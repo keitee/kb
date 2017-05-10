@@ -130,6 +130,7 @@ KT KB. vim, git, ECLIPSE. NETBEAN
 
 *kt_dev_env_git_000* git-clone-kb
 *kt_dev_env_git_000* git-init git-clone
+*kt_dev_env_git_000* git-internal git-object
 *kt_dev_env_git_000* git-submodule
 *kt_dev_env_git_000* git-submodule-read
 *kt_dev_env_0000* git-three-state
@@ -8768,6 +8769,153 @@ repository.
 
 
 ={============================================================================
+*kt_dev_env_git_000* git-internal git-object
+
+Chapter 9 Git Internals
+
+Git is fundamentally a content-addressable filesystem with a VCS user
+interface written on top of it.
+
+
+Has a bunch of verbs that do low-level work and were designed to be chained
+together UNIX style or called from scripts. These commands are generally
+referred to as `plumbing` commands, and the more user-friendly commands are
+called `porcelain` commands.
+
+These commands aren't meant to be used manually on the command line, but
+rather to be used as building blocks for new tools and custom scripts.
+
+
+<git-directory>
+When you run git init in a new or existing directory, Git creates the .git
+directory, which is where almost everything that Git stores and manipulates is
+located.
+
+$ ls
+HEAD
+branches/
+config
+description
+hooks/
+index
+info/
+objects/
+refs/
+
+This leaves four important entries: the `HEAD` and `index` files and the
+`objects` and `refs` directories. These are the core parts of Git. 
+
+The objects directory stores all the content for your database, the refs
+directory stores pointers into commit objects in that data (branches), the
+HEAD file points to the branch you currently have checked out, and the index
+file is where Git stores your staging area information. 
+
+
+<git-object>
+Content-addressable filesystem means that at the core of Git is a simple
+key-value data store. You can insert any kind of content into it, and it will
+give you back a key that you can use to retrieve the content again at any
+time.
+
+the plumbing command hash-object, which takes some data, stores it in your
+.git directory, and gives you back the key the data is stored as.
+
+$ echo ’test content’ | git hash-object -w --stdin
+d670460b4b4aece5915caf5c68d12f560a9fe3e4
+
+The -w tells hash-object to store the object; otherwise, the command simply
+tells you what the key would be. --stdin tells the command to read the content
+from stdin;
+
+$ find .git/objects -type f
+.git/objects/d6/70460b4b4aece5915caf5c68d12f560a9fe3e4
+
+
+You can pull the content back out of Git with the cat-file command.
+
+Passing -p to it instructs the cat-file command to figure out the type of
+content and display it nicely for you:
+
+$ git cat-file -p d670460b4b4aece5915caf5c68d12f560a9fe3e4
+test content
+
+
+note: why need `tree`?
+
+<git-blob>
+But remembering the SHA–1 key for each version of your file isn't practical;
+plus, you aren't storing the filename in your system - `just the content` 
+This object type is called a `blob`. 
+
+You can have Git tell you the object type of any object in Git, given its
+SHA–1 key, with cat-file -t:
+
+$ git cat-file -t 1f7a7a472abf3dd9643fd615f6da379c4acb3e3a
+blob
+
+
+note:
+git’s model of the world is based around objects which are identified by their
+`object name`, which is the correct term for the SHA-1 hashes you see all over
+the place. These objects can be of various types, such as “commit”, “tag”,
+    “blob” (file), “tree” (directory), etc.  
+
+
+<tree-object>
+The tree object, which solves the problem of storing the filename and also
+allows you to store a group of files together. 
+
+Git stores content in a manner similar to a UNIX filesystem, but a bit
+simplified. All the content is stored as tree and blob objects, with trees
+corresponding to UNIX directory entries and blobs corresponding more or less
+to inodes or file contents. 
+
+A `single tree object` contains one or more tree entries, each of which contains
+an SHA-1 pointer to a blob or subtree with its associated mode, type, and
+filename.
+
+note:
+Needs a tree object for a single file or blob.
+
+$ git cat-file -p masterˆ{tree}
+100644 blob a906cb2a4a904a152e80877d4088654daad0c859 README
+100644 blob 8f94139338f9404f26296befa88755fc2598c289 Rakefile
+040000 tree 99f1a6d12cb4b6f19c8655fca46c3ecf317074e0 lib
+
+
+Git normally creates a tree by taking the state of your staging area or index
+and writing a tree object from it. So, to create a tree object, you first have
+to set up an index by staging some files.
+
+Specify the mode, SHA–1, and filename
+
+// version 1, test.txt
+$ git update-index --add --cacheinfo 100644 \
+83baae61804e65cc73a7201a7252750c76066a30 test.txt
+
+Use the `write-tree` command to write the staging area out to a tree object.
+write-tree automatically creates a tree object from the state of the index if
+that tree doesn't yet exist:
+
+$ git write-tree
+d8329fc1cc938780ffdd9f94e0d364e0ea74f579
+
+$ git cat-file -p d8329fc1cc938780ffdd9f94e0d364e0ea74f579
+100644 blob 83baae61804e65cc73a7201a7252750c76066a30 test.txt
+
+$ git cat-file -t d8329fc1cc938780ffdd9f94e0d364e0ea74f579
+tree
+
+Can read trees into your staging area by calling read-tree.
+
+note:
+Skipped the full examples.
+
+
+<commit-object>
+
+
+={============================================================================
 *kt_dev_env_git_000* git-submodule
 
 https://git-scm.com/docs/git-submodule
@@ -9206,145 +9354,6 @@ you're out of sync:
 
   Running "git status" in the superproject will show the submodule as
   modified.
-
-
-={============================================================================
-*kt_dev_env_git_000* git-internal
-
-Chapter 9 Git Internals
-
-Git is fundamentally a content-addressable filesystem with a VCS user
-interface written on top of it.
-
-
-Has a bunch of verbs that do low-level work and were designed to be chained
-together UNIX style or called from scripts. These commands are generally
-referred to as `plumbing` commands, and the more user-friendly commands are
-called `porcelain` commands.
-
-These commands aren't meant to be used manually on the command line, but
-rather to be used as building blocks for new tools and custom scripts.
-
-
-<git-directory>
-When you run git init in a new or existing directory, Git creates the .git
-directory, which is where almost everything that Git stores and manipulates is
-located.
-
-$ ls
-HEAD
-branches/
-config
-description
-hooks/
-index
-info/
-objects/
-refs/
-
-This leaves four important entries: the `HEAD` and `index` files and the
-`objects` and `refs` directories. These are the core parts of Git. 
-
-The objects directory stores all the content for your database, the refs
-directory stores pointers into commit objects in that data (branches), the
-HEAD file points to the branch you currently have checked out, and the index
-file is where Git stores your staging area information. 
-
-
-<git-object>
-Content-addressable filesystem means that at the core of Git is a simple
-key-value data store. You can insert any kind of content into it, and it will
-give you back a key that you can use to retrieve the content again at any
-time.
-
-the plumbing command hash-object, which takes some data, stores it in your
-.git directory, and gives you back the key the data is stored as.
-
-$ echo ’test content’ | git hash-object -w --stdin
-d670460b4b4aece5915caf5c68d12f560a9fe3e4
-
-The -w tells hash-object to store the object; otherwise, the command simply
-tells you what the key would be. --stdin tells the command to read the content
-from stdin;
-
-$ find .git/objects -type f
-.git/objects/d6/70460b4b4aece5915caf5c68d12f560a9fe3e4
-
-
-You can pull the content back out of Git with the cat-file command.
-
-Passing -p to it instructs the cat-file command to figure out the type of
-content and display it nicely for you:
-
-$ git cat-file -p d670460b4b4aece5915caf5c68d12f560a9fe3e4
-test content
-
-
-note: why need `tree`?
-
-But remembering the SHA–1 key for each version of your file isn't practical;
-plus, you aren't storing the filename in your system - `just the content` This
-  object type is called a `blob`. 
-
-You can have Git tell you the object type of any object in Git, given its
-SHA–1 key, with cat-file -t:
-
-$ git cat-file -t 1f7a7a472abf3dd9643fd615f6da379c4acb3e3a
-blob
-
-
-<tree-object>
-The tree object, which solves the problem of storing the filename and also
-allows you to store a group of files together. 
-
-Git stores content in a manner similar to a UNIX filesystem, but a bit
-simplified. All the content is stored as tree and blob objects, with trees
-corresponding to UNIX directory entries and blobs corresponding more or less
-to inodes or file contents. 
-
-A `single tree object` contains one or more tree entries, each of which contains
-an SHA-1 pointer to a blob or subtree with its associated mode, type, and
-filename.
-
-note:
-Needs a tree object for a single file or blob.
-
-$ git cat-file -p masterˆ{tree}
-100644 blob a906cb2a4a904a152e80877d4088654daad0c859 README
-100644 blob 8f94139338f9404f26296befa88755fc2598c289 Rakefile
-040000 tree 99f1a6d12cb4b6f19c8655fca46c3ecf317074e0 lib
-
-
-Git normally creates a tree by taking the state of your staging area or index
-and writing a tree object from it. So, to create a tree object, you first have
-to set up an index by staging some files.
-
-Specify the mode, SHA–1, and filename
-
-// version 1, test.txt
-$ git update-index --add --cacheinfo 100644 \
-83baae61804e65cc73a7201a7252750c76066a30 test.txt
-
-Use the `write-tree` command to write the staging area out to a tree object.
-write-tree automatically creates a tree object from the state of the index if
-that tree doesn't yet exist:
-
-$ git write-tree
-d8329fc1cc938780ffdd9f94e0d364e0ea74f579
-
-$ git cat-file -p d8329fc1cc938780ffdd9f94e0d364e0ea74f579
-100644 blob 83baae61804e65cc73a7201a7252750c76066a30 test.txt
-
-$ git cat-file -t d8329fc1cc938780ffdd9f94e0d364e0ea74f579
-tree
-
-Can read trees into your staging area by calling read-tree.
-
-note:
-Skipped the full examples.
-
-
-<commit-object>
 
 
 ={============================================================================
