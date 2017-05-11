@@ -370,9 +370,9 @@
 *kt_linux_gcc_400* gcc-build-tc-buildroot-internal
 *kt_linux_gcc_400* gcc-build-buildroot-external-toolchain
 *kt_linux_gcc_400* gcc-build-spk-build-vmlinux
+*kt_linux_gcc_400* gcc-build-spk-toolchain
 *kt_linux_gcc_400* gcc-build-spk
 *kt_linux_gcc_400* gcc-build-spk-gdb
-*kt_linux_gcc_400* gcc-build-brcm-reference
 *kt_linux_gcc_400* gcc-build-glibc-reference
 *kt_linux_gcc_400* gcc-build-c-library
 *kt_linux_gcc_400* gcc-build-glibc-mips buildroot-glic-mips-internal-toolchain
@@ -56712,7 +56712,7 @@ pushd /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-spk
+*kt_linux_gcc_400* gcc-build-spk-toolchain
 
 MIPS:
 The toolchain used is the Broadcom NPTL toolchain with GCC4.2.
@@ -56814,6 +56814,470 @@ through the Timesys LinuxLink service.
 The SPK assumes that the symlink /opt/toolchains/uclibc-crosstools points to
 the correct toolchain. This is the default symlink to the Broadcom install.
 
+
+<rpm-build>
+cd /usr/src/redhat/SPECS
+rpmbuild -ba crosstools-linux-2.6.18.0-uclibc-0.9.29-nptl-20070423-4.2-10ts.spec  2>&1 |tee  buildlog 
+
++ /usr/bin/bzip2 -dc /usr/src/redhat/SOURCES/linux-libc-headers-2.6.18.0.tar.bz2
++ tar -xvvf -
+drwxr-xr-x root/root         0 2007-05-08 03:40:59 linux-libc-headers-2.6.18.0/
++ cd linux-libc-headers-2.6.18.0
+++ /usr/bin/id -u
++ '[' 0 = 0 ']'
++ /bin/chown -Rhf root .
+++ /usr/bin/id -u
++ '[' 0 = 0 ']'
++ /bin/chgrp -Rhf root .
++ /bin/chmod -Rf a+rX,u+w,g-w,o-w .
++ echo 'Patch #90 (linux-libc-headers-2.6.18.0-brcm-cachectl.patch):'
+
+// define patches
+Patch3003: uClibc-%{uclibc_version}-3003-plt-ldso.patch
+
+
+// decide which patches to apply
+%setup -T -b 0 -n uClibc-%{uclibc_version}
+%patch009 -p1
+%patch010 -p1
+%patch011 -p1
+%patch012 -p1
+%patch013 -p1
+%patch014 -p1
+%patch015 -p1
+%patch3003 -p1
+...
+
++ echo 'Patch #9 (uClibc-nptl-0.9.29-20070423-config.patch):'
++ patch -p1 -s
++ echo 'Patch #10 (uClibc-nptl-0.9.29-20070423-mips-gprof.patch):'
++ patch -p1 -s
+...
+
+note:
+So BUILD has all packages which are patched.
+
+
+// crosstools-linux-2.6.18.0-uclibc-0.9.29-nptl-20070423-4.2-11tsHound.spec
+build_tool()
+{
+  arch=$1
+  gnu_arch=$arch-linux-uclibc
+  export PATH=%{tools_dir_prefix}/bin:$PATH
+
+  pushd ${RPM_BUILD_DIR}
+
+  #
+  # Set the arch for the build/devel system, or let it be automaticly set.
+  #
+  build_arch=$arch-linux
+
++ PATH=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin:/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin:/root/bin
++ pushd /usr/src/redhat/BUILD
++ build_arch=mips-linux
+
+  # Configure uClibc and header files
+  
+  #
+  # Build uClibc
+  #
+  pushd uClibc-%{uclibc_version}
+
+  mkdir -p %{tools_dir_prefix}/$gnu_arch/include
+  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/usr/include
+  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/usr/lib
+  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/lib
+
++ `pushd uClibc-nptl-0.9.29-20070423`
++ mkdir -p /usr/src/redhat/BUILD/build_uClibc/usr/include
++ mkdir -p /usr/src/redhat/BUILD/build_uClibc/usr/lib
++ mkdir -p /usr/src/redhat/BUILD/build_uClibc/lib
+
+  # Copy in the locale tarball
+  cp ${RPM_SOURCE_DIR}/uClibc-locale-030818.tgz extra/locale
+
+  # Copy in the architecture config and fix it up
+  cp extra/Configs/Config.rpm.$arch ./.config
+
++ test hard = soft
+
+  if test %{float_type} = soft; then
+    # Modify the uClibc config for soft float
+    perl -p -i -e 's,.*HAS_FPU.*,# UCLIBC_HAS_FPU is not set\nUCLIBC_HAS_SOFT_FLOAT=y,g' ./.config
+  fi
+
+  # Modify the uClibc config for profiling
+  perl -p -i -e 's,.*UCLIBC_PROFILING.*,# UCLIBC_PROFILING is not set,g' ./.config
+
+  # Disable library stripping
+  perl -p -i -e 's,.*DOSTRIP.*,# DOSTRIP is not set,g' ./.config
+
+  make oldconfig
++ make oldconfig
+
+
+  # Create symlinks
+  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/linux include
+  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/asm-mips include/asm
+  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/asm-generic include/asm-generic
+
+  make PREFIX=${RPM_BUILD_DIR}/build_uClibc/			\
+       DEVEL_PREFIX=/usr/					\
+       RUNTIME_PREFIX=${RPM_BUILD_DIR}/build_uClibc/		\
+       HOSTCC=gcc						\
+       KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+       CROSS=$gnu_arch-						\
+       pregen install_dev
+  popd
+
++ ln -sf /usr/src/redhat/BUILD/linux-libc-headers-2.6.18.0/include/linux include
++ ln -sf /usr/src/redhat/BUILD/linux-libc-headers-2.6.18.0/include/asm-mips include/asm
++ ln -sf /usr/src/redhat/BUILD/linux-libc-headers-2.6.18.0/include/asm-generic include/asm-generic
++ make PREFIX=/usr/src/redhat/BUILD/build_uClibc/ DEVEL_PREFIX=/usr/ 
+  RUNTIME_PREFIX=/usr/src/redhat/BUILD/build_uClibc/ HOSTCC=gcc 
+  KERNEL_HEADERS=/usr/src/redhat/BUILD/build_uClibc/usr/include CROSS=mips-linux-uclibc- pregen install_dev
+
+  #
+  # Configure, build and install binutils
+  #
+  rm -rf build-binutils-%{binutils_version}
+  mkdir build-binutils-%{binutils_version}
+  pushd build-binutils-%{binutils_version}
+  ../binutils-%{binutils_version}/configure			\
+    --prefix=%{tools_dir_prefix}				\
+    --build=$build_arch 					\
+    --host=$build_arch	 					\
+    --target=$gnu_arch						\
+    --disable-werror						\
+    --disable-nls						\
+    --enable-multilib
+
++ ../binutils-2.17.50/configure
+--prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809
+--build=mips-linux --host=mips-linux --target=mips-linux-uclibc
+--disable-werror --disable-nls --enable-multilib
+
+  make %{parallel}
+  make info
+  make install
+  make install-info
+  popd
+  
+  #
+  # Update gcc version number
+  #
+  pushd gcc-%{gcc_version}
+  perl -p -i -e "s/BRCM_VER/%{build_number}-%{build_date}/" gcc/version.c
+  popd
+
+  #
+  # Build first stage C compiler
+  #
+  rm -rf build-gcc-%{gcc_version}-initial
+  mkdir build-gcc-%{gcc_version}-initial
+  pushd build-gcc-%{gcc_version}-initial
+
+  # Currently the unwind stuff seems to work for staticly linked apps but
+  # not dynamic.  So use setjmp/longjmp exceptions by default.
+  #
+  ../gcc-%{gcc_version}/configure 				\
+    --prefix=%{tools_dir_prefix}				\
+    --build=$build_arch 					\
+    --host=$build_arch						\
+    --target=$gnu_arch						\
+    --with-build-sysroot=${RPM_BUILD_DIR}/build_uClibc		\
+    --enable-languages=c					\
+    --disable-shared						\
+    --disable-__cxa_atexit 					\
+    --enable-target-optspace 					\
+    --with-gnu-ld						\
+    --with-float=%{float_type}					\
+    --enable-threads						\
+    --disable-multilib						\
+    --with-gnu-plts
+
++ ../gcc-4.2.0-20070124/configure
+`--prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809`
+--build=mips-linux --host=mips-linux --target=mips-linux-uclibc
+`--with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc` --enable-languages=c
+--disable-shared --disable-__cxa_atexit --enable-target-optspace --with-gnu-ld
+--with-float=hard --enable-threads --disable-multilib --with-gnu-plts
+
+  make %{parallel} all-gcc
+  make install-gcc
+  popd
+
+  #
+  # Build uClibc (which was configured above).
+  #
+  pushd uClibc-%{uclibc_version}
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=/						\
+    RUNTIME_PREFIX=/						\
+    CROSS=$gnu_arch- all
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=%{tools_dir_prefix}/$gnu_arch/			\
+    RUNTIME_PREFIX=%{tools_dir_prefix}/$gnu_arch/		\
+    CROSS=$gnu_arch-	 					\
+    install_runtime install_dev
+
++ make KERNEL_HEADERS=/usr/src/redhat/BUILD/build_uClibc/usr/include PREFIX=
+DEVEL_PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/
+RUNTIME_PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/
+CROSS=mips-linux-uclibc- install_runtime install_dev
+
+  ln -snf include %{tools_dir_prefix}/$gnu_arch/sys-include
++ ln -snf include /opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/sys-include
+
+  popd
+
+  #
+  # Build final C compiler and C++ support, using the newly built uClibc.
+  #
+  rm -rf build-gcc-%{gcc_version}-final
+  mkdir build-gcc-%{gcc_version}-final
+  pushd build-gcc-%{gcc_version}-final
+
+  #
+  # WARNING!!!  Do not use --with-gxx-include-dir!!!  WARNING!!!
+  #
+  # mjn3: Incorrectly setting the g++ include dir has broken a number
+  #       of uClibc toolchains in the past.  There is logic in some gcc
+  #       versions that attempts to detect path aliases and which can
+  #        break the include dir search order.  Best to just leave it be.
+  #
+  ../gcc-%{gcc_version}/configure				\
+    --prefix=%{tools_dir_prefix}/				\
+    --build=$build_arch						\
+    --host=$build_arch						\
+    --target=$gnu_arch						\
+    --with-build-sysroot=${RPM_BUILD_DIR}/build_uClibc		\
+    --enable-languages=c,c++					\
+    --disable-__cxa_atexit 					\
+    --enable-target-optspace					\
+    --with-gnu-ld						\
+    --with-float=%{float_type}					\
+    --enable-threads						\
+    --infodir=%{tools_dir_prefix}/info				\
+    --mandir=%{tools_dir_prefix}/man				\
+    --with-arch=mips32						\
+    --disable-libmudflap					\
+    --disable-nls						\
+    --with-gnu-plts
+
++ ../gcc-4.2.0-20070124/configure
+  --prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/
+  --build=mips-linux --host=mips-linux --target=mips-linux-uclibc
+  --with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc
+  --enable-languages=c,c++ --disable-__cxa_atexit --enable-target-optspace
+  --with-gnu-ld --with-float=hard --enable-threads
+  --infodir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/info
+  --mandir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/man
+  --with-arch=mips32 --disable-libmudflap --disable-nls --with-gnu-plts
+
+  make %{parallel} all							\
+    CFLAGS_FOR_TARGET="%{library_flags}"			\
+    CXXFLAGS_FOR_TARGET="%{library_flags}"
+
+  make info
+  make install
+  make install-info
+
+  # If we build libstdc++ with -mips16, scripts/testsuite_flags will
+  # cause the libstdc++ testsuite to use -mips16 (unlike the other
+  # testsuites).  If we built the library with -Os, the testsuite will
+  # also use -Os, but some of the tests require -O2.  Change the
+  # testsuite flags to the default "-O2 -g".
+  perl -p -i -e "s/-Os -g.*/-O2 -g/" $gnu_arch/libstdc++-v3/scripts/testsuite_flags
+
+  popd
+
+  #
+  # Relink uClibc against final libgcc
+  #
+  pushd uClibc-%{uclibc_version}
+
+  rm -rf lib
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=/						\
+    RUNTIME_PREFIX=/						\
+    CROSS=$gnu_arch- all
+
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=							\
+    DEVEL_PREFIX=%{tools_dir_prefix}/$gnu_arch/			\
+    RUNTIME_PREFIX=%{tools_dir_prefix}/$gnu_arch/		\
+    CROSS=$gnu_arch-	 					\
+    install_runtime install_dev
+
+  popd
+
+  #
+  # Build uClibc utils (which were configured above).
+  #
+  pushd uClibc-%{uclibc_version}
+  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=%{tools_dir_prefix}/$gnu_arch/target-apps/ 		\
+    DEVEL_PREFIX=						\
+    RUNTIME_PREFIX=						\
+    CROSS=$gnu_arch-	 					\
+    utils install_utils
+
+  make -C utils							\
+    KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
+    PREFIX=%{tools_dir_prefix}/$gnu_arch/ 			\
+    CROSS=$gnu_arch-	 					\
+    clean
+
+  # We build uClibc in place, so clean it up for the next arch.
+  make distclean
+  popd
+
+  // %if %{enable_gdb}
+  // #
+  // # Build gdbserver for the target
+  // #
+  // rm -rf build-gdbserver%{gdb_version}
+  // mkdir build-gdbserver%{gdb_version}
+  // pushd build-gdbserver%{gdb_version}
+
+  // AR=$gnu_arch-ar						\
+  // AS=$gnu_arch-as						\
+  // LD=$gnu_arch-ld						\
+  // NM=$gnu_arch-nm						\
+  // CC=$gnu_arch-gcc						\
+  // GCC=$gnu_arch-gcc						\
+  // CXX=$gnu_arch-g++						\
+  // RANLIB=$gnu_arch-ranlib					\
+  // gdb_cv_func_sigsetjmp=yes					\
+  // ac_cv_type_uintptr_t=yes					\
+  // gt_cv_func_gettext_libintl=yes				\
+  // ac_cv_func_dcgettext=yes					\
+  // bash_cv_func_strcoll_broken=no				\
+  // bash_cv_must_reinstall_sighandlers=no				\
+  // bash_cv_func_sigsetjmp=present				\
+  // bash_cv_have_mbstate_t=yes					\
+  // ../gdb-%{gdb_version}/gdb/gdbserver/configure			\
+  //   --prefix=%{tools_dir_prefix}/$gnu_arch/target-apps/usr	\
+  //   --target=$gnu_arch						\
+  //   --build=$build_arch						\
+  //   --host=$gnu_arch						\
+  //   --mandir=%{tools_dir_prefix}/man				\
+  //   --infodir=%{tools_dir_prefix}/info				\
+  //   --disable-nls						\
+  //   --without-uiout --disable-gdbmi				\
+  //   --disable-tui --disable-gdbtk --without-x			\
+  //   --without-included-gettext
+
+  // make %{parallel} all
+  // make install
+  // popd
+
+  // #
+  // # Build gdb for the host
+  // #
+  // rm -rf build-gdb-%{gdb_version}
+  // mkdir build-gdb-%{gdb_version}
+  // pushd build-gdb-%{gdb_version}
+  // gdb_cv_func_sigsetjmp=yes					\
+  // ../gdb-%{gdb_version}/configure				\
+  //   --prefix=%{tools_dir_prefix}				\
+  //   --target=$gnu_arch						\
+  //   --build=$build_arch						\
+  //   --host=$build_arch						\
+  //   --disable-nls						\
+  //   --disable-gdbserver						\
+  //   --without-included-gettext
+
+  // make %{parallel} all-gdb
+  // make info
+  // #make install-gdb
+  // make install
+  // make install-info
+  // #install gdb/gdb %{tools_dir_prefix}/bin/$gnu_arch-gdb
+  // #install gdb/gdb %{tools_dir_prefix}/$gnu_arch/bin
+
+  // popd
+  // %endif
+
+  #
+  # Build sstrip for the host.
+  #
+  # Even though it is independent of the target arch, provide symlinks
+  # so that it can be invoked like all other cross tools.
+  #
+  pushd sstrip
+
+  make all
+
+  install sstrip %{tools_dir_prefix}/bin
+
+  ln -snf sstrip %{tools_dir_prefix}/bin/$gnu_arch-sstrip
+  ln -snf sstrip %{tools_dir_prefix}/bin/$arch-linux-sstrip
+  ln -snf sstrip %{tools_dir_prefix}/bin/$arch-uclibc-sstrip
+  ln -snf ../../bin/sstrip %{tools_dir_prefix}/$gnu_arch/bin/sstrip
+
+  popd
+
+  #
+  # Now strip all binaries.
+  #
+
+  # Remove the script to avoid strip failures.
+  rm -f %{tools_dir_prefix}/bin/*-gccbug
+
+  # Do some additional housekeeping.
+  rm -f %{tools_dir_prefix}/lib/libiberty.a
+  rm -f %{tools_dir_prefix}/gcc/libiberty.a
+  rm -f %{tools_dir_prefix}/gcc/libmmalloc.a
+
+  strip %{tools_dir_prefix}/bin/*
+  strip %{tools_dir_prefix}/$gnu_arch/bin/*
+
+  $gnu_arch-strip %{tools_dir_prefix}/$gnu_arch/target-apps/sbin/*
+  $gnu_arch-strip %{tools_dir_prefix}/$gnu_arch/target-apps/usr/bin/*
+
+  #
+  # Create the backward compatibility symlinks.
+  #
+
+  pushd %{tools_dir_prefix}/bin
+  for F in $gnu_arch-* ; do \
+	ln -snf $F $arch-linux${F##$gnu_arch} ;\
+	ln -snf $F $arch-uclibc${F##$gnu_arch} ; \
+  done
+  popd
+  ln -snf $gnu_arch %{tools_dir_prefix}/$arch-linux
+  ln -snf $gnu_arch %{tools_dir_prefix}/$arch-uclibc
+
+  # Directory name changed in gcc 3.4.x from lib/gcc-libc/ to lib/gcc/.
+  if [ -d %{tools_dir_prefix}/lib/gcc-lib ] ; then 
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc-lib/$arch-linux
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc-lib/$arch-uclibc
+  fi
+  if [ -d %{tools_dir_prefix}/lib/gcc ] ; then 
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc/$arch-linux
+    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc/$arch-uclibc
+  fi
+}
+
+
+note: when not use --disable-multilib, no libgcc_eh.a and fails on
+build-glibc.
+
+make -j4 all-gcc
+make install-gcc
+
+
+
+={============================================================================
+*kt_linux_gcc_400* gcc-build-spk
 
 
 {spk-versions}
@@ -57946,442 +58410,6 @@ CCFLAGS_FOR_BUILD="" \
 --without-bash-malloc
 
 /usr/bin/make -j1 LDFLAGS=-static 
-
-
-={============================================================================
-*kt_linux_gcc_400* gcc-build-brcm-reference
-
-cd /usr/src/redhat/SPECS
-rpmbuild -ba crosstools-linux-2.6.18.0-uclibc-0.9.29-nptl-20070423-4.2-10ts.spec  2>&1 |tee  buildlog 
-
-+ /usr/bin/bzip2 -dc /usr/src/redhat/SOURCES/linux-libc-headers-2.6.18.0.tar.bz2
-+ tar -xvvf -
-drwxr-xr-x root/root         0 2007-05-08 03:40:59 linux-libc-headers-2.6.18.0/
-+ cd linux-libc-headers-2.6.18.0
-++ /usr/bin/id -u
-+ '[' 0 = 0 ']'
-+ /bin/chown -Rhf root .
-++ /usr/bin/id -u
-+ '[' 0 = 0 ']'
-+ /bin/chgrp -Rhf root .
-+ /bin/chmod -Rf a+rX,u+w,g-w,o-w .
-+ echo 'Patch #90 (linux-libc-headers-2.6.18.0-brcm-cachectl.patch):'
-
-// crosstools-linux-2.6.18.0-uclibc-0.9.29-nptl-20070423-4.2-11tsHound.spec
-build_tool()
-{
-  arch=$1
-  gnu_arch=$arch-linux-uclibc
-  export PATH=%{tools_dir_prefix}/bin:$PATH
-
-  pushd ${RPM_BUILD_DIR}
-
-  #
-  # Set the arch for the build/devel system, or let it be automaticly set.
-  #
-  build_arch=$arch-linux
-
-+ PATH=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin:/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin:/root/bin
-+ pushd /usr/src/redhat/BUILD
-+ build_arch=mips-linux
-
-  # Configure uClibc and header files
-  
-  #
-  # Build uClibc
-  #
-  pushd uClibc-%{uclibc_version}
-
-  mkdir -p %{tools_dir_prefix}/$gnu_arch/include
-  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/usr/include
-  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/usr/lib
-  mkdir -p ${RPM_BUILD_DIR}/build_uClibc/lib
-
-+ `pushd uClibc-nptl-0.9.29-20070423`
-+ mkdir -p /usr/src/redhat/BUILD/build_uClibc/usr/include
-+ mkdir -p /usr/src/redhat/BUILD/build_uClibc/usr/lib
-+ mkdir -p /usr/src/redhat/BUILD/build_uClibc/lib
-
-  # Copy in the locale tarball
-  cp ${RPM_SOURCE_DIR}/uClibc-locale-030818.tgz extra/locale
-
-  # Copy in the architecture config and fix it up
-  cp extra/Configs/Config.rpm.$arch ./.config
-
-+ test hard = soft
-
-  if test %{float_type} = soft; then
-    # Modify the uClibc config for soft float
-    perl -p -i -e 's,.*HAS_FPU.*,# UCLIBC_HAS_FPU is not set\nUCLIBC_HAS_SOFT_FLOAT=y,g' ./.config
-  fi
-
-  # Modify the uClibc config for profiling
-  perl -p -i -e 's,.*UCLIBC_PROFILING.*,# UCLIBC_PROFILING is not set,g' ./.config
-
-  # Disable library stripping
-  perl -p -i -e 's,.*DOSTRIP.*,# DOSTRIP is not set,g' ./.config
-
-  make oldconfig
-+ make oldconfig
-
-
-  # Create symlinks
-  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/linux include
-  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/asm-mips include/asm
-  ln -sf ${RPM_BUILD_DIR}/%{kernel_top_dir}/asm-generic include/asm-generic
-
-  make PREFIX=${RPM_BUILD_DIR}/build_uClibc/			\
-       DEVEL_PREFIX=/usr/					\
-       RUNTIME_PREFIX=${RPM_BUILD_DIR}/build_uClibc/		\
-       HOSTCC=gcc						\
-       KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
-       CROSS=$gnu_arch-						\
-       pregen install_dev
-  popd
-
-+ ln -sf /usr/src/redhat/BUILD/linux-libc-headers-2.6.18.0/include/linux include
-+ ln -sf /usr/src/redhat/BUILD/linux-libc-headers-2.6.18.0/include/asm-mips include/asm
-+ ln -sf /usr/src/redhat/BUILD/linux-libc-headers-2.6.18.0/include/asm-generic include/asm-generic
-+ make PREFIX=/usr/src/redhat/BUILD/build_uClibc/ DEVEL_PREFIX=/usr/ 
-  RUNTIME_PREFIX=/usr/src/redhat/BUILD/build_uClibc/ HOSTCC=gcc 
-  KERNEL_HEADERS=/usr/src/redhat/BUILD/build_uClibc/usr/include CROSS=mips-linux-uclibc- pregen install_dev
-
-  #
-  # Configure, build and install binutils
-  #
-  rm -rf build-binutils-%{binutils_version}
-  mkdir build-binutils-%{binutils_version}
-  pushd build-binutils-%{binutils_version}
-  ../binutils-%{binutils_version}/configure			\
-    --prefix=%{tools_dir_prefix}				\
-    --build=$build_arch 					\
-    --host=$build_arch	 					\
-    --target=$gnu_arch						\
-    --disable-werror						\
-    --disable-nls						\
-    --enable-multilib
-
-+ ../binutils-2.17.50/configure
---prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809
---build=mips-linux --host=mips-linux --target=mips-linux-uclibc
---disable-werror --disable-nls --enable-multilib
-
-  make %{parallel}
-  make info
-  make install
-  make install-info
-  popd
-  
-  #
-  # Update gcc version number
-  #
-  pushd gcc-%{gcc_version}
-  perl -p -i -e "s/BRCM_VER/%{build_number}-%{build_date}/" gcc/version.c
-  popd
-
-  #
-  # Build first stage C compiler
-  #
-  rm -rf build-gcc-%{gcc_version}-initial
-  mkdir build-gcc-%{gcc_version}-initial
-  pushd build-gcc-%{gcc_version}-initial
-
-  # Currently the unwind stuff seems to work for staticly linked apps but
-  # not dynamic.  So use setjmp/longjmp exceptions by default.
-  #
-  ../gcc-%{gcc_version}/configure 				\
-    --prefix=%{tools_dir_prefix}				\
-    --build=$build_arch 					\
-    --host=$build_arch						\
-    --target=$gnu_arch						\
-    --with-build-sysroot=${RPM_BUILD_DIR}/build_uClibc		\
-    --enable-languages=c					\
-    --disable-shared						\
-    --disable-__cxa_atexit 					\
-    --enable-target-optspace 					\
-    --with-gnu-ld						\
-    --with-float=%{float_type}					\
-    --enable-threads						\
-    --disable-multilib						\
-    --with-gnu-plts
-
-+ ../gcc-4.2.0-20070124/configure
-`--prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809`
---build=mips-linux --host=mips-linux --target=mips-linux-uclibc
-`--with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc` --enable-languages=c
---disable-shared --disable-__cxa_atexit --enable-target-optspace --with-gnu-ld
---with-float=hard --enable-threads --disable-multilib --with-gnu-plts
-
-  make %{parallel} all-gcc
-  make install-gcc
-  popd
-
-  #
-  # Build uClibc (which was configured above).
-  #
-  pushd uClibc-%{uclibc_version}
-
-  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
-    PREFIX=							\
-    DEVEL_PREFIX=/						\
-    RUNTIME_PREFIX=/						\
-    CROSS=$gnu_arch- all
-
-  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
-    PREFIX=							\
-    DEVEL_PREFIX=%{tools_dir_prefix}/$gnu_arch/			\
-    RUNTIME_PREFIX=%{tools_dir_prefix}/$gnu_arch/		\
-    CROSS=$gnu_arch-	 					\
-    install_runtime install_dev
-
-+ make KERNEL_HEADERS=/usr/src/redhat/BUILD/build_uClibc/usr/include PREFIX=
-DEVEL_PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/
-RUNTIME_PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/
-CROSS=mips-linux-uclibc- install_runtime install_dev
-
-  ln -snf include %{tools_dir_prefix}/$gnu_arch/sys-include
-+ ln -snf include /opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/sys-include
-
-  popd
-
-  #
-  # Build final C compiler and C++ support, using the newly built uClibc.
-  #
-  rm -rf build-gcc-%{gcc_version}-final
-  mkdir build-gcc-%{gcc_version}-final
-  pushd build-gcc-%{gcc_version}-final
-
-  #
-  # WARNING!!!  Do not use --with-gxx-include-dir!!!  WARNING!!!
-  #
-  # mjn3: Incorrectly setting the g++ include dir has broken a number
-  #       of uClibc toolchains in the past.  There is logic in some gcc
-  #       versions that attempts to detect path aliases and which can
-  #        break the include dir search order.  Best to just leave it be.
-  #
-  ../gcc-%{gcc_version}/configure				\
-    --prefix=%{tools_dir_prefix}/				\
-    --build=$build_arch						\
-    --host=$build_arch						\
-    --target=$gnu_arch						\
-    --with-build-sysroot=${RPM_BUILD_DIR}/build_uClibc		\
-    --enable-languages=c,c++					\
-    --disable-__cxa_atexit 					\
-    --enable-target-optspace					\
-    --with-gnu-ld						\
-    --with-float=%{float_type}					\
-    --enable-threads						\
-    --infodir=%{tools_dir_prefix}/info				\
-    --mandir=%{tools_dir_prefix}/man				\
-    --with-arch=mips32						\
-    --disable-libmudflap					\
-    --disable-nls						\
-    --with-gnu-plts
-
-+ ../gcc-4.2.0-20070124/configure
-  --prefix=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/
-  --build=mips-linux --host=mips-linux --target=mips-linux-uclibc
-  --with-build-sysroot=/usr/src/redhat/BUILD/build_uClibc
-  --enable-languages=c,c++ --disable-__cxa_atexit --enable-target-optspace
-  --with-gnu-ld --with-float=hard --enable-threads
-  --infodir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/info
-  --mandir=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/man
-  --with-arch=mips32 --disable-libmudflap --disable-nls --with-gnu-plts
-
-  make %{parallel} all							\
-    CFLAGS_FOR_TARGET="%{library_flags}"			\
-    CXXFLAGS_FOR_TARGET="%{library_flags}"
-
-  make info
-  make install
-  make install-info
-
-  # If we build libstdc++ with -mips16, scripts/testsuite_flags will
-  # cause the libstdc++ testsuite to use -mips16 (unlike the other
-  # testsuites).  If we built the library with -Os, the testsuite will
-  # also use -Os, but some of the tests require -O2.  Change the
-  # testsuite flags to the default "-O2 -g".
-  perl -p -i -e "s/-Os -g.*/-O2 -g/" $gnu_arch/libstdc++-v3/scripts/testsuite_flags
-
-  popd
-
-  #
-  # Relink uClibc against final libgcc
-  #
-  pushd uClibc-%{uclibc_version}
-
-  rm -rf lib
-
-  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
-    PREFIX=							\
-    DEVEL_PREFIX=/						\
-    RUNTIME_PREFIX=/						\
-    CROSS=$gnu_arch- all
-
-  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
-    PREFIX=							\
-    DEVEL_PREFIX=%{tools_dir_prefix}/$gnu_arch/			\
-    RUNTIME_PREFIX=%{tools_dir_prefix}/$gnu_arch/		\
-    CROSS=$gnu_arch-	 					\
-    install_runtime install_dev
-
-  popd
-
-  #
-  # Build uClibc utils (which were configured above).
-  #
-  pushd uClibc-%{uclibc_version}
-  make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
-    PREFIX=%{tools_dir_prefix}/$gnu_arch/target-apps/ 		\
-    DEVEL_PREFIX=						\
-    RUNTIME_PREFIX=						\
-    CROSS=$gnu_arch-	 					\
-    utils install_utils
-
-  make -C utils							\
-    KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
-    PREFIX=%{tools_dir_prefix}/$gnu_arch/ 			\
-    CROSS=$gnu_arch-	 					\
-    clean
-
-  # We build uClibc in place, so clean it up for the next arch.
-  make distclean
-  popd
-
-  // %if %{enable_gdb}
-  // #
-  // # Build gdbserver for the target
-  // #
-  // rm -rf build-gdbserver%{gdb_version}
-  // mkdir build-gdbserver%{gdb_version}
-  // pushd build-gdbserver%{gdb_version}
-
-  // AR=$gnu_arch-ar						\
-  // AS=$gnu_arch-as						\
-  // LD=$gnu_arch-ld						\
-  // NM=$gnu_arch-nm						\
-  // CC=$gnu_arch-gcc						\
-  // GCC=$gnu_arch-gcc						\
-  // CXX=$gnu_arch-g++						\
-  // RANLIB=$gnu_arch-ranlib					\
-  // gdb_cv_func_sigsetjmp=yes					\
-  // ac_cv_type_uintptr_t=yes					\
-  // gt_cv_func_gettext_libintl=yes				\
-  // ac_cv_func_dcgettext=yes					\
-  // bash_cv_func_strcoll_broken=no				\
-  // bash_cv_must_reinstall_sighandlers=no				\
-  // bash_cv_func_sigsetjmp=present				\
-  // bash_cv_have_mbstate_t=yes					\
-  // ../gdb-%{gdb_version}/gdb/gdbserver/configure			\
-  //   --prefix=%{tools_dir_prefix}/$gnu_arch/target-apps/usr	\
-  //   --target=$gnu_arch						\
-  //   --build=$build_arch						\
-  //   --host=$gnu_arch						\
-  //   --mandir=%{tools_dir_prefix}/man				\
-  //   --infodir=%{tools_dir_prefix}/info				\
-  //   --disable-nls						\
-  //   --without-uiout --disable-gdbmi				\
-  //   --disable-tui --disable-gdbtk --without-x			\
-  //   --without-included-gettext
-
-  // make %{parallel} all
-  // make install
-  // popd
-
-  // #
-  // # Build gdb for the host
-  // #
-  // rm -rf build-gdb-%{gdb_version}
-  // mkdir build-gdb-%{gdb_version}
-  // pushd build-gdb-%{gdb_version}
-  // gdb_cv_func_sigsetjmp=yes					\
-  // ../gdb-%{gdb_version}/configure				\
-  //   --prefix=%{tools_dir_prefix}				\
-  //   --target=$gnu_arch						\
-  //   --build=$build_arch						\
-  //   --host=$build_arch						\
-  //   --disable-nls						\
-  //   --disable-gdbserver						\
-  //   --without-included-gettext
-
-  // make %{parallel} all-gdb
-  // make info
-  // #make install-gdb
-  // make install
-  // make install-info
-  // #install gdb/gdb %{tools_dir_prefix}/bin/$gnu_arch-gdb
-  // #install gdb/gdb %{tools_dir_prefix}/$gnu_arch/bin
-
-  // popd
-  // %endif
-
-  #
-  # Build sstrip for the host.
-  #
-  # Even though it is independent of the target arch, provide symlinks
-  # so that it can be invoked like all other cross tools.
-  #
-  pushd sstrip
-
-  make all
-
-  install sstrip %{tools_dir_prefix}/bin
-
-  ln -snf sstrip %{tools_dir_prefix}/bin/$gnu_arch-sstrip
-  ln -snf sstrip %{tools_dir_prefix}/bin/$arch-linux-sstrip
-  ln -snf sstrip %{tools_dir_prefix}/bin/$arch-uclibc-sstrip
-  ln -snf ../../bin/sstrip %{tools_dir_prefix}/$gnu_arch/bin/sstrip
-
-  popd
-
-  #
-  # Now strip all binaries.
-  #
-
-  # Remove the script to avoid strip failures.
-  rm -f %{tools_dir_prefix}/bin/*-gccbug
-
-  # Do some additional housekeeping.
-  rm -f %{tools_dir_prefix}/lib/libiberty.a
-  rm -f %{tools_dir_prefix}/gcc/libiberty.a
-  rm -f %{tools_dir_prefix}/gcc/libmmalloc.a
-
-  strip %{tools_dir_prefix}/bin/*
-  strip %{tools_dir_prefix}/$gnu_arch/bin/*
-
-  $gnu_arch-strip %{tools_dir_prefix}/$gnu_arch/target-apps/sbin/*
-  $gnu_arch-strip %{tools_dir_prefix}/$gnu_arch/target-apps/usr/bin/*
-
-  #
-  # Create the backward compatibility symlinks.
-  #
-
-  pushd %{tools_dir_prefix}/bin
-  for F in $gnu_arch-* ; do \
-	ln -snf $F $arch-linux${F##$gnu_arch} ;\
-	ln -snf $F $arch-uclibc${F##$gnu_arch} ; \
-  done
-  popd
-  ln -snf $gnu_arch %{tools_dir_prefix}/$arch-linux
-  ln -snf $gnu_arch %{tools_dir_prefix}/$arch-uclibc
-
-  # Directory name changed in gcc 3.4.x from lib/gcc-libc/ to lib/gcc/.
-  if [ -d %{tools_dir_prefix}/lib/gcc-lib ] ; then 
-    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc-lib/$arch-linux
-    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc-lib/$arch-uclibc
-  fi
-  if [ -d %{tools_dir_prefix}/lib/gcc ] ; then 
-    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc/$arch-linux
-    ln -snf $gnu_arch %{tools_dir_prefix}/lib/gcc/$arch-uclibc
-  fi
-}
-
-
-note: when not use --disable-multilib, no libgcc_eh.a and fails on
-build-glibc.
-
-make -j4 all-gcc
-make install-gcc
 
 
 ={============================================================================
@@ -63926,6 +63954,13 @@ warning: GDB can't find the start of the function at 0x2aab4160.
 Backtrace stopped: previous frame identical to this frame (corrupt stack?)
 
 ~/asn/gcc/gcc-glibc-brcm-mips-install-two/bin/mips-linux-gnu-addr2line -e lib/ld.so.1 0x2aab4160
+
+*current-working*
+
+uClibc-nptl-0.9.29-20070423-3003-plt-ldso.patch
+
+--- uClibc-nptl-0.9.29-20070423.orig/ldso/include/dl-elf.h      2008-03-09 16:42:38.000000000 +0000
++++ uClibc-nptl-0.9.29-20070423/ldso/include/dl-elf.h   2008-03-09 16:42:41.000000000 +0000
 
 
 ={============================================================================
