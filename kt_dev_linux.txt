@@ -24482,7 +24482,7 @@ Section Headers:
 <speficy-section>
 mipsel-linux-uclibc-readelf -x 13 vmlinux
 
-<sections>
+<elf-sections>
 The .text section contains the executable program code. 
 
 The .rodata section contains constant data in your program. 
@@ -24838,7 +24838,7 @@ $ nm libhttp_upset.a | grep NDS_HTTP_strdup
 12:00000000 T NDS_HTTP_strdup
 
 
-<demangle>
+<nm-demangle>
        --demangle[=style]
            Decode (demangle) low-level symbol names into user-level names.
            Besides removing any initial underscore prepended by the system, this
@@ -34468,6 +34468,17 @@ required 0.11 seconds, or around one-twentieth of the time required for calls
 to getppid(). Of course, most system calls have significantly more overhead
 than getppid().
 
+note:
+The Linux system call interface is a single instruction: int 0x80. All system
+calls are done via this interrupt. To make a system call, eax should contain a
+number that indicates which system call is being invoked, and other registers
+are used to hold the arguments, if any. If the system call takes one argument,
+it will be in ebx; a system call with two arguments will use ebx and ecx.
+  Likewise, edx, esi, and edi are used if a third, fourth, or fifth argument
+  is required, respectively. Upon return from a system call, eax will contain
+  the return value. If an error occurs, eax will contain a negative value,
+with the absolute value indicating the error.
+
 
 ={============================================================================
 *kt_linux_core_001* linux-syscall-list
@@ -34481,7 +34492,6 @@ the full list of valid syscall names on /usr/include/asm/unistd.h.
 ./include/asm-frv/unistd.h
 ./include/asm-i386/unistd.h
 ./include/asm-sparc64/unistd.h
-./include/asm-mips/unistd.h
 ./include/asm-parisc/unistd.h
 ./include/asm-arm/unistd.h
 ./include/asm-v850/unistd.h
@@ -34500,7 +34510,45 @@ the full list of valid syscall names on /usr/include/asm/unistd.h.
 ./include/asm-xtensa/unistd.h
 ./include/asm-um/unistd.h
 ./include/asm-arm26/unistd.h
+
+
 ./include/linux/unistd.h
+
+#ifndef _LINUX_UNISTD_H_
+#define _LINUX_UNISTD_H_
+
+
+/*
+ * Include machine specific syscallX macros
+ */
+#include <asm/unistd.h>
+
+#endif /* _LINUX_UNISTD_H_ */
+
+
+./include/asm-mips/unistd.h
+
+#ifndef _ASM_UNISTD_H
+#define _ASM_UNISTD_H
+
+#include <asm/sgidefs.h>
+
+#if _MIPS_SIM == _MIPS_SIM_ABI32
+
+/*
+ * Linux o32 style syscalls are in the range from 4000 to 4999.
+ */
+#define __NR_Linux                      4000
+#define __NR_syscall                    (__NR_Linux +   0)
+#define __NR_exit                       (__NR_Linux +   1)
+#define __NR_fork                       (__NR_Linux +   2)
+#define __NR_read                       (__NR_Linux +   3)
+#define __NR_write                      (__NR_Linux +   4)
+#define __NR_open                       (__NR_Linux +   5)
+#define __NR_close                      (__NR_Linux +   6)
+#define __NR_waitpid                    (__NR_Linux +   7)
+#define __NR_creat                      (__NR_Linux +   8)
+...
 
 
 ={============================================================================
@@ -52129,6 +52177,7 @@ script appears in the command line.
 
 http://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
 
+3.14 Options for Linking
 
 -llibrary
 -l library
@@ -52169,6 +52218,10 @@ directories.
     results, you must also specify the same set of options used for
     compilation (-fpic, -fPIC, or model suboptions) when you specify this
     linker option.1 
+
+<gcc-strip>
+-s
+  Remove all symbol table and relocation information from the executable.
 
 
 https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html#Code-Gen-Options
@@ -62285,10 +62338,11 @@ An ELF file for an executable program (rather than a shared library or an
 the file, after the ELF header; each entry in this table provides information
 that is needed to run the program.
 
-The kernel only really cares about three types of program header entries. The
-first type is the PT_LOAD segment, which describes areas of the new program's
-running memory. This includes code and data sections that come from the
-executable file, together with the size of a BSS section. The BSS will be
+The kernel only really cares about `three types of program header entries.`
+
+The first type is the PT_LOAD segment, which describes areas of the new
+program's running memory. This includes code and data sections that come from
+the executable file, together with the size of a BSS section. The BSS will be
 filled with zeroes (thus only its length needs to be stored in the executable
     file). 
 
@@ -62332,7 +62386,80 @@ replacing the contents of the original program file and allowing access to the
  
 
 <elf-format>
-  
+linux-2.6.18.8-from-mips/include/linux/elf.h
+
+#ifndef _LINUX_ELF_H
+#define _LINUX_ELF_H
+
+#include <linux/types.h>
+#include <linux/auxvec.h>
+#include <linux/elf-em.h>
+#include <asm/elf.h>
+...
+
+<elf-header>
+To locate the program header, the ELF header is needed. The ELF header is the
+only data structure which has a fixed place in the file, starting at 0.
+
+typedef struct elf32_hdr{
+  unsigned char e_ident[EI_NIDENT];
+  Elf32_Half    e_type;
+  Elf32_Half    e_machine;
+  Elf32_Word    e_version;
+  Elf32_Addr    e_entry;      // Entry point */
+  Elf32_Off     e_phoff;      // where the program header starts
+  Elf32_Off     e_shoff;
+  Elf32_Word    e_flags;
+  Elf32_Half    e_ehsize;
+  Elf32_Half    e_phentsize;  // size of an entry of the program header
+  Elf32_Half    e_phnum;      // num of entries in the program header
+  Elf32_Half    e_shentsize;
+  Elf32_Half    e_shnum;
+  Elf32_Half    e_shstrndx;
+} Elf32_Ehdr;
+
+
+<elf-program-header>
+typedef struct elf32_phdr{
+  Elf32_Word    p_type;
+  Elf32_Off     p_offset;
+  Elf32_Addr    p_vaddr;
+  Elf32_Addr    p_paddr;
+  Elf32_Word    p_filesz;
+  Elf32_Word    p_memsz;
+  Elf32_Word    p_flags;
+  Elf32_Word    p_align;
+} Elf32_Phdr;
+
+
+linux-2.6.18.8-from-mips/include/asm-mips/elf.h
+/*
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file "COPYING" in the main directory of this archive
+ * for more details.
+ *
+ * Much of this is taken from binutils and GNU libc ...
+ */
+#ifndef _ASM_ELF_H
+#define _ASM_ELF_H
+
+
+/* ELF header e_flags defines. */
+/* MIPS architecture level. */
+#define EF_MIPS_ARCH_1          0x00000000      /* -mips1 code.  */
+#define EF_MIPS_ARCH_2          0x10000000      /* -mips2 code.  */
+#define EF_MIPS_ARCH_3          0x20000000      /* -mips3 code.  */
+#define EF_MIPS_ARCH_4          0x30000000      /* -mips4 code.  */
+#define EF_MIPS_ARCH_5          0x40000000      /* -mips5 code.  */
+#define EF_MIPS_ARCH_32         0x50000000      /* MIPS32 code.  */
+#define EF_MIPS_ARCH_64         0x60000000      /* MIPS64 code.  */
+#define EF_MIPS_ARCH_32R2       0x70000000      /* MIPS32 R2 code.  */
+#define EF_MIPS_ARCH_64R2       0x80000000      /* MIPS64 R2 code.  */
+...
+
+<read>
+http://www.lurklurk.org/linkers/linkers.html
+
 
 ={============================================================================
 *kt_linux_core_400* linux-abi
