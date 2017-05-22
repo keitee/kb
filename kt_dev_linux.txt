@@ -411,7 +411,7 @@
 *kt_linux_core_052* signal-raise-call
 
 |kt_linux_core_100| linux-process
-|kt_linux_core_101| process-creation
+|kt_linux_core_101| linux-process-creation
 |kt_linux_core_102| process-termination
 |kt_linux_core_103| process-monitor-child-process
 *kt_linux_core_104* linux-process-zombie *ex-interview*
@@ -515,7 +515,8 @@
 
 *kt_linux_arch_001* arch-mips tool-qemu
 
-*kt_linux_core_400* linux-elf load-elf
+*kt_linux_core_400* linux-elf
+*kt_linux_core_400* linux-elf-loading
 *kt_linux_core_400* linux-abi
 *kt_linux_core_400* linux-lib-libc-glibc
 *kt_linux_core_400* linux-lib-libc-glibc-port
@@ -525,9 +526,10 @@
 *kt_linux_core_400* linux-lib-static-how-works
 *kt_linux_core_400* linux-lib-dependancy
 *kt_linux_core_400* linux-lib-ld
-*kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
 *kt_linux_core_400* linux-lib-ld-use-different-version
 *kt_linux_core_400* linux-lib-ld-glibc ld-gdb
+*kt_linux_core_400* linux-lib-ld-uclibc
+*kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
 *kt_linux_core_402* linux-lib-ld-resolve-order
 *kt_linux_core_400* linux-lib-ld-debug
 *kt_linux_core_405* linux-lib-ld-api
@@ -12894,7 +12896,7 @@ stack overflow, global buffer overflow
 
 
 <reference>
-/duma_2_5_15/comparisons/memCheckers.html
+https://fossies.org/linux/duma/comparisons/memCheckers.html
 
 
 ={============================================================================
@@ -36087,7 +36089,7 @@ accommodate very large numbers of processes.
 
 
 ={============================================================================
-*kt_linux_core_101* process-creation
+*kt_linux_core_101* linux-process-creation
 
 LPI 24.
 
@@ -62324,7 +62326,7 @@ of an ELF binary program, which is the subject of this article.
 
 The ELF format
 
-*elf-handler*
+*elf-handler* <linux-elf-source>
 
 The ELF (Executable and Linkable Format) format is the main binary format in
 use on modern Linux systems, and support for it is implemented in the file
@@ -62385,6 +62387,24 @@ replacing the contents of the original program file and allowing access to the
   itself, rather than any other format.
  
 
+<dual-nature>
+LAL, Figure 3.10.
+
+ELF files have an unusual dual nature, Figure 10. Compilers, assemblers, and
+linkers treat the file as a set of logical `sections` described by a section
+header table, while the system loader treats the file as a set of `segments`
+described by a program header table.
+
+A single segment will usually consist of several sections. For example, a
+‘loadable read-only’ segment could contain sections for executable code,
+read-only data, and symbols for the dynamic linker.
+
+Relocatable files have section tables, executable files have program header
+tables, and shared objects have both. The sections are intended for further
+processing by a linker, while the segments are intended to be mapped into
+memory.
+
+
 <elf-format>
 linux-2.6.18.8-from-mips/include/linux/elf.h
 
@@ -62406,7 +62426,7 @@ typedef struct elf32_hdr{
   Elf32_Half    e_type;
   Elf32_Half    e_machine;
   Elf32_Word    e_version;
-  Elf32_Addr    e_entry;      // Entry point */
+  Elf32_Addr    e_entry;      // Entry point
   Elf32_Off     e_phoff;      // where the program header starts
   Elf32_Off     e_shoff;
   Elf32_Word    e_flags;
@@ -62430,6 +62450,56 @@ typedef struct elf32_phdr{
   Elf32_Word    p_flags;
   Elf32_Word    p_align;
 } Elf32_Phdr;
+
+/* Legal values for p_type (segment type).  */
+#define	PT_NULL		0		/* Program header table entry unused */
+// ...
+
+
+<elf-section-header>
+typedef struct
+{
+  Elf32_Word	sh_name;		/* Section name (string tbl index) */
+  Elf32_Word	sh_type;		/* Section type */
+  Elf32_Word	sh_flags;		/* Section flags */
+  Elf32_Addr	sh_addr;		/* Section virtual addr at execution */
+  Elf32_Off	sh_offset;		/* Section file offset */
+  Elf32_Word	sh_size;		/* Section size in bytes */
+  Elf32_Word	sh_link;		/* Link to another section */
+  Elf32_Word	sh_info;		/* Additional section information */
+  Elf32_Word	sh_addralign;		/* Section alignment */
+  Elf32_Word	sh_entsize;		/* Entry size if section holds table */
+} Elf32_Shdr;
+
+
+/* Special section indices.  */
+#define SHN_UNDEF	0		/* Undefined section */
+// ...
+#define SHN_ABS		0xfff1		/* Associated symbol is absolute */
+#define SHN_COMMON	0xfff2		/* Associated symbol is common */
+
+/* Legal values for sh_type (section type).  */
+#define SHT_NULL	  0		/* Section header table entry unused */
+#define SHT_PROGBITS	  1		/* Program data */
+// ...
+
+<elf-symbol>
+/* Symbol table entry.  */
+
+typedef struct
+{
+  Elf32_Word	st_name;		/* Symbol name (string tbl index) */
+  Elf32_Addr	st_value;		/* Symbol value */
+  Elf32_Word	st_size;		/* Symbol size */
+  unsigned char	st_info;		/* Symbol type and binding */
+  unsigned char	st_other;		/* Symbol visibility */
+  Elf32_Section	st_shndx;		/* Section index */
+} Elf32_Sym;
+
+
+A weak symbol is a half-hearted global symbol: if a definition is available
+for an undefined weak symbol, the linker will use it, but if not the value
+defaults to zero.
 
 
 linux-2.6.18.8-from-mips/include/asm-mips/elf.h
@@ -62459,6 +62529,222 @@ linux-2.6.18.8-from-mips/include/asm-mips/elf.h
 
 <read>
 http://www.lurklurk.org/linkers/linkers.html
+
+
+={============================================================================
+*kt_linux_core_400* linux-elf-loading
+
+LAL, Linkers and Loaders, 3
+
+<elf-interp-section>
+An unusual section type is .interp which contains the name of a program to use
+as an interpreter. If this section is present, rather than running the program
+directly, the system `runs the interpreter and passes it the ELF file` as an
+argument. Unix has for many years had self-running interpreted text files,
+using
+
+#! /path/to/interpreter
+
+as the first line of the file. ELF extends this facility to interpreters which
+run non-text programs. In practice this is used to call the run-time dynamic
+linker to load the program and link in any required shared libraries.
+
+The auxiliary vector contains beside the two aforementioned values several
+more values which allow the dynamic linker to avoid several systam calls. The
+elf.h defines a number of AT_ prefix. These are the tags for the entries in
+the vector.
+
+/* Auxiliary vector.  */
+
+/* This vector is normally only used by the program interpreter.  The
+   usual definition in an ABI supplement uses the name auxv_t.  The
+   vector is not usually defined in a standard <elf.h> file, but it
+   can't hurt.  We rename it to avoid conflicts.  The sizes of these
+   types are an arrangement between the exec server and the program
+   interpreter, so we don't fully specify them here.  */
+
+typedef struct
+{
+  uint32_t a_type;		/* Entry type */
+  union
+    {
+      uint32_t a_val;		/* Integer value */
+      /* We use to have pointer elements added here.  We cannot do that,
+	 though, since it does not work when using 32-bit definitions
+	 on 64-bit platforms and vice versa.  */
+    } a_un;
+} Elf32_auxv_t;
+
+/* Legal values for a_type (entry type).  */
+#define AT_NULL		0		/* End of vector */
+#define AT_IGNORE	1		/* Entry should be ignored */
+#define AT_EXECFD	2		/* File descriptor of program */
+#define AT_PHDR		3		/* Program headers for program */
+#define AT_PHENT	4		/* Size of program header entry */
+#define AT_PHNUM	5		/* Number of program headers */
+#define AT_PAGESZ	6		/* System page size */
+#define AT_BASE		7		/* Base address of interpreter */
+// ...
+
+See *linux-elf-source*
+
+// from dl-startup.c of uclubc
+//
+// * Fortunately, the linker itself leaves a few clues lying around, and when the
+// * kernel starts the image, there are a few further clues.  First of all, there
+// * is Auxiliary Vector Table information sitting on which is provided to us by
+// * the kernel, and which includes information about the load address that the
+// * program interpreter was loaded at, the number of sections, the address the
+// * application was loaded at and so forth.  Here this information is stored in
+// * the array auxvt.  For details see linux/fs/binfmt_elf.c where it calls
+// * NEW_AUX_ENT() a bunch of time....
+
+
+<address-binding>
+The basic job of any linker or loader is simple: it `binds` more abstract names
+to more concrete names, which permits programmers to write code using the more
+abstract names. That is, it takes a name written by a programmer such as
+getline and binds it to "the location 612 bytes from the beginning of the
+executable code in module iosys."
+
+
+Address binding: a historical perspective
+
+Libraries of code compound the `address assignment problem.`
+
+The `relocating loader` allowed the authors and users of the subprograms to
+write each subprogram as though it would start at location zero, and to defer
+the actual address binding until the subprograms were linked with a particular
+main program.
+
+But with operating systems, the program had to share the computer’s memory
+with the operating system and perhaps even with other programs, This means
+that the actual addresses at which the program would be running weren’t known
+until the operating system loaded the program into memory, deferring final
+address binding past link time to load time.
+
+Linkers and loaders now divided up the work, with linkers doing `part` of the
+address binding, assigning relative addresses within each program, and the
+loader doing a `final relocation` step to assign actual addresses.
+
+note:
+link time binding(relocation) and load time or run time address
+binding(relocation).
+
+  Relocation is the process of assigning load addresses to the various parts
+  of the program, adjusting the code and data in the program to reflect the
+  assigned addresses. In many systems, relocation happens more than once. It’s
+  quite common for a linker to create a program from multiple subprograms, and
+  create one linked output program that starts at zero, with the various
+  subprograms relocated to locations within the big program. 
+
+  Then when the program is loaded, the system picks the actual load address
+  and the linked program is relocated as a whole to the load address.
+
+
+But computers with hardware relocation invariably run more than one program,
+frequently multiple copies of the same program. Some parts of the program are
+  the same among all running instance (the executable code, in particular),
+while other parts are unique to each instance.
+
+Compilers and assemblers were modified to create object code in multiple
+  sections, with one section for read only code and another section for
+  writable data, the linker had to be able to combine all of sections of each
+  type so that the linked program would have all the code in one place and all
+  of the data in another.
+
+Most systems now provide shared libraries for programs to use, so that all the
+programs that use a library can share a single copy of it.
+
+Sometimes the binding is delayed even farther than that; with full-fledged
+dynamic linking, the addresses of called procedures aren’t bound until the
+first call. 
+
+Furthermore, programs can bind to libraries as the programs are running,
+  loading libraries in the middle of program execution.
+
+  Symbol resolution: When a program is built from multiple subprograms, the
+  references from one subprogram to another are made using symbols; a main
+  program might use a square root routine called sqrt, and the math library
+  defines sqrt. A linker resolves the symbol by noting the location assigned
+  to sqrt in the library, and patching the caller’s object code to so the call
+  instruction refers to that location.
+
+
+The line between relocation and symbol resolution can be fuzzy. Since linkers
+already can resolve references to symbols, one way to handle code relocation
+is to assign a symbol to the base address of each part of the program, and
+treat relocatable addresses as references to the base address symbols.
+
+
+Two-pass linking
+
+When a linker runs, it first has to scan the input files to find the sizes of
+the segments and to collect the definitions and references of all of the
+symbols. It `creates` a segment table listing all of the segments defined in the
+input files, and `a symbol table` with all of the symbols imported or exported.
+
+Using the data from the first pass, 
+the linker `assigns numeric locations to symbols`, determines the sizes and
+  location of the segments in the output address space, and figures out where
+  everything goes in the output file.
+
+The second pass uses the information collected in the first pass to control
+the actual linking process. It reads and relocates the object code,
+`substituting numeric addresses for symbol references`, and adjusting memory
+  addresses in code and data to reflect relocated segment addresses, and
+  writes the relocated code to the output file. It then writes the output
+  file, generally with header information, the relocated segments, and symbol
+  table information. 
+  
+If the program uses dynamic linking, the symbol table contains the info the
+runtime linker will need to resolve dynamic symbols.
+
+
+<elf-got-plt>
+Position-independent code
+
+One popular solution to the dilemma of loading the same program at different
+addresses is position independent code (PIC). The idea is simple, separate the
+code from the data and generate code that won’t change regardless of the
+address at which it’s loaded. That way the code can be shared among all
+processes, with only data pages being private to each process.
+
+
+Its designers noticed that an ELF executable consists of a group of code pages
+followed by a group of data pages, and regardless of where in the address
+space the program is loaded, the offset from the code to the data doesn’t
+change. So if the code can load its own address into a register, the data will
+be at a known distance from that address, and references to data in the
+program’s own data segment can use efficient based addressing with fixed
+offsets.
+
+The linker creates a global offset table (GOT) containing pointers to all of
+the global data that the executable file addresses.
+
+If a procedure needs to refer to global or static data, it’s up to the
+procedure itself to load up the address of the GOT. The details vary by
+architecture, but the 386 code is typical:
+
+  call .L2 ;; push PC in on the stack
+.L2:
+  popl %ebx ;; PC into register EBX
+  addl $_GLOBAL_OFFSET_TABLE_+[.-.L2],%ebx    ;; adjust ebx to GOT address
+
+It consists of a call instruction to the immediately following location, which
+has the effect of pushing the PC on the stack but not jumping, then a pop to
+get the saved PC in a register and an add immediate of the difference between
+the address the GOT and address the target of the call. In an object file
+generated by a compiler, there’s a special R_386_GOTPC relocation item for the
+operand of the addl instruction. 
+
+It tells the linker to substitute in the offset from the current instruction
+to the base address of the GOT, and also serves as a flag to the linker to
+build a GOT in the output file. In the output file, there’s no relocation
+needed for the instruction since the distance from the addl to the GOT is
+fixed. 
+
+note: this output is output in memory for DSO.
 
 
 ={============================================================================
@@ -63416,110 +63702,6 @@ slightly different. ldd will optionally set LD_VERBOSE=1 (to output version
     information) and LD_DEBUG=unused (to output unused shared libraries).
 
 
-={============================================================================
-*kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
-
-Q: HOW to check if linker finds a symbols? 
-
-<1>
-Another unfortunate consequence of this situation, together with poor
-implementation of uClibc dynamic linker [2], is that some libraries fail to
-load. This can happen in a scenario when a C program loads a C library which
-loads another C library that depends on some C++ libraries. uClibc dynamic
-linker in some of such cases doesn't resolve symbols in the right order,
-especially for global C++ objects with constructors!
-
-[2] It's been proved many times that uClibc dynamic linker implementation
-available on devices is broken as it doesn't resolve symbols properly when their
-dependencies are complex enough. Possibly upstream implementation works better
-but the one available from Broadcom is a mix of a very old version and some
-random backported patches.
-
-This libgstcencdec.so is a C library which depends on another C library:
-libdrm.so. The latter one depends on several C++ libraries, with one being
-SystemAPI.so. Because SystemAPI.so now depends on dbus-c++-1, the dynamic linker
-tries to load it. But due some unfortunate library and symbol ordering, it gets
-it wrong which results in a SIGSEGV while scanning for plug-ins:
-
-Program received signal SIGSEGV, Segmentation fault.
-
-[Switching to Thread 0x77ff4000 (LWP 1548)]
-0x00000000 in ?? ()
-(gdb) bt
-#0 0x00000000 in ?? ()
-#1 0x7661d180 in global constructors keyed to eventloop_integration.cpp () 
-  from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-
-#2 0x7661d558 in __do_global_ctors_aux () from 
-  /opt/zinc-trunk/lib/libdbus-c++-1.so.0
-
-
-<2>
-During development, works okay but suddenly failed to start during code
-management.
-
-After all, found that there is one function which thought was deleted but was in
-the code to be called. However, there is no function definition since it was
-removed but only calls to that function remained.
-
-How could that possible without linking error? Since it was so file and run nm:
-
-U        is undefined meaning extern
-
-This was undefined and supposed to be linked when loaded. So when run
-application, failed to find symbol and crashes. 
-
-root        1.1M Sep 18 15:16 core.gst-plugin-scan.8785.HUMAX.1442585817
-root        1.1M Sep 18 15:16 core.gst-plugin-scan.8786.HUMAX.1442585817
-root      171.9M Sep 18 15:17 core.multiqueue1:src.8775.HUMAX.1442585819
-
-
-<3>
-http://stackoverflow.com/questions/1617286/easy-check-for-unresolved-symbols-in-shared-libraries
-
-Q: To check if there are undefined symbol at compile time than dynamic loading
-time?
-
-A: (not checked yet)
-
-Check out the linker option -z defs / --no-undefined. When creating a shared
-object, it will cause the link to fail if there are unresolved symbols.
-
-If you are using gcc to invoke the linker, you'll use the compiler -Wl option to
-pass the option to the linker:
-
-gcc -shared ... -Wl,-z,defs
-
-As an example, consider the following file:
-
-#include <stdio.h>
-
-void forgot_to_define(FILE *fp);
-
-void doit(const char *filename)
-{
-    FILE *fp = fopen(filename, "r");
-    if (fp != NULL)
-    {
-        forgot_to_define(fp);
-        fclose(fp);
-    }
-}
-
-Now, if you build that into a shared object, it will succeed:
-
-> gcc -shared -fPIC -o libsilly.so silly.c && echo succeeded || echo failed
-succeeded
-
-But if you add -z defs, the link will fail and tell you about your missing symbol:
-
-> 
-gcc -shared -fPIC -o libsilly.so silly.c -Wl,-z,defs && echo succeeded || echo failed
-/tmp/cccIwwbn.o: In function `doit':
-silly.c:(.text+0x2c): undefined reference to `forgot_to_define'
-collect2: ld returned 1 exit status
-failed
-
 
 ={============================================================================
 *kt_linux_core_400* linux-lib-ld-use-different-version
@@ -64290,6 +64472,20 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
   /*User code is now executing*/
 
 
+<dl-runtime-resolve>
+
+/* Machine-dependent ELF dynamic relocation inline functions.  Stub version.
+ */
+_dl_runtime_resolve  111 sysdeps/generic/dl-machine.h   extern void _dl_runtime_resolve (Elf32_Word);
+_dl_runtime_resolve  124 sysdeps/generic/dl-machine.h       got[2] = (Elf32_Addr) &_dl_runtime_resolve;
+
+/* Machine-dependent ELF dynamic relocation inline functions.  MIPS version.
+ */
+_dl_runtime_resolve  723 sysdeps/mips/dl-machine.h   extern void _dl_runtime_resolve (ElfW(Word));
+_dl_runtime_resolve  737 sysdeps/mips/dl-machine.h       got[0] = (ElfW(Addr)) &_dl_runtime_resolve;
+_dl_runtime_resolve  288 sysdeps/mips/dl-trampoline.c   " STRINGXV(SETUP_GP64 (0, _dl_runtime_resolve)) "\n\
+
+
 NOTE: In order for gdb to be able to fully debug the application and
 standalone GLIBC you need to invoke it through the new standalone loader.
 
@@ -64356,6 +64552,184 @@ run --library-path
 /home/user/glibc/build/glibc32/nptl:\
 /home/user/glibc/build/glibc32/nptl_db \
 /home/user/glibc/build/test/test --direct
+
+
+={============================================================================
+*kt_linux_core_400* linux-lib-ld-uclibc
+
+  // uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-startup.c
+  _dl_start(unsigned long args)
+  {
+    // elf_machine_load_address() from ldso/ldso/mips/dl-sysdep.h
+    /* locate the ELF header.   We need this done as soon as possible
+     * (esp since SEND_STDERR() needs this on some platforms... */
+    auxvt[AT_BASE].a_un.a_val = elf_machine_load_address();
+    load_addr = auxvt[AT_BASE].a_un.a_val;
+    header = (ElfW(Ehdr) *) auxvt[AT_BASE].a_un.a_val;
+
+
+    // elf_machine_dynamic() from ldso/ldso/mips/dl-sysdep.h
+    /* Locate the global offset table.  Since this code must be PIC
+     * we can take advantage of the magic offset register, if we
+     * happen to know what that is for this architecture.  If not,
+     * we can always read stuff out of the ELF file to find it... */
+    got = elf_machine_dynamic();
+    dpnt = (ElfW(Dyn) *) (got + load_addr);
+
+    _dl_parse_dynamic_info(dpnt, tpnt->dynamic_info, NULL, load_addr);
+
+
+    /* OK, now do the relocations.  We do not do a lazy binding here, so
+       that once we are done, we have considerably more flexibility. */
+
+
+    /* Now we have done the mandatory linking of some things.  We are now
+       free to start using global variables, since these things have all been
+       fixed up by now.  Still no function calls outside of this library,
+       since the dynamic resolver is not yet ready. */
+    // ldso.c
+    _dl_get_ready_to_run(tpnt, load_addr, auxvt, envp, argv);
+    {
+      // ldso/mips/dl-sysdep.h
+      INIT_GOT(lpnt, _dl_loaded_modules);
+
+      /*
+       * Relocation of the GOT entries for MIPS have to be done
+       * after all the libraries have been loaded.
+       */
+      _dl_perform_mips_global_got_relocations(_dl_loaded_modules, !unlazy);
+
+      /*
+       * OK, now all of the kids are tucked into bed in their proper
+       * addresses.  Now we go through and look for REL and RELA records that
+       * indicate fixups to the GOT tables.  We need to do this in reverse
+       * order so that COPY directives work correctly.
+       */
+      // ldso/dl-elf.c
+      _dl_fixup(struct dyn_elf *rpnt, int now_flag)
+
+        //ldso/mips/elfinterp.c
+        _dl_parse_relocation_information();
+
+      _dl_calloc_function = (void* (*)(size_t, size_t)) (intptr_t)
+        _dl_find_hash("calloc", _dl_symbol_tables, NULL, ELF_RTYPE_CLASS_PLT);
+    }
+
+    /* Transfer control to the application.  */
+    _dl_elf_main = (int (*)(int, char **, char **)) auxvt[AT_ENTRY].a_un.a_val;
+  }
+
+
+// used in #define INIT_GOT(GOT_BASE,MODULE)						\
+_dl_runtime_resolve   49 ldso/mips/dl-sysdep.h  GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;                      \
+
+// ldso/mips/resolve.S
+_dl_runtime_resolve:
+
+
+={============================================================================
+*kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
+
+Q: HOW to check if linker finds a symbols? 
+
+<1>
+Another unfortunate consequence of this situation, together with poor
+implementation of uClibc dynamic linker [2], is that some libraries fail to
+load. This can happen in a scenario when a C program loads a C library which
+loads another C library that depends on some C++ libraries. uClibc dynamic
+linker in some of such cases doesn't resolve symbols in the right order,
+especially for global C++ objects with constructors!
+
+[2] It's been proved many times that uClibc dynamic linker implementation
+available on devices is broken as it doesn't resolve symbols properly when their
+dependencies are complex enough. Possibly upstream implementation works better
+but the one available from Broadcom is a mix of a very old version and some
+random backported patches.
+
+This libgstcencdec.so is a C library which depends on another C library:
+libdrm.so. The latter one depends on several C++ libraries, with one being
+SystemAPI.so. Because SystemAPI.so now depends on dbus-c++-1, the dynamic linker
+tries to load it. But due some unfortunate library and symbol ordering, it gets
+it wrong which results in a SIGSEGV while scanning for plug-ins:
+
+Program received signal SIGSEGV, Segmentation fault.
+
+[Switching to Thread 0x77ff4000 (LWP 1548)]
+0x00000000 in ?? ()
+(gdb) bt
+#0 0x00000000 in ?? ()
+#1 0x7661d180 in global constructors keyed to eventloop_integration.cpp () 
+  from /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+
+#2 0x7661d558 in __do_global_ctors_aux () from 
+  /opt/zinc-trunk/lib/libdbus-c++-1.so.0
+
+
+<2>
+During development, works okay but suddenly failed to start during code
+management.
+
+After all, found that there is one function which thought was deleted but was in
+the code to be called. However, there is no function definition since it was
+removed but only calls to that function remained.
+
+How could that possible without linking error? Since it was so file and run nm:
+
+U        is undefined meaning extern
+
+This was undefined and supposed to be linked when loaded. So when run
+application, failed to find symbol and crashes. 
+
+root        1.1M Sep 18 15:16 core.gst-plugin-scan.8785.HUMAX.1442585817
+root        1.1M Sep 18 15:16 core.gst-plugin-scan.8786.HUMAX.1442585817
+root      171.9M Sep 18 15:17 core.multiqueue1:src.8775.HUMAX.1442585819
+
+
+<3>
+http://stackoverflow.com/questions/1617286/easy-check-for-unresolved-symbols-in-shared-libraries
+
+Q: To check if there are undefined symbol at compile time than dynamic loading
+time?
+
+A: (not checked yet)
+
+Check out the linker option -z defs / --no-undefined. When creating a shared
+object, it will cause the link to fail if there are unresolved symbols.
+
+If you are using gcc to invoke the linker, you'll use the compiler -Wl option to
+pass the option to the linker:
+
+gcc -shared ... -Wl,-z,defs
+
+As an example, consider the following file:
+
+#include <stdio.h>
+
+void forgot_to_define(FILE *fp);
+
+void doit(const char *filename)
+{
+    FILE *fp = fopen(filename, "r");
+    if (fp != NULL)
+    {
+        forgot_to_define(fp);
+        fclose(fp);
+    }
+}
+
+Now, if you build that into a shared object, it will succeed:
+
+> gcc -shared -fPIC -o libsilly.so silly.c && echo succeeded || echo failed
+succeeded
+
+But if you add -z defs, the link will fail and tell you about your missing symbol:
+
+> 
+gcc -shared -fPIC -o libsilly.so silly.c -Wl,-z,defs && echo succeeded || echo failed
+/tmp/cccIwwbn.o: In function `doit':
+silly.c:(.text+0x2c): undefined reference to `forgot_to_define'
+collect2: ld returned 1 exit status
+failed
 
 
 ={============================================================================
@@ -64868,7 +65242,7 @@ option.
   Library rpath: [/home/NDS-UK/kyoupark/asn/mips-unknown-linux-uclibc/lib]
 
 
-<serch-order>
+<ld-serch-order>
 The difference between these two types of rpath lists is their relative
 precedence with respect to the LD_LIBRARY_PATH environment variable when the
 dynamic linker searches for shared libraries at run time: `DT_RPATH` has higher
@@ -65028,7 +65402,7 @@ $ echo "/lib" | gawk -f gen-trusted-dirs.awk
 
 #define SYSTEM_DIRS_MAX_LEN     5
 
-<ex> *search-order*
+<ex> *ld-search-order*
 *** KT: force LD_DEBUG=libs ***
          1:      KT: system_dirs: /lib/
          1:   find library=libdl.so.2 [0]; searching
