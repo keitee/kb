@@ -64557,6 +64557,10 @@ run --library-path
 ={============================================================================
 *kt_linux_core_400* linux-lib-ld-uclibc
 
+-sh-3.2# /lib/ld-uClibc.so.0
+Standalone execution is not supported yet
+
+
   // uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-startup.c
   _dl_start(unsigned long args)
   {
@@ -64576,6 +64580,9 @@ run --library-path
     got = elf_machine_dynamic();
     dpnt = (ElfW(Dyn) *) (got + load_addr);
 
+
+    /* OK, that was easy.  Next scan the DYNAMIC section of the image.
+       We are only doing ourself right now - we will have to do the rest later */
     _dl_parse_dynamic_info(dpnt, tpnt->dynamic_info, NULL, load_addr);
 
 
@@ -64590,7 +64597,7 @@ run --library-path
     // ldso.c
     _dl_get_ready_to_run(tpnt, load_addr, auxvt, envp, argv);
     {
-      // ldso/mips/dl-sysdep.h
+      // ldso/mips/dl-sysdep.h from *patch*
       INIT_GOT(lpnt, _dl_loaded_modules);
 
       /*
@@ -64607,12 +64614,16 @@ run --library-path
        */
       // ldso/dl-elf.c
       _dl_fixup(struct dyn_elf *rpnt, int now_flag)
-
-        //ldso/mips/elfinterp.c
+      {
+        //ldso/mips/elfinterp.c from *patch*
         _dl_parse_relocation_information();
+      }
 
-      _dl_calloc_function = (void* (*)(size_t, size_t)) (intptr_t)
-        _dl_find_hash("calloc", _dl_symbol_tables, NULL, ELF_RTYPE_CLASS_PLT);
+      // ldso/ldso/dl-hash.c
+      _dl_calloc_function = (void* (*)(size_t, size_t)) (intptr_t)_dl_find_hash("calloc", _dl_symbol_tables, NULL, ELF_RTYPE_CLASS_PLT);
+      {
+        // uses ARCH_SKIP_RELOC from *patch*
+      }
     }
 
     /* Transfer control to the application.  */
@@ -64625,6 +64636,404 @@ _dl_runtime_resolve   49 ldso/mips/dl-sysdep.h  GOT_BASE[0] = (unsigned long) _d
 
 // ldso/mips/resolve.S
 _dl_runtime_resolve:
+
+
+<brcm-patch>
+uClibc-nptl-0.9.29-20070423-3003-plt-ldso.patch
+
+	* include/elf.h (STO_MIPS_PLT, R_MIPS_COPY, R_MIPS_JUMP_SLOT): Define.
+	(R_MIPS_NUM): Bump to 128.
+	* ldso/include/dl-elf.h (ELF_ST_VISIBILITY): Define.
+	* ldso/ldso/dl-hash.c (ARCH_SKIP_RELOC): New macro.
+	(_dl_find_hash): Use it.
+	* ldso/ldso/mips/dl-sysdep.h (ARCH_SKIP_RELOC): Define.
+	(INIT_GOT): Treat index 2 as a pointer to _dl_linux_resolve
+	if there's a DT_JMPREL tag.
+	(elf_machine_type_class, DL_NO_COPY_RELOCS): Delete.
+	* ldso/ldso/mips/elfinterp.c (_dl_linux_resolve): Declare.
+	(_dl_linux_resolver): New function.
+	(_dl_parse_relocation_information): Handle R_MIPS_JUMP_SLOT
+	and R_MIPS_COPY.
+	(_dl_perform_mips_global_got_relocations): Use a PLT lookup
+	when replacing lazy binding stub entries with the real address.
+	Don't use PLT lookups otherwise.
+	* ldso/ldso/mips/resolve.S (_dl_runtime_resolve:): Allow the
+	move to $25 to be in the delay slot of the return jump.
+	(_dl_linux_resolve): New function.
+
+note:
+used in ARCH_SKIP_RELOC in INIT_GOT
+
+// Index: uClibc-nptl-0.9.29-20070423/ldso/include/dl-elf.h
+// ===================================================================
+// --- uClibc-nptl-0.9.29-20070423.orig/ldso/include/dl-elf.h	2008-03-09 16:42:38.000000000 +0000
+// +++ uClibc-nptl-0.9.29-20070423/ldso/include/dl-elf.h	2008-03-09 16:42:41.000000000 +0000
+// @@ -51,6 +51,7 @@ extern void _dl_protect_relro (struct el
+//  # define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
+//  # define ELF_R_SYM(i)     ELF64_R_SYM(i)
+//  # define ELF_R_TYPE(i)    ELF64_R_TYPE(i)
+// +# define ELF_ST_VISIBILITY(i) ELF64_ST_VISIBILITY(i)
+//  # ifndef ELF_CLASS
+//  #  define ELF_CLASS ELFCLASS64
+//  # endif
+// @@ -59,6 +60,7 @@ extern void _dl_protect_relro (struct el
+//  # define ELF_ST_TYPE(val) ELF32_ST_TYPE(val)
+//  # define ELF_R_SYM(i)     ELF32_R_SYM(i)
+//  # define ELF_R_TYPE(i)    ELF32_R_TYPE(i)
+// +# define ELF_ST_VISIBILITY(i) ELF32_ST_VISIBILITY(i)
+//  # ifndef ELF_CLASS
+//  #  define ELF_CLASS ELFCLASS32
+//  # endif
+
+
+note:
+1. add handling of dynamic section type:
+#define DT_JMPREL	23		/* Address of PLT relocs */
+
+2. use _dl_linux_resolve(void) which is added in
+uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/resolve.S
+
+// Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/dl-sysdep.h
+// ===================================================================
+// --- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/dl-sysdep.h	2008-03-09 16:42:38.000000000 +0000
+// +++ uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/dl-sysdep.h	2008-03-09 16:42:41.000000000 +0000
+// @@ -30,6 +30,12 @@ else if (dpnt->d_tag == DT_MIPS_RLD_MAP)
+//       *(Elf32_Addr *)(dpnt->d_un.d_ptr) =  (Elf32_Addr) debug_addr; \
+//  } while (0)
+//  
+// +#define ARCH_SKIP_RELOC(type_class, sym)				\
+// +	(((sym)->st_shndx == SHN_UNDEF)					\
+// +	 & ((type_class)						\
+// +	    | (((sym)->st_other & ~ELF_ST_VISIBILITY (-1))		\
+// +	       != STO_MIPS_PLT)))
+// +
+//  /* Initialization sequence for the application/library GOT.  */
+//  #define INIT_GOT(GOT_BASE,MODULE)						\
+//  do {										\
+// @@ -42,9 +48,11 @@ do {										\
+//  	/* Fill in first two GOT entries according to the ABI */		\
+//  	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
+//  	GOT_BASE[1] = (unsigned long) MODULE;					\
+// +	idx = 2;								\
+// +	if (MODULE->dynamic_info[DT_JMPREL])					\
+// +		GOT_BASE[idx++] = (unsigned long) _dl_linux_resolve;		\
+//  										\
+//  	/* Add load address displacement to all local GOT entries */		\
+// -	idx = 2;									\
+//  	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
+//  		GOT_BASE[idx++] += (unsigned long) MODULE->loadaddr;		\
+//  										\
+// @@ -71,10 +79,6 @@ void _dl_perform_mips_global_got_relocat
+//  #define ADDR_ALIGN 0xfff
+//  #define OFFS_ALIGN 0x7ffff000
+//  
+// -#define elf_machine_type_class(type)		ELF_RTYPE_CLASS_PLT
+// -/* MIPS does not have COPY relocs */
+// -#define DL_NO_COPY_RELOCS
+// -
+//  #define OFFSET_GP_GOT 0x7ff0
+//  
+//  static inline ElfW(Addr) *
+
+note: 
+used in ARCH_SKIP_RELOC in INIT_GOT
+
+// Index: uClibc-nptl-0.9.29-20070423/include/elf.h
+// ===================================================================
+// --- uClibc-nptl-0.9.29-20070423.orig/include/elf.h	2008-03-09 16:42:38.000000000 +0000
+// +++ uClibc-nptl-0.9.29-20070423/include/elf.h	2008-03-09 16:42:41.000000000 +0000
+// @@ -1539,6 +1539,7 @@ typedef struct
+//  #define STO_MIPS_INTERNAL		0x1
+//  #define STO_MIPS_HIDDEN			0x2
+//  #define STO_MIPS_PROTECTED		0x3
+// +#define STO_MIPS_PLT			0x10
+//  #define STO_MIPS_SC_ALIGN_UNUSED	0xff
+//  
+//  /* MIPS specific values for `st_info'.  */
+// @@ -1684,8 +1685,9 @@ typedef struct
+//  #define R_MIPS_TLS_TPREL64	48	/* TP-relative offset, 64 bit */
+//  #define R_MIPS_TLS_TPREL_HI16	49	/* TP-relative offset, high 16 bits */
+//  #define R_MIPS_TLS_TPREL_LO16	50	/* TP-relative offset, low 16 bits */
+// -/* Keep this the last entry.  */
+// -#define R_MIPS_NUM		51
+// +#define R_MIPS_COPY		126
+// +#define R_MIPS_JUMP_SLOT	127
+// +#define R_MIPS_NUM		128
+//  
+//  /* Legal values for p_type field of Elf32_Phdr.  */
+ 
+note:
+1. used in _dl_find_hash()
+
+2. ARCH_SKIP_RELOC is defined in dl-sysdep.h but seems not to be used here.
+   so used own defined here.
+
+// Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-hash.c
+// ===================================================================
+// --- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/dl-hash.c	2008-03-09 16:42:38.000000000 +0000
+// +++ uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-hash.c	2008-03-09 16:42:41.000000000 +0000
+// @@ -30,6 +30,11 @@
+//   * SUCH DAMAGE.
+//   */
+//  
+// +#ifndef ARCH_SKIP_RELOC
+// +#define ARCH_SKIP_RELOC(type_class, sym) \
+// +	((type_class) & ((sym)->st_shndx == SHN_UNDEF))
+// +#endif
+// +
+//  
+//  /* Various symbol table handling functions, including symbol lookup */
+//  
+// @@ -189,7 +194,7 @@ char *_dl_find_hash(const char *name, st
+//  				&& ELF_ST_TYPE(sym->st_info) != STT_TLS
+//  #endif
+//  				)
+// -				|| (type_class & (sym->st_shndx == SHN_UNDEF)))
+// +				|| ARCH_SKIP_RELOC (type_class, sym))
+//  				continue;
+//  
+//  			if (ELF_ST_TYPE(sym->st_info) > STT_FUNC
+// @@ -283,7 +288,7 @@ char *_dl_find_hash2(const char *name, s
+//  				&& ELF_ST_TYPE(sym->st_info) != STT_TLS
+//  #endif
+//  				)
+// -				|| (type_class & (sym->st_shndx == SHN_UNDEF)))
+// +				|| ARCH_SKIP_RELOC (type_class, sym))
+//  				continue;
+//  
+//  			if (ELF_ST_TYPE(sym->st_info) > STT_FUNC
+
+note:
+1. patch int _dl_parse_relocation_information()
+2. _dl_linux_resolver() is not used
+
+Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/elfinterp.c
+===================================================================
+--- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/elfinterp.c	2008-03-09 16:42:38.000000000 +0000
++++ uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/elfinterp.c	2008-03-09 16:42:41.000000000 +0000
+@@ -30,6 +30,7 @@
+ #include "ldso.h"
+ 
+ extern int _dl_runtime_resolve(void);
++extern int _dl_linux_resolve(void);
+ 
+ #define OFFSET_GP_GOT 0x7ff0
+ 
+@@ -83,6 +84,52 @@ unsigned long __dl_runtime_resolve(unsig
+ 	return new_addr;
+ }
+ 
++unsigned long
++_dl_linux_resolver(struct elf_resolve *tpnt, int reloc_entry)
++{
++	int reloc_type;
++	ELF_RELOC *this_reloc;
++	char *strtab;
++	ElfW(Sym) *symtab;
++	int symtab_index;
++	char *rel_addr;
++	char *new_addr;
++	char **got_addr;
++	unsigned long instr_addr;
++	char *symname;
++
++	rel_addr = (char *)tpnt->dynamic_info[DT_JMPREL];
++	this_reloc = (ELF_RELOC *)(rel_addr) + reloc_entry;
++	reloc_type = ELF_R_TYPE(this_reloc->r_info);
++	symtab_index = ELF_R_SYM(this_reloc->r_info);
++
++	reloc_type = ELF_R_TYPE(this_reloc->r_info);
++	symtab_index = ELF_R_SYM(this_reloc->r_info);
++
++	symtab = (ElfW(Sym) *)(intptr_t)tpnt->dynamic_info[DT_SYMTAB];
++	strtab = (char *)tpnt->dynamic_info[DT_STRTAB];
++	symname = strtab + symtab[symtab_index].st_name;
++
++	/* Address of the .got.plt entry to fix up. */
++	instr_addr = (unsigned long)this_reloc->r_offset;
++	got_addr = (char **)instr_addr;
++
++	/* Get the new value of the GOT entry. */
++	new_addr = _dl_find_hash(symname, tpnt->symbol_scope, tpnt, ELF_RTYPE_CLASS_PLT);
++	if (unlikely(!new_addr)) {
++		_dl_dprintf(2, "%s: can't resolve symbol '%s' in lib '%s'.\n", _dl_progname, symname, tpnt->libname);
++		_dl_exit(1);
++	}
++
++#if defined (__SUPPORT_LD_DEBUG__)
++#error "not implemented"
++#else
++	*got_addr = new_addr;
++#endif
++
++	return (unsigned long)new_addr;
++}
++
+ void _dl_parse_lazy_relocation_information(struct dyn_elf *rpnt,
+ 	unsigned long rel_addr, unsigned long rel_size)
+ {
+@@ -119,7 +166,6 @@ int _dl_parse_relocation_information(str
+ 			(unsigned long) rpnt->r_offset);
+ 		reloc_type = ELF32_R_TYPE(rpnt->r_info);
+ 		symtab_index = ELF32_R_SYM(rpnt->r_info);
+-		symbol_addr = 0;
+ 
+ 		debug_sym(symtab,strtab,symtab_index);
+ 		debug_reloc(symtab,strtab,rpnt);
+@@ -200,6 +246,35 @@ _dl_dprintf(2, "TLS_TPREL  : %s, %x, %x\
+ 			break;
+ 		case R_MIPS_NONE:
+ 			break;
++		case R_MIPS_JUMP_SLOT:
++			if (symtab_index) {
++				*reloc_addr = (unsigned long)_dl_find_hash(
++					strtab + symtab[symtab_index].st_name,
++					xpnt->dyn->symbol_scope, tpnt,
++					ELF_RTYPE_CLASS_PLT);
++			} else {
++				*reloc_addr = 0;
++			}
++			break;
++		case R_MIPS_COPY:
++			symbol_addr = (unsigned long)_dl_find_hash(
++					strtab + symtab[symtab_index].st_name,
++					xpnt->dyn->symbol_scope, tpnt,
++					ELF_RTYPE_CLASS_COPY);
++			if (symbol_addr) {
++#if defined (__SUPPORT_LD_DEBUG__)
++				if (_dl_debug_move)
++					_dl_dprintf(_dl_debug_file,
++						    "\n%s move %d bytes from %x to %x",
++						    strtab + symtab[symtab_index].st_name,
++						    symtab[symtab_index].st_size,
++						    symbol_addr, reloc_addr);
++#endif
++				_dl_memcpy((char *)reloc_addr,
++					   (char *)symbol_addr,
++					   symtab[symtab_index].st_size);
++			}
++			break;
+ 		default:
+ 			{
+ 				_dl_dprintf(2, "\n%s: ",_dl_progname);
+@@ -254,21 +329,31 @@ void _dl_perform_mips_global_got_relocat
+ 		/* Relocate the global GOT entries for the object */
+ 		while (i--) {
+ 			if (sym->st_shndx == SHN_UNDEF) {
+-				if (ELF32_ST_TYPE(sym->st_info) == STT_FUNC && sym->st_value && tmp_lazy) {
+-					*got_entry = sym->st_value + (unsigned long) tpnt->loadaddr;
++				if (ELF32_ST_TYPE(sym->st_info) == STT_FUNC && sym->st_value) {
++					if (tmp_lazy)
++						*got_entry = sym->st_value + (unsigned long) tpnt->loadaddr;
++					else
++						*got_entry = (unsigned long) _dl_find_hash(strtab +
++							sym->st_name, tpnt->symbol_scope, tpnt,
++							ELF_RTYPE_CLASS_PLT);
+ 				}
+ 				else {
+ 					*got_entry = (unsigned long) _dl_find_hash(strtab +
+-						sym->st_name, tpnt->symbol_scope, tpnt, ELF_RTYPE_CLASS_PLT);
++						sym->st_name, tpnt->symbol_scope, tpnt, 0);
+ 				}
+ 			}
+ 			else if (sym->st_shndx == SHN_COMMON) {
+ 				*got_entry = (unsigned long) _dl_find_hash(strtab +
+-					sym->st_name, tpnt->symbol_scope, tpnt, ELF_RTYPE_CLASS_PLT);
++					sym->st_name, tpnt->symbol_scope, tpnt, 0);
+ 			}
+ 			else if (ELF32_ST_TYPE(sym->st_info) == STT_FUNC &&
+-				*got_entry != sym->st_value && tmp_lazy) {
+-				*got_entry += (unsigned long) tpnt->loadaddr;
++				*got_entry != sym->st_value) {
++				if (tmp_lazy)
++					*got_entry += (unsigned long) tpnt->loadaddr;
++				else
++					*got_entry = (unsigned long) _dl_find_hash(strtab +
++						sym->st_name, tpnt->symbol_scope, tpnt,
++						ELF_RTYPE_CLASS_PLT);
+ 			}
+ 			else if (ELF32_ST_TYPE(sym->st_info) == STT_SECTION) {
+ 				if (sym->st_other == 0)
+@@ -276,7 +361,7 @@ void _dl_perform_mips_global_got_relocat
+ 			}
+ 			else {
+ 				*got_entry = (unsigned long) _dl_find_hash(strtab +
+-					sym->st_name, tpnt->symbol_scope, tpnt, ELF_RTYPE_CLASS_PLT);
++					sym->st_name, tpnt->symbol_scope, tpnt, 0);
+ 			}
+ 
+ 			got_entry++;
+
+Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/resolve.S
+===================================================================
+--- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/resolve.S	2008-03-09 16:42:38.000000000 +0000
++++ uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/resolve.S	2008-03-17 20:22:30.000000000 +0000
+@@ -61,7 +61,61 @@ _dl_runtime_resolve:
+ 	# Do a tail call to the original function
+ 	addiu	$29, 40
+ 	move	$25, $2
+-	jr	$25
++	jr	$2
+ .end	_dl_runtime_resolve
++
++	# On entry:
++	#
++	#	$14 points to the beginning of the .got.plt section
++	#	$15 points to _GLOBAL_OFFSET_TABLE_ + 8
++	#	$24 points to the function's .got.plt entry
++.align	2
++.globl	_dl_linux_resolve
++.type	_dl_linux_resolve,@function
++.ent	_dl_linux_resolve
++_dl_linux_resolve:
++	.frame	$29, 48, $31
++	.set noreorder
++
++	# Compute GP.
++	.set noreorder
++	.cpload $25
++	.set reorder
++
++	addiu	$29, -48
++
++	# Save slot call pc.
++	.cprestore 40
++
++	# Save the function arguments.  Also save $2 and $3, which are used
++	# as inputs to __mips16_ret_* functions.
++	sw	$2, 16($29)
++	sw	$3, 20($29)
++	sw	$4, 24($29)
++	sw	$5, 28($29)
++	sw	$6, 32($29)
++	sw	$7, 36($29)
++	sw	$31, 44($29)
++
++	# Setup functions args and call _dl_linux_resolver.
++	lw	$4, -4($15)
++	subu	$5, $24, $14
++	srl	$5, 2
++	jal	_dl_linux_resolver
++	move	$25, $2
++
++	# Restore the saved registers.
++	lw	$2, 16($29)
++	lw	$3, 20($29)
++	lw	$4, 24($29)
++	lw	$5, 28($29)
++	lw	$6, 32($29)
++	lw	$7, 36($29)
++	lw	$31, 44($29)
++
++	# Do a tail call to the original function.
++	addiu	$29, 48
++	jr	$25
++.end	_dl_linux_resolve
+ .previous
+ 
+
+uClibc-nptl-0.9.29-20070423-brcm-dl_calloc.patch:diff -urN uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-tls.c uClibc-nptl-0.9.29-20070423-patched/ldso/ldso/dl-tls.c
+uClibc-nptl-0.9.29-20070423-brcm-static-link.patch:diff -ru uClibc-nptl-0.9.29-20070423.rpm/ldso/ldso/dl-elf.c uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-elf.c
 
 
 ={============================================================================
