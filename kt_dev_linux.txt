@@ -411,18 +411,21 @@
 *kt_linux_core_052* signal-raise-call
 
 |kt_linux_core_100| linux-process
-|kt_linux_core_101| linux-process-creation
-|kt_linux_core_102| process-termination
-|kt_linux_core_103| process-monitor-child-process
-*kt_linux_core_104* linux-process-zombie *ex-interview*
-*kt_linux_core_104* process-sigchld
 |kt_linux_core_105| linux-process-memory-layout
-|kt_linux_core_106| linux-virtual-memory user-stack kernel-stack
+|kt_linux_core_106| linux-process-virtual-memory user-stack kernel-stack
 *kt_linux_core_107* linux-process-argv
 *kt_linux_core_107* linux-process-environment-list
+|kt_linux_core_101| linux-process-creation
+|kt_linux_core_102| linux-process-termination
+|kt_linux_core_103| linux-process-monitor-child-process
+*kt_linux_core_104* linux-process-zombie *ex-interview*
+*kt_linux_core_104* linux-process-sigchld
+|kt_linux_core_110| linux-process-exec exec-call *exec-wrapper-example*
+|kt_linux_core_110| linux-process-exec-system-call 
+*kt_linux_core_110* linux-process-exec-clone-call
+*kt_linux_core_103* linux-process-priority-and-schedule 
 |kt_linux_core_108| process: group
 |kt_linux_core_109| process-deamon
-|kt_linux_core_110| process-exec-call <exec-wrapper-example>
 *kt_linux_core_110* process-resource
 *kt_linux_core_110* process-resource-case
 *kt_linux_core_050* process-function-reentrant
@@ -439,11 +442,10 @@
 
 |kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
-|kt_linux_core_103| linux-priority linux-schedule
 
 *kt_linux_core_200* linux-io-model
 *kt_linux_core_201* linux-io-ioctl
-|kt_linux_core_201| linux-io-extended
+|kt_linux_core_201| linux-io-extended open-file-table
 |kt_linux_core_202| linux-io-non-blocking
 *kt_linux_core_203* linux-io-fs driver-api
 *kt_linux_core_203* linux-io-fs-vfs
@@ -454,7 +456,7 @@
 *kt_linux_core_203* linux-io-temp-file
 *kt_linux_core_203* linux-io-file-attribute
 *kt_linux_core_203* linux-io-directories
-*kt_linux_core_203* linux-io-permission-check process-credentials
+*kt_linux_core_203* linux-io-permission-check linux-process-credentials
 *kt_linux_core_203* linux-io-fs-mount
 *kt_linux_core_203* linux-io-fs-mount-tool-mount
 *kt_linux_core_203* linux-io-fs-mount-bind tool-chroot
@@ -2325,6 +2327,8 @@ else
    # when set
 fi
 
+
+<sh-equal-comparison>
 -n string
     True if the length of string is non-zero.
 
@@ -36097,9 +36101,563 @@ accommodate very large numbers of processes.
 
 
 ={============================================================================
+*kt_linux_core_105* linux-process-memory-layout
+
+LPI 6.3 Memory Layout of a Process
+
+LPI Figure 6-1: Typical memory layout of a process on Linux/x86-32.
+
+note: The ** areas represent invalid ranges in the process's virtual address space;
+that is, areas for which page tables have 'not' been created.
+
+High           +----------------+
+                  ** kernel. mapped into process virtual memory but 
+                             not accessible to program.
+               +----------------+                  0xC0000000
+                  argv, environ
+               +----------------+
+                  stack (grows down)
+top of stack   +----------------+
+                  ** unallocated
+               +----------------+
+                  heap (grows up)
+               +----------------+ < &end
+                  bss
+               +----------------+ < &edata
+                  inited data
+               +----------------+ < &etext
+                  text
+               +----------------+
+                  **
+Low            +----------------+                  0x00000000
+
+note: what's the kernel in this diagram?
+
+/proc/kallsyms provides addresses of kernel symbols in this region. /proc/ksyms
+in kernel 2.4 and earlier.
+
+
+The memory allocated to each process is composed of a number of parts, usually
+referred to as `segments`.
+
+<text-segment> 
+The text segment contains the machine-language instructions of the program run
+by the process. The text segment is made `read-only` so that a process doesn't
+accidentally modify its own instructions via a bad pointer value. Since many
+processes may be running the same program, the text segment is made 'sharable'
+so that a single copy of the program code can be mapped into the virtual address
+space of all of the processes.
+
+<initialized-data-segment>
+The initialized data segment contains 'global' and 'static' variables that are
+explicitly initialized. The values of these variables are read from the
+executable file when the program is loaded into memory.
+
+<uninitialized-data-segment> <bss>
+The uninitialized data segment contains 'global' and 'static' variables that are
+'not' explicitly initialized. Before starting the program, the system
+initializes all memory in this segment to 0.  For historical reasons, this is
+often called the bss segment, a name derived from an old assembler mnemonic for
+"block started by symbol." 
+
+The main reason for placing global and static variables that are initialized
+into a separate segment from those that are uninitialized is that, when a
+program is stored on disk, it is not necessary to allocate space for the
+uninitialized data. Instead, the executable merely needs to record the location
+and size required for the uninitialized data segment, and this space is
+allocated by the program loader at 'runtime'.
+
+Less commonly used, but more descriptive labels for the initialized and
+uninitialized data segments are user-initialized data segment and
+zero-initialized data segment.
+
+<stack>
+The stack is a dynamically growing and shrinking segment containing stack
+frames. One stack frame is allocated for each currently called function. A frame
+stores the function's local variables (so-called automatic variables),
+       arguments, and return value. Stack frames are discussed in more detail in
+         Section 6.5.
+
+<heap>
+The heap is an area from which memory (for variables) can be dynamically
+allocated at run time. The top end of the heap is called the program break.
+
+
+Sometimes, the term section is used instead of segment, since section is more
+consistent with the terminology used in the now ubiquitous ELF specification
+for executable file formats.
+
+<etext>
+the C program environment on most UNIX implementations (including Linux)
+provides three global symbols: etext, edata, and end.
+
+These symbols can be used from within a program to obtain the addresses of the
+next byte past, respectively, the end of the program text, the end of the
+initialized data segment, and the end of the uninitialized data segment.
+
+extern char etext, edata, end;
+/* For example, &etext gives the address of the end
+of the program text / start of initialized data */
+
+
+<size-command>
+The size(1) command displays the size of the text, initialized data, and
+uninitialized data (bss) segments of a binary executable.
+
+kyoupark@kit-debian:~$ ll libgcc_s.so.1
+-rw-r--r-- 1 kyoupark ccusers 290250 Apr  7 08:38 libgcc_s.so.1
+
+kyoupark@kit-debian:~$ size !$
+size libgcc_s.so.1
+   text    data     bss     dec     hex filename
+  60600    2064     288   62952    f5e8 libgcc_s.so.1
+
+>>> 60600+2064+288
+62952
+>>> hex(62952)
+'0xf5e8'
+
+
+={============================================================================
+*kt_linux_core_106* linux-process-virtual-memory user-stack kernel-stack
+
+LPI 6.4 Virtual Memory Management
+
+The aim of this virtual memory is to make efficient use of both the CPU and RAM
+(physical memory) by exploiting a property that is typical of most programs.
+
+`locality-of-reference`. Most programs demonstrate two kinds of locality:
+
+  `spatial locality` is the tendency of a program to reference memory
+  addresses that are 'near' those that were recently accessed (because of
+      'sequential' processing of instructions, and, sometimes, sequential
+      processing of data structures).
+
+  `temporal locality` is the tendency of a program to access the 'same' memory
+  addresses in the near future that it accessed in the recent past (because of
+      loops).
+
+The upshot of locality of reference is that it is possible to execute a program
+while maintaining only 'part' of its address space in RAM.
+
+
+<page>
+A virtual memory scheme splits the memory used by each program into small,
+  fixed-size units called `pages`. Correspondingly, RAM is divided into a series
+  of page frames of the same size. 
+
+At any one time, only some of the pages of a program need to be resident in
+physical memory page frames; these pages form the so-called `resident-set`.
+
+Copies of the unused pages of a program are maintained in the `swap-area` - a
+reserved area of disk space used to supplement the computer's RAM - and loaded
+into physical memory only as required. 
+
+
+<page-fault>
+When a process references a page that is `not currently resident` in physical
+memory, a `page-fault` occurs, at which point the kernel suspends execution of
+the process while the page is loaded from disk into memory.
+
+
+<per-process-page-table>
+The kernel maintains a `page-table` for `each-process` (Figure 6-2). The page
+table describes the location of each page in the process's virtual address
+space (the set of all virtual memory pages available to the process). 
+
+                          access -->
+process virtual address space    page table        physical memory(RAM) 
+                                                      page frames 
+low   page 0                           4                    0
+      page 1                           2                    1
+      page 2                           7                    2
+high  page 3                           0                    3
+
+Each entry in the page table either indicates the location of a virtual page
+in RAM or indicates that it currently resides on disk.
+
+Not all address ranges in the process's virtual address space require page-table
+entries. Typically, large ranges of the potential virtual address space are
+unused, so that it isn't necessary to maintain corresponding page-table entries.
+
+If a process tries to access an address for which there is 'no' corresponding
+page-table entry, it receives a SIGSEGV signal. *sigseg*
+
+
+<page-fault-seg-fault>
+page-fault is different from seg-fault since page-fault happens when finds an
+entry in page table but not in the resident-set so raise page-fault to signal
+that reads from swap-space. But seg-fault happens when no entry in page table.
+
+*PMMU*
+The implementation of virtual memory requires hardware support in the form of
+a paged memory management unit (PMMU). The PMMU translates each virtual memory
+address reference into the corresponding physical memory address and advises
+the kernel of a page fault when a particular virtual memory address
+corresponds to a page that is not resident in RAM.
+
+
+{valid-virtual-addresses}
+A process's range of 'valid' virtual addresses can change over its lifetime, as
+the kernel allocates and deallocates pages (and page-table entries) for the
+process.
+
+* as the stack grows downward beyond limits previously reached;
+
+* when memory is allocated or deallocated on the heap, by raising the program
+  break using brk(), sbrk(), or the malloc family of functions
+
+* when System V shared memory regions are attached using shmat() and detached
+  using shmdt()
+
+* when memory mappings are created using mmap() and unmapped using munmap()
+
+
+{advantages}
+Virtual memory management separates the virtual address space of a process
+from the physical address space of RAM. This provides many advantages:
+
+* Processes are `isolated` from one another and from the kernel, so that one
+  process can't read or modify the memory of another process or the kernel. This
+  is accomplished by having the page-table entries for each process point to
+  distinct sets of physical pages in RAM (or in the swap area).
+
+* Where appropriate, two or more processes can share memory. The kernel makes
+  this possible by having page-table entries in different processes refer to the
+  same pages of RAM. Memory sharing occurs in two common circumstances:
+
+  - Multiple processes executing the same program can share a single (readonly)
+  copy of the program code. This type of sharing is performed implicitly when
+  multiple programs execute the same program file (or load the same shared
+      library).
+
+  - Processes can use the shmget() and mmap() system calls to explicitly request
+  sharing of memory regions with other processes. This is done for the purpose
+  of interprocess communication.
+
+* The implementation of `memory-protection` schemes is facilitated; that is,
+  pagetable entries can be marked to indicate that the contents of the
+  corresponding page are readable, writable, executable, or some combination
+  of these protections. Where multiple processes share pages of RAM, it is
+  possible to specify that each process has different protections on the
+  memory; for example, one process might have read-only access to a page,
+  while another has read-write access.  
+       
+* Because only a part of a program needs to reside in memory, the program loads
+  and runs faster.  Furthermore, the memory footprint (i.e., virtual size) of a
+  process can exceed the capacity of RAM.
+
+* One final advantage of virtual memory management is that since each process
+  uses less RAM, more processes can simultaneously be held in RAM. This
+  typically leads to better CPU utilization, since it increases the likelihood
+  that, at any moment in time, there is at least one process that the CPU can
+  execute.
+
+
+6.5 The Stack and Stack Frames
+
+<kernel-stack>
+Sometimes, the term "user stack" is used to distinguish the stack we describe
+here from the "kernel stack". The kernel stack is a `per-process` memory region
+maintained in kernel memory that is used as the stack for execution of the
+functions called internally during the execution of a `system-call`.  The kernel
+can't employ the user stack for this purpose since it resides in unprotected
+user memory.
+
+
+<user-stack>
+Each (user) stack frame contains the following information:
+
+* Function arguments and local variables: 
+
+In C these are referred to as automatic variables, since they are automatically
+created when a function is called. These variables also automatically disappear
+when the function returns (since the stack frame disappears), and this forms the
+primary semantic distinction between automatic and static (and global)
+  variables: the latter have a permanent existence independent of the execution
+  of functions.
+
+* `call-linkage` information: 
+
+Each function uses certain CPU registers, such as the program counter, which
+points to the next machine-language instruction to be executed. Each time one
+function calls another, a copy of these registers is saved in the called
+function's stack frame so that when the function returns, the appropriate
+register values can be restored for the calling function.
+
+Referring to Listing 6-1, during the execution of the function square(), the
+stack will contain frames as:
+
++----------------+
+ frames for c run-time startup functions  note:
++----------------+
+ frame for main
++----------------+
+ frame for doCalc()
++----------------+
+ frame for square() 
++----------------+      <- sp. grows down
+
+
+={============================================================================
+*kt_linux_core_107* linux-process-argv
+
+6.6 Command-Line Arguments (argc, argv)
+
+<argv-trick>
+The fact that argv[0] contains the name used to invoke the program can be
+employed to perform a useful trick. We can create multiple links to (i.e.,
+    names for) the same program, and then have the program look at argv[0] and
+take different actions depending on the name used to invoke it. An example of
+this technique is provided by the gzip(1), gunzip(1), and zcat(1) commands,
+all of which are links to the same executable file. 
+
+If we employ this technique, we must be careful to handle the possibility that
+the user might invoke the program via a link with a name other than any of
+those that we expect.
+
+One limitation of the argc/argv mechanism is that these variables are
+available only as arguments to main().
+
+
+<ARG_MAX>
+There is an upper limit on the total number of bytes that can be stored in
+this area. SUSv3 prescribes the use of the ARG_MAX constant (defined in
+    <limits.h>) or the call sysconf(_SC_ARG_MAX) to determine this limit. 
+
+SUSv3 requires ARG_MAX to be at least _POSIX_ARG_MAX (4096) bytes. Most UNIX
+implementations allow a considerably higher limit than this.  SUSv3 leaves it
+unspecified whether an implementation counts overhead bytes (for terminating
+    null bytes, alignment bytes, and the argv and environ arrays of pointers)
+against the ARG_MAX limit.
+
+Starting with kernel 2.6.23, the limit on the total space used for argv and
+environ can be controlled via the RLIMIT_STACK resource limit, and a much
+larger limit is permitted for argv and environ.
+
+
+{proc-cmdline}
+The command-line arguments of any process can be read via the Linux-specific
+/proc/PID/cmdline file, with each argument being terminated by a null byte. A
+program can access its own command-line arguments via /proc/self/cmdline.
+
+
+={============================================================================
+*kt_linux_core_107* linux-process-environment-list
+
+LPI 6.7 Environment List
+
+Each process has an associated array of strings called the environment list,
+or simply the environment. Thus, the environment represents a set of
+  `name-value pairs` that can be used to hold arbitrary information. The names
+  in the list are referred to as `environment variables.`
+
+
+<copied>
+When a new process is created, it inherits a copy of its parent's environment.
+This is a primitive but frequently used form of interprocess communication;
+the environment provides a way to transfer information from a parent process
+to its child(ren). Since the child gets a copy of its parent's environment at
+the time it is created, this transfer of information is one-way and once-only.
+
+Each process has an environment list, which is a set of environment variables
+that are maintained within the `user-space memory of the process.` 
+
+When a new process is created via fork(), it inherits a copy of its parent's
+environment. Thus, the environment provides a mechanism for a parent process
+to `communicate` information to a child process. When a process replaces the
+program that it is running using exec(), the new program either inherits the
+environment used by the old program or receives a new environment specified as
+part of the exec() call.
+
+
+{sh-export}
+A value can be added to the environment using the export command. The above
+commands permanently add a value to the shell's environment, and this
+environment is then inherited by all child processes that the shell creates.
+At any point, an environment variable can be removed with the unset command
+
+$ SHELL=/bin/bash 			# create a `shell variable`
+$ export SHELL=/bin/bash	# put variable into shell process's environment
+
+In the Bourne shell and its descendants, the following syntax can be used to
+add values to the environment used to execute a single program, without
+affecting the parent shell (and subsequent commands):
+
+$ NAME=value program
+
+This adds a definition to the environment of `just the child process`
+executing the named program. If desired, multiple assignments (delimited by
+    white space) can precede the program name.
+
+
+{proc-environ}
+The environment list of any process can be examined via the Linux-specific
+/proc/PID/environ file, with each NAME=value pair being terminated by a null
+byte.
+
+$ cat /proc/1155/environ | strings
+
+
+{in-process}
+Within a C program, the environment list can be accessed using the global
+variable `char **environ.` The C run-time startup code defines this variable
+and assigns the location of the environment list to it. Like argv, environ
+points to a NULL-terminated list of pointers to null-terminated strings.
+
+the argv and environ arrays 'reside' in a single contiguous area of memory
+just above the process stack.
+
+#include <stdio.h>
+
+int main(int argc, char **argv, char **env)
+{
+    char **ep;
+
+    printf("this prints envs\n");
+    for(ep = env; *ep != NULL; ep++)
+        puts(*ep);
+
+    return;
+}
+
+
+{getenv-setenv}
+The getenv() function retrieves individual values from the 'process' environment.
+
+#include <stdlib.h>
+
+char *getenv(const char *name);
+
+Returns pointer to (value) string, or NULL if no such variable
+
+The setenv() function is an alternative to putenv() for adding a variable to
+the environment.
+
+int setenv(const char *name, const char *value, int overwrite);
+int unsetenv(const char *name);
+
+Returns 0 on success, or -1 on error
+
+int putenv(char *string);
+
+Returns 0 on success, or nonzero on error
+
+The string argument is a pointer to a string of the form name=value. After the
+putenv() call, this string is part of the environment. In other words, rather
+than duplicating the string pointed to by string, one of the elements of
+environ will be set to point to the same location as string.
+
+The setenv() function 'creates' a new environment variable `by allocating` a
+memory buffer for a string of the form name=value, and copying the strings
+pointed to by name and value into that buffer. note: this is why setenv() is
+preferable to putenv() since putenv() do not allocate.
+
+The setenv() function doesn't change the environment if the variable
+identified by name already exists and overwrite has the value 0. If overwrite
+is nonzero, the environment is always changed.
+
+note: Q: where does setenv() allocate a memory? is there any max limit of the
+number of env var to create? what if it goes over in term of process memory
+layout?
+
+From setenv() man:
+       ENOMEM Insufficient memory to add a new variable to the environment.
+
+
+The unsetenv() function removes the variable identified by name from the
+environment. 
+
+note: from man page, The unsetenv() function 'deletes' the variable name from
+the environment. If name does not exist in the environment, then the function
+succeeds, and the environment is unchanged.
+
+
+{clearenv}
+On occasion, it is useful to erase the entire environment, and then rebuild it
+with selected values. For example, we might do this in order to execute
+set-user-ID programs in a secure manner (Section 38.8). We can erase the
+environment by assigning NULL to environ:
+
+environ = NULL;
+
+This is exactly the step performed by the clearenv() library function.
+
+#define _BSD_SOURCE /* Or: #define _SVID_SOURCE */
+#include <stdlib.h>
+
+int clearenv(void)
+
+Returns 0 on success, or a nonzero on error
+
+<memory-leaks>
+In some circumstances, the use of setenv() and clearenv() can lead to memory
+leaks in a program. We noted above that setenv() allocates a memory buffer
+that is then made part of the environment. When we call clearenv(), it doesn't
+free this buffer (it can't, since it doesn't know of the buffer's existence).
+A program that repeatedly employed these two functions would steadily leak
+memory. 
+
+In practice, this is unlikely to be a problem, because a program typically
+calls clearenv() just once on startup, in order to remove all entries from the
+environment that it inherited from its predecessor (i.e., the program that
+    called exec() to start this program).
+
+
+$ ./modify_env "GREET=Guten Tag" SHELL=/bin/bash BYE=Ciao
+GREET=Guten Tag
+SHELL=/bin/bash
+
+$ ./modify_env SHELL=/bin/sh BYE=byebye
+SHELL=/bin/sh
+GREET=Hello world
+
+
+#define _GNU_SOURCE /* To get various declarations from <stdlib.h> */
+#include <stdlib.h>
+#include "tlpi_hdr.h"
+
+extern char **environ;
+
+int main(int argc, char *argv[])
+{
+    int j;
+    char **ep;
+
+    // note: do not 'free' actually
+    clearenv(); /* Erase entire environment */
+
+    for (j = 1; j < argc; j++)
+        if (putenv(argv[j]) != 0)
+            errExit("putenv: %s", argv[j]);
+
+    // note: when no GREET in arguments, this will create one but no call to free it?
+    if (setenv("GREET", "Hello world", 0) == -1)
+        errExit("setenv");
+
+    // note: when BYE is from argv, how dose this free it if unsetenv() do delete it?
+    unsetenv("BYE");
+
+    for (ep = environ; *ep != NULL; ep++)
+        puts(*ep);
+
+    exit(EXIT_SUCCESS);
+}
+
+
+<inter-process-inter-program>
+Sometimes, it is useful for a process to modify its environment. One reason is
+to make a change that is visible in all child processes subsequently created
+by that process.  Another possibility is that we want to set a variable that
+is visible to a new program to be loaded into the memory of this process
+("`exec`ed"). In this sense, the environment is not just a form of interprocess
+communication, but also a method of interprogram communication.
+
+
+={============================================================================
 *kt_linux_core_101* linux-process-creation
 
-LPI 24.
+LPI 24 Process Creation
 
 {process-creation}
 The wait(&status) system call has `two-purposes`. First, if a child of this
@@ -36154,7 +36712,7 @@ switch (childPid = fork()) {
 }
 
 note 
-child pid is assigned immediately after fork and has the same name in ps. So pid
+child pid is assigned `immediately after fork` and has the same name in ps. So pid
 == 0 check is to distinguish execution path in the same code in parent.
 
 $ pid (26337): before fork:  
@@ -36175,21 +36733,51 @@ corresponding parts the parent's memory. The child receives duplicates of all of
 the parent's file descriptors.
 
 
+<execing>
+The execve(pathname, argv, envp) system call loads a new program (pathname,
+with argument list argv, and environment list envp) into a processs memory.
+The existing program text is discarded, and the stack, data, and heap segments
+are `freshly created` for the new program. This operation is often referred to
+as execing a new program.
+
+
+<fork-copy-on-write>
+24.2.2
+
+However, actually performing a simple copy of the parents virtual memory
+pages into the new child process would be wasteful for a number of reasonsone
+being that a fork() is often followed by an immediate exec(), which replaces
+the processs text with a new program and reinitializes the processs data,
+heap, and stack segments.
+
+note: this is a reason to introduce vfork() and clone().
+
+
 <race-condition-after-fork>
 After a fork(), it is indeterminate which of the two is next scheduled to use
 CPU. If we need to guarantee a particular order, we must use some kind of
 synchronization technique.
 
 <case-use-signal>
-Avoiding Race Conditions by Synchronizing with Signals. Although, in practice,
-         such coordination is more likely to be done using semaphores, file
-         locks, or message passing. 
+Avoiding race conditions by synchronizing with signals. In practice, such
+coordination is more likely to be done using semaphores, file locks, or
+message passing. 
 
 
 ={============================================================================
-*kt_linux_core_102* process-termination
+*kt_linux_core_102* linux-process-termination
 
-LPI 25.
+LPI 25 Process Termination
+
+<exit-function-system-call>
+The exit(status) library function terminates a process, making all resources
+(memory, open file descriptors, and so on) used by the process available for
+subsequent reallocation by the kernel. The status argument is an integer that
+determines the termination status for the process. Using the wait() system
+call, the parent can retrieve this status.
+
+The exit() library function is layered on top of the _exit() system call.
+
 
 {two-ways}
 A process may terminate in two general ways. One of these is abnormal
@@ -36199,6 +36787,9 @@ can terminate normally, using the _exit() system call.
 
 #include <unistd.h>
 void _exit(int status);
+
+#include <stdlib.h>
+void exit(int status); 
 
 
 {exit-value}
@@ -36230,66 +36821,73 @@ compilation options employed:
 Programs generally don't call _exit() directly, but instead call the exit()
 library function, which performs various actions before calling _exit().
 
-note:
-exit() is library function and _exit() is system call.
-
 #include <stdlib.h>
 void exit(int status);
 
 The following actions are performed by exit():
 
-1. Exit handlers (functions registered with atexit() and on_exit()) are called,
+ 1 Exit handlers (functions registered with atexit() and on_exit()) are called,
   in reverse order of their registration (Section 25.3).
 
-2. The stdio stream buffers are flushed.
+<2> The stdio stream buffers are flushed.
 
-3. The _exit() system call is invoked, using the value supplied in status.
+ 3 The _exit() system call is invoked, using the value supplied in status.
 
 Unlike _exit(), which is UNIX-specific, exit() is defined as part of the
 standard C library; that is, it is available with every C implementation.
 
 
 {actions-on-termination}
+25.2 Details of Process Termination
+
 During both normal and abnormal termination of a process, the following actions
 occur:
 
-1. Open file descriptors, directory streams (Section 18.8), message catalog descriptors
-(see the catopen(3) and catgets(3) manual pages), and conversion descriptors
-(see the iconv_open(3) manual page) are closed.
+1. Open file descriptors, directory streams (Section 18.8), message catalog
+descriptors (see the catopen(3) and catgets(3) manual pages), and conversion
+descriptors (see the iconv_open(3) manual page) are closed.
 
-2. As a consequence of closing file descriptors, any file locks (Chapter 55) held by
-this process are released.
+2. As a consequence of closing file descriptors, any file locks (Chapter 55)
+held by this process are released.
 
-<3>. Any attached System V shared memory segments are detached, and the shm_nattch counter
-corresponding to each segment is decremented by one.
+<3> Any attached System V shared memory segments are detached, and the
+shm_nattch counter corresponding to each segment is decremented by one.
 
-4. For each System V semaphore for which a semadj value has been set by the process,
-that semadj value is added to the semaphore value. (Refer to Section 47.8.)
+4. For each System V semaphore for which a semadj value has been set by the
+process, that semadj value is added to the semaphore value. (Refer to Section
+47.8.)
 
-<5>. If this is the controlling process for a controlling terminal, then the SIGHUP signal is sent to
-each process in the controlling terminal's foreground process group, and the terminal is
-disassociated from the session.
+<5> If this is the controlling process for a controlling terminal, then the
+SIGHUP signal is sent to each process in the controlling terminal's foreground
+process group, and the terminal is disassociated from the session.
 
-6. Any POSIX named semaphores that are open in the calling process are closed as though sem_close()
-  were called.
+6. Any POSIX named semaphores that are open in the calling process are closed
+as though sem_close() were called.
 
-7. Any POSIX message queues that are open in the calling process are closed as though mq_close()
-  were called.
+7. Any POSIX message queues that are open in the calling process are closed as
+though mq_close() were called.
 
-8. If, as a consequence of this process exiting, a process group becomes orphaned and there are any
-stopped processes in that group, then all processes in the group are sent a SIGHUP signal followed
-by a SIGCONT signal. We consider this point further in Section 34.7.4.
+8. If, as a consequence of this process exiting, a process group becomes
+orphaned and there are any stopped processes in that group, then all processes
+in the group are sent a SIGHUP signal followed by a SIGCONT signal. We
+consider this point further in Section 34.7.4.
 
-9. Any memory locks established by this process using mlock() or mlockall() (Section 50.2) are
-removed.
+9. Any memory locks established by this process using mlock() or mlockall()
+(Section 50.2) are removed.
 
 10. Any memory mappings established by this process using mmap() are unmapped.
 
 
 {exit-handler}
+Sometimes, an application needs to automatically perform some operations on
+process termination.
+
+The GNU C library provides two ways of registering exit handlers. The first
+method, specified in SUSv3, is to use the atexit() function.
 
 
 {stdio-buffers-and-exit}
+25.4 Interactions Between fork(), stdio Buffers, and _exit()
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36313,8 +36911,8 @@ int main(int argc, char** argv)
 
 $ gcc sample-two.c 
 $ ./a.out 
-Hello world.
-Ciao
+Hello world. 				# printf
+Ciao 							# write
 
 $ ./a.out > a
 $ cat a
@@ -36322,33 +36920,29 @@ Ciao
 Hello world.
 Hello world.
 
+$ ./a.out > a 				# when use setbuf()
+$ cat a
+Ciao
+Hello world.
 
-<q> Why different output order and duplicates?
+note: Q: Why different output order and duplicates?
 
 1. duplicates.
+
 Recall that the stdio buffers are maintained in a process's user-space memory
-(refer to 13.2).  Therefore, these buffers are duplicated in the child by
-fork(). When standard output is directed to a terminal, it is `line-buffered` by
-default, with the result that the newline-terminated string written by printf()
-  appears 'immediately'. 
+(refer to 13.2). Therefore, these buffers are duplicated in the child by
+fork(). When standard output is `directed to a terminal`, it is
+`line-buffered` by default, with the result that the newline-terminated string
+written by printf() appears `immediately`. 
 
 However, when standard output is directed to a file, it is `block-buffered` by
 default. Thus the string written by printf() is still in the parent's stdio
 buffer at the time of the fork(), and this string is duplicated in the child.
-When the parent and the child later call exit(), they both flush their copies of
-the stdio buffers, resulting in duplicate output.
+When the parent and the child later call exit(), they both flush their copies
+of the stdio buffers, resulting in duplicate output.
 
 To remedy this, can use setbuf() and fflush() to flush the stdio buffer prior to
 a fork() call.  However, still have different order.
-
-$ ./a.out 
-Hello world.
-Ciao
-
-$ ./a.out > a
-$ cat a
-Ciao
-Hello world.
 
 2. the output order.
 The write() transfers data directly to a kernel buffer, and this buffer is not
@@ -36364,7 +36958,7 @@ to perform I/O on the same file, as described in Section 13.7.
 
 
 ={============================================================================
-*kt_linux_core_103* process-monitor-child-process
+*kt_linux_core_103* linux-process-monitor-child-process
 
 LPI 26 MONITORING CHILD PROCESSES
 
@@ -36468,7 +37062,7 @@ following events for the child:
 We use the term `wait status` to encompass all of the above cases. The
 designation `termination status` is used to refer to the first two cases.
 
-Although defined as an int, only the bottom 2 bytes of the value pointed to by
+Although defined as an int, `only the bottom 2 bytes` of the value pointed to by
 status are actually used. The way in which these 2 bytes are filled depends on
 which of the above events occurred for the child.
 
@@ -36496,7 +37090,7 @@ WIFEXITED(status)
 This macro returns true if the child process exited normally. In this case,
      the macro WEXITSTATUS(status) returns the exit status of the child
        process.  
-(As noted in Section 25.1, only the least significant byte of the child’s exit
+(As noted in Section 25.1, only the least significant byte of the childâs exit
  status is available to the parent.)
 
 Note that although the name status is also used for the argument of the above
@@ -36680,7 +37274,7 @@ int main(int argc, char *argv[])
 
 
 ={============================================================================
-*kt_linux_core_104* process-sigchld
+*kt_linux_core_104* linux-process-sigchld
 
 note:
 An example that has a possibility of creating zombie childrens and has to
@@ -36719,541 +37313,649 @@ note: skipped and see the LPI for more.
 
 
 ={============================================================================
-*kt_linux_core_105* linux-process-memory-layout
+*kt_linux_core_110* linux-process-exec exec-call
 
-LPI Figure 6-1: Typical memory layout of a process on Linux/x86-32.
+LPI 27 Program Execution
 
-The ** areas represent invalid ranges in the process's virtual address space;
-that is, areas for which page tables have 'not' been created.
+{execve-system-call}
+Various library functions, all with names beginning with exec, are layered on
+top of the execve() system call. Each of these functions provides a different
+interface to the same functionality. The loading of a new program by any of
+these calls is commonly referred to as an exec operation, or simply by the
+notation exec().
 
-High           +----------------+
-                  ** kernel. mapped into process virtual memory but 
-                             not accessible to program.
-               +----------------+                  0xC0000000
-                  argv, environ
-               +----------------+
-                  stack (grows down)
-top of stack   +----------------+
-                  ** unallocated
-               +----------------+
-                  heap (grows up)
-               +----------------+ < &end
-                  bss
-               +----------------+ < &edata
-                  inited data
-               +----------------+ < &etext
-                  text
-               +----------------+
-                  **
-Low            +----------------+                  0x00000000
+#include <unistd.h>
+int execve(const char *pathname, char *const argv[], char *const envp[]);
 
-note: what's the kernel in this diagram?
+note: 'never' returns on success; returns -1 on error
 
-/proc/kallsyms provides addresses of kernel symbols in this region. /proc/ksyms
-in kernel 2.4 and earlier.
 
+<attribute-that-remains>
+After an execve(), the process ID of the process remains the same, because the
+same process continues to exist.
 
-6.3 Memory Layout of a Process
 
-The memory allocated to each process is composed of a number of parts, usually
-referred to as `segments`.
+<never-return>
+Never need to check the return value from execve(); it will always be -1 if get
+since the very fact that it returned informs us that an error occurred,
 
-<text-segment> 
-The text segment contains the machine-language instructions of the program run
-by the process. The text segment is made `read-only` so that a process doesn't
-accidentally modify its own instructions via a bad pointer value. Since many
-processes may be running the same program, the text segment is made 'sharable'
-so that a single copy of the program code can be mapped into the virtual address
-space of all of the processes.
+<ex>
+note: See how envs are passed to.
 
-<initialized-data-segment>
-The initialized data segment contains 'global' and 'static' variables that are
-explicitly initialized. The values of these variables are read from the
-executable file when the program is loaded into memory.
+$ ./t_execve ./envargs 
+argv[0] = envargs 
+argv[1] = hello world 
+argv[2] = goodbye 
+env: GREET=salut 
+env: BYE=adieu 
 
-<uninitialized-data-segment> <bss>
-The uninitialized data segment contains 'global' and 'static' variables that are
-'not' explicitly initialized. Before starting the program, the system
-initializes all memory in this segment to 0.  For historical reasons, this is
-often called the bss segment, a name derived from an old assembler mnemonic for
-"block started by symbol." 
-
-The main reason for placing global and static variables that are initialized
-into a separate segment from those that are uninitialized is that, when a
-program is stored on disk, it is not necessary to allocate space for the
-uninitialized data. Instead, the executable merely needs to record the location
-and size required for the uninitialized data segment, and this space is
-allocated by the program loader at 'runtime'.
-
-Less commonly used, but more descriptive labels for the initialized and
-uninitialized data segments are user-initialized data segment and
-zero-initialized data segment.
-
-<stack>
-The stack is a dynamically growing and shrinking segment containing stack
-frames. One stack frame is allocated for each currently called function. A frame
-stores the function's local variables (so-called automatic variables),
-       arguments, and return value. Stack frames are discussed in more detail in
-         Section 6.5.
-
-<heap>
-The heap is an area from which memory (for variables) can be dynamically
-allocated at run time. The top end of the heap is called the program break.
-
-
-Sometimes, the term section is used instead of segment, since section is more
-consistent with the terminology used in the now ubiquitous ELF specification
-for executable file formats.
-
-<etext>
-the C program environment on most UNIX implementations (including Linux)
-provides three global symbols: etext, edata, and end.
-
-These symbols can be used from within a program to obtain the addresses of the
-next byte past, respectively, the end of the program text, the end of the
-initialized data segment, and the end of the uninitialized data segment.
-
-extern char etext, edata, end;
-/* For example, &etext gives the address of the end
-of the program text / start of initialized data */
-
-
-<size-command>
-The size(1) command displays the size of the text, initialized data, and
-uninitialized data (bss) segments of a binary executable.
-
-kyoupark@kit-debian:~$ ll libgcc_s.so.1
--rw-r--r-- 1 kyoupark ccusers 290250 Apr  7 08:38 libgcc_s.so.1
-
-kyoupark@kit-debian:~$ size !$
-size libgcc_s.so.1
-   text    data     bss     dec     hex filename
-  60600    2064     288   62952    f5e8 libgcc_s.so.1
-
->>> 60600+2064+288
-62952
->>> hex(62952)
-'0xf5e8'
-
-
-={============================================================================
-*kt_linux_core_106* linux-virtual-memory
-
-LPI 6.4 Virtual Memory Management
-
-The aim of this virtual memory is to make efficient use of both the CPU and RAM
-(physical memory) by exploiting a property that is typical of most programs.
-
-`locality-of-reference`. Most programs demonstrate two kinds of locality:
-
-  `spatial locality` is the tendency of a program to reference memory
-  addresses that are 'near' those that were recently accessed (because of
-      'sequential' processing of instructions, and, sometimes, sequential
-      processing of data structures).
-
-  `temporal locality` is the tendency of a program to access the 'same' memory
-  addresses in the near future that it accessed in the recent past (because of
-      loops).
-
-The upshot of locality of reference is that it is possible to execute a program
-while maintaining only 'part' of its address space in RAM.
-
-
-<page>
-A virtual memory scheme splits the memory used by each program into small,
-  fixed-size units called `pages`. Correspondingly, RAM is divided into a series
-  of page frames of the same size. 
-
-At any one time, only some of the pages of a program need to be resident in
-physical memory page frames; these pages form the so-called `resident-set`.
-
-Copies of the unused pages of a program are maintained in the `swap-area` - a
-reserved area of disk space used to supplement the computer's RAM - and loaded
-into physical memory only as required. 
-
-
-<page-fault>
-When a process references a page that is `not currently resident` in physical
-memory, a `page-fault` occurs, at which point the kernel suspends execution of
-the process while the page is loaded from disk into memory.
-
-The kernel maintains a `page-table` for `each-process` (Figure 6-2). The page
-table describes the location of each page in the process's virtual address
-space (the set of all virtual memory pages available to the process). 
-
-                          access -->
-process virtual address space    page table        physical memory(RAM) 
-                                                      page frames 
-low   page 0                           4                    0
-      page 1                           2                    1
-      page 2                           7                    2
-high  page 3                           0                    3
-
-Each entry in the page table either indicates the location of a virtual page
-in RAM or indicates that it currently resides on disk.
-
-Not all address ranges in the process's virtual address space require page-table
-entries. Typically, large ranges of the potential virtual address space are
-unused, so that it isn't necessary to maintain corresponding page-table entries.
-
-If a process tries to access an address for which there is 'no' corresponding
-page-table entry, it receives a SIGSEGV signal. *sigseg*
-
-
-<page-fault-seg-fault>
-page-fault is different from seg-fault since page-fault happens when finds an
-entry in page table but not in the resident-set so raise page-fault to signal
-that reads from swap-space. But seg-fault happens when no entry in page table.
-
-*PMMU*
-The implementation of virtual memory requires hardware support in the form of
-a paged memory management unit (PMMU). The PMMU translates each virtual memory
-address reference into the corresponding physical memory address and advises
-the kernel of a page fault when a particular virtual memory address
-corresponds to a page that is not resident in RAM.
-
-
-{valid-virtual-addresses}
-A process's range of 'valid' virtual addresses can change over its lifetime, as
-the kernel allocates and deallocates pages (and page-table entries) for the
-process.
-
-* as the stack grows downward beyond limits previously reached;
-
-* when memory is allocated or deallocated on the heap, by raising the program
-  break using brk(), sbrk(), or the malloc family of functions
-
-* when System V shared memory regions are attached using shmat() and detached
-  using shmdt()
-
-* when memory mappings are created using mmap() and unmapped using munmap()
-
-
-{advantages}
-Virtual memory management separates the virtual address space of a process
-from the physical address space of RAM. This provides many advantages:
-
-* Processes are `isolated` from one another and from the kernel, so that one
-  process can't read or modify the memory of another process or the kernel. This
-  is accomplished by having the page-table entries for each process point to
-  distinct sets of physical pages in RAM (or in the swap area).
-
-* Where appropriate, two or more processes can share memory. The kernel makes
-  this possible by having page-table entries in different processes refer to the
-  same pages of RAM. Memory sharing occurs in two common circumstances:
-
-  - Multiple processes executing the same program can share a single (readonly)
-  copy of the program code. This type of sharing is performed implicitly when
-  multiple programs execute the same program file (or load the same shared
-      library).
-
-  - Processes can use the shmget() and mmap() system calls to explicitly request
-  sharing of memory regions with other processes. This is done for the purpose
-  of interprocess communication.
-
-* The implementation of `memory-protection` schemes is facilitated; that is,
-  pagetable entries can be marked to indicate that the contents of the
-  corresponding page are readable, writable, executable, or some combination
-  of these protections. Where multiple processes share pages of RAM, it is
-  possible to specify that each process has different protections on the
-  memory; for example, one process might have read-only access to a page,
-  while another has read-write access.  
-       
-* Because only a part of a program needs to reside in memory, the program loads
-  and runs faster.  Furthermore, the memory footprint (i.e., virtual size) of a
-  process can exceed the capacity of RAM.
-
-* One final advantage of virtual memory management is that since each process
-  uses less RAM, more processes can simultaneously be held in RAM. This
-  typically leads to better CPU utilization, since it increases the likelihood
-  that, at any moment in time, there is at least one process that the CPU can
-  execute.
-
-
-6.5 The Stack and Stack Frames
-
-<kernel-stack>
-Sometimes, the term "user stack" is used to distinguish the stack we describe
-here from the "kernel stack". The kernel stack is a `per-process` memory region
-maintained in kernel memory that is used as the stack for execution of the
-functions called internally during the execution of a `system-call`.  The kernel
-can't employ the user stack for this purpose since it resides in unprotected
-user memory.
-
-
-<user-stack>
-Each (user) stack frame contains the following information:
-
-* Function arguments and local variables: 
-
-In C these are referred to as automatic variables, since they are automatically
-created when a function is called. These variables also automatically disappear
-when the function returns (since the stack frame disappears), and this forms the
-primary semantic distinction between automatic and static (and global)
-  variables: the latter have a permanent existence independent of the execution
-  of functions.
-
-* `call-linkage` information: 
-
-Each function uses certain CPU registers, such as the program counter, which
-points to the next machine-language instruction to be executed. Each time one
-function calls another, a copy of these registers is saved in the called
-function's stack frame so that when the function returns, the appropriate
-register values can be restored for the calling function.
-
-Referring to Listing 6-1, during the execution of the function square(), the
-stack will contain frames as:
-
-+----------------+
- frames for c run-time startup functions  note:
-+----------------+
- frame for main
-+----------------+
- frame for doCalc()
-+----------------+
- frame for square() 
-+----------------+      <- sp. grows down
-
-
-={============================================================================
-*kt_linux_core_107* linux-process-argv
-
-6.6 Command-Line Arguments (argc, argv)
-
-The fact that argv[0] contains the name used to invoke the program can be
-employed to perform a useful trick. We can create multiple links to (i.e.,
-    names for) the same program, and then have the program look at argv[0] and
-take different actions depending on the name used to invoke it. An example of
-this technique is provided by the gzip(1), gunzip(1), and zcat(1) commands,
-all of which are links to the same executable file. 
-
-If we employ this technique, we must be careful to handle the possibility that
-the user might invoke the program via a link with a name other than any of
-those that we expect.
-
-One limitation of the argc/argv mechanism is that these variables are
-available only as arguments to main().
-
-
-<ARG_MAX>
-There is an upper limit on the total number of bytes that can be stored in
-this area. SUSv3 prescribes the use of the ARG_MAX constant (defined in
-    <limits.h>) or the call sysconf(_SC_ARG_MAX) to determine this limit. 
-
-SUSv3 requires ARG_MAX to be at least _POSIX_ARG_MAX (4096) bytes. Most UNIX
-implementations allow a considerably higher limit than this.  SUSv3 leaves it
-unspecified whether an implementation counts overhead bytes (for terminating
-    null bytes, alignment bytes, and the argv and environ arrays of pointers)
-against the ARG_MAX limit.
-
-Starting with kernel 2.6.23, the limit on the total space used for argv and
-environ can be controlled via the RLIMIT_STACK resource limit, and a much
-larger limit is permitted for argv and environ.
-
-
-{proc-cmdline}
-The command-line arguments of any process can be read via the Linux-specific
-/proc/PID/cmdline file, with each argument being terminated by a null byte. A
-program can access its own command-line arguments via /proc/self/cmdline.
-
-
-={============================================================================
-*kt_linux_core_107* linux-process-environment-list
-
-LPI 6.7 Environment List
-
-Each process has an associated array of strings called the environment list,
-or simply the environment. Thus, the environment represents a set of
-  `name-value pairs` that can be used to hold arbitrary information. The names
-  in the list are referred to as `environment variables.`
-
-
-<copied>
-When a new process is created, it inherits a copy of its parent's environment.
-This is a primitive but frequently used form of interprocess communication;
-the environment provides a way to transfer information from a parent process
-to its child(ren). Since the child gets a copy of its parent's environment at
-the time it is created, this transfer of information is one-way and once-only.
-
-Each process has an environment list, which is a set of environment variables
-that are maintained within the user-space memory of the process. 
-
-When a new process is created via fork(), it inherits a copy of its parent's
-environment. Thus, the environment provides `a mechanism for a parent process
-to communicate` information to a child process. When a process replaces the
-program that it is running using exec(), the new program either inherits the
-environment used by the old program or receives a new environment specified as
-part of the exec() call.
-
-
-{sh-export}
-A value can be added to the environment using the export command. The above
-commands permanently add a value to the shell's environment, and this
-environment is then inherited by all child processes that the shell creates.
-At any point, an environment variable can be removed with the unset command
-
-$ export SHELL=/bin/bash
-
-In the Bourne shell and its descendants, the following syntax can be used to
-add values to the environment used to execute a single program, without
-affecting the parent shell (and subsequent commands):
-
-$ NAME=value program
-
-This adds a definition to the environment of `just the child process`
-executing the named program. If desired, multiple assignments (delimited by
-    white space) can precede the program name.
-
-
-{proc-environ}
-The environment list of any process can be examined via the Linux-specific
-/proc/PID/environ file, with each NAME=value pair being terminated by a null
-byte.
-
-$ cat /proc/1155/environ | strings
-
-
-{in-process}
-Within a C program, the environment list can be accessed using the global
-variable `char **environ.` The C run-time startup code defines this variable
-and assigns the location of the environment list to it. Like argv, environ
-points to a NULL-terminated list of pointers to null-terminated strings.
-
-the argv and environ arrays 'reside' in a single contiguous area of memory
-just above the process stack.
+// t_execve.c
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-int main(int argc, char **argv, char **env)
+int main(int argc, char** argv)
 {
-    char **ep;
+  char *argVec[10];
+  char *envVec[] = { "GREET=salut", "BYE=adieu", NULL };
 
-    printf("this prints envs\n");
-    for(ep = env; *ep != NULL; ep++)
-        puts(*ep);
+  if( argc != 2 || strcmp( argv[1], "--help" ) == 0 )
+    printf("%s pathname\n", argv[0] );
 
-    return;
+  // get basename
+  argVec[0] = strrchr( argv[1], '/' );
+  if( argVec[0] != NULL )
+    argVec[0]++;
+  else
+    argVec[0] = argv[1];
+
+  // note: ternimate with NULL and argVec[] is passed as a whole to execed
+  // application.
+
+  argVec[1] = "hello world";
+  argVec[2] = "goodbye";
+  argVec[3] = NULL;
+
+  execve( argv[1], argVec, envVec );
+
+  printf("if we get here, someting wrong.\n" );
+  exit(EXIT_FAILURE);
 }
 
+// envarg.c
 
-{getenv-setenv}
-The getenv() function retrieves individual values from the 'process' environment.
-
+#include <stdio.h>
 #include <stdlib.h>
-
-char *getenv(const char *name);
-
-Returns pointer to (value) string, or NULL if no such variable
-
-The setenv() function is an alternative to putenv() for adding a variable to
-the environment.
-
-int setenv(const char *name, const char *value, int overwrite);
-int unsetenv(const char *name);
-
-Returns 0 on success, or -1 on error
-
-int putenv(char *string);
-
-Returns 0 on success, or nonzero on error
-
-The string argument is a pointer to a string of the form name=value. After the
-putenv() call, this string is part of the environment. In other words, rather
-than duplicating the string pointed to by string, one of the elements of
-environ will be set to point to the same location as string.
-
-The setenv() function 'creates' a new environment variable `by allocating` a
-memory buffer for a string of the form name=value, and copying the strings
-pointed to by name and value into that buffer. note: this is why setenv() is
-preferable to putenv() since putenv() do not allocate.
-
-The setenv() function doesn't change the environment if the variable
-identified by name already exists and overwrite has the value 0. If overwrite
-is nonzero, the environment is always changed.
-
-The unsetenv() function removes the variable identified by name from the
-environment. note: from man page, The unsetenv() function 'deletes' the
-variable name from the environment. If name does not exist in the environment,
-         then the function succeeds, and the environment is unchanged.
-
-On occasion, it is useful to erase the entire environment, and then rebuild it
-with selected values. For example, we might do this in order to execute
-set-user-ID programs in a secure manner (Section 38.8). We can erase the
-environment by assigning NULL to environ:
-
-environ = NULL;
-
-This is exactly the step performed by the clearenv() library function.
-
-#define _BSD_SOURCE /* Or: #define _SVID_SOURCE */
-#include <stdlib.h>
-
-int clearenv(void)
-
-Returns 0 on success, or a nonzero on error
-
-<memory-leaks>
-In some circumstances, the use of setenv() and clearenv() can lead to memory
-leaks in a program. We noted above that setenv() allocates a memory buffer
-that is then made part of the environment. When we call clearenv(), it doesn't
-free this buffer (it can't, since it doesn't know of the buffer's existence).
-A program that repeatedly employed these two functions would steadily leak
-memory. 
-
-In practice, this is unlikely to be a problem, because a program typically
-calls clearenv() just once on startup, in order to remove all entries from the
-environment that it inherited from its predecessor (i.e., the program that
-    called exec() to start this program).
-
-
-$ ./modify_env "GREET=Guten Tag" SHELL=/bin/bash BYE=Ciao
-GREET=Guten Tag
-SHELL=/bin/bash
-
-$ ./modify_env SHELL=/bin/sh BYE=byebye
-SHELL=/bin/sh
-GREET=Hello world
-
-
-#define _GNU_SOURCE /* To get various declarations from <stdlib.h> */
-#include <stdlib.h>
-#include "tlpi_hdr.h"
+#include <string.h>
+#include <unistd.h>
 
 extern char **environ;
 
-int main(int argc, char *argv[])
+int main(int argc, char** argv)
 {
-    int j;
-    char **ep;
+  int j;
+  char **ep;
 
-    // note: do not 'free' actually
-    clearenv(); /* Erase entire environment */
+  for( j = 0; j < argc; j++ )
+    printf("argv[%d] = %s \n", j, argv[j] );
 
-    for (j = 1; j < argc; j++)
-        if (putenv(argv[j]) != 0)
-            errExit("putenv: %s", argv[j]);
+  for( ep = environ; *ep != NULL; ep++ )
+    printf("env: %s \n", *ep );
 
-    // note: when no GREET in arguments, this will create one but no call to free it?
-    if (setenv("GREET", "Hello world", 0) == -1)
-        errExit("setenv");
-
-    // note: when BYE is from argv, how dose this free it if unsetenv() do delete it?
-    unsetenv("BYE");
-
-    for (ep = environ; *ep != NULL; ep++)
-        puts(*ep);
-
-    exit(EXIT_SUCCESS);
+  exit(EXIT_SUCCESS);
 }
 
 
-<inter-process-inter-program>
-Sometimes, it is useful for a process to modify its environment. One reason is
-to make a change that is visible in all child processes subsequently created
-by that process.  Another possibility is that we want to set a variable that
-is visible to a new program to be loaded into the memory of this process
-(“execed”). In this sense, the environment is not just a form of interprocess
-communication, but also a method of interprogram communication.
+{exec-library}
+The library functions perfors an exec() and all are layered on top of execve().
+
+#include <unistd.h>
+
+int execle(const char *pathname, const char *arg, ...  
+    /* , (char *) NULL, char *const envp[] */ );
+int execlp(const char *filename, const char *arg, ...  
+    /* , (char *) NULL */);
+int execvp(const char *filename, char *const argv[]);
+int execv(const char *pathname, char *const argv[]);
+int execl(const char *pathname, const char *arg, ...  /* , (char *) NULL */);
+
+None of the above returns on success; all return -1 on error
+
+<path-filename>
+execvp() allow the program to be specified using just a filename. The filename
+is sought in the list of directories specified in the PATH environment variable.
+The functions contain the letter `p for PATH` to indicate this.
+
+The PATH variable is 'not' used if the filename contains a slash (/), in which
+case it is treated as a relative or absolute pathname.
+
+The PATH value for a login shell is set by system-wide and user-specific shell
+startup scripts. Since a child process inherits a copy of its parent's
+environment variables, each process that the shell creates to execute a
+command inherits a copy of the shell's PATH.
+
+<env>
+The execve() and execle() functions allow the programmer to 'explicitly'
+specify the environment for the new program using envp, a NULL-terminated
+array of pointers to character strings. The names of these functions end with
+the letter `e to indicate` this fact. All of the other exec() functions use the
+caller's existing environment (i.e., the contents of environ) as the
+environment for the new program.
+
+
+{descriptors-and-exec} *how-implement-redirection*
+27.4 File Descriptors and exec()
+
+By default, all file descriptors opened by a program that calls exec() remain
+open across the exec() and are available for use by the new program. This is
+frequently useful, because the calling program may open files on particular
+descriptors, and these files are automatically available to the new program,
+without it needing to know the names of, or open, the files.
+
+see *open-file-table*
+
+The shell takes advantage of this feature to handle I/O redirection for the
+programs that it executes. For example, suppose the following shell command:
+
+$ ls /tmp > dir.txt
+
+The shell performs the following steps to execute this command:
+
+1. A fork() is performed to create a child process that is also running a copy
+of the shell (and thus has a copy of the command).
+
+2. The child shell opens dir.txt for output using file descriptor 1 (standard
+output). This can be done in either of the following ways:
+
+a) The child shell closes descriptor 1 (STDOUT_FILENO) and then opens the file
+dir.txt. Since open() always uses the lowest available file descriptor, and
+standard input (descriptor 0) remains open, the file will be opened on
+descriptor 1.
+
+b) The shell opens dir.txt, obtaining a new file descriptor. Then, if that
+file descriptor is not standard output, the shell uses dup2() to force
+standard output to be a duplicate of the new descriptor and closes the new
+descriptor, since it is no longer required.
+
+3. The child shell execs the ls program. The ls program writes its output to
+standard output, which is the file dir.txt.
+
+
+<ex>
+This is to two things: parent is to run actual application given and child is to
+check if a parent is alive in a loop. If parent is died, do some action.
+
+1. shell runs this line in a script. 
+note: this cmd comes from outside to specify the application to run.
+
+   exec $exec_wrapper "$cmd" args...
+   
+2. $exec_wrapper is an application, exec-then-cleanup-app, which do two things: 
+   @ ppid from env is null and set ppid of shell. 
+   @ call fork
+
+   @ child sets env with ppid and 'exec' wrapper again. since env is set, child
+   runs in a loop while checking if parent is died. If so, 'exec' cleanup
+   application with ppid. 
+
+   note: ppid comes from env and argv as well. argv's one is not used.
+
+   @ parent 'exec' $cmd to run the given application such as a browser.
+
+shell: exec(wrapper);
+
+  // 'ppid' is null and set ppid with shell's pid
+  wrapper: ppid = getpid();    
+
+  wrapper: fork()
+    -> child: setenv(PPID);
+       child: exec(wrapper);
+
+       // run 'wrapper' code again but with 'ppid' set this time before exec and
+       // this is <inter-program> communication using envronment variable.
+
+       // will have different pid from parent which comes from fork() but not
+       // exec.
+
+       wrapper: do watch
+       wrapper: if parent is died, exec(cleanup);
+
+    -> parent: exec(application);
+       // has the same pid which is the shell's pid and run application code.
+
+
+note: see how exec used to replace "program code(text)" to run. the shell,
+  parent, replace itself with given application and the chain of exec in the
+  child.
+
+exec "$prefix/bin/exec-then-cleanup-app" "$prefix/bin/w3cEngine" \
+$enable_webkit_remote_debugging_as_needed \
+-cache "$app_data_dir/client-cache" \
+-cache-size "$cacheSize" \
+-jar "$app_data_dir/cookies.sqlite" \
+-url "$url" \
+-src "$sources"
+
+// wrapper: exec-then-cleanup-app
+
+#include <unistd.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
+void usage(const char* exec_name)
+{
+  fprintf(stderr, "Usage: %s cmd [args]\n\n"
+                  "Run `cmd` passing it `args` and run inspect"
+                  " when that completes\n", basename(exec_name));
+}
+
+int main(int argc, char** argv)
+{
+  pid_t pid;
+  int opt = 0;
+
+  // note: getenv returns NULL if an env is not set.
+
+  char* parent_pid_str = getenv("NEXUS_INSPECT_PARENT_PID");
+  char* cleanup_exe = PKG_BIN_DIR "/nexus-inspect";
+
+  if (NULL == parent_pid_str && argc < 2)
+  {
+    usage(argv[0]);
+    return 1;
+  }
+
+  if (NULL == parent_pid_str)
+  {
+    // Even if pids were unsigned 64-bit numbers, there could be a maximum
+    // of 20 characters in it. We add another for the null terminator.
+    char parent_pid[21];
+    int ret = snprintf(parent_pid, sizeof(parent_pid), "%i", getpid());
+    if (ret >= 20)
+    {
+      // If you're on a system with pids that are larger than unsigned
+      // 64-bit integers, you should seriously consider why you're still
+      // using nexus-inspect.
+      fprintf(stderr, "Pids are longer than expected (ie %d characters)."
+          " What's going on?", ret);
+      return 2;
+    }
+
+    pid = fork();
+    assert(!(pid < 0));
+    if (0 == pid)
+    {
+      // Child.
+
+      // Only launch the watcher if the cleanup app exists.
+      struct stat sb;
+      if (-1 == stat(cleanup_exe, &sb))
+      {
+        fprintf(stderr, "Cleanup executable (%s) doesn't exist, so not" 
+            " spawning watcher\n", cleanup_exe);
+        return 0;
+      }
+
+      // Create new group and become group leader.
+      if (setpgid(0, 0)) {
+        perror("setpgid failed!");
+        return 3;
+      }
+
+      // "$prefix/bin/exec-then-cleanup-app" "-p" "$parent_pid"
+      // args: /opt/zinc-trunk/bin/exec-then-cleanup-app -p 1479 
+
+      // note: ppid via args is not used.
+
+      const char* args[4] = { argv[0], "-p", parent_pid, NULL };
+
+      // We set the pid in the environment. Doing it via environment rather than
+      // arguments simplifies the code because we don't have to do any argument
+      // parsing - note that we do accept arguments and options, but they are
+      // *all* passed on to the exec'd process (see the parent branch, below).
+
+      setenv("NEXUS_INSPECT_PARENT_PID", parent_pid, 1);
+      execv(argv[0], (char*const*)args);
+    }
+    else
+    {
+      // Parent.
+      if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
+        perror("exec failed!");
+        return 4;;
+      }
+    }
+  }
+  else
+  {
+    // note: even if got ppid in number, have to use ppid string to pass over
+    // cleanup_exe
+
+    int parent_pid=atoi(parent_pid_str);
+    fprintf(stderr, "Going to watch pid: %d\n", parent_pid);
+    while (0 == kill(parent_pid, 0))
+    {
+      sleep(1);
+    }
+    fprintf(stderr, "Pid %d has died. Going to cleanup.\n", parent_pid);
+
+    char* args[5] = { cleanup_exe, "-r", "-p", parent_pid_str, NULL };
+    return execv(cleanup_exe, args);
+  }
+
+  return 0;
+}
+
+
+<ex> pass-arguments
+To run "strace -e open /bin/ls" to see open system calls when ls runs, but was
+not straightforward. Why?
+
+./a.out /usr/bin/strace
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char* argv[] )
+{
+    if( argc != 2 || strcmp( argv[1], "--help" ) == 0 )
+    {
+        printf("%s pathname\n", argv[0] );
+        exit(EXIT_FAILURE);
+    }
+
+    // const char* args[] = {"ls", "-al", ".", NULL };
+    // note: works fine
+
+    // const char* args[] = {"strace", "-e open", "/bin/ls", NULL };
+    // note: error when run "strace: invalid system call ` open'"
+
+    const char* args[] = {"strace", "-e", "open", "/bin/ls", NULL };
+    // note: works fine
+
+    if( execvp( argv[1], args ) != 0 )
+    {
+        // if (execvp("/bin/strace", (char*const*)(args)) != 0) {
+        perror("exec failed!");
+        return 4;;
+    }
+
+    exit(EXIT_FAILURE);
+}
+
+
+={============================================================================
+*kt_linux_core_110* linux-process-exec-system-call
+
+#include <stdlib.h>
+int system(const char *command);
+
+The principal advantages of system() are simplicity and convenience:
+
+* We dont need to handle the details of calling fork(), exec(), wait(), and exit().
+
+* Error and signal handling are performed by system() on our behalf.
+
+* Because system() `uses the shell` to execute command, all of the usual shell
+  processing, substitutions, and redirections are performed on command before
+  it is executed. This makes it easy to add an "execute a shell command"
+  feature to an application. (Many interactive applications provide such a
+  feature in the form of a ! command.)
+
+The main cost of system() is inefficiency. Executing a command using system()
+requires the creation of at least two processesone for the shell and one or
+more for the command(s) it executeseach of which performs an exec(). If
+efficiency or speed is a requirement, it is preferable to use explicit fork()
+and exec() calls to execute the desired program.
+
+
+Avoid using system() in set-user-ID and set-group-ID programs
+
+TODO: security example
+
+
+={============================================================================
+*kt_linux_core_110* linux-process-exec-clone-call
+
+LPI 28.2 The clone() System Call
+
+Linux-specific clone() system call creates a new process. It differs from the
+other two calls in allowing finer control over the steps that occur during
+process creation. The main use of clone() is in the implementation of
+threading libraries.
+
+#define _GNU_SOURCE
+#include <sched.h>
+
+int clone(int (*func) (void *), void *child_stack, int flags, void *func_arg, ...
+/* pid_t *ptid, struct user_desc *tls, pid_t *ctid */ );
+
+Returns process ID of child on success, or -1 on error
+
+Like fork(), a new process created with clone() is an almost exact duplicate
+of the parent. Unlike fork(), the cloned child doesnt continue from the point
+of the call, but instead commences by calling the function specified in the
+func argument; well refer to this as the child function. When called, the
+child function is passed the value specified in func_arg. Using appropriate
+casting, the child function can freely interpret this argument; for example,
+as an int or as a pointer to a structure.
+
+The clone() flags argument serves two purposes. First, its lower byte
+specifies the childs termination signal, which is the signal to be sent to
+the parent when the child terminates.
+
+The remaining bytes of the flags argument hold a bit mask that controls the
+operation of clone(). We summarize these bit-mask values in Table 28-2.
+
+
+={============================================================================
+*kt_linux_core_103* linux-process-priority-and-schedule 
+
+35.1 Process Priorities (Nice Values)
+
+{nice-value} {sched-other}
+
+low	high
+0     99 		100   					139
+					-20 		0 				+19
+					high 		default 		low nice value
+
+0  -99  : realtime priority. static and can set when create a process
+
+100-139 : user priority. can use nice command which uses with value from -20
+to +19. The default nice value is 0. note: does it mean 120 is default? 100 is
+highest?
+
+Processes are not scheduled in a strict hierarchy by nice value; rather, the
+nice value acts as weighting factor that causes the kernel scheduler to favor
+processes with higher priorities.
+
+Starting in kernel 2.6.23, a new kernel scheduling algorithm means that
+relative differences in nice values have a much stronger effect than in
+previous kernels.  As a result, processes with low nice values receive less
+CPU than before, and processes with high nice values obtain a greater
+proportion of the CPU.
+
+Retrieving and modifying priorities
+
+The getpriority() and setpriority() system calls allow a process to retrieve
+and change its own nice value or that of another process.
+
+
+{realtime-and-latency}
+POSIX realtime versus hard realtime
+
+POSIX API merely provides us with so-called soft realtime, allowing us to
+control which processes are scheduled for use of the CPU.
+
+The aim to distribute fairly CPU resource to all process on a system is not
+realtime approach.
+
+This is why most UNIX kernels-including, historically, Linux-have not natively
+supported realtime applications. Nevertheless, starting from around version
+2.6.18, various features have been added to the Linux kernel with the eventual
+aim of allowing Linux to natively provide full support for hard realtime
+applications, without imposing the aforementioned overhead for time-sharing
+operation.
+
+
+<latency-components>
+
+interrupt      ISR         ISR signals       user process
+event          runs        user process      runs
+ |             |              |                 |
+---------------------------------------------------------> time
+   interrupt      interrupt      scheduling
+   latency        processing     latency
+
+<scheduler>
+Before Linux 2, kernel didn't support preemption which means that no other
+process can run in kernel mode when one user process is already in the kernel
+mode until that is bloked or finishes its work.
+
+O(1) scheduler from Linux 2.5 and supports constant scheduling decision
+regardless of the number of process.
+
+
+{sched-realtime}
+35.2 Overview of Realtime Process Scheduling
+
+SUSv3 specifies a realtime process scheduling API (originally defined in
+POSIX.1b) that partly addresses these requirements. This API provides two
+realtime scheduling policies: SCHED_RR and SCHED_FIFO. Processes operating
+under either of these policies always have priority over processes scheduled
+using the standard round-robin timesharing policy described in Section 35.1,
+which the realtime scheduling API identifies using the constant SCHED_OTHER.
+
+Linux provides 99 realtime priority levels, 1 (lowest) to `99 (highest)`, and
+this range applies in both realtime scheduling policies. The priorities in
+each policy are equivalent. This means that, given two processes with the same
+priority, one operating under the SCHED_RR policy and the other under
+SCHED_FIFO, either may be the next one eligible for execution, depending on
+the order in which they were scheduled.
+
+In effect, each priority level maintains a queue of runnable processes, and
+the next process to run is selected from the front of the highest-priority
+nonempty queue.
+
+
+<schedule-policy>
+(from ~/include/linux/sched.h)
+/*
+ * Scheduling policies
+ */
+
+// normal user process. fairness
+#define SCHED_NORMAL 0     
+
+// realtime and run the highest priority. On the same priority, the first runs until it's blocked.
+// So it is realtime without time slice.
+#define SCHED_FIFO   1     
+
+// realtime and run the highest priority. On the same priority, the first runs but in the time
+// sliced. So it is realtime with time slice.
+#define SCHED_RR     2
+
+<default-policy>
+SCHED_NORMAL(OTHER) is default.
+
+To change the policy after a boot:
+For example, if scheduling is modified before insmod-ing callisto BCM drivers, tasks inherit changed
+scheduling. In that case last two task mods can be dropped. The list is quite aggressive as changing
+policy of kthread affects all new kernel threads. Fine tuning would obviously have to be done along
+with BCM.
+
+(about ways to change from NORMAL to RR)
+http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0182.html
+http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0330.html
+
+
+<code>
+/* from sched.h.
+#define MAX_USER_RT_PRIO   100
+#define MAX_RT_PRIO        MAX_USER_RT_PRIO
+*/
+
+#define MY_RT_PRIORITY MAX_USER_RT_PRIO /* Highest possible */
+
+int main(int argc, char **argv)
+{
+  ...
+  int rc, old_scheduler_policy;
+  struct sched_param my_params;
+  ...
+
+  /* Passing zero specifies caller's (our) policy */
+  old_scheduler_policy = sched_getscheduler(0);
+  my_params.sched_priority = MY_RT_PRIORITY;
+
+  /* Passing zero specifies callers (our) pid */
+  rc = sched_setscheduler(0, SCHED_RR, &my_params);
+  if ( rc == -1 )
+    handle_error();
+  ...
+}
+
+(sched.c)
+/**
+ * sys_sched_get_priority_max - return maximum RT priority.
+ * @policy: scheduling class.
+ *
+ * this syscall returns the maximum rt_priority that can be used
+ * by a given scheduling class.
+ */
+asmlinkage long sys_sched_get_priority_max(int policy)
+{
+        int ret = -EINVAL;
+
+        switch (policy) {
+        case SCHED_FIFO:
+        case SCHED_RR:
+                ret = MAX_USER_RT_PRIO-1;
+                break;
+        case SCHED_NORMAL:
+        case SCHED_BATCH:
+                ret = 0;
+                break;
+        }
+        return ret;
+}
+
+/**
+ * sys_sched_get_priority_min - return minimum RT priority.
+ * @policy: scheduling class.
+ *
+ * this syscall returns the minimum rt_priority that can be used
+ * by a given scheduling class.
+ */
+asmlinkage long sys_sched_get_priority_min(int policy)
+{
+        int ret = -EINVAL;
+
+        switch (policy) {
+        case SCHED_FIFO:
+        case SCHED_RR:
+                ret = 1;
+                break;
+        case SCHED_NORMAL:
+        case SCHED_BATCH:
+                ret = 0;
+        }
+        return ret;
+}
+
+
+{pthread-schedule}
+The POSIX draft standard specifies scheduling policy attributes of SCHED_FIFO (first-in-first-out),
+SCHED_RR (round-robin), or SCHED_OTHER (an implementation-defined method). SCHED_FIFO and
+SCHED_RR are optional in POSIX, and only are supported for real time bound threads
 
 
 ={============================================================================
@@ -38052,342 +38754,6 @@ a terminating newline character. Also, the format string may include the
 to the current value of errno (i.e., the equivalent of strerror(errno)).
 
 
-={============================================================================
-*kt_linux_core_110* process-execution, exec call
-
-LPI27
-
-{execve-system-call}
-Various library functions, all with names beginning with exec, are layered on
-top of the execve() system call. Each of these functions provides a different
-interface to the same functionality. The loading of a new program by any of
-these calls is commonly referred to as an exec operation, or simply by the
-notation exec().
-
-#include <unistd.h>
-int execve(const char *pathname, char *const argv[], char *const envp[]);
-
-'never' returns on success; returns -1 on error
-
-<attribute-that-remains>
-After an execve(), the process ID of the process remains the same, because the
-same process continues to exist.
-
-<never-return>
-Never need to check the return value from execve(); it will always be -1 if get
-since the very fact that it returned informs us that an error occurred,
-
-<ex>
-note: See how envs are passed to.
-
-$ ./t_execve ./envargs 
-argv[0] = envargs 
-argv[1] = hello world 
-argv[2] = goodbye 
-env: GREET=salut 
-env: BYE=adieu 
-
-// t_execve.c
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-int main(int argc, char** argv)
-{
-  char *argVec[10];
-  char *envVec[] = { "GREET=salut", "BYE=adieu", NULL };
-
-  if( argc != 2 || strcmp( argv[1], "--help" ) == 0 )
-    printf("%s pathname\n", argv[0] );
-
-  // get basename
-  argVec[0] = strrchr( argv[1], '/' );
-  if( argVec[0] != NULL )
-    argVec[0]++;
-  else
-    argVec[0] = argv[1];
-
-  // note: ternimate with NULL and argVec[] is passed as a whole to execed
-  // application.
-
-  argVec[1] = "hello world";
-  argVec[2] = "goodbye";
-  argVec[3] = NULL;
-
-  execve( argv[1], argVec, envVec );
-
-  printf("if we get here, someting wrong.\n" );
-  exit(EXIT_FAILURE);
-}
-
-// envarg.c
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-extern char **environ;
-
-int main(int argc, char** argv)
-{
-  int j;
-  char **ep;
-
-  for( j = 0; j < argc; j++ )
-    printf("argv[%d] = %s \n", j, argv[j] );
-
-  for( ep = environ; *ep != NULL; ep++ )
-    printf("env: %s \n", *ep );
-
-  exit(EXIT_SUCCESS);
-}
-
-
-{exec-library}
-The library functions perfors an exec() and all are layered on top of execve().
-
-#include <unistd.h>
-
-int execle(const char *pathname, const char *arg, ...  
-    /* , (char *) NULL, char *const envp[] */ );
-int execlp(const char *filename, const char *arg, ...  
-    /* , (char *) NULL */);
-int execvp(const char *filename, char *const argv[]);
-int execv(const char *pathname, char *const argv[]);
-int execl(const char *pathname, const char *arg, ...  /* , (char *) NULL */);
-
-None of the above returns on success; all return -1 on error
-
-<path-filename>
-execvp() allow the program to be specified using just a filename. The filename
-is sought in the list of directories specified in the PATH environment variable.
-The functions contain the letter p for PATH to indicate this.
-
-The PATH variable is 'not' used if the filename contains a slash (/), in which
-case it is treated as a relative or absolute pathname.
-
-The PATH value for a login shell is set by system-wide and user-specific shell
-startup scripts.  Since a child process inherits a copy of its parent's
-environment variables, each process that the shell creates to execute a command
-inherits a copy of the shell's PATH.
-
-<env>
-The execve() and execle() functions allow the programmer to 'explicitly' specify
-the environment for the new program using envp, a NULL-terminated array of
-pointers to character strings. The names of these functions end with the letter
-e (for environment) to indicate this fact. All of the other exec() functions use
-the caller's existing environment (i.e., the contents of environ) as the
-environment for the new program.
-
-<ex>
-This is to two things: parent is to run actual application given and child is to
-check if a parent is alive in a loop. If parent is died, do some action.
-
-1. shell runs this line in a script. 
-note: this cmd comes from outside to specify the application to run.
-
-   exec $exec_wrapper "$cmd" args...
-   
-2. $exec_wrapper is an application, exec-then-cleanup-app, which do two things: 
-   @ ppid from env is null and set ppid of shell. 
-   @ call fork
-
-   @ child sets env with ppid and 'exec' wrapper again. since env is set, child
-   runs in a loop while checking if parent is died. If so, 'exec' cleanup
-   application with ppid. 
-
-   note: ppid comes from env and argv as well. argv's one is not used.
-
-   @ parent 'exec' $cmd to run the given application such as a browser.
-
-shell: exec(wrapper);
-
-  // 'ppid' is null and set ppid with shell's pid
-  wrapper: ppid = getpid();    
-
-  wrapper: fork()
-    -> child: setenv(PPID);
-       child: exec(wrapper);
-
-       // run 'wrapper' code again but with 'ppid' set this time before exec and
-       // this is <inter-program> communication using envronment variable.
-
-       // will have different pid from parent which comes from fork() but not
-       // exec.
-
-       wrapper: do watch
-       wrapper: if parent is died, exec(cleanup);
-
-    -> parent: exec(application);
-       // has the same pid which is the shell's pid and run application code.
-
-
-note: see how exec used to replace "program code(text)" to run. the shell,
-  parent, replace itself with given application and the chain of exec in the
-  child.
-
-exec "$prefix/bin/exec-then-cleanup-app" "$prefix/bin/w3cEngine" \
-$enable_webkit_remote_debugging_as_needed \
--cache "$app_data_dir/client-cache" \
--cache-size "$cacheSize" \
--jar "$app_data_dir/cookies.sqlite" \
--url "$url" \
--src "$sources"
-
-// exec-then-cleanup-app
-
-#include <unistd.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
-void usage(const char* exec_name)
-{
-  fprintf(stderr, "Usage: %s cmd [args]\n\n"
-                  "Run `cmd` passing it `args` and run inspect"
-                  " when that completes\n", basename(exec_name));
-}
-
-int main(int argc, char** argv)
-{
-  pid_t pid;
-  int opt = 0;
-
-  // note: getenv returns NULL if an env is not set.
-
-  char* parent_pid_str = getenv("NEXUS_INSPECT_PARENT_PID");
-  char* cleanup_exe = PKG_BIN_DIR "/nexus-inspect";
-
-  if (NULL == parent_pid_str && argc < 2)
-  {
-    usage(argv[0]);
-    return 1;
-  }
-
-  if (NULL == parent_pid_str)
-  {
-    // Even if pids were unsigned 64-bit numbers, there could be a maximum
-    // of 20 characters in it. We add another for the null terminator.
-    char parent_pid[21];
-    int ret = snprintf(parent_pid, sizeof(parent_pid), "%i", getpid());
-    if (ret >= 20)
-    {
-      // If you're on a system with pids that are larger than unsigned
-      // 64-bit integers, you should seriously consider why you're still
-      // using nexus-inspect.
-      fprintf(stderr, "Pids are longer than expected (ie %d characters)."
-          " What's going on?", ret);
-      return 2;
-    }
-
-    pid = fork();
-    assert(!(pid < 0));
-    if (0 == pid)
-    {
-      // Child.
-
-      // Only launch the watcher if the cleanup app exists.
-      struct stat sb;
-      if (-1 == stat(cleanup_exe, &sb))
-      {
-        fprintf(stderr, "Cleanup executable (%s) doesn't exist, so not" 
-            " spawning watcher\n", cleanup_exe);
-        return 0;
-      }
-
-      // Create new group and become group leader.
-      if (setpgid(0, 0)) {
-        perror("setpgid failed!");
-        return 3;
-      }
-
-      // "$prefix/bin/exec-then-cleanup-app" "-p" "$parent_pid"
-      // args: /opt/zinc-trunk/bin/exec-then-cleanup-app -p 1479 
-
-      // note: ppid via args is not used.
-
-      const char* args[4] = { argv[0], "-p", parent_pid, NULL };
-
-      // We set the pid in the environment. Doing it via environment rather than
-      // arguments simplifies the code because we don't have to do any argument
-      // parsing - note that we do accept arguments and options, but they are
-      // *all* passed on to the exec'd process (see the parent branch, below).
-
-      setenv("NEXUS_INSPECT_PARENT_PID", parent_pid, 1);
-      execv(argv[0], (char*const*)args);
-    }
-    else
-    {
-      // Parent.
-      if (execvp(argv[1], (char*const*)(argv+1)) != 0) {
-        perror("exec failed!");
-        return 4;;
-      }
-    }
-  }
-  else
-  {
-    // note: even if got ppid in number, have to use ppid string to pass over
-    // cleanup_exe
-
-    int parent_pid=atoi(parent_pid_str);
-    fprintf(stderr, "Going to watch pid: %d\n", parent_pid);
-    while (0 == kill(parent_pid, 0))
-    {
-      sleep(1);
-    }
-    fprintf(stderr, "Pid %d has died. Going to cleanup.\n", parent_pid);
-
-    char* args[5] = { cleanup_exe, "-r", "-p", parent_pid_str, NULL };
-    return execv(cleanup_exe, args);
-  }
-
-  return 0;
-}
-
-
-{pass-arguments}
-To run "strace -e open /bin/ls" to see open system calls when ls runs, but was
-not straightforward. Why?
-
-./a.out /usr/bin/strace
-
-#include <stdio.h>
-#include <stdlib.h>
-
-int main(int argc, char* argv[] )
-{
-    if( argc != 2 || strcmp( argv[1], "--help" ) == 0 )
-    {
-        printf("%s pathname\n", argv[0] );
-        exit(EXIT_FAILURE);
-    }
-
-    // const char* args[] = {"ls", "-al", ".", NULL };
-    // note: works fine
-
-    // const char* args[] = {"strace", "-e open", "/bin/ls", NULL };
-    // note: error when run "strace: invalid system call ` open'"
-
-    const char* args[] = {"strace", "-e", "open", "/bin/ls", NULL };
-    // note: works fine
-
-    if( execvp( argv[1], args ) != 0 )
-    {
-        // if (execvp("/bin/strace", (char*const*)(args)) != 0) {
-        perror("exec failed!");
-        return 4;;
-    }
-
-    exit(EXIT_FAILURE);
-}
 
 
 ={============================================================================
@@ -39636,155 +40002,6 @@ in different group use lock, can use semaphore or lock on the shared memory.
 
 The mutex has ownership as well and see {mutex-ownership}.
 
-
-={============================================================================
-*kt_linux_core_103* linux-priority linux-schedule 
-
-{priority-on-linux}
-
-high           low
-0     99 100   139
-
-0  -99  : realtime priority. static and can set when create a process
-100-139 : user priority. can use nice command which uses with value from -20 to +19. The default
-nice value is 0. note: does it mean 120 is default? 100 is highest?
-
-
-{realtime-and-latency}
-The aim to distribute fairly CPU resource to all process on a system is not realtime approach.
-
-<latency-components>
-
-interrupt      ISR         ISR signals       user process
-event          runs        user process      runs
- |             |              |                 |
----------------------------------------------------------> time
-   interrupt      interrupt      scheduling
-   latency        processing     latency
-
-<no-hard-realtime>
-No support in kernel. To use hard realtime, install patch from 
-http://people.redhat.com/~mingo/realtime-preempt
-
-
-{schedule}
-Before Linux 2, kernel didn't support preemption which means that no other process can run in kernel
-mode when one user process is already in the kernel mode until that is bloked or finishes its work.
-
-<scheduler>
-O(1) scheduler from Linux 2.5 and supports constant scheduling decision regardless of the number of
-process.
-
-<schedule-policy>
-(from ~/include/linux/sched.h)
-/*
- * Scheduling policies
- */
-
-// normal user process. fairness
-#define SCHED_NORMAL 0     
-
-// realtime and run the highest priority. On the same priority, the first runs until it's blocked.
-// So it is realtime without time slice.
-#define SCHED_FIFO   1     
-
-// realtime and run the highest priority. On the same priority, the first runs but in the time
-// sliced. So it is realtime with time slice.
-#define SCHED_RR     2
-
-<default-policy>
-SCHED_NORMAL(OTHER) is default.
-
-To change the policy after a boot:
-For example, if scheduling is modified before insmod-ing callisto BCM drivers, tasks inherit changed
-scheduling. In that case last two task mods can be dropped. The list is quite aggressive as changing
-policy of kthread affects all new kernel threads. Fine tuning would obviously have to be done along
-with BCM.
-
-(about ways to change from NORMAL to RR)
-http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0182.html
-http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0330.html
-
-
-<code>
-/* from sched.h.
-#define MAX_USER_RT_PRIO   100
-#define MAX_RT_PRIO        MAX_USER_RT_PRIO
-*/
-
-#define MY_RT_PRIORITY MAX_USER_RT_PRIO /* Highest possible */
-
-int main(int argc, char **argv)
-{
-  ...
-  int rc, old_scheduler_policy;
-  struct sched_param my_params;
-  ...
-
-  /* Passing zero specifies caller's (our) policy */
-  old_scheduler_policy = sched_getscheduler(0);
-  my_params.sched_priority = MY_RT_PRIORITY;
-
-  /* Passing zero specifies callers (our) pid */
-  rc = sched_setscheduler(0, SCHED_RR, &my_params);
-  if ( rc == -1 )
-    handle_error();
-  ...
-}
-
-(sched.c)
-/**
- * sys_sched_get_priority_max - return maximum RT priority.
- * @policy: scheduling class.
- *
- * this syscall returns the maximum rt_priority that can be used
- * by a given scheduling class.
- */
-asmlinkage long sys_sched_get_priority_max(int policy)
-{
-        int ret = -EINVAL;
-
-        switch (policy) {
-        case SCHED_FIFO:
-        case SCHED_RR:
-                ret = MAX_USER_RT_PRIO-1;
-                break;
-        case SCHED_NORMAL:
-        case SCHED_BATCH:
-                ret = 0;
-                break;
-        }
-        return ret;
-}
-
-/**
- * sys_sched_get_priority_min - return minimum RT priority.
- * @policy: scheduling class.
- *
- * this syscall returns the minimum rt_priority that can be used
- * by a given scheduling class.
- */
-asmlinkage long sys_sched_get_priority_min(int policy)
-{
-        int ret = -EINVAL;
-
-        switch (policy) {
-        case SCHED_FIFO:
-        case SCHED_RR:
-                ret = 1;
-                break;
-        case SCHED_NORMAL:
-        case SCHED_BATCH:
-                ret = 0;
-        }
-        return ret;
-}
-
-
-{pthread-schedule}
-The POSIX draft standard specifies scheduling policy attributes of SCHED_FIFO (first-in-first-out),
-SCHED_RR (round-robin), or SCHED_OTHER (an implementation-defined method). SCHED_FIFO and
-SCHED_RR are optional in POSIX, and only are supported for real time bound threads
 
 
 ={============================================================================
@@ -42077,6 +42294,7 @@ even when no permission category grants execute permission. When accessing a
 directory, a privileged process is always granted execute (search) permission.
 
 
+{linux-process-credentials}
 LPI 9.1 Real User ID and Real Group ID
 
 The real user ID and group ID identify the user and group to which the process
@@ -63204,6 +63422,8 @@ is still useful C library for embedded systems without MMU.
 http://www.uclibc.org/
 http://git.uclibc.org/uClibc/
 
+git clone git://uclibc.org/uClibc.git
+
 note: this is the last update.
 15 May 2012, uClibc 0.9.33.2 Released
 uClibc-0.9.33.2 was released today. 
@@ -64670,41 +64890,152 @@ Dynamic Loader Operation
 
 The following is an annotated and summarized view of the dynamic loader startup:
 
+// CFLAGS='-O -g' \
+// ../glibc-2.13/configure --prefix=${PREFIX}/${TARGET} \
+// --build=$MACHTYPE --host=${TARGET} \
+// --without-cvs --disable-profile --without-gd \
+// --with-headers=${PREFIX}/${TARGET}/include \
+// --disable-debug --disable-sanity-checks --enable-obsolete-rpc \
+// libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes \
+// --enable-kernel=2.6.18 --with-__thread --with-tls --enable-shared \
+// --without-fp --enable-add-ons=nptl,../glibc-ports-2.13
+
+// sysdeps/mips/dl-machine.h
+// /* Initial entry point code for the dynamic linker.
+//    The C function `_dl_start' is the real entry point;
+//    its return value is the user program's entry point.
+//    Note how we have to be careful about two things:
+// 
+//    1) That we allocate a minimal stack of 24 bytes for
+//       every function call, the MIPS ABI states that even
+//       if all arguments are passed in registers the procedure
+//       called can use the 16 byte area pointed to by $sp
+//       when it is called to store away the arguments passed
+//       to it.
+// 
+//    2) That under Linux the entry is named __start
+//       and not just plain _start.  */
+// 
+#define RTLD_START asm (\
 RTLD_START (sysdep/<arch>/dl-machine.h)
+
+  // static ElfW(Addr) __attribute_used__ internal_function
+  // _dl_start (void *arg)
   _dl_start (elf/rtld.c)
+  {
+
     ELF_MACHINE_BEFORE_RTLD_RELOC (sysdep/<arch>/dl-machine.h)
-    ELF_DYNAMIC_RELOCATE (sysdep/<arch>/dl-machine.h, Relocate the loader)
-    _dl_start_final (elf/rtld.c, bottom half of _dl_start)
-      entry = _dl_sysdep_start (sysdep/generic/dl-sysdep.c)
-       user_entry = (ElfW(Addr)) ENTRY_POINT;
-       dl_main (elf/rtld.c, main entry point for loader)
+    // ELF_DYNAMIC_RELOCATE (sysdep/<arch>/dl-machine.h, Relocate the loader)
+    // /* Relocate ourselves so we can do normal function calls and
+    // data access using the global offset table.  */
+    ELF_DYNAMIC_RELOCATE (&bootstrap_map, 0, 0);
+    
+    // _dl_start_final (elf/rtld.c, bottom half of _dl_start)
+    
+#ifdef DONT_USE_BOOTSTRAP_MAP
+    ElfW(Addr) entry = _dl_start_final (arg);
+#else
+    ElfW(Addr) entry = _dl_start_final (arg, &info);
+#endif
+    {
 
-         // KT: dl-load.c for ld-search-order
-	      _dl_map_object (NULL, rtld_progname, lt_library, 0)
+  /* Call the OS-dependent function to set up life so we can do things like
+     file access.  It will call `dl_main' (below) to do all the real work
+     of the dynamic linker, and then unwind our frame and run the user
+     entry point on the same stack we entered on.  */
+  // elf/dl-sysdep.c
+  start_addr = _dl_sysdep_start (arg, &dl_main);
+  {
 
-         _dl_init_paths (elf/dl-load.c, fill in RPATH and LD_LIBRARY_PATH information)
-         _dl_debug_initialize (elf/dl-debug.c, initialization of _r_debug and DT_DEBUG)
+    user_entry = (ElfW(Addr)) ENTRY_POINT;
 
-         // KT: dl-lookup.c
-         _dl_lookup_symbol_x
+    // dl_main (elf/rtld.c, main entry point for loader)
+    (*dl_main) (phdr, phnum, &user_entry, _dl_auxv);
+    static void
+      dl_main (const ElfW(Phdr) *phdr,
+          ElfW(Word) phnum,
+          ElfW(Addr) *user_entry,
+          ElfW(auxv_t) *auxv)
+      {
 
-         // KT: dl-reloc.c
-         _dl_relocate_object ()
+        if (*user_entry == (ElfW(Addr)) ENTRY_POINT)
+        {
+          // Ho ho.  We are not the program interpreter!  We are the program
+          // itself!  This means someone ran ld.so as a command.  Well, that
+          // might be convenient to do sometimes.  We support it by
+          // interpreting the args like this:
+          //   ld.so PROGRAM ARGS...
+        }
 
-       DL_SYSDEP_INIT;
-       DL_PLATFORM_INIT; (sysdeps/<arch>/dl-machine.h)
-       /* Last action of _dl_sysdep_start return the user entry point */
-       return user_entry;
+        /* Scan the program header table for the dynamic section.  */
+        for (ph = phdr; ph < &phdr[phnum]; ++ph);
+
+        // elf/dl-load.c for ld-search-order
+        /* Map in the shared object file NAME.  */
+        _dl_map_object (NULL, rtld_progname, lt_library, 0);
+
+        // NEED_DL_SYSINFO is not defined for mips
+
+        // elf/dl-load.c, fill in RPATH and LD_LIBRARY_PATH information);
+        /* Initialize the data structures for the search paths for shared
+           objects.  */
+        _dl_init_paths (library_path);
+
+        // elf/dl-debug.c, initialization of _r_debug and DT_DEBUG);
+        /* Initialize _r_debug.  */
+        struct r_debug *r = _dl_debug_initialize (GL(dl_rtld_map).l_addr,
+            LM_ID_BASE);
+
+        // KT: dl-lookup.c
+        _dl_lookup_symbol_x();
+
+        // KT: dl-reloc.c
+        _dl_relocate_object ()
+        {
+          if (__builtin_expect (GLRO(dl_debug_mask) & DL_DEBUG_RELOC, 0))
+            _dl_debug_printf ("\nrelocation processing: %s%s\n",
+                l->l_name[0] ? l->l_name : rtld_progname,
+                lazy ? " (lazy)" : "");
+        }
+
+        _dl_debug_bindings (const char *undef_name, struct link_map *undef_map)
+        {
+          if (GLRO(dl_debug_mask) & DL_DEBUG_BINDINGS)
+          {
+            _dl_debug_printf ("binding file %s [%lu] to %s [%lu]: %s symbol `%s'",
+                (reference_name[0]
+                 ? reference_name
+                 : (rtld_progname ?: "<main program>")),
+                undef_map->l_ns,
+                value->m->l_name[0] ? value->m->l_name : rtld_progname,
+                value->m->l_ns,
+                protected ? "protected" : "normal", undef_name);
+            if (version)
+              _dl_debug_printf_c (" [%s]\n", version->name);
+            else
+              _dl_debug_printf_c ("\n");
+          }
+
+          do_lookup_x (undef_name, new_hash, &old_hash, *ref);
+        }
+
+        DL_SYSDEP_INIT;
+        DL_PLATFORM_INIT; (sysdeps/<arch>/dl-machine.h)
+          /* Last action of _dl_sysdep_start return the user entry point */
+          return user_entry;
+      }
+  }
+    }
+
     /* Last action of _dl_start returns the user entry point */      
     ELF_MACHINE_START_ADDRESS (GL(dl_loaded), entry); (sysdep/<arch>/dl-machine.h)
   _dl_init (elf/dl-init.c, run DSO initializers)
     call_init (elf/dl-init.c)
   jump to return of _dl_start (sysdep/<arch>/dl-machine.h)
   /*User code is now executing*/
-
+  }
 
 <dl-runtime-resolve>
-
 /* Machine-dependent ELF dynamic relocation inline functions.  Stub version.
  */
 _dl_runtime_resolve  111 sysdeps/generic/dl-machine.h   extern void _dl_runtime_resolve (Elf32_Word);
@@ -64990,7 +65321,6 @@ _dl_start(unsigned long args)
   // ldso.c
   _dl_get_ready_to_run(tpnt, load_addr, auxvt, envp, argv);
   {
-
     struct elf_resolve app_tpnt_tmp;
     struct elf_resolve *app_tpnt = &app_tpnt_tmp;
 
@@ -65052,9 +65382,10 @@ _dl_start(unsigned long args)
 
     ppnt = (ElfW(Phdr) *) auxvt[AT_PHDR].a_un.a_val;
 
+    // loop through program header table(segments table)
     for (i = 0; i < auxvt[AT_PHNUM].a_un.a_val; i++, ppnt++) {
 
-      // case dynamic segment
+      // handle dynamic segment
       if (ppnt->p_type == PT_DYNAMIC) {
 
         // _dl_parse_dynamic_info
@@ -65063,11 +65394,21 @@ _dl_start(unsigned long args)
         /* OK, we have what we need - slip this one into the list. */
         /*
          * We call this function when we have just read an ELF library or executable.
-         * We add the relevant info to the symbol chain, so that we can resolve all
+         * We `add the relevant info to the symbol chain`, so that we can resolve all
          * externals properly.
          */
         app_tpnt = _dl_add_elf_hash_table(_dl_progname, (char *)app_tpnt->loadaddr,
             app_tpnt->dynamic_info, ppnt->p_vaddr + app_tpnt->loadaddr, ppnt->p_filesz);
+
+        _dl_loaded_modules->libtype = elf_executable;
+
+        // note: not sure how this list is set up as a linked list
+        // /*
+        //  * This is the start of the linked list that describes all of the files present
+        //  * in the system with pointers to all of the symbol, string, and hash tables,
+        //  * as well as all of the other good stuff in the binary.
+        //  */
+        // struct elf_resolve *_dl_loaded_modules = NULL;
 
         // FORCE_SHAREABLE_TEXT_SEGMENTS=y
 
@@ -65098,12 +65439,15 @@ _dl_start(unsigned long args)
     // LDSO_LDD_SUPPORT=y
     // LDSO_PRELOAD_FILE_SUPPORT is not set
 
+    // note: applies to all in the list, _dl_loaded_modules
     /*
      * Relocation of the GOT entries for MIPS have to be done
      * after all the libraries have been loaded.
      */
     _dl_perform_mips_global_got_relocations(_dl_loaded_modules, !unlazy);
     {
+		/* Relocate the global GOT entries for the object */
+
       // ldso/ldso/mips/elfinterp.c from *patch-02*
       //
       // change to handle #define SHN_UNDEF 0 /* Undefined section */ when it
@@ -65112,7 +65456,7 @@ _dl_start(unsigned long args)
 
     /*
      * OK, now all of the kids are tucked into bed in their proper
-     * addresses.  Now we go through and look for REL and RELA records that
+     * addresses.  Now we go through and look for `REL and RELA records` that
      * indicate fixups to the GOT tables.  We need to do this in reverse
      * order so that COPY directives work correctly.
      */
@@ -65132,7 +65476,7 @@ _dl_start(unsigned long args)
         // #define R_MIPS_COPY        126
         // #define R_MIPS_JUMP_SLOT   127
         //
-        // $ readelf -r minit-dynamic
+        // $ readelf -r 
         //
         // Relocation section '.rel.plt' at offset 0x4b0 contains 6 entries:
         //  Offset     Info    Type            Sym.Value  Sym. Name
@@ -65616,6 +65960,317 @@ Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/resolve.S
 
 uClibc-nptl-0.9.29-20070423-brcm-dl_calloc.patch:diff -urN uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-tls.c uClibc-nptl-0.9.29-20070423-patched/ldso/ldso/dl-tls.c
 uClibc-nptl-0.9.29-20070423-brcm-static-link.patch:diff -ru uClibc-nptl-0.9.29-20070423.rpm/ldso/ldso/dl-elf.c uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-elf.c
+
+
+<from-uclibc-git>
+7f07b8deffa7eaea0cbab9e84503b7644a6b6f8e
+7f07b8de 188 (Bernhard Reutner-Fischer 2008-12-22 09:58:25 +0000 189) 		if (reloc_type == R_MIPS_JUMP_SLOT || reloc_type == R_MIPS_COPY) {
+
+commit 7f07b8deffa7eaea0cbab9e84503b7644a6b6f8e
+Author: Bernhard Reutner-Fischer <rep.dot.nop@gmail.com>
+Date:   Mon Dec 22 09:58:25 2008 +0000
+
+    - non-pic support for MIPS (Catherine Moore, clm at codesourcery com)
+
+diff --git a/include/elf.h b/include/elf.h
+index 4c6d090..9f00970 100644
+--- a/include/elf.h
++++ b/include/elf.h
+@@ -1544,6 +1544,7 @@ typedef struct
+ #define STO_MIPS_INTERNAL		0x1
+ #define STO_MIPS_HIDDEN			0x2
+ #define STO_MIPS_PROTECTED		0x3
++#define STO_MIPS_PLT			0x8
+ #define STO_MIPS_SC_ALIGN_UNUSED	0xff
+ 
+ /* MIPS specific values for `st_info'.  */
+@@ -1689,8 +1690,11 @@ typedef struct
+ #define R_MIPS_TLS_TPREL64	48	/* TP-relative offset, 64 bit */
+ #define R_MIPS_TLS_TPREL_HI16	49	/* TP-relative offset, high 16 bits */
+ #define R_MIPS_TLS_TPREL_LO16	50	/* TP-relative offset, low 16 bits */
++#define R_MIPS_GLOB_DAT		51
++#define R_MIPS_COPY		126
++#define R_MIPS_JUMP_SLOT        127
+ /* Keep this the last entry.  */
+-#define R_MIPS_NUM		51
++#define R_MIPS_NUM		128
+ 
+ /* Legal values for p_type field of Elf32_Phdr.  */
+ 
+@@ -1756,7 +1760,13 @@ typedef struct
+ #define DT_MIPS_COMPACT_SIZE 0x7000002f /* (O32)Size of compact rel section. */
+ #define DT_MIPS_GP_VALUE     0x70000030 /* GP value for aux GOTs.  */
+ #define DT_MIPS_AUX_DYNAMIC  0x70000031 /* Address of aux .dynamic.  */
+-#define DT_MIPS_NUM	     0x32
++/* The address of .got.plt in an executable using the new non-PIC ABI.  */
++#define DT_MIPS_PLTGOT	     0x70000032
++/* The base of the PLT in an executable using the new non-PIC ABI if that
++   PLT is writable.  For a non-writable PLT, this is omitted or has a zero
++   value.  */
++#define DT_MIPS_RWPLT        0x70000034
++#define DT_MIPS_NUM	     0x35
+ 
+ /* Legal values for DT_MIPS_FLAGS Elf32_Dyn entry.  */
+ 
+diff --git a/ldso/ldso/dl-hash.c b/ldso/ldso/dl-hash.c
+index b44bd3a..a251aaf 100644
+--- a/ldso/ldso/dl-hash.c
++++ b/ldso/ldso/dl-hash.c
+@@ -160,6 +160,11 @@ check_match (const ElfW(Sym) *sym, char *strtab, const char* undef_name, int typ
+ 		/* undefined symbol itself */
+ 		return NULL;
+ 
++#ifdef __mips__
++    if (sym->st_shndx == SHN_UNDEF && !(sym->st_other & STO_MIPS_PLT))
++        return NULL;
++#endif
++
+ 	if (sym->st_value == 0)
+ 		/* No value */
+ 		return NULL;
+diff --git a/ldso/ldso/mips/dl-sysdep.h b/ldso/ldso/mips/dl-sysdep.h
+index 7287792..8f303fb 100644
+--- a/ldso/ldso/mips/dl-sysdep.h
++++ b/ldso/ldso/mips/dl-sysdep.h
+@@ -93,10 +93,11 @@ typedef struct
+ 
+ #include <link.h>
+ 
+-#define ARCH_NUM 3
++#define ARCH_NUM 4
+ #define DT_MIPS_GOTSYM_IDX	(DT_NUM + OS_NUM)
+ #define DT_MIPS_LOCAL_GOTNO_IDX	(DT_NUM + OS_NUM +1)
+ #define DT_MIPS_SYMTABNO_IDX	(DT_NUM + OS_NUM +2)
++#define DT_MIPS_PLTGOT_IDX	(DT_NUM + OS_NUM +3)
+ 
+ #define ARCH_DYNAMIC_INFO(dpnt,  dynamic, debug_addr) \
+ do { \
+@@ -106,6 +107,8 @@ else if (dpnt->d_tag == DT_MIPS_LOCAL_GOTNO) \
+      dynamic[DT_MIPS_LOCAL_GOTNO_IDX] = dpnt->d_un.d_val; \
+ else if (dpnt->d_tag == DT_MIPS_SYMTABNO) \
+      dynamic[DT_MIPS_SYMTABNO_IDX] = dpnt->d_un.d_val; \
++else if (dpnt->d_tag == DT_MIPS_PLTGOT) \
++     dynamic[DT_MIPS_PLTGOT_IDX] = dpnt->d_un.d_val; \
+ else if (dpnt->d_tag == DT_MIPS_RLD_MAP) \
+      *(ElfW(Addr) *)(dpnt->d_un.d_ptr) =  (ElfW(Addr)) debug_addr; \
+ } while (0)
+@@ -114,6 +117,7 @@ else if (dpnt->d_tag == DT_MIPS_RLD_MAP) \
+ #define INIT_GOT(GOT_BASE,MODULE)						\
+ do {										\
+ 	unsigned long idx;							\
++	unsigned long *pltgot;							\
+ 										\
+ 	/* Check if this is the dynamic linker itself */			\
+ 	if (MODULE->libtype == program_interpreter)				\
+@@ -123,6 +127,12 @@ do {										\
+ 	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
+ 	GOT_BASE[1] = (unsigned long) MODULE;					\
+ 										\
++	pltgot = MODULE->dynamic_info[DT_MIPS_PLTGOT_IDX];			\
++	if (pltgot) {								\
++		pltgot[0] = (unsigned long) _dl_runtime_pltresolve;		\
++		pltgot[1] = (unsigned long) MODULE;				\
++	}									\
++										\
+ 	/* Add load address displacement to all local GOT entries */		\
+ 	idx = 2;									\
+ 	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
+@@ -151,9 +161,9 @@ void _dl_perform_mips_global_got_relocations(struct elf_resolve *tpnt, int lazy)
+ #define OFFS_ALIGN (0x10000000000UL-0x1000)
+ #endif	/* O32 || N32 */
+ 
+-#define elf_machine_type_class(type)		ELF_RTYPE_CLASS_PLT
+-/* MIPS does not have COPY relocs */
+-#define DL_NO_COPY_RELOCS
++#define elf_machine_type_class(type) \
++  ((((type) == R_MIPS_JUMP_SLOT) * ELF_RTYPE_CLASS_PLT)	\
++   | (((type) == R_MIPS_COPY) * ELF_RTYPE_CLASS_COPY))
+ 
+ #define OFFSET_GP_GOT 0x7ff0
+ 
+diff --git a/ldso/ldso/mips/elfinterp.c b/ldso/ldso/mips/elfinterp.c
+index 1b03d94..0ed2757 100644
+--- a/ldso/ldso/mips/elfinterp.c
++++ b/ldso/ldso/mips/elfinterp.c
+@@ -30,6 +30,7 @@
+ #include "ldso.h"
+ 
+ extern int _dl_runtime_resolve(void);
++extern int _dl_runtime_pltresolve(void);
+ 
+ #define OFFSET_GP_GOT 0x7ff0
+ 
+@@ -83,6 +84,61 @@ unsigned long __dl_runtime_resolve(unsigned long sym_index,
+ 	return new_addr;
+ }
+ 
++unsigned long
++__dl_runtime_pltresolve(struct elf_resolve *tpnt, int reloc_entry)
++{
++	int reloc_type;
++	ELF_RELOC *this_reloc;
++	char *strtab;
++	Elf32_Sym *symtab;
++	int symtab_index;
++	char *rel_addr;
++	char *new_addr;
++	char **got_addr;
++	unsigned long instr_addr;
++	char *symname;
++
++	rel_addr = (char *)tpnt->dynamic_info[DT_JMPREL];
++	this_reloc = (ELF_RELOC *)(intptr_t)(rel_addr + reloc_entry);
++	reloc_type = ELF32_R_TYPE(this_reloc->r_info);
++	symtab_index = ELF32_R_SYM(this_reloc->r_info);
++
++	symtab = (Elf32_Sym *)(intptr_t)tpnt->dynamic_info[DT_SYMTAB];
++	strtab = (char *)tpnt->dynamic_info[DT_STRTAB];
++	symname = strtab + symtab[symtab_index].st_name;
++
++	/* Address of the jump instruction to fix up. */
++	instr_addr = ((unsigned long)this_reloc->r_offset +
++		      (unsigned long)tpnt->loadaddr);
++	got_addr = (char **)instr_addr;
++
++	/* Get the address of the GOT entry. */
++	new_addr = _dl_find_hash(symname, tpnt->symbol_scope, tpnt, ELF_RTYPE_CLASS_PLT);
++	if (unlikely(!new_addr)) {
++		_dl_dprintf(2, "%s: can't resolve symbol '%s' in lib '%s'.\n", _dl_progname, symname, tpnt->libname);
++		_dl_exit(1);
++	}
++
++#if defined (__SUPPORT_LD_DEBUG__)
++	if ((unsigned long)got_addr < 0x40000000) {
++		if (_dl_debug_bindings) {
++			_dl_dprintf(_dl_debug_file, "\nresolve function: %s", symname);
++			if (_dl_debug_detail)
++				_dl_dprintf(_dl_debug_file,
++				            "\n\tpatched: %x ==> %x @ %x",
++				            *got_addr, new_addr, got_addr);
++		}
++	}
++	if (!_dl_debug_nofixups) {
++		*got_addr = new_addr;
++	}
++#else
++	*got_addr = new_addr;
++#endif
++
++	return (unsigned long)new_addr;
++}
++
+ void _dl_parse_lazy_relocation_information(struct dyn_elf *rpnt,
+ 	unsigned long rel_addr, unsigned long rel_size)
+ {
+@@ -115,6 +171,7 @@ int _dl_parse_relocation_information(struct dyn_elf *xpnt,
+ 	got = (unsigned long *) tpnt->dynamic_info[DT_PLTGOT];
+ 
+ 	for (i = 0; i < rel_size; i++, rpnt++) {
++		char *symname = NULL;
+ 		reloc_addr = (unsigned long *) (tpnt->loadaddr +
+ 			(unsigned long) rpnt->r_offset);
+ 		reloc_type = ELF_R_TYPE(rpnt->r_info);
+@@ -128,6 +185,16 @@ int _dl_parse_relocation_information(struct dyn_elf *xpnt,
+ 			old_val = *reloc_addr;
+ #endif
+ 
++		if (reloc_type == R_MIPS_JUMP_SLOT || reloc_type == R_MIPS_COPY) {
++			symname = strtab + symtab[symtab_index].st_name;
++			symbol_addr = (unsigned long)_dl_find_hash(symname,
++								   tpnt->symbol_scope,
++								   tpnt,
++								   elf_machine_type_class(reloc_type));
++			if (unlikely(!symbol_addr && ELF32_ST_BIND(symtab[symtab_index].st_info) != STB_WEAK))
++				return 1;
++		}
++
+ 		switch (reloc_type) {
+ #if _MIPS_SIM == _MIPS_SIM_ABI64
+ 		case (R_MIPS_64 << 8) | R_MIPS_REL32:
+@@ -148,6 +215,24 @@ int _dl_parse_relocation_information(struct dyn_elf *xpnt,
+ 				*reloc_addr += (unsigned long) tpnt->loadaddr;
+ 			}
+ 			break;
++		case R_MIPS_JUMP_SLOT:
++			*reloc_addr = symbol_addr;
++			break;
++		case R_MIPS_COPY:
++			if (symbol_addr) {
++#if defined (__SUPPORT_LD_DEBUG__)
++				if (_dl_debug_move)
++					_dl_dprintf(_dl_debug_file,
++						    "\n%s move %d bytes from %x to %x",
++						    symname, symtab[symtab_index].st_size,
++						    symbol_addr, reloc_addr);
++#endif
++
++				_dl_memcpy((char *)reloc_addr,
++					   (char *)symbol_addr,
++					   symtab[symtab_index].st_size);
++			}
++			break;
+ 		case R_MIPS_NONE:
+ 			break;
+ 		default:
+diff --git a/ldso/ldso/mips/resolve.S b/ldso/ldso/mips/resolve.S
+index f5d988a..d7951a1 100644
+--- a/ldso/ldso/mips/resolve.S
++++ b/ldso/ldso/mips/resolve.S
+@@ -112,3 +112,54 @@ _dl_runtime_resolve:
+ .end	_dl_runtime_resolve
+ .previous
+ 
++/* Assembler veneer called from the PLT header code when using the
++   non-PIC ABI.
++
++   Code in each PLT entry puts the caller's return address into t7 ($15),
++   the PLT entry index into t8 ($24), the address of _dl_runtime_pltresolve
++   into t9 ($25) and the address of .got.plt into gp ($28).  __dl_runtime_pltresolve
++   needs a0 ($4) to hold the link map and a1 ($5) to hold the index into
++   .rel.plt (== PLT entry index * 4).  */
++
++	.text
++	.align	2
++	.globl	_dl_runtime_pltresolve
++	.type	_dl_runtime_pltresolve,@function
++	.ent	_dl_runtime_pltresolve
++_dl_runtime_pltresolve:
++	.frame	$29, 40, $31
++	.set noreorder
++	# Save arguments and sp value in stack.
++	subu    $29, 40
++	lw      $10, 4($28)
++	# Modify t9 ($25) so as to point .cpload instruction.
++	addiu   $25, 12
++	# Compute GP.
++	.cpload $25
++	.set reorder
++
++	/* Store function arguments from registers to stack */
++	sw	$15, 36($29)
++	sw	$4, 16($29)
++	sw	$5, 20($29)
++	sw	$6, 24($29)
++	sw	$7, 28($29)
++
++	/* Setup functions args and call __dl_runtime_pltresolve.  */
++	move	$4, $10
++	sll     $5, $24, 3
++	jal	__dl_runtime_pltresolve
++
++	/* Restore function arguments from stack to registers */
++	lw	$31, 36($29)
++	lw	$4, 16($29)
++	lw	$5, 20($29)
++	lw	$6, 24($29)
++	lw	$7, 28($29)
++
++	/* Do a tail call to the original function */
++	addiu	$29, 40
++	move	$25, $2
++	jr	$25
++	.end	_dl_runtime_pltresolve
++	.previous
 
 
 ={============================================================================
