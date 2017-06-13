@@ -424,21 +424,19 @@
 |kt_linux_core_110| linux-process-exec-system-call 
 *kt_linux_core_110* linux-process-exec-clone-call
 *kt_linux_core_103* linux-process-priority-and-schedule 
+*kt_linux_core_110* linux-process-resource
+*kt_linux_core_050* linux-process-function-reentrant
 |kt_linux_core_108| process: group
 |kt_linux_core_109| process-deamon
-*kt_linux_core_110* process-resource
-*kt_linux_core_110* process-resource-case
-*kt_linux_core_050* process-function-reentrant
 
 *kt_linux_core_050* linux-memory
 
-*kt_linux_core_150* thread-and-process
-*kt_linux_core_151* thread-source
-*kt_linux_core_152* thread-errno
-|kt_linux_core_153| thread-compile
-*kt_linux_core_154* thread-create-and-exit
-*kt_linux_core_155* thread-join-and-detach
-|kt_linux_core_156| thread-id
+*kt_linux_core_150* linux-thread
+*kt_linux_core_151* linux-thread-source-and-ex
+|kt_linux_core_153| linux-thread-compile
+*kt_linux_core_154* linux-thread-api
+|kt_linux_core_156| linux-thread-id
+*kt_linux_core_157* linux-thread-attribute
 
 |kt_linux_core_150| pthread {nptl}
 |kt_linux_core_102| how to run three threads sequencially
@@ -481,8 +479,8 @@
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
 |kt_linux_core_200| ipc: sync: semaphore 
-*kt_linux_core_201* sync-mutex
-*kt_linux_core_202* sync: deadlock
+*kt_linux_core_201* linux-sync-mutex
+*kt_linux_core_202* linux-sync-deadlock
 *kt_linux_core_202* sync-cond: why condition variable in UNP example
 *kt_linux_core_202* sync-cond: why condition variable in LPI example
 *kt_linux_core_202* sync-cond: compare two examples
@@ -34754,6 +34752,14 @@ Usually, an error is indicated by a return of -1. When a system call fails, it
 sets `the global integer variable errno` to a positive value that identifies
 the specific error.
 
+Including the <errno.h> header file provides a declaration of errno, as well
+as a set of constants for the various error numbers. All of these symbolic
+names commence with E.
+
+% man errno
+
+EINVAL          Invalid argument (POSIX.1)
+
 Thus, a system call can be checked with code such as the following:
 
 cnt = read(fd, buf, numbytes);
@@ -34768,9 +34774,9 @@ if (cnt == -1) {
 First check if the function return value indicates an error, and `only then`
 examine errno to determine the cause of the error.
 
-because successful system calls and library functions never reset errno to 0,
-so this variable may have a nonzero value as a consequence of an error from a
-previous call. Furthermore, SUSv3 permits a successful function call to set
+because `successful` system calls and library functions never reset errno to
+0, so this variable may have a nonzero value as a consequence of an error from
+a previous call. Furthermore, SUSv3 permits a successful function call to set
 errno to a nonzero value (although few functions do this).
 
 
@@ -34787,6 +34793,12 @@ The perror() function prints the string pointed to by its msg argument,
 
 The strerror() function returns the error string corresponding to the error
 number given in its errnum argument.
+
+#include <stdio.h>
+void perror(const char *msg);
+
+#include <string.h>
+char *strerror(int errnum);
 
 
 {library-calls-on-error}
@@ -35031,6 +35043,28 @@ invoking exit handlers established by the parent.
 
 
 <thread-errno>
+The errno is a global integer variable. However, this doesn't suffice for
+threaded programs. If a thread made a call that returned an error in a
+`global-errno` variable, then this would confuse other threads that might also
+be making calls and checking errno. In other words, race conditions would
+result.
+
+<how>
+Each thread has its own errno value. On Linux, a `thread-specific-errno` is
+achieved in a similar manner to most other UNIX: errno is defined as a macro
+that `expands into a function call` returning a modifiable lvalue that is
+distinct for each thread. Since the lvalue is modifiable, it is still possible
+to write assignment statements of the form `errno = value` in threaded
+programs.
+
+To summarize, the errno mechanism has been adapted for threads in a manner
+that leaves error reporting unchanged from the traditional UNIX API.
+
+note: 
+After all, errno macro returns a per-thread errno. A program is required to
+declare errno by including <errno.h>, which enables the implementation of a
+per-thread errno.
+
 void errExitEN(int errnum, const char *format, ...);
 
 is the same as errExit(), except that instead of printing the error text
@@ -35039,10 +35073,11 @@ is the same as errExit(), except that instead of printing the error text
   argument errnum.
 
 Mainly, we use errExitEN() in programs that employ the POSIX threads API.
+
 Since:
 
 The traditional method of returning status from system calls and some library
-functions is to return 0 on success and -1 on error, with errno being set to
+functions is to `return 0 on success and -1 on error`, with errno being set to
 indicate the error. The functions in the `pthreads API do things differently`
 All pthreads functions return 0 on success or a positive value on failure. The
 failure value is one of the same values that can be placed in errno by
@@ -35057,10 +35092,12 @@ if (errno != 0)
 
 This approach is `inefficient` because errno is defined in threaded programs
   as a macro. Under the POSIX threads API, errno is redefined to be a function
-  that returns a pointer to a thread-specific storage area (see Section 31.3
+  that returns a `pointer to a thread-specific storage area` 
 
 errExitEN() function allows us to write a more efficient equivalent of the
-above code:
+above code because each reference to errno in a threaded program carries the
+overhead of a function call, our example programs don’t directly assign the
+return value of a Pthreads function to errno.
 
 int s;
 s = pthread_create(&thread, NULL, func, &arg);
@@ -37853,57 +37890,82 @@ nonempty queue.
  */
 
 // normal user process. fairness
+// SCHED_NORMAL(OTHER) is default.
 #define SCHED_NORMAL 0     
 
-// realtime and run the highest priority. On the same priority, the first runs until it's blocked.
-// So it is realtime without time slice.
+// realtime and run the highest priority. On the same priority, the first runs
+// until it's blocked. So it is realtime `without` time slice.
 #define SCHED_FIFO   1     
 
-// realtime and run the highest priority. On the same priority, the first runs but in the time
-// sliced. So it is realtime with time slice.
+// realtime and run the highest priority. On the same priority, the first runs
+// but in the time sliced. So it is realtime with time slice.
 #define SCHED_RR     2
 
-<default-policy>
-SCHED_NORMAL(OTHER) is default.
 
-To change the policy after a boot:
-For example, if scheduling is modified before insmod-ing callisto BCM drivers, tasks inherit changed
-scheduling. In that case last two task mods can be dropped. The list is quite aggressive as changing
-policy of kthread affects all new kernel threads. Fine tuning would obviously have to be done along
-with BCM.
+<sched-rr>
+35.2.1 The SCHED_RR Policy
 
-(about ways to change from NORMAL to RR)
-http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0182.html
-http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0330.html
+Once scheduled, a process employing the SCHED_RR policy maintains control of
+the CPU until either:
+
+  * it reaches the end of its time slice;
+  * it voluntarily relinquishes the CPU, either by performing a blocking
+    system call or by calling the sched_yield() system call.
+  * it terminates; or
+  * it is preempted by a higher-priority process.
+ 
+For the first two events above, when a process running under the SCHED_RR
+policy loses access to the CPU, it is placed at the back of the queue for its
+priority level. In the final case, when the higher-priority process has ceased
+execution, the preempted process continues execution, consuming the remainder
+of its time slice (i.e., the `preempted process remains` at the head of the
+    queue `for its priority level`).
+
+In both the SCHED_RR and the SCHED_FIFO policies, the currently running
+process may be preempted for one of the following reasons:
+
+  * a higher-priority process that was blocked became unblocked (e.g., an I/O
+    operation on which it was waiting completed);
+
+  * the priority of another process was raised to a higher level than the
+    currently running process; or
+
+  * the priority of the currently running process was decreased to a lower
+    value than that of some other runnable process.
 
 
-<code>
-/* from sched.h.
-#define MAX_USER_RT_PRIO   100
-#define MAX_RT_PRIO        MAX_USER_RT_PRIO
-*/
+<different-from-sched-other>
+The SCHED_RR policy is similar to the standard round-robin time-sharing
+scheduling algorithm (SCHED_OTHER), in that it allows a group of processes
+with the same priority to share access to the CPU. 
 
-#define MY_RT_PRIORITY MAX_USER_RT_PRIO /* Highest possible */
+The most notable difference is the existence of `strictly` distinct priority
+levels, with higher-priority processes always taking precedence over
+lower-priority processes. By contrast, a low nice value (i.e., high priority)
+  doesn’t give a process exclusive access to the CPU; it merely gives the
+  process a favorable weighting in scheduling decisions. As noted in Section
+  35.1, a process with a low priority (i.e., high nice value) always receives
+  at least some CPU time.
 
-int main(int argc, char **argv)
-{
-  ...
-  int rc, old_scheduler_policy;
-  struct sched_param my_params;
-  ...
+The other important difference is that the SCHED_RR policy allows us to
+precisely control `the order` in which processes are scheduled.
 
-  /* Passing zero specifies caller's (our) policy */
-  old_scheduler_policy = sched_getscheduler(0);
-  my_params.sched_priority = MY_RT_PRIORITY;
 
-  /* Passing zero specifies callers (our) pid */
-  rc = sched_setscheduler(0, SCHED_RR, &my_params);
-  if ( rc == -1 )
-    handle_error();
-  ...
-}
+<sched-batch>
+35.2.3 The SCHED_BATCH and SCHED_IDLE Policies
 
-(sched.c)
+The Linux 2.6 kernel series added two nonstandard scheduling policies:
+SCHED_BATCH and SCHED_IDLE.
+
+
+<sched-api>
+#include <sched.h>
+int sched_get_priority_min(int policy);
+int sched_get_priority_max(int policy);
+
+Both return nonnegative integer priority on success, or -1 on error
+
+// sched.c
 /**
  * sys_sched_get_priority_max - return maximum RT priority.
  * @policy: scheduling class.
@@ -37951,11 +38013,237 @@ asmlinkage long sys_sched_get_priority_min(int policy)
         return ret;
 }
 
+The range of realtime priorities differs from one UNIX implementation to
+another. Therefore, instead of hard-coding priority values into an
+application, we should specify priorities relative to the return value from
+one of these functions.
 
-{pthread-schedule}
-The POSIX draft standard specifies scheduling policy attributes of SCHED_FIFO (first-in-first-out),
-SCHED_RR (round-robin), or SCHED_OTHER (an implementation-defined method). SCHED_FIFO and
-SCHED_RR are optional in POSIX, and only are supported for real time bound threads
+
+35.3.2 Modifying and Retrieving Policies and Priorities
+
+The sched_setscheduler() system call changes both the scheduling policy and
+the priority of the process whose process ID is specified in pid. If pid is
+specified as 0, the attributes of the calling process are changed.
+
+#include <sched.h>
+int sched_setscheduler(pid_t pid, int policy, const struct sched_param *param);
+
+<ex>
+/* from sched.h.
+#define MAX_USER_RT_PRIO   100
+#define MAX_RT_PRIO        MAX_USER_RT_PRIO
+*/
+
+#define MY_RT_PRIORITY MAX_USER_RT_PRIO /* Highest possible */
+
+int main(int argc, char **argv)
+{
+  ...
+  int rc, old_scheduler_policy;
+  struct sched_param my_params;
+  ...
+
+  /* Passing zero specifies caller's (our) policy */
+  old_scheduler_policy = sched_getscheduler(0);
+  my_params.sched_priority = MY_RT_PRIORITY;
+
+  /* Passing zero specifies callers (our) pid */
+  rc = sched_setscheduler(0, SCHED_RR, &my_params);
+  if ( rc == -1 )
+    handle_error();
+  ...
+}
+
+A successful sched_setscheduler() call moves the process specified by pid to
+the `back of the queue for its priority level.`
+
+The scheduling policy and priority are inherited by a child created via
+fork(), and they are preserved across an exec().
+
+To change the policy after a boot:
+
+If scheduling is modified before insmod-ing callisto BCM drivers, tasks
+inherit changed scheduling. In that case last two task mods can be dropped.
+The list is quite aggressive as changing policy of kthread affects all new
+kernel threads. Fine tuning would obviously have to be done along with BCM.
+
+(about ways to change from NORMAL to RR)
+http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0182.html
+http://www.ussg.iu.edu/hypermail/linux/kernel/0411.1/0330.html
+
+
+The sched_setparam() system call provides a subset of the functionality of
+sched_setscheduler(). It modifies the scheduling priority of a process while
+leaving the policy unchanged.
+
+#include <sched.h>
+int sched_setparam(pid_t pid, const struct sched_param *param);
+
+
+Privileges and resource limits affecting changes to scheduling parameters
+
+Since kernel 2.6.12, the rules about setting realtime scheduling policies and
+priorities have changed with the introduction of a new, nonstandard resource
+limit, RLIMIT_RTPRIO. As with older kernels, privileged (CAP_SYS_NICE)
+  processes can make arbitrary changes to the scheduling policy and priority
+  of any process. However, an unprivileged process can also change scheduling
+  policies and priorities, according to the following rules:
+
+
+={============================================================================
+*kt_linux_core_110* linux-process-resource
+
+LPI 36 Process Resources
+
+36.1 Process Resource Usage
+
+36.2 Process Resource Limits
+
+Each process has a set of resource limits that can be used to restrict the
+amounts of various system resources that the process may consume. 
+
+For example, we may want to set resource limits on a process before execing an
+arbitrary program, if we are concerned that it may consume excessive
+resources. 
+
+We can set the resource limits of the shell using the ulimit built-in command
+(limit in the C shell). These limits are `inherited` by the processes that the
+shell creates to execute user commands.
+
+Since kernel 2.6.24, the Linux-specific `/proc/PID/limits` file can be used to
+view all of the resource limits of any process. This file is owned by the real
+user ID of the corresponding process and its permissions allow reading only by
+that user ID (or by a privileged process).
+
+$ cat /proc/3576/limits 
+Limit                     Soft Limit           Hard Limit           Units     
+Max cpu time              unlimited            unlimited            seconds   
+Max file size             unlimited            unlimited            bytes     
+Max data size             unlimited            unlimited            bytes     
+Max stack size            8388608              unlimited            bytes     
+Max core file size        0                    unlimited            bytes     
+Max resident set          unlimited            unlimited            bytes     
+Max processes             3941                 3941                 processes 
+Max open files            1024                 4096                 files     
+Max locked memory         65536                65536                bytes     
+Max address space         unlimited            unlimited            bytes     
+Max file locks            unlimited            unlimited            locks     
+Max pending signals       3941                 3941                 signals   
+Max msgqueue size         819200               819200               bytes     
+Max nice priority         0                    0                    
+Max realtime priority     0                    0                    
+Max realtime timeout      unlimited            unlimited            us        
+
+
+The getrlimit() and setrlimit() system calls allow a process to fetch and
+modify its resource limits.
+
+#include <sys/resource.h>
+int getrlimit(int resource, struct rlimit *rlim);
+int setrlimit(int resource, const struct rlimit *rlim);
+
+struct rlimit {
+  rlim_t rlim_cur; /* Soft limit (actual process limit) */
+  rlim_t rlim_max; /* Hard limit (ceiling for rlim_cur) */
+};
+
+These fields correspond to the two associated limits for a resource: the soft
+(rlim_cur) and hard (rlim_max) limits. (The rlim_t data type is an integer
+    type.) 
+
+The soft limit governs the amount of the resource that may be consumed by the
+process. A process can adjust the soft limit to any value from 0 up to the hard
+limit. For most resources, the sole purpose of the hard limit is to provide this
+'ceiling' for the soft limit.
+
+They are inherited by child processes created via fork() and are preserved
+across an exec().
+
+
+Although a resource limit is a per-process attribute, `in some cases`, the
+limit is measured against not just that process’s consumption of the
+corresponding resource, but also against the sum of resources consumed `by all
+processes` with the same real user ID. The RLIMIT_NPROC limit, which places a
+limit on the number of processes that can be created, is a good example of the
+rationale for this approach.
+
+If not otherwise specified, then a resource limit is measured 'only' against the
+process's own consumption of the resource.
+
+
+36.3 Details of Specific Resource Limits
+
+In this section, we provide details on each of the resource limits available on
+Linux, noting those that are Linux-specific.
+
+RLIMIT_AS
+
+The RLIMIT_AS limit specifies the maximum size for the process's virtual memory
+(address space), in bytes. Attempts (brk(), sbrk(), mmap(), mremap(), and
+    shmat()) to exceed this limit fail with the error ENOMEM. In practice, the
+most common place where a program may hit this limit is in calls to functions in
+the malloc package, which make use of sbrk() and mmap(). Upon encountering this
+limit, stack growth can also fail with the consequences listed below for
+RLIMIT_STACK.
+
+
+RLIMIT_STACK
+
+The RLIMIT_STACK limit specifies the maximum size of the process stack, in
+bytes. Attempts to grow the stack beyond this limit result in the generation of
+a `SIGSEGV` signal for the process. Since the stack is exhausted, the only way
+to catch this signal is by establishing an alternate `signal-stack`, as
+described in Section 21.3.
+
+Since Linux 2.6.23, the RLIMIT_STACK limit also determines the amount of space
+available for holding the process's command-line arguments and environment
+variables. See the execve(2) manual page for details.
+
+
+<case>
+The daemon crashes when it shows huge numbers in vm memory status and shows a
+call trace in coredump. Believe that it has no memory to create a thread stack.
+See RLIMIT_STACK and SIGSEGV. *sigseg*
+
+VmPeak:	 1893244 kB
+VmSize:	 1535856 kB
+
+#0  0x77399418 in stack_list_add () from /lib/libpthread.so.0
+#1  0x7739af1c in pthread_create () from /lib/libpthread.so.0
+#2  0x773e1488 in direct_thread_create () from /usr/local/lib/libdirect.so
+#3  0x76d6cb70 in fusion_enter () from /usr/local/lib/libfusion-1.4.so.17
+#4  0x7742e05c in dfb_core_create () from /usr/local/lib/libdirectfb.so
+#5  0x774100a8 in DirectFBCreate () from /usr/local/lib/libdirectfb.so
+
+libpthread/nptl/pthread_create.c
+
+int
+__pthread_create_2_1 (
+     pthread_t *newthread,
+     const pthread_attr_t *attr,
+     void *(*start_routine) (void *),
+     void *arg)
+{
+  STACK_VARIABLES;
+
+  const struct pthread_attr *iattr = (struct pthread_attr *) attr;
+  if (iattr == NULL)
+    /* Is this the best idea?  On NUMA machines this could mean
+       accessing far-away memory.  */
+    iattr = &default_attr;
+
+  struct pthread *pd = NULL;
+  int err = ALLOCATE_STACK (iattr, &pd);
+  ...
+}
+
+static int
+allocate_stack (const struct pthread_attr *attr, struct pthread **pdp,
+		ALLOCATE_STACK_PARMS)
+{
+	  /* And add to the list of stacks in use.  */
+	  stack_list_add (&pd->list, &stack_used);
+}
 
 
 ={============================================================================
@@ -38757,154 +39045,6 @@ to the current value of errno (i.e., the equivalent of strerror(errno)).
 
 
 ={============================================================================
-*kt_linux_core_110* process-resource
-
-LPI36
-
-36.2 Process Resource Limits
-
-Each process has a set of resource limits that can be used to restrict the
-amounts of various system resources that the process may consume. For example,
-we may want to set resource limits on a process before execing an arbitrary
-  program, if we are concerned that it may consume excessive resources. 
-
-We can set the resource limits of the shell using the ulimit built-in command
-(limit in the C shell). These limits are inherited by the processes that the
-shell creates to execute user commands.
-
-Since kernel 2.6.24, the Linux-specific `/proc/PID/limits` file can be used to
-view all of the resource limits of any process. This file is owned by the real
-user ID of the corresponding process and its permissions allow reading only by
-that user ID (or by a privileged process).
-
-$ cat /proc/3576/limits 
-Limit                     Soft Limit           Hard Limit           Units     
-Max cpu time              unlimited            unlimited            seconds   
-Max file size             unlimited            unlimited            bytes     
-Max data size             unlimited            unlimited            bytes     
-Max stack size            8388608              unlimited            bytes     
-Max core file size        0                    unlimited            bytes     
-Max resident set          unlimited            unlimited            bytes     
-Max processes             3941                 3941                 processes 
-Max open files            1024                 4096                 files     
-Max locked memory         65536                65536                bytes     
-Max address space         unlimited            unlimited            bytes     
-Max file locks            unlimited            unlimited            locks     
-Max pending signals       3941                 3941                 signals   
-Max msgqueue size         819200               819200               bytes     
-Max nice priority         0                    0                    
-Max realtime priority     0                    0                    
-Max realtime timeout      unlimited            unlimited            us        
-
-
-struct rlimit {
-  rlim_t rlim_cur; /* Soft limit (actual process limit) */
-  rlim_t rlim_max; /* Hard limit (ceiling for rlim_cur) */
-};
-
-These fields correspond to the two associated limits for a resource: the soft
-(rlim_cur) and hard (rlim_max) limits. (The rlim_t data type is an integer
-    type.) 
-
-The soft limit governs the amount of the resource that may be consumed by the
-process. A process can adjust the soft limit to any value from 0 up to the hard
-limit. For most resources, the sole purpose of the hard limit is to provide this
-'ceiling' for the soft limit.
-
-In most cases, resource limits are enforced for both privileged and unprivileged
-processes. They are inherited by child processes created via fork() and are
-preserved across an exec().
-
-
-Although a resource limit is a per-process attribute, in some cases, the limit
-is measured against not just that process’s consumption of the corresponding
-resource, but also against the sum of resources consumed by all processes with
-the same real user ID. The RLIMIT_NPROC limit, which places a limit on the
-number of processes that can be created, is a good example of the rationale for
-this approach.
-
-If not otherwise specified, then a resource limit is measured 'only' against the
-process's own consumption of the resource.
-
-
-In this section, we provide details on each of the resource limits available on
-Linux, noting those that are Linux-specific.
-
-RLIMIT_AS
-The RLIMIT_AS limit specifies the maximum size for the process's virtual memory
-(address space), in bytes. Attempts (brk(), sbrk(), mmap(), mremap(), and
-    shmat()) to exceed this limit fail with the error ENOMEM. In practice, the
-most common place where a program may hit this limit is in calls to functions in
-the malloc package, which make use of sbrk() and mmap(). Upon encountering this
-limit, stack growth can also fail with the consequences listed below for
-RLIMIT_STACK.
-
-
-RLIMIT_STACK
-The RLIMIT_STACK limit specifies the maximum size of the process stack, in
-bytes. Attempts to grow the stack beyond this limit result in the generation of
-a `SIGSEGV` signal for the process. Since the stack is exhausted, the only way
-to catch this signal is by establishing an alternate `signal-stack`, as
-described in Section 21.3.
-
-Since Linux 2.6.23, the RLIMIT_STACK limit also determines the amount of space
-available for holding the process's command-line arguments and environment
-variables. See the execve(2) manual page for details.
-
-
-RLIM_INFINITY
-What dose it really mean?
-
-
-={============================================================================
-*kt_linux_core_110* process-resource-case
-
-The daemon crashes when it shows huge numbers in vm memory status and shows a
-call trace in coredump. Believe that it has no memory to create a thread stack.
-See RLIMIT_STACK and SIGSEGV. *sigseg*
-
-VmPeak:	 1893244 kB
-VmSize:	 1535856 kB
-
-#0  0x77399418 in stack_list_add () from /lib/libpthread.so.0
-#1  0x7739af1c in pthread_create () from /lib/libpthread.so.0
-#2  0x773e1488 in direct_thread_create () from /usr/local/lib/libdirect.so
-#3  0x76d6cb70 in fusion_enter () from /usr/local/lib/libfusion-1.4.so.17
-#4  0x7742e05c in dfb_core_create () from /usr/local/lib/libdirectfb.so
-#5  0x774100a8 in DirectFBCreate () from /usr/local/lib/libdirectfb.so
-
-libpthread/nptl/pthread_create.c
-
-int
-__pthread_create_2_1 (
-     pthread_t *newthread,
-     const pthread_attr_t *attr,
-     void *(*start_routine) (void *),
-     void *arg)
-{
-  STACK_VARIABLES;
-
-  const struct pthread_attr *iattr = (struct pthread_attr *) attr;
-  if (iattr == NULL)
-    /* Is this the best idea?  On NUMA machines this could mean
-       accessing far-away memory.  */
-    iattr = &default_attr;
-
-  struct pthread *pd = NULL;
-  int err = ALLOCATE_STACK (iattr, &pd);
-  ...
-}
-
-static int
-allocate_stack (const struct pthread_attr *attr, struct pthread **pdp,
-		ALLOCATE_STACK_PARMS)
-{
-	  /* And add to the list of stacks in use.  */
-	  stack_list_add (&pd->list, &stack_used);
-}
-
-
-={============================================================================
 *kt_linux_core_050* process-function-reentrant
 
 From LPI signal.
@@ -39135,9 +39275,9 @@ function that called alloca() returns.
 
 
 ={============================================================================
-*kt_linux_core_150* thread-and-process
+*kt_linux_core_150* linux-thread
   
-LPI 29
+LPI 29 Threads Introduction
 
 A process is an instance of an executing program and a thread is an instance of
 an executing a task. In other words, a process is `processor-abstract`, an
@@ -39185,41 +39325,62 @@ fork();  // copy a child from a parent and actually use clone() call
 exec*()  // load a new program text.
 
 
-{thread-vs-process-model}
+Figure 29-1: Four threads executing in a process (Linux/x86-32)
 
-<PM>
+<process-model>
+Traditional UNIX approach to achieving concurrency by creating multiple
+processes:
+
 * It is difficult to share information between processes. Since the parent and
   child don't share memory other than the read-only text segment, we must use
   IPC.
 
-* Process creation with fork() is relatively expensive although 'copy-on-write'
+* Process creation with fork() is relatively expensive although copy-on-write
   is used. The need to duplicate various process attributes such as page tables
   and file descriptor tables means that a fork() call is still time-consuming.
 
-<TM>
+<thread-model>
 * Sharing information between threads is easy and fast since it is just a matter
   of copying data into shared (global or heap) variables. However, needs
   syncronization.
+
+  All of these threads are independently executing the same program, and they
+  all share the same global memory, including the initialized data,
+  uninitialized data, and heap segments.
 
 * Thread creation is faster because many of the attributes that must be
   duplicated in a child created by fork() are `instead-shared` between threads
   such as page table.
 
 
-<TM-disadvantages>
+<thread-model-disadvantages>
+29.9 Threads Versus Processes
+
 * Buggy thread can damage all of the threads in the process. less protection.
+  A bug in one thread (e.g., modifying memory via an incorrect pointer) can
+  damage all of the threads in the process, since they share the same address
+  space and other attributes. By contrast, processes are more isolated from
+  one another.
+
 * More threads means more memory and `context-switching`.
- 
-* more efforts to ensure thread-safe
-* each thread is competing for use of the finite virtual address space of a host process.
-* desirable to avoid the use of signals in multi-threaded since requires careful designs.
-// * should run the same program.
+
+* More efforts to ensure thread-safe. *When programming with threads, we need
+  to ensure that the functions we call are thread-safe or are called in a
+  thread-safe manner. Multiprocess applications don’t need to be concerned
+  with this.
+
+* Each thread is competing for use of the finite virtual address space of a
+  host process
+  Although the available virtual address space is large, this factor may be a
+  significant limitation for processes employing large numbers of threads or
+  threads that require large amounts of memory. By contrast, separate
+  processes can each employ the full range of available virtual memory
+
+* Desirable to avoid the use of signals in multi-threaded since requires
+  careful designs.
 
 
-{shared-and-not-shared-between-threads}
-From CH29 in {ref-LPI} and {ref-UNP}
-
-<shared-attributes>
+<shared-attributes-between-threads>
 The attributes that are shared; in other words, global attributes to a process:
 
 the same global memory, process code and most data;
@@ -39233,16 +39394,16 @@ signal dispositions;
 file system-related information: umask, current working directory, and root directory;
 resource limits;
 
-<not-shared-attributes> thread specific
+<not-shared-attributes-between-threads> thread specific
 thread ID (Section 29.5);
 signal mask;
 thread-specific data (Section 31.3);
 alternate signal stack (sigaltstack());
 the `errno` variable;
-realtime 'scheduling' policy and priority (Sections 35.2 and 35.3);
+realtime scheduling policy and priority (Sections 35.2 and 35.3);
 capabilities (Linux-specific, described in Chapter 39); and
-'stack' (local variables and function call linkage information).
-'registers' including PC and SP
+stack (local variables and function call linkage information).
+registers including PC and SP
 
 
 {multithreaded-vs-singlethreaded}
@@ -39254,22 +39415,37 @@ but more protection.
 note: tradeoff between IPC and protection.
 
 
-{user-and-kernel-stack}
-The kernel stack is a per-process memory region maintained in kernel memory that
-is used as the stack for execution of the functions called internally during the
-execution of a system call.
-
-Each (user) stack frame contains the following information:
-
-* Function arguments and local variables
-* Some registers. RA.
-
-note: needs more about difference?
-
-
 ={============================================================================
-*kt_linux_core_151* thread-sample
+*kt_linux_core_152* linux-thread-source-and-ex
 
+POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard
+defines an API for creating and manipulating threads. The two main Linux
+threading implementations - LinuxThreads and Native POSIX Threads Library (NPTL)
+- deviate from the standard.
+
+
+{pthread-apis}
+http://pubs.opengroup.org/onlinepubs/7990989799/xsh/pthread.h.html
+http://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread.h.html
+
+Linux threading models compared: LinuxThreads and NPTL
+http://www-128.ibm.com/developerworks/linux/library/l-threading.html?ca=dgr-lnxw07LinuxThreadsAndNPTL
+
+From 2.6, NPTL(New Posix Threading Library) that supports futex(fast user space
+mutex) and is part of glibc.
+
+
+{source}
+# from uclibc source
+
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\pthread.c
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\rwlock.c
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\pthread.h
+uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\bits\pthreadtypes.h
+(_pthread_rwlock_t)
+
+
+<ex>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -39312,284 +39488,111 @@ int main(int argc, char *argv[])
 
 
 ={============================================================================
-*kt_linux_core_151* thread-source
+*kt_linux_core_153* linux-thread-compile
 
-POSIX.1 threads approved in 1995 is a POSIX standard for threads. The standard
-defines an API for creating and manipulating threads. The two main Linux
-threading implementations - LinuxThreads and Native POSIX Threads Library (NPTL)
-- deviate from the standard.
+On Linux, programs that use the Pthreads API must be compiled with the cc
+-pthread option. The effects of this option include the following:
 
+1. The _REENTRANT preprocessor macro is defined. This causes the declarations
+of a few reentrant functions to be exposed.
 
-{pthread-apis}
-http://pubs.opengroup.org/onlinepubs/7990989799/xsh/pthread.h.html
-http://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread.h.html
-
-Linux threading models compared: LinuxThreads and NPTL
-http://www-128.ibm.com/developerworks/linux/library/l-threading.html?ca=dgr-lnxw07LinuxThreadsAndNPTL
-
-From 2.6, NPTL(New Posix Threading Library) that supports futex(fast user space
-mutex) and is part of glibc.
-
-
-{source}
-# from uclibc source
-
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\pthread.c
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\rwlock.c
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\pthread.h
-uClibc-0.9.30.1\uClibc-0.9.30.1\libpthread\linuxthreads\sysdeps\pthread\bits\pthreadtypes.h
-(_pthread_rwlock_t)
-
-
-={============================================================================
-*kt_linux_core_152* thread-errno
-  
-LPI 29.2
-
-{global-errno}
-When a system call fails, it sets the 'global' integer variable errno to a
-positive value that identifies the specific error. Including the <errno.h>
-header file provides a declaration of errno, as well as a set of constants for
-the various error numbers. All of these symbolic names commence with E.
-
-man errno
-
-EINVAL          Invalid argument (POSIX.1)
-
-Usually, an error is indicated by a return of -1. Thus, a system call can be
-checked with code such as the following:
-
-fd = open(pathname, flags, mode); /* system call to open a file */
-
-if (fd == -1) {
-   /* Code to handle the error */
-}
-
-<print-errnos>
-To print an error message based on the errno value. The perror() and strerror()
-library functions are provided for this purpose.
-
-#include <stdio.h>
-void perror(const char *msg);
-
-The perror() function prints the string pointed to by its msg argument, 'followed' by a message
-corresponding to the current value of errno.
-
-#include <string.h>
-char *strerror(int errnum);
-
-
-<when-to-check>
-Successful system calls and library functions 'never' reset errno to 0, so this
-variable may have a nonzero value as a consequence of an error from a previous
-call. Furthermore, SUSv3 permits a successful function call to set errno to a
-nonzero value (although few functions do this).
-
-Therefore, when checking for an error, we should always first check if the
-function return value indicates an error, and only then examine errno to
-determine the cause of the error.
-
-
-{thread-errno}
-The traditional method of returning status from system calls and some library
-functions is to return 0 on success and -1 on error, with errno being set to
-indicate the error. 
-
-The functions in the pthreads API do things differently. 
-
-<why>
-The errno is a global integer variable. However, this doesn't suffice for
-threaded programs. If a thread made a call that returned an error in a
-`global-errno` variable, then this would confuse other threads that might also
-be making calls and checking errno. In other words, race conditions would
-result.
-
-<how>
-Each thread has its own errno value. On Linux, a `thread-specific-errno` is
-achieved in a similar manner to most other UNIX: errno is defined as a 'macro'
-that expands into a function call returning a modifiable lvalue that is distinct
-for each thread. Since the lvalue is modifiable, it is still possible to write
-assignment statements of the form errno = value in threaded programs.
-
-To summarize, the errno mechanism has been adapted for threads in a manner that
-leaves error reporting unchanged from the traditional UNIX API.
-
-note: 
-After all, errno macro returns a per-thread errno. A program is required to
-declare errno by including <errno.h>, which enables the implementation of a
-per-thread errno.
-
-<value>
-All pthreads functions return 0 on success or a `positive-value` on 'failure'.
-The failure value is one of the same values that can be placed in errno by
-traditional UNIX system calls. 
-
-
-{LPI-approach}
-errExitEN() 
-is the same as errExit(), except that instead of printing the error text corresponding to the
-current value of errno, it prints the text corresponding to the error number (thus, the EN suffix)
-given in the argument errnum.
-
-Mainly, we use errExitEN() in programs that employ the POSIX threads API. Since:
-
-The traditional method of returning status from system calls and some library functions is to return
-0 on success and -1 on error, with errno being set to indicate the error. The functions in the
-pthreads API do things differently. All pthreads functions return 0 on success or a positive value
-on failure. The failure value is one of the same values that can be placed in errno by traditional
-UNIX system calls. 
-
-We could diagnose errors from the POSIX threads functions using code such as the following:
-
-errno = pthread_create(&thread, NULL, func, &arg);
-if (errno != 0)
-   errExit("pthread_create");
-
-However, this approach is 'inefficient' because errno is defined in threaded programs as a macro that
-expands into a 'function' call that returns a modifiable lvalue. 
-
-errExitEN() function allows us to write a more efficient equivalent of the above code:
-
-int s;
-s = pthread_create(&thread, NULL, func, &arg);
-if (s != 0)
-   errExitEN(s, "pthread_create");
-
-note: errExitEN do 'not' use errno which is a function call and user provides it instead. 
-
-TODO: needs to clarify further. 
-<one>
-From {ref-UNP}. Why is this? Because pthread funcs do not set <errno-var> and return errno instead.
-This means that set manually errno before calling err_sys() for example. This util funcs handles
-this:
-
-To avoid cluttering the code with braces, use {comma-operator} to combine assignment and the call:
-
-int n;
-if(( n = pthread_mutex_lock( &ndone_mutex )) != 0 )
-   errno = n, err_sys("pthread_mutex_lock error");
-
-Or
-
-void Pthread_mutex_lock(pthread_mutex_t* mptr)
-{
-  int n;
-
-  if(( n = pthread_mutex_lock( mptr )) == 0 )
-    return;
-
-  errno = n;
-  err_sys("pthread_mutex_lock error");
-} 
-
-From Appdix C in {ref-UNP}. The reason for our own error funcs is to handle error case with a single
-line. See {pthread-util-func} for the use.
-
-if( error condition )
-   err_sys( printf format with any number of args );
-
-instead of
-
-if( error condition ) {
-  char buff[200];
-  snprintf( buff, sizeof(buff), printf format with any number of args );
-  perror(buff);
-  exit(1);
-}
-
-
-={============================================================================
-*kt_linux_core_153* thread-compile
-
-On Linux, programs that use the Pthreads API must be compiled with the cc -pthread option. The
-effects of this option include the following:
-
-1. The _REENTRANT preprocessor macro is defined. This causes the declarations of a few reentrant
-functions to be exposed.
-
-2. The program is linked with the libpthread library (the equivalent of -lpthread).
+2. The program is linked with the libpthread library (the equivalent of
+    -lpthread).
 
 gcc -pthread sample.c
 
+3.12 Options Controlling the Preprocessor
+
+-pthread
+Define additional macros required for using the POSIX threads library. You
+should use this option consistently for both compilation and linking. This
+option is supported on GNU/Linux targets, most other Unix derivatives, and
+also on x86 Cygwin and MinGW targets.
+
+3.14 Options for Linking
+
+-pthread
+Link with the POSIX threads library. This option is supported on GNU/Linux
+targets, most other Unix derivatives, and also on x86 Cygwin and MinGW
+targets. On some targets this option also sets flags for the preprocessor, so
+it should be used consistently for both compilation and linking.
+
 
 ={============================================================================
-*kt_linux_core_154* thread-create-and-exit
+*kt_linux_core_154* linux-thread-create-and-exit
 
 <pthread-create>
 #include <pthread.h>
 
-// return 0 if okay, positive Exxx on error which is different from most system calls. 
+// return 0 if okay, positive Exxx on error which is different from most
+// system calls. 
 //
-// If need multiple arguments to the function, must package them into a structure and then pass the
-// address of this as the single argument to the start function.
+// If need multiple arguments to the function, must package them into a
+// structure and then pass the address of this as the single argument to the
+// start function.
 //
-// The tid argument points to a buffer of type pthread_t into which the unique identifier for
-// this thread is 'copied' before pthread_create() returns. This identifier can be used in later
-// Pthreads calls to refer to the thread. The arg should be in global or heap.
+// The tid argument points to a buffer of type pthread_t into which the unique
+// identifier for this thread is 'copied' before pthread_create() returns.
+// This identifier can be used in later Pthreads calls to refer to the thread.
+// The arg should be in global or heap.
 //
 // If attr is NULL, uses default values.
 //
-// EAGAIN : when cannot create a new thread because exceeded the limit on the number of threads
+// EAGAIN : when cannot create a new thread because exceeded the limit on the
+// number of threads
 
 int pthread_create( pthread_t *tid, const pthread_attr_t *attr, void *(*func)(void*), void *arg);
 
 
-{pthread-exit}
-
+<pthread-exit>
 // The execution of a thread terminates in one of the following ways: 
 //
-// o The thread's start function performs a return specifying a return value for the thread. This is
-// equivalent to pthread_exit()  
+// o The thread's start function performs a return specifying a return value
+// for the thread. This is equivalent to pthread_exit()  
 // 
-// o The thread calls pthread_exit() which can be called in any func called by start func.
+// o The thread calls pthread_exit() which can be called in any func called by
+// start func.
 //
 // o The thread is canceled using pthread_cancel()
 //
-// * `any-of-the-threads` calls exit(), or the main thread performs a return (in
-// the main() function), which causes 'all' threads in the process to terminate
-// immediately.
+// * `any-of-the-threads` calls exit(), or the main thread performs a return
+// (in the main() function), which causes 'all' threads in the process to
+// terminate immediately.
 // 
 // @retval
 //
-// Specifies a return value that can be obtained in 'another' thread by calling
-// pthread_join(). The value pointed to by retval should 'not' be located on the
-// thread's stack, since the contents of that stack become undefined on thread
-// termination. The same statement applies to the value given to a return
-// statement in the thread's start function.
+// Specifies a return value that can be obtained in 'another' thread by
+// calling pthread_join(). The value pointed to by retval should 'not' be
+// located on the thread's stack, since the contents of that stack become
+// undefined on thread termination. The same statement applies to the value
+// given to a return statement in the thread's start function.
 //
-// <continue-after-main-thread-exit> 
-// If the main thread calls pthread_exit() instead of calling exit() or
-// performing a return, then the other threads continue to execute.
+// <continue-after-main-thread-exit> If the main thread calls pthread_exit()
+// instead of calling exit() or performing a return, then the other threads
+// continue to execute.
 
 void pthread_exit(void *retval);
 
 
-={============================================================================
-*kt_linux_core_155* thread-join-and-detach
-
-LPI 29
-
 {pthread-join} 
-
 // return 0 if okay, positive Exxx on error. 
 //
 // To 'wait' for a given thread to terminate. If that thread has already
 // terminated, pthread_join() returns 'immediately'.
 //
 // If retval is a non-NULL pointer, then it receives a copy of the terminated
-// thread's return value - that is, the value that was specified when the thread
-// performed a return or called pthread_exit().
+// thread's return value - that is, the value that was specified when the
+// thread performed a return or called pthread_exit().
 
 int pthread_join( pthread_t thread, void **retval );
 
 <join-restriction>
-Calling pthread_join() for a thread ID that has been previously joined can lead
-to 'unpredictable' behavior; for example, it might instead join with a thread
-created later that happened to reuse the same thread ID.
+Calling pthread_join() for a thread ID that has been previously joined can
+lead to 'unpredictable' behavior; for example, it might instead join with a
+thread created later that happened to reuse the same thread ID.
 
 
 {pthread-detach}
-
 int pthread_detach(pthread_t tid);
 
 Thread is either 'joinable'(the 'default') or 'detached'. 
@@ -39600,7 +39603,7 @@ create detached thread when create it by using attr setting.
 pthread_detach( pthread_self() );
 
 By default, a thread is joinable, meaning that when it terminates, another
-  thread can obtain its return status using pthread_join(). 
+thread can obtain its return status using pthread_join(). 
 
 Sometimes, we don't care about the thread's return status; we simply want the
 system to automatically clean up and remove the thread when it terminates. In
@@ -39616,11 +39619,11 @@ To put things another way, pthread_detach() simply controls what happens after a
 thread terminates, not how or when it terminates.
 
 
-{zombie-thread}
-If a thread is not detached, then we must join with it using pthread_join(). If
-not, then, when the thread terminates, it produces the thread 'equivalent of a
-`zombie-process`. Aside from wasting system resources, if enough thread zombies
-accumulate, we won't be able to create additional threads.
+{zombie-thread} *zombie-process*
+If a thread is not detached, then we must join with it using pthread_join().
+If not, then, when the thread terminates, it produces the thread equivalent of
+a `zombie-process`. Aside from wasting system resources, if enough thread
+zombies accumulate, we won't be able to create additional threads.
 
 
 {what-join-do}
@@ -39645,22 +39648,18 @@ Section 30.2.4.
 
 
 ={============================================================================
-*kt_linux_core_156* thread-id
+*kt_linux_core_156* linux-thread-id
 
-LPI 29
-
-{tid}
+<why-equal-function-needed> *opaque-data*
 Each thread within a process is uniquely identified by a thread ID. This ID is
 returned to the caller of pthread_create(), and a thread can obtain its own ID
 using pthread_self().
 
 int pthread_equeal( pthread_t tid, pthread_t tid );
-
 Returns nonzero value if t1 and t2 are equal, otherwise 0
 
 pthread_t pthread_self(void);
 
-<why-equal-function-needed> opaque-data
 All pthread data type should be treated 'opaque' data. On Linux, pthread_t
 happens to be defined as an unsigned long, but on other implementations, it
 could be a pointer or a structure.
@@ -39670,18 +39669,19 @@ In NPTL, pthread_t is actually a pointer that has been cast to unsigned long.
 Two problems:
 
 1. Therefore, we can't 'portably' use code such as the following to display a
-thread ID. Though it does work on many implementations, including Linux, and is
-sometimes useful for debugging purposes:
+thread ID. Though it does work on many implementations, including Linux, and
+is sometimes useful for debugging purposes:
 
 pthread_t thr;
 printf("Thread ID = %ld\n", (long) thr);
 
 2. In the Linux threading implementations, thread IDs are unique across
-processes. However, this is 'not' necessarily the case on other implementations
+processes. However, this is 'not' necessarily the case on other
+implementations
 
 
 {posix-TID-and-kernel-tid}
-POSIX thread IDs are 'not' the same as the thread IDs returned by the Linux
+POSIX thread IDs are `not the same` as the thread IDs returned by the Linux
 specific gettid() system call. POSIX thread IDs are assigned and maintained by
 the threading implementation. The thread ID returned by gettid() is a number
 (similar to a process ID) that is assigned by the kernel. 
@@ -39690,8 +39690,6 @@ Although each POSIX thread has a unique kernel thread ID in the Linux NPTL
 implementation, an application generally doesn't need to know about the kernel
 IDs and won't be portable if it depends on knowing them.
 
-
-{tid-and-ps}
 
 <pthread-self>
 NAME
@@ -39717,7 +39715,6 @@ NOTES
        kernel thread ID returned by a call to gettid(2).
 
 <gettid>
-
 SYNOPSIS
        #include <sys/types.h>
 
@@ -39737,36 +39734,16 @@ NOTES
 
 
 ={============================================================================
-*kt_linux_core_157* pthread thread id. LPI 29
+*kt_linux_core_157* linux-thread-attribute
 
-/*  status must not point to an object that is local to the calling thread.
- *
- *  terminate two other ways:
- *
- *  o thread function returns. return value is the exit status of the thread. {Q} kernal handle and
- *  manage it?
- *
- *  o main thread function returns or any thread call exit/_exit, the process terminates
- *  immediately.
- */
-void pthread_exit(void *status);
+29.8 Thread Attributes
 
-// A thread may be canceled by any other thread in the same process. For example, if multiple
-// threads are started to work on a given task (say finding a record in a database) adn the first
-// thread completes the task then cancels the other threds.
-//
-// To handle the possibility of being canceled, can install(push) and remove(pop) cleanup handlers.
-// These handlers are called:
-// a) when the thread is canceled by pthread_cancel
-// b) when the thread voluntarily terminates (either by calling pthread_exit or returning from its
-// thread)
-
-int   pthread_cancel(pthread_t);
-void  pthread_cleanup_push(void*), void *);
-void  pthread_cleanup_pop(int);
+Attributes include information such as the location and size of the thread’s
+stack, the thread’s scheduling policy and priority (akin to the process
+    realtime scheduling policies and priorities), and whether the thread is
+joinable or detached.
 
 
-{pthread-attribute} 
 To override the default and normally take the detault using the attr arg as a NULL. Attributes are a
 way to specify behavior that is different from the default. When a thread is created with
 pthread_create or when a synchronization variable is initialized, an attribute object can be
@@ -39935,6 +39912,24 @@ NPTL 2.15
 <pid-nptl>
 note: Q. In Linux, every thread has a PID and can see when use ps command but in NPTL, thread
 group has one PID. is it true?
+
+
+={============================================================================
+*kt_linux_core_157* pthread thread id. LPI 29
+
+// A thread may be canceled by any other thread in the same process. For example, if multiple
+// threads are started to work on a given task (say finding a record in a database) adn the first
+// thread completes the task then cancels the other threds.
+//
+// To handle the possibility of being canceled, can install(push) and remove(pop) cleanup handlers.
+// These handlers are called:
+// a) when the thread is canceled by pthread_cancel
+// b) when the thread voluntarily terminates (either by calling pthread_exit or returning from its
+// thread)
+
+int   pthread_cancel(pthread_t);
+void  pthread_cleanup_push(void*), void *);
+void  pthread_cleanup_pop(int);
 
 
 ={============================================================================
@@ -40371,7 +40366,7 @@ following cases:
   socket.
 
 
-{file-descriptors-and-open-files}
+{file-descriptors-and-open-files} *open-file-table*
 
 5.4 Relationship Between File Descriptors and Open Files
 
@@ -40381,7 +40376,8 @@ different processes. Three data structures maintained by the 'kernel':
 
 File descriptor   ->  Open file   ->    i-node table
     table               table
-    fd x
+    fd x 					(system-wide) 		(system-wide)
+
 
 1. the `per-process open file descriptor table`
 
@@ -42263,7 +42259,7 @@ note: skipped.
 
 
 ={============================================================================
-*kt_linux_core_203* linux-io-permission-check
+*kt_linux_core_203* linux-io-permission-check linux-process-credentials
 
 15.4.3 Permission-Checking Algorithm
 
@@ -42273,7 +42269,7 @@ call includes a directory prefix, then, in addition to checking for the
 required permissions on the file itself, the kernel also checks for execute
 permission on each of the directories in this prefix. 
 
-// Permission checks are made using the process’s effective user ID, effective
+// Permission checks are made using the process's effective user ID, effective
 // group ID, and supplementary group IDs.
 
 To be strictly accurate, `for file permission checks on Linux`, the
@@ -45054,22 +45050,27 @@ are no longer required). note: real example? useful?
 
 
 ={============================================================================
-*kt_linux_core_201* sync-mutex
+*kt_linux_core_201* linux-sync-mutex
 
-LPI-30
+LPI 30 Thread Synchronization
 
-The term critical section is used to refer to a section of 'code' that accesses
-a shared resource and whose execution should be 'atomic'; that is, its execution
-should not be interrupted by another thread that simultaneously accesses the
-same shared resource.
+Mutexes allow threads to synchronize their use of a shared resource, so that,
+for example, one thread doesn’t try to access a shared variable at the same
+  time as another thread is modifying it. Condition variables perform a
+    `complementary task`: they allow threads to inform each other that a
+    shared variable (or other shared resource) has changed state.
+
+The term critical section is used to refer to a section of code that accesses
+a shared resource and whose execution should be `atomic`; that is, its
+execution should not be interrupted by another thread that simultaneously
+accesses the same shared resource.
 
 In the below problem, two threads shares the same code. It is about critial
 region but what is really protected is the 'data' being manipulated within the
 critical region.
 
 
-Problem
--------------------------------
+<problem>
 The kind of problems that can occur when shared resources are not accessed
 atomically.
 
@@ -45084,13 +45085,14 @@ thread has its 'own' copy of this variable.
 The vagaries of the kernel's CPU scheduling decisions:
 The scheduler time slice for thread 1 expires, and thread 2 commences execution.
 
-In complex programs, this 'nondeterministic' behavior means that such errors may
+In complex programs, this `nondeterministic` behavior means that such errors may
 occur only rarely, be hard to reproduce, and therefore be difficult to find.
 
 static int glob = 0;
 
 staic void threadFunc()
 {
+  int loops = *((int *) arg);
   int loc, j;
 
   for(j=0; j < loops; j++)
@@ -45102,10 +45104,9 @@ staic void threadFunc()
 }
 
 
-Solution?
--------------------------------
-It might seem that we could eliminate the problem by replacing the three statements
-inside the for loop with a single statement. Looks atomic?
+<solution>
+It might seem that we could eliminate the problem by replacing the three
+statements inside the for loop with a single statement. Looks atomic?
 
 staic void threadFunc()
 {
@@ -45117,60 +45118,58 @@ staic void threadFunc()
   }
 }
 
-However, on many hardware architectures (e.g., RISC architectures), the compiler
-would still need to convert this single statement into machine code whose steps
-are equivalent to the three statements inside the loop. In other words, despite
-its simple appearance, even a C increment operator may 'not' be atomic.
+However, on many hardware architectures (e.g., RISC architectures), the
+compiler would still need to convert this single statement into machine code
+whose steps are equivalent to the three statements inside the loop. In other
+words, despite its simple appearance, even a C increment operator may 'not' be
+atomic.
 
 
-Mutex
--------------------------------
+{mutex}
 More generally, mutexes can be used to ensure atomic access to any shared
 resource, but protecting shared variables is the most common use.
 
-
-Mutex Ownership
--------------------------------
-A mutex has two states: locked and unlocked. At any moment, *at-most* one thread
-may hold the lock on a mutex. Attempting to lock a mutex that is already locked
-either blocks or fails with an error depending on the method used to place the
-lock.
+<mutex-ownership>
+A mutex has two states: locked and unlocked. At any moment, *at-most* one
+thread may hold the lock on a mutex. Attempting to lock a mutex that is
+already locked either blocks or fails with an error depending on the method
+used to place the lock.
 
 When a thread locks a mutex, it becomes the 'owner' of that mutex. 'only' the
-mutex owner can unlock the mutex. Because of this ownership property, the terms
-'acquire' and 'release' are sometimes used synonymously for lock and unlock.
+mutex owner can unlock the mutex. Because of this ownership property, the
+terms 'acquire' and 'release' are sometimes used synonymously for lock and
+unlock.
 
 
-Mutex protocol
--------------------------------
+<mutex-protocol>
 Each thread employs the following protocol for accessing a resource:
 1. lock the mutex for the shared resource;
 2. access the shared resource; and
 3. unlock the mutex.
 
 
-Cooperative lock
--------------------------------
+<mutex-cooperative-lock>
 This means that mutex locking is advisory, rather than mandatory; nothing can
-prevent one thread from manipulating the data without first obtaining the mutex.
-For example, threads not participating a mutex circle can.
+prevent one thread from manipulating the data without first obtaining the
+mutex. For example, threads not participating a mutex circle can.
 
 
-Statically Allocated Mutexes
--------------------------------
+<mutex-allocation>
+statically allocated mutexes
+
 A mutex can either be allocated as a static variable or be created dynamically
 at run time. Before it can be used, a mutex must always be initialized.
 
 pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 
+dynamically initializing mutex
 
-Dynamically Initializing a Mutex
--------------------------------
 See LPI-30.1.5, 6
 
 
-Locking and Unlocking a Mutex
--------------------------------
+<mutex-lockin>
+30.1.2 Locking and Unlocking a Mutex
+
 After initialization, a mutex is unlocked.
 
 #include <pthread.h>
@@ -45190,22 +45189,81 @@ to pthread_mutex_unlock(), it is 'indeterminate' which thread will succeed in
 acquiring it.
 
 
-Mutex Types
--------------------------------
-o May not lock the same mutex twice. If do, two may happen for 'default'
-type of mutex: mutex-'deadlock' or EDEADLK for error check type. On Linux,
-     deadlock by default from {ref-LPI}. Why deadlock?  Because blocked trying
-     to lock a mutex that it already owns.
+<mutex-type>
+30.1.7 Mutex Types
 
-*mutex-unlock-not-locked*
-Unlocking a mutex that is not owned(locked) or that is locked by another thread
-'undefined' result. note: ownership matters when unlock and semaphore do not
-have ownership. Precisely what happens in each of these cases depends on the
-type of the mutex.
+  * A single thread may not lock the same mutex twice.
+  
+  * A thread may not unlock a mutex that it doesn’t currently own or locked
+
+Precisely what happens in each of these cases depends on the type of the
+mutex.
+
+note: ownership matters when unlock and semaphore do not
+have ownership. 
 
 
-<case-glib-beg>
+PTHREAD_MUTEX_NORMAL *mutex-self-lock*
 
+(Self-)deadlock detection is not provided for this type of mutex. If a thread
+tries to lock a mutex that it has already locked, then 'deadlock' results. On
+Linux, the thread deadlocks by default.
+
+Unlocking a mutex that is not locked or that is locked by another thread
+produces 'undefined' results. 
+
+On Linux, both of these operations succeed for this mutex type and a
+PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
+
+
+PTHREAD_MUTEX_ERRORCHECK
+
+All three of the above scenarios cause the relevant Pthreads function to return
+an error than blocking or deadlock but 'slower' than a normal so debugging
+purpose.
+
+
+PTHREAD_MUTEX_RECURSIVE
+
+A recursive mutex maintains the concept of a *lock-count* When a thread first
+acquires the mutex, the lock count is set to 1. Each subsequent lock operation
+by the same thread increments the lock count, and each unlock operation
+decrements the count. The mutex is released (i.e., made available for other
+    threads to acquire) only when the lock count falls to 0. 
+
+When is it useful?
+
+Still have ownership notion but there is no mutex deadlock or undefined result
+as _NORMAL type has.
+
+
+<mutex-locking-variants>
+Two variants of the pthread_mutex_lock() function which are much less
+frequently used:
+
+The pthread_mutex_trylock() function is the same as pthread_mutex_lock(),
+    except that if the mutex is currently locked, pthread_mutex_trylock()
+  fails, returning the error EBUSY.
+
+The pthread_mutex_timedlock() function is the same as pthread_mutex_lock(),
+    except that the caller can specify an additional argument, abstime, that
+    places a limit on the time that the thread will sleep while waiting to
+    acquire the mutex. If the time interval specified by its abstime argument
+    expires without the caller becoming the owner of the mutex,
+    pthread_mutex_timedlock() returns the error ETIMEDOUT.
+
+note: Why less used?
+
+In most well-designed applications, a thread should hold a mutex for only a
+short time, so that other threads are not prevented from executing in
+parallel. 
+
+A thread that uses pthread_mutex_trylock() to periodically poll the mutex to
+see if it can be locked risks being starved of access to the mutex while other
+queued threads are successively granted to the mutex via pthread_mutex_lock().
+
+
+<mutex-glib-code>
 // glib-2.40.0/gthread-posix.c
 //
 // The glib 2.40 changes unlock-not-locked which aborts from glib 2.0 which
@@ -45303,98 +45361,30 @@ g_mutex_unlock_slowpath (GMutex *mutex,
 #4  0x00007fffd8a94c3f in gst_hls_demux_switch_playlist ()
    from /release/debian-8-x86_64/oss/lib/gstreamer-1.0/libgsthlsdemux.so
 
-<case-glib-end>
 
-
-PTHREAD_MUTEX_NORMAL
-
-*mutex-self-lock*
-(Self-)deadlock detection is not provided for this type of mutex. If a thread
-tries to lock a mutex that it has already locked, then 'deadlock' results.
-Unlocking a mutex that is not locked or that is locked by another thread
-produces 'undefined' results. 
-
-On Linux, both of these operations 'succeed' for this mutex type and this is
-PTHREAD_MUTEX_DEFAULT
-
-
-PTHREAD_MUTEX_ERRORCHECK
-
-All three of the above scenarios cause the relevant Pthreads function to return
-an error than blocking or deadlock but 'slower' than a normal so debugging
-purpose.
-
-
-PTHREAD_MUTEX_RECURSIVE
-
-A recursive mutex maintains the concept of a *lock-count* When a thread first
-acquires the mutex, the lock count is set to 1. Each subsequent lock operation
-by the same thread increments the lock count, and each unlock operation
-decrements the count. The mutex is released (i.e., made available for other
-    threads to acquire) only when the lock count falls to 0. 
-
-When is it useful?
-
-Still have ownership notion but there is no mutex deadlock or undefined result
-as NOMAL type has.
-
-
-Locking Variants
--------------------------------
-Two variants of the pthread_mutex_lock() function which are much less frequently
-used:
-
-The pthread_mutex_trylock() function is the same as pthread_mutex_lock(), except
-that if the mutex is currently locked, pthread_mutex_trylock() fails, returning
-the error EBUSY.
-
-The pthread_mutex_timedlock() function is the same as pthread_mutex_lock(),
-    except that the caller can specify an additional argument, abstime, that
-    places a limit on the time that the thread will sleep while waiting to
-    acquire the mutex. If the time interval specified by its abstime argument
-    expires without the caller becoming the owner of the mutex,
-    pthread_mutex_timedlock() returns the error ETIMEDOUT.
-
-note: Why less used?
-
-In most well-designed applications, a thread should hold a mutex for only a
-short time, so that other threads are not prevented from executing in parallel. 
-
-A thread that uses pthread_mutex_trylock() to periodically poll the mutex to see
-if it can be locked risks being starved of access to the mutex while other
-queued threads are successively granted to the mutex via pthread_mutex_lock().
-
-
-Performance of Mutexes
--------------------------------
+<mutex-performance>
 This is relatively cheap and the performance impact of using a mutex is not
 significant in most applications.
 
-The problem with file locks and semaphores is that they always require a system
-call for the lock and unlock operations, and each system call has a small, but
-appreciable, cost (Section 3.1). By contrast, mutexes are implemented using
-atomic machine-language operations (performed on memory locations visible to all
-    threads) and require system calls only in case of lock contention.
-
+The problem with file locks and semaphores is that they always require a
+system call for the lock and unlock operations, and each system call has a
+small, but appreciable, cost (Section 3.1). By contrast, mutexes are
+implemented using atomic machine-language operations (performed on memory
+    locations visible to all threads) and require system calls only in case of
+lock contention.
 
 On Linux, mutexes are implemented using futexes (derived from fast user space
-    mutexes), and lock contentions are dealt with using the futex() system call.
-
-We don't describe futexes in this book (they are not intended for direct use in
-    user-space applications), but details can be found in [Drepper, 2004 (a)],
-   which also describes how mutexes are implemented using futexes. [Franke et
-   al., 2002] is a (now outdated) paper written by the developers of futexes,
-   which describes the early futex implementation and looks at the performance
-   gains derived from futexes.
+    mutexes), and lock contentions are dealt with using the futex() system
+call.
 
 
 ={============================================================================
-*kt_linux_core_202* sync: deadlock
+*kt_linux_core_202* linux-sync-deadlock
 
-Deadlocks. LPI-30.1.4
--------------------------------
-A deadlock is a situation where more than one thread is locking the same set of
-mutexes and will remain blocked indefinitely. Waiting for something never
+30.1.4 Mutex Deadlocks
+
+A deadlock is a situation where more than one thread is locking the same set
+of mutexes and will remain blocked indefinitely. Waiting for something never
 happens. Unrequited love?
 
 Thread A                            Thread B
@@ -45403,12 +45393,11 @@ Thread A                            Thread B
 blocks                              blocks
 
 
-Deadlock Examples
--------------------------------
+<deadlock-examples>
 <1> from pipe
 If employing this bidirectional communication using two pipes, then we need to
-be wary of deadlocks that may occur if both processes block while trying to read
-from empty pipes or while trying to write to pipes that are already full.
+be wary of deadlocks that may occur if both processes block while trying to
+read from empty pipes or while trying to write to pipes that are already full.
 
 <2> from fifo.
 use-different-fifo-for-read-and-write
@@ -45433,9 +45422,10 @@ process could perform its second step (opening the other FIFO for writing). So
 change order or use non-blocking call.
 
 <3>
-Message queues have a limited capacity. This has the potential to cause a couple of problems. One of
-these is that multiple simultaneous clients could fill the message queue, resulting in a deadlock
-situation, where no new client requests can be submitted and the server is blocked from writing any
+Message queues have a limited capacity. This has the potential to cause a
+couple of problems. One of these is that multiple simultaneous clients could
+fill the message queue, resulting in a deadlock situation, where no new client
+requests can be submitted and the server is blocked from writing any
 responses.
 
 <4> from mutex-deadlock
@@ -45446,12 +45436,12 @@ that it already owns. This could happen when exception is raised between lock
 and unlock pair.
 
 <5> from lock-free-queue
-Used the timed_wait() instead of the simpler wait() to solve a possible deadlock
-when Produce() is called between line A and line B in Listing One. Then wait()
-    will miss the notify_one() call and have to wait for the next produced
-    element to wake up. 'if' this element never comes (no more produced elements
-            or if the Produce() call actually waits for Consume() to return),
-    there's a deadlock.
+Used the timed_wait() instead of the simpler wait() to solve a possible
+deadlock when Produce() is called between line A and line B in Listing One.
+Then wait() will miss the notify_one() call and have to wait for the next
+produced element to wake up. 'if' this element never comes (no more produced
+    elements or if the Produce() call actually waits for Consume() to return),
+         there's a deadlock.
 
 <6> mutex-deadlock
 
@@ -45460,16 +45450,15 @@ lock(mutex1)        lock(mutex2)
 lock(mutex1)        lock(mutex2)
 
 
-Deadlock Avoid
--------------------------------
-
-o Mutex hierarchy or order
+<avoid-deadlock>
+* Mutex hierarchy or order
 
 The simplest way to avoid such deadlocks is to define a mutex hierarchy. When
 threads can lock the same set of mutexes, they should always lock them in the
 same order. Less flexible.
 
-o Try and back off
+* Try and back off
+
 An alternative strategy that is 'less' frequently used is "try, and then back
 off." See above on why try_lock is less used. If try_lock fails, release 'all'
 and try again later. This is less efficient than hierarchy approach but can be
