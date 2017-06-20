@@ -173,7 +173,6 @@
 *kt_linux_tool_100* tool-valgrind-memcheck-case
 *kt_linux_tool_100* tool-valgrind-massif
 *kt_linux_tool_001* tool-bugzilla
-*kt_linux_tool_001* tool-samba
 *kt_linux_tool_001* tool-ftp
 *kt_linux_tool_001* tool-rpm
 
@@ -577,7 +576,7 @@
 |kt_linux_core_710| dbus: kdbus
 
 #{ syssetup
-*kt_linux_sete_005* admin: check running services
+*kt_linux_sete_005* linux-admin-check running services
 *kt_linux_sete_005* admin: check nvidia version
 *kt_linux_sete_005* admin-gnome: check gnome version
 *kt_linux_sete_005* admin-gnome: shortcuts
@@ -11716,7 +11715,7 @@ root@3591df06b6f1:/#
 
 
 ={============================================================================
-*kt_linux_tool_051* tool-virtualbox
+*kt_linux_tool_051* tool-virtualbox tool-samba
 
 {graphic-issue}
 When see a problem with NVIDIA, need to install a driver for ubuntu manually:
@@ -11757,17 +11756,166 @@ sudo usermod -a -G vboxsf {username}
 <1> Have samba installation, setting, and user. This is simple and general and see as an example.
 http://www.sitepoint.com/ubuntu-12-04-lts-precise-pangolin-file-sharing-with-samba/
 
-sudo apt-get install samba samba-common system-config-samba winbind
+// sudo apt-get install samba samba-common system-config-samba winbind
+
+// for debian 64
+sudo apt-get install samba samba-common winbind
 
 change winbind setting
 
-For samba server settings: Workgroup. (this is domain) This field should be the same value as that
-used by your Windows Workgroupi.e if your WIndows Users are members of the 'Home' workgroup, type
-'Home' in this field.  
+For samba server settings: Workgroup. (this is domain) This field should be
+the same value as that used by your Windows Workgroupi.e if your WIndows Users
+are members of the 'Home' workgroup, type 'Home' in this field.  
 
-For samba users: use windows user name.
+<tool-samba>
+
+sudo service smbd start
+sudo service smbd stop
+sudo service smbd restart
+sudo systemctl restart smbd.service
+
+To see what are shared:
+
+$ smbclient -L //106.1.8.6/
+Enter keitee.park's password:
+Domain=[SERILOCAL] OS=[Unix] Server=[Samba 3.6.3]
+
+        Sharename       Type      Comment
+        ---------       ----      -------
+        IPC$            IPC       IPC Service (rockford server (Samba, Ubuntu))
+        dsk1            Disk      Main Disk
+Domain=[SERILOCAL] OS=[Unix] Server=[Samba 3.6.3]
+
+        Server               Comment
+        ---------            -------
+
+        Workgroup            Master
+        ---------            -------
+        WORKGROUP
 
 
+https://www.howtoforge.com/tutorial/debian-samba-server/
+
+3.3 Anonymous share
+
+You like to have a share were all users in your network can write to? Be
+careful, this share is open to anyone in the network, so use this only in
+local networks. Add an anonymous share like this:
+
+/etc/samba/smb.conf
+
+[anonymous]
+   path = /home/shares/anonymous
+   force group = users
+   create mask = 0660
+   directory mask = 0771
+   browsable =yes
+   writable = yes
+   guest ok = yes
+
+note:
+If `path` is wrong then PC host see anonymous share but cannot access through
+it.
+
+
+<changes>
+[global]
+
+## Browsing/Identification ###
+
+# Change this to the workgroup/NT-domain name your Samba server will part of
+   workgroup = CISCO
+
+[anonymous]
+  path=/home/kyoupark
+   force group = ccusers
+   create mask = 0660
+   directory mask = 0771
+   browsable = yes
+   writable = yes
+   read only = no
+   guest ok = yes
+
+
+<no-write>
+However, the above setting has no write and tried others such as:
+
+1. force user = username
+2. username map
+  [global]
+    username map = /pathToMapFile/usermap.txt
+
+Neither works and the easiest is:
+
+ Re: Can read but not write to Samba Share with Win7
+
+    [ShareName]
+    path = /home/username/
+    #read only = no
+    writeable = yes
+    browseable = yes
+
+    Your share has two problems unless you did some other things that you
+    didn't post.
+
+    It's not allowing guest access so you needed to create a samba user for
+    access.
+
+    Even if you did create a samba user the only one that would allow write
+    access is "username" because of the underlying Linux file permissions of
+    the path.
+
+    By default, your home directory has permissions of 755. The owner can read
+    and write ( the "7" ) and everyone else can only read ( the "5"'s ).
+
+    So you can set up a samba user for "username",
+
+    Or change the permissions on the target to 777:
+
+note:
+use 777. when add smbuser, will ask password from windows access. TODO more.
+
+<add-list-users>
+From the man page "pdbedit - manage the SAM database (Database of Samba
+Users)"
+
+sudo pdbedit -L -v
+
+-L to list users. -v to be verbose.
+
+kyoupark@kit-debian64:~/pad$ sudo smbpasswd -a kyoupark
+New SMB password:
+Retype new SMB password:
+Added user kyoupark.
+kyoupark@kit-debian64:~/pad$ sudo pdbedit -L -v
+---------------
+Unix username:        kyoupark
+NT username:
+Account Flags:        [U          ]
+User SID:             S-1-5-21-371559316-4287552441-583710022-1000
+Primary Group SID:    S-1-5-21-371559316-4287552441-583710022-513
+Full Name:            Kit Park
+Home Directory:       \\kit-debian64\kyoupark
+HomeDir Drive:
+Logon Script:
+Profile Path:         \\kit-debian64\kyoupark\profile
+Domain:               KIT-DEBIAN64
+Account desc:
+Workstations:
+Munged dial:
+Logon time:           0
+Logoff time:          Wed, 06 Feb 2036 15:06:39 GMT
+Kickoff time:         Wed, 06 Feb 2036 15:06:39 GMT
+Password last set:    Fri, 16 Jun 2017 18:29:07 BST
+Password can change:  Fri, 16 Jun 2017 18:29:07 BST
+Password must change: never
+Last bad password   : 0
+Bad password count  : 0
+Logon hours         : FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+kyoupark@kit-debian64:~/pad$
+
+
+{network}
 2. By default, VB uses Host-only networking and this means host cannot see
 guest. To enable for host to see guest, change to `bridged network` as shown
 in:
@@ -16544,103 +16692,6 @@ graphviz python-sphinx rst2pdf
 
 note:
 removed libdaemon-generic-perl since cannot find it for debian.
-
-
-={============================================================================
-*kt_linux_tool_001* tool-samba
-
-sudo service smbd start
-sudo service smbd stop
-sudo service smbd restart
-sudo systemctl restart smbd.service
-
-To see what are shared:
-
-$ smbclient -L //106.1.8.6/
-Enter keitee.park's password:
-Domain=[SERILOCAL] OS=[Unix] Server=[Samba 3.6.3]
-
-        Sharename       Type      Comment
-        ---------       ----      -------
-        IPC$            IPC       IPC Service (rockford server (Samba, Ubuntu))
-        dsk1            Disk      Main Disk
-Domain=[SERILOCAL] OS=[Unix] Server=[Samba 3.6.3]
-
-        Server               Comment
-        ---------            -------
-
-        Workgroup            Master
-        ---------            -------
-        WORKGROUP
-
-
-https://www.howtoforge.com/tutorial/debian-samba-server/
-
-3.3 Anonymous share
-
-You like to have a share were all users in your network can write to? Be
-careful, this share is open to anyone in the network, so use this only in
-local networks. Add an anonymous share like this:
-
-/etc/samba/smb.conf
-
-[anonymous]
-   path = /home/shares/anonymous
-   force group = users
-   create mask = 0660
-   directory mask = 0771
-   browsable =yes
-   writable = yes
-   guest ok = yes
-
-note:
-If `path` is wrong then PC host see anonymous share but cannot access through
-it.
-
-
-<no-write>
-However, the above setting has no write and tried others such as:
-
-1. force user = username
-2. username map
-  [global]
-    username map = /pathToMapFile/usermap.txt
-
-Neither works and the easiest is:
-
- Re: Can read but not write to Samba Share with Win7
-
-    [ShareName]
-    path = /home/username/
-    #read only = no
-    writeable = yes
-    browseable = yes
-
-    Your share has two problems unless you did some other things that you
-    didn't post.
-
-    It's not allowing guest access so you needed to create a samba user for
-    access.
-
-    Even if you did create a samba user the only one that would allow write
-    access is "username" because of the underlying Linux file permissions of
-    the path.
-
-    By default, your home directory has permissions of 755. The owner can read
-    and write ( the "7" ) and everyone else can only read ( the "5"'s ).
-
-    So you can set up a samba user for "username",
-
-    Or change the permissions on the target to 777:
-
-
-<list-users>
-From the man page "pdbedit - manage the SAM database (Database of Samba
-Users)"
-
-sudo pdbedit -L -v
-
--L to list users. -v to be verbose.
 
 
 ={============================================================================
@@ -64706,115 +64757,116 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
   _dl_start (elf/rtld.c)
   {
 
-    ELF_MACHINE_BEFORE_RTLD_RELOC (sysdep/<arch>/dl-machine.h)
-    // ELF_DYNAMIC_RELOCATE (sysdep/<arch>/dl-machine.h, Relocate the loader)
-    // /* Relocate ourselves so we can do normal function calls and
-    // data access using the global offset table.  */
-    ELF_DYNAMIC_RELOCATE (&bootstrap_map, 0, 0);
-    
-    // _dl_start_final (elf/rtld.c, bottom half of _dl_start)
-    
-#ifdef DONT_USE_BOOTSTRAP_MAP
-    ElfW(Addr) entry = _dl_start_final (arg);
-#else
-    ElfW(Addr) entry = _dl_start_final (arg, &info);
-#endif
-    {
+  ELF_MACHINE_BEFORE_RTLD_RELOC (sysdep/<arch>/dl-machine.h)
+  // ELF_DYNAMIC_RELOCATE (sysdep/<arch>/dl-machine.h, Relocate the loader)
+  // /* Relocate ourselves so we can do normal function calls and
+  // data access using the global offset table.  */
+  ELF_DYNAMIC_RELOCATE (&bootstrap_map, 0, 0);
 
-  /* Call the OS-dependent function to set up life so we can do things like
-     file access.  It will call `dl_main' (below) to do all the real work
-     of the dynamic linker, and then unwind our frame and run the user
-     entry point on the same stack we entered on.  */
-  // elf/dl-sysdep.c
-  start_addr = _dl_sysdep_start (arg, &dl_main);
+  // _dl_start_final (elf/rtld.c, bottom half of _dl_start)
+
+#ifdef DONT_USE_BOOTSTRAP_MAP
+  ElfW(Addr) entry = _dl_start_final (arg);
+#else
+  ElfW(Addr) entry = _dl_start_final (arg, &info);
+#endif
   {
 
-    user_entry = (ElfW(Addr)) ENTRY_POINT;
+    /* Call the OS-dependent function to set up life so we can do things like
+       file access.  It will call `dl_main' (below) to do all the real work
+       of the dynamic linker, and then unwind our frame and run the user
+       entry point on the same stack we entered on.  */
+    // elf/dl-sysdep.c
+    start_addr = _dl_sysdep_start (arg, &dl_main);
+    {
 
-    // dl_main (elf/rtld.c, main entry point for loader)
-    (*dl_main) (phdr, phnum, &user_entry, _dl_auxv);
-    static void
-      dl_main (const ElfW(Phdr) *phdr,
-          ElfW(Word) phnum,
-          ElfW(Addr) *user_entry,
-          ElfW(auxv_t) *auxv)
-      {
+      user_entry = (ElfW(Addr)) ENTRY_POINT;
 
-        if (*user_entry == (ElfW(Addr)) ENTRY_POINT)
+      // dl_main (elf/rtld.c, main entry point for loader)
+      (*dl_main) (phdr, phnum, &user_entry, _dl_auxv);
+      static void
+        dl_main (const ElfW(Phdr) *phdr,
+            ElfW(Word) phnum,
+            ElfW(Addr) *user_entry,
+            ElfW(auxv_t) *auxv)
         {
-          // Ho ho.  We are not the program interpreter!  We are the program
-          // itself!  This means someone ran ld.so as a command.  Well, that
-          // might be convenient to do sometimes.  We support it by
-          // interpreting the args like this:
-          //   ld.so PROGRAM ARGS...
-        }
 
-        /* Scan the program header table for the dynamic section.  */
-        for (ph = phdr; ph < &phdr[phnum]; ++ph);
-
-        // elf/dl-load.c for ld-search-order
-        /* Map in the shared object file NAME.  */
-        _dl_map_object (NULL, rtld_progname, lt_library, 0);
-
-        // NEED_DL_SYSINFO is not defined for mips
-
-        // elf/dl-load.c, fill in RPATH and LD_LIBRARY_PATH information);
-        /* Initialize the data structures for the search paths for shared
-           objects.  */
-        _dl_init_paths (library_path);
-
-        // elf/dl-debug.c, initialization of _r_debug and DT_DEBUG);
-        /* Initialize _r_debug.  */
-        struct r_debug *r = _dl_debug_initialize (GL(dl_rtld_map).l_addr,
-            LM_ID_BASE);
-
-        // KT: dl-lookup.c
-        _dl_lookup_symbol_x();
-
-        // KT: dl-reloc.c
-        _dl_relocate_object ()
-        {
-          if (__builtin_expect (GLRO(dl_debug_mask) & DL_DEBUG_RELOC, 0))
-            _dl_debug_printf ("\nrelocation processing: %s%s\n",
-                l->l_name[0] ? l->l_name : rtld_progname,
-                lazy ? " (lazy)" : "");
-        }
-
-        _dl_debug_bindings (const char *undef_name, struct link_map *undef_map)
-        {
-          if (GLRO(dl_debug_mask) & DL_DEBUG_BINDINGS)
+          if (*user_entry == (ElfW(Addr)) ENTRY_POINT)
           {
-            _dl_debug_printf ("binding file %s [%lu] to %s [%lu]: %s symbol `%s'",
-                (reference_name[0]
-                 ? reference_name
-                 : (rtld_progname ?: "<main program>")),
-                undef_map->l_ns,
-                value->m->l_name[0] ? value->m->l_name : rtld_progname,
-                value->m->l_ns,
-                protected ? "protected" : "normal", undef_name);
-            if (version)
-              _dl_debug_printf_c (" [%s]\n", version->name);
-            else
-              _dl_debug_printf_c ("\n");
+            // Ho ho.  We are not the program interpreter!  We are the program
+            // itself!  This means someone ran ld.so as a command.  Well, that
+            // might be convenient to do sometimes.  We support it by
+            // interpreting the args like this:
+            //   ld.so PROGRAM ARGS...
           }
 
-          do_lookup_x (undef_name, new_hash, &old_hash, *ref);
+          /* Scan the program header table for the dynamic section.  */
+          for (ph = phdr; ph < &phdr[phnum]; ++ph);
+
+          // elf/dl-load.c for ld-search-order
+          /* Map in the shared object file NAME.  */
+          _dl_map_object (NULL, rtld_progname, lt_library, 0);
+
+          // NEED_DL_SYSINFO is not defined for mips
+
+          // elf/dl-load.c, fill in RPATH and LD_LIBRARY_PATH information);
+          /* Initialize the data structures for the search paths for shared
+             objects.  */
+          _dl_init_paths (library_path);
+
+          // elf/dl-debug.c, initialization of _r_debug and DT_DEBUG);
+          /* Initialize _r_debug.  */
+          struct r_debug *r = _dl_debug_initialize (GL(dl_rtld_map).l_addr,
+              LM_ID_BASE);
+
+          // KT: dl-lookup.c
+          _dl_lookup_symbol_x();
+
+          // KT: dl-reloc.c
+          _dl_relocate_object ()
+          {
+            *current-working*
+            if (__builtin_expect (GLRO(dl_debug_mask) & DL_DEBUG_RELOC, 0))
+              _dl_debug_printf ("\nrelocation processing: %s%s\n",
+                  l->l_name[0] ? l->l_name : rtld_progname,
+                  lazy ? " (lazy)" : "");
+          }
+
+          _dl_debug_bindings (const char *undef_name, struct link_map *undef_map)
+          {
+            if (GLRO(dl_debug_mask) & DL_DEBUG_BINDINGS)
+            {
+              _dl_debug_printf ("binding file %s [%lu] to %s [%lu]: %s symbol `%s'",
+                  (reference_name[0]
+                   ? reference_name
+                   : (rtld_progname ?: "<main program>")),
+                  undef_map->l_ns,
+                  value->m->l_name[0] ? value->m->l_name : rtld_progname,
+                  value->m->l_ns,
+                  protected ? "protected" : "normal", undef_name);
+              if (version)
+                _dl_debug_printf_c (" [%s]\n", version->name);
+              else
+                _dl_debug_printf_c ("\n");
+            }
+
+            do_lookup_x (undef_name, new_hash, &old_hash, *ref);
+          }
+
+          DL_SYSDEP_INIT;
+          DL_PLATFORM_INIT; (sysdeps/<arch>/dl-machine.h)
+            /* Last action of _dl_sysdep_start return the user entry point */
+            return user_entry;
         }
-
-        DL_SYSDEP_INIT;
-        DL_PLATFORM_INIT; (sysdeps/<arch>/dl-machine.h)
-          /* Last action of _dl_sysdep_start return the user entry point */
-          return user_entry;
-      }
-  }
     }
+  }
 
-    /* Last action of _dl_start returns the user entry point */      
-    ELF_MACHINE_START_ADDRESS (GL(dl_loaded), entry); (sysdep/<arch>/dl-machine.h)
-  _dl_init (elf/dl-init.c, run DSO initializers)
+  /* Last action of _dl_start returns the user entry point */      
+  ELF_MACHINE_START_ADDRESS (GL(dl_loaded), entry); (sysdep/<arch>/dl-machine.h)
+    _dl_init (elf/dl-init.c, run DSO initializers)
     call_init (elf/dl-init.c)
-  jump to return of _dl_start (sysdep/<arch>/dl-machine.h)
-  /*User code is now executing*/
+    jump to return of _dl_start (sysdep/<arch>/dl-machine.h)
+    /*User code is now executing*/
   }
 
 <dl-runtime-resolve>
@@ -71317,7 +71369,7 @@ https://github.com/gregkh/kdbus
 
 
 ={============================================================================
-*kt_linux_sete_005* admin: check running services
+*kt_linux_sete_005* linux-admin-check running services
 
 sudo service --status-all
 
