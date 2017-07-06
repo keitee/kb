@@ -327,6 +327,9 @@
 
 |kt_linux_rege_001| regex-bre-ere
 |kt_linux_rege_001| regex-operators
+*kt_linux_rege_001* regex-group regex-reference
+*kt_linux_rege_001* regex-named-capture-group-reference
+*kt_linux_rege_001* regex-pcre
 |kt_linux_rege_001| regex-usage
 *kt_linux_rege_001* regex-grep tool-grep
 
@@ -33386,7 +33389,7 @@ A regular expression may be followed by one of several `repetition-operators`:
     The period ‘.’ matches any single character.
 
 ‘?’
-    The `preceding` item is optional and will be matched at most once.
+    The `preceding` item is `optional` and will be matched at most once.
 
     note: from py.re
     Causes the resulting RE to match 0 or 1 repetitions of the preceding RE.
@@ -33581,6 +33584,7 @@ meaning:
 
 ‘\S’
     Match non-whitespace, it is a synonym for ‘[^[:space:]]’.
+    *regex-negative-match*
 
 
 3.4 Anchoring
@@ -33650,6 +33654,67 @@ $ echo "This island is beautiful" | grep "\bis\b"
 ={============================================================================
 *kt_linux_rege_001* regex-group regex-reference
 
+$ man pcresyntax
+
+CAPTURING
+
+         (...)           capturing group
+         (?<name>...)    named capturing group (Perl)
+         (?'name'...)    named capturing group (Perl)
+         (?P<name>...)   named capturing group (Python)
+         (?:...)         non-capturing group
+         (?|...)         non-capturing group; reset group numbers for
+                          capturing groups in each alternative
+
+http://www.regular-expressions.info/brackets.html
+
+Use Parentheses for Grouping and Capturing
+
+You can group that part of the regular expression together. This allows you to
+apply a quantifier to the entire group or to restrict alternation to part of
+the regex.
+
+
+Parentheses Create Numbered Capturing Groups
+
+Besides grouping part of a regular expression together, parentheses also
+create a numbered capturing group. It stores the part of the string matched by
+the part of the regular expression inside the parentheses.
+
+The regex Set(Value)? matches Set or SetValue. In the first case, the first
+(and only) capturing group remains empty. In the second case, the first
+capturing group matches Value.
+
+
+http://docs.splunk.com/Documentation/Splunk/6.5.2/Knowledge/AboutSplunkregularexpressions
+Non-capturing group matching
+
+Use the syntax (?: ... ) to create groups that are matched but which are not
+captured. Note that here you do not need to include a field name in angle
+brackets. The colon character after the ? character is what identifies it as a
+non-capturing group.
+
+For example, (?:Foo|Bar) matches either Foo or Bar, but neither string is
+captured.
+
+
+note: WHY use non-capturing group match?
+https://stackoverflow.com/questions/18578714/what-is-the-purpose-of-the-passive-non-capturing-group-in-a-javascript-regex
+
+The use case is that sometimes you must (or should) use a group not because
+you are interested in what it captures but for syntactic reasons. In these
+situations it makes sense to use a non-capturing group instead of a "standard"
+capturing one because it is `less resource intensive` -- but if you don't care
+about that, a capturing group will behave in the exact same manner.
+
+
+Using Text Matched By Capturing Groups
+
+Capturing groups make it easy to extract part of the regex match. You can
+reuse the text inside the regular expression via a backreference.
+Backreferences can also be used in replacement strings. Please check the
+replacement text tutorial for details.
+
 
 3.5 Back-references and Subexpressions
 
@@ -33670,6 +33735,135 @@ ac_optarg=``expr "x$ac_option" : 'x[^=]*=\(.*\)'``
 
 $echo $ac_optarg
 /dev/null
+
+
+={============================================================================
+*kt_linux_rege_001* regex-named-capture-group-reference
+
+As shown, it's Python specific.
+
+         (?P<name>...)   named capturing group (Python)
+
+https://docs.python.org/2/howto/regex.html#regex-howto
+
+7.2.1. Regular Expression Syntax
+
+A brief explanation of the format of regular expressions follows. For further
+information and a gentler presentation, consult the Regular Expression HOWTO.
+
+(?...)
+    This is an `extension` notation (a '?' following a '(' is not meaningful
+        otherwise). The first character after the '?' determines what the
+    meaning and further syntax of the construct is. 
+
+    Extensions usually do not create a new group; (?P<name>...) is the only
+    `exception to this rule` 
+    
+    Following are the currently supported extensions.
+
+(?P<name>...)
+
+    Similar to regular parentheses, but the substring matched by the group is
+    accessible via `the symbolic group name` 
+    
+    Group names must be valid Python identifiers, and each group name must be
+    defined only once `within a regular expression` A symbolic group is also a
+    numbered group, just as if the group were not named.
+
+    Named groups can be referenced in three contexts. If the pattern is
+    (?P<quote>['"]).*?(?P=quote) (i.e. matching a string quoted with either
+    single or double quotes):
+
+(?P=name)
+
+    A backreference to a named group; it matches whatever text was matched by
+    the earlier group named name.
+
+
+http://www.regular-expressions.info/named.html
+
+http://docs.splunk.com/Documentation/Splunk/6.5.2/Knowledge/AboutSplunkregularexpressions
+
+Capture groups in regular expressions
+
+A named capture group is a regular expression grouping that extracts a field
+value when regular expression matches an event. Capture groups include the
+name of the field. They are notated with angle brackets as follows:
+
+matching text (?<field_name>capture pattern) more matching text.
+
+For example, you have this event text:
+
+131.253.24.135 fail admin_user
+
+Here are two regular expressions that use different syntax in their capturing
+groups to pull the same set of fields from that event.
+
+ Expression A: (?<ip>\d+\.\d+\.\d+\.\d+) (?<result>\w+) (?<user>.*)
+ Expression B: (?<ip>\S+) (?<result>\S+) (?<user>\S+)
+
+In Expression A, the pattern-matching characters used for the first capture
+group (ip) are specific. \d means "digit" and + means "one or more." So \d+
+means "one or more digits." \. refers to a period.
+
+The capture group for ip wants to match one or more digits, followed by a
+period, followed by one or more digits, followed by a period, followed by one
+or more digits, followed by a period, followed by one or more digits. This
+describes the syntax for an ip address.
+
+The second capture group in Expression A for the result field has the pattern
+\w+, which means "one or more alphanumeric characters." The third capture
+group in Expression A for the user field has the pattern .*, which means
+"match everything that's left."
+
+Expression B uses a common technique called `negative matching.` With negative
+matching, the regular expression does not try to define which text to match.
+Instead it defines what the text is not. In this Expression B, the values that
+should be extracted from the sample event are "not space" characters (\S). It
+uses the + to specify "one or more" of the "not space" characters.
+
+So Expression B says:
+
+Pull out the first string of not-space characters for the ip field value.
+
+Ignore the following space.
+
+Then pull out the second string of not-space characters for the result field
+value.
+
+Ignore the second space.
+
+Pull out the third string of not-space characters for the user field value."
+
+
+={============================================================================
+*kt_linux_rege_001* regex-pcre
+
+PCRE is short for Perl Compatible Regular Expressions. It is the name of an
+open source library written in C by Philip Hazel. The library is compatible
+with a great number of C compilers and operating systems. Many people have
+derived libraries from PCRE to make it compatible with other programming
+languages. The regex features included with PHP, Delphi, and R, and Xojo
+(REALbasic) are all based on PCRE. The library is also included with many
+Linux distributions as a shared .so library and a .h header file.
+
+Though PCRE claims to be Perl-compatible, there are more than enough
+differences between contemporary versions of Perl and PCRE to consider them
+distinct regex flavors. Recent versions of Perl have even copied features from
+PCRE that PCRE had copied from other programming languages before Perl had
+them, in an attempt to make Perl more PCRE-compatible. Today PCRE is used more
+widely than Perl because PCRE is part of so many libraries and applications.
+
+Philip Hazel has recently released a new library called PCRE2. The first PCRE2
+release was given version number 10.00 to make a clear break with the previous
+PCRE 8.36. Future PCRE releases will be limited to bug fixes. New features
+will go into PCRE2 only. If you're taking on a new development project, you
+should consider using PCRE2 instead of PCRE. But for existing projects that
+already use PCRE, it's probably best to stick with PCRE. Moving from PCRE to
+PCRE2 requires significant changes to your source code (but not to your
+    regular expressions).
+
+You can find more information about PCRE and PCRE2 at http://www.pcre.org/.
 
 
 ={============================================================================
