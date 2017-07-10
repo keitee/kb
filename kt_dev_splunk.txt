@@ -1,0 +1,244 @@
+*kt_dev_07*                                                                tw=100
+
+kt.dev.splunk
+
+/^[#=]{
+Use #{ for a group and ={ for a item
+
+|kt_dev_splunk_001| splunk-tutorial
+*kt_dev_splunk_001* splunk-operators
+*kt_dev_splunk_001* splunk-search-language
+
+# ============================================================================
+#{
+={============================================================================
+*kt_dev_splunk_001* splunk-tutorial
+
+http://docs.splunk.com/Documentation/Splunk/latest/SearchTutorial/WelcometotheSearchTutorial
+
+Where is the data stored?
+
+The process of transforming the data is called indexing. During indexing, the
+incoming data is processed to enable fast searching and analysis. The
+processed results are stored in the index as events.
+
+The index is a flat file repository for the data. For this tutorial, the index
+resides on the computer where you access your Splunk deployment.
+
+Events are stored in the index as a group of files that fall into two
+categories:
+
+ Raw data, which is the data that you add to the Splunk deployment. The raw
+ data is stored in a compressed format.  
+ 
+ Index files, which include some metadata files that point to the raw data.
+ These files reside in sets of directories, called buckets, that are organized
+ by age.
+
+By default, all of your data is put into a single, preconfigured index. There
+are several other indexes used for internal purposes.
+
+
+<sourcetype>
+http://docs.splunk.com/Documentation/Splunk/6.6.2/Data/Whysourcetypesmatter
+Why source types matter
+
+The source type is one of the default fields that Splunk software assigns to
+all incoming data. It tells Splunk software what kind of data you have, so
+that it can format the data intelligently during indexing. Source types also
+let you categorize your data for easier searching.
+
+Source types determine how incoming data is formatted Because the source type
+controls how Splunk software formats incoming data, it is important that you
+assign the correct source type to your data. That way, the `indexed` version of
+the data (the `event data`) looks the way you want, with appropriate
+timestamps and event breaks. This facilitates easier searching of the data
+later.
+
+Splunk software comes with a large number of predefined source types. When
+consuming data, Splunk software will usually select the correct source type
+automatically. If your data is specialized, you might need to manually select
+a different predefined source type. If your data is unusual, you might need to
+create a new source type with customized event processing settings. And if
+your data source contains heterogeneous data, you might need to assign the
+source type on a per-event (rather than a per-source) basis.
+
+Like any other field, you can also use the source type field to search event
+data, once the data has been indexed. You will use it a lot in your searches
+since the source type is a key way to categorize your data.
+
+<field>
+When you add data to the Splunk platform the data is indexed. As part of the
+index process, information is extracted from your data and formatted as name
+and value pairs, called fields.
+
+Fields are searchable name and value pairings that distinguish one event from
+another. Not all events have the same fields and field values. Use fields to
+write more tailored searches to retrieve the specific events that you want.
+
+
+<default-field>
+the default fields host, source, and sourcetype.
+
+
+Search with fields
+
+When you search for fields, you use the syntax field_name=field_value.
+
+ Field names are case sensitive, but field values are not.
+
+ You can use wildcards in field values.
+
+ Quotation marks are required when the field values include spaces.
+
+Interesting Fields are fields that appear in at least 20% of the events.
+
+
+The Fields sidebar displays the number of `unique values for each field` in
+the events. These are the same numbers that appear in the Select Fields dialog
+box.
+
+<ex>
+sourcetype=access_* status=200 action=purchase
+sourcetype=access_* status!=200 action=purchase
+(error OR fail* OR severe) OR (status=404 OR status=500 OR status=503)
+
+
+={============================================================================
+*kt_dev_splunk_001* splunk-operators
+
+<ex>
+buttercupgames (error OR fail* OR severe)
+
+The AND operator is implied when you type in multiple keywords. For example,
+typing "buttercupgames error" is the same as typing "buttercupgames AND
+  error".
+
+Notice that you `must` capitalize Boolean operators. The asterisk ( * )
+character is used as a wildcard character to match fail, failure, failed,
+failing, and so forth.
+
+When evaluating Boolean expressions, `precedence` is given to terms inside
+parentheses. NOT clauses are evaluated before OR clauses. AND clauses have the
+lowest precedence.
+
+
+={============================================================================
+*kt_dev_splunk_001* splunk-search-language
+
+Splunk developed the Search Processing Language (SPL) to use with Splunk
+software. SPL encompasses all the search commands and their functions,
+arguments, and clauses. One way to learn the SPL language is by using the
+  Search Assistant.
+
+There are two modes for the Search Assistant: Compact and Full. The default
+mode is Compact.
+
+To change to it Full.
+
+Splunk Cloud	Select Your_Name > User Settings.
+
+The pipe character indicates that you are about to use a command. The results
+of the search to the left of the pipe are used as the input to the command to
+the right of the pipe. You can pass the results of one command into another
+command in a series, or pipeline, of search commands.
+
+
+sourcetype=access_* status=200 action=purchase | top categoryId
+
+The top command is a `transforming command.` Transforming commands organize
+the search results into a table.
+
+
+<subsearch>
+
+Let's find the single most frequent shopper on the Buttercup Games online
+store, and what that shopper has purchased.
+
+Example 1 shows how to find the most frequent shopper without a subsearch.
+Example 2 shows how to find the most frequent shopper with a subsearch.
+
+
+Example 1: Search without a subsearch
+
+> sourcetype=access_* status=200 action=purchase | top limit=1 clientip
+
+The limit=1 argument specifies to return 1 value. The clientip `argument`
+specifies the field to return.
+
+
+> sourcetype=access_* status=200 action=purchase clientip=87.194.216.51 | stats count, dc(productId), values(productId) by clientip
+
+This search uses the count() function to return the total count of the
+purchases for the shopper. The dc() function is the distinct_count function.
+Use this function to count the number of different, or unique, products that
+the shopper bought. The values argument is used to display the actual product
+IDs in the results.
+
+The drawback to this approach is that you have to run two searches each time
+you want to build this table. The top purchaser is not likely to be the same
+person at any given time range.
+
+
+Example 2: Search with a subsearch
+
+> sourcetype=access_* status=200 action=purchase | top limit=1 clientip | table clientip
+
+A subsearch is enclosed in square brackets [ ] and `processed first` when the
+search is parsed.
+
+> sourcetype=access_* status=200 action=purchase `[search sourcetype=access_* status=200 action=purchase | top limit=1 clientip | table clientip]` | 
+stats count, dc(productId), values(productId) by clientip
+
+Because the top command returns the count and percent fields, the table
+command is used to keep only the clientip value.
+
+
+You can make the information more understandable by `renaming` the columns.
+
+> sourcetype=access_* status=200 action=purchase [search sourcetype=access_* status=200 action=purchase | top limit=1 clientip | table clientip] |
+stats count AS "Total Purchased", dc(productId) AS "Total Products", values(productId) AS "Products ID" by clientip | rename clientip AS "VIP Customer"
+
+
+<stat-command>
+http://docs.splunk.com/Documentation/SplunkCloud/6.6.0/SearchReference/Stats
+
+Description
+
+Calculates aggregate statistics over the results set, such as average, count,
+and sum. This is similar to SQL aggregation. If stats is used without a `by`
+  clause only one row is returned, which is the aggregation over the entire
+  incoming result set. If you use a by clause one row is returned for each
+  distinct value specified in the by clause.
+
+Syntax
+
+Simple: stats (stats-function(field) [AS field])... [BY field-list]
+
+Complete: stats [partitions=<num>] [allnum=<bool>] [delim=<string>] ( <stats-agg-term>... | <sparkline-agg-term>... ) [<by-clause>]
+
+
+by-clause
+Syntax: BY <field-list>
+Description: The name of one or more fields to group by. You cannot use a
+wildcard character to specify multiple fields with similar names. You must
+specify each field separately.
+
+
+Stats function options
+
+stats-function
+Syntax: avg() | c() | count() | dc() | distinct_count() | earliest() | estdc()
+| estdc_error() | exactperc<int>() | first() | last() | latest() | list() |
+max() | median() | min() | mode() | p<int>() | perc<int>() | range() | stdev()
+| stdevp() | sum() | sumsq() | upperperc<int>() | values() | var() | varp()
+
+Description: Functions used with the stats command. Each time you invoke the
+stats command, you can use more than one function. However, you can only use
+one by clause.  For a list of stats functions with descriptions and examples,
+see Statistical and charting functions.
+http://docs.splunk.com/Documentation/SplunkCloud/6.6.0/SearchReference/CommonStatsFunctions
+
+
+=}============================================================================
+Copyright: see |ktkb|                              vim:tw=100:ts=3:ft=help:norl:
