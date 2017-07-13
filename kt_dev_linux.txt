@@ -8308,6 +8308,10 @@ script -f /home/kit/log/`date | awk '{print "log-"$1"-"$2"-"$3"-"$4}'`
 To make a gateway from the ip address:
 gateway=`echo $ip | awk 'BEGIN { FS="." } ; { print $1"."$2"."$3"."1 }'`
 
+<ex>
+"-MS_CDI_CONTROL- Adding chunk to chunk input queue. " "chunk input fd = 332, p_address = 0x2c152000, num bytes = 385024 " "chunk_id = 336
+cat  LOGlastrun.log.unix | grep -e "chunk input fd = 351" | awk '{c=$36; sum+=c; print "| " $40 "|" c "|" sum "|"}' 
+
 
 ={============================================================================
 *kt_linux_tool_028* tool-sed
@@ -62904,7 +62908,7 @@ place for the duration of the program. For example, in an object file
 generated from C code, there will be a symbol for each `function` and for each
 `global and static variable.` 
 
-The value of such a symbol is simply an `offset` into the contents. This type
+The `value of such a symbol` is simply an `offset` into the contents. This type
 of symbol is known as a `defined symbol.` It is important not to confuse the
 value of the symbol representing the variable my_global_var with the value of
 my_global_var itself. The value of the symbol is roughly the address of the
@@ -63025,20 +63029,37 @@ undefined symbol. If the linker is unable to resolve that symbol, it will
 normally issue an error (but not always: for some symbol types or some
 relocation types an error may not be appropriate)
 
+// Linkers, Ian Lance Taylor
 // dynamic linker do dynamic relocation at runtime.
+
+When the program linker creates a shared library, it does not yet know which
+virtual address that shared library will run at. In fact, in different
+processes, the same shared library will run at different address, depending on
+the decisions made by the dynamic linker. This means that shared library code
+must be position independent. More precisely, it must be position independent
+after the dynamic linker has finished loading it. It is always possible for
+the dynamic linker to convert any piece of code to run at any virtula address,
+given sufficient relocation information. 
+
+However, performing the reloc computations must be done every time the program
+starts, implying that it will start more slowly. Therefore, any shared library
+system seeks to generate position independent code which requires a `minimal`
+number of relocations to be applied at runtime, while still running at close
+to the runtime efficiency of position dependent code.
 
 // LAL, Linkers and Loaders, 8
 
 One popular solution to the dilemma of loading the same program at different
 addresses is position independent code (PIC). The idea is simple, separate the
-code from the data and generate code that won’t change regardless of the
+code from the data and generate code that `won’t change` regardless of the
 address at which it’s loaded. That way the code can be shared among all
 processes, with only data pages being private to each process.
 
 On modern architectures, it’s not difficult to generate PIC executable code.
 Jumps and branches are generally either PC-relative or relative to a base
-register set at runtime, so no load-time relocation is required for them.  The
-problem is with data addressing. The code can’t contain any direct data
+register set at runtime, so no load-time relocation is required for them. 
+
+The problem is with data addressing. The code can’t contain any direct data
 addresses, since those would be relocatable and wouldn’t be PIC. 
 
 The usual solution is to create a table of data addresses in a data page and
@@ -63046,6 +63067,66 @@ keep a pointer to that table in a register, so the code can use indexed
 addressing relative to that register to pick up the data. This works at the
 cost of an extra indirection for each data reference, but there’s still the
 question of how to get the initial data address into the register.
+
+
+<pic-got-plt>
+
+// LAL 10.2
+As described in Chapter 8, ELF linkers support PIC code with a Global Offset
+Table (GOT) in each shared library that contains pointers to `all of the static`
+data referenced in the program.
+
+Since the GOT is in the same loadable ELF file as the code that references it,
+and `the relative addresses within a file don’t change` regardless of where
+  the program is loaded, the code can locate the GOT with a relative address,
+load the address of the GOT into a register, and then load pointers from the
+  GOT whenever it needs to address static data.
+
+To support dynamic linking, `each ELF shared libary and each executable` that
+uses shared libraries has a Procedure Linkage Table (PLT).
+
+// Linkers, Ian Lance Taylor
+Position independent code `will call non-static functions` via PLT. This PLT
+does not exist in .o files. In an .o file, use of the PLT is indicated by a
+`special relocation.` When the program linker processes such a relocation, it
+will create an entry in the PLT. It will adjust the instruction such that it
+becomes a PC-relative call to the PLT entry. PC-relative calls are inherently
+position independent and thus do not require a relocation entry themselves.
+
+The program linker will `create a relocation for the PLT entry` which tells
+the dynamic linker `which symbol is associated with that entry.` This process
+reduces the number of dynamic relocations in the shared library from one per
+function call to one per function `called.`
+
+However, by default, the dynamic linker will not actually apply a relocation
+to the PLT until some code actually calls the function in question. This also
+speeds up startup time, in that many invocations of a program will not call
+every possible function.
+
+
+The PLT adds a level of indirection `for function calls` analogous to that
+provided by the GOT for data. The PLT also permits `lazy evaluation`, that is,
+not resolving procedure addresses until they’re called for the first time.
+
+Since the PLT tends to have a lot more entries than the GOT, and most of the
+routines will never be called in any given program, that can both speed
+startup and save considerable time overall.
+
+      program
+   -> +--------------|
+      | call (codes) | -> to plt
+text  +--------------+
+      | PLT          | <- reference from call
+      +              | -> to got
+   -> +--------------| 
+      |              |
+      +--------------+
+data  | GOT          | -> to calls to other library
+      +--------------|    which has the same structure, plt and got
+      |              |
+   -> +--------------+
+
+// PLT in read-only text and GOT in data
 
 
 ={============================================================================
