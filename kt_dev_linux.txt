@@ -532,6 +532,7 @@
 *kt_linux_core_400* linux-lib-ld linux-dynamic-linker
 *kt_linux_core_400* linux-lib-ld-use-different-version
 *kt_linux_core_400* linux-lib-ld-glibc ld-gdb
+*kt_linux_core_400* linux-lib-ld-glibc-for-mips
 *kt_linux_core_400* linux-lib-ld-uclibc
 *kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
 *kt_linux_core_402* linux-lib-ld-resolve-order
@@ -57088,7 +57089,6 @@ make -j4 all-gcc
 make install-gcc
 
 
-
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-spk-use-own-toolchain
 
@@ -57116,7 +57116,7 @@ glibc-2.8.tar.bz2	          2009-Feb-26 16:48:15	15.2M	application/x-bzip
 glibc-2.8.tar.gz	          2009-Mar-10 17:05:47	20.4M	application/x-gzip
 
 
-<spk-buildroo-case>
+<spk-buildroot-case>
 toolchain/Config.in
 
 config BR2_TOOLCHAIN_EXTERNAL
@@ -57194,7 +57194,7 @@ $(TARGET_DIR)/lib/$(strip $(subst ",, $(BR2_TOOLCHAIN_EXTERNAL_LIB_C))):
 
 
 <spk-uclibc>
-Then where libuClibc-0.9.29.so come from when it doesn't get built? From patch
+Where does libuClibc-0.9.29.so come from when it doesn't get built? From patch
 file and means that it's `delivered as a binary`
 
 ~/si-logs/spk/darwin-spk-1.19/target/device/Sky/ams-drx890/rootfs/debug/lib$ ls -al
@@ -62422,6 +62422,42 @@ handle; the main load_elf_binary() function spans over 400 lines, and the ELF
 support code is more than four times as big as the code that supports the old
 a.out format.
 
+
+<elf-format>
+linux-2.6.18.8-from-mips/include/linux/elf.h
+
+#ifndef _LINUX_ELF_H
+#define _LINUX_ELF_H
+
+#include <linux/types.h>
+#include <linux/auxvec.h>
+#include <linux/elf-em.h>
+#include <asm/elf.h>
+...
+
+<elf-header>
+To locate the program header, the ELF header is needed. The ELF header is the
+only data structure which has a fixed place in the file, starting at 0.
+
+typedef struct
+{
+  unsigned char	e_ident[EI_NIDENT];	/* Magic number and other info */
+  Elf32_Half	e_type;			/* Object file type */
+  Elf32_Half	e_machine;		/* Architecture */
+  Elf32_Word	e_version;		/* Object file version */
+  Elf32_Addr	e_entry;		/* Entry point virtual address */
+  Elf32_Off	e_phoff;		/* Program header table file offset */
+  Elf32_Off	e_shoff;		/* Section header table file offset */
+  Elf32_Word	e_flags;		/* Processor-specific flags */
+  Elf32_Half	e_ehsize;		/* ELF header size in bytes */
+  Elf32_Half	e_phentsize;		/* Program header table entry size */
+  Elf32_Half	e_phnum;		/* Program header table entry count */
+  Elf32_Half	e_shentsize;		/* Section header table entry size */
+  Elf32_Half	e_shnum;		/* Section header table entry count */
+  Elf32_Half	e_shstrndx;		/* Section header string table index */
+} Elf32_Ehdr;
+
+
 <elf-executable> <elf-program-header>
 An ELF file for an executable program (rather than a shared library or an
     object file) must always contain a `program header table` near the start
@@ -62587,6 +62623,32 @@ memory.
    06     .note.ABI-tag
    07
 
+
+<elf-dynamic-section>
+/* Dynamic section entry.  */
+
+typedef struct
+{
+  Elf32_Sword	d_tag;			/* Dynamic entry type */
+  union
+    {
+      Elf32_Word d_val;			/* Integer value */
+      Elf32_Addr d_ptr;			/* Address value */
+    } d_un;
+} Elf32_Dyn;
+
+
+/* Legal values for d_tag (dynamic entry type).  */
+#define DT_NULL       0 /* Marks end of dynamic section */
+#define DT_NEEDED     1 /* Name of needed library */
+...
+#define DT_NUM      34  /* Number used, 0x22 */
+#define DT_LOOS     0x6000000d	/* Start of OS-specific */
+#define DT_HIOS     0x6ffff000	/* End of OS-specific */
+#define DT_LOPROC   0x70000000	/* Start of processor-specific */
+#define DT_HIPROC   0x7fffffff	/* End of processor-specific */
+#define DT_PROCNUM  DT_MIPS_NUM	/* Most used by any processor */
+
 Dynamic section at offset 0x17c contains 26 entries:
   Tag        Type                         Name/Value
  0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
@@ -62617,42 +62679,14 @@ Dynamic section at offset 0x17c contains 26 entries:
  0x00000000 (NULL)                       0x0
 
 
-<elf-format>
-linux-2.6.18.8-from-mips/include/linux/elf.h
-
-#ifndef _LINUX_ELF_H
-#define _LINUX_ELF_H
-
-#include <linux/types.h>
-#include <linux/auxvec.h>
-#include <linux/elf-em.h>
-#include <asm/elf.h>
-...
-
-<elf-header>
-To locate the program header, the ELF header is needed. The ELF header is the
-only data structure which has a fixed place in the file, starting at 0.
-
-typedef struct
-{
-  unsigned char	e_ident[EI_NIDENT];	/* Magic number and other info */
-  Elf32_Half	e_type;			/* Object file type */
-  Elf32_Half	e_machine;		/* Architecture */
-  Elf32_Word	e_version;		/* Object file version */
-  Elf32_Addr	e_entry;		/* Entry point virtual address */
-  Elf32_Off	e_phoff;		/* Program header table file offset */
-  Elf32_Off	e_shoff;		/* Section header table file offset */
-  Elf32_Word	e_flags;		/* Processor-specific flags */
-  Elf32_Half	e_ehsize;		/* ELF header size in bytes */
-  Elf32_Half	e_phentsize;		/* Program header table entry size */
-  Elf32_Half	e_phnum;		/* Program header table entry count */
-  Elf32_Half	e_shentsize;		/* Section header table entry size */
-  Elf32_Half	e_shnum;		/* Section header table entry count */
-  Elf32_Half	e_shstrndx;		/* Section header string table index */
-} Elf32_Ehdr;
-
-
 <elf-section-header>
+A section header table index is a subscript into this array. The ELF header’s
+e_shoff member gives the byte offset from the beginning of the file to the
+section header table; e_shnum tells how many entries the section header table
+contains; e_shentsize gives the size in bytes of each entry.  Some section
+header table indexes are reserved; an object file will not have sections for
+these special indexes.
+
 typedef struct
 {
   Elf32_Word	sh_name;		/* Section name (string tbl index) */
@@ -62670,14 +62704,16 @@ typedef struct
 
 /* Special section indices.  */
 #define SHN_UNDEF	0		/* Undefined section */
-// ...
-#define SHN_ABS		0xfff1		/* Associated symbol is absolute */
-#define SHN_COMMON	0xfff2		/* Associated symbol is common */
+
+#define SHN_MIPS_ACOMMON    0xff00	/* Allocated common symbols */
+#define SHN_MIPS_TEXT	    0xff01	/* Allocated test symbols.  */
+#define SHN_MIPS_DATA	    0xff02	/* Allocated data symbols.  */
+#define SHN_MIPS_SCOMMON    0xff03	/* Small common symbols */
+#define SHN_MIPS_SUNDEFINED 0xff04	/* Small undefined symbols */
 
 /* Legal values for sh_type (section type).  */
 #define SHT_NULL	  0		/* Section header table entry unused */
 #define SHT_PROGBITS	  1		/* Program data */
-// ...
 
 
 <elf-symbol> <linker-undefined-resolve>
@@ -64075,6 +64111,7 @@ Explanation:
   dynamic loader itself [6]. This routine resolves the actual address of the
   function. More on its action a bit later.
 
+  // note: first and second GOT entry
   // The first PLT entry is special. This references the second and third
   // entries in the GOT. The dynamic linker will initialize them to have
   // appropriate values for a callback into the dynamic linker itself.
@@ -64875,6 +64912,22 @@ possibility, a program can call the gnu_get_libc_version() function to
 determine the version of glibc available at run time.
 
 
+<source>
+https://www.gnu.org/software/libc/sources.html
+
+Download sources
+
+Releases are available by source branch checkout via git and tarball via ftp.
+
+Checkout the latest glibc 2.25 stable release:
+
+git clone git://sourceware.org/git/glibc.git
+cd glibc
+git checkout --track -b local_glibc-2.25 origin/release/2.25/master
+
+Release tarballs are available via anonymous ftp at http://ftp.gnu.org/gnu/glibc/ and its mirrors.
+
+
 ={============================================================================
 *kt_linux_core_400* linux-lib-libc-glibc-port
 
@@ -64888,6 +64941,30 @@ Errors when try to build glibc for mips:
 // 
 // configure: running configure fragment for add-on nptl
 // checking sysdep dirs... configure: error: The mips is not supported.
+
+
+Have most sources in sysdeps.
+
+kyoupark@ukstbuild2:~/asn/gcc/glibc-ports-2.13$ ll
+total 204
+drwxr-xr-x  5 kyoupark ccusers  4096 May  4 16:04 ./
+drwxr-xr-x 28 kyoupark ccusers  4096 May 17 11:14 ../
+-rw-r--r--  1 kyoupark ccusers    71 Jan 25  2011 Banner
+drwxr-xr-x  2 kyoupark ccusers  4096 Jan 25  2011 bare/
+-rw-r--r--  1 kyoupark ccusers  1437 Jan 25  2011 ChangeLog
+-rw-r--r--  1 kyoupark ccusers   347 Jan 25  2011 ChangeLog.aix
+-rw-r--r--  1 kyoupark ccusers  7826 Jan 25  2011 ChangeLog.alpha
+-rw-r--r--  1 kyoupark ccusers  9053 Jan 25  2011 ChangeLog.am33
+-rw-r--r--  1 kyoupark ccusers 44842 Jan 25  2011 ChangeLog.arm
+-rw-r--r--  1 kyoupark ccusers   725 Jan 25  2011 ChangeLog.cris
+-rw-r--r--  1 kyoupark ccusers 25015 Jan 25  2011 ChangeLog.hppa
+-rw-r--r--  1 kyoupark ccusers 24289 Jan 25  2011 ChangeLog.m68k
+-rw-r--r--  1 kyoupark ccusers 33221 Jan 25  2011 ChangeLog.mips
+-rw-r--r--  1 kyoupark ccusers  4314 Jan 25  2011 ChangeLog.powerpc
+drwxr-xr-x  2 kyoupark ccusers  4096 Jan 25  2011 data/
+-rw-r--r--  1 kyoupark ccusers  1435 Jan 25  2011 Makefile
+-rw-r--r--  1 kyoupark ccusers  2461 Jan 25  2011 README
+drwxr-xr-x 21 kyoupark ccusers  4096 Jan 25  2011 sysdeps/
 
 
 Like all glibc add-ons, this must be used by specifying the directory in
@@ -64985,8 +65062,6 @@ and then rebuild GCC (a common build sequence), then running the glibc
   GCC build because the initial GCC (if configured using --without-headers)
   will not have all the headers and libraries needed to build the glibc test
   programs.
-
-
 
 
 ={============================================================================
@@ -66704,6 +66779,16 @@ run --library-path
 
 
 ={============================================================================
+*kt_linux_core_400* linux-lib-ld-glibc-for-mips
+
+To modify glibc to have BRCM mips patches.
+
+kyoupark@ukstbuild2:~/asn/gcc/glibc-ports-2.13$ ack DT_JMP
+sysdeps/mips/dl-machine.h
+752:  if (l->l_info[DT_JMPREL] && lazy)
+
+
+={============================================================================
 *kt_linux_core_400* linux-lib-ld-uclibc
 
 *current-working*
@@ -66745,29 +66830,7 @@ supported in mips.
 #else
 
 
-/* Dynamic section entry.  */
-
-typedef struct
-{
-  Elf32_Sword	d_tag;			/* Dynamic entry type */
-  union
-    {
-      Elf32_Word d_val;			/* Integer value */
-      Elf32_Addr d_ptr;			/* Address value */
-    } d_un;
-} Elf32_Dyn;
-
-
-/* Legal values for d_tag (dynamic entry type).  */
-#define DT_NULL       0 /* Marks end of dynamic section */
-#define DT_NEEDED     1 /* Name of needed library */
-...
 #define DT_NUM      34  /* Number used, 0x22 */
-#define DT_LOOS     0x6000000d	/* Start of OS-specific */
-#define DT_HIOS     0x6ffff000	/* End of OS-specific */
-#define DT_LOPROC   0x70000000	/* Start of processor-specific */
-#define DT_HIPROC   0x7fffffff	/* End of processor-specific */
-#define DT_PROCNUM  DT_MIPS_NUM	/* Most used by any processor */
 
 /* OS and/or GNU dynamic extensions */
 #define OS_NUM 1
@@ -66786,21 +66849,6 @@ typedef struct
 //
 // Dynamic section at offset 0x17c contains 26 entries:
 //   Tag        Type                         Name/Value
-//  0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
-//  0x00000001 (NEEDED)                     Shared library: [libc.so.6]
-//  0x0000000c (INIT)                       0x4004e0
-//  0x0000000d (FINI)                       0x4008b0
-//  0x00000004 (HASH)                       0x400274
-//  0x00000005 (STRTAB)                     0x40038c
-//  0x00000006 (SYMTAB)                     0x4002bc
-//  0x0000000a (STRSZ)                      200 (bytes)
-//  0x0000000b (SYMENT)                     16 (bytes)
-//  0x70000016 (MIPS_RLD_MAP)               0x401960
-//  0x00000015 (DEBUG)                      0x0
-//  0x00000003 (PLTGOT)                     0x401980
-//  0x70000001 (MIPS_RLD_VERSION)           1
-//  0x70000005 (MIPS_FLAGS)                 NOTPOT
-//  0x70000006 (MIPS_BASE_ADDRESS)          0x400000
 //
 //  #define DT_MIPS_LOCAL_GOTNO  0x7000000a	/* Number of local GOT entries */
 //  0x7000000a (MIPS_LOCAL_GOTNO)           10
@@ -66811,10 +66859,6 @@ typedef struct
 //  0x00000014 (PLTREL)                     REL
 //  0x00000017 (JMPREL)                     0x4004b0
 //  0x00000002 (PLTRELSZ)                   48 (bytes)
-//  0x6ffffffe (VERNEED)                    0x400470
-//  0x6fffffff (VERNEEDNUM)                 2
-//  0x6ffffff0 (VERSYM)                     0x400454
-//  0x00000000 (NULL)                       0x0
 
 struct elf_resolve {
   /* These entries must be in this order to be compatible with the interface
@@ -67076,14 +67120,15 @@ _dl_start(unsigned long args)
      * Relocation of the GOT entries for MIPS have to be done
      * after all the libraries have been loaded.
      */
+    // ldso/ldso/mips/elfinterp.c
+    // _dl_perform_mips_global_got_relocations(struct elf_resolve *tpnt, int lazy)
     _dl_perform_mips_global_got_relocations(_dl_loaded_modules, !unlazy);
     {
 		/* Relocate the global GOT entries for the object */
 
-      // ldso/ldso/mips/elfinterp.c from *patch-02*
-      //
-      // change to handle #define SHN_UNDEF 0 /* Undefined section */ when it
-      // is not lazy in _dl_perform_mips_global_got_relocations.
+      // ldso/ldso/mips/elfinterp.c from *patch-02* which change to handle
+      // #define SHN_UNDEF 0 /* Undefined section */ when it is not lazy in
+      // _dl_perform_mips_global_got_relocations.
     }
 
     /*
@@ -67096,8 +67141,10 @@ _dl_start(unsigned long args)
     if (_dl_symbol_tables)
       if (_dl_fixup(_dl_symbol_tables, unlazy))
       {
+        // ldso/ldso/dl-elf.c
         // _dl_fixup(struct dyn_elf *rpnt, int now_flag);
 
+        // ldso/ldso/arm/elfinterp.c
         goof += _dl_parse_relocation_information(rpnt,
             tpnt->dynamic_info[DT_JMPREL],
             tpnt->dynamic_info[DT_PLTRELSZ]);
@@ -67174,196 +67221,231 @@ uClibc-nptl-0.9.29-20070423-3003-plt-ldso.patch
 	move to $25 to be in the delay slot of the return jump.
 	(_dl_linux_resolve): New function.
 
-note: used in ARCH_SKIP_RELOC
+<1>
+Index: uClibc-nptl-0.9.29-20070423/ldso/include/dl-elf.h
+===================================================================
+--- uClibc-nptl-0.9.29-20070423.orig/ldso/include/dl-elf.h	2008-03-09 16:42:38.000000000 +0000
++++ uClibc-nptl-0.9.29-20070423/ldso/include/dl-elf.h	2008-03-09 16:42:41.000000000 +0000
+@@ -51,6 +51,7 @@ extern void _dl_protect_relro (struct el
+ # define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
+ # define ELF_R_SYM(i)     ELF64_R_SYM(i)
+ # define ELF_R_TYPE(i)    ELF64_R_TYPE(i)
++# define ELF_ST_VISIBILITY(i) ELF64_ST_VISIBILITY(i)
+ # ifndef ELF_CLASS
+ #  define ELF_CLASS ELFCLASS64
+ # endif
+@@ -59,6 +60,7 @@ extern void _dl_protect_relro (struct el
+ # define ELF_ST_TYPE(val) ELF32_ST_TYPE(val)
+ # define ELF_R_SYM(i)     ELF32_R_SYM(i)
+ # define ELF_R_TYPE(i)    ELF32_R_TYPE(i)
++# define ELF_ST_VISIBILITY(i) ELF32_ST_VISIBILITY(i)
+ # ifndef ELF_CLASS
+ #  define ELF_CLASS ELFCLASS32
+# endif
 
-// Index: uClibc-nptl-0.9.29-20070423/ldso/include/dl-elf.h
-// ===================================================================
-// --- uClibc-nptl-0.9.29-20070423.orig/ldso/include/dl-elf.h	2008-03-09 16:42:38.000000000 +0000
-// +++ uClibc-nptl-0.9.29-20070423/ldso/include/dl-elf.h	2008-03-09 16:42:41.000000000 +0000
-// @@ -51,6 +51,7 @@ extern void _dl_protect_relro (struct el
-//  # define ELF_ST_TYPE(val) ELF64_ST_TYPE(val)
-//  # define ELF_R_SYM(i)     ELF64_R_SYM(i)
-//  # define ELF_R_TYPE(i)    ELF64_R_TYPE(i)
-// +# define ELF_ST_VISIBILITY(i) ELF64_ST_VISIBILITY(i)
-//  # ifndef ELF_CLASS
-//  #  define ELF_CLASS ELFCLASS64
-//  # endif
-// @@ -59,6 +60,7 @@ extern void _dl_protect_relro (struct el
-//  # define ELF_ST_TYPE(val) ELF32_ST_TYPE(val)
-//  # define ELF_R_SYM(i)     ELF32_R_SYM(i)
-//  # define ELF_R_TYPE(i)    ELF32_R_TYPE(i)
-// +# define ELF_ST_VISIBILITY(i) ELF32_ST_VISIBILITY(i)
-//  # ifndef ELF_CLASS
-//  #  define ELF_CLASS ELFCLASS32
-//  # endif
-
-
-note: <patch-01>
-/* Initialization sequence for the application/library GOT.  */
-#define INIT_GOT(GOT_BASE,MODULE)						\
-do {										\
-	unsigned long idx;							\
-										\
-	/* Check if this is the dynamic linker itself */			\
-	if (MODULE->libtype == program_interpreter)				\
-		continue;							\
-										\
-	/* Fill in first two GOT entries according to the ABI */		\
-	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
-	GOT_BASE[1] = (unsigned long) MODULE;					\
-										\
-	/* Add load address displacement to all local GOT entries */		\
-	idx = 2;									\
-	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
-		GOT_BASE[idx++] += (unsigned long) MODULE->loadaddr;		\
-										\
-} while (0)
-
-to:
-
-/* Initialization sequence for the application/library GOT.  */
-#define INIT_GOT(GOT_BASE,MODULE)						\
-do {										\
-	unsigned long idx;							\
-										\
-	/* Check if this is the dynamic linker itself */			\
-	if (MODULE->libtype == program_interpreter)				\
-		continue;							\
-										\
-	/* Fill in first two GOT entries according to the ABI */		\
-	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
-	GOT_BASE[1] = (unsigned long) MODULE;					\
-	idx = 2;								\ ~
-	if (MODULE->dynamic_info[DT_JMPREL])					\ ~
-		GOT_BASE[idx++] = (unsigned long) _dl_linux_resolve;		\ ~
-										\
-	/* Add load address displacement to all local GOT entries */		\
-	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
-		GOT_BASE[idx++] += (unsigned long) MODULE->loadaddr;		\
-										\
-} while (0)
-
-#define DT_JMPREL	23		/* Address of PLT relocs */
-
-_dl_linux_resolve(void) which is added in
-uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/resolve.S
-
-when see DT_JMPREL DT, set GOT_BASE[2] = _dl_runtime_resolve
+// used in ARCH_SKIP_RELOC
+//
+// 1. ldso/include/dl-elf is differnt from include/elf.h.
+// 2. add macros to use st_info
+//
+// typedef struct
+// {
+//   ...
+//   unsigned char	st_info;   /* Symbol type and binding */
+//   unsigned char	st_other;  /* Symbol visibility */
+//   Elf32_Section	st_shndx;  /* Section index */
+// } Elf32_Sym;
 
 
-// Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/dl-sysdep.h
-// ===================================================================
-// --- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/dl-sysdep.h	2008-03-09 16:42:38.000000000 +0000
-// +++ uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/dl-sysdep.h	2008-03-09 16:42:41.000000000 +0000
-// @@ -30,6 +30,12 @@ else if (dpnt->d_tag == DT_MIPS_RLD_MAP)
-//       *(Elf32_Addr *)(dpnt->d_un.d_ptr) =  (Elf32_Addr) debug_addr; \
-//  } while (0)
-//  
-// +#define ARCH_SKIP_RELOC(type_class, sym)				\
-// +	(((sym)->st_shndx == SHN_UNDEF)					\
-// +	 & ((type_class)						\
-// +	    | (((sym)->st_other & ~ELF_ST_VISIBILITY (-1))		\
-// +	       != STO_MIPS_PLT)))
-// +
-//  /* Initialization sequence for the application/library GOT.  */
-//  #define INIT_GOT(GOT_BASE,MODULE)						\
-//  do {										\
-// @@ -42,9 +48,11 @@ do {										\
-//  	/* Fill in first two GOT entries according to the ABI */		\
-//  	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
-//  	GOT_BASE[1] = (unsigned long) MODULE;					\
-// +	idx = 2;								\
-// +	if (MODULE->dynamic_info[DT_JMPREL])					\
-// +		GOT_BASE[idx++] = (unsigned long) _dl_linux_resolve;		\
-//  										\
-//  	/* Add load address displacement to all local GOT entries */		\
-// -	idx = 2;									\
-//  	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
-//  		GOT_BASE[idx++] += (unsigned long) MODULE->loadaddr;		\
-//  										\
-// @@ -71,10 +79,6 @@ void _dl_perform_mips_global_got_relocat
-//  #define ADDR_ALIGN 0xfff
-//  #define OFFS_ALIGN 0x7ffff000
-//  
-// -#define elf_machine_type_class(type)		ELF_RTYPE_CLASS_PLT
-// -/* MIPS does not have COPY relocs */
-// -#define DL_NO_COPY_RELOCS
-// -
-//  #define OFFSET_GP_GOT 0x7ff0
-//  
-//  static inline ElfW(Addr) *
+<2> <patch-01>
+Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/dl-sysdep.h
+===================================================================
+--- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/dl-sysdep.h	2008-03-09 16:42:38.000000000 +0000
++++ uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/dl-sysdep.h	2008-03-09 16:42:41.000000000 +0000
+@@ -30,6 +30,12 @@ else if (dpnt->d_tag == DT_MIPS_RLD_MAP)
+      *(Elf32_Addr *)(dpnt->d_un.d_ptr) =  (Elf32_Addr) debug_addr; \
+ } while (0)
+  
++#define ARCH_SKIP_RELOC(type_class, sym)				\
++	(((sym)->st_shndx == SHN_UNDEF)					\
++	 & ((type_class)						\
++	    | (((sym)->st_other & ~ELF_ST_VISIBILITY (-1))		\
++	       != STO_MIPS_PLT)))
++
+ /* Initialization sequence for the application/library GOT.  */
+ #define INIT_GOT(GOT_BASE,MODULE)						\
+ do {										\
+@@ -42,9 +48,11 @@ do {										\
+ 	/* Fill in first two GOT entries according to the ABI */		\
+ 	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
+ 	GOT_BASE[1] = (unsigned long) MODULE;					\
++	idx = 2;								\
++	if (MODULE->dynamic_info[DT_JMPREL])					\
++		GOT_BASE[idx++] = (unsigned long) _dl_linux_resolve;		\
+ 										\
+ 	/* Add load address displacement to all local GOT entries */		\
+-	idx = 2;									\
+ 	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
+ 		GOT_BASE[idx++] += (unsigned long) MODULE->loadaddr;		\
+ 										\
+@@ -71,10 +79,6 @@ void _dl_perform_mips_global_got_relocat
+ #define ADDR_ALIGN 0xfff
+ #define OFFS_ALIGN 0x7ffff000
+  
+-#define elf_machine_type_class(type)		ELF_RTYPE_CLASS_PLT
+-/* MIPS does not have COPY relocs */
+-#define DL_NO_COPY_RELOCS
+-
+ #define OFFSET_GP_GOT 0x7ff0
+  
+ static inline ElfW(Addr) *
+
+// when see DT_JMPREL, set GOT_BASE[2] = _dl_runtime_resolve
+// #define DT_JMPREL	23		/* Address of PLT relocs */
+// _dl_linux_resolve(void) which is added in ldso/ldso/mips/resolve.S
+//
+// /* Initialization sequence for the application/library GOT.  */
+// #define INIT_GOT(GOT_BASE,MODULE)						\
+// do {										\
+// 	unsigned long idx;							\
+// 										\
+// 	/* Check if this is the dynamic linker itself */			\
+// 	if (MODULE->libtype == program_interpreter)				\
+// 		continue;							\
+// 										\
+// 	/* Fill in first two GOT entries according to the ABI */		\
+// 	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
+// 	GOT_BASE[1] = (unsigned long) MODULE;					\
+// 										\
+// 	/* Add load address displacement to all local GOT entries */		\
+// 	idx = 2;									\
+// 	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
+// 		GOT_BASE[idx++] += (unsigned long) MODULE->loadaddr;		\
+// 										\
+// } while (0)
+//
+// to:
+//
+// /* Initialization sequence for the application/library GOT.  */
+// #define INIT_GOT(GOT_BASE,MODULE)						\
+// do {										\
+// 	unsigned long idx;							\
+// 										\
+// 	/* Check if this is the dynamic linker itself */			\
+// 	if (MODULE->libtype == program_interpreter)				\
+// 		continue;							\
+// 										\
+// 	/* Fill in first two GOT entries according to the ABI */		\
+// 	GOT_BASE[0] = (unsigned long) _dl_runtime_resolve;			\
+// 	GOT_BASE[1] = (unsigned long) MODULE;					\
+// 	idx = 2;								\ ~
+// 	if (MODULE->dynamic_info[DT_JMPREL])					\ ~
+// 		GOT_BASE[idx++] = (unsigned long) _dl_linux_resolve;		\ ~
+// 										\
+// 	/* Add load address displacement to all local GOT entries */		\
+// 	while (idx < MODULE->dynamic_info[DT_MIPS_LOCAL_GOTNO_IDX])		\
+// 		GOT_BASE[idx++] += (unsigned long) MODULE->loadaddr;		\
+// 										\
+// } while (0)
+//
+// /* Special section indices.  */
+//
+// #define SHN_UNDEF	0		/* Undefined section */
+// #define SHN_LORESERVE	0xff00		/* Start of reserved indices */
+// ...
+// if ARCH_SKIP_RELOC returns true then skip this reloc.
+//
+// /* MIPS specific values for `st_other'.  */
+// #define STO_MIPS_DEFAULT		0x0
+// #define STO_MIPS_INTERNAL		0x1
+// #define STO_MIPS_HIDDEN			0x2
+// #define STO_MIPS_PROTECTED		0x3
+// #define STO_MIPS_PLT			0x10
+// #define STO_MIPS_SC_ALIGN_UNUSED	0xff
+//
+// #define ELF32_ST_VISIBILITY(o)	((o) & 0x03)
+// ((sym)->st_other & ~ELF_ST_VISIBILITY (-1))
+//
+// so test 3 bits. return 1 for values greater than 0x3 and return 0 for less
+// values.
+//
+// ((sym)->st_other & b1111000)
+//
+// looks like to skip others other then PLT
+
+
+<3>
+Index: uClibc-nptl-0.9.29-20070423/include/elf.h
+===================================================================
+--- uClibc-nptl-0.9.29-20070423.orig/include/elf.h	2008-03-09 16:42:38.000000000 +0000
++++ uClibc-nptl-0.9.29-20070423/include/elf.h	2008-03-09 16:42:41.000000000 +0000
+@@ -1539,6 +1539,7 @@ typedef struct
+ #define STO_MIPS_INTERNAL		0x1
+ #define STO_MIPS_HIDDEN			0x2
+ #define STO_MIPS_PROTECTED		0x3
++#define STO_MIPS_PLT			0x10
+ #define STO_MIPS_SC_ALIGN_UNUSED	0xff
+  
+ /* MIPS specific values for `st_info'.  */
+@@ -1684,8 +1685,9 @@ typedef struct
+ #define R_MIPS_TLS_TPREL64	48	/* TP-relative offset, 64 bit */
+ #define R_MIPS_TLS_TPREL_HI16	49	/* TP-relative offset, high 16 bits */
+ #define R_MIPS_TLS_TPREL_LO16	50	/* TP-relative offset, low 16 bits */
+-/* Keep this the last entry.  */
+-#define R_MIPS_NUM		51
++#define R_MIPS_COPY		126
++#define R_MIPS_JUMP_SLOT	127
++#define R_MIPS_NUM		128
+  
+ /* Legal values for p_type field of Elf32_Phdr.  */
+ 
+
+<4>
+Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-hash.c
+===================================================================
+--- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/dl-hash.c	2008-03-09 16:42:38.000000000 +0000
++++ uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-hash.c	2008-03-09 16:42:41.000000000 +0000
+@@ -30,6 +30,11 @@
+  * SUCH DAMAGE.
+  */
+  
++#ifndef ARCH_SKIP_RELOC
++#define ARCH_SKIP_RELOC(type_class, sym) \
++	((type_class) & ((sym)->st_shndx == SHN_UNDEF))
++#endif
++
+  
+ /* Various symbol table handling functions, including symbol lookup */
+  
+@@ -189,7 +194,7 @@ char *_dl_find_hash(const char *name, st
+ 				&& ELF_ST_TYPE(sym->st_info) != STT_TLS
+ #endif
+ 				)
+-				|| (type_class & (sym->st_shndx == SHN_UNDEF)))
++				|| ARCH_SKIP_RELOC (type_class, sym))
+ 				continue;
+  
+ 			if (ELF_ST_TYPE(sym->st_info) > STT_FUNC
+@@ -283,7 +288,7 @@ char *_dl_find_hash2(const char *name, s
+ 				&& ELF_ST_TYPE(sym->st_info) != STT_TLS
+ #endif
+ 				)
+-				|| (type_class & (sym->st_shndx == SHN_UNDEF)))
++				|| ARCH_SKIP_RELOC (type_class, sym))
+ 				continue;
+  
+ 			if (ELF_ST_TYPE(sym->st_info) > STT_FUNC
 
 note: changes in elf.h and used in ARCH_SKIP_RELOC
-
-// Index: uClibc-nptl-0.9.29-20070423/include/elf.h
-// ===================================================================
-// --- uClibc-nptl-0.9.29-20070423.orig/include/elf.h	2008-03-09 16:42:38.000000000 +0000
-// +++ uClibc-nptl-0.9.29-20070423/include/elf.h	2008-03-09 16:42:41.000000000 +0000
-// @@ -1539,6 +1539,7 @@ typedef struct
-//  #define STO_MIPS_INTERNAL		0x1
-//  #define STO_MIPS_HIDDEN			0x2
-//  #define STO_MIPS_PROTECTED		0x3
-// +#define STO_MIPS_PLT			0x10
-//  #define STO_MIPS_SC_ALIGN_UNUSED	0xff
-//  
-//  /* MIPS specific values for `st_info'.  */
-// @@ -1684,8 +1685,9 @@ typedef struct
-//  #define R_MIPS_TLS_TPREL64	48	/* TP-relative offset, 64 bit */
-//  #define R_MIPS_TLS_TPREL_HI16	49	/* TP-relative offset, high 16 bits */
-//  #define R_MIPS_TLS_TPREL_LO16	50	/* TP-relative offset, low 16 bits */
-// -/* Keep this the last entry.  */
-// -#define R_MIPS_NUM		51
-// +#define R_MIPS_COPY		126
-// +#define R_MIPS_JUMP_SLOT	127
-// +#define R_MIPS_NUM		128
-//  
-//  /* Legal values for p_type field of Elf32_Phdr.  */
- 
 note:
 1. used in _dl_find_hash()
 
 2. ARCH_SKIP_RELOC is defined in dl-sysdep.h but seems not to be used here.
    so used own defined here.
 
-// Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-hash.c
-// ===================================================================
-// --- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/dl-hash.c	2008-03-09 16:42:38.000000000 +0000
-// +++ uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-hash.c	2008-03-09 16:42:41.000000000 +0000
-// @@ -30,6 +30,11 @@
-//   * SUCH DAMAGE.
-//   */
-//  
-// +#ifndef ARCH_SKIP_RELOC
-// +#define ARCH_SKIP_RELOC(type_class, sym) \
-// +	((type_class) & ((sym)->st_shndx == SHN_UNDEF))
-// +#endif
-// +
-//  
-//  /* Various symbol table handling functions, including symbol lookup */
-//  
-// @@ -189,7 +194,7 @@ char *_dl_find_hash(const char *name, st
-//  				&& ELF_ST_TYPE(sym->st_info) != STT_TLS
-//  #endif
-//  				)
-// -				|| (type_class & (sym->st_shndx == SHN_UNDEF)))
-// +				|| ARCH_SKIP_RELOC (type_class, sym))
-//  				continue;
-//  
-//  			if (ELF_ST_TYPE(sym->st_info) > STT_FUNC
-// @@ -283,7 +288,7 @@ char *_dl_find_hash2(const char *name, s
-//  				&& ELF_ST_TYPE(sym->st_info) != STT_TLS
-//  #endif
-//  				)
-// -				|| (type_class & (sym->st_shndx == SHN_UNDEF)))
-// +				|| ARCH_SKIP_RELOC (type_class, sym))
-//  				continue;
-//  
-//  			if (ELF_ST_TYPE(sym->st_info) > STT_FUNC
 
-
-note: <patch-02>
-_dl_linux_resolve uses _dl_linux_resolver()
-
+<5> <patch-02>
+// _dl_linux_resolve uses _dl_linux_resolver()
 Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/elfinterp.c
 ===================================================================
 --- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/elfinterp.c	2008-03-09 16:42:38.000000000 +0000
@@ -67521,6 +67603,7 @@ Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/elfinterp.c
  
  			got_entry++;
 
+<6>
 Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/mips/resolve.S
 ===================================================================
 --- uClibc-nptl-0.9.29-20070423.orig/ldso/ldso/mips/resolve.S	2008-03-09 16:42:38.000000000 +0000

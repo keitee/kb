@@ -58,32 +58,80 @@ Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_3abc
 egrep -an "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|TUNING TO|CHANNEL CHANGED|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController"
 egrep -an "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|TUNING TO|CHANNEL CHANGED|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|EPG"
 
+
 // eng build with player, atg, msm on and vrm log. use benidrom
-// 1. no FromEnd
 | 85.63.00_6891_MNTEE | 2017-07-13 08:52:46 | darwin_0019fbf2d46b_d95967ee55ecb17301429c97198e5e35.tgz |             |
 
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition" LOGlastrun_realtime_5e35 > 5e35.nds
-egrep -a "KEY_PRESS|PLAYER_API_Session_Play|l_position" 5e35.nds > 
-
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition|display_chunk.cpp" LOGlastrun_realtime_5e35 > 5e35-02.nds
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition|PTS Discontinuity|Adding chunk to" LOGlastrun_realtime_5e35 > 5e35-03.nds
 
-5e35-02.nds   // to show PTS values
-
-// to show call intervals
-egrep -a "KEY_PRESS|PLAYER_API_Session_Play|Requested property" 5e35.nds > 5e35-03.nds
+5e35-02.nds
 
 
-// use riviera
-// 1. shows some Requested property is StreamPositionFromEnd 
-| 85.63.00_6891_MNTEE | 2017-07-14 09:12:21 | darwin_0019fbf2d46b_a65a4973c0737f08d844d9a922f4d454.tgz |             |
-Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_a65a4973c0737f08d844d9a922f4d454/index.html
+// eng to see api performance, not-ok case
+| 85.63.00_7728_MNTEE | 2017-07-17 07:19:50 | darwin_0019fbf2d46b_8385e050d73aae3b5cf2275550b37255.tgz |             |
+// 7255.nds
+egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition"
+// 7255-02.nds
+egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|l_position"
 
-egrep -a "KEY_PRESS|PLAYER_API_Session_Play|l_position" 5e35.nds > 
-d454-02.nds   // to show l_positions
 
-egrep -a "KEY_PRESS|PLAYER_API_Session_Play|Requested property" 5e35.nds > 
-d454-03.nds   // to show call intervals
+Hi,
+
+This is from https://www.stb.bskyb.com/jira/browse/SI-11095 and they say they
+see time drift in position values from MW.
+
+This is what we are trying to understand:
+
+This is looking like a middleware issue.
+
+Logs show that the MW streamposition returned from the playersession
+getStreamPosition is drifting by about 7 seconds from actual playback time
+when playback is started from near the end of playback. To reproduce the issue
+we are playing back Benidorm season 8 episode 7 as a reference issue. We then
+start playback from 46 minutes and log the start time, the current reported
+playback position and the expected position. The logs show that the expected
+minor variation (about 300ms) is there until it suddenty increaes sharply to
+approx 6 or 7 seconds.  Attached is a middleware log that was generated
+running our middleware dependency test framework which provides a very minial
+enviroment for running tests. This log is not generated using a full picasso.
+This was used to help find the problem, the issue can be seen 100% of the time
+with a full picasso build. As can be seen in the attached log, there are lots
+of errors being generated.
+
+EPG use PLAYER property to get position:
+
+        case PLAYER_API_Session_PropId_Int32_StreamPosition:
+                if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_GetStreamPosition(&l_sc_data->active_job, MSM_REF_POINT_VSTART, MSM_UNIT_V_OFFSET, &l_position)))
+
+Their test harness uses systemtime and streamposition to show diff between
+them:
+
+The test itself is bit of a blunt instrument:
+
+1. Initially sets up a planner session.
+2. Creates a (hardcoded) locator for the benidorm episode discussed.  The asset has already been downloaded to the planner.
+3. Uses playersession to playback the locator.
+4. Sets up a simple java timer to poll playback position every 1 second.
+5. Prints out the stream position, the expected stream position based on time and the delta between the two
+6. Waits until playback end.
+
+Please note that the actual playback timeline does not poll every second like
+this test does.  This is purely done in the test to make it easier to see the
+'drift' but the drift can be seen without polling every second in the orignal
+logs on the JIRA.
+
+int streamPosition = playerSession.getStreamPosition();
+int pos = streamPosition - startPosition;
+long time = System.currentTimeMillis() - startTime;
+System.out.println("JT: PlaybackFromEnd.run: streamPosition=" + streamPosition + " pos=" + pos + " time=" + time + " delta=" + (pos - time));
+
+As far as I see stream position from MW is based on PTS from TPID PTS since
+it's playback and source is decoder. PTS from decoding can fluctuate from
+various factors. 
+
+Q: Is that test harness valid which compares streamtime and systemtime?
 
 
 ={============================================================================
