@@ -64,74 +64,173 @@ egrep -an "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESE
 
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition" LOGlastrun_realtime_5e35 > 5e35.nds
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition|display_chunk.cpp" LOGlastrun_realtime_5e35 > 5e35-02.nds
+
+egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition|display_chunk.cpp" LOGlastrun_realtime_5e35 > 5e35-02.nds
+
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition|PTS Discontinuity|Adding chunk to" LOGlastrun_realtime_5e35 > 5e35-03.nds
+// shows CDI warning
+egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition|PTS Discontinuity|buffer is above threshold" LOGlastrun_realtime_5e35 > 5e35-04.nds
 
 5e35-02.nds
 
 
-// eng to see api performance, not-ok case
+// eng to see api performance, not-ok case. player and msm
 | 85.63.00_7728_MNTEE | 2017-07-17 07:19:50 | darwin_0019fbf2d46b_8385e050d73aae3b5cf2275550b37255.tgz |             |
 // 7255.nds
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|StreamPosition"
 // 7255-02.nds
 egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|l_position"
 
+// 7255-04
+egrep -an "KEY_PRESS|l_position" 7255.nds > 7255-04.nds
 
-Hi,
+// 7255-03 shows CDI warning
+egrep -an "KEY_PRESS|doOpenScreen|AutoPlay|WatchNext|PlayList|MilestoneNotifier|PLAYER_API_Session_Play|VisibilityController|l_position|buffer is above threshold"
 
-This is from https://www.stb.bskyb.com/jira/browse/SI-11095 and they say they
-see time drift in position values from MW.
 
-This is what we are trying to understand:
+egrep -an "JT\|buffer is above threshold" picassodev-21863.log > picassodev-21863-02.nds
+egrep -an "JT\|buffer is above threshold" picassodev-21863.log > picassodev-21863-02.nds
 
-This is looking like a middleware issue.
 
-Logs show that the MW streamposition returned from the playersession
-getStreamPosition is drifting by about 7 seconds from actual playback time
-when playback is started from near the end of playback. To reproduce the issue
-we are playing back Benidorm season 8 episode 7 as a reference issue. We then
-start playback from 46 minutes and log the start time, the current reported
-playback position and the expected position. The logs show that the expected
-minor variation (about 300ms) is there until it suddenty increaes sharply to
-approx 6 or 7 seconds.  Attached is a middleware log that was generated
-running our middleware dependency test framework which provides a very minial
-enviroment for running tests. This log is not generated using a full picasso.
-This was used to help find the problem, the issue can be seen 100% of the time
-with a full picasso build. As can be seen in the attached log, there are lots
-of errors being generated.
+Hi Karl, Ed,
 
-EPG use PLAYER property to get position:
+Here is what I found and think from their test harness and log.
 
-        case PLAYER_API_Session_PropId_Int32_StreamPosition:
-                if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_GetStreamPosition(&l_sc_data->active_job, MSM_REF_POINT_VSTART, MSM_UNIT_V_OFFSET, &l_position)))
+Test harness:
+@Override public void run()
+{
+  try
+  {
+    int streamPosition = playerSession.getStreamPosition();
+    if (startTime == 0)
+    {
+      startTime = System.currentTimeMillis();
+      startPosition = streamPosition;
+    }
 
-Their test harness uses systemtime and streamposition to show diff between
-them:
+    int pos = streamPosition - startPosition;
+    long time = System.currentTimeMillis() - startTime;
+    System.out.println("JT: PlaybackFromEnd.run: streamPosition=" + streamPosition + " pos=" + pos + " time=" + time + " delta=" + (pos - time));
+  }
+}
 
-The test itself is bit of a blunt instrument:
+The view from test harness log:
 
-1. Initially sets up a planner session.
-2. Creates a (hardcoded) locator for the benidorm episode discussed.  The asset has already been downloaded to the planner.
-3. Uses playersession to playback the locator.
-4. Sets up a simple java timer to poll playback position every 1 second.
-5. Prints out the stream position, the expected stream position based on time and the delta between the two
-6. Waits until playback end.
+31:NDS: ^0946684985.760183 !MIL   -JAE          < p:000000e1 t:2e4ba520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: Playing out from:2760000
+278:NDS: ^0946684986.797962 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: couldnt get stream position
+493:NDS: ^0946684987.891955 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2761517 pos=0 time=0 delta=0
+541:NDS: ^0946684988.788498 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2762476 pos=959 time=897 delta=62
+544:NDS: ^0946684989.788545 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2763610 pos=2093 time=1897 delta=196
+547:NDS: ^0946684990.788488 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2764666 pos=3149 time=2897 delta=252
+549:NDS: ^0946684991.787669 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2765559 pos=4042 time=3897 delta=145
+552:NDS: ^0946684992.788500 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2766550 pos=5033 time=4897 delta=136
+567:NDS: ^0946684993.788691 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2767592 pos=6075 time=5898 delta=177
+586:NDS: ^0946684994.788911 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2768520 pos=7003 time=6898 delta=105
+590:NDS: ^0946684995.787917 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2769495 pos=7978 time=7897 delta=81
+596:NDS: ^0946684996.787538 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2770422 pos=8905 time=8896 delta=9
+598:NDS: ^0946684997.787785 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2771486 pos=9969 time=9897 delta=72
+608:NDS: ^0946684998.788555 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2772467 pos=10950 time=10898 delta=52
+613:NDS: ^0946684999.787731 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2773349 pos=11832 time=11897 delta=-65
+616:NDS: ^0946685000.788767 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2774479 pos=12962 time=12898 delta=64
+619:NDS: ^0946685001.788699 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2775490 pos=13973 time=13898 delta=75
+627:NDS: ^0946685002.788168 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2776505 pos=14988 time=14897 delta=91
+632:NDS: ^0946685003.787626 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2776650 pos=15133 time=15897 delta=-764
+635:NDS: ^0946685004.787822 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2776789 pos=15272 time=16897 delta=-1625
+638:NDS: ^0946685005.787534 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2776901 pos=15384 time=17896 delta=-2512
+647:NDS: ^0946685006.787727 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2777013 pos=15496 time=18897 delta=-3401
+651:NDS: ^0946685007.820411 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2777146 pos=15629 time=19929 delta=-4300
+===>
+654:NDS: ^0946685008.806331 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2777296 pos=15779 time=20915 delta=-5136
+660:NDS: ^0946685009.787749 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2777459 pos=15942 time=21897 delta=-5955
+664:NDS: ^0946685010.787878 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2777584 pos=16067 time=22897 delta=-6830
+669:NDS: ^0946685011.787716 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2778297 pos=16780 time=23897 delta=-7117
+686:NDS: ^0946685012.788058 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2779482 pos=17965 time=24897 delta=-6932
+701:NDS: ^0946685013.787963 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2780723 pos=19206 time=25897 delta=-6691
+715:NDS: ^0946685014.787580 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2781940 pos=20423 time=26896 delta=-6473
+733:NDS: ^0946685015.787617 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2783196 pos=21679 time=27897 delta=-6218
+749:NDS: ^0946685016.787742 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2784921 pos=23404 time=28897 delta=-5493
+763:NDS: ^0946685017.787794 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2786529 pos=25012 time=29897 delta=-4885
+780:NDS: ^0946685018.787706 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2788158 pos=26641 time=30897 delta=-4256
+795:NDS: ^0946685019.788316 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2789871 pos=28354 time=31897 delta=-3543
+811:NDS: ^0946685020.788031 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2791125 pos=29608 time=32897 delta=-3289
+828:NDS: ^0946685021.791537 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2792365 pos=30848 time=33900 delta=-3052
+840:NDS: ^0946685022.787883 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2793497 pos=31980 time=34897 delta=-2917
+855:NDS: ^0946685023.787578 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2794412 pos=32895 time=35897 delta=-3002
+872:NDS: ^0946685024.787760 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2795608 pos=34091 time=36897 delta=-2806
+888:NDS: ^0946685025.787811 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2796861 pos=35344 time=37897 delta=-2553
+903:NDS: ^0946685026.787683 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2797725 pos=36208 time=38897 delta=-2689
+920:NDS: ^0946685027.788175 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2798508 pos=36991 time=39897 delta=-2906
+935:NDS: ^0946685028.787812 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2799783 pos=38266 time=40897 delta=-2631
+952:NDS: ^0946685029.825446 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2800795 pos=39278 time=41897 delta=-2619
+971:NDS: ^0946685030.787576 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2802750 pos=41233 time=42896 delta=-1663
+986:NDS: ^0946685031.787867 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2804344 pos=42827 time=43897 delta=-1070
+1000:NDS: ^0946685032.787654 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2805344 pos=43827 time=44897 delta=-1070
+1037:NDS: ^0946685033.787211 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2807394 pos=45877 time=45896 delta=-19
+1051:NDS: ^0946685034.809930 !MIL   -JAE          < p:000000e1 t:2e463520 T:no name M:ceej_bsp.c F:ooBSP_write L:01126 > JT: PlaybackFromEnd.run: streamPosition=2807394 pos=45877 time=46919 delta=-1042
 
-Please note that the actual playback timeline does not poll every second like
-this test does.  This is purely done in the test to make it easier to see the
-'drift' but the drift can be seen without polling every second in the orignal
-logs on the JIRA.
+Here, delta seems to show big time gap which is what they say the issue. However, take a different veiw on the same log and then:
 
-int streamPosition = playerSession.getStreamPosition();
-int pos = streamPosition - startPosition;
-long time = System.currentTimeMillis() - startTime;
-System.out.println("JT: PlaybackFromEnd.run: streamPosition=" + streamPosition + " pos=" + pos + " time=" + time + " delta=" + (pos - time));
+pos =  2761517, pre =  2760000, diff = 1517, tdiff =    0
+pos =  2762476, pre =  2761517, diff =  959, tdiff =  897
+pos =  2763610, pre =  2762476, diff = 1134, tdiff = 1000
+pos =  2764666, pre =  2763610, diff = 1056, tdiff = 1000
+pos =  2765559, pre =  2764666, diff =  893, tdiff = 1000
+pos =  2766550, pre =  2765559, diff =  991, tdiff = 1000
+pos =  2767592, pre =  2766550, diff = 1042, tdiff = 1001
+pos =  2768520, pre =  2767592, diff =  928, tdiff = 1000
+pos =  2769495, pre =  2768520, diff =  975, tdiff =  999
+pos =  2770422, pre =  2769495, diff =  927, tdiff =  999
+pos =  2771486, pre =  2770422, diff = 1064, tdiff = 1001
+pos =  2772467, pre =  2771486, diff =  981, tdiff = 1001
+pos =  2773349, pre =  2772467, diff =  882, tdiff =  999
+pos =  2774479, pre =  2773349, diff = 1130, tdiff = 1001
+pos =  2775490, pre =  2774479, diff = 1011, tdiff = 1000
+pos =  2776505, pre =  2775490, diff = 1015, tdiff =  999
+pos =  2776650, pre =  2776505, diff =  145, tdiff = 1000
+pos =  2776789, pre =  2776650, diff =  139, tdiff = 1000
+pos =  2776901, pre =  2776789, diff =  112, tdiff =  999
+pos =  2777013, pre =  2776901, diff =  112, tdiff = 1001
+pos =  2777146, pre =  2777013, diff =  133, tdiff = 1032
+===>
+pos =  2777296, pre =  2777146, diff =  150, tdiff =  986
+pos =  2777459, pre =  2777296, diff =  163, tdiff =  982
+pos =  2777584, pre =  2777459, diff =  125, tdiff = 1000
+pos =  2778297, pre =  2777584, diff =  713, tdiff = 1000
+pos =  2779482, pre =  2778297, diff = 1185, tdiff = 1000
+pos =  2780723, pre =  2779482, diff = 1241, tdiff = 1000
+pos =  2781940, pre =  2780723, diff = 1217, tdiff =  999
+pos =  2783196, pre =  2781940, diff = 1256, tdiff = 1001
+pos =  2784921, pre =  2783196, diff = 1725, tdiff = 1000
+pos =  2786529, pre =  2784921, diff = 1608, tdiff = 1000
+pos =  2788158, pre =  2786529, diff = 1629, tdiff = 1000
+pos =  2789871, pre =  2788158, diff = 1713, tdiff = 1000
+pos =  2791125, pre =  2789871, diff = 1254, tdiff = 1000
+pos =  2792365, pre =  2791125, diff = 1240, tdiff = 1003
+pos =  2793497, pre =  2792365, diff = 1132, tdiff =  997
+pos =  2794412, pre =  2793497, diff =  915, tdiff = 1000
+pos =  2795608, pre =  2794412, diff = 1196, tdiff = 1000
+pos =  2796861, pre =  2795608, diff = 1253, tdiff = 1000
+pos =  2797725, pre =  2796861, diff =  864, tdiff = 1000
+pos =  2798508, pre =  2797725, diff =  783, tdiff = 1000
+pos =  2799783, pre =  2798508, diff = 1275, tdiff = 1000
+pos =  2800795, pre =  2799783, diff = 1012, tdiff = 1000
+pos =  2802750, pre =  2800795, diff = 1955, tdiff =  999
+pos =  2804344, pre =  2802750, diff = 1594, tdiff = 1001
+pos =  2805344, pre =  2804344, diff = 1000, tdiff = 1000
+pos =  2807394, pre =  2805344, diff = 2050, tdiff =  999
+pos =  2807394, pre =  2807394, diff =    0, tdiff = 1023
+pos =  2807394, pre =  2807394, diff =    0, tdiff =  976
 
-As far as I see stream position from MW is based on PTS from TPID PTS since
-it's playback and source is decoder. PTS from decoding can fluctuate from
-various factors. 
+The diff is a difference between stream positions between calls and these are not that big. The big time difference they said is because 
+	Tdiff(system time) goes steady and diff(stream time) fluctuate.
+	Test harness uses *accumulated* values so it adds up when time goes. 
 
-Q: Is that test harness valid which compares streamtime and systemtime?
+I think the questions to ask are:
+	To EPG. I suppose they use timers based on system time so see the issue. Since they have start, current, and end of stream, is it possible to use only stream time in their calculation?
+	To MS. Is this position flutuation within permissible threadhold? I think it’s yes since it down to decoding speed and there is big internal buffer in decoding pipeline which amounts for few seconds. 
+As far as I know, MS do its best and has some huristics considering buffering and decoding to make flow smooth, i.e., no visual artifect, but it’s limited since it’s rely on decoder.
+
+So dependin on what MS say, then EPG might have wrong expectation on stream position. Please shed your thought on.
 
 
 ={============================================================================
