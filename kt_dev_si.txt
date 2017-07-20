@@ -18231,6 +18231,7 @@ JNIEXPORT jint JNICALL Java_com_nds_fusion_playerimpl_PlayerSessionImpl_natPlaye
  These are read only values.
 */
 typedef enum  {
+    PLAYER_API_Session_PropId_Int32_StreamPosition                 = 10U, /**< The session stream position from beginning. This property can be changed via a call to #PLAYER_API_Session_SetPosition. */
     PLAYER_API_Session_PropId_Int32_StreamPositionFromEnd          = 11U, /**< The session stream position from end. This property can be changed via a call to #PLAYER_API_Session_SetPosition. */
 } PLAYER_API_Session_PropId;
 
@@ -18240,11 +18241,16 @@ typedef enum  {
  */
 typedef struct MSM_POSITION_TAG
 {
-    MSM_VFILE_POSITION		 vfile_offset_msec; /*!< @brief offset in milli seconds in the vfile */
-	xint64_t			 abs_position_msec;	/*!< @brief Absolute position */
-	SYSTEMTIME_TIMEDATE	 utc;				/*!< @brief Absolute time */
-	xint64_t			 abs_bytes;			/*!< @brief Absolute position in bytes */
+  MSM_VFILE_POSITION		 vfile_offset_msec; /*!< @brief offset in milli seconds in the vfile */
+  xint64_t			 abs_position_msec;	/*!< @brief Absolute position */
+  SYSTEMTIME_TIMEDATE	 utc;				/*!< @brief Absolute time */
+  xint64_t			 abs_bytes;			/*!< @brief Absolute position in bytes */
 } MSM_POSITION;
+
+
+#define     MSM_UNIT_V_OFFSET       0x00000001U  /*!< @brief Offset from v-file in milliseconds (according to reference point) */
+#define     MSM_UNIT_ABS_POSITION   0x00000002U  /*!< @brief Absolute position in milliseconds */
+#define     MSM_UNIT_UTC            0x00000004U  /*!< @brief Absolute time in UTC */
 
 // conversion from pts to position?
 !INFO   -P_Api        		< p:0x00000266 P:APP t:0x2c157520 T:no name M:player_api_session.c F:PLAYER_API_Session_GetInt32 L:2237 > Requested property is StreamPosition 
@@ -18256,6 +18262,33 @@ typedef struct MSM_POSITION_TAG
 !INFO   -MSM_MS       		< p:0x00000264 P:MW t:0x01b84520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CalcUserPosByPtsAndNotifyItem) L:10269 > < splicer=0x5 hMC=0x5 >" "USER POSITION using ***PTS***: " "has_advanced XTRUE, packet_number [0,12151597], " "packet_time [[2055:08:01 11:50:22]2147483647,4294967295] 
 !INFO   -P_Api        		< p:0x00000266 P:APP t:0x2c157520 T:no name M:player_api_session.c F:PLAYER_PRV_GetStreamPosition L:2109 > f_position_value = 2797030 
 !INFO   -P_Api        		< p:0x00000266 P:APP t:0x2c157520 T:no name M:player_api_session.c F:PLAYER_PRV_GetStreamPosition L:2184 > l_position = 2797030 
+
+
+// DARWIN_PLATFORM/DARWIN_PLAYER/src/player_api_session.c
+
+SYSTEM_STATUS PLAYER_API_Session_GetInt32()
+
+        case PLAYER_API_Session_PropId_Int32_StreamPosition:
+            PLAYER_DIAG_LOG_INFO(("Requested property is StreamPosition"));
+
+                if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_GetStreamPosition(&l_sc_data->active_job, MSM_REF_POINT_VSTART, MSM_UNIT_V_OFFSET, &l_position)))
+                {
+                    PLAYER_DIAG_LOG_ERROR(("Failed to retrieve PLAYER_API_Session_PropId_Int32_StreamPosition"));
+                }
+                else
+                {
+                    if (l_position.position_value.position < 0)
+                    {
+                        l_status = PLAYER_API_STATUS_FAILURE;
+                    }
+                    else
+                    {
+                        PLAYER_DIAG_LOG_WARN(("KT: StreamPosition: %d", l_position.position_value.position ));
+                        *int32Value = l_position.position_value.position;
+                        l_status = PLAYER_API_STATUS_OK;
+                    }
+                }
+            break;
 
 
 <plyaer-subtitle>
