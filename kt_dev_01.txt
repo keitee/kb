@@ -1002,31 +1002,37 @@ unsigned int val = ((unsigned)~0 >> 1) +1;    // okay, since cast is higher
 
 int main()
 {
-  unsigned int input1 = ~((unsigned int)0)>>1;
+  unsigned int input2 = (~(0)>>1);
 
-  // The signess must be known to compiler when do shift to have guaranteed
+  // 1. when use `not operation`, the size and signness is `independant`. The
+  // result `depends on the other operand` and done at `compile-time`. 
+  //
+  // so ~(0) makes "111...11" which don't have size and signness.
+  //
+  // 2. The signess must be known to compiler when do shift to have guaranteed
   // result. Since do not know signness, use `signed by default` and gets 1
   // for MSB when right-shift
   //
-  // Must use `unsigned` to do  `right-shift` in order to have guaranteed 0
-  // values. This is why glibc macro uses unsigned type.
+  // *right-shift* Must use `unsigned` to do  `right-shift` in order to have
+  // guaranteed 0 values. 
   //
-  // From glibc and see exercise 2-1 for examples.
-  // 
+  // so (~(0)>>1) makes "111...11"
+  //
+  // This is why glibc macro uses unsigned type which set size and signness.
+  // from glibc and see exercise 2-1 for examples.
+  //
   // # ifndef ULONG_MAX
   // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
   // # endif
   // # ifndef LONG_MAX
   // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
   // # endif
-  //
-  // When use `not operation`, the size and signness is `independant`. The
-  // result depends on the other operand and done at `compile-time`. 
 
-  unsigned int input2 = (~(0)>>1);
 
-  // works since the result is `independant` but assigned to unsigned. the first
-  // version is shorter version of this.
+  // input3 works since the result is `independant` but assigned to unsigned.
+  // input1 version is shorter version of this.
+  
+  unsigned int input1 = ~((unsigned int)0)>>1;
 
   unsigned int input3 = ~0;
   input3 >>=1;
@@ -1040,13 +1046,12 @@ int main()
 }
 
 01111111111111111111111111111111      // input1
-11111111111111111111111111111111      // input2
+11111111111111111111111111111111      // input2, wrong
 01111111111111111111111111111111      // input3
 
 
 note: 
-The summary is that for `unsigned`, `zero-filled` when `right-shift` for
-guranteed result.
+The summary is that for `unsigned`, `zero-filled` when do `right-shift`.
 
 http://msdn.microsoft.com/en-us/library/336xbhcz.aspx
 The `right-shift` causes the bit pattern in shift expression to be shifted to
@@ -1070,10 +1075,10 @@ The ansic says: Right shifting a 'signed' quantity will fill with sign bit
 <2> `left-shift-operator`
 To explain this point, try this exercise first:
 
-<ex> *ex-getbits*
-From ansic, p49. The function getbits(x, p, n) returns the (right adjusted)
-  n-bit field of x that begins at position p. For example, getbits( x, 4, 3 )
-  returns the three bits; 4, 3, 2, right adjusted.
+<ex> *ex-getbits* ansic, p49. 
+The function getbits(x, p, n) returns the (right adjusted) n-bit field of x
+that begins at position p. For example, getbits( x, 4, 3 ) returns the three
+bits; 4, 3, 2, right adjusted.
 
 unsigned getbits( unsigned x, int p, int n );
 
@@ -1083,10 +1088,10 @@ unsigned getbits( unsigned x, int p, int n );
   return x >> (p+1-n) & ~(1 << n);
 }
 
-This is wrong since it assumes:
+`left-shift` fills 0 but:
 
-~(1<<3)   = ~(1000) = ...00111    // *wrong* assumption
-                    = 11110111    // real
+~(1<<3)   = ~(1000) = ~(11111000) = 00000111    // wrong
+                    = ~(00001000) = 11110111    // real
 
 <correct>
 unsigned getbits( unsigned x, int p, int n )    // note unsigned
@@ -1094,7 +1099,7 @@ unsigned getbits( unsigned x, int p, int n )    // note unsigned
   return (x >> (p+1-n)) & ~(~0 << n);
 }
 
-this can be written using variables to make it easier to understand
+this can be written using variables to make it clearer/easier to understand
 
 unsigned getbits( unsigned x, int p, int n )
 {
@@ -1102,6 +1107,13 @@ unsigned getbits( unsigned x, int p, int n )
   unsigned shift = (p+1-n);
   return (x >> shift) & mask;
 }
+
+
+note: to get n num bits on since `not-operator` don't have size and signness.
+
+~(~0 << 2)    : ...0011
+((-1) & 0x11) : ...0011
+
 
 note:
 1. "~(~0 << n)" is interesting in making a 'mask' value.
@@ -1112,6 +1124,7 @@ note:
 4+1-3 = 2 shift   5-3 = 2 shift
 
 3. Do not need () since >> is higher than & but advisable to make easier to see.
+
 
 <analysis> To see the differnece, see the below result.
 #include <iostream>
@@ -2442,23 +2455,24 @@ usecomma.cpp:5:19: sorry, unimplemented: non-static data member initialisers
 {c++11}
 http://gcc.gnu.org/projects/cxx0x.html
 
-C++0x was the working name of the ISO C++ 2011 standard, which introduced a host of new features
-into the standard C++ language and library. This project sought to implement new C++11 features in
-GCC, and made it the first compiler to bring feature-complete C++11 to C++ programmers.
+C++0x was the working name of the ISO C++ 2011 standard, which introduced a
+host of new features into the standard C++ language and library. This project
+sought to implement new C++11 features in GCC, and made it the first compiler
+to bring feature-complete C++11 to C++ programmers.
 
-C++11 features are available as part of the "mainline" GCC compiler in the trunk of GCC's Subversion
-repository and in GCC 4.3 and later. 
+C++11 features are available as part of the "mainline" GCC compiler in the
+trunk of GCC's Subversion repository and in GCC 4.3 and later. 
 
 >
- To enable C++0x support, add the command-line parameter -std=c++0x to your g++ command line. 
-<
-Or, to enable GNU extensions in addition to C++0x extensions,
-add -std=gnu++0x to your g++ command line. GCC 4.7 and later support -std=c++11 and -std=gnu++11 as
-well.
+To enable C++0x support, add the command-line parameter -std=c++0x to your g++
+command line. Or, to enable GNU extensions in addition to C++0x extensions,
+        add -std=gnu++0x to your g++ command line. GCC 4.7 and later support
+        -std=c++11 and -std=gnu++11 as well.
 
-Important: GCC's support for C++11 is still experimental. Some features were implemented based on
-early proposals, and no attempt will be made to maintain backward compatibility when they are
-updated to match the final C++11 standard.
+Important: GCC's support for C++11 is still experimental. Some features were
+implemented based on early proposals, and no attempt will be made to maintain
+backward compatibility when they are updated to match the final C++11
+standard.
 
 $ g++ -v --help | egrep "\-std"
 
@@ -9372,7 +9386,7 @@ following.
 
 <ex> *ex-atoi* atoi second version in ansic p61
 The `for-loop` is preferable when there is a simple initialization and increment
-since it keeps the loop control statement 'close''together' and visiable at the
+since it keeps the loop control statement `close together and visiable` at the
 top of the loop.
 
 #include <ctype.h>
@@ -14045,11 +14059,12 @@ else
 
 <ex> *ex-atoi* ansic, p43.
 
-Key points:
+check points:
 
-* input check. s[i] >= '0' && s[i] <= '9';
-* conversion. n = n*10 + (s[i]-'0');
-* no sign support, no check on NIN/MAX
+  * input type? digits only? no space?
+  * input size?
+  * what base? 10 or 2?
+  * sign support? 
 
 int atoi(char s[])
 {
@@ -20622,7 +20637,7 @@ Polymorphism is derived from a Greek words meaning "many forms".
 
 <cpps-answer>
 Oppose to compile-time static binding, the compiler generates 'code' to decide
-at run time which function to call. This dynamic binding or virtual mechanism
+at run-time which function to call. This dynamic binding or virtual mechanism
 based on the fact that the static and dynamic types of reference and pointers
 can differ is how C++ supports polymorphism.
 
@@ -20633,16 +20648,23 @@ multiple different types to be used in it.
 program is constructed (such as the Template system in C++). Once the program is
 constructed, the choice is made and the type used is known.
 
-`dynamic-polymorphism` is determined at run time. (Such as a pointer to a base
+`dynamic-polymorphism` is determined at run-time. (Such as a pointer to a base
     class that allows for descendant class pointers to be passed in. The base
     class provides the interface and the descendants implement that interface in
     different ways that are suitable to the specifics of the class.) Decisions
 are made during run time that choose which type to pass.
 
-The important distinction is deciding at construction (compile) or run time.
+The important distinction is deciding at construction (compile) or run-time.
+
 Generally, a well designed static polymorphism performs better than dynamic, so
 it is to be preferred when the design makes it possible. If the information to
-make a choice is not available until run time, dynamic is the choice.
+make a choice is not available until run-time, dynamic is the choice.
+
+<from-python>
+the meaning of an operation depends on the type of the objects being operated
+on.
+
+How? overloading and overiding
 
 
 ={============================================================================

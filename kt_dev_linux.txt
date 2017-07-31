@@ -532,7 +532,7 @@
 *kt_linux_core_400* linux-lib-dependancy
 *kt_linux_core_400* linux-lib-ld linux-dynamic-linker
 *kt_linux_core_400* linux-lib-ld-glibc ld-gdb
-*kt_linux_core_400* linux-lib-ld-uclibc
+*kt_linux_core_400* linux-lib-ld-uclibc spk-toolchain-uclibc
 *kt_linux_core_400* linux-lib-ld-uclibc-fail-to-find-symbol
 *kt_linux_core_402* linux-lib-ld-resolve-order
 *kt_linux_core_400* linux-lib-ld-debug
@@ -8557,6 +8557,23 @@ and 'lasted' for 7 lines. The second set of numbers, e.g. "+2815,6" indicates
 that in the new file, the section starts on like 2815 and lasts for 6 lines.
 (You can guess that we are going to remove a line.)
 
+      <fuzz>
+       -F num  or  --fuzz=num
+          Set  the  maximum  fuzz  factor.  This option only applies to diffs
+          that have context, and causes patch to ignore up to that many lines
+          in looking for places to install a hunk.  Note that a larger fuzz
+          factor increases the odds of a faulty patch.  The default fuzz
+          factor is 2, and it may not be set to more than the number of lines
+          of  context  in  the context diff, ordinarily 3.
+
+        <ex>
+        this makes it failed since used --fuzz=0 and fuzz=2 when use without
+        --fuzz option.
+
+        + /usr/bin/patch -s -p1 --fuzz=0
+        1 out of 2 hunks FAILED -- saving rejects to file lib/unwind-forcedunwind.c.rej
+
+
 
 <p-option>
 The text after the @@ symbol indicates the function name that the change is
@@ -8716,22 +8733,6 @@ diff -Naur darwin-spk-1.18_orig/target/device/Sky/ams-drx890/kernel-debug.config
 
 
 <patch-options> in the script
-
-       -F num  or  --fuzz=num
-          Set  the  maximum  fuzz  factor.  This option only applies to diffs
-          that have context, and causes patch to ignore up to that many lines
-          in looking for places to install a hunk.  Note that a larger fuzz
-          factor increases the odds of a faulty patch.  The default fuzz
-          factor is 2, and it may not be set to more than the number of lines
-          of  context  in  the context diff, ordinarily 3.
-
-        <ex>
-        this makes it failed since used --fuzz=0 and fuzz=2 when use without
-        --fuzz option.
-
-        + /usr/bin/patch -s -p1 --fuzz=0
-        1 out of 2 hunks FAILED -- saving rejects to file lib/unwind-forcedunwind.c.rej
-
 
        -d dir  or  --directory=dir
           Change to the directory dir immediately, before doing anything else.
@@ -16887,11 +16888,21 @@ DESCRIPTION
               with -v|--verbose for a nicer display.
 
        --prefix NEWPATH
-              For relocatable binary packages, translate all file paths that start with the installation prefix in the package relocation hint(s) to NEWPATH.
+              For relocatable binary packages, translate all file paths that
+              start with the installation prefix in the package relocation
+              hint(s) to NEWPATH.
 
        --relocate OLDPATH=NEWPATH
-              For relocatable binary packages, translate all file paths that start with OLDPATH in the package relocation hint(s) to NEWPATH.  This option can be used repeatedly if  sev-
-              eral OLDPATH’s in the package are to be relocated.
+              For relocatable binary packages, translate all file paths that
+              start with OLDPATH in the package relocation hint(s) to NEWPATH.
+              This option can be used repeatedly if  sev- eral OLDPATH’s in
+              the package are to be relocated.
+
+
+<RPM_BUILD_DIR>
+$RPM_BUILD_ROOT (or the equivalent %{buildroot} SPEC file macro) always holds
+the directory under which RPM will look for any files to package.
+
 
 <ex>
 // rpm info
@@ -16909,14 +16920,15 @@ crosstools_hf-uclibc-<uclibc version>-common-<toolchain version>.i386.rpm \
 crosstools_hf-uclibc-<uclibc version>-mips-<toolchain version>.i386.rpm \
 crosstools_hf-uclibc-<uclibc version>-mipsel-<toolchain version>.i386.rpm
 
-
+<ex> when rpmbuild fails and made it to -1 for Debian build
 http://rpm.org/user_doc/macros.html
 
 // from rpm 4.8.0 from Debian
+/usr/lib/rpmmacros
 #       Default fuzz level for %patch in spec file.
 %_default_patch_fuzz    0
 
-// from rpm 4.4.2.3 on Centos
+// from rpm 4.4.2.3 on Centos. means no fizz check?
 #      Default fuzz level for %patch in spec file. -1 means no fuzz explicitely.
 %_default_patch_fuzz   -1
 
@@ -56546,9 +56558,14 @@ the correct toolchain. This is the default symlink to the Broadcom install.
 
 
 <rpm-install>
+su
 rpm -i \
     crosstools-linux-2.6.18.0-uclibc-nptl-0.9.29-20070423-4.2-10ts.src.rpm
 
+# centos
+install to /usr/src/redhat/SOURCES
+
+# debian
 will install in ~/rpmbuild like /home/kyoupark/rpmbuild but will not if there
 is a such directory.
 
@@ -56558,9 +56575,18 @@ centos vm:
 sky, drx890
 root, skysky
 gcc version 4.1.2 20080704 (Red Hat 4.1.2-55)
+// have shared folder, Downloads, with host pc and /media/sf_Downloads
 
 debian:
 gcc version 4.9.2 (Debian 4.9.2-10)
+
+// must specify buildlog output since there is a check in spec file before
+// running build_tool() or can comment out this check.
+//
+// have to comment out clean in the spec file in order not to delete built
+// toolchain. do not know why.
+// # %clean
+// # rm -rf %{tools_dir_prefix}
 
 cd /usr/src/redhat/SPECS
 rpmbuild -ba crosstools-linux-2.6.18.0-uclibc-0.9.29-nptl-20070423-4.2-10ts.spec  2>&1 |tee  buildlog 
@@ -56619,13 +56645,16 @@ build_tool()
   #
   build_arch=$arch-linux
 
++ build_tool mips
++ arch=mips
++ gnu_arch=mips-linux-uclibc
 + export PATH=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin:/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin:/root/bin
 + pushd /usr/src/redhat/BUILD
 + build_arch=mips-linux
 
   # Configure uClibc and header files
   
-  #
+  # note: not build but do config
   # Build uClibc
   #
   pushd uClibc-%{uclibc_version}
@@ -56658,6 +56687,9 @@ build_tool()
   perl -p -i -e 's,.*DOSTRIP.*,# DOSTRIP is not set,g' ./.config
 
   make oldconfig
+
++ marks the end of oldconfig
++ Manuel's hidden warnings (UCLIBC_MJN3_ONLY) [N/y/?] n
 
 + cp /usr/src/redhat/SOURCES/uClibc-locale-030818.tgz extra/locale
 + cp extra/Configs/Config.rpm.mips ./.config
@@ -56764,13 +56796,60 @@ build_tool()
   #
   pushd uClibc-%{uclibc_version}
 
+// must run the previous step to have .config.
+// pushd /usr/src/redhat/BUILD/uClibc-nptl-0.9.29-20070423
 // export PATH=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin:/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin:/root/bin
+// export PATH=/home/nds-uk/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin:/usr/kerberos/sbin:/usr/kerberos/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/X11R6/bin:/root/bin
 + make KERNEL_HEADERS=/usr/src/redhat/BUILD/build_uClibc/usr/include PREFIX= DEVEL_PREFIX=/ RUNTIME_PREFIX=/ CROSS=mips-linux-uclibc- all
   make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
     PREFIX=							\
     DEVEL_PREFIX=/						\
     RUNTIME_PREFIX=/						\
     CROSS=$gnu_arch- all
+
+// to get processed output
+// mips-linux-uclibc-gcc -c ldso/ldso/ldso.c -E -include ./include/libc-symbols.h -Wall -Wstrict-prototypes -fno-strict-aliasing -mips32 -mtune=mips32 -mabi=32 -fstack-protector -fno-builtin -nostdinc -I./include -I. -fsigned-char -Os -funit-at-a-time -fno-tree-loop-optimize -fno-tree-dominator-opts -fno-strength-reduce -mno-split-addresses -I./libpthread/nptl -I./libpthread/nptl/sysdeps/unix/sysv/linux/mips -I./libpthread/nptl/sysdeps/mips -I./libpthread/nptl/sysdeps/unix/sysv/linux -I./libpthread/nptl/sysdeps/pthread -I./libpthread/nptl/sysdeps/pthread/bits -I./libpthread/nptl/sysdeps/generic -I./ldso/ldso/mips -I./ldso/include -I/usr/src/redhat/BUILD/build_uClibc/usr/include -isystem /opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin/../lib/gcc/mips-linux-uclibc/4.2.0/include -DNDEBUG -fstack-protector-all -mno-split-addresses -fPIC -DSHARED -DNOT_IN_libc -DIS_IN_rtld -fno-stack-protector -fno-omit-frame-pointer -I./ldso/ldso/mips -I./ldso/include -I./ldso/ldso -DUCLIBC_RUNTIME_PREFIX="/" -DUCLIBC_LDSO="ld-uClibc.so.0" -DLDSO_ELFINTERP="mips/elfinterp.c"
+//
+// mips-linux-uclibc-gcc -c ldso/ldso/ldso.c -o ldso/ldso/ldso.oS -include ./include/libc-symbols.h -Wall -Wstrict-prototypes -fno-strict-aliasing -mips32 -mtune=mips32 -mabi=32 -fstack-protector -fno-builtin -nostdinc -I./include -I. -fsigned-char -Os -funit-at-a-time -fno-tree-loop-optimize -fno-tree-dominator-opts -fno-strength-reduce -mno-split-addresses -I./libpthread/nptl -I./libpthread/nptl/sysdeps/unix/sysv/linux/mips -I./libpthread/nptl/sysdeps/mips -I./libpthread/nptl/sysdeps/unix/sysv/linux -I./libpthread/nptl/sysdeps/pthread -I./libpthread/nptl/sysdeps/pthread/bits -I./libpthread/nptl/sysdeps/generic -I./ldso/ldso/mips -I./ldso/include -I/usr/src/redhat/BUILD/build_uClibc/usr/include -isystem /opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin/../lib/gcc/mips-linux-uclibc/4.2.0/include -DNDEBUG -fstack-protector-all -mno-split-addresses -fPIC -DSHARED -DNOT_IN_libc -DIS_IN_rtld -fno-stack-protector -fno-omit-frame-pointer -I./ldso/ldso/mips -I./ldso/include -I./ldso/ldso -DUCLIBC_RUNTIME_PREFIX="/" -DUCLIBC_LDSO="ld-uClibc.so.0" -DLDSO_ELFINTERP="mips/elfinterp.c"
+// mips-linux-uclibc-gcc -c ldso/ldso/ldso.c -o ldso/ldso/ldso.oS -include
+// ./include/libc-symbols.h -Wall -Wstrict-prototypes -fno-strict-aliasing
+// -mips32 -mtune=mips32 -mabi=32 -fstack-protector -fno-builtin -nostdinc
+// -I./include -I. -fsigned-char -Os -funit-at-a-time -fno-tree-loop-optimize
+// -fno-tree-dominator-opts -fno-strength-reduce -mno-split-addresses
+// -I./libpthread/nptl -I./libpthread/nptl/sysdeps/unix/sysv/linux/mips
+// -I./libpthread/nptl/sysdeps/mips
+// -I./libpthread/nptl/sysdeps/unix/sysv/linux
+// -I./libpthread/nptl/sysdeps/pthread
+// -I./libpthread/nptl/sysdeps/pthread/bits
+// -I./libpthread/nptl/sysdeps/generic -I./ldso/ldso/mips -I./ldso/include
+// -I/usr/src/redhat/BUILD/build_uClibc/usr/include -isystem
+// /opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin/../lib/gcc/mips-linux-uclibc/4.2.0/include
+// -DNDEBUG -fstack-protector-all -mno-split-addresses -fPIC -DSHARED
+// -DNOT_IN_libc -DIS_IN_rtld -fno-stack-protector -fno-omit-frame-pointer
+// -I./ldso/ldso/mips -I./ldso/include -I./ldso/ldso
+// -DUCLIBC_RUNTIME_PREFIX="/" -DUCLIBC_LDSO="ld-uClibc.so.0"
+// -DLDSO_ELFINTERP="mips/elfinterp.c"
+
+// mips-linux-uclibc-gcc -c ldso/ldso/mips/resolve.S -o ldso/ldso/mips/resolve.oS -include ./include/libc-symbols.h -Wall -Wstrict-prototypes -fno-strict-aliasing -mips32 -mtune=mips32 -mabi=32 -fstack-protector -fno-builtin -nostdinc -I./include -I. -fsigned-char -Os -funit-at-a-time -fno-tree-loop-optimize -fno-tree-dominator-opts -fno-strength-reduce -mno-split-addresses -I./libpthread/nptl -I./libpthread/nptl/sysdeps/unix/sysv/linux/mips -I./libpthread/nptl/sysdeps/mips -I./libpthread/nptl/sysdeps/unix/sysv/linux -I./libpthread/nptl/sysdeps/pthread -I./libpthread/nptl/sysdeps/pthread/bits -I./libpthread/nptl/sysdeps/generic -I./ldso/ldso/mips -I./ldso/include -I/usr/src/redhat/BUILD/build_uClibc/usr/include -isystem /opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin/../lib/gcc/mips-linux-uclibc/4.2.0/include -DNDEBUG -fstack-protector-all -mno-split-addresses -fPIC -DSHARED -fstack-protector-all -DNOT_IN_libc -DIS_IN_rtld -fno-stack-protector -fno-omit-frame-pointer -I./ldso/ldso/mips -I./ldso/include -I./ldso/ldso -DUCLIBC_RUNTIME_PREFIX="/" -DUCLIBC_LDSO="ld-uClibc.so.0" -D__ASSEMBLER__ -Wa,--noexecstack
+// mips-linux-uclibc-gcc -c ldso/ldso/mips/resolve.S -o
+// ldso/ldso/mips/resolve.oS -include ./include/libc-symbols.h -Wall
+// -Wstrict-prototypes -fno-strict-aliasing -mips32 -mtune=mips32 -mabi=32
+// -fstack-protector -fno-builtin -nostdinc -I./include -I. -fsigned-char -Os
+// -funit-at-a-time -fno-tree-loop-optimize -fno-tree-dominator-opts
+// -fno-strength-reduce -mno-split-addresses -I./libpthread/nptl
+// -I./libpthread/nptl/sysdeps/unix/sysv/linux/mips
+// -I./libpthread/nptl/sysdeps/mips
+// -I./libpthread/nptl/sysdeps/unix/sysv/linux
+// -I./libpthread/nptl/sysdeps/pthread
+// -I./libpthread/nptl/sysdeps/pthread/bits
+// -I./libpthread/nptl/sysdeps/generic -I./ldso/ldso/mips -I./ldso/include
+// -I/usr/src/redhat/BUILD/build_uClibc/usr/include -isystem
+// /opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/bin/../lib/gcc/mips-linux-uclibc/4.2.0/include
+// -DNDEBUG -fstack-protector-all -mno-split-addresses -fPIC -DSHARED
+// -fstack-protector-all -DNOT_IN_libc -DIS_IN_rtld -fno-stack-protector
+// -fno-omit-frame-pointer -I./ldso/ldso/mips -I./ldso/include -I./ldso/ldso
+// -DUCLIBC_RUNTIME_PREFIX="/" -DUCLIBC_LDSO="ld-uClibc.so.0" -D__ASSEMBLER__
+// -Wa,--noexecstack
 
 + make KERNEL_HEADERS=/usr/src/redhat/BUILD/build_uClibc/usr/include PREFIX= DEVEL_PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/ RUNTIME_PREFIX=/opt/toolchains/crosstools_hf-linux-2.6.18.0_gcc-4.2-11tsHound_uclibc-nptl-0.9.29-20070423_20160809/mips-linux-uclibc/ CROSS=mips-linux-uclibc- install_runtime install_dev
   make KERNEL_HEADERS=${RPM_BUILD_DIR}/build_uClibc/usr/include	\
@@ -63784,6 +63863,17 @@ typedef struct
 
 #define STN_UNDEF	0		/* End of a chain.  */
 
+<elf-symbol-st-other>
+/* How to extract and insert information held in the st_other field.  */
+
+#define ELF32_ST_VISIBILITY(o)	((o) & 0x03)
+
+/* Symbol visibility specification encoded in the st_other field.  */
+#define STV_DEFAULT	0		/* Default symbol visibility rules */
+#define STV_INTERNAL	1		/* Processor specific hidden class */
+#define STV_HIDDEN	2		/* Sym unavailable in other modules */
+#define STV_PROTECTED	3		/* Not preemptible, not exported */
+
 
 <elf-weak-symbol>
 A weak symbol is a half-hearted global symbol: if a definition is available
@@ -67152,7 +67242,7 @@ run --library-path
 
 
 ={============================================================================
-*kt_linux_core_400* linux-lib-ld-uclibc
+*kt_linux_core_400* linux-lib-ld-uclibc spk-toolchain-uclibc
 
 *current-working*
 
@@ -67498,6 +67588,25 @@ _dl_start(unsigned long args)
      * Relocation of the GOT entries for MIPS have to be done
      * after all the libraries have been loaded.
      */
+
+    // note:
+    // when looks into elfinterp.o in the build output, there is no object
+    // file. not built? thing is that elfinterp.c and other c files gets built 
+    // as part of ldso.c since in ldso.c, can see:
+    // 
+    // <ldso.c>
+    //
+    // /* Pull in the value of _dl_progname */
+    // #include LDSO_ELFINTERP
+    //
+    //
+    // #include "dl-hash.c"
+    // #include "dl-elf.c"
+    //
+    // <command-line for ldso.c build>
+    //
+    // -DLDSO_ELFINTERP="mips/elfinterp.c"
+    //
     // ldso/ldso/mips/elfinterp.c
     // _dl_perform_mips_global_got_relocations(struct elf_resolve *tpnt, int lazy)
     _dl_perform_mips_global_got_relocations(_dl_loaded_modules, !unlazy);
@@ -67802,11 +67911,31 @@ Index: uClibc-nptl-0.9.29-20070423/ldso/ldso/dl-hash.c
  			if (ELF_ST_TYPE(sym->st_info) > STT_FUNC
 
 note: changes in elf.h and used in ARCH_SKIP_RELOC
-note:
 1. used in _dl_find_hash()
+2. use ARCH_SKIP_RELOC is defined in dl-sysdep.h
 
-2. ARCH_SKIP_RELOC is defined in dl-sysdep.h but seems not to be used here.
-   so used own defined here.
+// from c file:
+//
+//        if ((sym->st_value == 0
+// #if USE_TLS
+//          && ELF_ST_TYPE(sym->st_info) != STT_TLS
+// #endif
+//          )
+//          || ARCH_SKIP_RELOC (type_class, sym))
+//          continue;
+//
+// from processed:
+//
+//    if ((sym->st_value == 0
+// 
+//     && ((sym->st_info) & 0xf) != 6
+// 
+//     )
+//     || (((sym)->st_shndx == 0) & ((type_class) | (((sym)->st_other & ~((-1) & 0x03)) != 0x10))))
+//     continue;
+//     
+// so ~((-1) & 0x03) is "11111111111111111100" and clears out 2 bits. want to
+// see only STO_MIPS_PLT(0x10).
 
 
 <5> <patch-02>
