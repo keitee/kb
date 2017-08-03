@@ -129,6 +129,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-ca-vgv
 |kt_dev_si_0001| comp-ca-camm
 |kt_dev_si_0001| comp-xtvfs
+|kt_dev_si_0001| comp-xtvfs-tool
 |kt_dev_si_0001| comp-nvram
 |kt_dev_si_0001| comp-helper
 |kt_dev_si_0001| comp-app
@@ -1887,7 +1888,7 @@ elif [ "$use_ftp" = "http" ] ; then
   echo "BLL:bootlog-upload.sh: MILESTONE Upload via HTTP on $interface , srcfile: ${srcfile}, md5name: $md5name"  >> "${BLLFILENAME}"
   echo "67#        Uploading logs via HTTP on ${interface}." >> "${UPLOAD_SCREEN_UPDATE}"
   /sbin/httpsend "$macaddr" "$srcfile" || exit $?
-  echo "$md5name" >"$logdir"/UPLOAD.URL
+  `echo "$md5name" >"$logdir"/UPLOAD.URL`   *upload-url* *upload-filename*
   echo "BLL:bootlog-upload.sh: MILESTONE Delete compressed and zipped UPLOAD file: ${srcfile}"  >> "${BLLFILENAME}"
   rm "$srcfile" || exit $?
 fi
@@ -1969,6 +1970,662 @@ Wait for the upload to complete and make a note of the uploaded files (starting 
  * UPLOADURL.TGZ= httpsend /tmp/darwin_0019fbfeedde_70a4e2fd32222759a1049d92b184d0f9.tgz - List of the above files
  *
 Send SI the darwin*.tgz file corresponding to the upload required
+
+<ex>
+-sh-3.2# /usr/bin/bootlog-uploadManual.sh 2
++ VERSION=1.1
++ DATE=04/02/2016
++ echo '###########################################################'
+###########################################################
++ echo '# /usr/bin/bootlog-uploadManual.sh 2                                                  '
+# /usr/bin/bootlog-uploadManual.sh 2
++ echo '# Last Modified Date: 04/02/2016                              '
+# Last Modified Date: 04/02/2016
++ echo '# VERSION: 1.1                                      '
+# VERSION: 1.1
++ echo '###########################################################'
+###########################################################
++ . /usr/bin/bootlog-fsn_data-config.sh
+++ set -xv
+
+LINE=""
+++ LINE=
+
+while :
+do
+  LINE=`grep "/dev/sda.*/mnt/nds/dev" /etc/mtab`
+  if [ -n "$LINE" ]; then
+    # Copy 2nd tokenized string &  add /FSN_DATA path
+    FSN_DATAPATH=`echo "$LINE" | cut -d " " -f2`/FSN_DATA
+    break
+  fi
+
+  LINE=`grep "/dev/mtdblock.*/mnt/nds/dev" /etc/mtab`
+  if [ -n "$LINE" ]; then
+    # Copy 2nd tokenized string
+    FSN_DATAPATH=`echo "$LINE" | cut -d " " -f2`
+    break
+  fi
+
+  sleep 30
+
+done
+++ :
+grep "/dev/sda.*/mnt/nds/dev" /etc/mtab
++++ grep '/dev/sda.*/mnt/nds/dev' /etc/mtab
+++ LINE='/dev/sda1 /mnt/nds/dev_6/part_0 xtvfs rw,nosuid 0 0'
+++ '[' -n '/dev/sda1 /mnt/nds/dev_6/part_0 xtvfs rw,nosuid 0 0' ']'
+echo "$LINE" | cut -d " " -f2
++++ echo '/dev/sda1 /mnt/nds/dev_6/part_0 xtvfs rw,nosuid 0 0'
++++ cut -d ' ' -f2
+++ FSN_DATAPATH=/mnt/nds/dev_6/part_0/FSN_DATA
+++ break
+
+FSN_ROOT="/mnt/nds"
+++ FSN_ROOT=/mnt/nds
+
+# Do not use variables [BLOG_DATAPATH, BLROTATED, BLINFOPATH] for background tasks
+# Only use std FSN_DATAPATH variable for background tasks
+
+# RLOG is the switch for the choice of uploading BOOTLOG or RLOG
+if [ "$1" == "--rlog" ]; then
+  if [ $# -eq 2 ]; then
+    uploaded_bootlog_name=$2
+    RLOG=1
+  else
+    echo "The bootlog-uploadManual.sh --rlog command will upload the remaining logs in RLOG folder."
+    echo "  Usage: bootlog-uploadManual.sh --rlog <uploaded_bootlog_name>"
+    echo "    e.g. bootlog-uploadManual.sh --rlog darwin_0019fbfeedde_71c19dbc8831781ee36061c913e333a4"
+    echo "  Usage: bootlog-uploadManual.sh --rlog 0 => Upload logs from current session present in FSN_DATA/RLOG directory"
+    exit
+  fi
+else
+# Get 1st parameter: The number of bootlog dirs to upload.
+  upload_limit=$1
+# Get 2nd parameter: Use FTP
+  use_ftp=$2
+fi
++ '[' 2 == --rlog ']'
++ upload_limit=2
++ use_ftp=
+
+
+###############################################################################
+# Init
+###############################################################################
+
+blghost=87.86.191.132
++ blghost=87.86.191.132
+blguser=anonymous
++ blguser=anonymous
+blgpass=upload@sky.com
++ blgpass=upload@sky.com
+blgpath=upload
++ blgpath=upload
+
+# Default upload_limit is 2
+if ! [ -n "$upload_limit" ]; then
+  upload_limit=2
+fi
++ '[' -n 2 ']'
+
+# Need to restore TCP SYN retries later
+syn_retries=`cat /proc/sys/net/ipv4/tcp_syn_retries`
+cat /proc/sys/net/ipv4/tcp_syn_retries
+++ cat /proc/sys/net/ipv4/tcp_syn_retries
++ syn_retries=5
+mtu_probing=`cat /proc/sys/net/ipv4/tcp_mtu_probing`
+cat /proc/sys/net/ipv4/tcp_mtu_probing
+++ cat /proc/sys/net/ipv4/tcp_mtu_probing
++ mtu_probing=0
+
+echo 1 >/proc/sys/net/ipv4/tcp_syn_retries
++ echo 1
+echo 1 >/proc/sys/net/ipv4/tcp_mtu_probing
++ echo 1
+
+# Get MAC address
+hwaddr=`cut -c1-2,4-5,7-8,10-11,13-14,16-17 </sys/class/net/eth0/address` || exit $?
+cut -c1-2,4-5,7-8,10-11,13-14,16-17 </sys/class/net/eth0/address
+++ cut -c1-2,4-5,7-8,10-11,13-14,16-17
++ hwaddr=0019fbf2d46b
+macaddr=`cat /sys/class/net/eth0/address` || exit $?
+cat /sys/class/net/eth0/address
+++ cat /sys/class/net/eth0/address
++ macaddr=00:19:fb:f2:d4:6b
+
+# URL compilation file
+url_comp="/tmp/UPLOAD.URL"
++ url_comp=/tmp/UPLOAD.URL
+rm $url_comp || true
++ rm /tmp/UPLOAD.URL
+rm: cannot remove '/tmp/UPLOAD.URL': No such file or directory
++ true
+
+toobigfilename=
++ toobigfilename=
+keeping=
++ keeping=
+
+###############################################################################                                                                                                                      [453/1247]
+# Functions
+#
+# Note that functions are not supported in the msh (Minimal Shell) of the
+# pre-prod kernel, but neither is telnet, so this script is only likely to be
+# run on builds running the debug kernel (si_devel, sky_trials etc), where
+# functions are fine.
+###############################################################################
+
+#############################
+# sendfile( $zipfilename, $zipfile )
+#############################
+sendfile()
+{
+  md5=`md5sum "$2" | cut -c1-32` || exit $?
+  src_file=$2
+
+  if [ "$use_ftp" ] ; then
+      echo "Uploading to ftp://${blguser}@${blghost}${src_file}"
+      dst_file="${blgpath}/darwin_${hwaddr}_${md5}.tgz"
+      ftpput -u "${blguser}" -p "${blgpass}" "${blghost}" "${dst_file}" "${src_file}" || exit $?
+      echo "$1 = ftp://${blguser}@${blghost}/${dst_file}" >> ${url_comp}
+      echo "bootlog-uploadManual.sh:  FTP Upload finished"
+  else
+      echo "Uploading to http://${blguser}@${blghost}${src_file}"
+      md5name="darwin_${hwaddr}_${md5}.tgz"
+      # name of the file to the httpsend does not matter.Could be anything.
+      # The way the naming of the upload file works is: generate the file,any name (UPLOAD.TGZ)
+      # --> using md5sum generate the name and for records store in UPLOAD.URL
+      # --> Upload the file, any name (UPLOAD.TGZ)
+      # --> in httpsend sky renames it as "2016-02-05_10-10-50_00:19:fb:f1:71:d8_10.10.8.54.tgz"
+      # --> On theyard, it regenerates the md5 sum name
+      echo "bootlog-uploadManual.sh: Upload via HTTP, file=${src_file}, md5name=${md5name}"
+      /sbin/httpsend "${macaddr}" "${src_file}" || exit $?
+      echo "$1 = httpsend ${md5name}" >> ${url_comp}
+      echo "bootlog-uploadManual.sh:  HTTP Upload finished"
+  fi
+
+  rm "${src_file}"
+}
+
+#############################
+# getFileLists( $logdir )
+#############################
+getFileLists()
+{
+  logdir="${1}"
+
+  discarded=
+  keeping=
+
+  # Get list of log files
+  for i in `ls "${logdir}"/*.LOG`
+  do
+    # Get size of file
+    isize=`ls -s ${i} | awk '{print $1}'`
+    if [ ${isize} -le 50000 ]
+    then
+      # Files to send
+      keeping="${keeping} ${i}"
+    else
+      # Files not sent
+      discarded="${discarded} ${i}"
+    fi
+  done
+
+  # Create file of too-big file filenames
+  if [ "${discarded}" ]
+  then
+    toobigfilename="${logdir}"/TOOBIG.TXT
+    echo "The following files need to be processed manually." > ${toobigfilename}
+    echo ${discarded} > ${toobigfilename}
+  fi
+}
+
+#############################
+# prepareLogsFrom( $logdir )
+#############################
+prepareAndSendLogsFrom()
+{
+  logdir=$1
+
+  postfix=`echo "$logdir" | awk -F. '{print $2}'`
+  zipfilename="UPLOAD${postfix}.TGZ"
+  zipfile="${FSN_DATAPATH}/$zipfilename"
+
+  # Store IP address assigned
+  ifconfig > "${logdir}"/IFCONFIG.LOG
+
+  keeping="${logdir}"/*.LOG
+  toobigfilename=
+
+  # If this is a 780 then dont send larger files.
+  is780=`grep ARM920T /proc/cpuinfo`
+  if [ "${is780}" ]
+  then
+    getFileLists "${logdir}"
+  fi
+
+  if ( grep -qi "drx595" /etc/hostname ); then
+    tar -cv \
+      "${logdir}"/UPLOAD.* \
+      "${logdir}"/LOG \
+      $toobigfilename \
+      $keeping \
+      "${logdir}"/*.CUR \
+      "${logdir}"/*.CSV \
+      "${logdir}"/*.TXT \
+      "${logdir}"/CDB.DB \
+      "${logdir}"/MFS.DB \
+      "${logdir}"/PCAT.DB \
+      "${logdir}"/PSL.BIX \
+      "${logdir}"/PSL.DB \
+      "${logdir}"/PSL.DBW \
+      "${logdir}"/PSL.NSA \
+      "${logdir}"/REMBOOK.DB \
+      "${logdir}"/NVRAM0.BIN \
+      "${logdir}"/NVRAM1.BIN \
+      "${logdir}"/*.COR \
+    | gzip >"$zipfile" || exit $?
+  else
+    tar -cv \
+      "${logdir}"/UPLOAD.* \
+      "${logdir}"/LOG \
+      $toobigfilename \
+      $keeping \
+      "${logdir}"/*.CUR \
+      "${logdir}"/*.CSV \
+      "${logdir}"/*.TXT \
+      "${logdir}"/CDB.DB \
+      "${logdir}"/MFS.DB \
+      "${logdir}"/PCAT.DB \
+      "${logdir}"/PSL.BIX \
+      "${logdir}"/PSL.DB \
+      "${logdir}"/PSL.DBW \
+      "${logdir}"/PSL.NSA \
+      "${logdir}"/REMBOOK.DB \
+      "${logdir}"/NVRAM0.BIN \
+      "${logdir}"/NVRAM1.BIN \
+      "${logdir}"/*.COR \
+    | gzip -1 >"$zipfile" || exit $?
+  fi
+
+  sendfile $zipfilename $zipfile
+}
+
+#############################
+# prepareAndSendRlogFrom( $logdir )
+#############################
+prepareAndSendRlogFrom()
+{
+  logdir=$1
+  postfix=`echo "$logdir" | awk -F. '{print $2}'`
+  zipfilename="UPLOAD${postfix}.TGZ"
+  zipfile="${FSN_DATAPATH}/$zipfilename"
+  # Check if any cur files present.
+  if ( ls $logdir/RLOG/*.LOG )
+  then
+    echo "Found some .LOG. Will be stitching and uploading them"
+  else
+    echo "No .LOG files in the RLOG of $logdir. NO  UPLOAD "
+    exit
+  fi
+  # Have a MANUAL.TXT file for theyard to know that this is a manual upload.store IP address assigned
+  ifconfig > "${logdir}"/RLOG/MANUAL.TXT
+  # Log parser on the yard uses INFO.TXT file to decode logs. Copying it to RLOG. run cl . to get the logs parsed manually on theyard.
+  cp "${logdir}"/INFO.TXT "${logdir}"/RLOG/
+  # Stitch together the cur files in RLOG. These would be the remaining one after MAX_RLOG_ROTATE_COPY of these were uploaded as part of regular upload.
+
+  # Get the logname from RLIST.LOG  e.g. "S278.LOG"
+  logname=`grep "LOG-" ${logdir}/RLOG/RLIST.LOG | tail -n 1 | cut -d "-" -f 1`;
+
+  # Copy RLIST.LOG to RLIST.TXT as we are deleting all *.LOG files
+  cp "${logdir}"/RLOG/RLIST.LOG "${logdir}"/RLOG/RLIST.TXT
+
+  # Loop and stitch
+  for ff in `ls $logdir/RLOG/*.LOG`
+  do
+    cat "${ff}" >> "${logdir}/RLOG/${logname}"
+    # The rm is done here because 595 might run out of memory if left for later.
+    rm -f  "${ff}"
+  done
+
+  # Copy back RLIST.TXT to RLIST.LOG to support manual uploads later when needed on for this log.
+  cp "${logdir}"/RLOG/RLIST.TXT "${logdir}"/RLOG/RLIST.LOG
+
+  if ( grep -qi "drx595" /etc/hostname ); then
+    tar -cv \
+      "${logdir}"/UPLOAD.* \
+      "${logdir}/RLOG/${logname}" \
+      "${logdir}"/RLOG/MANUAL.TXT \
+      "${logdir}"/RLOG/INFO.TXT \
+      "${logdir}"/RLOG/RLIST.LOG \
+    | gzip >"$zipfile" || exit $?
+  else
+    tar -cv \
+      "${logdir}"/UPLOAD.* \
+      "${logdir}/RLOG/${logname}" \
+      "${logdir}"/RLOG/MANUAL.TXT \
+      "${logdir}"/RLOG/INFO.TXT \
+      "${logdir}"/RLOG/RLIST.LOG \
+    | gzip -1 >"$zipfile" || exit $?
+  fi
+
+  sendfile $zipfilename $zipfile
+}
+
+# Get list of bootlog dirs, and process the ones we need to do.
+uploadBootlog()
+{
+  for ff in `find ${FSN_DATAPATH} -iname "BOOTLOG*"  -type d | awk -F. '{print $2"\t"$0}' | sort -n | cut -f 2 | head -n $upload_limit`
+  do
+    echo "uploading files from $ff"
+    prepareAndSendLogsFrom $ff
+    tail -1 $url_comp >> $ff/UPLOAD.URL
+  done
+}
+# Upload the RLOG of the matching md5 bname bootlog upload
+uploadRlog()
+{
+  if [ "$uploaded_bootlog_name" = "0" ]; then
+      echo "BLL:bootlog-uploadManual.sh: MILESTONE Generate INFO.TXT file. Call bootlog-mkinfo.sh"
+      /usr/bin/bootlog-mkinfo.sh >${FSN_DATAPATH}/RLOG/INFO.TXT
+      if  [ ! -e ${FSN_DATAPATH}/RLOG/INFO.TXT ]; then
+         echo "BLL:bootlog-uploadManual.sh: WARNING INFO.TXT not found. Recreate from ${FSN_DATAPATH}/RLOG/INFO.TXT. Information may be incorrect."
+         echo 'WARNING: Information may be incorrect' >${FSN_DATAPATH}/RLOG/INFO.TXT
+         echo >>${FSN_DATAPATH}/RLOG/INFO.TXT
+      else
+         echo "BLL:bootlog-uploadManual.sh: MILESTONE INFO.TXT found OK"
+
+         echo "uploading RLOG from ${FSN_DATAPATH} "
+         cat ${FSN_DATAPATH}/UPLOAD.URL
+         prepareAndSendRlogFrom ${FSN_DATAPATH}
+         tail -1 $url_comp >> ${FSN_DATAPATH}/UPLOAD.URL
+      fi
+  else
+      echo "checking for  $uploaded_bootlog_name in ${FSN_DATAPATH} "
+      for ff in `find ${FSN_DATAPATH} -iname "BOOTLOG*"  -type d`
+      do
+         if ( grep $uploaded_bootlog_name "$ff/UPLOAD.URL" )
+         then
+            echo "uploading RLOG from $ff "
+            cat $ff/UPLOAD.URL
+            prepareAndSendRlogFrom $ff
+            tail -1 $url_comp >> $ff/UPLOAD.URL
+            break
+            fi
+      done
+  fi
+}
+
+###############################################################################
+# main
+###############################################################################
+
+
+if [ -n "$RLOG" ]; then
+  uploadRlog
+else
+  uploadBootlog
+fi
++ '[' -n '' ']'
++ uploadBootlog
+find ${FSN_DATAPATH} -iname "BOOTLOG*"  -type d | awk -F. '{print $2"\t"$0}' | sort -n | cut -f 2 | head -n $upload_limit
+++ find /mnt/nds/dev_6/part_0/FSN_DATA -iname 'BOOTLOG*' -type d
+++ awk -F. '{print $2"\t"$0}'
+++ sort -n
+++ head -n 2
+++ cut -f 2
++ for ff in '`find ${FSN_DATAPATH} -iname "BOOTLOG*"  -type d | awk -F. '\''{print $2"\t"$0}'\'' | sort -n | cut -f 2 | head -n $upload_limit`'
++ echo 'uploading files from /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG'
+uploading files from /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG
++ prepareAndSendLogsFrom /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG
++ logdir=/mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG
+echo "$logdir" | awk -F. '{print $2}'
+++ echo /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG
+++ awk -F. '{print $2}'
++ postfix=
++ zipfilename=UPLOAD.TGZ
++ zipfile=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ
++ ifconfig
++ keeping='/mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/*.LOG'
++ toobigfilename=
+grep ARM920T /proc/cpuinfo
+++ grep ARM920T /proc/cpuinfo
++ is780=
++ '[' '' ']'
++ grep -qi drx595 /etc/hostname
++ gzip -1
++ tar -cv /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/UPLOAD.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/UPLOAD.URL /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/BLL.LOG /mnt/nd
+s/dev_6/part_0/FSN_DATA/BOOTLOG/BLL_PREV.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/DF.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/HDPARM.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/IFCONFIG.LOG /mnt/nds/dev_6
+/part_0/FSN_DATA/BOOTLOG/KMSG.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/UPLOAD.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/VERHIST.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/P598.CUR /mnt/nds/dev_6/part_0/FS
+N_DATA/BOOTLOG/MPROFAPP.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFCAK.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFMWS.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFPWM.CSV /mnt/nds/dev_6/part_0/F
+SN_DATA/BOOTLOG/MPROFSCD.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFSTM.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/FILES.TXT /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/INFO.TXT /mnt/nds/dev_6/part_0/FSN_DAT
+A/BOOTLOG/CDB.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MFS.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PCAT.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.BIX /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.DB /mnt
+/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.DBW /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.NSA /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/REMBOOK.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/NVRAM0.BIN /mnt/nds/dev_6/pa
+rt_0/FSN_DATA/BOOTLOG/NVRAM1.BIN '/mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/*.COR'
+tar: removing leading '/' from member names
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/UPLOAD.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/UPLOAD.URL
+tar: /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/LOG: No such file or directory
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/BLL.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/BLL_PREV.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/DF.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/HDPARM.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/IFCONFIG.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/KMSG.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/UPLOAD.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/VERHIST.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/P598.CUR
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFAPP.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFCAK.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFMWS.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFPWM.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFSCD.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MPROFSTM.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/FILES.TXT
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/INFO.TXT
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/CDB.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/MFS.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PCAT.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.BIX
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.DBW
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/PSL.NSA
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/REMBOOK.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/NVRAM0.BIN
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/NVRAM1.BIN
+tar: /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG/*.COR: No such file or directory
+tar: error exit delayed from previous errors
++ sendfile UPLOAD.TGZ /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ
+md5sum "$2" | cut -c1-32
+++ md5sum /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ
+++ cut -c1-32
++ md5=91f53985231ba3d57555da3797467e04
++ src_file=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ
++ '[' '' ']'
++ echo 'Uploading to http://anonymous@87.86.191.132/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ'
+Uploading to http://anonymous@87.86.191.132/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ
++ md5name=darwin_0019fbf2d46b_91f53985231ba3d57555da3797467e04.tgz
++ echo 'bootlog-uploadManual.sh: Upload via HTTP, file=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ, md5name=darwin_0019fbf2d46b_91f53985231ba3d57555da3797467e04.tgz'
+bootlog-uploadManual.sh: Upload via HTTP, file=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ, md5name=darwin_0019fbf2d46b_91f53985231ba3d57555da3797467e04.tgz
++ /sbin/httpsend 00:19:fb:f2:d4:6b /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ
+Uploading V2.0 (3)(00:19:fb:f2:d4:6b)(/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ)
+filelen = 3335206
+Connecting to server...(80)(drop.stb.bskyb.com)(50ee01ba)
+Sending header...
+Sending header... complete
+Sending payload string or binary...
+Sending payload via callback...
+currpos = (3335206/3335206)
+Receiving response...
+Received 743/743 bytes
+Response header:
+HTTP/1.1 200 OK
+Date: Mon, 24 Jul 2017 10:52:47 GMT
+Server: Apache/2.4.26 (Unix)
+Uploaded-file: 2017-07-24_11-52-47_00:19:fb:f2:d4:6b_91.234.201.1.tgz
+Content-Length: 464
+Keep-Alive: timeout=5, max=100
+Connection: Keep-Alive
+Content-Type: text/html; charset=ISO-8859-1
+
+Response header:
+HTTP/1.1 200 OK
+Date: Mon, 24 Jul 2017 10:52:47 GMT
+Server: Apache/2.4.26 (Unix)
+Uploaded-file: 2017-07-24_11-52-47_00:19:fb:f2:d4:6b_91.234.201.1.tgz
+Content-Length: 464
+Keep-Alive: timeout=5, max=100
+Connection: Keep-Alive
+Content-Type: text/html; charset=ISO-8859-1
+
+Payload bytes: 464
+Allocating 464 bytes for payload buffer
+Header includes 464 bytes of payload
+Payload received: 464 bytes
+End of stream
++ echo 'UPLOAD.TGZ = httpsend darwin_0019fbf2d46b_91f53985231ba3d57555da3797467e04.tgz'
++ echo 'bootlog-uploadManual.sh:  HTTP Upload finished'
+bootlog-uploadManual.sh:  HTTP Upload finished
++ rm /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD.TGZ
++ tail -1 /tmp/UPLOAD.URL
++ for ff in '`find ${FSN_DATAPATH} -iname "BOOTLOG*"  -type d | awk -F. '\''{print $2"\t"$0}'\'' | sort -n | cut -f 2 | head -n $upload_limit`'
++ echo 'uploading files from /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1'
+uploading files from /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1
++ prepareAndSendLogsFrom /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1
++ logdir=/mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1
+echo "$logdir" | awk -F. '{print $2}'
+++ echo /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1
+++ awk -F. '{print $2}'
++ postfix=1
++ zipfilename=UPLOAD1.TGZ
++ zipfile=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ
++ ifconfig
++ keeping='/mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/*.LOG'
++ toobigfilename=
+grep ARM920T /proc/cpuinfo
+++ grep ARM920T /proc/cpuinfo
++ is780=
++ '[' '' ']'
++ grep -qi drx595 /etc/hostname
++ gzip -1
++ tar -cv /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/UPLOAD.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/UPLOAD.URL /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/BLL.LOG
+ /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/BLL_PREV.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/DF.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/HDPARM.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/IFCONFIG.LO
+G /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/KMSG.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/P603.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/UPLOAD.LOG /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/VERHIST.LOG
+/mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/P603.CUR /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFAPP.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFCAK.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFMWS
+.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFPWM.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFSCD.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFSTM.CSV /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1
+/FILES.TXT /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/INFO.TXT /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/CDB.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MFS.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PCAT.DB /
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.BIX /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.DBW /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.NSA /mnt/nds/dev_
+6/part_0/FSN_DATA/BOOTLOG.1/REMBOOK.DB /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/NVRAM0.BIN /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/NVRAM1.BIN '/mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/*.COR'
+tar: removing leading '/' from member names
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/UPLOAD.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/UPLOAD.URL
+tar: /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/LOG: No such file or directory
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/BLL.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/BLL_PREV.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/DF.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/HDPARM.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/IFCONFIG.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/KMSG.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/P603.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/UPLOAD.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/VERHIST.LOG
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/P603.CUR
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFAPP.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFCAK.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFMWS.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFPWM.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFSCD.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MPROFSTM.CSV
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/FILES.TXT
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/INFO.TXT
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/CDB.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/MFS.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PCAT.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.BIX
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.DBW
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/PSL.NSA
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/REMBOOK.DB
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/NVRAM0.BIN
+mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/NVRAM1.BIN
+tar: /mnt/nds/dev_6/part_0/FSN_DATA/BOOTLOG.1/*.COR: No such file or directory
+tar: error exit delayed from previous errors
++ sendfile UPLOAD1.TGZ /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ
+md5sum "$2" | cut -c1-32
+++ md5sum /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ
+++ cut -c1-32
++ md5=878169ef4a7888d4ce4b1bc9f65fa841
++ src_file=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ
++ '[' '' ']'
++ echo 'Uploading to http://anonymous@87.86.191.132/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ'
+Uploading to http://anonymous@87.86.191.132/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ
++ md5name=darwin_0019fbf2d46b_878169ef4a7888d4ce4b1bc9f65fa841.tgz
++ echo 'bootlog-uploadManual.sh: Upload via HTTP, file=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ, md5name=darwin_0019fbf2d46b_878169ef4a7888d4ce4b1bc9f65fa841.tgz'
+bootlog-uploadManual.sh: Upload via HTTP, file=/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ, md5name=darwin_0019fbf2d46b_878169ef4a7888d4ce4b1bc9f65fa841.tgz
++ /sbin/httpsend 00:19:fb:f2:d4:6b /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ
+Uploading V2.0 (3)(00:19:fb:f2:d4:6b)(/mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ)
+filelen = 13300684
+Connecting to server...(80)(drop.stb.bskyb.com)(50ee01ba)
+Sending header...
+Sending header... complete
+Sending payload string or binary...
+Sending payload via callback...
+currpos = (13300684/13300684)
+Receiving response...
+Received 685/685 bytes
+Response header:
+HTTP/1.1 200 OK
+Date: Mon, 24 Jul 2017 10:53:10 GMT
+Server: Apache/2.4.26 (Unix)
+Uploaded-file: 2017-07-24_11-53-13_00:19:fb:f2:d4:6b_91.234.201.1.tgz
+Connection: close
+Content-Type: text/html; charset=ISO-8859-1
+
+Response header:
+HTTP/1.1 200 OK
+Date: Mon, 24 Jul 2017 10:53:10 GMT
+Server: Apache/2.4.26 (Unix)
+Uploaded-file: 2017-07-24_11-53-13_00:19:fb:f2:d4:6b_91.234.201.1.tgz
+Connection: close
+Content-Type: text/html; charset=ISO-8859-1
+
+Payload bytes: 0
+Allocating 0 bytes for payload buffer
+Header includes 464 bytes of payload
+Payload received: 464 bytes
+End of stream
++ echo 'UPLOAD1.TGZ = httpsend darwin_0019fbf2d46b_878169ef4a7888d4ce4b1bc9f65fa841.tgz'
++ echo 'bootlog-uploadManual.sh:  HTTP Upload finished'
+bootlog-uploadManual.sh:  HTTP Upload finished
++ rm /mnt/nds/dev_6/part_0/FSN_DATA/UPLOAD1.TGZ
++ tail -1 /tmp/UPLOAD.URL
+
+# Restore TCP SYN entries
+echo $syn_retries >/proc/sys/net/ipv4/tcp_syn_retries
++ echo 5
+echo $mtu_probing >/proc/sys/net/ipv4/tcp_mtu_probing
++ echo 0
+
+echo "++++++++++++++++++++++++++++++++++++++++"
++ echo ++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++
+echo "List of files uploaded"
++ echo 'List of files uploaded'
+List of files uploaded
+echo "++++++++++++++++++++++++++++++++++++++++"
++ echo ++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++
+cp $url_comp $FSN_DATAPATH
++ cp /tmp/UPLOAD.URL /mnt/nds/dev_6/part_0/FSN_DATA
+cat $url_comp
++ cat /tmp/UPLOAD.URL
+UPLOAD.TGZ = httpsend darwin_0019fbf2d46b_91f53985231ba3d57555da3797467e04.tgz
+UPLOAD1.TGZ = httpsend darwin_0019fbf2d46b_878169ef4a7888d4ce4b1bc9f65fa841.tgz
+echo "+++++++ List finished ++++++++++++++++++"
++ echo '+++++++ List finished ++++++++++++++++++'
++++++++ List finished ++++++++++++++++++
 
 
 ={============================================================================
@@ -2190,7 +2847,7 @@ Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_0
   PLATFORM_ams_drx890="FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01"
   PLATFORM_ams_drx595="FUSIONOS_5/BLD_DARWIN_SKYDRX595_BCM97350_LNUX_01"
 
-cd /home/NDS-UK/mariyapm/R11/R11/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
+cd FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
 
 1. 
 ./build_mw_epg.sh -p "ams-drx890" --project "picasso"  --profile "Sky_Trials" --variant "debug"
@@ -11488,7 +12145,7 @@ DEMUX_EVENT_CHUNKINPUT_GET_STATUS
 !INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(CdiServerThread) L:4802 > < no-ctx >" "Request done. request=E_REQUEST_TYPE_GET_CHUNK_INPUT_EVENTS Result=MS_STATUS_OK, time=[2045:08:12 20:59:52]1844039857 
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(CDIServerEventMgrCallback) L:4962 > < no-ctx >" "IN 
 
-*chunk-input-event*
+*chunk-input-event* tpid-monitoring
 uses events from CDI sepc.
 
 #define DEMUX_EVENT_CHUNK_QUEUE_EMPTY                (0x00000020U)
@@ -11522,6 +12179,22 @@ KERN_EMERG MIL tpidmonitor_process_event:440:Raising first PTS event (481 957)
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(CDISERVER_GetChunkInputEvents) L:2076 > < no-ctx >" "IN 
 !INFO   -MSM_MS       		< T:EVENT_MGR_THREAD M:cdi_server.c F:(SendMsgToBgThread) L:12471 > < no-ctx >" "Sending message to background thread 
 !INFO   -MSM_MS       		< T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7004 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 957 
+
+
+note:
+tpid-monitoring-pair and tpid monitor uses to get first PTS. TPID monitoring
+returns the first PTS for every injected chunk
+
+!INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6663 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Adding chunk to chunk input queue. " "chunk input fd = 370, p_address = 0x2c0f4000, num bytes = 385024 " "chunk_id = 725 
+
+!INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7124 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 1 entries 
+!INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:7140 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 725, PTS (0,81878398) 
+!INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01aec520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5929 > < splicer=0x9 hMC=0x9 >" "num blocks read 1 
+!INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01aec520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5948 > < splicer=0x9 hMC=0x9 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 725, PTS (0,81878398) 
+!INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01aec520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:6038 > < splicer=0x9 hMC=0x9 >" "Saving PTS at index 24, chunkID 725 PTS [0,81878398] 
+!INFO   -MSM_MS       		< p:0x000001e2 P:MW t:0x01b06520 T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputEvents) L:7007 > < no-ctx >" "-MS_CDI_CONTROL- Last completed chunk is 725 
+
 
 <chunkinput-buffer-rotate>
 egrep -an "KEY_PRESS|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|Peep Show|Adding chunk to chunk|PTS Discontinuity|Last completed chunk|GetChunkInputEventsCallback"
@@ -13558,6 +14231,7 @@ MIL   -MSM          < T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:MSM_DEVICEMAN_Ope
 !MIL    -MCM          P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,21,mc-create-mcid=,21,mc_create-str=,mc-record,fsnfmt=,hMC=0x15 
 !MIL    -MDM          P:MW T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x1b hMC=0x15 tuner_id =1 and job_type =RECORD 
 !MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(MSM_DEVICEMAN_Open) L:466 > MSM_DEVICEMAN_Open " "hMC=0x15, mc_type=0x7000003, source_locator=0xffe18144, " "destination_locator=0x721801e Starts...  
+*shrec-name*
 !MIL    -MSM          P:MW T:MCM_ITCMAIN_THREAD M:msm_deviceman.c F:(getParamBagValue) L:4336 > MSM_DEVICEMAN_Open `for record`: " "hMC=0x15, `shrec=s69897` Starts... 
 
 <vrm-to-mc-free>
@@ -15684,7 +16358,7 @@ locator:3:14:1203:s4611|
 4 actual_start_time, 
 5 actual_end_time, 
 6 event_name, 
-7 shrec_locator, 
+7 shrec_locator,            // *shrec-name*
 8 logical_channel, 
 10 channel_name,
 11 `series_id`,               // f[10] in items.c
@@ -15951,8 +16625,9 @@ INSERT INTO "ITEM" VALUES(1056964742,'locator:2:17:FFFC9472',NULL,NULL,'1c0413ff
 AV_CONTENT_ID,    *av-content*
 INTEGER PRIMARY KEY  UNIQUE, FILE_START_POSITION VARCHAR DEFAULT '0:0',  ACTUAL_START_TIME INTEGER DEFAULT '0',  
 ACTUAL_DURATION,  
-PROGRAM_SIZE VARCHAR DEFAULT '0:0',   VFILE_LOCATOR VARCHAR NOT NULL UNIQUE ,  SHREC_LOCATOR VARCHAR , 
-`IS_VIEWED`         // *prop-is-viewed* `PCAT_CAT_PROP_IS_VIEWED` bool type
+PROGRAM_SIZE VARCHAR DEFAULT '0:0',   VFILE_LOCATOR VARCHAR NOT NULL UNIQUE ,  
+`SHREC_LOCATOR VARCHAR` , // *shrec* 
+`IS_VIEWED`                 // *prop-is-viewed* `PCAT_CAT_PROP_IS_VIEWED` bool type
 LAST_POSITION,
 HEADEND_CONTENT_SIZE VARCHAR , INDEX_IMPORT_STATUS INTEGER DEFAULT '0',  CONTENT_IMPORT_STATUS INTEGER DEFAULT '0', IMPORT_SESSION_STATUS INTEGER DEFAULT '0',  IS_LEGACY_CONTENT INTEGER DEFAULT '0', ACTUAL_END_TIME INTEGER DEFAULT '0', LOCAL_ACTUAL_START_TIME INTEGER DEFAULT '0', LOCAL_ACTUAL_END_TIME INTEGER DEFAULT '0', 	 CONTENT_DISK_UID VARCHAR  , CA_COMP_INFO VARCHAR,VFILE_LOCATOR_TYPE INTEGER DEFAULT '21',  PMT_DATA VARCHAR ,CONTENT_DRM_EXP_TIME INTEGER DEFAULT 0, COUNTER INTEGER DEFAULT 0 );
 
@@ -17272,6 +17947,9 @@ PLAYER_SM_VRM_JobStarted
   // #define PLAYER_EVENT_SESSION                        0x80100000      
   // /**< Represents all Session events notified by PLAYER */
   //
+  // >>> hex(-2130706431+2**32)
+  // '0x81000001'
+  //
   // #define PLAYER_EVENT_SESSION_START                  0x80100001      
   // /**< Notification that a Play request has started. @see #PLAYER_EVENT_Session_Start_PropId */
   
@@ -18189,7 +18867,7 @@ NDS: ^[2017:04:24 13:00:32]0946818475.826793 !ERROR  -EPG_PLAY     		< p:0x00000
 NDS: ^[2017:04:24 13:00:32]0946818475.827236 !ERROR  -EPG_PLAY     		< p:0x000001ea P:APP t:0x2e242520 T:no name M:TrickModes F:playbackSpeedChangeCallback L:260 > T:PooledExecutor#4:@TM @@: Speed change notification: Speed=1000:expected:incoming
 
 
-<player-position> <player-session-property>
+<player-get-position> <player-session-property>
 // THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-impl/src/java/com/nds/fusion/playerimpl/PlayerSessionImpl.java
     @Override public synchronized int getStreamPosition()
             throws PlayerDataUnavailableException
@@ -18215,12 +18893,9 @@ JNIEXPORT jint JNICALL Java_com_nds_fusion_playerimpl_PlayerSessionImpl_natPlaye
  These are read only values.
 */
 typedef enum  {
+    PLAYER_API_Session_PropId_Int32_StreamPosition                 = 10U, /**< The session stream position from beginning. This property can be changed via a call to #PLAYER_API_Session_SetPosition. */
     PLAYER_API_Session_PropId_Int32_StreamPositionFromEnd          = 11U, /**< The session stream position from end. This property can be changed via a call to #PLAYER_API_Session_SetPosition. */
 } PLAYER_API_Session_PropId;
-
-47046:NDS: ^[2017:07:13 08:49:00]0946685565.398279 !INFO   -P_Api        		< p:0x00000266 P:APP t:0x2c157520 T:no name M:player_api_session.c F:PLAYER_API_Session_GetInt32 L:2237 > Requested property is StreamPosition 
-47068:NDS: ^[2017:07:13 08:49:00]0946685565.404607 !INFO   -P_Api        		< p:0x00000266 P:APP t:0x2c157520 T:no name M:player_api_session.c F:PLAYER_PRV_GetStreamPosition L:2109 > f_position_value = 2797030 
-47069:NDS: ^[2017:07:13 08:49:00]0946685565.404632 !INFO   -P_Api        		< p:0x00000266 P:APP t:0x2c157520 T:no name M:player_api_session.c F:PLAYER_PRV_GetStreamPosition L:2184 > l_position = 2797030 
 
 // CMS_MEDIA_SERVICES/MSM/inc/msm_types.h
 /**
@@ -18228,11 +18903,126 @@ typedef enum  {
  */
 typedef struct MSM_POSITION_TAG
 {
-    MSM_VFILE_POSITION		 vfile_offset_msec; /*!< @brief offset in milli seconds in the vfile */
-	xint64_t			 abs_position_msec;	/*!< @brief Absolute position */
-	SYSTEMTIME_TIMEDATE	 utc;				/*!< @brief Absolute time */
-	xint64_t			 abs_bytes;			/*!< @brief Absolute position in bytes */
+  MSM_VFILE_POSITION		 vfile_offset_msec; /*!< @brief offset in milli seconds in the vfile */
+  xint64_t			 abs_position_msec;	/*!< @brief Absolute position */
+  SYSTEMTIME_TIMEDATE	 utc;				/*!< @brief Absolute time */
+  xint64_t			 abs_bytes;			/*!< @brief Absolute position in bytes */
 } MSM_POSITION;
+
+
+#define     MSM_UNIT_V_OFFSET       0x00000001U  /*!< @brief Offset from v-file in milliseconds (according to reference point) */
+#define     MSM_UNIT_ABS_POSITION   0x00000002U  /*!< @brief Absolute position in milliseconds */
+#define     MSM_UNIT_UTC            0x00000004U  /*!< @brief Absolute time in UTC */
+
+// conversion from pts to position?
+!INFO   -P_Api        		< P:APP T:no name M:player_api_session.c F:PLAYER_API_Session_GetInt32 L:2237 > Requested property is StreamPosition 
+!INFO   -MSM_MS       		< P:MW  T:MSMDispatcher M:ms_fusion.cpp F:(MS_FUSION::GetPosition) L:2028 > < no-ctx >" "-MS_GET_API- hMC=0x7 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:splicer.cpp F:(HandleSplicerRequestDoActionList) L:2911 > <  >" "xcon=7 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:splicer.cpp F:(CompleteDoActionList) L:3580 > <  >" "IN 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:item.cpp F:(DoActionList) L:4101 > < splicer=0x7 hMC=0x7 >" "-MS_GET_API_ITEM- action_list=E_ITEM_LOCAL_PB_ACT_GET_SPEED_POSITION 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:item.cpp F:(CanDoAction) L:15439 > < splicer=0x7 hMC=0x7 >" "action=E_ITEM_LOCAL_PB_ACT_GET_SPEED_POSITION 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:item.cpp F:(IsAtEdgeOfFile) L:7350 > < splicer=0x7 hMC=0x7 >" "xcon = 7, is_edge_of_file = XFALSE 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetPosition) L:781 > < splicer=0x7 hMC=0x7 >" "get position using method 2 
+!INFO   -MSM_MS       		< P:MW  T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetPts) L:8490 > < no-ctx >" "-MS_CDI_CONTROL- returning PTS [0,250212598] 
+
+// can use script to see which pts used to calc position and to do
+// interpolation.
+//
+// may see this warning
+// /* MAX_ACCEPTED_PTS_JUMP - we don't expected more than 5 seconds without PTS */
+// #define MAX_ACCEPTED_PTS_JUMP     (90000*5) /* 5 seconds */
+// !WARN   -MSM_MS       		< P:MW T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6174 > < splicer=0x7 hMC=0x7 >" "Warning: received PTS [0,250727398] jumps 7 secs diff from " "previous one (pts=[0,250028998],chunk_id=7518, index=17).  
+//
+// from ms ppt:
+// On request to calculate the display position:
+// MS gets the displayed PTS from the video decoder
+// MS uses the PTS-packet offset mapping to interpolate the packet number matching the displayed PTS
+// MS uses MDI to convert the packet offset to time offset
+//
+// from the investigation, Tim say:
+//
+// While I agree that the PTS->packetNum interpolation would be somewhat worse
+// in the middle of chunk 17, that error will have reduced as the end of the
+// chunk is reached, and the problem is MSM’s assumption that PCRPTS, i.e.
+// the next stage in the mapping, where the main error is introduced.
+// 
+// The following graphs compare the position errors with the PTS-PCR delta.
+// Note that they will not be the same, because MSM samples the PTS/packet
+// numbers every 2048 packets and interpolates between them, so the errors are
+// somewhat less noisy than the PTS-PCR delta. Note that this is not the only
+// possible source of errors  variable-length open GOPs can also create large
+// errors, but that does not seem relevant in this case.
+//
+// Looking through the MW log, I don’t see anything that indicates a MW bug.
+// E.g. the correct chunks are being selected for the
+// PTS->packetNum->playbackPosition mappings. The problem is because XTVe
+// indexes with PCR for compatibility with RASP, which uses PCR because PTS
+// could be in encrypted packets in linear.
+//
+// In this case, the video encoder has illegal PTS-PCR differences, but a
+// high-but-legal difference would also be problematic.
+//
+// (So if there are huge ptc-pcr differnece in the strem input, decoder will
+// hold up pts longer which returns same pts to MS for longer time. This has
+// an effect which looks time go slow. So position go slow.)
+
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CalcUserPosByPtsAndNotifyItem) L:10245 > < splicer=0x7 hMC=0x7 >" "Using PTS [0,250212598] to calc position, Audio only=XFALSE 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(FindChunksForPTSInterpolation) L:11086 > < splicer=0x7 hMC=0x7 >" "returning entries 17 (PTS [0,250028998]), 18 (PTS [0,250727398]) 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetPacketAndTimeFromHistory_ByPts) L:10563 > < splicer=0x7 hMC=0x7 >" "Interpolate/extrapolating packet num and time 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(GetPacketAndTimeFromHistory_ByPts) L:10637 > < splicer=0x7 hMC=0x7 >" "pts is (0,250212598), time stamp ([2055:08:12 13:50:34]2147483647,4294967295), packet num (0,12132890) 
+
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CalcUserPosByPtsAndNotifyItem) L:10269 > < splicer=0x7 hMC=0x7 >" "USER POSITION using ***PTS***: " "has_advanced XTRUE, packet_number [0,12132890], " "packet_time [[2055:08:12 13:50:34]2147483647,4294967295] 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:transition_controller.cpp F:(FilterGetPositionCallbackHandler) L:5009 > < splicer=0x7 hMC=0x7 >" "xcon = 7, has_advanced = XTRUE, get ms_status = MS_STATUS_OK  
+!WARN   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:transition_controller.cpp F:(ResolveUserTimeByPacketWithDelta) L:4276 > < splicer=0x7 hMC=0x7 >" "call packet 2 time conversion for packet=(0, 12132890) with delta=(0, 0)ms 
+!INFO   -MSM_MS       		< P:MW  T:MDI_WT_THREAD M:mdi_server.c F:(HandleClientRequest) L:3029 > < no-ctx >" "ConvertPacketToTime - reduced one from packet " "num, as MDI count from 0. new pkt num=[0,12132889] 
+!INFO   -MSM_MS       		< P:MW  T:MDI_WT_THREAD M:mdi_server.c F:(HandleClientRequest) L:3062 > < no-ctx >" "called MetaConvertPacket[ToTime](context=[2055:08:12 13:51:00]2147483673," " packetNum=(0, 12132889)) -> 0, newTime=(0, 2777048)," " packet=(0, 12132889)) 
+!INFO   -MSM_MS       		< P:MW  T:MDI_WT_THREAD M:mdi_server.c F:(HandleClientRequest) L:3078 > < no-ctx >" "ConvertPacketToTime - added back one to packet num." " given pkt num=[0,12132890]. new pkt num=[0,12132890]. " "time=(0, 12132890) 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:item.cpp F:(CompleteDoingActionList) L:5602 > < splicer=0x7 hMC=0x7 >" "-MS_GET_API_ITEM- Action list done successfully " "action_list=E_ITEM_LOCAL_PB_ACT_GET_SPEED_POSITION 
+!INFO   -MSM_MS       		< P:MW  T:EVENT_MGR_THREAD M:splicer.cpp F:(RequestHandlerFsm_HandleRequestCompletedEvent) L:2188 > <  >" "-MS_SPLICE- m_req_handler_fsm_state E_SPLICER_REQ_HANDLER_FSM_ST_HANDLING_REQ 
+!INFO   -MSM_MS       		< P:MW  T:CLIENT_NFY_THREAD M:ms_fusion.cpp F:(FusionAPIFrontEndCallback) L:15816 > < no-ctx >" "-MS_GET_API- hMC=0x7 Nfy position nfy_reason=2 status=92295168 pos_in_milli=(0,2777048) 
+!INFO   -P_Api        		< P:APP T:no name M:player_api_session.c F:PLAYER_PRV_GetStreamPosition L:2109 > f_position_value = 2777048 
+!INFO   -P_Api        		< P:APP T:no name M:player_api_session.c F:PLAYER_PRV_GetStreamPosition L:2184 > l_position = 2777048 
+
+
+<to-check-pts-from-driver>
+// push a chunk and get pts from tpid monitor
+!INFO   -MSM_MS       		< P:MW T:CDI_WT_THREAD M:cdi_server.c F:(HandleAddChunkToChunkInput) L:6411 > < no-ctx >" "-MS_CDI_CONTROL- 
+  Adding chunk to chunk input queue. " "chunk input fd = 418, p_address = 0x2c6d2000, num bytes = 192512 " "chunk_id = 7519 
+!INFO   -MSM_MS       		< P:MW T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:6868 > < no-ctx >" "-MS_CDI_CONTROL- TPIDMONITOR_READ array length 8, " "returned 1 entries 
+!INFO   -MSM_MS       		< P:MW T:CDI_WT_THREAD M:cdi_server.c F:(HandleGetChunkInputTPIDMonitorData) L:6884 > < no-ctx >" "-MS_CDI_CONTROL- FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 7519, `PTS (0,250727398)` 
+
+// maps chunk id to list id
+!INFO   -MSM_MS       		< P:MW T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5927 > < splicer=0x7 hMC=0x7 >" "num blocks read 1 
+!INFO   -MSM_MS       		< P:MW T:EVENT_MGR_THREAD M:display_chunk.cpp F:(HandleChunkInputTPIDMonitorData) L:5946 > < splicer=0x7 hMC=0x7 >" "FIRST_PTS=true, DISCONTINUITY=false pid 481, chunklist ID 7519, PTS (0,250727398) 
+!INFO   -MSM_MS       		< P:MW T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6125 > < splicer=0x7 hMC=0x7 >" "found prev_pts (pts=[0,250028998],chunk_id=7518, index=17). 
+!INFO   -MSM_MS       		< P:MW T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6136 > < splicer=0x7 hMC=0x7 >" "found prev_prev_pts (pts=[0,249978598],chunk_id=7517, index=16). 
+
+
+// DARWIN_PLATFORM/DARWIN_PLAYER/src/player_api_session.c
+
+SYSTEM_STATUS PLAYER_API_Session_GetInt32()
+
+        case PLAYER_API_Session_PropId_Int32_StreamPosition:
+            PLAYER_DIAG_LOG_INFO(("Requested property is StreamPosition"));
+
+                if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_GetStreamPosition(&l_sc_data->active_job, MSM_REF_POINT_VSTART, MSM_UNIT_V_OFFSET, &l_position)))
+                {
+                    PLAYER_DIAG_LOG_ERROR(("Failed to retrieve PLAYER_API_Session_PropId_Int32_StreamPosition"));
+                }
+                else
+                {
+                    if (l_position.position_value.position < 0)
+                    {
+                        l_status = PLAYER_API_STATUS_FAILURE;
+                    }
+                    else
+                    {
+                        PLAYER_DIAG_LOG_WARN(("KT: StreamPosition: %d", l_position.position_value.position ));
+                        *int32Value = l_position.position_value.position;
+                        l_status = PLAYER_API_STATUS_OK;
+                    }
+                }
+            break;
 
 
 <plyaer-subtitle>
@@ -24192,6 +24982,25 @@ int pc_pfflush(LPARTITION *plpart)
 
 
 ={============================================================================
+|kt_dev_si_0001| comp-xtvfs-tool
+
+Usage: xtvfs_copy <option> <source> <target>
+
+       <option> :
+                  0 - XTVFS to XTVFS.
+                  1 - XTVFS to other.
+                  2 - other to XTVFS.
+                  3 - other to other.
+
+Usage example: /NDS/xtvfs_copy 1 /XTV/RASP/EXPECTED/2_1_5/STREAM.STR /mnt/nfs/Expected/2_1_5/stream.str
+
+note: must set destination file name. only for stream files since can use cp
+for normal text files.
+
+-sh-3.2# /mnt/tmp/si_logs/xtvfs_copyb 1 /mnt/nds/dev_6/part_0/S2069/STREAM.STR /mnt/tmp/x.str
+
+
+={============================================================================
 |kt_dev_si_0001| comp-nvram
 
 -sh-3.2# mount
@@ -24939,6 +25748,18 @@ build/applications/Picasso/picasso/Picasso/src/java/picasso/utils/listings/suppo
 
 
 ={============================================================================
+|kt_dev_si_0001| comp-pdl-hld
+
+CTM obtains the different objects within the NFF file using the Byte Range
+operation (see RFC2616, section 14.35). CTM knows the offsets of the objects
+from the NFF Table of Contents (TOC), which is contained in the first 188
+bytes of the NFF file.
+
+// for analysis
+https://cisco.app.box.com/v/overviewer
+
+
+={============================================================================
 |kt_dev_si_0001| comp-dpl comp-pdl
 
 http://hetty.cisco.com/fusionmadesimple/index.php/BSkyB_DPL
@@ -25264,7 +26085,8 @@ egrep -an "KEY_PRESS|MessageThread|DplPlayIsTrickModeRestriction|GenerateWorklis
 41478:NDS: ^[2017:02:17 08:52:53]0946685186.159289 !MIL    -MSM          		< p:0x000001b7 P:MW t:0x01d1a520 T:MSMDispatcher M:msm_sp.c F:(raiseSpeedNotification) L:2701 > raiseSpeedNotification " "hMC=0x5, nfy_reason=0x1, status=0x5805000, speed=1000,  
 43583:NDS: ^[2017:02:17 08:52:54]0946685187.147877 !MIL    -VRM_SERVER   		< p:0x000001b7 P:MW t:0x02153520 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
 55411:NDS: ^[2017:02:17 08:53:24]0946685217.405802 !MIL    -VRM_SERVER   		< p:0x000001b7 P:MW t:0x02153520 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
-55951:NDS: ^[2017:02:17 08:53:26]0946685219.415496 !MIL    -AMS          		< p:0x000001b7 P:MW t:0x02134520 T:UAM_HP_THREAD M:RTRDataClient.cpp F:RTRDataClient::UploadData L:228 > Post the report to server /ADMReportingServerProxy?securityscheme=DRM_SCHEME&auth_server=http://admrs.sky.com:80/ADMReportingServerProxy, buffNum=0, buffer size=642,isLastSent=1 
+55951:NDS: ^[2017:02:17 08:53:26]0946685219.415496 !MIL    -AMS          		< p:0x000001b7 P:MW t:0x02134520 T:UAM_HP_THREAD M:RTRDataClient.cpp F:RTRDataClient::UploadData L:228 > 
+  Post the report to server /ADMReportingServerProxy?securityscheme=DRM_SCHEME&auth_server=http://admrs.sky.com:80/ADMReportingServerProxy, buffNum=0, buffer size=642,isLastSent=1 
 63561:NDS: ^[2017:02:17 08:53:31]0946685224.447112 !MIL    -VRM_SERVER   		< p:0x000001b7 P:MW t:0x02153520 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
 74521:NDS: ^[2017:02:17 08:54:01]0946685254.977601 !MIL    -VRM_SERVER   		< p:0x000001b7 P:MW t:0x02153520 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
 75158:NDS: ^[2017:02:17 08:54:03]0946685256.988519 !MIL    -AMS          		< p:0x000001b7 P:MW t:0x02134520 T:UAM_HP_THREAD M:RTRDataClient.cpp F:RTRDataClient::UploadData L:228 > Post the report to server /ADMReportingServerProxy?securityscheme=DRM_SCHEME&auth_server=http://admrs.sky.com:80/ADMReportingServerProxy, buffNum=0, buffer size=640,isLastSent=1 
