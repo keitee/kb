@@ -167,8 +167,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_022* inheri-access-specifier
 *kt_dev_cpp_022* inheri-rtti
 *kt_dev_cpp_023* inheri-polymorphism
-|kt_dev_cpp_023| inheri-override
-*kt_dev_cpp_023* inheri-override-hide-name
+|kt_dev_cpp_023| cxx-inheri-override
 *kt_dev_cpp_023* inheri-private-or-public
 *kt_dev_cpp_023* inheri-public
 *kt_dev_cpp_023* class-template-pattern
@@ -182,7 +181,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_024| abstract base class {refactoring}
 |kt_dev_cpp_025| random
 |kt_dev_cpp_026| enum
-|kt_dev_cpp_028| namespace {case-example} {unnamed-namespace}
+|kt_dev_cpp_028| cxx-namespace {case-example} {unnamed-namespace}
 |kt_dev_cpp_029| type-member nested-class
 
 *kt_dev_cpp_050* template-function
@@ -13348,7 +13347,7 @@ Also known as overload resolution or deduce. The name has 'scope' and object has
 'lifetime'. Three possible outcomes: best match, no match, and ambiguous call.
 
 
-#01: <name-lookup>
+#01: <cxx-name-lookup>
 
 For `name-lookup` inside a namespace, look in members in case class, and if not
 found, continue looking in enclosing scope; which is a open scope having a name
@@ -20668,11 +20667,11 @@ How? overloading and overiding
 
 
 ={============================================================================
-*kt_dev_cpp_023* inheri-override
+*kt_dev_cpp_023* cxx-inheri-override
 
-{override-condition}
-To override, 'name' and 'args' type should be the 'same' but 'return' type is an
-exception to this when that is a pointer or reference.
+{problem-when-override-do-not-work}
+believe that made an override and expect that derived version gets called. no
+compile error and why? Two things:
 
 #include <iostream>
 
@@ -20685,13 +20684,90 @@ class Base {
 
 class D1 : public Base {
   public:
-    // bool fcn() { cout << "d1: fcn" << endl; }
-    int fcn(int) { cout << "d1: fcn(int) " << endl; }
+    int fcn(int) { cout << "d1  : fcn(int) " << endl; }
+};
+
+int main()
+{
+  D1 d1obj;
+  Base* bp = &d1obj;
+  bp->fcn();
+}
+
+base: fcn
+
+* No override happens since it do not meet *override-condition* Hence no vtable
+  update and base version called.
+
+
+int main()
+{
+  D1 d1obj;
+  D1* dp1 = &d1obj;
+  dp1->fcn();           // hide
+}
+
+compile error:
+sam01.cpp:32:12: error: no matching function for call to ‘D1::fcn()’
+sam01.cpp:32:12: note: candidate is:
+sam01.cpp:13:9: note: int D1::fcn(int)
+sam01.cpp:13:9: note:   candidate expects 1 argument, 0 provided
+
+* Effectively defines a new function in the derived, inner scope, and hide the
+  name in the base in *cxx-name-lookup* As EC++33 said, since not use some
+  overloads in the derived class due to hide, it also break "is-a"
+  relationship.
+
+
+{override-condition}
+To override, 'name' and 'args' type should be the 'same' but 'return' type is
+an exception to this when that is a pointer or reference.
+
+#include <iostream>
+
+using namespace std;
+
+class Base {
+  public:
+    virtual int fcn() { cout << "base: fcn" << endl; }
+};
+
+class D1 : public Base {
+  public:
+    bool fcn() { cout << "d1: fcn" << endl; }
 };
 
 class D2 : public D1 {
   public:
     int fcn() { cout << "d2: fcn" << endl; }
+};
+
+:13:10: error: conflicting return type specified for ‘virtual bool D1::fcn()’
+:7:17: error:   overriding ‘virtual int Base::fcn()’
+:18:9: error: conflicting return type specified for ‘virtual int D2::fcn()’
+:13:10: error:   overriding ‘virtual bool D1::fcn()’
+
+note: However, tried pointer return type, no errors so return type in
+overrides can be different only that is pointer. See p606 in ref-CPR.
+
+
+#include <iostream>
+
+using namespace std;
+
+class Base {
+  public:
+    virtual int fcn() { cout << "base: fcn" << endl; }
+};
+
+class D1 : public Base {
+  public:
+    int fcn(int) { cout << "d1  : fcn(int) " << endl; }
+};
+
+class D2 : public D1 {
+  public:
+    int fcn() { cout << "d2  : fcn" << endl; }
 };
 
 int main()
@@ -20700,63 +20776,61 @@ int main()
 
   Base *bp1 = &bobj, *bp2 = &d1obj, *bp3 = &d2obj;
 
-  bp1->fcn();
-  bp2->fcn();
-  bp3->fcn();
+  bp1->fcn();           // base
+  bp2->fcn();           // d1, no override
+  bp3->fcn();           // d2, override
 
   D1* dp1 = &d1obj;
-  dp1->fcn();           // hide
-  dp1->Base::fcn();     // can call explicitly
+  dp1->Base::fcn();     // call explicitly
   dp1->fcn(1);
 }
 
 base: fcn
 base: fcn
-d2: fcn
-
+d2  : fcn
 base: fcn
-d1: fcn(int) 
-
-<return-type-in-override> 
-when return type is different, errors
-
-:13:10: error: conflicting return type specified for ‘virtual bool D1::fcn()’
-:7:17: error:   overriding ‘virtual int Base::fcn()’
-:18:9: error: conflicting return type specified for ‘virtual int D2::fcn()’
-:13:10: error:   overriding ‘virtual bool D1::fcn()’
-
-note: However, tried pointer return type, no errors so return type in overrides
-can be different only that is pointer. See p606 in ref-CPR.
+d1  : fcn(int)
 
 
-{override-keyword}
-As for <2> case, this hide a name in the derived and derived version is not
-called as expected. It's surprisingly hard to find because there is no compile
-error. To avoid this, use override keyword from C++11 and cause compile error
-when it's not overrided:
+{override-keyword} {final-keyword}
+*problem-when-override-do-not-work* is surprisingly hard(really?) to find
+because there is no compile error. To avoid this, use override keyword from
+C++11 and cause compile error when it's not overrided:
 
-class B {
-  void f1(int) const final;
-  virtual void f2();
-  void f3();
+using namespace std;
+
+class Base {
+  public:
+    virtual int fcn() { cout << "base: fcn" << endl; }
 };
 
-class D : public B {
-  void f1(int) const;      // error
-  void f2() override;
-  void f3() override;      // error
+class D1 : public Base {
+  public:
+    int fcn(int) override { cout << "d1  : fcn(int) " << endl; }
 };
 
-# VC error for f3 case:
-error C3668: 'Derived::sample' : method with override specifier 'override' did
-not override any base class methods
+class D2 : public D1 {
+  public:
+    int fcn() { cout << "d2  : fcn" << endl; }
+};
+
+int main()
+{
+  D1 d1obj;
+  Base* bp = &d1obj;
+  bp->fcn();
+}
+
+:12:9: error: ‘int D1::fcn(int)’ marked override, but does not override
+     int fcn(int) override { cout << "d1  : fcn(int) " << endl; }
+         ^
 
 The final-keyword is used to end override as with final-keyword in inheritance.
 
 
 {default-arg-in-virtual}
-The default arg in 'virtual' func will 'always' be used base's one even when the
-drived version is run because default arg is 'statically' bound. So the
+The default arg in 'virtual' func will 'always' be used base's one even when
+the drived version is run because default arg is 'statically' bound. So the
 recommendation is that should use the same argument values in the base and
 derived. See {default-arg}
 
@@ -20776,113 +20850,9 @@ class Rectangle : public Shape {
 };
 
 
-={============================================================================
-*kt_dev_cpp_023* inheri-override-hide-name
+{further-references}
 
-<name-hide-in-override>
-When argument is different, two things happens:
-
-* Used virtual but no override due to different argument. No vtable update and
-  hence base version.
-
-* Effectively defines a new function in the derived, inner scope, and 'hide' the
-  name in the base. To resolve a call use dp1->fcn() or using declaration.
-  Compiler look for name fcn in D1 since uses static type and found fcn and
-  stops the search. However, this name expects int argument so
-
-compile error:
-
-sam01.cpp:32:12: error: no matching function for call to ‘D1::fcn()’
-sam01.cpp:32:12: note: candidate is:
-sam01.cpp:13:9: note: int D1::fcn(int)
-sam01.cpp:13:9: note:   candidate expects 1 argument, 0 provided
-
-Effectively, D1 has two functions named fcn and can call fcn() explicitly.
-Hiding name affects name lookup. This is why name and arguments 'must' be the
-same to override.
-
-
-<more>
-EC++33. As with {scope-in-inheritance}, names in the derived can hide names in
-the base. The other problem is that when base has overloads, derived must
-inherited all of them to have "is-a" relationship. However, if derived redefine
-or override only some of them then you would be hiding.
-
-class Base {
-  public:
-    virtual void mf1() = 0;
-    virtual void mf1(int);
-
-    virtual void mf2();
-    void mf3();
-    void mf3(double);
-};
-
-class Derived : public Base {
-  public:
-    virtual void mf1();
-    void mf3();
-    void mf4();
-};
-
-Derived d;
-
-d.mf1();
-d.mf1(x);      // error
-d.mf3();
-d.mf3(x);      // error
-
-To solve this, use using declaration to make all visible or inherit all.
-
-class Base {
-  public:
-    virtual void mf1() = 0;
-    virtual void mf1(int);
-
-    virtual void mf2();
-    void mf3();
-    void mf3(double);
-};
-
-class Derived : public Base {
-  public:
-    using Base::mf1;
-    using Base::mf3;
-
-    virtual void mf1();
-    void mf3();
-    void mf4();
-};
-
-Derived d;
-
-d.mf1();
-d.mf1(x);      // okay
-d.mf3();
-d.mf3(x);      // okay
-
-note: Used using declaration in public since it is public inheritance.
-
-On the other hand, want to inherit only some of them then use private
-inheritance and 'forwarding' function. Effectively, the below only inherits
-mf1() version from the base.
-
-class Base {
-  public:
-    virtual void mf1() = 0;
-    virtual void mf1(int);
-};
-
-class Derived : private Base {
-  public:
-    virtual void mf1() { Base::mf1(); }
-};
-
-Derived d;
-
-d.mf1();
-d.mf1(x);      // okay
-
+EC++33. do not find any useful or practical.
 
 EC++36. If you redefine non-virtual, as you seen, it hides names. The other
 problem is to exhibit 'inconsistent' behavior depending on type of pointer used.
@@ -22927,7 +22897,7 @@ newf(uc);         // newf(unsigned char);
 
 
 ={============================================================================
-*kt_dev_cpp_028* namespace
+*kt_dev_cpp_028* cxx-namespace
 
 {case-example}
 03/07/2014. At samsung. 
