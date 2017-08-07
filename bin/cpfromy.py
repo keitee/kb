@@ -21,5 +21,5 @@ if __name__ == "__main__":
     # add last 4 chars to the log filename
     splited = filename.split("_")
     newlogfile = logfile + "_" + splited[2][-4:]
-    sys.stdout.write("mv %s %s...\n" % (logfile, newlogfile))
+    sys.stdout.write("mv %s %s\n" % (logfile, newlogfile))
     subprocess.call(["mv", logfile, newlogfile])
