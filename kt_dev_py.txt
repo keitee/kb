@@ -37,7 +37,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-function-scope
 |kt_dev_py_0001| py-function-arguments
 |kt_dev_py_0001| py-class
-|kt_dev_py_0001| py-class-advanced
+|kt_dev_py_0001| py-class-static py-decorator
 |kt_dev_py_0001| py-exception
 
 |kt_dev_py_0001| py-sys
@@ -60,6 +60,12 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-xml
 |kt_dev_py_0001| py-logging
 |kt_dev_py_0001| py-error-encoding
+
+|kt_dev_py_0001| py-flask-doc
+|kt_dev_py_0001| py-flask-apache
+|kt_dev_py_0001| py-flask
+|kt_dev_py_0001| py-flask-template
+|kt_dev_py_0001| py-flask-form
 
 
 ={============================================================================
@@ -4827,53 +4833,210 @@ try to call a missing method.
 
 
 ={============================================================================
-|kt_dev_py_0001| py-class-advanced
+|kt_dev_py_0001| py-class-static py-decorator
 
 Learning Python 5E, 32, Advanced Class Topics
 
-Static and Class Methods
+Static Methods in 2.X and 3.X
 
-Python supports such goals with the notion of static methodssimple functions
-with no self argument that are nested in a class and are designed to work on
-class attributes instead of instance attributes.
+The concept of static methods is the same in both Python 2.X and 3.X, but its
+implementation requirements have evolved somewhat in Python 3.X.
 
-To enable these method modes, you must call special built-in functions named
-staticmethod and classmethod within the class, or invoke them with the special
-@name decoration syntax we’ll meet later in this chapter.
+// means there are differences in coding to use static methods and skip the
+// details.
+
+However, to allow self-less methods to be called through classes in 2.X and
+through instances in both 2.X and 3.X, you need to either adopt other designs
+or be able to somehow mark such methods as special. Let’s look at both options
+in turn.
+
+// so use staticmethod() and classmethod() to make code work for both version
+// lines.
+
+Both mark a function object as specialthat is, as requiring no instance if
+static and requiring a class argument if a class method.
+
+# File bothmethods.py
+
+class Methods:
+
+  def imeth(self, x):     # Normal instance method: passed a self
+    print([self, x])
+
+  def smeth(x):           # Static: no instance passed
+    print([x])
+
+  def cmeth(cls, x):      # Class: gets class, not instance
+    print([cls, x])
+
+  smeth = staticmethod(smeth)   # Make smeth a static method
+  cmeth = classmethod(cmeth)    # Make cmeth a class method
+
+this assignment form simply `rebind` the method names. 
+
+>>> from bothmethods import Methods # Normal instance methods
+>>> obj = Methods()                 # Callable through instance or class
+
+>>> obj.imeth(1)
+[<bothmethods.Methods object at 0x0000000002A15710>, 1]
+>>> Methods.imeth(obj, 2)
+[<bothmethods.Methods object at 0x0000000002A15710>, 2]
 
 
-<staticmethod>
-https://docs.python.org/2/library/functions.html#staticmethod
+>>> Methods.smeth(3)    # Static method: call through class
+[3]                     # No instance passed or expected
+>>> obj.smeth(4)        # Static method: call through instance
+[4]                     # Instance not passed
 
-staticmethod(function)
+>>> Methods.cmeth(5)                # Class method: call through class
+[<class 'bothmethods.Methods'>, 5]  # Becomes cmeth(Methods, 5)
+>>> obj.cmeth(6)                    # Class method: call through instance
+[<class 'bothmethods.Methods'>, 6]  # Becomes cmeth(Methods, 6)
 
-    Return a static method for function.
 
-    A static method does not receive an `implicit first argument` 
-    
-    To declare a static method, use this idiom:
+<ex-staticmethod>
+// note: see how to use class attribute
 
-    class C(object):
-        @staticmethod
-        def f(arg1, arg2, ...):
-            ...
+class Spam:
+  numInstances = 0 # Use static method for class data
 
-    The @staticmethod form is a `function decorator` see the description of
-      function definitions in Function definitions for details.
+  def __init__(self):
+    Spam.numInstances += 1
 
-    It can be called either on the class (such as C.f()) or on an instance
-    (such as C().f()). The instance is ignored except for its class.
+  def printNumInstances():
+    print("Number of instances: %s" % Spam.numInstances)
 
-    Static methods in Python are similar to those found in Java or C++. Also
-    see classmethod() for a variant that is useful for creating alternate
-    class constructors.
+  printNumInstances = staticmethod(printNumInstances)
 
-    For more information on static methods, consult the documentation on the
-    standard type hierarchy in The standard type hierarchy.
+>>> from spam_static import Spam
+>>> a = Spam()
+>>> b = Spam()
+>>> c = Spam()
 
-    New in version 2.2.
+>>> Spam.printNumInstances() # Call as simple function
+Number of instances: 3
 
-    Changed in version 2.4: Function decorator syntax added.
+>>> a.printNumInstances() # Instance argument not passed
+Number of instances: 3
+
+advantages over using simple global function:
+
+  * it also localizes the function name in the class scope (so it won’t clash
+    with other names in the module)
+
+  * moves the function code closer to where it is used (inside the class
+    statement) 
+
+  * allows subclasses to customize the static method with inheritance
+
+// note: overriding static method is possible in C++?
+
+class Sub(Spam):
+
+  def printNumInstances():    # Override a static method
+    print("Extra stuff...")   # But call back to original
+    Spam.printNumInstances()
+
+  printNumInstances = staticmethod(printNumInstances)
+
+
+<ex-classmethod>
+Rather than hardcoding the class name, the class method uses the automatically
+passed class object generically:
+
+// skip 
+
+# https://docs.python.org/2/library/functions.html#staticmethod
+# 
+# staticmethod(function)
+# 
+#     Return a static method for function.
+# 
+#     A static method does not receive an `implicit first argument` 
+#     
+#     To declare a static method, use this idiom:
+# 
+#     class C(object):
+#         @staticmethod
+#         def f(arg1, arg2, ...):
+#             ...
+# 
+#     The @staticmethod form is a `function decorator` see the description of
+#       function definitions in Function definitions for details.
+# 
+#     It can be called either on the class (such as C.f()) or on an instance
+#     (such as C().f()). The instance is ignored except for its class.
+# 
+#     Static methods in Python are similar to those found in Java or C++. Also
+#     see classmethod() for a variant that is useful for creating alternate
+#     class constructors.
+# 
+#     For more information on static methods, consult the documentation on the
+#     standard type hierarchy in The standard type hierarchy.
+# 
+#     New in version 2.2.
+# 
+#     Changed in version 2.4: Function decorator syntax added.
+
+
+<py-decorator>
+Python decorators addressed this specific need and provided a general tool for
+adding `logic` that manages both functions and classes, or later `calls` to them.
+
+`Function decorators` turn out to be very general tools: they are useful for
+adding many types of logic to functions besides the static and class method
+use cases. For instance, they may be used to augment functions with code that
+logs calls made to them, checks the types of passed arguments during
+debugging, and so on. Function decorators can be used to manage either
+functions themselves or later calls to them.
+
+  * Function decorators - the initial entry in this set, added in Python 2.4 -
+    augment function definitions. They specify special operation modes for
+    both simple functions and classes’ methods by `wrapping` them in an extra
+    layer of logic implemented as another function, usually called a
+    metafunction.
+
+built-in decorator or user-defined function decorators.
+
+# like callables in C++
+
+class C:
+  @staticmethod # Function decoration syntax
+  def meth():
+  ...
+
+Internally, this syntax has the same effect as the followingpassing the
+  function through the decorator and assigning the result back to the original
+  name:
+
+class C:
+  def meth():
+  ...
+  meth = staticmethod(meth) # Name rebinding equivalent
+
+
+class Spam:
+  numInstances = 0 # Use static method for class data
+
+  def __init__(self):
+    Spam.numInstances += 1
+
+  def printNumInstances():
+    print("Number of instances: %s" % Spam.numInstances)
+
+  printNumInstances = staticmethod(printNumInstances)
+
+to:
+
+class Spam:
+  numInstances = 0 # Use static method for class data
+
+  def __init__(self):
+    Spam.numInstances += 1
+
+  @staticmethod
+  def printNumInstances():
+    print("Number of instances: %s" % Spam.numInstances)
 
 
 ={============================================================================
@@ -6713,6 +6876,551 @@ encoding to latin1.
 
 The new python syntax introduced in the above link works as said or can use
 encoding.
+
+
+={============================================================================
+|kt_dev_py_0001| py-flask-doc
+
+http://flask-docs-kr.readthedocs.io/ko/latest/index.html
+http://flask.pocoo.org/docs/0.12/
+https://www.fullstackpython.com/flask.html
+
+
+={============================================================================
+|kt_dev_py_0001| py-flask-apache
+
+https://code.google.com/archive/p/modwsgi/
+
+What Is mod_wsgi?
+
+The aim of mod_wsgi is to implement a simple to use Apache module which can
+host any Python application which supports the Python WSGI interface. The
+module would be suitable for use in hosting high performance production web
+sites, as well as your average self managed personal sites running on web
+hosting services.
+
+http://wsgi.readthedocs.io/en/latest/what.html
+What is WSGI?
+
+WSGI is the Web Server Gateway Interface. It is a specification that describes
+how a web server communicates with web applications, and how web applications
+can be chained together to process one request.
+
+WSGI is a Python standard described in detail in PEP 3333.
+
+For more, see Learn about WSGI.
+
+
+
+Configuring apache to use with Flask[edit]
+
+This procedure is described in the following page: mod_wsgi(Apache).
+
+# http://flask.pocoo.org/docs/0.11/deploying/mod_wsgi/
+# 
+# mod_wsgi (Apache)
+# 
+# If you are using the Apache webserver, consider using mod_wsgi.
+# 
+# Watch Out
+# 
+# Please make sure in advance that any app.run() calls you might have in your
+# application file are inside an if __name__ == '__main__': block or moved to a
+# separate file. Just make sure it’s not called because this will always start a
+# local WSGI server which we do not want if we deploy that application to
+# mod_wsgi.
+
+After we have installed apache2 we also need to install mod_wsgi:
+
+apt-get install libapache2-mod-wsgi
+
+Create a wsgi file. If we wanted to install our application in
+/var/www/html/manatee the file will look something like (file saved in
+    repository):
+
+/ETHAN_SI_SCRIPTS/manatee/manatee.wsgi
+
+import sys
+sys.path.insert(0, '/var/www/html/ESS/manatee')
+
+print sys.path
+
+from manatee import app as application
+
+
+Create an Apache configuration file. I added one sample in the repository at
+manatee/conf/manatee.conf.
+
+/ETHAN_SI_SCRIPTS/manatee/conf/manatee.conf
+
+$ more manatee.conf
+<VirtualHost *:80>
+
+    LoadModule wsgi_module /usr/lib/apache2/modules/mod_wsgi.so
+
+#ServerName manatee.com
+
+    DocumentRoot /var/www/html/
+    WSGIDaemonProcess manatee user=www-data group=www-data threads=5
+    WSGIScriptAlias / /var/www/html/manatee/manatee.wsgi
+    Alias /static /var/www/html/manatee/static
+
+    <Directory /var/www/html/manatee>
+        WSGIProcessGroup manatee
+        WSGIApplicationGroup %{GLOBAL}
+        # Allow bigger files to upload
+        LimitRequestBody 41943040
+        Order deny,allow
+        Allow from all
+    </Directory>
+</VirtualHost>
+
+Copy the configuration file to /etc/apache2/sites-available. Then go to
+/etc/apache2/sites-enables and replace the configuration:
+
+ ln -s ../sites-available/manatee.conf
+ rm 000-default.conf
+
+
+/etc/apache2/sites-enabled$ ls -al
+lrwxrwxrwx 1 root root   31 Aug  9 09:57 manatee.conf -> ../sites-available/manatee.conf
+
+Finally restart the apache server:
+
+service apache2 restart
+
+
+kyoupark@kit-debian64:~/si/ETHAN_SI_SCRIPTS$ WORKSPACE=/home/kyoupark/si/ETHAN_SI_SCRIPTS/WS python manatee/manatee.py
+ * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
+
+
+={============================================================================
+|kt_dev_py_0001| py-flask
+
+Part I: Hello, World!
+https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-i-hello-world
+
+<create-virtualenv>
+create a virtual environment where everything gets installed so that your main
+Python installation is not affected. As an added benefit, you won't need root
+access to do the installation in this way.
+
+https://pypi.python.org/pypi/virtualenv
+
+sudo pip install virtualenv
+
+the command that creates a virtual environment is the following:
+
+$ virtualenv flask
+
+# kyoupark@kit-debian64:~$ virtualenv flask
+# New python executable in /home/kyoupark/flask/bin/python
+# Installing setuptools, pip, wheel...done.
+
+Virtual environments can be activated and deactivated, if desired. An
+activated environment adds the location of its bin folder to the system path,
+so that for example, when you type python you get the environment's version
+  and not the system's one. But activating a virtual environment is not
+  necessary, `it is equally effective to invoke the interpreter by` specifying
+  its pathname.
+
+install flask and extensions by entering the following commands, one after
+another:
+
+flask/bin/pip install flask
+flask/bin/pip install flask-login
+flask/bin/pip install flask-openid
+flask/bin/pip install flask-mail
+flask/bin/pip install flask-sqlalchemy
+flask/bin/pip install sqlalchemy-migrate
+flask/bin/pip install flask-whooshalchemy
+flask/bin/pip install flask-wtf
+flask/bin/pip install flask-babel
+flask/bin/pip install guess_language
+flask/bin/pip install flipflop
+flask/bin/pip install coverage
+
+
+"Hello, World" in Flask
+
+You now have a flask sub-folder inside your microblog folder that is populated
+with a Python interpreter and the Flask framework and extensions that we will
+use for this application. Now it's time to write our first web application!
+
+After you cd to the microblog folder, let's create the basic folder structure
+for our application:
+
+mkdir app
+mkdir app/static
+mkdir app/templates
+mkdir tmp
+
+The app folder will be where we will put our application package. The static
+sub-folder is where we will store static files like images, javascripts, and
+cascading style sheets. The templates sub-folder is obviously where our
+templates will go.
+
+Let's start by creating a simple init script for our app package (file
+    app/__init__.py):
+
+from flask import Flask
+
+# app variable
+app = Flask(__name__)
+
+# app module
+from app import views
+
+The script above simply creates the application object (of class Flask) and
+then imports the views module, which we haven't written yet. Do not confuse
+app the variable (which gets assigned the Flask instance) with app the package
+(from which we import the views module).
+
+If you are wondering why the import statement is at the end and not at the
+beginning of the script as it is always done, the reason is to avoid circular
+references, because you are going to see that the views module needs to import
+the `app variable` defined in this script. Putting the import at the end avoids
+the circular import error.
+
+<handlers>
+The views are the handlers that respond to requests from web browsers or other
+clients. In Flask handlers are written as Python functions. Each view function
+is mapped to one or more request URLs.
+
+Let's write our first view function (file app/views.py):
+
+from app import app
+
+@app.route('/')
+@app.route('/index')
+def index():
+    return "Hello, World!"
+
+This view is actually pretty simple, it just returns a string, to be displayed
+  on the client's web browser. The two route decorators above the function
+  create the mappings from URLs / and /index to this function.
+
+
+The final step to have a fully working web application is to create a script
+that starts up the development web server with our application. Let's call
+this script run.py, and put it in the root folder:
+
+#!flask/bin/python
+from app import app
+app.run(debug=True)
+
+The script simply imports the app variable from our app package and invokes
+its run method to start the server. Remember that the app variable holds the
+Flask instance that we created it above.
+
+To start the app you just run this script. On OS X, Linux and Cygwin you have
+to indicate that this is an executable file before you can run it:
+
+$ chmod a+x run.py
+
+Then the script can simply be executed as follows:
+
+./run.py
+
+kyoupark@kit-debian64:~/mblog$ ./run.py 
+ * Running on http://127.0.0.1:5000/ (Press CTRL+C to quit)
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 204-100-668
+
+127.0.0.1 - - [08/Aug/2017 20:36:55] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Aug/2017 20:36:55] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [08/Aug/2017 20:36:55] "GET /favicon.ico HTTP/1.1" 404 -
+
+
+After the server initializes it will listen on port 5000 waiting for
+connections. Now open up your web browser and enter the following URL in the
+address field:
+
+http://localhost:5000
+
+Alternatively you can use the following URL:
+
+http://localhost:5000/index
+
+Do you see the route mappings in action? The first URL maps to /, while the
+second maps to /index. Both routes are associated with our view function, so
+they produce the same result. If you enter any other URL you will get an
+error, since only these two have been defined.
+
+When you are done playing with the server you can just hit Ctrl-C to stop it.
+
+
+={============================================================================
+|kt_dev_py_0001| py-flask-template
+
+Part II: Templates (this article)
+https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-ii-templates
+
+yet very simple web application that has the following file structure:
+
+    microblog\
+      flask\
+        <virtual environment files>
+      app\
+        static\
+        templates\
+        __init__.py
+        views.py
+      tmp\
+      run.py
+
+
+If not use template:
+
+from app import app
+
+@app.route('/')
+@app.route('/index')
+def index():
+    user = {'nickname': 'Miguel'}  # fake user
+    return '''
+<html>
+  <head>
+    <title>Home Page</title>
+  </head>
+  <body>
+    <h1>Hello, ''' + user['nickname'] + '''</h1>
+  </body>
+</html>
+'''
+
+Templates to the rescue
+
+If you could keep the logic of your application separate from the layout or
+presentation of your web pages things would be much better organized, don't
+you think? You could even hire a web designer to create a killer web site
+while you code the site's behaviors in Python. Templates help implement this
+  separation.
+
+Let's write our first template (file app/templates/index.html):
+
+<html>
+  <head>
+    <title>{{ title }} - microblog</title>
+  </head>
+  <body>
+      <h1>Hello, {{ user.nickname }}!</h1>
+  </body>
+</html>
+
+As you see above, we just wrote a mostly standard HTML page, with the only
+difference that there are some placeholders for the `dynamic content` enclosed
+in {{ ... }} sections.
+
+Now let's see how we use this template from our view function (file
+    app/views.py):
+
+from flask import render_template
+from app import app
+
+@app.route('/')
+@app.route('/index')
+def index():
+    user = {'nickname': 'Miguel'}  # fake user
+    return render_template('index.html',
+                           title='Home',
+                           user=user)
+
+Try the application at this point to see how the template works. Once you have
+the rendered page in your browser you may want to `view the source HTML` and
+compare it against the original template.
+
+This function takes a template filename and a variable list of template
+arguments and returns the rendered template, with all the arguments replaced.
+
+
+<jinja2-templating-engine>
+Under the covers, the render_template function invokes the Jinja2 templating
+engine that is part of the Flask framework. Jinja2 substitutes {{...}} blocks
+with the corresponding values provided as template arguments.
+
+
+Loops in templates
+
+The logged in user in our microblog application will probably want to see
+recent posts from followed users in the home page, so let's see how we can do
+that.
+
+To begin, we use our handy fake object trick to create some users and some
+posts to show (file app/views.py):
+
+def index():
+    user = {'nickname': 'Miguel'}  # fake user
+    posts = [  # fake array of posts
+        { 
+            'author': {'nickname': 'John'}, 
+            'body': 'Beautiful day in Portland!' 
+        },
+        { 
+            'author': {'nickname': 'Susan'}, 
+            'body': 'The Avengers movie was so cool!' 
+        }
+    ]
+    return render_template("index.html",
+                           title='Home',
+                           user=user,
+                           posts=posts)
+
+To represent user posts we are using a list, where each element has author and
+body fields. When we get to implement a real database we will preserve these
+field names, so we can design and test our template using the fake objects
+without having to worry about updating it when we move to a database.
+
+On the template side we have to solve a new problem. The list can have any
+number of elements, it will be up to the view function to decide how many
+posts need to be presented. The template cannot make any assumptions about the
+number of posts, so it needs to be prepared to render as many posts as the
+view sends.
+
+So let's see how we do this using a for control structure (file
+    app/templates/index.html):
+
+
+Template inheritance
+
+Our microblog web application will need to have a navigation bar at the top of
+the page with a few links. Here you will get the link to edit your profile, to
+login, logout, etc.
+
+We can add a navigation bar to our index.html template, but as our application
+grows we will be needing to implement more pages, and this navigation bar will
+have to be copied to all of them. Then you will have to keep all these
+identical copies of the navigation bar in sync, and that could become a lot of
+work if you have a lot of pages and templates.
+
+Instead, we can use Jinja2's template inheritance feature, which allows us to
+move the parts of the page layout that are common to all templates and put
+them in a base template from which all other templates are derived.
+
+So let's define a base template that includes the navigation bar and also the
+bit of title logic we implemented earlier (file app/templates/base.html):
+
+<html>
+  <head>
+    {% if title %}
+    <title>{{ title }} - microblog</title>
+    {% else %}
+    <title>Welcome to microblog</title>
+    {% endif %}
+  </head>
+  <body>
+    <div>Microblog: <a href="/index">Home</a></div>
+    <hr>
+    {% block content %}{% endblock %}
+  </body>
+</html>
+
+In this template we use the `block` control statement to define the place where
+the derived templates can insert themselves. Blocks are given a unique name,
+    and their content can be replaced or enhanced in derived templates.
+
+And now what's left is to modify our index.html template to inherit from
+base.html (file app/templates/index.html):
+
+{% extends "base.html" %}
+{% block content %}
+    <h1>Hi, {{ user.nickname }}!</h1>
+    {% for post in posts %}
+    <div><p>{{ post.author.nickname }} says: <b>{{ post.body }}</b></p></div>
+    {% endfor %}
+{% endblock %}
+
+Since the base.html template will now take care of the general page structure
+we have removed those elements from this one and left only the content part.
+The extends block establishes the inheritance link between the two templates,
+    so that Jinja2 knows that when it needs to render index.html it needs to
+    include it inside base.html. The two templates have matching block
+    statements with name content, and this is how Jinja2 knows how to combine
+    the two into one. When we get to write new templates we will also create
+    them as extensions to base.html.
+
+
+={============================================================================
+|kt_dev_py_0001| py-flask-form
+
+Part III: Web Forms (this article)
+https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-iii-web-forms
+
+Configuration
+
+To handle our web forms we are going to use the Flask-WTF extension, which in
+turn wraps the WTForms project in a way that integrates nicely with Flask
+apps.
+
+Many Flask extensions require some amount of configuration, so we are going to
+setup a configuration file inside our root microblog folder so that it is
+easily accessible if it needs to be edited. Here is what we will start with
+(file config.py):
+
+WTF_CSRF_ENABLED = True
+SECRET_KEY = 'you-will-never-guess'
+
+Pretty simple, it's just two settings that our Flask-WTF extension needs. The
+WTF_CSRF_ENABLED setting activates the cross-site request forgery prevention
+(note that this setting is enabled by default in current versions of
+ Flask-WTF). In most cases you want to have this option enabled as it makes
+your app more secure.
+
+The SECRET_KEY setting is only needed when CSRF is enabled, and is used to
+create a cryptographic token that is used to validate a form. When you write
+your own apps make sure to set the secret key to something that is difficult
+to guess.
+
+Now that we have our config file we need to tell Flask to read it and use it.
+We can do this right after the Flask app object is created, as follows (file
+    app/__init__.py):
+
+from flask import Flask
+
+app = Flask(__name__)
+app.config.from_object('config')
+
+from app import views
+
+
+The user login form
+
+Web forms are represented in Flask-WTF as classes, subclassed from base class
+Form. A form subclass simply defines the fields of the form as class
+variables.
+
+Now we will create a login form that users will use to identify with the
+system. The login mechanism that we will support in our app is not the
+standard username/password type, we will have our users login using their
+OpenID. OpenIDs have the benefit that the authentication is done by the
+provider of the OpenID, so we don't have to validate passwords, which makes
+our site more secure to our users.
+
+The OpenID login only requires one string, the so called OpenID. We will also
+throw a 'remember me' checkbox in the form, so that users can choose to have a
+cookie installed in their browsers that remembers their login when they come
+back.
+
+Let's write our first form (file app/forms.py):
+
+from flask_wtf import Form
+from wtforms import StringField, BooleanField
+from wtforms.validators import DataRequired
+
+class LoginForm(Form):
+    openid = StringField('openid', validators=[DataRequired()])
+    remember_me = BooleanField('remember_me', default=False)
+
+I believe the class is pretty much self-explanatory. We imported the Form
+  class, and the two form field classes that we need, StringField and
+  BooleanField.
+
+The DataRequired import is a validator, a function that can be attached to a
+field to perform validation on the data submitted by the user. The
+DataRequired validator simply checks that the field is not submitted empty.
+There are many more validators included with Flask-WTF, we will use some more
+in the future.
 
 
 ==============================================================================
