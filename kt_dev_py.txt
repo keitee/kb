@@ -4345,7 +4345,6 @@ variables.
 
 
 {argument-matching}
-
 Argument Matching Basics
 
 By default, arguments are matched by position, from left to right, and you
@@ -4371,14 +4370,14 @@ Defaults: specify values for optional arguments that aren’t passed
 Functions themselves can specify default values for arguments to receive if
 the call passes too few values, again using the name=value syntax.
 
-TODO: more for the rest such as Varargs collecting
+Syntax                Location  Interpretation
 
-func(value)           Caller Normal argument: matched by position
-func(name=value)      Caller Keyword argument: matched by name
+func(value)           Caller    Normal argument: matched by position
+func(name=value)      Caller    Keyword argument: matched by name
 
-def func(name)        Function Normal argument: matches any passed value 
-                      by position or name
-def func(name=value)  Function Default argument value, if not passed in the call
+def func(name)        Function  Normal argument: matches any passed value 
+                                by position or name
+def func(name=value)  Function  Default argument value, if not passed in the call
 
 In a function call, simple values are matched by position, but using the
 name=value form to match by name to arguments instead; these are called
@@ -4393,6 +4392,84 @@ combination of any keyword arguments (name=value)
 
 In a function header, arguments must appear in this order: any normal
 arguments (name); followed by any default arguments (name=value)
+
+
+<varargs> <py-packing>
+`Varargs collecting`: collect arbitrarily many positional or keyword arguments
+
+Functions can use special arguments preceded with `one or two * characters` to
+collect an arbitrary number of possibly extra arguments. This feature is often
+referred to as varargs, after a variable-length argument list tool in the C
+language; in Python, the arguments are collected in a normal object.
+
+Syntax            Location  Interpretation
+
+def func(*name)   Function  Matches and collects remaining positional arguments 
+                            in a `tuple`
+def func(**name)  Function  Matches and collects remaining keyword arguments 
+                            in a `dictionary`
+
+
+>>> def f(*args): print(args)
+
+>>> f()
+()
+>>> f(1)
+(1,)
+>>> f(1,2,3)
+(1, 2, 3)
+
+>>> def f(**args): print(args)
+
+>>> f()
+{}
+>>> f(a=1, b=2)
+{'a': 1, 'b': 2}
+
+
+`Varargs unpacking`: pass arbitrarily many positional or keyword arguments
+
+Callers can also use the * syntax to unpack argument collections into separate
+arguments. This is the inverse of a * in a function header-in the header it
+means collect arbitrarily many arguments, while in the call it means unpack
+arbitrarily many arguments, and pass them individually as discrete values.
+
+func(*iterable)   Caller    Pass all objects in iterable as individual 
+                            positional arguments
+func(**dict)      Caller    Pass all `key/value pairs in dict` as individual 
+                            keyword arguments
+
+
+>>> def func(a, b, c, d): print(a, b, c, d)
+
+>>> args = (1, 2)
+>>> args += (3,4)
+>>> args
+(1, 2, 3, 4)
+>>> func(*args)
+(1, 2, 3, 4)
+>>> func(1,2,3,4)
+(1, 2, 3, 4)
+
+
+>>> args = {'a':1, 'b':2, 'c':3, 'd':4}
+>>> func(**args)                  # same as func(a=1, b=2, c=3, d=4)
+(1, 2, 3, 4)
+
+
+<argument-order>
+If you choose to use and combine the special argument-matching modes, Python
+will ask you to follow these ordering rules among the modes’ optional
+components:
+
+  * In a function call, arguments must appear in this order: any positional
+    arguments (value); followed by a combination of any keyword arguments
+    (name=value) and the *iterable form; followed by the **dict form.
+
+  * In a function header, arguments must appear in this order: any normal
+    arguments (name); followed by any default arguments (name=value); followed
+    by the *name (or * in 3.X) form; followed by any name or name=value
+    keyword-only arguments (in 3.X); followed by the **name form.
 
 
 ={============================================================================
@@ -5037,6 +5114,107 @@ class Spam:
   @staticmethod
   def printNumInstances():
     print("Number of instances: %s" % Spam.numInstances)
+
+
+<user-defined-function-decorators>
+
+A First Look at User-Defined Function Decorators
+
+Recall from Chapter 30 that the __call__ operator overloading method
+implements a function-call interface for class instances. The following code
+uses this to define a call proxy class that saves the decorated function in
+the instance and catches calls to the original name.
+
+#!/usr/bin/env python
+
+class tracer:
+    def __init__(self, func):
+        self.calls = 0
+        self.func = func
+
+    def __call__(self, *args):
+        self.calls += 1
+        print('calls %s to %s' % (self.calls, self.func.__name__))
+        # calls embedded func with vararg unpacking
+        return self.func(*args)   
+
+@tracer
+def spam(a, b, c):
+    return a + b + c
+
+print( spam(1, 2, 3))
+print( spam('a', 'b', 'c'))
+
+
+$ ./decoraor.py 
+calls 1 to spam
+6
+calls 2 to spam
+abc
+
+TODO: more on decorators
+
+Although they are a general mechanism whose usage may be required by some
+packages, coding new user-defined decorators and metaclasses is an advanced
+topic of interest primarily to tool writers, not application programmers.
+
+ Chapter 38 shows how to code properties using function decorator syntax in
+ more depth.
+
+ Chapter 39 has much more on decorators, including more comprehensive
+ examples.
+
+ Chapter 40 covers metaclasses, and more on the class and instance management
+ story.
+
+
+={============================================================================
+|kt_dev_py_0001| py-class-super
+
+Example from 28, see how to call super class's version:
+
+class Person:
+    def __init__(self, name, job=None, pay=0):
+        self.name = name
+        self.job = job
+        self.pay = pay
+
+    def giveRaise(self, percent):
+        self.pay = int(self.pay * (1+percent))
+
+    def __repr__(self):
+        return '[Person: %s, %s]' % (self.name, self.pay)
+
+class Manager(Person):
+    def giveRaise(self, percent, bonus=.10):
+        Person.giveRaise(self, percent+bonus)
+
+What About super?
+
+To extend inherited methods, the examples in this chapter simply call the
+original through the superclass name: Person.giveRaise(...). 
+This is the traditional and simplest scheme in Python, and the one used in
+most of this book.
+
+Python also has a super built-in function that allows calling back to a
+  superclass’s methods more generically but it’s cumbersome to use in 2.X;
+differs in form between 2.X and 3.X; relies on unusual semantics in 3.X; works
+  unevenly with Python’s operator overloading; and does not always mesh well
+  with traditionally coded multiple inheritance, where a single superclass
+  call won’t suffice.
+
+Because of these downsides, this book prefers to call superclasses by explicit
+  name instead of super, recommends the same policy for newcomers, and defers
+  presenting super until Chapter 32. It’s usually best judged after you learn
+  the simpler, and generally more traditional and “Pythonic” ways of achieving
+  the same goals, especially if you’re new to OOP. Topics like MROs and
+  cooperative multiple inheritance dispatch seem a lot to ask of beginnersand
+  others.
+
+
+32, The super Built-in Function: For Better or Worse?
+
+TODO: more?
 
 
 ={============================================================================
