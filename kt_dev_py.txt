@@ -13,10 +13,12 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-base-none-type
 |kt_dev_py_0001| py-base-control
 |kt_dev_py_0001| py-base-loop
+|kt_dev_py_0001| py-base-what-evaluate
 
+|kt_dev_py_0001| py-gotchas
 |kt_dev_py_0001| py-types
 |kt_dev_py_0001| py-variable py-dynamic-type
-|kt_dev_py_0001| py-number py-expression
+|kt_dev_py_0001| py-number
 |kt_dev_py_0001| py-string
 |kt_dev_py_0001| py-tuple
 |kt_dev_py_0001| py-list
@@ -34,6 +36,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-module-main-name
 |kt_dev_py_0001| py-function
 |kt_dev_py_0001| py-function-polymorphism
+|kt_dev_py_0001| py-function-scope
 |kt_dev_py_0001| py-function-scope
 |kt_dev_py_0001| py-function-arguments
 |kt_dev_py_0001| py-class
@@ -54,6 +57,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-dropbox
 |kt_dev_py_0001| py-imaplib
 |kt_dev_py_0001| py-time
+|kt_dev_py_0001| py-time-benchmark
 |kt_dev_py_0001| py-cvs
 |kt_dev_py_0001| py-stmplib
 |kt_dev_py_0001| py-parser-option
@@ -895,12 +899,98 @@ for i in xrange(10000):
     sum += i
 
 
-{for}
+<py-for>
 remove an element of a list in the loop
 
   for script_name, priority, test_id, process in running_list:
     do something
     running_list.remove((script_name, priority, test_id, process))
+
+
+={============================================================================
+|kt_dev_py_0001| py-base-what-evaluate
+
+def total():
+    return (elapsed, ret)
+
+if __name__ == "main":
+    ret = total( 1000, pow, 2, 1000)
+    print 'time taken to pow is %d' % (ret.elapsed)
+
+Why do not flag up error on ret.elapsed since there is no ret.elapsed
+attribute?
+
+Since python only cares code which runs. Even when have a totally nonsence def
+in the code, there is no error since it's not used.
+
+if __name__ == "__main__":
+    ret = total( 1000, pow, 2, 1000)
+    print 'time taken to pow is %d' % (ret.elapsed)
+
+
+={============================================================================
+|kt_dev_py_0001| py-gotchas
+
+<default-mutable-objects>
+
+Defaults and Mutable Objects, Chapter 21: The Benchmarking Interlude
+
+>>> def saver(x=[]):    # Saves away a list object
+x.append(1)             # Changes same object each time!
+print(x)
+
+>>> saver([2])          # Default not used
+[2, 1]
+
+>>> saver()             # Default used
+[1]
+>>> saver()             # Grows on each call!
+[1, 1]
+>>> saver()
+[1, 1, 1]
+
+
+<return-from-function-that-change-objects>
+
+Expression Statements, Chapter 11: Assignments, Expressions, and Prints
+
+Calling an in-place change operation such as append, sort, or reverse on a
+list always changes the list in place, but these methods do not return the
+list they have changed; instead, they return the None object.
+
+>>> L = [1, 2]
+>>> L.append(3)         # Append is an in-place change
+>>> L
+[1, 2, 3]
+
+However, it’s not unusual for Python newcomers to code such an operation as an
+assignment statement instead, intending to assign L to the larger list:
+
+>>> L = L.append(4)     # But append returns None, not L
+>>> print(L)            # So we lose our list!
+None
+
+
+Chapter 15: The Documentation Interlude
+
+A more devious example of this pops up in Python 2.X code when trying to step
+through dictionary items in a sorted fashion. It’s fairly common to see code
+like for k in D.keys().sort():. 
+  
+This almost works—the keys method builds a keys list, and the sort method
+  orders it—but because the sort method returns None, the loop fails because
+  it is ultimately a loop over None (a nonsequence). 
+                           
+This fails even sooner in Python 3.X, because dictionary keys are views, not
+lists! 
+
+To code this correctly, either use the newer sorted built-in function, which
+returns the sorted list, or split the method calls out to statements: Ks =
+list(D.keys()), then Ks.sort(), and finally, for k in Ks:.  
+
+This, by the way, is one case where you may still want to call the keys method
+explicitly for looping, instead of relying on the dictionary
+iterators—iterators do not sort.
 
 
 ={============================================================================
@@ -4163,34 +4253,43 @@ note:
 so E matters for lambda if not use 3.X.
 
 
-{lambda}
-Anonymous or lambda functions, which are really just simple functions
-consisting of a single statement, the result of which is the return value.
-They are defined using the `lambda keyword`
+<local-name-detected>
 
-They are especially convenient in data analysis because, as you'll see, there
-are many cases where data transformation functions will take functions as
-arguments. It's often less typing (and clearer) to pass a lambda function as
-opposed to writing a full-out function declaration or even assigning the
-lambda function to a local variable. For example, consider this silly example:
+Local Names Are Detected Statically, Chapter 21: The Benchmarking Interlude
 
->>> def apply_to_list(some_list, f):
-...     return [f(x) for x in some_list]
+What you may not realize is that Python detects locals statically, when it
+compiles the def’s code, rather than by noticing assignments as they happen at
+runtime. This leads to one of the most common oddities posted on the Python
+newsgroup by beginners. 
+
+note: compared with dynamically or runtime.
+
+>>> X=99
+>>> def selector():
+...     print(X)
 ... 
+>>> selector()
+99
+>>> def selector():
+...     print(X)
+...     X=88
+... 
+>>> selector()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "<stdin>", line 2, in selector
+UnboundLocalError: local variable 'X' referenced before assignment
 
->>> ints = [4,0,1,5,6]
->>> apply_to_list(ints, lambda x: x*2)
-[8, 0, 2, 10, 12]
-
-You could also have written [x * 2 for x in ints], but here we were able to
-succintly pass a custom operator to the apply_to_list function.
+While compiling, Python sees the assignment to X and decides that X will be a
+  local name everywhere in the function. But when the function is actually
+  run, because the assignment hasn’t yet happened when the print executes,
+  Python says you’re using an undefined name.
 
 
-{closures}
-In a nutshell, a closure is any `dynamically-generated function` returned by
-another function. The key property is that the returned function has access to
-the variables in the local namespace where it was created. Here is a very
-simple example:
+<closures>
+closure is any `dynamically-generated function` returned by another function.
+The key property is that the returned function has access to the variables in
+the local namespace where it was created. Here is a very simple example:
 
 >>> def make_closure(a):
 ...     def closure():
@@ -4207,39 +4306,23 @@ I know the secret: 5
 I know the secret: 5
 
 
-The difference between a closure and a regular Python function is that the
-closure continues to have access to the namespace (the function) where it was
-created, even though that function is done executing. So in the above case,
-  the returned closure will always print "I know the secret: 5" whenever you
-  call it. 
+The difference between a closure and a regular function is that the closure
+continues to have access to the namespace (the function) where it was created,
+    even though that function is done executing. 
+
+So in the above case, the returned closure will always print "I know the
+secret: 5" whenever you call it. 
 
 While it's common to create closures whose internal state (in this example,
     only the `value` of a) is `static`, you can just as easily have a
 `mutable` object like a dict, set, or list that can be modified. For example,
-  here's a function that returns a function that keeps track of arguments it
-  has been called with:
+    here's a function that returns a function that keeps track of arguments it
+      has been called with:
 
-def make_watcher():
-  have_seen = {}
-
-  def has_been_seen(x):
-    if x in have_seen:
-      return True
-    else:
-      have_seen[x] = True
-      return False
-  return has_been_seen
-
-Using this on a sequence of integers I obtain:
-
-In [496]: watcher = make_watcher()
-In [497]: vals = [5, 6, 1, 5, 1, 6, 3, 5]
-In [498]: [watcher(x) for x in vals]
-Out[498]: [False, False, False, True, True, True, False, True]
 
 one technical limitation to keep in mind is that while you can mutate any
 internal state objects (like adding key-value pairs to a dict), you cannot
-bind variables in the enclosing function scope. One way to work around this is
+bind `variables` in the enclosing function scope. One way to work around this is
 to modify a dict or list rather than binding variables:
 
 >>> def make_counter():
@@ -4294,6 +4377,33 @@ Out[501]: ' 1.7560'
 If you learn more about object-oriented programming in Python, you might
 observe that these patterns also could be implemented (albeit more verbosely)
   using classes.
+
+
+={============================================================================
+|kt_dev_py_0001| py-function-scope
+
+{lambda}
+Anonymous or lambda functions, which are really just simple functions
+consisting of a single statement, the result of which is the return value.
+They are defined using the `lambda keyword`
+
+They are especially convenient in data analysis because, as you'll see, there
+are many cases where data transformation functions will take functions as
+arguments. It's often less typing (and clearer) to pass a lambda function as
+opposed to writing a full-out function declaration or even assigning the
+lambda function to a local variable. For example, consider this silly example:
+
+>>> def apply_to_list(some_list, f):
+...     return [f(x) for x in some_list]
+... 
+
+>>> ints = [4,0,1,5,6]
+>>> apply_to_list(ints, lambda x: x*2)
+[8, 0, 2, 10, 12]
+
+You could also have written [x * 2 for x in ints], but here we were able to
+succintly pass a custom operator to the apply_to_list function.
+
 
 
 ={============================================================================
@@ -6685,6 +6795,175 @@ time.time()
 
 
 ={============================================================================
+|kt_dev_py_0001| py-time-benchmark
+
+Learning Python 5E, 21, The Benchmarking Interlude
+
+The range call is hoisted out of the timing loop in the total function, so its
+construction cost is not charged to the timed function in Python 2.X. In 3.X
+range is an iterable, so this step is neither required nor harmful, but we
+still run the result through list so its traversal cost is the same in both
+2.X and 3.X. This doesn’t apply to the bestof function, since no range factors
+are charged to the test’s time.
+
+
+<ex>
+#!/usr/bin/env python
+"""
+homegrown timing tools for function calls.
+does total time, best-of time, and best-of-totals time
+"""
+
+import time, sys
+
+# >>> sys.platform
+# 'win32'
+
+timer = time.clock if sys.platform[:3] == 'win' else time.time
+
+def total( reps, func, *pargs, **kargs):
+    """
+    total time to run func() reps times.
+    returns( total time, last result )
+    """
+    repslist = list(range(reps))
+    start = timer()
+    for i in repslist:
+        ret = func(*pargs, **kargs)
+
+    elapsed = timer() - start
+    return (elapsed, ret)
+
+
+def bestof( reps, func, *pargs, **kargs):
+    """
+    quickest func() among reps runs.
+    returns( best time, last result )
+    """
+    best = 2**32
+
+    # range usuage not timed here
+    for i in range(reps):
+        start = timer()
+        ret = func(*pargs, **kargs)
+        elapsed = timer()-start
+        if elapsed < best: best = elapsed
+    return (best, ret)
+
+
+def bestoftotal( rep1, rep2, func, *pargs, **kargs):
+    """
+    best of totals:
+    (best of rep1 runs of (total of rep2 runs of func))
+    """
+    return bestof( rep1, total, rep2, func, *pargs, **kargs)
+
+
+if __name__ == "__main__":
+    ret = total( 1000, pow, 2, 1000)
+    print 'time taken to pow is %f' % (ret[0])
+    ret = bestof( 1000, pow, 2, 1000)
+    print 'time taken to best of pow is %f' % (ret[0])
+    ret = bestoftotal( 50, 1000, pow, 2, 1000)
+    print 'time taken to bestoftotal of pow is %f' % (ret[0])
+
+
+See the way we use these and the both do the same and return the best-of
+tuple, which embeds the last total call’s result tuple.
+
+>>> timer.bestof(50, timer.total, 1000, str.upper, 'spam')
+(0.0005468751145372153, (0.0005004469323637295, 'SPAM'))
+
+>>> timer.bestoftotal(50, 1000, str.upper, 'spam')
+(0.000566912540591602, (0.0005195069228989269, 'SPAM'))
+
+note: that is, bestoftotal limits itself to use total. 
+
+
+#!/usr/bin/env python
+"Test the relative speed of iteration tool alternatives."
+
+import sys, timer
+
+reps = 10000
+
+replist = list(range(reps))
+
+# for loop
+def forLoop():
+    res = []
+    for x in replist:
+        res.append(abs(x))
+    return res
+
+# list comprehension
+def listComp():
+    return [abs(x) for x in replist]
+
+# map call
+def mapCall():
+    return map(abs, replist)
+
+# generator expression
+def genExpr():
+    return list(abs(x) for x in replist)
+
+# generator function
+def genFunc():
+    def gen():
+        for x in replist:
+            yield abs(x)
+    return list(gen())
+
+
+print(sys.version)
+for test in (forLoop, listComp, mapCall, genExpr, genFunc):
+    (bestof, (total, result)) = timer.bestoftotal(5, 1000, test)
+    print('%-9s: %.5f => [%s...%s]' %
+            (test.__name__, bestof, result[0], result[-1]))
+
+
+kit-debian64:~/works$ ./timeseqs.py 
+2.7.9 (default, Jun 29 2016, 13:08:31) 
+[GCC 4.9.2]
+forLoop  : 0.85904 => [0...9999]
+listComp : 0.53057 => [0...9999]
+mapCall  : 0.32763 => [0...9999]
+genExpr  : 0.71238 => [0...9999]
+genFunc  : 0.72132 => [0...9999]
+
+note: see that list comprehension and map is better than for loop.
+
+
+<py-timeit>
+the standard library also ships with a module named timeit that can be used in
+similar ways, but offers added flexibility and may better insulate clients
+from some platform differences.
+
+With timeit, tests are specified by either callable objects or statement
+strings; the latter can hold multiple statements if they use ; separators or
+\n characters for line breaks, and spaces or tabs to indent statements in
+nested blocks (e.g., \n\t).
+
+# timeit.repeat(stmt=’pass’, setup=’pass’, timer=<default timer>, repeat=3, number=1000000)
+# 
+# Create a Timer instance with the given statement, setup code and timer
+# function and run its repeat() method with the given repeat count and number
+# executions.
+# 
+# New in version 2.6.
+
+# use karg version
+>>> timer.bestoftotal(pow, 2, 1000, _reps1=50, _reps=1000)[0]
+0.0015938282012939453
+
+
+>>> import timeit
+>>> min(timeit.repeat(stmt="pow(2, 1000)", number=1000, repeat=50))
+0.0016210079193115234
+
+
+={============================================================================
 |kt_dev_py_0001| py-cvs
 
 The standard library of Python provides a CSV reader. The Python script below
@@ -7376,7 +7655,9 @@ you think? You could even hire a web designer to create a killer web site
 while you code the site's behaviors in Python. Templates help implement this
   separation.
 
-Let's write our first template (file app/templates/index.html):
+Let's write our first template 
+
+(file app/templates/index.html):
 
 <html>
   <head>
@@ -7391,8 +7672,9 @@ As you see above, we just wrote a mostly standard HTML page, with the only
 difference that there are some placeholders for the `dynamic content` enclosed
 in {{ ... }} sections.
 
-Now let's see how we use this template from our view function (file
-    app/views.py):
+Now let's see how we use this template from our view function 
+
+(file app/views.py):
 
 from flask import render_template
 from app import app
@@ -7404,6 +7686,10 @@ def index():
     return render_template('index.html',
                            title='Home',
                            user=user)
+
+
+note: so view has data and stitch up with template. `renders` the template.
+
 
 Try the application at this point to see how the template works. Once you have
 the rendered page in your browser you may want to `view the source HTML` and
@@ -7426,7 +7712,9 @@ recent posts from followed users in the home page, so let's see how we can do
 that.
 
 To begin, we use our handy fake object trick to create some users and some
-posts to show (file app/views.py):
+posts to show 
+
+(file app/views.py):
 
 def index():
     user = {'nickname': 'Miguel'}  # fake user
@@ -7477,7 +7765,9 @@ move the parts of the page layout that are common to all templates and put
 them in a base template from which all other templates are derived.
 
 So let's define a base template that includes the navigation bar and also the
-bit of title logic we implemented earlier (file app/templates/base.html):
+bit of title logic we implemented earlier 
+
+(file app/templates/base.html):
 
 <html>
   <head>
@@ -7551,13 +7841,13 @@ your own apps make sure to set the secret key to something that is difficult
 to guess.
 
 Now that we have our config file we need to tell Flask to read it and use it.
-We can do this right after the Flask app object is created, as follows (file
-    app/__init__.py):
+We can do this right after the Flask app object is created, as follows 
+(file app/__init__.py):
 
 from flask import Flask
 
 app = Flask(__name__)
-app.config.from_object('config')
+app.config.from_object('config')      # added
 
 from app import views
 
@@ -7599,6 +7889,142 @@ field to perform validation on the data submitted by the user. The
 DataRequired validator simply checks that the field is not submitted empty.
 There are many more validators included with Flask-WTF, we will use some more
 in the future.
+
+
+Form templates
+
+We will also need a template that contains the HTML that produces the form.
+
+The good news is that the LoginForm class that we just created knows how to
+render form fields as HTML, so we just need to concentrate on the layout. Here
+is our login template 
+
+(file app/templates/login.html):
+
+<!-- extend from base layout -->
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Sign In</h1>
+  <form action="" method="post" name="login">
+      {{ form.hidden_tag() }}
+      <p>
+          Please enter your OpenID:<br>
+          {{ form.openid(size=80) }}<br>
+      </p>
+      <p>{{ form.remember_me }} Remember Me</p>
+      <p><input type="submit" value="Sign In"></p>
+  </form>
+{% endblock %}
+
+Note that in this template we are reusing the base.html template through the
+extends template inheritance statement. We will actually do this with all our
+templates, to ensure a consistent layout across all pages.
+
+
+There are a few interesting differences between a regular HTML form and our
+template. This template expects a form object instantiated from the form class
+we just defined stored in a template argument named form. We will take care of
+sending this template argument to the template next, when we write the view
+function that renders this template.
+
+The form.hidden_tag() template argument will get replaced with a hidden field
+that implements the CSRF prevention that we enabled in the configuration. This
+field needs to be in all your forms if you have CSRF enabled. The good news is
+that Flask-WTF handles it for us, we just need to make sure it is included in
+the form.
+
+The actual fields of our form are rendered by the field objects, we just need
+to refer to a {{form.field_name}} template argument in the place where each
+field should be inserted. Some fields can take arguments. In our case, we are
+asking the text field to generate our openid field with a width of 80
+characters.
+
+Since we have not defined the submit button in the form class we have to
+define it as a regular field. The submit field does not carry any data so it
+doesn't need to be defined in the form class.
+
+
+Form views
+
+The final step before we can see our form is to code a view function that
+renders the template.
+
+This is actually quite simple since we just need to pass a form object to the
+template. Here is our new view function 
+
+(file app/views.py):
+
+from flask import render_template, flash, redirect
+from app import app
+from .forms import LoginForm
+
+# index view function suppressed for brevity
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = LoginForm()
+    return render_template('login.html', 
+                           title='Sign In',
+                           form=form)
+
+
+So basically, we have imported our LoginForm class, instantiated an object
+from it, and sent it down to the template. This is all that is required to get
+form fields rendered.
+
+Let's ignore for now the flash and redirect imports. We'll use them a bit
+later.
+
+The only other thing that is new here is the methods argument in the route
+decorator. This tells Flask that this view function accepts GET and POST
+requests. Without this the view will only accept GET requests. We will want to
+receive the POST requests, these are the ones that will bring in the form data
+entered by the user.
+
+At this point you can try the app and see the form in your web browser. After
+you start the application you will want to open http://localhost:5000/login in
+your web browser, as this is the route we have associated with the login view
+function.
+
+We have not coded the part that accepts data yet, so pressing the submit
+button will not have any effect at this time.
+
+
+http://localhost:5000/login
+
+/home/kyoupark/mblog/app/views.py:7: FlaskWTFDeprecationWarning: "flask_wtf.Form" has been renamed to "FlaskForm" and will be removed in 1.0.
+  form = LoginForm()
+
+// rendered source
+
+<!-- extend from base layout -->
+<html>
+  <head>
+    
+    <title> Sign In - microblog </title>
+    
+  </head>
+  <body>
+    <div> microblog: <a href="/index"> home </a></div>
+    <hr>
+    
+  <h1> Sign In </h1>
+  <form action="" method="post" name="login">
+    <input id="csrf_token" name="csrf_token" type="hidden" value="IjE0NmFlZTNhZDQyMzBlMzliNDdjYjk2NWNlZGZmYzNiNzUyYmU4ZTgi.DG95ww.Wx8mq0hmKtPqh1EsmCfXABOy-8w">
+    <p>
+      Please enter your OpenID: <br>
+      <input id="openid" name="openid" size="80" type="text" value=""> <br>
+    </p>
+    <p> <input id="remember_me" name="remember_me" type="checkbox" value="y"> Remember Me </p>
+    <p><input type="submit" value="Sign In"></p>
+  </form>
+
+  </body>
+</html>
+
+
+Receiving form data
 
 
 ==============================================================================
