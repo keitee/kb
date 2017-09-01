@@ -18,6 +18,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-box
 |kt_dev_si_0002| si-box-sceret-screen
 |kt_dev_si_0002| si-box-mount
+|kt_dev_si_0002| si-boot-cfe
 |kt_dev_si_0002| si-boot-start-mw
 |kt_dev_si_0002| si-boot-pwm
 |kt_dev_si_0002| si-bootlog
@@ -26,6 +27,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-build-flist
 |kt_dev_si_0002| si-build-server
 |kt_dev_si_0002| si-build
+|kt_dev_si_0002| si-build-core
 |kt_dev_si_0002| si-build-baseline
 |kt_dev_si_0002| si-build-errors
 |kt_dev_si_0002| si-build-mw
@@ -62,6 +64,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-dms
 |kt_dev_si_0001| comp-tree
 |kt_dev_si_0001| comp-term
+|kt_dev_si_0001| comp-cdi comp-ioctl
 |kt_dev_si_0001| comp-build enable-comp-diag
 |kt_dev_si_0001| comp-jpa
 |kt_dev_si_0001| comp-jpa-print-systemstring
@@ -1506,6 +1509,54 @@ This issue is fixed in version 1.0.7.4.
 
 
 ={============================================================================
+|kt_dev_si_0002| si-boot-cfe
+
+this explains the way that uses EOTV image which has only kernel in it. Then
+can mount nfs directory as flash0 and run startstack.sh manually. So can
+change flash0 to whatever you want as CFE do.
+
+http://hetty.cisco.com/fusionmadesimple/index.php/EOTV_Not_CFE
+
+
+kyoupark@st-castor-03:~$ ls STB_SW/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/BootImage/vmlinuz
+STB_SW/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/BootImage/vmlinuz
+
+kyoupark@st-castor-03:~$ cp STB_SW/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/BootImage/vmlinuz /tftpboot/kyoupark/
+kyoupark@st-castor-03:~$ ls /tftpboot/kyoupark/
+readme.in  vmlinuz
+
+
+ifconfig eth0 -auto; boot -elf somehost:/vmlinux 'mem=128M ip=dhcp console=uart,mmio,0x10400b00,115200n8'
+
+# ifconfig eth0 -auto; boot -elf 10.209.62.106:/kyoupark/vmlinuz
+# this emits error saying thet it is not elf format so use -z option.
+
+ifconfig eth0 -auto
+boot -z -elf 10.209.62.106:/kyoupark/vmlinuz
+mkdir /flash0
+# mount -t nfs -o nolock <your_nfs_machine_ip_addr>:/home/NDS-UK/<nfs_folder_build_path>/flash0 /flash0
+mount -t nfs -o nolock 10.209.62.106:/home/kyoupark/si_logs/flash0/flash0 /flash0
+/flash0/scripts/startstack.sh
+
+<ex>
+setenv -p STARTUP "ifconfig eth0 -auto; boot -z -elf <tftp_server>:/<vmlinuz-path-given-in-release-email> 'ip=dhcp console=uart,mmio,0x10400b00,115200n8'"
+
+
+<startstack>
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/release/startstack.sh
+
+if [ -f /flash0/scripts/this_is_first_boot ]
+then
+    rm /flash0/scripts/this_is_first_boot
+    echo "This is first boot; enable format"
+    /flash0/scripts/unified_startup.sh . /flash0 FORMAT NORUN $SERIAL $*
+else
+    echo "Reboot app - keeping recordings and data"
+    /flash0/scripts/unified_startup.sh . /flash0 NOCLEAN NODELETE NORUN $SERIAL $*
+fi
+
+
+={============================================================================
 |kt_dev_si_0002| si-boot-start-mw
 
 note:
@@ -2813,6 +2864,15 @@ Darwin SI
 Staines  Europe	st-castor-03.cisco.com	10.209.62.106
 
 
+HOWTO: Using NFS client on Windows7/10
+https://cisco.jiveon.com/docs/DOC-1635735
+
+mount -o mtype=hard,tcp <server_ip>:/path/to/share/directory Z:
+mount -o mtype=hard,tcp <server_ip>:/path/to/share/directory *
+
+mount -o mtype=hard,tcp 10.209.62.106:/home/kyoupark K:
+
+
 ={============================================================================
 |kt_dev_si_0002| si-build
 
@@ -3044,6 +3104,11 @@ command like this:
 
 $ newyard_fetch_diag.sh $PLATFORM $VERSION
 
+newyard_fetch_diag.sh ams-drx890 R019.087.01.00U
+newyard_fetch_diag.sh ams-drx890 R019.087.01.00D  // KO since not keep si devel
+
+Darwin_SI_Drop_R019.087.13.00D_picasso_ams-drx890_nds_si_devel_Binary_Image.tgz
+
 [si_logs@theyard R018.085.67.00U]$ pwd
 /home/si_logs/tx/ams-drx890/R018.085.67.00U
 
@@ -3062,12 +3127,13 @@ $ ls ~/tx/ams-drx780/R009.066.46.00U/unstripped_processes/
 APP_Process  disk_partition    FusionConfigExport  FusionConfigPatch     MW_Process   SCD_Process
 CA_Process   FusionConfigDump  FusionConfigImport  FusionConfigXmlPatch  PWM_Process  STM_Process
 
-~/bin/mips-gdb
+theyard$ ~/bin/mips-gdb
 
 // don't seem to have all libs
 // set solib-search-path ~/com.nds.darwin.debugsupport/debug_libs/uClibc-nptl-0.9.29-20070423
 
 set solib-absolute-prefix /junk
+set solib-search-path /home/si_logs/kit.park/unstripped_libraries
 set solib-search-path /home/si_logs/tx/ams-drx890/R018.085.67.00U/unstripped_libraries
 
 // (gdb) i source
@@ -7600,6 +7666,34 @@ VGC   VideoGuard Client
 VGV   VideoGuard Verifier
 VRM   Viewing And Recording Management
 SCI   Service Component Information
+
+
+={============================================================================
+|kt_dev_si_0001| comp-cdi comp-ioctl
+
+-DCDI_IOCTL_DEFINITIONS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/ioctl_magic.h" 
+
+~/STB_SW/FUSIONOS/CDI_INC/include$ ls 
+audienceresearch.h     cawd.h                 demuxcommon.h            fpindicator.h         multiplexer.h    raspdemuxraspcontrol.h        serial.h               vgdemuxicamcontrol.h
+audiocapture.h         cawd_ioctl.h           demuxcontrol.h           fpsegmenteddisplay.h  muxer.h          raspdemuxrasp.h               spdifformatter.h       vgdemuxicamdescrambler.h
+audiodecoder.h         cdi_errno.h            demuxdescrambler.h       fptextdisplay.h       nskcmchannel.h   raspdemuxraspindexer.h        surface.h              vgdemuxicamecmfilter.h
+audioencoder.h         cdi_net_if.h           demuxelementaryfilter.h  frontendcommon.h      nskcmgroup.h     rasp_ioctl.h                  svpcpmchannel.h        vgdemuxicamemmfilter.h
+audiomixer.h           cdi_stdint.h           demuxinput.h             gpdmachannel.h        nskemmfilter.h   relays.h                      svpcpmcontrol.h        vg_ioctl.h
+audiooutputencoder.h   cdi_sys_socket.h       demuxoutput.h            graphics.h            nsk.h            remod.h                       svp_ioctl.h            vgscreader.h
+audiooutput.h          cdi_sys_types.h        demuxremux.h             hddac.h               nsk_ioctl.h      resetcontrol.h                svpnsk.h               videodecoder.h
+audiopostprocessor.h   clocksync.h            demuxsectionfilter.h     hdmi.h                nskm2mchannel.h  rf4cecommon.h                 swdownload.h           videoencoder.h
+audiovolumeleveller.h  cmchannel.h            demuxtpidfilter.h        ieee1394.h            nskm2mgroup.h    rf4cecontrol.h                switch.h               viewport.h
+avinlet.h              cmgroup.h              demuxtschannel.h         iframedecoder.h       nskotp.h         rf4cegenericrw.h              temperaturesensors.h   vi_properties.h
+avmixer.h              cmmapper.h             denc.h                   imagedecoder.h        nskscreader.h    rf4cehid.h                    tpidproxy.h            watermarkingchannel.h
+avoutlet.h             cmtcontrol.h           digitaloutlet.h          ipdatagramreader.h    nsktpidproxy.h   rf4cemso.h                    transcodeoutput.h      watermarkingcontrol.h
+avoutputcommon.h       common.h               digitaloutput.h          ipfrontend.h          nvram.h          rf4cezrc.h                    tuner.h                watermarking_tables.h
+blender.h              common_ioctl.h         digitiser.h              irblaster.h           oobcommon.h      rtc.h                         userinput.h
+blitter.h              contiguousmemory.h     dvbcicontroller.h        keyladder.h           oobrx.h          sarfttunerabss.h              vbi.h
+bskyb_ioctl.h          cryptocommon.h         dvbci_ioctl.h            lnb.h                 oobtx.h          sarftvideodecoderavs.h        versioninformation.h
+bskybswdownload.h      cryptodma.h            dvihdmi.h                m2mchannel.h          otp.h            scart.h                       vgdemuxcommon.h
+bskybtuner.h           decoderstreamformat.h  encodermuxercommon.h     m2mgroup.h            pcm_format.h     screader.h                    vgdemuxcontrol.h
+bslcomm.h              demuxchunkinput.h      esprocessor.h            masterclock.h         pcmplayer.h      secondaryscramblingchannel.h  vgdemuxdescrambler.h
+bslcomm_tables.h       demuxclockfilter.h     flash.h                  mpegencoder.h         power.h          secondaryscramblingcontrol.h  vgdemuxecmcorruptor.h
 
 
 ={============================================================================
@@ -16175,7 +16269,7 @@ DISK_TEST_TIMEOUT_SEC=30
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-power comp-standby
+|kt_dev_si_0001| comp-power comp-standby comp-pwm
 
 # passive standby
 # config
@@ -16235,6 +16329,15 @@ https://www.stb.bskyb.com/confluence/display/STB/HDMI+One+Touch+Play
 <eco-mode>
 I have a patch somewhere that makes eco mode happen in a fast loop
 https://www.stb.bskyb.com/jira/browse/NGDEV-71879?focusedCommentId=868741&page=com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-868741
+
+
+<pwm>
+POWER SUBSYSTEM
+
+The Power SubSystem contains the following logically related and closely
+coupled set of Fusion Components:
+ 
+SYSINIT, STM, PWM (also known as HGH).
 
 
 ={============================================================================
@@ -23006,21 +23109,24 @@ MW_Process: mw_process_main.c
 	SYSINIT_StartComponents
 }
 
-# startup process
+// sysinit.cfg, startup process
+// [PROCESSES]
+// NUM_CHILD_PROCESSES=3
+// SYSINIT_SERVER_PROCESS_NAME="SCD_Process"
 SCD_Process: SCD_Process_main.c
 {
-    SYSINIT_ComponentRunLevelStruct componentList[NUM_COMPONENTS] =
-    {
-        {(uint8_t*)"DHCP", DHCP_RunLevelRequest},	# this is {comp name, comp init func}
-        {(uint8_t*)"NCM", NCM_RunLevelRequest},
-        {(uint8_t*)"MM", MODEM_RunLevelRequest},
-        {(uint8_t*)"PPPD", PPPD_RunLevelRequest}
-    };
+  SYSINIT_ComponentRunLevelStruct componentList[NUM_COMPONENTS] =
+  {
+    {(uint8_t*)"DHCP", DHCP_RunLevelRequest},	# this is {comp name, comp init func}
+    {(uint8_t*)"NCM", NCM_RunLevelRequest},
+      {(uint8_t*)"MM", MODEM_RunLevelRequest},
+      {(uint8_t*)"PPPD", PPPD_RunLevelRequest}
+  };
 
-	SYSINIT_SERVER_Init
-	SYSINIT_ClientInit
-	SYSINIT_StartComponents
-		SYSINIT_API_SendStartComponentsMsg # pass comp name to sysinit svr
+  SYSINIT_SERVER_Init
+    SYSINIT_ClientInit
+    SYSINIT_StartComponents
+    SYSINIT_API_SendStartComponentsMsg # pass comp name to sysinit svr
 }	
 
 
@@ -23134,9 +23240,7 @@ listenerRunLevelNotification
 		# if all comps on the same ring have responded, then signal it.
 		sem_post(&ringLevelCompleteSignal)
 
-
-# state_machine.c
-#
+// CMS_SYSTEM_INFRASTRUCTURE/SYSINIT/src/server/state_machine.c
 stateMachineThread:
 	/* Start the loop and process the requests as they arrive */
 	while(targetRunLevel != SYSINIT_RunLevelRequestShutdown)
@@ -23197,6 +23301,20 @@ SYSINIT_API_MyListener:
 "SPM_RunLevelRequest"(SYSINIT_RunLevelRequest, SYSINIT_ComponentHandle)
 	SYSINIT_API_NotifyRunLevelChanged(SYSINIT_API_RunLevelNotificationShutdown)
 		SEND IPC msgRunLevelNotification
+
+
+<version-info>
+SYSINIT_API_GetVersionInformationString
+
+// CMS_SYSTEM_INFRASTRUCTURE/SYSINIT/src/server/server_tasks.c
+
+#define SERVER_TASKS_VER_INFO_DEV_NAME "/dev/nds/versioninformation"
+
+void getHardwareStringFromDevice(const char *string, uint32_t string_length, SYSINIT_PRIV_HardwareString *pstHardwareString)
+
+            /* Call the ioctl to get property size */
+            if (SYSINIT_IOCTL(device_fd, VI_GET_PROPERTY_SIZE, &vi_property_size) != SYSINIT_POSIX_OK)
+
 
 #
 # JVM
