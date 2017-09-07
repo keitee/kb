@@ -14,6 +14,7 @@
 *kt_linux_bash_005* sh-quote
 *kt_linux_bash_019* sh-pipeline sh-subshell sh-environment
 *kt_linux_bash_019* sh-pipeline-case-problem
+*kt_linux_bash_019* sh-pipeline-async
 *kt_linux_bash_019* sh-list-construct
 *kt_linux_bash_021* sh-script
 *kt_linux_bash_021* sh-exit-status
@@ -732,10 +733,11 @@ ssh theyard "mysql -e \"select upload_time from upload where parser_result != 'N
 ={============================================================================
 *kt_linux_bash_019* sh-pipeline sh-subshell sh-environment
 
+*sh-pipe*
 3.2.2 Pipelines
 
 A pipeline is a sequence of simple commands separated by one of the control
-operators | or |&.
+`operators | or |&.`
 
 The format for a pipeline is
 
@@ -811,6 +813,7 @@ the following. Unless otherwise noted, the values are `inherited from` the
 A command invoked in this separate environment cannot affect the shell's
 execution environment.
 
+*sh-parentheses-subshell*
 `command-substitution`, commands `grouped-with-parentheses`, and
 `asynchronous-commands` are invoked in a `subshell-environment` that is a
 duplicate of the shell environment, except that traps caught by the shell are
@@ -1147,17 +1150,155 @@ if __name__ == "__main__":
 
 
 ={============================================================================
+*kt_linux_bash_019* sh-pipeline-async
+
+From 3.2.2 Pipelines
+
+If the pipeline is 'not' executed asynchronously (see `list-construct`), the
+shell 'waits' for all commands in the pipeline to complete.
+
+This means that each command in the pipeline runs `asynchronously`. 
+
+http://blog.dataart.com/linux-pipes-tips-tricks/
+
+<ex>
+# telnet to a box and run commands
+
+set -x
+
+ip=10.209.56.13
+
+ping -c 2 $ip &&
+(
+sleep 5
+echo "root"
+sleep 3
+echo "mkdir /mnt/tmp"
+echo "mount -o rw -t nfs 10.209.62.106:/home/kyoupark/ /mnt/tmp"
+echo "ls /mnt/nds/dev_6/part_0 > /mnt/tmp/_LIST_OUT_"
+echo "ls /mnt/tmp/_LIST_OUT_"
+echo "chmod 777 /mnt/tmp/_LIST_OUT_"
+echo "umount /mnt/tmp"
+echo "rmdir /mnt/tmp"
+echo exit
+) | telnet $ip
+
+However, the above do not work and need `wait` like:
+
+set -x
+
+ip=10.209.56.13
+
+ping -c 2 $ip &&
+(
+sleep 5
+echo "root"
+sleep 3
+echo "mkdir /mnt/tmp"
+echo "mount -o rw -t nfs 10.209.62.106:/home/kyoupark/ /mnt/tmp"
+echo "ls /mnt/nds/dev_6/part_0 > /mnt/tmp/_LIST_OUT_"
+echo "ls /mnt/tmp/_LIST_OUT_"
+echo "chmod 777 /mnt/tmp/_LIST_OUT_"
+echo "umount /mnt/tmp"
+echo "rmdir /mnt/tmp"
+sleep 5                   # needs to wait
+echo exit
+) | telnet $ip
+
+the wait which uses count and check on file that can be made as flag and that
+file can be made when commend ends.
+
+(
+echo "commands..."
+echo "touch $DIR/done"
+AA=0
+AALIMIT=50
+if [ $SB -eq 1 ]
+then
+AALIMIT=1000000
+fi
+while [ ! -f $DIR/done -a $AA -lt $AALIMIT ]
+do
+let AA+=1
+sleep 5
+echo "Waiting $AA" >&2
+done
+)
+
+
+kyoupark@st-castor-03:~$ sh pipe-run.sh
++ ip=10.209.56.13
++ ping -c 2 10.209.56.13
+PING 10.209.56.13 (10.209.56.13) 56(84) bytes of data.
+64 bytes from 10.209.56.13: icmp_seq=1 ttl=63 time=0.532 ms
+64 bytes from 10.209.56.13: icmp_seq=2 ttl=63 time=0.450 ms
+
+--- 10.209.56.13 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1000ms
+rtt min/avg/max/mdev = 0.450/0.491/0.532/0.041 ms
++ sleep 5
++ telnet 10.209.56.13
+Trying 10.209.56.13...
+Connected to 10.209.56.13.
+Escape character is '^]'.
+drx890 login: + echo root
++ sleep 3
+root
+-sh-3.2# + echo 'mkdir /mnt/tmp'
++ echo 'mount -o rw -t nfs 10.209.62.106:/home/kyoupark/ /mnt/tmp'
++ echo 'ls /mnt/nds/dev_6/part_0 > /mnt/tmp/_LIST_OUT_'
++ echo 'ls /mnt/tmp/_LIST_OUT_'
++ echo 'chmod 777 /mnt/tmp/_LIST_OUT_'
++ echo 'umount /mnt/tmp'
++ echo 'rmdir /mnt/tmp'
++ sleep 5
+mkdir /mnt/tmp
+chmod 777 /mnt/tmp/_LIST_OUT_
+umount /mnt/tmp
+rmdir /mnt/tmp
+-sh-3.2# mount -o rw -t nfs 10.209.62.106:/home/kyoupark/ /mnt/tmp
+-sh-3.2# ls /mnt/nds/dev_6/part_0 > /mnt/tmp/_LIST_OUT_
+-sh-3.2# ls /mnt/tmp/_LIST_OUT_
+/mnt/tmp/_LIST_OUT_
+-sh-3.2# chmod 777 /mnt/tmp/_LIST_OUT_
+-sh-3.2# umount /mnt/tmp
+-sh-3.2# rmdir /mnt/tmp
+-sh-3.2# + echo exit
+Connection closed by foreign host.
+kyoupark@st-castor-03:~$
+
+
+Also, the following do not work.
+
+ping -c 2 $ip && telnet $ip |
+(
+)
+
+So, subshell from () echos commands which piped into telnet and it's timing
+dependant.
+
+ping -c 2 $ip && 
+(
+echo "commands.."
+) | telnet $ip
+
+
+={============================================================================
 *kt_linux_bash_019* sh-list-construct
 
 3.2.3 Lists of Commands
 
 A list is a sequence of one or more `pipelines` separated by one of the
 operators ;, &, &&, or ||, and optionally terminated by one of ;, &, or a
-newline. 
+`newline`. 
 
 note: means do on multiple pipelines
 
 <semicolon>
+
+   A sequence of one or more newlines may appear in a 'list' to delimit
+   commands, equivalent to a semicolon.
+
 Commands separated by a ; are executed 'sequentially'; the shell waits for each
 command to terminate in turn. The return status is the exit status of the last
 command executed. 
@@ -4292,6 +4433,38 @@ function() {
     http://www.marathon.org/story/
     http://www.gnu.org/
     MYURLS
+}
+
+<ex>
+delete_unused_partitions()
+{
+
+    echo "delete_unused_partitions"
+
+    cat<<EOM | fdisk /dev/sda
+
+
+
+
+
+
+d
+3
+
+
+
+
+
+
+
+
+
+
+d
+4
+w
+EOM
+
 }
 
 
@@ -68197,7 +68370,7 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
 
   // static ElfW(Addr) __attribute_used__ internal_function
   // _dl_start (void *arg)
-  _dl_start (elf/rtld.c)
+  `_dl_start` (elf/rtld.c)
   {
 
   ELF_MACHINE_BEFORE_RTLD_RELOC (sysdep/<arch>/dl-machine.h)
@@ -68227,7 +68400,7 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
       // dl_main (elf/rtld.c, main entry point for loader)
       (*dl_main) (phdr, phnum, &user_entry, _dl_auxv);
       static void
-        dl_main (const ElfW(Phdr) *phdr,
+        `dl_main` (const ElfW(Phdr) *phdr,
             ElfW(Word) phnum,
             ElfW(Addr) *user_entry,
             ElfW(auxv_t) *auxv)
@@ -68453,33 +68626,6 @@ supported in mips.
 #else
 
 
-#define DT_NUM      34  /* Number used, 0x22 */
-
-/* OS and/or GNU dynamic extensions */
-#define OS_NUM 1
-
-// ldso/ldso/mips/dl-sysdep.h
-#define ARCH_NUM 3
-#define DT_MIPS_GOTSYM_IDX	(DT_NUM + OS_NUM)
-#define DT_MIPS_LOCAL_GOTNO_IDX	(DT_NUM + OS_NUM +1)
-#define DT_MIPS_SYMTABNO_IDX	(DT_NUM + OS_NUM +2)
-
-// readelf -d
-//
-// Dynamic section at offset 0x17c contains 26 entries:
-//   Tag        Type                         Name/Value
-//
-//  #define DT_MIPS_LOCAL_GOTNO  0x7000000a	/* Number of local GOT entries */
-//  0x7000000a (MIPS_LOCAL_GOTNO)           10
-//
-//  0x70000011 (MIPS_SYMTABNO)              13
-//  0x70000012 (MIPS_UNREFEXTNO)            39
-//  0x70000013 (MIPS_GOTSYM)                0xb
-//  0x00000014 (PLTREL)                     REL
-//  0x00000017 (JMPREL)                     0x4004b0
-//  0x00000002 (PLTRELSZ)                   48 (bytes)
-
-
 <elf-source-struct>
 // ldso/include/dl-hash.h
 struct elf_resolve {
@@ -68537,8 +68683,10 @@ _dl_start(unsigned long args)
   SEND_STDERR_DEBUG("Scanning DYNAMIC section\n");
   tpnt->dynamic_addr = dpnt;
 
+  // ldso/include/dl-elf.h
   static __always_inline
     _dl_parse_dynamic_info(dpnt, dynamic_info[] /* tpnt->dynamic_info */, NULL, load_addr)
+    void __dl_parse_dynamic_info(ElfW(Dyn) *dpnt, unsigned long dynamic_info[], void *debug_addr, ElfW(Addr) load_off)
     {
       // note: updates dynamic_info for each DT tags and is within
       // DYNAMIC_SIZE.
@@ -68547,12 +68695,30 @@ _dl_start(unsigned long args)
 
         if (dpnt->d_tag < DT_NUM) {
 
+          // note: *how-get-pltgot* 
+          //
+          // #define DT_PLTGOT	3  /* Processor defined value */
+          // #define DT_NUM      34 /* Number used, 0x22 */
+          //
+          // /* OS and/or GNU dynamic extensions */
+          // #define OS_NUM 1
+          // 
+          // 0x00000003 (PLTGOT)                     0x401980
+          // 
+          // ldso/ldso/mips/dl-sysdep.h
+          // #define ARCH_NUM 3
+          // #define DT_MIPS_GOTSYM_IDX	(DT_NUM + OS_NUM)
+          // #define DT_MIPS_LOCAL_GOTNO_IDX	(DT_NUM + OS_NUM +1)
+          // #define DT_MIPS_SYMTABNO_IDX	(DT_NUM + OS_NUM +2)
+
+          dynamic_info[dpnt->d_tag] = dpnt->d_un.d_val;
+
           if (dpnt->d_tag == DT_RELOCCOUNT)
             dynamic_info[DT_RELCONT_IDX] = dpnt->d_un.d_val;
 
-        // #define DT_LOOS     0x6000000d	/* Start of OS-specific */
-        // #define DT_HIOS     0x6ffff000	/* End of OS-specific */
-        // #define DT_LOPROC   0x70000000	/* Start of processor-specific */
+          // #define DT_LOOS     0x6000000d	/* Start of OS-specific */
+          // #define DT_HIOS     0x6ffff000	/* End of OS-specific */
+          // #define DT_LOPROC   0x70000000	/* Start of processor-specific */
         } else if (dpnt->d_tag < DT_LOPROC) {
 
         }
@@ -68580,6 +68746,8 @@ _dl_start(unsigned long args)
       } while(0)
 
       ADJUST_DYN_INFO(DT_HASH, load_off);
+
+      // note: *how-get-pltgot* 
       ADJUST_DYN_INFO(DT_PLTGOT, load_off);
       ADJUST_DYN_INFO(DT_STRTAB, load_off);
       ADJUST_DYN_INFO(DT_SYMTAB, load_off);

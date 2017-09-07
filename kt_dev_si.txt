@@ -82,7 +82,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-mcm
 |kt_dev_si_0001| comp-mdm
 |kt_dev_si_0001| comp-memman
-|kt_dev_si_0001| comp-membuster
+|kt_dev_si_0001| comp-membuster membuster-output
+|kt_dev_si_0001| comp-membuster-script
 |kt_dev_si_0001| comp-memman-membuster
 |kt_dev_si_0001| comp-memprof
 |kt_dev_si_0001| comp-timedoctor
@@ -1483,9 +1484,12 @@ mtd4: 03c00000 00020000 "nor"
 
 udhcpc -nR -t3 -T5
 
-// from a box and 10.209.62.232 is ukstbuild02 which shares all under /home
 mkdir /mnt/tmp
-mount -o rw -t nfs 10.209.62.232:/home/NDS-UK/kyoupark/ /mnt/tmp
+// from a box and 10.209.62.232 is ukstbuild02 which shares all under /home
+mount -o rw -t nfs 10.209.62.233:/home/NDS-UK/kyoupark/ /mnt/tmp
+// castor-03
+mount -o rw -t nfs 10.209.62.106:/home/kyoupark/ /mnt/tmp
+
 
 // to kit-debian
 mount -o rw -t nfs 10.209.56.97:/home/kyoupark/si_logs /mnt/tmp
@@ -8243,6 +8247,10 @@ DiagImpl.java
 **KT: DIAG_JAVA_natCreate(l_string:EPG_AFRM, pSegmentID:0xbeef0090
 **KT: DIAG_JAVA_natCreate(l_string:VGC_JAVA, pSegmentID:0xbeef0091
 
+<comp-jpa>
+STB_SW/THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/
+/modules/jpa-impl/src/c/inc/natPlayerCommon.h
+/modules/jpa-impl/src/c/src/natPlayerSessionImpl.c
 
 #
 # DARWIN_PLATFORM\DARWIN_PLAYER_JAVA
@@ -9137,10 +9145,77 @@ typedef enum _AMS_API_BOOKING_TYPE
 ={============================================================================
 |kt_dev_si_0001| comp-gfx comp-gfx-image
 
-# gfx.cfg
-POOL_SIZE_GFX_REGION=125000
+<gfx-image>
+kyoupark@st-castor-03:~/STB_SW$ grep GFX_IMAGE FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/SI_config.xml
 
-!ERROR  -GFXIMAGE     		< p:0x000001e2 P:APP t:0x2bf25520 T:no name M:gfx_image_jpeg_interface.c F:JPEG_INTERFACE_MemAllocLarge L:179 > Cannot allocate 482576 bytes 
+164:        <key name="POOL_SIZE_GFX_IMAGE" type="INTEGER" value="2000000">
+
+P1	70	27586	2017:08:28 14:28:34	Out of memory in " "GFX_IMAGE" pool.
+APP_GFX_IMAGE
+
+GfxImageCreate
+gfx_image_library.c:880
+Java_com_nds_fusion_gfximpl_GfxImageImpl_natCreateImage
+natGfxImageImpl.c:56
+
+note: there is no diag segment for J_GFX
+modules/jpa-impl/src/c/src/natGfxImageImpl.c
+
+JNIEXPORT jint JNICALL Java_com_nds_fusion_gfximpl_GfxImageImpl_natCreateImage
+  (JNIEnv *env, jclass jClass, jbyteArray jData, jint jOffset, jint jLength)
+{
+    GFX_IMAGE_Image image = NULL;
+    SYSTEM_STATUS status = GFX_IMAGE_GfxCreateFromContinuousMemory(GFX_PIXEL_FORMAT_ALL, GFX_CLUT_HANDLE_INVALID, &image);
+    if (SYSTEM_STATUS_IS_OK(status)) {
+        status = GFX_IMAGE_SetPixelFormatAll(image, PREFERRED_GFX_PIXEL_FORMAT);
+        if (SYSTEM_STATUS_IS_OK(status)) {
+            status = JPA_GFX_IMAGE_Decode(env, image, jData, jOffset, jLength);
+        }
+    }
+    JPA_GFX_MaybeThrowException(env, status);
+    return (jint)image;
+}
+
+JNIEXPORT void JNICALL Java_com_nds_fusion_gfximpl_GfxImageImpl_natDestroyGfxImage
+  (JNIEnv *env, jclass jClass, jint jImageHandle)
+{
+    // Flush hardware blitter
+    JPA_GFX_BLITTER_CHAIN_Execute(JPA_GFX_BLITTER_CHAIN_DESTROY_SURFACE);
+
+    GFX_IMAGE_Destroy((GFX_IMAGE_Image)jImageHandle);
+}
+
+SYSTEM_STATUS GFX_IMAGE_Destroy (GFX_IMAGE_Image anImage) {
+  status = anImage->api->destroyDecomp (anImage, GFX_IMAGE_ALL_IMAGES);
+}
+
+// uses function tables
+static GFX_IMAGE_DecoderAPI   jpeg_interface_DecoderAPI = {
+  GFX_IMAGE_API_ID_JPEG,            /* id */
+  JPEG_HEADER_SIZE,                 /* signNbByte */
+  JPEG_INTERFACE_IsOfType,          /* isOfType */
+  JPEG_INTERFACE_DestroyDecomp,     /* destroyDecomp */
+  JPEG_INTERFACE_ReadImageSize,     /* readImageSize */
+  JPEG_INTERFACE_LaunchDecomp,      /* launchDecomp */
+  JPEG_INTERFACE_ResumeDecomp,      /* resumeDecomp */
+  JPEG_INTERFACE_StopDecomp,        /* stopDecomp */
+};
+
+
+Q: It shows 11 allocations when hit OOM. Each requested allocation is 176904
+bytes and the total: size=1945944 / pool size=2000000
+
+A: 176904 bytes is the memory required for a single cover art image (182x243 *
+    4 bytes per pixel). R15 introduces wall of cover art in Cinema and Store,
+  which displays up to 15 cover art images.
+
+The EPG should be copying each decoded image to its own GFX surface and then
+immediately freeing it, but there are some threading issues with the way it
+does this in some places. 
+
+
+<gfx-region>
+POOL_SIZE_GFX_REGION=125000
 
 
 ={============================================================================
@@ -10760,17 +10835,16 @@ pool usage: 2112/204800 peak: 22296
 
 
 {oom-from-log-and-from-membuster}
-
-Found that OOM from log is far behind in OOM in MEM.TXT.
+Found that OOM from log is `far behind` in OOM in MEM.TXT.
 
 void   *MHWMemAllocStatic(MEMMAN_API_MemoryPoolHandle *pool, uint32_t size)
 {
-        MEMORY_PRINT_W(("Cannot allocate %d bytes in pool " POOLNAME_FMT ", not enough memory", size, PNAME(pool)));
-        if (smax <= size)
-        {
-            MEMORY_PRINT_W(("   Biggest block is %d bytes", smax));
-        }
-        DUMP_USED_BLOCKS(pool);
+  MEMORY_PRINT_W(("Cannot allocate %d bytes in pool " POOLNAME_FMT ", not enough memory", size, PNAME(pool)));
+  if (smax <= size)
+  {
+    MEMORY_PRINT_W(("   Biggest block is %d bytes", smax));
+  }
+  DUMP_USED_BLOCKS(pool);
 }
 
 #define DUMP_USED_BLOCKS(POOL) \
@@ -10817,23 +10891,17 @@ P:MW t:0x01e19520 T:CTM_SVR_DL_CONTENT M:mbuster_pinit.c F:membuster_plus_check_
 ...
 
 
+<membuster-output>
+MEM_AP.TXT  MEM_CA.TXT  MEM_MW.TXT  MEM_PW.TXT  MEM_SC.TXT  MEM_ST.TXT
+
 <ex>
 218996:start check at: 013:20:10.348
 219890:OOM Detected at: 013:32:09.086
-
 
 // first OOM in MEM_xx.TXT
 size=25032 (7f4f64 7dcff4 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [f688c2a7]
 allocs:`447`
 size=12963 (7c63bc 7dfab8 7dd838 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [0225da76]
-allocs:447
-size=76897 (7c63bc 7dfab8 7dd864 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [0619daa2]
-allocs:447
-size=2235 (7c63bc 7dfab8 7dcf4c 7dd670 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [e33ba878]
-allocs:447
-size=40319 (7c63bc 7dfab8 7dcf4c 7dd3f4 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [aa17a5fc]
-allocs:447
-size=5364 (7c63bc 7dfab8 7dcf4c 7dd57c 7eefa0 7a15a4 7a2adc 7a3b54 7a5028 7a53c0 79dfd4 79a950 51038c 50ae0c ef52d4 ) [cd4fa784]
 allocs:447
 
 
@@ -10854,7 +10922,6 @@ allocs:447
 
 
 WHY not match between 447 and 504?
-
 
 1462439:OOM Detected at: 032:02:23.066
 
@@ -10898,25 +10965,14 @@ $ grep "size=|allocs:447" MEM_MW_1.TXT
 
 
 <ex>
+size=2609 (9a8d70 9af8bc 6045ac 61c638 61cab8 6020f0 9cd48c ) [05d5559a]
+020 01251644     23 000:02:30.272
+020 01251674     20 000:02:31.084
+020 01251ae4     25 000:02:59.060
+020 01251b1c     23 000:03:05.768
+020 01250294     22 000:03:07.428
+allocs:120
 
-// shows upward trends
-$ egrep -anA 1 '638dbc5c' MEM_MW.TXT | more
---
-381588:size=63522 (7c8db8 7a6c54 7b1a98 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e91518 ) [638dbc5c]
-381589-allocs:373
---
-383300:size=63522 (7c8db8 7a6c54 7b1a98 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e91518 ) [638dbc5c]
-383301-156 02355fe4    163 005:27:58.477
---
-387430:size=63522 (7c8db8 7a6c54 7b1a98 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e91518 ) [638dbc5c]
-387431-156 02355fe4    163 005:27:58.477
---
-391577:size=63522 (7c8db8 7a6c54 7b1a98 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e91518 ) [638dbc5c]
-391578-156 02355fe4    163 005:27:58.477
---
-395505:size=63856 (7c8db8 7a6c54 7b1a98 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e91518 ) [638dbc5c]
-395506-allocs:375
---
 
 // to find out max allocs in OOM section
 sed -n '382030,386153p' MEM_MW.TXT | egrep -an 'allocs' | sort -n -t : -k 3
@@ -10940,9 +10996,9 @@ size=20888 (7a059c 7b16a0 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e9151
 893:allocs:373
 
 
-#
-# example analysis between LOG, MEMP and MEMB
-#
+<between-log-memprofile-membuster>
+example analysis between LOG, MEMP and MEMB
+
 (MPROF) # it's the same as MEM uses for its main output
                       # name, peak, used, total, g_count
                       ADPT_GUIDE,    7960,    7448,    8000,     114
@@ -10986,8 +11042,6 @@ echo "set terminal jpeg; set title 'ADPT_PLANNER-1st'; set grid; set output 'ADP
 
 egrep -an "pool PCAT_VIEW_CLNT_POOL" MEM121.TXT 
 egrep -an -B 1 "pool usage" MEM121.TXT | egrep -A 1 "PCAT_VIEW_CLNT_POOL"
-
-
 
 
 membuster_thread
@@ -11109,6 +11163,18 @@ CMS_SYSTEM_RESOURCE/PDM/src/server/inc/pdm_srv_fs_support.h
 
 PDM_FS_DIAG_LINK 1727 CMS_SYSTEM_RESOURCE/PDM/src/server/fs/pdm_srv_fs_support.c                     
 PDM_FS_WriteMntPointToFile((const uint8_t *)g_pdm_fs_diagDir, PDM_FS_DIAG_LINK,false);
+
+
+={============================================================================
+|kt_dev_si_0001| comp-membuster-script
+
+http://theyard.cisco.com/si_logs/translation/darwin_0019fb44075d_13341d2a2d8eaaea9b2c6fd3b7955fd5/membuster_report/APP_systemstring.html
+
+note: some cases, it tops the call trace at top which keeps increasing but not
+always. script issue?
+
+To decode all traces please run from within the log directory and reload this page
+/home/si_logs/bin/log_analysis_scripts/mem_leak_check.py ethan
 
 
 ={============================================================================
