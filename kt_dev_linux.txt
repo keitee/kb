@@ -68409,14 +68409,53 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
           if (*user_entry == (ElfW(Addr)) ENTRY_POINT)
           {
             // Ho ho.  We are not the program interpreter!  We are the program
-            // itself!  This means someone ran ld.so as a command.  Well, that
-            // might be convenient to do sometimes.  We support it by
-            // interpreting the args like this:
-            //   ld.so PROGRAM ARGS...
+            // itself!  This means someone ran ld.so as a command.  
+
+            rtld_is_main = true;
+
+            _dl_fatal_printf ("\
+                Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]\n\
+                You have invoked `ld.so', the helper program for shared library executables.\n\
+                This program usually lives in the file `/lib/ld.so', and special directives\n\
+                in executable files using ELF shared libraries tell the system's program\n\
+                loader to load the helper program from this file.  This helper program loads\n\
+                the shared libraries needed by the program executable, prepares the program\n\
+                to run, and runs it.  You may invoke this helper program directly from the\n\
+                command line to load and run an ELF executable file; this is like executing\n\
+                that file itself, but always uses this helper program from the file you\n\
+                specified, instead of the helper program file specified in the executable\n\
+                file you run.  This is mostly of use for maintainers to test new versions\n\
+                of this helper program; chances are you did not intend to run this program.\n\
+                \n\
+                --list                list all dependencies and how they are resolved\n\
+                --verify              verify that given object really is a dynamically linked\n\
+                object we can handle\n\
+                --library-path PATH   use given PATH instead of content of the environment\n\
+                variable LD_LIBRARY_PATH\n\
+                --inhibit-rpath LIST  ignore RUNPATH and RPATH information in object names\n\
+                in LIST\n\
+                --audit LIST          use objects named in LIST as auditors\n");
+          }
+          else
+          {
+            // note: alloc `link_map`
+            /* Create a link_map for the executable itself.
+               This will be what dlopen on "" returns.  */
+            main_map = _dl_new_object ((char *) "", "", lt_executable, NULL,
+                __RTLD_OPENEXEC, LM_ID_BASE);
           }
 
           /* Scan the program header table for the dynamic section.  */
           for (ph = phdr; ph < &phdr[phnum]; ++ph);
+
+          // note: parse dynamic section and fill l->l_info
+          if (! rtld_is_main)
+          {
+            /* Extract the contents of the dynamic section for easy access.  */
+            elf_get_dynamic_info (main_map, NULL);
+            /* Set up our cache of pointers into the hash table.  */
+            _dl_setup_hash (main_map);
+          }
 
           // elf/dl-load.c for ld-search-order
           /* Map in the shared object file NAME.  */
@@ -68458,6 +68497,9 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
           _dl_relocate_object (struct link_map *l)
           {
             *current-working*
+
+            // 1759:     relocation processing: /mnt/tmp/asn/glibc-libs/lib/libc.so.6 (lazy)
+
             if (__builtin_expect (GLRO(dl_debug_mask) & DL_DEBUG_RELOC, 0))
               _dl_debug_printf ("\nrelocation processing: %s%s\n",
                   l->l_name[0] ? l->l_name : rtld_progname,
@@ -68470,6 +68512,9 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
           {
             if (GLRO(dl_debug_mask) & DL_DEBUG_BINDINGS)
             {
+
+              // 1759:     binding file /mnt/tmp/asn/glibc-libs/lib/libc.so.6 [0] to /mnt/tmp/asn/glibc-libs/lib/libc.so.6 [0]: normal symbol `argp_err_exit_status' [GLIBC_2.2]
+              
               _dl_debug_printf ("binding file %s [%lu] to %s [%lu]: %s symbol `%s'",
                   (reference_name[0]
                    ? reference_name
