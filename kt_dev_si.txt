@@ -2950,6 +2950,9 @@ cd FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
 ./build_mw_epg.sh -p ams-drx890 --project picasso --variant debug --profile nds_si_devel
 ./build_mw_epg.sh --platform ams-drx890 --project picasso --profile sky_prod --variant prod --baseline ENG_XXX
 
+./build_mw_epg.sh --platform ams-drx890 --profile sky_trials --project picasso --variant debug --baseline ENG_TST_41.44.00U --cartool no --enable_full_parallel_build
+./make_image.sh -c --platform ams-drx890 --profile sky_trials --project picasso --variant debug --baseline ENG_TST_41.44.00U --cartool no --enable_full_parallel_build
+
 
 2) Upload jar files and replace it with car files. 
 note: requires hudson page to do that.
@@ -8961,9 +8964,34 @@ hex(((81 & 0x3FF) << 22) | ((0 & 0x3) << 16) | ((0 & 0xF) << 12) | (0 & 0xFFF) )
 
 UAM_STATUS_OK 		0x14400000
 
+static SYSTEM_STATUS DplPlayCheckPassedBoundaries(DPL_PLAY *pThis)
+{
+  DIAG_LOG_MIL (VRM_diag_segment_id, ("send DPLTI to anchor. hPlay = 0x%x", pThis -> hDplPlay));
+
+  dpltiMsg.dpl_play_handle = pThis->hDplPlay;
+  dpltiMsg.dpl_play_data.asset_transition_data.dplti = dplti;
+
+  pThis->notifyCallback (DPL_PLAY_EVENT_ASSET_TRANSITION, &dpltiMsg);
+  pThis->prevDirection = pThis->playDirection;
+}
+
+void BookingPlayNotifyServerDplEvent(DPL_PLAY_EVENT dpl_play_event, const DPL_PLAY_EVENT_DATA *p_event_data)
+{
+  case(DPL_PLAY_EVENT_ASSET_TRANSITION):
+    event = E_VRM_SRV_EVENT_JOB_PLAY_MSO_CHANGED;
+    event_data.job_mso_data.origin = MSO_ORIGIN_DPL;
+    event_data.job_mso_data.mso_status = VRM_STATUS_OK;
+    event_data.job_mso_data.job_handle = VRM_SRV_GetJobHandleFromCookie (pThis->job_man_cookie);
+    event_data.job_mso_data.mso_handle = p_event_data->dpl_play_data.asset_transition_data.dplti;
+    break;
+}
+
 
 // DARWIN_PLATFORM/DARWIN_PLAYER/src/player_uam.c
-// void PLAYER_UAM_SignalPlaybackUpdate()
+void PLAYER_UAM_SignalPlaybackUpdate()
+{
+  if (UAM_API_STATUS_OK != UAM_API_ParamDataProcessEvent(l_uam_handle));
+}
 
 !INFO   -P_Api        		< P:APP T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalSpeedInfo L:2562 > Succeed to send param bag to UAM with properties speed=12000 and time=59793098 
 !INFO   -P_Api        		< P:APP T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalSpeedChange L:1411 > Speed  = 12000 - Last Speed Notified = 6000  
