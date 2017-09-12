@@ -9094,6 +9094,19 @@ gzip -c ramdisk_rootfs_img > ramdisk_rootfs_img.gz
 /usr/bin/bzip2 -dc /usr/src/redhat/SOURCES/linux-libc-headers-2.6.18.0.tar.bz2
 
 
+{7z}
+https://www.ibm.com/developerworks/community/blogs/6e6f6d1b-95c3-46df-8a26-b7efd8ee4b57/entry/how_to_use_7zip_on_linux_command_line144?lang=en
+
+1. Create an archive
+$ 7z a basic.7z basic
+
+2. Extract an archive
+$ 7z e basic.7z
+
+3. List archive details
+$ 7z l basic.7z
+
+
 {tar}
 SYNOPSIS
        tar [OPTION...] [FILE]...
@@ -12086,7 +12099,7 @@ root@3591df06b6f1:/#
 
 
 ={============================================================================
-*kt_linux_tool_051* tool-virtualbox tool-samba
+*kt_linux_tool_051* tool-virtualbox tool-samba tool-vm
 
 {graphic-issue}
 When see a problem with NVIDIA, need to install a driver for ubuntu manually:
@@ -58986,7 +58999,7 @@ _dl_relocate_object ()
 
 
   // 2, glibc-ports-2.13/sysdeps/mips/dl-machine.h
-  elf_machine_runtime_setup (struct link_map *l, int lazy, int profile)
+  `elf_machine_runtime_setup` (struct link_map *l, int lazy, int profile)
   {
 # ifndef RTLD_BOOTSTRAP
     ElfW(Addr) *got;
@@ -59023,8 +59036,6 @@ _dl_relocate_object ()
     {
       ElfW(Addr) *gotplt;
 
-      // from
-      //
       // note: 
       // DT_MIPS_PLTGOT cause crash since l_info[84] is null.
       //
@@ -59051,13 +59062,20 @@ _dl_relocate_object ()
       // #0  0x5555c600 in _dl_relocate_object (scope=0x2aaa828c, reloc_mode=<value optimized out>, consider_profiling=0) at `../../glibc-ports-2.13/sysdeps/mips/dl-machine.h:755`
       // 755           gotplt = (ElfW(Addr) *) D_PTR (l, l_info[DT_MIPS (PLTGOT)]);
       //
+      // *link_map_struct*
       // include/link.h. this is defined in elf/link.h but seems not used.
       // struct link_map
       // {
-      //    ElfW(Dyn) *l_info[DT_NUM + DT_THISPROCNUM + DT_VERSIONTAGNUM
+      //    ElfW(Dyn) *`l_info`[DT_NUM + DT_THISPROCNUM + DT_VERSIONTAGNUM
 		//      + DT_EXTRANUM + DT_VALNUM + DT_ADDRNUM];
       // }
 
+      // *todo* 
+      // 1. modify elf_get_dynamic_info() according to
+      // brcm uclibc _dl_parse_dynamic_info()
+      //
+      // 2. modify to use PLTGOT
+      //
       // gotplt = (ElfW(Addr) *) D_PTR (l, l_info[DT_MIPS (PLTGOT)]);
       // to
       gotplt = (ElfW(Addr) *) D_PTR (l, l_info[DT_PLTGOT]);
@@ -68033,6 +68051,7 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
           if (! rtld_is_main)
           {
             /* Extract the contents of the dynamic section for easy access.  */
+            // elf_get_dynamic_info  102 elf/dynamic-link.h elf_get_dynamic_info (struct link_map *l, ElfW(Dyn) *temp)
             `elf_get_dynamic_info` (main_map, NULL);
             /* Set up our cache of pointers into the hash table.  */
             _dl_setup_hash (main_map);
@@ -68311,7 +68330,7 @@ _dl_start(unsigned long args)
 
   // ldso/include/dl-elf.h
   static __always_inline
-    _dl_parse_dynamic_info(dpnt, dynamic_info[] /* tpnt->dynamic_info */, NULL, load_addr)
+    _dl_parse_dynamic_info(dpnt, dynamic_info[] /* tpnt->dynamic_info */, NULL /*debug_addr */, load_addr)
     void __dl_parse_dynamic_info(ElfW(Dyn) *dpnt, unsigned long dynamic_info[], void *debug_addr, ElfW(Addr) load_off)
     {
       // note: updates dynamic_info for each DT tags and is within
@@ -68339,14 +68358,14 @@ _dl_start(unsigned long args)
 
           dynamic_info[dpnt->d_tag] = dpnt->d_un.d_val;
 
-          if (dpnt->d_tag == DT_RELOCCOUNT)
-            dynamic_info[DT_RELCONT_IDX] = dpnt->d_un.d_val;
+        } else if (dpnt->d_tag < DT_LOPROC) {
 
           // #define DT_LOOS     0x6000000d	/* Start of OS-specific */
           // #define DT_HIOS     0x6ffff000	/* End of OS-specific */
           // #define DT_LOPROC   0x70000000	/* Start of processor-specific */
-        } else if (dpnt->d_tag < DT_LOPROC) {
 
+          if (dpnt->d_tag == DT_RELOCCOUNT)
+            dynamic_info[DT_RELCONT_IDX] = dpnt->d_un.d_val;
         }
 
 // ldso/ldso/mips/dl-sysdep.h
