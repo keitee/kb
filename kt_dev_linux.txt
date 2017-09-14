@@ -33,7 +33,7 @@
 *kt_linux_bash_001* sh-expansion-tilde
 *kt_linux_bash_001* sh-expansion-parameter sh-variable-reference
 *kt_linux_bash_001* sh-expansion-parameter-substitude
-*kt_linux_bash_001* sh-expansion-command
+*kt_linux_bash_001* sh-expansion-command sh-output-from-command
 *kt_linux_bash_001* sh-expansion-word sh-ifs
 *kt_linux_bash_001* sh-expansion-arithmetic sh-expr
 *kt_linux_bash_001* sh-expansion-process
@@ -48,6 +48,8 @@
 *kt_linux_bash_038* sh-builtin-declare
 *kt_linux_bash_024* sh-builtin-job
 *kt_linux_bash_024* sh-builtin-help
+*kt_linux_bash_024* sh-builtin-source
+*kt_linux_bash_024* sh-builtin-hash which-command
 *kt_linux_bash_025* sh-special-variable
 *kt_linux_bash_023* sh-invoking
 |kt_linux_bash_030| sh-interactive-or-not
@@ -153,7 +155,7 @@
 *kt_linux_tool_051* tool-dirname tool-basename tool-readlink
 *kt_linux_tool_051* tool-last
 *kt_linux_tool_051* tool-add-user tool-sudo
-*kt_linux_tool_051* tool-virtualbox
+*kt_linux_tool_051* tool-virtualbox tool-samba tool-vm
 *kt_linux_tool_051* tool-cron tool-incron
 *kt_linux_tool_100* tool-gprof
 *kt_linux_tool_100* tool-gpg
@@ -714,10 +716,10 @@ The special parameters ‘*’ and ‘@’ have special meaning when in double q
 <ex>
 Do not quote all (see below) so that `can use variables` inside the quoted.
 
-$ echo '$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]'
+$ echo '$USER owes <-$1250.**>; [ as of (``date +%m/%d``) ]'
 $USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]
 
-$ echo "$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]"
+$ echo "$USER owes <-$1250.**>; [ as of (``date +%m/%d``) ]"
 parkkt owes <-250.**>; [ as of (01/26) ]
 
 <ex>
@@ -2519,13 +2521,6 @@ gender="female"
 if [[ "$gender" == f* ]]
 
 
-arg1 OP arg2
-    OP is one of ‘-eq’, ‘-ne’, ‘-lt’, ‘-le’, ‘-gt’, or ‘-ge’. 
-    These arithmetic binary operators return true if arg1 is equal to, not
-    equal to, less than, less than or equal to, greater than, or greater than
-    or equal to arg2, respectively. Arg1 and arg2 may be positive or negative
-    `integers`. 
-
 <ex>
 Used to check if there are files matched. Since *sh-expansion-filename*
 happens it expands to filename if there is a file and if not, left unchanged.
@@ -2537,6 +2532,15 @@ P397.CUR
 $ echo [SP]*.LOG
 [SP]*.LOG
 
+
+'ARG1 OP ARG2'
+     'OP' is one of '-eq', '-ne', '-lt', '-le', '-gt', or '-ge'.  These
+
+      These arithmetic binary operators return true if arg1 is equal to, not
+      equal to, less than, less than or equal to, greater than, or greater
+      than or equal to arg2, respectively. Arg1 and arg2 may be positive or
+      negative `integers`.  
+      
 
 ={============================================================================
 *kt_linux_bash_001* sh-pattern-match
@@ -2954,9 +2958,11 @@ else
 fi
 
 note: 
-this is why use *sh-quote* to handle empty string. see
-*sh-single-double-quote* *sh-expansion-parameter* see *sh-[[*
-To handle a `string` use double-quote and shows `null-string` is ''. 
+${VAR} and $VAR has no effect when referring variable since it's not array.
+*sh-quote*  does has effect since it stringfies it and make it null-string.
+See "-n `sting`" and  *sh-single-double-quote* *sh-expansion-parameter*
+*sh-[[* When on "set -x", `null-string`  shows as ''. 
+
 
 # 2 zero
 
@@ -3841,7 +3847,7 @@ _that_generates_url
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-expansion-command
+*kt_linux_bash_001* sh-expansion-command sh-output-from-command
 
 3.5.4 Command Substitution
 
@@ -5304,6 +5310,40 @@ the new value is retained when source completes. The return status is the exit
 grep BR2_PACKAGE_BUSYBOX_CONFIG .config > /tmp/spkconf$$
 . /tmp/spkconf$$
 rm /tmp/spkconf$$
+
+
+={============================================================================
+*kt_linux_bash_024* sh-builtin-hash which-command sh-hash sh-type
+
+https://unix.stackexchange.com/questions/86012/what-is-the-purpose-of-the-hash-command
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ sudo pip install -U pip
+// upgrading is done.
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ pip --version
+-bash: /usr/bin/pip: No such file or directory
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ which pip
+/usr/local/bin/pip
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ echo $PATH
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games
+
+WHY? both hash and type are builtin commands
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ hash -r
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ type pip
+pip is /usr/local/bin/pip
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ pip --version
+pip 9.0.1 from /usr/local/lib/python2.7/dist-packages (python 2.7)
+
+pi@raspberrypi ~/snugupdate-v2-snugberrypi $ hash
+hits    command
+   1    /usr/bin/which
+   1    /usr/local/bin/pip
+   1    /usr/bin/man
 
 
 ={============================================================================
@@ -24920,9 +24960,18 @@ its symbols.
 
 `uppercase` means global and `lowercase` means local. 
 
-B        is bss
-T/t      is text and means symbols defined in this object file. 
-D        data
+           "R"
+           "r" The symbol is in a read only data section.
+
+           "B"
+           "b" The symbol is in the uninitialized data section (known as BSS).
+
+           "T"
+           "t" The symbol is in the text (code) section.
+
+           "D"
+           "d" The symbol is in the initialized data section.
+
 A        is this address is absolute and is not subject to modification by an
          additional link stage
 

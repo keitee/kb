@@ -132,7 +132,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_005* init-copy-form-init
 |kt_dev_cpp_005| init-list-form-init initializer_list
 |kt_dev_cpp_006| swap {copy-and-swap-idiom}
-|kt_dev_cpp_008| const
+|kt_dev_cpp_008| cpp-const
 *kt_dev_cpp_008* const-temporary
 *kt_dev_cpp_008* const-this, const-overload, const-member-function
 |kt_dev_cpp_008| const-bitwise, logical
@@ -9062,6 +9062,28 @@ printf("ulong max from limits: %luL\n", ULONG_MAX );
        nonnormalized numbers, and nonzero but otherwise unspecified for
        normalized numbers.
 
+<not-use-printf>
+#include <cstdio>
+#include <iostream>
+
+int main()
+{
+    double d_val = 3.14;
+    int i_val = d_val;
+    double d_vval = i_val;
+
+    std::cout << "d_val: " << d_val << ", i_val: " << i_val << std::endl;
+    std::cout << "d_val: " << d_val << ", i_val: " << i_val << ", d_vval: " << d_vval << std::endl;
+
+    printf ("d_val: %e, i_val: %e, \n", d_val, i_val );
+    printf ("d_val: %e, i_val: %e, d_vval: %e \n", d_val, i_val, d_vval);
+}
+
+d_val: 3.14, i_val: 3
+d_val: 3.14, i_val: 3, d_vval: 3
+d_val: 3.140000e+00, i_val: 3.034283e-86,
+d_val: 3.140000e+00, i_val: 3.000000e+00, d_vval: 0.000000e+00
+
 
 ={============================================================================
 *kt_dev_lang_015* expr-control-flow
@@ -15562,36 +15584,137 @@ all containers?
 
 
 ={============================================================================
-*kt_dev_cpp_008* const 
+*kt_dev_cpp_008* cpp-const 
 
-{constant-expression}
+<must-be-initialized>
+Because we can't change the value of a const object after we create it, `must`
+be initialized.
+
+
+<constant-expression>
 A constant expression is an expression that involves only constants:
 
 #define MAXLINE 100
 char line[MAXLINE+1];
 
 
-{const-scope}
-To support seperate compilation of const variable, `const-variable` must be
-defined in every file and has `file-scope`. CPR p60. So can have same name in
-different files.  
+{const-file-scope} CPR p60
 
-To use the same const-variable in multiple files, must use `extern` on 'both'
-definition and declaration while `file-static` cannot do that.
+1. for constant expression
 
-The important principle is that shouldn't change const object.
+const int bufSize = 512;
+
+The compiler will repace uses of the variable with its corresponding value
+during compilation. That is, the compiler will generate code using the value
+512 in the places that our code uses bufSize. To do this, the compiler has to
+see the initializer. When split a program into multiple files, every file must
+have access to its initializer. In order to see initializer, the variable must
+be defined in every file. 
+
+To support this, `yet avoid multiple definitions` of the same variable, const
+variable are defined as local to file. When define a const with the same name
+in multiple files, it is `as if` had written definitions for separate
+variables in each file. 
+
+// this is main.c
+//
+// $ g++ -g -std=c++0x -c a.c
+// $ g++ -g -std=c++0x -c b.c
+// $ g++ -g -std=c++0x a.o b.o main.c
+//
+#include <cstdio>
+#include "def.h"
+
+int main()
+{
+    printf("this is main\n");
+    printf("this is main: the const is %d\n", ci_max_value );
+
+    print_const_from_a();
+    print_const_from_a();
+
+    return 0;
+}
+
+// this is a.c
+//
+#include <cstdio>
+#include "def.h"
+
+void print_const_from_a()
+{
+    printf("this is a.c and the const is %d\n", ci_max_value );
+}
+
+// this is b.c
+//
+#include <cstdio>
+#include "def.h"
+
+void print_const_from_b()
+{
+    printf("this is b.c and the const is %d\n", ci_max_value );
+}
+
+// this is def.h
+//
+const int ci_max_value = 500;
+
+extern void print_const_from_a();
+extern void print_const_from_b();
+
+// output
+//
+$ nm a.o
+0000000000000000 T _Z18print_const_from_av
+0000000000000024 r _ZL12ci_max_value
+
+$ nm b.o
+0000000000000000 T _Z18print_const_from_bv
+0000000000000024 r _ZL12ci_max_value
+
+$ nm a.out
+...
+000000000040071c r _ZL12ci_max_value
+0000000000400744 r _ZL12ci_max_value
+0000000000400778 r _ZL12ci_max_value
+
+The nm result is the same when defines ci_max_value in each c file and even
+when uses different initializers.
+
+Again as said, although use `the same name`, 
+  "it is `as if` had written definitions for separate variables in each file."
+  by `generating` a separate variable in each file.
+
+
+2. for not a constant expression
+
+When initialzer is not a constant expression, not generate a separate variable
+in each file and want const object behave like other variable. Must use
+`extern` on 'both' definition and declaration.
 
 // file one
-extern const int gc_max = 100;
+extern const int bufSize = fcn();
 
 // file two
-extern const int gc_max;
+extern const int bufSize;
+
+
+3. extern works for constant expression as well.
+
+$ nm a.o
+                 U ci_max_value
+$ nm b.o
+                 U ci_max_value
+$ nm a.out
+0000000000400758 R ci_max_value
+
 
 <ex>
 Suppose that a header has const definition like below and is included in
 multiple files. Is it a problem?
 
-const char* const MESSAGE_TYPE_URL_LIST = "text/uri-list";
+const char *const MESSAGE_TYPE_URL_LIST = "text/uri-list";
 
 Interesting, I was using gcc. It seems this is legal in C++ but not in C. Causes
 link error, duplicated.
@@ -15610,9 +15733,27 @@ This feature allows the user to put constobjects in header files that are
 included in many compilation units.
 
 
+4. tried 1 with gcc
+
+$ nm a.o
+0000000000000000 R ci_max_value
+$ nm b.o
+0000000000000000 R ci_max_value
+
+$ gcc -g a.o b.o main.c
+b.o:(.rodata+0x0): multiple definition of `ci_max_value'
+a.o:(.rodata+0x0): first defined here
+/tmp/ccfme3ln.o:(.rodata+0x0): multiple definition of `ci_max_value'
+a.o:/home/kyoupark/works/t_const/a.c:11: first defined here
+collect2: error: ld returned 1 exit status
+
+
+All in all, 1 is C++ feature which makes const file-scope.
+
+
 {top-and-low-level-const}
-The reference and pointer are 'indirect' access so makes two level in terms of
-constness. This matters when copy an object.
+This is only for pointer which has 'indirect' access so makes two level in
+terms of constness. This matters when copy an object.
 
   const int *const <variable-name>
   <-- 1 --> <- 2 ->
@@ -15628,23 +15769,11 @@ object that point or reference to.
 2. `declarator-type` part which is for compound type, reference or pointer, and
 for top-level. That is pointer or reference itself.
 
-The point is that it is compiler POV and for static type checking. To maintain
-constness, low-level 'never' be ignored but top-level can be since it's not
-about underlying object. 
+The point is that low-level 'never' be ignored but top-level can be since it's
+not about underlying object. 
 
 In other words, top-level restrics only what we can do 'through' that reference
 or pointer and says nothing about whether the underlying object itself. 
-
-note: not sure "through" since as seen in conversion below, low level should be
-kept whether it's through reference or pointer.
-
-int i = 42;
-const int ci = i;
-int j = ci;
-
-The initialization do not change the value of an object. Constness of ci matters
-'only' for operations that might change ci. Copying doesn't change ci. The new
-object has no further access to the original object. 
 
 
 <reference-to-const> 
@@ -15680,50 +15809,51 @@ int main()
 }
 
 
-{use-reference-const-param}
-Use `reference-to-const` when possible since two implications when use 'plain'
-reference param in func:
-
-  * A func that don't change a reference param, mislead its user to think it
-    does change.
-
-  * More importantly, it limit its use only to nonconst param.
-
-Why neeeds const and nonconst version? When use `reference-to-const` argument
-for better performance and clearer interface about constness, required to have
-both version. 
-
-The `const` matters when copying vars and func params.
-
-void fcn( const int i );
-fcn(j);     // const int i = j;
-fcn(cj);    // const int i = cj;
-
-void fcn( int i );
-fcn(j);     // int i = j;
-fcn(cj);    // int i = cj;        // ERROR
-
-The point is that fcn(const int i) can be used both const-param and
-nonconst-param. In other words, `top-level-const` can be ignored, its parameter
-list doesn't differ and do both. 
-
-<ex>
-const GstCaps *caps = gst_caps_from_string();
-GstCaps const *caps = gst_caps_from_string();
-gst_caps_unref(GetCaps *caps);
-
-:44: error: invalid conversion from 'const GstCaps*' to 'GstCaps*'
-:44: error:   initializing argument 1 of 'void gst_caps_unref(GstCaps*)'
-
-<ex>
-find_char(const string& s, char c);
-find_char("Hello", 'o');   // OK because const-to-ref can match to literal.
-
-find_char(string& s, char c);
-find_char("Hello", 'o');   // ERROR because literal is const
-
-So recommend reference-to-const-param over plain reference-param for
-flexibility: can use for both const and nonconst parameter. can use conversion.
+// TODO: make it clear
+// {use-reference-const-param}
+// Use `reference-to-const` when possible since two implications when use 'plain'
+// reference param in func:
+// 
+//   * A func that don't change a reference param, mislead its user to think it
+//     does change.
+// 
+//   * More importantly, it limit its use only to nonconst param.
+// 
+// Why neeeds const and nonconst version? When use `reference-to-const` argument
+// for better performance and clearer interface about constness, required to have
+// both version. 
+// 
+// The `const` matters when copying vars and func params.
+// 
+// void fcn( const int i );
+// fcn(j);     // const int i = j;
+// fcn(cj);    // const int i = cj;
+// 
+// void fcn( int i );
+// fcn(j);     // int i = j;
+// fcn(cj);    // int i = cj;        // ERROR
+// 
+// The point is that fcn(const int i) can be used both const-param and
+// nonconst-param. In other words, `top-level-const` can be ignored, its parameter
+// list doesn't differ and do both. 
+// 
+// <ex>
+// const GstCaps *caps = gst_caps_from_string();
+// GstCaps const *caps = gst_caps_from_string();
+// gst_caps_unref(GetCaps *caps);
+// 
+// :44: error: invalid conversion from 'const GstCaps*' to 'GstCaps*'
+// :44: error:   initializing argument 1 of 'void gst_caps_unref(GstCaps*)'
+// 
+// <ex>
+// find_char(const string& s, char c);
+// find_char("Hello", 'o');   // OK because const-to-ref can match to literal.
+// 
+// find_char(string& s, char c);
+// find_char("Hello", 'o');   // ERROR because literal is const
+// 
+// So recommend reference-to-const-param over plain reference-param for
+// flexibility: can use for both const and nonconst parameter. can use conversion.
 
 
 {const-return} equal-misspell
@@ -15732,10 +15862,9 @@ error when mistake happens:
 
 const Rational operator*( const Rational& lhs, const Rational& rhs );
 
-// typo. was meant if( a*b == c )
-if( a*b = c )
+if( a * b = c )       // typo. was meant if( a*b == c )
 
-If these are built-in tyeps, this is flat-out error but don't for class type. 
+If these are built-in type, this is flat-out error but don't for class type. 
 
 * The returned `built-in` type is an `rvalue` and can't be modified. EXPC++43.
 * Even if it were legal, the fact that it returns object by value would mean
@@ -15800,38 +15929,36 @@ std::vector<T>::const_iterator iter = vec.begin();
 *kt_dev_cpp_008* const-temporary
 
 {nonconst-to-const-conversion} type-match-exceptions. CPR p61
-As long as maintain constness, allow conversion and so two 'exceptions' to type
-match rule. If necessary, compiler make a 'temporary' to allow conversion and
-maintain constness.
+As long as maintain constness, allow conversion and so two exceptions to type
+match rule. 
 
 These exception are 'implicit' nonconst-to-const and derived-to-base-reference
 conversion. Can bind reference-to-const to non-const, a literal, a temp, or
 other expression that evaluate to an type.
 
-const int ci = 42;      
-int i = ci;             
-
-const int& r = ci;      // is 'always' low-level
-
 int i;
-const int &j = i;       // conversion from nonconst to const
-const int *p = &i;      // conversion from nonconst to const
-int &r = j, *q = p;     // ERROR since conversion from const to nonconst
+const int &j = i;       // type match exception. conversion from nonconst to const
+const int *p = &i;      // type match exception. conversion from nonconst to const
+int &r = j, *q = p;     // ERROR since no conversion from const to nonconst
+
 
 <const-reference-to-literal>
+compiler make a 'temporary' to allow conversion and maintain constness.
+
 const int &ri = 42;     // ok but int &ri = 42 is an error
 int &ri = 10;           // ERROR
-int &ri = double_val;   // ERROR note: it's reference
 
 double dval = 3.14;
-const int &ri = dval;   // ok becuase will bind to 'temporary' and cannot change
-                        // it via ri. note: it's reference.
+int ival = dval;        // truncation
+const int &ri = dval;   // ok becuase will bind to 'temporary'
 
-The reference is alias for something exist and also need to maintain constness.
-This is all about for 'compiler' to maintain constness by creating temporary. So
-the compiler transforms this:
+int &ri = dval;         // ERROR
+// error: invalid initialization of reference of type ‘int&’ from expression of type ‘double’
 
-const int temp = dval;     // see const and tempoary is const object.
+The reference is alias for something exist and also need to maintain
+constness. The compiler transforms this:
+
+const int temp = dval;  // see const and tempoary is const object.
 cont int &di = temp;
 
 This also shows an example of creating a temporary through const conversion.
@@ -15858,11 +15985,10 @@ int main()
 i: 200
 ri: 200
 d: 6.28
-rd: 3          // see
+rd: 3                   // shows temporary
 
 
 <ex>
-
 // std::string YVCloudAuth::getAuthToken() const;
 
 try
@@ -15878,6 +16004,7 @@ That's allowed.
 exactly, this const reference binds to this rvalue, extending it's lifetime for
 the lifetime of the reference itself. But in practice it's like giving a temp an
 alias. see below for a nice explanation
+
 
 <read>
 http://herbsutter.com/2008/01/01/gotw-88-a-candidate-for-the-most-important-const/
