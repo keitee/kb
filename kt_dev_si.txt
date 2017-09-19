@@ -1407,10 +1407,18 @@ dropbox_base_url = '/snugberrypi/logs/'
 ={============================================================================
 |kt_dev_si_0001| si-pi-upload
 
+<to-show-uploading-log-in-html>
+Clear or echo "uploadlog" to a page:
+upload.php
+        $log = file_get_contents("uploadlog");
+
+
 <local-settings>
 # enable log uploading via a SnugberryPi
 piLogUploading = True
 
+
+1. update_stb creates this file which has PI's IP:
 
 `libraries/update_engine.py`
 update_stb(self, image['clear'], settings.webserverIPAddress)
@@ -1448,26 +1456,49 @@ update_stb(self, image['clear'], settings.webserverIPAddress)
   # 
 
 
-Clear or echo "uploadlog" to a page:
-upload.php
-        $log = file_get_contents("uploadlog");
+2. put files to pi via ftp
 
-Looks like that a box uploads "uploadlog" automatically when boot up?
-
-
-1. update_stb creates this file which has PI's IP:
->>> location = /mnt/nds/dev_6/part_0/FSN_DATA/PI_ADDR
-
-note: WHY is doing that?
-
-
-2. ftp logs to pi
+filelist="${BLOG_DATAPATH}/UPLOAD.LOG \
+$logdir/LOG \
+$toobigfilename \
+$keeping \
+$logdir/*.CUR \
+$logdir/*.TXT \
+$logdir/*.CSV \
+$logdir/CDB.DB \
+$logdir/MFS.DB \
+$logdir/PCAT.DB \
+$logdir/PSL.BIX \
+$logdir/PSL.DB \
+$logdir/PSL.DBW \
+$logdir/PSL.NSA \
+$logdir/REMBOOK.DB \
+$logdir/NVRAM0.BIN \
+$logdir/NVRAM1.BIN \
+$logdir/*.COR"
 
 # bootlog-upload-1.sh
 /usr/bin/bootlog-upload-pi.sh "$logdir" "$hwaddr" "$filelist"
 
+note: only do uploads when bootlog-upload-pi.sh fails.
+
 # bootlog-upload-pi.sh
 pi_addr=`cat $BLOG_DATAPATH/PI_ADDR`
+
+# exit if there is no PI_ADDR.
+if [ $? != 0 ]; then
+	echo "BLL:bootlog-upload-pi.sh: PI address not set, skipping pi upload attempt" >> "${BLLFILENAME}"
+	exit 1
+fi
+
+# exit if web server is down
+id=`wget -q -O - http://$pi_addr/time.php`
+
+if [ $? != 0 ] || [ -z "$id" ]; then
+	rm $BLOG_DATAPATH/PI_ADDR
+	echo "BLL:bootlog-upload-pi.sh: PI not responding, disabling future pi upload attempts"  >> "${BLLFILENAME}"
+	exit 1
+fi
 
 for srcfile in $filelist
 do
@@ -1476,6 +1507,17 @@ do
 		ftpput -u anonymous -p pi "$pi_addr" upload/"$hwaddr"_"$id"_"${srcfile##*/}" "$srcfile"
 	fi
 done
+
+# mac_time_xxx.xxx
+pi@raspberrypi /srv/ftp/upload $ pwd
+/srv/ftp/upload
+
+783e533494c2_1505797761_BLL.LOG       783e533494c2_1505797761_INFO.TXT      783e533494c2_1505797761_MPROFPWM.CSV  783e533494c2_1505797761_P582.LOG    783e533494c2_1505797761_UPLOAD.LOG
+783e533494c2_1505797761_BLL_PREV.LOG  783e533494c2_1505797761_KMSG.LOG      783e533494c2_1505797761_MPROFSCD.CSV  783e533494c2_1505797761_PCAT.DB     783e533494c2_1505797761_UPLOAD.URL
+783e533494c2_1505797761_DF.LOG        783e533494c2_1505797761_MFS.DB        783e533494c2_1505797761_MPROFSTM.CSV  783e533494c2_1505797761_PSL.BIX     783e533494c2_1505797761_VERHIST.LOG
+783e533494c2_1505797761_FILES.TXT     783e533494c2_1505797761_MPROFAPP.CSV  783e533494c2_1505797761_NVRAM0.BIN    783e533494c2_1505797761_PSL.DB
+783e533494c2_1505797761_HDPARM.LOG    783e533494c2_1505797761_MPROFCAK.CSV  783e533494c2_1505797761_NVRAM1.BIN    783e533494c2_1505797761_PSL.NSA
+783e533494c2_1505797761_IFCONFIG.LOG  783e533494c2_1505797761_MPROFMWS.CSV  783e533494c2_1505797761_P582.CUR      783e533494c2_1505797761_REMBOOK.DB
 
 
 3. Use icron to run script whenever file uploads happens.
@@ -1489,6 +1531,14 @@ Watched filesystem path
 $#
 Event-related file name
 
+/home/pi/snugupdate-v2-snugberrypi/stblog.sh /srv/ftp/upload/ filename
+
+
+4. run stblog.sh for each file
+
+must exist STBLOGSDIR="/home/pi/snugupdate-v2-snugberrypi/stblogs/" and fails
+otherwise.
+
 Moves from /srv/ftp/upload to STBLOGSDIR="/home/pi/snugupdate-v2-snugberrypi/stblogs/"
 
 $2 0019fbf2d46b_1484200015_BLL.LOG
@@ -1498,10 +1548,17 @@ macaddr: 00:19:fb:f2:d4:6b
 
 When gets "UPLOAD.URL", tars and upload it to 
 
-log "Uploading $tgzname"
-${SHDIR}httpsend "$macaddr" "$tgzname"
+  # 783e533494c2_1505799673
+  mkdir $STBLOGSDIR$prefix
 
-./httpsend "00:19:fb:f2:d4:6b" version.txt
+  # move files to
+  $STBLOGSDIR$prefix/
+
+  # log "Uploading $tgzname"
+  # Uploading darwin_783e533494c2_cba3ff37180482f901afabdc5ffbd157.tgz
+  # ${SHDIR}httpsend "$macaddr" "$tgzname"
+  # ./httpsend "00:19:fb:f2:d4:6b" version.txt
+  /home/pi/snugupdate-v2-snugberrypi/httpsend "78:3e:53:34:94:c2" darwin_783e533494c2_cba3ff37180482f901afabdc5ffbd157.tgz
 
 
 ={============================================================================
@@ -2255,6 +2312,8 @@ else
 /usr/bin/cdi-fpi 0 0 0
 
 <bootlog-upload-1-sh>
+note: only do uploads when bootlog-upload-pi.sh fails.
+
 # FTP settings
 host=87.86.191.132
 user=anonymous
@@ -9362,6 +9421,95 @@ void PLAYER_UAM_SignalAssetTransition( SYSTEMOBJECT_HANDLE l_obj_handle )
 }
 
 
+ .text.UAM_API_ParamDataProcessEvent
+/components/darwin_system_platform_components/darwin_uam/src/libdarwin_uam.a(uam_api.o)
+                0x00000000006c2148                UAM_API_ParamDataProcessEvent
+
+/components/darwin_system_platform_components/darwin_uam/src/dcm/src/uam_api.o uam_api.c -o
+
+
+// UAM_API_ParamDataProcessEvent  345 DARWIN_PLATFORM/DARWIN_UAM/src/dcm/src/darwin/uam_api.c SYSTEM_STATUS UAM_API_ParamDataProcessEvent(UAM_API_PARAM_DATA_HANDLE sourceHandle)
+UAM_API_ParamDataProcessEvent  552 DARWIN_PLATFORM/DARWIN_UAM/src/dcm/src/uam_api.c SYSTEM_STATUS UAM_API_ParamDataProcessEvent(UAM_API_PARAM_DATA_HANDLE sourceHandle)
+
+SYSTEM_STATUS UAM_API_Event( UAM_API_REPORTING_COMP		reporting_comp,
+								  UAM_API_EVENT_TYPE			event_type,
+								  unsigned short				payload_length,
+								  unsigned char				*event_payload)
+
+{
+	SYSTEM_STATUS uam_status;
+	AMS_API_STATUS ams_status;
+
+	DIAG_DECLARE_FUNCTION("SERVER: UAM_API_Event");
+	DIAG_LOG_FN_ENTRY(UamDiagSegmentId);
+
+	DIAG_LOG_INFO(UamDiagSegmentId,("called with params: reporting_comp = %d, event_type = %d payload_length = %d",reporting_comp, event_type, payload_length) );
+
+	
+	ams_status = AMS_API_Event(reporting_comp,
+							  	  event_mapping_table[event_type],
+							  	  payload_length,
+							   	  event_payload );
+}
+
+
+//../processes/mw_process_main.o (UAM_RunLevelRequest)
+
+//DARWIN_PLATFORM/DARWIN_UAM/src/main/src/uam_main.c
+{
+  stat = UamInitialize(); /* all is OK - we call in this context because we don't have a thread yet.*/
+}
+
+static SYSTEM_STATUS UamInitialize (void)
+{
+	if (AMS_API_STATUS_OK != AMS_API_Init(ams_priority))
+}
+
+// XTV_High_Level_VOB/EGEN/EventGenerator/framework/src/generic_API/generic_API.cpp:77:            stat = ( 0 == AmsQueue::GetInstance()->CreateTask( AMSMain, task_priority ) )
+AMS_API_STATUS AMS_API_Init(unsigned long task_priority)
+{
+  stat = ( 0 == AmsQueue::GetInstance()->CreateTask( AMSMain, task_priority ) )
+}
+
+//XTV_High_Level_VOB/EGEN/EventGenerator/generic_linux/src/ams.cpp
+void AMSMain(void *)
+{
+		RTRDataClient rtrClient;
+}
+
+RTRDataClient::RTRDataClient()    
+{
+    AMS_DEBUG_DEFINE_FUNC_INFO("RTRDataClient::RTRDataClient");
+    AMS_DEBUG_DEFINE_FUNC_ENTRY    
+
+    DataClient::Init();
+}
+
+// HandleDataClientEvent   58 ../../../../../XTV_High_Level_VOB/EGEN/DataClient/framework/src/dataClient.cpp     THIS->HandleDataClientEvent(de, descriptor, timeStamp, type, timeStampMS);
+void DataClient::Init()
+{
+  (void)EGEN_RegisterDataClient( (DataClientCallback)(DataClientCallBackFunc), (void*)this, &dc_id );
+}
+
+void DataClient::DataClientCallBackFunc(void* userData, EGEN_DELIVER_EVENTS de, const char* descriptor, long timeStamp, DC_TYPE type, long timeStampMS)
+{
+    AMS_DEBUG_DEFINE_FUNC_INFO("DataClient::DataClientCallBackFunc");
+
+    DataClient*    THIS = (DataClient*)userData;
+    AMS_DEBUG_TRACE(("DC get data"));
+    THIS->HandleDataClientEvent(de, descriptor, timeStamp, type, timeStampMS);
+}
+
+// ../../../../../XTV_High_Level_VOB/EGEN/DataClient/RTR/src/RTRDataClient.cpp
+void RTRDataClient::HandleDataClientEvent(EGEN_DELIVER_EVENTS de) 
+{
+  SendToDataClient();
+}
+void RTRDataClient::SendToDataClient()
+{
+  UploadData();
+}
+
 1486618:NDS: ^[2017:09:11 06:46:28]0946916728.301981 !MIL    -AMS          		< p:0x00000209 P:MW t:0x0210b520 T:UAM_HP_THREAD M:RTRDataClient.cpp F:RTRDataClient::UploadData L:228 > Post the report to server /ADMReportingServerProxy?securityscheme=DRM_SCHEME&auth_server=http://admrs.sky.com:80/ADMReportingServerProxy, buffNum=0, buffer size=918,isLastSent=1 
 1486619:NDS: ^[2017:09:11 06:46:28]0946916728.302140 !ERROR  -AMS          		< p:0x00000209 P:MW t:0x0212a520 T:AMS_FTM_HTTP_REQUEST_HANDLER M:AMS_ftm.cpp F:AMS_FTM_HttpPost L:491 > KT: {
 1486620:	"immediateReport":	[{
@@ -9372,42 +9520,6 @@ void PLAYER_UAM_SignalAssetTransition( SYSTEMOBJECT_HANDLE l_obj_handle )
 1486625:			"primaryProviderId":	"bsky_skyatlanprev_hd",
 1486626:			"secondaryProviderId":	"bsky_seccomcmpgn_hd",
 1486627:			"primaryAssetId":	"MAIN00[2017:09:08 14:25:51]0000000291 
-
-
-// there are many data clients. who's calling handlePlaybackEvents?
-//
-// XTV_High_Level_VOB/EGEN/DataClient/framework/src/dataClient.cpp
-//
-// void DataClient::Init()
-// {
-//    (void)EGEN_RegisterDataClient( (DataClientCallback)(DataClientCallBackFunc), (void*)this, &dc_id );
-// }
-//
-// void DataClient::DataClientCallBackFunc(void* userData, EGEN_DELIVER_EVENTS de, const char* descriptor, long timeStamp, DC_TYPE type, long timeStampMS)
-// {
-//     DataClient*    THIS = (DataClient*)userData;
-//     AMS_DEBUG_TRACE(("DC get data"));
-//     THIS->HandleDataClientEvent(de, descriptor, timeStamp, type, timeStampMS);
-// }
-// 
-// this lead to registered client?
-//
-// XTV_High_Level_VOB/EGEN/DataClient/Generic/src/GenericDataClient.cpp
-//
-// AMS_API_STATUS	GenericDataClient::RegisterClient(AMS_CLIENT_CALLBACK_FUNC	*func);
-//
-// void GenericDataClient::HandleDataClientEvent(EGEN_DELIVER_EVENTS de, 
-// {
-//         UploadData();
-// }
-
-handlePlaybackEvents  272 XTV_High_Level_VOB/EGEN/DataClient/AGF/src/AGFDataClient.cpp          handlePlaybackEvents(ev, p);
-handlePlaybackEvents  161 XTV_High_Level_VOB/EGEN/DataClient/ATR/src/ATRDataClient.cpp          handlePlaybackEvents(ev, p);
-handlePlaybackEvents  260 XTV_High_Level_VOB/EGEN/DataClient/BARB/src/BARBDataClient.cpp         handlePlaybackEvents(ev, p);
-handlePlaybackEvents  429 XTV_High_Level_VOB/EGEN/DataClient/Generic/src/GenericDataClient.cpp          handlePlaybackEvents(ev, p);
-handlePlaybackEvents   35 XTV_High_Level_VOB/EGEN/DataClient/framework/inc/dataClient.h    void   handlePlaybackEvents(AmsEvent  ev, const char* descriptor);
-handlePlaybackEvents  196 XTV_High_Level_VOB/EGEN/DataClient/iOS/src/iOSDataClient.cpp          handlePlaybackEvents(ev, p);
-handlePlaybackEvents  229 XTV_High_Level_VOB/EGEN/DataClient/ssf_fusion/src/SsfFilesDataClient.cpp              handlePlaybackEvents(ev, p);
 
 
 // XTV_High_Level_VOB/EGEN/DataClient/framework/src/dataClient.cpp
