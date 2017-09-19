@@ -65,6 +65,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-xml
 |kt_dev_py_0001| py-logging
 |kt_dev_py_0001| py-error-encoding
+|kt_dev_py_0001| py-six
 
 |kt_dev_py_0001| py-flask-doc
 |kt_dev_py_0001| py-flask-apache
@@ -5188,7 +5189,7 @@ in turn.
 // so use staticmethod() and classmethod() to make code work for both version
 // lines.
 
-Both mark a function object as specialthat is, as requiring no instance if
+Both mark a function object as special that is, as requiring no instance if
 static and requiring a class argument if a class method.
 
 # File bothmethods.py
@@ -6207,6 +6208,30 @@ Popen.poll()
         stdOut, stdErr = P.communicate ()
         retVal = P.wait ()
 
+<ex>
+pi@raspberrypi ~ $ /sbin/ifconfig
+eth0      Link encap:Ethernet  HWaddr b8:27:eb:11:5f:d6
+          inet addr:10.209.60.87  Bcast:10.209.60.255  Mask:255.255.255.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:294459 errors:0 dropped:12617 overruns:0 frame:0
+          TX packets:71643 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:191387746 (182.5 MiB)  TX bytes:41340485 (39.4 MiB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:1755 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:1755 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:138052 (134.8 KiB)  TX bytes:138052 (134.8 KiB)
+
+
+>>> p = subprocess.Popen(["/sbin/ifconfig"], stdout=subprocess.PIPE)
+>>> p.communicate()
+('eth0      Link encap:Ethernet  HWaddr b8:27:eb:11:5f:d6  \n          inet addr:10.209.60.87  Bcast:10.209.60.255  Mask:255.255.255.0\n          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1\n          RX packets:294333 errors:0 dropped:12611 overruns:0 frame:0\n          TX packets:71573 errors:0 dropped:0 overruns:0 carrier:0\n          collisions:0 txqueuelen:1000 \n          RX bytes:191380039 (182.5 MiB)  TX bytes:41333421 (39.4 MiB)\n\nlo        Link encap:Local Loopback  \n          inet addr:127.0.0.1  Mask:255.0.0.0\n          UP LOOPBACK RUNNING  MTU:65536  Metric:1\n          RX packets:1755 errors:0 dropped:0 overruns:0 frame:0\n          TX packets:1755 errors:0 dropped:0 overruns:0 carrier:0\n          collisions:0 txqueuelen:0 \n          RX bytes:138052 (134.8 KiB)  TX bytes:138052 (134.8 KiB)\n\n', None)
+>>>
+
 
 ={============================================================================
 |kt_dev_py_0001| py-shlex
@@ -6257,6 +6282,47 @@ eval(expression, globals=None, locals=None)
 
     See ast.literal_eval() for a function that can safely evaluate strings
     with expressions containing only literals.
+
+<py-raw-input>
+raw_input([prompt])
+
+If the prompt argument is present, it is written to standard output without a
+trailing newline. The function then reads a line from input, converts it to a
+string (stripping a trailing newline), and returns that. When EOF is read,
+EOFError is raised. Example:
+
+>>> s = raw_input('--> ')
+--> Monty Python's Flying Circus
+>>> s
+"Monty Python's Flying Circus"
+
+If the readline module was loaded, then raw_input() will use it to provide
+elaborate line editing and history features.
+
+Version skew note: If you are working in Python 2.X, use raw_input() instead
+of input() in this code. The former was renamed to the latter in Python 3.X.
+Technically, 2.X has an input function too, but it also evaluates strings as
+though they are program code typed into a script, and so will not work in this
+context (an empty string is an error). Python 3.X’s input (and 2.X’s
+    raw_input) simply returns the entered text as a character string,
+unevaluated. To simulate 2.X’s input in 3.X, use eval(input()).
+
+<ex>
+
+// Do the actions look OK? (yes/no/confirm): xx
+// Invalid answer!
+// Do the actions look OK? (yes/no/confirm): yes
+// yes
+
+answer = getAnswer('Do the actions look OK?', ['yes', 'no', 'confirm'])
+
+def getAnser(question, answers):
+  repr_answers = ' (%s): ' % '/'.join(answers)
+  answer = raw_input(question + repr_answers)
+  while answer not in answers:
+    print 'Invalid answer!'
+    answer = raw_input(question + repr_answers)
+  return answer
 
 
 ={============================================================================
@@ -6684,6 +6750,16 @@ re.match(pattern, string, flags=0)
 
     If you want to locate a match anywhere in string, use search() instead
     (see also search() vs. match()).
+
+
+re.findall(pattern, string, flags=0)
+
+Return all non-overlapping matches of pattern in string, as a list of strings.
+The string is scanned left-to-right, and matches are returned in the order
+found. If one or more groups are present in the pattern, return a list of
+groups; this will be a list of tuples if the pattern has more than one group.
+Empty matches are included in the result unless they touch the beginning of
+another match.
 
 
 7.2.5.3. search() vs. match()
@@ -7344,6 +7420,37 @@ ignored.
     logging.basicConfig (filename="test.log", level = logging.DEBUG, \
             format = '%(asctime)s-%(levelname)s-%(message)s')
 
+logging.disable(lvl)
+
+Provides an overriding level lvl for all loggers which takes precedence over
+the logger’s own level. When the need arises to temporarily throttle logging
+output down across the whole application, this function can be useful. Its
+effect is to disable all logging calls of severity lvl `and below,` so that if
+you call it with a value of INFO, then all INFO and DEBUG events would be
+discarded, whereas those of severity WARNING and above would be processed
+according to the logger’s effective level. If logging.disable(logging.NOTSET)
+is called, it effectively removes this overriding level, so that logging
+output again depends on the effective levels of individual loggers.
+
+
+<ex>
+    logging.basicConfig(level=logging.DEBUG, format='[%(levelname)-7s] (%(threadName)-10s) %(message)s')
+    # Disable this level and all above, i.e. logging.INFO disables INFO & DEBUG
+    # Use logging.NOTSET to get all as per level set during initialisation.
+    # logging.disable(logging.INFO)
+    logging.info('logging info')
+    logging.debug('logging debug')
+    logging.warn('logging warn)')
+
+# when use logging.disable(logging.INFO)
+kyoupark@kit-debian64:~/works$ ./py-log.py
+[WARNING] (MainThread) logging warn)
+
+kyoupark@kit-debian64:~/works$ ./py-log.py
+[INFO   ] (MainThread) logging info
+[DEBUG  ] (MainThread) logging debug
+[WARNING] (MainThread) logging warn)
+
 
 <ex>
 #!/usr/bin/env python
@@ -7523,6 +7630,81 @@ encoding to latin1.
 
 The new python syntax introduced in the above link works as said or can use
 encoding.
+
+
+={============================================================================
+|kt_dev_py_0001| py-six
+
+https://pythonhosted.org/six/#
+
+Six: Python 2 and 3 Compatibility Library
+
+Six provides simple utilities for wrapping over differences between Python 2
+and Python 3. It is intended to support codebases that work on both Python 2
+and 3 without modification. six consists of only one Python file, so it is
+painless to copy into a project.
+
+Six can be downloaded on PyPi. Its bug tracker and code hosting is on
+BitBucket.
+
+The name, “six”, comes from the fact that 2*3 equals 6. Why not addition?
+Multiplication is more powerful, and, anyway, “five” has already been snatched
+away by the (admittedly now moribund) Zope Five project.
+
+Renamed modules and attributes compatibility
+
+Python 3 reorganized the standard library and moved several functions to
+different modules. Six provides a consistent interface to them through the
+fake six.moves module. For example, to load the module for parsing HTML on
+Python 2 or 3, write:
+
+The urllib, urllib2, and urlparse modules have been combined in the urllib
+package in Python 3. The six.moves.urllib package is a version-independent
+location for this functionality; its structure mimics the structure of the
+Python 3 urllib package.
+
+
+// before, 2.7 code
+def getAnswer(question, answers):
+  repr_answers = ' (%s): ' % '/'.join(answers)
+  answer = raw_input(question + repr_answers)
+  while answer not in answers:
+    print 'Invalid answer!'
+    answer = raw_input(question + repr_answers)
+  return answer
+    
+
+// after, 2.7 code
+import six
+
+def get_answer(question, answers):
+    repr_answers = ' (%s): ' % '/'.join(answers)
+    answer = six.moves.input(question + repr_answers)
+    while answer not in answers:
+        print('Invalid answer!')
+        answer = six.moves.input(question + repr_answers)
+    return answer
+
+
+={============================================================================
+|kt_dev_py_0001| py-telnet
+
+https://docs.python.org/2/library/telnetlib.html
+
+Telnet.read_until(expected[, timeout])
+
+Read until a given string, expected, is encountered or until timeout seconds
+have passed.
+
+When no match is found, return whatever is available instead, possibly the
+empty string. Raise EOFError if the connection is closed and no cooked data is
+available.
+
+note: `expected` can be a substring to search.
+
+<ex>
+$ /mnt/nds/dev_6/part_0/FSN_DATA/PI_ADDR
+# fsndata = tn.read_until('PI_ADDR', 10)
 
 
 ={============================================================================
