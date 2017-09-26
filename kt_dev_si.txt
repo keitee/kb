@@ -225,7 +225,9 @@ http://hetty.cisco.com/fusionmadesimple/index.php/SnugberryPi
 
 Photograph 2
 
-1. Remove the Micro SD card from the Pi front slot [Refer Photograph 1] and insert it into the SD to Micro SD card adapter provided with the Pi.[Refer Photograph 2]
+1. Remove the Micro SD card from the Pi front slot [Refer Photograph 1] and
+insert it into the SD to Micro SD card adapter provided with the Pi.[Refer
+Photograph 2]
 
 2. Insert the SD to Micro SD card adapter into the slot in your laptop/PC.
 
@@ -390,6 +392,12 @@ http://<pi ip>
 
 pi/pi
 
+
+<pi-mac>
+eth0      Link encap:Ethernet  HWaddr b8:27:eb:11:5f:d6
+
+eth0      Link encap:Ethernet  HWaddr b8:27:eb:1a:a7:5e
+ 
 
 <gpg>
 // windows version
@@ -9511,6 +9519,12 @@ void PLAYER_UAM_SignalPlaybackUpdate()
 1486123:NDS: ^[2017:09:11 06:46:26]0946916726.295318 !INFO   -P_Api        		< p:0x0000020b P:APP t:0x013aa520 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2264 > In PLAYER_UAM_SignalAssetTransition, l_evt_type = 77 
 1486124:NDS: ^[2017:09:11 06:46:26]0946916726.295896 !INFO   -P_Api        		< p:0x0000020b P:APP t:0x013aa520 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2472 > Succeed to send param bag to UAM 
 
+DARWIN_PLATFORM/DARWIN_UAM/inc/uam_api.h
+
+	UAM_API_EVENT_TYPE_DPL_ASSET_FROM,\  // 77
+	UAM_API_EVENT_TYPE_DPL_ASSET_TO,\    // 78
+
+
 void PLAYER_UAM_SignalAssetTransition( SYSTEMOBJECT_HANDLE l_obj_handle )
 {
                         // { KT
@@ -9574,6 +9588,23 @@ AMS_API_STATUS AMS_API_Init(unsigned long task_priority)
   stat = ( 0 == AmsQueue::GetInstance()->CreateTask( AMSMain, task_priority ) )
 }
 
+AMS_API_STATUS AMS_API_Event(AMS_API_REPORTING_COMP	reporting_comp)
+{
+  static AMS_API_STATUS PostEventToAmsQueue(unsigned char *payload, unsigned short len)
+  {
+    AMS_DEBUG_DEFINE_FUNC_INFO("PostEventToAmsQueue");
+
+    AMS_API_STATUS stat =
+      (0 == AmsQueue::GetInstance()->PostPayload(payload, len)) ?
+      AMS_API_STATUS_OK : AMS_API_QUEUE_FULL;
+
+    AMS_DEBUG_ERROR_IF_NOT_OK(stat,("Error post Event to Ams Queue:0x%x",stat));
+
+    return stat;
+  }
+}
+
+
 //XTV_High_Level_VOB/EGEN/EventGenerator/generic_linux/src/ams.cpp
 void AMSMain(void *)
 {
@@ -9603,15 +9634,34 @@ void DataClient::DataClientCallBackFunc(void* userData, EGEN_DELIVER_EVENTS de, 
     THIS->HandleDataClientEvent(de, descriptor, timeStamp, type, timeStampMS);
 }
 
-// ../../../../../XTV_High_Level_VOB/EGEN/DataClient/RTR/src/RTRDataClient.cpp
+// XTV_High_Level_VOB/EGEN/DataClient/RTR/src/RTRDataClient.cpp
+//
+// 12.4.1	UAM DPL Playback State Machine
+//
+// XTV_High_Level_VOB/EGEN/DataClient/RTR/src/RTRData.cpp
+// to create report json file and the calculation of inNormalPlay
+void RTRData::updateState(AmsEvent ev)
+{
+  inNormalPlay_ = viewInNormalPlay_ * 100 / part_duration_;
+}
+
 void RTRDataClient::HandleDataClientEvent(EGEN_DELIVER_EVENTS de) 
 {
+  RTRdata_.updateState(ev);
+
+  (RTRdata_.dpl_reporting_thr_ <= RTRdata_.inNormalPlay_)){
+    //Storing the json buffer before sending. If the storage is full - ignore this json, and loose this data
+    stat = StoreJsonBuffer();
+  }
+
   SendToDataClient();
 }
+
 void RTRDataClient::SendToDataClient()
 {
   UploadData();
 }
+
 
 1486618:NDS: ^[2017:09:11 06:46:28]0946916728.301981 !MIL    -AMS          		< p:0x00000209 P:MW t:0x0210b520 T:UAM_HP_THREAD M:RTRDataClient.cpp F:RTRDataClient::UploadData L:228 > Post the report to server /ADMReportingServerProxy?securityscheme=DRM_SCHEME&auth_server=http://admrs.sky.com:80/ADMReportingServerProxy, buffNum=0, buffer size=918,isLastSent=1 
 1486619:NDS: ^[2017:09:11 06:46:28]0946916728.302140 !ERROR  -AMS          		< p:0x00000209 P:MW t:0x0212a520 T:AMS_FTM_HTTP_REQUEST_HANDLER M:AMS_ftm.cpp F:AMS_FTM_HttpPost L:491 > KT: {
@@ -9705,35 +9755,14 @@ NDS: ^1489061802.439050 !ERROR -AMS          < p:00000470 t:0217e520 T:AMS_FTM_H
 			"assetPlaybackStartTime":	"09:02:23.102",
 			
 
-// XTV_High_Level_VOB/EGEN/EventGenerator/framework/inc/ams_generic_API.h
 
-typedef enum _AMS_API_EventSource
-{
-    AMS_API_EventSource_Record = 0,
-    AMS_API_EventSource_RB = 1,
-    AMS_API_EventSource_PDL = 2,
-    AMS_API_EventSource_VOD = 3,
-    AMS_API_EventSource_PVOD  = 4u,
-    AMS_API_EventSource_BDL  = 5u,
-    AMS_API_EventSource_DTT  = 6u,
-    AMS_API_EventSource_VOD_Trailer = 7u,
-    AMS_API_EventSource_ABR  =8u,
-    AMS_API_EventSource_UNKNOWN = AMS_API_EventSource_Record
-} AMS_API_EventSource;
-
-typedef enum _AMS_API_BOOKING_TYPE
-{
-    AMS_API_BOOKING_TYPE_UNDEF           = 0x00000000,
-    AMS_API_BOOKING_TYPE_MANUAL          = 0x00000001,
-    AMS_API_BOOKING_TYPE_PUSH            = 0x00000002,
-    AMS_API_BOOKING_TYPE_SERIES_LINK     = 0x00000004,
-    AMS_API_BOOKING_TYPE_BOOKABLE_PROMOS = 0x00000008,
-    AMS_API_BOOKING_TYPE_REMOTE_BOOKING  = 0x00000010,
-    AMS_API_BOOKING_TYPE_ARR             = 0x00000020,
-    AMS_API_BOOKING_TYPE_TIME_BASED      = 0x00000040,
-    AMS_API_BOOKING_TYPE_EVENT_BASED     = 0x00000080,
-    AMS_API_BOOKING_TYPE_LastValue       = 0xFFFFFFFF
-}AMS_API_BOOKING_TYPE;
+XTV_High_Level_VOB/EGEN/EventGenerator/portinglayer/inc/log_output/diag/egen_dbg.h:49:#define AMS_DEBUG_ERROR(X)                                        DIAG_LOG_ERROR(amsDbgOut.GetID(), X )
+#define AMS_DEBUG_DEFINE_FUNC_INFO(FUNCTION_NAME_STR)		DIAG_DECLARE_FUNCTION(FUNCTION_NAME_STR)
+#define AMS_DEBUG_TRACE(X)					DIAG_LOG_INFO(amsDbgOut.GetID(), X )
+#define AMS_DEBUG_WARN(X)					DIAG_LOG_WARN(amsDbgOut.GetID(), X )
+#define AMS_DEBUG_ERROR(X)					DIAG_LOG_ERROR(amsDbgOut.GetID(), X )
+#define AMS_DEBUG_MIL(X)					DIAG_LOG_MIL(amsDbgOut.GetID(), X )
+#define AMS_DEBUG_CR						DIAG_LOG_INFO(amsDbgOut.GetID(),("\n"))
 
 
 ={============================================================================
@@ -27401,6 +27430,36 @@ typedef enum PCAT_CAT_DPL_EXPIRY_STATE_
     PCAT_CAT_DPL_EXPIRY_STATE_SKIPPED,                     /**< @brief Play list asset was skipped and not downloaded */
     PCAT_CAT_DPL_EXPIRY_STATE_LAST                         /**< @brief dummy - last enum value */
 } PCAT_CAT_DPL_EXPIRY_STATE;
+
+
+<dpl-trick-mode-suppresion>
+{
+  "playList" : {
+    "admId" : 2,
+    "playlistId" : 691117768,
+    `"trickModeControl" : 0,` or
+    `"trickModeControl" : 2,`
+  }
+}
+
+/* Values of SYSTEMOBJECT_DPLAI_PROPID_I_TRICK_MODE_CONTROL setting */
+#define DPL_PLAY_TRICK_MODES_NO_RESTRICTION   0U
+#define DPL_PLAY_TRICK_MODES_RESTRICT_ALL     1U
+#define DPL_PLAY_TRICK_MODES_RESTRICT_FF      2U
+
+!WARN   -VRM_SERVER   		< p:0x000001db P:MW t:0x01d4d520 T:VRM_SRV M:dpl_play.c F:DplPlayIsTrickModeRestriction L:4009 > trick modes rejected (2) for current asset (handle 0xa8a1801a) 
+
+
+(pdl-dpl) BSKYB-DSN-3169 Dynamic Playlists in Anytime STB HLD.doc
+
+12	Real-Time Reporting
+
+  For each asset, a threshold may have been signalled in the playlist that the
+  inNormalPlay property must exceed for a real-time report to be generated. 
+
+  Note that reports are only sent if inNormalPlay exceeds a threahold set in
+  the playlist. Does the defining of the DPLAI need to be extended with this
+  threshold?
 
 
 ={============================================================================
