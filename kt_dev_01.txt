@@ -117,8 +117,8 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_003* expr-vexing-parse
 *kt_dev_cpp_004* cpp-copy-dyn-resource
 |kt_dev_cpp_006| cpp-copy-swap {copy-and-swap-idiom}
-*kt_dev_cpp_004* copy-control: message example, swap, move consideration
-*kt_dev_cpp_004* copy-control: move
+*kt_dev_cpp_004* cpp-copy-control-message-example
+*kt_dev_cpp_004* cpp-copy-control-move
 *kt_dev_cpp_004* copy-control: move: rvalue reference
 *kt_dev_cpp_004* copy-control: move: std-move
 *kt_dev_cpp_004* cpp-copy-preventing-copies cpp-delete
@@ -6904,7 +6904,7 @@ no effect for built-in types due to optimization but may be expensive for
 `iterators`. 
 
 
-<when-postfix-is-necessary>
+<when-postfix-is-necessary> search for *when-postfix-is-necessary*
 
 int *ip;
 
@@ -11432,6 +11432,14 @@ class T {
   double revenue;
 };
 
+  *cpp-remember*
+  No semicolon when defines member functions in class definition.
+
+  class T {
+    T(): bookNo(), units_sold(0), revenue(0.0) {}
+    T(const string &s);
+  };
+
 
 {ctor-init-list} 
 The following is initialization and assignment but not initialization since
@@ -12977,7 +12985,8 @@ implementations available to code written in this fashion.
 
 
 {case-ex}
-Used attempt-three and stl-vector-code taken from <vector> template in gcc
+Used attempt-three and `stl-vector` taken from <vector> template in gcc and
+this means stl-vector is `valuelike` 
 
 As shown the reference, to provide special implementations for more complex
 types by using function overloading.
@@ -13061,12 +13070,15 @@ sementics are supported by all containers?
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-control: message example, swap, move consideration
+*kt_dev_cpp_004* cpp-copy-control-message-example
 
-{copy-control-for-bookkeeping} message class example
+{copy-control-for-bookkeeping} 
+
+example do not allocate dynamic resources but needs copy-controls.
+
 CPR 519. Although copy control is most often needed for classes that allocate
-resources, that is not the only reason and some class have bookkeeping or other
-actions that copy control must perform.
+resources, that is not the only reason and some class have bookkeeping or
+other actions that copy control must perform.
 
 Folder (set of pointers to Message)  Message (set of pointers to Folder)
 [ ][ ][ ][ ][ ]: set                 message text
@@ -13079,44 +13091,31 @@ Folder (set of pointers to Message)  Message (set of pointers to Folder)
 
 
 <lits-of-operations-message-class> how to sketch a class
-To keep track of which Message are in which Folders, each message has a set of
-pointers to Folders and each Folder will have a set of pointers to its Message.
 
-note: Why 'set' of pointers for Message and Folder? This example have seperate
-interface for Folder and Message and if do operations on Message such as
-deleting a Message, there is a need to update Folder as well. So need to have a
-set for each object.
+1. The important requirement to remember:
+  Folder has pointers to Messages that is has and Messages has pointers to
+  Folders it belongs.
 
-Message class provide save() and remove() operations to add or remove a Message
-from a specified folder. To create a new Message, specify the contents of the
-message but no folder. To put a message call save(). 
+2. Message class provide save() and remove() operations to add or remove a
+Message from a specified folder. To create a new Message, specify the contents
+of the message but no folder. To put a message call save(). 
 
-note: Why? Can have Message(Folder&) but needs Message.remove() anyway. So
-better to have save and remove pair?
+3. To copy a message, the copy and the original will be a 'distinct' Message
+and shall be in the same 'set' of Folders. Thus copies the contents and to
+make the new to appear in the same Folders as the original, must traverse
+Folders to add a pointer to the new into each Folder. ADD. copy-ctor
 
-// copy ctor
-To copy a message, the copy and the original will be a 'distinct' Message and
-shall be in the same 'set' of Folders. Thus copies the contents and
-set-of-Folders; copying-stl-set which shows STL has valuelike. To make the new
-to appear in the same Folders as the original, must traverse the set-of-Folders
-to add a pointer to the new into each Folder. traverse.
+4. To destroy a Message, remove it from the Folders. REMOVE. dtor.
 
-// dtor
-To destroy a Message, remove pointers to that from the Folders. traverse.
+5. To assign a Message, will replace the contents and remove Message from lhs
+Folder-set and add that distinct Message to rhs Folder-set. REMOVE and ADD.
+copy-assign.
 
-// copy-assign
-To assign a Message, will replace the contents and also update Folder-set of lhs
-by removing lhs Message from lhs Folder-set and adding that 'distinct' Message
-to rhs Folder-set. traverse.
+  *cpp-remember*
+  The copy assign often does the same work as is needed in the copy ctor and
+  dtor. In this example, REMOVE and ADD. In such case the 'common' work should
+  be put in private utility functions.
 
-
-<copy-assign-do-dtor-and-copy-ctor>
-Looking at this list of operations, both the dtor and the copy assign have to
-'remove' this Message from the Folders. Both the copy ctor and the copy assign
-'add' a Message to a given list of Folders.
-
-The copy assign often does the same work as is needed in the copy ctor and dtor.
-In such case the 'common' work should be put in private utility functions.
 
 class Message {
   friend class Folder;
@@ -13175,7 +13174,8 @@ void Message::remove_from_Folders()
 }
 
 // copy-ctor. <copying-stl-set>
-Message::Message( const Message &m ) : contents(m.contents), folders(m.folders)
+Message::Message( const Message &m ): 
+  contents(m.contents), folders(m.folders)
 {
   add_to_Folders(m);
 }
@@ -13202,8 +13202,8 @@ Message& Message::operator=(const Message& rhs)
 note:
 Handle self-assign by removing pointers to this message from lhs before
 inserting pointers to rhs. If do inserting first, adding has no effect since
-adds the same address(message) to a set in a folder. So would have removed this
-from 'all' of its corresponding Folders.
+adds the same address(message) to a set in a folder. So would have removed
+this from 'all' of its corresponding Folders.
 
 Again, HasPtr example for self-assign and exception safe. 
 
@@ -13223,8 +13223,6 @@ and the Message example shows that it matters for correct behaviour.
 Since the library string and set defines own swap, Message class will benefit
 from defining own version of swap to avoid extraneous copies of `contents`
 string and `folders` set members. 
-
-note: WHY since not used in algorithms?
 
 However, must update a set of pointers that `Folders` have since after a
 swap(m1, m2) call, the `Folders` that had pointed to m1 must now point to m2.
@@ -13309,18 +13307,18 @@ Message& Message::operator=( Message &&rhs )
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-control: move semantics
+*kt_dev_cpp_004* cpp-copy-control-move
 
-{why}
-In some circumstances, an object is 'immediately' destroyed after it is copied.
-In those cases, moving rather than copying the object can provide a significant
-performance boost. Or IO or unique_ptr classes which cannot be copied but can be
-moved since these have a resource such as a pointer or an IO buffer that may not
-be shared.
+In some circumstances, an object is 'immediately' destroyed after it is
+copied. In those cases, moving rather than copying the object can provide a
+significant performance boost. 
+
+  IO or unique_ptr classes which cannot be copied but can be moved since these
+  have a resource such as a pointer or an IO buffer that may not be shared.
 
 note: In previous library, class stored in a container had to be 'copyable'.
-Under new standard, can use container on types that cannot be copied so long as
-they can be moved.
+Under new standard, can use container on types that cannot be copied so long
+as they can be moved.
 
 <own-allocation-example> CPR 524
 Some classes need to allocate a varying amount of storage at rum time. Such
@@ -13330,8 +13328,8 @@ classes need to do own allocation.
 
 StrVec example which is a simplification of the library vector class. Like
 vector, supports reallocation. If there is not enough space left, then obtains
-new space, moves the existing elements into that space, free the old space, and
-adds the new elements.
+new space, moves the existing elements into that space, free the old space,
+and adds the new elements.
 
 | 0 | 1 | 2 | 3 | 4 | unconstructed std::string elements |
 
@@ -13359,7 +13357,7 @@ class StrVec {
 
   private:
 
-    // to use the same allocator object for all StrVec
+    // *class-variable-case* to use the same allocator object for all StrVec
     static std::allocator<std::string> alloc;
 
     void chk_n_alloc()
@@ -13380,8 +13378,8 @@ pair<string*, string*>
 StrVec::alloc_n_copy( const string *begin, const string *end )
 {
   // allocate 'unconstructed' space to hold as many elements as are in the range
-
-  auto data = alloc.allocate( end - begin );     // iterator-arithmetic
+  // iterator-arithmetic
+  auto data = alloc.allocate( end - begin );     
 
   // <uninitialized_copy> 'construct' copies of given elements in
   // 'uninitialized' space. return { begin of the new space, past the last it
@@ -13432,13 +13430,13 @@ StrVec &StrVec::operator=( const StrVec &rhs )
 <reallocation>
 The string is valuelike and has own memory for those characters. When copy a
 string, the new and the old are independent from each other. However, when
-reallocates copies, there will be only 'one' user after the copy and as soon as
-copy is done, no need to keep the old.
+reallocates copies, there will be only 'one' user after the copy and as soon
+as copy is done, no need to keep the old.
 
 So copying the data in these std::strings in the old is 'unnecessary' in this
-case so StrVec's 'performance' will be much better if can avoid the overhead of
-allocating and deallocating the char memories for strings themselves each time
-we reallocate.
+case so StrVec's 'performance' will be much better if can avoid the overhead
+of allocating and deallocating the char memories for strings themselves each
+time we reallocate.
 
 
 <avoid-copying>
@@ -13465,6 +13463,8 @@ void StrVec::push_back( const string &s )
   // space allocated by `allocate()`. 
   // The second argument determine 'which' constructor to use to construct the
   // object in that space. This is string's copy ctor.
+  //
+  // *when-postfix-is-necessary*
   alloc.construct( first_free++, s );
 }
 
@@ -18897,12 +18897,12 @@ array<Point> point3 = {{1,2},{3,4},{5,6}}; // error : number of elements not giv
 ={============================================================================
 *kt_dev_cpp_017* cpp-static-members and class const
 
-TODO: case study of using class methond and class variable?
-
 The staic-members that are associated with the class rather than objects. So
 can call static member func as `class method` or class operation as in
 smalltalk and static member var as `class variable` or class static. See
 function-static for other terms.
+
+See *class-variable-case* for class variable example.
 
 note: static members 'obey' normal access control.
 
@@ -28767,7 +28767,7 @@ A vector manages its elements in a 'dynamic' array and supports random access,
 which means you can access each element directly with the corresponding index.
 
 {code}
-  // c++/4.7.2/bits/stl_vector.h
+  // /usr/include/c++/4.7.2/bits/stl_vector.h
 
   template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
     class vector : protected _Vector_base<_Tp, _Alloc>
