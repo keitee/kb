@@ -90,7 +90,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_lang_014| printf-format
 |kt_dev_lang_015| expr-control-flow
 *kt_dev_lang_015* expr-for-while
-|kt_dev_lang_016| cpp-operator-precedence
+|kt_dev_lang_016| cpp-precedence
 *kt_dev_lang_016* expr-evaluation-order
 *kt_dev_lang_016* expr-unary
 *kt_dev_lang_016* expr-assign
@@ -115,12 +115,12 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_004* cpp-copy-assign-self
 *kt_dev_cpp_003* expr-pass-by-reference
 *kt_dev_cpp_003* expr-vexing-parse
-*kt_dev_cpp_004* cpp-copy-dyn-resource
+*kt_dev_cpp_004* cpp-copy-dyn-resource cpp-hasptr-example
 |kt_dev_cpp_006| cpp-copy-swap {copy-and-swap-idiom}
 *kt_dev_cpp_004* cpp-copy-control-message-example
-*kt_dev_cpp_004* cpp-copy-control-move
-*kt_dev_cpp_004* copy-control: move: rvalue reference
-*kt_dev_cpp_004* copy-control: move: std-move
+*kt_dev_cpp_004* cpp-copy-control-move cpp-strvec-example
+*kt_dev_cpp_004* cpp-copy-control-move-rvalue-reference
+*kt_dev_cpp_004* cpp-copy-control-move-std-move
 *kt_dev_cpp_004* cpp-copy-preventing-copies cpp-delete
 |kt_dev_cpp_007| cpp-function-matching
 |kt_dev_cpp_021| overload-operator
@@ -160,7 +160,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_019| except-blanket catch and hidden exception
 *kt_dev_cpp_019* except-and-finally
 *kt_dev_cpp_021* code-check()
-|kt_dev_cpp_022| inheri
+|kt_dev_cpp_022| cpp-inheri
 *kt_dev_cpp_022* cpp-inheri-virtual
 *kt_dev_cpp_022* inheri-ctor-initializers
 *kt_dev_cpp_022* inheri-access-specifier
@@ -255,16 +255,16 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_054| iter-external-and-internal
 
 |kt_dev_stl_060| algorithm
-|kt_dev_stl_063| function-object
-|kt_dev_stl_063| function-object-predicate
-|kt_dev_stl_063| function-object-lambda
+|kt_dev_stl_063| cpp-fobj cpp-function-object cpp-functor
+|kt_dev_stl_063| cpp-fobj-predicate
+|kt_dev_stl_063| cpp-fobj-lambda C++11
 *kt_dev_stl_063* function-object-algorithm-argument
 *kt_dev_stl_063* function-object-copied
 *kt_dev_stl_063* function-object-template-argument
 *kt_dev_stl_063* function-object-good-things
 *kt_dev_stl_063* function-object-pass-by-reference
 *kt_dev_stl_063* function-object-predefined
-*kt_dev_stl_064* function-object-function-type
+*kt_dev_stl_064* cpp-fobj-function-type
 *kt_dev_stl_064* cpp-function-object cpp-function-pointer
 *kt_dev_stl_064* fobj-cases
 *kt_dev_stl_064* fobj-member-function
@@ -4175,10 +4175,6 @@ int main(int argc, char* argv[])
 }
 
 yes, works.
-
-
-={============================================================================
-*kt_dev_gcc_204* gcc-cpp-preprocessor
 
 
 ={============================================================================
@@ -9868,7 +9864,7 @@ else
 
 
 ={============================================================================
-*kt_dev_lang_016* cpp-operator-precedence
+*kt_dev_lang_016* cpp-precedence
 
 http://en.cppreference.com/w/cpp/language/operator_precedence
 
@@ -12567,7 +12563,7 @@ Sales_data obj;
 
 
 ={============================================================================
-*kt_dev_cpp_004* cpp-copy-dyn-resource
+*kt_dev_cpp_004* cpp-copy-dyn-resource cpp-hasptr-exmaple
 
 {when-use-resource-has-dyn-lifetime}
 * Don't know how many object is needed
@@ -12628,7 +12624,6 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
   ps = newp;
   return *this;
 }
-
 
 <pointerlike> shallow-copy, own-reference-counting
 The copy and the original share underlying object like shared_ptr. To show own
@@ -12695,13 +12690,15 @@ version. Otherwise, uses the swap defined by the library, use std::swap().
 `optimization`
 
 CPR 516. Classes that manages 'resources' often also define a swap. Defining
-swap is particularly important for classes that plan to 'use' with 'algorithms'
+swap is particularly important for classes that plan to `use with algorithms`
 that 'reorder' elements. Such algorithms call swap whenever they need to
 exchange two elements. reorder uses copy-assign.
 
-In HasPtr example, it can be implemented as valuelike or pointerlike. If it was
-valuelike and has no own swap, then valuelike swap is expensive since std::swap
-uses "one copy and two assignments"; two copy-assign calls. Again, repeted here:
+note:
+`swap` is more to use with algorithms than to support valuelike classes. Since
+as in HasPtr example, the version which uses swap, has a cost of copying
+argument and better than the original version. However, pointerlike is still
+wins.
 
 // valuelike
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
@@ -12711,6 +12708,15 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
   ps = newp;
   return *this;
 }
+
+// HasPtr copy-ctor copies the string in right hand operand into rhs before
+// changing left hand operand.
+HasPtr& HasPtr::operator=(HasPtr rhs)
+{
+  swap(*this, rhs);             // see *cpp-copy-swap* for HasPtr::swap()
+  return *this;                 // rhs is destroyed, which deletes the old ps.
+}
+
 
 <typical-swap>
 The typical swap involves "one copy and two assignments"
@@ -12764,6 +12770,10 @@ version first.
 
 If it was pointerlike, own swap is not necessary. The pointerlike is good for
 copy-control and swap.
+
+<swap-and-const>
+swap works always regardless of const.Here swap works on built-in type,
+     pointer which is not affected by constness check; bitwise const.
 
 
 `exception-safety`
@@ -13030,7 +13040,7 @@ template<typename _Tp, typename _Alloc>
   { __x.swap(__y); }
 
 
-{swap-usuage}
+{swap-usage}
 There are two use cases:
 <1>
 
@@ -13251,7 +13261,7 @@ void swap( Message &lhs, Message &rhs )
 
 <move-consideration>
 The point is that by defining move operations, the Message class can use
-string::move and set::move operations to avoid the overhead of copying the
+`string::move` and `set::move` operations to avoid the overhead of copying the
 contents and folders members.
 
 In addition to moving the `folder` member, moving must update each Folder that
@@ -13261,33 +13271,33 @@ Folder pointers. So make it common work.
 // move Folder pointers 'from' m 'to' this message
 void Message::move_Folders(Message *m)
 {
-    // note: use set move assign rather than copy, folders = m->folders
+    // use `set move assign` than copy, folders = m->folders
     folders = std::move(m->folders);  
 
-    // note: use 'folders' for both add and remove but not m.folders
+    // use 'folders' for both add and remove but not m.folders
     for( auto f : folders ) 
     {
         f->remMsg(m);
         f->addMsg(this);
     }
 
-    m->folders.clear();      // ensure that destroying m is harmless
+    // ensure that destroying m is harmless
+    m->folders.clear();
 }
 
 
-note: no noexcept
+  note: no noexcept
+  The inserting an element to a `set` might throw since it requires memory to
+  be allocated. As a result, unlike HasPtr and StrVec case, will 'not' mark
+  move operations as noexcept. 
 
-The inserting an element to a `set` might throw since it requires memory to be
-allocated. As a result, unlike HasPtr and StrVec case, will 'not' mark move
-operations as noexcept. 
-
-Q: whether or not noexcept is necessary requirement on move operations? See
+Q: Whether or not noexcept is necessary requirement on move operations? See
 noexcept on move in {conditions-to-use-move}
 
 
 // move ctor
 Message::Message( Message &&m ) 
-  : contents(std::move(m.contents)) // string::move
+  : contents(std::move(m.contents))           // string-move-ctor
 {
   move_Folders(&m);
 }
@@ -13295,10 +13305,11 @@ Message::Message( Message &&m )
 // move assign
 Message& Message::operator=( Message &&rhs )
 {
-  if( this != &rhs )    // direct check for self-assign
+  if( this != &rhs )                          // direct check for self-assign
   {
-    remove_from_Folders();    // destroy the old state of lhs
-    contents = std::move( rhs.contents );
+    // remove lhs from folders
+    remove_from_Folders();
+    contents = std::move( rhs.contents );     // set-move-assign
     move_Folders(&rhs);
   }
 
@@ -13307,7 +13318,7 @@ Message& Message::operator=( Message &&rhs )
 
 
 ={============================================================================
-*kt_dev_cpp_004* cpp-copy-control-move
+*kt_dev_cpp_004* cpp-copy-control-move cpp-strvec-example
 
 In some circumstances, an object is 'immediately' destroyed after it is
 copied. In those cases, moving rather than copying the object can provide a
@@ -13426,35 +13437,9 @@ StrVec &StrVec::operator=( const StrVec &rhs )
   return *this;
 }
 
-
-<reallocation>
-The string is valuelike and has own memory for those characters. When copy a
-string, the new and the old are independent from each other. However, when
-reallocates copies, there will be only 'one' user after the copy and as soon
-as copy is done, no need to keep the old.
-
-So copying the data in these std::strings in the old is 'unnecessary' in this
-case so StrVec's 'performance' will be much better if can avoid the overhead
-of allocating and deallocating the char memories for strings themselves each
-time we reallocate.
-
-
-<avoid-copying>
-Two facilities by C++11. 
-
-1. move ctor. 
-Several library classes, including string, define so called move constructor.
-Presumably the string move ctor copies the pointer rather than allocating
-spaces.
-
-2. std::move().
-Defined 'utility' header. Two things. must use `move()` to 'signal' it want to
-use the string move ctor. Otherwise, copy ctor will be used. Use std::move() not
-move().
-
 void StrVec::push_back( const string &s )
 {
-  // When there is no elements, this calls reallocate() to allocate
+  // When there is no elements, this calls `reallocate()` to allocate
   // 'unconstructed' space.
   chk_n_alloc();
 
@@ -13468,11 +13453,40 @@ void StrVec::push_back( const string &s )
   alloc.construct( first_free++, s );
 }
 
+
+<reallocation> <why-move-works>
+`string is valuelike` and has own memory for those characters. Copying a
+string copies the date because after we copy a string, there are two users of
+that string. However, when reallocates copies, there will be only `one user`
+after the copy and as soon as copy is done, no need to keep the old.
+
+So copying the data in these std::strings in the old is 'unnecessary' in this
+case so StrVec's 'performance' will be much better if can avoid the overhead
+of allocating and deallocating the char memories for strings themselves each
+time we reallocate.
+
+
+<avoid-copying>
+Two facilities by *C++11* 
+
+1. move ctor. 
+Several library classes, including string, define so called move constructor.
+Presumably the string move ctor copies the pointer rather than allocating
+spaces.
+
+2. std::move().
+Defined 'utility' header. Two things. must use `std::move()` to 'signal' it
+want to use the string move ctor. Otherwise, copy ctor will be used. Use
+std::move() not move().
+
 // All pointers points to 'unconstructed' space.
 //
 // when size() is 0, allocate 1 space, no move, and set pointers accordingly.
 // when size() is not 0, allocate two times bigger space, do move and set
 // pointers accordingly.
+
+Q: when size() is 0, element and first_free are the same. Then size() returns
+0?
 
 void StrVec::reallocate()
 {
@@ -13483,11 +13497,11 @@ void StrVec::reallocate()
   auto dest = newdata;      // start in the new array
   auto elem = elements;     // start in the old array
 
-  // note: construct() calls string's move ctor. move existing elements.
+  // construct() calls string's move ctor. move existing elements.
   for( size_t i = 0; i != size(); ++i )
     alloc.construct( dest++, std::move(*elem++) );
 
-  // note: this frees up the old allocated memory and std::string element but
+  // this frees up the old allocated memory and std::string element but
   // not string's memory for characters. WHY? since used string's move ctor and
   // means that std::string's dtor is move-aware since string remains in a
   // valid, destructible state.
@@ -13498,12 +13512,12 @@ void StrVec::reallocate()
   cap = elements + newcapacity;
 }
 
-note: the std::move() returns a result that cause construct() to use the string
-move ctor.
+the std::move() returns rvalue that cause construct() to use the string move
+ctor.
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-control: move: rvalue reference
+*kt_dev_cpp_004* cpp-copy-control-move-rvalue-reference
 
 {lvalue-rvalue-reference}
 CPR 226. "Calls to functions that return reference are 'lvalue'" which means
@@ -13528,20 +13542,20 @@ whereas rvalue refers to object's 'value'(its contents).
 
 *expression-has-a-value*
 From ansic: In C, any assignment, such as "c = getchar()" is an expression and
-has a value, which is the value of the left hand side after the assignment. This
-means that an assignment can appear as part of a larger expression, such as
-"while((c = getchar()) != EOF)"
+has a value, which is the value of the left hand side after the assignment.
+This means that an assignment can appear as part of a larger expression, such
+as "while((c = getchar()) != EOF)"
 
 The `lvalue` and `rvalue` are 'properties' of an expression. Expressions yield
 or require rvalue/lvalue. Operators 'differ' as to whether require lvalue or
 rvalue operands and as to whether return lvalue or rvalues. Some yield or
 require lvalues and others yield or require rvalues:
 
-Assignment 'requires' a (nonconst) lvalue as its left hand operand and 'yields'
-its left-hand operand as an lvalue.
+Assignment 'requires' a (nonconst) lvalue as its left hand operand and
+'yields' its left-hand operand as an lvalue.
 
-The address-of-operator(&) requires an lvalue operand and returns a 'pointer' to
-its operand as an rvalue.
+The address-of-operator(&) requires an lvalue operand and returns a 'pointer'
+to its operand as an rvalue.
 
 <ex> show that x++ returns rvalue which is the previous.
 int main(int argc, char* argv[])
@@ -13577,26 +13591,23 @@ int &r2 = i*42;         // error, cannot bind `lvalue-reference` to `rvalue`
 int &&r2 = i*42;        // okay
 
 Functions that return a nonreference type, along with the arithmetic,
-relational, bitwise, and postfix operations, all yield rvalues.
+relational, bitwise, and `postfix` operations, all yield rvalues.
 
 
 <rvalue-is-temporary> implicit move sementics
-// Functions that 'return' a nonreference type, along with the arithmetic,
-// relational, bitwise, and postfix increment/decrement operators, all yield
-// rvalues. So can bind rvalue to such expressions.
-
 Looking at the list of rvalue and lvalue expressions, lvalue has 'persitent'
-state, whereas rvalue are either literals or 'temporary' objects created in the
-course of evaluating expressions.
+state, whereas rvalue are either literals or 'temporary' objects created in
+the course of evaluating expressions.
 
-The `rvalue-reference` can only be bound to temporaries: the referred-to object is
-about to be destroyed and there can be 'no' other users of that object. So the
-code that uses an rvalue reference is 'free' to 'take' over resources from the
-object to which the reference refers.
+The `rvalue-reference` can only be bound to temporaries: the referred-to
+object is about to be destroyed and there can be `no other users` of that
+(move-from) object and only one user of (move-to) object. So the code that
+uses an rvalue reference is 'free' to 'take' over resources from the object to
+which the reference refers.
 
 
 ={============================================================================
-*kt_dev_cpp_004* copy-control: move: std-move
+*kt_dev_cpp_004* cpp-copy-control-move-std-move
 
 {std-move}
 This is defined in <utility> header and to 'return' rvalue reference to its
@@ -13605,22 +13616,24 @@ given object.
 int &&rr = std::move(rr1);
 moved-to             moved-from
 
-Essentially to tell or signal compiler that we do 'not' intend to use rr1 again
-except to 'assign' to it or 'destroy' it. So after move, cannot make any
-assumptions about the value of the moved-from object. note: Think a string case
-that can destory string object itself and can assign new memory for characters. 
+Essentially to tell or signal compiler that we do 'not' intend to use rr1
+again except to 'assign' to it or 'destroy' it. So after move, cannot make any
+assumptions about the value of the moved-from object. note: Think a string
+case that can destory string object itself and can assign new memory for
+characters. 
 
 
 <why-std-move>
 Since there is argument dependant lookup, if user defines move() then
-overloading rule picks up the right version. However, std::move is template and
-rvalue matches to 'any' type so name collision are more likely but less likely
-to be intentional. Therefore, suggest fully qualified one, std::move().
+overloading rule picks up the right version. However, std::move is template
+and rvalue matches to 'any' type so name collision are more likely but less
+likely to be intentional. Therefore, suggest fully qualified one, std::move().
 
 
 <move-controls> <take-over>
-See 'no' const on parameter and noexcept since do 'not' allocate any new memory
-and take over the memory from its argument. See <noexcept-keyword> for more.
+See 'no' `const` on parameter and `noexcept` since do 'not' allocate any new
+memory and take over the memory from its argument. See <noexcept-keyword> for
+more.
 
 class Foo {
   Foo(const Foo&);   // okay
@@ -13629,11 +13642,11 @@ class Foo {
 The move-ctor 'must' ensure that the moved-from object is left in a state that
 destroying that object will be 'harmless'.
 
-The moved-from object continues to 'exist', eventually will be destroyed and the
-dtor will be run on that. Setting pointer members to nullptr makes
-StrVec::free() in dtor do nothing. Otherwise, would delete the memory(resource)
-  we have moved. Also this is 'why' do not have const on s since changes its
-  state.
+The moved-from object continues to 'exist', eventually will be destroyed and
+the dtor will be run on that. Setting pointer members to nullptr makes
+StrVec::free() in dtor do nothing. Otherwise, would delete the
+memory(resource) we have moved. Also this is 'why' do not have const on s
+since changes its state.
 
 StrVec::StrVec( StrVec&& s ) noexcept
 : elements(s.elements), first_free(s.first_free), cap(s.cap)
@@ -13642,9 +13655,9 @@ StrVec::StrVec( StrVec&& s ) noexcept
   s.elements = s.first_free = s.cap = nullptr;
 }
 
-The move assign does the same work as the dtor and the move ctor. If move assign
-won't throw any exceptions, should make it noexcept and must guard against
-self-assignment.
+The move assign does the same work as the dtor and the move ctor. If move
+assign won't throw any exceptions, should make it noexcept and must guard
+against self-assignment.
 
 StrVec &StrVec::operator=( StrVec &&rhs ) noexcept
 {
@@ -13668,30 +13681,24 @@ StrVec &StrVec::operator=( StrVec &&rhs ) noexcept
   return *this;
 }
 
-note:
-The beheavior of dtor which is free() differs from copy and move context. This
-relies on the string's dtor.
-
-note:
-This has the same from as self-assign and exception safe does.
-
 
 <destructible-state>
 Be careful about meaning of move: The actual move happens on elements which is
 string in this case and move is done by copying and setting pointer members in
-StrVec POV and is not to free the memory moved. This is a meaning of taking over
-the resources in s, StrVec.
+StrVec POV and is not to free the memory moved. This is a meaning of taking
+over the resources in s, StrVec.
 
-Moving from an object does not destroy that object. Therefore, must ensure that
-the moved-from object is in a state in which the dtor can be run. In this
-example, if not set these pointer members null, there shall be a problem when
-dtor runs and calls free().
+Moving from an object does not destroy that object. Therefore, must ensure
+that the moved-from object is `in a state in which the dtor can be run.` In
+this example, if not set these pointer members null, there shall be a problem
+when dtor runs and calls free().
 
 In addition to that, move operations guarantee that the object remains 'valid'
 meaning that can runs operations but no guarantees/assumptions about its
 'value'. Can safely be given a new value or used in other ways that do not
-depend on its current value. StrVec move leave the moved-from object in the same
-state as a default initialized object and other classes may behave differently.
+depend on its current value. StrVec move leave the moved-from object in the
+same state as a default initialized object and other classes may behave
+differently.
 
 
 {synthesized-move-operations}
@@ -13699,9 +13706,12 @@ If class do not define copy ctor and assign then compiler 'always' make these
 operations; defined either as memberwise or deleted.
 
 Move operations are different. The compiler make move operations 'only' if a
-class does 'not' define any copy ctor and assign and 'only' if all data members
-can be move ctored and assigned. So if class has own copy ctor and assign then
-move will 'not' be synthesized.
+class does 'not' define any copy ctor and assign and 'only' if all nonstatic
+members can be move constructed and assigned because if a class doesn't have a
+move operation, the corresponding copy operation is used in place of move
+through function matching. 
+
+  "if class has own copy ctor and assign then move will 'not' be synthesized."
 
 // the compiler will synthesize the move operations for X and hasX
 struct X {
@@ -13716,27 +13726,26 @@ struct hasX {
 X x, x2 = std::move(x);          // use the synthesized move ctor
 hasX hx, hx2 = std::move(hx);
 
-If class defines either move ctor and/or move assign, the synthesized copy ctor
-and copy assign will de defined 'deleted'. So class that define move operations
-'must' also define own copy operations. Otherwise, those members are deleted by
-default.
+If class defines either move ctor and/or move assign but not defined copy
+controls, the synthesized copy controls will de defined 'deleted'. 
+
+  "class that define move operations 'must' also define own copy operations." 
 
 
 {copy-or-move}
-When class has both a move and copy ctor, how does the library know what to use?
-Use function matching since copy ctor takes const StrVec& and move only takes
-StrVec&&.
+When class has both a move and copy ctor, how does the library know what to
+use? Use function matching since copy ctor takes const StrVec& and move only
+takes StrVec&&.
 
 StrVec v1, v2;
-v1 = v2;                    // copy assign
+v1 = v2;                    // use copy assign
 
 StrVec getVec(istream &);   // assume getVec returns an rvalue
-                            // note: right function signature to return rvalue?
-v2 = getVec(cin);           // note: move assign
+v2 = getVec(cin);           // use move assign
    
-Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in the
-second assign, both are viable but copy assign requires conversion to const.
-Hence move is used since it is exact match.
+Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So in
+the second assign, both copy assign and move assign are viable but copy assign
+requires conversion to const. Hence move is used since it is exact match.
 
 
 {conditions-to-use-move}
@@ -13788,8 +13797,8 @@ called. "can bind rvalue to lreference".
 
 
 <move-example>
-The HasPtr copy-and-swap example shows that 'single' assignment operator acts as
-both copy and move assign.
+The HasPtr copy-and-swap example shows that 'single' assignment operator acts
+as both copy and move assign.
 
 HasPtr& HasPtr::operator=(const HasPtr &rhs)
 {
@@ -13799,15 +13808,14 @@ HasPtr& HasPtr::operator=(const HasPtr &rhs)
   return *this;
 }
 
-HasPtr& HasPtr::operator=(const HasPtr rhs)  // note. not ref and it's a copy
+HasPtr& HasPtr::operator=(HasPtr rhs) // note not ref and it's a copy
 {
-  ...                // operations to change a copy(rhs)
   swap(*this, rhs);
   reutn *this;       // rhs is destroyed, which deletes the old ps.
 }
 
-If add move ctor to HasPtr class then effectively add move assign as well. The
-assign operator is both the move and copy assign. 
+If add move ctor to HasPtr class then `effectively add move assign as well.`
+The assign operator is both the move and copy assign. 
 
 note This code is from copy-and-swap-idiom which is for valuelike case. Hence
 move is safe.
@@ -13815,42 +13823,35 @@ move is safe.
 class HasPtr {
   public:
     // move ctor
-    HasPtr(HasPtr &&p) noexcept : ps(p.ps), i(p.i), { p.ps = 0; }
+    HasPtr(HasPtr &&p) noexcept : ps(p.ps), i(p.i) { p.ps = 0; }
 
-    // note: copy ctor, HasPtr& operator=(const HasPtr rhs).
+    // copy-assign or move-assign
     HasPtr& operator=(HasPtr rhs)
     { swap(*this, rhs); return *this; }
     ...
 };
 
-Since operator=() uses nonreference type, uses copy initialization. 'depending'
-on the type of argument, it uses either the copy ctor or the move ctor.
+Since operator=() uses nonreference type, uses copy ctor to copy argument.
+'depending' on the type of argument, it uses either the copy ctor or the move
+ctor.
 
 HasPtr hp, hp2;
 
-hp = hp2;
-hp = std::move(hp2);
+hp = hp2;               // 1
+hp = std::move(hp2);    // 2
 
 The first assignment. hp2 is an lvalue, so the move ctor is not viable. copy
 ctor is used to initialize `rhs`.
 
 The second assignment. std::move return rvalue and both ctor are viable.
-However, because the argument is an rvalue reference, the move ctor is an exact
-match. 
+However, because the argument is an rvalue reference, the move ctor is an
+exact match. 
 
-Regardless of whether the copy or move ctor was used, the body of the assignment
-operator `swaps` the state of the two operators.
+Regardless of whether the copy or move ctor was used, the body of the
+assignment operator `swaps` the state of the two operands.
 
 note:
 After all, save a copy ctor in using valuelike case than move ctor case. 
-
-
-note: see <nonmember-friend-swap> for swap in HasPtr
-This was HasPtr& operator=(const HasPtr rhs) in the original example as copy
-context and do not have const now as move context even if the code of function
-is the same. Means that swap works always regardless of const. Why? Here swap
-works on built-in type, pointer which is not affected by constness check;
-bitwise const.
 
 
 {move-iterator-adaptor}
@@ -13908,8 +13909,8 @@ it has assigned to that element.
 
 {move-can-be-dangerous}
 Since moved-from object has 'indeterminate' state, std::move is a dangerous
-operation. When we call std::move must be certain that there can be 'no' user of
-the moved-from object. Judiciously used inside class code such as move
+operation. When we call std::move must be certain that there can be 'no' user
+of the moved-from object. Judiciously used inside class code such as move
 operations for significant performance benefit.
 
 
@@ -13917,12 +13918,18 @@ operations for significant performance benefit.
 Member functions other than constructors and assignment can benefit from
 providing both copy and move versions.
 
-copy version: lvalue reference to const
-move version: rvalue reference to nonconst
+  note: const-overload
+  Record lookup(account &);         // nonconst version
+  Record lookup(const account &);   // const version
+
 
 class StrVec {
   public:
+
+    // copy version, lvalue reference to const
     void push_back( const std::string& );
+
+    // move version, rvalue reference to nonconst
     void push_back( std::string&& );
     ...
 };
@@ -16175,7 +16182,7 @@ for overloading
 It is an error for two functions to differ only in their return types since
 don't see return type. See {virtual-copy-constructor} for override case.
 
-<constness-and-overload>
+<const-overload>
 The reason that the compiler can use the constness of the argument to
 distinguish which funtion to call is that there is `no-const-to-nonconst`
 conversion.
@@ -20099,7 +20106,6 @@ StrBlobPtr &StrBlobPtr::operator--()
 
 The inheritance provides `overriding` and `polymorphism`.
 
-
 {static-dynamic-type}
 The `dynamic-binding` at run-time so called `run-time-binding` because
 `static-type` is different from `dynamic-type` 
@@ -20112,9 +20118,9 @@ pointer or reference of base class = derived class objects;
 
 * Do not know which object to bind until run-time. 
 
-The `subobject` is key to how inheritance and dynamic-binding works. MEC++:
-inheritance give rise to pointer and reference with two different types: static
-and dynamic type.
+  "The `subobject` is key to how inheritance and dynamic-binding works. MEC++:
+  inheritance give rise to pointer and reference with two different types:
+  static and dynamic type."
 
 
 {conceptual-structure-of-deirved-object}
@@ -20161,20 +20167,14 @@ print_total( bulk_item );     // Bulk version. dynamic-binding.
 
 
 {sliced-off}
-The `staic-binding` is done at compile-time. copy-ctor and copy-assign are func
-calls and derived-to-base-conversion happens when base's copy-ctor and
+The `staic-binding` is done at compile-time. copy-ctor and copy-assign are
+func calls and derived-to-base-conversion happens when base's copy-ctor and
 copy-assign is called.
 
 class Foo {
   Foo(const Foo&);
   Foo& operator=(const Foo&);
 };
-
-The compiler always use static-type and if it is a virtual call then will
-generate a code for run-time binding and could calls derived version. However,
-         this could be broken if the derived fails to override.
-
-// where item is base and bulk is derived
 
 Quote item(bulk);         // sliced-off
 item = bulk;              // sliced-off
@@ -20201,18 +20201,18 @@ note: this is a syn coy-ctor that a compiler created.
 
 *baseptr = *baseptr;     // the same class. fine
 *baseptr = *baseptr;     // diff. base = derived. sliced-off. 1)
-*baseptr = *baseptr;     // diff. derived = base. sliced-off. 2) no-compile-error
+*baseptr = *baseptr;     // diff. derived = base. 2) no-compile-error
 
-Why different results, no comile error? Because a compiler use `static-type` and
-only base part will be copied for 1) and 2).
+Why different results, no comile error? Because a compiler use `static-type`
+and only base part will be copied for 1) and 2).
 
 So two problems here:
 
 * The sliced-off with no comiple error can happen when use pointer
 * Real programmers write code like this.
 
-How can make it compile error to flag up two cases, 1) and 2), in compile time?
-That is to make it difficult to use incorrectly. 
+How can make it compile error to flag up two cases, 1) and 2), in compile
+time?  That is to make it difficult to use incorrectly. 
 
 TODO: So what's the solution? need to summarise the followings again.
 
@@ -32688,21 +32688,18 @@ uniqie( beg, end, comp );
 
 
 ={============================================================================
-*kt_dev_stl_063* function-object
-
-*function-object* *functor*
+*kt_dev_stl_063* cpp-fobj cpp-function-object cpp-functor
 
 CPR 14.8 p571
 
-* The function object is an object and can 'call' this object. Calling an object
-  runs its overloaded call operator.
+* The function object is an object and can 'call' this object. Calling an
+  object runs its overloaded call operator.
 
 * The function call operator must be member.
 
 * May define multiple versions of the call operator, each of which must differ
   as to the number or types of parameters.
 
-<ex>
 
 struct absInt {
   int operator() (int val) const {
@@ -32719,10 +32716,11 @@ int ui = absObj(i);     // absObj.operator()(i)
 Can be 'smart' functions because may have other member functions and data
 members which means function objects have a 'state'.
 
-In fact, the same functionality, represented by two 'different' function objects
-instances of the same class, may have different 'states' at the same time. This
-is not possible for ordinary functions. Another advantage of function objects is
-that you can initialize them at 'runtime' before you use/call them.
+In fact, the same functionality, represented by two 'different' function
+objects instances of the same class, may have different 'states' at the same
+time. This is not possible for ordinary functions. Another advantage of
+function objects is that you can initialize them at 'runtime' before you
+use/call them.
 
 <ex> CPR 14.8
 
@@ -32760,20 +32758,20 @@ int main()
 
 
 ={============================================================================
-*kt_dev_stl_063* function-object-predicate
+*kt_dev_stl_063* cpp-fobj-predicate
 
-{why-user-functions}
 To increase their 'flexibility' and power, 'several' algorithms allow the
 passing of user-defined functions. This is 'callables' to change a default
 operator of algorithms. For example,
 
   The sort() uses "operator<()" on element type to sort but want to use
   different order? If sort() was written to simply use "<" then cannot able to
-  change its sort order regardless of whether element type supports the operator
-  for that order. So the supported operator of element type is different matter.
+  change its sort order regardless of whether element type supports the
+  operator for that order. So the supported operator of element type is
+  different matter.
 
 
-<ex> *ex-algo-for-each*
+<ex> *algo-for-each*
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -32832,8 +32830,8 @@ A predicate is a special kind of auxiliary function. Predicates return a
 Depending on their purpose, predicates are 'unary' or 'binary'.
 
 Not every unary or binary function that returns a boolean value is a valid
-predicate. In addition, the STL requires that predicates be 'stateless', meaning
-that they should always yield the same result for the same value.
+predicate. In addition, the STL requires that predicates be 'stateless',
+  meaning that they should always yield the same result for the same value.
 
 <code> *algo-sort*
 template< class RandomIt>
@@ -32883,67 +32881,6 @@ void sort( RandomIt first, RandomIt last, Compare comp );
       }
     }
 
-
-<ex-stable-sort> *ex-algo-stable-sort* *ex-algo-unique*
-Sort by length and also want to keep the order among the 'equal' elements.
-
-#include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
-
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-// binary predicate and sort by size
-bool isShorter(const string &s1, const string &s2)
-{
-  return s1.size() < s2.size();
-}
-
-// sort by alphabet and remove dups. unique() also move elements.
-void elimDups(vector<string> &words)
-{
-  // sort( words.begin(), words.end(), isShorter );
-  sort( words.begin(), words.end() );
-
-  PRINT_ELEMENTS(words, "sorted       : ");
-
-  auto end_unique = unique( words.begin(), words.end() );
-
-  words.erase( end_unique, words.end() );
-}
-
-int main()
-{
-  vector<string> coll{"over", "quick", "red", "fox", "jumps", "red", "the", 
-    "slow", "turtle", "the"};
-
-  PRINT_ELEMENTS(coll, "initialized  : ");
-
-  elimDups(coll);
-
-  PRINT_ELEMENTS(coll, "eliminated   : ");
-
-  stable_sort( coll.begin(), coll.end(), isShorter );
-
-  PRINT_ELEMENTS(coll, "stable sorted: ");
-}
-
-initialized  : over quick red fox jumps red the slow turtle the 
-sorted       : fox jumps over quick red red slow the the turtle // by alphabet
-eliminated   : fox jumps over quick red slow the turtle 
-stable sorted: fox red the over slow jumps quick turtle         // by size
 
 <ex> *ex-algo-find-if*
 #include <iostream>
@@ -33004,10 +32941,72 @@ int main()
 }
 
 
+<ex-stable-sort> *algo-stable-sort* *algo-unique*
+Sort by length and also want to keep the order among the 'equal' elements.
+
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+
+using namespace std;
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+// binary predicate and sort by size
+bool isShorter(const string &s1, const string &s2)
+{
+  return s1.size() < s2.size();
+}
+
+// sort by alphabet and remove dups. unique() also move elements.
+void elimDups(vector<string> &words)
+{
+  // sort( words.begin(), words.end(), isShorter );
+  sort( words.begin(), words.end() );
+
+  PRINT_ELEMENTS(words, "sorted       : ");
+
+  auto end_unique = unique( words.begin(), words.end() );
+
+  words.erase( end_unique, words.end() );
+}
+
+int main()
+{
+  vector<string> coll{"over", "quick", "red", "fox", "jumps", "red", "the", 
+    "slow", "turtle", "the"};
+
+  PRINT_ELEMENTS(coll, "initialized  : ");
+
+  elimDups(coll);
+
+  PRINT_ELEMENTS(coll, "eliminated   : ");
+
+  stable_sort( coll.begin(), coll.end(), isShorter );
+
+  PRINT_ELEMENTS(coll, "stable sorted: ");
+}
+
+initialized  : over quick red fox jumps red the slow turtle the 
+sorted       : fox jumps over quick red red slow the the turtle // by alphabet
+eliminated   : fox jumps over quick red slow the turtle 
+stable sorted: fox red the over slow jumps quick turtle         // by size
+
+
 <predicate-is-limited>
-Depending on algorithms to use, can use only unary or binary since the predicate
-only supports unary or binary which means must have one or two parameters. How
-to support more arguments?
+Depending on algorithms to use, can use only unary or binary since the
+predicate only supports unary or binary which means must have one or two
+parameters. How to support more arguments?
 
 <ex-stable-sort-contd>
 Revise the above stable-sort example to report how many words are of a given
@@ -33021,19 +33020,19 @@ void biggies( vector<string> &words, vector<string>::size_type sz )
   // stable sorted: fox red the over slow jumps quick turtle         // by size
   //
   // 1. get an iterator to the first element whose size is >= sz
-  // 2. compute the number of elements with size >= sz
+  // 2. print the number of elements with size >= sz
   // 3. print words of the given size or longer
 }
 
-<Q> Can use find_if to find the first whose size is >= sz? However, find_if
-takes 'unary' predicate so cannot use F(elem, size_type). How to solve this?
+The problem:
+Can use find_if to find the first whose size is >= sz? However, find_if takes
+'unary' predicate so cannot use f(elem, size_type). How to solve this?
 
 
 ={============================================================================
-*kt_dev_stl_063* function-object-lambda
+*kt_dev_stl_063* cpp-fobj-lambda C++11
 
-{lambda}
-Lambdas, introduced with C++11, define a way to specify functional behavior
+Lambdas, introduced with *C++11* , define a way to specify functional behavior
 'inside' an expression or statement. You can define 'objects' that represent
 functional behavior and pass these objects as `unnamed inline function` to
 algorithms to be used as predicates or for other purposes.
@@ -33044,9 +33043,10 @@ unlike function, be defined inside a function.
 <form>
 [capture list] (parameter list) -> return type { body }
 
-The capture list is a list of 'local' variables in the 'enclosing' function. The
-parameter and return are 'optional'. If omits them, will be void for parameter
-or return. When return used in the body, has an 'inferred' return type. 
+The capture list is a list of 'local' variables in the 'enclosing' function.
+The parameter and return are 'optional'. If omits them, will be void for
+parameter or return. When return used in the body, has an 'inferred' return
+type. 
 
 <ex>
 #include<iostream>
@@ -33078,11 +33078,9 @@ auto wc = find_if( words.begin(), words.end(),
                [sz](const string &a)
                { return a.size() >= sz; } );
 
-Here [sz] is used to capture a variable from enclosing function and also can use
-one parameter; one from capture and one from parameter and return bool.
+Here [sz] is used to capture a variable from enclosing function and also can
+use one parameter; one from capture and one from parameter and return bool.
 
-
-Put it all together:
 
 #include<iostream>
 #include<vector>
@@ -33141,10 +33139,12 @@ void biggies( vector<string> &words, vector<string>::size_type sz )
 
   // 1. get an iterator to the first element whose size is >= sz
 
+  // lambda version
   // auto wc = find_if( words.begin(), words.end(),
   //                [sz](const string &a)
   //                { return a.size() >= sz; } );
 
+  // bind version
   auto wc = find_if( words.begin(), words.end(),
                  bind( check_size, _1, sz ));
 
@@ -33185,16 +33185,12 @@ stable sorted: fox red the over slow jumps quick turtle
 for_each     : fox red the over slow jumps quick turtle 
 jumps quick turtle 
 
-note:
-In lambda in for_each, can use cout directly since cout is staic name and
-capture list can use only on local nonstatic variables.
-
 
 <lambda-capture>
-When define lambda, compiler generates a new unnamed class so when pass it to a
-function, defines both a new type and an object of that type. So the data member
-of a lambda are initialized when a lambda object is created. That means that the
-variable captured by a lambda is 'local' to a lambda.
+When define lambda, compiler generates a new unnamed class so when pass it to
+a function, defines both a new type and an object of that type. So the data
+member of a lambda are initialized when a lambda object is created. That means
+that the variable captured by a lambda is 'local' to a lambda.
 
 
 <capture-by-value-or-reference>
@@ -33210,12 +33206,13 @@ auto j = f();     // j is 0.
 
 Unlike parameters, the value of captured variable is copied when the lambda is
 'created', not when it is called (executed). When pass lambda such as return a
-lambda, careful for the same reason that a function must not return a reference
-to a local variable. If possible, avoid capturing pointers or reference.
+lambda, careful for the same reason that a function must not return a
+reference to a local variable. If possible, avoid capturing pointers or
+reference.
 
 <implicit-capture>
-Let the compiler 'infer' variables we use from the code in the lambda body. Use
-an & or = in the capture list. The revised is:
+Let the compiler 'infer' variables we use from the code in the lambda body.
+Use an & or = in the capture list. The revised is:
 
 // 1. get an iterator to the first element whose size is >= sz
 auto wc = find_if( words.begin(), words.end(),
@@ -34352,11 +34349,11 @@ namespace std {
 
 
 ={============================================================================
-*kt_dev_stl_064* function-object-function-type
+*kt_dev_stl_064* cpp-fobj-function-type
 
 {function-type}
-Assume to build a simple desk calculator and to define a function table to store
-pointers to these callables since all have the same call signature. 
+Assume to build a simple desk calculator and to define a function table to
+store pointers to these callables since all have the same call signature. 
 
 // ordinary function
 int add(int i, int j) { return i+j;}
@@ -34376,8 +34373,8 @@ map<string, int(*)(int, int)> binops;
 binops.insert( {"+", add} );
 binops.insert( {"%", mod} );  // error since mod is 'not' a pointer to function
 
-The second is in error since like any other object, a callable object has a type
-and lambda type does not match the type of the values in the map.
+The second is in error since like any other object, a callable object has a
+type and lambda type does not match the type of the values in the map.
 
 However, callables with different types may 'share' the same call signature. A
 call signature corresponds to a function type.

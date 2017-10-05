@@ -10,7 +10,7 @@
 #{ syssetup
 
 |kt_linux_bash_000| sh-reference
-*kt_linux_bash_005* sh-shebang
+*kt_linux_bash_005* sh-shebang tool-env
 *kt_linux_bash_005* sh-quote
 *kt_linux_bash_019* sh-pipeline sh-subshell sh-environment
 *kt_linux_bash_019* sh-pipeline-case-problem
@@ -131,7 +131,6 @@
 |kt_linux_tool_044| mc
 |kt_linux_tool_045| graphbiz
 |kt_linux_tool_046| tool-mktemp
-*kt_linux_tool_047* tool-env
 *kt_linux_tool_048* tool-dircolors
 *kt_linux_tool_048* tool-tput
 |kt_linux_tool_048| tool-gnome-terminal
@@ -627,9 +626,13 @@ http://wiki.bash-hackers.org/start
 
 
 ={============================================================================
-*kt_linux_bash_005* sh-shebang
+*kt_linux_bash_005* sh-shebang tool-env
 
-difference between two #!/usr/bin/python and #!/usr/bin/env python since using
+difference between two: 
+
+  #!/usr/bin/python
+  #!/usr/bin/env python since using
+
 env is a portable way to use?
   
 NAME
@@ -647,6 +650,16 @@ have a problem to run this script.
 the second uses PATH variable instead but may run different python version
 depending on PATH value set for a user. Also, this do not allow to pass
 arguments to the command such as python -f.
+
+<tool-env>
+env - run a program in a modified environment
+
+LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so
+
+env ${LD_PRELOAD} nickelmediad \
+    --no-mediasettings --no-localmedialibrary \
+    --no-outputmanager --no-servicelistbuilder \
+    -b $BUS_NAME -f $cfg &
 
 
 ={============================================================================
@@ -11272,19 +11285,6 @@ $ mktemp
 
 $ mktemp -t check-headers.XXXXX
 /tmp/check-headers.Y8A9r
-
-
-={============================================================================
-*kt_linux_tool_047* tool-env
-
-env - run a program in a modified environment
-
-LD_PRELOAD=/usr/local/lib/libdirectfb.so:/usr/local/lib/libdirect.so:/usr/local/lib/libinit.so
-
-env ${LD_PRELOAD} nickelmediad \
-    --no-mediasettings --no-localmedialibrary \
-    --no-outputmanager --no-servicelistbuilder \
-    -b $BUS_NAME -f $cfg &
 
 
 ={============================================================================
@@ -58954,9 +58954,8 @@ export PATH=${PREFIX}/bin:$PATH
 make
 
 // copy built ld to mount directory
-cd /home/kyoupark/asn/glibc-libs/lib
-cp /home/kyoupark/asn/gcc/glibc-2.13-build/elf/ld.so ld-2.13.so
-ll ld*
+cp /home/kyoupark/asn/gcc/glibc-2.13-build/elf/ld.so /home/kyoupark/asn/glibc-libs/lib/ld-2.13.so
+ls -al /home/kyoupark/asn/glibc-libs/lib/ld-2.13.so
 
 telnet 10.209.60.47
 mkdir /mnt/tmp
@@ -59232,6 +59231,14 @@ _dl_relocate_object ()
       //    ElfW(Dyn) *`l_info`[DT_NUM + DT_THISPROCNUM + DT_VERSIONTAGNUM
 		//      + DT_EXTRANUM + DT_VALNUM + DT_ADDRNUM];
       // }
+      //
+      // (ElfW(Addr) *) D_PTR (l, l_info[DT_MIPS (PLTGOT)]);
+      //
+      // #ifdef DL_RO_DYN_SECTION
+      // # define D_PTR(map, i) ((map)->i->d_un.d_ptr + (map)->l_addr)
+      // #else
+      // # define D_PTR(map, i) (map)->i->d_un.d_ptr
+      // #endif
 
       // gotplt = (ElfW(Addr) *) D_PTR (l, l_info[DT_MIPS (PLTGOT)]); to
       gotplt = (ElfW(Addr) *) D_PTR (l, l_info[DT_PLTGOT]);
@@ -68173,6 +68180,8 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
             ElfW(auxv_t) *auxv)
         {
 
+          `process_envvars` (&mode);
+
           if (*user_entry == (ElfW(Addr)) ENTRY_POINT)
           {
             // Ho ho.  We are not the program interpreter!  We are the program
@@ -68202,6 +68211,68 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
                 --inhibit-rpath LIST  ignore RUNPATH and RPATH information in object names\n\
                 in LIST\n\
                 --audit LIST          use objects named in LIST as auditors\n");
+
+
+            if (__builtin_expect (mode, normal) == verify)
+            {}
+            else
+            {
+              *call-dl-map-object*
+              // since use standalone more. 
+              //
+              // call-dl-map-object loops and load each:
+              // {
+              //    _dl_map_object_from_fd
+              //    {
+              //       _dl_debug_printf ("file=%s [%lu];  
+              //         generating link map\n", name, nsid);
+              //
+              //       `elf_get_dynamic_info` (l, NULL);
+              //    }
+              // }
+              //
+              // 20286:      KT: dynamic string...     
+              // 20286:       file=./minit-dynamic [0];  generating link map
+              // 20286:     *** KT: elf from map obj ***
+              // 20286:       dynamic: 0x0040017c  base: 0x00000000   size: 0x000019e0
+              // 20286:         entry: 0x004005e0  phdr: 0x00400034  phnum:          8
+              // 20286:
+              // 20286:     *** KT: map obj ***
+              // 20286:      KT: system_dirs: /lib/
+              // 20286:
+              // 20286:     file=libgcc_s.so.1 [0];  needed by ./minit-dynamic [0]
+              // 20286:     find library=libgcc_s.so.1 [0]; searching
+              // 20286:      KT: RPATH...     
+              // 20286:         KT: LD_LIB...     20286:        search path=/mnt/tmp/asn/glibc-libs/lib/tls:/mnt/tmp/asn/glibc-libs/lib                (LD_LIBRARY_PATH)
+              // 20286:     KT:  trying file=/mnt/tmp/asn/glibc-libs/lib/tls/libgcc_s.so.1
+              // 20286:     KT:  trying file=/mnt/tmp/asn/glibc-libs/lib/libgcc_s.so.1
+              // 20286:      KT: RUNPATH...     20286:       KT: default...
+              // 20286:
+              // 20286:     file=libgcc_s.so.1 [0];  generating link map
+              // 20286:     *** KT: elf from map obj ***
+              // 20286:       dynamic: 0x2aaac10c  base: 0x2aaac000   size: 0x0000f940
+              // 20286:         entry: 0x2aaae680  phdr: 0x2aaac034  phnum:          6
+              // 20286:
+              // 20286:
+              // 20286:     file=libc.so.6 [0];  needed by ./minit-dynamic [0]
+              // 20286:     find library=libc.so.6 [0]; searching
+              // 20286:      KT: RPATH...     20286:         KT: LD_LIB...     20286:        search path=/mnt/tmp/asn/glibc-libs/lib                (LD_LIBRARY_PATH)
+              // 20286:     KT:  trying file=/mnt/tmp/asn/glibc-libs/lib/libc.so.6
+              // 20286:      KT: RUNPATH...     20286:       KT: default...
+              // 20286:
+              // 20286:     file=libc.so.6 [0];  generating link map
+              // 20286:     *** KT: elf from map obj ***
+              // 20286:       dynamic: 0x2aabc1ac  base: 0x2aabc000   size: 0x00159e50
+              // 20286:         entry: 0x2aad32a4  phdr: 0x2aabc034  phnum:         11
+              
+              _dl_map_object (NULL, rtld_progname, lt_library, 0,
+                  __RTLD_OPENEXEC, LM_ID_BASE);
+
+              _dl_debug_printf ("*** KT: map obj ***\n");
+              
+              goes to *calls-dl-relocate*
+            }
+
           }
           else
           {
@@ -68231,10 +68302,10 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
 
           // NEED_DL_SYSINFO is not defined for mips
 
-          // elf/dl-load.c, fill in RPATH and LD_LIBRARY_PATH information);
+          // *elf/dl-load.c*  fill in RPATH and LD_LIBRARY_PATH information);
           /* Initialize the data structures for the search paths for shared
              objects.  */
-          _dl_init_paths (library_path);
+          `_dl_init_paths` (library_path);
 
           // elf/dl-debug.c, initialization of _r_debug and DT_DEBUG);
           /* Initialize _r_debug.  */
@@ -68261,6 +68332,27 @@ RTLD_START (sysdep/<arch>/dl-machine.h)
           // DT_EXTRANUM       759 elf/elf.h        #define DT_EXTRANUM	3
           // DT_VALNUM         713 elf/elf.h        #define DT_VALNUM 12
           // DT_ADDRNUM        734 elf/elf.h        #define DT_ADDRNUM 11
+
+          if (prelinked)
+          {}
+          else
+          {
+            /* Now we have all the objects loaded.  Relocate them all except for
+               the dynamic linker itself.  We do this in reverse order so that copy
+               relocs of earlier objects overwrite the data written by later
+               objects.  We do not re-relocate the dynamic linker itself in this
+               loop because that could result in the GOT entries for functions we
+               call being changed, and that would break us.  It is safe to relocate
+               the dynamic linker out of order because it has no copy relocs (we
+               know that because it is self-contained).  */
+
+            if (l != &GL(dl_rtld_map))
+            {
+              *calls-dl-relocate*
+              _dl_relocate_object (l, l->l_scope, GLRO(dl_lazy) ? RTLD_LAZY : 0,
+                  consider_profiling);
+            }
+          }
 
           _dl_relocate_object (struct link_map *l)
           {
