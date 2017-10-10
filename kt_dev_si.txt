@@ -245,6 +245,8 @@ b8-27-eb-c4-9b-9f,
 b8-27-eb-c5-5a-45, 0019fb63ea0a, SYSF85.03.00, Isaac Norman (inorman)
 b8-27-eb-c5-5a-45, 0019fb0f3d4e, SYSF85.03.00, Isaac Norman (inorman)
 b8-27-eb-d5-04-6e, 0019fb6384f6, ??, Edward Hadley-Clifton
+b8-27-eb-7c-4e-75, 0019fb0f4454, , Lee Edwards
+b8-27-eb-7c-4e-75, 0019fb603c26, , Lee Edwards
 
 
 0019fbd18cc3, SYSF85.03.00, Andy Haynes (andhayne)
@@ -9727,12 +9729,6 @@ void PLAYER_UAM_SignalPlaybackUpdate()
 ^[2017:09:27 06:17:44] !ERROR  -AMS          		< T:AMS_FTM_HTTP_REQUEST_HANDLER M:AMS_ftm.cpp F:AMS_FTM_HttpPost L:501 > Performing Http POST request -- calling the synchronous call to HTTP_API_Perform() 
 
 
-DARWIN_PLATFORM/DARWIN_UAM/inc/uam_api.h
-
-	UAM_API_EVENT_TYPE_DPL_ASSET_FROM,\  // 77
-	UAM_API_EVENT_TYPE_DPL_ASSET_TO,\    // 78
-
-
 void PLAYER_UAM_SignalAssetTransition( SYSTEMOBJECT_HANDLE l_obj_handle )
 {
                         // { KT
@@ -11155,27 +11151,53 @@ note:
 one tuner can have three jobs(live, rb, and rec) and two MC(live and recordings)
 
 
+<mc-state-debug>
 #-----------------------------------------------------------
 # MCM_Mediaconn_StateDebug when debug ON
 #-----------------------------------------------------------
-DIAG_LOG_INFO(g_mcm_diag_handle, ("%d (0x%x) %s (0x%x) %s (0x%x : 0x%x) %s (0x%x) %s (0x%x)",
-  line,
-  p_media_connection->h_media_connection,
-  t,                            // p_media_connection->mc_type, MC type, live etc
-  p_media_connection->mc_type,
-  s,                            // p_media_connection->status
-  p_media_connection->state,
-  p_media_connection->status,
-  a,                            // preparing mesg?
-  p_media_connection->sequence_index,
-  e,
-  event));
 
-!INFO  -MCM          < M:mcm_mediaconn_event.c F:MCM_Mediaconn_StateDebug L:00577 > 
-1835 
-(0x9) MCM_MEDIACONN_TYPE_CAPTURE 
-(0x3000006) STATE_STARTING SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION 
-(0x10000103 : 0x64) STARTING_STATE_INITIAL (0x13) ITC_EV_STARTING (DM ??? (00) Activity 0) (0x2008)
+#define MCM_STATE_DEBUG_LOG_FORMAT                                                                                                                                      \
+    "%d 
+hMC=0x%x 
+%s 
+(0x%x) 
+%s 
+%s 
+(0x%x : 0x%x) 
+%s 
+(0x%x) 
+%s 
+(0x%x) 
+retry_count %u is_retrying %d event_flag 0x%08x mcm_wait_flags 0x%08x",                              \
+
+
+F:MCM_Mediaconn_StateDebug L:1632 > 
+1678                                            // line
+hMC=0xa0e                                       // p_media_connection->h_media_connection
+MCM_MEDIACONN_TYPE_LIVE                         // mc_type_str
+(0x7000002)                                     // ->mc_type *mc-type*
+STATE_FREEING                                   // state_str
+SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION              // exception_str
+(0x10000105 : 0x64)                             // ->state, ->status
+PREPARING_SIM_MONI_SEI [SIM]                    // activity_str
+(0x11)                                          // -> sequence_index
+ITC_EV_??? (00000000) (DM ??? (00) Activity 0)  // event_buf 
+(0x0)                                           // event
+retry_count 3 is_retrying 0 event_flag 0x00000003 mcm_wait_flags 0x00000000 
+
+
+CMS_MEDIA_SERVICES/MCM/src/mcm_mediaconn_event.c
+
+        // state and state_str are the same
+        switch (p_media_connection->state)
+            case MCM_MEDIACONN_STATE_BASE:                          state_str = "STATE_BASE"; break;
+
+        // status and exception_str are the same
+        switch (p_media_connection->status)
+            case SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION:                    exception_str = "SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION"; break;
+
+                case MCM_MEDIACONN_PREPARING_SIM_MONI_SEI:                      activity_str = "PREPARING_SIM_MONI_SEI [SIM]"; break;
+
 
 <mc-type>
 p_media_connection->mc_type
@@ -11237,7 +11259,8 @@ STOP RB PLAY MC ( NOT DELETE? )
 STOP RB MC 
 RELESE RB MC
 
-<ex>
+
+<mc-states>
 70499:!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > 
   @@PMON@@,trace,mediacon,mc-create7,mc-create-mcid=,12237,mc_create-str=,mc-live,fsnfmt=,hMC=0x2fcd 
 
@@ -11288,26 +11311,27 @@ RELESE RB MC
 70869:!MIL    -MPM          		< T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Open L:947 > 
   MCM_MEDIACONN_STATE_OPENED hMC=0x2fce replace hMC=0x2fcd type=0x07000002 
 
-70880:!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Free L:593 > 
-  @@PMON@@,trace,mediacon,mc-free,12237,fsnfmt=,hMC=0x2fcd 
+// to close
+:!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Free L:593 > 
+  @@PMON@@,trace,mediacon,`mc-free`,12237,fsnfmt=,hMC=0x2fcd 
 
-70887:!MIL    -MPM          		< T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Free L:1989 > 
-  MCM_MEDIACONN_STATE_FREETSCHANNEL hMC=0x2fcd 
+:!MIL    -MPM          		< T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Free L:1989 > 
+  `MCM_MEDIACONN_STATE_FREETSCHANNEL` hMC=0x2fcd 
 
-70892:!MIL    -MCM          		< T:MCM_ITCMAIN_THREAD M:mcm_mediaconn_event.c F:MCM_Mediaconn_ActionFreeing L:5201 > 
-  @@PMON@@,trace,mediacon,mc-freed,12237,fsnfmt=,hMC=0x2fcd 
+:!MIL    -MCM          		< T:MCM_ITCMAIN_THREAD M:mcm_mediaconn_event.c F:MCM_Mediaconn_ActionFreeing L:5201 > 
+  @@PMON@@,trace,mediacon,`mc-freed`,12237,fsnfmt=,hMC=0x2fcd 
 
-70893:!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:660 > 
-  @@PMON@@,trace,mediacon,mc-destroy,12237,fsnfmt=,hMC=0x2fcd 
+:!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:660 > 
+  @@PMON@@,trace,mediacon,`mc-destroy`,12237,fsnfmt=,hMC=0x2fcd 
 
-70898:!WARN   -FDM_SVR      		< T:MCM_ITCMAIN_THREAD M:fdm_svr_deviceman.c F:releaseConnection L:441 > 
+:!WARN   -FDM_SVR      		< T:MCM_ITCMAIN_THREAD M:fdm_svr_deviceman.c F:releaseConnection L:441 > 
   deleting hMC=0x2fcd 
 
-70899:!MIL    -MPM          		< T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Close L:2107 > 
-  MCM_MEDIACONN_STATE_CLOSED hMC=0x2fcd 
+:!MIL    -MPM          		< T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Close L:2107 > 
+  `MCM_MEDIACONN_STATE_CLOSED` hMC=0x2fcd 
 
-70900:!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:729 > 
-  @@PMON@@,trace,mediacon,mc-destroyed,12237,fsnfmt=,hMC=0x2fcd 
+:!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:729 > 
+  @@PMON@@,trace,`mediacon,mc-destroyed`,12237,fsnfmt=,hMC=0x2fcd 
 
 
 <mc-playback>
@@ -16739,7 +16763,10 @@ SIM_DBC_MERGE_CFG_MAIN_SECTION  272 CMS_INFORMATION_SERVICES/SIM/src/utils/inc/s
 #-----------------------------------------------------------
 
 SIM generates the SCI object for the acquired PMT.
-SIM generates an SEI object for the acquired EIT-PF-A. Event Information Table-PresentFollowing-Actual (EIT-PF-A) 
+
+SIM generates an SEI(Service Event Information) object for the acquired
+EIT-PF-A. Event Information Table-PresentFollowing-Actual (EIT-PF-A) 
+
 SIM generates the CATI object for the acquired CAT
 
 EPG->SPM->SIM
@@ -23477,13 +23504,11 @@ SYSTEMOBJECT_SIZE=51200
 hex(((71 & 0x3FF) << 22) | ((2 & 0x3) << 16) | ((1 & 0xF) << 12) | (3 & 0xFFF) )
 
 SYSTEMUTIL_STATUS_INVALID_PARAMETER						0x10802000
+#define SYSTEMUTIL_STATUS_INVALID_PARAMETER (SYSTEM_MAKE_COMPONENT_STATUS(SYSTEMUTIL_COMP_ID, SYSTEMUTIL_IF_ID, SEVERITY_SEVERE,  3))
 
-
- * @param[in] client_id      ID created with SYSTEMUTIL_HDL_CreateClient.
- * @param[in] object         Address of the object referenced by the handle (must not be NULL).
- * @param[out] handle        New handle value.
-
-SYSTEMUTIL_HDL_Create
+// 0x11c2100d
+hex(((71 & 0x3FF) << 22) | ((2 & 0x3) << 16) | ((1 & 0xF) << 12) | (13 & 0xFFF) )
+#define SYSTEMUTIL_STATUS_TIMEDOUT          (SYSTEM_MAKE_COMPONENT_STATUS(SYSTEMUTIL_COMP_ID, SYSTEMUTIL_IF_ID, SEVERITY_SEVERE,  13))
 
 
 ={============================================================================
@@ -27084,7 +27109,7 @@ SGW 	Secure GateWay (HE component)
 http://10.64.134.118/tools/dpl-asset.php
 
 
-<dpl-playlist>
+<dpl-playlist> <pdl-playlist>
 Now STB will send Forward request to A-S SGW which is nothing but to get the
 playlist.
 
@@ -27110,7 +27135,7 @@ WP2602 - PDL DPL - Download Playlist Assets
     "trickModeControl" : 0,
     "caRating" : 0,
     "events" : [ {
-      "eventtype" : "ResolvedItem",
+      "eventtype" : "ResolvedItem",           // SA
       "index" : 1,
       "providerId" : "bsky_secpresevent_hd",
       "assetId" : "SCVT0000000002361495",
@@ -27129,7 +27154,7 @@ WP2602 - PDL DPL - Download Playlist Assets
       "fileSize" : 10,
       "trackingEvents" : [ {
         "trackingURL" : "https://2356e.v.fwmrm.net/ad/l/1?s=g007&n=144750%3B144750%3B394492&t=1501231395684624008&f=1&r=144750&adid=19680210&reid=5811490&arid=0&auid=&wpct=[PERCENTAGE]&cn=defaultImpression&et=i&_cc=19680210,5811490,,,1501231395,1&tpos=0&iw=&uxnw=&uxss=&uxct=&init=1&vcid2=LTM5MTAxMjk2OTU4NTYzMjA5Mg%3D%3D",
-        "action" : "impression"
+        "action" : "impression"             // generate <dpl-report> DPLTI
       } ],
       "reportingThreshold" : 75
     }, {
@@ -27673,7 +27698,7 @@ typedef enum PCAT_CAT_DPL_EXPIRY_STATE_
 } PCAT_CAT_DPL_EXPIRY_STATE;
 
 
-<dpl-trick-mode-suppresion>
+<dpl-report> <dpl-trick-mode-suppresion>
 {
   "playList" : {
     "admId" : 2,
@@ -27704,8 +27729,8 @@ typedef enum PCAT_CAT_DPL_EXPIRY_STATE_
 
 the number of DPLTI matches up to the number of assets in the playlist
 
-97649:NDS: ^[2017:09:08 11:25:02]0946686206.117939 !INFO   -VRM_SERVER   		< p:0x000001bf P:MW t:0x0212a520 T:VRM_SRV M:dpl_play.c F:DplPlayGenerateDplti L:2606 > SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME timestamp=41102085 (calc info timestamp64[0:41102085] ) 
-97650:NDS: ^[2017:09:08 11:25:02]0946686206.118697 !MIL    -VRM_SERVER   		< p:0x000001bf P:MW t:0x0212a520 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
+!INFO   -VRM_SERVER   		< p:0x000001bf P:MW t:0x0212a520 T:VRM_SRV M:dpl_play.c F:DplPlayGenerateDplti L:2606 > SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME timestamp=41102085 (calc info timestamp64[0:41102085] ) 
+!MIL    -VRM_SERVER   		< p:0x000001bf P:MW t:0x0212a520 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
 
 DPLSI which matches up to speed changes 
 
@@ -27721,6 +27746,10 @@ duration in PTS matches to the differecne in transition time.
 
 T:VRM_SRV M:dpl_play.c F:DplPlayGenerateDplti L:2606 > SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME timestamp=22660836 (calc info timestamp64[0:22660836] ) 
 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
+
+  DARWIN_PLATFORM/DARWIN_UAM/inc/uam_api.h
+  UAM_API_EVENT_TYPE_DPL_ASSET_TO,\    // 78
+
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2264 > KT: In PLAYER_UAM_SignalAssetTransition, l_evt_type = 78 
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2456 > KT: get PLAYLIST_INDEX(3) 
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2457 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_REPORTING_THRESHOLD(75) 
@@ -27732,8 +27761,45 @@ T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2463 > KT: set
 >>> 22662047-22660836
 1211
 
+  UAM_API_DESC_EVENT_TIME,				/* UNIX time format , 4 bytes */\
+
+  CMS_MEDIA_SERVICES/VRM/src/server/engine/dpl_play.c
+
+            stat = DplPlayConvertTimeStampfromMidnight(pThis, &timestamp64);
+            E_AB(stat);
+            timestamp = xint64_t_low(&timestamp64);
+            stat = SYSTEMOBJECT_SetInteger(dplti_sys_obj, SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME, timestamp);
+            E_AB(stat);
+    
+            DIAG_LOG_INFO (VRM_diag_segment_id, ("SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME timestamp=%u (calc info timestamp64[%d:%u] )",
+                           timestamp,
+                           xint64_t_high(&timestamp64), xint64_t_low(&timestamp64)));
+
+  !INFO   -VRM_SERVER   		< p:0x0000027e P:MW t:0x0212a520 T:VRM_SRV M:dpl_play.c F:DplPlayGenerateDplti L:2506 > DplPlayGenerateDplti called for job_type = 0x9 
+  !INFO   -VRM_SERVER   		< p:0x0000027e P:MW t:0x0212a520 T:VRM_SRV M:dpl_play.c F:DplPlayGenerateDplti L:2606 > SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME timestamp=22662047 (calc info timestamp64[0:22662047] ) 
+
+    }, {
+      "eventtype" : "ResolvedItem",
+      "index" : 3,
+      "providerId" : "bsky_secpresevent_hd",
+      "assetId" : "SCVT0000000002537895",
+      "expiryDate" : 1514764799,
+      "duration" : 1040,
+      "assetLocationURL" : "http://cdn.sky.com/329553/60449/bsky_secpresevent_hd/SECONDARY_ASSET/bsky_secpresevent_hd-SCVT0000000002537895-201609081722550000.nff",
+      "fileSize" : 10,
+      "trackingEvents" : [ {
+        "trackingURL" : "https://2356e.v.fwmrm.net/ad/l/1?s=g004&n=144750%3B144750%3B394492&t=1506090225893245012&f=1&r=144750&adid=19680210&reid=5811490&arid=0&auid=&wpct=[PERCENTAGE]&cn=defaultImpression&et=i&_cc=19680210,5811490,,,1506090225,1&tpos=0&iw=&uxnw=&uxss=&uxct=&init=1&vcid2=LTM5MTAxMjk2OTU4NTYzMjA5Mg%3D%3D",
+        "action" : "impression"
+      } ],
+      "reportingThreshold" : 75
+    }, {
+
+
 T:VRM_SRV M:dpl_play.c F:DplPlayGenerateDplti L:2606 > SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME timestamp=22662047 (calc info timestamp64[0:22662047] ) 
 T:VRM_SRV M:dpl_play.c F:DplPlayCheckPassedBoundaries L:3189 > send DPLTI to anchor. hPlay = 0x100 
+
+  UAM_API_EVENT_TYPE_DPL_ASSET_FROM,\  // 77
+
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2264 > KT: In PLAYER_UAM_SignalAssetTransition, l_evt_type = 77 
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2456 > KT: get PLAYLIST_INDEX(3) 
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2457 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_REPORTING_THRESHOLD(75) 
@@ -27742,6 +27808,35 @@ T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2460 > KT: get
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2461 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_ASSET_END_OFFSET(1120) 
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2462 > KT: get SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME(22662047) 
 T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2463 > KT: set UAM_API_DESC_DPL_EVENT_TYPE(1) 
+
+  UAM_API_EVENT_TYPE_DPL_ASSET_TO,\    // 78
+
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2264 > KT: In PLAYER_UAM_SignalAssetTransition, l_evt_type = 78 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2456 > KT: get PLAYLIST_INDEX(4) 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2457 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_REPORTING_THRESHOLD(75) 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2458 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_EVENT_TYPE, vrm event(2) 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2459 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_PART_DURATION(30080) 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2460 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_ASSET_START_OFFSET(0) 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2461 > KT: get SYSTEMOBJECT_DPLAI_PROPID_I_ASSET_END_OFFSET(30080) 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2462 > KT: get SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME(22662047) 
+T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2463 > KT: set UAM_API_DESC_DPL_EVENT_TYPE(1) 
+
+53381:NDS: ^[2017:09:27 06:17:44]0946685298.287492 !ERROR  -AMS          		< p:0x0000027e P:MW t:0x02119520 T:AMS_FTM_HTTP_REQUEST_HANDLER M:AMS_ftm.cpp F:AMS_FTM_HttpPost L:491 > KT: {
+53382:	"immediateReport":	[{
+53383:			"subscriberId":	22844813,
+53384:			"playlistId":	718013459,
+53385:			"admId":	3,
+53386:			"playlistIndex":	3,
+53387:			"primaryProviderId":	"bsky_atlantic_hd",
+53388:			"secondaryProviderId":	"bsky_secpresevent_hd",
+53389:			"primaryAssetId":	"MAIN00000[2017:09:28 00:27:13]0000065867 
+
+
+        DPLTI     DPLTI     DPLTI     DPLTI     DPLTI     DPLTI     NO DPLTI
+          /         /         /         /         /         /
+  | PA    | SA3     | SA4     | SA5     | SA6     | SA7     | PA    | EOF
+              \         \         \         \         \ 
+              report    report    report    report    report
 
 
 ={============================================================================
