@@ -184,12 +184,12 @@ KT KB. DEVELOPMENT.
 
 *kt_dev_cpp_050* cpp-template-function
 *kt_dev_cpp_050* cpp-template-class
-*kt_dev_cpp_050* template-typename
-*kt_dev_cpp_050* template-default-argument
-*kt_dev_cpp_050* template-member
-*kt_dev_cpp_050* template-explicit-instantiation
-*kt_dev_cpp_050* template-efficiency-deleter-case
-|kt_dev_cpp_050| template-explicit-argument
+*kt_dev_cpp_050* cpp-template-type-member
+*kt_dev_cpp_050* cpp-template-default-argument
+*kt_dev_cpp_050* cpp-template-member
+*kt_dev_cpp_050* cpp-template-explicit-instantiation
+*kt_dev_cpp_050* cpp-template-efficiency-on-deleter
+|kt_dev_cpp_050| cpp-template-explicit-argument
 |kt_dev_cpp_051| template-type-traits
 |kt_dev_cpp_052| template-argument-deduction
 *kt_dev_cpp_053* template-argument-deduction std-forward
@@ -261,7 +261,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_063* function-object-template-argument
 *kt_dev_stl_063* function-object-good-things
 *kt_dev_stl_063* function-object-pass-by-reference
-*kt_dev_stl_063* function-object-predefined
+*kt_dev_stl_063* cpp-fobj-predefined
 *kt_dev_stl_064* cpp-fobj-function-type
 *kt_dev_stl_064* cpp-function-object cpp-function-pointer
 *kt_dev_stl_064* fobj-cases
@@ -24214,7 +24214,7 @@ template<typename T>
 class Blob {
   public:
     typedef T value_type;
-    // <use-class-type-members>
+    // *cpp-template-type-member*
     typedef typename std::vector<T>::size_type size_type; 
 
     Blob();
@@ -24270,33 +24270,32 @@ arguments.
 shared_ptr<vector<string>>  // both are different type
 shared_ptr<vector<int>>     
 
-
-<member-function>
-
+TODO: code
 
 
-{friend-template}
+{template-friend}
 When a class contains a friend declaration, the class and the friend can
 independently be template or not.
 
 <one-to-one>
 The one-to-one friendship is the most common form of friendship from a class
-template to the specific instantiation of class or function template.
+template to `the specific instantiation` of class or function template.
 
 // forward declaration needed for friend declaration in Blob
 
 template <typename T> class BlobPtr;
 template <typename T> class Blob;
-template <typename T> bool operator==( const Blob<T> &, const Blob<T> & );
+template <typename T> bool operator==(const Blob<T> &, const Blob<T> &);
 
 template <typename T> class Blob {
 
     // each intantiation of Blob grants limited access to the instantiation of
-    // BlobPtr and the equality operator with the same type since uses Blob's
-    // template parameter.
+    // BlobPtr and the equality operator with the same type, T. 
 
-    friend class BlobPt<T>;
-    friend bool operator==<T>( const Blob<T> &, const Blob<T> & );
+    friend class BlobPtr<T>;
+
+    // see notation
+    friend bool operator==<T>(const Blob<T> &, const Blob<T> &);
 };
 
 
@@ -24304,12 +24303,20 @@ template <typename T> class Blob {
 Can also make every(all) instantiation(type) of another template its friend or
 may limit friendship to a specific instantiation.
 
-note: See CPR 665 for more.
+templcate <typename T> class C2 {
+
+  // single instantiation
+  friend claass Pal<T>;
+
+  // all instances of Pal2 are friends. no forward declaration required.
+  template <typename X> friend class Pal2;
+};
 
 
 {template-static}
-As with a static in ordinary class, there must be exactly one definition of each
-static member. Each instantiation has its 'own' instance of static members.
+As with a static in ordinary class, there must be exactly one definition of
+each static member. Each instantiation has its 'own' instance of static
+members.
 
 template <typename T> class Foo {
   public:
@@ -24330,18 +24337,25 @@ ct = fi.count();              // via an object
 
 
 ={============================================================================
-*kt_dev_cpp_050* template-typename
+*kt_dev_cpp_050* cpp-template-type-member
 
-{type-members} <typename-keyword>
+{template-type-members} <typename-keyword>
 Uses scope operator(::) to access both static member and type members. For
-example, string::size_type. In nontemplate code, the compiler has access to the
-class definition and knows whether a name accessed through the scope operator is
-a type or static member.
+example, string::size_type. In nontemplate code, the compiler has access to
+the class definition and knows whether a name accessed through the scope
+operator is a type or static member.
 
-In template code, when see code such as T::mem, won't know whether name is a
-type or a static member until instantiation is done. By default, the language
-assumes that a name accessed through the scope operator is 'not' a type. So if
-want to use type member of template must 'explicitly' tell.
+However, in template code, when see code such as T::mem, won't know whether
+name is a type or a static member until instantiation is done. 
+
+The problem is: is defining a variable named p or multiplying a static data
+member named size_type by p?
+
+T::size_type *p;
+
+By default, the language assumes that a name accessed through the scope
+operator is 'not' a type. So if want to use type member of template must
+'explicitly' tell using the keyword `typename`
 
 template<typename T> 
 typename T::value_type top( const T& c )
@@ -24349,7 +24363,7 @@ typename T::value_type top( const T& c )
   if( !c.empty() )
     return c.book();
   else
-    return typename T::value_type();      // "typename T::value_type" is a type
+    return `typename` T::value_type();      // "typename T::value_type" is a type
 }
 
 EC++42. This is called 'dependant' type names since it depends on the template
@@ -24370,9 +24384,9 @@ void print2nd( const T& container )
   ...
 }
 
-The exception to this is when typename is used in base class type. Suppose that
-if it have to use typename in this case, then how difficult it is to parse.
-Suppose Nested is a type(class) in this example.
+The exception to this is when typename is used in base class type. Suppose
+that if it have to use typename in this case, then how difficult it is to
+parse. Suppose Nested is a type(class) in this example.
 
 template<typename T>
 class Derived: public Base<T>::Nested {               // not use typename here
@@ -24416,7 +24430,7 @@ But,
 
 class StrBlob {
   public:
-    typedef typename std::vector<std::string>::size_type size_type;
+    `typedef typename` std::vector<std::string>::size_type size_type;
     ...
 };
 
@@ -24430,15 +24444,15 @@ Tried the both and the both compiles and works well.
 
 
 ={============================================================================
-*kt_dev_cpp_050* template-default-argument
+*kt_dev_cpp_050* cpp-template-default-argument
 
 Under new standard, supports default argument for both function and class
 template while the earlier version support only for class.
 
 <ex> function template
 
-The rewritten example of the previous example and see that F represent the type
-of a callable objects.
+The rewritten example of the previous example and see that F represent the
+type of a callable objects.
 
 template <typename T>
 int compare( const T& v1, const T& v2 )
@@ -24448,22 +24462,32 @@ int compare( const T& v1, const T& v2 )
   return 0;
 }
 
-note: This shows how function-object is useful
+// `This shows how function-object is useful` *cpp-functor*
+// default template argument, the 'type' of callable 
+// default function argument, F()
 
 template <typename T, typename F = less<T>>        
-// default template argument, the 'type' of callable 
 int compare( const T &v1, const T &v2, F f = F())  
-// default function argument, F()
 {
-  if( f(v1, v2) ) return -1;
-  if( f(v2, v1) ) return 1;
+  if (f(v1, v2)) return -1;
+  if (f(v2, v1)) return 1;
   return 0;
 }
 
-May supply their own comparison operation but are not required to do so since T
-is `int`.
+{
+  cout << "compare_f(1, 2): " << compare(1, 2) << endl;
+  cout << "compare_f(1, 1): " << compare(1, 1) << endl;
+  cout << "compare_f(2, 1): " << compare(2, 1) << endl;
 
-bool i = compare(0,42);
+  cout << "compare_f(1, 2): " << compare(1, 2, greater<int>()) << endl;
+  cout << "compare_f(1, 1): " << compare(1, 1, greater<int>()) << endl;
+  cout << "compare_f(2, 1): " << compare(2, 1, greater<int>()) << endl;
+}
+
+May supply their own comparison operation but are not required to do so since
+T is `int`.
+
+bool i = compare(0, 42);
 
 However, this depends on the isbn in item1 and item2.
 
@@ -24482,16 +24506,17 @@ bool j = compare( item1, item2, compareIsbn );
 template <typename T, typename container = vector<T>>
 class MyClass;
 
-template <typename T = int> 
+template <typename T = int>           // default type
 class Numbers {
   public:
-    Numbers(T v = 0): val(v) {}
+    Numbers(T v = 0): val(v) {}       // default value
   private:
     T val;
 };
 
 Numbers<long double> lots_of_precision;
 
+<cpp-template-default-type>
 The empty braket says we want the 'default' type to instantiate.
 
 Numbers<> average_precision;
@@ -24501,29 +24526,15 @@ Numbers<> average_precision;
 *kt_dev_cpp_050* template-member
 
 Either an ordinary class or class template may have a member function that is
-itself a template; member template. See this word ordering since it summarise
-that it is member function and function template.
+itself a template; `member template.` See this word ordering since it
+summarise that it is member function and function template.
 
-note: member template may 'not' be virtual.
+  "member template may 'not' be virtual."
 
-<with-ordinary-class>
+<with-nontemplate-class>
 The member template of ordinary class from CPR 672. This example is similar to
-the default deleter in unique_ptr since overloads operator(). To support any
-type, use template.
-
-// function object class as a replacement for delete
-class DebugDelete {
-  public:
-    DebugDelete( std::ostream& s = std::cerr) : os(s) {}
-
-    // note: as with any function template, the type of T is 'deduced'
-
-    template <typename T> void operator() (T* p) const
-    { os << "deleting unique_ptr" << std::endl; delete p; }
-
-  private:
-    std::ostream& os;               // note: reference-member
-};
+the default deleter in unique_ptr since overloads operator(). Unlike default
+deleter, support debug print and any type, use template.
 
 
 #include <iostream>
@@ -24532,18 +24543,23 @@ class DebugDelete {
 
 using namespace std;
 
+// *cpp-functor*
 class DebugDelete
 {
   private:
+    // *cpp-reference-member*
     ostream &os;
 
   public:
     DebugDelete(ostream &s = cerr) : os(s) {}
 
+    // as with any function template, the type of T is 'deduced'
     template<typename T>
       void operator() (T* p) const
-      { os << "deleting " << typeid(p).name() << ", p = " 
-        << p << endl; delete p; }
+      { 
+        os << "deleting " << typeid(p).name() << ", p = " << p << endl; 
+        delete p; 
+      }
 };
 
 int main()
@@ -24571,7 +24587,8 @@ Can be used with unique_ptr as a deleter:
 unique_ptr<int, DebugDelete> p( new int, DebugDelete() );
 unique_ptr<string, DebugDelete> p( new string, DebugDelete() );
 
-How will DebugDelete be instanticated for these cases? These are equivalent to:
+How will DebugDelete be instanticated for these cases? These are equivalent
+to:
 
 void DebugDelete::operator() (int*) const { delete p; }
 void DebugDelete::operator() (string*) const { delete p; }
@@ -24586,8 +24603,8 @@ deleter is called.
 
 
 <with-template-class>
-Both the class and member template have their 'independent' template parameters
-so must provide both.
+Both the class and member template have their 'independent' template
+parameters. To support iterators into varying kinds of sequences.
 
 template <typename T> class Blob {
   template <typename It> Blob(It b, It e);
@@ -24604,28 +24621,29 @@ Blob<int> a1( begin(iarray), end(iarray));
 Blob<int> a1( ivec.begin(), ivec.end());
 Blob<string> a1( svec.begin(), svec.end());
 
-As with "with-ordinary-class", function parameter types are 'deduced' as it is
-function template.
+As with "with-nontemplate-class", function parameter types are 'deduced' as it
+is function template.
 
 
 ={============================================================================
-*kt_dev_cpp_050* template-explicit-instantiation
+*kt_dev_cpp_050* cpp-template-explicit-instantiation
 
-{control-instantiation}
+{template-control-instantiation}
 The fact that instantiations are generated when a template is used means that
 the same instantiation may appear in multiple object files. This overhead can
-become significant in large systems. Under new standard, can avoid this through
-explicit instantiation.
+become significant in large systems. 
+
+Under new standard *C++11* , `can avoid this through explicit instantiation.`
 
 extern template `declaration`     // instantiation `declaration`
 template `declaration`            // instantiation `definition`
 
-When the compiler sees an "extern template declaration", will not generate code
-for that instantiation 'in' that file and it is to say there will be nonextern
-use of that elsewhere in the program. 
+When the compiler sees an "extern template declaration", will not generate
+code for that instantiation 'in' that file and it is to say there will be
+nonextern use of that elsewhere in the program. 
 
-Must be one definition for that instantiation and appear before any code that
-use that.
+Must be one definition for that particular instantiation and appear before any
+code that use that.
 
 // file1.cc
 
@@ -24644,9 +24662,9 @@ Blob<int> a2(a1);
 int i = compare( a1[0], a2[0] );
 
 
-// file2.cc
-// compiler generate 'all' members when see "instantiation definition" and must
-// link file1.o with file2.o. note: See tge syntax. 
+// file2.cc *cpp-template-instantiate-all*
+// compiler generate `all members` including inline members when see
+// "instantiation definition" and must link file1.o with file2.o.
 
 template class Blob<string>;
 template int compare( const int&, const int& );
@@ -24654,21 +24672,23 @@ template int compare( const int&, const int& );
 
 <instantiation-definition>
 The instantiation definition generates 'all' the members of that template
-including inline member function even if do not use a member since the compiler
-cannot know which member the program uses.
+including inline member function even if do not use a member since the
+compiler cannot know which member the program uses.
 
 Can be used only for types that can be used with every member function of a
 class template.
 
-note: How to instantiate all members from a template? When it is useful? from
-youview interview 
 
-note: How to before C++11?
+*cpp-interview*
+
+How to instantiate all members from a template? When it is useful? from
+youview interview. How to before C++11?
 
 http://stackoverflow.com/questions/2351148/explicit-instantiation-when-is-it-used
+
 For instance, libstdc++ contains the explicit instantiation of
 std::basic_string<char,char_traits<char>,allocator<char> > (which is
-        std::string) so every time you use functions of std::string, the same
+    std::string) so every time you use functions of std::string, the same
 function code doesn't need to be copied to objects. The compiler only need to
 refer (link) those to libstdc++
 
@@ -24677,17 +24697,21 @@ Explicit Instantiation
 Visual Studio 2005
 Other Versions
 
-Explicit instantiation lets you create an instantiation of a templated class or
-function without actually using it in your code. Because this is useful when you
-are creating 'library' (.lib) files that use templates for distribution,
-    uninstantiated template definitions are not put into object (.obj) files.
+Explicit instantiation lets you create an instantiation of a templated class
+or function without actually using it in your code. Because this is useful
+`when you are creating library files` that use templates for distribution,
+  uninstantiated template definitions are not put into object (.obj) files.
+
+
+  since templates are ordinarily in header files and by using explicit
+  instantiation, make a library. see the same reason of using library.
 
 The following explicitly instantiates MyStack for int variables and six items:
 
 template class MyStack<int, 6>;
 
-This statement creates an instantiation of MyStack without reserving any storage
-for an object; code is generated for all members.
+This statement creates an instantiation of MyStack without reserving any
+storage for an object; code is generated for all members.
 
 The following explicitly instantiates 'only' the constructor member function:
 
@@ -24699,42 +24723,42 @@ Instantiation.
 
 
 ={============================================================================
-*kt_dev_cpp_050* template-efficiency-deleter-case
+*kt_dev_cpp_050* cpp-template-efficiency-on-deleter
 
 {efficiency-and-flexibility}
-The difference in how the deleter is handled may have important perforamce
-impacts. CPR 678.
+The difference in how the deleter between shared_ptr and unique_ptr is handled
+may have important perforamce impacts. CPR 678.
+
+shared_ptr<connection> p (&c, end_connection);
+unique_ptr<connection, decltype(end_connection)*> p ( &c, end_connection );
 
 <shared-ptr>
 Since the deleter type is not part of shared_ptr type and not known until run
-time, do not hold the deleter as a direct member. Indeed, can change the deleter
-type during that shared_ptr's lifetime; can construct a shared_ptr using one
-deleter type and subsequently use reset() to give that same shared_ptr a
-different deleter type. Cannot have member whose type changes at run time. Hence
-deleter must be stored indirectly. (by pointer)
+time, do not hold the deleter as a direct member. Indeed, can change the
+deleter type during that shared_ptr's lifetime; can construct a shared_ptr
+using one deleter type and subsequently use reset() to give that same
+shared_ptr a different deleter type. Cannot have member whose type changes at
+run time. Hence deleter must be stored indirectly. (Suppose by pointer)
 
 The shared_ptr dtor must have:
 
-// del known only at run time; call through pointer and requires run time jump
-// to del's location.
+// deleter known only at run time; call through pointer and requires run time
+// jump to del's location such as:
 
 del ? del(p) : delete p;
 
 <unique_ptr>
-Since the deleter type is part of unique_ptr type and known at compile time, the
-deleter can be stored directly in each unique_ptr object. Indeed, call might
-even be inlined at compile time.
+Since the deleter type is part of unique_ptr type and is known at compile
+time, the deleter can be stored directly in each unique_ptr object. Indeed,
+  call might even be inlined at compile time.
 
 // direct call to the deleter is 'instantiated'
 del(p);
 
-<choice>
+<design-choice>
 By binding the deleter at compile time, unique_ptr avoids the run-time cost of
-an indirect call to its deleter. In contrast, by binding at run time, shared_ptr
-makes it easier for users to override the deleter.
-
-shared_ptr<connection> p (&c, end_connection);
-unique_ptr<connection, decltype(end_connection)*> p ( &c, end_connection );
+an `indirect call` to its deleter. In contrast, by binding at run time,
+   shared_ptr makes it easier for users to override the deleter.
 
 <code>
 template<typename _Tp1, typename _Deleter> 
@@ -24742,18 +24766,18 @@ template<typename _Tp1, typename _Deleter>
 
   ...
 
-   __d(__p); // Call _Deleter on __p.  // from other function
+   __d(__p); // Call _Deleter on __p.       // from other function
 
 
 ={============================================================================
-*kt_dev_cpp_050* template-explicit-argument
+*kt_dev_cpp_050* cpp-template-explicit-argument
 
 CPR 16.2.2
 
-Not possible for the compiler to deduce the type since doesn't appear in the
-function parameter list and there is no arguments whose type can be used to
-deduce the type of T1. The user have to specify the type. That way the user can
-choose whatever precision is appropriate.
+The user have to specify the type of template argument when not possible for
+the compiler to deduce the type since doesn't appear in the function parameter
+list and there is no arguments whose type can be used to deduce the type of
+T1. That way the user can choose whatever precision is appropriate.
 
 template< typename T1, typename T2, typename T3 > 
 T1 sum( T2, T3 );
@@ -24769,10 +24793,15 @@ is poor design since have to specify all of them to get T3.
 template<typename T1, typename T2, typename T3> 
 T3 alternative_sum( T2, T1 );
 
-alternative_sum<long long>(i, lng);               // poor design
-alternative_sum<long long, int, long>(i, lng);
+// error, can deduce T3
+auto val3 = alternative_sum<long long>(i, lng);
 
-note: does it have real case?
+// ok, all are specified
+auto val3 = alternative_sum<long long, int, long>(i, lng);
+
+
+*cpp-q* : does it have real use case?
+
 
 <normal-conversion>
 As with ordinary argument, normal conversion applies on
@@ -34405,8 +34434,9 @@ sort(nameTable.begin(), nameTable.end(), less<string *>());
 
 
 ={============================================================================
-*kt_dev_stl_063* function-object-predefined
+*kt_dev_stl_063* cpp-fobj-predefined
 
+<cpp-less>
 #include <functional> defines library-defined function objects:
 
 negate<type>()          - param
