@@ -35,10 +35,14 @@ newyard_reparse_request ?.tgz
 
 mgrep.py "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESENTED|RUNNING_STATUS|TUNING TO|CHANNEL CHANGED|MilestoneNotifier"
 
-mgrep.py "KEY_PRESS|Showing dialog|NCM_SERVER|NETWORK|EPG_NET|ATG_API\-OIGC"
+mgrep.py "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|NCM_SERVER|NETWORK|onDownloadQueueUpdate|\-OIGC|Tin Star"
+mgrep.py "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|NCM_SERVER|NETWORK|onDownloadQueueUpdate|ATG_API\-OIGC|Tin Star|CTM_SVR|DLM_SVR"
+mgrep.py "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|NCM_SERVER|NETWORK|onDownloadQueueUpdate|ATG_API\-OIGC|Tin Star|0x3C678017|0x3c678017|Perform failure"
+mgrep.py "KEY_PRESS|onDownloadQueueUpdate|Tin Star|0x3C678017|0x3c678017|Perform failure"
+
 
 ={============================================================================
-|kt_si_log_0001|  SI-11177 Second line of the subtitle flickers when live viewing the service
+|kt_si_log_0001| SI-11190: Hardware - NITS 3 - for R019.085.26.00U - Blue screen with error message stating: Error - Iterators.moveRelative:44. Not responding to IR. Recording on tuner0 dropped. 
 
 *current-working*
 
@@ -1288,6 +1292,118 @@ boot -z -elf 10.209.62.106:/kyoupark/vmlinuz
 mkdir /flash0
 mount -t nfs -o nolock 10.209.62.106:/home/kyoupark/si_logs/flash0-87.13/87.13.00_BSKYB_HR019_Int/flash0 /flash0
 /flash0/scripts/startstack.sh
+
+*current-working*
+
+(gdb) bt
+#0  0x00cc37dc in SIM_pi_xsi_ssl_ServiceKeyCompareFn (serviceKeyA=0xffffffff, serviceKeyB=0x1a9dc80) at src/sim_pi_xsi_ssl.c:693
+
+static int32_t SIM_pi_xsi_ssl_ServiceKeyCompareFn(const void *serviceKeyA, const void *serviceKeyB)
+{
+    int32_t result = *(int16_t *)serviceKeyA;
+}
+
+#1  0x00e2b8cc in SYSTEMUTIL_HASH_P_Lookup (hash=0x21618cc, HashKey=0x1a9dc80) at systemutil_hash.c:510
+#2  0x00e2c6a0 in SYSTEMUTIL_HASH_Lookup (hash=0x21618cc, HashKey=0x1a9dc80) at systemutil_hash.c:992
+#3  0x00cc42a0 in SIM_pi_xsi_ssl_GetSslDataRec (service_key=3258) at src/sim_pi_xsi_ssl.c:671
+
+/**
+ * @brief Retrieve an SSL service record from the #f_sim_ssl_service_lookup_htable.
+ *
+ * @param[in]   service_key     of service record required.
+ *
+ * @retval      pointer         to #SIM_PI_XSI_SSL_DATA service record.
+ */
+static XSI_SERVICE *SIM_pi_xsi_ssl_GetSslDataRec(uint16_t service_key)
+{
+    SYSTEMUTIL_HASH_Node_t ssl_node;
+    XSI_SERVICE *xsi_service = NULL;
+
+    SIM_TB_LOG_FN_ENTRY("SIM_pi_xsi_ssl_GetSslDataRec");
+
+    ssl_node = SYSTEMUTIL_HASH_Lookup(f_sim_ssl_service_lookup_htable, &service_key);
+    if (NULL != ssl_node)
+    {
+        xsi_service = SYSTEMUTIL_HASH_NodeGet(ssl_node);
+    }
+
+    SIM_TB_LOG_FN_EXITP(xsi_service);
+    return xsi_service;
+}
+
+                /* create service key hash table to provide service key lookup into f_sim_ssl_data service record array */
+                status = SYSTEMUTIL_HASH_Create(
+                    &f_sim_ssl_service_lookup_htable,
+                    g_sim_plugin_util_context,
+                    g_sim_pi_xsi_config.max_services,
+
+                    // provide compare function
+                    `SIM_pi_xsi_ssl_ServiceKeyCompareFn`,
+                    SIM_pi_xsi_ssl_ServiceKeyHashFn
+                );
+
+// save up in the hash table
+SYSTEM_STATUS SYSTEMUTIL_HASH_Insert(SYSTEMUTIL_HASH_Table_t hash,
+                                                   SYSTEMUTIL_HASH_Node_t node, const void *key)
+
+SYSTEMUTIL_HASH_Node_t ssl_node;
+ssl_node = SYSTEMUTIL_HASH_Lookup(f_sim_ssl_service_lookup_htable, p_hash_key);
+
+SYSTEMUTIL_HASH_Create(SYSTEMUTIL_HASH_Table_t * _hash)
+{
+    /* Allocate a hash table control structure. */
+    SYSTEMUTIL_CTX_MALLOC(status, hash, SYSTEMUTIL_HASH_Table_t, ctx, sizeof *hash);
+}
+
+
+#4  0x00cc761c in SIM_PI_XSI_SSL_ScheduleAcquired (p_section=0x22d3c44 "▒\f▒, odsa_requested_section=false, p_skevt_sections_processing_data=0x1a9dd38, p_section_is_update=0x1a9dd10,
+    p_subtable_complete=0x0) at src/sim_pi_xsi_ssl.c:4750
+
+/** @link SIM_PI_XSI_SSL_ScheduleAcquired() SIM_PI_XSI_SSL_ScheduleAcquired() @endlink */
+bool SIM_PI_XSI_SSL_ScheduleAcquired(const uint8_t                             *p_section,
+                                     bool                                       odsa_requested_section,
+                                     SIM_PI_XSI_SKEVT_SECTIONS_PROCESSING_DATA *p_skevt_sections_processing_data,
+                                     bool                                      *p_section_is_update,
+                                     bool                                      *p_subtable_complete)
+{
+  /* Read the section to find out where in the SSL it relates. */
+  SIM_PSI_ParsePrivateSectionHeader(p_section, &bits_processed, &skevt_header);
+
+  p_service = SIM_pi_xsi_ssl_GetSslDataRec(skevt_header.table_id_extention);
+}
+
+
+#5  0x00c2e350 in SIM_PI_XSI_SKEVT_SECTIONS_ContinueMASectionsFromFile (skevt_m_fd=302, skevt_a_fd=387, skevt_a_subtable=0x22d5f6c, num_skevt_a_sections=3, fill_ppv_only=false)
+    at src/sim_pi_xsi_skevt_sections.c:684
+#6  0x00c2e8a8 in SIM_pi_xsi_skevt_sections_ProcessMASectionsFromFile (skevt_m_fd=302, skevt_a_fd=387, fill_ppv_only=false) at src/sim_pi_xsi_skevt_sections.c:378
+
+/**
+ * @brief Set up section buffers and start processing sections from the given files.
+ *
+ * @param[in] skevt_m_fd      SKEVT-M section file to process.
+ * @param[in] skevt_a_fd      Matching SKEVT-A section file to process.
+ * @param[in] fill_ppv_only   If true, only process SKEVTs which contain PPV events.
+ *
+ * @retval #SIM_STATUS_OK if processing is successful.
+ * @retval #SIM_STATUS_FAILED if there is an error.
+ */
+static SIM_STATUS SIM_pi_xsi_skevt_sections_ProcessMASectionsFromFile(int skevt_m_fd,
+                                                                      int skevt_a_fd,
+                                                                      bool fill_ppv_only)
+{
+  // read from fd
+
+  if (true == SIM_PI_XSI_SSL_ScheduleAcquired(f_sim_pi_xsi_skevt_sections_skevt_m))
+    ;
+}
+
+
+#7  0x00c2ea30 in SIM_PI_XSI_SKEVT_SECTIONS_ProcessMASectionsFromFileDayAtATime (mjd=<value optimized out>, fill_ppv_only=false) at src/sim_pi_xsi_skevt_sections.c:841
+#8  0x00c0ca78 in SIM_pi_xsi_skthread_EventHandler (event=<value optimized out>, p_payload=0x16646c8, payload_size=<value optimized out>) at src/sim_pi_xsi_skevt_thread.c:5071
+#9  0x00bfb700 in SIM_THREAD_ITCPendEvent (p_thread_state=0x16645b8, event_handler_func=0xc0c3fc <SIM_pi_xsi_skthread_EventHandler>) at sim_thread.c:362
+#10 0x00bfc13c in sim_eventhandler_ThreadMainFunction (data=0x1664590) at sim_eventhandler.c:71
+#11 0x00e36990 in SYSTEMUTIL_THR_P_ThreadPrologue (arg=<value optimized out>) at systemutil_thread.c:613
+#12 0x2aad0f9c in __pthread_mutex_cond_lock_full () from /lib/libpthread.so.0
 
 
 ={============================================================================
@@ -4379,11 +4495,27 @@ void PLAYER_UAM_SignalAssetTransition( SYSTEMOBJECT_HANDLE l_obj_handle )
 1486626:			"secondaryProviderId":	"bsky_seccomcmpgn_hd",
 1486627:			"primaryAssetId":	"MAIN00[2017:09:08 14:25:51]0000000291 
 
-*current-working*
-
 mgrep.py "KEY_PRESS|raiseSpeedNotification|MSM_SP_SetSpeed|send DPLTI|UploadData|DplPlayIsTrickModeRestriction|KT|^\s+|PLAYER_UAM_SignalAssetTransition|\-UAM"
 
 44399:NDS: ^[2017:09:08 11:22:25]0946686049.951896 !INFO   -VRM_SERVER   		< p:0x000001bf P:MW t:0x0212a520 T:VRM_SRV M:dpl_play.c F:DplPlayGenerateDplti L:2606 > SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME timestamp=40945916 (calc info timestamp64[0:40945916] ) 
+
+
+*current-working*
+
+// Yard Link: http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb9866ac_846984f337dad8d563bacfb945e55266
+Yard Link: http://theyard.uk.nds.com/si_logs/translation/darwin_0019fb9866ac_79d2a2fb3cefd5095005e7fa74c4bc10
+
+mgrep.py "KEY_PRESS|raiseSpeedNotification|MSM_SP_SetSpeed|send DPLTI|UploadData|DplPlayIsTrickModeRestriction|KT|^\s+|PLAYER_UAM_SignalAssetTransition|\-UAM|SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME"
+
+kyoupark@st-castor-03:~/si_logs/SI-11050/10-16$ ./getptsdiff.py bc10.nds
+lineno =    63575, new = 42873454, pre =        0, diff = 42873454  // to SA1
+lineno =    75421, new = 42903890, pre = 42873454, diff =    30436  // to PA1, SA1 duration 
+lineno =    84566, new = 42927173, pre = 42903890, diff =    23283  // to SA3, 
+lineno =    96257, new = 42940747, pre = 42927173, diff =    13574  // to PA2
+lineno =   115257, new = 43000547, pre = 42940747, diff =    59800
+lineno =   127532, new = 43030529, pre = 43000547, diff =    29982
+lineno =   147117, new = 43090631, pre = 43030529, diff =    60102
+lineno =   161981, new = 43124875, pre = 43090631, diff =    34244
 
 
 ={============================================================================

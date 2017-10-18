@@ -302,7 +302,7 @@
 *kt_linux_tool_300* gdb-core-settting-run-commands when makes core
 *kt_linux_tool_300* gdb-core-force-core-signal
 *kt_linux_tool_300* gdb-core-force-core-command
-*kt_linux_gdb_300* gdb-core-stackframe
+*kt_linux_gdb_300* gdb-stack-frame
 *kt_linux_gdb_300* gdb-core-backtrace
 *kt_linux_gdb_300* gdb-core-backtrace-get a call trace promatically
 |kt_linux_gdb_300| gdb-core-analysis-on-mips
@@ -362,7 +362,7 @@
 *kt_linux_gcc_400* gcc-option-debug
 *kt_linux_gcc_400* gcc-option-instrument
 *kt_linux_gcc_400* gcc-build-execution-env
-*kt_linux_gcc_400* gcc-build-tc-target-triplet
+*kt_linux_gcc_400* gcc-toolchain-target-triplet
 *kt_linux_gcc_400* gcc-build-option
 *kt_linux_gcc_400* gcc-int-internal
 *kt_linux_gcc_400* gcc-int-spec-file
@@ -379,15 +379,15 @@
 *kt_linux_gcc_400* gcc-build-spk-gdb gcc-build-spk-bash
 *kt_linux_gcc_400* gcc-build-glibc-reference
 *kt_linux_gcc_400* gcc-build-c-library
-*kt_linux_gcc_400* gcc-build-glibc-mips buildroot-glic-mips-internal-toolchain
-*kt_linux_gcc_400* gcc-build-glibc-mips-own
+*kt_linux_gcc_400* gcc-toolchain-glibc-mips buildroot-glic-mips-internal-toolchain
+*kt_linux_gcc_400* gcc-toolchain-glibc-mips-own
 *kt_linux_gcc_400* gcc-build-enable-asan
 *kt_linux_gcc_400* gcc-build-mips-uclibc
 *kt_linux_gcc_400* gcc-build-mips-uclibc-asan
 *kt_linux_gcc_400* gcc-build-mips-uclibc-asan-combinations
 *kt_linux_gcc_400* gcc-build-tc-mips-target-tree
 *kt_linux_gcc_400* gcc-build-uclibc-target-tree
-*kt_linux_gcc_400* gcc-build-tc-cross-ng-mips-uclibc
+*kt_linux_gcc_400* gcc-toolchain-cross-ng-mips-uclibc
 
 
 #{ linux-performance
@@ -14909,9 +14909,10 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 
 
 <appendix>: AddressSanitizer Design
-AddressSanitizer is supported by two major open-source toolchains: LLVM and GCC (LLVM being the main
-development platform). The tool introduces a new compiler pass which instruments the generated
-memory operations by inserting instructions to perform memory checks.
+AddressSanitizer is supported by two major open-source toolchains: LLVM and
+GCC (LLVM being the main development platform). The tool introduces a new
+compiler pass which instruments the generated memory operations by inserting
+instructions to perform memory checks.
 
 Here's the bird's eye view of the performed instrumentation:
 
@@ -14924,9 +14925,10 @@ if (IsPoisoned(address)) {
 }
 *address = ...;  // or: ... = *address;
 
-The IsPoisoned check is implemented in such a way so as to minimize overhead in common case (i.e.
-when memory access is valid). It works by mapping the memory address in question to a bit in a
-special memory region called <shadow-memory>:
+The IsPoisoned check is implemented in such a way so as to minimize overhead
+in common case (i.e.  when memory access is valid). It works by mapping the
+memory address in question to a bit in a special memory region called
+<shadow-memory>:
 
 byte *shadow_address = MemToShadow(address);
 byte shadow_value = *shadow_address;
@@ -14947,17 +14949,20 @@ inline byte *MemToShadow(byte *address) {
   return (address >> 3) | ShadowStartOffset;   // ShadowStartOffset depends on the target arch
 }
 
-The shadow memory region is invisible to the program and occupies 1/8 of address space . It?s
-initialized in the following way:
+The shadow memory region is invisible to the program and occupies 1/8 of
+address space . It?s initialized in the following way:
 
-- bits that correspond to static variables are marked as unpoisoned
-- whenever new stack frame is allocated, addresses which correspond to entries are marked as
-  unpoisoned; upon frame termination bits are reset Stack and static objects are interspersed with
-  redzones (short poisoned memory blocks) to allow for catching of buffer overruns.
+  bits that correspond to static variables are marked as unpoisoned
 
-To allow checking of heap-allocated memory standard memory routines are overridden by ASan runtime
-library (libasan.so) to check/change poisonness of memory regions. For example malloc changes the
-status of allocated memory buffer to unpoisoned while free re-poisons it. Here is the full list of
+  whenever new stack frame is allocated, addresses which correspond to entries
+  are marked as unpoisoned; upon frame termination bits are reset Stack and
+  static objects are interspersed with redzones (short poisoned memory blocks)
+  to allow for catching of buffer overruns.
+
+To allow checking of heap-allocated memory standard memory routines are
+overridden by ASan runtime library (libasan.so) to check/change poisonness of
+memory regions. For example malloc changes the status of allocated memory
+buffer to unpoisoned while free re-poisons it. Here is the full list of
 instrumented functions:
 
 // signal.h
@@ -16165,6 +16170,9 @@ int main(int argc, char **argv)
 
 $ /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/mips-buildroot-linux-uclibc-gcc -fsanitize=address x.c
 
+mkdir /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/asn /flash0
+
 <error-when-no-asan>
 kyoupark@ukstbuild2:~$ ~/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/aarch64-buildroot-linux-musl-gcc -fsanitize=address x.c
 x.c:1:0: warning: -fsanitize=address not supported for this target
@@ -16180,6 +16188,89 @@ x.c:10:5: warning: incompatible implicit declaration of built-in function ‘fre
 /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2015.08.1-for-arm64/output/host/usr/bin/../lib/gcc/aarch64-buildroot-linux-musl/4.9.4/../../../../aarch64-buildroot-linux-musl/bin/ld: cannot find libasan_preinit.o: No such file or directory
 /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2015.08.1-for-arm64/output/host/usr/bin/../lib/gcc/aarch64-buildroot-linux-musl/4.9.4/../../../../aarch64-buildroot-linux-musl/bin/ld: cannot find -lasan
 collect2: error: ld returned 1 exit status
+
+
+<on-x86-when-without-g>
+
+this means that have to work out from pc and objdump.
+
+// objdump -S
+//  `80486f8`:       c7 01 0a 00 00 00       mov    DWORD PTR [ecx],0xa
+
+
+[root@vSTB flash0]# export LD_LIBRARY_PATH=".:${LD_LIBRARY_PATH}"
+[root@vSTB flash0]# ./out_san
+====>
+====> this is mips target and use after free..
+====>
+=================================================================
+==956==ERROR: AddressSanitizer: heap-use-after-free on address 0xb5a00fe4 
+at pc `0x080486f8` bp 0xbf8bd5a8 sp 0xbf8bd59c
+WRITE of size 4 at 0xb5a00fe4 thread T0
+    #0 0x80486f7 in main (/flash0/out_san+0x80486f7)
+    #1 0xb706b5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+    #2 0x8048580  (/flash0/out_san+0x8048580)
+
+0xb5a00fe4 is located 20 bytes inside of 40-byte region [0xb5a00fd0,0xb5a00ff8)
+freed by thread T0 here:
+    #0 0xb729de98 in __interceptor_free /home/kyoupark/asan/cross-build/.build/src/gcc-6.3.0/libsanitizer/asan/asan_malloc_linux.cc:45
+    #1 0x80486bb in main (/flash0/out_san+0x80486bb)
+    #2 0xb706b5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+
+previously allocated by thread T0 here:
+    #0 0xb729e18f in __interceptor_malloc /home/kyoupark/asan/cross-build/.build/src/gcc-6.3.0/libsanitizer/asan/asan_malloc_linux.cc:62
+    #1 0x80486aa in main (/flash0/out_san+0x80486aa)
+    #2 0xb706b5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+
+SUMMARY: AddressSanitizer: heap-use-after-free (/flash0/out_san+0x80486f7) in main
+Shadow bytes around the buggy address:
+  0x36b401a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b401b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b401c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b401d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b401e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x36b401f0: fa fa fa fa fa fa fa fa fa fa fd fd[fd]fd fd fa
+  0x36b40200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b40210: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b40220: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b40230: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b40240: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Heap right redzone:      fb
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack partial redzone:   f4
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==956==ABORTING
+[root@vSTB flash0]#
+
+
+<on-x86-when-with-g>
+
+shows line number which is the same as addr2line result.
+
+12:    x[5] = 10;
+
+==957==ERROR: AddressSanitizer: heap-use-after-free on address 0xb5900fe4 at pc 0x080486f8 bp 0xbf9f2bc8 sp 0xbf9f2bbc
+WRITE of size 4 at 0xb5900fe4 thread T0
+    #0 0x80486f7 in main /home/kyoupark/asan/sample.c:12
+    #1 0xb6ff45ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+    #2 0x8048580  (/flash0/out_san+0x8048580)
 
 
 {for-x86}
@@ -30417,7 +30508,7 @@ On gnu/Linux, this command can take into account the value of the file
 
 
 ={============================================================================
-*kt_linux_gdb_300* gdb-core-stackframe
+*kt_linux_gdb_300* gdb-stack-frame
 
 frame n 
 
@@ -53312,7 +53403,7 @@ release of Ubuntu is for. The main exception is that you can run 32-bit (x86,
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-tc-target-triplet
+*kt_linux_gcc_400* gcc-toolchain-target-triplet
 
 {triplet}
 http://wiki.osdev.org/Target_Triplet
@@ -53363,8 +53454,9 @@ This gets a bit worse since the vendor field can be left out:
 
 x86_64-linux-gnu
 
-note: 
-/home/kyoupark/si-logs/gcc-build/gcc-4.8.2/config.sub
+<check-toolchain-target-triplet>
+
+note: /home/kyoupark/si-logs/gcc-build/gcc-4.8.2/config.sub
 
 This is most definitely ambiguous. Most autoconf-based packages ship with a
 huge shell script called `config.sub` whose function is to disambiguate target
@@ -53446,6 +53538,13 @@ new target triplet, yours could be: http://wiki.osdev.org/OS_Specific_Toolchain
 case "${target}" in
   *-*-chorusos)
     ;;
+
+<ex> mips little endian
+mipsel-linux-addr2line  mipsel-linux-as       mipsel-linux-elfedit
+mipsel-linux-ld      mipsel-linux-nm       mipsel-linux-objdump
+
+<ex> x86_64
+x86 are all little endian so no need to have big endian triplet.
 
 
 ={============================================================================
@@ -57705,6 +57804,46 @@ gcc version 4.2.0 20070124 (prerelease) - BRCM BRCM_VER
  "/home/NDS-UK/kyoupark/asn/gcc/gcc-glibc-brcm-mips-install/bin/../lib/gcc/mips-linux-gnu/4.2.0/../../../../mips-linux-gnu/lib/crtn.o"
 
 
+<toolchain-spec-x86>
+kyoupark@st-castor-03:~/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build$ ~/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -### sample.c
+Using built-in specs.
+COLLECT_GCC=/home/kyoupark/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc
+COLLECT_LTO_WRAPPER=/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../libexec/gcc/i686-nptl-linux-gnu/4.9.1/lto-wrapper
+Target: i686-nptl-linux-gnu
+
+Configured with: /home/pete/old_chain/.build/src/gcc-4.9.1/configure --build=i686-build_pc-linux-gnu --host=i686-build_pc-linux-gnu --target=i686-nptl-linux-gnu --prefix=/home/pete/x-tools/i686-nptl-linux-gn
+u --with-sysroot=/home/pete/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot --enable-languages=c,c++ --with-arch=i686 --with-pkgversion='crosstool-NG 1.21.0' --enable-__cxa_atexit --disable-libmudfla
+p --disable-libgomp --disable-libssp --disable-libquadmath --disable-libquadmath-support 
+--disable-libsanitizer 
+--with-gmp=/home/pete/old_chain/.build/i686-nptl-linux-gnu/buildtools --with-mpfr=/home/pete/ol
+d_chain/.build/i686-nptl-linux-gnu/buildtools --with-mpc=/home/pete/old_chain/.build/i686-nptl-linux-gnu/buildtools --with-isl=/home/pete/old_chain/.build/i686-nptl-linux-gnu/buildtools --with-cloog=/home/pe
+te/old_chain/.build/i686-nptl-linux-gnu/buildtools --with-libelf=/home/pete/old_chain/.build/i686-nptl-linux-gnu/buildtools --with-host-libstdcxx='-static-libgcc -Wl,-Bstatic,-lstdc++ -lm' --enable-threads=p
+osix --enable-target-optspace --disable-nls --disable-multilib --with-local-prefix=/home/pete/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot --enable-c99 --enable-long-long
+
+Thread model: posix
+gcc version 4.9.1 (crosstool-NG 1.21.0)
+COLLECT_GCC_OPTIONS='-mtune=generic' '-march=i686'
+ /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../libexec/gcc/i686-nptl-linux-gnu/4.9.1/cc1 -quiet -iprefix /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../
+lib/gcc/i686-nptl-linux-gnu/4.9.1/ -isysroot /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../i686-nptl-linux-gnu/sysroot sample.c -quiet -dumpbase sample.c "-mtune=generic" "-march=
+i686" -auxbase sample -o /tmp/ccSzT2O1.s
+COLLECT_GCC_OPTIONS='-mtune=generic' '-march=i686'
+ /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-nptl-linux-gnu/4.9.1/../../../../i686-nptl-linux-gnu/bin/as --32 -o /tmp/ccQhQDLK.o /tmp/ccSzT2O1.s
+COMPILER_PATH=/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../libexec/gcc/i686-nptl-linux-gnu/4.9.1/:/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../libexe
+c/gcc/:/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-nptl-linux-gnu/4.9.1/../../../../i686-nptl-linux-gnu/bin/
+LIBRARY_PATH=/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-nptl-linux-gnu/4.9.1/:/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/:/h
+ome/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-nptl-linux-gnu/4.9.1/../../../../i686-nptl-linux-gnu/lib/:/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_
+01/bin/../i686-nptl-linux-gnu/sysroot/lib/:/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../i686-nptl-linux-gnu/sysroot/usr/lib/
+COLLECT_GCC_OPTIONS='-mtune=generic' '-march=i686'
+ /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../libexec/gcc/i686-nptl-linux-gnu/4.9.1/collect2 "--sysroot=/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../
+i686-nptl-linux-gnu/sysroot" --eh-frame-hdr -m elf_i386 -dynamic-linker /lib/ld-linux.so.2 /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../i686-nptl-linux-gnu/sysroot/usr/lib/crt1.o
+ /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../i686-nptl-linux-gnu/sysroot/usr/lib/crti.o /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-np
+tl-linux-gnu/4.9.1/crtbegin.o -L/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-nptl-linux-gnu/4.9.1 -L/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_0
+1/bin/../lib/gcc -L/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-nptl-linux-gnu/4.9.1/../../../../i686-nptl-linux-gnu/lib -L/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i6
+86_nptl_gcc_x86_linux_01/bin/../i686-nptl-linux-gnu/sysroot/lib -L/home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../i686-nptl-linux-gnu/sysroot/usr/lib /tmp/ccQhQDLK.o -lgcc --as-need
+ed -lgcc_s --no-as-needed -lc -lgcc --as-needed -lgcc_s --no-as-needed /home/kyoupark/STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../lib/gcc/i686-nptl-linux-gnu/4.9.1/crtend.o /home/kyoupark/STB_
+SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01/bin/../i686-nptl-linux-gnu/sysroot/usr/lib/crtn.o
+
+
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-spk-using-own-toolchain
 
@@ -59877,6 +60016,7 @@ make -j4
 make install
 
 
+*gcc-toolchain-target-triplet*
 We've specified aarch64-linux as the target system type. Binutils's configure
 script will recognize that this target is different from the machine we're
 building on, and configure a cross-assembler and cross-linker as a result. 
@@ -59887,10 +60027,6 @@ aarch64-linux-.
 `--disable-multilib` means that we only want our Binutils installation to work
 with programs and libraries using the AArch64 instruction set, and not any
 related instruction sets such as AArch32.
-
-// `${TARGET}` will be prefix in binary names
-// mipsel-linux-addr2line  mipsel-linux-as       mipsel-linux-elfedit
-// mipsel-linux-ld      mipsel-linux-nm       mipsel-linux-objdump
 
 
 note: failed to build 2.24 but build 2.25.1 on debian VM.
@@ -60299,7 +60435,7 @@ FATAL: kernel too old
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-glibc-mips buildroot-glic-mips-internal-toolchain
+*kt_linux_gcc_400* gcc-toolchain-glibc-mips buildroot-glic-mips-internal-toolchain
 
 <01> fail: gcc-4.8.2, glibc-2.20, linux-2.6.19
 Have to use Linux 2.6.32 or later for glibc-2.20
@@ -61507,7 +61643,7 @@ make install
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-glibc-mips-own
+*kt_linux_gcc_400* gcc-toolchain-glibc-mips-own
 
 <14-test> okay: gcc-4.2.0-brcm, glibc-2.13, linux-2.6.18.8-from-mips, binutils-2.17.50, float-hard
 
@@ -63215,18 +63351,18 @@ libc.a  libcrypt.so     libdl.so     libnsl.a    libpthread_nonshared.a  libreso
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-tc-cross-ng-mips-uclibc
+*kt_linux_gcc_400* gcc-toolchain-cross-ng-mips-uclibc
 
 http://crosstool-ng.org/
-
+wget http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-1.23.0.tar.xz
 wget http://crosstool-ng.org/download/crosstool-ng/crosstool-ng-1.22.0.tar.bz2
 
 tar xjf crosstool-ng-VERSION.tar.bz2
 cd crosstool-ng-VERSION
-./configure --prefix=/home/nds-uk/kyoupark/cross/install/bin
+./configure --prefix=/home/kyoupark/asan/cross/install/bin
 make
 make install
-export PATH="${PATH}:/home/nds-uk/kyoupark/cross/help2man-1.47.4:/home/nds-uk/kyoupark/cross/install/bin/bin"
+export PATH="${PATH}:/home/kyoupark/asan/cross/help2man-1.47.4:/home/kyoupark/asan/cross/install/bin/bin"
 
 Then, you are ready to use crosstool-NG.
 
@@ -63241,6 +63377,26 @@ cd /a/directory/to/build/your/toolchain
 ct-ng help
 ct-ng list-samples
 ct-ng show-arm-unknown-linux-gnueabi
+
+29:[G..]   i686-centos6-linux-gnu
+30:[G..]   i686-centos7-linux-gnu
+31:[G..]   i686-nptl-linux-gnu
+32:[G..]   i686-ubuntu12.04-linux-gnu
+33:[G..]   i686-ubuntu14.04-linux-gnu
+34:[G..]   i686-ubuntu16.04-linux-gnu
+35:[G.X]   i686-w64-mingw32
+47:[G.X]   i686-w64-mingw32,nios2-spico-elf
+
+ct-ng show-i686-nptl-linux-gnu
+kyoupark@kit-debian64:~/asan/cross-build$ ct-ng show-i686-nptl-linux-gnu
+[G..]   i686-nptl-linux-gnu
+    OS             : linux-4.10.8
+    Companion libs : gmp-6.1.2 mpfr-3.1.5 isl-0.16.1 mpc-1.0.3 libelf-0.8.13 expat-2.2.0 ncurses-6.0
+    binutils       : binutils-2.28
+    C compilers    : gcc  |  6.3.0
+    Languages      : C,C++
+    C library      : glibc-2.25 (threads: nptl)
+    Tools          : duma-2_5_15 gdb-7.12.1 ltrace-0.7.3 strace-4.16
 
 once you know what sample to use, configure ct-ng to use it:
 

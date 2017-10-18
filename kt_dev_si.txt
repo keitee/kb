@@ -1917,13 +1917,21 @@ This commit update dropbox interface and other following enhancements:
 
 http://vstb.cisco.com/
 
-
+<vm-setting>
 Under the vstb-XX.X.X settings:
 Serial Ports:
 Make note of serial port Path/Address E.g. “\\.\pipe\vstb-19.3.1_COM1”
 
 \\.\pipe\vstb-20.6.2_COM1
+\\.\pipe\vstb-21.1.0_COM1
 
+Network-> Adapter 1->Advanced->Port Forwarding:
+Add new rule using same Guest IP as Telnet but with Host Port/Guest Port for Remote Control Unit 8080
+Modify the Telnet host port to something different from 23 like 8023
+E.g.
+Name	Protocol	Host IP	Host Port	Guest IP	Guest Port
+Telnet	TCP	-	8023	10.0.2.15	23
+RCU	TCP	-	8080	10.0.2.15	8080
 
 <build>
 ./initialise_hooks
@@ -1933,6 +1941,29 @@ cd FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
 ./make.sh --profile nds_si_devel --debug_level release_dbg --os_debug_level release --project picasso --platform vstb --clean --output $PWD --baseline ENG_vSTB_40.40.00 --epg_bld_type release-trials |& tee b.log
 ./make.sh --debug_level release_dbg --os_debug_level release --project picasso --platform vstb --clean --output $PWD --baseline ENG_vSTB_40.40.00 --epg_bld_type release-trials |& tee b.log
 ./release.sh --platform vstb
+
+<output>
+$ ./release.sh --platform vstb --project picasso
+
+/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/NDS_INTEL_X86_LNUX_MRFUSION_01/LittleEndian
+
+<toolchain>
+CC=/home/kyoupark/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc
+
+i686-nptl-linux-gnu-gcc (crosstool-NG 1.21.0) 4.9.1
+Copyright (C) 2014 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+GNU ld (crosstool-NG 1.21.0) 2.25
+
+
+<mount>
+export PROFILE=FUSION-MRFUSION-01
+export STREAM_NETWORK=BSKYB_DARWIN
+mkdir /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb/flash0 /flash0
+/flash0/scripts/startstack.sh
 
 <vstb>
 [root@vSTB lib]# ./ld-2.23.so
@@ -16688,6 +16719,26 @@ COMPONENT_NAME := sim
 Please could you capture a log with the INFO logs from sim_dbc_query_list.c enabled. Unless youre running a full debug build, the easiest way I know to do this is to put a line such as the following just below the other #defines in that file:
 #define SIM_TB_LOG_INFO SIM_TB_LOG_WARN
 
+// use in c file
+CMS_INFORMATION_SERVICES/SIM/src/plug-in/xsi/sql/src/sim_pi_xsi_ssl.c
+#define SIM_TB_DIAG_ID              g_sim_pi_ssl_seg_id
+
+    SIM_TB_SetupDiagSegment(SIM_PI_SSL_DIAG_NAME,                       &g_sim_pi_ssl_seg_id);
+
+#define SIM_PI_SSL_DIAG_NAME                        ("SQ44")    /*!< @brief Segment name for SIM PI SSL */
+
+
+CMS_INFORMATION_SERVICES/SIM/src/plug-in/xsi/sql/src/sim_pi_xsi_skevt_sections.c
+#define SIM_TB_DIAG_ID                              g_sim_pi_skevt_sections_seg_id
+
+    SIM_TB_SetupDiagSegment(SIM_PI_SKEVT_SECTIONS_DIAG_NAME,            &g_sim_pi_skevt_sections_seg_id);
+
+#define SIM_PI_SKEVT_SECTIONS_DIAG_NAME             ("SQ57")    /*!< @brief Segment name for SIM PI section processing */
+
+#define SIM_TB_DIAG_ID      g_sim_pi_skevt_s2f_seg_id
+CMS_INFORMATION_SERVICES/SIM/src/plug-in/xsi/sql/src/sim_pi_xsi_init.c:1060:    SIM_TB_SetupDiagSegment(SIM_PI_SKEVT_S2F_DIAG_NAME,                 &g_sim_pi_skevt_s2f_seg_id);
+CMS_INFORMATION_SERVICES/SIM/src/utils/inc/sim_toolbox_diag.h:125:#define SIM_PI_SKEVT_S2F_DIAG_NAME                  ("SQ55")    /*!< @brief Segment name for SIM PI skevt sections to file code */
+
 
 # status code
 # (COMP, COMPIF, SEVERITY, STATUS) -> (COMP, SEVERITY, COMPIF, STATUS)
@@ -17727,6 +17778,8 @@ booking_info b left outer join av_content a on a.av_content_id = b.av_content_id
 #
 sqlite3 PCAT.DB 'select server_id from item i' | egrep ^[0-9] | wc -l
 
+#
+sqlite3 -list PCAT.DB 'select partial_content_status, booking_type, event_name, booking_exception, channel_name, j.booking_job_id, booking_source, record_status from item i, booking_jobs j, booking_info b left outer join av_content a on a.av_content_id = b.av_content_id where b.event_id = i.event_id and b.booking_id = j.booking_id order by ifnull(actual_start_time,trigger_time)'
 
 # 47504 is 'Series' from items.txt
 #
@@ -17766,7 +17819,7 @@ sqlite3 PCAT.DB 'select i.event_name from item i where i.event_id = 570426813' |
 BOOKING_JOB_ID,
 BOOKING_ID,           // maps to *booking-info*
 REMINDER_STATUS, 
-`RECORD_STATUS`,
+`RECORD_STATUS`, *pact-record-status*
 // @brief Values describing the status of an event that was scheduled for a
 // record booking.  Theses values are used for the
 // #PCAT_CAT_PROP_RECORD_STATUS property
@@ -17880,15 +17933,15 @@ KEEP,				# PCAT_CAT_PROP_KEEP_STATUS
 `BOOKING_EXCEPTION`       // *booking-exception* `SYSTEM_EXCEPTIONS_TYPE_TAG`
                         // 100: NO_EXCEPTION
 
-`PARTIAL_CONTENT_STATUS`, 
+`PARTIAL_CONTENT_STATUS`,   *pcat-content-status* *booking-state*
 
 // "PARTIAL_CONTENT_STATUS",                                   /*PCAT_CAT_PROP_CONTENT_STATUS*/
 // typedef enum PCAT_CAT_CONTENT_STATUS_TAG{
 //     PCAT_CAT_CONTENT_STATUS_UNDEF = 0,  /**< @brief  No available status */
 //     PCAT_CAT_CONTENT_STATUS_NO_CONTENT,
 //     PCAT_CAT_CONTENT_STATUS_PARTIAL,
-//     PCAT_CAT_CONTENT_STATUS_ALL,
-//     PCAT_CAT_CONTENT_STATUS_PENDING ,
+//     PCAT_CAT_CONTENT_STATUS_ALL,         3
+//     PCAT_CAT_CONTENT_STATUS_PENDING ,    4
 //     PCAT_CAT_CONTENT_STATUS_SUSPENDED , /**< @brief  added for BDL content : only part of the A/V content was recorded , not ready for playback */
 //     PCAT_CAT_CONTENT_STATUS_LAST        /**< @brief  dummy - last enum value */
 // }PCAT_CAT_CONTENT_STATUS;
@@ -23738,6 +23791,13 @@ typedef enum SYSTEM_EXCEPTIONS_TYPE_TAG   *booking-exception* *record-error*
   // 15
   SYSTEM_EXCEPTION_TYPE_NO_TUNER_AVAILABLE,       /*!< @brief Tuner not available due to tuner conflict */
   SYSTEM_EXCEPTION_TYPE_HTTP_404_NOT_FOUND,       /*!< @brief raw HTTP error */
+
+  // 35
+  SYSTEM_EXCEPTION_TYPE_RECORDING_SUCCEEDED,                       /*!< @brief Recording ended successfully */
+
+  // 75
+  SYSTEM_EXCEPTION_TYPE_HTTP_CONNECTION_ERROR,                     /*!< @brief Connection error */
+
   // 100
   SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION,             /*!< @brief No exceptions occured */
 
@@ -26588,6 +26648,9 @@ int AUTO_STANDBY_ID                                       = 1162;
    int SEARCHING_FOR_LISTINGS_ID                             = 1112;
    int NO_OTHER_CHANNELS_ID                                  = 1115;
 
+	int PDL_ASSET_AVAILABLE_ID                                           = 1172;
+	int END_OF_DOWNLOAD_BUFFER_ID                                        = 1089;
+
 	int `BUY_AND_KEEP_PURCHASE_CONFIRMATION_NON_MODAL`                     = 1475;
 
 <dialog-1477>
@@ -28256,6 +28319,12 @@ for the following transfers, thus making the operations faster, less CPU
     use curl_easy_setopt between the invokes to set options for the following
     curl_easy_perform. 
 
+https://curl.haxx.se/libcurl/c/libcurl-errors.html#CURLEOK
+CURLE_WRITE_ERROR (23)
+An error occurred when writing received data to a local file, or an error was
+returned to libcurl from a write callback.
+
+
 static CTM_SVR_FTM_P_DL_Context_t g_dl_ctx[FTM_NB_CTX];
 
 typedef struct _CTM_SVR_FTM_P_DL_Context_t
@@ -28457,10 +28526,19 @@ hex(((53 & 0x3FF) << 22) | ((3 & 0x3) << 16) | ((0 & 0xF) << 12) | (0 & 0xFFF) )
 #define HTTP_API_E_COULDNT_CONNECT         (_HTTP_FATAL(7))   /*!< @brief Couldn't connect to server */
 Perform failure. status : `0xd430007` 
 
+hex(((53 & 0x3FF) << 22) | ((3 & 0x3) << 16) | ((0 & 0xF) << 12) | (10 & 0xFFF) )
 #define HTTP_API_E_WRITE_ERROR             (_HTTP_FATAL(10))  /*!< @brief Failed writing received data */
 
 arrayErrorCodeLibToHTTP[CURLE_WRITE_ERROR] = HTTP_API_E_WRITE_ERROR;
-'0xd43000a'
+`0xd43000a`
+
+hex(((53 & 0x3FF) << 22) | ((3 & 0x3) << 16) | ((0 & 0xF) << 12) | (13 & 0xFFF) )
+#define HTTP_API_E_OPERATION_TIMEOUTED     (_HTTP_FATAL(13))  /*!< @brief A timeout time was reached */
+`0xd43000d`
+
+#define HTTP_API_E_ABORTED_BY_CALLBACK     (_HTTP_FATAL(18))  /*!< @brief The operation was aborted by an application callback */
+0xd430012
+
 
 /*! @brief  HTTP fatal error definition */
 #define _HTTP_FATAL(e)  \
@@ -28539,7 +28617,7 @@ time will be the one last successful commit state.
 //     }
 // }
 //
-// <pdl-failure-type> firstFailureReason failureType *booking-exception* 
+// <pdl-failure-type> firstFailureReason failureType *booking-exception* *booking-state*
 // import static com.nds.fusion.systemcommon.SystemCommonFailureType.NO_EXCEPTION; 100
 //
 // public enum ProgrammeState
@@ -28564,7 +28642,232 @@ time will be the one last successful commit state.
 // 	DOWNLOADED("DOWNLOADED"),
 // 	PENDING("PENDING");
 // }
+
+
+typedef enum PLANNER_API_BookingStateTag
+{
+    PLANNER_API_BOOKING_STATE_UNDEF             = 0U,
+    PLANNER_API_BOOKING_STATE_BOOKED            = 1U, /**<@brief Booked pending action*/
+    PLANNER_API_BOOKING_STATE_RECORDED          = 2U, /**<@brief Booked programme has been recorded */
+    PLANNER_API_BOOKING_STATE_RECORDING         = 3U, /**<@brief Currently recording, includes all of the event so far */
+    PLANNER_API_BOOKING_STATE_NOT_RECORDED      = 4U, /**<@brief Booked programme which was to be recorded, was not */
+    PLANNER_API_BOOKING_STATE_PARTIAL_RECORDED  = 5U, /**<@brief Booked programme has finished recorded, but part of the programme is missing */
+    PLANNER_API_BOOKING_STATE_PARTIAL_RECORDING = 6U, /**<@brief Currently recording, but the recording does not include all of the event so far */
+    PLANNER_API_BOOKING_STATE_DELETING          = 7U, /**<@brief Booking in the process of being deleted. If the booking is in this state, no other properties shoudl be retrieved*/
+    PLANNER_API_BOOKING_STATE_LASTVALUE         = 8U
+
+} PLANNER_API_BookingState;
+
+// DARWIN_PLATFORM/DARWIN_PLANNER/src/planner_bookedprogramme_properties.c
+SYSTEM_STATUS PLANNER_BookedProgramme_GetBookingState( PCAT_VIEW_VALUE_LIST value_list)
+{
+  // *pact-record-status* PCAT_VIEW_VLIST_GetInt(PCAT_CAT_PROP_RECORD_STATUS);
+  // *pcat-content-status* PCAT_VIEW_VLIST_GetInt(PCAT_CAT_PROP_CONTENT_STATUS);
+
+    PLANNER_API_BookingState PLANNER_BookedProgramme_MapPCATState(uint32_t record_state,uint32_t completion_state, bool failed)
+    {
+      PLANNER_API_BookingState l_state;
+
+      DIAG_DECLARE_FUNCTION("PLANNER_BookedProgramme_MapPCATState");
+      DIAG_LOG_FN_ENTRY(g_planner_diag_segment_id);
+
+      DIAG_LOG_INFO(g_planner_diag_segment_id, ("record_state: %u completion_state: %u failed: %d\n", record_state, completion_state, failed));
+
+      if (failed == true)
+      {
+        l_state = PLANNER_API_BOOKING_STATE_NOT_RECORDED;
+      }
+      else
+      {
+        switch (record_state)
+        {
+          case PCAT_CAT_RECORD_STATUS_TO_RECORD:
+            switch(completion_state)
+            {
+              case PCAT_CAT_CONTENT_STATUS_NO_CONTENT:
+                l_state = PLANNER_API_BOOKING_STATE_BOOKED;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_PARTIAL:
+                /* This combination may occur for a partial recording that is being resumed */
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDED;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_ALL:
+                l_state = PLANNER_API_BOOKING_STATE_RECORDED;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_SUSPENDED:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDED;
+                break;
+              default:
+                l_state = PLANNER_API_BOOKING_STATE_UNDEF;
+                break;
+            }
+            break;
+
+          case PCAT_CAT_RECORD_STATUS_START_RECORDING:
+            switch(completion_state)
+            {
+              case PCAT_CAT_CONTENT_STATUS_NO_CONTENT:
+#ifdef HOME_NETWORK_ABR_RECORDING
+                /* For HIP bookings which are in the start recording state but which have no content
+                   should be reported as recording. The recording will be triggered automatically when
+                   the user chooses to view it */
+                l_state = PLANNER_API_BOOKING_STATE_RECORDING;
+#else
+                l_state = PLANNER_API_BOOKING_STATE_BOOKED;
+#endif
+                break;
+              case PCAT_CAT_CONTENT_STATUS_PARTIAL:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDED;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_ALL:
+                l_state = PLANNER_API_BOOKING_STATE_BOOKED;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_SUSPENDED:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDED;
+                break;
+              default:
+                l_state = PLANNER_API_BOOKING_STATE_UNDEF;
+                break;
+            }
+            break;
+
+          case PCAT_CAT_RECORD_STATUS_RECORDING:
+            switch(completion_state)
+            {
+              case PCAT_CAT_CONTENT_STATUS_PARTIAL:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDING;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_ALL:
+                l_state = PLANNER_API_BOOKING_STATE_RECORDING;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_SUSPENDED:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDING;
+                break;
+              default:
+                l_state = PLANNER_API_BOOKING_STATE_UNDEF;
+                break;
+            }
+            break;
+
+          case PCAT_CAT_RECORD_STATUS_STOPPING:
+            switch(completion_state)
+            {
+              case PCAT_CAT_CONTENT_STATUS_PARTIAL:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDING;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_ALL:
+                l_state = PLANNER_API_BOOKING_STATE_RECORDING;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_SUSPENDED:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDING;
+                break;
+              default:
+                l_state = PLANNER_API_BOOKING_STATE_UNDEF;
+                break;
+            }
+            break;
+
+          case PCAT_CAT_RECORD_STATUS_ENDED:
+            switch(completion_state)
+            {
+              case PCAT_CAT_CONTENT_STATUS_PARTIAL:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDED;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_ALL:
+                l_state = PLANNER_API_BOOKING_STATE_RECORDED;
+                break;
+              case PCAT_CAT_CONTENT_STATUS_SUSPENDED:
+                l_state = PLANNER_API_BOOKING_STATE_PARTIAL_RECORDED;
+                break;
+              default:
+                l_state = PLANNER_API_BOOKING_STATE_UNDEF;
+                break;
+            }
+            break;
+
+          default:
+            DIAG_LOG_ERROR(g_planner_diag_segment_id, ("Invalid arguments: record_state %u completion_state %u failed %s", record_state, completion_state, ((failed == true) ? "true" : "false")));
+            l_state = PLANNER_API_BOOKING_STATE_UNDEF;
+            break;
+        }
+      }
+
+      DIAG_LOG_FN_EXIT(g_planner_diag_segment_id, l_state);
+      return l_state;
+    }
+}
+
+//build/applications/Picasso/picasso/jpa/modules/jpa-impl/src/c/src/natPlannerBookedProgrammeImpl.c
+JNIEXPORT jint JNICALL Java_com_nds_fusion_plannerimpl_PlannerBookedProgrammeImpl_natPlannerApiBookedProgrammeGetBookingState
+  (JNIEnv *env, jclass jClass, jint param1)
+{
+    /* Retrieve the booking state from the C component */
+    status = PLANNER_API_BookedProgramme_GetPropertyBookingState(jHandle,
+                                                                 PLANNER_API_BOOKEDPROG_PROPID_BOOKINGSTATE,
+
+    /* The booking state is an integer and so may be returned directly */
+    jReturnVal = (uint32_t)l_state;
+}
+
+
+build/applications/Picasso/picasso/jpa/modules/jpa-api/src/java/com/nds/fusion/planner/PlannerBookingState.java
+
+/** Current state of a Booked Service Event */
+public interface PlannerBookingState
+{
+	/** pbp not in planner (e.g pbp in conflict resolution process) */
+    int UNDEFINED = 0;
+
+    /** Booked pending action*/
+    int BOOKED = 1;
+
+    /** Booked programme has been recorded */
+    int RECORDED = 2;
+
+    /** Currently recording */
+    int RECORDING = 3;
+
+    /** Booked porgramme which was to be recorded, was not */
+    int NOT_RECORDED = 4;
+
+    /** Booked programme has finished recorded, by part of the programme is missing */
+    int PARTIAL_RECORDED = 5;
+
+    /** Booked programme which is currently recording, but the recording does not include all of the event so far */
+    int PARTIAL_RECORDING = 6;
+
+    /** Booked programme which is in the process of being deleted. If the booking is in this state, no other properties shoudl be retrieved*/
+    int DELETING = 7;
+
+}
+// build/applications/Picasso/picasso/jpa/modules/jpa-impl/src/java/com/nds/fusion/plannerimpl/PlannerBookedProgrammeStateMapper.java
+			case PlannerBookingState.PARTIAL_RECORDED:
+				return ProgrammeState.PART_RECORDED;
+
 //
+// build/applications/Picasso/picasso/Picasso/src/java/picasso/pdl/DownloadQueueState.java
+//
+public class DownloadQueueState implements Lifecycle
+{
+	public static final DownloadQueueState INITIAL_STATE = new DownloadQueueState(ACTIVE, NO_EXCEPTION, null, ProgrammeState.UNKNOWN, NO_EXCEPTION, false);
+
+	private final int                       status;
+	private final int                       failureType;
+	private final PlannerPdlBookedProgramme firstPbp;
+	private final ProgrammeState            firstStatus;
+	private final int                       firstFailureReason;
+	private final boolean                   firstIsDpl;
+
+	private DownloadQueueState(int status, int failureType, PlannerPdlBookedProgramme firstPbp, ProgrammeState firstStatus, int firstFailureReason, boolean firstIsDpl)
+	{
+		this.status = status;
+		this.failureType = failureType;
+		this.firstPbp = Lifecycles.newRef(firstPbp);
+		this.firstStatus = firstStatus;
+		this.firstFailureReason = firstFailureReason;
+		this.firstIsDpl = firstIsDpl;
+	}
+
 // THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso/pdl/DownloadQueueMonitor.java
 //
 //			@Override public void onDownloadQueueUpdate(DownloadQueueState oldState, DownloadQueueState newState)
