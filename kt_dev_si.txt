@@ -16,6 +16,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| si-pi-modified
 |kt_dev_si_0001| si-pi-flash
 |kt_dev_si_0001| si-pi-upload
+|kt_dev_si_0001| si-pi-upload-log
 |kt_dev_si_0001| si-pi-dropbox-upgrade
 
 |kt_dev_si_0002| si-vstb
@@ -61,6 +62,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-flipper si-manatee
 |kt_dev_si_0002| si-process-snug
 
+|kt_dev_si_0002| si-splunk
 |kt_dev_si_0002| si-tcpdump
 |kt_dev_si_0002| si-dmalloc
 
@@ -1569,7 +1571,7 @@ dropbox_base_url = '/snugberrypi/logs/'
 
 
 ={============================================================================
-|kt_dev_si_0001| si-pi-upload
+|kt_dev_si_0001| si-pi-upload-log
 
 <to-show-uploading-log-in-html>
 Clear or echo "uploadlog" to a page:
@@ -1940,15 +1942,24 @@ Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_0
 cd FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
 ./make.sh --profile nds_si_devel --debug_level release_dbg --os_debug_level release --project picasso --platform vstb --clean --output $PWD --baseline ENG_vSTB_40.40.00 --epg_bld_type release-trials |& tee b.log
 ./make.sh --debug_level release_dbg --os_debug_level release --project picasso --platform vstb --clean --output $PWD --baseline ENG_vSTB_40.40.00 --epg_bld_type release-trials |& tee b.log
-./release.sh --platform vstb
 
 <output>
 $ ./release.sh --platform vstb --project picasso
+$ ls
+flash0.tar.gz
 
 /STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/NDS_INTEL_X86_LNUX_MRFUSION_01/LittleEndian
 
 <toolchain>
 CC=/home/kyoupark/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc
+
+// STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01
+
+$ more crosstool-ng.config
+# Automatically generated make config: don't edit
+# crosstool-NG 1.21.0 Configuration
+# Wed May 18 13:28:31 2016
+
 
 i686-nptl-linux-gnu-gcc (crosstool-NG 1.21.0) 4.9.1
 Copyright (C) 2014 Free Software Foundation, Inc.
@@ -1963,6 +1974,7 @@ export PROFILE=FUSION-MRFUSION-01
 export STREAM_NETWORK=BSKYB_DARWIN
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb/flash0 /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan/flash0 /flash0
 /flash0/scripts/startstack.sh
 
 <vstb>
@@ -3535,7 +3547,7 @@ git tag | grep "BLD_.*_GM"
 git co BSKYB_HR016_Int
 
 # R13
-git co BSKYB_HR017_Int
+git co BSKYB_HR018_Int
 git co BSKYB_GM_Integration
 
 http://hetty.cisco.com/fusionmadesimple/index.php/Git_Fusion_standard_workflow
@@ -4214,8 +4226,9 @@ function patch_build_options_debug()
 }
 
 
-*build-make-options*
+*build-makefile*
 // FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/makefile
+// makefile -> ../../../BUILD_SYSTEM/COMMON_MAKEFILES/makefile
 
 make - --directory=projects/picasso --print-directory --no-builtin-rules \
 NDS_BUILD_SYSTEM=FUSION NDS_ROOT=/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build 
@@ -4230,6 +4243,23 @@ note:
     options are specified, each is interpreted relative to the previous one:
     ‘-C / -C etc’ is equivalent to ‘-C /etc’. This is typically used with
     recursive invocations of make (see Recursive Use of make).
+
+
+ifeq (,$(PLATFORMS_TOOLS_ROOT))
+  ifneq (,$(wildcard $(VOB_ROOT)/$(NDS_PLATFORM)/BLD_$(NDS_PLATFORM)))
+    PLATFORMS_TOOLS_ROOT:=$(VOB_ROOT)
+  else
+    ifneq (,$(wildcard $(VOB_ROOT)/deps))
+      PLATFORMS_TOOLS_ROOT:=$(VOB_ROOT)/deps
+    else
+      PLATFORMS_TOOLS_ROOT:=$(VOB_ROOT)
+    endif
+  endif
+endif
+
+common.mk
+261:# Remove unnecessary white spaces in variables used in platform.mk
+275:include $(PLATFORMS_TOOLS_ROOT)/$(NDS_FUSIONOS)/BLD_$(NDS_PLATFORM)/platform_cfg/$(NDS_HOST)/platform.mk
 
 
 <project-picasso-makefile>
@@ -4307,7 +4337,48 @@ $(LOCAL_COMPONENTS):
 // FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/makefile
 COMPONENT_SOURCE_LIBRARIES+=camm
 
+
 // FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/fusion2/makefile
+// STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects
+// fusion2 -> ../../../../BUILD_SYSTEM/COMMON_MAKEFILES/projects/fusion2/
+// STB_SW/BUILD_SYSTEM/COMMON_MAKEFILES/projects/fusion2/makefile
+-include $(NDS_ROOT)/projects/fusion2/makefile
+
+
+ifneq (,$(wildcard $(PLATFORMS_TOOLS_ROOT)/$(NDS_FUSIONOS)/BLD_$(NDS_PLATFORM)/platform_cfg/$(NDS_HOST)/setenv.mk))
+  include $(PLATFORMS_TOOLS_ROOT)/$(NDS_FUSIONOS)/BLD_$(NDS_PLATFORM)/platform_cfg/$(NDS_HOST)/setenv.mk
+else
+  LOCAL_MSG:=Unable to find $(PLATFORMS_TOOLS_ROOT)/$(NDS_FUSIONOS)/BLD_$(NDS_PLATFORM)/platform_cfg/$(NDS_HOST)/setenv.mk
+  $(call WARNING,LOCAL_MSG)
+  include $(NDS_TOOLS_ROOT)/platforms/$(NDS_PLATFORM)/setenv.mk
+endif
+
+
+<setenv-mk>
+// NDS_INTEL_X86_LNUX_MRFUSION_01/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/setenv.mk
+
+ifeq ($(`COMPILER_ROOT`),)
+    COMPILER_ROOT := $(PLATFORM_ROOT)/compiler/i686-nptl-linux-gnu
+endif
+
+// COMPILER_ROOT = /home/kyoupark/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu
+// i686-nptl-linux-gnu -> ../../../../../SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01//
+// STB_SW/deps/SYSTEM_BIN_3/i686_nptl_gcc_x86_linux_01
+
+# Toolchain prefix 
+# Very useful for compiling open-source applications, libraries and also the Linux Kernel
+# Examples, 
+# when the toolchain is "arm-linux-none-gcc" COMPILER_PREFIX should be "arm-linux-none"
+# when the toolchain is "mipsel-linux-uclibc-gcc" COMPILER_PREFIX should be "mipsel-linux-uclibc"
+COMPILER_PREFIX := i686-nptl-linux-gnu
+
+# "version" must be updated according to the vesion directory
+# For example: NDS_GCOV_PATH := $(COMPILER_ROOT)/lib/gcc/$(COMPILER_PREFIX)/4.2.0
+NDS_GCOV_PATH := $(COMPILER_ROOT)/lib/gcc/$(COMPILER_PREFIX)/4.9.1
+
+
+<platform-mk>
+// FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
 
 
 ={============================================================================
@@ -7609,6 +7680,12 @@ https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=S
 http://spvss-confluence.cisco.com/display/CCP/Basic+Use+Cases
 http://spvss-confluence.cisco.com/display/CCP/Slightly+More+Advanced+Use+Cases
 
+index=darwin component=DETAILED_INFO* priority=1 parser_testid=70
+| regex version="(R019.\d+.\d+.\d+U)"
+| rex field=message "(?i)parser_result=.""\s""(?<pool_name>.)""\spool"
+| chart dc(logid) by version, pool_name
+| sort -version
+
 
 ={============================================================================
 |kt_dev_si_0002| si-tcpdump
@@ -9094,7 +9171,9 @@ The Pure Interactive applications.
 The Applications of this type can be started by selecting an interactive
 application from the Interactive Main Menu.
 
-<key-pressed>
+<key-pressed> <keycode>
+/home/kyoupark/si-logs/theyard/bin/bskyb_charcodes
+
 // these three are pair
 !MIL    -aem          		< p:0x000001f6 P:APP t:0x01400520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:245 > KEY_PRESS: code=0x(GREEN)e201 
 !ERROR  -JAE          		< P:APP T:AEM_INPUT_MONITOR_THREAD M:modules/jvm-glue/src/c/src/je_aem.c F:JE_AEM_UserInputCallback L:103 > KT: JavaEngine: Key pressed: 0xe303, type 0x1 
@@ -12471,6 +12550,67 @@ echo "set terminal jpeg; set title 'ADPT_GUIDE 8K'; set grid; set output 'ADPT_G
 #1               #2(free)           #3                  #4                         #5 (peek)
 Memory_pool_name free_size_in_bytes total_size_in_bytes block_header_size_in_bytes max_allocated_in_bytes
 systemobject     24464              51200               20                         51140
+
+
+={============================================================================
+|kt_dev_si_0001| comp-time
+
+
+/**
+ * @brief Gets the UTC time from the RTC device.
+ * @param[out] utc_time UTC date/time retrieved from the RTC device.
+ *
+ * @retval #SYSTEMTIME_STATUS_OK on success.
+ * @retval #SYSTEMTIME_STATUS_TIME_NOT_AVAILABLE if there is no RTC device.
+ * @retval #SYSTEMTIME_STATUS_IO_ERROR if there was an internal IO error.
+ */
+static SYSTEM_STATUS SYSTEMTIME_RTCGetClock(uint32_t *utc_time)
+{
+  (ioctl(fd, RTC_GET_CLOCK, &rtc_value) == -1)
+
+    /* Check if the UTC time is in a valid range (year 1970-2100).
+       This is already checked by the following function. */
+    status = SYSTEMTIME_ConvertRTCValueToTimeDate(rtc_value, utc_time);
+}
+
+
+/**
+ * @brief Gets the time values for use by SYSTEMTIME_GetTime and SYSTEMTIME_GetTimeMillis
+ * @param[out] systemtime The current date/time without time zone or daylight saving offsets.
+ * @param[out] milliseconds The associated milliseconds value.
+ */
+SYSTEM_STATUS SYSTEMTIME_GetTimeVals(SYSTEMTIME_TIMEDATE *systemtime, uint32_t *milliseconds)
+{
+    SYSTEMTIME_TIME_OFFSETS offsets;
+    struct timespec         ts;
+    int                     res;
+    SYSTEM_STATUS           gettime_status = SYSTEMTIME_STATUS_OK;
+    uint32_t                utc;
+
+    ST_LOG_FN_ENTRY("SYSTEMTIME_GetTimeVals");
+
+    gettime_status = SYSTEMTIME_GetTimeOffsets(&offsets);
+    if (gettime_status != SYSTEMTIME_STATUS_OK)
+    {
+            status = SYSTEMTIME_RTCGetClock(&utc);
+
+            {
+                *systemtime = (SYSTEMTIME_TIMEDATE)utc;
+                *milliseconds = 0U;
+            }
+    }
+    else
+    {
+        res = clock_gettime(CLOCK_REALTIME, &ts);
+        {
+            *systemtime = (SYSTEMTIME_TIMEDATE)ts.tv_sec;
+            *systemtime += (SYSTEMTIME_TIMEDATE)offsets.offset;
+            *milliseconds = (uint32_t)ts.tv_nsec / SYSTEMTIME_NSEC_PER_MILLISEC; /* Convert to milliseconds */
+        }
+    }
+
+    return status;
+}
 
 
 ={============================================================================
@@ -16884,12 +17024,46 @@ XSI System
 
 (SDT) Flood Fill 
 
-Some sections occur in such large numbers it would take a long time to get them filtering for them one at a time. 
-** In these cases we flood fill the sections into files. Currently this is done for SKEVT, and SDT sections. **
-A generic filter is created, for example to flood fill SKEVTs for a day we just need to have a filter set on the PID, 
-and part table id (not including the 6 hour period) all sections matching this will then be written to the specified file 
-in the context of the SFM callback function. The flood fill will be considered complete when any of the first 3 sections repeat them selves. 
-This can cause problems if the drivers are dropping sections. 
+Some sections occur in such large numbers it would take a long time to get
+them filtering for them one at a time. 
+
+** In these cases we flood fill the sections `into files.` 
+Currently this is done for SKEVT, and SDT sections. **
+
+A generic filter is created, for example to flood fill SKEVTs for a day we
+just need to have a filter set on the PID, and part table id (not including
+    the 6 hour period) all sections matching this will then be written to the
+specified file in the context of the SFM callback function. The flood fill
+will be considered complete when any of the first 3 sections repeat them
+selves. This can cause problems if the drivers are dropping sections. 
+
+// uses own logging at all open in this function
+@@ -1165,18 +1165,22 @@ void SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles(uint32_t  mjd,
+         {
+             if(NULL != skevt_m_fd)
+             {
++^M
++                SIM_TB_LOG_ERROR(("KT: f_sim_pi_xsi_skevt_s2f_file_name(%s)", f_sim_pi_xsi_skevt_s2f_file_name));^M
+                 SIM_pi_xsi_skevt_s2f_GetFileNameDayAtATime(g_sim_pi_xsi_config.sim_tpid_skevt_m_base + (mjd % 8u));
+                 *skevt_m_fd = open(f_sim_pi_xsi_skevt_s2f_file_name, O_RDONLY);
+             }
+
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1176 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/M_54)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1183 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/A_70)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1169 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/B_101)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1176 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/M_55)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1183 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/A_71)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1169 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/B_101)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1176 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/M_48)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1183 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/A_64)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1169 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/B_101)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1176 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/M_49)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1183 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/A_65)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1169 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/B_101)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1176 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/M_50)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1183 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/A_66)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1169 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/B_101)
+-SQ55                      < T:SIM_PI_XSI_SKEVT_THREAD M:sim_pi_xsi_skevt_s2f.c F:SIM_PI_XSI_SKEVT_S2F_OpenSKEVTFiles L:1176 > KT: f_sim_pi_xsi_skevt_s2f_file_name(/mnt/nds/dev_6/part_0/FSN_DATA/M_51)
 
 
 Gap Fill
