@@ -166,9 +166,10 @@
 *kt_linux_tool_100* tool-efence-duma
 *kt_linux_tool_100* tool-efence-dmalloc
 *kt_linux_tool_100* tool-efence-fortify
-*kt_linux_tool_100* tool-efence-asan
-*kt_linux_tool_000* tool-efence-asan-llvm-build
-*kt_linux_tool_000* tool-efence-asan-gcc-build
+*kt_linux_tool_100* tool-asan tool-efence cpp-memory-issue
+*kt_linux_tool_100* tool-kasan tool-efence
+*kt_linux_tool_000* tool-asan-llvm
+*kt_linux_tool_000* tool-asan-gcc
 *kt_linux_tool_100* tool-efence-others
 *kt_linux_tool_100* tool-valgrind
 *kt_linux_tool_100* tool-valgrind-memcheck
@@ -374,10 +375,10 @@
 *kt_linux_gcc_400* gcc-build-buildroot-external-toolchain
 *kt_linux_gcc_400* gcc-build-spk-build-vmlinux
 *kt_linux_gcc_400* gcc-build-spk-toolchain
-*kt_linux_gcc_400* gcc-build-spk-toolchain-spec
+*kt_linux_gcc_400* gcc-toolchain-spec gcc-spec
 *kt_linux_gcc_400* gcc-build-spk-using-own-toolchain current-working
 *kt_linux_gcc_400* gcc-build-spk-gdb gcc-build-spk-bash
-*kt_linux_gcc_400* gcc-build-glibc-reference
+*kt_linux_gcc_400* gcc-toolchain-glibc-reference
 *kt_linux_gcc_400* gcc-build-c-library
 *kt_linux_gcc_400* gcc-toolchain-glibc-mips buildroot-glic-mips-internal-toolchain
 *kt_linux_gcc_400* gcc-toolchain-glibc-mips-own
@@ -3150,7 +3151,7 @@ declare -ar preload_libs=(
 vars+=(LD_PRELOAD=$(list_join ":" ${preload_libs[@]}))
 
 
-@
+@ *sh-args*
 ($@) Expands to the `positional-parameters`, starting from one. 
 
 When the expansion occurs "within double quotes", each parameter expands to a
@@ -7042,6 +7043,9 @@ DESCRIPTION
 ={============================================================================
 *kt_linux_tool_011* tool-find
 
+SYNOPSIS
+       find [-H] [-L] [-P] [-D debugopts] [-Olevel] [path...] [expression]
+
 {find-mtime}
 24(one day) hours based so -mtime 3 means that 72 hours(three days) from the
 current time and -mtime -3 means 72 before. 
@@ -7157,7 +7161,8 @@ EXPRESSIONS
               Same as ! expr, but not POSIX compliant.
 
        expr1 expr2
-              Two expressions in a row are taken to be joined with an implied "and"; expr2 is not evaluated if expr1 is false.
+              Two expressions in a row are taken to be joined with an implied
+              "and"; expr2 is not evaluated if expr1 is false.
 
        expr1 -a expr2
               Same as expr1 expr2.
@@ -12259,7 +12264,8 @@ sudo apt-get install nvidia-current
 
 Also, install the guest addition:
 
-Click on Install Guest Additions from the Devices menu and all will be done automatically.
+Click on Install Guest Additions from the Devices menu and all will be done
+automatically.
 
 
 {sharing-between-os}
@@ -12267,8 +12273,8 @@ http://www.virtualbox.org/manual/ch04.html#sharedfolders
 
 # set sharing folder on the host using virtual box menu and reboot
 #
-select "Shared folders" from the "Devices" menu, or click on the folder icon on the status bar in
-the bottom right corner.
+select "Shared folders" from the "Devices" menu, or click on the folder icon
+on the status bar in the bottom right corner.
 
 # shared folder is
 #
@@ -12276,9 +12282,10 @@ the bottom right corner.
 
 # add group permission when see access error when reading shared folder
 #
-Access to auto-mounted shared folders is only granted to the user group vboxsf, which is created by
-the VirtualBox Guest Additions installer. Hence guest users have to be member of that group to have
-read/write access or to have read-only access in case the folder is not mapped writable.
+Access to auto-mounted shared folders is only granted to the user group
+vboxsf, which is created by the VirtualBox Guest Additions installer. Hence
+guest users have to be member of that group to have read/write access or to
+have read-only access in case the folder is not mapped writable.
 
 sudo usermod -a -G vboxsf {username}
 
@@ -13448,121 +13455,6 @@ The free() function frees the memory space pointed to by ptr, which must have
   behavior occurs. If ptr is NULL, no operation is performed.
 
 
-<use-after-free>
-Here is an example usage (classical use-after-free error):
-
-$ cat uaf.c
-
-#include <stdlib.h>
-int main() {
-  int *x = malloc(10 * sizeof(int));
-  free(x);
-  return x[5];
-}
-
-
-from ansic, p167
-
-for( p = haed; p != NULL; p = p->next )
-   free(p);
-
-shall be:
-
-for( p = head; p != NULL; p = q )
-{
-   q = p->next;
-   free(p);
-}
-
-for( p = head; p != NULL; )
-{
-  q = p;
-  p = p->next;
-  free(q);
-}
-
-
-{overrun}
-Accessing out of index of array is 'undefined' so sometimes work or sometimes
-not.
-
-<01>
-int g_arr[3];
-
-int main(int argc, char* argv[])
-{
-  if( g_arr[5] == 0 )
-    printf("idx 5 is false\n");
-  else
-    printf("idx 5 is true\n");
-}
-
-$ ./a.out 
-idx 5 is false
-
-<02>
-The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
-sometimes. But crashed
-
-static MFS_STATUS MFSDBWRAP_GetDbContext(MFS_STORAGE_DB_CONTEXT_ID dbConId, 
-    MFS_DB_CONTEXT **ppContext)
-{
-  MFS_STATUS mfsStatus = MFS_STATUS_OK;
-
-  XDEBUG_DEFINE_FUNC_INFO("MFSDBWRAP_GetDbContext");
-  XDEBUG_TRACE2_1("start: dbConId=%d", dbConId);
-
-  // the dbConId is the index into the db context array, so we can directly
-  // access it.  First check that the context is really in use. If not this is a
-  // bug.
-
-  if (db_contexts_array[dbConId].bInUse == XFALSE)
-  {
-    XDEBUG_ERR2_0("No free slots for contextes.  Returning the first one");
-    mfsStatus = MFS_STATUS_ERROR;
-  }
-  else
-  {
-    *ppContext = &db_contexts_array[dbConId];
-  }
-
-  return mfsStatus;
-}
-
-<3>
-Seen on NDS MW issue
-
-MW_Process crash with core dump in SIM_dbc_query_ReadProgrammeInstanceInfo
-(during memcpy) 
-
-// void *memcpy(void *dest, const void *src, size_t n);
-(void)memcpy((void*)&obj_array[offset].sort_title[0], 
-    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
-
-// source when crashed
-0x1d8dfec: 0x54495050 0x494e4720 0x504f494e 0x54000000
-0x1d8dffc: 0xc009 0x0 0x0 0x0
-
-// dest
-x/40a obj_array[0].sort_title
-0x204eb20: 0x54495050 0x494e4720 0x504f494e 0x54000000
-0x204eb30: 0x0 0x0 0x0 0x0
-
-// solution
-strncpy(&obj_array[offset].sort_title[0], 
-    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
-
-So the problem is the accessing out of index. Why? When doing memcpy, there is
-  no gurantee that src and dest has all the vaild address up to the given size,
-     SIM_DBC_MAX_SORT_STRING_LEN(40). So when the valid length of src is smaller
-       than the size then the area which is over the length of src, may not
-       accessiable such as not contiguous, not valid for this process, etc. 
-
-So strncpy will ensure only the length of the value.text is copied when there is
-a null in src (destination then padded out with nulls) or a maximum of 40 is
-copied if the source string is over 40.
-
-
 ={============================================================================
 *kt_linux_tool_100* tool-efence-benchmark
 
@@ -14587,7 +14479,7 @@ https://android-developers.googleblog.com/2017/04/fortify-in-android.html
 
 
 ={============================================================================
-*kt_linux_tool_100* tool-efence-asan
+*kt_linux_tool_100* tool-asan tool-efence cpp-memory-issue
 
 AddressSanitizer is a tool that detects `memory corruption bugs` such as
 buffer overflows or accesses to a dangling pointer (use-after-free). 
@@ -14628,287 +14520,7 @@ Actively evolving (in contrast to mudflap which has been recently removed from
     Gcc)
 
 
-<ex> `use after free`
-
-Here is an example usage (classical use-after-free error):
-
-$ cat uaf.c
-
-#include <stdlib.h>
-int main() {
-  int *x = malloc(10 * sizeof(int));
-  free(x);
-  return x[5];
-}
-
-Let's examine the generated code for return statement:
-
-$ /opt/vd/arm-v7a15v5r1/bin/arm-v7a15v5r1-linux-gnueabi-gcc \
-    -fsanitize=address -O2 -S -o - uaf.c
-
-Below code is annotated for brevity:
-
-// int *x = malloc(10 * sizeof(int));
-  .loc 1 3 0
-  mov     r0, #40
-  bl      malloc
-  mov     r4, r0
-.LVL0:
-// free(x);
-  .loc 1 4 0
-  bl      free
-.LVL1:
-// ASan `instrumentation`: check memory access
-  .loc 1 5 0
-  add     r0, r4, #20           // Checked memory address
-  mov     r3, #536870912        // Base address of shadow region
-  ldrb    r3, [r3, r0, lsr #3]
-  and     r2, r0, #7
-  add     r2, r2, #3
-  sxtb    r3, r3
-  cmp     r2, r3
-  movlt   r2, #0
-  movge   r2, #1
-  cmp     r3, #0
-  moveq   r2, #0
-  cmp     r2, #0
-  bne     .L4                    // Poisoned access, report error
-  .loc 1 6 0
-// return x[5];
-  ldr     r0, [r4, #20]
-  ldmfd   sp!, {r4, pc}
-.L4:
-// ASan instrumentation: handle poisoned access
-  .loc 1 5 0
-  bl      __asan_report_load4
-
-We can see that ASan has inserted 11 additional instructions to check one
-memory access. Let's now check that runtime behavior matches our expectations:
-
-$ /opt/vd/arm-v7a15v5r1/bin/arm-v7a15v5r1-linux-gnueabi-gcc \
-    -fsanitize=address uaf.c
-
-$ scp a.out root@myboard:/
-a.out
-100%   12KB  12.1KB/s   00:00   
-
-$ ssh root@myboard /a.out
-=================================================================
-==154== ERROR: AddressSanitizer: heap-use-after-free on address 0xb5500fe4
-at pc 0x86b0 bp 0xbec1ecd4 sp 0xbec1eccc
-READ of size 4 at 0xb5500fe4 thread T0
-    #0 0x86af (/a.out+0x86af)
-    #1 0xb57f3bcb (/lib/libc.so.6+0x17bcb)
-0xb5500fe4 is located 20 bytes inside of 40-byte region [0xb5500fd0,0xb5500ff8)
-freed by thread T0 here:
-    #0 0xb59320f3 (/lib/libasan.so.0+0x150f3)
-    #1 0x8647 (/a.out+0x8647)
-    #2 0xb57f3bcb (/lib/libc.so.6+0x17bcb)
-previously allocated by thread T0 here:
-    #0 0xb59321bb (/lib/libasan.so.0+0x151bb)
-    #1 0x8637 (/a.out+0x8637)
-    #2 0xb57f3bcb (/lib/libc.so.6+0x17bcb)
-Shadow bytes around the buggy address:
-  0x36aa01a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa01b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa01c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa01d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa01e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-=>0x36aa01f0: fa fa fa fa fa fa fa fa fa fa `fd fd[fd]fd fd` fa
-  0x36aa0200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0210: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0220: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0230: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0240: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-Shadow byte legend (`one shadow byte represents 8 application bytes`):
-  Addressable:           00
-  Partially addressable: 01 02 03 04 05 06 07
-  Heap left redzone:     `fa`
-  Heap righ redzone:     fb
-  Freed Heap region:     `fd`
-  Stack left redzone:    f1
-  Stack mid redzone:     f2
-  Stack right redzone:   f3
-  Stack partial redzone: f4
-  Stack after return:    f5
-  Stack use after scope: f8
-  Global redzone:        f9
-  Global init order:     f6
-  Poisoned by user:      f7
-  ASan internal:         fe
-==154== ABORTING
-
-`one shadow byte represents 8 application bytes` so
-x[0], x[1]    to 8 bytes    1st fd
-x[2], x[3]    to 16 bytes   2nd fd
-x[4], x[5]    to 24 bytes   3rd fd
-
-
-<ex> `heap buffer overflow`
-Let's now examine another classical memory error: buffer overflow. These are
-handled differently depending on memory type (stack, static or heap) which
-we'll examine separately.
-
-$ cat heap_overflow.c
-
-int main(int argc, char **argv) {
-  int *array = new int[100];
-  array[0] = 0;
-  int res = array[argc + 100];  // Touch memory past end of buffer
-  delete [] array;
-  return res;
-}
-
-$ ssh root@myboard /a.out
-=================================================================
-==126== ERROR: AddressSanitizer: heap-buffer-overflow on address 0xb5503fb4
-at pc 0x8788 bp 0xbefc7cec sp 0xbefc7ce4
-READ of size m
-    #0 0x8787 (/a.out+0x8787)
-    #1 0xb5737bcb (/lib/libc.so.6+0x17bcb)
-0xb5503fb4 is located 4 bytes to the right of `400-byte region` [0xb5503e20,0xb5503fb0)
-allocated by thread T0 here:
-    #0 0xb59a8a77 (/lib/libasan.so.0+0x10a77)
-    #1 0x8697 (/a.out+0x8697)
-    #2 0xb5737bcb (/lib/libc.so.6+0x17bcb)
-Shadow bytes around the buggy address:
-  0x36aa07a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa07b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa07c0: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00   // 8*12 = 96
-  0x36aa07d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   // 8*16 = 128
-  0x36aa07e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   // 8*16 = 128
-=>0x36aa07f0: 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa fa fa   // 8*6  = 48
-  0x36aa0800: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0810: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0820: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0830: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36aa0840: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-Shadow byte legend (one shadow byte represents 8 application bytes):
-  Addressable:           00
-  Partially addressable: 01 02 03 04 05 06 07
-  Heap left redzone:     fa
-  Heap righ redzone:     fb
-  Freed Heap region:     fd
-  Stack left redzone:    f1
-  Stack mid redzone:     f2
-  Stack right redzone:   f3
-  Stack partial redzone: f4
-  Stack after return:    f5
-  Stack use after scope: f8
-  Global redzone:        f9
-  Global init order:     f6
-  Poisoned by user:      f7
-  ASan internal:         fe
-==126== ABORTING
-
-
-<e> `stack buffer overflow`
-https://github.com/google/sanitizers/wiki/AddressSanitizerExampleStackOutOfBounds
-
-Now to stack buffers:
-
-$ cat stack_oob.c
-
-int main(int argc, char **argv) {
-  int stack_array[100];
-  stack_array[1] = 0;
-  return stack_array[argc + 100];  // Touch memory past end of buffer
-}
-
-$ ssh root@myboard /a.out
-=================================================================
-==132== ERROR: AddressSanitizer: stack-buffer-overflow
-on address 0xbec82ccc at pc 0x875c bp 0xbec82b0c sp 0xbec82b04
-READ of size 4 at 0xbec82ccc thread T0
-    #0 0x875b (/a.out+0x875b)
-    #1 0xb56d6bcb (/lib/libc.so.6+0x17bcb)
-Address 0xbec82ccc is located at offset 436 in frame <main> of T0's stack:
-  This frame has 1 object(s):
-    [32, 432) 'stack_array'
-HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
-      (longjmp and C++ exceptions *are* supported)
-Shadow bytes around the buggy address:
-  0x37d90540: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x37d90550: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x37d90560: 00 00 00 f1 f1 f1 f1 00 00 00 00 00 00 00 00 00
-  0x37d90570: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x37d90580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-=>0x37d90590: 00 00 00 00 00 00 00 00 00[f4]f4 f3 f3 f3 f3 00
-  0x37d905a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x37d905b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x37d905c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x37d905d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x37d905e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-Shadow byte legend (one shadow byte represents 8 application bytes):
-  Addressable:           00
-  Partially addressable: 01 02 03 04 05 06 07
-  Heap left redzone:     fa
-  Heap righ redzone:     fb
-  Freed Heap region:     fd
-  Stack left redzone:    `f1`
-  Stack mid redzone:     f2
-  Stack right redzone:   `f3`
-  Stack partial redzone: f4
-  Stack after return:    f5
-  Stack use after scope: f8
-  Global redzone:        f9
-  Global init order:     f6
-  Poisoned by user:      f7
-  ASan internal:         fe
-==132== ABORTING
-
-
-<ex> `global buffer overflow`
-https://github.com/google/sanitizers/wiki/AddressSanitizerExampleGlobalOutOfBounds
-And finally static buffers:
-
-$ cat global_oob.c
-
-int global_array[100] = {-1};
-int main(int argc, char **argv) {
-  return global_array[argc + 100];  // Touch memory past end of buffer
-}
-
-$ ssh root@myboard /a.out
-=================================================================
-==138== ERROR: AddressSanitizer: global-buffer-overflow
-on address 0x00010b54 at pc 0x86f0 bp 0xbee97cf4 sp 0xbee97cec
-READ of size 4 at 0x00010b54 thread T0
-    #0 0x86ef (/a.out+0x86ef)
-    #1 0xb56ccbcb (/lib/libc.so.6+0x17bcb)
-0x00010b54 is located 4 bytes to the right of global variable 'global_array (global_oob.c)' (0x109c0) of size 400
-Shadow bytes around the buggy address:
-  0x20002110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x20002120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x20002130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x20002140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x20002150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-=>0x20002160: 00 00 00 00 00 00 00 00 00 00[f9]f9 f9 f9 f9 f9
-  0x20002170: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x20002180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x20002190: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x200021a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-  0x200021b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-Shadow byte legend (one shadow byte represents 8 application bytes):
-  Addressable:           00
-  Partially addressable: 01 02 03 04 05 06 07
-  Heap left redzone:     fa
-  Heap righ redzone:     fb
-  Freed Heap region:     fd
-  Stack left redzone:    f1
-  Stack mid redzone:     f2
-  Stack right redzone:   f3
-  Stack partial redzone: f4
-  Stack after return:    f5
-  Stack use after scope: f8
-  Global redzone:        `f9`
-  Global init order:     f6
-  Poisoned by user:      f7
-  ASan internal:         fe
-==138== ABORTING
-
-
-<appendix>: AddressSanitizer Design
+<design> AddressSanitizer Design
 AddressSanitizer is supported by two major open-source toolchains: LLVM and
 GCC (LLVM being the main development platform). The tool introduces a new
 compiler pass which instruments the generated memory operations by inserting
@@ -15033,6 +14645,544 @@ fscanf
 sscanf
  
 They also instrument builtin compiler intrinsic e.g. __builtin_memcpy, etc.
+
+
+{asn-uaf} `use after free` *cpp-memory-issue*
+
+from ansic, p167, another uaf
+
+for( p = haed; p != NULL; p = p->next )
+   free(p);
+
+shall be:
+
+for( p = head; p != NULL; p = q )
+{
+   q = p->next;
+   free(p);
+}
+
+for( p = head; p != NULL; )
+{
+  q = p;
+  p = p->next;
+  free(q);
+}
+
+
+<1> uaf-read
+Here is an example usage (classical use-after-free error):
+
+$ cat uaf.c
+
+#include <stdlib.h>
+int main() {
+  int *x = malloc(10 * sizeof(int));
+  free(x);
+  return x[5];
+}
+
+Let's examine the generated code for return statement:
+
+$ /opt/vd/arm-v7a15v5r1/bin/arm-v7a15v5r1-linux-gnueabi-gcc \
+    -fsanitize=address -O2 -S -o - uaf.c
+
+Below code is annotated for brevity:
+
+// int *x = malloc(10 * sizeof(int));
+  .loc 1 3 0
+  mov     r0, #40
+  bl      malloc
+  mov     r4, r0
+.LVL0:
+// free(x);
+  .loc 1 4 0
+  bl      free
+.LVL1:
+// ASan `instrumentation`: check memory access
+  .loc 1 5 0
+  add     r0, r4, #20           // Checked memory address
+  mov     r3, #536870912        // Base address of shadow region
+  ldrb    r3, [r3, r0, lsr #3]
+  and     r2, r0, #7
+  add     r2, r2, #3
+  sxtb    r3, r3
+  cmp     r2, r3
+  movlt   r2, #0
+  movge   r2, #1
+  cmp     r3, #0
+  moveq   r2, #0
+  cmp     r2, #0
+  bne     .L4                    // Poisoned access, report error
+  .loc 1 6 0
+// return x[5];
+  ldr     r0, [r4, #20]
+  ldmfd   sp!, {r4, pc}
+.L4:
+// ASan instrumentation: handle poisoned access
+  .loc 1 5 0
+  bl      __asan_report_load4
+
+We can see that ASan has inserted 11 additional instructions to check one
+memory access. Let's now check that runtime behavior matches our expectations:
+
+
+// see no optimization is used
+
+$ /opt/vd/arm-v7a15v5r1/bin/arm-v7a15v5r1-linux-gnueabi-gcc \
+    -fsanitize=address uaf.c
+
+$ scp a.out root@myboard:/
+a.out
+100%   12KB  12.1KB/s   00:00   
+
+$ ssh root@myboard /a.out
+=================================================================
+==154== ERROR: AddressSanitizer: heap-use-after-free on address 0xb5500fe4
+at pc 0x86b0 bp 0xbec1ecd4 sp 0xbec1eccc
+`READ` of size 4 at 0xb5500fe4 thread T0
+    #0 0x86af (/a.out+0x86af)
+    #1 0xb57f3bcb (/lib/libc.so.6+0x17bcb)
+0xb5500fe4 is located 20 bytes inside of 40-byte region [0xb5500fd0,0xb5500ff8)
+freed by thread T0 here:
+    #0 0xb59320f3 (/lib/libasan.so.0+0x150f3)
+    #1 0x8647 (/a.out+0x8647)
+    #2 0xb57f3bcb (/lib/libc.so.6+0x17bcb)
+previously allocated by thread T0 here:
+    #0 0xb59321bb (/lib/libasan.so.0+0x151bb)
+    #1 0x8637 (/a.out+0x8637)
+    #2 0xb57f3bcb (/lib/libc.so.6+0x17bcb)
+Shadow bytes around the buggy address:
+  0x36aa01a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa01b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa01c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa01d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa01e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x36aa01f0: fa fa fa fa fa fa fa fa fa fa `fd fd[fd]fd fd` fa
+  0x36aa0200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0210: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0220: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0230: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0240: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (`one shadow byte represents 8 application bytes`):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:     `fa`
+  Heap righ redzone:     fb
+  Freed Heap region:     `fd`
+  Stack left redzone:    f1
+  Stack mid redzone:     f2
+  Stack right redzone:   f3
+  Stack partial redzone: f4
+  Stack after return:    f5
+  Stack use after scope: f8
+  Global redzone:        f9
+  Global init order:     f6
+  Poisoned by user:      f7
+  ASan internal:         fe
+==154== ABORTING
+
+`one shadow byte represents 8 application bytes` so
+x[0], x[1]    to 8 bytes    1st fd
+x[2], x[3]    to 16 bytes   2nd fd
+x[4], x[5]    to 24 bytes   3rd fd
+
+
+<2> uaf-write
+
+// no -g and no -O
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -fsanitize=address uaf.c -o out_uaf_no_g_no_opt
+
+   #include <stdio.h>
+   #include <stdlib.h>
+   
+   //	gcc -fsanitize=address testmain.c -o out_asn
+   int main(int argc, char **argv)
+   {
+       printf("====> \n" );
+       printf("====> this is uaf(use after free)..\n" );
+       printf("====> \n" );
+       int *x = malloc(10*sizeof(int));
+       free(x);
+12:    x[5] = 10;
+       return;
+   }
+
+
+[root@vSTB flash0]# ./out_uaf_no_g_no_opt
+====>
+====> this is uaf(use after free)..
+====>
+=================================================================
+==1492==ERROR: AddressSanitizer: heap-use-after-free on address 0xb5b00fe4 at `pc 0x80486ba` bp 0xbfee9118 sp 0xbfee910c
+`WRITE` of size 4 at 0xb5b00fe4 thread T0
+    #0 0x80486b9 in main (/flash0/out_uaf_no_g_no_opt+0x80486b9)
+    #1 0xb710e5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+    #2 0x8048540 (/flash0/out_uaf_no_g_no_opt+0x8048540)
+
+0xb5b00fe4 is located 20 bytes inside of 40-byte region [0xb5b00fd0,0xb5b00ff8)
+freed by thread T0 here:
+    #0 0xb72e26e9 in __interceptor_free /home/kyoupark/asan/cross-build/.build/src/gcc-4.9.4/libsanitizer/asan/asan_malloc_linux.cc:79
+    #1 0x804867b in main (/flash0/out_uaf_no_g_no_opt+0x804867b)
+    #2 0xb710e5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+
+previously allocated by thread T0 here:
+    #0 0xb72e28d8 in __interceptor_malloc /home/kyoupark/asan/cross-build/.build/src/gcc-4.9.4/libsanitizer/asan/asan_malloc_linux.cc:96
+    #1 0x804866a in main (/flash0/out_uaf_no_g_no_opt+0x804866a)
+    #2 0xb710e5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+
+SUMMARY: AddressSanitizer: heap-use-after-free ??:0 main
+Shadow bytes around the buggy address:
+  0x36b601a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b601b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b601c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b601d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b601e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+=>0x36b601f0: fa fa fa fa fa fa fa fa fa fa fd fd[fd]fd fd fa
+  0x36b60200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b60210: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b60220: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b60230: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36b60240: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Heap right redzone:      fb
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack partial redzone:   f4
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Contiguous container OOB:fc
+  ASan internal:           fe
+==1492==ABORTING
+[root@vSTB flash0]#
+
+// addr2line
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-addr2line out_uaf_no_g_no_opt 0x80486ba
+??:0
+/home/kyoupark/asn/uaf.c:12
+
+// objdump
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-objdump -d -Mintel out_uaf_no_g_no_opt > out_uaf_dump_no_g_no_opt
+
+ 80486b5:	e8 06 fe ff ff       	call   80484c0 <__asan_report_store4@plt>
+ 80486ba:	c7 01 0a 00 00 00    	mov    DWORD PTR [ecx],0xa
+
+
+<3> uaf-write when use -g
+
+// yes -g and no -O
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g -fsanitize=address uaf.c -o out_uaf_no_g_no_opt
+
+[root@vSTB flash0]# ./out_uaf_yo_g_no_opt
+====>
+====> this is uaf(use after free)..
+====>
+=================================================================
+==1493==ERROR: AddressSanitizer: heap-use-after-free on address 0xb5b00fe4 at pc 0x80486ba bp 0xbf9f8b18 sp 0xbf9f8b0c
+WRITE of size 4 at 0xb5b00fe4 thread T0
+    #0 0x80486b9 in main /home/kyoupark/asn/uaf.c:12
+    #1 0xb71205ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+    #2 0x8048540 (/flash0/out_uaf_yo_g_no_opt+0x8048540)
+
+0xb5b00fe4 is located 20 bytes inside of 40-byte region [0xb5b00fd0,0xb5b00ff8)
+
+
+<4> uaf-write when use optimization. no asan for all optimization.
+
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -O2 -fsanitize=address uaf.c -o out_uaf_no_g_yo_opt_2
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -Os -fsanitize=address uaf.c -o out_uaf_no_g_yo_opt_2
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -O -fsanitize=address uaf.c -o out_uaf_no_g_yo_opt_2
+
+[root@vSTB flash0]# ./out_uaf_no_g_yo_opt_2
+====>
+====> this is uaf(use after free)..
+====>
+[root@vSTB flash0]#
+
+
+*TODO* clang examples use optimization but still see asan running. is it GCC
+version limitation?
+
+
+{asn-vo} `heap buffer overflow, out of index` *cpp-memory-issue*
+
+Accessing out of index of array is 'undefined' so sometimes work or sometimes
+not.
+
+<01>
+int g_arr[3];
+
+int main(int argc, char* argv[])
+{
+  if( g_arr[5] == 0 )
+    printf("idx 5 is false\n");
+  else
+    printf("idx 5 is true\n");
+}
+
+$ ./a.out 
+idx 5 is false
+
+<02>
+The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
+sometimes. But crashed
+
+static MFS_STATUS MFSDBWRAP_GetDbContext(MFS_STORAGE_DB_CONTEXT_ID dbConId, 
+    MFS_DB_CONTEXT **ppContext)
+{
+  MFS_STATUS mfsStatus = MFS_STATUS_OK;
+
+  XDEBUG_DEFINE_FUNC_INFO("MFSDBWRAP_GetDbContext");
+  XDEBUG_TRACE2_1("start: dbConId=%d", dbConId);
+
+  // the dbConId is the index into the db context array, so we can directly
+  // access it.  First check that the context is really in use. If not this is a
+  // bug.
+
+  if (db_contexts_array[dbConId].bInUse == XFALSE)
+  {
+    XDEBUG_ERR2_0("No free slots for contextes.  Returning the first one");
+    mfsStatus = MFS_STATUS_ERROR;
+  }
+  else
+  {
+    *ppContext = &db_contexts_array[dbConId];
+  }
+
+  return mfsStatus;
+}
+
+
+<ex>
+Let's now examine another classical memory error: buffer overflow. These are
+handled differently depending on memory type (stack, static or heap) which
+we'll examine separately.
+
+$ cat heap_overflow.c
+
+int main(int argc, char **argv) {
+  int *array = new int[100];
+  array[0] = 0;
+  int res = array[argc + 100];  // Touch memory past end of buffer
+  delete [] array;
+  return res;
+}
+
+$ ssh root@myboard /a.out
+=================================================================
+==126== ERROR: AddressSanitizer: heap-buffer-overflow on address 0xb5503fb4
+at pc 0x8788 bp 0xbefc7cec sp 0xbefc7ce4
+`READ` of size m
+    #0 0x8787 (/a.out+0x8787)
+    #1 0xb5737bcb (/lib/libc.so.6+0x17bcb)
+0xb5503fb4 is located 4 bytes to the right of `400-byte region` [0xb5503e20,0xb5503fb0)
+allocated by thread T0 here:
+    #0 0xb59a8a77 (/lib/libasan.so.0+0x10a77)
+    #1 0x8697 (/a.out+0x8697)
+    #2 0xb5737bcb (/lib/libc.so.6+0x17bcb)
+Shadow bytes around the buggy address:
+  0x36aa07a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa07b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa07c0: fa fa fa fa 00 00 00 00 00 00 00 00 00 00 00 00   // 8*12 = 96
+  0x36aa07d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   // 8*16 = 128
+  0x36aa07e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   // 8*16 = 128
+=>0x36aa07f0: 00 00 00 00 00 00[fa]fa fa fa fa fa fa fa fa fa   // 8*6  = 48
+  0x36aa0800: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0810: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0820: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0830: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x36aa0840: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:     fa
+  Heap righ redzone:     fb
+  Freed Heap region:     fd
+  Stack left redzone:    f1
+  Stack mid redzone:     f2
+  Stack right redzone:   f3
+  Stack partial redzone: f4
+  Stack after return:    f5
+  Stack use after scope: f8
+  Global redzone:        f9
+  Global init order:     f6
+  Poisoned by user:      f7
+  ASan internal:         fe
+==126== ABORTING
+
+
+<ex> `stack buffer overflow`
+https://github.com/google/sanitizers/wiki/AddressSanitizerExampleStackOutOfBounds
+
+Now to stack buffers:
+
+$ cat stack_oob.c
+
+int main(int argc, char **argv) {
+  int stack_array[100];
+  stack_array[1] = 0;
+  return stack_array[argc + 100];  // Touch memory past end of buffer
+}
+
+$ ssh root@myboard /a.out
+=================================================================
+==132== ERROR: AddressSanitizer: stack-buffer-overflow
+on address 0xbec82ccc at pc 0x875c bp 0xbec82b0c sp 0xbec82b04
+READ of size 4 at 0xbec82ccc thread T0
+    #0 0x875b (/a.out+0x875b)
+    #1 0xb56d6bcb (/lib/libc.so.6+0x17bcb)
+Address 0xbec82ccc is located at offset 436 in frame <main> of T0's stack:
+  This frame has 1 object(s):
+    [32, 432) 'stack_array'
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism or swapcontext
+      (longjmp and C++ exceptions *are* supported)
+Shadow bytes around the buggy address:
+  0x37d90540: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x37d90550: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x37d90560: 00 00 00 f1 f1 f1 f1 00 00 00 00 00 00 00 00 00
+  0x37d90570: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x37d90580: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x37d90590: 00 00 00 00 00 00 00 00 00[f4]f4 f3 f3 f3 f3 00
+  0x37d905a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x37d905b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x37d905c0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x37d905d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x37d905e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:     fa
+  Heap righ redzone:     fb
+  Freed Heap region:     fd
+  Stack left redzone:    `f1`
+  Stack mid redzone:     f2
+  Stack right redzone:   `f3`
+  Stack partial redzone: f4
+  Stack after return:    f5
+  Stack use after scope: f8
+  Global redzone:        f9
+  Global init order:     f6
+  Poisoned by user:      f7
+  ASan internal:         fe
+==132== ABORTING
+
+
+<ex> `global buffer overflow`
+https://github.com/google/sanitizers/wiki/AddressSanitizerExampleGlobalOutOfBounds
+And finally static buffers:
+
+$ cat global_oob.c
+
+int global_array[100] = {-1};
+int main(int argc, char **argv) {
+  return global_array[argc + 100];  // Touch memory past end of buffer
+}
+
+$ ssh root@myboard /a.out
+=================================================================
+==138== ERROR: AddressSanitizer: global-buffer-overflow
+on address 0x00010b54 at pc 0x86f0 bp 0xbee97cf4 sp 0xbee97cec
+READ of size 4 at 0x00010b54 thread T0
+    #0 0x86ef (/a.out+0x86ef)
+    #1 0xb56ccbcb (/lib/libc.so.6+0x17bcb)
+0x00010b54 is located 4 bytes to the right of global variable 'global_array (global_oob.c)' (0x109c0) of size 400
+Shadow bytes around the buggy address:
+  0x20002110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x20002120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x20002130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x20002140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x20002150: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x20002160: 00 00 00 00 00 00 00 00 00 00[f9]f9 f9 f9 f9 f9
+  0x20002170: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x20002180: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x20002190: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200021a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x200021b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:     fa
+  Heap righ redzone:     fb
+  Freed Heap region:     fd
+  Stack left redzone:    f1
+  Stack mid redzone:     f2
+  Stack right redzone:   f3
+  Stack partial redzone: f4
+  Stack after return:    f5
+  Stack use after scope: f8
+  Global redzone:        `f9`
+  Global init order:     f6
+  Poisoned by user:      f7
+  ASan internal:         fe
+==138== ABORTING
+
+
+<ex> *cpp-memory-issue* *cpp-memcpy-issue-issue*
+Seen on NDS MW issue
+
+MW_Process crash with core dump in SIM_dbc_query_ReadProgrammeInstanceInfo
+(during memcpy) 
+
+#define SIM_DBC_MAX_SORT_STRING_LEN   40
+
+// void *memcpy(void *dest, const void *src, size_t n);
+(void)memcpy((void*)&obj_array[offset].sort_title[0], 
+    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
+
+// source when crashed
+0x1d8dfec: 0x54495050 0x494e4720 0x504f494e 0x54000000
+0x1d8dffc: 0xc009 0x0 0x0 0x0
+
+// dest
+x/40a obj_array[0].sort_title
+0x204eb20: 0x54495050 0x494e4720 0x504f494e 0x54000000
+0x204eb30: 0x0 0x0 0x0 0x0
+
+DESCRIPTION
+       The memcpy() function copies n bytes from memory area src to memory
+       area dest.  The memory areas must not overlap.  Use memmove(3) if the
+       memory areas do overlap.
+
+DESCRIPTION
+       The  strcpy() function copies the string pointed to by src, including
+       the terminating null byte ('\0'), to the buffer pointed to by dest.
+       The strings may not overlap, and the destination string dest must be
+       large enough to receive the copy. Beware of buffer overruns! (See BUGS.)
+
+       The strncpy() function is similar, except that at most n bytes of src
+       are copied.  Warning: If there is no null byte among the first n bytes
+       of src, the string placed in dest will not  be  null-terminated.
+
+BUGS
+       If  the  destination string of a strcpy() is not large enough, then
+       anything might happen.  Overflowing fixed-length string buffers is a
+       favorite cracker technique for taking complete control of the machine.
+       Any time a program reads or copies data into a buffer, the program
+       first needs to check that there's enough space.  This may be
+       unnecessary if you can show that overflow is  impossible, but be
+       careful: programs can get changed over time, in ways that may make the
+       impossible possible.
+
+
+// solution
+strncpy(&obj_array[offset].sort_title[0], 
+    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
+
+The problem is out of index. Since when src, results[24].value.text, is less
+than SIM_DBC_MAX_SORT_STRING_LEN(40) then memcpy copies blindly over from and
+this cause out of index access on src.
+
+So strncpy will ensure only the length of the value.text is copied when there
+is a null in src (destination then padded out with nulls) or a maximum of 40
+is copied if the source string is over 40.
 
 
 <ex-real> `heap buffer-overflow` was detected by ASan:
@@ -15215,11 +15365,12 @@ CWebServerAppBase::t_OnUserMessage(PTEvent const*)
 527  WS_DEBUG("Pre call to WebServerLoadModule");
 528  WebServerLoadModule("libpairingplugin.so",(void*)GetPINData);
 
-The issue happened in strlen() function called for the _secure_db_key field which was set to the
-string secureKey (converted to C-string char*) via WebServerSetDBKey() call.
+The issue happened in strlen() function called for the _secure_db_key field
+which was set to the string secureKey (converted to C-string char*) via
+WebServerSetDBKey() call.
 
-The root cause is in WebServer and Lighttpd classes definitions and setLighttpdDBKey() member
-functions. The proposed fix is below:
+The root cause is in WebServer and Lighttpd classes definitions and
+setLighttpdDBKey() member functions. The proposed fix is below:
 
 $ diff WebServer.h.orig WebServer.h
 96a97
@@ -15529,7 +15680,6 @@ $diff APCNCTaskConfig.cpp.orig APCNCTaskConfig.cpp
 
 
 <ex-real> `stack buffer-overflow` was detected by ASan:
-<strncpy>
 ==283== ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7c25d990
 at pc 0xb4e02520 bp 0x989fe85c sp 0x989fe43c
 READ of size 4 at 0x7c25d990 thread T145 (CnS Server Mana)
@@ -15605,7 +15755,11 @@ CCnSParsePacket::t_ParseConnectionInfo(std::string&)
 638  ::strncpy(pChar,stConfServer.szStat.c_str(),length);
 639  CCNSVTP::GetInstance()->PrintVTP(CCNSVTP::CCNSVTP_TYPE_STATE_DATA,pChar,0);
 
+*cpp-strncpy-issue*
 According the strncpy POSIX specification:
+
+char *strncpy(char *restrict s1, const char *restrict s2, size_t n);
+
 If there is no null byte in the first n bytes of the array pointed to by s2,
    the result will not be null-terminated.
 
@@ -15618,8 +15772,11 @@ $ diff CnSParsePacket.cpp.orig CnSParsePacket.cpp
 >  ::strncpy(pChar,stConfServer.szStat.c_str(),length+1);
 
 
-{KSAN}
+={============================================================================
+*kt_linux_tool_100* tool-kasan tool-efence
+
 Preface
+
 Kernel address sanitizer is a solution suitable to catch bugs known as ?use
 after free?, ?buffer-overflow?, ?use of non initialized memory?, etc. This
 system software helps to inspect kernel code dynamically during its
@@ -16132,10 +16289,10 @@ For clang:
 
 
 ={============================================================================
-*kt_linux_tool_000* tool-efence-asan-gcc-build
+*kt_linux_tool_000* tool-asan-gcc
 
 The tool works on x86, ARM, MIPS (both 32- and 64-bit versions of all
-architectures), PowerPC64. The supported operation systems are Linux,
+    architectures), PowerPC64. The supported operation systems are Linux,
 Darwin (OS X and iOS Simulator), FreeBSD, Android:
 
 AddressSanitizer, a fast memory error detector, has been added and can be
@@ -16148,32 +16305,11 @@ GNU/Linux and on x86-64 Darwin.
 AddressSanitizer is based on compiler instrumentation and directly-mapped
 shadow memory. 
 
-note:
-AddressSanitizer is a part of LLVM starting with version 3.1 and a part of GCC
-starting with version `4.8`
+  AddressSanitizer is a part of LLVM starting with version 3.1 and a part of
+  GCC starting with version `4.8`
 
-<code-to-test-asan>
-#include <stdio.h>
-#include <stdlib.h>
 
-//      gcc -fsanitize=address testmain.c -o out_asn
-int main(int argc, char **argv)
-{
-    printf("====> \n" );
-    printf("====> this is mips target and use after free..\n" );
-    printf("====> \n" );
-    int *x = malloc(10*sizeof(int));
-    free(x);
-    x[5] = 10;
-    return;
-}
-
-$ /home/NDS-UK/kyoupark/asn/broot-latest/buildroot-2016.08.1/output/host/usr/bin/mips-buildroot-linux-uclibc-gcc -fsanitize=address x.c
-
-mkdir /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/asn /flash0
-
-<error-when-no-asan>
+<when-gcc-do-not-have-asan>
 kyoupark@ukstbuild2:~$ ~/asn/broot-latest/buildroot-2016.08.1-for-arm64/output/host/usr/bin/aarch64-buildroot-linux-musl-gcc -fsanitize=address x.c
 x.c:1:0: warning: -fsanitize=address not supported for this target
  #include <stdio.h>
@@ -16190,101 +16326,18 @@ x.c:10:5: warning: incompatible implicit declaration of built-in function ‘fre
 collect2: error: ld returned 1 exit status
 
 
-<on-x86-when-without-g>
-
-this means that have to work out from pc and objdump.
-
-// objdump -S
-//  `80486f8`:       c7 01 0a 00 00 00       mov    DWORD PTR [ecx],0xa
-
-
-[root@vSTB flash0]# export LD_LIBRARY_PATH=".:${LD_LIBRARY_PATH}"
-[root@vSTB flash0]# ./out_san
-====>
-====> this is mips target and use after free..
-====>
-=================================================================
-==956==ERROR: AddressSanitizer: heap-use-after-free on address 0xb5a00fe4 
-at pc `0x080486f8` bp 0xbf8bd5a8 sp 0xbf8bd59c
-WRITE of size 4 at 0xb5a00fe4 thread T0
-    #0 0x80486f7 in main (/flash0/out_san+0x80486f7)
-    #1 0xb706b5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
-    #2 0x8048580  (/flash0/out_san+0x8048580)
-
-0xb5a00fe4 is located 20 bytes inside of 40-byte region [0xb5a00fd0,0xb5a00ff8)
-freed by thread T0 here:
-    #0 0xb729de98 in __interceptor_free /home/kyoupark/asan/cross-build/.build/src/gcc-6.3.0/libsanitizer/asan/asan_malloc_linux.cc:45
-    #1 0x80486bb in main (/flash0/out_san+0x80486bb)
-    #2 0xb706b5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
-
-previously allocated by thread T0 here:
-    #0 0xb729e18f in __interceptor_malloc /home/kyoupark/asan/cross-build/.build/src/gcc-6.3.0/libsanitizer/asan/asan_malloc_linux.cc:62
-    #1 0x80486aa in main (/flash0/out_san+0x80486aa)
-    #2 0xb706b5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
-
-SUMMARY: AddressSanitizer: heap-use-after-free (/flash0/out_san+0x80486f7) in main
-Shadow bytes around the buggy address:
-  0x36b401a0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b401b0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b401c0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b401d0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b401e0: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-=>0x36b401f0: fa fa fa fa fa fa fa fa fa fa fd fd[fd]fd fd fa
-  0x36b40200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b40210: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b40220: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b40230: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-  0x36b40240: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-Shadow byte legend (one shadow byte represents 8 application bytes):
-  Addressable:           00
-  Partially addressable: 01 02 03 04 05 06 07
-  Heap left redzone:       fa
-  Heap right redzone:      fb
-  Freed heap region:       fd
-  Stack left redzone:      f1
-  Stack mid redzone:       f2
-  Stack right redzone:     f3
-  Stack partial redzone:   f4
-  Stack after return:      f5
-  Stack use after scope:   f8
-  Global redzone:          f9
-  Global init order:       f6
-  Poisoned by user:        f7
-  Container overflow:      fc
-  Array cookie:            ac
-  Intra object redzone:    bb
-  ASan internal:           fe
-  Left alloca redzone:     ca
-  Right alloca redzone:    cb
-==956==ABORTING
-[root@vSTB flash0]#
-
-
-<on-x86-when-with-g>
-
-shows line number which is the same as addr2line result.
-
-12:    x[5] = 10;
-
-==957==ERROR: AddressSanitizer: heap-use-after-free on address 0xb5900fe4 at pc 0x080486f8 bp 0xbf9f2bc8 sp 0xbf9f2bbc
-WRITE of size 4 at 0xb5900fe4 thread T0
-    #0 0x80486f7 in main /home/kyoupark/asan/sample.c:12
-    #1 0xb6ff45ef in __libc_start_main (/lib/libc.so.6+0x185ef)
-    #2 0x8048580  (/flash0/out_san+0x8048580)
-
-
 {for-x86}
 ASAN gets built as a part of gcc build and as a shared library.
 
 https://gcc.gnu.org/gcc-4.8/changes.html
 
-<vm>
+// vm
 On debian VM, and worked fine. This is gcc installed by default.
 
 kyoupark@kit-debian:~$ gcc --version
 gcc (Debian 4.9.2-10) 4.9.2
 
-<build-server>
+// build server
 Has 4.4.7 which do not have ASAN. So have 4.8.2 built and ASAN works when
 set a library path as:
 
@@ -16293,33 +16346,6 @@ kyoupark@ukstbuild2:~/toolchains/bin$ ./a.out
 
 $ ./gcc -fsanitize=address -Wl,-rpath=/home/NDS-UK/kyoupark/toolchains/lib64 uaf.c
 
-
-{for-mips-without-asn}
-For mips but without asn, builds okay and have toolchain built
-
-BR2_mips=y
-BR2_ARCH="mips"
-BR2_ENDIAN="BIG"
-BR2_GCC_TARGET_ARCH="mips32"
-BR2_GCC_TARGET_ABI="32"
-
-BR2_WGET="wget --passive-ftp -nd -t 3 --no-check-certificate"
-
-BR2_DEFAULT_KERNEL_HEADERS="3.2.81"
-BR2_TOOLCHAIN_BUILDROOT_UCLIBC=y
-
-BR2_GCC_VERSION="4.9.4"
-
-/output/host/usr/bin/mips-buildroot-linux-uclibc-gcc --version
-mips-buildroot-linux-uclibc-gcc.br_real (Buildroot 2016.08.1) 4.9.4
-Copyright (C) 2015 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.  There is NO
-warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
-/broot-latest/buildroot-2016.08.1/output/host/usr/bin$ ls
-mips-buildroot-linux-uclibc-gcc                
-mips-buildroot-linux-uclibc-gcc-4.9.4          
-...
 
 {for-aarch64}
 Enabled C++ support, used musl since there is no selection for uclibc.
@@ -52512,7 +52538,7 @@ You can specify the input language explicitly with the -x option:
 
 -S
     Stop after the stage of compilation proper; do not assemble. The output is
-    in the form of an assembler code file for each non-assembler input file
+    `in the form of an assembler code file` for each non-assembler input file
     specified.
 
     By default, the assembler file name for a source file is made by replacing
@@ -53179,12 +53205,14 @@ https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#Optimize-Options
 
 These options control various sorts of optimizations.
 
+*when-no-optimization*
 Without any optimization option, the compiler's goal is to reduce the cost of
-compilation and to make debugging produce the expected results. Statements are
-independent: if you stop the program with a breakpoint between statements, you
-can then assign a new value to any variable or change the program counter to
-any other statement in the function and get exactly the results you expect
-from the source code.
+compilation and to make debugging produce the expected results. 
+
+Statements are independent: if you stop the program with a breakpoint between
+statements, you can then assign a new value to any variable or change the
+program counter to any other statement in the function and get exactly the
+results you expect from the source code.
 
 Turning on optimization flags makes the compiler attempt to improve the
 performance and/or code size at the expense of compilation time and possibly
@@ -53208,53 +53236,73 @@ can invoke GCC with -Q --help=optimizers to find out the exact set of
 optimizations that are enabled at each level. See Overall Options, for
 examples. 
 
--O2
-Optimize even more. GCC performs nearly all supported optimizations that do
-not involve a space-speed tradeoff. As compared to -O, this option increases
-both compilation time and the performance of the generated code.
+-O
+-O1
+  Optimize. Optimizing compilation takes somewhat more time, and a lot more
+  memory for a large function.
 
--O2 turns on all optimization flags specified by -O. It also turns on the
-following optimization flags:
+  With -O, the compiler tries to reduce code size and execution time, without
+  performing any optimizations that take a great deal of compilation time.
+
+  -O turns on the following optimization flags:
+
+-O2
+  Optimize even more. GCC performs nearly all supported optimizations that do
+  not involve a space-speed tradeoff. As compared to -O, this option increases
+  both compilation time and the performance of the generated code.
+
+  -O2 turns on all optimization flags specified by -O. It also turns on the
+  following optimization flags:
+
+-Os
+  Optimize for size. -Os enables all -O2 optimizations that do not typically
+  increase code size. It also performs further optimizations designed to
+  reduce code size.
+
+  -Os disables the following optimization flags:
+
+  -falign-functions  -falign-jumps  -falign-loops -falign-labels
+  -freorder-blocks  -freorder-blocks-algorithm=stc
+  -freorder-blocks-and-partition  -fprefetch-loop-arrays
 
 -O0
-Reduce compilation time and make debugging produce the expected results. This
-is `the default`
+  Reduce compilation time and make debugging produce the expected results.
+  `This is the default`
 
 -Og
-Optimize debugging experience. -Og enables optimizations that do not interfere
-with debugging. It should be the optimization level of choice for the standard
-edit-compile-debug cycle, offering a reasonable level of optimization while
-maintaining fast compilation and a good debugging experience.
+  Optimize debugging experience. -Og enables optimizations that do not
+  interfere with debugging. It should be the optimization level of choice for
+  the standard edit-compile-debug cycle, offering a reasonable level of
+  optimization while maintaining fast compilation and a good debugging
+  experience.
 
 
 -fomit-frame-pointer
+  Don't keep the frame pointer in a register for functions that don't need
+  one.  This avoids the instructions to save, set up and restore frame
+  pointers; it also makes an extra register available in many functions. It
+  also makes debugging impossible on some machines.
 
-From LPI 41.
+  On some machines, such as the VAX, this flag has no effect, because the
+  standard calling sequence automatically handles the frame pointer and
+  nothing is saved by pretending it doesn't exist. The machine-description
+  macro FRAME_POINTER_REQUIRED controls whether a target machine supports this
+  flag.  See Register Usage.
 
-In addition, on some architectures, such as x86-32, the `-fomit-frame-pointer`
-option should not be specified because this makes debugging impossible. On
-some architectures, such as x86-64, this option is enabled by default since it
-doesn't prevent debugging. For the same reason, executables and libraries
-should not be stripped of debugging information using strip(1).
+  Enabled at levels -O, -O2, -O3, -Os. 
 
-From ASAN,
+  From LPI 41.
 
-To get nicer stacktraces, use `-fno-omit-frame-pointer`
+  In addition, on some architectures, such as x86-32, the
+  `-fomit-frame-pointer` option should not be specified because this makes
+  debugging impossible. On some architectures, such as x86-64, this option is
+  enabled by default since it doesn't prevent debugging. For the same reason,
+executables and libraries should not be stripped of debugging information
+  using strip(1).
 
-From gcc doc.
+  From ASAN,
 
-Don't keep the frame pointer in a register for functions that don't need one.
-This avoids the instructions to save, set up and restore frame pointers; it
-also makes an extra register available in many functions. It also makes
-debugging impossible on some machines.
-
-On some machines, such as the VAX, this flag has no effect, because the
-standard calling sequence automatically handles the frame pointer and nothing
-is saved by pretending it doesn't exist. The machine-description macro
-FRAME_POINTER_REQUIRED controls whether a target machine supports this flag.
-See Register Usage.
-
-Enabled at levels -O, -O2, -O3, -Os. 
+  To get nicer stacktraces, use `-fno-omit-frame-pointer`
 
 
 ={============================================================================
@@ -57718,7 +57766,7 @@ make install-gcc
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-spk-toolchain-spec
+*kt_linux_gcc_400* gcc-toolchain-spec gcc-spec
 
 toolchain spec comparisons.
 
@@ -59814,7 +59862,7 @@ CCFLAGS_FOR_BUILD="" \
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-glibc-reference
+*kt_linux_gcc_400* gcc-toolchain-glibc-reference
 
 http://preshing.com/20141119/how-to-build-a-gcc-cross-compiler/
 
@@ -59832,6 +59880,7 @@ $ sudo apt-get install g++ make gawk
 Everything else will be built from source. Create a new directory somewhere,
 and download the following source packages. 
 
+*gcc-source*
 wget http://ftpmirror.gnu.org/binutils/binutils-2.24.tar.gz
 wget http://ftpmirror.gnu.org/gcc/gcc-4.9.2/gcc-4.9.2.tar.gz
 
@@ -61850,6 +61899,11 @@ gcc-glibc-brcm-mips-install/mips-linux-gnu/include/bits/local_lim.h
 
 ={============================================================================
 *kt_linux_gcc_400* gcc-build-enable-asan
+
+
+gcc/gcc.c:7683:   /* -fsanitize= and -fsanitize-recover= can take
+gcc/opts.c:958:    error_at (loc, "-fsanitize-recover=thread is not supported");
+gcc/opts.c:961:    error_at (loc, "-fsanitize-recover=leak is not supported");
 
 note: without sysroot
 
