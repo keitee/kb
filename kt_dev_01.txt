@@ -234,7 +234,8 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_020| stl-coll-associative
 *kt_dev_stl_021* cpp-set cpp-multiset
-*kt_dev_stl_022* cpp-map cpp-multimap
+*kt_dev_stl_022* cpp-map cpp-multimap cpp-size-t
+*kt_dev_stl_023* cpp-multiset-find cpp-multimap-find
 |kt_dev_stl_023| associative: map: assignments
 
 |kt_dev_stl_030| unordered containers
@@ -364,8 +365,7 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_ccon_002| std::future
 
-
-*kt_dev_exer_001* write PRINT_ELEMENTS template function
+*kt_dev_exer_001* cpp-ex-write PRINT_ELEMENTS template function
 
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
@@ -2566,20 +2566,6 @@ echo -e "#include <utility>\nint main() { std::pair<bool, const char*> x(false, 
 Regardless of "-std=c++0x", comiles well for all cases but fails as:
 
 4.4.5/bits/stl_pair.h:90: error: invalid conversion from 'int' to 'const char*'
-
-
-<cpp-size-t>
-
-// c++config.h
-namespace std
-{
-  typedef __SIZE_TYPE__ 	size_t;
-  typedef __PTRDIFF_TYPE__	ptrdiff_t;
-
-#if __cplusplus >= 201103L
-  typedef decltype(nullptr)	nullptr_t;
-#endif
-}
 
 
 ={============================================================================
@@ -9545,7 +9531,7 @@ Precedence Operator, Description, Use, Associativity, (L)eft-to-right
  !                logical not                   !expr
  -                unary minus                   -expr
  +                unary plus                    +expr
- *                dereference                   *expr
+ *                `dereference`                   *expr
  (TODO)
 
 3 ++   -- [Prefix] increment and decrement            Right-to-left
@@ -13709,151 +13695,214 @@ We can overload a function based on its reference quialifier. See
 ={============================================================================
 *kt_dev_cpp_200* cpp-ex-query-example
 
-{ex-text-query}
+<ex>
+#include <iostream>
+#include <set>
+#include <map>
+#include <vector>
+#include <memory>
+#include <fstream>
+#include <sstream>
 
+// g++ -g -std=c++0x -c a.c
 
-  Define a more abstract solution, class, than using data structure directly.
+using namespace std;
 
-<data>
-  * Use `vector<string>` to store the entire input file. Can fetch the line using
-    its line number as the index.
-  * Use `istringstream` to break up each line into words.
-  * Use `set` to hold line numbers on which each word appears. Appears only once
-    in ascending order.
-  * Use `map` to associate each word with the set
-
-  note: This way use more time to build up data structures at the start and run
-  search quickly.
-
-
-void runQueries(ifstream& infile)
-{
-  TextQuery tq(infile);
-
-  // iterate with the user, prompt for a word to find and print results
-  while(true) {
-    cout << "enter the word to look for, or q to quit: ";
-    string s;
-
-    // stop if hit eof or q
-    if( !(cin >> s) || s == "q" ) break;
-
-    // run the query and print the result
-    print( cout, tq.query(s)) << endl;
-  }
-}
-
-
-<more-abstract-solution>
-Used class instead of using set, map, and vector directly. [DN] How to design what this query func
-return without cost of copying? Yes, shared_ptr.
-
-TextQuery:                         shared:dyn creted   QueryResult:
- shared_ptr<vector> : file           vector              shared_ptr<vector>
-  line 0
-  line 1
-  line 2
-  ...
- 
- map : < word, ptr-to-set>
-  word x, -> set : line nos         sets                shared_ptr
-  word y, -> set : line nos
-
-
-class QueryResult;	// forward declaration
-
-class TextQuery {
-  public:
-    using line_no = std::vector<std::string>::size_type; // [type-member]
-
-    TextQuery( std::ifstream& );
-    QueryResult query( const std::string& ) const;
-
-  private:
-    std::shared_ptr<std::vector<std::string>> file; // input file
-    std::map<std::string, std::shared_ptr< std::set< line_no >>> wm;
-};
-
-// TextQuery member definitions
-
-TextQuery::TextQuery( ifstream& is ) : file( new vector<string>) // new vector
-{
-  string text;
-
-  while( getline( is, text )) {     // for each line. std::getline
-    file->push_back(text);          // save line
-    int n = file->size() -1;        // get line num. -1 to make line num the same as vector index
-
-    istringstream line(text);
-    string word;
-
-    while( line >> word ) {                  // for each word of a line
-      // see that lines is reference
-      auto& lines = wm[word];                // add new entry if word is not in wm
-      // value-init and lines will be null
-      if( !lines )                           // lines is shared_ptr
-        lines.reset( new set< line_no > );   // new set
-
-      lines->insert(n);                      // save line num which shown this word
-      // word occurs more than once in the same line, do nothing since it is a set
-    }
-  }
-}
-
-Think what should return if the given string is not found because there is no set for this? Used
-a empty set which is local static, function-static.
-
-QueryResult TextQuery::query( const string& sought ) const
-{
-  static shared_ptr< set< line_no >> nodata( new set< line_no > );
-
-  auto loc = wordmap.find( sought ); // [Quiz] why find instead of subscript?
-
-  if( loc == wordmap.end() )
-    return QueryResult( sought, nodata, file );
-  else
-    return QueryResult( sought, loc->second, file );		
-}
+// CPR 484. 12.3.2
+//
+// Requirements are:
+//  * Search a given file for a word
+//  * Show the number of times the word occurs
+//  * Show a list of lines on which that word appears in ascending order
+//  * Show the line only once if a word occurs more than once on the same line
+//  * Repeat a search for any given word until user quit
+//
+// The output for query word "element" is:
+//
+// element occurs 112 times
+// 	(line 36) A set element contains only a key;
+// 	(line 158) operator creates a new element
+// 	...
+//
+//
+// When reads the input,
+//  * must remember the line(s) in which each word appears.
+//  * need to read the input a line at a time and break up the lines into its
+//    separate words.
+//
+// When makes output,
+//  * must be able to fetch the line numbers associated with a given word.
+//  * the line numbers must appear in ascending order with no duplicates.
+//  * must print the text in the input file at a given line number.
+//
+//
+// *cpp-remember*
+// When design a class, can be helpful to write programs using the class before
+// implementing the members. That way, can see whether the class has the
+// `operation` we need. A good way to start the design of a program is to list
+// the program's operations. Again, what operation we need helps us see what
+// `data structure` we will need.
+//
+// The hard part in designing query function is deciding what the query function
+// return.
+//
+// "need to know how often it occured, the line numbers, and the corresponding
+// text."
+//
+// The easiest way to return "all" those data is to define a second class.
+//
+//
+// * Use `vector<string>` to store the entire input file. Can fetch the line using
+//   its line number as the index.
+// * Use `istringstream` to break up each line into words.
+// * Use `set` to hold line numbers on which each word appears. Appears only once
+//   in ascending order.
+// * Use `map` to associate each word with the set
 
 class QueryResult {
-  friend std::ostream& print( std::ostream&, const QueryResult& );
 
-  public:
-  // this is missed in the book.
-  using line_no = std::vector<std::string>::size_type; // [type-member]
+    friend ostream &print(ostream &os, const QueryResult &qr);
 
-  QueryResult( std::string s,
-      std::shared_ptr< std::set<line_no>> p,
-      std::shared_ptr< std::vector< std::string >> f ): sought(s), lines(p), file(f) {}
-  private:
-  std::string sought;
-  std::shared_ptr< std::set<line_no>> lines;
-  std::shared_ptr< std::vector< std::string >> file;
+    public:
+        // *cpp-size-t* use size_t instead typedef
+        // using line_no = std::vector<std::string>::size_type;
+
+        QueryResult(std::string s, 
+                std::shared_ptr<std::set<size_t>> p,
+                std::shared_ptr<std::vector<std::string>> f) :
+            sought(s), lines(p), file(f) {}
+    private:
+        std::string sought;
+        // std::shared_ptr<std::set<line_no>> lines;
+        std::shared_ptr<std::set<size_t>> lines;
+        std::shared_ptr<std::vector<std::string>> file;
 };
 
+class TextQuery {
+    public:
+        // using line_no = std::vector<std::string>::size_type;
 
-ostream &print( ostream& os, const QueryResult& qr)
+        // ok
+        // TextQuery(std::ifstream &in) : file(make_shared<std::vector<std::string>>())
+        TextQuery(std::ifstream &in) : file(new std::vector<std::string>())
+        {
+            std::string line;
+
+            while (getline(in, line))
+            {
+                // save the line
+                file->push_back(line);
+
+                // get line number
+                size_t n = file->size() - 1;
+
+                // break up the line into words
+                std::istringstream iss(line);
+                std::string word;
+
+                // conversion-to-bool is explicit. okay?
+                while (iss >> word)
+                {
+                    // if word isn't already in the map, subscripting adds a new
+                    // entry which has default init shared_ptr(null). Need to
+                    // create empty set. 
+                    auto &lines = word_map[word];
+                    if (!lines)
+                        // lines.reset( new set< line_no > );   // new set
+                        lines = make_shared<std::set<size_t>>();
+
+                    lines->insert(n);
+                }
+
+            }
+        }
+
+        QueryResult query(const std::string &s) const
+        {
+            // 1. see it returns QueryResult but not printing the result here.
+
+            // 2. should not use [] since it creats an entry when it's not found
+            // auto &lines = word_map[s];
+
+            // 3. can use map.count() in place of map.find().
+            
+            // 4. handle when the given string is not found.
+            // why not use nullptr such as:
+            //
+            // static std::shared_ptr<std::set<line_no>> nodata;
+            // QueryResult(s, nullptr, file);
+            //
+            // since print() do not need to have special handling for this case
+            // such as size() and range for loop.
+
+            static std::shared_ptr<std::set<size_t>> nodata(new std::set<size_t>);
+
+            // *cpp-pair*
+            auto loc = word_map.find(s);
+            if (word_map.end() == loc)
+                return QueryResult(s, nodata, file);
+            else
+                return QueryResult(s, loc->second, file);
+        }
+
+    private:
+        std::shared_ptr<std::vector<std::string>> file;
+        std::map<std::string, std::shared_ptr<std::set<size_t>>> word_map;
+};
+
+// utility function
+string make_plural(size_t ctr, const string &word, const string &ending)
 {
-  os << qr.sought << " occurs " << qr.lines->size() << " " << make_plural( qr.lines->size(),
-      "time", "s") << endl;
+    // if (ctr > 1)
+    //     return word + ending;
+    // else
+    //     return word;
 
-  // when *qr.lines is empty, the loop will not be executed.
-  for( auto num : *qr.lines )
-    os << "\t(line " << num + 1 << ") " << *(qr.file->begin() + num) << endl;
-
-  return os;
+    return (ctr > 1) ? word + ending : word;
 }
 
-Got following errors:
+ostream &print(ostream &os, const QueryResult &qr)
+{
+    os << qr.sought << " occurs " << qr.lines->size() << " "
+        << make_plural(qr.lines->size(), "time", "s") << endl;
 
-tquery.cpp: In member function 'QueryResult TextQuery::query(const std::string&) const':
-tquery.cpp:58: error: return type 'struct QueryResult' is incomplete ~
-tquery.cpp:65: error: invalid use of incomplete type 'struct QueryResult' 
-tquery.cpp:12: error: forward declaration of 'struct QueryResult'
-tquery.cpp:67: error: invalid use of incomplete type 'struct QueryResult'
-tquery.cpp:12: error: forward declaration of 'struct QueryResult'
+    // Although the number in the set are numbered from 0, most users think of
+    // the first line as 1, so add 1 to the line number.
 
-When move query func after class QueryResult then these errors go away. Why?
+    // for (auto num : *qr.lines)
+    //     os << "\t(line " << num + 1 << ") " 
+    //         << *(qr.file->begin() + num) << endl;
+
+    for (auto num : *qr.lines)
+        os << "\t(line " << num + 1 << ") " 
+            << (*qr.file)[num] << endl;
+
+    return os;
+}
+
+void runQueries(ifstream &infile)
+{
+    TextQuery tq(infile);
+ 
+    while (true) {
+        cout << "enter the word to look for, or q to quit: ";
+ 
+        string s;
+ 
+        // eof or q?. *cpp-remember* not s == 'q'
+        if (!(cin >> s) || s == "q") break;
+ 
+        // run query and print the result
+        print(cout, tq.query(s)) << endl;
+    }
+}
+
+int main()
+{
+    std::ifstream ifs("README", std::ifstream::in);
+    runQueries(ifs);
+    ifs.close();
+}
 
 
 {extented-text-query-example}
@@ -28025,9 +28074,9 @@ to good design, here.
 
 
 ={============================================================================
-*kt_dev_stl_001* cpp-stl-pair cpp-stl-tuple
+*kt_dev_stl_001* cpp-pair cpp-tuple
 
-{cpp-stl-pair}
+{cpp-pair}
 The class pair treats two values as a 'single' unit. The pair is defined in
 <utility> header and the default pair ctor do `value-init` since it will use
 T().
@@ -28097,9 +28146,10 @@ p1.swap(p2) Swaps the data of p1 and p2 (since C++11)
 swap(p1,p2) Same (as global function) (since C++11)
 
 make_pair(val1,val2) 
+
 Returns a pair with types and values of val1 and val2. 
 The make_pair() function template enables you to create a value pair 'without'
-writing the types explicitly.
+writing the types explicitly since the type is deduced from.
 
 std::pair<int,char>(42,’@’)
 std::make_pair(42,’@’)
@@ -30232,7 +30282,7 @@ SD_multiset::iterator it;
 
 namespace std {
 
-  template<typename _Key, typename _Compare = std::less<_Key>,
+  template<typename _Key, typename _Compare = `std::less<_Key>`,
 	   typename _Alloc = std::allocator<_Key> >
     class set
     {
@@ -30245,7 +30295,7 @@ namespace std {
 }
 
 
-{type-requirement}
+{cpp-set-type-requirement}
 The elements of a set or a multiset may have any type T that is 'comparable'
 according to the sorting criterion. The optional second template argument
 defines the sorting criterion and if not passed, the default criterion `less`
@@ -30267,9 +30317,9 @@ if (c1 == c2) { // ERROR: different types
 
 
 {special-search-operations}
-You should always 'prefer' the optimized versions for sets and multisets to
-achieve logarithmic complexity instead of the linear complexity of the general
-algorithms.
+Special? You should always 'prefer' the optimized versions for sets and
+multisets to achieve logarithmic complexity instead of the linear complexity
+of the `general algorithms.`
 
       /**
        *  @brief  Finds the number of elements.
@@ -30308,84 +30358,6 @@ Returns the position of the `first element` with value val (or end() if none
       is different) but for containers with multiple key, count has to do more
   work since still has to count how many elements have the same key. So if
   don't need the count, it's best to use find.
-
-c.lower_bound(val) 
-Returns the first 'position', where val would get inserted (the first element >=
-val)
-
-c.upper_bound(val) 
-Returns the last position, where val would get inserted (the first element >
-val)
-
-c.equal_range(val) 
-Returns a range with all elements with a value equal to val (i.e., the first and
-last position, where val would get inserted)
-
-In other words, lower_bound() returns the position of the first element that has
-the same or a greater value than the argument, whereas upper_bound() returns the
-position of the first element with a greater value. Thus, equal_range() returns
-the range of elements that have the same value as the argument.
-
-If lower_bound() or the first value of equal_range() is equal to upper_bound()
-  or the second value of equal_range(), 'no' elements with the same value exist
-  in the set or multiset. 
-
-note: 
-The key is that it is sorted container and return a position to be inserted in
-sorted order.
-
-
-<ex>
-#include <iostream>
-#include <set>
-
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-int main()
-{
-  set<int> coll;
-
-  coll.insert(1);
-  coll.insert(2);
-  // coll.insert(3);
-  coll.insert(4);
-  coll.insert(5);
-  coll.insert(6);
-
-  PRINT_ELEMENTS( coll, "coll: ");
-
-  cout << "lower_bound(3): " << *coll.lower_bound(3) << endl;
-  cout << "upper_bound(3): " << *coll.upper_bound(3) << endl;
-  cout << "equal_range(3): " << *coll.equal_range(3).first << " "
-                             << *coll.equal_range(3).second << endl;
-
-  cout << "lower_bound(5): " << *coll.lower_bound(5) << endl;
-  cout << "upper_bound(5): " << *coll.upper_bound(5) << endl;
-  cout << "equal_range(5): " << *coll.equal_range(5).first << " "
-                             << *coll.equal_range(5).second << endl;
-}
-
-coll: 1 2 4 5 6
-lower_bound(3): 4
-upper_bound(3): 4          // see it is > 3
-equal_range(3): 4 4
-lower_bound(5): 5
-upper_bound(5): 6          // see it is > 5
-equal_range(5): 5 6
-
-note: 
-Although these _bound members usually used for multiset, can be used with set.
 
 
 {no-direct-change-of-value}
@@ -30501,20 +30473,52 @@ if (pos != coll.end()) {
 
 
 ={============================================================================
-*kt_dev_stl_022* cpp-map cpp-multimap
+*kt_dev_stl_022* cpp-map cpp-multimap cpp-size-t
 
-#include <map>
+<cpp-size-t>
+type `size_t` is a machine-specific `unsigned type` that is guaranteed to be
+large enough to hold the size of `any` object in memory.
+
+// c++config.h
+namespace std
+{
+  typedef __SIZE_TYPE__ 	size_t;
+  typedef __PTRDIFF_TYPE__	ptrdiff_t;
+
+#if __cplusplus >= 201103L
+  typedef decltype(nullptr)	nullptr_t;
+#endif
+}
+
+// /usr/include/c++/4.9/bits/stl_tree.h
+
+  template<typename _Key, typename _Val, typename _KeyOfValue,
+           typename _Compare, typename _Alloc = allocator<_Val> >
+    class _Rb_tree
+    {
+      typedef size_t 				size_type;
+    };
+
+
+// /usr/include/c++/4.9/bits/stl_map.h
 
 namespace std {
 
-  template <typename _Key, typename _Tp, typename _Compare = std::less<_Key>,
+  template <typename _Key, typename _Tp, typename _Compare = `std::less<_Key>`,
             typename _Alloc = std::allocator<std::pair<const _Key, _Tp> > >
     class map
     {
     public:
       typedef _Key                                          key_type;
       typedef _Tp                                           mapped_type;
+
       typedef std::pair<const _Key, _Tp>                    value_type;
+
+      typedef typename _Rep_type::size_type              size_type;
+
+      typedef _Rb_tree<key_type, value_type, _Select1st<value_type>,
+		       key_compare, _Pair_alloc_type> _Rep_type;
+
       typedef _Compare                                      key_compare;
       typedef _Alloc                                        allocator_type;
       ...
@@ -30522,18 +30526,22 @@ namespace std {
 }
 
 
-{type-requirement}
+{cpp-map-type-requirement}
 The elements of a map or a multimap may have any types Key and Tp that meet
 the following two requirements:
 
 * Both key and value must be copyable or movable.
-* The key must be comparable with the sorting criterion.
+* The key must be comparable with the sorting criterion. the default is `less`
 
 As with set, key is 'constant'. However, a direct modification of the value of
 the element is still possible, provided that the type of the value is not
 constant.
 
-<key-value-pair> cpp-value-type
+
+{cpp-map-value-type}
+*cpp-remember*
+When we dereference an iterator, get a reference to the container's `value type`
+
 The value_type is "pair<'const' key_type, mapped_type>" so implies key cannot
 be changed: 
 
@@ -30657,6 +30665,8 @@ while( cin >> word )
    ++word_count[word];
 
 // since C++11
+// iterator is pair, which is value-type and pair has first and second public
+// member. *cpp-pair*
 for( const auto &w : word_count )
    cout << w.first << " occurs" << 
           w.second << ((w.second>1) ? "times" : " time") << endl;
@@ -30682,9 +30692,6 @@ c.find(val)
 Returns the position(iterator) of the first element with 'key' val or end() if
 none found
 
-c.lower_bound(val) 
-c.upper_bound(val) 
-c.equal_range(val) 
 
 <to-find-element-for-value>
 You can't use the find() member function to search for an element that has a
@@ -30712,7 +30719,9 @@ using namespace std;
 
 int main()
 {
+  // both works
   map<float,float> coll = { {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+  map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
 
   auto posKey = coll.find(3.0);
   if( posKey != coll.end() )
@@ -30770,7 +30779,6 @@ namespace MyLib {
     }
 }
 
-note 
 maps provide a more convenient way to modify the key of an element. Instead of
 calling replace_key(), you can simply write the following:
 
@@ -30791,10 +30799,10 @@ c.erase(beg,end)
 
 c.clear()
 
-note: that the elements here are key/value pairs.
-
 std::map<std::string,int> coll;
-coll.insert( { word, 1} );           // C++11, most convenient way
+
+coll.insert( { word, 1} );           // *C++11* most convenient way
+
 coll.insert( std::map<std::string,int>::value_type( word, 1) );
 coll.insert( decltype(coll)::value_type( word, 1) );
 coll.insert( make_pair(word, 1) );
@@ -30802,8 +30810,8 @@ coll.insert( pair<string, size_t>(word, 1) );
 
 note: As for set, different iterator return for map and multimap.
 
-As for multiset, you can't use erase() to remove only the first element of these
-duplicates.
+As for multiset, you can't use erase() to remove only the first element of
+these duplicates.
 
 std::multimap<std::string,float> coll;
 
@@ -30813,9 +30821,10 @@ if (pos != coll.end()) {
 }
 
 <to-erase-element-for-value> saw-off-the-bench
-you can't use the find() member functions to remove elements that have a certain
-value instead of a certain key. As shown in <to-find-element-for-value>, can use
-loop but careful not to saw off the branch on which you are sitting.
+you can't use the find() member functions to remove elements that have a
+certain value instead of a certain key. As shown in
+<to-find-element-for-value>, can use loop but careful not to saw off the
+branch on which you are sitting.
 
 std::map<std::string,float> coll;
 
@@ -30860,9 +30869,10 @@ algorithm? No see <manipulate-associative> for details.
 coll.erase( remove( c.begin(), c.end(), value ), c.end() );
 
 <order-of-duplicates> same as multiset
-Before C++11, there was no clear guarantee for the order of equivalent elements.
-C++11 guarantees that newly inserted elements are inserted `at-the-end` of
-equivalent elements that multisets and multimaps already contain. 
+Before C++11, there was no clear guarantee for the order of equivalent
+elements.  C++11 guarantees that newly inserted elements are inserted
+`at-the-end` of equivalent elements that multisets and multimaps already
+contain. 
 
 In addition, the 'order' of equivalent elements is guaranteed to remain stable
 if insert(), emplace(), or erase() is called.
@@ -30970,6 +30980,120 @@ int main()
 key 3 found (3, three)
 max found (7, seventh)
 {seven, seventh, 7th, }
+
+
+={============================================================================
+*kt_dev_stl_023* cpp-multiset-find cpp-multimap-find
+
+
+  x   x   x   x   x   x   x
+      [  equal    ) 
+      lower       upper
+      
+c.lower_bound(val) 
+Returns an iterator to the first element with key not less than val.
+
+c.upper_bound(val) 
+Returns an iterator to the first element with key greater than val.
+
+c.equal_range(val) 
+Returns a range, pair of iterators, denoting the elements with val
+
+In other words, lower_bound() returns the position of the first element that
+has the same or a greater value than the argument, whereas upper_bound()
+returns the position of the first element with a greater value. Thus,
+equal_range() returns the range of elements that have the same value as the
+  argument.
+
+If lower_bound() or the first value of equal_range() is equal to upper_bound()
+or the second value of equal_range()
+
+Not only to find. Can be used to get a position to be inserted in sorted
+order.
+
+
+<ex>
+When there are multiple elements of the same key, those will be `adjacent`
+within the container.
+
+// this is for map
+string search_item("Alain de Botton");
+
+auto entries = aurthors.count(search_item);
+auto iter = aurthors.find(search_item);
+
+// this relys on the fact that multiple elements are adjacent.
+while (entries) {
+  cout << iter->second << endl;
+  ++iter;
+  --entries;
+}
+
+
+for (auto beg = authors.lower_bound(search_item),
+    end = authors.upper_bound(search_item);
+    beg != end;
+    ++beg)
+  cout << beg->second << endl;
+
+// return a pair of iterators
+for (auto pos = authors.equal_range(search_item);
+    pos.first != pos.second;
+    ++pos.first)
+  cout << pos.first->second << endl;
+
+
+<ex>
+#include <iostream>
+#include <set>
+
+using namespace std;
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  set<int> coll;
+
+  coll.insert(1);
+  coll.insert(2);
+  // coll.insert(3);
+  coll.insert(4);
+  coll.insert(5);
+  coll.insert(6);
+
+  PRINT_ELEMENTS( coll, "coll: ");
+
+  cout << "lower_bound(3): " << *coll.lower_bound(3) << endl;
+  cout << "upper_bound(3): " << *coll.upper_bound(3) << endl;
+  cout << "equal_range(3): " << *coll.equal_range(3).first << " "
+                             << *coll.equal_range(3).second << endl;
+
+  cout << "lower_bound(5): " << *coll.lower_bound(5) << endl;
+  cout << "upper_bound(5): " << *coll.upper_bound(5) << endl;
+  cout << "equal_range(5): " << *coll.equal_range(5).first << " "
+                             << *coll.equal_range(5).second << endl;
+}
+
+coll: 1 2 4 5 6
+lower_bound(3): 4
+upper_bound(3): 4          // see it is > 3
+equal_range(3): 4 4
+lower_bound(5): 5
+upper_bound(5): 6          // see it is > 5
+equal_range(5): 5 6
+
+note: 
+Although these _bound members usually used for multiset, can be used with set.
 
 
 ={============================================================================
@@ -38607,7 +38731,7 @@ int main()
 Here use_count is 4.
 
 
-{sp-init} {cpp-sp-make-shared}
+{sp-init} {cpp-make-shared}
 shared_ptr<string> pNico(new string("nico"));           // OK
 shared_ptr<string> pNico{new string("nico")};           // OK
 shared_ptr<string> pNico = make_shared<string>("nico"); // OK
@@ -47517,7 +47641,9 @@ completely handled by the packaged_task.
 # ============================================================================
 #{
 ={============================================================================
-*kt_dev_exer_001* write PRINT_ELEMENTS template function
+*kt_dev_exer_001* cpp-ex-write PRINT_ELEMENTS template function
+
+* this do not work for map.
 
 #include <iostream>
 #include <string>
