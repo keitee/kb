@@ -6447,11 +6447,17 @@ mysql --batch --table -u root uploads -e "SELECT version, upload_time, filename,
 
 
 <3> search all with the test id
-mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, FROM upload, all_tests_found WHERE all_tests_found.id=upload.id AND all_tests_found.test_id in (422) ORDER BY upload_time DESC LIMIT 5"
-mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, diskerrors, pcat_status, all_tests_found.test_id FROM upload, all_tests_found WHERE version LIKE '%R0%' and all_tests_found.id=upload.id AND all_tests_found.test_id in (75) ORDER BY upload_time DESC LIMIT 10"
+mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, all_tests_found.test_id FROM upload, all_tests_found WHERE version LIKE '%R0%' and all_tests_found.id=upload.id AND all_tests_found.test_id in (75) ORDER BY upload_time DESC LIMIT 10"
 
-// to see test_id
-mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, all_tests_found.test_id FROM upload, all_tests_found WHERE mac='0019fbf2d46b' AND all_tests_found.id=upload.id ORDER BY upload_time DESC LIMIT 10"
+mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, diskerrors, pcat_status, all_tests_found.test_id \
+FROM upload, all_tests_found WHERE version LIKE '%R0%' and all_tests_found.id=upload.id AND all_tests_found.test_id in (50) ORDER BY upload_time DESC LIMIT 10"
+
+mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, all_tests_found.test_id \
+FROM upload, all_tests_found WHERE version LIKE '%R0%' and all_tests_found.id=upload.id AND all_tests_found.test_id in (50) ORDER BY upload_time DESC LIMIT 100"
+
+// on mac
+mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, all_tests_found.test_id \
+FROM upload, all_tests_found WHERE mac='0019fbf2d46b' AND all_tests_found.id=upload.id ORDER BY upload_time DESC LIMIT 10"
 
 
 <ex>
@@ -7826,6 +7832,17 @@ index=darwin mac=0019fbf2d46b
 index=darwin component=DETAILED_INFO
 message = The main text of the actual log message
 
+index=darwin component=VRM_SERVER | rex filed=message "VRM-FSM: Live( (?<job>[01])): E_LIVE_STATE_DESTROY -> (E_LIVE_INPUT_FREE_FSM) -> E_LIVE_STATE_NONE"
+
+// 256090:NDS: ^[2017:10:20 20:35:10]0946973886.069153 !MIL    -VRM_SERVER   		< p:0x00000318 P:MW t:0x02108520 T:VRM_SRV M:fsm.c F:FSMRun L:917 > 
+// VRM-FSM: Live(  1): E_LIVE_STATE_CREATED -> (E_LIVE_INPUT_COMMIT) -> E_LIVE_STATE_COMMITTING 
+index=darwin component=VRM_SERVER message="VRM-FSM: Live( 0): E_LIVE_STATE_DESTROY -> (E_LIVE_INPUT_FREE_FSM) -> E_LIVE_STATE_NONE"
+
+// VRM-FSM: job_man:0x300925a: E_JOB_MAN_SRV_INT_ST_CREATING -> (E_JOB_MAN_SRV_INP_CREATED) -> E_JOB_MAN_SRV_INT_ST_CREATED 
+index=darwin component=VRM_SERVER message="VRM-FSM: job_man:0x300925a: E_JOB_MAN_SRV_INT_ST_CREATING -> (E_JOB_MAN_SRV_INP_CREATED) -> E_JOB_MAN_SRV_INT_ST_CREATED" 
+index=darwin component=VRM_SERVER | rex field=message "VRM-FSM: job_man:(?<handle>0x[0-f]*: E_JOB_MAN_SRV_INT_ST_CREATING -> (E_JOB_MAN_SRV_INP_CREATED) -> E_JOB_MAN_SRV_INT_ST_CREATED" 
+
+
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=Splunk+source+data
 
 http://spvss-confluence.cisco.com/display/CCP/Basic+Use+Cases
@@ -7836,6 +7853,10 @@ index=darwin component=DETAILED_INFO* priority=1 parser_testid=70
 | rex field=message "(?i)parser_result=.""\s""(?<pool_name>.)""\spool"
 | chart dc(logid) by version, pool_name
 | sort -version
+
+
+index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0"
+index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0" | dedup logid
 
 
 ={============================================================================
@@ -11633,6 +11654,19 @@ RELESE RB MC
 @@PMON@@,trace,mediacon,mc-create,65366,mc-create-mcid=,65366,mc_create-str=,mc-playback,fsnfmt=,hMC=0xff56 
 
 
+<mc-handle>
+typedef     uint32_t    MCM_MEDIACONN_HANDLE;           /*!< @brief Media Connection handle. @sa MCM_MEDIACONN_HANDLE_INVALID */
+
+#define MCM_MEDIACONN_HANDLE_INVALID                    ((uint32_t)0x00000000)                                     /*!< @brief Invalid Media Connection handle */
+
+
+240602:NDS: ^[2017:10:20 20:31:12]0946973648.873072 !MIL    -MDM                        < p:0x00000318 P:MW t:0x020d8520 T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3241 > 
+mdm_handle =0x3d77e hMC=0x0 tuner_id =1 and job_type =RECORD
+
+240780:NDS: ^[2017:10:20 20:31:13]0946973649.171794 !MIL    -MPM                        < p:0x00000318 P:MW t:0x01c09520 T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Open L:951 > 
+MCM_MEDIACON N_STATE_OPENED hMC=0xa1e1 `replace hMC=0x0` type=0x0300000a
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-memman
 
@@ -15289,6 +15323,14 @@ typedef enum SYSTEMJOB_TYPE_TAG
 
 
 <vrm-job-handle>
+/** @brief The VRM job handle.
+ @note VRM jobs differ from RMF jobs. A VRM job will typically create an RMF job.
+ @note The VRM jobs have a number of properties, One of them is an RMF job handle that the caller receives via the VRM job Media Status object.
+ */
+typedef uint32_t VRM_JOB_HANDLE;
+#define VRM_JOB_HANDLE_ILLEGAL  (0xFFFFFFFFU) /*!< @brief An illegal value for a VRM job handle. */
+
+
 // CMS_MEDIA_SERVICES/VRM/src/common/interface/job_man_clnt.c
 VRM_JOB_Create(SYSTEMJOB_TYPE_RB_RECORD, l_vrm_params, PLAYER_RB_EventListener, &l_rb_data->vrm_handle)
 
@@ -15423,6 +15465,8 @@ or
 !MIL    -P_Api        		< T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_CreateVRMJob L:1805 > Job `0x0300009a` *vrm-job-handle* Created on Display Target MAIN_TARGET `type=3` 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > `VRM-FSM: job_man:0x300009a`: E_JOB_MAN_SRV_INT_ST_NULL -> (E_JOB_MAN_SRV_INP_RUN) -> E_JOB_MAN_SRV_INT_ST_CREATING 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:live.c F:`LIVE_Create` L:1361 > @@PMON@@,mark,job,job-create,3,job-create-type=,jb-live,job-srcloc=,locator:5:3:FD2,job-destloc=,locator:3:2E:47:0 
+
+*vrm-job-handle* alternating between Live 0 and Live 1 when change channels.
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  0): E_LIVE_STATE_NONE -> (E_LIVE_INPUT_NEW_REQUEST) -> E_LIVE_STATE_CREATING 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: Live(  0): E_LIVE_STATE_CREATING -> (E_LIVE_INPUT_CREATED) -> E_LIVE_STATE_CREATED 
 !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:921 > VRM-FSM: job_man:0x300009a: E_JOB_MAN_SRV_INT_ST_CREATING -> (E_JOB_MAN_SRV_INP_CREATED) -> E_JOB_MAN_SRV_INT_ST_CREATED 
