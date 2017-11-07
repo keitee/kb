@@ -47,6 +47,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-build-spk si-build-driver
 |kt_dev_si_0002| si-sh-theyard
 |kt_dev_si_0002| si-sh-check-log
+|kt_dev_si_0002| si-sh-check-log-mc
 |kt_dev_si_0002| si-sh-check-log-auto
 |kt_dev_si_0002| si-sh-check-back
 |kt_dev_si_0002| si-sh-mysql
@@ -6165,6 +6166,23 @@ mcm_validate.sh
 mc_check.py mc_jobtypes.txt mc_statechanges.txt  tuner_hmc.info
 
 
+<mc_check-txt>
+hMc       Tuner Id  MCM Job             MC create line#     MC Active duration  MCM Pending State   MCM Uninitiated State
+---       --------  -------             ---------------     ------------------  -----------------   ---------------------
+0xf354    1         mc-record           9911710             73.9049             mc-stop             mc-free             
+0xf355              mc-live             9912674             60.0019             mc-create           PHEW                
+
+<mc-full-txt>
+0xf353    1         mc-live             9910153             84.7748             mc-freed            mc-free             
+0xf354    1         mc-record           9911710             73.9049             mc-stop             mc-free             
+0xf355              mc-live             9912674             60.0019             mc-create           PHEW                
+
+<etlog>
+MC	         jhVRM	Title	shrec	create	     created	    prepare	      prepared	     run	          running	      stop	        stopped	free	freed	destroy	destroyed
+hMC=0xf354	jb-rbrec		s2567	22 12:03:19,  22 12:03:19,  22 12:03:19,  22 12:03:20,  22 12:03:20,  22 12:03:20,  22 12:04:33
+hMC=0xf353	mc-live     s2567	22 12:03:19,  22 12:03:19,  22 12:03:19,  22 12:03:20,  22 12:03:20,  22 12:03:20,  22 12:04:33 
+
+
 ={============================================================================
 |kt_dev_si_0002| si-sh-check-log-auto
 
@@ -9934,6 +9952,31 @@ referenced interactive application is loaded and launched.
 
 
 // red trigger
+
+uses OPTV which is different from text app.
+
+3.2 Monitor for Interactive Applications
+3.2.1 Brief Description
+
+On tuning to a new channel, Player checks whether any of its elementary
+streams is a Trigger Track and, if so, FDM to download Interactive Trigger
+Module and Promo Modules.
+
+3.2.2 Use Case Realisation Design
+3.2.2.1 Main Flow
+
+The flow is described in relation to Figure 5.
+
+[1.X] Player opens an OpenTV session and registers an event listener with FDM.
+
+
+// DARWIN_PLATFORM/DARWIN_PLAYER/src/player_optv.c
+/*
+ * Open the FDM session.
+ * The FDM interface will have been initialised when the Player was started.
+ */
+SYSTEM_STATUS PLAYER_OPTV_OpenSession(void);
+
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@`5a8dda0`, event=1 CREATED
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:InteractiveApplicationModel F:onCreated L:948 > T:CEE-J EventQueue Reader 0:AEM app created with type 1
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:ApplicationFactory F:createApplicationForTrigger L:205 > T:CEE-J EventQueue Reader 0:IAPP: New legacy trigger
@@ -11811,13 +11854,19 @@ hex((((17 & 0x3FF) << 22) | ((0 & 0x3) << 16) | ((1 & 0xF) << 12) | (0 & 0xFFF) 
 #define MCM_MEDIACONN_STATUS_NOT_SUPPORTED              (SYSTEM_MAKE_COMPONENT_STATUS(MCM_COMP_ID, MCM_COMMON_ID, SEVERITY_SEVERE, 2)) /*!< @brief Not Supported status for MCM_MEDIACONN API*/
 
 
+<vrm-error>
 #define MCM_MEDIACONN_STATUS_ERROR                      (SYSTEM_MAKE_COMPONENT_STATUS(MCM_COMP_ID, MCM_COMMON_ID, SEVERITY_SEVERE, 1)) /*!< @brief Failure status for MCM_MEDIACONN API */
 
 `0x04421001`
 >>> hex((((17 & 0x3FF) << 22) | ((2 & 0x3) << 16) | ((1 & 0xF) << 12) | (1 & 0xFFF) ))
 '0x4421001'
 
-F:PANEL_DestroyCon L:509 > [API_CALL_ERR::""MCM""] " "on MCM_MEDIACONN_Destroy, [MCM:interface(1):SEVERE:status(1)(0x1)][(71438337)(0x04421001)] ""hMC=0x529c 
+note: is it really error?
+!INFO   -MCM          		< T:VRM_SRV M:mcm_media_connection.c F:MCRemoveMediaConnection L:265 > hMC=0x383f Removing 
+!MIL    -MCM          		< T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:729 > @@PMON@@,trace,mediacon,mc-destroyed,14399,fsnfmt=,hMC=0x383f 
+!INFO   -VRM_SERVER   		< T:VRM_SRV M:pvp_gen.c F:PANEL_DestroyCon L:502 > [API_CALL::""MCM""] " "MCM_MEDIACONN_Destroy returned [MCM:interface(1):SEVERE:status(1)(0x1)][(71438337)(0x04421001)] on ""hMC=0x383f 
+!INFO   -VRM_SERVER   		< T:VRM_SRV M:pvp_gen.c F:PANEL_DestroyCon L:509 > [API_CALL_ERR::""MCM""] " "on MCM_MEDIACONN_Destroy, [MCM:interface(1):SEVERE:status(1)(0x1)][(71438337)(0x04421001)] ""hMC=0x383f 
+!FATAL  -VRM_COMMON   		< T:VRM_SRV M:vrm_diag.c F:VRM_DIAG_Abort L:327 > ~~~~~~~~~~~~ VRM_DIAG_Abort at file=<pvp_fsm.c>, line=870, PANEL_FsmDisconnectingState, failed on: "PANEL_DestroyCon failed. The mconnection may be stuck" 
 
 
 note:
@@ -11869,6 +11918,8 @@ CMS_MEDIA_SERVICES/MCM/src/mcm_mediaconn_event.c
         switch (p_media_connection->status)
             case SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION:                    exception_str = "SYSTEM_EXCEPTION_TYPE_NO_EXCEPTION"; break;
 
+            // *comp-sei* SEI(Service Event Information)
+            switch (CURRENT_ACTIVITY(p_media_connection))
                 case MCM_MEDIACONN_PREPARING_SIM_MONI_SEI:                      activity_str = "PREPARING_SIM_MONI_SEI [SIM]"; break;
 
 
