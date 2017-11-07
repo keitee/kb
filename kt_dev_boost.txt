@@ -5,9 +5,9 @@ kt.dev.boost
 /^[#=]{
 Use #{ for a group and ={ for a item
 
-|kt_dev_boost_000| install, build and run
+|kt_dev_boost_000| boost-install
 |kt_dev_boost_001| boost-for-each
-|kt_dev_boost_002| program_options
+|kt_dev_boost_002| boost-program-options
 |kt_dev_boost_003| posix_time
 |kt_dev_boost_004| typeof
 |kt_dev_boost_005| is_same
@@ -47,19 +47,20 @@ Getting Started on Unix Variants
 1. download and untar
 tar --bzip2 -xf /path/to/boost_1_58_0.tar.bz2
 
-2. build and install
-3. include in source:
 
-#include <boost/typeof/typeof.hpp>
+4   Build a Simple Program Using Boost
 
-using namespace boost;
+To keep things simple, let's start by using a `header-only library.` The
+following program reads a sequence of integers from standard input, uses
+Boost.Lambda to multiply each number by three, and writes them to standard
+output:
 
-// don't need if installed with defaults.
-// 4. specify include directory
-// $ g++ -g -std=c++0x -I /usr/local/boost_1_58_0 tboost.cpp 
+// works without -I
+$ g++ -g t_02.cc
 
 
-{build}
+5   Prepare to Use a Boost Library Binary
+
 If you want to use any of the separately-compiled Boost libraries, you'll need
 to acquire library binaries.
 
@@ -74,15 +75,36 @@ Select your configuration options and invoke ./bootstrap.sh again without the
 directory, you'll probably want to at least use
 
 $ sudo ./bootstrap.sh --prefix=path/to/installation/prefix
-
-$ sudo ./bootstrap.sh
-Building Boost.Build engine with toolset gcc...
+$ sudo ./bootstrap.sh --prefix=/usr/local
 
 to install somewhere else. Also, consider using the --show-libraries and
 --with-libraries=library-name-list options to limit the long wait you'll
-experience if you build everything. Finally,
+experience if you build everything. 
 
-$ sudo ./b2 install
+
+// install in the current directory.
+$ sudo ./bootstrap.sh
+Building Boost.Build engine with toolset gcc...
+
+
+$ sudo ./b2
+The Boost C++ Libraries were successfully built!
+
+The following directory should be added to compiler include paths:
+
+    /home/kyoupark/works/boost/boost_1_65_1
+
+The following directory should be added to linker library paths:
+
+    /home/kyoupark/works/boost/boost_1_65_1/stage/lib
+$
+
+Finally, will leave Boost binaries in the lib/ subdirectory of your
+installation prefix. You will also find a copy of the Boost headers in the
+include/ subdirectory of the installation prefix, so you can henceforth use
+that directory as an #include path in place of the Boost root directory.
+
+$ sudo ./b2 install --prefix=PREFIX
 
 
 {build-error}
@@ -98,27 +120,49 @@ Do install and run ./b2 again.
 $ sudo apt-get install libbz2-dev
 
 
-{link}
-$ g++ -g t_asio_01.cpp
+<boost-link>
+6   Link Your Program to a Boost Library
 
-/usr/local/include/boost/asio/error.hpp:230: undefined reference to `boost::system::system_category()'
-collect2: error: ld returned 1 exit status
+There are two main ways to link to libraries:
 
-To solve this since The boost library you are using depends on the boost_system
-library. (Not all of them do.)
+    You can specify the full path to each library:
 
+    $ c++ -I path/to/boost_1_65_1 example.cpp -o example \
+       ~/boost/stage/lib/libboost_regex-gcc34-mt-d-1_36.a
+
+    You can separately specify a directory to search (with -Ldirectory) and a
+    library name to search for (with -llibrary,2 dropping the filename's
+        leading lib and trailing suffix (.a in this case):
+
+    $ c++ -I path/to/boost_1_65_1 example.cpp -o example \
+       -L~/boost/stage/lib/ -lboost_regex-gcc34-mt-d-1_36
+
+    As you can see, this method is just as terse as method A for one library;
+    it really pays off when you're using multiple libraries from the same
+    directory. 
+    
+    Note, however, that if you use this method with a library that has both
+    static (.a) and dynamic (.so) builds, the system may choose one
+    automatically for you unless you pass a special option such as -static on
+    the command line.
+
+    $ ./a.out
+    ./a.out: error while loading shared libraries: libboost_system.so.1.58.0: cannot
+    open shared object file: No such file or directory
+    
+    $ LD_LIBRARY_PATH=/usr/local/lib ./a.out 
+
+In both cases above, the bold text is what you'd add to the command lines we
+explored earlier.
+
+
+$ g++ t_02.cc -L/usr/local/lib -lboost_program_options
 $ g++ -g -lboost_system t_asio_01.cpp
 
 
 $ cat ./boobl.sh 
 #!/bin/bash
 g++ -g -std=c++0x -lboost_system $1
-
-$ ./a.out
-./a.out: error while loading shared libraries: libboost_system.so.1.58.0: cannot
-open shared object file: No such file or directory
-
-$ LD_LIBRARY_PATH=/usr/local/lib ./a.out 
 
 
 ={============================================================================
@@ -288,6 +332,167 @@ void parseProgramOptions(int argc, char** argv)
   *os << "started at     : " << started_at.time_of_day() << "\n";
   *os << "sampling period: " << sampling_period_ms << " ms\n";
 }
+
+<ex>
+//
+// g++ -static t_01.cc -L/usr/local/lib -lboost_program_options
+//
+#include <boost/program_options.hpp>
+#include <iostream>
+
+namespace opt = boost::program_options;
+
+// $ ./our_program.exe --apples=10 --oranges=20
+// Fruits count: 30
+
+int main(int argc, char **argv)
+{
+    // constructing an options describing variable and giving it a textural
+    // description "All options"
+    opt::options_description desc("All options");
+
+    // when we are adding options, 
+    // first parameter is a name to be used in command line.
+    // second parameter is a type of that option, wrapped in value<> class.
+    // third parameter must be a short description of that option.
+    desc.add_options()
+        ("apples", opt::value<int>(), "how many apples to you have")
+        ("oranges", opt::value<int>(), "how many oranges do you have")
+        ("help", "produce help message")
+        ;
+
+    // parse the command line
+    opt::variables_map vm;
+    opt::store(opt::parse_command_line(argc, argv, desc), vm);
+    opt::notify(vm);
+
+    // for processing help option
+    //
+    // $ ./a.out --h (or --help but not -h)
+    // All options:
+    //   --apples arg          how many apples to you have
+    //   --oranges arg         how many oranges do you have
+    //   --help                produce help message
+    // 
+    // $
+
+    if (vm.count("help")) {
+        std::cout << desc << "\n";
+        return 1;
+    }
+
+    // http://www.boost.org/doc/libs/1_65_1/doc/html/boost/program_options/abstract_variables_map.html
+    //
+    // boost::program_options::abstract_variables_map
+    //
+    // class abstract_variables_map {
+    //  // public member functions
+    //  const variable_value & operator[](const std::string &) const;
+    // };
+
+    // http://www.boost.org/doc/libs/1_65_1/doc/html/boost/program_options/variable_value.html
+    //
+    // boost::program_options::variable_value
+    //
+    // class variable_value {
+    //
+    //  public:
+    //   // public member functions
+    //   template<typename T> const T & as() const;
+    //   template<typename T> T & as();
+    // };
+    //
+    // variable_value public member functions
+    //
+    // 1. template<typename T> const T & as() const;
+    //
+    // If stored value if of type T, returns that value. Otherwise, throws
+    // boost::bad_any_cast exception.
+    //
+    // *cpp-template-explicit-argument*
+    
+    // processing "apples" and "oranges" options
+    std::cout << "Fruits count: " 
+        << vm["apples"].as<int>() + vm["oranges"].as<int>() << std::endl; 
+}
+
+// Parse configuration option values directly into a variable and make that option
+// a required one:
+// 
+//     int oranges_var = 0;
+//     desc.add_options()
+//         // ProgramOptions stores the option value into 
+//         // the variable that is passed by pointer. Here value of 
+//         // "--oranges" option will be stored into 'oranges_var'.
+//         ("oranges,o", opt::value<int>(&oranges_var)->required(), 
+//                                                 "oranges you have")
+// 
+// Get some mandatory string option:
+//         // 'name' option is not marked with 'required()',
+//         // so user may not provide it.
+//         ("name", opt::value<std::string>(), "your name")
+// 
+// Add short name for apple, set 10 as a default value for apples:
+//         // 'a' is a short option name for apples. Use as '-a 10'.
+//         // If no value provided, then the default value is used.
+//         ("apples,a", opt::value<int>()->default_value(10),
+//                                    "apples that you have");
+// 
+// Get the missing options from the configuration file:
+// 
+//     opt::variables_map vm;
+// 
+//     // Parsing command line options and storing values to 'vm'.
+//     opt::store(opt::parse_command_line(argc, argv, desc), vm);
+// 
+//     // We can also parse environment variables. Just use
+//     // 'opt::store with' 'opt::parse_environment' function.
+// 
+//     // Adding missing options from "apples_oranges.cfg" config file.
+//     try {
+//         opt::store(
+//             opt::parse_config_file<char>("apples_oranges.cfg", desc),
+//             vm
+//         );
+//     } catch (const opt::reading_file& e) {
+//         std::cout << "Error: " << e.what() << std::endl;
+//     }
+// 
+// The configuration file syntax differs from the command-line syntax. We do not
+// need to place minuses before the options. So, our apples_oranges.cfg file must
+// look like this:
+// 
+// oranges=20
+// 
+// 
+// Validate that all the required options were set:
+// 
+//     try {
+//         // `opt::required_option` exception is thrown if
+//         // one of the required options was not set.
+//         opt::notify(vm);
+// 
+//     } catch (const opt::required_option& e) {
+//         std::cout << "Error: " << e.what() << std::endl;
+//         return 2;
+//     }
+// 
+// If we combine all the mentioned tips into a single executable, then its help
+// command will produce this output:
+// 
+// $ ./our_program.exe --help
+//  All options:
+//    -o [ --oranges ] arg          oranges that you have
+//    --name arg                       your name
+//    -a [ --apples ] arg (=10)  apples that you have
+//    --help                              produce help message
+// 
+// Running it without a configuration file will produce the following output:
+// 
+// $ ./our_program.exe
+//  Error: can not read options configuration file 'apples_oranges.cfg'
+//  Error: the option '--oranges' is required but missing 
+// 
 
 
 ={============================================================================

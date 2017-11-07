@@ -6128,6 +6128,44 @@ done
 
 
 ={============================================================================
+|kt_dev_si_0002| si-sh-check-log-mc
+
+357@check_log
+
+    if [ -f LOGlast ]
+    then
+        if [ "$1" != "-update_only" ]
+        then
+            if [ $DO_NOT_ANALYSE -eq 1 ]
+            then
+                echo "DO NOT ANALYZE"
+            else
+                ######## Analysis Scripts #######
+                if [ "$TXMACHINE" == "" -a $LOCAL_NON_DIAG -eq 0 ]
+                then
+                    nohup analyze_log $NAME > analyze_log 2>&1 &
+                else
+                    timeout 600s analyze_log $NAME > analyze_log 2>&1
+                fi
+            fi
+        fi
+    fi
+    echo "After analyze log."
+
+
+analyze_log
+
+##### MCM state machine validation #####
+timeout 120s mcm_validate.sh
+
+
+mcm_validate.sh
+
+### Execute Python Script
+mc_check.py mc_jobtypes.txt mc_statechanges.txt  tuner_hmc.info
+
+
+={============================================================================
 |kt_dev_si_0002| si-sh-check-log-auto
 
 
@@ -9869,14 +9907,45 @@ referenced interactive application is loaded and launched.
       }
   }
 
+
+// takes 4 secs to get all apps from tuning start
+
 // text
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:`EventListener`$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5a8ddd3, event=1 CREATED
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:InteractiveApplicationModel F:onCreated L:948 > T:CEE-J EventQueue Reader 0:AEM app created with type 1
+
+
+// ^[2017:11:06 07:30:46] !MIL    -aem          		< p:0x00000286 P:APP t:0x015c6520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(1)e301 
+// ^[2017:11:06 07:30:47] !MIL    -EPG_ME       		< p:0x00000286 P:APP t:0x2c161520 T:no name M:MediaEngine F:playService L:1509 > T:PooledExecutor#1:TUNING TO BBC One Lon, 101 locator:5:3:7D2
+// !MIL    -VRM_SERVER   		< p:0x00000284 P:MW t:0x01d72520 T:VRM_SRV M:live.c F:LIVE_Create L:1393 > @@PMON@@,mark,job,job-create,3,job-create-type=,jb-live,job-srcloc=,locator:5:3:7D2,job-destloc=,locator:3:2E:4B:0 
+//
+// !INFO   -aem          		< p:0x00000286 P:APP t:0x01572520 T:AEM_STATE_MONITOR_THREAD M:aem_signalling_xsi.c F:AEM_XSI_StartPlayerSession L:841 > Creating text application 
+// !ENTER  -aem          		< p:0x00000286 P:APP t:0x01572520 T:AEM_STATE_MONITOR_THREAD M:aem_signalling.c F:AEM_AppSignalling_CreateApplication L:270 > |-> AEM_AppSignalling_CreateApplication
+//
+// typedef enum AEM_API_ApplicationEventTag
+// {
+//   AEM_API_ApplicationEventCreated        = 1,         /*!< @brief Application event is created */
+// } AEM_API_ApplicationEvent;
+//
+// !INFO   -aem          		< p:0x00000286 P:APP t:0x01572520 T:AEM_STATE_MONITOR_THREAD M:aem_signalling_xsi.c F:AEM_XSI_InitApplication L:1328 > *app->service_binding: on=0x2 ts=0x7fd service=0x189d) 
+// !INFO   -aem          		< p:0x00000286 P:APP t:0x01572520 T:AEM_STATE_MONITOR_THREAD M:aem_common.c F:AEM_NotifyEventListeners L:639 > Notify listener for appHandle <2>, appEvent <0x00000001> 
+// !MIL    -EPG_ALM      		< p:0x00000286 P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5a8c884, event=1 CREATED
+// !MIL    -EPG_ALM      		< p:0x00000286 P:APP t:0x2c12f520 T:no name M:InteractiveApplicationModel F:onCreated L:948 > T:CEE-J EventQueue Reader 0:AEM app created with type 1
+
 
 // red trigger
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@`5a8dda0`, event=1 CREATED
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:InteractiveApplicationModel F:onCreated L:948 > T:CEE-J EventQueue Reader 0:AEM app created with type 1
 !MIL    -EPG_ALM      		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:ApplicationFactory F:createApplicationForTrigger L:205 > T:CEE-J EventQueue Reader 0:IAPP: New legacy trigger
+
+// ^[2017:11:06 07:30:49] !MIL    -EPG_ME       		< p:0x00000286 P:APP t:0x2c161520 T:no name M:MediaEngine F:channelChanged L:2092 > T:PooledExecutor#1:CHANNEL CHANGED TO BBC One Lon, 101
+// ^[2017:11:06 07:30:49] !ENTER  -aem          		< p:0x00000286 P:APP t:0x01572520 T:AEM_STATE_MONITOR_THREAD M:aem_signalling.c F:AEM_AppSignalling_CreateApplication L:270 > |-> AEM_AppSignalling_CreateApplication
+// ^[2017:11:06 07:30:49] !ENTER  -aem          		< p:0x00000286 P:APP t:0x01572520 T:AEM_STATE_MONITOR_THREAD M:aem_trigger.c F:AEM_InitTriggerApp L:83 > |-> AEM_InitTriggerApp
+// ^[2017:11:06 07:30:49] !INFO   -aem          		< p:0x00000286 P:APP t:0x01572520 T:AEM_STATE_MONITOR_THREAD M:aem_common.c F:AEM_NotifyEventListeners L:639 > Notify listener for appHandle <3>, appEvent <0x00000001> 
+// ^[2017:11:06 07:30:49] !MIL    -EPG_ALM      		< p:0x00000286 P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5a8c007, event=1 CREATED
+// ^[2017:11:06 07:30:49] !MIL    -EPG_ALM      		< p:0x00000286 P:APP t:0x2c12f520 T:no name M:InteractiveApplicationModel F:onCreated L:948 > T:CEE-J EventQueue Reader 0:AEM app created with type 1
+// ^[2017:11:06 07:30:50] !MIL    -EPG_ALM      		< p:0x00000286 P:APP t:0x2c12f520 T:no name M:ApplicationFactory F:createApplicationForTrigger L:205 > T:CEE-J EventQueue Reader 0:IAPP: New legacy trigger
+
 
 // show trigger(may or may not) think "please wait" text on red or "press" on red.
 !MIL    -EPG_FS       		< p:0x00000270 P:APP t:0x2c12f520 T:no name M:VisibilityController F:show L:668 > T:CEE-J EventQueue Reader 0:VisibilityController.show LEGACY_TRIGGERS
@@ -11727,19 +11796,28 @@ drwxr-xr-x 6 kyoupark ccusers    4096 Oct 26  2009 ..
 COMPONENT_NAME := ms_mcm_src
 NDS_BUILD_TYPE_ms_mcm_src = debug
 
-<status>
-
+<mcm-error>
 #define MCM_COMP_ID           ((uint32_t)(17)) /*!< @brief Media Connection Management */
 #define MCM_COMMON_ID   (1)
 
+#define SEVERITY_SEVERE  ((uint32_t)(0x2))   /*!< @brief Severe return status - for use with #SYSTEM_MAKE_COMPONENT_STATUS and #SYSTEM_STATUS_GET_SEVERITY */
+
 // (((COMP_COMP_ID & 0x3FF) << 22) | ((SEVERITY & 0x3) << 16) | ((COMP_IF_ID & 0xF) << 12) | (STATUS & 0xFFF) )
 
-`0x4401000`
+`0x04401000`
 hex((((17 & 0x3FF) << 22) | ((0 & 0x3) << 16) | ((1 & 0xF) << 12) | (0 & 0xFFF) ))
 #define MCM_MEDIACONN_STATUS_OK                         (SYSTEM_MAKE_COMPONENT_STATUS(MCM_COMP_ID, MCM_COMMON_ID, SEVERITY_NONE,   0)) /*!< @brief Success status for MCM_MEDIACONN API */
 
-#define MCM_MEDIACONN_STATUS_ERROR                      (SYSTEM_MAKE_COMPONENT_STATUS(MCM_COMP_ID, MCM_COMMON_ID, SEVERITY_SEVERE, 1)) /*!< @brief Failure status for MCM_MEDIACONN API */
 #define MCM_MEDIACONN_STATUS_NOT_SUPPORTED              (SYSTEM_MAKE_COMPONENT_STATUS(MCM_COMP_ID, MCM_COMMON_ID, SEVERITY_SEVERE, 2)) /*!< @brief Not Supported status for MCM_MEDIACONN API*/
+
+
+#define MCM_MEDIACONN_STATUS_ERROR                      (SYSTEM_MAKE_COMPONENT_STATUS(MCM_COMP_ID, MCM_COMMON_ID, SEVERITY_SEVERE, 1)) /*!< @brief Failure status for MCM_MEDIACONN API */
+
+`0x04421001`
+>>> hex((((17 & 0x3FF) << 22) | ((2 & 0x3) << 16) | ((1 & 0xF) << 12) | (1 & 0xFFF) ))
+'0x4421001'
+
+F:PANEL_DestroyCon L:509 > [API_CALL_ERR::""MCM""] " "on MCM_MEDIACONN_Destroy, [MCM:interface(1):SEVERE:status(1)(0x1)][(71438337)(0x04421001)] ""hMC=0x529c 
 
 
 note:
@@ -15603,6 +15681,9 @@ typedef enum SYSTEMJOB_TYPE_TAG
     SYSTEMJOB_TYPE_PLAY_NFF_TO_HTTP,              /*!< @brief play NFF to HTTP */
     SYSTEMJOB_TYPE_LAST
 } SYSTEMJOB_Type;
+
+
+<vrm-error>
 
 
 <vrm-job-handle>
