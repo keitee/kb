@@ -7997,6 +7997,9 @@ index=darwin component=DETAILED_INFO* priority=1 parser_testid=70
 index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0"
 index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0" | dedup logid
 
+<ex>
+component=FDM_API_OPTV "limit number of module download session request" | dedup logid | eval logfile="darwin_".mac."_".logid | table logfile platform version
+
 
 ={============================================================================
 |kt_dev_si_0002| si-tcpdump
@@ -19774,6 +19777,76 @@ point of the broadcast file system
 Note that DSM-CC carousels are packaged such that more than one file may be
 resident in a module, and so acquiring a single file actually entails
 acquiring a module.
+
+// seems benign since calls these all jobs created. no seen on live since optv
+// runs on only live so no warning for that.
+!WARN   -FDM_CMN_CLT  		< p:0x0000026a P:MW t:0x01d95520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_optv.c F:FDM_OPTV_Run L:427 > media connection type is not supported 
+!WARN   -FDM_CMN_CLT  		< p:0x0000026a P:MW t:0x01d95520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_mhc.c F:FDM_MHC_Run L:863 > FDM_MHC_Run hMC=0x6 type:[117440515] 
+
+
+#define MAX_L_MEDIA_CONNECTIONS     (10)  /* For all type of media connections for GW and MR boxes */
+
+NDS: ^[2017:10:19 09:20:02]0946759746.727261 !ERROR  -FDM_SVR      		< p:0x000001ed P:MW t:0x01d42520 T:MCM_ITCMAIN_THREAD M:fdm_svr_sfm.c F:FDM_SVR_SetSfMediaConnection L:183 > No free slot to store media connection; 
+NDS: ^[2017:10:19 09:20:02]0946759746.727277 !ERROR  -FDM_CMN_CLT  		< p:0x000001ed P:MW t:0x01d42520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_optv.c F:FDM_OPTV_Run L:461 > FDM_SVR_SetSfMediaConnection failed 
+NDS: ^[2017:10:19 09:20:02]0946759746.727295 !WARN   -FDM_CMN_CLT  		< p:0x000001ed P:MW t:0x01d42520 T:MCM_ITCMAIN_THREAD M:fdm_plugin.c F:FDM_PLUGIN_Run L:595 > Run_cb() has failed for plugin Open TV\n 
+NDS: ^[2017:10:19 09:20:02]0946759746.727313 !WARN   -FDM_CMN_CLT  		< p:0x000001ed P:MW t:0x01d42520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_mhc.c F:FDM_MHC_Run L:863 > FDM_MHC_Run hMC=0x3806 type:[117440514] 
+
+CMS_MEDIA_SERVICES/MCM/src/mcm_mediaconn_event.c
+
+/* @brief Array of function pointers to DEVICEMAN open interfaces for each component */
+static COMP_DEVICEMAN_Open f_mcm_comp_deviceman_open[] =
+{
+    FEM_DEVICEMAN_Open,
+    MPM_DEVICEMAN_Open,
+    SIM_DEVICEMAN_Open,
+    NULL,
+    NULL,
+    FDM_DEVICEMAN_Open,
+    SDM_DEVICEMAN_Open,
+#ifdef FUSION_DYNAMIC_TSA_SUPPORTED
+    ASM_DEVICEMAN_Open,
+#else
+    NULL,
+#endif
+    /* Last entry in array is always NULL... */
+    NULL
+};
+
+SYSTEM_STATUS FDM_DEVICEMAN_Open(MCM_MEDIACONN_HANDLE h_media_connection,
+
+FDM_PLUGIN_Open
+
+SYSTEM_STATUS FDM_OPTV_Run(FDM_MC *pMc)
+{
+  if((FDM_SVR_SetSfMediaConnection(pMc->handle) != FDM_STATUS_OK));
+
+  /* SFM SESSION creation */
+  DBUG_PRINT("FDM_OPTV_Run",
+      ("new SFM session created handle = %#x", pMc->sfm_handle));
+
+}
+
+!MIL    -MCM          		< p:0x000001f9 P:MW t:0x01dcd520 T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,4,mc-create-mcid=,4,mc_create-str=,mc-live,fsnfmt=,hMC=0x4 
+!MIL    -MDM          		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3241 > mdm_handle =0x3 hMC=0x3 tuner_id =0 and job_type =LIVE_VIEWING 
+!MIL    -MDM          		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3241 > mdm_handle =0x2 hMC=0x2 tuner_id =1 and job_type =CAPTURE 
+!MIL    -MDM          		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3241 > mdm_handle =0x5 hMC=0x4 tuner_id =0 and job_type =LIVE_VIEWING 
+!MIL    -MPM          		< p:0x000001f9 P:MW t:0x018ce520 T:MPM_ITCMAIN_THREAD M:mpm_mediaconn_event.c F:MPM_Mediaconn_Open L:951 > MCM_MEDIACONN_STATE_OPENED hMC=0x4 replace hMC=0x3 type=0x07000002 
+!INFO   -FDM_SVR      		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_svr_deviceman.c F:FDM_DEVICEMAN_Open L:904 > mediaconn 0x4, mc_type = MCM_MEDIACONN_TYPE_LIVEVIEWING, locator_type = SYSTEMLOCATOR_TYPE_SERVICE 
+!INFO   -FDM_SVR      		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_svr_deviceman.c F:FDM_DEVICEMAN_Open L:944 > Reset num_plugin_stopped to 0, mc_type=117440514(LIVEVIEWING) 
+!INFO   -FDM_SVR      		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_svr_deviceman.c F:FDM_DEVICEMAN_Open L:950 > mediaconn = 0x4 (state = FDM_MC_INITIAL_S) 
+!INFO   -FDM_CMN_CLT  		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_optv.c F:FDM_OPTV_Open L:388 > hMC=0x4 type:[0x7000002] 
+!INFO   -FDM_CMN_CLT  		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_optv.c F:FDM_OPTV_Open L:405 > source locator - 0x8c18061 (0x4018017), dest locator = 0x8e1801f (0x42180ec) 
+
+SYSTEM_STATUS FDM_OPTV_Close(FDM_MC *pMc)
+{
+  FDM_SVR_ResetSfSessionInfoByMcHandle(MCM_MEDIACONN_HANDLE mc_handle);
+}
+
+!MIL    -MCM          		< p:0x000001f9 P:MW t:0x01dcd520 T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_Destroy L:660 > @@PMON@@,trace,mediacon,mc-destroy,3,fsnfmt=,hMC=0x3 
+!INFO   -FDM_SVR      		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_svr_deviceman.c F:FDM_DEVICEMAN_Close L:1201 > mediaconn = 0x3 (state = FDM_MC_STOPPED_S) 
+!INFO   -FDM_CMN_CLT  		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_optv.c F:FDM_OPTV_Close L:940 > Mark for unmount comp_id 0xd0401 (hMC=0x3) 
+!INFO   -FDM_CMN_CLT  		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_optv.c F:FDM_OPTV_ProcessESI L:1426 > Trying to unmount OPTV carousel with component id = 0xd0401 (hMC=0x3) 
+!INFO   -FDM_CMN_CLT  		< p:0x000001f9 P:MW t:0x01d9d520 T:MCM_ITCMAIN_THREAD M:fdm_plugin_optv.c F:FDM_OPTV_Close L:1008 > ESI List is not Empty; dont reset now! 
 
 
 ={============================================================================
