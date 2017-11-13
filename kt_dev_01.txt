@@ -18,7 +18,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_prob_008| elapsed time {clock}
 
 *kt_dev_prob_009* code-bit-twos-complement
-*kt_dev_prob_009* code-bit-types
+*kt_dev_prob_009* code-bit-types cpp-builtin-type
 *kt_dev_prob_010* code-bit-type-max-value
 *kt_dev_prob_010* code-address-alignment
 *kt_dev_prob_011* code-pointer-handle
@@ -748,7 +748,7 @@ note-3: What if use abs(XXX_MIN) here? No effect.
 
 
 ={============================================================================
-*kt_dev_prob_009* code-bit-types
+*kt_dev_prob_009* code-bit-types cpp-builtin-type
 
 {data-type} From ansic:
 
@@ -35319,6 +35319,8 @@ defined in the <functional> header in the std:: namespace.
 #include <functional>
 using namespace std::placeholders;
 
+$ g++ -std=c++0x t_boost.cpp -L/usr/local/lib
+
 
 CLR 10.2.2
 
@@ -37908,7 +37910,7 @@ Converting strings to numbers in C++ makes a lot of people depressed because
 of their inefficiency and user unfriendliness. See how string 100 can be
 converted to int:
 
-<ex>
+<ex> *cpp-istringstream-conversion*
 #include <sstream> 
  
 void sample1() {
@@ -37918,6 +37920,212 @@ void sample1() {
 
     // ...
 }
+
+
+http://www.boost.org/doc/libs/1_58_0/doc/html/boost_lexical_cast.html
+
+Motivation
+
+Sometimes a value must be converted to a literal text form, such as an int
+represented as a std::string, or vice-versa, when a std::string is interpreted
+as an int. Such examples are common when converting between data types
+internal to a program and representation external to a program, such as
+windows and configuration files.
+
+The standard C and C++ libraries offer a number of facilities for performing
+such conversions. However, they vary with their ease of use, extensibility,
+     and safety.
+
+For instance, there are a number of limitations with the family of standard C
+functions typified by 'atoi':
+
+o Conversion is supported in one direction only: from text to internal data
+type. Converting the other way using the C library requires either the
+inconvenience and compromised safety of the sprintf function, or the loss of
+portability associated with non-standard functions such as itoa.
+
+o The range of types supported is only a subset of the built-in numeric types,
+  namely int, long, and double.
+
+o The range of types cannot be extended in a uniform manner. For instance,
+  conversion from string representation to complex or rational.
+
+The standard C functions typified by strtol have the same basic limitations,
+    but offer finer control over the conversion process. However, for the
+    common case such control is often either not required or not used. The
+    scanf family of functions offer even greater control, but also lack safety
+    and ease of use.
+
+The standard C++ library offers stringstream for the kind of in-core
+formatting being discussed. It offers a great deal of control over the
+formatting and conversion of I/O to and from arbitrary types through text.
+However, for simple conversions direct use of stringstream can be either
+clumsy (with the introduction of extra local variables and the loss of
+    infix-expression convenience) or obscure (where stringstream objects are
+      created as temporary objects in an expression). Facets provide a
+    comprehensive concept and facility for controlling textual representation,
+    but their perceived complexity and high entry level requires an extreme
+    degree of involvement for simple conversions, and excludes all but a few
+    programmers.
+
+The lexical_cast function template offers a convenient and consistent form for
+supporting common conversions to and from arbitrary types when they are
+represented as text. The simplification it offers is in expression-level
+convenience for such conversions. For more involved conversions, such as where
+precision or formatting need tighter control than is offered by the default
+behavior of lexical_cast, the conventional std::stringstream approach is
+recommended. Where the conversions are numeric to numeric, boost::numeric_cast
+may offer more reasonable behavior than lexical_cast.
+
+
+* The boost::lexical_cast function will even check bounds for you:
+
+#include <boost/lexical_cast.hpp>
+#include <cassert>
+
+void sample4()
+{
+    try {
+        const short s = boost::lexical_cast<short>("1000000");
+        assert(false);
+    } catch (const boost::bad_lexical_cast &e) {
+        std::cout << e.what() << std::endl;
+    }
+}
+
+
+* Since Boost 1.56, there is a boost::conversion::try_lexical_convert function
+  that reports errors by return code. It could be useful in performance
+  critical places where bad input could often occur:
+
+#include <boost/lexical_cast.hpp>
+#include <cassert>
+
+void sample7() 
+{    
+  int i = 0;    
+  const bool ok = boost::conversion::try_lexical_convert("Bad stuff", i);    
+  assert(!ok);
+}
+
+
+<ex> convert-to-string *cpp-to-string*
+
+C++11 has std::to_string and std::to_wstring functions that are declared in
+the <string> header. Those functions use locales and have behavior very close
+to boost::lexical_cast<std::string> and boost::lexical_cast<std::wstring>,
+   respectively.
+
+
+std::map<std::string, std::string> si;
+
+static uint64_t fake_outputs = 0;
+
+si["POST_REPAIR_OUTPUTS"] =
+  boost::lexical_cast<std::string>(fake_outputs++);
+
+
+<ex> convert-to-number
+
+int EnvironmentAppIdStrategy::getAppId() const
+{
+    ApplicationRuntimeInstanceId appRuntimeInstanceId = 0;
+
+    char* appIdFromEnv = getenv(APP_RUNTIME_INSTANCE_ID_ENV_VAR_NAME);
+
+    // note: use stringstring to convert
+ 
+    const std::string appIdAsString(appIdFromEnv);
+    std::istringstream is(appIdAsString);
+    is >> appRuntimeInstanceId;
+
+    return appRuntimeInstanceId;
+}
+
+int EnvironmentAppIdStrategy::getAppId() const
+{
+    ApplicationRuntimeInstanceId appRuntimeInstanceId = 0;
+
+    char* appIdFromEnv = getenv(APP_RUNTIME_INSTANCE_ID_ENV_VAR_NAME);
+
+    return boost::lexical_cast<int>(appIdFromEnv);
+}
+
+
+{lexical-cast-peformance}
+While we weren't looking Boost.Lexical_cast became "in most cases
+boost::lexical_cast is faster than scanf, printf, std::stringstream". Yay for
+upgrades - now there's no reason to use scanf for performance reasons.
+
+http://www.boost.org/doc/libs/1_58_0/doc/html/boost_lexical_cast/
+  performance.html#boost_lexical_cast.performance.tests_description
+
+#include "PerfCounter.h"
+
+#include <iostream>
+#include <sstream>
+#include <boost/lexical_cast.hpp>
+
+int main(int argc,char** argv)
+{
+    PerfCounter counter;
+    
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        sscanf("42","%d",&out);
+    }
+    counter.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        std::stringstream ss("42");
+        ss >> out;
+    }
+    counter.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out = boost::lexical_cast<int>("42");
+    }
+    counter.snap("boost::lexical_cast<int>");
+    std::cout << counter.dump() << std::endl;
+}
+
+// from a run on debian
+
+$ ./a.out 
+Start -> scanf int took 2112us
+scanf int -> stringstream int took 27859us
+stringstream int -> boost::lexical_cast<int> took 910us
+boost::lexical_cast<int> -> end took 0us
+
+
+// about the above code
+
+> you're transforming the same value on every iteration, source of which is a
+> const - might this be a subject of some optimisation / cache related thing?
+
+Yeah, I was just thinking the same thing. I wouldn't be too surprised if the
+compiler replaces the lexical_cast call with a constant result. Try with a
+random number converted to a string.
+
+
+Start -> scanf int took 22us
+scanf int -> stringstream int took 45us
+stringstream int -> boost::lexical_cast<int> took 3us
+boost::lexical_cast<int> -> end took 0us
+
+on the host and
+
+Start -> scanf int took 46us
+scanf int -> stringstream int took 392us
+stringstream int -> boost::lexical_cast<int> took 11us
+boost::lexical_cast<int> -> end took 4us
+
+on the device.
+
 
 {numeric-conversion}
 Since C++11, the C++ standard library provides convenience functions to convert
@@ -37935,8 +38143,8 @@ stold(str,idxRet=nullptr)              Converts str to a long double
 
 // 4.4.5 do not support this
 to_string(val)                         Converts val to a string
-
 to_wstring(val)                        Converts val to a wstring
+
 
 <ex>
 #include <iostream>
@@ -37998,34 +38206,6 @@ int main(int argc, char* argv[])
  idx of first unprocessed char: 1
 9223372036854775807
 stoi
-
-
-{boost-lexical-cast}
-As said, it is supported from C+11 and see an error saying "not defined in
-std" when use the older. The alternative is to use boots:
-
-string s = boost::lexical_cast<std::string>(videoSize.height);
-
-boost::lexical_cast<std::string> works on any type that can be inserted into a
-std::ostream, including types from other libraries or your own code.
-
-Optimized specializations exist for common types, with the generic form
-resembling:
-
-template< typename OutType, typename InType >
-lexical_cast( const InType & input ) 
-{
-    std::stringstream temp_stream;
-    temp_stream << input;
-
-    OutType output;
-    temp_stream >> output;
-    return output;
-}
-
-You may choose this form to leverage greater flexibility of input types in
-generic functions, or to produce a std::string from a type that you know isn't a
-fundamental numeric type.
 
 
 ={============================================================================
@@ -38223,7 +38403,7 @@ CLR 15.10
 
 The mechanisms of stream classes can also be used to read from strings or to
 write to strings. `stringstream` provide a buffer but don't have an I/O
-channel.  This buffer/string can be manipulated with special functions. 
+channel. This buffer/string can be manipulated with special functions. 
 
 <usecase>
 A major use of this capability is the processing of I/O independent of the
@@ -38433,6 +38613,22 @@ for( const auto &entry : people )
           badNums.str() << endl;
   }
 }
+
+
+<cpp-istringstream-conversion>
+Input string streams are used mainly for formatted reading from existing
+strings. For example, it is often easier to read data line by line and then
+analyze each line individually. The following lines read the integer x with
+the value 3 and the floating-point f with the value 0.7 from the string s:
+
+{
+    int x; float f;
+    std::istringstream is("3.7");
+    is >> x >> f;
+    std::cout << "x: " << x << ", f: " << f << std::endl;
+}
+
+x: 3, f: 0.7
 
 
 ={============================================================================
