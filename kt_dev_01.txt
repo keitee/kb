@@ -9638,6 +9638,7 @@ that group is unspecified? NO when involves `evaluation`
 
 CPR p138.
 
+<cpp-order-of-evaluation>
 The `order-of-operand-evaluation` is `independent` of `precedence` and
 `associativity`.
 
@@ -9915,8 +9916,8 @@ underscore followed immediately by an uppercase letter.
 
 
 {variable}
-Avoid leading underscores for member variables since the standard reserves some.
-EXPC++ suggests member variables with trailing underscores.
+Avoid leading underscores for member variables since the standard reserves
+some. EXPC++ suggests member variables with trailing underscores.
 
 class Complex
 {
@@ -9930,6 +9931,7 @@ class TextQuery {
         using line_no = std::vector<std::string>::size_type;
 
     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
+
 
 ={============================================================================
 *kt_dev_lang_020* style-bracing-allman
@@ -10555,9 +10557,11 @@ string dots(10, '.');
 string s(dots);
 string null_book( "9-999-99999-9" );
 
+// `copy-init when converting-ctor` 
+string null_book = "9-999-99999-9"; 
+// `copy-init when copy-ctor` but no copy-assign called
+string s2 = s1;                     
 
-string null_book = "9-999-99999-9"; // `copy-init when converting-ctor` called
-string s2 = s1;                     // `copy-init when copy-ctor` called
 
 void f(vector<int>);
 f(10);                        // error since ctor that takes a size is explicit
@@ -10643,15 +10647,15 @@ value-init:
 ={============================================================================
 *kt_dev_cpp_005* cpp-init-copy-form
 
-The `copy-init` uses `converting-ctor` when `implicit-conversion` is necessary
-to make a call succeed and use `copy-ctor` when not. 
-
-`direct-init` uses function matching which means uses ctor with matching type
-parameter and copy-init use copy-ctor or converting-ctor if conversion is
-necessary which is used in implicit-conversion.
+The `copy-init` and `direct-init` uses `converting-ctor` if
+`implicit-conversion` is necessary to make a call succeed and use `copy-ctor`
+when not. The both use function matching to select a correct ctor. However,
+copy-init implicitly uses ctors.
 
 string null_book = "9-999-99999-9"; // `copy-init when converting-ctor` called
 string s2 = s1;                     // `copy-init when copy-ctor` called
+string s2(s1);                      // `direct-init when copy-ctor` called
+string s2("9-999");                 // `direct-init when converting-ctor` called
 
 Question is "does these above statements involve copy-assign?"
 
@@ -10663,6 +10667,24 @@ For example, what calls involved in this statments?
 calls converting or copy ctor to build right-side of statements. NO copy
 assign gets called. this example calls three Query ctor and two overloaded
 operators. 
+
+
+> WordQuery::WordQuery
+> Query::Query
+> WordQuery::WordQuery
+> Query::Query
+> WordQuery::WordQuery
+> Query::Query
+
+> Query::Query(const Query&): fiery
+> Query::Query(const Query&): bird
+> AndQuery::AndQuery
+> Query::Query(shared_ptr)
+
+> Query::Query(const Query&): (fiery & bird)
+> Query::Query(const Query&): wind
+> OrQuery::OrQuery
+> Query::Query(shared_ptr)
 
 
 <ex> 
@@ -10746,7 +10768,7 @@ int main()
 
 <ex>
 // explicit converting-ctor prevent use of copy-init but direct-init is okay
-// to use. WHY when there is no matching ctor? see *why-direct-init*
+// to use. WHY direct-init is explicit and see *why-direct-init*
 
 #include<iostream>
 #include<string>
@@ -10780,7 +10802,7 @@ int main()
     // copy-init
     MSTR m3 = "mstring three";
 
-    // direct-init
+    // direct-init uses converthing-ctor
     // MSTR m3("mstring three");
 }
 
@@ -10822,12 +10844,8 @@ class MSTR
 
 int main()
 {
-  cout << "main:" << endl;
-
-  MSTR m3("mstring three");
-  MSTR m3 = "mstring three";
-
-  cout << "main:" << endl;
+  MSTR m3("mstring three");       // converting-ctor
+  MSTR m3 = "mstring three";      // converting-ctor
 }
 
 <ex>
@@ -11677,7 +11695,7 @@ Used in contexts:
 
 * `copy-form-init` for the same type and converting-ctor for different type
 * `pass-by-value` function call for `nonreference` type parameter
-* `return-by-value` for nonreference type
+* `return-by-value` for nonreference type *cppy-copy-ctor-return*
 
   *cpp-remember*
   converting-ctor will be used if return statement requires conversion.
@@ -14590,6 +14608,32 @@ int main()
 
     ifs.close();
 }
+
+
+{
+  Query q = Query("fiery") & Query("bird") | Query("wind");
+}
+
+> WordQuery::WordQuery
+> Query::Query
+> WordQuery::WordQuery
+> Query::Query
+> WordQuery::WordQuery
+> Query::Query
+
+> Query::Query(const Query&): fiery
+> Query::Query(const Query&): bird
+> AndQuery::AndQuery
+> Query::Query(shared_ptr)
+
+> Query::Query(const Query&): (fiery & bird)
+> Query::Query(const Query&): wind
+> OrQuery::OrQuery
+> Query::Query(shared_ptr)
+
+Why Query copy-ctor gets called? Since BinaryQuery has two Query members which
+copy constructed in ctor. However, Query only has shared_ptr member and not
+really problem of having a copy-ctor.
 
 
 ={============================================================================
@@ -36584,11 +36628,11 @@ This is for only sequence containers with algorithms because associative and
 unordered containers cannot be used as a destination for overwriting
 algorithms.
 
-# reads
+// reads
 
 equal( one.cbegin(), one.cend(), two.cbegin() );   // assumes two >= one
 
-# write, 'destination'
+// write, 'destination'
 
 // coll2 must have enough room to copy
 copy (coll1.cbegin(), coll1.cend(), coll2.begin()); // destination
@@ -36634,8 +36678,10 @@ bool equal (InputIterator1 beg, InputIterator1 end, InputIterator2 cmpBeg)
 bool equal (InputIterator1 beg, InputIterator1 end, InputIterator2 cmpBeg, BinaryPredicate op)
 
 The caller must ensure that the range starting with cmpBeg contains enough
-elements. Complexity: linear (at most, numElems comparisons or calls of op(),
-    respectively).
+elements. 
+
+Complexity: 
+linear (at most, numElems comparisons or calls of op(), respectively).
 
 #include <iostream>
 #include <vector>
@@ -37049,7 +37095,7 @@ conversion from ‘int’ to ‘std::list<std::basic_string<char> >::value_type&
 
 
 ={============================================================================
-*kt_dev_stl_070* stl-string
+*kt_dev_stl_070* cpp-string
 
 C++ SLR 13.
 
