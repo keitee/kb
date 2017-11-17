@@ -94,7 +94,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_lang_016* expr-unary
 *kt_dev_lang_016* expr-assign
 *kt_dev_lang_016* expr-conditional (the ?: operator)
-*kt_dev_lang_017* style-identifier-variable
+*kt_dev_lang_017* style-name
 |kt_dev_lang_020| style-bracing-allman
 |kt_dev_lang_021| style-comments
 |kt_dev_lang_018| style-compound-type
@@ -159,20 +159,20 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_019| except-case
 |kt_dev_cpp_019| except-blanket catch and hidden exception
 *kt_dev_cpp_019* except-and-finally
-*kt_dev_cpp_021* code-check
+*kt_dev_cpp_021* cpp-code-check
 |kt_dev_cpp_022| cpp-inheri
 *kt_dev_cpp_022* cpp-inheri-multiple
 *kt_dev_cpp_022* inheri-ctor-initializers
 *kt_dev_cpp_022* cpp-access-control
 *kt_dev_cpp_022* inheri-rtti
 |kt_dev_cpp_023| cpp-override
-*kt_dev_cpp_023* cpp-inheri-is-a-model
-*kt_dev_cpp_023* inheri-public
-*kt_dev_cpp_023* class-template-pattern
+*kt_dev_cpp_023* cpp-class-model
+*kt_dev_cpp_023* cpp-pattern-template
+*kt_dev_cpp_023* cpp-inheri-model-avoid-public
+*kt_dev_cpp_023* cpp-inheri-public
 *kt_dev_cpp_023* cpp-pimpl
 *kt_dev_cpp_023* cpp-interface
 *kt_dev_cpp_023* inheri-strategy-pattern
-*kt_dev_cpp_023* inheri-class-relationship
 *kt_dev_cpp_023* inheri-class-relationship abuse-of-inheritance
 *kt_dev_cpp_024* cpp-incomplete-type forward-declaration
 *kt_dev_cpp_024* class-empty-base-class-optimization
@@ -9884,7 +9884,7 @@ cout << grade < 60 ? "fail" : "pass");        // error
 
 
 ={============================================================================
-*kt_dev_lang_017* style-identifier-variable
+*kt_dev_lang_017* style-name
 
 Q: Is it okay to use like #define _DECLTYPE(_T) typeof(_T) ?
 
@@ -9900,8 +9900,8 @@ Certain sets of names and function signatures are always reserved to the
 implementation:
 
 Each name that contains a double underscore (__) or begins with an underscore
-followed by an uppercase letter (2.11) is reserved to the implementation for any
-use.  
+followed by an uppercase letter (2.11) is reserved to the implementation for
+any use.  
 
 Each name that begins with an underscore is reserved to the implementation for
 use as a name in the global namespace.165
@@ -9914,22 +9914,20 @@ not contain two consecutive underscores, nor can an identifier begin with an
 underscore followed immediately by an uppercase letter.
 
 
-{variable}
+{variable} {classname} {member-function}
 Avoid leading underscores for member variables since the standard reserves
 some. EXPC++ suggests member variables with trailing underscores.
 
-class Complex
-{
+class TextQuery {
   public:
-    explicit Complex(double real, double imaginary = 0)
+    explicit TextQuery(double real, double imaginary = 0)
       : real_(real), imaginary_(imaginary)
     {}
+
+    using line_no = std::vector<std::string>::size_type;
+
+    sale.add_item (shared_ptr<Quote>(new Quote("123", 45)));
 };
-
-class TextQuery {
-        using line_no = std::vector<std::string>::size_type;
-
-    sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
 
 
 ={============================================================================
@@ -15308,6 +15306,134 @@ isbn : 912, sold : 6, total sales: 157.5
 
 
 ={============================================================================
+*kt_dev_cpp_200* cpp-abc-call-in-dtor
+
+<cxa-pure-virtual>
+// from mapfile
+ .text.__cxa_pure_virtual
+                0x00000000004027b0       0x1f /usr/lib/gcc/x86_64-linux-gnu/4.9/libstdc++.a(pure.o)
+                0x00000000004027b0                __cxa_pure_virtual
+
+// gcc/libsupc++/pure.cc
+
+extern "C" void
+__cxxabiv1::__cxa_pure_virtual (void)
+{
+  writestr ("pure virtual method called\n");
+  std::terminate ();
+}
+
+<purpose>
+https://stackoverflow.com/questions/920500/what-is-the-purpose-of-cxa-pure-virtual?noredirect=1&lq=1
+If anywhere in the runtime of your program an object is created with a virtual
+function pointer not filled in, and when the corresponding function is called,
+you will be calling a 'pure virtual function'.
+
+The handler you describe should be defined in the default libraries that come
+with your development environment. If you happen to omit the default
+libraries, you will find this handler undefined: the linker sees a
+declaration, but no definition. That's when you need to provide your own
+version.
+
+The infinite loop is acceptable because it's a 'loud' error: users of your
+software will immediately notice it. Any other 'loud' implementation is
+acceptable, too.
+
+
+https://stackoverflow.com/questions/99552/where-do-pure-virtual-function-call-crashes-come-from
+They can result if you try to make a virtual function call from a constructor
+or destructor. Since you can't make a virtual function call from a constructor
+or destructor (the derived class object hasn't been constructed or has already
+    been destroyed), it calls the base class version, which in the case of a
+pure virtual function, doesn't exist.
+
+class Base
+{
+public:
+    Base() { doIt(); }  // DON'T DO THIS
+    virtual void doIt() = 0;
+};
+
+void Base::doIt()
+{
+    std::cout<<"Is it fine to call pure virtual function from constructor?";
+}
+
+class Derived : public Base
+{
+    void doIt() {}
+};
+
+int main(void)
+{
+    Derived d;  // This will cause "pure virtual function call" error
+}
+
+
+When run on GCC 4.9.2, see Base::doIt() gets called rather than
+__cxa_pure_virtual() called. Believe that __cxa_pure_virtual is default
+setting for vtable.
+
+
+<ex>
+in this case, provides own __cxa_pure_virtual(). see this pointer, 0x2b02b4fc,
+gets changed and item is getting freed?
+
+Core was generated by `/NDS/bin/MW_Process MW_Process'.
+Program terminated with signal 8, Arithmetic exception.
+#0  0x008bee20 in __cxa_pure_virtual () at ms_utils.cpp:103
+#0  0x008bee20 in __cxa_pure_virtual () at ms_utils.cpp:103
+        _XDEBUG_TraceAssociationStr = 0x12f49a0 "< no-ctx >"
+        _XDEBUG_FuncInfo = {funcName = 0x12f4710 "__cxa_pure_virtual", dummy = 0}
+#1  0x00997a08 in MSCPP::ITEM::GetFilter (this=0x1, filter_type=MSCPP::E_MS_FILTER_TYPE_BUFFERPUMP) at item.cpp:6259
+        p_filter = 0xff0000 <PANEL_ReceiveMessage+1072>
+#2  0x0099b768 in MSCPP::ITEM::SetItemRunningJobs (`this=0x2b02b4fc`, p_item_running_jobs=0x2b02b4fc) at item.cpp:15740
+No locals.
+#3  0x0099b7c8 in MSCPP::ITEM::UndoGraph (this=0xff0000 <PANEL_ReceiveMessage+1072>, graph_index=1) at item.cpp:15688
+No locals.
+0x4, p_params = `0x2b02b4fc`, callback = 0x98fce8 <MSCPP::ITEM::ActionListFsm_SetState(MSCPP::ITEM_ACTION_LIST_FSM_STATE)+28>}, undo_event = {p_action_list = 0x4, callback = 0x2b02b4fc}, action_done_event = {action_id = 4, p_out_params = 0x2b02b4fc, result = 10026216}, action_undone_event = {action_id = 4, result = 721597692}}}
+        _XDEBUG_FuncInfo = {funcName = 0x1333440 "ActionFsm_HandleUndoEvent", dummy = 0}
+
+    class MS_FILTER : public TRACE_ASSOCIATION, private virtual NonCopyable
+    {
+        public:
+            virtual MS_FILTER *GetSource(_in_ ITEM       *p_item) = 0;
+            virtual MS_FILTER *GetDest(_in_ ITEM         *p_item) = 0;
+    };
+
+    class SHARED_FILTER : public MS_FILTER
+    {
+      // no override
+    };
+
+    class BUFFERPUMP_FILTER : public SHARED_FILTER, public MS_SRC_PUSH, public MS_DEST_PULL
+    {
+      public:
+        virtual MS_FILTER *GetSource(_in_ ITEM       *p_item);
+        virtual MS_FILTER *GetDest(_in_ ITEM         *p_item);
+    };
+
+
+MS_FILTER* ITEM::GetFilter(_in_ MS_FILTER_TYPE   filter_type)
+{
+    MS_FILTER *p_filter = m_p_source_filter;
+
+    while (p_filter != XNULL)
+    {
+	if (p_filter->GetType() == filter_type)
+	{
+	    break;
+	}
+	p_filter = p_filter->GetDest(this);
+    }
+
+    return p_filter;
+}
+
+so what's the actual filter type? is it in the middle of free?
+
+
+={============================================================================
 *kt_dev_cpp_004* cpp-copy-preventing-copies cpp-delete
 
 {preventing-copies} delete-keywords
@@ -15728,8 +15854,8 @@ int main()
 
 CPR 552
 
-Operator overloading defines the meaning of an operator applied to operand(s) of
-a 'class' type.
+Operator overloading defines the meaning of an operator applied to operand(s)
+of a 'class' type.
 
   * Overloaded operators are 'functions' with special names
   
@@ -15742,8 +15868,8 @@ a 'class' type.
   * Member operator function has `this` bound to lhs operand. 
   
   * Operator function must either be a member of a class or have at least one
-    parameter of class type. Since cannot change operators of built-in types and
-    argument dependant lookup for nonmember case.
+    parameter of class type. Since cannot change operators of built-in types
+    and argument dependant lookup for nonmember case.
 
   * Operator function has the same precedence and associativity as built-in
     operator.
@@ -15757,8 +15883,6 @@ a 'class' type.
 {member-or-nonmember}
 Decide whether to implement operator function as either a member or nonmember?
 
-<call-overloaded-operators>
-
 // nonmember case
 data1 + data2;
 operator+(data1, data2);
@@ -15767,16 +15891,14 @@ operator+(data1, data2);
 data1 += data2;
 data1.operator+=(data2);
 
-
-<what-decide>
   * For member, the first(lhs) operand is bound to implict `this` 
 
   * For member, the `lhs` operand must be an object of the class of which that
     operator is a member. 
   
   * 'symmetric' operators - those that might convert either oparand, such as
-    arithmetic, equiality, relational, and bitwise operators - usually should be
-    nonmember.
+    arithmetic, equiality, relational, and bitwise operators - usually should
+    be nonmember.
 
     Since use symetric operators with mixed types. For example, can add `int`
     and `double` which can use either type as lhs or rhs operand. To provide
@@ -15784,34 +15906,32 @@ data1.operator+=(data2);
     allow 'conversion' since member fixes ths lhs type.
 
 
-{compound-op}
-The assign op 'must' be `nonmember` since the literal, "hi!, do not have member operations.
+{assignment-version} {compound-op}
+The standalone version of op 'must' be `nonmember` since the literal, "hi!",
+    do not have member operations.
 
 string u = "hi" + s; 
 
-However, operator+= is 'not' commutative and must be `member`.
+a = b + 1.0;
+a = 1.0 + b;
 
-data1 += data2;
+However, the assignment version, operator+=(), is 'not' symmetric and
+commutative. they are different and must be `member`.
 
-equals to: 
+data1 += data2;   // data1.operator+=(data2);
+data2 += data1;   // data2.operator+=(data1);
 
-data1.operator+=(data2);
-
-It it was nonmember, then:
-
-data1 += data2;
-data2 += data1;
-
-are the same. Howerver, they are different and 'must' be member. 
 
 note: 
 CPR 564. Compound assignment operators are 'not' required to be members. So
 "assignment operators 'must', and ordinarily compound assignment operators
 'should', be defined as members.
 
-note:
-EXPC++ Item 20. The operator+= is more efficient since it operates on the `lhs`
-directly and returns only a reference, not a temporary object.
+
+*cpp-remember*
+EXPC++20. The operator+= is more efficient since it operates on the `lhs`
+directly and returns only a reference, not a temporary object. The standalone
+version should be implemented in terms of assignment version.
 
 T& T::operator+=(const T& other)
 {
@@ -15819,10 +15939,20 @@ T& T::operator+=(const T& other)
   return *this;
 }
 
+This must return `const return` and see *const-return* to prevent this:
+
+const Number operator+( const Number& lhs, const Number& rhs );
+Number a, b, c;
+a + b = c;
+
+// How to eliminate this cost? Not always possible to shun this. Can use
+// operator+= and see MEC++22 for more. Or can use compiler's
+// <return-value-optimisation> in MEC++20.
+
 const T operator+(const T& a, const T& b)
 {
   T temp(a);
-  temp += b;                // implemented in terms of +=
+  temp += b;                // `implemented in terms of` +=
   return temp;
 }
 
@@ -15856,8 +15986,7 @@ class StrVec {
 };
 
 
-{io-op}
-Ordinarily:
+{input-output}
 
   * the first parameter of an output operator is reference to `nonconst` since
     writing to the stream changes its state.
@@ -15865,9 +15994,12 @@ Ordinarily:
   * the second parameter should be a reference to `const` since avoids copying
     and printing does not change that object.
 
-  * return its stream parameters.
+  * return its stream parameters for chaining
+  
+  * implemented in terms of member or virtual member function which do actual
+    work.
 
-IO operators(<<, >>) 'must' be `nonmember` and usually a 'friend' since uses
+<<, >> operators 'must' be `nonmember` and usually a 'friend' since uses
 private members. 
 
 istream &operator>>(istream &is, Sales_data &item);
@@ -15942,19 +16074,12 @@ class StrVec {
 
 
 {increment-decrement}
+
 * Should be member since change the state of the object.
+
 * Should define both the prefix and postfix version.
 
 <prefix>
-
-// // prefix: return a reference to the incremented object
-// StrBlobPtr& StrBlobPtr::incr() const
-// {
-//   // if curr already points past the end, can't increment it.
-//   check(curr, "increment past end of StrBlobPtr");
-//   curr++;
-//   return *this;
-// }
 
 class StrBlobPtr {
   public:
@@ -15962,19 +16087,24 @@ class StrBlobPtr {
     StrBlobPtr &operator--();
 };
 
+*cpp-remember* return a reference to the incremented object
+
 StrBlobPtr &StrBlobPtr::operator++()
 {
   check(curr, "increment past end of StrBlobPtr");
   ++curr;
-  // note: How get reference to incremented element? When use operator*(), uses
-  // incremented curr.
+
+  // not return the reference of incremented element? use curr when use
+  // operator*() and see *cpp-op-member-access* 
+
   return *this;
 }
 
 StrBlobPtr &StrBlobPtr::operator--()
 {
-  // note: Why --curr before check()? see code-check.
+  // *cpp-remember* Why --curr before check()? see cpp-code-check
   --curr;
+  
   check(curr, "decrement past begin of StrBlobPtr");
   return *this;
 }
@@ -15992,14 +16122,16 @@ class StrBlobPtr {
     StrBlobPtr &operator--(int);
 };
 
-StrBlobPtr StrBlobPtr::operator++(int)
+*cpp-remember* return const to prevent like "a++++"
+
+const StrBlobPtr StrBlobPtr::operator++(int)
 {
   StrBlobPtr ret = *this;   // saves the current value
-  ++*this;                  // own prefix ++ checks the increment
-  return ret;               // return the old. copy!
+  ++*this;                  // no checks since `implemented in terms of` +=
+  return ret;               // return the old copy
 }
 
-StrBlobPtr StrBlobPtr::operator--(int)
+const StrBlobPtr StrBlobPtr::operator--(int)
 {
   StrBlobPtr ret = *this;
   --*this;
@@ -16358,6 +16490,14 @@ work? The compiler do implicit conversion to make a call succeed and creates a
 
 item.combine(Sales_data(str));
 
+<ex>
+Since the second parameter has a default value, this can be used as a single
+parameter ctor and, hence, as an implicit conversion. make it explicit.
+
+Complex (double real, double imaginary = 0)
+  : real_(real), imaginary_(imaginary)
+{}
+
 
 <only-one-conversion-allowed>
 The compiler will do only 'one' implicit conversion and the following is error.
@@ -16671,18 +16811,6 @@ pair<string, int> process( vector< string > v )
   else
     return pair<string, int>();
 }
-
-<ex> 
-This must be 'const' return and see {const-return}. If not, the following is
-legal: 
-
-const Number operator+( const Number& lhs, const Number& rhs );
-Number a, b, c;
-a + b = c;
-
-How to eliminate this cost? Not always possible to shun this. Can use
-operator+= and see MEC++22 for more. Or can use compiler's
-<return-value-optimisation> in MEC++20.
 
 <ex>
 const char* PersonInfo::theName() const;
@@ -21448,7 +21576,7 @@ A: Allocate local objects whose destructors perform cleanup
 
 
 ={============================================================================
-*kt_dev_cpp_021* code-check()
+*kt_dev_cpp_021* cpp-code-check()
 
 ... [0               (size-1)] size ...
     <------------------------>
@@ -22425,7 +22553,7 @@ int main()
 The final-keyword is used to end override as with final-keyword in inheritance.
 
 
-{cpp-override-access-control}
+{cpp-override-access-control} *cpp-access-control*
 override do not respect access-control in derived class.
 
 class B2 {
@@ -22502,40 +22630,45 @@ pD->mf();      // same object but D::mf
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-inheri-is-a-model
+*kt_dev_cpp_023* cpp-class-model
 
-EC++ 32, 38, 39.
+EC++32, 38, 39
 
 {is-a-model} `public-inheritance` EC++32
 The base represent a more 'general' concept than the derived since the derived
-represent a more specialised concept. Means that can use the derived where the
-base can be used. 
+represent a more `specialised concept.` Means that can use the derived where
+the base can be used and means anything that is true of the base is also true
+of the derived.
 
 Think this example and is it right 'relationship' in C++?
 
 class Square : public Rectangle;
+class Bird : public Penguin;
 
-No. Usually general means bigger set but not in C++ which is smaller. So, it's
-better to use "abstract" word than general and limits general to mean the
-'common' between them.
+No. English is different from C++
 
-As with scope rule in name search, the derived is nested in the base in logical.
-In C++, in order to be public inheritance, there shall be `is-a-model` or
-`works-like-a-model` for overrides that means anything that is true of the base
-is also true of the derived.
+
+<implementation-inheritance-interface-inheritance>
+
+EXPC++22
+
+Never use public inheritance except to model ture `is-a-model` or
+`works-like-a-model`. All overridden member functions must require no more and
+promise no less.
+
 
 note:
-CodeComplete p144. LSP (Liskov Substitution Principle) All the routines defined
-in the base class should mean the same thing when they are used in each of
-derived classes. Semantic meaning. Reduce complexity. 
+CodeComplete p144. LSP (Liskov Substitution Principle) All the routines
+defined in the base class should mean the same thing when they are used in
+each of derived classes. Semantic meaning. Reduce complexity. 
 
 
 {has-a-model} EC++38
 The composition has other synonyms such as containment, aggregation, or
-membership. Two types of composition: `has-a-model` in application domain and
-`is-implemented-in-terms-of-model` in implementation domain.
+membership. `is-implemented-in-terms-of-model` is spelled either private
+inheritance or membership.
 
-<ex> `has-a-model`
+<ex> `has-a-model` composition
 This is a composition in application domain and says that Person 'has' a name. 
 
 class Person {
@@ -22558,9 +22691,9 @@ instead?
 template<typename T>
 class Set: 'public' std::list<T>;
 
-We 'cannot' use `public-inheritance` since it is not `is-a-model` and std::list
-can have duplicates. The right way is to implement by using it and this is a
-composition in implementation domain.
+We 'cannot' use `public-inheritance` since it is not `is-a-model` and
+std::list can have duplicates. The right way is to implement by using it and
+this is a composition in implementation domain.
 
 template<class T>
 class Set {
@@ -22577,7 +22710,7 @@ class Set {
 template<typename T>
 bool Set<T>::member( const T& item ) const
 {
-  // note: is there find member function in list? 
+  // is there find member function in list? no.
   return std::find( rep.begin(), rep.end(), item ) != rep.end() );
 }
 
@@ -22603,8 +22736,9 @@ std::size_t Set<T>::size() const
 
 
 {private-inheritance} EC++39
-The private inheritance is implementation inheritance; inherits impelementation
-only but not interface which means `is-implemented-in-terms-of-model` 
+The private inheritance is implementation inheritance; inherits
+impelementation only but not interface which means
+`is-implemented-in-terms-of-model` 
 
 The composition is also is-implemented-in-terms-of so which do we need to use
 between them? 'prefer' composition whenever possible. 
@@ -22631,7 +22765,7 @@ class Widget : 'private' Timer {
     ...
 };
 
-<composition>
+
 Instead, can use composition approach.
 
 class Widget {
@@ -22649,10 +22783,10 @@ class Widget {
 };
 
 
-note: 
-When derives a class from Widget but want that class do not redefine onTick? Not
-possible using private inheritance. So the composition is an approach before
-C++11 to prevent derivation and final keyword in C++11.
+<cpp-prevent-derivation>
+When derives a class from Widget but want that class do not redefine onTick?
+Not possible using private inheritance. So the composition is an approach
+before C++11 to prevent derivation and final keyword in C++11.
 
 
 {compositions-over-private}
@@ -22664,21 +22798,357 @@ C++11 to prevent derivation and final keyword in C++11.
  
 * The composition is eaiser to understand.
 
-Use `private-inheritance` only when is absolutely necessary; when need to access
-protected area of the base and to redefine virtual functions of base but no
-conceptual relationship. 
+Use `private-inheritance` only when is absolutely necessary; when need to
+access protected area of the base and to redefine virtual functions of base
+but no conceptual relationship. 
 
-CodeComplete(p143) PI violates encapsulation and tends to point to design errors
-that should be resolved.
+CodeComplete(p143) PI violates encapsulation and tends to point to design
+errors that should be resolved.
 
 
 ={============================================================================
-*kt_dev_cpp_023* inheri-public
+*kt_dev_cpp_023* cpp-pattern-template
+
+EC++35
+
+The design pattern [REF003] called it template-method and define skeleton of
+an algorithm in an operation.
+
+Deferring 'some' steps to subclass without default implementation of some
+steps. Must be overridden.
+
+note: Says that that template method is non-virtual function in base and
+protected pure virtual function in derived.
+
+note: The template method has "Don't call us, we'll call you" that means
+parent class calls derived compared with when derived calls parent class.
+
+<ex>
+Application framework where application subclass application and document to
+suit speficif needs. For example, a drawing application defines
+DrawApplication and DrawDocument subclass.
+
+Document                Application
++Save()                 +AddDocument()
++Open()                 +OpenDocument()
++Close()                +DoCreateDocument()*
++DoRead()*              +CanOpenDocument()*
+                        +AboutToOpenDocument()*
+
+MyDocument              MyApplication
++DoRead()               +DoCreateDocument()           // return new MyDocument
+                        +CanOpenDocument()
+                        +AboutToOpenDocument()
+
+// this is template method
+void Application::OpenDocument( const char* name ) {
+  if( !CanOpenDocument(name)) {
+    // cannot handle this document
+    return;
+  }
+
+  // *cpp-pattern-factory-func* to create application specific document
+  Document* doc = DoCreateDocument();  
+
+  // steps
+  if(doc) {
+    _docs->AddDocument(doc);
+    AboutToOpenDocument(doc);
+    doc->Open();
+    doc->DoRead();
+  }
+}
+
+
+* Without chaning the algorithm's structure, the template-method defines steps
+  in terms of abstract operations that subclass override to provide concrete
+  behavior. `define invariant parts once` and `leave variant part to subclass.`
+
+* Refactoring. To avoid code duplication, identify the differences among
+  existing subclasses and then separate the differences into new operations,
+  replace the differing code with a template method(in base) that calls one of
+  these new operations. This is also about code resuse but difference is
+  steps, that is template method(function).
+
+* Hook operations.
+
+
+<cpp-pattern-nvi>
+EC++35. In the following example, different character may calculate their
+health in different ways. Use virtual? This is alternatives to usual virtual
+design. Called NVI(nonvirtual interface) idiom as a 'public' nonvirtual in the
+base call a 'private' virtual func that can be redefined but it's little more
+than window dressing as still use virtuals. 
+
+There are 'how' and 'when': template-method means that base controls when and
+derived control how.
+
+note: EC++ limits template method when it uses private virtual and EXPC++ p84
+also says "avoid public virtial functions; prefer using the template method
+pattern instead."
+
+
+class GameCharacter {
+  public:
+    int healthValue() const
+    {
+      // steps
+      // do before stuff 
+      int retVal = doHealthValue();
+      // do after stuff
+    }
+
+  private:     // note: see this is private and {text-query-example}
+    virtual int doHealthValue() const
+    {
+      // default calc code
+    }
+};
+
+class XGameCharacter : public GameCharacter;
+
+The base defines before and after stuff and when to call the derived part that
+is the derived dependent. The before and after can be lock/unlock, logging,
+   pre/post condition.
+
+note:
+For primitive operation which should be overridden, often prefix names with
+Do: DoRead as DoCreateDocument shown above.
+
+
+<hook-operation>
+To 'extend' parent class operation. But it is esay to forget to call the
+inherited function so can use template-method to give the parent class a
+control over how subclasses extend it. This is called hook-operation. 
+
+virtual void DerivedClass::Operation() {
+  ParentClass::Operation();
+  // additional
+}
+
+void ParentClass::Operation() {
+  // parent class behavior
+  HookOperation();
+}
+
+virtual void ParentClass::HookOperation() { }
+
+virtual void DerivedClass::HookOperation() {
+  // derived class extension
+}
+
+
+<private-or-protected>
+This example is from <cast-create-a-temp-object> to show the problem of cast
+and to show case that virtual memeber function in derived calls base class
+conterparts first.
+
+class Window {
+  public:
+    virtual void onResize() { ... }
+    ...
+};
+
+class SpecialWindow : public Window {
+  public:
+    virtual void onResize() {
+      Window::onResize();
+      // additional to the derived
+    }
+    ...
+};
+
+As with hook operation, this is to extend operation and should the Do
+operation be protected or private? If it was private, then errors so should be
+protected. note: However, can use hook operation instead.
+
+usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
+usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
+usetemppattern.cpp:51:20: error: within this context
+
+
+={============================================================================
+*kt_dev_cpp_023* cpp-inheri-model-avoid-public
+
+EXC++23. How to avoid public-inheritance using template-pattern 
+See *cpp-pattern-nvi* and *cpp-ex-query-example*
+
+class GenericTableAlgorithm
+{
+  public:
+    GenericTableAlgorithm(const string& table);
+    virtual ~GenericTableAlgorithm();
+
+    // it does all the work:
+    //
+    // a) physically reads the table's records, calling Filter() on each to
+    // determine whether it should be included in the rows to be processed 
+    //
+    // b) when the list of rows to operate upon is complete, call ProcessRow()
+    // for each row.
+
+    bool Process();
+
+  private:
+    virtual bool Filter(const Record&);
+    virtual bool ProcessRow(const PrimaryKey&) = 0;
+
+    struct GenericTableAlgorithmImpl* pimpl_;
+};
+
+// client or other developer's code to extend worker class
+
+class MyAlgorithm : 'public' GenericTableAlgorithm
+{
+  // override Filter() and ProcessRow() to implement a specific operation
+};
+
+class YourAlgorithm : 'public' GenericTableAlgorithm
+{
+  // override Filter() and ProcessRow() to implement a specific operation
+};
+
+
+// client code
+
+int main()
+{
+  MyAlgorithm a("Customer");
+  a.Process();
+
+  or
+
+  YourAlgorithm a("Customer");
+  a.Process();
+}
+
+Uses two pattern:
+
+  * The `cpp-pattern-pimpl` hides the implementation behind an opaque pointer
+    so that any changes to them will not require client code to compile.
+    Called `compiler-firewall-idiom` and `opaque-pointer` is a pointer to a
+    declared but undefined class.
+
+    struct XxxxImpl; XxxxImpl* pimpl_;
+
+  * *cpp-pattern-template-func*
+
+
+<no-inheritance>
+
+This holds two responsibilities, two users, to support different audiences.
+
+  "Always give each piece of code-module, class, function - a single,
+  well-defined responsibility."
+
+* Client code uses the algorithm. `interface`
+
+* Code to extend GenericTableAlgorithm for specialized specific case or usage.
+  `implementation`
+
+
+// one: `public interface for user` and use *cpp-pattern-pimpl* to remove
+// compile dependancy. 
+
+class GTAClient;
+
+class GenericTableAlgorithm
+{
+  public:
+    GenericTableAlgorithm(const string& table
+                          `GTAClient& worker`);
+
+    // Have separated away the inheritance relationship so the dtor doesn't need
+    // to be virtual.
+    ~GenericTableAlgorithm();
+
+    // Does all the work; calling Filter() and ProcessRow()
+    bool Process();
+
+    struct GenericTableAlgorithmImpl* pimpl_;
+};
+
+
+// two: concrete implementation detail class for writers to extend
+
+class GTAClient
+{
+  public:
+    virtual ~GTAClient() = 0;
+    virtual bool Filter(const Record&);
+    virtual bool ProcessRow(const PrimaryKey&) = 0;
+};
+
+class MyWorker : public GTAClient
+{
+  // override Filter() and ProcessRow() to implement a specific operation
+}
+
+class YourWorker : public GTAClient
+{
+  // override Filter() and ProcessRow() to implement a specific operation
+}
+
+int main()
+{
+  GenericTableAlgorithm a("Customer", MyWorker());
+  a.Process();
+}
+
+The good things are:
+
+* Any interface changes to GenericTableAlgorithm does 'not' affect the concrete
+  worker class at all since not in the inheritance.
+
+* Any protocal changes to GenericTableAlgorithm such as additional arguments
+  to Filter() or ProcessRow()? Not affect external users.
+ 
+* Any concrete worker class can be used with any other algorithm using
+  Filter()/ProcessRow() interface.
+
+*cpp-remember*
+Remember the computer science motto:
+  "Most problems can be solved by adding a level of indirection."
+
+
+<to-further>
+As GenericTableAlgorithm do not have member data, it does not need to keep
+'state' across invocations. So could replace it with function.
+
+bool GenericTableAlgorithm(const string& table, GTAClient& worker)
+{
+  // contents of Process()
+}
+
+int main()
+{
+  GenericTableAlgorithm("Customer", MyWorker());
+}
+
+
+Further, if worker object never need to store state, all instances are
+functionally equivalent and provide only virtual functions, then:
+
+template<typename GTACworker>
+bool GenericTableAlgorithm(const string& table)
+{
+  // contents of Process()
+}
+
+int main()
+{
+  // `cpp-template-explicit-argument`
+  GenericTableAlgorithm<MyWorker>("Customer");
+}
+
+
+={============================================================================
+*kt_dev_cpp_023* cpp-inheri-public
 
 EC++34 
 
 When design classes, should think 'three', pure virtual, virtual, and
-non-virtual, separately to specify with precision what you want derived classes
+nonvirtual, separately to specify with precision what you want derived classes
 to inherit.
 
 * Pure virtual (abstract). To have 'only' interface inherited. interface
@@ -22708,8 +23178,10 @@ Although this is classic OOD, has a problem. This is okay for model A and B but
 not C because C is different type of plane that has different way to fly and
 should have defined own fly(). 
 
+*cpp-remember* pure-virtual-can-force
 If C has forgot to redefine own, it will use the default. The solution is to
 'force' the derived explicitly request implementation if they need.
+
 
 <1> use ABC
 Has separation between interface and default implementation.
@@ -22741,7 +23213,7 @@ If forget to redefine ModelC::fly then will get errors in compile time because
 cannot create ModelC objects. That's because ModelC is ABC.
 
 
-<2> 
+<2> <pure-virtual-can-have-implementation> 
 Use the fact that pure virtual can have its implementation.
 
 class Airplane {
@@ -22770,235 +23242,13 @@ override, to request default implementation and if not override, emits errors.
 
 
 <3>
-Non-virtual (non-overridable). invariant over specialization. To have interface
-and 'mandatory' implementation that is default implementation but not
-overridable. 
+nonvirtual (non-overridable). invariant `over specialization.` To have
+interface and 'mandatory' implementation that is default implementation but
+not overridable. 
 
 
 ={============================================================================
-*kt_dev_cpp_023* class-template-pattern
-
-EC++35
-
-{template-pattern} 
-The design pattern [REF003] called it template-method and define skeleton of an
-algorithm in an operation.
-
-Deferring 'some' steps to subclass without default implementation of some steps.
-Must be overridden.
-
-note: Says that that template method is non-virtual function in base and
-protected pure virtual function in derived.
-
-note: The template method has "Don't call us, we'll call you" that means parent
-class calls derived compared with when derived calls parent class.
-
-<ex>
-Application framework where application subclass application and document to
-suit speficif needs. For example, a drawing application defines DrawApplication
-and DrawDocument subclass.
-
-Document                Application
-+Save()                 +AddDocument()
-+Open()                 +OpenDocument()
-+Close()                +DoCreateDocument()*
-+DoRead()*              +CanOpenDocument()*
-                        +AboutToOpenDocument()*
-
-MyDocument              MyApplication
-+DoRead()               +DoCreateDocument()           // return new MyDocument
-                        +CanOpenDocument()
-                        +AboutToOpenDocument()
-
-// this is template method
-void Application::OpenDocument( const char* name ) {
-  if( !CanOpenDocument(name)) {
-    // cannot handle this document
-    return;
-  }
-
-  // factory-func to create application specific document
-  Document* doc = DoCreateDocument();  
-
-  if(doc) {
-    _docs->AddDocument(doc);
-    AboutToOpenDocument(doc);
-    doc->Open();
-    doc->DoRead();
-  }
-}
-
-Use case:
-
-* Without chaning the algorithm's structure, the template-method defines steps
-  in terms of abstract operations that subclass override to provide concrete
-  behavior. Or it is to define 'invariant' parts once and leave 'variant' part
-  to subclass.
-
-* Refactoring. To avoid code duplication, identify the differences among
-  existing subclasses and then separate the differences into new operations,
-  replace the differing code with a template method(in base) that calls one of
-  these new operations. This is also about code resuse but difference is
-  steps, that is template.
-
-* Hook operations.
-
-
-<private-virtual>
-EC++35. In the following example, different character may calculate their health
-in different ways. Use virtual? This is alternatives to usual virtual design.
-Called NVI(non-virtual interface) idiom as a 'public' non-virtual in the base
-call a 'private' virtual func that can be redefined but it's little more than
-window dressing as still use virtuals. There are 'how' and 'when':
-template-method means that base controls when and derived control how.
-
-note: EC++ limits template method when it uses private virtual and EXPC++ p84
-also says "avoid public virtial functions; prefer using the template method
-pattern instead."
-
-
-class GameCharacter {
-  public:
-    int healthValue() const
-    {
-      // do 'before' stuff 
-      int retVal = doHealthValue();
-      // do 'after' stuff
-    }
-
-  private:     // note: see this is private and {text-query-example}
-    virtual int doHealthValue() const
-    {
-      // default calc code
-    }
-};
-
-The base defines before and after stuff and when to call the derived part that
-is the derived dependent. The before and after can be lock/unlock, logging,
-   pre/post condition.
-
-note:
-For a naming convention of primitive operation which should be overridden,
-    prefix names with Do: DoRead. Often used with {factory-func} as
-    DoCreateDocument shown above.
-
-<ex> shows that virtual functions can be overridden regardless of access
-specifier 
-
-#include <iostream>
-
-using std::cout;
-using std::endl;
-
-class Base {
-  public:
-    Base() { cout << "bas: this is ctor" << endl; }
-
-    void doCalc()
-    {
-      cout << "bas: doCalc" << endl;
-      doMorePub();
-      doMorePri();
-      doMorePro();
-      cout << "bas: called doMore" << endl;
-    }
-
-    virtual void doMorePub() { cout << "bas: doMorePub" << endl; }
-
-  private:
-    virtual void doMorePri() { cout << "bas: doMorePri" << endl; }
-
-  protected:
-    virtual void doMorePro() { cout << "bas: doMorePro" << endl; }
-};
-
-class Derived : public Base {
-  public:
-    Derived() { cout << "der: this is ctor" << endl; }
-
-    virtual void doMorePub() { cout << "der: doMorePub" << endl; }
-
-  private:
-    virtual void doMorePri()
-    {
-      // error Base::doMorePri();
-      cout << "der: doMorePri" << endl;
-    }
-
-  protected:
-    virtual void doMorePro() { cout << "der: doMorePro" << endl; }
-};
-
-int main(int argc, char** argv)
-{
-  Derived drv;
-  drv.doCalc();
-  cout << "end of main" << endl;
-}
-
-bas: this is ctor
-der: this is ctor
-bas: doCalc
-der: doMorePub
-der: doMorePri
-der: doMorePro
-bas: called doMore
-
-note: why this works? This is like {bitwise-const} as compiler picks up physical things since
-virtual calls are indirect calls which uses vptr to vtable.
-
-<hook-operation>
-The template-method can be used to 'extend' parent class 'operation' but not a class. 
-
-virtual void DerivedClass::Operation() {
-  ParentClass::Operation();
-  // additional
-}
-
-But it is esay to forget to call the inherited function so can use template-method to give the
-parent class a control over how subclasses extend it. This is called 'hook'-operation. 
-
-void ParentClass::Operation() {
-  // parent class behavior
-  HookOperation();
-}
-
-virtual void ParentClass::HookOperation() { }
-
-virtual void DerivedClass::HookOperation() {
-  // derived class extension
-}
-
-<private-or-protected>
-This example is from <cast-create-a-temp-object> to show the problem of cast and to show case that
-virtual memeber function in derived calls base class conterparts first.
-
-class Window {
-  public:
-    virtual void onResize() { ... }
-    ...
-};
-
-class SpecialWindow : public Window {
-  public:
-    virtual void onResize() {
-      Window::onResize();
-      // additional to the derived
-    }
-    ...
-};
-
-As with hook operation, this is to extend operation and should the Do operation be protected or
-private? If it was private, then errors so should be protected. note: However, can use hook
-operation instead.
-
-usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
-usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
-usetemppattern.cpp:51:20: error: within this context
-
-
-={============================================================================
-*kt_dev_cpp_023* cpp-pimpl
+*kt_dev_cpp_023* cpp-pattern-pimpl
 
 EC++31: minimize compilation dependencies
 
@@ -23008,15 +23258,15 @@ Two cases can cause complilation dependency problem:
 * No separation between interface and implementation in class definition which
   means header file changes.
 
-The implementation separation can be achieved when use func tables which has a
-set of fixed interfaces and this is often done via registration. Such as OS
-abstraction or driver abstraction which happens when porting.
+The `implementation separation` can be achieved when use function tables which
+has a set of fixed interfaces and this is often done via registration. Such as
+OS abstraction or driver abstraction which happens when porting.
  
 But, how to handle when interface changes? For example, when replace graphic
 library which has different interfaces. Usually talk about how to design
-interfaces for user but if user uses it everywhere and replace library, need to
-find every place using it. If there is a single point or file to use interfaces
-then better to cope with changes? More about C. 
+interfaces for user but if user uses it everywhere and replace library, need
+to find every place using it. If there is a single point or file to use
+interfaces then better to cope with changes? More about C. 
 
 This item is to reduce compliation dependancy by separating interface from
 implementation and this happens because C++ isn't very good at separating
@@ -23038,17 +23288,17 @@ class Person {
     Address theAddress;
 };
 
-This member data is 'implementaion' details and need class definition such as
-Date to compile. Hence headers of these class are needed:
+`member data is implementaion` details and need class definition such as Date
+to compile. Hence headers of these class are needed:
 
 // person.cpp
 #include <string>
 #include "date.h"
 #include "address.h"
 
-This cause cascading-compilation-dependencies. Suppose if this Date or Address
-class changes then classes using one of these should be compiled all over again.
-`cascading-compilation-dependencies`
+This cause `cascading-compilation-dependencies`. Suppose if this Date or
+Address class changes then classes using one of these should be compiled all
+over again.
 
 date.h    -- persoh.h -- xxx.cpp that use person class. 
 address.h --          -- xxx.cpp
@@ -23107,16 +23357,15 @@ pointer. No definition needed.
 * Need only 'declaration' for member function which uses a class as argument or
   return by value because the definition is needed only when 'call' a func or
   'define' a func. So if Date class changes then only need to recompile clients
-  that actually uses them but not all clients. See `forward-declaration` 
+  that actually uses them but not all clients. See *cpp-forward-declaration* 
  
 Date today(); void func(Date d);
 
-No Date definition is needed to declare these function. This removes dependency
-on definition and client should include necessary headers to 'actually' call
-these.
+No Date definition is needed to declare these function. This removes
+dependency on definition and client should include necessary headers to
+'actually' call these.
 
 
-<solution>
 // person.h, interface class
 class PersonImpl; // forward-declaration
 class Date;
@@ -23162,11 +23411,11 @@ note:
 
 EXC++26-31
 
-The `pimpl-pattern` has advantages:
+The *cpp-pattern-pimpl-pattern* has advantages:
 
 * Breaks compile-time dependencies.
 
-The `pimpl-pattern` has costs in performace:
+has costs in performace:
 
 * Each construction/destruction must allocate/deallocate memory.
 * At least one extra indirection and size overhead.
@@ -23568,7 +23817,7 @@ For MacApp framework example, class* DoMakeClass() where Class is the product cl
 
 
 ={============================================================================
-*kt_dev_cpp_023* inheritance-strategy-pattern
+*kt_dev_cpp_023* cpp-inheri-strategy-pattern
 
 {strategy-pattern} TODO: more clearer
 As with the same example as template pattern, calculate a health for a different game character.
@@ -23661,173 +23910,6 @@ class GameCharacter {
 };
 
 Can add/change calc func later because can have the drived classes in separate hierarchy.
-
-
-={============================================================================
-*kt_dev_cpp_023* inheri-class-relationship
-
-EXC++23. How to avoid public-inheritance using from template-pattern to
-strategy-pattern.
-
-<public-inheritance-from-template-pattern>
-
-class GenericTableAlgorithm
-{
-  public:
-    GenericTableAlgorithm(const string& table);
-    virtual ~GenericTableAlgorithm();
-
-    // Does all the work; calling Filter() on each table record an ProcessRow()
-    // for such row.
-    bool Process();
-
-  private:
-    virtual bool Filter(const Record&);
-    virtual bool ProcessRow(const PrimaryKey&) = 0;
-
-    struct GenericTableAlgorithmImpl* pimpl_;
-};
-
-// client or other developer's code to extend worker class
-
-class MyAlgorithm : 'public' GenericTableAlgorithm
-{
-  // override Filter() and ProcessRow() to implement a specific operation
-};
-
-class YourAlgorithm : 'public' GenericTableAlgorithm
-{
-  // override Filter() and ProcessRow() to implement a specific operation
-};
-
-
-// client code
-
-int main()
-{
-  MyAlgorithm a("Customer");
-  a.Process();
-
-  or
-
-  YourAlgorithm a("Customer");
-  a.Process();
-}
-
-
-The `pimpl-pattern` hides the implementation behind an opaque pointer so that
-any changes to them will not require client code to compile. Called
-`compiler-firewall-idiom` and `opaque-pointer` is a pointer to a declared but
-undefined class.
-
-struct XxxxImpl; XxxxImpl* pimpl_;
-
-
-This holds two responsibilities to support different audiences;
-
-* Client code uses the algorithm.
-* GenericTableAlgorithm uses the specialized concrete "details" class to
-  specialize its operation for a specific case or usage.
-
-Always prefer to give each piece of code-module, class, function-a single,
-       well-defined responsibility.
-
-
-<no-inheritance-to-strategy-pattern>
-
-// responsibility one: providing public interface for external user.
-
-class GTAClient;
-
-class GenericTableAlgorithm
-{
-  public:
-    GenericTableAlgorithm(const string& table
-                          GTAClient& worker);
-
-    // Have separated away the inheritance relationship so the dtor doesn't need
-    // to be virtual.
-    ~GenericTableAlgorithm();
-
-    // Does all the work; calling Filter() on each table record an ProcessRow()
-    // for such row.
-    bool Process();
-
-    struct GenericTableAlgorithmImpl* pimpl_;
-};
-
-
-// responsibility two: providing abstract public interface for 'extensibility'
-// for writers of concrete implementation detail class.
-
-class GTAClient
-{
-  public:
-    virtual ~GTAClient() = 0;
-    virtual bool Filter(const Record&);
-    virtual bool ProcessRow(const PrimaryKey&) = 0;
-};
-
-class MyWorker : public GTAClient
-{
-  // override Filter() and ProcessRow() to implement a specific operation
-}
-
-class YourWorker : public GTAClient
-{
-  // override Filter() and ProcessRow() to implement a specific operation
-}
-
-int main()
-{
-  GenericTableAlgorithm a("Customer", MyWorker());
-  a.Process();
-}
-
-The good things are:
-
-* Any interface changes to GenericTableAlgorithm does 'not' affect the concrete
-  worker class at all.
-
-* Any interface changes to GTAClient does 'not' affect extarnal users at all.
-
-* Any concrete worker class can be used with any other algorithm using
-  Filter()/ProcessRow() interface.
-
-
-Remember the computer science motto:
-  "Most problems can be solved by adding a level of indirection."
-
-
-<to-template>
-As GenericTableAlgorithm do not have member data, it does not need to keep
-'state' across invocations. So could replace it with function.
-
-bool GenericTableAlgorithm(const string& table, GTAClient& worker)
-{
-  // contents of Process()
-}
-
-int main()
-{
-  GenericTableAlgorithm("Customer", MyWorker());
-}
-
-
-Further, if worker object never need to store state, all instances are
-functionally equivalent and provide only virtual functions, then:
-
-template<typename GTACworker>
-bool GenericTableAlgorithm(const string& table)
-{
-  // contents of Process()
-}
-
-int main()
-{
-  // `template-explicit-argument`
-  GenericTableAlgorithm<MyWorker>("Customer");
-}
 
 
 ={============================================================================
@@ -23967,7 +24049,7 @@ The `pimpl-pattern` is used but not to reduce compiler dependancy.
 
 
 ={============================================================================
-*kt_dev_cpp_024* cpp-incomplete-type forward-declaration cpp-layout
+*kt_dev_cpp_024* cpp-incomplete-type cpp-forward-declaration cpp-layout
 
 struct Sales_data { /* ... */ };
 Sales_data accum, trans, *salesptr;
@@ -39660,7 +39742,7 @@ shared_ptr<int>(static_cast<int*>(sp.get()))  // ERROR: undefined behavior
 static_pointer_cast<int*>(sp)                 // OK
 
 
-<ex> {cpp-op-member-access}
+<ex> <cpp-op-member-access> <cpp-ex-strblob>
 The deference(*) and arrow(->) operator used in classes that represent
 iterators and in smart pointer.
 

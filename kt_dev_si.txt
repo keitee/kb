@@ -45,14 +45,14 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-build-map-file
 |kt_dev_si_0002| si-build-jpa
 |kt_dev_si_0002| si-build-spk si-build-driver
-|kt_dev_si_0002| si-sh-theyard
+|kt_dev_si_0002| si-theyard
 |kt_dev_si_0002| si-sh-check-log
 |kt_dev_si_0002| si-sh-check-log-mc
 |kt_dev_si_0002| si-sh-check-log-auto
 |kt_dev_si_0002| si-sh-check-back
 |kt_dev_si_0002| si-sh-mysql
 |kt_dev_si_0002| si-sh-log-unstripped
-|kt_dev_si_0002| si-sh-log-parser
+|kt_dev_si_0002| si-log-parser
 |kt_dev_si_0002| si-sh-log-parser-entry
 |kt_dev_si_0002| si-sh-log-parser-mine
 |kt_dev_si_0002| si-sh-to-dates si-keycodes
@@ -1990,10 +1990,19 @@ export PROFILE=FUSION-MRFUSION-01
 export STREAM_NETWORK=BSKYB_DARWIN
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb/flash0 /flash0
+/flash0/scripts/startstack.sh
+
+
 
 // copy libasan* into /flash0
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v4/flash0 /flash0
+
+0x0819b606 is located 0 bytes to the right of global variable 'gClientName' from 'diagctl_log_req_handler.c' (0x819b600) of size 6
+  'gClientName' is ascii string '_DLRH'
+
+/home/kyoupark/STB_SW/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diagctl_log_req_handler.c
+
 
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
@@ -2001,26 +2010,52 @@ mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /f
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6-with-recover/flash0 /flash0
 
-==1779==ASan runtime does not come first in initial library list; you should either link runtime to your application or manually preload it with LD_PRELOAD.
 export LD_PRELOAD=/flash0/libasan.so
 // LD_PRELOAD=/usr/lib/libforcesched.so:/lib/libresolv-refresh.so:/lib/libifnameindex.so:/usr/lib/libmutex-desched.so  /NDS/bin/PWM_Process
 
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/asn /flash0
-export LD_LIBRARY_PATH="/flash0/v6:${LD_LIBRARY_PATH}"
 
-
-export ASAN_OPTIONS="halt_on_error=0"
+export ASAN_OPTIONS="verbosity=2"
+export ASAN_OPTIONS="verbosity=2:halt_on_error=0"
 export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
+
+// since /root/run.sh is read-only, made this file in /flash0 and set
+// LD_PRELOAD there.
+//
+// rather than LD_PRELOAD=/flash0/libasan.so /flash0/scripts/startstack.sh
+//
+// note: this also pick ups asan
+// /flash0/fs/NDS/bin/FusionConfigImport: error while loading shared libraries: libasan.so.3: cannot open shared object file: No such file or directory
+//
+// can be fixed by using:
+// export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
+//
+// note:
+// ==1779==ASan runtime does not come first in initial library list; you should either link runtime to your application or manually preload it with LD_PRELOAD.
+//
+// /flash0/run.sh
+// ulimit -c unlimited
+// LD_PRELOAD=/usr/lib/libforcesched.so:/lib/libresolv-refresh.so:/lib/libifnameindex.so:/usr/lib/libmutex-desched.so \
+// /NDS/bin/PWM_Process
+//
+// note:
+// with/without this, both still show the above error. With this, can see
+// verbose message from asan but asan stops on:
+//
+// ==1350==AddressSanitizer Init done
+//
+// LD_PRELOAD=/flash0/libasan.so:
+
 /flash0/scripts/startstack.sh
 
+LD_PRELOAD=/flash0/libasan.so gdb /NDS/bin/PWM_Process
 
 ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g -fsanitize=address uaf.c -o out_uaf_use_4
+
 export LD_LIBRARY_PATH=".:${LD_LIBRARY_PATH}"
-./out_uaf_use_4
+export ASAN_OPTIONS="verbosity=2:halt_on_error=0"
 
-
-ASAN_OPTIONS="verbosity=2:halt_on_error=0" ./out_uaf_use_4
 
 <vstb>
 [root@vSTB lib]# ./ld-2.23.so
@@ -2260,20 +2295,6 @@ mount -t nfs -o nolock 10.209.62.106:/home/kyoupark/si_logs/flash0/flash0 /flash
 setenv -p STARTUP "ifconfig eth0 -auto; boot -z -elf <tftp_server>:/<vmlinuz-path-given-in-release-email> 'ip=dhcp console=uart,mmio,0x10400b00,115200n8'"
 
 
-<startstack>
-/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/release/startstack.sh
-
-if [ -f /flash0/scripts/this_is_first_boot ]
-then
-    rm /flash0/scripts/this_is_first_boot
-    echo "This is first boot; enable format"
-    /flash0/scripts/unified_startup.sh . /flash0 FORMAT NORUN $SERIAL $*
-else
-    echo "Reboot app - keeping recordings and data"
-    /flash0/scripts/unified_startup.sh . /flash0 NOCLEAN NODELETE NORUN $SERIAL $*
-fi
-
-
 ={============================================================================
 |kt_dev_si_0002| si-boot-start-mw
 
@@ -2387,7 +2408,26 @@ export LD_PRELOAD=/usr/lib/libforcesched.so:/lib/libresolv-refresh.so:/lib/libif
 /NDS/bin/PWM_Process
 
 
-<unified-startup>
+={============================================================================
+|kt_dev_si_0002| si-boot-pwm
+
+<startstack-sh>
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/release/startstack.sh
+
+if [ -f /flash0/scripts/this_is_first_boot ]
+then
+    rm /flash0/scripts/this_is_first_boot
+    echo "This is first boot; enable format"
+    /flash0/scripts/unified_startup.sh . /flash0 FORMAT NORUN $SERIAL $*
+else
+    echo "Reboot app - keeping recordings and data"
+    /flash0/scripts/unified_startup.sh . /flash0 NOCLEAN NODELETE NORUN $SERIAL $*
+fi
+
+/root/run.sh
+
+
+<unified-startup-sh>
 note:
 What is it for?
 deps/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/Scripts/unified_startup.sh
@@ -2438,15 +2478,27 @@ LD_PRELOAD=/usr/lib/cdi_tracker.so /usr/lib/libforcesched.so /usr/lib/libresolv-
 # FOSH
 mount -t nfs 172.18.253.143:/home/NDS-UK/parkkt/fob/595/fosh/Darwin97350_BE/debug/FOSH/NDS /NDS
 
-
-={============================================================================
-|kt_dev_si_0002| si-boot-pwm
-
+<run-sh>
+[root@vSTB flash0]# more /root/run.sh
+ulimit -c unlimited
+LD_PRELOAD=/usr/lib/libforcesched.so:/lib/libresolv-refresh.so:/lib/libifnameindex.so:/usr/lib/libmutex-desched.so \
 /NDS/bin/PWM_Process
 
-# The script will not kill the SCD process: PWM receives a SIGCHLD signal when
-# SCD (its child process) dies which causes it to restart the STB. There is
-# also a software watchdog which would eventually trigger.
+this is read-only since it is part of fs. To change this file, modify
+startstack.sh to run a different file in somewhere else.
+
+<pwm-process>
+# MSCQ181809
+# PWM_Process is the start binary (instead of SCD for WP2807)
+# We are waiting on the platforms to change unified_startup.sh so just replace all instances of SCD with PWM
+/NDS/bin/PWM_Process
+
+/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/mw_process_main.c
+drwxrwxrwx  2 kyoupark ccisco 4096 Oct 18 09:46 APP_Process/
+drwxrwxrwx  2 kyoupark ccisco 4096 Oct 18 09:46 CA_Process/
+drwxrwxrwx  2 kyoupark ccisco 4096 Oct 18 09:46 STM_Process/
+drwxrwxrwx  2 kyoupark ccisco 4096 Oct 18 09:46 SCD_Process/
+drwxrwxrwx  2 kyoupark ccisco 4096 Oct 18 09:46 PWM_Process/
 
 
 ={============================================================================
@@ -3832,7 +3884,7 @@ bem_composition.o                 bem_device_configure.o      bem_internal_event
 
 
 ={============================================================================
-|kt_dev_si_0002| si-build-core
+|kt_dev_si_0002| si-build-core si-gdb
 
 // 890
 ~/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gdb
@@ -3853,9 +3905,10 @@ e.g. ams-drx780.
 If those files do not exist you can populate the tx directory with them with a
 command like this:
 
-$ newyard_fetch_diag.sh $PLATFORM $VERSION
+<newyard-fetch>
+newyard_fetch_diag.sh $PLATFORM $VERSION
 
-newyard_fetch_diag.sh ams-drx890 R019.087.01.00U
+newyard_fetch_diag.sh ams-drx890 R019.087.46.00U
 newyard_fetch_diag.sh ams-drx890 R019.087.01.00D  // KO since not keep si devel
 
 Darwin_SI_Drop_R019.087.13.00D_picasso_ams-drx890_nds_si_devel_Binary_Image.tgz
@@ -3885,7 +3938,7 @@ theyard$ ~/bin/mips-gdb
 
 set solib-absolute-prefix /junk
 set solib-search-path /home/si_logs/kit.park/unstripped_libraries
-set solib-search-path /home/si_logs/tx/ams-drx890/R018.085.67.00U/unstripped_libraries
+set solib-search-path /home/si_logs/tx/ams-drx890/R019.087.46.00U/unstripped_libraries
 
 // (gdb) i source
 // Current source file is libc/stdlib/malloc-standard/free.c
@@ -3894,7 +3947,7 @@ set solib-search-path /home/si_logs/tx/ams-drx890/R018.085.67.00U/unstripped_lib
 
 set substitute-path /usr/src/redhat/BUILD /home/si_logs/kit.park
 
-file /home/si_logs/tx/ams-drx890/R018.085.67.00U/unstripped_processes/MW_Process
+file /home/si_logs/tx/ams-drx890/R019.087.46.00U/unstripped_processes/MW_Process
 core 465.COR
 
 thread apply all bt full
@@ -5721,7 +5774,7 @@ $ git tag ENG_XX.09.12
 
 
 ={============================================================================
-|kt_dev_si_0002| si-sh-theyard
+|kt_dev_si_0002| si-theyard
 
 Yard Link: http://theyard.cisco.com/si_logs/translation/
 
@@ -6717,7 +6770,7 @@ It then puts them in ~/tx/<platform>/<version>
 
 
 ={============================================================================
-|kt_dev_si_0002| si-sh-log-parser sh-test-log
+|kt_dev_si_0002| si-log-parser sh-test-log
 
 http://hetty.cisco.com/fusionmadesimple/index.php/TEST_LOG
 
@@ -6832,7 +6885,7 @@ note:
 # logging.info("Simple test found: " + str(simple_test) )
 #
 #
-# *2-run-script* on $FILE
+# *log-parser-run-script* on $FILE
 # read testlist.txt and build a list made up with script and test id
 #
 # NOTE: the *text-to-search* should be empty if you've got a script.
@@ -6992,7 +7045,7 @@ darwin_001018001200_30c26f7d966c03ff4f850a19380182b4.tgz
 
 
 ={============================================================================
-|kt_dev_si_0002| si-sh-log-parser-entry
+|kt_dev_si_0002| si-log-parser-entry
 
 {testlist}
 http://theyard.cisco.com/cgi-bin/test_list.sh
@@ -7231,8 +7284,25 @@ MID-6812	MID-6812: Blue screen failures while stopping Substitution job
 <tid-699>
 526:699 2       Planner errors for failing to compare strings of event names due to SYSTEMSTRING_GetByteLength() error. PLANNER_PRV_CompareSystemString.*Unable to compare strings due to SYSTEMSTRING_GetByteLength.*error    STR-9345        Recording failures due to Planner errors for failing to compare strings of event names.
 
+
 <653>
 http://theyard.uk.nds.com/logparseradmin/admin/logparser/test/653/
+
+
+<log-parser-771>
+mcm_timeout.py
+
+!WARN   -MCM          		< p:0x00000210 P:MW t:0x0183e520 T:SYSTEMALARM_MAIN M:mcm_mediaconn_event.c F:MCM_Mediaconn_AsyncResponseTimeoutCallback L:1770 > hMC=0x4b Response from device manager expected but not received after 7 seconds 
+!WARN   -MCM          		< p:0x00000210 P:MW t:0x01dac520 T:MCM_ITCMAIN_THREAD M:mcm_mediaconn_event.c F:MCM_Mediaconn_CancelAsyncResponseTimeoutAlarm L:1865 > hMC=0x4b Response from device manager received (after timeout) 
+
+this script do not return the line number of first MC which shows the problem.
+this script does add MC into a dic when see "expected" and del matching MC
+when see "received". So the dict would have MCs which don't get received
+message and this script would return the line of first entry of the dict whcih
+is the fist MC. However, when see many "expected" for the same MC and would
+return the line number of last occurance since the scipts keep inserting the
+entry into the dict.
+
 
 {all-benigh}
 P4	217	1		Memory pools growing: CAK:DRMM_MEMORY_POOL APP:STBE_POOL MWS:MW_HTTP_POOL APP:ADPT_PLANNER
@@ -11016,7 +11086,7 @@ Substitution starting:
 !MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,7,mc-create-mcid=,7,mc_create-str=,mc-substitution,fsnfmt=,hMC=0x7 
 !MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x6],to_mcon [hMC=0x7] 
 
-// subst to subst
+// subst to subst then the prev subst will be destroyed.
 !MIL    -MCM          		< P:MW T:VRM_SRV M:mcm_mediaconn.c F:MCM_MEDIACONN_CreateEx L:275 > @@PMON@@,trace,mediacon,mc-create,8,mc-create-mcid=,8,mc_create-str=,mc-substitution,fsnfmt=,hMC=0x8 
 !MIL    -MSM          		< P:MW T:VRM_SRV M:msm_splicer.c F:(MSM_SPLICER_SwitchPointDef) L:140 > h_media_connection  [hMC=0x6],from_mcon [hMC=0x7],to_mcon [hMC=0x8] 
 
