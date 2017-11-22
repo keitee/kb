@@ -40481,9 +40481,9 @@ namespace boost {
 
 
 ={============================================================================
-*kt_dev_stl_103* cpp-sp-unique
+*kt_dev_stl_103* cpp-sp-unique cpp-auto-ptr
 
-No copy or assign support. A pointer that implements the concept of
+`no copy or assign support` A pointer that implements the concept of
 'exclusive' ownership.
 
 This was `auto_ptr` before C++11 and it has only one user because
@@ -40498,14 +40498,32 @@ point to a given object. So limit the use and transfer ownerships.
 /usr/include/c++/4.9/bits/unique_ptr.h
   /// 20.7.12.2 unique_ptr for single objects.
 
-  template <typename _Tp, typename _Dp = default_delete<_Tp> >
+  template <typename _Tp, typename _Dp = default_delete<_Tp>>
     class unique_ptr
     {
       //...
 
+      *cpp-sp-unique-no-copy-support*
       // Disable copy from lvalue.
       unique_ptr(const unique_ptr&) = delete;             // @262
       unique_ptr& operator=(const unique_ptr&) = delete;  // @263
+
+      *cpp-sp-unique-move*
+      /// Move constructor.
+      unique_ptr(unique_ptr&& __u) noexcept
+      : _M_t(__u.release(), std::forward<deleter_type>(__u.get_deleter())) { }
+
+      /** @brief Move assignment operator.
+       *
+       * @param __u  The object to transfer ownership from.
+       *
+       * Invokes the deleter first if this object owns a pointer.
+       */
+      unique_ptr&
+      operator=(unique_ptr&& __u) noexcept
+      {
+        /* */
+      }
 
       /// Reset the %unique_ptr to empty, invoking the deleter if necessary.
       unique_ptr&
@@ -40574,7 +40592,8 @@ if (up) {   // if up is not empty
 
 
 {sp-unique-ownership} <unique-transfer-ownership>
-The `unique_ptr` do not support copy so `have-to` transfer ownership. Two options:
+The `unique_ptr` do not support copy so `have-to transfer ownership.` Two
+options:
 
 u.release() 
 
@@ -40612,7 +40631,7 @@ std::unique_ptr<ClassA> up1(new ClassA);
 // create another unique_ptr
 std::unique_ptr<ClassA> up2; 
 
-// error since no copy support
+// *error* since no copy support
 up2 = up1;              
 
 // assign the unique_ptr since supports `rvalue` assign. transfers ownership
@@ -40620,7 +40639,7 @@ up2 = up1;
 up2 = std::move(up1);   
 
 
-<return-unique-ptr> *cpp-move* 
+<return-unique-ptr> *cpp-move* *cpp-return*
 One exception to the rule that cannot copy a unique_ptr; that according to the
 language rules of C++11, the compiler will try a 'move' automatically. Can
 copy or assign a unique_ptr that is about to be destoryed.
@@ -40639,40 +40658,46 @@ unique_ptr<int> clone(int p) {
 }
 
 
-<source-and-sink-idiom>
+<cpp-pattern-source-and-sink>
+http://www.gotw.ca/gotw/025.htm
+https://eli.thegreenplace.net/2012/06/20/c11-using-unique_ptr-with-standard-library-containers
 
-// sink() gets ownership when gets called.
-void sink(std::unique_ptr<ClassA> up)  
+struct FooX 
 {
-...
+    FooX() { cerr << "Foo [" << this << "] constructed\n"; }
+    virtual ~FooX() { cerr << "Foo [" << this << "] destructed\n";}
+};
+
+void sink(unique_ptr<FooX> p) 
+{
+    cerr << "Sink owns Foo[" << p.get() << "]\n";
 }
 
-std::unique_ptr<ClassA> up(new ClassA);
-...
-sink(std::move(up));                  // up loses ownership
-
-
-note:
-Since `auto_ptr` supports copy, would be as below in that case.
-
-sink(up);                             // up loses ownership
-
-note: 
-Why not rvalue argument in sink()? As with "copy-or-move", whether or not to
-use copy or move constructor of unique_ptr depends on function matching and
-that's why std::move() is used in sink() call.
-
-
-// source: when exit, transfer ownership 
-// no std::move() in the return statement of source().
-
-std::unique_ptr<ClassA> source()
+unique_ptr<FooX> source() 
 {
-   std::unique_ptr<ClassA> ptr(new ClassA);
-   ...
-   // transfer ownership to calling function
-   return ptr;                               
+    cerr << "Creating Foo in source\n";
+    // *cpp-return* transfer ownership to calling function
+    return unique_ptr<FooX>(new FooX);
 }
+
+void main()
+{   
+    cerr << "Calling source\n";
+    unique_ptr<FooX> pmain = source();  // Can also be written as
+    // auto pmain = source();
+
+    cerr << "Now pmain owns Foo [" << pmain.get() << "]\n";
+    cerr << "Passing it to sink\n";
+
+    // sink(pmain);                    // ERROR! can't copy unique_ptr
+    
+    // why okay since sink() do not have rvalue parameter? because unique_ptr
+    // has move ctor and sink() will have move constructed parameter.
+    sink(move(pmain));              // OK: can move it!
+
+    cerr << "Main done\n";
+}
+
 
 void g()
 {
@@ -40680,7 +40705,6 @@ void g()
 
     for (int i=0; i<10; ++i) {
 
-        // note: 
         // p gets ownership of the returned object since no copy support
         p = source(); 
         // (previously returned object of f() gets deleted)

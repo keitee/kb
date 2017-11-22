@@ -170,6 +170,7 @@
 *kt_linux_tool_100* tool-efence-dmalloc
 *kt_linux_tool_100* tool-efence-fortify
 *kt_linux_tool_100* tool-asan tool-efence cpp-memory-issue
+*kt_linux_tool_100* tool-asan-use
 *kt_linux_tool_100* tool-kasan tool-efence
 *kt_linux_tool_000* tool-asan-llvm
 *kt_linux_tool_000* tool-asan-gcc
@@ -14891,7 +14892,7 @@ We can see that ASan has inserted 11 additional instructions to check one
 memory access. Let's now check that runtime behavior matches our expectations:
 
 
-// see no optimization is used
+// `no optimization is used`
 
 $ /opt/vd/arm-v7a15v5r1/bin/arm-v7a15v5r1-linux-gnueabi-gcc \
     -fsanitize=address uaf.c
@@ -14946,15 +14947,13 @@ Shadow byte legend (`one shadow byte represents 8 application bytes`):
   ASan internal:         fe
 ==154== ABORTING
 
-`one shadow byte represents 8 application bytes` so
+`one shadow byte represents 8 application bytes` so 40 bytes makes 5 `fd`
 x[0], x[1]    to 8 bytes    1st fd
 x[2], x[3]    to 16 bytes   2nd fd
 x[4], x[5]    to 24 bytes   3rd fd
 
 
-<2> uaf-write
-
-// no -g and no -O
+<2> uaf-write, `no -g and no -O`
 $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -fsanitize=address uaf.c -o out_uaf_no_g_no_opt
 
    #include <stdio.h>
@@ -14984,7 +14983,7 @@ $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -fsanitize=address u
     #1 0xb710e5ef in __libc_start_main (/lib/libc.so.6+0x185ef)
     #2 0x8048540 (/flash0/out_uaf_no_g_no_opt+0x8048540)
 
-0xb5b00fe4 is located 20 bytes inside of 40-byte region [0xb5b00fd0,0xb5b00ff8)
+0xb5b00fe4 is located 20 bytes inside of `40-byte region [0xb5b00fd0,0xb5b00ff8)`
 freed by thread T0 here:
     #0 0xb72e26e9 in __interceptor_free /home/kyoupark/asan/cross-build/.build/src/gcc-4.9.4/libsanitizer/asan/asan_malloc_linux.cc:79
     #1 0x804867b in main (/flash0/out_uaf_no_g_no_opt+0x804867b)
@@ -15040,9 +15039,8 @@ $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-objdump -d -Mintel out_u
  80486ba:	c7 01 0a 00 00 00    	mov    DWORD PTR [ecx],0xa
 
 
-<3> uaf-write when use -g
+<3> uaf-write, `use -g and no -O`
 
-// yes -g and no -O
 $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g -fsanitize=address uaf.c -o out_uaf_no_g_no_opt
 
 [root@vSTB flash0]# ./out_uaf_yo_g_no_opt
@@ -15052,7 +15050,7 @@ $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g -fsanitize=addres
 =================================================================
 ==1493==ERROR: AddressSanitizer: heap-use-after-free on address 0xb5b00fe4 at pc 0x80486ba bp 0xbf9f8b18 sp 0xbf9f8b0c
 WRITE of size 4 at 0xb5b00fe4 thread T0
-    #0 0x80486b9 in main /home/kyoupark/asn/uaf.c:12
+    `#0 0x80486b9 in main /home/kyoupark/asn/uaf.c:12`
     #1 0xb71205ef in __libc_start_main (/lib/libc.so.6+0x185ef)
     #2 0x8048540 (/flash0/out_uaf_yo_g_no_opt+0x8048540)
 
@@ -15086,23 +15084,6 @@ version limitation?
 
 
 {asn-vo} `heap buffer overflow, out of index` *cpp-memory-issue*
-
-Accessing out of index of array is 'undefined' so sometimes work or sometimes
-not.
-
-<01>
-int g_arr[3];
-
-int main(int argc, char* argv[])
-{
-  if( g_arr[5] == 0 )
-    printf("idx 5 is false\n");
-  else
-    printf("idx 5 is true\n");
-}
-
-$ ./a.out 
-idx 5 is false
 
 <02>
 The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
@@ -15248,7 +15229,27 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==132== ABORTING
 
 
-<ex> `global buffer overflow`
+{asn-vo} `global buffer overflow, out of index` *cpp-memory-issue*
+
+Accessing out of index of array is 'undefined' so sometimes work or sometimes
+not.
+
+<ex>
+int g_arr[3];
+
+int main(int argc, char* argv[])
+{
+  if( g_arr[5] == 0 )
+    printf("idx 5 is false\n");
+  else
+    printf("idx 5 is true\n");
+}
+
+$ ./a.out 
+idx 5 is false
+
+
+<ex>
 https://github.com/google/sanitizers/wiki/AddressSanitizerExampleGlobalOutOfBounds
 And finally static buffers:
 
@@ -15266,9 +15267,9 @@ on address 0x00010b54 at pc 0x86f0 bp 0xbee97cf4 sp 0xbee97cec
 READ of size 4 at 0x00010b54 thread T0
     #0 0x86ef (/a.out+0x86ef)
     #1 0xb56ccbcb (/lib/libc.so.6+0x17bcb)
-0x00010b54 is located 4 bytes to the right of global variable 'global_array (global_oob.c)' (0x109c0) of size 400
+0x00010b54 `is located 4 bytes to the right of global variable` 'global_array (global_oob.c)' (0x109c0) of size 400
 Shadow bytes around the buggy address:
-  0x20002110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x20002110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 // 16*8 = 128
   0x20002120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   0x20002130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
   0x20002140: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -15296,6 +15297,68 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
   Poisoned by user:      f7
   ASan internal:         fe
 ==138== ABORTING
+
+
+<ex>
+/* IPC client name */
+static char gClientName[] = "_DLRH";
+
+int DIAG_IPC_CLIENT_Open(char *client_name)
+{
+    diag_ipc_client_P_notify_server(DIAG_IPC_MSG_TYPE_REG, client_name,strlen(client_name)+1)
+    {
+      /* client name */
+      memcpy(msg+16,client_name,(int32_t)DIAG_CMN_ALIGN(client_name_len));
+    }
+}
+
+=================================================================
+==1334==ERROR: AddressSanitizer: global-buffer-overflow on address 0x0818a606 at pc 0xb6f46711 bp 0xbfdf5778 sp 0xbfdf5358
+READ of size 8 at 0x0818a606 thread T0
+    #0 0xb6f46710 in __interceptor_memcpy /home/kyoupark/asan/cross-build/.build/src/gcc-4.9.4/libsanitizer/asan/asan_interceptors.cc:375
+    #1 0x80948f1 (/NDS/bin/PWM_Process+0x80948f1)
+    #2 0x8094559 (/NDS/bin/PWM_Process+0x8094559)
+    #3 0x809233e (/NDS/bin/PWM_Process+0x809233e)
+    #4 0x809081f (/NDS/bin/PWM_Process+0x809081f)
+    #5 0x808b6a5 (/NDS/bin/PWM_Process+0x808b6a5)
+    #6 0x804c460 (/NDS/bin/PWM_Process+0x804c460)
+    #7 0x804ba76 (/NDS/bin/PWM_Process+0x804ba76)
+    #8 0xb6d735ef in __libc_start_main (/lib/libc.so.6+0x185ef)
+    #9 0x804b890 (/NDS/bin/PWM_Process+0x804b890)
+
+0x0818a606 is located 0 bytes to the right of global variable 'gClientName' from 'diagctl_log_req_handler.c' (0x818a600) of size 6
+  'gClientName' is ascii string '_DLRH'
+SUMMARY: AddressSanitizer: global-buffer-overflow /home/kyoupark/asan/cross-build/.build/src/gcc-4.9.4/libsanitizer/asan/asan_interceptors.cc:375 __interceptor_memcpy
+Shadow bytes around the buggy address:
+  0x21031470: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x21031480: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x21031490: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x210314a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x210314b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x210314c0:[06]f9 f9 f9 f9 f9 f9 f9 00 00 00 00 00 00 00 00
+  0x210314d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x210314e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x210314f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x21031500: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x21031510: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Heap right redzone:      fb
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack partial redzone:   f4
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Contiguous container OOB:fc
+  ASan internal:           fe
+==1334==ABORTING
 
 
 <ex> *cpp-memory-issue* *cpp-memcpy-issue-issue*
@@ -25554,6 +25617,8 @@ DESCRIPTION
 ={============================================================================
 *kt_linux_tool_204* tool-addr2line
 
+build/src/binutils-2.28/binutils/addr2line.c
+
 http://man7.org/linux/man-pages/man1/addr2line.1.html
 
 Usage: mipsel-linux-uclibc-addr2line [option(s)] [addr(s)]
@@ -25567,6 +25632,10 @@ specified on the command line, they will be read from stdin The options are:
   -j --section=<name>    Read section-relative offsets instead of addresses
   
   -e --exe=<executable>  Set the input file name (default is a.out)
+
+  // not not use -e
+  // i686-nptl-linux-gnu-addr2line: 'a.out': No such file
+
   -s --basenames         Strip directory names
   -f --functions         Show function names
   -C --demangle[=style]  Demangle function names
