@@ -124,6 +124,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_200| cpp-abc cpp-ex-quote-example cpp-refactoring
 *kt_dev_cpp_004* cpp-copy-preventing-copies cpp-delete
 |kt_dev_cpp_007| cpp-function-matching
+|kt_dev_cpp_028| cpp-namespace *cpp-pattern-handle*
 |kt_dev_cpp_021| cpp-overload-operator
 *kt_dev_cpp_005* cpp-builtin-conversion
 *kt_dev_cpp_005* type-integer-division
@@ -146,7 +147,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_011| inline {empty-ctor-represenstaion}
 |kt_dev_cpp_013| reference, called-by-reference 
 *kt_dev_cpp_014* cpp-auto
-|kt_dev_cpp_014| cpp-decltype type-typedef type-struct {class-vs-struct} 
+|kt_dev_cpp_014| cpp-decltype cpp-typedef cpp-struct
 |kt_dev_cpp_015| declaration and definition
 |kt_dev_cpp_016| array and struct
 |kt_dev_cpp_017| cpp-static-members and class const {class-method} {class-const}
@@ -167,18 +168,16 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_022* inheri-rtti
 |kt_dev_cpp_023| cpp-override
 *kt_dev_cpp_023* cpp-class-model
+*kt_dev_cpp_023* cpp-class-model avoid-public
+*kt_dev_cpp_023* cpp-class-model not-abuse-inheritance
 *kt_dev_cpp_023* cpp-pattern-template
-*kt_dev_cpp_023* cpp-inheri-model-avoid-public
-*kt_dev_cpp_023* cpp-inheri-public
-*kt_dev_cpp_023* cpp-pimpl
+*kt_dev_cpp_023* cpp-pattern-pimpl
 *kt_dev_cpp_023* cpp-interface
 *kt_dev_cpp_023* inheri-strategy-pattern
-*kt_dev_cpp_023* inheri-class-relationship abuse-of-inheritance
 *kt_dev_cpp_024* cpp-incomplete-type forward-declaration
 *kt_dev_cpp_024* class-empty-base-class-optimization
 |kt_dev_cpp_025| random
 |kt_dev_cpp_026| enum
-|kt_dev_cpp_028| cpp-namespace {case-example} {unnamed-namespace}
 |kt_dev_cpp_029| cpp-nested-class
 
 *kt_dev_cpp_050* cpp-template-function
@@ -8436,7 +8435,7 @@ must be known at compile time:
 sizeof( type )
 sizeof expression/object
 
-Both versions return a constant of type std::size_t.
+Both versions return a constant of type std::size_t *cpp-size-t*
 
 Explanation
 
@@ -14481,7 +14480,7 @@ class OrQuery : public BinaryQuery {
 inline Query::Query(const std::string &s) : q(new WordQuery(s)) {}
 
 
-// *cpp-interface-class*
+// *cpp-interface-class* *cpp-argument-dependant-lookup*
 // The return implicitly uses private Query ctor that takes the shared_ptr and
 // this is equivalent to:
 //
@@ -15646,36 +15645,44 @@ int main()
 ={============================================================================
 *kt_dev_cpp_007* cpp-function-matching
 
-{function-matching}
 Known as overload resolution. `The name has scope` and `object has lifetime.`
 Three possible outcomes: best match, no match, and ambiguous call.
 
 
-#01: <cpp-name-lookup>
+#01: <cpp-name-lookup> *cpp-argument-dependant-lookup*
 
 For `name-lookup` inside a namespace, look in members in case class, and if
 not found, continue looking in enclosing scope; which is a open scope having a
-name to look up. This can be block, class, or namespace. So continue looking
+name to look up. This can be block, class, or `namespace`. So continue looking
 in classes up the chain of inheritance or namespaces. This search goes upwards
 that means declared before use and before in reading order. For example, int
 A::C1::f3() in qualified name. 
 
-In addition, use `argument-dependant-lookup` for reference and pointer of class
-type. For non-class, enclosing scope that is before the point of use and is
-still open. See Primers p797. `using-declaration` or directive add names to the
-candidate set. If found the name, the compiler looks 'no' further.
+In addition, use `argument-dependant-lookup` for reference and pointer of
+class type. For non-class, enclosing scope that is before the point of use and
+is still open. See Primers p797. `using-declaration` or directive add names to
+the candidate set. 
+
+  "If found the name, the compiler looks 'no' further"
 
 Use the number of arguments, type match, and conversion to get viable
 functions. `In C++, name lookup happens before type checking`
 
 
+<scope-and-search>
+The search looks 'outwards' or 'upwards' through the 'enclosing' scopes which
+are declared 'before' the point of use and are still 'open'. The enclosing
+scopdes are blocks, namespaces, and base classes and search goes upwards and
+ends 'global' namespace. Hence 'hiding' name can happen.
+
+
 #02: <build-candidate> use name and build candiate of overloads and
 template instantiations
 
-Use 'name' only hence called name-lookup. Build candidate functions which is the
-set of overloaded functions and should be the same name and visible. Include
-any function-template instantiation for which template argument deduction
-succeeds.
+Use 'name' only hence called name-lookup. Build candidate functions which is
+the set of overloaded functions and should be the same name and visible.
+Include any function-template instantiation for which template argument
+deduction succeeds.
 
 // <overload-condition>
 // Member functions differing only in their constness can be overloaded.
@@ -15694,9 +15701,9 @@ succeeds.
 
 #04: <find-best-match> prefer best and nontemplate
 
-The exact match is better than a match that requires a conversion. `nontemplate`
-function is selected if there's only one in the set. If not, more specialized
-func template is called. otherwise, the call is ambiguous.
+The exact match is better than a match that requires a conversion.
+`nontemplate` function is selected if there's only one in the set. If not,
+more specialized func template is called. otherwise, the call is ambiguous.
 
 
 #05: <check-access>
@@ -15716,13 +15723,6 @@ a op b;
 
 This says nothing about whether it would calls member or non-member. So the set
 is wider to both member and non-member to be considered.  
-
-
-{scope-and-search}
-The search looks 'outwards' or 'upwards' through the 'enclosing' scopes which
-are declared 'before' the point of use and are still 'open'. The enclosing
-scopdes are blocks, namespaces, and base classes and search goes upwards and
-ends 'global' namespace. Hence 'hiding' name can happen.
 
 
 <in-inheritance>
@@ -15756,60 +15756,13 @@ Tried with GCC and got an error:
 .cpp:139:10: error: 'class Quote' has no member named 'discount_policy'
 
 
-{arg-dependant-lookup} 
-CPP 797. See this statements:
-
-std::string s;
-std::cin >> s;
-
-this is equi to:
-
-operator>>(std::cin, s); 
-
-This operator>>() is defined in the string libaray as a `nonmemeber` and in
-std namespace. 
-
-Why is it okay without using either "std::" or using-declaration? When func
-has class type argument which is class object, pointer or reference, the
-compiler searches `namespace` in which arg defined in addition to the normal
-scope to lookup. This is `exception` to the rule that names defined in a
-(closed) namespace are hidden.
-
-In this case, searches the namespace std, where cin and string is defined and
-found this func from string. note: it is namespace, not else.
-
-Why this exception? Otherwise, should use for every use:
-
-using std::operator>>; or std::operator>>(std::cin, s);
-
-Either would make simple use of the IO library more complicated. This makes it
-easy to use nonmember func which is conceptually part of class interface.
-
-
-EXC++31. Koenig Lookup.
-
-If you supply a function argument of class type, then to look up the correct
-function name the compiler consider matching names in the namespace containing
-the argument's type.
-
-
-EXC++32. Interface Principle.
-
-For class X, all functions, including `free-functions` (nonmember function),
-that both:
-
-* Mention X
-* Are supplied wth X 
-  (for example, come in the same header file and/or namespace)
-
-are logically part of X, because they form part of the interface of X.
-
-
+<cpp-hide-name>
 EXC++34. Name Hiding
 
-The code below may will compile or maybe not. GCC 4.7.2 builds fine. The
-std::accumulate uses operator+(int, N::C) and the problem is that the compiler
-may or may not be able to see that function depending on the compiler
+The code below may will compile or maybe not. GCC 4.7.2 builds fine. 
+
+The std::accumulate uses operator+(int, N::C) and the problem is that the
+compiler may or may not be able to see that function depending on the compiler
 implementation since C++ does not specify which standard headers will include
 each other.
 
@@ -15847,6 +15800,380 @@ int main()
   N::C a[10];
   std::accumulate(a, a+10, 0);
 }
+
+
+={============================================================================
+*kt_dev_cpp_028* cpp-namespace
+
+{cpp-namespace-case}
+03/07/2014. At samsung. 
+When moves application which was a process and uses static link to the shared
+library application to be used by other processes. The codes which works well
+before starts to fail since crash happens when try to create a thread using
+custom thread library. 
+
+Problem of linking? Problem of the thread library when used in shared library
+application? Somehow linker picks up the wrong libaray since a debugger shows
+odd address when thread creation call is made and causes a crash? 
+
+Tried various directions and spent many days. Eventually, found out that
+PCThread::Create() is a problem and works fine when changes parameter orders.
+The problem was that the process loads a lot of shared library and one of
+those has the same PCThread class in it but different signature. When our
+library make a call, it picks it up from the other shared library in which has
+different signature so crashes. Sovled when wraps PCThread class with a
+namespace.
+
+note: So this was a problem of symbols between shared libraries.
+
+The typical example is to use third party library and name conflict happens
+when other parties develops a libaray separately. In static link, conflict
+happens in link stage. In dynamic loading, this happens at run time and called
+dynamic binding. So more difficult to find out.
+
+See *kt_linux_core_107* shared library: search and resove
+
+
+{cpp-namespace}
+To solve name pollution or collisions, namespace partitions the global
+namespace and a namespace is a `scope`. It provides a much more controlled
+mechanism and any declaration can be put into a namespace.
+
+
+{global-namespace}
+Names defined at global scope are in the global-namespace which is implicitly
+declared and exists in every program. The scope operator can be used. Use "::"
+for global variables.
+
+::member_name
+
+
+{named-namespace}
+*cpp-remember* The namespce definition do not ends with a semi-colon.
+
+namespace Foo {
+  ...
+}
+
+<namespace-is-a-scope>
+Code outside the namespace must indicate the namespace in which the name is
+defined.
+
+cplusplus_primer::Query q = cplusplus_primer::Query("Hello");
+
+<can-be-discontiguous>
+The namespace either defines a new namespace or adds to an existing one. Be
+sure only #include appear before opening the namespace. If not, attempt to
+define all the names in that header as members of the enclosing namespace. 
+
+The declaration and definition should be in the same namespace and this means
+shall use namespace block in 'both' header and source file as well.
+
+// Sales_data.h
+#include <string>
+
+namespace cplusplus_primer {
+  class Sales_data { ... };
+  Sales_data operator+( const Sales_data&, const Sales_data&);
+  // declarations for the remaining functions in the Sales_data interface
+}
+
+// Sales_data.cpp
+#include "Sales_data.h"
+
+namespace cplusplus_primer {
+  // definitions for the Sales_data members and overloaded operators
+}
+
+// user.cpp
+#include "Sales_data.h"
+
+int main()
+{
+  using c_plusplus_primer::Sales_data;
+  Sales_data trans;
+  ...
+}
+
+<use-marco>
+
+#define NS_OPEN namespace XXX {
+#define NS_CLOSE }
+
+# header or source file
+
+# include <xxx>
+
+NS_OPEN
+...
+NS_CLOSE
+
+
+{cpp-namespace-unnamed} *cpp-file-static* 
+Unnamed namespace. variables in unnamed namespace has staic lifetime so has
+file scope as with file static. If a header file has vars in unnamed
+namespace, it create different static vars which are local to file that
+includes that header file. This also means that unnamed-namespace never spans
+multiple files and do 'not' recommend to have it in a header since the names
+in that namespace define different entities local to each file that includes
+the header.
+
+<key> This replace file-static in C *kt_dev_lang_001*
+
+namespace {
+  ...
+}
+
+<example>
+#include <iostream>
+
+int i;         // 3
+
+namespace {
+   int i;      // 6
+}
+
+int main()
+{
+   i = 10;     // 11. ambiguous: defined globally and in an 
+               // unnested, unnamed namespace.
+
+   return 0;
+}
+
+sam01.cpp: In function ‘int main()’:
+sam01.cpp:11:2: error: reference to ‘i’ is ambiguous
+sam01.cpp:3:5: error: candidates are: int i
+sam01.cpp:6:6: error:                 int {anonymous}::i
+
+<same-as-static>
+For static variable, try to use extern keyword and fails to link in the end.
+This is the same when use unnamed namespace. If not use extern then have
+multiple definition error. 
+
+<global-variables>
+Can use namespace for global variables:
+
+// file one
+namespace NG {
+  int gfs_count;
+}
+
+// file two
+namespace NG {
+  extern int gfs_count;
+}
+
+
+{cpp-using-declaration-and-directive} *cpp-using*
+The `using-declaration` which brings one namespace member into the scope that
+uses it.
+
+using std::cin;
+
+The `using-directive` which brings whole namespace into the the scope that
+have both a namespace and a scope that uses directive. This is enclosing scope
+that is outter scope than the one uses directive.
+
+`using namespce` std;
+
+<avoid-use-of-directive>
+Why? Other than else, `late detection`; means that ambiguity errors are
+detected only at the point of use when use directive. This late detection
+means that conflicts can arise long after introducing a particular library. If
+the program begins using a new part of the library, perviously undetected
+collisions may arise.
+
+// ex. blip namespace is injected into the global namespce but no compile
+// error. Emit error when strat to use j. At a point of `use`.
+
+#include <iostream>
+
+namespace blip {
+  int i=16, j=15;
+}
+
+int j = 0;
+
+int main()
+{
+  using namespace blip;
+
+  //++j;
+
+  return 0;
+}
+
+
+// ex. immediate compile error regardless of using j. At a point of
+// `declaration`. sam01.cpp:9:13: error: ‘j’ is already declared in this scope
+
+#include <iostream>
+
+namespace blip {
+  int i=16, j=15;
+}
+
+int j = 0;
+
+using blip::j; 
+
+int main()
+{
+   return 0;
+}
+
+
+<avoid-use-in-header-file>
+Why? A header that has a using directive or declaration at its top-level
+injects names into every file that includes the header. 
+
+<when-directive-useful>
+One place where using directive are useful is in the implementation files of
+the namespace itself.
+
+
+{nested-namespace}
+namespace X { 
+  namespace App {
+    class X : public XXX
+    {
+      ...
+    };
+  }
+}
+
+
+{rename-namespace}
+namespace bt = boost::posix_time;
+
+
+{cpp-argument-dependant-lookup} 
+
+CPP 797. See this statements:
+
+std::string s;
+std::cin >> s;
+
+this is equi to:
+
+operator>>(std::cin, s); 
+
+This operator>>() is defined in the string libaray as a `nonmemeber` and in
+std namespace. 
+
+Why is it okay without using either "std::" or using-declaration? When func
+has class type argument which is class object, pointer or reference, the
+compiler searches `namespace` in which arg defined in addition to the normal
+scope to lookup. This is `exception` to the rule that names defined in a
+(closed) namespace are hidden.
+
+In this case, searches the namespace std, where cin and string is defined and
+found this func from string. note: it is namespace, not else.
+
+Why this exception? Otherwise, should use for every use:
+
+using std::operator>>; or std::operator>>(std::cin, s);
+
+Either would make simple use of the IO library more complicated. This makes it
+easy to use nonmember func which is conceptually part of class interface.
+
+
+EXC++31 Koenig Lookup
+
+In short, the meaning of code in namespace B is being affected by a function
+declared in the completely separate namespace A, even though B has done
+nothing but simply mention a type found in A.
+
+namespace aren't quite as independent as people originally thought, but they
+are still pretty independent and fit their intendted purpose.
+
+
+EXC++ 120. say that member is more strongly related to the class than a
+nonmember.
+
+namespace A
+{
+  class X {};
+  void f(X);
+}
+
+namespace B
+{
+  void f(A::X);
+  void g(A::X parm)
+  {
+    // use A::f or B::f()?. ambiguous
+    f(parm);
+  }
+};
+
+
+namespace A
+{
+  class X {};
+  void f(X);
+}
+
+class B
+{
+  void f(A::X);
+  void g(A::X parm)
+  {
+    // use B::f(), not ambiguous
+    f(parm);
+  }
+};
+
+
+<what-makes-up-the-interface-of-class>
+EXC++32. Interface Principle.
+
+the class definition:
+
+"A class describes a set of data, along with the functions that operate on
+that data"
+
+Here, function means all function. For class X, all functions, including
+`free-functions` (nonmember function), that both:
+
+* Mention X
+* Are supplied wth X 
+  means that `come in the same header file and/or namespace`
+
+are logically part of X, because they form part of the interface of X.
+see *cpp-ex-query-example*
+
+
+*cpp-pattern-handle*
+`handle-technique` for writing OO code in a language that doesn't have
+classes. After all, "a sef of data, along with the functions that operate on
+that data"
+
+struct _iobuf { /* data goes here */ };
+
+typedef struct _iobuf FILE;
+
+FILE* fopen(const char* filename, const char* mode);
+int fclose(FILE* stream);
+
+long ftell(FILE* stream);
+/* etc */
+
+
+class FILE
+{
+  public:
+    FILE(const char* filename, const char* mode);
+    ~FILE();
+
+    int fseek(long offset, int origin);
+    long ftell();
+    /* etc */
+
+  private:
+    /* data goes here */
+};
 
 
 ={============================================================================
@@ -19896,11 +20223,11 @@ constness but the last does affect so have const in its deduced type.
 
 
 ={============================================================================
-*kt_dev_cpp_014* cpp-decltype type-typedef type-struct {class-vs-struct} 
+*kt_dev_cpp_014* cpp-decltype cpp-typedef cpp-struct {class-vs-struct} 
 
-{decltype-specifier}
+{cpp-decltype-specifier}
 Want to use type that the compiler decuces but do not want to use that to
-initialize the variable.  Return the type of expression but do not 'evaluate'
+initialize the variable. Return the type of expression but do not 'evaluate'
 it, that is, do not call expression.
 
 string s("...");
@@ -19940,8 +20267,9 @@ note: decltype usage. decltype is used to get type for template. solution was
 to have #define to use decltype only for C++0x but typeof for before C++0x.
 
 
-{struct-and-typedef}
-The structure is declared like this. No space allocated since it is declaration.
+{cpp-struct-and-typedef}
+The structure is declared like this. No space allocated since it is
+declaration.
 
 struct point {
   int x;
@@ -19963,8 +20291,7 @@ struct point pt = { 320, 200 };
 The only 'legal' operation on structure are copy and assign as a unit but not
 compare.
 
-<why-typedef>
-From ansic, p146.
+<why-typedef> From ansic, p146.
 The typedef creates a new data `type name` and does not create a `new type` in
 any sense; merely adds a new name for some 'existing' type. In effect, typedef
 is like #define, except that it is interpreted by the compiler.
@@ -20195,7 +20522,7 @@ typedef struct _fsm
 FSM_T new_fsm = 0;
 
 
-{type-alias}
+{cpp-type-alias}
 typedef double wages;
 using wages = double;         // C++11
 
@@ -20205,29 +20532,32 @@ typedef char *pstring;
 const pstring cstr = 0;       // do not interpret as "const char *pstring cstr"
 const pstring *ps;
 
-The cstr is "const pointer to char" but not "pointer to const char" since base type is "char *" and
-const applies on base type.
+The cstr is "const pointer to char" but not "pointer to const char" since base
+type is "char *" and const applies on base type.
 
 <typedef-in-class>
-Effectively, make alias to classA. Useful when class name changes. Seen in Tizen code. typedef is
-just a 'synonym' for some type (from ESTL)
+Effectively, make alias to classA. Useful when class name changes. Seen in
+Tizen code. typedef is just a 'synonym' for some type (from ESTL)
 
 typedef classA classB;
 
 <typedef-multiple>
-Is it error to have multiple typedefs? No. See *kt_dev_gcc_001* and the error is to have conflicting
-typedefs.
+Is it error to have multiple typedefs? No. See *kt_dev_gcc_001* and the error
+is to have conflicting typedefs.
 
 <two-reasons-to-use-typedef>
-1. To parameterize a program against portability problems. If typedef are used for data types that
-may be machine-dependent, only the typedef need change when the program is moved.
+1. To parameterize a program against portability problems. If typedef are used
+for data types that may be machine-dependent, only the typedef need change
+when the program is moved.
 
-2. To provide better documentation for a program. A type Treeprt may be easier to understand.
+2. To provide better documentation for a program. A type Treeprt may be easier
+to understand.
 
 
 {class-vs-struct}
-The only difference between struct and class is the default access specifier for members and
-derivation; struct is 'public' and class is private by default. p616 in ref-CPR.
+The only difference between struct and class is the default access specifier
+for members and derivation; struct is 'public' and class is private by
+default. p616 in ref-CPR.
 
 
 {layout-order-and-size}
@@ -20247,10 +20577,11 @@ hour :   [*      ]
 value:   [* * * *]
 seq  :   [*      ]
 
-In this case, as on many machines, sizeof(Readout) is 12, and not 6 as one would naively expect from
-simply adding the sizes of the individual members.
+In this case, as on many machines, sizeof(Readout) is 12, and not 6 as one
+would naively expect from simply adding the sizes of the individual members.
 
-You can minimize wasted space by simply ordering members by size (largest member first).
+You can minimize wasted space by simply ordering members by size (largest
+    member first).
 
 struct Readout {
   int value;
@@ -20263,8 +20594,8 @@ This would give us:
 value:      [* * * *]
 hour: seq : [* *    ]
 
-It is usually best to order members for readability and sort them by size only if there is a
-demonstrated need to optimize.
+It is usually best to order members for readability and sort them by size only
+if there is a demonstrated need to optimize.
 
 
 ={============================================================================
@@ -22629,6 +22960,112 @@ pB->mf();      // same object but B::mf
 pD->mf();      // same object but D::mf
 
 
+{which-virtuals}
+
+EC++34 
+
+When design classes, should think 'three', pure virtual, virtual, and
+nonvirtual, separately to specify with precision what you want derived classes
+to inherit.
+
+* Pure virtual (abstract). To have 'only' interface inherited. interface
+  inheritence. 
+
+* (Simple) virtual (overridable). To have interface and 'default'
+  implementation.
+
+
+{no-separation-between-interface-and-default-implementation}
+When use simple virtual, shall be careful since 'default' implementation is
+inherited without 'request' from the derived. This can be a problem when the
+derived not to redefine it.
+
+class Airplane {
+  public:
+    virtual void fly( const Airport& destination ) 
+    { // code for usual plane type. default; }
+    ...
+};
+
+class ModelA : public Airplane { ... };
+class ModelB : public Airplane { ... };
+class ModelC : public Airplane { ... };
+
+Although this is classic OOD, has a problem. This is okay for model A and B but
+not C because C is different type of plane that has different way to fly and
+should have defined own fly(). 
+
+*cpp-remember* pure-virtual-can-force
+If C has forgot to redefine own, it will use the default. The solution is to
+'force' the derived explicitly request implementation if they need.
+
+
+<1> use ABC
+Has separation between interface and default implementation.
+
+class Airplane {
+  public: >
+    virtual void fly( const Airport& destination ) = 0;  // pure and interface
+    ...
+  protected:
+    void defaultFly( ... );                              // implementation
+};
+
+void Airplane::defaultFly( ... )
+{
+   // code for usual plane type. default;
+}
+
+class ModelA : public Airplane {
+  public:
+    virtual void fly( ... ) { defaultFly( ... ); }    // explicit request
+};
+
+class ModelC : public Airplane {
+  public:
+    virtual void fly( ... ) { specific code for model C type }
+};
+
+If forget to redefine ModelC::fly then will get errors in compile time because
+cannot create ModelC objects. That's because ModelC is ABC.
+
+
+<2> <pure-virtual-can-have-implementation> 
+Use the fact that pure virtual can have its implementation.
+
+class Airplane {
+  public: >
+    virtual void fly( const Airport& destination ) = 0; // make a pure
+};
+
+// pure virtual implementation
+void Airplane::fly( ... )
+{
+   code for usual plane type. default.
+}
+
+class ModelA : public Airplane {
+  public:
+    virtual void fly( ... )  { Airplance::fly( ... ); }  // explicit
+};
+
+class ModelC : public Airplane {
+  public:
+    virtual void fly( ... ) { specific code for model C type }
+};
+
+The both approaches are the essentially same in that force the derived to
+override, to request default implementation and if not override, emits errors.
+
+
+<3>
+nonvirtual (non-overridable). invariant `over specialization.` To have
+interface and 'mandatory' implementation that is default implementation but
+not overridable. 
+
+
+
+
 ={============================================================================
 *kt_dev_cpp_023* cpp-class-model
 
@@ -22654,7 +23091,7 @@ EXPC++22
 
 Never use public inheritance except to model ture `is-a-model` or
 `works-like-a-model`. All overridden member functions must require no more and
-promise no less.
+promise no less. same semantic.
 
 
 note:
@@ -22807,168 +23244,7 @@ errors that should be resolved.
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-pattern-template
-
-EC++35
-
-The design pattern [REF003] called it template-method and define skeleton of
-an algorithm in an operation.
-
-Deferring 'some' steps to subclass without default implementation of some
-steps. Must be overridden.
-
-note: Says that that template method is non-virtual function in base and
-protected pure virtual function in derived.
-
-note: The template method has "Don't call us, we'll call you" that means
-parent class calls derived compared with when derived calls parent class.
-
-<ex>
-Application framework where application subclass application and document to
-suit speficif needs. For example, a drawing application defines
-DrawApplication and DrawDocument subclass.
-
-Document                Application
-+Save()                 +AddDocument()
-+Open()                 +OpenDocument()
-+Close()                +DoCreateDocument()*
-+DoRead()*              +CanOpenDocument()*
-                        +AboutToOpenDocument()*
-
-MyDocument              MyApplication
-+DoRead()               +DoCreateDocument()           // return new MyDocument
-                        +CanOpenDocument()
-                        +AboutToOpenDocument()
-
-// this is template method
-void Application::OpenDocument( const char* name ) {
-  if( !CanOpenDocument(name)) {
-    // cannot handle this document
-    return;
-  }
-
-  // *cpp-pattern-factory-func* to create application specific document
-  Document* doc = DoCreateDocument();  
-
-  // steps
-  if(doc) {
-    _docs->AddDocument(doc);
-    AboutToOpenDocument(doc);
-    doc->Open();
-    doc->DoRead();
-  }
-}
-
-
-* Without chaning the algorithm's structure, the template-method defines steps
-  in terms of abstract operations that subclass override to provide concrete
-  behavior. `define invariant parts once` and `leave variant part to subclass.`
-
-* Refactoring. To avoid code duplication, identify the differences among
-  existing subclasses and then separate the differences into new operations,
-  replace the differing code with a template method(in base) that calls one of
-  these new operations. This is also about code resuse but difference is
-  steps, that is template method(function).
-
-* Hook operations.
-
-
-<cpp-pattern-nvi>
-EC++35. In the following example, different character may calculate their
-health in different ways. Use virtual? This is alternatives to usual virtual
-design. Called NVI(nonvirtual interface) idiom as a 'public' nonvirtual in the
-base call a 'private' virtual func that can be redefined but it's little more
-than window dressing as still use virtuals. 
-
-There are 'how' and 'when': template-method means that base controls when and
-derived control how.
-
-note: EC++ limits template method when it uses private virtual and EXPC++ p84
-also says "avoid public virtial functions; prefer using the template method
-pattern instead."
-
-
-class GameCharacter {
-  public:
-    int healthValue() const
-    {
-      // steps
-      // do before stuff 
-      int retVal = doHealthValue();
-      // do after stuff
-    }
-
-  private:     // note: see this is private and {text-query-example}
-    virtual int doHealthValue() const
-    {
-      // default calc code
-    }
-};
-
-class XGameCharacter : public GameCharacter;
-
-The base defines before and after stuff and when to call the derived part that
-is the derived dependent. The before and after can be lock/unlock, logging,
-   pre/post condition.
-
-note:
-For primitive operation which should be overridden, often prefix names with
-Do: DoRead as DoCreateDocument shown above.
-
-
-<hook-operation>
-To 'extend' parent class operation. But it is esay to forget to call the
-inherited function so can use template-method to give the parent class a
-control over how subclasses extend it. This is called hook-operation. 
-
-virtual void DerivedClass::Operation() {
-  ParentClass::Operation();
-  // additional
-}
-
-void ParentClass::Operation() {
-  // parent class behavior
-  HookOperation();
-}
-
-virtual void ParentClass::HookOperation() { }
-
-virtual void DerivedClass::HookOperation() {
-  // derived class extension
-}
-
-
-<private-or-protected>
-This example is from <cast-create-a-temp-object> to show the problem of cast
-and to show case that virtual memeber function in derived calls base class
-conterparts first.
-
-class Window {
-  public:
-    virtual void onResize() { ... }
-    ...
-};
-
-class SpecialWindow : public Window {
-  public:
-    virtual void onResize() {
-      Window::onResize();
-      // additional to the derived
-    }
-    ...
-};
-
-As with hook operation, this is to extend operation and should the Do
-operation be protected or private? If it was private, then errors so should be
-protected. note: However, can use hook operation instead.
-
-usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
-usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
-usetemppattern.cpp:51:20: error: within this context
-
-
-={============================================================================
-*kt_dev_cpp_023* cpp-inheri-model-avoid-public
+*kt_dev_cpp_023* cpp-class-model avoid-public
 
 EXC++23. How to avoid public-inheritance using template-pattern 
 See *cpp-pattern-nvi* and *cpp-ex-query-example*
@@ -23143,112 +23419,317 @@ int main()
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-inheri-public
+*kt_dev_cpp_023* cpp-class-model not-abuse-inheritance
 
-EC++34 
+EXC++24.
 
-When design classes, should think 'three', pure virtual, virtual, and
-nonvirtual, separately to specify with precision what you want derived classes
-to inherit.
+Always minimise "coupling". The inheritance is strongest and tightly coupling.
+Second to friendship. Should use `containment` to avoid needless coupling and
+dependencies if can express a class relationship using it.
 
-* Pure virtual (abstract). To have 'only' interface inherited. interface
-  inheritence. 
-
-* (Simple) virtual (overridable). To have interface and 'default'
-  implementation.
-
-
-{no-separation-between-interface-and-default-implementation}
-When use simple virtual, shall be careful since 'default' implementation is
-inherited without 'request' from the derived. This can be a problem when the
-derived not to redefine it.
-
-class Airplane {
+<when-abuse-inheritance>
+template <class T>
+class MyList
+{
   public:
-    virtual void fly( const Airport& destination ) 
-    { // code for usual plane type. default; }
-    ...
+    bool    Insert( const T&, size_t index );
+    T       Access( size_t index ) const;
+    size_t  Size() const;
+
+  private:
+    T*      buf_;
+    size_t  bufSize_;
 };
 
-class ModelA : public Airplane { ... };
-class ModelB : public Airplane { ... };
-class ModelC : public Airplane { ... };
+Two ways to write a MySet `is-implemented-in-terms-of` MyList;
+`nonpublic-inheritance` and `containment`.
 
-Although this is classic OOD, has a problem. This is okay for model A and B but
-not C because C is different type of plane that has different way to fly and
-should have defined own fly(). 
-
-*cpp-remember* pure-virtual-can-force
-If C has forgot to redefine own, it will use the default. The solution is to
-'force' the derived explicitly request implementation if they need.
+nonpublic-inheritance make using class depend on public and protected area and
+containment make is on only public.
 
 
-<1> use ABC
-Has separation between interface and default implementation.
+template <class T>
+class MySet1 : private MyList<T>
+{
+  public:
+    bool    Add( const T& );            // calls Insert()
+    T       Get( size_t index ) const;  // calls Access()
 
-class Airplane {
-  public: >
-    virtual void fly( const Airport& destination ) = 0;  // pure and interface
-    ...
+    // to make Size() public
+    using MyList<T>::Size;
+
+    // ...
+};
+
+template <class T>
+class MySet2
+{
+  public:
+    bool    Add( const T& );            // calls impl_.Insert()
+    T       Get( size_t index ) const;  // calls impl_.Access()
+    size_t  Size() const;               // calls impl_.Size()
+    // ...
+
+  private:
+    MyList<T> impl_;
+};
+
+
+The containment is `has-a`, `composition`, `delagation`, and the inheritance is
+a superset of single containment since it has a subobject.
+
+
+<when-inheritance-appropriate>
+When use nonpublic inheritance? To use override. Even when it is the case, can
+avoid this.
+
+
+class Base
+{
+  public:
+    virtual int Func1();
   protected:
-    void defaultFly( ... );                              // implementation
+    bool Func2();
+  private:
+    bool Func3();   // uses Func1
 };
 
-void Airplane::defaultFly( ... )
+
+To get the right behavior, need to override Func1. Allows Derived to override
+Func1 but grants access to Func2 to all members of Derived. Needless made all
+Derived's members depend upon Base's protected interface.
+
+class Derived : private Base
 {
-   // code for usual plane type. default;
-}
-
-class ModelA : public Airplane {
   public:
-    virtual void fly( ... ) { defaultFly( ... ); }    // explicit request
+    int Func1();
+    // some of functions use Base::Func2 and some of which don't
 };
 
-class ModelC : public Airplane {
-  public:
-    virtual void fly( ... ) { specific code for model C type }
-};
 
-If forget to redefine ModelC::fly then will get errors in compile time because
-cannot create ModelC objects. That's because ModelC is ABC.
+Introduce as much couling as really need; "require no more and promise no less"
 
-
-<2> <pure-virtual-can-have-implementation> 
-Use the fact that pure virtual can have its implementation.
-
-class Airplane {
-  public: >
-    virtual void fly( const Airport& destination ) = 0; // make a pure
-};
-
-// pure virtual implementation
-void Airplane::fly( ... )
+class DerivedImpl : private Base
 {
-   code for usual plane type. default.
-}
-
-class ModelA : public Airplane {
   public:
-    virtual void fly( ... )  { Airplance::fly( ... ); }  // explicit
+    int Func1();
+    // functions that use Func2
 };
 
-class ModelC : public Airplane {
-  public:
-    virtual void fly( ... ) { specific code for model C type }
+class Derived
+{
+  // functions that don't use Func2
+  private:
+    DerivedImpl impl_;
 };
 
-The both approaches are the essentially same in that force the derived to
-override, to request default implementation and if not override, emits errors.
+
+this is much better since:
+
+* Separates and encapsulates the dependencies on Base.
+
+* Follows `one-class-one-resposibility` guideline; coustomizing Base and
+  implementaimplementing itself in-terms-of Base.
+
+* Allows multiple copiles of helper(like DerivedImpl) class.
+
+note:
+This is similar to `cpp-pattern-pimpl` but not to reduce compiler dependancy.
 
 
-<3>
-nonvirtual (non-overridable). invariant `over specialization.` To have
-interface and 'mandatory' implementation that is default implementation but
-not overridable. 
+<containment-in-generic-way>
+Again, back to MySet example. It is `implentable-in-terms-of any class` that
+supports the required functions that we need than MyList only.
+
+Different user code may choose to instantiate MySet using implementations with
+different performance characteristics. Write code that does many more inserts
+than searches and want to use an implementation that optimizes inserts.
+
+Difficult to have this flexibility with inheritance since it fix an
+implementation decision at design time.
+
+template <class T, class Impl = MyList<T>> 
+class MySet3
+{
+  public:
+    bool    Add( const T& );            // calls impl_.Insert()
+    T       Get( size_t index ) const;  // calls impl_.Access()
+    size_t  Size() const;               // calls impl_.Size()
+    // ...
+
+  private:
+    Impl impl_;
+};
+
+
+note:
+*cpp-queue* *cpp-stack* uses this technique which are implemented of in terms
+of deque.
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-pattern-pimpl
+*kt_dev_cpp_023* cpp-pattern-template
+
+EC++35
+
+The design pattern [REF003] called it template-method and define skeleton of
+an algorithm in an operation.
+
+Deferring 'some' steps to subclass without default implementation of some
+steps. Must be overridden.
+
+note: Says that that template method is non-virtual function in base and
+protected pure virtual function in derived.
+
+note: The template method has "Don't call us, we'll call you" that means
+parent class calls derived compared with when derived calls parent class.
+
+<ex>
+Application framework where application subclass application and document to
+suit speficif needs. For example, a drawing application defines
+DrawApplication and DrawDocument subclass.
+
+Document                Application
++Save()                 +AddDocument()
++Open()                 +OpenDocument()
++Close()                +DoCreateDocument()*
++DoRead()*              +CanOpenDocument()*
+                        +AboutToOpenDocument()*
+
+MyDocument              MyApplication
++DoRead()               +DoCreateDocument()           // return new MyDocument
+                        +CanOpenDocument()
+                        +AboutToOpenDocument()
+
+// this is template method
+void Application::OpenDocument( const char* name ) {
+  if( !CanOpenDocument(name)) {
+    // cannot handle this document
+    return;
+  }
+
+  // *cpp-pattern-factory-func* to create application specific document
+  Document* doc = DoCreateDocument();  
+
+  // steps
+  if(doc) {
+    _docs->AddDocument(doc);
+    AboutToOpenDocument(doc);
+    doc->Open();
+    doc->DoRead();
+  }
+}
+
+
+* Without chaning the algorithm's structure, the template-method defines steps
+  in terms of abstract operations that subclass override to provide concrete
+  behavior. `define invariant parts once` and `leave variant part to subclass.`
+
+* Refactoring. To avoid code duplication, identify the differences among
+  existing subclasses and then separate the differences into new operations,
+  replace the differing code with a template method(in base) that calls one of
+  these new operations. This is also about code resuse but difference is
+  steps, that is template method(function).
+
+* Hook operations.
+
+
+<cpp-pattern-nvi>
+EC++35. In the following example, different character may calculate their
+health in different ways. Use virtual? This is alternatives to usual virtual
+design. Called NVI(nonvirtual interface) idiom as a 'public' nonvirtual in the
+base call a 'private' virtual func that can be redefined but it's little more
+than window dressing as still use virtuals. 
+
+There are 'how' and 'when': template-method means that base controls when and
+derived control how.
+
+note: EC++ limits template method when it uses private virtual and EXPC++ p84
+also says "avoid public virtial functions; prefer using the template method
+pattern instead."
+
+
+class GameCharacter {
+  public:
+    int healthValue() const
+    {
+      // steps
+      // do before stuff 
+      int retVal = doHealthValue();
+      // do after stuff
+    }
+
+  private:     // note: see this is private and {text-query-example}
+    virtual int doHealthValue() const
+    {
+      // default calc code
+    }
+};
+
+class XGameCharacter : public GameCharacter;
+
+The base defines before and after stuff and when to call the derived part that
+is the derived dependent. The before and after can be lock/unlock, logging,
+   pre/post condition.
+
+note:
+For primitive operation which should be overridden, often prefix names with
+Do: DoRead as DoCreateDocument shown above.
+
+
+<hook-operation>
+To 'extend' parent class operation. But it is esay to forget to call the
+inherited function so can use template-method to give the parent class a
+control over how subclasses extend it. This is called hook-operation. 
+
+virtual void DerivedClass::Operation() {
+  ParentClass::Operation();
+  // additional
+}
+
+void ParentClass::Operation() {
+  // parent class behavior
+  HookOperation();
+}
+
+virtual void ParentClass::HookOperation() { }
+
+virtual void DerivedClass::HookOperation() {
+  // derived class extension
+}
+
+
+<private-or-protected>
+This example is from <cast-create-a-temp-object> to show the problem of cast
+and to show case that virtual memeber function in derived calls base class
+conterparts first.
+
+class Window {
+  public:
+    virtual void onResize() { ... }
+    ...
+};
+
+class SpecialWindow : public Window {
+  public:
+    virtual void onResize() {
+      Window::onResize();
+      // additional to the derived
+    }
+    ...
+};
+
+As with hook operation, this is to extend operation and should the Do
+operation be protected or private? If it was private, then errors so should be
+protected. note: However, can use hook operation instead.
+
+usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
+usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
+usetemppattern.cpp:51:20: error: within this context
+
+
+={============================================================================
+*kt_dev_cpp_023* cpp-pattern-pimpl cpp-minimise-compile-time
 
 EC++31: minimize compilation dependencies
 
@@ -23409,9 +23890,9 @@ note:
 * How about subclassing impl class to have other impls? okay.
 
 
-EXC++26-31
+EXC++27-31
 
-The *cpp-pattern-pimpl-pattern* has advantages:
+The *cpp-pattern-pimpl* has advantages:
 
 * Breaks compile-time dependencies.
 
@@ -23421,14 +23902,17 @@ has costs in performace:
 * At least one extra indirection and size overhead.
  
 
-EXP++29.
+EXC++29
 
-Use that "visible class which use pimpl class"
+What should go into Impl class from interface or visual class?
 
-What should go into pimpl class?
+1. Put all private data (but not functions) into Impl.
+2. Put all nonvirtual private members into Impl.
+3. Put all private and protected members into Impl.
 
-Put all nonvirtual private members and private data into pimpl class since
-client code shouldn't and doesn't care about these parts.
+`Put all nonvirtual private members and private data` into Impl class since
+client code shouldn't and doesn't care about these parts and protected and
+virtuals to be seen and used by derived class.
 
 
 ={============================================================================
@@ -23913,142 +24397,6 @@ Can add/change calc func later because can have the drived classes in separate h
 
 
 ={============================================================================
-*kt_dev_cpp_023* inheri-class-relationship abuse-of-inheritance
-
-EXC++24.
-
-The inheritance is overused which is strongest and tightly coupled relationship.
-Second to friendship. Should use `containment` to avoid needless coupling and
-dependencies.
-
-<when-inheritance-needless>
-template <class T>
-class MyList
-{
-  public:
-    bool    Insert( const T&, size_t index );
-    T       Access( size_t index ) const;
-    size_t  Size() const;
-
-  private:
-    T*      buf_;
-    size_t  bufSize_;
-};
-
-Two ways to write a MySet `is-implemented-in-terms-of` MyList;
-`nonpublic-inheritance` and `containment`.
-
-template <class T>
-class MySet1 : private MyList<T>
-{
-  public:
-    bool    Add( const T& );            // calls Insert()
-    T       Get( size_t index ) const;  // calls Access()
-    using MyList<T>::Size;
-    // ...
-};
-
-template <class T>
-class MySet2
-{
-  public:
-    bool    Add( const T& );            // calls impl_.Insert()
-    T       Get( size_t index ) const;  // calls impl_.Access()
-    size_t  Size() const;               // calls impl_.Size()
-    // ...
-
-  private:
-    MyList<T> impl_;
-};
-
-
-The containment is `has-a`, `composition`, `delagation`, and the inheritance is
-a superset of single containment since it has a subobject.
-
-
-<containment-in-generic-way>
-This is flexible and is `implentable`-in-terms-of 'any' class that supports the
-required functions that we need.
-
-Different user code may choose to instantiate MySet using implementations with
-different performance characteristics. Write code that does many more inserts
-than searches and want to use an implementation that optimizes inserts.
-
-Difficult to have this flexibility with inheritance since it fix an
-implementation decision at design time.
-
-
-template <class T, class Impl = MyList<T>> 
-class MySet3
-{
-  public:
-    bool    Add( const T& );            // calls impl_.Insert()
-    T       Get( size_t index ) const;  // calls impl_.Access()
-    size_t  Size() const;               // calls impl_.Size()
-    // ...
-
-  private:
-    Impl impl_;
-};
-
-
-<when-inheritance-appropriate>
-Even when inheritance is appropriate to override or to access protected member,
-can avoid this.
-
-The only way to get the right behavior is to override Func1.
-
-class Base
-{
-  public:
-    virtual int Func1();
-  protected:
-    bool Func2();
-  private:
-    bool Func3();   // uses Func1
-};
-
-
-Allows Derived to override Func1 but grants access to Func2 to all members of
-Derived. Needless made all Derived's members depend upon Base's protected
-interface.
-
-class Derived : private Base
-{
-  public:
-    int Func1();
-    // some of functions use Base::Func2 and some of which don't
-};
-
-
-Introduce as much couling as really need; "require no more and promise no less"
-
-class DerivedImpl : private Base
-{
-  public:
-    int Func1();
-    // functions that use Func2
-};
-
-class Derived
-{
-  // functions that don't use Func2
-  private:
-    DerivedImpl impl_;
-};
-
-
-Much better since:
-
-* Separates and encapsulates the dependencies on Base.
-* Follows `one-class-one-resposibility` guideline; coustomizing Base and
-  implementaimplementing itself in-terms-of Base.
-
-note:
-The `pimpl-pattern` is used but not to reduce compiler dependancy.
-
-
-={============================================================================
 *kt_dev_cpp_024* cpp-incomplete-type cpp-forward-declaration cpp-layout
 
 struct Sales_data { /* ... */ };
@@ -24078,10 +24426,17 @@ We can use an incomplete type in only limited ways: We can define pointers or
 references to such types, and we can declare (but 'not' define) functions that
 'use' an incomplete type `as a parameter or return type.`
 
+EXPC++26 *cpp-minimise-compile-time*
+Parameter and return types need only to be forward declared, so instead of the
+full definiton, really only need its forward declaration. e.g., iosfwd
+
+
+<object-function-member>
 A class must be defined-not just declared-before we can write code that
-creates objects of that type. Otherwise, the compiler does not know how much
-storage such objects need. Similarly, the class must be defined before a
-reference or pointer is used `to access' a member of the type.` 
+creates objects of that type or use virtual function of it. Otherwise, the
+compiler does not know how much storage such objects need. Similarly, the
+class must be defined before a reference or pointer is used to access a member
+of the type.` 
 
 After all, if the class has not been defined, the compiler cannot know what
 members the class has and don't know the class(type) layout:
@@ -24497,251 +24852,6 @@ unsigned char uc = VIRTUAL;
 
 newf(VIRTUAL);    // newf(int);
 newf(uc);         // newf(unsigned char);
-
-
-={============================================================================
-*kt_dev_cpp_028* cpp-namespace
-
-{case-example}
-03/07/2014. At samsung. 
-When moves application which was a process and uses static link to the shared
-library application to be used by other processes. The codes which works well
-before starts to fail since crash happens when try to create a thread using
-custom thread library. 
-
-Problem of linking? Problem of the thread library when used in shared library
-application? Somehow linker picks up the wrong libaray since a debugger shows
-odd address when thread creation call is made and causes a crash? 
-
-Tried various directions and spent many days. Eventually, found out that
-PCThread::Create() is a problem and works fine when changes parameter orders.
-The problem was that the process loads a lot of shared library and one of
-those has the same PCThread class in it but different signature. When our
-library make a call, it picks it up from the other shared library in which has
-different signature so crashes. Sovled when wraps PCThread class with a
-namespace.
-
-note: So this was a problem of symbols between shared libraries.
-
-The typical example is to use third party library and name conflict happens
-when other parties develops a libaray separately. In static link, conflict
-happens in link stage. In dynamic loading, this happens at run time and called
-dynamic binding. So more difficult to find out.
-
-See *kt_linux_core_107* shared library: search and resove
-
-
-{namespace}
-To solve name pollution or collisions, namespace partitions the global
-namespace and a namespace is a `scope`. It provides a much more controlled
-mechanism and any declaration can be put into a namespace.
-
-
-{global-namespace}
-Names defined at global scope are in the global-namespace which is implicitly
-declared and exists in every program. The scope operator can be used. Use "::"
-for global variables.
-
-::member_name
-
-
-{named-namespace}
-note: The namespce definition do not ends with a semi-colon.
-
-namespace Foo {
-  ...
-}
-
-<namespace-is-a-scope>
-Code outside the namespace must indicate the namespace in which the name is
-defined.
-
-cplusplus_primer::Query q = cplusplus_primer::Query("Hello");
-
-<can-be-discontiguous>
-The namespace either defines a new namespace or adds to an existing one. Be
-sure only #include appear before opening the namespace. If not, attempt to
-define all the names in that header as members of the enclosing namespace. 
-
-The declaration and definition should be in the same namespace and this means
-shall use namespace block in 'both' header and source file as well.
-
-// Sales_data.h
-#include <string>
-
-namespace cplusplus_primer {
-  class Sales_data { ... };
-  Sales_data operator+( const Sales_data&, const Sales_data&);
-  // declarations for the remaining functions in the Sales_data interface
-}
-
-// Sales_data.cpp
-#include "Sales_data.h"
-
-namespace cplusplus_primer {
-  // definitions for the Sales_data members and overloaded operators
-}
-
-// user.cpp
-#include "Sales_data.h"
-
-int main()
-{
-  using c_plusplus_primer::Sales_data;
-  Sales_data trans;
-  ...
-}
-
-<use-marco>
-
-#define NS_OPEN namespace XXX {
-#define NS_CLOSE }
-
-# header or source file
-
-# include <xxx>
-
-NS_OPEN
-...
-NS_CLOSE
-
-
-{unnamed-namespace} {file-static}
-Unnamed namespace. variables in unnamed namespace has staic lifetime so has file
-scope as with file static. If a header file has vars in unnamed namespace, it
-create different static vars which are local to file that includes that header
-file. This also means that unnamed-namespace never spans multiple files and do
-'not' recommend to have it in a header since the names in that namespace define
-different entities local to each file that includes the header.
-
-<key> This replace file-static in C *kt_dev_lang_001*
-
-namespace {
-  ...
-}
-
-<example>
-#include <iostream>
-
-int i;         // 3
-
-namespace {
-   int i;      // 6
-}
-
-int main()
-{
-   i = 10;     // 11. ambiguous: defined globally and in an 
-               // unnested, unnamed namespace.
-
-   return 0;
-}
-
-sam01.cpp: In function ‘int main()’:
-sam01.cpp:11:2: error: reference to ‘i’ is ambiguous
-sam01.cpp:3:5: error: candidates are: int i
-sam01.cpp:6:6: error:                 int {anonymous}::i
-
-<same-as-static>
-For static variable, try to use extern keyword and fails to link in the end.
-This is the same when use unnamed namespace. If not use extern then have
-multiple definition error. 
-
-<global-variables>
-Can use namespace for global variables:
-
-// file one
-namespace NG {
-  int gfs_count;
-}
-
-// file two
-namespace NG {
-  extern int gfs_count;
-}
-
-
-{cpp-using-declaration-and-directive}
-The `using-declaration` which brings one namespace member into the scope that
-uses it.
-
-using std::cin;
-
-The `using-directive` which brings whole namespace into the the scope that
-have both a namespace and a scope that uses directive. This is enclosing scope
-that is outter scope than the one uses directive.
-
-`using namespce` std;
-
-<avoid-use-of-directive>
-Why? Other than else, `late detection`; means that ambiguity errors are
-detected only at the point of use when use directive. This late detection
-means that conflicts can arise long after introducing a particular library. If
-the program begins using a new part of the library, perviously undetected
-collisions may arise.
-
-// ex. blip namespace is injected into the global namespce but no compile
-// error. Emit error when strat to use j. At a point of `use`.
-
-#include <iostream>
-
-namespace blip {
-  int i=16, j=15;
-}
-
-int j = 0;
-
-int main()
-{
-  using namespace blip;
-
-  //++j;
-
-  return 0;
-}
-
-
-// ex. immediate compile error regardless of using j. At a point of
-// `declaration`. sam01.cpp:9:13: error: ‘j’ is already declared in this scope
-
-#include <iostream>
-
-namespace blip {
-  int i=16, j=15;
-}
-
-int j = 0;
-
-using blip::j; 
-
-int main()
-{
-   return 0;
-}
-
-
-<avoid-use-in-header-file>
-Why? A header that has a using directive or declaration at its top-level
-injects names into every file that includes the header. 
-
-<when-directive-useful>
-One place where using directive are useful is in the implementation files of
-the namespace itself.
-
-
-{nested-namespace}
-namespace X { 
-  namespace App {
-    class X : public XXX
-    {
-      ...
-    };
-  }
-}
-
-
-{rename-namespace}
-namespace bt = boost::posix_time;
 
 
 ={============================================================================
