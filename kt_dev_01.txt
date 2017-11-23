@@ -3,6 +3,12 @@
 /^[#=]{
 Use #{ for a group and ={ for a item
 
+*kt_dev_cpp_quote* 
+
+EXC++, Herb Sutter
+  "write what you know and konw what you write."
+
+
 TODO:
 2. how to implement shared_ptr for multi-threaded without using locks?
 3. how to solve when there are same symbols in different objects in the same namespace?
@@ -113,7 +119,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_003* cpp-copy-control
 *kt_dev_cpp_004* cpp-copy-assign-self
 *kt_dev_cpp_003* expr-pass-by-reference
-*kt_dev_cpp_003* expr-vexing-parse
+*kt_dev_cpp_003* cpp-vexing-parse
 *kt_dev_cpp_004* cpp-copy-dyn-resource cpp-ex-hasptr-example
 |kt_dev_cpp_006| cpp-copy-swap {copy-and-swap-idiom}
 *kt_dev_cpp_004* cpp-copy-control cpp-ex-message-example
@@ -134,9 +140,9 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_005* cpp-conversion-to-bool-stream
 |kt_dev_cpp_008| cpp-const
 *kt_dev_cpp_008* cpp-const-temporary
-*kt_dev_cpp_008* const-this cpp-const-overload cpp-const-member-function
-|kt_dev_cpp_008| const-bitwise, logical
-*kt_dev_cpp_008* const-logical, cases 
+*kt_dev_cpp_008* cpp-const-member-function cpp-this
+|kt_dev_cpp_008| cpp-const-bitwise, logical
+*kt_dev_cpp_008* cpp-const-logical
 *kt_dev_cpp_008* const-mutable
 *kt_dev_cpp_008* const-read: from the outside (interfaces first) or from the inside?
 *kt_dev_cpp_008* const-read: logical and physical state
@@ -10653,7 +10659,7 @@ value-init:
 The `copy-init` and `direct-init` uses `converting-ctor` if
 `implicit-conversion` is necessary to make a call succeed and use `copy-ctor`
 when not. The both use function matching to select a correct ctor. However,
-copy-init implicitly uses ctors.
+copy-init implicitly uses converting-ctor.
 
 string null_book = "9-999-99999-9"; // `copy-init when converting-ctor` called
 string s2 = s1;                     // `copy-init when copy-ctor` called
@@ -12255,26 +12261,13 @@ class Rational {
 
 
 ={============================================================================
-*kt_dev_cpp_003* expr-vexing-parse
+*kt_dev_cpp_003* cpp-vexing-parse
 
-<ex>
-From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the the
-syntax can be the same as that of a fuction declaration.
+<ex> EXC++42
+this is function declaration for a function named t that takes no parameters
+and returns T by value.
 
-class background_task;
-std::thread my_thread( background_task() );     // not T()
-
-This declares the `function` my_thread that takes a single parameter which is
-  pointer to a function taking no parameters and returning a background_task
-  object. 
-  
-However, the intention was to create std::thread `instance` with function object
-to run.
-
-Solution?
-
-std::thread my_thread( (background_task()) );   // extra ()
-std::thread my_thread{ background_task() };     // brace-init
+T t();            // compare with int t();
 
 <ex>
 The intention is to have value-init but defines a function.
@@ -12302,6 +12295,25 @@ Intended to declare a default-init object but the compiler complains that cannot
   apply member access notation to a function. The correct way:
 
 Sales_data obj;
+
+<ex>
+From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the the
+syntax can be the same as that of a fuction declaration.
+
+class background_task;
+std::thread my_thread( background_task() );     // T is std::thread
+
+This declares the `function` my_thread that takes a single parameter which is
+  pointer to a function taking no parameters and returning a background_task
+  object. 
+  
+However, the intention was to create std::thread `instance` with function object
+to run.
+
+Solution?
+
+std::thread my_thread( (background_task()) );   // extra ()
+std::thread my_thread{ background_task() };     // brace-init
 
 
 ={============================================================================
@@ -16339,7 +16351,8 @@ ostream &operator<<(ostream& os, const Sales_data& item)
 
 
 {equal-and-relational} operator-less
-There is a subtle difference between equal and relational(operator <) as to define 'ordering'.
+There is a subtle difference between equal and relational(operator <) as to
+define 'ordering'.
 
 <equal>
   * Classes for which there is a logical meaning for equality should define
@@ -16790,6 +16803,13 @@ else
 
 converting-ctor and conversion-op define `class-type conversions.`
 
+<ex>
+EXC++39 says that avoid converison operators and non-explicit ctors.
+
+string s1, s2, s3;
+s1 = s2 - s3;           // oops, probably menat "+"
+
+
 {converting-ctor} *cpp-single-ctor*
 The converting-ctor is every ctor with `single` argument and do `implicit`
 conversion from arg type to that class type and conversion-op is opposite.
@@ -16930,10 +16950,13 @@ explicit container::container (size_type num)
 x.member(10);  // error
 
 
-<copy-init>
+<cpp-copy-init>
 `copy-init` only uses `converting-ctor` which uses `implicit-conversion` to make a
 call succeed but not `copy-ctor`. So if use `explicit` converting-ctor then
 cannot use `copy-init` and must use `direct-init`
+
+*cpp-remember* prefer direct-init to copy-init.
+
 
 explicit Sales_data(const std::string &s): bookNo(s) {};
 
@@ -18128,7 +18151,7 @@ okay in that case because those classes otherwise have no need for one.
 
 
 ={============================================================================
-*kt_dev_cpp_008* const-this cpp-const-overload cpp-const-member-function
+*kt_dev_cpp_008* cpp-const-member-function cpp-this
 
 {cpp-overload-condition}
 Member functions differing only in their constness can be overloaded. Conditons
@@ -18159,7 +18182,7 @@ Record lookup(account *);         // nonconst version
 Record lookup(const account *);   // const version
 
 
-{why-const-member-func}
+{cpp-const-member-func}
 EC++03. Two points:
 
 * Clearer interface to show which member func can change state; read or write.
@@ -18223,7 +18246,7 @@ func.
 screen myscreen;
 myscreen.display().set(10);
 
-Since display() returns const T& and cannot call nonconst, set_set() on const
+Since display() returns const T& and cannot call nonconst, set() on const
 object. Solution?
 
 <1> Have const and nonconst version
@@ -18330,6 +18353,9 @@ const_screen.display();
 {cpp-const-to-nonconst-error}
 
 <1>
+// `const` Screen& display() `const`
+Screen& display() `const`
+
 test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&'
 from expression of type 'const Screen'
@@ -18339,14 +18365,11 @@ conversion". So const member 'must' have this form since const applies to this
 pointer: 
 
 
-note: this shows why cannot use nonconst member on const object
-
-If do not have:
+when do not have const set(), then causes an error since set is nonconst
+version
 
     void set() const
     { cout << "set: this is const member" << endl; }
-
-Then this causes an error since set is nonconst version
 
 cscreen.display().set();
 
@@ -18355,7 +18378,8 @@ test.cpp:32:24: error: passing 'const Screen' as 'this' argument of 'void
 Screen::set()' discards qualifiers [-fpermissive]
 
 
-note: when remove const return and function do not return *this.
+when remove const return and function do not return *this.  The const
+display() returns nonconst as 'declared' since no comiple error and works. 
 
 Screen& display() const                           // not "const Screen& () const"
 { cout << "dis: this is const member" << endl; }  // do not return *this
@@ -18367,9 +18391,7 @@ dis: this is const member
 dis: this is const member
 set: this is non-const member           // see
 
-The const display() returns nonconst as 'declared' since no comiple error and
-works. 
-
+*cpp-remember*
 The point is that the const member func has always this form when use return.
 Why? see bitwise-const for more. This matters only when returns reference but
 not a copy.
@@ -18425,11 +18447,11 @@ bool Stack::empty() `const`
 
 
 ={============================================================================
-*kt_dev_cpp_008* const-bitwise, logical
+*kt_dev_cpp_008* cpp-const-bitwise, logical
 
 {bitwise-const} physical constness
-From EC++03. bitwise-const(physical const) is C++'s definition and compiler only
-catches assignment to member data which is read-only. 
+From EC++03. bitwise-const(physical const) is C++'s definition and compiler
+only catches assignment to member data which is read-only. 
 
 note: these are compiler errors at build time even if a user not use a member
 function which causes an error.
@@ -18440,7 +18462,6 @@ Error_code Stack::top(Stack_entry &item) const
 {
   else
     item = entry[count--];   // ERROR since count is member
-  // item = entry[count-1];
 
   return outcome;
 }
@@ -18469,9 +18490,19 @@ class Sample {
   public:
     Sample(const char* str) : text(str) {}
 
-    const char& operator[] (std::size_t pos) const      // note: 1
-    char& operator[] (std::size_t pos) const            // note: 2
-    { return text[pos]; }                               // error
+    // read-only assignment error
+    // : In function ‘int main(int, char**)’:
+    // :25:11: error: assignment of read-only 'location' ‘sam.Sample::operator[](1u)’
+
+    const char& operator[] (std::size_t pos) const
+    { return text[pos]; }
+
+    // *cpp-const-to-nonconst* error
+    // 11:22: error: invalid initialization of reference of type ‘char&’ 
+    //   from expression of type ‘const char’
+
+    char& operator[] (std::size_t pos) const
+    { return text[pos]; }
 
   private:
     std::string text;
@@ -18486,15 +18517,6 @@ int main(int argc, char** argv)
   sam[1] = 'X';                  // error
 }
 
-note: 1. read-only assignment error
-: In function ‘int main(int, char**)’:
-:25:11: error: assignment of read-only 'location' ‘sam.Sample::operator[](1u)’
-
-<const-to-nonconst-error>
-note: 2. const to nonconst error
-11:22: error: invalid initialization of reference of type ‘char&’ 
-  from expression of type ‘const char’
-
 
 <ex> when changed to use pointer instead
 
@@ -18506,8 +18528,12 @@ class Sample {
   public:
     Sample(const char* str) : ptext(new std::string(str)) {}
 
-    const char& operator[] (std::size_t pos) const       // note: 1
-    char& operator[] (std::size_t pos) const             // note: 2
+    // As with the above, emits read-only assignment error.
+    const char& operator[] (std::size_t pos) const
+    { return (*ptext)[pos]; }
+
+    // NO error and can change the value
+    char& operator[] (std::size_t pos) const
     { return (*ptext)[pos]; }
 
     ~Sample() { delete ptext; }
@@ -18525,35 +18551,33 @@ int main(int argc, char** argv)
   std::cout << sam[1] << endl;
 }
 
-note: 1. As with the above, emits read-only assignment error.
-
-note: 2. NO error and can change the value
-
-O
-X
-
-No compile errors because 'indirect' use of an object (outside of an object) can
-avoid C++'s const check called bitwise-const. Since do not make changes to
+No compile errors because 'indirect' use of an object (outside of an object)
+can avoid C++'s const check called bitwise-const. Since do not make changes to
 *this, member, pointer in this case, so compiler do not complain. This means
 const member func can change object state. Break encapsulation.
 
 
 <solution-one>
-From EC++28. Can fix this problem as below,
-
-const char& operator[] (std::size_t pos) const
-
-Not able to modify via this call. However, 'dangling' handles problem still
-remains since it returns reference to internal member such as reading it which
-is already gone.
+From EC++28. this form fix this problem as below since not able to modify via
+this call. However, 'dangling' handles problem still remains since it returns
+reference to internal member such as reading it which is already gone.
 
 Therefore, recommend to use const T(...) const form as a 'default'.
 
+const char& operator[] (std::size_t pos) const
 
-<solution-two> logical constness
-EC++03. Hence logical-const. This is an example to cache the length whenever it
-is requested. cache textLength. Although it changes its member, it maintains
-logical constness as it updates length to cache purpose. 
+
+<solution-two>
+Use *cpp-const-logical*
+
+
+={============================================================================
+*kt_dev_cpp_008* cpp-const-logical
+
+<ex>
+EC++03. Hence logical-const. This is an example to cache the length whenever
+it is requested. cache textLength. Although it changes its member, it
+maintains logical constness as it updates length to cache purpose. 
 
 class CTextBlock {
   public:
@@ -18579,14 +18603,7 @@ std::size_t CTextBlock::length() const
 }
 
 
-={============================================================================
-*kt_dev_cpp_008* const-logical, cases 
-
-Two typical use cases.
-
-1. cache case as above.
-
-2. lazy-initialization.
+<ex> cpp-lazy-initialization
 
 // from Singleton discussion
 
