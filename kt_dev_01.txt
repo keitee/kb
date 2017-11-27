@@ -76,7 +76,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_gcc_207* gcc-cpp-concatenation
 *kt_dev_gcc_208* cpp-stringification
 
-*kt_dev_cpp_0001* static
+*kt_dev_cpp_0001* cpp-static
 *kt_dev_cpp_0001* volatile
 *kt_dev_cpp_0001* idiom-singleton-pattern
 *kt_dev_cpp_0001* idiom-factory-pattern
@@ -96,7 +96,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_lang_015| expr-control-flow
 *kt_dev_lang_015* expr-for-while
 |kt_dev_lang_016| cpp-precedence
-*kt_dev_lang_016* expr-evaluation-order
+*kt_dev_lang_016* cpp-order-evaluation cpp-side-effect
 *kt_dev_lang_016* expr-unary
 *kt_dev_lang_016* expr-assign
 *kt_dev_lang_016* expr-conditional (the ?: operator)
@@ -168,7 +168,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_019* except-and-finally
 *kt_dev_cpp_021* cpp-code-check
 |kt_dev_cpp_022| cpp-inheri
-*kt_dev_cpp_022* cpp-inheri-multiple
+*kt_dev_cpp_022* cpp-inheri-virtual
 *kt_dev_cpp_022* inheri-ctor-initializers
 *kt_dev_cpp_022* cpp-access-control
 *kt_dev_cpp_022* inheri-rtti
@@ -4122,7 +4122,7 @@ option is ignored. GCC provides an informative message when this occurs if -v is
 ={============================================================================
 *kt_dev_gcc_204* gcc-cpp-use
 
-{ndebug}
+{cpp-ndebug} *cpp-assert*
 The assert macro is defined in `cassert` header. It depends on a preprocessor
 varaible named NDEBUG. If NDEBUG is defined, assert do nothing. By default,
          it's not defined.
@@ -5272,12 +5272,12 @@ as an ellipses parameter. This forces the user to pick an appropriate value for 
 which ensures the ellipses loop will terminate after a reasonable number of iterations even if it
 produces a garbage value.
 
+
 # ============================================================================
 #{ C AND C++
 ={============================================================================
-*kt_dev_cpp_0001* static
+*kt_dev_cpp_0001* cpp-static
 
-{problem}
 // file A
 class FileSystem {
   public:
@@ -5305,16 +5305,16 @@ How can you make sure that the global object tfs will be initialised before
 tempDir which uses that? 
 
 
-<init-order-problem>
+<cpp-init-order-problem> *cpp-undefined*
 This is called the intialization order fiasco, where global variables can be
-accessed before they are initialised. This is the race-condition on global
-variables. 
+accessed, pre-initialization value 0 for bulit-in types, before they are
+initialised since the order of initialization for global variables(including
+class statics) between translation units is undefined. This is the
+race-condition on global variables. 
 
 How to solve? By replacing the global variable with a function that returns a
 reference to a local static variable, this guarantee that it is initialised
 before anything accesses it. This is only true for single-threaded. 
-
-note: 
 
 Only true for single thread? <static-and-race-condition>
 
@@ -5332,31 +5332,28 @@ In C++11 this problem is solved: the initialization is defined to happen on
 exactly one thread.
 
 
-{static-type} function-static, file-static
-Global vars has a program scope. The static vars are still global object but has
-a limited scope.
+{cpp-static-type} function-static, file-static
+Global vars has a program scope. The static vars are still global object but
+has a limited scope.
 
 The `function-static` is only accessible within the function, and has no
 linkage.(?) It is initialised the first time execution reaches the definition,
   not necessarily during the program's initialization phases.
 
-From ansic, p83.
-So static is to 'limit' the scope of the object whether is to file or function.
-The `file-static` is private to a file and will not conflict with the same names
-in other files of the same program. The `file-static` can be used on both
-variables and functions.
+From ansic, p83. So static is to 'limit' the scope of the object whether is
+to file or function.  
+
+The `file-static` is private to a file and will not conflict with the same
+names in other files of the same program. The `file-static` can be used on
+both variables and functions.
 
 `internal-linkage` refers to everything only in scope of a translation unit.
 
-`global-static` `file-static`
+`global-static` `file-static` should use *cpp-namespace-unnamed* in C++.
 global(file) static has a file scope.
 
 `local-static` `function-static` 
 local(function) static has a function scope. 
-
-
-note: 
-`file-static` is in C and instead, should use `unnamed-namespace` in C++.
 
 
 void foo () {   
@@ -9604,7 +9601,7 @@ executes as
 
 
 ={============================================================================
-*kt_dev_lang_016* expr-evaluation-order
+*kt_dev_lang_016* cpp-order-evaluation
 
 {precedence-associativity}
 
@@ -9639,7 +9636,7 @@ that group is unspecified? NO when involves `evaluation`
 
 CPR p138.
 
-<cpp-order-of-evaluation>
+<cpp-order-of-evaluation> *cpp-undefined*
 The `order-of-operand-evaluation` is `independent` of `precedence` and
 `associativity`.
 
@@ -9664,44 +9661,85 @@ cout << i << " " << ++i << endl;
 
 ((((cout << i) << " " ) << ++i) << endl);     // `undefined`
 
-<ex>
+<ex> EXC++47
+
 return string("size = ") + itoa(size_, buf, 10) +
   ", used = " + itoa(used_, buf, 10);
 
-Use left-associative and:
+what this really amouts to is something like:
 
 return 
-  operator+(operator+(operator+(string("size = ") + itoa(size_, buf, 10)), 
-                      ", used = "), 
-            itoa(used_, buf, 10));
+  operator+(
+      operator+(operator+(string("size = ") + itoa(size_, buf, 10)),", used = "),
+      itoa(used_, buf, 10)
+      );
 
-If size_ is 10 and used_ is 5, which output since uses the same buf which is
-overwritten depending on the order?
+Say size_ is 10 and used_ is 5  the problem is that both uses the same buf
+which is overwritten depending on the order.
 
-size = 10, used = 5
+// when outer opearator+()'s first parameter is evalueated first and that's
+// stored in temporary string before the second itoa reuses the buffer.
+size = 10, used = 5       
+
+// when outer opearator+()'s second parameter is evalueated first and inner
+// itoa will clobber the result of the outer itoa before either value is used.
 size = 10, used = 10
 
 
-{ansic}
-From ansic, p53. C do not specify the 'order' in which the operands of an
-operator are evaluated. 
+<ex> EXC++47
+
+int f (int & x, int y = 1) { return x += y; }
+int g (int & x) { return x /= 2; }
+
+int main()
+{
+    int i = 42;
+
+    // f(43) = 43
+    // g(21) = 21
+    cout << "f(" << i << ") = " << f(i) << endl;
+    cout << "g(" << i << ") = " << g(i) << endl;
+
+    // f(22) = 22, g(21) = 21
+    cout << "f(" << i << ") = " << f(i) << ", "
+        << "g(" << i << ") = " << g(i) << endl;
+}
+
+
+{cpp-side-effect} from online
+A "side effect" is defined by the C++ standard in [intro.execution], by:
+
+Reading an object designated by a volatile glvalue (3.10), modifying an
+object, calling a library I/O function, or calling a function that does any of
+those operations are all side effects, which are changes in the state of the
+execution environment.
+
+y = (x = d) * 5; // Sets y to 15.
+
+The value returned from x = d, is its main effect. The changing of the value
+of x is a side effect.
+
+
+{ansic} ansic, p53. 
+C do not specify the 'order' in which the operands of an operator are
+evaluated. 
 
 x = f() + g();    // f may be evaluated before g or vice versa
 
 Function calls, nested assignment statements, and increment and decrement
-operators cause "side effect" - some variable is changed as a by-product of the
-`evaluation` of an expression. In any expression involving side effects, there
-can be subtle dependencies on the 'order' in which variables taking part in the
-expression are updated.
+operators cause *cpp-side-effect* - some variable is changed as a by-product
+of the `evaluation` of an expression. In any expression involving side
+effects, there can be subtle dependencies on the 'order' in which variables
+taking part in the expression are updated.
 
 printf("%d %d\n", ++n, power(2, n));   // WRONG this is not a comma operator
 
 a[i] = i++;
 
-When side effects take place is left to `discretion` of the compiler, since the
-best order depends strongly on machine architecture.
+When side effects take place is left to `discretion` of the compiler, since
+the best order depends strongly on machine architecture.
 
-<1>
+<ex>
 while (fgets(line, 256, file))
 {
   sscanf(line, "%s %d %d %f %f", Stocks[i], &Intervals[i], &Volumes[i], 
@@ -9709,15 +9747,15 @@ while (fgets(line, 256, file))
 }
 
 
-<2> see reverse polish calculator
+<ex> see reverse polish calculator
 The + and * are commutative operators, the order in which the popped operands
-are combined is irrelevant, but for - and / the left and right operands must be
-distinguished.
+are combined is irrelevant, but for - and / the left and right operands must
+be distinguished.
 
 push( pop() - pop () );
 
-This is wrong since the order in which the two calls of pop are evaluated is not
-'defined'.
+This is wrong since the order in which the two calls of pop are evaluated is
+not 'defined'.
 
 
 ={============================================================================
@@ -11177,7 +11215,7 @@ class T {
   };
 
 
-{ctor-init-list} 
+{cpp-ctor-init-list} 
 The following is initialization and assignment but not initialization since
 members are default initialized `before-ctor-body-runs`. 
 
@@ -11263,7 +11301,7 @@ class Derived: public Base
 };
 
 
-{order-of-member-init}
+{cpp-init-order-of-member}
 CPR 289. Members are initialized in the order in which they appear in the class
 definition. The order of initialization often doesn't matter unless one member
 is initialized in terms of another.
@@ -11273,6 +11311,19 @@ declared.
 
 2. Good idea to write member initializer to use the ctor's parameters rather
 than another data member from the same object.
+
+// EXC++47
+class Array : private ArrayBase, public Container
+{
+  public:
+    Array (size_t startingSize = 10)
+      : size_(startingSize),
+      buffer_(new T[size_]) {}              // *cpp-error*
+
+  private:
+    T* buffer_;
+    size_t used_, size_;
+};
 
 <cpp-type-member> <cpp-typename> CPR 272
 As with data and function member, type member is a local name and is subject
@@ -22516,13 +22567,13 @@ class Last 'final' : Base { ... };
 
 
 ={============================================================================
-*kt_dev_cpp_022* cpp-inheri-multiple
+*kt_dev_cpp_022* cpp-inheri-virtual
 
 MI and SI (single inheritance)
 
-The problem is that a class inherit from the same base class more than once and
-this means there are more than one subobject. Then what is the real problem or
-consequence out of having more than one subobject?
+The problem is that a class inherit from the same base class more than once
+and this means there are more than one subobject. Then what is the real
+problem or consequence out of having more than one subobject?
 
 From C++ Primer, p810, took this example from IO library:
 
@@ -22530,15 +22581,15 @@ basic_ios (ABC) <- istream <- iostream
                 <- ostream <- iostream
 
 basic_ios holds stream's buffer and state but iostream wants to use "the same
-buffer and condition state for both reading and writing". If an iostream object
-has two copies of its basic_ios, this 'sharing' is not possible.
+buffer and condition state for both reading and writing". If an iostream
+object has two copies of its basic_ios, this 'sharing' is not possible.
 
 That is, in iostream, cause ambiguity and can use both data using scope
 specifier like istream::x and ostream::x. so real issue is 'sharing'
 
-To solve this, use `virtual-inheritance` and this shared base class is called a
-virtual-base-class. How? makes only 'one' shared subobject for that virtual base
-class.
+To solve this, use `virtual-inheritance` and this shared base class is called
+a virtual-base-class. How? makes only 'one' shared subobject for that virtual
+base class.
 
 
 class istream : 'virtual' public basic_ios {};
@@ -22548,12 +22599,12 @@ class iostream : public istream, public ostream {};
 From EC++40, p193,
 
 This problem is called "deadly-MI-diamond" Problems? 'ambiguity' and
-    'replication' in the derived. C++ takes 'no' position on virtual inheritance
-    problem. (checked with VC and no errors when there's a deadly MI diamond)
-    and its default is to perform the replication. 
+  'replication' in the derived. C++ takes 'no' position on virtual inheritance
+  problem. (checked with VC and no errors when there's a deadly MI diamond)
+  and its default is to perform the replication. 
 
-However, VI 'costs' in size, speed and initialization problem. So recommendation
-is don't use VI unless you need to.
+However, VI 'costs' in size, speed and initialization problem. So
+recommendation is don't use VI unless you need to.
 
 <syntax>
 Which one is right to have public inheritance from Y and Z?
@@ -22568,7 +22619,23 @@ class X : public Y, public Z {
 
 
 ={============================================================================
-*kt_dev_cpp_022* inheri-ctor-initializers
+*kt_dev_cpp_022* cpp-inheri-ctor-init
+
+{cpp-init-order-class}
+nonvirtual base classes are initialized in `left-to-right` order as they are
+declared.
+
+// EXC++47
+class Array : private ArrayBase, public Container
+{
+  Array (size_t startingSize = 10)
+    : Container (startingSize),
+    ArrayBase (Container::GetSize()) {}       // *cpp-error*
+};
+
+That means it's trying to use a member of the not-yet-initialized Container
+base subobject.
+
 
 <1>
 Unless we say otherwise, the base part of a derived is 'default' initialized.
