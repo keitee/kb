@@ -71,6 +71,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_gcc_202| gcc-cpp-get-filename-without-full-path
 *kt_dev_gcc_203* gcc-cpp-isystem option
 *kt_dev_gcc_204* gcc-cpp-use
+*kt_dev_gcc_204* gcc-cpp-issue
 *kt_dev_gcc_205* gcc-cpp-vaarg
 *kt_dev_gcc_206* gcc-cpp-stringification
 *kt_dev_gcc_207* gcc-cpp-concatenation
@@ -303,9 +304,7 @@ KT KB. DEVELOPMENT.
 
 
 #{ EFFECTIVE C++ 3RD
-|kt_dev_ecpp_003| 09: no virtual call in ctor or dtor {pass-log-to-base-class} {static-member-example}
-|kt_dev_ecpp_004| 18: hard to use incorrectly 
-|kt_dev_ecpp_005| 23: prefer non-member non-friend func {encapsulation}
+*kt_dev_cpp_000* cpp-design-by-contract 
 |kt_dev_ecpp_006| 26: postpone variable definitions
 |kt_dev_ecpp_007| 28: avoid returning handles to object internals
 |kt_dev_ecpp_010| 34: interface and implementation inheritance
@@ -4249,33 +4248,38 @@ EC++02, no to preprocessor
 
 Prefer the compiler to the preprocessor because:
 
-<0> type-checking
+* type-checking
 
-<1> better to decode compile error and to use symbolic debugger. 
+* better to decode compile error and to use symbolic debugger. 
 
 #define ASPECT_RATIO 1.653
 
 const double AspectRatio = 1.653
 
-<2> smaller code (?) since blind substitution could result in multiple copies in your object code.
+* smaller code (?) since blind substitution could result in multiple copies in
+  your object code.
 
-<3> class-const
-class specific const and better encapsulation. see *kt_dev_cpp_017*
+* class-const
+class specific const and better encapsulation.
 
-<4> avoid problem when use macro with an expression
+* avoid problem when use macro with an expression
 
 // one
+
 #define CALL_WITH_MAX(a,b) func((a) > (b) ? (a) : (b) )
 
-int a= 5, b = 0;
+int a = 5, b = 0;
 
 CALL_WITH_MAX(++a, b);     // a is increased twice
-CALL_WITH_MAX(++a, b+10);  // a is increased once
+CALL_WITH_MAX(++a, b+10);  // a is increased once since (a > b) is false
 
 // two when the order of evaluation matters
-#define square(x)    x*x
 
+#define square(x)    x*x
+init z = 5
 square(z+1);
+
+36? No, it is 11.
 
 If want to avoid function call cost, use 'inline' instead.
 
@@ -11261,6 +11265,108 @@ class X {
 };
 
 
+<ex> EC++09, no virtual call in ctor or dtor 
+
+Assume that each time a transaction object is created, an appropriate log
+entry needs to be created in a log. If it is a derived object, then need to
+have a log entry for that type.
+
+Solution?:
+
+class Transaction {
+  public:
+    Transaction();
+
+    // to make type-dependent-log-entry
+    virtual void logTransaction() const = 0;
+    ...
+};
+
+Transaction::Transaction()
+{
+  // call
+  logTransaction();
+}
+
+class BuyTransaction: public Transaction {
+  public:
+    virtual void logTransaction() const;
+    ...
+};
+
+class SellTransaction: public Transaction {
+  public:
+    virtual void logTransaction() const;
+    ...
+};
+
+// use
+{
+   BuyTransaction buy;
+}
+
+Will it have a log entry of BuyTransaction as expected? NO. Will have the base
+class version if there is one. 
+
+C++ don't allow this because when base ctor runs, 'only' base part is created.
+Hence base version. If it was allowed, then derived call would access derived
+part which is not created or initialized. This is undefined so 'not' allowed.
+
+Remember that construction happens first from base. Also this can be explained
+as this is becuase it is static bining at compile time. Has nothing to do with
+virtual mechanism since not through reference or pointer.
+
+1. For the example above, some compilers issue a warning. Even if there is no
+warnings, there will be a link error unless there is a definition of pure
+virtual function. Remember pure virtual can have definition. 
+
+2) Can use normal virtual function (not pure) but still get base version.
+
+
+<solution>
+Make it non-virtual, move up the implementation to log in the tree and pass up
+the type-dependent info to the base class in the tree.
+
+class Transaction {
+  public:
+    explicit Transaction( const std::string& logInfo );
+
+    // non-virtual-func
+    void logTransaction( const std::string& logInfo) const;
+    ...
+};
+
+Transaction::Transaction( const std::string& logInfo )
+{
+  ...
+  logTransaction( logInfo );
+}
+
+class BuyTransaction: public Transaction {
+  public:
+    // pass-log-to-base-class
+    BuyTransaction( parameters ) 
+      : Transaction( createLogString(parameters) )
+    { ... }
+    ...
+  private:
+      'static' std::string createLogString( parameters );
+};
+
+See the use of createLogString, helper func, instead of initializing each
+member and it is more convenient and consider this when there are many
+parameters.
+
+*cpp-static-members* 
+Why static? By doing this, there is no danger of accidentally referring to the
+BuyTransaction object's as-yet-uninitialized data or function members when
+base ctor and part runs.
+
+Why logging call in the base class in the first place? that's becauase it's
+common to all type of transactions. So move up as it's abstraction.
+
+
+
 ={============================================================================
 *kt_dev_cpp_018* cpp-dtor cpp-nonvirtial-destruction-problem
 
@@ -15972,10 +16078,12 @@ defined.
 
 cplusplus_primer::Query q = cplusplus_primer::Query("Hello");
 
-<can-be-discontiguous>
-The namespace either defines a new namespace or adds to an existing one. Be
-sure only #include appear before opening the namespace. If not, attempt to
-define all the names in that header as members of the enclosing namespace. 
+
+{partitioning-or-packaging-functionality} <can-be-discontiguous>
+The namespace can be spread across multiple sources. The namespace either
+defines a new namespace or adds to an existing one. Be sure only #include
+appear before opening the namespace. If not, attempt to define all the names
+in that header as members of the enclosing namespace. 
 
 The declaration and definition should be in the same namespace and this means
 shall use namespace block in 'both' header and source file as well.
@@ -16006,7 +16114,113 @@ int main()
   ...
 }
 
-<use-marco>
+
+<cpp-ood> *cpp-encapsulation*
+EC++23 About considering encapsulation in design:
+
+OOD principle dictates that data and functions that operates on them should be
+bundled together. Does it suggest that member function is a better choice? No
+since OOD is about encapsulation. The nonmember and non-friend provides more
+encapsulation, packaging flexibility, and extensibility.
+
+The greater something is encapsulated, then the greater our ability to change
+it later without breaking user codes. Roughly, when there are 'more' funcs to
+access data, it's less encapsulated. Assumes that it follows the rule in
+EC++22 that member data must be private and therefore provide only funtional
+interfaces to access data.
+
+If use private member data, then only member function and friend can use it.
+If member function and non-member non-friend function provides the same
+functionality, which is better? non-member non-friend function 
+
+since it doesn't increase the number of functions that can access the private
+part of the class or dependant on memeber data. 
+
+class WebBrowser
+{
+  public:
+    ...
+    void clearCache();
+    void clearHistory();
+    void removeCookies();
+    ...
+};
+
+<1> Add more interface?
+
+class WebBrowser
+{
+  public:
+    ...
+    void clearCache();
+    void clearHistory();
+    void removeCookies();
+    void clearEverything();
+    ...
+};
+
+<2> Add non-member non-friend function?
+
+void clearBrowser( Webbrowser& wb )
+{
+  wb.clearCache();
+  wb.clearHistory();
+  wb.removeCookies();
+}
+
+How to use the approach two? Use namespace due to *cpp-argument-dependant-lookup* 
+
+namespace WebBrowserStuff {
+  class WebBrowser { ... };
+  void clearBrowser(WebBrowser& wb);
+  ...
+}
+
+
+<*> partitioning on convenience functions
+
+The convenience function can't offer any functionality a WebBrowser client
+couldn't already get in some other way. However, can make client to be
+compliation dependent on only what they uses.
+
+// <webbrowser.h> for class WebBrowser and 'core' WebBrowser-related functionality.
+namespace WebBrowserStuff {
+  class WebBrowser { ... };
+  void clearBrowser(WebBrowser& wb);
+  ...
+}
+
+// <webbrowserbookmarks.h> for bookmark related convenience functions.
+namespace WebBrowserStuff {
+  ...
+}
+
+// <webbrowsercookies.h> for cookies related convenience functions.
+namespace WebBrowserStuff {
+  ...
+}
+
+<*> partitioning on functionality
+
+Use the same approach but on separated functionality. Like STL, vector, list
+and etc are in each header but in the same namespce. Cannot do the same with
+class member since a class cannot be split into pieces.
+
+
+<*> functional extensibility
+
+When necessary, can extend functionality in the existing namespace by adding
+more. This is 'horizental' extension compared with 'vertical', i.e., class
+inheritence. 
+
+
+After all, it's all about encapsulation and seperation. The class is closed or
+tightly coupled approach since if it changes, the client will be broken. By
+having non-member non-friend in the middle, can have seperation between
+classes and client. This is like indirect access or interface class approach.
+
+
+{use-marco}
 
 #define NS_OPEN namespace XXX {
 #define NS_CLOSE }
@@ -16170,7 +16384,7 @@ this is equi to:
 
 operator>>(std::cin, s); 
 
-This operator>>() is defined in the string libaray as a `nonmemeber` and in
+This operator>>() is defined in the string libaray as a `non-memeber` and in
 std namespace. 
 
 Why is it okay without using either "std::" or using-declaration? When func
@@ -16246,7 +16460,7 @@ the class definition:
 that data"
 
 Here, function means all function. For class X, all functions, including
-`free-functions` (nonmember function), that both:
+`free-functions` (non-member function), that both:
 
 * Mention X
 * Are supplied wth X 
@@ -24657,7 +24871,7 @@ usetemppattern.cpp:51:20: error: within this context
 ={============================================================================
 *kt_dev_cpp_023* cpp-pattern-pimpl cpp-minimise-compile-time
 
-EC++31: minimize compilation dependencies
+EC++31: minimize compilation dependencies *cpp-encapsulation*
 
 Two cases can cause complilation dependency problem:
 
@@ -44505,104 +44719,11 @@ platform.mk.kt: ASCII English text
 # ============================================================================
 #{
 ={============================================================================
-={============================================================================
-*kt_dev_ecpp_003* 09: no virtual call in ctor or dtor 
+*kt_dev_cpp_000* cpp-design-by-contract 
+  
+EC++18, Make it hard to use incorrectly 
 
-<problem>
-Assume that each time a transaction object is created, an appropriate log entry needs to be created
-in a log. If it is a derived object, then need to have a log entry for that type.
-
-Solution?:
-
-class Transaction {
-  public:
-    Transaction();
-
-    virtual void logTransaction() const = 0;    // to make <type-dependent-log-entry>
-    ...
-};
-
-Transaction::Transaction()
-{
-  ... >
-  logTransaction();
-}
-
-class BuyTransaction: public Transaction {
-  public:
-    virtual void logTransaction() const;
-    ...
-};
-
-class SellTransaction: public Transaction {
-  public:
-    virtual void logTransaction() const;
-    ...
-};
-
-// use
-{
-   BuyTransaction buy;
-}
-
-Will it have a log entry of BuyTransaction as expected? NO. Will have the base class version if
-there is one. 
-
-C++ don't allow this because when base ctor runs, 'only' base part is created. Hence base version.
-If it was allowed, then derived call would access derived part which is not created or initialized.
-This is undefined so 'not' allowed. note: Remember that construction happens first from base. Also
-this can be explained as this is becuase it is static bining at compile time. Has nothing to do with
-virtual mechanism since not through reference or pointer.
-
-1. For the example above, some compilers issue a warning. Even if there is no warnings, there will
-be a link error unless there is a definition of pure virtual function. Remember pure virtual can
-have definition. 
-
-2) Can use normal virtual function (not pure) but still get base version.
-
-<solution>
-Make it non-virtual, move up the implementation to log in the tree and pass up the type-dependent
-info to the base class in the tree.
-
-class Transaction {
-  public:
-    explicit Transaction( const std::string& logInfo );
-
-    void logTransaction( const std::string& logInfo) const;       // non-virtual-func
-    ...
-};
-
-Transaction::Transaction( const std::string& logInfo )
-{
-  ...
-  logTransaction( logInfo );
-}
-
-class BuyTransaction: public Transaction {
-  public:
-    BuyTransaction( parameters ) 
-      : Transaction( createLogString(parameters) )                // pass-log-to-base-class
-    { ... }
-    ...
-  private:
-      'static' std::string createLogString( parameters );         // static-member-func
-};
-
-note: See the use of func, createLogString, helper func, instead of initializing each member and it
-is more convenient and consider this  when there are many parameters.
-
-<why-static> static-member-func-example
-Why static? By doing this, there is no danger of accidentally referring to the BuyTransaction
-object's as-yet-uninitialized data or function members when base ctor and part runs.
-
-Why logging call in the base class in the first place? that's becauase it's common to all type of
-transactions. So move up as it's abstraction.
-
-
-={============================================================================
-*kt_dev_ecpp_004* 18: hard to use incorrectly 
-
-1) Make compile error for incorrect uses (interface usage errors):
+1. Make compile error for incorrect uses (interface usage errors):
 
 class Date {
   public:
@@ -44615,7 +44736,7 @@ class Date {
 Date d(30, 3, 1995);    // wrong order
 Date d(3, 40, 1995);    // invalid
 
-How to make compile errros? Use <type-system>:
+How to make compile errros? Use C++ type system.
 
 struct Day {
   explicit Day(int day) : val(day) {}
@@ -44638,17 +44759,21 @@ class Date {
     ...
 };
 
-// client use
 
-Date d(30, 3, 1995);                      // wrong type. wrong order
-Date d( Day(3), Month(40), Year(1995) );  // wrong type. invalid
-Date d( Month(40), Day(3), Year(1995) );  // correct type. invalid value but easy to 'see'!
+// wrong type. wrong order
+Date d(30, 3, 1995);                      
+
+// wrong type. invalid
+Date d( Day(3), Month(40), Year(1995) );
+
+// correct type. invalid value but easy to 'see'!
+Date d( Month(40), Day(3), Year(1995) );  
 
 
-2) Make compile error for invalid values: 
+2. Make compile error for invalid values: 
 
-Consider enum? NO since not type-safe. Safer solution is to predefine all vaild months. note: C++11
-enum suppors type checks. 
+Consider enum? NO since not type-safe. Safer solution is to predefine all
+vaild months. note: C++11 enum supports type checks. 
 
 class Month {
   public:
@@ -44657,123 +44782,27 @@ class Month {
     static Month Dec() { return Month(12); }
 
   private:
-    explicit Month(int m); // 'prevent' creation of new values
+    // prevent creation of new values
+    explicit Month(int m); 
 };
 
 Date d( Month::Mar(), Day(30), Year(1995) );
 
-Used functions to represent months. How about {class-const} in *kt_dev_cpp_017* instead of using
-function?
+Used functions to represent months. How about {class-const} in
+*kt_dev_cpp_017* instead of using function?
 
 
-3) Force client to follow interface rule
+3. Force client to follow interface rule
 
 Investment* createInvestment();
 
-This means that client remember to use raii to prevent resource leaks. The better interface decision
-is:
+This means that client remember to use raii to prevent resource leaks. The
+better interface decision is:
 
 std::shated_ptr<Investment> createInvestment();
 
-The same is {factory-func} in *kt_dev_stl_018* which force client to use smart_ptr.
-
-
-={============================================================================
-*kt_dev_ecpp_005* 23: prefer non-member non-friend func
-
-EC++23. About considering encapsulation in design:
-
-OOD principle dictates that data and functions that operates on them should be bundled together.
-Does it suggest that member function is a better choice? No since OOD is about encapsulation. The
-nonmember and non-friend provides more encapsulation, packaging flexibility, and extensibility.
-
-The greater something is encapsulated, then the greater our ability to change it later without
-breaking user codes. Roughly, when there are 'more' funcs to access data, it's less encapsulated.
-Assumes that it follows the rule in EC++22 that member data must be private and therefore provide
-only funtional interfaces to access data.
-
-If use private member data, then only member function and friend can use it. If member function and
-non-member non-friend function provides the same functionality, which is better? non-member
-non-friend function <key> since it doesn't increase the number of functions that can access the
-private part of the class or dependant on memeber data. 
-
-class WebBrowser
-{
-  public:
-    ...
-    void clearCache();
-    void clearHistory();
-    void removeCookies();
-    ...
-};
-
-<1> approach one. add more interface?
-class WebBrowser
-{
-  public:
-    ...
-    void clearCache();
-    void clearHistory();
-    void removeCookies();
-    void clearEverything();
-    ...
-};
-
-<2> approach two. add non-member non-friend function?
-void clearBrowser( Webbrowser& wb )
-{
-  wb.clearCache();
-  wb.clearHistory();
-  wb.removeCookies();
-}
-
-How to use the approach two? Use namespace in C++ due to ADL.
-
-namespace WebBrowserStuff {
-  class WebBrowser { ... };
-  void clearBrowser(WebBrowser& wb);
-  ...
-}
-
-
-{partitioning-or-packaging-functionality}
-The namespace can be spread across multiple sources.
-
-<1> partitioning on convenience functions
-The convenience function can't offer any functionality a WebBrowser client couldn't already get in
-some other way. However, can make client to be compliation dependent on only what they uses.
-
-// <webbrowser.h> for class WebBrowser and 'core' WebBrowser-related functionality.
-namespace WebBrowserStuff {
-  class WebBrowser { ... };
-  void clearBrowser(WebBrowser& wb);
-  ...
-}
-
-// <webbrowserbookmarks.h> for bookmark related convenience functions.
-namespace WebBrowserStuff {
-  ...
-}
-
-// <webbrowsercookies.h> for cookies related convenience functions.
-namespace WebBrowserStuff {
-  ...
-}
-
-<2> partitioning on functionality
-Use the same approach but on separated functionality. Like STL, vector, list and etc are in each
-header but in the same namespce. Cannot do the same with class member since a class cannot be split
-into pieces.
-
-
-{functional-extensibility}
-When necessary, can extend functionality in the existing namespace by adding more. This is
-'horizental' extension compared with 'vertical', i.e., class inheritence. 
-
-<key> After all, it's all about encapsulation and seperation. The class is closed or tightly coupled
-approach since if it changes, the client will be broken. By having non-member non-friend in the
-middle, can have seperation between classes and client. This is like indirect access or interface
-class approach.
+The same is {factory-func} in *kt_dev_stl_018* which force client to use
+smart_ptr.
 
 
 ={============================================================================

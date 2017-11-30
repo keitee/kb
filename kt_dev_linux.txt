@@ -481,8 +481,6 @@
 |kt_linux_core_109| linux-process-deamon todo
 
 *kt_linux_core_050* linux-memory
-
-*kt_linux_core_150* linux-thread
 *kt_linux_core_050* linux-memory-mapping oom-killer
 *kt_linux_core_151* linux-thread-source-and-ex
 |kt_linux_core_153| linux-thread-compile
@@ -37239,6 +37237,7 @@ A virtual memory scheme splits the memory used by each program into small,
 At any one time, only some of the pages of a program need to be resident in
 physical memory page frames; these pages form the so-called `resident-set`.
 
+<swap-space>
 Copies of the unused pages of a program are maintained in the `swap-area` - a
 reserved area of disk space used to supplement the computer's RAM - and loaded
 into physical memory only as required. 
@@ -40399,11 +40398,381 @@ function that called alloca() returns.
 ={============================================================================
 *kt_linux_core_050* linux-memory-mapping
 
+LPI 49 Memory Mappings
+
+The mmap() system call creates a new memory mapping in the calling process’s
+virtual address space. A mapping can be of two types:
+
+* File mapping: A file mapping maps a region of a file directly into the
+  calling process’s virtual memory. Once a file is mapped, its contents can be
+  accessed by operations on the bytes in the corresponding memory region. The
+  pages of the mapping are (automatically) loaded from the file as required.
+  This type of mapping is also known as a file-based mapping or memory-mapped
+  file.
+
+* Anonymous mapping: An anonymous mapping doesn’t have a corresponding file.
+  Instead, the pages of the mapping are initialized to 0.
+
+  Another way of thinking of an anonymous mapping (and one is that is close to
+      the truth) is that it is a mapping of a virtual file whose contents are
+  always initialized with zeros.
+
+
+Memory mappings can be used for IPC
+
+The memory in one process’s mapping may be shared with mappings in other
+processes (i.e., the page-table entries of each process point to the same
+    pages of RAM).  This can occur in two ways:
+
+* When two processes map the same region of a file, they share the same pages
+  of physical memory.
+
+* A child process created by fork() inherits copies of its parent’s mappings,
+  and these mappings refer to the same pages of physical memory as the
+  corresponding mappings in the parent.
+
+When two or more processes share the same pages, each process can potentially
+see the changes to the page contents made by other processes, depending on
+whether the mapping is private or shared:
+
+* Private mapping (MAP_PRIVATE)
+  Modifications to the contents of the mapping are not visible to other
+  processes and, for a file mapping, are not carried through to the underlying
+  file. Although the pages of a private mapping are initially shared in the
+  circumstances described above, changes to the contents of the mapping are
+  nevertheless private to each process. The kernel accomplishes this using the
+  copy-on-write technique (Section 24.2.2). This means that whenever a process
+  attempts to modify the contents of a page, the kernel first creates a new,
+  separate copy of that page for the process (and adjusts the process’s page
+  tables). For this reason, a MAP_PRIVATE mapping is sometimes referred to
+  as a private, copy-on-write mapping.
+
+* Shared mapping (MAP_SHARED)
+  Modifications to the contents of the mapping are visible to other processes
+  that share the same mapping and, for a file mapping, are carried through to
+  the underlying file.
+
+
+The four different types of memory mappings are created and used as follows:
+
+* Private file mapping: The contents of the mapping are initialized from a
+  file region. Multiple processes mapping the same file initially share the
+  same physical pages of memory, but the copy-on-write technique is employed,
+  so that changes to the mapping by one process are invisible to other
+  processes. 
+
+  The main use of this type of mapping is to initialize a region of memory
+  from the contents of a file. Some common examples are initializing a
+  process’s text and initialized data segments from the corresponding parts of
+  a binary executable file or a shared library file.
+
+* Private anonymous mapping: Each call to mmap() to create a private anonymous
+  mapping yields a new mapping that is distinct from (i.e., does not share
+  physical pages with) other anonymous mappings created by the same (or a
+  different) process. Although a child process inherits its parent’s
+  mappings, copy-on-write semantics ensure that, after the fork(), the
+  parent and child don’t see changes made to the mapping by the other
+  process. 
+    
+  The primary purpose of private anonymous mappings is to allocate new
+  (zero-filled) memory for a process (e.g., malloc() employs mmap() for this
+  purpose when allocating large blocks of memory).
+
+* `Shared file mapping:` All processes mapping the same region of a file share
+  the same physical pages of memory, which are initialized from a file region.
+  Modifications to the contents of the mapping are carried through to the
+  file. 
+ 
+  This type of mapping serves two purposes. First, it permits
+  memory-mapped I/O. By this, we mean that a file is loaded into a region of
+  the process’s virtual memory, and modifications to that memory are
+  automatically written to the file. Thus, memory-mapped I/O provides an
+  alternative to using read() and write() for performing file I/O. 
+  
+  A second purpose of this type of mapping is to allow `unrelated processes`
+  to share a region of memory in order to perform (fast) IPC in a manner
+  similar to System V shared memory segments (Chapter 48).
+
+* Shared anonymous mapping: As with a private anonymous mapping, each call to
+  mmap() to create a shared anonymous mapping creates a new, distinct mapping
+  that doesn’t share pages with any other mapping. The difference is that the
+  pages of the mapping are not copied-on-write. This means that when a child
+  inherits the mapping after a fork(), the parent and child share the same
+  pages of RAM, and changes made to the contents of the mapping by one process
+  are visible to the other process. 
+  
+  Shared anonymous mappings allow IPC in a manner similar to System V shared
+  memory segments, but only between `related processes.`
+
+*proc-maps*
+Mappings are lost when a process performs an exec(), but are inherited by the
+child of a fork(). The mapping type (MAP_PRIVATE or MAP_SHARED) is also
+inherited. Information about all of a process’s mappings is visible in the
+Linux-specific /proc/ PID/maps file, which we described in Section 48.5.
+
+
+<syscall-mmap>
+49.2 Creating a Mapping: mmap()
+
+The mmap() system call creates a new mapping in the calling process’s virtual
+address space.
+
+#include <sys/mman.h>
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+
+Returns starting address of mapping on success, or MAP_FAILED on error
+
+
+The addr argument indicates the virtual address at which the mapping is to be
+located. If we specify addr as NULL, the kernel chooses a suitable address for
+the mapping. This is the preferred way of creating a mapping.
+
+The length argument specifies the size of the mapping in bytes. Although
+length doesn’t need to be a multiple of the system page size (as returned by
+sysconf(_SC_PAGESIZE)), the kernel creates mappings in units of this size,
+so that length is, in effect, rounded up to the next multiple of the
+page size.
+
+The prot argument is a bit mask specifying the protection to be placed on the
+mapping.
+
+PROT_READ The contents of the region can be read
+
+The flags argument is a bit mask of options controlling various aspects of the
+mapping operation. Exactly one of the following values must be included in
+this mask: 
+
+MAP_PRIVATE
+MAP_SHARED
+
+The remaining arguments, fd and offset, are used with file mappings (they are
+    ignored for anonymous mappings). 
+
+The fd argument is a file descriptor identifying the file to be mapped. The
+offset argument specifies the starting point of the mapping in the file, and
+must be a multiple of the system page size. 
+
+To map the entire file, we would specify offset as 0 and length as the size of
+the file. We say more about file mappings in Section 49.5.
+
+
+<syscall-munmap>
+49.3 Unmapping a Mapped Region: munmap()
+
+The munmap() system call performs the converse of mmap(), removing a mapping
+from the calling process’s virtual address space.
+
+#include <sys/mman.h>
+int munmap(void *addr, size_t length);
+
+Returns 0 on success, or 1 on error
+
+If there are no mappings in the address range specified by addr and length,
+   then munmap() has no effect, and returns 0 (for success).
+
+During unmapping, the kernel removes any memory locks that the process holds
+for the specified address range. (Memory locks are established using mlock()
+    or mlockall(), as described in Section 50.2.)
+
+  <when-unmap>
+  "All of a process’s mappings are automatically unmapped when it terminates or
+  performs an exec()."
+
+To ensure that the contents of a shared file mapping are written to the
+underlying file, a call to msync() (Section 49.5) should be made before
+unmapping a mapping with munmap().
+
+
+49.4 File Mappings
+
+As a result of these steps, mmap() maps the contents of the open file into the
+address space of the calling process. 
+
+Once mmap() has been called, we `can close the file descriptor` without
+affecting the mapping. However, in some cases it may be useful to keep this
+file descriptor opensee, for example, Listing 49-1 and also Chapter 54.
+
+On Linux, the pages of a file mapping are mapped in on the first access. This
+means that if changes are made to a file region after the mmap() call, but
+before the corresponding part (i.e., page) of the mapping is accessed, then
+the changes may be visible to the process, if the page has not otherwise
+already been loaded into memory. This behavior is implementation-dependent;
+portable applications should avoid relying on a particular kernel behavior in
+  this scenario.
+
+
+49.4.2 Shared File Mappings
+
+When multiple processes create shared mappings of the same file region, they
+all share the same physical pages of memory. In addition, modifications to the
+contents of the mapping are carried through to the file. In effect, the file
+is being treated as the paging store for this region of memory, as shown in
+Figure 49-2. (We simplify things in this diagram by omitting to show that the
+    mapped pages are typically not contiguous in physical memory.)
+
+Shared file mappings serve two purposes: memory-mapped I/O and IPC. We
+consider each of these uses below.
+
+
+Memory-mapped I/O
+
+Since the contents of the shared file mapping are initialized from the file,
+      and any modifications to the contents of the mapping are automatically
+        carried through to the file, we can perform file I/O simply by
+        accessing bytes of memory, relying on the kernel to ensure that the
+        changes to memory are propagated to the mapped file.
+
+The reasons that memory-mapped I/O can provide performance benefits are as
+follows:
+
+* A normal read() or write() involves two transfers: one between the file and
+  the kernel buffer cache, and the other between the buffer cache and a
+  user-space buffer. Using mmap() eliminates the second of these transfers.
+  For input, the data is available to the user process as soon as the kernel
+  has mapped the corresponding file blocks into memory. For output, the user
+  process merely needs to modify the contents of the memory, and can then rely
+  on the kernel memory manager to automatically update the underlying file.
+
+* In addition to saving a transfer between kernel space and user space, mmap()
+  can also improve performance by lowering memory requirements. When using
+  read() or write(), the data is maintained in two buffers: one in user space
+  and the other in kernel space. When using mmap(), a single buffer is shared
+  between the kernel space and user space. Furthermore, if multiple processes
+  are performing I/O on the same file, then, using mmap(), they can all share
+  the same kernel buffer, resulting in an additional memory saving.
+
+Performance benefits from memory-mapped I/O are most likely to be realized
+when performing repeated random accesses in a large file. If we are performing
+sequential access of a file, then mmap() will probably provide little or no
+gain over read() and write(), assuming that we perform I/O using buffer sizes
+big enough to avoid making a large number of I/O system calls. 
+
+The reason that there is little performance benefit is that, regardless of
+which technique we use, the entire contents of the file will be transferred
+between disk and memory exactly once, and the efficiency gains of eliminating
+a data transfer between user space and kernel space and reducing memory usage
+are typically negligible compared to the time required for disk I/O.
+
+Memory-mapped I/O can also have disadvantages. For small I/Os, the cost of
+memory-mapped I/O (i.e., mapping, page faulting, unmapping, and updating the
+    hardware memory management unit’s translation look-aside buffer) can
+actually be higher than for a simple read() or write(). In addition, it can
+sometimes be difficult for the kernel to efficiently handle write-back for
+writable mappings (the use of msync() or sync_file_range() can help improve
+    efficiency in this case).
+
+
+<why-use-mapping-over-shm>
+IPC using a shared file mapping
+
+Since all processes with a shared mapping of the same file region share the
+same physical pages of memory, the second use of a shared file mapping is as a
+method of (fast) IPC. 
+
+The feature that distinguishes this type of shared memory region from a System
+V shared memory object (Chapter 48) is that modifications to the contents of
+the region are carried through to the underlying mapped file. This feature is
+useful in an application that requires the shared memory contents to persist
+across application or system restarts.
+
+<ex> 
+show many mmaped entries of /tmp/ctm_tmp_0(deleted)
+
+2c148000     12K r--s-  /tmp/ctm_tmp_0 (deleted)
+2c354000      8K r--s-  /tmp/ctm_tmp_0 (deleted)
+
+since repeate a sequence which has close and unlik but no unmap calls and
+leaks memory of calling process.
+
+
+49.7 Anonymous Mappings
+
+The glibc implementation of malloc() uses MAP_PRIVATE anonymous mappings to
+allocate blocks of memory larger than MMAP_THRESHOLD bytes. This makes it
+possible to efficiently deallocate such blocks (via munmap()) if they are
+later given to free().  (It also reduces the possibility of memory
+    fragmentation when repeatedly allocating and deallocating large blocks of
+    memory.) MMAP_THRESHOLD is 128 kB by default, but this parameter is
+adjustable via the mallopt() library function.
+
 
 ={============================================================================
 *kt_linux_core_050* linux-memory-mapping oom-killer
 
 LPI 49.9 MAP_NORESERVE and Swap Space Overcommitting
+
+Some applications create large (usually private anonymous) mappings, but use
+only a small part of the mapped region. For example, certain types of
+scientific applications allocate a very large array, but operate on only a few
+widely separated elements of the array (a so-called sparse array).  
+
+If the kernel always allocated (or reserved) enough swap space for the whole
+of such mappings, then a lot of swap space would potentially be wasted.
+Instead, the kernel can reserve swap space for the pages of a mapping only as
+they are actually required (i.e., when the application accesses a page). This
+approach is called lazy swap reservation, and has the advantage that the total
+virtual memory used by applications can exceed the total size of RAM plus swap
+space.
+
+To put things another way, lazy swap reservation allows swap space to be
+overcommitted. This works fine, as long as all processes don’t attempt to
+access the entire range of their mappings. However, if all applications do
+attempt to access the full range of their mappings, RAM and swap space will be
+exhausted. 
+
+In this situation, the kernel reduces memory pressure by killing one or more
+of the processes on the system. Ideally, the kernel attempts to select the
+process causing the memory problems (see the discussion of the OOM killer
+    below), but this isn’t guaranteed.  
+
+For this reason, we may choose to prevent lazy swap reservation, instead
+forcing the system to allocate all of the necessary swap space when the
+mapping is created.  How the kernel handles reservation of swap space is
+controlled by the use of the MAP_NORESERVE flag when calling mmap(), and via
+/proc interfaces that affect the system-wide operation of swap space
+overcommitting. These factors are summarized in Table 49-4.
+
+<proc-sys-vm-overcommit>
+How the kernel handles reservation of swap space is controlled by the use of
+the MAP_NORESERVE flag when calling mmap(), and via /proc interfaces that
+affect the system-wide operation of swap space overcommitting.
+
+The Linux-specific /proc/sys/vm/overcommit_memory file contains an integer
+value that controls the kernel’s handling of swap space overcommits. Linux
+versions before 2.6 differentiated only two values in this file: 0, meaning
+deny obvious overcommits (subject to the use of the MAP_NORESERVE flag), and
+greater than 0, meaning that overcommits should be permitted in all cases.
+
+-sh-3.2# cat /proc/sys/vm/overcommit_memory
+0
+
+Table 49-4: Handling of swap space reservation during mmap()
+
+overcommit_memory value | MAP_NORESERVE specified in mmap() call?
+                        | No                        Yes
+0                       | Deny obvious overcommits  Allow overcommits
+
+// means that can do overcommit by using MAP_NORESERVE in mmap call
+
+The overcommit_ratio value is an integerexpressing a percentagecontained in
+the Linux-specific /proc/sys/vm/overcommit_ratio file. The default value
+contained in this file is 50, meaning that the kernel can overallocate up to
+50% of the size of the system’s RAM, and this will be successful, as long as
+not all processes try to use their full allocation.
+
+-sh-3.2# cat /proc/sys/vm/overcommit_ratio
+50
+
+systemutil_thread.c:1462:  
+if (MAP_FAILED == 
+    (ptMem = mmap(0, stackSize + 2 * g_stack_guard_size, 
+                  PROT_NONE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANON, -1, 0)))
+
+
+When a child process inherits a mapping across a fork(), it inherits the
+  MAP_NORESERVE setting for the mapping. The MAP_NORESERVE flag is not
+  specified in SUSv3, but it is supported on a few other UNIX implementations.
+
 
 The OOM killer
 
@@ -44357,6 +44726,30 @@ status    Various information (e.g., process IDs, credentials, memory usage, sig
 task      Contains one subdirectory for each thread in process (Linux 2.6)
 
 
+-sh-3.2# ls -al /proc/521
+dr-xr-xr-x    4 NDS_U2   NDS_MW          0 Jan  1 00:06 .
+dr-xr-xr-x   69 root     root            0 Jan  1 00:00 ..
+-r--------    1 NDS_U2   NDS_MW          0 Jan  1 03:01 auxv
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 00:11 cmdline
+lrwxrwxrwx    1 NDS_U2   NDS_MW          0 Jan  1 03:01 cwd -> /tmp
+-r--------    1 NDS_U2   NDS_MW          0 Jan  1 03:01 environ
+lrwxrwxrwx    1 NDS_U2   NDS_MW          0 Jan  1 03:01 exe -> /NDS/bin/MW_Process
+dr-x------    2 NDS_U2   NDS_MW          0 Jan  1 03:01 fd
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 03:01 maps
+-rw-------    1 NDS_U2   NDS_MW          0 Jan  1 03:01 mem
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 03:01 mounts
+-r--------    1 NDS_U2   NDS_MW          0 Jan  1 03:01 mountstats
+-rw-r--r--    1 NDS_U2   NDS_MW          0 Jan  1 03:01 oom_adj
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 03:01 oom_score
+lrwxrwxrwx    1 NDS_U2   NDS_MW          0 Jan  1 03:01 root -> /
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 03:01 smaps
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 00:11 stat
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 03:01 statm
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 00:11 status
+dr-xr-xr-x  145 NDS_U2   NDS_MW          0 Jan  1 00:11 task
+-r--r--r--    1 NDS_U2   NDS_MW          0 Jan  1 03:01 wchan
+
+
 <ex>
 The parent of any process can be found by looking at the Ppid field provided in
 the Linux-specific /proc/PID/status file.
@@ -44409,6 +44802,11 @@ voluntary_ctxt_switches:	310
 nonvoluntary_ctxt_switches:	127
 
 
+<proc-pid-stat>
+-sh-3.2# cat /proc/521/stat
+521 (MW_Process) S 518 32 32 0 -1 4202752 10035 0 440 0 66117 181791 0 0 -7 0 143 0 8911 60956672 8707 2147483647 4194304 22313252 2140515872 2140514904 716227284 0 0 4096 0 4294967295 0 0 18 0 6 2 0
+
+
 <proc-exe>
 note: to check the path name of the process.
 
@@ -44435,7 +44833,7 @@ note: get process name
 -bash[si_logs@theyard 26360]$
 
 
-<proc-maps>
+<proc-maps> *tool-pmap*
 Using the Linux-specific /proc/PID/maps file, we can see the location of the
 shared memory segments and shared libraries mapped by a program.
 
@@ -44513,7 +44911,7 @@ then later unlinked. Shared anonymous memory mappings are implemented in the
 same manner. (We describe mapped files and shared anonymous memory mappings in
     Chapter 49.)
 
-<smaps>
+<smaps> *tool-pmap*
 Starting with kernel 2.6.14, Linux also provides the /proc/PID/smaps file,
          which exposes more information about the memory consumption of each
          of a process's mappings. For further details, see the proc(5) manual
@@ -44543,6 +44941,10 @@ Swap:                  0 kB
 KernelPageSize:        4 kB
 MMUPageSize:           4 kB
 Locked:                0 kB
+
+
+<ex>
+# pmap `pgrep MW_Process`
 
 
 <ex> note: to check shared libraries that process uses
@@ -64441,6 +64843,10 @@ $16-$23, $30	s0-s8
 Saved registers to use freely. `Preserved across function calls.` These
 registers must be saved before use by the called function.
 
+<mips-gp>
+$28	gp	Global pointer.
+Not used in Windows CE and may be used as save register for called functions.
+
 (gdb) info registers
 
           zero       at       v0       v1       a0       a1       a2       a3
@@ -65236,6 +65642,343 @@ so a frame has ra, args, locals and struct itself or pointer to a struct.
 
 
 ={============================================================================
+*kt_linux_arch_001* arch-mips-backtrace mips-membuster
+
+<source>
+
+/* generates output. needs initialized frame info tab */
+void parse_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
+							uint32_t *syms, uint16_t *info_idx, uint32_t tcount, uint32_t *frame_inf )
+{
+  uint32_t *p;
+  uint16_t frame_sz, ret_addr;
+  int i, in_frame;
+  uint32_t ins, idx, cnt, frame_addr;
+
+  frame_sz = 0;
+
+  p = text;
+  in_frame = 0;
+  cnt=0;
+
+  // scan through all text code
+  for(i=0; i < text_size>>2; i++)
+  {
+    ins = p[i];
+
+    // push, get the start of a frame
+    if((ins &  0xffff8000) == 0x27bd8000)
+    {
+      frame_sz = (-ins) & 0x7fff;
+      frame_addr = (i << 2) + text_addr;
+      /*printf("frame start %.8x size:%d\n", text_addr + (i*4), frame_sz);
+        if(in_frame == 1) printf("already in frame: %x\n", text_addr + (i*4));*/
+      in_frame =1;
+    }
+
+    // pop
+    if((ins &  0xffff8000) == 0x27bd0000)
+    {
+      /*frame_sz = (ins) & 0x7fff;*/
+      /*printf("frame end %.8x size:%d\n", text_addr + (i*4), frame_sz);*/
+      in_frame=0;
+    }
+
+    if ((ins & 0xffff8000) == 0xafbf0000)
+    {
+      // should be found in the frame table
+      ret_addr = (ins) & 0x7fff;
+      for(idx=0; idx < tcount; idx++)
+      {
+        /* always expect a match here */
+        if( ((ret_addr << 16) | frame_sz) == frame_inf[idx]) break;
+      }
+
+      if(idx == tcount) printf("This should not happen, contact me\n");
+
+      // toral frame table(syms) has address of each frame
+      // info_idx has index to frame table.
+      syms[cnt] = frame_addr;
+      info_idx[cnt] = idx;
+      /*DPRINT("syms[%d] = %.8X info[%d]= %d\n", cnt, syms[cnt], cnt, info_index[cnt]);*/
+      cnt++;
+
+      /*printf("ra store %.8x offset:%d in_frame:%d\n", text_addr + (i*4), ret_addr, in_frame);*/
+    }
+  }
+
+  return;
+}
+}
+
+// #define TMP_FTAB_SIZE		1024
+//
+// count the number of frames needed and the size of the frame info table.
+// Frame info table will be generated as well
+
+int count_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
+						uint32_t *count, uint32_t *tcount, uint32_t *frame_inf)
+{
+  tcnt = 0;
+
+  // since a instruction is 4 bytes
+  for(i=0; i < text_size>>2; i++)
+  {
+#ifdef BI_ENDIAN_SUPPORT
+    ins = cond_swap32(p[i], swap);
+#else
+    ins = p[i];
+#endif				
+
+    // when see "push" and get the size of stack frame
+    if((ins &  0xffff8000) == 0x27bd8000)
+    {
+      // 27bdffb8 	addiu	sp,sp,-72  // push sp
+      //
+      // >>> 15 bits, bin(0x7fff)
+      // '0b111111111111111'
+
+      frame_sz = (-ins) & 0x7fff;
+      in_frame =1;
+    }
+
+    // when see "pop"
+    if((ins &  0xffff8000) == 0x27bd0000)
+    {
+      in_frame=0;
+    }
+
+    // when see "ra"
+    // cnt is number of ra instruction and tcnt is number of entry in the
+    // frame table
+    //
+    // make unique entry using (ret<<16 | frame_sz) and that is to have one
+    // entry for the same ra and frame size.
+    //
+    // so this reduce the mem size of frame table since have one frame table
+    // entry for the same caller? *Q*
+    //
+    // # of frames is 23018 and # of frames by using this = 448 when runs on
+    // APP_Process
+   
+    if ((ins & 0xffff8000) == 0xafbf0000)
+    {
+      ret_addr = (ins) & 0x7fff;
+
+      // is it already in the frame table?
+      for(j=0; j < tcnt; j++)
+      {
+        if(frame_inf[j] == ((ret_addr << 16) | frame_sz) ) break;
+      }
+      
+      // if not in the frame table then
+      if(j == tcnt)
+      { 
+        // add it to the frame table
+        frame_inf[tcnt] = ((ret_addr << 16) | frame_sz);
+        DPRINT("frame_info[%3d] = %.8X\n", tcnt, frame_inf[tcnt]);
+        tcnt++;
+        if(tcnt >= *tcount) return -1;
+      }
+      cnt++;
+    }
+  }
+}
+
+
+void membuster_plus_init(void)
+{
+  stacktrace_init(mb_bin_path)
+  {
+    // 1. parse elf header to get settings:
+    //    endian?, swap?, arch?, need table? (yes for mips)
+
+    parse_fn = parse_text_raw_mips;
+    count_fn = count_text_raw_mips;
+
+    // 2. build tables
+    // parse elf program header to get PT_LOAD properties.
+    //
+    // build structure by scanning the text two times
+    //
+    // found 23018 frames -> 448 fram_tab entries
+    //
+    // syms[# of total frame found] = address of a frame
+    //
+    // info_index[# of toral frame frond] = index to (unique) frame table
+    //
+    // frame_info[# of unique frame] = unique frame tag(computed)
+
+    for(n=0; n < n_phdr; n++)
+    {
+      if(phdr[n].p_type == PT_LOAD)
+      {
+        // use printf
+        // #define DPRINT if(DEBUG_ON == 1)printf
+
+        DPRINT("PT_LOAD header: offset=%d vaddr=%x paddr=%x fsize=%d msize=%d flags=%x\n", 
+            phdr[n].p_offset, phdr[n].p_vaddr, phdr[n].p_paddr, phdr[n].p_filesz, phdr[n].p_memsz, phdr[n].p_flags); 
+
+        if(phdr[n].p_flags & PF_X)
+        {
+          // get start and end
+
+          text_start = phdr[n].p_vaddr;
+          text_end = phdr[n].p_vaddr + phdr[n].p_memsz;
+
+          if(need_table)
+          {
+            DPRINT("parse text %x - %x\n", text_start, text_end);
+
+            text = text_start;
+            tcount = TMP_FTAB_SIZE;
+
+            frame_info = malloc(TMP_FTAB_SIZE * sizeof(uint32_t));
+
+            count_fn(text, phdr[n].p_vaddr, phdr[n].p_filesz, 
+                need_swap, &count, &tcount, frame_info);
+
+            // resize frame table
+            frame_info = realloc(frame_info, tcount * sizeof(uint32_t));
+            DPRINT("found %d frames %d fram_tab entries\n", count, tcount);
+
+            // use #count to alloc symbols and info index
+            symbols = (uint32_t *) malloc((count+1) * sizeof(uint32_t));
+            symbols[count] = 0x0FFFFFFF;
+            info_index = (uint16_t *) malloc(count * sizeof(uint16_t));
+            memset(info_index, 0xFF, count * sizeof(uint16_t));
+
+            parse_fn(text, phdr[n].p_vaddr, phdr[n].p_filesz, 
+                need_swap, symbols, info_index, tcount, frame_info);
+
+            DPRINT("parse done\n");
+          }
+        }
+      }
+    }
+
+    // 3. build jump table
+    //
+    // #define MAX_JUMP_TAB_SIZE 	8192
+    //
+
+    if(need_table)
+    {
+      jump_table_size = MAX_JUMP_TAB_SIZE; 
+
+      // alloc jump_table=32768
+
+      /* prepare a jump table (index table into the function addresses) */
+      jump_table = malloc(sizeof(uint32_t) * jump_table_size);
+      memset(jump_table, 0x00, sizeof(uint32_t) * jump_table_size);
+
+      // frame, sym 00: 0x403F44  (>>12) 0x403(1027), jump_table[1027] = 0
+      // frame, sym 01: 0x404F58  (>>12) 0x404(1028), jump_table[1028] = 1
+      // frame, sym 02: 0x404FE4  (>>12) 0x404(1028), 
+      // frame, sym 03: 0x405550  (>>12) 0x405(1029), jump_table[1029] = 0
+      //
+      // so # of frames is 23018 -> 8192
+      //
+      // reduce mem but no problem?
+
+      // >>> bin(8191), 13 bits and modulo % operation
+      // '0b1 1111 1111 1111'
+
+      // jt: symbols[0]= 0x0040BC28(0x0000040B), first_jump_val=0x0000040B, count=23018
+      //
+      first_jump_val = ((symbols[0] >> 12) & (jump_table_size-1));
+      jump_table[first_jump_val] = 0;
+      jump_val = first_jump_val;
+      for(i=0; i < count; i++)
+      {
+        if((((symbols[i+1]-4) >> 12) & (jump_table_size-1)) != jump_val)
+        {
+          jump_val = (((symbols[i+1]-4) >> 12) & (jump_table_size-1));
+          jump_table[jump_val] = i;
+        }
+
+      }
+
+      /* this is so that we can safely go one entry below the first without a if statement */
+      if(first_jump_val != 0)jump_table[first_jump_val - 1] = jump_table[first_jump_val];
+
+      /* plus 1 since it's a range including the last value */
+      jump_count = (jump_val - first_jump_val)+1;
+
+      /* fill up the holes in the jump table */
+      for(i=first_jump_val; i < (first_jump_val + jump_count); i++)
+      {
+        if(jump_table[i]==0)jump_table[i] = jump_table[i-1];
+        DPRINT("jump table[%.5d] = %5d\n", i, jump_table[i]);
+      }
+    }
+  }
+}
+
+
+As shown above, use this pattern at the entry of every non-leaf function
+although these are not in sequencial:
+
+  400688:	27bdffb8 	addiu	sp,sp,-72   // push sp
+  40068c:	afbf0044 	sw	ra,68(sp)	   // save ra to return
+  ...
+  a8d3b4:	27bd0020 	addiu	sp,sp,32    // pop sp
+
+<ex> from APP_Process
+
+
+// push is not always the first
+0040dd10 <AEM_JAVA_DeregisterCleanup_DeleteAllApplicationData>:
+  40dd10:	3c0400f6 	lui	a0,0xf6
+  40dd14:	27bdffe0 	addiu	sp,sp,-32
+  ...
+
+00578144 <PLANNER_BookedProgramme_GetRepetitionFrequency>:
+  578144:	27bdffa8 	addiu	sp,sp,-88
+  578148:	afb5004c 	sw	s5,76(sp)
+  57814c:	27a70020 	addiu	a3,sp,32
+  578150:	00c0a821 	move	s5,a2
+  578154:	2406000f 	li	a2,15
+  578158:	afb40048 	sw	s4,72(sp)
+  57815c:	afb30044 	sw	s3,68(sp)
+  578160:	afb20040 	sw	s2,64(sp)
+  578164:	afb00038 	sw	s0,56(sp)
+  578168:	afbf0050 	sw	ra,80(sp) ~
+  ...
+
+  578500:	03e00008 	jr	ra
+  578504:	27bd0058 	addiu	sp,sp,88
+
+00577e6c <PLANNER_BookedProgramme_StoreUint32InPCAT>:
+  577e6c:	27bdffb8 	addiu	sp,sp,-72
+  577e70:	38e30002 	xori	v1,a3,0x2
+  577e74:	afb40040 	sw	s4,64(sp)
+  577e78:	afb3003c 	sw	s3,60(sp)
+  577e7c:	24020012 	li	v0,18
+  577e80:	00c09821 	move	s3,a2
+  577e84:	24140002 	li	s4,2
+  577e88:	24060011 	li	a2,17
+  577e8c:	afb20038 	sw	s2,56(sp)
+  577e90:	0043300b 	movn	a2,v0,v1
+  577e94:	27a70028 	addiu	a3,sp,40
+  577e98:	24020003 	li	v0,3
+  577e9c:	02809021 	move	s2,s4
+  577ea0:	afb00030 	sw	s0,48(sp)
+  577ea4:	afbf0044 	sw	ra,68(sp) ~
+  ...
+
+  57813c:	03e00008 	jr	ra
+  578140:	27bd0048 	addiu	sp,sp,72
+
+To get a call trace from a current function:
+
+  1. save sp and ra
+
+  2. search "push sp" binary code downward where address increases since stack
+  grows to low address and get the size of current stack frame, push offset.
+
+
+={============================================================================
 *kt_linux_arch_001* arch-mips-for-and-while
 
 <asm-while-loop> in C
@@ -65659,7 +66402,7 @@ information that is needed to run the program.
 
 The kernel only really cares about `three types of program header entries.`
 
-The first type is the PT_LOAD segment, which describes areas of the new
+The first type is the `PT_LOAD` segment, which describes areas of the new
 program's running memory. This includes code and data sections that come from
 the executable file, together with the size of a BSS section. The BSS will be
 filled with zeroes (thus only its length needs to be stored in the executable
@@ -65684,8 +66427,8 @@ Program Headers:
   INTERP         0x000134 0x00400134 0x00400134 0x0000d 0x0000d R   0x1
       [Requesting program interpreter: /lib/ld.so.1]
   REGINFO        0x000164 0x00400164 0x00400164 0x00018 0x00018 R   0x4
-  LOAD           0x000000 0x00400000 0x00400000 0x00924 0x00924 R E 0x1000
-  LOAD           0x000924 0x00401924 0x00401924 0x00090 0x000bc RW  0x1000
+  LOAD           0x000000 0x00400000 0x00400000 0x00924 0x00924 R E 0x1000 ~
+  LOAD           0x000924 0x00401924 0x00401924 0x00090 0x000bc RW  0x1000 ~
   DYNAMIC        0x00017c 0x0040017c 0x0040017c 0x000f8 0x000f8 RWE 0x4
   NOTE           0x000144 0x00400144 0x00400144 0x00020 0x00020 R   0x4
   NULL           0x000000 0x00000000 0x00000000 0x00000 0x00000     0x4
@@ -65697,16 +66440,22 @@ typedef struct
   Elf32_Off	p_offset;		/* Segment file offset */
   Elf32_Addr	p_vaddr;		/* Segment virtual address */
   Elf32_Addr	p_paddr;		/* Segment physical address */
-  Elf32_Word	p_filesz;		/* Segment size in file */
-  Elf32_Word	p_memsz;		/* Segment size in memory */
+  Elf32_Word	p_filesz;		/* Segment size `in file` */
+  Elf32_Word	p_memsz;		/* Segment size `in memory` */
   Elf32_Word	p_flags;		/* Segment flags */
   Elf32_Word	p_align;		/* Segment alignment */
 } Elf32_Phdr;
 
 /* Legal values for p_type (segment type).  */
 #define	PT_NULL		0		/* Program header table entry unused */
+#define PT_LOAD		1		/* Loadable program segment */
 #define PT_DYNAMIC	2		/* Dynamic linking information */
 #define PT_GNU_RELRO	0x6474e552	/* Read-only after relocation */
+
+/* Legal values for p_flags (segment flags).  */
+#define PF_X		(1 << 0)	/* Segment is executable */
+#define PF_W		(1 << 1)	/* Segment is writable */
+#define PF_R		(1 << 2)	/* Segment is readable */
 
 
 Dynamically linked programs
@@ -65743,7 +66492,7 @@ linking view and execution view, adapted from fig 1-1 in Intel TIS document
 Linking View                            Execution View
 
 linkable                                executable
-sections                                segments
+`sections`                                `segments`
               +---------------------+
               | ELF header          |
               +---------------------+
