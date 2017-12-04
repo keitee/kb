@@ -182,7 +182,11 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_023* cpp-interface
 *kt_dev_cpp_023* inheri-strategy-pattern
 *kt_dev_cpp_024* cpp-incomplete-type forward-declaration
-*kt_dev_cpp_024* class-empty-base-class-optimization
+*kt_dev_cpp_024* cpp-empty-base-class-optimization
+*kt_dev_cpp_0000* cpp-design-by-contract 
+*kt_dev_cpp_0000* cpp-design-define-variable
+*kt_dev_cpp_0000* cpp-design-no-reference-to-internals
+*kt_dev_cpp_0000* cpp-new-delete
 |kt_dev_cpp_025| random
 |kt_dev_cpp_026| enum
 |kt_dev_cpp_029| cpp-nested-class
@@ -301,20 +305,6 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_110| stl-allocator
 |kt_dev_stl_111| gcc stl impl files
-
-
-#{ EFFECTIVE C++ 3RD
-*kt_dev_cpp_000* cpp-design-by-contract 
-|kt_dev_ecpp_006| 26: postpone variable definitions
-|kt_dev_ecpp_007| 28: avoid returning handles to object internals
-|kt_dev_ecpp_010| 34: interface and implementation inheritance
-|kt_dev_ecpp_012| 33: avoid hiding inherited names
-|kt_dev_ecpp_013| 22: data member must be private, encapsulation
-|kt_dev_ecpp_015| cpp-new-delete
-|kt_dev_ecpp_016| 49 : new handler
-|kt_dev_ecpp_017| 50: when to replace new and delete
-|kt_dev_ecpp_018| new-placemane-new
-
 
 #{ MORE EFFECTIVE C++ 1ST, 1996, 25TH PRINTING
 |kt_dev_mecpp_001| 16: 80-20 rule and profiler
@@ -24871,7 +24861,41 @@ usetemppattern.cpp:51:20: error: within this context
 ={============================================================================
 *kt_dev_cpp_023* cpp-pattern-pimpl cpp-minimise-compile-time
 
-EC++31: minimize compilation dependencies *cpp-encapsulation*
+*cpp-encapsulation*
+
+EC++22, data member must be private, encapsulation
+
+How about using public or protected member data in class? If class interface
+has only member funcs then the good things are:
+
+* Syntactically uniform access(consistency) since do not need to remember
+  which one is function or member data. Always use function interface.
+
+* Fine-grained access control. read-only. write-only. etc.
+
+* Encapsulation. Hiding data members behind <functional-interface> can offer
+  all kinds of implementation flexibility as with benefits from separation
+  between interfacea and implementation. For example, change implementation
+  later.
+
+The encapsulation is inversely proportional to the amount of code that might
+be broken if that something changes. 
+
+The point is that do not use public and protected members since this means
+un-encapsulated and un-changeable.
+
+CPR 270. The benefits of encapsulation.
+
+* The implementation of an encapsulated class can change over time without
+  requiring changes in user code. User code needs to change only when the
+  interface changes.
+
+* The data are protected from mistakes that users might introduce. If there is
+  a bug that corrupts an object's state, the place to look for the bug are
+  localized and limited.
+
+
+EC++31: minimize compilation dependencies 
 
 Two cases can cause complilation dependency problem:
 
@@ -25656,7 +25680,7 @@ void func(..)     // declare and define
 
 
 ={============================================================================
-*kt_dev_cpp_024* class-empty-base-class-optimization
+*kt_dev_cpp_024* cpp-empty-base-class-optimization
 
 The class has no data members at all and there can be space advantage. Compilers
 are allowrd to let an empty base subobject occupy zero space; whereas an empty
@@ -25674,6 +25698,759 @@ class D : private B
 {
   // the B base subobject need not occupy any space at all
 };
+
+
+={============================================================================
+*kt_dev_cpp_000* cpp-design-by-contract 
+  
+EC++18, Make it hard to use incorrectly 
+
+1. Make compile error for incorrect uses (interface usage errors):
+
+class Date {
+  public:
+    Date(int month, int day, int year);
+    ...
+};
+
+// client use
+
+Date d(30, 3, 1995);    // wrong order
+Date d(3, 40, 1995);    // invalid
+
+How to make compile errros? Use C++ type system.
+
+struct Day {
+  explicit Day(int day) : val(day) {}
+  int val;
+};
+
+struct Month {
+  explicit Month(int month) : val(month) {}
+  int val;
+};
+
+struct Year {
+  explicit Year(int year) : val(year) {}
+  int val;
+};
+
+class Date {
+  public:
+    Date( const Month& month, const Day& day, const Year& year);
+    ...
+};
+
+
+// wrong type. wrong order
+Date d(30, 3, 1995);                      
+
+// wrong type. invalid
+Date d( Day(3), Month(40), Year(1995) );
+
+// correct type. invalid value but easy to 'see'!
+Date d( Month(40), Day(3), Year(1995) );  
+
+
+2. Make compile error for invalid values: 
+
+Consider enum? NO since not type-safe. Safer solution is to predefine all
+vaild months. note: C++11 enum supports type checks. 
+
+class Month {
+  public:
+    static Month Jan() { return Month(1); }
+    ...
+    static Month Dec() { return Month(12); }
+
+  private:
+    // prevent creation of new values
+    explicit Month(int m); 
+};
+
+Date d( Month::Mar(), Day(30), Year(1995) );
+
+Used functions to represent months. How about {class-const} in
+*kt_dev_cpp_017* instead of using function?
+
+
+3. Force client to follow interface rule
+
+Investment* createInvestment();
+
+This means that client remember to use raii to prevent resource leaks. The
+better interface decision is:
+
+std::shated_ptr<Investment> createInvestment();
+
+The same is {factory-func} in *kt_dev_stl_018* which force client to use
+smart_ptr.
+
+
+={============================================================================
+*kt_dev_cpp_0000* cpp-design-define-variable
+
+EC++26, postpone variable definitions
+
+Avoid unused varaibles but see that there are variables which aren't
+completely unused so to postpone variable definitions as long as possible
+until is needed and have init value. Increases clarity and efficiency.
+
+std::string encryptPassword( const std::string& password )
+{
+  using namespace std;
+
+  string encrypted;
+
+  if( password.length() < MinimumPasswordLength )
+  {
+    throw logic_error("Password is too short");
+  }
+
+  ...
+
+  return encrypted;
+}
+
+The real meaning of 'as long as possible': postpone a variable's definition
+until right before you have to use the variable, also try to postpone the
+definition until you have initialsation arguments for it. Avoid cost of
+construction, destruction and default construction.
+
+
+{what-about-loop}
+# approach A                           # approach B
+Widget w;
+for( int i=0; i < n; i++ )             for( int i = 0; i < n; i++ )
+{                                      {
+  w = some value;                         Widget w(some value);
+  ...                                     ...
+}                                      }
+
+1 ctor, 1 dtor, n assign.              n ctor and dtor.
+
+Choose depending on whether ctor/dtor is expensive than assign.
+
+The approach B makes that the name w is only visible in the loop. This is good
+for comprehensibility and maintainability. So approach B is 'recommended'
+unless performance analysis shows approach A is better.
+
+
+{make-variable-available-only-for-some}
+By defining the variable in a condition, the pointer dp is not accessible
+outside the if. If the cast fails, then the unbound pointer is not available
+for use in subsequent code where we might forget to check whether the cast
+succeeded.
+
+if (Derived *dp = dynamic_cast<Derived*>(bp))
+{
+    // use the Derived object to which dp points
+   
+} else {  // bp points at a Base object
+
+    // use the Base object to which bp points
+}
+
+
+={============================================================================
+*kt_dev_cpp_0000* cpp-design-no-reference-to-internals
+
+EC++28, avoid returning handles to object internals
+
+Here internals means everything except public interface and includes private
+and protected member function. If returns handles (iterator, pointer and
+    reference) to internals, causes three problems: breaks encapsulatation,
+constness, and dangling-handles.
+
+{compromising-encapsulation-and-constness}
+The pass by reference is more efficient than pass by value and the interface
+offer client a way to learn what rectangle's points are:
+
+class Rectangle {
+  public:
+    Point& upperLeft() const { return pData->ulhc; }
+
+  private:
+    std::shared_ptr<RectData> pData;
+};
+
+Is it okay? NO because client can change its value:
+
+// use
+const Rectangle rec( ... );
+rec.upperLeft().setX(50);
+
+The problem is that makes memeber data effectively public as returns reference
+to it from a public member function since this is *cpp-const-bitwise*
+
+
+The solution is that it offers read-only access:
+
+class Rectangle {
+  public: >
+   const Point& upperLeft() const { return pData->ulhc; }
+
+  private:
+   std::shared_ptr<RectData> pData;
+};
+
+Similar to the example of {const-member-func}
+
+<ex>
+
+using namespace std;
+
+class Sample {
+  private:
+    int val;
+
+  public:
+    Sample() : val(10) {}
+    int& getx() { return val;}
+    void printx() { cout << val << endl; }
+};
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+  Sample sam;
+  cout << "------" << endl;
+  sam.printx();
+  sam.getx() = 20;
+  cout << "------" << endl;
+  sam.printx();
+
+  return 0;
+}
+
+This changes private member val to 20.
+
+
+{dangling-handles}
+class GUIObject { ... }
+const Rectangle boundingBox( const GUIObject& obj );
+
+// use
+GUIObject* pgo;
+...
+const Point* pUpperLeft = &( boundingBox(*pgo).upperLeft() );
+
+This returns a temporary Rectangle and returns its upper member. The problem
+is this temporary is destroyed when this statement ends and pUpperLeft will
+dangle even if const use.
+
+vector and string's [] operator returns reference but these are exceptions to
+this rule, but not a general rule. Better not use [] operator.
+
+
+={============================================================================
+*kt_dev_cpp_0000* cpp-new-delete
+
+{default-value-initialize}
+
+string* ps = new string;      // default-init
+string* ps = new string();    // value-init. T()
+
+int* pi = new int;            // default-init
+int* pi = new int();          // value-init. T()
+
+Only for built-in types, value-init makes difference and this means that
+default-init for built-in types has 'uninitialized' values. For class types,
+  both will use default ctors and so no difference. 
+  
+The `new operator` combines allocation and construction; creates 'unnamed' and
+then 'default-init' objects e.g. calls ctor for class object.
+
+
+{new-operator-and-operator-new}
+MEC++08: This operator is built into the language and, like sizeof, you can't
+change its meaning: it always does the same thing. What it does is twofold:
+allocation and construction.
+
+The new operator, use `operator new` (or operator new[]) to allocate raw
+memory, runs ctor to construct, and returns pointer to constructed memory.
+Raise 'bad_alloc' exception when there is  no memory.
+
+For deletion, do opposite; runs dtor and operator delete( or delete[]) to free
+memory.
+
+note: C++ runtime gurantees that delete nullptr do nothing.
+
+
+{do-not-mix-with-array-form}
+EC++16. Use the same form in corresponding uses of new and delete since these
+do two things but think what will happen when call destructor(s) less or more
+than needed. Undefined in both ways. 
+
+std::string *stringPtr1 = new std::string;
+std::string *stringPtr2 = new std::string[100]; 
+
+delete stringPtr1;
+delete[] stringPtr2;
+
+This can be not obvious when use typedef: 
+
+typedef std::string AddressLines[4];
+std::string *pal = new AddressLines;
+
+delete pal;    // undefined
+delete[] pal;
+
+If do not know that there is a typedef, for example, it is in a file somewhere
+in huge source tree then may be a problem.
+
+
+{operator-new-and-delete}
+This is the C++ equivalent of calling malloc and free. What you can change is
+how the memory for an object is allocated. The name of the function that the
+new operator calls to allocate memory is operator new. Can rewrite or overload
+that function to change its behavior.
+
+The operator new function is usually declared like this:
+
+void * operator new(size_t size);
+
+The return type is void*, because this function returns a pointer to raw,
+    uninitialized memory.
+
+void *rawMemory = operator new(sizeof(string));
+
+Like malloc, operator new's only responsibility is to allocate memory.
+
+note: Can define own operator new and delete but careful because it takes over
+responsibility for 'all' dynamic memory allocation. Since it changes global
+one so new operator will automatically invoke your custom version of operator
+new.
+
+
+{new-operator-with-zero-size}
+What happens if get_size returns 0? The answer is that our code works fine.
+Calling new[0] is legal even though we cannout create an array variable of
+size 0.
+
+char arr[0];              // error: cannot define a zero-length array
+char *cp = new char[0];   // ok: but cp can't be dereferenced
+
+// p acts as the off-the-end pointer
+size_t n = get_size();
+int *p = new int[n];
+for (int* q = p; q != p + n; ++q)
+  // process the array
+  
+
+{new-handler}
+EC++49, new handler
+
+Before operator new throws an exception in response to an unsatisfiable
+request for memory, calls a error handling function called new handler. Can
+set user's handler by calling set_new_handler for 'flexibility' of handling
+allocation errors.
+
+namespace std {
+  typedef void (*new_handler)();
+  new_handler set_new_handler( new_handler p ) throw();     // see noexcept
+};
+
+void outOfMem()
+{
+  std::cerr << "Unable to satisfy request for memory\n";
+  std::abort();
+}
+
+int main()
+{
+  std::set_new_handler( outOfMem );
+  int *pBigDataMemory = new int[10000000000L];
+  ...
+}
+
+When operator new is unable to fulfill a memory request, calls new handler
+'repeatedly' until it can find enough memory. So handler must do one of
+followings:
+
+1. Make more memory avaiable
+For example, allocate a large block of memory at program start-up, then
+release it for use the first time thw handler is invoked.
+
+2. Install a different handler
+If the current handler can't make any more memory available, perhaps it knows
+of a different handler that can and next time operator new calls the new
+handler. note: May have hierachy of handler.
+
+3. Deinstall handler
+Call set_new_handler(0). With no handler installed, operator new will throws
+an exception when allocation is unsuccessful.
+
+4. Throw an exception
+Throw a type bad_alloc or derived from bad_alloc.
+
+5. Not return
+Typically calls abort or exit.
+
+
+{class-specific-handler}
+Instead of using 'global' handler, can use class specific handler.
+
+// Widget
+
+class Widget {
+  public:
+    static std::new_handler set_new_handler( std::new_handler p ) throw ();
+    static void *operator new( std::size_t size ) throw ( std::bad_alloc );
+
+  private:
+    static std::new_handler currentHandler;
+};
+
+std::new_handler Widget::currentHandler = 0;
+
+std::new_handler Widget::set_new_handler( std::new_handler p ) throw ()
+{
+  // note: this merely set currentHandler
+  std::new_handler oldHandler = currentHandler;
+  currentHandler = p;
+  return oldHandler;
+}
+
+void* Widget::operator new( std::size_t size ) throw( std::bad_alloc )
+{
+  // note: save old global handler and set new one
+  NewHandlerHolder h( std::set_new_handler(currentHandler));
+
+  // note: call global operator new
+  return ::operator new(size);
+}
+
+// HandlerHolder
+// note: uses raii to restore global handler back when done
+
+class NewHandlerHolder {
+  public:
+    explicit NewHandlerHolder( std::new_handler nh ) : handler(nh) {}
+    ~NewHandlerHolder() { std::set_new_handler(handler); }
+
+  private:
+    std::new_handler handler;
+
+    // preventing copies
+    NewHandlerHolder( const NewHandlerHolder& );
+    NewHandlerHolder& operator=( const NewHandlerHolder& );
+};
+
+// Use
+
+void outOfMem();
+
+Widget::set_new_handler( outOfMem );
+
+// note: see how Widget's operator new is called due to arg-dependent lookup.
+Widget* pw1 = new Widget;              // if allocation fails, call outOfMem
+
+std::string* ps = new std::string;     // if allocation fails, call global one if there is
+
+Widget::set_new_handler(0);            // set no handler for Widget
+
+Widget* pw2 = new Widget;              // if allocation fails, throw exception immediately
+
+<to-support-other-class>
+This scheme is the same regardless of the class and then use template to
+support other types.
+
+template<typename T>
+class NewHandlerSupport {
+  public:
+    static std::new_handler set_new_handler( std::new_handler p ) throw ();
+    static void* operator new( std::size_t size ) throw (std::bad_alloc);
+
+    // other versions of operator new.
+  private:
+    static std::new_handler currentHandler;
+};
+
+template<typename T>
+std::new_handler NewHandlerSupport<T>::currentHandler = 0;
+
+template<typename T>
+std::new_handler NewHandlerSupport<T>::set_new_handler( std::new_handler p ) throw ()
+{
+  std::new_handler oldHandler = currentHandler;
+  currentHandler = p;
+  return oldHandler;
+}
+
+template<typename T>
+void* NewHandlerSupport<T>::operator new( std::size_t size ) throw( std::bad_alloc )
+{
+  NewHandlerHolder h( std::set_new_handler(currentHandler));
+
+  return ::operator new(size);
+}
+
+class Widget : public NewHandlerSupprt<Widget> {
+  // as before but without set_new_handler and operator new
+};
+
+note: never use type parameter T. All need is a different copy of
+NewHandlerSupport, in particular its static data member currentHandler.
+Template mechanism do.
+
+note: this is useful and called 'mixin' style inheritance. how about "is-a"
+relationship?
+
+
+{replace-new}
+EC++50: when to replace new and delete
+
+Three common reasons to replace complier provided operator new and delete.
+
+1. To detect usage errors
+
+1.1. Operator new keeps a list of allocated addresses and operator delete
+removes addresses from the list, easy to detect usage errors.
+
+1.2. Overrun and underrun. Have signature before and after the memory made
+available to clients.  Operator delete can check if the signatures are still
+intact, can log when overrun or underrun occurred along with the value of the
+offending pointer.
+
+2. To improve efficiency
+
+2.1. The default operator new and delete is general purpose such as large
+blocks, small blocks, and mixtures of the two. Have to worry about heap
+fragmentation. If know allocation 'pattern' of an application, can use custom
+operator new and delete to have performance improvements.
+
+2.2. Custom version for objects of a particular type such as class-specific
+allocators. Boot pool libaray for fixed-size allocators.
+
+2.3. Reduce space overhead. The general version often incur some overhead for
+each allocated block.  Allocators tuned for small objects such as boost pool
+library essentially eliminate such overhead.
+
+2.4. Cluster related objects. If know that particular data structures are used
+together and like to minimize page 'fault', can create a separate 'heap' for
+the data so they are clustered together as few pages as possible. Placement
+version can make it possible to achieve such clustering. note: placement new
+use case.
+
+3. To collect usage statics
+
+Before writing custom new and delete, gather information about how application
+uses dynamic memory.  Distribution of allocated block size, their lifetime,
+     allocation and deallocation order such as FIFO, LIFO, or random, usage
+     pattern changes in different stages of execution, maximum amount of
+     allocated memory in use at any one time (high water mark or peak value).
+     Custom version make it easy to collect this kind of information.
+
+4. To have unconventioal behavior
+
+4.1. Allocate and deallocate blocks in shared memory which has a C API or
+memory-mapped I/O. note: placement new use case.
+
+4.2. Overwrite deallocated blocks with zeros in order to increase the security
+of application data.
+
+
+<example> to show how to replace global operator new and see EC++51 for details
+static const int signature = 0xDEADBEEF;
+
+typedef unsigned char Byte;
+
+// this code has several flaws
+void* operator new( std::size_t size ) throw( std::bad_alloc )
+{
+  using namespace std;
+
+  size_t realSize = size + 2*sizeof(int);
+
+  void *pMem = malloc( realSize );
+  if( !pMem ) throw bad_alloc();
+
+  *(static_cast<int*>(pMem)) = signature;
+  *(reinterpret_cast<int*>(static_cast<Byte*>(pMem)+realSize-sizeof(int)) ) = signature;
+
+  return static_cast<Byte*>(pMem)+sizeof(int);
+}
+
+<alignment-consideration>
+Many computer architectures require that data of particular type be placed in
+memory in particular kinds of address. Called alignments. If not, cause
+hardware exception or slow performance. If simly uses malloc then no problem
+since C++ guarantees malloc returns alligned pointer. However, the above code
+is not returning a pointer we got from malloc. So this is consideration when
+think of custom new and delete.
+
+Two options: Compiler can have options for different memory managers or open
+source memory managers such as boost pool library for allocation of a large
+number of small objects, fixed-size allocator.
+
+
+{cpp-new-placement}
+
+Widget* pw = new Widget;
+
+Two functions are called: operator new and constructor. What would happen when
+operator new allocated memory but constructor raised exception? C++ runtime
+system gurantees to undo operator new.
+
+{normal-new-and-delete-form}
+The normal global new and delete are:
+
+void* operator new( std::size_t ) throw (std::bad_alloc);            // normal new
+void* operator new( std::size_t, void* ) throw();                    // placement new
+void* operator new( std::size_t, const std::nothrow_t& ) throw();    // nothrow new
+void operator delete( void* rawMemory ) throw ();
+void operator delete( void* rawMemory, std::size_t ) throw ();       // at class scope
+
+
+{placement-new} interview question
+Means operator new function that takes additional parameters other than the
+size. To use this version of new, include 'new' header.
+
+note: see how passes parameters to operator new
+note: operator new and deletes use 'overloads' mechanism.
+
+// placement version to log allocations to ostream
+static void* operator new( std::size_t size, std::ostream& os ) throw (std::bad_alloc);
+
+// particularly useful placement version
+void* operator new( std::size_t size, void *pMemory) throw();
+
+<ex>
+One example is to tell not to raise exception. No exception and return 'nullptr'
+instead. 
+
+note: This is for older code which expect null pointer when allocation fails
+since newer C++ raise an exception instead. This is called 'nothrow' new. This
+only guarentees no exception in operator new but not whole expression since
+constructor can still raise an exception. So will never have a need for nothrow
+new.
+
+note: The nothrow keyword is the same as noexcept but used in new operator
+expression.
+
+int* pi = new (std::nothrow) int;
+
+<example>
+The other example is that it is used inside vector<> to create objects in the vector's unused
+capacity. note: not sure when looked at gcc code. 
+
+<example>
+new (place_address) type 
+new (place_address) type (initializers)
+
+Widget * constructWidgetInBuffer(void *buffer, int widgetSize)
+{
+  return new (buffer) Widget(widgetSize);
+}
+
+This function returns a pointer to a Widget object that's constructed within the buffer passed to
+the function.
+
+<must-provide-all>
+C++ choose corresponding delete when undo operator new so must provide 'both' when customize new and
+delete. If not found, no delete is called.
+
+Suppose class specific new and delete that logs allocations to ostream.
+
+class Widget {
+  public:
+    // non-normal from of new
+    static void* operator new( std::size_t, std::ostream& os ) throw (std::bad_alloc);
+
+    // normal class specific form of delete
+    static void operator delete( void *p, std::size_t size ) throw();
+};
+
+Widget* pw = new (std::cerr) Widget;
+
+As with nothrow version, the problem is that C++ cannot find the corresponding delete when
+constructor raises exception. So must have placement 'delete' as well.
+
+void operator delete(void*, std::ostream&) throw();
+
+If not, no delete is called if constructor throws an exception.
+
+However, consider what happens if no exception is thrown and get to delete in client code. This
+calls the normal operator delete but not placement version. Placement delete is called 'only' if an
+exception arises from a 'constructor' that's coupled to a call to a placement new.
+
+delete pw;
+
+Therefore, must provide all to forestall all memory leaks associated with placement versions of new.
+
+class Widget {
+  public:
+    // non-normal from of new
+    static void* operator new( std::size_t, std::ostream& os ) throw (std::bad_alloc);
+
+    // placement version
+    static void operator delete(void *p, std::ostream& os) throw();
+
+    // normal delete
+    static void operator delete(void *p) throw();
+};
+
+<consider-name-hide>
+Since member function names hides functions in outer scopes, class specific new and delete hides
+normal new and delete.
+
+class Base {
+  public:
+    // non-normal from of new
+    static void* operator new( std::size_t, std::ostream& os ) throw (std::bad_alloc);
+};
+
+Base* pb = new Base;                // error since normal new is hidden
+Base* pb = new (std::cerr) Base;    // okay
+
+Similarly, new in derived hides both global and inherited versions.
+
+class Derived : public Base {
+  static void* operator new( std::size_t size ) throw( std::bad_alloc );
+};
+
+Derived* pd = new (std::clog) Derived;    // error
+Derived* pd = new Derived;                // okay
+
+So unless mean to prevent class clients from using these forms, be sure to make them available in
+addition to any custom versions you create.
+
+<conclusion>
+An easy way is to create base class containing all and client just use inheritance to get the
+standard forms.
+
+class StandardNewDeleteForms {
+  public:
+    // normal new/delete
+    static void* operator new( std::size_t size ) throw (std::bad_alloc)
+    { return ::operator new(size); }
+    static void operator delete( void* rawMemory ) throw ()
+    { ::operator delete(rawMemory); }
+
+    // placement new/delete
+    static void* operator new( std::size_t size, void* pMem ) throw()
+    { return ::operator new(size, pMem); }
+    static void operator delete( void* rawMemory, void* pMem) throw()
+    { ::operator delete( rawMemory, pMem ); }
+
+    // nothrow new/delete
+    static void* operator new( std::size_t size, const std::nothrow_t& nt ) throw()
+    { return ::operator new(size, nt); }
+    static void operator delete( void* rawMemory, const std::nothrow_t&) throw()
+    { ::operator delete( rawMemory ); }
+};
+
+class Widget : public StandardNewDeleteForms {
+  public:
+    // make those visible
+    using StandardNewDeleteForms::operator new;
+    using StandardNewDeleteForms::operator delete;
+
+    static void* operator new( std::size_t size, std::ostream& os ) throw( std::bad_alloc );
+    static void operator delete( void* rawMemory, std::ostream& os ) throw();
+};
+
+
 
 
 ={============================================================================
@@ -44682,11 +45459,6 @@ only for glibc?
 
 
 ==============================================================================
-*kt_dev_sys_013*	clock_gettime and mktime
-
-
-
-==============================================================================
 *kt_dev_sys_014*	newlines between dos and linux
 
 Q: what is it about?
@@ -44714,773 +45486,6 @@ platform.mk: ASCII English text, with CRLF line terminators
 
 [ktpark@cdilinux build_mlu]$ file platform.mk.kt (for unix)
 platform.mk.kt: ASCII English text
-
-
-# ============================================================================
-#{
-={============================================================================
-*kt_dev_cpp_000* cpp-design-by-contract 
-  
-EC++18, Make it hard to use incorrectly 
-
-1. Make compile error for incorrect uses (interface usage errors):
-
-class Date {
-  public:
-    Date(int month, int day, int year);
-    ...
-};
-
-// client use
-
-Date d(30, 3, 1995);    // wrong order
-Date d(3, 40, 1995);    // invalid
-
-How to make compile errros? Use C++ type system.
-
-struct Day {
-  explicit Day(int day) : val(day) {}
-  int val;
-};
-
-struct Month {
-  explicit Month(int month) : val(month) {}
-  int val;
-};
-
-struct Year {
-  explicit Year(int year) : val(year) {}
-  int val;
-};
-
-class Date {
-  public:
-    Date( const Month& month, const Day& day, const Year& year);
-    ...
-};
-
-
-// wrong type. wrong order
-Date d(30, 3, 1995);                      
-
-// wrong type. invalid
-Date d( Day(3), Month(40), Year(1995) );
-
-// correct type. invalid value but easy to 'see'!
-Date d( Month(40), Day(3), Year(1995) );  
-
-
-2. Make compile error for invalid values: 
-
-Consider enum? NO since not type-safe. Safer solution is to predefine all
-vaild months. note: C++11 enum supports type checks. 
-
-class Month {
-  public:
-    static Month Jan() { return Month(1); }
-    ...
-    static Month Dec() { return Month(12); }
-
-  private:
-    // prevent creation of new values
-    explicit Month(int m); 
-};
-
-Date d( Month::Mar(), Day(30), Year(1995) );
-
-Used functions to represent months. How about {class-const} in
-*kt_dev_cpp_017* instead of using function?
-
-
-3. Force client to follow interface rule
-
-Investment* createInvestment();
-
-This means that client remember to use raii to prevent resource leaks. The
-better interface decision is:
-
-std::shated_ptr<Investment> createInvestment();
-
-The same is {factory-func} in *kt_dev_stl_018* which force client to use
-smart_ptr.
-
-
-={============================================================================
-*kt_dev_ecpp_006* 26: postpone variable definitions
-
-{cost}
-Avoid unused varaibles but see that there are variables which aren't completely unused so to
-postpone variable definitions as long as possible until is needed and have init value. Increases
-clarity and efficiency.
-
-std::string encryptPassword( const std::string& password )
-{
-  using namespace std;
-
-  string encrypted;
-
-  if( password.length() < MinimumPasswordLength )
-  {
-    throw logic_error("Password is too short");
-  }
-
-  ...
-
-  return encrypted;
-}
-
-The real meaning of 'as long as possible': postpone a variable's definition until right before you
-have to use the variable, also try to postpone the definition until you have initialsation arguments
-for it. Avoid cost of construction, destruction and default construction.
-
-
-{what-about-loop}
-# approach A                           # approach B
-Widget w;
-for( int i=0; i < n; i++ )             for( int i = 0; i < n; i++ )
-{                                      {
-  w = some value;                         Widget w(some value);
-  ...                                     ...
-}                                      }
-
-1 ctor, 1 dtor, n assign.              n ctor and dtor.
-
-Choose depending on whether ctor/dtor is expensive than assign.
-
-The approach B makes that the name w is only visible in the loop. This is good for comprehensibility
-and maintainability. So approach B is 'recommended' unless performance analysis shows approach A is
-better.
-
-
-{make-variable-available-only-for-some}
-By defining the variable in a condition, the pointer <dp> is not accessible outside the if. If the
-cast fails, then the unbound pointer is not available for use in subsequent code where we might
-forget to check whether the cast succeeded.
-
-if (Derived *dp = dynamic_cast<Derived*>(bp))
-{
-    // use the Derived object to which dp points
-   
-} else {  // bp points at a Base object
-
-    // use the Base object to which bp points
-}
-
-
-={============================================================================
-*kt_dev_ecpp_007* 28: avoid returning handles to object internals
-
-EC++28. Here internals means everything except public interface and includes private and protected
-member func. If returns handles (iterator, pointer and reference) to internals, causes three
-problems: breaks encapsulatation, constness, and dangling-handles.
-
-{compromising-encapsulation-and-constness}
-The passing by ref is more efficient than passing by value and the interface offer client a way to
-learn what rectangle's points are:
-
-class Rectangle {
-  public:
-    Point& upperLeft() const { return pData->ulhc; }
-
-  private:
-    std::shared_ptr<RectData> pData;
-};
-
-Is it okay? NO because client can change its value:
-
-// use
-const Rectangle rec( ... );
-rec.upperLeft().setX(50);
-
-The problem is that makes memeber data effectively public as returns reference to it from a public
-member function since this is bitwise-const. See {bitwise-const} in *kt_dev_cpp_008*
-
-The solution is that it offers read-only access:
-
-class Rectangle {
-  public: >
-   const Point& upperLeft() const { return pData->ulhc; }
-
-  private:
-   std::shared_ptr<RectData> pData;
-};
-
-Similar to the example of {const-member-func} in *kt_dev_cpp_008*
-
-The other example:
-
-using namespace std;
-
-class Sample {
-  private:
-    int val;
-
-  public:
-    Sample() : val(10) {}
-    int& getx() { return val;}
-    void printx() { cout << val << endl; }
-};
-
-int _tmain(int argc, _TCHAR* argv[])
-{
-  Sample sam;
-  cout << "------" << endl;
-  sam.printx();
-  sam.getx() = 20;
-  cout << "------" << endl;
-  sam.printx();
-
-  return 0;
-}
-
-This changes private member val to 20.
-
-
-{dangling-handles}
-class GUIObject { ... }
-const Rectangle boundingBox( const GUIObject& obj );
-
-// use
-GUIObject* pgo;
-...
-const Point* pUpperLeft = &( boundingBox(*pgo).upperLeft() );
-
-This returns a temporary Rectangle and returns its upper member. The problem is this temporary is
-destroyed when end this statement and pUpperLeft will dangle even if const use.
-
-note: vector and string's [] operator returns reference but these are exceptions to this rule, but
-not a general rule. Better not use [] operator.
-
-
-
-={============================================================================
-*kt_dev_ecpp_013* 22: data member must be private, encapsulation
-
-EC++22. How about using public or protected member data in class?
-
-If class interface has only member funcs then the good things are:
-
-  - Syntactically uniform access(consistency) since do not need to remember
-    which one is function or member data. Always use function interface.
-
-  - Fine-grained access control. read-only. write-only. etc.
-
-  - Encapsulation. Hiding data members behind <functional-interface> can offer
-  all kinds of implementation flexibility as with benefits from separation
-  between interfacea and implementation. For example, change implementation
-  later.
-
-The encapsulation is inversely proportional to the amount of code that might be
-broken if that something changes. 
-
-The point is that do not use public and protected members since this means
-un-encapsulated and un-changeable.
-
-
-CPR 270. The benefits of encapsulation.
-
-  - The implementation of an encapsulated class can change over time without
-  requiring changes in user code. User code needs to change only when the
-  interface changes.
-
-  - The data are protected from mistakes that users might introduce. If there is
-  a bug that corrupts an object's state, the place to look for the bug are
-  localized and limited.
-
-
-={============================================================================
-*kt_dev_ecpp_015* cpp-new-delete
-
-{default-value-initialize}
-
-string* ps = new string;      // default-init
-string* ps = new string();    // value-init. T()
-
-int* pi = new int;            // default-init
-int* pi = new int();          // value-init. T()
-
-Only for built-in types, value-init makes difference and this means that
-default-init for built-in types has 'uninitialized' values. For class types,
-  both will use default ctors and so no difference. 
-  
-The `new operator` combines allocation and construction; creates 'unnamed' and
-then 'default-init' objects e.g. calls ctor for class object.
-
-
-{new-operator-and-operator-new}
-MEC++08: This operator is built into the language and, like sizeof, you can't
-change its meaning: it always does the same thing. What it does is twofold:
-allocation and construction.
-
-The new operator, use `operator new` (or operator new[]) to allocate raw
-memory, runs ctor to construct, and returns pointer to constructed memory.
-Raise 'bad_alloc' exception when there is  no memory.
-
-For deletion, do opposite; runs dtor and operator delete( or delete[]) to free
-memory.
-
-note: C++ runtime gurantees that delete nullptr do nothing.
-
-
-{do-not-mix-with-array-form}
-EC++16. Use the same form in corresponding uses of new and delete since these
-do two things but think what will happen when call destructor(s) less or more
-than needed. Undefined in both ways. 
-
-std::string *stringPtr1 = new std::string;
-std::string *stringPtr2 = new std::string[100]; 
-
-delete stringPtr1;
-delete[] stringPtr2;
-
-This can be not obvious when use typedef: 
-
-typedef std::string AddressLines[4];
-std::string *pal = new AddressLines;
-
-delete pal;    // undefined
-delete[] pal;
-
-If do not know that there is a typedef, for example, it is in a file somewhere
-in huge source tree then may be a problem.
-
-
-{operator-new-and-delete}
-This is the C++ equivalent of calling malloc and free. What you can change is
-how the memory for an object is allocated. The name of the function that the
-new operator calls to allocate memory is operator new. Can rewrite or overload
-that function to change its behavior.
-
-The operator new function is usually declared like this:
-
-void * operator new(size_t size);
-
-The return type is void*, because this function returns a pointer to raw,
-    uninitialized memory.
-
-void *rawMemory = operator new(sizeof(string));
-
-Like malloc, operator new's only responsibility is to allocate memory.
-
-note: Can define own operator new and delete but careful because it takes over
-responsibility for 'all' dynamic memory allocation. Since it changes global
-one so new operator will automatically invoke your custom version of operator
-new.
-
-
-{new-operator-with-zero-size}
-What happens if get_size returns 0? The answer is that our code works fine.
-Calling new[0] is legal even though we cannout create an array variable of
-size 0.
-
-char arr[0];              // error: cannot define a zero-length array
-char *cp = new char[0];   // ok: but cp can't be dereferenced
-
-// p acts as the off-the-end pointer
-size_t n = get_size();
-int *p = new int[n];
-for (int* q = p; q != p + n; ++q)
-  // process the array
-  
-
-={============================================================================
-*kt_dev_ecpp_016* 49: new handler
-
-Before operator new throws an exception in response to an unsatisfiable request for memory, calls a
-error handling function called new handler. Can set user's handler by calling set_new_handler for
-'flexibility' of handling allocation errors.
-
-namespace std {
-  typedef void (*new_handler)();
-  new_handler set_new_handler( new_handler p ) throw();     // see noexcept
-};
-
-void outOfMem()
-{
-  std::cerr << "Unable to satisfy request for memory\n";
-  std::abort();
-}
-
-int main()
-{
-  std::set_new_handler( outOfMem );
-  int *pBigDataMemory = new int[10000000000L];
-  ...
-}
-
-When operator new is unable to fulfill a memory request, calls new handler 'repeatedly' until it can
-find enough memory. So handler must do one of followings:
-
-1. Make more memory avaiable
-For example, allocate a large block of memory at program start-up, then release it for use the first
-time thw handler is invoked.
-
-2. Install a different handler
-If the current handler can't make any more memory available, perhaps it knows of a different handler
-that can and next time operator new calls the new handler. note: May have hierachy of handler.
-
-3. Deinstall handler
-Call set_new_handler(0). With no handler installed, operator new will throws an exception when
-allocation is unsuccessful.
-
-4. Throw an exception
-Throw a type bad_alloc or derived from bad_alloc.
-
-5. Not return
-Typically calls abort or exit.
-
-
-{class-specific-handler}
-Instead of using 'global' handler, can use class specific handler.
-
-// Widget
-
-class Widget {
-  public:
-    static std::new_handler set_new_handler( std::new_handler p ) throw ();
-    static void *operator new( std::size_t size ) throw ( std::bad_alloc );
-
-  private:
-    static std::new_handler currentHandler;
-};
-
-std::new_handler Widget::currentHandler = 0;
-
-std::new_handler Widget::set_new_handler( std::new_handler p ) throw ()
-{
-  // note: this merely set currentHandler
-  std::new_handler oldHandler = currentHandler;
-  currentHandler = p;
-  return oldHandler;
-}
-
-void* Widget::operator new( std::size_t size ) throw( std::bad_alloc )
-{
-  // note: save old global handler and set new one
-  NewHandlerHolder h( std::set_new_handler(currentHandler));
-
-  // note: call global operator new
-  return ::operator new(size);
-}
-
-// HandlerHolder
-// note: uses raii to restore global handler back when done
-
-class NewHandlerHolder {
-  public:
-    explicit NewHandlerHolder( std::new_handler nh ) : handler(nh) {}
-    ~NewHandlerHolder() { std::set_new_handler(handler); }
-
-  private:
-    std::new_handler handler;
-
-    // preventing copies
-    NewHandlerHolder( const NewHandlerHolder& );
-    NewHandlerHolder& operator=( const NewHandlerHolder& );
-};
-
-// Use
-
-void outOfMem();
-
-Widget::set_new_handler( outOfMem );
-
-// note: see how Widget's operator new is called due to arg-dependent lookup.
-Widget* pw1 = new Widget;              // if allocation fails, call outOfMem
-
-std::string* ps = new std::string;     // if allocation fails, call global one if there is
-
-Widget::set_new_handler(0);            // set no handler for Widget
-
-Widget* pw2 = new Widget;              // if allocation fails, throw exception immediately
-
-<to-support-other-class>
-This scheme is the same regardless of the class and then use template to support other types.
-
-template<typename T>
-class NewHandlerSupport {
-  public:
-    static std::new_handler set_new_handler( std::new_handler p ) throw ();
-    static void* operator new( std::size_t size ) throw (std::bad_alloc);
-
-    // other versions of operator new.
-  private:
-    static std::new_handler currentHandler;
-};
-
-template<typename T>
-std::new_handler NewHandlerSupport<T>::currentHandler = 0;
-
-template<typename T>
-std::new_handler NewHandlerSupport<T>::set_new_handler( std::new_handler p ) throw ()
-{
-  std::new_handler oldHandler = currentHandler;
-  currentHandler = p;
-  return oldHandler;
-}
-
-template<typename T>
-void* NewHandlerSupport<T>::operator new( std::size_t size ) throw( std::bad_alloc )
-{
-  NewHandlerHolder h( std::set_new_handler(currentHandler));
-
-  return ::operator new(size);
-}
-
-class Widget : public NewHandlerSupprt<Widget> {
-  // as before but without set_new_handler and operator new
-};
-
-note: never use type parameter T. All need is a different copy of NewHandlerSupport, in particular
-its static data member currentHandler. Template mechanism do.
-
-note: this is useful and called 'mixin' style inheritance. how about "is-a" relationship?
-
-
-={============================================================================
-*kt_dev_ecpp_017* 50: when to replace new and delete
-
-Three common reasons to replace complier provided operator new and delete.
-
-1. To detect usage errors
-
-1.1. Operator new keeps a list of allocated addresses and operator delete removes addresses from the
-list, easy to detect usage errors.
-
-1.2. Overrun and underrun. Have signature before and after the memory made available to clients.
-Operator delete can check if the signatures are still intact, can log when overrun or underrun
-occurred along with the value of the offending pointer.
-
-2. To improve efficiency
-
-2.1. The default operator new and delete is general purpose such as large blocks, small blocks, and
-mixtures of the two. Have to worry about heap fragmentation. If know allocation 'pattern' of an
-application, can use custom operator new and delete to have performance improvements.
-
-2.2. Custom version for objects of a particular type such as class-specific allocators. Boot pool
-libaray for fixed-size allocators.
-
-2.3. Reduce space overhead. The general version often incur some overhead for each allocated block.
-Allocators tuned for small objects such as boost pool library essentially eliminate such overhead.
-
-2.4. Cluster related objects. If know that particular data structures are used together and like to
-minimize page 'fault', can create a separate 'heap' for the data so they are clustered together as
-few pages as possible. Placement version can make it possible to achieve such clustering. note:
-placement new use case.
-
-3. To collect usage statics
-
-Before writing custom new and delete, gather information about how application uses dynamic memory.
-Distribution of allocated block size, their lifetime, allocation and deallocation order such as
-FIFO, LIFO, or random, usage pattern changes in different stages of execution, maximum amount of
-allocated memory in use at any one time (high water mark or peak value). Custom version make it easy
-to collect this kind of information.
-
-4. To have unconventioal behavior
-
-4.1. Allocate and deallocate blocks in shared memory which has a C API or memory-mapped I/O. note:
-placement new use case.
-
-4.2. Overwrite deallocated blocks with zeros in order to increase the security of application data.
-
-<example> to show how to replace global operator new and see EC++51 for details
-static const int signature = 0xDEADBEEF;
-
-typedef unsigned char Byte;
-
-// this code has several flaws
-void* operator new( std::size_t size ) throw( std::bad_alloc )
-{
-  using namespace std;
-
-  size_t realSize = size + 2*sizeof(int);
-
-  void *pMem = malloc( realSize );
-  if( !pMem ) throw bad_alloc();
-
-  *(static_cast<int*>(pMem)) = signature;
-  *(reinterpret_cast<int*>(static_cast<Byte*>(pMem)+realSize-sizeof(int)) ) = signature;
-
-  return static_cast<Byte*>(pMem)+sizeof(int);
-}
-
-<alignment-consideration>
-Many computer architectures require that data of particular type be placed in memory in particular
-kinds of address. Called alignments. If not, cause hardware exception or slow performance. If simly
-uses malloc then no problem since C++ guarantees malloc returns alligned pointer. However, the above
-code is not returning a pointer we got from malloc. So this is consideration when think of custom
-new and delete.
-
-Two options: Compiler can have options for different memory managers or open source memory managers
-such as boost pool library for allocation of a large number of small objects, fixed-size allocator.
-
-
-={============================================================================
-*kt_dev_ecpp_018* new-placemane-new
-
-Widget* pw = new Widget;
-
-Two functions are called: operator new and constructor. What would happen when
-  operator new allocated memory but constructor raised exception? C++ runtime
-  system gurantees to undo operator new.
-
-{normal-new-and-delete-form}
-The normal global new and delete are:
-
-void* operator new( std::size_t ) throw (std::bad_alloc);            // normal new
-void* operator new( std::size_t, void* ) throw();                    // placement new
-void* operator new( std::size_t, const std::nothrow_t& ) throw();    // nothrow new
-void operator delete( void* rawMemory ) throw ();
-void operator delete( void* rawMemory, std::size_t ) throw ();       // at class scope
-
-
-{placement-new} interview question
-Means operator new function that takes additional parameters other than the
-size. To use this version of new, include 'new' header.
-
-note: see how passes parameters to operator new
-note: operator new and deletes use 'overloads' mechanism.
-
-// placement version to log allocations to ostream
-static void* operator new( std::size_t size, std::ostream& os ) throw (std::bad_alloc);
-
-// particularly useful placement version
-void* operator new( std::size_t size, void *pMemory) throw();
-
-<ex>
-One example is to tell not to raise exception. No exception and return 'nullptr'
-instead. 
-
-note: This is for older code which expect null pointer when allocation fails
-since newer C++ raise an exception instead. This is called 'nothrow' new. This
-only guarentees no exception in operator new but not whole expression since
-constructor can still raise an exception. So will never have a need for nothrow
-new.
-
-note: The nothrow keyword is the same as noexcept but used in new operator
-expression.
-
-int* pi = new (std::nothrow) int;
-
-<example>
-The other example is that it is used inside vector<> to create objects in the vector's unused
-capacity. note: not sure when looked at gcc code. 
-
-<example>
-new (place_address) type 
-new (place_address) type (initializers)
-
-Widget * constructWidgetInBuffer(void *buffer, int widgetSize)
-{
-  return new (buffer) Widget(widgetSize);
-}
-
-This function returns a pointer to a Widget object that's constructed within the buffer passed to
-the function.
-
-<must-provide-all>
-C++ choose corresponding delete when undo operator new so must provide 'both' when customize new and
-delete. If not found, no delete is called.
-
-Suppose class specific new and delete that logs allocations to ostream.
-
-class Widget {
-  public:
-    // non-normal from of new
-    static void* operator new( std::size_t, std::ostream& os ) throw (std::bad_alloc);
-
-    // normal class specific form of delete
-    static void operator delete( void *p, std::size_t size ) throw();
-};
-
-Widget* pw = new (std::cerr) Widget;
-
-As with nothrow version, the problem is that C++ cannot find the corresponding delete when
-constructor raises exception. So must have placement 'delete' as well.
-
-void operator delete(void*, std::ostream&) throw();
-
-If not, no delete is called if constructor throws an exception.
-
-However, consider what happens if no exception is thrown and get to delete in client code. This
-calls the normal operator delete but not placement version. Placement delete is called 'only' if an
-exception arises from a 'constructor' that's coupled to a call to a placement new.
-
-delete pw;
-
-Therefore, must provide all to forestall all memory leaks associated with placement versions of new.
-
-class Widget {
-  public:
-    // non-normal from of new
-    static void* operator new( std::size_t, std::ostream& os ) throw (std::bad_alloc);
-
-    // placement version
-    static void operator delete(void *p, std::ostream& os) throw();
-
-    // normal delete
-    static void operator delete(void *p) throw();
-};
-
-<consider-name-hide>
-Since member function names hides functions in outer scopes, class specific new and delete hides
-normal new and delete.
-
-class Base {
-  public:
-    // non-normal from of new
-    static void* operator new( std::size_t, std::ostream& os ) throw (std::bad_alloc);
-};
-
-Base* pb = new Base;                // error since normal new is hidden
-Base* pb = new (std::cerr) Base;    // okay
-
-Similarly, new in derived hides both global and inherited versions.
-
-class Derived : public Base {
-  static void* operator new( std::size_t size ) throw( std::bad_alloc );
-};
-
-Derived* pd = new (std::clog) Derived;    // error
-Derived* pd = new Derived;                // okay
-
-So unless mean to prevent class clients from using these forms, be sure to make them available in
-addition to any custom versions you create.
-
-<conclusion>
-An easy way is to create base class containing all and client just use inheritance to get the
-standard forms.
-
-class StandardNewDeleteForms {
-  public:
-    // normal new/delete
-    static void* operator new( std::size_t size ) throw (std::bad_alloc)
-    { return ::operator new(size); }
-    static void operator delete( void* rawMemory ) throw ()
-    { ::operator delete(rawMemory); }
-
-    // placement new/delete
-    static void* operator new( std::size_t size, void* pMem ) throw()
-    { return ::operator new(size, pMem); }
-    static void operator delete( void* rawMemory, void* pMem) throw()
-    { ::operator delete( rawMemory, pMem ); }
-
-    // nothrow new/delete
-    static void* operator new( std::size_t size, const std::nothrow_t& nt ) throw()
-    { return ::operator new(size, nt); }
-    static void operator delete( void* rawMemory, const std::nothrow_t&) throw()
-    { ::operator delete( rawMemory ); }
-};
-
-class Widget : public StandardNewDeleteForms {
-  public:
-    // make those visible
-    using StandardNewDeleteForms::operator new;
-    using StandardNewDeleteForms::operator delete;
-
-    static void* operator new( std::size_t size, std::ostream& os ) throw( std::bad_alloc );
-    static void operator delete( void* rawMemory, std::ostream& os ) throw();
-};
 
 
 # ============================================================================

@@ -65066,17 +65066,26 @@ sw $12 , 0xFFF8($13)    or    sw $12 , -8($13)
 Both are the same.
 
 
-<mips-jal>
-34. jump and link: jal instruction
-              +--------+-----------------------------------------+
-J-type format |000011 | jump_target |
-              +--------+-----------------------------------------+
+<mips-jal> update *mips-ra*
 
-// update *mips-ra*
-Effects of the instruction: R31 <-- [PC] + 4
- PC <-- [PC31..28] || [I25..0] || 02
+jal - jump and link
+-----------------------
+copy program counter to register $ra (return address register) Jumps to the
+calculated address and stores the return address in $31. Unconditionally jumps
+to a specified location and puts the return address in a general register. By
+default, the return address is placed in register $31.
 
-Assembly format: jal jump_target 
+jal target # $31 = PC + 8 (!NOTE: it's 8)
+
+0000 11ii iiii iiii iiii iiii iiii iiii 
+
+j - jump
+------------------------
+Jumps to the calculated address. The instruction j $31 returns from the a
+"jal" call.  
+
+j target
+0000 10ii iiii iiii iiii iiii iiii iiii
 
 
 <mips-lw>
@@ -65566,7 +65575,7 @@ int main(int argc, char* argv[])
   4006f4:	24050002 	li	a1,2
   4006f8:	24060003 	li	a2,3
   4006fc:	24070004 	li	a3,4
-                                        // -> save ra *mips-ra* and jump
+                                        // -> update ra *mips-ra* and jump
   400700:	0c100175 	jal	4005d4 <func_first>
                                         // <- returns from the call
   400704:	00000000 	nop
@@ -65628,8 +65637,10 @@ int main(int argc, char* argv[])
   (28)  : struct_two    +56 = 84
   (32)  : struct_three
 
-  3. save ra(ra2) and call first
-  4. get ra from the frame and return to the caller(standard library)
+  3. call. update ra register(ra2) and call first
+  use ra register to pass return address to inner calls.
+
+  4. return.get ra from the frame and return to the caller(standard library)
 
   04(68) : ra(ra1) use 4(word) from here
   00(72) : 
@@ -65644,8 +65655,8 @@ so a frame has ra, args, locals and struct itself or pointer to a struct.
 ={============================================================================
 *kt_linux_arch_001* arch-mips-backtrace mips-membuster
 
-<source>
-
+<build-tables>
+// scan from loaded memory
 /* generates output. needs initialized frame info tab */
 void parse_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
 							uint32_t *syms, uint16_t *info_idx, uint32_t tcount, uint32_t *frame_inf )
@@ -65666,27 +65677,19 @@ void parse_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size,
   {
     ins = p[i];
 
-    // push, get the start of a frame
+    // push, get the start address of a frame
     if((ins &  0xffff8000) == 0x27bd8000)
     {
       frame_sz = (-ins) & 0x7fff;
+
+      // text_addr is load address so get a loading address of a frame.
       frame_addr = (i << 2) + text_addr;
-      /*printf("frame start %.8x size:%d\n", text_addr + (i*4), frame_sz);
-        if(in_frame == 1) printf("already in frame: %x\n", text_addr + (i*4));*/
-      in_frame =1;
     }
 
-    // pop
-    if((ins &  0xffff8000) == 0x27bd0000)
-    {
-      /*frame_sz = (ins) & 0x7fff;*/
-      /*printf("frame end %.8x size:%d\n", text_addr + (i*4), frame_sz);*/
-      in_frame=0;
-    }
-
+    // ra
     if ((ins & 0xffff8000) == 0xafbf0000)
     {
-      // should be found in the frame table
+      // should be found in the *frame-info-table*
       ret_addr = (ins) & 0x7fff;
       for(idx=0; idx < tcount; idx++)
       {
@@ -65696,25 +65699,26 @@ void parse_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size,
 
       if(idx == tcount) printf("This should not happen, contact me\n");
 
-      // toral frame table(syms) has address of each frame
-      // info_idx has index to frame table.
+      // cnt is # of total frame
+      //
+      // *sysbol-info-table* has loading address of each frame
       syms[cnt] = frame_addr;
-      info_idx[cnt] = idx;
-      /*DPRINT("syms[%d] = %.8X info[%d]= %d\n", cnt, syms[cnt], cnt, info_index[cnt]);*/
-      cnt++;
 
-      /*printf("ra store %.8x offset:%d in_frame:%d\n", text_addr + (i*4), ret_addr, in_frame);*/
+      // *info-index-table* has index to *frame-info-table* of each frame
+      info_idx[cnt] = idx;
+
+      cnt++;
     }
   }
 
   return;
 }
-}
 
+
+// scan from loaded memory
 // #define TMP_FTAB_SIZE		1024
 //
-// count the number of frames needed and the size of the frame info table.
-// Frame info table will be generated as well
+// get count the total number of frames and frame info table.
 
 int count_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
 						uint32_t *count, uint32_t *tcount, uint32_t *frame_inf)
@@ -65748,21 +65752,59 @@ int count_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, 
       in_frame=0;
     }
 
-    // when see "ra"
-    // cnt is number of ra instruction and tcnt is number of entry in the
-    // frame table
+    // *frame-info-table* To get and pack ra offest and frame size
     //
-    // make unique entry using (ret<<16 | frame_sz) and that is to have one
-    // entry for the same ra and frame size.
+    // Whenever see "save ra" while scanning whole text area, save offset of
+    // ra to save in the stack and the size of current stack frame. 
     //
-    // so this reduce the mem size of frame table since have one frame table
-    // entry for the same caller? *Q*
+    // cnt is the total number of ra instruction seen and tcnt is number of entry in the
+    // frame info table
     //
-    // # of frames is 23018 and # of frames by using this = 448 when runs on
-    // APP_Process
+    // WHY do (offset<<16 | frame_sz)?
+    //
+    // To save memory, use 16 bits for each ra and frame size and pack them
+    // into single 4 bytes. 
+    //
+    // This has simply offset size which are byte offset and frame info table
+    // do need to have the same entry as the symbol table since different symbols
+    // may have the same offset sizes. 
+    //
+    // # of total frames from scanning is 23018 
+    // -> # of entrys in frame info table is 448 when runs on APP_Process
+    //
+    // so make a value from ra offset and frame size and save it into the
+    // table.
+    //
+    // 0040bbd4 <_init>:
+    //   40bbd4:	3c1c00b1 	lui	gp,0xb1
+    //   40bbd8:	279c055c 	addiu	gp,gp,1372
+    //   40bbdc:	0399e021 	addu	gp,gp,t9
+    //   40bbe0:	27bdffe0 	addiu	sp,sp,-32         // frame size
+    //   40bbe4:	afbc0010 	sw	gp,16(sp)
+    //   40bbe8:	afbf001c 	sw	ra,28(sp)            // ra offset
+    // 
+    // 0040c920 <__do_global_dtors_aux>:
+    //   40c920:	3c0200f2 	lui	v0,0xf2
+    //   40c924:	90428c50 	lbu	v0,-29616(v0)
+    //   40c928:	27bdffe0 	addiu	sp,sp,-32
+    //   40c92c:	afbf001c 	sw	ra,28(sp)
+    //
+    // Like these, both maps into the same entry in frame info table.
+    //
+    // To use it, use
+    //
+    // info = frame_info[info_index[i-1]];
+    // info >> 18
+    //
+    // not 16? since offset is bytes and use it as 4 bytes int.
+    //
+    // count: foffset(0x0000bbe0): push. ins(0x27bdffe0) -ins(0xd8420020) frame_sz(0x20)
+    // count: j(0), frame_info[  0] = 001c0020. ret_addr = 0000001c(28)
+    // count: frame_info[  0] >> 18 = 00000007(7)
    
     if ((ins & 0xffff8000) == 0xafbf0000)
     {
+      // get ra offset in stack
       ret_addr = (ins) & 0x7fff;
 
       // is it already in the frame table?
@@ -65801,7 +65843,9 @@ void membuster_plus_init(void)
     //
     // build structure by scanning the text two times
     //
-    // found 23018 frames -> 448 fram_tab entries
+    //
+    // found 23008 frames -> 448 fram_tab entries
+    // alloc symbols=92036 for frames 23009
     //
     // syms[# of total frame found] = address of a frame
     //
@@ -65822,9 +65866,13 @@ void membuster_plus_init(void)
         if(phdr[n].p_flags & PF_X)
         {
           // get start and end
+          // PT_LOAD header(3): type=1 offset=0 
+          // vaddr=0x400000 paddr=0x400000 fsize=11297060 msize=11297060 flags=0x5
 
           text_start = phdr[n].p_vaddr;
           text_end = phdr[n].p_vaddr + phdr[n].p_memsz;
+
+          // text_start 400000 - text_end ec6124
 
           if(need_table)
           {
@@ -65859,8 +65907,9 @@ void membuster_plus_init(void)
 
     // 3. build jump table
     //
-    // #define MAX_JUMP_TAB_SIZE 	8192
+    // #define MAX_JUMP_TAB_SIZE 	8192 (0x2000)
     //
+    // count is # of total frames
 
     if(need_table)
     {
@@ -65872,25 +65921,60 @@ void membuster_plus_init(void)
       jump_table = malloc(sizeof(uint32_t) * jump_table_size);
       memset(jump_table, 0x00, sizeof(uint32_t) * jump_table_size);
 
+      // *jump-info-table*  
+      // maps to index of *symbol-info-table*
+      //
       // frame, sym 00: 0x403F44  (>>12) 0x403(1027), jump_table[1027] = 0
       // frame, sym 01: 0x404F58  (>>12) 0x404(1028), jump_table[1028] = 1
       // frame, sym 02: 0x404FE4  (>>12) 0x404(1028), 
       // frame, sym 03: 0x405550  (>>12) 0x405(1029), jump_table[1029] = 0
       //
-      // so # of frames is 23018 -> 8192
+      // count=23008
       //
-      // reduce mem but no problem?
+      // jt: symbols[0]= 0x0040bbe0(0x40bbdc, 0x0000040b), first_jump_val=0x0000040b
+      // jt: update jump_table[0x0040b] = 0
+      //
+      // jt: symbols[00001]= 0x0040c928(0x0040c924, 0x0000040c), jump_val=0x0000040b 
+      // jt: !eg: update jump_table[0x0040c] = 0
+      //
+      // jt: symbols[00002]= 0x0040c9b4(0x0040c9b0, 0x0000040c), jump_val=0x0000040c 
+      // jt: symbols[00003]= 0x0040cfa0(0x0040cf9c, 0x0000040c), jump_val=0x0000040c 
+      // jt: symbols[00004]= 0x0040d010(0x0040d00c, 0x0000040d), jump_val=0x0000040c 
+      // jt: !eg: update jump_table[0x0040d] = 3
+      //
+      // jt: symbols[00005]= 0x0040d1ec(0x0040d1e8, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00006]= 0x0040dc60(0x0040dc5c, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00007]= 0x0040dd14(0x0040dd10, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00008]= 0x0040dd34(0x0040dd30, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00009]= 0x0040de50(0x0040de4c, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00010]= 0x0040e388(0x0040e384, 0x0000040e), jump_val=0x0000040d 
+      // jt: !eg: update jump_table[0x0040e] = 9
+      // ...
+      // jt: !eg: update jump_table[0x00c61] = 23004
+      //
+      // jt: symbols[23008]= 0x0fffffff(0x0000ffff), jump_val=0x00000c61 
+      // jt: !eg: update jump_table[0x01fff] = 23007
+      // jt: jump_count= 7157 
+      //
+      // so take -4 from the start address of the frame (of a symbol) and
+      // right shift 12 bits then some symbols are merged into the same
+      // *jump-info-table* slot.
+      //
+      // # of frames is 23018 -> 8192
+      //
+      // the jump-info-table. ** WHY AND OKAY ?? **
 
-      // >>> bin(8191), 13 bits and modulo % operation
+
+      // >>> bin(8191), 13 bits and "& (jump_table_size-1)" do modulo % operation
       // '0b1 1111 1111 1111'
 
-      // jt: symbols[0]= 0x0040BC28(0x0000040B), first_jump_val=0x0000040B, count=23018
-      //
       first_jump_val = ((symbols[0] >> 12) & (jump_table_size-1));
       jump_table[first_jump_val] = 0;
       jump_val = first_jump_val;
       for(i=0; i < count; i++)
       {
+        // only when differnt from the previous
+
         if((((symbols[i+1]-4) >> 12) & (jump_table_size-1)) != jump_val)
         {
           jump_val = (((symbols[i+1]-4) >> 12) & (jump_table_size-1));
@@ -65904,6 +65988,13 @@ void membuster_plus_init(void)
 
       /* plus 1 since it's a range including the last value */
       jump_count = (jump_val - first_jump_val)+1;
+
+      // jump_count= 7157.  (0x01bf5) (0x01fff-0x0040b) +1= 7157
+      // 0x0040b+7157 = 0x02000
+     
+      // fill empty slots in the jump table with the previous(nearest?)
+      // symbol.
+
 
       /* fill up the holes in the jump table */
       for(i=first_jump_val; i < (first_jump_val + jump_count); i++)
@@ -65919,13 +66010,38 @@ void membuster_plus_init(void)
 As shown above, use this pattern at the entry of every non-leaf function
 although these are not in sequencial:
 
+
+A function using a stack frame has the following instruction as the first one: 
+
+addiu sp,sp,-<frame_size>
+
+We make use of this to detect starting address of a function. This works
+better than using 'j ra' instruction to signify end of the previous function
+(for e.g. functions like boot() or panic() do not actually emit a 'j ra'
+ instruction).	the abi does not require that the addiu instruction be the
+first one.   
+
+#define MIPS_START_OF_FUNCTION(ins)     (((ins) & 0xffff8000) == 0x27bd8000)
+
+0x27bd 8000(001001.11101.11101.1000*)
+
+addiu $t(11101 $29(sp)), $s(sp), imm 					# $t = $s + imm
+
+// push
+0x27BDFFE0 # in_frame=1 case. addiu sp, sp, -32
+
+// pop
+0x27BD0020 # in_frame=0 case. addiu sp, sp, 32
+
+<ex>
+
   400688:	27bdffb8 	addiu	sp,sp,-72   // push sp
   40068c:	afbf0044 	sw	ra,68(sp)	   // save ra to return
   ...
   a8d3b4:	27bd0020 	addiu	sp,sp,32    // pop sp
 
-<ex> from APP_Process
 
+<ex> from APP_Process
 
 // push is not always the first
 0040dd10 <AEM_JAVA_DeregisterCleanup_DeleteAllApplicationData>:
@@ -65976,6 +66092,199 @@ To get a call trace from a current function:
 
   2. search "push sp" binary code downward where address increases since stack
   grows to low address and get the size of current stack frame, push offset.
+
+
+<from-user>
+// instrumented memman ifs
+
+MEMMAN_API_Handle *MEMMAN_API_AllocP(MEMMAN_API_MemoryPoolHandle *pool, uint32_t size, int32_t gcollect)
+void   *MEMMAN_API_AllocStaticP(MEMMAN_API_MemoryPoolHandle * pool, uint32_t size)        
+void   *MEMMAN_API_CallocStaticP(MEMMAN_API_MemoryPoolHandle * pool, uint32_t nbelem, uint32_t size)
+void   *MEMMAN_API_AllocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, uint32_t size, uint32_t align)
+void   *MEMMAN_API_AllocMaxStaticP(MEMMAN_API_MemoryPoolHandle * pool, uint32_t * paramsize)
+void   *MEMMAN_API_ReallocStaticP(MEMMAN_API_MemoryPoolHandle * pool, void *ptr, uint32_t askedSize)
+void   *MEMMAN_API_ReallocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, void *ptr, uint32_t askedSize, uint32_t align)
+{
+  //  alloc calls
+  ptr = (void *) MHWMemAllocStatic(pool, size);
+
+  // add list
+  // alloc_list_add(MEMMAN_API_MemoryPoolHandle *pool, uint32_t addr, uint32_t size, uint32_t type)
+  alloc_list_add(pool, (uint32_t)ptr, size, ALLOC_TYPE_MV);
+  {
+    // struct stacktrace_frame f;
+    // 	struct stacktrace_frame
+    // 	{
+    // 	  int             size;       /* Frame size */
+    // 	  uint32_t *      fp;         /* Frame pointer */
+    // 	  uint32_t *      pc;         /* Program counter */
+    // 	  uint32_t *      func;       /* Start of current function */
+    // 	  uint32_t *      caller;     /* Address of caller */
+    // 	};
+
+    // this is the very first function
+    // as it's already in the called frame, sp was moved and ra has return addr.
+    //
+    // *nolinine*
+    // int __attribute__ ((noinline)) stacktrace_start(struct stacktrace_frame *f)
+
+    stacktrace_start(&f);
+    {
+      // run asm code to get sp and ra to the caller
+      /* __builtin_frame_address(0) doesn't appear work with -fomit-frame-pointer */
+      /* so we get the stack pointer and hope it's not been trashed */
+      f->fp     = $sp;
+      f->caller = $ra;
+      f->func   = stacktrace_start;
+
+      // get a idx of symble table from the jump table
+      //
+      // so not use 12 bits
+      //
+      // >>> bin(0x1FFF000)
+      // '0b1111111111111000000000000'
+      //
+      i = jump_table[(((uint32_t)(f->func) & 0x1FFF000) >> 12)-1];
+
+      // get a nearest addres in the sym table
+      while((uint32_t)(f->func) >= symbols[i])
+      {
+        i++;
+      }
+
+      // get a frame size
+      f->size = frame_info[info_index[i-1]] & 0xFFFF;
+
+      /* Unwind frame - below if statement is on purpose, as it prevents 
+         a nasty optimization that breaks unwinding*/
+      i = stacktrace_unwind(f);
+      if(i == -1)return -1;
+      else return 0;
+    }
+
+    while(stacktrace_unwind(&f) != -1)
+    {
+      // build a backtrace(bt)
+      pool->bt_temp[i++] = f.caller;
+    }
+
+    // calc a checksum
+    checksum = fletcher32(pool->bt_temp, i);
+
+    // get a idx of alloc list
+    idx = get_alloc_index(pool);
+
+    // get a idx of bt list and if not found one, call bt_add
+    bt_idx = bt_find(pool, checksum);
+    if(bt_idx==-1)
+    {
+      bt_idx = bt_add(pool, pool->bt_temp, num_of_item_in_bt_temp, checksum);
+      { 
+        // copy bt_data[] <- bt_temp
+        pool->bt_list_idx++; 
+      }
+      pool->bt_list[bt_idx].size = 0;
+    }
+
+    //
+    pool->alloc_list[idx].addr = ptr;                  // allocated ptr from memman	
+    pool->alloc_list[idx].size = size;                 // allocated size
+    pool->alloc_list[idx].bt_index = (uint16_t)bt_idx; // idx of this bt
+    pool->alloc_list[idx].type = type;                 // allocated type
+    pool->alloc_list[idx].time = time_get();
+    pool->bt_list[bt_idx].size += size;                // accumulated size for this bt
+  } // end alloc_list_add
+}
+
+
+SYSTEM_STATUS MEMMAN_API_FreeP(MEMMAN_API_MemoryPoolHandle *pool, MEMMAN_API_Handle *handle)
+SYSTEM_STATUS MEMMAN_API_FreeStaticP(MEMMAN_API_MemoryPoolHandle * pool, void *ptr)
+{
+	alloc_list_remove(pool, (uint32_t) addr);
+	{
+		# search alloc list for this addr and if found, mark it freed.
+		if(pool->alloc_list[i].addr == addr)
+			pool->bt_list[pool->alloc_list[i].bt_index].size -= pool->alloc_list[i].size;
+			add_recent_freed(pool, idx of alloc list);
+	}
+}
+
+
+#if __mips__ 
+/* unwinding of stack frame */
+int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
+{
+  int count, i;
+  uint32_t info;
+
+  count = 0;
+
+  /* Unwind frame pointer */
+  f->pc = f->caller;
+
+  // note that we are in the stack now and stack grows to low address:
+  //
+  // base offset | contents       | frame
+  // +-----------+----------------+--------------
+  // $sp       +0| arg build      |   low	
+  //             | area           |   
+  //             +----------------+   current
+  //             | ra             |
+  //             +----------------+
+  //             ...
+  // +-----------+----------------+--------------
+  // old $sp   +0|                |	
+  //             |                |	high
+  //
+  // to get the sp of the previous frame, move the current sp back to the
+  // previous by adding offset (increase in address).
+  //
+  // note that do /4 since offset is byte offset and we use sp in 4 bytes
+  // unit.
+
+  f->fp += f->size >> 2;
+
+  f->func = f->pc;
+
+  /* don't go further down if it's inside the stdlib */
+  /*if((uint32_t)f->func & 0xFF000000)return -1;
+  if(((uint32_t)f->func) < 0x00400000)return -1;*/
+
+  if((uint32_t)(f->func) < text_start || (uint32_t)(f->func) > text_end)
+	  return -1;
+
+
+  i = jump_table[(((uint32_t)(f->func) & 0x1FFF000) >> 12)-1];
+  TDPRINT("caller2 %x jmp %d\n", f->caller, i);
+  /*if(i==0)return -1;*/
+  
+  TDPRINT("sym2 %x\n", symbols[i]);
+  while((uint32_t)(f->func) >= symbols[i])
+  {
+  	i++;
+	TDPRINT("sym2x %x\n", symbols[i]);
+  }
+
+  /* get function start addr from the symbol table */
+  f->func = (uint32_t *)symbols[i-1];
+
+  // *frame-info-table*
+  //
+  /* if we've hit a function with no info, we're done */
+  if( info_index[i-1] == 0xFFFF ) return -1;
+
+  info = frame_info[info_index[i-1]];
+  /* Get size of frame */
+  f->size = info & 0xFFFF;
+
+  // WHY -2? since *mips-jal* do save ra = pc+8 so -8 bytes
+
+  /* Get caller */
+  f->caller = (uint32_t *)f->fp[info >> 18] - 2;
+  TDPRINT("frame2 %x\n", f->caller);
+
+  return 0;
+}
 
 
 ={============================================================================
