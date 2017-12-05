@@ -251,7 +251,6 @@
 |kt_linux_tool_160| ccache
 
 |kt_linux_tool_200| bin-:
-*kt_linux_tool_201* tool-readelf
 *kt_linux_tool_201* tool-size
 *kt_linux_tool_202* tool-nm
 *kt_linux_tool_203* tool-objdump
@@ -303,6 +302,7 @@
 *kt_linux_gdb_300* gdb-remote: frontend: cgdb
 *kt_linux_gdb_300* gdb-remote: frontend: eclipse
 
+*kt_linux_tool_300* gdb-core
 |kt_linux_tool_300| gdb-core-setting
 *kt_linux_tool_300* gdb-core-settting-run-commands when makes core
 *kt_linux_tool_300* gdb-core-force-core-signal
@@ -408,6 +408,7 @@
 *kt_linux_core_400* linux-elf-pic
 *kt_linux_core_400* linux-elf-loading
 *kt_linux_core_400* linux-elf-start
+*kt_linux_core_400* linux-elf-debug
 *kt_linux_core_400* linux-abi
 *kt_linux_core_400* linux-lib-libc-glibc check-libc-version
 *kt_linux_core_400* linux-lib-libc-glibc-port
@@ -25558,15 +25559,6 @@ $ nm libhttp_upset.a | grep NDS_HTTP_strdup
 12:00000000 T NDS_HTTP_strdup
 
 
-<nm-demangle>
-       --demangle[=style]
-           Decode (demangle) low-level symbol names into user-level names.
-           Besides removing any initial underscore prepended by the system, this
-           makes C++ function names readable. Different compilers have different
-           mangling styles. The optional demangling style argument can be used
-           to choose an appropriate demangling style for your compiler.
-
-
 <mapfile>
 Have statically linked application binary, can check if there is a symbol by
 using nm. However, cannot tell from where this symbol. How?
@@ -25661,6 +25653,41 @@ ELF Header:
   Size of section headers:           40 (bytes)
   Number of section headers:         38
   Section header string table index: 35
+
+<ex>
+shows a dump adding load address:
+
+PT_LOAD header(3): type=1 offset=0 
+vaddr=0x400000 paddr=0x400000 fsize=11297060 msize=11297060 flags=0x5
+
+APP_Process:     file format elf32-tradbigmips
+
+Disassembly of section .init:
+
+0040bbd4 <_init>:
+  40bbd4:	3c1c00b1 	lui	gp,0xb1
+  40bbd8:	279c055c 	addiu	gp,gp,1372
+  40bbdc:	0399e021 	addu	gp,gp,t9
+  40bbe0:	27bdffe0 	addiu	sp,sp,-32
+  40bbe4:	afbc0010 	sw	gp,16(sp)
+  40bbe8:	afbf001c 	sw	ra,28(sp)
+  40bbec:	afbc0018 	sw	gp,24(sp)
+  40bbf0:	04110001 	bal	40bbf8 <_init+0x24>
+  40bbf4:	00000000 	nop
+  40bbf8:	0c103260 	jal	40c980 <frame_dummy>
+  40bbfc:	00000000 	nop
+  40bc00:	04110001 	bal	40bc08 <_init+0x34>
+  40bc04:	00000000 	nop
+  40bc08:	0c318660 	jal	c61980 <__do_global_ctors_aux>
+  40bc0c:	00000000 	nop
+  40bc10:	8fbf001c 	lw	ra,28(sp)
+  40bc14:	03e00008 	jr	ra
+  40bc18:	27bd0020 	addiu	sp,sp,32
+Disassembly of section .plt:
+
+0040bc20 <pthread_cond_signal@plt-0x20>:
+  40bc20:	3c0f00f1 	lui	t7,0xf1
+  40bc24:	8df94148 	lw	t9,16712(t7)
 
 
 ={============================================================================
@@ -29975,7 +30002,7 @@ starting another instance of GDB what Eclipse as a matter of fact does.
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-core: man
+*kt_linux_tool_300* gdb-core
 
 $ man 5 core
 
@@ -30072,6 +30099,20 @@ DESCRIPTION
 
            543210
         '0b100011'
+
+
+<core-linux>
+Look for the code in fs/binfmt_aout.c and fs/binfmt_elf.c (in newer kernels,
+you'll have to grep around a little in older ones) that says
+
+        memcpy(corefile,"core.",5);
+#if 0
+        memcpy(corefile+5,current->comm,sizeof(current->comm));
+#else
+        corefile[4] = '\0';
+#endif
+
+and change the 0s to 1s.
 
 
 ={============================================================================
@@ -35273,6 +35314,96 @@ mem=166M rw console=uart,mmio,0x10400b00,115200n8 ip_conntrack_tftp.ports=4085
 init started: BusyBox v1.13.1 (2017-03-06 07:49:02 GMT)
 starting pid 1, tty '/dev/ttyS0': '/bin/sh'
 sh-3.2#
+
+
+<boot>
+* Appendix A: Linux startup sequence in 2.4.x
+
+    kernel_entry() - arch/mips/kernel/head.S
+       set stack;
+       prepare argc/argp/envp;
+       jal init_arch - arch/mips/kernel/setup.c
+            cpu_probe() -
+            prom_init(...) - arch/mips/ddb5074/prom.c
+            loadmmu()
+            start_kernel()  - init/main.c
+                    setup_arch(&commaind_line); - arch/mips/kernel/setup.c
+                            ddb_setup()         - arch/mips/ddb5074/setup.c
+                    parse_options(command_line);
+                    trap_init();
+                    init_IRQ();                 - arch/mips/kernel/irq.c
+                    sched_init();
+                    softirq_init();
+                    time_init();
+                            if (board_time_init) board_time_init();
+                            set xtime by calling rtc_get_time();
+    			pick appropriate do_gettimeoffset()
+    			board_timer_setup(&timer_irqaction);
+                    console_init();
+                    init_modules();
+                    kmem_cache_init();
+                    sti();			/* interrupt first open */
+                    calibrate_delay();
+                    mem_init();
+                    kmem_cache_sizes_init();
+    		pgtable_cache_init();
+                    fork_init();
+                    proc_caches_init();
+                    vfs_caches_init();
+                    buffer_init();
+                    page_cache_init();
+                    signals_init();
+                    smp_init();
+                    kernel_thread(init, ...)
+                    cpu_idle();
+
+
+    init() - init/main.c
+      - lock_kernel();
+        do_basic_setup();
+          - [MTRR] mtrr_init();
+            [SYSCTL] sysctl_init();
+    	[S390] s390_init_machine_check();
+            [ACPI] acpi_init();
+            [PCI] pci_init();
+            [SBUS] sbus_init();
+            [PPC] ppc_init();
+            [MCA] mca_init();
+            [ARCH_ACORN] ecard_init();
+            [ZORRO] zorro_init();
+            [DIO] dio_init();
+            [MAC] nubus_init();
+            [ISAPNP] isapnp_init();
+            [TC] tc_init();
+            sock_init();
+    	start_context_thread();
+            do_initcalls();
+            [IRDA] irda_proto_init();
+            [IRDA] irda_device_init();
+            [PCMCIA] init_pcmcia_ds();
+
+        prepare_namespace();
+        free_initmem();
+        unlock_kernel();
+
+        files = current->files;
+        if(unshare_files())
+                panic("unshare");
+        put_files_struct(files);
+
+        if (open("/dev/console", O_RDWR, 0) < 0)
+                    printk("Warning: unable to open an initial console.\n");
+        (void) dup(0);
+        (void) dup(0);
+
+        if (execute_command)
+                    run_init_process(execute_command);
+        run_init_process("/sbin/init");
+        run_init_process("/etc/init");
+        run_init_process("/bin/init");
+        run_init_process("/bin/sh");
+
+        panic("No init found.  Try passing init= option to kernel.");
 
 
 ={============================================================================
@@ -65537,8 +65668,8 @@ int func_first(int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, ENTRY
 
 int main(int argc, char* argv[])
 {
-  400688:	27bdffb8 	addiu	sp,sp,-72
-  40068c:	afbf0044 	sw	ra,68(sp)	 // save ra return
+  400688:	27bdffb8 	addiu	sp,sp,-72   // push
+  40068c:	afbf0044 	sw	ra,68(sp)	   // save ra return
   400690:	afbe0040 	sw	s8,64(sp)
   400694:	03a0f021 	move	s8,sp
   400698:	afc40048 	sw	a0,72(s8)
@@ -65592,10 +65723,74 @@ int main(int argc, char* argv[])
   400724:	03c0e821 	move	sp,s8
   400728:	8fbf0044 	lw	ra,68(sp)
   40072c:	8fbe0040 	lw	s8,64(sp)
-  400730:	27bd0048 	addiu	sp,sp,72
+  400730:	27bd0048 	addiu	sp,sp,72    // pop  
   400734:	03e00008 	jr	ra
   400738:	00000000 	nop
   40073c:	00000000 	nop
+
+
+<odd-asms>
+// case where no push and pop
+00788400 <GFX_IMAGE_JPEG_INTERFACE_InitErrorManager>:
+  788400:	3c030079 	lui	v1,0x79
+  788404:	24638618 	addiu	v1,v1,-31208
+  788408:	ac830000 	sw	v1,0(a0)
+  78840c:	3c030079 	lui	v1,0x79
+  788410:	24638370 	addiu	v1,v1,-31888
+  788414:	ac830004 	sw	v1,4(a0)
+  788418:	3c030079 	lui	v1,0x79
+  78841c:	24638584 	addiu	v1,v1,-31356
+  788420:	ac830008 	sw	v1,8(a0)
+  788424:	3c030079 	lui	v1,0x79
+  788428:	24638470 	addiu	v1,v1,-31632
+  78842c:	ac83000c 	sw	v1,12(a0)
+  788430:	3c030079 	lui	v1,0x79
+  788434:	246383ec 	addiu	v1,v1,-31764
+  788438:	ac830010 	sw	v1,16(a0)
+  78843c:	3c0300ed 	lui	v1,0xed
+  788440:	2463cbc4 	addiu	v1,v1,-13372
+  788444:	ac830070 	sw	v1,112(a0)
+  788448:	00801021 	move	v0,a0
+  78844c:	2403007c 	li	v1,124
+  788450:	ac830074 	sw	v1,116(a0)
+  788454:	ac800068 	sw	zero,104(a0)
+  788458:	ac80006c 	sw	zero,108(a0)
+  78845c:	ac800014 	sw	zero,20(a0)
+  788460:	ac800078 	sw	zero,120(a0)
+  788464:	ac80007c 	sw	zero,124(a0)
+  788468:	03e00008 	jr	ra
+  78846c:	ac800080 	sw	zero,128(a0)
+
+// two pops
+0046bcd0 <NDSJNI_ThrowException>:
+  46bcd0:	27bdffd8 	addiu	sp,sp,-40
+  46bcd4:	afb20020 	sw	s2,32(sp)
+  46bcd8:	afbf0024 	sw	ra,36(sp)
+  46bcdc:	afb1001c 	sw	s1,28(sp)
+  46bce0:	afb00018 	sw	s0,24(sp)
+  46bce4:	8c900004 	lw	s0,4(a0)
+  46bce8:	00a09021 	move	s2,a1
+  46bcec:	8e110000 	lw	s1,0(s0)
+  46bcf0:	8e390018 	lw	t9,24(s1)
+  46bcf4:	0320f809 	jalr	t9
+  46bcf8:	02002021 	move	a0,s0
+  46bcfc:	1040000a 	beqz	v0,46bd28 <NDSJNI_ThrowException+0x58>
+  46bd00:	02002021 	move	a0,s0
+  46bd04:	8e390038 	lw	t9,56(s1)
+  46bd08:	02403021 	move	a2,s2
+  46bd0c:	8fbf0024 	lw	ra,36(sp)
+  46bd10:	8fb20020 	lw	s2,32(sp)
+  46bd14:	8fb1001c 	lw	s1,28(sp)
+  46bd18:	8fb00018 	lw	s0,24(sp)
+  46bd1c:	00402821 	move	a1,v0
+  46bd20:	03200008 	jr	t9
+  46bd24:	27bd0028 	addiu	sp,sp,40
+  46bd28:	8fbf0024 	lw	ra,36(sp)
+  46bd2c:	8fb20020 	lw	s2,32(sp)
+  46bd30:	8fb1001c 	lw	s1,28(sp)
+  46bd34:	8fb00018 	lw	s0,24(sp)
+  46bd38:	03e00008 	jr	ra
+  46bd3c:	27bd0028 	addiu	sp,sp,40
 
 
 <stack-frames>
@@ -65655,361 +65850,8 @@ so a frame has ra, args, locals and struct itself or pointer to a struct.
 ={============================================================================
 *kt_linux_arch_001* arch-mips-backtrace mips-membuster
 
-<build-tables>
-// scan from loaded memory
-/* generates output. needs initialized frame info tab */
-void parse_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
-							uint32_t *syms, uint16_t *info_idx, uint32_t tcount, uint32_t *frame_inf )
-{
-  uint32_t *p;
-  uint16_t frame_sz, ret_addr;
-  int i, in_frame;
-  uint32_t ins, idx, cnt, frame_addr;
-
-  frame_sz = 0;
-
-  p = text;
-  in_frame = 0;
-  cnt=0;
-
-  // scan through all text code
-  for(i=0; i < text_size>>2; i++)
-  {
-    ins = p[i];
-
-    // push, get the start address of a frame
-    if((ins &  0xffff8000) == 0x27bd8000)
-    {
-      frame_sz = (-ins) & 0x7fff;
-
-      // text_addr is load address so get a loading address of a frame.
-      frame_addr = (i << 2) + text_addr;
-    }
-
-    // ra
-    if ((ins & 0xffff8000) == 0xafbf0000)
-    {
-      // should be found in the *frame-info-table*
-      ret_addr = (ins) & 0x7fff;
-      for(idx=0; idx < tcount; idx++)
-      {
-        /* always expect a match here */
-        if( ((ret_addr << 16) | frame_sz) == frame_inf[idx]) break;
-      }
-
-      if(idx == tcount) printf("This should not happen, contact me\n");
-
-      // cnt is # of total frame
-      //
-      // *sysbol-info-table* has loading address of each frame
-      syms[cnt] = frame_addr;
-
-      // *info-index-table* has index to *frame-info-table* of each frame
-      info_idx[cnt] = idx;
-
-      cnt++;
-    }
-  }
-
-  return;
-}
-
-
-// scan from loaded memory
-// #define TMP_FTAB_SIZE		1024
-//
-// get count the total number of frames and frame info table.
-
-int count_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
-						uint32_t *count, uint32_t *tcount, uint32_t *frame_inf)
-{
-  tcnt = 0;
-
-  // since a instruction is 4 bytes
-  for(i=0; i < text_size>>2; i++)
-  {
-#ifdef BI_ENDIAN_SUPPORT
-    ins = cond_swap32(p[i], swap);
-#else
-    ins = p[i];
-#endif				
-
-    // when see "push" and get the size of stack frame
-    if((ins &  0xffff8000) == 0x27bd8000)
-    {
-      // 27bdffb8 	addiu	sp,sp,-72  // push sp
-      //
-      // >>> 15 bits, bin(0x7fff)
-      // '0b111111111111111'
-
-      frame_sz = (-ins) & 0x7fff;
-      in_frame =1;
-    }
-
-    // when see "pop"
-    if((ins &  0xffff8000) == 0x27bd0000)
-    {
-      in_frame=0;
-    }
-
-    // *frame-info-table* To get and pack ra offest and frame size
-    //
-    // Whenever see "save ra" while scanning whole text area, save offset of
-    // ra to save in the stack and the size of current stack frame. 
-    //
-    // cnt is the total number of ra instruction seen and tcnt is number of entry in the
-    // frame info table
-    //
-    // WHY do (offset<<16 | frame_sz)?
-    //
-    // To save memory, use 16 bits for each ra and frame size and pack them
-    // into single 4 bytes. 
-    //
-    // This has simply offset size which are byte offset and frame info table
-    // do need to have the same entry as the symbol table since different symbols
-    // may have the same offset sizes. 
-    //
-    // # of total frames from scanning is 23018 
-    // -> # of entrys in frame info table is 448 when runs on APP_Process
-    //
-    // so make a value from ra offset and frame size and save it into the
-    // table.
-    //
-    // 0040bbd4 <_init>:
-    //   40bbd4:	3c1c00b1 	lui	gp,0xb1
-    //   40bbd8:	279c055c 	addiu	gp,gp,1372
-    //   40bbdc:	0399e021 	addu	gp,gp,t9
-    //   40bbe0:	27bdffe0 	addiu	sp,sp,-32         // frame size
-    //   40bbe4:	afbc0010 	sw	gp,16(sp)
-    //   40bbe8:	afbf001c 	sw	ra,28(sp)            // ra offset
-    // 
-    // 0040c920 <__do_global_dtors_aux>:
-    //   40c920:	3c0200f2 	lui	v0,0xf2
-    //   40c924:	90428c50 	lbu	v0,-29616(v0)
-    //   40c928:	27bdffe0 	addiu	sp,sp,-32
-    //   40c92c:	afbf001c 	sw	ra,28(sp)
-    //
-    // Like these, both maps into the same entry in frame info table.
-    //
-    // To use it, use
-    //
-    // info = frame_info[info_index[i-1]];
-    // info >> 18
-    //
-    // not 16? since offset is bytes and use it as 4 bytes int.
-    //
-    // count: foffset(0x0000bbe0): push. ins(0x27bdffe0) -ins(0xd8420020) frame_sz(0x20)
-    // count: j(0), frame_info[  0] = 001c0020. ret_addr = 0000001c(28)
-    // count: frame_info[  0] >> 18 = 00000007(7)
-   
-    if ((ins & 0xffff8000) == 0xafbf0000)
-    {
-      // get ra offset in stack
-      ret_addr = (ins) & 0x7fff;
-
-      // is it already in the frame table?
-      for(j=0; j < tcnt; j++)
-      {
-        if(frame_inf[j] == ((ret_addr << 16) | frame_sz) ) break;
-      }
-      
-      // if not in the frame table then
-      if(j == tcnt)
-      { 
-        // add it to the frame table
-        frame_inf[tcnt] = ((ret_addr << 16) | frame_sz);
-        DPRINT("frame_info[%3d] = %.8X\n", tcnt, frame_inf[tcnt]);
-        tcnt++;
-        if(tcnt >= *tcount) return -1;
-      }
-      cnt++;
-    }
-  }
-}
-
-
-void membuster_plus_init(void)
-{
-  stacktrace_init(mb_bin_path)
-  {
-    // 1. parse elf header to get settings:
-    //    endian?, swap?, arch?, need table? (yes for mips)
-
-    parse_fn = parse_text_raw_mips;
-    count_fn = count_text_raw_mips;
-
-    // 2. build tables
-    // parse elf program header to get PT_LOAD properties.
-    //
-    // build structure by scanning the text two times
-    //
-    //
-    // found 23008 frames -> 448 fram_tab entries
-    // alloc symbols=92036 for frames 23009
-    //
-    // syms[# of total frame found] = address of a frame
-    //
-    // info_index[# of toral frame frond] = index to (unique) frame table
-    //
-    // frame_info[# of unique frame] = unique frame tag(computed)
-
-    for(n=0; n < n_phdr; n++)
-    {
-      if(phdr[n].p_type == PT_LOAD)
-      {
-        // use printf
-        // #define DPRINT if(DEBUG_ON == 1)printf
-
-        DPRINT("PT_LOAD header: offset=%d vaddr=%x paddr=%x fsize=%d msize=%d flags=%x\n", 
-            phdr[n].p_offset, phdr[n].p_vaddr, phdr[n].p_paddr, phdr[n].p_filesz, phdr[n].p_memsz, phdr[n].p_flags); 
-
-        if(phdr[n].p_flags & PF_X)
-        {
-          // get start and end
-          // PT_LOAD header(3): type=1 offset=0 
-          // vaddr=0x400000 paddr=0x400000 fsize=11297060 msize=11297060 flags=0x5
-
-          text_start = phdr[n].p_vaddr;
-          text_end = phdr[n].p_vaddr + phdr[n].p_memsz;
-
-          // text_start 400000 - text_end ec6124
-
-          if(need_table)
-          {
-            DPRINT("parse text %x - %x\n", text_start, text_end);
-
-            text = text_start;
-            tcount = TMP_FTAB_SIZE;
-
-            frame_info = malloc(TMP_FTAB_SIZE * sizeof(uint32_t));
-
-            count_fn(text, phdr[n].p_vaddr, phdr[n].p_filesz, 
-                need_swap, &count, &tcount, frame_info);
-
-            // resize frame table
-            frame_info = realloc(frame_info, tcount * sizeof(uint32_t));
-            DPRINT("found %d frames %d fram_tab entries\n", count, tcount);
-
-            // use #count to alloc symbols and info index
-            symbols = (uint32_t *) malloc((count+1) * sizeof(uint32_t));
-            symbols[count] = 0x0FFFFFFF;
-            info_index = (uint16_t *) malloc(count * sizeof(uint16_t));
-            memset(info_index, 0xFF, count * sizeof(uint16_t));
-
-            parse_fn(text, phdr[n].p_vaddr, phdr[n].p_filesz, 
-                need_swap, symbols, info_index, tcount, frame_info);
-
-            DPRINT("parse done\n");
-          }
-        }
-      }
-    }
-
-    // 3. build jump table
-    //
-    // #define MAX_JUMP_TAB_SIZE 	8192 (0x2000)
-    //
-    // count is # of total frames
-
-    if(need_table)
-    {
-      jump_table_size = MAX_JUMP_TAB_SIZE; 
-
-      // alloc jump_table=32768
-
-      /* prepare a jump table (index table into the function addresses) */
-      jump_table = malloc(sizeof(uint32_t) * jump_table_size);
-      memset(jump_table, 0x00, sizeof(uint32_t) * jump_table_size);
-
-      // *jump-info-table*  
-      // maps to index of *symbol-info-table*
-      //
-      // frame, sym 00: 0x403F44  (>>12) 0x403(1027), jump_table[1027] = 0
-      // frame, sym 01: 0x404F58  (>>12) 0x404(1028), jump_table[1028] = 1
-      // frame, sym 02: 0x404FE4  (>>12) 0x404(1028), 
-      // frame, sym 03: 0x405550  (>>12) 0x405(1029), jump_table[1029] = 0
-      //
-      // count=23008
-      //
-      // jt: symbols[0]= 0x0040bbe0(0x40bbdc, 0x0000040b), first_jump_val=0x0000040b
-      // jt: update jump_table[0x0040b] = 0
-      //
-      // jt: symbols[00001]= 0x0040c928(0x0040c924, 0x0000040c), jump_val=0x0000040b 
-      // jt: !eg: update jump_table[0x0040c] = 0
-      //
-      // jt: symbols[00002]= 0x0040c9b4(0x0040c9b0, 0x0000040c), jump_val=0x0000040c 
-      // jt: symbols[00003]= 0x0040cfa0(0x0040cf9c, 0x0000040c), jump_val=0x0000040c 
-      // jt: symbols[00004]= 0x0040d010(0x0040d00c, 0x0000040d), jump_val=0x0000040c 
-      // jt: !eg: update jump_table[0x0040d] = 3
-      //
-      // jt: symbols[00005]= 0x0040d1ec(0x0040d1e8, 0x0000040d), jump_val=0x0000040d 
-      // jt: symbols[00006]= 0x0040dc60(0x0040dc5c, 0x0000040d), jump_val=0x0000040d 
-      // jt: symbols[00007]= 0x0040dd14(0x0040dd10, 0x0000040d), jump_val=0x0000040d 
-      // jt: symbols[00008]= 0x0040dd34(0x0040dd30, 0x0000040d), jump_val=0x0000040d 
-      // jt: symbols[00009]= 0x0040de50(0x0040de4c, 0x0000040d), jump_val=0x0000040d 
-      // jt: symbols[00010]= 0x0040e388(0x0040e384, 0x0000040e), jump_val=0x0000040d 
-      // jt: !eg: update jump_table[0x0040e] = 9
-      // ...
-      // jt: !eg: update jump_table[0x00c61] = 23004
-      //
-      // jt: symbols[23008]= 0x0fffffff(0x0000ffff), jump_val=0x00000c61 
-      // jt: !eg: update jump_table[0x01fff] = 23007
-      // jt: jump_count= 7157 
-      //
-      // so take -4 from the start address of the frame (of a symbol) and
-      // right shift 12 bits then some symbols are merged into the same
-      // *jump-info-table* slot.
-      //
-      // # of frames is 23018 -> 8192
-      //
-      // the jump-info-table. ** WHY AND OKAY ?? **
-
-
-      // >>> bin(8191), 13 bits and "& (jump_table_size-1)" do modulo % operation
-      // '0b1 1111 1111 1111'
-
-      first_jump_val = ((symbols[0] >> 12) & (jump_table_size-1));
-      jump_table[first_jump_val] = 0;
-      jump_val = first_jump_val;
-      for(i=0; i < count; i++)
-      {
-        // only when differnt from the previous
-
-        if((((symbols[i+1]-4) >> 12) & (jump_table_size-1)) != jump_val)
-        {
-          jump_val = (((symbols[i+1]-4) >> 12) & (jump_table_size-1));
-          jump_table[jump_val] = i;
-        }
-
-      }
-
-      /* this is so that we can safely go one entry below the first without a if statement */
-      if(first_jump_val != 0)jump_table[first_jump_val - 1] = jump_table[first_jump_val];
-
-      /* plus 1 since it's a range including the last value */
-      jump_count = (jump_val - first_jump_val)+1;
-
-      // jump_count= 7157.  (0x01bf5) (0x01fff-0x0040b) +1= 7157
-      // 0x0040b+7157 = 0x02000
-     
-      // fill empty slots in the jump table with the previous(nearest?)
-      // symbol.
-
-
-      /* fill up the holes in the jump table */
-      for(i=first_jump_val; i < (first_jump_val + jump_count); i++)
-      {
-        if(jump_table[i]==0)jump_table[i] = jump_table[i-1];
-        DPRINT("jump table[%.5d] = %5d\n", i, jump_table[i]);
-      }
-    }
-  }
-}
-
-
 As shown above, use this pattern at the entry of every non-leaf function
 although these are not in sequencial:
-
 
 A function using a stack frame has the following instruction as the first one: 
 
@@ -66086,12 +65928,394 @@ addiu $t(11101 $29(sp)), $s(sp), imm 					# $t = $s + imm
   57813c:	03e00008 	jr	ra
   578140:	27bd0048 	addiu	sp,sp,72
 
-To get a call trace from a current function:
 
-  1. save sp and ra
+<build-tables>
+// scan from loaded memory
+/* generates output. needs initialized frame info tab */
+void parse_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
+							uint32_t *syms, uint16_t *info_idx, uint32_t tcount, uint32_t *frame_inf )
+{
+  uint32_t *p;
+  uint16_t frame_sz, ret_addr;
+  int i, in_frame;
+  uint32_t ins, idx, cnt, frame_addr;
 
-  2. search "push sp" binary code downward where address increases since stack
-  grows to low address and get the size of current stack frame, push offset.
+  frame_sz = 0;
+
+  p = text;
+  in_frame = 0;
+  cnt=0;
+
+  // scan through all text code by int size
+  for(i=0; i < text_size>>2; i++)
+  {
+    ins = p[i];
+
+    // push, get the start address of a frame
+    if((ins &  0xffff8000) == 0x27bd8000)
+    {
+      frame_sz = (-ins) & 0x7fff;
+
+      // text_addr is load address so get a loaded address of a frame.
+      frame_addr = (i << 2) + text_addr;
+    }
+
+    // ra
+    if ((ins & 0xffff8000) == 0xafbf0000)
+    {
+      // ra offset and frame size pair must be found in the *frame-info-table*
+      // and get a index to frame info table and save it to the info index
+      // table.
+      ret_addr = (ins) & 0x7fff;
+      for(idx=0; idx < tcount; idx++)
+      {
+        /* always expect a match here */
+        if( ((ret_addr << 16) | frame_sz) == frame_inf[idx]) break;
+      }
+
+      if(idx == tcount) printf("This should not happen, contact me\n");
+
+      // cnt is # of total frame
+      //
+      // *sysbol-info-table* has loading address of each frame
+      syms[cnt] = frame_addr;
+
+      // *info-index-table* has index to *frame-info-table* of each frame. By
+      // doing this, make a map between symbol info table to frame info table.
+      info_idx[cnt] = idx;
+
+      cnt++;
+    }
+  }
+
+  return;
+}
+
+
+// #define TMP_FTAB_SIZE		1024
+//
+// scan from loaded memory(text) and return count the total number of frames
+// and build frame info table. not use text_addr
+//
+// since this binary is already loaded into memory.
+
+int count_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, uint32_t swap, 
+						uint32_t *count, uint32_t *tcount, uint32_t *frame_inf)
+{
+  tcnt = 0;
+
+  // since a instruction is 4 bytes
+  for(i=0; i < text_size>>2; i++)
+  {
+#ifdef BI_ENDIAN_SUPPORT
+    ins = cond_swap32(p[i], swap);
+#else
+    ins = p[i];
+#endif				
+
+    // when see "push" and get the size of stack frame
+    if((ins &  0xffff8000) == 0x27bd8000)
+    {
+      // 27bdffb8 	addiu	sp,sp,-72  // push sp
+      //
+      // >>> 15 bits, bin(0x7fff)
+      // '0b111111111111111'
+
+      frame_sz = (-ins) & 0x7fff;
+      in_frame =1;
+    }
+
+    // when see "pop"
+    if((ins &  0xffff8000) == 0x27bd0000)
+    {
+      in_frame=0;
+    }
+
+    // *frame-info-table* To get and pack ra offest and frame size
+    //
+    // Whenever see "save ra" while scanning whole text area, save offset of
+    // ra to save in the stack and the size of current stack frame. 
+    //
+    // cnt is the total number of ra instruction seen and tcnt is number of
+    // entry in the frame info table
+    //
+    // WHY do (offset<<16 | frame_sz)?
+    //
+    // "To save memory, use 16 bits for each ra and frame size and pack them
+    // into single 4 bytes."
+    //
+    // This has simply offset size which are byte offset and frame info table
+    // do need to have the same entry as the symbol table since different
+    // symbols may have the same offset sizes. 
+    //
+    // # of total frames from scanning is 23018 -> # of entrys in frame info
+    // table is 448 when runs on APP_Process
+    //
+    // so make a value from ra offset and frame size and save it into the
+    // table.
+    //
+    // 0040bbd4 <_init>:
+    //   40bbd4:	3c1c00b1 	lui	gp,0xb1
+    //   40bbd8:	279c055c 	addiu	gp,gp,1372
+    //   40bbdc:	0399e021 	addu	gp,gp,t9
+    //   40bbe0:	27bdffe0 	addiu	sp,sp,-32         // frame size
+    //   40bbe4:	afbc0010 	sw	gp,16(sp)
+    //   40bbe8:	afbf001c 	sw	ra,28(sp)            // ra offset
+    // 
+    // 0040c920 <__do_global_dtors_aux>:
+    //   40c920:	3c0200f2 	lui	v0,0xf2
+    //   40c924:	90428c50 	lbu	v0,-29616(v0)
+    //   40c928:	27bdffe0 	addiu	sp,sp,-32
+    //   40c92c:	afbf001c 	sw	ra,28(sp)
+    //
+    // // when the second "sw ra" do not count as "save ra"
+    // 007f07cc <stacktrace_start>:
+    //   7f07cc:	27bdffd0 	addiu	sp,sp,-48
+    //   7f07d0:	afb10024 	sw	s1,36(sp)
+    //   7f07d4:	afbf0028 	sw	ra,40(sp)
+    //   7f07d8:	afb00020 	sw	s0,32(sp)
+    //   7f07dc:	00808821 	move	s1,a0
+    //   7f07e0:	ac9d0004 	sw	sp,4(a0)
+    //   7f07e4:	ac9f0010 	sw	ra,16(a0)
+    //
+    // *tool-objdump* dumps all but here we only care about text code.
+    //
+    // Like these, both maps into the same entry in frame info table since
+    // both has the same size of frame size and ra offset.
+    //
+    // "To use frame info table later, use"
+    //
+    // info = frame_info[info_index[i-1]];
+    // info >> 18
+    //
+    // not 16? since ra offset is bytes and use it as 4 bytes int by /4.
+    //
+    // count: foffset(0x0000bbe0): push. ins(0x27bdffe0) -ins(0xd8420020) frame_sz(0x20)
+    // count: j(0), frame_info[  0] = 001c0020. ret_addr = 0000001c(28)
+    // count: frame_info[  0] >> 18 = 00000007(7)
+   
+    if ((ins & 0xffff8000) == 0xafbf0000)
+    {
+      // get ra offset in stack
+      ret_addr = (ins) & 0x7fff;
+
+      // is it already in the frame table?
+      for(j=0; j < tcnt; j++)
+      {
+        if(frame_inf[j] == ((ret_addr << 16) | frame_sz) ) break;
+      }
+      
+      // if not in the frame table then
+      if(j == tcnt)
+      { 
+        // add it to the frame table
+        frame_inf[tcnt] = ((ret_addr << 16) | frame_sz);
+        DPRINT("frame_info[%3d] = %.8X\n", tcnt, frame_inf[tcnt]);
+        tcnt++;
+        if(tcnt >= *tcount) return -1;
+      }
+      cnt++;
+    }
+  }
+
+  // return counts
+
+  *count = cnt;
+  *tcount = tcnt;
+  return cnt;
+}
+
+
+void membuster_plus_init(void)
+{
+  stacktrace_init(mb_bin_path)
+  {
+    // 1. parse elf header to get settings:
+    //    endian?, swap?, arch?, need table? (yes for mips)
+
+    parse_fn = parse_text_raw_mips;
+    count_fn = count_text_raw_mips;
+
+    // 2. build tables
+    // parse elf program header to get PT_LOAD properties.
+    //
+    // build structure by scanning the text two times
+    //
+    // syms[# of total frame found] = address of a frame
+    //
+    // info_index[# of toral frame frond] = index to (unique) frame table
+    //
+    // frame_info[# of unique frame] = unique frame tag(computed)
+
+    for(n=0; n < n_phdr; n++)
+    {
+      if(phdr[n].p_type == PT_LOAD)
+      {
+        // use printf
+        // #define DPRINT if(DEBUG_ON == 1)printf
+
+        DPRINT("PT_LOAD header: offset=%d vaddr=%x paddr=%x fsize=%d msize=%d flags=%x\n", 
+            phdr[n].p_offset, phdr[n].p_vaddr, phdr[n].p_paddr, phdr[n].p_filesz, phdr[n].p_memsz, phdr[n].p_flags); 
+
+        if(phdr[n].p_flags & PF_X)
+        {
+          // get start and end
+          // PT_LOAD header(3): type=1 offset=0 
+          // vaddr=0x400000 paddr=0x400000 fsize=11297060 msize=11297060 flags=0x5
+
+          text_start = phdr[n].p_vaddr;
+          text_end = phdr[n].p_vaddr + phdr[n].p_memsz;
+
+          // text_start 400000 - text_end ec6124
+          //
+          // >>> 0xec6124-0x400000
+          // 11297060, '0xac6124'
+
+          if(need_table)
+          {
+            DPRINT("parse text %x - %x\n", text_start, text_end);
+
+            text = text_start;
+            tcount = TMP_FTAB_SIZE;
+
+            frame_info = malloc(TMP_FTAB_SIZE * sizeof(uint32_t));
+
+            // count: cnt(23008), tcnt(448).
+            count_fn(text, phdr[n].p_vaddr, phdr[n].p_filesz, 
+                need_swap, &count, &tcount, frame_info);
+
+            // resize frame table
+            frame_info = realloc(frame_info, tcount * sizeof(uint32_t));
+            DPRINT("found %d frames %d fram_tab entries\n", count, tcount);
+
+            // note that # total frame is 23007 since count is increased after
+            // and alloc one more and set the last, 23008, as invalid
+            //
+            // found 23008 frames -> 448 fram_tab entries
+            // alloc symbols=92036 for frames 23009
+
+            symbols = (uint32_t *) malloc((count+1) * sizeof(uint32_t));
+            symbols[count] = 0x0FFFFFFF;
+
+            info_index = (uint16_t *) malloc(count * sizeof(uint16_t));
+            memset(info_index, 0xFF, count * sizeof(uint16_t));
+
+            parse_fn(text, phdr[n].p_vaddr, phdr[n].p_filesz, 
+                need_swap, symbols, info_index, tcount, frame_info);
+
+            // the last
+            // save syms[23007] = 00c61e6c info[23007]= 447
+
+            DPRINT("parse done\n");
+          }
+        }
+      }
+    }
+
+    // 3. build jump table
+    //
+    // #define MAX_JUMP_TAB_SIZE 	8192 (0x2000)
+    //
+    // count is # of total frames
+
+    if(need_table)
+    {
+      jump_table_size = MAX_JUMP_TAB_SIZE; 
+
+      // alloc jump_table=32768
+
+      /* prepare a jump table (index table into the function addresses) */
+      jump_table = malloc(sizeof(uint32_t) * jump_table_size);
+      memset(jump_table, 0x00, sizeof(uint32_t) * jump_table_size);
+
+      // *jump-info-table* maps to index of *symbol-info-table*
+      //
+      // TO SAVE MEM AND LOOK-UP TIME!
+      //
+      // >>> bin(8191), 13 bits and "& (jump_table_size-1)" do modulo % operation
+      // '0b1 1111 1111 1111'
+
+      // count=23008
+      //
+      // jt: symbols[0]= 0x0040bbe0(0x0000040b), first_jump_val=0x0000040b
+      // jt: update jump_table[0x0040b] = 0
+      
+      first_jump_val = ((symbols[0] >> 12) & (jump_table_size-1));
+      jump_table[first_jump_val] = 0;
+      jump_val = first_jump_val;
+
+      // jt: symbols[00001]= 0x0040c928(0x0040c924, 0x0000040c), jump_val=0x0000040b 
+      // jt: !eg: update jump_table[0x0040c] = 0
+      //
+      // note: as you can see, some symbols falls into the same 4K page size
+      // and are skipped. Later, maps to the same jump info table index.
+      //
+      // jt: symbols[00002]= 0x0040c9b4(0x0040c9b0, 0x0000040c), jump_val=0x0000040c 
+      // jt: symbols[00003]= 0x0040cfa0(0x0040cf9c, 0x0000040c), jump_val=0x0000040c 
+      //
+      // note: only when calculated jump_val is different from the previous
+      // jump_val, that is a different page, maps to the different jump info
+      // table index.
+      // 
+      // jt: symbols[00004]= 0x0040d010(0x0040d00c, 0x0000040d), jump_val=0x0000040c 
+      // jt: !eg: update jump_table[0x0040d] = 3
+      //
+      // jt: symbols[00005]= 0x0040d1ec(0x0040d1e8, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00006]= 0x0040dc60(0x0040dc5c, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00007]= 0x0040dd14(0x0040dd10, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00008]= 0x0040dd34(0x0040dd30, 0x0000040d), jump_val=0x0000040d 
+      // jt: symbols[00009]= 0x0040de50(0x0040de4c, 0x0000040d), jump_val=0x0000040d 
+      //
+      // jt: symbols[00010]= 0x0040e388(0x0040e384, 0x0000040e), jump_val=0x0000040d 
+      // jt: !eg: update jump_table[0x0040e] = 9
+
+      for(i=0; i < count; i++)
+      {
+        // note: WHY -4? Probaly becuase the start of a frame(symbol) do not
+        // always start from the beginning?
+
+        if((((symbols[i+1]-4) >> 12) & (jump_table_size-1)) != jump_val)
+        {
+          jump_val = (((symbols[i+1]-4) >> 12) & (jump_table_size-1));
+          jump_table[jump_val] = i;
+        }
+
+      }
+
+      // ...
+      // jt: !eg: update jump_table[0x00c61] = 23004
+      //
+      // jt: symbols[23008]= 0x0fffffff(0x0ffffffb, 0x0000ffff), jump_val=0x00000c61 
+      // jt: !eg: update jump_table[0x01fff] = 23007
+      // jt: jump_count= 7157 
+      //
+      // # of frames is 23018 -> 8192
+
+      // note that set [beg-1] = [beg]
+      /* this is so that we can safely go one entry below the first without a if statement */
+      if(first_jump_val != 0)jump_table[first_jump_val - 1] = jump_table[first_jump_val];
+
+      // note that this is array index calculation to get size
+      /* plus 1 since it's a range including the last value */
+      jump_count = (jump_val - first_jump_val)+1;
+
+      // jump_count= 7157.  (0x01bf5) (0x01fff-0x0040b) +1= 7157
+      // 0x0040b+7157 = 0x02000
+     
+      // fill empty slots which represent 4K address space which do not have
+      // symbols belongs to that and set these slots to the one found before.
+      // So repeat the found 4K slot on following empty slots until see the
+      // new one.
+
+      /* fill up the holes in the jump table */
+      for(i=first_jump_val; i < (first_jump_val + jump_count); i++)
+      {
+        if(jump_table[i]==0)jump_table[i] = jump_table[i-1];
+        DPRINT("jump table[%.5d] = %5d\n", i, jump_table[i]);
+      }
+    }
+  }
+}
 
 
 <from-user>
@@ -66130,34 +66354,40 @@ void   *MEMMAN_API_ReallocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, void 
 
     stacktrace_start(&f);
     {
-      // run asm code to get sp and ra to the caller
-      /* __builtin_frame_address(0) doesn't appear work with -fomit-frame-pointer */
-      /* so we get the stack pointer and hope it's not been trashed */
-      f->fp     = $sp;
-      f->caller = $ra;
-      f->func   = stacktrace_start;
-
-      // get a idx of symble table from the jump table
-      //
-      // so not use 12 bits
-      //
-      // >>> bin(0x1FFF000)
-      // '0b1111111111111000000000000'
-      //
-      i = jump_table[(((uint32_t)(f->func) & 0x1FFF000) >> 12)-1];
-
-      // get a nearest addres in the sym table
-      while((uint32_t)(f->func) >= symbols[i])
+      // set f for current function frame
       {
-        i++;
+        // run asm code to get sp and ra to the caller
+        /* __builtin_frame_address(0) doesn't appear work with -fomit-frame-pointer */
+        /* so we get the stack pointer and hope it's not been trashed */
+        f->fp     = $sp;
+        f->caller = $ra;
+        f->func   = stacktrace_start;
+
+        // note: use 25 bits address and 4K page in the jump table. Starts from
+        // the -1 from the jump table due to how jump table is constructed and
+        // get the symbol index.
+        //
+        // >>> bin(0x1FFF000) '0b1111111111111000000000000'
+
+        i = jump_table[(((uint32_t)(f->func) & 0x1FFF000) >> 12)-1];
+
+        // get a nearest addres in the sym table
+        while((uint32_t)(f->func) >= symbols[i])
+        {
+          i++;
+        }
+
+        // get a frame size and -1 since increased after comparison.
+        f->size = frame_info[info_index[i-1]] & 0xFFFF;
       }
 
-      // get a frame size
-      f->size = frame_info[info_index[i-1]] & 0xFFFF;
+      // get the caller from the current
+      {
+        /* Unwind frame - below if statement is on purpose, as it prevents 
+           a nasty optimization that breaks unwinding*/
+        i = stacktrace_unwind(f);
+      }
 
-      /* Unwind frame - below if statement is on purpose, as it prevents 
-         a nasty optimization that breaks unwinding*/
-      i = stacktrace_unwind(f);
       if(i == -1)return -1;
       else return 0;
     }
@@ -66242,8 +66472,10 @@ int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
   // note that do /4 since offset is byte offset and we use sp in 4 bytes
   // unit.
 
+  // move sp back
   f->fp += f->size >> 2;
 
+  // caller address
   f->func = f->pc;
 
   /* don't go further down if it's inside the stdlib */
@@ -66251,8 +66483,7 @@ int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
   if(((uint32_t)f->func) < 0x00400000)return -1;*/
 
   if((uint32_t)(f->func) < text_start || (uint32_t)(f->func) > text_end)
-	  return -1;
-
+	  `return -1;`
 
   i = jump_table[(((uint32_t)(f->func) & 0x1FFF000) >> 12)-1];
   TDPRINT("caller2 %x jmp %d\n", f->caller, i);
@@ -66269,15 +66500,14 @@ int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
   f->func = (uint32_t *)symbols[i-1];
 
   // *frame-info-table*
-  //
   /* if we've hit a function with no info, we're done */
-  if( info_index[i-1] == 0xFFFF ) return -1;
+  if( info_index[i-1] == 0xFFFF ) `return -1;`
 
   info = frame_info[info_index[i-1]];
   /* Get size of frame */
   f->size = info & 0xFFFF;
 
-  // WHY -2? since *mips-jal* do save ra = pc+8 so -8 bytes
+  // WHY -2?
 
   /* Get caller */
   f->caller = (uint32_t *)f->fp[info >> 18] - 2;
@@ -69166,6 +69396,23 @@ create_elf_tables          linux kernel source code
 
 start_thread               linux kernel source code 
                            include/asm/processor.h
+
+
+={============================================================================
+*kt_linux_core_400* linux-elf-debug
+
+~/bin/mips-linux-uclibc-readelf --debug-dump=info APP_Process | grep -A 20 PCAT_AllocStaticP_DBG
+
+  <870919>     DW_AT_name        : (indirect string, offset: 0xf927e): PCAT_AllocStaticP_DBG
+  <87091d>     DW_AT_decl_file   : 1
+  <87091e>     DW_AT_decl_line   : 410
+  <870920>     DW_AT_prototyped  : 1
+  <870921>     DW_AT_type        : <86f559>
+  <870925>     DW_AT_low_pc      : 0x843ba4
+  <870929>     DW_AT_high_pc     : 0x843c6c
+  <87092d>     DW_AT_MIPS_fde    : 0x4be98
+  <870931>     DW_AT_frame_base  : 0x2d7467     (location list)
+  <870935>     DW_AT_sibling     : <8709d9>
 
 
 ={============================================================================

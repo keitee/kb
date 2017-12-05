@@ -1,4 +1,4 @@
-*kt_dev_si*                                                                tw=100
+*kt_dev_si*                                                                tw=101
 
 kt.dev.si
 
@@ -72,6 +72,7 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_si_0001| comp-doc
 |kt_dev_si_0002| comp-process
+|kt_dev_si_0002| comp-smartctl comp-badblocks
 |kt_dev_si_0001| comp-dms
 |kt_dev_si_0001| comp-tree
 |kt_dev_si_0001| comp-term
@@ -8369,6 +8370,16 @@ STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/APP_Process
 
 
 ={============================================================================
+|kt_dev_si_0002| comp-smartctl comp-badblocks
+
+-sh-3.2# which smartctl
+/usr/sbin/smartctl
+
+-sh-3.2# which badblocks
+/sbin/badblocks
+
+
+={============================================================================
 |kt_dev_si_0001| comp-dms
 
 http://ndpedia.il.nds.com/index.php/Main_Page
@@ -14800,7 +14811,7 @@ char* JobTypeToString(SYSTEMJOB_Type jobType)
     case SYSTEMJOB_TYPE_PLAYBACK:
         typeStr = "P";
         break;
-    case SYSTEMJOB_TYPE_`DOWNLOAD`:
+    case SYSTEMJOB_TYPE_`DOWNLOAD`:   *pdl-download*
         typeStr = "D";
         break;
         ...
@@ -14931,11 +14942,15 @@ RMF_CONFLICT_STATUS_FAILURE   (0x7802001)
 
 RMF_ALLOCATE_REQUEST_STATUS_SUCCESS(1)
 
+<rmf-request>
 RMF_ALLOCATE_PERMISSION_NONE    (0xf0000000U) /*!< @brief `no permission` */	
 RMF_ALLOCATE_PERMISSION_STORE   (0x10000004U) /*!< @brief Store recording on disk */	
 RMF_ALLOCATE_PERMISSION_RECORD  (0x10000008U) /*!< @brief Recording to disk */	
 RMF_ALLOCATE_PERMISSION_LIVE    (0x10000020U) /*!< @brief Live streaming */	
 RMF_ALLOCATE_PERMISSION_EXTEND  (0x10001000U) /*!< @brief Extend quota storage  */	
+
+#define	RMF_ALLOCATE_PERMISSION_DATA_CAPTURE			(0x10000200U)		/*!< @brief data capturing - SI tables, carousel, software downloads */	
+#define	RMF_ALLOCATE_PERMISSION_SCAN					(0x10000400U)		/*!< @brief Using a 'tuner' to set frequency manually in order to make first tune, add channels etc. */	
 
 
 note: result and status returns okay but released permission is not.
@@ -15372,6 +15387,12 @@ Units = sectors of 1 * 512 = 512 bytes
 
 
 <disk-quotas>
+
+WP 41
+* User Quota: for Viewer-initiated recordings
+* System Quota: for Push VOD recordings (to be supported in a later Iteration)
+
+
 !INFO  -SBMS_USERBOOKING < T:SBM_UB_MAIN M:sbm_server_ub_bookedprogramme_properties.c F:SBM_SERVER_USERBOOKING_GetQuotaStatus L:00435 > 
   Quota (user): MaxSize 0x00000000,5c868d3e, UsedSize 0x00000000,001dc5fe, usedPct 0x0
 !INFO  -RMF          < T:SBM_UB_MAIN M:rmf_quota.c F:RMF_QUOTA_GetQuotaStatus L:00590 > maxSize =  0,[2019:03:11 16:30:54]1552321854(high,low)
@@ -15394,8 +15415,20 @@ M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota recycle: size: 0,0(
 1.4 TB
 
 
-<pcat-item-txt>
-note: so do not show quota size and free space.
+			DIAG_PMON_DISK_QUOTA_INITIAL(gRmfSegmentId,
+					0U /* standart parameter */,
+					temp_quota->creationInfo.name,
+					xint64_t_low(&temp_max_size),
+					xint64_t_low(&temp_staticUsedSize) );
+
+NDS: ^[2017:12:03 00:55:12]0946685068.993551 !MIL    -RMF          		< p:0x000001e5 P:MW t:0x01d72520 T:VRM_SRV M:quota_resource.c F:QUOTA_RESOURCE_ActionsAfterRestoration L:1258 > 
+  @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,user,d-quota-max-MB=,233614,d-quota-cur-MB=,26878 
+  @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,system,d-quota-max-MB=,195510,d-quota-cur-MB=,194981 
+  @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,NDS_Dynamic,d-quota-max-MB=,38146,d-quota-cur-MB=,15462 
+  @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,recycle,d-quota-max-MB=,0,d-quota-cur-MB=,196440 
+
+
+<pcat-item-txt> note: so do not show quota size and free space.
 
 // Adds up space used for each recording with `booking_source` catagory.
 SPACE USED (Gb): USER :6.90 PVOD :186.12 SLINK:208.91 DYNAM:1.49 
@@ -15712,6 +15745,16 @@ space conflicts by removing jobs from the Recycle disk quota.
 
 note:
 This WP is applied HR015.
+
+
+<nvram-txt>
+
+ ~~~ Record Properties
+Start Guard Time          = 0x0000 (0) 
+End Guard Time            = 0x0000 (0) 
+Auto Start Guard Time     = 0x0002 (On) 
+Auto End Guard Time       = 0x0002 (On) 
+Deletion Mode             = 0x0001 (Automatic) 
 
 
 ={============================================================================
@@ -18504,7 +18547,12 @@ Schechter, Ruti
 
 SRM manages the PVOD recordings.  
 
-SRM uses PCAT to update the schedule information (such as start time, duration, or locator) when a schedule change occurs, to manage the lifetimes of PCAT entries (including deleting PCAT entries when record/remind jobs are destroyed), and to clean out old history items and disappeared events. SRM also gets event information from broadcast metadata (via SIM) and saves it for later use.
+SRM uses PCAT to update the schedule information (such as start time,
+    duration, or locator) when a schedule change occurs, to manage the
+lifetimes of PCAT entries (including deleting PCAT entries when record/remind
+    jobs are destroyed), and to clean out old history items and disappeared
+events. SRM also gets event information from broadcast metadata (via SIM) and
+saves it for later use.
 
 COMPONENT_NAME := darwin_srm
 TRACE_LEVEL_SRM="AFEWMIPR<>!"
@@ -25854,6 +25902,17 @@ F:runLevelNotificationCallback L:00333 > component PDM changed to run/ring level
 !MIL    -SYSINIT_S    		< P:SCD T:IPC_WRAPPER_THREAD M:state_machine.c F:runLevelNotificationCallback L:311 > ENDING   Moving component LAE to runlevel PVR. 
 
 
+*comp-standby* standby out can happen during transition to pvr level
+
+!MIL    -aem          		< p:0x000001d6 P:APP t:0x01479520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(SKY)ef01 
+!MIL    -EPG_INIT     		< p:0x000001d6 P:APP t:0x2c12f520 T:no name M:PowerOperatingModes F:actionOperatingMode L:385 > T:CEE-J EventQueue Reader 0:actionOperatingMode - mode > 3 currentState > STANDBY
+!MIL    -AMS          		< p:0x000001d4 P:MW t:0x01d53520 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:83 > STANDBY_OUT event 
+
+// last sysinit log
+!MIL    -SYSINIT_S    		< p:0x000001d1 P:SCD t:0x00648530 T:STATE_MACHINE_THREAD M:state_machine.c F:switchRingLevelRunLevel L:460 > ENDING   Moving ring level 19 to runlevel PVR. 
+!MIL    -SYSINIT_S    		< p:0x000001d1 P:SCD t:0x00648530 T:STATE_MACHINE_THREAD M:state_machine.c F:stateMachineThread L:1416 > ENDING   Moving system to runlevel PVR. 
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-wlm
 
@@ -27827,7 +27886,7 @@ public interface IScreenType
   T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/guide"}
 
 
-<dialog-live-pause>
+<dialog-1030> <live-pause>
 int LIVE_PAUSE_NOT_AVAILABLE_ID                                          = 1030;
 
 !MIL   -EPG_DLG      < M:DialogManager F:showDialog L:01400 > T:CEE-J EventQueue Reader 0:Showing dialog 1030
@@ -28117,6 +28176,21 @@ THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/j
 						.flags(DISPLAY_IN_PIG | PERSISTENT | HIDE_VIDEO)
 						.actions(BACKUP_IGNORE)
 						.screenLayer(IScreenLayer.TV_DIALOG)));
+
+<dialog-1371>
+!MIL    -EPG_DLG      		< p:0x00000203 P:APP t:0x2c12f520 T:no name M:DialogManager F:showDialog L:1407 > T:CEE-J EventQueue Reader 0:Showing dialog 1371
+!ERROR  -EPG_DEV1     		< p:0x00000203 P:APP t:0x2c12f520 T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:CEE-J EventQueue Reader 0:setting last screen seen to /planner/empty_text_generic_error_id
+!MIL    -EPG_MISC     		< p:0x00000203 P:APP t:0x2c12f520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "ScreenChange","changed to": "/planner/empty_text_generic_error_id"}
+!ERROR  -EPG_DEV1     		< p:0x00000203 P:APP t:0x2c242520 T:no name M:NotificationConverter F:setLastScreenSeen L:11 > T:Analytics#0:setting last screen seen to /planner/empty_text_generic_error_id
+
+		register(dialog(IDialogID.EMPTY_TEXT_GENERIC_ERROR_ID).with(textContent().title(DialogTitle.THERE_HAS_BEEN_A_PROBLEM)
+				.instruction(BACKUP_TO_RETURN)
+				.textStrings("%s"))
+				.with(behaviour().screenLayer(IScreenLayer.MENU_DIALOG)
+						.primaryPriority(IPrimaryPriority.OTHER)
+						.secondaryPriority(ISecondaryPriority.OTHER_HIGH_PRIORITY)
+						.actions(BACKUP_BACKUP)
+						.modal(true)));
 
 note:
 need to gerp on ID.
@@ -29457,6 +29531,11 @@ ATG_API_Ctxt_t  ATG_API_Ctxt;      /** @brief ATG Internal Context */
 ={============================================================================
 |kt_dev_si_0001| comp-http comp-ctm comp-pdl
 
+<pdl-download-speed-bitrate>
+// slow speed?
+!WARN   -RMF          		< p:0x000001f7 P:MW t:0x01bb3520 T:RMF_Server M:rmp_pdl_job.c F:RMP_PDL_JOB_GetBitrate L:446 > job=0x20104d2(0)[D] effective vfile size is still zero time diff=55 assuming default bitrate 
+
+
 <curl-version>
 CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/lib/curl/curl_v7_26_0/src/cookie.c
 CMS_SYSTEM_INFRASTRUCTURE/HTTP/src/lib/curl/curl_v7_15_2/src/cookie.c
@@ -30142,6 +30221,8 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 
 // note: search ctm job with no-case
 
+
+
 // `STARTED`
 !WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job `0xca278008` (Type = 2) from 3 (CREATED) to 4 (COMMITED) 
 !MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[`0xCA278008`] ; ctm_status=[UNKNOWN_CTM_STATUS](0x63000040) 
@@ -30160,6 +30241,10 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 
 !MIL    -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > ctm_job=[0xCA278008] ; ctm_status=[CTM_STATUS_READY_TO_DOWNLOAD](0x63000001) 
 !WARN   -DLM_SVR      		< P:MW T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Override_Active_Job L:2255 > Replacing active job: [tag=R2D-A ; id=0x00000173 ; job_id=0xCA278008] 
+
+// ctm job is different from vrm job
+!MIL    -RMF          		< p:0x00000202 P:MW t:0x01e5d520 T:CTM_SVR_HANDLEREQUESTS M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x201004e(0)[D] request=0x10004000 released=0xf0000000 change request if fails. 
+
 !WARN   -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_Change_State L:7022 > Transition : CTM job 0xca278008 (Type = 2) from 4 (COMMITED) to 1 (STARTED) 
 !MIL    -CTM_SVR      		< P:MW T:CTM_SVR_HANDLEREQUESTS M:ctm_svr_job_manager.c F:CTM_SVR_HandleFTMReturnedSuccess L:474 > FTM Callback (Success) status called for job 0xca278008 step CTM_JOB_STEP_1_DPL_DOWNLOAD_RESPONSE 
 
@@ -30275,6 +30360,10 @@ Seen|PDL |2016:09:26 06:12:24|2016:09:26 06:12:59|Anna Scher: In Confidence     
 // stopped due to disk full
 !MIL    -DLM_SVR      		< p:0x0000020e P:MW t:0x01f21520 T:DLM_HANDLEEVENTS M:dlm_mqp_server.c F:DLM_SVR_Dispatch_ctm_Status L:3803 > 
   ctm_job=[0x1E07809D] ; ctm_status=[CTM_STATUS_STOPPED_BY_DISK_CONFLICT](0x63002000) 
+
+
+<pdl-download-next>
+117797:NDS: ^[2017:12:02 12:10:45]0946725496.338424 !MIL    -EPG_ME       		< p:0x00000203 P:APP t:0x2c148520 T:no name M:DownloadNext$8 F:success L:609 > T:PooledExecutor#0:DOWNLOADNEXT: Set next episode = locator:3:11:2909E720:0
 
 
 <pdl-status> <pdl-faulure-type> pdlAvailable
@@ -30469,6 +30558,20 @@ http://epgservices.sky.com/downloadnext/4101/5/branding/CBeebies%20HD/programme/
 
 <green-key>
 Cancel ?
+
+
+<comp-pdl-sac>
+NDS: ^[2017:12:03 21:39:44]0946846035.332149 !WARN   -HTTP         		< p:0x00000201 P:MW t:0x02373520 T:HTTP_ASYNC_Encoding_0 M:http_sac.c F:HTTP_SAC_ProcessDecryption L:475 > Received 500 from SGW when send message over SAC. Report as SERVER_BUSY. 
+
+NDS: ^[2017:12:03 21:39:44]0946846035.453979 !ERROR  -EPG_NET      		< p:0x00000203 P:APP t:0x2ed4f520 T:no name M:ErrorLoggingConsumer F:failure L:18 > T:est3#0:Failed fetching from [http://localhost:8080/cmdc/content/programid%3A%2F%2F4290669899~programid%3A%2F%2F4290669899/offers?count=2&lang=eng&clientId=00C6A6971655F2B5%7E00C6A697_0%7E00C6A697&filter=purchasable%7Etrue%2Centitled%7Etrue&sort=expiryD\
+NDS: ^[2017:12:03 21:39:44]0946846035.454014 !ERROR  -EPG_NET      		< p:0x00000203 P:APP t:0x2ed4f520 T:no name M:ErrorLoggingConsumer F:failure L:18 > ateTime&marketingTarget=1&logicOperand=FAF5FFC1%7E1FFA0000]
+NDS: ^[2017:12:03 21:39:44]0946846035.454034 !ERROR  -EPG_NET      		< p:0x00000203 P:APP t:0x2ed4f520 T:no name M:ErrorLoggingConsumer F:failure L:18 > bvO: 
+NDS: ^[2017:12:03 21:39:44]0946846035.454055 !ERROR  -EPG_NET      		< p:0x00000203 P:APP t:0x2ed4f520 T:no name M:ErrorLoggingConsumer F:failure L:18 > 	at picasso.utils.io.AsyncHttpFetcher$FetchTask.run (Unknown Source, bco=82)
+NDS: ^[2017:12:03 21:39:44]0946846035.454075 !ERROR  -EPG_NET      		< p:0x00000203 P:APP t:0x2ed4f520 T:no name M:ErrorLoggingConsumer F:failure L:18 > 	at picasso.utils.concurrent.task.RunnableWrapper.call (Unknown Source, bco=4)
+NDS: ^[2017:12:03 21:39:44]0946846035.454095 !ERROR  -EPG_NET      		< p:0x00000203 P:APP t:0x2ed4f520 T:no name M:ErrorLoggingConsumer F:failure L:18 > 	at picasso.utils.concurrent.task.Task.run (Unknown Source, bco=40)
+NDS: ^[2017:12:03 21:39:44]0946846035.454113 !ERROR  -EPG_NET      		< p:0x00000203 P:APP t:0x2ed4f520 T:no name M:ErrorLoggingConsumer F:failure L:18 > 	at picasso.utils.concurrent.task.ThreadPoolExecutor$WorkerThread.run (Unknown Source, bco=71)
+
+can cause *dialog-1371*
 
 
 ={============================================================================
