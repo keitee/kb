@@ -27915,7 +27915,7 @@ on any target, you may want to check whether the program has corrupted its own
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-exem-print
+*kt_linux_gdb_300* gdb-print
 
 10.5 Output Formats
 
@@ -65977,7 +65977,7 @@ void parse_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size,
 
       // cnt is # of total frame
       //
-      // *sysbol-info-table* has loading address of each frame
+      // *symbol-info-table* has loading address of each frame
       syms[cnt] = frame_addr;
 
       // *info-index-table* has index to *frame-info-table* of each frame. By
@@ -66114,6 +66114,8 @@ int count_text_raw_mips(uint32_t *text, uint32_t text_addr, uint32_t text_size, 
         tcnt++;
         if(tcnt >= *tcount) return -1;
       }
+
+      // note: increase after so have +1
       cnt++;
     }
   }
@@ -66168,6 +66170,8 @@ void membuster_plus_init(void)
 
           // text_start 400000 - text_end ec6124
           //
+          // >>> hex(0xac6124+0x00400000)
+          // '0xec6124'
           // >>> 0xec6124-0x400000
           // 11297060, '0xac6124'
 
@@ -66188,10 +66192,12 @@ void membuster_plus_init(void)
             frame_info = realloc(frame_info, tcount * sizeof(uint32_t));
             DPRINT("found %d frames %d fram_tab entries\n", count, tcount);
 
-            // note that # total frame is 23007 since count is increased after
-            // and alloc one more and set the last, 23008, as invalid
+            // *symbol-info-table-invalid* 
+            // note symbols have +1 more since that # total frame is 23008
+            // since count is increased after, [0-23007] and alloc one more and 
+            // set the last, 23009, [0-23008], as invalid
             //
-            // found 23008 frames -> 448 fram_tab entries
+            // found 23008 frames -> 448 fram_tab entries 
             // alloc symbols=92036 for frames 23009
 
             symbols = (uint32_t *) malloc((count+1) * sizeof(uint32_t));
@@ -66318,6 +66324,80 @@ void membuster_plus_init(void)
 }
 
 
+<membuster-init>
+
+typedef struct _BT_LIST
+{
+	uint32_t checksum;
+	uint16_t pos;
+	uint16_t len;
+	uint32_t size;
+} BT_LIST;
+
+typedef struct _ALLOC_LIST
+{
+	uint32_t addr;
+	uint32_t time;
+	uint32_t size;
+	uint16_t bt_index;
+	uint16_t type;
+} ALLOC_LIST;
+
+struct MEMMAN_API_MemoryPoolHandleTag
+{
+#ifdef MEMMAN_MEMBUSTER
+	uint32_t *bt_data;
+	uint32_t bt_data_idx, bt_list_idx, bt_list_len, bt_data_len;
+	uint32_t alloc_list_idx, alloc_list_len;
+	int32_t recent_freed[5];
+	BT_LIST *bt_list;
+	ALLOC_LIST *alloc_list;
+	uint32_t   *bt_temp; /* temp buffer for holding backtraces */
+#ifdef MEMBUSTER_DEBUG
+	uint32_t alloc_search_time, bt_search_time, fletcher_time, bt_time, free_time;
+#endif
+#endif /* MEMBUSTER */
+};
+
+
+// CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/memman_pinit.c
+// note: it's per a pool
+static SYSTEM_STATUS PoolCreate(MEMMAN_API_MemoryPoolHandle **handle, char *name, uint32_t flags)
+{
+  poolHandle->alloc_list = malloc(sizeof(ALLOC_LIST) * ALLOC_LIST_INIT_SIZE);
+  poolHandle->bt_list    = malloc(sizeof(BT_LIST) * BT_LIST_INIT_SIZE);
+  poolHandle->bt_data    = malloc(sizeof(uint32_t) * BT_DATA_INIT_SIZE);
+
+  // note comes from `max_call_in_bt = MAX_CALL_DEPTH;`
+  poolHandle->`bt_temp`    = malloc(get_max_call_in_bt() * sizeof(uint32_t));
+
+  poolHandle->alloc_list_len = ALLOC_LIST_INIT_SIZE;
+
+  // note: represent total num of alloc of a pool
+  /* 1 because the first index is found through recently freed index mechanism */
+  poolHandle->alloc_list_idx = 1; 
+
+  // note: represent total num of bt of a pool
+  poolHandle->bt_list_idx = 0;
+  poolHandle->bt_list_len = BT_LIST_INIT_SIZE;
+
+  poolHandle->bt_data_len = BT_DATA_INIT_SIZE;
+  poolHandle->bt_data_idx = 0;
+  // ...
+  *handle = poolHandle;
+}
+
+uint32_t MHWMemCheckBank(MEMMAN_API_MemoryPoolHandle * mpool, uint32_t size, uint32_t mem_nb_bank)
+{
+	membuster_plus_pool_oom(mpool);
+}
+
+MEMMAN_API_Init
+{
+	membuster_plus_init();
+}
+
+
 <from-user>
 // instrumented memman ifs
 
@@ -66332,6 +66412,7 @@ void   *MEMMAN_API_ReallocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, void 
   //  alloc calls
   ptr = (void *) MHWMemAllocStatic(pool, size);
 
+  // CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mbuster_pinit.c
   // add list
   // alloc_list_add(MEMMAN_API_MemoryPoolHandle *pool, uint32_t addr, uint32_t size, uint32_t type)
   alloc_list_add(pool, (uint32_t)ptr, size, ALLOC_TYPE_MV);
@@ -66352,6 +66433,9 @@ void   *MEMMAN_API_ReallocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, void 
     // *nolinine*
     // int __attribute__ ((noinline)) stacktrace_start(struct stacktrace_frame *f)
 
+    // starts from 0 which means i represent num of calls in bt_temp
+    i = 0;
+
     stacktrace_start(&f);
     {
       // set f for current function frame
@@ -66371,6 +66455,7 @@ void   *MEMMAN_API_ReallocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, void 
 
         i = jump_table[(((uint32_t)(f->func) & 0x1FFF000) >> 12)-1];
 
+        // *cpp-loop*
         // get a nearest addres in the sym table
         while((uint32_t)(f->func) >= symbols[i])
         {
@@ -66392,27 +66477,43 @@ void   *MEMMAN_API_ReallocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, void 
       else return 0;
     }
 
+    // note: now current f->caller is `alloc_list_add`
+
+    // build a backtrace(bt) of this call from a user into bt_temp array
     while(stacktrace_unwind(&f) != -1)
     {
-      // build a backtrace(bt)
       pool->bt_temp[i++] = f.caller;
     }
 
-    // calc a checksum
+    // calculate a checksum of bt_temp, that is a whole bt
     checksum = fletcher32(pool->bt_temp, i);
 
-    // get a idx of alloc list
-    idx = get_alloc_index(pool);
+    // get a idx of next free alloc slot from the alloc list array
+    `idx` = get_alloc_index(pool);
 
-    // get a idx of bt list and if not found one, call bt_add
-    bt_idx = bt_find(pool, checksum);
+    // get a idx of bt which matches to checksum from the bt list and if not
+    // found one and which means new one, call bt_add
+    `bt_idx` = bt_find(pool, checksum);
     if(bt_idx==-1)
     {
-      bt_idx = bt_add(pool, pool->bt_temp, num_of_item_in_bt_temp, checksum);
+      // note: i is number of calls in the bt_temp
+      bt_idx = bt_add(pool, pool->bt_temp, i, checksum);
       { 
-        // copy bt_data[] <- bt_temp
-        pool->bt_list_idx++; 
+        // get a next free index of bt_list
+        idx = pool->bt_list_idx++; 
+
+        // set bt_list
+        pool->bt_list[idx].len      = len;
+        pool->bt_list[idx].checksum = checksum;
+        pool->bt_list[idx].pos      = pool->bt_data_idx;
+
+        // bt_data[] = bt_temp
+        memcpy(&(pool->bt_data[pool->bt_data_idx]), bt, len * sizeof(uint32_t));
+        pool->bt_data_idx += len;
+
+        return idx;
       }
+
       pool->bt_list[bt_idx].size = 0;
     }
 
@@ -66425,6 +66526,12 @@ void   *MEMMAN_API_ReallocStaticAlignP(MEMMAN_API_MemoryPoolHandle * pool, void 
     pool->bt_list[bt_idx].size += size;                // accumulated size for this bt
   } // end alloc_list_add
 }
+
+note:
+
+alloc_list[x]
+  has bt[y]
+    : 7c8db8 7a6c54 7b1a98 7b64b8 7c3670 7c4850 7a7524 7986e0 5101d8 50abe8 e91518
 
 
 SYSTEM_STATUS MEMMAN_API_FreeP(MEMMAN_API_MemoryPoolHandle *pool, MEMMAN_API_Handle *handle)
@@ -66515,6 +66622,113 @@ int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
 
   return 0;
 }
+
+
+<membuster-check-from-thread>
+
+mb_check_sleep = 180;
+
+static void membuster_thread(void)
+{
+  membuster_plus_check_all();
+  {
+    "start check at: %.3d:%.2d:%.2d.%.3d\n",
+  }
+
+  sleep(mb_check_sleep);
+}
+
+
+// old: start check at: 000:04:38.883
+// WHY??
+start check at: 1192:59:51.721
+
+
+// membuster_plus_check_all() runs a loop for all pools. List allocs which has
+// the same bt index, that is the same bt, for each pool 
+
+pool SFM_MEMORY_POOL size=741680:
+size=400 (c7e800 c7f078 c7d0f8 108357c ) [c2d7e24b]
+allocs:4
+size=336 (c80a38 c7a45c e92fd8 e96904 e98330 e4a54c e4c908 d1ab10 d3a178 108357c ) [9094c3ba]
+allocs:6
+size=3528 (c80a38 c7a45c c98104 cb4000 cad48c caf924 cb15bc cd3254 e8cd2c d0a00c d0da4c d0c934 cc03d8 cc0e48 cc17a0 cc23f0 ccf108 ccb150 e48010 e4c220 d1ab10 d3a178 108357c ) [e9045d3a]
+allocs:63
+size=900 (c7e800 c7f240 c7d0f8 108357c ) [cbbfe413]
+allocs:9
+size=210 (c8235c c7e858 c7f240 c7d0f8 108357c ) [14350890]
+allocs:6
+size=1700 (c7e800 c7ee18 c7d338 108357c ) [bdb7e22b]
+allocs:17
+size=630 (c8235c c7e858 c7ee18 c7d338 108357c ) [062d06a8]
+allocs:18
+pool usage: 17800/741680 peak: 17912
+
+pool SFM_SectionPool size=1923072:
+
+...
+
+
+<membuster-check-from-oom>
+// found that OOM from log is `far behind` in OOM in MEM.TXT.
+
+void   *MHWMemAllocStatic(MEMMAN_API_MemoryPoolHandle *pool, uint32_t size)
+{
+  MEMORY_PRINT_W(("Cannot allocate %d bytes in pool " POOLNAME_FMT ", not enough memory", size, PNAME(pool)));
+  if (smax <= size)
+  {
+    MEMORY_PRINT_W(("   Biggest block is %d bytes", smax));
+  }
+  DUMP_USED_BLOCKS(pool);
+}
+
+
+#define DUMP_USED_BLOCKS(POOL) \
+	(void) membuster_plus_pool_oom(POOL); \
+	(void) MemCheckMemory(POOL, MEMSTATUS_LOGLEVEL(MEMMAN_API_MEMSTATUS_ALL, MEMSTATUS_LOGLEVEL_WARN))
+
+
+void membuster_plus_pool_oom(MEMMAN_API_MemoryPoolHandle *p)
+{
+#ifdef MEMBUSTER_OOM_ONLY
+    membuster_plus_check_pool(0, mb_file_path, p);
+#else
+    membuster_create_output_path();
+    membuster_plus_check_pool(mb_output, mb_file_path, p);
+#endif /* MEMBUSTER_OOM_ONLY */
+}
+
+
+// static void membuster_plus_check_pool() is used by MEMMAN API but not from
+// membuster thread.
+// CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mbuster_pinit.c
+
+static void membuster_plus_check_pool()
+{
+  // bt from bt_data
+
+  sprintf(buf+(9*x), "%08x ", 0xFFFFFFFF & (p->bt_data[b[j].pos + x]));
+
+  // to MEM_xx file
+  fprintf(of,
+      "OOM Detected at: %.3d:%.2d:%.2d.%.3d\n",
+      hour,
+      minute,
+      sec,
+      msec);
+
+  // to LOG
+  MEMORY_PRINT_E(("MEMBUSTER: pool %s, count %d size %d, bt(%s)", p->name, `alloc_count`, `b[j].size`, buf));
+}
+
+
+M:mem_blockpool.c F:MHWMemCheckBank L:310 > CHECK_BANK Size:1448 FreeSize:788 Bank:1 PoolMAX:387248 
+M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 2580 bytes in pool " "MW_HTTP_POOL"
+M:mem_static.c F:MHWMemAllocStatic L:78 > Biggest block is 712 bytes
+M:mbuster_pinit.c 
+  F:membuster_plus_check_pool L:755 > 
+  MEMBUSTER: pool MW_HTTP_POOL, count 1 size 520, bt(007aff90 00ef5c30 007afe08 00795b3c 006e1a60 00ef52d4 )
+...
 
 
 ={============================================================================
