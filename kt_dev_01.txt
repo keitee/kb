@@ -94,7 +94,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_0004* cpp-sizeof
 |kt_dev_lang_014| printf-format
 |kt_dev_lang_015| expr-control-flow
-*kt_dev_cpp_0000* cpp-loop cpp-for cpp-while
+*kt_dev_cpp_0000* cpp-loop cpp-for cpp-while cpp-side-effect
 |kt_dev_lang_016| cpp-precedence
 *kt_dev_lang_016* cpp-order-evaluation cpp-side-effect
 *kt_dev_lang_016* expr-unary
@@ -7846,13 +7846,12 @@ different.
 
 
 ={============================================================================
-*kt_dev_cpp_0004* pointer-cstring
+*kt_dev_cpp_0004* cpp-cstring cpp-sizeof
 
-<ex> *ex-strlen* 
-ansic, p103. excluding NULL which means `size-1`
+<ex> *ex-strlen* ansic, p103.  
 
-* `cstring` needs an extra space for NULL
-* "*run++" has `effect` even when see NULL and has `off-the-end` 
+* strlen excludes NULL which means `size-1`
+* `cpp-cstring` needs an extra space for NULL
 
 int strlen( char *s )
 {
@@ -7864,49 +7863,14 @@ int strlen( char *s )
   return p-s;             // size-1 when s[size]
 }
 
-int wrong_mstrlen(char s[])
-{
-  char *run = s;
-
-  while( *run++ )         // `postfix-issue`
-    ;
-
-  return run-s;
-}
-
-int mstrlen(char s[])
-{
-  char *run = s;
-
-  while( *run )
-    run++;
-
-  return run-s;
-}
-
-int nstrlen(char s[])
-{
-  int i = 0;
-
-  while( s[i] )
-    ++i;
-
-  return i;
-}
-
 int main(int argc, char* argv[])
 {
   char input[] = "pointer";
 
-  printf("len: %d, size: %d\n", mstrlen(input), sizeof(input));
-  printf("len: %d, size: %d\n", nstrlen(input), sizeof(input));
+  printf("len: %d, size: %d\n", strlen(input), sizeof(input));
 }
 
 len: 7, size: 8     // use right version
-len: 7, size: 8
-
-len: 8, size: 8     // use wrong version
-len: 7, size: 8
 
 
 <cstring-in-memory>
@@ -7933,17 +7897,6 @@ $4 = {0xa, 0x0}
 $5 = {0x0}
 (gdb) p /x str3
 $6 = {0x6f, 0x6e, 0x65, 0x0}
-
-
-<ex> *ex-strcpy*
-note: Why not show `postfix-issue` as *ex-strlen* ? Since do not use `effect`
-after while.
-
-void strcpy( char *s, char *t )
-{
-  while( *s++ = *t++ ) 
-    ;
-}
 
 
 <ex> *ex-strcat* 
@@ -8837,7 +8790,12 @@ switch( events )
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cpp-loop cpp-for cpp-while
+*kt_dev_cpp_0000* cpp-loop cpp-for cpp-while cpp-side-effect
+
+The `cpp-for-loop` is preferable when there is a simple initialization and
+increment since it keeps the loop control statement 
+  `close together and visiable` at the top of the loop. see *cpp-for-iterator*
+
 
 <ex> *ex-escape* 
 From ansic, exercise 3-2. Write a function escape(s,t) that converts
@@ -8846,18 +8804,17 @@ as it copies the string t to s. Use a switch. Write a function for the other
 direction as well, converting escape sequences into the real characters.
 
 
-// mine to show idea
 void escape(char* s, char* t)
 {
-  // note when use "while(*t++)", the result missed out the first char due to
-  // `postfix-issue` 
+  // when use "while(*t++)", the result missed out the first char. WHY?
+  // since do not use side-effect.
 
   while( *t )
   {
     switch(*t)
     {
       case '\t':
-        *s++ = '\\';    // note
+        *s++ = '\\';    // note to escape
         *s++ = 't';
         break;
 
@@ -8873,21 +8830,122 @@ void escape(char* s, char* t)
 }
 
 
-while(expression)
-  statement
+  `while(expression)`
+    statement
 
-"If expression is non-zero, statement is executed and expression is
-re-evaluated." So in strcpy, copied by evaluating and increased by the side
-effect. Not used in statement. This means that if use "s" or "t" in the
-statement then will get the side effect, that is, increased one. See the
-following.
+  "If expression is non-zero, statement is executed and expression is
+  re-evaluated." 
+
+
+{cpp-side-effect} from online
+A "side effect" is defined by the C++ standard in [intro.execution], by:
+
+Reading an object designated by a volatile glvalue (3.10), modifying an
+object, calling a library I/O function, or calling a function that does any of
+those operations are all side effects, which are `changes` in the state of the
+execution environment.
+
+y = (x = d) * 5; // sets y to 15.
+
+The value returned from x = d, is its main effect. The changing of the value
+of x is a side effect.
+
+
+  ""Therefore, the point is whether or not `evaluation` cause side-effect and 
+  use `side-effect` afterwords.""
+
+
+<ex>
+// use pointer arithmetic to return length
+int mstrlen_1(const char *s)
+{
+    const char *p = s;
+
+    while (*s)
+        ++s;
+
+    return s-p;
+}
+
+// use a variable to return length
+int mstrlen_2(const char *s)
+{
+    unsigned int i = 0;
+
+    while (*s)
+    {
+        ++s;
+        ++i;
+    }
+
+    return i;
+}
+
+// there is a side-effect but not used. Hence okay.
+int mstrlen_3(const char *s)
+{
+    unsigned int i = 0;
+
+    while (*s++)
+        ++i;
+
+    return i;
+}
+
+// side-effect is used in getting a length. Hence not okay.
+int mstrlen_4(const char s[])
+{
+  const char *run = s;
+
+  while (*run++)
+    ;
+
+  return run-s;
+}
+
+// there is a side-effect but not used. Hence okay.
+int mstrlen_5(const char s[])
+{
+  const char *run = s;
+
+  while (*run)
+    ++run;
+
+  return run-s;
+}
+
+void t_mstrlen()
+{
+    const char *input = "01234567890123456";
+
+    printf("mstrlen is %d\n", mstrlen_1(input));
+    printf("mstrlen is %d\n", mstrlen_2(input));
+    printf("mstrlen is %d\n", mstrlen_3(input));
+    printf("mstrlen is %d\n", mstrlen_4(input));
+    printf("mstrlen is %d\n", mstrlen_5(input));
+}
+
+mstrlen is 17
+mstrlen is 17
+mstrlen is 17
+mstrlen is 18
+mstrlen is 17
+
+
+<ex> *ex-strcpy*
+
+void strcpy( char *s, char *t )
+{
+  while( *s++ = *t++ ) 
+    ;
+}
+
+
+Why not show a problem? Evaluation do copy and increase pointers. However
+side-effects are not used and no problem. 
 
 
 <ex> *ex-atoi* atoi second version in ansic p61
-The `for-loop` is preferable when there is a simple initialization and increment
-since it keeps the loop control statement `close together and visiable` at the
-top of the loop.
-
 #include <ctype.h>
 
 int atoi(char s[])
@@ -8910,8 +8968,10 @@ int atoi(char s[])
   return sign*n;
 }
 
-This is the right version. However, if use the approach as below then miss out
-the one char.
+
+Again shows the side-effect issue. If use the approach as below then miss out
+the one char. When there is no leading space, expect i==0 when loop ends but
+i==1 since will have the side effect.
 
 int atoi(char s[])
 {
@@ -8920,12 +8980,11 @@ int atoi(char s[])
   // skip white spaces
   while( isspace(s[i++]) )
     ;
+  ...
 }
 
-`postfix-issue` 
-For example, when there is no leading space, expect i==0 when loop ends but i==1
-since will have the side effect. This is the same problem of expand() example
-above. Two solutions:
+
+Two solutions:
 
 int atoi(char s[])
 {
@@ -8947,6 +9006,9 @@ int atoi(char s[])
 
 
 <ex>
+Similar to ex-bitcount but this gets the number of interation while input has
+1 bit so effectly gets MSB position.
+
 #include <iostream>
 
 using namespace std;
@@ -8957,9 +9019,6 @@ int main()
   // unsigned int input = 3301;
 
   unsigned int count = 0;
-
-  // Similar to ex-bitcount but this gets the number of interation while input
-  // has 1 bit so effectly gets MSB position.
 
   // gets 12
   for(count=0; input; input >>= 1)
@@ -8978,11 +9037,11 @@ int main()
 
 
 <ex> *ex-expand* 
-From ansic, exercise 3-3. Write a function expand(s1,s2) that expands shorthand
-notations like a-z in the string s1 into the equivalent complete list abc...xyz
-in s2. Allow for letters of either case and digits, and be prepared to handle
-cases like a-b-c and a-z0-9 and -a-z . Arrange that a leading or trailing - is
-taken literally
+From ansic, exercise 3-3. Write a function expand(s1,s2) that expands
+shorthand notations like a-z in the string s1 into the equivalent complete
+list abc...xyz in s2. Allow for letters of either case and digits, and be
+prepared to handle cases like a-b-c and a-z0-9 and -a-z . Arrange that a
+leading or trailing - is taken literally
 
 #include <stdio.h>
 #include <ctype.h>
@@ -9226,24 +9285,27 @@ find(const char* s, int n, char a)
 }
 
 
-{comma-operator}
-The comma operator is a sequence point (as they are && and ||) so the order of evaluation of the
-operands is 'fixed'. It is a binary operator that evaluates its first operand, performs all side
-effects and discards the result, and then evaluates the second operand and returns its value.
+{cpp-side-effect} {cpp-operator-comma}
+The comma operator is a sequence point (as they are && and ||) so the order of
+evaluation of the operands is 'fixed'. It is a binary operator that evaluates
+its first operand, performs all side effects and discards the result, and then
+evaluates the second operand and returns its value.
 
-Any number of expressions separated by commas can form a single expression because the comma
-operator is associative. The use of the comma operator guarantees that the subexpressions will be
-evaluated in <left-to-right> order, and the value of the last becomes the value of the entire
-expression. type so:
+Any number of expressions separated by commas can form a single expression
+because the comma operator is associative. 
+
+The use of the comma operator guarantees that the sub-expressions will be
+evaluated in `left-to-right` order, and the value of the last becomes the
+value of the entire expression:
 
 x = (y, z);
 
-will do y and, after performing all side effects, will discard it, then do z and finally will set x
-to z.
+will do y and, after performing all `side effects`, will discard it, then do z
+and finally will set x to z.
 
-Because the comma operator discards its first operand, it is useful where the first operand has
-<desirable-side-effects>, such as in the initializer or the counting expression of a for loop. Used
-to produce side effects.
+Because the comma operator discards its first operand, it is useful where the
+first operand has `desirable side effects`, such as in the initializer or the
+counting expression of a for loop. Used to produce side effects.
 
 For example, this for statement:
 
@@ -9261,12 +9323,14 @@ while (a!=1) {
     p+=(a&1)*b;      // see
 }
 
-The primary use of the comma operator is to 'produce' side effects in the following situations:
+The primary use of the comma operator is `to produce side effects` in the
+following situations:
 
 Calling a function
 Entering or repeating an iteration loop
 Testing a condition
-Other situations where a side effect is required but the result of the expression is not immediately needed
+Other situations where a side effect is required but the result of the
+expression is not immediately needed
 
 for (i=0; i<2; ++i, f() );
 
@@ -9274,16 +9338,18 @@ A for statement in which i is incremented and f() is called at each iteration.
 
 if ( f(), ++i, i>1 ) { /* ... */ } 
 
-An if statement in which function f() is called, variable i is incremented, and variable i is tested
-against a value. The first two expressions within this comma expression are evaluated before the
-expression i>1. Regardless of the results of the first two expressions, the third is evaluated and
-its result determines whether the if statement is processed.
+An if statement in which function f() is called, variable i is incremented,
+   and variable i is tested against a value. The first two expressions within
+   this comma expression are evaluated before the expression i>1. Regardless
+   of the results of the first two expressions, the third is evaluated and its
+   result determines whether the if statement is processed.
 
 func( ( ++a, f(a) ) ); 
 
-A function call to func() in which a is incremented, the resulting value is passed to a function
-f(), and the return value of f() is passed to func(). The function func() is passed only a single
-argument, because the comma expression is enclosed in parentheses within the function argument list.
+A function call to func() in which a is incremented, the resulting value is
+passed to a function f(), and the return value of f() is passed to func(). The
+function func() is passed only a single argument, because the comma expression
+is enclosed in parentheses within the function argument list.
 
 
 {control-break-continue}
@@ -9563,20 +9629,6 @@ int main()
     cout << "f(" << i << ") = " << f(i) << ", "
         << "g(" << i << ") = " << g(i) << endl;
 }
-
-
-{cpp-side-effect} from online
-A "side effect" is defined by the C++ standard in [intro.execution], by:
-
-Reading an object designated by a volatile glvalue (3.10), modifying an
-object, calling a library I/O function, or calling a function that does any of
-those operations are all side effects, which are changes in the state of the
-execution environment.
-
-y = (x = d) * 5; // Sets y to 15.
-
-The value returned from x = d, is its main effect. The changing of the value
-of x is a side effect.
 
 
 {ansic} ansic, p53. 
@@ -34418,11 +34470,11 @@ vector, deque, array, and strings
 
 {cpp-iter-range}
 [begin, end) notation and `off-the-end` iterator which is one past the last.
-This notation applies to subrange as well in use of algorithm. A half-open range
-has two advantages:
+This notation applies to subrange as well in use of algorithm. A half-open
+range has two advantages:
 
-* You have a simple end criterion for loops that iterate over the elements: They
-  simply continue as long as end() is not reached.
+* You have a simple end criterion for loops that iterate over the elements:
+  They simply continue as long as end() is not reached.
 
 * It avoids special handling for empty ranges. For empty ranges, begin() is
   equal to end().
@@ -34431,12 +34483,12 @@ EXC++01:
 *end() is always a programming error since end() returns invalid iterator.
 
 
-<generic-programming>
+<generic-programming> <cpp-for-iterator>
 C++ uses != as a matter of habit rather than < in loops. They do so for the
 same reason that they use iterators rather than subscripts because it applies
-to various kinds of containers provided by the library. 
+to various kinds of containers provided by the library: 
 
-  "not all containers are sequencial."
+  "since not all containers are sequencial."
 
 The internal 'behavior' of iterators depends on the data structure over which
 they iterate. For example iterator of `associative-containers` would do
