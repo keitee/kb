@@ -66702,6 +66702,8 @@ int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
 	TDPRINT("sym2x %x\n", symbols[i]);
   }
 
+  // note: fix!
+
   /* get function start addr from the symbol table */
   f->func = (uint32_t *)symbols[i-1];
 
@@ -66723,18 +66725,129 @@ int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
 }
 
 
+<fix-to-membuster-crash>
+APP process crashes when press a yellow button to launch iapp and found that
+one of functions during unwinding comes from libPicasso.a and which do not
+have push, save ra, and pop pattern. Therefore, not in symbol table
+membuster maintains. The fix is to return in those cases: 
+
+    if (0x0FFFFFFF == symbols[i])
+    {
+      printf("KT: =============================\n");
+      printf("KT: su: RETURN: i(%d), f->func(0x%8x)\n", i, f->func);
+      return -1;
+    }
+
+Some functions called are:
+
+KT: su: RETURN: i(23081), f->func(0x  e4fff8)
+KT: su: RETURN: i(23081), f->func(0x  f00700)
+
+$ mips-uclibc-addr2line -f -s -e APP_Process e4fff8 f00700
+Lpriv192
+adaptors-register-natives.c:0
+Lpriv266
+adaptors-register-natives.c:0
+
+
+/* GENERATED CODE - DO NOT EDIT */
+./build/applications/Picasso/picasso/jpa/out/release_dbg/amsdrx890/release_dbg/generated-source/adaptors-register-callbacks.c
+
+build/applications/Picasso/picasso/jpa/Makefile:249:            ADAPTOR_LIBS="$(abspath $(OUTDIR_PLATFORM_DEPENDENT)/libPicasso.a)"\
+
+// dump from libPicasso.a
+
+00000ec0 <Lpriv27564>:
+     ec0:	3c1c0000 	lui	gp,0x0
+     ec4:	279c0000 	addiu	gp,gp,0
+     ec8:	0399e021 	addu	gp,gp,t9
+     ecc:	1220001b 	beqz	s1,f3c <Lpriv27564+0x7c>
+     ed0:	ac310000 	sw	s1,0(at)
+     ed4:	8f01fffc 	lw	at,-4(t8)
+     ed8:	30210002 	andi	at,at,0x2
+     edc:	14200017 	bnez	at,f3c <Lpriv27564+0x7c>
+     ee0:	8f990000 	lw	t9,0(gp)
+     ee4:	00000000 	nop
+     ee8:	8f390000 	lw	t9,0(t9)
+     eec:	8f390000 	lw	t9,0(t9)
+     ef0:	8e21fffc 	lw	at,-4(s1)
+     ef4:	30210002 	andi	at,at,0x2
+     ef8:	10200010 	beqz	at,f3c <Lpriv27564+0x7c>
+     efc:	8f810000 	lw	at,0(gp)
+     f00:	00000000 	nop
+     f04:	8c210000 	lw	at,0(at)
+     f08:	0319c823 	subu	t9,t8,t9
+     f0c:	8c210000 	lw	at,0(at)
+     f10:	0019c302 	srl	t8,t9,0xc
+     f14:	0018c080 	sll	t8,t8,0x2
+     f18:	0019c9c2 	srl	t9,t9,0x7
+     f1c:	0038c021 	addu	t8,at,t8
+     f20:	24010001 	li	at,1
+     f24:	0321c804 	sllv	t9,at,t9
+     f28:	c3010000 	ll	at,0(t8)
+     f2c:	00390825 	or	at,at,t9
+     f30:	e3010000 	sc	at,0(t8)
+     f34:	1020fffc 	beqz	at,f28 <Lpriv27564+0x68>
+     f38:	00000000 	nop
+     f3c:	03e00008 	jr	ra
+     f40:	00000000 	nop
+	...
+
+
+<ex>
+note:
+* do now show MEMMAN_API_AllocStaticP
+* the line number from *tool-addr2line* is not exact match
+
+pool GUIDE size=590248:
+size=36 (6030e0 615f60 601714 9d5c6c ) [dcab057f]
+
+$ mips-uclibc-addr2line -f -s -e ./APP_Process 6030e0 615f60 601714 9d5c6c
+Guide_Util_Alloc_Debug
+guide_api_common.c:270
+GuideScheduleSimpleProgrammeInstanceListChangedHandler
+guide_api_schedule.c:4590
+MessageThread
+guide_api_common.c:1113
+VRMIPCClientGenericUserInterfaceCB
+vrm_ipc_client.c:1029
+
+// DARWIN_PLATFORM/DARWIN_GUIDE/src/guide_api_common.c
+
+void* Guide_Util_Alloc_Debug(MEMMAN_API_MemoryPoolHandle *pool, uint32_t size, const char *file, int line)
+{
+   void *ptlBuffer = NULL;
+
+   DIAG_DECLARE_FUNCTION("Guide_Util_Alloc_Debug");
+   DIAG_LOG_FN_ENTRY(g_guide_diag_memory_segment_id);
+
+#if (defined(MEMMAN_FORCE_ALLOC_DEBUG))
+   ptlBuffer = MEMMAN_API_AllocStaticPDebug(pool, size, NULL, file, line);
+#else
+   ptlBuffer = MEMMAN_API_AllocStaticP(pool, size);
+#endif
+   // ...
+}
+
+
 <membuster-check-from-thread>
 
+mb_init_sleep  = 300;
 mb_check_sleep = 180;
 
 static void membuster_thread(void)
 {
-  membuster_plus_check_all();
+  sleep(mb_init_sleep); /* wait 5 minutes before checking allocations */
+  
+  while(1)
   {
-    "start check at: %.3d:%.2d:%.2d.%.3d\n",
-  }
+    membuster_plus_check_all();
+    {
+      "start check at: %.3d:%.2d:%.2d.%.3d\n",
+    }
 
-  sleep(mb_check_sleep);
+    sleep(mb_check_sleep);
+  }
 }
 
 
