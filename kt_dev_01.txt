@@ -114,7 +114,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_005* cpp-init-copy-form
 |kt_dev_cpp_005| cpp-list-init cpp-initializer-list
 |kt_dev_cpp_003| cpp-ctor
-*kt_dev_cpp_018* cpp-dtor cpp-nonvirtial-destruction-problem
+*kt_dev_cpp_018* cpp-dtor cpp-non-virtial-destruction-problem
 *kt_dev_cpp_003* cpp-default-argument
 *kt_dev_cpp_003* cpp-copy-control
 *kt_dev_cpp_004* cpp-copy-assign-self
@@ -158,7 +158,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_016| cpp-array
 *kt_dev_cpp_016* cpp-static
 |kt_dev_cpp_017| cpp-static-members and class const {class-method} {class-const}
-|kt_dev_cpp_019| except
+|kt_dev_cpp_019| cpp-except
 |kt_dev_cpp_019| except-dtor-ctor
 *kt_dev_cpp_019* except-noexcept
 *kt_dev_cpp_019* except-safe
@@ -189,7 +189,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_cpp_0000* cpp-design-no-reference-to-internals
 *kt_dev_cpp_0000* cpp-new-delete
 |kt_dev_cpp_025| random
-|kt_dev_cpp_026| enum
+|kt_dev_cpp_026| cpp-enum
 |kt_dev_cpp_029| cpp-nested-class
 
 *kt_dev_cpp_050* cpp-template-function
@@ -237,7 +237,7 @@ KT KB. DEVELOPMENT.
 *kt_dev_stl_011* coll-vector-bool
 |kt_dev_stl_012| sequential: deque
 |kt_dev_stl_013| sequential: array
-|kt_dev_stl_014| sequential: list
+|kt_dev_stl_014| cpp-list
 |kt_dev_stl_015| sequential: forward list
 
 |kt_dev_stl_020| stl-coll-associative
@@ -284,7 +284,7 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_stl_080| stl-bitset
 
-|kt_dev_stl_100| cpp-sp-raii
+|kt_dev_stl_100| cpp-sp-raii cpp-raii
 |kt_dev_stl_101| cpp-sp-shared
 |kt_dev_stl_102| cpp-sp-weak
 *kt_dev_stl_101* cpp-ex-strblob-example
@@ -10914,8 +10914,10 @@ int main()
     // copy-from, an error
     MSTR m3 = "mstring three";
 
-    // `list-from-init` no error and converting-ctor is used.
-    MSTR m3{"mstring three"};
+    // `cpp-list-init` no error and converting-ctor is used. see that
+    // list-init works when there is no such a ctor. converting ctor is
+    // called.
+    MSTR m3{"mstring three"}; 
 }
 
 
@@ -11415,9 +11417,32 @@ Why logging call in the base class in the first place? that's becauase it's
 common to all type of transactions. So move up as it's abstraction.
 
 
+{class-invariant}
+Such a statement of what is assumed to be true for a class is called a class
+invariant, or simply an invariant. It is `the job of a constructor` to establish
+the invariant for its class (so that the member functions can rely on it) and
+for the member functions to make sure that the invariant holds when they exit. 
+
+Unfortunately, our Vector constructor only partially did its job. It properly
+initialized the Vector members, but it failed to check that the arguments
+passed to it made sense. Consider:
+
+Vector v(27);
+
+This is likely to cause chaos. Here is a more appropriate definition:
+
+Vector::Vector(int s)
+{
+  if (s<0) throw length_error{};
+
+  elem = new double[s];
+
+  sz = s;
+}
+
 
 ={============================================================================
-*kt_dev_cpp_018* cpp-dtor cpp-nonvirtial-destruction-problem
+*kt_dev_cpp_018* cpp-dtor cpp-non-virtial-destruction-problem
 
 {running-order}
 Opposite to ctor in destruction order so dtor body runs first and then
@@ -11463,14 +11488,14 @@ end of main
 derived dtor
 base dtor
 
-Unlike `nonvirtual-destruction-problem`, this case uses only static binding
+Unlike `non-virtual-destruction-problem`, this case uses only static binding
 and no vtable is involved. The compiler knows only about derived type and do
 not emits code to follow vtables.
 
 
-{syn-version-is-nonvirtual} {dtor-in-derived-classes}
+{syn-version-is-non-virtual} {dtor-in-derived-classes}
 The dtor is one of `copy-controls` and means if not defined, the compiler will
-make one which is `nonvirtual` when the base don't have one.
+make one which is `non-virtual` when the base don't have one.
 
 The virtual is only used in class definition and for other functions, if it's
 virtual in base then all overrides in derived classes are virtual. How about
@@ -11481,7 +11506,7 @@ only for destroying the resources allocated by the derived class. From user or
 programmer POV.
 
 
-{nonvirtual-destruction-problem}
+{non-virtual-destruction-problem}
 EC++07. The problem is that base dtor runs when derived dtor is expected via
 derived-to-base pointer is used
 
@@ -11562,7 +11587,7 @@ ctor: derived derived
 
 
 {when-use-virtual-dtor}
-Because there are costs of virtuals and *nonvirtual-destruction-problem* , All
+Because there are costs of virtuals and *non-virtual-destruction-problem* , All
 base class 'must' have virtual-dtor and these are <1> and <2> as advised in
 EC++07.
 
@@ -14661,7 +14686,7 @@ class NotQuery : public Query_base {
         return QueryResult(rep(), ret_lines, result.get_file());
     }
 
-    // query.rep() is nonvirtual call which ultimately makes a virtual call to
+    // query.rep() is non-virtual call which ultimately makes a virtual call to
     // get the representation of the underlying Query.
     // *cpp-override-access-control*
 
@@ -14996,7 +15021,7 @@ the Disc_quote ctor to construct the Disc_quote part of their objects. Default
 ctor default initialize those members.
 
   This ABS has no destructor and will use synthesized one.
-  see *nonvirtual-destruction-problem*
+  see *non-virtual-destruction-problem*
 
 
 {error-when-create-abc}
@@ -21489,16 +21514,16 @@ the class scope.
 
 
 ={============================================================================
-*kt_dev_cpp_019* except
+*kt_dev_cpp_019* cpp-except
 
 The exception are run-time anomalies that prevent the program from continuing
-normally. Exception handling supports the cooperation between the detecting and
-handling parts of a program. 
+normally. Exception handling supports the cooperation between the detecting
+and handling parts of a program. 
 
 MEC++09: What's different to the approach of returning error code? Exception
 'cannot' be 'ignored' and if do, it is terminated. From MEC++12. The execution
-return to call site for func call but never for exception when think that throw
-is a function call.
+return to call site for func call but never for exception when think that
+throw is a function call.
 
 Exception handling involves:
 
@@ -21523,11 +21548,11 @@ Exception classes are defined in four headers.
 
   * exception header
     The C++ Standard library provides a 'base' class specifically designed to
-    declare objects to be thrown as exceptions. It is called std::exception and
-    is defined in the exception header. This class has a virtual member function
-    called what() that returns a null-terminated character sequence and that can
-    be overwritten in derived classes to contain some sort of description of the
-    exception. 
+    declare objects to be thrown as exceptions. It is called std::exception
+    and is defined in the exception header. This class has a virtual member
+    function called what() that returns a null-terminated character sequence
+    and that can be overwritten in derived classes to contain some sort of
+    description of the exception. 
 
   * stdexcept header
     The 'stdexcept' header defines several general purpose exception classes
@@ -21635,9 +21660,9 @@ runtime_error        error detected during runtime
 
 
 {stack-unwinding}
-A `throw` acts like a return; statements following a throw are not executed.  If
-no 'matching' catch found, current/calling function is exited until found one in
-the call tree.
+A `throw` acts like a return; statements following a throw are not executed.
+If no 'matching' catch found, current/calling function is exited until found
+one in the call tree.
 
 If not found a matching catch and call 'terminate'. If found, run catch and
 coutinue running from the the end of the try block catched but not the point
@@ -21653,8 +21678,8 @@ func3()              func2()                func1()
 }                    }                      }
 
 
-During stack-unwinding, function exits 'prematurely' and means local objects are
-dstroyed and dtor is called.
+During stack-unwinding, function exits 'prematurely' and means local objects
+are dstroyed and dtor is called.
 
 
 ={============================================================================
@@ -26779,10 +26804,11 @@ CPR 749. TBD.
 ={============================================================================
 *kt_dev_cpp_026* enum
 
-The enumerations group together sets of 'integral' constants and defines new
-  'type'. From ansic, there are two advantages over #define:
+The enumerations group together sets of `integral constants` and defines new
+'type'. From ansic, there are two advantages over #define:
 
-* Provide a convenient way to associate constant value with names.
+* Provide a convenient way to associate constant value with symbolic names.
+
 * A debugger may be able to print values of enumeration variables. confirmed on
   gcc.
 
@@ -26793,32 +26819,34 @@ Why scoped enum in C++11? Support scope and type checks.
 The enumerator is const and need 'not' be unique. By default, start at 0 and
 increases by 1.
 
-// scoped, named
+// `class enum` scoped, named
 enum class open_modes { input, output, append };
 
-// unscoped, named
+// `plain enum` unscoped, named
 enum color { red, yellow, green };
 
 // unscoped, unnamed
 enum { floatPrec = 6, doublePrec = 10, double_doublePrec = 10 };
 
 
-{scoped-enum}
-CPR 19.3 832. C++11. note that used 'class' keyword. Defines an object of
-'open_modes' type and follows scoping rule means 'type' erorr can happen. Scope
-means that enumerators are inaccessible outside the scope and user have to
-specify explicitly when use it. 
+{scoped-enum} *C++11*
+CPR 19.3 832. note that `enum class` Defines an object of 'open_modes' type
+and follows scoping rule means 'type' erorr can happen. Scope means that
+enumerators are inaccessible outside the scope and user have to specify
+explicitly when use it. 
 
 // scoped, named
 enum class open_modes { input, output, append };
 
+open_modes x = open_modes::input;
 
-{unscoped-enum}
+
 The enumerator names in unscoped enum are placed into the same scope as the
 enumeration. 
 
 enum color { red, yellow, green };          // unscoped
-enum stoplight { red, yellow, green };      // error since redefines enumerators
+enum stoplight { red, yellow, green };      
+// error since redefines enumerators
 // error: conflicting declaration "red" error: red has a previous declaration as
 // main()::color red
 
@@ -32564,13 +32592,13 @@ strcpyed   : u s e   d a t a   m e m b e r  o f   f i r s t
 
 
 ={============================================================================
-*kt_dev_stl_014* sequential: list
+*kt_dev_stl_014* cpp-list
 
 A list<> is implemented as a 'doubly' linked list of elements and do not
 provide random access. The advantage of a list is that the insertion or
 removal of an element is fast at any position.
 
-<example>
+<ex>
 #include <iostream>
 #include <list>
 
@@ -32591,9 +32619,19 @@ int main()
 
 
 {no-random-access}
-A direct element access by using operator [ ] is not provided for lists. This
-is because lists don't provide random access, and so an operator [ ] would
-have bad performance.
+A direct element access by using operator[] is not provided for lists. This is
+because lists don't provide random access, and so an operator[] would have
+bad performance.
+
+double& List_container::operator[](int i)
+{
+  for (auto& x : ld) {
+    if (i==0) return x;
+    --i;
+  }
+
+  throw out_of_range("List container");
+}
 
 
 {list-erase}
@@ -41302,7 +41340,7 @@ see the use of bitset and bitset only supports fixed size.
 
 
 ={============================================================================
-*kt_dev_stl_100* cpp-sp-raii
+*kt_dev_stl_100* cpp-sp-raii cpp-raii
 
 {resource-acquisition-is-initialization} {resource-managing-class}
 EC++13. Why RAII? When use dynamic resource, client is fully resposible for
@@ -41385,6 +41423,15 @@ void f()
   and use the fact that dtor is called automatically when object is destroyed;
   use resource-managing-class object lifetime. As soon as get resource,
   initialize a object. How? In a 'constructor' and hence called raii.
+
+  C++PL
+
+  RAII, allows us to eliminate “naked new operations,” that is, to avoid
+  allocations in general code and keep them buried inside the implementation
+  of well-behaved abstractions. Similarly, “naked delete operations” should be
+  avoided. Avoiding naked new and naked delete makes code far less error-prone
+  and far easier to keep free of resource leaks
+
 
 Acquire and initialize a resource-managing-class in the same statement. In
 other words, reference should be 'encapsulated' in a object,
@@ -43100,9 +43147,10 @@ struct default_delete
     void
         operator()(_Tp* __ptr) const
         {
-            static_assert(sizeof(_Tp)>0, "can't delete pointer to incomplete type");
+          *cpp-static-assert*
+          static_assert(sizeof(_Tp)>0, "can't delete pointer to incomplete type");
 
-            `delete __ptr;`
+          `delete __ptr;`
         }
 };
 
