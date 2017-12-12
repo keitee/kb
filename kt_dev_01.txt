@@ -223,12 +223,10 @@ KT KB. DEVELOPMENT.
 |kt_dev_cpp_304| case: overload
 
 #{ stl follow <what-container-consideration> for points to consider
-|kt_dev_stl_000| stl-sgi, design-rationale
-|kt_dev_stl_001| cpp-stl-pair cpp-stl-tuple
+|kt_dev_stl_000| cpp-stl
+|kt_dev_stl_001| cpp-pair cpp-tuple
 |kt_dev_stl_002| std::ref
 *kt_dev_stl_004* stl-why-can-use-in-condition
-
-|kt_dev_stl_006| stl concepts, error, exception handling
 *kt_dev_stl_007* coll-amortized-complexity
 |kt_dev_stl_007| cpp-stl-container
 |kt_dev_stl_008| containers: requirement on element type {value-reference-semantics}
@@ -10867,17 +10865,15 @@ compiler will complain if try to create an object of such a class with no
 initializer. HOW?
 
 
-  * narrowing conversion
-
+*cpp-remember*
 The `list-form-init` do 'not' allow `narrow-conversion` of 'built-in' type.
 
 int x3{5.0};      // ERROR: narrowing
 int x4 = {5.3};   // ERROR: narrowing
 
-note: 
 Worthwhile to use this property? Since unlikely to directly initialize an int
-from a long double? However such initialization might happen unintentionally in
-template. So YES.
+  from a long double? However such initialization might happen unintentionally
+  in template. So YES.
 
   * use `single-form-of-init` whether it is built-in or class type
 
@@ -30903,20 +30899,144 @@ FullEventPtr operator()(
 # ============================================================================
 #{ STL
 ={============================================================================
-*kt_dev_stl_000* stl-sgi
+*kt_dev_stl_000* cpp-stl
 
 http://www.sgi.com/tech/stl/ 
 
 {stl-design-rationale}
-The idea behind the STL is to beat the combinatorial explosion of containers and
-functions that implement the same data structures and algorithms without forcing
-all program structures to be objects that are all in the same hierarchy. As long
-as a type has the needed properties, it works with STL containers or algorithms,
-   no matter what class hierarchies it is or isn't part of.
+The idea behind the STL is to beat the combinatorial explosion of containers
+and functions that implement the same data structures and algorithms without
+forcing all program structures to be objects that are all in the same
+hierarchy. As long as a type has the needed properties, it works with STL
+containers or algorithms, no matter what class hierarchies it is or isn't part
+of.
 
-STL provides a collection of such things that are recognized as both useful and
-reasonable design.  The picky could point out std::string as a counter-example
-to good design, here. 
+STL provides a collection of such things that are recognized as both useful
+and reasonable design. The picky could point out std::string as a
+counter-example to good design, here. 
+
+
+The concept of the STL is based on a 'separation' of data and operations. The
+data is managed by container classes, and the operations are defined by
+configurable algorithms. Iterators are the 'glue' between these two
+components.
+
+This STL concept contradicts the original idea of object-oriented programming:
+However, the reason for doing so is very important. In principle, you can
+combine every kind of container with every kind of algorithm, so the result is
+a very 'flexible' but still rather 'small' framework.
+
+One fundamental aspect of the STL is that all components work with 'arbitrary'
+types. Thus, the STL is a good example of the concept of 'generic'
+programming. Containers and algorithms are generic for arbitrary types and
+classes, respectively.
+
+
+{components}
+
+1. container
+
+Containers are used to manage 'collections' of objects of a certain kind.
+Every kind of container has its own advantages and disadvantages, so having
+different container types reflects different requirements for collections in
+programs.
+
+2. iterator
+
+Iterators are used to step through the elements of collections of objects. The
+major advantage of iterators is that they offer a small but common interface
+for any arbitrary container type. 
+
+The interface for iterators is almost the same as for ordinary pointers. To
+increment an iterator, you call operator ++. To access the value of an
+iterator, you use operator *. 
+
+So, you might consider an iterator a kind of a smart pointer that translates
+the call "go to the next element" into whatever is appropriate.
+
+3. algorithm
+
+Algorithms are used to process the elements of collections. Algorithms use
+iterators. Thus, because the iterator interface for iterators is common for
+all container types, an algorithm has to be written only once to work with
+arbitrary containers.
+
+
+{error-handling}
+The design goal of the STL was the best performance rather than the highest
+security. Error checking wastes time, so almost 'none' is done. Two reasons:
+
+1. Error checking reduces performance, and speed is still a general goal of
+programs. As mentioned, good performance was one of the design goals of the
+STL.
+
+2. If you prefer safety over speed, you can still get it, either by adding
+wrappers or by using special versions of the STL. But when error checking is
+built into all basic operations, you can't program to avoid error checking to
+get better performance. For example, when every subscript operation checks
+whether a range is valid, you can't write your own subscripts without
+checking.  However, it is possible the other way around.
+
+The C++ standard library states that any STL use that violates preconditions
+results in undefined behavior because these errors occur at 'runtime', not at
+compile time, they cause undefined behavior. In particular, the use of the STL
+requires that the following be met:
+
+<precondition>
+1. Iterators must be valid. For example, they must be initialized before they
+are used. Note that iterators may become invalid as a side effect of other
+operations. In particular, iterators become invalid
+
+- for vectors and deques, if elements are inserted or deleted or reallocation takes place, and
+- for unordered containers, if 'rehashing' takes place (which also might be the result of an
+insertion).
+
+2. Iterators that refer to the past-the-end position have no element to which
+to refer. Thus, calling operator * or operator -> is not allowed. This is
+especially true for the return values of the end(), cend(), and rend()
+  container member functions.
+
+3. Ranges must be valid:
+- Both iterators that specify a range must refer to the same container.
+- The second iterator must be reachable from the first iterator.
+
+4. If more than one source range is used, the second and later ranges usually
+must have at least as many elements as the first one.
+
+5. Destination ranges must have enough elements that can be overwritten;
+otherwise, insert iterators must be used.
+
+
+{exception-handling}
+As a result of these discussions, the C++ standard library since C++98 gives
+the following basic guarantee for exception safety: The C++ standard library
+will not leak resources or violate container invariants in the face of
+exceptions.
+
+Regarding this stronger guarantee; atomic with respect to exceptions or
+transaction safe, the C++ standard library now guarantees the following:
+
+The library reference, p249 for details.
+
+Note that all these guarantees are based on the requirement that 'destructors'
+never throw, which should always be the case in C++. The C++ standard library
+makes this promise, and so must the 'application' programmer.
+
+<what-container-consideration>
+If you need a container with full commit-or-rollback ability, you should use
+either a list (without calling or special handling for remove(), remove_if(),
+    merge(), sort(), and unique()) or an associative/unordered container
+(without calling their multiple-element insert operations). This avoids having
+to make copies before a modifying operation to ensure that no data gets lost.
+Note that making copies of a container could be very expensive.
+
+If you can't use a node-based container and need the full commit-or-rollback
+ability, you have to provide wrappers for each critical operation.
+
+
+{guarantees}
+From ESTL p5. The revolutionary aspect of STL is its complexity guarantees
+regardless of the STL platform you are using.
 
 
 ={============================================================================
@@ -31430,115 +31550,6 @@ public:
   { return this->fail(); }
   //@}
 }
-
-
-={============================================================================
-*kt_dev_stl_006* stl concepts
-
-The concept of the STL is based on a 'separation' of data and operations. The data is managed by
-container classes, and the operations are defined by configurable algorithms. Iterators are the 'glue'
-between these two components.
-
-This STL concept contradicts the original idea of object-oriented programming: However, the reason
-for doing so is very important. In principle, you can combine every kind of container with every
-kind of algorithm, so the result is a very 'flexible' but still rather 'small' framework.
-
-One fundamental aspect of the STL is that all components work with 'arbitrary' types. Thus, the STL is
-a good example of the concept of 'generic' programming. Containers and algorithms are generic for
-arbitrary types and classes, respectively.
-
-
-{components}
-1. container
-Containers are used to manage 'collections' of objects of a certain kind. Every kind of container
-has its own advantages and disadvantages, so having different container types reflects different
-requirements for collections in programs.
-
-2. iterator
-Iterators are used to step through the elements of collections of objects. The major advantage of
-iterators is that they offer a small but common interface for any arbitrary container type. 
-
-The interface for iterators is almost the same as for ordinary pointers. To increment an iterator,
-you call operator ++. To access the value of an iterator, you use operator *. 
-
-So, you might consider an iterator a kind of a smart pointer that translates the call "go to the
-next element" into whatever is appropriate.
-
-3. algorithm
-Algorithms are used to process the elements of collections. Algorithms use iterators. Thus, because
-the iterator interface for iterators is common for all container types, an algorithm has to be
-written only once to work with arbitrary containers.
-
-
-{error-handling}
-The design goal of the STL was the best performance rather than the highest security. Error checking
-wastes time, so almost 'none' is done. Two reasons:
-
-1. Error checking reduces performance, and speed is still a general goal of programs. As mentioned,
-good performance was one of the design goals of the STL.
-
-2. If you prefer safety over speed, you can still get it, either by adding wrappers or by using
-special versions of the STL. But when error checking is built into all basic operations, you can't
-program to avoid error checking to get better performance. For example, when every subscript
-operation checks whether a range is valid, you can't write your own subscripts without checking.
-However, it is possible the other way around.
-
-The C++ standard library states that any STL use that violates preconditions results in undefined
-behavior because these errors occur at 'runtime', not at compile time, they cause undefined
-behavior. In particular, the use of the STL requires that the following be met:
-
-<precondition>
-1. Iterators must be valid. For example, they must be initialized before they are used. Note that
-iterators may become invalid as a side effect of other operations. In particular, iterators become
-invalid
-
-- for vectors and deques, if elements are inserted or deleted or reallocation takes place, and
-- for unordered containers, if 'rehashing' takes place (which also might be the result of an
-insertion).
-
-2. Iterators that refer to the past-the-end position have no element to which to refer. Thus,
-  calling operator * or operator -> is not allowed. This is especially true for the return values of
-  the end(), cend(), and rend() container member functions.
-
-3. Ranges must be valid:
-- Both iterators that specify a range must refer to the same container.
-- The second iterator must be reachable from the first iterator.
-
-4. If more than one source range is used, the second and later ranges usually must have at least as
-many elements as the first one.
-
-5. Destination ranges must have enough elements that can be overwritten; otherwise, insert iterators
-must be used.
-
-
-{exception-handling}
-As a result of these discussions, the C++ standard library since C++98 gives the following basic
-guarantee for exception safety: The C++ standard library will not leak resources or violate
-container invariants in the face of exceptions.
-
-Regarding this stronger guarantee; atomic with respect to exceptions or transaction safe, the C++
-standard library now guarantees the following:
-
-The library reference, p249 for details.
-
-Note that all these guarantees are based on the requirement that 'destructors' never throw, which
-should always be the case in C++. The C++ standard library makes this promise, and so must the
-'application' programmer.
-
-<what-container-consideration>
-If you need a container with full commit-or-rollback ability, you should use either a list (without
-calling or special handling for remove(), remove_if(), merge(), sort(), and unique()) or an
-associative/unordered container (without calling their multiple-element insert operations). This
-avoids having to make copies before a modifying operation to ensure that no data gets lost. Note
-that making copies of a container could be very expensive.
-
-If you can't use a node-based container and need the full commit-or-rollback ability, you have to
-provide wrappers for each critical operation.
-
-
-{guarantees}
-From ESTL p5. The revolutionary aspect of STL is its complexity guarantees regardless of the STL
-platform you are using.
 
 
 ={============================================================================
