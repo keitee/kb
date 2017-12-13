@@ -228,7 +228,7 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_002| std::ref
 *kt_dev_stl_004* stl-why-can-use-in-condition
 *kt_dev_stl_007* coll-amortized-complexity
-|kt_dev_stl_007| cpp-stl-container
+|kt_dev_stl_007| cpp-container
 |kt_dev_stl_008| containers: requirement on element type {value-reference-semantics}
 |kt_dev_stl_009| containers: common operations and initialize
 |kt_dev_stl_010| containers: assignments and swap
@@ -240,15 +240,12 @@ KT KB. DEVELOPMENT.
 |kt_dev_stl_014| cpp-list
 |kt_dev_stl_015| sequential: forward list
 
-|kt_dev_stl_020| stl-coll-associative
+*kt_dev_stl_020* cpp-container-associative
 *kt_dev_stl_021* cpp-set cpp-multiset
 *kt_dev_stl_022* cpp-map cpp-multimap cpp-size-t
-*kt_dev_stl_023* cpp-multiset-find cpp-multimap-find
-|kt_dev_stl_023| associative: map: assignments
-
 |kt_dev_stl_030| unordered containers
-
 |kt_dev_stl_040| adaptor containers {stack} {queue}
+*kt_dev_stl_020* cpp-container-print-elements
 
 |kt_dev_stl_050| cpp-iter
 |kt_dev_stl_050| cpp-iter-array
@@ -343,7 +340,6 @@ KT KB. DEVELOPMENT.
 
 |kt_dev_ccon_002| std::future
 
-*kt_dev_exer_001* cpp-ex-write PRINT_ELEMENTS template function
 
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
@@ -10914,7 +10910,7 @@ int main()
     // copy-from, an error
     MSTR m3 = "mstring three";
 
-    // `cpp-list-init` no error and converting-ctor is used. see that
+    // `cpp-brace-init` no error and converting-ctor is used. see that
     // list-init works when there is no such a ctor. converting ctor is
     // called.
     MSTR m3{"mstring three"}; 
@@ -17709,6 +17705,7 @@ $ clang++ -std=c++11 main.cpp && ./a.out
 c'tor
 d'tor
 
+// same as gcc
 $ clang++ -std=c++11 -fno-elide-constructors main.cpp && ./a.out
 c'tor
 move c'tor
@@ -21070,7 +21067,7 @@ typedef struct _fsm
 FSM_T new_fsm = 0;
 
 
-{cpp-type-alias}
+{cpp-type-alias} cpp-using
 typedef double wages;
 using wages = double;         // C++11
 
@@ -21088,6 +21085,36 @@ Effectively, make alias to classA. Useful when class name changes. Seen in
 Tizen code. typedef is just a 'synonym' for some type (from ESTL)
 
 typedef classA classB;
+
+
+<define-new-type>
+The aliasing mechanism can be used to define a new template by binding some or
+all template arguments.
+
+template<typename Key, typename Value>
+class Map
+{
+  // ...
+};
+
+template<typename Value>
+using String_map = Map<string, Value>;
+
+// Map<string, int>
+String_map<int> m; 
+
+
+To simplify the declaration of containers, define a type alias:
+
+using SD_multiset = unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*>;
+SD_multiset bookstore(42, hasher, eqOp);
+
+This is not supported in GCC 4.6 and use typedef instead.
+
+typedef unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*> SD_multiset;
+SD_multiset bookstore(42, hasher, eqOp);
+SD_multiset::iterator it;
+
 
 <typedef-multiple>
 Is it error to have multiple typedefs? No. See *kt_dev_gcc_001* and the error
@@ -31598,7 +31625,7 @@ complexity. Thus, the complexity of the insertion is 'amortized' constant time.
 
 
 ={============================================================================
-*kt_dev_stl_007* cpp-stl-container
+*kt_dev_stl_007* cpp-container
 
 According to the way the order of elements is defined. See difference between
 `ordered` and `sorted` term.
@@ -31982,7 +32009,7 @@ different elements afterward. <Q> only for array?
 
 
 ={============================================================================
-*kt_dev_stl_010* coll-sequential
+*kt_dev_stl_010* cpp-container-sequential
 
 Consider performance trade-offs between insert/delete and random-access.
 
@@ -32855,35 +32882,92 @@ items: 10
 
 
 ={============================================================================
-*kt_dev_stl_020* stl-coll-associative
+*kt_dev_stl_020* cpp-container-associative
 
 Associative containers sort their elements automatically according to a
 certain ordering criterion. By default, the containers compare the elements or
 the keys with `operator<`. However, you can supply your own comparison
 function to define another `sort-criterion`.
 
+
 <what-container-consideration>
-Typically implemented as binary trees. The associative containers differ in the
-kinds of elements they support and how they handle duplicates. GCC uses
-`red-black-tree` which is balanced binary tree and search functions have
+
+Pros:
+Typically implemented as binary trees. The associative containers differ in
+the kinds of elements they support and how they handle duplicates. GCC uses
+`red black tree` which is balanced binary tree and search functions have
 `log(n)` 'logarithmic' complexity.
 
-From gcc errors:
-In file included from /usr/include/c++/4.6/map:60:0,
-                 from use-mmap.cpp:3:
-/usr/include/c++/4.6/bits/stl_tree.h: In member function 
-  'std::_Rb_tree<_Key, _Val, _KeyOfValue,
+note:
+Since uses the same rb tree, can consider a cpp-set as a special kind of
+cpp-map, in which the value is 'identical' to the key.
 
 
-<set-and-map>
-You can consider a set as a special kind of map, in which the value is
-'identical' to the key.
+Cons:
+However, automatic sorting also imposes an important constraint on sets and
+multisets: You may not change the value of an element directly, because doing
+so might compromise the correct order.
+
+Therefore, to modify the value of an element, you must remove the element
+having the old value and insert a new element that has the new value. 
+
+The interface reflects this behavior: 
+
+* `set` and `multiset` don't provide operations for direct element access.
+
+  note: However, maps has.
+
+* Indirect access via iterators has the constraint that, from the iterator's
+  point of view, the element value is 'constant'.
+
+  note: means that  cannot use modifying algorithm like algo-remove
+
+
+{element-access}
+sets and multisets do not provide direct element access, so you have to use
+range-based for loops or iterators. Sets and multisets provide the usual
+member functions for iterators (Table 7.38).
+
+c.begin()   Returns a bidirectional iterator for the first element
+c.end()     Returns a bidirectional iterator for the position after the last
+            element
+c.cbegin()  Returns a constant bidirectional iterator for the first element
+            (since C++11)
+c.cend()    Returns a constant bidirectional iterator for the position after
+            the last element (since C++11)
+c.rbegin()  Returns a reverse iterator for the first element of a reverse
+            iteration
+c.rend()    Returns a reverse iterator for the position after the last element
+            of a reverse iteration
+c.crbegin() Returns a constant reverse iterator for the first element of a
+            reverse iteration (since C++11)
+c.crend()   Returns a constant reverse iterator for the position after the
+            last element of a reverse iteration (since C++11)
+
+
+{iterator-category}
+As with all associative container, the iterators are `bidirectional iterators`
+Thus, you can't use them in algorithms that are provided 'only' for
+random-access iterators, such as algorithms for sorting or random shuffling.
+
+
+{same-type}
+Comparisons are provided only for containers of the same type which includes
+sorting criterion. Thus, the elements and the sorting criterion must have the
+same types; otherwise, a type error occurs at compile time. For example:
+
+std::set<float> c1;                       // sorting criterion: std::less<>
+std::set<float,std::greater<float> > c2;  // std::greater<>
+...
+if (c1 == c2) { // ERROR: different types
+...
+}
 
 
 {change-sorting-criterion} stl-set stl-multiset
-set c(op) Creates an empty set/multiset that uses op as the sorting criterion
 
-Here, set may be one of the following types:
+set c(op)         Creates an empty set/multiset that uses op as the sorting 
+                  criterion
 
 set<Elem>         A set that by default sorts with less<> (operator <)
 set<Elem,Op>      A set that by default sorts with Op
@@ -32891,7 +32975,7 @@ multiset<Elem>    A multiset that by default sorts with less<> (operator <)
 multiset<Elem,Op> A multiset that by default sorts with Op
 
 note: 
-That if two 'containers' are 'compared' by operator ==, the elements in both
+that if two 'containers' are 'compared' by operator ==, the elements in both
 containers are compared using their operator ==, which means that operator ==
 has to be provided for the 'element' type.
 
@@ -32905,15 +32989,24 @@ multimap<Key,Val,Op> A multimap that by default sorts keys with Op
 
 There are two ways to set sorting criterion.
 
+
 <as-a-template-parameter>
-In this case, the sorting criterion is 'part' of the type. This is the usual way
-to specify the sorting criterion. To be more precise, the second parameter is
-the 'type' of the sorting criterion.  The concrete sorting criterion is the
+In this case, the sorting criterion is 'part' of the type. This is the usual
+way to specify the sorting criterion. To be more precise, the second parameter
+is the 'type' of the sorting criterion. The concrete sorting criterion is the
 function 'object' that gets created with the container. To do this, the
 constructor of the container calls the default constructor of the type of the
 sorting criterion.
-typedef std::set<int,std::greater<int>> IntSet; typedef std::map<float,std::string,std::greater<float>> coll; <as-a-constructor-parameter> You might have a type for several sorting criteria that allows having different initial values or states. This is useful when processing the sorting criterion at 'runtime' and when sorting criteria are needed that are different (criterion)
-but of the same data type.
+
+typedef std::set<int,std::greater<int>> IntSet; 
+typedef std::map<float,std::string,std::greater<float>> coll; 
+
+
+<as-a-constructor-parameter> 
+You might have a type for several sorting criteria that allows having
+different initial values or states. This is useful when processing the sorting
+criterion at 'runtime' and when sorting criteria are needed that are different
+(criterion) but of the same data type.
 
 <ex>
 multiset< std::shared_ptr<Quote>, decltype(compare)*> items{ compare };
@@ -32979,8 +33072,11 @@ int main()
   PRINT_ELEMENTS(coll1, "coll1 : ");
 
   // One of Nonmodifying operations for set family
+  //
   // c.key_comp() Returns the comparison criterion
-  // c.value_comp() Returns the comparison criterion for values as a whole (same as key_comp())
+  //
+  // c.value_comp() Returns the comparison criterion for values as a whole
+  // (same as key_comp())
 
   if( coll1.value_comp() == coll2.value_comp() )
     cout << "coll1 and coll2 have the same sorting criterion" << endl;
@@ -32993,11 +33089,11 @@ coll2 : 7 6 5 4 2 1
 coll1 : 7 6 5 4 3 2 1 
 coll1 and coll2 have the same sorting criterion
 
-note: the class RuntimeCmp provides the general ability to specify, at runtime, the sorting
-criterion for any type.
+note: the class RuntimeCmp provides the general ability to specify, at
+runtime, the sorting criterion for any type.
 
-note: that coll1 and coll2 have the same type, which is 'not' the case when passing less<> and
-greater<> as sorting criteria. 
+note: that coll1 and coll2 have the same type, which is 'not' the case when
+passing less<> and greater<> as sorting criteria. 
 
 If try to use set c<elem, op> then not compile since they are different type.
 
@@ -33023,8 +33119,8 @@ int main()
   //  cout << "coll1 and coll2 have the different sorting criterion" << endl;
 }
 
-note: also that the assignment operator assigns the elements and the sorting criterion;
-If change coll1 as below and run the program:
+note: also that the assignment operator assigns the elements and the sorting
+criterion; If change coll1 as below and run the program:
 
   IntSet coll1{ 4, 7 }; 
 
@@ -33035,8 +33131,8 @@ coll2 : 7 6 5 4 2 1
 coll1 : 7 6 5 4 3 2 1 
 coll1 and coll2 have the same sorting criterion
 
-That seems useful since if use c<elem, op> approach, copy each item into the other set which has
-different sorting criterion.
+That seems useful since if use c<elem, op> approach, copy each item into the
+other set which has different sorting criterion.
 
 <example>
 1. How to define a sorting criterion at runtime
@@ -33144,29 +33240,11 @@ Haken           snag
 Hund            dog
 Unternehmen     undertake
 
-note: The second block changed the order due to 'nocase' criterion. 
-note: that the second block has one item 'less' because the uppercase word "Unternehmen" is, from a
-case-insensitive point of view, equal to the lowercase word "unternehmen"
-note: The signature of operator() must be const.
-
-
-{iterator-category}
-As with all associative container, the iterators are `bidirectional-iterators`.
-Thus, you can't use them in algorithms that are provided 'only' for
-random-access iterators, such as algorithms for sorting or random shuffling.
-
-
-{use-typedef}
-To simplify the declaration of containers, define a type alias:
-
-using SD_multiset = unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*>;
-SD_multiset bookstore(42, hasher, eqOp);
-
-This is not supported in GCC 4.6 and use typedef instead.
-
-typedef unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*> SD_multiset;
-SD_multiset bookstore(42, hasher, eqOp);
-SD_multiset::iterator it;
+note: The second block changed the order due to 'nocase' criterion.  
+note:
+that the second block has one item 'less' because the uppercase word
+"Unternehmen" is, from a case-insensitive point of view, equal to the
+lowercase word "unternehmen" note: The signature of operator() must be const.
 
 
 ={============================================================================
@@ -33178,8 +33256,9 @@ SD_multiset::iterator it;
 
 namespace std {
 
-  template<typename _Key, typename _Compare = `std::less<_Key>`,
-	   typename _Alloc = std::allocator<_Key> >
+  template<typename _Key, 
+    typename _Compare = `std::less<_Key>`,
+	 typename _Alloc = std::allocator<_Key> >
     class set
     {
     };
@@ -33198,24 +33277,14 @@ defines the sorting criterion and if not passed, the default criterion `less`
 is used.
 
 
-{same-type}
-The same type for sets includes sorting criterion and this is ture for
-comparison and assign. Comparisons are provided only for containers of the
-same type. Thus, the elements and the sorting criterion must have the same
-types; otherwise, a type error occurs at compile time. For example:
+{cpp-set-search-operations}
+Because they are optimized for fast searching of elements, sets and multisets
+provide `special search functions` (Table 7.36). These functions are special
+versions of general algorithms that have the same name. 
 
-std::set<float> c1;                       // sorting criterion: std::less<>
-std::set<float,std::greater<float> > c2;  // std::greater<>
-...
-if (c1 == c2) { // ERROR: different types
-...
-}
-
-
-{special-search-operations}
-Special? You should always 'prefer' the optimized versions for sets and
-multisets to achieve logarithmic complexity instead of the linear complexity
-of the `general algorithms.`
+You should always 'prefer' the optimized versions for sets and multisets to
+achieve logarithmic complexity instead of the linear complexity of the
+`general algorithms.`
 
       /**
        *  @brief  Finds the number of elements.
@@ -33256,31 +33325,131 @@ Returns the position of the `first element` with value val (or end() if none
   don't need the count, it's best to use find.
 
 
-{no-direct-change-of-value}
-Automatic sorting also imposes an important constraint on sets and multisets:
-You may 'not' change the value of an element directly, because doing so might
-compromise the correct order.
+<cpp-multset-order-of-duplicates>
+For multisets, since C++11 it is guaranteed that insert(), emplace(), and
+erase() preserve the relative ordering of equivalent elements, and that
+inserted elements are placed `at-the-end` of existing equivalent values.
 
-Therefore, to modify the value of an element, you must remove the element
-having the old value and insert a new element that has the new value. The
-interface reflects this behavior:
+For multisets, since C++11 it is guaranteed that insert(), emplace(), and
+erase() preserve the relative ordering of equivalent elements, and that
+inserted elements are placed at the end of existing equivalent values.
 
-* `set` and `multiset` don't provide operations for direct element access.
-  However, maps have some.
+  x   x   x   x   x   x   x
+      [  equal    ) 
+      lower       upper
+      
+c.lower_bound(val) 
+Returns an iterator to the first element with key not less than val.
 
-* Indirect access via iterators has the constraint that, from the iterator's
-  point of view, the element value is 'constant'.
+c.upper_bound(val) 
+Returns an iterator to the first element with key greater than val.
+
+c.equal_range(val) 
+Returns a range, pair of iterators, denoting the elements with val
+
+lower_bound() returns the position of the first element that has the same or a
+greater value than the argument, whereas upper_bound() returns the position of
+the first element with a greater value. Thus, equal_range() returns the range
+of elements that have the same value as the argument.
+
+If lower_bound() or the first value of equal_range() is equal to upper_bound()
+or the second value of equal_range()
+
+Not only to find. Can be used to get a position to be inserted in sorted
+order.
 
 
-{set-insert-set-erase}
-Again, bidirectional iterator and from an iterator's point of view, all elements
-are considered 'constant'. Means that iterators are also constant.
+<ex>
+When there are multiple elements of the same key, those will be `adjacent`
+within the container.
+
+// this is for multimap
+string search_item("Alain de Botton");
+
+auto entries = aurthors.count(search_item);
+auto iter = aurthors.find(search_item);
+
+// this relys on the fact that multiple elements are adjacent.
+while (entries) {
+  cout << iter->second << endl;
+  ++iter;
+  --entries;
+}
+
+// 
+for (auto beg = authors.lower_bound(search_item),
+    end = authors.upper_bound(search_item);
+    beg != end;
+    ++beg)
+  cout << beg->second << endl;
+
+// return a pair of iterators
+for (auto pos = authors.equal_range(search_item);
+    pos.first != pos.second;
+    ++pos.first)
+  cout << pos.first->second << endl;
+
+
+<ex>
+#include <iostream>
+#include <set>
+
+using namespace std;
+
+template <typename T>
+inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << elem << ' ';
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  set<int> coll;
+
+  coll.insert(1);
+  coll.insert(2);
+  // coll.insert(3);
+  coll.insert(4);
+  coll.insert(5);
+  coll.insert(6);
+
+  PRINT_ELEMENTS( coll, "coll: ");
+
+  cout << "lower_bound(3): " << *coll.lower_bound(3) << endl;
+  cout << "upper_bound(3): " << *coll.upper_bound(3) << endl;
+  cout << "equal_range(3): " << *coll.equal_range(3).first << " "
+                             << *coll.equal_range(3).second << endl;
+
+  cout << "lower_bound(5): " << *coll.lower_bound(5) << endl;
+  cout << "upper_bound(5): " << *coll.upper_bound(5) << endl;
+  cout << "equal_range(5): " << *coll.equal_range(5).first << " "
+                             << *coll.equal_range(5).second << endl;
+}
+
+coll: 1 2 4 5 6
+lower_bound(3): 4
+upper_bound(3): 4          // see it is > 3
+equal_range(3): 4 4
+lower_bound(5): 5
+upper_bound(5): 6          // see it is > 5
+equal_range(5): 5 6
+
+note: 
+these _bound members usually used for multiset, can be used with set.
+
+
+{cpp-set-insert-set-erase}
+Again, all elements are considered 'constant'. Means that iterators are also
+constant.
 
 As a result, you can't call any 'modifying' algorithm on the elements of a set
-or a multiset. For example, you can't call the algorithm-remove, because it
-"removes" by overwriting "removed" elements with the following elements. To
-remove elements in sets and multisets, you can use only 'member' functions
-provided by the container.
+or a multiset. To remove elements in sets and multisets, you can use only
+'member' functions provided by the container.
 
 c.insert(val)
 c.insert(pos,val)
@@ -33296,10 +33465,6 @@ c.clear()
 set.insert( ivec.begin(), ivec.end() );
 set.insert( { 1, 2, 3, 4, 5} );
 
-<order-of-duplicates>
-For multisets, since C++11 it is guaranteed that insert(), emplace(), and
-erase() preserve the relative ordering of equivalent elements, and that inserted
-elements are placed `at-the-end` of existing equivalent values.
 
 <different-return>
 The return types of the inserting functions insert() and emplace() differ as
@@ -33310,18 +33475,21 @@ follows:
 pair<iterator,bool>  insert (const value_type& val);
 iterator             insert (const_iterator posHint, const value_type& val);
 
-template <typename... Args> pair<iterator, bool> emplace (Args&&... args);
-template <typename... Args> iterator emplace_hint (const_iterator posHint, Args&&... args);
+template <typename... Args> pair<iterator, bool> 
+  emplace (Args&&... args);
+template <typename... Args> iterator 
+  emplace_hint (const_iterator posHint, Args&&... args);
 
 `multiset` provide the following interface:
 
 iterator insert (const value_type& val);
 iterator insert (const_iterator posHint, const value_type& val);
 
-template <typename... Args> iterator emplace (Args&&... args);
-template <typename... Args> iterator emplace_hint (const_iterator posHint, Args&&... args);
+template <typename... Args> iterator 
+  emplace (Args&&... args);
+template <typename... Args> iterator 
+  emplace_hint (const_iterator posHint, Args&&... args);
 
-note: 
 The bool in return is only for set since insert in multiset always succeed.
 multisets allow duplicates, whereas sets do not. Thus, the insertion of an
 element might fail for a set if it already contains an element with the same
@@ -33334,18 +33502,18 @@ structure
 * The member first of the pair structure returns the position of the newly
   inserted element or the position of the still existing element.
 
-Two insert() for the same purpose? As said, position is used it as a 'hint'.
-The prime purpose is that you have one insert function that has the same
-interface for all container types. Remember `sequence-container` use insert(pos,
-    val) interface. 
+Position argument? As said, position is used it as a 'hint'. The prime purpose
+is that you have one insert function that has the same interface for all
+container types. Remember `sequence-container` use insert(pos, val) interface. 
 
 
-{set-erase}
-std::set<Elem> coll;
-...
-// removes all elements with passed value and return # of erased elements
+<set-erase>
 
+// removes all elements equal to value and return # of erased elements
 coll.erase(value);
+
+// Removes all elements (empties the container)
+c.clear()
 
 // removes the element at iterator position pos or range[beg, eng) and returns
 // the 'following' position (returned nothing before C++11)
@@ -33358,7 +33526,7 @@ first element of these duplicates. Instead, you can code as follows:
 
 std::multiset<Elem> coll;
 ...
-// remove first element with passed value
+// remove only first element with passed value
 std::multiset<Elem>::iterator pos;
 
 pos = coll.find(value);
@@ -33375,6 +33543,27 @@ if (pos != coll.end()) {
 type `size_t` is a machine-specific `unsigned type` that is guaranteed to be
 large enough to hold the size of `any` object in memory.
 
+// /usr/include/c++/4.9/cstddef
+
+#ifndef _GLIBCXX_CSTDDEF
+#define _GLIBCXX_CSTDDEF 1
+
+#pragma GCC system_header
+
+#include <bits/c++config.h>
+#include <stddef.h>
+
+#if __cplusplus >= 201103L
+namespace std
+{
+  // We handle size_t, ptrdiff_t, and nullptr_t in c++config.h.
+  using ::max_align_t;
+}
+#endif
+
+#endif // _GLIBCXX_CSTDDEF
+
+
 // c++config.h
 namespace std
 {
@@ -33386,6 +33575,7 @@ namespace std
 #endif
 }
 
+// <cpp-red-black-tree>
 // /usr/include/c++/4.9/bits/stl_tree.h
 
   template<typename _Key, typename _Val, typename _KeyOfValue,
@@ -33438,7 +33628,7 @@ constant.
 *cpp-remember*
 When we dereference an iterator, get a reference to the container's `value type`
 
-The value_type is "pair<'const' key_type, mapped_type>" so implies key cannot
+The value_type is `pair<'const' key_type, mapped_type>` so implies key cannot
 be changed: 
 
       typedef std::pair<const _Key, _Tp>                    value_type;
@@ -33453,15 +33643,11 @@ map<string, int>::value_type v3;    // pair< const string, int >
 map<string, int>::key_type v4;      // string
 map<string, int>::mapped_type v5;   // int
 
-<what-container-consideration>
-Searching for elements that have a certain 'value' but not key promotes bad
-performance.
-
 
 {element-access}
-The usual way to access elements is via `range-based-for` loops or iterators.
-An exception to that rule is that maps provide at() and the subscript
-operator[] to access elements directly
+The usual way to access elements in associative container is via `range-for`
+loops or iterators. An exception to that rule is that maps provide at() and
+the subscript operator[] to access elements directly
 
 reference container::operator[] (size_type idx)
 const_reference container::operator[ ] (size_type idx) const
@@ -33560,14 +33746,12 @@ map<string, size_t> word_count;
 while( cin >> word )
    ++word_count[word];
 
-// since C++11
-// iterator is pair, which is value-type and pair has first and second public
-// member. *cpp-pair*
+// *C++11* *cpp-pair*
 for( const auto &w : word_count )
    cout << w.first << " occurs" << 
           w.second << ((w.second>1) ? "times" : " time") << endl;
 
-// before C++11
+// before C++11 since no range-for
 std::map<std::string,float> coll;
 std::map<std::string,float>::iterator pos;
 
@@ -33577,8 +33761,8 @@ for (pos = coll.begin(); pos != coll.end(); ++pos) {
 }
 
 
-{special-search-operations}
-As for sets and multisets, maps and multimaps provide special search member
+{cpp-map-search-operations}
+`As for sets and multisets,` maps and multimaps provide special search member
 functions that perform better because of their internal tree structure
 
 c.count(val) 
@@ -33589,9 +33773,11 @@ Returns the position(iterator) of the first element with 'key' val or end() if
 none found
 
 
-<to-find-element-for-value>
+Searching for elements that have a certain 'value' but not key promotes bad
+performance.
+
 You can't use the find() member function to search for an element that has a
-certain 'value'.  Instead, have to use a general algorithm, such as the
+certain 'value'. Instead, have to use a general algorithm, such as the
 find_if() algorithm, or program an explicit loop. Here is an example of a
 simple loop:
 
@@ -33641,139 +33827,7 @@ key 3.0 found!(3,2)
 value 3.0 found!(4,3)
 
 
-{map-insert-erase}
-As for set, you can't call any modifying algorithm on the elements of a set or
-a multiset as a destination since key is constant.
-
-<to-change-key>
-To change the key of an element, you have only one choice: You must replace
-the old element with a new element that has the same value.
-
-namespace MyLib {
-  template <typename Cont>
-    inline
-    bool replace_key (Cont& c,
-        const typename Cont::key_type& old_key,
-        const typename Cont::key_type& new_key)
-    {
-      typename Cont::iterator pos;
-      pos = c.find(old_key);
-      if (pos != c.end()) {
-
-        // insert new element with value of old element
-        c.insert(typename Cont::value_type(new_key, pos->second));
-
-        // remove old element
-        c.erase(pos);
-
-        return true;
-      }
-      else {
-        // key not found
-        return false;
-      }
-    }
-}
-
-maps provide a more convenient way to modify the key of an element. Instead of
-calling replace_key(), you can simply write the following:
-
-// insert new element with value of old element
-coll["new_key"] = coll["old_key"];
-
-// remove old element
-coll.erase("old_key");
-
-c.insert(val)           // note: different from sequence
-c.insert(pos,val)
-c.insert(beg,end)
-c.insert(initlist)
-
-c.erase(val)
-c.erase(pos)
-c.erase(beg,end)
-
-c.clear()
-
-std::map<std::string,int> coll;
-
-coll.insert( { word, 1} );           // *C++11* most convenient way
-
-coll.insert( std::map<std::string,int>::value_type( word, 1) );
-coll.insert( decltype(coll)::value_type( word, 1) );
-coll.insert( make_pair(word, 1) );
-coll.insert( pair<string, size_t>(word, 1) );
-
-note: As for set, different iterator return for map and multimap.
-
-As for multiset, you can't use erase() to remove only the first element of
-these duplicates.
-
-std::multimap<std::string,float> coll;
-
-auto pos = coll.find(key);
-if (pos != coll.end()) {
-  coll.erase(pos);
-}
-
-<to-erase-element-for-value> saw-off-the-bench
-you can't use the find() member functions to remove elements that have a
-certain value instead of a certain key. As shown in
-<to-find-element-for-value>, can use loop but careful not to saw off the
-branch on which you are sitting.
-
-std::map<std::string,float> coll;
-
-for (auto pos = coll.begin(); pos != coll.end(); ++pos) {
-  if (pos->second == value) {
-    coll.erase(pos);          // RUNTIME ERROR
-  }
-}
-
-Calling erase() for the element to which you are referring with pos
-'invalidates' pos as an iterator of coll. In fact, calling ++pos results in
-undefined behavior. note: this invalidates only current one but not else.
-
-Since C++11:
-
-std::map<std::string,float> coll;
-
-for (auto pos = coll.begin(); pos != coll.end(); ) {
-  if (pos->second == value) {
-    pos = coll.erase(pos);                // possible only since C++11
-  }
-  else {
-    ++pos;
-  }
-}
-
-The correct way before C++11:
-
-// remove all elements having a certain value
-for (pos = coll.begin(); pos != coll.end(); ) {
-  if (pos->second == value) {
-    coll.erase(pos++);                    // <key>
-  }
-  else {
-    ++pos;
-  }
-}
-
-Or can use remove-erase idiom: algorithm-remove. <Q> really since modifying
-algorithm? No see <manipulate-associative> for details.
-
-coll.erase( remove( c.begin(), c.end(), value ), c.end() );
-
-<order-of-duplicates> same as multiset
-Before C++11, there was no clear guarantee for the order of equivalent
-elements.  C++11 guarantees that newly inserted elements are inserted
-`at-the-end` of equivalent elements that multisets and multimaps already
-contain. 
-
-In addition, the 'order' of equivalent elements is guaranteed to remain stable
-if insert(), emplace(), or erase() is called.
-
-<example> print duplicates in multimap
+<ex> print duplicates in multimap
 #include <iostream>
 #include <string>
 #include <map>
@@ -33823,7 +33877,6 @@ title: How to get through
 
 See that the order of duplicates is maintained.
 
-
 <ex> or use _bound calls
 for(auto beg = authors.lower_bound( search_item ), 
     end = authors.upper_bound( search_item );
@@ -33839,6 +33892,124 @@ for(auto beg = authors.lower_bound( search_item ),
 for( auto pos = authors.equal_range( search_item ); 
     pos.first != pos.second; ++pos.first)
    cout << pos.first->second << endl;
+
+
+{cpp-map-insert-cpp-map-erase}
+`As for set,` you can't call any modifying algorithm on the elements of a set
+or a multiset as a destination since key is constant.
+
+To change the key of an element, you have only one choice: You must replace
+the old element with a new element that has the same value.
+
+namespace MyLib {
+  template <typename Cont>
+    inline
+    bool replace_key (Cont& c,
+        const typename Cont::key_type& old_key,
+        const typename Cont::key_type& new_key)
+    {
+      typename Cont::iterator pos;
+      pos = c.find(old_key);
+      if (pos != c.end()) {
+
+        // insert new element with value of old element
+        c.insert(typename Cont::value_type(new_key, pos->second));
+
+        // remove old element
+        c.erase(pos);
+
+        return true;
+      }
+      else {
+        // key not found
+        return false;
+      }
+    }
+}
+
+maps provide a more convenient way to modify the key of an element. Instead of
+calling replace_key(), you can simply write the following:
+
+// insert new element with value of old element
+coll["new_key"] = coll["old_key"];
+
+// remove old element
+coll.erase("old_key");
+
+c.insert(val)                 // ??? note: different from sequence
+c.insert(pos,val)
+c.insert(beg,end)
+c.insert(initlist)
+
+c.erase(val)
+c.erase(pos)
+c.erase(beg,end)
+
+c.clear()
+
+coll.insert( { word, 1} );    // *C++11* most convenient way
+coll.insert( std::map<std::string,int>::value_type( word, 1) );
+coll.insert( decltype(coll)::value_type( word, 1) );
+coll.insert( make_pair(word, 1) );
+coll.insert( pair<string, size_t>(word, 1) );
+
+`As for set,` different iterator return for map and multimap. As for multiset,
+you can't use erase() to remove only the first element of these duplicates.
+
+std::multimap<std::string,float> coll;
+
+auto pos = coll.find(key);
+if (pos != coll.end()) {
+  coll.erase(pos);
+}
+
+
+<to-erase-element-for-value> *cpp-iter-invalidate* 
+you can't use the find() member functions to remove elements that have a
+certain value instead of a certain key. Can use loop but careful not to saw
+off the branch on which you are sitting.
+
+std::map<std::string,float> coll;
+
+for (auto pos = coll.begin(); pos != coll.end(); ++pos) {
+  if (pos->second == value) {
+    coll.erase(pos);          // cause RUNTIME ERROR
+  }
+}
+
+Calling erase() for the element to which you are referring with pos
+'invalidates' pos as an iterator of coll and calling ++pos results in
+undefined behavior. note: this invalidates only current one but not else.
+
+// since C++11:
+
+std::map<std::string,float> coll;
+
+for (auto pos = coll.begin(); pos != coll.end(); ) {
+  if (pos->second == value) {
+    pos = coll.erase(pos);
+  }
+  else {
+    ++pos;
+  }
+}
+
+// before C++11:
+
+// remove all elements having a certain value
+for (pos = coll.begin(); pos != coll.end(); ) {
+  if (pos->second == value) {
+    coll.erase(pos++);                    // <key> *cpp-side-effect*
+  }
+  else {
+    ++pos;
+  }
+}
+
+Or can use remove-erase idiom: algorithm-remove. <Q> really since modifying
+algorithm? No see <manipulate-associative> for details.
+
+coll.erase( remove( c.begin(), c.end(), value ), c.end() );
 
 
 <ex> *ex-algo-max-element* 
@@ -33878,135 +34049,7 @@ max found (7, seventh)
 {seven, seventh, 7th, }
 
 
-={============================================================================
-*kt_dev_stl_023* cpp-multiset-find cpp-multimap-find
-
-
-  x   x   x   x   x   x   x
-      [  equal    ) 
-      lower       upper
-      
-c.lower_bound(val) 
-Returns an iterator to the first element with key not less than val.
-
-c.upper_bound(val) 
-Returns an iterator to the first element with key greater than val.
-
-c.equal_range(val) 
-Returns a range, pair of iterators, denoting the elements with val
-
-In other words, lower_bound() returns the position of the first element that
-has the same or a greater value than the argument, whereas upper_bound()
-returns the position of the first element with a greater value. Thus,
-equal_range() returns the range of elements that have the same value as the
-  argument.
-
-If lower_bound() or the first value of equal_range() is equal to upper_bound()
-or the second value of equal_range()
-
-Not only to find. Can be used to get a position to be inserted in sorted
-order.
-
-
-<ex>
-When there are multiple elements of the same key, those will be `adjacent`
-within the container.
-
-// this is for map
-string search_item("Alain de Botton");
-
-auto entries = aurthors.count(search_item);
-auto iter = aurthors.find(search_item);
-
-// this relys on the fact that multiple elements are adjacent.
-while (entries) {
-  cout << iter->second << endl;
-  ++iter;
-  --entries;
-}
-
-
-for (auto beg = authors.lower_bound(search_item),
-    end = authors.upper_bound(search_item);
-    beg != end;
-    ++beg)
-  cout << beg->second << endl;
-
-// return a pair of iterators
-for (auto pos = authors.equal_range(search_item);
-    pos.first != pos.second;
-    ++pos.first)
-  cout << pos.first->second << endl;
-
-
-<ex>
-#include <iostream>
-#include <set>
-
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-int main()
-{
-  set<int> coll;
-
-  coll.insert(1);
-  coll.insert(2);
-  // coll.insert(3);
-  coll.insert(4);
-  coll.insert(5);
-  coll.insert(6);
-
-  PRINT_ELEMENTS( coll, "coll: ");
-
-  cout << "lower_bound(3): " << *coll.lower_bound(3) << endl;
-  cout << "upper_bound(3): " << *coll.upper_bound(3) << endl;
-  cout << "equal_range(3): " << *coll.equal_range(3).first << " "
-                             << *coll.equal_range(3).second << endl;
-
-  cout << "lower_bound(5): " << *coll.lower_bound(5) << endl;
-  cout << "upper_bound(5): " << *coll.upper_bound(5) << endl;
-  cout << "equal_range(5): " << *coll.equal_range(5).first << " "
-                             << *coll.equal_range(5).second << endl;
-}
-
-coll: 1 2 4 5 6
-lower_bound(3): 4
-upper_bound(3): 4          // see it is > 3
-equal_range(3): 4 4
-lower_bound(5): 5
-upper_bound(5): 6          // see it is > 5
-equal_range(5): 5 6
-
-note: 
-Although these _bound members usually used for multiset, can be used with set.
-
-
-={============================================================================
-*kt_dev_stl_023* associative: map: assignments
-
-CLR 7.8.2
-
-For these operations, both containers must have the 'same' type. In particular,
-the type of the comparison criteria must be the same, although the comparison
-  criteria themselves may be different. See Section 7.8.6, page 351, for an
-  example of different sorting criteria that have the same type. If the criteria
-  are different, they also get assigned or swapped.
-
-note: Since comparison criteria is part of type.
-
-
-<ex>
+{cpp-map-assign}
 
 #include<iostream>
 #include<iomanip>
@@ -34381,6 +34424,51 @@ type in an integer n(loop count) followed by n decimal numbers.
 1 2 3 4 5 6 7 8 9 10 11 12
 input is done and you have entered.
 1 : 2 : 3 : 4 : 5 : 6 : 7 : 8 : 9 : 10 : 
+
+
+={============================================================================
+*kt_dev_stl_020* cpp-container-print-elements
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+template<typename T>
+void PRINT_ELEMENTS( const T &con, const std::string &delm = " " )
+{
+  for( const auto &elem : con )
+    std::cout << elem << delm;
+
+  std::cout << std::endl;
+}
+
+int main()
+{
+  std::vector<int> vcon{1, 2, 3, 4, 5};
+
+  std::cout << "-----------" << std::endl;
+  PRINT_ELEMENTS(vcon);
+  PRINT_ELEMENTS(vcon, ",");
+  std::cout << "-----------" << std::endl;
+}
+
+
+Q: range-for oPRINT_ELEMENTSnly works for sequential containers? No since:
+
+PRINT_ELEMENTS works for set
+
+However, need one for map:
+
+template<typename T>
+inline void PRINT_ELEMENTS_MAP( const T& coll, const std::string &optstr = "" )
+{
+  std::cout << optstr;
+
+  for( const auto &elem : coll )
+    std::cout << "{" << elem.first << ", " << elem.second << "}" << endl;
+
+  std::cout << std::endl;
+}
 
 
 ={============================================================================
@@ -36792,10 +36880,17 @@ reference.
 Let the compiler 'infer' variables we use from the code in the lambda body.
 Use an & or = in the capture list. The revised is:
 
-// 1. get an iterator to the first element whose size is >= sz
+// get an iterator to the first element whose size is >= sz
 auto wc = find_if( words.begin(), words.end(),
                [=](const string &a)
                { return a.size() >= sz; } );
+
+// C++PL
+The [&] is a capture list specifying that local names used (such as x) will be
+accessed through references. Had we wanted to “capture” only x, we could have
+said so: [&x]. Had we wanted to give the generated object a copy of x, we
+could have said so: [=x]. Capture nothing is [], capture all local names used
+by reference is [&], and capture all local names used by value is [=].
 
 
 <limits-of-lambda>
@@ -39349,6 +39444,20 @@ coll: 1 2 3 4 5 6 7 8 9
 number of elements equal to 4:      1
 number of elememts with even value: 4
 number of elememts than 4         : 5
+
+
+<ex>
+template<typename C, typename P>
+int count (const C& c, P pred)
+{
+  int cnt = 0;
+
+  for (const auto &x : c)
+    if (pred(x))
+      ++cnt;
+
+  return cnt;
+}
 
 
 ={============================================================================
@@ -49231,71 +49340,6 @@ completely handled by the packaged_task.
 # ============================================================================
 #{
 ={============================================================================
-*kt_dev_exer_001* cpp-ex-write PRINT_ELEMENTS template function
-
-* this do not work for map.
-
-#include <iostream>
-#include <string>
-#include <vector>
-
-template<typename T>
-void PRINT_ELEMENTS( note:1 T &con, note:2 std::string &delm = " " )
-{
-  note:3: This works but requires more typing.
-  for( const typename T::value_type &elem : con )
-    std::cout << elem << delm;
-
-  std::cout << std::endl;
-}
-
-int main()
-{
-  note:4
-  // std::vector<int> vcon = {"1", "2", "3", "4", "5"};
-  // std::vector<int> vcon{"1", "2", "3", "4", "5"};
-  std::vector<int> vcon{1, 2, 3, 4, 5};
-
-  std::cout << "-----------" << std::endl;
-  PRINT_ELEMENTS(vcon);
-  PRINT_ELEMENTS(vcon, ","); note:2
-  std::cout << "-----------" << std::endl;
-}
-
-In note:2, there must be `const` since cannot bind `rvalue` to
-`lvalue-reference` but can do that with const. Otherwise, gets compile error:
-
-.cpp: In function ‘void PRINT_ELEMENTS(T&, std::string&) 
-  [with T = std::vector<int>; std::string = std::basic_string<char>]’:
-.cpp:22:22: error: default argument for parameter of type 
-  ‘std::string& {aka std::basic_string<char>&}’ has type ‘const char [2]’
-
-
-<updated>
-#include <iostream>
-#include <string>
-#include <vector>
-
-template<typename T>
-void PRINT_ELEMENTS( const T &con, const std::string &delm = " " )
-{
-  for( const auto &elem : con )
-    std::cout << elem << delm;
-
-  std::cout << std::endl;
-}
-
-int main()
-{
-  std::vector<int> vcon{1, 2, 3, 4, 5};
-
-  std::cout << "-----------" << std::endl;
-  PRINT_ELEMENTS(vcon);
-  PRINT_ELEMENTS(vcon, ",");
-  std::cout << "-----------" << std::endl;
-}
-
-
 # ============================================================================
 #{
 ={============================================================================

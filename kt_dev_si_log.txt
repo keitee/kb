@@ -353,6 +353,8 @@ mgrep.py "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|VIDEO IS|FRAME_PRESEN
 
 static final int APPLICATION_TERMINATION_TIMEOUT_MS    = 20000;
 
+// VERSION: 87.52.00_6800_MNTEE
+// this is ashwini's eng build
 theyard.uk.nds.com/si_logs/translation/darwin_0019fb3b92aa_0b1803578fadddedf8526426b208ef15
 
 == 8736455:NDS: ^[2017:12:08 10:41:27]0946930123.852936 !ERROR  -aem          		< p:0x000001e5 P:APP t:0x2c12f520 T:no name M:aem_api_xsi.c F:AEM_API_Application_Terminate L:1455 > AEM_API_Application_Terminate called 
@@ -360,7 +362,98 @@ theyard.uk.nds.com/si_logs/translation/darwin_0019fb3b92aa_0b1803578fadddedf8526
 == 8736455:NDS: ^[2017:12:08 10:41:27]0946930123.852979 !ERROR  -aem          		< p:0x000001e5 P:APP t:0x2c12f520 T:no name M:aem_internal_xsi.c F:AEM_Application_Terminate L:85 > 2 Calling AEM_TerminateApp 
 == 8736456:NDS: ^[2017:12:08 10:41:27]0946930123.852997 !ERROR  -aem          		< p:0x000001e5 P:APP t:0x2c12f520 T:no name M:aem_sys.c F:AEM_TerminateApp L:266 > app->applicationInfo.state 7 
 
+// do not see like:
+// == 8727114: !MIL    -EPG_ALM      		< p:0x000001e5 P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5abde49, event=4 STOPPING
+// == 8727116: !MIL    -P_Api        		< p:0x000001e5 P:APP t:0x016a7520 T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1168 > VIDEO IS SHOWN 
+// == 8727127: !MIL    -EPG_ALM      		< p:0x000001e5 P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5abde49, event=6 TERMINATED
+// == 8727158: !MIL    -AMS          		< p:0x000001e3 P:MW t:0x01d53520 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleAppEvents L:313 > APP_END event 
+// == 8727159: !MIL    -AMS          		< p:0x000001e3 P:MW t:0x01d53520 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleAppEvents L:327 > Application params: app_id=2997, provider_id=256 
+
+
 8736661:NDS: ^[2017:12:08 10:41:47]0946930143.860511 !  /!\  -EPG_AFRM     		< p:0x000001e5 P:APP t:0x2c12f520 T:no name M:InteractiveApplicationModel$ApplicationTerminati F:onTimeout L:1417 > T:CEE-J EventQueue Reader 0:HALT!!!  IAPP: Application termination timeout!
+
+// CMS_PLATFORM_SERVICES/AEM/src/aem_internal_xsi.c
+SYSTEM_STATUS AEM_Application_Terminate(Application *app)
+{
+    SYSTEM_STATUS status = AEM_API_STATUS_ERROR;
+
+    AEM_DIAG_LOG_FN_ENTRY("AEM_Application_Terminate");
+
+    if (g_aem_use_mhc_not_otv)
+    {
+        if(app->applicationInfo.type != AEM_API_ApplicationType_Resident)
+        {
+            DIAG_LOG_ERROR(g_aem_segment_id, ("KT: AEM_AppSignalingInfo_Terminate"));
+
+            if (!SYSTEM_STATUS_IS_OK(AEM_AppSignallingInfo_Terminate(app)))
+        }
+
+        /* If the app->engine != NULL, then we must call terminate_CB of App engine */
+        if ((app->engine == NULL) &&
+                ((app->applicationInfo.state == AEM_API_ApplicationStateLoading) ||
+                        (app->applicationInfo.state == AEM_API_ApplicationStatePending)))
+        {
+
+            DIAG_LOG_ERROR(g_aem_segment_id, ("KT: AEM_FireAppEvent"));
+
+            AEM_StateAppEvent appEvent = {AEM_FireAppEvent, AEM_API_ApplicationEventTerminated, app->applicationInfo.applicationHandle,
+                    {app->applicationInfo.identifier.provider_id, app->applicationInfo.identifier.application_id}};
+            (void)AEM_RunAsync(&appEvent, sizeof(AEM_StateAppEvent));
+
+            status = AEM_API_STATUS_OK;
+        }
+        else
+        {
+            DIAG_LOG_ERROR(g_aem_segment_id, ("KT: AEM_Terminate: not optv"));
+            status = AEM_TerminateApp(app);
+        }
+    }
+    else
+    {
+        DIAG_LOG_ERROR(g_aem_segment_id, ("2 Calling AEM_TerminateApp"));
+        DIAG_LOG_ERROR(g_aem_segment_id, ("KT: AEM_Terminate"));
+        status = AEM_TerminateApp(app);
+
+    }
+  return(status);
+}
+
+// CMS_PLATFORM_SERVICES/AEM/src/aem_sys.c
+
+/** @brief the internals of the terminate function */
+SYSTEM_STATUS AEM_TerminateApp(Application *app)
+{
+    SYSTEM_STATUS status = AEM_API_STATUS_ERROR;
+
+    DIAG_DECLARE_FUNCTION ("AEM_TerminateApp");
+    DIAG_LOG_FN_ENTRY (g_aem_segment_id);
+
+    if(app->engine == NULL)
+    {
+        DIAG_LOG_ERROR(g_aem_segment_id, ("Application not started yet"));
+    }
+    else if(app->engine->application_engine_info.terminate_fn == NULL)
+    {
+        DIAG_LOG_ERROR(g_aem_segment_id, ("engine terminate_fn = NULL"));
+        status = AEM_API_STATUS_FEATURE_NOT_SUPPORTED;
+    }
+    else
+    {
+        /* In case of error state, AEM will not pass by state stopping, because the engine can never */
+        app->applicationInfo.state = app->applicationInfo.state == AEM_API_ApplicationStateError ? AEM_API_ApplicationStateStopped :
+                AEM_API_ApplicationStateStopping ;
+
+        DIAG_LOG_ERROR(g_aem_segment_id, (" app->applicationInfo.state %d",app->applicationInfo.state))
+
+        (void)app->engine->application_engine_info.terminate_fn(app->applicationInfo.applicationHandle);
+
+        (void)AEM_ListRemoveKeySubscriptionForApp(app->applicationInfo.applicationHandle);
+        status = AEM_API_STATUS_OK;
+    }
+
+    DIAG_LOG_FN_EXIT (g_aem_segment_id, status);
+    return status;
+}
 
 
 ={============================================================================

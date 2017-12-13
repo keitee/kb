@@ -10546,6 +10546,12 @@ egrep -an "KEY_PRESS|currentscreen|EPG_ALM|EPG_FS|\-LAE"
 
 !MIL    -EPG_ME       		< P:APP t:0x2c17a520 T:no name M:MediaEngine F:channelChanged L:2092 > T:PooledExecutor#2:CHANNEL CHANGED TO Help and Support, 2050
 !MIL    -EPG_MISC     		< P:APP t:0x2c12f520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "PlayingStatus","action": "LIVE","label": "PlayingStatus changed to: LIVE","currentscreen": "/tv/2050"}
+
+// notify EPG wich iapp handle 
+// pListener->listener(applicationHandle, applicationEvent, pListener->usertag);
+
+!INFO   -aem          		< p:0x000001d9 P:APP t:0x0145f520 T:AEM_STATE_MONITOR_THREAD M:aem_common.c F:AEM_NotifyEventListeners L:639 > Notify listener for appHandle <3>, appEvent <0x00000001> 
+
 !MIL    -EPG_ALM      		< P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5abde49, event=1 CREATED
 !MIL    -EPG_ALM      		< P:APP t:0x2c12f520 T:no name M:InteractiveApplicationModel F:onCreated L:946 > T:CEE-J EventQueue Reader 0:AEM app created with type 3
 !MIL    -EPG_ALM      		< P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5abde49, event=2 RUNNING
@@ -10582,11 +10588,19 @@ typedef enum AEM_API_ApplicationStateTag
 !MIL    -aem          		< P:APP t:0x0149a520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(SKY)ef01 
 !MIL    -EPG_MISC     		< P:APP t:0x2c12f520 T:no name M:MilestoneNotifier F:send L:21 > T:CEE-J EventQueue Reader 0:{"category": "KeyPressMagicEye","action": "SKY","label": "Key Press SKY","currentscreen": "/interactive_background"}
 
+3.8 Exit An Interactive Application
+
 4. EPG requests AEM to terminate the application
 
 !MIL    -EPG_ALM      		< P:APP t:0x2c12f520 T:no name M:BaseApplication F:terminate L:75 > T:CEE-J EventQueue Reader 0:Terminating application=DV@5a3e947, name=Help and Support, AemApplication=ck@5abde49
+!ENTER  -aem          		< p:0x000001d9 P:APP t:0x2c12f520 T:no name M:aem_api_xsi.c F:AEM_API_Application_Terminate L:1453 > |-> AEM_API_Application_Terminate
 !PARAM  -aem          		< p:0x00000217 P:APP t:0x2c12f520 T:no name M:aem_api_xsi.c F:AEM_API_Application_Terminate L:1454 > application_handle=3 
+!ENTER  -aem          		< p:0x000001d9 P:APP t:0x2c12f520 T:no name M:aem_internal_xsi.c F:AEM_Application_Terminate L:49 > |-> AEM_Application_Terminate
 
+5. AEM requests LAE to terminate the application using a pre-registered
+   callback.
+6. LAE unloads the application.
+7. LAE notifies AEM that the application is terminated.
 
 // these are custom logging
 !ERROR  -aem          		< P:APP t:0x2c12f520 T:no name M:aem_api_xsi.c F:AEM_API_Application_Terminate L:1455 > AEM_API_Application_Terminate called 
@@ -10594,8 +10608,109 @@ typedef enum AEM_API_ApplicationStateTag
 !ERROR  -aem          		< P:APP t:0x2c12f520 T:no name M:aem_internal_xsi.c F:AEM_Application_Terminate L:85 > 2 Calling AEM_TerminateApp 
 !ERROR  -aem          		< P:APP t:0x2c12f520 T:no name M:aem_sys.c F:AEM_TerminateApp L:266 > app->applicationInfo.state 7 
 
+// how LAE notifies AEM?
+
+!PARAM  -aem          		< p:0x000001d9 P:APP t:0x014e7520 T:LAE_THREAD M:aem_state.c F:AEM_ApplicationStateEventListener L:168 > application_handle = 0x00000003 application_event = 4 
+
+// CMS_PLATFORM_SERVICES/AEM/src/aem_api.c
+
+/**  @brief Registers an application engine with the AEM.  Each application engine must call this function to inform
+     the AEM of it's services. An application engine should register once
+     only with the AEM by invoking this function during initilisation.
+     The AEM_API_ApplicationEngineCallback structure passed by this function specifies a number of content types
+     that are supported by the application engine (for example, HTML,
+     JAR).  The AEM maintains a list of registered application engines and their content types, and uses this list
+     to determine which application engine shall be invoked when launching an application.
+     If an application engine registers a content type which is already registered by another engine, then this
+     registration shall take precedence and the previous registration of the content type by another application engine shall
+     be removed.
+     This AEM_API_ApplicationEngineCallback structure also specifies a number of callback functions which must be
+     implemented by the application engine.
+     When the AEM wants to perform an action on the application engine (for instance, terminating an application), it
+     invokes the registered callback function for that application engine and passes the necessary parameters.
+
+     @param[in] application_engine - a pointer to a AEM_API_ApplicationEngineCallback structure.  This specifies
+     the application engine name, callbacks, also specifies the supported content types.
+     @return
+     AEM_API_STATUS_OK if the call was successful.
+     AEM_API_STATUS_ERROR if an error occurred during the call.
+ */
+SYSTEM_STATUS AEM_API_RegisterApplicationEngine (AEM_API_ApplicationEngineCallback application_engine)
+{
+  p_app->applicationInfo.state = AEM_API_ApplicationStateLoading;
+  status = engine->application_engine_info.launch_fn(g_aem_defaultApplicationHandle, (uint8_t *)g_aem_defaultAppUri, AEM_ApplicationStateEventListener);
+}
+
+
+// CMS_PLATFORM_SERVICES/AEM/src/inc/aem_state.h
+
+/** @brief callback function that is called by application engine to notify aem
+  * the application reached one of the events enumerated in #aem_api_applicationevent.
+  * also this callback is used internally by aem to notify the application created
+  * and deleted when receiving player event and sai object from player
+
+  * @param[in] app_event  - the current event of the application.
+  * @param[in] app_eventparams  - a point to a structure including application handle
+  * and event parameters for special application event. for example, when event
+  * #aem_api_applicationeventrunning is reported by application engine, the event parameters
+  * - provider_id and application_id should be reported as well.
+ *
+ *  @retval none.
+ */
+void AEM_ApplicationStateEventListener(AEM_API_ApplicationEvent app_event,
+                                       AEM_API_EventParams *app_eventparams);
+
+
+// src/AemSm.cpp
+m_aemEventListener(AEM_API_ApplicationEventStopping, &eventParams);
+
+
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:113 > application_engine.attributes.name = JavaEngine 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:114 > application_engine.attributes.content_types = .class 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:115 > application_engine.attributes.num_content_types = 1 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:116 > application_engine.attributes.single_instance = 1 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:117 > application_engine.attributes.single_application = 0 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:118 > application_engine.attributes.single_application = v1.0 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:120 > application_engine.launch_fn = 0x55f928 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:121 > application_engine.terminate_fn = 0x55f72c 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:122 > application_engine.resume_fn = 0x55f72c 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:123 > application_engine.show_fn = 0x55f72c 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:124 > application_engine.hide_fn = 0x55f72c 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:125 > application_engine.pause_fn = 0x55f72c 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:126 > application_engine.user_input_fn = 0x55f738 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:127 > application_engine.message_received_fn = 0x55f72c 
+!PARAM  -aem          		< T:IPC_WRAPPER_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:128 > application_engine.user_multi_input_fn = (nil) 
+
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:113 > application_engine.attributes.name = LAE 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:114 > application_engine.attributes.content_types = .otv 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:115 > application_engine.attributes.num_content_types = 1 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:116 > application_engine.attributes.single_instance = 1 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:117 > application_engine.attributes.single_application = 0 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:118 > application_engine.attributes.single_application = v1.0 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:120 > application_engine.launch_fn = 0xa350ec 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:121 > application_engine.terminate_fn = 0xa3511c 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:122 > application_engine.resume_fn = 0xa3510c 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:123 > application_engine.show_fn = 0xa35144 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:124 > application_engine.hide_fn = 0xa3512c 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:125 > application_engine.pause_fn = 0xa34058 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:126 > application_engine.user_input_fn = 0xa350ac 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:127 > application_engine.message_received_fn = 0xa36c24 
+!PARAM  -aem          		< T:LAE_THREAD M:aem_api.c F:AEM_API_RegisterApplicationEngine L:128 > application_engine.user_multi_input_fn = 0xf00000 
+
+8. AEM notifies EPG that the application is terminated.
+
+// AEM_API_ApplicationEventStopping       = 4,         /*!< @brief Application event is stopping */
+!INFO   -aem          		< p:0x000001d9 P:APP t:0x0145f520 T:AEM_STATE_MONITOR_THREAD M:aem_signalling.c F:AEM_FireAppEvent L:845 > app_event=4, app_handle = 0x00000003 
+!INFO   -aem          		< p:0x000001d9 P:APP t:0x0145f520 T:AEM_STATE_MONITOR_THREAD M:aem_common.c F:AEM_NotifyEventListeners L:639 > Notify listener for appHandle <3>, appEvent <0x00000004> 
+
 !MIL    -EPG_ALM      		< P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5abde49, event=4 STOPPING
 !MIL    -P_Api        		< P:APP t:0x016a7520 T:LAE_THREAD M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1168 > VIDEO IS SHOWN 
+
+
+// AEM_API_ApplicationEventTerminated     = 6,         /*!< @brief Application event is closing down */
+!INFO   -aem          		< p:0x000001d9 P:APP t:0x0145f520 T:AEM_STATE_MONITOR_THREAD M:aem_signalling.c F:AEM_FireAppEvent L:845 > app_event=6, app_handle = 0x00000003 
+!INFO   -aem          		< p:0x000001d9 P:APP t:0x0145f520 T:AEM_STATE_MONITOR_THREAD M:aem_common.c F:AEM_NotifyEventListeners L:639 > Notify listener for appHandle <3>, appEvent <0x00000006> 
+
 !MIL    -EPG_ALM      		< P:APP t:0x2c12f520 T:no name M:EventListener$1 F:run L:79 > T:CEE-J EventQueue Reader 0:IAPP: AEM event: app=ck@5abde49, event=6 TERMINATED
 !MIL    -AMS          		< P:MW t:0x01d53520 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleAppEvents L:313 > APP_END event 
 !MIL    -AMS          		< P:MW t:0x01d53520 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleAppEvents L:327 > Application params: app_id=2997, provider_id=256 
