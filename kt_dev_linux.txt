@@ -308,7 +308,6 @@
 *kt_linux_tool_300* gdb-core-force-core-command
 *kt_linux_gdb_300* gdb-stack-frame
 *kt_linux_gdb_300* gdb-core-backtrace gdb-bt
-*kt_linux_gdb_300* gdb-core-backtrace-get a call trace promatically
 |kt_linux_gdb_300| gdb-core-analysis-on-mips
 |kt_linux_gdb_300| gdb-step
 *kt_linux_tool_309* gdb-break
@@ -397,6 +396,7 @@
 *kt_linux_arch_001* arch-endian
 *kt_linux_arch_001* arch-mips-registers mips-instruction
 *kt_linux_arch_001* arch-mips-stack
+*kt_linux_arch_001* arch-mips-backtrace mips-membuster
 *kt_linux_arch_001* arch-mips-for-and-while
 *kt_linux_arch_001* arch-mips-power-on-reset
 *kt_linux_arch_001* arch-mips-qemu tool-qemu
@@ -30939,111 +30939,6 @@ When see call traces using bt, it does not show:
 up to this point when attaching gdb.
 
 Q: how to put some code to provide a point to use gdb?
-
-
-={============================================================================
-*kt_linux_gdb_300* gdb-core-backtrace-get a call trace promatically
-
-In running gst-launch, see the call traces made automatically as shown.
-
-Caught SIGSEGV
-#0  0x7753cd1c in __lll_lock_wait () from /lib/libpthread.so.0
-#1  0x775446fc in pthread_mutex_lock () from /lib/libpthread.so.0
-#2  0x772c4fcc in g_mutex_lock () from /opt/zinc-trunk/oss/lib/libglib-2.0.so.0
-#3  0x75b6f2ac in gst_nexus_mgr_set_rate (mgr=0x48e0b0, settings=0x47ff18, res=0x0, rate=1) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexusmgr.c:1097
-#4  0x75b74aa0 in gst_nexus_sink_play_locked (sink=0x47fd18) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1531
-#5  gst_nexus_sink_change_state_locked (transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING, sink=0x47fd18) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1354
-#6  gst_nexus_sink_change_state (element=<optimized out>, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1326
-#7  0x77464ed8 in gst_element_change_state (element=0x47fd18, transition=<optimized out>) at gstelement.c:2602
-#8  0x77465aac in gst_element_set_state_func (element=0x47fd18, state=<optimized out>) at gstelement.c:2558
-#9  0x7743a954 in gst_bin_element_set_state (next=GST_STATE_PLAYING, current=GST_STATE_PAUSED, start_time=0, base_time=592515640814054, element=0x47fd18, bin=0x489078) at gstbin.c:2328
-#10 gst_bin_change_state_func (element=0x489078, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at gstbin.c:2665
-#11 0x77490e24 in gst_pipeline_change_state (element=0x489078, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at gstpipeline.c:474
-#12 0x77464ed8 in gst_element_change_state (element=0x489078, transition=<optimized out>) at gstelement.c:2602
-#13 0x77465aac in gst_element_set_state_func (element=0x489078, state=<optimized out>) at gstelement.c:2558
-#14 0x00404c5c in main (argc=28, argv=0x7f9c2c94) at gst-launch.c:1095
-Spinning.  Please run 'gdb gst-launch-1.0 15054' to continue debugging, Ctrl-C
-to quit, or Ctrl-\ to dump core.
-
-
-gstreamer-1.5.0/tools/gst-launch.c
-
-static void
-fault_handler_sighandler (int signum)
-{
-  fault_restore ();
-
-  /* printf is used instead of g_print(), since it's less likely to
-   * deadlock */
-  switch (signum) {
-    case SIGSEGV:
-      fprintf (stderr, "Caught SIGSEGV\n");
-      break;
-    case SIGQUIT:
-      if (!quiet)
-        printf ("Caught SIGQUIT\n");
-      break;
-    default:
-      fprintf (stderr, "signo:  %d\n", signum);
-      break;
-  }
-
-  fault_spin ();
-}
-
-static void
-fault_spin (void)
-{
-  int spinning = TRUE;
-
-  glib_on_error_halt = FALSE;
-  g_on_error_stack_trace ("gst-launch-" GST_API_VERSION);
-
-  wait (NULL);
-
-  /* FIXME how do we know if we were run by libtool? */
-  fprintf (stderr,
-      "Spinning.  Please run 'gdb gst-launch-" GST_API_VERSION " %d' to "
-      "continue debugging, Ctrl-C to quit, or Ctrl-\\ to dump core.\n",
-      (gint) getpid ());
-  while (spinning)
-    g_usleep (1000000);
-}
-
-static void
-fault_restore (void)
-{
-  struct sigaction action;
-
-  memset (&action, 0, sizeof (action));
-  action.sa_handler = SIG_DFL;
-
-  sigaction (SIGSEGV, &action, NULL);
-  sigaction (SIGQUIT, &action, NULL);
-}
-
-static void
-fault_setup (void)
-{
-  struct sigaction action;
-
-  memset (&action, 0, sizeof (action));
-  action.sa_handler = fault_handler_sighandler;
-
-  sigaction (SIGSEGV, &action, NULL);
-  sigaction (SIGQUIT, &action, NULL);
-}
-
-int
-main (int argc, char *argv[])
-{
-  ...
-
-#ifdef G_OS_UNIX
-    fault_setup ();
-#endif
-
-}
 
 
 ={============================================================================
@@ -65917,6 +65812,59 @@ int main(int argc, char* argv[])
 so a frame has ra, args, locals and struct itself or pointer to a struct.
 
 
+<difference-with-fomit-frame-pointer>
+
+// no -fomit-frame-pointer
+
+00400590 <func_second>:
+  400590:	27bdffe8 	addiu	sp,sp,-24
+  400594:	afbe0010 	sw	s8,16(sp)
+  400598:	03a0f021 	move	s8,sp
+  40059c:	afc40018 	sw	a0,24(s8)
+  4005a0:	afc5001c 	sw	a1,28(s8)
+  4005a4:	afc00008 	sw	zero,8(s8)
+  4005a8:	8fc20018 	lw	v0,24(s8)
+  4005ac:	00021840 	sll	v1,v0,0x1
+  4005b0:	8fc2001c 	lw	v0,28(s8)
+  4005b4:	00621021 	addu	v0,v1,v0
+  4005b8:	afc20008 	sw	v0,8(s8)
+  4005bc:	8fc20008 	lw	v0,8(s8)
+  4005c0:	03c0e821 	move	sp,s8
+  4005c4:	8fbe0010 	lw	s8,16(sp)
+  4005c8:	27bd0018 	addiu	sp,sp,24
+  4005cc:	03e00008 	jr	ra
+  4005d0:	00000000 	nop
+
+
+// with -fomit-frame-pointer
+
+$ ~/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-uclibc-gcc -fomit-frame-pointer sample.c
+$ ~/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-uclibc-objdump -D a.out > sample_out_when_use_omit_
+
+00400590 <func_second>:
+  400590:	27bdfff0 	addiu	sp,sp,-16
+  400594:	afa40010 	sw	a0,16(sp)
+  400598:	afa50014 	sw	a1,20(sp)
+  40059c:	afa00008 	sw	zero,8(sp)
+  4005a0:	8fa20010 	lw	v0,16(sp)
+  4005a4:	00021840 	sll	v1,v0,0x1
+  4005a8:	8fa20014 	lw	v0,20(sp)
+  4005ac:	00621021 	addu	v0,v1,v0
+  4005b0:	afa20008 	sw	v0,8(sp)
+  4005b4:	8fa20008 	lw	v0,8(sp)
+  4005b8:	27bd0010 	addiu	sp,sp,16
+  4005bc:	03e00008 	jr	ra
+  4005c0:	00000000 	nop
+
+
+// with -Os and no -fomit-frame-pointer
+
+00400590 <func_second>:
+  400590:	00041040 	sll	v0,a0,0x1
+  400594:	03e00008 	jr	ra
+  400598:	00a21021 	addu	v0,a1,v0
+
+
 ={============================================================================
 *kt_linux_arch_001* arch-mips-backtrace mips-membuster
 
@@ -66716,7 +66664,7 @@ int __attribute__ ((noinline)) stacktrace_unwind(struct stacktrace_frame *f)
   /* Get size of frame */
   f->size = info & 0xFFFF;
 
-  // WHY -2?
+  // WHY -2, 8 bytes back? since *mips-jal* moves PC+8?
 
   /* Get caller */
   f->caller = (uint32_t *)f->fp[info >> 18] - 2;
@@ -66942,6 +66890,399 @@ M:mbuster_pinit.c
   F:membuster_plus_check_pool L:755 > 
   MEMBUSTER: pool MW_HTTP_POOL, count 1 size 520, bt(007aff90 00ef5c30 007afe08 00795b3c 006e1a60 00ef52d4 )
 ...
+
+
+={============================================================================
+*kt_linux_arch_001* arch-backtrace
+
+`regarding symbol resolution`, the current glibc (version 2.3.1 at the time of
+    this writing) allows users to obtain the function name and offset only on
+systems based on the ELF binary format. Furthermore, static symbols' names
+cannot be resolved internally, because they cannot be accessed by the dynamic
+linking facilities. In this case, the external command `addr2line` can be used
+instead.
+
+The implementation of backtrace() in the glibc library contains
+platform-specific code for each platform, which is based either on GCC
+internal variables (__builtin_frame_address and __builtin_return_address) or
+on assembly code.
+
+you still have to resolve the return addresses into function names, an
+operation dependent on the binary format you are using. In the case of ELF, it
+is performed by using a dynamic linker internal function (_dl_addr(), see
+    glibc-x.x.x/sysdeps/generic/elf/backtracesyms.c).
+
+The key one is backtrace(), which navigates the stack frames from the calling
+point to the beginning of the program and provides an array of return
+addresses.
+
+use backtrace_symbols(). This function transforms a list of return addresses,
+as returned by backtrace(), into a list of strings, each containing the
+  function name offset within the function and the return address.
+
+backtrace_symbols() internally calls malloc() and, thus, can fail if the
+memory heap is corrupted--which might be the case if you are dealing with a
+fault signal handler. If you need to resolve the return addresses in such a
+situation, calling backtrace_symbols_fd() is safer, because it directly writes
+to the given file descriptor without allocating memory. The same reasoning
+implies that it is safer to use either static or automatic (non dynamic)
+storage space for the array passed to backtrace().
+
+In order to convert an address to a function name, the last two functions rely
+on symbol information `to be available inside the program itself.` To enable
+this feature, compile your program with the -rdynamic option (see man dlopen
+    for more details).
+
+  -rdynamic
+  Pass the flag ‘-export-dynamic’ to the ELF linker, on targets that support
+  it. This instructs the linker to add all symbols, not only used ones, to the
+  dynamic symbol table. This option is needed for some uses of dlopen or to
+  allow obtaining backtraces from within a program.)
+
+
+https://www.gnu.org/software/libc/manual/html_node/Backtraces.html
+
+// backtrace from glibc
+
+BACKTRACE(3)                                                                            Linux Programmer's Manual                                                                            BACKTRACE(3)
+
+NAME
+       backtrace, backtrace_symbols, backtrace_symbols_fd - support for application self-debugging
+
+SYNOPSIS
+       #include <execinfo.h>
+
+       int backtrace(void **buffer, int size);
+
+       char **backtrace_symbols(void *const *buffer, int size);
+
+       void backtrace_symbols_fd(void *const *buffer, int size, int fd);
+
+
+<ex>
+// Here's an example program that installs a SIGSEGV handler and prints a
+// stacktrace to stderr when it segfaults.
+
+#include <stdio.h>
+#include <execinfo.h>
+#include <signal.h>
+#include <stdlib.h>
+
+
+void handler(int sig) {
+  void *array[10];
+  size_t size;
+
+  // get void*'s for all entries on the stack
+  size = backtrace(array, 10);
+
+  // print out all the frames to stderr
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  backtrace_symbols_fd(array, size, 2);
+  exit(1);
+}
+
+void baz() {
+ int *foo = (int*)-1; // make a bad pointer
+  printf("%d\n", *foo);       // causes segfault
+}
+
+void bar() { baz(); }
+void foo() { bar(); }
+
+int main(int argc, char **argv) {
+  signal(SIGSEGV, handler);   // install our handler
+  foo(); // this will call foo, bar, and baz.  baz segfaults.
+}
+
+// on x86_64 VM
+
+$ gcc -g t_backtrace.c
+$ ./a.out
+Error: signal 11:
+./a.out[0x4006d2]
+/lib/x86_64-linux-gnu/libc.so.6(+0x350e0)[0x7ff5b192b0e0]
+./a.out[0x40072b]
+./a.out[0x40074e]
+./a.out[0x40075e]
+./a.out[0x400788]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf5)[0x7ff5b1917b45]
+./a.out[0x4005e9]
+
+
+<ex>
+
+// do not build on x86_64 VM and see how to use backtrace call family
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
+
+#include <execinfo.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ucontext.h>
+#include <unistd.h>
+
+/* This structure mirrors the one found in /usr/include/asm/ucontext.h */
+typedef struct _sig_ucontext {
+ unsigned long     uc_flags;
+ struct ucontext   *uc_link;
+ stack_t           uc_stack;
+ struct sigcontext uc_mcontext;
+ sigset_t          uc_sigmask;
+} sig_ucontext_t;
+
+void crit_err_hdlr(int sig_num, siginfo_t * info, void * ucontext)
+{
+ void *             array[50];
+ void *             caller_address;
+ char **            messages;
+ int                size, i;
+ sig_ucontext_t *   uc;
+
+ uc = (sig_ucontext_t *)ucontext;
+
+ /* Get the address at the time the signal was raised from the EIP (x86) */
+ caller_address = (void *) uc->uc_mcontext.eip;   
+
+ fprintf(stderr, "signal %d (%s), address is %p from %p\n", 
+  sig_num, strsignal(sig_num), info->si_addr, 
+  (void *)caller_address);
+
+ size = backtrace(array, 50);
+
+ /* overwrite sigaction with caller's address */
+ array[1] = caller_address;
+
+ messages = backtrace_symbols(array, size);
+
+ /* skip first stack frame (points here) */
+ for (i = 1; i < size && messages != NULL; ++i)
+ {
+  fprintf(stderr, "[bt]: (%d) %s\n", i, messages[i]);
+ }
+
+ free(messages);
+
+ exit(EXIT_FAILURE);
+}
+
+int crash()
+{
+ char * p = NULL;
+ *p = 0;
+ return 0;
+}
+
+int foo4()
+{
+ crash();
+ return 0;
+}
+
+int foo3()
+{
+ foo4();
+ return 0;
+}
+
+int foo2()
+{
+ foo3();
+ return 0;
+}
+
+int foo1()
+{
+ foo2();
+ return 0;
+}
+
+int main(int argc, char ** argv)
+{
+ struct sigaction sigact;
+
+ sigact.sa_sigaction = crit_err_hdlr;
+ sigact.sa_flags = SA_RESTART | SA_SIGINFO;
+
+ if (sigaction(SIGSEGV, &sigact, (struct sigaction *)NULL) != 0)
+ {
+  fprintf(stderr, "error setting signal handler for %d (%s)\n",
+    SIGSEGV, strsignal(SIGSEGV));
+
+  exit(EXIT_FAILURE);
+ }
+
+ foo1();
+
+ exit(EXIT_SUCCESS);
+}
+
+
+(output)
+signal 11 (Segmentation fault), address is (nil) from 0x8c50
+[bt]: (1) ./test(crash+0x24) [0x8c50]
+[bt]: (2) ./test(foo4+0x10) [0x8c70]
+[bt]: (3) ./test(foo3+0x10) [0x8c8c]
+[bt]: (4) ./test(foo2+0x10) [0x8ca8]
+[bt]: (5) ./test(foo1+0x10) [0x8cc4]
+[bt]: (6) ./test(main+0x74) [0x8d44]
+[bt]: (7) /lib/libc.so.6(__libc_start_main+0xa8) [0x40032e44]
+
+
+The problem is that there is no backtrace.c for mips.
+
+./uClibc-ng-1.0.17/libubacktrace/arm/backtrace.c
+./uClibc-ng-1.0.17/libubacktrace/backtrace.c
+./uClibc-0.9.33.2/libubacktrace/arm/backtrace.c
+./uClibc-0.9.33.2/libubacktrace/backtrace.c
+
+
+./uClibc-0.9.33.2/libubacktrace/arm/backtrace.c
+
+/*
+ * Perform stack unwinding by using the _Unwind_Backtrace.
+ *
+ */
+int backtrace (void **array, int size);
+
+// _Unwind_Backtrace comes from the gcc.
+
+static void backtrace_init (void)
+{
+	void *handle = dlopen ("libgcc_s.so.1", RTLD_LAZY);
+	if (handle == NULL
+		|| ((unwind_backtrace = dlsym (handle, "_Unwind_Backtrace")) == NULL)
+		|| ((unwind_vrs_get = dlsym (handle, "_Unwind_VRS_Get")) == NULL)) {
+		printf("libgcc_s.so.1 must be installed for backtrace to work\n");
+		abort();
+	}
+}
+
+
+<ex>
+In running gst-launch, see the call traces made automatically as shown.
+
+Caught SIGSEGV
+#0  0x7753cd1c in __lll_lock_wait () from /lib/libpthread.so.0
+#1  0x775446fc in pthread_mutex_lock () from /lib/libpthread.so.0
+#2  0x772c4fcc in g_mutex_lock () from /opt/zinc-trunk/oss/lib/libglib-2.0.so.0
+#3  0x75b6f2ac in gst_nexus_mgr_set_rate (mgr=0x48e0b0, settings=0x47ff18, res=0x0, rate=1) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexusmgr.c:1097
+#4  0x75b74aa0 in gst_nexus_sink_play_locked (sink=0x47fd18) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1531
+#5  gst_nexus_sink_change_state_locked (transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING, sink=0x47fd18) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1354
+#6  gst_nexus_sink_change_state (element=<optimized out>, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Polonium/Polonium.GSTNexus/src/gstnexussink.c:1326
+#7  0x77464ed8 in gst_element_change_state (element=0x47fd18, transition=<optimized out>) at gstelement.c:2602
+#8  0x77465aac in gst_element_set_state_func (element=0x47fd18, state=<optimized out>) at gstelement.c:2558
+#9  0x7743a954 in gst_bin_element_set_state (next=GST_STATE_PLAYING, current=GST_STATE_PAUSED, start_time=0, base_time=592515640814054, element=0x47fd18, bin=0x489078) at gstbin.c:2328
+#10 gst_bin_change_state_func (element=0x489078, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at gstbin.c:2665
+#11 0x77490e24 in gst_pipeline_change_state (element=0x489078, transition=GST_STATE_CHANGE_PAUSED_TO_PLAYING) at gstpipeline.c:474
+#12 0x77464ed8 in gst_element_change_state (element=0x489078, transition=<optimized out>) at gstelement.c:2602
+#13 0x77465aac in gst_element_set_state_func (element=0x489078, state=<optimized out>) at gstelement.c:2558
+#14 0x00404c5c in main (argc=28, argv=0x7f9c2c94) at gst-launch.c:1095
+Spinning.  Please run 'gdb gst-launch-1.0 15054' to continue debugging, Ctrl-C
+to quit, or Ctrl-\ to dump core.
+
+
+gstreamer-1.5.0/tools/gst-launch.c
+
+static void
+fault_handler_sighandler (int signum)
+{
+  fault_restore ();
+
+  /* printf is used instead of g_print(), since it's less likely to
+   * deadlock */
+  switch (signum) {
+    case SIGSEGV:
+      fprintf (stderr, "Caught SIGSEGV\n");
+      break;
+    case SIGQUIT:
+      if (!quiet)
+        printf ("Caught SIGQUIT\n");
+      break;
+    default:
+      fprintf (stderr, "signo:  %d\n", signum);
+      break;
+  }
+
+  fault_spin ();
+}
+
+// tools/gst-launch.c
+static void
+fault_spin (void)
+{
+  int spinning = TRUE;
+
+  glib_on_error_halt = FALSE;
+  g_on_error_stack_trace ("gst-launch-" GST_API_VERSION);
+
+  wait (NULL);
+
+  /* FIXME how do we know if we were run by libtool? */
+  fprintf (stderr,
+      "Spinning.  Please run 'gdb gst-launch-" GST_API_VERSION " %d' to "
+      "continue debugging, Ctrl-C to quit, or Ctrl-\\ to dump core.\n",
+      (gint) getpid ());
+  while (spinning)
+    g_usleep (1000000);
+}
+
+static void
+fault_restore (void)
+{
+  struct sigaction action;
+
+  memset (&action, 0, sizeof (action));
+  action.sa_handler = SIG_DFL;
+
+  sigaction (SIGSEGV, &action, NULL);
+  sigaction (SIGQUIT, &action, NULL);
+}
+
+static void
+fault_setup (void)
+{
+  struct sigaction action;
+
+  memset (&action, 0, sizeof (action));
+  action.sa_handler = fault_handler_sighandler;
+
+  sigaction (SIGSEGV, &action, NULL);
+  sigaction (SIGQUIT, &action, NULL);
+}
+
+int
+main (int argc, char *argv[])
+{
+  ...
+
+#ifdef G_OS_UNIX
+    fault_setup ();
+#endif
+
+}
+
+https://developer.gnome.org/glib/stable/glib-Warnings-and-Assertions.html#g-on-error-stack-trace
+
+void
+g_on_error_stack_trace (const gchar *prg_name);
+
+Invokes gdb, which attaches to the current process and shows a stack trace.
+Called by g_on_error_query() when the "[S]tack trace" option is selected. You
+can get the current process's program name with g_get_prgname(), assuming that
+you have called gtk_init() or gdk_init().  This function may cause different
+actions on non-UNIX platforms.
+
+Parameters
+prg_name
+the program name, needed by gdb for the "[S]tack trace" option
 
 
 ={============================================================================
