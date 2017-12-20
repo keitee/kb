@@ -25373,13 +25373,49 @@ SCD_Process: SCD_Process_main.c
 }	
 
 
-# app side
-#
-class InitialisationManager:
-public void requestSystemReset()
+<comp-sysinit-reset>
+
+// build/applications/Picasso/picasso/Picasso/src/java/picasso/initialisationmanager/InitialisationManager.java
+class InitialisationManager
 {
-	cr.getSpmApi().initiateShutdown(SpmApi.ShutDownType.FULL_SYSTEM_RESET);
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x2c1c5520 T:no name M:InitialisationManager$StateChanger F:startOperatingOn L:2393 > T:IM#0:Starting state change to SHUTDOWN
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x2c1c5520 T:no name M:PowerOperatingModes F:waitForNonTransitionState L:278 > T:IM#0:waitForNonTransitionState - state > ON
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x2c1c5520 T:no name M:PowerOperatingModes F:waitForNonTransitionState L:290 > T:IM#0:state > ON
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x2c1c5520 T:no name M:PowerOperatingModes F:waitForNonTransitionState L:291 > T:IM#0:state > ON
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x2c1c5520 T:no name M:PowerOperatingModes F:setState L:231 > T:IM#0:setState > TRANSITION
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x011dc520 T:PREFS_PTHREAD M:PowerOperatingModes F:notifyOperatingMode L:302 > T:threadtracker: notifyOperatingMode of state : 1
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x011dc520 T:PREFS_PTHREAD M:PowerOperatingModes F:setState L:231 > T:threadtracker:setState > STANDBY
+  // !MIL    -SYSINIT_S    		< p:0x000001c0 P:SCD t:0x00648530 T:STATE_MACHINE_THREAD M:state_machine.c F:switchAllRingLevelsToShutdownLevel L:545 > STARTING Moving system to runlevel SHUTDOWN. 
+  // !MIL    -SYSINIT_S    		< p:0x000001c0 P:SCD t:0x00648530 T:STATE_MACHINE_THREAD M:state_machine.c F:sendChangeForRingLevel L:240 > STARTING Moving ring level 19 to runlevel SHUTDOWN. 
+  // !MIL    -SYSINIT_S    		< p:0x000001c0 P:SCD t:0x00648530 T:STATE_MACHINE_THREAD M:server_msghandling.c F:sendRunLevelRequest L:965 > STARTING Moving component JAVAENGINE to runlevel SHUTDOWN 
+  // !MIL    -SYSINIT_S    		< p:0x000001c0 P:SCD t:0x00648530 T:STATE_MACHINE_THREAD M:server_msghandling.c F:sendRunLevelRequest L:965 > STARTING Moving component LAE to runlevel SHUTDOWN 
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x2eee5520 T:no name M:InitialisationManager F:shutdown L:2226 > T:threadtracker:Entering shutdown
+  // !MIL    -EPG_INIT     		< p:0x000001c5 P:APP t:0x2eee5520 T:no name M:InitialisationManager F:shutdown L:2233 > T:threadtracker:Exiting shutdown
+
+  @Override public void startOperatingOn(final List<PicassoLifecycleListener> components)
+  {
+    LOGGER.logMilestone("Starting state change to " + state.getName());
+  }
+
+  @Override public void requestSystemReset()
+  {
+    powerOperatingModesControl.doOff();
+    apiFactory.getSpmApi().initiateShutdown(SpmApi.ShutDownType.FULL_SYSTEM_RESET);
+  }
+
+  public void shutdown()
+  {
+    LOGGER.logMilestone("Entering shutdown");
+    disableKeyEvents();
+    shutdownAllComponents();
+    Executors.killPool();
+    killMiddlewareSessions();
+    stateChangeExecutor.shutdown();
+    myExecutor.shutdown();
+    LOGGER.logMilestone("Exiting shutdown");
+  }
 }
+
 
 class SpmApiImpl:
 public void initiateShutdown(int shutdownType)
@@ -25426,13 +25462,36 @@ SPM_SystemState_MessageHandler:
 	    break;
 
 
-SPM_SystemState_ResetTheSystem:
-	else if(msg_ptr->data.shutdown.shutdownType == SPM_API_SHUTDOWN_FULL_SYSTEM_RESET)
+<com-sysinit-shutdown-type>
+/**
+ * Various Shutdown Types
+*/
+typedef enum spm_api_shutdown_type
+{
+    SPM_API_SHUTDOWN_UNDEF = 0,
+    SPM_API_SHUTDOWN_CLEAN = 1,             /**< shutdown of the box*/
+    SPM_API_SHUTDOWN_FULL_SYSTEM_RESET = 2, /**< format devices listed in spm.cfg (section [STORAGE_DEVICES]) and restart the box*/
+    SPM_API_SHUTDOWN_CLEAN_RESTART = 3,     /**< restart the box without formatting any devices */
+    SPM_API_SHUTDOWN_FACTORY_RESET = 4,     /**< restart with factory defaults retaining CA data (format devices listed in spm.cfg section [STORAGE_DEVICES]) */
+    SPM_API_SHUTDOWN_FACTORY_RESET_RETAINING_CONTENT = 5,   /**< restart with factory defaults retaining recordings and CA data (format devices listed in spm.cfg section [STORAGE_DEVICES]) */
+    SPM_API_SHUTDOWN_UNPAIR = 6,            /**< [IPC only] restart the box after un-pairing from the GW. A new pairing operation will be required. */
+    SPM_API_SHUTDOWN_LAST_VALUE = 7
+} SPM_API_SHUTDOWN_TYPE;
+
+// DARWIN_PLATFORM/DARWIN_SPM/src/server/spm_system/spm_systemstate.c
+SYSTEM_STATUS SPM_SystemState_ResetTheSystem(const SPM_API_SHUTDOWN_TYPE shutdownType)
+{
+    else if(shutdownType == SPM_API_SHUTDOWN_FULL_SYSTEM_RESET)
+    {
+        /* Reformat the device types listed in the configuration file. */
+        status = SPM_SystemState_ResetTheSystemWithFormat(SPM_COMMON_GetConfig()->full_system_reset_device_types);
+    }
 		SPM_Disk_RequestDataReset
 		SYSINIT_API_SetException(SYSTEM_EXCEPTION_TYPE_RESTARTED_LOCALLY)
         SYSINIT_API_SetActivityState(SPM_GetComponentSysinitHandle(), ** "SYSINIT_API_ActivityStateRequestRestart" **)
 					SYSINIT_API_SendSetActivityState
 						IPC_CLIENT_Send(msgSetActivityState)
+  }
 
 # 
 # server side
@@ -25508,8 +25567,9 @@ stateMachineThread:
 
 				targetRunLevel = SYSINIT_RunLevelRequestShutdown;
 
-				for(`from high ring level to low ring level`)
-					switchRingLevelRunLevel 
+            switchAllRingLevelsToShutdownLevel(highestRingLevel, lowestRingLevel, true);
+				// for(`from high ring level to low ring level`)
+			   //  switchRingLevelRunLevel 
 
 				DIAG_LOG_MIL(g_SYSINIT_SERVER_segment, ("Reached run level SHUTDOWN"));
 
