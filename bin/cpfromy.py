@@ -23,3 +23,6 @@ if __name__ == "__main__":
     newlogfile = logfile + "_" + splited[2][-4:]
     sys.stdout.write("mv %s %s\n" % (logfile, newlogfile))
     subprocess.call(["mv", logfile, newlogfile])
+
+    text = "1i" + filename
+    subprocess.call(["sed", "-i", text, newlogfile])
