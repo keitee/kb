@@ -10681,6 +10681,9 @@ void AEM_ApplicationStateEventListener(AEM_API_ApplicationEvent app_event,
 
 
 // AEM_API_ApplicationEventTerminated     = 6,         /*!< @brief Application event is closing down */
+//
+!ERROR  -aem          		< p:0x000001be P:APP t:0x014cf520 T:LAE_THREAD M:aem_state.c F:AEM_ApplicationStateEventListener L:169 > KT: AEM_ApplicationStateEventListener 
+!ERROR  -aem          		< p:0x000001be P:APP t:0x014cf520 T:LAE_THREAD M:aem_state.c F:AEM_ApplicationStateEventListener L:170 > KT: application_handle = 0x00000172 application_event = 6 
 !INFO   -aem          		< p:0x000001d9 P:APP t:0x0145f520 T:AEM_STATE_MONITOR_THREAD M:aem_signalling.c F:AEM_FireAppEvent L:845 > app_event=6, app_handle = 0x00000003 
 !INFO   -aem          		< p:0x000001d9 P:APP t:0x0145f520 T:AEM_STATE_MONITOR_THREAD M:aem_common.c F:AEM_NotifyEventListeners L:639 > Notify listener for appHandle <3>, appEvent <0x00000006> 
 
@@ -25598,34 +25601,55 @@ stateMachineThread:
             // *comp-sysinit-reset*
             // this is old
 				// if(ioctl(t_fd, RESET_CONTROL_RESET) == -1)
-
-            // this is new
             //
-            // PWM is not on SYSINIT config
-            //
-            // void* PwmMainThread(void *args)
-            // {
-            // 
-            // 	PWM_Term (pwm_request);
-            // }
-            //
-            // COMMON_MIDDLEWARE/HGH/src/server/pwm_main.c
-            //
-            // SYSTEM_STATUS PWM_Term(PWM_REQUEST pwm_request)
-            // PWM_CallPowerHelper(pwm_request);
-            //
-            // void PWM_CallPowerHelper(PWM_REQUEST pwm_request):
-            // case PWM_REQUEST_SHUTDOWN_RESTART:
-            //    (void)PWM_SERVER_power_device_restart();
-            //
-            //  COMMON_MIDDLEWARE/HGH/src/server/pwm_pow.c
-            //  SYSTEM_STATUS PWM_SERVER_power_device_restart(void)
-            //      /* Call the ioctl for reset */
-            //      if (PWM_SERVER_POW_IOCTL_WD(g_PWM_POW_reset_device_fd, RESET_CONTROL_RESET) == -1)
+            // the new approach uses pwm
 
           case SYSINIT_API_ActivityStateRequestRestart:
           case SYSINIT_API_ActivityStateRequestShutdown:
 		}					
+
+<comp-pwm> *comp-sysinit-reset*
+// COMMON_MIDDLEWARE/HGH/src/server/pwm_init.c
+
+/*===========================================================================*/
+static void PwmShutdownRestartImmediate(SYSTEMALARM_ALARM_HANDLE handle, uint32_t user_data_handle)
+{
+    handle = handle;
+    user_data_handle = user_data_handle;
+    
+    DIAG_DECLARE_FUNCTION("PwmShutdownRestartImmediate");
+
+    /* This is used in testing.
+     * It allows CI to know the box was forced to shutdown (and is about to finish).
+     * Simply output this exact diag to allow the tests to complete.
+     **/
+    DIAG_LOG_MIL(g_PWM_SERVER_PwmDiag, ("Forcing Restart"));
+
+    PWM_CallPowerHelper(PWM_REQUEST_SHUTDOWN_RESTART);
+
+    return;
+}
+
+// PWM is not on SYSINIT config
+//
+// void* PwmMainThread(void *args)
+// {
+// 	PWM_Term (pwm_request);
+// }
+//
+// COMMON_MIDDLEWARE/HGH/src/server/pwm_main.c
+//
+// SYSTEM_STATUS PWM_Term(PWM_REQUEST pwm_request)
+// PWM_CallPowerHelper(pwm_request);
+//
+// void PWM_CallPowerHelper(PWM_REQUEST pwm_request):
+// case PWM_REQUEST_SHUTDOWN_RESTART:
+//    (void)PWM_SERVER_power_device_restart();
+//
+//  COMMON_MIDDLEWARE/HGH/src/server/pwm_pow.c
+//  SYSTEM_STATUS PWM_SERVER_power_device_restart(void)
+//      /* Call the ioctl for reset */
+//      if (PWM_SERVER_POW_IOCTL_WD(g_PWM_POW_reset_device_fd, RESET_CONTROL_RESET) == -1)
 
 
 # SYSINIT_RUNLEVEL_TIMEOUT=60 is used for each comp to respond

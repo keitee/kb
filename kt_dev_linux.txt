@@ -75802,6 +75802,7 @@ include/linux/time.h, are:
 CLOCK_REALTIME                Settable system-wide real-time clock
 
 The CLOCK_REALTIME clock is a system-wide clock that measures wall-clock time.
+
 By contrast with the CLOCK_MONOTONIC clock, the setting of this clock can be
 changed.
 
@@ -76074,7 +76075,7 @@ time: 00:00:04.648
 
 
 ={============================================================================
-*kt_linux_core_604* linux-time-us-stamp
+*kt_linux_core_604* linux-time-us-stamp cpp-ex-perfcounter
 
 <ex>
 #ifndef PERFCOUNTER_H
@@ -76206,6 +76207,173 @@ Start -> scanf int took 2112us
 scanf int -> stringstream int took 27859us
 stringstream int -> boost::lexical_cast<int> took 910us
 boost::lexical_cast<int> -> end took 0us
+
+
+<ex>
+// perfcounter.h
+
+#ifndef PERF_COUNTER_H_
+#define PERF_COUNTER_H_
+
+#include <string>
+
+using std::string;
+
+class PerfCounter
+{
+    public:
+        PerfCounter();
+        ~PerfCounter();
+
+        void snap(const string &name_);
+        void dump();
+
+    private:
+        // *cpp-nested-class*
+        // since the original code uses class but makes it all public, use
+        // struct instead.
+        struct CounterData
+        {
+            CounterData(const string &name_) : name{name_}, pnext{nullptr} {}
+            CounterData *pnext;
+            struct timespec ts;
+            string name;
+        };
+
+        CounterData *phead;
+        CounterData *pend;
+
+        // utility function
+        CounterData *createSnap(const string &name_);
+};
+
+#endif // PERF_COUNTER_H_
+
+// perfcounter.cpp
+
+#include "perfcounter.h"
+#include <iostream>     // std::cout
+#include <sstream>
+#include <cstdint>      // for uint64_t
+#include <ctime>        // for clock_gettime
+
+// g++ -std=c++11 perfcounter.cpp main.cpp
+
+PerfCounter::PerfCounter()
+{
+    // create a start node
+    phead = pend = createSnap("start");
+
+    // phead = pend = new CounterData("start");
+    // clock_gettime(CLOCK_MONOTONIC, &(phead->ts));
+}
+
+PerfCounter::~PerfCounter()
+{
+    // clean up a list
+    for (CounterData *psnap = phead; psnap;)
+    {
+        phead = psnap->pnext;
+        std::cout << "delete " << psnap->name << std::endl;
+        delete psnap;
+        psnap = phead;
+    }
+}
+
+void PerfCounter::snap(const string &name_)
+{
+    CounterData *psnap = createSnap(name_);
+
+    // CounterData *psnap = new CounterData(name_);
+    // clock_gettime(CLOCK_MONOTONIC, &(psnap->ts));
+
+    pend->pnext = psnap;
+    pend = psnap;
+}
+
+// utility function to have common code in one place
+// note that use of cpp-nested-class type, PerfCounter::CounterData. Otherwise,
+// see compile errors.
+//
+// CounterData *PerfCounter::createSnap(const string &name_) {}
+//
+// perfcounter.cpp:45:1: error: ‘CounterData’ does not name a type
+//  CounterData *PerfCounter::createSnap(const string &name_)
+//  ^
+
+PerfCounter::CounterData *PerfCounter::createSnap(const string &name_)
+{
+    CounterData *psnap = new CounterData(name_);
+    clock_gettime(CLOCK_MONOTONIC, &(psnap->ts));
+    return psnap;
+}
+
+// cpp-stringstream
+void PerfCounter::dump()
+{
+    std::stringstream ss{};
+    uint32_t countSnap{1};
+
+    // only when there are two nodes to use
+    for (CounterData *pstart = phead; 
+            pstart && pstart->pnext; pstart = pstart->pnext)
+    {
+        ss << "snap: " << countSnap << ": ";
+        ss << pstart->name << " -> " << pstart->pnext->name << " took ";
+
+        // time diff in us from current to next
+        uint64_t timeDiff = 
+            (pstart->pnext->ts.tv_sec*1000000 + pstart->pnext->ts.tv_nsec/1000)-
+            (pstart->ts.tv_sec*1000000 + pstart->ts.tv_nsec/1000);
+
+        ss << timeDiff << "us" << std::endl;
+        ++countSnap;
+    }
+
+    std::cout << ss.str();
+}
+
+// main.cpp
+#include "perfcounter.h"
+
+#include <iostream>
+#include <sstream>
+#include <boost/lexical_cast.hpp>
+
+int main(int argc,char** argv)
+{
+    PerfCounter counter;
+    
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        sscanf("42","%d",&out);
+    }
+    counter.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out;
+        std::stringstream ss("42");
+        ss >> out;
+    }
+    counter.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+        int out = boost::lexical_cast<int>("42");
+    }
+    counter.snap("boost::lexical_cast<int>");
+    counter.dump();
+}
+
+snap: 1: start -> scanf int took 1050us
+snap: 2: scanf int -> stringstream int took 7130us
+snap: 3: stringstream int -> boost::lexical_cast<int> took 1922us
+delete start
+delete scanf int
+delete stringstream int
+delete boost::lexical_cast<int>
 
 
 ={============================================================================
