@@ -95,7 +95,7 @@ KT KB. CPP
 *kt_dev_lang_016* expr-unary
 *kt_dev_lang_016* expr-assign
 *kt_dev_lang_016* expr-conditional (the ?: operator)
-*kt_dev_lang_017* style-name
+*kt_dev_lang_017* cpp-style-name
 |kt_dev_lang_020| cpp-style-bracing-allman
 |kt_dev_lang_021| cpp-style-comments
 *kt_dev_lang_021* cpp-style-layout
@@ -103,9 +103,9 @@ KT KB. CPP
 *kt_dev_lang_018* style-order-of-header
 
 #{ cpp
-*kt_dev_cpp_000* cpp-ref
-|kt_dev_cpp_000| cpp-oop
-*kt_dev_cpp_005* cpp-init-form
+*kt_dev_cpp_0000* cpp-reference
+|kt_dev_cpp_0000| cpp-oop
+*kt_dev_cpp_0000* cpp-init-form
 *kt_dev_cpp_005* cpp-init-copy-form
 |kt_dev_cpp_005| cpp-list-init cpp-initializer-list
 |kt_dev_cpp_003| cpp-ctor
@@ -142,7 +142,6 @@ KT KB. CPP
 |kt_dev_cpp_008| cpp-const-bitwise
 *kt_dev_cpp_008* cpp-const-logical
 *kt_dev_cpp_008* cpp-const-mutable
-*kt_dev_cpp_008* const-read: from the outside (interfaces first) or from the inside?
 *kt_dev_cpp_008* const-read: logical and physical state
 *kt_dev_cpp_008* const-read: constness on logical state
 *kt_dev_cpp_008* const-read-const-correctness, part 1
@@ -182,6 +181,7 @@ KT KB. CPP
 *kt_dev_cpp_0000* cpp-design-by-contract 
 *kt_dev_cpp_0000* cpp-design-define-variable
 *kt_dev_cpp_0000* cpp-design-no-reference-to-internals
+*kt_dev_cpp_0000* cpp-design-interface-first
 *kt_dev_cpp_0000* cpp-new-delete
 |kt_dev_cpp_025| random
 |kt_dev_cpp_026| cpp-enum
@@ -9681,7 +9681,7 @@ cout << grade < 60 ? "fail" : "pass");        // error
 
 
 ={============================================================================
-*kt_dev_lang_017* style-name
+*kt_dev_lang_017* cpp-style-name
 
 Q: Is it okay to use like #define _DECLTYPE(_T) typeof(_T) ?
 
@@ -10297,7 +10297,7 @@ class X {
 # ============================================================================
 #{ CPP
 ={============================================================================
-*kt_dev_cpp_000* cpp-ref
+*kt_dev_cpp_0000* cpp-reference
 
 <cpp-core-guideline>
 http://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines
@@ -10305,7 +10305,7 @@ https://github.com/CppKorea/CppCoreGuidelines
 
 
 ={============================================================================
-*kt_dev_cpp_000* cpp-oop
+*kt_dev_cpp_0000* cpp-oop
 
 The key ideas in OOP are data abstraction, inheritance, and dynamic binding.
 
@@ -10346,7 +10346,7 @@ of the same type as the class from which it inherits.
 
 
 ={============================================================================
-*kt_dev_cpp_005* cpp-init-form
+*kt_dev_cpp_0000* cpp-init-form
 
 // `default-init`
 string s1;                 
@@ -19778,204 +19778,6 @@ const char* _determineSource(char*in, int* sourceLen, int *readPos, bool* usePat
 
 
 ={============================================================================
-*kt_dev_cpp_008* read: from the outside (interfaces first) or from the inside?
-
-https://isocpp.org/wiki/faq/operator-overloading#design-interfaces-first
-
-Should I design my classes from the outside (interfaces first) or from the
-inside (data first)?
-
-From the outside!
-
-A good interface provides a simplified view that is expressed in the vocabulary
-of a user. In the case of OO software, the interface is normally the set of
-public methods of either a single class or a tight group of classes.
-
-First think about what the object logically represents, 'not' how you intend to
-physically build it. For example, suppose you have a Stack class that will be
-built by containing a LinkedList:
-
-class Stack {
-  public:
-    // ...
-  private:
-    LinkedList list_;
-};
-
-Should the Stack have a get() method that returns the LinkedList? Or a set()
-  method that takes a LinkedList? Or a constructor that takes a LinkedList?
-  Obviously the answer is No, since you should design your interfaces from the
-  outside-in. I.e., users of Stack objects don’t care about LinkedLists; they
-  care about pushing and popping.
-
-Now for another example that is a bit more subtle. Suppose class LinkedList is
-built 'using' a linked list of Node objects, where each Node object has a
-pointer to the next Node:
-
-class Node { /*...*/ };
-
-class LinkedList {
-  public:
-    // ...
-  private:
-    Node* first_;
-};
-
-Should the LinkedList class have a get() method that will let users access the
-first Node? Should the Node object have a get() method that will let users
-follow that Node to the next Node in the chain? In other words, what should a
-LinkedList look like from the outside? Is a LinkedList really a chain of Node
-objects? Or is that just an implementation detail? And if it is just an
-implementation detail, how will the LinkedList let users(Stack class) access
-each of the elements in the LinkedList one at a time?
-
-The key insight is the realization that a LinkedList is not a chain of Nodes.
-That may be 'how' it is built, but that is 'not' what it is. What it is is a
-sequence of elements. 
-
-Therefore the LinkedList 'abstraction' should provide a LinkedListIterator class
-as well, and that LinkedListIterator might have an operator++ to go to the next
-element, and it might have a get()/set() pair to access its value stored in the
-Node (the value in the Node element is solely the responsibility of the
-    LinkedList user, which is why there is a get()/set() pair that allows the
-    user to freely manipulate that value).
-
-Starting from the user’s perspective, we might want our LinkedList class to
-support operations that look similar to accessing an array using pointer
-arithmetic:
-
-    void userCode(LinkedList& a)
-    {
-      for (LinkedListIterator p = a.begin(); p != a.end(); ++p)
-        std::cout << *p << '\n';
-    }
-
-To implement this interface, LinkedList will need a begin() method and an end()
-  method. These return a LinkedListIterator object. The LinkedListIterator will
-  need a method to go forward, ++p; a method to access the current element, *p;
-  and a comparison operator, p != a.end().
-
-The code follows. 
-
-The important thing to notice is that LinkedList does not have any methods that
-let users access Nodes. 
-
-Nodes are an implementation technique that is completely buried. This makes:
-
-  the LinkedList class safer (no chance a user will mess up the invariants and
-      linkages between the various nodes), 
-  
-  easier to use (users don’t need to expend extra effort keeping the node-count
-      equal to the actual number of nodes, or any other infrastructure stuff),
-
-  and more flexible (by changing a single typedef, users could change their code
-      from using LinkedList to some other list-like class and the bulk of their
-      code would compile cleanly and hopefully with improved performance
-      characteristics).
-
-
-#include <cassert>    // Poor man's exception handling
-
-class LinkedListIterator;
-class LinkedList;
-
-class Node {
-  // No public members; this is a "private class"
-  friend class LinkedListIterator;   // A friend class
-  friend class LinkedList;
-  Node* next_;
-  int elem_;
-};
-
-class LinkedListIterator {
-  public:
-    bool operator== (LinkedListIterator i) const;
-    bool operator!= (LinkedListIterator i) const;
-    void operator++ ();   // Go to the next element
-
-    // note: get/set to access element(value)
-    int& operator*  ();   // Access the current element
-
-  private:
-    LinkedListIterator(Node* p);
-    Node* p_;
-    friend class LinkedList;  // so LinkedList can construct a LinkedListIterator
-};
-
-class LinkedList {
-  public:
-    void append(int elem);    // Adds elem after the end
-    void prepend(int elem);   // Adds elem before the beginning
-
-    // ...
-    LinkedListIterator begin();
-    LinkedListIterator end();
-
-    // ...
-  private:
-    Node* first_;
-};
-
-Here are the methods that are obviously inlinable (probably in the same header
-    file):
-
-    inline bool LinkedListIterator::operator== (LinkedListIterator i) const
-    {
-      return p_ == i.p_;
-    }
-    inline bool LinkedListIterator::operator!= (LinkedListIterator i) const
-    {
-      return p_ != i.p_;
-    }
-    inline void LinkedListIterator::operator++()
-    {
-      assert(p_ != NULL);  // or if (p_==NULL) throw ...
-      p_ = p_->next_;
-    }
-    inline int& LinkedListIterator::operator*()
-    {
-      assert(p_ != NULL);  // or if (p_==NULL) throw ...
-      return p_->elem_;
-    }
-    inline LinkedListIterator::LinkedListIterator(Node* p)
-      : p_(p)
-    { }
-    inline LinkedListIterator LinkedList::begin()
-    {
-      return first_;
-    }
-    inline LinkedListIterator LinkedList::end()
-    {
-      return NULL;
-    }
-
-Conclusion: The linked list had two different kinds of data. The values of the
-elements stored in the linked list are the responsibility of the user of the
-linked list (and only the user; the linked list itself makes no attempt to
-    prohibit users from changing the third element to 5), and the linked list’s
-infrastructure data (next pointers, etc.), whose values are the responsibility
-of the linked list (and only the linked list; e.g., the linked list does not let
-    users change (or even look at!) the various next pointers).
-
-Thus the only get()/set() methods were to get and set the elements of the linked
-list, but not the infrastructure of the linked list. Since the linked list hides
-the infrastructure pointers/etc., it is able to make very strong promises
-regarding that infrastructure (e.g., if it were a doubly linked list, it might
-    guarantee that every forward pointer was matched by a backwards pointer from
-    the next Node).
-
-So, we see here an example of where the values of some of a class’s data is the
-responsibility of users (in which case the class needs to have get()/set()
-    methods for that data) but the data that the class wants to control does not
-  necessarily have get()/set() methods.
-
-Note: the purpose of this example is not to show you how to write a linked-list
-class. In fact you should not “roll your own” linked-list class since you should
-use one of the “container classes” provided with your compiler. Ideally you’ll
-use one of the standard container classes such as the std::list<T> template.
-
-
-={============================================================================
 *kt_dev_cpp_008* read: logical and physical state
 
 https://isocpp.org/wiki/faq/const-correctness#logical-vs-physical-state
@@ -26117,6 +25919,206 @@ dangle even if const use.
 
 vector and string's [] operator returns reference but these are exceptions to
 this rule, but not a general rule. Better not use [] operator.
+
+
+={============================================================================
+*kt_dev_cpp_0000* cpp-design-interface-first
+
+https://isocpp.org/wiki/faq/operator-overloading#design-interfaces-first
+
+Should I design my classes from the outside (interfaces first) or from the
+inside (data first)?
+
+From the outside!
+
+A good interface provides a simplified view that is expressed in the vocabulary
+of a user. In the case of OO software, the interface is normally the set of
+public methods of either a single class or a tight group of classes.
+
+First think about what the object logically represents, 'not' how you intend to
+physically build it. For example, suppose you have a Stack class that will be
+built by containing a LinkedList:
+
+class Stack {
+  public:
+    // ...
+  private:
+    LinkedList list_;
+};
+
+Should the Stack have a get() method that returns the LinkedList? Or a set()
+  method that takes a LinkedList? Or a constructor that takes a LinkedList?
+  Obviously the answer is No, since you should design your interfaces from the
+  outside-in. I.e., users of Stack objects don’t care about LinkedLists; they
+  care about pushing and popping.
+
+Now for another example that is a bit more subtle. Suppose class LinkedList is
+built 'using' a linked list of Node objects, where each Node object has a
+pointer to the next Node:
+
+class Node { /*...*/ };
+
+class LinkedList {
+  public:
+    // ...
+  private:
+    Node* first_;
+};
+
+Should the LinkedList class have a get() method that will let users access the
+first Node? Should the Node object have a get() method that will let users
+follow that Node to the next Node in the chain? In other words, what should a
+LinkedList look like from the outside? Is a LinkedList really a chain of Node
+objects? Or is that just an implementation detail? And if it is just an
+implementation detail, how will the LinkedList let users(Stack class) access
+each of the elements in the LinkedList one at a time?
+
+The key insight is the realization that a LinkedList is not a chain of Nodes.
+That may be 'how' it is built, but that is 'not' what it is. What it is is a
+sequence of elements. 
+
+Therefore the LinkedList 'abstraction' should provide a LinkedListIterator class
+as well, and that LinkedListIterator might have an operator++ to go to the next
+element, and it might have a get()/set() pair to access its value stored in the
+Node (the value in the Node element is solely the responsibility of the
+    LinkedList user, which is why there is a get()/set() pair that allows the
+    user to freely manipulate that value).
+
+Starting from the user’s perspective, we might want our LinkedList class to
+support operations that look similar to accessing an array using pointer
+arithmetic:
+
+    void userCode(LinkedList& a)
+    {
+      for (LinkedListIterator p = a.begin(); p != a.end(); ++p)
+        std::cout << *p << '\n';
+    }
+
+To implement this interface, LinkedList will need a begin() method and an end()
+  method. These return a LinkedListIterator object. The LinkedListIterator will
+  need a method to go forward, ++p; a method to access the current element, *p;
+  and a comparison operator, p != a.end().
+
+The code follows. 
+
+The important thing to notice is that LinkedList does not have any methods that
+let users access Nodes. 
+
+Nodes are an implementation technique that is completely buried. This makes:
+
+  the LinkedList class safer (no chance a user will mess up the invariants and
+      linkages between the various nodes), 
+  
+  easier to use (users don’t need to expend extra effort keeping the node-count
+      equal to the actual number of nodes, or any other infrastructure stuff),
+
+  and more flexible (by changing a single typedef, users could change their code
+      from using LinkedList to some other list-like class and the bulk of their
+      code would compile cleanly and hopefully with improved performance
+      characteristics).
+
+
+#include <cassert>    // Poor man's exception handling
+
+class LinkedListIterator;
+class LinkedList;
+
+class Node {
+  // No public members; this is a "private class"
+  friend class LinkedListIterator;   // A friend class
+  friend class LinkedList;
+  Node* next_;
+  int elem_;
+};
+
+class LinkedListIterator {
+  public:
+    bool operator== (LinkedListIterator i) const;
+    bool operator!= (LinkedListIterator i) const;
+    void operator++ ();   // Go to the next element
+
+    // note: get/set to access element(value)
+    int& operator*  ();   // Access the current element
+
+  private:
+    LinkedListIterator(Node* p);
+    Node* p_;
+    friend class LinkedList;  // so LinkedList can construct a LinkedListIterator
+};
+
+class LinkedList {
+  public:
+    void append(int elem);    // Adds elem after the end
+    void prepend(int elem);   // Adds elem before the beginning
+
+    // ...
+    LinkedListIterator begin();
+    LinkedListIterator end();
+
+    // ...
+  private:
+    Node* first_;
+};
+
+Here are the methods that are obviously inlinable (probably in the same header
+    file):
+
+    inline bool LinkedListIterator::operator== (LinkedListIterator i) const
+    {
+      return p_ == i.p_;
+    }
+    inline bool LinkedListIterator::operator!= (LinkedListIterator i) const
+    {
+      return p_ != i.p_;
+    }
+    inline void LinkedListIterator::operator++()
+    {
+      assert(p_ != NULL);  // or if (p_==NULL) throw ...
+      p_ = p_->next_;
+    }
+    inline int& LinkedListIterator::operator*()
+    {
+      assert(p_ != NULL);  // or if (p_==NULL) throw ...
+      return p_->elem_;
+    }
+    inline LinkedListIterator::LinkedListIterator(Node* p)
+      : p_(p)
+    { }
+    inline LinkedListIterator LinkedList::begin()
+    {
+      return first_;
+    }
+    inline LinkedListIterator LinkedList::end()
+    {
+      return NULL;
+    }
+
+Conclusion: The linked list had two different kinds of data. The values of the
+elements stored in the linked list are the responsibility of the user of the
+linked list (and only the user; the linked list itself makes no attempt to
+    prohibit users from changing the third element to 5), and the linked list’s
+infrastructure data (next pointers, etc.), whose values are the responsibility
+of the linked list (and only the linked list; e.g., the linked list does not let
+    users change (or even look at!) the various next pointers).
+
+Thus the only get()/set() methods were to get and set the elements of the linked
+list, but not the infrastructure of the linked list. Since the linked list hides
+the infrastructure pointers/etc., it is able to make very strong promises
+regarding that infrastructure (e.g., if it were a doubly linked list, it might
+    guarantee that every forward pointer was matched by a backwards pointer from
+    the next Node).
+
+So, we see here an example of where the values of some of a class’s data is the
+responsibility of users (in which case the class needs to have get()/set()
+    methods for that data) but the data that the class wants to control does not
+  necessarily have get()/set() methods.
+
+Note: the purpose of this example is not to show you how to write a linked-list
+class. In fact you should not “roll your own” linked-list class since you should
+use one of the “container classes” provided with your compiler. Ideally you’ll
+use one of the standard container classes such as the std::list<T> template.
+
+
 
 
 ={============================================================================
@@ -41317,7 +41319,7 @@ int main(int argc,char** argv)
     std::cout << counter.dump() << std::endl;
 }
 
-// from a run on debian
+// on debian
 
 $ ./a.out 
 Start -> scanf int took 2112us
@@ -41335,20 +41337,37 @@ Yeah, I was just thinking the same thing. I wouldn't be too surprised if the
 compiler replaces the lexical_cast call with a constant result. Try with a
 random number converted to a string.
 
+// on the host
 
 Start -> scanf int took 22us
 scanf int -> stringstream int took 45us
 stringstream int -> boost::lexical_cast<int> took 3us
 boost::lexical_cast<int> -> end took 0us
 
-on the host and
+// on the device
 
 Start -> scanf int took 46us
 scanf int -> stringstream int took 392us
 stringstream int -> boost::lexical_cast<int> took 11us
 boost::lexical_cast<int> -> end took 4us
 
-on the device.
+// on debian VM
+snap: 1: start -> scanf int took 1050us
+snap: 2: scanf int -> stringstream int took 7130us
+snap: 3: stringstream int -> boost::lexical_cast<int> took 1922us
+delete start
+delete scanf int
+delete stringstream int
+delete boost::lexical_cast<int>
+
+// on build host
+snap: 1: start -> scanf int took 1917us
+snap: 2: scanf int -> stringstream int took 7663us
+snap: 3: stringstream int -> boost::lexical_cast<int> took 1488us
+delete start
+delete scanf int
+delete stringstream int
+delete boost::lexical_cast<int>
 
 
 {numeric-conversion}
