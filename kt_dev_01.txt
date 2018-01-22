@@ -116,11 +116,12 @@ KT KB. CPP
 *kt_dev_cpp_004* cpp-copy-control-move cpp-move cpp-ex-strvec-example
 *kt_dev_cpp_004* cpp-copy-control-move-rvalue-reference
 *kt_dev_cpp_004* cpp-copy-control-move-std-move
-*kt_dev_cpp_200* cpp-ex-query-example cpp-interface
+*kt_dev_cxx_0000* cxx-ex-query-example cpp-interface
+*kt_dev_cxx_0000* cxx-ex-strblob-example
 |kt_dev_cpp_200| cpp-abc cpp-ex-quote-example cpp-refactoring
 *kt_dev_cpp_200* cpp-abc-call-in-dtor
 *kt_dev_cpp_004* cpp-copy-preventing-copies cpp-delete
-|kt_dev_cpp_007| cpp-function-matching
+|kt_dev_cxx_0000| cxx-function-matching
 |kt_dev_cpp_028| cpp-namespace *cpp-pattern-handle*
 |kt_dev_cpp_021| cpp-overload-operator
 *kt_dev_cpp_005* cpp-builtin-conversion
@@ -163,12 +164,13 @@ KT KB. CPP
 *kt_dev_cpp_022* cpp-access-control
 *kt_dev_cpp_022* cpp-cast cpp-named-cast
 *kt_dev_cpp_022* cpp-rtti
-|kt_dev_cpp_023| cpp-override
+*kt_dev_cxx_0000* cxx-override
+*kt_dev_cxx_0000* cxx-override-ref: C++ under the hood, Scott Meyers
 *kt_dev_cpp_023* cpp-class-model
 *kt_dev_cpp_023* cpp-class-model avoid-public
 *kt_dev_cpp_023* cpp-class-model not-abuse-inheritance
-*kt_dev_cpp_023* cpp-pattern-template
-*kt_dev_cpp_023* cpp-pattern-pimpl
+*kt_dev_cxx_0000* cxx-pattern-template-method
+*kt_dev_cxx_0000* cxx-pattern-pimpl cpp-minimise-compile-time
 *kt_dev_cpp_023* cpp-interface
 *kt_dev_cpp_023* inheri-strategy-pattern
 *kt_dev_cpp_024* cpp-incomplete-type forward-declaration
@@ -202,7 +204,6 @@ KT KB. CPP
 *kt_dev_cpp_060* template-initialize-type-member
 
 *kt_dev_cpp_100* read-virtual-function-call-mechanism
-|kt_dev_cpp_101| ref: C++ under the hood, Scott Meyers
 |kt_dev_cpp_102| ref: MEC++24 understand the cost of virtual functions
 |kt_dev_cpp_103| ref: others
 |kt_dev_cpp_104| ref: why singletons are controversial
@@ -276,7 +277,6 @@ KT KB. CPP
 |kt_dev_stl_100| cpp-sp-raii cpp-raii
 |kt_dev_stl_101| cpp-sp-shared
 |kt_dev_stl_102| cpp-sp-weak
-*kt_dev_cpp_0000* cpp-sp-ex-strblob-example
 *kt_dev_stl_102* cpp-sp-exception
 *kt_dev_stl_103* cpp-sp-unique
 *kt_dev_stl_103* cpp-sp-delete sp-deleter
@@ -9634,7 +9634,7 @@ cout << grade < 60 ? "fail" : "pass");        // error
 
 
 ={============================================================================
-*kt_dev_lang_017* cpp-style-name
+*kt_dev_cxx_0000* cxx-style-name
 
 Q: Is it okay to use like #define _DECLTYPE(_T) typeof(_T) ?
 
@@ -9674,9 +9674,8 @@ class TextQuery {
       : real_(real), imaginary_(imaginary)
     {}
 
-    using line_no = std::vector<std::string>::size_type;
-
-    sale.add_item (shared_ptr<Quote>(new Quote("123", 45)));
+  private:
+    std::map<std::string, std::shared_ptr<std::set<size_t>>> word_map_;
 };
 
 
@@ -14066,187 +14065,283 @@ When makes output,
  * must print the text in the input file at a given line number.
 
 
-<ex>
-#include <iostream>
+<ex-simple>
 #include <set>
 #include <map>
 #include <vector>
-#include <memory>
-#include <fstream>
+#include <string>
+#include <fstream>          // ifstream
+#include <memory>           // shared_ptr
+#include <iostream>
 #include <sstream>
-
-// g++ -g -std=c++0x -c a.c
 
 using namespace std;
 
-//
-//
-// *cpp-remember*
+// g++ -std=c++11 -g t_query_simple.cpp
+
+// <DN> <cxx-design> 
 // When design a class, can be helpful to write programs using the class before
 // implementing the members. That way, can see whether the class has the
 // `operation` we need. A good way to start the design of a program is to list
 // the program's operations. Again, what operation we need helps us see what
 // `data structure` we will need.
 //
+// int main()
+// {
+//     std::ifstream ifs("README", std::ifstream::in);
+// 
+//     TextQuery tq(ifs);
+// 
+//     while (true)
+//     {
+//         cout << "pls enter the word to search or q to quit: ";
+// 
+//         string word;
+// 
+//         // if see condition to quit
+//         if (!(cin >> word) || s == "q") break;
+// 
+//         // run query and print the result
+//         print(cout, tq.query(word)) << endl;
+//     }
+// 
+//     ifs.close();
+// }
+
+// <DN> This ex is more than simple grep since simple grep is one-pass but this
+// do mutiple-pass. So needs more structures.
+//
+// <DN> Search a given word whenever a user runs a query? If built a structure
+// which has a word and where that word was shown then no need to search a whole
+// file every time. So use a map<word, set<lines>>
+
+
+// <DN> What if have to return the result from query()? Since the result is not
+// simple due to more structures used, need to pack them to return. Like
+// iterator, pack them as a class. So needs to make it sharable, not a member
+// and use shared_ptr on file and set.
+//
 // The hard part in designing query function is deciding what the query function
-// return.
-//
-// "need to know how often it occured, the line numbers, and the corresponding
-// text."
-//
-// The easiest way to return "all" those data is to define a second class.
-//
-//
-// * Use `vector<string>` to store the entire input file. Can fetch the line using
-//   its line number as the index.
-// * Use `istringstream` to break up each line into words.
-// * Use `set` to hold line numbers on which each word appears. Appears only once
-//   in ascending order.
-// * Use `map` to associate each word with the set
+// return. The easiest way to return "all" those data is to define a second
+// class.
 
-class QueryResult {
+class QueryResult
+{
 
-    friend ostream &print(ostream &os, const QueryResult &qr);
+    friend ostream &print(ostream &os, const QueryResult &result);
+
+    using line_no = size_t;
 
     public:
-        // *cpp-size-t* use size_t instead typedef
-        // using line_no = std::vector<std::string>::size_type;
+        QueryResult(std::string word, 
+            std::shared_ptr<std::vector<std::string>> file,
+            std::shared_ptr<std::set<line_no>> lines)
+            : sought(word), file_(file), lines_(lines) {}
 
-        QueryResult(std::string s, 
-                std::shared_ptr<std::set<size_t>> p,
-                std::shared_ptr<std::vector<std::string>> f) :
-            sought(s), lines(p), file(f) {}
     private:
         std::string sought;
-        // std::shared_ptr<std::set<line_no>> lines;
-        std::shared_ptr<std::set<size_t>> lines;
-        std::shared_ptr<std::vector<std::string>> file;
+        std::shared_ptr<std::vector<std::string>> file_;
+        std::shared_ptr<std::set<line_no>> lines_;
 };
 
-class TextQuery {
+class TextQuery
+{
+    // *cxx-size-t*
+    // using line_no = std::vector<std::string>>::size_type;
+    using line_no = size_t;
+
     public:
-        // using line_no = std::vector<std::string>::size_type;
-
-        // ok
-        // TextQuery(std::ifstream &in) : file(make_shared<std::vector<std::string>>())
-        TextQuery(std::ifstream &in) : file(new std::vector<std::string>())
-        {
-            std::string line;
-
-            while (getline(in, line))
-            {
-                // save the line
-                file->push_back(line);
-
-                // get line number
-                size_t n = file->size() - 1;
-
-                // break up the line into words
-                std::istringstream iss(line);
-                std::string word;
-
-                // conversion-to-bool is explicit. okay?
-                while (iss >> word)
-                {
-                    // if word isn't already in the map, subscripting adds a new
-                    // entry which has default init shared_ptr(null). Need to
-                    // create empty set. 
-                    auto &lines = word_map[word];
-                    if (!lines)
-                        // lines.reset( new set< line_no > );   // new set
-                        lines = make_shared<std::set<size_t>>();
-
-                    lines->insert(n);
-                }
-
-            }
-        }
-
-        QueryResult query(const std::string &s) const
-        {
-            // 1. see it returns QueryResult but not printing the result here.
-
-            // 2. should not use [] since it creats an entry when it's not found
-            // auto &lines = word_map[s];
-
-            // 3. can use map.count() in place of map.find().
-            
-            // 4. handle when the given string is not found.
-            // why not use nullptr such as:
-            //
-            // static std::shared_ptr<std::set<line_no>> nodata;
-            // QueryResult(s, nullptr, file);
-            //
-            // since print() do not need to have special handling for this case
-            // such as size() and range for loop.
-
-            static std::shared_ptr<std::set<size_t>> nodata(new std::set<size_t>);
-
-            // *cpp-pair*
-            auto loc = word_map.find(s);
-            if (word_map.end() == loc)
-                return QueryResult(s, nodata, file);
-            else
-                return QueryResult(s, loc->second, file);
-        }
+        TextQuery(std::ifstream &in);
+        void query_and_print(const std::string &word) const;
+        QueryResult query(const std::string &word) const;
 
     private:
-        std::shared_ptr<std::vector<std::string>> file;
-        std::map<std::string, std::shared_ptr<std::set<size_t>>> word_map;
+        // std::vector<std::string> input_file_;
+        std::shared_ptr<std::vector<std::string>> input_file_;
+
+        // std::map<std::string, std::set<line_no>> word_map_;
+        std::map<std::string, std::shared_ptr<std::set<line_no>>> word_map_;
 };
 
-// utility function
-string make_plural(size_t ctr, const string &word, const string &ending)
+TextQuery::TextQuery(std::ifstream &in) 
+    : input_file_(make_shared<std::vector<std::string>>())
 {
-    // if (ctr > 1)
-    //     return word + ending;
-    // else
-    //     return word;
+    std::string line;
 
-    return (ctr > 1) ? word + ending : word;
+    // read a file
+    while (getline(in, line))
+    {
+        input_file_->push_back(line);
+
+        // get a line number
+        // <DN> can use variable to keep line counts
+        // <DN> line count starts from 0
+        line_no n = input_file_->size()-1;
+
+        // parse up a line into words
+        std::stringstream iss{line};
+        std::string word;
+
+        while (iss >> word)
+        {
+            // if a word isn't in the map, add a new entry but shared_ptr is
+            // default initialized, nullptr. Have to create a empty set.
+            auto &lines = word_map_[word];
+            if (!lines)
+                lines = make_shared<std::set<line_no>>();
+
+            // insert a line into a set
+            lines->insert(n);
+        }
+    }
 }
 
-ostream &print(ostream &os, const QueryResult &qr)
+// utility function
+string make_plural(size_t size, const string &word, const string &ending)
+{ return (size > 1) ? word+ending : word; }
+
+void TextQuery::query_and_print(const std::string &word) const
 {
-    os << qr.sought << " occurs " << qr.lines->size() << " "
-        << make_plural(qr.lines->size(), "time", "s") << endl;
+    auto pos = word_map_.find(word);
 
-    // Although the number in the set are numbered from 0, most users think of
-    // the first line as 1, so add 1 to the line number.
+    // if found
+    if (pos != word_map_.end())
+    {
+        cout << word << " occurs " << pos->second->size() << " " 
+            << make_plural(pos->second->size(), "time", "s") << endl;
 
-    // for (auto num : *qr.lines)
-    //     os << "\t(line " << num + 1 << ") " 
-    //         << *(qr.file->begin() + num) << endl;
+        for (auto e : *(pos->second))
+            cout << "(line " << e+1 << ") " << (*input_file_)[e] << endl;
+    }
+    else
+        cout << word << " not found" << endl;
+}
 
-    for (auto num : *qr.lines)
-        os << "\t(line " << num + 1 << ") " 
-            << (*qr.file)[num] << endl;
+QueryResult TextQuery::query(const std::string &word) const
+{
+    // <DN> How to handle when not found? Use the empty set rather than nullptr
+    //
+    // return QueryResult(word, input_file_, nullptr);
+    // 
+    // since by doing that, print() do not have special handling. 
+
+    static std::shared_ptr<std::set<line_no>> notfound{make_shared<std::set<line_no>>()};
+
+    // <DN> should not use [] which can add new entry
+    auto pos = word_map_.find(word);
+
+    // if found
+    if (pos != word_map_.end())
+        return QueryResult(word, input_file_, pos->second);
+    else
+        return QueryResult(word, input_file_, notfound);
+}
+
+ostream &print(ostream &os, const QueryResult &result)
+{
+    // os << word << " occurs " << pos->second->size() << " " 
+    //     << make_plural(pos->second->size(), "time", "s") << endl;
+    os << result.sought << " occurs " << result.lines_->size() << " " 
+        << make_plural(result.lines_->size(), "time", "s") << endl;
+
+    // <DN> line number starts from 0 in the set but add +1 to print it from 1
+    // for the user.
+    //
+    // <DN> Since uses vector, can use *cxx-iter-arithmetic* rather than []
+    // for (auto e : *(pos->second))
+    //     cout << "(line " << e + 1 << ") " << *(result_file_->begin()+e) << endl;
+
+    for (auto e : *result.lines_)
+        cout << "(line " << e + 1 << ") " << (*result.file_)[e] << endl;
+
+    // <DN> if miss out this line, gets core and the trace is:
+    //
+    // Program terminated with signal SIGSEGV, Segmentation fault.
+    // #0  0x00007f84dd7af05c in std::basic_ostream<char, std::char_traits<char> >& std::endl<char, std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&) ()
+    //    from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
 
     return os;
 }
 
-void runQueries(ifstream &infile)
-{
-    TextQuery tq(infile);
- 
-    while (true) {
-        cout << "enter the word to look for, or q to quit: ";
- 
-        string s;
- 
-        // eof or q?. *cpp-remember* not s == 'q'
-        if (!(cin >> s) || s == "q") break;
- 
-        // run query and print the result
-        print(cout, tq.query(s)) << endl;
-    }
-}
 
-int main()
+// *cxx-simple-grep*
+// = 01 ======
+// pls enter the word to search or q to quit: GNU
+// GNU occurs 10 times
+// (line 1) This directory contains the sources of the GNU C Library.
+// (line 4) The GNU C Library is the standard system C library for all GNU systems,
+// (line 5) and is an important part of what makes up a GNU system.  It provides the
+// (line 14) The GNU C Library implements much of the POSIX.1 functionality in the
+// (line 17) incorporated into an official GNU C Library release.
+// (line 19) When working with Linux kernels, this version of the GNU C Library
+// (line 25) The GNU C Library supports these configurations for using Linux kernels:
+// (line 53) the GNU C Library.  You might also consider reading the WWW pages for
+// (line 56) The GNU C Library is (almost) completely documented by the Texinfo manual
+// (line 69) The GNU C Library is free software.  See the file COPYING.LIB for copying
+
+void t_query_01()
 {
     std::ifstream ifs("README", std::ifstream::in);
-    runQueries(ifs);
+
+    TextQuery tq(ifs);
+
+    cout << "pls enter the word to search or q to quit: ";
+
+    string word;
+
+    // if see condition to quit
+    if (!(cin >> word)) return;
+
+    // run query and print the result
+    tq.query_and_print(word);
+}
+
+
+// = 02 ======
+// pls enter the word to search or q to quit: GNU
+// GNU occurs 10 times
+// (line 1) This directory contains the sources of the GNU C Library.
+// (line 4) The GNU C Library is the standard system C library for all GNU systems,
+// (line 5) and is an important part of what makes up a GNU system.  It provides the
+// (line 14) The GNU C Library implements much of the POSIX.1 functionality in the
+// (line 17) incorporated into an official GNU C Library release.
+// (line 19) When working with Linux kernels, this version of the GNU C Library
+// (line 25) The GNU C Library supports these configurations for using Linux kernels:
+// (line 53) the GNU C Library.  You might also consider reading the WWW pages for
+// (line 56) The GNU C Library is (almost) completely documented by the Texinfo manual
+// (line 69) The GNU C Library is free software.  See the file COPYING.LIB for copying
+// 
+// pls enter the word to search or q to quit:
+
+void t_query_02()
+{
+    std::ifstream ifs("README", std::ifstream::in);
+
+    TextQuery tq(ifs);
+
+    while (true)
+    {
+        cout << "pls enter the word to search or q to quit: ";
+
+        string word;
+
+        // if see condition to quit
+        if (!(cin >> word) || word == "q") break;
+
+        // run query and print the result
+        print(cout, tq.query(word)) << endl;
+    }
+
     ifs.close();
+}
+ 
+int main()
+{
+    cout << "= 02 ======" << endl;
+    t_query_02();
+
+    // cout << "= 01 ======" << endl;
+    // t_query_01();
 }
 
 
@@ -14937,6 +15032,639 @@ int main()
 Why Query copy-ctor gets called? Since BinaryQuery has two Query members which
 copy constructed in ctor. However, Query only has shared_ptr member and not
 really problem of having a copy-ctor.
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-ex-strblob-example
+
+<ex>
+#include <iostream>             // for cout
+#include <vector>
+#include <string>
+#include <memory>
+#include <initializer_list>
+
+// g++ -std=c++11 -g t_strblob.cpp
+
+//////////////////////////////////////////////////////////////////////////////
+// StrBlob without StrBlobPtr
+//
+// CPR 455
+//
+// * show how to implement a new collection type using library container.
+// `is-implemented-in-terms-of-model`
+//
+// * This shows when shared_ptr is useful than own raii since this case don't
+// need `copy-controls` and use syn versions but not a problem as it has only
+// one member which is shared_ptr.
+
+namespace SB1
+{
+
+using namespace std;
+
+class StrBlob
+{
+    public:
+        typedef vector<string>::size_type size_type;
+
+        // interface
+        StrBlob() : data_(make_shared<vector<string>>()) {}
+        StrBlob(initializer_list<string> il) :
+            data_(make_shared<vector<string>>(il)) {}
+
+        size_type size() const { return data_->size(); }
+        bool empty() const { return data_->empty(); }
+
+        void push_back(const string &e);
+        void pop_back();
+
+        std::string &front();
+        std::string &back();
+
+    private:
+        shared_ptr<vector<string>> data_;
+
+        // *cpp-except*
+        // see that return type has nothing to do with exception.
+        void check(size_type index, const string &message) const
+        {
+            if (index >= data_->size())
+                throw out_of_range(message);
+        }
+};
+
+void StrBlob::push_back(const string &e)
+{
+    data_->push_back(e);
+}
+
+void StrBlob::pop_back()
+{
+    // check if we calls it on empty vector since calls on empty
+    // vector is `undefined` behavior.
+    check(0, "pop_back() on empty container");
+
+    // std::vector.pop_back() removes the last but do not return.
+    data_->pop_back();
+}
+
+std::string &StrBlob::front()
+{
+    check(0, "front() on empty container");
+    return data_->front();
+}
+
+std::string &StrBlob::back()
+{
+    check(0, "back() on empty container");
+    return data_->back();
+}
+
+} // namespace SB1
+
+
+// = 01 ======
+// size : 4
+// front: one
+// back : four
+// size : 5
+// front: one
+// back : five
+// size : 0
+// terminate called after throwing an instance of 'std::out_of_range'
+//   what():  front() on empty container
+// Aborted
+
+void t_strblob_01()
+{
+    using namespace std;
+
+    SB1::StrBlob sb{"one", "two", "three", "four"};
+
+    cout << "size : " << sb.size() << endl;
+    cout << "front: " << sb.front() << endl;
+    cout << "back : " << sb.back() << endl;
+
+    sb.push_back("five");
+
+    cout << "size : " << sb.size() << endl;
+    cout << "front: " << sb.front() << endl;
+    cout << "back : " << sb.back() << endl;
+
+    SB1::StrBlob s2;
+
+    cout << "size : " << s2.size() << endl;
+    cout << "front: " << s2.front() << endl;
+    cout << "back : " << s2.back() << endl;
+}
+
+
+// = 02 ======
+// b1 size: 1
+// b1 size: 4
+// b2 size: 4
+// b1 size: 4
+
+void t_strblob_02()
+{
+    SB1::StrBlob b1{"b1"};
+    {
+        std::cout << "b1 size: " << b1.size() << std::endl;
+
+        SB1::StrBlob b2{ "this", "is", "second blob" };
+        b1 = b2;
+        b2.push_back(". really?");
+
+        std::cout << "b1 size: " << b1.size() << std::endl;
+        std::cout << "b2 size: " << b2.size() << std::endl;
+    }
+
+    std::cout << "b1 size: " << b1.size() << std::endl;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// StrBlob with StrBlobPtr
+
+// namespace SB2
+// {
+
+using namespace std;
+
+// forward declaration
+// *cpp-incomplete-type* issue decide which class comes first.
+class StrBlobPtr;
+
+class StrBlob
+{
+    // friend declaration
+    friend class StrBlobPtr;
+
+    public:
+        typedef vector<string>::size_type size_type;
+
+        // interface
+        StrBlob() : data_(make_shared<vector<string>>()) {}
+        StrBlob(initializer_list<string> il) :
+            data_(make_shared<vector<string>>(il)) {}
+
+        size_type size() const { return data_->size(); }
+        bool empty() const { return data_->empty(); }
+
+        void push_back(const string &e);
+        void pop_back();
+
+        std::string &front();
+        std::string &back();
+
+        // iterator support
+        // cause *cpp-incomplete-type* issue and can't be defined until
+        // StrBlobPtr is defined.
+        //
+        // StrBlobPtr begin() { return StrBlobPtr(*this); }
+        // StrBlobPtr end() { return StrBlobPtr(*this, data_->size()); }
+
+        StrBlobPtr begin();
+        StrBlobPtr end();
+
+    private:
+        shared_ptr<vector<string>> data_;
+
+        void check(size_type index, const string &message) const
+        {
+            if (index >= data_->size())
+                throw out_of_range(message);
+        }
+};
+
+void StrBlob::push_back(const string &e)
+{
+    data_->push_back(e);
+}
+
+void StrBlob::pop_back()
+{
+    // check if we calls it on empty vector since calls on empty
+    // vector is `undefined` behavior.
+    check(0, "pop_back() on empty container");
+
+    // std::vector.pop_back() removes the last but do not return.
+    data_->pop_back();
+}
+
+std::string &StrBlob::front()
+{
+    check(0, "front() on empty container");
+    return data_->front();
+}
+
+std::string &StrBlob::back()
+{
+    check(0, "back() on empty container");
+    return data_->back();
+}
+
+// CPR 473, *cpp-iter*
+//
+// <- new container class ->  <- companion class like iterator ->
+//    StrBlob                    StrBlobPtr
+//    - shared_ptr               - weak_ptr
+//
+//                      vector[]
+//                      - underlying container
+class StrBlobPtr
+{
+    friend bool eq(const StrBlobPtr&, const StrBlobPtr&);
+
+    public:
+        StrBlobPtr() {}
+        // cannot use on const StrBlob since ctor uses non-const.
+        StrBlobPtr(StrBlob &blob, size_t size = 0) : blob_(blob.data_), curr_(size) {}
+
+        StrBlobPtr &incr();     // prefix version, ++iter
+        StrBlobPtr &decr();     // prefix version, --iter
+        string &deref() const;  // *iter
+
+        // CPR 566, *cpp-overload-operator-increment-decrement*
+        //
+        // * No language requirement but prefer to be a member since change the
+        // state of the object.
+        //
+        // * As for built-in type, there are both prefix and postfix versions.
+        
+        // prefix versions
+        //
+        // note: 
+        // To be consistent with the built-in operators, the prefix should
+        // return a reference
+
+        StrBlobPtr &operator++();
+        StrBlobPtr &operator--();
+
+        // postfix versions
+        //
+        // The postfix version takes an extra parameter which is unused and is
+        // to distinguish it from the prefix.
+        //
+        // note:
+        //
+        // To be consistent with the built-in operators, the postfix should
+        // return the old `value`, not a reference.
+
+        StrBlobPtr operator++(int);
+        StrBlobPtr operator--(int);
+
+        // may use const to prevent like, a++++.
+        // const StrBlobPtr operator++(int);
+        // const StrBlobPtr operator--(int);
+        
+
+        // CPR 569, *cpp-overload-operator-member-access*
+        //
+        // * Used in iterator and smart pointer class
+        //
+        // * operator arrow must be a member and dereference usually be a member
+        // as well.
+        
+        string &operator*() const;
+        string *operator->() const;
+
+    private:
+        shared_ptr<vector<string>> check(size_t index, const string &message) const
+        {
+            // check member differs from the one of StrBlob.
+            auto pblob = blob_.lock();
+            if (!pblob)
+                throw runtime_error("unbound StrBlobPtr");
+
+            if (index >= pblob->size())
+                throw out_of_range(message);
+
+            return pblob;
+        }
+
+        // current index
+        size_t curr_{0};
+        weak_ptr<vector<string>> blob_;
+};
+
+inline string &StrBlobPtr::deref() const
+{
+    auto blob = check(curr_, "dereference nonexistent element");
+    // [] is higher than *
+    return (*blob)[curr_];
+}
+
+inline StrBlobPtr &StrBlobPtr::incr()
+{
+    // if curr_ already points past the end
+    check(curr_, "increment past the end");
+    ++curr_;
+    return *this;
+}
+
+inline StrBlobPtr &StrBlobPtr::decr()
+{
+    // if curr_ is zero, decrementing it will yield an invalid index
+    --curr_;
+    // check(-1, "decrement before the begin");
+    check(curr_, "decrement before the begin");
+    return *this;
+}
+
+// same as incr()
+inline StrBlobPtr &StrBlobPtr::operator++()
+{
+    // if curr_ already points past the end
+    check(curr_, "increment past the end");
+    ++curr_;
+    return *this;
+}
+
+inline StrBlobPtr StrBlobPtr::operator++(int)
+{
+    StrBlobPtr ret = *this;     // saves the current value
+    ++*this;                    // no checks since prefix ++ do.
+    return ret;
+}
+
+// same as decr()
+inline StrBlobPtr &StrBlobPtr::operator--()
+{
+    // if curr_ is zero, decrementing it will yield an invalid index
+    --curr_;
+    // check(-1, "decrement before the begin");
+    check(curr_, "decrement before the begin");
+    return *this;
+}
+
+inline StrBlobPtr StrBlobPtr::operator--(int)
+{
+    StrBlobPtr ret = *this;     // saves the current value
+    --*this;                    // no checks since prefix -- do. R associative
+    return ret;
+}
+
+// same as deref()
+// note:
+// Although it's const member function since do not change its state, returns a
+// reference and client can change through it.
+
+inline string &StrBlobPtr::operator*() const
+{
+    auto blob = check(curr_, "dereference nonexistent element");
+    // [] is higher than *
+    return (*blob)[curr_];
+}
+
+// note:
+//
+// StrBlob a1{"hi", "bye", "now"};
+// StrBlobPtr p{a1};
+//
+// *p = "okay";     // can change. assigns ot the fist element in a1
+//
+// cout << p->size() << endl;       // prints 4, the size of the first element.
+// cout << (*p).size() << endl;     // same
+//
+// The arrow operator never lose its meaning of member access. Depending on the
+// type of point:
+//
+// (*point).mem;                // point is a built-in pointer type
+// point.operator()->mem;       // point is an object of class type. iterator
+// 
+//
+// <ex> when item is shared pointer itself
+//
+// multiset<std::shared_ptr<Quote>, comp> items;
+//
+// for (auto item = items.cbegin(); item != items.cend();
+//  item = items.upper_bound(*item))
+// {
+//  os << (*item)->isbn() << " occurs, " << endl;
+// }
+//
+// <ex> shared pointer is not built-in array type
+//
+// For array:
+// 
+// *(parray+1) is synomym for parray[1]
+// 
+// the same hold for shared_ptr? No. array is special and not vector.
+// 
+// shared_ptr<vector<string>> sp(new vector<string>{"one", "two", "three"});
+// 
+// // OK
+// cout << "0: " << (*sp)[0] << endl;
+//     
+// // OK
+// cout << "0: " << *(sp->begin()+0) << endl;
+// 
+// // ERROR
+// cout << "0: " << *(*sp+0) << endl;
+
+
+inline string *StrBlobPtr::operator->() const
+{
+    // take address of a string reference
+    return & this->operator*();
+}
+
+
+// "casue *cpp-incomplete-type* issue and can't be defined until
+// StrBlobPtr is defined." so defined here.
+// return a temporary which points either begin or end.
+StrBlobPtr StrBlob::begin()
+{
+    return StrBlobPtr(*this);
+}
+
+StrBlobPtr StrBlob::end()
+{
+    return StrBlobPtr(*this, data_->size());
+}
+
+// } // namespace SB2
+
+
+// named equality operators for StrBlobPtr
+inline bool eq(const StrBlobPtr &lhs, const StrBlobPtr &rhs)
+{
+    auto l = lhs.blob_.lock(), r = rhs.blob_.lock();
+
+    // if the underlying vector is the same
+    if (l == r)
+        // then they're equal if they're both null, !r
+        // or if they point to the same element.
+        return (!r || lhs.curr_ == rhs.curr_);
+    else
+        return false;
+}
+
+inline bool neq(const StrBlobPtr &lhs, const StrBlobPtr &rhs)
+{
+    return !eq(lhs, rhs);
+}
+
+
+// = 03 ======
+// b1 size: 1
+// b2 size: 4
+// b1 size: 4
+// a
+// an
+// the
+// about
+
+void t_strblob_03()
+{
+    StrBlob b1{"b1"};
+    {
+        std::cout << "b1 size: " << b1.size() << std::endl;
+
+        StrBlob b2{"a", "an", "the"};
+        b1 = b2;
+        b2.push_back("about");
+
+        std::cout << "b2 size: " << b2.size() << std::endl;
+    }
+
+    std::cout << "b1 size: " << b1.size() << std::endl;
+
+    for (auto it = b1.begin(); neq(it, b1.end()); it.incr())
+        cout << it.deref() << endl;
+}
+
+
+// = 04 ======
+// 10
+// 10
+// b1 size: 5
+// super okay
+// bye
+// for
+// now
+// about
+
+void t_strblob_04()
+{
+    StrBlob a1{"hi", "bye", "for", "now"};
+    StrBlobPtr p{a1};
+    
+    *p = "super okay";     // can change. assigns ot the fist element in a1
+    
+    cout << p->size() << endl;       // prints 4, the size of the first element.
+    cout << (*p).size() << endl;     // same
+
+    a1.push_back("about");
+
+    cout << "b1 size: " << a1.size() << endl;
+
+    for (auto it = a1.begin(); neq(it, a1.end()); ++it)
+        cout << *it << endl;
+}
+
+int main()
+{
+    using namespace std;
+
+    cout << "= 04 ======" << endl;
+    t_strblob_04();
+
+    // cout << "= 03 ======" << endl;
+    // t_strblob_03();
+
+    // cout << "= 02 ======" << endl;
+    // t_strblob_02();
+
+    // cout << "= 01 ======" << endl;
+    // t_strblob_01();
+}
+
+<ex>
+// Blob template <cpp-ex-strblob-template>
+// This is the template-version of the same. No longer specific to `string`.
+//
+template <typename T>
+class Blob
+{
+    public:
+        typedef T value_type;
+
+        // *cpp-template-type-member*
+        typedef typename std::vector<T>::size_type size_type;
+
+        Blob();
+        Blob(std::initializer_list<T> il);
+
+        size_type size() const { return data->size(); }
+        bool empty() const { return data->empty(); }
+
+        void push_back(const T &t) { data->push_back(t); }
+        void pop_back();
+
+        T& front()
+        {
+            check(0, "front() on empty container");
+            return data->front();
+        }
+        T& back();
+
+        T& operator[](size_type i);
+
+        // // const versions
+        // T & back() const;
+        // T & operator[](size_type i) const;
+
+    private:
+        std::shared_ptr<std::vector<T>> data;
+        void check(size_type i, const std::string &message) const;
+};
+
+// ctors
+template <typename T>
+Blob<T>::Blob(): data(make_shared<std::vector<T>>()) {}
+
+template <typename T>
+Blob<T>::Blob(std::initializer_list<T> il) : data(make_shared<std::vector<T>>(il)) {}
+
+// <cpp-template-member-function>
+//
+// To write a member function of class template 'outside' of definition,
+// remember that the instantiated type is a new type and must say to which class
+// the member belongs. see Blob`<T>`
+//
+// it is instantiated `only if` it is used and if not, it is not instantiated.
+
+template <typename T>
+void Blob<T>::check(size_type i, const std::string &message) const
+{
+    if (i >= data->size())
+        throw std::out_of_range(message);
+}
+
+// as stl-vector back() returns the last element
+template <typename T>
+T & Blob<T>::back()
+{
+    check(0, "back on empty blob");
+    return data->back();
+}
+
+template <typename T>
+T & Blob<T>::operator[](size_type i)
+{
+    check(i, "subscript out of range");
+    return (*data)[i];
+}
+
+template <typename T>
+void Blob<T>::pop_back()
+{
+    check(0, "pop_back on empty blob");
+    data->pop_back();
+}
+
 
 
 ={============================================================================
@@ -15944,13 +16672,13 @@ int main()
 
 
 ={============================================================================
-*kt_dev_cpp_007* cpp-function-matching
+*kt_dev_cxx_0000* cxx-function-matching
 
 Known as overload resolution. `The name has scope` and `object has lifetime.`
 Three possible outcomes: best match, no match, and ambiguous call.
 
 
-#01: <cpp-name-lookup> *cpp-argument-dependant-lookup*
+#01: <cxx-name-lookup> *cxx-argument-dependant-lookup*
 
 For `name-lookup` inside a namespace, look in members in case class, and if
 not found, continue looking in enclosing scope; which is a open scope having a
@@ -23666,7 +24394,7 @@ exception.
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-override
+*kt_dev_cxx_0000* cxx-override
 
 {problem-when-override-do-not-work}
 Believe that made an override and expect that derived version gets called. no
@@ -23674,144 +24402,124 @@ compile error and why? Two things:
 
 #include <iostream>
 
+// g++ -g -std=c++0x t_override.cpp
+
 using namespace std;
 
-class Base {
+class B0 {
   public:
-    virtual int fcn() { cout << "base: fcn" << endl; }
+    virtual int foo() { cout << "B0::foo" << endl; }
 };
 
-class D1 : public Base {
+class D1 : public B0 {
   public:
-    int fcn(int) { cout << "d1  : fcn(int) " << endl; }
+    int foo(int) { cout << "D1::foo(int) " << endl; }
 };
 
-int main()
+// = 01 ======
+// B0::foo
+
+// No override since it do not meet *cxx-override-condition* Hence no vtable
+// update and base version called.
+
+void t_override_01()
 {
-  D1 d1obj;
-  Base* bp = &d1obj;
-  bp->fcn();
+    D1 dobj;
+    B0* p = &dobj;
+    p->foo();
 }
 
-base: fcn
+// t_override.cpp: In function ‘void t_override_02()’:
+// t_override.cpp:92:12: error: no matching function for call to ‘D1::foo()’
+//      p->foo();
+//             ^
+// t_override.cpp:92:12: note: candidate is:
+// t_override.cpp:14:9: note: int D1::foo(int)
+//      int foo(int) { cout << "D1::foo(int) " << endl; }
+//          ^
+// t_override.cpp:14:9: note:   candidate expects 1 argument, 0 provided
+//
+// Effectively defines a new function in the derived, inner scope, name found
+// and stops lookup. so hide the name in the base in *cxx-name-lookup* 
+//
+// Q: ?? As EC++33 said, since not use some overloads in the derived class due
+// to hide, it also break "is-a" relationship.
 
-No override happens since it do not meet *cpp-override-condition* Hence no
-vtable update and base version called.
-
-
+void t_override_02()
+{
+    D1 dobj;
+    D1* p = &dobj;
+    p->foo();
+}
+ 
 int main()
 {
-  D1 d1obj;
-  D1* dp1 = &d1obj;     // pointer to derived
-  dp1->fcn();           // hide
+    cout << "= 02 ======" << endl;
+    t_override_02();
+
+    cout << "= 01 ======" << endl;
+    t_override_01();
 }
-
-compile error:
-sam01.cpp:32:12: error: no matching function for call to ‘D1::fcn()’
-sam01.cpp:32:12: note: candidate is:
-sam01.cpp:13:9: note: int D1::fcn(int)
-sam01.cpp:13:9: note:   candidate expects 1 argument, 0 provided
-
-Effectively defines a new function in the derived, inner scope, and hide the
-name in the base in *cxx-name-lookup* As EC++33 said, since not use some
-overloads in the derived class due to hide, it also break "is-a" relationship.
 
 
 {cpp-override-condition}
-To override, name, exactly same parameter type including `const`, and return
-type should be the 'same'. an exception to this when return type is a pointer
-or reference. See *cpp-overload-condition*
+To override:
+
+  name, parameter type, `const`, and return type should be the 'same'. 
+
+An exception to this when return type is a pointer or reference.
+See *cpp-overload-condition*
+
+However, tried pointer return type, no errors so return type in overrides can
+be different only that is pointer. See p606 in ref-CPR.
 
 
 #include <iostream>
 
+// g++ -g -std=c++0x t_override.cpp
+
+namespace OR2 {
+
 using namespace std;
 
-class Base {
+class B0 {
   public:
-    virtual int fcn() { cout << "base: fcn" << endl; }
+    virtual int foo() { cout << "int B0::foo()" << endl; }
 };
 
-class D1 : public Base {
+class D1 : public B0 {
   public:
-    bool fcn() { cout << "d1: fcn" << endl; }
+    bool foo() { cout << "bool D1::foo() " << endl; }
 };
 
 class D2 : public D1 {
   public:
-    int fcn() { cout << "d2: fcn" << endl; }
+    int foo() { cout << "bool D2::foo() " << endl; }
 };
 
-:13:10: error: conflicting return type specified for ‘virtual bool D1::fcn()’
-:7:17: error:   overriding ‘virtual int Base::fcn()’
-:18:9: error: conflicting return type specified for ‘virtual int D2::fcn()’
-:13:10: error:   overriding ‘virtual bool D1::fcn()’
-
-note: However, tried pointer return type, no errors so return type in
-overrides can be different only that is pointer. See p606 in ref-CPR.
-
-
-#include <iostream>
-
-using namespace std;
-
-class Base {
-  public:
-    virtual int fcn() { cout << "base: fcn" << endl; }
-};
-
-class D1 : public Base {
-  public:
-    // *do-not-override*
-    int fcn(int) { cout << "d1  : fcn(int) " << endl; }
-    // *do-not-override*
-    int fcn() const { cout << "d1  : fcn() const " << endl; }
-
-    // although not use override keyword, emits errors
-    // : error: conflicting return type specified for ‘virtual bool D1::fcn()’
-    //      bool fcn() { cout << "d1: fcn" << endl; }
-    bool fcn() { cout << "d1: fcn" << endl; }
-
-    int fcn() { cout << "d1  : fcn() " << endl; }
-};
-
-class D2 : public D1 {
-  public:
-    int fcn() { cout << "d2  : fcn" << endl; }
-};
-
-int main()
-{
-  Base bobj; D1 d1obj; D2 d2obj;
-
-  Base *bp1 = &bobj, *bp2 = &d1obj, *bp3 = &d2obj;
-
-  bp1->fcn();           // base
-  bp2->fcn();           // d1, no override
-  bp3->fcn();           // d2, override
-
-  D1* dp1 = &d1obj;
-  dp1->Base::fcn();     // call explicitly
-  dp1->fcn(1);
 }
 
-// do-not-override
-// base: fcn
-// base: fcn            // *do-not-override*
-// d2  : fcn
-// ======
-// base: fcn
-// d1  : fcn() const
-// d1  : fcn(int)
 
-// do-override
-// base: fcn
-// d1  : fcn
-// d2  : fcn
-// ======
-// base: fcn
-// d1  : fcn
-// d1  : fcn(int)
+// t_override.cpp:33:10: error: conflicting return type specified for ‘virtual bool OR2::D1::foo()’
+//      bool foo() { cout << "bool D1::foo() " << endl; }
+//           ^
+// t_override.cpp:28:17: error:   overriding ‘virtual int OR2::B0::foo()’
+//      virtual int foo() { cout << "int B0::foo()" << endl; }
+//                  ^
+// t_override.cpp:38:9: error: conflicting return type specified for ‘virtual int OR2::D2::foo()’
+//      int foo() { cout << "bool D2::foo() " << endl; }
+//          ^
+// t_override.cpp:33:10: error:   overriding ‘virtual bool OR2::D1::foo()’
+//      bool foo() { cout << "bool D1::foo() " << endl; }
+          ^
+void t_override_03()
+{
+    using namespace OR2;
+
+    D2 dobj;
+    D2* p = &dobj;
+    p->foo();
+}
 
 
 {override-keyword} {final-keyword}
@@ -23850,44 +24558,50 @@ int main()
 The final-keyword is used to end override as with final-keyword in inheritance.
 
 
-{cpp-override-access-control} *cpp-access-control*
+{cxx-override-access-control} *cpp-access-control*
 override do not respect access-control in derived class.
 
-class B2 {
+namespace OR3 {
+
+using namespace std;
+
+class B0 {
   public:
-    virtual int call_public() { cout << "base: call_public()" << endl; }
-    virtual int call_private() { cout << "base: call_private()" << endl; }
-    virtual int call_protected() { cout << "base: call_protected()" << endl; }
+    virtual int calls_public() { cout << "B0::calls_public" << endl; }
+    virtual int calls_private() { cout << "B0::calls_private" << endl; }
+    virtual int calls_protected() { cout << "B0::calls_protected" << endl; }
 };
 
-class DD2 : public B2 {
+class D1 : public B0 {
   public:
-    int call_public() { cout << "derived: call_public()" << endl; }
-  private:
-    int call_private() { cout << "derived: call_private()" << endl; }
+    int calls_public() { cout << "D1::calls_public" << endl; }
   protected:
-    int call_protected() { cout << "derived: call_protected()" << endl; }
+    int calls_private() { cout << "D1::calls_private" << endl; }
+  private:
+    int calls_protected() { cout << "D1::calls_protected" << endl; }
 };
 
-int ex_02()
-{
-  DD2 dobj;
-  B2 *bp = &dobj;
-
-  bp->call_public();
-  bp->call_private();
-  bp->call_protected();
 }
 
-derived: call_public()
-derived: call_private()
-derived: call_protected()
+// = 04 ======
+// D1::calls_public
+// D1::calls_protected
+// D1::calls_private
+
+void t_override_04()
+{
+    using namespace OR3;
+
+    D1 dobj;
+    B0* p = &dobj;
+    p->calls_public();
+    p->calls_protected();
+    p->calls_private();
+}
 
 
 {further-references}
-
 EC++33. do not find any useful or practical.
-
 EC++36. If you redefine nonvirtual, as you seen, it hides names. The other
 problem is to exhibit 'inconsistent' behavior depending on type of pointer
 used.
@@ -23905,12 +24619,11 @@ pD->mf();      // same object but D::mf
 
 
 {which-virtuals}
-
 EC++34 
 
 When design classes, should think 'three', pure virtual, virtual, and
-nonvirtual, separately to specify with precision what you want derived classes
-to inherit.
+non-virtual, separately to specify with precision what you want derived
+classes to inherit.
 
 * Pure virtual (abstract). To have 'only' interface inherited. interface
   inheritence. 
@@ -24008,6 +24721,231 @@ interface and 'mandatory' implementation that is default implementation but
 not overridable. 
 
 
+={============================================================================
+*kt_dev_cxx_0000* cxx-override-ref: C++ under the hood, Scott Meyers
+
+http://www.han-ese.nl/~ewout/ESE/INF2/CPP_onder_de_motorkap.pdf
+
+Overview
+
+This talk offers a detailed look at how C++ compilers typically implement
+language features, focusing on the cost of those features - or, more
+typically, the lack thereof - compared to equivalent functionality in C. It
+begins with an extremely detailed examination of the implementation of virtual
+functions under both single and multiple inheritance, explaining how
+performance considerations have influenced both the design and implementation
+of this language feature. It then moves to an overview of the implementation
+of all other features of C++, dividing them into "no-cost" and "low-cost"
+categories. The information in this paper is an overview of more detailed
+information covered in the conference presentation.
+
+Implementing Virtual Functions
+
+Given a class such as this,
+
+class B {
+  public:
+    B();
+    virtual ~B();                            // 0
+    virtual void f1();                       // 1
+    virtual int f2(char c) const;            // 2
+    virtual void f3(const std::string& s);   // 3
+    void f4() const;
+};
+
+Compilers number the virtual functions in the order in which they are
+encountered. Different compilers may start the numbering with different
+values, but it's common to start counting at 0. Assuming 0 is the initial
+value, the virtuals in B would be numbered as indicated by the comments. Note
+that neither B's constructor nor its member function f4 receive numbers.
+That's because they're not virtual functions, hence are implemented
+differently - like non-member functions, which themselves are implemented like
+functions in C.
+
+`For each class with at least one virtual function`, compilers generate a
+virtual function table, `vtbl`. A vtbl is an array of function pointers such
+that the n th entry of the table points to the implementations of the virtual
+function numbered n. B's vtbl would look like this:
+
+B's vtbl []    -> impl of B::~B
+         []    -> impl of B::f1
+         []    -> impl of B::f2
+         []    -> impl of B::f3
+
+In the case of pure virtual functions, there is typically no implementation to
+point to. In that case, the vtbl slot for the function generally points to a
+compiler-generated function that, when called, issues a runtime error message
+(e.g., "Pure virtual function called") and exits the program. 
+
+Consider now a derived class D :
+
+class D: public B {
+  public:
+    D();                          // nonvirtual  - no number
+    virtual ~D();                 // redefined   - number 0 (as in base class)
+    virtual void f1();            // redefined   - number 1 (as in base class)
+    virtual void f5(char *str);   // new virtual - number 4
+};
+
+Compilers set up a vtbl for D in the same way they do for B, except that when
+D redefines a virtual function it inherits, that function gets the same number
+in D as in B. D's vtbl thus looks like this:
+
+D's vtbl []    -> impl of D::~D
+         []    -> impl of D::f1
+         []    -> impl of B::f2
+         []    -> impl of B::f3
+         []    -> impl of D::f5
+
+Note that in cases where D inherits its virtual function implementations from
+B, D's vtbl points to functions implemented in B. This reveals that the cost
+of a virtual function call is independent of the depth of the hierarchy. At
+runtime, when a virtual is to be called, there is no need to search the
+hierarchy for the "right" implementation, because the hierarchy was flattened
+during construction of the vtbls.  
+
+Every object of a class with at least one virtual function contains a virtual
+table pointer, `vptr`. This pointer is added by the compiler, and its location
+may vary from compiler to compiler. An object's vptr points to the vtbl
+appropriate for the type of the object; compilers automatically insert code to
+achieve this into constructors and destructors. note: to set vptr. At runtime
+we could have the following situation where all B objects have a vptr pointing
+to B's vtbl and all D objects have a vptr pointing to D's vtbl:
+
+For the following C++ source code,
+
+void makeACall(B *pB)
+{
+  // call the implementation of f1 appropriate for whatever type of object pB
+  // points to
+
+  pB->f1(); 
+} 
+
+Compilers emit code equivalent to this:
+
+(*pB->vptr[1])(pB); 
+
+Call the function pointed to by vtbl entry 1 (f1's number/index) in the vtbl
+pointed to by pB->vptr; pass pB as the "this" pointer
+
+// this means that the code to select 1 entry in the vtbl is done at compile
+// time but still need to decide what pB actually points at runtime.
+// "pass pB as the "this" pointer"
+
+
+Virtual Functions Under Multiple Inheritance
+
+Under multiple inheritance (MI), a new issues arises: a single object has
+multiple addresses, and different addresses need to be passed to different
+functions. For example, suppose D has two base classes
+
+class B1 { ... };
+class B2 { ... };
+class D: public B1, public B2 { ... };
+
+A D object can be pointed to by pointers of any of three different types
+(excluding void*): B1*, B2*, or D*. 
+
+At runtime, such an object is likely to be laid out in memory like this, where
+the diagram shows where pointers of each of these different types point:
+
+B1*, D* ->  B1 data
+B2*     ->  B2 data
+            D data
+
+Given these functions,
+
+void f(B1 *pb1);  // expects pb1 to point to the top of a B1
+void g(B2 *pb2);  // expects pb2 to point to the top of a B2
+
+consider:
+
+D *pd = new D;    // pD points to top of object
+
+// fine, f expects a pointer to top of object
+f(pd);            
+
+// pointer adjustment required : g expects a pointer to B2 part of object
+g(pd);            
+
+In fact, offset adjustments may be necessary even for something as simple as a
+pointer initialization:
+
+B2 *pb2 = pd;     // pb2 should point to B2 part of object, not to top
+
+
+Unfortunately, the need for an offset adjustment may not be determinable
+during compilation. For example, given this hierarchy
+
+class B1 {
+  public:
+    virtual void mf();     // may be overridden in derived classes
+};
+
+class B2 {
+  public:
+    virtual void mf();     // may be overridden in derived classes
+};
+
+and this implementation of g,
+
+void g(B2 *pb2)
+{
+  pb2->mf();               // offset adjustment required?
+}
+
+The this pointer passed to mf may or may not require an offset adjustment. If
+the mf called is implemented in B2, no adjustment is needed, but if the mf
+called is implemented in B1 or D, an adjustment typically is required. During
+compilation, however, there is no way to know the type of object pb2 points
+to, hence no way to know which implementation of mf is being called.
+
+<key> Compilers 'solve' this problem by creating 'extra' vptrs and vtbls in MI
+hierarchies. In particular a class with n 'base' classes can be expected to
+give rise to objects with n vptrs and n vtbls, e.g.:
+
+note: this means extra vptr and vtbl entry(trunk) for each additional 'base' class
+note: Here again, single inheritance means one level of inheritance so single inheritance is
+different from single hierachy of inheritance.
+
+B1*, D* ->  B1/D vptr   -> D vtbl [] impls of virtuals declared in B1 or D (and maybe B2)
+            B1 data
+B2*     ->  B2 vptr     -> D as B2 vtbl [] impls of virtuals declared in B2
+            B2 data
+            D data
+
+When compilers generate code for a call to a virtual function, they 'know'
+which vptr they are using hence where the object pointer currently points and
+they know which vtbl they are using hence the this pointer expected by the
+function pointed to by each vtbl entry, so they can determine whether an
+offset adjustment is required for the call.
+
+
+The code for the offset adjustment itself is typically placed in a thunk 
+- a small piece of code not part of any function. Vtbl entries 'requiring'
+offset adjustments then point to thunks, and thunks forward calls to the
+target function implementation after performing the offset:
+
+<key> 
+In the above example, called g(B2*) with D and D's version should be called.
+However, B2's vtable entry has B2's version and so update that entry with
+trunk which adjust this to D and call D's version. See <understand-trunk> for
+more. Thunks themselves are often implemented as alternative vtbl function
+entry points:
+
+This treatment of the implementation of virtual functions under MI is still
+incomplete, because it fails to take into account the possibility of virtual
+base classes, but, as Stan Lippman comments in Inside the C++ Object Model ,
+     "Virtual base class support wanders off into the Byzantine...The material
+     is simply too esoteric to warrant discussion...." 
+
+However, one thing should be clear: virtual functions are implemented very
+efficiently. In fact, their implementation is both smaller and faster than
+most C approximations (e.g., anything based on cascading if/then/else type
+    tests).
+
+note: this article has lots of references to refer to when necessary.
 
 
 ={============================================================================
@@ -24512,21 +25450,15 @@ of deque.
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-pattern-template
+*kt_dev_cxx_0000* cxx-pattern-template-method
 
 EC++35
 
-The design pattern [REF003] called it template-method and define skeleton of
+The design pattern [REF003] called it `template-method` and define skeleton of
 an algorithm in an operation.
 
 Deferring 'some' steps to subclass without default implementation of some
 steps. Must be overridden.
-
-note: Says that that template method is non-virtual function in base and
-protected pure virtual function in derived.
-
-note: The template method has "Don't call us, we'll call you" that means
-parent class calls derived compared with when derived calls parent class.
 
 <ex>
 Application framework where application subclass application and document to
@@ -24536,23 +25468,23 @@ DrawApplication and DrawDocument subclass.
 Document                Application
 +Save()                 +AddDocument()
 +Open()                 +OpenDocument()
-+Close()                +DoCreateDocument()*
++Close()                +DoCreateDocument()*        // virtuals
 +DoRead()*              +CanOpenDocument()*
                         +AboutToOpenDocument()*
 
 MyDocument              MyApplication
-+DoRead()               +DoCreateDocument()           // return new MyDocument
++DoRead()               +DoCreateDocument()         // return new MyDocument
                         +CanOpenDocument()
                         +AboutToOpenDocument()
 
-// this is template method
+// this is template method which is non-virtual
 void Application::OpenDocument( const char* name ) {
   if( !CanOpenDocument(name)) {
     // cannot handle this document
     return;
   }
 
-  // *cpp-pattern-factory-func* to create application specific document
+  // *cxx-pattern-factory-func* to create application specific document
   Document* doc = DoCreateDocument();  
 
   // steps
@@ -24581,12 +25513,12 @@ void Application::OpenDocument( const char* name ) {
 <cpp-pattern-nvi>
 EC++35. In the following example, different character may calculate their
 health in different ways. Use virtual? This is alternatives to usual virtual
-design. Called NVI(nonvirtual interface) idiom as a 'public' nonvirtual in the
+design. Called NVI(non-virtual interface) idiom as a public non-virtual in the
 base call a 'private' virtual func that can be redefined but it's little more
 than window dressing as still use virtuals. 
 
-There are 'how' and 'when': template-method means that base controls when and
-derived control how.
+  "HOW and WHEN: template-method means that base controls when and derived
+  control how."
 
 note: EC++ limits template method when it uses private virtual and EXPC++ p84
 also says "avoid public virtial functions; prefer using the template method
@@ -24597,7 +25529,6 @@ class GameCharacter {
   public:
     int healthValue() const
     {
-      // steps
       // do before stuff 
       int retVal = doHealthValue();
       // do after stuff
@@ -24644,12 +25575,12 @@ virtual void DerivedClass::HookOperation() {
 
 
 <private-or-protected>
-This example is from <cast-create-a-temp-object> to show the problem of cast
-and to show case that virtual memeber function in derived calls base class
-conterparts first.
+As *cxx-override-access-control* override do not respect access control.
+However as with hook to call base function, access control do matter when call
+base version.
 
 class Window {
-  public:
+  private:
     virtual void onResize() { ... }
     ...
 };
@@ -24663,40 +25594,15 @@ class SpecialWindow : public Window {
     ...
 };
 
-As with hook operation, this is to extend operation and should the Do
-operation be protected or private? If it was private, then errors so should be
-protected. note: However, can use hook operation instead.
-
-usetemppattern.cpp: In member function 'virtual void Derived::doMorePri()':
-usetemppattern.cpp:26:16: error: 'virtual void Base::doMorePri()' is private
-usetemppattern.cpp:51:20: error: within this context
+: In member function 'virtual void Derived::doMorePri()':
+:26:16: error: 'virtual void Base::doMorePri()' is private
+:51:20: error: within this context
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-pattern-pimpl cpp-minimise-compile-time
+*kt_dev_cxx_0000* cxx-pattern-pimpl cpp-minimise-compile-time
 
 *cpp-encapsulation*
-
-EC++22, data member must be private, encapsulation
-
-How about using public or protected member data in class? If class interface
-has only member funcs then the good things are:
-
-* Syntactically uniform access(consistency) since do not need to remember
-  which one is function or member data. Always use function interface.
-
-* Fine-grained access control. read-only. write-only. etc.
-
-* Encapsulation. Hiding data members behind <functional-interface> can offer
-  all kinds of implementation flexibility as with benefits from separation
-  between interfacea and implementation. For example, change implementation
-  later.
-
-The encapsulation is inversely proportional to the amount of code that might
-be broken if that something changes. 
-
-The point is that do not use public and protected members since this means
-un-encapsulated and un-changeable.
 
 CPR 270. The benefits of encapsulation.
 
@@ -29962,251 +30868,50 @@ others can incur significant overhead. These implementation mechanisms are appli
 
 
 ={============================================================================
-*kt_dev_cpp_101* ref: C++ under the hood, Scott Meyers
-
-http://www.han-ese.nl/~ewout/ESE/INF2/CPP_onder_de_motorkap.pdf
-
-Overview
-
-This talk offers a detailed look at how C++ compilers typically implement language features,
-focusing on the cost of those features - or, more typically, the lack thereof - compared to
-  equivalent functionality in C. It begins with an extremely detailed examination of the
-  implementation of virtual functions under both single and multiple inheritance, explaining how
-  performance considerations have influenced both the design and implementation of this language
-  feature. It then moves to an overview of the implementation of all other features of C++, dividing
-  them into "no-cost" and "low-cost" categories. The information in this paper is an overview of
-  more detailed information covered in the conference presentation.
-
-Implementing Virtual Functions
-
-Given a class such as this,
-
-class B {
-  public:
-    B();
-    virtual ~B();                            // 0
-    virtual void f1();                       // 1
-    virtual int f2(char c) const;            // 2
-    virtual void f3(const std::string& s);   // 3
-    void f4() const;
-};
-
-Compilers number the virtual functions in the order in which they are encountered. Different
-compilers may start the numbering with different values, but it's common to start counting at 0.
-Assuming 0 is the initial value, the virtuals in B would be numbered as indicated by the comments.
-Note that neither B's constructor nor its member function f4 receive numbers. That's because they're
-not virtual functions, hence are implemented differently - like non-member functions, which
-themselves are implemented like functions in C.
-
-For each class with at least one virtual function, compilers generate a virtual function table
-(often abbreviated vtbl). A vtbl is an array of function pointers such that the n th entry of the
-table points to the implementations of the virtual function numbered n. B's vtbl would look like
-this:
-
-B's vtbl []    -> impl of B::~B
-         []    -> impl of B::f1
-         []    -> impl of B::f2
-         []    -> impl of B::f3
-
-In the case of pure virtual functions, there is typically no implementation to point to. In that
-case, the vtbl slot for the function generally points to a compiler-generated function that, when
-called, issues a runtime error message (e.g., "Pure virtual function called") and exits the
-program. 
-
-Consider now a derived class D :
-
-class D: public B {
-  public:
-    D();                          // nonvirtual  - no number
-    virtual ~D();                 // redefined   - number 0 (as in base class)
-    virtual void f1();            // redefined   - number 1 (as in base class)
-    virtual void f5(char *str);   // new virtual - number 4
-};
-
-Compilers set up a vtbl for D in the same way they do for B, except that when D redefines a virtual
-function it inherits, that function gets the same number in D as in B. D's vtbl thus looks like
-this:
-
-D's vtbl []    -> impl of D::~D
-         []    -> impl of D::f1
-         []    -> impl of B::f2
-         []    -> impl of B::f3
-         []    -> impl of D::f5
-
-Note that in cases where D inherits its virtual function implementations from B, D's vtbl points to
-functions implemented in B. This reveals that the cost of a virtual function call is 'independent' of
-the depth of the hierarchy. At runtime, when a virtual is to be called, there is no need to search
-the hierarchy for the "right" implementation, because the hierarchy was flattened during
-construction of the vtbls.  
-
-Every object of a class with at least one virtual function contains a virtual table pointer - a vptr
-- inside it. This pointer is added by the compiler, and its location may vary from compiler to
-compiler. An object's vptr points to the vtbl appropriate for the type of the object; compilers
-automatically insert code to achieve this into constructors and destructors. note: to set vptr. At
-runtime we could have the following situation where all B objects have a vptr pointing to B's vtbl
-and all D objects have a vptr pointing to D's vtbl:
-
-For the following C++ source code,
-
-void makeACall(B *pB)
-{
-  pB->f1(); // call the implementation of f1 appropriate for whatever type of object pB points to
-} 
-
-Compilers emit code equivalent to this:
-
-(*pB->vptr[1])(pB); 
-
-Call the function pointed to by vtbl entry 1 (f1's number/index) in the vtbl pointed to by pB->vptr;
-pass pB as the "this" pointer
-
-note: this means that the code to select 1 entry in the vtbl is done at compile time but still need
-to decide what pB actually points at runtime.
-
-Virtual Functions Under Multiple Inheritance
-
-Under multiple inheritance (MI), a new issues arises: a single object has multiple addresses, and
-different addresses need to be passed to different functions. For example, suppose D has two base
-classes
-
-class B1 { ... };
-class B2 { ... };
-class D: public B1, public B2 { ... };
-
-A D object can be pointed to by pointers of any of three different types (excluding void*): B1*,
-B2*, or D*. 
-
-At runtime, such an object is likely to be laid out in memory like this, where the diagram shows
-where pointers of each of these different types point:
-
-B1*, D* ->  B1 data
-B2*     ->  B2 data
-            D data
-
-Given these functions,
-
-void f(B1 *pb1);  // expects pb1 to point to the top of a B1
-void g(B2 *pb2);  // expects pb2 to point to the top of a B2
-
-consider:
-
-D *pd = new D;    // pD points to top of object
-f(pd);            // fine, f expects a pointer to top of object
-g(pd);            // pointer adjustment required : g expects a pointer to B2 part of object
-
-In fact, offset adjustments may be necessary even for something as simple as a pointer
-initialization:
-
-B2 *pb2 = pd;     // pb2 should point to B2 part of object, not to top
-
-Unfortunately, the need for an offset adjustment may not be determinable during compilation. For
-example, given this hierarchy
-
-class B1 {
-  public:
-    virtual void mf();     // may be overridden in derived classes
-};
-
-class B2 {
-  public:
-    virtual void mf();     // may be overridden in derived classes
-};
-
-and this implementation of g,
-
-void g(B2 *pb2)
-{
-  pb2->mf();               // offset adjustment required?
-}
-
-The this pointer passed to mf may or may not require an offset adjustment. If the mf called is
-implemented in B2, no adjustment is needed, but if the mf called is implemented in B1 or D, an
-adjustment typically is required. During compilation, however, there is no way to know the type of
-object pb2 points to, hence no way to know which implementation of mf is being called.
-
-<key> Compilers 'solve' this problem by creating 'extra' vptrs and vtbls in MI hierarchies. In
-particular a class with n 'base' classes can be expected to give rise to objects with n vptrs and n
-vtbls, e.g.:
-
-note: this means extra vptr and vtbl entry(trunk) for each additional 'base' class
-note: Here again, single inheritance means one level of inheritance so single inheritance is
-different from single hierachy of inheritance.
-
-B1*, D* ->  B1/D vptr   -> D vtbl [] impls of virtuals declared in B1 or D (and maybe B2)
-            B1 data
-B2*     ->  B2 vptr     -> D as B2 vtbl [] impls of virtuals declared in B2
-            B2 data
-            D data
-
-When compilers generate code for a call to a virtual function, they 'know' which vptr they are using
-hence where the object pointer currently points and they know which vtbl they are using hence the
-this pointer expected by the function pointed to by each vtbl entry, so they can determine whether
-an offset adjustment is required for the call.
-
-
-The code for the offset adjustment itself is typically placed in a thunk 
-- a small piece of code not part of any function. Vtbl entries 'requiring' offset adjustments then
-point to thunks, and thunks forward calls to the target function implementation after performing the
-offset:
-
-<key> 
-In the above example, called g(B2*) with D and D's version should be called. However, B2's vtable
-entry has B2's version and so update that entry with trunk which adjust this to D and call D's
-version. See <understand-trunk> for more. Thunks themselves are often implemented as alternative
-vtbl function entry points:
-
-This treatment of the implementation of virtual functions under MI is still incomplete, because it
-fails to take into account the possibility of virtual base classes, but, as Stan Lippman comments
-in Inside the C++ Object Model , "Virtual base class support wanders off into the Byzantine...The
-material is simply too esoteric to warrant discussion...." 
-
-However, one thing should be clear: virtual functions are implemented very efficiently. In fact,
-their implementation is both smaller and faster than most C approximations (e.g., anything based
-on cascading if/then/else type tests).
-
-note: this article has lots of references to refer to when necessary.
-
-
-={============================================================================
 *kt_dev_cpp_102* ref: MEC++24 understand the cost of virtual functions
 
-Each class in a program that 'declares' or 'inherits' virtual functions has its own vtbl, and the
-entries in a class's vtbl are pointers to the implementations of the virtual functions for that
-class.
+Each class in a program that 'declares' or 'inherits' virtual functions has
+its own vtbl, and the entries in a class's vtbl are pointers to the
+implementations of the virtual functions for that class.
 
 <first-cost>
-Space for a virtual table for each class that contains virtual functions. The size of a class's vtbl
-is proportional to the number of virtual functions declared for that class including those it
-inherits from its base classes.
+Space for a virtual table for each class that contains virtual functions. The
+size of a class's vtbl is proportional to the number of virtual functions
+declared for that class including those it inherits from its base classes.
 
-The total amount of space required for virtual tables is not usually significant, but if you have a
-large number of classes or a large number of virtual functions in each class, you may find that the
-vtbls take a significant bite out of your address space.
+The total amount of space required for virtual tables is not usually
+significant, but if you have a large number of classes or a large number of
+virtual functions in each class, you may find that the vtbls take a
+significant bite out of your address space.
 
 <second-cost>
-Size cost of vptr which links between objects which are of the same class and per-class vtable.
+Size cost of vptr which links between objects which are of the same class and
+per-class vtable.
 
-Even on systems with unconstrained memory, you may find that the performance of your software
-decreases, because larger objects mean fewer fit on each cache or virtual memory page, and that
-means your paging activity will probably increase.
+Even on systems with unconstrained memory, you may find that the performance
+of your software decreases, because larger objects mean fewer fit on each
+cache or virtual memory page, and that means your paging activity will
+probably increase.
 
 <third-cost>
-You effectively give up inlining since inline is done at compile time but virtual uses dynamic
-mechanism so compiler do not inline virtuals.
+You effectively give up inlining since inline is done at compile time but
+virtual uses dynamic mechanism so compiler do not inline virtuals.
 
-<Q> This section said that virtual functions per se are not usually a performance bottleneck.
-Really?
+<Q> This section said that virtual functions per se are not usually a
+performance bottleneck.  Really?
 
 <forth-cost>
-With multiple inheritance, offset calculations to find vptrs within objects become more complicated.
-there are multiple vptrs within a single object (one per base class). As a result, both the
-per-class and the per-object space overhead for virtual functions increases, and the runtime
-invocation cost grows slightly, too. See references for more.
+With multiple inheritance, offset calculations to find vptrs within objects
+become more complicated.  there are multiple vptrs within a single object (one
+    per base class). As a result, both the per-class and the per-object space
+overhead for virtual functions increases, and the runtime invocation cost
+grows slightly, too. See references for more.
 
 <fifth-cost>
-With virtual base class, implementations of virtual base classes often use pointers to virtual base
-class parts as the means for avoiding the replication, and one or more of those pointers may be
-stored inside your objects. See adding pointer to virtual base in a object.
+With virtual base class, implementations of virtual base classes often use
+pointers to virtual base class parts as the means for avoiding the
+replication, and one or more of those pointers may be stored inside your
+objects. See adding pointer to virtual base in a object.
 
 class A { ... };
 class B: virtual public A { ... };
@@ -30222,13 +30927,15 @@ class D: public B, public C { ... };
 
 
 {RTTI-cost}
-RTTI can discover info about object and class at run-time. How? That information is stored in an
-object of type type_info, and you can access the type_info object for a class by using the typeid
-operator. There is a single copy for each class. 
+RTTI can discover info about object and class at run-time. How? That
+information is stored in an object of type type_info, and you can access the
+type_info object for a class by using the typeid operator. There is a single
+copy for each class. 
 
-The language specification states that we're guaranteed accurate information on an object's dynamic
-type 'only' if that type has at least one virtual function. This makes RTTI data sound a lot like a
-virtual function table. So RTTI was designed to be implementable in terms of a class's vtbl.
+The language specification states that we're guaranteed accurate information
+on an object's dynamic type 'only' if that type has at least one virtual
+function. This makes RTTI data sound a lot like a virtual function table. So
+RTTI was designed to be implementable in terms of a class's vtbl.
 
 Typical implementation is:
 
@@ -31519,7 +32226,7 @@ This feature is used by the C++ standard library at various places. For example:
 ={============================================================================
 *kt_dev_cpp_0000* cpp-bool-in-condition
 
-{cpp-getline}
+{cxx-getline}
 The std::getline is declared as:
 
 istream& getline (istream& strm, string& str);
@@ -31822,18 +32529,18 @@ and reasonably fast.
 
 coll.push_back(i);
 
-<size>
-is provided for any container class except forward_list because it couldn't
-have constant complexity there.
+<cxx-size-cxx-empty>
+size() is provided for any container class except forward_list because it
+couldn't have constant complexity there.
 
 coll.size();
 
-<empty>
 empty() returns whether the number of elements is zero (begin()==end()). 
 
 note: 
-You 'should' prefer it over size()==0, because it might be implemented more
+Should prefer it over size()==0, because it might be implemented more
 efficiently than size(), and size() is not provided for forward lists.
+
 
 <resize>
 is used to change the number of elements except array including increse from
@@ -34270,29 +34977,6 @@ on map returns `mapped_type` but dereferencing of iterator returns
       }
 
 
-<insert-can-be-costly-or-mistake> <insert-when-not-exist>
-word_count[word] = 1; 
-
-Happens 3 setps but 3) could be extra
-
-* Search key and not found
-* Insert temp element pair{ word, 0 }. value init since default ctor is called
-* Assign it with 1
-
-When accessing map with key which is not exist, cause addition. Inserts a new
-element with key "ottto" and prints its value, which is 0 by default.
-
-std::cout << coll["ottto"];
-
-
-The real bug which meant to print out debug message but creates one elements
-which is not added before due to if and else logic in the code.
-
-NICKEL_TRACE("getSourceInformation: "
-        << "configuration: " << sourceInfo["CONFIGURATION"]
-        << "video size   : " << sourceInfo["VIDEO_WIDTH"]);
-
-
 <ex> *ex-count-words* *ex-count-keyword*
 
 string word;
@@ -34316,7 +35000,7 @@ for (pos = coll.begin(); pos != coll.end(); ++pos) {
 }
 
 
-{cpp-map-search-operations} cpp-container-search
+{cxx-map-search-operations} cxx-container-search
 `As for sets and multisets,` maps and multimaps provide special search member
 functions that perform better because of their internal tree structure
 
@@ -34324,8 +35008,29 @@ c.count(val)
 Returns the number of elements with 'key' val
 
 c.find(val) 
-Returns the position(iterator) of the first element with 'key' val or end() if
+Returns the position(iterator) of `the first element with key` or end() if
 none found
+
+<when-use-find> <insert-can-be-costly-or-mistake> <insert-when-not-exist>
+word_count[word] = 1; 
+
+Happens 3 setps but 3) could be extra
+
+* Search key and not found
+* Insert temp element pair{word, 0}. value init since default ctor is called
+* Assign it with 1
+
+When accessing map with key which is not exist, cause addition. Inserts a new
+element with key "ottto" and prints its value, which is 0 by default.
+
+std::cout << coll["ottto"];
+
+The real bug which meant to print out debug message but creates one elements
+which is not added before due to if and else logic in the code.
+
+NICKEL_TRACE("getSourceInformation: "
+        << "configuration: " << sourceInfo["CONFIGURATION"]
+        << "video size   : " << sourceInfo["VIDEO_WIDTH"]);
 
 
 Searching for elements that have a certain 'value' but not key promotes bad
@@ -42387,7 +43092,7 @@ int main()
 Here use_count is 4.
 
 
-{sp-init} {cpp-make-shared}
+{sp-init} {cxx-make-shared}
 shared_ptr<string> pNico(new string("nico"));           // OK
 shared_ptr<string> pNico{new string("nico")};           // OK
 shared_ptr<string> pNico = make_shared<string>("nico"); // OK
@@ -42406,7 +43111,7 @@ auto p6 = make_shared<vector<sting>>();
 
 
 <safer-and-faster>
-The shared_ptr<T>(new X(...)) performs two allocations: one for X and one for
+shared_ptr<T> sp(new X(...)) performs two allocations: one for X and one for
 the control block used, for example, by the shared pointer to manage its use
 count. 
   
@@ -42838,638 +43543,6 @@ value to p or by leaving main() - the kid's object of the family loses its
 last owner, which has the effect that both parents lose their last owner. So
 'all' objects, initially created by new, are deleted now so that their
 destructors get called since weak pointer don't increase count.
-
-
-={============================================================================
-*kt_dev_cpp_0000* cpp-sp-ex-strblob-example
-
-<ex>
-#include <iostream>             // for cout
-#include <vector>
-#include <string>
-#include <memory>
-#include <initializer_list>
-
-// g++ -std=c++11 -g t_strblob.cpp
-
-//////////////////////////////////////////////////////////////////////////////
-// StrBlob without StrBlobPtr
-//
-// CPR 455
-//
-// * show how to implement a new collection type using library container.
-// `is-implemented-in-terms-of-model`
-//
-// * This shows when shared_ptr is useful than own raii since this case don't
-// need `copy-controls` and use syn versions but not a problem as it has only
-// one member which is shared_ptr.
-
-namespace SB1
-{
-
-using namespace std;
-
-class StrBlob
-{
-    public:
-        typedef vector<string>::size_type size_type;
-
-        // interface
-        StrBlob() : data_(make_shared<vector<string>>()) {}
-        StrBlob(initializer_list<string> il) :
-            data_(make_shared<vector<string>>(il)) {}
-
-        size_type size() const { return data_->size(); }
-        bool empty() const { return data_->empty(); }
-
-        void push_back(const string &e);
-        void pop_back();
-
-        std::string &front();
-        std::string &back();
-
-    private:
-        shared_ptr<vector<string>> data_;
-
-        // *cpp-except*
-        // see that return type has nothing to do with exception.
-        void check(size_type index, const string &message) const
-        {
-            if (index >= data_->size())
-                throw out_of_range(message);
-        }
-};
-
-void StrBlob::push_back(const string &e)
-{
-    data_->push_back(e);
-}
-
-void StrBlob::pop_back()
-{
-    // check if we calls it on empty vector since calls on empty
-    // vector is `undefined` behavior.
-    check(0, "pop_back() on empty container");
-
-    // std::vector.pop_back() removes the last but do not return.
-    data_->pop_back();
-}
-
-std::string &StrBlob::front()
-{
-    check(0, "front() on empty container");
-    return data_->front();
-}
-
-std::string &StrBlob::back()
-{
-    check(0, "back() on empty container");
-    return data_->back();
-}
-
-} // namespace SB1
-
-
-// = 01 ======
-// size : 4
-// front: one
-// back : four
-// size : 5
-// front: one
-// back : five
-// size : 0
-// terminate called after throwing an instance of 'std::out_of_range'
-//   what():  front() on empty container
-// Aborted
-
-void t_strblob_01()
-{
-    using namespace std;
-
-    SB1::StrBlob sb{"one", "two", "three", "four"};
-
-    cout << "size : " << sb.size() << endl;
-    cout << "front: " << sb.front() << endl;
-    cout << "back : " << sb.back() << endl;
-
-    sb.push_back("five");
-
-    cout << "size : " << sb.size() << endl;
-    cout << "front: " << sb.front() << endl;
-    cout << "back : " << sb.back() << endl;
-
-    SB1::StrBlob s2;
-
-    cout << "size : " << s2.size() << endl;
-    cout << "front: " << s2.front() << endl;
-    cout << "back : " << s2.back() << endl;
-}
-
-
-// = 02 ======
-// b1 size: 1
-// b1 size: 4
-// b2 size: 4
-// b1 size: 4
-
-void t_strblob_02()
-{
-    SB1::StrBlob b1{"b1"};
-    {
-        std::cout << "b1 size: " << b1.size() << std::endl;
-
-        SB1::StrBlob b2{ "this", "is", "second blob" };
-        b1 = b2;
-        b2.push_back(". really?");
-
-        std::cout << "b1 size: " << b1.size() << std::endl;
-        std::cout << "b2 size: " << b2.size() << std::endl;
-    }
-
-    std::cout << "b1 size: " << b1.size() << std::endl;
-}
-
-//////////////////////////////////////////////////////////////////////////////
-// StrBlob with StrBlobPtr
-
-// namespace SB2
-// {
-
-using namespace std;
-
-// forward declaration
-// *cpp-incomplete-type* issue decide which class comes first.
-class StrBlobPtr;
-
-class StrBlob
-{
-    // friend declaration
-    friend class StrBlobPtr;
-
-    public:
-        typedef vector<string>::size_type size_type;
-
-        // interface
-        StrBlob() : data_(make_shared<vector<string>>()) {}
-        StrBlob(initializer_list<string> il) :
-            data_(make_shared<vector<string>>(il)) {}
-
-        size_type size() const { return data_->size(); }
-        bool empty() const { return data_->empty(); }
-
-        void push_back(const string &e);
-        void pop_back();
-
-        std::string &front();
-        std::string &back();
-
-        // iterator support
-        // cause *cpp-incomplete-type* issue and can't be defined until
-        // StrBlobPtr is defined.
-        //
-        // StrBlobPtr begin() { return StrBlobPtr(*this); }
-        // StrBlobPtr end() { return StrBlobPtr(*this, data_->size()); }
-
-        StrBlobPtr begin();
-        StrBlobPtr end();
-
-    private:
-        shared_ptr<vector<string>> data_;
-
-        void check(size_type index, const string &message) const
-        {
-            if (index >= data_->size())
-                throw out_of_range(message);
-        }
-};
-
-void StrBlob::push_back(const string &e)
-{
-    data_->push_back(e);
-}
-
-void StrBlob::pop_back()
-{
-    // check if we calls it on empty vector since calls on empty
-    // vector is `undefined` behavior.
-    check(0, "pop_back() on empty container");
-
-    // std::vector.pop_back() removes the last but do not return.
-    data_->pop_back();
-}
-
-std::string &StrBlob::front()
-{
-    check(0, "front() on empty container");
-    return data_->front();
-}
-
-std::string &StrBlob::back()
-{
-    check(0, "back() on empty container");
-    return data_->back();
-}
-
-// CPR 473, *cpp-iter*
-//
-// <- new container class ->  <- companion class like iterator ->
-//    StrBlob                    StrBlobPtr
-//    - shared_ptr               - weak_ptr
-//
-//                      vector[]
-//                      - underlying container
-class StrBlobPtr
-{
-    friend bool eq(const StrBlobPtr&, const StrBlobPtr&);
-
-    public:
-        StrBlobPtr() {}
-        // cannot use on const StrBlob since ctor uses non-const.
-        StrBlobPtr(StrBlob &blob, size_t size = 0) : blob_(blob.data_), curr_(size) {}
-
-        StrBlobPtr &incr();     // prefix version, ++iter
-        StrBlobPtr &decr();     // prefix version, --iter
-        string &deref() const;  // *iter
-
-        // CPR 566, *cpp-overload-operator-increment-decrement*
-        //
-        // * No language requirement but prefer to be a member since change the
-        // state of the object.
-        //
-        // * As for built-in type, there are both prefix and postfix versions.
-        
-        // prefix versions
-        //
-        // note: 
-        // To be consistent with the built-in operators, the prefix should
-        // return a reference
-
-        StrBlobPtr &operator++();
-        StrBlobPtr &operator--();
-
-        // postfix versions
-        //
-        // The postfix version takes an extra parameter which is unused and is
-        // to distinguish it from the prefix.
-        //
-        // note:
-        //
-        // To be consistent with the built-in operators, the postfix should
-        // return the old `value`, not a reference.
-
-        StrBlobPtr operator++(int);
-        StrBlobPtr operator--(int);
-
-        // may use const to prevent like, a++++.
-        // const StrBlobPtr operator++(int);
-        // const StrBlobPtr operator--(int);
-        
-
-        // CPR 569, *cpp-overload-operator-member-access*
-        //
-        // * Used in iterator and smart pointer class
-        //
-        // * operator arrow must be a member and dereference usually be a member
-        // as well.
-        
-        string &operator*() const;
-        string *operator->() const;
-
-    private:
-        shared_ptr<vector<string>> check(size_t index, const string &message) const
-        {
-            // check member differs from the one of StrBlob.
-            auto pblob = blob_.lock();
-            if (!pblob)
-                throw runtime_error("unbound StrBlobPtr");
-
-            if (index >= pblob->size())
-                throw out_of_range(message);
-
-            return pblob;
-        }
-
-        // current index
-        size_t curr_{0};
-        weak_ptr<vector<string>> blob_;
-};
-
-inline string &StrBlobPtr::deref() const
-{
-    auto blob = check(curr_, "dereference nonexistent element");
-    // [] is higher than *
-    return (*blob)[curr_];
-}
-
-inline StrBlobPtr &StrBlobPtr::incr()
-{
-    // if curr_ already points past the end
-    check(curr_, "increment past the end");
-    ++curr_;
-    return *this;
-}
-
-inline StrBlobPtr &StrBlobPtr::decr()
-{
-    // if curr_ is zero, decrementing it will yield an invalid index
-    --curr_;
-    // check(-1, "decrement before the begin");
-    check(curr_, "decrement before the begin");
-    return *this;
-}
-
-// same as incr()
-inline StrBlobPtr &StrBlobPtr::operator++()
-{
-    // if curr_ already points past the end
-    check(curr_, "increment past the end");
-    ++curr_;
-    return *this;
-}
-
-inline StrBlobPtr StrBlobPtr::operator++(int)
-{
-    StrBlobPtr ret = *this;     // saves the current value
-    ++*this;                    // no checks since prefix ++ do.
-    return ret;
-}
-
-// same as decr()
-inline StrBlobPtr &StrBlobPtr::operator--()
-{
-    // if curr_ is zero, decrementing it will yield an invalid index
-    --curr_;
-    // check(-1, "decrement before the begin");
-    check(curr_, "decrement before the begin");
-    return *this;
-}
-
-inline StrBlobPtr StrBlobPtr::operator--(int)
-{
-    StrBlobPtr ret = *this;     // saves the current value
-    --*this;                    // no checks since prefix -- do. R associative
-    return ret;
-}
-
-// same as deref()
-// note:
-// Although it's const member function since do not change its state, returns a
-// reference and client can change through it.
-
-inline string &StrBlobPtr::operator*() const
-{
-    auto blob = check(curr_, "dereference nonexistent element");
-    // [] is higher than *
-    return (*blob)[curr_];
-}
-
-// note:
-//
-// StrBlob a1{"hi", "bye", "now"};
-// StrBlobPtr p{a1};
-//
-// *p = "okay";     // can change. assigns ot the fist element in a1
-//
-// cout << p->size() << endl;       // prints 4, the size of the first element.
-// cout << (*p).size() << endl;     // same
-//
-// The arrow operator never lose its meaning of member access. Depending on the
-// type of point:
-//
-// (*point).mem;                // point is a built-in pointer type
-// point.operator()->mem;       // point is an object of class type. iterator
-// 
-//
-// <ex> when item is shared pointer itself
-//
-// multiset<std::shared_ptr<Quote>, comp> items;
-//
-// for (auto item = items.cbegin(); item != items.cend();
-//  item = items.upper_bound(*item))
-// {
-//  os << (*item)->isbn() << " occurs, " << endl;
-// }
-//
-// <ex> shared pointer is not built-in array type
-//
-// For array:
-// 
-// *(parray+1) is synomym for parray[1]
-// 
-// the same hold for shared_ptr? No. array is special and not vector.
-// 
-// shared_ptr<vector<string>> sp(new vector<string>{"one", "two", "three"});
-// 
-// // OK
-// cout << "0: " << (*sp)[0] << endl;
-//     
-// // OK
-// cout << "0: " << *(sp->begin()+0) << endl;
-// 
-// // ERROR
-// cout << "0: " << *(*sp+0) << endl;
-
-
-inline string *StrBlobPtr::operator->() const
-{
-    // take address of a string reference
-    return & this->operator*();
-}
-
-
-// "casue *cpp-incomplete-type* issue and can't be defined until
-// StrBlobPtr is defined." so defined here.
-// return a temporary which points either begin or end.
-StrBlobPtr StrBlob::begin()
-{
-    return StrBlobPtr(*this);
-}
-
-StrBlobPtr StrBlob::end()
-{
-    return StrBlobPtr(*this, data_->size());
-}
-
-// } // namespace SB2
-
-
-// named equality operators for StrBlobPtr
-inline bool eq(const StrBlobPtr &lhs, const StrBlobPtr &rhs)
-{
-    auto l = lhs.blob_.lock(), r = rhs.blob_.lock();
-
-    // if the underlying vector is the same
-    if (l == r)
-        // then they're equal if they're both null, !r
-        // or if they point to the same element.
-        return (!r || lhs.curr_ == rhs.curr_);
-    else
-        return false;
-}
-
-inline bool neq(const StrBlobPtr &lhs, const StrBlobPtr &rhs)
-{
-    return !eq(lhs, rhs);
-}
-
-
-// = 03 ======
-// b1 size: 1
-// b2 size: 4
-// b1 size: 4
-// a
-// an
-// the
-// about
-
-void t_strblob_03()
-{
-    StrBlob b1{"b1"};
-    {
-        std::cout << "b1 size: " << b1.size() << std::endl;
-
-        StrBlob b2{"a", "an", "the"};
-        b1 = b2;
-        b2.push_back("about");
-
-        std::cout << "b2 size: " << b2.size() << std::endl;
-    }
-
-    std::cout << "b1 size: " << b1.size() << std::endl;
-
-    for (auto it = b1.begin(); neq(it, b1.end()); it.incr())
-        cout << it.deref() << endl;
-}
-
-
-// = 04 ======
-// 10
-// 10
-// b1 size: 5
-// super okay
-// bye
-// for
-// now
-// about
-
-void t_strblob_04()
-{
-    StrBlob a1{"hi", "bye", "for", "now"};
-    StrBlobPtr p{a1};
-    
-    *p = "super okay";     // can change. assigns ot the fist element in a1
-    
-    cout << p->size() << endl;       // prints 4, the size of the first element.
-    cout << (*p).size() << endl;     // same
-
-    a1.push_back("about");
-
-    cout << "b1 size: " << a1.size() << endl;
-
-    for (auto it = a1.begin(); neq(it, a1.end()); ++it)
-        cout << *it << endl;
-}
-
-int main()
-{
-    using namespace std;
-
-    cout << "= 04 ======" << endl;
-    t_strblob_04();
-
-    // cout << "= 03 ======" << endl;
-    // t_strblob_03();
-
-    // cout << "= 02 ======" << endl;
-    // t_strblob_02();
-
-    // cout << "= 01 ======" << endl;
-    // t_strblob_01();
-}
-
-<ex>
-// Blob template <cpp-ex-strblob-template>
-// This is the template-version of the same. No longer specific to `string`.
-//
-template <typename T>
-class Blob
-{
-    public:
-        typedef T value_type;
-
-        // *cpp-template-type-member*
-        typedef typename std::vector<T>::size_type size_type;
-
-        Blob();
-        Blob(std::initializer_list<T> il);
-
-        size_type size() const { return data->size(); }
-        bool empty() const { return data->empty(); }
-
-        void push_back(const T &t) { data->push_back(t); }
-        void pop_back();
-
-        T& front()
-        {
-            check(0, "front() on empty container");
-            return data->front();
-        }
-        T& back();
-
-        T& operator[](size_type i);
-
-        // // const versions
-        // T & back() const;
-        // T & operator[](size_type i) const;
-
-    private:
-        std::shared_ptr<std::vector<T>> data;
-        void check(size_type i, const std::string &message) const;
-};
-
-// ctors
-template <typename T>
-Blob<T>::Blob(): data(make_shared<std::vector<T>>()) {}
-
-template <typename T>
-Blob<T>::Blob(std::initializer_list<T> il) : data(make_shared<std::vector<T>>(il)) {}
-
-// <cpp-template-member-function>
-//
-// To write a member function of class template 'outside' of definition,
-// remember that the instantiated type is a new type and must say to which class
-// the member belongs. see Blob`<T>`
-//
-// it is instantiated `only if` it is used and if not, it is not instantiated.
-
-template <typename T>
-void Blob<T>::check(size_type i, const std::string &message) const
-{
-    if (i >= data->size())
-        throw std::out_of_range(message);
-}
-
-// as stl-vector back() returns the last element
-template <typename T>
-T & Blob<T>::back()
-{
-    check(0, "back on empty blob");
-    return data->back();
-}
-
-template <typename T>
-T & Blob<T>::operator[](size_type i)
-{
-    check(i, "subscript out of range");
-    return (*data)[i];
-}
-
-template <typename T>
-void Blob<T>::pop_back()
-{
-    check(0, "pop_back on empty blob");
-    data->pop_back();
-}
 
 
 ={============================================================================
