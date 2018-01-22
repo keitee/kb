@@ -69,8 +69,6 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-cast cpp-pointer-handle
 *kt_dev_cxx_0000* cxx-issue-incremental-build
 *kt_dev_cxx_0001* cxx-volatile
-*kt_dev_cxx_0001* idiom-singleton-pattern
-*kt_dev_cxx_0001* idiom-factory-pattern
 |kt_dev_lang_002| stdio
 |kt_dev_lang_003| #error and #warning
 *kt_dev_cpp_0004* cpp-postfix-increase
@@ -99,7 +97,7 @@ KT KB. CPP
 
 #{ cpp
 *kt_dev_cpp_0000* cpp-reference
-|kt_dev_cpp_0000| cpp-oop
+|kt_dev_cpp_0000| cxx-oop
 *kt_dev_cpp_0000* cpp-init-form
 *kt_dev_cpp_005* cpp-init-copy-form
 |kt_dev_cpp_005| cpp-list-init cpp-initializer-list
@@ -171,7 +169,9 @@ KT KB. CPP
 *kt_dev_cpp_023* cpp-class-model not-abuse-inheritance
 *kt_dev_cxx_0000* cxx-pattern-template-method
 *kt_dev_cxx_0000* cxx-pattern-pimpl cpp-minimise-compile-time
-*kt_dev_cpp_023* cpp-interface
+*kt_dev_cxx_0000* cxx-pattern-interface
+*kt_dev_cxx_0000* cxx-pattern-singleton
+*kt_dev_cxx_0000* cxx-pattern-factory
 *kt_dev_cpp_023* inheri-strategy-pattern
 *kt_dev_cpp_024* cpp-incomplete-type forward-declaration
 *kt_dev_cpp_024* cpp-empty-base-class-optimization
@@ -5197,500 +5197,6 @@ static storage qualifier gives T static storage duration (C++11 §3.7) and
 
 
 ={============================================================================
-*kt_dev_cpp_0001* idiom-singleton-pattern
-
-From design pattern. Using global, static objects have two problems:
-
-* Do not keep you from instantiating 'multiple' objects of the same type(class).
-  Not about the name.
-
-class X one_instance; class X two_instance.
-
-* No control of access. e.g., init-order-problem.
-
-
-Good things over global by making a class itself 'responsible' for keeping track
-of its sole instance:
-
-* `instance-control` such as only one instance
-* `controlled-access`. there is no such a thing for global objects.
-* `lazy-initialization` `no-creation` if it is not called. In the following
-  example, no creation unless a user call instance() but global do not.
-
-
-<common-implementation>
-* For C, use `function-static` as shown above.
-
-* For C++, use singleton class, pattern. Put simply, sigleton can be called
-  `class-static` in the same sense as function static.
-
-
-class Singleton {
-
-  public:
-    // `controlled-access` single point of access
-    // `lazy-initialisation` means that do not create instance until its first
-    // access.
-
-    'static' Singleton* Instance()
-    {
-      if(_instance==0) {
-        _instance = new Singleton;
-      }
-      return _instance;
-    }
-
-  // no-user-creation
-  // shall be an implementation since gets created in Instance() anyway.
-
-  protected:                         
-    Singleton() {};                  
-
-  // can have different concrete classes in different hierachy
-  private:
-    'static' Singleton* _instance;
-};
-
-Singleton* Singleton::_Instance = 0;
-
-
-<no-user-creation>
-No preventing-copies for singleton. Why? Because no direct creation from a user.
-See preventing-copies for more.
-
-
-note: 
-dynamic creation and must have destructor. where?
-
-
-={============================================================================
-*kt_dev_cpp_0001* idiom-factory-pattern
-
-{singleton-plus-factory}
-The singleton is similar to `factory-function` in that both has a single point
-to create hence static func. However, the aim is different. The singleton is
-about `when-or-how-to-create` and the factory is about `what-to-create`. 
-
-
-Like to have singleton and flexibility to choose what to create? Here are ways:
-
-
-<1> env + subclassing + static creation
-
-There are many ways to specify what derived class to create. See
-{interface-class}. The other way in design pattern, use 'registry' to find a
-class to create which is more flexible because it is open to possible singleton
-class meaning no Instance() change when there are new sigleton class and to set
-it at run-time.
-
-class Singleton {
-  public:
-    'static' void Register( char* name, Singleton* );
-    'static' Singleton* Instance();
-
-  protected:
-    'static' Singleton* Lookup( const char* name );
-
-  private:
-    'static' Singleton* _instance;
-    'static' List<NameStingletonPair>* _registry;
-};
-
-Singleton* Singleton::Instance() 
-{
-  if(_instance==0) {
-
-    const char* singletonName = getenv("SINGLETON");
-    _instance = Lookup(singletonName);
-  }
-  return _instance;
-}
-
-// to register
-MySingleton::MySingleton() 
-{
-  ...
-  Singleton::Register( "MYSINGLETON", this );
-}
-
-// create and used file static since no protected ctor but how about parent
-// class?
-
-static MySingleton mySingleton;
-static XXSingleton XXSingleton;
-
-theSingleton.Instance();         // ? should be Singleton::Instance()->xxx();
-
-The downside is that 'all' possible singleton classes must be created before
-register since must build a list to look up beforehand. Here have single
-instance for a selcted class in container. How about multiple instance of a
-class? 
-
-note: TODO not clear about theSingleton
-
-
-<2> from design pattern. env + subclassing + dynamic creation
-
-class MazeFactory {
-  public:
-    static MazeFactory* Instance();
-    ... public interfaces ...
-
-  protected:
-      MazeFactory();
-
-  private:
-      static MazeFactory* _instance;
-};
-
-MazeFactory* MazeFactory::_instance = 0;
-
-MazeFactory* MazeFactory::Instance () {
-  if( _instance == 0 ) {
-    _instance = new MazeFactory;
-  }
-
-  return _instance;
-}
-
-To create different classes:
-
-MazeFactory* MazeFactory::Instance () {
-  if( _instance == 0 ) {
-    const char* mazeStyle = getenv("MAZESTYLE");
-
-    if( strcmp( mazeStyle, "bombed" ) == 0 ) {
-      _instance = new BombedMazeFactory;
-    }
-    else if( strcmp( mazeStyle, "ehchanted" ) == 0 ) {
-      _instance = new EnchantedMazeFactory;
-
-      // other possible subclasses which means this should be modified whenever
-      // there are new subclasses.
-
-    } else { // default
-      _instance = new MazeFactory;
-    }
-  }
-
-  return _instance;
-}
-
-How about overriding Instance() in class hierachy? NOT OK because there must be
-an instance to call Instance() but ctor is protected. So MUST use
-`class-method`, `staic-member-function`, for singleton-pattern.
-
-class MazeFactory {
-  public:
-    'virtual' MazeFactory* Instance(); 
-    ... public interfaces ...
-
-  protected:
-      MazeFactory();
-
-  private:
-      static MazeFactory* _instance;
-};
-
-MazeFactory* MazeFactory::_instance = 0;
-
-BombedMazeFactory* BombedMazeFactory::Instance () {
-  if( _instance == 0 ) {
-    _instance = new BombedMazeFactory;
-  }
-
-  return _instance;
-}
-
-
-{limit-the-number-of-object} TODO: more tidy up
-MEC++26. This is example of <function-static>
-
-class PrintJob;
-
-class Printer {
-  public:
-    void reset();
-    ...
-
-  friend Printer& thePrinter();  // why need this? because need to call ctor.
-
-  private:                       // <ban-to-create-directly>
-   Printer();
-   Printer( const Printer& rhs );
-   ...
-};
-
-Printer& thePrinter()
-{
-  static Printer p; 
-  return p;
-}
-
-Use:
-
-thePrinter().reset();
-
-The other approach is to make it static member function and then it make use a bit wordier:
-
-Printer::thePrinter().reset();
-
-Recommend <funciton-static> over class-variable because:
-
-1. no creation if no func call. An object that is static in a class is, for all intents and purposes,
-always constructed (and destructed), even if it is never used. KT: This has nothing to do with
-static because class member object will be created regardless of static.
-
-o prevent {init-order-problem} since this could happen anything but function-static.
-
-KT. This method do lazy-initialisation automatically and seems to be a good alternative to
-singletone?
-
-
-{{control-the-number-of-object}}
-
-class Printer {
-	 public:
-	 	class TooManyObjects { };
-
-		Printer();
-		~Printer();
-		...
-
-	private:
-		static size_t numObjects;
-		Printer(const Printer& rhs); # no-copy-ctor
-};
-
-size_t Printer::numObjects = 0;
-
-Printer::Printer()
-{
-	 if( numObjects >= 1 ) {
-		  throw TooManyObjects();
-	 }
-	 ...
-	 ++numObjects;
-}
-
-Printer::~Printer()
-{
-	 ...
-	 --numObjects;
-}
-
-The pros is that easy to understand and to support any number of objects.
-
-The cons is that is not working in following cases; inheritance and <containment>. Both can be
-prevented by having private ctor because cannot create object:
-
-class ColorPrinter : public Printer {
-	 ...
-};
-
-Printer p;
-ColorPrinter cp;  # cause-an-exception
-
-
-class X {
-	 private:
-	 	Printer p;
-		...
-};
-
-X m1;
-X m2;             # cause-an-exception
-
-Both cases call ctor twice and these can be prevented by having ctor private. Here note that static
-var, class-static, remains a single across objects of its class.
-
-
-{{pseudo-ctor}}
-
-class FSA {
-	 public:
-	 	static FSA* makeFSA();
-	 	static FSA* makeFSA( const FSA& rhs );
-		...
-
-	private:
-		FSA();
-		FSA( const FSA& rhs );
-		...
-};
-
-FSA* FSA::makeFSA()
-{ return newFSA(); } # okay as it is member func
-
-When make ctors private, cannot create object. Hence no derivation and containment. This pseudo-ctor
-approcah means that client must delete and can use smart pointer for that.
-
-
-{{multiple-time-instance-in-liecycle}}
-
-<file-static> has only one instance for whole program life so not possible to do:
-
-create Printer object p1;
-use p1;
-destroy p1;
-create Printer object p2;
-use p2;
-destroy p2;
-
-If use both control-the-number-of-object and prventing derivation, then have single instance in
-multiple times for whole program life.
-
-class Printer {
-	 public:
-	 	class TooManyObjects { ... };
-
-		static Printer* makePrinter();
-		~Printer();
-		void reset();
-		...
-
-	private:
-		static size_t numObjects;
-		Printer();
-		Printer( const Printer& rhs );
-};
-
-size_t Printer::numObjects = 0;
-
-Printer::Printer()
-{
-	 if( numObjects >= 1 ) {
-		  throw TooManyObjects();
-	 }
-	 ...
-	 ++numObjects;
-}
-
-Printer* Printer::makePrinter()
-{ return new Printer(); }
-
-Can return null pointer instead of issuing an exception.
-
-To supports more than one:
-
-class Printer {
-	 public:
-	 	class TooManyObjects { ... };
-
-		static Printer* makePrinter();
-		~Printer();
-		void reset();
-		...
-
-	private:
-		static size_t numObjects;
-		static const size_t maxObjects = 10;
-		Printer();
-		Printer( const Printer& rhs );
-};
-
-size_t Printer::numObjects = 0;
-const size_t Printer::maxObjects;
-
-Printer::Printer()
-{
-	 if( numObjects >= maxObjects ) {
-		  throw TooManyObjects();
-	 }
-	 ...
-	 ++numObjects;
-}
-
-
-{{to-support-different-instance}}
-
-If there are many other types of instances to manage? Make it generalise and use template:
-
-template< class T > # T is type being counted
-class Counted {     # instance counting class
-	 public:
-	 	class TooManyObject { ... };
-		static size_t objectCount() { return numObjects; }
-
-	protected:       # <to-make-it-used-only-as-base-class>
-		Counted();
-		Counted( const Counted& rhs );
-		~Counted() { --numObjects; };
-
-	private:
-		static size_t numObjects;
-		static const size_t maxObjects;
-		void int();
-};
-
-template< class T>
-Counted< T >::Counted()
-{ init(); }
-
-template< class T>
-Counted< T >::Counted( const Counted< T >& )
-{ init(); }
-
-template< class T>
-void Counted< T>::init()
-{
-	 if( numObjects >= maxObjects )
-		  throw TooManyObjects();
-	
-	++numObjects;
-}
-
-
-template< class T> size_t Counted< T>::numObjects;
-
-
-Each derived class, Counted< T>, has independent counter and manage counting mechanism which is
-<encapsulation>
-
-Client use:
-
-class Printer : private Counted< Printer> {
-	 public:
-	 	static Printer* makePrinter();
-	 	static Printer* makePrinter( const Printer& rhs );
-		 
-		~Printer();
-		void reset();
-		...
-
-		note: to make these public
-		using Counted< Printer>::objectCount;
-		using Counted< Printer>::TooManyObjects;
-
-	private:
-		Printer();
-		Printer( const Printer& rhs );
-};
-
-note: Client should set static values which is a bit of loose end. If not, link error.
-
-const size_t Counted< Printer>::maxObjects = 10;
-const size_t Counted< FileDescripter>::maxObjects = 16;
-
-
-{further-study}
-(However, there is still no guarantee that it will not be destroyed before anything finishes
-accessing it; you still need to take great care if you think you need a globally-accessible
-variable. See the comments for a link to help in that situation.)
-
-That is, init order fiaso means that there is no gurantee on the order of init when global and
-global static init each other. e.g. if there are A and B object and B uses a method of A, then it is
-a problem when B is created first.
-
-The solution to this is to use local static:
-
-http://www.parashift.com/c++-faq-lite/static-init-order-on-first-use.html
-http://stackoverflow.com/questions/335369/finding-c-static-initialization-order-problems/335746#335746
-
-note: KT. since it's best to avoid global object, do not study it further.
-
-
-={============================================================================
 *kt_dev_lang_002* stdio
 
 {redirection}
@@ -10257,7 +9763,7 @@ https://github.com/CppKorea/CppCoreGuidelines
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cpp-oop
+*kt_dev_cpp_0000* cxx-oop
 
 The key ideas in OOP are data abstraction, inheritance, and dynamic binding.
 
@@ -16461,9 +15967,8 @@ so what's the actual filter type? is it in the middle of free?
 
 
 ={============================================================================
-*kt_dev_cpp_004* cpp-copy-preventing-copies cpp-delete
+*kt_dev_cpp_004* cxx-copy-preventing-copies cxx-delete
 
-{preventing-copies} delete-keywords
 CPR 507 and EC++06. How can define a class to prevent copy or assign like
 `iostream` class? Do not defining copy-controls? This do not work as syn version
 will be made. Two ways: `delete-keyword` and `private-access-control`.
@@ -16502,14 +16007,14 @@ class PrivateCopy {
     ~PrivateCopy();
 };
 
-Since the dtor is public, users will be able to define object but not be able to
-copy such objects.
+Since the dtor is public, users will be able to define object but not be able
+to copy such objects.
 
 
 <ex>
-This is an example and see 'compile' errors when use `private-access-control` to
-prevent copies and note that won't compile regardless of whether there is copy
-control definition(implementation) in base class.
+This is an example and see 'compile' errors when use `private-access-control`
+to prevent copies and note that won't compile regardless of whether there is
+copy control definition(implementation) in base class.
 
 #include <iostream>
 
@@ -16591,15 +16096,13 @@ $ ./comp.sh use-prevent-copy.cpp
   `Base::Base(Base const&)' collect2: ld returned 1 exit status
 
 
-The summary:
+To prevent access from derived classes or user, make copy control private and
+cause compile error.
 
-  To prevent access from derived classes or user, make copy control private and
-  cause compile error.
-
-  To prevent access from friend or members, so declare copy controls but not
-  define. By doing this, can cause 'link' errors when there are attempts to use.
-  Because when used, compiler will try to link but no definition. The example is
-  ios_base, basic_ios, and sentry of STL implementation.
+To prevent access from friend or members, so declare copy controls but not
+define. By doing this, can cause 'link' errors when there are attempts to use.
+Because when used, compiler will try to link but no definition. The example is
+ios_base, basic_ios, and sentry of STL implementation.
 
 
 <boost-noncopyable>
@@ -25709,7 +25212,7 @@ STL uses this approach: Two header files.
 <sstream> <streambuf> <fstream> <iostream> are all implementation files
 
 
-{cpp-pimpl} AKA `cpp-handle-class`. 
+{cxx-pattern-pimpl} AKA `cpp-handle-class`. 
 
 // See {exception-safe} in *kt_dev_cpp_019* Have two classes. One is what client
 // use and has a pointer to implementation. 
@@ -25768,8 +25271,8 @@ use         interface: no virtuals           interface
                                              (subclassing)
 
 note:
-* If impl class changes, need to change only cpp file of interface class but not
-  clients.
+* If impl class changes, need to change only cpp file of interface class but
+  not clients.
 
 * How about subclassing impl class to have other impls? okay.
 
@@ -25800,7 +25303,7 @@ virtuals to be seen and used by derived class.
 
 
 ={============================================================================
-*kt_dev_cpp_023* cpp-interface
+*kt_dev_cxx_0000* cxx-pattern-interface
 
 Similar to JAVA's interface but C++ one can have data or func implementation.
 Use ABC and interface class can have only interfaces or interface and default
@@ -25813,7 +25316,7 @@ class Person {                      // class IPerson(ABC)
     virtual std::string birthDate() const = 0; 
     virtual std::string address() const = 0; 
     ...
-    // factory-func *kt_dev_stl_018*
+    // *cxx-pattern-factory-func*
     'static' std::shared_ptr<Person> create(
         const std::string& name, const Date& birthday, const Address& address);
 };
@@ -25872,6 +25375,211 @@ IPerson::create(...)
  |-return new RealPersonY
  |-...
  +-return new RealPersonZ
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-pattern-singleton
+
+From design pattern. Using global, static objects have two problems:
+
+* Do not keep you from instantiating 'multiple' objects of the same type(class).
+  Not about the name.
+
+class X one_instance; class X two_instance.
+
+* No control of access. e.g., init-order-problem.
+
+
+Good things over global by making a class itself 'responsible' for keeping track
+of its sole instance:
+
+* `instance-control` such as only one instance
+* `controlled-access`. there is no such a thing for global objects.
+* `lazy-initialization` `no-creation` if it is not called. In the following
+  example, no creation unless a user call instance() but global do not.
+
+
+<code>
+* For C, use `function-static` as shown above.
+
+* For C++, use singleton class, pattern. Put simply, sigleton can be called
+  `class-static` in the same sense as function static.
+
+
+class Singleton {
+
+  public:
+    // `controlled-access` single point of access
+    // `lazy-initialisation` means that do not create instance until its first
+    // access.
+
+    'static' Singleton* Instance()
+    {
+      if(_instance==0) {
+        _instance = new Singleton;
+      }
+      return _instance;
+    }
+
+  protected:                         
+    // `no user creation`
+    // shall be an implementation since gets created in Instance() anyway.
+    Singleton() {};                  
+
+  // can have different concrete classes in different hierachy
+  private:
+    'static' Singleton* _instance;
+};
+
+Singleton* Singleton::_Instance = 0;
+
+Q: Have to use shared_ptr to copy and dtor context? No. This is static
+function and there is no Singleton object created. Hence no copy controls.
+
+Q: No need to delete _instance? To be reclaimed when an application
+terminates?
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-pattern-factory
+
+{singleton-plus-factory}
+The singleton is similar to `factory-function` in that both has a single point
+to create hence static func. However, the aim is different. The singleton is
+about `when-or-how-to-create` and the factory is about `what-to-create`. 
+
+
+Like to have singleton and flexibility to choose what to create? Here are ways:
+
+<1> env + subclassing + static creation
+
+See Use 'registry' to find a class to use and this is more flexible because
+there is no code change necessary, e.g., Instance(), when there are new
+sigleton class to add.
+
+class Singleton {
+  public:
+    'static' void Register( char* name, Singleton* );
+    'static' Singleton* Instance();
+
+  protected:
+    'static' Singleton* Lookup( const char* name );
+
+  private:
+    'static' Singleton* _instance;
+    'static' List<NameStingletonPair>* _registry;
+};
+
+Singleton* Singleton::Instance() 
+{
+  if(_instance==0) {
+
+    const char* singletonName = getenv("SINGLETON");
+    _instance = Lookup(singletonName);
+  }
+  return _instance;
+}
+
+// to register in ctor
+MySingleton::MySingleton() 
+{
+  ...
+  Singleton::Register( "MYSINGLETON", this );
+}
+
+// create and used file static since no protected ctor but how about parent
+// class?
+
+static MySingleton mySingleton;
+static XXSingleton XXSingleton;
+
+theSingleton.Instance();         // ? should be Singleton::Instance()->xxx();
+
+The downside is that 'all' possible singleton classes must be created before
+register since must build a list to look up beforehand. Here have single
+instance for a selcted class in container. How about multiple instance of a
+class? 
+
+note: TODO not clear about theSingleton
+
+
+<2> from design pattern. env + subclassing + dynamic creation
+
+class MazeFactory {
+  public:
+    static MazeFactory* Instance();
+    // ... public interfaces ...
+
+  protected:
+      MazeFactory();
+
+  private:
+      static MazeFactory* _instance;
+};
+
+MazeFactory* MazeFactory::_instance = 0;
+
+MazeFactory* MazeFactory::Instance () {
+  if( _instance == 0 ) {
+    _instance = new MazeFactory;
+  }
+
+  return _instance;
+}
+
+
+To create different classes:
+
+MazeFactory* MazeFactory::Instance () {
+  if( _instance == 0 ) {
+    const char* mazeStyle = getenv("MAZESTYLE");
+
+    if( strcmp( mazeStyle, "bombed" ) == 0 ) {
+      _instance = new BombedMazeFactory;
+    }
+    else if( strcmp( mazeStyle, "ehchanted" ) == 0 ) {
+      _instance = new EnchantedMazeFactory;
+
+      // other possible subclasses which means this should be modified whenever
+      // there are new subclasses.
+
+    } else { // default
+      _instance = new MazeFactory;
+    }
+  }
+
+  return _instance;
+}
+
+How about overriding Instance() in class hierachy? NOT OK because there must
+be an instance to call Instance() but ctor is protected. So MUST use
+`class-method`, `staic-member-function`, for singleton-pattern.
+
+class MazeFactory {
+  public:
+    'virtual' MazeFactory* Instance(); 
+    ... public interfaces ...
+
+  protected:
+      MazeFactory();
+
+  private:
+      static MazeFactory* _instance;
+};
+
+MazeFactory* MazeFactory::_instance = 0;
+
+BombedMazeFactory* BombedMazeFactory::Instance () {
+  if( _instance == 0 ) {
+    _instance = new BombedMazeFactory;
+  }
+
+  return _instance;
+}
+
+
+note:
+MEC++26 shows more such as how limit the number of objects.
 
 
 ={============================================================================
