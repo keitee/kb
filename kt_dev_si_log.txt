@@ -347,6 +347,109 @@ adaptors-register-callbacks.c:0
 
 
 ={============================================================================
+|kt_si_log_0001| SI-11282 HD Output resolution not changing automatically after exiting any interactive app
+
+<1> SI-11282: +P_API, BEM, MPM
+| 41.73.00_2636_MNTEE | 2018-01-24 11:38:24 | darwin_0019fbf2d46b_478ac19ca53404e3515a992527aee550.tgz |             |
+Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_478ac19ca53404e3515a992527aee550/index.html
+
+mgrep.py "KEY_PRESS|VIDEO IS|FRAME_PRESENTED|TUNING TO|CHANNEL CHANGED|_RUNNING_STATUS|BEM_DevConfig_HandleHdPotentialResolutionChange|_SetVideoParameters|PLAYER_PRV_ResetVideoPlaneWindows|EPG_ALM" LOGlastrun_realtime_e550 > e550.nds
+
+!ENTER  -P_Api        		< p:0x0000021a P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_PRV_ResetVideoPlaneWindows L:338 > |-> PLAYER_PRV_ResetVideoPlaneWindows
+!ENTER  -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_server_oc.c F:BEM_OC_Terminal_LockResources L:97 > |-> BEM_OC_Terminal_LockResources
+!EXIT   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_server_oc.c F:BEM_OC_Terminal_LockResources L:101 > <-| BEM_OC_Terminal_LockResources : return_status = 0xc01000
+!INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_server_ipc.c F:BEM_IPC_SERVER_Handle_OC_IPC L:817 > sending a reply to 4, request 850 status 12587008 
+!ENTER  -P_Api        		< p:0x0000021a P:APP t:0x2c12f520 T:no name M:player_wingfx.c F:PLAYER_WINGFX_VideoComposition_ResetPlaneWindows L:5897 > |-> PLAYER_WINGFX_VideoComposition_ResetPlaneWindows
+!INFO   -P_Api        		< p:0x0000021a P:APP t:0x2c12f520 T:no name M:player_wingfx.c F:PLAYER_WINGFX_VideoComposition_ResetPlaneWindows L:5899 > plane handle 83, composition 0x00000050, enable: 1 
+!ENTER  -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_composition.c F:BEM_Composition_ResetPlaneWindows L:3804 > |-> BEM_Composition_ResetPlaneWindows
+!INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_composition.c F:BEM_Composition_ResetPlaneWindows L:3860 > Client released windows control, composition 80 
+
+
+SYSTEM_STATUS PLAYER_API_AVControl_UpdateDisplay(PLAYER_API_AVControl_Handle avcontrol)
+SYSTEM_STATUS PLAYER_PRV_AVControl_UpdateWindows(PLAYER_API_AVControl_SourceType l_source,
+
+SYSTEM_STATUS PLAYER_PRV_ResetVideoPlaneWindows(PLAYER_SURFACE *v_surface)
+
+SYSTEM_STATUS PLAYER_WINGFX_VideoComposition_ResetPlaneWindows(PLAYER_PLANE_COMPO_DATA *p_surface_plane)
+{
+    SYSTEM_STATUS               l_status = PLAYER_API_STATUS_OK;
+
+    PLAYER_DIAG_LOG_FN_ENTRY(("PLAYER_WINGFX_VideoComposition_ResetPlaneWindows"));
+
+    PLAYER_DIAG_LOG_INFO(("plane handle %d, composition 0x%08x, enable: %d", p_surface_plane->plane_handle, p_surface_plane->composition_handle, p_surface_plane->plane_enable));
+
+    if (p_surface_plane->plane_enable)
+    {
+        if (!SYSTEM_STATUS_IS_OK(BEM_OC_VideoComposition_ResetPlaneWindows(p_surface_plane->composition_handle,
+                                                                           p_surface_plane->plane_handle)))
+
+/*===========================================================================*/
+/**  @brief Allows BEM clients to reset the plane windows. If the plane is a
+  *  video plane BEM will then apply picture formatting to the viewport
+  *  windows.
+  *
+  *
+  *  @param[in] composition Identifies the Video Composition.
+  *  @param[in] plane Identifies the Plane to reset.
+  *
+  *  @retval BEM_STATUS_OK if successful
+  *  @retval BEM_STATUS_NOT_OK on error
+  *
+  *  @pre The plane must be enabled
+  *
+  *  @sa #BEM_OC_VideoComposition_AttachPlane
+  *  @sa #BEM_OC_VideoComposition_EnablePlane
+  *  @sa #BEM_OC_VideoComposition_SetPlaneWindows
+  *
+  */
+/*===========================================================================*/
+SYSTEM_STATUS BEM_OC_VideoComposition_ResetPlaneWindows(BEM_OC_OUTPUT_COMPOSITION_Handle composition,
+                                                        BEM_OC_OUTPUT_PLANE_Handle plane)
+{
+    SYSTEM_STATUS status;
+
+    DIAG_DECLARE_FUNCTION("BEM_OC_VideoComposition_ResetPlaneWindows");
+    DIAG_LOG_FN_ENTRY(g_BEM_ServerDiagSegId);
+    DIAG_LOG_PARAMS(g_BEM_ServerDiagSegId,("composition:%d plane:%d", composition, plane));
+
+    status = BEM_Composition_ResetPlaneWindows(composition, plane);
+
+    DIAG_LOG_FN_EXIT(g_BEM_ServerDiagSegId, status);
+    return status;
+}
+
+
+/*===========================================================================*/
+/**  @brief Allows BEM clients to reset the windows of a plane. This function
+  *  only applies to video planes (#BEM_OC_SOURCE_TYPE_VIDEO).
+  *
+  *  @param[in]  composition        - The composition containing the plane
+  *  @param[in]  plane              - The plane in question
+  *  @return                        - SYSTEM_STATUS
+  */
+/*===========================================================================*/
+SYSTEM_STATUS BEM_Composition_ResetPlaneWindows(
+                                    BEM_OC_OUTPUT_COMPOSITION_Handle composition,
+                                    BEM_OC_OUTPUT_PLANE_Handle plane)
+{
+
+// tune to HD after exiting iapp
+== 113569:NDS: ^[2018:01:24 11:33:57]0946685141.179076 !MIL    -MPM          		< p:0x00000218 P:MW t:0x01a3c520 T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1376 > FRAME_PRESENTED: hMC=0xb 
+== 113571:NDS: ^[2018:01:24 11:33:57]0946685141.179136 !INFO   -MPM          		< p:0x00000218 P:MW t:0x01a3c520 T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1393 > hMC=0xb MPM_ITC_EV_FRAME_PRESENTED_EVENT Event posted 
+== 113727:NDS: ^[2018:01:24 11:33:57]0946685141.201141 !ENTER  -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:1802 > |-> BEM_DevConfig_HandleHdPotentialResolutionChange
+
+== 113728:NDS: ^[2018:01:24 11:33:57]0946685141.201158 !INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:1815 > Client has windows control, composition 80 
+
+== 113729:NDS: ^[2018:01:24 11:33:57]0946685141.201171 !INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:1836 > do nothing 
+== 113730:NDS: ^[2018:01:24 11:33:57]0946685141.201186 !EXIT   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:2368 > <-| BEM_DevConfig_HandleHdPotentialResolutionChange : return_status = 0xc01000
+== 113779:NDS: ^[2018:01:24 11:33:57]0946685141.260278 !ENTER  -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:1802 > |-> BEM_DevConfig_HandleHdPotentialResolutionChange
+== 113780:NDS: ^[2018:01:24 11:33:57]0946685141.260307 !INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:1848 > We've got 1 channels in composition_id 76 
+== 113781:NDS: ^[2018:01:24 11:33:57]0946685141.260322 !INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:1903 > no primary channel 
+== 113782:NDS: ^[2018:01:24 11:33:57]0946685141.260338 !INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:2246 > no change to resolution on blender required 
+== 113783:NDS: ^[2018:01:24 11:33:57]0946685141.260354 !EXIT   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:2368 > <-| BEM_DevConfig_HandleHdPotentialResolutionChange : return_status = 0xc21002
+
+
+={============================================================================
 |kt_si_log_0001| SI-11280 New Engineering LAE on GM is broken 
 
 https://www.stb.bskyb.com/jira/browse/SI-11280
@@ -9218,9 +9321,11 @@ mysql --batch --table -u root uploads -e "select version, upload_time, filename,
 garethbowen
 mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019FB47B180' order by upload_time desc limit 10"
 
-Isaac Norma
-inorman@cisco.com
+graemewaggott, Graeme Waggott
+0019FBD18CD8
+mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019FBD18CD8' order by upload_time desc limit 10"
 
+Isaac Norma, inorman@cisco.com
 0019FB0F3D4E
 mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019FB0F3D4E' order by upload_time desc limit 10"
 
@@ -9242,6 +9347,25 @@ mysql --batch --table -u root uploads -e "select version, upload_time, filename,
 <1> from the last week
 File: darwin_0019fb47b180_1164bbd98fd5675681ae984eecc3542e.tgz
 Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fb47b180_1164bbd98fd5675681ae984eecc3542e/index.html
+
+
+<2> daviddeasy Dave Deasy kitchen
+| R019.087.63.00U | 2018-01-22 21:57:56 | darwin_0019fb1a2c04_c2d70f51544eda845f28621bf57fb07b.tgz |             |
+http://theyard.cisco.com/si_logs/translation/darwin_0019fb1a2c04_c2d70f51544eda845f28621bf57fb07b/index.html
+
+<3> graemewaggott, Graeme Waggott
+| R019.087.63.00U | 2018-01-22 22:26:59 | darwin_0019fbd18cd8_c0e4faea757a6eb9dfd47fee159abe6e.tgz |             |
+
+105739:NDS: ^[2018:01:22 21:54:00]0946742844.888435 !MIL    -MPM          		< p:0x00000228 P:MW t:0x01881520 T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1376 > FRAME_PRESENTED: hMC=0x20 
+
+111760:NDS: ^[2018:01:22 22:02:42]0946743366.836889 !WARN   -MSM_MS       		< p:0x00000228 P:MW t:0x01985520 T:EVENT_MGR_THREAD M:security.cpp F:(HandleRangeNotifyEvent) L:1813 > < splicer=0x20 hMC=0x20 >" "-MS_SCR_STALLED- the new active range doesn't free the stall - request for range again! , " "stalled range=[(0:2489825)->(0:2490495)] " "active range=[(0, 0)->(0, 0)]. 
+111761:NDS: ^[2018:01:22 22:02:42]0946743366.836939 !WARN   -MSM_MS       		< p:0x00000228 P:MW t:0x01985520 T:EVENT_MGR_THREAD M:security.cpp F:(PushMaximumAllowed) L:2058 > < splicer=0x20 hMC=0x20 >" "Read needed has to be" " stalled because not in range." " active range=[(0, 0)->(0, 0)]. 
+
+112187:NDS: ^[2018:01:22 22:03:46]0946743430.544681 !ERROR  -MSM_MS       		< p:0x00000228 P:MW t:0x01985520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6241 > < splicer=0x20 hMC=0x20 >" "Error in received PTS [0,127798]. It has gone backward " "from previous one (pts=[0,55142998],chunk_id=1611, index=1) " "and previous previous one (pts=[0,55128598],chunk_id=1610, index=0)  
+112188:NDS: ^[2018:01:22 22:03:46]0946743430.544701 !ERROR  -MSM_MS       		< p:0x00000228 P:MW t:0x01985520 T:EVENT_MGR_THREAD M:display_chunk.cpp F:(CheckPTSFromDrivers) L:6243 > < splicer=0x20 hMC=0x20 >" "diff 15282 frames! 
+
+
+| R019.087.63.00U | 2018-01-22 05:50:04 | darwin_0019fbd18cd8_5a2bafe3e21281e37837908d6f1f78cc.tgz |             |
 
 
 ={============================================================================
