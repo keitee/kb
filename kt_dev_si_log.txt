@@ -355,6 +355,10 @@ Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_478a
 
 mgrep.py "KEY_PRESS|VIDEO IS|FRAME_PRESENTED|TUNING TO|CHANNEL CHANGED|_RUNNING_STATUS|BEM_DevConfig_HandleHdPotentialResolutionChange|_SetVideoParameters|PLAYER_PRV_ResetVideoPlaneWindows|EPG_ALM" LOGlastrun_realtime_e550 > e550.nds
 
+mgrep.py "KEY_PRESS|VIDEO IS|FRAME_PRESENTED|TUNING TO|CHANNEL CHANGED|_RUNNING_STATUS|BEM_DevConfig_HandleHdPotentialResolutionChange|_SetVideoParameters|PLAYER_PRV_ResetVideoPlaneWindows|PLAYER_API_AVControl_UpdateDisplay|PLAYER_API_AVControl_SetWindows|EPG_ALM" LOGlastrun_realtime_e550 > e550_02.nds
+
+ L:5219 > |-> PLAYER_API_AVControl_UpdateDisplay
+
 !ENTER  -P_Api        		< p:0x0000021a P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_PRV_ResetVideoPlaneWindows L:338 > |-> PLAYER_PRV_ResetVideoPlaneWindows
 !ENTER  -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_server_oc.c F:BEM_OC_Terminal_LockResources L:97 > |-> BEM_OC_Terminal_LockResources
 !EXIT   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_server_oc.c F:BEM_OC_Terminal_LockResources L:101 > <-| BEM_OC_Terminal_LockResources : return_status = 0xc01000
@@ -366,9 +370,48 @@ mgrep.py "KEY_PRESS|VIDEO IS|FRAME_PRESENTED|TUNING TO|CHANNEL CHANGED|_RUNNING_
 
 
 SYSTEM_STATUS PLAYER_API_AVControl_UpdateDisplay(PLAYER_API_AVControl_Handle avcontrol)
+{
+  // for graphic, still, and video
+  if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_AVControl_UpdateSurface(PLAYER_API_AVControl_SourceType_Graphics,
+          &l_avcontrol_data->g_surface, ~
+          l_graphic_input_window,
+          &l_update_graphic_visibility,
+          l_sc_data)))
+}
+
+// l_av_surface is input
+SYSTEM_STATUS PLAYER_PRV_AVControl_UpdateSurface(PLAYER_API_AVControl_SourceType    l_source,
+                                                 PLAYER_AVCONTROL_SURFACE           *l_av_surface, ~
+                                                 PLAYER_API_AVControl_Window        *graphic_input_window,
+                                                 bool                               *update_visibility,
+                                                 PLAYER_SERVICE_CONTEXT_DATA        *sc_data)
+{
+  if(!SYSTEM_STATUS_IS_OK(PLAYER_PRV_AVControl_UpdateWindows(l_source,
+          l_player_surface,
+          graphic_input_window,
+          &l_av_surface->input_window,
+          &l_av_surface->output_window,
+          l_av_surface->reset_window))) ~
+}
+
 SYSTEM_STATUS PLAYER_PRV_AVControl_UpdateWindows(PLAYER_API_AVControl_SourceType l_source,
+                                                 PLAYER_SURFACE *p_surface,
+                                                 PLAYER_API_AVControl_Window *graphic_input_window,
+                                                 PLAYER_API_AVControl_Window *input_window,
+                                                 PLAYER_API_AVControl_Window *output_window,
+                                                 bool reset_window)
+{
+    if(l_source == PLAYER_API_AVControl_SourceType_Video)
+    {
+        if(reset_window == true)
+        {
+            if(PLAYER_API_STATUS_OK != PLAYER_PRV_ResetVideoPlaneWindows(p_surface))
+        }
+    }
+}
 
 SYSTEM_STATUS PLAYER_PRV_ResetVideoPlaneWindows(PLAYER_SURFACE *v_surface)
+  if(!SYSTEM_STATUS_IS_OK(PLAYER_WINGFX_VideoComposition_ResetPlaneWindows(&v_surface->data.s_plane->plane_compos[l_index])))
 
 SYSTEM_STATUS PLAYER_WINGFX_VideoComposition_ResetPlaneWindows(PLAYER_PLANE_COMPO_DATA *p_surface_plane)
 {
@@ -447,6 +490,31 @@ SYSTEM_STATUS BEM_Composition_ResetPlaneWindows(
 == 113781:NDS: ^[2018:01:24 11:33:57]0946685141.260322 !INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:1903 > no primary channel 
 == 113782:NDS: ^[2018:01:24 11:33:57]0946685141.260338 !INFO   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:2246 > no change to resolution on blender required 
 == 113783:NDS: ^[2018:01:24 11:33:57]0946685141.260354 !EXIT   -BEM          		< p:0x00000218 P:MW t:0x019c1520 T:BEM_ITCMAIN_THREAD M:bem_device_configure.c F:BEM_DevConfig_HandleHdPotentialResolutionChange L:2368 > <-| BEM_DevConfig_HandleHdPotentialResolutionChange : return_status = 0xc21002
+
+
+<2> Add custom logging
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_5230e2536ec8a5e7f434083b477083f9/index.html
+mgrep.py "KEY_PRESS|VIDEO IS|FRAME_PRESENTED|TUNING TO|CHANNEL CHANGED|_RUNNING_STATUS|BEM_DevConfig_HandleHdPotentialResolutionChange|_SetVideoParameters|PLAYER_PRV_ResetVideoPlaneWindows|PLAYER_API_AVControl_UpdateDisplay|PLAYER_API_AVControl_SetWindows|EPG_ALM|KT"
+
+
+After all, EPG calls SetWindows:
+
+111593:NDS: ^[2018:01:29 10:58:59]0946685985.911376 !MIL    -EPG_PLAY     		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:PhotoViewingUPnPNotifier F:publish L:32 > T:CEE-J EventQueue Reader 0:Sending UPnP state not-viewing
+== 111603:NDS: ^[2018:01:29 10:58:59]0946685985.912269 !ENTER  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetWindows L:706 > |-> PLAYER_API_AVControl_SetWindows
+== 111604:NDS: ^[2018:01:29 10:58:59]0946685985.912286 !INFO   -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetWindows L:708 > avcontrol=3, source=1 
+== 111605:NDS: ^[2018:01:29 10:58:59]0946685985.912308 !INFO   -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetWindows L:718 > Set windows for source type 1  
+== 111606:NDS: ^[2018:01:29 10:58:59]0946685985.912322 !INFO   -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetWindows L:726 > Input Window null 
+== 111607:NDS: ^[2018:01:29 10:58:59]0946685985.912335 !INFO   -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetWindows L:734 > Output Window null 
+== 111608:NDS: ^[2018:01:29 10:58:59]0946685985.912350 !ERROR  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetWindows L:759 > KT: RESETTING WINDOWS 
+== 111609:NDS: ^[2018:01:29 10:58:59]0946685985.912371 !EXIT   -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_SetWindows L:889 > <-| PLAYER_API_AVControl_SetWindows : return_status = 0x6801000
+== 111610:NDS: ^[2018:01:29 10:58:59]0946685985.912404 !ENTER  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_UpdateDisplay L:5222 > |-> PLAYER_API_AVControl_UpdateDisplay
+== 111611:NDS: ^[2018:01:29 10:58:59]0946685985.912422 !INFO   -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_UpdateDisplay L:5226 > avcontrol=3 
+== 111619:NDS: ^[2018:01:29 10:58:59]0946685985.912578 !ERROR  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_UpdateDisplay L:5278 > KT: UpdateSurface(GRAPHIC) 
+== 111623:NDS: ^[2018:01:29 10:58:59]0946685985.912638 !ERROR  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_UpdateDisplay L:5313 > KT: UpdateSurface(STILL) 
+== 111627:NDS: ^[2018:01:29 10:58:59]0946685985.912695 !ERROR  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_API_AVControl_UpdateDisplay L:5327 > KT: UpdateSurface(VIDEO) 
+== 111629:NDS: ^[2018:01:29 10:58:59]0946685985.912722 !ERROR  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_PRV_AVControl_UpdateSurface L:3368 > KT: AVControl_UpdateWindows 
+== 111631:NDS: ^[2018:01:29 10:58:59]0946685985.912752 !ERROR  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_PRV_AVControl_UpdateWindows L:931 > KT: ResetVideoPlaneWindows 
+== 111632:NDS: ^[2018:01:29 10:58:59]0946685985.912766 !ENTER  -P_Api        		< p:0x00000288 P:APP t:0x2c12f520 T:no name M:player_api_avcontrol.c F:PLAYER_PRV_ResetVideoPlaneWindows L:338 > |-> PLAYER_PRV_ResetVideoPlaneWindows
 
 
 ={============================================================================
