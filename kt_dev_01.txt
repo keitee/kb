@@ -105,8 +105,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-copy-control
 *kt_dev_cxx_0000* cxx-copy-assign-self
 *kt_dev_cxx_0000* cxx-pass-by-reference cxx-reference
-*kt_dev_cpp_003* cpp-vexing-parse
-*kt_dev_cpp_004* cpp-copy-dyn-resource cpp-ex-hasptr-example
+*kt_dev_cxx_0000* cxx-vexing-parse
+*kt_dev_cxx_0000* cxx-copy-dyn-resource cxx-ex-hasptr-exmaple
 |kt_dev_cpp_006| cpp-copy-swap {copy-and-swap-idiom}
 *kt_dev_cpp_004* cpp-copy-control cpp-ex-message-example
 *kt_dev_cxx_0000* cxx-copy-control-move cxx-move cxx-ex-strvec-example
@@ -11927,13 +11927,13 @@ hint that the reference argument is modified.
 
 
 ={============================================================================
-*kt_dev_cpp_003* cpp-vexing-parse
+*kt_dev_cxx_0000* cxx-vexing-parse
 
 <ex> EXC++42
-this is function declaration for a function named t that takes no parameters
+This is function declaration for a function named t that takes no parameters
 and returns T by value.
 
-T t();            // compare with int t();
+T t();
 
 <ex>
 The intention is to have value-init but defines a function.
@@ -11944,8 +11944,7 @@ source = _determineSource((char*)in, &sourcelen, &inIndex, &usePath);
 error: assignment of function 'std::string source()'
 error: cannot convert 'std::string' to 'std::string()' in assignment
 
-note: 
-see 'function' in error message. to use it as intended, create a temporary and
+See 'function' in error message. to use it as intended, create a temporary and
 use copy initialzation. not useful.
 
 std::string source = string();
@@ -11957,24 +11956,24 @@ Sales_data obj();
 
 if (obj.isbn() == Primer.isbn())
 
-Intended to declare a default-init object but the compiler complains that cannot
-  apply member access notation to a function. The correct way:
+Intended to declare a default-init object but the compiler complains that
+  cannot apply member access notation to a function. The correct way:
 
 Sales_data obj;
 
 <ex>
-From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the the
-syntax can be the same as that of a fuction declaration.
+From C++CA 2.1.1, if you pass a 'temporary' rather than a named variable the
+the syntax can be the same as that of a fuction declaration.
 
 class background_task;
-std::thread my_thread( background_task() );     // T is std::thread
+std::thread my_thread( background_task() );     // T()
 
 This declares the `function` my_thread that takes a single parameter which is
   pointer to a function taking no parameters and returning a background_task
   object. 
   
-However, the intention was to create std::thread `instance` with function object
-to run.
+However, the intention was to create std::thread `instance` with function
+object to run.
 
 Solution?
 
@@ -11983,7 +11982,7 @@ std::thread my_thread{ background_task() };     // brace-init
 
 
 ={============================================================================
-*kt_dev_cpp_004* cpp-copy-dyn-resource cpp-ex-hasptr-exmaple
+*kt_dev_cxx_0000* cxx-copy-dyn-resource cxx-ex-hasptr-exmaple
 
 {when-use-resource-has-dyn-lifetime}
 * Don't know how many object is needed
@@ -11997,55 +11996,75 @@ copy functions of a type. No different in swap discussion.
 
 <valuelike> deep-copy, self-contained-object
 The copy and the original are independent since copy underlying object as well.
-note: The STL containers and string use valuelike copy.
 
-class HasPtr {
-  public:
-    HasPtr(const std::string& s = std::string() )  // def arg. 
-      : ps( new std::string(s)), i(0) {}
-    >
-    // copy ctor that copies the string, not just the pointer.
-    HasPtr(const HasPtr& p):
-        ps( new std::string( *p.ps ));
+note: 
+The STL containers and string use valuelike copy.
 
-    // copy assign to free the object's existing string and copy the string from
-    // its rhs.
-    HasPtr& operator=(const HasPtr& p);
+// value-like hasptr
+class HasPtr 
+{
+    public:
+        // default
+        HasPtr(const std::string &s = std::string()):
+            ps_(new std::string(s)), count_(0) {}
 
-    // dtor to free the string
-    ~HasPtr() { delete ps; }
+        // copy ctor
+        HasPtr(const HasPtr &rhs):
+            ps_(new std::string(*rhs.ps_)), count_(rhs.count_) 
+        {
+            cout << "HasPtr::" << *ps_ << endl;
+        }
 
-  private:
-    std::string* ps; 
-    int i;
+        // copy assign
+        //
+        // Assignment operator typically combine the actions of the dtor and
+        // the copy-ctor since destroys the lhs operand and copies data from
+        // the rhs.
+
+        HasPtr& operator=(const HasPtr &rhs)
+        {
+            auto newps = new string(*rhs.ps_);
+            // delete old only when copying is okay to support self assign and
+            // exception safe
+            delete ps_;
+            ps_ = newps;
+            count_ = rhs.count_;
+            return *this;
+        }
+
+        ~HasPtr() { cout << "~HasPtr::" << *ps_ << endl; delete ps_; }
+
+    private:
+        std::string *ps_;
+        int count_;
 };
 
-<copy-assign>
-Assignment operator typically combine the actions of the dtor and the copy-ctor
-since destroys the lhs operand and copies data from the rhs.
-
-Think about self-assign and exception safe. The below covers self-assign and
-exception-safe. See *kt_dev_cpp_019* for more on self-assign and exception
-
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
+HasPtr f(HasPtr hp)
 {
-  auto newp = new string(*rhs.ps);
-  delete ps;
-  ps = newp;
-  return *this;
+    HasPtr ret = hp;
+    return ret;
 }
 
-// WRONG on self-assign and exception-safe
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
+
+// = 03 ======
+// HasPtr::hi mom!
+// HasPtr::hi mom!
+// ~HasPtr::hi mom!
+// ~HasPtr::hi mom!
+// =----======
+// ~HasPtr::hi mom!
+
+void t_sp_03()
 {
-  delete ps;
-  // if it is self-assign, are copying from deleted memory.
-  auto newp = new string(*rhs.ps);
-  ps = newp;
-  return *this;
+    // allocate a new copy
+    HasPtr h("hi mom!");
+    // copy ctor copies h in the call f and that copy is destroyed when f exits
+    f(h);
+    cout << "=----======" << endl;
 }
 
-<pointerlike> shallow-copy, own-reference-counting
+
+<pointerlike> shallow-copy, own-reference-counting *cxx-sp-shared*
 The copy and the original share underlying object like shared_ptr. To show own
 reference counting:
 
