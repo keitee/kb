@@ -347,6 +347,205 @@ adaptors-register-callbacks.c:0
 
 
 ={============================================================================
+|kt_si_log_0001| SI-11302 R16 - TV Guide freeze when cancelling future and current recordings
+
+mgrep.py "KEY_PRESS|EPG_BOOK|G_Sess"
+
+Detected Baseline Version: R000.041.75.00P
+
+| R000.041.79.00U     | 2018-01-31 11:10:30 | darwin_0019fbf2d46b_fb50ca4eae83695d83bcd5bdb53cd555.tgz |             |
+
+| R000.041.79.00U     | 2018-01-31 11:02:37 | darwin_0019fbf2d46b_178c8e44466bdc546e718b8253609f2f.tgz |             |
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_178c8e44466bdc546e718b8253609f2f/index.html
+
+kyoupark@st-castor-03:~/STB_SW$ git describe
+BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_41.73.00_BSKYB_GM_Integration
+
+#define GUIDE_DEFAULT_RETRIEVAL_TIMEOUT          (30L)  /**< The timeout value to use, in seconds */
+
+// this code is the same for both
+SYSTEM_STATUS GuideWaitForAsyncCallback(GUIDE_AsyncCallbackStruct *asyncCallbackStruct)
+{
+    SYSTEMUTIL_SYNC_timespec timeout_value;
+    SYSTEM_STATUS status = GUIDE_API_STATUS_OK;
+    SYSTEM_STATUS sys_status = SYSTEMUTIL_STATUS_OK;
+
+    DIAG_DECLARE_FUNCTION("GuideWaitForAsyncCallback");
+    DIAG_LOG_FN_ENTRY(g_guide_diag_segment_id);
+
+    /* Wait for the callback function to have been called */
+
+    (void)SYSTEMUTIL_SYNC_GetTime(&timeout_value);
+
+    timeout_value.tv_sec += GUIDE_DEFAULT_RETRIEVAL_TIMEOUT;
+
+    while ((asyncCallbackStruct->response_received == false) && (sys_status == SYSTEMUTIL_STATUS_OK))
+    {
+        sys_status = SYSTEMUTIL_SYNC_CondTimedWait(&asyncCallbackStruct->cond, &asyncCallbackStruct->mutex, &timeout_value);
+        if (SYSTEMUTIL_STATUS_OK != sys_status)
+        {
+            DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED sys_status=%#x", sys_status));
+            status = GUIDE_API_STATUS_FAILED;
+        }
+    }
+
+    /* Unlock iterator_callback_mutex */
+
+    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex))
+    {
+        DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_THR_MutexUnlock() FAILED"));
+        status = GUIDE_API_STATUS_FAILED;
+    }
+    DIAG_LOG_FN_EXIT(g_guide_diag_segment_id, status);
+
+    return status;
+}
+
+
+| 87.52.00_8616_MNTEE | 2018-01-31 10:55:58 | darwin_0019fbf2d46b_c398e57f1d9dd338cffa1fdd366d94c2.tgz |             |
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_c398e57f1d9dd338cffa1fdd366d94c2/index.html
+
+kyoupark@st-castor-03:~/STB_SW_o$ git describe
+BSKYB_HR019_Int/BSKYB_INTEGRATION_BLD_87.52.00_BSKYB_HR019_Int
+
+// different 
+DARWIN_PLATFORM/DARWIN_GUIDE/src/guide_api_programmeinstance.c
+
+SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
+{
+                                    /* Get the booking status handle (asynchronous) */
+                                    GuidePrepareForAsyncCallback(&f_planner_window_mutex);
+                                    if (PLANNER_API_STATUS_OK != GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
+                                                                                                                                        l_start_time,
+                                                                                                                                        l_duration,
+                                                                                                                                        (PLANNER_API_UserTag)l_request_handle,
+                                                                                                                                        GuideProgrammeInstanceBookingPropsListener,
+                                                                                                                                        GuideProgrammeInstanceBookingPropsUpdateListener))
+                                    {
+                                        GuideCancelPrepareForAsyncCallback(&f_planner_window_mutex);
+                                        DIAG_LOG_WARN(g_guide_diag_segment_id, ("PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow() FAILED"));
+                                        l_status = GUIDE_API_STATUS_ATTRIBUTE_NOT_RETRIEVED_YET;
+                                    }
+                                    else
+                                    {
+                                        struct timespec timeout_value;
+
+                                        (void)SYSTEMUTIL_SYNC_GetTime(&timeout_value);
+                                        timeout_value.tv_sec += GUIDE_DEFAULT_RETRIEVAL_TIMEOUT;
+
+                                        /* This request handle will be of a valid value once the listener gets called, which means
+                                           we have a returned planner handle no matter the returned status OK or failed. */
+                                        while (l_request_handle != request_object_data->request.cached_window.proginst_list_request_handle)
+                                        {
+                                            if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_SYNC_CondTimedWait(&f_planner_window_cond, &f_planner_window_mutex, &timeout_value))
+                                            {
+                                                DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED"));
+                                                l_status = GUIDE_API_STATUS_FAILED;
+                                                break;
+                                            }
+                                        }
+
+                                        system_status = SYSTEMUTIL_THR_MutexUnlock(&f_planner_window_mutex);
+                                        DIAG_LOG_ASSERT_EQUAL(g_guide_diag_segment_id, SYSTEMUTIL_STATUS_OK, system_status);
+
+
+// +GUIDE on
+| 41.73.00_9543_MNTEE | 2018-01-31 13:21:27 | darwin_0019fbf2d46b_a1abd71fb02347e9bad3829d7611f388.tgz |             |
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_a1abd71fb02347e9bad3829d7611f388/index.html
+
+mgrep.py "KEY_PRESS|EPG_BOOK|EPG_KEY|GUIDE_API_ProgrammeInstance_GetBookingProperties" LOGlastrun_realtime_f388
+
+
+88404:NDS: ^[2018:01:31 13:17:42]0946685653.948982 !ENTER  -G_Sess       		< p:0x0000020f P:APP t:0x2c161520 T:no name M:guide_api_programmeinstance.c F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2016 > |-> GUIDE_API_ProgrammeInstance_GetBookingProperties
+88405:NDS: ^[2018:01:31 13:17:42]0946685653.949149 !INFO   -G_Sess       		< p:0x0000020f P:APP t:0x2c161520 T:no name M:guide_api_programmeinstance.c F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2052 > Unable to retrieve request object 
+88406:NDS: ^[2018:01:31 13:17:42]0946685653.949165 !INFO   -G_Sess       		< p:0x0000020f P:APP t:0x2c161520 T:no name M:guide_api_programmeinstance.c F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2138 > got_planner_time_window 0 
+88407:NDS: ^[2018:01:31 13:17:42]0946685653.949182 !INFO   -G_Sess       		< p:0x0000020f P:APP t:0x2c161520 T:no name M:guide_api_programmeinstance.c F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2254 > Retrieve time window for Programme Instance 0x08000044 
+== 88410:NDS: ^[2018:01:31 13:17:42]0946685653.949405 !ENTER  -G_Sess       		< p:0x0000020f P:APP t:0x2c161520 T:no name M:guide_api_common.c F:GuideWaitForAsyncCallback L:2385 > |-> GuideWaitForAsyncCallback
+88552:NDS: ^[2018:01:31 13:17:43]0946685654.023495 !MIL    -EPG_BOOK     		< p:0x0000020f P:APP t:0x2c12f520 T:no name M:BaseBookingActivity F:logReasonForFailToCompleteActivity L:451 > T:CEE-J EventQueue Reader 0:Activity not considered completed so will not finish activity.
+
+89180:NDS: ^[2018:01:31 13:18:12]0946685683.797765 !MIL    -aem          		< p:0x0000020f P:APP t:0x014f2520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(DOWN)e101 
+== 89181:NDS: ^[2018:01:31 13:18:13]0946685684.025089 !WARN   -G_Sess       		< p:0x0000020f P:APP t:0x2c12f520 T:no name M:guide_api_common.c F:GuideWaitForAsyncCallback L:2398 > SYSTEMUTIL_SYNC_CondTimedWait() FAILED sys_status=0x11c2100d 
+== 89182:NDS: ^[2018:01:31 13:18:13]0946685684.025113 !EXIT   -G_Sess       		< p:0x0000020f P:APP t:0x2c12f520 T:no name M:guide_api_common.c F:GuideWaitForAsyncCallback L:2410 > <-| GuideWaitForAsyncCallback : return_status = 0x3c20000
+89183:NDS: ^[2018:01:31 13:18:13]0946685684.025129 !WARN   -G_Sess       		< p:0x0000020f P:APP t:0x2c12f520 T:no name M:guide_api_programmeinstance.c F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2315 > GuideWaitForAsyncCallback() FAILED 
+89187:NDS: ^[2018:01:31 13:18:13]0946685684.025477 !EXIT   -G_Sess       		< p:0x0000020f P:APP t:0x2c12f520 T:no name M:guide_api_programmeinstance.c F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2435 > <-| GUIDE_API_ProgrammeInstance_GetBookingProperties : return_status = 0x3c20000
+
+
+// old way
+typedef struct
+{
+    bool                   response_received;
+    SYSTEMUTIL_THR_Mutex_t mutex;
+    SYSTEMUTIL_SYNC_Cond_t cond;
+
+} GUIDE_AsyncCallbackStruct;
+
+static GUIDE_AsyncCallbackStruct f_planner_window_cond;
+
+GuidePrepareForAsyncCallback(&f_planner_window_cond);
+  SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex);
+
+if (PLANNER_API_STATUS_OK != GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
+  GuideProgrammeInstanceBookingPropsListener)
+
+                                        l_status = GuideWaitForAsyncCallback(&f_planner_window_cond);
+
+
+static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_tag)
+  GuideSignalCallbackReceived(&f_planner_window_cond);
+
+/**
+    A callback function calls this function in cases where asynchronous functions in the SIM say are
+    needed to be made to look synchronous.
+
+    See GuidePrepareForAsyncCallback for more details
+
+    @param asyncCallbackStruct pointer to the async callback data structure
+*/
+void GuideSignalCallbackReceived(GUIDE_AsyncCallbackStruct *asyncCallbackStruct)
+{
+    DIAG_DECLARE_FUNCTION("GuideSignalCallbackReceived");
+    DIAG_LOG_FN_ENTRY(g_guide_diag_segment_id);
+
+    /* Lock iterator_callback_mutex */
+    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex))
+    {
+        DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to lock mutex"));
+    }
+    else
+    {
+        asyncCallbackStruct->response_received = true;
+
+        /* Signal the condition variable */
+        if (SYSTEMUTIL_STATUS_OK!=SYSTEMUTIL_SYNC_CondSignal(&asyncCallbackStruct->cond))
+        {
+            DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to signal cond var"));
+        }
+
+        /* Unlock iterator_callback_mutex */
+        if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex))
+        {
+            DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to unlock mutex"));
+        }
+    }
+
+    DIAG_LOG_FN_EXIT(g_guide_diag_segment_id, 0);
+}
+
+
+// no history and big push
+commit 35f0c1ea06fd2021a4689473323546c5d15e56a9
+Author: yerkessp <phburnet@cisco.com>
+Date:   Thu May 8 11:21:42 2014 +0100
+
+    darwin_middleware_services_D70.0.130_DMS_MASTER_Integration_2_Int Intitial GEO_FUSION
+
+    Change-Id: I7bd1d9bfcb347ade68268619c4904571714df3b6
+
+// do not say about async and reentrant in the header
+SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties(GUIDE_API_PROGRAMME_INSTANCE_HANDLE handle,
+
+
+={============================================================================
 |kt_si_log_0001| SI-11282 HD Output resolution not changing automatically after exiting any interactive app
 
 <1> SI-11282: +P_API, BEM, MPM

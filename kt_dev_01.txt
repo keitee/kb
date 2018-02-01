@@ -274,21 +274,20 @@ KT KB. CPP
 
 |kt_dev_stl_080| cpp-bitset
 
-|kt_dev_stl_100| cpp-sp-raii cpp-raii
-|kt_dev_stl_101| cpp-sp-shared
-|kt_dev_stl_102| cpp-sp-weak
-*kt_dev_stl_102* cpp-sp-exception
+*kt_dev_cxx_0000* cxx-sp-raii cxx-raii
+*kt_dev_cxx_0000* cxx-sp-shared
+*kt_dev_cxx_0000* cxx-sp-weak
+*kt_dev_cxx_0000* cxx-sp-exception
 *kt_dev_cxx_0000* cxx-sp-unique cxx-auto-ptr
-*kt_dev_stl_103* cpp-sp-delete sp-deleter
+*kt_dev_cxx_0000* cpp-sp-delete sp-deleter
 *kt_dev_cxx_0000* cxx-sp-read: can store unique_ptr in a container?
-*kt_dev_stl_104* sp-misuse
-*kt_dev_stl_104* sp-shared-from-this
+*kt_dev_cxx_0000* cxx-sp-misuse cxx-sp-shared-from-this
 *kt_dev_stl_105* smart pointer: gotw #102: exception safety
 |kt_dev_stl_102| smart pointer: internal: auto_ptr
 *kt_dev_stl_103* sp-shared-implement
 *kt_dev_stl_101* sp-shared-code
-*kt_dev_stl_104* sp-thread-safety
-|kt_dev_stl_104| smart pointer: examples
+*kt_dev_cpp_0000* cxx-sp-thread-safety
+*kt_dev_cxx_0000* cxx-sp-case-examples
 |kt_dev_stl_106| when to use which containers
 
 |kt_dev_stl_110| cpp-allocator
@@ -10383,6 +10382,10 @@ Why `ctor-init-list`? From CPR 289 and EC++04.
 
   const, reference, and class member that do not have a default ctor.
 
+* Only for ctor
+  :38:38: error: only constructors take member initializers
+     MSTR &operator=(const MSTR &m) : mesg(m.mesg)
+
 note: 
 Again the same reason as recommendation on initialization above. For the last
 case, that is because will try to use default-ctor for class memeber data when
@@ -12000,62 +12003,68 @@ The copy and the original are independent since copy underlying object as well.
 note: 
 The STL containers and string use valuelike copy.
 
+namespace VALUELIKE 
+{
+
 // value-like hasptr
 class HasPtr 
 {
     public:
-        // default
         HasPtr(const std::string &s = std::string()):
-            ps_(new std::string(s)), count_(0) {}
+            ps_(new std::string(s)), count_(0) 
+        {
+            cout << "::HasPtr(), " << *ps_ << endl;
+        }
 
         // copy ctor
         HasPtr(const HasPtr &rhs):
             ps_(new std::string(*rhs.ps_)), count_(rhs.count_) 
         {
-            cout << "HasPtr::" << *ps_ << endl;
+            cout << "::HasPtr(const HasPtr&), " << *ps_ << endl;
         }
 
         // copy assign
-        //
-        // Assignment operator typically combine the actions of the dtor and
-        // the copy-ctor since destroys the lhs operand and copies data from
-        // the rhs.
-
         HasPtr& operator=(const HasPtr &rhs)
         {
             auto newps = new string(*rhs.ps_);
-            // delete old only when copying is okay to support self assign and
-            // exception safe
+            // delete old only when copying is okay
             delete ps_;
             ps_ = newps;
             count_ = rhs.count_;
             return *this;
         }
 
-        ~HasPtr() { cout << "~HasPtr::" << *ps_ << endl; delete ps_; }
+        ~HasPtr() { cout << "::~HasPtr(), " << *ps_ << endl; delete ps_; }
 
     private:
         std::string *ps_;
         int count_;
 };
 
+// hp is copy ctor'ed
 HasPtr f(HasPtr hp)
 {
+    // ret is copy ctor'ed
     HasPtr ret = hp;
     return ret;
 }
 
+} // namespace
+
 
 // = 03 ======
-// HasPtr::hi mom!
-// HasPtr::hi mom!
-// ~HasPtr::hi mom!
-// ~HasPtr::hi mom!
+// ::HasPtr(), hi mom!
+// ::HasPtr(const HasPtr&), hi mom!
+// ::HasPtr(const HasPtr&), hi mom!
+// ::~HasPtr(), hi mom!
+// ::~HasPtr(), hi mom!
 // =----======
-// ~HasPtr::hi mom!
+// ::~HasPtr(), hi mom!
 
 void t_sp_03()
 {
+    using namespace VALUELIKE;
+
     // allocate a new copy
     HasPtr h("hi mom!");
     // copy ctor copies h in the call f and that copy is destroyed when f exits
@@ -12068,53 +12077,194 @@ void t_sp_03()
 The copy and the original share underlying object like shared_ptr. To show own
 reference counting:
 
-class HasPtr {
-  public:
-    // see default arg and new size_t
-    HasPtr(const std::string& s = std::string() ) 
-        : ps( new std::string(s)), i(0), use( new std::size_t(1) ) {}
+namespace POINTERLIKE 
+{
 
-    // if separate constructors in two. the difference is a cost of temporary.
-    // HasPtr() 
-    //     : ps( new std::string()), i(0), use( new std::size_t(1) ) {}
+// pointer-like hasptr
+class HasPtr 
+{
+    public:
+        HasPtr(const std::string &s = std::string()):
+            ps_(new std::string(s)), count_(0), use_(new size_t(1))
+        {
+            cout << "::HasPtr(), " << *ps_ << ", use " << *use_ << endl;
+        }
 
-    // HasPtr(const std::string &s) 
-    //     : ps( new std::string(s)), i(0), use( new std::size_t(1) ) {}
+        // copy ctor
+        HasPtr(const HasPtr &rhs):
+            ps_(rhs.ps_), count_(rhs.count_), use_(rhs.use_) 
+        {
+            ++*rhs.use_;
+            cout << "::HasPtr(const HasPtr&), " << *ps_ << ", use " << *use_ << endl;
+        }
 
-    HasPtr(const HasPtr& p): ps( p.ps ), use( p.use ) { ++*use; };
+        // copy assign
+        HasPtr& operator=(const HasPtr &rhs)
+        {
+            // increase first to support self assign which includes HasPtr in
+            // the same group; shares the same.
+            ++*rhs.use_;
 
-    HasPtr& operator=(const HasPtr& p);
-    ~HasPtr();
-      
-  private:
-    std::string* ps;
-    std::size_t* use; 
+            // if no other users, free.
+            if (--*use_ == 0)
+            {
+                delete ps_; delete use_;
+            }
+
+            ps_ = rhs.ps_; use_ = rhs.use_;
+            count_ = rhs.count_;
+
+            cout << "::=(&), " << *ps_ << ", use " << *use_ << endl; 
+
+            return *this;
+        }
+
+        // move ctor
+        HasPtr(HasPtr &&rhs):
+            ps_(rhs.ps_), count_(rhs.count_), use_(rhs.use_)
+        {
+            // cause error
+            // error: cannot convert ‘size_t* {aka long unsigned int*}’ to ‘std::string* {aka std::basic_string<char>*}’ in assignment
+            // rhs.ps_ = rhs.use_ = nullptr;
+
+            // makes move-from safe to delete. ?? However, ~HasPtr use
+            // dereference of use. See ~HasPtr
+            rhs.ps_ = nullptr;
+            rhs.use_ = nullptr;
+            rhs.count_ = 0;
+
+            cout << "::HasPtr(HasPtr&&), " << *ps_ << ", use " << *use_ << endl;
+        }
+
+        // move assign
+        HasPtr& operator=(HasPtr &&rhs)
+        {
+            // direct check rather than increase first to support self assign
+            // ++*rhs.use_;
+
+            if (this != &rhs)
+            {
+                // if no other users, free. do the work of dtor
+                if (--*use_ == 0)
+                {
+                    delete ps_; delete use_;
+                }
+
+                // do the work of ctor
+                ps_ = rhs.ps_; use_ = rhs.use_;
+                count_ = rhs.count_;
+
+                // makes move-from safe to delete. ?? However, ~HasPtr use
+                // dereference of use.
+                rhs.ps_ = nullptr;
+                rhs.use_ = nullptr;
+                rhs.count_ = 0;
+
+                cout << "::=(&&), " << *ps_ << ", use " << *use_ << endl; 
+            }
+            return *this;
+        }
+
+        ~HasPtr() 
+        { 
+            // if no other users, free.
+            // if (--*use_ == 0) cause *seg-fault*
+            if (use_ && --*use_ == 0)
+            {
+                cout << "::~HasPtr(), " << *ps_ << ", use " << *use_ << endl; 
+                delete ps_; delete use_;
+            }
+        }
+
+    private:
+        std::string *ps_;
+        int count_;
+        // to track how many object share *ps
+        size_t *use_;
 };
 
-HasPtr::~HasPtr()
+// hp is copy ctor'ed
+HasPtr f(HasPtr hp)
 {
-  if( --*use == 0 )
-  {
-    delete ps; delete use;
-  }
+    HasPtr ret;
+    ret = hp;
+    return ret;
 }
 
-The copy assign do dtor and copy constructor. handle self-assign
+} // namespace
 
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
+
+// = 04 ======
+// ::HasPtr(), hi mom!, use 1
+// ::HasPtr(const HasPtr&), hi mom!, use 2
+// ::HasPtr(const HasPtr&), hi mom!, use 3
+// =----======
+// ::~HasPtr(), hi mom!, use 0
+
+void t_sp_14()
 {
-  ++*rhs.use;
+    using namespace POINTERLIKE;
 
-  // lhs
-  if( --*use == 0 )
-  {
-    delete ps; delete use;
-  }
+    HasPtr h("hi mom!");
+    // h, h2, and h3 share the same underlying string
+    HasPtr h2 = h;
+    HasPtr h3{h2};
+    cout << "=----======" << endl;
+}
 
-  ps = rhs.ps;
-  use = rhs.use;
+// move. see 1 use count and one dtor
+// = 05 ======
+// ::HasPtr(), hi mom!, use 1
+// ::HasPtr(HasPtr&&), hi mom!, use 1
+// ::HasPtr(HasPtr&&), hi mom!, use 1
+// =----======
+// ::~HasPtr(), hi mom!, use 0
 
-  return *this;
+void t_sp_15()
+{
+    using namespace POINTERLIKE;
+
+    HasPtr h("hi mom!");
+    // h, h2, and h3 use the same one underlying string
+    HasPtr h2 = std::move(h);
+    HasPtr h3 = std::move(h2);
+    cout << "=----======" << endl;
+}
+
+// see only single dtor
+// = 06 ======
+// ::HasPtr(), hi mom!, use 1
+// ::HasPtr(), hi dad!, use 1
+// ::=(&), hi mom!, use 2
+// =----======
+// ::~HasPtr(), hi mom!, use 0
+
+void t_sp_16()
+{
+    using namespace POINTERLIKE;
+
+    HasPtr h1("hi mom!");
+    HasPtr h2("hi dad!");
+    h2 = h1;
+    cout << "=----======" << endl;
+}
+
+// move assign. see the same result
+// = 07 ======
+// ::HasPtr(), hi mom!, use 1
+// ::HasPtr(), hi dad!, use 1
+// ::=(&&), hi mom!, use 1
+// =----======
+// ::~HasPtr(), hi mom!, use 0
+
+void t_sp_17()
+{
+    using namespace POINTERLIKE;
+
+    HasPtr h1("hi mom!");
+    HasPtr h2("hi dad!");
+    h2 = std::move(h1);
+    cout << "=----======" << endl;
 }
 
 
@@ -14735,6 +14885,8 @@ class StrBlobPtr
         //
         // * operator arrow must be a member and dereference usually be a member
         // as well.
+        //
+        // * const
         
         string &operator*() const;
         string *operator->() const;
@@ -42325,7 +42477,7 @@ o. boost has a dynamic_bitset you can use.
 
 
 ={============================================================================
-*kt_dev_stl_100* cpp-sp-raii cpp-raii
+*kt_dev_cxx_0000* cxx-sp-raii cxx-raii
 
 {resource-acquisition-is-initialization} {resource-managing-class}
 EC++13. Why RAII? When use dynamic resource, client is fully resposible for
@@ -42702,7 +42854,7 @@ copied ownership of the resource is transfered.
 
 
 ={============================================================================
-*kt_dev_stl_101* cpp-sp-shared
+*kt_dev_cxx_0000* cxx-sp-shared
 
 This implements the concept of `shared-ownership` so that the object and its
 associated resources get released whenever the last reference to it gets
@@ -42717,7 +42869,7 @@ shared_ptr<T> plist;
 shared_ptr<list<int>> plist;
 
 
-{cpp-sp-operations}
+{cxx-sp-shared-operations}
 
 // Use args to initialize the object of type T
 make_shared<T>(args);
@@ -42736,9 +42888,7 @@ swap(p, q);
 p.swap(q);
 
 
-<ex>
-
-SLR 5.2 Smart Pointers
+<ex> RCLR 5.2 Smart Pointers
 
 #include <iostream>
 #include <memory>
@@ -42784,13 +42934,18 @@ int main()
 Here use_count is 4.
 
 
-{sp-init} {cxx-make-shared}
+{cxx-sp-shared-init} {cxx-make-shared}
 shared_ptr<string> pNico(new string("nico"));           // OK
 shared_ptr<string> pNico{new string("nico")};           // OK
 shared_ptr<string> pNico = make_shared<string>("nico"); // OK
-shared_ptr<string> pNico = new string("nico");          // NO
 
-// NO since requires converting-ctor but shared ptr's ctor are explicit 
+// NO since requires copy init but shared ptr's ctor are explicit 
+shared_ptr<string> pNico = new string("nico");
+
+// NO since shared ptr's ctor is explicit
+shared_ptr<int> p (new int(42));
+p = new int(1024);                      
+
 shared_ptr<int> clone(int p) {
   return new int(p);
 }
@@ -42802,7 +42957,7 @@ shard_prt<string> p4 = make_shared<string>(10, '9');
 auto p6 = make_shared<vector<sting>>();
 
 
-<safer-and-faster>
+<cxx-sp-make-shared>
 shared_ptr<T> sp(new X(...)) performs two allocations: one for X and one for
 the control block used, for example, by the shared pointer to manage its use
 count. 
@@ -42830,8 +42985,7 @@ bsk.add_item( make_shared<Quote>("123", 45) );
 // void add_item( const std::shared_ptr<Quote>& sale);
 
 
-
-{cpp-sp-reset}
+{cxx-sp-shared-reset}
 Why not assignment instead of using reset when assign a shared pointer with a
 new resource? 
 
@@ -42841,7 +42995,6 @@ new resource?
 
   * This is when set shared pointer with new resource and assignment works
     between shared pointers.
-
 
 p.reset();
 p.reset(q);
@@ -42859,14 +43012,6 @@ The reset can be used to bind a pointer with shared pointer later.
 
 shared_ptr<string> pNico4;
 pNico4.reset(new string("nico"));
-
-However, cannot use `copy-form-init` since shared pointer ctors that takes
-pointers `are explicit` but copy-from reuires implicit conversion.
-
-shared_ptr<int> p (new int(42));
-p = new int(1024);                  // ERROR
-
-shared_ptr<int> p = new int(42);    // ERROR
 
 
 <access-to-pointee>
@@ -42887,7 +43032,7 @@ shared_ptr<vector<T>> pvec;
 T var = (*pvec)[index];          // () is necessary since [] is higher than *
 
 
-{sp-check-users} do not rely on use_count()
+{cxx-sp-shared-check-users} do not rely on use_count()
 To check how many users are. Return bool on whether there is the only user of
 this sp.
 
@@ -42944,17 +43089,11 @@ shared_ptr<int>(static_cast<int*>(sp.get()))  // ERROR: undefined behavior
 static_pointer_cast<int*>(sp)                 // OK
 
 
-<ex> <cpp-op-member-access> <cpp-ex-strblob>
+<ex> <cpp-op-member-access> *cxx-ex-strblob-example*
 The deference(*) and arrow(->) operator used in classes that represent
 iterators and in smart pointer.
 
 The arrow must be a member.
-
-// std::string &StrBlobPtr::deref() const
-// {
-//   auto p = check( curr, "dereference past end");
-//   return (*p)[curr];    // () is necessary since [] is higher than *
-// }
 
 class StrBlobPtr {
   public:
@@ -42970,11 +43109,8 @@ class StrBlobPtr {
     }
 };
 
-The arrow operator delegate the real work by calling the deference operator and
-returning the 'address' of the element returned by that operator.
-
-See that both are `const` member and return a reference or pointer to `nonconst`
-string since StrBlobPtr only be bound to a `nonconst` StrBlob.
+The arrow operator delegate the real work by calling the deference operator
+and returning the 'address' of the element returned by that operator.
 
 shared_ptr<> p;
 
@@ -43013,7 +43149,7 @@ the same hold for shared_ptr? No. array is special and not vector.
 
 
 ={============================================================================
-*kt_dev_stl_102* cpp-sp-weak
+*kt_dev_cxx_0000* cxx-sp-weak
 
 The weak pointer is `checked pointer class.` Two points:
 
@@ -43031,7 +43167,7 @@ if (shared_ptr<int> np = wp.lock()) {
 }
 
 
-<use-case>
+<cxx-sp-weak-case>
 The shared_ptrs are provided to automatically release resources associated
 with objects no longer needed. However, under certain circumstances, this
 behavior doesn't work or is not what is intended:
@@ -43046,7 +43182,7 @@ behavior doesn't work or is not what is intended:
 
   * Another example occurs when you explicitly want to share but not 'own' an
     object. Thus, you have the semantics that the lifetime of a reference to
-    an object 'outlives' the object it refers to. Here, shared_ptrs would
+    an object `outlives the object it refers to.` Here, shared_ptrs would
     never release the object, and ordinary pointers might not notice that the
     object they refer to is not valid anymore, which introduces the 'risk' of
     accessing released data.
@@ -43055,23 +43191,23 @@ behavior doesn't work or is not what is intended:
 <operations>
 * This class requires a shared pointer to get created.
 
-// * Whenever the last shared pointer owning the object loses its ownership, any
-// weak pointer automatically becomes empty. note: It this is the case, then no
-// need to use lock() so seems not.
+* Besides default and copy constructors, class weak_ptr provides a constructor
+  taking a shared_ptr.
 
-* Besides default and copy constructors, class weak_ptr provides 'only' a
-  constructor taking a shared_ptr.
+* The default constructor creates an empty weak pointer. a weak_ptr can be
+  empty, which is the case if it is not initialized by a shared_ptr or if the
+  last owner of the corresponding object was deleted.
 
 * Cannot use operators * and -> to access a referenced object of a weak_ptr
   directly. Instead, you `have to create a shared pointer out of it.`
 
-  * Creating a shared pointer out of a weak pointer checks whether there is
-  * (still) an associated object. If not, create an 'empty' shared pointer.
-  // If not, this operation will throw an exception or create an 'empty' shared
-  // pointer; what exactly happens depends on the operation used.
+* Creating a shared pointer out of a weak pointer checks whether there is
+  (still) an associated object. If not, this operation will throw an exception
+  or create an 'empty' shared pointer; what exactly happens depends on the
+  operation used.
 
-  * While dealing with the referenced object, the shared pointer can't get
-    released since shared pointer was created out of weak pointer.
+* While dealing with the referenced object, the shared pointer can't get
+  released since shared pointer was created out of weak pointer.
 
 As a consequence, class weak_ptr provides only a small number of operations:
 
@@ -43082,7 +43218,7 @@ w.expired();
 w.lock();
 
 
-<ex>
+<ex> *cxx-ex-weak-sp-example*
 // cyclic reference. none of the Persons gets released, because each still has
 // at least one shared pointer referring to it.
 
@@ -43129,7 +43265,11 @@ int main()
   cout << "- name of 1st kid of nico's mom: " 
     << p->mother->kids[0]->name << endl;
 
-  // note: this is when expect dtor happens but not.
+  // note: 
+  // this is when expect dtor happens but not since when assign jim to p, lost
+  // nico family and then p hold jim family, but no dtor since jim's kid count
+  // is not 0.
+
   p = initFamily("jim");
 
   cout << "jim's family exists" << endl;
@@ -43152,10 +43292,6 @@ mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
                \ (shared or weak)   \
                 -> kid               -> kid
 
-Why there is no dtor for two family at all? When assign jim to p, lost nico
-family and even if p hold jim family, no dtor since p's(kid) count is not 0.
-
-
 Solution?
 
 class Person {
@@ -43176,7 +43312,11 @@ class Person {
 };
 
 
-<check-on-weak-pointer>
+<cxx-sp-weak-check>
+Have several options to check that the object still exist: 
+
+* Use lock() returns `empty shared ptr if fails`
+
 To use weak pointer approach, instead of calling
 
 p->mother->kids[0]->name
@@ -43186,12 +43326,9 @@ we now have to insert lock() into the expression
 p->mother->kids[0].lock()->name
 
 This lock() yields a shared_ptr out of the weak_ptr the vector of kids
-contains.  If this modification is not possible, lock() yields an empty
-shared_ptr. 
-
-note:
-// In that case, calling operator * or -> would cause 'undefined' behavior.
-// Using lock() is 'optional' since still can use directly.
+contains. If this modification is not possible, lock() yields an empty
+shared_ptr. In that case, calling operator * or -> would cause 'undefined'
+behavior.
 
 In g++ (Debian 4.7.2-5) 4.7.2, this emits an error:
 
@@ -43202,19 +43339,14 @@ error: base operand of ‘->’ has non-pointer type
 {aka std::weak_ptr<Person>}'
 
 
-Have several options to check that the object still exist: 
+* Can call expired(), which returns true if use_count() is zero, false
+  otherwise. This option is equivalent to checking whether use_count() is
+  equal to 0 but might be 'faster'.
 
-  * Can call expired(), which returns true if use_count() is zero, false
-    otherwise. This option is equivalent to checking whether use_count()
-    is equal to 0 but might be 'faster'.
-
-  * Can explicitly convert a weak_ptr into a shared_ptr by using a
-    corresponding shared_ptr constructor. If there is no valid referenced
-    object, this constructor will throw a bad_weak_ptr exception. note: or use
-    lock().
-
-  * Use use_count(). Not recommended since it is slow and not reliable.
-
+* Can explicitly convert a weak_ptr into a shared_ptr by using a
+  corresponding shared_ptr constructor. If there is no valid referenced
+  object, this constructor will throw a `bad_weak_ptr exception` 
+  
 
 By doing so, we can break the cycle of shared pointers. The output:
 
@@ -43238,7 +43370,7 @@ destructors get called since weak pointer don't increase count.
 
 
 ={============================================================================
-*kt_dev_stl_102* cpp-sp-exception
+*kt_dev_cxx_0000* cxx-sp-exception
 
 As with STL, boost do not raise exception when dereferencing.
 
@@ -43256,18 +43388,17 @@ namespace boost {
 ={============================================================================
 *kt_dev_cxx_0000* cxx-sp-unique cxx-auto-ptr
 
-`no copy or assign support` A pointer that implements the concept of
-'exclusive' ownership.
+`no copy or assign support` that implements the concept of 'exclusive' ownership.
 
 This was `auto_ptr` before C++11 and it has only one user because
 `no-ordinary-copy-and-assign-supported`. Only 'one' `unique_ptr` at a time can
 point to a given object. So limit the use and transfer ownerships.
 
-  In contrast to shared pointers, a 'minimum' space and time overhead is the
-  focus of this class.
+In contrast to shared pointers, a 'minimum' space and time overhead is the
+focus of this class.
 
 
-<code> *cpp-delete*
+<code> *cxx-delete*
 /usr/include/c++/4.9/bits/unique_ptr.h
   /// 20.7.12.2 unique_ptr for single objects.
 
@@ -43276,12 +43407,12 @@ point to a given object. So limit the use and transfer ownerships.
     {
       //...
 
-      *cpp-sp-unique-no-copy-support*
+      *cxx-sp-unique-no-copy-support*
       // Disable copy from lvalue.
       unique_ptr(const unique_ptr&) = delete;             // @262
       unique_ptr& operator=(const unique_ptr&) = delete;  // @263
 
-      *cpp-sp-unique-move*
+      *cxx-sp-unique-move*
       /// Move constructor.
       unique_ptr(unique_ptr&& __u) noexcept
       : _M_t(__u.release(), std::forward<deleter_type>(__u.get_deleter())) { }
@@ -43320,9 +43451,16 @@ point to a given object. So limit the use and transfer ownerships.
         if (__p != pointer())
           get_deleter()(__p);
       }
+
+      *cxx-conversion-to-bool*
+      /// Return @c true if the stored pointer is not null.
+      explicit operator bool() const noexcept
+      { return get() == pointer() ? false : true; }
+
     };
 
 
+<ex>
 #include <iostream>
 #include <string>
 #include <memory>
@@ -43356,37 +43494,63 @@ In file included from /usr/include/c++/4.7/memory:86:0,
 /usr/include/c++/4.7/bits/unique_ptr.h:263:19: error: declared here
 
 
-<check> TODO: need to check and confirm
+{cxx-sp-unique-ctor}
+Do not support copy init since do not have copy ctor.
+
+std::unique_ptr<int> up = new int;  // ERROR
+std::unique_ptr<int> up(new int);   // OK
+
+
+A unique_ptr does not have to own an object, so it can be empty.
+
+*cxx-conversion-to-bool*
 You can check whether a unique_ptr owns an object by calling operator bool():
 
-if (up) {   // if up is not empty
+// if up is not empty
+if (up) {
    std::cout << *up << std::endl;
 }
 
+if (up != nullptr)        // if up is not empty
+if (up.get() != nullptr)  // if up is not empty
 
-{sp-unique-ownership} <unique-transfer-ownership>
+
+{cxx-sp-unique-transfer-ownership}
 The `unique_ptr` do not support copy so `have-to transfer ownership.` Two
 options:
 
-u.release() 
+up.reset() 
+Calls the deleter for an owned object and makes up empty 
+`(equivalent to up=nullptr)`
 
-relinquishes control of the pointer u has held; returns the pointer u has held
-and makes u null.
+up.reset(ptr) 
+Calls the deleter for an owned object and reinitializes the shared pointer to
+own *ptr
 
-  "there is no such a thing in shared_ptr"
+up.release() 
+Gives up ownership back to the caller (returns owned object without calling
+the deleter)
+
+note: 
+no such a thing in shared_ptr
 
 
-1. Use release() and reset() pair
+* Use release() and reset() pair
 
 The release() return the pointer it held and make the unique ptr null so using
 reset/release pair to transfer ownerships.
 
-unique_ptr<string> p2(p1.release());  // 'transfer' ownership. up loses it
-std::string* sp = up.release();       // 'transfer' ownership. up loses it
-sp.reset(up.release());               // 'transfer' ownership. up loses it
+unique_ptr<string> p2(up.release());  // up loses it and up is nullptr
+sp.reset(up.release());               // up loses it and up is nullptr
 
 
-2. Use move semantics.
+* Use a temporty (use move semantics)
+
+unique_ptr<Foo> p4(new Foo(4));
+p4 = unique_ptr<Foo>(new Foo(5));
+
+
+* Use move semantics *cxx-prefered* since intention is clear
 
 // initialize a unique_ptr with a new object
 std::unique_ptr<ClassA> up1(new ClassA);
@@ -43412,7 +43576,80 @@ up2 = up1;
 up2 = std::move(up1);   
 
 
-<return-unique-ptr> *cxx-return-cxx-move*
+<ex>
+
+// = 01 ======
+// Foo ctor(1)
+// Foo ctor(2)
+// Foo ctor(3)
+// Foo ctor(4)
+// p3 is not empty
+// Foo dtor(2)
+// Foo dtor(1)
+// p3 is empty
+// Foo ctor(5)
+// Foo dtor(4)
+// =----======
+// Foo dtor(5)
+// Foo dtor(3)
+
+void t_sp_01()
+{
+    unique_ptr<Foo> p1(new Foo(1));
+    unique_ptr<Foo> p2(new Foo(2));
+    unique_ptr<Foo> p3(new Foo(3));
+    unique_ptr<Foo> p4(new Foo(4));
+
+    if (p3)
+        cout << "p3 is not empty" << endl;
+    else
+        cout << "p3 is empty" << endl;
+
+    p2.reset(p3.release());     // dtor Foo2, p1->Foo1, p2->Foo3, p3->null
+    p3.reset(p1.release());     // no   dtor, p1->null, p2->Foo3, p3->Foo1
+    p3.reset(p1.release());     // dtor Foo1, p1->null, p3->null, p2->Foo3
+
+    if (p3)
+        cout << "p3 is not empty" << endl;
+    else
+        cout << "p3 is empty" << endl;
+
+    p4 = unique_ptr<Foo>(new Foo(5));
+
+    cout << "=----======" << endl;
+}
+
+
+<cxx-sp-misuse-unique>
+RCLR 101, 5.2 Smart Pointers
+
+A unique_ptr provides the semantics of exclusive ownership. However, it’s up
+to the programmer to ensure that no two unique pointers are initialized by the
+same pointer:
+
+std::string* sp = new std::string("hello");
+std::unique_ptr<std::string> up1(sp);
+std::unique_ptr<std::string> up2(sp); // ERROR: up1 and up2 own same data
+
+Unfortunately, this is a runtime error, so the programmer has to avoid such a
+mistake.
+
+note:
+THAT's not ture since copy is not allowed and have to see this error:
+
+: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp = Foo; _Dp = std::default_delete<Foo>]’
+     unique_ptr<Foo> p4(p3);
+                          ^
+
+// lost pointer
+// ERROR. p2 won't free the memory and have lost the pointer.
+p2.release();
+
+// OK. but must remember to delete(p).
+auto p = p2.release();
+
+
+<cxx-sp-unique-return> *cxx-return-cxx-move*
 One exception to the rule that cannot copy a unique_ptr; that according to the
 language rules of C++11, the compiler will try a 'move' automatically. Can
 copy or assign a unique_ptr that is about to be destoryed.
@@ -43489,24 +43726,14 @@ void g()
 that owns data ensures that this data is deleted.
 
 
-<misuse-unique-pointer>
-// lost pointer
-// ERROR. p2 won't free the memory and have lost the pointer.
-p2.release();
+<cxx-sp-unique-as-members> exception-in-ctor
 
-// OK. but must remember to delete(p).
-auto p = p2.release();
+RCLR 103, 5.2 Smart Pointers
 
-
-<use-as-members> exception-in-ctor
-A unique_ptr helps to avoid resource leaks caused by exceptions thrown during
-the initialization of an object. Note that destructors are called 'only' if
-any construction is completed. 
-
-So, if an exception occurs inside a constructor, destructors are called 'only'
-for objects that have been fully constructed. This can result in resource
-leaks for classes with multiple raw pointers if during the construction the
-first new was successful but the second was not.
+If an exception occurs inside a constructor, destructors are called 'only' for
+objects that have been fully constructed. This can result in resource leaks
+for classes with multiple raw pointers if during the construction the first
+new was successful but the second was not.
 
 class ClassB {
   private:
@@ -43531,7 +43758,10 @@ class ClassB {
     }
 };
 
-To avoid such a 'possible' resource leak,
+To avoid such a 'possible' resource leak, unique_ptr helps to avoid resource
+leaks caused by exceptions thrown during the initialization of an object. Note
+that destructors are called 'only' if any construction is completed. 
+
 
 class ClassB {
   private:
@@ -43571,7 +43801,7 @@ return one from a function. How about `unique_ptr`?
 
 
 ={============================================================================
-*kt_dev_stl_103* cpp-sp-delete
+*kt_dev_cxx_0000* cpp-sp-delete
 
 {sp-nullptr} {when-deletion-happens}
 Such a deletion does not necessarily have to happen at the end of the scope.
@@ -44533,31 +44763,35 @@ by uptr: diff(ms): 585
 
 
 ={============================================================================
-*kt_dev_stl_104* cpp-sp-misuse
+*kt_dev_cxx_0000* cxx-sp-misuse cxx-sp-shared-from-this
 
-CLR 5.2.3
+RCLR 5.2.3
 
-1. Cyclic reference shown above.
+* Cyclic reference shown above.
 
 
-2. Double delete. 
+* Double delete. 
+
 Have to ensure that only one 'group' of shared pointers owns an object.
 
 int* p = new int;
 shared_ptr<int> sp1(p);
-shared_ptr<int> sp2(p);   // no compile error but error in double delete.
+shared_ptr<int> sp2(p);       // new shared ptr group and double delete.
 
 For this reason, you should always directly initialize a smart pointer the
 moment you create the object with its associated resource:
 
 shared_ptr<int> sp1(new int);
-shared_ptr<int> sp2(sp1);  // OK
+shared_ptr<int> sp2(sp1);     // OK
 
 
-3. Indirect double delete.
+* Indirect double delete.
+
 Suppose that we want to introduce a member function for a Person that creates
 both the reference from a kid to the parent and a corresponding reference back:
 
+// *cxx-ex-weak-sp-example*
+//
 // shared_ptr<Person> initFamily (const string& name)
 // {
 //   shared_ptr<Person> mom(new Person(name+"'s mom"));
@@ -44577,6 +44811,8 @@ shared_ptr<Person> initFamily (const string& name)
   return kid;                                 // return kid
 }
 
+naive implementation is:
+
 void setParentsAndTheirKids (shared_ptr<Person> m = nullptr, 
     shared_ptr<Person> f = nullptr) 
 {
@@ -44590,23 +44826,23 @@ void setParentsAndTheirKids (shared_ptr<Person> m = nullptr,
   }
 }
 
-The problem is the creation of a shared pointer out of `this` pointer. 
+Apart from cyclic reference issue, the problem is the creation of a shared
+pointer out of `this` pointer. 
 
 Want to pass kid's shared pointer to mother and father but to do that, need a
-shared pointer to the kid, which we don't have at hand since this pointer is not
-shared pointer. So this creates temporary shared pointer from this which is
-'new' group of shared pointer. Two shared pointer group to the kid and when mom
-and dad go free, will do double delete.
+shared pointer to the kid, which we don't have at hand since this pointer is
+not shared pointer. So it creates temporary shared pointer from this which is
+`new group of shared pointer.` Two shared pointer group to the kid and when
+mom and dad go free, will do double delete.
 
 One way to deal with this problem is to pass the shared pointer to the kid as a
 third argument. But the C++ standard library provides another option: class
 std::enable_shared_from_this<>.
 
 
-={============================================================================
-*kt_dev_stl_104* sp-shared-from-this
+{cxx-sp-shared-from-this}
 
-Can use class std::enable_shared_from_this<> to derive your class, representing
+Use class std::enable_shared_from_this<> `to derive your class`, representing
 objects managed by shared pointers, with your class name passed as template
 argument. Doing so allows you to use a derived member function
 `shared_from_this()` to create a correct shared_ptr out of `this`
@@ -45825,7 +46061,7 @@ namespace std {
 
 
 ={============================================================================
-*kt_dev_stl_104* sp-thread-safety
+*kt_dev_cpp_0000* cxx-sp-thread-safety
 
 https://gcc.gnu.org/onlinedocs/libstdc++/manual/memory.html#shared_ptr.thread
 
@@ -45833,6 +46069,7 @@ Thread Safety
 
 The Thread Safety section of the Boost shared_ptr documentation says
 "shared_ptr objects offer the same level of thread safety as built-in types."
+
 The implementation must ensure that concurrent updates to separate shared_ptr
 instances are correct even when those instances share a reference count e.g.
 
@@ -45881,11 +46118,12 @@ For the version of shared_ptr in libstdc++ the compiler and library are fixed,
 
 
 ={============================================================================
-*kt_dev_stl_104* smart pointers examples
+*kt_dev_cxx_0000* cxx-sp-case-examples
 
-If you want reference semantics in STL containers - whether because copying elements is expensive or
-because identical elements will be shared by different collections - you should use a smart pointer
-class that avoids possible errors. In addition, using a reference wrapper is possible.
+If you want reference semantics in STL containers - whether because copying
+elements is expensive or because identical elements will be shared by
+different collections - you should use a smart pointer class that avoids
+possible errors. In addition, using a reference wrapper is possible.
 
 <ex> *ex-algo-find-if*
 #include <iostream>
