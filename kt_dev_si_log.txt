@@ -363,91 +363,12 @@ BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_41.73.00_BSKYB_GM_Integration
 
 #define GUIDE_DEFAULT_RETRIEVAL_TIMEOUT          (30L)  /**< The timeout value to use, in seconds */
 
-// this code is the same for both
-SYSTEM_STATUS GuideWaitForAsyncCallback(GUIDE_AsyncCallbackStruct *asyncCallbackStruct)
-{
-    SYSTEMUTIL_SYNC_timespec timeout_value;
-    SYSTEM_STATUS status = GUIDE_API_STATUS_OK;
-    SYSTEM_STATUS sys_status = SYSTEMUTIL_STATUS_OK;
-
-    DIAG_DECLARE_FUNCTION("GuideWaitForAsyncCallback");
-    DIAG_LOG_FN_ENTRY(g_guide_diag_segment_id);
-
-    /* Wait for the callback function to have been called */
-
-    (void)SYSTEMUTIL_SYNC_GetTime(&timeout_value);
-
-    timeout_value.tv_sec += GUIDE_DEFAULT_RETRIEVAL_TIMEOUT;
-
-    while ((asyncCallbackStruct->response_received == false) && (sys_status == SYSTEMUTIL_STATUS_OK))
-    {
-        sys_status = SYSTEMUTIL_SYNC_CondTimedWait(&asyncCallbackStruct->cond, &asyncCallbackStruct->mutex, &timeout_value);
-        if (SYSTEMUTIL_STATUS_OK != sys_status)
-        {
-            DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED sys_status=%#x", sys_status));
-            status = GUIDE_API_STATUS_FAILED;
-        }
-    }
-
-    /* Unlock iterator_callback_mutex */
-
-    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex))
-    {
-        DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_THR_MutexUnlock() FAILED"));
-        status = GUIDE_API_STATUS_FAILED;
-    }
-    DIAG_LOG_FN_EXIT(g_guide_diag_segment_id, status);
-
-    return status;
-}
-
 
 | 87.52.00_8616_MNTEE | 2018-01-31 10:55:58 | darwin_0019fbf2d46b_c398e57f1d9dd338cffa1fdd366d94c2.tgz |             |
 http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_c398e57f1d9dd338cffa1fdd366d94c2/index.html
 
 kyoupark@st-castor-03:~/STB_SW_o$ git describe
 BSKYB_HR019_Int/BSKYB_INTEGRATION_BLD_87.52.00_BSKYB_HR019_Int
-
-// different 
-DARWIN_PLATFORM/DARWIN_GUIDE/src/guide_api_programmeinstance.c
-
-SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
-{
-                                    /* Get the booking status handle (asynchronous) */
-                                    GuidePrepareForAsyncCallback(&f_planner_window_mutex);
-                                    if (PLANNER_API_STATUS_OK != GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
-                                                                                                                                        l_start_time,
-                                                                                                                                        l_duration,
-                                                                                                                                        (PLANNER_API_UserTag)l_request_handle,
-                                                                                                                                        GuideProgrammeInstanceBookingPropsListener,
-                                                                                                                                        GuideProgrammeInstanceBookingPropsUpdateListener))
-                                    {
-                                        GuideCancelPrepareForAsyncCallback(&f_planner_window_mutex);
-                                        DIAG_LOG_WARN(g_guide_diag_segment_id, ("PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow() FAILED"));
-                                        l_status = GUIDE_API_STATUS_ATTRIBUTE_NOT_RETRIEVED_YET;
-                                    }
-                                    else
-                                    {
-                                        struct timespec timeout_value;
-
-                                        (void)SYSTEMUTIL_SYNC_GetTime(&timeout_value);
-                                        timeout_value.tv_sec += GUIDE_DEFAULT_RETRIEVAL_TIMEOUT;
-
-                                        /* This request handle will be of a valid value once the listener gets called, which means
-                                           we have a returned planner handle no matter the returned status OK or failed. */
-                                        while (l_request_handle != request_object_data->request.cached_window.proginst_list_request_handle)
-                                        {
-                                            if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_SYNC_CondTimedWait(&f_planner_window_cond, &f_planner_window_mutex, &timeout_value))
-                                            {
-                                                DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED"));
-                                                l_status = GUIDE_API_STATUS_FAILED;
-                                                break;
-                                            }
-                                        }
-
-                                        system_status = SYSTEMUTIL_THR_MutexUnlock(&f_planner_window_mutex);
-                                        DIAG_LOG_ASSERT_EQUAL(g_guide_diag_segment_id, SYSTEMUTIL_STATUS_OK, system_status);
-
 
 // +GUIDE on
 | 41.73.00_9543_MNTEE | 2018-01-31 13:21:27 | darwin_0019fbf2d46b_a1abd71fb02347e9bad3829d7611f388.tgz |             |
@@ -471,6 +392,9 @@ mgrep.py "KEY_PRESS|EPG_BOOK|EPG_KEY|GUIDE_API_ProgrammeInstance_GetBookingPrope
 
 
 // old way
+// kyoupark@st-castor-03:~/STB_SW$ git describe
+// BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_41.73.00_BSKYB_GM_Integration
+
 typedef struct
 {
     bool                   response_received;
@@ -481,14 +405,42 @@ typedef struct
 
 static GUIDE_AsyncCallbackStruct f_planner_window_cond;
 
-GuidePrepareForAsyncCallback(&f_planner_window_cond);
-  SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex);
+SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
+{
+  /* In order to make this interface reentrant create a new request with each querry of planner
+     for the current programme instance. When this API is called simultaneously for an identical
+     programme instance, each querry to planner shall work with the associated request and does
+     not impact each other. */
 
-if (PLANNER_API_STATUS_OK != GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
-  GuideProgrammeInstanceBookingPropsListener)
+  GuidePrepareForAsyncCallback(&f_planner_window_cond)
+  { SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex); }
 
-                                        l_status = GuideWaitForAsyncCallback(&f_planner_window_cond);
+  GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
+      GuideProgrammeInstanceBookingPropsListener);
 
+  GuideWaitForAsyncCallback(&f_planner_window_cond);
+  // SYSTEM_STATUS GuideWaitForAsyncCallback(GUIDE_AsyncCallbackStruct *asyncCallbackStruct)
+  // {
+  //     /* Wait for the callback function to have been called */
+  // 
+  //     (void)SYSTEMUTIL_SYNC_GetTime(&timeout_value);
+  // 
+  //     timeout_value.tv_sec += GUIDE_DEFAULT_RETRIEVAL_TIMEOUT;
+  // 
+  //     while ((asyncCallbackStruct->response_received == false) && (sys_status == SYSTEMUTIL_STATUS_OK))
+  //     {
+  //         sys_status = SYSTEMUTIL_SYNC_CondTimedWait(&asyncCallbackStruct->cond, &asyncCallbackStruct->mutex, &timeout_value);
+  //         if (SYSTEMUTIL_STATUS_OK != sys_status)
+  //         {
+  //             DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED sys_status=%#x", sys_status));
+  //             status = GUIDE_API_STATUS_FAILED;
+  //         }
+  //     }
+  // 
+  //     /* Unlock iterator_callback_mutex */
+  //     if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex))
+  // }
+}
 
 static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_tag)
   GuideSignalCallbackReceived(&f_planner_window_cond);
@@ -503,13 +455,9 @@ static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_
 */
 void GuideSignalCallbackReceived(GUIDE_AsyncCallbackStruct *asyncCallbackStruct)
 {
-    DIAG_DECLARE_FUNCTION("GuideSignalCallbackReceived");
-    DIAG_LOG_FN_ENTRY(g_guide_diag_segment_id);
-
     /* Lock iterator_callback_mutex */
     if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex))
     {
-        DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to lock mutex"));
     }
     else
     {
@@ -517,32 +465,91 @@ void GuideSignalCallbackReceived(GUIDE_AsyncCallbackStruct *asyncCallbackStruct)
 
         /* Signal the condition variable */
         if (SYSTEMUTIL_STATUS_OK!=SYSTEMUTIL_SYNC_CondSignal(&asyncCallbackStruct->cond))
-        {
-            DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to signal cond var"));
-        }
 
         /* Unlock iterator_callback_mutex */
         if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex))
-        {
-            DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to unlock mutex"));
-        }
     }
-
-    DIAG_LOG_FN_EXIT(g_guide_diag_segment_id, 0);
 }
 
 
-// no history and big push
-commit 35f0c1ea06fd2021a4689473323546c5d15e56a9
-Author: yerkessp <phburnet@cisco.com>
-Date:   Thu May 8 11:21:42 2014 +0100
+// ** NEW ** NOT reproducible
+// kyoupark@st-castor-03:~/STB_SW_o$ git describe
+// BSKYB_HR019_Int/BSKYB_INTEGRATION_BLD_87.52.00_BSKYB_HR019_Int
+// DARWIN_PLATFORM/DARWIN_GUIDE/src/guide_api_programmeinstance.c
 
-    darwin_middleware_services_D70.0.130_DMS_MASTER_Integration_2_Int Intitial GEO_FUSION
+SYSTEMUTIL_THR_Mutex_t f_planner_window_mutex = SYSTEMUTIL_THR_MUTEX_INITIALIZER;
+SYSTEMUTIL_SYNC_Cond_t f_planner_window_cond;
 
-    Change-Id: I7bd1d9bfcb347ade68268619c4904571714df3b6
+// callback from SIM
+static void GuideProgrammeInstanceBookingPropsListener()
+{
+  GuideSignalCallbackReceived(&f_planner_window_mutex, &f_planner_window_cond)
+  {
+    /* Lock iterator_callback_mutex */
+    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexLock(callback_mutex))
+    {
+      /* Signal the condition variable */
+      if (SYSTEMUTIL_STATUS_OK!=SYSTEMUTIL_SYNC_CondSignal(callback_cond))
+      {
+        DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to signal iterator_callback_cond"));
+      }
 
-// do not say about async and reentrant in the header
-SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties(GUIDE_API_PROGRAMME_INSTANCE_HANDLE handle,
+      /* Unlock iterator_callback_mutex */
+      if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexUnlock(callback_mutex))
+      {
+        DIAG_LOG_WARN(g_guide_diag_segment_id, ("Failed to unlock iterator_callback_mutex"));
+      }
+    }
+  }
+}
+
+
+SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
+{
+  /* In order to make this interface reentrant create a new request with each querry of planner
+     for the current programme instance. When this API is called simultaneously for an identical
+     programme instance, each querry to planner shall work with the associated request and does
+     not impact each other. */
+
+  /* Get the booking status handle (asynchronous) */
+  GuidePrepareForAsyncCallback(&f_planner_window_mutex);
+  {
+    (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexLock(callback_mutex));
+  }
+  
+  if (PLANNER_API_STATUS_OK != GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
+        l_start_time,
+        l_duration,
+        (PLANNER_API_UserTag)l_request_handle,
+        GuideProgrammeInstanceBookingPropsListener,
+        GuideProgrammeInstanceBookingPropsUpdateListener))
+
+  (void)SYSTEMUTIL_SYNC_GetTime(&timeout_value);
+  timeout_value.tv_sec += GUIDE_DEFAULT_RETRIEVAL_TIMEOUT;
+
+  /* This request handle will be of a valid value once the listener gets called, which means
+     we have a returned planner handle no matter the returned status OK or failed. */
+  while (l_request_handle != request_object_data->request.cached_window.proginst_list_request_handle)
+  {
+    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_SYNC_CondTimedWait(&f_planner_window_cond, &f_planner_window_mutex, &timeout_value))
+    {
+      DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED"));
+      l_status = GUIDE_API_STATUS_FAILED;
+      break;
+    }
+  }
+
+  system_status = SYSTEMUTIL_THR_MutexUnlock(&f_planner_window_mutex);
+  DIAG_LOG_ASSERT_EQUAL(g_guide_diag_segment_id, SYSTEMUTIL_STATUS_OK, system_status);
+}
+
+
+| R000.041.80.00U     | 2018-02-01 14:20:30 | darwin_0019fbf2d46b_8d5d8eae57d79cbc30f9929691566bab.tgz |             |
+Yard Link: http://theyard.cisco.com/si_logs/translation/darwin_0019fbf2d46b_8d5d8eae57d79cbc30f9929691566bab/index.html
+
+SYSTEM_STATUS PLANNER_GridJobs_RetrieveProgInstBookingPropsInTimeWindow(PLANNER_API_Session_Handle session,
+
+SYSTEM_STATUS PLANNER_BookingStatusHandler(uint32_t payload_handle)
 
 
 ={============================================================================
