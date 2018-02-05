@@ -309,7 +309,7 @@ KT KB. CPP
 
 
 #{ c++ concurrent in action
-|kt_dev_ccon_000| cpp-con-thread
+*kt_dev_cxx_0000* cxx-con-thread cxx-boost-thread
 |kt_dev_ccon_001| std-threadad: copy callables and arguments. lifetime issue
 |kt_dev_ccon_002| std-threadad: join and detach
 *kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
@@ -12693,29 +12693,6 @@ Folder (set of pointers to Message)  Message (set of pointers to Folder)
 
 
 <lits-of-operations-message-class> how to sketch a class
-
-* Folder has pointers to Messages that is has and Messages has pointers to
-Folders it belongs.
-
-* Message class provide save() and remove() operations to add or remove a
-Message from a specified folder. To create a new Message, specify the contents
-of the message but no folder. To put a message call save(). 
-
-* To copy a message, the copy and the original will be a 'distinct' Message
-and shall be in the same 'set' of Folders. Thus copies the contents and to
-make the new to appear in the same Folders as the original, must traverse
-Folders to add a pointer to the new into each Folder. ADD. copy-ctor
-
-* To destroy a Message, remove it from the Folders. REMOVE. dtor.
-
-* To assign a Message, will replace the contents and remove Message from lhs
-Folder-set and add that distinct Message to rhs Folder-set. REMOVE and ADD.
-copy-assign.
-
-  *cpp-remember*
-  The copy assign often does the same work as is needed in the copy ctor and
-  dtor. In this example, REMOVE and ADD. In such case the 'common' work should
-  be put in private utility functions.
 
 
 class Message {
@@ -47800,7 +47777,7 @@ class CustomerList {
 # ============================================================================
 #{ c++ concurrent in action
 ={============================================================================
-*kt_dev_ccon_000* cpp-con-thread
+*kt_dev_cxx_0000* cxx-con-thread cxx-boost-thread
 
 <cpp-thread-build>
 
@@ -47829,6 +47806,91 @@ Aborted
 $ g++ -g -std=c++0x -pthread tthread.cpp 
 $ ./a.out 
 Hello concurrent world
+
+<ex>
+// g++ -std=c++11 -lboost_system -lboost_thread xx.cpp
+#include <queue>
+#include <iostream>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
+
+using namespace boost;
+
+template <typename T>
+class locked_queue
+{
+    public:
+        // push an item into the end of the queue
+        void push(T const &item)
+        {
+            mutex::scoped_lock lock(m_mutex);
+            m_queue.push(item);
+            // queue went from empty to one, notify a thread
+            if(m_queue.size() == 1)
+            {
+                m_notEmptyCondition.notify_one();
+            }
+        }
+
+        // pop the oldest item out of the queue
+        // blocks until there are item to be popped
+        T pop()
+        {
+            mutex::scoped_lock lock(m_mutex);
+            while(m_queue.empty() == true)
+                m_notEmptyCondition.wait(lock);
+
+            T item = m_queue.front();
+            m_queue.pop();
+            return item;
+        }
+
+    private:
+        std::queue<T> m_queue;
+        mutex m_mutex;
+        condition_variable m_notEmptyCondition;
+};
+
+
+// producer that pushes two items to a queue
+void producer(locked_queue<int> *q)
+{
+  q->push(1);
+  q->push(2);
+}
+
+// consumer that pops an item from the queue
+void consumer(locked_queue<int> *q)
+{
+  int i = q->pop();
+  std::cout << "consumer: " << i << std::endl;
+}
+
+int main()
+{
+  locked_queue<int> lq;
+
+  // std::cout << "main: starts consumers" << std::endl;
+
+  // set up two consumers to wait for items
+  thread c1(bind(&consumer, &lq));
+  thread c2(bind(&consumer, &lq));
+
+  // sleep for a second to ensure c1 and c2 are ready
+  // not the best code, but good enough for a test case
+  sleep(2);
+
+  // create the producer to push in two items
+  thread p(bind(&producer, &lq));
+
+  c1.join();
+  c2.join();
+  p.join();
+ 
+  std::cout << "main: ends" << std::endl;
+  return 0;
+}
 
 
 ={============================================================================

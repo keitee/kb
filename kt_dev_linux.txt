@@ -533,9 +533,10 @@
 *kt_linux_core_201* linux-sync-mutex
 *kt_linux_core_202* linux-sync-deadlock
 *kt_linux_core_202* linux-sync-cond
-*kt_linux_core_202* linux-sync-cond-why-cond-lpi-case
-*kt_linux_core_202* linux-sync-cond-why-cond-unp-case
-*kt_linux_core_202* linux-sync-cond-order sync-cond-spurious-wakeup
+*kt_linux_core_202* linux-sync-cond-lost-wake-up-issue
+*kt_linux_core_202* linux-sync-cond-lpi-example
+*kt_linux_core_202* linux-sync-cond-unp-example
+*kt_linux_core_202* linux-sync-cond-order linux-sync-cond-spurious-wakeup
 *kt_linux_core_202* linux-sync-cond-advanced
 *kt_linux_core_202* linux-sync-cond-examples
 *kt_linux_core_202* linux-sync-between-processes
@@ -46965,7 +46966,72 @@ pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 
 dynamically initializing mutex
 
-See LPI-30.1.5, 6
+The static initializer value PTHREAD_MUTEX_INITIALIZER can be used only for
+initializing a statically allocated mutex with default attributes. In all
+other cases, we must dynamically initialize the mutex using
+pthread_mutex_init().
+
+// note:
+// can use ptherd_mutex_init() for statically allocated mutex. see the same in
+// real code
+// https://www.ibm.com/support/knowledgecenter/en/ssw_i5_54/apis/users_61.htm
+
+pthread_mutex_t       mutex2;
+pthread_mutex_t       mutex3;
+pthread_mutexattr_t   mta;
+pthread_mutexattr_init(&mta);
+
+The following three mutex initialization mechanisms have equivalent function.
+
+pthread_mutex_t       mutex1 = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_init(&mutex2, NULL);
+pthread_mutex_init(&mutex3, &mta);
+
+All three mutexes are created with the default mutex attributes.
+
+// from man page
+In cases where default mutex attributes are appropriate, the macro
+PTHREAD_MUTEX_INITIALIZER can be used to initialize mutexes that are
+statically allocated. The effect shall  be  equivalent  to dynamic
+initialization by a call to pthread_mutex_init() with parameter attr specified
+as NULL, except that no error checks are performed.
+
+// uclibc@libpthread/linuxthreads/sysdeps/pthread/pthread.h
+
+enum
+{
+  PTHREAD_MUTEX_TIMED_NP,
+  PTHREAD_MUTEX_RECURSIVE_NP,
+  PTHREAD_MUTEX_ERRORCHECK_NP,
+  PTHREAD_MUTEX_ADAPTIVE_NP
+#ifdef __USE_UNIX98
+  ,
+  `PTHREAD_MUTEX_NORMAL = PTHREAD_MUTEX_TIMED_NP,`
+  PTHREAD_MUTEX_RECURSIVE = PTHREAD_MUTEX_RECURSIVE_NP,
+  PTHREAD_MUTEX_ERRORCHECK = PTHREAD_MUTEX_ERRORCHECK_NP,
+  PTHREAD_MUTEX_DEFAULT = PTHREAD_MUTEX_NORMAL
+#endif
+#ifdef __USE_GNU
+  /* For compatibility.  */
+  , PTHREAD_MUTEX_FAST_NP = PTHREAD_MUTEX_ADAPTIVE_NP
+#endif
+};
+
+#define PTHREAD_MUTEX_INITIALIZER \
+  {0, 0, 0, PTHREAD_MUTEX_TIMED_NP, __LOCK_INITIALIZER}
+
+/* Mutexes (not abstract because of PTHREAD_MUTEX_INITIALIZER).  */
+/* (The layout is unnatural to maintain binary compatibility
+    with earlier releases of LinuxThreads.) */
+typedef struct
+{
+  int __m_reserved;               /* Reserved for future use */
+  int __m_count;                  /* Depth of recursive locking */
+  _pthread_descr __m_owner;       /* Owner thread (if recursive or errcheck) */
+  int __m_kind;                   /* Mutex kind: fast, recursive or errcheck */
+  struct _pthread_fastlock __m_lock; /* Underlying fast lock */
+} pthread_mutex_t;
 
 
 <mutex-lockin>
@@ -47005,7 +47071,7 @@ note: ownership matters when unlock and semaphore do not
 have ownership. 
 
 
-PTHREAD_MUTEX_NORMAL *mutex-self-lock*
+PTHREAD_MUTEX_NORMAL *mutex-self-lock* *same-thread*
 
 (Self-)deadlock detection is not provided for this type of mutex. If a thread
 tries to lock a mutex that it has already locked, then 'deadlock' results. On
@@ -47014,15 +47080,16 @@ Linux, the thread deadlocks by default.
 Unlocking a mutex that is not locked or that is locked by another thread
 produces 'undefined' results. 
 
+note: Q: What does this mean?
 On Linux, both of these operations succeed for this mutex type and a
 PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
 
 
 PTHREAD_MUTEX_ERRORCHECK
 
-All three of the above scenarios cause the relevant Pthreads function to return
-an error than blocking or deadlock but 'slower' than a normal so debugging
-purpose.
+All three of the above scenarios cause the relevant Pthreads function to
+return an error than blocking or deadlock but 'slower' than a normal so
+debugging purpose.
 
 
 PTHREAD_MUTEX_RECURSIVE
@@ -47031,7 +47098,7 @@ A recursive mutex maintains the concept of a *lock-count* When a thread first
 acquires the mutex, the lock count is set to 1. Each subsequent lock operation
 by the same thread increments the lock count, and each unlock operation
 decrements the count. The mutex is released (i.e., made available for other
-    threads to acquire) only when the lock count falls to 0. 
+    threads to acquire) `only when the lock count falls to 0` 
 
 When is it useful?
 
@@ -47292,13 +47359,19 @@ Look at algorithms that assure access.
 ={============================================================================
 *kt_linux_core_202* linux-sync-cond
 
-30.2.2 Signaling and Waiting on Condition Variables
+LPI 30.2.2 Signaling and Waiting on Condition Variables
 
 int pthread_cond_signal( pthread_cond_t *cptr );
 int pthread_cond_broadcast( pthread_cond_t *cptr );
 int pthread_cond_timedwait( ... );
 
 <cond-signal-more-efficient>
+The difference between pthread_cond_signal() and pthread_cond_broadcast() lies
+in what happens if multiple threads are blocked in pthread_cond_wait(). With
+pthread_cond_signal(), we are simply guaranteed that at least one of the
+blocked threads is woken up; with pthread_cond_broadcast(), all blocked
+threads are woken up.
+
 Using pthread_cond_broadcast() always yields correct results (since all
     threads should be programmed to handle redundant and spurious wake-ups),
       but pthread_cond_signal() can be more efficient. 
@@ -47312,15 +47385,15 @@ designed to perform the exactly `same task.`
 Given these assumptions, pthread_cond_signal() can be more efficient than
 pthread_cond_broadcast(), because it `avoids` the following possibility:
 
-1. All waiting threads are awoken.
+* All waiting threads are awoken.
 
-2. One thread is scheduled first. This thread checks the state of the shared
-variable( s) (under protection of the associated mutex) and sees that there is
+* One thread is scheduled first. This thread checks the state of the shared
+variable(s) (under protection of the associated mutex) and sees that there is
 work to be done. The thread performs the required work, changes the state of
 the shared variable(s) to indicate that the work has been done, and unlocks
 the associated mutex.
 
-3. Each of the remaining threads in turn locks the mutex and tests the state
+* Each of the remaining threads in turn locks the mutex and tests the state
 of the shared variable. However, because of the change made by the first
 thread, these threads see that there is no work to be done, and so unlock the
 mutex and go back to sleep (i.e., call pthread_cond_wait() once more).
@@ -47331,32 +47404,208 @@ threads are designed to perform `different tasks` (in which case they probably
 
 
 <cond-wait>
-This is blocking on condition and ALWAYS has an associated mutex. Why?
-because both producer and consumer accesses to the shared state variable which
-is linked to that condition so should be synced. In other words, there is a
-natural association of a mutex with a condition varaible.
+The pthread_cond_wait() function blocks a thread until the condition variable
+cond is signaled.
 
-pthread_cond_wait( &nready.cond, &nready.mutex );
-
-  Do `three things`: unlock a mutex, block a calling thread until signaled,
-     and relock mutex when signaled. Releasing the mutex and blocking on the
-       condition variable are performed `atomically`.
-
-A condition variable holds no state information. It is simply a mechanism for
-communicating information about the application's state.
+ALWAYS has an associated because both producer and consumer accesses to the
+shared state variable which is linked to that condition so should be synced.
+In other words, there is a natural association of a mutex with a condition
+varaible.
 
 int pthread_cond_wait( pthread_cond_t *cptr, pthread_mutex_t* mptr);
+pthread_cond_wait( &nready.cond, &nready.mutex );
 
-<cond-can-be-lost>
-Guarantee that at least one of the blocked thread is woken up. If no thread is
-waiting, the signal is 'lost' since condition variable holds no state
-information. 
-
-Q: no cost for too many signals?
+Do `three things`: unlock a mutex, block a calling thread until signaled, and
+  relock mutex when signaled. Releasing the mutex and blocking on the
+  condition variable are performed `atomically`.
 
 
 ={============================================================================
-*kt_linux_core_202* linux-sync-cond-why-cond-lpi-case
+*kt_linux_core_202* linux-sync-cond-lost-wake-up-issue
+
+<unp-example>
+* Use two mutex; one between producers and the other between producers and
+  consumer to use a condition. Not sure how much benefit can get from this.
+
+* Producers and consumer produce or consume as many items as it could as long
+  as ther are items to use. consumer wait and producer signals ONLY when there
+  is no item
+
+* *signal-lost* Only when there is no more items, consumer and producers
+  engages in condition. There is a consumer which waits first.
+
+<lpi-example>
+* Use one mutex for producers and consumer.
+ 
+* Producers send a signal when produce each item and single consumer reads as
+  many items as items are available.
+
+* *signal-lost* Can lost some but not a problem since consumer consumes as
+  many as it could when signaled. There is a consumer which waits first.
+
+For both, although some signal can be lost, there is a thread which waits
+first and gets signaled.
+
+
+<case>
+Application calls async APIs in a short space of time and which uses mutex and
+condition variable to make it sync call fashion to other component.
+
+typedef struct
+{
+  // predicate
+  bool                   response_received;
+  SYSTEMUTIL_THR_Mutex_t mutex;
+  SYSTEMUTIL_SYNC_Cond_t cond;
+
+} GUIDE_AsyncCallbackStruct;
+
+static GUIDE_AsyncCallbackStruct f_planner_window_cond;
+
+// async call
+SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
+{
+  /* In order to make this interface reentrant create a new request with each
+   * querry of planner for the current programme instance. When this API is
+   * called simultaneously for an identical programme instance, each querry to
+   * planner shall work with the associated request and does not impact each
+   * other. 
+   */
+
+  // lock
+  GuidePrepareForAsyncCallback(&f_planner_window_cond)
+  { SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex); }
+
+  // register callback
+  GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
+      GuideProgrammeInstanceBookingPropsListener);
+
+  // wait on condition
+  GuideWaitForAsyncCallback(&f_planner_window_cond);
+  {
+    while ((asyncCallbackStruct->response_received == false) && (sys_status == SYSTEMUTIL_STATUS_OK))
+    {
+      sys_status = SYSTEMUTIL_SYNC_CondTimedWait(&asyncCallbackStruct->cond, &asyncCallbackStruct->mutex, &timeout_value);
+    }
+
+    SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex));
+  }
+}
+
+// callback
+static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_tag)
+{
+  GuideSignalCallbackReceived(&f_planner_window_cond)
+  {
+    /* Lock iterator_callback_mutex */
+    if (SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex))
+    {
+      asyncCallbackStruct->response_received = true;
+
+      /* Signal the condition variable */
+      if (SYSTEMUTIL_STATUS_OK!=SYSTEMUTIL_SYNC_CondSignal(&asyncCallbackStruct->cond));
+
+      /* Unlock iterator_callback_mutex */
+      if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex));
+    }
+  }
+}
+
+Looks fine on the face of it. However, the issue is that timeout happens when
+calls this function multiple times in a very short time space. 
+
+The log shows:
+
+// first API call (thread #01)
+^[2018:02:02 07:32:42]0946740080.938130 
+!ENTER  -G_Sess       		< F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2016 > |-> GUIDE_API_ProgrammeInstance_GetBookingProperties
+
+// wait on condition
+^[2018:02:02 07:32:42]0946740080.938333
+!ENTER  -G_Sess       		< F:GuidePrepareForAsyncCallback L:2330 > |-> GuidePrepareForAsyncCallback
+^[2018:02:02 07:32:42]0946740080.938504
+!ENTER  -G_Sess       		< F:GuideWaitForAsyncCallback L:2385 > |-> GuideWaitForAsyncCallback
+
+
+// second API call (thread #02)
+^[2018:02:02 07:32:42]0946740080.950809
+!ENTER  -G_Sess       		< F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2016 > |-> GUIDE_API_ProgrammeInstance_GetBookingProperties
+
+// wait on condition
+!ENTER  -G_Sess       		< F:GuidePrepareForAsyncCallback L:2330 > |-> GuidePrepareForAsyncCallback
+`^[2018:02:02 07:32:42]0946740080.951211`
+!ENTER  -G_Sess       		< F:GuideWaitForAsyncCallback L:2385 > |-> GuideWaitForAsyncCallback
+
+
+// first callback and signaled, asyncCallbackStruct->response_received == true
+^[2018:02:02 07:32:43]0946740081.090678 !ENTER  -PLANNER      		< F:PLANNER_BookingStatusHandler L:1515 > |-> PLANNER_BookingStatusHandler
+^[2018:02:02 07:32:43]0946740081.138914 !ENTER  -G_Sess       		< F:GuideSignalCallbackReceived L:2426 > |-> GuideSignalCallbackReceived
+^[2018:02:02 07:32:43]0946740081.138939 !EXIT   -G_Sess       		< F:GuideSignalCallbackReceived L:2450 > <-| GuideSignalCallbackReceived : return_status = 0x0
+^[2018:02:02 07:32:43]0946740081.139015 !EXIT   -PLANNER      		< F:PLANNER_BookingStatusHandler L:1574 > <-| PLANNER_BookingStatusHandler : return_status = 0x6402000
+
+
+== Here lost signal
+== // second callback and signaled, asyncCallbackStruct->response_received == true
+== ^[2018:02:02 07:32:43]0946740081.139066 !ENTER  -PLANNER      		< F:PLANNER_BookingStatusHandler L:1515 > |-> PLANNER_BookingStatusHandler
+== 
+== // gets condition, change predicate, release lock. runs after the condifion.
+== ^[2018:02:02 07:32:43]0946740081.139336 !EXIT
+== !EXIT   -G_Sess       		< F:GuideWaitForAsyncCallback L:2410 > <-| GuideWaitForAsyncCallback : return_status = 0x3c00000
+== 
+== // second callback contines
+== ^[2018:02:02 07:32:43]0946740081.171939 !ENTER  -G_Sess       		< F:GuideSignalCallbackReceived L:2426 > |-> GuideSignalCallbackReceived
+== ^[2018:02:02 07:32:43]0946740081.171962 !EXIT   -G_Sess       		< F:GuideSignalCallbackReceived L:2450 > <-| GuideSignalCallbackReceived : return_status = 0x0
+== ^[2018:02:02 07:32:43]0946740081.172035 !EXIT   -PLANNER      		< F:PLANNER_BookingStatusHandler L:1574 > <-| PLANNER_BookingStatusHandler : return_status = 0x6402000
+
+
+// exit API call
+!EXIT   -G_Sess       		< F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2435 > 
+  <-| GUIDE_API_ProgrammeInstance_GetBookingProperties : return_status = 0x3c00000
+
+
+// third API call (thread #03)
+^[2018:02:02 07:32:43]0946740081.172588 !ENTER  -G_Sess       		< F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2016 > |-> GUIDE_API_ProgrammeInstance_GetBookingProperties
+
+// wait on condition
+^[2018:02:02 07:32:43]0946740081.172956 !ENTER  -G_Sess       		< F:GuideWaitForAsyncCallback L:2385 > |-> GuideWaitForAsyncCallback
+
+
+// third callback and signaled
+^[2018:02:02 07:32:43]0946740081.177932 !ENTER  -PLANNER      		< F:PLANNER_BookingStatusHandler L:1515 > |-> PLANNER_BookingStatusHandler
+^[2018:02:02 07:32:43]0946740081.232369 !ENTER  -G_Sess       		< F:GuideSignalCallbackReceived L:2426 > |-> GuideSignalCallbackReceived
+^[2018:02:02 07:32:43]0946740081.232394 !EXIT   -G_Sess       		< F:GuideSignalCallbackReceived L:2450 > <-| GuideSignalCallbackReceived : return_status = 0x0
+^[2018:02:02 07:32:43]0946740081.232455 !EXIT   -PLANNER      		< F:PLANNER_BookingStatusHandler L:1574 > <-| PLANNER_BookingStatusHandler : return_status = 0x6402000
+
+// gets condition, change predicate, release lock. runs after the condifion.
+== 406907:NDS: ^[2018:02:02 07:32:43]0946740081.232499 !EXIT   -G_Sess       		< p:0x00000211 P:APP t:0x2c148520 T:no name M:guide_api_common.c F:GuideWaitForAsyncCallback L:2410 > <-| GuideWaitForAsyncCallback : return_status = 0x3c00000
+
+// exit API call
+^[2018:02:02 07:32:43]0946740081.233073 !EXIT   -G_Sess       		< F:GUIDE_API_ProgrammeInstance_GetBookingProperties L:2435 > <-| GUIDE_API_ProgrammeInstance_GetBookingProperties : return_status = 0x3c00000
+
+
+// 30 sec timeout happens
+^[2018:02:02 07:33:12]0946740110.953873 !WARN   -G_Sess       		< F:GuideWaitForAsyncCallback L:2398 > SYSTEMUTIL_SYNC_CondTimedWait() FAILED sys_status=0x11c2100d 
+
+
+{signal-can-be-lost} wake-up-issue
+A condition variable holds `no state information.` It is simply a mechanism
+for communicating information about the application's state. 
+
+`If no thread is waiting on the condition variable at the time` that it is
+signaled, then the signal is lost. 
+
+A thread that later waits on the condition variable will unblock only when the
+variable is signaled once more.
+
+
+Solution?
+
+* Use broadcast?
+* Use something to remember events such as queue?
+
+
+={============================================================================
+*kt_linux_core_202* linux-sync-cond-lpi-example
 
 30.2 Signaling Changes of State: Condition Variables
 
@@ -47365,14 +47614,13 @@ the main thread, and that we use a mutex-protected variable, avail, to
 represent the number of produced units awaiting consumption
 
 <without-cond-var>
-note: not a complete code since removed some to show points
+// not a complete code since removed some to show points
 
 /* LPI 30 */ threads/prod_no_condvar.c
 
 /* prod_no_condvar.c
-
-   A simple POSIX threads producer-consumer example that doesn't use a condition
-   variable.
+   A simple POSIX threads producer-consumer example that doesn't use a
+   condition variable.
 */
 
 static int avail = 0;
@@ -47404,7 +47652,7 @@ threadFunc(void *arg)
 int
 main(int argc, char *argv[])
 {
-  /* Create all threads */
+  /* Create all producer threads */
 
   totRequired = 0;
   for (j = 1; j < argc; j++) {
@@ -47435,7 +47683,7 @@ main(int argc, char *argv[])
           numConsumed);
 
       done = numConsumed >= totRequired;
-    }
+    } // while
 
     s = pthread_mutex_unlock(&mtx);
     if (s != 0)
@@ -47445,22 +47693,21 @@ main(int argc, char *argv[])
       break;
 
     /* Perhaps do other work here that does not require mutex lock */
-  }
+  } // for
 
   exit(EXIT_SUCCESS);
 }
+
 
 The above code works, but it wastes CPU time, because the main thread
 continually loops, checking the state of the variable avail.
 
 A condition variable remedies this and allows a thread to sleep (wait) until
-another thread notifies (signals) it that it must do something (i.e., that
-    some “condition” has arisen that the sleeper must now respond to).
+another thread notifies (signals) it that it must do something. 
 
 
 <with-cond-var>
 /* prod_condvar.c
-
    A simple POSIX threads producer-consumer example using a condition variable.
 */
 
@@ -47484,7 +47731,7 @@ threadFunc(void *arg)
 
     // First unlocked the mutex associated with the shared variable, and then
     // signaled the corresponding condition variable. We could have reversed
-    // these two steps; SUSv3 permits them to be done in either order.
+    // these two steps; `SUSv3 permits them to be done in either order`
 
     s = pthread_mutex_unlock(&mtx);
     if (s != 0)
@@ -47522,7 +47769,7 @@ main(int argc, char *argv[])
     if (s != 0)
       errExitEN(s, "pthread_mutex_lock");
 
-    // see *spurious-wakeup*
+    // *linux-sync-cond-spurious-wakeup*
     // We explain why the pthread_cond_wait() call is placed within a while
     // loop rather than an if statement
 
@@ -47561,21 +47808,14 @@ main(int argc, char *argv[])
 
 
 ={============================================================================
-*kt_linux_core_202* linux-sync-cond-why-cond-unp-case
+*kt_linux_core_202* linux-sync-cond-unp-example
 
-UNP-XX
+UNP-XX, Consumer and Producer
 
-Consumer and Producer: 01
--------------------------------
-Multiple producer(writing) and one consumer(reading). Once writing finishs,
-consumer get started. No sync between producer and consumer and only sync for
-  producers. So use mutex. 
-
-No sync for reading? NO for this example since reading starts after writing.
-However, need to sync reading if want to have right result while writing
-happens.  
-
-<ex>
+<ex-01> 
+// Multiple producer(writing) and one consumer(reading). Once writing finishs,
+// consumer get started. No sync between producer and consumer and only sync
+// for producers
 
 #include <stdio.h>
 #include <pthread.h>
@@ -47600,14 +47840,14 @@ Pthread_create
   fprintf( stderr, "pthread_create error(%d)", n );
 }
 
-// shared by all threads
+// shared by all threads. once set, not changed.
 int nitems;
 
 struct {
   pthread_mutex_t mutex;
   int buff[MAXNITEMS];
-  int nput;                     // next index to write
-  int nval;                     // next val to write
+  int nput;                     // *predicate* next index to write
+  int nval;                     // *predicate* next val to write
 } shared = { PTHREAD_MUTEX_INITIALIZER };
 
 void *produce(void *), *consume(void *);
@@ -47664,8 +47904,8 @@ void* produce(void* arg)
     }
 
     shared.buff[ shared.nput ] = shared.nval;
-    shared.nput++;
-    shared.nval++;
+    shared.nput++; ~
+    shared.nval++; ~
 
     pthread_mutex_unlock( &shared.mutex );
 
@@ -47711,21 +47951,16 @@ tid[-1252185280] count[4] = 163767
 consume done
 
 
-Consumer and Producer: 02
--------------------------------
-Now consumer runs at the same time and runs when there is data to read. All is
-accessing the same data and are in the 'same' mutex group. Problem is that
-when consumer has a lock and wakes up, consumer do polling or spinning to
-check data.
-
-note:
-The consumer and producer has the equal opportunity to run since it is
-'indeterminate' which thread will succeed in acquiring a lock.
-
-
-<ex>
-Uses shared mutex between producers and consumer. If items to read are ready
-then returns. Otherwise, do loops. The changes from the previous is:
+<ex-02>
+// Now consumer runs at the same time and runs when there is data to read. All
+// is accessing the same data and all are in the 'same' mutex group. Problem
+// is that when consumer has a lock and wakes up, consumer do polling or
+// spinning to check data. The consumer and producer has the equal opportunity
+// to run since it is 'indeterminate' which thread will succeed in acquiring a
+// lock.
+//
+// Uses shared mutex between producers and consumer. If items to read are
+// ready then returns. Otherwise, do loops. The changes from the previous is:
 
 int main()
 {
@@ -47770,9 +48005,10 @@ void* consume(void* arg)
   // see use of global vars; nitems and shared.buff
   for( i=0; i < nitems; i++ )
   { >
-    // polling until item i is ready
+    // polling until ith item is ready. i is current read index.
     consume_wait(i);
 
+    // check/consume
     if( shared.buff[i] != i )
       printf("con: err: buff[%d] = %d\n", i, shared.buff[i] );
   }
@@ -47783,39 +48019,10 @@ void* consume(void* arg)
 }
 
 
-Consumer and Producer: 03
--------------------------------
-For producers, do not need to wait since when have a lock meaning that it is
-time for it to do write what it need to do is to write blindly. However, for
-consumers, it is not the same as producers since it have to chceck if items are
-available to read to to its work.
+<ex-03>
+// Use condition variable
 
-That is why it has polling to check but the polling is a waste of cpu time. How
-to solve? A mutex is for locking and a cond-var is for waiting. The mutex
-provides mutual exclusion for accessing the shared variable, while the condition
-variable is used to signal changes in the variable's state.
 
-note:
--. The second example has reading and writing in the same mutex group and all
-competes with others. So reading and writing cannot run at the same time.
-
--. This example uses 'two' mutex group: one for writing and one for reading. Why
-two mutexes since there is only one reader? 
-
-This allows two things:
-
-1. Less contention and more chances to run since reading is not in the same
-mutex group. 
-
-2. Consumer wakes up when there are items to process and which do not waste a
-running slot in polling. 
-
-After all, codition variable is to reduce such waste of polling and blocking.
-
-<ex>
-
-// note: previously
-// 
 // // shared by all threads
 // int nitems;
 // 
@@ -47825,6 +48032,11 @@ After all, codition variable is to reduce such waste of polling and blocking.
 //   int nput;                     // next index to write
 //   int nval;                     // next val to write
 // } shared = { PTHREAD_MUTEX_INITIALIZER };
+
+
+// Take buff out of shared state
+// Use two mutexes for read and write. May be slightly better but not sure how
+// much.
 
 int nitems;
 int buff[MAXNITEMS];
@@ -47838,9 +48050,7 @@ struct {
 struct {
   pthread_mutex_t mutex;
   pthread_cond_t cond;
-
-  // note:
-  int ready;
+  int ready;                    // *predicate* 
 
 } nready = { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER };
 
@@ -47871,8 +48081,8 @@ void* produce(void* arg)
     pthread_mutex_lock( &nready.mutex );
 
     // "ready" is 0 and means there is no items to read. Now there is one item
-    // produced and signal cond-var. So "ready" is 'predicate' and the number of
-    // items avaialbe to read ( number of produce - number of consume ).
+    // produced and signal cond-var. So "ready" is 'predicate' and the number
+    // of items avaialbe to read ( number of produce - number of consume ).
 
     if( nready.ready == 0 )
       pthread_cond_signal( &nready.cond );
@@ -47892,14 +48102,14 @@ void* consume(void* arg)
 {
   int i;
 
-  // see use of global vars; nitems and shared.buff
+  // Q: Better if consumer reads all when has a lock? Yes, like a LPI example.
   for( i=0; i < nitems; i++ )
   { >
     // receieve cond-var
     pthread_mutex_lock( &nready.mutex );
 
-    // Always test the condition again when wakes up because *spurious-wakeups*
-    // can occur. Unlock "nready.mutex" and wait. 
+    // Always test the condition again when wakes up because
+    // *spurious-wakeups* can occur. Unlock "nready.mutex" and wait. 
 
     while( nready.ready == 0 ) 
       pthread_cond_wait( &nready.cond, &nready.mutex);
@@ -47921,91 +48131,46 @@ void* consume(void* arg)
 }
 
 
-Q: Is it possible to implement this using two mutex than using a mutex and a
-cond-var? Yes, but more contention.
-
-// Q: If change producer's handling of ready like this, is it better?
-// 
-// {
-//     // note: changed to use cond-var 
-//     // {
-//     pthread_mutex_lock( &nready.mutex );
-// 
-//     // "ready" is 0 and means there is no items to read. Now there is one item
-//     // produced and signal cond-var. So "ready" is the number of items
-//     // avaialbe to read.
-// 
-//     if( nready.ready == 0 )
-//     {
-//       nready.ready++;
-//       pthread_cond_signal( &nready.cond );
-//     }
-// 
-//     pthread_mutex_unlock( &nready.mutex );
-//     // }
-// }
-//
-// NO since other writers cannot updates nready.ready even when done writing.
-
-Q: Better if consumer reads all when has a lock? Yes, like a LPI example.
-
-
 ={============================================================================
-*kt_linux_core_202* linux-sync-cond-order sync-cond-spurious-wakeup
+*kt_linux_core_202* linux-sync-cond-order linux-sync-cond-spurious-wakeup
 
-<sync-cond-order>
+<use-cond-on-signal-side>
 LPI and UNP uses different call order of _mutex_unlock and _cond_signal.
 
 POSIX recommends the followings although SUSv3 permits them to be done in
 either order and LPI said this may yieid `better performance`:
 
+s = pthread_mutex_unlock(&mtx);
+s = pthread_cond_signal(&cond);
+
+or
+
+s = pthread_cond_signal(&cond);
+s = pthread_mutex_unlock(&mtx);
+
+
 30.2.2 Signaling and Waiting on Condition Variables
 
 [Butenhof, 1996] points out that, on some implementations, unlocking the mutex
 and then signaling the condition variable may yield better performance than
-  performing these steps in the reverse sequence. If the mutex is unlocked
-  only after the condition variable is signaled, the thread performing
-  pthread_cond_wait() may wake up while the mutex is still locked, and then
-  immediately go back to sleep again when it finds that the mutex is locked.
-  This results in two superfluous context switches. Some implementations
-  eliminate this problem by employing a technique called wait morphing, which
-  moves the signaled thread from the condition variable wait queue to the
-  mutex wait queue without performing a context switch if the mutex is locked.
+  performing these steps in the reverse sequence. 
 
+If the mutex is unlocked only after the condition variable is signaled, the
+thread performing pthread_cond_wait() may wake up while the mutex is still
+locked, and then immediately go back to sleep again when it finds that the
+mutex is locked. This results in two superfluous context switches. Some
+implementations eliminate this problem by employing a technique called wait
+morphing, which moves the signaled thread 
 
-<ex> redundant wakeup
-pthread_mutex_lock( &nready.mutex );
-
-if( nready.ready == 0 )
-   pthread_cond_signal( &nready.cond );
-
-nready.ready++;
-
-pthread_mutex_unlock( &nready.mutex );
-
-
-<ex>
-{
-  avail++;        /* Let consumer know another unit is available */
-
-  // First unlocked the mutex associated with the shared variable, and then
-  // signaled the corresponding condition variable. We could have reversed
-  // these two steps; SUSv3 permits them to be done in either order.
-
-  s = pthread_mutex_unlock(&mtx);
-  if (s != 0)
-    errExitEN(s, "pthread_mutex_unlock");
-
-  s = pthread_cond_signal(&cond);         /* Wake sleeping consumer */
-  if (s != 0)
-    errExitEN(s, "pthread_cond_signal");
-}
+  from `the condition variable wait queue` to `the mutex wait queue`
+  
+without performing a context switch if the mutex is locked.
 
 
 <ex> 
-We should always set variable first and then signal the change to other tasks,
-   not the other way round. Although here it is done under locked mutex, which
-   makes it safe, however it is still worth following a good practice.
+Should always set variable first and then signal the change to other tasks,
+not the other way round. Although here it is done under locked mutex, which
+makes it safe, however it is still worth following a good practice.
 
 from:
     g_mutex_lock(&writer->mutex);
@@ -48015,7 +48180,7 @@ from:
         {
             g_cond_signal(&writer->cond);
         }
-        writer->writer_thread = NULL;
+        `writer->writer_thread = NULL;`
     }
     g_mutex_unlock(&writer->mutex);
 
@@ -48025,17 +48190,14 @@ to:
         old_thread = writer->writer_thread;
         if (old_thread)
         {
-            writer->writer_thread = NULL;
+            `writer->writer_thread = NULL;`
             g_cond_signal(&writer->cond);
         }
     }
     g_mutex_unlock(&writer->mutex);
 
-note: This is spurious wakeup since requires to check the predicate,
-  "writer_thread".
 
-
-<check-on-predicate> <spurious-wakeups>
+<use-cond-on-wait-side> <spurious-wakeups>
 
 30.2.3 Testing a Condition Variable’s Predicate
 
@@ -48051,8 +48213,9 @@ Because, on return from pthread_cond_wait(), that is when signaled, there are
 immediately `recheck` the predicate and resume sleeping if it is not in the
 desired state. 
 
-So use while-loop always to test the condition again when wakes up because
-spurious wakeups can occur for following reasons:
+So use while-loop always to test the condition again when wakes up because we
+can’t make any assumptions about the state of the predicate upon return from
+pthread_cond_wait(), including spurious wakeups, for following reasons:
 
   while (avail == 0) {            /* Wait for something to consume */
     s = pthread_cond_wait(&cond, &mtx);
@@ -48070,22 +48233,20 @@ spurious wakeups can occur for following reasons:
     first and change the state of the associated shared variable(s), and thus
     the state of the predicate.
 
-    note: Likely when there are more readers
-
   * Designing for "loose" predicates may be simpler. Sometimes, it is easier
     to design applications based on condition variables that indicate
-    'possibility' rather than 'certainty'. In other words, signaling a
-    condition variable would mean "there may be something" for the signaled
-    thread to do rather than "there is something" to do. Using this approach,
-    the condition variable can be signaled based on approximations of the
-    predicate's state, and the signaled thread can ascertain if there really
-    is something to do by rechecking the predicate.
+    `possibility rather than certainty` In other words, signaling a condition
+    variable would mean "there may be something" for the signaled thread to do
+    rather than "there is something" to do. Using this approach, the condition
+    variable can be signaled based on approximations of the predicate's state,
+    and the signaled thread can ascertain if there really is something to do
+    by rechecking the predicate.
 
   * Spurious wake-ups can occur. On some implementations, a thread waiting on
     a condition variable may be woken up even though no other thread actually
     signaled the condition variable. Such spurious wake-ups are a (rare)
-  consequence of the techniques required for efficient implementation on some
-  multiprocessor systems, and are explicitly 'permitted' by SUSv3.
+    consequence of the techniques required for efficient implementation on
+    some multiprocessor systems, and are explicitly 'permitted' by SUSv3.
 
 
 ={============================================================================
@@ -48093,32 +48254,6 @@ spurious wakeups can occur for following reasons:
 
 Advanced thread-synchronization primitives: These facilities include barriers,
 readwrite locks, and spin locks.
-
-
-={============================================================================
-*kt_linux_core_202* sync-cond: compare two examples
-
-<UNP>
-- Two mutex. One for producer and the other for consumer and cond-var.
-
-- Producers can produce in producer mutex and make a signal only when there was
-no item for consumer to use. Producer is in consumer mutext for short time to
-signal or update predicate.
-
-- Single consumer reads as many item as it can. 
-
-note: Looks that this approach would increase chances of running producer and
-consumer concurrently. 
-
-<LPI>
-- One mutex for producer, consumer, and cond-var.
-
-- Producers make a signal for each item produced. 
-
-- Single consumer reads as many item as it can. 
-
-note: Since consumer reads as many as it can, some signal gets lost and not
-used.
 
 
 ={============================================================================
@@ -48325,12 +48460,11 @@ shared in a shared memory, these can be used between processes. If not, it is
 for threads in a process.
 
 In {ref-LPI} p881, process-shared mutexes and condition variables. They are
-'not' available on all UNIX systems, and so are not commonly employed for
-process synchronization.
+  'not' available on all UNIX systems, and so are not commonly employed for
+  process synchronization.
 
 note: As said, if share mutex structure in shared memory, then what is
 process-shared mutex?
-
 
 
 {implicit-sync}
@@ -48339,15 +48473,12 @@ message-q. For example,
 
 grep pattern chapters.* | wc -l
 
-Writing by producer and reading by consumer are handled by kernel. Does it mean
-that grep and wc runs at the same time? not one after one.
+Writing by producer and reading by consumer are handled by kernel. Does it
+mean that grep and wc runs at the same time? not one after one.
 
 
 ={============================================================================
-*kt_linux_core_202* linux-sync-between-processes
-
-==============================================================================
-*kt_linux_core_220*	sync: read-write lock
+*kt_linux_core_202* sync: read-write lock
 
 From {ref-UNP} but no such a thing in {ref-LPI}, so may be old way but surely in posix but may be
 different to this since this lock is before posix standard. See {ref-UNP} note.
