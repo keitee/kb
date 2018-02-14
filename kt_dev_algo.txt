@@ -91,7 +91,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_glib_003| itoa
 |kt_dev_glib_004| printf
 |kt_dev_glib_005| qsort
-|kt_dev_glib_006| tail
+|kt_dev_glib_006| glib-tail
 |kt_dev_glib_007| fopen
 |kt_dev_glib_008| isdigit
 |kt_dev_glib_010| abs
@@ -19506,7 +19506,7 @@ int strcmp_f(char *s, char *t)
 
 
 ={============================================================================
-*kt_dev_glib_006* tail
+*kt_dev_glib_006* glib-tail
 
 <ex> *ex-tail* *ex-interview*
 A question of google first phone screening.
@@ -19802,154 +19802,140 @@ int main(int argc, char *argv[])
 }
 
 
-<3> C++ version
-#include <iostream>
-#include <string>
-#include <fstream>   // for ifstream
-#include <vector>
-
-using namespace std;
-
-const int MAXLINE=10;
-
-// tail filename
-int main(int argc, char* argv[] )
-{
-  vector<string> file;
-
-  if( argc != 2 )
-  {
-    cerr << "usuage: tail filename" << endl;
-    exit(1);
-  }
-
-  std::ifstream ifs( argv[1], std::ifstream::in );
-
-  for( int i = 0; i < MAXLINE; i++ )
-    file.push_back( string() );
-
-  string line;
-  int lines = 0, totalLines = 0;
-
-  // read lines
-  while( getline(ifs, line) )
-  {
-    cout << "read:" << lines << ":" << line << endl;
-    file[lines] = std::move(line);
-    totalLines++;
-    lines++;
-    lines = lines % MAXLINE;
-    // lines = ++lines % MAXLINE;   // note: okay
-    // lines = lines++ % MAXLINE;   // note: cause seg fault <TODO> needs to find out more
-  }
-
-  // write lines
-  // note: this do not work when more than MAX
-  for( int i = 0; i < MAXLINE; i++ )
-  {
-    if( (totalLines < MAXLINE) && !file[lines].empty() )
-      cout << "write:" << lines << ":" << file[lines] << endl;
-
-    lines++;
-    lines = lines % MAXLINE;
-  }
-
-  ifs.close();
-}
-
-<4> corrected version
-* Can use argv for vector creation and uses the fixed value for simplicity.
-* Used read line count only and the key is that write loop is used only to use
-  the number of loop. Not use loop index value.
-* See how C++ code is simpler than C.
+<ex> C++ version *cxx-modulus*
 
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <vector>
 
-const int MAXLINE = 10;
+// * Can use argv for MAXSIZE but uses the fixed value for simplicity.
+// * See how C++ is simpler than C.
+// *TN* there shall be elements before using [] access operator.
 
-int main( int argc, char* argv[] )
+// output:
+// (4) Please see http://www.gnu.org/software/libc/bugs.html for bug reporting
+// (5) information.  We are now using the Bugzilla system to track all bug reports.
+// (6) This web page gives detailed information on how to report bugs properly.
+// (7)
+// (8) The GNU C Library is free software.  See the file COPYING.LIB for copying
+// (9) conditions, and LICENSES for notices about a few contributions that require
+// (0) these additional notices to be distributed.  License copyright years may be
+// (1) listed using range notation, e.g., 2000-2013, indicating that every year in
+// (2) the range, inclusive, is a copyrightable year that would otherwise be listed
+// (3) individually.
+
+// no reverse() and push_back() in while
+void tail_01()
 {
-  // Assumes 10 lines and get filename from arg
-  if( argc != 2 )
-  {
-    exit(EXIT_FAILURE);
-  }
+    using namespace std;
 
-  std::vector<std::string> inputFile;
-  std::ifstream streamFile( argv[1], std::ifstream::in );
-  std::string Line;
-  int readCount=0;
+    vector<string> svec;
+    ifstream ifs{"README", ifstream::in};
+    string line;
 
-  for(int n=0; n < MAXLINE; n++)
-    inputFile.push_back( std::string() );
+    // assume that this tail supports 10 lines
+    const size_t MAXLINE = 10;
 
-  while(getline(streamFile, Line))
-  {
-    // `copy-version` but do not work.
-    // inputFile.push_back( std::string(Line) );
-    
-    // `copy-version`
-    // inputFile[readCount] = Line;
+    size_t current_line = 0;
 
-    // `move-version`
-    // inputFile[readCount] = std::move(Line);
+    while (getline(ifs, line))
+    {
+        if (current_line < MAXLINE)
+            svec.push_back(line);
+        else
+            svec[current_line % MAXLINE] = line;
 
-    readCount = (readCount+1) % MAXLINE;
-  }
+        ++current_line;
+    }
 
-  for(int n=0; n < MAXLINE; n++)
-  {
-    if(!inputFile[readCount].empty())
-      std::cout << readCount << ":" << inputFile[readCount] << std::endl;
+    // print out MAXLINE after the last written
+    for (size_t i = 0; i < MAXLINE; ++i)
+    {
+        current_line %= MAXLINE;
 
-    readCount = (readCount+1) % MAXLINE;
-  }
+        cout << "(" << current_line << ") " << svec[current_line] << endl;
 
-  streamFile.close();
-
-  exit(EXIT_SUCCESS);
+        ++current_line;
+    }
 }
 
+// reserve()
+void tail_02()
+{
+    using namespace std;
 
-kt@kt-ub-vb:~/work$ cat inputless.txt 
-1: this is one
-2: this is two
-3: this is three
-4: this is four
-5: this is five
-6: this is six
-7: this is seven
-8: this is eight
+    vector<string> svec;
+    ifstream ifs{"README", ifstream::in};
+    string line;
 
-kt@kt-ub-vb:~/work$ cat inputmore.txt 
-1: this is one
-2: this is two
-3: this is three
-4: this is four
-5: this is five
-6: this is six
-7: this is seven
-8: this is eight
-9: this is nine
-10: this is ten
-11: this is ten+1
-12: this is ten+2
+    // assume that this tail supports 10 lines
+    const size_t MAXLINE = 10;
 
+    // reads input
+    // * makes a vector available by adding empty strings and which simplify code
+    //   to read a file.
+    svec.reserve(MAXLINE);
 
-={============================================================================
-*kt_dev_glib_007* fopen
+    for (size_t i = 0; i < MAXLINE; ++i)
+        svec.push_back(string());
 
-fopen works for all:
+    size_t current_line = 0;
 
-char fname1[] = "./input.txt";
-char fname2[] = ".//input.txt";
-char fname3[] = ".///input.txt";
-char fname4[] = "./if/comp.sh";
-char fname5[] = "./if//comp.sh";
-char fname6[] = "./if///comp.sh";
+    while (getline(ifs, line))
+    {
+        svec[current_line % MAXLINE] = line;
+        ++current_line;
+    }
+
+    // print out MAXLINE after the last written
+    for (size_t i = 0; i < MAXLINE; ++i)
+    {
+        current_line %= MAXLINE;
+
+        cout << "(" << current_line << ") " << svec[current_line] << endl;
+
+        ++current_line;
+    }
+}
+
+// move version
+void tail_03()
+{
+    using namespace std;
+
+    vector<string> svec;
+    ifstream ifs{"README", ifstream::in};
+    string line;
+
+    // assume that this tail supports 10 lines
+    const size_t MAXLINE = 10;
+
+    // reads input
+    // * makes a vector available by adding empty strings and which simplify code
+    //   to read a file.
+    svec.reserve(MAXLINE);
+
+    for (size_t i = 0; i < MAXLINE; ++i)
+        svec.push_back(string());
+
+    size_t current_line = 0;
+
+    while (getline(ifs, line))
+    {
+        svec[current_line % MAXLINE] = std::move(line);
+        ++current_line;
+    }
+
+    // print out MAXLINE after the last written
+    for (size_t i = 0; i < MAXLINE; ++i)
+    {
+        current_line %= MAXLINE;
+
+        cout << "(" << current_line << ") " << svec[current_line] << endl;
+
+        ++current_line;
+    }
+}
 
 
 ={============================================================================
