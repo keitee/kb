@@ -38807,6 +38807,136 @@ int main(int argc, char* argv[] )
 }
 
 
+<ex>
+#!/bin/sh
+#
+# 'logfile-monitor.sh' checks periodically (every $INTERVAL seconds) if there
+# has been a change to the debug log file size. If there hasn't (which might be
+# indicative of a process stuck in a tight loop) then it will kill the MW, APP,
+# and CA processes to obtain their core files.
+#
+# The script will not kill the SCD process: PWM receives a SIGCHLD signal when
+# SCD (its child process) dies which causes it to restart the STB. There is
+# also a software watchdog which would eventually trigger.
+#
+# Before killing the processes the script will capture the output of the 'ps'
+# and 'top' commands in files 'PS.TXT' and 'TOP.TXT', respectively. Those files
+# will be uploaded automatically as part of the logs and will be available on
+# the respective log parser page.
+#
+# The script also creates two empty files, FORCED.TXT and AUTOKILL.TXT, which
+# will enable the log parser to mark the logs appropriately.
+#
+# After having been triggered and successfully done the above, the script will
+# (where it is supported) flash the STB's front panel indicators in one second
+# intervals.
+#
+# The process killing sequence can also be triggered manually by logging onto
+# the STB and sending signal SIGHUP to the script, like this:
+#
+# -sh-3.2# kill -s 1 $(pidof logfile-monitor.sh)
+#
+# (Note that it might take up to $INTERVAL seconds before the script responds.)
+#
+# <michael.petzold@sky.uk>
+# Version: 22/03/2017
+###############################################################################
+
+HANGUP_RECEIVED=false
+trap 'HANGUP_RECEIVED=true' SIGHUP
+
+# Function: Manipulate the STB's front panel lights; call with 1=on or 0=off
+set_fpi() {
+    for index in $(seq 0 6); do
+        /usr/bin/cdi-fpi $index $1 1
+    done
+}
+
+# Function: Flash the STB's front panel lights
+blink_fpi() {
+    if [ -x /usr/bin/cdi-fpi ]; then
+        while true; do
+            set_fpi 1
+            sleep 1
+            set_fpi 0
+            sleep 1
+        done
+    fi
+}
+
+# Wait for all the processes to start (also, the new log file doesn't exist yet
+# at this point)
+sleep 330
+
+# Get mount point (this will set FSN_DATAPATH)
+. /usr/bin/bootlog-fsn_data-config.sh
+[ -n "${FSN_DATAPATH}" ] || exit 1
+
+# Work out the PID for the PWM process; we need this for the LOG file name
+PID_PWM=$(pidof PWM_Process)
+[ $? = 0 ] || exit 1
+
+# Find the log file (diag bin only)
+LOGFILE=${FSN_DATAPATH}/P${PID_PWM}.CUR
+[ -f ${LOGFILE} ] || exit 1
+
+PREV_LOGFILE_SIZE=0
+INTERVAL=60
+
+while true; do
+    # Get the current log file size
+    CUR_LOGFILE_SIZE=$(ls -l ${LOGFILE} | awk '{print $5}')
+
+    # Calculate diff between current and previous log file sizes
+    DIFF=$(expr ${CUR_LOGFILE_SIZE} - ${PREV_LOGFILE_SIZE})
+
+    # If no size change, kill off the processes to create core files and exit
+    # (Note that $DIFF might be negative if the log has just been auto-rotated)
+    if [ $DIFF -eq 0 -o "${HANGUP_RECEIVED}" = "true" ]; then
+
+        # Take a snapshot of the processes
+        ps auxf >${FSN_DATAPATH}/PS.TXT
+        top -b -n 1 >${FSN_DATAPATH}/TOP.TXT
+
+        # Work out the PIDs for the processes to be killed
+        PID_MW=$(pidof MW_Process)
+        [ $? = 0 ] || PID_MW=0
+        PID_APP=$(pidof APP_Process)
+        [ $? = 0 ] || PID_APP=0
+        PID_CA=$(pidof CA_Process)
+        [ $? = 0 ] || PID_CA=0
+
+        # If one of the processes was already dead (and hence probably the
+        # reason that the log has stopped) we don't want to kill the remaining
+        # processes in order not to change the failure symptoms
+        if [ ${PID_MW} = 0 -o ${PID_APP} = 0 -o ${PID_CA} = 0 ]; then
+            exit 0
+        fi
+
+        # Kill the processes to generate core files; use SIGSEGV (11)
+        for PID in ${PID_MW} ${PID_APP} ${PID_CA}; do
+            while (ps $PID >/dev/null) && !(ps $PID | grep -qi "<defunct>"); do
+                kill -s 11 $PID
+                sleep 10
+            done
+        done
+
+        # These are not 'natural' crash dumps
+        touch ${FSN_DATAPATH}/FORCED.TXT
+        touch ${FSN_DATAPATH}/AUTOKILL.TXT
+
+        # Flash the STB's front panel lights to indicate what has happened
+        sleep 60
+        blink_fpi
+        exit 0
+    else
+        PREV_LOGFILE_SIZE=${CUR_LOGFILE_SIZE}
+        # Wait for a bit & then loop again
+        sleep $INTERVAL
+    fi
+done
+
+
 ={============================================================================
 *kt_linux_core_110* linux-process-exec-system-call
 
