@@ -125,6 +125,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-fdm
 |kt_dev_si_0001| comp-pshed
 |kt_dev_si_0001| comp-pdm comp-storage
+|kt_dev_si_0001| comp-disk-check
 |kt_dev_si_0001| comp-player
 |kt_dev_si_0001| comp-sharedplanner
 |kt_dev_si_0001| comp-planner
@@ -1730,7 +1731,7 @@ pi@raspberrypi /srv/ftp/upload $ pwd
 783e533494c2_1505797761_IFCONFIG.LOG  783e533494c2_1505797761_MPROFMWS.CSV  783e533494c2_1505797761_P582.CUR      783e533494c2_1505797761_REMBOOK.DB
 
 
-3. Use icron to run script whenever file uploads happens.
+3. Use icron to run script whenever file uploads to pi occurs.
 
 pi@$ incrontab -l
 /srv/ftp/upload IN_CLOSE_WRITE /home/pi/snugupdate-v2-snugberrypi/stblog.sh $@/ $#
@@ -10498,7 +10499,7 @@ SYSTEM_STATUS PLAYER_API_Session_StopLiveReservation(PLAYER_API_SessionHandle se
 >>> -(2**32-0x88000001)
 -2013265919
 
-> T:PooledExecutor#3:PlayerEvent > oP@5a8d508 ID > -2013265919
+!MIL    -EPG_PLAY > T:PooledExecutor#3:PlayerEvent > oP@5a8d508 ID > -2013265919
 >
 (iapp) FSION-DSN-1642-WP108_Interactive_Application_Conflicts.doc
 
@@ -20460,7 +20461,7 @@ To mound /dev/sda
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-pdm-disk-check
+|kt_dev_si_0001| comp-disk-check
 
 2. badblocks -nsv /dev/sda
 
@@ -20474,6 +20475,8 @@ https://wiki.archlinux.org/index.php/badblocks
 
 NOTE: Do not select write in case of badblocks testing ... it may overwrite
 the HDD contents.
+
+<comp-disk-smartctl>
 
 
 ={============================================================================
@@ -21011,7 +21014,7 @@ unsigned.
 '0x80200020'
 
 
-*app-register-listener*
+*app-register-listener* *player-event*
 
 // /Picasso/src/java/picasso/mediaengine/PlayerEventPump.java
 public void registerWithMiddleware(PlayerSession playerSession)
@@ -25086,6 +25089,207 @@ DARWIN_PLATFORM/DARWIN_PREFS/src/server/prefs_api_terminal.c
 static PREFS_OP_MODE_TRANSITION_T operating_mode_sm[] =
 
 
+<hdcp-event-player-event>
+
+// PREFS -> EPG
+//
+// build/applications/Picasso/picasso/Picasso/src/java/picasso/mediaengine/HdcpEventPump.java
+
+	public HdcpEventPump(IExecutor executor, MediaEngine mediaEngine)
+	{
+		this.executor = executor;
+		this.mediaEngine = mediaEngine;
+	}
+
+	public void registerWithMiddleware(PrefsSession prefsSession)
+	{
+		PrefsTerminal prefsTerminal = prefsSession.getTerminal();
+		`prefsTerminal.registerHdmiStateListener(this);`
+	}
+
+	@Override public void notifyChange(final int hdmiState)
+	{
+		/* logger.logInfo("HDCP / HDMI status is now: " + hdmiState); */
+
+		executor.runLater(new Runnable()
+		{
+			@Override public void run()
+			{
+				mediaEngine.onHdcpEvent(hdmiState);
+            
+			}
+		});
+	}
+
+   /** An Active HDMI Sink has been detected, but AV is not being transmitted. */
+   /** HDCP authentication has failed and been acknowledged by the user. */
+   /** HDCP authentication is not being retried. */
+   int HDCP_NOT_AVAILABLE = 5;
+
+   /** Transition message from state STATE_HDCP_NOT_AVAILABLE */
+   int HDCP_NOT_AVAILABLE_MESSAGE = 6;
+
+   /** HDCP Error: An Active HDMI Sink has been detected and AV is being transmitted unencrypted.  */
+   /** HDCP authentication is being retried once per second, unless a revocation error was received. */
+   int HDCP_ERROR = 7;
+
+   /** HDCP Revocation: An Active HDMI Sink has been detected and AV is being transmitted unencrypted. */
+   /** HDCP authentication is not being retried. */
+   int HDCP_REVOCATION = 8;
+
+
+   // The EPG shows that dialog on receipt of this event > 
+   // PrefsHdmiStateListener.HdmiStates.HDCP_NOT_AVAILABLE
+   //
+   // On receipt of either of these events >
+   // PrefsHdmiStateListener.HdmiStates.HDCP_REVOCATION:
+   // PrefsHdmiStateListener.HdmiStates.HDCP_ERROR:
+   // the dialog is removed.
+
+	public void onHdcpEvent(int event)
+	{
+		switch (event)
+		{
+			case PrefsHdmiStateListener.HdmiStates.HDCP_AUTHENTICATING:
+				break;
+
+			case PrefsHdmiStateListener.HdmiStates.HDCP_DISABLED:
+			case PrefsHdmiStateListener.HdmiStates.HDCP_ENCRYPTING:
+			case PrefsHdmiStateListener.HdmiStates.HDMI_NOT_AVAILABLE:
+			case PrefsHdmiStateListener.HdmiStates.HDMI_OFF:
+			case PrefsHdmiStateListener.HdmiStates.HDCP_NOT_AVAILABLE:
+				announcer.doHDCP(true);
+				break;
+			case PrefsHdmiStateListener.HdmiStates.HDCP_REVOCATION:
+			case PrefsHdmiStateListener.HdmiStates.HDCP_ERROR:
+				announcer.doHDCP(false);
+				break;
+			default:
+      }
+   }
+
+// THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso/tvviewingmgr/fullscreen/FullScreenController.java
+	{
+		if (isHdcpOK)
+		{
+			removeHDCPDialog();
+		}
+		else
+		{
+			createHDCPDialog();
+		}
+	}
+
+
+// build/applications/Picasso/picasso/jpa/modules/jpa-impl/src/java/com/nds/fusion/prefsimpl/PrefsTerminalImpl.java
+	@Override public void registerHdmiStateListener(PrefsHdmiStateListener hdmiStateListener)
+	{
+		synchronized (synchronizationObject)
+		{
+			natPrefsAPITerminalRegisterHdmiStateListener(nativeHandle, hdmiStateListeners.registerNew(hdmiStateListener));
+		}
+	}
+
+JNIEXPORT void JNICALL Java_com_nds_fusion_prefsimpl_PrefsTerminalImpl_natPrefsAPITerminalRegisterHdmiStateListener
+    SYSTEM_STATUS status = PREFS_API_TERMINAL_RegisterHdmiStateListener((PREFS_API_TerminalHandle) native_handle,
+            hdmiStateCallback, callback_id);
+
+
+void PREFS_TERMINAL_callHdmiStateListener(PREFS_API_TerminalHandle terminal_handle,
+                                          PREFS_API_TERMINAL_HdmiState state,
+                                          bool auto_reply)
+{
+  for (i=0U; i< PREFS_API_MAX_NUM_HDMI_STATE_LISTENER; i++)
+  {
+    /* In this case only the listener of the terminal_handle has to be called */
+    if (auto_reply == true)
+    {
+      if (f_PREFS_API_RegisterHdmiStateListeners[i].handle == terminal_handle)
+      {
+        if (f_PREFS_API_RegisterHdmiStateListeners[i].listener != NULL)
+        {
+          f_PREFS_API_RegisterHdmiStateListeners[i].listener(state, f_PREFS_API_RegisterHdmiStateListeners[i].user_tag);
+        }
+        break;
+      }
+    }
+    else
+    {
+      if (f_PREFS_API_RegisterHdmiStateListeners[i].handle != PREFS_API_REGISTER_LISTENER_ILLEGAL_HANDLE)
+      {
+        if ( (f_PREFS_API_RegisterHdmiStateListeners[i].listener != NULL) &&
+            (f_PREFS_API_RegisterHdmiStateListeners[i].last_notified_hdmi_state != state) )
+        {
+          f_PREFS_API_RegisterHdmiStateListeners[i].last_notified_hdmi_state = state;
+          f_PREFS_API_RegisterHdmiStateListeners[i].listener(state, f_PREFS_API_RegisterHdmiStateListeners[i].user_tag);
+        }
+      }
+    }
+  }
+}
+
+
+/**
+ @brief Terminal object property hdmi state identifiers
+*/
+typedef enum prefs_api_terminal_hdmi_state
+{
+	PREFS_API_TERMINAL_HDMI_STATE_UNDEF                         =0U,
+	/* Undefined value. */
+	PREFS_API_TERMINAL_HDMI_STATE_HDMI_OFF                      =1U,
+	/**<  The HDMI Output Port is Disabled. */
+	PREFS_API_TERMINAL_HDMI_STATE_HDMI_NOT_AVAILABLE            =2U,
+	/**<  The HDMI Output Port is Enabled. Waiting for an Active HDMI Sink Device to be attached and powered. */
+	PREFS_API_TERMINAL_HDMI_STATE_HDCP_DISABLED                 =3U,
+	/**<  An Active HDMI Sink has been detected and AV is being transmitted unencrypted.
+          HDCP may be disabled or authenticating. */
+	PREFS_API_TERMINAL_HDMI_STATE_HDCP_ENCRYPTING               =4U,
+	/**<  An Active HDMI Sink has been detected and AV is being transmitted encrypted using HDCP. */
+	PREFS_API_TERMINAL_HDMI_STATE_HDCP_NOT_AVAILABLE            =5U,
+	/**<  An Active HDMI Sink has been detected, but AV is not being transmitted.
+          HDCP authentication has failed and been acknowledged by the user.
+          HDCP authentication is not being retried.
+          PREFS_API_TERMINAL_PROPID_UINT32_HDCP_NOT_AVAILABLE_TIMER indicates the time to remain in ��HDCP Not Available (Initial)�� state */
+	PREFS_API_TERMINAL_HDMI_STATE_HDCP_NOT_AVAILABLE_MESSAGE    =6U,
+	/**<  Transitionning message state from STATE_HDCP_NOT_AVAILABLE
+          If PREFS_API_TERMINAL_PROPID_UINT32_HDCP_NOT_AVAILABLE_TIMER is 0, never transit to ��HDCP Not Available message' */
+	PREFS_API_TERMINAL_HDMI_STATE_HDCP_ERROR                    =7U,
+	/**<  HDCP Error - An Active HDMI Sink has been detected and AV is being transmitted unencrypted.
+                       HDCP authentication is being retried once per second, unless a revocation error was received. */
+	PREFS_API_TERMINAL_HDMI_STATE_HDCP_REVOCATION               =8U,
+	/**<  HDCP Revocation - An Active HDMI Sink has been detected and AV is being transmitted unencrypted.
+                            HDCP authentication is not being retried. */
+	PREFS_API_TERMINAL_HDMI_STATE_HDCP_AUTHENTICATING           =9U,
+	/**<  HDCP Authenticating - An Active HDMI Sink has been detected and AV is being transmitted unencrypted.
+                                HDCP is authenticating. */
+	PREFS_API_TERMINAL_HDMI_STATE_LAST_VALUE                    =10U
+	/* Last Value */
+} PREFS_API_TERMINAL_HdmiState;
+
+
+!MIL    -P_Api        		< p:0x0000017e P:APP t:0x0131c520 T:PLAYER_MAIN M:player_common.c F:PLAYER_PrefsHDMIStateListenerHandlerSessionAction L:7057 > Received HDMI State PREFS_API_TERMINAL_HDMI_STATE_HDCP_NOT_AVAILABLE 
+!WARN   -P_Api        		< p:0x0000017e P:APP t:0x0131c520 T:PLAYER_MAIN M:player_common.c F:PLAYER_PrefsHDMIStateListenerHandlerSessionAction L:7064 > Context is not supported by HDMI state handler. 
+!MIL    -P_Api        		< p:0x0000017e P:APP t:0x0131c520 T:PLAYER_MAIN M:player_common.c F:PLAYER_PrefsHDMIStateListenerHandlerSessionAction L:7057 > Received HDMI State PREFS_API_TERMINAL_HDMI_STATE_HDCP_NOT_AVAILABLE 
+
+// DARWIN_PLATFORM/DARWIN_PLAYER/src/player_common.c
+
+static void *MessageThread(void * param)
+{
+  PLAYER_PrefsHDMIStateListenerHandler(l_payload_struct->data.prefs.event.hdmi_state, l_payload_struct->data.prefs.g_user_tag)
+  {
+    (void) PLAYER_Context_AllContextsAction(PLAYER_PrefsHDMIStateListenerHandlerSessionAction, (void*) &l_hdmi_state);
+  }
+}
+
+static void PLAYER_PrefsHDMIStateListener(PREFS_API_TERMINAL_HdmiState hdmi_state, uint32_t user_tag)
+
+else if (PREFS_API_TERMINAL_RegisterHdmiStateListener(g_player_component.terminal_handle, PLAYER_PrefsHDMIStateListener, g_player_component.prefs_session) != PREFS_API_STATUS_OK)
+
+
+4993:NDS: ^[2018:02:14 14:07:09]0946685343.063136 !WARN   -BEM          		< p:0x0000017c P:MW t:0x018b7520 T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdmiAndStatus L:2507 > Starting HDCP retry - set alarm 500 ms, hdcp_failed_count 0 
+5003:NDS: ^[2018:02:14 14:07:09]0946685343.903056 !MIL    -BEM          		< p:0x0000017c P:MW t:0x018b7520 T:BEM_INTERNAL_EVENT_THREAD M:bem_internal_event.c F:BEM_InternalEvent_CheckHdmiAndStatus L:2389 > Authentication/encryption failed [events: HDMI_EVENT_CP_KSV_INVALID (0x800000), hdcp_status: HDMI_STATUS_NOT_AUTHENTICATED_KSV_INVALID (0x3)] 
+
+
 ={============================================================================
 |kt_dev_si_0001| comp-systemobject
 
@@ -28335,6 +28539,16 @@ int AUTO_STANDBY_ID                                       = 1162;
 	int END_OF_RECORDING_ID                                              = 1009;
 		register(dialog(IDialogID.END_OF_RECORDING_ID).with(textContent().instruction(BACKUP_TO_RETURN)
 				.textStrings("End of programme")
+<dialog-1020>
+		register(dialog(IDialogID.HDCP_NOT_SUPPORTED_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.FYI)
+						.textStrings("This display does not support HDCP\nGo to skyviewinghelp.com for further information\nPlease disconnect your HDMI connection")
+						.instruction(BACKUP_TO_CANCEL))
+				.with(behaviour().primaryPriority(IPrimaryPriority.SYSTEM)
+						.secondaryPriority(ISecondaryPriority.SYSTEM)
+						.flags(DISPLAY_IN_PIG | MODAL | PERSISTENT | HIDE_VIDEO)
+						.actions(BACKUP_BACKUP)
+						.screenLayer(IScreenLayer.TV_DIALOG)));
 
 <dialog-1034>
 	int PIN_PROTECTED_WITH_RESET_PIN                                     = 1034;
