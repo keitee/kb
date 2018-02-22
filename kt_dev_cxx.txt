@@ -1,4 +1,4 @@
-*kt_dev_01*                                                     tw=100, utf-8
+*kt_dev_cxx*                                                     tw=100, utf-8
 
 /^[#=]{
 Use #{ for a group and ={ for a item
@@ -77,12 +77,11 @@ KT KB. CPP
 *kt_dev_cpp_0004* pointer-argv
 *kt_dev_cpp_0004* pointer-null
 *kt_dev_cpp_0004* pointer-reading
-*kt_dev_cxx_0000* cxx-cstring cxx-check
-*kt_dev_cxx_0000* cxx-sizeof
+*kt_dev_cxx_0000* cxx-cstring cxx-check cxx-sizeof
 |kt_dev_lang_014| printf-format
 *kt_dev_cxx_0000* cxx-switch
 *kt_dev_cxx_0000* cxx-loop cxx-for cxx-while cxx-side-effect
-|kt_dev_lang_016| cpp-precedence
+|kt_dev_cxx_0000| cxx-precedence
 *kt_dev_cxx_0000* cxx-evaluation-order
 *kt_dev_lang_016* expr-unary
 *kt_dev_lang_016* expr-assign
@@ -6896,17 +6895,132 @@ different.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-cstring cxx-check
+*kt_dev_cxx_0000* cxx-cstring cxx-check cxx-sizeof
 
 array, sizeof, strlen and valid index:
 
   0   1   2   3   4   5 
   D   S   M   :   !   \0
 
-  sizeof              is 6
-  strlen              is 5
-  valid array index   is 0-5
-  valid cstring index is 0-4
+valid array index     [0, 6) [0, size(), sizeof()) or [0, 5] [0, size()-1]
+valid cstring index   [0, 5) [0, strlen()) or [0, 4] [0, strlen()-1]
+
+// = 03 ======
+// size of s1 cstring  : 8
+// size of s1 cstring  : 8
+// size of s1 cstring  : 1
+// size of s2 cstring  : 22
+// strlen of s2 cstring: 21
+// size of string      : 21
+
+int t_string_03()
+{
+    char *s1 = "this is first message";
+    char s2[] = "this is first message";
+    cout << "size of s1 cstring  : " << sizeof(s1) << endl;
+    cout << "size of s1 cstring  : " << sizeof s1 << endl;
+    cout << "size of s1 cstring  : " << sizeof *s1 << endl;
+    cout << "size of s2 cstring  : " << sizeof(s2) << endl;
+    cout << "strlen of s2 cstring: " << strlen(s2) << endl;
+
+    string s{s1};
+    cout << "size of string      : " << s.size() << endl;
+}
+
+
+{cxx-sizeof}
+
+Queries size of the 'object' or 'type'. Used when actual size of the object
+must be known at compile time:
+
+sizeof (type)
+sizeof expression/object
+
+Both versions return a constant of type std::size_t *cxx-size-t*
+
+Explanation
+
+* returns size in bytes of the object representation of type.
+* returns size in bytes of the object representation of the type, that would be
+  returned by expression, if evaluated.  
+
+* Depending on the computer architecture, a byte may consist of 8 or more bits,
+  the exact number being recorded in CHAR_BIT.
+
+* sizeof(char), sizeof(signed char), sizeof(unsigned char) always return 1.
+
+* Cannot be used with function types, incomplete types, or bit-field lvalues.
+
+* When applied to a reference, the result is the size of the `referenced-type`
+
+* When applied to a class type, the result is the size of an object of that
+  class 'plus' any additional padding required to place such object in an array.
+
+* When applied to an empty class type, always returns 1.
+  `cpp-empty-base-class-optimization`
+
+
+<sizeof-which-version>
+sizeof(`type`)
+sizeof expression/object
+
+must use sizeof(type) for type since syntatical reson:
+
+val1 = sizeof int;
+
+: error: expected primary-expression before 'int'
+: error: expected ';' before 'int
+
+
+struct nlist {
+  struct nlist *next;
+  char *name;
+  char *defn;
+};
+
+int main( int argc, char *argv[] )
+{
+  char val = sizeof(val);
+  printf("sizeof is %d\n", val );
+
+  int *pint;
+  printf("sizeof is %d\n", sizeof(*pint));
+
+  struct nlist *plist;
+  printf("sizeof is %d\n", sizeof(*plist));  
+
+  // <Q> 4 or 12? 12 since it is the same as printf("sizeof is %d\n",
+  // sizeof(struct nlist));
+}
+
+Here a pointer points to a 'type' and this is a struct in this case.
+
+
+<to-get-array-size> cpp-array
+Two forms and the 'latter' is 'better' since do not need to be changed if the
+type changes.
+
+int length= sizeof(arr)/sizeof(int);
+int length= sizeof(arr)/sizeof(arr[0]);
+
+
+int func()
+{
+  int arr[] = { ... };
+  int length= sizeof(arr)/sizeof(int);
+  ...
+}
+
+This works fine as expected; sizeof(array) returns a size of an array, but if
+you pass array in func, it is converted to a pointer and the return of sizeof
+is the size of pointer but not the array.
+
+int func(int arr[])
+{
+  int length = sizeof(arr)/sizeof(int);   // note: THIS DOESN'T WORK!
+  ...
+}
+
 
 
 {cxx-strlen} *cxx-side-effect*  
@@ -7270,101 +7384,6 @@ while( middle != end && *middle != sought )
 }
 
 // when no found, begin, end, and middle are the same.
-
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-sizeof
-
-Queries size of the 'object' or 'type'. Used when actual size of the object
-must be known at compile time:
-
-sizeof (type)
-sizeof expression/object
-
-Both versions return a constant of type std::size_t *cxx-size-t*
-
-Explanation
-
-* returns size in bytes of the object representation of type.
-* returns size in bytes of the object representation of the type, that would be
-  returned by expression, if evaluated.  
-
-* Depending on the computer architecture, a byte may consist of 8 or more bits,
-  the exact number being recorded in CHAR_BIT.
-
-* sizeof(char), sizeof(signed char), sizeof(unsigned char) always return 1.
-
-* Cannot be used with function types, incomplete types, or bit-field lvalues.
-
-* When applied to a reference, the result is the size of the `referenced-type`
-
-* When applied to a class type, the result is the size of an object of that
-  class 'plus' any additional padding required to place such object in an array.
-
-* When applied to an empty class type, always returns 1.
-  `cpp-empty-base-class-optimization`
-
-
-<sizeof-which-version>
-sizeof(`type`)
-sizeof expression/object
-
-must use sizeof(type) for type since syntatical reson:
-
-val1 = sizeof int;
-
-: error: expected primary-expression before 'int'
-: error: expected ';' before 'int
-
-
-struct nlist {
-  struct nlist *next;
-  char *name;
-  char *defn;
-};
-
-int main( int argc, char *argv[] )
-{
-  char val = sizeof(val);
-  printf("sizeof is %d\n", val );
-
-  int *pint;
-  printf("sizeof is %d\n", sizeof(*pint));
-
-  struct nlist *plist;
-  printf("sizeof is %d\n", sizeof(*plist));  
-
-  // <Q> 4 or 12? 12 since it is the same as printf("sizeof is %d\n",
-  // sizeof(struct nlist));
-}
-
-Here a pointer points to a 'type' and this is a struct in this case.
-
-
-<to-get-array-size> cpp-array
-Two forms and the 'latter' is 'better' since do not need to be changed if the
-type changes.
-
-int length= sizeof(arr)/sizeof(int);
-int length= sizeof(arr)/sizeof(arr[0]);
-
-
-int func()
-{
-  int arr[] = { ... };
-  int length= sizeof(arr)/sizeof(int);
-  ...
-}
-
-This works fine as expected; sizeof(array) returns a size of an array, but if
-you pass array in func, it is converted to a pointer and the return of sizeof
-is the size of pointer but not the array.
-
-int func(int arr[])
-{
-  int length = sizeof(arr)/sizeof(int);   // note: THIS DOESN'T WORK!
-  ...
-}
 
 
 ={============================================================================
@@ -7792,14 +7811,14 @@ increment since it keeps the loop control statement
   `close together and visiable` at the top of the loop.
 
 
-<cpp-range-for>
+<cxx-range-for>
 The `range-for` is supported from GCC 4.6
 
-Two points:
-
+*TN*
   * range-for caches `begin()` and `end()` so has risk of using `invalidated-iterators`
   * shall use `const&` in for loop statement to avoid unnecessary copy.
   * do not call end() in every loop
+  * range-for do not use iterator but use element itself. 
 
 for( T &r : vec )
    r *= 2;
@@ -8630,7 +8649,7 @@ else
 
 
 ={============================================================================
-*kt_dev_lang_016* cpp-precedence
+*kt_dev_cxx_0000* cxx-precedence
 
 http://en.cppreference.com/w/cpp/language/operator_precedence
 
@@ -10094,7 +10113,7 @@ vector<std::string> cities{"Berlin", "London", "Braunschweig", "Cologne" };
 complex<double> c{4.0,3.0};
 
 
-*cpp-remember*
+*cxx-remember*
 The good things are:
 
   * list init do `value-init` for built-in types
@@ -10104,7 +10123,7 @@ fundamental data types, which usually have an 'undefined' value, are
 initialized by zero, or nullptr, if it is a pointer.
 
 int i;      // i has undefined value
-int j{};    // j is initialized by 0
+int j{};    // j is initialized by 0    *cxx-remember*
 int* p;     // p has undefined value
 int* q{};   // q is initialized by nullptr
 
@@ -40171,7 +40190,7 @@ function object 'retains' a reference to its instance of X and will remain
 valid 'even' when p goes out of scope or is reset(). 
 
 
-<ex> *cpp-fobj-has-state*
+<ex> *cpp-fobj-has-state* *cxx-limits*
 The idea is that function object keep state, playspeed, in this case and use
 that state when is asked to raise an event.
 
@@ -42381,8 +42400,9 @@ for( string::size_t i = endi-1; i >= begi; --i )
 
 
 ={============================================================================
-*kt_dev_stl_073* cpp-string-numeric-conversion cpp-boost-lexical-cast
+*kt_dev_cxx_0000* cxx-string-numeric-conversion cxx-boost-lexical-cast
 
+<string-to-number>
 Converting strings to numbers in C++ makes a lot of people depressed because
 of their inefficiency and user unfriendliness. See how string 100 can be
 converted to int:
@@ -42486,7 +42506,7 @@ void sample7()
 }
 
 
-<ex> convert-to-string *cpp-to-string*
+<ex> convert-to-string *cxx-string-to-string*
 
 C++11 has std::to_string and std::to_wstring functions that are declared in
 the <string> header. Those functions use locales and have behavior very close
@@ -42621,7 +42641,7 @@ delete stringstream int
 delete boost::lexical_cast<int>
 
 
-{numeric-conversion}
+{cxx-string-numeric-conversion}
 Since C++11, the C++ standard library provides convenience functions to convert
 strings into numeric values or to convert numeric values to strings. Only for
 types string and wstring, not u16string and u32string.
@@ -42701,6 +42721,32 @@ int main(int argc, char* argv[])
  idx of first unprocessed char: 1
 9223372036854775807
 stoi
+
+
+{gxx-string-print-char} *cxx-stream*
+
+How to print char value but not a printable char? Use +saved_input trick.
+http://www.cs.technion.ac.il/users/yechiel/c++-faq/print-char-or-ptr-as-number.html
+
+// = 04 ======
+// iv : 10
+// id : 10
+// cv : A
+// cv : 65
+// cv : 65
+
+int t_string_04()
+{
+    int iv{10};
+    double id{10.0};
+    char cv{65};
+
+    cout << "iv : " << iv << endl;
+    cout << "id : " << id << endl;
+    cout << "cv : " << cv << endl;
+    cout << "cv : " << +cv << endl;
+    cout << "cv : " << to_string(cv) << endl;
+}
 
 
 ={============================================================================
