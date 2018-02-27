@@ -47737,7 +47737,10 @@ SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
 
   // lock
   GuidePrepareForAsyncCallback(&f_planner_window_cond)
-  { SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex); }
+  { 
+    SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex); 
+    asyncCallbackStruct->response_received = false;         // clear predicate
+  }
 
   // register callback
   GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
@@ -47758,12 +47761,12 @@ SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
 // callback
 static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_tag)
 {
-  GuideSignalCallbackReceived(&f_planner_window_cond)
+  `GuideSignalCallbackReceived`(&f_planner_window_cond)
   {
     /* Lock iterator_callback_mutex */
     if (SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex))
     {
-      asyncCallbackStruct->response_received = true;
+      asyncCallbackStruct->response_received = true;      // set predicate
 
       /* Signal the condition variable */
       if (SYSTEMUTIL_STATUS_OK!=SYSTEMUTIL_SYNC_CondSignal(&asyncCallbackStruct->cond));
@@ -47807,13 +47810,14 @@ The log shows:
 ^[2018:02:02 07:32:43]0946740081.139015 !EXIT   -PLANNER      		< F:PLANNER_BookingStatusHandler L:1574 > <-| PLANNER_BookingStatusHandler : return_status = 0x6402000
 
 
-== Here lost signal
+== Here lost the second signal when signaled while handling the first and before the second waits on.
+==
 == // second callback and signaled, asyncCallbackStruct->response_received == true
 == ^[2018:02:02 07:32:43]0946740081.139066 !ENTER  -PLANNER      		< F:PLANNER_BookingStatusHandler L:1515 > |-> PLANNER_BookingStatusHandler
 == 
-== // gets condition, change predicate, release lock. runs after the condifion.
+== // gets condition from the first, change predicate, release lock. runs after the condifion.
 == ^[2018:02:02 07:32:43]0946740081.139336 !EXIT
-== !EXIT   -G_Sess       		< F:GuideWaitForAsyncCallback L:2410 > <-| GuideWaitForAsyncCallback : return_status = 0x3c00000
+== !EXIT   -G_Sess       		< F:GuideWaitForAsyncCallback L:2410 > <-| `GuideWaitForAsyncCallback` : return_status = 0x3c00000
 == 
 == // second callback contines
 == ^[2018:02:02 07:32:43]0946740081.171939 !ENTER  -G_Sess       		< F:GuideSignalCallbackReceived L:2426 > |-> GuideSignalCallbackReceived

@@ -2334,6 +2334,17 @@ if [ -e /etc/start-mw.sh ]; then
     /etc/start-mw.sh
 fi
 
+<nds-drivers>
+if [ -e /etc/load-nds-drivers.sh ]; then
+insmod /lib/modules/2.6.18.8/mhxnvramfs.ko
+insmod /lib/modules/2.6.18.8/xtvfs.ko
+
+// -sh-3.2# cat load-nds-drivers.sh
+// #!/bin/sh
+// insmod /lib/modules/2.6.18.8/mhxnvramfs.ko
+// insmod /lib/modules/2.6.18.8/xtvfs.ko
+
+
 <boot-start-mw>
 // generated from build_mw_epg.sh
 // /etc/start-mw.sh  *start-mw*
@@ -2698,6 +2709,12 @@ if /usr/bin/bootlog-upload-1.sh "$logdir" &>/tmp/UPLOAD.LOG; then
   # Remove global log file if upload succeeded
   rm -f "${BLOG_DATAPATH}"/UPLOAD.LOG
 else
+
+*bootlog-log*
+cat /tmp/UPLOAD.LOG >>"${logdir}"/UPLOAD.LOG
+echo "BLL:bootlog-upload.sh: INFO Copy(eth0) of /tmp/UPLOAD.LOG BEGIN"  >> "${BLLFILENAME}"
+cat /tmp/UPLOAD.LOG >> "${BLLFILENAME}"
+echo "BLL:bootlog-upload.sh: INFO Copy(eth0) of /tmp/UPLOAD.LOG END"  >> "${BLLFILENAME}"
 
 # Disable "online" LED
 /usr/bin/cdi-fpi 0 0 0
@@ -3501,6 +3518,90 @@ echo "+++++++ List finished ++++++++++++++++++"
 
 
 ={============================================================================
+|kt_dev_si_0002| si-bootlog-log
+
+
+// bootlog-config.sh
+
+# Path to initial/temporary BootLog Log (BLL) file
+# (MSCQ00182643: BSKYB_SI_BOOTLOG_AddMilestonesAndFilesizeChecks)
+BLLTEMPPATH="/tmp"
+
+// bootlog.sh
+# ------------------------------------------------------------------------------
+# Set up BootLogLog (BLL)
+# ------------------------------------------------------------------------------
+
+# Set BootLogLog (BLL) filename
+# Initialially we use the temporary location, until the mounts are in place
+export `BLLFILENAME`="${BLLTEMPPATH}"/BLL.LOG
+
+// BLL:bootlog.sh: MILESTONE CONFIG1: BLOG_mntdev = /dev/sda1, BLOG_mntpath = /tmp/dummydisk/BLOGDIR, `BLOG_DATAPATH = /tmp/dummydisk/BLOGDIR/FSN_DATA`, MAX_MEM_FOR_LOG_MB = 2048, MAX_BOOTLOG_ROTATE = 6, MAX_RLOG_ROTATE_COPY = 59
+// BLL:bootlog.sh: MILESTONE CONFIG2: FSN_ROOT = /mnt/nds, BLLPATH = , BLINFOPATH = /tmp/dummydisk/BLOGDIR/FSN_DATA/VERINFO, MPROFPATH = /tmp, MAX_INDIVIDUAL_FILESIZE_KB = 256000
+// 
+// BLL:bootlog.sh: MILESTONE Mount  BLOG_mntdev BLOG_mntpath: /dev/sda1 /tmp/dummydisk/BLOGDIR
+
+// *TN* mounted
+
+# ------------------------------------------------------------------------------
+# Initialise BootLog Log (BLL) in persistant storage
+#   Before now, all BLL output was being written to /tmp/BLL.LOG. We can set
+#   things up properly.  (See also ReadMe.txt in this directory).
+# ------------------------------------------------------------------------------
+# Set BootLogLog filename to the mounted device, and briefly remember the temp location.
+TEMPBLLNAME="${BLLFILENAME}"
+export BLLFILENAME="${BLOG_DATAPATH}"/BLL.LOG
+
+
+# Rename the previous BootLogLog (BLL) file (if it exists), in preparation to start a new one
+if [ -e "${BLLFILENAME}" ]; then
+  cp "${BLLFILENAME}" "${BLOG_DATAPATH}"/BLL_PREV.LOG
+  rm -f "${BLLFILENAME}"
+  `PrevBLLFileFound=true`
+else
+  PrevBLLFileFound=false
+fi
+
+
+# Copy the temporary BLL.LOG from "${BLLTEMPPATH}"/BLL.LOG to "${BLOG_DATAPATH}"/BLL.LOG
+if [ -e "${TEMPBLLNAME}" ]; then
+  cp "${TEMPBLLNAME}" "${BLLFILENAME}"
+  rm -f "${TEMPBLLNAME}"
+  echo "BLL:bootlog.sh: MILESTONE Temp BLL file copied to persistent storage"  >> "${BLLFILENAME}"
+else
+  echo "BLL:bootlog.sh: WARNING Temp BLL file not found. Starting new file in persistant storage"  > "${BLLFILENAME}"
+fi
+
+
+*TN* so BILLFILENAME changes are okay
+
+# Report on earlier "BLL_PREV.LOG" activity
+if [ `"${PrevBLLFileFound}" == "true"` ]; then
+   echo "BLL:bootlog.sh: MILESTONE Previous BLL file renamed to ${BLOG_DATAPATH}/BLLPREV.LOG"  >> "${BLLFILENAME}"
+else
+   echo "BLL:bootlog.sh: WARNING Previous BLL file not found"  >> "${BLLFILENAME}"
+fi
+
+// BLL:bootlog.sh: MILESTONE Temp BLL file copied to persistent storage
+// BLL:bootlog.sh: MILESTONE Previous BLL file renamed to /tmp/dummydisk/BLOGDIR/FSN_DATA/BLLPREV.LOG
+
+# ------------------------------------------------------------------------------
+# Execute child scripts
+# ------------------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------------------
+# Unmount the disk used to create BOOTLOG folder
+# ------------------------------------------------------------------------------
+// *TN* see from BLL.PREV.LOG due to switch between disk and tmp
+BLL:bootlog.sh: MILESTONE Disk/FFS is being unmounted, so BLL.LOG moved back to temp: /tmp
+
+# ------------------------------------------------------------------------------
+# Create background processes
+# ------------------------------------------------------------------------------
+
+
+={============================================================================
 |kt_dev_si_0002| si-bootlog-logfile-monitor
 
 // build_mw_epg.sh
@@ -3545,6 +3646,9 @@ echo "+++++++ List finished ++++++++++++++++++"
 ={============================================================================
 |kt_dev_si_0001| si-httpsend
 
+<from-spk>
+/home/kyoupark/spk-out/build_mips/httpsend-0.0/src/httpsend.c
+
 build by spk and seems to be modified to send it sky.
 
 printf("Uploading (%d)(%s)(%s)\n",argc, /* mac */ argv[1],argv[2]);
@@ -3552,7 +3656,6 @@ printf("Uploading (%d)(%s)(%s)\n",argc, /* mac */ argv[1],argv[2]);
 ./httpsend "00:19:fb:f2:d4:6b" version.txt
 
 Fixed to: http://drop.stb.bskyb.com/cgi-bin/stbdump.cgi
-
 
 <ftp-sky>
 # fsky?
@@ -4879,6 +4982,7 @@ function check_input_tarballs()
   CDI_DRIVERS_CONFIG_TARBALL=${CDI_DRIVERS_CONFIG_TARBALL_DIR}/config-${SPK_PLATFORM}-${SPK_VARIANT}.tar.bz2
   SCS_BINARY_TARBALL=${CDI_DRIVERS_TARBALL_DIR}/service-centre-${SPK_PLATFORM}-${SPK_VARIANT}.tar.bz2
 
+  // *nds-drivers*
   // + MW_EPG_TARBALL_DIR=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian
   // + MW_EPG_TARBALL=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/mw-epg-ams-drx890-debug-sky_trials.tar.bz2
   // + MW_EPG_SPK_TARBALL_NAME=mw-epg-ams-drx890-debug.tar.bz2
@@ -4886,6 +4990,14 @@ function check_input_tarballs()
   // + CDI_DRIVERS_TARBALL=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/cdi-drivers-ams-drx890-debug.tar.bz2
   // + CDI_DRIVERS_CONFIG_TARBALL=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/configs/config-ams-drx890-debug.tar.bz2
   // + SUPPORT_PACKAGE_TARBALL=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/support-ams-drx890-debug.tar.bz2
+  
+  // /home/kyoupark/STB_SW/deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball
+  // lrwxrwxrwx 1 kyoupark ccisco   87 Feb 13 16:13 nds-drv-ams-drx890-prod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-prod.tar.bz2
+  // lrwxrwxrwx 1 kyoupark ccisco   90 Feb 13 16:13 nds-drv-ams-drx890-preprod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-preprod.tar.bz2
+  // lrwxrwxrwx 1 kyoupark ccisco   88 Feb 13 16:13 nds-drv-ams-drx890-debug.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-debug.tar.bz2
+  //
+  // they are the same file.
+  // diff3 debug/etc/load-nds-drivers.sh preprod/etc/load-nds-drivers.sh prod/etc/load-nds-drivers.sh
 } 
 
 
@@ -10899,6 +11011,7 @@ THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae/config/stbe.ini
 12831:NDS: ^[2018:01:30 14:39:29]0946685349.008236 !INFO   -LAE                         < p:0x000001c8 P:APP t:0x016ea520 T:LAE_THREAD M:AppEngineSm.cpp F:LAE L:89 > [I] Render renderOsd()
 12832:NDS: ^[2018:01:30 14:39:29]0946685349.008418 !INFO   -LAE                         < p:0x000001c8 P:APP t:0x016ea520 T:LAE_THREAD M:AppEngineSm.cpp F:LAE L:89 > [T] Render videoColor(0x00000000) OVER m_videoFillColor(0x00000000) -> 0x00000000
 
+7748:NDS: ^[2018:02:08 11:45:33]0946685422.513489 !INFO   -LAE                          < p:0x00000207 P:APP t:0x01721520 T:LAE_THREAD M:AppEngineSm.cpp F:LAE L:89 > [I] ServiceSm ServiceSm::getServiceByChannelKey (channelKey=2085) returning (rval=1):
 
 <comp-iapp-output-control>
 SI-10968 R13 - Black screen displayed for approx 4 secs after exiting some Interactive apps
