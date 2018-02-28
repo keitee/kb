@@ -35,11 +35,11 @@ class Quote {
         // since sale is const object and error to call nonconst version on
         // const object. *cpp-remember* always makes a call on `object`
         //
-        virtual Quote *clone() const &
-        { 
-            cout << "quote::clone::copy" << endl;
-            return new Quote(*this); 
-        }
+        // virtual Quote *clone() const &
+        // { 
+        //     cout << "quote::clone::copy" << endl;
+        //     return new Quote(*this); 
+        // }
 
         // virtual copy, move version
         //  uses *reference-qualifier* and *cpp-overload-move*.
@@ -85,11 +85,11 @@ class Bulk_quote : public Disc_quote
         //  Unlike Quote::clone(), when there is no const, no compile error but
         //  gets always Quote version since no override. see
         //  *cpp-override-condition*
-        virtual Bulk_quote *clone() const &
-        { 
-            cout << "bulk::clone::copy" << endl;
-            return new Bulk_quote(*this); 
-        }
+        // virtual Bulk_quote *clone() const &
+        // { 
+        //     cout << "bulk::clone::copy" << endl;
+        //     return new Bulk_quote(*this); 
+        // }
 
         // virtual copy, move version
         virtual Bulk_quote *clone() const &&
@@ -109,11 +109,11 @@ class Basket
 
         // virtual copy, copy version
         // which signals to use lvalue object, lvalue reference qualifier
-        void add_item(const Quote &item)
-        {
-            cout << "basket::add_item::copy version" << endl;
-            items.insert(shared_ptr<Quote>(item.clone()));
-        }
+        // void add_item(const Quote &item)
+        // {
+        //     cout << "basket::add_item::copy version" << endl;
+        //     items.insert(shared_ptr<Quote>(item.clone()));
+        // }
 
         // virtual copy, move version
         // which signals to use rvalue object, rvalue reference qualifier
