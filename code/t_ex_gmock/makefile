@@ -14,7 +14,7 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread
 
-TESTS = test_quote test_basket
+TESTS = test_gmock
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -51,15 +51,8 @@ gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
 #
-t_ex_quote.o : t_ex_quote.cpp $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c t_ex_quote.cpp -o t_ex_quote.o
+t_ex_mock.o : t_ex_mock.cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c t_ex_mock.cpp -o t_ex_mock.o
 
-test_quote : t_ex_quote.o gtest.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
-
-#
-t_ex_basket.o : t_ex_basket.cpp $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c t_ex_basket.cpp -o t_ex_basket.o
-
-test_basket : t_ex_basket.o gtest.a gmock.a
+test_gmock : t_ex_mock.o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

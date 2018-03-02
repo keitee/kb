@@ -18,17 +18,17 @@ Use #{ for a group and ={ for a item
 |kt_dev_test_107| cppunit: inject dependency to object under test
 *kt_dev_test_108* cppunit: test runner command line options
 
-|kt_dev_test_200| gmock:
+|kt_dev_test_200| gmock-install
 |kt_dev_test_201| gmock-for-dummies
 *kt_dev_test_201* gmock-sequence
-|kt_dev_test_202| gmock: example
-|kt_dev_test_203| gmock: cook: write action
+*kt_dev_test_201* gmock-for-multiple-expectations
+*kt_dev_test_202* gmock-and-cppunit
+*kt_dev_test_203* gmock-action
+*kt_dev_test_203* gmock-side-effect
 |kt_dev_test_204| gmock: cheat: cardinality
-|kt_dev_test_205| gmock: cheat: using a function as action
-|kt_dev_test_206| gmock: cheat: combine actions
 |kt_dev_test_207| gmock: cook: nice and strict mock
 *kt_dev_test_208* gmock-errors when misses expectation
-*kt_dev_test_208* gmock: case example
+*kt_dev_test_208* gmock-ex
 
 
 # ============================================================================
@@ -1294,9 +1294,6 @@ int main(int argc, char** argv)
 // kyoupark@kit-debian64:~/works/t_ex_quote$ 
 
 
-
-
-
 ={============================================================================
 *kt_dev_test_100* cppunit
 
@@ -2200,11 +2197,76 @@ run a test, it's done by cppunit automatically.
 
 
 ={============================================================================
-*kt_dev_test_200* gmock:
+*kt_dev_test_200* gmock-install
 
 googlemock
-This project has been absorbed into the GoogleTest project. All open googlemock
-issues have been moved there. https://github.com/google/googletest
+This project has been absorbed into the GoogleTest project. All open
+googlemock issues have been moved there. https://github.com/google/googletest
+
+
+Requirements for Contributors
+
+We welcome patches. If you plan to contribute a patch, you need to build
+Google Mock and its tests, which has further requirements:
+
+Automake version 1.9 or newer
+Autoconf version 2.59 or newer
+Libtool / Libtoolize
+Python version 2.3 or newer (for running some of the tests and re-generating
+certain source files from templates)
+
+
+To prepare the Autotools build system:
+
+cd googlemock
+autoreconf -fvi
+
+export GTEST_DIR=/home/kyoupark/works/googletest/googletest
+export GMOCK_DIR=/home/kyoupark/works/googletest/googlemock
+
+g++ -isystem ${GTEST_DIR}/include -I${GTEST_DIR} \
+    -isystem ${GMOCK_DIR}/include -I${GMOCK_DIR} \
+    -pthread -c ${GTEST_DIR}/src/gtest-all.cc
+
+g++ -isystem ${GTEST_DIR}/include -I${GTEST_DIR} \
+    -isystem ${GMOCK_DIR}/include -I${GMOCK_DIR} \
+    -pthread -c ${GMOCK_DIR}/src/gmock-all.cc
+
+ar -rv libgmock.a gtest-all.o gmock-all.o
+
+ar: creating libgmock.a
+a - gtest-all.o
+a - gmock-all.o
+
+
+Next, you should compile your test source file with ${GTEST_DIR}/include and
+${GMOCK_DIR}/include in the header search path, and link it with gmock and any
+other necessary libraries:
+
+g++ -isystem ${GTEST_DIR}/include -isystem ${GMOCK_DIR}/include \
+    -pthread path/to/your_test.cc libgmock.a -o your_test
+
+
+As an example, the make/ directory contains a Makefile that you can use to
+build Google Mock on systems where GNU make is available (e.g. Linux, Mac OS
+    X, and Cygwin). It doesn't try to build Google Mock's own tests. Instead,
+it just builds the Google Mock library and a sample test. You can use it as a
+  starting point for your own build script.
+
+If the default settings are correct for your environment, the following
+commands should succeed:
+
+cd ${GMOCK_DIR}/make
+make
+./gmock_test
+
+g++ -isystem ../../googletest/include -isystem ../include -g -Wall -Wextra -pthread -c ../test/gmock_test.cc
+g++ -isystem ../../googletest/include -isystem ../include -I../../googletest -I.. -g -Wall -Wextra -pthread \
+            -c ../src/gmock-all.cc
+g++ -isystem ../../googletest/include -isystem ../include -I../../googletest -I.. -g -Wall -Wextra -pthread \
+            -c ../../googletest/src/gtest-all.cc
+g++ -isystem ../../googletest/include -isystem ../include -I../../googletest -I.. -g -Wall -Wextra -pthread \
+            -c ../src/gmock_main.cc
 
 
 ={============================================================================
@@ -2226,11 +2288,11 @@ community:
 
 <fake-and-mock>
 Fake objects have working implementations, but usually take some shortcut;
-perhaps to make the operations less expensive, which makes them not suitable for
-    production. An in-memory file system would be an example of a fake.
+perhaps to make the operations less expensive, which makes them not suitable
+  for production. An in-memory file system would be an example of a fake.
 
 Mocks are objects pre-programmed with expectations, which form a specification
-of the calls they are expected to receive. 
+  of the calls they are expected to receive. 
 
 note: not sure about difference
 
@@ -2239,9 +2301,10 @@ to remember is that a mock allows you to check the 'interaction' between
 'itself' and 'code' that uses it. The difference between fakes and mocks will
 become much clearer once you start to use mocks.
 
-Google C++ Mocking Framework (or Google Mock for short) is a library (sometimes
-        we also call it a "framework" to make it sound cool) for creating mock
-classes and using them. It does to C++ what jMock and EasyMock do to Java.
+Google C++ Mocking Framework (or Google Mock for short) is a library
+(sometimes we also call it a "framework" to make it sound cool) for creating
+mock classes and using them. It does to C++ what jMock and EasyMock do to
+Java.
 
 
 Using Google Mock involves three basic steps:
@@ -2258,61 +2321,62 @@ Using Google Mock involves three basic steps:
 
 * Why Google Mock?
 
-While mock objects help you 'remove' unnecessary 'dependencies' in tests and make
-them fast and reliable, using mocks manually in C++ is hard:
+While mock objects help you 'remove' unnecessary 'dependencies' in tests and
+make them fast and reliable, using mocks manually in C++ is hard:
 
-o Someone has to implement the mocks. The job is usually tedious and
-error-prone. No wonder people go great distance to avoid it.
+* Someone has to implement the mocks. The job is usually tedious and
+  error-prone. No wonder people go great distance to avoid it.
 
-o The quality of those manually written mocks is a bit, uh, unpredictable. You
-may see some really polished ones, but you may also see some that were hacked up
-in a hurry and have all sorts of ad hoc restrictions.
+* The quality of those manually written mocks is a bit, uh, unpredictable. You
+  may see some really polished ones, but you may also see some that were
+  hacked up in a hurry and have all sorts of ad hoc restrictions.
 
-o The knowledge you gained from using one mock doesn't transfer to the next. 
+* The knowledge you gained from using one mock doesn't transfer to the next. 
 
 In contrast, Java and Python programmers have some fine mock frameworks, which
 automate the creation of mocks. As a result, mocking is a proven effective
 technique and widely adopted practice in those communities. Having the right
 tool absolutely makes the difference.
 
+
 Google Mock was built to help C++ programmers. It was inspired by jMock and
-EasyMock, but designed with C++'s specifics in mind. It is your friend if any of
-the following problems is bothering you:
+EasyMock, but designed with C++'s specifics in mind. It is your friend if any
+of the following problems is bothering you:
 
-note: prototying
-o You are stuck with a sub-optimal design and wish you had done more prototyping
-before it was too late, but prototyping in C++ is by no means "rapid".
+<gmock-prototying>
+* You are stuck with a sub-optimal design and wish you had done more
+  prototyping before it was too late, but prototyping in C++ is by no means
+  "rapid".
 
-o Your tests are slow as they depend on too many libraries or use expensive
-resources e.g. a database.
+* Your tests are slow as they depend on too many libraries or use expensive
+  resources e.g. a database.
 
-o Your tests are brittle as some resources they use are unreliable e.g. the
-network.
+* Your tests are brittle as some resources they use are unreliable e.g. the
+  network.
 
-note: testing
-o You want to test how your code handles a failure (e.g. a file checksum error),
-  but it's not easy to cause one.
+* You want to test how your code handles a failure (e.g. a file checksum
+  error), but it's not easy to cause one.
 
-o You need to make sure that your module interacts with other modules in the
-right way, but it's hard to observe the interaction; therefore you resort to
-observing the side effects at the end of the action, which is awkward at best.
+* You need to make sure that your module interacts with other modules in the
+  right way, but it's hard to observe the interaction; therefore you resort to
+  observing the side effects at the end of the action, which is awkward at
+  best.
 
-note: mock-out
-o You want to "mock out" your dependencies, except that they don't have mock
-implementations yet; and, frankly, you aren't thrilled by some of those
-hand-written mocks. 
+* You want to `mock out` your dependencies, except that they don't have mock
+  implementations yet; and, frankly, you aren't thrilled by some of those
+  hand-written mocks. 
 
 
 We encourage you to use Google Mock as:
 
-o a design tool, for it lets you experiment with your interface design early and
-often. More iterations lead to better designs!
+* a design tool, for it lets you experiment with your interface design early
+  and often. More iterations lead to better designs!
 
-o a testing tool to cut your tests' outbound dependencies and probe the
-interaction between your module and its collaborators. 
+* a testing tool to cut your tests' outbound dependencies and probe the
+  interaction between your module and its collaborators. 
 
 
-* Getting Started
+Getting Started
 
 Using Google Mock is easy! Inside your C++ source file, just #include
 "gtest/gtest.h" and "gmock/gmock.h", and you are ready to go. 
@@ -2321,18 +2385,19 @@ Using Google Mock is easy! Inside your C++ source file, just #include
 * A Case for Mock Turtles
 
 Let's look at an example. Suppose you are developing a graphics program that
-relies on a LOGO-like API for drawing. How would you test that it does the right
-thing? Well, you can run it and compare the screen with a golden screen
-snapshot, but let's admit it: tests like this are expensive to run and fragile. 
+relies on a LOGO-like API for drawing. How would you test that it does the
+right thing? Well, you can run it and compare the screen with a golden screen
+snapshot, but let's admit it: tests like this are expensive to run and
+fragile. 
 
 What if you just upgraded to a shiny new graphics card that has better
 anti-aliasing? Suddenly you have to update all your golden images. It would be
 too painful if all your tests are like this. Fortunately, you learned about
 Dependency Injection and know the right thing to do: instead of having your
-application talk to the drawing API directly, wrap the API in an interface (say,
-        Turtle) and code to that interface:
+application talk to the drawing API directly, wrap the API in an interface
+(say, Turtle) and code to that interface:
 
-note: dependency injection?
+// dependency injection?
 
 class Turtle {
   ...
@@ -2346,7 +2411,7 @@ class Turtle {
   virtual int GetY() const = 0;
 };
 
-Note that the destructor of Turtle must be virtual, as is the case for all
+Note that the destructor of Turtle `must be virtual,` as is the case for all
 classes you intend to inherit from - otherwise the destructor of the derived
 class will not be called when you delete an object through a base pointer, and
 you'll get corrupted program states like memory leaks.
@@ -2357,20 +2422,20 @@ Finally, GetX() and GetY() tell you the current position of the turtle.
 
 Your program will normally use a real implementation of this interface. In
 tests, you can use a *mock-implementation* instead. This allows you to easily
-check what drawing primitives your program is calling, with what arguments, and
-in which order. 
+check what drawing primitives your program is calling, with what arguments,
+      and in which order. 
 
 Tests written this way are much more robust, they won't break because your new
-machine does anti-aliasing differently, easier to read and maintain; the intent
-of a test is expressed in the code, not in some binary images, and run much,
-   much faster. 
+machine does anti-aliasing differently, easier to read and maintain; the
+intent of a test is expressed in the code, not in some binary images, and run
+much, much faster. 
 
 
 * Writing the Mock Class
 
 If you are lucky, the mocks you need to use have already been implemented by
-some nice people. If, however, you find yourself in the position to write a mock
-class, relax - Google Mock turns this task into a fun game! Well, almost. 
+some nice people. If, however, you find yourself in the position to write a
+mock class, relax - Google Mock turns this task into a fun game! Well, almost. 
   
 
 ** How to Define It
@@ -2385,15 +2450,15 @@ methods using templates, it's much more involved. Count how many arguments it
 has.
 
 3. In the 'public' section of the child class, write MOCK_METHODn(); or
-MOCK_CONST_METHODn(); if you are mocking a const method, where n is the 'number'
-of the arguments; if you counted wrong, shame on you, and a compiler error will
-tell you so.
+MOCK_CONST_METHODn(); if you are mocking a const method, where n is the
+`number of the arguments`; if you counted wrong, shame on you, and a compiler
+error will tell you so.
 
 4. Now comes the fun part: you take the function signature, cut-and-paste the
-function name as the first argument to the macro, and leave what's left as the
-second argument. in case you're curious, this is the type of the function.
+`function name` as the first argument to the macro, and leave what's left as the
+second argument. in case you're curious, this is `the type of the function.`
 
-5. Repeat until all virtual functions you want to mock are done. 
+5. Repeat until `all virtual functions you want to mock` are done. 
 
 After the process, you should have something like:
 
@@ -2423,7 +2488,8 @@ class MockTurtle : public Turtle {
   MOCK_CONST_METHOD0(GetY, int());
 };
 
-note: do not need to define
+// dtor has null implementation.
+// do not need to define.
 
 You don't need to 'define' these mock methods somewhere else - the MOCK_METHOD*
 macros will 'generate' the 'definitions' for you. It's that simple! Once you get
@@ -2456,7 +2522,7 @@ mock_foo.h. Then everyone can reference mock_foo.h from their tests. If Foo ever
 changes, there is only one copy of MockFoo to change, and only tests that depend
 on the changed methods need to be fixed.
 
-note: use a header and put it in testing sub package.
+// use a header and put it in testing sub package.
 
 Another way to do it: you can introduce a thin layer FooAdaptor on top of Foo
 and code to this new interface. Since you own FooAdaptor, you can absorb changes
@@ -2472,14 +2538,14 @@ Once you have a mock class, using it is easy. The typical work flow is:
 
 1. Import the Google Mock names from the "testing" namespace such that you can
 use them unqualified (You only have to do it once per file. Remember that
-        namespaces are a good idea and good for your health.).
+    namespaces are a good idea and good for your health.).
 
-2. 'create' some mock objects.
+2. `create some mock objects.`
 
-3. Specify your 'expectations' on them. How many times will a method be called?
-With what arguments?  What should it do? etc.
+3. `specify your expectations on them.` How many times will a method be
+called?  With what arguments?  What should it do? etc.
 
-4. 'exercise' some code that 'uses' the mocks; optionally, check the result
+4. `exercise some code that uses the mocks;` optionally, check the result
 using Google Test assertions. If a mock method is called more than expected or
 with wrong arguments, you'll get an error immediately.
 
@@ -2516,24 +2582,24 @@ int main(int argc, char** argv)
 }
 
 As you might have guessed, this test checks that PenDown() is called at least
-once. If the painter object didn't call this method, your test will 'fail' with
-a message like this:
+once. If the painter object didn't call this method, your test will 'fail'
+with a message like this:
 
 path/to/my_test.cc:119: Failure
 Actual function call count doesn't match this expectation:
 Actually: never called;
 Expected: called at least once.
 
-note: the painter object is one under test that uses a turtle. so here is
-mocking up "turtle" to test painter object.
+// the painter object is one under test that uses a turtle. so here is mocking
+// up "turtle" to test painter object.
 
 // Tip 1: If you run the test from an Emacs buffer, you can hit <Enter> on the
 // line number displayed in the error message to jump right to the failed
 // expectation.
 
 Tip 2: If your mock objects are never 'deleted', the final verification won't
-happen. Therefore it's a good idea to use a heap leak checker in your tests when
-you allocate mocks on the heap.
+happen. Therefore it's a good idea to use a heap leak checker in your tests
+when you allocate mocks on the heap.
 
 
 Important note: 
@@ -2554,9 +2620,9 @@ the same effect without using Google Mock. However, as we shall reveal soon,
 
 * Using Google Mock with Any Testing Framework
 
-If you want to use something other than Google Test (e.g. CppUnit or CxxTest) as
-your testing framework, just change the main() function in the previous section
-to:
+If you want to use something other than Google Test (e.g. CppUnit or CxxTest)
+  as your testing framework, just change the main() function in the previous
+  section to:
 
 int main(int argc, char** argv) {
   // The following line causes Google Mock to throw an exception on failure,
@@ -2568,8 +2634,8 @@ int main(int argc, char** argv) {
 
 This approach has a catch: it makes Google Mock throw an exception from a mock
 object's destructor sometimes. With some compilers, this sometimes causes the
-test program to crash. You'll still be able to notice that the test has failed,
-     but it's not a graceful failure.
+test program to crash. You'll still be able to notice that the test has
+failed, but it's not a graceful failure.
 
 A better solution is to use Google Test's event listener API to report a test
 failure to your testing framework properly. You'll need to implement the
@@ -2578,19 +2644,19 @@ straightforward.
 
 If this turns out to be too much work, we suggest that you stick with Google
 Test, which works with Google Mock seamlessly (in fact, it is technically part
-        of Google Mock.). If there is a reason that you cannot use Google Test,
-    please let us know. 
+    of Google Mock.). If there is a reason that you cannot use Google Test,
+  please let us know. 
 
 
 * Setting Expectations
 
-<right-expectation>
-The key to using a mock object successfully is to set the right expectations on
-it. If you set the expectations too 'strict', your test will fail as the result
-of unrelated changes. If you set them too 'loose', bugs can slip through. You
-want to do it just right such that your test can catch exactly the kind of bugs
-you intend it to catch. Google Mock provides the necessary means for you to do
-it "just right." 
+<gmock-expectation>
+The key to using a mock object successfully is to set the right expectations
+on it. If you set the expectations too 'strict', your test will fail as the
+result of unrelated changes. If you set them too 'loose', bugs can slip
+through. You want to do it just right such that your test can catch exactly
+the kind of bugs you intend it to catch. Google Mock provides the necessary
+means for you to do it "just right." 
 
 ** General Syntax
 
@@ -2602,14 +2668,14 @@ EXPECT_CALL(mock_object, method(matchers))
     .WillOnce(action)
     .WillRepeatedly(action);
 
-The macro has two arguments: first the mock object, and then the method and its
-arguments. Note that the two are separated by a comma (,), not a period (.). Why
-using a comma? The answer is that it was necessary for technical reasons.
+The macro has two arguments: first the mock object, and then the method and
+its arguments. Note that the two are separated by a comma (,), not a period
+(.). Why using a comma? The answer is that it was necessary for technical
+reasons.
 
-<optional-clause>
-The macro can be followed by some optional clauses that provide more information
-about the expectation. We'll discuss how each clause works in the coming
-sections.
+The macro can be followed by some optional clauses that provide more
+information about the expectation. We'll discuss how each clause works in the
+coming sections.
 
 This syntax is designed to make an expectation read like English. For example,
      you can probably guess that
@@ -2631,7 +2697,63 @@ expectations easily identifiable (either by grep or by a human reader), and
 second it allows Google Mock to include the source file location of a failed
 expectation in messages, making debugging easier. 
 
-note: how does this macro expands?
+
+Knowing When to Expect
+
+ON_CALL is likely the single most under-utilized construct in Google Mock.
+
+There are basically two constructs for defining the behavior of a mock object:
+ON_CALL and EXPECT_CALL. The difference? ON_CALL defines what happens when a
+mock method is called, but doesn't imply any expectation on the method being
+called. EXPECT_CALL not only defines the behavior, but also sets an
+expectation that the method will be called with the given arguments, for the
+given number of times (and in the given order when you specify the order too).
+
+Since EXPECT_CALL does more, isn't it better than ON_CALL? Not really. Every
+EXPECT_CALL adds a constraint on the behavior of the code under test. Having
+more constraints than necessary is baaad - even worse than not having enough
+constraints.
+
+This may be counter-intuitive. How could tests that verify more be worse than
+tests that verify less? Isn't verification the whole point of tests?
+
+The answer, lies in what a test should verify. A good test verifies the
+contract of the code. If a test over-specifies, it doesn't leave enough
+freedom to the implementation. As a result, changing the implementation
+without breaking the contract (e.g. refactoring and optimization), which
+should be perfectly fine to do, can break such tests. Then you have to spend
+time fixing them, only to see them broken again the next time the
+implementation is changed.
+
+Keep in mind that one doesn't have to verify more than one property in one
+test. `In fact, it's a good style to verify only one thing in one test.` If
+you do that, a bug will likely break only one or two tests instead of dozens
+(which case would you rather debug?). If you are also in the habit of giving
+tests descriptive names that tell what they verify, you can often easily guess
+what's wrong just from the test log itself.
+
+So use ON_CALL by default, and only use EXPECT_CALL when you actually intend
+to verify that the call is made. 
+
+// ? share?
+
+For example, you may have a bunch of ON_CALLs in your test fixture to set the
+common mock behavior shared by all tests in the same group, and write
+(scarcely) different EXPECT_CALLs in different TEST_Fs to verify different
+aspects of the code's behavior. 
+
+Compared with the style where each TEST has many EXPECT_CALLs, this leads to
+tests that are more resilient to implementational changes (and thus less
+    likely to require maintenance) and makes the intent of the tests more
+obvious (so they are easier to maintain when you do need to maintain them).
+
+If you are bothered by the "Uninteresting mock function call" message printed
+when a mock method without an EXPECT_CALL is called, you may use a NiceMock
+instead to suppress all such messages for the mock object, or suppress the
+message for specific methods by adding EXPECT_CALL(...).Times(AnyNumber()). DO
+NOT suppress it by blindly adding an EXPECT_CALL(...), or you'll have a test
+that's a pain to maintain.
+
 
 ** Matchers: What Arguments Do We Expect?
 
@@ -2641,15 +2763,15 @@ expecting; for example:
 // Expects the turtle to move forward by 100 units.
 EXPECT_CALL(turtle, Forward(100));
 
-<do-not-care-args>
+<gmock-any-args>
 Sometimes you may not want to be too specific. Remember that talk about tests
 being too rigid? Over specification leads to brittle tests and obscures the
 intent of tests. Therefore we encourage you to specify only what's necessary -
 no more, no less. 
 
 <_>
-If you care to check that Forward() will be called but aren't interested in its
-actual argument, write _ as the argument, which means "anything goes":
+If you care to check that Forward() will be called but aren't interested in
+its actual argument, write _ as the argument, which means "anything goes":
 
 using ::testing::_;
 ...
@@ -2660,70 +2782,89 @@ _ is an instance of what we call 'matchers'. A matcher is like a predicate and
 can test whether an argument is what we'd expect. You can use a matcher inside
 EXPECT_CALL() wherever a function argument is expected.
 
-A list of built-in matchers can be found in the CheatSheet. For example, here's
-the Ge; greater than or equal matcher:
+A list of built-in matchers can be found in the CheatSheet. 
+
+For example, here's the Ge; greater than or equal matcher:
 https://code.google.com/p/googlemock/wiki/CheatSheet
 
 using ::testing::Ge;...
+
 EXPECT_CALL(turtle, Forward(Ge(100)));
 
 This checks that the turtle will be told to go forward by at least 100 units. 
 
 
-** Cardinalities: How Many Times Will It Be Called? <cardinality-clause>
+<gmock-cardinality>
+** Cardinalities: How Many Times Will It Be Called? 
+
+Cardinalities
+
+These are used in Times() to specify how many times a mock function will be
+called:
+
+AnyNumber()	    The function can be called any number of times.
+AtLeast(n)	    The call is expected at least n times.
+AtMost(n)	    The call is expected at most n times.
+Between(m, n)	 The call is expected between m and n (inclusive) times.
+
+Exactly(n) or n 
+The call is expected exactly n times. In particular, the call should never
+happen when n is 0.
+
 
 The first clause we can specify following an EXPECT_CALL() is Times(). We call
-its argument a cardinality as it tells how many times the call should occur. It
-allows us to repeat an expectation many times without actually writing it as
-many times. More importantly, a cardinality can be "fuzzy", just like a matcher
-can be. This allows a user to express the intent of a test exactly.
+its argument a cardinality as it tells how many times the call should occur.
+It allows us to repeat an expectation many times without actually writing it
+as many times. More importantly, a cardinality can be "fuzzy", just like a
+matcher can be. This allows a user to express the intent of a test exactly.
 
 An interesting special case is when we say Times(0). You may have guessed - it
 means that the function shouldn't be called with the 'given' arguments at all,
-      and Google Mock will report a Google Test failure whenever the function is
-      (wrongfully) called.
+      and Google Mock will report a Google Test failure whenever the function
+      is (wrongfully) called.
 
-We've seen AtLeast(n) as an example of fuzzy cardinalities earlier. For the list
-of built-in cardinalities you can use, see the CheatSheet.
+We've seen AtLeast(n) as an example of fuzzy cardinalities earlier. For the
+list of built-in cardinalities you can use, see the CheatSheet.
 https://code.google.com/p/googlemock/wiki/CheatSheet
 
-The Times() clause can be omitted. If you omit Times(), Google Mock will 'infer'
-the cardinality for you. The rules are easy to remember:
+The Times() clause can be omitted. If you omit Times(), Google Mock will
+'infer' the cardinality for you. The rules are easy to remember:
 
-o If neither WillOnce() nor WillRepeatedly() is in the EXPECT_CALL(), the
-inferred cardinality is Times(1).
+* If neither WillOnce() nor WillRepeatedly() is in the EXPECT_CALL(), the
+  inferred cardinality is Times(1).
 
-o If there are n WillOnce()'s but no WillRepeatedly(), where n >= 1, the
-cardinality is Times(n).
+* If there are n WillOnce()'s but no WillRepeatedly(), where n >= 1, the
+  cardinality is Times(n).
 
-o If there are n WillOnce()'s and one WillRepeatedly(), where n >= 0, the
-cardinality is Times(AtLeast(n)). 
+* If there are n WillOnce()'s and one WillRepeatedly(), where n >= 0, the
+  cardinality is Times(AtLeast(n)). 
 
 note: means that n number of WillOnce() clauses
 
-Quick quiz: what do you think will happen if a function is expected to be called
-twice but actually called four times? 
+Quick quiz: what do you think will happen if a function is expected to be
+called twice but actually called four times? 
 
 
-** Actions: What Should It Do? <action-clause>
+<gmock-action>
+** Actions: What Should It Do?
 
-Remember that a mock object doesn't really have a working implementation? We as
-users have to 'tell' it "what to do when a method is invoked." This is easy in
-Google Mock.
+Remember that a mock object doesn't really have a working implementation? We
+as users have to 'tell' it "what to do when a method is invoked." This is easy
+in Google Mock.
 
 First, if the return type of a mock function is a built-in type or a pointer,
-    the function has a default action; a void function will just return, a bool
-    function will return false, and other functions will return 0. 
+  the function has `a default action`; a void function will just return, a bool
+  function will return false, and other functions will return 0. 
 
 In addition, in C++ 11 and above, a mock function whose return type is
 default-constructible (i.e. has a default constructor) has a default action of
-returning a default-constructed value. If you don't say anything, this behavior
-will be used.
+returning a default-constructed value. If you don't say anything, this
+behavior will be used.
 
-Second, if a mock function doesn't have a default action, or the default action
-doesn't suit you, you can specify the action to be taken each time the
-expectation matches using a series of WillOnce() clauses followed by an optional
-WillRepeatedly(). For example,
+Second, if a mock function doesn't have a default action, or the default
+action doesn't suit you, you `can specify the action to be taken each time` the
+expectation matches using a series of WillOnce() clauses followed by an
+optional WillRepeatedly(). For example,
 
 using ::testing::Return;...
 EXPECT_CALL(turtle, GetX())
@@ -2741,38 +2882,36 @@ EXPECT_CALL(turtle, GetY())
     .WillOnce(Return(200))
     .WillRepeatedly(Return(300));
 
-says that turtle.GetY() will be called at least twice (Google Mock knows this as
-        we've written two WillOnce() clauses and a WillRepeatedly() while having
-        no explicit Times()), will return 100 the first time, 200 the second
-time, and 300 from the third time on.
+says that turtle.GetY() will be called at least twice (Google Mock knows this
+    as we've written two WillOnce() clauses and a WillRepeatedly() while
+    having no explicit Times()), will return 100 the first time, 200 the
+second time, and 300 from the third time on.
 
-Of course, if you explicitly write a Times(), Google Mock will not try to infer
-the cardinality itself. What if the number you specified is larger than there
-are WillOnce() clauses? Well, after all WillOnce()s are used up, Google Mock
-will do the default action for the function every time (unless, of course, you
-        have a WillRepeatedly().).
+Of course, if you explicitly write a Times(), Google Mock will not try to
+infer the cardinality itself. What if the number you specified is larger than
+there are WillOnce() clauses? Well, after all WillOnce()s are used up, Google
+Mock will do the default action for the function every time (unless, of
+    course, you have a WillRepeatedly().).
+
 
 <can-call-function>
 What can we do inside WillOnce() besides Return()? You can return a reference
 using ReturnRef(variable), or invoke a pre-defined function, among others.
 
-*important* The EXPECT_CALL() statement evaluates the action clause only 'once',
-  even though the action may be performed many times. Therefore you must be
-  careful about side effects. The following may not do what you want:
+*important* The EXPECT_CALL() statement evaluates the action clause only
+'once', even though the action may be performed many times. Therefore you must
+be careful about side effects. The following may not do what you want:
 
 int n = 100;
 EXPECT_CALL(turtle, GetX())
 .Times(4)
 .WillRepeatedly(Return(n++));
 
-Instead of returning 100, 101, 102, ..., consecutively, this mock function will
-'always' return 100 as n++ is only evaluated once. Similarly, Return(new Foo)
-will create a new Foo object when the EXPECT_CALL() is executed, and will return
-the same pointer every time. 
+Instead of returning 100, 101, 102, ..., consecutively, this mock function
+will 'always' return 100 as n++ is only evaluated once. Similarly, Return(new
+    Foo) will create a new Foo object when the EXPECT_CALL() is executed, and
+will return the same pointer every time. 
 
-<custom-action>
-If you want the side effect to happen every time, you need to define a custom
-action, which we'll teach in the CookBook.
 
 Time for another quiz! What do you think the following means?
 
@@ -2781,51 +2920,19 @@ EXPECT_CALL(turtle, GetY())
 .Times(4)
 .WillOnce(Return(100));
 
-Obviously turtle.GetY() is expected to be called four times. But if you think it
-will return 100 every time, think twice! Remember that one WillOnce() clause
-will be consumed each time the function is invoked and the 'default' action will
-be taken afterwards. So the right answer is that turtle.GetY() will return 100
-the first time, but return 0 from the second time on, as returning 0 is the
-default action for int functions. 
+Obviously turtle.GetY() is expected to be called four times. But if you think
+it will return 100 every time, think twice! Remember that one WillOnce()
+  clause will be consumed each time the function is invoked and the 'default'
+  action will be taken afterwards. So the right answer is that turtle.GetY()
+  will return 100 the first time, but return 0 from the second time on, as
+  returning 0 is the default action for int functions. 
 
 // MOCK_CONST_METHOD0(GetX, int());
 // MOCK_CONST_METHOD0(GetY, int());
 
 
-** Using Multiple Expectations
-
-So far we've only shown examples where you have a single expectation. More
-realistically, you're going to specify expectations on multiple mock methods,
-    which may be from 'multiple' mock objects.
-
-By default, when a mock method is invoked, Google Mock will 'search' the
-expectations in the 'reverse' order they are defined, and stop when an active
-expectation that 'matches' the arguments is found. You can think of it as "newer
-rules override older ones.". If the matching expectation cannot take any more
-calls, you will get an upper-bound-violated failure. Here's an example:
-
-using ::testing::_;...
-EXPECT_CALL(turtle, Forward(_));  // #1
-EXPECT_CALL(turtle, Forward(10))  // #2
-    .Times(2);
-
-If Forward(10) is called three times in a row, the third time it will be an
-error, as the last matching expectation (#2) has been 'saturated'. 
-
-If, however, the third Forward(10) call is replaced by Forward(20), then it
-would be 'okay', as now #1 will be the matching expectation.
-
-Side note: Why does Google Mock search for a match in the reverse order of the
-expectations? The reason is that this allows a user to set up the 'default'
-expectations in a mock object's constructor or the test fixture's set-up phase
-and then customize the mock by writing more specific expectations in the test
-body. So, if you have two expectations on the same method, you want to put the
-one with more 'specific' matchers after the other, or the more specific rule
-would be shadowed by the more general one that comes after it. 
-
-
 ={============================================================================
-*kt_dev_test_201* gmock-for-sequence
+*kt_dev_test_201* gmock-sequence
 
 ** Ordered vs Unordered Calls
 
@@ -2833,8 +2940,8 @@ By default, an expectation can match a call even though an earlier expectation
 hasn't been satisfied. In other words, the calls don't have to occur in the
 order the expectations are specified.
 
-Sometimes, you may want all the expected calls to occur in a 'strict' order. To
-say this in Google Mock is easy:
+Sometimes, you may want all the expected calls to occur in a 'strict' order.
+To say this in Google Mock is easy:
 
 using ::testing::InSequence;...
 TEST(FooTest, DrawsLineSegment) {
@@ -2849,17 +2956,17 @@ TEST(FooTest, DrawsLineSegment) {
   Foo();
 }
 
-By creating an object of type InSequence, all expectations in its 'scope' are
-put into a sequence and have to occur sequentially. Since we are just relying on
-the constructor and destructor of this object to do the actual work, its name is
-really irrelevant.
+By creating an object of type InSequence, `all expectations in its scope` are
+put into a sequence and have to occur sequentially. Since we are just relying
+on the constructor and destructor of this object to do the actual work, its
+name is really irrelevant.
 
 In this example, we test that Foo() calls the three expected functions in the
 order as written. If a call is made out-of-order, it will be an error.
 
 What if you care about the relative order of some of the calls, but not all of
-them? Can you specify an arbitrary partial order? The answer is ... yes! If you
-are impatient, the details can be found in the CookBook. 
+them? Can you specify an arbitrary partial order? The answer is ... yes! If
+you are impatient, the details can be found in the CookBook. 
 
 
 https://github.com/google/googletest/blob/master/googlemock/docs/CookBook.md
@@ -2872,24 +2979,25 @@ brittle tests. For example, we may care about A occurring before both B and C,
         constraining.
 
 Google Mock allows you to impose an arbitrary DAG (directed acyclic graph) on
-the calls. One way to express the DAG is to use the After clause of EXPECT_CALL.
+the calls. One way to express the DAG is to use the After clause of
+EXPECT_CALL.
 
 Another way is via the InSequence() clause (not the same as the InSequence
-        class), which we borrowed from jMock 2. It's less flexible than After(),
-        but more convenient when you have long chains of sequential calls, as it
-        doesn't require you to come up with different names for the expectations
-        in the chains. Here's how it works:
+    class), which we borrowed from jMock 2. It's less flexible than After(),
+        but more convenient when you have long chains of sequential calls, as
+        it doesn't require you to come up with different names for the
+        expectations in the chains. Here's how it works:
 
 If we view EXPECT_CALL() statements as nodes in a graph, and add an edge from
 node A to node B wherever A must occur before B, we can get a DAG. We use the
 term "sequence" to mean a directed path in this DAG. Now, if we decompose the
 DAG into sequences, we just need to know which sequences each EXPECT_CALL()
-    belongs to in order to be able to reconstruct the orginal DAG.
+  belongs to in order to be able to reconstruct the orginal DAG.
 
 So, to specify the partial order on the expectations we need to do two things:
-first to define some Sequence objects, and then for each EXPECT_CALL() say which
-Sequence objects it is part of. Expectations in the same sequence must occur in
-the order they are written. For example,
+first to define some Sequence objects, and then for each EXPECT_CALL() say
+which Sequence objects it is part of. Expectations in the same sequence must
+occur in the order they are written. For example,
 
   using ::testing::Sequence;
 
@@ -2912,12 +3020,45 @@ specifies the following DAG (where s1 is A -> B, and s2 is A -> C -> D):
        |
        +---> C ---> D
 
-This means that A must occur before B and C, and C must occur before D. There's
-no restriction about the order other than these.
+This means that A must occur before B and C, and C must occur before D.
+There's no restriction about the order other than these.
 
 
 ={============================================================================
-*kt_dev_test_201* gmock-for-sequence
+*kt_dev_test_201* gmock-for-multiple-expectations
+
+** Using Multiple Expectations
+
+So far we've only shown examples where you have a single expectation. More
+realistically, you're going to specify expectations on multiple mock methods,
+  which may be from 'multiple' mock objects.
+
+By default, when a mock method is invoked, Google Mock will 'search' the
+expectations in the `reverse order they are defined,` and stop when an active
+expectation that `matches the arguments is found.` You can think of it as
+"newer rules override older ones.". If the matching expectation cannot take
+any more calls, you will get an `upper-bound-violated failure.` Here's an
+example:
+
+using ::testing::_;...
+EXPECT_CALL(turtle, Forward(_));  // #1
+EXPECT_CALL(turtle, Forward(10))  // #2
+    .Times(2);
+
+If Forward(10) is called three times in a row, the third time it will be an
+error, as the last matching expectation (#2) has been 'saturated'. 
+
+If, however, the third Forward(10) call is replaced by Forward(20), then it
+would be 'okay', as now #1 will be the matching expectation.
+
+Side note: Why does Google Mock search for a match in the reverse order of the
+expectations? The reason is that this allows a user to set up the 'default'
+expectations in a mock object's constructor or the test fixture's set-up phase
+and then customize the mock by writing more specific expectations in the test
+body. So, if you have two expectations on the same method, you want to put the
+one with more 'specific' matchers after the other, or the more specific rule
+would be shadowed by the more general one that comes after it. 
+
 
 ** All Expectations Are Sticky (Unless Said Otherwise)
 
@@ -2934,18 +3075,18 @@ EXPECT_CALL(turtle, GoTo(_, _))  // #1
 EXPECT_CALL(turtle, GoTo(0, 0))  // #2
     .Times(2);
 
-Suppose turtle.GoTo(0, 0) is called three times. In the third time, Google Mock
-will see that the arguments match expectation #2. Remember that we always pick
-the last matching expectation. 
+Suppose turtle.GoTo(0, 0) is called three times. In the third time, Google
+  Mock will see that the arguments match expectation #2. Remember that we
+  always pick the last matching expectation. 
 
 Now, since we said that there should be only two such calls, Google Mock will
-report an error immediately. This is basically what we've told you in the "Using
-Multiple Expectations" section above.
+report an error immediately. This is basically what we've told you in the
+"Using Multiple Expectations" section above.
 
-This example shows that expectations in Google Mock are *sticky* by default, in
-the sense that they 'remain' active even 'after' we have reached their
-invocation upper bounds. This is an important rule to remember, as it affects
-the meaning of the spec, and is different to how it's done in many other mocking
+This shows that expectations in Google Mock are *sticky* by default, in the
+sense that they `remain active even after` we have reached their invocation
+upper bounds. This is an important rule to remember, as it affects the meaning
+of the spec, and is different to how it's done in many other mocking
 frameworks (Why'd we do that? Because we think our rule makes the common cases
     easier to express and understand.).
 
@@ -2961,13 +3102,13 @@ for (int i = n; i > 0; i--) {
 
 If you think it says that turtle.GetX() will be called n times and will return
 10, 20, 30, ..., consecutively, think twice! The problem is that, as we said,
-    expectations are sticky. So, the second time turtle.GetX() is called, the
-    last (latest) EXPECT_CALL() statement will match, and will immediately lead
-    to an "upper bound exceeded" error - this piece of code is not very useful!
+  expectations are sticky. So, the second time turtle.GetX() is called, the
+  last (latest) EXPECT_CALL() statement will match, and will immediately lead
+  to an "upper bound exceeded" error - this piece of code is not very useful!
 
-One correct way of saying that turtle.GetX() will return 10, 20, 30, ..., is to
-explicitly say that the expectations are not sticky. In other words, they should
-retire as soon as they are saturated:
+One correct way of saying that turtle.GetX() will return 10, 20, 30, ..., is
+to explicitly say that the expectations are not sticky. In other words, they
+should retire as soon as they are saturated:
 
 using ::testing::Return;
 ...
@@ -2997,7 +3138,7 @@ using ::testing::Return;
 By the way, the other situation where an expectation may not be sticky is when
 it's in a sequence - as soon as another expectation that comes after it in the
 sequence has been used, it automatically retires (and will never be used to
-        match any call). 
+    match any call). 
 
 
 ** Uninteresting Calls
@@ -3023,7 +3164,105 @@ advance your level of enjoyment and testing bliss.
 
 
 ={============================================================================
-*kt_dev_test_202* gmock: example
+*kt_dev_test_203* gmock-side-effect
+
+Mocking Side Effects
+
+Sometimes a method exhibits its effect not via returning a value but via side
+effects. For example, it may change some global state or modify an output
+argument. To mock side effects, in general you can define your own action by
+implementing ::testing::ActionInterface.
+
+If all you need to do is to change an output argument, the built-in
+SetArgPointee() action is convenient:
+
+
+SetArgPointee<N>(value)	
+Assign value to the variable pointed by the N-th (0-based) argument.
+
+
+using ::testing::SetArgPointee;
+
+class MockMutator : public Mutator {
+ public:
+  MOCK_METHOD2(Mutate, void(bool mutate, int* value));
+  ...
+};
+...
+
+  MockMutator mutator;
+  EXPECT_CALL(mutator, Mutate(true, _))
+      .WillOnce(SetArgPointee<1>(5));
+
+In this example, when mutator.Mutate() is called, we will assign 5 to the int
+variable pointed to by argument #1 (0-based).
+
+SetArgPointee() conveniently makes an internal copy of the value you pass to
+it, removing the need to keep the value in scope and alive. The implication
+however is that the value must have a copy constructor and assignment
+operator.
+
+If the mock method also needs to return a value as well, you can chain
+SetArgPointee() with Return() using DoAll():
+
+using ::testing::_;
+using ::testing::Return;
+using ::testing::SetArgPointee;
+
+class MockMutator : public Mutator {
+ public:
+  ...
+  MOCK_METHOD1(MutateInt, bool(int* value));
+};
+...
+
+  MockMutator mutator;
+  EXPECT_CALL(mutator, MutateInt(_))
+      .WillOnce(DoAll(SetArgPointee<0>(5),
+                      Return(true)));
+
+If the output argument is an array, use the SetArrayArgument<N>(first, last)
+  action instead. It copies the elements in source range [first, last) to the
+  array pointed to by the N-th (0-based) argument:
+
+using ::testing::NotNull;
+using ::testing::SetArrayArgument;
+
+class MockArrayMutator : public ArrayMutator {
+ public:
+  MOCK_METHOD2(Mutate, void(int* values, int num_values));
+  ...
+};
+...
+
+  MockArrayMutator mutator;
+  int values[5] = { 1, 2, 3, 4, 5 };
+  EXPECT_CALL(mutator, Mutate(NotNull(), 5))
+      .WillOnce(SetArrayArgument<0>(values, values + 5));
+
+This also works when the argument is an output iterator:
+
+using ::testing::_;
+using ::testing::SetArrayArgument;
+
+class MockRolodex : public Rolodex {
+ public:
+  MOCK_METHOD1(GetNames, void(std::back_insert_iterator<vector<string> >));
+  ...
+};
+...
+
+  MockRolodex rolodex;
+  vector<string> names;
+  names.push_back("George");
+  names.push_back("John");
+  names.push_back("Thomas");
+  EXPECT_CALL(rolodex, GetNames(_))
+      .WillOnce(SetArrayArgument<0>(names.begin(), names.end()));
+
+
+={============================================================================
+*kt_dev_test_202* gmock-and-cppunit
 
 <1> use gmock and cppunit
 
@@ -3059,7 +3298,92 @@ class RepositoryTest : public CppUnit::TestFixture
 
 
 ={============================================================================
-*kt_dev_test_203* gmock: cook: write action
+*kt_dev_test_203* gmock-action
+
+<gmock-action-invoke>
+Using Functions/Methods/Functors as Actions
+
+If the built-in actions don't suit you, you can easily use an existing
+function, method, or functor as an action:
+
+using ::testing::_;
+using ::testing::Invoke;
+
+class MockFoo : public Foo {
+ public:
+  MOCK_METHOD2(Sum, int(int x, int y));
+  MOCK_METHOD1(ComplexJob, bool(int x));
+};
+
+int CalculateSum(int x, int y) { return x + y; }
+
+class Helper {
+ public:
+  bool ComplexJob(int x);
+};
+...
+
+  MockFoo foo;
+  Helper helper;
+  EXPECT_CALL(foo, Sum(_, _))
+      .WillOnce(Invoke(CalculateSum));
+  EXPECT_CALL(foo, ComplexJob(_))
+      .WillOnce(Invoke(&helper, &Helper::ComplexJob));
+
+  foo.Sum(5, 6);       // Invokes CalculateSum(5, 6).
+  foo.ComplexJob(10);  // Invokes helper.ComplexJob(10);
+
+The only requirement is that the type of the function, etc must be compatible
+with the signature of the mock function, meaning that 
+
+the latter's, mock, arguments can be implicitly converted to the corresponding
+arguments of the former, f, and the former's return type can be implicitly
+converted to that of the latter. So, you can invoke something whose type is
+not exactly the same as the mock function, as long as it's safe to do so -
+nice, huh?
+
+
+Invoke(f)
+Invoke f with the arguments passed to the mock function, where f can be a
+global/static function or a functor.
+
+Invoke(object_pointer, &class::method)
+Invoke the method on the object with the arguments passed to the mock
+function.
+
+InvokeWithoutArgs(f)
+Invoke f, which can be a global/static function or a functor. f must take no
+arguments.
+
+InvokeWithoutArgs(object_pointer, &class::method)
+Invoke the method on the object, which takes no arguments.
+
+InvokeArgument<N>(arg1, arg2, ..., argk)
+Invoke the mock function's N-th (0-based) argument, which must be a function
+or a functor, with the k arguments.
+
+The 'return' value of the invoked function is used as the return value of the
+action.
+
+When defining a function or functor to be used with Invoke*(), you can declare
+any unused parameters as Unused:
+
+double Distance(Unused, double x, double y) { return sqrt(x*x + y*y); }
+...
+EXPECT_CALL(mock, Foo("Hi", _, _)).WillOnce(Invoke(Distance));
+
+In InvokeArgument<N>(...), if an argument needs to be passed by reference, wrap
+  it inside ByRef(). For example,
+
+InvokeArgument<2>(5, string("Hi"), ByRef(foo))
+
+calls the mock function's #2 argument, passing to it 5 and string("Hi") by
+value, and foo by reference. 
+
+
+<gmock-action-custom>
+If you want the side effect to happen every time, you need to define a custom
+action, which we'll teach in the CookBook.
 
 https://code.google.com/p/googlemock/wiki/CookBook#Writing_New_Actions_Quickly
 
@@ -3204,6 +3528,35 @@ ACTION_P(returnNewExceptionalFuture, exception) {
 }
 
 
+<gmock-action-combine>
+
+Combining Actions
+
+Want to do more than one thing when a function is called? That's fine. DoAll()
+allow you to do 'sequence' of actions every time. Only the return value of the
+'last' action in the sequence will be used.
+
+DoAll(a1, a2, ..., an)
+
+Do all actions a1 to an and return the result of an in each invocation. The
+first n - 1 sub-actions must return void.
+
+
+using ::testing::DoAll;
+
+class MockFoo : public Foo {
+ public:
+  MOCK_METHOD1(Bar, bool(int n));
+};
+...
+
+  EXPECT_CALL(foo, Bar(_))
+      .WillOnce(DoAll(action_1,
+                      action_2,
+                      ...
+                      action_n));
+
+
 ={============================================================================
 *kt_dev_test_204* gmock: cheat: cardinality
 
@@ -3228,72 +3581,6 @@ The call is expected between m and n (inclusive) times.
 Exactly(n) or n 
 The call is expected exactly n times. In particular, the call should never
 happen when n is 0.
-
-
-={============================================================================
-*kt_dev_test_205* gmock: cheat: using a function as action
-
-Using a Function or a Functor as an Action
-
-Invoke(f)
-Invoke f with the arguments passed to the mock function, where f can be a
-global/static function or a functor.
-
-Invoke(object_pointer, &class::method)
-Invoke the method on the object with the arguments passed to the mock function.
-
-InvokeWithoutArgs(f)
-Invoke f, which can be a global/static function or a functor. f must take no
-arguments.
-
-InvokeWithoutArgs(object_pointer, &class::method)
-Invoke the method on the object, which takes no arguments.
-
-InvokeArgument<N>(arg1, arg2, ..., argk)
-Invoke the mock function's N-th (0-based) argument, which must be a function or
-a functor, with the k arguments.
-
-The 'return' value of the invoked function is used as the return value of the
-action.
-
-When defining a function or functor to be used with Invoke*(), you can declare
-any unused parameters as Unused:
-
-double Distance(Unused, double x, double y) { return sqrt(x*x + y*y); }
-...
-EXPECT_CALL(mock, Foo("Hi", _, _)).WillOnce(Invoke(Distance));
-
-In InvokeArgument<N>(...), if an argument needs to be passed by reference, wrap
-  it inside ByRef(). For example,
-
-InvokeArgument<2>(5, string("Hi"), ByRef(foo))
-
-calls the mock function's #2 argument, passing to it 5 and string("Hi") by
-value, and foo by reference. 
-
-
-={============================================================================
-*kt_dev_test_206* gmock: cheat: combine actions
-
-Combining Actions
-
-Want to do more than one thing when a function is called? That's fine. DoAll()
-allow you to do 'sequence' of actions every time. Only the return value of the
-'last' action in the sequence will be used.
-
-using ::testing::DoAll;
-
-class MockFoo : public Foo {
- public:
-  MOCK_METHOD1(Bar, bool(int n));
-};
-...
-
-  EXPECT_CALL(foo, Bar(_))
-      .WillOnce(DoAll(action_1,
-                      action_2,
-                      ...
-                      action_n));
 
 
 ={============================================================================
@@ -3481,7 +3768,145 @@ Run: 1   Failure total: 2   Failures: 2   Errors: 0
 
 
 ={============================================================================
-*kt_dev_test_208* gmock: case example
+*kt_dev_test_208* gmock-ex
+
+<ex>
+https://musingstudio.com/2013/09/17/unit-testing-with-gtest-and-gmock/
+
+#include "gmock\gmock.h"
+ 
+#include <iostream>
+#include <list>
+#include <memory>
+ 
+class WeatherStation
+{
+public:
+    virtual ~WeatherStation(){};
+ 
+    // see *cxx-enum*
+    typedef enum
+    {
+        North, South, East, West
+    } Direction;
+ 
+    typedef enum
+    {
+        Optimistic, Pessimistic
+    } Outlook;
+ 
+    // NB Semantics on wind deliberately ugly to show a neat feature in gmock
+    virtual void wind( Direction* pDirection, double* strength ) const = 0;
+    virtual double rainfall() const = 0;
+    virtual std::string prediction( Outlook outlook ) const = 0;
+};
+ 
+class UserInterface
+{
+public:
+    UserInterface( const std::shared_ptr<WeatherStation>& weather_station ) :
+        weather_station_( weather_station )
+    {
+    }
+ 
+    typedef enum
+    {
+        Heavy, Medium, Light
+    } Range;
+ 
+    Range rain()
+    {
+        auto rainfall = weather_station_->rainfall();
+        if ( 0.0 <= rainfall && rainfall < 2.0 ) return Light;
+        else if ( 2.0 <= rainfall && rainfall < 4.0 ) return Medium;
+        else return Heavy;
+    }
+ 
+    Range wind()
+    {
+        WeatherStation::Direction direction;
+        double strength;
+        weather_station_->wind( &direction, &strength );
+ 
+        if ( 0.0 <= strength && strength < 5.0 ) return Light;
+        else if ( 5.0 <= strength && strength < 10.0 ) return Medium;
+        else return Heavy;
+    }
+ 
+    std::pair<std::string, std::string> predict_range()
+    {
+        return std::make_pair( 
+            weather_station_->prediction( WeatherStation::Optimistic ),
+            weather_station_->prediction( WeatherStation::Pessimistic ) );
+    }
+ 
+private:
+    std::shared_ptr<WeatherStation> weather_station_;
+};
+ 
+using namespace testing;
+ 
+class MockWeatherStation : public WeatherStation
+{
+public:
+    MOCK_CONST_METHOD0( rainfall, double() );
+    MOCK_CONST_METHOD2( wind, void(WeatherStation::Direction*, double*) );
+    MOCK_CONST_METHOD1( prediction, std::string( WeatherStation::Outlook ) );
+};
+ 
+TEST( WeatherStationUserInterface, rain_should_be_heavy )
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+    // GMock: specify a simple return value using Return(x)
+    EXPECT_CALL( *weather_station, rainfall() )
+        .WillOnce( Return(5.0) );
+    UserInterface ui( weather_station );
+    EXPECT_EQ( UserInterface::Heavy, ui.rain() );
+}
+ 
+TEST( WeatherStationUserInterface, wind_should_be_light )
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+
+    // GMock: specify out parameter values using SetArgPointee
+    //
+    // *TN* wind() returns void and use agrument as output
+ 
+    EXPECT_CALL( *weather_station, wind(_,_) )
+        .WillOnce( DoAll( SetArgPointee<0>( WeatherStation::North ),
+                          SetArgPointee<1>( 0.5 )) );
+    UserInterface ui( weather_station );
+    EXPECT_EQ( UserInterface::Light, ui.wind() );
+}
+ 
+TEST( WeatherStationUserInterface, predictions_are_displayed )
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+    
+    // GMock: inject more complex logic using C++11 lambdas,
+    // and pattern match on the input value
+    //
+    // *TN* (WeatherStation::Outlook _) is unused argument *gmock-any-args*
+ 
+    EXPECT_CALL( *weather_station, prediction(WeatherStation::Optimistic) )
+        .WillOnce( Invoke( []( WeatherStation::Outlook _ ) -> std::string
+            {
+                return "Sunny";
+            }) );
+    EXPECT_CALL( *weather_station, prediction(WeatherStation::Pessimistic) )
+        .WillOnce( Invoke( []( WeatherStation::Outlook _ ) -> std::string
+            {
+                return "Overcast";
+            }) );
+ 
+    UserInterface ui( weather_station );
+    auto predicted_range = ui.predict_range();
+    EXPECT_EQ( "Sunny", predicted_range.first );
+    EXPECT_EQ( "Overcast", predicted_range.second );
+}
+
+
+<ex>
 
 void GstMediaRouterTest::test_thatGetPositionReturnsStableValues()
 {
