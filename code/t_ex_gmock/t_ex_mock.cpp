@@ -1,11 +1,21 @@
 #include <iostream>
 #include <set>
 #include <memory>
+#include <exception>
 
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 
 using namespace std;
+
+class WeatherException : public exception
+{
+public:
+        const char *what() const throw()
+        {
+            return "weather exception";
+        }
+};
 
 class WeatherStation
 {
@@ -36,6 +46,7 @@ public:
     virtual void wind( Direction* pDirection, double* strength ) const = 0;
     virtual double rainfall() const = 0;
     virtual std::string prediction( Outlook outlook ) const = 0;
+    virtual std::string snow( Outlook outlook ) const = 0;
 };
  
 class UserInterface
@@ -76,6 +87,18 @@ public:
             weather_station_->prediction( WeatherStation::Optimistic ),
             weather_station_->prediction( WeatherStation::Pessimistic ) );
     }
+
+    std::string snow()
+    {
+        try {
+            return weather_station_->snow(WeatherStation::Pessimistic);
+            // return weather_station_->snow(WeatherStation::Optimistic);
+        } catch(WeatherException &e)
+        {
+            cout << "snow: exception: " << e.what() << endl;
+            return "snow exception";
+        }
+    }
  
 private:
     std::shared_ptr<WeatherStation> weather_station_;
@@ -89,6 +112,7 @@ public:
     MOCK_CONST_METHOD0( rainfall, double() );
     MOCK_CONST_METHOD2( wind, void(WeatherStation::Direction*, double*) );
     MOCK_CONST_METHOD1( prediction, std::string( WeatherStation::Outlook ) );
+    MOCK_CONST_METHOD1( snow, std::string( WeatherStation::Outlook ) );
 };
  
 TEST( WeatherStationUserInterface, rain_should_be_heavy )
@@ -96,7 +120,7 @@ TEST( WeatherStationUserInterface, rain_should_be_heavy )
     auto weather_station = std::make_shared<MockWeatherStation>();
     // GMock: specify a simple return value using Return(x)
     EXPECT_CALL( *weather_station, rainfall() )
-        .WillOnce( Return(5.0) );
+        .WillRepeatedly( Return(5.0) );
     UserInterface ui( weather_station );
     EXPECT_EQ( UserInterface::Heavy, ui.rain() );
 }
@@ -106,7 +130,7 @@ TEST( WeatherStationUserInterface, wind_should_be_light )
     auto weather_station = std::make_shared<MockWeatherStation>();
     // GMock: specify out parameter values using SetArgPointee
     EXPECT_CALL( *weather_station, wind(_,_) )
-        .WillOnce( DoAll( SetArgPointee<0>( WeatherStation::North ),
+        .WillRepeatedly( DoAll( SetArgPointee<0>( WeatherStation::North ),
                           SetArgPointee<1>( 0.5 )) );
     UserInterface ui( weather_station );
     EXPECT_EQ( UserInterface::Light, ui.wind() );
@@ -115,15 +139,17 @@ TEST( WeatherStationUserInterface, wind_should_be_light )
 TEST( WeatherStationUserInterface, predictions_are_displayed )
 {
     auto weather_station = std::make_shared<MockWeatherStation>();
+
     // GMock: inject more complex logic using C++11 lambdas,
     // and pattern match on the input value
     EXPECT_CALL( *weather_station, prediction(WeatherStation::Optimistic) )
-        .WillOnce( Invoke( []( WeatherStation::Outlook _ ) -> std::string
+        .WillRepeatedly( Invoke( []( WeatherStation::Outlook x) -> std::string
             {
                 return "Sunny";
             }) );
+
     EXPECT_CALL( *weather_station, prediction(WeatherStation::Pessimistic) )
-        .WillOnce( Invoke( []( WeatherStation::Outlook _ ) -> std::string
+        .WillRepeatedly( Invoke( []( WeatherStation::Outlook x) -> std::string
             {
                 return "Overcast";
             }) );
@@ -132,6 +158,19 @@ TEST( WeatherStationUserInterface, predictions_are_displayed )
     auto predicted_range = ui.predict_range();
     EXPECT_EQ( "Sunny", predicted_range.first );
     EXPECT_EQ( "Overcast", predicted_range.second );
+}
+
+TEST( WeatherStationUserInterface, DISABLED_snow_exception )
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+
+    // GMock: inject more complex logic using C++11 lambdas,
+    // and pattern match on the input value
+    EXPECT_CALL( *weather_station, snow(_) )
+        .WillRepeatedly(Throw(WeatherException()));
+ 
+    UserInterface ui( weather_station );
+    EXPECT_EQ( "snow exception", ui.snow() );
 }
 
 int main(int argc, char **argv)
