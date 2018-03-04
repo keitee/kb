@@ -313,12 +313,12 @@
 *kt_linux_tool_309* gdb-break
 *kt_linux_tool_309* gdb-break-set-location
 *kt_linux_tool_309* gdb-break-set-location-in-cpp
-*kt_linux_tool_309* gdb-break-set
+*kt_linux_gdb_309* gdb-break-set
 *kt_linux_tool_309* gdb-break: conditional ex
 *kt_linux_tool_309* gdb-break: info. get you quickly where
 *kt_linux_tool_309* gdb-break: ignore
 *kt_linux_tool_309* gdb-break: set in shared
-*kt_linux_tool_309* gdb-break: set watch
+*kt_linux_gdb_309* gdb-break-set-watch
 *kt_linux_tool_309* gdb-break: set catch
 *kt_linux_tool_310* gdb-break: unset
 *kt_linux_tool_310* gdb-break: disable
@@ -523,9 +523,9 @@
 
 |kt_linux_core_300| ipc: socket: LPI 56
 
-*kt_linux_core_101* ipc-pipe
-*kt_linux_core_102* ipc-pipe-check-setup
-|kt_linux_core_103| ipc: fifo
+*kt_linux_core_101* linux-ipc-pipe
+*kt_linux_core_102* linux-ipc-pipe-check-setup
+|kt_linux_core_103| linux-ipc-fifo
 |kt_linux_core_104| ipc: semantics of read() and write() on pipes and fifo
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
@@ -32009,7 +32009,7 @@ characters from the option name, e.g., break -s main.c -li 3.
 
 
 ={============================================================================
-*kt_linux_tool_309* gdb-break-set-location-in-cpp
+*kt_linux_tool_309* gdb-break-set-location-in-cpp gdb-linenumber
 
 <1>
 (gdb) break lib.cpp:5
@@ -32119,7 +32119,7 @@ NAME
 
 
 ={============================================================================
-*kt_linux_tool_309* gdb-break-set
+*kt_linux_gdb_309* gdb-break-set-condition
 
 5.1.1 Setting Breakpoints
 
@@ -32147,6 +32147,40 @@ g_object_ref (gpointer _object)
 
 break g_object_ref if _object == 0xcafebabe
 break g_object_unref if _object == 0xcafebabe
+
+<ex>
+in addition to a watchpoint nested inside a breakpoint you can also set a
+single breakpoint on the 'filename:line_number' and use a condition. I find it
+sometimes easier.
+
+(gdb) break iter.c:6 if i == 5
+Breakpoint 2 at 0x4004dc: file iter.c, line 6.
+(gdb) c
+Continuing.
+0
+1
+2
+3
+4
+
+Breakpoint 2, main () at iter.c:6
+6           printf("%d\n", i);
+
+If like me you get tired of line numbers changing, you can add a label then
+set the breakpoint on the label like so:
+
+#include <stdio.h>
+main()
+{ 
+     int i = 0;
+     for(i=0;i<7;++i) {
+       looping:
+        printf("%d\n", i);
+     }
+     return 0;
+}
+
+(gdb) break main:looping if i == 5
 
 
 gdb normally implements breakpoints by replacing the program code at the
@@ -32396,12 +32430,12 @@ breakpoint being created.
 
 
 ={============================================================================
-*kt_linux_tool_309* gdb-break: set watch
+*kt_linux_gdb_000* gdb-break-set-watch
 
 5.1.2 Setting Watchpoints
 
 You can use a watchpoint to stop execution whenever the 'value' of an
-'expression' changes, 'without' having to predict a particular place where this
+`expression changes`, 'without' having to predict a particular place where this
 may happen. (This is sometimes called a data breakpoint.) The expression may be
 as simple as the value of a single variable, or as complex as many variables
 combined by operators. Examples include:
@@ -36863,11 +36897,11 @@ When the user types the terminal interrupt character (usually Control-C), the
 terminal driver sends this signal to the foreground process group. The default
 action for this signal is to terminate the process.
 
-<SIGPIPE> broken-pipe
+<sigpipe> *broken-pipe*
 This signal is generated when a process tries to write to a pipe, a FIFO, or a
-socket for which there is no corresponding reader process. This normally occurs
-because the reading process has closed its file descriptor for the IPC channel.
-See Section 44.2 for further details.
+socket for which there is no corresponding reader process. This normally
+occurs because the reading process has closed its file descriptor for the IPC
+channel. See Section 44.2 for further details.
 
 
 <SIGSEGV> *sigseg* 11
@@ -46561,7 +46595,7 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr, int 
 
 
 ={============================================================================
-*kt_linux_core_101* ipc-pipe
+*kt_linux_core_101* linux-ipc-pipe
 
 {pipe}
 The pipe is `unnamed-fifo` and is an early form that can be used
@@ -46581,37 +46615,49 @@ ls                          pipe                           wc
 
 
 <byte-stream-and-sequential> LPI 44.1
-When we say that a pipe is a byte stream, we mean that there is no concept of 'messages' or message
-boundaries when using a pipe. 
+When we say that a pipe is a byte stream, we mean that there is no concept of
+'messages' or message boundaries when using a pipe. 
 
-The process reading from a pipe can read 'blocks' of data of any size, regardless of the size of
-blocks written by the writing process. Furthermore, the data passes through the pipe 'sequentially'
-- bytes are read from a pipe in exactly the order they were written. It is not possible to randomly
-access the data in a pipe using lseek().
-
-
-<block-on-read>
-Attempts to read from a pipe that is currently empty 'block' until at least one byte has been
-written to the pipe. If the write end of a pipe is closed, then a process reading from the pipe will
-see end-of-file (i.e., read() returns 0) once it has read all remaining data in the pipe.
+The process reading from a pipe can read 'blocks' of data of any size,
+    regardless of the size of blocks written by the writing process.
+Furthermore, the data passes through the pipe 'sequentially'
+- bytes are read from a pipe in exactly the order they were written. It is not
+possible to randomly access the data in a pipe using lseek().
 
 
-<limited-capacity> <block-on-write> LPI 44
-A pipe is simply a 'buffer' maintained in kernel memory. This buffer has a maximum capacity. Once a
-pipe is full, further writes to the pipe 'block' until the reader removes some data from the pipe.
+<block-on-read> *sync-deadlock*
+Attempts to read from a pipe that is currently empty 'block' until at least
+one byte has been written to the pipe. 
+
+If the write end of a pipe is closed, then a process reading from the pipe
+will see end-of-file (i.e., read() returns 0) once it has read all remaining
+data in the pipe.
+
+
+<block-on-write> <limited-capacity> LPI 44 *sync-deadlock*
+A pipe is simply a 'buffer' maintained in kernel memory. This buffer has a
+maximum capacity. Once a pipe is full, further writes to the pipe 'block'
+until the reader removes some data from the pipe.
+
+<wary-of-deadlock> *sync-deadlock*
+If employing two pipes for bi-directional buffer, then we need to be wary of
+deadlocks that may occur if both processes block while trying to read from
+empty pipes OR while trying to write to pipes that are already full.
 
 
 <use-large-buffer-size>
-SUSv3 makes no requirement about the capacity of a pipe. In Linux kernels before 2.6.11, the pipe
-capacity is the same as the system page size (e.g., 4096 bytes on x86-32); since Linux 2.6.11, the
-pipe capacity is 65,536 bytes. Other UNIX implementations have different pipe capacities.
+SUSv3 makes no requirement about the capacity of a pipe. In Linux kernels
+before 2.6.11, the pipe capacity is the same as the system page size (e.g.,
+    4096 bytes on x86-32); since Linux 2.6.11, the pipe capacity is 65,536
+bytes. Other UNIX implementations have different pipe capacities.
 
-This means that pipe is kernel resource meaning that there is copy between kernel and process. In
-theory, there is no reason why a pipe couldn't operate with smaller capacities, even with a
-single-byte buffer. The reason for employing large buffer sizes is efficiency: each time a writer
-fills the pipe, the kernel must perform a context switch to allow the reader to be scheduled so that
-it can empty some data from the pipe. Employing a larger buffer size means that fewer context
-switches are required.
+This means that pipe is kernel resource meaning that there is copy between
+kernel and process. In theory, there is no reason why a pipe couldn't operate
+with smaller capacities, even with a single-byte buffer. The reason for
+employing large buffer sizes is efficiency: each time a writer fills the pipe,
+          the kernel must perform a context switch to allow the reader to be
+          scheduled so that it can empty some data from the pipe. Employing a
+          larger buffer size means that fewer context switches are required.
 
 
 <create-pipe-using-pipe-call>
@@ -46621,15 +46667,15 @@ int pipe(int filedes[2]);        Returns 0 on success, or -1 on error
 
 
 <use-read-and-write>
-As with any file descriptor, we can use the read() and write() system calls to perform I/O on the
-pipe.
+As with any file descriptor, we can use the read() and write() system calls to
+perform I/O on the pipe.
 
 
 <set-up-pipe>
-Parent gets two fds from a pipe() call which are fd[0] for read and fd[1] for write. Create a child
-via fork() and the child process inherits copies of its parent's file descriptors. Close unused fds
-to create a single channel between parent and child. note: 0 for read and 1 for write which are
-fixed.
+Parent gets two fds from a pipe() call which are fd[0] for read and fd[1] for
+write. Create a child via fork() and the child process inherits copies of its
+parent's file descriptors. Close unused fds to create a single channel between
+parent and child. 0 for read and 1 for write which are fixed.
 
             parent                 ->                    parent           
                                              
@@ -46666,22 +46712,26 @@ switch (fork()) { /* Create a child process */
 
 
 <needs-of-closing-for-reading-process>
-If the reading process doesn't close the write end of the pipe, then, after the other process closes
-its write descriptor, the reader won't see end-of-file, even after it has read all data from the
-pipe. Instead, a read() would block waiting for data, because the kernel knows that there is still
-at least one write descriptor open for the pipe. That this descriptor is held open by the reading
-process itself is irrelevant; in theory, that process could still write to the pipe, even if it is
-blocked trying to read. For example, the read() might be interrupted by a signal handler that writes
-data to the pipe. (This is a realistic scenario, as we’ll see in Section 63.5.2.)
+If the reading process doesn't close the write end of the pipe, then, after
+the other process closes its write descriptor, the reader won't see
+end-of-file, even after it has read all data from the pipe. Instead, a read()
+  would block waiting for data, because the kernel knows that there is still
+  at least one write descriptor open for the pipe. That this descriptor is
+  held open by the reading process itself is irrelevant; in theory, that
+  process could still write to the pipe, even if it is blocked trying to read.
+For example, the read() might be interrupted by a signal handler that writes
+data to the pipe. (This is a realistic scenario, as we’ll see in Section
+    63.5.2.)
 
 
-<broken-pipe>
-When a process tries to write to a pipe for which no process has an open read descriptor, the kernel
-sends the SIGPIPE signal to the writing process. By default, this signal kills a process. A process
-can instead arrange to catch or ignore this signal, in which case the write() on the pipe fails with
-the error EPIPE (broken pipe). Receiving the SIGPIPE signal or getting the EPIPE error is a useful
-indication about the status of the pipe, and this is why unused read descriptors for the pipe should
-be closed.
+<broken-pipe> *sigpipe*
+When a process tries to write to a pipe for which no process has an open read
+descriptor, the kernel sends the SIGPIPE signal to the writing process. By
+default, this signal kills a process. A process can instead arrange to catch
+or ignore this signal, in which case the write() on the pipe fails with the
+error EPIPE (broken pipe). Receiving the SIGPIPE signal or getting the EPIPE
+error is a useful indication about the status of the pipe, and this is why
+unused read descriptors for the pipe should be closed.
 
 
 <needs-of-closing-for-writing-process>
@@ -46689,12 +46739,6 @@ If the writing process doesn't close the read end of the pipe, then, even after 
 closes the read end of the pipe, the writing process will still be able to write to the pipe.
 Eventually, the writing process will fill the pipe, and a further attempt to write will block
 indefinitely.
-
-
-<wary-of-deadlock>
-If employing two pipes for bi-directional buffer, then we need to be wary of deadlocks that may
-occur if both processes block while trying to read from empty pipes OR while trying to write to
-pipes that are already full.
 
 
 <pipe2-call>
@@ -46709,9 +46753,10 @@ result.
 
 
 <pipe-for-unrelated-process>
-There is an exception that pipes can be used to communicate only between related processes. Passing
-a file descriptor over a UNIX domain socket (a technique that described in Section 61.13.3) makes it
-possible to pass a file descriptor for a pipe to an unrelated process.
+There is an exception that pipes can be used to communicate only between
+related processes. Passing a file descriptor over a UNIX domain socket (a
+    technique that described in Section 61.13.3) makes it possible to pass a
+file descriptor for a pipe to an unrelated process.
 
 
 <second> to-create-pipe
@@ -46742,7 +46787,7 @@ After all, the reason that can use pipe between parent/child is that fds are sha
 
 
 ={============================================================================
-*kt_linux_core_102* ipc-pipe-check-setup
+*kt_linux_core_102* linux-ipc-pipe-check-setup
 
 [root@HUMAX 856]# ll /proc/846/fd
 ...
@@ -46763,35 +46808,38 @@ This shows 'two' ends of pipe.
 
 
 ={============================================================================
-*kt_linux_core_103* ipc: fifo
+*kt_linux_core_103* linux-ipc-fifo
 
 {fifo}
-To solve this, fifo was introduced and is called 'named'-pipe since has path name. Means that it
-is created in the filesystem as a file. Use usual read and write call. Fifo is either read-only or
-write-only.
+To solve this, fifo was introduced and is called `named-pipe` since has path
+name. Means that it is created in the filesystem as a file. Use usual read and
+write call. Fifo is either read-only or write-only.
 
-1. create a fifo using mkfifo call.
-2. open a fifo for read or write using open call
+* create a fifo using mkfifo call.
+* open a fifo for read or write using open call
 
 <fifo-create>
 #include <sys/stat.h>
 int mkfifo(const char *pathname, mode_t mode);
 
 <fifo-sync>
-Therefore, by default, opening a FIFO for reading (the open() O_RDONLY flag) blocks until another
-process opens the FIFO for writing (the open() O_WRONLY flag). Conversely, opening the FIFO for
-writing blocks until another process opens the FIFO for reading.  In other words, opening a FIFO
-synchronizes the reading and writing processes.
+By default, opening a FIFO for reading (the open() O_RDONLY flag) blocks until
+another process opens the FIFO for writing (the open() O_WRONLY flag).
+Conversely, opening the FIFO for writing blocks until another process opens
+the FIFO for reading.  In other words, opening a FIFO synchronizes the reading
+and writing processes.
 
 <note-from-nds-fusion-ipc>
-FIFOs have certain natural limitations, they are unidirectional, and fragment large message sizes
-with no built in support for reassembling the fragments. Furthermore FIFOs are limited in number due
-to system resources. The key are 'fragment' and 'limit'-in-number.
+FIFOs have certain natural limitations, they are unidirectional, and fragment
+large message sizes with no built in support for reassembling the fragments.
+Furthermore FIFOs are limited in number due to system resources. The key are
+'fragment' and limit-in-number.
 
 Due to the limited number of FIFOs it was determined that there would be one
-control FIFO per server (to establish communication from clients) and one pair of unidirectional
-FIFOs for every pair of server and client instances (note that there is one instance of a client in
-every process that uses that client). This is illustrated below.
+control FIFO per server (to establish communication from clients) and one pair
+of unidirectional FIFOs for every pair of server and client instances (note
+    that there is one instance of a client in every process that uses that
+    client). This is illustrated below.
 
 server                  client a
 - control pipe          -> and <-
@@ -46801,14 +46849,10 @@ server                  client a
 
 note: KT. do not match with this pic?
 
-To cope with fragmentation and the fact that there may be several interfaces being used on a single
-client instance (and multiple components using that client instance in a single process) a protocol
-was designed as described below. This protocol is used in both FIFO and TCP/IP IPC communication.
-
-
-{summary}
-When writes, if there is no reading process, broken-pipe. When reads, if there
-is no writing process, blocked.
+To cope with fragmentation and the fact that there may be several interfaces
+being used on a single client instance (and multiple components using that
+client instance in a single process) a protocol was designed as described
+below. This protocol is used in both FIFO and TCP/IP IPC communication.
 
 
 ={============================================================================
