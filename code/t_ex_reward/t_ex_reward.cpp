@@ -103,9 +103,9 @@ class RewardService {
                     const Portfolio &subscriptions)
         {
             const std::map<Subscription, std::string> rewardsTable{
-                {Subscription::SPORTS, "SPORTS"},
-                {Subscription::MUSIC, "MUSIC"},
-                {Subscription::MOVIES, "MOVIES"}
+                {Subscription::SPORTS, "CHAMPIONS_LEAGUE_FINAL_TICKET"},
+                {Subscription::MUSIC, "KARAOKE_PRO_MICROPHONE"},
+                {Subscription::MOVIES, "PIRATES_OF_THE_CARIBBEAN_COLLECTION"}
             };
 
             Eligibility found_eligibility{Eligibility::CUSTOMER_INELIGIBLE};
@@ -173,8 +173,8 @@ TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation1_ReturnRewards)
     const auto result = reward_service.checkRewards("111", account_valid,
             Portfolio({Subscription::SPORTS, Subscription::MUSIC}));
 
-    ASSERT_THAT(result, ElementsAre("SPORTS", "MUSIC"));
-    ASSERT_EQ(true, account_valid);
+    ASSERT_THAT(result, ElementsAre("CHAMPIONS_LEAGUE_FINAL_TICKET", "KARAOKE_PRO_MICROPHONE"));
+    ASSERT_EQ(account_valid, true);
 }
 
 TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation2_ReturnRewards)
@@ -191,8 +191,8 @@ TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation2_ReturnRewards)
     const auto result = reward_service.checkRewards("111", account_valid, 
             Portfolio({Subscription::MUSIC, Subscription::SPORTS}));
 
-    ASSERT_THAT(result, ElementsAre("SPORTS", "MUSIC"));
-    ASSERT_EQ(true, account_valid);
+    ASSERT_THAT(result, ElementsAre("CHAMPIONS_LEAGUE_FINAL_TICKET", "KARAOKE_PRO_MICROPHONE"));
+    ASSERT_EQ(account_valid, true);
 }
 
 TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation3_ReturnRewards)
@@ -209,8 +209,8 @@ TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation3_ReturnRewards)
     const auto result = reward_service.checkRewards("111", account_valid,
             Portfolio({Subscription::SPORTS, Subscription::MUSIC, Subscription::KIDS}));
 
-    ASSERT_THAT(result, ElementsAre("SPORTS", "MUSIC"));
-    ASSERT_EQ(true, account_valid);
+    ASSERT_THAT(result, ElementsAre("CHAMPIONS_LEAGUE_FINAL_TICKET", "KARAOKE_PRO_MICROPHONE"));
+    ASSERT_EQ(account_valid, true);
 }
 
 TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation4_ReturnRewards)
@@ -227,8 +227,8 @@ TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation4_ReturnRewards)
     const auto result = reward_service.checkRewards("111", account_valid,
             Portfolio({Subscription::SPORTS, Subscription::KIDS, Subscription::MUSIC}));
 
-    ASSERT_THAT(result, ElementsAre("SPORTS", "MUSIC"));
-    ASSERT_EQ(true, account_valid);
+    ASSERT_THAT(result, ElementsAre("CHAMPIONS_LEAGUE_FINAL_TICKET", "KARAOKE_PRO_MICROPHONE"));
+    ASSERT_EQ(account_valid, true);
 }
 
 
@@ -248,7 +248,7 @@ TEST(RewardServiceTest, checkRewards_EligibleCustomer_ReturnNoRewards)
             Portfolio({Subscription::KIDS, Subscription::NEWS}));
 
     ASSERT_THAT(result, IsEmpty());
-    ASSERT_EQ(true, account_valid);
+    ASSERT_EQ(account_valid, true);
 }
 
 // Ineligible and no rewards
@@ -267,7 +267,7 @@ TEST(RewardServiceTest, checkRewards_InEligibleCustomer_ReturnNoRewards)
             Portfolio({Subscription::SPORTS, Subscription::MUSIC}));
 
     ASSERT_THAT(result, IsEmpty());
-    ASSERT_EQ(true, account_valid);
+    ASSERT_EQ(account_valid, true);
 }
 
 // technical failure and no rewards
@@ -286,7 +286,7 @@ TEST(RewardServiceTest, checkRewards_TechnicalFailure_ReturnNoRewards)
             Portfolio({Subscription::SPORTS, Subscription::MUSIC}));
 
     ASSERT_THAT(result, IsEmpty());
-    ASSERT_EQ(true, account_valid);
+    ASSERT_EQ(account_valid, true);
 }
 
 // technical failure from other exception and no rewards
@@ -305,7 +305,7 @@ TEST(RewardServiceTest, checkRewards_TechnicalFailureFromOthers_ReturnNoRewards)
             Portfolio({Subscription::SPORTS, Subscription::MUSIC}));
 
     ASSERT_THAT(result, IsEmpty());
-    ASSERT_EQ(true, account_valid);
+    ASSERT_EQ(account_valid, true);
 }
 
 // invalid account failure and no rewards
@@ -324,7 +324,7 @@ TEST(RewardServiceTest, checkRewards_InvalidAccountFailure_ReturnNoRewards)
             Portfolio({Subscription::SPORTS, Subscription::MUSIC}));
 
     ASSERT_THAT(result, IsEmpty());
-    ASSERT_EQ(false, account_valid);
+    ASSERT_EQ(account_valid, false);
 }
 
 

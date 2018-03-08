@@ -173,6 +173,47 @@ TEST( WeatherStationUserInterface, DISABLED_snow_exception )
     EXPECT_EQ( "snow exception", ui.snow() );
 }
 
+// ={=========================================================================
+
+typedef std::pair<std::string, bool> PairReturn;
+
+ostream &operator<<(ostream &os, const PairReturn &p)
+{
+    os << "out" << endl;
+}
+
+bool ComparePair(const PairReturn &m, const PairReturn &n) 
+{
+    return m == n ? true : false;
+
+    // if ( (get<0>(m) == get<0>(n)) && (get<1>(m) == get<1>(n)))
+    //     return true;
+
+    // return (n%m == 0) ? true : false;
+}
+
+TEST(AssertTest, AssertPredicate)
+{
+    // PairReturn p1 = make_pair({"KIDS", "NEWS"}, false);
+    // PairReturn p2 = make_pair({"KIDS", "NEWS"}, false);
+    // PairReturn p3 = make_pair({"KIDS", "NEWS"}, true);
+
+    PairReturn p1 = std::pair<std::string, bool>({"KIDS", "NEWS"}, false);
+    PairReturn p2 = PairReturn({"KIDS", "NEWS"}, false);
+    PairReturn p3 = PairReturn({"KIDS", "NEWS"}, true);
+
+    // auto weather_station = std::make_shared<MockWeatherStation>();
+
+    // // GMock: inject more complex logic using C++11 lambdas,
+    // // and pattern match on the input value
+    // EXPECT_CALL( *weather_station, snow(_) )
+    //     .WillRepeatedly(Throw(WeatherException()));
+
+    EXPECT_PRED2(ComparePair, p1, p2);
+    // EXPECT_PRED2(ComparePair, p1, p3);
+}
+
+
 int main(int argc, char **argv)
 {
     std::cout << "Running main() from gmock_main.cc\n";
