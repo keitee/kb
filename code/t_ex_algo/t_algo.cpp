@@ -6,9 +6,13 @@
 #include <algorithm>
 #include <bitset>
 
+#include "gmock/gmock.h"
+
 // g++ -g -std=c++0x t_override.cpp
 
 using namespace std;
+using testing::ElementsAre;
+using testing::Eq;
 
 // ={=========================================================================
 void t_algo_reverse_01()
@@ -23,14 +27,14 @@ void t_algo_reverse_01()
     //
     // void reverse(char *str);
     {
-      char *start = input;
+      char *str = input;
       char *end = input+(strlen(input)-1);
 
-      for (char temp; start < end;)
+      for (char temp; str < end;)
       {
-          // swap(start, end)
-          temp = *start;
-          *start++ = *end;
+          // swap(str, end)
+          temp = *str;
+          *str++ = *end;
           *end-- = temp;
       }
     }
@@ -48,13 +52,13 @@ void t_algo_reverse_02()
     //
     // void reverse(char *str);
     {
-      int start{}, end{};
+      int str{}, end{};
       char temp{}; 
 
-      for (end = strlen(input)-1; start < end; ++start, --end)
+      for (end = strlen(input)-1; str < end; ++str, --end)
       {
-          // swap(start, end)
-          temp = input[start], input[start] = input[end], input[end] = temp;
+          // swap(str, end)
+          temp = input[str], input[str] = input[end], input[end] = temp;
       }
     }
 
@@ -353,85 +357,63 @@ void t_algo_swap_02()
 
 // ={=========================================================================
 // find if a string has all unique chars
-void t_algo_if_unique_01()
+// 
+// o. Space? assume ASCII 256 chars
+//    ask for clarity. Since it's only for alphabet uppercase then use 32
+//    bset and reduce space requirement.
+//
+// o. One simple optimization. return false if the length of input string is greater
+//    than the number of uniques chars in the set; e.g., ASCII, 256
+// 
+//    if( sizeString > 256 ) return false;
+//    
+// o. cstring or std::string?
+//
+// o. time O(n) and space O(1)
+
+bool if_unique_01(const char *str)
 {
-    // false
-    // char input[] = "abcdefghijklmnopqa";
+    std::bitset<256> bset{};
 
-    // true
-    char input[] = "abcdefghijklmnopqr";
-    bool breturn{true};
-
-    cout << "input : " << input << endl;
-
-    // o. Space? assume ASCII 256 chars
-    //    ask for clarity. Since it's only for alphabet uppercase then use 32
-    //    bset and reduce space requirement.
-    //
-    // o. One simple optimization. return false if the length of input string is greater
-    //    than the number of uniques chars in the set; e.g., ASCII, 256
-    // 
-    //    if( sizeString > 256 ) return false;
-    //    
-    // o. cstring or std::string?
-    //
-    // o. time O(n) and space O(1)
-    //
-    // bool unique(const char *str);
+    for (; *str; ++str)
     {
-        std::bitset<256> bset{};
-
-        for (char *start = input; *start; ++start)
+        if (bset[*str])
         {
-            if (bset[*start])
-            {
-                // return false;
-                breturn = false; break;
-            }
-            else
-                bset[*start] = 1;
+            return false;
         }
-
-        // return true;
+        else
+            bset[*str] = 1;
     }
 
-    // result
-    cout << "result: " << breturn << endl;
+    return true;
 }
 
-
-void t_algo_if_unique_02()
+bool if_unique_02(const char *str)
 {
-    // false
-    // char input[] = "abcdefghijklmnopqa";
+    std::string unique_set{};
 
-    // true
-    char input[] = "abcdefghijklmnopqr";
-    bool breturn{true};
-
-    cout << "input : " << input << endl;
-
-    // bool unique(const char *str);
+    for (; *str; ++str)
     {
-        std::string unique_set{};
-
-        for (char *start = input; *start; ++start)
+        if (unique_set.find(*str) != string::npos)
         {
-            if (unique_set.find(*start) != string::npos)
-            {
-                // return false;
-                breturn = false; break;
-            }
-            else
-                unique_set += *start;
+            return false;
         }
-
-        // return true;
+        else
+            unique_set += *str;
     }
 
-    // result
-    cout << "result: " << breturn << endl;
+    return true;
 }
+
+TEST(CxxAlgoTest, FindIfHasAllUniqueChars)
+{
+    EXPECT_THAT(if_unique_01("abcdefghijklmnopqa"), false);
+    EXPECT_THAT(if_unique_01("abcdefghijklmnopqr"), true);
+
+    EXPECT_THAT(if_unique_02("abcdefghijklmnopqa"), false);
+    EXPECT_THAT(if_unique_02("abcdefghijklmnopqr"), true);
+}
+
 
 // ={=========================================================================
 // anagram
@@ -526,10 +508,10 @@ void t_algo_anagram_02()
 //         // time O(n), space O(1)
 //         // builds occurance and order set
 //         size_t input_order{};
-//         for (auto start = input.cbegin(); start != input.cend(); ++start)
+//         for (auto str = input.cbegin(); str != input.cend(); ++str)
 //         {
-//             ++cset_occurance[*start];
-//             cset_order[*start] = input_order;
+//             ++cset_occurance[*str];
+//             cset_order[*str] = input_order;
 //             ++input_order;
 //         }
 // 
@@ -544,15 +526,15 @@ void t_algo_anagram_02()
 // 
 //         unsigned char saved_input{};
 // 
-//         for (auto start = 0; start < 256; ++start)
+//         for (auto str = 0; str < 256; ++str)
 //         {
 //             // see unique
-//             if (cset_occurance[start] == 1)
+//             if (cset_occurance[str] == 1)
 //             {
-//                 if (cset_order[start] < saved_order)
+//                 if (cset_order[str] < saved_order)
 //                 {
-//                     saved_order = cset_order[start];
-//                     saved_input = start;
+//                     saved_order = cset_order[str];
+//                     saved_input = str;
 //                 }
 //             }
 //         }
@@ -774,7 +756,7 @@ void t_algo_find_longest_01()
                     longest_char = current_char;
                 }
 
-                // reset and start a search again
+                // reset and str a search again
                 current_char = input[i];
                 current_occurance = 1;
             }
@@ -839,7 +821,7 @@ void t_algo_find_longest_02()
                     i += current_occurance-1;
                 }
 
-                // reset and start a search again
+                // reset and str a search again
                 current_char = input[i];
                 current_occurance = 1;
             }
@@ -853,71 +835,8 @@ void t_algo_find_longest_02()
     }
 }
 
-
-int main()
+int main(int argc, char** argv)
 {
-    // cout << "= 18 ======" << endl;
-    // t_algo_find_longest_02();
-
-    // cout << "= 17 ======" << endl;
-    // t_algo_find_longest_01();
-
-    // cout << "= 16 ======" << endl;
-    // t_algo_find_intersect();
-
-    // cout << "= 15 ======" << endl;
-    // t_algo_find_first_unique();
-
-    cout << "= 13 ======" << endl;
-    t_algo_if_unique_02();
-
-    cout << "= 12 ======" << endl;
-    t_algo_if_unique_01();
-    
-    // cout << "= 01 ======" << endl;
-    // t_algo_reverse_01();
-
-    // cout << "= 02 ======" << endl;
-    // t_algo_reverse_02();
-   
-    // cout << "= 03_02 ======" << endl;
-    // t_algo_reverse_03_02();
-    
-    // cout << "= 03_01 ======" << endl;
-    // t_algo_reverse_03_01();
-
-    // cout << "= 03 ======" << endl;
-    // t_algo_reverse_03();
-
-    // cout << "= 04 ======" << endl;
-    // t_algo_reverse_04();
-
-    // cout << "= 06 ======" << endl;
-    // t_algo_reverse_06();
-
-    // = 06 ======
-    // input : JTVAKAVISHAAAL
-    // result: LHSIKAVTJ
-    
-    // cout << "= 07 ======" << endl;
-    // t_algo_find_number_01();
-
-    // cout << "= 08 ======" << endl;
-    // t_algo_find_number_02();
-
-    // cout << "= 09 ======" << endl;
-    // t_algo_find_number_03();
-
-    // cout << "= 10 ======" << endl;
-    // t_algo_swap_01();
-
-    // cout << "= 11 ======" << endl;
-    // t_algo_swap_02();
-    
-
-    // cout << "= 13 ======" << endl;
-    // t_algo_anagram_01();
-
-    // cout << "= 14 ======" << endl;
-    // t_algo_anagram_02();
+    testing::InitGoogleMock(&argc, argv);
+    return RUN_ALL_TESTS();
 }

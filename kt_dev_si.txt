@@ -66,6 +66,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-dmalloc
 
 |kt_dev_si_0002| si-q
+|kt_dev_si_0002| si-q-comp-ui
 
 |kt_dev_si_0003| si-log-commands
 |kt_dev_si_0003| si-log-lines
@@ -7049,6 +7050,8 @@ mysql --batch --table -u root uploads -e "SELECT version, upload_time, filename,
 
 
 <3> search all with the test id
+
+mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, parser_result, all_tests_found.test_id FROM upload, all_tests_found WHERE all_tests_found.id=upload.id AND all_tests_found.test_id in (70) ORDER BY upload_time DESC LIMIT 100"
 mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, all_tests_found.test_id FROM upload, all_tests_found WHERE version LIKE '%R0%' and all_tests_found.id=upload.id AND all_tests_found.test_id in (75) ORDER BY upload_time DESC LIMIT 10"
 
 mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, diskerrors, pcat_status, all_tests_found.test_id \
@@ -8511,7 +8514,8 @@ index=darwin component=TESTS_FOUND | rex field=message "^\"?(?<prio>[0-9]{1})\s(
 index=darwin component=DETAILED_INFO
 message = The main text of the actual log message
 
-<ex>
+
+<splunk-on-log-message>
 index=darwin component=VRM_SERVER | rex filed=message "VRM-FSM: Live( (?<job>[01])): E_LIVE_STATE_DESTROY -> (E_LIVE_INPUT_FREE_FSM) -> E_LIVE_STATE_NONE"
 
 // 256090:NDS: ^[2017:10:20 20:35:10]0946973886.069153 !MIL    -VRM_SERVER   		< p:0x00000318 P:MW t:0x02108520 T:VRM_SRV M:fsm.c F:FSMRun L:917 > 
@@ -8545,7 +8549,13 @@ index=darwin component=DETAILED_INFO* priority=1 platform="ams-drx890"
 index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0"
 index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0" | dedup logid
 
-<ex>
+component=MEMMAN "Cannot allocate 3592 bytes in pool " "PREFS"
+
+| dedup logid | eval logfile="darwin_".mac."_".logid | table logfile platform version
+
+// !WARN   -MEMMAN       		< p:0x000007f6 P:MW t:0x01f46450 T:IPC_WRAPPER_THREAD M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 3592 bytes in pool " "PREFS"  
+component=MEMMAN "Cannot allocate" "PREFS" | dedup logid | timechart span=1h count by platform
+
 component=FDM_API_OPTV "limit number of module download session request" | dedup logid | eval logfile="darwin_".mac."_".logid | table logfile platform version
 
 <ex>
@@ -8560,6 +8570,7 @@ index=darwin component=ASM function=ASMLIB_SO_CreateTransition "New entry" Type 
 The new command I used here was streamstats and it was used to count the
 number of consecutive InstanceIDs per mac ("streamstats count BY InstanceID
     mac reset_on_change=true") in some cases spanning separate logs. (edited)
+
 
 
 ={============================================================================
@@ -8743,6 +8754,39 @@ locally it works fine, guess best bet is build the wgt locally and attach it to 
 
 Prachi Joshi15/01/2018, 15:23
 ok yes I agree
+
+
+<q-ui>
+
+4506:NDS: ^[2018:01:23 03:19:40]0000000072.065365 !MIL    -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:main.cpp F:int main(int, char**) L:312 > MS:EPG MainView Start
+
+QtEpgApp/source/prod_epg/epg_ui/src/MainView.cpp
+776:    NotificationModel::notificationsInJSON = FileUtils::instance().readQJsonDocumentFromFile(QStringLiteral(":/notifications/notifications.json")).toVariant().toMap();
+777:    Q_ASSERT_X(NotificationModel::notificationsInJSON.count(), "Badly formed resource", "Failed to load notifications resource");
+
+
+12278:NDS: ^[2018:01:23 03:34:22]0000000954.102201 !MIL    -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:NotificationModel.cpp F:void NotificationModel::showById(const NotificationId&, Notifica L:195 > MS:EPG Show notification id :  "NSS"
+
+resources/notifications/notifications.json
+    "NSS":
+    {
+        "Title":"$['NSS_MINI_TV']",
+        "Type":"Banner",
+        "Timeout":0,
+        "Groups":"Player,MainTV,MiniTV",
+        "Priority":200
+    },
+
+resources/localeFiles/language/eng/strings.json
+        {
+            "id": "SCHEDULE_NOT_READY_MESSAGE",
+            "t": "Waiting for TV Schedule\u2026",
+            "d": "Text shown in UI areas that require schedule data when not enough data have been harvested yet.",
+            "f": ""
+        },
+
+!INFO   -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:PanelContainerGadget.cpp F:void PanelContainerGadget::processPanelRequests() L:2467 > REQUEST_ADD_PANEL_URI: "guide://message?stringWithSpinnerKey=SCHEDULE_NOT_READY_MESSAGE"
+!MIL    -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:PanelGadget.cpp F:virtual void PanelGadget::setUri(const QString&, bool, Navigatio L:229 > MS:EPG Set new panel :  "guide://message?stringWithSpinnerKey=SCHEDULE_NOT_READY_MESSAGE"
 
 
 ={============================================================================
@@ -13112,6 +13156,10 @@ S has 2 SD channels and S2 has three HD channels.
 !MIL    -AMS          		< P:MW M:dataClient.cpp F:DataClient::handleSignalEvents L:848 > SIGNAL_LOSS event arrived 
 
 egrep -an "|FEM_DS_GetTunerStatusInfo|FEM_PLUGIN_Satellite_DeviceEvent|notifySignalState"
+
+// Q
+!MIL    -FEM          		< p:0x0000063b P:MW t:0x75944450 T:FEM_WORKER_THREAD M:fem_plugin_satellite_common.c F:FEM_PLUGIN_SatelliteCommon_LogLockEventStatus L:1185 > Locked f=12460500 fo=0 fs=29500000 fec=4096 tuner=0 LNB=0 hMC=0x3 
+!MIL    -FEM          		< p:0x0000063b P:MW t:0x75944450 T:FEM_WORKER_THREAD M:fem_plugin_satellite_common.c F:FEM_PLUGIN_SatelliteCommon_LogLockEventStatus L:1185 > Locked f=12460500 fo=0 fs=29500000 fec=4096 tuner=0 LNB=0 hMC=0x4 
 
 
 ={============================================================================

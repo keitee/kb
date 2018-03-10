@@ -9,6 +9,7 @@
 
 using namespace std;
 using testing::ElementsAre;
+using testing::Eq;
 
 // ={=========================================================================
 
@@ -121,6 +122,8 @@ TEST(CxxStringTest, PrintVariousTypeToOutputSteram)
 
 
 // ={=========================================================================
+// n will be the total lenth of the return
+
 template<typename T>
 void pad(T &s, typename T::size_type n, typename T::value_type c)
 {
@@ -638,6 +641,31 @@ TEST(CxxStringTest, BoostSplit_Input2)
     EXPECT_THAT(svec, ElementsAre("", "", "Name"));
 }
 
+
+// ={=========================================================================
+void join(const std::vector<std::string> &vector, const char delim, std::string &joined)
+{
+    joined.clear();
+
+    for (auto it = vector.cbegin(); it != vector.cend(); ++it)
+    {
+        joined += *it;
+
+        // cxx-iter-arithmetic
+        if (it < vector.cend()-1)
+            joined += delim;
+    }
+}
+
+TEST(CxxStringTest, JoinSequnenceString)
+{
+    std::vector<string> svec{"fee", "fi", "foe", "fum"};
+    std::string s;
+
+    join(svec, '/', s);
+
+    EXPECT_THAT(s, Eq("fee/fi/foe/fum"));
+}
 
 int main(int argc, char** argv)
 {
