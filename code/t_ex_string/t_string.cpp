@@ -667,6 +667,50 @@ TEST(CxxStringTest, JoinSequnenceString)
     EXPECT_THAT(s, Eq("fee/fi/foe/fum"));
 }
 
+
+// ={=========================================================================
+// 4.10 Finding the nth Instance of a Substring 
+bool nth_substring(int n, const std::string &s, const std::string &p)
+{
+    size_t start{0};
+    size_t found;
+
+    for (int i = 0; i < n; ++i)
+    {
+        found = s.find(p, start);
+        
+        if (found != std::string::npos)
+            start = found + 1;
+        else
+            return false;
+    }
+    
+    return true;
+}
+
+// int nthSubstr(int n, const string &s, const string &p)
+// {
+//     string::size_type i = s.find(p); // Find the first occurrence
+//     int j;
+//     for (j = 1; j < n && i != string::npos; ++j)
+//         i = s.find(p, i + 1); // Find the next occurrence
+//     if (j == n)
+//         return (i);
+//     else
+//         return (-1);
+// }
+
+TEST(CxxStringTest, FindNthSubstring)
+{
+    const std::string s{"the wind, the sea, the sky, the trees"};
+    const std::string p{"the"};
+
+    EXPECT_THAT(nth_substring(1, s, p), true);
+    EXPECT_THAT(nth_substring(2, s, p), true);
+    EXPECT_THAT(nth_substring(4, s, p), true);
+    EXPECT_THAT(nth_substring(5, s, p), false);
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleMock(&argc, argv);
