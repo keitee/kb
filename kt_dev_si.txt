@@ -5,7 +5,6 @@ kt.dev.si
 /^[#=]{
 Use #{ for a group and ={ for a item
 
-|kt_dev_si_0001| si-repo
 |kt_dev_si_0001| si-pi-dirs
 |kt_dev_si_0001| si-pi-snug-mac
 |kt_dev_si_0001| si-pi si-snug
@@ -65,6 +64,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0002| si-splunk
 |kt_dev_si_0002| si-tcpdump
 |kt_dev_si_0002| si-dmalloc
+
+|kt_dev_si_0002| si-q
+|kt_dev_si_0002| si-q-comp-ui
 
 |kt_dev_si_0003| si-log-commands
 |kt_dev_si_0003| si-log-lines
@@ -158,36 +160,6 @@ Use #{ for a group and ={ for a item
 
 # ============================================================================
 #{
-={============================================================================
-|kt_dev_si_0001| si-repo
-
-Git global setup
-
-git config --global user.name "kyoupark"
-git config --global user.email "kyoupark@cisco.com"
-
-Create a new repository
-git clone https://wwwin-gitlab-sjc.cisco.com/kyoupark/SI-REPO.git
-cd sample
-touch README.md
-git add README.md
-git commit -m "add README"
-git push -u origin master
-
-Existing folder or Git repository
-
-cd existing_folder
-git init
-git remote add origin https://wwwin-gitlab-sjc.cisco.com/kyoupark/SI-REPO.git
-git add .
-git commit
-git push -u origin master
-
-git@wwwin-gitlab-sjc.cisco.com:kyoupark/SI-REPO.git
-
-git remote set-url origin git@wwwin-gitlab-sjc.cisco.com:kyoupark/SI-REPO.git
-
-
 ={============================================================================
 |kt_dev_si_0001| si-pi-dirs
 
@@ -1280,6 +1252,8 @@ from libraries import settings
   # 
   stbImages.printImages()
 
+  # *pi-check-version*
+  #
   # Now let's decide what we want to do with each of the STB
   # `libraries/stb.py`
   # devices = Devices()
@@ -1300,7 +1274,7 @@ from libraries import settings
   #
   #   image = images.getImage(self.info['boxtype'])
   #
-  # *force-option*
+  # *pi-force-option*
   # If you want to ignore what versions a box has, ie the STBs will be flashed
   # with the highest image version that we have
   #
@@ -1312,7 +1286,7 @@ from libraries import settings
   #     print ' - upgrade to %s' % image['filename']
   #     self._update = True
   #
-  # *compare.version*
+  # // compare version
   #
   # <modelNumber>R000.040.86.00U (4ldzgns)</modelNumber>
   #
@@ -2130,6 +2104,14 @@ C:\Program Files (x86)\Cisco Systems\Cisco Jabber\jabber-config-defaults.xml
 
 
 ={============================================================================
+|kt_dev_si_0002| si-jira
+
+project = SI AND issuetype = Bug AND status in (Open, "In Progress", Reopened, Blocked, Deferred) AND "Product Release" in ("Release 15", "Release 16") AND Severity in (Minor, Major, Showstopper) ORDER BY cf[10010] ASC, Priority DESC, Severity DESC, "Product Sub-Release"
+
+Type = Bug AND project = NGDEV AND component = "Systems Integration" AND (Country is EMPTY OR Country in (Sky_UK)) AND status not in (resolved, "Ready For Test", closed) AND "Epic Link" in (NGDEV-98367) ORDER BY priority, Created DESC
+
+
+={============================================================================
 |kt_dev_si_0002| si-links
 
 http://ndpedia.il.nds.com/index.php/Fusion/DMS/TestPlan | | DMS
@@ -2176,6 +2158,10 @@ http://wwwin-tools.cisco.com/dir/details/kyoupark | CISCO | Directory | Kyoungta
 https://wwwin-git-gpk-2.cisco.com:8081/#/admin/projects/ | CISCO | Code Review
 
 https://wiki.cisco.com/display/DEVTEST/Linux+Mint+13+on+Thinkpad+W520 | CISCO | Linux Mint 13 on Thinkpad W520 - DEVTEST DevTest Team - IT Wiki
+
+
+<search-tag>
+http://tbird2.cisco.com/repo/list
 
 
 ={============================================================================
@@ -2329,6 +2315,17 @@ note:
 if [ -e /etc/start-mw.sh ]; then
     /etc/start-mw.sh
 fi
+
+<nds-drivers>
+if [ -e /etc/load-nds-drivers.sh ]; then
+insmod /lib/modules/2.6.18.8/mhxnvramfs.ko
+insmod /lib/modules/2.6.18.8/xtvfs.ko
+
+// -sh-3.2# cat load-nds-drivers.sh
+// #!/bin/sh
+// insmod /lib/modules/2.6.18.8/mhxnvramfs.ko
+// insmod /lib/modules/2.6.18.8/xtvfs.ko
+
 
 <boot-start-mw>
 // generated from build_mw_epg.sh
@@ -2694,6 +2691,12 @@ if /usr/bin/bootlog-upload-1.sh "$logdir" &>/tmp/UPLOAD.LOG; then
   # Remove global log file if upload succeeded
   rm -f "${BLOG_DATAPATH}"/UPLOAD.LOG
 else
+
+*bootlog-log*
+cat /tmp/UPLOAD.LOG >>"${logdir}"/UPLOAD.LOG
+echo "BLL:bootlog-upload.sh: INFO Copy(eth0) of /tmp/UPLOAD.LOG BEGIN"  >> "${BLLFILENAME}"
+cat /tmp/UPLOAD.LOG >> "${BLLFILENAME}"
+echo "BLL:bootlog-upload.sh: INFO Copy(eth0) of /tmp/UPLOAD.LOG END"  >> "${BLLFILENAME}"
 
 # Disable "online" LED
 /usr/bin/cdi-fpi 0 0 0
@@ -3497,6 +3500,90 @@ echo "+++++++ List finished ++++++++++++++++++"
 
 
 ={============================================================================
+|kt_dev_si_0002| si-bootlog-log
+
+
+// bootlog-config.sh
+
+# Path to initial/temporary BootLog Log (BLL) file
+# (MSCQ00182643: BSKYB_SI_BOOTLOG_AddMilestonesAndFilesizeChecks)
+BLLTEMPPATH="/tmp"
+
+// bootlog.sh
+# ------------------------------------------------------------------------------
+# Set up BootLogLog (BLL)
+# ------------------------------------------------------------------------------
+
+# Set BootLogLog (BLL) filename
+# Initialially we use the temporary location, until the mounts are in place
+export `BLLFILENAME`="${BLLTEMPPATH}"/BLL.LOG
+
+// BLL:bootlog.sh: MILESTONE CONFIG1: BLOG_mntdev = /dev/sda1, BLOG_mntpath = /tmp/dummydisk/BLOGDIR, `BLOG_DATAPATH = /tmp/dummydisk/BLOGDIR/FSN_DATA`, MAX_MEM_FOR_LOG_MB = 2048, MAX_BOOTLOG_ROTATE = 6, MAX_RLOG_ROTATE_COPY = 59
+// BLL:bootlog.sh: MILESTONE CONFIG2: FSN_ROOT = /mnt/nds, BLLPATH = , BLINFOPATH = /tmp/dummydisk/BLOGDIR/FSN_DATA/VERINFO, MPROFPATH = /tmp, MAX_INDIVIDUAL_FILESIZE_KB = 256000
+// 
+// BLL:bootlog.sh: MILESTONE Mount  BLOG_mntdev BLOG_mntpath: /dev/sda1 /tmp/dummydisk/BLOGDIR
+
+// *TN* mounted
+
+# ------------------------------------------------------------------------------
+# Initialise BootLog Log (BLL) in persistant storage
+#   Before now, all BLL output was being written to /tmp/BLL.LOG. We can set
+#   things up properly.  (See also ReadMe.txt in this directory).
+# ------------------------------------------------------------------------------
+# Set BootLogLog filename to the mounted device, and briefly remember the temp location.
+TEMPBLLNAME="${BLLFILENAME}"
+export BLLFILENAME="${BLOG_DATAPATH}"/BLL.LOG
+
+
+# Rename the previous BootLogLog (BLL) file (if it exists), in preparation to start a new one
+if [ -e "${BLLFILENAME}" ]; then
+  cp "${BLLFILENAME}" "${BLOG_DATAPATH}"/BLL_PREV.LOG
+  rm -f "${BLLFILENAME}"
+  `PrevBLLFileFound=true`
+else
+  PrevBLLFileFound=false
+fi
+
+
+# Copy the temporary BLL.LOG from "${BLLTEMPPATH}"/BLL.LOG to "${BLOG_DATAPATH}"/BLL.LOG
+if [ -e "${TEMPBLLNAME}" ]; then
+  cp "${TEMPBLLNAME}" "${BLLFILENAME}"
+  rm -f "${TEMPBLLNAME}"
+  echo "BLL:bootlog.sh: MILESTONE Temp BLL file copied to persistent storage"  >> "${BLLFILENAME}"
+else
+  echo "BLL:bootlog.sh: WARNING Temp BLL file not found. Starting new file in persistant storage"  > "${BLLFILENAME}"
+fi
+
+
+*TN* so BILLFILENAME changes are okay
+
+# Report on earlier "BLL_PREV.LOG" activity
+if [ `"${PrevBLLFileFound}" == "true"` ]; then
+   echo "BLL:bootlog.sh: MILESTONE Previous BLL file renamed to ${BLOG_DATAPATH}/BLLPREV.LOG"  >> "${BLLFILENAME}"
+else
+   echo "BLL:bootlog.sh: WARNING Previous BLL file not found"  >> "${BLLFILENAME}"
+fi
+
+// BLL:bootlog.sh: MILESTONE Temp BLL file copied to persistent storage
+// BLL:bootlog.sh: MILESTONE Previous BLL file renamed to /tmp/dummydisk/BLOGDIR/FSN_DATA/BLLPREV.LOG
+
+# ------------------------------------------------------------------------------
+# Execute child scripts
+# ------------------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------------------
+# Unmount the disk used to create BOOTLOG folder
+# ------------------------------------------------------------------------------
+// *TN* see from BLL.PREV.LOG due to switch between disk and tmp
+BLL:bootlog.sh: MILESTONE Disk/FFS is being unmounted, so BLL.LOG moved back to temp: /tmp
+
+# ------------------------------------------------------------------------------
+# Create background processes
+# ------------------------------------------------------------------------------
+
+
+={============================================================================
 |kt_dev_si_0002| si-bootlog-logfile-monitor
 
 // build_mw_epg.sh
@@ -3541,6 +3628,9 @@ echo "+++++++ List finished ++++++++++++++++++"
 ={============================================================================
 |kt_dev_si_0001| si-httpsend
 
+<from-spk>
+/home/kyoupark/spk-out/build_mips/httpsend-0.0/src/httpsend.c
+
 build by spk and seems to be modified to send it sky.
 
 printf("Uploading (%d)(%s)(%s)\n",argc, /* mac */ argv[1],argv[2]);
@@ -3548,7 +3638,6 @@ printf("Uploading (%d)(%s)(%s)\n",argc, /* mac */ argv[1],argv[2]);
 ./httpsend "00:19:fb:f2:d4:6b" version.txt
 
 Fixed to: http://drop.stb.bskyb.com/cgi-bin/stbdump.cgi
-
 
 <ftp-sky>
 # fsky?
@@ -3587,6 +3676,33 @@ tar -cjvf ~/ktpark/SI-4453.bz2 .
 
 ={============================================================================
 |kt_dev_si_0002| si-git 
+
+Git global setup
+
+git config --global user.name "kyoupark"
+git config --global user.email "kyoupark@cisco.com"
+
+Create a new repository
+git clone https://wwwin-gitlab-sjc.cisco.com/kyoupark/SI-REPO.git
+cd sample
+touch README.md
+git add README.md
+git commit -m "add README"
+git push -u origin master
+
+Existing folder or Git repository
+
+cd existing_folder
+git init
+git remote add origin https://wwwin-gitlab-sjc.cisco.com/kyoupark/SI-REPO.git
+git add .
+git commit
+git push -u origin master
+
+git@wwwin-gitlab-sjc.cisco.com:kyoupark/SI-REPO.git
+
+git remote set-url origin git@wwwin-gitlab-sjc.cisco.com:kyoupark/SI-REPO.git
+
 
 <register-ssh-key>
 https://wiki.cisco.com/display/GITFUSION/Getting+started+in+Git
@@ -4188,6 +4304,228 @@ Goto http://hudsonmaster1:8080/hudson/job/AutoSI_GetBaseline/, log in, select
 and start the baseline build.
 NB: Use if possible 'ukstbuild3_bskyb' as CC_SERVER; the Bash shell on
 'hudsconccspur' appears to be set up slightly differently.
+
+
+{si-artifactory}
+https://wiki.cisco.com/display/GITFUSION/Platform+configuration+in+Git
+
+// git clone -b AMS_BCM_MIPS4K_LNUX_DARWIN_01 ssh://phburnet@wwwin-git-gpk-2.cisco.com:29418/platforms/platform_hub
+
+git clone -b AMS_BCM_MIPS4K_LNUX_DARWIN_01 ssh://kyoupark@wwwin-git-gpk-2.cisco.com:29418/platforms/platform_hub
+
+cd platform_hub
+
+Resolve_Deps/scripts/resolve_deps.sh
+
+kyoupark@st-castor-03:~/platform_hub$ git submodule status
+ e08ce3183b1fd216cb1776a6ba47d803d9b03e38 AMS_BCM_MIPS4K_LNUX_DARWIN_01 (AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20)
+ ac852f3614b562902597a27b2e30678aa85be306 FUSIONOS/CDI_INC (CDI_INC_FOSVERSION_29.1.1.1)
+ 2bfe35e6143a1fbc952f002d1be8ddb8934eea89 FUSIONOS/FOS_INC (FOS_INC_FOSVERSION_29.1.1.1)
+ f7403257fbe5d05b5e46b79efe76d90f3280fcb1 FUSIONOS/MHXNVRAMFS (MHXNVRAMFS_F83.0.0.REL_MHXNVRAMFS_MAIN_Int)
+ 9debc66e770305d28bb6effe3c13f9257f157b77 FUSIONOS/XTVFS (master/XTVFS_OS20.0.41_XTVFS_MAIN_2_Int)
+ e55ce2459371f8eaecc382e8d732c971438b1208 FUSIONOS_3/CDI_TRACKER (master/CDI_TRACKER_1.0.29_CDI_TRACKER_MAIN_Int)
+ fa1685318a162ef15f630c9682b0e697bdb9d828 XTV_Low_Level_VOB/XTVFS_Comp (master/XTVFS_Comp_20.0.66_xtvfs_main_3_Int)
+ e97542ce5916574f7c4b08ccd7d08bbabc89906a XTV_Low_Level_VOB/xi64_comp (master/xi64_comp_Ver.1.0.4_xi64_main_Integration)
+ 854002a74386263f233300343ed5016a9b400935 XTV_Tools_VOB/xdat_comp (master/xdat_comp_xdat_main_2.0.9)
+
+
+http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
+
+Importing customer CDI tarball
+
+The customer CDI tarball is imported into the platform repo here are the steps
+that should be taken
+
+
+# From the starting point of the platform_hub root directory
+cd <platform git submodule path>
+
+// kyoupark@st-castor-03:~/platform_hub/AMS_BCM_MIPS4K_LNUX_DARWIN_01$ ll
+// total 36
+// -rw-rw-r--  1 kyoupark ccisco   54 Feb 28 15:02 .git
+// -rw-rw-r--  1 kyoupark ccisco    6 Feb 28 15:02 .gitignore
+// drwxrwxr-x  4 kyoupark ccisco 4096 Feb 28 15:02 BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
+// drwxrwxr-x  6 kyoupark ccisco 4096 Feb 28 15:02 DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
+// drwxrwxr-x  3 kyoupark ccisco 4096 Feb 28 15:02 Resolve_Deps/
+// drwxrwxr-x  3 kyoupark ccisco 4096 Feb 28 15:02 KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
+// -rwxrwxr-x  1 kyoupark ccisco  792 Feb 28 15:02 initialise_hooks*
+// drwxr-xr-x  6 kyoupark ccisco 4096 Feb 28 15:02 ./
+// drwxr-xr-x 15 kyoupark ccisco 4096 Feb 28 15:02 ../
+
+// kyoupark@st-castor-03:~/platform_hub/AMS_BCM_MIPS4K_LNUX_DARWIN_01/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball$ ll
+// lrwxrwxrwx 1 kyoupark ccisco   96 Feb 28 15:02 kernel-headers-ams-drx890-preprod.tar.gz -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/kernel-headers-ams-drx890-preprod.tar.gz
+// lrwxrwxrwx 1 kyoupark ccisco   94 Feb 28 15:02 kernel-headers-ams-drx890-debug.tar.gz -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/kernel-headers-ams-drx890-debug.tar.gz
+// lrwxrwxrwx 1 kyoupark ccisco   91 Feb 28 15:02 cdi-drivers-ams-drx890-prod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/cdi-drivers-ams-drx890-prod.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   94 Feb 28 15:02 cdi-drivers-ams-drx890-preprod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/cdi-drivers-ams-drx890-preprod.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   92 Feb 28 15:02 cdi-drivers-ams-drx890-debug.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/cdi-drivers-ams-drx890-debug.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   94 Feb 28 15:02 service-centre-ams-drx890-prod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/service-centre-ams-drx890-prod.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   97 Feb 28 15:02 service-centre-ams-drx890-preprod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/service-centre-ams-drx890-preprod.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   95 Feb 28 15:02 service-centre-ams-drx890-debug.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/service-centre-ams-drx890-debug.tar.bz2*
+// lrwxrwxrwx 1 kyoupark ccisco   87 Feb 28 15:02 nds-drv-ams-drx890-prod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-prod.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   90 Feb 28 15:02 nds-drv-ams-drx890-preprod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-preprod.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   88 Feb 28 15:02 nds-drv-ams-drx890-debug.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-debug.tar.bz2
+// lrwxrwxrwx 1 kyoupark ccisco   93 Feb 28 15:02 kernel-headers-ams-drx890-prod.tar.gz -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/kernel-headers-ams-drx890-prod.tar.gz
+
+
+// * e08ce31 : (HEAD -> AMS_BCM_MIPS4K_LNUX_DARWIN_01, tag: AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20, origin/HEAD, origin/AMS_BCM_MIPS4K_LNUX_DARWIN_01_SquashFS, origin/AMS_BCM_MIPS4K_LNUX_DARWIN_01) Automated driver import script (5 months ago) <Hudkins automated>
+// * 05e4432 : (tag: AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.0-h1.19p20) Automated driver import script (5 months ago) <Hudkins automated>
+// * 247f6ef : (tag: AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.15.0-h1.19p19) Automated driver import script (7 months ago) <Hudkins automated>
+// * bf2e176 : (tag: AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.14.1-h1.19p19) Automated driver import script (7 months ago) <Hudkins automated>
+// * 7128c46 : (tag: AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.14.0-h1.19p18, origin/AMS_BCM_MIPS4K_ENGG_VER3_LNUX_DARWIN_01) Automated driver import script (12 months ago) <Hudkins automated>
+// * fa8eacf : (tag: AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.13.1-h1.19p18) Automated driver import script (1 year, 3 months ago) <Hudkins automated>
+
+
+# <1>an important step before importing any files
+Resolve_Deps/scripts/rm_deps_symlinks.sh
+  
+# Now extract files customer CDI tarball into appropriate folders BLD_<platform>, DEL_<platform> and KERN_<platform>
+# Build platform and once built:
+  
+# stage any code changes
+find . ! -path "./.git/*"  -type f -exec grep -Il . {} \; | while read file; do echo "git add \"${file}\"" ;done | bash
+ 
+# add any imported symlinks
+find . -type l -exec git add -f {} \;
+ 
+# create tarball
+git ls-files --others | tar -zcf /tmp/<platform>.tar.gz --files-from –
+
+# <2>
+// Has two dirs which don't have sym links:
+// drwxr-xr-x 3 kyoupark ccisco 4096 Oct 16 16:44 KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
+// drwxr-xr-x 6 kyoupark ccisco 4096 Oct 16 16:44 DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
+//
+// the current tag/tar name is AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20
+// so the next would be AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20
+// tar cvzfp AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz .
+//
+// -rw-r--r--  1 kyoupark ccisco 226961844 Oct 16 16:44 AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20.tar.gz
+// -rw-r--r--  1 kyoupark ccisco 226964700 Mar  1 09:32 AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz
+  
+
+# <3> deploy artifact
+curl -u stb-bin-deployer:7Th3kSL7ED -X PUT --data-binary @/tmp/<platform>.tar.gz http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/<platform>/<revision>/<platform>-<revision>.tar.gz
+
+// http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20/
+// http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20/AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20.tar.gz
+
+curl -u stb-bin-deployer:7Th3kSL7ED -X PUT --data-binary @/tmp/<platform>.tar.gz http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/<platform>/<revision>/<platform>-<revision>.tar.gz
+
+// curl -u stb-bin-deployer:7Th3kSL7ED -X PUT --data-binary @./AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz \
+// http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20/AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz
+//
+// http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20/AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz
+
+# remove untracked files
+for a in `git ls-files --others` ; do rm $a ;done
+  
+# <4> edit ivy file and replace the artifact revision with the new deployed in the previous step
+vi Resolve_Deps/ivy_files/download_platform_bin_ivy.xml
+
+// <?xml version="1.0" encoding="UTF-8"?>
+// <ivy-module version="2.0">
+// <info organisation="platforms" module="bin_AMS_BCM_MIPS4K_LNUX_DARWIN_01"/>
+// <dependencies>
+//
+// <dependency org="platforms" name="AMS_BCM_MIPS4K_LNUX_DARWIN_01" rev="AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20">
+// <artifact name="AMS_BCM_MIPS4K_LNUX_DARWIN_01" ext="tar.gz" type="gz"/>
+//         </dependency>
+//
+// <dependency org="toolchains" name="mips4k_gcc_x86_linux_hound_2_debuglibs" rev="mips4k_gcc_x86_linux_hound_2_debuglibs_crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508">
+// <artifact name="mips4k_gcc_x86_linux_hound_2_debuglibs" ext="tar.gz" type="gz"/>
+//         </dependency>
+// <dependency org="toolchains" name="mips4k_gcc_x86_linux_hound_2" rev="mips4k_gcc_x86_linux_hound_2_crosstools_hf-linux-2.6.18.0_gcc-4.2-10tsHound_uclibc-nptl-0.9.29-20070423_20140508">
+// <artifact name="mips4k_gcc_x86_linux_hound_2" ext="tar.gz" type="gz"/>
+//         </dependency>
+// </dependencies>
+// </ivy-module>
+  
+
+# <5> retrieve newly deployed artifact
+cd ..
+Resolve_Deps/scripts/resolve_deps.sh
+
+# now recreate symlinks
+cd <platform>
+../Resolve_Deps/scripts/create_dependencies.pl ../deps/DEL_<platform> DEL_<platform>
+../Resolve_Deps/scripts/create_dependencies.pl ../deps/KERN_<platform> KERN_<platform>
+
+// cd AMS_BCM_MIPS4K_LNUX_DARWIN_01/
+// ../Resolve_Deps/scripts/create_dependencies.pl ../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01 DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01
+// ../Resolve_Deps/scripts/create_dependencies.pl ../deps/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01 KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01
+
+
+Stage, commit, tag and push for review
+
+This has to be done in two stages, first to be applied is any changes in the
+platform submodule. Then secondly, within the platform_hub. 
+
+# stage any changes
+git add -A .
+
+# commit
+git commit -m "import of <revision>"
+
+// git commit -m "import of AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20"
+
+# create tag
+git tag -a <revision> -m "import of <revision>"
+
+// git tag -a AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20 -m "import of AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20"
+
+# push for review
+git push origin HEAD:refs/for/<branch> 
+
+// git push origin HEAD:refs/for/AMS_BCM_MIPS4K_LNUX_DARWIN_01
+  
+
+# once changes have been reviewed and submitted then commit change in platform_hub
+cd -
+git add -A .
+
+# commit
+git commit -m "import of <revision>"
+
+// git commit -m "import of AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20"
+
+# create tag
+git tag -a <branch>/<revision> -m "import of <revision>"
+
+// git tag -a AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20 -m "import of AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20"
+
+# push for review
+git push origin HEAD:refs/for/<branch>
+
+// git push origin HEAD:refs/for/AMS_BCM_MIPS4K_LNUX_DARWIN_01
+
+# review and submit change in gerrit
+ 
+
+Making any change live on STB_SW project branch
+
+For projects to use a a new release of the platform imported into git, then
+the submodule needs to be switched to the new sha-1 or tag
+
+# on project or feature branch
+git submodule update --init <platform>
+cd <platform>
+
+// cd AMS_BCM_MIPS4K_LNUX_DARWIN_01
+
+# ensure up to date
+git fetch --tags    
+
+// * [new tag]         AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20 -> AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20
+
+# this can also be a branch or a specific sha-1
+git checkout <tag>    
+
+cd ..
+
+git add -f <platform>
+
+# then follow your project git playbook instructions for commit, tag and push
+# for review
 
 
 ={============================================================================
@@ -4875,6 +5213,7 @@ function check_input_tarballs()
   CDI_DRIVERS_CONFIG_TARBALL=${CDI_DRIVERS_CONFIG_TARBALL_DIR}/config-${SPK_PLATFORM}-${SPK_VARIANT}.tar.bz2
   SCS_BINARY_TARBALL=${CDI_DRIVERS_TARBALL_DIR}/service-centre-${SPK_PLATFORM}-${SPK_VARIANT}.tar.bz2
 
+  // *nds-drivers*
   // + MW_EPG_TARBALL_DIR=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian
   // + MW_EPG_TARBALL=/home/nds-uk/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/mw-epg-ams-drx890-debug-sky_trials.tar.bz2
   // + MW_EPG_SPK_TARBALL_NAME=mw-epg-ams-drx890-debug.tar.bz2
@@ -4882,6 +5221,14 @@ function check_input_tarballs()
   // + CDI_DRIVERS_TARBALL=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/cdi-drivers-ams-drx890-debug.tar.bz2
   // + CDI_DRIVERS_CONFIG_TARBALL=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/configs/config-ams-drx890-debug.tar.bz2
   // + SUPPORT_PACKAGE_TARBALL=/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_INPUT_DEL_2/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/support-ams-drx890-debug.tar.bz2
+
+  // /home/kyoupark/STB_SW/deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball
+  // lrwxrwxrwx 1 kyoupark ccisco   87 Feb 13 16:13 nds-drv-ams-drx890-prod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-prod.tar.bz2
+  // lrwxrwxrwx 1 kyoupark ccisco   90 Feb 13 16:13 nds-drv-ams-drx890-preprod.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-preprod.tar.bz2
+  // lrwxrwxrwx 1 kyoupark ccisco   88 Feb 13 16:13 nds-drv-ams-drx890-debug.tar.bz2 -> ../../../deps/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball/nds-drv-ams-drx890-debug.tar.bz2
+  //
+  // they are the same file.
+  // diff3 debug/etc/load-nds-drivers.sh preprod/etc/load-nds-drivers.sh prod/etc/load-nds-drivers.sh
 } 
 
 
@@ -6703,6 +7050,8 @@ mysql --batch --table -u root uploads -e "SELECT version, upload_time, filename,
 
 
 <3> search all with the test id
+
+mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, parser_result, all_tests_found.test_id FROM upload, all_tests_found WHERE all_tests_found.id=upload.id AND all_tests_found.test_id in (70) ORDER BY upload_time DESC LIMIT 100"
 mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, all_tests_found.test_id FROM upload, all_tests_found WHERE version LIKE '%R0%' and all_tests_found.id=upload.id AND all_tests_found.test_id in (75) ORDER BY upload_time DESC LIMIT 10"
 
 mysql --batch --table --column-names -u root uploads -e "SELECT version, upload_time, filename, diskerrors, pcat_status, all_tests_found.test_id \
@@ -7108,6 +7457,12 @@ http://theyard.cisco.com/cgi-bin/test_list.sh
 
 http://theyard.uk.nds.com/logparseradmin/admin/logparser/test/
 http://theyard.uk.nds.com/logparseradmin/admin/logparser/test/442/
+
+
+<log-parser-core>
+// line # in the result page is not relavant
+check_log::handle_core()
+
 
 <log-parser-2>
 2	
@@ -8159,7 +8514,8 @@ index=darwin component=TESTS_FOUND | rex field=message "^\"?(?<prio>[0-9]{1})\s(
 index=darwin component=DETAILED_INFO
 message = The main text of the actual log message
 
-<ex>
+
+<splunk-on-log-message>
 index=darwin component=VRM_SERVER | rex filed=message "VRM-FSM: Live( (?<job>[01])): E_LIVE_STATE_DESTROY -> (E_LIVE_INPUT_FREE_FSM) -> E_LIVE_STATE_NONE"
 
 // 256090:NDS: ^[2017:10:20 20:35:10]0946973886.069153 !MIL    -VRM_SERVER   		< p:0x00000318 P:MW t:0x02108520 T:VRM_SRV M:fsm.c F:FSMRun L:917 > 
@@ -8193,7 +8549,13 @@ index=darwin component=DETAILED_INFO* priority=1 platform="ams-drx890"
 index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0"
 index=darwin component=VRM_SERVER "Bad parameter """"hMC=0x0" | dedup logid
 
-<ex>
+component=MEMMAN "Cannot allocate 3592 bytes in pool " "PREFS"
+
+| dedup logid | eval logfile="darwin_".mac."_".logid | table logfile platform version
+
+// !WARN   -MEMMAN       		< p:0x000007f6 P:MW t:0x01f46450 T:IPC_WRAPPER_THREAD M:mem_static.c F:MHWMemAllocStatic L:75 > Cannot allocate 3592 bytes in pool " "PREFS"  
+component=MEMMAN "Cannot allocate" "PREFS" | dedup logid | timechart span=1h count by platform
+
 component=FDM_API_OPTV "limit number of module download session request" | dedup logid | eval logfile="darwin_".mac."_".logid | table logfile platform version
 
 <ex>
@@ -8208,6 +8570,7 @@ index=darwin component=ASM function=ASMLIB_SO_CreateTransition "New entry" Type 
 The new command I used here was streamstats and it was used to count the
 number of consecutive InstanceIDs per mac ("streamstats count BY InstanceID
     mac reset_on_change=true") in some cases spanning separate logs. (edited)
+
 
 
 ={============================================================================
@@ -8307,6 +8670,123 @@ https://www.stb.bskyb.com/jira/browse/DRI-1845
         modified:   FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/make_image.sh
         modified:   FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/makefile
         modified:   FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/mw_process_main.c
+
+
+={============================================================================
+|kt_dev_si_0002| si-q
+
+git co BSKYB_HQ000_ETHAN_Int
+
+// tag
+BSKYB_HQ000_ETHAN_Int/BSKYB_INTEGRATION_BLD_06.27.04_BSKYB_HQ000_ETHAN_Int
+
+Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01
+
+
+chrmicha@st-castor-03 ~ $ type rd-falcon-D1
+rd-falcon-D1 is aliased to `Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_BSKYB/BLD_ETHAN_SKY97445_BCM7445_LNUX_01'
+chrmicha@st-castor-03 ~ $ type rd-falcon-V2
+rd-falcon-V2 is aliased to `Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_BSKYB_2/BLD_ETHAN_SKYH419_FALCONV2_LNUX_01'
+chrmicha@st-castor-03 ~ $ type rd-mr
+rd-mr is aliased to `Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_BSKYB/BLD_ETHAN_SKYH412_MRBOX_LNUX_01'
+chrmicha@st-castor-03 ~ $ type rd-xwing
+rd-xwing is aliased to `Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_BSKYB/BLD_ETHAN_SKYH412_XWING_LNUX_01'
+
+// process
+BAU and the use of Epics
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=BAU+and+the+use+of+Epics
+
+Ethan Release Builds
+http://hetty.cisco.com/fusionmadesimple/index.php/Ethan_Release_Builds#Build_Engineer_Guide
+
+
+={============================================================================
+|kt_dev_si_0002| si-q-comp-ui
+
+https://www.stb.bskyb.com/confluence/display/2016/Useful+Information#UsefulInformation-EnablingUIQTDebug
+
+Enabling UI QT Debug 
+By default all UI qdebug is turned off in an SI build, to enable the UI qdebug you need to modify a build define and do a clean build
+Index: THIRD_PARTY_LIBRARIES/BSKYB_GEN2_AMS/Components/Qt/Qt5-Ethan/build/component.mk
+===================================================================
+--- THIRD_PARTY_LIBRARIES/BSKYB_GEN2_AMS/Components/Qt/Qt5-Ethan/build/component.mk     (revision 677)
++++ THIRD_PARTY_LIBRARIES/BSKYB_GEN2_AMS/Components/Qt/Qt5-Ethan/build/component.mk     (working copy)
+@@ -147,7 +147,7 @@
+ $(shell chmod a+x ${QT_MOC} ${QT_RCC})
+ ## Ensure no debug in SI builds
+-SKY_OPTIONS += -DQT_NO_DEBUG_OUTPUT
++#SKY_OPTIONS += -DQT_NO_DEBUG_OUTPUT
+See the following link maintained by the UI team on how the UI logging mechanism works:
+EPG Application Logging
+
+
+// note
+This conversation between Douglas and Pratchi is about building the epg from source.
+
+Douglas Lima15/01/2018, 15:03
+Hi, has anyone recently built with --epg_from_src ?
+
+Prachi Joshi15/01/2018, 15:04
+sometime last year
+had to change this
+THIRD_PARTY_LIBRARIES/BSKYB_GEN2_UI/Applications/makefile
+add not parallel at line 265
+
+262 ## ************************************************************************
+263 # Run the packaging / signing tool over the output
+264 ## ************************************************************************
+265 .NOTPARALLEL:
+266
+
+Salim Esmailjee15/01/2018, 15:06
+Please do update http://hetty.cisco.com/fusionmadesimple/index.php/Epg_hijack after you manage to successfully build it
+
+Douglas Lima15/01/2018, 15:21
+Thanks Prachi, I had an old patch from NGDEV-84050 (still open) and have updated with .NOTPARALLEL but still fails in manatee due to ( No module named jsonschema), it works fine in build servers. I wonder if it is actually an missing python package.
+
+Prachi Joshi15/01/2018, 15:21
+oh ok
+I had tried this locally not on manatee so I dont know. May be it doesn't work locally as well
+something changed
+
+Douglas Lima15/01/2018, 15:22
+locally it works fine, guess best bet is build the wgt locally and attach it to manatee (ok not ideal, symbols will be messed, etc)
+
+Prachi Joshi15/01/2018, 15:23
+ok yes I agree
+
+
+<q-ui>
+
+4506:NDS: ^[2018:01:23 03:19:40]0000000072.065365 !MIL    -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:main.cpp F:int main(int, char**) L:312 > MS:EPG MainView Start
+
+QtEpgApp/source/prod_epg/epg_ui/src/MainView.cpp
+776:    NotificationModel::notificationsInJSON = FileUtils::instance().readQJsonDocumentFromFile(QStringLiteral(":/notifications/notifications.json")).toVariant().toMap();
+777:    Q_ASSERT_X(NotificationModel::notificationsInJSON.count(), "Badly formed resource", "Failed to load notifications resource");
+
+
+12278:NDS: ^[2018:01:23 03:34:22]0000000954.102201 !MIL    -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:NotificationModel.cpp F:void NotificationModel::showById(const NotificationId&, Notifica L:195 > MS:EPG Show notification id :  "NSS"
+
+resources/notifications/notifications.json
+    "NSS":
+    {
+        "Title":"$['NSS_MINI_TV']",
+        "Type":"Banner",
+        "Timeout":0,
+        "Groups":"Player,MainTV,MiniTV",
+        "Priority":200
+    },
+
+resources/localeFiles/language/eng/strings.json
+        {
+            "id": "SCHEDULE_NOT_READY_MESSAGE",
+            "t": "Waiting for TV Schedule\u2026",
+            "d": "Text shown in UI areas that require schedule data when not enough data have been harvested yet.",
+            "f": ""
+        },
+
+!INFO   -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:PanelContainerGadget.cpp F:void PanelContainerGadget::processPanelRequests() L:2467 > REQUEST_ADD_PANEL_URI: "guide://message?stringWithSpinnerKey=SCHEDULE_NOT_READY_MESSAGE"
+!MIL    -com.bskyb.epgui		< p:0x0000063c P:APP t:0x70f921d0 T:no name M:PanelGadget.cpp F:virtual void PanelGadget::setUri(const QString&, bool, Navigatio L:229 > MS:EPG Set new panel :  "guide://message?stringWithSpinnerKey=SCHEDULE_NOT_READY_MESSAGE"
 
 
 ={============================================================================
@@ -10895,6 +11375,7 @@ THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae/config/stbe.ini
 12831:NDS: ^[2018:01:30 14:39:29]0946685349.008236 !INFO   -LAE                         < p:0x000001c8 P:APP t:0x016ea520 T:LAE_THREAD M:AppEngineSm.cpp F:LAE L:89 > [I] Render renderOsd()
 12832:NDS: ^[2018:01:30 14:39:29]0946685349.008418 !INFO   -LAE                         < p:0x000001c8 P:APP t:0x016ea520 T:LAE_THREAD M:AppEngineSm.cpp F:LAE L:89 > [T] Render videoColor(0x00000000) OVER m_videoFillColor(0x00000000) -> 0x00000000
 
+7748:NDS: ^[2018:02:08 11:45:33]0946685422.513489 !INFO   -LAE                          < p:0x00000207 P:APP t:0x01721520 T:LAE_THREAD M:AppEngineSm.cpp F:LAE L:89 > [I] ServiceSm ServiceSm::getServiceByChannelKey (channelKey=2085) returning (rval=1):
 
 <comp-iapp-output-control>
 SI-10968 R13 - Black screen displayed for approx 4 secs after exiting some Interactive apps
@@ -12675,6 +13156,10 @@ S has 2 SD channels and S2 has three HD channels.
 !MIL    -AMS          		< P:MW M:dataClient.cpp F:DataClient::handleSignalEvents L:848 > SIGNAL_LOSS event arrived 
 
 egrep -an "|FEM_DS_GetTunerStatusInfo|FEM_PLUGIN_Satellite_DeviceEvent|notifySignalState"
+
+// Q
+!MIL    -FEM          		< p:0x0000063b P:MW t:0x75944450 T:FEM_WORKER_THREAD M:fem_plugin_satellite_common.c F:FEM_PLUGIN_SatelliteCommon_LogLockEventStatus L:1185 > Locked f=12460500 fo=0 fs=29500000 fec=4096 tuner=0 LNB=0 hMC=0x3 
+!MIL    -FEM          		< p:0x0000063b P:MW t:0x75944450 T:FEM_WORKER_THREAD M:fem_plugin_satellite_common.c F:FEM_PLUGIN_SatelliteCommon_LogLockEventStatus L:1185 > Locked f=12460500 fo=0 fs=29500000 fec=4096 tuner=0 LNB=0 hMC=0x4 
 
 
 ={============================================================================
@@ -18439,6 +18924,35 @@ Going forward, if similar issue is found, please release one of the tuner (By
 !MIL    -MDM          		< p:0x000001ec P:MW t:0x01c8c520 T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x43e6 hMC=0xe10 tuner_id =1 and job_type =LIVE_VIEWING 
 !MIL    -MDM          		< p:0x000001ec P:MW t:0x01c8c520 T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x43f0 hMC=0xe14 tuner_id =0 and job_type =RECORD 
 !MIL    -MDM          		< p:0x000001ec P:MW t:0x01c8c520 T:MCM_ITCMAIN_THREAD M:mdm_connection.c F:MDM_TunerStatusPrint L:3223 > mdm_handle =0x4413 hMC=0xe1e tuner_id =1 and job_type =LIVE_VIEWING 
+
+
+<comp-sim-error>
+//
+We have got hold of the Schedule DB from box and I can confirm that SCVKEY2
+and CNID are correct but INSTKEY 426 does not exist in schedule
+
+//
+Thanks to Kit for reproducing the problem. We can see that EPG is querying
+GUIDE for some information which it cannot find in SIM database.
+
+ 
+NDS: ^0946686568.333174 !WARN  -SQ13         < p:000000f1 t:01a04520 T:SIM_SC_IPC_SERVER_THREAD M:sim_dbc_sched_query.c F:
+  SIM_DBC_QUERY_GetProgrammeInstanceByXsiLocator L:00648 > SIM_DBC_UTIL_GetProgInstObjectFromQuery()=NOT FOUND by XSI locator: INSTKEY=426 SVCK2=0x0FA4 CNID=0x0020
+ 
+We are trying to get hold of SCHED.DB from disk
+
+//
+!WARN   -SQ13                             < p:0x0000020f P:MW t:0x019b7520 T:SIM_SC_IPC_SERVER_THREAD M:sim_dbc_sched_query.c 
+  F:SIM_DBC_QUERY_GetProgrammeInstanceByXsiLocator L:648 > SIM_DBC_UTIL_GetProgInstObjectFromQuery()=NOT FOUND by XSI locator: ""INSTKEY=439"" ""SVCK2=0x0FA9"" ""CNID=0x0020 
+!ERROR  -SQ08                             < p:0x0000020f P:MW t:0x019b7520 T:SIM_SC_IPC_SERVER_THREAD M:sim_dbc_merged_query.c 
+  F:SIM_DBC_MERGED_QUERY_GetProgrammeInstanceByXsiLocator L:2412 > SIM_dbc_merged_query_ProcessAndMergeRetrievedPI() FAILED 
+
+// Q
+/tmp/sim_ram
+-sh-3.2# ls -al SCHEDDSK.DB
+
+// Darwin
+FSN_DATA/
 
 
 ={============================================================================
