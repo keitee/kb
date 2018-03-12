@@ -52,7 +52,7 @@ gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
 #
-$(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
+$(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS) soundex.h
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 
 test_$(TARGET) : $(TARGET).o gtest.a gmock.a

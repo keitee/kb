@@ -7,8 +7,11 @@
 # g++ (Debian 6.3.0-18+deb9u1) 6.3.0 20170516
 # have to use absloute path. don't know why
 
-GTEST_DIR = /home/kitp/works/googletest/googletest
-GMOCK_DIR = /home/kitp/works/googletest/googlemock
+# GTEST_DIR = /home/kitp/works/googletest/googletest
+# GMOCK_DIR = /home/kitp/works/googletest/googlemock
+
+GTEST_DIR = ~/works/googletest/googletest
+GMOCK_DIR = ~/works/googletest/googlemock
 
 TARGET = t_string
 

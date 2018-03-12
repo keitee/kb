@@ -37,48 +37,29 @@ class Soundex
 public:
     std::string encode(const std::string &word) const
     {
-        return zeroPad(head(word) + encodeMultipleDigits(tail(word)));
-    }
+        // *TN* do not like to express case handling only on head.
 
-private:
-    static const size_t MAX_CODE_LENGTH{4};
+        // return zeroPad(head(word) + encodeMultipleDigits(tail(word)));
+        //
+        // To support case:
+        // return zeroPad(upperFront(head(word)) + encodeMultipleDigits(tail(word)));
+        
+        // To support when the first and the second are the same char,
+        //
+        // Our solution involves a little bit of change to the overall policy
+        // embodied in encode. We pass `the entire word` to encodedDigits for
+        // encoding so that we can compare the encoding of the second letter to
+        // the first. 
+        //
+        // TN: this seems great rather than having state to keep the first
+        // between head() and tail().
+        //
+        // This cause to change encodeMultipleDigits() to encode the first to
+        // handle both when there should be one char when char is not found in
+        // the map such as A so that tail() should works on not-null-string AND
+        // when the first and the second map to the same such as "Bbxx"
 
-    std::string head(const std::string &word) const
-    {
-        // Q: this cause const converison error
-        // return std::string(word[0]);
-        return word.substr(0, 1);
-    }
-
-    std::string tail(const std::string &word) const
-    {
-        return word.substr(1);
-    }
-
-    // *TODO* do not check when word.size() > MAX_CODE_LENGTH
-    std::string zeroPad(const std::string &word) const
-    {
-        auto zerosNeeded = MAX_CODE_LENGTH - word.size();
-        std::cout << "zerosNeeded: " << zerosNeeded << std::endl;
-
-        return word + std::string(zerosNeeded, '0');
-
-        // when use cxx-string-append
-        // std::string padded(word);
-        // return padded.append(zerosNeeded, '0');
-    }
-
-    std::string encodeMultipleDigits(const std::string &word) const
-    {
-        std::string encoded;
-
-        for (const auto letter : word)
-        {
-            if (encoded.length() = 
-            encoded += encodeDigit(letter);
-        }
-
-        return encoded;
+        return zeroPad(upperFront(head(word)) + tail(encodeMultipleDigits(word)));
     }
 
     std::string encodeDigit(const char letter) const
@@ -93,9 +74,88 @@ private:
             {'r', "6"}
         };
 
-        auto it = encodings.find(letter);
-        return it == encodings.end() ? "" : it->second;
+        auto it = encodings.find(std::tolower(letter));
+        return it == encodings.end() ? DIGIT_NOT_FOUND : it->second;
+    }
+
+private:
+    static const size_t MAX_CODE_LENGTH{4};
+    static const std::string DIGIT_NOT_FOUND;
+    
+    std::string head(const std::string &word) const
+    {
+        return word.substr(0, 1);
+    }
+
+    std::string upperFront(const std::string &word) const
+    {
+        return std::string(1, std::toupper(word.front()));
+    }
+
+    std::string tail(const std::string &word) const
+    {
+        return word.substr(1);
+    }
+
+    std::string zeroPad(const std::string &word) const
+    {
+        auto zerosNeeded = MAX_CODE_LENGTH - word.size();
+
+        return word + std::string(zerosNeeded, '0');
+
+        // when use cxx-string-append
+        // std::string padded(word);
+        // return padded.append(zerosNeeded, '0');
+    }
+
+    // check overflow when word.size() > MAX_CODE_LENGTH and which can be done
+    // at zeroPad or here.
+    std::string encodeMultipleDigits(const std::string &word) const
+    {
+        // crash for the most since encodeDigit() will return null when not
+        // found in the map.
+        //
+        // std::string encoded;
+        // encoded += encodeDigit(word.front());
+
+        // works for the most but not
+        // CombinesDuplicateCodesWhenSecondDuplicatesFirst() since there will be
+        // the first char.
+        //
+        // std::string encoded{word.front()};
+
+        std::string encoded;
+        encoded += encodeDigit(word.front());
+        
+        for (const auto letter : tail(word))
+        {
+            if (isComplete(encoded)) 
+                break;
+
+            auto digit = encodeDigit(letter);
+            if (DIGIT_NOT_FOUND != digit && digit != lastDigit(encoded))
+                encoded += encodeDigit(letter);
+        }
+
+        return encoded;
+    }
+
+    bool isComplete(const std::string &encoding) const
+    {
+        // return encoding.length() == MAX_CODE_LENGTH-1;
+        return encoding.length() == MAX_CODE_LENGTH;
+    }
+
+    std::string lastDigit(const std::string encoding) const
+    {
+        if (encoding.empty())
+            return "";
+
+        return std::string(1, encoding.back());
+        // return std::string{encoding.back()};
     }
 };
+
+const std::string Soundex::DIGIT_NOT_FOUND{"*"};
 
 #endif // SOUNDEX_H

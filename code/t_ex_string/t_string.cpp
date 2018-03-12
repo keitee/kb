@@ -158,6 +158,16 @@ TEST(CxxStringTest, StringInsertAndAppendMember)
     EXPECT_EQ( ws1, L"fooXXXXXXXXXXXXXXXXX");
 }
 
+TEST(CxxStringTest, StringAppendNull)
+{
+    string s1{};
+
+    for(int n = 0; n < 5; ++n)
+        s1 += "";
+
+    EXPECT_EQ(s1.length(), 0);
+}
+
 
 // ={=========================================================================
 
