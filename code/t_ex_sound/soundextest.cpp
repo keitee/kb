@@ -78,6 +78,14 @@ TEST_F(SoundexEncoding, CombinesDuplicateCodesWhenSecondDuplicatesFirst)
     ASSERT_THAT(soundex.encode("Bbcd"), Eq("B230"));
 }
 
+// What about vowels? Rule #3 also states that otherwise-duplicate encodings
+// separated by a vowel (not h or w) get coded twice.
+
+TEST_F(SoundexEncoding, DoesNotCombineDuplicateEncodingsSeparatedByVowels)
+{
+    ASSERT_THAT(soundex.encode("Jbob"), Eq("J110"));
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleMock(&argc, argv);

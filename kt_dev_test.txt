@@ -14,6 +14,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_test_107| cppunit: inject dependency to object under test
 *kt_dev_test_108* cppunit: test runner command line options
 
+*kt_dev_test_001* tdd
+
 |kt_dev_test_001| gtest-install
 |kt_dev_test_002| gtest-doc
 *kt_dev_test_002* gtest-naming
@@ -27,6 +29,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_test_203* gmock-side-effect
 *kt_dev_test_202* gmock-and-cppunit
 *kt_dev_test_203* gmock-action
+*kt_dev_test_203* gmock-matcher
 |kt_dev_test_204| gmock: cheat: cardinality
 |kt_dev_test_207| gmock: cook: nice and strict mock
 *kt_dev_test_208* gmock-errors when misses expectation
@@ -936,6 +939,13 @@ This leads to the each test case name
 note:
 When run a single test which do not have any calls to setUp() and tearDown() to
 run a test, it's done by cppunit automatically.
+
+
+={============================================================================
+*kt_dev_test_001* tdd
+
+<tdd-cycle> RGR
+This cycle is often summarized as red-green-refactor
 
 
 ={============================================================================
@@ -3149,6 +3159,33 @@ TEST( WeatherStationUserInterface, snow_exception )
 ={============================================================================
 *kt_dev_test_203* gmock-matcher
 
+https://github.com/google/googletest/blob/master/googlemock/docs/CheatSheet.md
+
+Matchers
+
+A matcher matches a single argument. You can use it inside ON_CALL() or
+EXPECT_CALL(), or use it to validate a value directly:
+
+EXPECT_THAT(value, matcher)	
+Asserts that value matches matcher.
+
+ASSERT_THAT(value, matcher)	
+The same as EXPECT_THAT(value, matcher), except that it generates a fatal
+failure.
+
+// *TN* value is a single argument to matcher
+
+Built-in matchers (where argument is the function argument) are divided into
+several categories:
+
+
+<ex>
+// result is std::vector<> return
+
+const auto result = reward_service.checkRewards("111", account_valid);
+ASSERT_THAT(result, ElementsAre("CHAMPIONS_LEAGUE_FINAL_TICKET", "KARAOKE_PRO_MICROPHONE"));
+
+
 Container Matchers
 
 Most STL-style containers support ==, so you can use Eq(expected_container) or
@@ -3165,6 +3202,110 @@ ElementsAreArray({ e0, e1, ..., en }), ElementsAreArray(array), or ElementsAreAr
 
 The same as ElementsAre() except that the expected element values/matchers
 come from an initializer list, STL-style container, or C-style array.
+
+
+Defining Matchers
+
+MATCHER(IsEven, "") { return (arg % 2) == 0; }	
+Defines a matcher IsEven() to match an even number.
+
+MATCHER_P(IsDivisibleBy, n, "") 
+{ *result_listener << "where the remainder is " << (arg % n); return (arg % n) == 0; }	
+
+Defines a macher IsDivisibleBy(n) to match a number divisible by n.
+
+MATCHER_P2(IsBetween, a, b, std::string(negation ? "isn't" : "is") + " between " + PrintToString(a) + " and " + PrintToString(b)) 
+{ return a <= arg && arg <= b; }	
+
+Defines a matcher IsBetween(a, b) to match a value in the range [a, b].
+
+Notes:
+The MATCHER* macros cannot be used inside a function or class.
+
+The matcher body must be purely functional (i.e. it cannot have any side
+effect, and the result must not depend on anything other than the value
+being matched and the matcher parameters).
+
+You can use PrintToString(x) to convert a value x of any type to a string.
+
+<ex>
+As we add new functionality to RetweetCollection, such as combining similar
+tweets, we’ll want to verify that the new behavior properly impacts the
+collection’s size and emptiness. We have several ways to address verifying
+both attributes.
+
+// since size() and isEmpty() are different interface to the same
+// functionality.
+
+The first option is for every size-related assertion, add a second assertion
+around emptiness. This choice produces unnecessarily repetition and cluttered
+tests.
+
+TEST_F(ARetweetCollection, DecreasesSizeAfterRemovingTweet) 
+{
+  collection.add(Tweet());
+  collection.remove(Tweet());
+
+  ASSERT_THAT(collection.size(), Eq(0u));
+  ASSERT_TRUE(collection.isEmpty());  // DON'T DO THIS
+}
+    
+
+The second option is for every test around size, write a second test for
+emptiness. While keeping in line with the notion of one assert per test, this
+choice would also produce too much duplication.
+    
+TEST_F(ARetweetCollection, DecreasesSizeAfterRemovingTweet) 
+{
+  collection.add(Tweet()); 
+  collection.remove(Tweet());
+  ASSERT_THAT(collection.size(), Eq(0u));
+}
+        
+TEST_F(ARetweetCollection, IsEmptyAfterRemovingTweet) 
+{
+  collection.add(Tweet());
+  collection.remove(Tweet());
+  ASSERT_TRUE(collection.isEmpty());
+}
+            
+
+The third option is to create a helper method or custom assertion. Since the
+code contains a conceptual link between size and emptiness, perhaps we should
+link the concepts in the assertions.
+
+class RetweetCollection
+{
+    public:
+        RetweetCollection() {}
+
+        bool isEmpty() const
+        {
+            return 0 == size();
+        }
+
+        unsigned int size() const 
+        {
+            return 0;
+        }
+};
+
+class ARetweetCollection : public Test 
+{
+    public:
+        RetweetCollection collection;
+};
+
+MATCHER_P(HasSize, expected, "")
+{
+    return arg.size() == expected 
+        && arg.isEmpty() == (0 == expected); 
+}
+
+TEST_F(ARetweetCollection, MatcherWithSingleArgument)
+{
+    EXPECT_THAT(collection, HasSize(0u));
+}
 
 
 ={============================================================================

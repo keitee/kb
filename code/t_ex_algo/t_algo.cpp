@@ -835,6 +835,211 @@ void t_algo_find_longest_02()
     }
 }
 
+
+// ={=========================================================================
+// atoi
+//
+// * input type? digits only? no space?
+// * input size?
+// * what base? 10 or 2?
+// * sign support? 
+
+// from ansic, p43.
+//
+// when base is 10.
+//
+// this is 'naive' implementation since no error handlings and return 0 when
+// failed to convert. compare to strtol
+//
+// there is no check on the end of string input? '0' is not the same as
+// 0(null) and when see any other than numbers, for loops ends.
+
+uint32_t atoi_navie(const char *str)
+{
+    uint32_t value{0}, i{0};
+
+    for (value, i; str[i] >= '0' && str[i] <= '9'; ++i)
+    {
+        value = value*10 + (str[i] - '0');
+    }
+
+    return value;
+}
+
+// use isdigit()
+
+uint32_t atoi_isdigit(const char *str)
+{
+    uint32_t value{0}, i{0};
+
+    for (value, i; isdigit(str[i]); ++i)
+    {
+        value = value*10 + (str[i] - '0');
+    }
+
+    return value;
+}
+
+// To support sign and leading space
+
+uint32_t atoi_sign(const char *str)
+{
+    uint32_t value{0}, i{0}, sign{0};
+
+    while (isspace(str[i]))
+        ++i;
+
+    // check sign but don't need to increase i
+    sign = str[i] == '-' ? -1 : 1;
+
+    // have to increase
+    if (str[i] == '-' || str[i] == '+')
+        ++i;
+
+    for (value, i; isdigit(str[i]); ++i)
+    {
+        value = value*10 + (str[i] - '0');
+    }
+
+    return sign*value;
+}
+
+// use base 2. value is right but not representation
+
+// Chapter 7: String Fundamentals, 207
+// #!/usr/bin/python
+//
+// B = '1101'
+// I = 0
+//
+// while B != '':
+//     I = I*2 + (ord(B[0]) - ord('0'))
+//     B = B[1:]
+//
+// print(I)
+
+uint32_t atoi_binary(const char *str)
+{
+    uint32_t value{0}, i{0};
+
+    for (value, i; str[i] >= '0' && str[i] <= '9'; ++i)
+    {
+        value = value*2 + (str[i] - '0');
+    }
+
+    return value;
+}
+
+
+// use base 16. htoi
+//
+// From ansic, exercise 2-3. 
+//
+// Write the function htoi(s), which converts a string of hexadecimal digits
+// (including an 'optional' 0x or 0X) into its equivalent integer value. The
+// allowable digits are 0 through 9, a through f, and A through F.
+//
+// isxdigit()
+//        checks for hexadecimal digits, that is, one of
+//        0 1 2 3 4 5 6 7 8 9 a b c d e f A B C D E F.
+
+// previous try
+//
+// int htoi(char s[])
+// {
+//   int n, i = 0, v = 0;
+// 
+//   // optional 0x or 0X
+//   if(s[0] == '0' && ( s[1] == 'x' || s[1] == 'X' ))
+//     i = 2;
+// 
+//   // isxdigit()
+//   // checks for a hexadecimal digits, that is, one of 
+//   // 0 1 2 3 4 5 6 7 8 9 a b c d e f A B C D E F.
+//    
+//   for(n = 0; isxdigit(s[i]); i++)
+//   {
+//     if( s[i] >= '0' && s[i] <= '9' )
+//       v = s[i] - '0';
+//     else if( s[i] >= 'a' && s[i] <= 'f' )
+//       v = s[i] - 'a' + 10;
+//     else 
+//       v = s[i] - 'A' + 10;
+// 
+//     n = n*16 + v;
+//   }
+// 
+//   return n;
+// }
+
+uint32_t atoi_hex(const char *str)
+{
+    uint32_t value{0}, i{0};
+    const std::string hex{"0123456789abcdef"};
+
+    for (value, i; hex.find(std::tolower(str[i])) != std::string::npos; ++i)
+    {
+        value = value*16 + hex.find(std::tolower(str[i]));
+    }
+
+    return value;
+}
+
+
+TEST(CxxAlgoAtoiTest, RunWithVariousValues)
+{
+    EXPECT_THAT(atoi_navie("123"), Eq(123));
+    EXPECT_THAT(atoi_isdigit("123"), Eq(123));
+
+    EXPECT_THAT(atoi_sign("123"), Eq(123));
+    EXPECT_THAT(atoi_sign("-123"), Eq(-123));
+
+    EXPECT_THAT(atoi_binary("1101"), Eq(13));
+
+    EXPECT_THAT(atoi_hex("1a"), Eq(26));
+    EXPECT_THAT(atoi_hex("1A"), Eq(26));
+}
+
+
+// ={=========================================================================
+// itoa
+//
+// * input type? digits only? no space?
+// * input size?
+// * what base? 10 or 2?
+// * sign support? 
+
+// from ansic, p43.
+//
+// when base is 10.
+//
+// this is 'naive' implementation since no error handlings and return 0 when
+// failed to convert. compare to strtol
+//
+// there is no check on the end of string input? '0' is not the same as
+// 0(null) and when see any other than numbers, for loops ends.
+
+std::string itoa_navie(const int input)
+{
+    uint32_t value{input}, i{0};
+    char letter{0};
+    std::string result{};
+
+    for (; value;)
+    {
+        letter = '0' + (value % 10);
+        result += letter;
+        value /= 10;
+    }
+
+    return std::string(result.crbegin(), result.crend());
+}
+
+TEST(CxxAlgoItoaTest, RunWithVariousValues)
+{
+    EXPECT_THAT(itoa_navie(123), Eq("123"));
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleMock(&argc, argv);

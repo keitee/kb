@@ -110,34 +110,79 @@ private:
 
     // check overflow when word.size() > MAX_CODE_LENGTH and which can be done
     // at zeroPad or here.
+    
+    // std::string encodeMultipleDigits(const std::string &word) const
+    // {
+    //     // crash for the most since encodeDigit() will return null when not
+    //     // found in the map.
+    //     //
+    //     // std::string encoded;
+    //     // encoded += encodeDigit(word.front());
+
+    //     // works for the most but not
+    //     // CombinesDuplicateCodesWhenSecondDuplicatesFirst() since there will be
+    //     // the first char.
+    //     //
+    //     // std::string encoded{word.front()};
+
+    //     std::string encoded;
+    //     encoded += encodeDigit(word.front());
+        
+    //     for (const auto letter : tail(word))
+    //     {
+    //         if (isComplete(encoded)) 
+    //             break;
+
+    //         auto digit = encodeDigit(letter);
+    //         if (DIGIT_NOT_FOUND != digit && digit != lastDigit(encoded))
+    //             encoded += encodeDigit(letter);
+    //     }
+
+    //     return encoded;
+    // }
+
     std::string encodeMultipleDigits(const std::string &word) const
     {
-        // crash for the most since encodeDigit() will return null when not
-        // found in the map.
-        //
-        // std::string encoded;
-        // encoded += encodeDigit(word.front());
-
-        // works for the most but not
-        // CombinesDuplicateCodesWhenSecondDuplicatesFirst() since there will be
-        // the first char.
-        //
-        // std::string encoded{word.front()};
-
         std::string encoded;
-        encoded += encodeDigit(word.front());
-        
-        for (const auto letter : tail(word))
-        {
-            if (isComplete(encoded)) 
-                break;
 
-            auto digit = encodeDigit(letter);
-            if (DIGIT_NOT_FOUND != digit && digit != lastDigit(encoded))
-                encoded += encodeDigit(letter);
-        }
+        encodeHead(encoded, word);
+        encodeTail(encoded, word);
 
         return encoded;
+    }
+
+    void encodeHead(std::string &encoding, const std::string &word) const
+    {
+        encoding += encodeDigit(word.front());
+    }    
+
+    void encodeTail(std::string &encoding, const std::string &word) const 
+    {
+        // for (const auto letter : tail(word))
+        // {
+        //     if (!isComplete(encoding)) 
+        //         encodeLetter(encoding, letter);
+        // }
+
+        // to use index
+        for (auto i = 1u; i < word.length(); ++i)
+        {
+            if (!isComplete(encoding)) 
+                encodeLetter(encoding, word[i], word[i-1]);
+        }
+    }
+
+    void encodeLetter(std::string &encoding, char letter, char prevLetter) const 
+    {
+        auto digit = encodeDigit(letter);
+        if (DIGIT_NOT_FOUND != digit && 
+                (digit != lastDigit(encoding) || isVowel(prevLetter)))
+            encoding += digit;
+    }
+
+    bool isVowel(char letter) const
+    {
+        return std::string("aeiouy").find(std::tolower(letter)) != std::string::npos;
     }
 
     bool isComplete(const std::string &encoding) const

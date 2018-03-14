@@ -174,7 +174,43 @@ TEST( WeatherStationUserInterface, DISABLED_snow_exception )
 }
 
 // ={=========================================================================
+// test MATCHER_P
 
+class RetweetCollection
+{
+    public:
+        RetweetCollection() {}
+
+        bool isEmpty() const
+        {
+            return 0 == size();
+        }
+
+        unsigned int size() const 
+        {
+            return 0;
+        }
+};
+
+class ARetweetCollection : public Test 
+{
+    public:
+        RetweetCollection collection;
+};
+
+MATCHER_P(HasSize, expected, "")
+{
+    return arg.size() == expected 
+        && arg.isEmpty() == (0 == expected); 
+}
+
+TEST_F(ARetweetCollection, MatcherWithSingleArgument)
+{
+    EXPECT_THAT(collection, HasSize(0u));
+}
+
+
+// ={=========================================================================
 typedef std::pair<std::string, bool> PairReturn;
 
 ostream &operator<<(ostream &os, const PairReturn &p)
