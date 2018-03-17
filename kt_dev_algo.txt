@@ -1472,6 +1472,251 @@ void t_algo_find_intersect()
 }
 
 
+={===========================================================================
+*kt_dev_algo_0000* dev-algo-problem: roman converter
+
+<mine>
+//
+// Convert Arabic number to Roman number
+//
+
+#include <string>
+#include <map>
+
+class RomanConvert
+{
+    public:
+
+        // 1. tried to use input/output string arg like 
+        //
+        //      void convert(uint32_t, std::string &)
+        //
+        // and use public string member in the fixture class.
+        // However, since there are many asserts in a test, have to reset
+        // this string member before using the next assert. dropped.
+        //
+        // 2. uses one single string and add at the front whenever converted a
+        // letter. By this, no need to reverse the result as itoa() does but
+        // there will be a downside; relocation and performance. Howerver, since
+        // it is not a long string, do not think they matter here. 
+
+        std::string convert(uint32_t number) const 
+        {
+            std::string converted;
+            uint32_t tens{0}, digit{0};
+
+            // for fixed roman letters
+            // the code works without this to cover fixed romans since the loop
+            // below will find it eventually. However, it uses a map already and
+            // may save some time.
+            
+            auto it = roman_table.find(number);
+            if (it != roman_table.cend())
+                return it->second;
+
+            for (; number;)
+            {
+                digit = number % 10;
+
+                if (digit < 4)
+                {
+                    padWithFoundRoman(digit, tens, 0, converted);
+                }
+                else if (digit > 5 && digit < 9)
+                {
+                    padWithFoundRoman(digit, tens, 5, converted);
+                }
+                else if (!(digit % 5))
+                {
+                    findFiveBaseRoman(digit, tens, converted);
+                }
+                else if (digit == 4 || digit == 9)
+                {
+                    findSubstractRoman(digit, tens, converted);
+                }
+
+                ++tens;
+
+                number /= 10;
+            }
+
+            return converted;
+        }
+
+    private:
+        const std::map<uint32_t, std::string> roman_table{
+            {0, ""},
+            {1, "I"}, {5, "V"},
+            {10, "X"}, {50, "L"},
+            {100, "C"}, {500, "D"},
+            {1000, "M"}
+        };
+
+        void padWithFoundRoman(uint32_t number, uint32_t tens, uint32_t fixed, std::string &padded) const
+        {
+            std::string result;
+
+            // find the letter to pad
+            auto it = roman_table.find( pow(10, tens) );
+            if ( it == roman_table.cend() )
+                std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+
+            std::string letter = it->second;
+
+            // find the base
+            it = roman_table.find( fixed*pow(10, tens) );
+            if ( it == roman_table.cend() )
+                std::cout << "roman_table(" << fixed*pow( 10, tens ) << ") not found" << std::endl;
+
+            std::string base = it->second;
+
+            // add the base once
+            result += base;
+
+            // add the pad
+            for (uint32_t count = number - fixed; count; --count)
+                result += letter;
+
+            padded.insert(0, result);
+        }
+
+        void findSubstractRoman(uint32_t number, uint32_t tens, std::string &converted) const
+        {
+            std::string padded;
+
+            // find the letter in substract form
+            auto it = roman_table.find( pow(10, tens) );
+            if ( it == roman_table.cend() )
+                std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+
+            std::string letter = it->second;
+
+            // find the base
+            it = roman_table.find( (number+1)*pow(10, tens) );
+            if ( it == roman_table.cend() )
+                std::cout << "roman_table(" << (number+1)*pow( 10, tens ) << ") not found" << std::endl;
+
+            std::string base = it->second;
+
+            converted.insert( 0, letter + base );
+        }
+
+        void findFiveBaseRoman(uint32_t number, uint32_t tens, std::string &converted) const
+        {
+            // find the letter in substract form
+            auto it = roman_table.find( number * pow(10, tens) );
+            if ( it == roman_table.cend() )
+                std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+
+            converted.insert( 0, it->second );
+        }
+};
+
+
+<from-tdd>
+//
+// Appendix 2
+// Code Kata: Roman Numeral Converter
+//
+
+#include "gmock/gmock.h"
+
+using namespace ::testing;
+using namespace std;
+
+string convert(unsigned int arabic) 
+{
+    // What if we consider the Roman representation of four as a single digit,
+    // despite  that it requires two of our alphabet’s characters (IV)?
+
+    const auto arabicToRomanConversions = {
+        make_pair(1000u, "M"), 
+        make_pair(900u, "CM"), 
+        make_pair(500u, "D"), 
+        make_pair(400u, "CD"), 
+        make_pair(100u, "C"),
+        make_pair(90u, "XC"), 
+        make_pair(50u, "L"), 
+        make_pair(40u, "XL"), 
+        make_pair(10u, "X"), 
+        make_pair(9u, "IX"), 
+        make_pair(5u, "V"), 
+        make_pair(4u, "IV"), 
+        make_pair(1u, "I") 
+    };
+
+    string roman{""};
+
+    // while (arabic >= 10)
+    // {
+    //     roman += "X";
+    //     arabic -= 10;
+    // }
+    //
+    // while (arabic >= 1)
+    // {
+    //     roman += "I";
+    //     arabic -= 1;
+    // }
+
+    for( auto arabicToRoman : arabicToRomanConversions )
+    {
+        while( arabic >= arabicToRoman.first )
+        {
+            roman += arabicToRoman.second;
+            arabic -= arabicToRoman.first;
+        }
+    }
+
+    return roman;
+}
+
+TEST(RomanConverter, CanConvertPositiveDigits) 
+{
+    EXPECT_THAT(convert(1), Eq("I"));
+    EXPECT_THAT(convert(2), Eq("II"));
+    EXPECT_THAT(convert(3), Eq("III"));
+    EXPECT_THAT(convert(10), Eq("X"));
+    EXPECT_THAT(convert(11), Eq("XI"));
+    EXPECT_THAT(convert(12), Eq("XII"));
+    EXPECT_THAT(convert(13), Eq("XIII"));
+    EXPECT_THAT(convert(20), Eq("XX"));
+    EXPECT_THAT(convert(23), Eq("XXIII"));
+    EXPECT_THAT(convert(5), Eq("V"));
+
+    EXPECT_THAT(convert(50), Eq("L"));
+    EXPECT_THAT(convert(80), Eq("LXXX"));
+    EXPECT_THAT(convert(100), Eq("C"));
+    EXPECT_THAT(convert(288), Eq("CCLXXXVIII"));
+
+    EXPECT_THAT(convert(6), Eq("VI"));
+    EXPECT_THAT(convert(7), Eq("VII"));
+    EXPECT_THAT(convert(8), Eq("VIII"));
+
+    EXPECT_THAT(convert(4), Eq("IV"));
+
+    EXPECT_THAT(convert(5), Eq("V"));
+    EXPECT_THAT(convert(10), Eq("X"));
+    EXPECT_THAT(convert(11), Eq("XI"));
+    EXPECT_THAT(convert(12), Eq("XII"));
+    EXPECT_THAT(convert(13), Eq("XIII"));
+    EXPECT_THAT(convert(20), Eq("XX"));
+    EXPECT_THAT(convert(50), Eq("L"));
+    EXPECT_THAT(convert(80), Eq("LXXX"));
+    EXPECT_THAT(convert(100), Eq("C"));
+    EXPECT_THAT(convert(288), Eq("CCLXXXVIII"));
+    EXPECT_THAT(convert(2999), Eq("MMCMXCIX"));
+    EXPECT_THAT(convert(3447), Eq("MMMCDXLVII"));
+    EXPECT_THAT(convert(1513), Eq("MDXIII"));
+}
+
+int main(int argc, char** argv)
+{
+    testing::InitGoogleMock(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+
+
 ={============================================================================
 *kt_dev_quiz_011* find a path in a maze
 
@@ -18467,6 +18712,42 @@ where a floating-point number may be followed by e or E and an optionally signed
 *kt_dev_algo_0000* dev-algo-itoa
 
 non-standard and not part of glibc and should use sprintf instead.
+
+// itoa
+//
+// * input type? digits only? no space?
+// * input size?
+// * what base? 10 or 2?
+// * sign support? 
+
+// from ansic, p43.
+//
+// when base is 10.
+//
+// there is no check on the end of string input? '0' is not the same as
+// 0(null) and when see any other than numbers, for loops ends.
+
+std::string itoa_navie(const int input)
+{
+    uint32_t value{input}, i{0};
+    char letter{0};
+    std::string result{};
+
+    for (; value;)
+    {
+        letter = '0' + (value % 10);
+        result += letter;
+        value /= 10;
+    }
+
+    return std::string(result.crbegin(), result.crend());
+}
+
+TEST(CxxAlgoItoaTest, RunWithVariousValues)
+{
+    EXPECT_THAT(itoa_navie(123), Eq("123"));
+}
+
 
 {1}
 // * supports 10 base

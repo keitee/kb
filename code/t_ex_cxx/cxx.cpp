@@ -6,6 +6,10 @@
 
 using namespace std;
 
+
+// ={=========================================================================
+// cxx-enum
+
 enum class EnumFlags :char { SPORT=1, KIDS=2, MUSIC=4 };
 
 constexpr EnumFlags operator| (EnumFlags lhs, EnumFlags rhs)
@@ -46,6 +50,7 @@ class ScopedEnum {
                     result = 2;
                     break;
 
+                // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
                 case EnumFlags::SPORT|EnumFlags::MUSIC:
                     cout << "has sport and music flag" << endl;
                     result = 3;
@@ -61,8 +66,7 @@ class ScopedEnum {
 };
 
 
-// Quote sales which has no discount. 45*3 = 135
-TEST(BulkQuote1Test, checkTotal1)
+TEST(CxxFeaturesTest, UseScopedEnum)
 {
     ScopedEnum scoped;
 
@@ -73,6 +77,29 @@ TEST(BulkQuote1Test, checkTotal1)
     EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
     // EXPECT_EQ(100, scoped.checkFlags(200));
 }
+
+
+// ={=========================================================================
+// cxx-enum, unscoped enum, enum hack
+
+enum color { red, yellow, green };          // unscoped
+enum class peppers { red, yellow, green };  // scoped
+
+TEST(CxxFeaturesTest, UseEnumHack)
+{
+    int value_1 = color::yellow;
+
+    // error: cannot convert ‘peppers’ to ‘int’ in initialization
+    // int value_2 = peppers::red;
+
+    color set_1 = yellow;
+
+    // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+    // color set_2 = 2;
+    
+    EXPECT_EQ(value_1, set_1);
+}
+
 
 int main(int argc, char** argv)
 {

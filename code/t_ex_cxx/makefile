@@ -6,12 +6,13 @@
 GTEST_DIR = /home/kyoupark/works/googletest/googletest
 GMOCK_DIR = /home/kyoupark/works/googletest/googlemock
 
-TARGET = roman
+TARGET = cxx
 
 # Where to find user code.
 USER_DIR = .
 
 CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include 
+# CPPFLAGS += -isystem $(GTEST_DIR)/include
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread
 
@@ -52,8 +53,8 @@ gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
 #
-$(TARGET).o : $(TARGET)_test.cpp $(GTEST_HEADERS) $(TARGET).h
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET)_test.cpp -o $(TARGET).o
+$(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 
 $(TESTS) : $(TARGET).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

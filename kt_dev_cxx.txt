@@ -19133,6 +19133,31 @@ Both return cause undefined result at the call site(caller) because it returns
 reference to local to function foo().
 
 
+<no-return-string>
+
+// supposed to return string but not
+
+std::string return_string(const std::string &input)
+{
+    // return ??
+}
+
+int main()
+{
+    return_string("this is call from main");
+    ...
+}
+
+// without -D_GLIBCXX_DEBUG
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x00007f0f6974f170 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::~basic_string() () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+
+// with -D_GLIBCXX_DEBUG
+Program received signal SIGSEGV, Segmentation fault.
+0x00000000004018b3 in __gnu_cxx::__exchange_and_add_single (__mem=0xfffffffffffffff9, __val=-1) at /usr/include/c++/4.9/ext/atomicity.h:67
+67          _Atomic_word __result = *__mem;
+
+
 ={============================================================================
 *kt_dev_cxx_0000* cxx-type-bool
 
@@ -29529,25 +29554,46 @@ int a3 = Warning::green;                    // error; no conversion.
 
 
 {cxx-enum-hack}
-The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
-be used where an integral value is required. Called `enum-hack`. 
+May be true for C, but not for C++?
 
-int i = color::red;                       // ok
-int j = peppers::red;                     // error since it is scoped
+// The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
+// be used where an integral value is required. Called `enum-hack`. 
+// 
+// int i = color::red;                       // ok
+// int j = peppers::red;                     // error since it is scoped
+// 
+// open_modes readfile = open_modes::input;  // ok
+// open_modes readfile = 2;                  // error
+// 
+// enum color eyes = green;                  // ok
+// enum color eyes = 2;                      // ok
+// 
+// class GamePlayer {
+//   private:
+//     enum { NumTurns = 5; }
+// 
+//     int scopes[NumTurns];
+//     ...
+// };
 
-open_modes readfile = open_modes::input;  // ok
-open_modes readfile = 2;                  // error
 
-enum color eyes = green;                  // ok
-enum color eyes = 2;                      // ok
+// cxx-enum, unscoped enum, enum hack
 
-class GamePlayer {
-  private:
-    enum { NumTurns = 5; }
+enum color { red, yellow, green };          // unscoped
+enum class peppers { red, yellow, green };  // scoped
 
-    int scopes[NumTurns];
-    ...
-};
+TEST(CxxFeaturesTest, UseEnumHack)
+{
+    int value_1 = color::yellow;
+
+    // error: cannot convert ‘peppers’ to ‘int’ in initialization
+    // int value_2 = peppers::red;
+
+    color set_1 = green;
+
+    // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+    color set_2 = 2;
+}
 
 
 {underlying-type}
@@ -42307,38 +42353,7 @@ namespace std {
 
 C++ SLR 13.2
 
-{operations}
-
-<initialization> operation-arg-scheme
-The operations that manipulate the value of a string have several overloaded
-versions that use the argument scheme:
-
-const string & str 
-   The whole string str
-
-const string & str, size_type idx, size_type num 
-   At most, the first num characters of str starting with index idx
-
-const char* cstr 
-   The whole C-string cstr
-
-const char* chars, size_type len 
-   len characters of the character array chars
-
-char c 
-   The character c
-
-size_type num, char c 
-   num occurrences of character c
-
-const_iterator beg, const_iterator end 
-   All characters in range [beg,end) 
-
-initlist 
-   All characters in initlist (since C++11)
-
-
-{string-and-c-string}
+<cxx-string-ctor>
 In standard C++, the type of string literals was changed from char* to const
 char*. 
 
@@ -42349,6 +42364,9 @@ char*.
   used as a special character in an ordinary C-string to mark the end of the
   string. The character '\0' may be part of a string just like every other
   character.
+
+The operations that manipulate the value of a string have several overloaded
+versions.
 
 string s(cstr);
 Creates a string s that is initialized by the C-string cstr
@@ -42371,6 +42389,47 @@ string s2( s1 );           // direct form of initialzation.
 string s2 = s1;            // copy form of initialzation.
 
 string s4( n, 'c' );
+
+
+TEST(CxxStringTest, RunStringCtors)
+{
+    string s1{"zoo"};
+    EXPECT_EQ( s1, "zoo");
+
+    string s2("zoo");
+    EXPECT_EQ( s1, "zoo");
+
+    char letter = 'A';
+
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // string s3(letter);
+
+    // ok since:
+    //
+    // /**
+    //  *  @brief  Append a character.
+    //  *  @param __c  The character to append.
+    //  *  @return  Reference to this string.
+    //  */
+    // basic_string&
+    // operator+=(_CharT __c)
+    // { 
+    //  this->push_back(__c);
+    //  return *this;
+    // }
+    
+    string s4;
+    s4 += letter;
+    EXPECT_EQ( s4, "A");
+
+    string s5;
+
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // s5.append(letter);
+    
+    s5.append(1, letter);
+    EXPECT_EQ( s5, "A");
+}
 
 
 // {string-nullptr} <caution> *string-element-access*

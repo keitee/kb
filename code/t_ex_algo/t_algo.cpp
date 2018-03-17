@@ -260,8 +260,13 @@ void t_algo_find_number_02()
             ++imap[e];
 
         auto pos_return = find_if( imap.cbegin(), imap.cend(),
-                [](const pair<size_t,size_t> &e)
-                { if (e.second % 2) return true; }
+                [] (const pair<size_t,size_t> &e)
+                { 
+                    if (e.second % 2) 
+                        return true; 
+
+                    return false;
+                }
                 );
 
         // return the result;
@@ -733,7 +738,6 @@ void t_algo_find_longest_01()
     // const string input = "AAABBCCCCDDD";
 
     size_t input_size = input.size();
-    char result{};
 
     // pair<char, size_t> find_longest(size_t size, const vector<char> &input);
     {
@@ -786,7 +790,6 @@ void t_algo_find_longest_02()
     // const string input = "AAABBCCCCDDD";
 
     size_t input_size = input.size();
-    char result{};
 
     // pair<char, size_t> find_longest(size_t size, const vector<char> &input);
     {
@@ -858,7 +861,7 @@ uint32_t atoi_navie(const char *str)
 {
     uint32_t value{0}, i{0};
 
-    for (value, i; str[i] >= '0' && str[i] <= '9'; ++i)
+    for (; str[i] >= '0' && str[i] <= '9'; ++i)
     {
         value = value*10 + (str[i] - '0');
     }
@@ -872,7 +875,7 @@ uint32_t atoi_isdigit(const char *str)
 {
     uint32_t value{0}, i{0};
 
-    for (value, i; isdigit(str[i]); ++i)
+    for (; isdigit(str[i]); ++i)
     {
         value = value*10 + (str[i] - '0');
     }
@@ -896,7 +899,7 @@ uint32_t atoi_sign(const char *str)
     if (str[i] == '-' || str[i] == '+')
         ++i;
 
-    for (value, i; isdigit(str[i]); ++i)
+    for (; isdigit(str[i]); ++i)
     {
         value = value*10 + (str[i] - '0');
     }
@@ -922,7 +925,7 @@ uint32_t atoi_binary(const char *str)
 {
     uint32_t value{0}, i{0};
 
-    for (value, i; str[i] >= '0' && str[i] <= '9'; ++i)
+    for (; str[i] >= '0' && str[i] <= '9'; ++i)
     {
         value = value*2 + (str[i] - '0');
     }
@@ -977,7 +980,7 @@ uint32_t atoi_hex(const char *str)
     uint32_t value{0}, i{0};
     const std::string hex{"0123456789abcdef"};
 
-    for (value, i; hex.find(std::tolower(str[i])) != std::string::npos; ++i)
+    for (; hex.find(std::tolower(str[i])) != std::string::npos; ++i)
     {
         value = value*16 + hex.find(std::tolower(str[i]));
     }
@@ -1013,15 +1016,12 @@ TEST(CxxAlgoAtoiTest, RunWithVariousValues)
 //
 // when base is 10.
 //
-// this is 'naive' implementation since no error handlings and return 0 when
-// failed to convert. compare to strtol
-//
 // there is no check on the end of string input? '0' is not the same as
 // 0(null) and when see any other than numbers, for loops ends.
 
 std::string itoa_navie(const int input)
 {
-    uint32_t value{input}, i{0};
+    int value{input};
     char letter{0};
     std::string result{};
 
@@ -1035,9 +1035,28 @@ std::string itoa_navie(const int input)
     return std::string(result.crbegin(), result.crend());
 }
 
+std::string itoa_no_reverse(const int input)
+{
+    std::string result{};
+    std::string temp;
+    char letter{0};
+    int value{input};
+
+    for(; value;)
+    {
+        letter = '0' + (value % 10);
+        temp += letter;
+        result.insert( 0, temp );
+        value /= 10;
+    }
+
+    return result;
+}
+
 TEST(CxxAlgoItoaTest, RunWithVariousValues)
 {
     EXPECT_THAT(itoa_navie(123), Eq("123"));
+    EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
 }
 
 int main(int argc, char** argv)

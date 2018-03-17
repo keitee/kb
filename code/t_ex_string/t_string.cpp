@@ -220,6 +220,49 @@ TEST(CxxStringTest, TrimCharOrWhitespaceFromEnd)
     EXPECT_EQ( s2, "zoo");
 }
 
+// ={=========================================================================
+// string ctors
+
+TEST(CxxStringTest, RunStringCtors)
+{
+    string s1{"zoo"};
+    EXPECT_EQ( s1, "zoo");
+
+    string s2("zoo");
+    EXPECT_EQ( s1, "zoo");
+
+    char letter = 'A';
+
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // string s3(letter);
+
+    // ok since:
+    //
+    // /**
+    //  *  @brief  Append a character.
+    //  *  @param __c  The character to append.
+    //  *  @return  Reference to this string.
+    //  */
+    // basic_string&
+    // operator+=(_CharT __c)
+    // { 
+    //  this->push_back(__c);
+    //  return *this;
+    // }
+    
+    string s4;
+    s4 += letter;
+    EXPECT_EQ( s4, "A");
+
+    string s5;
+
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // s5.append(letter);
+    
+    s5.append(1, letter);
+    EXPECT_EQ( s5, "A");
+}
+
 
 // ={=========================================================================
 // Q: to split the string "Name|Address|Phone" into three separate strings,
@@ -679,7 +722,7 @@ TEST(CxxStringTest, JoinSequnenceString)
 
 
 // ={=========================================================================
-// 4.10 Finding the nth Instance of a Substring 
+// 4.10 Finding the nth Instance of a Substring
 bool nth_substring(int n, const std::string &s, const std::string &p)
 {
     size_t start{0};
@@ -720,6 +763,7 @@ TEST(CxxStringTest, FindNthSubstring)
     EXPECT_THAT(nth_substring(4, s, p), true);
     EXPECT_THAT(nth_substring(5, s, p), false);
 }
+
 
 int main(int argc, char** argv)
 {

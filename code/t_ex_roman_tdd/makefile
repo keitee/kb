@@ -6,17 +6,16 @@
 GTEST_DIR = /home/kyoupark/works/googletest/googletest
 GMOCK_DIR = /home/kyoupark/works/googletest/googlemock
 
-TARGET = t_ex_enum
+TARGET = RomanConverter
 
 # Where to find user code.
 USER_DIR = .
 
 CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include 
-# CPPFLAGS += -isystem $(GTEST_DIR)/include
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread
 
-TESTS = test_$(TARGET)
+TESTS = $(TARGET)_test
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -53,8 +52,9 @@ gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
 #
-$(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
+# $(TARGET).o : $(TARGET)Test.cpp $(GTEST_HEADERS) $(TARGET).h
+$(TARGET).o : $(TARGET)Test.cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET)Test.cpp -o $(TARGET).o
 
-test_$(TARGET) : $(TARGET).o gtest.a gmock.a
+$(TESTS) : $(TARGET).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
