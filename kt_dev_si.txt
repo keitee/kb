@@ -8561,6 +8561,9 @@ component=MEMMAN "Cannot allocate" "PREFS" | dedup logid | timechart span=1h cou
 
 component=FDM_API_OPTV "limit number of module download session request" | dedup logid | eval logfile="darwin_".mac."_".logid | table logfile platform version
 
+// for epg
+component1=com.bskyb.epgui "BERR" | dedup logid | timechart span=1h count by platform
+
 <splunk-index>
 * | stats values(index)
 
@@ -21014,9 +21017,6 @@ SYSTEM_STATUS PDM_FP_SetState(PDM_FP_HANDLE handle, PDM_FP_STATE state, uint32_t
 
 // DIAG_LOG_MIL(g_pdm_diag_segment_id, ("PDM_FP_SetState handle=0x%x state=0x%x",handle, state));
 
-NDS: ^[2018:01:23 04:55:13]0000005805.416707 !MIL    -PDM_MW       		< p:0x0000063b P:MW t:0x7635e450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x4 state=0x7 
-NDS: ^[2018:01:23 04:55:13]0000005805.416730 !MIL    -PDM_MW       		< p:0x0000063b P:MW t:0x7635e450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x6 state=0x2 
-NDS: ^[2018:01:23 04:55:13]0000005805.416998 !MIL    -AMS          		< p:0x0000063b P:MW t:0x6d3c4450 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:79 > STANDBY_IN event 
 
 /** @brief An enumeration used to indicate which state of the current indicator. In the start-up,
   * all indicators shall be set to #PDM_FP_STATE_OFF. Note that some values are only valid for
@@ -21026,16 +21026,48 @@ typedef enum PDM_FP_STATE_Tag
 {
     PDM_FP_STATE_UNDEF = 0U,
     PDM_FP_STATE_ON,
-    PDM_FP_STATE_OFF,
+    PDM_FP_STATE_OFF,     // 2
     PDM_FP_STATE_RED,
-    PDM_FP_STATE_GREEN,
+    PDM_FP_STATE_GREEN,   // 4
     PDM_FP_STATE_ORANGE,
     PDM_FP_STATE_BLUE,
-    PDM_FP_STATE_AMBER,
+    PDM_FP_STATE_AMBER,   // 7
     PDM_FP_STATE_YELLOW,
     PDM_FP_STATE_WHITE,
     PDM_FP_STATE_LASTVALUE
 } PDM_FP_STATE;
+
+
+// *TN* handle is important.
+// PDM_FP_STATE_AMBER,   // 7
+300:NDS: ^[2018:03:19 05:47:47]0000000069.619526 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x4 state=0x7 
+301:NDS: ^[2018:03:19 05:47:47]0000000069.619548 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x6 state=0x2 
+
+// out of standby
+20709:NDS: ^[2018:03:19 07:49:55]0000007397.181230 !MIL    -HAM          		< p:0x000009ab P:APP t:0xa57ff1d0 T:no name M:hamiltron-client.c F:hamiltron_client_send_key_event L:859 > KEY_PRESS: code=0x(STANDBY)e000('standby') sent to 'com.bskyb.epgui'
+// PDM_FP_STATE_GREEN,   // 4
+20796:NDS: ^[2018:03:19 07:49:55]0000007397.508592 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x4 state=0x4 
+
+20797:NDS: ^[2018:03:19 07:49:55]0000007397.508623 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x6 state=0x2 
+22090:NDS: ^[2018:03:19 07:49:59]0000007401.151872 !MIL    -MPM          		< p:0x000009aa P:MW t:0xb6429450 T:MPM_PROXYMONITOR_THREAD M:mpm_component_video.c F:MPMComponentVideoFramePresentedHandler L:1376 > FRAME_PRESENTED: hMC=0x6 
+22092:NDS: ^[2018:03:19 07:49:59]0000007401.162111 !MIL    -P_Api        		< p:0x000009ab P:APP t:0xb5cd11d0 T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1176 > VIDEO IS SHOWN 
+22093:NDS: ^[2018:03:19 07:49:59]0000007401.162194 !MIL    -P_Api        		< p:0x000009ab P:APP t:0xb5cd11d0 T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessVSI L:9010 > VIDEO_RUNNING_STATUS: jtVRM=3, jhVRM=0x3000001, status=RUNNING 
+
+// to standby
+54706:NDS: ^[2018:03:19 11:31:49]0000020711.670177 !MIL    -HAM          		< p:0x000009ab P:APP t:0xa57ff1d0 T:no name M:hamiltron-client.c F:hamiltron_client_send_key_event L:859 > KEY_PRESS: code=0x(STANDBY)e000('standby') sent to 'com.bskyb.epgui'
+// PDM_FP_STATE_AMBER,   // 7
+54739:NDS: ^[2018:03:19 11:31:49]0000020711.739087 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x4 state=0x7 
+54740:NDS: ^[2018:03:19 11:31:49]0000020711.739113 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x6 state=0x2 
+54741:NDS: ^[2018:03:19 11:31:49]0000020711.739278 !MIL    -AMS          		< p:0x000009aa P:MW t:0xb61e0450 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:79 > STANDBY_IN event 
+
+55059:NDS: ^[2018:03:19 11:31:50]0000020712.893781 !MIL    -P_Api        		< p:0x000009ab P:APP t:0xb5cd11d0 T:PLAYER_MAIN M:player_api_avcontrol.c F:PLAYER_AVControl_UpdateVisibility L:1180 > VIDEO IS HIDDEN 
+
+// out of standby
+55297:NDS: ^[2018:03:19 11:32:17]0000020739.108609 !MIL    -HAM          		< p:0x000009ab P:APP t:0xa57ff1d0 T:no name M:hamiltron-client.c F:hamiltron_client_send_key_event L:859 > KEY_PRESS: code=0x(STANDBY)e000('standby') sent to 'com.bskyb.epgui'
+// PDM_FP_STATE_GREEN,   // 4
+55353:NDS: ^[2018:03:19 11:32:17]0000020739.319866 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x4 state=0x4 
+55354:NDS: ^[2018:03:19 11:32:17]0000020739.319898 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x6 state=0x2 
+55356:NDS: ^[2018:03:19 11:32:17]0000020739.321815 !MIL    -AMS          		< p:0x000009aa P:MW t:0xb61e0450 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:83 > STANDBY_OUT event 
 
 
 ={============================================================================

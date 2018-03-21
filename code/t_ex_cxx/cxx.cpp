@@ -1,5 +1,6 @@
 #include <iostream>
 #include <set>
+#include <vector>
 #include <memory>
 
 #include "gtest/gtest.h"
@@ -100,6 +101,88 @@ TEST(CxxFeaturesTest, UseEnumHack)
     EXPECT_EQ(value_1, set_1);
 }
 
+
+// ={=========================================================================
+// cxx-rvo
+
+struct Snitch {   // Note: All methods have side effects
+    Snitch(int value): value_(value) { cout << "c'tor" << endl; }
+    ~Snitch() { cout << "d'tor" << endl; }
+
+    Snitch(const Snitch&) { cout << "copy c'tor" << endl; }
+    Snitch(Snitch&&) { cout << "move c'tor" << endl; }
+
+    Snitch& operator=(const Snitch&) {
+        cout << "copy assignment" << endl;
+        return *this;
+    }
+
+    Snitch& operator=(Snitch&&) {
+        cout << "move assignment" << endl;
+        return *this;
+    }
+
+    int getValue() const { return value_;}
+
+    private:
+        int value_{0};
+};
+
+Snitch ExampleRVO() {
+
+  Snitch sn(100);
+
+  cout << "in example rvo: " << sn.getValue() << endl;
+
+  return sn;
+}
+
+TEST(CxxFeaturesTest, UseRVO)
+{
+    cout << "----------" << endl;
+    Snitch snitch = ExampleRVO();
+    cout << "----------" << endl;
+}
+
+
+vector<Snitch> ReturnVector() {
+    // vector<Snitch> ivec(1000000000, 1);
+    // vector(n, elem); creates n elements
+    vector<Snitch> ivec(10, Snitch(200));
+    cout << "size of vector: " << ivec.size() << endl;
+  return ivec;
+}
+
+TEST(CxxFeaturesTest, UseRVOReturnBigVector)
+{
+    cout << "----------" << endl;
+    vector<Snitch> ivec = ReturnVector();
+    cout << "----------" << endl;
+}
+
+void foo(Snitch s) {
+    cout << "snitch value is: " << s.getValue() << endl;
+}
+
+TEST(CxxFeaturesTest, UseCopyElison)
+{
+    cout << "----------" << endl;
+    foo(Snitch(200));
+    cout << "----------" << endl;
+}
+
+Snitch createSnitch() {
+    return Snitch(200);
+}
+
+TEST(CxxFeaturesTest, UseAssignment)
+{
+    cout << "----------" << endl;
+    Snitch s = createSnitch();
+    cout << "----------" << endl;
+    s = createSnitch();
+    cout << "----------" << endl;
+}
 
 int main(int argc, char** argv)
 {

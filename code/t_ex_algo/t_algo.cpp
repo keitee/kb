@@ -11,8 +11,7 @@
 // g++ -g -std=c++0x t_override.cpp
 
 using namespace std;
-using testing::ElementsAre;
-using testing::Eq;
+using namespace testing;
 
 // ={=========================================================================
 void t_algo_reverse_01()
@@ -721,121 +720,202 @@ void t_algo_find_intersect()
 // ={=========================================================================
 // find the longest sequence of input char array
 
-void t_algo_find_longest_01()
+MATCHER_P(EqPair, expected, "")
 {
-    // since std::vector/array is not useful here. not cstring array and string
-    // is useful since provices [] access and do not include '\0'.
-
-    // = 17 ======
-    // longest char      : F
-    // longest occurance : 18
-    const string input = "AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS";
-
-    //
-    // = 17 ======
-    // longest char      : C
-    // longest occurance : 4
-    // const string input = "AAABBCCCCDDD";
-
-    size_t input_size = input.size();
-
-    // pair<char, size_t> find_longest(size_t size, const vector<char> &input);
-    {
-        char current_char{}, longest_char{};
-        size_t current_occurance{}, longest_occurance{};
-
-        // take the first
-        current_char = input[0];
-        current_occurance = 1;
-
-        for (size_t i = 1; i < input_size; ++i)
-        {
-            // if see the different char. use XOR and looks fancy?
-            if (current_char^input[i])
-            {
-                // save it if it's the longest so far
-                if(current_occurance > longest_occurance)
-                {
-                    longest_occurance = current_occurance;
-                    longest_char = current_char;
-                }
-
-                // reset and str a search again
-                current_char = input[i];
-                current_occurance = 1;
-            }
-            // if see the same before
-            else
-                ++current_occurance;
-        }
-
-        cout << "longest char      : " << longest_char << endl;
-        cout << "longest occurance : " << longest_occurance << endl;
-    }
+    return arg.first == expected.first &&
+        arg.second == expected.second;
 }
 
-void t_algo_find_longest_02()
+// this is the second try and works fine.
+pair<char, size_t> find_longest_01(const string &input)
 {
-    // = 18 ======
-    // skipped : 2
-    // skipped : 3
-    // skipped : 17
-    // longest char      : F
-    // longest occurance : 18
-    const string input = "AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS";
-    
-    // = 18 ======
-    // longest char      : C
-    // longest occurance : 4
-    // const string input = "AAABBCCCCDDD";
+    size_t current_occurance{0}, longest_occurance{0};
+    char current_char{0}, longest_char{0};
+
+    for( auto letter : input )
+    {
+        if( letter != current_char )
+        {
+            current_char = letter;
+            current_occurance = 1;
+        }
+        // if( letter == current_char )
+        else
+            ++current_occurance;
+
+        if( current_occurance > longest_occurance )
+        {
+            longest_char = current_char;
+            longest_occurance = current_occurance;
+        }
+    }
+
+    return pair<char, size_t>(longest_char, longest_occurance);
+}
+
+
+TEST(CxxAlgoTest, FindLongestSequence1)
+{
+    const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
+    EXPECT_THAT(find_longest_01(input1), 
+            EqPair(pair<char, size_t>('F', 18)));
+
+    const string input2{"AAABBCCCCDDD"};
+    EXPECT_THAT(find_longest_01(input2), 
+            EqPair(pair<char, size_t>('C', 4)));
+
+    const string input3{"AAAAAAAAAAAA"};
+    EXPECT_THAT(find_longest_01(input3), 
+            EqPair(pair<char, size_t>('A', 12)));
+}
+
+
+// Firstly, looks better but it fails when the input has one long sequence.
+pair<char, size_t> find_longest_02(const string &input)
+{
+    char current_char{}, longest_char{};
+    size_t current_occurance{}, longest_occurance{};
+
+    for (auto letter : input)
+    {
+        // if see the different char. use XOR and looks fancy?
+        if (current_char^letter)
+        {
+            // save it if it's the longest so far
+            if(current_occurance > longest_occurance)
+            {
+                longest_occurance = current_occurance;
+                longest_char = current_char;
+            }
+
+            // reset and str a search again
+            current_char = letter;
+            current_occurance = 1;
+        }
+        // if see the same before
+        else
+            ++current_occurance;
+    }
+
+    return pair<char, size_t>(longest_char, longest_occurance);
+}
+
+TEST(CxxAlgoTest, FindLongestSequence2)
+{
+    const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
+    EXPECT_THAT(find_longest_02(input1), 
+            EqPair(pair<char, size_t>('F', 18)));
+
+    const string input2{"AAABBCCCCDDD"};
+    EXPECT_THAT(find_longest_02(input2), 
+            EqPair(pair<char, size_t>('C', 4)));
+
+    // fails on this case
+    // const string input3{"AAAAAAAAAAAA"};
+    // EXPECT_THAT(find_longest_02(input3), 
+    //         EqPair(pair<char, size_t>('A', 12)));
+}
+
+
+// // To do better than O(n), can skip some chars in searching a sequence.
+// pair<char, size_t> find_longest_01(const string &input)
+// {
+//     size_t current_occurance{0}, longest_occurance{0};
+//     char current_char{0}, longest_char{0};
+
+//     for( auto letter : input )
+//     {
+//         if( letter != current_char )
+//         {
+//             current_char = letter;
+//             current_occurance = 1;
+//         }
+//         // if( letter == current_char )
+//         else
+//             ++current_occurance;
+
+//         if( current_occurance > longest_occurance )
+//         {
+//             longest_char = current_char;
+//             longest_occurance = current_occurance;
+//         }
+//     }
+
+//     return pair<char, size_t>(longest_char, longest_occurance);
+// }
+
+
+pair<char, size_t> t_algo_find_longest_02(const string &input)
+{
+    char current_char{}, longest_char{};
+    size_t current_occurance{}, longest_occurance{};
 
     size_t input_size = input.size();
 
-    // pair<char, size_t> find_longest(size_t size, const vector<char> &input);
+    // take the first
+    current_char = input[0];
+    current_occurance = 1;
+    
+    for (size_t i = 1; i < input_size; ++i)
     {
-        char current_char{}, longest_char{};
-        size_t current_occurance{}, longest_occurance{};
-
-        // take the first
-        current_char = input[0];
-        current_occurance = 1;
-
-        
-        for (size_t i = 1; i < input_size; ++i)
+        // if see the different char. use XOR and looks fancy?
+        if (current_char^input[i])
         {
-            // if see the different char. use XOR and looks fancy?
-            if (current_char^input[i])
+            // save the previous sequence if it's the longest so far
+            if (current_occurance > longest_occurance)
             {
-                // save it if it's the longest so far
-                if (current_occurance > longest_occurance)
-                {
-                    longest_occurance = current_occurance;
-                    longest_char = current_char;
-                }
-
-                size_t check_skip = i + (current_occurance-1);
-
-                if (check_skip > input_size)
-                    break;
-
-                if (input[i]^input[check_skip])
-                {
-                    cout << "skipped : " << current_occurance-1 << endl;
-                    i += current_occurance-1;
-                }
-
-                // reset and str a search again
-                current_char = input[i];
-                current_occurance = 1;
+                longest_occurance = current_occurance;
+                longest_char = current_char;
             }
-            // if see the same before
-            else
-                ++current_occurance;
-        }
 
-        cout << "longest char      : " << longest_char << endl;
-        cout << "longest occurance : " << longest_occurance << endl;
+            // see i and i + (current longest sequence-1) and skip them in
+            // between if they are different
+            //
+            // if they are the same, don't skip so don't change i
+            size_t check_skip = i + (current_occurance-1);
+
+            if (check_skip > input_size)
+                break;
+
+            if (input[i]^input[check_skip])
+            {
+                // cout << "skipped : input[i]: " << input[i] << ", input[skip]: " << input[check_skip] << endl;
+                // cout << "skipped : " << current_occurance-1 << endl;
+                i += current_occurance-1;
+            }
+
+            // reset and str a search again
+            current_char = input[i];
+            current_occurance = 1;
+        }
+        // if see the same before
+        else
+            ++current_occurance;
     }
+
+    cout << "longest char      : " << longest_char << endl;
+    cout << "longest occurance : " << longest_occurance << endl;
+
+    return pair<char, size_t>(longest_char, longest_occurance);
+}
+
+TEST(CxxAlgoTest, FindLongestSequenceBetter)
+{
+    // const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
+    // EXPECT_THAT(t_algo_find_longest_02(input1), 
+    //         EqPair(pair<char, size_t>('F', 18)));
+
+    // const string input2{"AAABBCCCCDDD"};
+    // EXPECT_THAT(t_algo_find_longest_02(input2), 
+    //         EqPair(pair<char, size_t>('C', 4)));
+
+    // const string input3{"AAAABCBBBBBCCCCDDD"};
+    // EXPECT_THAT(t_algo_find_longest_02(input3), 
+    //         EqPair(pair<char, size_t>('B', 5)));
+
+    const string input3{"AAAABCCCCCCCC"};
+    EXPECT_THAT(t_algo_find_longest_02(input3), 
+            EqPair(pair<char, size_t>('C', 8)));
 }
 
 

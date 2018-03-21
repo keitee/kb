@@ -173,7 +173,6 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-design-defines-problem
 *kt_dev_cxx_0000* cxx-design-by-contract 
 *kt_dev_cxx_0000* cxx-design-define-variable
-*kt_dev_cxx_0000* cxx-design-no-reference-to-internals
 *kt_dev_cxx_0000* cxx-design-interface-first
 *kt_dev_cxx_0000* cxx-design-core-guide
 
@@ -299,7 +298,7 @@ KT KB. CPP
 |kt_dev_ccon_001| std-threadad: copy callables and arguments. lifetime issue
 |kt_dev_ccon_002| std-threadad: join and detach
 *kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
-|kt_dev_ccon_004| std::mutex and inherent race in thread-safe stack
+*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
 *kt_dev_ccon_005* cpp-con-lock-guard cpp-deadlock
 |kt_dev_ccon_006| cpp-con-unique-lock
 |kt_dev_ccon_007| std::unique_lock and transferring mutex
@@ -11957,107 +11956,6 @@ cs is: 6Screen
 end of main
 
 
-{cxx-reference-return-by-value} EC++21
-The `pass-by-reference` is great so always use reference? However, there are
-cases that must return a copy not a reference such as operator*(). This is a
-operator to multiply not to dereferene.
-
-note:
-How distinguish between two multiply and dereferene?
-
-// dereferene operator, member
-T& operator*() { return *ptr_; }
-    
-// multiply operator, nonmmber
-friend const T operator*( const T &lhs, const T &rhs );
-
-
-These are tries to save a construction cost by using pass-by-reference. Not
-quite right.
-
-<1> 
-Use stack but remember a refenrece is a name for some 'existing' object. Here
-returns a reference to object that no longer exist.
-
-Rational c = a*b;
-
-class Rational {
-  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
-  {
-    Rational retult( lhs.n*rhs.n, lhs.d*rhs.d );
-    return result;
-  }
-};
-
-
-<2> 
-Use heap but there is no way to delete in case: 
-
-Rational w, x, y, z;
-w = x*y*z;
-
-class Rational {
-  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
-  {
-    Rational *retult = new Rational( lhs.n*rhs.n, lhs.d*rhs.d );
-    return *result;
-  }
-};
-
-
-<3> 
-Use function static? Not right for multi-threaded and even for
-single-threaded.
-
-class Rational {
-  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
-  {
-    static Rational retult;
-    ...
-    return result;
-  }
-
-  bool operator==( const Rational& lhs, const Rational& rhs);
-};
-
-Rational a, b, c, d;
-
-if( (a*b) == (c*d) )
-{
-  ...
-}
-
-This will always true since it is evaluated as
-
-if( operator==( operator*(a,b), operator*(c,d) ) )
-
-Therefore, should return a copy and pay a small cost for correct behavior.
-
-class Rational {
-  friend const Rational operator*( const Rational& lhs, const Rational& rhs );
-  ...
-};
-
-*cpp-remember* C++PL p191
-To keep a program readable, it is often best to avoid functions that modify
-their arguments. Instead, you can return a value from the function explicitly:
-
-void increment(int &aa) { ++aa; }
-int next(int p) { return p+1; }
-
-void g()
-{
-  int x = 1;
-  increment(x);   // x = 2
-  x = next(x);    // x = 3
-}
-
-The increment(x) notation doesn't give a clue to the reader that x's value is
-being modified, the way x = next(x) does. Consequently, "plain" reference
-arguments should be used only where the name of the function gives a strong
-hint that the reference argument is modified.
-
-
 ={============================================================================
 *kt_dev_cxx_0000* cxx-vexing-parse
 
@@ -18668,7 +18566,7 @@ help improve runtime performance.
 Return Value Optimization
 
 RVO basically means the compiler is allowed to avoid creating temporary
-objects for return values, even if they have side effects.
+objects `for return values`, even if they have side effects.
 
 Here’s a simple example:
 
@@ -18685,7 +18583,7 @@ $ clang++ -std=c++11 main.cpp && ./a.out
 c'tor
 d'tor
 
-// same as gcc *cxx-return-cxx-move*
+// gcc shows the same result. see *cxx-return-cxx-move* used here.
 $ clang++ -std=c++11 -fno-elide-constructors main.cpp && ./a.out
 c'tor
 move c'tor
@@ -18704,8 +18602,11 @@ This is also the default behavior, meaning practically all C++ programs
 utilize RVO.
 
 
+// turn off RVO
 // https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#index-fno-elide-constructors
-// 
+//
+// elide: to not pronounce a particular sound in a word:
+//
 // 3.5 Options Controlling C++ Dialect
 // 
 // -fno-elide-constructors
@@ -18732,7 +18633,7 @@ Without RVO the compiler creates 3 Snitch objects instead of 1:
 
 Performance
 
-The neat thing about RVO is that it makes returning objects free. It works via
+The neat thing about RVO is that `it makes returning objects free.` It works via
 allocating memory for the to-be-returned object in the caller’s stack frame.
 The returning function then uses that memory as if it was in its own frame
 without the programmer knowing / caring.
@@ -18752,7 +18653,7 @@ int main() {
   }
 }
 
-
+// off RVO
 $ clang++ -fno-elide-constructors -std=c++98 -stdlib=libc++ -O3 main.cpp && time ./a.out
 real	0m37.235s
 user	0m37.168s
@@ -18762,8 +18663,11 @@ $ clang++ -std=c++98 -stdlib=libc++ -O3 main.cpp && time ./a.out
 real	0m17.681s
 user	0m17.668s
 sys	0m0.000s
-217% difference on my machine by simply avoiding the copy of the vector. In C++11 (or newer) environments it is even marginally faster to disable RVO:
 
+217% difference on my machine by simply avoiding the copy of the vector. In
+C++11 (or newer) environments it is even marginally faster to disable RVO:
+
+// off RVO
 $ clang++ -fno-elide-constructors -std=c++11 -stdlib=libc++ -O3 main.cpp && time ./a.out
 real	0m18.195s
 user	0m18.188s
@@ -18779,6 +18683,7 @@ This is due to Move Semantics, which is the subject of the next post.
 <ex>
 kyoupark@kit-debian64:~/works$ uname -a
 Linux kit-debian64 3.16.0-4-amd64 #1 SMP Debian 3.16.36-1+deb8u1 (2016-09-03) x86_64 GNU/Linux
+
 kyoupark@kit-debian64:~/works$ gcc --version
 gcc (Debian 4.9.2-10) 4.9.2
 
@@ -18853,6 +18758,34 @@ d'tor
 
 In my experience, RVO is more frequent (and thus useful) than other
 copy-elision practices, but your mileage may vary.
+
+
+void foo(Snitch s) {
+    cout << "snitch value is: " << s.getValue() << endl;
+}
+
+TEST(CxxFeaturesTest, UseCopyElison)
+{
+    cout << "----------" << endl;
+    foo(Snitch(200));
+    cout << "----------" << endl;
+}
+
+// with -fno-
+----------
+c'tor
+move c'tor
+snitch value is: 0
+d'tor
+d'tor
+----------
+
+// without -fno-
+----------
+c'tor
+snitch value is: 200
+d'tor
+----------
 
 
 <when-rvo-do-not-on>
@@ -18931,6 +18864,9 @@ wrong most of the times. It will indeed attempt to force move-constructor, but
 in doing so it will disable RVO. It is also redundant, as move will happen if
 it can even without explicitly calling std::move() (see here).
 
+TODO
+https://stackoverflow.com/questions/14856344/when-should-stdmove-be-used-on-a-function-return-value
+
 Snitch CreateSnitch() {
   Snitch snitch;
   return std::move(snitch);
@@ -18963,11 +18899,14 @@ int main() {
   s = CreateSnitch();
 }
 
+// with -fno-
 $ clang++ -std=c++11 -stdlib=libc++ main.cpp && ./a.out
 c'tor
+--- where it is not rvo
 c'tor
 move assignment
 d'tor
+---
 d'tor
 
 
@@ -19005,11 +18944,446 @@ performance when writing code, unless you have a quantifiable reason.
 TODO: *C++17*
 https://jonasdevlieghere.com/guaranteed-copy-elision/
 
+<ex>
+std::vector<std::string> return_vector(const std::string &input)
+{
+    std::vector<std::string> svec{};
+
+    for(int i = 0; i < 10; ++i)
+    {
+        svec.push_back(input);
+    }
+
+    return svec;
+}
+
+int main()
+{
+    auto rvec = return_vector("string vector");
+}
+
+// modified to print vector copy and move ctor in stl_vector.h
+kyoupark@kit-debian64:~/works$ g++ -std=c++11 xxx.cpp 
+kyoupark@kit-debian64:~/works$ ./a.out    // nothing printed
+kyoupark@kit-debian64:~/works$ g++ -std=c++11 -fno-elide-constructors xxx.cpp 
+kyoupark@kit-debian64:~/works$ ./a.out 
+kit:vector move ctor          
+kit:vector move ctor
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-return cxx-undefined
 
-<no-return-when-expected>
+{cxx-return-what-should-return} {cxx-reference-return-by-value} EC++21
+The `pass-by-reference` is great so always use reference? 
+
+note:
+How distinguish between two multiply and dereferene?
+
+// dereferene operator, member
+T& operator*() { return *ptr_; }
+    
+// multiply operator, nonmmber
+friend const T operator*( const T &lhs, const T &rhs );
+
+
+These are tries to save a construction cost by using pass-by-reference. Not
+quite right.
+
+<1> 
+Use stack but remember a refenrece is a name for some 'existing' object. Here
+returns a reference to object that no longer exist.
+
+Rational c = a*b;
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    Rational retult( lhs.n*rhs.n, lhs.d*rhs.d );
+    return result;
+  }
+};
+
+
+<2> 
+Use heap but there is no way to delete in case: 
+
+Rational w, x, y, z;
+w = x*y*z;
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    Rational *retult = new Rational( lhs.n*rhs.n, lhs.d*rhs.d );
+    return *result;
+  }
+};
+
+
+<3> 
+Use function static? Not right for multi-threaded and even for
+single-threaded.
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    static Rational retult;
+    ...
+    return result;
+  }
+
+  bool operator==( const Rational& lhs, const Rational& rhs);
+};
+
+Rational a, b, c, d;
+
+if( (a*b) == (c*d) )
+{
+  ...
+}
+
+This will always true since it is evaluated as
+
+if( operator==( operator*(a,b), operator*(c,d) ) )
+
+*cxx-remember*
+Therefore, should return a copy and pay a small cost for correct behavior and
+usually no cost due to *cxx-rvo* 
+
+There are cases that must return a copy not a reference such as operator*().
+This is a operator to multiply not to dereferene.
+
+
+class Rational {
+  friend const Rational operator*( const Rational& lhs, const Rational& rhs );
+  ...
+};
+
+*cxx-remember* C++PL 191
+To keep a program readable, it is often best to avoid functions that modify
+their arguments. Instead, you can return a value from the function explicitly:
+
+void increment(int &aa) { ++aa; }
+int next(int p) { return p+1; }
+
+void g()
+{
+  int x = 1;
+  increment(x);   // x = 2
+  x = next(x);    // x = 3
+}
+
+The increment(x) notation doesn't give a clue to the reader that x's value is
+being modified, the way x = next(x) does. Consequently, "plain" reference
+arguments should be used only where the name of the function gives a strong
+hint that the reference argument is modified.
+
+
+{cxx-return-no-reference-to-internals}
+
+CCG F.43: Never (directly or indirectly) return a pointer or a reference to a
+local object
+
+EC++28, avoid returning handles to object internals
+
+Here internals means everything except public interface and includes private
+and protected member function. If returns handles (iterator, pointer and
+    reference) to internals, causes three problems: breaks encapsulatation,
+constness, and dangling-handles.
+
+
+<compromising-encapsulation-and-constness>
+The pass by reference is more efficient than pass by value and the interface
+offer client a way to learn what rectangle's points are:
+
+class Rectangle {
+  public:
+    Point& upperLeft() const { return pData->ulhc; }
+
+  private:
+    std::shared_ptr<RectData> pData;
+};
+
+Is it okay? NO because client can change its value:
+
+// use
+const Rectangle rec( ... );
+rec.upperLeft().setX(50);
+
+The problem is that makes memeber data effectively public as returns reference
+to it from a public member function since this is *cxx-const-bitwise*
+
+
+The solution is that it offers read-only access:
+
+class Rectangle {
+  public: >
+   `const` Point& upperLeft() const { return pData->ulhc; }
+
+  private:
+   std::shared_ptr<RectData> pData;
+};
+
+Similar to the example of {const-member-func}
+
+<ex>
+using namespace std;
+
+class Sample {
+  private:
+    int val;
+
+  public:
+    Sample() : val(10) {}
+    int& getx() { return val;}
+    void printx() { cout << val << endl; }
+};
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+  Sample sam;
+  cout << "------" << endl;
+  sam.printx();
+  sam.getx() = 20;
+  cout << "------" << endl;
+  sam.printx();
+
+  return 0;
+}
+
+This changes private member val to 20.
+
+
+<dangling-handles>
+class GUIObject { ... }
+const Rectangle boundingBox( const GUIObject& obj );
+
+// use
+GUIObject* pgo;
+...
+const Point* pUpperLeft = &( boundingBox(*pgo).upperLeft() );
+
+This returns a temporary Rectangle and returns its upper member. The problem
+is this temporary is destroyed when this statement ends and pUpperLeft will
+dangle even if const use.
+
+vector and string's [] operator returns reference but these are exceptions to
+this rule, but not a general rule. Better not use [] operator.
+
+
+{cxx-return-cxx-temporary}
+
+The function returns value
+
+std::string YVCloudAuth::getAuthToken() const;
+
+and here defines a reference to use return value so takes a reference to a
+temporary.
+
+try
+{
+  `const std::string&` token = cloudAuth->getAuthToken();
+  Header.replace("<add-youview-token>", token.c_str());
+}
+
+You're taking a reference to a temporary object
+
+That's allowed.
+
+exactly, this const reference binds to this rvalue, extending it's lifetime
+for the lifetime of the reference itself. But in practice it's like giving a
+temp an alias. see below for a nice explanation
+
+
+http://herbsutter.com/2008/01/01/gotw-88-a-candidate-for-the-most-important-const/
+
+GotW #88: A Candidate For the "Most Important const"
+
+Q1: Is the following code legal C++?
+
+    // Example 1
+
+    string f() { return "abc"; }
+
+    void g() {
+      `const string&` s = f();
+      cout << s << endl;    // can we still use the "temporary" object?
+    }
+
+
+A1: Yes.
+
+This is a C++ feature. the code is valid and does exactly what it appears to
+do.
+
+Normally, a temporary object lasts only until the end of the full expression
+in which it appears. 
+
+However, C++ deliberately specifies that binding a temporary object to a
+reference to const on the stack `lengthens the lifetime of the temporary` to
+the lifetime of the reference itself, and thus avoids what would otherwise be
+a common dangling-reference error. 
+
+In the example above, the temporary returned by f() lives until the closing
+curly brace. (Note this only applies to stack-based references. It doesn't
+    work for references that are members of objects.)
+
+
+Q2: What if we take out the const. is Example 2 still legal C++?
+
+    // Example 2
+
+    string f() { return "abc"; }
+
+    void g() {
+      string& s = f();       // still legal?
+      cout << s << endl;
+    }
+
+A2: No.
+
+The "const" is important. The first line is an error and the code won't
+compile portably with this reference to non-const, because f() returns a
+temporary object (i.e., `rvalue`) and only lvalues can be bound to references
+to non-const.
+
+*cxx-const-to-non-const-error*
+:19:21: error: invalid initialization of non-const reference of type 
+  ‘std::string& {aka std::basic_string<char>&}’ 
+  from an `rvalue` of type ‘std::string {aka std::basic_string<char>}’
+
+Note: Visual C++ does allow Example 2 but emits a "nonstandard extension used"
+warning by default. A conforming C++ compiler can always allow
+otherwise-illegal C++ code to compile and give it some meaning — hey, it could
+choose to allow inline COBOL if some kooky compiler writer was willing to
+implement that extension, maybe after a few too many Tequilas. For some kinds
+of extensions the C++ standard requires that the compiler at least emit some
+diagnostic to say that the code isn’t valid ISO C++, as this compiler does.
+
+Note: gcc 4.7.2 and see 'rvalue'.
+
+<ex>
+I once heard Andrei Alexandrescu give a talk on ScopeGuard (invented by Petru
+    Marginean) where he used this C++ feature and called it "the most important
+const I ever wrote." And this brings us to the Guru Question, which highlights
+the additional subtlety that Andrei's code deftly leveraged.
+
+Guru Question
+
+Q3: When the reference goes out of scope, which destructor gets called?
+A3: The same destructor that would be called for the temporary object. It's just
+being delayed.
+
+Corollary: You can take a const Base& to a Derived temporary and it will be
+destroyed without virtual dispatch on the destructor call.
+
+This is nifty. Consider the following code:
+
+    // Example 3
+
+    Derived factory(); // construct a Derived object
+
+    void g() {
+      const Base& b = factory(); // calls Derived::Derived here
+      // use b
+    } // calls Derived::~Derived directly here - not Base::~Base + virtual dispatch!
+
+Does this work in practice on real compilers? Yes: Every compiler I have access
+to calls the correct Derived destructor, including even ancient Borland 5.5 and
+Visual C++ 6.0 (and Digital Mars, though DM calls the destructor at the wrong
+    time, as noted above).
+
+Andrei leverages this subtlety (of course) in his ScopeGuard implementation to
+avoid making the implementation classes' destructors virtual at all, which is
+okay in that case because those classes otherwise have no need for one. 
+
+
+{cxx-return-const-return}
+
+// this is old and out-dated.
+//
+// EC++03. When `return by value` for user type, use const to raise error when
+// mistake happens:
+// 
+// const Rational operator*( const Rational& lhs, const Rational& rhs );
+// 
+// if( a * b = c )       // typo. was meant if( a * b == c )
+// 
+// If these are built-in type, this is flat-out error but not for class type. 
+// 
+// * The returned `built-in` type is an `rvalue` and can't be modified. EXPC++43.
+// * Even if it were legal, the fact that it returns object by value would mean
+//   that a copy would be modified and that's not the behavior you want. 
+// 
+// So better to be prepared for this kind of mistakes. Also this is an example of
+// returning a copy than reference.
+
+
+CCG F.20: For “out” output values, prefer return values to output parameters
+
+Note A struct of many (individually cheap-to-move) elements may be in
+aggregate expensive to move. It is not recommended to return a const value.
+
+`Such older advice is now obsolete`; it does not add value, and it interferes
+with move semantics.  
+
+const vector<int> fct(); // bad: that "const" is more trouble than it is worth
+
+vector<int> g(const vector<int>& vx)
+{
+  // ...
+  fct() = vx; // prevented by the "const"
+
+  // ...
+  // expensive copy: move semantics suppressed by the "const"
+  // *TN* since move controls requires non-const argument.
+  return fct(); 
+}
+
+The argument for adding const to a return value is that it prevents (very
+rare) accidental access to a temporary. The argument against is prevents
+(very frequent) use of move semantics.
+
+*TN* So better to allow move semantics than to prevent access to a temporary
+
+
+Exceptions
+
+If a type is `expensive to move` (e.g., array<BigPOD>), consider allocating
+it on the free store and return a handle (e.g., unique_ptr ), or passing it in
+a reference to non-const target object to fill (to be used as an
+out-parameter).
+
+
+F.47: Return T& from assignment operators
+
+Reason 
+
+The convention for operator overloads (especially on value types) is for
+operato r=(const T&) to perform the assignment and then return (non-const)
+  *this. This ensures consistency with standard-library types and follows the
+  principle of “do as the ints do.”
+
+Note 
+Historically there was some guidance to make the assignment operator return
+const T&. This was primarily to avoid code of the form (a = b) = c such code
+is not common enough to warrant violating consistency with standard types.
+
+Example
+
+class Foo
+{
+  public:
+    ...
+      Foo& operator=(const Foo& rhs) {
+        // Copy members.
+        ...
+          return *this;
+      }
+};
+
+
+{no-return-when-expected}
 
 #include <iostream>
 #include <string>
@@ -19816,47 +20190,6 @@ int main()
 }
 
 
-{cxx-const-return} *cxx-return* 
-EC++03. When `return by value` for user type, use const to raise error when
-mistake happens:
-
-const Rational operator*( const Rational& lhs, const Rational& rhs );
-
-if( a * b = c )       // typo. was meant if( a*b == c )
-
-If these are built-in type, this is flat-out error but not for class type. 
-
-* The returned `built-in` type is an `rvalue` and can't be modified. EXPC++43.
-* Even if it were legal, the fact that it returns object by value would mean
-  that a copy would be modified and that's not the behavior you want. 
-
-So better to be prepared for this kind of mistakes. Also this is an example of
-returning a copy than reference.
-
-// RCCG
-F.20: For “out” output values, prefer return values to output parameters
-
-Note A struct of many (individually cheap-to-move) elements may be in
-aggregate expensive to move. It is not recommended to return a const value.
-Such older advice is now obsolete; it does not add value, and it interferes
-with move semantics.  const vector<int> fct(); // bad: that "const" is more
-trouble than it is worth
-
-vector<int> g(const vector<int>& vx)
-{
-  // ...
-  fct() = vx; // prevented by the "const"
-  // ...
-  return fct(); // expensive copy: move semantics suppressed by the "const"
-}
-
-The argument for adding const to a return value is that it prevents (very
-rare) accidental access to a temporary. The argument against is prevents
-(very frequent) use of move semantics.
-
-// So better to allow move semantics than to prevent access to a temporary
-
-
 {const-on-base-type}
 When use const with type alias, it can be surprising. For example,
 
@@ -20024,125 +20357,6 @@ i: 200
 ri: 200
 d: 6.28
 rd: 3                   // not changed, temporary
-
-
-<const-reference-to-return> *cxx-return*
-// std::string YVCloudAuth::getAuthToken() const;
-
-try
-{
-  const std::string& token = cloudAuth->getAuthToken();
-  Header.replace("<add-youview-token>", token.c_str());
-}
-
-You're taking a reference to a temporary object
-
-That's allowed.
-
-exactly, this const reference binds to this rvalue, extending it's lifetime
-for the lifetime of the reference itself. But in practice it's like giving a
-temp an alias. see below for a nice explanation
-
-
-http://herbsutter.com/2008/01/01/gotw-88-a-candidate-for-the-most-important-const/
-
-GotW #88: A Candidate For the "Most Important const"
-
-Q1: Is the following code legal C++?
-
-    // Example 1
-
-    string f() { return "abc"; }
-
-    void g() {
-      const string& s = f();
-      cout << s << endl;    // can we still use the "temporary" object?
-    }
-
-
-A1: Yes.
-
-This is a C++ feature. the code is valid and does exactly what it appears to
-do.
-
-Normally, a temporary object lasts only until the end of the full expression
-in which it appears. However, C++ deliberately specifies that binding a
-temporary object to a reference to const on the stack 'lengthens' the lifetime
-of the temporary to the 'lifetime' of the reference itself, and thus avoids
-what would otherwise be a common dangling-reference error. In the example
-above, the temporary returned by f() lives until the closing curly brace.
-(Note this only applies to stack-based references. It doesn't work for
- references that are members of objects.)
-
-
-Q2: What if we take out the const. is Example 2 still legal C++?
-
-    // Example 2
-
-    string f() { return "abc"; }
-
-    void g() {
-      string& s = f();       // still legal?
-      cout << s << endl;
-    }
-
-A2: No.
-
-The "const" is important. The first line is an error and the code won't
-compile portably with this reference to non-const, because f() returns a
-temporary object (i.e., `rvalue`) and only lvalues can be bound to references
-to non-const.
-
-Note: Visual C++ does allow Example 2 but emits a "nonstandard extension used"
-warning by default. A conforming C++ compiler can always allow
-otherwise-illegal C++ code to compile and give it some meaning — hey, it could
-choose to allow inline COBOL if some kooky compiler writer was willing to
-implement that extension, maybe after a few too many Tequilas. For some kinds
-of extensions the C++ standard requires that the compiler at least emit some
-diagnostic to say that the code isn’t valid ISO C++, as this compiler does.
-
-Note: gcc 4.7.2 and see 'rvalue'.
-
-<ex>
-I once heard Andrei Alexandrescu give a talk on ScopeGuard (invented by Petru
-    Marginean) where he used this C++ feature and called it "the most important
-const I ever wrote." And this brings us to the Guru Question, which highlights
-the additional subtlety that Andrei's code deftly leveraged.
-
-Guru Question
-
-Q3: When the reference goes out of scope, which destructor gets called?
-A3: The same destructor that would be called for the temporary object. It's just
-being delayed.
-
-Corollary: You can take a const Base& to a Derived temporary and it will be
-destroyed without virtual dispatch on the destructor call.
-
-This is nifty. Consider the following code:
-
-    // Example 3
-
-    Derived factory(); // construct a Derived object
-
-    void g() {
-      const Base& b = factory(); // calls Derived::Derived here
-      // use b
-    } // calls Derived::~Derived directly here - not Base::~Base + virtual dispatch!
-
-Does this work in practice on real compilers? Yes: Every compiler I have access
-to calls the correct Derived destructor, including even ancient Borland 5.5 and
-Visual C++ 6.0 (and Digital Mars, though DM calls the destructor at the wrong
-    time, as noted above).
-
-Andrei leverages this subtlety (of course) in his ScopeGuard implementation to
-avoid making the implementation classes' destructors virtual at all, which is
-okay in that case because those classes otherwise have no need for one. 
-
-
-<cxx-const-to-non-const-error>
-:19:21: error: invalid initialization of non-const reference of type 
-  ‘std::string& {aka std::basic_string<char>&}’ 
-  from an `rvalue` of type ‘std::string {aka std::basic_string<char>}’
 
 
 ={============================================================================
@@ -28313,96 +28527,6 @@ if (Derived *dp = dynamic_cast<Derived*>(bp))
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-design-no-reference-to-internals
-
-EC++28, avoid returning handles to object internals
-
-Here internals means everything except public interface and includes private
-and protected member function. If returns handles (iterator, pointer and
-    reference) to internals, causes three problems: breaks encapsulatation,
-constness, and dangling-handles.
-
-{compromising-encapsulation-and-constness}
-The pass by reference is more efficient than pass by value and the interface
-offer client a way to learn what rectangle's points are:
-
-class Rectangle {
-  public:
-    Point& upperLeft() const { return pData->ulhc; }
-
-  private:
-    std::shared_ptr<RectData> pData;
-};
-
-Is it okay? NO because client can change its value:
-
-// use
-const Rectangle rec( ... );
-rec.upperLeft().setX(50);
-
-The problem is that makes memeber data effectively public as returns reference
-to it from a public member function since this is *cpp-const-bitwise*
-
-
-The solution is that it offers read-only access:
-
-class Rectangle {
-  public: >
-   const Point& upperLeft() const { return pData->ulhc; }
-
-  private:
-   std::shared_ptr<RectData> pData;
-};
-
-Similar to the example of {const-member-func}
-
-<ex>
-
-using namespace std;
-
-class Sample {
-  private:
-    int val;
-
-  public:
-    Sample() : val(10) {}
-    int& getx() { return val;}
-    void printx() { cout << val << endl; }
-};
-
-int _tmain(int argc, _TCHAR* argv[])
-{
-  Sample sam;
-  cout << "------" << endl;
-  sam.printx();
-  sam.getx() = 20;
-  cout << "------" << endl;
-  sam.printx();
-
-  return 0;
-}
-
-This changes private member val to 20.
-
-
-{dangling-handles}
-class GUIObject { ... }
-const Rectangle boundingBox( const GUIObject& obj );
-
-// use
-GUIObject* pgo;
-...
-const Point* pUpperLeft = &( boundingBox(*pgo).upperLeft() );
-
-This returns a temporary Rectangle and returns its upper member. The problem
-is this temporary is destroyed when this statement ends and pUpperLeft will
-dangle even if const use.
-
-vector and string's [] operator returns reference but these are exceptions to
-this rule, but not a general rule. Better not use [] operator.
-
-
-={============================================================================
 *kt_dev_cxx_0000* cxx-design-interface-first
 
 See *cxx-sp-ex-strblob-example* as well.
@@ -32942,6 +33066,18 @@ void t_util_01()
 }
 
 
+<ex>
+const std::vector<std::pair<uint32_t, std::string>> roman_table{
+  std::make_pair(1000u, "M"),
+  std::make_pair(900u, "CM")
+};
+
+const auto roman_table{
+  std::make_pair(1000u, "M"),
+  std::make_pair(900u, "CM")
+};
+
+
 <move-or-copy>
 You can influence the type make_pair() yields by forcing either move or
 reference semantics.
@@ -36180,7 +36316,7 @@ map<string, size_t> word_count;
 while( cin >> word )
    ++word_count[word];
 
-// *C++11* *cpp-pair*
+// *C++11* *cxx-pair*
 for( const auto &w : word_count )
    cout << w.first << " occurs" << 
           w.second << ((w.second>1) ? "times" : " time") << endl;
@@ -49629,9 +49765,9 @@ o software transactional memory (STM)
 
 
 ={============================================================================
-*kt_dev_ccon_004* cpp-con-mutex cpp-con-lock-guard cpp-race-condition thread-safe stack
+*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
 
-{cpp-mutex}
+{cxx-mutex}
 Mutexes are the most general of the data-protection mechanisms. But they're
 not a silver bullet; it's important to structure your code to protect the
 right data and avoid race conditions inherent in your interfaces. Mutexes also
@@ -49639,10 +49775,6 @@ come with their own problems, in the form of a deadlock and protecting either
 too much or too little data.
 
 <cpp-lock-guard>
-Not recommended practice to call the member functions, lock() and unlock(),
-    directly, because this means that you have to remember to call unlock() on
-    every code path out of a function, including those due to exceptions.
-
 std::lock_guard class template, which implements that RAII idiom for a mutex;
 
 #include <mutex>
@@ -49663,12 +49795,8 @@ bool list_contains(int value_to_find)
       != some_list.end();
 }
 
-Can encapsulate the functionality and enforce the protection and it's common
-to group the mutex and the protected data together in a class rather than use
-global variables.
 
-
-{not-silver-bullet} {design-considerations}
+{not-silver-bullet}
 If all the member functions of the class lock the mutex before accessing any
 other data members and unlock it when done, the data is nicely protected from
 all comers.
@@ -49685,8 +49813,8 @@ data and that there are no backdoors.
 
 
 <do-not-pass-protected-data>
-If do careful design, the data is safe now? No. If you dig a little deeper,
-it's not that straightforward. Nothing ever is.
+If do careful design, the data is safe now? No. If dig a little deeper, it's
+not that straightforward. Nothing ever is.
 
 As well as checking that the member functions don't pass out pointers or
 references to their callers. also to check that they don't pass such pointers
@@ -49753,24 +49881,89 @@ Just because individual operations on the list are safe, you can still get
 race conditions, even with a really simple interface since interface is not
 well designed. Consider std::stack<>.
 
-template< typename T, typename Container=std::deque<T> >
-class stack
+// bits/stl_stack.h
+
+template<typename _Tp, typename _Sequence = deque<_Tp> >
+    class stack
 {
-    public:
 
-        // ...
-        
-        bool empty() const;
-        size_t size() const;
-        
-        T& top();
-        T const& top() const;
+  /**
+   *  Returns true if the %stack is empty.
+   */
+  bool
+    empty() const
+    { return c.empty(); }
 
-        void push(const T& );
-        void push(T &&);
+  /**  Returns the number of elements in the %stack.  */
+  size_type
+    size() const
+    { return c.size(); }
 
-        void pop();
+  /**
+   *  Returns a read/write reference to the data at the first
+   *  element of the %stack.
+   */
+  reference
+    top()
+    {
+      __glibcxx_requires_nonempty();
+      return c.back();
+    }
+
+  /**
+   *  Returns a read-only (constant) reference to the data at the first
+   *  element of the %stack.
+   */
+  const_reference
+    top() const
+    {
+      __glibcxx_requires_nonempty();
+      return c.back();
+    }
+
+  /**
+   *  @brief  Add data to the top of the %stack.
+   *  @param  __x  Data to be added.
+   *
+   *  This is a typical %stack operation.  The function creates an
+   *  element at the top of the %stack and assigns the given data
+   *  to it.  The time complexity of the operation depends on the
+   *  underlying sequence.
+   */
+  void
+    push(const value_type& __x)
+    { c.push_back(__x); }
+
+#if __cplusplus >= 201103L
+  void
+    push(value_type&& __x)
+    { c.push_back(std::move(__x)); }
+
+  template<typename... _Args>
+    void
+    emplace(_Args&&... __args)
+    { c.emplace_back(std::forward<_Args>(__args)...); }
+#endif
+
+  /**
+   *  @brief  Removes first element.
+   *
+   *  This is a typical %stack operation.  It shrinks the %stack
+   *  by one.  The time complexity of the operation depends on the
+   *  underlying sequence.
+   *
+   *  Note that no data is returned, and if the first element's
+   *  data is needed, it should be retrieved before pop() is
+   *  called.
+   */
+  void
+    pop()
+    {
+      __glibcxx_requires_nonempty();
+      c.pop_back();
+    }
 };
+
 
 The problem is not about mutex-based implementation. it's an interface problem
 so the race condition would still occur with a lock-free implementation. this
@@ -49787,15 +49980,15 @@ if(!s.empty())                            <-
     do_something(value);
 }
 
-1. empty-and-top sequence
+1. race betwen empty and top
 Calling top() on an empty stack is undefined. classic race.
 
-2. top-and-pop sequence
-One of the two values on the stack is discarded without ever having been read,
-    whereas the other is processed twice. another race and far more
-    'insidious'. there's never anything obviously wrong going on and the
-    consequence of the bug are far from the cause although depends on exactly
-    what do_something really dose.
+2. race between top and pop
+Another race and far more 'insidious'. One of the two values on the stack is
+discarded without ever having been read, whereas the other is processed
+twice.There's never anything obviously wrong going on and the consequence of
+the bug are far from the cause although depends on exactly what do_something
+really dose.
 
 <option-1> note: this is a discusssion in Exceptional C++
 one that combine the calls to top() and pop() under the mutex. that is pop()

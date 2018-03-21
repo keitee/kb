@@ -211,44 +211,45 @@ TEST_F(ARetweetCollection, MatcherWithSingleArgument)
 
 
 // ={=========================================================================
-typedef std::pair<std::string, bool> PairReturn;
+// to check on pair
 
-ostream &operator<<(ostream &os, const PairReturn &p)
+MATCHER_P(EqPair, expected, "")
 {
-    os << "out" << endl;
+    return arg.first == expected.first && arg.second.empty() == expected.second.empty();
 }
 
-bool ComparePair(const PairReturn &m, const PairReturn &n) 
+TEST(AssertTest, AssertOnPair)
 {
-    return m == n ? true : false;
+    auto p1 = make_pair(1, std::vector<std::string>());
+    auto p2 = make_pair(1, std::vector<std::string>());
+    auto p3 = make_pair(2, std::vector<std::string>());
 
-    // if ( (get<0>(m) == get<0>(n)) && (get<1>(m) == get<1>(n)))
-    //     return true;
-
-    // return (n%m == 0) ? true : false;
+    EXPECT_THAT(p1, EqPair(p2));
+    // EXPECT_THAT(p1, EqPair(make_pair(1,std::vector<std::string>{"PAIR"})));
+    // EXPECT_THAT(p1, EqPair(p3));
 }
 
-TEST(AssertTest, AssertPredicate)
+
+// ={=========================================================================
+TEST(AssertTest, CheckTheOrderOfAssertArg)
 {
-    // PairReturn p1 = make_pair({"KIDS", "NEWS"}, false);
-    // PairReturn p2 = make_pair({"KIDS", "NEWS"}, false);
-    // PairReturn p3 = make_pair({"KIDS", "NEWS"}, true);
+    int value{100};
 
-    PairReturn p1 = std::pair<std::string, bool>({"KIDS", "NEWS"}, false);
-    PairReturn p2 = PairReturn({"KIDS", "NEWS"}, false);
-    PairReturn p3 = PairReturn({"KIDS", "NEWS"}, true);
+    EXPECT_THAT(value, 100);
+    EXPECT_THAT(100, value);
 
-    // auto weather_station = std::make_shared<MockWeatherStation>();
-
-    // // GMock: inject more complex logic using C++11 lambdas,
-    // // and pattern match on the input value
-    // EXPECT_CALL( *weather_station, snow(_) )
-    //     .WillRepeatedly(Throw(WeatherException()));
-
-    EXPECT_PRED2(ComparePair, p1, p2);
-    // EXPECT_PRED2(ComparePair, p1, p3);
+    // t_ex_mock.cpp:262: Failure
+    // Value of: value
+    // Expected: is equal to 101
+    //   Actual: 100 (of type int)
+    //
+    // t_ex_mock.cpp:263: Failure
+    // Value of: 101
+    // Expected: is equal to 100
+    //   Actual: 101 (of type int)
+    EXPECT_THAT(value, 101);
+    EXPECT_THAT(101, value);
 }
-
 
 int main(int argc, char **argv)
 {
