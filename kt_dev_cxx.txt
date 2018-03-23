@@ -257,7 +257,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-string-operations
 *kt_dev_cxx_0000* cxx-string-find
 |kt_dev_stl_073| cpp-string-numeric-conversion cpp-boost-lexical-cast
-|kt_dev_stl_074| stl-string: iterator support
+*kt_dev_cxx_0000* cxx-string-iterator
 *kt_dev_cxx_0000* cxx-stringstream
 *kt_dev_stl_075* stl-string: seg fault
 *kt_dev_cxx_0000* cxx-sp-raii cxx-raii
@@ -4460,7 +4460,7 @@ ULLONG_MAX:                                          18446744073709551615
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-limits
+*kt_dev_cpp_0000* cxx-limits cxx-bits
 
 <1> To get INT_MAX, 01111111...1,  ((~0)>>1) is wrong. why?
 
@@ -4654,70 +4654,114 @@ with and that's why said independent.
 
 
 <ex> *ex-bitcount*
-From ansic, p50. The function counts the number of 1 bits in its integer
-argument. 
 
-int bitcount( unsigned x );
+// From ansic, p50. 
+// The function counts the number of 1 bits in its integer argument. 
+//
+// 1. The key is not to use sizeof operator
+// 2. unsigned argument
+// 3. use independent of type.
 
-note: The key is not to use sizeof operator, unsigned argument, and use
-independent of type size.
-
-int bitcount( unsigned x )
+// returns bit position starting from 1 since input >> is evalueated after
+// ++count.
+uint32_t count_bits_01(const uint32_t value)
 {
-  int b;
+    uint32_t count{};
+    uint32_t input = value;
 
-  for(b = 0; x != 0; x >>= 1) // for(b = 0; x; x >>= 1), see {operator-assign}
-    if( x & 01 )              // x & 1 works as well
-      b++;
+    // do not need to check like: if (input &1) to increase count for every
+    // interation since when runs out 1, input becomes 0 and the loop ends. 
+    for (; input != 0; input >>= 1)
+        ++count;
 
-  return b;
+    return count;
+}
+
+// page 51. exercise 2-9. In a two's complement number system, x &= (x-1) deletes
+// the rightmost 1-bit in x. Explain why. Use this observation to write a 'faster'
+// version of bitcount.
+// 
+// Answer:
+// 
+// If x is odd, then (x-1) has the same bit representation as x except that the
+// rightmost 1-bit becomes a 0. In this case, (x & (x-1)) == (x-1).
+// 
+// x = 5: 5(101) & 4(100) = 100  // 101 -> 100 by having rightmost 1 to 0
+// 
+// If x is even, the end result of anding(&) x and x-1 has the rightmost 1 of x to 0.
+// 
+// x = 4: 4(100) & 3(11)  = 0    // 100 -> 0   by having rightmost 1 to 0
+//          ^ rightmost 1
+// x = 6: 6(110) & 5(101) = 100  // 110 -> 100 by having rightmost 1 to 0
+//           ^ rightmost 1
+// x = 8: 8(1000) & 7(111) = 0   // 1000 -> 0  by having rightmost 1 to 0
+// 
+// 000   0     All even numbers has tailing 0s and it becomes 1 when minus 1
+// 001   1
+// 010   2
+// 011   3
+// 100   4
+// 101   5
+// 110   6
+// 111   7
+// ...
+// 
+// note: This is about careful observation but not a mechanism of borrowing a carry
+// for example. For both odd and even case, has the effect of having rightmost 1 to
+// 0. So clear 1 from x one by one and no need to check on if to count bits.
+// 
+// note: And(&) is faster than shift operation? Yes and also there is no `if` in
+// the loop.
+// 
+// int bitcount(unsigned x)
+// {
+//   int b;
+// 
+//   for (b = 0; x != 0; x &= (x-1))
+//     b++;
+//   return b;
+// }
+
+// but this fails. WHY?
+uint32_t count_bits_02(const uint32_t value)
+{
+    uint32_t count{};
+    uint32_t input = value;
+
+    for (; input != 0; input &= (input-1))
+        ++count;
+
+    return count;
 }
 
 
-<ex> *ex-bitcount*
-page 51. exercise 2-9. In a two's complement number system, x &= (x-1) deletes
-the rightmost 1-bit in x. Explain why. Use this observation to write a 'faster'
-version of bitcount.
+// returns bit position starting from 0 since input >> is evalueated before
+// ++count.
 
-Answer:
-
-If x is odd, then (x-1) has the same bit representation as x except that the
-rightmost 1-bit becomes a 0. In this case, (x & (x-1)) == (x-1).
-
-x = 5: 5(101) & 4(100) = 100  // 101 -> 100 by having rightmost 1 to 0
-
-If x is even, the end result of anding(&) x and x-1 has the rightmost 1 of x to 0.
-
-x = 4: 4(100) & 3(11)  = 0    // 100 -> 0   by having rightmost 1 to 0
-         ^ rightmost 1
-x = 6: 6(110) & 5(101) = 100  // 110 -> 100 by having rightmost 1 to 0
-          ^ rightmost 1
-x = 8: 8(1000) & 7(111) = 0   // 1000 -> 0  by having rightmost 1 to 0
-
-000   0     All even numbers has tailing 0s and it becomes 1 when minus 1
-001   1
-010   2
-011   3
-100   4
-101   5
-110   6
-111   7
-...
-
-note: This is about careful observation but not a mechanism of borrowing a carry
-for example. For both odd and even case, has the effect of having rightmost 1 to
-0. So clear 1 from x one by one and no need to check on if to count bits.
-
-note: And(&) is faster than shift operation? Yes and also there is no `if` in
-the loop.
-
-int bitcount(unsigned x)
+uint32_t count_bits_03(const uint32_t value)
 {
-  int b;
+    uint32_t count{};
+    uint32_t input = value;
 
-  for (b = 0; x != 0; x &= (x-1))
-    b++;
-  return b;
+    for (; input && (input >>=1);)
+        ++count;
+
+    return count;
+}
+
+TEST(CxxAlgoTest, FindNumberOfBitsBetweenTwoIntegers)
+{
+    // A = 35 = 10 0011
+    // B =  9 =    1001
+    EXPECT_THAT(count_bits_01(35), Eq(6));
+    EXPECT_THAT(count_bits_01(9), Eq(4));
+
+    // fails
+    // EXPECT_THAT(count_bits_02(35), Eq(6));
+    // EXPECT_THAT(count_bits_02(9), Eq(4));
+
+    EXPECT_THAT(count_bits_03(35), Eq(5));
+    EXPECT_THAT(count_bits_03(9), Eq(3));
 }
 
 
@@ -7214,7 +7258,7 @@ bool strend_02(char *s, char *t)
 
     while (*s++ == *t++)
     {
-        // if side-effect, +1, points NULL then all matches up.
+        // if cxx-side-effect, +1, points NULL then all matches up.
         if (*s == '\0')
             return true;
     }
@@ -7857,6 +7901,7 @@ The value returned from x = d, is its main effect. The changing of the value
 of x is a side effect.
 
 
+  *cxx-remeber*
   ""Therefore, the point is whether or not `evaluation` cause side-effect and 
   use `side-effect` in operations `afterwords`.""
 
@@ -8045,7 +8090,7 @@ int mstrlen_2(const char *s)
     return i;
 }
 
-// side-effect made in while() is not used. Hence okay.
+// cxx-side-effect made in while() is not used. Hence okay.
 int mstrlen_3(const char *s)
 {
     unsigned int i = 0;
@@ -8056,7 +8101,7 @@ int mstrlen_3(const char *s)
     return i;
 }
 
-// side-effect made in while() is used in getting a length. side-effect cause
+// cxx-side-effect made in while() is used in getting a length. side-effect cause
 // +1 and not okay.
 int mstrlen_4(const char s[])
 {
@@ -8068,7 +8113,7 @@ int mstrlen_4(const char s[])
   return run-s;
 }
 
-// side-effect is not used. Hence okay.
+// cxx-side-effect is not used. Hence okay.
 int mstrlen_5(const char s[])
 {
   const char *run = s;
@@ -8109,8 +8154,8 @@ void strcpy( char *s, char *t )
 }
 
 
-Why not a problem? while() evaluation cause side-effects but side-effect(+1)
-is not used.
+Why not a problem? while() evaluation cause cxx-side-effects but
+cxx-side-effect(+1) is not used.
 
 For *pbeg++, post-increase is high than dereference(*) so it's the same as
 *(pbeg++) but how this behave as *(pbeg); pbeg++; ? because it returns the
@@ -8135,7 +8180,7 @@ direction as well, converting escape sequences into the real characters.
 void escape(char* s, char* t)
 {
   // when use "while(*t++)", the result missed out the first char. Since
-  // side-effect is used afterwords.
+  // cxx-side-effect is used afterwords.
 
   while( *t )
   {
@@ -8188,9 +8233,9 @@ int atoi(char s[])
 }
 
 
-Again shows the side-effect issue. If use the approach as below then miss out
-the one char. When there is no leading space, expect i==0 when loop ends but
-i==1 since will have the side effect.
+Again shows the cxx-side-effect issue. If use the approach as below then miss
+out the one char. When there is no leading space, expect i==0 when loop ends
+but i==1 since will have the side effect.
 
 int atoi(char s[])
 {
@@ -10338,7 +10383,7 @@ The reasons to avoid the syn-version:
 To see when syn versions are useful. see {make-base-class-for-reference-counting}
 
 
-{cxx-ctor-and-const}
+{cxx-ctor-const}
 The ctor `cannot-be-const`. When create a const object of a class type, the
 object does not assume its constness until after the ctor completes the
 object's initialisation. Thus, ctor can write to const objects during their
@@ -12291,197 +12336,216 @@ void t_sp_13_2()
 
 
 <pointerlike> shallow-copy, own-reference-counting *cxx-sp-shared*
-The copy and the original share underlying object like shared_ptr. To show own
-reference counting:
 
-namespace POINTERLIKE 
-{
-
-// pointer-like hasptr
-class HasPtr 
+class HasPtr
 {
     public:
-        HasPtr(const std::string &s = std::string()):
-            ps_(new std::string(s)), count_(0), use_(new size_t(1))
+        HasPtr(const std::string &s = std::string())
+            : ps_(new std::string(s)), use_(new std::size_t(1))
         {
-            cout << "::HasPtr(), " << *ps_ << ", use " << *use_ << endl;
+            std::cout << "::HasPtr(): " << *ps_ << " used " << *use_ << std::endl;
         }
 
         // copy ctor
-        HasPtr(const HasPtr &rhs):
-            ps_(rhs.ps_), count_(rhs.count_), use_(rhs.use_) 
+        HasPtr(const HasPtr &rhs)
+            : ps_(rhs.ps_), use_(rhs.use_)
         {
-            ++*rhs.use_;
-            cout << "::HasPtr(const HasPtr&), " << *ps_ << ", use " << *use_ << endl;
+            // increase a counter
+            ++*use_;
+            std::cout << "::HasPtr(const HasPtr &): " << *ps_ << " used " << *use_ << std::endl;
         }
 
         // copy assign
+        // decrease lhs and increase rhs
         HasPtr& operator=(const HasPtr &rhs)
         {
-            // increase first to support self assign which includes HasPtr in
-            // the same group; shares the same.
+            // increase first to support cxx-self-assign. ???
             ++*rhs.use_;
 
-            // if no other users, free.
+            // do dtor's work. when there is no users
             if (--*use_ == 0)
             {
-                delete ps_; delete use_;
+                delete ps_;
+                delete use_;
             }
 
-            ps_ = rhs.ps_; use_ = rhs.use_;
-            count_ = rhs.count_;
-
-            cout << "::=(&), " << *ps_ << ", use " << *use_ << endl; 
+            // do ctor's work
+            ps_ = rhs.ps_;
+            use_ = rhs.use_;
+            std::cout << "::HasPtr &operator=(const HasPtr &): " << *ps_ << " used " << *use_ << std::endl;
 
             return *this;
         }
 
         // move ctor
-        HasPtr(HasPtr &&rhs):
-            ps_(rhs.ps_), count_(rhs.count_), use_(rhs.use_)
+        HasPtr(HasPtr &&rhs)
+            : ps_(rhs.ps_), use_(rhs.use_)
         {
-            // cause error
-            // error: cannot convert ‘size_t* {aka long unsigned int*}’ to ‘std::string* {aka std::basic_string<char>*}’ in assignment
-            // rhs.ps_ = rhs.use_ = nullptr;
-
-            // makes move-from safe to delete. ?? However, ~HasPtr use
-            // dereference of use. See ~HasPtr
+            // do not increase a counter
+            // ++*use_;
+            
+            // this why ~HasPtr() has checks
             rhs.ps_ = nullptr;
             rhs.use_ = nullptr;
-            rhs.count_ = 0;
-
-            cout << "::HasPtr(HasPtr&&), " << *ps_ << ", use " << *use_ << endl;
+            std::cout << "::HasPtr(HasPtr &&): " << *ps_ << " used " << *use_ << std::endl;
         }
 
         // move assign
         HasPtr& operator=(HasPtr &&rhs)
         {
-            // direct check rather than increase first to support self assign
-            // ++*rhs.use_;
-
+            // cxx-self-assign direct check
             if (this != &rhs)
             {
-                // if no other users, free. do the work of dtor
                 if (--*use_ == 0)
                 {
                     delete ps_; delete use_;
                 }
 
-                // do the work of ctor
                 ps_ = rhs.ps_; use_ = rhs.use_;
-                count_ = rhs.count_;
 
-                // makes move-from safe to delete. ?? However, ~HasPtr use
-                // dereference of use.
+                std::cout << "::HasPtr &operator=(HasPtr &&): " << *ps_ << " used " << *use_ << std::endl;
+
                 rhs.ps_ = nullptr;
                 rhs.use_ = nullptr;
-                rhs.count_ = 0;
-
-                cout << "::=(&&), " << *ps_ << ", use " << *use_ << endl; 
             }
+
             return *this;
         }
 
-        ~HasPtr() 
-        { 
-            // if no other users, free.
-            // if (--*use_ == 0) cause *seg-fault*
+        ~HasPtr()
+        {
+            // when there is no users
+            // have to check if use_ is not null since use_ can be null due to
+            // move support. Otherwise, cxx-seg-fault. 
+            // For copy, works okay without it.
             if (use_ && --*use_ == 0)
             {
-                cout << "::~HasPtr(), " << *ps_ << ", use " << *use_ << endl; 
+                std::cout << "::~HasPtr(): " << *ps_ << " used " << *use_ << std::endl;
                 delete ps_; delete use_;
+
+                // cxx-nullptr
+                // error: cannot convert ‘size_t* {aka long unsigned int*}’ to ‘std::string* {aka std::basic_string<char>*}’ in assignment
+                // rhs.ps_ = rhs.use_ = nullptr;
+                ps_ = nullptr;
+                use_ = nullptr;
             }
         }
 
     private:
+        // value type
         std::string *ps_;
-        int count_;
-        // to track how many object share *ps
-        size_t *use_;
+
+        //  other member
+        // int other_;
+
+        // reference count to track how many shares this
+        std::size_t *use_;
 };
 
-// hp is copy ctor'ed
-HasPtr f(HasPtr hp)
+HasPtr use_ptr(HasPtr hp)
 {
     HasPtr ret;
+    std::cout << "use_ptr: use copy controls" << std::endl;
     ret = hp;
     return ret;
 }
 
-} // namespace
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(const HasPtr &): hi mon! used 2
+// ::HasPtr(const HasPtr &): hi mon! used 3
+// -------------
+// ::~HasPtr(): hi mon! used 0
 
+TEST(CxxSpTest, UseHasPtrCopyCtor) {
 
-// = 04 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(const HasPtr&), hi mom!, use 2
-// ::HasPtr(const HasPtr&), hi mom!, use 3
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+    // h1, h2, h3 shares the same underlying.
+    
+    cout << "=============" << endl;
 
-void t_sp_14()
-{
-    using namespace POINTERLIKE;
+    HasPtr h1("hi mon!");
 
-    HasPtr h("hi mom!");
-    // h, h2, and h3 share the same underlying string
-    HasPtr h2 = h;
+    HasPtr h2 = h1;
     HasPtr h3{h2};
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
 }
 
-// move. see 1 use count and one dtor
-// = 05 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(HasPtr&&), hi mom!, use 1
-// ::HasPtr(HasPtr&&), hi mom!, use 1
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+// =============
+// ::HasPtr(): hi mom! used 1
+// ::HasPtr(HasPtr &&): hi mom! used 1
+// ::HasPtr(HasPtr &&): hi mom! used 1
+// -------------
+// ::~HasPtr(): hi mom! used 0
 
-void t_sp_15()
-{
-    using namespace POINTERLIKE;
+TEST(CxxSpTest, UseHasPtrMove) {
 
-    HasPtr h("hi mom!");
     // h, h2, and h3 use the same one underlying string
-    HasPtr h2 = std::move(h);
+ 
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mom!");
+    HasPtr h2 = std::move(h1);
     HasPtr h3 = std::move(h2);
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
 }
 
-// see only single dtor
-// = 06 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(), hi dad!, use 1
-// ::=(&), hi mom!, use 2
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(): hi dad! used 1
+// ::HasPtr &operator=(const HasPtr &): hi mon! used 2
+// -------------
+// ::~HasPtr(): hi mon! used 0
 
-void t_sp_16()
-{
-    using namespace POINTERLIKE;
+TEST(CxxSpTest, UseHasPtrCopyAssign) {
 
-    HasPtr h1("hi mom!");
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mon!");
     HasPtr h2("hi dad!");
+
     h2 = h1;
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
 }
 
-// move assign. see the same result
-// = 07 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(), hi dad!, use 1
-// ::=(&&), hi mom!, use 1
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(): hi dad! used 1
+// ::HasPtr &operator=(HasPtr &&): hi mon! used 1
+// -------------
+// ::~HasPtr(): hi mon! used 0
 
-void t_sp_17()
-{
-    using namespace POINTERLIKE;
+TEST(CxxSpTest, UseHasPtrMoveAssign) {
 
-    HasPtr h1("hi mom!");
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mon!");
     HasPtr h2("hi dad!");
+
     h2 = std::move(h1);
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
+}
+
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(const HasPtr &): hi mon! used 2
+// ::HasPtr():  used 1
+// use_ptr: use copy controls
+// ::HasPtr &operator=(const HasPtr &): hi mon! used 3
+// -------------
+// ::~HasPtr(): hi mon! used 0
+
+TEST(CxxSpTest, UseHasPtrUseFunction) {
+
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mon!");
+    HasPtr h2 = use_ptr(h1);
+
+    cout << "-------------" << endl;
 }
 
 
@@ -35954,6 +36018,10 @@ namespace std {
 }
 
 
+<ex>
+set<int, greater<int>> iset{13, 9, 7, 10, 2, 11, 12, 8, 7};
+
+
 {cxx-set-type-requirement}
 The elements of a set or a multiset may have any type T that is 'comparable'
 according to the sorting criterion. The optional second template argument
@@ -42425,6 +42493,41 @@ namespace std {
       size_type
       length() const _GLIBCXX_NOEXCEPT
       { return _M_rep()->_M_length; }
+
+      // cxx-string-insert
+
+      /**
+       *  @brief  Insert multiple characters.
+       *  @param __p  Iterator referencing location in string to insert at.
+       *  @param __n  Number of characters to insert
+       *  @param __c  The character to insert.
+       *  @throw  std::length_error  If new length exceeds @c max_size().
+       *
+       *  Inserts @a __n copies of character @a __c starting at the
+       *  position referenced by iterator @a __p.  If adding
+       *  characters causes the length to exceed max_size(),
+       *  length_error is thrown.  The value of the string doesn't
+       *  change if an error is thrown.
+      */
+      void
+      insert(`iterator __p`, size_type __n, _CharT __c)
+      {	this->replace(__p, __p, __n, __c);  }
+
+      /**
+       *  @brief  Insert value of a string.
+       *  @param __pos1  Iterator referencing location in string to insert at.
+       *  @param __str  The string to insert.
+       *  @return  Reference to this string.
+       *  @throw  std::length_error  If new length exceeds @c max_size().
+       *
+       *  Inserts value of @a __str starting at @a __pos1.  If adding
+       *  characters causes the length to exceed max_size(),
+       *  length_error is thrown.  The value of the string doesn't
+       *  change if an error is thrown.
+      */
+      basic_string&
+      insert(`size_type __pos1`, const basic_string& __str)
+      { return this->insert(__pos1, __str, size_type(0), __str.size()); }
     };
 
 // bits/char_traits.h
@@ -42537,6 +42640,7 @@ TEST(CxxStringTest, RunStringCtors)
 
     char letter = 'A';
 
+    // *cxx-string-const*
     // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
     // string s3(letter);
 
@@ -43695,7 +43799,7 @@ int main(int argc, char* argv[])
 stoi
 
 
-{gxx-string-print-char} *cxx-stream*
+{cxx-string-print-char} *cxx-stream*
 
 How to print char value itself but not a printable char? Use +saved_input trick.
 http://www.cs.technion.ac.il/users/yechiel/c++-faq/print-char-or-ptr-as-number.html
@@ -43722,17 +43826,16 @@ int t_string_04()
 
 
 ={============================================================================
-*kt_dev_stl_074* string: iterator support
+*kt_dev_cxx_0000* cxx-string-iterator
 
-{iterator-support}
 A string is an ordered collection of characters. As a consequence, the C++
-standard library provides an interface for strings that lets you use them as STL
-containers. 
+standard library provides an interface for strings that lets you use them as
+STL containers. 
 
 String iterators are random-access iterators. The exact type is implementation
 defined, but string iterators are often defined simply as ordinary pointers.
 
-<example> algorithm-search, algorithm-transform
+<ex> algorithm-search, algorithm-transform
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -43781,7 +43884,7 @@ uppered : THE ZIP CODE OF BRAUNSCHWEIG IN GERMANY IS 38100
 substring "Germany" found at index 32
 
 
-<example> algorithm-unique
+<ex> algorithm-unique
 #include <iostream>
 #include <string>
 #include <algorithm>
