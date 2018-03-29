@@ -43,6 +43,29 @@ TEST(CxxStlTest, HowSetSorted)
     cout << "size : " << iset.size() << endl;
 }
 
+
+// ={=========================================================================
+// cxx-algo-generate
+
+class CardSequence
+{
+    public:
+        int operator() () {
+            return rand() % 24;
+        }
+};
+
+TEST(CxxStlTest, AlgoGenerate)
+{
+    vector<uint32_t> ivec1;
+    generate_n( back_inserter(ivec1), 12, rand );
+    PRINT_ELEMENTS(ivec1);
+
+    vector<uint32_t> ivec2;
+    generate_n( back_inserter(ivec2), 12, CardSequence() );
+    PRINT_ELEMENTS(ivec2);
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);

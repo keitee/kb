@@ -2,8 +2,15 @@
 // Convert Arabic number to Roman number
 //
 
+// 1. How can support multiple players? Firstly, support multiple player which
+// are allocated statically.
+//
+
 #include <string>
-#include <map>
+#include <vector>
+#include <set>
+#include <algorithm>
+#include <iterator>
 
 using Card = uint32_t;
 using Score = uint32_t;
@@ -17,10 +24,15 @@ class CardPlayer
         // assume it's sorted. TODO: needs sorted container?
         void populateCards(int seed)
         {
-            if( seed == 1 )
-                cards = std::vector<Card>{2, 3, 5, 6, 7, 9, 10, 11, 12};
-            else if( seed == 0 )
-                cards = std::vector<Card>{1, 4, 8, 13, 14, 15, 16, 17, 18};
+            // if( seed == 1 )
+            //     cards = std::vector<Card>{2, 3, 5, 6, 7, 9, 10, 11, 12};
+            // else if( seed == 0 )
+            //     cards = std::vector<Card>{1, 4, 8, 13, 14, 15, 16, 17, 18};
+            
+            // generate_n( back_inserter(cards, NUMBER_OF_CARDS_PER_PLAYER, CardSequence()));
+            
+            std::vector<int> ivec;
+            std::generate_n( std::back_inserter(ivec, 12, std::rand));
 
             std::cout << name_ << " has " << cards.size() << std::endl;
         }
@@ -62,6 +74,17 @@ class CardPlayer
 
 
     private:
+        const uint32_t NUMBER_OF_CARDS_PER_PLAYER{10};
+        const uint32_t NUMBER_OF_CARDS_PER_DECK{24};
+
+        class CardSequence
+        {
+            public:
+                int operator() () {
+                    return rand() % 24;
+                }
+        };
+
         std::string name_;
         std::vector<Card> cards{};
         std::vector<Card> scores{};

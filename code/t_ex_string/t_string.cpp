@@ -765,6 +765,26 @@ TEST(CxxStringTest, FindNthSubstring)
 }
 
 
+// ={=========================================================================
+// use raw string
+
+// { "address": {
+//          "road":"Drury Ln",
+//          "city":"Fountain",
+//          "state":"CO",
+//          "country":"US" }}
+
+TEST(CxxStringTest, UseRawString)
+{
+    const std::string s = R"({ "address": {
+         "road":"Drury Ln",
+         "city":"Fountain",
+         "state":"CO",
+         "country":"US" }})";
+
+        std::cout << s << std::endl;
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleMock(&argc, argv);

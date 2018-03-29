@@ -47,6 +47,7 @@ public:
     virtual double rainfall() const = 0;
     virtual std::string prediction( Outlook outlook ) const = 0;
     virtual std::string snow( Outlook outlook ) const = 0;
+    virtual std::string sample(std::string) const = 0;
 };
  
 class UserInterface
@@ -99,6 +100,11 @@ public:
             return "snow exception";
         }
     }
+
+    std::string test_sample()
+    {
+        return weather_station_->sample("this is sample");
+    }
  
 private:
     std::shared_ptr<WeatherStation> weather_station_;
@@ -113,6 +119,7 @@ public:
     MOCK_CONST_METHOD2( wind, void(WeatherStation::Direction*, double*) );
     MOCK_CONST_METHOD1( prediction, std::string( WeatherStation::Outlook ) );
     MOCK_CONST_METHOD1( snow, std::string( WeatherStation::Outlook ) );
+    MOCK_CONST_METHOD1( sample, std::string(std::string) );
 };
  
 TEST( WeatherStationUserInterface, rain_should_be_heavy )
@@ -171,6 +178,22 @@ TEST( WeatherStationUserInterface, DISABLED_snow_exception )
  
     UserInterface ui( weather_station );
     EXPECT_EQ( "snow exception", ui.snow() );
+}
+
+TEST( WeatherStationUserInterface, test_sample)
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+
+    // GMock: inject more complex logic using C++11 lambdas,
+    // and pattern match on the input value
+    EXPECT_CALL( *weather_station, sample("this is sample") )
+        .WillRepeatedly(Invoke([](std::string str) -> std::string
+                    {
+                        return str + "!!";
+                    }));
+ 
+    UserInterface ui( weather_station );
+    EXPECT_EQ( "this is sample!!", ui.test_sample() );
 }
 
 // ={=========================================================================

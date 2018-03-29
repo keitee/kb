@@ -30,8 +30,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_test_202* gmock-and-cppunit
 *kt_dev_test_203* gmock-action
 *kt_dev_test_203* gmock-matcher
-|kt_dev_test_204| gmock: cheat: cardinality
-|kt_dev_test_207| gmock: cook: nice and strict mock
+*kt_dev_test_207* gmock-nice gmock-strict
 *kt_dev_test_208* gmock-errors when misses expectation
 *kt_dev_test_208* gmock-ex
 *kt_dev_test_200* gmock-value-parameterized
@@ -1844,7 +1843,10 @@ g++ -isystem ../../googletest/include -isystem ../include -I../../googletest -I.
 *kt_dev_test_200* gmock-doc
 
 ForDummies -- start here if you are new to Google Mock.
+
 CheatSheet -- a quick reference.
+https://code.google.com/p/googlemock/wiki/CheatSheet
+
 CookBook -- recipes for doing various tasks using Google Mock.
 FrequentlyAskedQuestions -- check here before asking a question on the mailing list.
 
@@ -2243,7 +2245,7 @@ means for you to do it "just right."
 In Google Mock we use the EXPECT_CALL() macro to set an expectation on a mock
 method. The general 'syntax' is:
 
-EXPECT_CALL(mock_object, method(matchers))
+EXPECT_CALL(mock_object, method(`matchers`))
     .Times(cardinality)
     .WillOnce(action)
     .WillRepeatedly(action);
@@ -2337,7 +2339,7 @@ that's a pain to maintain.
 
 ** Matchers: What Arguments Do We Expect?
 
-When a mock function takes arguments, we 'must' specify what arguments we are
+When a mock function takes `arguments`, we 'must' specify what arguments we are
 expecting; for example:
 
 // Expects the turtle to move forward by 100 units.
@@ -2372,6 +2374,103 @@ using ::testing::Ge;...
 EXPECT_CALL(turtle, Forward(Ge(100)));
 
 This checks that the turtle will be told to go forward by at least 100 units. 
+
+<ex>
+should be exact match to argument
+
+// when mock function argument is not a value
+
+TEST( WeatherStationUserInterface, test_sample)
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+
+    EXPECT_CALL( *weather_station, sample(std::string str) )    // *see*
+        .WillRepeatedly(Invoke([](std::string str) -> std::string
+                    {
+                        return str + "!!";
+                    }));
+ 
+    UserInterface ui( weather_station );
+    EXPECT_EQ( "this is sample!!", ui.test_sample() );
+}
+
+In file included from /home/kyoupark/works/googletest/googlemock/include/gmock/gmock-generated-function-mockers.h:43:0,
+                 from /home/kyoupark/works/googletest/googlemock/include/gmock/gmock.h:61,
+                 from t_ex_mock.cpp:7:
+t_ex_mock.cpp: In member function ‘virtual void WeatherStationUserInterface_test_sample_Test::TestBody()’:
+t_ex_mock.cpp:189:54: error: expected primary-expression before ‘)’ token
+     EXPECT_CALL( *weather_station, sample(std::string) )
+
+
+// when mock function not gets called with exact value match
+
+class UserInterface
+{
+public:
+    std::string test_sample()
+    {
+        return weather_station_->sample("this is not sample");  // *see*
+    }
+};
+
+TEST( WeatherStationUserInterface, test_sample)
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+
+    EXPECT_CALL( *weather_station, sample("this is sample") )   // *see*
+        .WillRepeatedly(Invoke([](std::string str) -> std::string
+                    {
+                        return str + "!!";
+                    }));
+ 
+    UserInterface ui( weather_station );
+    EXPECT_EQ( "this is sample!!", ui.test_sample() );
+}
+
+unknown file: Failure
+
+Unexpected mock function call - returning default value.
+    Function call: sample("this is not sample")
+          Returns: ""
+Google Mock tried the following 1 expectation, but it didn't match:
+
+t_ex_mock.cpp:189: EXPECT_CALL(*weather_station, sample("this is sample"))...
+  Expected arg #0: is equal to "this is sample"
+           Actual: "this is not sample"
+         Expected: to be called any number of times
+           Actual: never called - satisfied and active
+t_ex_mock.cpp:196: Failure
+Expected equality of these values:
+  "this is sample!!"
+  ui.test_sample()
+    Which is: ""
+[  FAILED  ] WeatherStationUserInterface.test_sample (3 ms)
+
+
+// when expectation fails
+
+TEST( WeatherStationUserInterface, test_sample)
+{
+    auto weather_station = std::make_shared<MockWeatherStation>();
+
+    // GMock: inject more complex logic using C++11 lambdas,
+    // and pattern match on the input value
+    EXPECT_CALL( *weather_station, sample("this is sample") )
+        .WillRepeatedly(Invoke([](std::string str) -> std::string
+                    {
+                        return str + "!!";
+                    }));
+ 
+    UserInterface ui( weather_station );
+    EXPECT_EQ( "this is sample", ui.test_sample() );    // *see*
+}
+
+t_ex_mock.cpp:196: Failure
+Expected equality of these values:
+  "this is sample"
+  ui.test_sample()
+    Which is: "this is sample!!"
+[  FAILED  ] WeatherStationUserInterface.test_sample (1 ms)
 
 
 <gmock-cardinality>
@@ -3346,38 +3445,13 @@ TEST(AssertTest, AssertOnPair)
 }
 
 
-={============================================================================
-*kt_dev_test_204* gmock: cheat: cardinality
-
-https://code.google.com/p/googlemock/wiki/CheatSheet
-
-Cardinalities
-These are used in Times() to specify how many times a mock function will be
-called:
-
-AnyNumber()
-The function can be called any number of times.
-
-AtLeast(n)
-The call is expected at least n times.
-
-AtMost(n)
-The call is expected at most n times.
-
-Between(m, n)
-The call is expected between m and n (inclusive) times.
-
-Exactly(n) or n 
-The call is expected exactly n times. In particular, the call should never
-happen when n is 0.
-
 
 ={============================================================================
-*kt_dev_test_207* gmock: cook: nice and strict mock
+*kt_dev_test_207* gmock-nice gmock-strict
 
 Some of the mocks are called quite often and are expected to have some default
 reaction which is expressed with WillByDefault() statement in setUp(). This
-still results is "Uninteresting mock call" warning generated pointing at the
+`still results is "Uninteresting mock call" warning` generated pointing at the
 default value defined in setUp().
 
 To make output less verbose and avoid warning for mocks which are know to
@@ -3410,7 +3484,7 @@ TEST(...) {
   ... code that uses mock_foo ...
 }
 
-<nice-mock>
+<gmock-nice>
 If a method of mock_foo other than DoThis() is called, it will be reported by
 Google Mock as a warning. However, if you rewrite your test to use
 NiceMock<MockFoo> instead, the warning will be 'gone', resulting in a cleaner

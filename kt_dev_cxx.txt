@@ -129,7 +129,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-conversion-to-bool
 *kt_dev_cxx_0000* cxx-const 
 *kt_dev_cpp_0008* cxx-const-temporary
-*kt_dev_cxx_0000* cxx-const-member-function cpp-this
+*kt_dev_cxx_0000* cxx-const-member-function cxx-this cxx-overload-condition
 *kt_dev_cxx_0000* cxx-const-bitwise
 *kt_dev_cxx_0000* cxx-const-logical
 *kt_dev_cxx_0000* cxx-const-mutable cxx-mutable
@@ -258,6 +258,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-string-find
 |kt_dev_stl_073| cpp-string-numeric-conversion cpp-boost-lexical-cast
 *kt_dev_cxx_0000* cxx-string-iterator
+*kt_dev_cxx_0000* cxx-string-raw
 *kt_dev_cxx_0000* cxx-stringstream
 *kt_dev_stl_075* stl-string: seg fault
 *kt_dev_cxx_0000* cxx-sp-raii cxx-raii
@@ -299,13 +300,11 @@ KT KB. CPP
 |kt_dev_ccon_002| std-threadad: join and detach
 *kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
 *kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
-*kt_dev_ccon_005* cpp-con-lock-guard cpp-deadlock
-|kt_dev_ccon_006| cpp-con-unique-lock
-|kt_dev_ccon_007| std::unique_lock and transferring mutex
-|kt_dev_ccon_008| std::unique_lock and granulity
-|kt_dev_ccon_009| std::call_once and protecting during initialization
-|kt_dev_ccon_010| boost::shared_lock and read-write lock
-|kt_dev_ccon_011| recursive lock
+*kt_dev_ccon_005* cxx-con-deadlock cxx-deadlock
+*kt_dev_ccon_006* cxx-con-unique-lock
+*kt_dev_ccon_009* cxx-con-call-once
+*kt_dev_ccon_010* cxx-con-shared-lock cxx-boost-shared-lock
+*kt_dev_ccon_011* cxx-con-recursive-lock
 |kt_dev_ccon_012| std::condition_variable
 |kt_dev_ccon_013| thread-safe queue
 |kt_dev_ccon_014| cpp-con-task-model cpp-future
@@ -10291,7 +10290,7 @@ int main()
 -rwxr-xr-x  1 kyoupark kyoupark 66560 Sep 20 09:45 a.out.old*
 
 
-{cpp-initializer-list}
+{cxx-initializer-list} cxx-array cxx-vector
 To 'support' the concept of initializer lists for user-defined types. It is a
 library template type that repersents an 'array' of values of the `same-type`.
 The element in a list are always `const`.
@@ -20424,7 +20423,7 @@ rd: 3                   // not changed, temporary
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-const-member-function cpp-this
+*kt_dev_cxx_0000* cxx-const-member-function cxx-this
 
 {cxx-overload-condition}
 Member functions differing only in their constness can be overloaded. Conditons
@@ -33141,6 +33140,12 @@ const auto roman_table{
   std::make_pair(900u, "CM")
 };
 
+// can use cxx-range-for on roman_table but pair do not support iterator. How?
+// auto makes it class initializer_list which supports iterator
+// *cxx-initializer-list* 
+
+for(const auto &e : roman_table)
+
 
 <move-or-copy>
 You can influence the type make_pair() yields by forcing either move or
@@ -39423,7 +39428,10 @@ algorithms:
 3. You can use the return value of the for_each() *algo-for-each*
 
 
-<pass-by-reference>
+<pass-by-reference> *algo-generate*
+
+10.1.2 Function Objects with Internal State
+
 To pass a function object by reference, you simply have to qualify the call of
 the algorithm so that the function object type is a reference.
 
@@ -44013,6 +44021,27 @@ int main(int argc, char* argv[])
 
 
 ={============================================================================
+*kt_dev_cxx_0000* cxx-string-raw
+
+// { "address": {
+//          "road":"Drury Ln",
+//          "city":"Fountain",
+//          "state":"CO",
+//          "country":"US" }}
+
+TEST(CxxStringTest, UseRawString)
+{
+    const std::string s = R"({ "address": {
+         "road":"Drury Ln",
+         "city":"Fountain",
+         "state":"CO",
+         "country":"US" }})";
+
+    std::cout << s << std::endl;
+}
+
+
+={============================================================================
 *kt_dev_cxx_0000* cxx-stringstream
 
 CLR 15.10
@@ -44793,9 +44822,11 @@ auto p6 = make_shared<vector<sting>>();
 
 
 <cxx-sp-make-shared>
-shared_ptr<T> sp(new X(...)) performs two allocations: one for X and one for
-the control block used, for example, by the shared pointer to manage its use
-count. 
+
+shared_ptr<T> sp(new X(...)); 
+  
+performs two allocations: one for X and one for the control block used, for
+example, by the shared pointer to manage its use count. 
   
 Using make_shared<T>(...) instead is considerably faster, performing only one
 allocation, and safer because a situation where the allocation of X succeeds
@@ -49877,7 +49908,7 @@ right data and avoid race conditions inherent in your interfaces. Mutexes also
 come with their own problems, in the form of a deadlock and protecting either
 too much or too little data.
 
-<cpp-lock-guard>
+<cxx-lock-guard>
 std::lock_guard class template, which implements that RAII idiom for a mutex;
 
 #include <mutex>
@@ -49986,7 +50017,7 @@ well designed. Consider std::stack<>.
 
 // bits/stl_stack.h
 
-template<typename _Tp, typename _Sequence = deque<_Tp> >
+template<typename _Tp, typename _Sequence = deque<_Tp>> 
     class stack
 {
 
@@ -50083,10 +50114,10 @@ if(!s.empty())                            <-
     do_something(value);
 }
 
-1. race betwen empty and top
+* race betwen empty and top
 Calling top() on an empty stack is undefined. classic race.
 
-2. race between top and pop
+* race between top and pop
 Another race and far more 'insidious'. One of the two values on the stack is
 discarded without ever having been read, whereas the other is processed
 twice.There's never anything obviously wrong going on and the consequence of
@@ -50094,24 +50125,22 @@ the bug are far from the cause although depends on exactly what do_something
 really dose.
 
 <option-1> note: this is a discusssion in Exceptional C++
-one that combine the calls to top() and pop() under the mutex. that is pop()
-  return the value as well as remove it from the stack. However, can leads to
-  issue if the copy constructor for the objects on the stack can throw an
-  exception.
+combine the calls to top() and pop() under the mutex. that is pop() return the
+value as well as remove it from the stack. However, can leads to issue if the
+copy constructor for the objects on the stack can throw an exception.
 
-Consider stack<vector<int>>. Now, a vector is a dynamically sized container,
-         so when you copy a vector the library has to allocate some more
-         memory from the heap in order to copy the contents. If the system is
-         heavily loaded, or there are significant resource constraints, this
-         memory allocation can fail, so the copy constructor for vector might
-         throw a std::bad_alloc exception. This is especially likely if the
-         vector contains a lot of elements. If the pop() function was defined
-         to return the value popped, as well as remove it from the stack, you
-         have a potential problem: the value being popped is returned to the
-         caller 'only' after the stack has been modified, but the process of
-         copying the data to return to the caller might throw an exception. If
-         this happens, the data just popped is lost; it has been removed from
-         the stack, but the copy was unsuccessful! 
+  Consider stack<vector<int>>. Now, a vector is a dynamically sized container,
+  so when you copy a vector the library has to allocate some more memory from
+  the heap in order to copy the contents. If the system is heavily loaded, or
+  there are significant resource constraints, this memory allocation can fail,
+  so the copy constructor for vector might throw a std::bad_alloc exception.
+  This is especially likely if the vector contains a lot of elements. If the
+  pop() function was defined to return the value popped, as well as remove it
+  from the stack, you have a potential problem: the value being popped is
+  returned to the caller 'only' after the stack has been modified, but the
+  process of copying the data to return to the caller might throw an
+  exception. If this happens, the data just popped is lost; it has been
+  removed from the stack, but the copy was unsuccessful! 
     
 The designers of the std::stack interface helpfully split the operation in
 two: get the top element (top()) and then remove it from the stack (pop()), so
@@ -50203,19 +50232,21 @@ class threadsafe_stack
         }
 };
 
-note: when initializer-list is not useful
+// *cxx-ctor-init-list* is not useful
 This stack implementation is actually copyable; the copy constructor locks the
 mutex in the source object and then copies the internal stack. You do the copy
 in the constructor body rather than the member initializer list in order to
 ensure that the mutex is held across the copy.
 
-note: no need empty() since use exception.
+// no need empty() since use exception.
 Your five stack operations have now become three: push(), pop(), and empty().
 Even empty() is superfluous.
 
 
 ={============================================================================
-*kt_dev_ccon_005* cpp-con-lock-guard cpp-deadlock
+*kt_dev_ccon_005* cxx-con-deadlock cxx-deadlock
+
+3.2.4 Deadlock: the problem and a solution
 
 <cpp-deadlock>
 deadlock does not just occur with locks: can occur any synchronization
@@ -50224,18 +50255,14 @@ because it is waiting for the other to finish."
 
 Simple rules that can help you to write deadlock-free code.
 
-o Avoid nested locks
-o Avoid calling user-supplied code while holding a lock
-o Acquire locks in a fixed or the same order
+* Avoid nested locks
+* Avoid calling user-supplied code while holding a lock
+* Acquire locks in a fixed or the same order
 
-Although fixed order used, deadlock can still occur. Consider that use a mutex
-to protect each instance of the same class, use operation that exchanges data
-between two instances. The mutexes on both instances must be locked. If two
-threads calls this operation with the parametars(instances) swapped then you
-have deadlock. 
 
-std::lock() can lock two or more mutexes at 'once' without risk of deadlock and
-provides 'all-or-nothing' semantics.
+<cxx-con-std-lock>
+std::lock() can lock two or more mutexes at 'once' without risk of deadlock
+and provides 'all-or-nothing' semantics.
 
 class X
 {
@@ -50263,9 +50290,9 @@ class X
 };
 
 
-o Use a lock hierarchy
+<cxx-con-lock-hierarchy>
 
-This is really a particular case of lock-ordering and can provide a means of
+This is really `a particular case of lock-ordering` and can provide a means of
 checking at runtime. The idea is to divide an application into 'layers' and
 identify all the mutexes that may be locked in any given layer.
 
@@ -50309,13 +50336,18 @@ void thread_b()
     other_stuff();
 }
 
-1. thread_b() is not fine. this does mean that can't hold two locks at the same time if they're the
-same level in the hierarchy so hand-over-hand locking schemes require that each mutex in the chain
-have a lower value than the prior one which my be impractical in some cases.
+thread_b() is not fine. this does mean that can't hold two locks at the same
+time if they're the same level in the hierarchy so hand-over-hand locking
+schemes require that each mutex in the chain have a lower value than the prior
+one which my be impractical in some cases.
 
-<user-defined-mutex>
-2. show the use of std::lock_guard with user-defined mutex type. should have three member functions:
-lock, unlock and try_lock which forward to the same name on the underlying mutex. 
+
+<cxx-con-user-defined-mutex>
+
+Listing 3.8 A simple hierarchical mutex
+
+Show the use of std::lock_guard with user-defined mutex type. Have to have
+three member functions: lock, unlock and try_lock
 
 class hierarchical_mutex
 {
@@ -50325,6 +50357,8 @@ class hierarchical_mutex
     uisigned long previous_hierarchy_value;
 
     static thread_local unsigned long this_thread_hierarchy_value;
+
+    // hierarchy value should go from high to low
 
     void check_for_hierarchy_violation()
     {
@@ -50368,24 +50402,56 @@ class hierarchical_mutex
     }
 };
 
-// <thread-local> since it is declared thread_local, every thread has its 'own' copy
+// *cxx-static*
+// cxx-con-thread-local since it is declared thread_local, every thread has
+// its 'own' copy
+
 thread_local unsigned long
    hierarchical_mutex::this_thread_hierarchy_value( ULONG_MAX );
 
 
 ={============================================================================
-*kt_dev_ccon_006* cpp-con-unique-lock
+*kt_dev_ccon_006* cxx-con-unique-lock
 
 The standard library offers help in the form of an operation for acquiring
 several locks simultaneously with regard to deadlock problem.
 
 std::unique_lock provides more 'flexibility' than std::lock_guard.
 
-o std::defer_lock to indicate that the mutex should remian unlocked on
+* std::defer_lock to indicate that the mutex should remian unlocked on
   construction then later locked by calling std::unique_lock.lock().
 
-o std::uniqie_lock is typically larger and has a slight performance penalty so
+* std::uniqie_lock is typically larger and has a slight performance penalty so
   lock_guard is in preference if it suits.
+
+Listing 3.6 Using std::lock() and std::lock_guard in a swap operation
+
+class X
+{
+  private:
+    std::mutex m;
+
+  public:
+
+    friend void swap( X& lhs, X& rhs )
+    {
+      if( &lhs == &rhs )
+        return;
+
+      // lock two mutexes
+      std::lock( lhs.m, rhs.m );
+
+      // std::adopt_lock to indicate to std::lock_guard objects that the
+      // mutexes are 'already' locked.
+
+      std::lock_guard<std::mutex> lock_a( lhs.m, std::adopt_lock );
+      std::lock_guard<std::mutex> lock_b( rhs.m, std::adopt_lock );
+
+      swap( lhs.some_detail, rhs.some_detail );
+    }
+};
+
+Listing 3.9 Using std::lock() and std::unique_lock in a swap operation
 
 class X
 {
@@ -50410,18 +50476,21 @@ class X
 };
 
 
-={============================================================================
-*kt_dev_ccon_007* std::unique_lock and transferring mutex
+{flexible-unique-lock} like unique_ptr
+Because unique_lock instances don't have to own their associated mutexes, the
+ownership of a mutex can be transferred between instances by moving the
+instances around.
 
-{flexible-unique-lock}
-Because unique_lock instances don't have to own their associated mutexes, the ownership of a mutex
-can be transferred between instances by moving the instances around.
+One possible use is to allow a function to lock a mutex and transfer ownership
+of that lock to the caller, so the caller can then perform additional actions
+under the protection of the same lock.
 
-One possible use is to allow a function to lock a mutex and transfer ownership of that lock to the
-caller, so the caller can then perform additional actions under the protection of the same lock.
+lk is local variable and can be returned without calling std::move since the
+compiler takes care of calling the move constructor.
 
 std::unique_lock<std::mutex> get_lock()
 {
+    // some_mutex is 'extern'
     extern std::mutex some_mutex;
 
     std::unique_lock<std::mutex> lk( some_mutex );
@@ -50430,47 +50499,17 @@ std::unique_lock<std::mutex> get_lock()
     return lk;
 }
 
-note: lk is local variable and can be returned without calling std::move since the compiler takes
-care of calling the move constructor.
-
-note: some_mutex is 'extern'
-
 void process_data()
 {
     std::unique_lock<std::mutex> lk(get_lock());
     do_something();
 }
 
-<gatweay-class>
-One such usage is where the lock isn't returned directly but is a data member of a gateway class
-used to ensure correctly locked access to some protected data. 
 
-In this case, all access to the data is through this gateway class; when you wish to access the
-data, you obtain an instance of the gateway class (by calling a function such as get_lock() in the
-        preceding example), which acquires the lock. You can then access the data through member
-functions of the gateway object. 
-        
-When you're finished, you destroy the gateway object, which releases the lock and allows other
-threads to access the protected data. Such a gateway object may well be movable so that it can be
-returned from a function, in which case the lock object data member also needs to be movable.
-
-<manual-option>
-The flexibility of std::unique_lock also allows instances to relinquish their locks before they're
-destroyed. You can do this with the unlock() member function, just like for a mutex:
-std::unique_lock supports the same basic set of member functions for locking and unlocking as a
-mutex does, in order that it can be used with generic functions such as std::lock.
-
-
-={============================================================================
-*kt_dev_ccon_008* std::unique_lock and granulity
-
-Not only is it important to choose a sufficiently coarse lock granularity to ensure the required
-data is protected, but it's also important to ensure that a lock is held only for the operations
-that actually require it since holding the lock will 'delay' other threads unnecessary. less
-contention.
-
-std::unique_lock works well in this situation, because you can call unlock() when the code no longer
-needs access to the shared data and then call lock() again if access is required later in the code:
+<cxx-unique-lock-granulity>
+std::unique_lock works well in this situation, because you can call unlock()
+when the code no longer needs access to the shared data and then call lock()
+again if access is required later in the code:
 
 void get_and_process_data()
 {
@@ -50487,55 +50526,24 @@ void get_and_process_data()
     write_result( data_to_process, result );
 }
 
-The previous swap examples using locks must lock both instance. If you were trying to compare a
-simple data member that is int and is cheap to copy compared to big_data in previous examples then
-can minimize locking time by holding single lock as below?
-
-// listing 3.10
-
-class Y
-{
-    private:
-        int some_detail;
-        mutable std::mutex m;
-        int get_detail() const
-        {
-            std::lock_guard<std::mutex> lock_a(m);
-            return some_detail;
-        }
-    public:
-        Y(int sd):some_detail(sd){}
-        friend bool operator==(Y const& lhs, Y const& rhs)
-        {
-            if(&lhs==&rhs)
-                return true;
-            int const lhs_value=lhs.get_detail();
-            int const rhs_value=rhs.get_detail();
-            return lhs_value==rhs_value;
-        }
-};
-
-NO. this has changed the semantics of operations since compare values from different point in time.
-So comparison is meaningless and race condition.
-
-To be careful that the semantics of the operation are not changed in a problematic fashion.
-
 
 ={============================================================================
-*kt_dev_ccon_009* std::call_once and protecting during initialization
+*kt_dev_ccon_009* cxx-con-call-once
 
-One particularly extreme (but remarkably common) case is where the shared data needs protection only
-from concurrent access while it’s being initialized, but after that no explicit synchronization is
-required. This might be because the data is read-only once created, and so there are no possible
-synchronization issues, or it might be because the necessary protection is performed implicitly as
-part of the operations on the data.
+One particularly extreme (but remarkably common) case is where the shared data
+needs protection only from concurrent access while it’s being initialized, but
+after that no explicit synchronization is required. This might be because the
+data is read-only once created, and so there are no possible synchronization
+issues, or it might be because the necessary protection is performed
+implicitly as part of the operations on the data.
 
-It's for this reason that the C++ Standard provides a mechanism purely for protecting shared data
-during initialization.
+It's for this reason that the C++ Standard provides a mechanism purely for
+protecting shared data during initialization.
 
-Suppose you have a shared resource that's so expensive to construct that you want to do so only if
-it's actually required; maybe it opens a database connection or allocates a lot of memory. Lazy
-initialization such as this is common in single-threaded code
+Suppose you have a shared resource that's so expensive to construct that you
+want to do so only if it's actually required; maybe it opens a database
+connection or allocates a lot of memory. Lazy initialization such as this is
+common in single-threaded code
 
 std::shared_ptr<some_resource> resource_ptr;
 
@@ -50549,9 +50557,10 @@ void foo()
 }
 
 
-A naive translation to multithreaded code which cause unnecessary serialization of threads using the
-resource. This is because each thread must wait on the mutex in order to check whether the resource
-has already been initialized.
+A naive translation to multithreaded code which cause unnecessary
+serialization of threads using the resource. This is because each thread must
+wait on the mutex in order to check whether the resource has already been
+initialized.
 
 
 std::shared_ptr<some_resource> resource_ptr;
@@ -50571,30 +50580,10 @@ void foo()
 }
 
 
-<data-race>
-This so called "double-checked locking" is better?
-
-void undefined_behaviour_with_double_checked_locking()
-{
-    if(!resource_ptr)
-    {
-        std::lock_guard<std::mutex> lk(resource_mutex);
-        if(!resource_ptr)
-        {
-            resource_ptr.reset(new some_resource);
-        }
-    }
-    resource_ptr->do_something();
-}
-
-
-No it cause race condition since read to resource_ptr outside the lock and write inside the lock are
-not synchronized. May run on different instance. This is defined "data race".
-
-
 <std-once>
-C++ provides std::once_flag and std::call_once to handle this situation. Every thread can just use
-std::call_once and this do the same as "naive translation" but has a lower overhead.
+C++ provides std::once_flag and std::call_once to handle this situation. Every
+thread can just use std::call_once and this do the same as "naive translation"
+but has a lower overhead.
 
 
 std::shared_ptr<some_resource> resource_ptr;
@@ -50647,57 +50636,67 @@ As with std::thread and std::bind, used additional argument to call_once.
 
 
 note:
-It's worth noting that, like std::mutex, std::once_flag instances can't be copied or moved, so if
-you use them as a class member like this, you'll have to explicitly define these special member
-functions should you require them.
+It's worth noting that, like std::mutex, std::once_flag instances can't be
+copied or moved, so if you use them as a class member like this, you'll have
+to explicitly define these special member functions should you require them.
 
 
 <alternative-to-call-once>
-One scenario where there's a potential race condition over initialization is that of a local
-variable declared with static.
+One scenario where there's a potential race condition over initialization is
+that of a local variable declared with static.
 
-see <init-order-problem>
+*cxx-singleton* *cxx-init-order-problem*
 
-In C++11 this problem is solved: the initialization is defined to happen on exactly one thread, and
-no other threads will proceed until that initialization is complete, so the race condition is just
-over which thread gets to do the initialization rather than anything more problematic. This can be
-used as an alternative to std::call_once for those cases where a single global instance is required:
+In C++11 this problem is solved: the initialization is defined to happen on
+exactly one thread, and no other threads will proceed until that
+initialization is complete, so the race condition is just over which thread
+gets to do the initialization rather than anything more problematic. This can
+be used as an alternative to std::call_once for those cases where a single
+global instance is required:
 
-
-Protecting data only for initialization is a special case of a more general scenario: that of a
-rarely updated data structure. For most of the time, such a data structure is read-only and can
-therefore be merrily read by multiple threads concurrently.
-
-note: singleton is read-only
+Protecting data only for initialization is a special case of a more general
+scenario: that of a rarely updated data structure. For most of the time, such
+a data structure is read-only and can therefore be merrily read by multiple
+threads concurrently.
 
 
 ={============================================================================
-*kt_dev_ccon_010* boost::shared_lock and read-write lock
+*kt_dev_ccon_010* cxx-con-shared-lock cxx-boost-shared-lock
 
-For most of the time, such a data structure is read-only and can therefore be merrily read by
-multiple threads concurrently, but on occasion the data structure may need updating?
+<cxx-shared-lock> 
 
-What's needed is a different kind of mutex. This new kind of mutex is typically called a
-reader-writer mutex, because it allows for two different kinds of usage: exclusive access by a
-single "writer" thread or shared, concurrent access by multiple "reader" threads.
+3.3.2 Protecting rarely updated data structures
 
-The new C++ Standard Library doesn't provide such a mutex out of the box and is provided by the
-boost library, which is based on the proposal.
+This new kind of mutex is typically called a reader-writer mutex, because it
+allows for two different kinds of usage: exclusive access by a single “writer”
+thread or shared, concurrent access by multiple “reader” threads.
+
+The new C++ Standard Library doesn't provide such a mutex out of the box and
+is provided by the boost library, which is based on the proposal.
 
 note: 
-The performance is dependent on the number of processors involved and the relative workloads of the
-reader and updater threads. therefore important to profile the performance of the code on the target
-system to ensure that there's actually a benefit to the additional complexity.
-
-Typically, a given DNS entry will remain unchanged for a long period of time in many cases DNS
-entries remain unchanged for years. Although new entries may be added to the table from time to time
-as users access different websites, this data will therefore remain largely unchanged throughout its
-life.
+The performance is dependent on the number of processors involved and the
+relative workloads of the reader and updater threads. therefore important to
+profile the performance of the code on the target system to ensure that
+there's actually a benefit to the additional complexity.
 
 Those threads that don't need to update the data structure can instead use
-boost::shared_lock<boost::shared_mutex> to obtain shared access. This is used just the same as
-std::unique_lock, except that multiple threads may have a shared lock on the same
-boost::shared_mutex at the same time. 
+boost::shared_lock<boost::shared_mutex> to obtain shared access. This is used
+just the same as std::unique_lock, except that multiple threads may have a
+shared lock on the same boost::shared_mutex at the same time. 
+
+The only constraint is that if any thread has a shared lock, a thread that
+tries to acquire an exclusive lock will block until all other threads have
+relinquished their locks, and likewise if any thread has an exclusive lock, no
+other thread may acquire a shared or exclusive lock until the first thread has
+relinquished its lock.
+
+
+// Typically, a given DNS entry will remain unchanged for a long period of
+// time in many cases DNS entries remain unchanged for years. Although new
+// entries may be added to the table from time to time as users access
+// different websites, this data will therefore remain largely unchanged
+// throughout its life.
 
 #include <map>
 #include <string>
@@ -50728,28 +50727,17 @@ class dns_cache
     }
 };
 
-The only constraint is that if any thread has a shared lock, a thread that tries to acquire an
-exclusive lock will block until all other threads have relinquished their locks, and likewise if any
-thread has an exclusive lock, no other thread may acquire a shared or exclusive lock until the first
-thread has relinquished its lock.
-
-So update_or_add_entry() uses an instance of std::lock_guard<> to provide exclusive access while the
-table is updated; not only are other threads prevented from doing updates in a call
-update_or_add_entry(), but threads that call find_entry() are blocked too.
+So update_or_add_entry() uses an instance of std::lock_guard<> to provide
+exclusive access while the table is updated; not only are other threads
+prevented from doing updates in a call update_or_add_entry(), but threads that
+call find_entry() are blocked too.
 
 
 ={============================================================================
-*kt_dev_ccon_011* recursive lock
+*kt_dev_ccon_011* cxx-con-recursive-lock
 
-With std::mutex, it's an error for a thread to try to lock a mutex it already owns, and attempting
-to do so will result in undefined behavior. However, in some circumstances it would be desirable for
-a thread to reacquire the same mutex several times without having first released it. For this
-purpose, the C++ Standard Library provides std::recursive_mutex.
-
-Most of the time, if you think you want a recursive mutex, you probably need to change your design
-instead.
-
-Since, in particular, the class invariants are typically broken while the lock is held.
+Most of the time, if you think you want a recursive mutex, you probably need to
+change your design instead.
 
 
 ={============================================================================

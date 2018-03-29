@@ -2,10 +2,28 @@
 #include <set>
 #include <vector>
 #include <memory>
+// #include <typeinfo>
 
 #include "gtest/gtest.h"
 
 using namespace std;
+
+// ={=========================================================================
+// cxx-pair
+
+TEST(CxxFeaturesTest, UsePairType)
+{
+    const auto map{
+        make_pair(10, "X"),
+        make_pair(9, "IX"),
+        make_pair(5, "V")
+    };
+
+    for(const auto &e : map)
+        cout << "{" << e.first << ", " << e.second << "}" << endl;
+
+    cout << "typeid : " << typeid(map).name() << endl;
+}
 
 
 // ={=========================================================================
