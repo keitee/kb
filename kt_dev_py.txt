@@ -74,6 +74,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-flask-template
 |kt_dev_py_0001| py-flask-form
 
+|kt_dev_py_0001| py-unit
+
 
 ={============================================================================
 |kt_dev_py_0001| py-book
@@ -2276,45 +2278,74 @@ list or tuple:
 Learning Python 5E, 8 Lists and Dictionaries
 
 Dictionaries are sometimes called associative arrays or hashes. Internally,
-dictionaries are implemented as hash tables.
+dictionaries are implemented as hash tables and are unordered collections.
 
 Dictionaries, the only mapping type in core objects set, are also `mutable`:
 like lists, they may be changed in place and can grow and shrink on demand.
 
-Unlike out-of-bounds assignments in lists, which are forbidden, assignments to
-new dictionary keys create those keys:
+It is a flexibly-sized collection of key-value pairs, where key and value are
+Python objects. 
 
->>> D = {}
->>> D['name'] = 'Bob'             # Create keys by assignment
->>> D['age'] = 40
-
-
-A more common name for it is hash map or associative array. It is a
-flexibly-sized collection of key-value pairs, where key and value are Python
-objects. 
-
-One way to create one is by using curly `braces` {} and using `colons` to
-separate keys and values:
-
-{'name': 'Bob', 'age': 40}        # Traditional literal expression
-
-dict(name='Bob', age=40)          # dict keyword argument form
+Each key can have just one associated value, but that value can be a
+collection of multiple objects if needed, and a given value can be stored
+under any number of keys.
 
 
-note: set vs dict
+class TestDictCreation(unittest.TestCase):
+
+    # create dict by assign
+
+    # The first is handy if you can spell out the entire dictionary ahead of
+    # time.
+
+    def test_create_by_assign(self):
+        d = {}
+        d['name'] = 'Bob'
+        d['age'] = 40
+        self.assertEqual( d, {'name': 'Bob', 'age': 40})
+
+
+    # create dict by initializers
+
+    # The second is of use if you need to create the dictionary one field at a
+    # time on the fly.
+
+    def test_create_by_initializers(self):
+        d = {'name': 'Bob', 'age': 40}
+        self.assertEqual( d, {'name': 'Bob', 'age': 40})
+
+
+    # create dict by keyword argument form
+
+    # The third involves less typing than the first, but it requires all keys to
+    # be strings.
+
+    def test_create_by_keyword_form(self):
+        d = dict(name='Bob', age=40)
+        self.assertEqual( d, {'name': 'Bob', 'age': 40})
+
+    # create dict by key, value tuple form
+
+    # The last is useful if you need to build up keys and values as sequences at
+    # runtime.
+
+    def test_create_by_tuple_form(self):
+        d = dict([('name', 'Bob'), ('age', 40)])
+        self.assertEqual( d, {'name': 'Bob', 'age': 40})
+
+
+*TN* set vs dict
   return {'mac': result}          # returns a dict
   return {'mac', result}          # returns a set
 
 
 <dict-sort>
-Notice how the left-to-right order of dictionary keys is scrambled. Mappings
-are not positionally ordered, they'll come back in a different order than you
-typed them.
-
 What do we do, though, if we do need to impose an ordering on a dictionary's
-items?  One common solution is to grab a list of keys with the dictionary keys
+items? One common solution is to grab a list of keys with the dictionary keys
 method, sort that with the list sort method, and then step through the result
 with a Python for loop
+
+// one way to do 
 
 >>> Ks = list(D.keys())         # Unordered keys list
 >>> Ks                          # A list in 2.X, "view" in 3.X: use list()
@@ -2325,11 +2356,18 @@ with a Python for loop
 ['a', 'b', 'c']
 
 *py-iteration-protocol*
+Python also lets you step through a dictionary's keys list without actually
+calling the keys method in most for loops. For any dictionary D, saying `for
+key in D` works the same as saying the complete `for key in D.keys()`
+
 >>> for key in Ks:              # Iterate though sorted keys
       print(key, '=>', D[key])  # <== press Enter twice here (3.X print)
 a => 1
 b => 2
 c => 3
+
+
+// the other way to do
 
 This is a three-step process, and in recent versions of Python it can be done
 in one step with the newer `sorted()` built-in function.
@@ -2377,28 +2415,13 @@ True
           if args.detail:
               print key + ":",
 
-              # looks up the value of a dict
+              # looks up the value of a dict and the value is a list
               for build in segments [key]:
                   print build,
               print " "
 
-In fact, Python also lets you step through a dictionary's keys list without
-actually calling the keys method in most for loops. 
-For any dictionary D, saying `for key in D` works the same as saying the
-complete `for key in D.keys()`
 
->>> table = {'1975': 'Holy Grail',    # Key: Value
-... '1979': 'Life of Brian',
-... '1983': 'The Meaning of Life'}
-
->>> for year in table:                # Same as: for year in table.keys()
-... print(year + '\t' + table[year])
-...
-1979 Life of Brian
-1975 Holy Grail
-1983 The Meaning of Life
-
-
+<dict-pop>
 Values can be deleted either using the `del` keyword or the `pop` method
 (which simultaneously returns the value and deletes the key):
 
@@ -2446,8 +2469,7 @@ One dict can be merged into another using the `update` method:
 note: 'b' is overwritten.
 
 
-Preview: Mapping values to keys
-
+<dict-search-value>
 Notice how the prior table maps year to titles, but not vice versa. If you
 want to map the other way-titles to years-you can either code the dictionary
 differently, or use methods like items() that give searchable sequences,
@@ -2462,6 +2484,7 @@ differently, or use methods like items() that give searchable sequences,
 >>> list(table.items())             # Value=>Key (year=>title)
 [('The Meaning of Life', '1983'), ('Holy Grail', '1975'), ('Life of Brian', '1979')]
 
+# *list-comprehension*
 >>> [title for (title, year) in table.items() if year == '1975']
 ['Holy Grail']
 
@@ -2531,14 +2554,78 @@ value = some_dict.get(key, default_value)
 will raise an exception.
 
 Fetching a nonexistent key is normally an error, but the get method returns a
-default value-None, or a passed-in default-if the key doesn’t exist.
+default value-None, or a passed-in default if the key doesn’t exist.
 
->>> D.get('spam') # A key that is there
-2
->>> print(D.get('toast')) # A key that is missing
-None
->>> D.get('toast', 88)
-88
+
+# ('when found: a is ', 100)
+# ('when not found: d is ', None)
+# ('when not found: d is ', 400)
+
+class TestDictDefaultValue(unittest.TestCase):
+
+    def test_dict_get(self):
+        d = {'a':100, 'c':300, 'b':200}
+
+        print("when found: a is " , d.get('a', 400))
+        print("when not found: d is " , d.get('d'))
+        print("when not found: d is " , d.get('d', 400))
+
+
+# {'0x123': 2, '0x345': 1}
+# more concise than if/else
+
+class TestDictDefaultValue(unittest.TestCase):
+
+    def test_dict_get(self):
+        d = {}
+
+        d['0x123'] = d.get('0x123', 0) + 1
+        d['0x123'] = d.get('0x123', 0) + 1
+        d['0x345'] = d.get('0x345', 0) + 1
+
+        # if 'a' not in d:
+        #     d['a'] = 1
+        # else:
+        #     d['a'] += 1
+
+        # if 'a' not in d:
+        #     d['a'] = 1
+        # else:
+        #     d['a'] += 1
+
+        # if 'b' not in d:
+        #     d['b'] = 1
+        # else:
+        #     d['b'] += 1
+
+TODO:
+Suppose that there are log lines which logs creation and deletion of a handle.
+So use a handle as a key and see occurances. If occurances is 1 then deletion
+of a handle is missing so leaks resources. The code below is for this case. 
+
+If want to map a line as well, for example, {handle, [occurance, line]}, how
+can we support this? The below give an error:
+
+        d['0x123'] = d.get('0x123', [0, ''])[0]+1
+
+class TestDictDefaultValue(unittest.TestCase):
+
+    def test_dict_get(self):
+        d = {}
+
+        d['0x123'] = d.get('0x123', 0)+1
+        d['0x123'] = d.get('0x123', 0)+1
+        d['0x345'] = d.get('0x345', 0)+1
+        d['0x678'] = d.get('0x678', 0)+1
+        d['0x678'] = d.get('0x678', 0)+1
+        d['0x145'] = d.get('0x145', 0)+1
+
+        # *list-comprehension*
+        print [handle for (handle, occurance) in d.items() if occurance == 1]
+
+        # for (handle, occurance) in d.items():
+        #     if occurance == 1:
+        #         print handle
 
 
 <other-collection-as-value>
@@ -2618,6 +2705,8 @@ per value.
 
 
 Using dictionaries to simulate flexible lists: using integer keys
+
+# when use list
 
 >>> L = []
 >>> L[99] = 'spam'
@@ -2736,7 +2825,7 @@ from collections import OrderedDict
 
 Learning Python 5E, 5, Numeric Types
 
-A set is `iterable` and an `unordered` collection of unique and `immutable`
+A set is `iterable` and an `unordered` collection of `unique and immutable`
 objects. You can think of them like dicts, but keys only, no values.
 
 A set can be created in two ways:
@@ -8687,6 +8776,92 @@ http://localhost:5000/login
 
 
 Receiving form data
+
+
+={============================================================================
+|kt_dev_py_0001| py-unit
+
+https://docs.python.org/2/library/unittest.html
+
+25.3. unittest — Unit testing framework
+
+The Python unit testing framework, sometimes referred to as “PyUnit,” is a
+Python language version of JUnit, by Kent Beck and Erich Gamma. JUnit is, in
+turn, a Java version of Kent’s Smalltalk testing framework. Each is the de
+facto standard unit testing framework for its respective language.
+
+
+25.3.1. Basic example
+
+<ex>
+import unittest
+
+class TestStringMethods(unittest.TestCase):
+
+    def test_upper(self):
+        self.assertEqual('foo'.upper(), 'FOO')
+
+    def test_isupper(self):
+        self.assertTrue('FOO'.isupper())
+        self.assertFalse('Foo'.isupper())
+
+    def test_split(self):
+        s = 'hello world'
+        self.assertEqual(s.split(), ['hello', 'world'])
+        # check that s.split fails when the separator is not a string
+        with self.assertRaises(TypeError):
+            s.split(2)
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+A testcase is created by subclassing unittest.TestCase. The three individual
+tests are defined with methods whose names `start with the letters test.` This
+`naming convention` informs the test runner about which methods represent tests.
+
+The crux of each test is a call to assertEqual() to check for an expected
+result; assertTrue() or assertFalse() to verify a condition; or assertRaises()
+to verify that a specific exception gets raised. These methods are used
+instead of the assert statement so the test runner can accumulate all test
+results and produce a report.
+
+The setUp() and tearDown() methods allow you to define instructions that will
+be executed before and after each test method. They are covered in more detail
+in the section Organizing test code.
+
+The final block shows a simple way to run the tests. unittest.main() provides
+a command-line interface to the test script. When run from the command line,
+  the above script produces an output that looks like this:
+
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.000s
+
+OK
+
+
+When changes it to fail:
+
+    def test_isupper(self):
+        self.assertTrue('FOO'.isupper())
+        # self.assertFalse('Foo'.isupper())
+        self.assertTrue('Foo'.isupper())
+
+
+ F..
+ ======================================================================
+ FAIL: test_isupper (__main__.TestStringMethods)
+ ----------------------------------------------------------------------
+ Traceback (most recent call last):
+   File "pyunit_test.py", line 11, in test_isupper
+     self.assertTrue('Foo'.isupper())
+ AssertionError: False is not true
+ 
+ ----------------------------------------------------------------------
+ Ran 3 tests in 0.002s
+ 
+ FAILED (failures=1)
 
 
 ==============================================================================

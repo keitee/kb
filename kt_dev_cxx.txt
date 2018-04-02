@@ -19234,7 +19234,7 @@ vector and string's [] operator returns reference but these are exceptions to
 this rule, but not a general rule. Better not use [] operator.
 
 
-{cxx-return-cxx-temporary}
+{cxx-return-reference=cxx-temporary}
 
 The function returns value
 
@@ -19305,7 +19305,7 @@ Q2: What if we take out the const. is Example 2 still legal C++?
 
 A2: No.
 
-The "const" is important. The first line is an error and the code won't
+`The "const &" is important.` The first line is an error and the code won't
 compile portably with this reference to non-const, because f() returns a
 temporary object (i.e., `rvalue`) and only lvalues can be bound to references
 to non-const.
@@ -34206,11 +34206,41 @@ c.erase(beg,end)    Removes all elements of the range [beg,end) and returns
 
 c.clear()           Removes all elements (empties the container)
 
-coll.insert( { word, 1} );    // *C++11* most convenient way
+coll.insert( { word, 1} );    // *cxx-map-insert* *C++11* most convenient way
 coll.insert( std::map<std::string,int>::value_type( word, 1) );
 coll.insert( decltype(coll)::value_type( word, 1) );
 coll.insert( make_pair(word, 1) );
 coll.insert( pair<string, size_t>(word, 1) );
+
+*TN*
+As with set, different return applies to map as well.
+
+TEST(CxxStlTest, HowMapInsertWorks)
+{
+    // cannot be a const map since operator[] is for non-const.
+
+    map<unsigned int, string> pmap{ 
+        {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    // PRINT_M_ELEMENTS(pmap);
+
+    pmap[3] = "threee";
+    pmap[3] = "threeee";
+    pmap[3] = "threeeee";
+    pmap[3] = "threeeeee";
+
+    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+
+    // PRINT_M_ELEMENTS(pmap);
+
+    pmap.insert({3, "third"});
+    pmap.insert({3, "thirdd"});
+    pmap.insert({3, "thirddd"});
+    pmap.insert({3, "thirdddd"});
+
+    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+}
 
 
 <return-position>
@@ -34951,7 +34981,7 @@ For nonconstant vectors, `these operations return a reference` to the element.
 Thus, you could modify an element by using one of these operations, provided
 it is not forbidden for other reasons.
 
-c[idx]      Returns the element with index idx (no range checking)
+c[idx]      Returns the element with index idx (`no range checking`)
 c.at(idx)   Returns the element with index idx (throws range-error exception if
             idx is out of range)
 
@@ -36274,6 +36304,27 @@ namespace std {
       typedef _Compare                                      key_compare;
       typedef _Alloc                                        allocator_type;
       ...
+
+      // *cxx-map-insert*
+      /**
+       *  @brief Attempts to insert a std::pair into the %map.
+
+       *  @param __x Pair to be inserted (see std::make_pair for easy
+       *	     creation of pairs).
+       *
+       *  @return  A pair, of which the first element is an iterator that 
+       *           points to the possibly inserted pair, and the second is 
+       *           a bool that is true if the pair was actually inserted.
+       *
+       *  This function attempts to insert a (key, value) %pair into the %map.
+       *  A %map relies on unique keys and thus a %pair is only inserted if its
+       *  first element (the key) is not already present in the %map.
+       *
+       *  Insertion requires logarithmic time.
+       */
+      std::pair<iterator, bool>
+      insert(const value_type& __x)
+      { return _M_t._M_insert_unique(__x); }
     };
 }
 
@@ -36329,9 +36380,9 @@ const T& map::operator at (const key_type& key) const
 
 
 <cxx-map-fetch> <associative-array> <cpp-map-default-value>
-The 'both' maps and unordered maps can also be thought of as an
+The both maps and unordered maps can also be thought of as an
 `associative-array`, an array whose index is not an integer value. As a
-consequence, both containers provide the subscript operator [ ].
+consequence, both containers provide the subscript operator[].
 
 However, that the subscript operator does not behave like the usual subscript
 operator for arrays: Not having an element for an index is 'not' an error. A
@@ -36456,42 +36507,50 @@ for (pos = coll.begin(); pos != coll.end(); ++pos) {
   }
 }
 
+
 <ex>
-#include <iostream>
-#include <map>
-#include <algorithm>
-
-using namespace std;
-
-int main()
+MATCHER_P(EqPair, expected, "")
 {
-  // both works
-  // map<float,float> coll = { {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
-  map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
-
-  auto posKey = coll.find(3.0);
-  if( posKey != coll.end() )
-  {
-    cout << "key 3.0 found!(" << posKey->first << "," << 
-      posKey->second << ")" << endl;
-  }
-
-
-  // *algo-find-if* see const since it's *cxx-algo-non-modifying*
-
-  auto posVal = find_if( coll.cbegin(), coll.cend(),
-      [] ( const pair<float,float> &elem ) {
-        return elem.second == 3.0;
-        } );
-  if( posVal != coll.end() )
-  {
-    cout << "value 3.0 found!(" << posVal->first << "," << 
-      posVal->second << ")" << endl;
-  }
+    return arg->first == expected.first && arg->second == expected.second;
 }
 
-key 3.0 found!(3,2)
-value 3.0 found!(4,3)
+TEST(CxxStlTest, HowMapFindWorks)
+{
+    map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+
+    auto posKey = coll.find(3.0);
+    if( posKey != coll.end() )
+    {
+        // cout << "key 3.0 found!(" << posKey->first << "," << 
+        //     posKey->second << ")" << endl;
+        ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
+        // ASSERT_THAT(posKey->first, Eq(3));
+        // ASSERT_THAT(posKey->second, Eq(2));
+    }
+
+
+    // *algo-find-if-const* error if there is no const on predicate. 
+    // since it's *cxx-algo-non-modifying* ?
+    // have to specify element type when use lambda
+
+    auto posVal = find_if( coll.cbegin(), coll.cend(),
+
+            // all of them works *cxx-decltype*
+            // [] ( const pair<float,float> &elem ) {
+            // [] ( const map<float,float>::value_type &elem ) {
+            // [] ( const decltype(coll)::value_type &elem ) {
+           
+            [] ( const decltype(coll)::value_type &elem ) {
+            return elem.second == 3.0;
+            } );
+    if( posVal != coll.end() )
+    {
+        // cout << "value 3.0 found!(" << posVal->first << "," << 
+        //     posVal->second << ")" << endl;
+        ASSERT_THAT(posVal->first, Eq(4));
+        ASSERT_THAT(posVal->second, Eq(3));
+    }
+}
 
 
 <ex> print duplicates in multimap
@@ -36505,6 +36564,7 @@ int main()
 
   std::multimap<std::string, std::string> authors;
 
+  // *cxx-map-insert*
   authors.insert( {"Kit, Park", "How to get through"} );
   authors.insert( {"Barth, John", "Sot-Weed Factor"} );
   authors.insert( {"Barth, John", "Lost in the Funhouse"});
@@ -36610,7 +36670,7 @@ max found (7, seventh)
 {seven, seventh, 7th, }
 
 
-{cpp-map-assign}
+<cxx-map-copy-assign>
 
 #include<iostream>
 #include<iomanip>
@@ -40240,14 +40300,14 @@ find_if requires `unary predicate` but want to use more complicated predicate.
       _Value& _M_value;
 
       _Iter_equals_val(_Value& __value)
-	: _M_value(__value)
+	     : _M_value(__value)
       { }
 
       // shows to use operator==()
       template<typename _Iterator>
-	bool
-	operator()(_Iterator __it)
-	{ return *__it == _M_value; }
+	   bool
+	   operator()(_Iterator __it)
+	   { return *__it == _M_value; }
     };
 
   template<typename _Value>
@@ -40293,7 +40353,7 @@ find_if requires `unary predicate` but want to use more complicated predicate.
   */
   template<typename _InputIterator, typename _Predicate>
     inline _InputIterator
-    find_if(_InputIterator __first, _InputIterator __last,
+    `find_if`(_InputIterator __first, _InputIterator __last,
 	    _Predicate __pred)
     {
       // concept requirements
@@ -40313,7 +40373,7 @@ template<typename _InputIterator, typename _Predicate>
   __find_if(_InputIterator __first, _InputIterator __last,
       _Predicate __pred, input_iterator_tag)
   {
-    while (__first != __last && !bool(__pred(*__first)))
+    while (__first != __last && !bool(`__pred(*__first)`))
       ++__first;
     return __first;
   }
@@ -48220,7 +48280,7 @@ uninitialized_fill_n( q, vi.size(), 42 );
 ={============================================================================
 *kt_dev_cxx_0000* cxx-chrono cxx-time
 
-RCLR 5.7.2 Durations
+CLR 5.7.2 Durations
 
 A duration is a combination of a value representing the number of ticks and a
 fraction representing the unit in seconds. For example:
