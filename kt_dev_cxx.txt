@@ -129,7 +129,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-conversion-to-bool
 *kt_dev_cxx_0000* cxx-const 
 *kt_dev_cpp_0008* cxx-const-temporary
-*kt_dev_cxx_0000* cxx-const-member-function cpp-this
+*kt_dev_cxx_0000* cxx-const-member-function cxx-this cxx-overload-condition
 *kt_dev_cxx_0000* cxx-const-bitwise
 *kt_dev_cxx_0000* cxx-const-logical
 *kt_dev_cxx_0000* cxx-const-mutable cxx-mutable
@@ -173,7 +173,6 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-design-defines-problem
 *kt_dev_cxx_0000* cxx-design-by-contract 
 *kt_dev_cxx_0000* cxx-design-define-variable
-*kt_dev_cxx_0000* cxx-design-no-reference-to-internals
 *kt_dev_cxx_0000* cxx-design-interface-first
 *kt_dev_cxx_0000* cxx-design-core-guide
 
@@ -258,7 +257,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-string-operations
 *kt_dev_cxx_0000* cxx-string-find
 |kt_dev_stl_073| cpp-string-numeric-conversion cpp-boost-lexical-cast
-|kt_dev_stl_074| stl-string: iterator support
+*kt_dev_cxx_0000* cxx-string-iterator
+*kt_dev_cxx_0000* cxx-string-raw
 *kt_dev_cxx_0000* cxx-stringstream
 *kt_dev_stl_075* stl-string: seg fault
 *kt_dev_cxx_0000* cxx-sp-raii cxx-raii
@@ -299,14 +299,12 @@ KT KB. CPP
 |kt_dev_ccon_001| std-threadad: copy callables and arguments. lifetime issue
 |kt_dev_ccon_002| std-threadad: join and detach
 *kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
-|kt_dev_ccon_004| std::mutex and inherent race in thread-safe stack
-*kt_dev_ccon_005* cpp-con-lock-guard cpp-deadlock
-|kt_dev_ccon_006| cpp-con-unique-lock
-|kt_dev_ccon_007| std::unique_lock and transferring mutex
-|kt_dev_ccon_008| std::unique_lock and granulity
-|kt_dev_ccon_009| std::call_once and protecting during initialization
-|kt_dev_ccon_010| boost::shared_lock and read-write lock
-|kt_dev_ccon_011| recursive lock
+*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
+*kt_dev_ccon_005* cxx-con-deadlock cxx-deadlock
+*kt_dev_ccon_006* cxx-con-unique-lock
+*kt_dev_ccon_009* cxx-con-call-once
+*kt_dev_ccon_010* cxx-con-shared-lock cxx-boost-shared-lock
+*kt_dev_ccon_011* cxx-con-recursive-lock
 |kt_dev_ccon_012| std::condition_variable
 |kt_dev_ccon_013| thread-safe queue
 |kt_dev_ccon_014| cpp-con-task-model cpp-future
@@ -4461,7 +4459,7 @@ ULLONG_MAX:                                          18446744073709551615
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-limits
+*kt_dev_cpp_0000* cxx-limits cxx-bits
 
 <1> To get INT_MAX, 01111111...1,  ((~0)>>1) is wrong. why?
 
@@ -4655,70 +4653,114 @@ with and that's why said independent.
 
 
 <ex> *ex-bitcount*
-From ansic, p50. The function counts the number of 1 bits in its integer
-argument. 
 
-int bitcount( unsigned x );
+// From ansic, p50. 
+// The function counts the number of 1 bits in its integer argument. 
+//
+// 1. The key is not to use sizeof operator
+// 2. unsigned argument
+// 3. use independent of type.
 
-note: The key is not to use sizeof operator, unsigned argument, and use
-independent of type size.
-
-int bitcount( unsigned x )
+// returns bit position starting from 1 since input >> is evalueated after
+// ++count.
+uint32_t count_bits_01(const uint32_t value)
 {
-  int b;
+    uint32_t count{};
+    uint32_t input = value;
 
-  for(b = 0; x != 0; x >>= 1) // for(b = 0; x; x >>= 1), see {operator-assign}
-    if( x & 01 )              // x & 1 works as well
-      b++;
+    // do not need to check like: if (input &1) to increase count for every
+    // interation since when runs out 1, input becomes 0 and the loop ends. 
+    for (; input != 0; input >>= 1)
+        ++count;
 
-  return b;
+    return count;
+}
+
+// page 51. exercise 2-9. In a two's complement number system, x &= (x-1) deletes
+// the rightmost 1-bit in x. Explain why. Use this observation to write a 'faster'
+// version of bitcount.
+// 
+// Answer:
+// 
+// If x is odd, then (x-1) has the same bit representation as x except that the
+// rightmost 1-bit becomes a 0. In this case, (x & (x-1)) == (x-1).
+// 
+// x = 5: 5(101) & 4(100) = 100  // 101 -> 100 by having rightmost 1 to 0
+// 
+// If x is even, the end result of anding(&) x and x-1 has the rightmost 1 of x to 0.
+// 
+// x = 4: 4(100) & 3(11)  = 0    // 100 -> 0   by having rightmost 1 to 0
+//          ^ rightmost 1
+// x = 6: 6(110) & 5(101) = 100  // 110 -> 100 by having rightmost 1 to 0
+//           ^ rightmost 1
+// x = 8: 8(1000) & 7(111) = 0   // 1000 -> 0  by having rightmost 1 to 0
+// 
+// 000   0     All even numbers has tailing 0s and it becomes 1 when minus 1
+// 001   1
+// 010   2
+// 011   3
+// 100   4
+// 101   5
+// 110   6
+// 111   7
+// ...
+// 
+// note: This is about careful observation but not a mechanism of borrowing a carry
+// for example. For both odd and even case, has the effect of having rightmost 1 to
+// 0. So clear 1 from x one by one and no need to check on if to count bits.
+// 
+// note: And(&) is faster than shift operation? Yes and also there is no `if` in
+// the loop.
+// 
+// int bitcount(unsigned x)
+// {
+//   int b;
+// 
+//   for (b = 0; x != 0; x &= (x-1))
+//     b++;
+//   return b;
+// }
+
+// but this fails. WHY?
+uint32_t count_bits_02(const uint32_t value)
+{
+    uint32_t count{};
+    uint32_t input = value;
+
+    for (; input != 0; input &= (input-1))
+        ++count;
+
+    return count;
 }
 
 
-<ex> *ex-bitcount*
-page 51. exercise 2-9. In a two's complement number system, x &= (x-1) deletes
-the rightmost 1-bit in x. Explain why. Use this observation to write a 'faster'
-version of bitcount.
+// returns bit position starting from 0 since input >> is evalueated before
+// ++count.
 
-Answer:
-
-If x is odd, then (x-1) has the same bit representation as x except that the
-rightmost 1-bit becomes a 0. In this case, (x & (x-1)) == (x-1).
-
-x = 5: 5(101) & 4(100) = 100  // 101 -> 100 by having rightmost 1 to 0
-
-If x is even, the end result of anding(&) x and x-1 has the rightmost 1 of x to 0.
-
-x = 4: 4(100) & 3(11)  = 0    // 100 -> 0   by having rightmost 1 to 0
-         ^ rightmost 1
-x = 6: 6(110) & 5(101) = 100  // 110 -> 100 by having rightmost 1 to 0
-          ^ rightmost 1
-x = 8: 8(1000) & 7(111) = 0   // 1000 -> 0  by having rightmost 1 to 0
-
-000   0     All even numbers has tailing 0s and it becomes 1 when minus 1
-001   1
-010   2
-011   3
-100   4
-101   5
-110   6
-111   7
-...
-
-note: This is about careful observation but not a mechanism of borrowing a carry
-for example. For both odd and even case, has the effect of having rightmost 1 to
-0. So clear 1 from x one by one and no need to check on if to count bits.
-
-note: And(&) is faster than shift operation? Yes and also there is no `if` in
-the loop.
-
-int bitcount(unsigned x)
+uint32_t count_bits_03(const uint32_t value)
 {
-  int b;
+    uint32_t count{};
+    uint32_t input = value;
 
-  for (b = 0; x != 0; x &= (x-1))
-    b++;
-  return b;
+    for (; input && (input >>=1);)
+        ++count;
+
+    return count;
+}
+
+TEST(CxxAlgoTest, FindNumberOfBitsBetweenTwoIntegers)
+{
+    // A = 35 = 10 0011
+    // B =  9 =    1001
+    EXPECT_THAT(count_bits_01(35), Eq(6));
+    EXPECT_THAT(count_bits_01(9), Eq(4));
+
+    // fails
+    // EXPECT_THAT(count_bits_02(35), Eq(6));
+    // EXPECT_THAT(count_bits_02(9), Eq(4));
+
+    EXPECT_THAT(count_bits_03(35), Eq(5));
+    EXPECT_THAT(count_bits_03(9), Eq(3));
 }
 
 
@@ -7215,7 +7257,7 @@ bool strend_02(char *s, char *t)
 
     while (*s++ == *t++)
     {
-        // if side-effect, +1, points NULL then all matches up.
+        // if cxx-side-effect, +1, points NULL then all matches up.
         if (*s == '\0')
             return true;
     }
@@ -7858,6 +7900,7 @@ The value returned from x = d, is its main effect. The changing of the value
 of x is a side effect.
 
 
+  *cxx-remeber*
   ""Therefore, the point is whether or not `evaluation` cause side-effect and 
   use `side-effect` in operations `afterwords`.""
 
@@ -8046,7 +8089,7 @@ int mstrlen_2(const char *s)
     return i;
 }
 
-// side-effect made in while() is not used. Hence okay.
+// cxx-side-effect made in while() is not used. Hence okay.
 int mstrlen_3(const char *s)
 {
     unsigned int i = 0;
@@ -8057,7 +8100,7 @@ int mstrlen_3(const char *s)
     return i;
 }
 
-// side-effect made in while() is used in getting a length. side-effect cause
+// cxx-side-effect made in while() is used in getting a length. side-effect cause
 // +1 and not okay.
 int mstrlen_4(const char s[])
 {
@@ -8069,7 +8112,7 @@ int mstrlen_4(const char s[])
   return run-s;
 }
 
-// side-effect is not used. Hence okay.
+// cxx-side-effect is not used. Hence okay.
 int mstrlen_5(const char s[])
 {
   const char *run = s;
@@ -8110,8 +8153,8 @@ void strcpy( char *s, char *t )
 }
 
 
-Why not a problem? while() evaluation cause side-effects but side-effect(+1)
-is not used.
+Why not a problem? while() evaluation cause cxx-side-effects but
+cxx-side-effect(+1) is not used.
 
 For *pbeg++, post-increase is high than dereference(*) so it's the same as
 *(pbeg++) but how this behave as *(pbeg); pbeg++; ? because it returns the
@@ -8136,7 +8179,7 @@ direction as well, converting escape sequences into the real characters.
 void escape(char* s, char* t)
 {
   // when use "while(*t++)", the result missed out the first char. Since
-  // side-effect is used afterwords.
+  // cxx-side-effect is used afterwords.
 
   while( *t )
   {
@@ -8189,9 +8232,9 @@ int atoi(char s[])
 }
 
 
-Again shows the side-effect issue. If use the approach as below then miss out
-the one char. When there is no leading space, expect i==0 when loop ends but
-i==1 since will have the side effect.
+Again shows the cxx-side-effect issue. If use the approach as below then miss
+out the one char. When there is no leading space, expect i==0 when loop ends
+but i==1 since will have the side effect.
 
 int atoi(char s[])
 {
@@ -10247,7 +10290,7 @@ int main()
 -rwxr-xr-x  1 kyoupark kyoupark 66560 Sep 20 09:45 a.out.old*
 
 
-{cpp-initializer-list}
+{cxx-initializer-list} cxx-array cxx-vector
 To 'support' the concept of initializer lists for user-defined types. It is a
 library template type that repersents an 'array' of values of the `same-type`.
 The element in a list are always `const`.
@@ -10339,7 +10382,7 @@ The reasons to avoid the syn-version:
 To see when syn versions are useful. see {make-base-class-for-reference-counting}
 
 
-{cxx-ctor-and-const}
+{cxx-ctor-const}
 The ctor `cannot-be-const`. When create a const object of a class type, the
 object does not assume its constness until after the ctor completes the
 object's initialisation. Thus, ctor can write to const objects during their
@@ -10410,7 +10453,7 @@ class T {
   double revenue;
 };
 
-  *cpp-remember*
+  *cxx-remember*
   No semicolon when defines member functions in class definition.
 
   class T {
@@ -10514,11 +10557,14 @@ CPR 289. Members are initialized in the order in which they appear in the class
 definition. The order of initialization often doesn't matter unless one member
 is initialized in terms of another.
 
-1. Good idea to write ctor-init in the same order as the members are
-declared.
+* Good idea to write ctor-init in the same order as the members are declared.
 
-2. Good idea to write member initializer to use the ctor's parameters rather
-than another data member from the same object.
+// :293:21: warning: ‘MakeToken::str_’ will be initialized after [-Wreorder]
+//         string str_{};
+
+
+* Good idea to write member initializer to use the ctor's parameters rather
+  than another data member from the same object.
 
 // EXC++47
 class Array : private ArrayBase, public Container
@@ -11954,107 +12000,6 @@ cs is: 6Screen
 end of main
 
 
-{cxx-reference-return-by-value} EC++21
-The `pass-by-reference` is great so always use reference? However, there are
-cases that must return a copy not a reference such as operator*(). This is a
-operator to multiply not to dereferene.
-
-note:
-How distinguish between two multiply and dereferene?
-
-// dereferene operator, member
-T& operator*() { return *ptr_; }
-    
-// multiply operator, nonmmber
-friend const T operator*( const T &lhs, const T &rhs );
-
-
-These are tries to save a construction cost by using pass-by-reference. Not
-quite right.
-
-<1> 
-Use stack but remember a refenrece is a name for some 'existing' object. Here
-returns a reference to object that no longer exist.
-
-Rational c = a*b;
-
-class Rational {
-  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
-  {
-    Rational retult( lhs.n*rhs.n, lhs.d*rhs.d );
-    return result;
-  }
-};
-
-
-<2> 
-Use heap but there is no way to delete in case: 
-
-Rational w, x, y, z;
-w = x*y*z;
-
-class Rational {
-  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
-  {
-    Rational *retult = new Rational( lhs.n*rhs.n, lhs.d*rhs.d );
-    return *result;
-  }
-};
-
-
-<3> 
-Use function static? Not right for multi-threaded and even for
-single-threaded.
-
-class Rational {
-  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
-  {
-    static Rational retult;
-    ...
-    return result;
-  }
-
-  bool operator==( const Rational& lhs, const Rational& rhs);
-};
-
-Rational a, b, c, d;
-
-if( (a*b) == (c*d) )
-{
-  ...
-}
-
-This will always true since it is evaluated as
-
-if( operator==( operator*(a,b), operator*(c,d) ) )
-
-Therefore, should return a copy and pay a small cost for correct behavior.
-
-class Rational {
-  friend const Rational operator*( const Rational& lhs, const Rational& rhs );
-  ...
-};
-
-*cpp-remember* C++PL p191
-To keep a program readable, it is often best to avoid functions that modify
-their arguments. Instead, you can return a value from the function explicitly:
-
-void increment(int &aa) { ++aa; }
-int next(int p) { return p+1; }
-
-void g()
-{
-  int x = 1;
-  increment(x);   // x = 2
-  x = next(x);    // x = 3
-}
-
-The increment(x) notation doesn't give a clue to the reader that x's value is
-being modified, the way x = next(x) does. Consequently, "plain" reference
-arguments should be used only where the name of the function gives a strong
-hint that the reference argument is modified.
-
-
 ={============================================================================
 *kt_dev_cxx_0000* cxx-vexing-parse
 
@@ -12390,197 +12335,216 @@ void t_sp_13_2()
 
 
 <pointerlike> shallow-copy, own-reference-counting *cxx-sp-shared*
-The copy and the original share underlying object like shared_ptr. To show own
-reference counting:
 
-namespace POINTERLIKE 
-{
-
-// pointer-like hasptr
-class HasPtr 
+class HasPtr
 {
     public:
-        HasPtr(const std::string &s = std::string()):
-            ps_(new std::string(s)), count_(0), use_(new size_t(1))
+        HasPtr(const std::string &s = std::string())
+            : ps_(new std::string(s)), use_(new std::size_t(1))
         {
-            cout << "::HasPtr(), " << *ps_ << ", use " << *use_ << endl;
+            std::cout << "::HasPtr(): " << *ps_ << " used " << *use_ << std::endl;
         }
 
         // copy ctor
-        HasPtr(const HasPtr &rhs):
-            ps_(rhs.ps_), count_(rhs.count_), use_(rhs.use_) 
+        HasPtr(const HasPtr &rhs)
+            : ps_(rhs.ps_), use_(rhs.use_)
         {
-            ++*rhs.use_;
-            cout << "::HasPtr(const HasPtr&), " << *ps_ << ", use " << *use_ << endl;
+            // increase a counter
+            ++*use_;
+            std::cout << "::HasPtr(const HasPtr &): " << *ps_ << " used " << *use_ << std::endl;
         }
 
         // copy assign
+        // decrease lhs and increase rhs
         HasPtr& operator=(const HasPtr &rhs)
         {
-            // increase first to support self assign which includes HasPtr in
-            // the same group; shares the same.
+            // increase first to support cxx-self-assign. ???
             ++*rhs.use_;
 
-            // if no other users, free.
+            // do dtor's work. when there is no users
             if (--*use_ == 0)
             {
-                delete ps_; delete use_;
+                delete ps_;
+                delete use_;
             }
 
-            ps_ = rhs.ps_; use_ = rhs.use_;
-            count_ = rhs.count_;
-
-            cout << "::=(&), " << *ps_ << ", use " << *use_ << endl; 
+            // do ctor's work
+            ps_ = rhs.ps_;
+            use_ = rhs.use_;
+            std::cout << "::HasPtr &operator=(const HasPtr &): " << *ps_ << " used " << *use_ << std::endl;
 
             return *this;
         }
 
         // move ctor
-        HasPtr(HasPtr &&rhs):
-            ps_(rhs.ps_), count_(rhs.count_), use_(rhs.use_)
+        HasPtr(HasPtr &&rhs)
+            : ps_(rhs.ps_), use_(rhs.use_)
         {
-            // cause error
-            // error: cannot convert ‘size_t* {aka long unsigned int*}’ to ‘std::string* {aka std::basic_string<char>*}’ in assignment
-            // rhs.ps_ = rhs.use_ = nullptr;
-
-            // makes move-from safe to delete. ?? However, ~HasPtr use
-            // dereference of use. See ~HasPtr
+            // do not increase a counter
+            // ++*use_;
+            
+            // this why ~HasPtr() has checks
             rhs.ps_ = nullptr;
             rhs.use_ = nullptr;
-            rhs.count_ = 0;
-
-            cout << "::HasPtr(HasPtr&&), " << *ps_ << ", use " << *use_ << endl;
+            std::cout << "::HasPtr(HasPtr &&): " << *ps_ << " used " << *use_ << std::endl;
         }
 
         // move assign
         HasPtr& operator=(HasPtr &&rhs)
         {
-            // direct check rather than increase first to support self assign
-            // ++*rhs.use_;
-
+            // cxx-self-assign direct check
             if (this != &rhs)
             {
-                // if no other users, free. do the work of dtor
                 if (--*use_ == 0)
                 {
                     delete ps_; delete use_;
                 }
 
-                // do the work of ctor
                 ps_ = rhs.ps_; use_ = rhs.use_;
-                count_ = rhs.count_;
 
-                // makes move-from safe to delete. ?? However, ~HasPtr use
-                // dereference of use.
+                std::cout << "::HasPtr &operator=(HasPtr &&): " << *ps_ << " used " << *use_ << std::endl;
+
                 rhs.ps_ = nullptr;
                 rhs.use_ = nullptr;
-                rhs.count_ = 0;
-
-                cout << "::=(&&), " << *ps_ << ", use " << *use_ << endl; 
             }
+
             return *this;
         }
 
-        ~HasPtr() 
-        { 
-            // if no other users, free.
-            // if (--*use_ == 0) cause *seg-fault*
+        ~HasPtr()
+        {
+            // when there is no users
+            // have to check if use_ is not null since use_ can be null due to
+            // move support. Otherwise, cxx-seg-fault. 
+            // For copy, works okay without it.
             if (use_ && --*use_ == 0)
             {
-                cout << "::~HasPtr(), " << *ps_ << ", use " << *use_ << endl; 
+                std::cout << "::~HasPtr(): " << *ps_ << " used " << *use_ << std::endl;
                 delete ps_; delete use_;
+
+                // cxx-nullptr
+                // error: cannot convert ‘size_t* {aka long unsigned int*}’ to ‘std::string* {aka std::basic_string<char>*}’ in assignment
+                // rhs.ps_ = rhs.use_ = nullptr;
+                ps_ = nullptr;
+                use_ = nullptr;
             }
         }
 
     private:
+        // value type
         std::string *ps_;
-        int count_;
-        // to track how many object share *ps
-        size_t *use_;
+
+        //  other member
+        // int other_;
+
+        // reference count to track how many shares this
+        std::size_t *use_;
 };
 
-// hp is copy ctor'ed
-HasPtr f(HasPtr hp)
+HasPtr use_ptr(HasPtr hp)
 {
     HasPtr ret;
+    std::cout << "use_ptr: use copy controls" << std::endl;
     ret = hp;
     return ret;
 }
 
-} // namespace
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(const HasPtr &): hi mon! used 2
+// ::HasPtr(const HasPtr &): hi mon! used 3
+// -------------
+// ::~HasPtr(): hi mon! used 0
 
+TEST(CxxSpTest, UseHasPtrCopyCtor) {
 
-// = 04 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(const HasPtr&), hi mom!, use 2
-// ::HasPtr(const HasPtr&), hi mom!, use 3
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+    // h1, h2, h3 shares the same underlying.
+    
+    cout << "=============" << endl;
 
-void t_sp_14()
-{
-    using namespace POINTERLIKE;
+    HasPtr h1("hi mon!");
 
-    HasPtr h("hi mom!");
-    // h, h2, and h3 share the same underlying string
-    HasPtr h2 = h;
+    HasPtr h2 = h1;
     HasPtr h3{h2};
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
 }
 
-// move. see 1 use count and one dtor
-// = 05 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(HasPtr&&), hi mom!, use 1
-// ::HasPtr(HasPtr&&), hi mom!, use 1
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+// =============
+// ::HasPtr(): hi mom! used 1
+// ::HasPtr(HasPtr &&): hi mom! used 1
+// ::HasPtr(HasPtr &&): hi mom! used 1
+// -------------
+// ::~HasPtr(): hi mom! used 0
 
-void t_sp_15()
-{
-    using namespace POINTERLIKE;
+TEST(CxxSpTest, UseHasPtrMove) {
 
-    HasPtr h("hi mom!");
     // h, h2, and h3 use the same one underlying string
-    HasPtr h2 = std::move(h);
+ 
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mom!");
+    HasPtr h2 = std::move(h1);
     HasPtr h3 = std::move(h2);
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
 }
 
-// see only single dtor
-// = 06 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(), hi dad!, use 1
-// ::=(&), hi mom!, use 2
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(): hi dad! used 1
+// ::HasPtr &operator=(const HasPtr &): hi mon! used 2
+// -------------
+// ::~HasPtr(): hi mon! used 0
 
-void t_sp_16()
-{
-    using namespace POINTERLIKE;
+TEST(CxxSpTest, UseHasPtrCopyAssign) {
 
-    HasPtr h1("hi mom!");
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mon!");
     HasPtr h2("hi dad!");
+
     h2 = h1;
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
 }
 
-// move assign. see the same result
-// = 07 ======
-// ::HasPtr(), hi mom!, use 1
-// ::HasPtr(), hi dad!, use 1
-// ::=(&&), hi mom!, use 1
-// =----======
-// ::~HasPtr(), hi mom!, use 0
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(): hi dad! used 1
+// ::HasPtr &operator=(HasPtr &&): hi mon! used 1
+// -------------
+// ::~HasPtr(): hi mon! used 0
 
-void t_sp_17()
-{
-    using namespace POINTERLIKE;
+TEST(CxxSpTest, UseHasPtrMoveAssign) {
 
-    HasPtr h1("hi mom!");
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mon!");
     HasPtr h2("hi dad!");
+
     h2 = std::move(h1);
-    cout << "=----======" << endl;
+
+    cout << "-------------" << endl;
+}
+
+// =============
+// ::HasPtr(): hi mon! used 1
+// ::HasPtr(const HasPtr &): hi mon! used 2
+// ::HasPtr():  used 1
+// use_ptr: use copy controls
+// ::HasPtr &operator=(const HasPtr &): hi mon! used 3
+// -------------
+// ::~HasPtr(): hi mon! used 0
+
+TEST(CxxSpTest, UseHasPtrUseFunction) {
+
+    cout << "=============" << endl;
+
+    HasPtr h1("hi mon!");
+    HasPtr h2 = use_ptr(h1);
+
+    cout << "-------------" << endl;
 }
 
 
@@ -18019,26 +17983,6 @@ is comparison between signed and unsigned. note: this is a problem of
 string-npos.
 
 
-<ex> *ex-atoi* ansic, p43.
-
-check points:
-
-  * input type? digits only? no space?
-  * input size?
-  * what base? 10 or 2?
-  * sign support? 
-
-int atoi(char s[])
-{
-  int n, i;
-
-  for(n = 0, i = 0; s[i] >= '0' && s[i] <= '9'; i++)
-    n = n*10 + (s[i]-'0');
-
-  return n;
-}
-
-
 <ex> *ex-lower*
 
 ASCII only since uses "offset = a-A" based on that upper case comes first and
@@ -18685,7 +18629,7 @@ help improve runtime performance.
 Return Value Optimization
 
 RVO basically means the compiler is allowed to avoid creating temporary
-objects for return values, even if they have side effects.
+objects `for return values`, even if they have side effects.
 
 Here’s a simple example:
 
@@ -18702,7 +18646,7 @@ $ clang++ -std=c++11 main.cpp && ./a.out
 c'tor
 d'tor
 
-// same as gcc *cxx-return-cxx-move*
+// gcc shows the same result. see *cxx-return-cxx-move* used here.
 $ clang++ -std=c++11 -fno-elide-constructors main.cpp && ./a.out
 c'tor
 move c'tor
@@ -18721,8 +18665,11 @@ This is also the default behavior, meaning practically all C++ programs
 utilize RVO.
 
 
+// turn off RVO
 // https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html#index-fno-elide-constructors
-// 
+//
+// elide: to not pronounce a particular sound in a word:
+//
 // 3.5 Options Controlling C++ Dialect
 // 
 // -fno-elide-constructors
@@ -18749,7 +18696,7 @@ Without RVO the compiler creates 3 Snitch objects instead of 1:
 
 Performance
 
-The neat thing about RVO is that it makes returning objects free. It works via
+The neat thing about RVO is that `it makes returning objects free.` It works via
 allocating memory for the to-be-returned object in the caller’s stack frame.
 The returning function then uses that memory as if it was in its own frame
 without the programmer knowing / caring.
@@ -18769,7 +18716,7 @@ int main() {
   }
 }
 
-
+// off RVO
 $ clang++ -fno-elide-constructors -std=c++98 -stdlib=libc++ -O3 main.cpp && time ./a.out
 real	0m37.235s
 user	0m37.168s
@@ -18779,8 +18726,11 @@ $ clang++ -std=c++98 -stdlib=libc++ -O3 main.cpp && time ./a.out
 real	0m17.681s
 user	0m17.668s
 sys	0m0.000s
-217% difference on my machine by simply avoiding the copy of the vector. In C++11 (or newer) environments it is even marginally faster to disable RVO:
 
+217% difference on my machine by simply avoiding the copy of the vector. In
+C++11 (or newer) environments it is even marginally faster to disable RVO:
+
+// off RVO
 $ clang++ -fno-elide-constructors -std=c++11 -stdlib=libc++ -O3 main.cpp && time ./a.out
 real	0m18.195s
 user	0m18.188s
@@ -18796,6 +18746,7 @@ This is due to Move Semantics, which is the subject of the next post.
 <ex>
 kyoupark@kit-debian64:~/works$ uname -a
 Linux kit-debian64 3.16.0-4-amd64 #1 SMP Debian 3.16.36-1+deb8u1 (2016-09-03) x86_64 GNU/Linux
+
 kyoupark@kit-debian64:~/works$ gcc --version
 gcc (Debian 4.9.2-10) 4.9.2
 
@@ -18870,6 +18821,34 @@ d'tor
 
 In my experience, RVO is more frequent (and thus useful) than other
 copy-elision practices, but your mileage may vary.
+
+
+void foo(Snitch s) {
+    cout << "snitch value is: " << s.getValue() << endl;
+}
+
+TEST(CxxFeaturesTest, UseCopyElison)
+{
+    cout << "----------" << endl;
+    foo(Snitch(200));
+    cout << "----------" << endl;
+}
+
+// with -fno-
+----------
+c'tor
+move c'tor
+snitch value is: 0
+d'tor
+d'tor
+----------
+
+// without -fno-
+----------
+c'tor
+snitch value is: 200
+d'tor
+----------
 
 
 <when-rvo-do-not-on>
@@ -18948,6 +18927,9 @@ wrong most of the times. It will indeed attempt to force move-constructor, but
 in doing so it will disable RVO. It is also redundant, as move will happen if
 it can even without explicitly calling std::move() (see here).
 
+TODO
+https://stackoverflow.com/questions/14856344/when-should-stdmove-be-used-on-a-function-return-value
+
 Snitch CreateSnitch() {
   Snitch snitch;
   return std::move(snitch);
@@ -18980,11 +18962,14 @@ int main() {
   s = CreateSnitch();
 }
 
+// with -fno-
 $ clang++ -std=c++11 -stdlib=libc++ main.cpp && ./a.out
 c'tor
+--- where it is not rvo
 c'tor
 move assignment
 d'tor
+---
 d'tor
 
 
@@ -19022,11 +19007,446 @@ performance when writing code, unless you have a quantifiable reason.
 TODO: *C++17*
 https://jonasdevlieghere.com/guaranteed-copy-elision/
 
+<ex>
+std::vector<std::string> return_vector(const std::string &input)
+{
+    std::vector<std::string> svec{};
+
+    for(int i = 0; i < 10; ++i)
+    {
+        svec.push_back(input);
+    }
+
+    return svec;
+}
+
+int main()
+{
+    auto rvec = return_vector("string vector");
+}
+
+// modified to print vector copy and move ctor in stl_vector.h
+kyoupark@kit-debian64:~/works$ g++ -std=c++11 xxx.cpp 
+kyoupark@kit-debian64:~/works$ ./a.out    // nothing printed
+kyoupark@kit-debian64:~/works$ g++ -std=c++11 -fno-elide-constructors xxx.cpp 
+kyoupark@kit-debian64:~/works$ ./a.out 
+kit:vector move ctor          
+kit:vector move ctor
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-return cxx-undefined
 
-<no-return-when-expected>
+{cxx-return-what-should-return} {cxx-reference-return-by-value} EC++21
+The `pass-by-reference` is great so always use reference? 
+
+note:
+How distinguish between two multiply and dereferene?
+
+// dereferene operator, member
+T& operator*() { return *ptr_; }
+    
+// multiply operator, nonmmber
+friend const T operator*( const T &lhs, const T &rhs );
+
+
+These are tries to save a construction cost by using pass-by-reference. Not
+quite right.
+
+<1> 
+Use stack but remember a refenrece is a name for some 'existing' object. Here
+returns a reference to object that no longer exist.
+
+Rational c = a*b;
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    Rational retult( lhs.n*rhs.n, lhs.d*rhs.d );
+    return result;
+  }
+};
+
+
+<2> 
+Use heap but there is no way to delete in case: 
+
+Rational w, x, y, z;
+w = x*y*z;
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    Rational *retult = new Rational( lhs.n*rhs.n, lhs.d*rhs.d );
+    return *result;
+  }
+};
+
+
+<3> 
+Use function static? Not right for multi-threaded and even for
+single-threaded.
+
+class Rational {
+  friend const Rational& operator*( const Rational& lhs, const Rational& rhs )
+  {
+    static Rational retult;
+    ...
+    return result;
+  }
+
+  bool operator==( const Rational& lhs, const Rational& rhs);
+};
+
+Rational a, b, c, d;
+
+if( (a*b) == (c*d) )
+{
+  ...
+}
+
+This will always true since it is evaluated as
+
+if( operator==( operator*(a,b), operator*(c,d) ) )
+
+*cxx-remember*
+Therefore, should return a copy and pay a small cost for correct behavior and
+usually no cost due to *cxx-rvo* 
+
+There are cases that must return a copy not a reference such as operator*().
+This is a operator to multiply not to dereferene.
+
+
+class Rational {
+  friend const Rational operator*( const Rational& lhs, const Rational& rhs );
+  ...
+};
+
+*cxx-remember* C++PL 191
+To keep a program readable, it is often best to avoid functions that modify
+their arguments. Instead, you can return a value from the function explicitly:
+
+void increment(int &aa) { ++aa; }
+int next(int p) { return p+1; }
+
+void g()
+{
+  int x = 1;
+  increment(x);   // x = 2
+  x = next(x);    // x = 3
+}
+
+The increment(x) notation doesn't give a clue to the reader that x's value is
+being modified, the way x = next(x) does. Consequently, "plain" reference
+arguments should be used only where the name of the function gives a strong
+hint that the reference argument is modified.
+
+
+{cxx-return-no-reference-to-internals}
+
+CCG F.43: Never (directly or indirectly) return a pointer or a reference to a
+local object
+
+EC++28, avoid returning handles to object internals
+
+Here internals means everything except public interface and includes private
+and protected member function. If returns handles (iterator, pointer and
+    reference) to internals, causes three problems: breaks encapsulatation,
+constness, and dangling-handles.
+
+
+<compromising-encapsulation-and-constness>
+The pass by reference is more efficient than pass by value and the interface
+offer client a way to learn what rectangle's points are:
+
+class Rectangle {
+  public:
+    Point& upperLeft() const { return pData->ulhc; }
+
+  private:
+    std::shared_ptr<RectData> pData;
+};
+
+Is it okay? NO because client can change its value:
+
+// use
+const Rectangle rec( ... );
+rec.upperLeft().setX(50);
+
+The problem is that makes memeber data effectively public as returns reference
+to it from a public member function since this is *cxx-const-bitwise*
+
+
+The solution is that it offers read-only access:
+
+class Rectangle {
+  public: >
+   `const` Point& upperLeft() const { return pData->ulhc; }
+
+  private:
+   std::shared_ptr<RectData> pData;
+};
+
+Similar to the example of {const-member-func}
+
+<ex>
+using namespace std;
+
+class Sample {
+  private:
+    int val;
+
+  public:
+    Sample() : val(10) {}
+    int& getx() { return val;}
+    void printx() { cout << val << endl; }
+};
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+  Sample sam;
+  cout << "------" << endl;
+  sam.printx();
+  sam.getx() = 20;
+  cout << "------" << endl;
+  sam.printx();
+
+  return 0;
+}
+
+This changes private member val to 20.
+
+
+<dangling-handles>
+class GUIObject { ... }
+const Rectangle boundingBox( const GUIObject& obj );
+
+// use
+GUIObject* pgo;
+...
+const Point* pUpperLeft = &( boundingBox(*pgo).upperLeft() );
+
+This returns a temporary Rectangle and returns its upper member. The problem
+is this temporary is destroyed when this statement ends and pUpperLeft will
+dangle even if const use.
+
+vector and string's [] operator returns reference but these are exceptions to
+this rule, but not a general rule. Better not use [] operator.
+
+
+{cxx-return-reference=cxx-temporary}
+
+The function returns value
+
+std::string YVCloudAuth::getAuthToken() const;
+
+and here defines a reference to use return value so takes a reference to a
+temporary.
+
+try
+{
+  `const std::string&` token = cloudAuth->getAuthToken();
+  Header.replace("<add-youview-token>", token.c_str());
+}
+
+You're taking a reference to a temporary object
+
+That's allowed.
+
+exactly, this const reference binds to this rvalue, extending it's lifetime
+for the lifetime of the reference itself. But in practice it's like giving a
+temp an alias. see below for a nice explanation
+
+
+http://herbsutter.com/2008/01/01/gotw-88-a-candidate-for-the-most-important-const/
+
+GotW #88: A Candidate For the "Most Important const"
+
+Q1: Is the following code legal C++?
+
+    // Example 1
+
+    string f() { return "abc"; }
+
+    void g() {
+      `const string&` s = f();
+      cout << s << endl;    // can we still use the "temporary" object?
+    }
+
+
+A1: Yes.
+
+This is a C++ feature. the code is valid and does exactly what it appears to
+do.
+
+Normally, a temporary object lasts only until the end of the full expression
+in which it appears. 
+
+However, C++ deliberately specifies that binding a temporary object to a
+reference to const on the stack `lengthens the lifetime of the temporary` to
+the lifetime of the reference itself, and thus avoids what would otherwise be
+a common dangling-reference error. 
+
+In the example above, the temporary returned by f() lives until the closing
+curly brace. (Note this only applies to stack-based references. It doesn't
+    work for references that are members of objects.)
+
+
+Q2: What if we take out the const. is Example 2 still legal C++?
+
+    // Example 2
+
+    string f() { return "abc"; }
+
+    void g() {
+      string& s = f();       // still legal?
+      cout << s << endl;
+    }
+
+A2: No.
+
+`The "const &" is important.` The first line is an error and the code won't
+compile portably with this reference to non-const, because f() returns a
+temporary object (i.e., `rvalue`) and only lvalues can be bound to references
+to non-const.
+
+*cxx-const-to-non-const-error*
+:19:21: error: invalid initialization of non-const reference of type 
+  ‘std::string& {aka std::basic_string<char>&}’ 
+  from an `rvalue` of type ‘std::string {aka std::basic_string<char>}’
+
+Note: Visual C++ does allow Example 2 but emits a "nonstandard extension used"
+warning by default. A conforming C++ compiler can always allow
+otherwise-illegal C++ code to compile and give it some meaning — hey, it could
+choose to allow inline COBOL if some kooky compiler writer was willing to
+implement that extension, maybe after a few too many Tequilas. For some kinds
+of extensions the C++ standard requires that the compiler at least emit some
+diagnostic to say that the code isn’t valid ISO C++, as this compiler does.
+
+Note: gcc 4.7.2 and see 'rvalue'.
+
+<ex>
+I once heard Andrei Alexandrescu give a talk on ScopeGuard (invented by Petru
+    Marginean) where he used this C++ feature and called it "the most important
+const I ever wrote." And this brings us to the Guru Question, which highlights
+the additional subtlety that Andrei's code deftly leveraged.
+
+Guru Question
+
+Q3: When the reference goes out of scope, which destructor gets called?
+A3: The same destructor that would be called for the temporary object. It's just
+being delayed.
+
+Corollary: You can take a const Base& to a Derived temporary and it will be
+destroyed without virtual dispatch on the destructor call.
+
+This is nifty. Consider the following code:
+
+    // Example 3
+
+    Derived factory(); // construct a Derived object
+
+    void g() {
+      const Base& b = factory(); // calls Derived::Derived here
+      // use b
+    } // calls Derived::~Derived directly here - not Base::~Base + virtual dispatch!
+
+Does this work in practice on real compilers? Yes: Every compiler I have access
+to calls the correct Derived destructor, including even ancient Borland 5.5 and
+Visual C++ 6.0 (and Digital Mars, though DM calls the destructor at the wrong
+    time, as noted above).
+
+Andrei leverages this subtlety (of course) in his ScopeGuard implementation to
+avoid making the implementation classes' destructors virtual at all, which is
+okay in that case because those classes otherwise have no need for one. 
+
+
+{cxx-return-const-return}
+
+// this is old and out-dated.
+//
+// EC++03. When `return by value` for user type, use const to raise error when
+// mistake happens:
+// 
+// const Rational operator*( const Rational& lhs, const Rational& rhs );
+// 
+// if( a * b = c )       // typo. was meant if( a * b == c )
+// 
+// If these are built-in type, this is flat-out error but not for class type. 
+// 
+// * The returned `built-in` type is an `rvalue` and can't be modified. EXPC++43.
+// * Even if it were legal, the fact that it returns object by value would mean
+//   that a copy would be modified and that's not the behavior you want. 
+// 
+// So better to be prepared for this kind of mistakes. Also this is an example of
+// returning a copy than reference.
+
+
+CCG F.20: For “out” output values, prefer return values to output parameters
+
+Note A struct of many (individually cheap-to-move) elements may be in
+aggregate expensive to move. It is not recommended to return a const value.
+
+`Such older advice is now obsolete`; it does not add value, and it interferes
+with move semantics.  
+
+const vector<int> fct(); // bad: that "const" is more trouble than it is worth
+
+vector<int> g(const vector<int>& vx)
+{
+  // ...
+  fct() = vx; // prevented by the "const"
+
+  // ...
+  // expensive copy: move semantics suppressed by the "const"
+  // *TN* since move controls requires non-const argument.
+  return fct(); 
+}
+
+The argument for adding const to a return value is that it prevents (very
+rare) accidental access to a temporary. The argument against is prevents
+(very frequent) use of move semantics.
+
+*TN* So better to allow move semantics than to prevent access to a temporary
+
+
+Exceptions
+
+If a type is `expensive to move` (e.g., array<BigPOD>), consider allocating
+it on the free store and return a handle (e.g., unique_ptr ), or passing it in
+a reference to non-const target object to fill (to be used as an
+out-parameter).
+
+
+F.47: Return T& from assignment operators
+
+Reason 
+
+The convention for operator overloads (especially on value types) is for
+operato r=(const T&) to perform the assignment and then return (non-const)
+  *this. This ensures consistency with standard-library types and follows the
+  principle of “do as the ints do.”
+
+Note 
+Historically there was some guidance to make the assignment operator return
+const T&. This was primarily to avoid code of the form (a = b) = c such code
+is not common enough to warrant violating consistency with standard types.
+
+Example
+
+class Foo
+{
+  public:
+    ...
+      Foo& operator=(const Foo& rhs) {
+        // Copy members.
+        ...
+          return *this;
+      }
+};
+
+
+{no-return-when-expected}
 
 #include <iostream>
 #include <string>
@@ -19148,6 +19568,31 @@ const string& foo()
 
 Both return cause undefined result at the call site(caller) because it returns
 reference to local to function foo().
+
+
+<no-return-string>
+
+// supposed to return string but not
+
+std::string return_string(const std::string &input)
+{
+    // return ??
+}
+
+int main()
+{
+    return_string("this is call from main");
+    ...
+}
+
+// without -D_GLIBCXX_DEBUG
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x00007f0f6974f170 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::~basic_string() () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+
+// with -D_GLIBCXX_DEBUG
+Program received signal SIGSEGV, Segmentation fault.
+0x00000000004018b3 in __gnu_cxx::__exchange_and_add_single (__mem=0xfffffffffffffff9, __val=-1) at /usr/include/c++/4.9/ext/atomicity.h:67
+67          _Atomic_word __result = *__mem;
 
 
 ={============================================================================
@@ -19808,47 +20253,6 @@ int main()
 }
 
 
-{cxx-const-return} *cxx-return* 
-EC++03. When `return by value` for user type, use const to raise error when
-mistake happens:
-
-const Rational operator*( const Rational& lhs, const Rational& rhs );
-
-if( a * b = c )       // typo. was meant if( a*b == c )
-
-If these are built-in type, this is flat-out error but not for class type. 
-
-* The returned `built-in` type is an `rvalue` and can't be modified. EXPC++43.
-* Even if it were legal, the fact that it returns object by value would mean
-  that a copy would be modified and that's not the behavior you want. 
-
-So better to be prepared for this kind of mistakes. Also this is an example of
-returning a copy than reference.
-
-// RCCG
-F.20: For “out” output values, prefer return values to output parameters
-
-Note A struct of many (individually cheap-to-move) elements may be in
-aggregate expensive to move. It is not recommended to return a const value.
-Such older advice is now obsolete; it does not add value, and it interferes
-with move semantics.  const vector<int> fct(); // bad: that "const" is more
-trouble than it is worth
-
-vector<int> g(const vector<int>& vx)
-{
-  // ...
-  fct() = vx; // prevented by the "const"
-  // ...
-  return fct(); // expensive copy: move semantics suppressed by the "const"
-}
-
-The argument for adding const to a return value is that it prevents (very
-rare) accidental access to a temporary. The argument against is prevents
-(very frequent) use of move semantics.
-
-// So better to allow move semantics than to prevent access to a temporary
-
-
 {const-on-base-type}
 When use const with type alias, it can be surprising. For example,
 
@@ -20018,127 +20422,8 @@ d: 6.28
 rd: 3                   // not changed, temporary
 
 
-<const-reference-to-return> *cxx-return*
-// std::string YVCloudAuth::getAuthToken() const;
-
-try
-{
-  const std::string& token = cloudAuth->getAuthToken();
-  Header.replace("<add-youview-token>", token.c_str());
-}
-
-You're taking a reference to a temporary object
-
-That's allowed.
-
-exactly, this const reference binds to this rvalue, extending it's lifetime
-for the lifetime of the reference itself. But in practice it's like giving a
-temp an alias. see below for a nice explanation
-
-
-http://herbsutter.com/2008/01/01/gotw-88-a-candidate-for-the-most-important-const/
-
-GotW #88: A Candidate For the "Most Important const"
-
-Q1: Is the following code legal C++?
-
-    // Example 1
-
-    string f() { return "abc"; }
-
-    void g() {
-      const string& s = f();
-      cout << s << endl;    // can we still use the "temporary" object?
-    }
-
-
-A1: Yes.
-
-This is a C++ feature. the code is valid and does exactly what it appears to
-do.
-
-Normally, a temporary object lasts only until the end of the full expression
-in which it appears. However, C++ deliberately specifies that binding a
-temporary object to a reference to const on the stack 'lengthens' the lifetime
-of the temporary to the 'lifetime' of the reference itself, and thus avoids
-what would otherwise be a common dangling-reference error. In the example
-above, the temporary returned by f() lives until the closing curly brace.
-(Note this only applies to stack-based references. It doesn't work for
- references that are members of objects.)
-
-
-Q2: What if we take out the const. is Example 2 still legal C++?
-
-    // Example 2
-
-    string f() { return "abc"; }
-
-    void g() {
-      string& s = f();       // still legal?
-      cout << s << endl;
-    }
-
-A2: No.
-
-The "const" is important. The first line is an error and the code won't
-compile portably with this reference to non-const, because f() returns a
-temporary object (i.e., `rvalue`) and only lvalues can be bound to references
-to non-const.
-
-Note: Visual C++ does allow Example 2 but emits a "nonstandard extension used"
-warning by default. A conforming C++ compiler can always allow
-otherwise-illegal C++ code to compile and give it some meaning — hey, it could
-choose to allow inline COBOL if some kooky compiler writer was willing to
-implement that extension, maybe after a few too many Tequilas. For some kinds
-of extensions the C++ standard requires that the compiler at least emit some
-diagnostic to say that the code isn’t valid ISO C++, as this compiler does.
-
-Note: gcc 4.7.2 and see 'rvalue'.
-
-<ex>
-I once heard Andrei Alexandrescu give a talk on ScopeGuard (invented by Petru
-    Marginean) where he used this C++ feature and called it "the most important
-const I ever wrote." And this brings us to the Guru Question, which highlights
-the additional subtlety that Andrei's code deftly leveraged.
-
-Guru Question
-
-Q3: When the reference goes out of scope, which destructor gets called?
-A3: The same destructor that would be called for the temporary object. It's just
-being delayed.
-
-Corollary: You can take a const Base& to a Derived temporary and it will be
-destroyed without virtual dispatch on the destructor call.
-
-This is nifty. Consider the following code:
-
-    // Example 3
-
-    Derived factory(); // construct a Derived object
-
-    void g() {
-      const Base& b = factory(); // calls Derived::Derived here
-      // use b
-    } // calls Derived::~Derived directly here - not Base::~Base + virtual dispatch!
-
-Does this work in practice on real compilers? Yes: Every compiler I have access
-to calls the correct Derived destructor, including even ancient Borland 5.5 and
-Visual C++ 6.0 (and Digital Mars, though DM calls the destructor at the wrong
-    time, as noted above).
-
-Andrei leverages this subtlety (of course) in his ScopeGuard implementation to
-avoid making the implementation classes' destructors virtual at all, which is
-okay in that case because those classes otherwise have no need for one. 
-
-
-<cxx-const-to-non-const-error>
-:19:21: error: invalid initialization of non-const reference of type 
-  ‘std::string& {aka std::basic_string<char>&}’ 
-  from an `rvalue` of type ‘std::string {aka std::basic_string<char>}’
-
-
 ={============================================================================
-*kt_dev_cxx_0000* cxx-const-member-function cpp-this
+*kt_dev_cxx_0000* cxx-const-member-function cxx-this
 
 {cxx-overload-condition}
 Member functions differing only in their constness can be overloaded. Conditons
@@ -21622,7 +21907,7 @@ int countUnique(const T &s)
     {
     }
         
-    // error on "++it"
+    // *cxx-const* error on "++it since it itself is const see cxx-range-for
     for (const auto it = s.begin(); it != s.end(); ++it)
     {
         if (chars.find(*it) == T::npos)
@@ -22325,11 +22610,20 @@ of class because it's global objects.
 // xxx.h
 class Foo {
   private:
-    static double interest;         // declare
+    static double interest;                         // declare
 };
 
 // xxx.cpp
-double Foo::interest = initRate();  // define and init
+double Foo::interest = initRate();                  // define and init
+
+//
+class Foo {
+private:
+    static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
+    static const std::string DIGIT_NOT_FOUND;
+};
+
+const std::string Soundex::DIGIT_NOT_FOUND{"*"};
 
 
 {class-const} EC++02
@@ -28296,96 +28590,6 @@ if (Derived *dp = dynamic_cast<Derived*>(bp))
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-design-no-reference-to-internals
-
-EC++28, avoid returning handles to object internals
-
-Here internals means everything except public interface and includes private
-and protected member function. If returns handles (iterator, pointer and
-    reference) to internals, causes three problems: breaks encapsulatation,
-constness, and dangling-handles.
-
-{compromising-encapsulation-and-constness}
-The pass by reference is more efficient than pass by value and the interface
-offer client a way to learn what rectangle's points are:
-
-class Rectangle {
-  public:
-    Point& upperLeft() const { return pData->ulhc; }
-
-  private:
-    std::shared_ptr<RectData> pData;
-};
-
-Is it okay? NO because client can change its value:
-
-// use
-const Rectangle rec( ... );
-rec.upperLeft().setX(50);
-
-The problem is that makes memeber data effectively public as returns reference
-to it from a public member function since this is *cpp-const-bitwise*
-
-
-The solution is that it offers read-only access:
-
-class Rectangle {
-  public: >
-   const Point& upperLeft() const { return pData->ulhc; }
-
-  private:
-   std::shared_ptr<RectData> pData;
-};
-
-Similar to the example of {const-member-func}
-
-<ex>
-
-using namespace std;
-
-class Sample {
-  private:
-    int val;
-
-  public:
-    Sample() : val(10) {}
-    int& getx() { return val;}
-    void printx() { cout << val << endl; }
-};
-
-int _tmain(int argc, _TCHAR* argv[])
-{
-  Sample sam;
-  cout << "------" << endl;
-  sam.printx();
-  sam.getx() = 20;
-  cout << "------" << endl;
-  sam.printx();
-
-  return 0;
-}
-
-This changes private member val to 20.
-
-
-{dangling-handles}
-class GUIObject { ... }
-const Rectangle boundingBox( const GUIObject& obj );
-
-// use
-GUIObject* pgo;
-...
-const Point* pUpperLeft = &( boundingBox(*pgo).upperLeft() );
-
-This returns a temporary Rectangle and returns its upper member. The problem
-is this temporary is destroyed when this statement ends and pUpperLeft will
-dangle even if const use.
-
-vector and string's [] operator returns reference but these are exceptions to
-this rule, but not a general rule. Better not use [] operator.
-
-
-={============================================================================
 *kt_dev_cxx_0000* cxx-design-interface-first
 
 See *cxx-sp-ex-strblob-example* as well.
@@ -29537,25 +29741,46 @@ int a3 = Warning::green;                    // error; no conversion.
 
 
 {cxx-enum-hack}
-The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
-be used where an integral value is required. Called `enum-hack`. 
+May be true for C, but not for C++?
 
-int i = color::red;                       // ok
-int j = peppers::red;                     // error since it is scoped
+// The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
+// be used where an integral value is required. Called `enum-hack`. 
+// 
+// int i = color::red;                       // ok
+// int j = peppers::red;                     // error since it is scoped
+// 
+// open_modes readfile = open_modes::input;  // ok
+// open_modes readfile = 2;                  // error
+// 
+// enum color eyes = green;                  // ok
+// enum color eyes = 2;                      // ok
+// 
+// class GamePlayer {
+//   private:
+//     enum { NumTurns = 5; }
+// 
+//     int scopes[NumTurns];
+//     ...
+// };
 
-open_modes readfile = open_modes::input;  // ok
-open_modes readfile = 2;                  // error
 
-enum color eyes = green;                  // ok
-enum color eyes = 2;                      // ok
+// cxx-enum, unscoped enum, enum hack
 
-class GamePlayer {
-  private:
-    enum { NumTurns = 5; }
+enum color { red, yellow, green };          // unscoped
+enum class peppers { red, yellow, green };  // scoped
 
-    int scopes[NumTurns];
-    ...
-};
+TEST(CxxFeaturesTest, UseEnumHack)
+{
+    int value_1 = color::yellow;
+
+    // error: cannot convert ‘peppers’ to ‘int’ in initialization
+    // int value_2 = peppers::red;
+
+    color set_1 = green;
+
+    // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+    color set_2 = 2;
+}
 
 
 {underlying-type}
@@ -32904,6 +33129,24 @@ void t_util_01()
 }
 
 
+<ex>
+const std::vector<std::pair<uint32_t, std::string>> roman_table{
+  std::make_pair(1000u, "M"),
+  std::make_pair(900u, "CM")
+};
+
+const auto roman_table{
+  std::make_pair(1000u, "M"),
+  std::make_pair(900u, "CM")
+};
+
+// can use cxx-range-for on roman_table but pair do not support iterator. How?
+// auto makes it class initializer_list which supports iterator
+// *cxx-initializer-list* 
+
+for(const auto &e : roman_table)
+
+
 <move-or-copy>
 You can influence the type make_pair() yields by forcing either move or
 reference semantics.
@@ -33963,11 +34206,41 @@ c.erase(beg,end)    Removes all elements of the range [beg,end) and returns
 
 c.clear()           Removes all elements (empties the container)
 
-coll.insert( { word, 1} );    // *C++11* most convenient way
+coll.insert( { word, 1} );    // *cxx-map-insert* *C++11* most convenient way
 coll.insert( std::map<std::string,int>::value_type( word, 1) );
 coll.insert( decltype(coll)::value_type( word, 1) );
 coll.insert( make_pair(word, 1) );
 coll.insert( pair<string, size_t>(word, 1) );
+
+*TN*
+As with set, different return applies to map as well.
+
+TEST(CxxStlTest, HowMapInsertWorks)
+{
+    // cannot be a const map since operator[] is for non-const.
+
+    map<unsigned int, string> pmap{ 
+        {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    // PRINT_M_ELEMENTS(pmap);
+
+    pmap[3] = "threee";
+    pmap[3] = "threeee";
+    pmap[3] = "threeeee";
+    pmap[3] = "threeeeee";
+
+    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+
+    // PRINT_M_ELEMENTS(pmap);
+
+    pmap.insert({3, "third"});
+    pmap.insert({3, "thirdd"});
+    pmap.insert({3, "thirddd"});
+    pmap.insert({3, "thirdddd"});
+
+    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+}
 
 
 <return-position>
@@ -34708,7 +34981,7 @@ For nonconstant vectors, `these operations return a reference` to the element.
 Thus, you could modify an element by using one of these operations, provided
 it is not forbidden for other reasons.
 
-c[idx]      Returns the element with index idx (no range checking)
+c[idx]      Returns the element with index idx (`no range checking`)
 c.at(idx)   Returns the element with index idx (throws range-error exception if
             idx is out of range)
 
@@ -35780,6 +36053,10 @@ namespace std {
 }
 
 
+<ex>
+set<int, greater<int>> iset{13, 9, 7, 10, 2, 11, 12, 8, 7};
+
+
 {cxx-set-type-requirement}
 The elements of a set or a multiset may have any type T that is 'comparable'
 according to the sorting criterion. The optional second template argument
@@ -36027,6 +36304,27 @@ namespace std {
       typedef _Compare                                      key_compare;
       typedef _Alloc                                        allocator_type;
       ...
+
+      // *cxx-map-insert*
+      /**
+       *  @brief Attempts to insert a std::pair into the %map.
+
+       *  @param __x Pair to be inserted (see std::make_pair for easy
+       *	     creation of pairs).
+       *
+       *  @return  A pair, of which the first element is an iterator that 
+       *           points to the possibly inserted pair, and the second is 
+       *           a bool that is true if the pair was actually inserted.
+       *
+       *  This function attempts to insert a (key, value) %pair into the %map.
+       *  A %map relies on unique keys and thus a %pair is only inserted if its
+       *  first element (the key) is not already present in the %map.
+       *
+       *  Insertion requires logarithmic time.
+       */
+      std::pair<iterator, bool>
+      insert(const value_type& __x)
+      { return _M_t._M_insert_unique(__x); }
     };
 }
 
@@ -36082,9 +36380,9 @@ const T& map::operator at (const key_type& key) const
 
 
 <cxx-map-fetch> <associative-array> <cpp-map-default-value>
-The 'both' maps and unordered maps can also be thought of as an
+The both maps and unordered maps can also be thought of as an
 `associative-array`, an array whose index is not an integer value. As a
-consequence, both containers provide the subscript operator [ ].
+consequence, both containers provide the subscript operator[].
 
 However, that the subscript operator does not behave like the usual subscript
 operator for arrays: Not having an element for an index is 'not' an error. A
@@ -36142,7 +36440,7 @@ map<string, size_t> word_count;
 while( cin >> word )
    ++word_count[word];
 
-// *C++11* *cpp-pair*
+// *C++11* *cxx-pair*
 for( const auto &w : word_count )
    cout << w.first << " occurs" << 
           w.second << ((w.second>1) ? "times" : " time") << endl;
@@ -36209,42 +36507,50 @@ for (pos = coll.begin(); pos != coll.end(); ++pos) {
   }
 }
 
+
 <ex>
-#include <iostream>
-#include <map>
-#include <algorithm>
-
-using namespace std;
-
-int main()
+MATCHER_P(EqPair, expected, "")
 {
-  // both works
-  // map<float,float> coll = { {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
-  map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
-
-  auto posKey = coll.find(3.0);
-  if( posKey != coll.end() )
-  {
-    cout << "key 3.0 found!(" << posKey->first << "," << 
-      posKey->second << ")" << endl;
-  }
-
-
-  // *algo-find-if* see const since it's *cxx-algo-non-modifying*
-
-  auto posVal = find_if( coll.cbegin(), coll.cend(),
-      [] ( const pair<float,float> &elem ) {
-        return elem.second == 3.0;
-        } );
-  if( posVal != coll.end() )
-  {
-    cout << "value 3.0 found!(" << posVal->first << "," << 
-      posVal->second << ")" << endl;
-  }
+    return arg->first == expected.first && arg->second == expected.second;
 }
 
-key 3.0 found!(3,2)
-value 3.0 found!(4,3)
+TEST(CxxStlTest, HowMapFindWorks)
+{
+    map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+
+    auto posKey = coll.find(3.0);
+    if( posKey != coll.end() )
+    {
+        // cout << "key 3.0 found!(" << posKey->first << "," << 
+        //     posKey->second << ")" << endl;
+        ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
+        // ASSERT_THAT(posKey->first, Eq(3));
+        // ASSERT_THAT(posKey->second, Eq(2));
+    }
+
+
+    // *algo-find-if-const* error if there is no const on predicate. 
+    // since it's *cxx-algo-non-modifying* ?
+    // have to specify element type when use lambda
+
+    auto posVal = find_if( coll.cbegin(), coll.cend(),
+
+            // all of them works *cxx-decltype*
+            // [] ( const pair<float,float> &elem ) {
+            // [] ( const map<float,float>::value_type &elem ) {
+            // [] ( const decltype(coll)::value_type &elem ) {
+           
+            [] ( const decltype(coll)::value_type &elem ) {
+            return elem.second == 3.0;
+            } );
+    if( posVal != coll.end() )
+    {
+        // cout << "value 3.0 found!(" << posVal->first << "," << 
+        //     posVal->second << ")" << endl;
+        ASSERT_THAT(posVal->first, Eq(4));
+        ASSERT_THAT(posVal->second, Eq(3));
+    }
+}
 
 
 <ex> print duplicates in multimap
@@ -36258,6 +36564,7 @@ int main()
 
   std::multimap<std::string, std::string> authors;
 
+  // *cxx-map-insert*
   authors.insert( {"Kit, Park", "How to get through"} );
   authors.insert( {"Barth, John", "Sot-Weed Factor"} );
   authors.insert( {"Barth, John", "Lost in the Funhouse"});
@@ -36363,7 +36670,7 @@ max found (7, seventh)
 {seven, seventh, 7th, }
 
 
-{cpp-map-assign}
+<cxx-map-copy-assign>
 
 #include<iostream>
 #include<iomanip>
@@ -39181,7 +39488,10 @@ algorithms:
 3. You can use the return value of the for_each() *algo-for-each*
 
 
-<pass-by-reference>
+<pass-by-reference> *algo-generate*
+
+10.1.2 Function Objects with Internal State
+
 To pass a function object by reference, you simply have to qualify the call of
 the algorithm so that the function object type is a reference.
 
@@ -39990,14 +40300,14 @@ find_if requires `unary predicate` but want to use more complicated predicate.
       _Value& _M_value;
 
       _Iter_equals_val(_Value& __value)
-	: _M_value(__value)
+	     : _M_value(__value)
       { }
 
       // shows to use operator==()
       template<typename _Iterator>
-	bool
-	operator()(_Iterator __it)
-	{ return *__it == _M_value; }
+	   bool
+	   operator()(_Iterator __it)
+	   { return *__it == _M_value; }
     };
 
   template<typename _Value>
@@ -40043,7 +40353,7 @@ find_if requires `unary predicate` but want to use more complicated predicate.
   */
   template<typename _InputIterator, typename _Predicate>
     inline _InputIterator
-    find_if(_InputIterator __first, _InputIterator __last,
+    `find_if`(_InputIterator __first, _InputIterator __last,
 	    _Predicate __pred)
     {
       // concept requirements
@@ -40063,7 +40373,7 @@ template<typename _InputIterator, typename _Predicate>
   __find_if(_InputIterator __first, _InputIterator __last,
       _Predicate __pred, input_iterator_tag)
   {
-    while (__first != __last && !bool(__pred(*__first)))
+    while (__first != __last && !bool(`__pred(*__first)`))
       ++__first;
     return __first;
   }
@@ -40192,7 +40502,9 @@ using namespace std::placeholders;
 // when case sensitivity doesn't matter.
 char myToupper (char c)
 {
-  // *cpp-toupper*
+  // *cxx-toupper*
+  // /usr/include/ctype.h:127:12: note: int toupper(int)
+
   std::locale loc;
   return std::use_facet<std::ctype<char>>(loc).toupper(c);
 }
@@ -42156,12 +42468,37 @@ namespace std {
       typedef typename _Traits::char_type             value_type;
       typedef typename _CharT_alloc_type::size_type   size_type;
 
+      // *cxx-string-const*
+      // when encoding.back() returns reference:
+      //
+      // this works:
+      // return std::string(1, encoding.back());
+      // return std::string{encoding.back()};
+      //
+      // this emits const error:
+      // return std::string(encoding.back());
+
       /**
        *  @brief  Construct string as copy of a C string.
        *  @param  __s  Source C string.
        *  @param  __a  Allocator to use (default is default allocator).
        */
       basic_string(const _CharT* __s, const _Alloc& __a = _Alloc());
+
+      /**
+       *  @brief  Construct string as multiple characters.
+       *  @param  __n  Number of characters.
+       *  @param  __c  Character to use.
+       *  @param  __a  Allocator to use (default is default allocator).
+       */
+      basic_string(size_type __n, _CharT __c, const _Alloc& __a = _Alloc());
+
+      /**
+       *  @brief  Construct string from an initializer %list.
+       *  @param  __l  std::initializer_list of characters.
+       *  @param  __a  Allocator to use (default is default allocator).
+       */
+      basic_string(initializer_list<_CharT> __l, const _Alloc& __a = _Alloc());
 
       /**
        *  @brief  Compare to a string.
@@ -42224,6 +42561,41 @@ namespace std {
       size_type
       length() const _GLIBCXX_NOEXCEPT
       { return _M_rep()->_M_length; }
+
+      // cxx-string-insert
+
+      /**
+       *  @brief  Insert multiple characters.
+       *  @param __p  Iterator referencing location in string to insert at.
+       *  @param __n  Number of characters to insert
+       *  @param __c  The character to insert.
+       *  @throw  std::length_error  If new length exceeds @c max_size().
+       *
+       *  Inserts @a __n copies of character @a __c starting at the
+       *  position referenced by iterator @a __p.  If adding
+       *  characters causes the length to exceed max_size(),
+       *  length_error is thrown.  The value of the string doesn't
+       *  change if an error is thrown.
+      */
+      void
+      insert(`iterator __p`, size_type __n, _CharT __c)
+      {	this->replace(__p, __p, __n, __c);  }
+
+      /**
+       *  @brief  Insert value of a string.
+       *  @param __pos1  Iterator referencing location in string to insert at.
+       *  @param __str  The string to insert.
+       *  @return  Reference to this string.
+       *  @throw  std::length_error  If new length exceeds @c max_size().
+       *
+       *  Inserts value of @a __str starting at @a __pos1.  If adding
+       *  characters causes the length to exceed max_size(),
+       *  length_error is thrown.  The value of the string doesn't
+       *  change if an error is thrown.
+      */
+      basic_string&
+      insert(`size_type __pos1`, const basic_string& __str)
+      { return this->insert(__pos1, __str, size_type(0), __str.size()); }
     };
 
 // bits/char_traits.h
@@ -42288,38 +42660,7 @@ namespace std {
 
 C++ SLR 13.2
 
-{operations}
-
-<initialization> operation-arg-scheme
-The operations that manipulate the value of a string have several overloaded
-versions that use the argument scheme:
-
-const string & str 
-   The whole string str
-
-const string & str, size_type idx, size_type num 
-   At most, the first num characters of str starting with index idx
-
-const char* cstr 
-   The whole C-string cstr
-
-const char* chars, size_type len 
-   len characters of the character array chars
-
-char c 
-   The character c
-
-size_type num, char c 
-   num occurrences of character c
-
-const_iterator beg, const_iterator end 
-   All characters in range [beg,end) 
-
-initlist 
-   All characters in initlist (since C++11)
-
-
-{string-and-c-string}
+<cxx-string-ctor>
 In standard C++, the type of string literals was changed from char* to const
 char*. 
 
@@ -42330,6 +42671,9 @@ char*.
   used as a special character in an ordinary C-string to mark the end of the
   string. The character '\0' may be part of a string just like every other
   character.
+
+The operations that manipulate the value of a string have several overloaded
+versions.
 
 string s(cstr);
 Creates a string s that is initialized by the C-string cstr
@@ -42352,6 +42696,48 @@ string s2( s1 );           // direct form of initialzation.
 string s2 = s1;            // copy form of initialzation.
 
 string s4( n, 'c' );
+
+
+TEST(CxxStringTest, RunStringCtors)
+{
+    string s1{"zoo"};
+    EXPECT_EQ( s1, "zoo");
+
+    string s2("zoo");
+    EXPECT_EQ( s1, "zoo");
+
+    char letter = 'A';
+
+    // *cxx-string-const*
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // string s3(letter);
+
+    // ok since:
+    //
+    // /**
+    //  *  @brief  Append a character.
+    //  *  @param __c  The character to append.
+    //  *  @return  Reference to this string.
+    //  */
+    // basic_string&
+    // operator+=(_CharT __c)
+    // { 
+    //  this->push_back(__c);
+    //  return *this;
+    // }
+    
+    string s4;
+    s4 += letter;
+    EXPECT_EQ( s4, "A");
+
+    string s5;
+
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // s5.append(letter);
+    
+    s5.append(1, letter);
+    EXPECT_EQ( s5, "A");
+}
 
 
 // {string-nullptr} <caution> *string-element-access*
@@ -42503,7 +42889,14 @@ s.insert(1, aString);     // s: page
 s.insert(1,"ersifl");     // s: persiflage
 
 
-<ex> cxx-string-padding
+<ex> cxx-string-insert-padding
+
+// Table 13.7. Iterator Operations of Strings
+//
+// s.insert(pos,num,c) 
+//
+// Inserts num occurrences of the character c at iterator position pos and
+// returns the iterator position of the first new character
 
 // = 05 ======
 // XXXXXXXXXXXXXXXXXfoo
@@ -42628,7 +43021,7 @@ To remove all characters in a string:
 
 s = "";     // assign the empty string
 s.clear();  // clear contents
-s.erase();  // erase all characters
+s.erase();  // same as s.erase(0, npos), erase all characters
 
 
 <inefficient-concatenation>
@@ -42755,10 +43148,10 @@ size_type string::find_first_not_of (const string& str) const
 size_type string::find_first_not_of (const string& str, size_type idx) const
 
 * These functions search for the first character that is or is not also an
-  element of the string str. starting at idx.
+  element of the string str. `starting at idx.`
 
 * These functions return the index of that character or substring when
-  successful or string::npos if they fail.
+  successful or `string::npos if they fail.`
 
 *TN*
 return index of the found which is difference from 0.
@@ -43474,7 +43867,7 @@ int main(int argc, char* argv[])
 stoi
 
 
-{gxx-string-print-char} *cxx-stream*
+{cxx-string-print-char} *cxx-stream*
 
 How to print char value itself but not a printable char? Use +saved_input trick.
 http://www.cs.technion.ac.il/users/yechiel/c++-faq/print-char-or-ptr-as-number.html
@@ -43501,17 +43894,16 @@ int t_string_04()
 
 
 ={============================================================================
-*kt_dev_stl_074* string: iterator support
+*kt_dev_cxx_0000* cxx-string-iterator
 
-{iterator-support}
 A string is an ordered collection of characters. As a consequence, the C++
-standard library provides an interface for strings that lets you use them as STL
-containers. 
+standard library provides an interface for strings that lets you use them as
+STL containers. 
 
 String iterators are random-access iterators. The exact type is implementation
 defined, but string iterators are often defined simply as ordinary pointers.
 
-<example> algorithm-search, algorithm-transform
+<ex> algorithm-search, algorithm-transform
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -43560,7 +43952,7 @@ uppered : THE ZIP CODE OF BRAUNSCHWEIG IN GERMANY IS 38100
 substring "Germany" found at index 32
 
 
-<example> algorithm-unique
+<ex> algorithm-unique
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -43686,6 +44078,27 @@ int main(int argc, char* argv[])
  ,?Haeehlloooruwy
 
 <Q> why still duplicates?
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-string-raw
+
+// { "address": {
+//          "road":"Drury Ln",
+//          "city":"Fountain",
+//          "state":"CO",
+//          "country":"US" }}
+
+TEST(CxxStringTest, UseRawString)
+{
+    const std::string s = R"({ "address": {
+         "road":"Drury Ln",
+         "city":"Fountain",
+         "state":"CO",
+         "country":"US" }})";
+
+    std::cout << s << std::endl;
+}
 
 
 ={============================================================================
@@ -44469,9 +44882,11 @@ auto p6 = make_shared<vector<sting>>();
 
 
 <cxx-sp-make-shared>
-shared_ptr<T> sp(new X(...)) performs two allocations: one for X and one for
-the control block used, for example, by the shared pointer to manage its use
-count. 
+
+shared_ptr<T> sp(new X(...)); 
+  
+performs two allocations: one for X and one for the control block used, for
+example, by the shared pointer to manage its use count. 
   
 Using make_shared<T>(...) instead is considerably faster, performing only one
 allocation, and safer because a situation where the allocation of X succeeds
@@ -47865,7 +48280,7 @@ uninitialized_fill_n( q, vi.size(), 42 );
 ={============================================================================
 *kt_dev_cxx_0000* cxx-chrono cxx-time
 
-RCLR 5.7.2 Durations
+CLR 5.7.2 Durations
 
 A duration is a combination of a value representing the number of ticks and a
 fraction representing the unit in seconds. For example:
@@ -49544,20 +49959,16 @@ o software transactional memory (STM)
 
 
 ={============================================================================
-*kt_dev_ccon_004* cpp-con-mutex cpp-con-lock-guard cpp-race-condition thread-safe stack
+*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
 
-{cpp-mutex}
+{cxx-mutex}
 Mutexes are the most general of the data-protection mechanisms. But they're
 not a silver bullet; it's important to structure your code to protect the
 right data and avoid race conditions inherent in your interfaces. Mutexes also
 come with their own problems, in the form of a deadlock and protecting either
 too much or too little data.
 
-<cpp-lock-guard>
-Not recommended practice to call the member functions, lock() and unlock(),
-    directly, because this means that you have to remember to call unlock() on
-    every code path out of a function, including those due to exceptions.
-
+<cxx-lock-guard>
 std::lock_guard class template, which implements that RAII idiom for a mutex;
 
 #include <mutex>
@@ -49578,12 +49989,8 @@ bool list_contains(int value_to_find)
       != some_list.end();
 }
 
-Can encapsulate the functionality and enforce the protection and it's common
-to group the mutex and the protected data together in a class rather than use
-global variables.
 
-
-{not-silver-bullet} {design-considerations}
+{not-silver-bullet}
 If all the member functions of the class lock the mutex before accessing any
 other data members and unlock it when done, the data is nicely protected from
 all comers.
@@ -49600,8 +50007,8 @@ data and that there are no backdoors.
 
 
 <do-not-pass-protected-data>
-If do careful design, the data is safe now? No. If you dig a little deeper,
-it's not that straightforward. Nothing ever is.
+If do careful design, the data is safe now? No. If dig a little deeper, it's
+not that straightforward. Nothing ever is.
 
 As well as checking that the member functions don't pass out pointers or
 references to their callers. also to check that they don't pass such pointers
@@ -49668,24 +50075,89 @@ Just because individual operations on the list are safe, you can still get
 race conditions, even with a really simple interface since interface is not
 well designed. Consider std::stack<>.
 
-template< typename T, typename Container=std::deque<T> >
-class stack
+// bits/stl_stack.h
+
+template<typename _Tp, typename _Sequence = deque<_Tp>> 
+    class stack
 {
-    public:
 
-        // ...
-        
-        bool empty() const;
-        size_t size() const;
-        
-        T& top();
-        T const& top() const;
+  /**
+   *  Returns true if the %stack is empty.
+   */
+  bool
+    empty() const
+    { return c.empty(); }
 
-        void push(const T& );
-        void push(T &&);
+  /**  Returns the number of elements in the %stack.  */
+  size_type
+    size() const
+    { return c.size(); }
 
-        void pop();
+  /**
+   *  Returns a read/write reference to the data at the first
+   *  element of the %stack.
+   */
+  reference
+    top()
+    {
+      __glibcxx_requires_nonempty();
+      return c.back();
+    }
+
+  /**
+   *  Returns a read-only (constant) reference to the data at the first
+   *  element of the %stack.
+   */
+  const_reference
+    top() const
+    {
+      __glibcxx_requires_nonempty();
+      return c.back();
+    }
+
+  /**
+   *  @brief  Add data to the top of the %stack.
+   *  @param  __x  Data to be added.
+   *
+   *  This is a typical %stack operation.  The function creates an
+   *  element at the top of the %stack and assigns the given data
+   *  to it.  The time complexity of the operation depends on the
+   *  underlying sequence.
+   */
+  void
+    push(const value_type& __x)
+    { c.push_back(__x); }
+
+#if __cplusplus >= 201103L
+  void
+    push(value_type&& __x)
+    { c.push_back(std::move(__x)); }
+
+  template<typename... _Args>
+    void
+    emplace(_Args&&... __args)
+    { c.emplace_back(std::forward<_Args>(__args)...); }
+#endif
+
+  /**
+   *  @brief  Removes first element.
+   *
+   *  This is a typical %stack operation.  It shrinks the %stack
+   *  by one.  The time complexity of the operation depends on the
+   *  underlying sequence.
+   *
+   *  Note that no data is returned, and if the first element's
+   *  data is needed, it should be retrieved before pop() is
+   *  called.
+   */
+  void
+    pop()
+    {
+      __glibcxx_requires_nonempty();
+      c.pop_back();
+    }
 };
+
 
 The problem is not about mutex-based implementation. it's an interface problem
 so the race condition would still occur with a lock-free implementation. this
@@ -49702,35 +50174,33 @@ if(!s.empty())                            <-
     do_something(value);
 }
 
-1. empty-and-top sequence
+* race betwen empty and top
 Calling top() on an empty stack is undefined. classic race.
 
-2. top-and-pop sequence
-One of the two values on the stack is discarded without ever having been read,
-    whereas the other is processed twice. another race and far more
-    'insidious'. there's never anything obviously wrong going on and the
-    consequence of the bug are far from the cause although depends on exactly
-    what do_something really dose.
+* race between top and pop
+Another race and far more 'insidious'. One of the two values on the stack is
+discarded without ever having been read, whereas the other is processed
+twice.There's never anything obviously wrong going on and the consequence of
+the bug are far from the cause although depends on exactly what do_something
+really dose.
 
 <option-1> note: this is a discusssion in Exceptional C++
-one that combine the calls to top() and pop() under the mutex. that is pop()
-  return the value as well as remove it from the stack. However, can leads to
-  issue if the copy constructor for the objects on the stack can throw an
-  exception.
+combine the calls to top() and pop() under the mutex. that is pop() return the
+value as well as remove it from the stack. However, can leads to issue if the
+copy constructor for the objects on the stack can throw an exception.
 
-Consider stack<vector<int>>. Now, a vector is a dynamically sized container,
-         so when you copy a vector the library has to allocate some more
-         memory from the heap in order to copy the contents. If the system is
-         heavily loaded, or there are significant resource constraints, this
-         memory allocation can fail, so the copy constructor for vector might
-         throw a std::bad_alloc exception. This is especially likely if the
-         vector contains a lot of elements. If the pop() function was defined
-         to return the value popped, as well as remove it from the stack, you
-         have a potential problem: the value being popped is returned to the
-         caller 'only' after the stack has been modified, but the process of
-         copying the data to return to the caller might throw an exception. If
-         this happens, the data just popped is lost; it has been removed from
-         the stack, but the copy was unsuccessful! 
+  Consider stack<vector<int>>. Now, a vector is a dynamically sized container,
+  so when you copy a vector the library has to allocate some more memory from
+  the heap in order to copy the contents. If the system is heavily loaded, or
+  there are significant resource constraints, this memory allocation can fail,
+  so the copy constructor for vector might throw a std::bad_alloc exception.
+  This is especially likely if the vector contains a lot of elements. If the
+  pop() function was defined to return the value popped, as well as remove it
+  from the stack, you have a potential problem: the value being popped is
+  returned to the caller 'only' after the stack has been modified, but the
+  process of copying the data to return to the caller might throw an
+  exception. If this happens, the data just popped is lost; it has been
+  removed from the stack, but the copy was unsuccessful! 
     
 The designers of the std::stack interface helpfully split the operation in
 two: get the top element (top()) and then remove it from the stack (pop()), so
@@ -49822,19 +50292,21 @@ class threadsafe_stack
         }
 };
 
-note: when initializer-list is not useful
+// *cxx-ctor-init-list* is not useful
 This stack implementation is actually copyable; the copy constructor locks the
 mutex in the source object and then copies the internal stack. You do the copy
 in the constructor body rather than the member initializer list in order to
 ensure that the mutex is held across the copy.
 
-note: no need empty() since use exception.
+// no need empty() since use exception.
 Your five stack operations have now become three: push(), pop(), and empty().
 Even empty() is superfluous.
 
 
 ={============================================================================
-*kt_dev_ccon_005* cpp-con-lock-guard cpp-deadlock
+*kt_dev_ccon_005* cxx-con-deadlock cxx-deadlock
+
+3.2.4 Deadlock: the problem and a solution
 
 <cpp-deadlock>
 deadlock does not just occur with locks: can occur any synchronization
@@ -49843,18 +50315,14 @@ because it is waiting for the other to finish."
 
 Simple rules that can help you to write deadlock-free code.
 
-o Avoid nested locks
-o Avoid calling user-supplied code while holding a lock
-o Acquire locks in a fixed or the same order
+* Avoid nested locks
+* Avoid calling user-supplied code while holding a lock
+* Acquire locks in a fixed or the same order
 
-Although fixed order used, deadlock can still occur. Consider that use a mutex
-to protect each instance of the same class, use operation that exchanges data
-between two instances. The mutexes on both instances must be locked. If two
-threads calls this operation with the parametars(instances) swapped then you
-have deadlock. 
 
-std::lock() can lock two or more mutexes at 'once' without risk of deadlock and
-provides 'all-or-nothing' semantics.
+<cxx-con-std-lock>
+std::lock() can lock two or more mutexes at 'once' without risk of deadlock
+and provides 'all-or-nothing' semantics.
 
 class X
 {
@@ -49882,9 +50350,9 @@ class X
 };
 
 
-o Use a lock hierarchy
+<cxx-con-lock-hierarchy>
 
-This is really a particular case of lock-ordering and can provide a means of
+This is really `a particular case of lock-ordering` and can provide a means of
 checking at runtime. The idea is to divide an application into 'layers' and
 identify all the mutexes that may be locked in any given layer.
 
@@ -49928,13 +50396,18 @@ void thread_b()
     other_stuff();
 }
 
-1. thread_b() is not fine. this does mean that can't hold two locks at the same time if they're the
-same level in the hierarchy so hand-over-hand locking schemes require that each mutex in the chain
-have a lower value than the prior one which my be impractical in some cases.
+thread_b() is not fine. this does mean that can't hold two locks at the same
+time if they're the same level in the hierarchy so hand-over-hand locking
+schemes require that each mutex in the chain have a lower value than the prior
+one which my be impractical in some cases.
 
-<user-defined-mutex>
-2. show the use of std::lock_guard with user-defined mutex type. should have three member functions:
-lock, unlock and try_lock which forward to the same name on the underlying mutex. 
+
+<cxx-con-user-defined-mutex>
+
+Listing 3.8 A simple hierarchical mutex
+
+Show the use of std::lock_guard with user-defined mutex type. Have to have
+three member functions: lock, unlock and try_lock
 
 class hierarchical_mutex
 {
@@ -49944,6 +50417,8 @@ class hierarchical_mutex
     uisigned long previous_hierarchy_value;
 
     static thread_local unsigned long this_thread_hierarchy_value;
+
+    // hierarchy value should go from high to low
 
     void check_for_hierarchy_violation()
     {
@@ -49987,24 +50462,56 @@ class hierarchical_mutex
     }
 };
 
-// <thread-local> since it is declared thread_local, every thread has its 'own' copy
+// *cxx-static*
+// cxx-con-thread-local since it is declared thread_local, every thread has
+// its 'own' copy
+
 thread_local unsigned long
    hierarchical_mutex::this_thread_hierarchy_value( ULONG_MAX );
 
 
 ={============================================================================
-*kt_dev_ccon_006* cpp-con-unique-lock
+*kt_dev_ccon_006* cxx-con-unique-lock
 
 The standard library offers help in the form of an operation for acquiring
 several locks simultaneously with regard to deadlock problem.
 
 std::unique_lock provides more 'flexibility' than std::lock_guard.
 
-o std::defer_lock to indicate that the mutex should remian unlocked on
+* std::defer_lock to indicate that the mutex should remian unlocked on
   construction then later locked by calling std::unique_lock.lock().
 
-o std::uniqie_lock is typically larger and has a slight performance penalty so
+* std::uniqie_lock is typically larger and has a slight performance penalty so
   lock_guard is in preference if it suits.
+
+Listing 3.6 Using std::lock() and std::lock_guard in a swap operation
+
+class X
+{
+  private:
+    std::mutex m;
+
+  public:
+
+    friend void swap( X& lhs, X& rhs )
+    {
+      if( &lhs == &rhs )
+        return;
+
+      // lock two mutexes
+      std::lock( lhs.m, rhs.m );
+
+      // std::adopt_lock to indicate to std::lock_guard objects that the
+      // mutexes are 'already' locked.
+
+      std::lock_guard<std::mutex> lock_a( lhs.m, std::adopt_lock );
+      std::lock_guard<std::mutex> lock_b( rhs.m, std::adopt_lock );
+
+      swap( lhs.some_detail, rhs.some_detail );
+    }
+};
+
+Listing 3.9 Using std::lock() and std::unique_lock in a swap operation
 
 class X
 {
@@ -50029,18 +50536,21 @@ class X
 };
 
 
-={============================================================================
-*kt_dev_ccon_007* std::unique_lock and transferring mutex
+{flexible-unique-lock} like unique_ptr
+Because unique_lock instances don't have to own their associated mutexes, the
+ownership of a mutex can be transferred between instances by moving the
+instances around.
 
-{flexible-unique-lock}
-Because unique_lock instances don't have to own their associated mutexes, the ownership of a mutex
-can be transferred between instances by moving the instances around.
+One possible use is to allow a function to lock a mutex and transfer ownership
+of that lock to the caller, so the caller can then perform additional actions
+under the protection of the same lock.
 
-One possible use is to allow a function to lock a mutex and transfer ownership of that lock to the
-caller, so the caller can then perform additional actions under the protection of the same lock.
+lk is local variable and can be returned without calling std::move since the
+compiler takes care of calling the move constructor.
 
 std::unique_lock<std::mutex> get_lock()
 {
+    // some_mutex is 'extern'
     extern std::mutex some_mutex;
 
     std::unique_lock<std::mutex> lk( some_mutex );
@@ -50049,47 +50559,17 @@ std::unique_lock<std::mutex> get_lock()
     return lk;
 }
 
-note: lk is local variable and can be returned without calling std::move since the compiler takes
-care of calling the move constructor.
-
-note: some_mutex is 'extern'
-
 void process_data()
 {
     std::unique_lock<std::mutex> lk(get_lock());
     do_something();
 }
 
-<gatweay-class>
-One such usage is where the lock isn't returned directly but is a data member of a gateway class
-used to ensure correctly locked access to some protected data. 
 
-In this case, all access to the data is through this gateway class; when you wish to access the
-data, you obtain an instance of the gateway class (by calling a function such as get_lock() in the
-        preceding example), which acquires the lock. You can then access the data through member
-functions of the gateway object. 
-        
-When you're finished, you destroy the gateway object, which releases the lock and allows other
-threads to access the protected data. Such a gateway object may well be movable so that it can be
-returned from a function, in which case the lock object data member also needs to be movable.
-
-<manual-option>
-The flexibility of std::unique_lock also allows instances to relinquish their locks before they're
-destroyed. You can do this with the unlock() member function, just like for a mutex:
-std::unique_lock supports the same basic set of member functions for locking and unlocking as a
-mutex does, in order that it can be used with generic functions such as std::lock.
-
-
-={============================================================================
-*kt_dev_ccon_008* std::unique_lock and granulity
-
-Not only is it important to choose a sufficiently coarse lock granularity to ensure the required
-data is protected, but it's also important to ensure that a lock is held only for the operations
-that actually require it since holding the lock will 'delay' other threads unnecessary. less
-contention.
-
-std::unique_lock works well in this situation, because you can call unlock() when the code no longer
-needs access to the shared data and then call lock() again if access is required later in the code:
+<cxx-unique-lock-granulity>
+std::unique_lock works well in this situation, because you can call unlock()
+when the code no longer needs access to the shared data and then call lock()
+again if access is required later in the code:
 
 void get_and_process_data()
 {
@@ -50106,55 +50586,24 @@ void get_and_process_data()
     write_result( data_to_process, result );
 }
 
-The previous swap examples using locks must lock both instance. If you were trying to compare a
-simple data member that is int and is cheap to copy compared to big_data in previous examples then
-can minimize locking time by holding single lock as below?
-
-// listing 3.10
-
-class Y
-{
-    private:
-        int some_detail;
-        mutable std::mutex m;
-        int get_detail() const
-        {
-            std::lock_guard<std::mutex> lock_a(m);
-            return some_detail;
-        }
-    public:
-        Y(int sd):some_detail(sd){}
-        friend bool operator==(Y const& lhs, Y const& rhs)
-        {
-            if(&lhs==&rhs)
-                return true;
-            int const lhs_value=lhs.get_detail();
-            int const rhs_value=rhs.get_detail();
-            return lhs_value==rhs_value;
-        }
-};
-
-NO. this has changed the semantics of operations since compare values from different point in time.
-So comparison is meaningless and race condition.
-
-To be careful that the semantics of the operation are not changed in a problematic fashion.
-
 
 ={============================================================================
-*kt_dev_ccon_009* std::call_once and protecting during initialization
+*kt_dev_ccon_009* cxx-con-call-once
 
-One particularly extreme (but remarkably common) case is where the shared data needs protection only
-from concurrent access while it’s being initialized, but after that no explicit synchronization is
-required. This might be because the data is read-only once created, and so there are no possible
-synchronization issues, or it might be because the necessary protection is performed implicitly as
-part of the operations on the data.
+One particularly extreme (but remarkably common) case is where the shared data
+needs protection only from concurrent access while it’s being initialized, but
+after that no explicit synchronization is required. This might be because the
+data is read-only once created, and so there are no possible synchronization
+issues, or it might be because the necessary protection is performed
+implicitly as part of the operations on the data.
 
-It's for this reason that the C++ Standard provides a mechanism purely for protecting shared data
-during initialization.
+It's for this reason that the C++ Standard provides a mechanism purely for
+protecting shared data during initialization.
 
-Suppose you have a shared resource that's so expensive to construct that you want to do so only if
-it's actually required; maybe it opens a database connection or allocates a lot of memory. Lazy
-initialization such as this is common in single-threaded code
+Suppose you have a shared resource that's so expensive to construct that you
+want to do so only if it's actually required; maybe it opens a database
+connection or allocates a lot of memory. Lazy initialization such as this is
+common in single-threaded code
 
 std::shared_ptr<some_resource> resource_ptr;
 
@@ -50168,9 +50617,10 @@ void foo()
 }
 
 
-A naive translation to multithreaded code which cause unnecessary serialization of threads using the
-resource. This is because each thread must wait on the mutex in order to check whether the resource
-has already been initialized.
+A naive translation to multithreaded code which cause unnecessary
+serialization of threads using the resource. This is because each thread must
+wait on the mutex in order to check whether the resource has already been
+initialized.
 
 
 std::shared_ptr<some_resource> resource_ptr;
@@ -50190,30 +50640,10 @@ void foo()
 }
 
 
-<data-race>
-This so called "double-checked locking" is better?
-
-void undefined_behaviour_with_double_checked_locking()
-{
-    if(!resource_ptr)
-    {
-        std::lock_guard<std::mutex> lk(resource_mutex);
-        if(!resource_ptr)
-        {
-            resource_ptr.reset(new some_resource);
-        }
-    }
-    resource_ptr->do_something();
-}
-
-
-No it cause race condition since read to resource_ptr outside the lock and write inside the lock are
-not synchronized. May run on different instance. This is defined "data race".
-
-
 <std-once>
-C++ provides std::once_flag and std::call_once to handle this situation. Every thread can just use
-std::call_once and this do the same as "naive translation" but has a lower overhead.
+C++ provides std::once_flag and std::call_once to handle this situation. Every
+thread can just use std::call_once and this do the same as "naive translation"
+but has a lower overhead.
 
 
 std::shared_ptr<some_resource> resource_ptr;
@@ -50266,57 +50696,67 @@ As with std::thread and std::bind, used additional argument to call_once.
 
 
 note:
-It's worth noting that, like std::mutex, std::once_flag instances can't be copied or moved, so if
-you use them as a class member like this, you'll have to explicitly define these special member
-functions should you require them.
+It's worth noting that, like std::mutex, std::once_flag instances can't be
+copied or moved, so if you use them as a class member like this, you'll have
+to explicitly define these special member functions should you require them.
 
 
 <alternative-to-call-once>
-One scenario where there's a potential race condition over initialization is that of a local
-variable declared with static.
+One scenario where there's a potential race condition over initialization is
+that of a local variable declared with static.
 
-see <init-order-problem>
+*cxx-singleton* *cxx-init-order-problem*
 
-In C++11 this problem is solved: the initialization is defined to happen on exactly one thread, and
-no other threads will proceed until that initialization is complete, so the race condition is just
-over which thread gets to do the initialization rather than anything more problematic. This can be
-used as an alternative to std::call_once for those cases where a single global instance is required:
+In C++11 this problem is solved: the initialization is defined to happen on
+exactly one thread, and no other threads will proceed until that
+initialization is complete, so the race condition is just over which thread
+gets to do the initialization rather than anything more problematic. This can
+be used as an alternative to std::call_once for those cases where a single
+global instance is required:
 
-
-Protecting data only for initialization is a special case of a more general scenario: that of a
-rarely updated data structure. For most of the time, such a data structure is read-only and can
-therefore be merrily read by multiple threads concurrently.
-
-note: singleton is read-only
+Protecting data only for initialization is a special case of a more general
+scenario: that of a rarely updated data structure. For most of the time, such
+a data structure is read-only and can therefore be merrily read by multiple
+threads concurrently.
 
 
 ={============================================================================
-*kt_dev_ccon_010* boost::shared_lock and read-write lock
+*kt_dev_ccon_010* cxx-con-shared-lock cxx-boost-shared-lock
 
-For most of the time, such a data structure is read-only and can therefore be merrily read by
-multiple threads concurrently, but on occasion the data structure may need updating?
+<cxx-shared-lock> 
 
-What's needed is a different kind of mutex. This new kind of mutex is typically called a
-reader-writer mutex, because it allows for two different kinds of usage: exclusive access by a
-single "writer" thread or shared, concurrent access by multiple "reader" threads.
+3.3.2 Protecting rarely updated data structures
 
-The new C++ Standard Library doesn't provide such a mutex out of the box and is provided by the
-boost library, which is based on the proposal.
+This new kind of mutex is typically called a reader-writer mutex, because it
+allows for two different kinds of usage: exclusive access by a single “writer”
+thread or shared, concurrent access by multiple “reader” threads.
+
+The new C++ Standard Library doesn't provide such a mutex out of the box and
+is provided by the boost library, which is based on the proposal.
 
 note: 
-The performance is dependent on the number of processors involved and the relative workloads of the
-reader and updater threads. therefore important to profile the performance of the code on the target
-system to ensure that there's actually a benefit to the additional complexity.
-
-Typically, a given DNS entry will remain unchanged for a long period of time in many cases DNS
-entries remain unchanged for years. Although new entries may be added to the table from time to time
-as users access different websites, this data will therefore remain largely unchanged throughout its
-life.
+The performance is dependent on the number of processors involved and the
+relative workloads of the reader and updater threads. therefore important to
+profile the performance of the code on the target system to ensure that
+there's actually a benefit to the additional complexity.
 
 Those threads that don't need to update the data structure can instead use
-boost::shared_lock<boost::shared_mutex> to obtain shared access. This is used just the same as
-std::unique_lock, except that multiple threads may have a shared lock on the same
-boost::shared_mutex at the same time. 
+boost::shared_lock<boost::shared_mutex> to obtain shared access. This is used
+just the same as std::unique_lock, except that multiple threads may have a
+shared lock on the same boost::shared_mutex at the same time. 
+
+The only constraint is that if any thread has a shared lock, a thread that
+tries to acquire an exclusive lock will block until all other threads have
+relinquished their locks, and likewise if any thread has an exclusive lock, no
+other thread may acquire a shared or exclusive lock until the first thread has
+relinquished its lock.
+
+
+// Typically, a given DNS entry will remain unchanged for a long period of
+// time in many cases DNS entries remain unchanged for years. Although new
+// entries may be added to the table from time to time as users access
+// different websites, this data will therefore remain largely unchanged
+// throughout its life.
 
 #include <map>
 #include <string>
@@ -50347,28 +50787,17 @@ class dns_cache
     }
 };
 
-The only constraint is that if any thread has a shared lock, a thread that tries to acquire an
-exclusive lock will block until all other threads have relinquished their locks, and likewise if any
-thread has an exclusive lock, no other thread may acquire a shared or exclusive lock until the first
-thread has relinquished its lock.
-
-So update_or_add_entry() uses an instance of std::lock_guard<> to provide exclusive access while the
-table is updated; not only are other threads prevented from doing updates in a call
-update_or_add_entry(), but threads that call find_entry() are blocked too.
+So update_or_add_entry() uses an instance of std::lock_guard<> to provide
+exclusive access while the table is updated; not only are other threads
+prevented from doing updates in a call update_or_add_entry(), but threads that
+call find_entry() are blocked too.
 
 
 ={============================================================================
-*kt_dev_ccon_011* recursive lock
+*kt_dev_ccon_011* cxx-con-recursive-lock
 
-With std::mutex, it's an error for a thread to try to lock a mutex it already owns, and attempting
-to do so will result in undefined behavior. However, in some circumstances it would be desirable for
-a thread to reacquire the same mutex several times without having first released it. For this
-purpose, the C++ Standard Library provides std::recursive_mutex.
-
-Most of the time, if you think you want a recursive mutex, you probably need to change your design
-instead.
-
-Since, in particular, the class invariants are typically broken while the lock is held.
+Most of the time, if you think you want a recursive mutex, you probably need to
+change your design instead.
 
 
 ={============================================================================
