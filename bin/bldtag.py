@@ -32,6 +32,12 @@ if __name__ == "__main__":
         "-path", "*/tools",  "-o",
         "-path", "*/VQE_SRC",  "-o",
         "-path", "*/AVCU",  "-o",
+        "-path", "*/Interface",  "-o",
+        "-path", "*/doc",  "-o",
+        "-path", "*/openssl",  "-o",
+        "-path", "*/FREETYPE2",  "-o",
+        "-path", "*/iscdhcp",  "-o",
+        "-path", "*/unit_test",  "-o",
         "-path", "*/test",  "-o",
         "-path", "*/test2",
         ")", "-prune", "-o", "-type", "f", "-print"]
