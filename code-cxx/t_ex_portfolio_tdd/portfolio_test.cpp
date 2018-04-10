@@ -4,6 +4,7 @@
 
 using namespace testing;
 using namespace std;
+using namespace boost::gregorian;
 
 // fixture
 class APortfolio : public Test 
@@ -11,11 +12,22 @@ class APortfolio : public Test
     public:
         static const string IBM;
         static const string SAMSUNG;
+        static const date ARBITRARY_DATE;
         Portfolio portfolio_;
+
+        void ASSERT_PURCHASE(
+                PurchaseRecord &purchase,
+                int shareCount,
+                const date &transactionDate)
+        {
+            ASSERT_THAT(purchase.count_, Eq(shareCount));
+            ASSERT_THAT(purchase.date_, Eq(transactionDate));
+        }
 };
 
 const string APortfolio::IBM{"IBM"};
 const string APortfolio::SAMSUNG{"SS"};
+const date APortfolio::ARBITRARY_DATE{2014, Sep, 5};
 
 TEST_F(APortfolio, IsEmptyWhenCreated)
 {
@@ -89,10 +101,38 @@ TEST_F(APortfolio, AnswersThePurchaseRecordForASinglePurchase)
     // purchase history
     auto purchases = portfolio_.Purchases(SAMSUNG);
 
+    // single history
     auto purchase = purchases[0];
 
     ASSERT_THAT(purchase.count_, Eq(5u));
     ASSERT_THAT(purchase.date_, Eq(purchaseDate));
+}
+
+TEST_F(APortfolio, IncludesSalesInPurchaseRecords)
+{
+    portfolio_.Purchase(SAMSUNG, 10, ARBITRARY_DATE);
+    portfolio_.Sell(SAMSUNG, 5, ARBITRARY_DATE);
+
+    auto sales = portfolio_.Purchases(SAMSUNG);
+
+    // asset the second transaction, sell.
+    ASSERT_PURCHASE( sales[1], -5, ARBITRARY_DATE);
+}
+
+bool operator==(const PurchaseRecord &lhs, const PurchaseRecord &rhs)
+{
+    return lhs.count_ == rhs.count_ && lhs.date_ == rhs.date_;
+}
+
+TEST_F(APortfolio, SeparatesPurchaseRecordsBySymbol) 
+{
+    portfolio_.Purchase(SAMSUNG, 5, ARBITRARY_DATE);
+    portfolio_.Purchase(IBM, 1, ARBITRARY_DATE);
+
+    auto sales = portfolio_.Purchases(SAMSUNG);
+
+    // ASSERT_PURCHASE( sales[0], 5, ARBITRARY_DATE);
+    ASSERT_THAT(sales, ElementsAre(PurchaseRecord(5, ARBITRARY_DATE)));
 }
 
 int main(int argc, char** argv)

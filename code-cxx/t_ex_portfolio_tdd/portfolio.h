@@ -33,15 +33,14 @@ struct PurchaseRecord
         : count_(shareCount), date_(datePurchase)
     {}
 
-    unsigned int count_;
+    // + menas buy and - means sell
+    int count_;
     date date_;
 };
 
 class Portfolio
 {
     public:
-        static const date FIXED_PURCHASE_DATE;
-
         Portfolio()
         {}
 
@@ -63,7 +62,17 @@ class Portfolio
 
             holdings_[symbol] += shareCount;
 
-            purchases_.push_back(PurchaseRecord(shareCount, transactionDate));
+            // *TN* really need to add a empty vector when it is first time to
+            // purchase/sell; when not found purchase history in the map?
+            //
+            // No since vector will be default constructured.
+            
+            // auto it = purchaseRecord_.find(symbol);
+            // if (it == purchaseRecord_.end())
+            //     purchaseRecord_[symbol] = std::vector<PurchaseRecord>();
+            purchaseRecord_[symbol].push_back(PurchaseRecord(shareCount, transactionDate));
+
+            // purchases_.push_back(PurchaseRecord(shareCount, transactionDate));
 
             // *TN* do not work since insert fails when element is already
             // exist.
@@ -77,10 +86,14 @@ class Portfolio
 
         std::vector<PurchaseRecord> Purchases(const std::string &symbol) const
         {
-            return purchases_;
+            // return purchases_;
+            
+            // *TN* this assumes that it always find a symbol.
+            return purchaseRecord_.find(symbol)->second;
         }
 
-        void Sell(const std::string &symbol, unsigned int shareCount)
+        void Sell(const std::string &symbol, unsigned int shareCount,
+                const date &transactionDate = FIXED_PURCHASE_DATE)
         {
             auto count = ShareCount(symbol);
 
@@ -88,6 +101,13 @@ class Portfolio
                 throw InvalidSellException();
 
             holdings_[symbol] = count - shareCount;
+
+            // auto it = purchaseRecord_.find(symbol);
+            // if (it == purchaseRecord_.end())
+            //     purchaseRecord_[symbol] = std::vector<PurchaseRecord>();
+            purchaseRecord_[symbol].push_back(PurchaseRecord(-shareCount, transactionDate));
+
+            // purchases_.push_back(PurchaseRecord(-shareCount, transactionDate));
 
             // * duplicate in find() code
             // * fails when sells more than purchased.
@@ -119,11 +139,12 @@ class Portfolio
 
     private:
         std::unordered_map<std::string, unsigned int> holdings_;
-        std::vector<PurchaseRecord> purchases_;
+        std::unordered_map<std::string, std::vector<PurchaseRecord>> purchaseRecord_;
+        // std::vector<PurchaseRecord> purchases_;
 
-        // date FIXED_PURCHASE_DATE{date(2014, Jan, 1)};
+        // static const date FIXED_PURCHASE_DATE{2014, Jan, 1};
+        static const date FIXED_PURCHASE_DATE;
 };
 
-// const boost::gregorian::date Portfolio::FIXED_PURCHASE_DATE(date(2014, Jan, 1));
-const date Portfolio::FIXED_PURCHASE_DATE(date(2014, Jan, 1));
+const date Portfolio::FIXED_PURCHASE_DATE{2014, Jan, 1};
 

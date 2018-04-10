@@ -10,6 +10,13 @@ using namespace std;
 using namespace testing;
 
 template <typename T>
+void INSERT_ELEMENTS( T& coll, int first, int last )
+{
+    for (auto i = first; i <= last; i++)
+        coll.insert( coll.end(), i );
+}
+
+template <typename T>
 void PRINT_ELEMENTS( T& coll, const string optstr="" )
 {
     size_t count{};
@@ -72,7 +79,7 @@ class CardSequence
         }
 };
 
-TEST(CxxStlTest, AlgoGenerate)
+TEST(CxxStlTest, UseAlgoGenerate)
 {
     vector<uint32_t> ivec1;
     generate_n( back_inserter(ivec1), 12, rand );
@@ -154,6 +161,54 @@ TEST(CxxStlTest, HowMapFindWorks)
         ASSERT_THAT(posVal->first, Eq(4));
         ASSERT_THAT(posVal->second, Eq(3));
     }
+}
+
+
+// ={=========================================================================
+// cxx-algo-accumulate
+//
+// 11.11 Numeric Algorithms
+//
+// Thus, for the values
+//  a1 a2 a3 a4 ...
+//
+// they compute and return either
+//  initValue + a1 + a2 + a3 + ...
+//
+// or
+//  initValue op a1 op a2 op a3 op ...
+// respectively.
+//
+// sum: 45
+// sum: -55
+// product: 362880
+// product: 0
+
+TEST(CxxStlTest, UseAlgoAccumulate)
+{
+    vector<int> coll;
+
+    INSERT_ELEMENTS( coll, 1, 9 );
+
+    // PRINT_ELEMENTS( coll );
+    // 
+    // cout << "sum: "
+    //     << accumulate( coll.cbegin(), coll.cend(), 0 ) << endl;
+    //
+    // cout << "sum: "
+    //     << accumulate( coll.cbegin(), coll.cend(), -100 ) << endl;
+    //
+    // cout << "product: "
+    //     << accumulate( coll.cbegin(), coll.cend(), 1, multiplies<int>()) << endl;
+    //
+    // cout << "product: "
+    //     << accumulate( coll.cbegin(), coll.cend(), 0, multiplies<int>()) << endl;
+
+    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 0 ), Eq(45) );
+    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), -100 ), Eq(-55) );
+
+    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 1, multiplies<int>() ), Eq(362880) );
+    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 0, multiplies<int>() ), Eq(0) );
 }
 
 int main(int argc, char** argv)

@@ -6053,6 +6053,7 @@ make install or sudo make install
 {gtag-build-tag}
 https://www.gnu.org/software/global/globaldoc_toc.html#gtags
 
+<use-gtag-skip>
 
 // use skip feature? works but not recommended
 //
@@ -6117,21 +6118,17 @@ https://www.gnu.org/software/global/globaldoc_toc.html#gtags
 //    autom4te.cache/,*.orig,*.rej,*.bak,*~,#*#,*.swp,*.tmp,*_flymake.*,*_flymake:
 
 
-// build tag list using ag but not successful
-// .agignore
-// ag -U --nopager --follow --nocolor --nogroup -g '' > gtaglist.out
+<use-git-ignore>
+
+**/build/
+**/mock/
 
 
 // don't use incremental tag updating.
 
-gtags --skip-unreadable
-
 <gtag-options>
 --skip-unreadable
     Skip unreadable files. 
-
-
-{gtag-build-tag-use-find}
 
 ‘-f’, ‘--file’ file
     Give a list of candidates of target files. Files which are not on the list
@@ -6139,28 +6136,59 @@ gtags --skip-unreadable
     from the standard input. File names must be separated by newline. You may
     use find(1). 
 
-// -f option only allows filenames but not directory which means list out
-// every files.
-//
-// see *tool-find* to ignore directories from find result
 
+<use-file-list>
+#!/usr/bin/env python
+import sys
+import subprocess
 
-find . -type f -print >/tmp/list     // make a file set
-vi /tmp/list                         // customize the file set
-gtags -f /tmp/list
+if __name__ == "__main__":
+    # execute only if run as a script
 
+    # cleanup files
+    subprocess.call(["rm", "-f", "G* tags flist.out"])
 
-<ex>
-#!/bin/bash
-echo "building a gtag list..."
+    dirs = [
+        './CMS_PLATFORM_SERVICES', 
+        './CMS_SYSTEM_INFRASTRUCTURE',
+        './DARWIN_PLATFORM', './CMS_MEDIA_SERVICES', './CMS_INFORMATION_SERVICES',
+        './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso',
+        './THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae',
+        './FUSIONOS_2/UTILITIES_HELPER',
+        './XTV_High_Level_VOB',
+        './FUSIONOS'
+        ]
 
-# do not follow link
-find $1 -name '*.[ch]' -o -name '*.[ch]pp' > flist.out 
+    listfile = 'flist.out'
+    logfile = open(listfile, 'w+')
 
-# follow link
-find -L $1 -name '*.[ch]' -o -name '*.[ch]pp' > flist.out 
+    # find . -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
+    # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
+    command = ["find", ".", "-type", "d", 
+        "(", 
+        "-path",  "*/build", "-o", 
+        "-path", "*/mock",  "-o",
+        "-path", "*/lib",  "-o",
+        "-path", "*/tools",  "-o",
+        "-path", "*/VQE_SRC",  "-o",
+        "-path", "*/AVCU",  "-o",
+        "-path", "*/test",  "-o",
+        "-path", "*/test2",
+        ")", "-prune", "-o", "-type", "f", "-print"]
 
-gtags -f ./flist.out
+    for e in dirs:
+      command[1] = e
+      subprocess.call(command, stdout=logfile)
+
+    logfile.close()
+
+    sys.stdout.write("building ctags for %s ...\n" % listfile)
+    subprocess.call(["ctags", "-L", listfile])
+
+    sys.stdout.write("building gtags for %s ...\n" % listfile)
+    subprocess.call(["gtags", "-f", listfile])
+
+    sys.stdout.write("done\n")
 
 
 <build-tags-recursively>
