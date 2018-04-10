@@ -5,9 +5,49 @@ import subprocess
 if __name__ == "__main__":
     # execute only if run as a script
 
-    subprocess.call(["rm", "-f", "G* tags"])
+    # cleanup files
+    subprocess.call(["rm", "-f", "G* tags flist.out"])
 
-    listfile = "/home/kyoupark/git/kb/si/flist.out"
+    dirs = [
+        './CMS_PLATFORM_SERVICES', 
+        './CMS_SYSTEM_INFRASTRUCTURE',
+        './DARWIN_PLATFORM', './CMS_MEDIA_SERVICES', './CMS_INFORMATION_SERVICES',
+        './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso',
+        './THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae',
+        './FUSIONOS_2/UTILITIES_HELPER',
+        './XTV_High_Level_VOB',
+        './FUSIONOS'
+        ]
+
+    listfile = 'flist.out'
+    logfile = open(listfile, 'w+')
+
+    # find . -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
+    # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
+    command = ["find", ".", "-type", "d", 
+        "(", 
+        "-path",  "*/build", "-o", 
+        "-path", "*/mock",  "-o",
+        "-path", "*/lib",  "-o",
+        "-path", "*/tools",  "-o",
+        "-path", "*/VQE_SRC",  "-o",
+        "-path", "*/AVCU",  "-o",
+        "-path", "*/Interface",  "-o",
+        "-path", "*/doc",  "-o",
+        "-path", "*/openssl",  "-o",
+        "-path", "*/FREETYPE2",  "-o",
+        "-path", "*/iscdhcp",  "-o",
+        "-path", "*/unit_test",  "-o",
+        "-path", "*/test",  "-o",
+        "-path", "*/test2",
+        ")", "-prune", "-o", "-type", "f", "-print"]
+
+    for e in dirs:
+      command[1] = e
+      subprocess.call(command, stdout=logfile)
+
+    logfile.close()
+
     sys.stdout.write("building ctags for %s ...\n" % listfile)
     subprocess.call(["ctags", "-L", listfile])
 
