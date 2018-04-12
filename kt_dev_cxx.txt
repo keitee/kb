@@ -48,7 +48,7 @@ KT KB. CPP
 |kt_dev_gcc_111| gcc: profiling
 
 *kt_dev_gcc_200* gcc-cpp
-|kt_dev_gcc_201| gcc-cpp-header-guard
+|kt_dev_gcc_201| cpp-header-guard
 *kt_dev_gcc_201* gcc-cpp-defined
 |kt_dev_gcc_202| gcc-cpp-get-filename-without-full-path
 *kt_dev_gcc_203* gcc-cpp-isystem option
@@ -196,7 +196,7 @@ KT KB. CPP
 *kt_dev_cpp_053* cpp-template-std-forward
 *kt_dev_cpp_053* cpp-template-overload
 |kt_dev_cpp_053| cpp-template-variadic
-|kt_dev_cpp_054| cpp-template-specialization
+|kt_dev_cpp_054| cxx-template-specialization
 *kt_dev_cpp_054* template-inheritance
 *kt_dev_cpp_060* template-initialize-type-member
 
@@ -236,13 +236,13 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-iter-adapters
 *kt_dev_cpp_0000* cpp-iter-external-and-internal
 
-|kt_dev_stl_063| cpp-fobj cpp-function-object cpp-functor
+*kt_dev_stl_063* cxx-fobj cxx-function-object cxx-functor
 |kt_dev_stl_063| cpp-fobj-predicate
 |kt_dev_stl_063| cpp-fobj-lambda cpp-lambda C++11
 *kt_dev_stl_063* cpp-fobj-as-argument
 *kt_dev_stl_063* cpp-fobj-pass-by-reference
 *kt_dev_stl_063* cpp-fobj-predefined
-*kt_dev_stl_064* cpp-fobj-function-type
+*kt_dev_stl_064* cxx-fobj-function-type cxx-function-adaptor
 *kt_dev_stl_064* cpp-fobj-type cpp-function-pointer
 *kt_dev_stl_065* cpp-fobj-bind cpp-bind
 *kt_dev_stl_066* cpp-fobj-bind-member-function
@@ -2392,7 +2392,7 @@ brief abbreviations for longer constructs.
 
 
 ={============================================================================
-*kt_dev_gcc_201* gcc-cpp-header-guard
+*kt_dev_gcc_201* cpp-header-guard
 
 2.4 Once-Only Headers
 
@@ -2417,14 +2417,35 @@ included again, the conditional will be false, because FILE_FOO_SEEN is defined.
 The preprocessor will skip over the entire contents of the file, and the
 compiler will not see it twice.
 
-You can put comments outside the wrapper. They will not interfere with this
-optimization.
+In a user header file, the macro name should 'not' begin with '_'. In a system
+header file, it 'should' begin with '__' to avoid conflicts with user
+programs. In any kind of header file, the macro name should contain the name
+of the file and some additional text, to avoid conflicts with other header
+files.  
 
-The macro FILE_FOO_SEEN is called the controlling macro or "guard macro". In a
-user header file, the macro name should 'not' begin with '_'. In a system header
-file, it 'should' begin with '__' to avoid conflicts with user programs. In any
-kind of header file, the macro name should contain the name of the file and some
-additional text, to avoid conflicts with other header files.  
+http://www.learncpp.com/cpp-tutorial/1-10a-header-guards/
+
+<ex>
+
+// #ifndef __GEOSERVER_H__
+// #define __GEOSERVER_H__
+
+class GeoServer
+{
+  // has only function declaration
+};
+
+// #endif // __GEOSERVER_H__
+
+
+In file included from geoserver_test.cpp:3:0:
+geoserver.h:13:7: error: redefinition of ‘class GeoServer’
+ class GeoServer
+       ^
+In file included from geoserver_test.cpp:2:0:
+geoserver.h:13:7: error: previous definition of ‘class GeoServer’
+ class GeoServer
+       ^
 
 
 ={============================================================================
@@ -11589,7 +11610,7 @@ level, there are differences and in compiler level, implemented as pointers.
 The reference is a sub set of pointer which is limited in use?
 
 
-{why-reference}
+{why-reference} cxx-return-reference
 * No copy made so efficient code
 * Syntatic need such as operator[]
 
@@ -11931,7 +11952,7 @@ See how using a reference can make a code simple and neat to implement pass by
 reference approach than using a pointer.
 
 
-{cxx-reference-return-vs-copy}
+{cxx-return-reference-vs-copy}
 Beware a func that returns copy or reference. QUIZ: maybe a quiz?
 
 class Screen {
@@ -11998,6 +12019,72 @@ rs is: 6Screen
 Screen: move 5, set: 10
 cs is: 6Screen
 end of main
+
+
+<cxx-return-reference-cxx-access-private> cxx-operator-==
+
+        // Q: does it work to access private of that?
+        bool operator==(const Location &that)
+        {
+            return longitude_ == that.longitude_ &&
+                latitude_ == that.latitude_;
+        }
+
+// value: 10
+// value: 100
+// value: 200
+
+class AUsePrivateMemberThroughReference
+{
+    private:
+        int val_;
+
+    public:
+        AUsePrivateMemberThroughReference() : val_(10) {}
+
+        int &returnReference()
+        {
+            return val_;
+        }
+
+        void changePrivate(AUsePrivateMemberThroughReference &that)
+        {
+            that.val_ = 200;
+        }
+
+        void printValue() const
+        {
+            std::cout << "value: " << val_ << std::endl;
+        }
+};
+
+
+TEST(CxxFeaturesTest, UsePrivateMemberThroughReference)
+{
+    AUsePrivateMemberThroughReference firstObjectWithValue10;
+
+    firstObjectWithValue10.printValue();
+    int &ref = firstObjectWithValue10.returnReference();
+    ref = 100;
+    firstObjectWithValue10.printValue();
+
+    // *TN* compiler flag an error:
+    //
+    // cxx.cpp:216:13: error: ‘int AUsePrivateMemberThroughReference::val_’ is private
+    //          int val_;
+    //              ^
+    // cxx.cpp:254:9: error: within this context
+    //      ref.val_ = 100;
+    //
+    // firstObjectWithValue10.printValue();
+    // AUsePrivateMemberThroughReference &ref = firstObjectWithValue10.returnReference();
+    // ref.val_ = 100;
+    // firstObjectWithValue10.printValue();
+
+    AUsePrivateMemberThroughReference secondObjectWithValue10;
+    secondObjectWithValue10.changePrivate(firstObjectWithValue10);
+    firstObjectWithValue10.printValue();
+}
 
 
 ={============================================================================
@@ -14401,7 +14488,6 @@ class TextQuery
                 // *cxx-stringstream* parse up a line
                 while (ssline >> word)
                 {
-
                     // not covered in the book -- cleanup_str removes
                     // punctuation and converts all text to lowercase so that
                     // the queries operate in a case insensitive manner
@@ -17765,7 +17851,7 @@ So the ordering depends on how plan to use the class. For Sales_data class there
 is no single logical defintion of < so better not to define < at all.
 
 
-{subscript}
+{subscript} cxx-return-reference
 * must be member.
 * return a reference to the element that is fetched.
 * can be used on either side of an assignment. So it is a good idea to define
@@ -19234,7 +19320,7 @@ vector and string's [] operator returns reference but these are exceptions to
 this rule, but not a general rule. Better not use [] operator.
 
 
-{cxx-return-reference=cxx-temporary}
+{cxx-return-reference-cxx-temporary}
 
 The function returns value
 
@@ -31815,7 +31901,7 @@ std::forward<int>(10), std::forward<char>(c)
 
 
 ={============================================================================
-*kt_dev_cpp_054* cpp-template-specialization
+*kt_dev_cpp_054* cxx-template-specialization
 
 CPR 16.5
 
@@ -34023,7 +34109,7 @@ but different elements afterward. <Q> only for array?
 {subscript}
 The operator[] has different sementics in sequential and associative.
 
-return reference
+cxx-return-reference
 
 s[n]  return a reference to the element at position n in string.
 v[n]  return a reference to the element at position n in vector.
@@ -38201,9 +38287,9 @@ compare two collections for equality with an external iterator, for example,
 
 
 ={============================================================================
-*kt_dev_stl_063* cpp-fobj cpp-function-object cpp-functor
+*kt_dev_stl_063* cxx-fobj cxx-function-object cxx-functor
 
-CPR 14.8 p571
+CPR 14.8, 571
 
 * The function object is an object and can 'call' this object. Calling an
   object runs its overloaded call operator.
@@ -39866,7 +39952,7 @@ namespace std {
 
 
 ={============================================================================
-*kt_dev_stl_064* cpp-fobj-function-type
+*kt_dev_stl_064* cxx-fobj-function-type cxx-function-adaptor
 
 {function-type}
 Assume to build a simple desk calculator and to define a function table to
@@ -39896,7 +39982,7 @@ type and lambda type does not match the type of the values in the map.
 However, callables with different types may 'share' the same call signature. A
 call signature corresponds to a function type.
 
-*cpp-function-adaptor*
+*cxx-function-adaptor*
 Solve this using library 'type' named 'function' defined in functional header.
 This represent 'any' callables that has the same call signature. This is
 additional information for a template.
@@ -39927,6 +40013,20 @@ passes them along to its stored callable objects.
 binops["+"](10,5);   // adds(10,5)
 binops["-"](10,5);   // minus<int>(10,5)
 ...
+
+
+<ex>
+
+template<typename TFrom, typename TTo> std::vector<TTo> Collect(
+      const std::vector<TFrom>& source,
+      std::function<TTo(TFrom)> func) {
+   std::vector<TTo> results;
+   std::transform(source.begin(), source.end(), std::back_inserter(results), func);
+   return results;
+}
+
+            return Collect<User, string>(user, 
+                    [](User each) {return each.name(); });
 
 
 ={============================================================================
@@ -44351,6 +44451,24 @@ void PerfCounter::dump()
 }
 
 
+<ex> cxx-string-from-object
+
+std::ostream &operator<<(std::ostream &os, const Location &location)
+{
+    os << "(" << location.latitude() << "," << location.longitude() << ")";
+    return os;
+}
+
+TEST_F(ALocation, ProvidesPrintableRepresentation) {
+   Location location{-32, -105};
+   stringstream s;
+ 
+   s << location;
+ 
+   ASSERT_THAT(s.str(), StrEq("(-32,-105)"));
+}
+
+
 ={============================================================================
 *kt_dev_stl_075* stl-string: seg fault
 
@@ -48289,18 +48407,38 @@ uninitialized_fill_n( q, vi.size(), 42 );
 ={============================================================================
 *kt_dev_cxx_0000* cxx-chrono cxx-time
 
-CLR 5.7.2 Durations
+CLR 5.7 Clocks and Timers
+
+In fact, in the past, the interfaces to system time provided by C and POSIX
+switched from seconds to milliseconds, then to microseconds, and finally to
+nanoseconds. The problem was that for each switch, a new interface was
+provided. For this reason, a precision-neutral library was proposed for C++11.
+
+* A duration of time is defined as a specific number of ticks over `a time unit.`
+
+* A timepoint is defined as combination of a duration and a beginning of time
+  (the so-called epoch).
+
+* The concept of a timepoint, however, is parametrized by a clock, which is
+  the object that defines the epoch of a timepoint. Thus, different clocks
+  have different epochs. In general, operations dealing with multiple
+  timepoints, such as processing the duration/difference between two
+  timepoints, require using the same epoch/clock. A clock also provides a
+  convenience function to yield the timepoint of `now`.
+
+
+5.7.2 Durations
 
 A duration is a combination of a value representing the number of ticks and a
 fraction representing the unit in seconds. For example:
 
-// one unit is 1 sec
+// time unit is 1 sec
 std::chrono::duration<int> twentySeconds(20);
 
-// one unit is 60 secs
+// time unit is 60 secs
 std::chrono::duration<double,std::ratio<60>> halfAMinute(0.5);
 
-// one unit is 1/1000 sec
+// time unit is 1/1000 sec
 std::chrono::duration<long,std::ratio<1,1000>> oneMillisecond(1);
 
 For more convenience, the C++ standard library provides the following type
@@ -48311,21 +48449,377 @@ std::chrono::hours aDay(24);
 std::chrono::milliseconds oneMillisecond(1);
 
 
+Table 5.22. Other Operations and Types of durations
+
+d.count()             Returns ticks of the duration d
+duration_cast<D>(d)   Returns duration d explicitly converted into type D
+
+<use-duration-cast>
+As we have seen, implicit conversions to a more precise unit type are always
+possible. However, conversions to a coarser unit type are not, because you
+might lose information.
+
+std::chrono::seconds sec(55);
+std::chrono::minutes m1 = sec;                          // ERROR
+std::chrono::minutes m2 =
+std::chrono::duration_cast<std::chrono::minutes>(sec);  // OK
+
+// A typical example is code that segments a duration into different units. For
+// example, the following code segments a duration of milliseconds into the
+// corresponding hours, minutes, seconds, and milliseconds
+//
+// raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
+//      02::00::55::42
+
+template <typename V, typename R>
+ostream &operator<<(ostream &os, const chrono::duration<V,R> &d)
+{
+    os << "[" << d.count() << " of " << R::num << "/" << R::den << "]";
+    return os;
+}
+
+TEST(CxxFeaturesTest, UseCronoDurationCast)
+{
+    chrono::milliseconds ms(7255042);
+
+    chrono::hours   hh = chrono::duration_cast<chrono::hours>(ms);
+    chrono::minutes mm = chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+    chrono::seconds ss = chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+    chrono::milliseconds msec = chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+
+    cout << "raw: " << hh << "::" << mm << "::"
+        << ss << "::" << msec << endl;
+    cout << "     " << setfill('0') << setw(2) << hh.count() << "::" 
+        << setw(2) << mm.count() << "::"
+        << setw(2) << ss.count() << "::"
+        << setw(2) << msec.count() << endl;
+}
+
+
+5.7.3 Clocks and Timepoints
+
+* A clock defines an epoch and a tick period. For example, a clock might tick
+ in milliseconds since the UNIX epoch (January 1, 1970) or tick in
+ nanoseconds since the start of the program. In addition, a clock provides a
+ type for any timepoint specified according to this clock.  The interface of
+ a clock provides a function now() to yield an object for the current point
+ in time.
+
+* A timepoint represents a specific point in time by associating a positive or
+  negative duration to a given clock.
+
+
+clock::now()  Yields a time_point for the current point in time
+
+Table 5.23. Operations and Types of Clocks
+
+
+The C++ standard library provides three clocks, which provide this interface:
+
+1. The `system_clock` represents timepoints associated with the usual
+real-time clock of the current system. This clock also provides convenience
+functions to_time_t() and from_time_t() to convert between any timepoint and
+the C system time type time_t, which means that you can convert into and from
+calendar times
+
+2. The steady_clock gives the guarantee that it never gets adjusted. Thus,
+  timepoint values never decrease as the physical time advances, and they
+  advance at a steady rate relative to real time.
+
+3. The high_resolution_clock represents a clock with the shortest tick period
+possible on the current system.
+
+
+// the following function prints the properties of a clock
+// C represents clock
+template <typename C>
+void print_clock_data()
+{
+    using namespace std;
+
+    cout << "- precision: ";
+
+    // clock::period 
+    // Yields the type of the unit type (equivalent to clock::duration::period)
+    
+    typedef typename C::period P;
+
+    // /usr/include/c++/4.9/ratio
+    // typedef ratio<                     1000, 1> kilo;
+    
+    if( ratio_less_equal<P, std::milli>::value )
+    {
+        // This class template alias generates a ratio type that is the
+        // multiplication of the ratio types R1 and R2.
+        // 
+        // The resulting type is the same as if ratio_multiply was defined as:
+        //
+        // template <typename R1, typename R2> 
+        // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den >;
+
+        typedef typename ratio_multiply<P, std::kilo>::type TT;
+        cout << fixed << double(TT::num)/TT::den << " milliseconds" << endl;
+    } 
+    else
+    {
+        cout << fixed << double(P::num)/P::den << " seconds" << endl;
+    }
+
+    // clock::is_steady 
+    // Yields true if the clock is steady
+    
+    cout << "- is steady: " << boolalpha << C::is_steady << endl;
+}
+
+// TN: this is different from CLR result 
+//
+// system_clock:
+// - precision: 0.000001 milliseconds
+// - is steady: false
+//
+// high_resolution_clock:
+// - precision: 0.000001 milliseconds
+// - is steady: false
+//
+// steady_clock:
+// - precision: 0.000001 milliseconds
+// - is steady: true
+
+TEST(CxxFeaturesTest, UseCronoClock)
+{
+    cout << "system_clock: " << endl;
+    print_clock_data<std::chrono::system_clock>();
+
+    cout << "high_resolution_clock: " << endl;
+    print_clock_data<std::chrono::high_resolution_clock>();
+
+    cout << "steady_clock: " << endl;
+    print_clock_data<std::chrono::steady_clock>();
+}
+
+
+<steady-clock>
+The steady_clock is important to compare or compute the difference of two times in your
+program, where you processed the current point in time.
+
+Similarly, processing the elapsed time of a program:
+
+auto diff = chrono::system_clock::now() - system_start;
+auto sec = chrono::duration_cast<chrono::seconds>(diff);
+cout << "this program runs: " << s.count() << " seconds" << endl;
+
+might print a negative duration if the clock was adjusted in the meantime. For
+the same reason, using timers with other than the steady_clock might change
+their duration when the system clock gets adjusted. 
+
+
+Timepoints
+
+With any of these clocks - or even with user-defined clocks - you can deal
+with timepoints. 
+
+Class time_point provides the corresponding interface, parametrized by a
+clock:
+
+namespace std {
+  namespace chrono {
+    template <typename Clock,
+             typename Duration = typename Clock::duration>
+               class time_point;
+  }
+}
+
+
+std::string as_string(const std::chrono::system_clock::time_point &tp)
+{
+    // static convenience function
+    // Note also that this convenience function probably will work only for
+    // system_clocks, the only clocks that provide an interface for conversions
+    // to and from time_t.
+
+    std::time_t time = std::chrono::system_clock::to_time_t(tp);
+
+    // std::string ts = std::ctime(&time);
+    std::string ts = std::asctime(gmtime(&time));
+
+    // remove trailing newline
+    ts.resize(ts.size()-1);
+    return ts;
+}
+
+// epoch: Thu Jan  1 01:00:00 1970
+// now  : Thu Apr 12 10:52:00 2018
+// min  : Tue Sep 21 00:11:29 1677
+// max  : Sat Apr 12 00:47:16 2262
+
+// Note that it’s 1 o’clock rather than midnight. This may look a bit
+// surprising, but remember that the conversion to the calendar time with
+// ctime() inside asString() takes the time zone into account.  Thus, the UNIX
+// epoch used here  which, again, is not always guaranteed to be the epoch of
+// the system time  started at 00:00 in Greenwich, UK. In my time zone, Germany,
+// it was 1 a.m. at that moment, so in my time zone the epoch started at 1 a.m.
+// on January 1, 1970. Accordingly, if you start this program, your output is
+// probably different, according to your time zone, even if your system uses the
+// same epoch in its system clock.
+
+// epoch: Thu Jan  1 00:00:00 1970
+// now  : Thu Apr 12 10:01:32 2018
+// min  : Tue Sep 21 00:12:44 1677
+// max  : Fri Apr 11 23:47:16 2262
+
+TEST(CxxFeaturesTest, UseCronoTimepoint)
+{
+    // print the epoch of this clock
+    
+    // is equivalent to:
+    // std::chrono::time_point<std::chrono::system_clock> tp
+    std::chrono::system_clock::time_point tp;
+
+    cout << "epoch: " << as_string(tp) << endl;
+
+    tp = std::chrono::system_clock::now();
+    cout << "now  : " << as_string(tp) << endl;
+
+    tp = std::chrono::system_clock::time_point::min();
+    cout << "min  : " << as_string(tp) << endl;
+
+    tp = std::chrono::system_clock::time_point::max();
+    cout << "max  : " << as_string(tp) << endl;
+}
+
+
+see Conversions between Timepoints and Calendar Time
+
+
+5.7.5 Blocking with Timers
+
+All the blocking functions that end with _for() use a duration, whereas all
+functions that end with _until() use a timepoint as argument. For example,
+
+this_thread::sleep_for(chrono::seconds(10));
+
+blocks the current thread, which might be the main thread for 10 seconds,
+
+this_thread::sleep_until(chrono::system_clock::now()
+  + chrono::seconds(10));
+
+blocks the current thread until the system clock has reached a timepoint 10
+seconds later than now.
+
+Although these calls look the same, they are not! 
+
+For all _until() functions, where you pass a timepoint, time adjustments might
+have an effect. If, during the 10 seconds after calling sleep_until(), the
+system clock gets adjusted, the timeout will be adjusted accordingly. If, for
+example, we wind the system clock back 1 hour, the program will block for 60
+minutes and 10 seconds. If, for example, we adjust the clock forward for more
+than 10 seconds, the timer will end immediately.
+
+If you use a _for() function, such as sleep_for(), where you pass a duration,
+   or if you use the steady_clock, adjustments of the system clock usually
+   will have no effect on the duration of timers. However, on hardware where a
+   steady clock is not available, and thus the platform gives no chance to
+   count seconds independently of a possibly adjusted system time, time
+   adjustments can also impact the _for() functions.
+
+All these timers do not guarantee to be exact. For any timer, there will be a
+delay because the system only periodically checks for expired timers, and the
+handling of timers and interrupts takes some time. Thus, durations of timers
+will take their specified time plus a period that depends on the quality of
+implementation and the current situation.
+
 <ex>
+*TN* see that when convert to milli sec, use *0.001
+
+{
+    auto elapsed_ = duration_cast<microseconds>(diff);
+    // micro sec
+    cout << "time taken for " << text_ << " is " << elapsed_.count() << endl;
+
+    // milli sec
+    cout << "time taken for " << text_ << " is " << elapsed_.count()/1000 << endl;
+    cout << "time taken for " << text_ << " is " << elapsed_.count()*0.001 << endl;
+    
+    auto elapsedms_ = duration_cast<milliseconds>(diff);
+    cout << "time taken for " << text_ << " is " << elapsedms_.count() << endl;
+}
+
+time taken for HandlesLargeNumbersOfUsers is 126172
+time taken for HandlesLargeNumbersOfUsers is 126
+time taken for HandlesLargeNumbersOfUsers is 126.172
+time taken for HandlesLargeNumbersOfUsers is 126
+
+
+<ex>
+
+// time.h
+
+#ifndef TIME_H
+#define TIME_H
+
+#include <string>
 #include <chrono>
 
-using namespace std::chrono;  // see §35.2
+struct TestTimer
+{
+    TestTimer(const std::string &text);
+    ~TestTimer();
 
-// used measures nanoseconds
-auto t0 = high_resolution_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> start_;
+    // std::chrono::system_clock::time_point start_;
+    
+    // std::chrono::time_point<std::chrono::system_clock> end_;
+    // std::chrono::microseconds elapsed_;
+    
+    std::string text_;
+};
 
-this_thread::sleep_for(milliseconds{20});
+#endif // TIME_H
 
-auto t1 = high_resolution_clock::now();
 
-cout << duration_cast<nanoseconds>(t1t0).count() << " nanoseconds passed\n";
-cout << duration_cast<milliseconds>(t1t0).count() << " milliseconds passed\n";
+// time.cpp
 
+#include <iostream>
+#include "time.h"
+
+using namespace std;
+using namespace std::chrono;
+
+TestTimer::TestTimer(const std::string &text) 
+    : text_(text)
+{
+    start_ = system_clock::now();
+}
+
+TestTimer::~TestTimer() 
+{
+    auto diff = system_clock::now() - start_;
+    auto elapsed_ = duration_cast<microseconds>(diff);
+    cout << "time taken for " << text_ << " is " << elapsed_.count() << endl;
+    cout << "time taken for " << text_ << " is " << elapsed_.count()/1000 << endl;
+    cout << "time taken for " << text_ << " is " << elapsed_.count()*0.001 << endl;
+    
+    auto elapsedms_ = duration_cast<milliseconds>(diff);
+    cout << "time taken for " << text_ << " is " << elapsedms_.count() << endl;
+}
+
+
+// use
+
+TEST_F(AGeoServerUserInBox, HandlesLargeNumbersOfUsers) {
+   Location anotherLocation{aUserLocation.go(10, West)};
+   const unsigned int lots {500000};
+   for (unsigned int i{0}; i < lots; i++) {
+      string user{"user" + to_string(i)};
+      server.track(user);
+      server.updateLocation(user, anotherLocation);
+   }
+
+   TestTimer timer("HandlesLargeNumbersOfUsers");
+
+   auto users = server.usersInBox(aUser, Width, Height);
+   ASSERT_THAT(lots, Eq(users.size()));
+}
 
 
 ={============================================================================

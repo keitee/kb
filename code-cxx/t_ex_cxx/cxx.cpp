@@ -2,7 +2,7 @@
 #include <set>
 #include <vector>
 #include <memory>
-// #include <typeinfo>
+#include <chrono>
 
 #include "gtest/gtest.h"
 
@@ -202,25 +202,232 @@ TEST(CxxFeaturesTest, UseAssignment)
     cout << "----------" << endl;
 }
 
+
+// ={=========================================================================
+// cxx-reference-and-access
+
+// value: 10
+// value: 100
+// value: 200
+
+class AUsePrivateMemberThroughReference
+{
+    private:
+        int val_;
+
+    public:
+        AUsePrivateMemberThroughReference() : val_(10) {}
+
+        int &returnReference()
+        {
+           return val_;
+        }
+        
+        // error
+        // AUsePrivateMemberThroughReference &returnReference()
+        // {
+        //     return *this;
+        // }
+
+        void changePrivate(AUsePrivateMemberThroughReference &that)
+        {
+            that.val_ = 200;
+        }
+
+        void printValue() const
+        {
+            std::cout << "value: " << val_ << std::endl;
+        }
+};
+
+
+TEST(CxxFeaturesTest, UsePrivateMemberThroughReference)
+{
+    AUsePrivateMemberThroughReference firstObjectWithValue10;
+
+    firstObjectWithValue10.printValue();
+    int &ref = firstObjectWithValue10.returnReference();
+    ref = 100;
+    firstObjectWithValue10.printValue();
+
+    // error
+    // firstObjectWithValue10.printValue();
+    // AUsePrivateMemberThroughReference &ref = firstObjectWithValue10.returnReference();
+    // ref.val_ = 100;
+    // firstObjectWithValue10.printValue();
+
+    AUsePrivateMemberThroughReference secondObjectWithValue10;
+    secondObjectWithValue10.changePrivate(firstObjectWithValue10);
+    firstObjectWithValue10.printValue();
+}
+
+
+// ={=========================================================================
+// cxx-crono
+//
+// A typical example is code that segments a duration into different units. For
+// example, the following code segments a duration of milliseconds into the
+// corresponding hours, minutes, seconds, and milliseconds
+//
+// raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
+//      02::00::55::42
+
+template <typename V, typename R>
+ostream &operator<<(ostream &os, const chrono::duration<V,R> &d)
+{
+    os << "[" << d.count() << " of " << R::num << "/" << R::den << "]";
+    return os;
+}
+
+TEST(CxxFeaturesTest, UseCronoDurationCast)
+{
+    chrono::milliseconds ms(7255042);
+
+    chrono::hours   hh = chrono::duration_cast<chrono::hours>(ms);
+    chrono::minutes mm = chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+    chrono::seconds ss = chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+    chrono::milliseconds msec = chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+
+    cout << "raw: " << hh << "::" << mm << "::"
+        << ss << "::" << msec << endl;
+    cout << "     " << setfill('0') << setw(2) << hh.count() << "::" 
+        << setw(2) << mm.count() << "::"
+        << setw(2) << ss.count() << "::"
+        << setw(2) << msec.count() << endl;
+}
+
+// ={=========================================================================
+// cxx-crono-clock
+
+// the following function prints the properties of a clock
+// C represents clock
+template <typename C>
+void print_clock_data()
+{
+    using namespace std;
+
+    cout << "- precision: ";
+
+    // clock::period 
+    // Yields the type of the unit type (equivalent to clock::duration::period)
+    
+    typedef typename C::period P;
+
+    // /usr/include/c++/4.9/ratio
+    // typedef ratio<                     1000, 1> kilo;
+    
+    if( ratio_less_equal<P, std::milli>::value )
+    {
+        // This class template alias generates a ratio type that is the
+        // multiplication of the ratio types R1 and R2.
+        // 
+        // The resulting type is the same as if ratio_multiply was defined as:
+        //
+        // template <typename R1, typename R2> 
+        // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den >;
+
+        typedef typename ratio_multiply<P, std::kilo>::type TT;
+        cout << fixed << double(TT::num)/TT::den << " milliseconds" << endl;
+    } 
+    else
+    {
+        cout << fixed << double(P::num)/P::den << " seconds" << endl;
+    }
+
+    // clock::is_steady 
+    // Yields true if the clock is steady
+    
+    cout << "- is ready: " << boolalpha << C::is_steady << endl;
+}
+
+// TN: this is different from CLR result 
+//
+// system_clock:
+// - precision: 0.000001 milliseconds
+// - is ready: false
+// high_resolution_clock:
+// - precision: 0.000001 milliseconds
+// - is ready: false
+// steady_clock:
+// - precision: 0.000001 milliseconds
+// - is ready: true
+
+TEST(CxxFeaturesTest, UseCronoClock)
+{
+    cout << "system_clock: " << endl;
+    print_clock_data<std::chrono::system_clock>();
+
+    cout << "high_resolution_clock: " << endl;
+    print_clock_data<std::chrono::high_resolution_clock>();
+
+    cout << "steady_clock: " << endl;
+    print_clock_data<std::chrono::steady_clock>();
+}
+
+
+// ={=========================================================================
+// cxx-crono-timepoint
+
+std::string as_string(const std::chrono::system_clock::time_point &tp)
+{
+    // static convenience function
+    // Note also that this convenience function probably will work only for
+    // system_clocks, the only clocks that provide an interface for conversions
+    // to and from time_t.
+
+    std::time_t time = std::chrono::system_clock::to_time_t(tp);
+
+    // std::string ts = std::ctime(&time);
+    std::string ts = std::asctime(gmtime(&time));
+
+    // remove trailing newline
+    ts.resize(ts.size()-1);
+    return ts;
+}
+
+// epoch: Thu Jan  1 01:00:00 1970
+// now  : Thu Apr 12 10:52:00 2018
+// min  : Tue Sep 21 00:11:29 1677
+// max  : Sat Apr 12 00:47:16 2262
+
+// Note that it’s 1 o’clock rather than midnight. This may look a bit
+// surprising, but remember that the conversion to the calendar time with
+// ctime() inside asString() takes the time zone into account.  Thus, the UNIX
+// epoch used here  which, again, is not always guaranteed to be the epoch of
+// the system time  started at 00:00 in Greenwich, UK. In my time zone, Germany,
+// it was 1 a.m. at that moment, so in my time zone the epoch started at 1 a.m.
+// on January 1, 1970. Accordingly, if you start this program, your output is
+// probably different, according to your time zone, even if your system uses the
+// same epoch in its system clock.
+
+// epoch: Thu Jan  1 00:00:00 1970
+// now  : Thu Apr 12 10:01:32 2018
+// min  : Tue Sep 21 00:12:44 1677
+// max  : Fri Apr 11 23:47:16 2262
+
+TEST(CxxFeaturesTest, UseCronoTimepoint)
+{
+    // print the epoch of this clock
+    
+    // is equivalent to:
+    // std::chrono::time_point<std::chrono::system_clock> tp
+    std::chrono::system_clock::time_point tp;
+
+    cout << "epoch: " << as_string(tp) << endl;
+
+    tp = std::chrono::system_clock::now();
+    cout << "now  : " << as_string(tp) << endl;
+
+    tp = std::chrono::system_clock::time_point::min();
+    cout << "min  : " << as_string(tp) << endl;
+
+    tp = std::chrono::system_clock::time_point::max();
+    cout << "max  : " << as_string(tp) << endl;
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
-
-// [==========] Running 1 test from 1 test case.
-// [----------] Global test environment set-up.
-// [----------] 1 test from BulkQuote1Test
-// [ RUN      ] BulkQuote1Test.checkTotal1
-// has sport flag
-// has kids flas
-// has music flag
-// has sport and music flag
-// has unknown flag
-// [       OK ] BulkQuote1Test.checkTotal1 (1 ms)
-// [----------] 1 test from BulkQuote1Test (1 ms total)
-// 
-// [----------] Global test environment tear-down
-// [==========] 1 test from 1 test case ran. (1 ms total)
-// [  PASSED  ] 1 test.
 

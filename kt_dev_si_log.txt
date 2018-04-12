@@ -18,6 +18,9 @@ git diff BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_41.85.00_BSKYB_GM_Integratio
 // 6b
 mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019fbf2d46b' order by upload_time desc limit 10"
 
+// 45
+mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019fb63d645' order by upload_time desc limit 10"
+
 // Karl
 mysql --batch --table -u root uploads -e "select version, upload_time, filename, pcat_status from upload where mac='0019fb1a2bde' order by upload_time desc limit 10"
 
@@ -1094,6 +1097,319 @@ is no log when the pin entry screen is presented.
 
 
 ={============================================================================
+|kt_si_log_0001| SI-11379 Create special build for SFS testing with continuous flash bank mirroring
+
+SI_config.xml
+
+   <!-- SI-10846: Disable Mirroring for only Sky_trails build profile, since SNUG boxes show issue while mirroing using new ETP loader 4.20v-->
+   <file name="sdm.cfg">
+    <section name="MIRRORING">
+     <key name="DISABLE_MIRRORING" type="BOOLEAN" value="TRUE">
+     </key>
+    </section>
+   </file>
+
+https://www.stb.bskyb.com/jira/browse/SI-10846
+
+For Cust_trials build (40.54.00_7215) we see DISABLE_MIRRORING=FALSE,
+whereas for Sky_trails build(40.54.00_7214) we see DISABLE_MIRRORING=TRUE
+
+// DARWIN_PLATFORM/DARWIN_SPM/sw_download/src/server/spm_download.c
+
+/**
+ * @brief Performs the mirroring of the partitions (if necessary)
+ */
+static SYSTEM_STATUS SPM_Download_InitPartitions(void)
+{
+    // !MIL    -SWDL_SVR     		< F:SPM_Download_InitPartitions L:1696 > Partition info for SDM_PARTITION_RT_INACTIVE : sdm_status=0x8c00000, partition_type=2, applicationId=49, producerId=79, version=65535, partition_status=3, irs=6 
+    // !MIL    -SWDL_SVR     		< F:SPM_Download_InitPartitions L:1696 > Partition info for SDM_PARTITION_RT_ACTIVE : sdm_status=0x8c00000, partition_type=2, applicationId=49, producerId=79, version=65535, partition_status=3, irs=6 
+    // !MIL    -SWDL_SVR     		< F:SPM_Download_InitPartitions L:1696 > Partition info for SDM_PARTITION_BL2_ACTIVE : sdm_status=0x8c20001, partition_type=1, applicationId=0, producerId=0, version=0, partition_status=0, irs=6 
+    // !MIL    -SWDL_SVR     		< F:SPM_Download_InitPartitions L:1696 > Partition info for SDM_PARTITION_BL2_INACTIVE : sdm_status=0x8c20006, partition_type=1, applicationId=0, producerId=0, version=0, partition_status=0, irs=6 
+
+    // /* Initiate RT mirroring only if we have successfully acquired information
+    //  * about the Active RT partition.
+    //  */
+    // if((partition_info[SDM_PARTITION_RT_ACTIVE].sdm_status == SDM_API_STATUS_OK) &&
+    //    ((partition_info[SDM_PARTITION_RT_INACTIVE].status == SDM_PARTITION_STATUS_CORRUPTED) ||
+    //     (partition_info[SDM_PARTITION_RT_ACTIVE].version > partition_info[SDM_PARTITION_RT_INACTIVE].version) ||
+    //     (partition_info[SDM_PARTITION_RT_INACTIVE].sdm_status != SDM_API_STATUS_OK)))
+    {
+        SWDL_SVR_DIAG_LOG_ERROR(("KT: set RT without condition"));
+        mirroring_flag |= SDM_MIRRORING_ACTION_RT;
+    }
+
+    if(SDM_MIRRORING_ACTION_NONE != mirroring_flag)
+    {
+        SYSTEMALARM_ALARM_INFO info;
+
+        /* set up a system alarm timer to delay the mirroring */
+        info.is_absolute = false;
+        info.alarm_data.rel_info.callback = SPM_Download_StartMirroringAlarmListener;
+        info.alarm_data.rel_info.is_repeating = false;
+        info.alarm_data.rel_info.timeout = (SPM_COMMON_GetConfig()->mirroringDelay) * 1000U; /* mirroring delay may be 0 - systemalarm handles that */
+        info.alarm_data.rel_info.user_data = `mirroring_flag`;
+
+        if (SYSTEMALARM_Set(&info, &f_mirroring_delay_alarm) != SYSTEMALARM_STATUS_OK)
+        {
+            SWDL_SVR_DIAG_LOG_ERROR(("Error in SYSTEMALARM_Set"));
+            status = SPM_API_STATUS_ERROR;
+        }
+        else
+        {
+            SWDL_SVR_DIAG_LOG_INFO(("Mirroring delayed by %d milliseconds", info.alarm_data.rel_info.timeout));
+        }
+    }
+}
+
+
+/** @brief Callback function for the alarm. {ASYNC} to start mirroring
+*   @brief The callback function should return quickly and should not call any of the alarm API functions.
+*   @brief The function is called with the alarm handle and the user data (transferred when setting the alarm)
+*/
+static void SPM_Download_StartMirroringAlarmListener(SYSTEMALARM_ALARM_HANDLE handle,
+                                       usHandle_t user_data_handle)
+{
+    SPM_DOWNLOAD_INTERNAL_MESSAGE message;
+
+    SWDL_SVR_DIAG_LOG_FN_ENTRY(("SPM_Download_StartMirroringAlarmListener"));
+
+    /* post message */
+    message.event = SPM_DOWNLOAD_INTERNAL_EVENT_START_MIRRORING_ALARM_EXPIRED;
+    message.payload.start_mirroring_alarm_expired_payload.handle = handle;
+    message.payload.start_mirroring_alarm_expired_payload.user_data = `user_data_handle`;
+
+    /* call the callback */
+    f_SPM_DOWNLOAD_message_callback((uint8_t*) &message, sizeof(SPM_DOWNLOAD_INTERNAL_MESSAGE));
+
+    SWDL_SVR_DIAG_LOG_FN_EXIT(0U);
+    return;
+}
+
+
+{
+  case SPM_DOWNLOAD_INTERNAL_EVENT_START_MIRRORING_ALARM_EXPIRED:
+    SPM_Download_InternalEventStartMirroringAlarmExpired(messageReceived);
+    break;
+}
+
+
+SDM_API_StartMirroring 1622 DARWIN_PLATFORM/DARWIN_SPM/sw_download/src/server/spm_download.c
+
+/**
+ * @brief Handler for the SPM_DOWNLOAD_INTERNAL_EVENT_START_MIRRORING_ALARM_EXPIRED message
+ * @param[in] messagePtr Message pointer
+ */
+static void SPM_Download_InternalEventStartMirroringAlarmExpired(const SPM_DOWNLOAD_INTERNAL_MESSAGE* messagePtr)
+{
+    SWDL_SVR_DIAG_LOG_FN_ENTRY(("SPM_Download_InternalEventStartMirroringAlarmExpired"));
+
+    f_mirroring_delay_alarm = SYSTEMALARM_HANDLE_ILLEGAL;
+
+    if(SPM_DOWNLOAD_TYPE_UNDEF != f_spm_download.downloadType)
+    {
+        SWDL_SVR_DIAG_LOG_ERROR(("Download in progress. Cannot continue with mirroring."));
+    }
+    else
+    {
+        /* start the delayed mirroring */
+
+        // SYSTEM_STATUS SDM_API_StartMirroring(SDM_COMPLETION_CALLBACK mirror_complete_callback,
+        // `SDM_MIRRORING_ACTION_FLAG mirror_action`,
+        // uint32_t user_tag);
+        //
+        // #define SDM_MIRRORING_ACTION_NONE  0x00
+        // #define SDM_MIRRORING_ACTION_RT    0x01     /* Bit mask to mirror the RunTime partition */
+        // #define SDM_MIRRORING_ACTION_BL2   0x02     /* Bit mask to mirror the BL2 partition */
+        // !ERROR  -SDM          		< p:0x00000207 P:MW t:0x0205e520 T:SPM_DISPATCHER M:sdm_client.c F:SDM_API_StartMirroring L:1397 > mirror_action not valid [0] 
+
+        if (SDM_API_StartMirroring(SPM_Download_MirrorCallback, messagePtr->payload.start_mirroring_alarm_expired_payload.user_data, 0U) != SDM_API_STATUS_OK)
+        {
+            SWDL_SVR_DIAG_LOG_ERROR(("SDM_API_StartMirroring failed"));
+        }
+        else
+        {
+            SWDL_SVR_DIAG_LOG_MIL(("[SWDL] Partition mirroring started..."));
+            f_spm_download.downloadType = SPM_DOWNLOAD_TYPE_MIRRORING;
+            f_spm_download.state = SPM_DOWNLOAD_STATE_OPERATION_IN_PROGRESS;
+        }
+    }
+
+    SWDL_SVR_DIAG_LOG_FN_EXIT(0U);
+}
+
+SYSTEM_STATUS SDM_API_StartMirroring(SDM_COMPLETION_CALLBACK mirror_complete_callback,
+        SDM_MIRRORING_ACTION_FLAG mirror_action,
+        uint32_t user_tag)
+{
+        message.event = SDM_EVENT_START_MIRRORING;
+}
+
+void SDM_StartMirroringThread(const SDM_MESSAGE* messagePtr)
+{
+    if (disableMirroring == false)
+    {
+        f_mirror_action = messagePtr->payload.mirroring.mirror_action;
+        f_first_pass_error = SDM_MIRRORING_STATUS_OK;
+
+        if (SDM_SpawnMirroringThread() != SDM_API_STATUS_OK)
+        {
+            SDM_DIAG_LOG_ERROR(("SDM_SpawnMirroringThread failed"));
+        }
+        else if (SYSTEMITC_API_PostEvent(&f_mirroringQueue,
+                    (uint32_t)SDM_MIRRORING_EVENT_START_MIRRORING,
+                    messagePtr,
+                    sizeof(SDM_MESSAGE)) != SYSTEMITC_OK)
+        {
+        }
+    }
+}
+
+static void *SDM_MirroringThread(void* param)
+{
+                /* process the message */
+                switch(event)
+                {
+                    case SDM_MIRRORING_EVENT_START_MIRRORING:
+                        SDM_DIAG_LOG_EVENT(("SDM_MIRRORING_EVENT_START_MIRRORING message received"));
+                        image_type = (p_sdm_message->payload.mirroring.image_type);
+                        `SDM_StartMirroring`(image_type);
+                        break;
+}
+
+
+== !MIL    -SDM          		< T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_StartMirroring L:112 > Mirroring start from active (version 0xffff) to inactive (version 0x0) 
+
+
+/**
+ * @brief Performs the main part of mirroring (copying of the image).
+ *        Handler for the SDM_MIRRORING_EVENT_CONTINUE_MIRRORING message. This function is usually
+ *        called multiple times during one mirroring process
+ *
+ *        This function is called from the mirroring thread context.
+ */
+static void SDM_ContinueMirroring(void)
+{
+    message = (
+            (f_mirroringData.error == SDM_MIRRORING_STATUS_OK) &&
+            (f_mirroringData.offset < f_mirroringData.endOffset)
+            ) /* the same condition as for the while loop */
+        ? SDM_MIRRORING_EVENT_CONTINUE_MIRRORING
+        : SDM_MIRRORING_EVENT_COMPLETE_IMAGE;
+
+    if (SYSTEMITC_API_PostEvent(&f_mirroringQueue, (uint32_t)message, NULL, 0U) != SYSTEMITC_OK)
+}
+
+
+{
+                    case SDM_MIRRORING_EVENT_COMPLETE_IMAGE:
+                        SDM_DIAG_LOG_ERROR(("KT: SDM_MIRRORING_EVENT_COMPLETE_IMAGE message received"));
+                        SDM_CompleteMirrorImage();
+                        break;
+
+
+                    case SDM_MIRRORING_EVENT_FINISH_MIRRORING:
+                        SDM_DIAG_LOG_EVENT(("SDM_MIRRORING_EVENT_FINISH_MIRRORING message received"));
+                        SDM_FinishMirroring();
+                        exit_task = true;
+                        break;
+
+                    case SDM_EVENT_MIRRORING_FINISHED:
+                        SDM_MirroringFinishedHandler(messagePtr);
+                        break;
+}
+
+
+/**
+ * @brief Handler for the SDM_EVENT_MIRRORING_FINISHED message (aborts the software download)
+ * @param[in] messagePtr Message pointer
+ */
+void SDM_MirroringFinishedHandler(const SDM_MESSAGE* messagePtr)
+{
+    SDM_DIAG_LOG_FN_ENTRY("SDM_MirroringFinishedHandler");
+
+    switch (messagePtr->payload.mirroring.completionStatus)
+    {
+        case SDM_COMPLETION_STATUS_COMPLETE:
+            SDM_SPC_WriteWithTimeStamp("[BGLOAD] Mirroring complete\n");
+            break;
+
+        case SDM_COMPLETION_STATUS_ABORTED:
+            SDM_SPC_WriteWithTimeStamp("[BGLOAD] Mirroring aborted\n");
+            break;
+
+        case SDM_COMPLETION_STATUS_FAILED:
+            SDM_SPC_WriteWithTimeStamp("[BGLOAD] Mirroring failed\n");
+            break;
+
+        default:
+            SDM_SPC_WriteWithTimeStamp("[BGLOAD] Mirroring ended with unknown status\n");
+            break;
+    }
+
+    SDM_DIAG_LOG_INFO(("notifying the client about mirroring status: %d", messagePtr->payload.mirroring.completionStatus));
+
+    SDM_ClientMirroringNotify(messagePtr->payload.mirroring.completionStatus);
+
+    SDM_DIAG_LOG_FN_EXIT(0U);
+    return;
+}
+
+
+mgrep.py "sdm_mirroring.c"
+
+
+// CT
++---------------------+---------------------+----------------------------------------------------------+-------------+
+| 84.68.00_3433_MNTEE | 2018-04-11 06:26:48 | darwin_0019fbf2d46b_6a954b4bf7145356eb4de1bf34c605c2.tgz |             |
+NDS: ^[2018:04:10 15:07:42]0946684862.556603 !INFO   -SDM          		< p:0x0000018e P:MW t:0x01b17520 T:SDM_THREAD M:sdm.c F:SDM_ReadConfigFile L:497 > Fetched sdm.cfg:MIRRORING[DISABLE_MIRRORING] = 0 
+
+| 84.68.00_7735_MNTEE | 2018-04-10 15:07:48 | darwin_0019fbf2d46b_e5f29d10e022770d7b0a1796f5da1d2c.tgz |             |
+| 84.68.00_7735_MNTEE | 2018-04-10 14:58:50 | darwin_0019fbf2d46b_3b19d7b4aec873c64821d75bd9b70866.tgz |             |
+| 84.68.00_7735_MNTEE | 2018-04-10 14:27:20 | darwin_0019fbf2d46b_d18d53dee07fbecdd0e9b9e9a69b4607.tgz |             |
+| 41.88.00_6716_MNTEE | 2018-04-10 13:47:23 | darwin_0019fbf2d46b_784353736e6b6d8cf7a11880f3140d25.tgz |             |
+| 84.68.00_9910_MNTEE | 2018-04-10 13:29:20 | darwin_0019fbf2d46b_c0353cfc611e7d94a39a2abd9e1623ec.tgz |             |
+| 84.68.00_9910_MNTEE | 2018-04-10 11:39:22 | darwin_0019fbf2d46b_dedefce100d5a347da5a45c20386a377.tgz |             |
+
+
+// ST
+| 84.68.00_9910_MNTEE | 2018-04-10 10:48:23 | darwin_0019fbf2d46b_a86fded5e7656f00d3ca65f5694ea379.tgz |             |
+
+| 84.68.00_9910_MNTEE | 2018-04-10 10:26:22 | darwin_0019fbf2d46b_a7d7e51c198de5d8ab76d7ad438f37bd.tgz |             |
+NDS: ^[2018:04:10 10:21:08]0946684883.602802 !INFO   -SDM          		< p:0x00000203 P:MW t:0x01b16520 T:SDM_THREAD M:sdm.c F:SDM_ReadConfigFile L:497 > Fetched sdm.cfg:MIRRORING[DISABLE_MIRRORING] = 0 
+
+-sh-3.2# more sdm.cfg
+[MIRRORING]
+DISABLE_MIRRORING=FALSE
+-sh-3.2# cat /NDS/config/version.cfg
+[VERSION]
+NDS_SW_VERSION="84.68.00_9910_MNTEE"
+RELEASE_SW_VERSION="84.68.00_9910_MNTEE"
+
+| 41.91.00_0790_MNTEE | 2018-04-10 10:21:19 | darwin_0019fbf2d46b_eeeb27f9f4395d2681082ead45a71c89.tgz |             |
++---------------------+---------------------+----------------------------------------------------------+-------------+
+
+!EXIT   -SDM          		< p:0x00000203 P:MW t:0x01dfa520 T:SPM_DISPATCHER M:sdm_client.c F:SDM_API_StartMirroring L:1539 > <-| SDM_API_StartMirroring : return_status = 0x8c00000
+!MIL    -SDM          		< p:0x00000203 P:MW t:0x01b16520 T:SDM_THREAD M:sdm_mirroring.c F:SDM_StartMirroringHandler L:642 > starting the mirroring... 
+
+!ENTER  -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_StartMirroring L:98 > |-> SDM_StartMirroring
+!MIL    -SDM          		< p:0x00000203 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_StartMirroring L:112 > Mirroring start from active (version 0xffff) to inactive (version 0x154f) 
+!INFO   -SDM          		< p:0x00000203 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_flash_otv.c F:SDM_Flash_OTV_GetPayloadSize L:393 > Payload size is 16287748 
+!ENTER  -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_flash.c F:SDM_FlashEraseInactivePartition L:1199 > |-> SDM_FlashEraseInactivePartition
+!INFO   -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_flash.c F:SDM_FlashEraseInactivePartition L:1217 > FLASH WRITE: Inactive partition has been erased 
+
+!EXIT   -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_flash.c F:SDM_FlashEraseInactivePartition L:1223 > <-| SDM_FlashEraseInactivePartition : return_status = 0x8c00000
+!EXIT   -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_StartMirroring L:166 > <-| SDM_StartMirroring : return_status = 0x0
+!ENTER  -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_ContinueMirroring L:186 > |-> SDM_ContinueMirroring
+!PARAM  -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_ContinueMirroring L:188 > f_mirroringData:{ buffer=0x0.8213f01c, payloadSize=16287748, offset=36, endOffset=16287784, error=0 } 
+
+!INFO   -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_flash.c F:SDM_Flash_WriteData L:1182 > FLASH WRITE: partition=1 (partitionIdx=0) offset= 36  block size=16384 
+!INFO   -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_flash.c F:SDM_Flash_ReadData L:1127 > FLASH READ: partition=2 (partitionIdx=1) offset=16420  block size=16384 
+
+!PARAM  -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_ContinueMirroring L:188 > f_mirroringData:{ buffer=0x0.8213f01c, payloadSize=16287748, offset=2490404, endOffset=16287784, error=0 } 
+!PARAM  -SDM          		< p:0x000001c4 P:MW t:0x01ec4520 T:SDM_MIRRORING_THREAD M:sdm_mirroring.c F:SDM_ContinueMirroring L:188 > f_mirroringData:{ buffer=0x0.8213f01c, payloadSize=16287748, offset=2867236, endOffset=16287784, error=0 } 
+
+
+={============================================================================
 |kt_si_log_0001| SI-11335 INITRAMFS: Unwanted files after the system bootup can be removed to free up some system memory
 
 // from Sireesh Vamadevan
@@ -1335,7 +1651,7 @@ typedef enum BEM_OC_OUTPUT_CHANNEL_USE_TAG
 25366:NDS: ^[2018:03:01 09:47:47]0946686392.426133 !INFO   -P_Api        		< p:0x0000020c P:APP t:0x013c1520 T:PLAYER_MAIN M:player_common.c F:PLAYER_Common_MuteVideoOutputChannel L:7045 > channel = 2, mute = 0 
 
 // new eng builds
-ENG_41.88.00_3085
+ENG_41.88.00_3085 (which is gone from the yard so create a new one) -> ENG_41.88.00_6716_MNTEE
 ENG_87.67.03_1481
 
 debug_3=P_Api:AFEWMI<>
