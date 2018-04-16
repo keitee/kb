@@ -52,18 +52,25 @@ bool GeoServer::isDifferentUserInBounds(
 }
 
 
-std::vector<User> GeoServer::usersInBox(
-        const std::string &user, double widthInMeters, double heightInMeters) const
+// std::vector<User> GeoServer::usersInBox(
+void GeoServer::usersInBox(
+        const std::string &user, double widthInMeters, 
+        double heightInMeters,
+        GeoServerListener *listener) const
 {
     auto location = locations_.find(user)->second;
 
     Area box{location, widthInMeters, heightInMeters};
 
-    std::vector<User> users;
+    // std::vector<User> users;
 
     for( auto &each : locations_ )
         if( isDifferentUserInBounds(each, user, box) )
-            users.push_back( User{each.first, each.second} );
+        {
+            // users.push_back( User{each.first, each.second} );
+            if (listener)
+                listener->updated(User{each.first, each.second});
+        }
 
-    return users;
+    // return users;
 }

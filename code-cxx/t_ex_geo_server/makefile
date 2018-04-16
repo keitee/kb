@@ -52,7 +52,15 @@ gmock.a : gmock-all.o
 gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
-# area.cpp
+# threadpool_test.cpp
+threadpool_test.o : threadpool_test.cpp $(GTEST_HEADERS) threadpool.h
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c threadpool_test.cpp -o threadpool_test.o
+
+# work_test.cpp
+work_test.o : work_test.cpp $(GTEST_HEADERS) work.h
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c work_test.cpp -o work_test.o
+
+# time.cpp
 time.o : time.cpp $(GTEST_HEADERS) time.h
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c time.cpp -o time.o
 
@@ -76,5 +84,5 @@ $(TARGET1)_test.o : $(TARGET1)_test.cpp $(GTEST_HEADERS) geoserver.h
 $(TARGET2)_test.o : $(TARGET2)_test.cpp $(GTEST_HEADERS) geoserver.h 
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET2)_test.cpp -o $(TARGET2)_test.o
 
-$(TESTS) : $(TARGET1)_test.o $(TARGET2)_test.o $(TARGET1).o $(TARGET2).o area.o time.o gtest.a gmock.a
+$(TESTS) : $(TARGET1)_test.o $(TARGET2)_test.o $(TARGET1).o $(TARGET2).o area.o time.o work_test.o threadpool_test.o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

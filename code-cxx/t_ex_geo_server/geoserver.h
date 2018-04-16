@@ -13,18 +13,12 @@
 #include "area.h"
 #include "user.h"
 
-// class User {
-// public:
-//    User(const std::string& name, Location location) 
-//       : name_(name), location_(location) {}
+class GeoServerListener
+{
+    public:
+        virtual void updated(const User &user) = 0;
+};
 
-//    std::string name() { return name_; }
-//    Location location() { return location_; }
-
-// private:
-//    std::string name_;
-//    Location location_;
-// };
 
 class GeoServer
 {
@@ -40,8 +34,11 @@ class GeoServer
          const std::string& user,
          const Area& box) const;
 
-        std::vector<User> usersInBox(
-                const std::string& user, double widthInMeters, double heightInMeters) const;
+        // std::vector<User> usersInBox(
+        void usersInBox(
+                const std::string& user, double widthInMeters, 
+                double heightInMeters,
+                GeoServerListener *listener=nullptr) const;
 
     private:
         std::unordered_map<std::string, Location> locations_;

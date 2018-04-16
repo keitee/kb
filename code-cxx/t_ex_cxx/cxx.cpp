@@ -425,6 +425,26 @@ TEST(CxxFeaturesTest, UseCronoTimepoint)
     cout << "max  : " << as_string(tp) << endl;
 }
 
+
+// ={=========================================================================
+// cxx-static
+
+class Foo {
+    private:
+        static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
+        // static const std::string DIGIT_NOT_FOUND;
+        static const std::string DIGIT_NOT_FOUND{"*"};
+    public:
+        Foo() {}
+};
+
+// const std::string Foo::DIGIT_NOT_FOUND{"*"};
+
+TEST(CxxFeaturesTest, UseClassStatic)
+{
+    Foo foo;
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);

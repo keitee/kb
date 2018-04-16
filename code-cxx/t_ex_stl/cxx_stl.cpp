@@ -3,6 +3,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <deque>
 
 #include "gmock/gmock.h"
 
@@ -46,6 +47,21 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
     cout << " (" << count << ")" << endl;
 }
 
+// ={=========================================================================
+// cxx-deque
+
+TEST(CxxStlTest, HowDequeSupportEmpty)
+{
+    deque<int> iq;
+
+    try {
+        auto e = iq.back();
+    }
+    catch(...)
+    {
+        cout << "exception" << endl;
+    }
+}
 
 // ={=========================================================================
 // cxx-set
