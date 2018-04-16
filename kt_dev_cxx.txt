@@ -35093,7 +35093,7 @@ c.back()    Returns the last element (no check whether a last element exists)
             (does not remove it)
 
 
-<at-range-check>
+<at-range-check> cxx-undefined
 Only at() performs range checking. If the index is out of range, at() throws an
 `out_of_range` exception (see 4.3, page 41). All other functions do not check. A
 range error results in undefined behavior. 
@@ -50557,13 +50557,15 @@ void oops()
 ={============================================================================
 *kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
 
-{broken-invariant}
-There are problems with sharing data between threads due to the consequences
-of modifying data. The concept used is 'invariant' that is statement always
-true about a particular data structures.  The problem is when the invariants
-of the system cannot be maintained. Broken invariants.
+3.1 Problems with sharing data between threads
 
-{race-conditions}
+{cxx-invariant}
+There are problems with sharing data between threads due to the consequences
+of modifying data. The concept used is `invariant` that is statement always
+true about a particular data structures. The problem is when the invariants of
+the system cannot be maintained. Broken invariants.
+
+{cxx-race-conditions}
 A race condition is anything where the outcome depends on the relative
 ordering of execution of operations on two or more threads. It is when the
 race condition leads to broken invariants that there is a problem.
@@ -50572,22 +50574,24 @@ Such problems will show up at the most inconvenient time since the race
 conditions are "timing sensitive" and hard to find and duplicate because the
 window of opportunity is small.
 
-<data-race>
+<cxx-data-race>
 The C++ Standard also defines the term data race to mean the specific type of
 race condition that arises because of concurrent modification to a single
 'object'. uncontrolled concurrent access to a variable
 
 <approaches-to-solve>
-o The simplest option is to wrap your data structure with a protection
+* The simplest option is to wrap your data structure with a protection
   mechanism
 
-o lock-free programming
+* lock-free programming
 
-o software transactional memory (STM)
+* software transactional memory (STM)
 
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
+
+3.2.1 Using mutexes in C++
 
 {cxx-mutex}
 Mutexes are the most general of the data-protection mechanisms. But they're
@@ -50688,6 +50692,9 @@ void foo()
 
 
 {cpp-race-condition-inherent-in-interface}
+
+3.2.3 Spotting race conditions inherent in interfaces
+
 Consider the doubly linked list example again. In order for a thread to safely
 delete a node, you need to ensure that you're preventing concurrent accesses
 to `three nodes:` the node being deleted and the nodes on either side. If you
@@ -50699,9 +50706,12 @@ it's not the individual nodes that need protecting for the individual steps
 but the whole data structure, for the whole delete operation. The easiest
 solution in this case is to have a single mutex that protects the entire list.
 
-Just because individual operations on the list are safe, you can still get
-race conditions, even with a really simple interface since interface is not
-well designed. Consider std::stack<>.
+
+<ex-cxx-stack>
+Just because individual operations on the list are safe, you're not out of the
+woods yet; you can still get race conditions, even with a really simple
+interface since interface is not well designed. Consider std::stack<>, listing
+3.3.
 
 // bits/stl_stack.h
 
@@ -50803,19 +50813,28 @@ if(!s.empty())                            <-
 }
 
 * race betwen empty and top
-Calling top() on an empty stack is undefined. classic race.
+Calling top() on an empty stack is undefined, cxx-undefined. classic race.
 
 * race between top and pop
 Another race and far more 'insidious'. One of the two values on the stack is
 discarded without ever having been read, whereas the other is processed
-twice.There's never anything obviously wrong going on and the consequence of
-the bug are far from the cause although depends on exactly what do_something
-really dose.
+twice. two top() at the same time and one pop() on each thread. 
 
-<option-1> note: this is a discusssion in Exceptional C++
-combine the calls to top() and pop() under the mutex. that is pop() return the
-value as well as remove it from the stack. However, can leads to issue if the
-copy constructor for the objects on the stack can throw an exception.
+There's never anything obviously wrong going on and the consequence of the bug
+are far from the cause although depends on exactly what do_something really
+does.
+
+
+<option-1> 
+
+TN this is a discusssion in Exceptional C++
+
+This calls for a more radical change to the interface, one that combines the
+calls to top() and pop() under the protection of the mutex; pop() return the
+value as well as remove it from the stack. 
+  
+However, can leads to issue if the copy constructor for the objects on the
+stack can throw an exception.
 
   Consider stack<vector<int>>. Now, a vector is a dynamically sized container,
   so when you copy a vector the library has to allocate some more memory from
@@ -50866,7 +50885,8 @@ Provide both option 2 and either option 3 or 4. Flexibility should never be
 ruled out.
 
 <thread-safe-stack>
-This implements option 2 and 4.
+
+// This implements option 2 and 4.
 
 #include <exception>
 #include <memory>
@@ -50920,7 +50940,7 @@ class threadsafe_stack
         }
 };
 
-// *cxx-ctor-init-list* is not useful
+// when *cxx-ctor-init-list* is not useful
 This stack implementation is actually copyable; the copy constructor locks the
 mutex in the source object and then copies the internal stack. You do the copy
 in the constructor body rather than the member initializer list in order to
@@ -50936,7 +50956,7 @@ Even empty() is superfluous.
 
 3.2.4 Deadlock: the problem and a solution
 
-<cpp-deadlock>
+<cxx-deadlock>
 deadlock does not just occur with locks: can occur any synchronization
 construct that can lead to a wait cycle. "neither thread can make progress
 because it is waiting for the other to finish."
@@ -51431,9 +51451,23 @@ change your design instead.
 ={============================================================================
 *kt_dev_ccon_012* cxx-con-condition_variable
 
-Because std::condition_variable_any is more general, there's the potential for additional costs in
-terms of size, performance, or operating system resources, so std::condition_variable should be
-preferred unless the additional flexibility is required.
+4.1.1 Waiting for a condition with condition variables
+
+The Standard C++ Library provides not one but two implementations of a
+condition variable: std::condition_variable and std::condition_variable_any.
+Both of these are declared in the <condition_variable> library header.
+
+the former is limited to working with std::mutex, whereas the latter can work
+with anything that meets some minimal criteria for being mutex-like, hence the
+_any suffix. Because std::condition_variable_any is more general, there’s the
+potential for additional costs in terms of size, performance, or operating
+system resources, so std::condition_ variable should be preferred unless the
+additional flexibility is required.
+
+Because std::condition_variable_any is more general, there's the potential for
+additional costs in terms of size, performance, or operating system resources,
+so std::condition_variable should be preferred unless the additional
+  flexibility is required.
 
 std::mutex mut;
 std::queue<data_chunk> data_queue;
@@ -51456,14 +51490,20 @@ void data_processing_thread()
 {
     while(true)
     {
-        std::unique_lock<std::mutex> lk(mut);                  // note
+        // cxx-unique-lock
+        std::unique_lock<std::mutex> lk(mut);
 
-        data_cond.wait(lk,[]{return !data_queue.empty();});    // note
+        // *cxx-con-condition-variable-predicate*
+        data_cond.wait(lk,[]{return !data_queue.empty();});
 
         data_chunk data=data_queue.front();
         data_queue.pop();
 
-        lk.unlock();                                           // note
+        // Processing data can potentially be a time-consuming operation, and
+        // as you saw in chapter 3, it’s a bad idea to hold a lock on a mutex
+        // for longer than necessary.
+
+        lk.unlock();
 
         process(data);
 
@@ -51472,28 +51512,32 @@ void data_processing_thread()
     }
 }
 
-note: condition and why unique_lock
-a lambda function that expresses the condition being waited for. checks to see if the data_queue is
-not empty() - that is, there's some data in the queue ready for processing.
 
-The implementation of wait() then checks the condition (by calling the supplied lambda function) and
-returns if the expression returned true. If the condition isn't satisfied, wait() unlocks the mutex
-and puts the thread in a blocked or waiting state.
+<cxx-con-condition-variable-predicate>
 
-the thread wakes from its slumber (unblocks it), reacquires the lock on the mutex, and checks the
-condition again, returning from wait() with the mutex still locked if the condition has been
-satisfied. If the condition hasn't been satisfied, the thread unlocks the mutex and resumes waiting.
-This is 'why' you need the std::unique_lock rather than the std::lock_guard.
+a lambda function that expresses the condition being waited for. checks to see
+if the data_queue is not empty() - that is, there's some data in the queue
+ready for processing.
 
-The flexibility to unlock a std::unique_lock isn't just used for the call to wait(); it's also used
-once you have the data to process but before processing it
+The implementation of wait() then checks the condition by calling the supplied
+lambda function and returns if the expression returned true. If the condition
+isn't satisfied, wait() unlocks the mutex and puts the thread in a blocked or
+waiting state.
+
+the thread wakes from its slumber (unblocks it), reacquires the lock on the
+mutex, and checks the condition again, returning from wait() with the mutex
+still locked if the condition has been satisfied. If the condition hasn't been
+satisfied, the thread unlocks the mutex and resumes waiting. This is 'why' you
+need the std::unique_lock rather than the std::lock_guard.
+
 
 <suprious-wake>
-When the waiting thread reacquires the mutex and checks the condition, if it isn't in direct
-response to a notification from another thread, it's called a spurious wake. Because the number and
-frequency of any such spurious wakes are by definition indeterminate, it is 'not' advisable to use a
-function with side effects for the condition check. If you do so, you must be prepared for the "side
-effects" to occur multiple times.
+When the waiting thread reacquires the mutex and checks the condition, if it
+isn't in direct response to a notification from another thread, it's called a
+spurious wake. Because the number and frequency of any such spurious wakes are
+by definition indeterminate, it is 'not' advisable to use a function with side
+effects for the condition check. If you do so, you must be prepared for the
+"side effects" to occur multiple times.
 
 
 ={============================================================================
