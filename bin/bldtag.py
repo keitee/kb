@@ -52,6 +52,6 @@ if __name__ == "__main__":
     subprocess.call(["ctags", "-L", listfile])
 
     sys.stdout.write("building gtags for %s ...\n" % listfile)
-    subprocess.call(["gtags", "-f", listfile])
+    subprocess.call(["gtags", "--skip-unreadable", "-f", listfile])
 
     sys.stdout.write("done\n")
