@@ -299,7 +299,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-con-thread-lifetime-issue
 |kt_dev_ccon_002| std-threadad: join and detach
 *kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
-*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
+*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-stack
 *kt_dev_ccon_005* cxx-con-deadlock cxx-deadlock
 *kt_dev_ccon_006* cxx-con-unique-lock
 *kt_dev_ccon_009* cxx-con-call-once
@@ -48483,10 +48483,10 @@ provided. For this reason, a precision-neutral library was proposed for C++11.
   convenience function to yield the timepoint of `now`.
 
 
-5.7.2 Durations
+5.7.2 Durations, relative time
 
-A duration is a combination of a value representing the number of ticks and a
-fraction representing the unit in seconds. For example:
+A duration is a combination of a value representing `the number of ticks` and a
+`fraction` representing the unit in seconds. For example:
 
 // time unit is 1 sec
 std::chrono::duration<int> twentySeconds(20);
@@ -48669,7 +48669,7 @@ the same reason, using timers with other than the steady_clock might change
 their duration when the system clock gets adjusted. 
 
 
-Timepoints
+Timepoints, absolute time
 
 With any of these clocks - or even with user-defined clocks - you can deal
 with timepoints. 
@@ -48746,43 +48746,6 @@ TEST(CxxFeaturesTest, UseCronoTimepoint)
 
 see Conversions between Timepoints and Calendar Time
 
-
-5.7.5 Blocking with Timers
-
-All the blocking functions that end with _for() use a duration, whereas all
-functions that end with _until() use a timepoint as argument. For example,
-
-this_thread::sleep_for(chrono::seconds(10));
-
-blocks the current thread, which might be the main thread for 10 seconds,
-
-this_thread::sleep_until(chrono::system_clock::now()
-  + chrono::seconds(10));
-
-blocks the current thread until the system clock has reached a timepoint 10
-seconds later than now.
-
-Although these calls look the same, they are not! 
-
-For all _until() functions, where you pass a timepoint, time adjustments might
-have an effect. If, during the 10 seconds after calling sleep_until(), the
-system clock gets adjusted, the timeout will be adjusted accordingly. If, for
-example, we wind the system clock back 1 hour, the program will block for 60
-minutes and 10 seconds. If, for example, we adjust the clock forward for more
-than 10 seconds, the timer will end immediately.
-
-If you use a _for() function, such as sleep_for(), where you pass a duration,
-   or if you use the steady_clock, adjustments of the system clock usually
-   will have no effect on the duration of timers. However, on hardware where a
-   steady clock is not available, and thus the platform gives no chance to
-   count seconds independently of a possibly adjusted system time, time
-   adjustments can also impact the _for() functions.
-
-All these timers do not guarantee to be exact. For any timer, there will be a
-delay because the system only periodically checks for expired timers, and the
-handling of timers and interrupts takes some time. Thus, durations of timers
-will take their specified time plus a period that depends on the quality of
-implementation and the current situation.
 
 <ex>
 *TN* see that when convert to milli sec, use *0.001
@@ -50842,9 +50805,9 @@ stack can throw an exception.
   there are significant resource constraints, this memory allocation can fail,
   so the copy constructor for vector might throw a std::bad_alloc exception.
   This is especially likely if the vector contains a lot of elements. If the
-  pop() function was defined to return the value popped, as well as remove it
+  pop() function was defined `to return the value popped`, as well as remove it
   from the stack, you have a potential problem: the value being popped is
-  returned to the caller 'only' after the stack has been modified, but the
+  returned to the caller `only after the stack has been modified`, but the
   process of copying the data to return to the caller might throw an
   exception. If this happens, the data just popped is lost; it has been
   removed from the stack, but the copy was unsuccessful! 
@@ -50868,13 +50831,12 @@ restriction since many user type do not support it.
 <option-3>
 Use no-throw copy or move constructor. Limited since restrict the use of this
 thread-safe stack to those types that can safely be returned by value without
-an exception. note: may change as more type supports move semantics. 
+an exception. note that may change as more type supports move semantics. 
 
 <option-4>
 Return a pointer to the popped item. That is to use dynamically allocated item
-and pass its pointer.  The advantage here is that pointers can be freely
-copied without throwing an exception, so you've avoided Cargill’s exception
-problem.
+and pass its pointer. The advantage here is that pointers can be freely copied
+without throwing an exception, so you've avoided Cargill’s exception problem.
 
 However, requiring that each object in the stack be allocated separately with
 new would impose quite an overhead compared to the original non-thread-safe
@@ -50884,9 +50846,9 @@ version.
 Provide both option 2 and either option 3 or 4. Flexibility should never be
 ruled out.
 
-<thread-safe-stack>
+<cxx-stack-thread-safe-stack>
 
-// This implements option 2 and 4.
+// This implements option 1, 2 and 4.
 
 #include <exception>
 #include <memory>
@@ -50918,6 +50880,8 @@ class threadsafe_stack
             std::lock_guard<std::mutex> lock(m);
             data.push(new_value);
         }
+
+        // return pointer and if make_shared throws, data is not modified.
         std::shared_ptr<T> pop()
         {
             std::lock_guard<std::mutex> lock(m);
@@ -50926,6 +50890,8 @@ class threadsafe_stack
             data.pop();
             return res;
         }
+
+        // use reference
         void pop(T& value)
         {
             std::lock_guard<std::mutex> lock(m);
@@ -50933,6 +50899,7 @@ class threadsafe_stack
             value=data.top();
             data.pop();
         }
+
         bool empty() const
         {
             std::lock_guard<std::mutex> lock(m);
@@ -51449,7 +51416,7 @@ change your design instead.
 
 
 ={============================================================================
-*kt_dev_ccon_012* cxx-con-condition_variable
+*kt_dev_ccon_012* cxx-con-condition_variable cxx-queue
 
 4.1.1 Waiting for a condition with condition variables
 
@@ -51479,7 +51446,10 @@ void data_preparation_thread()
     {
         data_chunk const data=prepare_data();
 
-        std::lock_guard<std::mutex> lk(mut);                   // note
+        // TN see that the same mutex are used for both lock_guard and
+        // unique_lock
+
+        std::lock_guard<std::mutex> lk(mut);
 
         data_queue.push(data);
         data_cond.notify_one();
@@ -51527,8 +51497,10 @@ waiting state.
 the thread wakes from its slumber (unblocks it), reacquires the lock on the
 mutex, and checks the condition again, returning from wait() with the mutex
 still locked if the condition has been satisfied. If the condition hasn't been
-satisfied, the thread unlocks the mutex and resumes waiting. This is 'why' you
-need the std::unique_lock rather than the std::lock_guard.
+satisfied, the thread unlocks the mutex and resumes waiting. 
+
+<cxx-unique-lock>
+This is 'why' you need the std::unique_lock rather than the std::lock_guard.
 
 
 <suprious-wake>
@@ -51540,14 +51512,77 @@ effects for the condition check. If you do so, you must be prepared for the
 "side effects" to occur multiple times.
 
 
+<cxx-queue-thread-safe>
+When using a queue to pass data between threads, the receiving thread often
+needs to wait for the data. Let’s provide two variants on pop(): 
+  
+try_pop(), which tries to pop the value from the queue but always returns
+immediately (with an indication of failure) even if there wasn’t a value to
+retrieve, and wait_and_pop(), which will wait until there’s a value to
+retrieve.
+
+
+// Listing 4.4 Extracting push() and wait_and_pop() from listing 4.1
+
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+
+template<typename T>
+class threadsafe_queue
+{
+  private:
+    std::mutex mut;
+    std::queue<T> data_queue;
+    std::condition_variable data_cond;
+
+  public:
+    void push(T new_value)
+    {
+      std::lock_guard<std::mutex> lk(mut);
+      data_queue.push(new_value);
+      data_cond.notify_one();
+    }
+
+    // see no unlock on cxx-unique-lock
+
+    void wait_and_pop(T& value)
+    {
+      std::unique_lock<std::mutex> lk(mut);
+      data_cond.wait(lk,[this]{return !data_queue.empty();});
+      value=data_queue.front();
+      data_queue.pop();
+    }
+};
+
+threadsafe_queue<data_chunk> data_queue;
+
+// see how user code has been changed
+
+void data_preparation_thread()
+{
+  while(more_data_to_prepare())
+  {
+    data_chunk const data=prepare_data();
+    data_queue.push(data);
+  }
+}
+
+void data_processing_thread()
+{
+  while(true)
+  {
+    data_chunk data;
+    data_queue.wait_and_pop(data);
+    process(data);
+    if(is_last_chunk(data))
+      break;
+  }
+}
+
+
 ={============================================================================
-*kt_dev_ccon_013* thread-safe queue
-
-TODO 4.1.2
-
-
-={============================================================================
-*kt_dev_ccon_014* cpp-con-task-model cpp-future
+*kt_dev_ccon_014* cpp-con-task-model cxx-future
 
 From C++PL 42.4.
 
@@ -51680,6 +51715,96 @@ vector<T> wait_for_all(vector<future<T>>& vf)
         res.push_back(fu.get());
     return res;
 }
+
+
+={============================================================================
+*kt_dev_ccon_014* cpp-con-wait
+
+// CLR and CCON
+
+5.7.5 Blocking with Timers
+
+All the blocking functions that end with _for() use a duration, whereas all
+functions that end with _until() use a timepoint as argument. For example,
+
+this_thread::sleep_for(chrono::seconds(10));
+
+blocks the current thread, which might be the main thread for 10 seconds,
+
+this_thread::sleep_until(chrono::system_clock::now()
+  + chrono::seconds(10));
+
+blocks the current thread until the system clock has reached a timepoint 10
+seconds later than now.
+
+
+The wait functions all return a status to indicate whether the wait timed out
+or the waitedfor event occurred. 
+
+In this case, you’re waiting for a future, so the function returns
+std::future_status::timeout if the wait times out, std::future_status::ready
+if the future is ready, or std::future_status::deferred if the future’s task
+  is deferred. 
+
+
+Although these calls look the same, they are not! 
+
+The time for a duration-based wait `is measured using a steady clock` internal
+to the library, so 35 milliseconds means 35 milliseconds of elapsed time, even
+if the system clock was adjusted (forward or back) during the wait. 
+
+For all _until() functions, where you pass a timepoint, time adjustments might
+have an effect.
+
+the vagaries of system scheduling and the varying precisions of OS clocks
+  means that the actual time between the thread issuing the call and returning
+  from it may be much longer than 35 ms.
+
+// CLR
+
+All these timers do not guarantee to be exact. For any timer, there will be a
+delay because the system only periodically checks for expired timers, and the
+handling of timers and interrupts takes some time. Thus, durations of timers
+will take their specified time plus a period that depends on the quality of
+implementation and the current situation.
+
+
+<bounded-or-unbounded>
+
+#include <condition_variable>
+#include <mutex>
+#include <chrono>
+
+std::condition_variable cv;
+bool done;
+std::mutex m;
+
+bool wait_loop()
+{
+  auto const timeout= std::chrono::steady_clock::now()+
+    std::chrono::milliseconds(500);
+  std::unique_lock<std::mutex> lk(m);
+
+  while(!done)
+  {
+    if(cv.wait_until(lk,timeout)==std::cv_status::timeout)
+      break;
+  }
+
+  return done;
+}
+
+This is the recommended way to wait for condition variables with a time limit,
+     if you’re not passing a predicate to the wait. This way, the overall
+     length of the loop is `bounded.`
+
+As you saw in section 4.1.1, you need to loop when using condition variables
+if you don’t pass in the predicate, in order to handle spurious wakeups. 
+
+If you use wait_for() in a loop, you might end up waiting almost the full
+length of time before a spurious wake, and the next time through the wait time
+starts again. This may repeat any number of times, making the total wait time
+unbounded.
 
 
 ={============================================================================
