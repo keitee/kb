@@ -4,9 +4,151 @@
 #include <deque>
 #include <thread>
 #include <atomic>
+#include <chrono>
 #include "work.h"
 
 // ThreadPool, which creates worker threads to handle the work queue
+
+
+// code/c9/6/ThreadPool.h
+//
+// supports only one work
+
+#if 0
+class ThreadPool {
+public:
+   virtual ~ThreadPool() {
+      if (workThread_)
+         workThread_->join();
+   }
+
+   void start() {
+      workThread_ = std::make_shared<std::thread>(&ThreadPool::worker, this);
+   }
+   // ...
+   bool hasWork() {
+      return !workQueue_.empty();
+   }
+
+   void add(Work work) {
+      workQueue_.push_front(work); 
+      // std::cout << "add: " << workQueue_.size() << std::endl;
+   }
+
+   Work pullWork() {
+      auto work = workQueue_.back();
+      workQueue_.pop_back();
+      // std::cout << "pullWork" << std::endl;
+      return work;
+   }
+
+private:
+   void worker() {
+
+      // when no works to do, do busy looping
+      while (!hasWork())
+        ;
+      
+      pullWork().execute();
+   }
+
+   std::deque<Work> workQueue_;
+   std::shared_ptr<std::thread> workThread_;
+};
+
+
+// To support multiple works
+
+class ThreadPool {
+public:
+    virtual ~ThreadPool() {
+
+        // <problem-2> hang
+        // Unfortunately...no, fortunately, our lame implementation hangs the
+        // test run every time. Consistent failure when dealing with threads is
+        // a great step toward a solution. A bit of analysis suggests that:
+        //
+        // once the test completes, the ThreadPool destructor sets the done_ flag
+        // to true and then attempts to join the thread. The thread can’t
+        // complete because it’s stuck in the while loop that waits for work to
+        // be available.
+        //
+        // Introducing done_ to support multiple work cause racy because as
+        // said in the book:
+        //
+        // NOTE: every time? However, it works for me when run. To make the hang
+        // happen, make some delay here so that done_ is set after thread enters
+        // busy loop and this hang is reproduced.
+        // 
+        // std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        done_ = true;
+
+        if (workThread_)
+            workThread_->join();
+    }
+
+   // ...
+   void start() {
+      workThread_ = std::make_shared<std::thread>(&ThreadPool::worker, this);
+   }
+
+   bool hasWork() {
+      return !workQueue_.empty();
+   }
+
+   void add(Work work) {
+      workQueue_.push_front(work); 
+   }
+
+   Work pullWork() {
+      auto work = workQueue_.back();
+      workQueue_.pop_back();
+      return work;
+   }
+
+private:
+
+   // <problem-2>
+   // void worker() {
+   //    while (!done_) {
+   //       while (!hasWork())
+   //          ;
+   //       pullWork().execute();
+   //    }
+   // }
+
+   void worker() {
+      while (!done_) {
+         while (!done_ && !hasWork())
+            ;
+         pullWork().execute();
+      }
+   }
+
+   std::atomic<bool> done_{false};
+   std::deque<Work> workQueue_;
+   std::shared_ptr<std::thread> workThread_;
+};
+
+
+// <problem-3>
+// Our tests no longer hang and pass on their first run. Once again, however,
+// they fail intermittently. "We need to hit things harder" from the test so that
+// it fails every time. A quick attempt at bumping up the number of work items
+// added to the loop doesn’t appear to make much difference. 
+//
+// NOTE fail intermittently? For me, ran 1000 times and no luck to see this
+// reproduced.
+//
+// "We need to hit things harder"? So far, "1 client and 1 thread in a pool"
+//
+// Our test needs to add work items from multiple threads created by the test
+// itself. More client threads!
+
+#endif
+
+// support mutiple worker threads and mutex on IFs
 
 class ThreadPool
 {
@@ -18,41 +160,6 @@ class ThreadPool
 
         void stop()
         {
-            // <problem 1>
-            //
-            // Introducing done_ to support multiple work cause racy because as
-            // said in the book:
-            //
-            // once the test completes, the ThreadPool destructor sets the done_
-            // flag to true and then attempts to join the thread. The thread
-            // can’t complete because it’s stuck in the while loop that waits
-            // for work to be available.
-            //
-            // However, it works for me when run. To make the hang happen, make
-            // some delay here like:
-            // 
-            // std::string s;
-            // for(int i = 0; i < 100; ++i)
-            //     s = s + "x";
-            //
-            // so that done_ is get after thread enters busy loop and this hang
-            // is reproduced.
-            //
-            // where:
-            //
-            // void worker()
-            // {
-            //     // supports multiple works to process
-            //     while (!done_)
-            //     {
-            //         // when no works to do, do busy looping
-            //         while (!hasWork())
-            //             ;
-            //
-            //         pullWork().execute();
-            //     }
-            // }
-
             done_ = true;
             for (auto &t : threads_) t.join();
         }
@@ -79,36 +186,13 @@ class ThreadPool
         {
             std::lock_guard<std::mutex> block(mutex_);
 
-            // <problem>
+            // <problem-5>
             //
             // Our test fails consistently. Given our suspicion around the
             // worker function, we add a line of code to handle the case where
             // work is no longer available (in other words, where another thread
             // picked it up).
-            //
-            // The worker function seems to remain the only code with any such
-            // potential. In worker, we loop until there is work; each time
-            // through the loop establishes and immediately releases a lock
-            // within hasWork. Once there is work, the loop exits, and control
-            // falls through to the statement pullWork().execute(). What if,
-            // during this short span, another thread has grabbed work?
-            //
-            // Otherwise, one of threads fails as:
-            //
-            // terminate called after throwing an instance of 'std::bad_function_call'
-            //   what():  bad_function_call
-            // Aborted (core dumped)
-            //
-            // (gdb) bt
-            // #0  0x00007fd2bc07b067 in __GI_raise (sig=sig@entry=6) at ../nptl/sysdeps/unix/sysv/linux/raise.c:56
-            // #1  0x00007fd2bc07c448 in __GI_abort () at abort.c:89
-            // #2  0x00007fd2bc968b3d in __gnu_cxx::__verbose_terminate_handler() () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-            // #3  0x00007fd2bc966bb6 in ?? () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-            // #4  0x00007fd2bc966c01 in std::terminate() () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-            // #5  0x00007fd2bc9bea01 in ?? () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-            // #6  0x00007fd2bcc1b064 in start_thread (arg=0x7fd2bc045700) at pthread_create.c:309
-            // #7  0x00007fd2bc12e62d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:111
-
+            
             if (workq_.empty()) return Work{};
 
             auto work = workq_.back();
@@ -139,6 +223,5 @@ class ThreadPool
             // std::cout << "worker ends" << std::endl;
         }
 };
-
 
 #endif // THREADPOOL_H

@@ -297,20 +297,16 @@ KT KB. CPP
 #{ c++ concurrent in action
 *kt_dev_cxx_0000* cxx-con-thread cxx-boost-thread
 *kt_dev_cxx_0000* cxx-con-thread-lifetime-issue
-|kt_dev_ccon_002| std-threadad: join and detach
-*kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
-*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-stack
-*kt_dev_ccon_005* cxx-con-deadlock cxx-deadlock
-*kt_dev_ccon_006* cxx-con-unique-lock
-*kt_dev_ccon_009* cxx-con-call-once
-*kt_dev_ccon_010* cxx-con-shared-lock cxx-boost-shared-lock
-*kt_dev_ccon_011* cxx-con-recursive-lock
-|kt_dev_ccon_012| cxx-con-condition_variable
-|kt_dev_ccon_013| thread-safe queue
-|kt_dev_ccon_014| cpp-con-task-model cpp-future
-*kt_dev_ccon_014* cpp-con-async
-|kt_dev_ccon_016| wait(): wait and poll
-|kt_dev_ccon_017| std::packaged_task
+*kt_dev_cxx_0000* cxx-con-mutex cxx-lock-guard cxx-stack
+*kt_dev_cxx_0000* cxx-con-deadlock cxx-deadlock
+*kt_dev_cxx_0000* cxx-con-unique-lock
+*kt_dev_cxx_0000* cxx-con-call-once
+*kt_dev_cxx_0000* cxx-con-shared-lock cxx-boost-shared-lock
+*kt_dev_cxx_0000* cxx-con-recursive-lock
+*kt_dev_cxx_0000* cxx-con-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-con-wait
+*kt_dev_cxx_0000* cxx-con-task-model cxx-futur cxx-async
+*kt_dev_cxx_0000* cxx-con-packaged-task
 |kt_dev_ccon_018| std::promise
 |kt_dev_ccon_019| std::shared_future in multiple threads
 
@@ -5263,6 +5259,48 @@ main( int argc, char *argv[] )
 
   exit(0);
 }
+
+
+<ex>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(int argc, char **argv)
+{
+    int count = 0;
+    char filename[256] = {0};
+    FILE *fp;
+
+    if (argc < 2)
+    {
+        fprintf(stderr, "specify num of files to run...\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // count  = atoi(argv[1]);
+    count  = 20;
+
+    fprintf(stderr, "create, open but not close for %d...\n", count);
+
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        sprintf(filename, "./k_%d", i );
+
+        fprintf(stderr, "opening %d, %s...\n", i, filename);
+        if ((fp = fopen( filename, "w+")) == NULL)
+        {
+            fprintf(stderr, "fail to open %d, %s,...\n", i, filename);
+            perror("fopen error");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    sleep(1000);
+
+    exit(EXIT_SUCCESS);
+}
+
 
 <why-stderr>
 Output written on stderr normally appears on the screen even if the standard output is redirected.
@@ -20285,7 +20323,8 @@ terms of constness. This matters when copy an object.
   const int * <variable-name>            // pointer to const
   const int *const <variable-name>       // const pointer to const
   int const *const <variable-name>       // const pointer to const
-  const int & <variable-name>            // reference to const
+  const int & <variable-name>            // reference to const *cxx-reference-const*
+  int const & <variable-name>            // reference to const
 
 1. `base-type` part which is for underlying object and for low-level. That is a
 object that point or reference to.
@@ -39027,15 +39066,23 @@ parameter or return. When return used in the body, has an 'inferred' return
 type. 
 
 <ex>
-#include<iostream>
 
-using namespace std;
-
-int main()
+TEST(CxxFeaturesTest, UseLambda)
 {
-  auto f = [] { return 42; };
+  // string callback()
+  // {
+  //     std::string value{"this is a callback"};
+  //     return value;
+  // };
 
-  cout << f() << endl;
+  auto callback = [](){
+    std::string value{"this is a callback"};
+    return value;
+  };
+
+  std::string result = callback();
+
+  cout << "result: " << result << endl;
 }
 
 
@@ -42874,9 +42921,10 @@ TEST(CxxStringTest, RunStringCtors)
     char letter = 'A';
 
     // *cxx-string-const*
+    //
     // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
     // string s3(letter);
-
+    //
     // ok since:
     //
     // /**
@@ -42890,6 +42938,10 @@ TEST(CxxStringTest, RunStringCtors)
     //  this->push_back(__c);
     //  return *this;
     // }
+    //
+    // this is error since there is no string ctor which takes single
+    // character, char, but there are string ctor which takes char*. so can
+    // create a string from char literal or char array.
     
     string s4;
     s4 += letter;
@@ -50229,9 +50281,6 @@ int main()
 The std::thread object must be self-contained and this means initial function
 and its arguments `should be copied` into a thread object.
 
-The compiler checks that the first argument can be invoked given the following
-arguments and `builds the necessary function object` to pass to the thread.
-
 class background_task
 {
   public:
@@ -50250,7 +50299,7 @@ If use callable object, it is 'copied' into the storage belonging to the newly
 created thread of execution and invoked from there. It's therefore essential
 that the copy is *self-contained* or the result may not be what's expected.
 
-note: std::bind uses the same mechanism.
+// std::bind uses the same mechanism.
 
 If not, can cause lifefime issue. For stl algorithms and predicates, use
 either usual function or temporary functional object and passes it as
@@ -50265,14 +50314,9 @@ lifetime issue.
 
 // when not self-contained since has a reference to external
 
-void f( int i, std::string const& s );
+The second argument is passed as a "char const *" and converted to a
+std::string `only in the context of the new thread.` 
 
-std::thread t( f, 3, "hello" );
-
-This creates a new thread which calls f( 3, "hello" ) and the second argument
-is passed as a "char const *" and converted to a std::string. This is
-particularly important when the argument supplied is a pointer to an automatic
-variable, as follows:
 
 void f( int i, std::string const& s );
 
@@ -50289,7 +50333,7 @@ The problem is that there is a significance chance that the function oops will
 exit `before the buffer has been converted to a std::string` on the new
 thread. Thus leading to undefined behavior because it relies on implicit
 conversion and a pointer of buffer is copied, no guarantee that buffer is
-available 'when' a thread runs f() which requires a conversion from char* to
+available when a thread runs f() which requires a conversion from char* to
 string.
 
 The solution is to do it explicitly before passing the buffer to the
@@ -50325,20 +50369,29 @@ void oops_again( widget_id w )
   process_widget_data(data);
 }
 
-`although passed by reference, still copied and has internal copy.` WHY?
-
 The problem is that process_widget_data will be passed an unchanged data
-rather than a correctly updated version.
+rather than a correctly updated version since although passed by reference,
+still copied and has internal copy. WHY?
+
 
 The solution is to use:
 
 // *cxx-ref*
 std::thread t( update_data_for_widget, w, std::ref(data) );
 
-// TN: since it uses t.join() it is safe to use reference to local variable.
+// TN since it uses t.join() it is safe to use reference to local variable.
 
 
 <cxx-thread-lifetime-issue>
+
+Once started a thread, need to explicitly decide whether to wait for it to
+finish by joining or leave it to run on its own by detaching.
+
+If don't decide before thread object is destoryed, then your program is
+terminated. the std::thread destructor calls std::terminate().
+
+If don't wait for a thread to finish, lifetime issues can happen and that's
+why must use self-contained approach.
 
 Since not waiting for a thread termintated, when ThreadPool gets destroyed it
 will destroy thread as well which may be running. Got *cxx-seg-fault* and
@@ -50480,45 +50533,7 @@ make sure that when use thread object.
 
 
 ={============================================================================
-*kt_dev_ccon_002* std-thread: join and detach
-
-Once started a thread, need to explicitly decide whether to wait for it to
-finish by joining or leave it to run on its own by detaching.
-
-If don't decide before thread object is destoryed, then your program is
-terminated. the std::thread destructor calls std::terminate().
-
-If don't wait for a thread to finish, lifetime issues can happen and that's why
-must use self-contained approach.
-
-struct func
-{
-    int i;
-
-    func( int & i_ ): i(i_) {}
-
-    void operator()()
-    {
-        ...
-    }
-};
-
-void oops()
-{
-    int some_local_state = 0;
-
-    func my_func( some_local_state );
-
-    // new thread might still be running after oops()
-    std::thread my_thread( my_func );  
-
-    // should be my_thread.join();
-    my_thread.detach();                
-}
-
-
-={============================================================================
-*kt_dev_ccon_003* cpp-con-race-condition cpp-data-race
+*kt_dev_cxx_0000* cxx-con-mutex cxx-lock-guard cxx-race
 
 3.1 Problems with sharing data between threads
 
@@ -50550,9 +50565,6 @@ race condition that arises because of concurrent modification to a single
 
 * software transactional memory (STM)
 
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
 
 3.2.1 Using mutexes in C++
 
@@ -50919,7 +50931,7 @@ Even empty() is superfluous.
 
 
 ={============================================================================
-*kt_dev_ccon_005* cxx-con-deadlock cxx-deadlock
+*kt_dev_cxx_0000* cxx-con-deadlock cxx-deadlock
 
 3.2.4 Deadlock: the problem and a solution
 
@@ -51086,7 +51098,7 @@ thread_local unsigned long
 
 
 ={============================================================================
-*kt_dev_ccon_006* cxx-con-unique-lock
+*kt_dev_cxx_0000* cxx-con-unique-lock
 
 The standard library offers help in the form of an operation for acquiring
 several locks simultaneously with regard to deadlock problem.
@@ -51203,7 +51215,7 @@ void get_and_process_data()
 
 
 ={============================================================================
-*kt_dev_ccon_009* cxx-con-call-once
+*kt_dev_cxx_0000* cxx-con-call-once
 
 One particularly extreme (but remarkably common) case is where the shared data
 needs protection only from concurrent access while it’s being initialized, but
@@ -51336,7 +51348,7 @@ threads concurrently.
 
 
 ={============================================================================
-*kt_dev_ccon_010* cxx-con-shared-lock cxx-boost-shared-lock
+*kt_dev_cxx_0000* cxx-con-shared-lock cxx-boost-shared-lock
 
 <cxx-shared-lock> 
 
@@ -51409,14 +51421,14 @@ call find_entry() are blocked too.
 
 
 ={============================================================================
-*kt_dev_ccon_011* cxx-con-recursive-lock
+*kt_dev_cxx_0000* cxx-con-recursive-lock
 
 Most of the time, if you think you want a recursive mutex, you probably need to
 change your design instead.
 
 
 ={============================================================================
-*kt_dev_ccon_012* cxx-con-condition_variable cxx-queue
+*kt_dev_cxx_0000* cxx-con-condition-variable cxx-queue
 
 4.1.1 Waiting for a condition with condition variables
 
@@ -51582,143 +51594,7 @@ void data_processing_thread()
 
 
 ={============================================================================
-*kt_dev_ccon_014* cpp-con-task-model cxx-future
-
-From C++PL 42.4.
-
-<task-model>
-Focuses on specifying a simple kind of task: a task that does one thing given
-arguments and produces one result. Hiding uses of the messier
-threads-and-locks level.
-
-Often, we would like to provide a lot of small tasks and let 'the system'
-worry about how to map their execution onto hardware resources and how to keep
-them out of problems with data races, spurious wake-ups, excessive waits, etc.
-
-The importance of these facilities is their 'simplicity'. In a sequential
-program, we usually write something like:
-
-// perform a task given arguments and get the result
-res = task(args);
-
-The concurrent version becomes:
-
-// perform a task given arguments
-auto handle = async(task,args);  
-
-// ... do something else ...
-//
-// get the result
-res = handle.get()               
-
-
-<shared-or-call-and-return>
-Communicating through shared data is pretty low level. In particular, the
-programmer has to devise ways of knowing what work has and has not been done
-by various tasks. In that regard, use of shared data is inferior to the notion
-of call and return. On the other hand, some people are convinced that sharing
-must be more efficient than copying arguments and returns. That can indeed be
-so when large amounts of data are involved, but locking and unlocking are
-relatively expensive operations. On the other hand, modern machines are very
-good at copying data, especially compact data, such as vector elements. So
-don’t choose shared data for communication because of “efficiency” without
-thought and preferably not without measurement.
-
-    
-{future-and-promise}
-`communication between tasks` is handled by a future/promise pair. A task
-'puts' its result into a promise, and a task that needs the result 'retrieves'
-the result from the corresponding future:
-
-task 1                             task 2:
------------------------            ------------------------------------------
-get() -> future  <->  value   <->  promise    <- set_value(), set_exception()
-
-The value is known as "shared state". In addition to the return value or
-exception, it contains the information needed for two threads to 'safely'
-exchange the information. For example:
-
-o A ready bit to indicate whether a value or exception is ready to be
-  extracted by a future.
-
-An implementation can take action on a shared state:
-
-o Make ready: Set the 'ready bit' and unblock any waiting threads.
-
-
-  "Please note the absence of explicit mention of locks in this code: we are
-  able to concentrate on tasks to be done, rather than on the mechanisms used
-  to manage their communication."
-
-
-{promise}
-A promise is the 'handle' to a shared state. It is where a task can deposit its
-result to be retrieved through a future.
-
-<operations>
-promise pr {};       
-Default constructor: pr has a shared state that is not yet ready
-
-fu=pr.get_future()   fu is the future corresponding to pr
-
-pr.set_value(x)      The result of the task is the value x
-pr.set_value()       Set the result of the task for a void future
-
-pr.set_exception(p)  
-The result of the task is the exception pointed to by p; p is an exception_ptr
-
-note: there are 'no' copy operations for a promise. A set function throws
-future_error if a value or exception is already set.
-
-
-<single-value>
-Only possible to transmit a 'single' result value through a promise. That may
-seem restrictive, but remember that the value is 'moved' into and out of the
-shared state, rather than copied, so that we can cheaply pass a collection of
-objects. For example:
-
-promise<map<string,int>> pr;
-map<string,int>> m;
-
-// ... fill m with a million <string,int> pairs ...
-
-pr.set_value(m);
-
-A task may then extract that map from a corresponding future at essentially zero
-cost.
-
-
-{future}
-A future is a handle to a shared state. It is where a task can retrieve a result
-deposited by a promise.
-
-<operations>
-future fu {fu2};
-Move constructor: fu gets fu2's shared state, if any; fu2 no longer has a shared
-state; noexcept
-
-fu.get()
-For future<void>: like x=fu.get(), but don't move any value
-
-fu.wait() 
-Block until a value arrives
-
-<ex>
-
-I can easily implement a version of wait_for_all():
-
-template<typename T>
-vector<T> wait_for_all(vector<future<T>>& vf)
-{
-    vector<T> res;
-    for (auto& fu : vf)
-        res.push_back(fu.get());
-    return res;
-}
-
-
-={============================================================================
-*kt_dev_ccon_014* cpp-con-wait
+*kt_dev_cxx_0000* cxx-con-wait
 
 // CLR and CCON
 
@@ -51727,6 +51603,7 @@ vector<T> wait_for_all(vector<future<T>>& vf)
 All the blocking functions that end with _for() use a duration, whereas all
 functions that end with _until() use a timepoint as argument. For example,
 
+// *cxx-chrono*
 this_thread::sleep_for(chrono::seconds(10));
 
 blocks the current thread, which might be the main thread for 10 seconds,
@@ -51807,40 +51684,188 @@ starts again. This may repeat any number of times, making the total wait time
 unbounded.
 
 
+<cxx-condition-variable-source>
+
+  /// cv_status
+  enum class cv_status { no_timeout, timeout };
+
+    template<typename _Duration>
+      cv_status
+      wait_until(unique_lock<mutex>& __lock,
+		 const chrono::time_point<__clock_t, _Duration>& __atime)
+      { return __wait_until_impl(__lock, __atime); }
+
+    template<typename _Rep, typename _Period>
+      cv_status
+      wait_for(unique_lock<mutex>& __lock,
+	       const chrono::duration<_Rep, _Period>& __rtime)
+      { return wait_until(__lock, __clock_t::now() + __rtime); }
+
+
 ={============================================================================
-*kt_dev_ccon_014* cpp-con-async
+*kt_dev_cxx_0000* cxx-con-task-model cxx-future cxx-async
 
-note: this way is to set future 'implicitly'.
+C++PL 42.4.
 
-<one-off-event-and-asynchronous-result>
-The C++ Standard Library models this sort of one-off event with a future. Wait
-for the future to become ready. A future may have 'data' associated with it or
-    it may not. Once an event has happened (and the future has become ready),
-       the future can't be 'reset'.
+<cxx-con-task-model>
+Focuses on specifying a simple kind of task: a task that does one thing given
+arguments and produces one result. 
+
+  "Hiding uses of the messier threads-and-locks level. `abstraction`"
+
+  "Separating threading logic from application logic"
+
+Often, we would like to provide a lot of small tasks and let 'the system'
+worry about how to map their execution onto hardware resources and how to keep
+them out of problems with data races, spurious wake-ups, excessive waits, etc.
+
+The importance of these facilities is their simplicity. In a sequential
+program, we usually write something like:
+
+// perform a task given arguments and get the result
+res = task(args);
+
+The concurrent version becomes:
+
+// perform a task given arguments
+auto handle = async(task,args);  
+
+// ... do something else ...
+//
+// get the result
+res = handle.get()               
+
+
+<shared-data-vs-call-and-return>
+Communicating through shared data is pretty low level. In particular, the
+programmer has to devise ways of knowing what work has and has not been done
+by various tasks. In that regard, use of shared data is inferior to the notion
+of call and return. On the other hand, some people are convinced that sharing
+must be more efficient than copying arguments and returns. That can indeed be
+so when large amounts of data are involved, but locking and unlocking are
+relatively expensive operations. On the other hand, modern machines are very
+good at copying data, especially compact data, such as vector elements. So
+don’t choose shared data for communication because of “efficiency” without
+thought and preferably not without measurement.
+
+    
+{future-and-promise}
+`communication between tasks` is handled by a future/promise pair. A task
+'puts' its result into a promise, and a task that needs the result 'retrieves'
+the result from the corresponding future:
+
+task 1                             task 2:
+---------------                    ------------------------------------------
+get() -> future  <->  value   <->  promise    <- set_value(), set_exception()
+
+The value is known as "shared state". In addition to the return value or
+exception, it contains the information needed for two threads to 'safely'
+exchange the information. For example:
+
+o A ready bit to indicate whether a value or exception is ready to be
+  extracted by a future.
+
+An implementation can take action on a shared state:
+
+o Make ready: Set the 'ready bit' and unblock any waiting threads.
+
+
+  "Please note the absence of explicit mention of locks in this code: we are
+  able to concentrate on tasks to be done, rather than on the mechanisms used
+  to manage their communication."
+
+
+{cxx-future}
+A future is a handle to a shared state. It is where a task can retrieve a result
+deposited by a promise.
+
+Wait for the future to become ready. Once an event has happened (and the
+future has become ready), the future can't be 'reset'.
+
+  "A future may have 'data' associated with it or it may not."
 
 <two-types>
 There are two sorts of futures in the C++ Standard Library, implemented as two
-class templates declared in the <future> library header: unique futures
+class templates declared in the <future> header: unique futures
 (std::future<>) and shared futures (std::shared_future<>). These are modeled
-after std::unique_ptr and std::shared_ptr. An instance of std::future is the one
-and only instance that refers to its associated event, whereas multiple
-instances of std::shared_future may refer to the same event. In the latter case,
-all the instances will become ready at the same time, and they may all access
-    any data associated with the event. 
+after std::unique_ptr and std::shared_ptr. An instance of std::future is the
+one and only instance that refers to its associated event, whereas multiple
+instances of std::shared_future may refer to the same event. In the latter
+case, all the instances will become ready at the same time, and they may all
+access any data associated with the event. 
 
 This associated data is the reason these are templates; just like
 std::unique_ptr and std::shared_ptr, the template parameter is the type of the
 associated data.
 
-<no-data>
 The std:future<void>, std::shared_future<void> template specializations should
 be used where there's no associated data.
 
 
-{return-from-task}
-std::thread doesn't provide an easy means of returning a value from such a task.
-This is where the std::async function template (also declared in the <future>
-        header) comes in.
+future fu {fu2};
+Move constructor: fu gets fu2's shared state, if any; fu2 no longer has a shared
+state; noexcept
+
+fu.get()
+For future<void>: like x=fu.get(), but don't move any value
+
+fu.wait() 
+Block until a value arrives
+
+<ex>
+
+I can easily implement a version of wait_for_all():
+
+template<typename T>
+vector<T> wait_for_all(vector<future<T>>& vf)
+{
+    vector<T> res;
+    for (auto& fu : vf)
+        res.push_back(fu.get());
+    return res;
+}
+
+
+{cxx-promise}
+A promise is the 'handle' to a shared state. It is where a task can deposit its
+result to be retrieved through a future.
+
+promise pr {};       
+Default constructor: pr has a shared state that is not yet ready
+
+fu=pr.get_future()   fu is the future corresponding to pr
+
+pr.set_value(x)      The result of the task is the value x
+pr.set_value()       Set the result of the task for a void future
+
+pr.set_exception(p)  
+The result of the task is the exception pointed to by p; p is an exception_ptr
+
+TN: there are 'no' copy operations for a promise. A set function throws
+future_error if a value or exception is already set.
+
+
+<single-value>
+Only possible to transmit a single result value through a promise. That may
+seem restrictive, but remember that `the value is moved into` and out of the
+shared state, rather than copied, so that we can cheaply pass a collection of
+objects. For example:
+
+promise<map<string,int>> pr;
+map<string,int>> m;
+
+// ... fill m with a million <string,int> pairs ...
+
+pr.set_value(m);
+
+A task may then extract that map from a corresponding future at essentially
+zero cost.
+
+
+{cxx-async} {return-from-task}
+std::thread doesn't provide an easy means of returning a value from such a
+task. This is where the std::async function template declared in the <future>
+header, comes in.
 
 Use std::async to start an asynchronous task for which you don't need the result
 right away. Rather than giving you back a std::thread object to wait on,
@@ -51850,25 +51875,40 @@ right away. Rather than giving you back a std::thread object to wait on,
 When you need the value, you just call get() on the future, and the thread
 blocks until the future is ready and then returns the value. 
 
-#include <future>
-#include <iostream>
 
-int find_the_answer_to_ltuae();
+<ex>
+// Q: when use async, when does a thread start and end?
+//
+// ends do_other_stuff
+// ends find_the_answer
+// the answer is 100
 
-void do_other_stuff();
-
-int main()
+int find_the_answer()
 {
-    std::future<int> the_answer = std::async( find_the_answer_to_ltuae );
+    this_thread::sleep_for(chrono::milliseconds(100));
+    std::cout << "ends find_the_answer" << std::endl;
+    return 100;
+}
+
+void do_other_stuff()
+{
+    this_thread::sleep_for(chrono::minutes(1));
+    std::cout << "ends do_other_stuff" << std::endl;
+}
+
+TEST(CconThreadTest, UseAsync)
+{
+    std::future<int> the_answer = std::async( find_the_answer );
     do_other_stuff();
-    std::cout << "The answer is " << the_answer.get() << std::endl;
+    std::cout << "the answer is " << the_answer.get() << std::endl;
 }
 
 
 std::async allows you to pass additional arguments to the function by adding
 extra arguments to the call, in the same way that std::thread does. If the
 arguments are rvalues, the copies are created by moving the originals. This
-allows the use of move-only types as both the function object and the arguments.
+allows the use of move-only types as both the function object and the
+arguments.
 
 #include <string>
 #include <future>
@@ -51926,21 +51966,11 @@ class move_only
 auto f5=std::async(move_only()); 
 
 
-<ex> C++ SRL 18
+<ex>
+// C++ SRL 18, *cxx-random*
 
-note: As std::thread example, must build with -lpthread.
-
-Here, async() 'tries' to start the passed functionality immediately
-asynchronously in a separate thread.
-
-#include <future>
-#include <thread>
-#include <chrono>
-#include <random>
-#include <iostream>
-#include <exception>
-
-using namespace std;
+// Here, async() 'tries' to start the passed functionality immediately
+// asynchronously in a separate thread.
 
 int doSomething (char c)
 {
@@ -51966,7 +51996,7 @@ int func2()
     return doSomething('+');
 }
 
-int main()
+TEST(CconThreadTest, UseAsyncInBackground)
 {
     cout << "starting func1() in background"
         << " and func2() in foreground:" << endl;
@@ -51980,7 +52010,7 @@ int main()
     cout << "\nresult of func1()+func2(): " << result << endl;
 }
 
-note:
+
 Here, with the call of get(), one of three things might happen:
 
 1. If func1() was started with async() in a separate thread and has already
@@ -51992,9 +52022,9 @@ its end and yields the result.
 3. If func1() was not started yet, it will be forced to start now and, like a
 synchronous function call, get() will block until it yields the result.
 
-This behavior is important because it ensures that the program 'still' works on
-a single-threaded environment or, if for any other reason, it was not possible
-for async() to start a new thread.
+This behavior is important because it ensures that the program 'still' works
+on a single-threaded environment or, if for any other reason, it was not
+possible for async() to start a new thread.
 
 
 Thus, the combination of
@@ -52004,8 +52034,10 @@ std::future<int> result1(std::async(func1)); and result1.get()
 allows you to optimize a program in a way that, if possible, func1() runs in
 parallel while the next statements in the main thread are processed. If it is
 not possible to run it in parallel, it will be called sequentially when get()
-    gets called. This means that, in any case, it is guaranteed that after
-    get(), func1() was called either asynchronously or synchronously.
+  gets called. 
+    
+This means that, in any case, it is guaranteed that after get(), func1() was
+called either asynchronously or synchronously.
 
 Two kinds of outputs are possible for this program. If async() could
 successfully start func1(), the output might be something like the following:
@@ -52021,14 +52053,16 @@ starting func1() in background and func2() in foreground:
 ++++++++++..........
 result of func1()+func2(): 89
 
-Note that without calling get(), there is no guarantee that func1() will ever be
-called. As written, if async() couldn't start the passed functionality
-immediately, it will defer the call so that it gets called only when the outcome
-of the passed functionality explicitly is requested with get()
+// this is result when run it on VM.
 
-Note also that you have to ensure that you ask for the result of a functionality
-started with async() no earlier than necessary. For example, the following
-"optimization" is probably not what you want:
+Note that without calling get(), there is no guarantee that func1() will ever
+be called. As written, if async() couldn't start the passed functionality
+immediately, it will defer the call so that it gets called only when the
+outcome of the passed functionality explicitly is requested with get()
+
+Note also that you have to ensure that you ask for the result of a
+functionality started with async() no earlier than necessary. For example, the
+following "optimization" is probably not what you want:
 
 std::future<int> result1(std::async(func1));
 int result = func2() + result1.get(); // might call func2() after func1() ends
@@ -52038,87 +52072,71 @@ unspecified, result1.get() might be called before func2() so that you have
 sequential processing again.
 
 
-{specify-how-to-run}
+{cxx-async-specify-when-to-run}
+
+4.2.1 Returning values from background tasks
+
 By default, it's up to the implementation whether std::async starts a new
 thread, or whether the task runs synchronously when the future is waited for.
+
 You can specify which to use with an additional parameter to std::async. 
 
 std::launch::deferred
 
-This parameter is of the type std::launch, std::launch::deferred to indicate
-that the function call is to be deferred until either wait() or get() is called
-on the future. If the function call is deferred, it may never actually run
-because it is guaranteed that func1() never gets called without get() (or
-        wait(); see page 953).
+This is of the type std::launch, std::launch::deferred to indicate that the
+function call is to be deferred until either wait() or get() is called on the
+future, std::launch::async to indicate that the function must be run on its
+own thread, or std::launch::deferred | std::launch::async to indicate that the
+implementation may choose. This last option is the default.
+
+If the function call is deferred, it may never actually run because it is
+guaranteed that func1() never gets called without get() or wait()
 
 
-std::launch::async to indicate that the function must be run on its own thread
-
-From C++ SRL 18
+// C++ SRL 18
 
 If the asynchronous call is not possible here, the program will throw a
 std::system_error exception (see Section 4.3.1, page 43) with the error code
 resource_unavailable_try_again, which is equivalent to the POSIX errno EAGAIN
 (see Section 4.3.2, page 45).
 
-note:
 If don't assign the result of std::async(std::launch::async,...) anywhere, the
 caller will block until the passed functionality has finished, which would mean
 that this is nothing but a synchronous call.
 
+// int main()
+// {
+//     cout << "starting func1() in background"
+//         << " and func2() in foreground:" << endl;
+// 
+//     future<int> result1(std::async(std::launch::async, func1));
+// 
+//     int result2 = func2();
+// 
+//     try 
+//     {
+//         int result = result1.get() + result2;
+// 
+//         cout << "\nresult of func1()+func2(): " << result << endl;
+//     }
+//     catch( const exception& e )
+//     {
+//         cerr << "\nEXCEPTION: " << e.what() << endl;
+//     }
+// }
 
-#include <future>
-#include <thread>
-#include <chrono>
-#include <random>
-#include <iostream>
-#include <exception>
-
-using namespace std;
-
-int doSomething (char c)
-{
-    default_random_engine dre(c);
-    uniform_int_distribution<int> id(10, 1000);
-
-    for(int i=0; i<10; ++i)
-    {
-        this_thread::sleep_for(chrono::milliseconds( id(dre) ));
-        cout.put(c).flush();
-    }
-
-    return c;
-}
-
-int func1()
-{
-    return doSomething('.');
-}
-
-int func2()
-{
-    return doSomething('+');
-}
-
-int main()
+TEST(CconThreadTest, UseAsyncWithAsync)
 {
     cout << "starting func1() in background"
         << " and func2() in foreground:" << endl;
 
-    future<int> result1(std::async(std::launch::async, func1));
+    future<int> result1(std::async(launch::async, func1));
 
     int result2 = func2();
 
-    try 
-    {
-        int result = result1.get() + result2;
+    int result = result1.get() + result2;
 
-        cout << "\nresult of func1()+func2(): " << result << endl;
-    }
-    catch( const exception& e )
-    {
-        cerr << "\nEXCEPTION: " << e.what() << endl;
-    }
+    cout << "\nresult of func1()+func2(): " << result << endl;
 }
 
 starting func1() in background and func2() in foreground:
@@ -52126,18 +52144,98 @@ starting func1() in background and func2() in foreground:
 result of func1()+func2(): 89
 
 
-std::launch::deferred | std::launch::async to indicate that the implementation
-may choose. This last option is the 'default'. 
+<cxx-future-wait>
 
-auto f6=std::async(std::launch::async,Y(),1.2);
-auto f7=std::async(std::launch::deferred,baz,std::ref(x));
+C++ SRL 18.1.2 
 
-auto f8=std::async(std::launch::deferred | std::launch::async, baz,std::ref(x));
-auto f9=std::async(baz,std::ref(x));
+You can call get() for a future<> 'only' once. After get(), the future is in
+an invalid state, which can be checked only by calling valid() for the future.
 
-f7.wait();
+Just calling wait() forces the start of a thread a future represents and waits
+for the termination of the background operation:
 
-f8 and f9 that implementation chooses and f7 is a sync call.
+std::future<...> f(std::async(func)); // try to call func asynchronously
+...
+f.wait(); // wait for func to be done (might start background task)
+
+But futures also provide an interface to wait for a background operation to
+finish without processing its outcome. This interface is callable more than
+once and might be combined with a duration or timepoint to limit the amount of
+waiting time.
+
+Two other wait() functions exist for futures, but those functions do 'not'
+force the thread to get started, if it hasn't started yet:
+
+1. With wait_for(), you can wait for a limited time for an asynchronously
+running operation by passing a duration:
+
+std::future<...> f(std::async(func)); // try to call func asynchronously
+...
+f.wait_for(std::chrono::seconds(10)); // wait at most 10 seconds for func
+
+2. With wait_until(), you can wait until a specific timepoint has reached:
+
+std::future<...> f(std::async(func)); // try to call func asynchronously
+...
+f.wait_until(std::system_clock::now()+std::chrono::minutes(1));
+
+Both wait_for() and wait_until() return one of the following:
+
+* `std::future_status::deferred` if async() deferred the operation and no calls
+  to wait() or get() have yet forced it to start (both function return
+  immediately in this case)
+
+* std::future_status::timeout if the operation was started asynchronously but
+  hasn't finished yet (if the waiting expired due to the passed timeout)
+
+* std::future_status::ready if the operation has finished
+
+By passing a zero duration or a timepoint that has passed, you can simply
+"poll" to see whether a background task has started and/or is (still) running:
+
+<ex>
+// On VM:
+//
+// starting 2 operations asynchronously
+// 
+// ..........++++++++++
+// done
+
+TEST(CconThreadTest, UseAsyncX)
+{
+    cout << "starting 2 operations asynchronously" << endl;
+
+    // start two loops in the background printing characters . or +
+    auto f1 = async([]{ doSomething('.'); });
+    auto f2 = async([]{ doSomething('+'); });
+
+    // if at least one of the background tasks is running
+    if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
+        f2.wait_for(chrono::seconds(0)) != future_status::deferred) 
+    {
+        cout << "\ndeffered" << endl;
+
+        // poll until at least one of the loops finished
+        while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
+               f2.wait_for(chrono::seconds(0)) != future_status::ready) 
+        {
+            //...;
+            cout << "\nyield" << endl;
+            this_thread::yield();  // hint to reschedule to the next thread
+        }
+    }
+    cout.put('\n').flush();
+
+    // wait for all loops to be finished and process any exception
+    try {
+        f1.get();
+        f2.get();
+    }
+    catch (const exception& e) {
+        cout << "\nEXCEPTION: " << e.what() << endl;
+    }
+    cout << "\ndone" << endl;
+}
 
 
 {care-with-future-scope}
@@ -52269,123 +52367,14 @@ performance because f might run in parallel before the outcome of f is needed.
 
 
 ={============================================================================
-*kt_dev_ccon_015* wait(): wait and poll
-
-You can call get() for a future<> 'only' once. After get(), the future is in an
-    invalid state, which can be checked only by calling valid() for the future.
-
-Just calling wait() forces the start of a thread a future represents and waits
-for the termination of the background operation:
-
-std::future<...> f(std::async(func)); // try to call func asynchronously
-...
-f.wait(); // wait for func to be done (might start background task)
-
-But futures also provide an interface to wait for a background operation to
-finish without processing its outcome. This interface is callable more than once
-and might be combined with a duration or timepoint to limit the amount of
-waiting time.
-
-Two other wait() functions exist for futures, but those functions do 'not' force
-the thread to get started, if it hasn't started yet:
-
-1. With wait_for(), you can wait for a limited time for an asynchronously
-running operation by passing a duration:
-
-std::future<...> f(std::async(func)); // try to call func asynchronously
-...
-f.wait_for(std::chrono::seconds(10)); // wait at most 10 seconds for func
-
-2. With wait_until(), you can wait until a specific timepoint has reached:
-
-std::future<...> f(std::async(func)); // try to call func asynchronously
-...
-f.wait_until(std::system_clock::now()+std::chrono::minutes(1));
-
-Both wait_for() and wait_until() return one of the following:
-
-* std::future_status::deferred if async() deferred the operation and no calls to
-wait() or get() have yet forced it to start (both function return immediately in
-        this case)
-
-* std::future_status::timeout if the operation was started asynchronously but
-hasn't finished yet (if the waiting expired due to the passed timeout)
-
-* std::future_status::ready if the operation has finished
-
-By passing a zero duration or a timepoint that has passed, you can simply "poll"
-to see whether a background task has started and/or is (still) running:
-
-note: useful case? skipped for now.
-
-C++ SRL 18.1.2 
-
-note: On VM, do not work and do not understand. maybe different on PC linux?
-
-#include <future>
-#include <thread>
-#include <chrono>
-#include <random>
-#include <iostream>
-#include <exception>
-
-using namespace std;
-
-int doSomething (char c)
-{
-    default_random_engine dre(c);
-    uniform_int_distribution<int> id(10, 1000);
-
-    for(int i=0; i<10; ++i)
-    {
-        this_thread::sleep_for(chrono::milliseconds( id(dre) ));
-        cout.put(c).flush();
-    }
-
-    return c;
-}
-
-int main()
-{
-    cout << "starting 2 operations asynchronously" << endl;
-
-    // start two loops in the background printing characters . or +
-    auto f1 = async([]{ doSomething('.'); });
-    auto f2 = async([]{ doSomething('+'); });
-
-    // if at least one of the background tasks is running
-    if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
-        f2.wait_for(chrono::seconds(0)) != future_status::deferred) {
-        // poll until at least one of the loops finished
-        while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
-               f2.wait_for(chrono::seconds(0)) != future_status::ready) {
-            //...;
-            this_thread::yield();  // hint to reschedule to the next thread
-        }
-    }
-    cout.put('\n').flush();
-
-    // wait for all loops to be finished and process any exception
-    try {
-        f1.get();
-        f2.get();
-    }
-    catch (const exception& e) {
-        cout << "\nEXCEPTION: " << e.what() << endl;
-    }
-    cout << "\ndone" << endl;
-}
-
-
-={============================================================================
-*kt_dev_ccon_017* std::packaged_task
+*kt_dev_cxx_0000* cxx-con-packaged-task
 
 std::async is not the only way to associate a std::future with a task; you can
-also do it by wrapping the task in an instance of the std::packaged_task<> class
-template which is a higher-level abstraction
+also do it by wrapping the task in an instance of the std::packaged_task<>
+class template which is a higher-level abstraction
 
 
-{packaged-task}
+{cxx-packaged-task}
 A packaged_task holds a 'task' and a future/promise 'pair'.
 
 task 1                             packaged_task: 
@@ -52395,53 +52384,61 @@ get()  ->  future  <-> value  <->  promise  <- set_value(x)       <- return x
                                             <- set_exception(px)  <- throw x
 
 We pass a task (a function or a function object) that we want executed to a
-packaged_task. When our task executes a return x, it 'causes' a set_value(x) on
-the packaged_task's promise. Similarly, a throw x causes a set_exception(px)
-where px is an exception_ptr for x. Basically, the packaged_task executes its
-task, f(args), like this:
+packaged_task. When our task executes a return x, it 'causes' a set_value(x)
+on the packaged_task's promise. Similarly, a throw x causes a
+set_exception(px) where px is an exception_ptr for x. Basically, the
+packaged_task executes its task, f(args), like this:
 
 try {
-   pr.set_value(f(args));  // assume that the promise is called pr
+   pr.set_value(f(args));     // assume that the promise is called pr
 }
 catch(...) {
    pr.set_exception(current_exception());
 }
 
-<operations>
 
 packaged_task pt {f};
 
-Construct pt holding f; f is moved into pt; use the default allocator; explicit
+Construct pt holding f; f is moved into pt; use the default allocator;
+explicit
 
 pt()(args)     
     
-Execute f(args); a return x in f() does a set_value(x) to pt's promise, a throw x in f() does a
-set_exception(px) to pt's promise; px is an exception_ptr to x
+Execute f(args); a return x in f() does a set_value(x) to pt's promise, a
+throw x in f() does a set_exception(px) to pt's promise; px is an
+exception_ptr to x
 
 fu=pt.get_future()
 
 fu is the future for pt's promise; throws future_error if called twice
-<how-works>
-When the std::packaged_task<> object is invoked, it calls the associated function or callable object
-and makes the future ready, with the return value stored as the associated data.
+
+
+<cxx-packaged-task-works>
+When the std::packaged_task<> object is invoked, it calls the associated
+function or callable object and makes the future ready, with the return value
+stored as the associated data.
 
 
 <why-packaged-task>
-This can be used as a building block for thread pools or other task management schemes, such as
-running each task on its own thread, or running them all sequentially on a particular background
-thread. If a large operation can be divided into "self-contained sub-tasks", each of these can be
-wrapped in a std::packaged_task<> instance, and then that instance passed to the task scheduler or
-thread pool. This abstracts out the details of the tasks; the scheduler 'just' deals with
-std::packaged_ task<> instances rather than individual functions.
+This can be used as a building block for thread pools or other task management
+schemes, such as running each task on its own thread, or running them all
+sequentially on a particular background thread. If a large operation can be
+divided into `self-contained sub-tasks`, each of these can be wrapped in a
+std::packaged_task<> instance, and then that instance passed to the task
+scheduler or thread pool. This abstracts out the details of the tasks; the
+scheduler 'just' deals with std::packaged_ task<> instances rather than
+individual functions.
 
 
 {associate-a-task-with-future}
-The template parameter for the std::packaged_task<> class template is a function signature. The
-return type of the specified function signature identifies the type of the std::future<> returned
-from the get_future() member function, whereas the argument list of the function signature is used
-to specify the signature of the packaged task's function call operator.
+The template parameter for the std::packaged_task<> class template is a
+function signature. The return type of the specified function signature
+identifies the type of the std::future<> returned from the get_future() member
+function, whereas the argument list of the function signature is used to
+specify the signature of the packaged task's function call operator.
 
-A partial class definition for std::packaged_task <std::string(std::vector<char>*,int)> would be: 
+A partial class definition for std::packaged_task
+<std::string(std::vector<char>*,int)> would be: 
 
 template<>
 class packaged_task<std::string(std::vector<char>*,int)>
@@ -52455,24 +52452,28 @@ class packaged_task<std::string(std::vector<char>*,int)>
         void operator()(std::vector<char>*,int);
 };
 
-The std::packaged_task object is thus a 'callable' object, and it can be wrapped in a std::function
-object, passed to a std::thread as the thread function, passed to another function that requires a
-callable object, or even invoked directly. 
+The std::packaged_task object is thus a 'callable' object, and it can be
+wrapped in a std::function object, passed to a std::thread as the thread
+function, passed to another function that requires a callable object, or even
+invoked directly. 
 
 note: packaged_task is itself callable object which is different from async.
 
-When the std::packaged_task is invoked as a function object, the arguments supplied to the function
-call operator are passed on to the contained function, and the return value is stored as the
-asynchronous result in the std::future obtained from get_future(). You can thus wrap a task in a
-std::packaged_task and retrieve the future before passing the std::packaged_task object elsewhere to
-be invoked in due course. When you need the result, you can wait for the future to become ready.
+When the std::packaged_task is invoked as a function object, the arguments
+supplied to the function call operator are passed on to the contained
+function, and the return value is stored as the asynchronous result in the
+std::future obtained from get_future(). You can thus wrap a task in a
+std::packaged_task and retrieve the future before passing the
+std::packaged_task object elsewhere to be invoked in due course. When you need
+the result, you can wait for the future to become ready.
 
 
-<example>
-Many GUI frameworks require that updates to the GUI be done from specific threads, so if another
-thread needs to update the GUI, it must send a message to the right thread in order to do so.
-std:packaged_task provides one way of doing this without requiring a custom message for each and
-every GUI-related activity.
+<ex>
+Many GUI frameworks require that updates to the GUI be done from specific
+threads, so if another thread needs to update the GUI, it must send a message
+to the right thread in order to do so.  std:packaged_task provides one way of
+doing this without requiring a custom message for each and every GUI-related
+activity.
 
 #include <deque>
 #include <mutex>
@@ -52486,10 +52487,12 @@ std::deque<std::packaged_task<void()> > tasks;
 bool gui_shutdown_message_received();
 void get_and_process_gui_message();
 
-the GUI thread loops until a message has been received telling the GUI to shut down, repeatedly
-'polling' for GUI messages to handle, such as user clicks, and for tasks on the task queue. If there
-are no tasks on the queue, it loops again; otherwise, it extracts the task from the queue, and then
-runs the task. The future associated with the task will then be made ready when the task completes.
+the GUI thread loops until a message has been received telling the GUI to shut
+down, repeatedly 'polling' for GUI messages to handle, such as user clicks,
+  and for tasks on the task queue. If there are no tasks on the queue, it
+  loops again; otherwise, it extracts the task from the queue, and then runs
+  the task. The future associated with the task will then be made ready when
+  the task completes.
 
 void gui_thread()
 {
@@ -52516,13 +52519,15 @@ void gui_thread()
 std::thread gui_bg_thread(gui_thread);
 
 
-Posting a task on the queue is equally simple: a new packaged task is created from the supplied
-function, the future is obtained from that task by calling the get_future() member function, and the
-task is put on the list before the future is returned to the caller. The code that posted the
-message to the GUI thread can then wait for the future if it needs to know that the task has been
+Posting a task on the queue is equally simple: a new packaged task is created
+from the supplied function, the future is obtained from that task by calling
+the get_future() member function, and the task is put on the list before the
+future is returned to the caller. The code that posted the message to the GUI
+thread can then wait for the future if it needs to know that the task has been
 completed, or it can discard the future if it doesn't need to know.
 
-note: this uses a future as a completion indicator since no associated data, future<void>.
+// this uses a future as a completion indicator since no associated data,
+// future<void>.
 
 template<typename Func>
 std::future<void> post_task_for_gui_thread(Func f)
@@ -52534,9 +52539,10 @@ std::future<void> post_task_for_gui_thread(Func f)
     return res;
 }
 
-std::packaged_task can also be used in more complex situations; by specifying a different function
-signature as the template parameter, can change the return type and thus the type of data stored in
-the future's associated state and also the argument types of the function call operator.
+std::packaged_task can also be used in more complex situations; by specifying
+a different function signature as the template parameter, can change the
+return type and thus the type of data stored in the future's associated state
+and also the argument types of the function call operator.
 
 
 ={============================================================================

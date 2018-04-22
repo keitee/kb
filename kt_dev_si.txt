@@ -516,7 +516,7 @@ https://hudkinsmaster1.cisco.com:8443/view/_AutoSigning/job/AS20_RequestSigning_
 21:27:52 sign_version/5364/ethupdater.bin_signed.mux_dr
 
 
-<boot-loader>
+<si-serial-boot-loader>
 http://hetty.cisco.com/fusionmadesimple/index.php/Flashing_Signed_Image
 
 01 and 02 are the two flash banks. '-1-' means the image in that bank is
@@ -1504,6 +1504,7 @@ lrwxrwxrwx    1 root     root           17 Jan  1 08:06 libexpat.so.1 -> libexpa
 // /home/kyoupark/si_logs/updater/bin.ams890
 mkdir /mnt/tmp
 mount -o rw -t nfs 10.209.62.106:/home/kyoupark/si_logs/updater /mnt/tmp
+mount -o rw -t nfs 10.209.62.106:/home/kyoupark /mnt/tmp
 
 LD_LIBRARY_PATH=. ./update -t `date +%s` -w image.img
 LD_LIBRARY_PATH=. ./update -t `date +%s` -w image.img.40.73
@@ -2557,6 +2558,32 @@ call SCD process
 # /FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/tools/nds/si/bootlog
 
 
+<bootlog-readme>
+
+TYPES OF ROTATION
+=================
+There are 2 types of rotation:
+
+1) BOOTLOG ROTATE
+   On reboot. The diag logs along with other bits like nvram, pcat, file list,
+   info etc are packed into a folder named BOOTLOG.
+   This is then uploaded. The BOOTLOG folder from the previous reboot is renamed
+   as BOOTLOG.1, and BOOTLOG.1 as BOOTLOG.2, and so on, until a max of 15 for
+   890 and 3 for 595 is reached. The max number is defined in bootlog-config.sh.
+   (See MAX_BOOTLOG_ROTATE in bootlog-config.sh)
+
+2) RLOG ROTATE
+   The other type of rotation is for the current log.  When current log reaches
+   a max size, it will trigger DIAG to itself rotate the file - this happens by
+   DIAG renaming the Sxxx.CUR(S<pid>.CUR) as Sxxx.LOG file and starting a blank
+   new Sxxx.CUR file. The background rotation script (bootlog-copyrotated.sh)
+   then detects this .LOG file and copies/moves it into the RLOG folder with a
+   timestamp filename as <timestamp>.LOG.
+   The max size is defined in diag-binary.cfg. At present there is a system
+   override in SI_Config.xml.  This is set to 20 MB for now. as <timestamp>.LOG.
+   (See MAX_RLOG_ROTATE_COPY in bootlog-config.sh)
+
+
 <bootlog-config>
 # -sh-3.2# cat /etc/hostname
 # drx890
@@ -2641,6 +2668,11 @@ mkdir /mnt/nds/BLOGDIR/FSN_DATA/VERINFO
 # Copy database files
 echo "BLL:bootlog-create.sh: MILESTONE Copy database files (*.DB* to BOOTLOG/)"  >> "${BLLFILENAME}"
 cp -a ` *.DB* BOOTLOG/`
+
+echo "BLL:bootlog-create.sh: MILESTONE Create FILES.TXT"  >> "${BLLFILENAME}"
+echo "42#        Creating list of files on disk." >> "${UPLOAD_SCREEN_UPDATE}"
+# Recursive directory listing of the disk
+ls -lR "${BLOG_mntpath}" >BOOTLOG/FILES.TXT
 
 
 mv ${BLINFOPATH}/INFO.TXT LOG LOG.* *.LOG *.CUR *.COR *.TXT BOOTLOG/
@@ -3525,6 +3557,7 @@ export `BLLFILENAME`="${BLLTEMPPATH}"/BLL.LOG
 // BLL:bootlog.sh: MILESTONE CONFIG2: FSN_ROOT = /mnt/nds, BLLPATH = , BLINFOPATH = /tmp/dummydisk/BLOGDIR/FSN_DATA/VERINFO, MPROFPATH = /tmp, MAX_INDIVIDUAL_FILESIZE_KB = 256000
 // 
 // BLL:bootlog.sh: MILESTONE Mount  BLOG_mntdev BLOG_mntpath: /dev/sda1 /tmp/dummydisk/BLOGDIR
+mount "${BLOG_mntdev}" "${BLOG_mntpath}"
 
 // *TN* mounted
 
@@ -3706,6 +3739,9 @@ git@wwwin-gitlab-sjc.cisco.com:kyoupark/SI-REPO.git
 
 git remote set-url origin git@wwwin-gitlab-sjc.cisco.com:kyoupark/SI-REPO.git
 
+
+git diff BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_42.07.00_BSKYB_GM_Integration BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_42.09.00_BSKYB_GM_Integration
+git diff BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_42.07.00_BSKYB_GM_Integration BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_42.09.00_BSKYB_GM_Integration -- THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae/config/stbe.ini
 
 <register-ssh-key>
 https://wiki.cisco.com/display/GITFUSION/Getting+started+in+Git
@@ -3909,7 +3945,7 @@ http://hudsonmaster1.uk.nds.com:8080/hudson/job/build_fullstack_image/102440/con
     echo "  --disable_full_parallel_build  Disables full parallel build and reverts to leaf-node parallelism"
 
 ./build_mw_epg.sh --platform ams-drx890 --profile sky_trials --project picasso --variant debug --baseline ENG_TST_41.44.00U --cartool no --enable_full_parallel_build
-./build_mw_epg.sh --platform ams-drx890 --profile sky_trials --project picasso --variant debug --baseline ENG_TST_KT --cartool no --enable_full_parallel_build
+./build_mw_epg.sh --platform ams-drx890 --profile sky_trials --project picasso --variant debug --baseline ENG_KT_FD --cartool no --enable_full_parallel_build --filldisk
 ./make_image.sh -c --platform ams-drx890 --profile sky_trials --project picasso --variant debug --baseline ENG_KT --cartool no --enable_full_parallel_build
 
 
@@ -3918,7 +3954,7 @@ http://hudsonmaster1.uk.nds.com:8080/hudson/job/build_fullstack_image/102440/con
 
 ./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean [--output /home/NDS-UK/parkkt/cc/parkkt_BSKYB_INTEGRATION_MAIN_01/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build]
 ./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean
-./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean --baseline ENG_0603_PICA
+./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean --baseline ENG_KT
 ./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --use_sysinit_cfg 
 ./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --memprof --baseline ENG_KT_SP
 ./build_mw_epg.sh --platform ams-drx890 --project picasso --variant debug --profile nds_si_devel --clean --mw_only --baseline ENG_KT_PCAT_05
@@ -3943,6 +3979,7 @@ make.sh -c --platform "ams-drx890" --profile "NDS_SI_Devel"
 # takes about 37 mins
 ./make_image.sh --platform ams-drx890 --project picasso --profile "NDS_SI_Devel" -c
 ./make_image.sh --platform ams-drx890 --project picasso --profile "NDS_SI_Devel" --kernel_only 
+/home/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/APPLI_0.FLA.etp.nds_si_devel
 
 
 *build-07* *comp-cfe*
@@ -3950,6 +3987,10 @@ make.sh -c --platform "ams-drx890" --profile "NDS_SI_Devel"
 /FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/\
 AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/image/OTV/
 
+
+kyoupark@st-castor-03:~/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build$ ./release.sh --platform ams-drx890 --project picasso
+kyoupark@st-castor-03:~/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build$ ls flash0.tar.gz
+flash0.tar.gz
 
 ./release.sh --platform ams-drx890 --project picasso
 /home/kyoupark/si_logs/flash0
@@ -3962,11 +4003,7 @@ change flash0 to whatever you want as CFE do.
 
 http://hetty.cisco.com/fusionmadesimple/index.php/EOTV_Not_CFE
 
-
-kyoupark@st-castor-03:~$ ls STB_SW/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/BootImage/vmlinuz
-STB_SW/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/BootImage/vmlinuz
-
-kyoupark@st-castor-03:~$ cp STB_SW/FUSIONOS_OUTPUT_DEL_2/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/BootImage/vmlinuz /tftpboot/kyoupark/
+cp /home/kyoupark/STB_SW/deps/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/BootImage/vmlinuz /tftpboot/kyoupark/
 kyoupark@st-castor-03:~$ ls /tftpboot/kyoupark/
 readme.in  vmlinuz
 
@@ -3978,23 +4015,22 @@ CFE> ifconfig eth0 -auto; boot -elf somehost:/vmlinux 'mem=128M ip=dhcp console=
 
 ifconfig eth0 -auto
 
-# /tftpboot/kyoupark
-CFE> boot -z -elf 10.209.62.106:/kyoupark/vmlinuz
+// /tftpboot/kyoupark
+// CFE> boot -z -elf 10.209.62.106:/kyoupark/vmlinuz
 boot -z -elf 10.209.62.106:/kyoupark/vmlinuz
 
 sh-3.2# 
+// mount -t nfs -o nolock <your_nfs_machine_ip_addr>:/home/NDS-UK/<nfs_folder_build_path>/flash0 /flash0
+
 mkdir /flash0
-# mount -t nfs -o nolock <your_nfs_machine_ip_addr>:/home/NDS-UK/<nfs_folder_build_path>/flash0 /flash0
-mount -t nfs -o nolock 10.209.62.106:/home/kyoupark/si_logs/flash0/flash0 /flash0
+mount -t nfs -o nolock 10.209.62.106:/home/kyoupark/si_logs/flash0 /flash0
+
+*TN* will format ar first time. How to make it not to format?
 /flash0/scripts/startstack.sh
+
 
 <ex>
 setenv -p STARTUP "ifconfig eth0 -auto; boot -z -elf <tftp_server>:/<vmlinuz-path-given-in-release-email> 'ip=dhcp console=uart,mmio,0x10400b00,115200n8'"
-
-
-mkdir /flash0
-mount -t nfs -o nolock 10.209.62.106:/home/kyoupark/si_logs/flash0/flash0 /flash0
-/flash0/scripts/startstack.sh
 
 // # to get flash0.tar.gz. use this but not release.sh
 // ./utils/picasso_flash_H1.sh -b ams_bcm -p stripped_optim -s nds
@@ -4324,7 +4360,7 @@ NB: Use if possible 'ukstbuild3_bskyb' as CC_SERVER; the Bash shell on
 
 
 ={============================================================================
-|kt_dev_si_0002| si-build-artifactory
+|kt_dev_si_0002| si-build-artifactory si-checkin-nds-driver
 
 https://wiki.cisco.com/display/GITFUSION/Platform+configuration+in+Git
 
@@ -4356,7 +4392,7 @@ The customer CDI tarball is imported into the platform repo here are the steps
 that should be taken
 
 
-# From the starting point of the platform_hub root directory
+# From the starting point of the `platform_hub` root directory
 cd <platform git submodule path>
 
 // kyoupark@st-castor-03:~/platform_hub/AMS_BCM_MIPS4K_LNUX_DARWIN_01$ ll
@@ -4394,7 +4430,8 @@ cd <platform git submodule path>
 // * fa8eacf : (tag: AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.13.1-h1.19p18) Automated driver import script (1 year, 3 months ago) <Hudkins automated>
 
 
-# <1>an important step before importing any files
+<1> an important step before importing any files
+
 Resolve_Deps/scripts/rm_deps_symlinks.sh
   
 # Now extract files customer CDI tarball into appropriate folders BLD_<platform>, DEL_<platform> and KERN_<platform>
@@ -4409,8 +4446,12 @@ find . -type l -exec git add -f {} \;
 # create tarball
 git ls-files --others | tar -zcf /tmp/<platform>.tar.gz --files-from –
 
-# <2>
+<2>
+
+// AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20.tar.gz
+//
 // Has two dirs which don't have sym links:
+//
 // drwxr-xr-x 3 kyoupark ccisco 4096 Oct 16 16:44 KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
 // drwxr-xr-x 6 kyoupark ccisco 4096 Oct 16 16:44 DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/
 //
@@ -4422,11 +4463,7 @@ git ls-files --others | tar -zcf /tmp/<platform>.tar.gz --files-from –
 // -rw-r--r--  1 kyoupark ccisco 226964700 Mar  1 09:32 AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz
   
 
-# <3> deploy artifact
-curl -u stb-bin-deployer:7Th3kSL7ED -X PUT --data-binary @/tmp/<platform>.tar.gz http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/<platform>/<revision>/<platform>-<revision>.tar.gz
-
-// http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20/
-// http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20/AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20.tar.gz
+<3> deploy artifact
 
 curl -u stb-bin-deployer:7Th3kSL7ED -X PUT --data-binary @/tmp/<platform>.tar.gz http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/<platform>/<revision>/<platform>-<revision>.tar.gz
 
@@ -4434,11 +4471,14 @@ curl -u stb-bin-deployer:7Th3kSL7ED -X PUT --data-binary @/tmp/<platform>.tar.gz
 // http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20/AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz
 //
 // http://engci-maven.cisco.com/artifactory/STB_BIN-thirdparty-repo/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01/AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20/AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.2-h1.19p20.tar.gz
+//
+// Q: WHERE can I find the old tar files?
+
 
 # remove untracked files
 for a in `git ls-files --others` ; do rm $a ;done
   
-# <4> edit ivy file and replace the artifact revision with the new deployed in the previous step
+<4> edit ivy file and replace the artifact revision with the new deployed in the previous step
 vi Resolve_Deps/ivy_files/download_platform_bin_ivy.xml
 
 // <?xml version="1.0" encoding="UTF-8"?>
@@ -8119,7 +8159,7 @@ https://hudkinsgit.cisco.com/rodolgon/manatee
 // git clone git@hudkinsgit.cisco.com:rodolgon/manatee.git
 // 
 // 
-// /ETHAN_SI_SCRIPTS/scripts/common$ ll *.py
+// `/ETHAN_SI_SCRIPTS/scripts/common`$ ll *.py
 // -rwxr-xr-x 1 kyoupark kyoupark    97 Aug  7 08:27 cmdLine.py*
 // -rwxr-xr-x 1 kyoupark kyoupark 31431 Aug  7 08:27 Diag.py*
 // 
@@ -8151,7 +8191,7 @@ note: standalone script? not used anywhere?
 listTags.py Listing the existing tags in one branch
 
 * BM has all branch details in a dict.
-* BM in ETHAN_SI_SCRIPTS/scripts/common/GitClass.py
+* BM in `ETHAN_SI_SCRIPTS/scripts/common/GitClass.py`
 * BM.listBranches() is simply to look in the dict(nested dict) to show branch name.
 
     # a nested dict with {branchname, {repo, branch, pattern}}.
@@ -8160,6 +8200,13 @@ listTags.py Listing the existing tags in one branch
             'branch' : 'BSKYB_HR014_Int',
             'pattern' : 'refs/tags/BSKYB_HR014_Int/BSKYB_INTEGRATION_BLD_[0-9][0-9].[0-9][0-9].[0-9][0-9]_BSKYB_HR014_Int' }
         },
+
+    DRIVER_BRANCHES = {
+        "ams-drx890": {'repo':"ssh://wwwin-git-gpk-2.cisco.com:29418/platforms/AMS_BCM_MIPS4K_LNUX_DARWIN_01",
+            'branch' : "AMS_BCM_MIPS4K_LNUX_DARWIN_01",
+            'pattern' : 'AMS_BCM_MIPS4K_LNUX_DARWIN_01_*',
+            'submodule' : 'AMS_BCM_MIPS4K_LNUX_DARWIN_01',
+            'type':'darwin'},
 
   BM.listBranches ():
     for key in BranchManagement.AVAILABLE_BRANCHES:
@@ -8230,6 +8277,17 @@ def extractRepository (branch, tag, dir):
   # 
   #             # cmd = ['git', 'checkout', tag]
 
+
+{py-createJobfile}
+// flipper/createJobfile.py
+
+// note: what this mean??
+
+# This script creates a jobfile in the parent directory of the git repository.
+# You need this file before calling uploadTarball.py. The getTag script will
+# generate one but if you have a `random repository` then you need to use this
+# script
+
 def createJobFiles (branch, tag, dir):
 
 * receives three parameters: the branch, tag, as listed by listTag.py and the
@@ -8288,17 +8346,6 @@ def createJobFiles (branch, tag, dir):
 # BUILD_NUMBER=5401
 # UseEmailSubject=Re: FLIPPER build: Manually triggered build
 # SERVER=theyard.cisco.com
-
-
-{py-createJobfile}
-
-note: what this mean??
-
-# This script creates a jobfile in the parent directory of the git repository.
-# You need this file before calling uploadTarball.py. The getTag script will
-# generate one but if you have a `random repository` then you need to use this
-# script
-
 
 
 {py-diag} *diag-segment-list*
@@ -8504,6 +8551,31 @@ hijack_3=AMS_BCM_MIPS4K_LNUX_DARWIN_01/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/Tarball
 hijack_2=AMS_BCM_MIPS4K_LNUX_DARWIN_01/DEL_AMS_BCM_MIPS4K_LNUX_DARWIN_01/build_platform/spk/patches/darwin-spk-1.19-patches.tar.bz2
 email=kyoupark@cisco.com
 #######
+
+
+<si-manatee> profile selection
+
+manatee/GetData.py
+
+    @staticmethod
+    def getProfilesInBranch (branch):
+        # hardcoded for now
+        # This is now obselete for Ethan/Hudkins2
+        if branch.startswith ("HR") or branch == "XR047":
+            profiles = {'profiles' : ['cust_trials', 'mem_trials', 'nds_si_devel', 'sky_prod',              'sky_trials', 'sdk_image', 'sky_tpt'] }
+        elif branch.startswith ("Q0") or branch.startswith ("XR0"):
+            profiles = {'profiles' : ['cust_trials',               'nds_si_devel',             'prod_logs', 'sky_trials', 'sdk_image', 'sky_tpt'] }
+        else:
+            profiles = {'profiles' : ['cust_trials', 'mem_trials', 'nds_si_devel', 'sky_prod', 'prod_logs', 'sky_trials', 'sdk_image', 'sky_tpt'] }
+
+        return json.dumps (profiles)
+
+manatee/manatee.py
+
+@app.route ('/profiles/<branch_id>')
+def getProfiles (branch_id):
+    GD = GetData.GetData ()
+    return GD.getProfilesInBranch(branch_id)
 
 
 ={============================================================================
@@ -11626,8 +11698,12 @@ void PLAYER_UAM_SignalPlaybackUpdate()
 ^[2017:09:27 06:17:42] !ERROR  -P_Api        		< T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2462 > KT: get SYSTEMOBJECT_DPLTI_PROPID_I_TRANSITION_TIME(22662047) 
 ^[2017:09:27 06:17:42] !ERROR  -P_Api        		< T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2463 > KT: set UAM_API_DESC_DPL_EVENT_TYPE(1) 
 ^[2017:09:27 06:17:42] !INFO   -P_Api        		< T:PLAYER_MAIN M:player_uam.c F:PLAYER_UAM_SignalAssetTransition L:2485 > Succeed to send param bag to UAM 
+
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:ams.cpp F:AMSMain L:481 > ProcessEvent 
+
+// XTV_High_Level_VOB/EGEN/EventGenerator/framework/inc/ams_generic_API.h
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:translate.cpp F:Translate2AMS::AMSEvent L:60 > Got generic event AMS_API_EVENT_TYPE_DPL_ASSET_FROM [0x4D], len = 462 
+
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:es_translator.cpp F:ES_Translator::ExtractData L:199 > Extract data, descriptor type = 0x71 , name=AMS_API_PARAM_ADM_ID 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:es_translator.cpp F:ES_Translator::ExtractData L:199 > Extract data, descriptor type = 0x70 , name=AMS_API_PARAM_PLAYLIST_ID 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:es_translator.cpp F:ES_Translator::ExtractData L:199 > Extract data, descriptor type = 0x72 , name=AMS_API_PARAM_PLAYLIST_INDEX 
@@ -11644,11 +11720,18 @@ void PLAYER_UAM_SignalPlaybackUpdate()
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:es_translator.cpp F:ES_Translator::ExtractData L:199 > Extract data, descriptor type = 0x7a , name=AMS_API_PARAM_ASSET_START_OFFSET 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:es_translator.cpp F:ES_Translator::ExtractData L:199 > Extract data, descriptor type = 0x7b , name=AMS_API_PARAM_ASSET_END_OFFSET 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:es_translator.cpp F:ES_Translator::ExtractData L:199 > Extract data, descriptor type = 0x79 , name=AMS_API_PARAM_DPL_EVENT_TIME 
+
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:ams.cpp F:ProcessEvent L:292 > event DPL_ANYTIME_FROM [0x75]\n 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::DataClientCallBackFunc L:57 > DC get data 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:RTRDataClient.cpp F:DataClient::IsRTREvent L:332 > RTR event = 117, 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:RTRDataClient.cpp F:DataClient::HandleDataClientEvent L:278 > RTRdata_ rec is = 212, data_ rec is = 212 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:RTRData.cpp F:RTRData::updateState L:458 > DPL_ANYTIME_FROM, isInPlayMode 1, viewInNormalPlay_ = 1211, part_duration_ =1120,inNormalPlay_ =108, dpl_event_time_ =22662047 ! 
+
+
+// CMS_MEDIA_SERVICES/CTM/src/server/ctm_svr_json.c
+// (void)SYSTEMUTIL_JSON_Object_AddItem(l_json_subscriber_obj, "subscriberId", l_json_item);
+
+
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:RTRDataClient.cpp F:RTRDataClient::StoreJsonBuffer L:163 > buff size = 914 
 ^[2017:09:27 06:17:42] !ERROR  -AMS          		< T:UAM_HP_THREAD M:RTRDataClient.cpp F:RTRDataClient::StoreJsonBuffer L:164 > buff {
 	"immediateReport":	[{
@@ -11997,7 +12080,8 @@ XTV_High_Level_VOB/EGEN/EventGenerator/portinglayer/inc/log_output/diag/egen_dbg
 #define AMS_DEBUG_MIL(X)					DIAG_LOG_MIL(amsDbgOut.GetID(), X )
 #define AMS_DEBUG_CR						DIAG_LOG_INFO(amsDbgOut.GetID(),("\n"))
 
-// to get ams log out, change to
+// NOTE to get ams log out, change to
+// #define AMS_DEBUG_TRACE(X)					DIAG_LOG_INFO(amsDbgOut.GetID(), X )
 #define AMS_DEBUG_TRACE(X)					DIAG_LOG_ERROR(amsDbgOut.GetID(), X )
 
 
@@ -12083,6 +12167,8 @@ POOL_SIZE_GFX_REGION=125000
 
 ={============================================================================
 |kt_dev_si_0001| comp-atm comp-adsmart
+
+~/bin/log_analysis_scripts/adlog.py > adlog.txt
 
 http://hetty.cisco.com/fusionmadesimple/index.php/BSkyB_AdSmart_SI_Helpers
 
@@ -14007,7 +14093,7 @@ scp si_logs@theyard:/home/si_logs/translation/darwin_0019fb1a2bde_af0149021502c8
 // on the yard
 mips-uclibc-addr2line -C -f -s -e ./unstripped_processes/APP_Process 
 
-// on the build
+// brcm-gcc, on the build
 ~/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-uclibc-addr2line -C -f -s -e
 
 
@@ -19797,6 +19883,7 @@ sqlite3 PCAT.DB 'select server_id from item i' | egrep ^[0-9] | wc -l
 
 #
 sqlite3 -list PCAT.DB 'select partial_content_status, booking_type, event_name, booking_exception, channel_name, j.booking_job_id, booking_source, record_status from item i, booking_jobs j, booking_info b left outer join av_content a on a.av_content_id = b.av_content_id where b.event_id = i.event_id and b.booking_id = j.booking_id order by ifnull(actual_start_time,trigger_time)'
+sqlite3 -list PCAT.DB 'select shrec_locator, j.booking_job_id from item i, booking_jobs j, booking_info b left outer join av_content a on a.av_content_id = b.av_content_id where b.event_id = i.event_id and b.booking_id = j.booking_id order by ifnull(actual_start_time,trigger_time)'
 
 # 47504 is 'Series' from items.txt
 #
@@ -27217,7 +27304,59 @@ NDS: ^[2018:04:13 06:22:27]0946685080.367464 !MIL    -EPG_INIT     		< p:0x00000
 NDS: ^[2018:04:13 06:22:27]0946685080.367741 !MIL    -EPG_INIT     		< p:0x0000023d P:APP t:0x2c1c5520 T:no name M:STBProfile F:setStbProfileId L:143 > T:IM#0:setStbProfileId: new=aa, old=aa
 NDS: ^[2018:04:13 06:22:27]0946685080.367911 !MIL    -EPG_INIT     		< p:0x0000023d P:APP t:0x2c1c5520 T:no name M:InitialisationManager F:init_postSTBProfileSet L:1762 > T:IM#0:postSTBmethodCalled set
 NDS: ^[2018:04:13 06:22:27]0946685080.368187 !MIL    -EPG_INIT     		< p:0x0000023d P:APP t:0x2c1c5520 T:no name M:PlannerStarter F:notifyTransition L:90 > T:IM#0:notifyTransition(3, 6)
+
+	/**
+	 * The callback from the middleware notifying us of the SPM system status
+	 *
+	 * Forwarded from InitialisationManager.SystemPvrListener.notifyChange()
+	 */
+	@Override public synchronized void notifyTransition(int newState, int reason)
+	{
+		logger.logMilestone("notifyTransition(" + newState + ", " + reason +")");
+		systemState = newState;
+		maybeNotifyPlannerSessionAvailable();
+	}
+
+	private void maybeNotifyPlannerSessionAvailable()
+	{
+		/* logger.logInfo("systemState=" + systemState + " sessionState=" + sessionStatusToString(sessionState)); */
+
+		if (hasNotified)
+		{
+			return;
+		}
+
+					logger.logMilestone("PLANNER READY");
+   }
+
+
 NDS: ^[2018:04:13 06:22:27]0946685080.370607 !MIL    -EPG_INIT     		< p:0x0000023d P:APP t:0x2c1c5520 T:no name M:PlannerStarter$2 F:run L:140 > T:IM#0:PLANNER READY
+
+		@Override protected void onPlannerSessionAvailable(final PlannerSession plannerSession)
+
+		private void notifyPlannerSessionAvailable(final PlannerSession ses)
+		{
+			synchronized (doingTheRoundsLock)
+			{
+				new StateChanger(DISK_RECEIVED, stateChangeExecutor)
+				{
+					@Override protected void operateOn(PicassoLifecycleListener component,
+					                                   StateChangeCompleteListener l)
+					{
+						component.statusNotifyHDDAvailable(l);
+					}
+				}.startOperatingOn(managers);
+				new StateChanger(PLANNER_SESSION_RECEIVED, stateChangeExecutor)
+				{
+					@Override protected void betweenUpgradeAndOperation()
+					{
+						cr.setPlannerSession(ses);
+						availability.setPlannerAvailable();
+					}
+            }
+         }
+      }
+
 NDS: ^[2018:04:13 06:22:27]0946685080.373559 !MIL    -EPG_INIT     		< p:0x0000023d P:APP t:0x2c1c5520 T:no name M:InitialisationManager$StateChanger F:startOperatingOn L:2539 > T:IM#0:Starting state change to DISK RECEIVED
 NDS: ^[2018:04:13 06:22:27]0946685080.386518 !MIL    -EPG_INIT     		< p:0x0000023d P:APP t:0x2c1c5520 T:no name M:InitialisationManager$StateChanger F:startOperatingOn L:2539 > T:IM#0:Starting state change to PLANNER SESSION RECEIVED
 NDS: ^[2018:04:13 06:22:27]0946685080.551100 !MIL    -EPG_INIT     		< p:0x0000023d P:APP t:0x2c193520 T:no name M:SetTopBoxReadinessMilestoneLogger F:onPlannerSessionAvailable L:22 > T:PooledExecutor#3:Planner is ready
@@ -28570,6 +28709,10 @@ XTV FS Group <XTVFSGroup@nds.com>
 
 >>> hex(0x8000 | (((1 & 0x7f) << 8) | (2 & 0xff) ))
 '0x8102'
+
+// from KMSG.LOG
+<4>[0946685585.773993] XTVFS_InodeRead:GetMaxOffsetFromExtentFile failed, stat = 0x8102, fullPath= A:\S22236\STREAM.STR!!!!!
+
 
 # The stat = 0x8123 means partition table error. It seemed to be a failure in
 # mount operation when trying to read the partition table.

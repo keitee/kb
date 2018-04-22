@@ -11,6 +11,28 @@ using namespace std;
 using testing::ElementsAre;
 using testing::Eq;
 
+
+// ={=========================================================================
+// string
+
+TEST(CxxStringTest, ConstructFromChars)
+{
+    char s1[] = "this is first message";
+    char* s2 = "this is first message";
+
+    string string_from_char(s1);
+    string string_from_const_char(s2);
+
+    const char const_letter = 'A';
+    char non_const_letter = 'A';
+
+    // both suffers from:
+    // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // string string_from_const_letter(const_letter);
+    // string string_from_non_const_letter(non_const_letter);
+}
+
+
 // ={=========================================================================
 
 // cstring.

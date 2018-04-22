@@ -121,6 +121,49 @@ TEST(CxxFeaturesTest, UseEnumHack)
 
 
 // ={=========================================================================
+// cxx-reference-const
+
+struct Snitch_X {   // Note: All methods have side effects
+    Snitch_X(int value): value_(value) { cout << "c'tor" << endl; }
+    ~Snitch_X() { cout << "d'tor" << endl; }
+
+    Snitch_X(Snitch_X const&) { cout << "copy c'tor" << endl; }
+    Snitch_X(Snitch_X&&) { cout << "move c'tor" << endl; }
+
+    Snitch_X& operator=(Snitch_X const&) {
+        cout << "copy assignment" << endl;
+        return *this;
+    }
+
+    Snitch_X& operator=(Snitch_X&&) {
+        cout << "move assignment" << endl;
+        return *this;
+    }
+
+    int getValue() const { return value_;}
+
+    private:
+        int value_{0};
+};
+
+Snitch_X ExampleRVO_X() {
+
+  Snitch_X sn(100);
+
+  cout << "in example rvo: " << sn.getValue() << endl;
+
+  return sn;
+}
+
+TEST(CxxFeaturesTest, UseConstReference)
+{
+    cout << "----------" << endl;
+    Snitch_X snitch = ExampleRVO_X();
+    cout << "----------" << endl;
+}
+
+
+// ={=========================================================================
 // cxx-rvo
 
 struct Snitch {   // Note: All methods have side effects
@@ -432,18 +475,45 @@ TEST(CxxFeaturesTest, UseCronoTimepoint)
 class Foo {
     private:
         static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
-        // static const std::string DIGIT_NOT_FOUND;
-        static const std::string DIGIT_NOT_FOUND{"*"};
+        static const std::string DIGIT_NOT_FOUND;
+
+        // cause an error
+        // static const std::string DIGIT_NOT_FOUND{"*"};
     public:
         Foo() {}
 };
 
-// const std::string Foo::DIGIT_NOT_FOUND{"*"};
+const std::string Foo::DIGIT_NOT_FOUND{"*"};
 
 TEST(CxxFeaturesTest, UseClassStatic)
 {
     Foo foo;
 }
+
+
+// ={=========================================================================
+// cxx-lambda
+
+// string callback()
+// {
+//     std::string value{"this is a callback"};
+//     return value;
+// }
+
+TEST(CxxFeaturesTest, UseLambda)
+{
+    auto callback = [](){
+        std::string value{"this is a callback"};
+        return value;
+    };
+
+    std::string result = callback();
+
+    cout << "result: " << result << endl;
+}
+
+
+// ={=========================================================================
 
 int main(int argc, char** argv)
 {
