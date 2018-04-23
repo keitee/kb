@@ -28714,6 +28714,173 @@ XTV FS Group <XTVFSGroup@nds.com>
 <4>[0946685585.773993] XTVFS_InodeRead:GetMaxOffsetFromExtentFile failed, stat = 0x8102, fullPath= A:\S22236\STREAM.STR!!!!!
 
 
+//
+
+[0946684904.768040] xtvfs_write_inode: XtvfsWriteInodeNoLock failed
+[0946684904.770040] BufRead: pc_read_blk  failed, ret= 0x8103 !!!!!
+[0946684904.771040]InodeGet: BufRead failed, block = 243606 !!!
+[0946684904.772040]XTVFS_InodeWrite: InodeGet failed !!!
+
+/*---------------------------------------------------------------------------*/
+static FINODE* InodeGet(int ppartno,  unsigned long block, unsigned int index,
+                  BLKBUFF** ppbuff, int* pb_myNode)
+/*!<
+  \Description: Find finode, defined by block index in cache, if not found, read from disc   
+  \Parameters:  
+  \- ppartno:	in, partition number
+  \- block		:in: directory sector 
+  \- index		:in: index of dosinode  
+  \- ppbuff		:out: if not equal to 0, RAM copy of sector block, should be freed by caller after use.  
+  \- pb_myNode	:out: 1, if finode was allocated (should free) 
+  \Returns:  finode on sucess;
+			0 on failure
+  \*---------------------------------------------------------------------------*/ 
+{
+	DOSINODE*  pi;
+	FINODE*	   pfinode;
+	LPARTITION *plpart = 0;
+	
+	*pb_myNode = 0;
+	*ppbuff = 0;
+
+	
+	/* TODO :  Currently we get the the plpart of partition 0 i.e. only internal partition is supported.
+	           This should be changed to support external disk by receiveing ppartno as parameter
+			   to this function
+			   Please note that the third parameter of pc_prtno2prt instruct whther to check that the partition is mounted
+	*/
+
+   /* Get Pointer to the structure of data partition */
+	plpart = pc_prtno2prt(ppartno,DATA_PARTITION,FALSE); 
+	if (!plpart) {
+		printk("XTVFS::InodeGet, ppartno = %d, Null data logical partition !!!!!\n",ppartno);
+		return 0;
+	}
+		/* search in inode cache */
+	pfinode = pc_scani( plpart, block, index);
+	if(pfinode) {	/* found */
+		return pfinode;
+	}
+
+	/* finode did not found - allocate new and read */
+	*ppbuff = BufRead(ppartno, block);
+	if(!*ppbuff) {
+		printk("InodeGet: BufRead failed, block = %lu !!!\n", block);
+
+      // NOTE: WHY RETURN???
+		return 0;
+	}
+
+	pfinode = pc_memory_finode();
+	if(!pfinode) {
+		printk("\n InodeGet: no free finodes !!!!! \n");
+		pc_free_buf(*ppbuff, 0);
+		return 0;
+	}
+	*pb_myNode = 1;
+	pi = (DOSINODE *) &((*ppbuff)->data[0]);
+	pc_dos2inode( pfinode, (pi + index));
+	pc_marki(pfinode, plpart, block, index);
+	pfinode->opencount = 1;
+	return pfinode;
+}
+
+NOTE: Where are to call pc_memory_finode()?
+
+// /*  the FINODE structure freed (returned to the heap.) */
+// void pc_free_memory_inode(FINODE *pinode)
+
+kyoupark@kit-debian64:~/si/XTVFS_Comp$ gl -r pc_free_memory_inode
+pc_free_memory_inode  216 XTVFS_CMA_Wrapper/src/xtvfs4kernel.c          pc_free_memory_inode(pobj->finode);
+pc_free_memory_inode 3506 ertfs/src/api.c                       pc_free_memory_inode(((DROBJ *)statobj->pobj)->finode);
+pc_free_memory_inode  481 ertfs/src/bss.c       XDEBUG_DEFINE_FUNC(pc_free_memory_inode) /* automatically added */
+pc_free_memory_inode 2014 ertfs/src/drobj.c     pc_free_memory_inode(pfi);
+pc_free_memory_inode  826 inc/xtvdisk.h    void pc_free_memory_inode(FINODE *pinode);
+
+
+// PC_MEMORY_FINODE -  Allocate a FINODE structure
+
+// static FINODE* InodeGet(int ppartno,  unsigned long block, unsigned int index,
+pc_memory_finode  145 XTVFS_CMA_Wrapper/src/xtvfs4kernel.c      pfinode = pc_memory_finode();
+
+pc_memory_finode  526 ertfs/src/bss.c   XDEBUG_DEFINE_FUNC(pc_memory_finode) /* automatically added */
+
+// FINODE *pc_alloci(int ppartno)                                         /*__fn__*/
+pc_memory_finode 1882 ertfs/src/drobj.c         p = pc_memory_finode();
+
+pc_memory_finode  825 inc/xtvdisk.h    FINODE *pc_memory_finode(void);
+
+
+static XTVFSSTATUS Init(void)
+{
+  ret = init_xtvfs_data_array();
+}
+
+static XTVFSSTATUS init_xtvfs_data_array()
+{
+    // to `NBLKBUFFS`
+    ret |= pc_init_blks_pool();
+
+    if (_mem_buff_pool == NULL)
+    #define MEM_SIZE_BUFF_POOL      (BUFFER_POOL_SIZE * sizeof(byte))
+    #define BUFFER_POOL_SIZE ((BUF_SIZE * `NBLKBUFFS`) + BUFFER_ALIGNMENT)
+
+    // array 
+    if (mem_block_pool == NULL)
+
+    /* We kmalloc the data below, which is proportional in size to the maximum number of open files,
+     * as it is too big for BSS on some platforms.
+     *
+    #define MEM_SIZE_BLOCK_POOL     (`NBLKBUFFS` * sizeof(BLKBUFF))
+
+
+    // to MAX OPEN FILES
+    ret |= pc_init_drobjs_pool();
+        ret |= XTVFS_UTIL_KMALLOC(MEM_SIZE_DROPJ_POOL, &mem_drobj_pool);
+        #define MEM_SIZE_DROPJ_POOL     (NDROBJS * sizeof(DROBJ))
+
+        #define `NDROBJS`    (32 + NUM_USERS*MAX_NUM_PHYS_PARTS + NUM_USERS + `NUSERFILES`)
+
+    // to MAX OPEN FILES
+    //
+    // double linked list using array, setup a forward list.
+    
+    ret |= pc_init_finodes_pool();
+        ret |= XTVFS_UTIL_KMALLOC(MEM_SIZE_FINODE_POOL, &mem_finode_pool);
+        #define MEM_SIZE_FINODE_POOL    (`NFINODES` * sizeof(FINODE))
+
+        /* Directory Object Needs. Conservative guess is One CWD per user per partition(In VGDRM - We have one CWD per user) +
+           One per file + one per User for directory traversal */
+        /* This is calculated... do not change */
+        #define `NFINODES`   (32 + NUM_USERS*MAX_NUM_PHYS_PARTS + NUM_USERS + `NUSERFILES`)
+
+    // to MAX OPEN FILES
+    ret |= pc_init_files_pool();
+        ret |= XTVFS_UTIL_KMALLOC(MEM_SIZE_FILE_POOL, &mem_file_pool);
+        #define MEM_SIZE_FILE_POOL      (`NUSERFILES` * sizeof(PC_FILE))
+}
+
+
+//
+#else
+#define NBLKBUFFS        BUFFERS_POOL_BLOCKS  
+								/* Number of blocks in the buffer pool. Uses 532
+                                bytes per block. Impacts performance during
+                                directory traversals Since disk Reads on
+                                Sandisk is very fast we can keep this low
+                                (must be at least 1) */
+
+#define NUSERFILES       MAX_OPENED_FILES  
+								/* Maximum Number of open Files */
+#endif /*LOW_MEM*/
+
+
+// platform/dogan/inc/xtvfs_config.h
+
+/* Maximum number of opened files at the same time (data & stream files) */
+#define MAX_OPENED_FILES			80
+
+
 # The stat = 0x8123 means partition table error. It seemed to be a failure in
 # mount operation when trying to read the partition table.
 # 

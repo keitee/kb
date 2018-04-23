@@ -2,6 +2,7 @@
 #include "geoserver.h"
 #include "user.h"
 #include "time.h"
+#include "threadpool.h"
 
 using namespace std;
 using namespace testing;
@@ -91,8 +92,41 @@ class AGeoServerUserInBox: public Test
 
         Location aUserLocation { 38, -103 };
 
+        // moved to here to refactor
+        class GeoServerUserTrackingListener: public GeoServerListener
+        {
+            public:
+                void updated(const User &user)
+                { users.push_back(user); }
+
+                vector<User> users;
+        } trackingListener;
+
+
+        // The GeoServer tests AnswersUsersInSpecifiedRange and
+        // AnswersOnlyUsersWithinSpecifiedRange must still work. But if we use a
+        // ThreadPool, we’ll need to introduce waits in our tests, like the ones
+        // we coded in ThreadPoolTest. Instead, we choose to introduce a test
+        // double that reduces the ThreadPool to a single-threaded
+        // implementation of the add function.
+        //
+        // So makt it synchronous.
+
+        class SingleThreadedPool : public ThreadPool
+        {
+            public:
+                virtual void add(Work work) override
+                { work.execute(); }
+        };
+
+        shared_ptr<ThreadPool> pool;
+
+
         void SetUp() override
         {
+            pool = make_shared<SingleThreadedPool>();
+            server.useThreadPool(pool);
+
             server.track(aUser);
             server.track(bUser);
             server.track(cUser);
@@ -108,25 +142,31 @@ class AGeoServerUserInBox: public Test
 };
 
 
-// TEST_F(AGeoServerUserInBox, AnswersUsersInSpecifiedRange) {
-//    server.updateLocation(
-//       bUser, Location{aUserLocation.go(Width / 2 - TenMeters, East)}); 
-// 
-//    auto users = server.usersInBox(aUser, Width, Height);
-// 
-//    ASSERT_THAT(UserNames(users), ElementsAre(bUser));
-// }
+#if 0
+TEST_F(AGeoServerUserInBox, AnswersUsersInSpecifiedRange) {
+   server.updateLocation(
+      bUser, Location{aUserLocation.go(Width / 2 - TenMeters, East)}); 
+ 
+   auto users = server.usersInBox(aUser, Width, Height);
+ 
+   ASSERT_THAT(UserNames(users), ElementsAre(bUser));
+}
+#endif
+
+// c9/13/GeoServerTest.cpp
 
 TEST_F(AGeoServerUserInBox, AnswersUsersInSpecifiedRange) 
 {
-    class GeoServerUserTrackingListener: public GeoServerListener
-    {
-        public:
-            void updated(const User &user)
-            { users.push_back(user); }
+    // class GeoServerUserTrackingListener: public GeoServerListener
+    // {
+    //     public:
+    //         void updated(const User &user)
+    //         { users.push_back(user); }
 
-            vector<User> users;
-    } trackingListener;
+    //         vector<User> users;
+    // } trackingListener;
+    
+    pool->start(0);
 
     server.updateLocation(
             bUser, Location{aUserLocation.go(Width / 2 - TenMeters, East)}); 
@@ -139,14 +179,16 @@ TEST_F(AGeoServerUserInBox, AnswersUsersInSpecifiedRange)
 
 TEST_F(AGeoServerUserInBox, AnswersOnlyUsersWithinSpecifiedRange) 
 {
-    class GeoServerUserTrackingListener: public GeoServerListener
-    {
-        public:
-            void updated(const User &user)
-            { users.push_back(user); }
+    // class GeoServerUserTrackingListener: public GeoServerListener
+    // {
+    //     public:
+    //         void updated(const User &user)
+    //         { users.push_back(user); }
 
-            vector<User> users;
-    } trackingListener;
+    //         vector<User> users;
+    // } trackingListener;
+
+    pool->start(0);
 
     server.updateLocation(
             bUser, Location{aUserLocation.go(Width / 2 + TenMeters, East)}); 
@@ -193,6 +235,46 @@ TEST_F(AGeoServerUserInBox, DISABLED_HandlesLargeNumbersOfUsers) {
         // ASSERT_THAT(lots, Eq(users.size()));
     }
 }
+
+
+#if 0
+
+// c9/17/GeoServerTest.cpp
+// TEST_GROUP_BASE(AGeoServer_ScaleTests, GeoServerUsersInBoxTests) {
+
+class AGeoServer_ScaleTests : public Test
+{
+   class GeoServerCountingListener: public GeoServerListener {
+   public:
+      void updated(const User& user) override {
+         unique_lock<std::mutex> lock(mutex_);
+         Count++;
+         wasExecuted_.notify_all();
+      }
+
+      void waitForCountAndFailOnTimeout(unsigned int expectedCount, 
+            const milliseconds& time=milliseconds(10000)) {
+         unique_lock<mutex> lock(mutex_);
+         CHECK_TRUE(wasExecuted_.wait_for(lock, time, [&] 
+                  { return expectedCount == Count; }));
+      }
+      condition_variable wasExecuted_;
+      unsigned int Count{0};
+      mutex mutex_;
+   };
+   GeoServerCountingListener countingListener;
+   shared_ptr<thread> t;
+
+   void setup() override {
+      pool = make_shared<ThreadPool>();
+      GeoServerUsersInBoxTests::setup();
+   }
+
+   void teardown() override {
+      t->join();
+   }
+};
+#endif
 
 
 int main(int argc, char** argv)

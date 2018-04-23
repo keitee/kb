@@ -5,6 +5,7 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include <mutex>
 #include "work.h"
 
 // ThreadPool, which creates worker threads to handle the work queue
@@ -176,7 +177,7 @@ class ThreadPool
             return !workq_.empty();
         }
 
-        void add(Work work)
+        virtual void add(Work work)
         {
             std::lock_guard<std::mutex> block(mutex_);
             workq_.push_front(work);
