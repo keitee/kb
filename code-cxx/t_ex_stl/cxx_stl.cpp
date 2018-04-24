@@ -257,10 +257,12 @@ TEST(CxxStlTest, UseAlgoEqual)
     EXPECT_TRUE( equal( coll1.begin(), coll1.end(),
                 coll3.begin()));
 
+    // coll1 and coll2 are different but are the same as to the order of
+    // even/odd.
     EXPECT_TRUE( equal( coll1.begin(), coll1.end(),
                 coll2.begin(), [](int lhs, int rhs)
                 {
-                    return lhs 
+                    return lhs % 2 == rhs % 2; 
                 }
                 ));
 }
