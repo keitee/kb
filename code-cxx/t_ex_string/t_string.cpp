@@ -10,6 +10,7 @@
 using namespace std;
 using testing::ElementsAre;
 using testing::Eq;
+using testing::StrEq;
 
 
 // ={=========================================================================
@@ -806,6 +807,67 @@ TEST(CxxStringTest, UseRawString)
 
         std::cout << s << std::endl;
 }
+
+
+// ={=========================================================================
+// 4.11 Removing a Substring from a String
+
+void removeSubstrs1(std::string& s, const std::string& p)
+{
+    auto start = s.find(p);
+
+    if( start != std::string::npos )
+    {
+        auto first = s.substr( 0, start );
+        auto second = s.substr( start + p.size() );
+
+        s = first + second;
+    }
+}
+
+void removeSubstrs2(std::string& s, const std::string& p)
+{
+    auto start = s.find(p);
+
+    if( start != std::string::npos )
+        s.erase(start, p.size());
+}
+
+void removeSubstrs3(std::string& s, const std::string& p)
+{
+    auto size = p.size();
+
+    for( auto start = s.find(p); 
+            start != std::string::npos;
+            start = s.find(p))
+        s.erase(start, size);
+}
+
+TEST(CxxStringTest, RemoveSubString)
+{
+    string s1{"One fish, two fish, red fish, blue fish"};
+    string r1{"One , two fish, red fish, blue fish"};
+    string p{"fish"};
+
+    removeSubstrs1(s1, p);
+
+    string s2{"One fish, two fish, red fish, blue fish"};
+
+    removeSubstrs2(s2, p);
+
+    EXPECT_TRUE(s1 == r1);
+    EXPECT_TRUE(s2 == r1);
+
+    string s3{"One fish, two fish, red fish, blue fish"};
+    string r3{"One , two , red , blue "};
+
+    removeSubstrs3(s3, p);
+    EXPECT_THAT(s3, Eq(r3));
+}
+
+
+// ={=========================================================================
+// 4.12 Converting a String to Lower- or Uppercase
 
 int main(int argc, char** argv)
 {
