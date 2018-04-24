@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <deque>
+#include <list>
 
 #include "gmock/gmock.h"
 
@@ -49,19 +50,20 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
 
 // ={=========================================================================
 // cxx-deque
+// case seg-fault
 
-TEST(CxxStlTest, HowDequeSupportEmpty)
-{
-    deque<int> iq;
-
-    try {
-        auto e = iq.back();
-    }
-    catch(...)
-    {
-        cout << "exception" << endl;
-    }
-}
+// TEST(CxxStlTest, HowDequeSupportEmpty)
+// {
+//     deque<int> iq;
+// 
+//     try {
+//         auto e = iq.back();
+//     }
+//     catch(...)
+//     {
+//         cout << "exception" << endl;
+//     }
+// }
 
 // ={=========================================================================
 // cxx-set
@@ -225,6 +227,42 @@ TEST(CxxStlTest, UseAlgoAccumulate)
 
     ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 1, multiplies<int>() ), Eq(362880) );
     ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 0, multiplies<int>() ), Eq(0) );
+}
+
+
+// ={=========================================================================
+// cxx-algo-equal
+
+// coll1 (vector): 1 2 3 4 5 6 7 (7)
+// coll2 (list)  : 3 4 5 6 7 8 9 (7)
+// coll3 (list)  : 1 2 3 4 5 6 7 (7)
+
+TEST(CxxStlTest, UseAlgoEqual)
+{
+    vector<int> coll1;
+    list<int> coll2;
+    list<int> coll3;
+
+    INSERT_ELEMENTS(coll1, 1, 7);
+    INSERT_ELEMENTS(coll2, 3, 9);
+    INSERT_ELEMENTS(coll3, 1, 7);
+
+    PRINT_ELEMENTS(coll1, "coll1 (vector): ");
+    PRINT_ELEMENTS(coll2, "coll2 (list)  : ");
+    PRINT_ELEMENTS(coll3, "coll3 (list)  : ");
+
+    EXPECT_FALSE( equal( coll1.begin(), coll1.end(),
+                coll2.begin()));
+
+    EXPECT_TRUE( equal( coll1.begin(), coll1.end(),
+                coll3.begin()));
+
+    EXPECT_TRUE( equal( coll1.begin(), coll1.end(),
+                coll2.begin(), [](int lhs, int rhs)
+                {
+                    return lhs 
+                }
+                ));
 }
 
 int main(int argc, char** argv)

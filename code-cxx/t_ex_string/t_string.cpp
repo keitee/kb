@@ -869,6 +869,53 @@ TEST(CxxStringTest, RemoveSubString)
 // ={=========================================================================
 // 4.12 Converting a String to Lower- or Uppercase
 
+void toUpper(std::string &s)
+{
+    for( auto i = s.begin(); i != s.end(); ++i)
+        *i = toupper(*i);
+}
+
+void toLower(std::string &s)
+{
+    for( auto i = s.begin(); i != s.end(); ++i)
+        *i = tolower(*i);
+}
+
+TEST(CxxStringTest, ConvertStringToLowerUpperCase)
+{
+    string s{"shazam"};
+
+    toUpper(s);
+    EXPECT_THAT(s, Eq("SHAZAM"));
+
+    toLower(s);
+    EXPECT_THAT(s, Eq("shazam"));
+}
+
+
+// ={=========================================================================
+// 4.13 Doing a Case-Insensitive String Comparison
+
+bool caseInsCompare1(const string& s1, const string& s2)
+{
+    if( s1.size() != s2.size() )
+        return false;
+
+    for( auto lhs = s1.cbegin(), rhs = s2.cbegin() ; lhs != s1.cend(); ++lhs, ++rhs)
+        if( toupper(*lhs) != toupper(*rhs) )
+            return false;
+
+    return true;
+}
+
+TEST(CxxStringTest, CompareCaseInsensitive)
+{
+    const string s1 = "In the BEGINNING...";
+    const string s2 = "In the beginning...";
+
+    EXPECT_TRUE( caseInsCompare1(s1, s2));
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleMock(&argc, argv);
