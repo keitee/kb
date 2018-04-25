@@ -916,6 +916,22 @@ TEST(CxxStringTest, CompareCaseInsensitive)
     EXPECT_TRUE( caseInsCompare1(s1, s2));
 }
 
+
+// ={=========================================================================
+// 4.14 Doing a Case-Insensitive String Search
+
+size_t caseInsFind(string& s, const string& p)
+{
+    toUpper(std::string &s)
+}
+
+TEST(CxxStringTest, SearchCaseInsensitive)
+{
+    string s = "row, row, row, your boat";
+    const string p = "YOUR";
+    EXPECT_TRUE(caseInsFind(s, p));
+}
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleMock(&argc, argv);
