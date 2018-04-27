@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
+#include <fstream>
 #include <boost/algorithm/string.hpp>
 
 #include "gmock/gmock.h"
@@ -920,20 +921,117 @@ TEST(CxxStringTest, CompareCaseInsensitive)
 // ={=========================================================================
 // 4.14 Doing a Case-Insensitive String Search
 
-size_t caseInsFind(string& s, const string& p)
+// modifies s and assumes p is upper-case
+bool caseInsFind1(string& s, const string& p)
 {
-    toUpper(std::string &s)
+  toUpper(s);
+
+  return s.find(p) != std::string::npos;
+}
+
+// do not modify s
+bool caseInsFind2(string& s, const string& p)
+{
+  auto it = search(s.begin(), s.end(), p.begin(), p.end(),
+      [](char lhs, char rhs)
+      {
+      return toupper(lhs) == rhs;
+      });
+
+  return it != s.end();
 }
 
 TEST(CxxStringTest, SearchCaseInsensitive)
 {
-    string s = "row, row, row, your boat";
-    const string p = "YOUR";
-    EXPECT_TRUE(caseInsFind(s, p));
+  string s1 = "row, row, row, your boat";
+  const string p = "YOUR";
+
+  // // returns 15
+  // cout << caseInsFind(s, p) << endl;
+  
+  EXPECT_TRUE(caseInsFind1(s1, p));
+  cout << s1 << endl;
+
+  string s2 = "row, row, row, your boat";
+  EXPECT_TRUE(caseInsFind2(s2, p));
+  cout << s2 << endl;
 }
+
+
+// ={=========================================================================
+// 4.15 Converting Between Tabs and Spaces in a Text File
+
+TEST(CxxStringTest, ConvertTabToSpace)
+{
+  ifstream input_file{"input.txt"};
+  ofstream output_file{"output_space.txt"};
+  char read_char{};
+
+  while (input_file.get(read_char))
+  {
+    if (read_char == '\t')
+      output_file << "   "; // 3 spaces
+    else 
+      output_file << read_char;
+  }
+}
+
+// the tricky bit is that:
+//
+// For all other characters, or for fewer than three spaces, whatever is read
+// from the input stream is written to the output stream.
+//
+// that means that have to remember when see spaces less than 3 and output that
+// spaces.
+//
+// ss...sss...s...
+//
+// sssss...sssssssssss....
+//
+// the both case is when see not-space char
+
+TEST(CxxStringTest, ConvertSpaceToTab)
+{
+  ifstream input_file{"output_space.txt"};
+  ofstream output_file{"output_tab.txt"};
+  char read_char{};
+  size_t space_count{};
+
+  while (input_file.get(read_char))
+  {
+    // if (read_char == '\s')
+    if (read_char == ' ')
+    {
+      ++space_count;
+
+      if (3 == space_count)
+      {
+        // output_file << '\t';
+        output_file.put('\t');
+        space_count = 0;
+      }
+    }
+    else 
+    {
+      if (space_count)
+      {
+        for (size_t i = 0; i < space_count; ++i)
+          output_file.put(' ');
+
+        space_count = 0;
+      }
+
+      output_file << read_char;
+    }
+  }
+}
+
+
+// ={=========================================================================
+// 4.16 Wrapping Lines in a Text File
 
 int main(int argc, char** argv)
 {
-    testing::InitGoogleMock(&argc, argv);
-    return RUN_ALL_TESTS();
+  testing::InitGoogleMock(&argc, argv);
+  return RUN_ALL_TESTS();
 }

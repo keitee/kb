@@ -276,6 +276,7 @@ class AThreadPoolWithMultipleThreads: public Test
         {
             unique_lock<mutex> lock(m);
             ++count;
+            // wasExecuted.notify_one();
             wasExecuted.notify_all();
         }
 
@@ -286,8 +287,25 @@ class AThreadPoolWithMultipleThreads: public Test
             // ASSERT_TRUE(wasExecuted.wait_for(lock, chrono::milliseconds(100),
             //            [&] {return count == expectedCount;}));
 
-            wasExecuted.wait_for(lock, chrono::milliseconds(1000),
-                        [&] {return count == expectedCount;});
+            auto ret = wasExecuted.wait_for(lock, chrono::milliseconds(100),
+                        [&] 
+                        {
+                        // cout << "wait_for: count: " << count << endl;
+                        return count == expectedCount;
+                        });
+            cout << "ret wait_for: " << ret << endl;
+
+            //  this solves <problem-8>
+            if(!ret)
+            {
+              cout << "wait again wait_for: " << ret << endl;
+              ret = wasExecuted.wait_for(lock, chrono::milliseconds(100),
+                        [&] 
+                        {
+                        // cout << "wait_for: count: " << count << endl;
+                        return count == expectedCount;
+                        });
+            }
         }
 
         void addThreadIfUnique(const thread::id &id)
@@ -308,7 +326,7 @@ class AThreadPoolWithMultipleThreads: public Test
 
 // 500 work items, 2 workers
 
-TEST_F(AThreadPoolWithMultipleThreads, DispatchesWorkToMultipleThreadsOneClient) {
+TEST_F(AThreadPoolWithMultipleThreads, DISABLED_DispatchesWorkToMultipleThreadsOneClient) {
    // number of worker threads in pool
    unsigned int numberOfThreads{2};
    pool.start(numberOfThreads);
@@ -325,7 +343,9 @@ TEST_F(AThreadPoolWithMultipleThreads, DispatchesWorkToMultipleThreadsOneClient)
    EXPECT_THAT(numberOfThreadsProcessed(), Eq(numberOfThreads));
 }
 
-//  500x100 work items, 2 workers
+//  500x100 work items, 100 clients, 2 workers
+//  note that clients threas only do add and there is only one wait thread which
+//  is test thread.
 
 TEST_F(AThreadPoolWithMultipleThreads, DispatchesWorkToMultipleThreadsMultipleClient) {
    unsigned int numberOfWorkerThreads{2};
