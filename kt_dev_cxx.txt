@@ -241,8 +241,8 @@ KT KB. CPP
 *kt_dev_stl_064* cxx-fobj-function-type cxx-function-adaptor
 *kt_dev_stl_064* cpp-fobj-type cpp-function-pointer
 *kt_dev_stl_065* cpp-fobj-bind cpp-bind
-*kt_dev_stl_066* cpp-fobj-bind-member-function
-*kt_dev_stl_060* cpp-algo
+*kt_dev_cxx_0000* cxx-fobj-bind-member-function
+*kt_dev_cxx_0000* cxx-algo
 *kt_dev_cxx_0000* cxx-algo-non-modifying
 *kt_dev_stl_070* cpp-algo-copy
 
@@ -35531,7 +35531,23 @@ c.clear()
 Removes all elements (empties the container)
 
 
-C++ SLR 8.8 Special Member Functions for Lists and Forward Lists
+<cxx-list-splice>
+Splice Functions and Functions to Change the Order of Elements
+
+Linked lists have the advantage that you can remove and insert elements at any
+position in constant time. If you move elements from one container to another,
+this advantage doubles in that you need only redirect some internal
+pointers
+
+To support this ability, lists provide not only remove() but also additional
+modifying member functions to change the order of and relink elements and
+ranges. You can call these operations to move elements inside a single list or
+between two lists, provided that the lists have the same type.
+
+Table 7.25. Special Modifying Operations for Lists
+
+c.splice(pos, c2) 
+Moves all elements of c2 to c in front of the iterator position pos.
 
 void list::splice (const_iterator pos, list& source);
 void list::splice (const_iterator pos, list&& source);
@@ -35558,12 +35574,13 @@ used instead of const_iterator.
 
 * Provided by list.
 
+c.splice(pos, c2, c2pos) 
+Moves the element at c2pos in c2 in front of pos of list c (c and c2 may be
+identical)
 
-void list::splice (const_iterator pos, list& source, const_iterator sourcePos)
-void list::splice (const_iterator pos, list&& source, const_iterator sourcePos)
-
-* Move the element at the position sourcePos of the list source into *this and
-insert it at the position of iterator pos.
+c.splice(pos, c2, c2beg, c2end) 
+Moves all elements of the range [c2beg,c2end) in c2 in front of pos of list c
+(c and c2 may be identical)
 
 
 ={============================================================================
@@ -40623,7 +40640,7 @@ bool caseInsFind2(string& s, const string& p)
 
 
 ={============================================================================
-*kt_dev_stl_066* cpp-fobj-bind-member-function
+*kt_dev_cxx_0000* cxx-fobj-bind-member-function
 
 The bind() works with member function, modifying member function, and 'virtual'
 function. The first argument is a member function and the next argument defines
@@ -40724,7 +40741,7 @@ As with `function`, must make 'explicit' the 'object' on which the member
 function will operate and which is normally implicit parameter.
 
 As with `mem_fn`, the 'first' argument to the callable can be either a pointer
-or a reference. *cpp-this*
+or a reference. *cxx-this*
 
 auto f = bind(&string::empty, _1);
 f(*svec.begin());     // object; f uses .*
@@ -40732,52 +40749,33 @@ f(&svec[0]);          // pointer; f uses ->*
 
 
 <ex>
-#include<iostream>
-#include<vector>
-#include<string>
-#include<algorithm>
-#include<functional>
-
 using namespace std;
 using namespace std::placeholders;
 
 template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+void PRINT_PERSON_ELEMENTS(T &coll, const string &mesg = "")
 {
-  std::cout << optstr << endl;
+    cout << mesg << endl;
 
-  for( const auto &elem : coll )
-    elem.print();
+    for(const auto &e : coll)
+        e.PrintName();
+
+    cout << endl;
 }
-
 class Person {
-  private:
-    string name;
-
-  public:
-    Person (const string& n) : name(n) {}
-
-    void print () const
-    {
-      cout << ":" << name << endl;
-    }
-
-    void print2 (const string& prefix) const
-    {
-      cout << prefix << name << endl;
-    }
-
-    void setName (const std::string& n)
-    {
-      name = n;
-    }
+    public:
+    Person(const string &name) : name_(name) {}
+    void PrintName() const { cout << "+" << name_ << endl;}
+    void PrintNameWithPrefix(const string &prefix) const { cout << prefix << name_ << endl; }
+    void SetName(const string &name) { name_ = name;}
+    private:
+    string name_;
 };
 
-int main()
+TEST(CxxFeaturesTest, UseFunctionAdaptor)
 {
-  vector<Person> coll1 = { Person("one"), Person("two"), Person("three") };
-
-  PRINT_ELEMENTS( coll1, "initialized: " );
+  vector<Person> coll={Person("one"), Person("two"), Person("thr")};
+  PRINT_PERSON_ELEMENTS(coll, "init: ");
 
   // call member function print() for each person.
   //
@@ -40793,38 +40791,50 @@ int main()
   //   return op;
   // }
 
-  // *algo-for-each*
-  for_each( coll1.begin(), coll1.end(), 
-      bind(`&Person::print`, _1));
+  cout << "bind: " << endl;
+  for_each(coll.begin(), coll.end(),
+      bind(&Person::PrintName, _1));
+  cout << endl;
 
-  // call member function print2() with additional argument for each person
-  for_each( coll1.begin(), coll1.end(), 
-      bind(`&Person::print2`, _1, ">" ));
+  cout << "bind: " << endl;
+  for_each(coll.begin(), coll.end(),
+      bind(&Person::PrintNameWithPrefix, _1, "*"));
+  cout << endl;
 
-  // call modifying member function setName()
-  for_each( coll1.begin(), coll1.end(), 
-      bind(`&Person::setName`, _1, "Paul" ));
+  cout << "bind: " << endl;
+  for_each(coll.begin(), coll.end(),
+      mem_fn(&Person::PrintName));      
+  cout << endl;        
 
-  PRINT_ELEMENTS( coll1, "modified   : " );
+  for_each(coll.begin(), coll.end(),
+      bind(&Person::SetName, _1, "paul"));      
+  PRINT_PERSON_ELEMENTS(coll, "modi: "); 
 }
 
-initialized: 
-:one
-:two
-:three
+init: 
++one
++two
++thr
 
-:one
-:two
-:three
+bind: 
++one
++two
++thr
 
->one
->two
->three
->
-modified   : 
-:Paul
-:Paul
-:Paul
+bind: 
+*one
+*two
+*thr
+
+bind: 
++one
++two
++thr
+
+modi: 
++paul
++paul
++paul
 
 
 <cpp-member-function-address>
@@ -41284,7 +41294,7 @@ void ProxyMediaRouter::setSourceComplete
 
 
 ={============================================================================
-*kt_dev_stl_060* cpp-algo
+*kt_dev_cxx_0000* cxx-algo
 
 Algorithms are not member functions of the container classes and do not work
 directly on a container. All in all, this concept reduces the amount of code
@@ -41845,6 +41855,55 @@ t_algo_copy.cpp:28:65:   required from here
 /usr/include/c++/4.7/bits/stl_algobase.h:329:8: error: invalid user-defined
 conversion from ‘int’ to ‘std::list<std::basic_string<char> >::value_type&& {aka
   std::basic_string<char>&&}’ [-fpermissive]
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-algo-mutating
+
+<algo-partition>
+
+11.8.5 Moving Elements to the Front
+
+* Both algorithms return the first position for which op() yields false.
+
+As this example shows, stable_partition(), unlike partition(), preserves the
+relative order of the even and the odd elements.
+
+// coll1: 1 2 3 4 5 6 7 8 9 (9)
+// coll1: 8 2 6 4 5 3 7 1 9 (9)
+// first odd element: 5
+// coll2: 1 2 3 4 5 6 7 8 9 (9)
+// coll2: 2 4 6 8 1 3 5 7 9 (9)
+// first odd element: 1
+
+TEST(CxxStlTest, UseAlgoPartition)
+{
+    vector<int> coll1;
+    vector<int> coll2;
+
+    INSERT_ELEMENTS(coll1, 1, 9);
+    PRINT_ELEMENTS(coll1, "coll1: ");
+
+    vector<int>::iterator pos1, pos2;
+    pos1 = partition(coll1.begin(), coll1.end(),    // range
+                [](int elem)
+                {
+                    return elem %2 == 0;
+                });
+    PRINT_ELEMENTS(coll1, "coll1: ");
+    cout << "first odd element: " << *pos1 << endl;
+
+    INSERT_ELEMENTS(coll2, 1, 9);
+    PRINT_ELEMENTS(coll2, "coll2: ");
+
+    pos2 = stable_partition(coll2.begin(), coll2.end(),
+                [](int elem)
+                {
+                    return elem %2 == 0;
+                });
+    PRINT_ELEMENTS(coll2, "coll2: ");
+    cout << "first odd element: " << *pos2 << endl;
+}
 
 
 ={============================================================================
@@ -51292,6 +51351,8 @@ void data_processing_thread()
         std::unique_lock<std::mutex> lk(mut);
 
         // *cxx-con-condition-variable-predicate*
+        // have to use <cxx-unique-lock> and otherwise error
+
         data_cond.wait(lk,[]{return !data_queue.empty();});
 
         data_chunk data=data_queue.front();
@@ -51344,10 +51405,6 @@ wait_for(lock, duration, predicate) wait_until(lock, time_point, predicate)
 
 `bool`—the return value of the predicate when awakened
 note: the timeout expires return false.
-
-
-<cxx-unique-lock>
-This is 'why' you need the std::unique_lock rather than the std::lock_guard.
 
 
 <cxx-con-condition-variable-suprious-wake>

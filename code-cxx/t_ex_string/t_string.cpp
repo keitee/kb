@@ -13,14 +13,13 @@ using testing::ElementsAre;
 using testing::Eq;
 using testing::StrEq;
 
-
 // ={=========================================================================
 // string
 
 TEST(CxxStringTest, ConstructFromChars)
 {
     char s1[] = "this is first message";
-    char* s2 = "this is first message";
+    char *s2 = "this is first message";
 
     string string_from_char(s1);
     string string_from_const_char(s2);
@@ -34,7 +33,6 @@ TEST(CxxStringTest, ConstructFromChars)
     // string string_from_non_const_letter(non_const_letter);
 }
 
-
 // ={=========================================================================
 
 // cstring.
@@ -46,12 +44,12 @@ bool strend_01(char *s, char *t)
     // assume s is bigger than t
     size_t diff = strlen(s) - strlen(t);
 
-    char *psource = s+diff, *ptarget = t;
+    char *psource = s + diff, *ptarget = t;
     while (*psource)
     {
         if (*psource != *ptarget)
             return false;
-        
+
         ++psource, ++ptarget;
     }
 
@@ -73,7 +71,6 @@ bool strend_02(char *s, char *t)
     return false;
 }
 
-
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
 // strend(this is first message, ssage) returns 1
@@ -92,7 +89,6 @@ TEST(CxxStringTest, CompareStringFromEnd)
     EXPECT_EQ(false, strend_02(s1, t2));
 }
 
-
 // ={=========================================================================
 // size of s1 cstring  : 8
 // size of s1 cstring  : 8
@@ -110,13 +106,12 @@ TEST(CxxStringTest, CompareStringSizes)
     cout << "size of s1 cstring  : " << sizeof s1 << endl;
     cout << "size of s1 cstring  : " << sizeof *s1 << endl;
     cout << "size of s2 cstring  : " << sizeof(s2) << endl;
-    cout << "size of s2 cstring  : " << sizeof(s2)/sizeof(s2[0]) << endl;
+    cout << "size of s2 cstring  : " << sizeof(s2) / sizeof(s2[0]) << endl;
     cout << "strlen of s2 cstring: " << strlen(s2) << endl;
 
     string s{s1};
     cout << "size of string      : " << s.size() << endl;
 }
-
 
 // ={=========================================================================
 
@@ -144,11 +139,10 @@ TEST(CxxStringTest, PrintVariousTypeToOutputSteram)
     cout << "str[0] : " << ch << endl;
 }
 
-
 // ={=========================================================================
 // n will be the total lenth of the return
 
-template<typename T>
+template <typename T>
 void pad(T &s, typename T::size_type n, typename T::value_type c)
 {
     if (n > s.size())
@@ -159,41 +153,41 @@ TEST(CxxStringTest, StringInsertAndAppendMember)
 {
     string s1{"foo"};
     s1.insert(0, 20 - s1.size(), 'X');
-    EXPECT_EQ( s1, "XXXXXXXXXXXXXXXXXfoo");
+    EXPECT_EQ(s1, "XXXXXXXXXXXXXXXXXfoo");
 
     string s2{"foo"};
     s2.insert(s2.begin(), 20 - s2.size(), 'X');
-    EXPECT_EQ( s2, "XXXXXXXXXXXXXXXXXfoo");
+    EXPECT_EQ(s2, "XXXXXXXXXXXXXXXXXfoo");
 
     string s3{"foo"};
     s3.append(20 - s3.size(), 'X');
-    EXPECT_EQ( s3, "fooXXXXXXXXXXXXXXXXX");
+    EXPECT_EQ(s3, "fooXXXXXXXXXXXXXXXXX");
 
     string s4{"foo"};
     pad(s4, 20, 'X');
-    EXPECT_EQ( s4, "fooXXXXXXXXXXXXXXXXX");
+    EXPECT_EQ(s4, "fooXXXXXXXXXXXXXXXXX");
 
     string s5{"foo"};
     s5.append(20 - s5.size(), 'X');
-    EXPECT_EQ( s5, "fooXXXXXXXXXXXXXXXXX");
+    EXPECT_EQ(s5, "fooXXXXXXXXXXXXXXXXX");
 
     wstring ws1{L"foo"};
     pad(ws1, 20, 'X');
-    EXPECT_EQ( ws1, L"fooXXXXXXXXXXXXXXXXX");
+    EXPECT_EQ(ws1, L"fooXXXXXXXXXXXXXXXXX");
 }
 
 TEST(CxxStringTest, StringAppendNull)
 {
     string s1{};
 
-    for(int n = 0; n < 5; ++n)
+    for (int n = 0; n < 5; ++n)
         s1 += "";
 
     EXPECT_EQ(s1.length(), 0);
 }
 
-
 // ={=========================================================================
+// 4.2 Trimming a String
 
 // to trim `some` number of char from the end
 void rtrim(std::string &s, char c)
@@ -205,7 +199,11 @@ void rtrim(std::string &s, char c)
     for (; it != s.begin() && *--it == c;)
         ;
 
-    // move it one back since increased in for
+    // move it one back since it is increased in for loop one more
+    //
+    // note: when string s do not have any c, for loop condition runs once adn
+    // 'it' is end()-1. so ++it makes it is end(). so erase() has no effect.
+
     if (*it != c)
         ++it;
 
@@ -228,6 +226,18 @@ void rtrimws(std::string &s)
     s.erase(it, s.end());
 }
 
+// to trim `whitespace` from the start
+void ltrimws(std::string &s)
+{
+    if (s.empty())
+        return;
+
+    auto it = s.begin();
+    for (; it != s.end() && isspace(*it); ++it)
+        ;
+
+    s.erase(s.begin(), it);
+}
 
 // z
 // s: zoo                              , size : 33
@@ -237,11 +247,23 @@ TEST(CxxStringTest, TrimCharOrWhitespaceFromEnd)
 {
     string s1{"zoo"};
     rtrim(s1, 'o');
-    EXPECT_EQ( s1, "z");
+    EXPECT_EQ(s1, "z");
 
     string s2{"zoo                              "};
     rtrimws(s2);
-    EXPECT_EQ( s2, "zoo");
+    EXPECT_EQ(s2, "zoo");
+
+    string s3{"zzz"};
+    rtrim(s3, 'o');
+    EXPECT_EQ(s3, "zzz");
+
+    string s4{"                              zoo"};
+    ltrimws(s4);
+    EXPECT_EQ(s4, "zoo");
+
+    string s5{"zoo"};
+    ltrimws(s5);
+    EXPECT_EQ(s5, "zoo");
 }
 
 // ={=========================================================================
@@ -250,10 +272,10 @@ TEST(CxxStringTest, TrimCharOrWhitespaceFromEnd)
 TEST(CxxStringTest, RunStringCtors)
 {
     string s1{"zoo"};
-    EXPECT_EQ( s1, "zoo");
+    EXPECT_EQ(s1, "zoo");
 
     string s2("zoo");
-    EXPECT_EQ( s1, "zoo");
+    EXPECT_EQ(s1, "zoo");
 
     char letter = 'A';
 
@@ -269,24 +291,23 @@ TEST(CxxStringTest, RunStringCtors)
     //  */
     // basic_string&
     // operator+=(_CharT __c)
-    // { 
+    // {
     //  this->push_back(__c);
     //  return *this;
     // }
-    
+
     string s4;
     s4 += letter;
-    EXPECT_EQ( s4, "A");
+    EXPECT_EQ(s4, "A");
 
     string s5;
 
     // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
     // s5.append(letter);
-    
-    s5.append(1, letter);
-    EXPECT_EQ( s5, "A");
-}
 
+    s5.append(1, letter);
+    EXPECT_EQ(s5, "A");
+}
 
 // ={=========================================================================
 // Q: to split the string "Name|Address|Phone" into three separate strings,
@@ -305,77 +326,76 @@ TEST(CxxStringTest, RunStringCtors)
 
 class MakeToken
 {
-    public:
-        MakeToken(const std::string &input, const std::string &delim = "|")
-            : str_(input), delim_(delim)
+  public:
+    MakeToken(const std::string &input, const std::string &delim = "|")
+        : str_(input), delim_(delim)
+    {
+        // fix-on-next-token
+        begin_ = str_.find_first_not_of('|');
+        end_ = str_.find_first_of('|', begin_);
+    }
+
+    // updates begin_ and end_ state
+    void nextToken(std::string &token)
+    {
+        // there are more tokens to process
+        if (end_ != string::npos)
         {
-            // fix-on-next-token
-            begin_ = str_.find_first_not_of('|');
+            // cxx-string-substr
+            // substr(start, length) but not substr(start, end);
+            token = str_.substr(begin_, end_ - begin_);
+            begin_ = str_.find_first_not_of('|', end_);
             end_ = str_.find_first_of('|', begin_);
         }
 
-        // updates begin_ and end_ state
-        void nextToken(std::string &token)
+        // seen the last token ending with no delim, |"xxx"
+        //
+        // * TDD: can check if nextToken() is called more than # of tokens.
+        // this cause
+        // else if(end_ == string::npos)
+        //
+
+        else if (begin_ != string::npos && end_ == string::npos)
         {
-            // there are more tokens to process
-            if (end_ != string::npos)
-            {
-                // cxx-string-substr
-                // substr(start, length) but not substr(start, end);
-                token = str_.substr(begin_, end_ - begin_);
-                begin_ = str_.find_first_not_of('|', end_);
-                end_ = str_.find_first_of('|', begin_);
-            }
+            token = str_.substr(begin_);
+            // to make the condition to stop
+            begin_ = end_ = string::npos;
+        }
+    }
 
-            // seen the last token ending with no delim, |"xxx"
-            //
-            // * TDD: can check if nextToken() is called more than # of tokens.
-            // this cause
-            // else if(end_ == string::npos)
-            //
+    // do not update states since it just counts
+    // * this is not only complicated but also makes wrong result as
+    // fix-on-next-token e.g., "||Name" produce 2.
 
-            else if( begin_ != string::npos && end_ == string::npos)
-            {
-                token = str_.substr(begin_);
-                // to make the condition to stop
-                begin_ = end_ = string::npos;
-            }
+    int countTokens()
+    {
+        auto begin = str_.find_first_not_of('|');
+        auto end = str_.find_first_of('|', begin);
+
+        while (begin != end)
+        {
+            ++count_;
+            begin = str_.find_first_not_of('|', end);
+            end = str_.find_first_of('|', begin);
         }
 
-        // do not update states since it just counts
-        // * this is not only complicated but also makes wrong result as
-        // fix-on-next-token e.g., "||Name" produce 2. 
+        return count_;
+    }
 
-        int countTokens()
-        {
-            auto begin = str_.find_first_not_of('|');
-            auto end = str_.find_first_of('|', begin);
+    // to do this, need to have member variables to keep state
+    bool hasMoreTokens() const
+    {
+        return begin_ != end_;
+    }
 
-            while (begin != end)
-            {
-                ++count_;
-                begin = str_.find_first_not_of('|', end);
-                end = str_.find_first_of('|', begin);
-            }
-
-            return count_;
-        }
-
-        // to do this, need to have member variables to keep state
-        bool hasMoreTokens() const
-        {
-            return begin_ != end_;
-        }
-
-private:
-        MakeToken() = default;
-        string str_{};
-        string delim_{};
-        int count_{};
-        size_t begin_{};
-        size_t end_{};
+  private:
+    MakeToken() = default;
+    string str_{};
+    string delim_{};
+    int count_{};
+    size_t begin_{};
+    size_t end_{};
 };
-
 
 TEST(CxxStringTest, MakeTokensFromString)
 {
@@ -386,7 +406,7 @@ TEST(CxxStringTest, MakeTokensFromString)
     MakeToken mt1("Name|Address|Phone");
     EXPECT_EQ(3, mt1.countTokens());
 
-    while(mt1.hasMoreTokens())
+    while (mt1.hasMoreTokens())
     {
         mt1.nextToken(token);
         svec.push_back(token);
@@ -400,7 +420,7 @@ TEST(CxxStringTest, MakeTokensFromString)
     MakeToken mt2("Name|Address");
     EXPECT_EQ(2, mt2.countTokens());
 
-    while(mt2.hasMoreTokens())
+    while (mt2.hasMoreTokens())
     {
         mt2.nextToken(token);
         svec.push_back(token);
@@ -414,7 +434,7 @@ TEST(CxxStringTest, MakeTokensFromString)
     MakeToken mt3("Name");
     EXPECT_EQ(1, mt3.countTokens());
 
-    while(mt3.hasMoreTokens())
+    while (mt3.hasMoreTokens())
     {
         mt3.nextToken(token);
         svec.push_back(token);
@@ -428,7 +448,7 @@ TEST(CxxStringTest, MakeTokensFromString)
     MakeToken mt4("Name|");
     EXPECT_EQ(1, mt4.countTokens());
 
-    while(mt4.hasMoreTokens())
+    while (mt4.hasMoreTokens())
     {
         mt4.nextToken(token);
         svec.push_back(token);
@@ -442,7 +462,7 @@ TEST(CxxStringTest, MakeTokensFromString)
     MakeToken mt5("Name||Address");
     EXPECT_EQ(2, mt5.countTokens());
 
-    while(mt5.hasMoreTokens())
+    while (mt5.hasMoreTokens())
     {
         mt5.nextToken(token);
         svec.push_back(token);
@@ -457,7 +477,7 @@ TEST(CxxStringTest, MakeTokensFromString)
     MakeToken mt6("||Name");
     EXPECT_EQ(1, mt6.countTokens());
 
-    while(mt6.hasMoreTokens())
+    while (mt6.hasMoreTokens())
     {
         mt6.nextToken(token);
         svec.push_back(token);
@@ -465,7 +485,6 @@ TEST(CxxStringTest, MakeTokensFromString)
 
     EXPECT_THAT(svec, ElementsAre("Name"));
 }
-
 
 TEST(CxxStringTest, MakeTokensFromString_ExpectMoreTokens)
 {
@@ -481,19 +500,18 @@ TEST(CxxStringTest, MakeTokensFromString_ExpectMoreTokens)
         svec.push_back(token);
     }
 
-    // *TDD* 
+    // *TDD*
     // when calls it more than # of elements, do not clear token input string so
     // has the same string. Need to clear input in this case?
     EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone", "Phone", "Phone", "Phone"));
 }
-
 
 // ={=========================================================================
 // C++ codebook, 4.7, tokenizing a string
 // * there are couple of points that are different from the book
 class StringTokenizer
 {
-public:
+  public:
     StringTokenizer(const string &s, const char *delim = nullptr)
         : str_(s)
     {
@@ -527,9 +545,9 @@ public:
             begin_ = str_.find_first_not_of(delim_, end_);
             end_ = str_.find_first_of(delim_, begin_);
         }
-        else if(begin_ != string::npos && end_ == string::npos)
+        else if (begin_ != string::npos && end_ == string::npos)
         {
-            s = str_.substr(begin_, str_.length()-begin_);
+            s = str_.substr(begin_, str_.length() - begin_);
             begin_ = str_.find_first_not_of(delim_, end_);
         }
     }
@@ -567,8 +585,7 @@ public:
         return begin_ != end_;
     }
 
-
-private:
+  private:
     StringTokenizer() {}
     string delim_;
     string str_;
@@ -576,7 +593,6 @@ private:
     size_t begin_{};
     size_t end_{};
 };
-
 
 TEST(CxxStringTest, StringTokenizerFromString_Input1)
 {
@@ -587,7 +603,7 @@ TEST(CxxStringTest, StringTokenizerFromString_Input1)
 
     EXPECT_EQ(3, st.countTokens());
 
-    while(st.hasMoreTokens())
+    while (st.hasMoreTokens())
     {
         st.nextToken(token);
         svec.push_back(token);
@@ -605,7 +621,7 @@ TEST(CxxStringTest, StringTokenizerFromString_Input2)
 
     EXPECT_EQ(2, st.countTokens());
 
-    while(st.hasMoreTokens())
+    while (st.hasMoreTokens())
     {
         st.nextToken(token);
         svec.push_back(token);
@@ -623,7 +639,7 @@ TEST(CxxStringTest, StringTokenizerFromString_Input3)
 
     EXPECT_EQ(1, st.countTokens());
 
-    while(st.hasMoreTokens())
+    while (st.hasMoreTokens())
     {
         st.nextToken(token);
         svec.push_back(token);
@@ -641,7 +657,7 @@ TEST(CxxStringTest, StringTokenizerFromString_Input4)
 
     EXPECT_EQ(1, st.countTokens());
 
-    while(st.hasMoreTokens())
+    while (st.hasMoreTokens())
     {
         st.nextToken(token);
         svec.push_back(token);
@@ -659,7 +675,7 @@ TEST(CxxStringTest, StringTokenizerFromString_Input5)
 
     EXPECT_EQ(2, st.countTokens());
 
-    while(st.hasMoreTokens())
+    while (st.hasMoreTokens())
     {
         st.nextToken(token);
         svec.push_back(token);
@@ -677,7 +693,7 @@ TEST(CxxStringTest, StringTokenizerFromString_Input6)
 
     EXPECT_EQ(1, st.countTokens());
 
-    while(st.hasMoreTokens())
+    while (st.hasMoreTokens())
     {
         st.nextToken(token);
         svec.push_back(token);
@@ -685,7 +701,6 @@ TEST(CxxStringTest, StringTokenizerFromString_Input6)
 
     EXPECT_THAT(svec, ElementsAre("Name"));
 }
-
 
 // ={=========================================================================
 
@@ -718,7 +733,6 @@ TEST(CxxStringTest, BoostSplit_Input2)
     EXPECT_THAT(svec, ElementsAre("", "", "Name"));
 }
 
-
 // ={=========================================================================
 void join(const std::vector<std::string> &vector, const char delim, std::string &joined)
 {
@@ -729,7 +743,7 @@ void join(const std::vector<std::string> &vector, const char delim, std::string 
         joined += *it;
 
         // cxx-iter-arithmetic
-        if (it < vector.cend()-1)
+        if (it < vector.cend() - 1)
             joined += delim;
     }
 }
@@ -744,7 +758,6 @@ TEST(CxxStringTest, JoinSequnenceString)
     EXPECT_THAT(s, Eq("fee/fi/foe/fum"));
 }
 
-
 // ={=========================================================================
 // 4.10 Finding the nth Instance of a Substring
 bool nth_substring(int n, const std::string &s, const std::string &p)
@@ -755,13 +768,13 @@ bool nth_substring(int n, const std::string &s, const std::string &p)
     for (int i = 0; i < n; ++i)
     {
         found = s.find(p, start);
-        
+
         if (found != std::string::npos)
             start = found + 1;
         else
             return false;
     }
-    
+
     return true;
 }
 
@@ -788,7 +801,6 @@ TEST(CxxStringTest, FindNthSubstring)
     EXPECT_THAT(nth_substring(5, s, p), false);
 }
 
-
 // ={=========================================================================
 // use raw string
 
@@ -806,41 +818,40 @@ TEST(CxxStringTest, UseRawString)
          "state":"CO",
          "country":"US" }})";
 
-        std::cout << s << std::endl;
+    std::cout << s << std::endl;
 }
-
 
 // ={=========================================================================
 // 4.11 Removing a Substring from a String
 
-void removeSubstrs1(std::string& s, const std::string& p)
+void removeSubstrs1(std::string &s, const std::string &p)
 {
     auto start = s.find(p);
 
-    if( start != std::string::npos )
+    if (start != std::string::npos)
     {
-        auto first = s.substr( 0, start );
-        auto second = s.substr( start + p.size() );
+        auto first = s.substr(0, start);
+        auto second = s.substr(start + p.size());
 
         s = first + second;
     }
 }
 
-void removeSubstrs2(std::string& s, const std::string& p)
+void removeSubstrs2(std::string &s, const std::string &p)
 {
     auto start = s.find(p);
 
-    if( start != std::string::npos )
+    if (start != std::string::npos)
         s.erase(start, p.size());
 }
 
-void removeSubstrs3(std::string& s, const std::string& p)
+void removeSubstrs3(std::string &s, const std::string &p)
 {
     auto size = p.size();
 
-    for( auto start = s.find(p); 
-            start != std::string::npos;
-            start = s.find(p))
+    for (auto start = s.find(p);
+         start != std::string::npos;
+         start = s.find(p))
         s.erase(start, size);
 }
 
@@ -866,19 +877,18 @@ TEST(CxxStringTest, RemoveSubString)
     EXPECT_THAT(s3, Eq(r3));
 }
 
-
 // ={=========================================================================
 // 4.12 Converting a String to Lower- or Uppercase
 
 void toUpper(std::string &s)
 {
-    for( auto i = s.begin(); i != s.end(); ++i)
+    for (auto i = s.begin(); i != s.end(); ++i)
         *i = toupper(*i);
 }
 
 void toLower(std::string &s)
 {
-    for( auto i = s.begin(); i != s.end(); ++i)
+    for (auto i = s.begin(); i != s.end(); ++i)
         *i = tolower(*i);
 }
 
@@ -893,17 +903,16 @@ TEST(CxxStringTest, ConvertStringToLowerUpperCase)
     EXPECT_THAT(s, Eq("shazam"));
 }
 
-
 // ={=========================================================================
 // 4.13 Doing a Case-Insensitive String Comparison
 
-bool caseInsCompare1(const string& s1, const string& s2)
+bool caseInsCompare1(const string &s1, const string &s2)
 {
-    if( s1.size() != s2.size() )
+    if (s1.size() != s2.size())
         return false;
 
-    for( auto lhs = s1.cbegin(), rhs = s2.cbegin() ; lhs != s1.cend(); ++lhs, ++rhs)
-        if( toupper(*lhs) != toupper(*rhs) )
+    for (auto lhs = s1.cbegin(), rhs = s2.cbegin(); lhs != s1.cend(); ++lhs, ++rhs)
+        if (toupper(*lhs) != toupper(*rhs))
             return false;
 
     return true;
@@ -914,66 +923,63 @@ TEST(CxxStringTest, CompareCaseInsensitive)
     const string s1 = "In the BEGINNING...";
     const string s2 = "In the beginning...";
 
-    EXPECT_TRUE( caseInsCompare1(s1, s2));
+    EXPECT_TRUE(caseInsCompare1(s1, s2));
 }
-
 
 // ={=========================================================================
 // 4.14 Doing a Case-Insensitive String Search
 
 // modifies s and assumes p is upper-case
-bool caseInsFind1(string& s, const string& p)
+bool caseInsFind1(string &s, const string &p)
 {
-  toUpper(s);
+    toUpper(s);
 
-  return s.find(p) != std::string::npos;
+    return s.find(p) != std::string::npos;
 }
 
 // do not modify s
-bool caseInsFind2(string& s, const string& p)
+bool caseInsFind2(string &s, const string &p)
 {
-  auto it = search(s.begin(), s.end(), p.begin(), p.end(),
-      [](char lhs, char rhs)
-      {
-      return toupper(lhs) == rhs;
-      });
+    auto it = search(s.begin(), s.end(), p.begin(), p.end(),
+                     [](char lhs, char rhs) {
+                         return toupper(lhs) == rhs;
+                     });
 
-  return it != s.end();
+    return it != s.end();
 }
 
 TEST(CxxStringTest, SearchCaseInsensitive)
 {
-  string s1 = "row, row, row, your boat";
-  const string p = "YOUR";
+    string s1 = "row, row, row, your boat";
+    const string p = "YOUR";
 
-  // // returns 15
-  // cout << caseInsFind(s, p) << endl;
-  
-  EXPECT_TRUE(caseInsFind1(s1, p));
-  cout << s1 << endl;
+    // // returns 15
+    // cout << caseInsFind(s, p) << endl;
 
-  string s2 = "row, row, row, your boat";
-  EXPECT_TRUE(caseInsFind2(s2, p));
-  cout << s2 << endl;
+    EXPECT_TRUE(caseInsFind1(s1, p));
+    cout << s1 << endl;
+
+    string s2 = "row, row, row, your boat";
+    EXPECT_TRUE(caseInsFind2(s2, p));
+    cout << s2 << endl;
 }
-
 
 // ={=========================================================================
 // 4.15 Converting Between Tabs and Spaces in a Text File
 
 TEST(CxxStringTest, ConvertTabToSpace)
 {
-  ifstream input_file{"input.txt"};
-  ofstream output_file{"output_space.txt"};
-  char read_char{};
+    ifstream input_file{"input.txt"};
+    ofstream output_file{"output_space.txt"};
+    char read_char{};
 
-  while (input_file.get(read_char))
-  {
-    if (read_char == '\t')
-      output_file << "   "; // 3 spaces
-    else 
-      output_file << read_char;
-  }
+    while (input_file.get(read_char))
+    {
+        if (read_char == '\t')
+            output_file << "   "; // 3 spaces
+        else
+            output_file << read_char;
+    }
 }
 
 // the tricky bit is that:
@@ -992,46 +998,203 @@ TEST(CxxStringTest, ConvertTabToSpace)
 
 TEST(CxxStringTest, ConvertSpaceToTab)
 {
-  ifstream input_file{"output_space.txt"};
-  ofstream output_file{"output_tab.txt"};
-  char read_char{};
-  size_t space_count{};
+    ifstream input_file{"output_space.txt"};
+    ofstream output_file{"output_tab.txt"};
+    char read_char{};
+    size_t space_count{};
 
-  while (input_file.get(read_char))
-  {
-    // if (read_char == '\s')
-    if (read_char == ' ')
+    while (input_file.get(read_char))
     {
-      ++space_count;
+        // if (read_char == '\s')
+        if (read_char == ' ')
+        {
+            ++space_count;
 
-      if (3 == space_count)
-      {
-        // output_file << '\t';
-        output_file.put('\t');
-        space_count = 0;
-      }
+            if (3 == space_count)
+            {
+                // output_file << '\t';
+                output_file.put('\t');
+                space_count = 0;
+            }
+        }
+        else
+        {
+            if (space_count)
+            {
+                for (size_t i = 0; i < space_count; ++i)
+                    output_file.put(' ');
+
+                space_count = 0;
+            }
+
+            output_file << read_char;
+        }
     }
-    else 
-    {
-      if (space_count)
-      {
-        for (size_t i = 0; i < space_count; ++i)
-          output_file.put(' ');
-
-        space_count = 0;
-      }
-
-      output_file << read_char;
-    }
-  }
 }
-
 
 // ={=========================================================================
 // 4.16 Wrapping Lines in a Text File
 
-int main(int argc, char** argv)
+// Two requirements:
+//
+// For example, if you want to wrap text at 72 characters, you would insert a
+// new-line character after every 72 characters in the file.
+//
+// If the file contains human-readable text, you probably want to avoid
+// splitting words.
+//
+// works on a word unit and tmp keeps current word.
+//
+// whenever see a word, current_char is space and last_char is char, write it
+// and clear tmp.
+//
+// cc cccc ccccc cccc[width to wrap]
+//  ^^ - current_char
+//  +--- last_char
+//
+// at the wrap point, write a '\n' and last word. update i since last word is
+// already written on the new line.
+
+void testWrap(istream &in, ostream &out, size_t width)
 {
-  testing::InitGoogleMock(&argc, argv);
-  return RUN_ALL_TESTS();
+    string tmp{};
+    char current_char = '\0';
+    char last_char = '\0';
+    size_t i = 0;
+
+    while (in.get(current_char))
+    {
+        // increase i on every iteration
+        if (++i == width)
+        {
+            ltrimws(tmp);
+            out << '\n'
+                << tmp;
+            i = tmp.length();
+            tmp.clear();
+        }
+        else if (isspace(current_char) && !isspace(last_char))
+        {
+            out << tmp;
+            tmp.clear();
+        }
+
+        // Since the original approach do not work well in dealing with new line in
+        // the input, this is an attempt to fix. not sure if it works. no further
+        // effort and stops here.
+        //
+        // if (current_char == '\n')
+        //   current_char = ' ';
+
+        tmp += current_char;
+        last_char = current_char;
+    }
 }
+
+TEST(CxxStringTest, WrapLinesInTextFile)
+{
+    ifstream input_file{"input.txt"};
+    ofstream output_file{"output_wrap.txt"};
+
+    testWrap(input_file, output_file, 72);
+}
+
+// ={=========================================================================
+// 4.17 4.17 Counting the Number of Characters, Words,
+// and Lines in a Text File
+
+// kyoupark@kit-debian64:~/git/kb/code-cxx/t_ex_string$ wc input.txt
+//   3  23 152 input.txt
+//
+// CxxStringTest.CountStuffInTextFile
+//
+// cc: 152
+// wc: 23
+// lc: 3
+//
+// CxxStringTest.CountStuffInTextFile2
+//
+// cc: 149
+// wc: 23
+// lc: 4
+
+TEST(CxxStringTest, CountStuffInTextFile)
+{
+    ifstream input_file{"input.txt"};
+    size_t word_count{};
+    size_t char_count{};
+    size_t line_count{};
+    char current_char{};
+    char last_char{' '};
+    string tmp{};
+
+    while (input_file.get(current_char))
+    {
+        // to count word when current is space and last previous is not space.
+        //
+        // this has +1 word than wc command since when the input line is:
+        // [space]xxx xxx
+        
+        // this first space is counted as a word as isspace(curr) is true and
+        // isspace(last) is false. To fix this, set last_char's init value.
+
+        if ((isspace(current_char) || current_char == '\n') && !isspace(last_char))
+        {
+            // cout << "w: " << tmp << endl;
+            // tmp.clear();
+            ++word_count;
+        }
+
+        // to count line
+        if (current_char == '\n')
+            ++line_count;
+
+        tmp += current_char;
+        last_char = current_char;
+        ++char_count;
+    }
+
+    cout << "cc: " << char_count << endl;
+    cout << "wc: " << word_count << endl;
+    cout << "lc: " << line_count << endl;
+}
+
+TEST(CxxStringTest, CountStuffInTextFile2)
+{
+    ifstream input_file{"input.txt"};
+
+    char cur = '\0';
+    char last = '\0';
+    int chars = 0;
+    int words = 0;
+    int lines = 0;
+
+    while (input_file.get(cur))
+    {
+        if (cur == '\n' ||
+            (cur == '\f' && last == '\r'))
+            lines++;
+        else
+            chars++;
+        if (!std::isalnum(cur) && // This is the end of a
+            std::isalnum(last))   // word
+            words++;
+        last = cur;
+    }
+    if (chars > 0)
+    {                           // Adjust word and line
+        if (std::isalnum(last)) // counts for special
+            words++;            // case
+        lines++;
+    }
+
+    cout << "cc: " << chars << endl;
+    cout << "wc: " << words << endl;
+    cout << "lc: " << lines << endl;
+}
+
+int main(int argc, char **argv)
+{
+    testing::InitGoogleMock(&argc, argv);
+    return RUN_ALL_TESTS();
+    }

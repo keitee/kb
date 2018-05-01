@@ -181,6 +181,60 @@ TEST(CxxStlTest, HowMapFindWorks)
     }
 }
 
+// ={=========================================================================
+// cxx-list
+
+void PrintLists(const list<int> &list_one, const list<int> &list_two)
+{
+    cout << "list 1: ";
+    copy(list_one.cbegin(), list_one.cend(), ostream_iterator<int>(cout, " "));
+    cout << endl << "list 2: ";
+    copy(list_two.cbegin(), list_two.cend(), ostream_iterator<int>(cout, " "));
+    cout << endl << endl;
+}
+
+// list 0: 0 1 2 3 4 5 
+// list 2: 0 1 2 3 4 5 
+//
+// list 1: 
+// list 2: 0 1 2 [0 1 2 3 4 5] 3 4 5 
+//
+// list 1: 
+// list 2: 1 2 [0 1 2 3 4 5] 3 4 5 0 
+//
+// list 1: 
+// list 2: 2 0 1 2 3 4 5 3 4 5 0 
+// list 3: 1 
+
+TEST(CxxStlTest, UseListMemberFuntions)
+{
+    list<int> list_one, list_two;
+
+    for(int i=0; i < 6; ++i)
+    {
+        list_one.push_back(i);
+        list_two.push_back(i);
+    }
+
+    PrintLists(list_one, list_two);
+
+    // moves all elements of list_one before the pos of '3' element.
+    list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
+    PrintLists(list_one, list_two);
+
+    // move first element of list_two to the end
+    list_two.splice(list_two.end(), list_two, list_two.begin());
+    PrintLists(list_one, list_two);
+
+    list<int> list_three;
+    // move first element of list_two to the first of list_three
+    list_three.splice(list_three.begin(), list_two, list_two.begin());
+    PrintLists(list_one, list_two);
+    cout << "list 3: ";
+    copy(list_three.begin(), list_three.end(), ostream_iterator<int>(cout, " "));
+    cout << endl;
+}
+
 
 // ={=========================================================================
 // cxx-algo-accumulate
@@ -265,6 +319,45 @@ TEST(CxxStlTest, UseAlgoEqual)
                     return lhs % 2 == rhs % 2; 
                 }
                 ));
+}
+
+// ={=========================================================================
+// cxx-algo-partition
+
+// coll1: 1 2 3 4 5 6 7 8 9 (9)
+// coll1: 8 2 6 4 5 3 7 1 9 (9)
+// first odd element: 5
+// coll2: 1 2 3 4 5 6 7 8 9 (9)
+// coll2: 2 4 6 8 1 3 5 7 9 (9)
+// first odd element: 1
+
+TEST(CxxStlTest, UseAlgoPartition)
+{
+    vector<int> coll1;
+    vector<int> coll2;
+
+    INSERT_ELEMENTS(coll1, 1, 9);
+    PRINT_ELEMENTS(coll1, "coll1: ");
+
+    vector<int>::iterator pos1, pos2;
+    pos1 = partition(coll1.begin(), coll1.end(),    // range
+                [](int elem)
+                {
+                    return elem %2 == 0;
+                });
+    PRINT_ELEMENTS(coll1, "coll1: ");
+    cout << "first odd element: " << *pos1 << endl;
+
+    INSERT_ELEMENTS(coll2, 1, 9);
+    PRINT_ELEMENTS(coll2, "coll2: ");
+
+    pos2 = stable_partition(coll2.begin(), coll2.end(),
+                [](int elem)
+                {
+                    return elem %2 == 0;
+                });
+    PRINT_ELEMENTS(coll2, "coll2: ");
+    cout << "first odd element: " << *pos2 << endl;
 }
 
 int main(int argc, char** argv)

@@ -1,6 +1,9 @@
 #include <iostream>
 #include <thread>
 #include <future>
+#include <list>
+#include <mutex>
+#include <queue>
 
 #include "gtest/gtest.h"
 
@@ -45,6 +48,88 @@ TEST(CconThreadTest, RunTwoThreads)
     t1.join();
     t2.join();
     cout << "\ndone" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-lockedqueue
+
+template <typename T>
+class locked_queue
+{
+  public:
+    // push an item into the end of the queue
+    void push(T const &item)
+    {
+      std::lock_guard<std::mutex> lock(m_mutex);
+      m_queue.push(item);
+      // queue went from empty to one, notify a thread
+      if(m_queue.size() == 1)
+      {
+        m_notEmptyCondition.notify_one();
+      }
+    }
+
+    // pop the oldest item out of the queue
+    // blocks until there are item to be popped
+    T pop()
+    {
+      std::unique_lock<std::mutex> lock(m_mutex);
+      while(m_queue.empty() == true)
+        m_notEmptyCondition.wait(lock);
+
+      T item = m_queue.front();
+      m_queue.pop();
+      return item;
+    }
+
+  private:
+    std::queue<T> m_queue;
+    std::mutex m_mutex;
+    std::condition_variable m_notEmptyCondition;
+};
+
+
+// producer that pushes two items to a queue
+void producer(locked_queue<int> *q)
+{
+  std::cout << "starts producer" << std::endl;
+  q->push(1);
+  q->push(2);
+  std::cout << "ends producer" << std::endl;
+}
+
+// consumer that pops an item from the queue
+void consumer(locked_queue<int> *q)
+{
+  std::cout << "starts consumer" << std::endl;
+  int i = q->pop();
+  std::cout << "ends consumer: " << i << std::endl;
+}
+
+TEST(CconThreadTest, UseLockedQueue)
+{
+  locked_queue<int> lq;
+
+  // set up two consumers to wait for items
+
+  std::cout << "main: starts consumers" << std::endl;
+  std::thread c1(&consumer, &lq);
+  std::thread c2(&consumer, &lq);
+
+  // sleep for a second to ensure c1 and c2 are ready
+  // not the best code, but good enough for a test case
+  this_thread::sleep_for(chrono::seconds(2));
+
+  // create the producer to push in two items
+  
+  std::thread p(&producer, &lq);
+
+  c1.join();
+  c2.join();
+  p.join();
+ 
+  std::cout << "main: ends" << std::endl;
 }
 
 
@@ -173,6 +258,96 @@ TEST(CconThreadTest, UseAsyncX)
         cout << "\nEXCEPTION: " << e.what() << endl;
     }
     cout << "\ndone" << endl;
+}
+
+// ={=========================================================================
+// cxx-quicksort
+// Listing 4.12 A sequential implementation of Quicksort
+
+template<typename T>
+std::list<T> sequential_quick_sort(std::list<T> input)
+{
+    if(input.empty())
+        return input;
+
+    std::list<T> result;
+    // move the first of input to the first of result
+    result.splice(result.begin(), input, input.begin());
+    const T &pivot = *result.begin();
+
+    // divide input into two; one which are < pivot and the other which are >= pivot.
+    auto divide_point = std::partition(input.begin(), input.end(),
+            [&](const T &t)
+            {
+                return t < pivot;
+            });
+
+    // make two list; lower_part and input(higher_part)
+    std::list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+
+    auto new_lower(sequential_quick_sort(std::move(lower_part)));
+    auto new_higher(sequential_quick_sort(std::move(input)));
+
+    result.splice(result.end(), new_higher);
+    result.splice(result.begin(), new_lower);
+    return result;
+}
+
+TEST(CconThreadTest, UseSequentialQuickSort)
+{
+    // result {12, 19, 22, 26, 29, 33, 35 };
+    // std::list<int> input{26, 33, 35, 29, 19, 12, 22};
+    std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
+
+    auto result = sequential_quick_sort(input);
+    copy(result.begin(), result.end(), ostream_iterator<int>(cout, " "));
+    cout << endl;
+}
+
+
+template<typename T>
+std::list<T> parallel_quick_sort(std::list<T> input)
+{
+    if(input.empty())
+        return input;
+
+    std::list<T> result;
+    // move the first of input to the first of result
+    result.splice(result.begin(), input, input.begin());
+    const T &pivot = *result.begin();
+
+    // divide input into two; one which are < pivot and the other which are >= pivot.
+    auto divide_point = std::partition(input.begin(), input.end(),
+            [&](const T &t)
+            {
+                return t < pivot;
+            });
+
+    // make two list; lower_part and input(higher_part)
+    std::list<T> lower_part;
+    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+
+    std::future<std::list<T>> new_lower(
+        std::async(parallel_quick_sort<T>, std::move(lower_part))
+        );
+    auto new_higher(parallel_quick_sort(std::move(input)));
+
+    result.splice(result.end(), new_higher);
+    result.splice(result.begin(), new_lower.get());
+    return result;
+}
+
+TEST(CconThreadTest, UseParallelQuickSort)
+{
+    // result {12, 19, 22, 26, 29, 33, 35 };
+    // std::list<int> input{26, 33, 35, 29, 19, 12, 22};
+
+    std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
+
+    auto result = parallel_quick_sort(input);
+    copy(result.begin(), result.end(), ostream_iterator<int>(cout, " "));
+    cout << endl;
 }
 
 // ={=========================================================================

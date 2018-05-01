@@ -1203,6 +1203,121 @@ TEST(CxxAlgoTest, FindNumberOfBitsBetweenTwoIntegers)
     EXPECT_THAT(find_same_number_of_bits(55, 5), Eq(2));
 }
 
+// ={=========================================================================
+// qsort
+using Position = int;
+using Entry = int;
+
+inline bool GT(int lhs, int rhs) { return lhs > rhs; }
+inline bool LT(int lhs, int rhs) { return lhs < rhs; }
+inline bool EQ(int lhs, int rhs) { return lhs == rhs; }
+
+size_t recursion_depth = 0;
+
+void PrintList(Entry *coll, Position start, Position end, const std::string &desc = "")
+{
+    std::cout << desc << ": {";
+
+    for(Position i = start; i <= end; ++i)
+        std::cout << coll[i] << ", ";
+
+    std::cout << "}" << std::endl;
+}
+
+void PrintRecursionDepth(bool prefix, size_t depth)
+{
+    for(size_t i=0; i <= depth; ++i)
+    {
+        if(prefix)
+            std::cout << "+";
+        else
+            std::cout << " ";
+    }
+
+    if(prefix)
+        std::cout << "(" << depth << ")";
+    else
+        std::cout << "      ";
+}
+
+void SwapEntry(Entry *coll, Position lhs, Position rhs)
+{
+    int temp = coll[lhs];
+
+    coll[lhs] = coll[rhs];
+    coll[rhs] = temp;
+}
+
+Position MakePartion(Entry *coll, Position start, Position end)
+{
+    Position i{};
+    Position pos_last_small{};
+    Entry pivot_value{};
+
+    PrintRecursionDepth(false, recursion_depth);
+    PrintList(coll, start, end, "1:");
+
+    // pick the center as pivot and move it to 0th
+    SwapEntry(coll, start, (start+end)/2);
+
+    PrintRecursionDepth(false, recursion_depth);
+    PrintList(coll, start, end, "2:");
+
+    pos_last_small = start;
+    pivot_value = coll[pos_last_small];
+
+    // scan all in the list except the first entry, which is pivot, and build
+    // loop invariant; that divide a list in two.
+    for(i = start+1; i <= end; ++i)
+    {
+        if(LT(coll[i], pivot_value))
+            SwapEntry(coll, ++pos_last_small, i);
+    }
+
+    PrintRecursionDepth(false, recursion_depth);
+    PrintList(coll, start, end, "3:");
+    
+    SwapEntry(coll, start, pos_last_small);
+
+    PrintRecursionDepth(false, recursion_depth);
+    PrintList(coll, start, end, "4:");
+    
+    return pos_last_small;
+}
+
+void DoQuickSort(Entry *coll, Position start, Position end)
+{
+    Position pivot_pos{};
+
+    if(start < end)
+    {
+        ++recursion_depth;
+        PrintRecursionDepth(true, recursion_depth);
+
+        std::cout << "QS(" << start << ", " << end << ")" << std::endl;
+        
+        pivot_pos = MakePartion(coll, start, end);
+        DoQuickSort(coll, start, pivot_pos-1);
+        DoQuickSort(coll, pivot_pos+1, end);
+
+        --recursion_depth;
+    }
+}
+TEST(CxxAlgoTest, RunQuickSort)
+{
+  int arr[] = { 12, 19, 22, 26, 29, 33, 35 };
+
+  int size = ( sizeof(arr)/sizeof(arr[0]));
+
+  DoQuickSort(arr, 0, size-1 );
+
+  std::cout << "sorted: { "; 
+
+  for(int idx = 0; idx < size; idx++)
+    std::cout << arr[idx] << ", "; 
+
+  std::cout << "}" << std::endl;
+}
 
 int main(int argc, char** argv)
 {

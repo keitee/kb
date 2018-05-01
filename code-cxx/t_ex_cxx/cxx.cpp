@@ -7,6 +7,7 @@
 #include "gtest/gtest.h"
 
 using namespace std;
+using namespace std::placeholders;
 
 // ={=========================================================================
 // cxx-pair
@@ -514,6 +515,69 @@ TEST(CxxFeaturesTest, UseLambda)
 
 
 // ={=========================================================================
+// cxx-isspace
+
+// isspace(' '): 8192
+// isspace(0)  : 0
+//
+//       isspace()
+//              checks for white-space characters.  In the "C" and "POSIX"
+//              locales, these are: space, form-feed  ('\f'), newline ('\n'),
+//              carriage return ('\r'), horizontal tab ('\t'), and vertical tab
+//              ('\v').
+
+TEST(CxxFeaturesTest, UseIsspace)
+{
+  cout << "isspace(' '): " << isspace(' ') << endl;
+  cout << "isspace(0)  : " << isspace(0) << endl;
+}
+
+// ={=========================================================================
+// cxx-function-adaptor
+template <typename T>
+void PRINT_PERSON_ELEMENTS(T &coll, const string &mesg = "")
+{
+    cout << mesg << endl;
+
+    for(const auto &e : coll)
+        e.PrintName();
+
+    cout << endl;
+}
+class Person {
+    public:
+    Person(const string &name) : name_(name) {}
+    void PrintName() const { cout << "+" << name_ << endl;}
+    void PrintNameWithPrefix(const string &prefix) const { cout << prefix << name_ << endl; }
+    void SetName(const string &name) { name_ = name;}
+    private:
+    string name_;
+};
+
+TEST(CxxFeaturesTest, UseFunctionAdaptor)
+{
+    vector<Person> coll={Person("one"), Person("two"), Person("thr")};
+    PRINT_PERSON_ELEMENTS(coll, "init: ");
+
+    cout << "bind: " << endl;
+    for_each(coll.begin(), coll.end(),
+        bind(&Person::PrintName, _1));
+    cout << endl;
+
+    cout << "bind: " << endl;
+    for_each(coll.begin(), coll.end(),
+        bind(&Person::PrintNameWithPrefix, _1, "*"));
+    cout << endl;
+
+    cout << "bind: " << endl;
+    for_each(coll.begin(), coll.end(),
+        mem_fn(&Person::PrintName));      
+    cout << endl;        
+
+    for_each(coll.begin(), coll.end(),
+        bind(&Person::SetName, _1, "paul"));      
+    PRINT_PERSON_ELEMENTS(coll, "modi: "); 
+}
 
 int main(int argc, char** argv)
 {
