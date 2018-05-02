@@ -1247,9 +1247,17 @@ usecomma.cpp:5:19: sorry, unimplemented: non-static data member initialisers
 
 
 
-{cplusplus-macro}
+{cxx-cplusplus}
 __cplusplus
-This macro is defined when the C++ compiler is in use. You can use __cplusplus to test whether a header is compiled by a C compiler or a C++ compiler. This macro is similar to __STDC_VERSION__, in that it expands to a version number. Depending on the language standard selected, the value of the macro is 199711L for the 1998 C++ standard, 201103L for the 2011 C++ standard, 201402L for the 2014 C++ standard, 201703L for the 2017 C++ standard, or an unspecified value strictly larger than 201703L for the experimental languages enabled by -std=c++2a and -std=gnu++2a.
+
+This macro is defined when the C++ compiler is in use. You can use __cplusplus
+to test whether a header is compiled by a C compiler or a C++ compiler. This
+macro is similar to __STDC_VERSION__, in that it expands to a version number.
+Depending on the language standard selected, the value of the macro is 199711L
+for the 1998 C++ standard, 201103L for the 2011 C++ standard, 201402L for the
+2014 C++ standard, 201703L for the 2017 C++ standard, or an unspecified value
+strictly larger than 201703L for the experimental languages enabled by
+-std=c++2a and -std=gnu++2a.
 
 
 {the-gnu-c++-library}
@@ -10228,7 +10236,7 @@ void print( std::initializer_list<int> vals )
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-ctor
+*kt_dev_cxx_0000* cxx-ctor cxx-in-class-init
 
 {cxx-ctor-default}
 There are operations synthesized by compiler if they are not defined by user
@@ -10253,14 +10261,14 @@ The `default-ctor` is a special constructor which takes `no-arguments`.
 The recommendation on initialization is to avoid syn-version and do it
 explicitly:
 
-`in-class-init` (C++11) or `ctor-init-list`
+`cxx-in-class-init` (C++11) or `ctor-init-list`
 
 
 The reasons to avoid the syn-version:
 
 * The `default-init` for built-in types means `undefined value.`
 
-  The synthesised detault-ctor will use `in-class-init` if there is and
+  The synthesised detault-ctor will use `cxx-in-class-init` if there is and
   otherwise `default-init` its member and use default ctor for its class
   member. So undefined value for built-in types and default constructed
   value for user types.
@@ -10308,14 +10316,34 @@ class Sales_data {
 Q: use case other than default ctor?
 
 
-{cxx-in-class-init} *C++11* 
-For window_mgr calss to start up with a single, default-inited screen.
+{cxx-in-class-init} *C++11* CPR 73
+in-class-init are `restricted as to the form`: must either be enclosed inside
+curly braces or follow an = sign. May not specify an in-class-init inside
+parentheses.
 
+class Game
+{
+  public:
+
+    // CardPlayer player1("this is player");
+    //
+    // t_string.cpp:53:23: error: expected identifier before string constant
+    //      CardPlayer player("this is player");
+    //                        ^
+    // t_string.cpp:53:23: error: expected ‘,’ or ‘...’ before string constant
+    
+    CardPlayer player2{"this is player"};
+    CardPlayer player3 = {"this is player"};
+};
+
+
+<ex>
 class window_mgr {
 
   private:
-   vector<Screen> screens{ Screen(24, 80, ' ') };       // direct init form 
-   vector<Screen> screens = { Screen(24, 80, ' ') };    // copy init form
+    // to start up with a single, default-inited screen.
+    vector<Screen> screens{ Screen(24, 80, ' ') };       // direct init form 
+    vector<Screen> screens = { Screen(24, 80, ' ') };    // copy init form
 };
 
 class T {
@@ -22603,7 +22631,7 @@ usecomma.cpp:8:13: error: invalid use of non-static data member ‘Foo::MAX’
 <in-h>
 class Foo {
   private:
-    static const double interest = 30;    // declaration. in-class-init. 
+    static const double interest = 30;    // declaration. cxx-in-class-init. 
     double table[ interest ];             // can be used.
 };
 
@@ -29432,74 +29460,24 @@ distribution object with an engine.
 
 <ex> to get a number in a specified range
 
-// = 01 ======
 // 0, 1, 9, 5, 6, 2, 0, 8, 8, 12, 4, 6, 10, 0, 0, 6, 8, 0, 4, 0, 5, 8, 7, 12, 11, 6, 1, 8, 5, 9, 
 
-#include <iostream>
-#include <random>
-
-// g++ -g -std=c++0x t_override.cpp
-
-int t_random_01()
+TEST(CxxStlTest, UseRandom)
 {
-    using namespace std;
+  default_random_engine dre;
+  uniform_int_distribution<unsigned> udist(0, 12);
 
-    default_random_engine e;
-    uniform_int_distribution<unsigned> u(0, 12);
-
-    for (size_t i = 0; i < 30; ++i)
-        cout << u(e) << ", ";
-
-    cout << endl;
+  for(size_t i = 0; i < 30; ++i)
+    cout << udist(dre) << ", ";
+  cout << endl;
 }
 
 
-{same-sequence}
+{cxx-random-same-sequence}
 Even though the numbers generated appear to be random, a given generator returns
 the 'same' sequence of numbers each time it is run. This is very 'helpful'
 during testing and on the other hand, programs have to take this fact into
-account.
-
-<ex>
-#include <iostream>
-#include <random>
-#include <vector>
-
-using namespace std;
-
-vector<unsigned> bad_randVec(void)
-{
-  default_random_engine e;
-  uniform_int_distribution<unsigned> u(0,9);
-  vector<unsigned> ret;
-
-  cout << "--------------" << endl;
-
-  for (size_t i = 0; i < 20; i++)
-  {
-    unsigned rval = u(e);
-    ret.push_back(rval);
-    cout << rval << " ";
-  }
-
-  cout << endl;
-
-  return ret;
-}
-
-int main(void)
-{
-  vector<unsigned> v1(bad_randVec());
-  vector<unsigned> v2(bad_randVec());
-
-  cout << ((v1 == v2) ? "equal" : "not equal") << endl;
-}
-
---------------
-0 1 7 4 5 2 0 6 6 9 3 5 8 0 0 5 6 0 3 0 
---------------
-0 1 7 4 5 2 0 6 6 9 3 5 8 0 0 5 6 0 3 0 
-equal
+account. note that rand() makes different every time.
 
 
 {different-sequence}
@@ -39561,8 +39539,9 @@ algorithms:
 
 10.1.2 Function Objects with Internal State
 
-To pass a function object by reference, you simply have to qualify the call of
-the algorithm so that the function object type is a reference.
+To pass a function object by reference, simply have to qualify the call of the
+algorithm so that the function object type is a reference. By this, can
+contiune the sequence.
 
 class IntSequence {
   private:
@@ -39585,9 +39564,9 @@ int main()
 
   IntSequence seq(1); // integral sequence starting with 1
 
-  // insert values from 1 to 4
-  // pass function object by reference so that it will continue with 5 
-  // note: see reference in "IntSequence&"
+  // insert values from 2
+  // since seq was passed by reference as in "IntSequence&" so seq will have
+  // the last value 6
 
   generate_n<back_insert_iterator<list<int>>, int, `IntSequence&`>(
       back_inserter(coll),    // start
@@ -39596,7 +39575,8 @@ int main()
 
   PRINT_ELEMENTS(coll);
 
-  // insert values from 42 to 45
+  // insert values from 43 to 46
+
   generate_n(
       back_inserter(coll),  // start
       4,                    // number of elements
@@ -39604,8 +39584,8 @@ int main()
 
   PRINT_ELEMENTS(coll);
 
-  // continue with first sequence
-  // pass function object by value but it will continue with 5 again
+  // currently seq has 6 value and start from that since passed by value
+
   generate_n(
       back_inserter(coll),  // start
       4,                    // number of elements
@@ -39613,7 +39593,9 @@ int main()
 
   PRINT_ELEMENTS(coll);
 
-  // continue with first sequence again
+  // no change
+  // currently seq has 6 value and start from that since passed by value
+
   generate_n(
       back_inserter(coll),  // start
       4,                    // number of elements
@@ -41705,11 +41687,12 @@ int count (const C& c, P pred)
 
 
 ={============================================================================
-*kt_dev_stl_070* cpp-algo-copy
+*kt_dev_cxx_0000* cxx-algo-modifying
 
 CLR 11.6
-
-There are two ways to modify elements:
+  
+This section describes algorithms that modify the elements of a range. There
+are two ways to modify elements:
 
 1. Modify them directly while iterating through a sequence.
 2. Modify them while copying them from a source range to a destination range.
@@ -41721,12 +41704,61 @@ All algorithms that have a separate destination range return the position after
 the last copied element of that (destination) range.
 
 
-{algo-copy}
+<algo-generate>
+
+11.6.5 Assigning New Values
+
+Assigning Generated Values
+
+void generate (ForwardIterator beg, ForwardIterator end, Func op)
+void generate_n (OutputIterator beg, Size num, Func op)
+
+* generate() assigns the values that are generated by a call of
+op() to each element in the range [beg,end).
+
+* generate_n() assigns the values that are generated by a call of
+op() to the first num elements in the range starting with beg. If num is
+negative, generate_n() does nothing (specified only since C++11).
+
+* The caller must ensure that the destination range is big enough or that
+  insert iterators are used.
+
+<ex>
+// 1804289383 846930886 1681692777 1714636915 1957747793 424238335 719885386 1649760492 596516649 1189641421 1025202362 1350490027 (12)
+// 2 19 11 22 12 18 4 16 11 8 15 21 (12)
+
+class CardSequence
+{
+    public:
+        int operator() () {
+            return rand() % 24;
+        }
+};
+
+TEST(CxxStlTest, UseAlgoGenerate)
+{
+    vector<uint32_t> ivec1;
+    generate_n( back_inserter(ivec1), 12, rand );
+    PRINT_ELEMENTS(ivec1);
+
+    vector<uint32_t> ivec2;
+    generate_n( back_inserter(ivec2), 12, CardSequence() );
+    PRINT_ELEMENTS(ivec2);
+}
+
+
+<algo-copy>
+
+NOTE: TODO: WHY modifying one?
+
+11.6.1 Copying Elements
 
 OutputIterator
 copy (InputIterator sourceBeg, InputIterator sourceEnd,
       OutputIterator destBeg)
 
+* The caller must ensure that the destination range is big enough or that
+  insert iterators are used.
 
 <ex> *algo-copy*
 #include <iostream>
@@ -41760,6 +41792,7 @@ int main()
 The copy() statement is illegal because [first, last) not a vaild range; indeed
 first may actually be after last.
 
+*cxx-seg-fault*
 The first is coll.end() and the last is dereferencible iterator. The copy
 requires that first 'must' be a valid range. The likely symptom will be a
 difficult-to-diagnose core dump during or sometime after the copy.
@@ -41789,9 +41822,38 @@ type = N11__gnu_debug14_Safe_iteratorIN9__gnu_cxx17__normal_iteratorIPiNSt9
 Aborted
 
 
+NOTE: TODO: HOW to use copy between different types?
+
+* To assign all elements of a container, use the assignment operator if the
+  containers have the same type (see Section 8.4, page 406) or the assign()
+  member function if the containers have different types (see Section 8.4,
+  page 407).
+
+// /usr/include/c++/4.9/bits/stl_algobase.h
+  /**
+   *  @brief Copies the range [first,last) into result.
+   *  @ingroup mutating_algorithms
+   *  @param  __first  An input iterator.
+   *  @param  __last   An input iterator.
+   *  @param  __result An output iterator.
+   *  @return   result + (first - last)
+   *
+   *  This inline function will boil down to a call to @c memmove whenever
+   *  possible.  Failing that, if random access iterators are passed, then the
+   *  loop count will be known (and therefore a candidate for compiler
+   *  optimizations such as unrolling).  Result may not be contained within
+   *  [first,last); the copy_backward function should be used instead.
+   *
+   *  Note that the end of the output range is permitted to be contained
+   *  within [first,last).
+  */
+  template<typename _II, typename _OI>
+    inline _OI
+    copy(_II __first, _II __last, _OI __result)
+
 <ex>
 From EXPC++ 05. Snippet to show the queston: How does algo-copy work when the
-type of source and dest is differen? That is when T and O different?
+type of source and dest is different? That is when T and O different?
 
 template<typename T, size_t size>
 class fixed_vector
@@ -41818,47 +41880,36 @@ is built-in assignment.
 
 When tries different types, shows the error:
 
-#include <iostream>
-#include <vector>
-#include <list>
-#include <string>
-#include <algorithm>
+// when use list<int>
+// init: 1 2 3 4 5 6 (6)
+// list: 1 2 3 4 5 6 (6)
 
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-int main()
+TEST(CxxStlTest, UseAlgoCopy)
 {
   vector<int> coll{1,2,3,4,5,6};
 
-  PRINT_ELEMENTS(coll, "initialized: " );
+  PRINT_ELEMENTS(coll, "init: " );
 
-  // list<int> coll1;
-  list<string> coll1;
+  list<int> coll1;
+  // list<string> coll1;
   copy( coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
 
-  PRINT_ELEMENTS(coll1, "list       : " );
+  PRINT_ELEMENTS(coll1, "list: " );
 }
 
-
-t_algo_copy.cpp:28:65:   required from here
+.cpp:28:65:   required from here
 /usr/include/c++/4.7/bits/stl_algobase.h:329:8: error: invalid user-defined
-conversion from ‘int’ to ‘std::list<std::basic_string<char> >::value_type&& {aka
-  std::basic_string<char>&&}’ [-fpermissive]
+conversion from ‘int’ to ‘std::list<std::basic_string<char> >::value_type&&
+{aka std::basic_string<char>&&}’ [-fpermissive]
 
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-algo-mutating
+
+Mutating algorithms `change the order of elements but not their values.`
+Because elements of associative and unordered containers have an order defined
+by the container, you can’t use these algorithms as a destination for mutating
+algorithms.
 
 <algo-partition>
 

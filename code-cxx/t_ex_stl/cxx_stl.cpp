@@ -87,29 +87,6 @@ TEST(CxxStlTest, HowSetSorted)
 
 
 // ={=========================================================================
-// cxx-algo-generate
-
-class CardSequence
-{
-    public:
-        int operator() () {
-            return rand() % 24;
-        }
-};
-
-TEST(CxxStlTest, UseAlgoGenerate)
-{
-    vector<uint32_t> ivec1;
-    generate_n( back_inserter(ivec1), 12, rand );
-    PRINT_ELEMENTS(ivec1);
-
-    vector<uint32_t> ivec2;
-    generate_n( back_inserter(ivec2), 12, CardSequence() );
-    PRINT_ELEMENTS(ivec2);
-}
-
-
-// ={=========================================================================
 // cxx-map
 
 TEST(CxxStlTest, HowMapInsertWorks)
@@ -181,6 +158,7 @@ TEST(CxxStlTest, HowMapFindWorks)
     }
 }
 
+
 // ={=========================================================================
 // cxx-list
 
@@ -233,6 +211,94 @@ TEST(CxxStlTest, UseListMemberFuntions)
     cout << "list 3: ";
     copy(list_three.begin(), list_three.end(), ostream_iterator<int>(cout, " "));
     cout << endl;
+}
+
+
+// ={=========================================================================
+// cxx-algo-copy
+
+// when use list<int>
+// init: 1 2 3 4 5 6 (6)
+// list: 1 2 3 4 5 6 (6)
+
+TEST(CxxStlTest, UseAlgoCopy)
+{
+  vector<int> coll{1,2,3,4,5,6};
+
+  PRINT_ELEMENTS(coll, "init: " );
+
+  list<int> coll1;
+
+  // error
+  // list<string> coll1;
+  
+  copy( coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
+
+  PRINT_ELEMENTS(coll1, "list: " );
+}
+
+// ={=========================================================================
+// cxx-random
+
+// 0, 1, 9, 5, 6, 2, 0, 8, 8, 12, 4, 6, 10, 0, 0, 6, 8, 0, 4, 0, 5, 8, 7, 12, 11, 6, 1, 8, 5, 9, 
+
+TEST(CxxStlTest, UseRandom)
+{
+  default_random_engine dre;
+  uniform_int_distribution<unsigned> udist(0, 12);
+
+  for(size_t i = 0; i < 30; ++i)
+    cout << udist(dre) << ", ";
+  cout << endl;
+}
+
+unsigned GetNext(int size)
+{
+  static default_random_engine dre;
+  static uniform_int_distribution<unsigned> udist(0, size);
+  return udist(dre);
+  // return rand()%12;
+}
+
+TEST(CxxStlTest, UseRandomForGettingIndex)
+{
+  for(int i = 0; i < 6; ++i)
+    cout << "1: " << GetNext(5) << endl;
+
+  for(int i = 0; i < 7; ++i)
+    cout << "2: " << GetNext(6) << endl;
+
+  for(int i = 0; i < 8; ++i)
+    cout << "3: " << GetNext(7) << endl;
+
+  for(int i = 0; i < 9; ++i)
+    cout << "4: " << GetNext(8) << endl;
+}
+
+
+// ={=========================================================================
+// cxx-algo-generate
+
+// 1804289383 846930886 1681692777 1714636915 1957747793 424238335 719885386 1649760492 596516649 1189641421 1025202362 1350490027 (12)
+// 2 19 11 22 12 18 4 16 11 8 15 21 (12)
+
+class CardSequence
+{
+    public:
+        int operator() () {
+            return rand() % 24;
+        }
+};
+
+TEST(CxxStlTest, UseAlgoGenerate)
+{
+    vector<uint32_t> ivec1;
+    generate_n( back_inserter(ivec1), 12, rand );
+    PRINT_ELEMENTS(ivec1);
+
+    vector<uint32_t> ivec2;
+    generate_n( back_inserter(ivec2), 12, CardSequence() );
+    PRINT_ELEMENTS(ivec2);
 }
 
 

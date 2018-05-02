@@ -1,10 +1,11 @@
+#include "gmock/gmock.h"
+
 #include <iostream>
 #include <cstring>
 #include <vector>
 #include <fstream>
 #include <boost/algorithm/string.hpp>
 
-#include "gmock/gmock.h"
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -12,6 +13,7 @@ using namespace std;
 using testing::ElementsAre;
 using testing::Eq;
 using testing::StrEq;
+
 
 // ={=========================================================================
 // string
@@ -24,14 +26,15 @@ TEST(CxxStringTest, ConstructFromChars)
     string string_from_char(s1);
     string string_from_const_char(s2);
 
-    const char const_letter = 'A';
-    char non_const_letter = 'A';
-
     // both suffers from:
+    // const char const_letter = 'A';
+    // char non_const_letter = 'A';
+    //
     // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
     // string string_from_const_letter(const_letter);
     // string string_from_non_const_letter(non_const_letter);
 }
+
 
 // ={=========================================================================
 
