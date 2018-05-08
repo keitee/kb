@@ -1,3 +1,69 @@
+// REWARDS SERVICE
+//
+// Scenario
+
+// A ground-breaking broadcaster has decided to reward its most loyal customers.
+//
+// A software engineering team, developing the customer account website, is
+// working on the story below.  
+//
+// Display customer's available rewards As a customer, if I am eligible for
+// rewards, then I want to see which rewards are available based on my channel
+// subscriptions.  
+//
+// The Account Management team has partnered with the Customer Status team that
+// provides a service that checks the customer eligibility based on loyalty and
+// billing status.
+// 
+// Instructions
+//
+// TODO:
+// You are required to provide an implementation of a RewardsService. Please do
+// this in C++/QT.  Please use the latest GCC compiler or QTCreator for Linux.
+// Please agree on an alternative with Sky Recruitment if this isn’t possible.
+// The service accepts as input a customer account number and a portfolio
+// containing channels subscriptions. If the customer is eligible for rewards
+// the RewardsService should return a list of all the rewards available
+// according to the subscriptions on the portfolio.
+//
+// Acceptance Criteria
+// The following table describes the codes for the channel subscriptions and the
+// associated rewards.
+// 
+// Channel          Reward
+// SPORTS           CHAMPIONS_LEAGUE_FINAL_TICKET
+// KIDS             N/A
+// MUSIC            KARAOKE_PRO_MICROPHONE
+// NEWS             N/A
+// MOVIES           PIRATES_OF_THE_CARIBBEAN_COLLECTION
+//
+// The Customer Status team is currently developing the EligibilityService which
+// accepts the account number as an input. You are required to provide a mock or
+// stub of the EligibilityService interface.
+//
+//                RewardService                   EligibilityService
+//
+// account num,
+// channel Subscription ->
+//                                    account num ->
+//                                    <- eligibility
+//
+// <- rewards
+//
+// The following table describes the EligibiityService output and the expected result:
+//
+// EligibilityService output           Description                               RewardsService result
+// 
+// CUSTOMER_ELIGIBLE                   Customer is eligible                      Return relevant rewards 
+//                                                                               according to the customer's portfolio
+//
+// CUSTOMER_INELIGIBLE                 Customer is not eligible                  Return no rewards
+//
+// Technical failure exception         Service technical failure                 Return no rewards
+//
+// Invalid account number exception    The supplied account number is invalid    Return no rewards 
+
+
 // For brevity, uses a single file and class declaration which has
 // implementations.
 

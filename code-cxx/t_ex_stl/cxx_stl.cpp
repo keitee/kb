@@ -49,6 +49,138 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
 }
 
 // ={=========================================================================
+// cxx-vector
+
+// 0 1 2 3 4 5 6 7 8 9 (10)
+// size: 10
+// 0 2 3 4 5 6 7 8 9 (9)
+// size: 9
+// 0 3 4 5 6 7 8 9 (8)
+// size: 8
+
+// 0 1 2 3 4 5 6 7 8 9 (10)
+// 1 3 5 7 9 (5)
+
+TEST(CxxStlTest, VecorEraseChangesEnd)
+{
+  vector<int> ivec;
+  INSERT_ELEMENTS(ivec, 0, 9);
+  PRINT_ELEMENTS(ivec);
+  cout << "size: " << ivec.size() << endl;
+
+  auto it = ivec.begin()+1;
+
+  ivec.erase(it);
+  PRINT_ELEMENTS(ivec);
+  cout << "size: " << ivec.size() << endl;
+
+  ivec.erase(it);
+  PRINT_ELEMENTS(ivec);
+  cout << "size: " << ivec.size() << endl;
+
+  vector<int> ivec2{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  PRINT_ELEMENTS(ivec2);
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = ivec2.begin(); it != ivec2.end(); /* no */)
+  {
+    // if see even values, remove it
+    if(!(*it % 2))
+      it = ivec2.erase(it);
+    else
+      ++it;
+  }
+
+  PRINT_ELEMENTS(ivec2);
+}
+
+// 0 1 2 3 4 5 6 7 8 9 (10)
+// 1 1 3 3 5 5 7 7 9 9 (10)
+
+TEST(CxxStlText, VectorInsertErase)
+{
+  vector<int> ivec{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  PRINT_ELEMENTS(ivec);
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = ivec.begin(); it != ivec.end(); /* no */)
+  {
+    // if see odd values, repeat it in front of it.
+    if(*it % 2)
+    {
+      it = ivec.insert(it, *it);
+      it += 2;
+    }
+    else
+      it = ivec.erase(it);
+  }
+
+  PRINT_ELEMENTS(ivec);
+}
+
+class VectorEraseCallsDtor
+{
+  public:
+    VectorEraseCallsDtor(const string name): name_(name) 
+      { cout << "VectorEraseCallsDtor::ctor: " << name_ << endl; }
+    ~VectorEraseCallsDtor() 
+      { cout << "VectorEraseCallsDtor::dtor: " << name_ << endl; }
+
+    string GetName() { return name_; }
+
+  private:
+    string name_;
+};
+
+TEST(CxxStlTest, VecorEraseAndDtor)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+
+  for(int i = 0; i < 5; ++i)
+  {
+    cout << "-for ---------" << endl;
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+}
+
+TEST(CxxStlTest, VecorEraseAndDtorWithReserve)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+  ovec.reserve(10);
+
+  for(int i = 0; i < 5; ++i)
+  {
+    cout << "-for ---------" << endl;
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+}
+
+
+// ={=========================================================================
 // cxx-deque
 // case seg-fault
 
@@ -237,68 +369,59 @@ TEST(CxxStlTest, UseAlgoCopy)
   PRINT_ELEMENTS(coll1, "list: " );
 }
 
-// ={=========================================================================
-// cxx-random
-
-// 0, 1, 9, 5, 6, 2, 0, 8, 8, 12, 4, 6, 10, 0, 0, 6, 8, 0, 4, 0, 5, 8, 7, 12, 11, 6, 1, 8, 5, 9, 
-
-TEST(CxxStlTest, UseRandom)
-{
-  default_random_engine dre;
-  uniform_int_distribution<unsigned> udist(0, 12);
-
-  for(size_t i = 0; i < 30; ++i)
-    cout << udist(dre) << ", ";
-  cout << endl;
-}
-
-unsigned GetNext(int size)
-{
-  static default_random_engine dre;
-  static uniform_int_distribution<unsigned> udist(0, size);
-  return udist(dre);
-  // return rand()%12;
-}
-
-TEST(CxxStlTest, UseRandomForGettingIndex)
-{
-  for(int i = 0; i < 6; ++i)
-    cout << "1: " << GetNext(5) << endl;
-
-  for(int i = 0; i < 7; ++i)
-    cout << "2: " << GetNext(6) << endl;
-
-  for(int i = 0; i < 8; ++i)
-    cout << "3: " << GetNext(7) << endl;
-
-  for(int i = 0; i < 9; ++i)
-    cout << "4: " << GetNext(8) << endl;
-}
-
 
 // ={=========================================================================
-// cxx-algo-generate
+// cxx-algo-generate cxx-random
 
 // 1804289383 846930886 1681692777 1714636915 1957747793 424238335 719885386 1649760492 596516649 1189641421 1025202362 1350490027 (12)
 // 2 19 11 22 12 18 4 16 11 8 15 21 (12)
 
-class CardSequence
+class CardSequenceUseRand
 {
-    public:
-        int operator() () {
-            return rand() % 24;
-        }
+  public:
+    CardSequenceUseRand(int size): size_(size) {}
+
+    int operator() () {
+      // return rand() % 24;
+      return rand() % (size_);
+    }
+
+  private:
+    int size_{};
 };
+
+class CardSequenceUseRandom
+{
+  public:
+    int operator() () {
+      return udist(dre);
+    }
+
+  private:
+    static default_random_engine dre;
+    static uniform_int_distribution<size_t> udist;
+};
+
+default_random_engine CardSequenceUseRandom::dre;
+uniform_int_distribution<size_t> CardSequenceUseRandom::udist{0, 24};
 
 TEST(CxxStlTest, UseAlgoGenerate)
 {
     vector<uint32_t> ivec1;
-    generate_n( back_inserter(ivec1), 12, rand );
+    generate_n( back_inserter(ivec1), 12, CardSequenceUseRandom() );
     PRINT_ELEMENTS(ivec1);
 
     vector<uint32_t> ivec2;
-    generate_n( back_inserter(ivec2), 12, CardSequence() );
+    generate_n( back_inserter(ivec2), 12, CardSequenceUseRandom() );
     PRINT_ELEMENTS(ivec2);
+
+    vector<uint32_t> ivec3;
+    generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
+    PRINT_ELEMENTS(ivec3);
+
+    vector<uint32_t> ivec4;
+    generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
+    PRINT_ELEMENTS(ivec4);
 }
 
 

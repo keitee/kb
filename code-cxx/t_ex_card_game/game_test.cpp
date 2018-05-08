@@ -14,13 +14,8 @@ TEST_F(CardPlayerTest, WhenNoCardPopulated) {
 }
 
 TEST_F(CardPlayerTest, WhenPopulated) {
-    player.PopulateCards(1);
+    player.PopulateCards();
     ASSERT_THAT(player.HasMoreCards(), Eq(true));
-}
-
-TEST_F(CardPlayerTest, GetCard) {
-    player.PopulateCards(1);
-    ASSERT_THAT(player.GetCard(), Eq(12));
 }
 
 TEST_F(CardPlayerTest, GetScore) {
@@ -36,7 +31,54 @@ public:
     CardGame game;
 };
 
-TEST_F(CardGameTest, PlayOneGame) {
+// TEST_F(CardGameTest, DISABLED_PopulatePlayers) {
+TEST_F(CardGameTest, PopulatePlayers) {
+    ASSERT_THAT(game.PopulatePlayer_(4), Eq(4));
+}
+
+// TEST_F(CardGameTest, DISABLED_PlayTwoPlayeGame) {
+TEST_F(CardGameTest, PlayTwoPlayeGame) {
+    game.PopulatePlayer_(2);
+    game.Play();
+    game.AnnounceWinner();
+}
+
+// TEST_F(CardGameTest, DISABLED_PlayForPlayerGame) {
+TEST_F(CardGameTest, PlayForPlayerGame) {
+    game.PopulatePlayer_(4);
+    game.Play();
+    game.AnnounceWinner();
+}
+
+
+class CardGameSPTest: public Test
+{
+public:
+    CardGameSP game;
+};
+
+TEST_F(CardGameSPTest, PopulatePlayers) {
+// TEST_F(CardGameSPTest, DISABLED_PopulatePlayers) {
+    ASSERT_THAT(game.PopulatePlayer_(4), Eq(4));
+}
+
+TEST_F(CardGameSPTest, PlayTwoPlayeGame) {
+// TEST_F(CardGameSPTest, DISABLED_PlayTwoPlayeGame) {
+    game.PopulatePlayer_(2);
+    game.Play();
+    game.AnnounceWinner();
+}
+
+TEST_F(CardGameSPTest, PlayForPlayerGame) {
+// TEST_F(CardGameSPTest, DISABLED_PlayForPlayerGame) {
+    game.PopulatePlayer_(4);
+    game.Play();
+    game.AnnounceWinner();
+}
+
+TEST_F(CardGameSPTest, PlayEightPlayerGame) {
+// TEST_F(CardGameSPTest, DISABLED_PlayForPlayerGame) {
+    game.PopulatePlayer_(8);
     game.Play();
     game.AnnounceWinner();
 }

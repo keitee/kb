@@ -2,6 +2,7 @@
 // https://dev.to/mortoray/interview-question-a-two-player-card-game-67i
 //
 // * design problem
+//
 // I introduce the question with a preamble about being focused on the design
 // and structure of the code.
 //
@@ -15,7 +16,8 @@
 // both players turn over their top-most card
 //
 // the player with the higher valued card takes the cards and puts them in their
-// scoring pile (scoring 1 point per card)
+// scoring pile (scoring 1 point per card) 
+// note: this may bear question about a lower value card
 // 
 // this continues until the players have no cards left
 // 
@@ -148,9 +150,6 @@
 // * Only one person has made it this far, setting the gold standard for this
 // interview question.
 //
-// Only one person has made it this far, setting the gold standard for this
-// interview question.
-//
 // Only the time pressure
 // 
 // What I like about this question is that it lacks any trickery or random
@@ -167,36 +166,53 @@
 #include <set>
 #include <algorithm>
 #include <iterator>
+#include <memory>
 
 using Card = uint32_t;
 using Score = uint32_t;
+
+template<typename T>
+void PRINT_ELEMENTS(const T &coll, const std::string &optstr = "")
+{
+  size_t count{};
+
+  std::cout << optstr;
+
+  for (const auto &e : coll)
+  {
+    std:: cout << e << " ";
+    ++count;
+  }
+
+  std::cout << "(" << count << ")" << std::endl;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// CardPlayer
 
 class CardPlayer
 {
   public:
     CardPlayer() = delete;
-    CardPlayer(const std::string &name) : name_(name) {}
+    CardPlayer(const std::string &name) 
+      : name_(name) {}
+
+    ~CardPlayer() 
+    {
+      PRINT_ELEMENTS(play_cards_, name_+ ":play cards : dtor: ");
+      PRINT_ELEMENTS(score_cards_, name_+ ":score cards: dtor: ");
+    }
 
     // assume that:
     // * it's descending sorted to have the biggest card from the beginning.
     //   remove `descending` since vector is expensive to take it from front.
-    // * 9 cards
-    // * no duplicates
-    // * card number are from 1 to X. 0 means invalid value
+    // * card number are from 0 to X
 
-    void PopulateCards(int seed)
+    void PopulateCards()
     {
-      if( seed == 1 )
-        play_cards_ = std::vector<Card>{2, 3, 5, 6, 7, 9, 10, 11, 12};
-      // cards = std::vector<Card>{12, 11, 10, 9, 7, 6, 5, 3, 2};
-      else if( seed == 0 )
-        play_cards_ = std::vector<Card>{1, 4, 8, 13, 14, 15, 16, 17, 18};
-      // cards = std::vector<Card>{18, 17, 16, 15, 14, 13, 8, 4, 1};
-
-      // generate_n( back_inserter(cards, NUMBER_OF_CARDS_PER_PLAYER, CardSequence()));
-      // std::vector<int> ivec;
-      // std::generate_n( std::back_inserter(ivec, 12, std::rand));
-      // std::cout << name_ << " has " << cards.size() << std::endl;
+      generate_n(back_inserter(play_cards_), NUMBER_OF_CARDS_PER_PLAYER, CardSequenceRandom());
+      sort(play_cards_.begin(), play_cards_.end());
+      PRINT_ELEMENTS(play_cards_, name_+ ": ");
     }
 
     bool HasMoreCards() const
@@ -204,24 +220,25 @@ class CardPlayer
       return !play_cards_.empty();
     }
 
+    // assumes that it's called only when a player has a card to play
     Card GetCard()
     {
-      // card{0} means a invalid card
       Card card{};
 
-      if(HasMoreCards())
-      {
-        card = play_cards_.back();
-        play_cards_.pop_back();
-      }
+      card = play_cards_.back();
+      play_cards_.pop_back();
 
       return card;
     }
 
     void SaveCardToScore(const Card card)
     {
-      if(card)
-        score_cards_.push_back(card);
+      score_cards_.push_back(card);
+    }
+
+    void SaveCardToPlay(const Card card)
+    {
+      play_cards_.push_back(card);
     }
 
     Score GetScore() const
@@ -235,15 +252,19 @@ class CardPlayer
     }
 
   private:
-    const uint32_t NUMBER_OF_CARDS_PER_PLAYER{10};
-    const uint32_t NUMBER_OF_CARDS_PER_DECK{24};
+    static const uint32_t NUMBER_OF_CARDS_PER_PLAYER;
+    static const uint32_t NUMBER_OF_CARDS_PER_DECK;
 
-    class CardSequence
+    class CardSequenceRandom
     {
       public:
         int operator() () {
-          return rand() % 24;
+          return udist(dre);
         }
+
+      private:
+        static std::default_random_engine dre;
+        static std::uniform_int_distribution<uint32_t> udist;
     };
 
     std::string name_;
@@ -251,58 +272,429 @@ class CardPlayer
     std::vector<Card> score_cards_{};
 };
 
+const uint32_t CardPlayer::NUMBER_OF_CARDS_PER_DECK{24};
+const uint32_t CardPlayer::NUMBER_OF_CARDS_PER_PLAYER{10};
+
+std::default_random_engine 
+  CardPlayer::CardSequenceRandom::dre;
+
+std::uniform_int_distribution<uint32_t> 
+  CardPlayer::CardSequenceRandom::udist{0, NUMBER_OF_CARDS_PER_DECK};
+
+
+/////////////////////////////////////////////////////////////////////////////
+// CardGameUseVector
 
 class CardGame
 {
   public:
     CardGame() 
     {
-      left_player.PopulateCards(0);
-      right_player.PopulateCards(1);
+      // NOTE: to aviod reallocations
+      running_players_.reserve(10);
+    }
+
+    // deals players that has cards to play so no check is needed to see if
+    // it has cards to play
+    bool HasRunningPlayers()
+    {
+      // NOTE that should cover case when there is no running players
+      //
+      // this code works well until have 2 players. However, as soon as moves to
+      // 4 players, shows the issue.
+      //
+      // if(running_players_.size() == 0 || running_players_.size() % 2)
+      // 
+      // because it's random to pick up players, some gets finished earlier than
+      // others and this makes the number of players odd sometimes. So have to
+      // remove a check on odd number of players.
+      
+      // NOTE: 
+      //
+      // if(running_players_.size() == 0)
+      //
+      // starts to see hang with > 2 players sometimes but not always. Have to
+      // change since as the reason above, can see odd number of running players
+      // and this cause hang on rand() % 1. Have to end the play when there is
+      // only one running player that still have cards to play.
+      
+      if(running_players_.size() == 0 || running_players_.size() == 1)
+        return false;
+
+      return true;
     }
 
     void Play()
     {
-      Card card_from_right{}, card_from_left{};
+      Card first_card{}, second_card{};
 
-      while( right_player.HasMoreCards() )
+      // NOTE: this causes two ctor/dtors
+      CardPlayer first_player{"first"};
+      CardPlayer second_player{"second"};
+
+      while(HasRunningPlayers())
       {
-        card_from_right = right_player.GetCard();
-        card_from_left = left_player.GetCard();
+        ++number_of_plays_;
 
-        (card_from_left > card_from_right ? 
-            left_player.SaveCardToScore(card_from_left) : right_player.SaveCardToScore(card_from_right));
+        auto selected_players = GetRunningPlayers_();
+
+        // copy players
+        first_player = running_players_[selected_players.first];
+        second_player = running_players_[selected_players.second];
+
+        first_card = first_player.GetCard();
+        second_card = second_player.GetCard();
+
+        // std::cout << "Play (" << number_of_plays_ << ") : " << 
+        //   selected_players.first << " {" << std::setw(2) << first_card << "}, " << 
+        //   selected_players.second << " {" << std::setw(2) << second_card << "}" << std::endl;
+
+        // NOTE: when there are same value items, it goes either to firsr or
+        // second since GetRandomIndex_() uses random to select index so first
+        // and second cannot be fixed. So depending on which one becomes first
+        // card can go one of them so score result can be different from the
+        // expected. 
+        //
+        // (first_card > second_card ? 
+        //   first_player.SaveCardToScore(first_card) 
+        //   : second_player.SaveCardToScore(second_card));
+        //
+        // This means that handling when the value is the same is not optional
+        // and have to have decision on that. 
+        
+        // NOTE: when not see the same value, put back the one which is not
+        // scored since GetCard() removes it from the vector. Otherwise, lost
+        // them. so now the number of cards that all players started with should
+        // match with the sum of the number of scores and the number of cards
+        // which is not played at the end of run. 
+        
+        if(first_card == second_card)
+        {
+          second_player.SaveCardToScore(second_card);
+          first_player.SaveCardToScore(first_card); 
+        }
+        else if(first_card > second_card)
+        {
+          first_player.SaveCardToScore(first_card); 
+          second_player.SaveCardToPlay(second_card); 
+        }
+        else
+        {
+          first_player.SaveCardToPlay(first_card); 
+          second_player.SaveCardToScore(second_card);
+        }
+
+        // copy players back
+        running_players_[selected_players.first] = first_player;
+        running_players_[selected_players.second] = second_player;
+
+        MoveFinishedPlayers_();
       }
     }
 
     void AnnounceWinner() const
     {
-      Score score_from_right = right_player.GetScore();
-      Score score_from_left = left_player.GetScore();
+      Score winner_score = std::numeric_limits<uint32_t>::min();
+      std::string winner_name;
 
-      (score_from_right > score_from_left ? 
-        PrintWinner_(right_player) : PrintWinner_(left_player));
+      for(const auto &e : finished_players_)
+      {
+        if ( winner_score < e.GetScore())
+        {
+          winner_score = e.GetScore();
+          winner_name = e.GetName();
+        }
+      }
+
+      std::cout << "=================================" << std::endl;
+      std::cout << "play stat: " << std::endl;
+      std::cout << "plays : " << number_of_plays_ << std::endl;
+      std::cout << "winner: " << winner_name << " got " 
+        << winner_score << " scores" << std::endl;
     }
 
-  private:
-    // left and right side player
-    CardPlayer left_player{"LSP"};
-    CardPlayer right_player{"RSP"};
-
+  // note that make it public in order to use it from test. one done that make
+  // it private again?
+  //
+  // private:
+  public:
+    size_t number_of_players_{};
+    size_t number_of_plays_{};
     std::vector<CardPlayer> running_players_;
     std::vector<CardPlayer> finished_players_;
 
-    std::pair<CardPlayer&, CardPlayer&> GetRunningPlayers_()
+    size_t PopulatePlayer_(size_t number_of_players)
     {
-      static default_random_engine dre;
-      // can use array size?
-      static uniform_int_distribution<size_t> dist(0, 4);
+        std::string player_name;
+
+        for(size_t i = 0; i < number_of_players; ++i)
+        {
+            player_name = "player " + std::to_string(i);
+
+            // NOTE: why dose it involve copy ctor?
+            running_players_.push_back(CardPlayer(player_name));
+        }
+
+        // to have only 0 or 1 of test_seed
+        for(auto &e : running_players_)
+          e.PopulateCards();
+
+        number_of_players_ = number_of_players;
+
+        return running_players_.size();
+    } 
+
+    // get random index within number of running players
+    size_t GetRandomIndex_()
+    {
+        return rand() % running_players_.size();
     }
 
-    void PrintWinner_(const CardPlayer &player) const
+    std::pair<size_t, size_t> GetRunningPlayers_()
     {
-      std::cout << "winner " << player.GetName() << " got " 
-        << player.GetScore() << " scores" << std::endl;
+      // choose two players in random
+      size_t index_first_player = GetRandomIndex_();
+      size_t index_second_player = GetRandomIndex_();
+      while (index_second_player == index_first_player)
+        index_second_player = GetRandomIndex_();
+
+      return 
+        std::pair<size_t, size_t>(index_first_player, index_second_player);
+    }
+
+    // check and move players which do not have cards to play
+    void MoveFinishedPlayers_()
+    {
+      for (auto it = running_players_.begin(); it != running_players_.end();)
+      {
+        if (!it->HasMoreCards())
+        {
+          std::cout << "MoveFinishedPlayers_: move " 
+            << it->GetName() << std::endl;
+
+          // NOTE: copy
+          // finished_players_.push_back(*it);
+          
+          finished_players_.push_back(std::move(*it));
+
+          it = running_players_.erase(it);
+        }
+        else
+          ++it;
+      }
     }
 };
+
+
+/////////////////////////////////////////////////////////////////////////////
+// CardGameUseSharedPointer
+
+class CardGameSP
+{
+  public:
+    CardGameSP() 
+    {
+    }
+
+    bool HasRunningPlayers()
+    {
+      if(running_players_.size() == 0 || running_players_.size() == 1)
+        return false;
+
+      return true;
+    }
+
+    void Play()
+    {
+      Card first_card{}, second_card{};
+
+      std::shared_ptr<CardPlayer> first_player{};
+      std::shared_ptr<CardPlayer> second_player{};
+
+      while(HasRunningPlayers())
+      {
+        ++number_of_plays_;
+
+        auto selected_players = GetRunningPlayers_();
+
+        // copy players
+        first_player = running_players_[selected_players.first];
+        second_player = running_players_[selected_players.second];
+
+        first_card = first_player->GetCard();
+        second_card = second_player->GetCard();
+
+        // std::cout << "Play (" << number_of_plays_ << ") : " << 
+        //   selected_players.first << " {" << std::setw(2) << first_card << "}, " << 
+        //   selected_players.second << " {" << std::setw(2) << second_card << "}" << std::endl;
+
+        if(first_card == second_card)
+        {
+          second_player->SaveCardToScore(second_card);
+          first_player->SaveCardToScore(first_card); 
+        }
+        else if(first_card > second_card)
+        {
+          first_player->SaveCardToScore(first_card); 
+          second_player->SaveCardToPlay(second_card); 
+        }
+        else
+        {
+          first_player->SaveCardToPlay(first_card); 
+          second_player->SaveCardToScore(second_card);
+        }
+
+        MoveFinishedPlayers_();
+      }
+    }
+
+    void AnnounceWinner() const
+    {
+      Score winner_score = std::numeric_limits<uint32_t>::min();
+      std::string winner_name;
+
+      for(const auto &e : finished_players_)
+      {
+        if ( winner_score < e->GetScore())
+        {
+          winner_score = e->GetScore();
+          winner_name = e->GetName();
+        }
+      }
+
+      std::cout << "=================================" << std::endl;
+      std::cout << "play stat: " << std::endl;
+      std::cout << "plays : " << number_of_plays_ << std::endl;
+      std::cout << "winner: " << winner_name << " got " 
+        << winner_score << " scores" << std::endl;
+    }
+
+  // note that make it public in order to use it from test. one done that make
+  // it private again?
+  //
+  // private:
+  public:
+    size_t number_of_players_{};
+    size_t number_of_plays_{};
+    std::vector<std::shared_ptr<CardPlayer>> running_players_;
+    std::vector<std::shared_ptr<CardPlayer>> finished_players_;
+
+    size_t PopulatePlayer_(size_t number_of_players)
+    {
+        std::string player_name;
+
+        for(size_t i = 0; i < number_of_players; ++i)
+        {
+            player_name = "player " + std::to_string(i);
+
+            running_players_.push_back(std::make_shared<CardPlayer>(player_name));
+        }
+
+        for(auto &e : running_players_)
+          e->PopulateCards();
+
+        number_of_players_ = number_of_players;
+
+        return running_players_.size();
+    } 
+
+    // get random index within number of running players
+    size_t GetRandomIndex_()
+    {
+        return rand() % running_players_.size();
+    }
+
+
+    std::pair<size_t, size_t> GetRunningPlayers_()
+    {
+      // choose two players in random
+      size_t index_first_player = GetRandomIndex_();
+      size_t index_second_player = GetRandomIndex_();
+      while (index_second_player == index_first_player)
+        index_second_player = GetRandomIndex_();
+
+      return 
+        std::pair<size_t, size_t>(index_first_player, index_second_player);
+    }
+
+    // check and move players which do not have cards to play
+    void MoveFinishedPlayers_()
+    {
+      for (auto it = running_players_.begin(); it != running_players_.end();)
+      {
+        if (!(*it)->HasMoreCards())
+        {
+          std::cout << "MoveFinishedPlayers_: move " 
+            << (*it)->GetName() << std::endl;
+
+          finished_players_.push_back(std::move(*it));
+
+          it = running_players_.erase(it);
+        }
+        else
+          ++it;
+      }
+    }
+};
+
+
+// compare vector vs shared_ptr version
+//
+// [ RUN      ] CardGameTest.PlayTwoPlayeGame
+// kit:vector copy ctor
+// kit:vector copy ctor
+// player 0:dtor: (0)
+// kit:vector copy ctor
+// kit:vector copy ctor
+// player 1:dtor: (0)
+// player 0: 0 0 1 1 9 9 12 13 16 20 (10)
+// player 1: 2 10 10 13 14 16 17 17 21 23 (10)
+// Play: 1 {23}, 0 {20}
+// Play: 1 {21}, 0 {16}
+// Play: 0 {13}, 1 {17}
+// Play: 1 {17}, 0 {12}
+// Play: 1 {16}, 0 { 9}
+// Play: 1 {14}, 0 { 9}
+// Play: 0 { 1}, 1 {13}
+// Play: 0 { 1}, 1 {10}
+// Play: 1 {10}, 0 { 0}
+// Play: 0 { 0}, 1 { 2}
+// MoveFinishedPlayers_: move player 0
+// kit:vector copy ctor
+// kit:vector copy ctor
+// player 1:dtor: 23 21 17 17 16 14 13 10 10 2 (10)
+// MoveFinishedPlayers_: move player 1
+// kit:vector copy ctor
+// kit:vector copy ctor
+// kit:vector copy ctor
+// kit:vector copy ctor
+// player 0:dtor: (0)
+// player 1:dtor: 23 21 17 17 16 14 13 10 10 2 (10)
+// player 1:dtor: 23 21 17 17 16 14 13 10 10 2 (10)
+// player 0:dtor: (0)
+// winner player 1 got 10 scores
+// player 0:dtor: (0)
+// player 1:dtor: 23 21 17 17 16 14 13 10 10 2 (10)
+// [       OK ] CardGameTest.PlayTwoPlayeGame (4 ms)
+//
+//
+// [ RUN      ] CardGameSPTest.PlayTwoPlayeGame
+// player 0: 1 6 9 11 12 13 19 19 22 23 (10)
+// player 1: 0 3 15 17 18 18 20 21 22 24 (10)
+// Play: 1 {24}, 0 {23}
+// Play: 0 {22}, 1 {22}
+// Play: 1 {21}, 0 {19}
+// Play: 1 {20}, 0 {19}
+// Play: 1 {18}, 0 {13}
+// Play: 1 {18}, 0 {12}
+// Play: 0 {11}, 1 {17}
+// Play: 0 { 9}, 1 {15}
+// Play: 0 { 6}, 1 { 3}
+// Play: 0 { 1}, 1 { 0}
+// MoveFinishedPlayers_: move player 0
+// MoveFinishedPlayers_: move player 1
+// winner player 1 got 8 scores
+// player 0:dtor: 22 6 1 (3)
+// player 1:dtor: 24 22 21 20 18 18 17 15 (8)
+// [       OK ] CardGameSPTest.PlayTwoPlayeGame (0 ms)
 

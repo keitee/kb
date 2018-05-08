@@ -9,8 +9,17 @@
 using namespace std;
 using namespace std::placeholders;
 
+
 // ={=========================================================================
 // cxx-pair
+
+// {10, X}
+// {9, IX}
+// {5, V}
+// typeid : St16initializer_listIKSt4pairIiPKcEE
+//
+// pair 1 is bigger
+// pair 4 is bigger
 
 TEST(CxxFeaturesTest, UsePairType)
 {
@@ -24,6 +33,109 @@ TEST(CxxFeaturesTest, UsePairType)
         cout << "{" << e.first << ", " << e.second << "}" << endl;
 
     cout << "typeid : " << typeid(map).name() << endl;
+
+    auto pair1 = make_pair(10, 10);
+    auto pair2 = make_pair(10, 9);
+
+    auto pair3 = make_pair( 9, 11);
+    auto pair4 = make_pair(11, 9);
+
+    if(pair1 < pair2)
+      cout << "pair 2 is bigger" << endl;
+    else
+      cout << "pair 1 is bigger" << endl;
+
+    if(pair3 < pair4)
+      cout << "pair 4 is bigger" << endl;
+    else
+      cout << "pair 3 is bigger" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-tuple
+
+// tup1: 41 6.3 nico 
+// tup2: 22 44 two 
+// tup1: 41 44 nico 
+// tup1 is bigger than tup2
+// tup1: 22 44 two 
+
+TEST(CxxFeaturesTest, UseTupleType)
+{
+  tuple<int, float, string> tup1{41, 6.3, "nico"};
+
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
+
+  auto tup2 = make_tuple(22, 44, "two");
+
+  cout << "tup2: ";
+  cout << get<0>(tup2) << " ";
+  cout << get<1>(tup2) << " ";
+  cout << get<2>(tup2) << " " << endl;;
+
+  get<1>(tup1) = get<1>(tup2);
+
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;;
+
+  if( tup1 > tup2 )
+  {
+    cout << "tup1 is bigger than tup2" << endl;
+    tup1 = tup2;
+  }
+
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;;
+}
+
+
+// tup: 41 6.3 nico 
+// tup: 41 6.3 nico 
+// tup: 41 6.3 nico 
+// tup: 22 44 two 
+
+TEST(CxxFeaturesTest, UseTupleTie)
+{
+  tuple<int, float, string> tup1{41, 6.3, "nico"};
+  int i;
+  float f;
+  string s;
+
+  tie(i, f, s) = tup1;
+
+  cout << "tup: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
+
+  cout << "tup: ";
+  cout << i << " ";
+  cout << f << " ";
+  cout << s << " " << endl;
+
+  i = 45;
+  f = 7.3;
+  s = "nico mom";
+
+  cout << "tup: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
+
+  tie(i, f, s) = make_tuple(22, 44, "two");
+
+  cout << "tup: ";
+  cout << i << " ";
+  cout << f << " ";
+  cout << s << " " << endl;
 }
 
 
@@ -532,8 +644,10 @@ TEST(CxxFeaturesTest, UseIsspace)
   cout << "isspace(0)  : " << isspace(0) << endl;
 }
 
+
 // ={=========================================================================
 // cxx-function-adaptor
+
 template <typename T>
 void PRINT_PERSON_ELEMENTS(T &coll, const string &mesg = "")
 {

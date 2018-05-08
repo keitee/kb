@@ -261,17 +261,17 @@ TEST(AssertTest, CheckTheOrderOfAssertArg)
     EXPECT_THAT(value, 100);
     EXPECT_THAT(100, value);
 
-    // t_ex_mock.cpp:262: Failure
-    // Value of: value
-    // Expected: is equal to 101
-    //   Actual: 100 (of type int)
-    //
-    // t_ex_mock.cpp:263: Failure
-    // Value of: 101
-    // Expected: is equal to 100
-    //   Actual: 101 (of type int)
-    EXPECT_THAT(value, 101);
-    EXPECT_THAT(101, value);
+    // // t_ex_mock.cpp:262: Failure
+    // // Value of: value
+    // // Expected: is equal to 101
+    // //   Actual: 100 (of type int)
+    // //
+    // // t_ex_mock.cpp:263: Failure
+    // // Value of: 101
+    // // Expected: is equal to 100
+    // //   Actual: 101 (of type int)
+    // EXPECT_THAT(value, 101);
+    // EXPECT_THAT(101, value);
 }
 
 int main(int argc, char **argv)

@@ -18107,6 +18107,12 @@ else
     lettergrade += '-';
 }
 
+<ex>
+cause infinitive loop when size_-1 is 1 thinking it would makes 0 or 1 but it
+only makes 0.
+
+return rand() % (size_-1);
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-type-conversion cxx-explicit
@@ -32922,6 +32928,8 @@ regardless of the STL platform you are using.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-pair cxx-tuple
 
+5.1 Pairs and Tuples
+
 {cxx-pair}
 The class pair treats two values as a 'single' unit. The pair is defined in
 <utility> header and the default pair ctor do `value-init` since it will use
@@ -33127,18 +33135,43 @@ int main()
 i: 2
 
 
-<pair-comparison>
+<cxx-pair-comparison>
+// /usr/include/c++/4.9/bits/stl_pair.h
 
-namespace std {
-  template <typename T1, typename T2>
-    bool operator== (const pair<T1,T2>& x, const pair<T1,T2>& y) {
-      return x.first == y.first && x.second == y.second;
-    }
-}
+  /// Two pairs of the same type are equal iff their members are equal.
+  template<class _T1, class _T2>
+    inline _GLIBCXX_CONSTEXPR bool
+    operator==(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y)
+    { return __x.first == __y.first && __x.second == __y.second; }
 
-The first value has higher priority. Thus, if the first values of two pairs
-differ, the result of their comparison is used as the result of the overall
-comparison of the pairs.
+
+In a comparison of pairs, the first value has higher priority. 
+
+note: only use the result of the first
+Thus, if the first values of two pairs differ, the result of their comparison
+is used as the result of the overall comparison of the pairs. 
+
+note: use the result of the second since the first is the same
+If the members first are equal, the comparison of the members second yields
+the overall result:
+
+  /// <http://gcc.gnu.org/onlinedocs/libstdc++/manual/utilities.html>
+  template<class _T1, class _T2>
+    inline _GLIBCXX_CONSTEXPR bool
+    operator<(const pair<_T1, _T2>& __x, const pair<_T1, _T2>& __y)
+    { return __x.first < __y.first
+	     || (!(__y.first < __x.first) && __x.second < __y.second); }
+
+<ex>
+
+// pair 1 is bigger
+// pair 4 is bigger
+
+    auto pair1 = make_pair(10, 10);
+    auto pair2 = make_pair(10, 9);
+
+    auto pair3 = make_pair( 9, 11);
+    auto pair4 = make_pair(11, 9);
 
 
 {cxx-tuple}
@@ -33146,42 +33179,49 @@ Tuples extends the concept of pairs to an 'arbitrary' number of heterogeneous
 elements.
 
 <ex>
+
 #include <tuple>
-#include <iostream>
 
-using namespace std;
+// tup1: 41 6.3 nico 
+// tup2: 22 44 two 
+// tup1: 41 44 nico 
+// tup1 is bigger than tup2
+// tup1: 22 44 two 
 
-int main()
+TEST(CxxFeaturesTest, UseTupleType)
 {
-  tuple<int, float, string> t1( 41, 6.3, "nico" );
+  tuple<int, float, string> tup1{41, 6.3, "nico"};
 
-  // iterate over elements
-  cout << get<0>(t1) << " ";
-  cout << get<1>(t1) << " ";
-  cout << get<2>(t1) << " ";
-  cout << endl;
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
 
-  auto t2 = make_tuple( 22, 44, "two" );
+  auto tup2 = make_tuple(22, 44, "two");
 
-  // assign second value in t2 to t1
-  get<1>(t1) = get<1>(t2);
+  cout << "tup2: ";
+  cout << get<0>(tup2) << " ";
+  cout << get<1>(tup2) << " ";
+  cout << get<2>(tup2) << " " << endl;;
 
-  if( t1 > t2 )
+  get<1>(tup1) = get<1>(tup2);
+
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;;
+
+  if( tup1 > tup2 )
   {
-    cout << "t1 is bigger than t2" << endl;
-    t1 = t2;
+    cout << "tup1 is bigger than tup2" << endl;
+    tup1 = tup2;
   }
 
-  // iterate over elements
-  cout << get<0>(t1) << " ";
-  cout << get<1>(t1) << " ";
-  cout << get<2>(t1) << " ";
-  cout << endl;
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;;
 }
-
-41 6.3 nico 
-t1 is bigger than t2
-22 44 two 
 
 
 <iteration>
@@ -33199,44 +33239,49 @@ get<3>(t1) // compile-time error if t1 has only three elements
 
 
 {cxx-tie}
-tie(ref1,ref2,...)
 Creates a tuple of references, which allows extracting (individual) values out
 of a tuple. So getting values out of tuple is easy than using get<x>.
 
-#include <tuple>
-#include <iostream>
+// tup: 41 6.3 nico 
+// tup: 41 6.3 nico 
+// tup: 41 6.3 nico 
+// tup: 22 44 two 
 
-using namespace std;
-
-int main()
+TEST(CxxFeaturesTest, UseTupleTie)
 {
-  int i; float f; string s;
-  
-  tuple<int, float, string> t1( 41, 6.3, "nico" );
+  tuple<int, float, string> tup1{41, 6.3, "nico"};
+  int i;
+  float f;
+  string s;
 
-  tie(i, f, s) = t1;
+  tie(i, f, s) = tup1;
 
-  // iterate over elements
-  // cout << get<0>(t1) << " ";
-  // cout << get<1>(t1) << " ";
-  // cout << get<2>(t1) << " ";
-  // cout << endl;
+  cout << "tup: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
 
+  cout << "tup: ";
   cout << i << " ";
   cout << f << " ";
-  cout << s << " ";
-  cout << endl;
+  cout << s << " " << endl;
 
-  tie(i, f, s) = make_tuple( 22, 44, "two" );
+  i = 45;
+  f = 7.3;
+  s = "nico mom";
 
+  cout << "tup: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
+
+  tie(i, f, s) = make_tuple(22, 44, "two");
+
+  cout << "tup: ";
   cout << i << " ";
   cout << f << " ";
-  cout << s << " ";
-  cout << endl;
+  cout << s << " " << endl;
 }
-
-41 6.3 nico 
-22 44 two 
 
 
 The use of std::ignore allows ignoring tuple elements while parsing with tie().
@@ -33253,7 +33298,8 @@ std::tie(i, std::ignore, s) = t;
 <move-or-copy>
 As with pair, can force move or copy of tuple.
 
-<tuple-initializer>
+
+<cxx-tuple-init>
 The constructor taking a variable number of arguments to initialize a tuple is
 declared as 'explicit':
 
@@ -33267,13 +33313,13 @@ namespace std {
     };
 }
 
-This situation, however, has consequences when using initializer lists to define
-values of a tuple.  For example, you can't use the assignment syntax to
+This situation, however, has consequences when using initializer lists to
+define values of a tuple. For example, you can't use the assignment syntax to
 initialize a tuple because that is considered to be an implicit conversion:
 
-std::tuple<int,double> t1(42,3.14);    // OK, old syntax
-std::tuple<int,double> t2{42,3.14};    // OK, new syntax
-std::tuple<int,double> t3 = {42,3.14}; // ERROR <Q> why? See copy ctor
+std::tuple<int,double> t1(42, 3.14);    // OK, old syntax
+std::tuple<int,double> t2{42, 3.14};    // OK, new syntax
+std::tuple<int,double> t3 = {42, 3.14}; // ERROR <Q> why? See copy ctor
 
 
 std::vector<std::tuple<int,float>> v { {1,1.0}, {2,2.0} }; // ERROR
@@ -33297,6 +33343,7 @@ std::vector<std::tuple<int,float>>
 std::tuple<int,int,int> foo() {
   return std::make_tuple(1,2,3); // OK
 }
+
 
 <tuple-print>
 The tuple class was first made public in the 'boost' library. There, tuple had
@@ -34035,6 +34082,8 @@ c.resize(num,elem)      Changes the number of elements to num (if size() grows
 
 c.clear()               Removes all elements (empties the container)
 
+where, pos, beg, end are iterators.
+
 
 {cxx-set-insert-cxx-set-erase}
 All elements are considered 'constant'. Means that iterators are also
@@ -34322,38 +34371,56 @@ void t_iter_04()
 }
 
 
-<ex>
-// = 05 ======
-// 1:1:3:3:5:5:7:7:9:9:
+<ex> *cxx-vector-insert* *cxx-vector-erase*
+// 0 1 2 3 4 5 6 7 8 9 (10)
+// size: 10
+// 0 2 3 4 5 6 7 8 9 (9)
+// size: 9
+// 0 3 4 5 6 7 8 9 (8)
+// size: 8
 
-// the point is to update it on each trip of the loop
-
-void t_iter_05()
+TEST(CxxStlTest, VecorEraseChangesEnd)
 {
-    std::vector<int> iv{0,1,2,3,4,5,6,7,8,9};
+  vector<int> ivec;
+  INSERT_ELEMENTS(ivec, 0, 9);
+  PRINT_ELEMENTS(ivec);
+  cout << "size: " << ivec.size() << endl;
 
-    for (auto it = iv.begin(); it != iv.end();)
+  auto it = ivec.begin()+1;
+
+  ivec.erase(it);
+  PRINT_ELEMENTS(ivec);
+  cout << "size: " << ivec.size() << endl;
+
+  ivec.erase(it);
+  PRINT_ELEMENTS(ivec);
+  cout << "size: " << ivec.size() << endl;
+}
+
+// 0 1 2 3 4 5 6 7 8 9 (10)
+// 1 1 3 3 5 5 7 7 9 9 (10)
+
+TEST(CxxStlText, VectorInsertErase)
+{
+  vector<int> ivec{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  PRINT_ELEMENTS(ivec);
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = ivec.begin(); it != ivec.end(); /* no */)
+  {
+    // if see odd values, repeat it in front of it.
+    if(*it % 2)
     {
-        // if see odd values
-        if (*it % 2)
-        {
-            // *cpp-iter-arthimetic*
-            // repeat the item. it points the item repeated. so +2 to point the
-            // item which are not checked.
-            it = iv.insert(it, *it);
-            it += 2;
-        }
-        // if see even vales
-        else
-        {
-            // update it as erase returns next elements.
-            it = iv.erase(it);
-        }
+      it = ivec.insert(it, *it);
+      // *cxx-iter-arthimetic*
+      it += 2;
     }
+    else
+      it = ivec.erase(it);
+  }
 
-    for (const auto &e : iv)
-        cout << e << ":";
-    cout << endl;
+  PRINT_ELEMENTS(ivec);
 }
 
 
@@ -34789,6 +34856,8 @@ containers that supports random access; string, vector, deque and array.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-container-cxx-vector
 
+7.3 Vectors
+
 A vector manages its elements in a 'dynamic' array and supports random access,
 which means you can access each element directly with the corresponding index.
 
@@ -34872,7 +34941,7 @@ int main()
 }
 
 
-{reallocation} cpp-vector-reallocation
+{reallocation} cxx-vector-reallocation
 To support fast random access, vector elements are stored 'contiguously'. To
 maintain contiguous memory and to avoid reallocating a container each time an
 element is added, the allocation strategy is: 
@@ -34923,6 +34992,139 @@ For fundamental types, zero initialization is guaranteed.
 But for complex types, even if a default constructor is provided, the
 initialization takes time. If the only reason for initialization is to reserve
 memory, you should use reserve().
+
+
+<ex>
+Started from "Why so many dtors get called?"
+
+class VectorEraseCallsDtor
+{
+  public:
+    VectorEraseCallsDtor(const string name): name_(name) 
+      { cout << "VectorEraseCallsDtor::ctor: " << name_ << endl; }
+    ~VectorEraseCallsDtor() 
+      { cout << "VectorEraseCallsDtor::dtor: " << name_ << endl; }
+
+    string GetName() { return name_; }
+
+  private:
+    string name_;
+};
+
+TEST(CxxStlTest, VecorEraseAndDtor)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+
+  for(int i = 0; i < 5; ++i)
+  {
+    cout << "-for ---------" << endl;
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+}
+
+TEST(CxxStlTest, VecorEraseAndDtorWithReserve)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+  ovec.reserve(10);
+
+  for(int i = 0; i < 5; ++i)
+  {
+    cout << "-for ---------" << endl;
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+}
+
+
+NOTE: cxx-vector-reallocation is not something when create a vector with big
+numbers. This happens from the start.
+
+NOTE: cxx-vector-erase() caused T's dtor called since end() moves. However,
+dtors which is the target of erase() is not called.
+
+NOTE: do not predict how rellocation or destruction gets called.
+
+[ RUN      ] CxxStlTest.VecorEraseAndDtor
+-for ---------
+VectorEraseCallsDtor::ctor: name 0
+VectorEraseCallsDtor::dtor: name 0
+-for ---------
+VectorEraseCallsDtor::ctor: name 1
+VectorEraseCallsDtor::dtor: name 0
+VectorEraseCallsDtor::dtor: name 1
+-for ---------
+VectorEraseCallsDtor::ctor: name 2
+VectorEraseCallsDtor::dtor: name 0
+VectorEraseCallsDtor::dtor: name 1
+VectorEraseCallsDtor::dtor: name 2
+-for ---------
+VectorEraseCallsDtor::ctor: name 3
+VectorEraseCallsDtor::dtor: name 3
+-for ---------
+VectorEraseCallsDtor::ctor: name 4
+VectorEraseCallsDtor::dtor: name 0
+VectorEraseCallsDtor::dtor: name 1
+VectorEraseCallsDtor::dtor: name 2
+VectorEraseCallsDtor::dtor: name 3
+VectorEraseCallsDtor::dtor: name 4
+VectorEraseCallsDtor::dtor: name 4
+-erase---------
+VectorEraseCallsDtor::dtor: name 4
+-erase---------
+VectorEraseCallsDtor::dtor: name 4
+-erase---------
+VectorEraseCallsDtor::dtor: name 3
+VectorEraseCallsDtor::dtor: name 4
+[       OK ] CxxStlTest.VecorEraseAndDtor (3 ms)
+
+
+[ RUN      ] CxxStlTest.VecorEraseAndDtorWithReserve
+-for ---------
+VectorEraseCallsDtor::ctor: name 0
+VectorEraseCallsDtor::dtor: name 0
+-for ---------
+VectorEraseCallsDtor::ctor: name 1
+VectorEraseCallsDtor::dtor: name 1
+-for ---------
+VectorEraseCallsDtor::ctor: name 2
+VectorEraseCallsDtor::dtor: name 2
+-for ---------
+VectorEraseCallsDtor::ctor: name 3
+VectorEraseCallsDtor::dtor: name 3
+-for ---------
+VectorEraseCallsDtor::ctor: name 4
+VectorEraseCallsDtor::dtor: name 4
+VectorEraseCallsDtor::dtor: name 4
+-erase---------
+VectorEraseCallsDtor::dtor: name 4
+-erase---------
+VectorEraseCallsDtor::dtor: name 4
+-erase---------
+VectorEraseCallsDtor::dtor: name 3
+VectorEraseCallsDtor::dtor: name 4
+[       OK ] CxxStlTest.VecorEraseAndDtorWithReserve (0 ms)
+
 
 <shrink-to-fit>
 Unlike for strings, it is not possible to call reserve() for vectors to shrink
@@ -43699,7 +43901,7 @@ Converting strings to numbers in C++ makes a lot of people depressed because
 of their inefficiency and user unfriendliness. See how string 100 can be
 converted to int:
 
-<ex> *cpp-istringstream-conversion*
+<ex> do *cxx-string-convert-to-number*
 #include <sstream> 
  
 void sample1() {
@@ -43798,7 +44000,7 @@ void sample7()
 }
 
 
-<ex> convert-to-string *cxx-string-to-string*
+<ex> convert-to-string *cxx-string-convert-to-string*
 
 C++11 has std::to_string and std::to_wstring functions that are declared in
 the <string> header. Those functions use locales and have behavior very close
@@ -43933,7 +44135,7 @@ delete stringstream int
 delete boost::lexical_cast<int>
 
 
-{cxx-string-numeric-conversion}
+{cxx-string-convert-to-number}
 Since C++11, the C++ standard library provides convenience functions to convert
 strings into numeric values or to convert numeric values to strings. Only for
 types string and wstring, not u16string and u32string.
@@ -43989,7 +44191,7 @@ int main(int argc, char* argv[])
         cout << std::stoi("789", &idx, 8 ) << endl;
         cout << " idx of first unprocessed char: " << idx << endl;
 
-        // *cxx-to-string* convert numeric to string
+        // *cxx-string-convert-to-string* convert numeric to string
         // *cxx-limits*
         long long ll = std::numeric_limits<long long>::max();
         string s = std::to_string(ll);
@@ -44252,19 +44454,17 @@ TEST(CxxStringTest, UseRawString)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-stringstream
 
-CLR 15.10
+CLR 15.10 Stream Classes for Strings
 
-The mechanisms of stream classes can also be used to read from strings or to
-write to strings. `stringstream` provide a `buffer` but don't have an I/O
-channel. This buffer/string can be manipulated with special functions. 
+`stringstream` "see(treat) string as a stream so use stream ops" and provide a
+`buffer` 
 
-<use>
-A major use of this capability is the processing of I/O independent of the
-actual I/O. For example, text for output can be formatted in a string and then
-sent to an output channel sometime `later`. Another use is reading input line
-by line and processing each line by using string streams.
+  sstream buffer <-> stream
 
-  "see(treat) string as a stream so use stream ops"
+For example, text for output can be formatted in a string and then sent to an
+output channel sometime `later`. Another use is reading input line by line and
+processing each line by using stream operations.
+
 
 Supports in-memory IO. Use stream operation such as read(>>) and write(<<) but
 they are really to read from or write to a string since use it as if the
@@ -44282,14 +44482,14 @@ are defined for strings:
     ("output string stream")
 
   * The class template basic_stringstream<> with the specializations
-    stringstream and wstringstream for reading from and writing to strings
+    stringstream and wstringstream `for reading from and writing to strings`
 
   * The class template basic_stringbuf<> with the specializations stringbuf
     and wstringbuf, used by the other string stream classes to perform the
     reading and writing of characters
 
 
-<members>
+<ops>
 #include <sstream>
 
 sstream strm(string);   
@@ -44303,75 +44503,47 @@ copies the string s into strm. Sets the contents of the buffer to string and
   remove the current contents from the stream. Can use the function str() to
   assign new contents to the buffer.
 
+note: ss.str(""); clears sstream buffer
+
 
 <ex>
-// g++ -g -std=c++0x -c a.c
+// ={=========================================================================
+// string-stringstream
 
-#include<iostream>
-#include<string>
-#include<sstream>
-#include<bitset>
-#include<fstream>   // for ifstream
+// note that os, buffer, has all inputs from << and seek() moves writing pos.
+// do *cxx-string-convert-to-string*
+//
+// decimal : 15, hex : f
+// ---------
+// decimal : 15, hex : f
+// float : 4.67, bitset : 001011010011101
+// ---------
+// octal : 1715, hex : f
+// float : 4.67, bitset : 001011010011101
 
-using namespace std;
-
-//////////////////////////////////////////////////////////////////////////////
-// o. To see that stringstream is a buffer and use stream operations.
-
-// = 01 ======
-// dec: 15 hex: f
-// -------
-// dec: 15 hex: f
-// float: 4.67 bitset: 001011010011101
-
-void t_sstream_01()
+TEST(CxxStringTest, UseOutputStringStream)
 {
   ostringstream os;
 
-  // use stream operations and endl remains in os as a new line.
-  os << "dec: " << 15 << hex << " hex: " << 15 << endl;
+  os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
   cout << os.str();
 
-  // see that os has all outputs. 
-  cout << "-------" << endl;
-  bitset<15> b(5789);
-  os << "float: " << 4.67 << " bitset: " << b << endl;
+  cout << "---------" << endl;
+  bitset<15> bit_set(5789);
+  os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
+  cout << os.str();
+
+  cout << "---------" << endl;
+  os.seekp(0);
+  os << "octal : " << oct << 15;
   cout << os.str();
 }
 
-// = 02 ======
-// dec: 15 hex: f
-// -------
-// oct: 17 hex: f
-// float: 4.67 bitset: 001011010011101
 
-void t_sstream_02()
-{
-    ostringstream os;
+<ex> *cxx-string-convert-to-number*
 
-    // use stream operations and endl remains in os as a new line.
-    os << "dec: " << 15 << hex << " hex: " << 15 << endl;
-    cout << os.str();
-
-    // see that os has all outputs. 
-    cout << "-------" << endl;
-    bitset<15> b(5789);
-    os << "float: " << 4.67 << " bitset: " << b << endl;
-
-    // Using seekp(), the write position is moved to the beginning of the
-    // stream. The following call of operator << writes at the beginning of the
-    // string, thus overwriting the beginning of the existing string stream.
-    // However, the characters that are not overwritten remain valid. 
-    os.seekp(0); 
-    os << "oct: " << oct << 15; 
-    cout << os.str(); 
-}
-
-
-//////////////////////////////////////////////////////////////////////////////
-// * To see that stringstream do `string to number` conversion.
-// * file parsing example *cxx-ex-ifstream*
-
+// file parsing example *cxx-ex-ifstream*
+//
 // input.txt
 //
 // VOD.L 1 100 184.0 183.7
@@ -44379,7 +44551,6 @@ void t_sstream_02()
 // VOD.L 3 100 185.0 183.9
 // VOD.X 4 100 186.0 184.0
 // VOD.L 5 100 187.0 183.1
-//
 
 struct StockData
 {
@@ -44408,7 +44579,7 @@ void t_sstream_03()
     {
         istringstream iss(line);
 
-        // o. do string to number conversion.
+        // *cxx-string-convert-to-number*
         iss >> sdata.name; 
         iss >> sdata.time;
         iss >> sdata.volume;
@@ -44427,37 +44598,21 @@ void t_sstream_03()
     ifs.close();
 }
 
-// = 04 ======
-// x: 3, f: 0.7
 
-void t_sstream_04()
+// do *cxx-string-convert-to-number*
+// The following lines read the integer x with the value 3 and the
+// floating-point f with the value 0.7 from the string s:
+
+TEST(CxxStringTest, UseInputStringStream)
 {
-    int x{}; float f{};
-    istringstream is{"3.7"};
+  int x{};
+  float f{};
+  istringstream is{"3.7"};
 
-    // Input string streams are used mainly for formatted reading from existing
-    // strings. For example, it is often easier to read data line by line and
-    // then analyze each line individually. The following lines read the integer
-    // x with the value 3 and the floating-point f with the value 0.7 from the
-    // string s:
-
-    is >> x >> f;
-    cout << "x: " << x << ", f: " << f << endl;
-}
-
-int main()
-{
-    cout << "= 04 ======" << endl;
-    t_sstream_04();
-
-    cout << "= 03 ======" << endl;
-    t_sstream_03();
-
-    cout << "= 02 ======" << endl;
-    t_sstream_02();
-
-    cout << "= 01 ======" << endl;
-    t_sstream_01();
+  is >> x >> f;
+ 
+  ASSERT_THAT(x, Eq(3));
+  ASSERT_THAT(f, FloatEq(0.7));
 }
 
 
@@ -44490,7 +44645,7 @@ void PerfCounter::dump()
 }
 
 
-<ex> cxx-string-from-object
+<ex> cxx-string-convert-to-string-from-object
 
 std::ostream &operator<<(std::ostream &os, const Location &location)
 {
@@ -44980,10 +45135,7 @@ p.swap(q);
 
 <ex> RCLR 5.2 Smart Pointers
 
-#include <iostream>
 #include <memory>
-#include <string>
-#include <vector>
 
 using namespace std;
 
@@ -45238,7 +45390,7 @@ p->mem is synonym for (*p).mem
 
 <ex>
 item is iterator(pointer) and *item is itself is shared_ptr. Hence to access
-member (*item)->mem.
+member (*item)->mem since * has lower.
 
     multiset<std::shared_ptr<Quote>, comp> items;
 

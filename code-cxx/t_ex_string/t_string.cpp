@@ -4,6 +4,7 @@
 #include <cstring>
 #include <vector>
 #include <fstream>
+#include <bitset>
 #include <boost/algorithm/string.hpp>
 
 
@@ -13,6 +14,7 @@ using namespace std;
 using testing::ElementsAre;
 using testing::Eq;
 using testing::StrEq;
+using testing::FloatEq;
 
 
 // ={=========================================================================
@@ -37,7 +39,6 @@ TEST(CxxStringTest, ConstructFromChars)
 
 
 // ={=========================================================================
-
 // cstring.
 // return bool if source and target are the same from the end.
 // bool strend(char *s, char *t);
@@ -91,6 +92,79 @@ TEST(CxxStringTest, CompareStringFromEnd)
     EXPECT_EQ(true, strend_02(s1, t1));
     EXPECT_EQ(false, strend_02(s1, t2));
 }
+
+
+// ={=========================================================================
+// string-stringstream
+
+// note that os, buffer, has all inputs from << and seek() moves writing pos.
+// do *cxx-string-convert-to-string*
+//
+// decimal : 15, hex : f
+// ---------
+// decimal : 15, hex : f
+// float : 4.67, bitset : 001011010011101
+// ---------
+// octal : 1715, hex : f
+// float : 4.67, bitset : 001011010011101
+
+TEST(CxxStringTest, UseOutputStringStream)
+{
+  ostringstream os;
+
+  os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
+  cout << os.str();
+
+  cout << "---------" << endl;
+  bitset<15> bit_set(5789);
+  os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
+  cout << os.str();
+
+  cout << "---------" << endl;
+  os.seekp(0);
+  os << "octal : " << oct << 15;
+  cout << os.str();
+}
+
+// do *cxx-string-convert-to-number*
+// The following lines read the integer x with the value 3 and the
+// floating-point f with the value 0.7 from the string s:
+
+TEST(CxxStringTest, UseInputStringStream)
+{
+  int x{};
+  float f{};
+  istringstream is{"3.7"};
+
+  is >> x >> f;
+ 
+  ASSERT_THAT(x, Eq(3));
+  ASSERT_THAT(f, FloatEq(0.7));
+}
+
+
+TEST(CxxStringTest, UseOutputStringStreamX)
+{
+  stringstream ss;
+  vector<string> string_vector{};
+
+  // for(int i = 0; i < 4; ++i)
+  // {
+  //   ss << "player " << i << ", ";
+  //   string_vector.push_back(string(ss.str()));
+  //   ss.str("");
+  // }
+  
+  for(int i = 0; i < 4; ++i)
+  {
+    string str = "player " + to_string(i);
+    string_vector.push_back(str);
+  }
+ 
+  copy(string_vector.begin(), string_vector.end(), ostream_iterator<string>(cout, " "));
+  cout << endl;
+}
+
 
 // ={=========================================================================
 // size of s1 cstring  : 8
