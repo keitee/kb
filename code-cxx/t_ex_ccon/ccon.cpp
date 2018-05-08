@@ -4,6 +4,8 @@
 #include <list>
 #include <mutex>
 #include <queue>
+#include <stack>
+#include <exception>
 
 #include "gtest/gtest.h"
 
@@ -130,6 +132,97 @@ TEST(CconThreadTest, UseLockedQueue)
   p.join();
  
   std::cout << "main: ends" << std::endl;
+}
+
+
+// ={=========================================================================
+// cxx-threadsafe-stack
+
+struct empty_stack : std::exception
+{
+  const char *what() const noexcept
+  {
+    return "empty_stack exception";
+  }
+};
+
+template<typename T>
+class threadsafe_stack
+{
+  public:
+    threadsafe_stack() {}
+    threadsafe_stack(const threadsafe_stack &other)
+    {
+      std::lock_guard<mutex> lock(other.m);
+      data = other.data;
+    }
+
+    threadsafe_stack &operator=(const threadsafe_stack &) = delete;
+
+    void push(T value)
+    {
+      std::lock_guard<mutex> lock(m);
+      data.push(value);
+    }
+
+    std::shared_ptr<T> pop()
+    {
+      std::lock_guard<mutex> lock(m);
+      if (data.empty())
+        throw empty_stack();
+
+      std::shared_ptr<T> const res(std::make_shared<T>(data.top()));
+      data.pop();
+      return res;
+    }
+
+    void pop(T &value)
+    {
+      std::lock_guard<mutex> lock(m);
+      if (data.empty())
+        throw empty_stack();
+
+      value = data.top();
+      data.pop();
+    }
+
+    bool empty() const
+    {
+      std::lock_guard<mutex> lock(m);
+      return data.empty();
+    }
+
+  private:
+    std::stack<T> data;
+    mutable std::mutex m;
+};
+
+// [ RUN      ] CconThreadTest.UseThreadSafeStack
+// returned item is 5
+// unknown file: Failure
+// C++ exception with description "empty_stack exception" thrown in the test body.
+// [  FAILED  ] CconThreadTest.UseThreadSafeStack (0 ms)
+
+TEST(CconThreadTest, UseThreadSafeStack)
+{
+  threadsafe_stack<int> tss;
+
+  // tss.push(1);
+  // tss.push(2);
+  // tss.push(3);
+  // tss.push(4);
+  
+  tss.push(5);
+  auto sp = tss.pop();
+
+  cout << "returned item is " << *sp << endl;
+
+  // this raises an exception
+  if (tss.empty())
+  {
+    int x;
+    tss.pop(x);
+  }
 }
 
 

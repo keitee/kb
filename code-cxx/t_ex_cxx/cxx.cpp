@@ -4,10 +4,11 @@
 #include <memory>
 #include <chrono>
 
-#include "gtest/gtest.h"
+#include "gmock/gmock.h"
 
 using namespace std;
 using namespace std::placeholders;
+using namespace testing;
 
 
 // ={=========================================================================
@@ -585,7 +586,7 @@ TEST(CxxFeaturesTest, UseCronoTimepoint)
 // ={=========================================================================
 // cxx-static
 
-class Foo {
+class FooStatic {
     private:
         static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
         static const std::string DIGIT_NOT_FOUND;
@@ -593,14 +594,14 @@ class Foo {
         // cause an error
         // static const std::string DIGIT_NOT_FOUND{"*"};
     public:
-        Foo() {}
+        FooStatic() {}
 };
 
-const std::string Foo::DIGIT_NOT_FOUND{"*"};
+const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
 
 TEST(CxxFeaturesTest, UseClassStatic)
 {
-    Foo foo;
+    FooStatic foo;
 }
 
 
@@ -692,6 +693,101 @@ TEST(CxxFeaturesTest, UseFunctionAdaptor)
         bind(&Person::SetName, _1, "paul"));      
     PRINT_PERSON_ELEMENTS(coll, "modi: "); 
 }
+
+
+// ={=========================================================================
+// cxx-unique-ptr
+
+class Foo 
+{
+  private:
+    int id;
+  public:
+    Foo(int val = 1):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
+    ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+};
+
+// [ RUN      ] CxxFeaturesTest.UseUniquePtrMove
+// Foo ctor(1)
+// Foo ctor(2)
+// Foo ctor(3)
+// Foo ctor(4)
+// p3 is not null
+// Foo dtor(2)
+// Foo dtor(1)
+// p3 is null
+// Foo dtor(4)
+// Foo dtor(3)
+// [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
+
+TEST(CxxFeaturesTest, UseUniquePtrMove)
+{
+  unique_ptr<Foo> p1(new Foo(1));
+  unique_ptr<Foo> p2(new Foo(2));
+  unique_ptr<Foo> p3(new Foo(3));
+  unique_ptr<Foo> p4(new Foo(4));
+
+  if (p3)
+    cout << "p3 is not null" << endl;
+  else
+    cout << "p3 is null" << endl;
+
+  p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
+  p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
+  p3 = std::move(p1);     // p1->null , p2->F3, p3->null
+
+  if (p3)
+    cout << "p3 is not null" << endl;
+  else
+    cout << "p3 is null" << endl;
+}
+
+unique_ptr<Foo> source()
+{
+  unique_ptr<Foo> ret(new Foo);
+  cout << "source: create up" << endl;
+  cout << "source: owns " << ret.get() << endl;
+  cout << "source: ends" << endl;
+
+  // *cxx-return-cxx-move*
+  return ret;
+}
+
+void sink(unique_ptr<Foo> p)
+{
+  cout << "sink: owns " << p.get() << endl;
+  cout << "sink: ends" << endl;
+}
+
+
+// [ RUN      ] CxxFeaturesTest.UseUniqueSinkSource
+// call source()
+// Foo ctor(1)
+// source: create up
+// source: owns 0x21d1be0
+// source: ends
+// main: owns 0x21d1be0
+// sink: owns 0x21d1be0
+// sink: ends
+// Foo dtor(1)
+// main: ends
+
+[       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
+TEST(CxxFeaturesTest, UseUniqueSinkSource)
+{
+  cout << "call source()" << endl;
+  unique_ptr<Foo> up = source();
+
+  cout << "main: owns " << up.get() << endl;
+
+  sink(move(up));
+
+  cout << "main: ends" << endl;
+}
+
+
+// ={=========================================================================
+//
 
 int main(int argc, char** argv)
 {

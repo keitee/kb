@@ -106,7 +106,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-copy-control cxx-ex-message-example
 *kt_dev_cxx_0000* cxx-copy-control-move cxx-move cxx-ex-strvec-example
 *kt_dev_cxx_0000* cxx-copy-control-move-rvalue-reference
-*kt_dev_cxx_0000* cxx-copy-control-move-std-move
+*kt_dev_cxx_0000* cxx-copy-control-move-std-move cxx-move-synthesized
 *kt_dev_cxx_0000* cxx-ex-query-example cpp-interface
 *kt_dev_cxx_0000* cxx-ex-strblob-example
 *kt_dev_cxx_0000* cxx-abc cxx-ex-quote-example cxx-refactoring
@@ -305,8 +305,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-con-packaged-task
 |kt_dev_ccon_018| std::promise
 |kt_dev_ccon_019| std::shared_future in multiple threads
-
 |kt_dev_ccon_002| std::future
+*kt_dev_cxx_0000* cxx-con-lock-based-data-structure
 
 
 #{ BLUSHES OR BUGS
@@ -23715,12 +23715,12 @@ class NetworkProblemException : public BrokerException
     {
         URANIUM_ERROR("Caught std::exception. What = "<<e.what());
     }
+    // *cxx-except-catch-all*
     catch(...)
     {
         URANIUM_ERROR("Caught an exception while receiving IP events.");
     }
 }
-
 
 
 ={============================================================================
@@ -45819,7 +45819,7 @@ sp.reset(up.release());               // up loses it and up is nullptr
 * Use a temporty (use move semantics)
 
 unique_ptr<Foo> p4(new Foo(4));
-p4 = unique_ptr<Foo>(new Foo(5));
+p4 = unique_ptr<Foo>(new Foo(5));     // move assign
 
 
 * Use move semantics *cxx-prefered* since intention is clear
@@ -45850,50 +45850,55 @@ up2 = std::move(up1);
 
 <ex>
 
-// = 01 ======
+class Foo 
+{
+  private:
+    int id;
+  public:
+    Foo(int val):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
+    ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+};
+
+// [ RUN      ] CxxFeaturesTest.UseUniquePtrMove
 // Foo ctor(1)
 // Foo ctor(2)
 // Foo ctor(3)
 // Foo ctor(4)
-// p3 is not empty
+// p3 is not null
 // Foo dtor(2)
 // Foo dtor(1)
-// p3 is empty
-// Foo ctor(5)
+// p3 is null
 // Foo dtor(4)
-// =----======
-// Foo dtor(5)
 // Foo dtor(3)
+// [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-void t_sp_01()
+TEST(CxxFeaturesTest, UseUniquePtrMove)
 {
-    unique_ptr<Foo> p1(new Foo(1));
-    unique_ptr<Foo> p2(new Foo(2));
-    unique_ptr<Foo> p3(new Foo(3));
-    unique_ptr<Foo> p4(new Foo(4));
+  unique_ptr<Foo> p1(new Foo(1));
+  unique_ptr<Foo> p2(new Foo(2));
+  unique_ptr<Foo> p3(new Foo(3));
+  unique_ptr<Foo> p4(new Foo(4));
 
-    if (p3)
-        cout << "p3 is not empty" << endl;
-    else
-        cout << "p3 is empty" << endl;
+  if (p3)
+    cout << "p3 is not null" << endl;
+  else
+    cout << "p3 is null" << endl;
 
-    p2.reset(p3.release());     // dtor Foo2, p1->Foo1, p2->Foo3, p3->null
-    p3.reset(p1.release());     // no   dtor, p1->null, p2->Foo3, p3->Foo1
-    p3.reset(p1.release());     // dtor Foo1, p1->null, p3->null, p2->Foo3
+  p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
+  p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
+  p3 = std::move(p1);     // p1->null , p2->F3, p3->null
 
-    if (p3)
-        cout << "p3 is not empty" << endl;
-    else
-        cout << "p3 is empty" << endl;
-
-    p4 = unique_ptr<Foo>(new Foo(5));
-
-    cout << "=----======" << endl;
+  if (p3)
+    cout << "p3 is not null" << endl;
+  else
+    cout << "p3 is null" << endl;
 }
 
 
 <cxx-sp-misuse-unique>
 RCLR 101, 5.2 Smart Pointers
+
+// will have double free issue, lifetime issue
 
 A unique_ptr provides the semantics of exclusive ownership. However, it’s up
 to the programmer to ensure that no two unique pointers are initialized by the
@@ -45906,18 +45911,12 @@ std::unique_ptr<std::string> up2(sp); // ERROR: up1 and up2 own same data
 Unfortunately, this is a runtime error, so the programmer has to avoid such a
 mistake.
 
-note:
-THAT's not ture since copy is not allowed and have to see this error:
 
-: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp = Foo; _Dp = std::default_delete<Foo>]’
-     unique_ptr<Foo> p4(p3);
-                          ^
+// lost pointer p2 won't free the memory and have lost the pointer.
 
-// lost pointer
-// ERROR. p2 won't free the memory and have lost the pointer.
 p2.release();
 
-// OK. but must remember to delete(p).
+// OK. but must remember to delete(p) since p is not smart pointer
 auto p = p2.release();
 
 
@@ -45944,40 +45943,47 @@ unique_ptr<int> clone(int p) {
 http://www.gotw.ca/gotw/025.htm
 https://eli.thegreenplace.net/2012/06/20/c11-using-unique_ptr-with-standard-library-containers
 
-struct FooX 
+unique_ptr<Foo> source()
 {
-    FooX() { cerr << "Foo [" << this << "] constructed\n"; }
-    virtual ~FooX() { cerr << "Foo [" << this << "] destructed\n";}
-};
+  unique_ptr<Foo> ret(new Foo);
+  cout << "source: create up" << endl;
+  cout << "source: owns " << ret.get() << endl;
+  cout << "source: ends" << endl;
 
-void sink(unique_ptr<FooX> p) 
-{
-    cerr << "Sink owns Foo[" << p.get() << "]\n";
+  // *cxx-return-cxx-move*
+  return ret;
 }
 
-unique_ptr<FooX> source() 
+void sink(unique_ptr<Foo> p)
 {
-    cerr << "Creating Foo in source\n";
-    // *cxx-return-cxx-move* transfer ownership to calling function
-    return unique_ptr<FooX>(new FooX);
+  cout << "sink: owns " << p.get() << endl;
+  cout << "sink: ends" << endl;
 }
 
-void main()
-{   
-    cerr << "Calling source\n";
-    unique_ptr<FooX> pmain = source();  // Can also be written as
-    // auto pmain = source();
 
-    cerr << "Now pmain owns Foo [" << pmain.get() << "]\n";
-    cerr << "Passing it to sink\n";
+// [ RUN      ] CxxFeaturesTest.UseUniqueSinkSource
+// call source()
+// Foo ctor(1)
+// source: create up
+// source: owns 0x21d1be0
+// source: ends
+// main: owns 0x21d1be0
+// sink: owns 0x21d1be0
+// sink: ends
+// Foo dtor(1)
+// main: ends
 
-    // sink(pmain);                    // ERROR! can't copy unique_ptr
-    
-    // why okay since sink() do not have rvalue parameter? because unique_ptr
-    // has move ctor and sink() will have move constructed parameter.
-    sink(move(pmain));              // OK: can move it!
+[       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
+TEST(CxxFeaturesTest, UseUniqueSinkSource)
+{
+  cout << "call source()" << endl;
+  unique_ptr<Foo> up = source();
 
-    cerr << "Main done\n";
+  cout << "main: owns " << up.get() << endl;
+
+  sink(move(up));
+
+  cout << "main: ends" << endl;
 }
 
 
@@ -46013,13 +46019,16 @@ class ClassB {
     ClassA* ptr2;
 
   public:
+
     // constructor that initializes the pointers - will cause resource leak if
     // second new throws
+
     ClassB (int val1, int val2)
       : ptr1(new ClassA(val1)), ptr2(new ClassA(val2)) {
       }
 
     // copy constructor - might cause resource leak if second new throws
+
     ClassB (const ClassB& x)
       : ptr1(new ClassA(*x.ptr1)), ptr2(new ClassA(*x.ptr2)) {
       }
@@ -46062,10 +46071,7 @@ note:
 * Also have to implement the copy constructor and assignment operator. By
   default, both would try to copy or assign the members, which isn't possible.
   If you don't provide them, ClassB also would provide only move semantics.
-  <Q> by compiler? Here valuelike used.
-
-  note: TODO more about copy ctor and assign when used as a member.
-
+  see *cxx-move-synthesized*
 
 <use-with-containers>
 `auto_ptr` is not possible to store an auto_ptr in a container, nor could we
@@ -53029,6 +53035,247 @@ pair with user data.
 
 The C++PL says: There is no get_promise() operation to match get_future(). The use of the promise is
 completely handled by the packaged_task.
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-con-lock-based-data-structure
+
+6.2.3 A thread-safe queue using fine-grained locks and
+condition variables
+
+Excecise to use finer-grained locking by having two mutexes for head and tail.
+
+Listing 6.4 A simple single-threaded queue implementation
+
+#include <memory>
+
+template<typename T>
+class queue
+{
+private:
+    struct node
+    {
+        T data;
+        std::unique_ptr<node> next;
+
+        node(T data_):
+            data(std::move(data_))
+        {}
+    };
+    
+    std::unique_ptr<node> head;
+    node* tail;
+    
+public:
+    queue():
+        tail(nullptr)
+    {}
+
+    queue(const queue& other)=delete;
+    queue& operator=(const queue& other)=delete;
+
+    std::shared_ptr<T> try_pop()
+    {
+        if(!head)
+        {
+            return std::shared_ptr<T>();
+        }
+        std::shared_ptr<T> const res(
+            std::make_shared<T>(std::move(head->data)));
+        std::unique_ptr<node> const old_head=std::move(head);
+        head=std::move(old_head->next);
+        return res;
+    }
+    
+    void push(T new_value)
+    {
+        std::unique_ptr<node> p(new node(std::move(new_value)));
+        node* const new_tail=p.get();
+        if(tail)
+        {
+            tail->next=std::move(p);
+        }
+        else
+        {
+            head=std::move(p);
+        }
+        tail=new_tail;
+    }
+};
+
+
+Two problems to support concurrent access:
+
+* push() modify head and tail and have to lock both.
+
+* if there is a single item, then head == tail. if one do push() and the other
+  do pop() which access the same. since can't tell if it's the same without
+  reading both head and tail, have to lock both in pop() as well. 
+
+
+
+How to solve? Having a dummy node avoids cases where need to access both head
+and tail.
+
+Listing 6.5 A simple queue with a dummy node
+
+#include <memory>
+template<typename T>
+class queue
+{
+private:
+    struct node
+    {
+        std::shared_ptr<T> data;
+        std::unique_ptr<node> next;
+    };
+    
+    std::unique_ptr<node> head;
+    node* tail;
+    
+public:
+    queue():
+        head(new node),tail(head.get())
+    {}
+
+    queue(const queue& other)=delete;
+    queue& operator=(const queue& other)=delete;
+
+    std::shared_ptr<T> try_pop()
+    {
+        if(head.get()==tail)
+        {
+            return std::shared_ptr<T>();
+        }
+        std::shared_ptr<T> const res(head->data);
+        std::unique_ptr<node> const old_head=std::move(head);
+        head=std::move(old_head->next);
+        return res;
+    }
+
+    // note:
+    // The new node you create is going to be the new dummy node, so you don’t
+    // need to supply the new_value to the constructor   
+
+    void push(T new_value)
+    {
+        std::shared_ptr<T> new_data(
+            std::make_shared<T>(std::move(new_value)));
+        std::unique_ptr<node> p(new node);
+        tail->data=new_data;
+        node* const new_tail=p.get();
+        tail->next=std::move(p);
+        tail=new_tail;
+    }
+};
+
+
+So, you can have one mutex for head and one for tail. Where do you put the
+locks?
+
+Listing 6.6 A thread-safe queue with fine-grained locking
+
+#include <memory>
+#include <mutex>
+
+template<typename T>
+class threadsafe_queue
+{
+    std::mutex head_mutex;
+    std::mutex tail_mutex;
+    
+    node* get_tail()
+    {
+        std::lock_guard<std::mutex> tail_lock(tail_mutex);
+        return tail;
+    }
+
+    std::unique_ptr<node> pop_head()
+    {
+        std::lock_guard<std::mutex> head_lock(head_mutex);
+        if(head.get()==get_tail())
+        {
+            return nullptr;
+        }
+        std::unique_ptr<node> const old_head=std::move(head);
+        head=std::move(old_head->next);
+        return old_head;
+    }
+        
+public:
+    threadsafe_queue():
+        head(new node),tail(head.get())
+    {}
+
+    threadsafe_queue(const threadsafe_queue& other)=delete;
+    threadsafe_queue& operator=(const threadsafe_queue& other)=delete;
+
+    std::shared_ptr<T> try_pop()
+    {
+        std::unique_ptr<node> old_head=pop_head();
+        return old_head ? old_head->data : std::shared_ptr<T>();
+    }
+    
+    void push(T new_value)
+    {
+        std::shared_ptr<T> new_data(
+            std::make_shared<T>(std::move(new_value)));
+        std::unique_ptr<node> p(new node);
+        node* const new_tail=p.get();
+        std::lock_guard<std::mutex> tail_lock(tail_mutex);
+        tail->data=new_data;
+        tail->next=std::move(p);
+        tail=new_tail;
+    }
+};
+
+Thankfully the lock on the tail_mutex in get_tail() solves everything. Because
+the call to get_tail() locks the same mutex as the call to push(), there’s a
+defined order between the two calls. Either the call to get_tail() occurs
+before the call to push(), in which case it sees the old value of tail, or it
+occurs after the call to push(), in which case it sees the new value of tail
+and the new data attached to the previous value of tail.
+
+
+It’s also important that the call to get_tail() occurs inside the lock on
+head_mutex.
+
+std::unique_ptr<node> pop_head()
+{
+  node* const old_tail=get_tail();
+
+  // note:
+  // here do not hold any locks on tail and head
+
+  std::lock_guard<std::mutex> head_lock(head_mutex);
+  if(head.get()==old_tail)
+  {
+    return nullptr;
+  }
+  std::unique_ptr<node> old_head=std::move(head);
+  head=std::move(old_head->next);
+  return old_head;
+}
+
+In this broken scenario, where the call to get_tail(0) is made outside the
+scope of the lock, you might find that both head and tail have changed by the
+time your initial thread can acquire the lock on head_mutex, and not only is
+the returned tail node no longer the tail, but it’s no longer even part of the
+list. 
+
+This could then mean that the comparison of head to old_tail c fails, even if
+head really is the last node. Consequently, when you update head d you may end
+up moving head beyond tail and off the end of the list, destroying the data
+structure. In the correct implementation from listing 6.6, you keep the call
+to get_tail() inside the lock on head_mutex. This ensures that no other
+threads can change head, and tail only ever moves further away (as new nodes
+    are added in calls to push()), which is perfectly safe. head can never
+pass the value returned from get_tail(), so the invariants are upheld.
+
+// TODO: skip for the rest since they are about adding full interfaces.
+
+
+6.3 Designing more complex lock-based data structures
 
 
 # ============================================================================
