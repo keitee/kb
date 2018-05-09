@@ -14,7 +14,7 @@ USER_DIR = .
 CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include 
 # CPPFLAGS += -isystem $(GTEST_DIR)/include
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread 
+CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread  
 #CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -fno-elide-constructors
 
 TESTS = $(TARGET)_test

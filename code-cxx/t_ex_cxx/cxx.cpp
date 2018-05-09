@@ -771,8 +771,8 @@ void sink(unique_ptr<Foo> p)
 // sink: ends
 // Foo dtor(1)
 // main: ends
+// [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-[       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 TEST(CxxFeaturesTest, UseUniqueSinkSource)
 {
   cout << "call source()" << endl;
@@ -784,6 +784,20 @@ TEST(CxxFeaturesTest, UseUniqueSinkSource)
 
   cout << "main: ends" << endl;
 }
+
+
+// ={=========================================================================
+// cxx-range-for
+
+// TEST(CxxFeaturesTest, DISABLED_UseRangeForOnInteger)
+// {
+//   int num_loops{10};
+// 
+//   for (const auto &e : num_loops)
+//   {
+//     cout << "e : " << e << endl;
+//   }
+// }
 
 
 // ={=========================================================================

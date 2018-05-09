@@ -7,6 +7,8 @@
 #include <stack>
 #include <exception>
 
+#include <boost/thread/shared_mutex.hpp>
+
 #include "gtest/gtest.h"
 
 using namespace std;
@@ -223,6 +225,149 @@ TEST(CconThreadTest, UseThreadSafeStack)
     int x;
     tss.pop(x);
   }
+}
+
+
+// ={=========================================================================
+// cxx-threadsafe-lookup-table, listing_6.11.cpp
+
+template<typename Key, typename Value, typename Hash = std::hash<Key>>
+class threadsafe_lookup_table
+{
+  public:
+    threadsafe_lookup_table(
+        unsigned num_buckets = 19, Hash const &hasher = Hash()):
+        buckets_(num_buckets), hasher_(hasher)
+    {
+      for (size_t i = 0; i < num_buckets; ++i)
+      {
+        buckets_[i].reset(new bucket_type);
+      }
+    }
+
+    // off copy controls
+    threadsafe_lookup_table(const threadsafe_lookup_table &other) = delete;
+    threadsafe_lookup_table &operator=(const threadsafe_lookup_table &other) = delete;
+
+    Value value_for(const Key &key, const Value &default_value = Value()) const
+    {
+      return get_bucket(key).value_for(key, default_value);
+    }
+
+    void add_or_update_mapping(const Key &key, const Value &value)
+    {
+      get_bucket(key).add_or_update_mapping(key, value);
+    }
+
+    void remove_mapping(const Key &key)
+    {
+      get_bucket(key).remove_mapping(key);
+    }
+
+  private:
+    class bucket_type
+    {
+      public:
+#ifdef SUPPORT_CONST
+        Value value_for(const Key &key, const Value &default_value) const
+#else
+        Value value_for(const Key &key, const Value &default_value)
+#endif
+        {
+          // read on shared mutex
+          boost::shared_lock<boost::shared_mutex> lock(m);
+
+          auto found_entry = find_entry_for(key);
+          return found_entry == data.end() ? default_value : found_entry->second;
+        }
+
+        void add_or_update_mapping(const Key &key, const Value &value)
+        {
+          // write on shared mutex
+          boost::unique_lock<boost::shared_mutex> lock(m);
+
+          auto found_entry = find_entry_for(key);
+
+#ifdef SUPPORT_CONST
+          if (found_entry == data.end())
+            data.push_back(bucket_value(key, value));
+          // else
+          //   found_entry->second = value;
+#else // SUPPORT_CONST
+          if (found_entry == data.end())
+            data.push_back(bucket_value(key, value));
+          else
+            found_entry->second = value;
+#endif
+        }
+
+        void remove_mapping(const Key &key, const Value &value)
+        {
+          // write on shared mutex
+          boost::unique_lock<boost::shared_mutex> lock(m);
+
+          auto found_entry = find_entry_for(key);
+          if (found_entry != data.end())
+            data.erase(found_entry);
+        }
+
+      private:
+        using bucket_value = std::pair<Key, Value>;
+        std::list<bucket_value> data;
+        mutable boost::shared_mutex m;
+
+#ifdef SUPPORT_CONST
+        // okay
+        using bucket_iterator = typename std::list<bucket_value>::const_iterator;
+
+        bucket_iterator find_entry_for(const Key &key) const
+        {
+          return std::find_if(data.begin(), data.end(),
+              // [&](const bucket_value &item) {
+              // [&](const bucket_value &item) {
+              [&](const bucket_value &item) {
+              return item.first == key;
+              });
+        }
+#else
+        using bucket_iterator = typename std::list<bucket_value>::iterator;
+
+        bucket_iterator find_entry_for(const Key &key)
+        {
+          return std::find_if(data.begin(), data.end(),
+              [&](const bucket_value &item) {
+              return item.first == key;
+              });
+        }
+#endif
+
+    };
+
+    std::vector<std::unique_ptr<bucket_type>> buckets_;
+    Hash hasher_;
+
+    bucket_type &get_bucket(const Key &key) const
+    {
+      std::size_t bucket_index = hasher_(key) % buckets_.size();
+      return *buckets_[bucket_index];
+    }
+};
+
+// [ RUN      ] CconThreadTest.UseThreadSafeLookupTable
+// kit:vector(n)
+// searched value : 300
+// [       OK ] CconThreadTest.UseThreadSafeLookupTable (0 ms)
+
+TEST(CconThreadTest, UseThreadSafeLookupTable)
+{
+  threadsafe_lookup_table<string, int> tslt;
+
+  tslt.add_or_update_mapping("one", 100);
+  tslt.add_or_update_mapping("two", 200);
+  tslt.add_or_update_mapping("three", 300);
+  tslt.add_or_update_mapping("four", 400);
+
+  cout << "searched value : " << tslt.value_for("three") << endl;
 }
 
 

@@ -179,9 +179,10 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-nested-class
 *kt_dev_cxx_0000* cxx-regex
 
-*kt_dev_cpp_050* cpp-template-function
+*kt_dev_cxx_0000* cxx-template-decode-error
+*kt_dev_cxx_0000* cxx-template-function
 *kt_dev_cpp_050* cpp-template-class
-*kt_dev_cpp_050* cpp-template-type-member
+*kt_dev_cxx_0000* cxx-template-type-member
 *kt_dev_cpp_050* cpp-template-default-argument
 *kt_dev_cpp_050* cpp-template-member
 *kt_dev_cpp_050* cpp-template-explicit-instantiation
@@ -222,8 +223,8 @@ KT KB. CPP
 
 *kt_dev_cxx_0000* cxx-container-associative
 *kt_dev_cxx_0000* cxx-container-cxx-set cxx-multiset
-*kt_dev_cpp_0000* cpp-container-cpp-map cpp-multimap cpp-size-t
-|kt_dev_cpp_0000| cpp-container-cpp-unordered
+*kt_dev_cpp_0000* cpp-container-cxx-map cpp-multimap cpp-size-t
+*kt_dev_cxx_0000* cxx-container-cpp-unordered
 |kt_dev_cpp_0000| cpp-container-adaptor containers {stack} {queue}
 *kt_dev_cxx_0000* cxx-container-print-elements
 
@@ -7972,6 +7973,25 @@ The range for changes way to access element:
 }
 
 
+NOTE:
+cxx-range-for can be used only with types that suppors iterators, begin(), and
+not used with integers.
+
+TEST(CxxFeaturesTest, UseRangeForOnInteger)
+{
+  int num_loops{10};
+
+  for (const auto &e : num_loops)
+  {
+    cout << "e : " << e << endl;
+  }
+}
+
+cxx.cpp: In member function ‘virtual void CxxFeaturesTest_UseRangeForOnInteger_Test::TestBody()’:
+cxx.cpp:796:24: error: ‘begin’ was not declared in this scope
+   for (const auto &e : num_loops)
+
+
 {cxx-side-effect} from online
 A "side effect" is defined by the C++ standard in [intro.execution], by:
 
@@ -10501,7 +10521,7 @@ class Array : private ArrayBase, public Container
 };
 
 
-<cxx-ctor-type-member> <cpp-typename> CPR 272
+<cxx-ctor-type-member> <cxx-typename> CPR 272
 As with data and function member, type member is a local name and is subject
 to the access control. Users can use that name.
 
@@ -14429,7 +14449,7 @@ class TextQuery
 
             if (pos != word_map_.end())
             {
-                // *cxx-map-find*
+xx// *cxx-map-find*
                 std::cout << word << " occurs " << pos->second->size() << " "
                     << make_plural(pos->second->size(), "time", "s") << std::endl;
 
@@ -20454,7 +20474,7 @@ EC++03. Two points:
 * Make it possible to work with const objects. 
 
 
-<cxx-const-this>
+{cxx-const-this}
 Member function access the object through an extra, implicit parameter named
 `this`. The compiler passes the address of `total` to the implicit `this`
 parameter as if rewrites this call as:
@@ -20495,12 +20515,87 @@ void print_screen( const Screen &s )
   cout << s.getMesg() << endl;
 }
 
+
 <ex>
 
 void print( const TextBlock& cbt )
 {
   std::cout << cbt[0];                    // operator[] shall be const version
 }
+
+
+<ex>
+This is not straitforward to understand. Since find_entry_for() is const
+member function, makes this const, *cxx-const-this*, and data member becomes
+const and find_if returns const iterator. so *cxx-const-to-non-const-error*
+However, get a long error as shown in *cxx-template-decode-error*
+
+class bucket_type
+{
+  public:
+
+  private:
+    using bucket_value = std::pair<Key, Value>;
+    std::list<bucket_value> data;
+
+    // error
+    using bucket_iterator = typename std::list<bucket_value>::iterator;
+
+    // okay
+    using bucket_iterator = typename std::list<bucket_value>::const_iterator;
+
+    bucket_iterator find_entry_for(const Key &key) const
+    {
+      return std::find_if(data.begin(), data.end(),
+          [&](const bucket_value &item) {
+          return item.first == key;
+          });
+    }
+};
+
+
+<ex>
+Okay. remove const from find_entry_for() and gets error from value_for().
+
+class bucket_type
+{
+  public:
+    Value value_for(const Key &key, const Value &default_value) const
+    {
+      // read on shared mutex
+      boost::shared_lock<boost::shared_mutex> lock(m);
+
+      auto found_entry = find_entry_for(key);
+      return found_entry == data.end() ? default_value : found_entry->second;
+    }
+
+  private:
+
+    bucket_iterator find_entry_for(const Key &key)
+    {
+      return std::find_if(data.begin(), data.end(),
+          [&](const bucket_value &item) {
+          return item.first == key;
+          });
+    }
+};
+
+ccon.cpp:276:48: error: passing ‘const
+threadsafe_lookup_table<std::basic_string<char>, int>::bucket_type’ as ‘this’
+argument of ‘threadsafe_lookup_table<Key, Value,
+         Hash>::bucket_type::bucket_iterator threadsafe_lookup_table<Key,
+         Value, Hash>::bucket_type::find_entry_for(const Key&) [with Key =
+         std::basic_string<char>; Value = int; Hash =
+         std::hash<std::basic_string<char> >; threadsafe_lookup_table<Key,
+         Value, Hash>::bucket_type::bucket_iterator =
+         __gnu_debug::_Safe_iterator<std::__cxx1998::_List_iterator<std::pair<std::basic_string<char>,
+         int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+         std::allocator<std::pair<std::basic_string<char>, int> > > >]’
+         discards qualifiers [-fpermissive]
+
+           auto found_entry = find_entry_for(key);
+                                                ^
+Because value_for() is const which makes a call from const to nonconst.
 
 
 {const-non-const-member} *cpp-overload-const*
@@ -22259,7 +22354,7 @@ To simplify the declaration of containers, define a type alias:
 using SD_multiset = unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*>;
 SD_multiset bookstore(42, hasher, eqOp);
 
-This is not supported in GCC 4.6 and use typedef instead.
+// This is not supported in GCC 4.6 and use typedef instead.
 
 typedef unordered_multiset< Sales_data, decltype(hasher)*, decltype(eqOp)*> SD_multiset;
 SD_multiset bookstore(42, hasher, eqOp);
@@ -30163,7 +30258,123 @@ string counts {"1\n22\n333"};
 
 
 ={============================================================================
-*kt_dev_cpp_050* cpp-template-function
+*kt_dev_cxx_0000* cxx-template-decode-error
+
+this is an *cxx-const-to-non-const-error*
+
+// single long erro and if do warpping:
+
+ccon.cpp:317:16: error: could not convert ‘std::find_if(_IIter, _IIter,
+    _Predicate) [with _IIter =
+__gnu_debug::_Safe_iterator<std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>,
+int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+std::allocator<std::pair<std::basic_string<char>, int> > > >; _Predicate =
+  threadsafe_lookup_table<Key, Value, Hash>::bucket_type::find_entry_for(const
+      Key&) const [with Key = std::basic_string<char>; Value = int; Hash =
+  std::hash<std::basic_string<char> >; threadsafe_lookup_table<Key, Value,
+Hash>::bucket_type::bucket_iterator =
+  __gnu_debug::_Safe_iterator<std::__cxx1998::_List_iterator<std::pair<std::basic_string<char>,
+int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+std::allocator<std::pair<std::basic_string<char>, int> > > >]::<lambda(const
+    bucket_value&)>](std::__debug::list<_Tp, _Allocator>::end() const [with
+      _Tp = std::pair<std::basic_string<char>, int>; _Allocator =
+      std::allocator<std::pair<std::basic_string<char>, int> >;
+      std::__debug::list<_Tp, _Allocator>::const_iterator =
+      __gnu_debug::_Safe_iterator<std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>,
+      int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+      std::allocator<std::pair<std::basic_string<char>, int> > > >; typename
+      std::__cxx1998::list<_Tp, _Alloc>::const_iterator =
+      std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>,
+      int> >](), <lambda closure object>threadsafe_lookup_table<Key, Value,
+      Hash>::bucket_type::find_entry_for(const Key&) const [with Key =
+      std::basic_string<char>; Value = int; Hash =
+      std::hash<std::basic_string<char> >; threadsafe_lookup_table<Key, Value,
+      Hash>::bucket_type::bucket_iterator =
+      __gnu_debug::_Safe_iterator<std::__cxx1998::_List_iterator<std::pair<std::basic_string<char>,
+      int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+      std::allocator<std::pair<std::basic_string<char>, int> > >
+      >]::<lambda(const bucket_value&)>{(* & key)})’ from
+    ‘__gnu_debug::_Safe_iterator<std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>,
+int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+std::allocator<std::pair<std::basic_string<char>, int> > > >’ to
+  ‘threadsafe_lookup_table<std::basic_string<char>,
+int>::bucket_type::bucket_iterator {aka
+  __gnu_debug::_Safe_iterator<std::__cxx1998::_List_iterator<std::pair<std::basic_string<char>,
+  int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+  std::allocator<std::pair<std::basic_string<char>, int> > > >}’ }); ^
+
+
+// decode it to understand
+
+ccon.cpp:314:16: error: could not convert 
+
+// see ';' as sepeartor
+
+‘std::find_if(_IIter, _IIter, _Predicate) 
+  [
+  with 
+    _IIter =
+    __gnu_debug::_Safe_iterator<std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>,
+    int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+    std::allocator<std::pair<std::basic_string<char>, int> > > >; 
+
+    _Predicate =
+    threadsafe_lookup_table<Key, Value, Hash>::bucket_type::find_entry_for(const
+        Key&) const [with Key = std::basic_string<char>; 
+
+    Value = int; 
+
+    Hash = std::hash<std::basic_string<char> >; 
+    
+    threadsafe_lookup_table<Key, Value, Hash>::bucket_type::bucket_iterator =
+    __gnu_debug::_Safe_iterator<std::__cxx1998::_List_iterator<std::pair<std::basic_string<char>,
+    int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+    std::allocator<std::pair<std::basic_string<char>, int> > > >]::<lambda(const
+        bucket_value&)>
+  ]
+  (
+   std::__debug::list<_Tp, _Allocator>::end() const 
+   [with
+        _Tp = std::pair<std::basic_string<char>, int>; _Allocator =
+        std::allocator<std::pair<std::basic_string<char>, int> >;
+
+        std::__debug::list<_Tp, _Allocator>::const_iterator =
+        __gnu_debug::_Safe_iterator<std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>,
+        int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+        std::allocator<std::pair<std::basic_string<char>, int> > > >; 
+
+        typename std::__cxx1998::list<_Tp, _Alloc>::const_iterator =
+        std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>, int>> 
+
+   ](), <lambda closure object>threadsafe_lookup_table<Key, Value, Hash>::bucket_type::find_entry_for(const Key&) const 
+   [with Key =
+        std::basic_string<char>; Value = int; Hash =
+        std::hash<std::basic_string<char> >; 
+        threadsafe_lookup_table<Key, Value, Hash>::bucket_type::bucket_iterator =
+        __gnu_debug::_Safe_iterator<std::__cxx1998::_List_iterator<std::pair<std::basic_string<char>,
+        int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+        std::allocator<std::pair<std::basic_string<char>, int> > >
+        >
+   ]::<lambda(const bucket_value&)>{(* & key)}
+  )
+’ 
+  
+  from
+      ‘__gnu_debug::_Safe_iterator<std::__cxx1998::_List_const_iterator<std::pair<std::basic_string<char>,
+      int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+      std::allocator<std::pair<std::basic_string<char>, int> > > >’ 
+
+  to
+
+      ‘threadsafe_lookup_table<std::basic_string<char>, int>::bucket_type::bucket_iterator 
+
+      {aka __gnu_debug::_Safe_iterator<std::__cxx1998::_List_iterator<std::pair<std::basic_string<char>,
+        int> >, std::__debug::list<std::pair<std::basic_string<char>, int>,
+        std::allocator<std::pair<std::basic_string<char>, int> > > >}’ }); ^
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-template-function
 
 The types become known during complilation in generic programming whereas OOP
 deals with types that are not known until run time.
@@ -30416,9 +30627,9 @@ ct = fi.count();              // via an object
 
 
 ={============================================================================
-*kt_dev_cpp_050* cpp-template-type-member
+*kt_dev_cxx_0000* cxx-template-type-member
 
-{template-type-members} <cpp-type-member> <cpp-typename>
+{template-type-members} <cxx-type-member> <cxx-typename>
 Uses scope operator(::) to access both static member and type members. For
 example, string::size_type. In nontemplate code, the compiler has access to
 the class definition and knows whether a name accessed through the scope
@@ -30433,8 +30644,8 @@ member named size_type by p?
 T::size_type *p;
 
 By default, the language assumes that a name accessed through the scope
-operator is 'not' a type. So if want to use type member of template must
-'explicitly' tell using the keyword `typename`
+operator `is not a type.` So if want to use type member of template must
+`explicitly tell using the keyword typename`
 
 template<typename T> 
 typename T::value_type top( const T& c )
@@ -30515,11 +30726,24 @@ class StrBlob {
 
 Tried the both and the both compiles and works well.
 
-  template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
+  template<typename _Tp, typename _Alloc = std::allocator<_Tp>> 
     class vector : protected _Vector_base<_Tp, _Alloc>
     {
       typedef size_t					 size_type;
     };
+
+
+<ex>
+  // error 
+  typedef std::list<bucket_value>::iterator bucket_iterator;
+
+  // okay
+  typedef typename std::list<bucket_value>::iterator bucket_iterator;
+
+ccon.cpp:306:17: error: need ‘typename’ before ‘std::__debug::list<std::pair<_T1, _T2> >::iterator’ 
+  because ‘std::__debug::list<std::pair<_T1, _T2> >’ is a dependent scope
+         typedef std::list<bucket_value>::iterator bucket_iterator;
+                 ^
 
 
 ={============================================================================
@@ -31886,24 +32110,24 @@ specialization of the hash template and it must define:
 To add members to std namespace
 
 namespace std {
-    template <>
-        // indicate it is a specialization for T, Sales_data, type
-        struct hash <Sales_data>
-        {
-            typedef size_t result_type;
-            typedef Sales_data argument_type;
-
-            size_t operator() ( const Sales_data& s ) const;
-        };
-
-    size_t hash<Sales_data>::operator()(const Sales_data &s) const
+  template <>
+    // indicate it is a specialization for T, Sales_data, type
+    struct hash <Sales_data>
     {
-        // use 'unnamed', temporary object and delegate the complexity of good
-        // hash function to the library.
+      typedef size_t result_type;
+      typedef Sales_data argument_type;
 
-        return hash<string>() (s.bookNo) 
-          ^ hash<unsigned>() (s.units_sold) ^ hash<double>() (s.revenue);
-    }
+      size_t operator() ( const Sales_data& s ) const;
+    };
+
+  size_t hash<Sales_data>::operator()(const Sales_data &s) const
+  {
+    // use 'unnamed', temporary object and delegate the complexity of good
+    // hash function to the library.
+
+    return hash<string>() (s.bookNo) 
+      ^ hash<unsigned>() (s.units_sold) ^ hash<double>() (s.revenue);
+  }
 }  // no semicolon after the end of namespace
 
 
@@ -33794,7 +34018,7 @@ in general have "good" performance, where "good" normally means constant or
 logarithmic complexity. This prevents a programmer from calling a function
 that might cause bad performance.
 
-<emplace>
+<cxx-emplace>
 Here c means container and the emplace_* construct a object 'directly' in a
 container rather then copying from a temporary.
 
@@ -34045,7 +34269,7 @@ There are some differences between containers as to what to return from insert
 and erase and arguments. 
 
 
-{cxx-vector-insert-cxx-vector-erase} cxx-insert
+{cxx-vector-insert-cxx-vector-erase} cxx-insert cxx-erase
 Table 7.14. Insert and Remove Operations of Vectors
 
 c.push_back(elem)       Appends a copy of elem at the end
@@ -34085,7 +34309,7 @@ c.clear()               Removes all elements (empties the container)
 where, pos, beg, end are iterators.
 
 
-{cxx-set-insert-cxx-set-erase}
+{cxx-set-insert-cxx-set-erase} cxx-insert cxx-erase
 All elements are considered 'constant'. Means that iterators are also
 constant:
 
@@ -34255,24 +34479,28 @@ The text reads:
 insert invalidate iterator from pos since they are after the insertion point.
 
 
-{cxx-list-insert}
+{cxx-list-insert-cxx-list-erase}
 
-c.insert(pos,n,elem)  
-  
-Inserts n copies of elem before iterator position pos and returns the position
-of the first new element (or pos if there is no new element)
+Table 7.24. Insert and Remove Operations of Lists
 
-c.insert(pos,beg,end) 
+c.insert(pos,n,elem)    Inserts n copies of elem before iterator position pos
+                        and returns the position of the first new element (or
+                        pos if there is no new element)
 
-Inserts a copy of all elements of the range [beg,end) before iterator position
-pos and returns the position of the first new element (or pos if there is no
-    new element)
+c.insert(pos,beg,end)   Inserts a copy of all elements of the range [beg,end)
+                        before iterator position pos and returns the position
+                        of the first new element (or pos if there is no new element)
 
-c.insert(pos,initlist) 
+c.insert(pos,initlist)  Inserts a copy of all elements of the initializer list
+                        initlist before iterator position pos and returns the
+                        position of the first new element (or pos if there is
+                        no new element; since C++11)
 
-Inserts a copy of all elements of the initializer list initlist before
-iterator position pos and returns the position of the first new element (or
-    pos if there is no new element; since C++11)
+c.erase(pos)      Removes the element at iterator position pos and returns the
+                  position of the next element
+
+c.erase(beg,end)  Removes all elements of the range [beg,end) and returns the
+                  position of the next element
 
 
 <ex>
@@ -34526,10 +34754,16 @@ void t_iter_08()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-remove
+*kt_dev_cxx_0000* cxx-container-remove-cxx-remove
+
+6.7.1 “Removing” Elements
+
+{cxx-remove-sequential} *algo-remove* 
 
 <ex>
-// = 08_01 ======
+
+// remove 2 value from container
+//
 // size: 12
 // 1,2,3,4,5,6,2,7,2,8,2,9,
 // ===========
@@ -34562,6 +34796,9 @@ void t_iter_08_01()
     cout << endl;
 }
 
+
+// do the same using algo-erase
+
 void t_iter_08_02()
 {
     std::vector<int> ivec{1,2,3,4,5,6,2,7,2,8,2,9};
@@ -34582,9 +34819,8 @@ void t_iter_08_02()
 }
 
 
-{for-sequential} *ex-algo-remove* 
-
-// = 09 ======
+// to show algo-erase do not change size
+//
 // before : 12 elements
 // 6 5 4 3 2 1 1 2 3 4 5 6 
 // after  : 12 elements
@@ -34622,10 +34858,11 @@ Thus, `remove()` did not change the number of elements in the collection for
 which it was called. Revised the code to actually remove by calling 'member'
 function. 
 
-note: 
+note: cxx-list-remove
 coll.remove() is only for list and forward_list since no such member function
 for others.
 
+note: this explains iterator which glues algorithm and container
 
 In practice, there are some limits and workarounds you should know. Many of
 these have to do with modifications. These aspects are surprising and show the
@@ -34681,7 +34918,8 @@ void t_iter_10()
 }
 
 
-{for-associative}
+{cxx-remove-associative} *algo-remove* 
+
 Manipulation algorithms-those that remove elements and those that reorder or
 modify elements-have another 'problem' when you try to use them with
 associative or unordered containers:
@@ -34769,6 +35007,37 @@ pre : 9 elements
 number of removed elements: 1
 pre : 8 elements
 1 2 4 5 6 7 8 9 
+
+
+{constant-key} cxx-map cxx-set cxx-unordered
+Here, the iterator pos iterates through the sequence of pairs of const string
+and float, and you have to use operator -> to access key and value of the
+actual element
+
+Trying to change the value of the key results in an error:
+
+elem.first = "hello"; // ERROR at compile time
+pos->first = "hello"; // ERROR at compile time
+
+However, changing the value of the element is no problem, as long as elem is
+declared as a nonconstant reference and the type of the value is not constant:
+
+elem.second = 13.5; // OK
+pos->second = 13.5; // OK
+
+To change the key of an element, you have only one choice: You must replace
+the old element with a new element that has the same value. 
+
+// Section 7.8.2, page 339.
+
+Note that maps provide a more convenient way to modify the key of an element.
+Instead of calling replace_key(), you can simply write the following:
+
+// insert new element with value of old element
+coll["new_key"] = coll["old_key"];
+
+// remove old element
+coll.erase("old_key");
 
 
 {algorithm-or-member-function}
@@ -34912,36 +35181,40 @@ which means you can access each element directly with the corresponding index.
       end() const _GLIBCXX_NOEXCEPT
       { return const_iterator(this->_M_impl._M_finish); }
 
+
+      /**
+       *  @brief  Creates a %vector with default constructed elements.
+       *  @param  __n  The number of elements to initially create.
+       *  @param  __a  An allocator.
+       *
+       *  This constructor fills the %vector with @a __n default
+       *  constructed elements.
+       */
+      explicit
+      vector(size_type __n, const allocator_type& __a = allocator_type())
+      : _Base(__n, __a)
+      { 
+		_M_default_initialize(__n); 
+      }
+
+      /**
+       *  @brief  Creates a %vector with copies of an exemplar element.
+       *  @param  __n  The number of elements to initially create.
+       *  @param  __value  An element to copy.
+       *  @param  __a  An allocator.
+       *
+       *  This constructor fills the %vector with @a __n copies of @a __value.
+       */
+      vector(size_type __n, const value_type& __value,
+	     const allocator_type& __a = allocator_type())
+      : _Base(__n, __a)
+      { 
+	   _M_fill_initialize(__n, __value); 
+      }
     };
 
 
-<<ctor-and-dtor>
-vector<T> c(n,elem);
-Creates a vector initialized with n copies of element elem
-
-
-<ex>
-#include <iostream>
-#include <memory>
-#include <vector>
-
-using namespace std;
-
-int main()
-{
-  vector<int> coll;
-
-  for(int i=1; i <= 6; i++)
-    coll.push_back(i);
-
-  for(int i=0; i < coll.size(); i++)
-    cout << coll[i] << ' ';
-
-  cout << endl;
-}
-
-
-{reallocation} cxx-vector-reallocation
+{cxx-vector-reallocation}
 To support fast random access, vector elements are stored 'contiguously'. To
 maintain contiguous memory and to avoid reallocating a container each time an
 element is added, the allocation strategy is: 
@@ -35632,7 +35905,7 @@ double& List_container::operator[](int i)
 }
 
 
-{list-erase}
+{cxx-list-erase}
 the header from begin() gets updated when use erase(start, end) to trim
 entries in the front.
 
@@ -35967,7 +36240,7 @@ multiset<Elem>    A multiset that by default sorts with less<> (operator <)
 multiset<Elem,Op> A multiset that by default sorts with Op
 
 
-<cpp-map-element-type>
+<cxx-map-element-type>
 if two 'containers' are 'compared' by operator ==, the elements in both
 containers are compared using their operator ==, which means that operator ==
 has to be provided for the 'element' type.
@@ -36481,7 +36754,7 @@ namespace std
 #endif
 }
 
-// <cpp-red-black-tree>
+// <cxx-red-black-tree>
 // /usr/include/c++/4.9/bits/stl_tree.h
 
   template<typename _Key, typename _Val, typename _KeyOfValue,
@@ -36985,68 +37258,97 @@ size of dict1: 8, size of dict2: 8
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cpp-container-cpp-unordered
+*kt_dev_cxx_0000* cxx-container-cxx-unordered
 
-The cost of a map lookup is O(log(n)) where n is the number of elements in the
-map. That’s pretty good. For example, for a map with 1,000,000 elements, we
-perform only about 20 comparisons and indirections to find an element.
-However, in many cases, we can do better by using a hashed lookup rather than
-comparison using an ordering function, such as <. The standard-library hashed
-containers are referred to as “unordered” because they don’t require an
-ordering function:
+7.9 Unordered Containers
 
+namespace std {
+  template <typename T,
+            typename Hash = hash<T>,
+            typename EqPred = equal_to<T>,
+            typename Allocator = allocator<T>> 
+        class unordered_set;
+
+  template <typename Key, typename T,
+           typename Hash = hash<T>,
+           typename EqPred = equal_to<T>,
+           typename Allocator = allocator<pair<const Key, T>> >
+        class unordered_map;
+}
+
+
+<cxx-unordered>
 In unordered containers, elements have no defined order. Thus, if you insert
 three elements, they might have any order when you 'iterate' over all the
 elements in the container. If you insert a fourth element, the order of the
 elements previously inserted might change due to 'rehasing'. The only
 important fact is that a specific element is somewhere in the container. Even
 when you have two containers with equal elements inside, the order might be
-different. Think of it as like a 'bag'.
-
-Unordered containers are typically implemented as a 'hash' table. Thus,
-internally, the container is an array of linked lists. But because such a fast
-  perfect hash function is not always possible or might require that the array
-  consumes a huge amount of memory, the elements in the array are linked lists
-  so that you can store more than one element at each array position.
+different.
 
 
-<default-hash>
+<cxx-unordered-hash>
+Unordered containers are typically implemented as a 'hash' table. 
+
+For unordered set or multiset, for each value to store, the hash function maps
+it to a bucket (slot) in the hash table. Each bucket manages a singly linked
+list containing all the elements for which the hash function yields the same
+value.
+
+For unordered map or multimap, for each element to store, which is a key/value
+pair, the hash function maps the value of the key to a bucket (slot) in the
+hash table. Each bucket manages a singly linked list containing all the
+elements for which the hash function yields the same value.
+
 A default hash function is provided for fundamental types and strings, but we
 would have to declare our own hash function for other types.
 
 All these unordered container classes have optional template arguments to
-specify a hash function and an 'equivalence' criterion. note: why equal? since
-no order.
+specify a hash function and an 'equivalence' criterion, '==' operator.
 
 
-{type-requirement}
-Use '==' op and hash func.
+<cxx-unordered-performance> amortized constant
+The cost of a map lookup is O(log(n)) where n is the number of elements in the
+map. 
+
+Assuming that the hashing strategy is well chosen and well implemented, you
+can guarantee amortized constant time for insertions, deletions, and element
+search
+
+you should usually prefer unordered maps over maps unless you need the
+sorting.
 
 
-{performance} amortized complexity
-Because the complexity for element access is amortized constant for unordered
-maps rather than logarithmic for maps, you should usually prefer unordered
-maps over maps unless you need the sorting.
+<cxx-unordered-properties>
 
-{duplicate-order}
+* the iterators are guaranteed only to be forward iterators
+  reverse iterators, including rbegin(), rend(), crbegin(), and crend(), are
+  not supported
+
+* lower_bound() and upper_bound() are not provided.
+
+
+<cxx-unordered-exception>
+Unordered containers are `node-based containers`, so any failure to construct
+a node simply leaves the container as it was.
+
+* erase() does not throw an exception, provided that the hash function and the
+  equivalence criterion don’t throw, which is the case for the default
+  functions.
+
+
+<duplicate-order>
 The only guarantee is that duplicates, which are possible because a multiset
 is used, are grouped together in the order of their insertion.
 
-<ex>
-#include <iostream>
-#include <string>
-#include <unordered_set>
-
-using namespace std;
-
-int main()
+TEST(CxxStlTest, UnorderedMapDuplicates)
 {
   unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", "New York",
     "Chicago", "Toronto", "Paris", "Frankfurt"};
 
   for( const auto &elem : cities )
     cout << elem << ' ';
-  
+
   cout << endl;
 
   // insert additional elements
@@ -37054,13 +37356,47 @@ int main()
 
   for( const auto &elem : cities )
     cout << elem << ' ';
-  
+
   cout << endl;
 }
 
-Hanover Paris Frankfurt Frankfurt Chicago New York Braunschweig Toronto 
-Munich Chicago New York Toronto London Frankfurt Frankfurt Paris Hanover Hanover Braunschweig
-Braunschweig 
+Paris Toronto Chicago New York Frankfurt Frankfurt Hanover Braunschweig
+Munich London Frankfurt Frankfurt New York Braunschweig Braunschweig Chicago Toronto Hanover Hanover Paris
+
+
+<cxx-hash>
+Providing Your Own Hash Function
+
+The hash function has to be a function or a function object that takes a value
+of the element type as parameter and returns bucket index, a value of type
+std::size_t.
+
+your goal is to provide a function that maps the different element values
+equally distributed in the range [0,size_t).
+
+Providing a good hash function is trickier than it sounds. A naive approach
+would be to simply add all hash values for those attributes that are relevant
+for the hash function.
+
+class CustomerHash
+{
+  public:
+    std::size_t operator() (const Customer& c) const {
+      return std::hash<std::string>()(c.fname) +
+        std::hash<std::string>()(c.lname) +
+        std::hash<long>()(c.no);
+    }
+};
+
+Here, the hash value returned is just the sum of the hash value for the
+Customer’s attributes fname, lname, and no.
+
+std::unordered_set<Customer,CustomerHash> custset;
+
+
+TODO:
+A better approach is the following, which uses a hash function provided by
+Boost (see [Boost]) and a more convenient interface:
 
 
 ={============================================================================
@@ -51662,6 +51998,7 @@ class threadsafe_queue
     }
 
     // see no unlock on cxx-unique-lock
+    // *cxx-lambda-this*
 
     void wait_and_pop(T& value)
     {

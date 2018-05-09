@@ -5,6 +5,7 @@
 #include <memory>
 #include <deque>
 #include <list>
+#include <unordered_set>
 
 #include "gmock/gmock.h"
 
@@ -179,6 +180,33 @@ TEST(CxxStlTest, VecorEraseAndDtorWithReserve)
   cout << "-erase---------" << endl;
 }
 
+class VectorCtorsTest
+{
+  public:
+  VectorCtorsTest(int size, int value = 10) : icoll(size, value) {}
+  int size() { return icoll.size(); }
+  void print() { PRINT_ELEMENTS(icoll, "clsss : "); }
+
+  private:
+  vector<int> icoll;
+};
+
+
+TEST(CxxStlTest, VecorCtors)
+{
+  vector<int> icoll1(5);
+  PRINT_ELEMENTS(icoll1, "default init: ");
+  ASSERT_THAT(icoll1.size(), Eq(5));
+
+  vector<int> icoll2(5, 10);
+  PRINT_ELEMENTS(icoll2, "value   init: ");
+  ASSERT_THAT(icoll2.size(), Eq(5));
+
+  VectorCtorsTest icoll3(10, 100);
+  icoll3.print();
+  ASSERT_THAT(icoll3.size(), Eq(10));
+}
+
 
 // ={=========================================================================
 // cxx-deque
@@ -196,6 +224,7 @@ TEST(CxxStlTest, VecorEraseAndDtorWithReserve)
 //         cout << "exception" << endl;
 //     }
 // }
+
 
 // ={=========================================================================
 // cxx-set
@@ -288,6 +317,29 @@ TEST(CxxStlTest, HowMapFindWorks)
         ASSERT_THAT(posVal->first, Eq(4));
         ASSERT_THAT(posVal->second, Eq(3));
     }
+}
+
+
+// ={=========================================================================
+// cxx-unordered
+
+TEST(CxxStlTest, UnorderedMapDuplicates)
+{
+  unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", "New York",
+    "Chicago", "Toronto", "Paris", "Frankfurt"};
+
+  for( const auto &elem : cities )
+    cout << elem << ' ';
+
+  cout << endl;
+
+  // insert additional elements
+  cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
+
+  for( const auto &elem : cities )
+    cout << elem << ' ';
+
+  cout << endl;
 }
 
 
