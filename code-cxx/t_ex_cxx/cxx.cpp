@@ -799,6 +799,21 @@ TEST(CxxFeaturesTest, UseUniqueSinkSource)
 //   }
 // }
 
+// hash(one): 16780311998597636082
+// hash(two): 4939359993625789802
+
+// ={=========================================================================
+// cxx-hash
+TEST(CxxFeaturesTest, UseHashOnString)
+{
+  cout << "hash(one): " << string("xxx") << endl;
+
+  // error
+  // cout << "hash(one): " << hash<string>("one") << endl;
+  
+  cout << "hash(one): " << hash<string>()("one") << endl;
+  cout << "hash(two): " << hash<string>()("two") << endl;
+}
 
 // ={=========================================================================
 //

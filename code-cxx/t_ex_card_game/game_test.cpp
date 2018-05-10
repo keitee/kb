@@ -25,6 +25,10 @@ TEST_F(CardPlayerTest, GetScore) {
     ASSERT_THAT(player.GetScore(), Eq(3));
 }
 
+
+/////////////////////////////////////////////////////////////////////////////
+// CardGameTest
+
 class CardGameTest: public Test
 {
 public:

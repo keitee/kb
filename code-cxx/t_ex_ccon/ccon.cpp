@@ -231,6 +231,12 @@ TEST(CconThreadTest, UseThreadSafeStack)
 // ={=========================================================================
 // cxx-threadsafe-lookup-table, listing_6.11.cpp
 
+// * each bucket is protected by shared mutex
+//
+// * If you again use a mutex that supports multiple readers or a single writer,
+// you increase the opportunities for concurrency N-fold, where N is the number
+// of buckets.
+
 template<typename Key, typename Value, typename Hash = std::hash<Key>>
 class threadsafe_lookup_table
 {
