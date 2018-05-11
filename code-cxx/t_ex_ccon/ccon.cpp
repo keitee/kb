@@ -404,6 +404,44 @@ TEST(CconThreadTest, UseAsync)
     std::cout << "the answer is " << the_answer.get() << std::endl;
 }
 
+void UseReference(int &value)
+{
+  std::cout << "input   value: " << value << std::endl;
+  value += 200;
+  std::cout << "changed value: " << value << std::endl;
+}
+
+// [ RUN      ] CconThreadTest.CompareThreadAndAsync
+// input   value: 1
+// changed value: 201
+// final value: 201
+// [       OK ] CconThreadTest.CompareThreadAndAsync (1 ms)
+
+TEST(CconThreadTest, UseAsyncWithReference)
+{
+  int value{1};
+
+  // In file included from /usr/include/c++/4.9/thread:39:0,
+  //                  from ccon.cpp:2:
+  // /usr/include/c++/4.9/functional: In instantiation of ‘struct std::_Bind_simple<void (*(int))(int&)>’:
+  // /usr/include/c++/4.9/thread:140:47:   required from ‘std::thread::thread(_Callable&&, _Args&& ...) [with _Callable = void (&)(int&); _Args = {int&}]’
+  // ccon.cpp:418:36:   required from here
+  // /usr/include/c++/4.9/functional:1665:61: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
+  //        typedef typename result_of<_Callable(_Args...)>::type result_type;
+  //                                                              ^
+  // /usr/include/c++/4.9/functional:1695:9: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
+  //          _M_invoke(_Index_tuple<_Indices...>)
+  //          ^
+  // makefile:58: recipe for target 'ccon.o' failed
+  // make: *** [ccon.o] Error 1
+  //
+  // std::thread t(UseReference, value);  
+
+  std::thread t(UseReference, std::ref(value));  
+  t.join();
+  std::cout << "final value: " << value << std::endl;
+}
+
 
 // ={=========================================================================
 // cxx-async with no option

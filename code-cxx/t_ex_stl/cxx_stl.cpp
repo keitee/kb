@@ -6,6 +6,7 @@
 #include <deque>
 #include <list>
 #include <unordered_set>
+#include <queue>
 
 #include "gmock/gmock.h"
 
@@ -47,6 +48,17 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
     }
 
     cout << " (" << count << ")" << endl;
+}
+
+template <typename T>
+void PRINT_Q_ELEMENTS(const T& coll, const string &optsrt = "")
+{
+  size_t count = coll.size();
+
+  for(int i = 0; i < count; ++i)
+    cout << coll.top() << " ";
+
+  cout << "(" << count << ")" << endl;
 }
 
 // ={=========================================================================
@@ -224,6 +236,32 @@ TEST(CxxStlTest, VecorCtors)
 //         cout << "exception" << endl;
 //     }
 // }
+
+
+// ={=========================================================================
+// cxx-queue-priority
+
+TEST(CxxStlTest, QueueProritySort)
+{
+  priority_queue<float> pq;
+
+  pq.push(66.6);
+  pq.push(22.2);
+  pq.push(44.4);
+
+  pq.pop();
+
+  PRINT_Q_ELEMENTS(pq, "1: ");
+
+  // insert more
+  pq.push(11.1);
+  pq.push(55.5);
+  pq.push(33.3);
+
+  PRINT_Q_ELEMENTS(pq, "2: ");
+  pq.pop();
+  PRINT_Q_ELEMENTS(pq, "3: ");
+}
 
 
 // ={=========================================================================

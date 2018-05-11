@@ -7,6 +7,8 @@
  * http://www.pragmaticprogrammer.com/titles/lotdd for more book information.
 ***/
 
+// Chapter	      2, Test-Driven Development: A First Example
+// 
 // 1. Retain the first letter.
 //
 // 2. Drop all other occurrences of a, e, i, o, u, y, h, w.
