@@ -20,7 +20,7 @@ using testing::FloatEq;
 // ={=========================================================================
 // string
 
-TEST(CxxStringTest, ConstructFromChars)
+TEST(CxxString, ConstructFromChars)
 {
     char s1[] = "this is first message";
     char *s2 = "this is first message";
@@ -35,6 +35,88 @@ TEST(CxxStringTest, ConstructFromChars)
     // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
     // string string_from_const_letter(const_letter);
     // string string_from_non_const_letter(non_const_letter);
+}
+
+// ={=========================================================================
+// string ctors
+
+TEST(CxxString, UseStringCtors)
+{
+    string s1{"zoo"};
+    EXPECT_EQ(s1, "zoo");
+
+    string s2("zoo");
+    EXPECT_EQ(s1, "zoo");
+
+    char letter = 'A';
+
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // string s3(letter);
+
+    // ok since:
+    //
+    // /**
+    //  *  @brief  Append a character.
+    //  *  @param __c  The character to append.
+    //  *  @return  Reference to this string.
+    //  */
+    // basic_string&
+    // operator+=(_CharT __c)
+    // {
+    //  this->push_back(__c);
+    //  return *this;
+    // }
+
+    string s4;
+    s4 += letter;
+    EXPECT_EQ(s4, "A");
+
+    string s5;
+
+    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // s5.append(letter);
+
+    s5.append(1, letter);
+    EXPECT_EQ(s5, "A");
+}
+
+
+// ={=========================================================================
+// string operations
+
+TEST(CxxString, UseStringOperations)
+{
+    string s1{"zoo"};
+    EXPECT_EQ(s1.back(), 'o');
+
+    // this fails as the same reason as string ctors shown above.
+    // EXPECT_EQ(string(s1.back()), "o");
+    
+    EXPECT_EQ(string(1, s1.back()), "o");
+}
+
+// ={=========================================================================
+// string and cstring
+
+// s[0] : z
+// s[1] : o
+// s[2] : o
+// s[3] : 
+// s[3] is null
+
+TEST(CxxString, UseStringVsCstring)
+{
+  string s{"zoo"};
+
+  cout << "s[0] : " << s[0] << endl;  // z
+  cout << "s[1] : " << s[1] << endl;  // o
+  cout << "s[2] : " << s[2] << endl;  // o
+  cout << "s[3] : " << s[3] << endl;  // o
+
+  if (s[3] == 0)
+    cout << "s[3] is null" << endl;
+  else
+    cout << "s[3] is not null" << endl;
 }
 
 
@@ -343,48 +425,6 @@ TEST(CxxStringTest, TrimCharOrWhitespaceFromEnd)
     EXPECT_EQ(s5, "zoo");
 }
 
-// ={=========================================================================
-// string ctors
-
-TEST(CxxStringTest, RunStringCtors)
-{
-    string s1{"zoo"};
-    EXPECT_EQ(s1, "zoo");
-
-    string s2("zoo");
-    EXPECT_EQ(s1, "zoo");
-
-    char letter = 'A';
-
-    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
-    // string s3(letter);
-
-    // ok since:
-    //
-    // /**
-    //  *  @brief  Append a character.
-    //  *  @param __c  The character to append.
-    //  *  @return  Reference to this string.
-    //  */
-    // basic_string&
-    // operator+=(_CharT __c)
-    // {
-    //  this->push_back(__c);
-    //  return *this;
-    // }
-
-    string s4;
-    s4 += letter;
-    EXPECT_EQ(s4, "A");
-
-    string s5;
-
-    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
-    // s5.append(letter);
-
-    s5.append(1, letter);
-    EXPECT_EQ(s5, "A");
-}
 
 // ={=========================================================================
 // Q: to split the string "Name|Address|Phone" into three separate strings,

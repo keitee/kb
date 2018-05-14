@@ -22,7 +22,7 @@ using namespace testing;
 // pair 1 is bigger
 // pair 4 is bigger
 
-TEST(CxxFeaturesTest, UsePairType)
+TEST(CxxPair, UsePairType)
 {
     const auto map{
         make_pair(10, "X"),
@@ -50,6 +50,36 @@ TEST(CxxFeaturesTest, UsePairType)
       cout << "pair 4 is bigger" << endl;
     else
       cout << "pair 3 is bigger" << endl;
+}
+
+// ={=========================================================================
+// cxx-pair-reference
+
+// val pair {11, 21}
+// i and j  {10, 20}      // not changed
+// ref pair {11, 21}
+// i and j  {11, 21}      // changed
+
+TEST(CxxPair, UsePairWithReference)
+{
+  int i = 10;
+  int j = 20;
+
+  auto val = make_pair(i, j);
+
+  ++val.first;
+  ++val.second;
+
+  cout << "val pair {" << val.first << ", " << val.second << "}" << endl;
+  cout << "i and j  {" << i << ", " << j << "}" << endl;
+
+  auto ref = make_pair(std::ref(i), std::ref(j));
+
+  ++ref.first;
+  ++ref.second;
+
+  cout << "ref pair {" << ref.first << ", " << ref.second << "}" << endl;
+  cout << "i and j  {" << i << ", " << j << "}" << endl;
 }
 
 
