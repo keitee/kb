@@ -53,7 +53,7 @@ TEST(CxxPair, UsePairType)
 }
 
 // ={=========================================================================
-// cxx-pair-reference
+// cxx-pair-reference cxx-std-ref
 
 // val pair {11, 21}
 // i and j  {10, 20}      // not changed
@@ -81,6 +81,175 @@ TEST(CxxPair, UsePairWithReference)
   cout << "ref pair {" << ref.first << ", " << ref.second << "}" << endl;
   cout << "i and j  {" << i << ", " << j << "}" << endl;
 }
+
+
+// ={=========================================================================
+// cxx-std-forward
+template <typename F, typename T1, typename T2>
+void flip(F f, T1 param1, T2 param2)
+{
+  f(param2, param1);
+}
+
+template <typename F, typename T1, typename T2>
+void flip_forward(F f, T1 &&param1, T2 &&param2)
+{
+  f(std::forward<T2>(param2), std::forward<T1>(param1));
+}
+
+void f(int value1, int &value2)
+{
+  cout << "f(" << value1 << ", " << ++value2 << ")" << endl;
+}
+
+// f(20, 11)
+// withoug ref: i and j  {10, 20}
+// f(20, 11)
+// with    ref: i and j  {11, 20}
+// f(20, 11)
+// wit forward: i and j  {11, 20}
+
+TEST(CxxTemplate, UseForward)
+{
+  int i = 10;
+  int j = 20;
+
+  flip(f, i, j);
+  cout << "withoug ref: i and j  {" << i << ", " << j << "}" << endl;
+
+  flip(f, std::ref(i), j);
+  cout << "with    ref: i and j  {" << i << ", " << j << "}" << endl;
+
+  i = 10;
+  j = 20;
+
+  flip_forward(f, i, j);
+  cout << "wit forward: i and j  {" << i << ", " << j << "}" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-copy-control
+
+class CopyControlBaseUsePrivate {
+  public:
+    CopyControlBaseUsePrivate() = default;
+    ~CopyControlBaseUsePrivate() = default;
+
+  private:
+    int value_;
+    CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) 
+      { (void)base; cout << "copy-ctor: base" << endl; }   // @11
+    CopyControlBaseUsePrivate& operator=(const CopyControlBaseUsePrivate& base) 
+      { (void)base; cout << "copy-assign: base" << endl; return *this; }
+};
+
+class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
+{
+  public:
+    void getShout() { cout << "derived get shout" << endl; };
+};
+
+
+class CopyControlBaseUseDelete {
+  public:
+    CopyControlBaseUseDelete() = default;
+    ~CopyControlBaseUseDelete() = default;
+
+  public:
+    CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+    CopyControlBaseUseDelete& operator=(const CopyControlBaseUseDelete& base) = delete;
+
+  private:
+    int value_;
+};
+
+class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
+{
+  public:
+    void getShout() { cout << "derived get shout" << endl; };
+};
+
+// TEST(CxxCopyControl, UsePrivateAndDelete)
+// {
+//   CopyControlBaseUsePrivate b1, b2;
+// 
+//   // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
+//   //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
+//   //      ^
+//   // cxx.cpp:174:34: error: within this context
+//   //    CopyControlBaseUsePrivate b3(b1);
+// 
+//   CopyControlBaseUsePrivate b3(b1);
+// 
+//   CopyControlDerivedUsePrivate d1, d2;
+// 
+//   // note: 
+//   // since base copy ctor is private and derived copy ctor is deleted.
+//   //
+//   // cxx.cpp:177:37: error: use of deleted function ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const CopyControlDerivedUsePrivate&)’
+//   //    CopyControlDerivedUsePrivate d3(d1);
+//   //                                      ^
+//   // cxx.cpp:145:7: note: ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const CopyControlDerivedUsePrivate&)’ is implicitly deleted because the default definition would be ill-formed:
+//   //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
+//   //        ^
+//   // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
+//   //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
+//   //      ^
+//   // cxx.cpp:145:7: error: within this context
+//   //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
+//   //        ^
+//   
+//   CopyControlDerivedUsePrivate d3(d1);
+// 
+//   // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
+//   //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
+//   //      ^
+//   // cxx.cpp:167:34: error: within this context
+//   //    CopyControlBaseUsePrivate b3(b1);
+//   //                                   ^
+// 
+//   CopyControlBaseUseDelete b4, b5;
+// 
+//   // note:
+//   // whether they are public or private do not make difference.
+//   //
+//   // when are private and deleted
+//   //
+//   // cxx.cpp:170:33: error: within this context
+//   //    CopyControlBaseUseDelete b6(b4);
+//   //                                  ^
+//   // cxx.cpp:170:33: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
+//   // cxx.cpp:151:5: note: declared here
+//   //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+//   //      ^
+//   
+//   // when are public and deleted
+//   //
+//   // cxx.cpp:181:33: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
+//   //    CopyControlBaseUseDelete b6(b4);
+//   //                                  ^
+//   // cxx.cpp:151:5: note: declared here
+//   //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+//   //      ^
+// 
+//   CopyControlBaseUseDelete b6(b4);
+// 
+//   CopyControlDerivedUseDelete d4, d5;
+// 
+//   // cxx.cpp:210:36: error: use of deleted function ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const CopyControlDerivedUseDelete&)’
+//   //    CopyControlDerivedUseDelete d6(d4);
+//   //                                     ^
+//   // cxx.cpp:165:7: note: ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const CopyControlDerivedUseDelete&)’ is implicitly deleted because the default definition would be ill-formed:
+//   //  class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
+//   //        ^
+//   // cxx.cpp:165:7: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
+//   // cxx.cpp:158:5: note: declared here
+//   //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+//   //      ^
+// 
+//   CopyControlDerivedUseDelete d6(d4);
+// }
 
 
 // ={=========================================================================
@@ -844,6 +1013,17 @@ TEST(CxxFeaturesTest, UseHashOnString)
   cout << "hash(one): " << hash<string>()("one") << endl;
   cout << "hash(two): " << hash<string>()("two") << endl;
 }
+
+
+// ={=========================================================================
+// cxx-bool
+
+TEST(CxxBool, CheckBoolDefault)
+{
+  bool value{};
+  EXPECT_EQ(value, false);
+}
+
 
 // ={=========================================================================
 //

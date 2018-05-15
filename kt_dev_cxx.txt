@@ -48,7 +48,7 @@ KT KB. CPP
 |kt_dev_gcc_111| gcc: profiling
 
 *kt_dev_gcc_200* gcc-cpp
-|kt_dev_gcc_201| cpp-header-guard
+|kt_dev_cxx_0000| cxx-header-guard
 *kt_dev_gcc_201* gcc-cpp-defined
 |kt_dev_gcc_202| gcc-cpp-get-filename-without-full-path
 *kt_dev_gcc_203* gcc-cpp-isystem option
@@ -111,7 +111,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-ex-strblob-example
 *kt_dev_cxx_0000* cxx-abc cxx-ex-quote-example cxx-refactoring
 *kt_dev_cxx_0000* cxx-abc-call-in-dtor
-*kt_dev_cxx_0000* cxx-copy-preventing-copies cxx-delete
+*kt_dev_cxx_0000* cxx-copy-prevent-copies cxx-delete
 |kt_dev_cxx_0000| cxx-function-matching
 *kt_dev_cxx_0000* cxx-namespace cxx-interface
 *kt_dev_cxx_0000* cxx-overload-operator
@@ -309,7 +309,7 @@ KT KB. CPP
 |kt_dev_ccon_019| std::shared_future in multiple threads
 |kt_dev_ccon_002| std::future
 *kt_dev_cxx_0000* cxx-con-lock-based-data-structure
-
+*kt_dev_cxx_0000* cxx-con-functional-programming cxx-con-fsm
 
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
@@ -2394,7 +2394,7 @@ brief abbreviations for longer constructs.
 
 
 ={============================================================================
-*kt_dev_gcc_201* cpp-header-guard
+*kt_dev_cxx_0000* cxx-header-guard
 
 2.4 Once-Only Headers
 
@@ -16646,7 +16646,7 @@ so what's the actual filter type? is it in the middle of free?
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-copy-preventing-copies cxx-delete
+*kt_dev_cxx_0000* cxx-copy-prevent-copies cxx-delete
 
 CPR 507 and EC++06. How can define a class to prevent copy or assign like
 `iostream` class? Do not defining copy-controls? This do not work as syn version
@@ -16695,55 +16695,123 @@ This is an example and see 'compile' errors when use `private-access-control`
 to prevent copies and note that won't compile regardless of whether there is
 copy control definition(implementation) in base class.
 
-#include <iostream>
-
-using std::cout; using std::endl;
-
-class Base {
+class CopyControlBaseUsePrivate {
   public:
-    Base() = default;
-    ~Base() = default;
+    CopyControlBaseUsePrivate() = default;
+    ~CopyControlBaseUsePrivate() = default;
+
   private:
-    int m_iDataABCAnimal;
-    Base(const Base& base) { cout << "copy-ctor: base" << endl; }   // @11
-    Base& operator=(const Base& base) { cout << "copy-assign: base" << endl; }
+    int value_;
+    CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
+    CopyControlBaseUsePrivate& operator=(const CopyControlBaseUsePrivate& base) { cout << "copy-assign: base" << endl; }
 };
 
-class D : public Base
+class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
 {
   public:
     void getShout() { cout << "derived get shout" << endl; };
 };
 
-int main()
+
+class CopyControlBaseUseDelete {
+  public:
+    CopyControlBaseUseDelete() = default;
+    ~CopyControlBaseUseDelete() = default;
+
+  public:
+    CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+    CopyControlBaseUseDelete& operator=(const CopyControlBaseUseDelete& base) = delete;
+
+  private:
+    int value_;
+};
+
+class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 {
-  std::cout << "--{ main " << std::endl;
+  public:
+    void getShout() { cout << "derived get shout" << endl; };
+};
 
-  Base b1, b2;
+TEST(CxxCopyControl, UsePrivateAndDelete)
+{
+  CopyControlBaseUsePrivate b1, b2;
 
-  Base b3(b1);       // note: 01 @21
+  // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
+  //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
+  //      ^
+  // cxx.cpp:174:34: error: within this context
+  //    CopyControlBaseUsePrivate b3(b1);
 
-  D d1, d2;
+  CopyControlBaseUsePrivate b3(b1);
 
-  d1.getShout();
+  CopyControlDerivedUsePrivate d1, d2;
 
-  d2 = d1;           // note: 02
+  // note: 
+  // since base copy ctor is private and derived copy ctor is deleted.
+  //
+  // cxx.cpp:177:37: error: use of deleted function ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const CopyControlDerivedUsePrivate&)’
+  //    CopyControlDerivedUsePrivate d3(d1);
+  //                                      ^
+  // cxx.cpp:145:7: note: ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const CopyControlDerivedUsePrivate&)’ is implicitly deleted because the default definition would be ill-formed:
+  //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
+  //        ^
+  // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
+  //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
+  //      ^
+  // cxx.cpp:145:7: error: within this context
+  //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
+  //        ^
+  
+  CopyControlDerivedUsePrivate d3(d1);
 
-  std::cout << "--} main " << std::endl;
+  // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
+  //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
+  //      ^
+  // cxx.cpp:167:34: error: within this context
+  //    CopyControlBaseUsePrivate b3(b1);
+  //                                   ^
+
+  CopyControlBaseUseDelete b4, b5;
+
+  // note:
+  // whether they are public or private do not make difference.
+  //
+  // when are private and deleted
+  //
+  // cxx.cpp:170:33: error: within this context
+  //    CopyControlBaseUseDelete b6(b4);
+  //                                  ^
+  // cxx.cpp:170:33: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
+  // cxx.cpp:151:5: note: declared here
+  //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+  //      ^
+  
+  // when are public and deleted
+  //
+  // cxx.cpp:181:33: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
+  //    CopyControlBaseUseDelete b6(b4);
+  //                                  ^
+  // cxx.cpp:151:5: note: declared here
+  //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+  //      ^
+
+  CopyControlBaseUseDelete b6(b4);
+
+  CopyControlDerivedUseDelete d4, d5;
+
+  // cxx.cpp:210:36: error: use of deleted function ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const CopyControlDerivedUseDelete&)’
+  //    CopyControlDerivedUseDelete d6(d4);
+  //                                     ^
+  // cxx.cpp:165:7: note: ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const CopyControlDerivedUseDelete&)’ is implicitly deleted because the default definition would be ill-formed:
+  //  class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
+  //        ^
+  // cxx.cpp:165:7: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
+  // cxx.cpp:158:5: note: declared here
+  //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+  //      ^
+
+  CopyControlDerivedUseDelete d6(d4);
 }
-
-note: 01
-use-prevent-copy.cpp: In function ‘int main()’:
-use-prevent-copy.cpp:11:4: error: ‘Base::Base(const Base&)’ is private
-use-prevent-copy.cpp:21:12: error: within this context
-
-note: 02
-base.cpp: In function ‘int main()’:
-base.cpp:33:8: error: use of deleted function ‘D& D::operator=(const D&)’
-base.cpp:15:7: error: ‘D& D::operator=(const D&)’ is implicitly deleted 
-    because the default definition would be ill-formed:
-base.cpp:12:10: error: ‘Base& Base::operator=(const Base&)’ is private
-base.cpp:15:7: error: within this context
 
 
 <friend-can-access> 
@@ -24662,7 +24730,7 @@ new_type (expression)
 but each one with its own special characteristics:
 
 
-<cpp-cast-dynamic-cast> 
+{cxx-cast-dynamic-cast}
 dynamic_cast can only be used `with pointers and references to classes` (or
     with void*). Its purpose is to ensure that the result of the type
 conversion points `to a valid complete object` of the destination pointer
@@ -24675,7 +24743,7 @@ DONE BY COMPILER.
 But dynamic_cast can also 'downcast' (convert from pointer-to-base to
     pointer-to-derived) `polymorphic classes (those with virtual members)`
 `if-and only if` the pointed object is a valid 'complete' object of the target
-type. For example:
+type. 
 
 #include <iostream>
 #include <exception>
@@ -24742,7 +24810,7 @@ class Base, which is an incomplete object of class Derived.
 
 <for-pointer>
 When dynamic_cast cannot cast a pointer because it is not a complete object of
-the required class, it 'returns' a null pointer to indicate the failure. 
+the required class, `returns a null pointer to indicate the failure.`
 
 <for-reference>
 If dynamic_cast is used to convert to a reference type and the conversion is
@@ -31639,31 +31707,66 @@ note:
 see *cxx-std-ref* for comparison.
 
 template <typename F, typename T1, typename T2>
-void flip1(F f, T1 t1, T2 t2)
+void flip(F f, T1 param1, T2 param2)
 {
-  f(t2, t1);
+  f(param2, param1);
 }
 
-works fine until when use it to call a function that has a reference.
-
-void f(int v1, int &v2)
+template <typename F, typename T1, typename T2>
+void flip_forward(F f, T1 &&param1, T2 &&param2)
 {
-  cout << v1 << " " << ++v2 << endl;
+  f(std::forward<T2>(param2), std::forward<T1>(param1));
 }
 
-f(42, i);               // f changes i
-flip1(f, j, 42);        // f(42, j); leaves j unchanged
+void f(int value1, int &value2)
+{
+  cout << "f(" << value1 << ", " << ++value2 << ")" << endl;
+}
 
-The instantiation is:
+// f(42, i);               // f changes i
+// flip1(f, j, 42);        // j unchanged
+// 
+// The instantiation is:
+// 
+// void flip1(void(*fcn)(int, int&), int t1, int t2);
+// 
+// The problem is that j in flip1 is copied to t1 which is local to flip1 so the
+// changes made by f do not affect.
+//
+// f(20, 11)
+// withoug ref: i and j  {10, 20}
+//
+// f(20, 11)
+// with    ref: i and j  {11, 20}
+//
+// f(20, 11)
+// wit forward: i and j  {11, 20}
 
-void flip1(void(*fcn)(int, int&), int t1, int t2);
+TEST(CxxTemplate, UseForward)
+{
+  int i = 10;
+  int j = 20;
 
-The problem is that j in flip1 is copied to t1 which is local to flip1 so the
-changes made by f do not affect.
+  flip(f, i, j);
+  cout << "withoug ref: i and j  {" << i << ", " << j << "}" << endl;
 
-Solution? A function parameter that is an rvalue reference to a template
-parameter 'preserves' constness and lvalue/rvalue property of its
-corresponding argument.
+  // note:
+  // cxx-std-ref works
+
+  flip(f, std::ref(i), j);
+  cout << "with    ref: i and j  {" << i << ", " << j << "}" << endl;
+
+  i = 10;
+  j = 20;
+
+  flip_forward(f, i, j);
+  cout << "wit forward: i and j  {" << i << ", " << j << "}" << endl;
+}
+
+
+A function parameter that is an rvalue reference to a template parameter
+'preserves' constness and lvalue/rvalue property of its corresponding
+argument.
 
 template <typename F, typename T1, typename T2>
 void flip2(F f, T1 &&t1, T2 &&t2)
@@ -31671,8 +31774,8 @@ void flip2(F f, T1 &&t1, T2 &&t2)
   f(t2, t1);
 }
 
-Still flip2 solves one half of the problem since cannot be used to call a
-function that has an rvalue parameter.
+Still flip2 solves half of the problem since cannot be used to call a function
+that has an rvalue parameter.
 
 void g(int &&i, int& j)
 {
@@ -31681,7 +31784,6 @@ void g(int &&i, int& j)
 
 void flip2(void(*fcn)(int &&, int&), int t1, int t2);
 
-// flip2(g, i, 42);    // g(42, i); g(t2, t1);
 flip2(g, 42, i);    // g(i, 42); g(t2, t1);
 
 Why? Since a function parameter, like any other variable, is an lvalue
@@ -31690,10 +31792,9 @@ lvalue to `rvalue-reference` parameter in g.
 
 note: WHY not reference-collapsing? Because g() is not template.
 
-
 Use `std::forward()` to preserve the types of the original arguments. Unlike
 std::move(), std::forward() 'must' be called with an explicit template
-argument, *cpp-template-explicit-argument* and returns rvalue reference to
+argument, *cxx-template-explicit-argument* and returns rvalue reference to
 that type, T &&. 
 
 template <typename F, typename T1, typename T2>
@@ -31703,6 +31804,10 @@ void flip(F f, T1 &&t1, T2 &&t2)                    // 1
 }
 
 To preserve type information is two-step process, 1 and 2.
+
+note:
+What's the difference between std::ref() and std::forward() solution?
+By std::forward() solution, user of template don't need to anyting.
 
 
 ={============================================================================
@@ -41452,7 +41557,8 @@ modi:
 +paul
 
 
-<cpp-member-function-address>
+<cxx-member-function-pointer>
+
 CPR 19.4 835
 
 When initialize a pointer to member, that pointer does 'not' yet point to any
@@ -41469,7 +41575,8 @@ When the member is overloaded, must distinguish which function we want:
 char (Screen::*pmf2)(Screen::pos, Screen::pos) const;
 pmf2 = &Screen::get;
 
-Unlike ordinary function pointer, no automatic conversion between a member
+*cxx-remember*
+`Unlike ordinary function pointer, no automatic conversion` between a member
 funtion and a pointer to that function.
 
 pmf = &Screen::get;     // must explicitly use address-of operator
@@ -53749,9 +53856,88 @@ pass the value returned from get_tail(), so the invariants are upheld.
 6.3 Designing more complex lock-based data structures
 
 
-# ============================================================================
-#{
 ={============================================================================
+*kt_dev_cxx_0000* cxx-con-functional-programming cxx-con-fsm
+
+4.4.1 Functional programming with futures
+
+The term functional programming (FP) refers to a style of programming where
+the result of a function call depends solely on the parameters to that
+function and doesn’t depend on any external state.
+
+This makes things easy to think about, especially when concurrency is
+involved, because many of the problems associated with shared memory discussed
+in chapter 3 disappear.
+
+If there are no modifications to shared data, there can be no race conditions
+and thus no need to protect shared data with mutexes either.
+
+The benefits of functional programming aren’t limited to those languages where
+it’s the default paradigm, however. C++ is a multiparadigm language, and it’s
+entirely possible to write programs in the FP style. 
+
+This is even easier in C++11 than it was in C++98, with the advent of lambda
+functions (see appendix A, section A.6), the incorporation of std::bind from
+Boost and TR1, and the introduction of automatic type deduction for variables
+(see appendix A, section A.7). Futures are the final piece of the puzzle that
+makes FP-style concurrency viable in C++; a future can be passed around
+between threads to allow the result of one computation to depend on the result
+of another, without any explicit access to shared data.
+
+Functional programming isn’t the only concurrent programming paradigm that
+eschews shared mutable data; another paradigm is CSP (Communicating Sequential
+    Processes), where threads are conceptually entirely separate, with no
+shared data but with communication channels that allow messages to be passed
+between them.
+
+
+4.4.2 Synchronizing operations with message passing
+
+The idea of CSP is simple: if there’s no shared data, each thread can be
+reasoned about entirely independently, purely on the basis of how it behaves
+in response to the messages that it received. Each thread is therefore
+effectively a `state machine`: when it receives a message, it updates its
+state in some manner and maybe sends one or more messages to other threads,
+with the processing performed depending on the initial state. 
+  
+One way to write such threads would be to formalize this and implement a
+Finite State Machine model, but this isn’t the only way; the state machine can
+be implicit in the structure of the application.
+
+Imagine for a moment that you’re implementing the code for an ATM. One way to
+handle everything would be to split the code into three independent threads:
+one to handle the physical machinery, one to handle the ATM logic, and one to
+communicate with the bank. These threads could communicate purely by passing
+messages rather than sharing any data. For example, the thread handling the
+machinery would send a message to the logic thread when the person at the
+machine entered their card or pressed a button, and the logic thread would
+send a message to the machinery thread indicating how much money to dispense,
+and so forth.
+
+
+* class that has a member function to represent each state. 
+
+* Each member function can then wait for specific sets of incoming messages
+  and handle them when they arrive, possibly triggering a switch to another
+  state.
+
+* if a message is received that doesn’t match the specified type, it’s
+  discarded, and the thread continues to wait until a matching message is
+  received.
+
+Figure 4.3 A simple state machine model for an ATM
+
+it does give you a feel for the message-passing style of programming. There’s
+no need to think about synchronization and concurrency issues, just which
+messages may be received at any given point and which messages to send.
+
+As you can see, this style of programming can greatly simplify the task of
+designing a concurrent system, because each thread can be treated entirely
+independently. It is thus an example of using multiple threads to separate
+concerns and as such requires you to explicitly decide how to divide the tasks
+between threads.
+
+
 # ============================================================================
 #{
 ={============================================================================
