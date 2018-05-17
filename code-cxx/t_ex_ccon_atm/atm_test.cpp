@@ -27,6 +27,27 @@
 
 using namespace messaging;
 
+
+// [ RUN      ] AtmFsm.CancelPin
+// atm::run::for
+// atm::waiting_for_card::card_inserted
+// atm::getting_pin::digit_pressed: 3
+// atm::getting_pin::digit_pressed: 33
+// atm::getting_pin::digit_pressed: 330
+// atm::getting_pin::cancel_pressed
+// [       OK ] AtmFsm.CancelPin (1001 ms)
+// [ RUN      ] AtmFsm.DoWithdraw
+// atm::run::for
+// atm::waiting_for_card::card_inserted
+// atm::getting_pin::digit_pressed: 3
+// atm::getting_pin::digit_pressed: 33
+// atm::getting_pin::digit_pressed: 330
+// atm::getting_pin::digit_pressed: 3301
+// atm::verify_pin::pin_verified
+// atm::wait_for_action::withdraw_pressed: 50
+// atm::process_withdrawal::withdraw_ok
+// [       OK ] AtmFsm.DoWithdraw (1000 ms)
+
 TEST(AtmFsm, CancelPin)
 {
   bank_machine bank;

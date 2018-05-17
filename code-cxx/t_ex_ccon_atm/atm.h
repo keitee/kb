@@ -249,6 +249,9 @@ class atm
     void waiting_for_card()
     {
       // interface_hardware.send(display_enter_card());
+      //
+      // state waitinf_for_card -> event card_inserted -> state getting_pin
+      //                              -> eaf, lambda
 
       incoming_.wait()
         .handle<card_inserted>

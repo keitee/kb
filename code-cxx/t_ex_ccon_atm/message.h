@@ -70,8 +70,6 @@ namespace messaging
 
 
   ///////////////////////////////////////////////////////////////////
-  //
-      
   class close_queue
   {};
 
@@ -135,6 +133,8 @@ namespace messaging
                 q_,this,std::forward<OtherFunc>(of));
         }
 
+      // there is only one object to do wait_and_dispatch and use chained_ to
+      // do this.
       ~TemplateDispatcher() noexcept(false)
       {
         if(!chained_)
@@ -155,7 +155,6 @@ namespace messaging
       explicit dispatcher(queue *q):
         q_(q), chained_(false) {}
 
-
       // most of the time you’ll be wanting to handle a message.
       //
       // It’s a template, and the message type isn’t deducible, so you must
@@ -165,6 +164,34 @@ namespace messaging
       // handle() itself passes the queue, the current dispatcher object, and
       // the handler function to a new instance of the TemplateDispatcher class
       // template, to handle messages of the specified type.
+      // 
+      // Your message processing stops when you’ve successfully handled a
+      // message, so that you can wait for a different set of messages next
+      // time. If you do get a match for the specified message type, the
+      // supplied function is called rather than throwing an exception (although
+      // the handler function may throw an exception itself). 
+      //
+      // If you don’t get a match, you chain to the previous dispatcher. In the
+      // first instance, this will be a dispatcher, but
+      //  
+      // if you chain calls to handle() to allow multiple types of messages to
+      // be handled, this may be a prior instantiation of TemplateDispatcher<>,
+      // which will in turn chain to the previous handler if the message doesn’t
+      // match. 
+      //
+      // Because any of the handlers might throw an exception (including the
+      // dispatcher’s default handler for close_queue messages), the destructor
+      // must once again be declared noexcept(false) f.  
+      //
+      // This simple framework allows you to push any type of message on the
+      // queue and then selectively match against messages you can handle on the
+      // receiving end. It also allows you to pass around a reference to the
+      // queue for pushing messages on, while keeping the receiving end private.
+      //
+      // note:
+      // So in every state function, member function, build a chain of temporary
+      // of TemplateDispatcher and this chain is a list of messages that this
+      // state can handle. messages that are not handled are swallowed. 
 
       template<typename Message, typename Func>
         TemplateDispatcher<dispatcher, Message, Func>
@@ -211,8 +238,6 @@ namespace messaging
       // is marked noexcept(false);
       //
       // note: this exception is used to end run()
-      //
-      // Q: when is it going to be called to end?
       //
       // so either raise exception to end or say that message is not handled.
 
