@@ -54372,6 +54372,8 @@ static SYSTEM_STATUS PlayInitializeEntry (BASIC_PLAY *pThis, const PLAY_PARAMS	*
   init.callback				= (VRM_FSM_TRANS_CB)PlayActionFsmOnExit;
   init.init_state				= (uint16_t)`E_PLAY_INT_STATE_NONE`;
   init.timeout_callback		 = NULL; 
+
+  // *set-init-data-for-each-instance*
   `init.data = (void *)(pThis);`
 
   // set fsm instance handle
@@ -54406,15 +54408,17 @@ typedef void (*FSM_TIMEOUT_CB)
 
 /* specific FSM instance associated data */ 
 typedef struct _fsm_init {
-	VRM_FSM_DEFINITION_HANDLE fsm_definition_handle;/* FSM definition to construct instance from */
 
-												 /* used by tracing */
-	void			  *data;					 /* any user data, that is sent to the 
-													user after actions and timeouts */
-	uint16_t		  init_state;				 /*initial state to be set for the machine */
+  /* FSM definition to construct instance from */
+  VRM_FSM_DEFINITION_HANDLE fsm_definition_handle;
 
-	VRM_FSM_TRANS_CB  callback;					 /* called on transition */
-	FSM_TIMEOUT_CB	  timeout_callback;			 /* called on timeout */
+  // *set-init-data-for-each-instance*
+  void			  *data;					 /* any user data, that is sent to the 
+                                        user after actions and timeouts */
+  uint16_t		  init_state;				 /*initial state to be set for the machine */
+
+  VRM_FSM_TRANS_CB  callback;					 /* called on transition */
+  FSM_TIMEOUT_CB	  timeout_callback;			 /* called on timeout */
 
 } VRM_FSM_INIT;
 
@@ -54622,6 +54626,14 @@ static SYSTEM_STATUS VrmSrvReceiveMessage (uint32_t event,
 
 <to-send-event-to-fsm>
 
+// this ends up to call PLAY_Start. different fsm which may be run on
+// different thread
+//
+// VRM_FSM_E(  E_JOB_MAN_SRV_INT_ST_CREATED,               /* state */
+//         E_JOB_MAN_SRV_INP_START_BYPASS_COMMIT_CALLED,              /* input */
+//         E_JOB_MAN_SRV_INT_ST_STARTING,                /* new state */
+//         (VRM_FSM_ACTION)JobManSrvStartingState ),       /* action */
+
 SYSTEM_STATUS PLAY_Start( const PLAY_PARAMS    *p_play_params,
                             PLAY_HANDLE                *p_hPlay)
 {
@@ -54633,7 +54645,7 @@ SYSTEM_STATUS PLAY_Start( const PLAY_PARAMS    *p_play_params,
 
 
 // note: This function can send a messages which is async and or call a
-// function.  The route to this function can come from thread or from action
+// function. The route to this function can come from thread or from action
 // function in fsm.
 
 static SYSTEM_STATUS PlaySendFSMInput(const BASIC_PLAY * pThis, 
@@ -54670,7 +54682,10 @@ typedef struct PLAY_FSM_MSG_PAYLOAD_
     PLAY_HANDLE     play_handle;
 } PLAY_FSM_MSG_PAYLOAD;
 
+
 // send to `VrmSrvItcQueueHandle`
+// E_PLAY_MSG_TYPE_FSM = VRM_GET_SUBCOMP_INITIAL_VALUE(E_VRM_SUBCOMP_ID_ENGINE_PLAY)    /* message containing FSM input */
+
 stat = PlaySendMessage (E_PLAY_MSG_TYPE_FSM, &fsm_msg, sizeof (PLAY_FSM_MSG_PAYLOAD));
 
 
@@ -54853,6 +54868,7 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
       fsm->in_action = true; // eaf guard start 
 
       /* `Carry out action` */
+      // *set-init-data-for-each-instance*
       if (pTrans->action) {
         (*pTrans->action)(fsm->init.data);
       }
@@ -54867,6 +54883,20 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
   }
 }
 
+
+//  VRM_FSM_E(  E_PLAY_INT_STATE_NONE,        	/* state */
+//      E_PLAY_INPUT_START,   				/* input */
+//      E_PLAY_INT_STATE_STARTING,        	/* new state */
+//      (VRM_FSM_ACTION) PlayActionStartingState ),	/* action */
+
+static void PlayActionStartingState(BASIC_PLAY *pThis)
+{
+  if (pThis ->is_vfile_playback) {
+  }
+
+  pThis->last_status = 
+    VRM_FSM_SetNextInput (pThis -> fsm, (uint16_t)E_PLAY_INPUT_RMF_ACQUIRE_RESOURCE);
+}
 
 
 # ============================================================================

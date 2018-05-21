@@ -2163,7 +2163,7 @@ http://wwwin-tools.cisco.com/dir/details/kyoupark | CISCO | Directory | Kyoungta
 https://wwwin-git-gpk-2.cisco.com:8081/#/admin/projects/ | CISCO | Code Review
 
 https://wiki.cisco.com/display/DEVTEST/Linux+Mint+13+on+Thinkpad+W520 | CISCO | Linux Mint 13 on Thinkpad W520 - DEVTEST DevTest Team - IT Wiki
-
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=Creating+Test+Requests
 
 <search-tag>
 http://tbird2.cisco.com/repo/list
@@ -12543,6 +12543,14 @@ F:RecordActionFsmOnExit L:4661 > input = PANEL_CONFIGURE, new state = CONFIGURIN
 >>> (0xe803000) & 0xFFF
 0
 
+>>> (0x0E821001) & 0xFFF
+1
+
+// get severity
+(0x0E821001 >> 16) & 0x3
+2
+
+
 <bdl-job>
 // seems it do not have shrec
 !MIL    -VRM_SERVER   P:MW T:SRM_HP_THREAD M:job_man_srv.c F:JobManSrvStart L:4948 > VRM_JOB_START: jtVRM=`jb-jb-bdl-record`, jhVRM=0x2000051 
@@ -22185,6 +22193,16 @@ unsigned.
 >>> hex(-2145386464+ 2**32)
 '0x80200020'
 
+<player-event-pin>
+
+>>> hex(-2146434816+2**32)
+'0x80100100'
+>>> hex(-2146435040+2**32)
+'0x80100020'
+
+#define PLAYER_EVENT_SESSION_BLOCKED                0x80100100      /*!< @brief Notification that a Service was blocked because a valid PIN check is required. @see #PLAYER_EVENT_Session_Blocked_PropId */
+#define PLAYER_EVENT_SESSION_PIN_NOT_REQUIRED       0x80100200      /*!< @brief Notification that a PIN is no longer required and the session can proceed @see #PLAYER_EVENT_Session_Pin_Not_Required_PropId */
+
 
 *app-register-listener* *player-event*
 
@@ -22891,7 +22909,8 @@ public boolean isRunning() throws PlayerDataUnavailableException
 #   MW PLAYER -> PLAYER_JAVA_PlayerEventListener -> JAVA Listener
 #-----------------------------------------------------------
 
-<player-pin>
+
+{player-pin}
 # PR#18928: PIN wrongly displayed in banner on cancelling purchase. Player.
 # Closed on 14 FEB 2011
 # refer to WP587
@@ -22906,6 +22925,19 @@ public interface PlayerEventSessionPinNotRequired extends PlayerEventSession
     public static final int  EVENT =  0x80100200;
 
 }
+
+// 204789:NDS: ^[2018:05:17 13:54:18]0946717630.436736 !MIL    -P_Api        		< p:0x00000210 P:APP t:0x01328520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_Milestone 
+  L:2930 > {PR} ""PREPLAY-PIN_REQUIRED, locator:null events_happened(SFLAGS ) job_type(PLAYER_JOB_TYPE_PLAYBACK) 
+  reason(EVENT_RATING WATERSHED ) source(SOURCE_PLANNER) event_rating_state(STATE_PRESENT) event_rating(3) user_rating(5) 
+
+== >>> hex(-2146434816+2**32)
+== '0x80100100'
+== >>> hex(-2146435040+2**32)
+== '0x80100020'
+
+#define PLAYER_EVENT_SESSION_BLOCKED                0x80100100      /*!< @brief Notification that a Service was blocked because a valid PIN check is required. @see #PLAYER_EVENT_Session_Blocked_PropId */
+#define PLAYER_EVENT_SESSION_PIN_NOT_REQUIRED       0x80100200      /*!< @brief Notification that a PIN is no longer required and the session can proceed @see #PLAYER_EVENT_Session_Pin_Not_Required_PropId */
+
 
 # source and log
 // player_pin.c
@@ -22968,10 +23000,129 @@ the previous service when moving to the EPG.
 /*!< @brief Notification that a valid PIN check is required using #PLAYER_API_Session_CheckPIN. @see #PLAYER_EVENT_Session_Pin_Required_PropId */
 
 
+*comp-pin*
+
+https://spvss-confluence.cisco.com/display/SE/Parental+Control#ParentalControl-Watershedrules
+
+// src/server/ca/vgc/spm_vgc_xsi_sc.c
+/*
+ * BBFC ratings are represented by integers in this way:
+ * Rating:   Integer:
+ * unrated   0
+ * U         1
+ * PG        2
+ * 12        3
+ * 15        4
+ * 18        5
+ *
+ * The bitmap for VGC is constructed by setting the i'th bit of byte 0, and setting all bits of bytes 1->3 to zero
+ * Basically the 6 LSB of byte zero are used as:
+ * -----------------------------------------------------
+ * | 5(18) | 4(15) | 3(12) | 2(PG) | 1(U) | 0(unrated) |
+ * -----------------------------------------------------
+ * a value of 0x3F it means that the user can watch everything (PREFS value = 5).
+ * a value of 0x1F it means that the user can watch all programmes but 18 rated programmes (PREFS value = 4)
+ * a value of 0xF it means that the user can watch all programmes but 18 and 15 rated programmes (PREFS value = 3)
+ * a value of 0x7 it means that the user can watch all programmes but 18 and 15 and 12 rated programmes (PREFS value = 2)
+ * a value of 0x3 it means that the user can watch all programmes but 18 and 15 and 12 and PG rated programmes (`PREFS value = 1`)
+ * a value of 0x1 it means that the user can watch all unrated programmes (PREFS value = 0)
+ */
+
+ ~~~ CA Properties
+Pin On PreWaterShed Playback  = 0x03 (ERROR Value) 
+Online Pin                    = 0x02 (On) 
+Pin Needed                    = 0x01 (Off) 
+User Rating                   = 0x01 (1) 
+Pin Time 4H Callback          = 0x00 (0) 
+Pin callback handle           = 0x05 (5) 
+Pin Attempt                   = 0x03 (3) 
+Pin Needed Callback           = 0x01 (Off) 
+Pin Restrictions              = 0x02 (Enabled) 
+Pin Code                      = 0x0000 
+Pin at Startup                = 0x01 (Disabled) 
+Purchase Pin                  = 0x02 (Enabled) 
+User Settings Pin             = 0x01 (Disabled) 
+STB Pin Code                  = 0x0000 
+
+
+// when watershed is on
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_ConvertRatingValueToBitmap L:195 > PLAYER_PIN_ConvertRatingValueToBitmap, Rating: 3 
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_VGCCheckRatingExceeded L:273 > Activity: 6 
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_VGCCheckRatingExceeded L:286 > {PR} ""event rating[3], threshold[4] (source:PREFS), operator rating [255] 
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_VGCCheckRatingExceeded L:304 > Rating exceeded watershed: true 
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_PinRequiredForSIRating L:383 > Rating exceeded. Need pin 
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_IsPinRequired L:2072 > {PR} ""Check PIN from Planner's rating 
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_IsPinRequired L:2111 > {PR} ""*need_pin_for_service:    false  
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_IsPinRequired L:2112 > {PR} ""*need_pin_for_event:      true  
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_IsPinRequired L:2113 > {PR} ""*need_pin_for_locked:     false  
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_IsPinRequired L:2114 > {PR} ""*need_pin_for_manual:     false  
+== !INFO   -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_IsPinRequired L:2115 > {PR} ""pin_reason: 0x12 pin_requested false 
+== !MIL    -P_Api        		< p:0x00000204 P:APP t:0x01441520 T:PLAYER_MAIN M:player_pin.c F:PLAYER_PIN_Milestone L:2930 > {PR} ""PREPLAY-PIN_REQUIRED, locator:null events_happened(SFLAGS ) job_type(PLAYER_JOB_TYPE_PLAYBACK) reason(EVENT_RATING WATERSHED ) source(SOURCE_PLANNER) event_rating_state(STATE_PRESENT) event_rating(3) user_rating(4) 
+
+
+//../DARWIN_PREFS/inc/prefs_api_ca.h *comp-pref*
+/**
+ @brief Enumeration for PREFS_API_CA_PROPID_UINT32_PIN_ON_PRE_WATERSHED_PLAYBACK
+*/
+typedef enum prefs_api_ca_pin_on_pre_watershed_playback_type {
+    PREFS_API_CA_PIN_ON_PRE_WATERSHED_PLAYBACK_UNDEF            = 0U,
+     /**< Uninitialised */
+    PREFS_API_CA_PIN_ON_PRE_WATERSHED_PLAYBACK_OFF              = 1U,
+    /**< PIN is not required for pre-watershed playback */
+    PREFS_API_CA_PIN_ON_PRE_WATERSHED_PLAYBACK_ON		= 2U,
+    /**< PIN is required for pre-watershed playback */
+    PREFS_API_CA_PIN_ON_PRE_WATERSHED_PLAYBACK_LAST_VALUE       = 3U
+    /**< Last Value */
+}PREFS_API_CA_PinOnPreWatershedPlayback_Type;
+
+/**
+ @brief Enumeration for PREFS_API_CA_PROPID_UINT32_ONLINE_PIN
+*/
+typedef enum prefs_api_ca_online_pin_type {
+    PREFS_API_CA_ONLINE_PIN_UNDEF	= 0U,
+     /**< Uninitialised */
+    PREFS_API_CA_ONLINE_PIN_OFF		= 1U,
+    /**< PIN is not required before going online */
+    PREFS_API_CA_ONLINE_PIN_ON		= 2U,
+    /**< PIN is required before going online */
+    PREFS_API_CA_ONLINE_PIN_LAST_VALUE  = 3U
+    /**< Last Value */
+}PREFS_API_CA_OnlinePin_Type;
+
+/**
+ @brief Enumeration for PREFS_API_CA_PROPID_UINT32_KEEP_PIN_NEEDED
+*/
+typedef enum prefs_api_ca_keep_pin_needed_type {
+    PREFS_API_CA_KEEP_PIN_NEEDED_UNDEF		= 0U,
+     /**< Uninitialised */
+    PREFS_API_CA_KEEP_PIN_NEEDED_OFF		= 1U,
+    /**< PIN is not required to change keep programmes */
+    PREFS_API_CA_KEEP_PIN_NEEDED_ON		= 2U,
+    /**< PIN is required to change keep programmes */
+    PREFS_API_CA_KEEP_PIN_NEEDED_LAST_VALUE     = 3U
+    /**< Last Value */
+}PREFS_API_CA_KeepPinNeeded_Type;
+
+/**
+ @brief Enumeration for PREFS_API_CA_PROPID_UINT32_PIN_RESTRICTIONS
+*/
+typedef enum prefs_api_ca_pin_restrictions_type {
+    PREFS_API_CA_PIN_RESTRICTIONS_UNDEF         = 0U,
+     /**< Uninitialised */
+    PREFS_API_CA_PIN_RESTRICTIONS_DISABLED      = 1U,
+    /**< PIN restrictions are enabled */
+    PREFS_API_CA_PIN_RESTRICTIONS_ENABLED       = 2U,
+    /**< PIN restrictions are disabled */
+    PREFS_API_CA_PIN_RESTRICTIONS_LAST_VALUE    = 3U
+    /**< Last Value */
+}PREFS_API_CA_PinRestrictions_Type;
+
+
 <player-rate>
 # rating checks
 < T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessCASI L:04594 > Job is scrambled
 < T:PLAYER_MAIN M:player_sm_vrm.c F:PLAYER_SM_VRM_ProcessCASI L:04595 > Limit exceeded: true
+
 
 <player-speed>
 NDS: ^[2017:04:24 13:00:32]0946818475.675422 !MIL    -VRM_SERVER   		< p:0x000001e8 P:MW t:0x01d53520 T:VRM_SRV M:pvp_play.c F:PANEL_PlaySetSpeed L:318 > [API_CALL::""MSM_SP""] " "calling MSM_SP_SetSpeed mcon= 0x170, speed: 0x3e8 

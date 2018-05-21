@@ -1310,6 +1310,35 @@ TEST(CxxStringTest, CountStuffInTextFile2)
     cout << "lc: " << lines << endl;
 }
 
+
+// ={=========================================================================
+// 4.18 Counting Instances of Each Word in a Text File
+
+TEST(CxxStringTest, CountWordsInTextFile)
+{
+  ifstream input_file{"input.txt"};
+  size_t word_count{};
+  string word{};
+  std::map<std::string, size_t> wm{};
+
+  while (input_file >> word)
+  {
+    ++wm[word];
+  }
+
+  for(const auto &e : wm)
+  {
+    cout << word_count << ": " << e.first << ": " << e.second << endl;
+    ++word_count;
+  }
+}
+
+
+// 4.19 Add Margins to a Text File
+
+
+// ={=========================================================================
+
 int main(int argc, char **argv)
 {
     testing::InitGoogleMock(&argc, argv);

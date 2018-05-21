@@ -489,6 +489,7 @@ class atm
     //
     // atm machine keeps this sender copies to send messages to them.
 
+    // note: cxx-conversion-op which convert receiver to sender
     messaging::sender get_sender()
     {
       return incoming_;

@@ -542,6 +542,7 @@ TEST(CconThreadTest, UseAsyncX)
     cout << "\ndone" << endl;
 }
 
+
 // ={=========================================================================
 // cxx-quicksort
 // Listing 4.12 A sequential implementation of Quicksort
@@ -631,6 +632,78 @@ TEST(CconThreadTest, UseParallelQuickSort)
     copy(result.begin(), result.end(), ostream_iterator<int>(cout, " "));
     cout << endl;
 }
+
+
+// ={=========================================================================
+// cxx-atomic
+// Listing 5.4 Sequential consistency implies a total ordering
+
+std::atomic<bool> x, y;
+std::atomic<int> z;
+
+void write_x()
+{
+  // 1
+  x.store(true, std::memory_order_seq_cst);
+}
+
+void write_y()
+{
+  // 2
+  y.store(true, std::memory_order_seq_cst);
+}
+
+void read_x_then_y()
+{
+  while(!x.load(std::memory_order_seq_cst))
+    ;
+
+  // 3
+  if(y.load(std::memory_order_seq_cst))
+    ++z;
+}
+
+void read_y_then_x()
+{
+  while(!y.load(std::memory_order_seq_cst))
+    ;
+
+  // 4
+  if(x.load(std::memory_order_seq_cst))
+    ++z;
+}
+
+// Both loads can return true, leading to z being 2, but under no circumstances
+// can z be zero.
+
+// [ RUN      ] CconThreadTest.UseSequentialConsistency
+// z: 2
+// [       OK ] CconThreadTest.UseSequentialConsistency (8 ms)
+
+TEST(CconThreadTest, UseSequentialConsistency)
+{
+  x = false;
+  y = false;
+  z = 0;
+
+  // either the store to x or the store to y must happen first, even though it’s
+  // not specified which.
+
+  std::thread a(write_x);
+  std::thread b(write_y);
+  std::thread c(read_x_then_y);
+  std::thread d(read_y_then_x);
+
+  a.join();
+  b.join();
+  c.join();
+  d.join();
+
+  cout << "z: " << z << endl; 
+
+  assert(z.load()!=0);
+}
+
 
 // ={=========================================================================
 
