@@ -298,7 +298,9 @@ TEST(CxxStringTest, PrintVariousTypeToOutputSteram)
     cout << "str[0] : " << ch << endl;
 }
 
+
 // ={=========================================================================
+// string-pad
 // n will be the total lenth of the return
 
 template <typename T>
@@ -310,13 +312,21 @@ void pad(T &s, typename T::size_type n, typename T::value_type c)
 
 TEST(CxxStringTest, StringInsertAndAppendMember)
 {
+    // string s1{"foo"};
+    // s1.insert(0, 20 - s1.size(), 'X');
+    // EXPECT_EQ(s1, "XXXXXXXXXXXXXXXXXfoo");
+
     string s1{"foo"};
-    s1.insert(0, 20 - s1.size(), 'X');
-    EXPECT_EQ(s1, "XXXXXXXXXXXXXXXXXfoo");
+    s1.insert(s1.size(), 20 - s1.size(), 'X');
+    EXPECT_EQ(s1, "fooXXXXXXXXXXXXXXXXX");
+
+    // string s2{"foo"};
+    // s2.insert(s2.begin(), 20 - s2.size(), 'X');
+    // EXPECT_EQ(s2, "XXXXXXXXXXXXXXXXXfoo");
 
     string s2{"foo"};
-    s2.insert(s2.begin(), 20 - s2.size(), 'X');
-    EXPECT_EQ(s2, "XXXXXXXXXXXXXXXXXfoo");
+    s2.insert(s2.end(), 20 - s2.size(), 'X');
+    EXPECT_EQ(s2, "fooXXXXXXXXXXXXXXXXX");
 
     string s3{"foo"};
     s3.append(20 - s3.size(), 'X');
@@ -325,10 +335,6 @@ TEST(CxxStringTest, StringInsertAndAppendMember)
     string s4{"foo"};
     pad(s4, 20, 'X');
     EXPECT_EQ(s4, "fooXXXXXXXXXXXXXXXXX");
-
-    string s5{"foo"};
-    s5.append(20 - s5.size(), 'X');
-    EXPECT_EQ(s5, "fooXXXXXXXXXXXXXXXXX");
 
     wstring ws1{L"foo"};
     pad(ws1, 20, 'X');
@@ -344,6 +350,7 @@ TEST(CxxStringTest, StringAppendNull)
 
     EXPECT_EQ(s1.length(), 0);
 }
+
 
 // ={=========================================================================
 // 4.2 Trimming a String
@@ -1334,7 +1341,11 @@ TEST(CxxStringTest, CountWordsInTextFile)
 }
 
 
+// ={=========================================================================
 // 4.19 Add Margins to a Text File
+// ={=========================================================================
+// 4.20 Justify a Text File
+
 
 
 // ={=========================================================================

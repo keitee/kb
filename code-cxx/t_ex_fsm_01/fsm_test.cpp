@@ -87,25 +87,9 @@ static void runner(VRM_FSM_INSTANCE_HANDLE fsm)
   // VRM_FSM_Input(fsm, (uint16_t)E_ATM_INPUT_CARD_INSERTED);
   // std::cout << "fsm_thread: end" << std::endl;
 
-  // try
-  // {
-  //   for (;;)
-  //   {
-  //     auto msg = q.wait_and_pop();
- 
-  //     // TODO: send an input to fsm
-  //     //
-  //   }
-  // }
-  // catch(close_queue const &)
-  // {
-  // }
-  
   for (;;)
   {
     std::cout << "fsm_thread: wait for a message" << std::endl;
-
-
 
     auto msg = q.wait_and_pop();
     std::cout << "fsm_thread: got a message" << std::endl;
@@ -194,9 +178,9 @@ static void DoneProcessing(void *data)
 static void FsmOnTransition(void *data, const VRM_FSM_ENTRY *entry)
 {
   std::cout << "FsmOnTransition: " 
-    << "current state: " << entry->state_str
-    << "input event  : " << entry->input_str
-    << "new state    : " << entry->new_state
+    << " current state: " << (uint16_t) entry->state
+    << " input event  : " << (uint16_t) entry->input
+    << " new state    : " << (uint16_t) entry->new_state
     << std::endl;
 }
 
@@ -253,10 +237,8 @@ static VRM_FSM_ENTRY AtmFsm[] = {
 };
 
 
-TEST(AtmFsm, CancelPin)
+TEST(AtmFsm, RunAtmFsm)
 {
-  std::cout << "atm::" << std::endl;
-
   SYSTEM_STATUS	            stat = VRM_FSM_OK;
   VRM_FSM_DEFINITION_INFO   fsm_info;
   VRM_FSM_DEFINITION_HANDLE fsm_definition_handle{};
@@ -270,25 +252,17 @@ TEST(AtmFsm, CancelPin)
 
   /* initialize fsm init data */ 
   fsm_init.fsm_definition_handle  = fsm_definition_handle;
-  // fsm_init.callback               = (VRM_FSM_TRANS_CB)FsmOnTransition;
-  fsm_init.callback               = (VRM_FSM_TRANS_CB) nullptr;
+  fsm_init.callback               = (VRM_FSM_TRANS_CB)FsmOnTransition;
   fsm_init.init_state             = (uint16_t)E_ATM_STATE_WAITING_FOR_CARD;
   fsm_init.data                   = (void*) nullptr;
 
   stat = VRM_FSM_CreateInstance(&fsm_init, &fsm_instance_handle);
 
-  VRM_FSM_SetName(fsm_instance_handle, "atm::fsm");
-
-  // stat = VRM_FSM_Input(fsm_instance_handle, (uint16_t)E_ATM_INPUT_CARD_INSERTED);
-
-  // bank_machine bank;
-  // interface_machine interface_hardware;
-  // atm machine(bank.get_sender(),interface_hardware.get_sender());
+  VRM_FSM_SetName(fsm_instance_handle, "atm");
 
   std::thread fsm_thread(runner, fsm_instance_handle);
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  std::cout << "main: send a message" << std::endl;
 
   send_message((uint16_t)E_ATM_INPUT_CARD_INSERTED);
   send_message((uint16_t)E_ATM_INPUT_DIGIT_PRESSED);
@@ -298,7 +272,6 @@ TEST(AtmFsm, CancelPin)
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
   send_message((uint16_t)E_ATM_INPUT_WITHDRAW_PRESSED);
-
 
   // to wait for some time to allow fsm to run transitions
   std::this_thread::sleep_for(std::chrono::seconds(1));

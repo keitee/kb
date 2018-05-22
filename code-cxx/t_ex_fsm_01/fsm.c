@@ -1,27 +1,4 @@
 /*
-    Copyright (c) NDS Limited 2006
-
-    P R O P R I E T A R Y  & C O N F I D E N T I A L
-
-    The copyright of this code and related documentation together with
-    any other associated intellectual property rights are vested in
-    NDS Limited and may not be used except in accordance with the terms
-    of the licence that you have entered into with NDS Limited.
-    Use of this material without an express licence from NDS Limited
-    shall be an infringement of copyright and any other intellectual
-    property rights that may be incorporated with this material.
-*/
-
-/*
-*********************************************************************
-Revision Properties:
---------------------
-$User:$
-$Revision:$
-$Date:$
-$Activity:$
-$Comments:$
-*********************************************************************
 */
 
 /*****************************************************************************\
@@ -46,24 +23,19 @@ $Comments:$
 #define DIAG_LOG_INFO(id, msg)          ((void)0)
 
 
-/* some definitions for memman */ 
-#define FSM_START_NUM_OF_DEFINITIONS (20u)			/* TODO: change this if more modules use FSM */
-#define FSM_STEP_NUM_OF_DEFINITIONS	 (5u)			/* if the above is correctly set no need for this at all */
-
-#define FSM_STEP_NUM_OF_INSTANCES	 (10u)
-
 /* State transition. Contains the new state and the action to be taken. */
 typedef struct fsm_trans {
   uint16_t new_state;             /* new state */    
   VRM_FSM_ACTION action;			/* action on this transition */	
 } FSM_TRANS;
 
-// /* Timeout. Contains the timeout milli and the input to be generated upon timeout. */
-// typedef struct fsm_timer {
-//   uint32_t   milli;
-//   uint16_t input;
-// } FSM_TIMER;
-
+#if 0
+/* Timeout. Contains the timeout milli and the input to be generated upon timeout. */
+typedef struct fsm_timer {
+  uint32_t   milli;
+  uint16_t input;
+} FSM_TIMER;
+#endif
 
 /* fsm definition structure */
 typedef struct _fsm_definition { 
@@ -73,7 +45,10 @@ typedef struct _fsm_definition {
   uint16_t     min_input, max_input, num_inputs;
 
   FSM_TRANS   *table;        /* transitions table in size of states_num*inputs_num */
-  // FSM_TIMER   *timeouts;     /* timeouts array in size of states_num */
+
+#if 0
+  FSM_TIMER   *timeouts;     /* timeouts array in size of states_num */
+#endif
 
   uint16_t instances_count;   /* number of live instances of this FSM definition */
 } FSM_DEFINITION;
@@ -92,10 +67,11 @@ typedef struct _fsm
   uint16_t      input_offset;							/* input value that will be processed */
   bool		  input_available;						/* true if input is available, false otherwise */
 
-  // uint16_t      timeout_input;						/* input to be sent as callback paramter when timeout */
-  // SYSTEMALARM_ALARM_HANDLE   alarm_handle;			/* alarm used for timeout */
-  // bool		 alarm_expected;	  /* true after alarm is set, false if alarm is not set, cancled or timed out */	
-
+#if 0
+  uint16_t      timeout_input;						/* input to be sent as callback paramter when timeout */
+  SYSTEMALARM_ALARM_HANDLE   alarm_handle;			/* alarm used for timeout */
+  bool		 alarm_expected;	  /* true after alarm is set, false if alarm is not set, cancled or timed out */	
+#endif
   bool         in_action;           /* when action is preformed this flag is true */
 
 } *FSM_T;
@@ -131,7 +107,10 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h);
 static SYSTEM_STATUS FSMSetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
 							     uint16_t state);
 
-// static void FSMTimeout(SYSTEMALARM_ALARM_HANDLE handle,usHandle_t data);
+#if 0
+static void FSMTimeout(SYSTEMALARM_ALARM_HANDLE handle,usHandle_t data);
+#endif
+
 
 /*****************************************************************************\
   \Functions bodies
@@ -139,14 +118,13 @@ static SYSTEM_STATUS FSMSetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
 
 /*---------------------------------------------------------------------------*/ 
 /* print the string corresponding with a given state */
+// note: if see default return string, means not supported new state
 static std::string TraceState(const FSM_T   fsm,uint16_t state) { 
 
   std::string ret{"<End State>"};
   uint32_t i;
   FSM_DEFINITION* def; 
 
-  /*	DIAG_DECLARE_FUNCTION("TraceState");
-  */
   /* get the FSM definition */
   def = (FSM_DEFINITION*)(fsm->init.fsm_definition_handle);
 
@@ -160,24 +138,15 @@ static std::string TraceState(const FSM_T   fsm,uint16_t state) {
   return ret;
 }
 
-/* print the string corresponding with a given input */
 /*---------------------------------------------------------------------------*/
-static std::string TraceInput(const FSM_T   fsm,
-                        uint16_t input)
-/*!<
-  \Description:
-  \Parameters:
-      \- fsm :
-      \- input :
-  \Returns:
-\*---------------------------------------------------------------------------*/
+/* print the string corresponding with a given input */
+// note: if see default return string, means not supported new input
+static std::string TraceInput(const FSM_T   fsm, uint16_t input)
 {
-  std::string ret{"<unused>"};
+  std::string ret{"<End Event>"};
   uint32_t i;
   FSM_DEFINITION* def; 
 
-  /*	DIAG_DECLARE_FUNCTION("TraceInput");
-  */
   /* get the FSM definition */
   def = (FSM_DEFINITION*)(fsm->init.fsm_definition_handle);
 
@@ -191,39 +160,41 @@ static std::string TraceInput(const FSM_T   fsm,
   return ret;
 }
 
-// /* alarm callback function */
-// /*---------------------------------------------------------------------------*/
-// static void FSMTimeout(SYSTEMALARM_ALARM_HANDLE handle,usHandle_t data) { 
+#if 0
+/* alarm callback function */
+/*---------------------------------------------------------------------------*/
+static void FSMTimeout(SYSTEMALARM_ALARM_HANDLE handle,usHandle_t data) { 
 
-// 	SYSTEM_STATUS stat;
-// 	/* avoid comiler warning, of not using this formal parameter*/
-// 	/*handle = handle; */
+	SYSTEM_STATUS stat;
+	/* avoid comiler warning, of not using this formal parameter*/
+	/*handle = handle; */
 		
-//     FSM_T fsm = (FSM_T)data; /*lint !e923
-// 		this should be fixed later, currently this is protected by assert in the start of VRM_FSM_Init function */
+    FSM_T fsm = (FSM_T)data; /*lint !e923
+		this should be fixed later, currently this is protected by assert in the start of VRM_FSM_Init function */
 
-// 	DIAG_DECLARE_FUNCTION("FSMTimeout"); 
+	DIAG_DECLARE_FUNCTION("FSMTimeout"); 
 
-//     (fsm->init.timeout_callback)(fsm->init.data, fsm->timeout_input);
+    (fsm->init.timeout_callback)(fsm->init.data, fsm->timeout_input);
 
 
-// 	/* wait, in what context this function is called? 
-// 	   if it is a different thread than the VRM's, than there could be a race condition 
-// 	   here*/ 
+	/* wait, in what context this function is called? 
+	   if it is a different thread than the VRM's, than there could be a race condition 
+	   here*/ 
 
-// 	fsm->alarm_expected = false;
+	fsm->alarm_expected = false;
 
-// 	/* inject input */    
-// 	stat = VRM_FSM_Input((VRM_FSM_INSTANCE_HANDLE)fsm,fsm->timeout_input); 
+	/* inject input */    
+	stat = VRM_FSM_Input((VRM_FSM_INSTANCE_HANDLE)fsm,fsm->timeout_input); 
 
-// #ifdef VRM_DEBUG  
-// 	if (!SYSTEM_STATUS_IS_OK(stat)) { 
-// 		DIAG_LOG_ERROR(VRM_diag_segment_id,("fail to inject FSM input upon timeout. fsm name: %s",fsm->name));
-// 	} 
-// #endif
+#ifdef VRM_DEBUG  
+	if (!SYSTEM_STATUS_IS_OK(stat)) { 
+		DIAG_LOG_ERROR(VRM_diag_segment_id,("fail to inject FSM input upon timeout. fsm name: %s",fsm->name));
+	} 
+#endif
 
-// 	return; 
-// }
+	return; 
+}
+#endif
 
 
 /*===========================================================================*/
@@ -252,8 +223,11 @@ static SYSTEM_STATUS FSMSetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
   FSM_DEFINITION* def = NULL; 
   FSM_T fsm = (FSM_T)fsm_h;
   uint16_t state_offset = 0u;
-  // SYSTEMALARM_ALARM_INFO info;
-  // SYSTEM_STATUS alarm_stat;
+
+#if 0
+  SYSTEMALARM_ALARM_INFO info;
+  SYSTEM_STATUS alarm_stat;
+#endif
 
   DIAG_DECLARE_FUNCTION("FSMSetState"); 
 
@@ -261,7 +235,6 @@ static SYSTEM_STATUS FSMSetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
   if (fsm->in_action) {
     stat = VRM_FSM_FAILURE; 
   }
-
 
   if (SYSTEM_STATUS_IS_OK(stat)) { 
     /* get the FSM definition */
@@ -282,45 +255,48 @@ static SYSTEM_STATUS FSMSetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
     fsm->pre_state_offset = fsm->state_offset;
     fsm->state_offset = state_offset;
 
-    // /* set the input that is injected when timeout from this state */
-    // fsm->timeout_input = def->timeouts[state].input;
+#if 0
+    /* set the input that is injected when timeout from this state */
+    fsm->timeout_input = def->timeouts[state].input;
 
-    // /* cancel previous alarm if needed */
-    // if (true == fsm->alarm_expected) { 
-    //   alarm_stat = SYSTEMALARM_Cancel(fsm->alarm_handle);  
+    /* cancel previous alarm if needed */
+    if (true == fsm->alarm_expected) { 
+      alarm_stat = SYSTEMALARM_Cancel(fsm->alarm_handle);  
 
-// #ifdef VRM_DEBUG 
-//       if (!SYSTEM_STATUS_IS_OK(alarm_stat)) {
-//         DIAG_LOG_INFO(VRM_diag_segment_id,("Previous alarm could not be canceled. fsm->name: %s",fsm->name));
-//       } 
-// #endif
+#ifdef VRM_DEBUG 
+      if (!SYSTEM_STATUS_IS_OK(alarm_stat)) {
+        DIAG_LOG_INFO(VRM_diag_segment_id,("Previous alarm could not be canceled. fsm->name: %s",fsm->name));
+      } 
+#endif
 
-      // fsm->alarm_expected = false;
-    // } 
+      fsm->alarm_expected = false;
+    } 
 
-    // /* do we need to set a new alarm? */ 
-    // if (0u != def->timeouts[state].milli) {
+    /* do we need to set a new alarm? */ 
+    if (0u != def->timeouts[state].milli) {
 
-    //   /* set the alarm */ 
-    //   info.alarm_data.rel_info.callback = FSMTimeout;
-    //   info.alarm_data.rel_info.user_data = (usWord_t)fsm_h; /*lint !e923:
-    //                                                           this should be fixed later, currently this is protected by assert in the start of VRM_FSM_Init function */
-    //   info.alarm_data.rel_info.is_repeating = false;
-    //   info.alarm_data.rel_info.timeout = def->timeouts[state].milli; 
+      /* set the alarm */ 
+      info.alarm_data.rel_info.callback = FSMTimeout;
+      info.alarm_data.rel_info.user_data = (usWord_t)fsm_h; /*lint !e923:
+                                                              this should be fixed later, currently this is protected by assert in the start of VRM_FSM_Init function */
+      info.alarm_data.rel_info.is_repeating = false;
+      info.alarm_data.rel_info.timeout = def->timeouts[state].milli; 
 
-    //   info.is_absolute = false;
+      info.is_absolute = false;
 
-    //   fsm->alarm_expected = true;
+      fsm->alarm_expected = true;
 
-    //   /* set the alarm */ 	
-    //   alarm_stat = SYSTEMALARM_Set(&info,&(fsm->alarm_handle)); 
+      /* set the alarm */ 	
+      alarm_stat = SYSTEMALARM_Set(&info,&(fsm->alarm_handle)); 
 
-    //   if (SYSTEMALARM_STATUS_OK != alarm_stat) { 		   
-    //     VRM_DIAG_ASSERT_ZERO("Alarm counld not be set"); 
+      if (SYSTEMALARM_STATUS_OK != alarm_stat) { 		   
+        VRM_DIAG_ASSERT_ZERO("Alarm counld not be set"); 
 
-    //     fsm->alarm_expected = false;
-    //   }		 
-    // } 
+        fsm->alarm_expected = false;
+      }		 
+    } 
+#endif
+
   } 	 
 
   return stat; 
@@ -334,8 +310,6 @@ SYSTEM_STATUS VRM_FSM_SetName(VRM_FSM_INSTANCE_HANDLE fsm_h,
   SYSTEM_STATUS stat = VRM_FSM_OK;
   FSM_T fsm = (FSM_T)fsm_h;
 
-  /*	DIAG_DECLARE_FUNCTION("VRM_FSM_SetName"); 	 
-  */
   if (fsm == NULL) {
     stat = VRM_FSM_FAILURE;
   }
@@ -389,8 +363,10 @@ SYSTEM_STATUS VRM_FSM_CreateDefinition(const VRM_FSM_DEFINITION_INFO* pFSM_defin
     fsm_definition->def_info.entries = pFSM_definition_info->entries;
     fsm_definition->def_info.num_entries = pFSM_definition_info->num_entries; 
 
-    // fsm_definition->def_info.timeouts = pFSM_definition_info->timeouts; 
-    // fsm_definition->def_info.num_timeouts = pFSM_definition_info->num_timeouts;
+#if 0
+    fsm_definition->def_info.timeouts = pFSM_definition_info->timeouts; 
+    fsm_definition->def_info.num_timeouts = pFSM_definition_info->num_timeouts;
+#endif
 
     /* no instances at this time */ 
     fsm_definition->instances_count = 0u;
@@ -459,31 +435,33 @@ SYSTEM_STATUS VRM_FSM_CreateDefinition(const VRM_FSM_DEFINITION_INFO* pFSM_defin
     } 
   } 
 
-  // if (SYSTEM_STATUS_IS_OK(stat)) { 
+#if 0
+  if (SYSTEM_STATUS_IS_OK(stat)) { 
 
-  //   /* Allocate a timeouts array, setting all elements to 0 */ 
-  //   fsm_definition->timeouts =
-  //     (struct fsm_timer *)VRM_MEMMAN_API_CallocStaticP(VRM_MEMMAN_GetVrmMemoryPoolHandle(),
-  //         (uint32_t)fsm_definition->num_states, 
-  //         (uint32_t)sizeof(struct fsm_timer));
+    /* Allocate a timeouts array, setting all elements to 0 */ 
+    fsm_definition->timeouts =
+      (struct fsm_timer *)VRM_MEMMAN_API_CallocStaticP(VRM_MEMMAN_GetVrmMemoryPoolHandle(),
+          (uint32_t)fsm_definition->num_states, 
+          (uint32_t)sizeof(struct fsm_timer));
 
 
-  //   /* check for allocation error */ 
-  //   if (fsm_definition->timeouts == 0) { 
+    /* check for allocation error */ 
+    if (fsm_definition->timeouts == 0) { 
 
-  //     /* free previous allocated resources */ 	   
-  //     (void)VRM_MEMMAN_API_FreeStaticP(VRM_MEMMAN_GetVrmMemoryPoolHandle(),
-  //         (void*)fsm_definition->table); 
+      /* free previous allocated resources */ 	   
+      (void)VRM_MEMMAN_API_FreeStaticP(VRM_MEMMAN_GetVrmMemoryPoolHandle(),
+          (void*)fsm_definition->table); 
 
-  //     /* free the definition */ 
-  //     (void)MEMMAN_API_FreeElementP(VRM_MEMMAN_GetVrmMemoryPoolHandle(),
-  //         p_definitions_allocator, fsm_definition);			    
+      /* free the definition */ 
+      (void)MEMMAN_API_FreeElementP(VRM_MEMMAN_GetVrmMemoryPoolHandle(),
+          p_definitions_allocator, fsm_definition);			    
 
-  //     fsm_definition = 0;
-  //     _fsm_error(mem_err); 
-  //     stat = VRM_FSM_FAILURE;
-  //   }
-  // }
+      fsm_definition = 0;
+      _fsm_error(mem_err); 
+      stat = VRM_FSM_FAILURE;
+    }
+  }
+#endif
 
   if (SYSTEM_STATUS_IS_OK(stat)) { 
     /* initialize the entries in the table */
@@ -514,16 +492,17 @@ SYSTEM_STATUS VRM_FSM_CreateDefinition(const VRM_FSM_DEFINITION_INFO* pFSM_defin
       }
     }
 
-    // /* Fill the timeouts array */
-    // for (i = 0u; i < pFSM_definition_info->num_timeouts; i++) {
-    //   state = pFSM_definition_info->timeouts[i].state - fsm_definition->min_state;
-    //   fsm_definition->timeouts[state].input = pFSM_definition_info->timeouts[i].input;
-    //   fsm_definition->timeouts[state].milli = pFSM_definition_info->timeouts[i].milli;
-    // }    
+#if 0
+    /* Fill the timeouts array */
+    for (i = 0u; i < pFSM_definition_info->num_timeouts; i++) {
+      state = pFSM_definition_info->timeouts[i].state - fsm_definition->min_state;
+      fsm_definition->timeouts[state].input = pFSM_definition_info->timeouts[i].input;
+      fsm_definition->timeouts[state].milli = pFSM_definition_info->timeouts[i].milli;
+    }    
+#endif
 
     /* set the returned handle */ 
     *pHandle = (VRM_FSM_DEFINITION_HANDLE)fsm_definition;
-    // DIAG_LOG_MIL(VRM_diag_segment_id,("FSM Defintion(%p) created", *pHandle));
   } 
 
   if (!SYSTEM_STATUS_IS_OK(stat)) {
@@ -565,10 +544,11 @@ SYSTEM_STATUS VRM_FSM_DestroyDefinition(VRM_FSM_DEFINITION_HANDLE fsm_def_handle
     /* free the states table */ 	   
     (void)free((void*)def->table);
 
-    // /* free the definition time outs table */ 	   
-    // (void)free((void*)def->timeouts); 
-
-    // DIAG_LOG_MIL(VRM_diag_segment_id,("FSM Defintion(%p) destroyed", def));
+#if 0
+    /* free the definition time outs table */ 	   
+    (void)free((void*)def->timeouts); 
+    DIAG_LOG_MIL(VRM_diag_segment_id,("FSM Defintion(%p) destroyed", def));
+#endif 
 
     /* free the definition */
     (void)free((void*)def);
@@ -620,8 +600,10 @@ SYSTEM_STATUS VRM_FSM_CreateInstance(const VRM_FSM_INIT *pInit,
     /* increase instance count for the used definition */
     new_fsm->in_action = false;
 
-    // /* alarm is not valid */ 
-    // new_fsm->alarm_expected = false;
+#if 0
+    /* alarm is not valid */ 
+    new_fsm->alarm_expected = false;
+#endif 
 
     /* set the initial state */
     stat = FSMSetState((VRM_FSM_INSTANCE_HANDLE)new_fsm,
@@ -660,8 +642,6 @@ SYSTEM_STATUS VRM_FSM_GetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
   FSM_T	fsm	= (FSM_T)fsm_h;
   FSM_DEFINITION* def = NULL;
 
-  /*	DIAG_DECLARE_FUNCTION("VRM_FSM_GetState");
-  */
   if (NULL == fsm_h) { 
     _fsm_error(par_err); 
     stat = VRM_FSM_FAILURE;
@@ -820,27 +800,33 @@ SYSTEM_STATUS VRM_FSM_SetNextInput(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t input
 }
 
 
-// /* 
-// NGDEV-32730/MSCQ2866122, reduce VRM_MONITOR state change log, 
-// as VRM_MONITOR FSM might keep changing between two states during progressive download, such as [REPORT_EVALUATE, PLAYABLE], [REPORT_EVALUATE, NOT_PLAYABLE].
-// */
-// static bool ignore_state_change_log(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t new_state)
-// {
-//   bool        ignore = false;
-//   FSM_T       fsm = (FSM_T)fsm_h;
+#if 0
+/* 
+NGDEV-32730/MSCQ2866122, reduce VRM_MONITOR state change log, 
+as VRM_MONITOR FSM might keep changing between two states during progressive download, such as [REPORT_EVALUATE, PLAYABLE], [REPORT_EVALUATE, NOT_PLAYABLE].
+*/
+static bool ignore_state_change_log(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t new_state)
+{
+  bool        ignore = false;
+  FSM_T       fsm = (FSM_T)fsm_h;
 
-//   if(new_state == fsm->pre_state_offset)
-//   {
-//     if(strncmp((const char *)fsm->name,VRM_FSM_NAME_PREFIX_VRM_MONITOR, strlen(VRM_FSM_NAME_PREFIX_VRM_MONITOR)) == 0)
-//     {
-//       ignore = true;
-//     }
-//   }
-//   return ignore;
-// }
+  if(new_state == fsm->pre_state_offset)
+  {
+    if(strncmp((const char *)fsm->name,VRM_FSM_NAME_PREFIX_VRM_MONITOR, strlen(VRM_FSM_NAME_PREFIX_VRM_MONITOR)) == 0)
+    {
+      ignore = true;
+    }
+  }
+  return ignore;
+}
+#endif
 
 
 /*===========================================================================*/
+// If gets unsupported event which is not defined for a state in fsm definition
+// then they are silently ignored since their new state are mapped to illegal
+// state and do nothing.
+
 static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h) 
 {
   SYSTEM_STATUS stat = VRM_FSM_OK;
@@ -849,17 +835,17 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
   FSM_T       fsm = (FSM_T)fsm_h;
   VRM_FSM_ENTRY   cb_entry;
   FSM_DEFINITION* def = NULL;
-#if 0 /*ifdef VRM_DEBUG*/
+
+#if 0
   SYSTEMTIME_TIMEDATE currentTime;                            /* The current time */
   char timeStrCurrent[SYSTEMTIME_MIN_STRING_BUFFER_SIZE] = "";/* String to print the date */
   int32_t timeSize = SYSTEMTIME_MIN_STRING_BUFFER_SIZE;           /* String size to print the date */
-#endif
+#endif 
 
   DIAG_DECLARE_FUNCTION("FSMRun");	 
 
   /* in any case reset input available flag */ 	
   fsm->input_available = false;
-
 
   def = (FSM_DEFINITION*)(fsm->init.fsm_definition_handle);
 
@@ -892,16 +878,15 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
 
   /* L.R. */
   if ( VRM_FSM_ILLEGAL_STATE == pTrans->new_state ) {	    
-    DIAG_LOG_INFO( VRM_diag_segment_id,
-        ("^__ Attention: Undefined fsm_entry !!!")); 					 
+    _fsm_error("^__ Attention: Undefined fsm_entry !!!"); 					 
   }
 
-  // /* Setup the callback if any */
-  // if (fsm->init.callback != NULL) {
-  //   cb_entry.state	= fsm->state_offset + def->min_state;
-  //   cb_entry.input = fsm->input_offset + def->min_input;
-  //   cb_entry.new_state = pTrans->new_state + def->min_state;
-  // }
+  /* Setup the callback if any */
+  if (fsm->init.callback != NULL) {
+    cb_entry.state	= fsm->state_offset + def->min_state;
+    cb_entry.input = fsm->input_offset + def->min_input;
+    cb_entry.new_state = pTrans->new_state + def->min_state;
+  }
 
   /* If there is a real new state, set it */
   if (pTrans->new_state != VRM_FSM_ILLEGAL_STATE) {
@@ -929,8 +914,6 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
   return stat; 
 }
 
-
-  
 
 #if 0
 /*===========================================================================*/
@@ -1009,8 +992,6 @@ SYSTEM_STATUS VRM_FSM_Reset(VRM_FSM_INSTANCE_HANDLE fsm_h)
   SYSTEM_STATUS stat = VRM_FSM_OK;
   FSM_T fsm = (FSM_T)fsm_h;
 
-  /*DIAG_DECLARE_FUNCTION("VRM_FSM_Reset");*/
-
   /* Check for parameter errors. */
   if (fsm == NULL) { 
     _fsm_error(par_err); 
@@ -1033,8 +1014,6 @@ SYSTEM_STATUS VRM_FSM_SetState(VRM_FSM_INSTANCE_HANDLE fsm_h,uint16_t state)
   SYSTEM_STATUS stat = VRM_FSM_OK;
   FSM_T fsm = (FSM_T)fsm_h;
 
-  /*DIAG_DECLARE_FUNCTION("VRM_FSM_SetState");*/
-
   /* Check for parameter errors. */
   if (fsm == NULL) { 
     _fsm_error(par_err); 
@@ -1052,12 +1031,6 @@ SYSTEM_STATUS VRM_FSM_SetState(VRM_FSM_INSTANCE_HANDLE fsm_h,uint16_t state)
 
 /*---------------------------------------------------------------------------*/
 static void _fsm_error(const char *msg)
-/*!<
-  \Description: Print error message on STDERR
-  \Parameters:
-      \- msg : String to print
-  \Returns: nothing
-\*---------------------------------------------------------------------------*/
 {	 
   std::cout << "fsm_error: " << msg << std::endl;
 }
