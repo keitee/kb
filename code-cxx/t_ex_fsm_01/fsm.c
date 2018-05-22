@@ -665,6 +665,9 @@ SYSTEM_STATUS VRM_FSM_GetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
 
 /*===========================================================================*/
 // send input event to fsm instance
+//
+// VRM_FSM_SetNextInput() vs VRM_FSM_Input() 
+//
 // * use input from argument when input is not set before or input from
 // VRM_FSM_SetNextInput().
 //
@@ -672,19 +675,50 @@ SYSTEM_STATUS VRM_FSM_GetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
 //
 // check user is not calling this function from within an action function */ 
 //
-// VRM_FSM_SetNextInput()
-//  set input when fsm is in action, eaf
-//  run VRM_FSM_Input() if not in eaf
+// VRM_FSM_SetNextInput() is called in eaf to set next input event to be
+// preocessed, say deferred event. Then when is this will be run?
 //
-// VRM_FSM_Input() 
-//  call VRM_FSM_SetNextInput() when in eaf.
-//  set input since otherwise not in eaf and run and this means that
-//  input_available must be false.
+// For this VRM fsm, eafs until E_PLAY_INT_STATE_WAIT_PANEL_CONFIG calls
+// VRM_FSM_SetNextInput() to set next state and this enables that one async
+// message runs through to this state.
 //
-// VRM_FSMVRM_FSM_Input() will use it. So while fsm in action, fsm will postpone
-// its run. 
+// // first async message
 //
-// Q: How deep does fsm keep
+// !ENTER  -VRM_SERVER   		< T:VRM_SRV M:basic_play.c F:PLAY_ReceiveMessage L:1090 > |-> PLAY_ReceiveMessage
+// !ENTER  -VRM_SERVER   		< T:VRM_SRV M:basic_play.c F:PlaySendFSMInput L:4547 > |-> PlaySendFSMInput
+// !ENTER  -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:VRM_FSM_Input L:810 > |-> VRM_FSM_Input
+// 
+// !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:922 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_NONE -> (E_PLAY_INPUT_START) -> E_PLAY_INT_STATE_STARTING 
+// !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:922 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_STARTING -> (E_PLAY_INPUT_RMF_ACQUIRE_RESOURCE) -> E_PLAY_INT_STATE_ALLOCATING_RESOURCES 
+// !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:922 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_ALLOCATING_RESOURCES -> (E_PLAY_INPUT_RMF_RESOURCES_ALLOCATED) -> E_PLAY_INT_STATE_RESOURCES_ALLOCATED 
+// !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:922 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_RESOURCES_ALLOCATED -> (E_PLAY_INPUT_PANEL_CONFIGURE) -> E_PLAY_INT_STATE_CONFIGURING 
+// !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:922 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_CONFIGURING -> (E_PLAY_INPUT_WAIT_PANEL_CONFIG) -> E_PLAY_INT_STATE_WAIT_PANEL_CONFIG 
+// 
+// !EXIT   -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:VRM_FSM_Input L:858 > <-| VRM_FSM_Input : return_status = 0xb400000
+// !EXIT   -VRM_SERVER   		< T:VRM_SRV M:basic_play.c F:PlaySendFSMInput L:4569 > <-| PlaySendFSMInput : return_status = 0xb400000
+// 
+// // next async message
+//
+// !ENTER  -VRM_SERVER   		< T:VRM_SRV M:basic_play.c F:PlaySendFSMInput L:4547 > |-> PlaySendFSMInput
+// !ENTER  -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:VRM_FSM_Input L:810 > |-> VRM_FSM_Input
+// !MIL    -VRM_SERVER   		< T:VRM_SRV M:fsm.c F:FSMRun L:922 > VRM-FSM: play:0x100: E_PLAY_INT_STATE_WAIT_PANEL_CONFIG -> (E_PLAY_INPUT_MCONN_CONFIGURED) -> E_PLAY_INT_STATE_CONFIGURED 
+//
+// HOW?
+//
+// SYSTEM_STATUS VRM_FSM_Input()
+// {
+//   /* run FSM while there is input available */
+//   while (SYSTEM_STATUS_IS_OK(stat) && (true == fsm->input_available)) { 
+//     stat = FSMRun(fsm_h); 
+//   } 
+// 
+//   return stat;
+// }
+//
+// This while loops do the trick. Firstly, run the first eaf and this set next
+// state and exit. In the second iteration, run that agian until input_available
+// is true.
+
 
 SYSTEM_STATUS VRM_FSM_Input(VRM_FSM_INSTANCE_HANDLE fsm_h,
 						uint16_t input)
@@ -739,7 +773,6 @@ SYSTEM_STATUS VRM_FSM_Input(VRM_FSM_INSTANCE_HANDLE fsm_h,
   while (SYSTEM_STATUS_IS_OK(stat) && (true == fsm->input_available)) { 
     stat = FSMRun(fsm_h); 
   } 
-
 
   return stat;
 }
