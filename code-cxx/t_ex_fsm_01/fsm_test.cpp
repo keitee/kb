@@ -116,6 +116,8 @@ static void send_message(uint32_t message)
 
 
 ///////////////////////////////////////////////////////////////////
+// eafs
+
 static std::string account;
 static std::string pin;
 
@@ -128,8 +130,6 @@ static void CardInserted(void* data)
   std::cout << "atm::CardInserted:" << std::endl;
   std::cout << "atm::CardInserted:init account and pin" << std::endl;
 }
-
-// external -> digit_pressed
 
 static void DigitPressed(void *data)
 {
