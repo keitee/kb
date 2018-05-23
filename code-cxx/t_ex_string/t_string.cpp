@@ -1343,9 +1343,123 @@ TEST(CxxStringTest, CountWordsInTextFile)
 
 // ={=========================================================================
 // 4.19 Add Margins to a Text File
+
 // ={=========================================================================
 // 4.20 Justify a Text File
 
+// Note that I set the width inside the loop while I set the right flag prior to
+// the loop. I had to do this because the width resets to zero after each write
+// to the stream. Format flags are not reset after writes, so I only had to
+// initialize them once and be done with it.
+
+TEST(CxxStringTest, JustifyTextFile)
+{
+  ifstream input_file{"input.txt"};
+  ofstream output_file{"justified.txt"};
+
+  size_t width{72};
+  string line{};
+
+  output_file.setf(ios_base::right);
+
+  while (input_file)
+  {
+    output_file.width(width);
+    getline(input_file, line);
+    output_file << line << '\n';
+  }
+}
+
+
+// ={=========================================================================
+// 4.21 Squeeze Whitespace to Single Spaces in a Text File
+// You have a text file with whitespace of varying lengths in it, and you want
+// to reduce every occurrence of a contiguous span of whitespace characters to a
+// single space.
+
+TEST(CxxStringTest, SqueezeWhitespaceInTextFile)
+{
+  ifstream input_file{"input.txt"};
+  ofstream output_file{"squeezed.txt"};
+
+  char current_char{};
+  char saved_char{};
+
+  while (input_file.get(current_char))
+  {
+    // save up only on whitespace
+    if (isspace(current_char))
+    {
+      if (saved_char != current_char)
+        saved_char = current_char;
+    }
+    // output saved whitespace when see nonwhitespace char on input
+    else
+    {
+      if (isspace(saved_char))
+      {
+        output_file << saved_char;
+        saved_char = 0;
+      }
+
+      output_file << current_char;
+    }
+  }
+}
+
+
+// operator>>() ignores whitespace, so all I have to do is add a space and each
+// chunk of nonwhitespace.
+
+TEST(CxxStringTest, SqueezeWhitespaceInTextFileTwo)
+{
+  ifstream input_file{"input.txt"};
+  ofstream output_file{"squeezed_two.txt"};
+
+  string tmp;
+
+  // grab the first word
+  input_file >> tmp;
+  output_file << tmp;
+
+  while (input_file >> tmp)
+  {
+    output_file << ' ';
+    output_file << tmp;
+  }
+}
+
+
+// ={=========================================================================
+// 4.22 Autocorrect Text as a Buffer Changes
+// You have a class that represents some kind of text field or document, and as
+// text is appended to it, you want to correct automatically misspelled words
+// the way Microsoft Word’s Autocorrect feature does.
+
+class TextAutoCorrectField {
+  public:
+    TextAutoCorrectField() = delete;
+    TextAutoCorrectField(const StrStrMap *p) : pdict_(p) {}
+
+    void append(char c);
+    void getText(string &s) {s = buf_;}
+
+  private:
+    string buf_;
+    const StrStrMap *pdict_;
+};
+
+void TextAutoCorrectField::append(char c)
+{
+  // only do when see a word boundary that is a sequence of a char and space or
+  // punctions.
+
+  if ((isspace(c) || ispunct(c)) &&
+      buf_.length() > 0 &&
+      !isspace(buf_[buf_.length()-1]))
+  {
+  }
+}
 
 
 // ={=========================================================================
