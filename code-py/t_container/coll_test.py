@@ -173,7 +173,7 @@ class TestDictMemberFunctions(unittest.TestCase):
         print d
 
     # items()
-    # Return a copy of the dictionary’s list of (key, value) pairs.
+    # Return a copy of the dictionary's list of (key, value) pairs.
     # searching through sequences like this is generally much slower 
     # than a direct key index
 
@@ -193,13 +193,28 @@ class TestDictMemberFunctions(unittest.TestCase):
 
 class TestDictDefaultValue(unittest.TestCase):
 
+    # test_dict_basic (__main__.TestDictDefaultValue) ...
+    # when found: a is      100
+    # when not found: d is  None
+    # when not found: d is  400
+    # ok
+
+    def test_dict_basic(self):
+        print
+
+        d = {'a':100, 'c':300, 'b':200}
+
+        print "when found: a is     " , d.get('a', 400)
+        print "when not found: d is " , d.get('d')
+        print "when not found: d is " , d.get('d', 400)
+
+
     # test_dict_get (__main__.TestDictDefaultValue) ...
     # egrep -an "0x145|0x345"
     # {'0x145': 1, '0x678': 2, '0x123': 2, '0x345': 1}
     # ok
 
     def test_dict_get(self):
-
         print
 
         d = {}
@@ -219,6 +234,61 @@ class TestDictDefaultValue(unittest.TestCase):
         #         print handle
 
         print d
+
+    # group words by the first char of a word
+
+    # test_dict_use_default_value (__main__.TestDictDefaultValue) ...
+    # {'a': ['apple', 'atom'], 'b': ['bat', 'bar', 'book']}
+    # ok
+
+    def test_dict_use_default_value(self):
+        print
+
+        words=['apple', 'bat', 'bar', 'atom', 'book']
+
+        by_letter={}
+
+        for word in words:
+            letter = word[0]
+            if letter not in by_letter:
+                by_letter[letter] = [word]
+            else:
+                by_letter[letter].append(word)
+
+        print by_letter
+
+    # the same result. Q: how does the first word get added?
+
+    def test_dict_use_get_to_set_default_value(self):
+        print
+
+        words=['apple', 'bat', 'bar', 'atom', 'book']
+
+        by_letter={}
+
+        for word in words:
+            letter = word[0]
+            by_letter.setdefault(letter, []).append(word)
+
+        print by_letter
+
+The built-in `collections` module has a useful class, `defaultdict`, which makes
+  this even easier. One is created by passing a type or function for
+  generating the default value for each slot in the dict: 
+  
+from collections import defaultdict 
+by_letter = defaultdict(list) 
+for word in words:
+  by_letter[word[0]].append(word) 
+  
+
+The initializer to defaultdict only needs to be a callable object (e.g. any
+    function), not necessarily a type. Thus, if you wanted the default value
+to be 4 you could pass a function returning 4
+
+counts = defaultdict(lambda: 4)
+
+
 
 # py-list
 class TestStringSplitMethods(unittest.TestCase):
