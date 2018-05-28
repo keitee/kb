@@ -1436,6 +1436,8 @@ TEST(CxxStringTest, SqueezeWhitespaceInTextFileTwo)
 // text is appended to it, you want to correct automatically misspelled words
 // the way Microsoft Word’s Autocorrect feature does.
 
+typedef map<std::string, std::string> StrStrMap;
+
 class TextAutoCorrectField {
   public:
     TextAutoCorrectField() = delete;
@@ -1458,9 +1460,54 @@ void TextAutoCorrectField::append(char c)
       buf_.length() > 0 &&
       !isspace(buf_[buf_.length()-1]))
   {
+    // Is there ever case where buf_ contails multiple words seperated by ws?
+    // in other words, is there any case when i is not 0?
+    // yes, there is since buf_ of TextAutoCorrectField becomes corrected line
+    // but not a word, so we have to work on the last chunk which just becomes a
+    // word. i is the start index of this word. 
+    
+    auto i = buf_.find_last_of(" \f\n\r\t\v");
+    i = (i == string::npos) ? 0 : ++i;
+
+    // std::cout << "TextAutoCorrectField::append: i : " << i << std::endl;
+
+    // take out the last word and look it up in the map
+    string word = buf_.substr(i, buf_.length()-i);
+    StrStrMap::const_iterator found = pdict_->find(word);
+
+    if (found != pdict_->end())
+    {
+      buf_.erase(i, buf_.length()-i);
+      buf_ += found->second;
+    }
   }
+
+  buf_ += c;
 }
 
+TEST(CxxStringTest, AutoCorrectField)
+{
+  StrStrMap dict{};
+  TextAutoCorrectField auto_text(&dict);
+
+  // see that update a map after passed in to TextAutoCorrectField
+  
+  dict["taht"] = "that";
+  dict["right"] = "wrong";
+  dict["bug"] = "feature";
+
+  string given_text = "He's right, taht's a bug.";
+
+  std::cout << "original:  " << given_text << std::endl;
+
+  for (const auto e : given_text)
+    auto_text.append(e);
+
+  string result_text{};
+  auto_text.getText(result_text);
+
+  std::cout << "corrected: " << result_text << std::endl;
+}
 
 // ={=========================================================================
 

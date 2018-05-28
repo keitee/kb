@@ -22143,7 +22143,7 @@ int countUnique(const T &s)
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-decltype cpp-typedef cxx-struct {class-vs-struct} 
+*kt_dev_cxx_0000* cxx-decltype cxx-typedef cxx-struct {class-vs-struct} 
 
 {cpp-decltype-specifier}
 Want to have a type deduced `without defining an initialized variable.` Return
@@ -22216,8 +22216,8 @@ The typedef creates a new data `type name` and does not create a `new type` in
 any sense; merely adds a new name for some 'existing' type. In effect, typedef
 is like #define, except that it is interpreted by the compiler.
 
-point top;          // using typedef is convenient
 struct point top;
+point top;            // using typedef is convenient
 
 
 {cxx-struct-initialization}
@@ -22381,7 +22381,11 @@ typedef struct treenode {
   treenode  *right;
 } TreeNode;
 
-<ex> <error>
+
+<ex> <cxx-typedef-error>
+note:
+this is used to be okay for C but now fails on C++
+
 struct List;         // 7
 
 typedef struct node
@@ -22398,6 +22402,7 @@ typedef struct {
 
 gen-list-linked.cpp:19:3: error: conflicting declaration ‘typedef struct List List’
 gen-list-linked.cpp:7:8: error: ‘struct List’ has a previous declaration as ‘struct List’
+
 
 <okay>
 struct list;
@@ -54507,6 +54512,9 @@ typedef struct _fsm_init {
   // *set-init-data-for-each-instance*
   void			  *data;					 /* any user data, that is sent to the 
                                         user after actions and timeouts */
+
+  // note: init state is to set start but no eaf is called
+
   uint16_t		  init_state;				 /*initial state to be set for the machine */
 
   VRM_FSM_TRANS_CB  callback;					 /* called on transition */
@@ -54579,7 +54587,7 @@ SYSTEM_STATUS VRM_FSM_CreateInstance(const VRM_FSM_INIT *pInit,
     /* alarm is not valid */ 
     new_fsm->alarm_expected = false;
 
-    /* set the initial state */ 
+    /* `set the initial state` */ 
     stat = `FSMSetState`((VRM_FSM_INSTANCE_HANDLE)new_fsm, 
         (uint16_t)(new_fsm->init.init_state - def->min_state));
 
@@ -54886,12 +54894,6 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
   VRM_FSM_ENTRY   cb_entry;
   FSM_DEFINITION* def = NULL;
 
-#if 0 /*ifdef VRM_DEBUG*/
-  SYSTEMTIME_TIMEDATE currentTime;                            /* The current time */
-  char timeStrCurrent[SYSTEMTIME_MIN_STRING_BUFFER_SIZE] = "";/* String to print the date */
-  int32_t timeSize = SYSTEMTIME_MIN_STRING_BUFFER_SIZE;           /* String size to print the date */
-#endif
-
   DIAG_DECLARE_FUNCTION("FSMRun");	 
 
   // note: to break invariant so that end the loop
@@ -54900,37 +54902,12 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
 
   def = (FSM_DEFINITION*)(fsm->init.fsm_definition_handle);
 
+  // note: use previous state, so pTrans is made from it
   /* calculate offset in states table -> from old state (state_offset) & input */
   offset = (fsm->state_offset * def->num_inputs) + fsm->input_offset; 
 
   /* set a pointer to the table's entry */
   pTrans = def->table + offset;
-
-#ifdef VRM_DEBUG
-  DIAG_LOG_INFO( VRM_diag_segment_id,
-      ("--------- [%s] ---------",fsm->name));
-
-  DIAG_LOG_INFO(VRM_diag_segment_id,
-      ("state:     %s",TraceState(fsm, fsm->state_offset)));
-
-  DIAG_LOG_INFO(VRM_diag_segment_id,
-      ("input:     %s",TraceInput(fsm, (uint16_t)(fsm->input_offset + def->min_input))));
-
-  DIAG_LOG_INFO(VRM_diag_segment_id,
-      ("new state: %s",TraceState(fsm, pTrans->new_state)));
-
-#if 0 /* getting current time is a very heavy operation */
-  /* Get the current time */
-  stat = SYSTEMTIME_GetTime(&currentTime);
-
-  if (SYSTEM_STATUS_IS_OK(stat)) {
-    stat = SYSTEMTIME_DebugString(currentTime, timeStrCurrent, &timeSize);
-  }
-
-  DIAG_LOG_INFO(VRM_diag_segment_id,("current time: %s (%d)\n", timeStrCurrent, currentTime));
-#endif /* 0 */
-
-#endif
 
   /* L.R. */
   if ( VRM_FSM_ILLEGAL_STATE == pTrans->new_state ) {	    
@@ -54948,6 +54925,7 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
   /* If there is a real new state, set it */
   if (pTrans->new_state != VRM_FSM_ILLEGAL_STATE) {
 
+    // note: update state_offset(current)
     /* set the state_offset + initialize timeout if needed */
     stat = `FSMSetState((VRM_FSM_INSTANCE_HANDLE)fsm, pTrans->new_state);`
 
@@ -54955,6 +54933,7 @@ static SYSTEM_STATUS FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
       fsm->in_action = true; // eaf guard start 
 
       /* `Carry out action` */
+      // note: do not care return value from eaf which is also void function
       // *set-init-data-for-each-instance*
       if (pTrans->action) {
         (*pTrans->action)(fsm->init.data);
@@ -55026,6 +55005,33 @@ This while loops do the trick. Firstly, run the first eaf and this set next
 state and exit. In the second iteration, run that agian until input_available
 is true.
 
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-fsm-comparison
+
+<cxx-fsm-c++>
+
+* naturally support class and instance
+* event action function
+* no table-driven
+
+<cxx-fsm-dynamic>
+
+* manually support class and instance
+* event action function
+* table-driven but one table. use state and event enums and one transiiton
+  table.
+* support all event that all state support
+
+<cxx-fsm-static>
+
+* support only instance
+* state action function which means more state or branches in action function
+* to behave differently depending on input event to implement the same fsm
+  compared with dynamic or C++ fsm.
+* table-driven. use list of structures to define fsm which requires many
+  changes in places
+  
 
 # ============================================================================
 #{
