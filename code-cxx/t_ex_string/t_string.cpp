@@ -6,6 +6,7 @@
 #include <fstream>
 #include <bitset>
 #include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
 
 
 // g++ -g -std=c++0x t_override.cpp
@@ -434,8 +435,136 @@ TEST(CxxStringTest, TrimCharOrWhitespaceFromEnd)
 
 
 // ={=========================================================================
-// Q: to split the string "Name|Address|Phone" into three separate strings,
-// "Name", "Address", and "Phone", with the delimiter removed.
+// 4.6 Splitting a String
+// You want to split a delimited string into multiple strings. For example, you
+// may want to split the string "Name|Address|Phone" into three separate
+// strings, "Name", "Address", and "Phone", with the delimiter removed.
+
+// note:
+// this has *undefined* behaviour; sometimes works and sometimes infinite loop
+// since found is npos when not found and do ++found and use it loop condition.
+
+void split(const string &s, char delim, vector<string> &coll)
+{
+  size_t i{};
+  size_t found{};
+  std::string token;
+ 
+  for (i = 0; found != std::string::npos; )
+  {
+    found = s.find(delim, i);
+    token = s.substr(i, found-i);
+    i = ++found;
+    coll.push_back(token);
+    // std::cout << "token: " << token << std::endl;
+  }
+}
+
+TEST(DISABLED_SplitString, UseSplitDraftVersion)
+{
+  std::vector<std::string> coll;
+
+  split("Smith, Bill, 5/1/2002, Active", ',', coll); 
+  EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
+}
+
+void split_text(const string &s, char delim, vector<string> &coll)
+{
+  string::size_type i = 0;
+  string::size_type found = s.find(delim);
+
+  while (found != string::npos)
+  {
+    // save the first token
+    coll.push_back(s.substr(i, found-i));
+    // std::cout << "token: " << s.substr(i, found-i) << std::endl;
+    i = ++found;
+    found = s.find(delim, i);
+
+    // if see no more token, save the current
+    if (found == string::npos)
+    {
+      // std::cout << "token: " << s.substr(i, found) << std::endl;
+      coll.push_back(s.substr(i, found));
+    }
+  }
+}
+
+TEST(SplitString, UseSplitTextVersion)
+{
+  std::vector<std::string> coll;
+
+  split_text("Smith, Bill, 5/1/2002, Active", ',', coll); 
+  EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
+
+  // note: fails:
+  //
+  // t_string.cpp:497: Failure
+  // Value of: coll
+  // Expected: has 1 element that is equal to "Smith"
+  //   Actual: {}
+  // [  FAILED  ] CxxStringTest.SplitString (1 ms)
+  //
+  // coll.clear();
+  // split_text("Smith", ',', coll); 
+  // EXPECT_THAT(coll, ElementsAre("Smith"));
+}
+
+void split_revised(const string &input, char delim, vector<string> &coll)
+{
+  string::size_type i{};
+  string::size_type found = input.find(delim, i);
+
+  while (found != string::npos)
+  {
+    coll.push_back(input.substr(i, found-i));
+    i = ++found;
+    found = input.find(delim, i);
+  }
+
+  if (found == string::npos)
+    coll.push_back(input.substr(i, found-i));
+}
+
+TEST(SplitString, UseSplitRevisedVersion)
+{
+  std::vector<std::string> coll;
+
+  split_revised("Smith, Bill, 5/1/2002, Active", ',', coll); 
+  EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
+
+  coll.clear();
+  split_revised("Smith", ',', coll); 
+  EXPECT_THAT(coll, ElementsAre("Smith"));
+}
+
+
+TEST(SplitString, UseSplitBoostVersion)
+{
+  std::string str1{"Name|Address|Phone"};
+  std::vector<std::string> svec1;
+
+  boost::split(svec1, str1, boost::is_any_of("|"));
+
+  EXPECT_THAT(svec1, ElementsAre("Name", "Address", "Phone"));
+
+  // note: cxx-boost-split see how boost works
+  //
+  // Value of: svec
+  // Expected: has 1 element that is equal to "Name"
+  //   Actual: { "", "", "Name" }, which has 3 elements
+
+  std::string str2{"||Name"};
+  std::vector<std::string> svec2;
+
+  boost::split(svec2, str2, boost::is_any_of("|"));
+
+  EXPECT_THAT(svec2, ElementsAre("", "", "Name"));
+}
+
+
+// ={=========================================================================
+// 4.7, tokenizing a string, C++ codebook
 //
 // int main( ) {
 //    string s = " razzle dazzle giddyup ";
@@ -447,6 +576,205 @@ TEST(CxxStringTest, TrimCharOrWhitespaceFromEnd)
 //        cout << "token = " << tmp << '\n';
 //    }
 // }
+//
+// * there are couple of points that are different from the book
+
+class StringTokenizer
+{
+  public:
+    StringTokenizer(const string &s, const char *delim = nullptr)
+        : str_(s)
+    {
+        if (!delim)
+            delim_ = " \f\n\r\r\v|";
+        else
+            delim_ = delim;
+
+        // *TDD* fix-on-next-token
+        // this causes to fail on the "||Name" and loop on nextToken has
+        // {"Name", "Name"}
+        //
+        // begin_ = str_.find_first_not_of(delim_);
+        // end_ = str_.find_first_of(delim_);
+
+        begin_ = str_.find_first_not_of(delim_);
+        end_ = str_.find_first_of(delim_, begin_);
+    }
+
+    void nextToken(string &s)
+    {
+        // if (begin_ == string::npos && end_ == string::npos)
+        // is when input is null.
+        //
+        // This is not supposed be called since hasMoreTokens() return false.
+        // However, when user call it wihtout checking with hasMoreTokens() then
+        // do nothing and more defensive. 
+        //
+        // see MakeToken::nextToken()
+
+        if (begin_ != string::npos && end_ != string::npos)
+        {
+            s = str_.substr(begin_, end_ - begin_);
+            begin_ = str_.find_first_not_of(delim_, end_);
+            end_ = str_.find_first_of(delim_, begin_);
+        }
+        else if (begin_ != string::npos && end_ == string::npos)
+        {
+            s = str_.substr(begin_, str_.length() - begin_);
+            begin_ = str_.find_first_not_of(delim_, end_);
+        }
+    }
+
+    size_t countTokens()
+    {
+        // return if we already counted. possible to call this more than once?
+        // this is becuase to have member variable.
+        if (count_ != 0)
+            return count_;
+
+        size_t count_delim = 0;
+        size_t pos_delim = 0;
+
+        for (;;)
+        {
+            // find a char and break if there are only delimiters.
+            if ((pos_delim = str_.find_first_not_of(delim_, pos_delim)) == string::npos)
+                break;
+
+            // this is different from the book
+            // pos_delim = str_.find_first_of(delim_, pos_delim+1);
+            pos_delim = str_.find_first_of(delim_, pos_delim);
+            ++count_delim;
+
+            if (pos_delim == string::npos)
+                break;
+        }
+
+        return count_ = count_delim;
+    }
+
+    bool hasMoreTokens()
+    {
+        return begin_ != end_;
+    }
+
+  private:
+    StringTokenizer() {}
+    string delim_;
+    string str_;
+    size_t count_{};
+    size_t begin_{};
+    size_t end_{};
+};
+
+TEST(StringTokenizer, UseString_Input1)
+{
+    std::string token{};
+    std::vector<std::string> svec{};
+
+    StringTokenizer st("Name|Address|Phone");
+
+    EXPECT_EQ(3, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+        st.nextToken(token);
+        svec.push_back(token);
+    }
+
+    EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
+}
+
+TEST(StringTokenizer, UseString_Input2)
+{
+    std::string token{};
+    std::vector<std::string> svec{};
+
+    StringTokenizer st("Name|Address");
+
+    EXPECT_EQ(2, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+        st.nextToken(token);
+        svec.push_back(token);
+    }
+
+    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
+}
+
+TEST(StringTokenizer, UseString_Input3)
+{
+    std::string token{};
+    std::vector<std::string> svec{};
+
+    StringTokenizer st("Name");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+        st.nextToken(token);
+        svec.push_back(token);
+    }
+
+    EXPECT_THAT(svec, ElementsAre("Name"));
+}
+
+TEST(StringTokenizer, UseString_Input4)
+{
+    std::string token{};
+    std::vector<std::string> svec{};
+
+    StringTokenizer st("Name|");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+        st.nextToken(token);
+        svec.push_back(token);
+    }
+
+    EXPECT_THAT(svec, ElementsAre("Name"));
+}
+
+TEST(StringTokenizer, UseString_Input5)
+{
+    std::string token{};
+    std::vector<std::string> svec{};
+
+    StringTokenizer st("Name||Address");
+
+    EXPECT_EQ(2, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+        st.nextToken(token);
+        svec.push_back(token);
+    }
+
+    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
+}
+
+TEST(StringTokenizer, UseString_Input6)
+{
+    std::string token{};
+    std::vector<std::string> svec{};
+
+    StringTokenizer st("||Name");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+        st.nextToken(token);
+        svec.push_back(token);
+    }
+
+    EXPECT_THAT(svec, ElementsAre("Name"));
+}
+
 
 class MakeToken
 {
@@ -459,14 +787,13 @@ class MakeToken
         end_ = str_.find_first_of('|', begin_);
     }
 
-    // updates begin_ and end_ state
+    // get token and updates begin_ and end_ for the next 
     void nextToken(std::string &token)
     {
         // there are more tokens to process
         if (end_ != string::npos)
         {
-            // cxx-string-substr
-            // substr(start, length) but not substr(start, end);
+            // cxx-string-substr substr(start, length)
             token = str_.substr(begin_, end_ - begin_);
             begin_ = str_.find_first_not_of('|', end_);
             end_ = str_.find_first_of('|', begin_);
@@ -477,7 +804,6 @@ class MakeToken
         // * TDD: can check if nextToken() is called more than # of tokens.
         // this cause
         // else if(end_ == string::npos)
-        //
 
         else if (begin_ != string::npos && end_ == string::npos)
         {
@@ -521,7 +847,8 @@ class MakeToken
     size_t end_{};
 };
 
-TEST(CxxStringTest, MakeTokensFromString)
+
+TEST(MakeToken, MakeTokensFromString)
 {
     std::string token{};
     std::vector<std::string> svec{};
@@ -630,232 +957,194 @@ TEST(CxxStringTest, MakeTokensFromString_ExpectMoreTokens)
     EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone", "Phone", "Phone", "Phone"));
 }
 
-// ={=========================================================================
-// C++ codebook, 4.7, tokenizing a string
-// * there are couple of points that are different from the book
-class StringTokenizer
+
+// MakeTonen_0529
+//
+// int main( ) {
+//    string tmp;
+//    MakeToken_0529 st("Name|Address|Phone");
+//    cout << "there are " << st.countTokens( ) << " tokens.\n";
+//    while (st.hasMoreTokens( )) {
+//        st.nextToken(tmp);
+//        cout << "token = " << tmp << '\n';
+//    }
+// }
+//
+// 1. countTokens() count number of tokens, cache it, and return it. Then how
+// about hasMoreTokens()? This means that don't need to keep input_ and change
+// it whenever nextToken() gets called. So count number of tokens whenever it
+// gets called and keep a contailer which has tokens.
+//
+// int main( ) {
+//    string tmp;
+//    MakeToken st("Name|Address|Phone");
+//    cout << "there are " << st.countTokens( ) << " tokens.\n";
+//    while (st.countTokens( )) {
+//        st.nextToken(tmp);
+//        cout << "token = " << tmp << '\n';
+//    }
+// }
+
+// TDD on 2018.05.29
+// * Like cxx-boost-split, "||Name" has {"", "", "Name"}
+// * Has token array member so remove hadMoreToken() and countToken() do not
+// calculate count everytime when gets called.
+
+class MakeToken_0529
 {
   public:
-    StringTokenizer(const string &s, const char *delim = nullptr)
-        : str_(s)
-    {
-        if (!delim)
-            delim_ = " \f\n\r\r\v|";
-        else
-            delim_ = delim;
+    MakeToken_0529(const string &input, const string &delim = "|"):
+      input_(input), delim_(delim)
+      {
+        size_t i{};
+        size_t found = input_.find_first_of(delim_, i);
 
-        // *TDD* fix-on-next-token
-        // this causes to fail on the "||Name" and loop on nextToken has
-        // {"Name", "Name"}
-        //
-        // begin_ = str_.find_first_not_of(delim_);
-        // end_ = str_.find_first_of(delim_);
-
-        begin_ = str_.find_first_not_of(delim_);
-        end_ = str_.find_first_of(delim_, begin_);
-    }
-
-    // can implement like MakeToken::nextToken()
-    // * do not change s when input is null.
-    // * TDD: can check if nextToken() is called more than # of tokens.
-    void nextToken(string &s)
-    {
-        // if (begin_ == string::npos && end_ == string::npos)
-        // is when input is null.
-
-        if (begin_ != string::npos && end_ != string::npos)
+        while (found != string::npos)
         {
-            s = str_.substr(begin_, end_ - begin_);
-            begin_ = str_.find_first_not_of(delim_, end_);
-            end_ = str_.find_first_of(delim_, begin_);
+          tokens_.push_back(input_.substr(i, found-i));
+          i = ++found;
+          found = input_.find_first_of(delim_, i);
+
         }
-        else if (begin_ != string::npos && end_ == string::npos)
-        {
-            s = str_.substr(begin_, str_.length() - begin_);
-            begin_ = str_.find_first_not_of(delim_, end_);
-        }
-    }
+
+        if (found == string::npos)
+          tokens_.push_back(input_.substr(i, found));
+      }
 
     size_t countTokens()
     {
-        // return if we already counted. possible to call this more than once?
-        // this is becuase to have member variable.
-        if (count_ != 0)
-            return count_;
-
-        size_t count_delim = 0;
-        size_t pos_delim = 0;
-
-        for (;;)
-        {
-            // find a char and break if there are only delimiters.
-            if ((pos_delim = str_.find_first_not_of(delim_, pos_delim)) == string::npos)
-                break;
-
-            // this is different from the book
-            // pos_delim = str_.find_first_of(delim_, pos_delim+1);
-            pos_delim = str_.find_first_of(delim_, pos_delim);
-            ++count_delim;
-
-            if (pos_delim == string::npos)
-                break;
-        }
-
-        return count_ = count_delim;
+      return tokens_.size();
     }
 
-    bool hasMoreTokens()
+    void nextToken(string &token)
     {
-        return begin_ != end_;
+      auto it = tokens_.begin();
+      if (it != tokens_.end())
+      {
+        token = *it;
+        tokens_.erase(it);
+      }
     }
 
   private:
-    StringTokenizer() {}
-    string delim_;
-    string str_;
-    size_t count_{};
-    size_t begin_{};
-    size_t end_{};
+    const string input_;
+    const string delim_;
+    size_t number_of_tokens_{};
+    vector<string> tokens_{};
 };
 
-TEST(CxxStringTest, StringTokenizerFromString_Input1)
+TEST(MakeToken_0529, UseCountTokens)
+{
+  MakeToken_0529 st("Name|Address|Phone");
+
+  EXPECT_THAT(st.countTokens(), Eq(3));
+  EXPECT_THAT(st.countTokens(), Eq(3));
+}
+
+TEST(MakeToken_0529, UseGetTokens)
+{
+  vector<string> coll{};
+  MakeToken_0529 st("Name|Address|Phone");
+  string token;
+
+  while (st.countTokens())
+  {
+    st.nextToken(token);
+    coll.push_back(token);
+  }
+
+  EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+}
+
+TEST(MakeToken_0529, UseVariousInputs)
 {
     std::string token{};
     std::vector<std::string> svec{};
 
-    StringTokenizer st("Name|Address|Phone");
+    // 1. "Name|Address|Phone"
+    MakeToken_0529 mt1("Name|Address|Phone");
+    EXPECT_EQ(3, mt1.countTokens());
 
-    EXPECT_EQ(3, st.countTokens());
-
-    while (st.hasMoreTokens())
+    while (mt1.countTokens())
     {
-        st.nextToken(token);
+        mt1.nextToken(token);
         svec.push_back(token);
     }
 
     EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
-}
 
-TEST(CxxStringTest, StringTokenizerFromString_Input2)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
+    // 2. "Name|Address"
+    token.clear();
+    svec.clear();
+    MakeToken_0529 mt2("Name|Address");
+    EXPECT_EQ(2, mt2.countTokens());
 
-    StringTokenizer st("Name|Address");
-
-    EXPECT_EQ(2, st.countTokens());
-
-    while (st.hasMoreTokens())
+    while (mt2.countTokens())
     {
-        st.nextToken(token);
+        mt2.nextToken(token);
         svec.push_back(token);
     }
 
     EXPECT_THAT(svec, ElementsAre("Name", "Address"));
-}
 
-TEST(CxxStringTest, StringTokenizerFromString_Input3)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
+    // 3. "Name"
+    token.clear();
+    svec.clear();
+    MakeToken_0529 mt3("Name");
+    EXPECT_EQ(1, mt3.countTokens());
 
-    StringTokenizer st("Name");
-
-    EXPECT_EQ(1, st.countTokens());
-
-    while (st.hasMoreTokens())
+    while (mt3.countTokens())
     {
-        st.nextToken(token);
+        mt3.nextToken(token);
         svec.push_back(token);
     }
 
     EXPECT_THAT(svec, ElementsAre("Name"));
-}
 
-TEST(CxxStringTest, StringTokenizerFromString_Input4)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
+    // 4. "Name|"
+    token.clear();
+    svec.clear();
+    MakeToken_0529 mt4("Name|");
+    EXPECT_EQ(2, mt4.countTokens());
 
-    StringTokenizer st("Name|");
-
-    EXPECT_EQ(1, st.countTokens());
-
-    while (st.hasMoreTokens())
+    while (mt4.countTokens())
     {
-        st.nextToken(token);
+        mt4.nextToken(token);
         svec.push_back(token);
     }
 
-    EXPECT_THAT(svec, ElementsAre("Name"));
-}
+    EXPECT_THAT(svec, ElementsAre("Name", ""));
 
-TEST(CxxStringTest, StringTokenizerFromString_Input5)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
+    // 5. "Name||Address"
+    token.clear();
+    svec.clear();
+    MakeToken_0529 mt5("Name||Address");
+    EXPECT_EQ(3, mt5.countTokens());
 
-    StringTokenizer st("Name||Address");
-
-    EXPECT_EQ(2, st.countTokens());
-
-    while (st.hasMoreTokens())
+    while (mt5.countTokens())
     {
-        st.nextToken(token);
+        mt5.nextToken(token);
         svec.push_back(token);
     }
 
-    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
-}
+    EXPECT_THAT(svec, ElementsAre("Name", "", "Address"));
 
-TEST(CxxStringTest, StringTokenizerFromString_Input6)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
+    // 6. "||Name"
+    // exception where end > begin
+    token.clear();
+    svec.clear();
+    MakeToken_0529 mt6("||Name");
+    EXPECT_EQ(3, mt6.countTokens());
 
-    StringTokenizer st("||Name");
-
-    EXPECT_EQ(1, st.countTokens());
-
-    while (st.hasMoreTokens())
+    while (mt6.countTokens())
     {
-        st.nextToken(token);
+        mt6.nextToken(token);
         svec.push_back(token);
     }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-}
-
-// ={=========================================================================
-
-TEST(CxxStringTest, BoostSplit_Input1)
-{
-    std::string str{"Name|Address|Phone"};
-    std::vector<std::string> svec;
-
-    boost::split(svec, str, boost::is_any_of("|"));
-
-    // for (auto &e : svec)
-    //     cout << e << endl;
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
-}
-
-// *TN* see how boost works
-//
-// Value of: svec
-// Expected: has 1 element that is equal to "Name"
-//   Actual: { "", "", "Name" }, which has 3 elements
-
-TEST(CxxStringTest, BoostSplit_Input2)
-{
-    std::string str{"||Name"};
-    std::vector<std::string> svec;
-
-    boost::split(svec, str, boost::is_any_of("|"));
 
     EXPECT_THAT(svec, ElementsAre("", "", "Name"));
 }
+
 
 // ={=========================================================================
 void join(const std::vector<std::string> &vector, const char delim, std::string &joined)
@@ -1224,7 +1513,7 @@ TEST(CxxStringTest, WrapLinesInTextFile)
 }
 
 // ={=========================================================================
-// 4.17 4.17 Counting the Number of Characters, Words,
+// 4.17 Counting the Number of Characters, Words,
 // and Lines in a Text File
 
 // kyoupark@kit-debian64:~/git/kb/code-cxx/t_ex_string$ wc input.txt
@@ -1335,9 +1624,10 @@ TEST(CxxStringTest, CountWordsInTextFile)
 
   for(const auto &e : wm)
   {
-    cout << word_count << ": " << e.first << ": " << e.second << endl;
     ++word_count;
   }
+
+  cout << "word count: " << word_count << endl;
 }
 
 
@@ -1508,6 +1798,81 @@ TEST(CxxStringTest, AutoCorrectField)
 
   std::cout << "corrected: " << result_text << std::endl;
 }
+
+
+// ={=========================================================================
+// 4.23 Reading a Comma-Separated Text File
+// You want to read in a text file that is delimited by commas and new lines (or
+// any other pair of delimiters for that matter). Records are delimited by one
+// character, and fields within a record are delimited by another. For example,
+// a comma-separated text file of employee information may look like the
+// following: 
+// Smith, Bill, 5/1/2002, Active 
+// Stanford, John, 4/5/1999, Inactive
+// Such files are usually interim storage for data sets exported from
+// spreadsheets, databases, or other file formats.
+
+void loadCSV(ifstream &ifs, vector<vector<string>*> &data)
+{
+  string line{};
+
+  while (ifs)
+  {
+    getline(ifs, line);
+
+    auto coll = new vector<string>();
+
+    split_revised(line, ',', *coll);
+
+    data.push_back(coll);
+
+    line.clear();
+  }
+}
+
+TEST(CxxStringTest, ReadCsvFile)
+{
+  ifstream ifs{"input.csv"};
+
+  vector<vector<string>*> data;
+
+  loadCSV(ifs, data);
+
+  // loop on vector pointer array
+  for (auto e : data)
+  {
+    // loop on string vector
+    for (auto i : *e)
+    {
+      cout << "|" << i;
+    }
+    cout << "|" << endl;
+
+    delete e;
+  }
+}
+
+
+// ={=========================================================================
+// 4.24 Using Regular Expressions to Split a String
+// Use Boost’s regex class template. regex enables the use of regular
+// expressions on string and text data.
+
+TEST(CxxStringTest, BoostRegex)
+{
+  string s = "who, lives:in-a,pineapple    under the sea?";
+
+  // create the reg ex
+  boost::regex re(",|:|-|\\s+");
+  // create a iterator using a sequence and that reg ex
+  boost::sregex_token_iterator p(s.begin(), s.end(), re, -1);
+  // create an end of reg ex marker
+  boost::sregex_token_iterator end;
+
+  while (p != end)
+    cout << *p++ << endl;
+}
+
 
 // ={=========================================================================
 
