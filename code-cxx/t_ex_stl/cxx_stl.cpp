@@ -406,7 +406,7 @@ void PrintLists(const list<int> &list_one, const list<int> &list_two)
 // list 2: 2 0 1 2 3 4 5 3 4 5 0 
 // list 3: 1 
 
-TEST(CxxStlTest, UseListMemberFuntions)
+TEST(CxxStl, UseListExercise_01)
 {
     list<int> list_one, list_two;
 
@@ -433,6 +433,79 @@ TEST(CxxStlTest, UseListMemberFuntions)
     cout << "list 3: ";
     copy(list_three.begin(), list_three.end(), ostream_iterator<int>(cout, " "));
     cout << endl;
+}
+
+template <typename T>
+struct printer
+{
+  void operator()(const T& s)
+  {
+    cout << s << endl;
+  }
+};
+
+TEST(CxxStl, UseListExercise_02)
+{
+  list<string> list_one;
+  list<string> list_two;
+
+  printer<string> strPrinter;
+  printer<int> intPrinter;
+
+  list_one.push_back("Red");
+  list_one.push_back("Green");
+  list_one.push_back("Blue");
+
+  list_two.push_front("Orange");
+  list_two.push_front("Yellow");
+  list_two.push_front("Fuschia");
+
+  // for_each(list_one.begin(), list_one.end(), strPrinter);
+  // for_each(list_two.begin(), list_two.end(), strPrinter);
+
+  EXPECT_THAT(list_one, ElementsAre("Red", "Green", "Blue"));
+  EXPECT_THAT(list_two, ElementsAre("Fuschia", "Yellow", "Orange"));
+
+  list_one.sort();
+  list_two.sort();
+
+  EXPECT_THAT(list_one, ElementsAre("Blue", "Green", "Red"));
+  EXPECT_THAT(list_two, ElementsAre("Fuschia", "Orange", "Yellow"));
+
+  list_one.merge(list_two);
+
+  EXPECT_THAT(list_one, ElementsAre("Blue", "Fuschia", "Green", "Orange", "Red", "Yellow"));
+  EXPECT_THAT(list_two.size(), Eq(0));
+
+  // for_each(list_one.begin(), list_one.end(), strPrinter);
+  // for_each(list_two.begin(), list_two.end(), strPrinter);
+
+  list<int> int_list;
+
+  int_list.push_back(0);
+  int_list.push_back(1);
+  int_list.push_back(2);
+  int_list.push_back(3);
+  int_list.push_back(4);
+
+  // for_each(int_list.begin(), int_list.end(), intPrinter);
+  
+  int_list.remove_if([](int e)
+      { 
+        if (e > 2) 
+          return true;
+
+        return false;
+      });
+
+  // for_each(int_list.begin(), int_list.end(), intPrinter);
+  
+  EXPECT_THAT(int_list, ElementsAre(0, 1, 2));
+
+  int_list.remove_if([](int e)
+      { return e % 2 == 0; });
+
+  EXPECT_THAT(int_list, ElementsAre(1));
 }
 
 
