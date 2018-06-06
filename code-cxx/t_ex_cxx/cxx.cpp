@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <chrono>
+#include <limits>
 
 #include "gmock/gmock.h"
 
@@ -1067,7 +1068,7 @@ TEST(CxxStdio, UseInput)
 
   cin >> i;
   cin >> d;
-  cin.ignore(10, '\n');
+  cin.ignore(numeric_limits<streamsize>::max(), '\n');
   getline(cin, s);
 
   cout << i << endl;

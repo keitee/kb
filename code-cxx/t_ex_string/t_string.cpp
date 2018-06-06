@@ -182,51 +182,26 @@ TEST(CxxStringTest, CompareStringFromEnd)
 
 // note that os, buffer, has all inputs from << and seek() moves writing pos.
 // do *cxx-string-convert-to-string*
-//
-// decimal : 15, hex : f
-// ---------
-// decimal : 15, hex : f
-// float : 4.67, bitset : 001011010011101
-// ---------
-// octal : 1715, hex : f
-// float : 4.67, bitset : 001011010011101
 
-TEST(CxxStringTest, UseOutputStringStream)
+
+TEST(CxxStringStream, UseOutputStringStream)
 {
   ostringstream os;
 
   os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
-  cout << os.str();
+  EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
 
-  cout << "---------" << endl;
   bitset<15> bit_set(5789);
   os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
-  cout << os.str();
+  EXPECT_EQ(os.str(), "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
 
-  cout << "---------" << endl;
   os.seekp(0);
   os << "octal : " << oct << 15;
-  cout << os.str();
-}
-
-// do *cxx-string-convert-to-number*
-// The following lines read the integer x with the value 3 and the
-// floating-point f with the value 0.7 from the string s:
-
-TEST(CxxStringTest, UseInputStringStream)
-{
-  int x{};
-  float f{};
-  istringstream is{"3.7"};
-
-  is >> x >> f;
- 
-  ASSERT_THAT(x, Eq(3));
-  ASSERT_THAT(f, FloatEq(0.7));
+  EXPECT_EQ(os.str(), "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
 }
 
 
-TEST(CxxStringTest, UseOutputStringStreamX)
+TEST(CxxStringStream, UseStringStream)
 {
   stringstream ss;
   vector<string> string_vector{};
@@ -244,8 +219,38 @@ TEST(CxxStringTest, UseOutputStringStreamX)
     string_vector.push_back(str);
   }
  
-  copy(string_vector.begin(), string_vector.end(), ostream_iterator<string>(cout, " "));
-  cout << endl;
+  EXPECT_THAT(string_vector, ElementsAre("player 0", "player 1", "player 2", "player 3"));
+  // copy(string_vector.begin(), string_vector.end(), ostream_iterator<string>(cout, " "));
+  // cout << endl;
+}
+
+
+// do *cxx-string-convert-to-number*
+// The following lines read the integer x with the value 3 and the
+// floating-point f with the value 0.7 from the string s:
+
+TEST(CxxStringStream, UseInputStringStream)
+{
+  int x{};
+  float f{};
+  istringstream is{"3.7"};
+
+  is >> x >> f;
+ 
+  ASSERT_THAT(x, Eq(3));
+  ASSERT_THAT(f, FloatEq(0.7));
+}
+
+TEST(CxxStringStream, UseInputStringStreamToParse)
+{
+  istringstream is{"1 2 3 4"};
+  int value{};
+  vector<int> coll{};
+
+  while (is >> value)
+      coll.push_back(value);
+
+  EXPECT_THAT(coll, ElementsAre(1,2,3,4));
 }
 
 
@@ -637,7 +642,7 @@ class StringTokenizer
 
         for (;;)
         {
-            // find a char and break if there are only delimiters.
+            // break if there are only delimiters.
             if ((pos_delim = str_.find_first_not_of(delim_, pos_delim)) == string::npos)
                 break;
 
@@ -776,66 +781,65 @@ TEST(StringTokenizer, UseString_Input6)
 }
 
 
+// * not boost-split style which means do not support null token.
+
 class MakeToken
 {
   public:
     MakeToken(const std::string &input, const std::string &delim = "|")
-        : str_(input), delim_(delim)
-    {
-        // fix-on-next-token
+      : str_(input), delim_(delim)
+      {
         begin_ = str_.find_first_not_of('|');
         end_ = str_.find_first_of('|', begin_);
-    }
+      }
 
     // get token and updates begin_ and end_ for the next 
+    //
+    // note: here check if nextToken() is called more than # of tokens which
+    // hasMoreTokens() is for. If do not support this, then can make it simple
+    // as no check is required. 
     void nextToken(std::string &token)
     {
-        // there are more tokens to process
-        if (end_ != string::npos)
-        {
-            // cxx-string-substr substr(start, length)
-            token = str_.substr(begin_, end_ - begin_);
-            begin_ = str_.find_first_not_of('|', end_);
-            end_ = str_.find_first_of('|', begin_);
-        }
+      // there are more tokens to process
+      if (end_ != string::npos)
+      {
+        // cxx-string-substr substr(start, length)
+        token = str_.substr(begin_, end_ - begin_);
+        begin_ = str_.find_first_not_of('|', end_);
+        end_ = str_.find_first_of('|', begin_);
+      }
 
-        // seen the last token ending with no delim, |"xxx"
-        //
-        // * TDD: can check if nextToken() is called more than # of tokens.
-        // this cause
-        // else if(end_ == string::npos)
+      // seen the hand and to see it, run it input "xxx" as
+      // TEST(DISABLED_MakeToken, ParseTokensFromInput)
 
-        else if (begin_ != string::npos && end_ == string::npos)
-        {
-            token = str_.substr(begin_);
-            // to make the condition to stop
-            begin_ = end_ = string::npos;
-        }
+      else if (begin_ != string::npos && end_ == string::npos)
+      {
+        token = str_.substr(begin_);
+        // to make the condition to stop
+        begin_ = end_ = string::npos;
+      }
     }
 
     // do not update states since it just counts
-    // * this is not only complicated but also makes wrong result as
-    // fix-on-next-token e.g., "||Name" produce 2.
-
     int countTokens()
     {
-        auto begin = str_.find_first_not_of('|');
-        auto end = str_.find_first_of('|', begin);
+      auto begin = str_.find_first_not_of('|');
+      auto end = str_.find_first_of('|', begin);
 
-        while (begin != end)
-        {
-            ++count_;
-            begin = str_.find_first_not_of('|', end);
-            end = str_.find_first_of('|', begin);
-        }
+      while (begin != end)
+      {
+        ++count_;
+        begin = str_.find_first_not_of('|', end);
+        end = str_.find_first_of('|', begin);
+      }
 
-        return count_;
+      return count_;
     }
 
     // to do this, need to have member variables to keep state
     bool hasMoreTokens() const
     {
-        return begin_ != end_;
+      return begin_ != end_;
     }
 
   private:
@@ -847,8 +851,28 @@ class MakeToken
     size_t end_{};
 };
 
+// to see nextToken() hang
+TEST(DISABLED_MakeToken, ParseTokensFromInput)
+{
+    std::string token{};
+    std::vector<std::string> svec{};
 
-TEST(MakeToken, MakeTokensFromString)
+    // 3. "Name"
+    token.clear();
+    svec.clear();
+    MakeToken mt3("Name");
+    EXPECT_EQ(1, mt3.countTokens());
+
+    while (mt3.hasMoreTokens())
+    {
+        mt3.nextToken(token);
+        svec.push_back(token);
+    }
+
+    EXPECT_THAT(svec, ElementsAre("Name"));
+}
+
+TEST(DISABLED_MakeToken, ParseTokensFromVariosInputs)
 {
     std::string token{};
     std::vector<std::string> svec{};
@@ -937,7 +961,7 @@ TEST(MakeToken, MakeTokensFromString)
     EXPECT_THAT(svec, ElementsAre("Name"));
 }
 
-TEST(CxxStringTest, MakeTokensFromString_ExpectMoreTokens)
+TEST(CxxStringTest, ParseTokensMoreThanHad)
 {
     std::string token{};
     std::vector<std::string> svec{};
@@ -989,6 +1013,7 @@ TEST(CxxStringTest, MakeTokensFromString_ExpectMoreTokens)
 // * Like cxx-boost-split, "||Name" has {"", "", "Name"}
 // * Has token array member so remove hadMoreToken() and countToken() do not
 // calculate count everytime when gets called.
+// * note: may not work with "|||"
 
 class MakeToken_0529
 {
@@ -1143,6 +1168,195 @@ TEST(MakeToken_0529, UseVariousInputs)
     }
 
     EXPECT_THAT(svec, ElementsAre("", "", "Name"));
+}
+
+
+// ={=========================================================================
+// StringTokenizer_0606
+//
+// int main( ) {
+//    string s = " razzle dazzle giddyup ";
+//    string tmp;
+//    StringTokenizer st(s);
+//    cout << "there are " << st.countTokens( ) << " tokens.\n";
+//    while (st.hasMoreTokens( )) {
+//        st.nextToken(tmp);
+//        cout << "token = " << tmp << '\n';
+//    }
+// }
+//
+// class StringTokenizer {
+//
+//   private:
+//     StringTokenizer() {}
+//     string delim_;
+//     string str_;
+//     size_t count_{};
+//     size_t begin_{};
+//     size_t end_{};
+// };
+// 
+// * not boost-split style which means do not support null token.
+
+class StringTokenizer_0606
+{
+  public:
+    StringTokenizer_0606(const string &input, const string &delim = "|")
+      : input_(input), delim_(delim)
+    {
+      pos_token_ = input_.find_first_not_of(delim_, 0);
+      pos_delim_ = input_.find_first_of(delim_, pos_token_);
+    }
+
+    bool hasMoreTokens()
+    {
+      return pos_token_ != pos_delim_;
+    }
+
+    void nextToken(string &token)
+    {
+      token = input_.substr(pos_token_, pos_delim_ - pos_token_);
+
+      pos_token_ = input_.find_first_not_of(delim_, pos_delim_);
+      pos_delim_ = input_.find_first_of(delim_, pos_token_);
+    }
+
+    size_t countTokens()
+    {
+      if (count_)
+        return count_;
+
+      size_t pos_start = input_.find_first_not_of(delim_, 0);
+      size_t pos_delim{};
+      
+      while( (pos_delim = input_.find_first_of(delim_, pos_start)) != string::npos)
+      {
+        pos_start = input_.find_first_not_of(delim_, pos_delim);
+        ++count_;
+      }
+
+      if (pos_start != string::npos && pos_delim == string::npos)
+        ++count_;
+
+      return count_;
+    }
+
+  private:
+    StringTokenizer_0606() {}
+    string input_;
+    string delim_;
+    size_t count_{};
+    size_t pos_token_{};
+    size_t pos_delim_{};
+};
+
+TEST(StringTokenizer_0606, UseCountTokens)
+{
+  StringTokenizer_0606 st1("Name|Address|Phone");
+  EXPECT_EQ(st1.countTokens(), 3);
+
+  StringTokenizer_0606 st2("Name|Address");
+  EXPECT_EQ(2, st2.countTokens());
+
+  StringTokenizer_0606 st3("Name");
+  EXPECT_EQ(1, st3.countTokens());
+
+  StringTokenizer_0606 st4("Name||Address");
+  EXPECT_EQ(2, st4.countTokens());
+
+  StringTokenizer_0606 st5("||Name");
+  EXPECT_EQ(1, st5.countTokens());
+
+  StringTokenizer_0606 st6("|||");
+  EXPECT_EQ(0, st6.countTokens());
+}
+
+TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
+{
+  string token{};
+  vector<string> coll{};
+
+  StringTokenizer_0606 st1("Name|Address|Phone");
+  EXPECT_EQ(st1.countTokens(), 3);
+
+  while (st1.hasMoreTokens())
+  {
+    st1.nextToken(token);
+    coll.push_back(token);
+  }
+
+  EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+
+  // 2. "Name|Address"
+  token.clear();
+  coll.clear();
+  StringTokenizer_0606 st2("Name|Address");
+  EXPECT_EQ(2, st2.countTokens());
+
+  while (st2.hasMoreTokens())
+  {
+    st2.nextToken(token);
+    coll.push_back(token);
+  }
+
+  EXPECT_THAT(coll, ElementsAre("Name", "Address"));
+
+  // 3. "Name"
+  token.clear();
+  coll.clear();
+  StringTokenizer_0606 st3("Name");
+  EXPECT_EQ(1, st3.countTokens());
+
+  while (st3.hasMoreTokens())
+  {
+    st3.nextToken(token);
+    coll.push_back(token);
+  }
+
+  EXPECT_THAT(coll, ElementsAre("Name"));
+
+  // 4. "Name|"
+  token.clear();
+  coll.clear();
+  StringTokenizer_0606 st4("Name|");
+  EXPECT_EQ(1, st4.countTokens());
+
+  while (st4.hasMoreTokens())
+  {
+    st4.nextToken(token);
+    coll.push_back(token);
+  }
+
+  EXPECT_THAT(coll, ElementsAre("Name"));
+
+  // 5. "Name||Address"
+  token.clear();
+  coll.clear();
+  StringTokenizer_0606 st5("Name||Address");
+  EXPECT_EQ(2, st5.countTokens());
+
+  while (st5.hasMoreTokens())
+  {
+    st5.nextToken(token);
+    coll.push_back(token);
+  }
+
+  EXPECT_THAT(coll, ElementsAre("Name", "Address"));
+
+  // 6. "||Name"
+  // exception where end > begin
+  token.clear();
+  coll.clear();
+  StringTokenizer_0606 st6("||Name");
+  EXPECT_EQ(1, st6.countTokens());
+
+  while (st6.hasMoreTokens())
+  {
+    st6.nextToken(token);
+    coll.push_back(token);
+  }
+
+  EXPECT_THAT(coll, ElementsAre("Name"));
 }
 
 
