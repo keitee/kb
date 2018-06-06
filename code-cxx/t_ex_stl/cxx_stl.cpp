@@ -7,6 +7,9 @@
 #include <list>
 #include <unordered_set>
 #include <queue>
+// #include <algorithm>
+#include <numeric>        // std::accumulate for gcc 6
+#include <random>
 
 #include "gmock/gmock.h"
 
@@ -639,6 +642,25 @@ TEST(CxxStlTest, UseAlgoPartition)
     cout << "first odd element: " << *pos2 << endl;
 }
 
+// ={=========================================================================
+// cxx-algo-unique
+TEST(CxxStl, AlgoUnique)
+{
+  string input{"1   2  3            4           "};
+
+  cout << "input: " << input << endl;
+
+  auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y)
+      {
+        return x == y and x == ' ';
+      });
+
+  input.erase(new_end, input.end());
+
+  cout << "input: " << input << endl;
+}
+
+// ={=========================================================================
 int main(int argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);
