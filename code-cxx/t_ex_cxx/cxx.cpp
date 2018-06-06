@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <chrono>
+#include <limits>
 
 #include "gmock/gmock.h"
 
@@ -1022,6 +1023,57 @@ TEST(CxxBool, CheckBoolDefault)
 {
   bool value{};
   EXPECT_EQ(value, false);
+}
+
+
+// ={=========================================================================
+// cxx-stdio
+
+TEST(CxxStdio, UseInput)
+{
+  int i{};
+  double d{};
+  string s{};
+
+  // show the same result when use cin. To emulate input:
+  // 10
+  // 4.0
+  // This is a text
+  stringstream iss("10\n4.0\nThis is a text\n");
+  iss >> i;
+  iss >> d;
+  iss >> s;
+
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "This");
+
+  stringstream iss2("10\n4.0\nThis is a text\n");
+  iss2 >> i;
+  iss2 >> d;
+  getline(iss2, s);
+
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "");
+
+  stringstream iss3("10\n4.0\nThis is a text\n");
+  iss3 >> i;
+  iss3 >> d;
+  getline(iss3 >> ws, s);
+
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "This is a text");
+
+  cin >> i;
+  cin >> d;
+  cin.ignore(numeric_limits<streamsize>::max(), '\n');
+  getline(cin, s);
+
+  cout << i << endl;
+  cout << d << endl;
+  cout << s << endl;
 }
 
 

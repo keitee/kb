@@ -246,9 +246,10 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-fobj-bind-member-function
 *kt_dev_cxx_0000* cxx-algo
 *kt_dev_cxx_0000* cxx-algo-non-modifying
-*kt_dev_stl_070* cpp-algo-copy
+*kt_dev_cxx_0000* cxx-algo-modifying
+*kt_dev_cxx_0000* cxx-algo-mutating
 
-*kt_dev_cpp_000* cpp-stream cpp-cout cpp-cin
+*kt_dev_cxx_0000* cpp-stream cpp-cout cpp-cin
 
 *kt_dev_cxx_0000* cxx-string
 *kt_dev_cxx_0000* cxx-string-code
@@ -5193,7 +5194,7 @@ static storage qualifier gives T static storage duration (C++11 §3.7) and
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-stdio cxx-stream
+*kt_dev_cxx_0000* cxx-stdio
 
 {redirection}
 When shell runs a program, three files are open, with file descriotors 0, 1,
@@ -5596,7 +5597,156 @@ int main()
 }
 
 
-{cxx-stream} *cxx-raii* *cxx-file*
+={============================================================================
+*kt_dev_cxx_0000* cxx-stream cxx-file
+
+<cxx-getline> <cxx-string-getline>
+15.3.3 Input/Output of Special Types
+
+The type string from the C++ standard library (see Chapter 13) grows as needed
+to accommodate a lengthy string. Rather than using char*, this is much easier
+and less error prone. In addition, strings provide a convenient function
+getline() for line-by-line reading (see Section 13.2.10, page 677). So,
+whenever you can, avoid the use of C-strings and use strings.
+
+
+<cxx-string-getline>
+
+13.2.10 Input/Output Operators
+
+This comes from string class but do not need to qualify std:: due to argument
+dependent lookup.
+
+This function reads all characters, including leading whitespaces, until the
+line delimiter or end-of-file is reached. 
+
+The line delimiter is extracted but 'not' appended; not include a new line
+character. so have to add '\n' when output it back to a file.
+
+while (getline(std::cin, s)) {       // for each line from cin
+...
+}
+
+
+can set delimiter. If you read token by token, the newline character is not a
+special character. In this case, the tokens might contain a newline character.
+
+while (getline(std::cin, s, ’:’)) {   // for each token separated by ’:’
+...
+}
+
+// note: if useful, do further reading.
+// can use stringstream. Note also that since C++11, getline() is overloaded for
+// both lvalue and rvalue stream references, which allows using temporary string
+// streams. See Section 15.10, page 802, for details about string streams.
+
+void process (const std::string& filecontents)
+{
+  // process first line of passed string:
+  std::string firstLine;
+  std::getline(std::stringstream(filecontents), // OK since C++11
+      firstLine);
+  ...
+}
+
+
+// /usr/include/c++/4.9.2/bits/basic_string.h
+
+  /**
+   *  @brief  Read a line from stream into a string.
+   *  @param __is  Input stream.
+   *  @param __str  Buffer to store into.
+   *  @param __delim  Character marking end of line.
+   *  @return  Reference to the input stream.
+   *
+   *  Stores characters from @a __is into @a __str until @a __delim is
+   *  found, the end of the stream is encountered, or str.max_size()
+   *  is reached.  Any previous contents of @a __str are erased.  If
+   *  @a __delim is encountered, it is extracted but not stored into
+   *  @a __str.
+   */
+  template<typename _CharT, typename _Traits, typename _Alloc>
+    basic_istream<_CharT, _Traits>&
+    getline(basic_istream<_CharT, _Traits>& __is,
+	    basic_string<_CharT, _Traits, _Alloc>& __str, _CharT __delim);
+
+  /**
+   *  @brief  Read a line from stream into a string.
+   *  @param __is  Input stream.
+   *  @param __str  Buffer to store into.
+   *  @return  Reference to the input stream.
+   *
+   *  Stores characters from is into @a __str until &apos;\n&apos; is
+   *  found, the end of the stream is encountered, or str.max_size()
+   *  is reached.  Any previous contents of @a __str are erased.  If
+   *  end of line is encountered, it is extracted but not stored into
+   *  @a __str.
+   */
+  template<typename _CharT, typename _Traits, typename _Alloc>
+    inline basic_istream<_CharT, _Traits>&
+    getline(basic_istream<_CharT, _Traits>& __is,
+	    basic_string<_CharT, _Traits, _Alloc>& __str)
+    { return std::getline(__is, __str, __is.widen('\n')); }
+
+
+<ex>
+TEST(CxxStdio, UseInput)
+{
+  int i{};
+  double d{};
+  string s{};
+
+  // show the same result when use cin. To emulate input:
+  // 10
+  // 4.0
+  // This is a text
+  stringstream iss("10\n4.0\nThis is a text\n");
+  iss >> i;
+  iss >> d;
+  iss >> s;
+
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "This");
+
+  stringstream iss2("10\n4.0\nThis is a text\n");
+  iss2 >> i;
+  iss2 >> d;
+  getline(iss2, s);
+
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "");
+
+  stringstream iss3("10\n4.0\nThis is a text\n");
+  iss3 >> i;
+  iss3 >> d;
+  getline(iss3 >> ws, s);
+
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "This is a text");
+
+  cin >> i;
+  cin >> d;
+  cin.ignore(numeric_limits<streamsize>::max(), '\n');
+  getline(cin, s);
+
+  cout << i << endl;
+  cout << d << endl;
+  cout << s << endl;
+}
+
+http://www.cplusplus.com/reference/istream/ws/
+Extract whitespaces
+
+Extracts as many whitespace characters as possible from the current position
+in the input sequence. The extraction stops as soon as a non-whitespace
+character is found. These extracted whitespace characters are discarded.
+
+note:
+The point is that there is remaining '\n' before getline is used.
+
 
 CLR 15.5.1 Member Functions for Input
 
@@ -5610,7 +5760,68 @@ section than to use operator >>. The reason is that the maximum string size to
 be read must be passed explicitly as an argument.
 
 
-CLR 15.7 Formatting
+istream& istream::ignore ()
+istream& istream::ignore (streamsize count)
+istream& istream::ignore (streamsize count, int delim)
+
+* `All forms extract and discard characters.`
+* The first form ignores one character.
+* The second form ignores up to count characters.
+* The third form ignores up to count characters until delim is extracted and
+  discarded.
+
+* If count is std::numeric_limits<std::streamsize>::max(), all characters are
+  discarded until either delim or end-of-file is reached.
+
+* All forms return the stream.
+ 
+* Examples:
+ 
+  The following call discards the rest of the line:
+
+  cin.ignore(numeric_limits<std::streamsize>::max(),’\n’);
+
+  The following call discards the complete remainder of cin:
+
+  cin.ignore(numeric_limits<std::streamsize>::max());
+
+
+<cxx-stream-format>
+
+CLR 15.6 Manipulators
+
+Manipulators for streams are objects that modify a stream when applied with
+the standard I/O operators. This does not necessarily mean that something is
+read or written. The basic manipulators defined in <istream> or <ostream> are
+presented in Table 15.8.
+
+endl    basic_ostream Inserts a newline character into the buffer and
+        flushes the output buffer to its device
+
+ends    basic_ostream Inserts a (terminating) null character into the buffer
+
+flush   basic_ostream Flushes the output buffer to its device
+
+ws      basic_istream Reads and ignores whitespaces
+
+
+Manipulators with Arguments
+
+Some of the manipulators process arguments. For example, you can use the
+following to set the minimum field width of the next output and the fill
+character:
+
+std::cout << std::setw(6) << std::setfill(’_’);
+
+The standard manipulators with arguments are defined in the header file
+<iomanip>, which must be included to work with the standard manipulators
+taking arguments: #include <iomanip>
+
+The standard manipulators taking arguments are all concerned with details of
+formatting.
+
+
+CLR 15.7.1 Format Flags
 
 setf(flags)   Sets flags as additional flags and returns the previous state 
               of all flags
@@ -5622,6 +5833,23 @@ flags()       Returns all set format flags
 flags(flags)  Sets flags as the new flags and returns the previous state 
               of all flags
 
+
+<manipulators-vs-flags>
+The manipulators setiosflags() and resetiosflags() provide the possibility of
+setting or clearing, respectively, one or more flags in a write or read
+statement with operator << or >>, respectively.  To use one of these
+manipulators, you must include the header file <iomanip>. For example:
+
+#include <iostream>
+#include <iomanip>
+...
+std::cout << resetiosflags(std::ios::adjustfield) // clear adjustm. flags
+          << setiosflags(std::ios::left);         // left-adjust values
+
+Some flag manipulations are performed by specialized manipulators. These
+manipulators are used often 
+
+`because they are more convenient and more readable.`
 
 <ex>
 Often, the stream you are writing to does not belong to you, especially if you
@@ -5648,14 +5876,13 @@ void logError(ostream &out, const string &s)
 }
 
 
-CLR 15.7.3 Field Width, Fill Character, and Adjustment
+15.7.3 Field Width, Fill Character, and Adjustment
 
 <ex>
-
-// Note that I set the width inside the loop while I set the right flag prior
-// to the loop. I had to do this because the width resets to zero after each
-// write to the stream. Format flags are not reset after writes, so I only had
-// to initialize them once and be done with it.
+Note that I set the width inside the loop while I set the right flag prior to
+the loop. I had to do this because the width resets to zero after each write
+to the stream. Format flags are not reset after writes, so I only had to
+initialize them once and be done with it.
 
 {
   size_t width{72};
@@ -5670,6 +5897,18 @@ CLR 15.7.3 Field Width, Fill Character, and Adjustment
     output_file << line << '\n';
   }
 }
+
+
+15.7.7 General Formatting Definitions
+
+Flag    Meaning
+skipws  Skips leading whitespaces automatically when reading a value 
+        with operator >>
+
+Both flags can be manipulated using the manipulators presented in Table 15.30.
+
+Manipulator Meaning
+skipws  Skips leading whitespaces with operator >> (sets the flag ios::skipws)
 
 
 CLR 15.9
@@ -5731,11 +5970,6 @@ note:
 Why getline()? see *cxx-ex-ifstream* to see parsing example, difficult to
 build structure from a file without knowing where to stop for a unit. 
 
-
-<std-getline>
-Without including <fstream>, then compiler emits error since there are getline
-from stdio and getline from fstream. Updated since there is no error without
-fstream header when use g++.
 
 <ex> for ifstream
 #include <iostream>
@@ -10153,7 +10387,7 @@ int* p;     // p has undefined value
 int* q{};   // q is initialized by nullptr
 
 
-Use cpp-list-init to use complete object to initialize
+Use cxx-list-init to use complete object to initialize
 
 struct Token
 {
@@ -10185,7 +10419,7 @@ Token Token_stream::get()
 }
 
 
-*cpp-remember*
+*cxx-remember*
 The `list-form-init` do 'not' allow `narrow-conversion` of 'built-in' type.
 
 int x3{5.0};      // ERROR: narrowing
@@ -10235,8 +10469,8 @@ int main()
     // copy-from, an error
     MSTR m3 = "mstring three";
 
-    // `cpp-brace-init` no error and converting-ctor is used. see that
-    // list-init works when there is no such a ctor. converting ctor is
+    // `cxx-brace-init` no error and converting-ctor is used. see that
+    // cxx-list-init works when there is no such a ctor. converting ctor is
     // called.
     MSTR m3{"mstring three"}; 
 }
@@ -10279,21 +10513,13 @@ The element in a list are always `const`.
 
 Can write a function that takes varying number of arguments.
 
+// /usr/include/c++/4.9/initializer_list
+
 #include "initializer_list"
 
 initializer_list<int> li; 
 initializer_list<string> ls;
 
-Since it's array, it supports begin()/end() and can process elements.
-
-<ex>
-void error_msg( initializer_list<string> ls )
-{
-  for( auto beg = ls.begin(); beg != ls.end(); ++beg )
-    cout << *beg << " ";
-
-  cout << endl;
-}
 
 <ex>
 void error_msg( ErrorCode e, initializer_list<string> ls )
@@ -10314,6 +10540,38 @@ void print( std::initializer_list<int> vals )
   for (auto p=vals.begin(); p!=vals.end(); ++p)  
     std::cout << *p << "\n";
 }
+
+<ex>
+class StrVec
+{
+  public:
+    StrVec() {}
+    StrVec(std::initializer_list<std::string> il)
+    {
+      auto vec = alloc_and_copy(il.begin(), il.end());
+      element_ = vec.first;
+      free_ = cap_ = vec.second;
+    }
+};
+
+StrVec sv{"one", "two", "three"};
+
+<ex>
+    const auto arabicToRomanConversions = {
+        make_pair(1000u, "M"), 
+        make_pair(900u, "CM"), 
+        make_pair(500u, "D"), 
+        make_pair(400u, "CD"), 
+        make_pair(100u, "C"),
+        make_pair(90u, "XC"), 
+        make_pair(50u, "L"), 
+        make_pair(40u, "XL"), 
+        make_pair(10u, "X"), 
+        make_pair(9u, "IX"), 
+        make_pair(5u, "V"), 
+        make_pair(4u, "IV"), 
+        make_pair(1u, "I") 
+    };
 
 
 ={============================================================================
@@ -10489,6 +10747,15 @@ Why `ctor-init-list`? From CPR 289 and EC++04.
 * Only for ctor
   :38:38: error: only constructors take member initializers
      MSTR &operator=(const MSTR &m) : mesg(m.mesg)
+
+note:
+// C++ cookbook
+but you also gain automatic exception handling. If an object is constructed in
+the initializer list, and that object throws an exception during construction,
+    the runtime environment destroys all other previously constructed objects
+    in the list, and the exception continues to the caller of the constructor.
+    On the other hand, if you assign the argument in the body of the
+    constructor, then you have to handle the exception with a try/catch block.
 
 note: 
 Again the same reason as recommendation on initialization above. For the last
@@ -19992,11 +20259,7 @@ if (! (std::cin >> x)) {
 }
 
 
-<ex> cxx-std-getline
-// std::getline is declared as:
-
-istream& getline (istream& strm, string& str);
-
+<ex> cxx-getline
 All characters, including leading whitespaces, are extracted until any of the
 following happens:
 
@@ -36474,6 +36737,72 @@ Moves all elements of the range [c2beg,c2end) in c2 in front of pos of list c
 (c and c2 may be identical)
 
 
+<ex>
+TEST(CxxStl, UseListExercise_02)
+{
+  list<string> list_one;
+  list<string> list_two;
+
+  printer<string> strPrinter;
+  printer<int> intPrinter;
+
+  list_one.push_back("Red");
+  list_one.push_back("Green");
+  list_one.push_back("Blue");
+
+  list_two.push_front("Orange");
+  list_two.push_front("Yellow");
+  list_two.push_front("Fuschia");
+
+  // for_each(list_one.begin(), list_one.end(), strPrinter);
+  // for_each(list_two.begin(), list_two.end(), strPrinter);
+
+  EXPECT_THAT(list_one, ElementsAre("Red", "Green", "Blue"));
+  EXPECT_THAT(list_two, ElementsAre("Fuschia", "Yellow", "Orange"));
+
+  list_one.sort();
+  list_two.sort();
+
+  EXPECT_THAT(list_one, ElementsAre("Blue", "Green", "Red"));
+  EXPECT_THAT(list_two, ElementsAre("Fuschia", "Orange", "Yellow"));
+
+  list_one.merge(list_two);
+
+  EXPECT_THAT(list_one, ElementsAre("Blue", "Fuschia", "Green", "Orange", "Red", "Yellow"));
+  EXPECT_THAT(list_two.size(), Eq(0));
+
+  // for_each(list_one.begin(), list_one.end(), strPrinter);
+  // for_each(list_two.begin(), list_two.end(), strPrinter);
+
+  list<int> int_list;
+
+  int_list.push_back(0);
+  int_list.push_back(1);
+  int_list.push_back(2);
+  int_list.push_back(3);
+  int_list.push_back(4);
+
+  // for_each(int_list.begin(), int_list.end(), intPrinter);
+  
+  int_list.remove_if([](int e)
+      { 
+        if (e > 2) 
+          return true;
+
+        return false;
+      });
+
+  // for_each(int_list.begin(), int_list.end(), intPrinter);
+  
+  EXPECT_THAT(int_list, ElementsAre(0, 1, 2));
+
+  int_list.remove_if([](int e)
+      { return e % 2 == 0; });
+
+  EXPECT_THAT(int_list, ElementsAre(1));
+}
+
+
 ={============================================================================
 *kt_dev_cxx_0000* cxx-container-cxx-forward-list
 
@@ -38225,7 +38554,7 @@ only if the container has push_front and use back_inserter only if it has
 push_back. These are `back_inserter`, `front_inserter`, `inserter` which bind
 iterator to container operations.
 
-Consider *algo-copy* :
+Consider *cxx-algo-copy* :
 
 namespace std {
   template <typename InputIterator, typename OutputIterator>
@@ -38538,6 +38867,8 @@ provide push_front() as a member function: deque, list, and forward_list.
 
 {cxx-iter-stream} cxx-stream-iterator
 
+// /usr/include/c++/4.9/bits/stream_iterator.h
+
   "see(treat) stream as a sequence of elements(container) so use iterators"
 
 A stream is an object that represent I/O channel. Treat stream as a sequence
@@ -38569,28 +38900,23 @@ istream_iterator<string> in_iter(cin), eof;
 vector<string> vec(in_iter, eof);   // vector ctor which use iter range
 
 
-<ex>
-vector<Data> e;
-copy( istream_iterator<Date>( cin ), 
-    istream_iterator<Date>(), back_inserter(e) );
+<ex> algo-copy
+// template <class T, class charT=char, class traits=char_traits< charT>>
+// class ostream_iterator;
+// 
+// ostream_iterator (ostream_type& s, const char_type* delimiter);
 
-
-<ex> ostream_iterator
-
-template <class T, class charT=char, class traits=char_traits< charT>>
-class ostream_iterator;
-
-ostream_iterator (ostream_type& s, const char_type* delimiter);
+copy (list_two.cbegin(), list_two.cend(), ostream_iterator<int>(cout, " "));
 
 std::ostream_iterator<int> out_iter( std::cout, " " );
 for( auto e : vec )
   *out_iter++ = e;
 cout << endl;
 
-or
 
-copy( vec.begin(), vec.end(), out_iter );
-cout << endl;
+vector<Data> e;
+copy( istream_iterator<Date>( cin ), 
+    istream_iterator<Date>(), back_inserter(e) );
 
 
 <ex>
@@ -42763,7 +43089,7 @@ TEST(CxxStlTest, UseAlgoPartition)
 
 
 ={============================================================================
-*kt_dev_cpp_000* cpp-stream cpp-cout cpp-cin
+*kt_dev_cxx_0000* cpp-stream cpp-cout cpp-cin
 
 C++LR 15.1.2 Stream Classes
 
@@ -44031,84 +44357,6 @@ string foo()
 }
 
 
-{io-operators}
-<cxx-string-getline>
-This comes from string class but do not need to qualify std:: due to argument
-dependent lookup.
-
-This function reads all characters, including leading whitespaces, until the
-line delimiter or end-of-file is reached. 
-
-The line delimiter is extracted but 'not' appended; not include a new line
-character. so have to add '\n' when output it back to a file.
-
-while (getline(std::cin, s)) {       // for each line from cin
-...
-}
-
-
-can set delimiter. Note that if you read token by token, the newline character
-is not a special character. In this case, the tokens might contain a newline
-character.
-
-while (getline(std::cin, s, ’:’)) {   // for each token separated by ’:’
-...
-}
-
-// note: if useful, do further reading.
-// can use stringstream. Note also that since C++11, getline() is overloaded for
-// both lvalue and rvalue stream references, which allows using temporary string
-// streams. See Section 15.10, page 802, for details about string streams.
-
-void process (const std::string& filecontents)
-{
-  // process first line of passed string:
-  std::string firstLine;
-  std::getline(std::stringstream(filecontents), // OK since C++11
-      firstLine);
-  ...
-}
-
-
-// /usr/include/c++/4.9.2/bits/basic_string.h
-
-  /**
-   *  @brief  Read a line from stream into a string.
-   *  @param __is  Input stream.
-   *  @param __str  Buffer to store into.
-   *  @param __delim  Character marking end of line.
-   *  @return  Reference to the input stream.
-   *
-   *  Stores characters from @a __is into @a __str until @a __delim is
-   *  found, the end of the stream is encountered, or str.max_size()
-   *  is reached.  Any previous contents of @a __str are erased.  If
-   *  @a __delim is encountered, it is extracted but not stored into
-   *  @a __str.
-   */
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    basic_istream<_CharT, _Traits>&
-    getline(basic_istream<_CharT, _Traits>& __is,
-	    basic_string<_CharT, _Traits, _Alloc>& __str, _CharT __delim);
-
-  /**
-   *  @brief  Read a line from stream into a string.
-   *  @param __is  Input stream.
-   *  @param __str  Buffer to store into.
-   *  @return  Reference to the input stream.
-   *
-   *  Stores characters from is into @a __str until &apos;\n&apos; is
-   *  found, the end of the stream is encountered, or str.max_size()
-   *  is reached.  Any previous contents of @a __str are erased.  If
-   *  end of line is encountered, it is extracted but not stored into
-   *  @a __str.
-   */
-  template<typename _CharT, typename _Traits, typename _Alloc>
-    inline basic_istream<_CharT, _Traits>&
-    getline(basic_istream<_CharT, _Traits>& __is,
-	    basic_string<_CharT, _Traits, _Alloc>& __str)
-    { return std::getline(__is, __str, __is.widen('\n')); }
-
-
 ={============================================================================
 *kt_dev_cxx_0000* cxx-string-find
 
@@ -44146,7 +44394,28 @@ size_type string::rfind (const string& str, size_type idx) const
 * successful or string::npos if they fail.
 
 
-Finds the first 'character' of any of these chars:
+note:
+Given *cxx-string-const* why not an error?
+
+  s.find(',', i);
+
+Since:
+
+      /**
+       *  @brief  Find position of a character.
+       *  @param __c  Character to locate.
+       *  @param __pos  Index of character to search from (default 0).
+       *  @return  Index of first occurrence.
+       *
+       *  Starting from @a __pos, searches forward for @a __c within
+       *  this string.  If found, returns the index where it was
+       *  found.  If not found, returns npos.
+      */
+      size_type
+      find(_CharT __c, size_type __pos = 0) const _GLIBCXX_NOEXCEPT;
+
+
+Finds the first `character of any of these chars`:
 
 size_type string::find_first_of (const string& str) const
 size_type string::find_first_of (const string& str, size_type idx) const
@@ -44159,7 +44428,7 @@ size_type string::find_first_not_of (const string& str, size_type idx) const
 * These functions return the index of that character or substring when
   successful or `string::npos if they fail.`
 
-*TN*
+*cxx-remember*
 return index of the found which is difference from 0.
 
 
@@ -44177,7 +44446,8 @@ string string::substr (size_type idx, `size_type len`) const
 * If idx and len are missing, a copy of the string is returned.
 * All forms throw out_of_range if idx > size().
 
-*TN* returns [0, len)
+*cxx-remember* 
+uses `length` and returns [0, length)
 
 std::string s("interchangeability");
 
