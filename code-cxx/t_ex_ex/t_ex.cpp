@@ -395,6 +395,38 @@ TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
 }
 
 
+TEST(StringStream, X)
+{
+  size_t number_of_entries{};
+  cin >> number_of_entries;
+
+  map<string, string> phone_map{};
+
+  for (auto i = 0; i < number_of_entries; ++i)
+  {
+    string line;
+    getline(cin >> ws, line);
+
+    stringstream ss(line);
+    string name, number;
+    ss >> name;
+    ss >> number;
+
+    phone_map[name] = number;
+  }
+
+  string query;
+
+  while (cin >> query)
+  {
+    if (phone_map.find(query) != phone_map.end())
+      cout << query << "=" << phone_map[query] << endl;
+    else
+      cout << "Not found" << endl;
+  }
+}
+
+
 // ={=========================================================================
 
 int main(int argc, char **argv)

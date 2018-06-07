@@ -182,8 +182,7 @@ TEST(CxxStringTest, CompareStringFromEnd)
 // note that os, buffer, has all inputs from << and seek() moves writing pos.
 // do *cxx-string-convert-to-string*
 
-
-TEST(CxxStringStream, UseOutputStringStream)
+TEST(StringStream, UseOutputStringStream)
 {
   ostringstream os;
 
@@ -200,25 +199,26 @@ TEST(CxxStringStream, UseOutputStringStream)
 }
 
 
-TEST(CxxStringStream, UseStringStream)
+TEST(StringStream, UseStringStreamToConvertIntegers)
 {
   stringstream ss;
   vector<string> string_vector{};
 
-  // for(int i = 0; i < 4; ++i)
-  // {
-  //   ss << "player " << i << ", ";
-  //   string_vector.push_back(string(ss.str()));
-  //   ss.str("");
-  // }
-  
   for(int i = 0; i < 4; ++i)
   {
-    string str = "player " + to_string(i);
-    string_vector.push_back(str);
+    ss << "player " << i;
+    string_vector.push_back(string(ss.str()));
+    ss.str("");
   }
+  
+  // for(int i = 0; i < 4; ++i)
+  // {
+  //   string str = "player " + to_string(i);
+  //   string_vector.push_back(str);
+  // }
  
   EXPECT_THAT(string_vector, ElementsAre("player 0", "player 1", "player 2", "player 3"));
+
   // copy(string_vector.begin(), string_vector.end(), ostream_iterator<string>(cout, " "));
   // cout << endl;
 }
@@ -228,11 +228,15 @@ TEST(CxxStringStream, UseStringStream)
 // The following lines read the integer x with the value 3 and the
 // floating-point f with the value 0.7 from the string s:
 
-TEST(CxxStringStream, UseInputStringStream)
+TEST(StringStream, UseInputStringStream)
 {
   int x{};
   float f{};
-  istringstream is{"3.7"};
+
+  // istringstream is{"3.7"};
+
+  string input{"3.7"};
+  stringstream is(input);
 
   is >> x >> f;
  
@@ -240,9 +244,9 @@ TEST(CxxStringStream, UseInputStringStream)
   ASSERT_THAT(f, FloatEq(0.7));
 }
 
-TEST(CxxStringStream, UseInputStringStreamToParse)
+TEST(StringStream, UseInputStringStreamToParse)
 {
-  istringstream is{"1 2 3 4"};
+  stringstream is{"1 2 3 4"};
   int value{};
   vector<int> coll{};
 
