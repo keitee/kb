@@ -11,8 +11,8 @@
 # GTEST_DIR = ~/works/googletest/googletest
 # GMOCK_DIR = ~/works/googletest/googlemock
 
-GTEST_DIR = /home/kyoupark/works/googletest/googletest
-GMOCK_DIR = /home/kyoupark/works/googletest/googlemock
+GTEST_DIR = /home/kitp/works/googletest/googletest
+GMOCK_DIR = /home/kitp/works/googletest/googlemock
 
 
 TARGET = t_string

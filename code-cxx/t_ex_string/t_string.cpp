@@ -1,5 +1,3 @@
-#include "gmock/gmock.h"
-
 #include <iostream>
 #include <cstring>
 #include <vector>
@@ -8,6 +6,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 
+#include "gmock/gmock.h"
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -373,13 +372,22 @@ void rtrim(std::string &s, char c)
 
     // move it one back since it is increased in for loop one more
     //
-    // note: when string s do not have any c, for loop condition runs once adn
+    // note: when string s do not have any c, for loop condition runs once and
     // 'it' is end()-1. so ++it makes it is end(). so erase() has no effect.
 
     if (*it != c)
         ++it;
 
     s.erase(it, s.end());
+}
+
+void rtrim_0607(std::string &s, char c)
+{
+  if (s.empty())
+    return;
+
+  while (s[s.length()-1] == c)
+    s.pop_back();
 }
 
 // to trim `whitespace` from the end
@@ -415,19 +423,28 @@ void ltrimws(std::string &s)
 // s: zoo                              , size : 33
 // s: zoo, size : 3
 
-TEST(CxxStringTest, TrimCharOrWhitespaceFromEnd)
+TEST(Trim, UseTrims)
 {
     string s1{"zoo"};
     rtrim(s1, 'o');
     EXPECT_EQ(s1, "z");
 
-    string s2{"zoo                              "};
-    rtrimws(s2);
-    EXPECT_EQ(s2, "zoo");
-
     string s3{"zzz"};
     rtrim(s3, 'o');
     EXPECT_EQ(s3, "zzz");
+
+    string s11{"zoo"};
+    rtrim_0607(s11, 'o');
+    EXPECT_EQ(s1, "z");
+
+    string s33{"zzz"};
+    rtrim_0607(s33, 'o');
+    EXPECT_EQ(s3, "zzz");
+
+
+    string s2{"zoo                              "};
+    rtrimws(s2);
+    EXPECT_EQ(s2, "zoo");
 
     string s4{"                              zoo"};
     ltrimws(s4);
@@ -1970,8 +1987,8 @@ void TextAutoCorrectField::append(char c)
     // but not a word, so we have to work on the last chunk which just becomes a
     // word. i is the start index of this word. 
     
-    auto i = buf_.find_last_of(" \f\n\r\t\v");
-    i = (i == string::npos) ? 0 : ++i;
+    auto x = buf_.find_last_of(" \f\n\r\t\v");
+    auto i = (x == string::npos) ? 0 : ++x;
 
     // std::cout << "TextAutoCorrectField::append: i : " << i << std::endl;
 
