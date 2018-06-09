@@ -404,10 +404,10 @@ TEST(StringStream, X)
 
   for (auto i = 0; i < number_of_entries; ++i)
   {
-    string line;
-    getline(cin >> ws, line);
+    // string line;
+    // getline(cin >> ws, line);
+    // stringstream ss(line);
 
-    stringstream ss(line);
     string name, number;
     ss >> name;
     ss >> number;

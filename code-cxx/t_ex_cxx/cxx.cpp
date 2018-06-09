@@ -1074,6 +1074,21 @@ TEST(CxxStdio, UseInput)
   cout << i << endl;
   cout << d << endl;
   cout << s << endl;
+
+  stringstream iss4("10\n4.0\n1 2 3 4\n");
+  int i1, i2, i3, i4;
+  iss4 >> i;
+  iss4 >> d;
+  iss4 >> i1;
+  iss4 >> i2;
+  iss4 >> i3;
+  iss4 >> i4;
+
+  vector<int> coll{i1, i2, i3, i4};
+  
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_THAT(coll, ElementsAre(1,2,3,4));
 }
 
 

@@ -396,20 +396,7 @@ void PrintLists(const list<int> &list_one, const list<int> &list_two)
     cout << endl << endl;
 }
 
-// list 0: 0 1 2 3 4 5 
-// list 2: 0 1 2 3 4 5 
-//
-// list 1: 
-// list 2: 0 1 2 [0 1 2 3 4 5] 3 4 5 
-//
-// list 1: 
-// list 2: 1 2 [0 1 2 3 4 5] 3 4 5 0 
-//
-// list 1: 
-// list 2: 2 0 1 2 3 4 5 3 4 5 0 
-// list 3: 1 
-
-TEST(CxxStl, UseListExercise_01)
+TEST(CollList, UseSpliceOrMerge)
 {
     list<int> list_one, list_two;
 
@@ -419,80 +406,53 @@ TEST(CxxStl, UseListExercise_01)
         list_two.push_back(i);
     }
 
-    PrintLists(list_one, list_two);
+    EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
+    EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
 
     // moves all elements of list_one before the pos of '3' element.
     list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
-    PrintLists(list_one, list_two);
+    EXPECT_EQ(list_one.size(), 0); 
+    // 0 1 2 [0 1 2 3 4 5] 3 4 5 
+    EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
 
     // move first element of list_two to the end
     list_two.splice(list_two.end(), list_two, list_two.begin());
-    PrintLists(list_one, list_two);
+    // 1 2 [0 1 2 3 4 5] 3 4 5 0 
+    EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
 
     list<int> list_three;
     // move first element of list_two to the first of list_three
     list_three.splice(list_three.begin(), list_two, list_two.begin());
-    PrintLists(list_one, list_two);
-    cout << "list 3: ";
-    copy(list_three.begin(), list_three.end(), ostream_iterator<int>(cout, " "));
-    cout << endl;
+
+    EXPECT_THAT(list_two, ElementsAreArray({2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
+    EXPECT_THAT(list_three, ElementsAre(1)); 
+
+    list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
+    list<int> list5{0, 1, 2, 3, 4, 5};
+    
+    // 8.8.1 Special Member Functions for Lists (and Forward Lists)
+    //
+    // Strictly speaking, the standard requires that both (forward) lists be
+    // sorted on entry. In practice, however, merging is also possible for
+    // unsorted lists.  However, you should check this before you rely on it.
+    // 
+    // So will be sorted?
+    //
+    // list<int> list5;
+    // list5.merge({4, 1, 0, 3, 2, 5});
+    // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
+    //
+    // NO and failed on gcc.
+
+    list5.merge(list4);
+    EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
 }
 
-template <typename T>
-struct printer
+
+TEST(CollList, UseListRemoveIf)
 {
-  void operator()(const T& s)
-  {
-    cout << s << endl;
-  }
-};
+  list<int> int_list{0, 1, 2, 3, 4};
 
-TEST(CxxStl, UseListExercise_02)
-{
-  list<string> list_one;
-  list<string> list_two;
-
-  printer<string> strPrinter;
-  printer<int> intPrinter;
-
-  list_one.push_back("Red");
-  list_one.push_back("Green");
-  list_one.push_back("Blue");
-
-  list_two.push_front("Orange");
-  list_two.push_front("Yellow");
-  list_two.push_front("Fuschia");
-
-  // for_each(list_one.begin(), list_one.end(), strPrinter);
-  // for_each(list_two.begin(), list_two.end(), strPrinter);
-
-  EXPECT_THAT(list_one, ElementsAre("Red", "Green", "Blue"));
-  EXPECT_THAT(list_two, ElementsAre("Fuschia", "Yellow", "Orange"));
-
-  list_one.sort();
-  list_two.sort();
-
-  EXPECT_THAT(list_one, ElementsAre("Blue", "Green", "Red"));
-  EXPECT_THAT(list_two, ElementsAre("Fuschia", "Orange", "Yellow"));
-
-  list_one.merge(list_two);
-
-  EXPECT_THAT(list_one, ElementsAre("Blue", "Fuschia", "Green", "Orange", "Red", "Yellow"));
-  EXPECT_THAT(list_two.size(), Eq(0));
-
-  // for_each(list_one.begin(), list_one.end(), strPrinter);
-  // for_each(list_two.begin(), list_two.end(), strPrinter);
-
-  list<int> int_list;
-
-  int_list.push_back(0);
-  int_list.push_back(1);
-  int_list.push_back(2);
-  int_list.push_back(3);
-  int_list.push_back(4);
-
-  // for_each(int_list.begin(), int_list.end(), intPrinter);
-  
   int_list.remove_if([](int e)
       { 
         if (e > 2) 
@@ -501,14 +461,56 @@ TEST(CxxStl, UseListExercise_02)
         return false;
       });
 
-  // for_each(int_list.begin(), int_list.end(), intPrinter);
-  
   EXPECT_THAT(int_list, ElementsAre(0, 1, 2));
 
   int_list.remove_if([](int e)
       { return e % 2 == 0; });
 
   EXPECT_THAT(int_list, ElementsAre(1));
+}
+
+
+// ={=========================================================================
+// algo-equal
+
+TEST(AlgoEqual, UseVariousCases)
+{
+  vector<string> vec1{"Charles", "in", "Charge"};
+  vector<string> vec2{"Charles", "in", "charge"};
+
+  // false
+  cout << (vec1 == vec2 ? "true" : "false") << endl;
+
+  // false
+  cout << boolalpha 
+    << equal(vec1.begin(), vec1.end(), vec2.begin()) << endl;
+
+  string s1{"abcde"};
+  string s2{"abcdf"};
+
+  // Testing for “Less Than”
+  //
+  // Both forms return whether the elements in the range [beg1,end1) are
+  // “lexicographically less than” the elements in the range [beg2,end2).
+
+  cout << boolalpha
+    // false
+    << lexicographical_compare(s1.begin(), s1.end(), s1.begin(), s1.end()) 
+    << endl
+    // true
+    << lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end()) 
+    << endl;
+
+  // Search the First Difference
+  //
+  // The first form returns the first two corresponding elements of range
+  // [beg,end) and the range starting with cmpBeg that differ.
+  // 
+  // first mismatch = e second mismatch = f
+
+  auto iter = mismatch(s1.begin(), s1.end(), s2.begin());
+  cout << "first mismatch = " << *(iter.first) << endl;
+  cout << "second mismatch = " << *(iter.second) << endl;
 }
 
 
@@ -686,34 +688,81 @@ TEST(CxxStlTest, UseAlgoEqual)
 // coll2: 2 4 6 8 1 3 5 7 9 (9)
 // first odd element: 1
 
-TEST(CxxStlTest, UseAlgoPartition)
+TEST(Algo, UsePartition)
 {
     vector<int> coll1;
     vector<int> coll2;
 
     INSERT_ELEMENTS(coll1, 1, 9);
-    PRINT_ELEMENTS(coll1, "coll1: ");
+    EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-    vector<int>::iterator pos1, pos2;
-    pos1 = partition(coll1.begin(), coll1.end(),    // range
+    auto pos1 = partition(coll1.begin(), coll1.end(),    // range
                 [](int elem)
                 {
                     return elem %2 == 0;
                 });
-    PRINT_ELEMENTS(coll1, "coll1: ");
-    cout << "first odd element: " << *pos1 << endl;
+
+    EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
+
+    // algo-partition retuns returns an iterator to the first element where the
+    // predicate is not true, or the end of the range if all elements satisfy
+    // the predicate. so first odd element:
+ 
+    EXPECT_EQ(*pos1, 5);
 
     INSERT_ELEMENTS(coll2, 1, 9);
-    PRINT_ELEMENTS(coll2, "coll2: ");
+    EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-    pos2 = stable_partition(coll2.begin(), coll2.end(),
+    auto pos2 = stable_partition(coll2.begin(), coll2.end(),
                 [](int elem)
                 {
                     return elem %2 == 0;
                 });
-    PRINT_ELEMENTS(coll2, "coll2: ");
-    cout << "first odd element: " << *pos2 << endl;
+    EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
+
+    // first odd element:
+    EXPECT_EQ(*pos2, 1);
 }
+
+
+// ={=========================================================================
+// cxx-algo-for-each cxx-algo-transform
+
+int square_value_with_return(int value)
+{
+  value = value*value;
+  return value;
+}
+
+void square_value_no_return(int value)
+{
+  value = value*value;
+}
+
+void square_refer_no_return(int &value)
+{
+  value = value*value;
+}
+
+TEST(Algo, UseForEachAndTransform)
+{
+  set<int> coll1{1,2,3,4,5,6,7,8};
+  for_each(coll1.begin(), coll1.end(), square_value_no_return);
+  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+
+  // error since key in set are const
+  // set<int> coll11{1,2,3,4,5,6,7,8};
+  
+  vector<int> coll11{1,2,3,4,5,6,7,8};
+  for_each(coll11.begin(), coll11.end(), square_refer_no_return);
+  EXPECT_THAT(coll11, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
+
+  vector<int> coll2;
+  transform(coll1.begin(), coll1.end(), back_inserter(coll2), square_value_with_return);
+  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+  EXPECT_THAT(coll2, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
+}
+
 
 // ={=========================================================================
 // cxx-algo-unique

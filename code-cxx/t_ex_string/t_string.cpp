@@ -235,8 +235,12 @@ TEST(StringStream, UseInputStringStream)
 
   // istringstream is{"3.7"};
 
+  // string input{"3.7"};
+  // stringstream is(input);
+
   string input{"3.7"};
-  stringstream is(input);
+  stringstream is;
+  is.str(input);
 
   is >> x >> f;
  
