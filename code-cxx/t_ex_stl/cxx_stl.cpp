@@ -541,8 +541,37 @@ TEST(CxxStlTest, UseAlgoCopy)
 // ={=========================================================================
 // cxx-algo-generate cxx-random
 
-// 1804289383 846930886 1681692777 1714636915 1957747793 424238335 719885386 1649760492 596516649 1189641421 1025202362 1350490027 (12)
-// 2 19 11 22 12 18 4 16 11 8 15 21 (12)
+// 16807, 282475249, 1622650073, 984943658, 1144108930, 470211272, 101027544, 1457850878, 1458777923, 2007237709, 823564440, 1115438165, 1784484492, 74243042, 114807987, 1137522503, 1441282327, 16531729,
+//  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
+//  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
+
+TEST(Random, UseRandomEngineAndDistribution)
+{
+  default_random_engine dre;
+
+  for (size_t i = 0; i < 18; ++i)
+    cout << dre() << ", ";
+  cout << endl;
+
+  uniform_int_distribution<unsigned> udist1(0, 6);
+
+  for (size_t i = 0; i < 18; ++i)
+    cout << setw(2) << udist1(dre) << ", ";
+  cout << endl;
+
+  uniform_int_distribution<unsigned> udist2(6, 12);
+
+  for (size_t i = 0; i < 18; ++i)
+    cout << setw(2) << udist2(dre) << ", ";
+  cout << endl;
+}
+
+
+// 0 3 18 11 13 5 1 16 16 23 9 12 (12)
+// 20 0 1 13 16 0 9 1 10 17 14 23 (12)
+// 1 0 1 1 1 1 0 0 1 1 0 1 (12)
+// 0 1 1 0 0 0 0 0 1 0 1 1 (12)
+// 8 8 8 9 9 9 7 8 8 8 7 9 (12)
 
 class CardSequenceUseRand
 {
@@ -570,10 +599,27 @@ class CardSequenceUseRandom
     static uniform_int_distribution<size_t> udist;
 };
 
+
+class CardSequenceUseRandWithRange
+{
+  public:
+    CardSequenceUseRandWithRange(int min, int max)
+      : min_(min), max_(max) {}
+
+    int operator() () {
+      return min_ + (rand() % (max_ - min_ + 1));
+    }
+
+  private:
+    int min_{};
+    int max_{};
+};
+
+
 default_random_engine CardSequenceUseRandom::dre;
 uniform_int_distribution<size_t> CardSequenceUseRandom::udist{0, 24};
 
-TEST(CxxStlTest, UseAlgoGenerate)
+TEST(Algo, UseGenerate)
 {
     vector<uint32_t> ivec1;
     generate_n( back_inserter(ivec1), 12, CardSequenceUseRandom() );
@@ -590,6 +636,11 @@ TEST(CxxStlTest, UseAlgoGenerate)
     vector<uint32_t> ivec4;
     generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
     PRINT_ELEMENTS(ivec4);
+
+    vector<uint32_t> ivec5;
+    generate_n(back_inserter(ivec5), 12, 
+        CardSequenceUseRandWithRange(6, 9));
+    PRINT_ELEMENTS(ivec5);
 }
 
 
