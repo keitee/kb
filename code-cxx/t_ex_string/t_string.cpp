@@ -199,31 +199,6 @@ TEST(StringStream, UseOutputStringStream)
 }
 
 
-TEST(StringStream, UseStringStreamToConvertIntegers)
-{
-  stringstream ss;
-  vector<string> string_vector{};
-
-  for(int i = 0; i < 4; ++i)
-  {
-    ss << "player " << i;
-    string_vector.push_back(string(ss.str()));
-    ss.str("");
-  }
-  
-  // for(int i = 0; i < 4; ++i)
-  // {
-  //   string str = "player " + to_string(i);
-  //   string_vector.push_back(str);
-  // }
- 
-  EXPECT_THAT(string_vector, ElementsAre("player 0", "player 1", "player 2", "player 3"));
-
-  // copy(string_vector.begin(), string_vector.end(), ostream_iterator<string>(cout, " "));
-  // cout << endl;
-}
-
-
 // do *cxx-string-convert-to-number*
 // The following lines read the integer x with the value 3 and the
 // floating-point f with the value 0.7 from the string s:
@@ -259,6 +234,91 @@ TEST(StringStream, UseInputStringStreamToParse)
 
   EXPECT_THAT(coll, ElementsAre(1,2,3,4));
 }
+
+
+TEST(StringConversion, UseStringStreamToConvert)
+{
+  // to-string
+  stringstream ss;
+  vector<string> string_vector{};
+
+  for(int i = 0; i < 4; ++i)
+  {
+    ss << "player " << i;
+    string_vector.push_back(string(ss.str()));
+    ss.str("");
+  }
+  
+  // for(int i = 0; i < 4; ++i)
+  // {
+  //   string str = "player " + to_string(i);
+  //   string_vector.push_back(str);
+  // }
+ 
+  EXPECT_THAT(string_vector, ElementsAre("player 0", "player 1", "player 2", "player 3"));
+
+  // to-number
+  stringstream ssi{"1 2 3 4"};
+  vector<int> coll2{};
+  int value{};
+
+  ssi >> value; coll2.push_back(value);
+  ssi >> value; coll2.push_back(value);
+  ssi >> value; coll2.push_back(value);
+  ssi >> value; coll2.push_back(value);
+
+  EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4));
+}
+
+TEST(StringConversion, UseStlFunctionsToConvert)
+{
+  EXPECT_EQ(std::stoi("  77"), 77);
+  EXPECT_EQ(std::stoi("  77.7"), 77);
+
+  // std::stoi("-0x77") yields 0 because it parses only -0, interpreting
+  // the x as the end of the numeric value found.
+  EXPECT_EQ(std::stoi("-0x77"), 0);
+
+  size_t idx{};
+
+  EXPECT_EQ(std::stoi("  42 is the truth", &idx), 42);
+  // idx of first unprocessed char
+  EXPECT_EQ(idx, 4);
+
+  // use base 16 and 8. 0x42 = 66
+  EXPECT_EQ(std::stoi("  42", nullptr, 16), 66) << endl;
+
+  // std::stol("789", &idx, 8) parses only the first character of the string
+  // because 8 is not a valid character for octal numbers.
+
+  EXPECT_EQ(std::stoi("789", &idx, 8), 7);
+  // idx of first unprocessed char
+  EXPECT_EQ(idx, 1);
+
+  // man strtol()
+  //
+  // The string may begin with an arbitrary amount of white space (as deter‐
+  // mined by isspace(3)) followed by a single optional '+' or '-' sign.  
+
+  // If base is zero or 16, the string may then include a "0x" prefix, and
+  // the number  will  be read in base 16; otherwise, a zero base is taken
+  // as 10 (decimal) unless the next character is '0', in which case it  is
+  // taken as 8 (octal).
+
+  EXPECT_EQ(std::stol("0x12AB", nullptr, 0), 4779);
+  EXPECT_EQ(std::stol("12AB", nullptr, 16), 4779);
+
+  // *cxx-string-convert-to-string* *cxx-limits*
+  long long ll = std::numeric_limits<long long>::max();
+  EXPECT_EQ(std::to_string(ll), "9223372036854775807");
+
+  // try to convert back and throws out_of_range
+  EXPECT_THROW(std::stoi("9223372036854775807"), std::out_of_range);
+}
+
+// TEST(StringConversion, UseBoostLexicalCastToConvert)
+// {
+// }
 
 
 // ={=========================================================================

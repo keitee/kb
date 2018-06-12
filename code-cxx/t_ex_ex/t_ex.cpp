@@ -395,35 +395,68 @@ TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
 }
 
 
-TEST(StringStream, X)
+// TEST(StringStream, X)
+// {
+//   size_t number_of_entries{};
+//   cin >> number_of_entries;
+
+//   map<string, string> phone_map{};
+
+//   for (auto i = 0; i < number_of_entries; ++i)
+//   {
+//     // string line;
+//     // getline(cin >> ws, line);
+//     // stringstream ss(line);
+
+//     string name, number;
+//     stringstream ss;
+//     ss >> name;
+//     ss >> number;
+
+//     phone_map[name] = number;
+//   }
+
+//   string query;
+
+//   while (cin >> query)
+//   {
+//     if (phone_map.find(query) != phone_map.end())
+//       cout << query << "=" << phone_map[query] << endl;
+//     else
+//       cout << "Not found" << endl;
+//   }
+// }
+
+bool doubleEquals(double left, double right, double epsilon)
 {
-  size_t number_of_entries{};
-  cin >> number_of_entries;
+  return (fabs(left-right) < epsilon);
+}
 
-  map<string, string> phone_map{};
+bool doubleLess(double left, double right, double epsilon, bool orequal = false)
+{
+  if (fabs(left - right) < epsilon)
+    return orequal;
 
-  for (auto i = 0; i < number_of_entries; ++i)
-  {
-    // string line;
-    // getline(cin >> ws, line);
-    // stringstream ss(line);
+  return left < right;
+}
 
-    string name, number;
-    ss >> name;
-    ss >> number;
+TEST(CompareFloating, x)
+{
+  double first = 0.33339999;
+  double second = 1.0/3.0;
 
-    phone_map[name] = number;
-  }
+  cout << first << endl;
+  cout << second << endl;
 
-  string query;
+  cout << boolalpha << (first == second) << endl;
 
-  while (cin >> query)
-  {
-    if (phone_map.find(query) != phone_map.end())
-      cout << query << "=" << phone_map[query] << endl;
-    else
-      cout << "Not found" << endl;
-  }
+  cout << doubleEquals(first, second, .0001) << endl;
+  cout << doubleEquals(second, first, .0001) << endl;
+
+  stringstream ss{"1.234e5"};
+  double d{};
+  ss >> d;
+  cout << d << endl;
 }
 
 
