@@ -12,6 +12,7 @@
 #include "location.h"
 #include "area.h"
 #include "user.h"
+#include "threadpool.h"
 
 class GeoServerListener
 {
@@ -40,10 +41,15 @@ class GeoServer
                 double heightInMeters,
                 GeoServerListener *listener=nullptr) const;
 
+        // c9/15/GeoServer.h
+        void useThreadPool(std::shared_ptr<ThreadPool> pool);
+
     private:
         std::unordered_map<std::string, Location> locations_;
         std::unordered_map<std::string, Location>::const_iterator
             find(const std::string &user) const;
+
+        std::shared_ptr<ThreadPool> pool_;
 };
 
 #endif // __GEOSERVER_H__

@@ -14,7 +14,7 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread
 
-TESTS = test_gmock
+TESTS = gmock_test 
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -50,9 +50,13 @@ gmock.a : gmock-all.o
 gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
-#
+# for list example
+t_ex_list.o : t_ex_list.cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c t_ex_list.cpp -o t_ex_list.o
+
+# for weatherstation example
 t_ex_mock.o : t_ex_mock.cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c t_ex_mock.cpp -o t_ex_mock.o
 
-test_gmock : t_ex_mock.o gtest.a gmock.a
+$(TESTS) : t_ex_list.o t_ex_mock.o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

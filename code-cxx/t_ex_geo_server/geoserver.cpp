@@ -64,13 +64,41 @@ void GeoServer::usersInBox(
 
     // std::vector<User> users;
 
+    // for( auto &each : locations_ )
+    //     if( isDifferentUserInBounds(each, user, box) )
+    //     {
+    //         // users.push_back( User{each.first, each.second} );
+    //         if (listener)
+    //             listener->updated(User{each.first, each.second});
+    //     }
+
+    // c9/15/GeoServer.cpp
     for( auto &each : locations_ )
-        if( isDifferentUserInBounds(each, user, box) )
-        {
-            // users.push_back( User{each.first, each.second} );
-            if (listener)
-                listener->updated(User{each.first, each.second});
-        }
+    {
+        Work work{ [&] 
+            {
+                if( isDifferentUserInBounds(each, user, box) )
+                {
+                    // users.push_back( User{each.first, each.second} );
+                    if (listener)
+                        listener->updated(User{each.first, each.second});
+                }
+            }};
+        pool_->add(work);
+    }
+
+    // NOTE:
+    // As always, we seek incremental change, leaving in place the logic that
+    // directly returns a vector of users. This allows us to prove our idea
+    // before wasting a lot of time applying a similar implementation to other
+    // tests.
 
     // return users;
+}
+
+// c9/15/GeoServer.cpp
+
+void GeoServer::useThreadPool(std::shared_ptr<ThreadPool> pool)
+{
+    pool_ = pool;
 }

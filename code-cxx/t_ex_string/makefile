@@ -7,11 +7,13 @@
 # g++ (Debian 6.3.0-18+deb9u1) 6.3.0 20170516
 # have to use absloute path. don't know why
 
-# GTEST_DIR = /home/kitp/works/googletest/googletest
-# GMOCK_DIR = /home/kitp/works/googletest/googlemock
+# why `relative path` do not work?
+# GTEST_DIR = ~/works/googletest/googletest
+# GMOCK_DIR = ~/works/googletest/googlemock
 
-GTEST_DIR = ~/works/googletest/googletest
-GMOCK_DIR = ~/works/googletest/googlemock
+GTEST_DIR = $(HOME)/works/googletest/googletest
+GMOCK_DIR = $(HOME)/works/googletest/googlemock
+
 
 TARGET = t_string
 
@@ -21,9 +23,9 @@ USER_DIR = .
 CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(GTEST_DIR) \
 			-isystem $(GMOCK_DIR)/include -I$(GMOCK_DIR)
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread
+CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -lboost_regex
 
-TESTS = test_$(TARGET)
+TESTS = $(TARGET)_test
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -63,5 +65,5 @@ gtest.a : gtest-all.o
 $(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 
-test_$(TARGET) : $(TARGET).o gtest.a gmock.a
+$(TARGET)_test : $(TARGET).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
