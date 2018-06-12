@@ -11,8 +11,12 @@ if __name__ == "__main__":
     dirs = [
         './CMS_PLATFORM_SERVICES', 
         './CMS_SYSTEM_INFRASTRUCTURE',
-        './DARWIN_PLATFORM', './CMS_MEDIA_SERVICES', './CMS_INFORMATION_SERVICES',
+        './DARWIN_PLATFORM', 
+        './CMS_MEDIA_SERVICES', 
+        './CMS_INFORMATION_SERVICES',
+        './COMMON_MIDDLEWARE',
         './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso',
+        './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-api/src/java/com/nds/fusion',
         './THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae',
         './FUSIONOS_2/UTILITIES_HELPER',
         './XTV_High_Level_VOB',
@@ -22,7 +26,7 @@ if __name__ == "__main__":
     listfile = 'flist.out'
     logfile = open(listfile, 'w+')
 
-    # find . -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
+    # find {to be replaced} -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
     # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
     command = ["find", ".", "-type", "d", 
         "(", 
@@ -34,10 +38,12 @@ if __name__ == "__main__":
         "-path", "*/AVCU",  "-o",
         "-path", "*/Interface",  "-o",
         "-path", "*/doc",  "-o",
+        "-path", "*/docs",  "-o",
         "-path", "*/openssl",  "-o",
         "-path", "*/FREETYPE2",  "-o",
         "-path", "*/iscdhcp",  "-o",
         "-path", "*/unit_test",  "-o",
+        "-path", "*/cunitTest",  "-o",
         "-path", "*/test",  "-o",
         "-path", "*/test2",
         ")", "-prune", "-o", "-type", "f", "-print"]
