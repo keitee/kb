@@ -5,6 +5,7 @@
 #include <bitset>
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
+#include <boost/cast.hpp>
 
 #include "gmock/gmock.h"
 
@@ -319,6 +320,27 @@ TEST(StringConversion, UseStlFunctionsToConvert)
 // TEST(StringConversion, UseBoostLexicalCastToConvert)
 // {
 // }
+
+TEST(StringConverison, NarrowNumericConversion)
+{
+  // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’ inside { } [-Wnarrowing]
+  //    int x{5.0};
+  //            ^
+
+  int x{5.0};
+  EXPECT_EQ(x, 5);
+
+  // I am cramming an int into a short. On my (Windows XP) system, an int is
+  // four bytes and a short is two. A short is signed, which means that I have
+  // 15 bits to represent a number with and, therefore, 32,767 is the maximum
+  // positive value it can hold. The above piece of code goes off without a
+  // hitch, but when I increment i by one, it goes beyond the range of a short:
+
+  int i{32767};
+  EXPECT_EQ(boost::numeric_cast<short>(i), 32767);
+  ++i;
+  EXPECT_THROW(boost::numeric_cast<short>(i), boost::bad_numeric_cast);
+}
 
 
 // ={=========================================================================

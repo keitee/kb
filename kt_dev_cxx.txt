@@ -193,7 +193,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-template-std-forward
 *kt_dev_cpp_053* cpp-template-overload
 |kt_dev_cpp_053| cpp-template-variadic
-|kt_dev_cpp_054| cxx-template-specialization
+*kt_dev_cxx_0000* cxx-template-specialization
 *kt_dev_cpp_054* template-inheritance
 *kt_dev_cpp_060* template-initialize-type-member
 
@@ -10498,21 +10498,6 @@ Token Token_stream::get()
 }
 
 
-*cxx-remember*
-The `list-form-init` do 'not' allow `narrow-conversion` of 'built-in' type.
-
-int x3{5.0};      // ERROR: narrowing
-int x4 = {5.3};   // ERROR: narrowing
-
-Worthwhile to use this property? Since unlikely to directly initialize an int
-from a long double? However such initialization might happen unintentionally
-in template. So YES.
-
-  * use `single-form-of-init` whether it is built-in or class type
-
-  * avoid vexing-parse
-
-
 <ex>
 As with `direct-form-init`, `list-form-init` do not care `exlpicit` on
 converting-ctor.
@@ -16300,7 +16285,7 @@ class Blob
     public:
         typedef T value_type;
 
-        // *cpp-template-type-member*
+        // *cxx-template-type-member*
         typedef typename std::vector<T>::size_type size_type;
 
         Blob();
@@ -29018,9 +29003,12 @@ wide applicability and a solid empirical basis.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-design-by-contract 
   
-EC++18, Make it hard to use incorrectly 
+{ex-for-type}
 
-1. Make compile error for incorrect uses (interface usage errors):
+* EC++18, Make it hard to use incorrectly 
+* for compile time and for types but not values
+
+// Make compile error for incorrect uses (interface usage errors):
 
 class Date {
   public:
@@ -29057,20 +29045,19 @@ class Date {
 };
 
 
-// wrong type. wrong order
+// error since not explicit and wrong order
 Date d(30, 3, 1995);                      
 
-// wrong type. invalid
+// error since wrong order
 Date d( Day(3), Month(40), Year(1995) );
 
-// correct type. invalid value but easy to 'see'!
+// okay but invalid value. However, easy to 'see'!
 Date d( Month(40), Day(3), Year(1995) );  
 
 
-2. Make compile error for invalid values: 
+How to make compile error for invalid values?
 
-Consider enum? NO since not type-safe. Safer solution is to predefine all
-vaild months. note: C++11 enum supports type checks. 
+* Used functions only to represent months.
 
 class Month {
   public:
@@ -29085,11 +29072,139 @@ class Month {
 
 Date d( Month::Mar(), Day(30), Year(1995) );
 
-Used functions to represent months. How about {class-const} in
-*kt_dev_cpp_017* instead of using function?
+
+* Consider enum? NO since not type-safe. Safer solution is to predefine all
+  vaild months. note: C++11 enum supports type checks. see *cxx-enum* 
 
 
-3. Force client to follow interface rule
+{ex-for-values}
+
+* runtime check for values
+ 
+<cxx-design-policy>
+* Using policies can improve the flexibility of classes by deferring design
+  decisions to the user of the type. It is common to use policies when a group
+  of types has a common interface but vary in their implementation. Policies
+  are also particularly useful when it is impossible to anticipate and satisfy
+  all possible usage scenarios of a given type.
+
+// C++ cookbook, 5.6 Defining Constrained Value Types
+
+template<typename Policy_T>
+struct ConstrainedValue
+{
+  public:
+    // public typedefs
+    //
+    // t_ex.cpp:435:22: error: expected nested-name-specifier before ‘Policy_T’
+    //      typedef typename Policy_T policy_type;
+    //                       ^
+    // typedef typename Policy_T policy_type;
+
+    typedef Policy_T policy_type;
+    typedef typename Policy_T::value_type value_type;
+    typedef ConstrainedValue self;
+    // default constructor
+    ConstrainedValue( ) : m(Policy_T::default_value) { }
+    ConstrainedValue(const self& x) : m(x.m) { }
+    ConstrainedValue(const value_type& x) 
+    { 
+      cout << "converting ctor" << endl;
+      Policy_T::assign(m, x); 
+    }
+
+    operator value_type( ) const { return m; }
+
+    // uses the policy defined assign function
+    void assign(const value_type& x) {
+      Policy_T::assign(m, x);
+    }
+
+    // assignment operations
+    self& operator=(const value_type& x) { assign(x); return *this; }
+    self& operator+=(const value_type& x) { assign(m + x); return *this; }
+    self& operator-=(const value_type& x) { assign(m - x); return *this; }
+    self& operator*=(const value_type& x) { assign(m * x); return *this; }
+    self& operator/=(const value_type& x) { assign(m / x); return *this; }
+    self& operator%=(const value_type& x) { assign(m % x); return *this; }
+    self& operator>>=(int x) { assign(m >> x); return *this; }
+    self& operator<<=(int x) { assign(m << x); return *this; }
+
+    // unary operations
+    self operator-( ) { return self(-m); }
+    self operator+( ) { return self(+m); }
+    self operator!( ) { return self(!m); }
+    self operator~( ) { return self(~m); }
+    // binary operations
+    friend self operator+(self x, const value_type& y) { return x += y; }
+    friend self operator-(self x, const value_type& y) { return x -= y; }
+    friend self operator*(self x, const value_type& y) { return x *= y; }
+    friend self operator/(self x, const value_type& y) { return x /= y; }
+    friend self operator%(self x, const value_type& y) { return x %= y; }
+    friend self operator+(const value_type& y, self x) { return x += y; }
+    friend self operator-(const value_type& y, self x) { return x -= y; }
+    friend self operator*(const value_type& y, self x) { return x *= y; }
+    friend self operator/(const value_type& y, self x) { return x /= y; }
+    friend self operator%(const value_type& y, self x) { return x %= y; }
+    friend self operator>>(self x, int y) { return x >>= y; }
+    friend self operator<<(self x, int y) { return x <<= y; }
+    // stream operators
+    friend ostream& operator<<(ostream& o, self x) { o << x.m; return o; }
+    friend istream& operator>>(istream& i, self x) {
+      value_type tmp; i >> tmp; x.assign(tmp); return i;
+    }
+    // comparison operators
+    friend bool operator<(const self& x, const self& y) { return x.m < y.m; }
+    friend bool operator>(const self& x, const self& y) { return x.m > y.m; }
+    friend bool operator<=(const self& x, const self& y) { return x.m <= y.m; }
+    friend bool operator>=(const self& x, const self& y) { return x.m >= y.m; }
+    friend bool operator==(const self& x, const self& y) { return x.m == y.m; }
+    friend bool operator!=(const self& x, const self& y) { return x.m != y.m; }
+  private:
+    value_type m;
+};
+
+template<int Min_N, int Max_N>
+struct RangedIntPolicy
+{
+  typedef int value_type;
+  const static value_type default_value = Min_N;
+  static void assign(value_type& lvalue, const value_type& rvalue) {
+    if ((rvalue < Min_N) || (rvalue > Max_N)) {
+      throw range_error("out of valid range");
+    }
+    lvalue = rvalue;
+  }
+};
+
+typedef ConstrainedValue< RangedIntPolicy<1582, 4000> > GregYear;
+typedef ConstrainedValue< RangedIntPolicy<1, 12> > GregMonth;
+typedef ConstrainedValue< RangedIntPolicy<1, 31> > GregDayOfMonth;
+
+void gregOutputDate(GregDayOfMonth d, GregMonth m, GregYear y) {
+  cout << m << "/" << d << "/" << y << endl;
+}
+
+TEST(Ranged, X)
+{
+  try {
+    gregOutputDate(14, 7, 2005);
+  }
+  catch(...) {
+    cerr << "whoops, shouldn't be here" << endl;
+  }
+  try {
+    gregOutputDate(1, 13, 1582);
+    // gregOutputDate(1, 5, 1148);
+    cerr << "whoops, shouldn't be here" << endl;
+  }
+  catch(...) {
+    cerr << "are you sure you want to be using a Gregorian Calendar?" << endl;
+  }
+}
+
+{ex-for-interface}
+Force client to follow interface rule
 
 Investment* createInvestment();
 
@@ -29098,8 +29213,7 @@ better interface decision is:
 
 std::shated_ptr<Investment> createInvestment();
 
-The same is {factory-func} in *kt_dev_stl_018* which force client to use
-smart_ptr.
+So it force client to use smart_ptr.
 
 
 ={============================================================================
@@ -31310,6 +31424,24 @@ ccon.cpp:306:17: error: need ‘typename’ before ‘std::__debug::list<std::pa
   because ‘std::__debug::list<std::pair<_T1, _T2> >’ is a dependent scope
          typedef std::list<bucket_value>::iterator bucket_iterator;
                  ^
+<ex>
+template<typename Policy_T>
+struct ConstrainedValue
+{
+  public:
+
+    // error
+    //
+    // t_ex.cpp:435:22: error: expected nested-name-specifier before ‘Policy_T’
+    //      typedef typename Policy_T policy_type;
+    //                       ^
+    // typedef typename Policy_T policy_type;
+
+    typedef Policy_T policy_type;
+
+    // ...
+};
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-default-argument
@@ -31674,7 +31806,7 @@ note: Q: does it have real use case?
 
 <normal-conversion>
 As with ordinary argument, normal conversion applies on
-`template-explicit-argument` since no deduction involved.
+`cxx-template-explicit-argument` since no deduction involved.
 
 template <typename T> int compare(const T& v1, const T& v2);
 
@@ -32597,7 +32729,9 @@ std::forward<int>(10), std::forward<char>(c)
 
 
 ={============================================================================
-*kt_dev_cpp_054* cxx-template-specialization
+*kt_dev_cxx_0000* cxx-template-specialization
+
+{cxx-template-nontype-parameters}
 
 CPR 16.5
 
@@ -32613,49 +32747,97 @@ template argument. In some cases, the general template is wrong for a type.
 When cannot or do not want to use the template version, can define a
 specialized version of the class or function template.
 
+CPR 16.1
 
-{problem}
+* A nontype parameter represents `a value rather than a type.` These value must
+  be constant expression and is a constant value inside the template
+  definition.
+
+* A nontype parameters are specified by using a specific type name instead of
+  the class or typename keyword.
+
 Again, compare() is an example for which the general definition is not
 appropriate for a particular type, character pointers. We want to compare
 pointers by strcmp() rather than by comparing the pointer values.
 
-// first version for any two types
-template <typename T> int compare(const T&, const T&)
+// generic version for any two types
+
+template <typename T> 
+int compare(const T&, const T&)
 {
   if( v1 < v2 ) return -1;
   if( v2 < v1 ) return 1;
   return 0;
 }
 
-// second version for string literals. Uses `nontype-template` parameters
-template <size_t N, size_t M> int compare(const char (&) [N], const (&) [M])
+// nontype-template-parameter version for string literals
+// define parameters as references to an array since cannot copy an array.
+
+template <unsigned N, unsigned M> 
+int compare(const char (&p1) [N], const (&p2) [M])
 {
-    return strcmp(p1, p2);
+  return strcmp(p1, p2);
 }
 
 If calls compare() with character pointers, the first version will be called
 because `nontype-template` version will be called only when pass a string
-literal or an array.
+literal which is array of const char or an array.
 
 
 const char *p1 = "hi", *p2 = "mom";
 
-compare(p1, p2);          // call first
-compare("hi", "mom");     // call second
+// instantiate type-template version
+
+compare(p1, p2);          
+
+// instantiate nontype-template version
+// int compare(const char (&p1)[3], const char (&p2)[4]);
+
+compare("hi", "mom");     
 
 
-{specialization}
+<ex>
+template<class T, int size> class Myfilebuf
+{
+    T* filepos;
+    static int array[size];
+
+  public:
+    Myfilebuf() { /* ... */ }
+    ~Myfilebuf();
+    advance(); // function defined elsewhere in program
+};
+
+template<int Min_N, int Max_N>
+struct RangedIntPolicy
+{
+  typedef int value_type;
+  const static value_type default_value = Min_N;
+  static void assign(value_type& lvalue, const value_type& rvalue) {
+    if ((rvalue < Min_N) || (rvalue > Max_N)) {
+      throw range_error("out of valid range");
+    }
+    lvalue = rvalue;
+  }
+};
+
+
+{cxx-template-specialization}
 To handle character pointers, can define a `template specialization` of the
 first version. A `separate definition` of the template, specific instantiation
 in which one or more template parameters are specified to have particular
 types.
 
-  *specialization-or-explitict-argument*
+  *template-specialization-or-template-explitict-argument*
+
   Can use `cpp-template-explicit-argument` because it specifies the types?
   No becuase explict-argument `specifies the type` with the same
   defintion(code) but specialization supply different 'definition' and
   specifies definition or instantiation. Hence sometimes called
   `total-specitialzation` as oppose to partial specialization?
+
+  template-explicit-argument is to create one for specific type when try to
+  use it and template-specialization is when defines template. 
 
 
 <for-function-template>
@@ -32785,7 +32967,8 @@ The remove_reference type-trait works through a series of specialization.
 
 // original, most general template and for any type
 
-template <typename T> struct remove_reference 
+template <typename T> 
+struct remove_reference 
 {
     typedef T type;
 };
@@ -32793,10 +32976,12 @@ template <typename T> struct remove_reference
 // partial specialization used for lvalue and rvalue reference
 // *cpp-reference-quailifier*
 
-template <typename T> struct remove_reference`<T&>` 
+template <typename T> 
+struct remove_reference`<T&>` 
 { typedef T type; };
 
-template <typename T> struct remove_reference`<T&&>`
+template <typename T> 
+struct remove_reference`<T&&>`
 { typedef T type;};
 
 The specialization's parameter list has the same number of parameters as the
@@ -40754,7 +40939,7 @@ inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
   std::cout << std::endl;
 }
 
-template <int theValue>       // *cpp-template-explicit-argument*
+template <int theValue>       // *cxx-template-nontype-paremeter*
 void add( int& elem )
 {
   elem += theValue;
@@ -45381,6 +45566,38 @@ delete stringstream int
 delete boost::lexical_cast<int>
 
 
+{to-number-narrow-convertion}
+The `list-form-init` do 'not' allow `narrow-conversion` of 'built-in' type.
+
+TEST(StringConverison, NarrowNumericConversion)
+{
+  // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’ inside { } [-Wnarrowing]
+  //    int x{5.0};
+  //            ^
+
+  int x{5.0};
+  EXPECT_EQ(x, 5);
+
+  // I am cramming an int into a short. On my (Windows XP) system, an int is
+  // four bytes and a short is two. A short is signed, which means that I have
+  // 15 bits to represent a number with and, therefore, 32,767 is the maximum
+  // positive value it can hold. The above piece of code goes off without a
+  // hitch, but when I increment i by one, it goes beyond the range of a short:
+
+  int i{32767};
+  EXPECT_EQ(boost::numeric_cast<short>(i), 32767);
+  ++i;
+  EXPECT_THROW(boost::numeric_cast<short>(i), boost::bad_numeric_cast);
+}
+
+Worthwhile to use this property? Since unlikely to directly initialize an int
+from a long double? However such initialization might happen unintentionally
+in template. So YES.
+
+  * use `single-form-of-init` whether it is built-in or class type
+  * avoid vexing-parse
+
+
 {cxx-string-print-char} *cxx-stream*
 
 How to print char value itself but not a printable char? Use +saved_input trick.
@@ -49854,14 +50071,18 @@ ostream &operator<<(ostream &os, const chrono::duration<V,R> &d)
     return os;
 }
 
-TEST(CxxFeaturesTest, UseCronoDurationCast)
+TEST(Time, UseCronoDurationCast)
 {
     chrono::milliseconds ms(7255042);
 
-    chrono::hours   hh = chrono::duration_cast<chrono::hours>(ms);
-    chrono::minutes mm = chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
-    chrono::seconds ss = chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
-    chrono::milliseconds msec = chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+    chrono::hours   hh = 
+      chrono::duration_cast<chrono::hours>(ms);
+    chrono::minutes mm = 
+      chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+    chrono::seconds ss = 
+      chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+    chrono::milliseconds msec = 
+      chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
 
     cout << "raw: " << hh << "::" << mm << "::"
         << ss << "::" << msec << endl;
@@ -49961,7 +50182,7 @@ void print_clock_data()
 // - precision: 0.000001 milliseconds
 // - is steady: true
 
-TEST(CxxFeaturesTest, UseCronoClock)
+TEST(Time, ShowCronoClockDetails)
 {
     cout << "system_clock: " << endl;
     print_clock_data<std::chrono::system_clock>();
@@ -49975,8 +50196,8 @@ TEST(CxxFeaturesTest, UseCronoClock)
 
 
 <steady-clock>
-The steady_clock is important to compare or compute the difference of two times in your
-program, where you processed the current point in time.
+The steady_clock is important to compare or compute the difference of two
+times in your program, where you processed the current point in time.
 
 Similarly, processing the elapsed time of a program:
 
@@ -49988,6 +50209,8 @@ might print a negative duration if the clock was adjusted in the meantime. For
 the same reason, using timers with other than the steady_clock might change
 their duration when the system clock gets adjusted. 
 
+
+<cxx-time-crono-print>
 
 Timepoints, absolute time
 
@@ -50043,7 +50266,7 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 // min  : Tue Sep 21 00:12:44 1677
 // max  : Fri Apr 11 23:47:16 2262
 
-TEST(CxxFeaturesTest, UseCronoTimepoint)
+TEST(Time, PrintCronoTimepoint)
 {
     // print the epoch of this clock
     
@@ -50066,31 +50289,78 @@ TEST(CxxFeaturesTest, UseCronoTimepoint)
 
 see Conversions between Timepoints and Calendar Time
 
+<cxx-facet>
 
-<ex>
-*TN* see that when convert to milli sec, use *0.001
+16.2.2 Locale Facets
 
+The dependencies on national conventions are separated into several aspects
+that are handled by corresponding objects. An object dealing with a specific
+aspect of internationalization is called a facet.
+
+16.4.3 Time and Date Formatting
+
+The two facets time_get<> and time_put<> in the category time provide services
+for parsing and formatting of times and dates. This is done by the member
+functions that operate on objects of type tm. This type is defined in the
+header file <ctime>. The objects are not passed directly; rather, a pointer to
+them is used as the argument.
+
+Both facets in the time category depend heavily on the behavior of the
+function strftime(), also defined in the header file <ctime>. This function
+uses a string with conversion specifiers to produce a string from a tm object.
+
+
+The time_put<> facet defines two functions called put(), which are used to
+convert the date information stored in an object of type tm into a sequence of
+characters written to an output iterator.
+
+tp.put(to,fs,fill,val,cvt)      using the conversion specifier cvt
+tp.put(to,fs,fill,val,cvt,mod)  using the conversion specifier cvt and modifier mod
+
+first four arguments:
+
+* to is the output iterator to which the time is written. put() returns a copy
+  of this iterator with the position immediately after the last character
+  written. Here, you can also pass a stream, which will be converted into a
+  stream iterator.
+
+* fs is a stream object of type std::ios_base that defines the formatting. It
+  is usually a stream, imbued by the required locale and facets.
+
+* fill is a character to use in case a filling character is needed.
+ 
+* val is the time value of type tm* storing the date to be formatted. The
+  first form of put() uses cvt to pass one of the conversion specifiers to
+  strftime() to define the requested formatting.
+
+The second form of put() allows you to provide an optional modifier. The
+meaning of the argument mod is not defined by the standard. It is intended to
+be used as a modifier to the conversion as found in several implementations of
+the strftime() function.
+
+TEST(Time, UserTimeFacet)
 {
-    auto elapsed_ = duration_cast<microseconds>(diff);
-    // micro sec
-    cout << "time taken for " << text_ << " is " << elapsed_.count() << endl;
+  auto now = chrono::system_clock::now();
+  time_t t = chrono::system_clock::to_time_t(now);
+  tm *tm_now = localtime(&t);
 
-    // milli sec
-    cout << "time taken for " << text_ << " is " << elapsed_.count()/1000 << endl;
-    cout << "time taken for " << text_ << " is " << elapsed_.count()*0.001 << endl;
-    
-    auto elapsedms_ = duration_cast<milliseconds>(diff);
-    cout << "time taken for " << text_ << " is " << elapsedms_.count() << endl;
+  locale loc;
+  const time_put<char> &tp = use_facet<time_put<char>>(loc);
+
+  // %x Locale’s preferred date representation Jul 12 1998
+  // 06/12/18
+  tp.put(cout , cout, ' ', tm_now, 'x');
+  cout << endl;
+
+  // use format string
+  // Tuesday 06/12/18 04PM
+  string fmt = "%A %x %I%p\n";
+  tp.put(cout, cout, ' ', tm_now,
+      fmt.c_str(), fmt.c_str()+fmt.size());
 }
 
-time taken for HandlesLargeNumbersOfUsers is 126172
-time taken for HandlesLargeNumbersOfUsers is 126
-time taken for HandlesLargeNumbersOfUsers is 126.172
-time taken for HandlesLargeNumbersOfUsers is 126
-
 
 <ex>
-
 // time.h
 
 #ifndef TIME_H
@@ -50159,6 +50429,14 @@ TEST_F(AGeoServerUserInBox, HandlesLargeNumbersOfUsers) {
    auto users = server.usersInBox(aUser, Width, Height);
    ASSERT_THAT(lots, Eq(users.size()));
 }
+
+note:
+see that when convert to milli sec, use *0.001
+
+time taken for HandlesLargeNumbersOfUsers is 126172
+time taken for HandlesLargeNumbersOfUsers is 126
+time taken for HandlesLargeNumbersOfUsers is 126.172
+time taken for HandlesLargeNumbersOfUsers is 126
 
 
 ={============================================================================
@@ -52919,7 +53197,10 @@ All the blocking functions that end with _for() use a duration, whereas all
 functions that end with _until() use a timepoint as argument. For example,
 
 // *cxx-chrono*
-this_thread::sleep_for(chrono::seconds(10));
+note:
+include <thread> to use std::this_thread
+
+std::this_thread::sleep_for(chrono::seconds(10));
 
 blocks the current thread, which might be the main thread for 10 seconds,
 

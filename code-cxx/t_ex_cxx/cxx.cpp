@@ -4,6 +4,8 @@
 #include <memory>
 #include <chrono>
 #include <limits>
+#include <thread>
+#include <boost/cast.hpp>
 
 #include "gmock/gmock.h"
 
@@ -620,6 +622,51 @@ TEST(CxxFeaturesTest, UsePrivateMemberThroughReference)
 
 
 // ={=========================================================================
+// cxx-time
+
+
+// The local date and time is: Tue Jun 12 12:49:12 2018
+// The local date and time is: Tue Jun 12 12:49:12 2018
+// The UTC date and time is: Tue Jun 12 11:49:12 2018
+
+TEST(Time, UseConventionalWay)
+{
+  // time_t now = time(0);
+  auto now = time(0);
+
+  cout << "The local date and time is: " << ctime(&now) << endl;
+
+  // tm *localtm = localtime(&now);
+  auto localtm = localtime(&now);
+  cout << "The local date and time is: " << asctime(localtm) << endl;
+
+  // tm *gmtm = gmtime(&now);
+  auto gmtm = gmtime(&now);
+  if (gmtm != nullptr)
+  {
+    cout << "The UTC date and time is: " << asctime(gmtm) << endl;
+  }
+}
+
+// The local date and time is: Tue Jun 12 14:42:18 2018
+// The local date and time is: Tue Jun 12 14:42:28 2018
+
+TEST(Time, UseConventionalWayToShowPitfall)
+{
+  // tm *localtm = localtime(&now);
+  time_t now = time(0);
+  auto localtm = localtime(&now);
+  cout << "The local date and time is: " << asctime(localtm) << endl;
+
+  std::this_thread::sleep_for(chrono::seconds(10));
+
+  now = time(0);
+  localtm = localtime(&now);
+  cout << "The local date and time is: " << asctime(localtm) << endl;
+}
+
+
+// ={=========================================================================
 // cxx-crono
 //
 // A typical example is code that segments a duration into different units. For
@@ -636,14 +683,18 @@ ostream &operator<<(ostream &os, const chrono::duration<V,R> &d)
     return os;
 }
 
-TEST(CxxFeaturesTest, UseCronoDurationCast)
+TEST(Time, UseCronoDurationCast)
 {
     chrono::milliseconds ms(7255042);
 
-    chrono::hours   hh = chrono::duration_cast<chrono::hours>(ms);
-    chrono::minutes mm = chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
-    chrono::seconds ss = chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
-    chrono::milliseconds msec = chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+    chrono::hours   hh = 
+      chrono::duration_cast<chrono::hours>(ms);
+    chrono::minutes mm = 
+      chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+    chrono::seconds ss = 
+      chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+    chrono::milliseconds msec = 
+      chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
 
     cout << "raw: " << hh << "::" << mm << "::"
         << ss << "::" << msec << endl;
@@ -709,7 +760,7 @@ void print_clock_data()
 // - precision: 0.000001 milliseconds
 // - is ready: true
 
-TEST(CxxFeaturesTest, UseCronoClock)
+TEST(Time, ShowCronoClockDetails)
 {
     cout << "system_clock: " << endl;
     print_clock_data<std::chrono::system_clock>();
@@ -762,24 +813,46 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 // min  : Tue Sep 21 00:12:44 1677
 // max  : Fri Apr 11 23:47:16 2262
 
-TEST(CxxFeaturesTest, UseCronoTimepoint)
+TEST(Time, PrintCronoTimepoint)
 {
-    // print the epoch of this clock
-    
-    // is equivalent to:
-    // std::chrono::time_point<std::chrono::system_clock> tp
-    std::chrono::system_clock::time_point tp;
+  // print the epoch of this clock
 
-    cout << "epoch: " << as_string(tp) << endl;
+  // is equivalent to:
+  // std::chrono::time_point<std::chrono::system_clock> tp
+  std::chrono::system_clock::time_point tp;
 
-    tp = std::chrono::system_clock::now();
-    cout << "now  : " << as_string(tp) << endl;
+  cout << "epoch: " << as_string(tp) << endl;
 
-    tp = std::chrono::system_clock::time_point::min();
-    cout << "min  : " << as_string(tp) << endl;
+  tp = std::chrono::system_clock::now();
+  cout << "now  : " << as_string(tp) << endl;
 
-    tp = std::chrono::system_clock::time_point::max();
-    cout << "max  : " << as_string(tp) << endl;
+  tp = std::chrono::system_clock::time_point::min();
+  cout << "min  : " << as_string(tp) << endl;
+
+  tp = std::chrono::system_clock::time_point::max();
+  cout << "max  : " << as_string(tp) << endl;
+}
+
+
+TEST(Time, UserTimeFacet)
+{
+  auto now = chrono::system_clock::now();
+  time_t t = chrono::system_clock::to_time_t(now);
+  tm *tm_now = localtime(&t);
+
+  locale loc;
+  const time_put<char> &tp = use_facet<time_put<char>>(loc);
+
+  // %x Locale’s preferred date representation Jul 12 1998
+  // 06/12/18
+  tp.put(cout , cout, ' ', tm_now, 'x');
+  cout << endl;
+
+  // use format string
+  // Tuesday 06/12/18 04PM
+  string fmt = "%A %x %I%p\n";
+  tp.put(cout, cout, ' ', tm_now,
+      fmt.c_str(), fmt.c_str()+fmt.size());
 }
 
 
