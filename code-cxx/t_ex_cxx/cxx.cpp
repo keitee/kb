@@ -5,6 +5,7 @@
 #include <chrono>
 #include <limits>
 #include <thread>
+#include <list>
 #include <boost/cast.hpp>
 
 #include "gmock/gmock.h"
@@ -624,7 +625,6 @@ TEST(CxxFeaturesTest, UsePrivateMemberThroughReference)
 // ={=========================================================================
 // cxx-time
 
-
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The UTC date and time is: Tue Jun 12 11:49:12 2018
@@ -667,7 +667,7 @@ TEST(Time, UseConventionalWayToShowPitfall)
 
 
 // ={=========================================================================
-// cxx-crono
+// cxx-time-crono
 //
 // A typical example is code that segments a duration into different units. For
 // example, the following code segments a duration of milliseconds into the
@@ -705,7 +705,7 @@ TEST(Time, UseCronoDurationCast)
 }
 
 // ={=========================================================================
-// cxx-crono-clock
+// cxx-time-crono-clock
 
 // the following function prints the properties of a clock
 // C represents clock
@@ -774,7 +774,7 @@ TEST(Time, ShowCronoClockDetails)
 
 
 // ={=========================================================================
-// cxx-crono-timepoint
+// cxx-time-crono-timepoint
 
 std::string as_string(const std::chrono::system_clock::time_point &tp)
 {
@@ -872,9 +872,78 @@ class FooStatic {
 
 const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
 
-TEST(CxxFeaturesTest, UseClassStatic)
+TEST(Static, DefineStaticOutside)
 {
     FooStatic foo;
+}
+
+// c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
+
+class StaticClass
+{
+  protected:
+    int value_{};
+    size_t id_{};
+
+    string name_{};
+    static list<StaticClass*> instances_;
+    static size_t track_id_;
+
+  public:
+    StaticClass(int value, string name =  "static class")
+      : value_(value), name_(name)
+    {
+      id_ = ++track_id_;
+      instances_.push_back(this);
+    }
+
+    ~StaticClass()
+    {
+      auto it = find(instances_.begin(), instances_.end(), this);
+      if (it != instances_.end())
+        instances_.erase(it);
+    }
+
+  public:
+    static void ShowList()
+    {
+      cout << "ShowList: " << instances_.size() << endl;
+      for (const auto &e : instances_)
+      {
+        cout << "ShowList: name : " << e->name_ << endl;
+        cout << "ShowList: value: " << e->value_ << endl;
+        cout << "ShowList: id   : " << e->id_ << endl;
+      }
+    }
+};
+
+list<StaticClass*> StaticClass::instances_;
+size_t StaticClass::track_id_ = 0;
+
+// ShowList: 3
+// ShowList: name : instance 1
+// ShowList: value: 1
+// ShowList: id   : 1
+// ShowList: name : instance 2
+// ShowList: value: 10
+// ShowList: id   : 2
+// ShowList: name : instance 3
+// ShowList: value: 100
+// ShowList: id   : 3
+
+TEST(Static, TrackClassInstances)
+{
+  StaticClass sc1(1, "instance 1");
+  StaticClass sc2(10, "instance 2");
+  StaticClass sc3(100, "instance 3");
+  StaticClass::ShowList();
+}
+
+// ShowList: 0
+
+TEST(Static, TrackClassInstancesWhenNothingCreated)
+{
+  StaticClass::ShowList();
 }
 
 
@@ -1075,6 +1144,7 @@ TEST(CxxFeaturesTest, UseUniqueSinkSource)
 // hash(one): 16780311998597636082
 // hash(two): 4939359993625789802
 
+
 // ={=========================================================================
 // cxx-hash
 TEST(CxxFeaturesTest, UseHashOnString)
@@ -1092,7 +1162,7 @@ TEST(CxxFeaturesTest, UseHashOnString)
 // ={=========================================================================
 // cxx-bool
 
-TEST(CxxBool, CheckBoolDefault)
+TEST(Bool, CheckBoolDefault)
 {
   bool value{};
   EXPECT_EQ(value, false);
@@ -1139,14 +1209,14 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "This is a text");
 
-  cin >> i;
-  cin >> d;
-  cin.ignore(numeric_limits<streamsize>::max(), '\n');
-  getline(cin, s);
-
-  cout << i << endl;
-  cout << d << endl;
-  cout << s << endl;
+  // cin >> i;
+  // cin >> d;
+  // cin.ignore(numeric_limits<streamsize>::max(), '\n');
+  // getline(cin, s);
+  //
+  // cout << i << endl;
+  // cout << d << endl;
+  // cout << s << endl;
 
   stringstream iss4("10\n4.0\n1 2 3 4\n");
   int i1, i2, i3, i4;
@@ -1166,7 +1236,55 @@ TEST(CxxStdio, UseInput)
 
 
 // ={=========================================================================
-//
+// cxx-rtti
+
+class RttiBase 
+{
+  public:
+    // to make it polymorphic
+    ~RttiBase() {}
+
+  private:
+    int id_;
+};
+
+class RttiDerived : public RttiBase 
+{
+  private:
+    int value_;
+};
+
+TEST(Rtti, UseTypeid)
+{
+  RttiBase b, bb;
+  RttiDerived d;
+  bool result{};
+
+  result = (typeid(b) == typeid(d));
+  EXPECT_EQ(result, false);
+
+  result = (typeid(b) == typeid(bb));
+  EXPECT_EQ(result, true);
+
+  result = (typeid(d) == typeid(RttiDerived));
+  EXPECT_EQ(result, true);
+}
+
+TEST(Rtti, UseDynamicCast)
+{
+  RttiDerived d;
+
+  auto result = dynamic_cast<RttiBase*>(&d);
+  EXPECT_TRUE(result != NULL);
+
+  if (RttiBase *bp = dynamic_cast<RttiBase*>(&d))
+    cout << "derived is a subclass of base" << endl;
+  else
+    cout << "derived is NOT a subclass of base" << endl;
+}
+
+
+// ={=========================================================================
 
 int main(int argc, char** argv)
 {

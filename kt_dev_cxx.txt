@@ -150,7 +150,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-inheri-ctor-init
 *kt_dev_cxx_0000* cxx-access-control
 *kt_dev_cxx_0000* cxx-cast cpp-named-cast
-*kt_dev_cpp_022* cpp-rtti
+*kt_dev_cxx_0000* cxx-rtti
 *kt_dev_cxx_0000* cxx-override
 *kt_dev_cxx_0000* cxx-override-ref: C++ under the hood, Scott Meyers
 *kt_dev_cxx_0000* cxx-class-model
@@ -17733,6 +17733,22 @@ namespace aren't quite as independent as people originally thought, but they
 are still pretty independent and fit their intendted purpose.
 
 
+<ex>
+
+When you pass in a function parameter that belongs to a namespace, the
+compiler includes that namespace when performing name lookup on functions
+within the body of the function. You may not need this every day, but it saves
+a lot of typing or an extra using directive when you do. The idea behind this
+is that functions that operate on some type are often defined in the same
+namespace as that type. Incidentally, it a good practice, in general, to put
+functions that operate on certain types in the same namespace as those types,
+when possible.
+
+void f(dev::Device& d) {
+  register(d); // This is actually dev::register
+}
+
+
 EXC++ 120. say that member is more strongly related to the class than a
 nonmember.
 
@@ -17768,6 +17784,8 @@ class B
     f(parm);
   }
 };
+
+
 
 
 <what-makes-up-the-interface-of-class>
@@ -23029,7 +23047,7 @@ The `function-static` is only accessible within the function, and has no
 linkage.(?) It is initialised the first time execution reaches the definition,
   not necessarily during the program's initialization phases.
 
-From RANSIC 83, so static is to 'limit' the scope of the object whether is
+From ANSIC 83, so static is to 'limit' the scope of the object whether is
 to file or function.  
 
 The `file-static` is private to a file and will not conflict with the same
@@ -23060,7 +23078,7 @@ int main (int argc, char const *argv[]) {
 
 
 <limit-scope-meaning>
-This applies to a function so if define static function, it has file-scope. 
+static has limited file-scope. 
 
 // file one
 #include <iostream>
@@ -23113,7 +23131,7 @@ collect2: ld returned 1 exit status
 make: *** [main] Error 1
 
 
-
+<static-member-func-and-this>
 The staic members are associated with the class rather than objects. So can
 call static member function as `class method` or class operation as in
 smalltalk and static member variable as `class variable` or class static. 
@@ -23122,8 +23140,6 @@ See *class-variable-case* for class variable example.
 
 note: static members 'obey' normal access control.
 
-
-<static-member-func-and-this>
 The static-member-func do not bound to any object; do not have a this pointer.
 Aa a result static-member-func `may not be declared as const` and not refer to
 this in the body. 
@@ -23150,36 +23166,111 @@ r = ac2->rate();
 Member function can use it directly without the scope operator.
 
 
-<cxx-static-class-variable>
+{cxx-static-class-variable}
 The objects do 'not' contain data associated with class variable. When
 initialized? The default constructor 'implicitly' default initialize
 static-member-variable. The class-static <must-be-defined-and-inited> outside
 of class because it's global objects.
 
-// xxx.h
-class Foo {
+class FooStatic {
   private:
-    static double interest;                         // declare
-};
-
-// xxx.cpp
-double Foo::interest = initRate();                  // define and init
-
-//
-class Foo {
-private:
-    static const size_t MAX_CODE_LENGTH{4};
+    // note not defined and okay since it's const
+    static const size_t MAX_CODE_LENGTH{4};         
+    // note error since not const 
+    // static size_t MAX_CODE_LENGTH{4};            
+    
     static const std::string DIGIT_NOT_FOUND;
 
     // static const std::string DIGIT_NOT_FOUND{"*"};
-    // : error: in-class initialization of static data member ‘const string Foo::DIGIT_NOT_FOUND’ of non-literal type
+    // : error: in-class initialization of static data member 
+    //  ‘const string Foo::DIGIT_NOT_FOUND’ of non-literal type
     //   static const std::string DIGIT_NOT_FOUND{"*"};
     //                                               ^
-    // : error: non-constant in-class initialization invalid for static member ‘Foo::DIGIT_NOT_FOUND’
+    // : error: non-constant in-class initialization invalid for 
+    //  static member ‘Foo::DIGIT_NOT_FOUND’
     // : note: (an out of class initialization is required)
+
+  public:
+    FooStatic() {}
 };
 
-const std::string Soundex::DIGIT_NOT_FOUND{"*"};
+const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
+
+TEST(Static, DefineStaticOutside)
+{
+    FooStatic foo;
+}
+
+
+<ex>
+// c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
+
+class StaticClass
+{
+  protected:
+    int value_{};
+    size_t id_{};
+
+    string name_{};
+    static list<StaticClass*> instances_;
+    static size_t track_id_;
+
+  public:
+    StaticClass(int value, string name =  "static class")
+      : value_(value), name_(name)
+    {
+      id_ = ++track_id_;
+      instances_.push_back(this);
+    }
+
+    ~StaticClass()
+    {
+      auto it = find(instances_.begin(), instances_.end(), this);
+      if (it != instances_.end())
+        instances_.erase(it);
+    }
+
+  public:
+    static void ShowList()
+    {
+      cout << "ShowList: " << instances_.size() << endl;
+      for (const auto &e : instances_)
+      {
+        cout << "ShowList: name : " << e->name_ << endl;
+        cout << "ShowList: value: " << e->value_ << endl;
+        cout << "ShowList: id   : " << e->id_ << endl;
+      }
+    }
+};
+
+list<StaticClass*> StaticClass::instances_;
+size_t StaticClass::track_id_ = 0;
+
+// ShowList: 3
+// ShowList: name : instance 1
+// ShowList: value: 1
+// ShowList: id   : 1
+// ShowList: name : instance 2
+// ShowList: value: 10
+// ShowList: id   : 2
+// ShowList: name : instance 3
+// ShowList: value: 100
+// ShowList: id   : 3
+
+TEST(Static, TrackClassInstances)
+{
+  StaticClass sc1(1, "instance 1");
+  StaticClass sc2(10, "instance 2");
+  StaticClass sc3(100, "instance 3");
+  StaticClass::ShowList();
+}
+
+// ShowList: 0
+
+TEST(Static, TrackClassInstancesWhenNothingCreated)
+{
+  StaticClass::ShowList();
+}
 
 
 {cxx-const-class-const} EC++02
@@ -25362,9 +25453,9 @@ each other.
 
 
 ={============================================================================
-*kt_dev_cpp_022* cpp-rtti
+*kt_dev_cxx_0000* cxx-rtti
 
-{rtti} CPR 19.2 825
+{cxx-rtti} CPR 19.2 825
 The RTTI(run-time type identification) is provided through two operators:
 
 * `typeid` operator, which returns the type of a given expression
@@ -25382,42 +25473,54 @@ error-prone and the programmer must know to which type the object should be cast
 and must check that the cast was successful.
 
 
-{dynamic-cast}
-Has following forms:
+{cxx-rtti-dynamic-cast}
+The only requirement is that the object argument is a polymorphic type, which
+means that it has at least one virtual function.
 
 dynamic_cast<type*>(e);
 dynamic_cast<type&>(e);
 dynamic_cast<type&&>(e);
 
-The type e must be either a class type that has at least one 'virtual'
-functions, is publicly derived from the target type, a public base class of the
-target type, or the same as the target type.
-
-note:
-This means to support dynamic type since if the type has 'no' virtuals, then it
-is static type and compiler knows that at compile time, also to support upcast
-and downcast in the inheritance hirachacy.
-
-
 If e has one of these types, the the call will succeed. Otherwise, the cast
-fails and the result is 0. If the cast to a reference type fails, throws an
+fails and the result is 0. If the cast to a `reference` type fails, throws an
 `bad_cast` exception.
 
-
-if (Derived *dp = dynamic_cast<Derived*>(bp))
+class RttiBase 
 {
-  //
-} else {
-  //
+  public:
+    // to make it polymorphic
+    ~RttiBase() {}
+
+  private:
+    int id_;
+};
+
+class RttiDerived : public RttiBase 
+{
+  private:
+    int value_;
+};
+
+TEST(Rtti, UseDynamicCast)
+{
+  RttiDerived d;
+
+  auto result = dynamic_cast<RttiBase*>(&d);
+  EXPECT_TRUE(result != NULL);
+
+  // if (RttiBase *bp = dynamic_cast<RttiBase*>(&d))
+  //   cout << "derived is a subclass of base" << endl;
+  // else
+  //   cout << "derived is NOT a subclass of base" << endl;
 }
 
 note:
-By defining the variable in a condition, do the cast and check as a single
-operation. Moreover, dp is not accessible outside the if. If the cast fails,
-  then the unbound pointer is not available.
+By defining the variable in a condition, cast and check as a single operation.
+Moreover, bp is not accessible outside the if. If the cast fails, then the
+unbound pointer is not available.
 
 
-{cpp-typeid}
+{cxx-rtti-typeid}
 The `typeid` allows to check the type of an expression or type name.
 
 typeid (e);
@@ -25428,23 +25531,32 @@ compared with another value returned by typeid using operators == and != or can
 serve to obtain a null-terminated character sequence representing the data type
 or class name by using its name() member.
 
-<ex>
-Derived *dp = new Derived;
-Base *bp = dp;
+class RttiBase 
+{
+  private:
+    int id_;
+};
 
-// compare the type of two objects at run-time
-if (typeid(*bp) == typeid(*dp)) {
-  //
-}
+class RttiDerived : public RttiBase 
+{
+  private:
+    int value_;
+};
 
-// test whether the run-time type is a specific type
-if (typeid(*bp) == typeid(Derived)) {
-  //
-}
+TEST(Rtti, UseTypeid)
+{
+  RttiBase b, bb;
+  RttiDerived d;
+  bool result{};
 
-// typeid(bp) retuns static type and this check always fails
-if (typeid(bp) == typeid(Derived)) {
-  //
+  result = (typeid(b) == typeid(d));
+  EXPECT_EQ(result, false);
+
+  result = (typeid(b) == typeid(bb));
+  EXPECT_EQ(result, true);
+
+  result = (typeid(d) == typeid(RttiDerived));
+  EXPECT_EQ(result, true);
 }
 
 

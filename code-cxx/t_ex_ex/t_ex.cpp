@@ -542,9 +542,51 @@ TEST(Ranged, X)
 
 
 // ={=========================================================================
+//
+class MyClass {
+  protected:
+    int value_;
+  public:
+    static list<MyClass*> instances_;
+    MyClass(int val);
+    ~MyClass( );
+    static void showList( );
+};
+
+list<MyClass*> MyClass::instances_;
+
+MyClass::MyClass(int val) {
+  instances_.push_back(this);
+  value_ = val;
+}
+
+MyClass::~MyClass( ) {
+  list<MyClass*>::iterator p =
+    find(instances_.begin( ), instances_.end( ), this);
+  if (p != instances_.end( ))
+    instances_.erase(p);
+}
+
+void MyClass::showList( ) {
+  cout << "showList: " << instances_.size() << endl;
+  for (list<MyClass*>::iterator p = instances_.begin( );
+      p != instances_.end( ); ++p)
+    cout << (*p)->value_ << endl;
+}
+
+TEST(XXX, XXX)
+{
+  // MyClass a(1);
+  // MyClass b(10);
+  // MyClass c(100);
+  MyClass::showList( );
+}
+
+
+// ={=========================================================================
 
 int main(int argc, char **argv)
 {
-    testing::InitGoogleMock(&argc, argv);
-    return RUN_ALL_TESTS();
-    }
+  testing::InitGoogleMock(&argc, argv);
+  return RUN_ALL_TESTS();
+}
