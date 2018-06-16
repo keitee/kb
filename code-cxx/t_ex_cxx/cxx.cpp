@@ -6,6 +6,7 @@
 #include <limits>
 #include <thread>
 #include <list>
+#include <regex>
 #include <boost/cast.hpp>
 
 #include "gmock/gmock.h"
@@ -55,6 +56,7 @@ TEST(CxxPair, UsePairType)
     else
       cout << "pair 3 is bigger" << endl;
 }
+
 
 // ={=========================================================================
 // cxx-pair-reference cxx-std-ref
@@ -1281,6 +1283,59 @@ TEST(Rtti, UseDynamicCast)
     cout << "derived is a subclass of base" << endl;
   else
     cout << "derived is NOT a subclass of base" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-regex
+
+// 14.1 The Regex Match and Search Interface
+
+TEST(Regex, UseMatch)
+{
+  // find XML/HTML tagged value (using fefault syntax)
+  regex reg1("<.*>.*</.*>");
+  bool found = regex_match("<tag>value</tag>", reg1);
+  EXPECT_EQ(found, true);
+
+  // find XML/HTML tagged value (tags before and after the value must match)
+  // R"(<(.*)>.*</\1>)" // equivalent to: "<(.*)>.*</\\1>"
+  regex reg2("<(.*)>.*</\\1>");
+  found = regex_match("<tag>value</tag>", reg2);
+  EXPECT_EQ(found, true);
+
+  // find XML/HTML tagged value (using grep syntax)
+  regex reg3("<\\(.*\\)>.*</\\1>", regex_constants::grep);
+  found = regex_match("<tag>value</tag>", reg2);
+  EXPECT_EQ(found, true);
+
+  // use C string as reg expression (needs explicit cast to regex)
+  found = regex_match("<tag>value</tag>", regex("<.*>.*</.*>"));
+  EXPECT_EQ(found, true);
+
+  // regex_match() versus regex_search():
+  //
+  // regex_match() checks whether the *whole* character sequence matches a
+  // regular expression.
+  //
+  // regex_search() checks whether the character sequence *partially* matches a
+  // regular expression.
+
+  found = regex_match ("XML tag: <tag>value</tag>",
+      regex("<(.*)>.*</\\1>")); // note: fails to match
+  EXPECT_EQ(found, false);
+
+  found = regex_search ("XML tag: <tag>value</tag>",
+      regex("<(.*)>.*</\\1>")); // matches
+  EXPECT_EQ(found, true);
+
+  found = regex_match ("XML tag: <tag>value</tag>",
+      regex(".*<(.*)>.*</\\1>.*")); // matches
+  EXPECT_EQ(found, true);
+
+  found = regex_search ("XML tag: <tag>value</tag>",
+      regex(".*<(.*)>.*</\\1>.*")); // matches
+  EXPECT_EQ(found, true);
 }
 
 
