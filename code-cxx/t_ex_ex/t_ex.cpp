@@ -5,6 +5,8 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <chrono>
+#include <thread>
 #include <boost/algorithm/string.hpp>
 
 
@@ -542,6 +544,72 @@ TEST(Ranged, X)
 
 
 // ={=========================================================================
+
+// Q: If run it standalone, it runs slower than on in GTEST. WHY?
+//
+// #include <iostream>
+// #include <chrono>
+// #include <thread>
+// 
+// using namespace std;
+// 
+// typedef bool (*UPDATEFUNC)(int);
+// 
+// bool UpdateProgress(int percent)
+// {
+//   cout << flush << "\r" << percent << " % complete...";
+//   // cout << "\r" << percent << "% complete...";
+//   return true;
+// }
+// 
+// int main()
+// {
+//   UPDATEFUNC f = UpdateProgress;
+// 
+//   for (long l = 0; l < 100000000; ++l)
+//   {
+//     if (l % 1000000 == 0)
+//       f(l / 1000000);
+// 
+//     for (long x = 0; x < 100; ++x)
+//       x = x; 
+// 
+//     // this_thread::sleep_for(std::chrono::milliseconds{1});
+//   }
+// 
+//   cout << endl;
+// 
+//   return EXIT_SUCCESS;
+// }
+
+
+typedef bool (*UPDATEFUNC)(int);
+
+bool UpdateProgress(int percent)
+{
+  cout << flush << "\r" << percent << "% complete...";
+  return true;
+}
+
+TEST(Progress, X)
+{
+  UPDATEFUNC f = UpdateProgress;
+
+  for (long l = 0; l < 100000000; ++l)
+  {
+    if (l % 1000000 == 0)
+      f(l / 1000000);
+
+    for (long x = 0; l < 1000000; ++l)
+      x = x; 
+
+    // this_thread::sleep_for(std::chrono::milliseconds{10});
+  }
+
+  cout << endl;
+}
+
+
 // ={=========================================================================
 
 int main(int argc, char **argv)
