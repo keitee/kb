@@ -27,34 +27,50 @@ using namespace testing;
 // pair 1 is bigger
 // pair 4 is bigger
 
-TEST(CxxPair, UsePairType)
+TEST(Pair, UsePairType)
 {
-    const auto map{
-        make_pair(10, "X"),
-        make_pair(9, "IX"),
-        make_pair(5, "V")
-    };
+  // gcc 6.3.0 emits error:
+  //
+  // cxx.cpp:36:5: error: direct-list-initialization of ‘auto’ requires exactly
+  // one element [-fpermissive] 
+  //
+  // };
+  // ^
+  // cxx.cpp:36:5: note: for deduction to ‘std::initializer_list’, use
+  // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)          
 
-    for(const auto &e : map)
-        cout << "{" << e.first << ", " << e.second << "}" << endl;
+  // const auto pair_map{
+  //     make_pair(10, "X"),
+  //     make_pair(9, "IX"),
+  //     make_pair(5, "V")
+  // };
 
-    cout << "typeid : " << typeid(map).name() << endl;
-
-    auto pair1 = make_pair(10, 10);
-    auto pair2 = make_pair(10, 9);
-
-    auto pair3 = make_pair( 9, 11);
-    auto pair4 = make_pair(11, 9);
-
-    if(pair1 < pair2)
-      cout << "pair 2 is bigger" << endl;
-    else
-      cout << "pair 1 is bigger" << endl;
-
-    if(pair3 < pair4)
-      cout << "pair 4 is bigger" << endl;
-    else
-      cout << "pair 3 is bigger" << endl;
+  const auto pair_map = {
+    make_pair(10, "X"),
+    make_pair(9, "IX"),
+    make_pair(5, "V")
+  };
+  
+  for(const auto &e : pair_map)
+    cout << "{" << e.first << ", " << e.second << "}" << endl;
+  
+  cout << "typeid : " << typeid(pair_map).name() << endl;
+  
+  auto pair1 = make_pair(10, 10);
+  auto pair2 = make_pair(10, 9);
+  
+  auto pair3 = make_pair( 9, 11);
+  auto pair4 = make_pair(11, 9);
+  
+  if(pair1 < pair2)
+    cout << "pair 2 is bigger" << endl;
+  else
+    cout << "pair 1 is bigger" << endl;
+  
+  if(pair3 < pair4)
+    cout << "pair 4 is bigger" << endl;
+  else
+    cout << "pair 3 is bigger" << endl;
 }
 
 
@@ -1280,9 +1296,52 @@ TEST(Rtti, UseDynamicCast)
   EXPECT_TRUE(result != NULL);
 
   if (RttiBase *bp = dynamic_cast<RttiBase*>(&d))
+  {
+    (void)bp;
     cout << "derived is a subclass of base" << endl;
+  }
   else
     cout << "derived is NOT a subclass of base" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-ctor
+class ConstructionNoDefault
+{
+  public:
+    ConstructionNoDefault(const std::string &name) 
+    {
+      (void)name;
+    }
+
+  private:
+    int value_;
+};
+
+class ConstructionWitNoCtorInitList
+{
+  public:
+    ConstructionWitNoCtorInitList() {}
+
+  private:
+    ConstructionNoDefault member;
+};
+
+class ConstructionWitCtorInitList
+{
+  public:
+    ConstructionWitCtorInitList()
+      : member("construction with init list") {}
+
+  private:
+    ConstructionNoDefault member;
+};
+
+TEST(Construction, CtorInitList)
+{
+  ConstructionWitNoCtorInitList cwo;
+  // ConstructionWitCtorInitList cw;
 }
 
 

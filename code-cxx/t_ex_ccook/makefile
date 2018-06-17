@@ -5,16 +5,17 @@
 
 GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
+TINYXML_DIR = $(HOME)/works/tinyxml2
 
-TARGET = cxx_stl
+TARGET = tinyxml_test
 
 # Where to find user code.
 USER_DIR = .
 
-CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include 
-# CPPFLAGS += -isystem $(GTEST_DIR)/include
+CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include \
+	-isystem $(TINYXML_DIR)
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread  
+CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -L$(TINYXML_DIR)
 #CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -fno-elide-constructors
 
 TESTS = $(TARGET)_test
@@ -24,6 +25,8 @@ GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
 
 GMOCK_HEADERS = $(GMOCK_DIR)/include/gmock/*.h \
                 $(GMOCK_DIR)/include/gmock/internal/*.h
+
+TINYXML_HEADERS = $(TINYXML_DIR)/*.h
 
 # House-keeping build targets.
 all : $(TESTS)
@@ -58,4 +61,4 @@ $(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 
 $(TESTS) : $(TARGET).o gtest.a gmock.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -ltinyxml2 -o $@

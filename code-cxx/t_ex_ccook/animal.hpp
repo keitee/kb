@@ -21,9 +21,10 @@ class Contact
     void SetName(const std::string &name) { name_ = name; }
     void SetPhone(const std::string &phone)
     {
+      static std::regex pattern{"\\([0-9]{3}\\)[0-9]{3}-[0-9]{4}"};
       // to verify that phone has the form (ddd)ddd-dddd
-      if (!std::regex_match(phone, pattern))
-        throw std::runtime_error(std::string("bad phone number:") + phone);
+      // if (!std::regex_match(phone, pattern))
+      //   throw std::runtime_error(std::string("bad phone number:") + phone);
 
       phone_ = phone;
     }
@@ -31,7 +32,7 @@ class Contact
   private:
     std::string name_;
     std::string phone_;
-    const std::string pattern{"\\([0-9]{3}\\)[0-9]{3}-[0-9]{4}"};
+    // const std::string pattern{"\\([0-9]{3}\\)[0-9]{3}-[0-9]{4}"};
 };
 
 // operators
@@ -57,7 +58,7 @@ class Animal
 
     Animal(const std::string &name, const std::string &species,
         const std::string &dob, const Contact &vet, const Contact &trainer)
-      name_(name), species_(species), dob_(dob), vet_(vet), trainer_(trainer)
+      : name_(name), species_(species), dob_(dob), vet_(vet), trainer_(trainer)
       {
       }
 
