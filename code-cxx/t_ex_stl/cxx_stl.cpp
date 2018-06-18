@@ -77,7 +77,7 @@ void PRINT_Q_ELEMENTS(const T& coll, const string &optsrt = "")
 // 0 1 2 3 4 5 6 7 8 9 (10)
 // 1 3 5 7 9 (5)
 
-TEST(CxxStlTest, VecorEraseChangesEnd)
+TEST(StlVector, VecorEraseChangesEnd)
 {
   vector<int> ivec;
   INSERT_ELEMENTS(ivec, 0, 9);
@@ -114,7 +114,7 @@ TEST(CxxStlTest, VecorEraseChangesEnd)
 // 0 1 2 3 4 5 6 7 8 9 (10)
 // 1 1 3 3 5 5 7 7 9 9 (10)
 
-TEST(CxxStlText, VectorInsertErase)
+TEST(StlVector, VectorInsertErase)
 {
   vector<int> ivec{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -139,7 +139,7 @@ TEST(CxxStlText, VectorInsertErase)
 class VectorEraseCallsDtor
 {
   public:
-    VectorEraseCallsDtor(const string name): name_(name) 
+    VectorEraseCallsDtor(const string name="vector"): name_(name) 
       { cout << "VectorEraseCallsDtor::ctor: " << name_ << endl; }
     ~VectorEraseCallsDtor() 
       { cout << "VectorEraseCallsDtor::dtor: " << name_ << endl; }
@@ -150,7 +150,7 @@ class VectorEraseCallsDtor
     string name_;
 };
 
-TEST(CxxStlTest, VecorEraseAndDtor)
+TEST(StlVector, CreateOnDemand)
 {
   vector<VectorEraseCallsDtor> ovec{};
 
@@ -172,7 +172,7 @@ TEST(CxxStlTest, VecorEraseAndDtor)
   cout << "-erase---------" << endl;
 }
 
-TEST(CxxStlTest, VecorEraseAndDtorWithReserve)
+TEST(StlVector, CreateWithReserve)
 {
   vector<VectorEraseCallsDtor> ovec{};
   ovec.reserve(10);
@@ -195,6 +195,58 @@ TEST(CxxStlTest, VecorEraseAndDtorWithReserve)
   cout << "-erase---------" << endl;
 }
 
+TEST(StlVector, CreateWithPreAllocation)
+{
+  vector<VectorEraseCallsDtor> ovec(10);
+
+  // for(int i = 0; i < 5; ++i)
+  // {
+  //   cout << "-for ---------" << endl;
+  //   string name = "name " + to_string(i);
+  //   ovec.push_back(VectorEraseCallsDtor(name));
+  // }
+
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+
+  it = ovec.erase(it);
+  cout << "-erase---------" << endl;
+}
+
+
+// cause seg fault
+TEST(DISABLED_StlVector, AccessInvalidIndex)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+
+  for(int i = 0; i < 5; ++i)
+  {
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  cout << "name: " << ovec[8].GetName() << endl;
+}
+
+TEST(StlVector, AccessInvalidIndexWithReserve)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+  ovec.reserve(10);
+
+  for(int i = 0; i < 5; ++i)
+  {
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  cout << "name: " << ovec[8].GetName() << endl;
+}
+
+
 class VectorCtorsTest
 {
   public:
@@ -207,7 +259,7 @@ class VectorCtorsTest
 };
 
 
-TEST(CxxStlTest, VecorCtors)
+TEST(StlVector, VecorCtors)
 {
   vector<int> icoll1(5);
   PRINT_ELEMENTS(icoll1, "default init: ");

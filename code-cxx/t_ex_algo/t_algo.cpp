@@ -13,8 +13,212 @@
 using namespace std;
 using namespace testing;
 
+
 // ={=========================================================================
 
+template <typename T>
+void PRINT_ELEMENTS_MAP(T col, const string mesg, const string sep = ", ")
+{
+    cout << "=" << mesg << endl;
+
+    for ( auto &e : col)
+        cout << "{" << e.first << ", " << e.second << "}" << sep;
+}
+
+
+// ={=========================================================================
+// algo-swap: swap without a temporary
+void t_algo_swap_01(int &a, int &b)
+{
+  a = a + b;
+  b = a - b;      // b = a
+  a = a - b;      // a = b
+}
+
+TEST(AlgoSwap, SwapUseArithmetic)
+{
+  int a = 9, b = 4;
+
+  t_algo_swap_01(a, b);
+
+  EXPECT_THAT(a, Eq(4));
+  EXPECT_THAT(b, Eq(9));
+}
+
+
+// X XOR  X  = 0
+// X XOR  0  = X
+// X XOR  1  = ~X    // X XOR (~0) = ~X
+// X XOR ~X  = 1     
+// 
+// 00000000000000000000111111000000 // x
+// 00000000000000000000111111000000 // x^0
+// 11111111111111111111000000111111 // x^(~0) but not x^1
+// 
+// x =  1010; y = 0011;          // before
+// x =  1001 =  1010  ^ 0011     // x = x^y
+// y =  1010 = [1001] ^ 0011     // y = x^y, y = (x^y)^y = (x^0) = x
+// x = [0011] =  1001 ^ [1010]   // x = x^y, x = (x^y)^x = (y^0) = y
+// x = 0011; y = 1010;           // after
+
+void t_algo_swap_02(int &a, int &b)
+{
+  a = a ^ b;
+  b = a ^ b;      // b = a^b = (a^b)^b = a^0 = a
+  a = a ^ b;      // a = a^b = (a^b)^a = b^0 = b
+}
+
+TEST(AlgoSwap, SwapUseXOR)
+{
+  int a = 9, b = 4;
+
+  t_algo_swap_02(a, b);
+
+  EXPECT_THAT(a, Eq(4));
+  EXPECT_THAT(b, Eq(9));
+}
+
+
+// ={=========================================================================
+// algo-find a number seen odd times
+unsigned int t_algo_find_a_number_01(const vector<unsigned int> &input)
+{
+  unsigned int uireturn{};
+
+  for (const auto e : input)
+    uireturn ^= e;
+
+  return uireturn;
+}
+
+TEST(AlgoFindOdd, FindNumberSeenOddTimes)
+{
+    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+    EXPECT_THAT(t_algo_find_a_number_01(input), 12);
+}
+
+unsigned int t_algo_find_a_number_02(const vector<unsigned int> &input)
+{
+  size_t uiresult;
+  map<size_t, size_t> imap{};
+
+  // put them into a map<key, count>
+  for (const auto e : input)
+    ++imap[e];
+
+  auto pos_return = find_if( imap.cbegin(), imap.cend(),
+      [] (const pair<size_t,size_t> &e)
+      { 
+        if (e.second % 2) 
+          return true; 
+
+        return false;
+      }
+      );
+
+  uiresult = (pos_return != imap.cend()) ? pos_return->first : 0;
+  return uiresult;
+}
+
+TEST(AlgoFindOdd, FindNumberSeenOddTimesUseMap)
+{
+    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+    EXPECT_THAT(t_algo_find_a_number_02(input), 12);
+}
+
+unsigned int t_algo_find_a_number_03(const vector<unsigned int> &input)
+{
+  size_t uireturn{};
+  multiset<size_t> imset{input.cbegin(), input.cend()};
+
+  // put them into a map<key, count>
+  for (const auto e : imset)
+  {
+    if ( imset.count(e) % 2)
+    {
+      uireturn = e;
+      break;
+    }
+  }
+
+  return uireturn;
+}
+
+TEST(AlgoFindOdd, FindNumberSeenOddTimesUseSet)
+{
+    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+    EXPECT_THAT(t_algo_find_a_number_02(input), 12);
+}
+
+
+// ={=========================================================================
+// algo-find if a string has all unique chars
+// 
+// o. Space? assume ASCII 256 chars
+//    ask for clarity. Since it's only for alphabet uppercase then use 32
+//    bset and reduce space requirement.
+//
+// o. One simple optimization. return false if the length of input string is greater
+//    than the number of uniques chars in the set; e.g., ASCII, 256
+// 
+//    if( sizeString > 256 ) return false;
+//    
+// o. cstring or std::string?
+//
+// o. time O(n) and space O(1)
+
+// use lookup table
+bool if_unique_01(const char *str)
+{
+    std::bitset<256> bset{};
+
+    for (; *str; ++str)
+    {
+        if (bset[*str])
+        {
+            return false;
+        }
+        else
+            bset[*str] = 1;
+    }
+
+    return true;
+}
+
+
+// use cxx-string-find()
+bool if_unique_02(const char *str)
+{
+    std::string unique_set{};
+
+    for (; *str; ++str)
+    {
+        if (unique_set.find(*str) != string::npos)
+        {
+            return false;
+        }
+        else
+            unique_set += *str;
+    }
+
+    return true;
+}
+
+TEST(AlgoUnique, FindIUniqueCharsUseLookup)
+{
+    EXPECT_THAT(if_unique_01("abcdefghijklmnopqa"), false);
+    EXPECT_THAT(if_unique_01("abcdefghijklmnopqr"), true);
+}
+
+TEST(AlgoUnique, FindIUniqueCharsUseStringFind)
+{
+    EXPECT_THAT(if_unique_02("abcdefghijklmnopqa"), false);
+    EXPECT_THAT(if_unique_02("abcdefghijklmnopqr"), true);
+}
+
+
+// ={=========================================================================
+// algo-reserve
 // * use in/out parameter
 // * cstring but efficient
 // * strlen()-1 since array indexing is always [0, size-1], or [0,size) and in
@@ -35,7 +239,7 @@ void reverse_string_01(char *input)
     }
 }
 
-TEST(CxxAlgoTest, ReverseCstring)
+TEST(AlgoReverse, ReverseCstring)
 {
     char input[] = "REVERSE IT";
     reverse_string_01(input);
@@ -56,7 +260,7 @@ void reverse_string_02(char *input)
     }
 }
 
-TEST(CxxAlgoTest, ReverseCstringAnsiVersion)
+TEST(AlgoReverse, ReverseCstringAnsiVersion)
 {
     char input[] = "REVERSE IT";
     reverse_string_02(input);
@@ -72,7 +276,7 @@ std::string reverse_string_03(const std::string &input)
     return std::string(input.crbegin(), input.crend());
 }
 
-TEST(CxxAlgoTest, ReverseCppStringUseRevrseIterator)
+TEST(AlgoReverse, ReverseCppStringUseRevrseIterator)
 {
     std::string input{"REVERSE IT"};
     EXPECT_THAT(reverse_string_03(input), Eq("TI ESREVER"));
@@ -86,7 +290,7 @@ void reverse_string_04(std::string &input)
     std::reverse(input.begin(), input.end());
 }
 
-TEST(CxxAlgoTest, ReverseCppStringUseAlgorithm)
+TEST(AlgoReverse, ReverseCppStringUseAlgorithm)
 {
     std::string input{"REVERSE IT"};
     reverse_string_04(input);
@@ -103,7 +307,7 @@ std::string reverse_string_05(const std::string &input)
     return reversed;
 }
 
-TEST(CxxAlgoTest, ReverseCppStringUsePushBack)
+TEST(AlgoReverse, ReverseCppStringUsePushBack)
 {
     std::string input{"REVERSE IT"};
     EXPECT_THAT(reverse_string_05(input), Eq("TI ESREVER"));
@@ -137,11 +341,13 @@ std::string reverse_string_06(const std::string &input)
         }
     }
 
+    // sout: JTVAKISHL
+
     // return reverse;
     return std::string{sout.crbegin(), sout.crend()};
 }
 
-TEST(CxxAlgoTest, ReverseCppStringRemoveDuplicates)
+TEST(AlgoReverse, ReverseCppStringRemoveDuplicates)
 {
     std::string input{"JTVAKAVISHAAAL"};
     EXPECT_THAT(reverse_string_06(input), Eq("LHSIKAVTJ"));
@@ -149,221 +355,7 @@ TEST(CxxAlgoTest, ReverseCppStringRemoveDuplicates)
 
 
 // ={=========================================================================
-
-template <typename T>
-void PRINT_ELEMENTS_MAP(T col, const string mesg, const string sep = ", ")
-{
-    cout << "=" << mesg << endl;
-
-    for ( auto &e : col)
-        cout << "{" << e.first << ", " << e.second << "}" << sep;
-}
-
-
-// ={=========================================================================
-// find a number seen odd times
-void t_algo_find_number_01()
-{
-    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    unsigned int uiresult{};
-
-    // unsigned int find_a_number(const vector<unsigned int> &input);
-    {
-        unsigned int uireturn{};
-
-        for (const auto e : input)
-            uireturn ^= e;
-
-        // return the result;
-        uiresult = uireturn;
-    }
-
-    // result: 12
-    cout << "result: " << uiresult << endl;
-}
-
-// find a number seen odd times
-void t_algo_find_number_02()
-{
-    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    size_t uiresult{};
-
-    // unsigned int find_a_number(const vector<unsigned int> &input);
-    {
-        map<size_t, size_t> imap{};
-
-        // put them into a map<key, count>
-        for (const auto e : input)
-            ++imap[e];
-
-        auto pos_return = find_if( imap.cbegin(), imap.cend(),
-                [] (const pair<size_t,size_t> &e)
-                { 
-                    if (e.second % 2) 
-                        return true; 
-
-                    return false;
-                }
-                );
-
-        // return the result;
-        // return (pos_return != imap.cend()) ? pos_return->first : 0;
-        uiresult = (pos_return != imap.cend()) ? pos_return->first : 0;
-    }
-
-    // result: 12
-    cout << "result: " << uiresult << endl;
-}
-
-// find a number seen odd times
-void t_algo_find_number_03()
-{
-    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    size_t uiresult{};
-
-    // unsigned int find_a_number(const vector<unsigned int> &input);
-    {
-        size_t uireturn{};
-        multiset<size_t> imset{input.cbegin(), input.cend()};
-
-        // put them into a map<key, count>
-        for (const auto e : imset)
-        {
-            if ( imset.count(e) % 2)
-            {
-                uireturn = e;
-                break;
-            }
-        }
-
-        // return the result;
-        uiresult = uireturn;
-    }
-
-    // result: 12
-    cout << "result: " << uiresult << endl;
-}
-
-// ={=========================================================================
-// swap without a temporary
-void t_algo_swap_01()
-{
-    int a = 9, b = 4;
-
-    cout << "a: " << a << ", b:" << b << endl;
-
-    // void swap(int &a, int &b);
-    {
-        a = a + b;
-        b = a - b;      // b = a
-        a = a - b;      // a = b
-    }
-
-    // result
-    cout << "a: " << a << ", b:" << b << endl;
-}
-
-
-// X XOR  X  = 0
-// X XOR  0  = X
-// X XOR  1  = ~X    // X XOR (~0) = ~X
-// X XOR ~X  = 1     
-// 
-// 00000000000000000000111111000000 // x
-// 00000000000000000000111111000000 // x^0
-// 11111111111111111111000000111111 // x^(~0) but not x^1
-// 
-// x =  1010; y = 0011;          // before
-// x =  1001 =  1010  ^ 0011     // x = x^y
-// y =  1010 = [1001] ^ 0011     // y = x^y, y = (x^y)^y = (x^0) = x
-// x = [0011] =  1001 ^ [1010]   // x = x^y, x = (x^y)^x = (y^0) = y
-// x = 0011; y = 1010;           // after
-
-void t_algo_swap_02()
-{
-    int a = 9, b = 4;
-
-    cout << "a: " << a << ", b:" << b << endl;
-
-    // void swap(int &a, int &b);
-    {
-        a = a ^ b;
-        b = a ^ b;      // b = a^b = (a^b)^b = a^0 = a
-        a = a ^ b;      // a = a^b = (a^b)^a = b^0 = b
-    }
-
-    // result
-    cout << "a: " << a << ", b:" << b << endl;
-}
-
-
-// ={=========================================================================
-// find if a string has all unique chars
-// 
-// o. Space? assume ASCII 256 chars
-//    ask for clarity. Since it's only for alphabet uppercase then use 32
-//    bset and reduce space requirement.
-//
-// o. One simple optimization. return false if the length of input string is greater
-//    than the number of uniques chars in the set; e.g., ASCII, 256
-// 
-//    if( sizeString > 256 ) return false;
-//    
-// o. cstring or std::string?
-//
-// o. time O(n) and space O(1)
-
-// use lookup table
-
-bool if_unique_01(const char *str)
-{
-    std::bitset<256> bset{};
-
-    for (; *str; ++str)
-    {
-        if (bset[*str])
-        {
-            return false;
-        }
-        else
-            bset[*str] = 1;
-    }
-
-    return true;
-}
-
-
-// use cxx-string-find()
-
-bool if_unique_02(const char *str)
-{
-    std::string unique_set{};
-
-    for (; *str; ++str)
-    {
-        if (unique_set.find(*str) != string::npos)
-        {
-            return false;
-        }
-        else
-            unique_set += *str;
-    }
-
-    return true;
-}
-
-TEST(CxxAlgoTest, FindIfHasAllUniqueChars)
-{
-    EXPECT_THAT(if_unique_01("abcdefghijklmnopqa"), false);
-    EXPECT_THAT(if_unique_01("abcdefghijklmnopqr"), true);
-
-    EXPECT_THAT(if_unique_02("abcdefghijklmnopqa"), false);
-    EXPECT_THAT(if_unique_02("abcdefghijklmnopqr"), true);
-}
-
-
-// ={=========================================================================
-// anagram
+// algo-anagram
 //
 // o. Space? assume ASCII 256 chars
 //    ask for clarity. Since it's only for alphabet uppercase then use 32
@@ -387,6 +379,15 @@ bool find_anagram_01(string one, string two)
     return (one == two) ? true : false;
 }
 
+TEST(AlgoAnagram, FindAnagramUseSort)
+{
+    EXPECT_TRUE(find_anagram_01("PARK", "APRK"));
+    EXPECT_FALSE(find_anagram_01("PARK", "APRKPARK"));
+    EXPECT_FALSE(find_anagram_01("PARK", "CARK"));
+    EXPECT_FALSE(find_anagram_01("PARK", "PAAA"));
+}
+
+
 bool find_anagram_02(const string one, const string two)
 { 
     if (one.size() != two.size())
@@ -408,18 +409,11 @@ bool find_anagram_02(const string one, const string two)
     return true;
 }
 
-TEST(CxxAlgoTest, FindAnagram)
+TEST(AlgoAnagram, FindAnagramUseLookupNoDuplicate)
 {
-    EXPECT_TRUE(find_anagram_01("PARK", "APRK"));
     EXPECT_TRUE(find_anagram_02("PARK", "APRK"));
-
-    EXPECT_FALSE(find_anagram_01("PARK", "APRKPARK"));
     EXPECT_FALSE(find_anagram_02("PARK", "APRKPARK"));
-
-    EXPECT_FALSE(find_anagram_01("PARK", "CARK"));
     EXPECT_FALSE(find_anagram_02("PARK", "CARK"));
-
-    EXPECT_FALSE(find_anagram_01("PARK", "PAAA"));
 
     // find_anagram_02() fails on:
     // EXPECT_FALSE(find_anagram_02("PARK", "PAAA"));
@@ -457,7 +451,7 @@ bool find_anagram_03(string one, string two)
     return true;
 }
 
-TEST(CxxAlgoTest, FindAnagramWhenDuplicated)
+TEST(AlgoAnagram, FindAnagramUseLookupDuplicate)
 {
     // find_anagram_02() fails on:
     EXPECT_FALSE(find_anagram_03("PARK", "PAAA"));
@@ -465,7 +459,7 @@ TEST(CxxAlgoTest, FindAnagramWhenDuplicated)
 
 
 // ={=========================================================================
-// // find first unique byte
+// algo-find first unique byte
 // * time O(n) space O(1)
 // * Do not check input.
 // * Each input value are less than 256 adn the # of input are less than unit
@@ -476,156 +470,112 @@ TEST(CxxAlgoTest, FindAnagramWhenDuplicated)
 //   Not byte seen first since every byte is seen first at first time. The
 //   problem is that it can be shown in later of a stream.
 
-unsigned char find_first_unique(const vector<unsigned char> &input)
+unsigned char algo_find_first_unique(const vector<unsigned char> &input)
 {
-    // *TN* size of order depends on the size of input? NO.
-    size_t occurance[256]={}, order[256]={};
+  // note: 
+  // input order depends on the input size. Here, the order is one for that
+  // byte. NO.
+  size_t occurance[256]={}, order[256]={};
 
-    // build occurance and order
-    size_t input_order{};
+  // build occurance and order
+  size_t input_order{};
 
-    for (const auto e: input)
+  for (const auto e: input)
+  {
+    ++occurance[e];
+    // here order starts from 1
+    order[e] = ++input_order;
+  }
+
+  // find the first byte *cxx-limits*
+  unsigned char saved_input{};
+
+  // const unsigned int UINT_MAX_ORDER = ~((unsigned int)0);
+  // unsigned int saved_order = UINT_MAX_ORDER;
+  size_t saved_order{numeric_limits<size_t>::max()};
+
+  for (auto i = 0; i < 256; ++i)
+  {
+    if ((occurance[i] == 1) && (order[i] < saved_order))
     {
-        ++occurance[e];
-        // here order starts from 1
-        order[e] = ++input_order;
+      // *TN* i refers to input value
+      saved_input = i;
+      saved_order = order[i];
     }
+  }
 
-    // find the first byte
-    unsigned char saved_input{};
-    // *cxx-limits*
-    //
-    // const unsigned int UINT_MAX_ORDER = ~((unsigned int)0);
-    // unsigned int saved_order = UINT_MAX_ORDER;
-    size_t saved_order{numeric_limits<size_t>::max()};
+  // o. to print a char to int, have to define a var as int or to defind a
+  // char and to use +saved_input trick.
+  // http://www.cs.technion.ac.il/users/yechiel/c++-faq/print-char-or-ptr-as-number.html
+  cout << "saved input : " << +saved_input << endl;
+  cout << "saved order : " << saved_order << endl;
 
-    for (auto i = 0; i < 256; ++i)
-    {
-        if ((occurance[i] == 1) && (order[i] < saved_order))
-        {
-            // *TN* i refers to input value
-            saved_input = i;
-            saved_order = order[i];
-        }
-    }
-
-    // o. to print a char to int, have to define a var as int or to defind a
-    // char and to use +saved_input trick.
-    // http://www.cs.technion.ac.il/users/yechiel/c++-faq/print-char-or-ptr-as-number.html
-    cout << "saved input : " << +saved_input << endl;
-    cout << "saved order : " << saved_order << endl;
-
-    return saved_input;
+  return saved_input;
 }
 
-TEST(CxxAlgoTest, FindFirstUniqueByte)
+TEST(AlgoFindUniqueByte, FindFirstUniqueByteFromStream)
 {
     const vector<unsigned char> input_stream{20, 11, 23, 33, 34, 54, 44, 38, 215, 126, 101, 20, 11, 20, 54, 54, 44, 38, 38, 215, 126, 215, 23};
-    EXPECT_THAT(find_first_unique(input_stream),Eq(33));
+    EXPECT_THAT(algo_find_first_unique(input_stream),Eq(33));
+}
+
+unsigned char algo_find_first_unique_0618(const vector<unsigned char> &input)
+{
+  // pair<occurance, index> and 255
+  vector<pair<size_t, size_t>> lookup_table(255);
+
+  // first pass, build table with occurance and input index
+  size_t input_index{};
+
+  for (const auto e : input)
+  {
+    auto &entry = lookup_table[e];
+    entry.first += 1;
+    entry.second = input_index;
+
+    ++input_index;
+  }
+
+  // second pass, find first and unique input byte
+  unsigned char current_byte{};
+  size_t current_order = numeric_limits<size_t>::max();
+
+  unsigned char current_index{};
+
+  for (const auto e: lookup_table)
+  {
+    if (e.first == 1 && e.second < current_order)
+    {
+      current_byte = current_index;
+      current_order = e.second;
+    }
+
+    ++current_index;
+  }
+
+  return current_byte;
+}
+
+TEST(AlgoFindUniqueByte, FindFirstUniqueByteFromStream_0618)
+{
+    const vector<unsigned char> input_stream{20, 11, 23, 33, 34, 54, 44, 38, 215, 126, 101, 20, 11, 20, 54, 54, 44, 38, 38, 215, 126, 215, 23};
+    EXPECT_THAT(algo_find_first_unique_0618(input_stream),Eq(33));
 }
 
 
 // ={=========================================================================
-// find if rectangles intersect
-
-// To check assumption:
-// 
-//     +--------+ top(x2, y2)
-//     |        |
-//     |        |
-//     +--------+
-//  bot(x1,y1)
-//
-//  or top can be upper left and bot can be down right
-//  since depending on how Rect is defined, checking can be different. See
-//  is_point_in_rect(). 
-//
-//  this affect also the order of arguments to Rect(). However, not much point
-//  of supporting no-assumption case.
-//
-// This is from ANSIC 130. Handles point rather than each value.
-
-struct Point
-{
-    // not a default ctor so have to define it
-    Point(const int x, const int y) : x_(x), y_(y) {}
-    int x_{};
-    int y_{};
-};
-
-struct Rect
-{
-    // not a default ctor so have to define it
-    // Rect(bot, top);
-    Rect(const Point &a, const Point &b) : bot_(a), top_(b) {}
-    Point bot_;
-    Point top_;
-};
-
-// bot.x <= x <= top.x AND bot.y <= y <= top.y
-// should be AND
-//
-// if want to have no assumption then:
-//
-// return ((r.bot.x <= p.x && p.x <= r.top.x) || (r.top.x <= p.x && p.x <= r.bot.x)) && 
-//        ((r.bot.y <= p.y && p.y <= r.top.y) || (r.top.y <= p.y && p.y <= r.bot.y));
-
-bool is_point_in_rect(const Point &point, const Rect &rect)
-{
-    return ((rect.bot_.x_ <= point.x_) && (point.x_ <= rect.top_.x_)) &&
-        ((rect.bot_.y_ <= point.y_) && (point.y_ <= rect.top_.y_));
-}
-
-void print_result(const Rect &a, const Rect &b, bool result)
-{
-    cout << "a: bot (" << a.bot_.x_ << ", " << a.bot_.y_ << ")" 
-        << " : top (" << a.top_.x_ << ", " << a.top_.y_ << ")" << endl;
-
-    cout << "b: bot (" << b.bot_.x_ << ", " << b.bot_.y_ << ")" 
-        << " : top (" << b.top_.x_ << ", " << b.top_.y_ << ")" << endl;
-
-    cout << (result ? "intersected" : "not intersected") << endl;
-}
-
-
-// = 16 ======
-// a: bot (10, 10) : top (20, 20)
-// b: bot (15, 15) : top (25, 25)
-// intersected
-// a: bot (10, 10) : top (20, 20)
-// b: bot (20, 20) : top (25, 25)
-// intersected
-
-void t_algo_find_intersect()
-{
-    // bool intersect(rect a, rect b);
-    {
-        Rect a(Point(10,10), Point(20,20));
-        Rect b(Point(15,15), Point(25,25));
-
-        bool result = is_point_in_rect(a.bot_, b) || is_point_in_rect(a.top_, b);
-
-        print_result(a, b, result);
-    }
-    {
-
-        Rect a(Point(10,10), Point(20,20));
-        Rect b(Point(20,20), Point(25,25));
-
-        bool result = is_point_in_rect(a.bot_, b) || is_point_in_rect(a.top_, b);
-
-        print_result(a, b, result);
-    }
-}
-
-
-// ={=========================================================================
-// find the longest sequence of input char array
+// algo-find the longest sequence of input char array
 
 MATCHER_P(EqPair, expected, "")
 {
     return arg.first == expected.first &&
         arg.second == expected.second;
+}
+
+MATCHER_P(NotEqPair, expected, "")
+{
+    return arg.first != expected.first ||
+        arg.second != expected.second;
 }
 
 // this is the second try and works fine.
@@ -656,7 +606,7 @@ pair<char, size_t> find_longest_01(const string &input)
 }
 
 
-TEST(CxxAlgoTest, FindLongestSequence1)
+TEST(AlgoLongestSequence, FindLongestSequence)
 {
     const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
     EXPECT_THAT(find_longest_01(input1), 
@@ -702,20 +652,61 @@ pair<char, size_t> find_longest_02(const string &input)
     return pair<char, size_t>(longest_char, longest_occurance);
 }
 
-TEST(CxxAlgoTest, FindLongestSequence2)
+TEST(AlgoLongestSequence, FindLongestSequenceFail)
+{
+    // fails on this case
+    const string input3{"AAAAAAAAAAAA"};
+    EXPECT_THAT(find_longest_02(input3), 
+            NotEqPair(pair<char, size_t>('A', 12)));
+}
+
+pair<unsigned char, size_t> algo_find_longest_sequence_0618(const string &input)
+{
+  unsigned char current_char{}, saved_char{};
+  size_t        current_occurance{};
+  size_t        saved_occurance = numeric_limits<size_t>::min();
+
+  for(const auto e : input)
+  {
+    if (e != current_char)
+    {
+      // if see a longer sequence
+      if (saved_occurance < current_occurance)
+      {
+        saved_char = current_char;
+        saved_occurance = current_occurance;
+      }
+
+      current_char = e;
+      current_occurance = 1;
+    }
+    else
+      ++current_occurance;
+  }
+
+  // if see a longer sequence when input ends or input has only one sequence
+  if (saved_occurance < current_occurance)
+  {
+    saved_char = current_char;
+    saved_occurance = current_occurance;
+  }
+
+  return pair<unsigned char, size_t>(saved_char, saved_occurance);
+}
+
+TEST(AlgoLongestSequence, FindLongestSequence_0618)
 {
     const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(find_longest_02(input1), 
+    EXPECT_THAT(algo_find_longest_sequence_0618(input1), 
             EqPair(pair<char, size_t>('F', 18)));
 
     const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(find_longest_02(input2), 
+    EXPECT_THAT(algo_find_longest_sequence_0618(input2), 
             EqPair(pair<char, size_t>('C', 4)));
 
-    // fails on this case
-    // const string input3{"AAAAAAAAAAAA"};
-    // EXPECT_THAT(find_longest_02(input3), 
-    //         EqPair(pair<char, size_t>('A', 12)));
+    const string input3{"AAAAAAAAAAAA"};
+    EXPECT_THAT(algo_find_longest_sequence_0618(input3), 
+            EqPair(pair<char, size_t>('A', 12)));
 }
 
 
@@ -761,7 +752,7 @@ pair<char, size_t> t_algo_find_longest_02(const string &input)
             // if they are different
             if (input[i]^input[check_skip])
             {
-                cout << "skipped : " << current_occurance-1 << endl;
+                // cout << "skipped : " << current_occurance-1 << endl;
                 i += current_occurance-1;
             }
 
@@ -774,13 +765,13 @@ pair<char, size_t> t_algo_find_longest_02(const string &input)
             ++current_occurance;
     }
 
-    cout << "longest char      : " << longest_char << endl;
-    cout << "longest occurance : " << longest_occurance << endl;
+    // cout << "longest char      : " << longest_char << endl;
+    // cout << "longest occurance : " << longest_occurance << endl;
 
     return pair<char, size_t>(longest_char, longest_occurance);
 }
 
-TEST(CxxAlgoTest, FindLongestSequenceBetter)
+TEST(AlgoLongestSequence, FindLongestSequenceBetter)
 {
     const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
     EXPECT_THAT(t_algo_find_longest_02(input1), 
@@ -795,11 +786,455 @@ TEST(CxxAlgoTest, FindLongestSequenceBetter)
             EqPair(pair<char, size_t>('B', 5)));
 }
 
-TEST(CxxAlgoTest, DISABLED_FailLongestSequenceBetter)
+TEST(AlgoLongestSequence, FindLongestSequenceBetterFail)
 {
     const string input3{"AAAABCCCCCCCC"};
     EXPECT_THAT(t_algo_find_longest_02(input3), 
-            EqPair(pair<char, size_t>('C', 8)));
+            NotEqPair(pair<char, size_t>('C', 8)));
+}
+
+
+// ={=========================================================================
+// algo-intersect find if rectangles intersect
+//
+// from ANSIC 130. Handles point rather than each value.
+//
+// assumption about bot/and.
+// 
+//     +--------+ top(x2, y2)      +--------+ bot(x2, y2)   
+//     |        |                  |        |            
+//     |        |                  |        |            
+//     +--------+                  +--------+            
+//  bot(x1,y1)                  top(x1,y1)               
+//
+//
+// since depending on how Rect is defined, checking can be different in
+// is_point_in_rect(). 
+//
+// this assumes bot < point < top and if use top/bot way, it fails
+//
+// bool is_point_in_rect(const Point &point, const Rect &rect)
+// {
+//     return ((rect.bot_.x_ <= point.x_) && (point.x_ <= rect.top_.x_)) &&
+//         ((rect.bot_.y_ <= point.y_) && (point.y_ <= rect.top_.y_));
+// }
+//
+// this affect also the order of arguments to Rect(). However, not much point
+// of supporting no-assumption case. No, when tried it again, spend hours why
+// the check code fails depending on how Rect() is defined.
+
+struct Point
+{
+    // not a default ctor so have to define it
+    Point(const int x, const int y) : x_(x), y_(y) {}
+    int x_{};
+    int y_{};
+};
+
+struct Rect
+{
+    // not a default ctor so have to define it
+    // Rect(bot, top);
+    Rect(const Point &a, const Point &b) : bot_(a), top_(b) {}
+    Point bot_;
+    Point top_;
+};
+
+// bot.x <= x <= top.x AND bot.y <= y <= top.y
+// should be AND
+//
+// support both cases which Rect defines.
+
+bool is_point_in_rect(const Point &point, const Rect &rect)
+{
+  return ((rect.top_.x_ >= point.x_ && rect.bot_.x_ <= point.x_) || (rect.bot_.x_ >= point.x_ && rect.top_.x_ <= point.y_)) &&
+    ((rect.top_.y_ >= point.y_ && rect.bot_.y_ <= point.y_) || (rect.bot_.y_ >= point.y_ && rect.top_.y_ <= point.y_));
+}
+
+bool algo_is_intersected(const Rect &r1, const Rect &r2)
+{
+  return is_point_in_rect(r1.top_, r2) || is_point_in_rect(r1.bot_, r2);
+}
+
+
+TEST(AlgoIntersect, CheckIfRectIntersected)
+{
+  {
+    // bot/top
+    Rect a(Point(10,10), Point(20,20));
+    Rect b(Point(15,15), Point(25,25));
+    EXPECT_THAT(algo_is_intersected(a, b), Eq(true));
+  }
+
+  {
+    // top/bot
+    Rect a(Point(20, 20), Point(10,10));
+    Rect b(Point(25, 25), Point(15,15));
+    EXPECT_THAT(algo_is_intersected(a, b), Eq(true));
+  }
+
+  {
+    // bot/top, inclues the same point
+    Rect a(Point(10,10), Point(20,20));
+    Rect b(Point(20,20), Point(25,25));
+    EXPECT_THAT(algo_is_intersected(a, b), Eq(true));
+  }
+
+  {
+    // bot/top, inclues the same point
+    Rect a(Point(10,10), Point(20,20));
+    Rect b(Point(25,25), Point(35,35));
+    EXPECT_THAT(algo_is_intersected(a, b), Eq(false));
+  }
+}
+
+
+// ={=========================================================================
+// algo-roman-numeric
+
+// Convert Arabic number to Roman number
+//
+// 1. the roman number has fixed mappings:
+//
+//  1       : I
+//  5       : V
+//  10      : X
+//  50      : L
+//  100     : C
+//  500     : D
+//  1000    : M
+//
+// 2. As itoa(), use loop, %, and / to get a digit to convert:
+//  
+//      tens    2   1   0
+//              X   X   X
+//      digit   D   D   D
+//
+// 3. Divide 0-9 into sub-groups to get:
+//
+//  * 0 < digit < 4:
+//
+//      tens = 0:
+//          1       (1, 10**0)      I
+//          2       (2, 10**0)      II
+//          3       (3, 10**0)      III
+//
+//      tens = 1:
+//          10      (1, 10**1)      X
+//          20      (2, 10**1)      XX
+//          30      (3, 10**1)      XXX
+//
+//      tens = 2:
+//          100     (1, 10**2)      C
+//          200     (2, 10**2)      CC
+//          300     (3, 10**2)      CCC
+//      ...
+//
+//      To use the same function as 5 < digit < 9 case:
+//
+//      tens = 0:
+//                          (base, repeat, roman to repeat)
+//          1, 0+1          (0*10**0, 1, 10**0)     I
+//          2, 0+1          (0*10**0, 2, 10**0)     II
+//          3, 0+1          (0*10**0, 3, 10**0)     III
+//
+//  * 5 < digit < 9:
+//
+//      tens = 0:
+//                          (base, repeat, roman to repeat)
+//          6, 5+1          (5*10**0, 1, 10**0)     VI
+//          7, 5+2          (5*10**0, 2, 10**0)     VII
+//          8, 5+3          (5*10**0, 3, 10**0)     VIII
+//
+//      tens = 1:
+//          60, 50+10       (5*10**1, 1, 10**1)     LX
+//          70, 50+20       (5*10**1, 2, 10**1)     LXX
+//          89, 50+30       (5*10**1, 3, 10**1)     LXXX
+//
+//      tens = 2:
+//          600, 500+100    (5*10**1, 1, 10**1)     DC
+//          700, 500+200    (5*10**1, 2, 10**1)     DCC
+//          890, 500+300    (5*10**1, 3, 10**1)     DCCC
+//      ...
+//
+//  * 4 or 9
+//
+//      tens = 0:
+//          4, 5-1          (10**0 + (4+1)*10**0)   IV
+//          9, 10-1         (10**0 + (9+1)*10**0)   IX
+//
+//      tens = 1:
+//          40, 50-10       (10**1 + (4+1)*10**1)   XL
+//          90, 100-10      (10**1 + (9+1)*10**1)   XC
+//      ...
+//
+//  * 5
+//
+//      tens = 0:
+//          5,              (10**0*5)
+//
+//      tens = 1:
+//          50              (10**1*5)
+//
+//      tens = 2:
+//          500             (10**2*5)
+
+class RomanConvert
+{
+  public:
+
+    // 1. tried to use input/output string arg like 
+    //
+    //      void convert(uint32_t, std::string &)
+    //
+    // and use public string member in the fixture class.
+    // However, since there are many asserts in a test, have to reset
+    // this string member before using the next assert. dropped.
+    //
+    // 2. uses one single string and add at the front whenever converted a
+    // letter. By this, no need to reverse the result as itoa() does but
+    // there will be a downside; relocation and performance. Howerver, since
+    // it is not a long string, do not think they matter here. 
+
+    std::string convert(uint32_t number) const 
+    {
+      std::string converted;
+      uint32_t tens{0}, digit{0};
+
+      // for fixed roman letters
+      // the code works without this to cover fixed romans since the loop
+      // below will find it eventually. However, it uses a map already and
+      // may save some time.
+
+      auto it = roman_table.find(number);
+      if (it != roman_table.cend())
+        return it->second;
+
+      for (; number;)
+      {
+        digit = number % 10;
+
+        if (digit < 4)
+        {
+          padWithFoundRoman(digit, tens, 0, converted);
+        }
+        else if (digit > 5 && digit < 9)
+        {
+          padWithFoundRoman(digit, tens, 5, converted);
+        }
+        else if (!(digit % 5))
+        {
+          findFiveBaseRoman(digit, tens, converted);
+        }
+        else if (digit == 4 || digit == 9)
+        {
+          findSubstractRoman(digit, tens, converted);
+        }
+
+        ++tens;
+
+        number /= 10;
+      }
+
+      return converted;
+    }
+
+  private:
+    const std::map<uint32_t, std::string> roman_table{
+      {0, ""},
+        {1, "I"}, {5, "V"},
+        {10, "X"}, {50, "L"},
+        {100, "C"}, {500, "D"},
+        {1000, "M"}
+    };
+
+    void padWithFoundRoman(uint32_t number, uint32_t tens, uint32_t fixed, std::string &padded) const
+    {
+      std::string result;
+
+      // find the letter to pad
+      auto it = roman_table.find( pow(10, tens) );
+      if ( it == roman_table.cend() )
+        std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+
+      std::string letter = it->second;
+
+      // find the base
+      it = roman_table.find( fixed*pow(10, tens) );
+      if ( it == roman_table.cend() )
+        std::cout << "roman_table(" << fixed*pow( 10, tens ) << ") not found" << std::endl;
+
+      std::string base = it->second;
+
+      // add the base once
+      result += base;
+
+      // add the pad
+      for (uint32_t count = number - fixed; count; --count)
+        result += letter;
+
+      padded.insert(0, result);
+    }
+
+    void findSubstractRoman(uint32_t number, uint32_t tens, std::string &converted) const
+    {
+      std::string padded;
+
+      // find the letter in substract form
+      auto it = roman_table.find( pow(10, tens) );
+      if ( it == roman_table.cend() )
+        std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+
+      std::string letter = it->second;
+
+      // find the base
+      it = roman_table.find( (number+1)*pow(10, tens) );
+      if ( it == roman_table.cend() )
+        std::cout << "roman_table(" << (number+1)*pow( 10, tens ) << ") not found" << std::endl;
+
+      std::string base = it->second;
+
+      converted.insert( 0, letter + base );
+    }
+
+    void findFiveBaseRoman(uint32_t number, uint32_t tens, std::string &converted) const
+    {
+      // find the letter in substract form
+      auto it = roman_table.find( number * pow(10, tens) );
+      if ( it == roman_table.cend() )
+        std::cout << "roman_table(" << pow(10, tens) << ") not found" << std::endl;
+
+      converted.insert( 0, it->second );
+    }
+};
+
+
+TEST(RomanConvert, ConvertToRomansFirstAttempt) {
+
+  RomanConvert converter;
+
+  EXPECT_THAT(converter.convert(1), Eq("I"));
+  EXPECT_THAT(converter.convert(2), Eq("II"));
+  EXPECT_THAT(converter.convert(3), Eq("III"));
+  EXPECT_THAT(converter.convert(4), Eq("IV"));
+  EXPECT_THAT(converter.convert(5), Eq("V"));
+  EXPECT_THAT(converter.convert(6), Eq("VI"));
+  EXPECT_THAT(converter.convert(7), Eq("VII"));
+  EXPECT_THAT(converter.convert(8), Eq("VIII"));
+  EXPECT_THAT(converter.convert(9), Eq("IX"));
+  EXPECT_THAT(converter.convert(10), Eq("X"));
+  EXPECT_THAT(converter.convert(11), Eq("XI"));
+  EXPECT_THAT(converter.convert(12), Eq("XII"));
+  EXPECT_THAT(converter.convert(13), Eq("XIII"));
+  EXPECT_THAT(converter.convert(16), Eq("XVI"));
+  EXPECT_THAT(converter.convert(17), Eq("XVII"));
+  EXPECT_THAT(converter.convert(18), Eq("XVIII"));
+  EXPECT_THAT(converter.convert(20), Eq("XX"));
+  EXPECT_THAT(converter.convert(23), Eq("XXIII"));
+  EXPECT_THAT(converter.convert(41), Eq("XLI"));
+  EXPECT_THAT(converter.convert(45), Eq("XLV"));
+  EXPECT_THAT(converter.convert(50), Eq("L"));
+  EXPECT_THAT(converter.convert(80), Eq("LXXX"));
+  EXPECT_THAT(converter.convert(91), Eq("XCI"));
+  EXPECT_THAT(converter.convert(95), Eq("XCV"));
+  EXPECT_THAT(converter.convert(100), Eq("C"));
+  EXPECT_THAT(converter.convert(122), Eq("CXXII"));
+  EXPECT_THAT(converter.convert(152), Eq("CLII"));
+  EXPECT_THAT(converter.convert(196), Eq("CXCVI"));
+  EXPECT_THAT(converter.convert(247), Eq("CCXLVII"));
+  EXPECT_THAT(converter.convert(288), Eq("CCLXXXVIII"));
+  EXPECT_THAT(converter.convert(298), Eq("CCXCVIII"));
+  EXPECT_THAT(converter.convert(500), Eq("D"));
+  EXPECT_THAT(converter.convert(1000), Eq("M"));
+  EXPECT_THAT(converter.convert(1513), Eq("MDXIII"));
+  EXPECT_THAT(converter.convert(2999), Eq("MMCMXCIX"));
+  EXPECT_THAT(converter.convert(3447), Eq("MMMCDXLVII"));
+}
+
+
+string convert_to_roman(unsigned int arabic) 
+{
+  string convert{};
+
+  // note:
+  // 1. the order of element in the map matters
+  // 2. do not need 6?? in the map since it follows the same addition rule
+  // 3. to fix a warning on signed int and unsigned int comparion, use "u"
+  // suffix.
+
+  const auto lookup_table = {
+    make_pair(1000u, "M"),
+    make_pair(900u, "CM"),
+    // make_pair(600, "DC"),
+    make_pair(500u, "D"),
+    make_pair(400u, "CD"),
+    make_pair(100u, "C"),
+    //
+    make_pair(90u, "XC"),
+    // make_pair(60, "LX"),
+    make_pair(50u, "L"),
+    make_pair(40u, "XL"),
+    make_pair(10u, "X"),
+    //
+    make_pair(9u, "IX"),
+    // make_pair(6, "VI"),
+    make_pair(5u, "V"),
+    make_pair(4u, "IV"),
+    make_pair(1u, "I")
+  };
+
+  for (const auto e : lookup_table)
+  {
+    while (e.first <= arabic)
+    {
+      arabic -= e.first;
+      convert += e.second;
+    }
+  }
+
+  // cout << "converted: " << convert << endl;
+
+  return convert;
+}
+
+TEST(RomanConvert, ConvertToRomansTDD) 
+{
+  EXPECT_THAT(convert_to_roman(1), Eq("I"));
+  EXPECT_THAT(convert_to_roman(2), Eq("II"));
+  EXPECT_THAT(convert_to_roman(3), Eq("III"));
+  EXPECT_THAT(convert_to_roman(4), Eq("IV"));
+  EXPECT_THAT(convert_to_roman(5), Eq("V"));
+  EXPECT_THAT(convert_to_roman(6), Eq("VI"));
+  EXPECT_THAT(convert_to_roman(7), Eq("VII"));
+  EXPECT_THAT(convert_to_roman(8), Eq("VIII"));
+  EXPECT_THAT(convert_to_roman(9), Eq("IX"));
+  EXPECT_THAT(convert_to_roman(10), Eq("X"));
+  EXPECT_THAT(convert_to_roman(11), Eq("XI"));
+  EXPECT_THAT(convert_to_roman(12), Eq("XII"));
+  EXPECT_THAT(convert_to_roman(13), Eq("XIII"));
+  EXPECT_THAT(convert_to_roman(16), Eq("XVI"));
+  EXPECT_THAT(convert_to_roman(17), Eq("XVII"));
+  EXPECT_THAT(convert_to_roman(18), Eq("XVIII"));
+  EXPECT_THAT(convert_to_roman(20), Eq("XX"));
+  EXPECT_THAT(convert_to_roman(23), Eq("XXIII"));
+  EXPECT_THAT(convert_to_roman(41), Eq("XLI"));
+  EXPECT_THAT(convert_to_roman(45), Eq("XLV"));
+  EXPECT_THAT(convert_to_roman(50), Eq("L"));
+  EXPECT_THAT(convert_to_roman(80), Eq("LXXX"));
+  EXPECT_THAT(convert_to_roman(91), Eq("XCI"));
+  EXPECT_THAT(convert_to_roman(95), Eq("XCV"));
+  EXPECT_THAT(convert_to_roman(100), Eq("C"));
+  EXPECT_THAT(convert_to_roman(122), Eq("CXXII"));
+  EXPECT_THAT(convert_to_roman(152), Eq("CLII"));
+  EXPECT_THAT(convert_to_roman(196), Eq("CXCVI"));
+  EXPECT_THAT(convert_to_roman(247), Eq("CCXLVII"));
+  EXPECT_THAT(convert_to_roman(288), Eq("CCLXXXVIII"));
+  EXPECT_THAT(convert_to_roman(298), Eq("CCXCVIII"));
+  EXPECT_THAT(convert_to_roman(500), Eq("D"));
+  EXPECT_THAT(convert_to_roman(1000), Eq("M"));
+  EXPECT_THAT(convert_to_roman(1513), Eq("MDXIII"));
+  EXPECT_THAT(convert_to_roman(2999), Eq("MMCMXCIX"));
+  EXPECT_THAT(convert_to_roman(3447), Eq("MMMCDXLVII"));
 }
 
 

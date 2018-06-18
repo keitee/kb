@@ -542,6 +542,87 @@ TEST(Ranged, X)
 
 
 // ={=========================================================================
+
+string convert_to_roman(unsigned int arabic) 
+{
+  string convert{};
+
+  const auto lookup_table = {
+    make_pair(1000, "M"),
+    make_pair(900, "CM"),
+    // make_pair(600, "DC"),
+    make_pair(500, "D"),
+    make_pair(400, "CD"),
+    make_pair(100, "C"),
+    //
+    make_pair(90, "XC"),
+    // make_pair(60, "LX"),
+    make_pair(50, "L"),
+    make_pair(40, "XL"),
+    make_pair(10, "X"),
+    //
+    make_pair(9, "IX"),
+    // make_pair(6, "VI"),
+    make_pair(5, "V"),
+    make_pair(4, "IV"),
+    make_pair(1, "I")
+  };
+
+  for (const auto e : lookup_table)
+  {
+    while (e.first <= arabic)
+    {
+      arabic -= e.first;
+      convert += e.second;
+    }
+  }
+
+  // cout << "converted: " << convert << endl;
+
+  return convert;
+}
+
+TEST(RomanConverter, CanConvertPositiveDigits) 
+{
+  EXPECT_THAT(convert_to_roman(1), Eq("I"));
+  EXPECT_THAT(convert_to_roman(2), Eq("II"));
+  EXPECT_THAT(convert_to_roman(3), Eq("III"));
+  EXPECT_THAT(convert_to_roman(4), Eq("IV"));
+  EXPECT_THAT(convert_to_roman(5), Eq("V"));
+  EXPECT_THAT(convert_to_roman(6), Eq("VI"));
+  EXPECT_THAT(convert_to_roman(7), Eq("VII"));
+  EXPECT_THAT(convert_to_roman(8), Eq("VIII"));
+  EXPECT_THAT(convert_to_roman(9), Eq("IX"));
+  EXPECT_THAT(convert_to_roman(10), Eq("X"));
+  EXPECT_THAT(convert_to_roman(11), Eq("XI"));
+  EXPECT_THAT(convert_to_roman(12), Eq("XII"));
+  EXPECT_THAT(convert_to_roman(13), Eq("XIII"));
+  EXPECT_THAT(convert_to_roman(16), Eq("XVI"));
+  EXPECT_THAT(convert_to_roman(17), Eq("XVII"));
+  EXPECT_THAT(convert_to_roman(18), Eq("XVIII"));
+  EXPECT_THAT(convert_to_roman(20), Eq("XX"));
+  EXPECT_THAT(convert_to_roman(23), Eq("XXIII"));
+  EXPECT_THAT(convert_to_roman(41), Eq("XLI"));
+  EXPECT_THAT(convert_to_roman(45), Eq("XLV"));
+  EXPECT_THAT(convert_to_roman(50), Eq("L"));
+  EXPECT_THAT(convert_to_roman(80), Eq("LXXX"));
+  EXPECT_THAT(convert_to_roman(91), Eq("XCI"));
+  EXPECT_THAT(convert_to_roman(95), Eq("XCV"));
+  EXPECT_THAT(convert_to_roman(100), Eq("C"));
+  EXPECT_THAT(convert_to_roman(122), Eq("CXXII"));
+  EXPECT_THAT(convert_to_roman(152), Eq("CLII"));
+  EXPECT_THAT(convert_to_roman(196), Eq("CXCVI"));
+  EXPECT_THAT(convert_to_roman(247), Eq("CCXLVII"));
+  EXPECT_THAT(convert_to_roman(288), Eq("CCLXXXVIII"));
+  EXPECT_THAT(convert_to_roman(298), Eq("CCXCVIII"));
+  EXPECT_THAT(convert_to_roman(500), Eq("D"));
+  EXPECT_THAT(convert_to_roman(1000), Eq("M"));
+  EXPECT_THAT(convert_to_roman(1513), Eq("MDXIII"));
+  EXPECT_THAT(convert_to_roman(2999), Eq("MMCMXCIX"));
+  EXPECT_THAT(convert_to_roman(3447), Eq("MMMCDXLVII"));
+}
+
+
 // ={=========================================================================
 
 int main(int argc, char **argv)
