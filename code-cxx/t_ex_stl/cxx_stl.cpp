@@ -886,6 +886,23 @@ TEST(CxxStl, AlgoUnique)
 }
 
 // ={=========================================================================
+// cxx-algo-unique
+
+// size: 12
+// 1,2,3,4,5,6,2,7,2,8,2,9,
+// ===========
+// size: 8
+// 1,3,4,5,6,7,8,9,
+
+// remove value 2 from coll
+TEST(StlAlgoRemove, UseErase)
+{
+  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+}
+
+// ={=========================================================================
 int main(int argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);

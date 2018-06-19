@@ -5,6 +5,7 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include <bitset>
 #include <boost/algorithm/string.hpp>
 
 
@@ -547,6 +548,12 @@ string convert_to_roman(unsigned int arabic)
 {
   string convert{};
 
+  // note:
+  // 1. the order of element in the map matters
+  // 2. do not need 6?? in the map since it follows the same addition rule
+  // 3. to fix a warning on signed int and unsigned int comparion, use "u"
+  // suffix.
+
   const auto lookup_table = {
     make_pair(1000, "M"),
     make_pair(900, "CM"),
@@ -621,6 +628,111 @@ TEST(RomanConverter, CanConvertPositiveDigits)
   EXPECT_THAT(convert_to_roman(2999), Eq("MMCMXCIX"));
   EXPECT_THAT(convert_to_roman(3447), Eq("MMMCDXLVII"));
 }
+
+// ={=========================================================================
+// cxx-bit cxx-numeric-limit
+//
+// The addition operation in the CPU is agnostic to whether the integer is
+// signed or unsigned. The bit representation is the same. 
+//
+// Here `negate` means that -value but not ~value which is bitwise operation.
+// 
+// If you `negate` 0x80000000, _MIN, you get the same again and that is
+// something to look out for because there is `no-change` in bit representation.
+// This means abs() has no effect when fed the largest negative number. So bit
+// representation is 'agnostic' to whether it's signed or unsigned.
+
+TEST(Bit, MaxNegagiveIsSpecial)
+{
+  // get max negative, ???_MIN
+  int int_min = (~((unsigned int)0) >> 1)+1;
+
+  bitset<32> bitset_int_min(int_min);
+  EXPECT_EQ(bitset_int_min.to_string(), "10000000000000000000000000000000");
+
+  // what'd happen when negate ???_MIN?
+  int negate_min = -int_min;
+  bitset<32> bitset_negate_min(negate_min);
+  EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
+}
+
+TEST(Bit, GetLimts)
+{
+  // fails
+  // unsigned int int_max = (~((int)0)) >> 1;
+  // int int_max = (~((int)0)) >> 1;
+  
+  // okays
+  // int int_max = (~((unsigned int)0)) >> 1;
+  // unsigned int int_max = (~((unsigned int)0)) >> 1;
+  
+  unsigned int uint_max = ~((unsigned int)0);
+  int int_max = uint_max >> 1;
+  int int_min = int_max + 1;
+  
+  // bitset<32> bitsetx{int_max};
+  // cout << bitsetx << endl;
+
+  EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
+  EXPECT_EQ(int_max, numeric_limits<int>::max());
+  EXPECT_EQ(int_min, numeric_limits<int>::min());
+}
+
+// ={=========================================================================
+
+class Generator
+{
+  public:
+    int operator() () { return rand() % 50; }
+};
+
+using PortfolioIterator = vector<unsigned int>::iterator;
+
+PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
+{
+  // how to get T of coll such as algo-remove? here, assumes that we know T
+  vector<unsigned int> coll;
+
+  PortfolioIterator start = begin;
+  PortfolioIterator current{};
+
+  for (; start != end; ++start)
+  {
+    // not use push_back() since void push_back()
+    if (*start <= max_quanity)
+      current = coll.insert(coll.end(), *start);
+  }
+
+  start = begin;
+
+  for (; start != end; ++start)
+  {
+    if (*start > max_quanity)
+      coll.push_back(*start);
+  }
+
+  copy(coll.begin(), coll.end(), ostream_iterator<unsigned int>(cout, ","));
+  cout << endl;
+
+  return ++current;
+}
+
+
+TEST(X, Rearrange)
+{
+  vector<unsigned int> coll;
+
+  generate_n(back_inserter(coll), 20, Generator());
+
+  copy(coll.begin(), coll.end(), ostream_iterator<int>(cout, ","));
+  cout << endl;
+
+  PortfolioIterator iter = RearrangeByQuantity(coll.begin(), coll.end(), 25);
+  cout << "iter: " << *iter << endl;
+}
+
+
 
 
 // ={=========================================================================

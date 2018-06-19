@@ -212,7 +212,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-container-element-type
 *kt_dev_cxx_0000* cxx-container-common-operations
 *kt_dev_cxx_0000* cxx-container-insert-erase cxx-iter-invalidate
-*kt_dev_cxx_0000* cxx-container-remove
+*kt_dev_cxx_0000* cxx-container-remove cxx-remove
 *kt_dev_cxx_0000* cxx-container-sequential
 *kt_dev_cxx_0000* cxx-container-cxx-vector
 *kt_dev_cxx_0000* cxx-container-cxx-vector-bool
@@ -4061,15 +4061,17 @@ NOT 23: 1110 1000
 1000 0010    : -126 (0111 1101 + 1 = 0111 1110 (126)) // not -2
 ...
 1111 1110    : -2
-1111 1111 }} : -1         Uxxx_MAX
+1111 1111 }} : -1         Uxxx_MAX, 255
 ------------------------- 
 
 To get two's complement in programmatic way
 
-uint32_t ins = 0x27BDFFE0 
+uint32_t i = 0x27BDFFE0:
+
 0010.0111.1011.1101.1111.1111.1110.0000
 
-two's complement
+i's twos complement is:
+
 1101.1000.0100.0010.0000.0000.0001.1111      // ~X (not)
 +1                                           // +1
 --------------------------------------------------
@@ -4078,52 +4080,54 @@ two's complement
 (-ins) = 0xD8420020                          // twos-complement, negate
 1101.1000.0100.0010.0000.0000.0010.0000
 
-
-<the-max-negative-num-is-special>
-As with 8 bits pattern:
-
--128 ... 127
-
-As with 32 bits pattern:
-
-0111 1111 1111 1111 1111 1111 1111 1111     // 0x7fffffff, INT_MAX
-1000 0000 0000 0000 0000 0000 0000 0000     // 0x80000000, [31...0] INT_MIN
-
-The addition operation in the CPU is agnostic to whether the integer is signed
-or unsigned. The bit representation is the same. 
-
-Here `negate` means that -value but not ~value which is bitwise operation.
-
-If you `negate` 0x80000000, _MIN, you get the same again and that is something
-to look out for because there is `no-change` in bit representation. This means
-abs() has no effect when fed the largest negative number. So bit
-representation is 'agnostic' to whether it's signed or unsigned.
-
-int main()
+TEST(Bit, GetLimts)
 {
-  // `max-negative-num` INT_MIN
-  int value = ((unsigned int)(~0) >> 1)+1;
+  // fails
+  // unsigned int int_max = (~((int)0)) >> 1;
+  // int int_max = (~((int)0)) >> 1;
+  
+  // okays
+  // int int_max = (~((unsigned int)0)) >> 1;
+  // unsigned int int_max = (~((unsigned int)0)) >> 1;
+  
+  unsigned int uint_max = ~((unsigned int)0);
+  int int_max = uint_max >> 1;
+  int int_min = int_max + 1;
+  
+  // bitset<32> bitsetx{int_max};
+  // cout << bitsetx << endl;
 
-  std::bitset<32> bitset2{value};
-  std::cout << bitset2 << std::endl;
-
-  // negate `max-negative-num`
-  unsigned int minus_value = -value;
-  std::bitset<32> bitset3{value};
-  std::cout << bitset3 << std::endl;
+  EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
+  EXPECT_EQ(int_max, numeric_limits<int>::max());
+  EXPECT_EQ(int_min, numeric_limits<int>::min());
 }
 
-10000000000000000000000000000000
-10000000000000000000000000000000
 
-unsigned int x = ~0;    // 11....1 UINT_MAX
-             x >>= 1;   // 01....1 INT_MAX
+<the-max-negative-num-is-special>
 
-signed   -INT_MAX-1 ... INT_MAX        // -128 ~ 127
-unsigned 0          ... UNIT_MAX       // 0 ~ 256
+// The addition operation in the CPU is agnostic to whether the integer is
+// signed or unsigned. The bit representation is the same. 
+//
+// Here `negate` means that -value but not ~value which is bitwise operation.
+// 
+// If you `negate` 0x80000000, _MIN, you get the same again and that is
+// something to look out for because there is `no-change` in bit representation.
+// This means abs() has no effect when fed the largest negative number. So bit
+// representation is 'agnostic' to whether it's signed or unsigned.
 
--INT_MAX-2? -INT_MAX-2 becomes INT_MAX since plus and minus moves up/down in bit
-representation.
+TEST(Bit, MaxNegagiveIsSpecial)
+{
+  // get max negative, ???_MIN
+  int int_min = (~((unsigned int)0) >> 1)+1;
+
+  bitset<32> bitset_int_min{int_min};
+  EXPECT_EQ(bitset_int_min.to_string(), "10000000000000000000000000000000");
+
+  // what'd happen when negate ???_MIN?
+  int negate_min = -int_min;
+  bitset<32> bitset_negate_min{negate_min};
+  EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
+}
 
 
 <to-toggle-between-unsigned-and-signed> *interview-quiz*
@@ -35742,7 +35746,7 @@ void t_iter_08()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-remove-cxx-remove
+*kt_dev_cxx_0000* cxx-container-remove cxx-remove
 
 6.7.1 “Removing” Elements
 
@@ -35906,7 +35910,7 @@ void t_iter_10()
 }
 
 
-{cxx-remove-associative} *algo-remove* 
+{cxx-remove-associative}
 
 Manipulation algorithms-those that remove elements and those that reorder or
 modify elements-have another 'problem' when you try to use them with
@@ -35939,6 +35943,7 @@ int main()
   copy( coll.cbegin(), coll.cend(), ostream_iterator<int>(cout, " "));
   cout << endl;
 
+  // algo-remove
   remove( coll.begin(), coll.end(), 3 );
 
   // print 
@@ -43492,6 +43497,10 @@ negative, generate_n() does nothing (specified only since C++11).
 class CardSequence
 {
     public:
+
+        // note: error
+        // int operator() {
+
         int operator() () {
             return rand() % 24;
         }

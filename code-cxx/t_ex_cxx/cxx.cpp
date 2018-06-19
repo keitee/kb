@@ -1340,6 +1340,56 @@ TEST(Regex, UseMatch)
 
 
 // ={=========================================================================
+// cxx-bit cxx-numeric-limit
+//
+// The addition operation in the CPU is agnostic to whether the integer is
+// signed or unsigned. The bit representation is the same. 
+//
+// Here `negate` means that -value but not ~value which is bitwise operation.
+// 
+// If you `negate` 0x80000000, _MIN, you get the same again and that is
+// something to look out for because there is `no-change` in bit representation.
+// This means abs() has no effect when fed the largest negative number. So bit
+// representation is 'agnostic' to whether it's signed or unsigned.
+
+TEST(Bit, MaxNegagiveIsSpecial)
+{
+  // get max negative, ???_MIN
+  int int_min = (~((unsigned int)0) >> 1)+1;
+
+  bitset<32> bitset_int_min(int_min);
+  EXPECT_EQ(bitset_int_min.to_string(), "10000000000000000000000000000000");
+
+  // what'd happen when negate ???_MIN?
+  int negate_min = -int_min;
+  bitset<32> bitset_negate_min(negate_min);
+  EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
+}
+
+TEST(Bit, GetLimts)
+{
+  // fails
+  // unsigned int int_max = (~((int)0)) >> 1;
+  // int int_max = (~((int)0)) >> 1;
+  
+  // okays
+  // int int_max = (~((unsigned int)0)) >> 1;
+  // unsigned int int_max = (~((unsigned int)0)) >> 1;
+  
+  unsigned int uint_max = ~((unsigned int)0);
+  int int_max = uint_max >> 1;
+  int int_min = int_max + 1;
+  
+  // bitset<32> bitsetx{int_max};
+  // cout << bitsetx << endl;
+
+  EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
+  EXPECT_EQ(int_max, numeric_limits<int>::max());
+  EXPECT_EQ(int_min, numeric_limits<int>::min());
+}
+
+
+// ={=========================================================================
 
 int main(int argc, char** argv)
 {
