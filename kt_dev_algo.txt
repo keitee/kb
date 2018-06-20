@@ -17,9 +17,10 @@ Use #{ for a group and ={ for a item
 
 |kt_dev_quiz_011| find a path in a maze {freopen}
 *kt_dev_algo_0000* dev-algo-problem: count same bits between two integers
+*kt_dev_algo_0000* dev-algo-problem: algo-partition
 *kt_dev_quiz_014* q-code-review task *ex-interview*
 |kt_dev_quiz_015| sorting and searching questions from {ref-004}
-|kt_dev_quiz_017| q-power-of-two *ex-interview*
+*kt_dev_algo_0000* dev-algo-quiz: estimation using power of two *ex-interview*
 |kt_dev_quiz_018| linked list questions from {ref-004} {runner-technique} {tortoise-and-hare}
 |kt_dev_quiz_019| array and string questions from {ref-004}
 |kt_dev_quiz_020| coding task
@@ -2238,6 +2239,201 @@ TEST(CxxAlgoTest, FindNumberOfBitsBetweenTwoIntegers)
 }
 
 
+={============================================================================
+*kt_dev_algo_0000* dev-algo-problem: algo-partition
+
+Re-arrange the portfolio between (begin, end)  in such a way that all the
+stocks with quantity <= maxQuantity precede all those with quantity >
+maxQuantity Return the iterator to the first element with quantity >
+maxQuantity
+
+// 2N space and time
+
+PortfolioIterator rearrangeByQuantity( PortfolioIterator begin,
+                               PortfolioIterator end  ,
+                               unsigned int maxQuantity   )
+{
+   // implement me
+   std::vector<Stock> PortfolioGreater, PortfolioLesser;
+   PortfolioIterator run = begin;
+  
+   for( ; run != end; ++run)
+   {
+        // greater
+        if( run->quantity > maxQuantity )
+            PortfolioGreater.push_back(*run); // assume not use std::move()
+        else
+            PortfolioLesser.push_back(*run);
+   }
+  
+   run = begin;
+   for(const auto& elem : PortfolioLesser) {
+       *run++ = elem;
+   }
+   begin = run;
+
+   for(const auto& elem : PortfolioGreater) {
+       *run++ = elem;
+   }
+       
+   return begin;
+}
+
+
+using PortfolioIterator = vector<unsigned int>::iterator;
+
+
+// 2N time
+
+PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
+{
+  // how to get T of coll such as algo-remove? here, assumes that we know T
+  vector<unsigned int> coll;
+
+  PortfolioIterator start = begin;
+  PortfolioIterator current{};
+
+  for (; start != end; ++start)
+  {
+    // not use push_back() since void push_back()
+    if (*start <= max_quanity)
+      current = coll.insert(coll.end(), *start);
+  }
+
+  start = begin;
+
+  for (; start != end; ++start)
+  {
+    if (*start > max_quanity)
+      coll.push_back(*start);
+  }
+
+  // copy it back
+  copy(coll.begin(), coll.end(), begin);
+
+  return ++current;
+}
+
+
+TEST(StlAlgoPartition, UseOwnPartitionTwoPass)
+{
+  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+  PortfolioIterator iter = RearrangeByQuantity(coll.begin(), coll.end(), 25);
+
+  // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
+  // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
+  //                                ^^
+
+  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+
+  // this now fails since `current` is iterator of internal coll but not input
+  // call. Have to work out one.
+  // EXPECT_THAT(*iter, 43);
+}
+
+// unlike remove(), have to keep unmatched item as well
+PortfolioIterator my_partition_one(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
+{
+  // move up to the first which *do not* matches to the condition
+  
+  PortfolioIterator first = begin;
+  for (; first != end; ++first)
+    if (*first > max_quanity)
+      break;
+
+  PortfolioIterator runner = first;
+  ++runner;
+  for (; runner != end; ++runner)
+  {
+    // if item matches to condition
+    if (*runner <= max_quanity)
+    {
+      std::iter_swap(runner, first);
+      ++first;
+    }
+  }
+
+  return first;
+}
+
+TEST(StlAlgoPartition, UseOwnPartitionOnePass)
+{
+  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+  PortfolioIterator iter = my_partition_one(coll.begin(), coll.end(), 25);
+
+  // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
+  // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
+  //                                ^^
+
+  // see different order to the second pass one
+  // EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+  EXPECT_THAT(distance(coll.begin(), iter), 11);
+  EXPECT_THAT(*iter, 43);
+}
+
+// same as algo-partition
+PortfolioIterator my_partition_two(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
+{
+  // move up to the first which *do not* matches to the condition
+  
+  PortfolioIterator first = begin;
+  while (*first <= max_quanity)
+    if (++first == end)
+      return first;
+
+  PortfolioIterator runner = first;
+  while (++runner != end)
+  {
+    // if item matches to condition
+    if (*runner <= max_quanity)
+    {
+      std::iter_swap(runner, first);
+      ++first;
+    }
+  }
+
+  return first;
+}
+
+TEST(StlAlgoPartition, UseOwnPartitionOnePassTwo)
+{
+  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+  PortfolioIterator iter = my_partition_two(coll.begin(), coll.end(), 25);
+
+  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+  EXPECT_THAT(distance(coll.begin(), iter), 11);
+  EXPECT_THAT(*iter, 43);
+}
+
+// note: why different order?
+
+TEST(StlAlgoPartition, UsePartition)
+{
+  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+  PortfolioIterator iter = partition(coll.begin(), coll.end(), [](int e)
+      {
+        if (e <= 25)
+          return true;
+        return false;
+      }
+      );
+
+  // EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+  // EXPECT_THAT(*iter, 43);
+  EXPECT_THAT(coll, ElementsAreArray({23,6,11,6,13,23,21,19,20,15,24,48,37,34,29,26,41,30,42,43}));
+  EXPECT_THAT(distance(coll.begin(), iter), 11);
+  EXPECT_THAT(*iter, 48);
+}
+
+
 ={{===========================================================================
 *kt_dev_quiz_014* q-code-review task *ex-interview*
 
@@ -3340,7 +3536,7 @@ you handle cases like that.
 
 
 ={{===========================================================================
-*kt_dev_quiz_017* q-power-of-two *ex-interview*
+*kt_dev_algo_0000* dev-algo-quiz: estimation using power of two *ex-interview*
 
 From google phone interview, quick calculation of 2^24.
 
@@ -4409,48 +4605,6 @@ int main()
 // 1317 minutes has 52 % viewers in the scaled-down space.
 
 
-={============================================================================
-*kt_dev_quiz_021* q-logical
-
-// Re-arrange the portfolio between (begin, end)  in such a way that
-// all the stocks with quantity <= maxQuantity precede all those with quantity > maxQuantity
-// Return the iterator to the first element with quantity > maxQuantity
-//
-PortfolioIterator rearrangeByQuantity( PortfolioIterator begin,
-                               PortfolioIterator end  ,
-                               unsigned int maxQuantity   )
-{
-   // implement me
-   std::vector<Stock> PortfolioGreater, PortfolioLesser;
-   PortfolioIterator run = begin;
-  
-   for( ; run != end; ++run)
-   {
-        // greater
-        if( run->quantity > maxQuantity )
-            PortfolioGreater.push_back(*run); // assume not use std::move()
-        else
-            PortfolioLesser.push_back(*run);
-   }
-  
-   run = begin;
-   for(const auto& elem : PortfolioLesser) {
-       *run++ = elem;
-   }
-   begin = run;
-
-   for(const auto& elem : PortfolioGreater) {
-       *run++ = elem;
-   }
-       
-   return begin;
-}
-
-Many thanks,
-Kit
-------
-Sorry for a terse reply or typo as sent from a mobile.
-
 
 ={============================================================================
 *kt_dev_quiz_021* q-logical
@@ -4640,33 +4794,37 @@ minute argument can do you no harm at all.
 3. 
 
 ={============================================================================
-*kt_dev_quiz_100* codility: equilibrium index of a sequence
+*kt_dev_algo_0000* dev-algo-problem algo-roman roman converter
 
-The equilibrium index of a sequence is an index such that the sum of elements at lower indexes is
-equal to the sum of elements at higher indexes. For example, in a sequence A:
+// codility: equilibrium index of a sequence
 
-A[0]=-7 A[1]=1 A[2]=5 A[3]=2 A[4]=-4 A[5]=3 A[6]=0    [-7, 1, 5, 3, -4, 3, 0]
+The equilibrium index of a sequence is an index such that the sum of elements
+at lower indexes is equal to the sum of elements at higher indexes. For
+example, in a sequence A:
+
+A[0]=-7 A[1]=1 A[2]=5 A[3]=2 A[4]=-4 A[5]=3 A[6]=0    [-7, 1, 5, 2, -4, 3, 0]
 
 3 is an equilibrium index, because: A[0]+A[1]+A[2]=A[4]+A[5]+A[6]
 
-6 is also an equilibrium index, because: A[0]+A[1]+A[2]+A[3]+A[4]+A[5]=0 (The sum of zero elements
-is zero) 
+6 is also an equilibrium index, because: A[0]+A[1]+A[2]+A[3]+A[4]+A[5]=0 (The
+sum of zero elements is zero) 
 
-7 is not an equilibrium index - because it is not a valid index of sequence A. If you still have
-doubts, here is a precise definition: 
+7 is not an equilibrium index - because it is not a valid index of sequence A.
+If you still have doubts, here is a precise definition: 
 
-The integer k is an equilibrium index of a sequence A[0],A[1]..,A[n-1] if and only if 0<= k and
-sum(A[0..(k-1)])=sum(A[(k+1)..(n-1)]). Assume the sum of zero elements is equal to zero.
+The integer k is an equilibrium index of a sequence A[0],A[1]..,A[n-1] if and
+only if 0<= k and sum(A[0..(k-1)])=sum(A[(k+1)..(n-1)]). Assume the sum of
+zero elements is equal to zero.
 
 Write a function
 
 int equi(int A[], int n);
 
-that, given a sequence, returns its equilibrium index (any) or -1 if no equilibrium index exists.
-Assume that the sequence may be very long. 
+that, given a sequence, returns its equilibrium index (any) or -1 if no
+equilibrium index exists. Assume that the sequence may be very long. 
 
-The problem can be solved by using various approaches, the most common being simply to follow the
-equilibrium definition:
+The problem can be solved by using various approaches, the most common being
+simply to follow the equilibrium definition:
 
 // while moving index, continues to sum right and left sum.
 //
@@ -4686,13 +4844,17 @@ int equi ( int A[], int n ) {
 Unfortunately, this approach has two disadvantages:
 
 o it fails on large input data sets, since the time complexity is O(n2)
-o it fails on large input values (for example if the input array contains values like MIN/MAX_INT)
-due to the arithmetic overflows
 
-We can fix the first problem with a better algorithm, and the second problem with a better data-type
-(for example, using long long type instead of int for sum computations). The key observation for
-better running time is to update the left/right sums in constant time instead of recomputing them
-from the scratch. O(n)
+o it fails on large input values (for example if the input array contains
+    values like MIN/MAX_INT) due to the arithmetic overflows
+
+We can fix the first problem with a better algorithm, and the second problem
+with a better data-type (for example, using long long type instead of int for
+    sum computations). 
+  
+The key observation for better running time is to update the left/right sums
+in constant time instead of recomputing them from the scratch. O(n)
+
 
 <code-example>
 int equi(int arr[], int n) {

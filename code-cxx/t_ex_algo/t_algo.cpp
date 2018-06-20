@@ -1445,6 +1445,72 @@ TEST(BitPattern, FindNumberOfBitsBetweenTwoIntegers_0619)
 
 
 // ={=========================================================================
+// algo-equi
+
+int equi(int A[], int n)
+{
+  int start{}, index{};
+
+  for (index = 0; index < n; ++index)
+  {
+    // have to reset them on every loop
+    int left_sum{}, right_sum{};
+
+    for (start = 0; start < index; ++start)
+      left_sum += A[start];
+
+    for (start = index+1; start < n; ++start)
+      right_sum += A[start];
+
+    if (left_sum == right_sum)
+      return index;
+  }
+
+  return -1;
+}
+
+TEST(AlgoEquilbrium, EquiPoor)
+{
+  int coll[] = {-7, 1, 5, 2, -4, 3, 0};
+
+  EXPECT_THAT(equi(coll, 7), 3);
+}
+
+int equi_0620(int A[], int n)
+{
+  int index{};
+
+  long long total_sum{};
+  for (index = 0; index < n; ++index)
+    total_sum += A[index];
+
+  long long right_sum{total_sum};
+  long long left_sum{};
+
+  for (index = 0; index < n; ++index)
+  {
+    if (index-1 >= 0)
+      left_sum += A[index-1];
+
+    if (index+1 < n)
+      total_sum -= A[index+1];
+
+    if (left_sum == right_sum)
+      return index;
+  }
+
+  return -1;
+}
+
+TEST(AlgoEquilbrium, Equi0620)
+{
+  int coll[] = {-7, 1, 5, 2, -4, 3, 0};
+
+  EXPECT_THAT(equi_0620(coll, 7), 3);
+}
+
+
+// ={=========================================================================
 // algo-atoi
 //
 // * input type? digits only? no space?
