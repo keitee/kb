@@ -229,7 +229,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-container-cpp-unordered
 *kt_dev_cxx_0000* cxx-container-print-elements
 
-*kt_dev_cpp_0000* cpp-iter
+*kt_dev_cpp_0000* cxx-iter
 *kt_dev_cpp_0000* cpp-iter-array
 *kt_dev_cxx_0000* cxx-iter-adapters
 *kt_dev_cpp_0000* cpp-iter-external-and-internal
@@ -35753,92 +35753,48 @@ void t_iter_08()
 {cxx-remove-sequential} *algo-remove* 
 
 <ex>
-
-// remove 2 value from container
-//
-// size: 12
-// 1,2,3,4,5,6,2,7,2,8,2,9,
-// ===========
-// size: 8
-// 1,3,4,5,6,7,8,9,
-
-void t_iter_08_01()
+// remove value 2 from coll
+TEST(StlAlgoRemove, UseErase)
 {
-    std::vector<int> ivec{1,2,3,4,5,6,2,7,2,8,2,9};
+  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
-    cout << "size: " << ivec.size() << endl;
-    for (const auto &e : ivec)
-        cout << e << ",";
-    cout << endl;
+  for (auto it = coll.begin(); it != coll.end(); ++it)
+  {
+    if (*it == 2)
+      it = coll.erase(it);
+  }
 
-    int value = 2;
-
-    for (auto it = ivec.cbegin(); it != ivec.cend(); )
-    {
-        if (*it == value)
-            it = ivec.erase(it);
-        else
-            ++it;
-    }
-
-    cout << "===========" << endl;
-    cout << "size: " << ivec.size() << endl;
-    for (const auto &e : ivec)
-        cout << e << ","; 
-    cout << endl;
+  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
 }
 
-
-// do the same using algo-erase
-
-void t_iter_08_02()
+TEST(StlAlgoRemove, UseRemoveAndErase)
 {
-    std::vector<int> ivec{1,2,3,4,5,6,2,7,2,8,2,9};
+  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
-    cout << "size: " << ivec.size() << endl;
-    for (const auto &e : ivec)
-        cout << e << ",";
-    cout << endl;
+  auto end = remove(coll.begin(), coll.end(), 2);
 
-    auto end = remove(ivec.begin(), ivec.end(), 2);
-    ivec.erase(end, ivec.end());
+  // *algo-distance*
+  EXPECT_THAT(distance(end, coll.end()), 4);
 
-    cout << "===========" << endl;
-    cout << "size: " << ivec.size() << endl;
-    for (const auto &e : ivec)
-        cout << e << ","; 
-    cout << endl;
+  coll.erase(end, coll.end());
+
+  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
 }
 
-
-// to show algo-erase do not change size
-//
-// before : 12 elements
-// 6 5 4 3 2 1 1 2 3 4 5 6 
-// after  : 12 elements
-// 6 5 4 2 1 1 2 4 5 6 5 6 
-
-void t_iter_09()
+// show that algo-remove() do not remove elements
+TEST(StlAlgoRemove, RemoveDoNotRemove)
 {
-    std::list<int> coll;
+  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
-    for (int i = 1; i <= 6; ++i)
-    {
-        coll.push_back(i);
-        coll.push_front(i);
-    }
+  remove(coll.begin(), coll.end(), 2);
 
-    cout << "before : " << coll.size() << " elements" << endl;
-    copy(coll.cbegin(), coll.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl;
+  // std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+  // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
+  //                                       ^^^^^^^ 
 
-    // remove all elements with value 3
-    remove(coll.begin(), coll.end(), 3);
-
-    cout << "after  : " << coll.size() << " elements" << endl;
-    copy(coll.cbegin(), coll.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl;
+  EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
 }
+
 
 So *algo-remove* reorder:
 
@@ -35847,67 +35803,24 @@ So *algo-remove* reorder:
                         += return the past of the last element
 
 Thus, `remove()` did not change the number of elements in the collection for
-which it was called. Revised the code to actually remove by calling 'member'
-function. 
+which it was called. Have to call erase member function to actually remove.
 
 note: cxx-list-remove
 coll.remove() is only for list and forward_list since no such member function
 for others.
 
-note: this explains iterator which glues algorithm and container
+This explains iterator which glues algorithm and container. In practice, there
+are some limits and workarounds you should know. Many of these have to do with
+modifications. These aspects are surprising and show the 'price' of the STL
+concept that separates containers and algorithms with great flexibility.
 
-In practice, there are some limits and workarounds you should know. Many of
-these have to do with modifications. These aspects are surprising and show the
-'price' of the STL concept that separates containers and algorithms with great
-flexibility.
-
-Why don't algorithms call erase() by themselves? This question highlights the
-price of the flexibility of the STL. The STL separates data structures and
-algorithms by using iterators as the interface. However, iterators are an
-abstraction to represent a 'position' in a container. In general, iterators do
-not know their containers. Thus, the algorithms, which use the iterators to
-access the elements of the container, can't call any member function for it.
-
-
-// = 10 ======
-// before : 12 elements
-// 6 5 4 3 2 1 1 2 3 4 5 6 
-// after  : 12 elements
-// 6 5 4 2 1 1 2 4 5 6 5 6 
-// number of removed elements: 2
-// erased : 10 elements
-// 6 5 4 2 1 1 2 4 5 6 
-
-void t_iter_10()
-{
-    std::list<int> coll;
-
-    for (int i = 1; i <= 6; ++i)
-    {
-        coll.push_back(i);
-        coll.push_front(i);
-    }
-
-    cout << "before : " << coll.size() << " elements" << endl;
-    copy(coll.cbegin(), coll.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl;
-
-    // algo-remove remove all elements with value 3. save logical end.
-    auto end = remove(coll.begin(), coll.end(), 3);
-
-    cout << "after  : " << coll.size() << " elements" << endl;
-    copy(coll.cbegin(), coll.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl;
-
-    // *algo-distance*
-    cout << "number of removed elements: " << distance(end, coll.end()) << endl;
-
-    coll.erase(end, coll.end());
-
-    cout << "erased : " << coll.size() << " elements" << endl;
-    copy(coll.cbegin(), coll.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl;
-}
+  Why don't algorithms call erase() by themselves? This question highlights
+  the price of the flexibility of the STL. The STL separates data structures
+  and algorithms by using iterators as the interface. However, iterators are
+  an abstraction to represent a 'position' in a container. In general,
+  iterators do not know their containers. Thus, the algorithms, which use the
+  iterators to access the elements of the container, can't call any member
+  function for it.
 
 
 {cxx-remove-associative}
@@ -36458,7 +36371,7 @@ TEST(DISABLED_StlVector, AccessInvalidIndex)
   cout << "name: " << ovec[8].GetName() << endl;
 }
 
-// do not cause seg fault
+// do not cause seg fault but cxx-undefined
 TEST(StlVector, AccessInvalidIndexWithReserve)
 {
   vector<VectorEraseCallsDtor> ovec{};
@@ -38855,7 +38768,7 @@ PRINT_ELEMENTS or _MAPS for:
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cpp-iter
+*kt_dev_cpp_0000* cxx-iter
 
 {generalization-of-pointer}
 A concept of an object that represents positions of elements in a container.
@@ -38883,7 +38796,7 @@ The difference is that iterators may be 'smart' pointers. Or iterators are an
 abstraction to represent a 'position' in a container.
 
 
-{iterator-categories}
+{cxx-iter-categories}
 An iterator of a higher category provides all the operations of lower ones.
 
 * input iterator 
@@ -38919,7 +38832,7 @@ An iterator of a higher category provides all the operations of lower ones.
 // vector, deque, array, and strings
 
 
-{cpp-iter-code}
+{cxx-iter-code}
 
 // bits/stl_iterator_base_types.h
 
@@ -38997,7 +38910,7 @@ An iterator of a higher category provides all the operations of lower ones.
     };
 
 
-{cpp-iter-range}
+{cxx-iter-range}
 [begin, end) notation and `off-the-end` iterator which is one past the last.
 This notation applies to subrange as well in use of algorithm. A half-open
 range has two advantages:
@@ -39012,7 +38925,7 @@ range has two advantages:
 *end() is always a programming error since end() returns invalid iterator.
 
 
-<generic-programming> <cpp-loop>
+<generic-programming> <cxx-loop>
 C++ uses != as a matter of habit rather than < in loops. They do so for the
 same reason that they use iterators rather than subscripts because it applies
 to various kinds of containers provided by the library: 
@@ -39102,6 +39015,44 @@ for (auto pos = coll.begin(); pos != coll.end(); ++pos) {
 
 for (auto pos = `coll.cbegin()`; pos != coll.cend(); ++pos) {
   cout << *pos << ’ ’;
+}
+
+
+<cxx-iter-swap>
+
+9.3.4 iter_swap()
+
+// #include <algorithm>
+//
+// void iter_swap (ForwardIterator1 pos1, ForwardIterator2 pos2)
+//
+// Swaps the values to which iterators pos1 and pos2 refer.
+// The iterators don’t need to have the same type. However, the values must be
+// assignable.
+//
+// (1,2,3,4,5,6,7,8,9)
+//  ^^^
+// (2,1,3,4,5,6,7,8,9)
+//  ^               ^
+// (9,1,3,4,5,6,7,8,2)
+
+TEST(StlIter, IterSwap)
+{
+  vector<int> coll;
+
+  INSERT_ELEMENTS(coll, 1, 9);
+  PRINT_ELEMENTS(coll);
+  EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6,7,8,9));
+
+  // std::iter_swap(coll.begin(), next(coll.begin()));
+  std::iter_swap(coll.begin(), ++coll.begin());
+  PRINT_ELEMENTS(coll);
+  EXPECT_THAT(coll, ElementsAre(2,1,3,4,5,6,7,8,9));
+
+  // std::iter_swap(coll.begin(), prev(coll.end()));
+  std::iter_swap(coll.begin(), --coll.end());
+  PRINT_ELEMENTS(coll);
+  EXPECT_THAT(coll, ElementsAre(9,1,3,4,5,6,7,8,2));
 }
 
 
@@ -40538,38 +40489,133 @@ algorithm:
 Both algorithms return the logical `new end of the modified sequence.` the
 position after the last element not removed. See CLR 11.7.1 
 
-note: 
+// show that remove_if() returns end if not found
+
+TEST(StlAlgoRemove, UseRemoveIf)
+{
+  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+  auto it = remove_if(coll.begin(), coll.end(), [](int e)
+      {
+        if (e == 10)
+          return true;
+        return false;
+      });
+
+  EXPECT_THAT(it, coll.end());
+}
+
+
 The way that makes copy is interesting which uses !bool and copies element to
 the same position when it is not equal.
 
-{
+// /usr/include/c++/4.9.2/bits/stl_algo.h
+
+  /**
+   *  @brief Remove elements from a sequence.
+   *  @ingroup mutating_algorithms
+   *  @param  __first  An input iterator.
+   *  @param  __last   An input iterator.
+   *  @param  __value  The value to be removed.
+   *  @return   An iterator designating the end of the resulting sequence.
+   *
+   *  All elements equal to @p __value are removed from the range
+   *  @p [__first,__last).
+   *
+   *  remove() is stable, so the relative order of elements that are
+   *  not removed is unchanged.
+   *
+   *  Elements between the end of the resulting sequence and @p __last
+   *  are still present, but their value is unspecified.
+  */
+  template<typename _ForwardIterator, typename _Tp>
+    inline _ForwardIterator
+    remove(_ForwardIterator __first, _ForwardIterator __last,
+	   const _Tp& __value)
+    {
+      // concept requirements
+      __glibcxx_function_requires(_Mutable_ForwardIteratorConcept<
+				  _ForwardIterator>)
+      __glibcxx_function_requires(_EqualOpConcept<
+	    typename iterator_traits<_ForwardIterator>::value_type, _Tp>)
+      __glibcxx_requires_valid_range(__first, __last);
+
+      return std::__remove_if(__first, __last,
+		__gnu_cxx::__ops::__iter_equals_val(__value));
+    }
+
+  /**
+   *  @brief Remove elements from a sequence using a predicate.
+   *  @ingroup mutating_algorithms
+   *  @param  __first  A forward iterator.
+   *  @param  __last   A forward iterator.
+   *  @param  __pred   A predicate.
+   *  @return   An iterator designating the end of the resulting sequence.
+   *
+   *  All elements for which @p __pred returns true are removed from the range
+   *  @p [__first,__last).
+   *
+   *  remove_if() is stable, so the relative order of elements that are
+   *  not removed is unchanged.
+   *
+   *  Elements between the end of the resulting sequence and @p __last
+   *  are still present, but their value is unspecified.
+  */
   template<typename _ForwardIterator, typename _Predicate>
     _ForwardIterator
-    remove_if(_ForwardIterator __first, _ForwardIterator __last,
-      _Predicate __pred)
+    __remove_if(_ForwardIterator __first, _ForwardIterator __last,
+		_Predicate __pred)
     {
-      // ...
-
-      // uses the copied pred
-      __first = _GLIBCXX_STD_A::find_if(__first, __last, __pred);
-
-      if(__first == __last)
+      __first = std::__find_if(__first, __last, __pred);
+      if (__first == __last)
         return __first;
 
       _ForwardIterator __result = __first;
-
       ++__first;
-
-      // uses the pred which is count is 0. if not copyed in the first then
-      // count would be 3
-      for(; __first != __last; ++__first)
-        if(!bool(__pred(*__first)))
-          {
-            *__result = _GLIBCXX_MOVE(*__first);
-            ++__result;
-          }
+      for (; __first != __last; ++__first)
+        if (!__pred(__first))
+        {
+          *__result = _GLIBCXX_MOVE(*__first);
+          ++__result;
+        }
       return __result;
     }
+
+
+// implement own remove()
+using ITERATOR = std::vector<int>::iterator;
+
+ITERATOR OwnRemove(ITERATOR begin, ITERATOR end, int value)
+{
+  // when not found
+  ITERATOR first = find(begin, end, value);
+  if (first == end)
+    return first;
+
+  ITERATOR result = first;
+  ++first;
+
+  for (; first != end; ++first)
+    if (!(*first == value))
+    {
+      *result = *first;
+      ++result;
+    }
+
+  return result;
+}
+
+TEST(StlAlgoRemove, UseOwnRemove)
+{
+  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+  auto end = OwnRemove(coll.begin(), coll.end(), 2);
+
+  EXPECT_THAT(distance(end, coll.end()), 4);
+
+  coll.erase(end, coll.end());
+
+  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
 }
 
 
@@ -43733,6 +43779,63 @@ TEST(Algo, UsePartition)
     // first odd element:
     EXPECT_EQ(*pos2, 1);
 }
+
+// /usr/include/c++/4.9.2/bits/stl_algo.h
+  /**
+   *  @brief Move elements for which a predicate is true to the beginning
+   *         of a sequence.
+   *  @ingroup mutating_algorithms
+   *  @param  __first   A forward iterator.
+   *  @param  __last    A forward iterator.
+   *  @param  __pred    A predicate functor.
+   *  @return  An iterator @p middle such that @p __pred(i) is true for each
+   *  iterator @p i in the range @p [__first,middle) and false for each @p i
+   *  in the range @p [middle,__last).
+   *
+   *  @p __pred must not modify its operand. @p partition() does not preserve
+   *  the relative ordering of elements in each group, use
+   *  @p stable_partition() if this is needed.
+  */
+  template<typename _ForwardIterator, typename _Predicate>
+    inline _ForwardIterator
+    partition(_ForwardIterator __first, _ForwardIterator __last,
+	      _Predicate   __pred)
+    {
+      // concept requirements
+      __glibcxx_function_requires(_Mutable_ForwardIteratorConcept<
+				  _ForwardIterator>)
+      __glibcxx_function_requires(_UnaryPredicateConcept<_Predicate,
+	    typename iterator_traits<_ForwardIterator>::value_type>)
+      __glibcxx_requires_valid_range(__first, __last);
+
+      return std::__partition(__first, __last, __pred,
+			      std::__iterator_category(__first));
+    }
+
+  /// This is a helper function...
+  template<typename _ForwardIterator, typename _Predicate>
+    _ForwardIterator
+    __partition(_ForwardIterator __first, _ForwardIterator __last,
+		_Predicate __pred, forward_iterator_tag)
+    {
+      if (__first == __last)
+        return __first;
+    
+      while (__pred(*__first))
+        if (++__first == __last)
+          return __first;
+    
+      _ForwardIterator __next = __first;
+    
+      while (++__next != __last)
+        if (__pred(*__next))
+        {
+          std::iter_swap(__first, __next);
+          ++__first;
+        }
+    
+      return __first;
+    }
 
 
 ={============================================================================
