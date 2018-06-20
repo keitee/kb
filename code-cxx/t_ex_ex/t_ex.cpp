@@ -5,7 +5,12 @@
 #include <vector>
 #include <fstream>
 #include <string>
+<<<<<<< HEAD
 #include <bitset>
+=======
+#include <chrono>
+#include <thread>
+>>>>>>> 2b315751c49bfc4250ceed8e7a5ead381afd6f88
 #include <boost/algorithm/string.hpp>
 
 
@@ -543,7 +548,6 @@ TEST(Ranged, X)
 
 
 // ={=========================================================================
-
 string convert_to_roman(unsigned int arabic) 
 {
   string convert{};
@@ -718,18 +722,68 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   return ++current;
 }
 
+// Q: If run it standalone, it runs slower than on in GTEST. WHY?
+//
+// #include <iostream>
+// #include <chrono>
+// #include <thread>
+// 
+// using namespace std;
+// 
+// typedef bool (*UPDATEFUNC)(int);
+// 
+// bool UpdateProgress(int percent)
+// {
+//   cout << flush << "\r" << percent << " % complete...";
+//   // cout << "\r" << percent << "% complete...";
+//   return true;
+// }
+// 
+// int main()
+// {
+//   UPDATEFUNC f = UpdateProgress;
+// 
+//   for (long l = 0; l < 100000000; ++l)
+//   {
+//     if (l % 1000000 == 0)
+//       f(l / 1000000);
+// 
+//     for (long x = 0; x < 100; ++x)
+//       x = x; 
+// 
+//     // this_thread::sleep_for(std::chrono::milliseconds{1});
+//   }
+// 
+//   cout << endl;
+// 
+//   return EXIT_SUCCESS;
+// }
 
-TEST(X, Rearrange)
+
+typedef bool (*UPDATEFUNC)(int);
+
+bool UpdateProgress(int percent)
 {
-  vector<unsigned int> coll;
+  cout << flush << "\r" << percent << "% complete...";
+  return true;
+}
 
-  generate_n(back_inserter(coll), 20, Generator());
+TEST(Progress, X)
+{
+  UPDATEFUNC f = UpdateProgress;
 
-  copy(coll.begin(), coll.end(), ostream_iterator<int>(cout, ","));
+  for (long l = 0; l < 100000000; ++l)
+  {
+    if (l % 1000000 == 0)
+      f(l / 1000000);
+
+    for (long x = 0; l < 1000000; ++l)
+      x = x; 
+
+    // this_thread::sleep_for(std::chrono::milliseconds{10});
+  }
+
   cout << endl;
-
-  PortfolioIterator iter = RearrangeByQuantity(coll.begin(), coll.end(), 25);
-  cout << "iter: " << *iter << endl;
 }
 
 
