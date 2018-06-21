@@ -1447,7 +1447,7 @@ TEST(BitPattern, FindNumberOfBitsBetweenTwoIntegers_0619)
 // ={=========================================================================
 // algo-equi
 
-int equi(int A[], int n)
+int equi_poor(int A[], int n)
 {
   int start{}, index{};
 
@@ -1473,7 +1473,7 @@ TEST(AlgoEquilbrium, EquiPoor)
 {
   int coll[] = {-7, 1, 5, 2, -4, 3, 0};
 
-  EXPECT_THAT(equi(coll, 7), 3);
+  EXPECT_THAT(equi_poor(coll, 7), 3);
 }
 
 int equi_0620(int A[], int n)
@@ -1492,8 +1492,7 @@ int equi_0620(int A[], int n)
     if (index-1 >= 0)
       left_sum += A[index-1];
 
-    if (index+1 < n)
-      total_sum -= A[index+1];
+    right_sum = total_sum - left_sum - A[index];
 
     if (left_sum == right_sum)
       return index;
@@ -1502,11 +1501,320 @@ int equi_0620(int A[], int n)
   return -1;
 }
 
-TEST(AlgoEquilbrium, Equi0620)
+int equi_0620_better(int A[], int n)
+{
+  int index{};
+
+  long long total_sum{};
+  for (index = 0; index < n; ++index)
+    total_sum += A[index];
+
+  long long right_sum{total_sum};
+  long long left_sum{};
+
+  for (index = 0; index < n; ++index)
+  {
+    // if (index-1 >= 0)
+    //   left_sum += A[index-1];
+
+    right_sum = total_sum - left_sum - A[index];
+
+    if (left_sum == right_sum)
+      return index;
+
+    left_sum += A[index];
+  }
+
+  return -1;
+}
+
+// do not use total_sum
+int equi_do_not_use_total( int A[], int n )
+{
+  if( !n || !A )
+    return -1;
+
+  long long rsum = 0, lsum = 0;
+
+  for(int i=0; i<n; i++)
+    rsum += A[i];
+
+  for(int i=0; i<n; i++)
+  {
+    rsum -= A[i];
+
+    if( lsum == rsum )
+      return i;
+
+    lsum += A[i];
+  }
+
+  return -1;
+}
+
+TEST(AlgoEquilbrium, Equi_0620)
 {
   int coll[] = {-7, 1, 5, 2, -4, 3, 0};
 
   EXPECT_THAT(equi_0620(coll, 7), 3);
+  EXPECT_THAT(equi_0620_better(coll, 7), 3);
+  EXPECT_THAT(equi_do_not_use_total(coll, 7), 3);
+}
+
+
+// ={=========================================================================
+// algo-equi-tape
+
+int tape_equi_0628(vector<int> &A)
+{
+  int abs_diff{};
+  int saved_diff = numeric_limits<int>::max();
+
+  long long right_sum{}, left_sum{};
+  for (unsigned int i = 0; i < A.size(); ++i)
+    right_sum += A[i]; 
+
+  for (unsigned int i = 0; i < A.size()-1; ++i)
+  {
+    left_sum += A[i];
+    right_sum -= A[i];
+
+    abs_diff = abs(left_sum - right_sum);
+    if (abs_diff < saved_diff)
+    {
+      saved_diff = abs_diff;
+    }
+  }
+
+  return saved_diff;
+}
+
+
+int tape_equi_1(vector<int> &A)
+{
+  if(!A.size())
+    return -1;
+
+  // note:
+  long long tsum = 0;
+
+  // size N, [0, N-1]
+  for(unsigned int i=0; i < A.size(); i++)
+    tsum += A[i];
+
+  long long rsum = 0, lsum = 0;
+  int runabs = INT_MAX, curabs = 0;
+
+  for(unsigned int i=0; i < A.size()-1; i++)
+  {
+    lsum += A[i];
+    rsum = tsum - lsum;
+
+    curabs = abs(lsum-rsum);
+
+    if(runabs > curabs)
+      runabs = curabs;
+  }
+
+  return runabs;
+}
+
+int tape_equi_2(vector<int> &A)
+{
+  if(!A.size())
+    return -1;
+
+  // note:
+  long long rsum = 0;
+
+  // size N, [0, N-1]
+  for(unsigned int i=0; i < A.size(); i++)
+    rsum += A[i];
+
+  long long lsum = 0;
+  int runabs = INT_MAX, curabs = 0;
+
+  // [0, N-2]
+  for(unsigned int i=0; i < A.size()-1; i++)
+  {
+    lsum += A[i];
+    rsum -= A[i];
+
+    curabs = abs(lsum-rsum);
+
+    if(runabs > curabs)
+      runabs = curabs;
+  }
+
+  return runabs;
+}
+
+int tape_equi_model(vector<int> &A) 
+{
+  // write your code in C++98
+  if( !A.size() )
+    return -1;
+ 
+  long long sum = 0, rsum = 0, lsum = 0;
+  int cmin = INT_MAX;
+ 
+  for(int i=0; i<A.size(); i++)
+    sum += A[i];
+ 
+  lsum = A[0];
+ 
+  // note: 
+  // it is okay to use (n-1)th to calc lsum since not used anyway. WHY?
+  for(int i=1; i<A.size(); i++)
+  {
+    rsum = sum - lsum;
+ 
+    // cmin = abs cause warning of possible loss since assign from long long to int.
+    if( abs(lsum-rsum) < cmin )
+      cmin = abs(lsum-rsum);
+ 
+    lsum += A[i];
+  }
+ 
+  return cmin;
+}
+
+TEST(AlgoEquilbrium, TapeEqui_0620)
+{
+  vector<int> coll{3, 2, 1, 4, 3};
+
+  EXPECT_THAT(tape_equi_model(coll), 1);
+  EXPECT_THAT(tape_equi_1(coll), 1);
+  EXPECT_THAT(tape_equi_2(coll), 1);
+  EXPECT_THAT(tape_equi_0628(coll), 1);
+}
+
+
+// ={=========================================================================
+// algo-distinct-count
+
+bool absLessThan(int a, int b)
+{
+  return abs(a) < abs(b);
+}
+
+bool absEqual(int a, int b)
+{
+  return abs(a) == abs(b);
+}
+
+int distinct_count_old_01(const vector<int> &A)
+{
+  if(!A.size())
+    return -1;
+
+  vector<int> ivec;
+  int count = 0;
+
+  for(size_t i = 0; i < A.size(); ++i)
+    ivec.push_back(A[i]);
+
+  sort( ivec.begin(), ivec.end(), absLessThan );
+  auto it_end_unique = unique( ivec.begin(), ivec.end(), absEqual );
+
+  auto it_begin = ivec.begin();
+
+  while( it_begin != it_end_unique )
+  {
+    ++it_begin;
+    ++count;
+  }
+
+  return count;
+}
+
+int distinct_count_old_02(const vector<int> &A) {
+    // write your code in C++98
+    int size = A.size();
+    
+    if( !size )
+        return -1;
+        
+    std::set<int> iset;
+    
+    for( int i = 0; i <  size; i++ )
+        iset.insert( abs(A[i]) );
+        
+    return iset.size();
+}
+
+int distinct_count_0621(const vector<int> &A)
+{
+  set<int> coll{};
+
+  for (const auto e : A)
+    coll.insert(abs(e));
+
+  return coll.size();
+}
+
+TEST(AlgoDistinctCount, DistinctCount)
+{
+  vector<int> coll{-5, -3, -1, 0, 3, 6};
+
+  EXPECT_THAT(distinct_count_old_01(coll), 5);
+  EXPECT_THAT(distinct_count_old_02(coll), 5);
+  EXPECT_THAT(distinct_count_0621(coll), 5);
+}
+
+
+// ={=========================================================================
+// algo-water-volume
+
+
+size_t water_volume_0621(const vector<int> &A)
+{
+  size_t last_high{}, last_high_index{};
+  size_t prev{}, curr{};
+  size_t volume{}, high{}, width{};
+
+  cout << "--------" << endl;
+
+  for (size_t i = 0; i < A.size(); ++i)
+  {
+    curr = A[i];
+
+    // trigger condition to compute volume. that is when it goes up(prev < curr)
+    // and last_high is not null.
+    
+    if (prev < curr && last_high)
+    {
+      high = min(curr, last_high) - prev;
+      width = (i - last_high_index) - 1;
+      volume += (high*width);
+
+      cout << "i:" << i << " c:" << curr << " p:" << prev 
+        << " lh:" << last_high << " lhi:" << last_high_index
+        << " h:" << high << " w:" << width << " v:" << volume << endl;
+    }
+
+    // when it goes down and see bigger than before
+    if(curr < prev && last_high < prev)
+    {
+      last_high = prev;
+      last_high_index = i-1;
+      cout << "i:" << i << " u lh:" << last_high << endl;
+    }
+
+    prev = curr;
+  }
+
+  return volume;
+}
+
+
+TEST(AlgoWaterVolume, WaterVolume)
+{
+  vector<int> coll1{2,5,1,2,3,4,7,7,6};
+  vector<int> coll2{2,5,1,3,1,2,1,7,7,6};
+
+  EXPECT_THAT(water_volume_0621(coll1), 10);
+  EXPECT_THAT(water_volume_0621(coll2), 17);
 }
 
 
