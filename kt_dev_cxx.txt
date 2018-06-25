@@ -35634,55 +35634,131 @@ void t_iter_04()
 
 
 <ex> *cxx-vector-insert* *cxx-vector-erase*
-// 0 1 2 3 4 5 6 7 8 9 (10)
-// size: 10
-// 0 2 3 4 5 6 7 8 9 (9)
-// size: 9
-// 0 3 4 5 6 7 8 9 (8)
-// size: 8
 
-TEST(CxxStlTest, VecorEraseChangesEnd)
+PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
 {
-  vector<int> ivec;
-  INSERT_ELEMENTS(ivec, 0, 9);
-  PRINT_ELEMENTS(ivec);
-  cout << "size: " << ivec.size() << endl;
+  // how to get T of coll such as algo-remove? here, assumes that we know T
+  vector<unsigned int> coll;
 
-  auto it = ivec.begin()+1;
+  PortfolioIterator start = begin;
+  PortfolioIterator current{};
 
-  ivec.erase(it);
-  PRINT_ELEMENTS(ivec);
-  cout << "size: " << ivec.size() << endl;
+  // one pass to filter <=
 
-  ivec.erase(it);
-  PRINT_ELEMENTS(ivec);
-  cout << "size: " << ivec.size() << endl;
+  for (; start != end; ++start)
+  {
+    // not use push_back() since void push_back()
+    if (*start <= max_quanity)
+      current = coll.insert(coll.end(), *start);
+  }
+
+  start = begin;
+
+  // second pass to filter >
+
+  for (; start != end; ++start)
+  {
+    if (*start > max_quanity)
+      coll.push_back(*start);
+  }
+
+  // copy it back
+  copy(coll.begin(), coll.end(), begin);
+
+  // believed that current is valid and points to where is divided
+  //
+  // /usr/include/c++/6/debug/safe_iterator.h:298:
+  // Error: attempt to increment a singular iterator.
+  // 
+  // Objects involved in the operation:
+  //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
+  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
+  //       state = singular;
+  //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
+  //     }
+  // Aborted
+  //
+  // return ++current;
+
+  // to make it pass, not used
+  return current;
 }
 
-// 0 1 2 3 4 5 6 7 8 9 (10)
-// 1 1 3 3 5 5 7 7 9 9 (10)
 
-TEST(CxxStlText, VectorInsertErase)
+// no compile error but errors when built with -D_GLIBCXX_DEBUG and run
+//
+// /usr/include/c++/6/debug/safe_iterator.h:191:
+// Error: attempt to construct a constant iterator from a singular mutable 
+// iterator.
+// 
+// Objects involved in the operation:
+//     iterator "this" @ 0x0x7ffcc61e9980 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int const*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (constant iterator);
+//       state = singular;
+//     }
+//     iterator "other" @ 0x0x7ffcc61e97f0 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+//       state = singular;
+//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffcc61e9820
+//     }
+// Aborted
+
+TEST(DISABLED_StlVector, EraseChangesEnd_EmitRuntimeError)
 {
-  vector<int> ivec{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  vector<int> coll1;
+  INSERT_ELEMENTS(coll1, 0, 8);
+  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
 
-  PRINT_ELEMENTS(ivec);
+  auto it = coll1.begin()+1;
+
+  // note: it is not valid after this so should be
+  // it = coll1.erase(it);
+
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
+
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
+
+  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
 
   // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = ivec.begin(); it != ivec.end(); /* no */)
+  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
+  {
+    // if see even values, remove it
+    if(!(*it % 2))
+      it = coll2.erase(it);
+    else
+      ++it;
+  }
+
+  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
+}
+
+
+TEST(StlVector, InsertAndErase)
+{
+  vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = coll.begin(); it != coll.end(); /* no */)
   {
     // if see odd values, repeat it in front of it.
     if(*it % 2)
     {
-      it = ivec.insert(it, *it);
       // *cxx-iter-arthimetic*
+      it = coll.insert(it, *it);
       it += 2;
     }
     else
-      it = ivec.erase(it);
+      // cxx-vector-erase cxx-erase
+      it = coll.erase(it);
   }
 
-  PRINT_ELEMENTS(ivec);
+  EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
 }
 
 

@@ -54,86 +54,119 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
 }
 
 template <typename T>
-void PRINT_Q_ELEMENTS(const T& coll, const string &optsrt = "")
+void PRINT_Q_ELEMENTS(const T& coll, const string &optstr = "")
 {
   size_t count = coll.size();
+  cout << optstr;
 
-  for(int i = 0; i < count; ++i)
+  for(size_t i = 0; i < count; ++i)
     cout << coll.top() << " ";
 
   cout << "(" << count << ")" << endl;
 }
 
+
 // ={=========================================================================
 // cxx-vector
 
-// 0 1 2 3 4 5 6 7 8 9 (10)
-// size: 10
-// 0 2 3 4 5 6 7 8 9 (9)
-// size: 9
-// 0 3 4 5 6 7 8 9 (8)
-// size: 8
+// no compile error but errors when built with -D_GLIBCXX_DEBUG and run
+//
+// /usr/include/c++/6/debug/safe_iterator.h:191:
+// Error: attempt to construct a constant iterator from a singular mutable 
+// iterator.
+// 
+// Objects involved in the operation:
+//     iterator "this" @ 0x0x7ffcc61e9980 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int const*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (constant iterator);
+//       state = singular;
+//     }
+//     iterator "other" @ 0x0x7ffcc61e97f0 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+//       state = singular;
+//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffcc61e9820
+//     }
+// Aborted
 
-// 0 1 2 3 4 5 6 7 8 9 (10)
-// 1 3 5 7 9 (5)
-
-TEST(DISABLED_StlVector, VecorEraseChangesEnd)
+TEST(DISABLED_StlVector, EraseChangesEnd_EmitRuntimeError)
 {
-  vector<int> ivec;
-  INSERT_ELEMENTS(ivec, 0, 9);
-  PRINT_ELEMENTS(ivec);
-  cout << "size: " << ivec.size() << endl;
+  vector<int> coll1;
+  INSERT_ELEMENTS(coll1, 0, 8);
+  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
 
-  auto it = ivec.begin()+1;
+  auto it = coll1.begin()+1;
 
-  ivec.erase(it);
-  PRINT_ELEMENTS(ivec);
-  cout << "size: " << ivec.size() << endl;
+  // note: it is not valid after this
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
 
-  ivec.erase(it);
-  PRINT_ELEMENTS(ivec);
-  cout << "size: " << ivec.size() << endl;
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
 
-  vector<int> ivec2{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  PRINT_ELEMENTS(ivec2);
+  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
 
   // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = ivec2.begin(); it != ivec2.end(); /* no */)
+  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
   {
     // if see even values, remove it
     if(!(*it % 2))
-      it = ivec2.erase(it);
+      it = coll2.erase(it);
     else
       ++it;
   }
 
-  PRINT_ELEMENTS(ivec2);
+  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
 }
 
-// 0 1 2 3 4 5 6 7 8 9 (10)
-// 1 1 3 3 5 5 7 7 9 9 (10)
-
-TEST(StlVector, VectorInsertErase)
+TEST(StlVector, EraseChangesEnd_NoError)
 {
-  vector<int> ivec{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  vector<int> coll1;
+  INSERT_ELEMENTS(coll1, 0, 8);
+  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
 
-  PRINT_ELEMENTS(ivec);
+  auto it = coll1.begin()+1;
+
+  it = coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
+
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
+
+  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
 
   // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = ivec.begin(); it != ivec.end(); /* no */)
+  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
+  {
+    // if see even values, remove it
+    if(!(*it % 2))
+      it = coll2.erase(it);
+    else
+      ++it;
+  }
+
+  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
+}
+
+
+TEST(StlVector, InsertAndErase)
+{
+  vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = coll.begin(); it != coll.end(); /* no */)
   {
     // if see odd values, repeat it in front of it.
     if(*it % 2)
     {
-      it = ivec.insert(it, *it);
+      it = coll.insert(it, *it);
       it += 2;
     }
     else
-      it = ivec.erase(it);
+      it = coll.erase(it);
   }
 
-  PRINT_ELEMENTS(ivec);
+  EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
 }
 
 class VectorEraseCallsDtor
@@ -217,23 +250,23 @@ TEST(StlVector, CreateWithPreAllocation)
   cout << "-erase---------" << endl;
 }
 
-void FillVector(vector<int> &coll)
+void StlVectorFillVector(vector<int> &coll)
 {
   for (int i = 0; i < 10; ++i)
     coll.insert(coll.end(), i);
 }
 
-// TEST(StlVector, CreateWithPreAllocationFromFunction)
-// {
-//   vector<int> coll;
-//   FillVector(coll);
+TEST(StlVector, CreateWithPreAllocationFromFunction)
+{
+  vector<int> coll;
+  StlVectorFillVector(coll);
 
-//   vector<bool> table1(coll.size());
-//   vector<bool> table2(10);
+  vector<bool> table1(coll.size());
+  vector<bool> table2(10);
 
-//   EXPECT_THAT(table1.size(), 10);
-//   EXPECT_THAT(table2.size(), 10);
-// }
+  EXPECT_THAT(table1.size(), 10);
+  EXPECT_THAT(table2.size(), 10);
+}
 
 // cause seg fault
 TEST(DISABLED_StlVector, AccessInvalidIndex)
@@ -1048,6 +1081,7 @@ TEST(StlAlgoRemove, UseOwnRemove)
 
 // ={=========================================================================
 
+// like algo-remove()
 using PortfolioIterator = vector<unsigned int>::iterator;
 
 PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
@@ -1059,6 +1093,8 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   PortfolioIterator start = begin;
   PortfolioIterator current{};
 
+  // one pass to filter <=
+
   for (; start != end; ++start)
   {
     // not use push_back() since void push_back()
@@ -1067,6 +1103,8 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   }
 
   start = begin;
+
+  // second pass to filter >
 
   for (; start != end; ++start)
   {
@@ -1077,7 +1115,23 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   // copy it back
   copy(coll.begin(), coll.end(), begin);
 
-  return ++current;
+  // here try to increase end() which is current
+  //
+  // /usr/include/c++/6/debug/safe_iterator.h:298:
+  // Error: attempt to increment a singular iterator.
+  // 
+  // Objects involved in the operation:
+  //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
+  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
+  //       state = singular;
+  //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
+  //     }
+  // Aborted
+  //
+  // return ++current;
+
+  // not used
+  return current;
 }
 
 
