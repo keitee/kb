@@ -66,6 +66,180 @@ void PRINT_Q_ELEMENTS(const T& coll, const string &optstr = "")
 }
 
 
+// core will be generated
+TEST(StlIterator, InvalidIterator_OnVector)
+{
+  std::vector<int> coll{1,2,3,4};
+
+  auto it = find(coll.begin(), coll.end(), 2);
+  if( it != coll.end())
+  {
+    it = coll.insert( it, 7 );
+    it = coll.insert( it, 6 );
+    it = coll.insert( it, 5 );
+
+    // Q: This seems okay since inserting element at the same pos,2? what will
+    // happen?
+    //
+    // veci.insert( it, 7 );
+    // veci.insert( it, 6 );
+    // veci.insert( it, 5 );
+    //
+    // core dump since it gets invalidated.
+  }
+
+  EXPECT_THAT(coll, ElementsAre(1,5,6,7,2,3,4));
+}
+
+
+// *cxx-undefined*
+// may cause runtime error but not always so undefined. 
+// Calling erase() for the element to which you are referring with it
+// invalidates it as an iterator of coll and calling ++it results in
+// undefined behavior.
+//
+// However, when use -D_GLIBCXX_DEBUG:
+//
+// /usr/include/c++/6/debug/safe_iterator.h:298:
+// Error: attempt to increment a singular iterator.
+// 
+// Objects involved in the operation:
+//     iterator "this" @ 0x0x7ffcae5ac5d0 {
+//       type = __gnu_debug::_Safe_iterator<std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> >, std::__debug::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> > > > (constant iterator);
+//       state = singular;
+//       references sequence with type 'std::__debug::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> > >' @ 0x0x7ffcae5ac600
+//     }
+
+TEST(DISABLED_StlIterator, InvalidIteratorOnMap)
+{
+  std::map<std::string, int> coll{
+    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
+  };
+
+  int value = 2;
+
+  for (auto it = coll.cbegin(); it != coll.cend(); ++it)
+  {
+    if (it->second == value)
+      coll.erase(it);
+  }
+}
+
+TEST(StlIterator, ValidIteratorOnMapBeforeC11)
+{
+  std::map<std::string, int> coll{
+    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
+  };
+
+  int value = 2;
+
+  for (auto it = coll.cbegin(); it != coll.cend();)
+  {
+    // before C++11 since erase returns nothing. *cxx-side-effect*
+    if (it->second == value)
+      coll.erase(it++);
+    else
+      ++it;
+  }
+}
+
+TEST(StlIterator, ValidIteratorOnMapAfterC11)
+{
+  std::map<std::string, int> coll{
+    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
+  };
+
+  int value = 2;
+
+  for (auto it = coll.cbegin(); it != coll.cend();)
+  {
+    if (it->second == value)
+      it = coll.erase(it);
+    else
+      ++it;
+  }
+}
+
+
+// https://stackoverflow.com/questions/37280744/got-singular-iterator-error-in-looping-with-iterator-and-pop-back
+
+// why this work?
+TEST(StlIterator, InvalidIteratorOnDeque_Okay_One)
+{
+  deque<int> coll{1,2,3};
+
+  for (auto it = coll.rbegin(); it != coll.rend(); ++it)
+  {
+    cout << "it : " << *it << endl;
+    coll.pop_back();
+  }
+}
+
+// why this work?
+TEST(StlIterator, InvalidIteratorOnDeque_Okay_Two)
+{
+  deque<int> coll{1,2,3};
+
+  for (auto it = coll.rbegin(); it != coll.rend();)
+  {
+    cout << "it : " << *it << endl;
+    coll.pop_back();
+    ++it;
+  }
+}
+
+TEST(StlIterator, InvalidIteratorOnDeque_Okay_Three)
+{
+  deque<int> coll{1,2,3};
+
+  for (auto it = coll.rbegin(); it != coll.rend();)
+  {
+    cout << "it : " << *it << endl;
+    coll.pop_back();
+    it = coll.rbegin();
+  }
+}
+
+// /usr/include/c++/6/debug/safe_iterator.h:149:
+// Error: attempt to copy-construct an iterator from a singular iterator.
+// 
+// Objects involved in the operation:
+//     iterator "this" @ 0x0x7ffde23ae160 {
+//       type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int, int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable iterator);
+//       state = singular;
+//     }
+//     iterator "other" @ 0x0x7ffde23ae1f0 {
+//       type = __gnu_debug::_Safe_iterator<std::__cxx1998::_Deque_iterator<int, int&, int*>, std::__debug::deque<int, std::allocator<int> > > (mutable iterator);
+//       state = singular;
+//       references sequence with type 'std::__debug::deque<int, std::allocator<int> >' @ 0x0x7ffde23ae230
+//     }
+// Aborted
+
+TEST(DISABLED_StlIterator, InvalidIteratorOnDeque_ErrorOne)
+{
+  deque<int> coll{1,2,3};
+
+  for (auto it = coll.rbegin(); it != coll.rend();)
+  {
+    it = coll.rbegin();
+    cout << "it : " << *it << endl;
+    coll.pop_back();
+  }
+}
+
+TEST(DISABLED_StlIterator, InvalidIteratorOnDeque_ErrorTwo)
+{
+  deque<int> coll{1,2,3};
+
+  for (auto it = coll.rbegin(); it != coll.rend();)
+  {
+    ++it;
+    cout << "it : " << *it << endl;
+    coll.pop_back();
+  }
+}
+
+
 // ={=========================================================================
 // cxx-vector
 
@@ -330,18 +504,19 @@ TEST(StlVector, VecorCtors)
 // cxx-deque
 // case seg-fault
 
-// TEST(CxxStlTest, HowDequeSupportEmpty)
-// {
-//     deque<int> iq;
-// 
-//     try {
-//         auto e = iq.back();
-//     }
-//     catch(...)
-//     {
-//         cout << "exception" << endl;
-//     }
-// }
+TEST(DISABLED_StlDeque, HowDequeSupportEmpty)
+{
+    deque<int> iq;
+
+    try {
+        auto e = iq.back();
+        (void) e;
+    }
+    catch(...)
+    {
+        cout << "exception" << endl;
+    }
+}
 
 
 // ={=========================================================================
