@@ -426,21 +426,50 @@ TEST(StlVector, CreateWithPreAllocation)
 
 void StlVectorFillVector(vector<int> &coll)
 {
-  for (int i = 0; i < 10; ++i)
+  for (int i = 0; i < 20; ++i)
     coll.insert(coll.end(), i);
 }
 
-TEST(StlVector, CreateWithPreAllocationFromFunction)
+TEST(StlVector, InitializeFromExpression)
 {
   vector<int> coll;
   StlVectorFillVector(coll);
 
+  // okay as well
+  // int value;
+  // cin >> value;
+  // vector<bool> table1(value);
+
   vector<bool> table1(coll.size());
   vector<bool> table2(10);
 
-  EXPECT_THAT(table1.size(), 10);
+  EXPECT_THAT(table1.size(), 20);
   EXPECT_THAT(table2.size(), 10);
 }
+
+TEST(StlVector, InitializeForms)
+{
+  // default init
+  vector<int> coll1;
+
+  for (int i = 0; i < 5; i++)
+  {
+    int val;
+    coll1.push_back(val);
+  }
+
+  // default init and fails
+  EXPECT_THAT(coll1, ElementsAre(0,0,0,0,0));
+
+  // value init
+  vector<int> coll2(5);
+  EXPECT_THAT(coll2, ElementsAre(0,0,0,0,0));
+
+  // value init
+  vector<int> coll3(5, 10);
+  EXPECT_THAT(coll3, ElementsAre(10,10,10,10,10));
+}
+
 
 // cause seg fault
 TEST(DISABLED_StlVector, AccessInvalidIndex)
