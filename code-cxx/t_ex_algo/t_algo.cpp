@@ -2645,7 +2645,7 @@ int find_frog_river_old_06(int X, const vector<int> &A) {
 
 // Detected time complexity: O(N)
 
-TEST(AlgoFrogRiver, 0626_02_old)
+TEST(AlgoFrogRiver, OldAttempts)
 {
   EXPECT_THAT(find_frog_river_old_06(5, {1,3,1,4,2,3,5,4}), 6);
   EXPECT_THAT(find_frog_river_old_06(1, {2,3,4,5,1,3,5,4}), 4);
@@ -2653,6 +2653,173 @@ TEST(AlgoFrogRiver, 0626_02_old)
   EXPECT_THAT(find_frog_river_old_06(5, {1}), -1);
   EXPECT_THAT(find_frog_river_old_06(1, {2}), -1);
   EXPECT_THAT(find_frog_river_old_06(1, {1}), 0);
+}
+
+
+// ={=========================================================================
+// algo-find-missing-integer
+
+// 2018.06.27
+// 1. do not say about return value for errors
+//
+// 2. Allocate lookup table for 2,147,xxx,xxx x 2? No and not meet O(n) space as
+// well. 
+//  
+// Since it's about `positive` minimal integer, inputs are 1..2,147,xxx,xxx.
+// Since N size array could have the max input value which is N.
+//
+// So can reduce input value range to 1...N
+//
+// What if input is not sequential such as "{100, 200, 300, 340}"? Not a valid
+// input since we are looking for `missing`, `not occurring` element. If that's
+// valid input then what are the missing element? So many and not a valid input.
+
+
+int find_missing_integer(const vector<int> &A)
+{
+  // input check
+  if (A.empty())
+    return -1;
+
+  vector<bool> lookup(A.size());
+
+  for (size_t i = 0; i < A.size(); ++i)
+  {
+    if (A[i] > 0 && lookup[A[i]-1] == false)
+      lookup[A[i]-1] = true;
+  }
+
+  for (size_t i = 0; i < lookup.size(); ++i)
+    if (lookup[i] == false)
+      return i+1;
+
+  return -1;
+}
+
+TEST(AlgoFindMissingInteger, 0627_01)
+{
+  EXPECT_THAT(find_missing_integer({1,3,6,4,1,2}), 5);
+}
+
+
+// O(N), 100%
+//
+// Use bool vector approach? The input element can be negative so ignore
+// negegative inputs.  However, the problem is input value can be too big to
+// have bool vector. how to solve?
+// 
+// The key is whatever the input value is the aim to find the minimum positive
+// value which is missed. So have bool vector(N) and only consider inputs in 0 <
+// x <= N. Since even if there is no input in the specificed range then it
+// simply means that it misses the whole value of the range and need to get the
+// first false in the bool vector. 
+//
+// If bool vector has all set then return N+1. ????
+
+int find_missing_integer_old(const vector<int> &A)
+{
+  vector<bool> flags(A.size());
+
+  for(unsigned int i=0; i < A.size(); i++)
+  {
+    int value = A[i];
+
+    if( value > 0 && value <= (int)A.size() )
+      flags[value-1] = true;
+  }
+
+  for(unsigned int i=0; i < flags.size(); i++)
+    if( flags[i] == false )
+      return i+1;
+
+  return A.size()+1;
+}
+
+TEST(AlgoFindMissingInteger, OldTries)
+{
+  EXPECT_THAT(find_missing_integer_old({1,3,6,4,1,2}), 5);
+}
+
+
+// ={=========================================================================
+// algo-max-counters
+
+// 2018.06.27
+// 
+// A[M] array, N counters
+// A[k], 1 =< A[k] =< N+1, 
+//  if A[k] =< N, increase(A[k]). if A[k] == N+1, max_counter
+// 1 =< N, M =< 100,000
+
+vector<int> find_max_counters_0627(int N, vector<int> A)
+{
+  vector<int> result(N, 0);
+  int max{};
+
+  for(size_t i = 0; i < A.size(); ++i)
+  {
+    if (A[i] == N+1)
+    {
+      // fill_n(result, N, max);
+      for(auto &e : result)
+        e = max;
+    }
+    else if (A[i] >= 1 && A[i] <= N)
+    {
+      if(++result[A[i]-1] > max)
+        max = result[A[i]-1];
+    }
+  }
+
+  return result;
+}
+
+TEST(AlgoMaxCounters, 0627_01)
+{
+  EXPECT_THAT(find_max_counters_0627(5, {3,4,4,6,1,4,4}), 
+      ElementsAre(3,2,2,4,2));
+}
+
+
+// when simply follows descriptions:
+//
+// The result is that 100% correctness and 40% performance.
+//
+// Therefore, can see that the problem is the max-all operation and as a worst
+// case, when there are N max-all operations this will be O(N*M) but target is
+// O(M+N). So the key is to find a way to have max-all effect without doing a
+// loop. How?
+
+vector<int> find_max_counters_old_01(int N, const vector<int>& A)
+{
+  vector<int> counters(N, 0);
+
+  int current_max = 0;
+
+  for( size_t i=0; i < A.size(); i++ )
+  {
+    // set current max to all
+    if( A[i] >= N+1 )
+    {
+      for( size_t j=0; j < counters.size(); j++ )
+        if( counters[j] > current_max )
+          current_max = counters[j];
+
+      for( size_t j=0; j < counters.size(); j++ )
+        counters[j] = current_max;
+    }
+    // increment a counter
+    else
+      counters[A[i]-1] += 1;
+  }
+
+  return counters;
+}
+
+TEST(AlgoMaxCounters, OldTries)
+{
+  EXPECT_THAT(find_max_counters_old_01(5, {3,4,4,6,1,4,4}), 
+      ElementsAre(3,2,2,4,2));
 }
 
 

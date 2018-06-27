@@ -1458,6 +1458,24 @@ TEST(StlAlgoPartition, UsePartition)
   EXPECT_THAT(*iter, 48);
 }
 
+// ={=========================================================================
+// algo-fill
+
+TEST(StlAlgoFill, Fill)
+{
+  vector<int> coll;
+  fill_n(back_inserter(coll), 8, 7);
+  EXPECT_THAT(coll, ElementsAre(7,7,7,7,7,7,7,7));  
+
+  fill(coll.begin(), coll.end(), 1);
+  EXPECT_THAT(coll, ElementsAre(1,1,1,1,1,1,1,1));  
+
+  vector<int> coll1(8,0);
+  EXPECT_THAT(coll1, ElementsAre(0,0,0,0,0,0,0,0));  
+  // fill_n(coll1, 8, 7);
+  // EXPECT_THAT(coll, ElementsAre(7,7,7,7,7,7,7,7));  
+}
+
 
 // ={=========================================================================
 int main(int argc, char** argv)
