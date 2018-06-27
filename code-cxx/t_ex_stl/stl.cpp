@@ -443,6 +443,8 @@ TEST(StlVector, InitializeFromExpression)
   vector<bool> table1(coll.size());
   vector<bool> table2(10);
 
+  int iarray[coll.size()];
+
   EXPECT_THAT(table1.size(), 20);
   EXPECT_THAT(table2.size(), 10);
 }

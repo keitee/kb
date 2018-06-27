@@ -2309,6 +2309,354 @@ int find_perm_old_03( vector<int> &A )
 
 
 // ={=========================================================================
+// algo-frog-river
+
+// 2018.06.26
+int find_frog_river_0626(int X, const vector<int> &A)
+{
+  // input check
+  if (A.empty())
+    return -1;
+
+  vector<bool> lookup(A.size());
+  int target_sum = (X*(X+1))/2;
+  int input_sum{};
+
+  for (size_t i = 0; i < A.size(); ++i)
+  {
+    if (lookup[A[i]] == false)
+    {
+      lookup[A[i]] = true;
+      input_sum += A[i];
+
+      if (target_sum == input_sum)
+        return i;
+    }
+  }
+
+  return -1;
+}
+
+TEST(AlgoFrogRiver, 0626_01)
+{
+  EXPECT_THAT(find_frog_river_0626(5, {1,3,1,4,2,3,5,4}), 6);
+  // fails
+  // EXPECT_THAT(find_frog_river_0626(1, {2,3,4,5,1,3,5,4}), 4);
+}
+
+int find_frog_river_0626_02(int X, const vector<int> &A)
+{
+  // input check
+  if (A.empty())
+    return -1;
+
+  vector<bool> lookup(A.size());
+  int target_sum = (X*(X+1))/2;
+  int input_sum{};
+
+  for (size_t i = 0; i < A.size(); ++i)
+  {
+    if (A[i] <= X && lookup[A[i]] == false)
+    {
+      lookup[A[i]] = true;
+      input_sum += A[i];
+
+      if (target_sum == input_sum)
+        return i;
+    }
+  }
+
+  return -1;
+}
+
+// although this version passed, it's wrong in size of lookup table.
+TEST(AlgoFrogRiver, 0626_02)
+{
+  EXPECT_THAT(find_frog_river_0626_02(5, {1,3,1,4,2,3,5,4}), 6);
+  EXPECT_THAT(find_frog_river_0626_02(1, {2,3,4,5,1,3,5,4}), 4);
+  EXPECT_THAT(find_frog_river_0626_02(5, {}), -1);
+
+  // fails
+  // /usr/include/c++/4.9/debug/vector:357:error: attempt to subscript container 
+  //     with out-of-bounds index 1, but container only holds 1 elements.
+
+  // Objects involved in the operation:
+  // sequence "this" @ 0x0x7fff25cb8fd0 {
+  //   type = NSt7__debug6vectorIbSaIbEEE;
+  // }
+  // Aborted
+  //
+  // EXPECT_THAT(find_frog_river_0626_02(5, {1}), -1);
+}
+
+int find_frog_river_0626_03(int X, const vector<int> &A)
+{
+  // input check
+  if (A.empty())
+    return -1;
+
+  vector<bool> lookup(A.size()+1);
+  int target_sum = (X*(X+1))/2;
+  int input_sum{};
+
+  for (size_t i = 0; i < A.size(); ++i)
+  {
+    if (A[i] <= X && lookup[A[i]] == false)
+    {
+      lookup[A[i]] = true;
+      input_sum += A[i];
+
+      if (target_sum == input_sum)
+        return i;
+    }
+  }
+
+  return -1;
+}
+
+TEST(AlgoFrogRiver, 0626_03)
+{
+  EXPECT_THAT(find_frog_river_0626_03(5, {1,3,1,4,2,3,5,4}), 6);
+  EXPECT_THAT(find_frog_river_0626_03(1, {2,3,4,5,1,3,5,4}), 4);
+  EXPECT_THAT(find_frog_river_0626_03(5, {}), -1);
+  EXPECT_THAT(find_frog_river_0626_03(5, {1}), -1);
+  EXPECT_THAT(find_frog_river_0626_03(1, {2}), -1);
+  EXPECT_THAT(find_frog_river_0626_03(1, {1}), 0);
+}
+
+
+int find_frog_river_old_01( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  bool *pbitset = new bool(X);
+ 
+  int idx;                        
+  int count=0;
+
+  // bitset{0, X-1}
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < (int)A.size(); idx++)    // signed and unsigned warning.
+  {
+    // wasn't set before?
+    if( pbitset[A[idx]-1] == false )
+    {
+      // set it and increase count
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      // are all position set?
+      if( count == X )                 // signed and unsigned warning.
+      {
+        delete pbitset; return idx;
+      }
+    }
+  }
+
+  delete pbitset; return -1;
+}
+
+// Failed on 25%:
+// 
+// small_random1 3 random permutation, X = 50     0.020 s.     RUNTIME ERROR
+// tested program terminated unexpectedly
+//
+// 1. signed and unsigned that complier warns mismatch between signed and
+// unsigned.  No such error when run with GCC 4.6.3.
+// 
+// 2. this is wrong since it allocate a single bool but not array. Failed on
+// other many test cases with the same error. But why no such error on GCC
+// 4.6.3. This sites uses C++98 so may be new initialize way in C++11?
+
+
+// Still failed with the same error.
+int find_frog_river_old_02( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  bool *pbitset = new bool(X);
+ 
+  int idx;                        
+  int count=0;
+
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < (int)A.size(); idx++)
+  {
+    if( pbitset[A[idx]-1] == false )
+    {
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      if( count == X )
+      {
+        delete[] pbitset; return idx;  // diff
+      }
+    }
+  }
+
+  delete[] pbitset; return -1;         // diff
+}
+
+
+int find_frog_river_old_03( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==1 )
+    return -1;
+
+  bool *pbitset = new bool[X];   // diff
+ 
+  int idx;                        
+  int count=0;
+
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < (int)A.size(); idx++)
+  {
+    if( pbitset[A[idx]-1] == false )
+    {
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      if( count == X )
+      {
+        delete[] pbitset; return idx;
+      }
+    }
+  }
+
+  delete[] pbitset; return -1;
+}
+
+// 90 out of 100 points. Detected time complexity: O(N). Failed on:
+// 
+// single single element     0.020 s.     WRONG ANSWER got -1 expected 0
+// 
+// note: think about when single element has big value(position)
+
+
+int find_frog_river_old_04( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==0 )           // diff
+    return -1;
+
+  bool *pbitset = new bool[X];
+ 
+  int idx;                        
+  int count=0;
+
+  // bitset{0, X-1}
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < (int)A.size(); idx++)
+  {
+    // wasn't set before?
+    if( (A[idx]-1 < X) && pbitset[A[idx]-1] == false )   // diff
+    {
+      // set it and increase count
+      pbitset[A[idx]-1] = true;
+      count++;
+
+      // are all position set?
+      if( count == X )
+      {
+        delete [] pbitset; return idx;
+      }
+    }
+  }
+
+  delete [] pbitset; return -1;
+}
+
+// 100 out of 100 points. Detected time complexity: O(N) 
+
+
+int find_frog_river_old_05( int X, std::vector<int> &A )
+{
+  if( A.empty() || X==0 )           // diff
+    return -1;
+
+  bool *pbitset = new bool[X];
+ 
+  int idx;                        
+  int count=0;
+
+  // bitset{0, X-1}
+  for(idx=0; idx < X; idx++)
+    pbitset[idx] = false;
+
+  for(idx=0; idx < (int)A.size(); idx++)
+  {
+    int value = A[idx]-1;
+
+    // wasn't set before?
+    if( (value < X) && pbitset[value] == false )   // diff
+    {
+      // set it and increase count
+      pbitset[value] = true;
+      count++;
+
+      // are all position set?
+      if( count == X )
+      {
+        delete [] pbitset; return idx;
+      }
+    }
+  }
+
+  delete [] pbitset; return -1;
+}
+
+// The key idea is that it is about counting and to use counter to check if
+// receives all inputs rather than using loops or function call like bitset.
+
+
+int find_frog_river_old_06(int X, const vector<int> &A) {
+  // write your code in C++11
+  if( A.empty() || !X )
+    return -1;
+
+  vector<bool> flags(X);
+  int count = 0;
+
+  for(unsigned int i=0; i < A.size(); i++ )
+  {
+    int value = A[i]-1;
+
+    if( value < X && flags[value] == false )
+    {
+      flags[value] = true;
+      count++;
+    }
+
+    if( count == X )
+      return i;
+  }
+
+  return -1;
+}
+
+// Detected time complexity: O(N)
+
+TEST(AlgoFrogRiver, 0626_02_old)
+{
+  EXPECT_THAT(find_frog_river_old_06(5, {1,3,1,4,2,3,5,4}), 6);
+  EXPECT_THAT(find_frog_river_old_06(1, {2,3,4,5,1,3,5,4}), 4);
+  EXPECT_THAT(find_frog_river_old_06(5, {}), -1);
+  EXPECT_THAT(find_frog_river_old_06(5, {1}), -1);
+  EXPECT_THAT(find_frog_river_old_06(1, {2}), -1);
+  EXPECT_THAT(find_frog_river_old_06(1, {1}), 0);
+}
+
+
+// ={=========================================================================
 // algo-atoi
 //
 // * input type? digits only? no space?
