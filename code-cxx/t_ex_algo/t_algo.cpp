@@ -3074,6 +3074,95 @@ int passing_car_old_01( vector<int> &A )
 
 
 // ={=========================================================================
+// algo-count-div
+
+// Since time O(1), cannot use loop. 
+//
+// How to solve?
+//
+// when A is divisible by K:
+//    B-S = diff. diff/K + 1 is the number of integers that can be divisible by
+//    K. +1 since diff do not include A.
+//
+// 6,7,8,9,10,11,12, K=2
+//
+// 12-6=6. 6/2=3. 3+1=4
+//
+// when A is not diviaible by K:
+//    cannot use loop either to find S(start value). so have to find the next
+//    K*x element in the input. To do that, if A%K != 0, then S = (A/K + 1)*K.
+//
+//    B-S = diff. diff/K + 1.
+
+// peformance 100%, correctness 50%
+int count_div_0628_01(int A, int B, int K)
+{
+  int start{}, result{};
+
+  if (A%K == 0)
+    start = A;
+  else
+    start = (A/K+1)*K;
+
+  return result = (B-start)/K + 1;
+}
+
+TEST(AlgoCountDiv, 0628_01)
+{
+  EXPECT_THAT(count_div_0628_01(6, 11, 2), 3); 
+}
+
+
+// failed from the report
+// EXPECT_THAT(count_div_0628_01(1, 1, 11), 0); 
+// 
+// failed from the report
+// EXPECT_THAT(count_div_0628_03(1, 1, 11), 0); 
+// 
+// fails since 0/K and 0%K are 0. WHY 1? Since 0 is still divisible.
+// EXPECT_THAT(count_div_0628_03(0, 1, 11), 1); 
+//
+// why 1?
+// EXPECT_THAT(count_div_0628_03(0, 0, 11), 1); 
+// 
+// fails
+// EXPECT_THAT(count_div_0628_03(0, 14, 2), 8); 
+//
+// after all, missed to handle:
+// 1. end case which is 0 on both A and B
+// 2. 0/K and 0%K are 0.
+
+
+// 100% pass
+int count_div_0628_03(int A, int B, int K)
+{
+  int start{}, result{};
+
+  if (A%K == 0)
+    start = A;
+  else
+    start = (A/K+1)*K;
+
+  if (B-start >= 0)
+    result = (B-start)/K + 1;
+  
+  return result;
+}
+
+TEST(AlgoCountDiv, 0628_03)
+{
+  EXPECT_THAT(count_div_0628_03(6, 11, 2), 3); 
+  EXPECT_THAT(count_div_0628_03(1, 1, 11), 0); 
+  EXPECT_THAT(count_div_0628_03(0, 1, 11), 1); 
+  EXPECT_THAT(count_div_0628_03(10, 10, 5), 1); 
+  EXPECT_THAT(count_div_0628_03(10, 10, 7), 0); 
+  EXPECT_THAT(count_div_0628_03(10, 10, 20), 0); 
+  EXPECT_THAT(count_div_0628_03(0, 0, 11), 1); 
+  EXPECT_THAT(count_div_0628_03(0, 14, 2), 8); 
+}
+
+
+// ={=========================================================================
 // algo-atoi
 //
 // * input type? digits only? no space?
