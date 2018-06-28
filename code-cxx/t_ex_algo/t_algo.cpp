@@ -2822,6 +2822,256 @@ TEST(AlgoMaxCounters, OldTries)
       ElementsAre(3,2,2,4,2));
 }
 
+// The above has time O(N*M) for worst cases such as when input has all 6, max
+// operations. So key is not to loop on N counter array for a max operation.
+//
+// The observation shows that max-all op is performance bottleneck.
+//
+// How to solve?
+//
+// {3,4,4,6,1,4,4}
+//
+// 0   0 0 0 0
+// 0   0 1 0 0
+// 0   0 1 1 0
+// 0   0 1 2 0
+// -   - - - - take a snapshot of current max rather than run max op
+// 2+1 0 1 2 0
+// 3   0 1 3 0
+// 3   0 1 4 0
+// then do lopp and update elements that are less than snapshot value so that
+// avoid run loop every max op.
+
+vector<int> find_max_counters_0627_02(int N, vector<int> A)
+{
+  vector<int> result(N, 0);
+  int current_max{}, operation_max{};
+
+  for (size_t i = 0; i < A.size(); ++i)
+  {
+    if (A[i] == N+1)
+    {
+      operation_max = current_max;
+    }
+    else if (A[i] >= 1 && A[i] <= N)
+    {
+      if (result[A[i]-1] < operation_max)
+        result[A[i]-1] = operation_max + 1;
+      else 
+        result[A[i]-1] += 1;
+
+      if(result[A[i]-1] > current_max)
+        current_max = result[A[i]-1];
+    }
+  }
+
+  for (auto &e : result)
+  {
+    if (e < operation_max)
+      e = operation_max;
+  }
+
+  return result;
+}
+
+TEST(AlgoMaxCounters, 0627_02)
+{
+  EXPECT_THAT(find_max_counters_0627_02(5, {3,4,4,6,1,4,4}), 
+      ElementsAre(3,2,2,4,2));
+  EXPECT_THAT(find_max_counters_0627_02(5, {3,4,4,6,1,4,6}), 
+      ElementsAre(3,3,3,3,3));
+  EXPECT_THAT(find_max_counters_0627_02(5, {3,6,6,6,6,6,6}), 
+      ElementsAre(1,1,1,1,1));
+}
+
+
+// solution from online.
+// http://codility-lessons.blogspot.co.uk/2014/07/lesson-2maxcounters.html
+// 
+//     (0, 0, 1, 0, 0)        (0, 0, 1, 0, 0)
+//     (0, 0, 1, 1, 0)        (0, 0, 1, 1, 0)
+//     (0, 0, 1, 2, 0)        (0, 0, 1, 2, 0)
+//     (2, 2, 2, 2, 2)        (-, -, -, -, -)   max=2, maxLastMaxOp = 2
+//     (3, 2, 2, 2, 2)        (3, 0, 1, 2, 0)
+//     (3, 2, 2, 3, 2)        (3, 0, 1, 3, 0)
+//     (3, 2, 2, 4, 2)        (3, 0, 1, 4, 0)
+//                            (3, 2, 2, 4, 2)   set maxLastMaxOp to all which are not increased since
+//                            last max-all operation.
+// 
+// This approach use flags to know which is increased since the last max-all
+// operation and set maxLastMaxOp to all which are not increased since the last
+// max-all.
+// 
+// The key 'observation' is that max-all sets the 'base' for following increase
+// operations. 
+//
+// This approach still however didn't meet performance goal. 88%. WHY? since do
+// memset on every max op.
+
+
+// comment out due to compile erros on Result struct
+// struct Results find_max_counters_old_02(int N, int A[], int M) 
+// {
+//   struct Results result;
+//   result.C = calloc(sizeof(int), N);
+//   result.L = N;
+// 
+//   int* flg = alloca(sizeof(int) * N);
+//   memset(flg, 0x00, sizeof(int) * N);
+// 
+//   int max = 0;
+//   int maxAtTheLastMaxCntOp = 0;
+// 
+//   int i;
+//   for (i = 0; i < M; i++){
+//     int op = A[i];
+//     //if the op is max counter.
+//     if (op == N + 1){
+//       maxAtTheLastMaxCntOp = max;
+//       memset(flg, 0x00, sizeof(int) * N);    
+//     }
+//     //if the op is increase(x)
+//     else {
+//       //op is beweetn 1 to N, but the index for the array C 
+//       //is between 0 and (N-1). Decrease op to adjust it.
+//       op--; 
+//       if (flg[op] == 1){
+//         result.C[op]++;
+//       }
+//       else {
+//         result.C[op] = maxAtTheLastMaxCntOp + 1;
+//         flg[op] = 1;                
+//       }
+// 
+//       if (result.C[op] > max){
+//         max = result.C[op];
+//       }
+//     }
+//   }
+// 
+//   //apply the 'max counter' operation
+//   //to the slot(s) where it should be applied. 
+//   int j;  
+//   for (j = 0; j < N; j++){
+//     if (flg[j] == 0){
+//       result.C[j] = maxAtTheLastMaxCntOp;
+//     }
+//   }
+//   return result;
+// }
+
+// the final solution from online.
+// 
+// This approach removes the use of flags. As with the above observation,
+// max-all set the base that means any following increase should be based on
+// 'hidden' base. So if result[op] < maxLastMaxOp then result[op] =
+// maxLastMaxOp+1. Once done a loop, handle all which are not increased since
+// the last max-all by checking less than maxLastMaxOp. 
+//
+// Verified 100% peformance mark.
+
+vector<int> find_max_counters_old_03(int N, vector<int> &A) 
+{
+  // write your code in C++11
+  vector<int> result(N,0);
+
+  int maxLast =0, maxCurrent = 0;
+
+  for(unsigned int i = 0; i < A.size(); i++ )
+  {
+    int op = A[i];
+
+    if( op == N+1 )   // max-all op
+      maxLast = maxCurrent;
+    else              // inc op
+    {
+      op--;
+
+      if( result[op] < maxLast )
+        result[op] = maxLast+1;
+      else
+        result[op]++;
+
+      if( result[op] > maxCurrent )
+        maxCurrent = result[op];
+    }
+  }
+
+  for( int i =0; i < N; i++ )
+    if( result[i] < maxLast )
+      result[i] = maxLast;
+
+  return result;
+}
+
+
+// ={=========================================================================
+// algo-passing-car
+
+// in sum, find (0, X) pair from the input. 
+//
+// if loop on input to find each (0, X) pair then cannot meet O(N)
+//
+// How to solve?
+//
+// the key is whenever see 1, it's counted more depending on preceding 0's
+// number.
+//
+// {0, 1, 0, 1, 1}
+//     *     *  *
+//           *  *
+// so sum is 5
+
+int passing_car_0628_01(const vector<int> A)
+{
+  int pair_count{}, zero_count{};
+
+  for(size_t i = 0; i < A.size(); ++i)
+  {
+    if (A[i] == 0)
+      ++zero_count;
+    else 
+    {
+      pair_count += zero_count;
+    }
+  }
+
+  return pair_count;
+}
+
+TEST(AlgoPassingCar, 0628_01)
+{
+  EXPECT_THAT(passing_car_0628_01({0,1,0,1,1}), 5); 
+}
+
+// From http://codility-lessons.blogspot.co.uk/2014/07/lesson-3-passingcars.html.
+// 
+// The idea is that
+// 
+//    0 1 0 1 1
+//    *------->
+//        *--->
+
+int passing_car_old_01( vector<int> &A )
+{
+  int count = 0, countEast = 0;
+
+  for( int i=0; i < (int)A.size(); i++ )
+  {
+    if( A[i] == 0 )
+      countEast++;
+    else
+    {
+      count += countEast;
+
+      if( count > 1000000000 )
+        return -1;
+    }
+  }
+
+  return count;
+}
+
 
 // ={=========================================================================
 // algo-atoi
