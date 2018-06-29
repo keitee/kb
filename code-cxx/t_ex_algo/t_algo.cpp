@@ -3006,6 +3006,42 @@ vector<int> find_max_counters_old_03(int N, vector<int> &A)
 
 
 // ={=========================================================================
+// algo-perfix-sum
+
+// counting prefix sums, O(n)
+vector<int> make_prefix_sums(const vector<int> &A)
+{
+  // +1 since prefix sum has one more
+  size_t size = A.size()+1;
+
+  vector<int> prefix_sum(size);
+
+  for (size_t i = 1; i < size; ++i)
+    prefix_sum[i] = prefix_sum[i-1] + A[i-1];
+
+  return prefix_sum;
+}
+
+TEST(AlgoPrefixSum, MakePrefixSum)
+{
+  EXPECT_THAT(make_prefix_sums({1,2,3,4,5,6}),
+      ElementsAre(0,1,3,6,10,15,21));
+
+  EXPECT_THAT(make_prefix_sums({2,3,7,5,1,3,9}),
+      ElementsAre(0,2,5,12,17,18,21,30));
+}
+
+int count_total(const vector<int> &P, int x, int y)
+{
+}
+
+
+// int mushroom_model(const vector<int> A, int K, int M)
+// {
+
+// }
+
+// ={=========================================================================
 // algo-passing-car
 
 // in sum, find (0, X) pair from the input. 
@@ -3159,6 +3195,45 @@ TEST(AlgoCountDiv, 0628_03)
   EXPECT_THAT(count_div_0628_03(10, 10, 20), 0); 
   EXPECT_THAT(count_div_0628_03(0, 0, 11), 1); 
   EXPECT_THAT(count_div_0628_03(0, 14, 2), 8); 
+}
+
+
+// ={=========================================================================
+// algo-count-identical-pairs
+
+// {3,5,6,3,3,5}
+//
+// Why the answer is 4 but not 3? Use index and there are 4 pairs
+//
+// no mention of input value range and assumes 255, 0 <= A[x] <= 255
+//
+// the same as algo-passing_car
+
+int count_identical_pairs_0629_01(const vector<int> &A)
+{
+  int count{};
+
+  vector<pair<int, int>> map(256);
+
+  for (auto e : A)
+  {
+    // not set before
+    if (map[e].first == 0)
+      map[e] = pair<int, int>(e, 0);
+
+    // add count
+    count += map[e].second;
+
+    // update count
+    map[e].second += 1;
+  }
+
+  return count;
+}
+
+TEST(AlgoCountIdenticalPairs, 0629_01)
+{
+  EXPECT_THAT(count_identical_pairs_0629_01({3,5,6,3,3,5}), 4); 
 }
 
 

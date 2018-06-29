@@ -1471,9 +1471,8 @@ TEST(StlAlgoFill, Fill)
   EXPECT_THAT(coll, ElementsAre(1,1,1,1,1,1,1,1));  
 
   vector<int> coll1(8,0);
-  EXPECT_THAT(coll1, ElementsAre(0,0,0,0,0,0,0,0));  
-  // fill_n(coll1, 8, 7);
-  // EXPECT_THAT(coll, ElementsAre(7,7,7,7,7,7,7,7));  
+  fill_n(coll1.begin(), 8, 7);
+  EXPECT_THAT(coll1, ElementsAre(7,7,7,7,7,7,7,7));  
 }
 
 
