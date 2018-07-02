@@ -3031,15 +3031,62 @@ TEST(AlgoPrefixSum, MakePrefixSum)
       ElementsAre(0,2,5,12,17,18,21,30));
 }
 
+// Using prefix (or suffix) sums allows us to calculate the total of any slice
+// of the array very quickly. For example, assume that you are asked about the
+// totals of m slices [x..y] such that 0 <= x <= y < n, where the total is the
+// sum ax + ax+1 + . . . + ay−1 + ay.
+
 int count_total(const vector<int> &P, int x, int y)
 {
+  // since prefix sum index is +1 more then input index.
+  return P[y+1] - P[x];
+}
+
+TEST(AlgoPrefixSum, SumAnySlice)
+{
+  //   {1,2, 3, 4, 5, 6}
+  //         2     4
+  // (0,1,3,[6,10,15],21)
+  //
+  // 15-3 = 12
+
+  EXPECT_THAT(count_total(make_prefix_sums({1,2,3,4,5,6}), 2, 4), 12);
+
+  // (0,2,5,[12,17,18],21,30)
+  // 18-5 = 13
+
+  EXPECT_THAT(count_total(make_prefix_sums({2,3,7,5,1,3,9}), 2, 4), 13);
 }
 
 
-// int mushroom_model(const vector<int> A, int K, int M)
-// {
+int mushroom_model(const vector<int> A, int K, int M)
+{
+  int size = A.size();
+  int result{};
+  auto prefix_sum = make_prefix_sums(A);
+  int right_pos{}, left_pos{};
 
-// }
+  int x = min(M, K) + 1;
+  for (size_t prefix_index = 0; prefix_index < x; ++prefix_index)
+  {
+    left_pos = K - prefix_index;
+    right_pos = min(size-1, max(K, K+M-2*prefix_index));
+    auto xresult = count_total(prefix_sum, left_pos, right_pos);
+    result = max(result, xresult);
+  }
+
+  int xx = min(M+1, size-K);
+  for (size_t prefix_index = 0; prefix_index < xx; ++prefix_index)
+  {
+    right_pos = K + prefix_index;
+    left_pos = max(0, min(K, K-(M-2*prefix_index)));
+    auto xresult = count_total(prefix_sum, left_pos, right_pos);
+    result = max(result, xresult);
+  }
+
+  return result;
+}
+
 
 // ={=========================================================================
 // algo-passing-car
