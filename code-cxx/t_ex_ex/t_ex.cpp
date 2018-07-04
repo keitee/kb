@@ -5,12 +5,9 @@
 #include <vector>
 #include <fstream>
 #include <string>
-<<<<<<< HEAD
 #include <bitset>
-=======
 #include <chrono>
 #include <thread>
->>>>>>> 2b315751c49bfc4250ceed8e7a5ead381afd6f88
 #include <boost/algorithm/string.hpp>
 
 
@@ -784,6 +781,164 @@ TEST(Progress, X)
   }
 
   cout << endl;
+}
+
+// ={=========================================================================
+
+typedef long long lint;
+
+// int T, N;
+
+int xi[1000];
+int wi[1000];
+
+// #define abs(a) (((a) > 0)?(a):-(a))
+// #define min(a,b) (((a) < (b))?(a):(b))
+
+// {Q} does the order matter? for example, abs(s-e) or abs(e-s)
+#define TIME(s,e) (abs(xi[e] - xi[s]))
+
+lint sum(int s, int e, lint time = 0);
+lint sum(int s1, int s2, int s3, lint time = 0);
+
+lint sum(int s, int e, lint time)
+{
+  if(s == e)
+  {
+    return 0;
+  }
+  int dx = ((e > s)? 1:-1);
+  lint res = 0;
+
+  // cout << "time: " << setw(4) << time << endl;
+
+  // [1] 
+  // here time is sum of absolute distance of between points and res is the sum of weighted
+  // distance.
+  //
+  // for s < e case
+  // s == 0  : i == 1,   dx == 1
+  //         TIME(0,1), abs(0-1), res = time*wi[1];
+  //
+  // for s > e case
+  // s == N-1: i == N-2, dx == -1 
+  //           TIME(N-1, N-2), res = time*wi[N-2]
+  //
+  // this is a code to implement the summation above but it is cool to use one single function for
+  // both direction. This dx variable is direction.
+  //
+  // ->  s     e: abs(e-s), abs(1-0), abs(1-0)*w[1]
+  //
+  //     0th   1th    2th    n-1 : N array
+  // ----*-----*------*------*---
+  //
+  //               <-  e     s: abs(e-s), abs((n-2)-(n-1)), abs((n-2)-(n-1))*w[n-2]
+  //
+  // [2] no exit condition in for loop
+  //
+  for(int i = s + dx; ; i+=dx)
+  {
+    // time += TIME(i, i - dx);
+    time += TIME(i-dx, i);
+    res += time*(lint)wi[i];
+    // cout << "i: " << i << " i-dx: " << i-dx 
+    //   << " xi[e]: " << xi[i-dx] << " xi[s]: " << xi[i] << " time: " << time 
+    //   << " wi[i]: " << wi[i] << " res: " << res << endl;
+
+    if( i == e )
+    {
+      // cout << " sum: [" << s << " ," << e << "], sum: " << res << endl;
+      return res;
+    }
+  }
+
+  // cout << " sum: [" << s << " ," << e << "], sum: " << res << endl;
+  return res;
+}
+
+lint sum(int s1, int s2, int s3, lint time)
+{
+	// (s2 - s1)*(s3 - s1) < 0
+	lint d1 = sum(s1, s2, time);
+  cout << "+ sum: " << setw(4) << d1 << " = sum(" << s1 << ", " << s2 
+    << ", time: " << time << ")" << endl;
+
+	//lint d2 = sum(s2, s3);
+	lint d3 = sum (s1, s3, time + 2*TIME(s2, s1));
+  cout << "+ sum: " << setw(4) << d3 << " = sum(" << s1 << ", " << s3
+    << ", time: " << time + 2*TIME(s2, s1) << ")" << endl;
+
+  cout << "+ sum: " << d1+d3 << endl;
+
+	return d1 + d3;
+}
+
+// search(start index, end index)
+pair<lint, lint> search(int s, int e)
+{
+  lint dMin = sum(s, e);
+  int ind = s;
+
+  if(s == e)
+  {
+    return make_pair(0, 0);
+  }
+  int dx = ((e > s)? 1:-1);
+
+  lint sumT = 0;
+  lint time = 0;
+
+  for(int i = s + dx; i != e; i += dx)
+  {
+    cout << "for sum(" << i << ", " << s << ", " << e << ")" << endl;
+    lint res = sum(i, s, e);
+
+    if(res < dMin || res == dMin && abs(i - s) > abs(ind - s))
+    {
+      cout << "update: dmin:" << dMin << ", res:" << res 
+        << ", i" << i << ", s:" << s << endl;
+      dMin = res;
+      ind = i;
+    }
+  }
+
+  if(ind != s)
+  {
+    cout << "search again: search(" << ind << ", " << s << ")" << endl;
+
+    pair<lint, lint> res = search(ind, s);	
+    sumT += res.first;
+    time += res.second + TIME(ind, s);		
+
+    //printf("%d->%d->%d\n", ind, s, e);
+  }
+
+  cout << "ind sum(ind:" << ind << ", " << e << ", time:" << time << ")" << endl;
+  sumT += sum(ind, e, time);
+  time += TIME(ind, e);
+
+  return make_pair(sumT, time);
+}
+
+TEST(XXX, XXX)
+{
+
+  vector<int> dcall{1, 6, 12, 13, 14, 24};
+  vector<int> wcall{1, 2, 10, 3, 5, 1};
+  
+  for (int i = 0; i < dcall.size(); ++i)
+  {
+    xi[i] = dcall[i];
+    wi[i] = wcall[i];
+  }
+
+  int N = dcall.size();
+
+  pair<lint, lint> res1 = search(0, N - 1);
+  cout << "-----------------" << endl;
+  pair<lint, lint> res2 = search(N - 1, 0);
+
+  cout << "min : " << min(res1.first, res2.first) << endl;
 }
 
 

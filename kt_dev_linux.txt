@@ -95,7 +95,8 @@
 *kt_linux_tool_014* tool-putty-xwin
 *kt_linux_tool_015* tool-pgrep, tool-pidof
 |kt_linux_tool_018| tool-ls
-|kt_linux_tool_019| tool-strace
+*kt_linux_tool_019* tool-trace tool-ftrace
+|kt_linux_tool_019| tool-trace tool-strace
 |kt_linux_tool_020| tool-date
 |kt_linux_tool_021| tool-chmod
 |kt_linux_tool_022| mknod
@@ -8029,7 +8030,177 @@ ls -1
 
 
 ={============================================================================
-*kt_linux_tool_019* tool-strace
+*kt_linux_tool_019* tool-trace tool-ftrace
+
+<tool-trace-chrome>
+https://www.gamasutra.com/view/news/176420/Indepth_Using_Chrometracing_to_view_your_inline_profiling_data.php
+
+Viewing external profile data files
+
+chrome://tracing/
+
+
+<tool-trace-tool-ftrace>
+Ftrace is a Linux kernel internals tracing tool that was first included in the
+2.6.27 kernel in 2008. 
+
+The main ftrace documentation is available in the Linux kernel source at
+…/root/Documentation/trace/ftrace.txt. It was last updated for the 3.10
+kernel. In the same directory, there are a number of other interesting
+documents including ftrace-design.txt by Mike Frysinger which focuses on
+architecture implementation details. The actual tracemoint implementation
+mechanism is detailed by Mathieu Desnoyers in tracepoints.txt.
+
+One of the annoying things about ftrace for most first time users of the tool
+is that it does not provide an easy mechanism to invoke an executable and just
+trace that executable. Here is a simple shell script which provides that
+functionality:
+
+#!/bin/bash
+# Read more: https://blog.fpmurphy.com/2014/05/kernel-tracing-using-ftrace.html#ixzz5KIDBCBAz
+ 
+DEBUGFS=`grep debugfs /proc/mounts | awk '{ print $2; }'`
+ 
+echo $$ > $DEBUGFS/tracing/set_ftrace_pid
+echo function > $DEBUGFS/tracing/current_tracer
+echo 1 > $DEBUGFS/tracing/tracing_on
+exec $*
+echo 0 > $DEBUGFS/tracing/tracing_on
+
+
+echo function > current_tracer
+echo 1 > tracing_on
+cat trace
+echo 0 > tracing_on
+echo > trace
+
+To simplify the use of ftrace, Rostedt has written two tools  trace-cmd and
+kernelshark. These are available as standard repo RPMs in Fedora 20. Trace-cmd
+is a binary command line tool which acts as a user interface to ftrace whereas
+Kernelshark is a graphical consumer of trace-cmd output.
+
+note:
+should run trace-cmd under a directory that you have write permission.
+
+sudo apt-get install trace-cmd
+
+
+<tool-trace-tool-ftrace-add-tag>
+
+  trace_marker		- Writes into this file writes into the kernel buffer
+
+A trace marker enables some coordination between what is happening in user
+space and inside the kernel by providing a way to write into the ftrace kernel
+ring buffer from user space. This marker will then appear in the trace output
+to give a location where a specific event occurred. Here is an example of
+setting a trace marker:
+
+# echo "FINN" > /sys/kernel/debug/tracing/trace_marker
+
+
+A practical example
+
+This is how trace-cmd was used to investigate an unexpectedly long delay
+between FRAME_PRESENTED and "VIDEO IS SHOWN" traces in the MW log files. The
+use of the system() function is not optimal for speed, but it makes the
+modification quick and simple!
+
+Changes to /usr/bin/trace-cmd
+
+These two chmod entries were added to /usr/bin/trace-cmd. This change of
+permission was necessary to allow the MW processes to write to the trace
+marker buffer. This allows you to print messages directly into your ftrace
+capture.
+
+/usr/bin/trace-cmd stop
+echo 3500 > /sys/kernel/debug/tracing/buffer_size_kb #set ftrace buffer size default is probably to low
+/usr/bin/trace-cmd start -e sched -e irq
+chmod 777 /sys/kernel/debug
+chmod 222 /sys/kernel/debug/tracing/trace_marker
+
+Changes to mpm_component_video.c
+
+This causes the text FRAME_PRESENTED to be written into the ftrace log file
+
+DIAG_LOG_MIL(g_MPM_Logging_ID, ("FRAME_PRESENTED: hMC=0x%x", h_media_connection));
+system("echo FRAME_PRESENTED > /sys/kernel/debug/tracing/trace_marker");
+DIAG_PMON_DECODER_1ST_FRAME(g_MPM_Logging_ID, h_media_connection);
+Changes to player_api_avcontrol.c
+
+This causes the text VIDEO_IS_SHOWN to be written into the ftrace log, then
+the trace buffer is stopped, then the trigger file is created to allow
+trace_cmd.sh to collect and write the logs to the FSN_DATA directory.
+
+if ( true == visibility )
+{
+    PLAYER_DIAG_LOG_MIL(("VIDEO IS SHOWN"));
+    system("echo VIDEO_IS_SHOWN > /sys/kernel/debug/tracing/trace_marker ; /usr/bin/trace-cmd stop ; touch /tmp/trace_cmd_triggered");
+}
+else
+
+Debugging the kernel using Ftrace - part 2
+https://lwn.net/Articles/366796/
+
+
+<tool-ftrace-others>
+https://github.com/brendangregg/perf-tools
+
+
+<tool-trace-tool-uftrace>
+The uftrace tool is to trace and analyze execution of a program written in
+C/C++. It was heavily inspired by the ftrace framework of the Linux kernel
+(especially function graph tracer) and supports userspace programs. It
+supports various kind of commands and filters to help analysis of the program
+execution and performance.
+
+note:
+what's difference from ftrace? supports userspace programs.
+
+The -pg debug option generates profiling information used by gprof
+
+https://github.com/namhyung/uftrace
+https://github.com/namhyung/uftrace/wiki/Tutorial
+
+To analyze this program with uftrace, you need to enable the compiler
+instrumentation. The gcc provides -pg and -finstrument-functions options for
+this. We prefer to use -pg option as it's more light-weight in terms of
+compiler optimization, but there were some cases it didn't work well.
+Currently function arguments are only accessible if it's compiled with the -pg
+option.
+
+
+<tool-gprof>
+http://sourceware.org/binutils/docs/gprof/
+
+Profiling a program is an important step in analyzing program performance and
+identifying bottlenecks. A C or C++ program can be easily profiled in Linux
+using gprof:
+
+Make sure your C or C++ code compiles without errors. Make sure your compiled
+program starts, executes and exits without any errors.
+
+Add the -pg option to both the object compilation and linking stages of the
+program compilation. Compile the program from scratch.
+
+Execute the program as you normally do. It might take a while longer to finish
+due to the profiling. After the program exits, it writes a gmon.out file with
+profiling information.
+
+$ ./foo
+
+Invoke gprof with your program executable as input. It prints out profiling
+information in the form of both a flat profile and a call graph. You can pipe
+this to a pager or redirect it to a text file for examination.
+
+$ gprof foo
+
+Examining the output of gprof gives you an idea of which functions in the
+program are taking the most execution time. This information can be used to
+optimize such functions.
+
+
+={============================================================================
+*kt_linux_tool_019* tool-trace tool-strace
 
 strace - trace `system-calls` and `signals` 
 
@@ -13607,12 +13778,6 @@ Incron Event Decisions
 Dynamic incrontab
 
 note: skipped the rest
-
-
-={============================================================================
-*kt_linux_tool_100* tool-gprof
-
-http://sourceware.org/binutils/docs/gprof/
 
 
 ={============================================================================
