@@ -19,796 +19,218 @@ using testing::Eq;
 using testing::StrEq;
 using testing::FloatEq;
 
-
-// ={=========================================================================
-// MakeTonen
-//
-// int main( ) {
-//    string tmp;
-//    MakeToken_0529 st("Name|Address|Phone");
-//    cout << "there are " << st.countTokens( ) << " tokens.\n";
-//    while (st.hasMoreTokens( )) {
-//        st.nextToken(tmp);
-//        cout << "token = " << tmp << '\n';
-//    }
-// }
-//
-// 1. countTokens() count number of tokens, cache it, and return it. Then how
-// about hasMoreTokens()? This means that don't need to keep input_ and change
-// it whenever nextToken() gets called. So count number of tokens whenever it
-// gets called and keep a contailer which has tokens.
-//
-// int main( ) {
-//    string tmp;
-//    MakeToken st("Name|Address|Phone");
-//    cout << "there are " << st.countTokens( ) << " tokens.\n";
-//    while (st.countTokens( )) {
-//        st.nextToken(tmp);
-//        cout << "token = " << tmp << '\n';
-//    }
-// }
-
-// TDD on 2018.05.29
-// * Like cxx-boost-split, "||Name" has {"", "", "Name"}
-// * Has token array member so remove hadMoreToken() and countToken() do not
-// calculate count everytime when gets called.
-
-class MakeToken_0529
-{
-  public:
-    MakeToken_0529(const string &input, const string &delim = "|"):
-      input_(input), delim_(delim)
-      {
-        size_t i{};
-        size_t found = input_.find_first_of(delim_, i);
-
-        while (found != string::npos)
-        {
-          tokens_.push_back(input_.substr(i, found-i));
-          i = ++found;
-          found = input_.find_first_of(delim_, i);
-
-        }
-
-        if (found == string::npos)
-          tokens_.push_back(input_.substr(i, found));
-      }
-
-    size_t countTokens()
-    {
-      return tokens_.size();
-    }
-
-    void nextToken(string &token)
-    {
-      auto it = tokens_.begin();
-      if (it != tokens_.end())
-      {
-        token = *it;
-        tokens_.erase(it);
-      }
-    }
-
-  private:
-    const string input_;
-    const string delim_;
-    size_t number_of_tokens_{};
-    vector<string> tokens_{};
-};
-
-TEST(MakeToken_0529, UseCountTokens)
-{
-  MakeToken_0529 st("Name|Address|Phone");
-
-  EXPECT_THAT(st.countTokens(), Eq(3));
-  EXPECT_THAT(st.countTokens(), Eq(3));
-}
-
-TEST(MakeToken_0529, UseGetTokens)
-{
-  vector<string> coll{};
-  MakeToken_0529 st("Name|Address|Phone");
-  string token;
-
-  while (st.countTokens())
-  {
-    st.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
-}
-
-TEST(MakeToken_0529, UseVariousInputs)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    // 1. "Name|Address|Phone"
-    MakeToken_0529 mt1("Name|Address|Phone");
-    EXPECT_EQ(3, mt1.countTokens());
-
-    while (mt1.countTokens())
-    {
-        mt1.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
-
-    // 2. "Name|Address"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt2("Name|Address");
-    EXPECT_EQ(2, mt2.countTokens());
-
-    while (mt2.countTokens())
-    {
-        mt2.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
-
-    // 3. "Name"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt3("Name");
-    EXPECT_EQ(1, mt3.countTokens());
-
-    while (mt3.countTokens())
-    {
-        mt3.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-
-    // 4. "Name|"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt4("Name|");
-    EXPECT_EQ(2, mt4.countTokens());
-
-    while (mt4.countTokens())
-    {
-        mt4.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", ""));
-
-    // 5. "Name||Address"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt5("Name||Address");
-    EXPECT_EQ(3, mt5.countTokens());
-
-    while (mt5.countTokens())
-    {
-        mt5.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "", "Address"));
-
-    // 6. "||Name"
-    // exception where end > begin
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt6("||Name");
-    EXPECT_EQ(3, mt6.countTokens());
-
-    while (mt6.countTokens())
-    {
-        mt6.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("", "", "Name"));
-}
-
-
-// ={=========================================================================
-// StringTokenizer_0606
-//
-// int main( ) {
-//    string s = " razzle dazzle giddyup ";
-//    string tmp;
-//    StringTokenizer st(s);
-//    cout << "there are " << st.countTokens( ) << " tokens.\n";
-//    while (st.hasMoreTokens( )) {
-//        st.nextToken(tmp);
-//        cout << "token = " << tmp << '\n';
-//    }
-// }
-//
-// class StringTokenizer {
-//
-//   private:
-//     StringTokenizer() {}
-//     string delim_;
-//     string str_;
-//     size_t count_{};
-//     size_t begin_{};
-//     size_t end_{};
-// };
-// 
-// * not boost-split style which means do not support null token.
-
-class StringTokenizer_0606
-{
-  public:
-    StringTokenizer_0606(const string &input, const string &delim = "|")
-      : input_(input), delim_(delim)
-    {
-      pos_token_ = input_.find_first_not_of(delim_, 0);
-      pos_delim_ = input_.find_first_of(delim_, pos_token_);
-    }
-
-    bool hasMoreTokens()
-    {
-      return pos_token_ != pos_delim_;
-    }
-
-    void nextToken(string &token)
-    {
-      token = input_.substr(pos_token_, pos_delim_ - pos_token_);
-
-      pos_token_ = input_.find_first_not_of(delim_, pos_delim_);
-      pos_delim_ = input_.find_first_of(delim_, pos_token_);
-    }
-
-    size_t countTokens()
-    {
-      if (count_)
-        return count_;
-
-      size_t pos_start = input_.find_first_not_of(delim_, 0);
-      size_t pos_delim{};
-      
-      while( (pos_delim = input_.find_first_of(delim_, pos_start)) != string::npos)
-      {
-        pos_start = input_.find_first_not_of(delim_, pos_delim);
-        ++count_;
-      }
-
-      if (pos_start != string::npos && pos_delim == string::npos)
-        ++count_;
-
-      return count_;
-    }
-
-  private:
-    StringTokenizer_0606() {}
-    string input_;
-    string delim_;
-    size_t count_{};
-    size_t pos_token_{};
-    size_t pos_delim_{};
-};
-
-TEST(StringTokenizer_0606, UseCountTokens)
-{
-  StringTokenizer_0606 st1("Name|Address|Phone");
-  EXPECT_EQ(st1.countTokens(), 3);
-
-  StringTokenizer_0606 st2("Name|Address");
-  EXPECT_EQ(2, st2.countTokens());
-
-  StringTokenizer_0606 st3("Name");
-  EXPECT_EQ(1, st3.countTokens());
-
-  StringTokenizer_0606 st4("Name||Address");
-  EXPECT_EQ(2, st4.countTokens());
-
-  StringTokenizer_0606 st5("||Name");
-  EXPECT_EQ(1, st5.countTokens());
-
-  StringTokenizer_0606 st6("|||");
-  EXPECT_EQ(0, st6.countTokens());
-}
-
-TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
-{
-  string token{};
-  vector<string> coll{};
-
-  StringTokenizer_0606 st1("Name|Address|Phone");
-  EXPECT_EQ(st1.countTokens(), 3);
-
-  while (st1.hasMoreTokens())
-  {
-    st1.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
-
-  // 2. "Name|Address"
-  token.clear();
-  coll.clear();
-  StringTokenizer_0606 st2("Name|Address");
-  EXPECT_EQ(2, st2.countTokens());
-
-  while (st2.hasMoreTokens())
-  {
-    st2.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name", "Address"));
-
-  // 3. "Name"
-  token.clear();
-  coll.clear();
-  StringTokenizer_0606 st3("Name");
-  EXPECT_EQ(1, st3.countTokens());
-
-  while (st3.hasMoreTokens())
-  {
-    st3.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name"));
-
-  // 4. "Name|"
-  token.clear();
-  coll.clear();
-  StringTokenizer_0606 st4("Name|");
-  EXPECT_EQ(1, st4.countTokens());
-
-  while (st4.hasMoreTokens())
-  {
-    st4.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name"));
-
-  // 5. "Name||Address"
-  token.clear();
-  coll.clear();
-  StringTokenizer_0606 st5("Name||Address");
-  EXPECT_EQ(2, st5.countTokens());
-
-  while (st5.hasMoreTokens())
-  {
-    st5.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name", "Address"));
-
-  // 6. "||Name"
-  // exception where end > begin
-  token.clear();
-  coll.clear();
-  StringTokenizer_0606 st6("||Name");
-  EXPECT_EQ(1, st6.countTokens());
-
-  while (st6.hasMoreTokens())
-  {
-    st6.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name"));
-}
-
-
-// TEST(StringStream, X)
-// {
-//   size_t number_of_entries{};
-//   cin >> number_of_entries;
-
-//   map<string, string> phone_map{};
-
-//   for (auto i = 0; i < number_of_entries; ++i)
-//   {
-//     // string line;
-//     // getline(cin >> ws, line);
-//     // stringstream ss(line);
-
-//     string name, number;
-//     stringstream ss;
-//     ss >> name;
-//     ss >> number;
-
-//     phone_map[name] = number;
-//   }
-
-//   string query;
-
-//   while (cin >> query)
-//   {
-//     if (phone_map.find(query) != phone_map.end())
-//       cout << query << "=" << phone_map[query] << endl;
-//     else
-//       cout << "Not found" << endl;
-//   }
-// }
-
-template<typename Policy_T>
-struct ConstrainedValue
-{
-  public:
-    // public typedefs
-    //
-    // t_ex.cpp:435:22: error: expected nested-name-specifier before ‘Policy_T’
-    //      typedef typename Policy_T policy_type;
-    //                       ^
-    // typedef typename Policy_T policy_type;
-
-    typedef Policy_T policy_type;
-    typedef typename Policy_T::value_type value_type;
-    typedef ConstrainedValue self;
-    // default constructor
-    ConstrainedValue( ) : m(Policy_T::default_value) { }
-    ConstrainedValue(const self& x) : m(x.m) { }
-    ConstrainedValue(const value_type& x) 
-    { 
-      cout << "converting ctor" << endl;
-      Policy_T::assign(m, x); 
-    }
-
-    operator value_type( ) const { return m; }
-
-    // uses the policy defined assign function
-    void assign(const value_type& x) {
-      Policy_T::assign(m, x);
-    }
-
-    // assignment operations
-    self& operator=(const value_type& x) { assign(x); return *this; }
-    self& operator+=(const value_type& x) { assign(m + x); return *this; }
-    self& operator-=(const value_type& x) { assign(m - x); return *this; }
-    self& operator*=(const value_type& x) { assign(m * x); return *this; }
-    self& operator/=(const value_type& x) { assign(m / x); return *this; }
-    self& operator%=(const value_type& x) { assign(m % x); return *this; }
-    self& operator>>=(int x) { assign(m >> x); return *this; }
-    self& operator<<=(int x) { assign(m << x); return *this; }
-
-    // unary operations
-    self operator-( ) { return self(-m); }
-    self operator+( ) { return self(+m); }
-    self operator!( ) { return self(!m); }
-    self operator~( ) { return self(~m); }
-    // binary operations
-    friend self operator+(self x, const value_type& y) { return x += y; }
-    friend self operator-(self x, const value_type& y) { return x -= y; }
-    friend self operator*(self x, const value_type& y) { return x *= y; }
-    friend self operator/(self x, const value_type& y) { return x /= y; }
-    friend self operator%(self x, const value_type& y) { return x %= y; }
-    friend self operator+(const value_type& y, self x) { return x += y; }
-    friend self operator-(const value_type& y, self x) { return x -= y; }
-    friend self operator*(const value_type& y, self x) { return x *= y; }
-    friend self operator/(const value_type& y, self x) { return x /= y; }
-    friend self operator%(const value_type& y, self x) { return x %= y; }
-    friend self operator>>(self x, int y) { return x >>= y; }
-    friend self operator<<(self x, int y) { return x <<= y; }
-    // stream operators
-    friend ostream& operator<<(ostream& o, self x) { o << x.m; return o; }
-    friend istream& operator>>(istream& i, self x) {
-      value_type tmp; i >> tmp; x.assign(tmp); return i;
-    }
-    // comparison operators
-    friend bool operator<(const self& x, const self& y) { return x.m < y.m; }
-    friend bool operator>(const self& x, const self& y) { return x.m > y.m; }
-    friend bool operator<=(const self& x, const self& y) { return x.m <= y.m; }
-    friend bool operator>=(const self& x, const self& y) { return x.m >= y.m; }
-    friend bool operator==(const self& x, const self& y) { return x.m == y.m; }
-    friend bool operator!=(const self& x, const self& y) { return x.m != y.m; }
-  private:
-    value_type m;
-};
-
-template<int Min_N, int Max_N>
-struct RangedIntPolicy
-{
-  typedef int value_type;
-  const static value_type default_value = Min_N;
-  static void assign(value_type& lvalue, const value_type& rvalue) {
-    if ((rvalue < Min_N) || (rvalue > Max_N)) {
-      throw range_error("out of valid range");
-    }
-    lvalue = rvalue;
-  }
-};
-
-typedef ConstrainedValue< RangedIntPolicy<1582, 4000> > GregYear;
-typedef ConstrainedValue< RangedIntPolicy<1, 12> > GregMonth;
-typedef ConstrainedValue< RangedIntPolicy<1, 31> > GregDayOfMonth;
-
-void gregOutputDate(GregDayOfMonth d, GregMonth m, GregYear y) {
-  cout << m << "/" << d << "/" << y << endl;
-}
-
-TEST(Ranged, X)
-{
-  try {
-    gregOutputDate(14, 7, 2005);
-  }
-  catch(...) {
-    cerr << "whoops, shouldn't be here" << endl;
-  }
-  try {
-    gregOutputDate(1, 13, 1582);
-    // gregOutputDate(1, 5, 1148);
-    cerr << "whoops, shouldn't be here" << endl;
-  }
-  catch(...) {
-    cerr << "are you sure you want to be using a Gregorian Calendar?" << endl;
-  }
-}
-
-
-// ={=========================================================================
-string convert_to_roman(unsigned int arabic) 
-{
-  string convert{};
-
-  // note:
-  // 1. the order of element in the map matters
-  // 2. do not need 6?? in the map since it follows the same addition rule
-  // 3. to fix a warning on signed int and unsigned int comparion, use "u"
-  // suffix.
-
-  const auto lookup_table = {
-    make_pair(1000, "M"),
-    make_pair(900, "CM"),
-    // make_pair(600, "DC"),
-    make_pair(500, "D"),
-    make_pair(400, "CD"),
-    make_pair(100, "C"),
-    //
-    make_pair(90, "XC"),
-    // make_pair(60, "LX"),
-    make_pair(50, "L"),
-    make_pair(40, "XL"),
-    make_pair(10, "X"),
-    //
-    make_pair(9, "IX"),
-    // make_pair(6, "VI"),
-    make_pair(5, "V"),
-    make_pair(4, "IV"),
-    make_pair(1, "I")
-  };
-
-  for (const auto e : lookup_table)
-  {
-    while (e.first <= arabic)
-    {
-      arabic -= e.first;
-      convert += e.second;
-    }
-  }
-
-  // cout << "converted: " << convert << endl;
-
-  return convert;
-}
-
-TEST(RomanConverter, CanConvertPositiveDigits) 
-{
-  EXPECT_THAT(convert_to_roman(1), Eq("I"));
-  EXPECT_THAT(convert_to_roman(2), Eq("II"));
-  EXPECT_THAT(convert_to_roman(3), Eq("III"));
-  EXPECT_THAT(convert_to_roman(4), Eq("IV"));
-  EXPECT_THAT(convert_to_roman(5), Eq("V"));
-  EXPECT_THAT(convert_to_roman(6), Eq("VI"));
-  EXPECT_THAT(convert_to_roman(7), Eq("VII"));
-  EXPECT_THAT(convert_to_roman(8), Eq("VIII"));
-  EXPECT_THAT(convert_to_roman(9), Eq("IX"));
-  EXPECT_THAT(convert_to_roman(10), Eq("X"));
-  EXPECT_THAT(convert_to_roman(11), Eq("XI"));
-  EXPECT_THAT(convert_to_roman(12), Eq("XII"));
-  EXPECT_THAT(convert_to_roman(13), Eq("XIII"));
-  EXPECT_THAT(convert_to_roman(16), Eq("XVI"));
-  EXPECT_THAT(convert_to_roman(17), Eq("XVII"));
-  EXPECT_THAT(convert_to_roman(18), Eq("XVIII"));
-  EXPECT_THAT(convert_to_roman(20), Eq("XX"));
-  EXPECT_THAT(convert_to_roman(23), Eq("XXIII"));
-  EXPECT_THAT(convert_to_roman(41), Eq("XLI"));
-  EXPECT_THAT(convert_to_roman(45), Eq("XLV"));
-  EXPECT_THAT(convert_to_roman(50), Eq("L"));
-  EXPECT_THAT(convert_to_roman(80), Eq("LXXX"));
-  EXPECT_THAT(convert_to_roman(91), Eq("XCI"));
-  EXPECT_THAT(convert_to_roman(95), Eq("XCV"));
-  EXPECT_THAT(convert_to_roman(100), Eq("C"));
-  EXPECT_THAT(convert_to_roman(122), Eq("CXXII"));
-  EXPECT_THAT(convert_to_roman(152), Eq("CLII"));
-  EXPECT_THAT(convert_to_roman(196), Eq("CXCVI"));
-  EXPECT_THAT(convert_to_roman(247), Eq("CCXLVII"));
-  EXPECT_THAT(convert_to_roman(288), Eq("CCLXXXVIII"));
-  EXPECT_THAT(convert_to_roman(298), Eq("CCXCVIII"));
-  EXPECT_THAT(convert_to_roman(500), Eq("D"));
-  EXPECT_THAT(convert_to_roman(1000), Eq("M"));
-  EXPECT_THAT(convert_to_roman(1513), Eq("MDXIII"));
-  EXPECT_THAT(convert_to_roman(2999), Eq("MMCMXCIX"));
-  EXPECT_THAT(convert_to_roman(3447), Eq("MMMCDXLVII"));
-}
-
-// ={=========================================================================
-// cxx-bit cxx-numeric-limit
-//
-// The addition operation in the CPU is agnostic to whether the integer is
-// signed or unsigned. The bit representation is the same. 
-//
-// Here `negate` means that -value but not ~value which is bitwise operation.
-// 
-// If you `negate` 0x80000000, _MIN, you get the same again and that is
-// something to look out for because there is `no-change` in bit representation.
-// This means abs() has no effect when fed the largest negative number. So bit
-// representation is 'agnostic' to whether it's signed or unsigned.
-
-TEST(Bit, MaxNegagiveIsSpecial)
-{
-  // get max negative, ???_MIN
-  int int_min = (~((unsigned int)0) >> 1)+1;
-
-  bitset<32> bitset_int_min(int_min);
-  EXPECT_EQ(bitset_int_min.to_string(), "10000000000000000000000000000000");
-
-  // what'd happen when negate ???_MIN?
-  int negate_min = -int_min;
-  bitset<32> bitset_negate_min(negate_min);
-  EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
-}
-
-TEST(Bit, GetLimts)
-{
-  // fails
-  // unsigned int int_max = (~((int)0)) >> 1;
-  // int int_max = (~((int)0)) >> 1;
-  
-  // okays
-  // int int_max = (~((unsigned int)0)) >> 1;
-  // unsigned int int_max = (~((unsigned int)0)) >> 1;
-  
-  unsigned int uint_max = ~((unsigned int)0);
-  int int_max = uint_max >> 1;
-  int int_min = int_max + 1;
-  
-  // bitset<32> bitsetx{int_max};
-  // cout << bitsetx << endl;
-
-  EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
-  EXPECT_EQ(int_max, numeric_limits<int>::max());
-  EXPECT_EQ(int_min, numeric_limits<int>::min());
-}
-
-// ={=========================================================================
-
-class Generator
-{
-  public:
-    int operator() () { return rand() % 50; }
-};
-
-using PortfolioIterator = vector<unsigned int>::iterator;
-
-PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
-    PortfolioIterator end, unsigned int max_quanity)
-{
-  // how to get T of coll such as algo-remove? here, assumes that we know T
-  vector<unsigned int> coll;
-
-  PortfolioIterator start = begin;
-  PortfolioIterator current{};
-
-  for (; start != end; ++start)
-  {
-    // not use push_back() since void push_back()
-    if (*start <= max_quanity)
-      current = coll.insert(coll.end(), *start);
-  }
-
-  start = begin;
-
-  for (; start != end; ++start)
-  {
-    if (*start > max_quanity)
-      coll.push_back(*start);
-  }
-
-  copy(coll.begin(), coll.end(), ostream_iterator<unsigned int>(cout, ","));
-  cout << endl;
-
-  return ++current;
-}
-
-// Q: If run it standalone, it runs slower than on in GTEST. WHY?
-//
-// #include <iostream>
-// #include <chrono>
-// #include <thread>
-// 
-// using namespace std;
-// 
-// typedef bool (*UPDATEFUNC)(int);
-// 
-// bool UpdateProgress(int percent)
-// {
-//   cout << flush << "\r" << percent << " % complete...";
-//   // cout << "\r" << percent << "% complete...";
-//   return true;
-// }
-// 
-// int main()
-// {
-//   UPDATEFUNC f = UpdateProgress;
-// 
-//   for (long l = 0; l < 100000000; ++l)
-//   {
-//     if (l % 1000000 == 0)
-//       f(l / 1000000);
-// 
-//     for (long x = 0; x < 100; ++x)
-//       x = x; 
-// 
-//     // this_thread::sleep_for(std::chrono::milliseconds{1});
-//   }
-// 
-//   cout << endl;
-// 
-//   return EXIT_SUCCESS;
-// }
-
-
-typedef bool (*UPDATEFUNC)(int);
-
-bool UpdateProgress(int percent)
-{
-  cout << flush << "\r" << percent << "% complete...";
-  return true;
-}
-
-TEST(Progress, X)
-{
-  UPDATEFUNC f = UpdateProgress;
-
-  for (long l = 0; l < 100000000; ++l)
-  {
-    if (l % 1000000 == 0)
-      f(l / 1000000);
-
-    for (long x = 0; l < 1000000; ++l)
-      x = x; 
-
-    // this_thread::sleep_for(std::chrono::milliseconds{10});
-  }
-
-  cout << endl;
-}
-
 // ={=========================================================================
 
 typedef long long lint;
 
-// int T, N;
+int g_points[1000];
+int g_weights[1000];
 
-int xi[1000];
-int wi[1000];
+// the order of arg do not matter since it's abs. for example, abs(s-e) or abs(e-s)
+#define ABS_DISTANCE(s,e) (abs(g_points[e] - g_points[s]))
 
-// #define abs(a) (((a) > 0)?(a):-(a))
-// #define min(a,b) (((a) < (b))?(a):(b))
+lint sum_range(int start, int finish, lint start_distance = 0);
+lint sum_range_with_start(int start, int begin, int end, lint start_distance =0);
 
-// {Q} does the order matter? for example, abs(s-e) or abs(e-s)
-#define TIME(s,e) (abs(xi[e] - xi[s]))
+// get weighted sum in (begin, end] from start offset. note that do not
+// include start in its sum.
+//
+// * loop condition and distance math
+// turns out have to have loop exit in the middle of loop as the orignial has.
+// Other attemtps like these cause probblems:
+//
+// for (int i = begin + direction; i != end ; i += direction)
+// cause to miss out the last in add so wrong result.
+//
+// for (int i = begin + direction; i != (end+1); i += direction)
+// cause to seg fault when do the left direction, direction is -1. 
+// 
+// the proper is:
+//
+// for (int i = begin + direction; ; i += direction)
+// {
+//   start_distance += ABS_DISTANCE(i-direction, i);
+//
+//   if (i == end)
+//    return weight_sum;
+// }
+//
+// Why? In order to support both direction and not inclding the start, use
+// clever way to do match. In particuler, the way `direction` is used.
+//
+// For example:
+//
+// sum_range(0,5)
+//  not include start, 0.
+//  direction = 1, i = 1, ABS(0,1), wi[1] 
+//  direction = 1, i = 2, ABS(1,2), wi[2] 
+//  direction = 1, i = 3, ABS(3,2), wi[3] 
+//  direction = 1, i = 4, ABS(4,3), wi[4] 
+//  direction = 1, i = 5, ABS(5,4), wi[5] 
+//  exit
+//
+// sum_range(5,0)
+//  not include start, 5.
+//  direction = -1, i = 4, ABS(5,4), wi[4] 
+//  direction = -1, i = 3, ABS(4,3), wi[3] 
+//  direction = -1, i = 2, ABS(3,2), wi[2] 
+//  direction = -1, i = 1, ABS(2,1), wi[1] 
+//  direction = -1, i = 0, ABS(1,0), wi[0] 
+//  exit
+//
+// running:
+//
+// # DURATION     TID     FUNCTION
+//             [   529] | search(0, 5) {
+// 
+//                          /* starts from 0 to 5 */
+//                          /* sum(start, begin, end, dis); */
+//    0.665 us [   529] |   sum(0, 5, 0, 5) = 244;
+// 
+//                          /* starts from 1 */
+//                          /* sum(begin, end, dis); */
+//             [   529] |   sum(1, 0, 5, 0) {
+//    0.443 us [   529] |     sum(1, 0, 0, 0) = 5;
+//    1.035 us [   529] |     sum(1, 5, 10, 5) = 329;
+//    1.219 ms [   529] |   } = 334; /* sum */
+// 
+//                          /* starts from 2 */
+//             [   529] |   sum(2, 0, 5, 0) {
+//    0.514 us [   529] |     sum(2, 0, 0, 0) = 23;
+//    0.499 us [   529] |     sum(2, 5, 22, 5) = 223;
+//    1.225 ms [   529] |   } = 246; /* sum */
+// 
+//                          /* starts from 3 */
+//             [   529] |   sum(3, 0, 5, 0) {
+//    0.554 us [   529] |     sum(3, 0, 0, 0) = 36;
+//    0.566 us [   529] |     sum(3, 5, 24, 5) = 160;
+//    1.078 ms [   529] |   } = 196; /* sum */
+// 
+//                          /* update minimum sum and save start point */
+// 
+//                          /* starts from 4 */
+//             [   529] |   sum(4, 0, 5, 0) {
+//    0.493 us [   529] |     sum(4, 0, 0, 0) = 52;
+//    0.431 us [   529] |     sum(4, 5, 26, 5) = 36;
+//  190.644 us [   529] |   } = 88; /* sum */
+// 
+//                          /* update minimum sum and save start point */
+// 
+//                          /* search [0,5] ends and there are updates so search again [4,0] */
+// 
+//             [   529] |   search(4, 0) {
+// 
+//                          /* starts from 4 to 0 */
+//    0.242 us [   529] |     sum(4, 0, 0, 0) = 52;
+// 
+//             [   529] |     sum(3, 4, 0, 0) {
+//    0.202 us [   529] |       sum(3, 4, 0, 4) = 5;
+//    0.394 us [   529] |       sum(3, 0, 2, 0) = 62;
+//  280.063 us [   529] |     } = 67; /* sum */
+// 
+//             [   529] |     sum(2, 4, 0, 0) {
+//    0.301 us [   529] |       sum(2, 4, 0, 4) = 13;
+//    0.220 us [   529] |       sum(2, 0, 4, 0) = 35;
+//   40.841 us [   529] |     } = 48; /* sum */
+// 
+//                          /* update minimum sum and save start point */
+// 
+//             [   529] |     sum(1, 4, 0, 0) {
+//    0.217 us [   529] |       sum(1, 4, 0, 4) = 121;
+//    0.211 us [   529] |       sum(1, 0, 16, 0) = 21;
+//   37.859 us [   529] |     } = 142; /* sum */
+// 
+//                          /* search [4,0] ends and there are updates so search again [2,4] */
+// 
+//             [   529] |     search(2, 4) {
+//    0.224 us [   529] |       sum(2, 4, 0, 4) = 13;
+// 
+//             [   529] |       sum(3, 2, 4, 0) {
+//    3.156 us [   529] |         sum(3, 2, 0, 2) = 10;
+//    0.221 us [   529] |         sum(3, 4, 2, 4) = 15;
+//   44.632 us [   529] |       } = 25; /* sum */
+// 
+//    0.208 us [   529] |       sum(2, 4, 0, 4) = 13;
+// 
+//                              /* search [2,4] ends
+//                                 add time[2, end 4], time +=2, time 2
+//                                 <13, 2> = sum(ind:2, e:4, time:0)
+//                              */
+//
+//                              /* means that start = 2 for minimul sum ! */ 
+//
+//   71.569 us [   529] |     } = 13; /* search */
+// 
+//                            /* still in search [4,0]
+//                               ind was 2, add time[2, start 4], time +=2, time 4 
+//                             */
+// 
+//    0.428 us [   529] |     sum(2, 0, 4, 0) = 35;
+// 
+//                            /* search [4,0] ends
+//                               add time[2, start 0], time +=11, time 15
+//                               <48, 15> = sum(ind:2, e:0, time:4)
+//                            */
+// 
+//  955.074 us [   529] |   } = 48; /* search */
+// 
+//                            /* still in search [0,5]
+//                               ind was 4, add time[4, start 0], time +=13, time 28 
+//                             */
+// 
+//    0.235 us [   529] |   sum(4, 5, 28, 5) = 38;
+// 
+//                            /* search [0,5] ends
+//                               add time[4, end 5], time +=10, time 38
+//                               <86, 38> sum(ind:4, e:5, time:28)
+//                            */
+// 
+//    6.085 ms [   529] | } = 86; /* search */
+// 
+//             [   529] | search(5, 0) {
+//    0.239 us [   529] |   sum(5, 0, 0, 0) = 262;
+//             [   529] |   sum(4, 5, 0, 0) {
+//    0.206 us [   529] |     sum(4, 5, 0, 5) = 10;
+//    0.223 us [   529] |     sum(4, 0, 20, 0) = 372;
+//   49.363 us [   529] |   } = 382; /* sum */
+//             [   529] |   sum(3, 5, 0, 0) {
+//    0.300 us [   529] |     sum(3, 5, 0, 5) = 16;
+//    0.295 us [   529] |     sum(3, 0, 22, 0) = 322;
+//   50.948 us [   529] |   } = 338; /* sum */
+//             [   529] |   sum(2, 5, 0, 0) {
+//    0.287 us [   529] |     sum(2, 5, 0, 5) = 25;
+//    0.305 us [   529] |     sum(2, 0, 24, 0) = 95;
+//   52.524 us [   529] |   } = 120; /* sum */
+//             [   529] |   sum(1, 5, 0, 0) {
+//    0.254 us [   529] |     sum(1, 5, 0, 5) = 139;
+//    0.249 us [   529] |     sum(1, 0, 36, 0) = 41;
+//   42.398 us [   529] |   } = 180; /* sum */
+//             [   529] |   search(2, 5) {
+//    0.223 us [   529] |     sum(2, 5, 0, 5) = 25;
+//             [   529] |     sum(3, 2, 5, 0) {
+//    0.202 us [   529] |       sum(3, 2, 0, 2) = 10;
+//    0.211 us [   529] |       sum(3, 5, 2, 5) = 28;
+//   37.587 us [   529] |     } = 38; /* sum */
+//             [   529] |     sum(4, 2, 5, 0) {
+//    0.279 us [   529] |       sum(4, 2, 0, 2) = 23;
+//    0.270 us [   529] |       sum(4, 5, 4, 5) = 14;
+//   56.792 us [   529] |     } = 37; /* sum */
+//    0.363 us [   529] |     sum(2, 5, 0, 5) = 25;
+//  657.999 us [   529] |   } = 25; /* search */
+//    0.286 us [   529] |   sum(2, 0, 24, 0) = 95;
+//  954.739 us [   529] | } = 120; /* search */
+//
+//  86 = min(86, 120)
 
-lint sum(int s, int e, lint time = 0);
-lint sum(int s1, int s2, int s3, lint time = 0);
-
-lint sum(int s, int e, lint time)
+lint sum_range(int begin, int end, lint start_distance)
 {
-  if(s == e)
-  {
+  if (begin == end)
     return 0;
-  }
-  int dx = ((e > s)? 1:-1);
-  lint res = 0;
+
+  // forward or backward
+  int direction = ((end > begin) ? 1: -1);
+
+  lint weight_sum = 0;
 
   // cout << "time: " << setw(4) << time << endl;
 
@@ -833,112 +255,116 @@ lint sum(int s, int e, lint time)
   // ----*-----*------*------*---
   //
   //               <-  e     s: abs(e-s), abs((n-2)-(n-1)), abs((n-2)-(n-1))*w[n-2]
-  //
-  // [2] no exit condition in for loop
-  //
-  for(int i = s + dx; ; i+=dx)
+  
+  for (int i = begin + direction; ; i += direction)
   {
-    // time += TIME(i, i - dx);
-    time += TIME(i-dx, i);
-    res += time*(lint)wi[i];
-    // cout << "i: " << i << " i-dx: " << i-dx 
-    //   << " xi[e]: " << xi[i-dx] << " xi[s]: " << xi[i] << " time: " << time 
-    //   << " wi[i]: " << wi[i] << " res: " << res << endl;
+    start_distance += ABS_DISTANCE(i-direction, i);
+    weight_sum += start_distance*(lint)g_weights[i];
 
-    if( i == e )
-    {
-      // cout << " sum: [" << s << " ," << e << "], sum: " << res << endl;
-      return res;
-    }
+    if (i == end)
+      return weight_sum;
   }
 
-  // cout << " sum: [" << s << " ," << e << "], sum: " << res << endl;
-  return res;
+  return weight_sum;
 }
 
-lint sum(int s1, int s2, int s3, lint time)
+
+lint sum_range_with_start(int start, int begin, int end, lint start_distance)
 {
-	// (s2 - s1)*(s3 - s1) < 0
-	lint d1 = sum(s1, s2, time);
-  cout << "+ sum: " << setw(4) << d1 << " = sum(" << s1 << ", " << s2 
-    << ", time: " << time << ")" << endl;
+	lint d1 = sum_range(start, begin, start_distance);
 
-	//lint d2 = sum(s2, s3);
-	lint d3 = sum (s1, s3, time + 2*TIME(s2, s1));
-  cout << "+ sum: " << setw(4) << d3 << " = sum(" << s1 << ", " << s3
-    << ", time: " << time + 2*TIME(s2, s1) << ")" << endl;
-
-  cout << "+ sum: " << d1+d3 << endl;
+	// why 2? since used twice to make a turn
+	lint d3 = sum_range(start, end, start_distance + 2*ABS_DISTANCE(begin, start));
 
 	return d1 + d3;
 }
 
 // search(start index, end index)
-pair<lint, lint> search(int s, int e)
+pair<lint, lint> search(int begin, int end)
 {
-  lint dMin = sum(s, e);
-  int ind = s;
+  lint current_sum = sum_range(begin, end, 0);
+  int current_start = begin;
 
-  if(s == e)
-  {
+  if(begin == end)
     return make_pair(0, 0);
-  }
-  int dx = ((e > s)? 1:-1);
 
-  lint sumT = 0;
-  lint time = 0;
+  int direction = ((end > begin)? 1:-1);
 
-  for(int i = s + dx; i != e; i += dx)
+  lint calculated_sum = 0;
+  lint calculated_distance = 0;
+
+  for (int start = begin + direction; start != end; start += direction)
   {
-    cout << "for sum(" << i << ", " << s << ", " << e << ")" << endl;
-    lint res = sum(i, s, e);
+    lint range_sum  = sum_range_with_start(start, begin, end);
 
-    if(res < dMin || res == dMin && abs(i - s) > abs(ind - s))
+    // found sum which is less than sum of [begin, end] and save start point.
+    // so `ind` is saved start which shows the minimum sum so far.
+    // 
+    // redundant check
+    // if (range_sum < current_sum && abs(start - begin) > abs(current_start - begin))
+
+    if (range_sum < current_sum)
     {
-      cout << "update: dmin:" << dMin << ", res:" << res 
-        << ", i" << i << ", s:" << s << endl;
-      dMin = res;
-      ind = i;
+
+      current_sum = range_sum;
+      current_start = start;
     }
   }
 
-  if(ind != s)
+  // when found start point which has lesser sum since current_start do not
+  // change when there is no lesser sum found in the range.
+
+  if (current_start != begin)
   {
-    cout << "search again: search(" << ind << ", " << s << ")" << endl;
-
-    pair<lint, lint> res = search(ind, s);	
-    sumT += res.first;
-    time += res.second + TIME(ind, s);		
-
-    //printf("%d->%d->%d\n", ind, s, e);
+    pair<lint, lint> result = search(current_start, begin);	
+    calculated_sum += result.first;
+    calculated_distance += result.second + ABS_DISTANCE(current_start, begin);		
   }
 
-  cout << "ind sum(ind:" << ind << ", " << e << ", time:" << time << ")" << endl;
-  sumT += sum(ind, e, time);
-  time += TIME(ind, e);
+  calculated_sum += sum_range(current_start, end, calculated_distance);
+  calculated_distance += ABS_DISTANCE(current_start, end);
 
-  return make_pair(sumT, time);
+  return make_pair(calculated_sum, calculated_distance);
 }
+
 
 TEST(XXX, XXX)
 {
-
-  vector<int> dcall{1, 6, 12, 13, 14, 24};
-  vector<int> wcall{1, 2, 10, 3, 5, 1};
-  
-  for (int i = 0; i < dcall.size(); ++i)
   {
-    xi[i] = dcall[i];
-    wi[i] = wcall[i];
+    vector<int> dcall{1, 6, 12, 13, 14, 24};
+    vector<int> wcall{1, 2, 10, 3, 5, 1};
+
+    for (size_t i = 0; i < dcall.size(); ++i)
+    {
+      g_points[i] = dcall[i];
+      g_weights[i] = wcall[i];
+    }
+
+    int N = dcall.size();
+
+    pair<lint, lint> res1 = search(0, N - 1);
+    pair<lint, lint> res2 = search(N - 1, 0);
+
+    EXPECT_THAT(min(res1.first, res2.first), 86);
   }
 
-  int N = dcall.size();
+  {
+    vector<int> dcall{5, 34, 45, 49, 51, 52, 53, 56, 63, 81, 84, 88, 93, 99, 106};
+    vector<int> wcall{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
-  pair<lint, lint> res1 = search(0, N - 1);
-  cout << "-----------------" << endl;
-  pair<lint, lint> res2 = search(N - 1, 0);
+    for (size_t i = 0; i < dcall.size(); ++i)
+    {
+      g_points[i] = dcall[i];
+      g_weights[i] = wcall[i];
+    }
 
-  cout << "min : " << min(res1.first, res2.first) << endl;
+    int N = dcall.size();
+
+    pair<lint, lint> res1 = search(0, N - 1);
+    pair<lint, lint> res2 = search(N - 1, 0);
+
+    EXPECT_THAT(min(res1.first, res2.first), 630);
+  }
 }
 
 
