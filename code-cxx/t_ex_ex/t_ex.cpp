@@ -78,7 +78,32 @@ lint sum_range_with_start(int start, int begin, int end, lint start_distance =0)
 //  direction = -1, i = 0, ABS(1,0), wi[0] 
 //  exit
 //
+//
 // running:
+//
+//  i   0    1    2     3     4     5
+// wi   1    2    10    3     5     1
+// -----+----+-----+-----+-----+-----+---
+// xi   1    6    12    13    14    24
+//      s--------------------------->   244
+//      -----s
+//      ---------------------------->   329
+//      ----------s
+//      ---------------------------->   246
+//      ----------------s
+//      ---------------------------->   196
+//      ----------------------s
+//      ---------------------------->   88
+//      ...
+//
+// 86 is made of:
+//
+//                s-----*-----*
+//      *----*----
+//                            ------*
+//
+// where * denotes points used in sum.
+//
 //
 // # DURATION     TID     FUNCTION
 //             [   529] | search(0, 5) {
@@ -221,6 +246,13 @@ lint sum_range_with_start(int start, int begin, int end, lint start_distance =0)
 //  954.739 us [   529] | } = 120; /* search */
 //
 //  86 = min(86, 120)
+//
+// Things to note:
+//
+// 1. Always calculate distance from the start point.
+// 2. Do not count point which are already counted.
+// 3. The start point do not included in the sum.
+
 
 lint sum_range(int begin, int end, lint start_distance)
 {
@@ -232,30 +264,6 @@ lint sum_range(int begin, int end, lint start_distance)
 
   lint weight_sum = 0;
 
-  // cout << "time: " << setw(4) << time << endl;
-
-  // [1] 
-  // here time is sum of absolute distance of between points and res is the sum of weighted
-  // distance.
-  //
-  // for s < e case
-  // s == 0  : i == 1,   dx == 1
-  //         TIME(0,1), abs(0-1), res = time*wi[1];
-  //
-  // for s > e case
-  // s == N-1: i == N-2, dx == -1 
-  //           TIME(N-1, N-2), res = time*wi[N-2]
-  //
-  // this is a code to implement the summation above but it is cool to use one single function for
-  // both direction. This dx variable is direction.
-  //
-  // ->  s     e: abs(e-s), abs(1-0), abs(1-0)*w[1]
-  //
-  //     0th   1th    2th    n-1 : N array
-  // ----*-----*------*------*---
-  //
-  //               <-  e     s: abs(e-s), abs((n-2)-(n-1)), abs((n-2)-(n-1))*w[n-2]
-  
   for (int i = begin + direction; ; i += direction)
   {
     start_distance += ABS_DISTANCE(i-direction, i);
