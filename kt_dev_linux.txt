@@ -48302,6 +48302,7 @@ typedef struct
 
 } GUIDE_AsyncCallbackStruct;
 
+// global
 static GUIDE_AsyncCallbackStruct f_planner_window_cond;
 
 // async call
@@ -48322,15 +48323,20 @@ SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
   }
 
   // register callback
-  GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow(l_planner_session,
-      GuideProgrammeInstanceBookingPropsListener);
+  GUIDE_Int_PLANNER_API_Session_RetrieveProgInstBookingPropsInTimeWindow
+    (l_planner_session, GuideProgrammeInstanceBookingPropsListener);
 
   // wait on condition
   GuideWaitForAsyncCallback(&f_planner_window_cond);
   {
-    while ((asyncCallbackStruct->response_received == false) && (sys_status == SYSTEMUTIL_STATUS_OK))
+    // note:
+    // uses `predicate` which is part of global structure
+
+    while ((asyncCallbackStruct->response_received == false) 
+        && (sys_status == SYSTEMUTIL_STATUS_OK))
     {
-      sys_status = SYSTEMUTIL_SYNC_CondTimedWait(&asyncCallbackStruct->cond, &asyncCallbackStruct->mutex, &timeout_value);
+      sys_status = SYSTEMUTIL_SYNC_CondTimedWait(&asyncCallbackStruct->cond, 
+          &asyncCallbackStruct->mutex, &timeout_value);
     }
 
     SYSTEMUTIL_THR_MutexUnlock(&asyncCallbackStruct->mutex));
@@ -48348,6 +48354,10 @@ static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_
       asyncCallbackStruct->response_received = true;      // set predicate
 
       /* Signal the condition variable */
+
+      // use `pthread_cond_signal`(&cond->cond)); compared to
+      // SYSTEM_STATUS SYSTEMUTIL_SYNC_CondBroadcast(SYSTEMUTIL_SYNC_Cond_t* cond);
+
       if (SYSTEMUTIL_STATUS_OK!=SYSTEMUTIL_SYNC_CondSignal(&asyncCallbackStruct->cond));
 
       /* Unlock iterator_callback_mutex */
@@ -48355,6 +48365,7 @@ static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_
     }
   }
 }
+
 
 Looks fine on the face of it. However, the issue is that timeout happens when
 calls this function multiple times in a very short time space. 
@@ -48433,7 +48444,7 @@ The log shows:
 ^[2018:02:02 07:33:12]0946740110.953873 !WARN   -G_Sess       		< F:GuideWaitForAsyncCallback L:2398 > SYSTEMUTIL_SYNC_CondTimedWait() FAILED sys_status=0x11c2100d 
 
 
-{signal-can-be-lost} wake-up-issue
+{linux-sync-cond-signal-can-be-lost} wake-up-issue
 A condition variable holds `no state information.` It is simply a mechanism
 for communicating information about the application's state. 
 
@@ -48443,11 +48454,35 @@ signaled, then the signal is lost.
 A thread that later waits on the condition variable will unblock only when the
 variable is signaled once more.
 
-
 Solution?
 
 * Use broadcast?
 * Use something to remember events such as queue?
+
+// delivered fix
+// async call
+
+SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
+{
+  // wait on `predicate` which is not global and is an instance of each
+  // session
+
+  while (l_request_handle != request_object_data->request.cached_window.proginst_list_request_handle)
+  {
+    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_SYNC_CondTimedWait(&f_planner_window_cond.cond, &f_planner_window_cond.mutex, &timeout_value))
+    {
+      DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED"));
+      l_status = GUIDE_API_STATUS_FAILED;
+      break;
+    }
+  }
+}
+
+// callback
+static void GuideProgrammeInstanceBookingPropsListener(PLANNER_API_UserTag user_tag)
+{
+  request_data->request.cached_window.proginst_list_request_handle = user_tag;
+}
 
 
 ={============================================================================
@@ -49043,7 +49078,7 @@ to:
     g_mutex_unlock(&writer->mutex);
 
 
-<use-cond-on-wait-side> <spurious-wakeups>
+<use-cond-on-wait-side> <linux-sync-cond-spurious-wakeups>
 
 30.2.3 Testing a Condition Variable’s Predicate
 

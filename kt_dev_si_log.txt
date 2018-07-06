@@ -2031,6 +2031,7 @@ mgrep.py "KEY_PRESS|doOpenScreen|ScreenSeen|Showing dialog|NCM_SERVER|NETWORK|on
 
 mgrep.py "KEY_PRESS|NCM_SERVER|NETWORK|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR_REQ_SPM|DLM_NetworkStatus_Listener_Main|DLM_SVR_Net_Interface_|DLM_SVR_Dispatch_spm_Status|DLM_SVR_Net_Handle_Interfaces"
 
+
 // calls Post_SPM_Event()
 
 static SYSTEM_STATUS DLM_SVR_SPM_Check_NetworkStatus(void)
@@ -2059,13 +2060,122 @@ static void DLM_NetworkStatus_Listener_Main(SPM_API_Network_MainStatus l_status,
 
 
 <x>
-http://theyard.cisco.com/si_logs/translation/darwin_0019fbd5e59a_0964930e46f81ed3afe70bd414be9f8f/index.html
 
 http://theyard.cisco.com/si_logs/translation/darwin_783e5304c6cd_12985a70990dfa0cc21e64caf87140d8/index.html
 
 // from my box to compare
 // 88.15.00_6100_MNTEE
 darwin_0019fbf2d46b_ff0aa2d7ae29276256c87b4805569e09.tgz
+
+
+http://theyard.cisco.com/si_logs/translation/darwin_0019fbd5e59a_0964930e46f81ed3afe70bd414be9f8f/index.html
+
+NDS: ^[2018:07:05 08:58:40]0946684911.166740 !ERROR  -SPM_COMMON   		< p:0x000001fa P:MW t:0x0220e520 T:DLM_HANDLEEVENTS M:spm_common.c F:SPM_COMMON_waitOnCondition L:622 > SYSTEMUTIL_SYNC_CondTimedWait failed with status: 0x11c2100d 
+NDS: ^[2018:07:05 08:58:40]0946684911.166845 !EXIT   -SPM_CLIENT   		< p:0x000001fa P:MW t:0x0220e520 T:DLM_HANDLEEVENTS M:spm_client_msg.c F:SPM_CLIENT_MSG_waitForServerEvent L:951 > <-| SPM_CLIENT_MSG_waitForServerEvent : return_status = 0xdc20001
+== 2517:NDS: ^[2018:07:05 08:58:40]0946684911.166861 !WARN   -SPM_CLIENT   		< p:0x000001fa P:MW t:0x0220e520 T:DLM_HANDLEEVENTS M:spm_client_network.c F:SPM_API_Network_GetMainStatus L:3077 > Returning default main status SPM_API_NETWORK_MAIN_CONFIG_UNSET 
+
+== 2520:NDS: ^[2018:07:05 08:58:40]0946684911.166909 !INFO   -DLM_SVR      		< p:0x000001fa P:MW t:0x0220e520 T:DLM_HANDLEEVENTS M:dlm_mqp_svr_evt_handler.c F:DLM_SVR_Post_SPM_Event L:1340 > Post DLM_SVR_REQ_SPM event, event = 0x4 
+== 2526:NDS: ^[2018:07:05 08:58:40]0946684911.167053 !INFO   -DLM_SVR      		< p:0x000001fa P:MW t:0x0220e520 T:DLM_HANDLEEVENTS M:dlm_mqp_svr_evt_handler.c F:DLM_SVR_Post_SPM_Event L:1340 > Post DLM_SVR_REQ_SPM event, event = 0x6 
+
+
+// global
+/* sync Context for waiting to network ready */
+SPM_CLIENT_MODULE_SYNC_CONTEXT f_syncContextNetworkReady;
+
+/** @brief Get Network Main connection status.
+  *
+  * @param[out] l_value Pointer to a SPM_API_Network_MainStatus variable in which to store the result.
+  *
+  * @retval #SPM_API_STATUS_OK Status successfully returned.
+  * @retval #SPM_API_STATUS_ERROR Failed to return Network connection status.
+  *
+  * Gets Network Main connection status.
+  */
+SYSTEM_STATUS SPM_API_Network_GetMainStatus(SPM_API_Network_MainStatus *l_value)
+{
+    SYSTEM_STATUS status = SPM_API_STATUS_ERROR;
+    SPM_COMMON_IPC_MESSAGE message;
+    SPM_CONFIG_STRUCT *spm_config;
+
+    SPM_CLIENT_DIAG_LOG_FN_ENTRY(("SPM_API_Network_GetMainStatus"));
+
+    memset(&message, 0, (uint32_t)sizeof(SPM_COMMON_IPC_MESSAGE));
+
+    (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_API_NETWORK_mutex);
+
+    spm_config = SPM_COMMON_GetConfig();
+
+    f_syncContextNetworkReady.timeout = spm_config->main_and_ethernet_status_timeout;
+    /* check if the ClientId is arrived...if not wait */
+    if (SPM_CLIENT_MSG_waitForClientId() != SPM_API_STATUS_OK)
+    {
+        SPM_CLIENT_DIAG_LOG_ERROR(("Error in acquiring the Client Id"));
+    }
+
+    // note: uses global predicate
+
+    /* Wait for network to become ready */
+    else if(SPM_CLIENT_MSG_waitForServerEvent(&`f_syncContextNetworkReady`, false) != SPM_API_STATUS_OK)  /* wait only if needed */
+    {
+        SPM_CLIENT_DIAG_LOG_WARN(("Returning default main status SPM_API_NETWORK_MAIN_CONFIG_UNSET"));
+        *l_value = SPM_API_NETWORK_MAIN_CONFIG_UNSET;
+        status = SPM_API_STATUS_OK;
+    }
+    else
+    {
+        message.event = SPM_CLIENT2SERVER_EVENT_NETWORK_GET_MAIN_STATUS;
+        if (SPM_CLIENT_MSG_waitForServer(&f_syncContextServer, &message ) != SPM_API_STATUS_OK)
+        {
+            SPM_CLIENT_DIAG_LOG_ERROR(("SPM_CLIENT_MSG_waitForServer failed"));
+        }
+        else
+        {
+            (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_Network_StaticData_mutex);
+
+            *l_value = f_main_status;
+            status = f_syncContextServer.lastResponse;
+            SPM_CLIENT_DIAG_LOG_INFO(("Returning main status = 0x%X, result of function = 0x%X", f_main_status, status));
+
+            (void)SYSTEMUTIL_THR_MutexUnlock(&f_SPM_Network_StaticData_mutex);
+        }
+    }
+
+    f_syncContextNetworkReady.timeout = 0U; /* set zero in order to wait default timeout */
+    (void)SYSTEMUTIL_THR_MutexUnlock(&f_SPM_API_NETWORK_mutex);
+
+    SPM_CLIENT_DIAG_LOG_FN_EXIT(status);
+    return status;
+}
+
+void SPM_CLIENT_MSG_signalSrvResponse(SPM_CLIENT_MODULE_SYNC_CONTEXT* syncContext,
+                                      SYSTEM_STATUS serverResponse)
+{
+    SPM_CLIENT_DIAG_LOG_FN_ENTRY(("SPM_CLIENT_MSG_signalSrvResponse"));
+
+    (void)SYSTEMUTIL_THR_MutexLock(&(syncContext->mutex));
+
+    syncContext->lastResponse = serverResponse;
+    `syncContext->predicate = true;`
+
+    if (SYSTEMUTIL_SYNC_CondBroadcast(&syncContext->cond) != SYSTEMUTIL_STATUS_OK)
+    {
+        SPM_CLIENT_DIAG_LOG_ERROR(("SYSTEMUTIL_SYNC_CondBroadcast failed"));
+    }
+
+    (void)SYSTEMUTIL_THR_MutexUnlock(&(syncContext->mutex));
+
+    SPM_CLIENT_DIAG_LOG_FN_EXIT(0U);
+}
+
+                SPM_CLIENT_MSG_signalSrvResponse(&f_syncContextNetworkReady, SPM_API_STATUS_OK);
+
+
+NDS: ^[2018:07:03 08:36:42]0946684903.943359 !INFO   -SPM_CLIENT   		< p:0x00000211 P:APP t:0x01278520 T:SPM_CLIENT M:spm_client_network.c F:SPM_CLIENT_Network_ProcessAsynchronousExternalMessage L:1063 > Network ready, is_back_channel_active = 0x3, f_failed_subtest=0 
+NDS: ^[2018:07:03 08:36:42]0946684903.943372 !ENTER  -SPM_CLIENT   		< p:0x00000211 P:APP t:0x01278520 T:SPM_CLIENT M:spm_client_msg.c F:SPM_CLIENT_MSG_signalSrvResponse L:1001 > |-> SPM_CLIENT_MSG_signalSrvResponse
+NDS: ^[2018:07:03 08:36:42]0946684903.943390 !EXIT   -SPM_CLIENT   		< p:0x00000211 P:APP t:0x01278520 T:SPM_CLIENT M:spm_client_msg.c F:SPM_CLIENT_MSG_signalSrvResponse L:1015 > <-| SPM_CLIENT_MSG_signalSrvResponse : return_status = 0x0
+NDS: ^[2018:07:03 08:36:37]0946684898.394261 !ENTER  -SPM_CLIENT   		< p:0x0000020f P:MW t:0x0220b520 T:DLM_HANDLEEVENTS M:spm_client_network.c F:SPM_API_Network_GetMainStatus L:3060 > |-> SPM_API_Network_GetMainStatus
+
+mgrep.py "KEY_PRESS|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR_REQ_SPM|DLM_NetworkStatus_Listener_Main|SPM_CLIENT_Network_ProcessAsynchronousExternalMessage|SPM_CLIENT_MSG_signalSrvResponse|SPM_API_Network_GetMainStatus"
 
 
 ={============================================================================
