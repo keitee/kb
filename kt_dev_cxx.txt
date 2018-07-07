@@ -89,6 +89,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-op-conditional (the ?: operator)
 *kt_dev_cxx_0000* cxx-code-style
 *kt_dev_cxx_0000* cxx-code-style-bracing-allman
+*kt_dev_cxx_0000* cxx-code-deep-nested-if
 
 *kt_dev_cxx_0000* cxx-reference
 *kt_dev_cxx_0000* cxx-oop
@@ -9888,6 +9889,16 @@ google-awesome-project/src/foo/internal/fooserver.cc
 #include "base/commandlineflags.h"
 #include "foo/server/bar.h"
 
+<ex> other exmple
+
+Included headers ordering but I think a nice and consistent way of including
+them is as all alphabetically in each group:
+
+local project headers
+3PS library headers
+OS specific headers
+standard headers
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-code-style-bracing-allman
@@ -10025,15 +10036,56 @@ int main(int argc, char *argv[])
 
 
 ={============================================================================
-*kt_dev_lang_018* style-order-of-header
+*kt_dev_cxx_0000* cxx-code-deep-nested-if
 
-Included headers ordering but I think a nice and consistent way of including
-them is as all alphabetically in each group:
+CodeComplete 17.1
 
-local project headers
-3PS library headers
-OS specific headers
-standard headers
+the problem of deep nested if
+
+<ex> from real code
+
+SYSTEM_STATUS SPM_API_Network_GetMainStatus(SPM_API_Network_MainStatus *l_value)
+{
+  SYSTEM_STATUS status = SPM_API_STATUS_ERROR;
+
+  f_syncContextNetworkReady.timeout = spm_config->main_and_ethernet_status_timeout;
+
+  /* check if the ClientId is arrived...if not wait */
+  if (SPM_CLIENT_MSG_waitForClientId() != SPM_API_STATUS_OK)
+  {
+    SPM_CLIENT_DIAG_LOG_ERROR(("Error in acquiring the Client Id"));
+  }
+  /* Wait for network to become ready */
+  else if(SPM_CLIENT_MSG_waitForServerEvent(&f_syncContextNetworkReady, false) 
+      != SPM_API_STATUS_OK)  /* wait only if needed */
+  {
+    SPM_CLIENT_DIAG_LOG_WARN(("Returning default main status SPM_API_NETWORK_MAIN_CONFIG_UNSET"));
+    *l_value = SPM_API_NETWORK_MAIN_CONFIG_UNSET;
+    status = SPM_API_STATUS_OK;
+  }
+  else
+  {
+    message.event = SPM_CLIENT2SERVER_EVENT_NETWORK_GET_MAIN_STATUS;
+    if (SPM_CLIENT_MSG_waitForServer(&f_syncContextServer, &message ) 
+        != SPM_API_STATUS_OK)
+    {
+      SPM_CLIENT_DIAG_LOG_ERROR(("SPM_CLIENT_MSG_waitForServer failed"));
+    }
+    else
+    {
+      (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_Network_StaticData_mutex);
+
+      *l_value = f_main_status;
+      status = f_syncContextServer.lastResponse;
+      SPM_CLIENT_DIAG_LOG_INFO(("Returning main status = 0x%X, result of function = 0x%X", 
+            f_main_status, status));
+
+      (void)SYSTEMUTIL_THR_MutexUnlock(&f_SPM_Network_StaticData_mutex);
+    }
+  }
+
+  return status;
+}
 
 
 # ============================================================================
