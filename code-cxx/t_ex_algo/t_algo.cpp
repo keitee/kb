@@ -795,6 +795,87 @@ TEST(AlgoLongestSequence, FindLongestSequenceBetterFail)
 
 
 // ={=========================================================================
+// algo-grade
+
+// F: 60 > score
+// D: 70 >
+// C: 80 >
+// B: 90 >
+// A: 100 >
+//
+// plus '+' for 8, 9 and '-' for 0,1,2 for each grade
+
+vector<string> grade_scores(const vector<int> scores)
+{
+  const vector<string> grade_table{"F", "D", "C", "B", "A"};
+  vector<string> result;
+  string grade{};
+
+  for (auto e : scores)
+  {
+    if (e < 60)
+      result.push_back(grade_table[0]);
+    else
+    {
+      grade.clear();
+
+      int band = (e - 50)/10;
+      grade = grade_table[band];
+
+      int plus_or_minus = (e - 50)%10;
+      if (plus_or_minus <3)
+        grade += "-";
+      else if (plus_or_minus > 7)
+        grade += "+";
+
+      result.push_back(grade);
+    }
+  }
+
+  return result;
+}
+
+vector<string> grade_scores_model(const vector<int> scores)
+{
+  const vector<string> grade_table{"F", "D", "C", "B", "A"};
+  vector<string> result;
+  string grade{};
+
+  for (auto e : scores)
+  {
+    if (e < 60)
+      result.push_back(grade_table[0]);
+    else
+    {
+      grade.clear();
+
+      grade = grade_table[(e - 50)/10];
+
+      int plus_or_minus = e % 10;
+      if (plus_or_minus <3)
+        grade += "-";
+      else if (plus_or_minus > 7)
+        grade += "+";
+
+      result.push_back(grade);
+    }
+  }
+
+  return result;
+}
+
+TEST(AlgoGrade, FindLongestSequenceBetterFail)
+{
+    const vector<int> coll{54, 60, 62, 66, 68, 71, 73, 78, 89, 98};
+    EXPECT_THAT(grade_scores(coll), 
+            ElementsAre("F", "D-", "D-","D", "D+","C-", "C", "C+", "B+", "A+"));
+
+    EXPECT_THAT(grade_scores_model(coll), 
+            ElementsAre("F", "D-", "D-","D", "D+","C-", "C", "C+", "B+", "A+"));
+}
+
+
+// ={=========================================================================
 // algo-intersect find if rectangles intersect
 //
 // from ANSIC 130. Handles point rather than each value.

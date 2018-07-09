@@ -48277,7 +48277,7 @@ ETIMEDOUT.
   engages in condition. There is a consumer which waits first.
 
 <lpi-example>
-* Use one mutex for producers and consumer.
+* Use one mutex for many producers and single consumer.
  
 * Producers send a signal when produce each item and single consumer reads as
   many items as items are available.
@@ -48315,11 +48315,11 @@ SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
    * other. 
    */
 
-  // lock
+  // note: lock and clear predicate
   GuidePrepareForAsyncCallback(&f_planner_window_cond)
   { 
     SYSTEMUTIL_THR_MutexLock(&asyncCallbackStruct->mutex); 
-    asyncCallbackStruct->response_received = false;         // clear predicate
+    asyncCallbackStruct->response_received = false;
   }
 
   // register callback
@@ -48459,17 +48459,25 @@ Solution?
 * Use broadcast?
 * Use something to remember events such as queue?
 
-// delivered fix
-// async call
+
+// delivered fix which makes predicate an entry per session and this is not
+// global. 
+//
+// What may happen here is that since predicate was global, when it's signed
+// and waiting thread waked up, there is no gurantee that predicate is true
+// and waiting thread waits again and timeout happens. This is the same effect
+// as signal lost. Might say signal is swallowed. 
 
 SYSTEM_STATUS GUIDE_API_ProgrammeInstance_GetBookingProperties()
 {
   // wait on `predicate` which is not global and is an instance of each
   // session
 
-  while (l_request_handle != request_object_data->request.cached_window.proginst_list_request_handle)
+  while (l_request_handle != 
+      request_object_data->request.cached_window.proginst_list_request_handle)
   {
-    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_SYNC_CondTimedWait(&f_planner_window_cond.cond, &f_planner_window_cond.mutex, &timeout_value))
+    if (SYSTEMUTIL_STATUS_OK != SYSTEMUTIL_SYNC_CondTimedWait
+        (&f_planner_window_cond.cond, &f_planner_window_cond.mutex, &timeout_value))
     {
       DIAG_LOG_WARN(g_guide_diag_segment_id, ("SYSTEMUTIL_SYNC_CondTimedWait() FAILED"));
       l_status = GUIDE_API_STATUS_FAILED;
@@ -48504,7 +48512,10 @@ represent the number of produced units awaiting consumption
    condition variable.
 */
 
+// *sync-cond-predicate* which is global
 static int avail = 0;
+
+// producer
 
 static void *
 threadFunc(void *arg)
@@ -48580,7 +48591,7 @@ main(int argc, char *argv[])
 }
 
 
-The above code works, but it wastes CPU time, because the main thread
+The above code works, but it wastes CPU time, because the main consumer thread
 continually loops, checking the state of the variable avail.
 
 A condition variable remedies this and allows a thread to sleep (wait) until
@@ -48650,7 +48661,7 @@ main(int argc, char *argv[])
     if (s != 0)
       errExitEN(s, "pthread_mutex_lock");
 
-    // *linux-sync-cond-spurious-wakeup*
+    // *linux-sync-cond-spurious-wakeup* sync-cond-predicate
     // We explain why the pthread_cond_wait() call is placed within a while
     // loop rather than an if statement
 
@@ -49083,7 +49094,7 @@ to:
 30.2.3 Testing a Condition Variable’s Predicate
 
 Each condition variable has an associated `predicate` involving one or more
-shared variables. In these example, nready.ready == 0  and (avail == 0) are
+`shared variables.` In these example, nready.ready == 0  and (avail == 0) are
 the predicate.
 
 This demonstrates a general design principle: a pthread_cond_wait() call must
