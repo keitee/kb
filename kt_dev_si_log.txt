@@ -2054,6 +2054,7 @@ darwin_0019fbf2d46b_ff0aa2d7ae29276256c87b4805569e09.tgz
 http://theyard.cisco.com/si_logs/translation/darwin_0019fbd5e59a_0964930e46f81ed3afe70bd414be9f8f/index.html
 
 mgrep.py "KEY_PRESS|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR_REQ_SPM|DLM_NetworkStatus_Listener_Main|SPM_API_Network_GetMainStatus|SPM_COMMON_waitOnCondition|Moving component (SPM_SERVER|NCM|DLM_SERVER)|KT|SPM_CLIENT_Network_CallMainListeners|SPM_NCM_Event|f_main_status" LOGlastrun_realtime_9f8f > 9f8f.nds
+mgrep.py "KEY_PRESS|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR_REQ_SPM|DLM_NetworkStatus_Listener_Main|SPM_API_Network_GetMainStatus|SPM_COMMON_waitOnCondition|Moving component (SPM_SERVER|NCM|DLM_SERVER)|SPM_CLIENT_Network_CallMainListeners|SPM_NCM_Event|f_main_status|download_queue_resume_error" LOGlastrun_realtime_9f8f > 9f8f.nds
 
 412:NDS: ^[2018:07:05 08:58:28]0946684899.532106 !MIL    -SYSINIT_S             < p:0x000001f7 P:SCD t:0x00620530 T:IPC_WRAPPER_THREAD M:state_machine.c F:runLevelNotificationCallback L:311 > 
   ENDING   Moving component NCM to runlevel ACTIVE.
@@ -2107,112 +2108,114 @@ mgrep.py "KEY_PRESS|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR
   NETSET 0 - CTM_READY 0 - SYSTEMTIME 1 - NETCHANGED 0 
 
 
-// global
-
-/* sync Context for waiting to network ready */
-typedef struct SPM_CLIENT_MODULE_SYNC_CONTEXT_
-{
-    SYSTEMUTIL_SYNC_Cond_t cond;   /* Cond Variable used for wait */
-    SYSTEMUTIL_THR_Mutex_t mutex;  /* Mutex used for wait */
-    bool predicate;                /* Predicate used for wait*/
-    uint32_t timeout;              /* Time to wait for response. if set to 0U, use default value */
-    uint32_t lastResponse;         /* Store the last response status from server */
-} SPM_CLIENT_MODULE_SYNC_CONTEXT;
-
-SPM_CLIENT_MODULE_SYNC_CONTEXT f_syncContextNetworkReady;
-
-// DARWIN_PLATFORM/DARWIN_SPM/src/client/spm_client_network.c
-
-/** @brief Get Network Main connection status.
-  *
-  * @param[out] l_value Pointer to a SPM_API_Network_MainStatus variable in which to store the result.
-  *
-  * @retval #SPM_API_STATUS_OK Status successfully returned.
-  * @retval #SPM_API_STATUS_ERROR Failed to return Network connection status.
-  *
-  * Gets Network Main connection status.
-  */
-SYSTEM_STATUS SPM_API_Network_GetMainStatus(SPM_API_Network_MainStatus *l_value)
-{
-    SYSTEM_STATUS status = SPM_API_STATUS_ERROR;
-    SPM_COMMON_IPC_MESSAGE message;
-    SPM_CONFIG_STRUCT *spm_config;
-
-    SPM_CLIENT_DIAG_LOG_FN_ENTRY(("SPM_API_Network_GetMainStatus"));
-
-    memset(&message, 0, (uint32_t)sizeof(SPM_COMMON_IPC_MESSAGE));
-
-    (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_API_NETWORK_mutex);
-
-    spm_config = SPM_COMMON_GetConfig();
-
-    f_syncContextNetworkReady.timeout = spm_config->main_and_ethernet_status_timeout;
-    /* check if the ClientId is arrived...if not wait */
-    if (SPM_CLIENT_MSG_waitForClientId() != SPM_API_STATUS_OK)
-    {
-        SPM_CLIENT_DIAG_LOG_ERROR(("Error in acquiring the Client Id"));
-    }
-
-    // note: uses global predicate, clear predicate and wait on
-
-    /* Wait for network to become ready */
-    else if(SPM_CLIENT_MSG_waitForServerEvent(&`f_syncContextNetworkReady`, false) != SPM_API_STATUS_OK)  /* wait only if needed */
-    {
-        SPM_CLIENT_DIAG_LOG_WARN(("Returning default main status SPM_API_NETWORK_MAIN_CONFIG_UNSET"));
-        *l_value = SPM_API_NETWORK_MAIN_CONFIG_UNSET;
-        status = SPM_API_STATUS_OK;
-    }
-    else
-    {
-        message.event = SPM_CLIENT2SERVER_EVENT_NETWORK_GET_MAIN_STATUS;
-        if (SPM_CLIENT_MSG_waitForServer(&f_syncContextServer, &message ) != SPM_API_STATUS_OK)
-        {
-            SPM_CLIENT_DIAG_LOG_ERROR(("SPM_CLIENT_MSG_waitForServer failed"));
-        }
-        else
-        {
-            (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_Network_StaticData_mutex);
-
-            *l_value = f_main_status;
-            status = f_syncContextServer.lastResponse;
-            SPM_CLIENT_DIAG_LOG_INFO(("Returning main status = 0x%X, result of function = 0x%X", f_main_status, status));
-
-            (void)SYSTEMUTIL_THR_MutexUnlock(&f_SPM_Network_StaticData_mutex);
-        }
-    }
-
-    f_syncContextNetworkReady.timeout = 0U; /* set zero in order to wait default timeout */
-    (void)SYSTEMUTIL_THR_MutexUnlock(&f_SPM_API_NETWORK_mutex);
-
-    SPM_CLIENT_DIAG_LOG_FN_EXIT(status);
-    return status;
-}
-
-void SPM_CLIENT_MSG_signalSrvResponse(SPM_CLIENT_MODULE_SYNC_CONTEXT* syncContext,
-                                      SYSTEM_STATUS serverResponse)
-{
-    SPM_CLIENT_DIAG_LOG_FN_ENTRY(("SPM_CLIENT_MSG_signalSrvResponse"));
-
-    (void)SYSTEMUTIL_THR_MutexLock(&(syncContext->mutex));
-
-    syncContext->lastResponse = serverResponse;
-    `syncContext->predicate = true;`
-
-    if (SYSTEMUTIL_SYNC_CondBroadcast(&syncContext->cond) != SYSTEMUTIL_STATUS_OK)
-    {
-        SPM_CLIENT_DIAG_LOG_ERROR(("SYSTEMUTIL_SYNC_CondBroadcast failed"));
-    }
-
-    (void)SYSTEMUTIL_THR_MutexUnlock(&(syncContext->mutex));
-
-    SPM_CLIENT_DIAG_LOG_FN_EXIT(0U);
-}
-
-                SPM_CLIENT_MSG_signalSrvResponse(&f_syncContextNetworkReady, SPM_API_STATUS_OK);
+// // global
+// 
+// /* sync Context for waiting to network ready */
+// typedef struct SPM_CLIENT_MODULE_SYNC_CONTEXT_
+// {
+//     SYSTEMUTIL_SYNC_Cond_t cond;   /* Cond Variable used for wait */
+//     SYSTEMUTIL_THR_Mutex_t mutex;  /* Mutex used for wait */
+//     bool predicate;                /* Predicate used for wait*/
+//     uint32_t timeout;              /* Time to wait for response. if set to 0U, use default value */
+//     uint32_t lastResponse;         /* Store the last response status from server */
+// } SPM_CLIENT_MODULE_SYNC_CONTEXT;
+// 
+// SPM_CLIENT_MODULE_SYNC_CONTEXT f_syncContextNetworkReady;
+// 
+// // DARWIN_PLATFORM/DARWIN_SPM/src/client/spm_client_network.c
+// 
+// /** @brief Get Network Main connection status.
+//   *
+//   * @param[out] l_value Pointer to a SPM_API_Network_MainStatus variable in which to store the result.
+//   *
+//   * @retval #SPM_API_STATUS_OK Status successfully returned.
+//   * @retval #SPM_API_STATUS_ERROR Failed to return Network connection status.
+//   *
+//   * Gets Network Main connection status.
+//   */
+// SYSTEM_STATUS SPM_API_Network_GetMainStatus(SPM_API_Network_MainStatus *l_value)
+// {
+//     SYSTEM_STATUS status = SPM_API_STATUS_ERROR;
+//     SPM_COMMON_IPC_MESSAGE message;
+//     SPM_CONFIG_STRUCT *spm_config;
+// 
+//     SPM_CLIENT_DIAG_LOG_FN_ENTRY(("SPM_API_Network_GetMainStatus"));
+// 
+//     memset(&message, 0, (uint32_t)sizeof(SPM_COMMON_IPC_MESSAGE));
+// 
+//     (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_API_NETWORK_mutex);
+// 
+//     spm_config = SPM_COMMON_GetConfig();
+// 
+//     f_syncContextNetworkReady.timeout = spm_config->main_and_ethernet_status_timeout;
+//     /* check if the ClientId is arrived...if not wait */
+//     if (SPM_CLIENT_MSG_waitForClientId() != SPM_API_STATUS_OK)
+//     {
+//         SPM_CLIENT_DIAG_LOG_ERROR(("Error in acquiring the Client Id"));
+//     }
+// 
+//     // note: uses global predicate, clear predicate and wait on
+// 
+//     /* Wait for network to become ready */
+//     else if(SPM_CLIENT_MSG_waitForServerEvent(&`f_syncContextNetworkReady`, false) != SPM_API_STATUS_OK)  /* wait only if needed */
+//     {
+//         SPM_CLIENT_DIAG_LOG_WARN(("Returning default main status SPM_API_NETWORK_MAIN_CONFIG_UNSET"));
+//         *l_value = SPM_API_NETWORK_MAIN_CONFIG_UNSET;
+//         status = SPM_API_STATUS_OK;
+//     }
+//     else
+//     {
+//         message.event = SPM_CLIENT2SERVER_EVENT_NETWORK_GET_MAIN_STATUS;
+//         if (SPM_CLIENT_MSG_waitForServer(&f_syncContextServer, &message ) != SPM_API_STATUS_OK)
+//         {
+//             SPM_CLIENT_DIAG_LOG_ERROR(("SPM_CLIENT_MSG_waitForServer failed"));
+//         }
+//         else
+//         {
+//             (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_Network_StaticData_mutex);
+// 
+//             *l_value = f_main_status;
+//             status = f_syncContextServer.lastResponse;
+//             SPM_CLIENT_DIAG_LOG_INFO(("Returning main status = 0x%X, result of function = 0x%X", f_main_status, status));
+// 
+//             (void)SYSTEMUTIL_THR_MutexUnlock(&f_SPM_Network_StaticData_mutex);
+//         }
+//     }
+// 
+//     f_syncContextNetworkReady.timeout = 0U; /* set zero in order to wait default timeout */
+//     (void)SYSTEMUTIL_THR_MutexUnlock(&f_SPM_API_NETWORK_mutex);
+// 
+//     SPM_CLIENT_DIAG_LOG_FN_EXIT(status);
+//     return status;
+// }
+// 
+// void SPM_CLIENT_MSG_signalSrvResponse(SPM_CLIENT_MODULE_SYNC_CONTEXT* syncContext,
+//                                       SYSTEM_STATUS serverResponse)
+// {
+//     SPM_CLIENT_DIAG_LOG_FN_ENTRY(("SPM_CLIENT_MSG_signalSrvResponse"));
+// 
+//     (void)SYSTEMUTIL_THR_MutexLock(&(syncContext->mutex));
+// 
+//     syncContext->lastResponse = serverResponse;
+//     `syncContext->predicate = true;`
+// 
+//     if (SYSTEMUTIL_SYNC_CondBroadcast(&syncContext->cond) != SYSTEMUTIL_STATUS_OK)
+//     {
+//         SPM_CLIENT_DIAG_LOG_ERROR(("SYSTEMUTIL_SYNC_CondBroadcast failed"));
+//     }
+// 
+//     (void)SYSTEMUTIL_THR_MutexUnlock(&(syncContext->mutex));
+// 
+//     SPM_CLIENT_DIAG_LOG_FN_EXIT(0U);
+// }
 
 
-
-mgrep.py "KEY_PRESS|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR_REQ_SPM|DLM_NetworkStatus_Listener_Main|SPM_API_Network_GetMainStatus|SPM_COMMON_waitOnCondition"
+//     {"SPM_NETWORK",              "NETWORK_TEST_ABORT_ON_FAILURE",  &f_spm_config.network_test_abort_on_failure,         SPM_COMMON_CONFIG_ENTRY_TYPE_BOOL},
+// 
+// -sh-3.2# grep MAIN_AND_ETHERNET_STATUS_TIMEOUT spm.cfg | more
+// MAIN_AND_ETHERNET_STATUS_TIMEOUT=1
+// 
+//  * @param[in] timeout how long to wait in seconds
 
 
 <c228> from mine and okay case to compare
@@ -2248,6 +2251,12 @@ mgrep.py "KEY_PRESS|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR
 2921:NDS: ^[2018:07:09 10:15:00]0946684917.011403 !ERROR  -DLM_SVR      		< p:0x00000224 P:MW t:0x02184520 T:SPM_CLIENT M:dlm_mqp_server.c F:DLM_NetworkStatus_Listener_Main L:1745 > KT: DLM_SVR_Post_SPM_Event(6) 
 
 
+// static SYSTEM_STATUS DLM_SVR_Activate(void)
+// static SYSTEM_STATUS DLM_SPM_Init(void)
+// 		if (DLM_API_STATUS_OK != DLM_SPM_Register())
+//         if (DLM_API_STATUS_OK != DLM_SVR_SPM_Check_NetworkStatus())
+//
+// DARWIN_PLATFORM/DARWIN_DLM/src/dlm_server/dlm_mqp_server.c
 // calls Post_SPM_Event()
 
 static SYSTEM_STATUS DLM_SVR_SPM_Check_NetworkStatus(void)
@@ -2394,7 +2403,6 @@ SPM_HSM_EVENT_IDX SPM_Network_Handle_GNSV6 (void)
 2312:NDS: ^[2018:07:05 08:58:40]0946684911.087835 !INFO   -SPM_NETWORK  		< p:0x000001fa P:MW t:0x020bc520 T:SPM_DISPATCHER M:spm_network.c F:SPM_Network_Handle_GNS L:5254 
   > Received NCM_SESSION_EVENT_TYPE_GLOBAL_NET_SET event, f_main_status = 1 
 
-"KEY_PRESS|DLM_SVR_QSM_DisplayQueueState|DLM_SVR_DisplayAllCond|DLM_SVR_REQ_SPM|DLM_NetworkStatus_Listener_Main|SPM_API_Network_GetMainStatus|SPM_COMMON_waitOnCondition|Moving component SPM_SERVER|KT|SPM_CLIENT_Network_CallMainListeners|SPM_NCM_Event|f_main_status" LOGlastrun_realtime_c228
 
 
 ={============================================================================
