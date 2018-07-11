@@ -1436,6 +1436,50 @@ TEST(RomanConvert, 0711)
 
 
 // ={=========================================================================
+// algo-recursion-factorial
+
+// factorial, n!, is the product of all `positive` integers less than or equals
+// to n.
+
+// CPR 227
+int factorial(int value)
+{
+  // CodeComplete 440, #19
+  if (1 < value)
+    return factorial(value-1)*value;
+
+  return 1;
+}
+
+TEST(AlgoRecursion, FactorialRecursion) 
+{
+  EXPECT_THAT(factorial(5), 120);
+}
+
+// CodeComplete 397, #17.2,
+// Don’t use recursion for factorials or Fibonacci numbers
+
+int factorial_iteration(int value)
+{
+  int result{1};
+
+  // for (int i = 1; i <= value; ++i)
+
+  for (int i = 2; i <= value; ++i)
+  {
+    result *= i;
+  }
+
+  return result;
+}
+
+TEST(AlgoRecursion, FactorialIteration) 
+{
+  EXPECT_THAT(factorial_iteration(5), 120);
+}
+
+
+// ={=========================================================================
 // algo-count-bits count same bits between two integers
 //
 // A = 35 = 10 0011
