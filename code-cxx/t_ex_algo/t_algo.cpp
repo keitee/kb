@@ -864,7 +864,7 @@ vector<string> grade_scores_model(const vector<int> scores)
   return result;
 }
 
-TEST(AlgoGrade, FindLongestSequenceBetterFail)
+TEST(AlgoGrade, UseTable)
 {
     const vector<int> coll{54, 60, 62, 66, 68, 71, 73, 78, 89, 98};
     EXPECT_THAT(grade_scores(coll), 
@@ -872,6 +872,48 @@ TEST(AlgoGrade, FindLongestSequenceBetterFail)
 
     EXPECT_THAT(grade_scores_model(coll), 
             ElementsAre("F", "D-", "D-","D", "D+","C-", "C", "C+", "B+", "A+"));
+}
+
+
+// CodeComplete 18.4 Stair-Step Access Tables.
+//
+// A: 90.0% >=
+// B: 90.0% <
+// C: 75.0% <
+// D: 65.0% <
+// F: 50.0% <
+//
+// Suppose scores are floating numbers.
+
+const string grade_stair_step(const double score)
+{
+  const vector<double> range_limit{50.0, 65.0, 75.0, 90.0, 100.0};
+  const vector<string> grade{"F", "D", "C", "B", "A"};
+
+  int max_grade_level = grade.size()-1;
+  int grade_level{};
+  string student_grade{"A"};
+
+  while ((student_grade == "A") && (grade_level < max_grade_level))
+  {
+    if (score < range_limit[grade_level])
+      student_grade = grade[grade_level];
+
+    ++grade_level;
+  }
+
+  return student_grade;
+}
+
+TEST(AlgoGrade, UseStairStep)
+{
+    EXPECT_THAT(grade_stair_step(49.0), "F");
+    EXPECT_THAT(grade_stair_step(60.0), "D");
+    EXPECT_THAT(grade_stair_step(62.0), "D");
+    EXPECT_THAT(grade_stair_step(66.0), "C");
+    EXPECT_THAT(grade_stair_step(68.0), "C");
+    EXPECT_THAT(grade_stair_step(89.0), "B");
+    EXPECT_THAT(grade_stair_step(98.0), "A");
 }
 
 
@@ -1316,6 +1358,80 @@ TEST(RomanConvert, ConvertToRomansTDD)
   EXPECT_THAT(convert_to_roman(1513), Eq("MDXIII"));
   EXPECT_THAT(convert_to_roman(2999), Eq("MMCMXCIX"));
   EXPECT_THAT(convert_to_roman(3447), Eq("MMMCDXLVII"));
+}
+
+const string roman_numeral_0711(unsigned int value)
+{
+  const auto roman_table = {
+    make_pair(1000u, "M"),
+    make_pair(900u, "CM"),
+    make_pair(500u, "D"),
+    make_pair(400u, "CD"),
+    make_pair(100u, "C"),
+    make_pair(90u, "XC"),
+    make_pair(50u, "L"),
+    make_pair(40u, "XL"),
+    make_pair(10u, "X"),
+    make_pair(9u, "IX"),
+    make_pair(5u, "V"),
+    make_pair(4u, "IV"),
+    make_pair(1u, "I")
+  };
+
+  string result{};
+
+  for (const auto &e : roman_table)
+  {
+    // note: must be "<=" but not "<"
+    
+    while (e.first <= value)
+    {
+      value -= e.first;
+      result += e.second;
+    }
+  }
+
+  return result;
+}
+
+TEST(RomanConvert, 0711) 
+{
+  EXPECT_THAT(roman_numeral_0711(1), Eq("I"));
+  EXPECT_THAT(roman_numeral_0711(2), Eq("II"));
+  EXPECT_THAT(roman_numeral_0711(3), Eq("III"));
+  EXPECT_THAT(roman_numeral_0711(4), Eq("IV"));
+  EXPECT_THAT(roman_numeral_0711(5), Eq("V"));
+  EXPECT_THAT(roman_numeral_0711(6), Eq("VI"));
+  EXPECT_THAT(roman_numeral_0711(7), Eq("VII"));
+  EXPECT_THAT(roman_numeral_0711(8), Eq("VIII"));
+  EXPECT_THAT(roman_numeral_0711(9), Eq("IX"));
+  EXPECT_THAT(roman_numeral_0711(10), Eq("X"));
+  EXPECT_THAT(roman_numeral_0711(11), Eq("XI"));
+  EXPECT_THAT(roman_numeral_0711(12), Eq("XII"));
+  EXPECT_THAT(roman_numeral_0711(13), Eq("XIII"));
+  EXPECT_THAT(roman_numeral_0711(16), Eq("XVI"));
+  EXPECT_THAT(roman_numeral_0711(17), Eq("XVII"));
+  EXPECT_THAT(roman_numeral_0711(18), Eq("XVIII"));
+  EXPECT_THAT(roman_numeral_0711(20), Eq("XX"));
+  EXPECT_THAT(roman_numeral_0711(23), Eq("XXIII"));
+  EXPECT_THAT(roman_numeral_0711(41), Eq("XLI"));
+  EXPECT_THAT(roman_numeral_0711(45), Eq("XLV"));
+  EXPECT_THAT(roman_numeral_0711(50), Eq("L"));
+  EXPECT_THAT(roman_numeral_0711(80), Eq("LXXX"));
+  EXPECT_THAT(roman_numeral_0711(91), Eq("XCI"));
+  EXPECT_THAT(roman_numeral_0711(95), Eq("XCV"));
+  EXPECT_THAT(roman_numeral_0711(100), Eq("C"));
+  EXPECT_THAT(roman_numeral_0711(122), Eq("CXXII"));
+  EXPECT_THAT(roman_numeral_0711(152), Eq("CLII"));
+  EXPECT_THAT(roman_numeral_0711(196), Eq("CXCVI"));
+  EXPECT_THAT(roman_numeral_0711(247), Eq("CCXLVII"));
+  EXPECT_THAT(roman_numeral_0711(288), Eq("CCLXXXVIII"));
+  EXPECT_THAT(roman_numeral_0711(298), Eq("CCXCVIII"));
+  EXPECT_THAT(roman_numeral_0711(500), Eq("D"));
+  EXPECT_THAT(roman_numeral_0711(1000), Eq("M"));
+  EXPECT_THAT(roman_numeral_0711(1513), Eq("MDXIII"));
+  EXPECT_THAT(roman_numeral_0711(2999), Eq("MMCMXCIX"));
+  EXPECT_THAT(roman_numeral_0711(3447), Eq("MMMCDXLVII"));
 }
 
 
