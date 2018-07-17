@@ -2045,6 +2045,10 @@ TEST(DISABLED_AlgoMaze, Array20x20)
 //
 // 1. The key is not to use sizeof operator
 // 2. unsigned int
+//
+// *cxx-shift* Must use `unsigned` to do  `right-shift` in order to have
+// guaranteed 0 values. 
+//
 // 3. use independent of type.
 
 // returns MSB position which starts from 1th since input >> is evalueated after
@@ -2121,7 +2125,7 @@ uint32_t get_msb_pos_02(const uint32_t value)
 }
 
 
-TEST(BitPattern, GetMSBPosition)
+TEST(AlgoBitCount, GetMSBPosition)
 {
     // A = 35 = 10 0011
     // B =  9 =    1001
@@ -2133,7 +2137,7 @@ TEST(BitPattern, GetMSBPosition)
     // EXPECT_THAT(get_msb_pos_02(9), Eq(4));
 }
 
-uint32_t find_same_number_of_bits(const uint32_t first, const uint32_t second)
+uint32_t count_bits_old(const uint32_t first, const uint32_t second)
 {
   // get the smaller between inputs
   uint32_t small = first > second ? second : first;
@@ -2144,7 +2148,7 @@ uint32_t find_same_number_of_bits(const uint32_t first, const uint32_t second)
   for (; small && (small >>=1);)
     ++top_pos;
 
-  // xor
+  // xor since cxx-xor remains 1 when bits are different.
   uint32_t diff = first^second;
   uint32_t count{};
 
@@ -2159,23 +2163,22 @@ uint32_t find_same_number_of_bits(const uint32_t first, const uint32_t second)
   return count;
 }
 
-TEST(BitPattern, FindNumberOfBitsBetweenTwoIntegers)
+TEST(AlgoBitCount, FindNumberOfBitsBetweenTwoIntegers)
 {
     // 35 = 10 0011
     // 9 =     1001
     //          ^ ^
-    EXPECT_THAT(find_same_number_of_bits(35, 9), Eq(2));
+    EXPECT_THAT(count_bits_old(35, 9), Eq(2));
 
     // 55 = 10 0111
     // 5 =      101
     //          ^ ^
-    EXPECT_THAT(find_same_number_of_bits(55, 5), Eq(2));
+    EXPECT_THAT(count_bits_old(55, 5), Eq(2));
 }
 
 // 2018.0619
-// assumes:
 // 1. unsigned int
-int get_number_of_bits_between_two_integers(const unsigned int a, const unsigned int b)
+int count_bits_18_0619(const unsigned int a, const unsigned int b)
 {
   // get min and max
   auto input = minmax(a, b);
@@ -2227,13 +2230,52 @@ TEST(BitPattern, FindNumberOfBitsBetweenTwoIntegers_0619)
   //                                    9,   1001
   //                                  xor,   1010
   //                                  ans, 2
-  EXPECT_THAT(get_number_of_bits_between_two_integers(35, 9), 2);
+  EXPECT_THAT(count_bits_18_0619(35, 9), 2);
 
   // 55 = 10 0111,  mask, 7 (0111),   max, 7(0111)
   //                                    5,    101
   //                                  xor, 2( 010)
   //                                  ans, 2 
-  EXPECT_THAT(get_number_of_bits_between_two_integers(55, 5), 2);
+  EXPECT_THAT(count_bits_18_0619(55, 5), 2);
+}
+
+
+// 2018.0717
+int count_bits_18_0717(const unsigned int a, const unsigned int b)
+{
+  // get min and max
+  auto input = minmax(a, b);
+
+  // take min value
+  unsigned int min = input.first;
+  unsigned int max = input.second;
+
+  unsigned int num_of_common_bits{};
+  
+  // no differetn when use for (; min && min >>= 1;)
+  for (; min; min >>= 1, max >>= 1)
+  {
+    // same bit, 0 or 1 between two numbers
+    if ((min & 0x1) == (max &0x1u))
+      ++num_of_common_bits;
+  }
+
+  return num_of_common_bits;
+}
+
+TEST(BitPattern, FindNumberOfBitsBetweenTwoIntegers_0717)
+{
+  //  35, 100011,   mask, 15 (1111),  max, 3(0011)
+  //                                    9,   1001
+  //                                  xor,   1010
+  //                                  ans, 2
+  EXPECT_THAT(count_bits_18_0717(35, 9), 2);
+
+  // 55 = 10 0111,  mask, 7 (0111),   max, 7(0111)
+  //                                    5,    101
+  //                                  xor, 2( 010)
+  //                                  ans, 2 
+  EXPECT_THAT(count_bits_18_0717(55, 5), 2);
 }
 
 
