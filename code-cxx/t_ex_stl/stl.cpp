@@ -532,6 +532,139 @@ TEST(StlVector, VecorCtors)
 
 
 // ={=========================================================================
+// cxx-array
+
+TEST(StlArray, ArrayCtors)
+{
+  array<int, 8> coll = {11,22,33};
+  coll.back() = 999;
+  coll[coll.size()-2] = 42;
+
+  EXPECT_THAT(coll, ElementsAre(11,22,33,0,0,0,42,999));
+}
+
+// initialized: t.h.i.s. .i.s. .a.n. .c.h.a.r. .a.r.r.a.y.....................(41)
+// strcpyed   : u.s.e. .t.h.e. .a.d.d.r.e.s.s. .o.f. .f.i.r.s.t..................(41)
+// strcpyed   : u.s.e. .d.a.t.a. .m.e.m.b.e.r..o.f. .f.i.r.s.t..................(41)
+
+TEST(StlArray, ArrayAccess)
+{
+  // *TN* 
+  // array size is 41 and the initializer is less than this. does array handle
+  // this?
+  //
+  // array<char,50> carr{"ABCDEDFHIJKLMN"};
+  // PRINT_ELEMENTS(carr, "char array: ");
+  //
+  // changed PRINT_ELEMENTS() to print the # of iteration in a loop and see
+  // blank outputs
+  // ========
+  // char array: A B C D E D F H I J K L M N                                     (50)
+
+  array<char, 41> coll = {"this is an char array"};
+  PRINT_ELEMENTS(coll, "initialized: " );
+
+  strcpy( &coll[0], "use the address of first");
+  PRINT_ELEMENTS(coll, "strcpyed   : " );
+
+  strcpy( coll.data(), "use data member");
+  PRINT_ELEMENTS(coll, "strcpyed   : " );
+}
+
+
+
+// ={=========================================================================
+// cxx-multi-dimensitional
+
+TEST(StlMultiArray, UseVectorAndArray)
+{
+  const size_t rows = 5;
+  const size_t cols = 5;
+
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+
+  vector<vector<int>> coll_vector(rows, vector<int>(cols, 0)); 
+
+  cout << "{" << endl;
+  for (size_t i = 0; i < rows; ++i)
+  {
+    for(size_t j = 0; j < cols; ++j)
+      cout << coll_vector[i][j] << " ";
+    cout << endl;
+  }
+  cout << "}" << endl;
+
+  // 0 0 0 0 0
+  // 1 1 1 1 0
+  // 0 0 0 0 0
+  // 0 1 1 1 1
+  // 2 0 0 0 0
+
+  std::vector<std::vector<int>> coll_vector_5{
+    {0,0,0,0,0},
+    {1,1,1,1,0},
+    {0,0,0,0,0},
+    {0,1,1,1,1},
+    {2,0,0,0,0}
+  };
+
+  cout << "{" << endl;
+  for (size_t i = 0; i < rows; ++i)
+  {
+    for(size_t j = 0; j < cols; ++j)
+      cout << coll_vector_5[i][j] << " ";
+    cout << endl;
+  }
+  cout << "}" << endl;
+
+
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+  // 0 0 0 0 0
+
+  array<array<int, cols>, rows> coll_array{}; 
+
+  cout << "{" << endl;
+  for (size_t i = 0; i < rows; ++i)
+  {
+    for(size_t j = 0; j < cols; ++j)
+      cout << coll_array[i][j] << " ";
+    cout << endl;
+  }
+  cout << "}" << endl;
+
+  // 0 0 0 0 0
+  // 1 1 1 1 0
+  // 0 0 0 0 0
+  // 0 1 1 1 1
+  // 2 0 0 0 0
+
+  std::array<std::array<int, 5>, 5> coll_array_5 = {
+    0,0,0,0,0,
+    1,1,1,1,0,
+    0,0,0,0,0,
+    0,1,1,1,1,
+    2,0,0,0,0
+  };
+
+  cout << "{" << endl;
+  for (size_t i = 0; i < rows; ++i)
+  {
+    for(size_t j = 0; j < cols; ++j)
+      cout << coll_array_5[i][j] << " ";
+    cout << endl;
+  }
+  cout << "}" << endl;
+}
+
+
+// ={=========================================================================
 // cxx-deque
 // case seg-fault
 

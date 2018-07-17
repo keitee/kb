@@ -1362,7 +1362,7 @@ TEST(RomanConvert, ConvertToRomansTDD)
 
 const string roman_numeral_0711(unsigned int value)
 {
-  const auto roman_table = {
+  const auto roman_table{
     make_pair(1000u, "M"),
     make_pair(900u, "CM"),
     make_pair(500u, "D"),

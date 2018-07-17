@@ -378,6 +378,520 @@ TEST(XXX, XXX)
 
 // ={=========================================================================
 
+template <typename T>
+void PRINT_ELEMENTS( T& coll, const string optstr="" )
+{
+    size_t count{};
+    cout << optstr;
+
+    for( const auto &elem : coll )
+    {
+        cout << "(" << elem.first << ", " << elem.second << ") ";
+        ++count;
+    }
+
+    cout << "(" << count << ")" << endl;
+}
+
+using Point = std::pair<int, int>;
+
+// 1. input and point(row, col) which is the same as point(y, x) but 
+// not point(x, y). This has to do with array access.
+//
+// 2. To support range from (1,1) to (N,N), used padding to the input data:
+//
+// {2,2,2,2,2,2},
+// {2,0,0,0,0,0}, 
+// {2,1,1,1,1,0},
+// {2,0,0,0,0,0},
+// {2,0,1,1,1,1},
+// {2,2,0,0,0,0}
+//
+// run:
+//
+// (1, 2) (1, 3) (1, 4) (1, 5) (2, 5) (3, 5) (3, 4) (3, 3) (3, 2) (3, 1) (4, 1) (5, 1) (5, 2) (5, 3) (5, 4) (5, 5) (16)
+//
+//             [ 10578] | find_path(1, 1) {
+//             [ 10578] |   find_path(1, 2) {
+//             [ 10578] |     find_path(1, 1) {
+//   12.428 us [ 10578] |     } /* find_path */
+//             [ 10578] |     find_path(1, 3) {
+//             [ 10578] |       find_path(1, 2) {
+//   10.787 us [ 10578] |       } /* find_path */
+//             [ 10578] |       find_path(1, 4) {
+//             [ 10578] |         find_path(1, 3) {
+//   13.404 us [ 10578] |         } /* find_path */
+//             [ 10578] |         find_path(1, 5) {
+//             [ 10578] |           find_path(1, 4) {
+//   12.767 us [ 10578] |           } /* find_path */
+//             [ 10578] |           find_path(2, 5) {
+//             [ 10578] |             find_path(1, 5) {
+//   85.506 us [ 10578] |             } /* find_path */
+//             [ 10578] |             find_path(3, 5) {
+//             [ 10578] |               find_path(3, 4) {
+//             [ 10578] |                 find_path(3, 3) {
+//             [ 10578] |                   find_path(3, 2) {
+//             [ 10578] |                     find_path(3, 1) {
+//             [ 10578] |                       find_path(3, 2) {
+//   28.249 us [ 10578] |                       } /* find_path */
+//             [ 10578] |                       find_path(4, 1) {
+//             [ 10578] |                         find_path(3, 1) {
+//  182.678 us [ 10578] |                         } /* find_path */
+//             [ 10578] |                         find_path(5, 1) {
+//             [ 10578] |                           find_path(5, 2) {
+//             [ 10578] |                             find_path(5, 1) {
+//   82.954 us [ 10578] |                             } /* find_path */
+//             [ 10578] |                             find_path(5, 3) {
+//             [ 10578] |                               find_path(5, 2) {
+//   17.163 us [ 10578] |                               } /* find_path */
+//             [ 10578] |                               find_path(5, 4) {
+//             [ 10578] |                                 find_path(5, 3) {
+//   19.277 us [ 10578] |                                 } /* find_path */
+//             [ 10578] |                                 find_path(5, 5) {
+//   19.241 us [ 10578] |                                 } /* find_path */
+//  116.223 us [ 10578] |                               } /* find_path */
+//  213.627 us [ 10578] |                             } /* find_path */
+//  391.920 us [ 10578] |                           } /* find_path */
+//  967.572 us [ 10578] |                         } /* find_path */
+//    2.857 ms [ 10578] |                       } /* find_path */
+//    3.996 ms [ 10578] |                     } /* find_path */
+//    4.060 ms [ 10578] |                   } /* find_path */
+//    4.126 ms [ 10578] |                 } /* find_path */
+//    4.220 ms [ 10578] |               } /* find_path */
+//    4.287 ms [ 10578] |             } /* find_path */
+//    5.416 ms [ 10578] |           } /* find_path */
+//    6.411 ms [ 10578] |         } /* find_path */
+//    6.485 ms [ 10578] |       } /* find_path */
+//    6.559 ms [ 10578] |     } /* find_path */
+//    6.708 ms [ 10578] |   } /* find_path */
+//    7.233 ms [ 10578] | } /* find_path */
+
+
+struct Maze
+{
+  std::vector<std::vector<int>> input;
+
+  // std::array<std::array<int, 11>, 11> input;
+  // std::array<std::array<int, 6>, 6> input;
+
+  // set of visited points
+  std::set<Point> visited_points{};
+
+  // array of path points
+  std::vector<Point> path_points{};
+
+  Maze(int row, int col)
+    : row_(row), col_(col) {}
+
+  bool AlreadyTried(Point position)
+  {
+    return visited_points.find(position) == visited_points.end() ? false : true;
+  }
+
+  bool FoundTheExit(Point position)
+  {
+    return position == Point(row_-1, col_-1) ? true : false;
+  }
+
+  void RememberPosition(Point position)
+  {
+    auto result = visited_points.insert(position);
+    if (!result.second)
+    {
+      cout << "RememberPosition: founds duplicates" << endl;
+      cout << "RememberPosition: (" << position.first << ", " << position.second << ")" << endl;
+      PRINT_ELEMENTS(visited_points);
+    }
+  }
+
+  // if cannot move, return the input position
+  Point GetPositionToMoveLeft(Point position)
+  {
+    Point point_to_move{position.first, position.second-1};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  Point GetPositionToMoveRight(Point position)
+  {
+    Point point_to_move{position.first, position.second+1};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  Point GetPositionToMoveUp(Point position)
+  {
+    Point point_to_move{position.first-1, position.second};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  Point GetPositionToMoveDown(Point position)
+  {
+    Point point_to_move{position.first+1, position.second};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  Point GetPositionToDiagRightUp(Point position)
+  {
+    Point point_to_move{position.first-1, position.second+1};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  Point GetPositionToDiagRightDown(Point position)
+  {
+    Point point_to_move{position.first+1, position.second+1};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  Point GetPositionToDiagLeftUp(Point position)
+  {
+    Point point_to_move{position.first-1, position.second-1};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  Point GetPositionToDiagLeftDown(Point position)
+  {
+    Point point_to_move{position.first+1, position.second-1};
+
+    if (ValidPoint(point_to_move))
+    {
+      return point_to_move;
+    }
+    else 
+    {
+      return position;
+    }
+  }
+
+  private:
+
+  bool ValidPoint(Point position)
+  {
+    if ((0 <= position.first && position.first < row_) &&
+        (0 <= position.second && position.second < col_) &&
+        input[position.first][position.second] != 1
+       )
+    {
+      return true;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  int row_{};
+  int col_{};
+};
+
+
+// To use uftrace log, changed it from 
+// bool find_path(Maze &maze, Point position)
+
+bool find_path(Maze &maze, int row, int col)
+{
+  Point position{row, col};
+
+  // to prevent circular path and going backwards and this make it search
+  // forward. 
+  if (maze.AlreadyTried(position))
+  {
+    return false;
+  }
+
+  // found a path which is stop condition
+  if (maze.FoundTheExit(position))
+  {
+    return true;
+  }
+
+  // remember a position tried
+  maze.RememberPosition(position);
+
+  Point new_position{};
+
+  // left
+  if ((new_position = maze.GetPositionToMoveLeft(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "left:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  // right
+  if ((new_position = maze.GetPositionToMoveRight(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "right:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  // up
+  if ((new_position = maze.GetPositionToMoveUp(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "up:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  // down
+  if ((new_position = maze.GetPositionToMoveDown(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "down:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  // diag right up 
+  if ((new_position = maze.GetPositionToDiagRightUp(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "diag:rup:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  // diag right down 
+  if ((new_position = maze.GetPositionToDiagRightDown(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "diag:rdown:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  // diag left up 
+  if ((new_position = maze.GetPositionToDiagLeftUp(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "diag:lup:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  // diag left down 
+  if ((new_position = maze.GetPositionToDiagLeftDown(position)) != position)
+  {
+    if (find_path(maze, new_position.first, new_position.second))
+    {
+      cout << "diag:ldown:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      maze.path_points.insert(maze.path_points.begin(), new_position);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+TEST(Maze, ExerciseInterfaces)
+{
+  Maze maze(5, 5);
+  maze.input = {
+    {0,0,0,0,0},
+    {1,1,1,1,0},
+    {0,0,0,0,0},
+    {0,1,1,1,1},
+    {2,0,0,0,0}
+  };
+
+  maze.RememberPosition(Point(1, 1));
+  maze.RememberPosition(Point(1, 2));
+
+  EXPECT_THAT(maze.AlreadyTried(Point(1, 1)), true);
+  EXPECT_THAT(maze.AlreadyTried(Point(1, 3)), false);
+
+  EXPECT_THAT(maze.FoundTheExit(Point(4, 5)), false);
+  EXPECT_THAT(maze.FoundTheExit(Point(5, 5)), false);
+
+  // not able to move
+  EXPECT_THAT(maze.GetPositionToMoveLeft(Point(0, 0)), Eq(Point(0, 0)));
+
+  // able to move
+  EXPECT_THAT(maze.GetPositionToMoveLeft(Point(0, 1)), Eq(Point(0, 0)));
+}
+
+TEST(DISABLED_Maze, Array5x5)
+{
+  Maze maze(5, 5);
+  maze.input = {
+    {0,0,0,0,0},
+    {1,1,1,1,0},
+    {0,0,0,0,0},
+    {0,1,1,1,1},
+    {2,0,0,0,0}
+  };
+
+  // use start point (0, 0) rather then (1, 1).
+  find_path(maze, 0, 0);
+  PRINT_ELEMENTS(maze.path_points);
+}
+
+TEST(DISABLED_Maze, Array10x10)
+{
+  // when not support diagonal move
+  // Maze maze(10, 10);
+  // maze.input = {
+  //   {0,1,0,1,0,1,0,0,0,1},
+  //   {0,1,0,1,0,1,1,1,0,1},
+  //   {0,0,0,0,0,1,0,0,0,1},
+  //   {0,1,0,1,1,1,0,1,1,1},
+  //   {0,1,2,1,0,0,0,0,0,1},
+  //   {1,1,0,1,0,1,1,1,1,1},
+  //   {0,1,0,0,0,0,0,1,0,1},
+  //   {0,1,1,1,0,1,1,1,0,1},
+  //   {0,0,0,0,0,0,0,0,0,1},
+  //   {1,1,1,1,1,1,1,1,0,0}
+  // };
+
+  Maze maze(10, 10);
+  maze.input = {
+    {0,1,0,1,0,1,0,0,0,1},
+    {0,1,0,1,0,1,1,1,0,1},
+    {0,0,0,0,0,1,0,0,0,1},
+    {0,1,0,1,1,1,0,1,1,1},
+    {0,1,2,1,0,0,0,0,0,1},
+    {1,1,0,1,0,1,1,1,1,1},
+    {0,1,0,0,0,0,0,1,0,1},
+    {0,1,1,1,0,1,1,1,0,1},
+    {0,0,0,0,0,0,0,0,0,1},
+    {1,1,1,1,1,1,1,1,1,0}
+  };
+ 
+  find_path(maze, 0, 0);
+  PRINT_ELEMENTS(maze.path_points);
+}
+
+TEST(Maze, Array15x15)
+{
+  Maze maze(15, 15);
+  maze.input = {
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},  
+    {0,1,0,1,0,0,0,1,0,1,0,1,0,1,0},
+    {0,1,0,0,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,0,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    {2,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+  };
+ 
+  find_path(maze, 0, 0);
+  PRINT_ELEMENTS(maze.path_points);
+}
+
+TEST(Maze, Array20x20)
+{
+  Maze maze(20, 20);
+  maze.input = {
+
+    {0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}, 
+    {0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,1,0,1},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1},
+    {0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,1},
+    {0,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,1},
+    {0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1},
+    {0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,0,1},
+    {0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,1},
+    {0,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0,1},
+    {0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
+    {0,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,0,1},
+    {0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
+    {0,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1},
+    {0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
+    {0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0}
+  };
+ 
+  find_path(maze, 0, 0);
+  PRINT_ELEMENTS(maze.path_points);
+}
+
+
+// ={=========================================================================
+
 int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);
