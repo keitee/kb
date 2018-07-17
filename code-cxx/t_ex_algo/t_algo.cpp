@@ -1493,6 +1493,38 @@ TEST(AlgoRecursion, FactorialIteration)
   EXPECT_THAT(factorial_iteration(5), 120);
 }
 
+int factorial_iteration_0717(int value)
+{
+  int result{1};
+
+  for (; 0 < value; --value)
+  {
+    result *= value;
+  }
+
+  return result;
+}
+
+TEST(AlgoRecursion, FactorialIteration_0717) 
+{
+  EXPECT_THAT(factorial_iteration(5), 120);
+}
+
+
+// ={=========================================================================
+// algo-recursion-fibonacci
+//
+// F0 = 0
+// F1 = 1
+// F2 = F1 + F0
+// F3 = F2 + F1
+// F4 = F3 + F2
+// F5 = F4 + F3
+
+int fibonacci_iteration(int value)
+{
+}
+
 
 // ={=========================================================================
 // algo-recursion-maze algo-maze
