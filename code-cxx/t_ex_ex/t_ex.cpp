@@ -398,7 +398,16 @@ using Point = std::pair<int, int>;
 // 1. input and point(row, col) which is the same as point(y, x) but 
 // not point(x, y). This has to do with array access.
 //
-// 2. To support range from (1,1) to (N,N), used padding to the input data:
+// 2. If it's valid point which are not checked against to traveled points, call
+// find_path for every possible move from a point and then this move is cheked
+// against to the traveled points. So supporting diagonal move needs more
+// recursive calls. Therefore, it use the traveled path to exit the call for
+// points that it already traveled; to move forward, to move back when see the
+// dead end, and naturally to prevent circular path.
+//
+// See again that calls find_path() for every possible move.
+//
+// 3. To support range from (1,1) to (N,N), used padding to the input data:
 //
 // {2,2,2,2,2,2},
 // {2,0,0,0,0,0}, 
@@ -407,7 +416,7 @@ using Point = std::pair<int, int>;
 // {2,0,1,1,1,1},
 // {2,2,0,0,0,0}
 //
-// run:
+// the result of run:
 //
 // (1, 2) (1, 3) (1, 4) (1, 5) (2, 5) (3, 5) (3, 4) (3, 3) (3, 2) (3, 1) (4, 1) (5, 1) (5, 2) (5, 3) (5, 4) (5, 5) (16)
 //
@@ -667,9 +676,11 @@ bool find_path(Maze &maze, int row, int col)
   // left
   if ((new_position = maze.GetPositionToMoveLeft(position)) != position)
   {
+    cout << "l:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
-      cout << "left:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      // cout << "left:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
       maze.path_points.insert(maze.path_points.begin(), new_position);
       return true;
     }
@@ -678,6 +689,8 @@ bool find_path(Maze &maze, int row, int col)
   // right
   if ((new_position = maze.GetPositionToMoveRight(position)) != position)
   {
+    cout << "r:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
       cout << "right:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
@@ -689,9 +702,11 @@ bool find_path(Maze &maze, int row, int col)
   // up
   if ((new_position = maze.GetPositionToMoveUp(position)) != position)
   {
+    cout << "u:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
-      cout << "up:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      // cout << "up:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
       maze.path_points.insert(maze.path_points.begin(), new_position);
       return true;
     }
@@ -700,9 +715,11 @@ bool find_path(Maze &maze, int row, int col)
   // down
   if ((new_position = maze.GetPositionToMoveDown(position)) != position)
   {
+    cout << "d:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
-      cout << "down:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      // cout << "down:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
       maze.path_points.insert(maze.path_points.begin(), new_position);
       return true;
     }
@@ -711,9 +728,11 @@ bool find_path(Maze &maze, int row, int col)
   // diag right up 
   if ((new_position = maze.GetPositionToDiagRightUp(position)) != position)
   {
+    cout << "dru:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
-      cout << "diag:rup:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      // cout << "diag:rup:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
       maze.path_points.insert(maze.path_points.begin(), new_position);
       return true;
     }
@@ -722,9 +741,11 @@ bool find_path(Maze &maze, int row, int col)
   // diag right down 
   if ((new_position = maze.GetPositionToDiagRightDown(position)) != position)
   {
+    cout << "drd:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
-      cout << "diag:rdown:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      // cout << "diag:rdown:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
       maze.path_points.insert(maze.path_points.begin(), new_position);
       return true;
     }
@@ -733,9 +754,11 @@ bool find_path(Maze &maze, int row, int col)
   // diag left up 
   if ((new_position = maze.GetPositionToDiagLeftUp(position)) != position)
   {
+    cout << "dlu:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
-      cout << "diag:lup:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      // cout << "diag:lup:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
       maze.path_points.insert(maze.path_points.begin(), new_position);
       return true;
     }
@@ -744,9 +767,11 @@ bool find_path(Maze &maze, int row, int col)
   // diag left down 
   if ((new_position = maze.GetPositionToDiagLeftDown(position)) != position)
   {
+    cout << "dld:(" << new_position.first << ", " << new_position.second << ")" << endl;
+
     if (find_path(maze, new_position.first, new_position.second))
     {
-      cout << "diag:ldown:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
+      // cout << "diag:ldown:insert(" << new_position.first << ", " << new_position.second << ")" << endl;
       maze.path_points.insert(maze.path_points.begin(), new_position);
       return true;
     }
@@ -798,7 +823,8 @@ TEST(DISABLED_Maze, Array5x5)
   PRINT_ELEMENTS(maze.path_points);
 }
 
-TEST(DISABLED_Maze, Array10x10)
+// TEST(DISABLED_Maze, Array10x10)
+TEST(Maze, Array10x10)
 {
   // when not support diagonal move
   // Maze maze(10, 10);
@@ -833,7 +859,7 @@ TEST(DISABLED_Maze, Array10x10)
   PRINT_ELEMENTS(maze.path_points);
 }
 
-TEST(Maze, Array15x15)
+TEST(DISABLED_Maze, Array15x15)
 {
   Maze maze(15, 15);
   maze.input = {
@@ -858,7 +884,18 @@ TEST(Maze, Array15x15)
   PRINT_ELEMENTS(maze.path_points);
 }
 
-TEST(Maze, Array20x20)
+// This input select the path which do have have "2" in. How to support this
+// requirement?
+//
+// * change the traveled path to have the value and to keep only traveled points
+// so far. So need to remove point when find_path() returns false so that
+// traveled path only have points up to where it runs into
+//
+// * changed the end condition to see if the traveled path has the "2". if not
+// return false so that can try other paths.
+
+
+TEST(DISABLED_Maze, Array20x20)
 {
   Maze maze(20, 20);
   maze.input = {
