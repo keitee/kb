@@ -926,6 +926,43 @@ TEST(DISABLED_Maze, Array20x20)
   PRINT_ELEMENTS(maze.path_points);
 }
 
+template <typename T>
+void PRINT_ELEMENTS_MAP(T col, const string mesg, const string sep = ", ")
+{
+    cout << "=" << mesg << endl;
+
+    for ( auto &e : col)
+        cout << "{" << e.first << ", " << e.second << "}" << sep;
+}
+
+int count_occurance_from_sequence(const vector<int> &input, int key) 
+{
+  map<char,int> count_map;
+
+  for (auto value : input)
+  {
+    string str = to_string(value);
+    for (auto e : str)
+    {
+      ++count_map[e];
+    }
+  }
+
+  string stringkey = to_string(key);
+  auto ret = count_map.find(stringkey[0]);
+  
+  // if values are [0,9] and are ASCII then, can use:
+  // auto ret = count_map.find(key+48);
+
+  return ret->second;
+}
+
+TEST(X, XX) 
+{
+  vector<int> input_value{11,12,13,14,15};
+  EXPECT_THAT(count_occurance_from_sequence(input_value, 1), 6);
+}
+
 
 // ={=========================================================================
 

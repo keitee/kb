@@ -95,7 +95,7 @@ TEST(AlgoSwap, SwapUseXOR)
 
 
 // ={=========================================================================
-// algo-find a number seen odd times
+// algo-occurance find a number seen odd times
 unsigned int t_algo_find_a_number_01(const vector<unsigned int> &input)
 {
   unsigned int uireturn{};
@@ -106,7 +106,7 @@ unsigned int t_algo_find_a_number_01(const vector<unsigned int> &input)
   return uireturn;
 }
 
-TEST(AlgoFindOdd, FindNumberSeenOddTimes)
+TEST(AlgoOccurance, FindNumberSeenOddTimes)
 {
     const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     EXPECT_THAT(t_algo_find_a_number_01(input), 12);
@@ -135,7 +135,7 @@ unsigned int t_algo_find_a_number_02(const vector<unsigned int> &input)
   return uiresult;
 }
 
-TEST(AlgoFindOdd, FindNumberSeenOddTimesUseMap)
+TEST(AlgoOccurance, FindNumberSeenOddTimesUseMap)
 {
     const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     EXPECT_THAT(t_algo_find_a_number_02(input), 12);
@@ -159,10 +159,42 @@ unsigned int t_algo_find_a_number_03(const vector<unsigned int> &input)
   return uireturn;
 }
 
-TEST(AlgoFindOdd, FindNumberSeenOddTimesUseSet)
+TEST(AlgoOccurance, FindNumberSeenOddTimesUseSet)
 {
     const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     EXPECT_THAT(t_algo_find_a_number_02(input), 12);
+}
+
+
+// ={=========================================================================
+// algo-occurance
+
+int count_occurance_from_sequence(const vector<int> &input, int key) 
+{
+  map<char,int> count_map;
+
+  for (auto value : input)
+  {
+    string str = to_string(value);
+    for (auto e : str)
+    {
+      ++count_map[e];
+    }
+  }
+
+  string stringkey = to_string(key);
+  auto ret = count_map.find(stringkey[0]);
+  
+  // if values are [0,9] and are ASCII then, can use:
+  // auto ret = count_map.find(key+48);
+
+  return ret->second;
+}
+
+TEST(AlgoOccurance, CountKey) 
+{
+  vector<int> input_value{11,12,13,14,15};
+  EXPECT_THAT(count_occurance_from_sequence(input_value, 1), 6);
 }
 
 
@@ -1508,21 +1540,6 @@ int factorial_iteration_0717(int value)
 TEST(AlgoRecursion, FactorialIteration_0717) 
 {
   EXPECT_THAT(factorial_iteration(5), 120);
-}
-
-
-// ={=========================================================================
-// algo-recursion-fibonacci
-//
-// F0 = 0
-// F1 = 1
-// F2 = F1 + F0
-// F3 = F2 + F1
-// F4 = F3 + F2
-// F5 = F4 + F3
-
-int fibonacci_iteration(int value)
-{
 }
 
 
@@ -4891,6 +4908,10 @@ TEST(DISABLED_CxxAlgoItoaTest, RunWithVariousValues)
     EXPECT_THAT(itoa_navie(123), Eq("123"));
     EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
 }
+
+
+// ={=========================================================================
+// algo-list-simple
 
 
 int main(int argc, char** argv)
