@@ -15,7 +15,6 @@ using namespace testing;
 
 
 // ={=========================================================================
-
 template <typename T>
 void PRINT_ELEMENTS_MAP(T col, const string mesg, const string sep = ", ")
 {
@@ -169,6 +168,14 @@ TEST(AlgoOccurance, FindNumberSeenOddTimesUseSet)
 // ={=========================================================================
 // algo-occurance
 
+// When input a, and b are 0 <= a <= b <= 100,000,000), write a problem to find
+// out how many k integer appears.
+// 
+// e.g.,
+// input: 11, 12, 13, 14, 15, k = 1
+// 
+// k appears 6 times.
+
 int count_occurance_from_sequence(const vector<int> &input, int key) 
 {
   map<char,int> count_map;
@@ -182,19 +189,41 @@ int count_occurance_from_sequence(const vector<int> &input, int key)
     }
   }
 
-  string stringkey = to_string(key);
-  auto ret = count_map.find(stringkey[0]);
+  // string stringkey = to_string(key);
+  // auto ret = count_map.find(stringkey[0]);
   
   // if values are [0,9] and are ASCII then, can use:
-  // auto ret = count_map.find(key+48);
+  auto ret = count_map.find(key+'0');
 
   return ret->second;
+}
+
+int count_occurance_from_sequence_0719(const vector<int> &input, int key) 
+{
+  int digit{}, count{};
+
+  for (auto value : input)
+  {
+    for(; value;)
+    {
+      digit = value % 10;
+
+      if (digit == key)
+        ++count;
+
+      value /= 10;
+    }
+  }
+
+  return count;
 }
 
 TEST(AlgoOccurance, CountKey) 
 {
   vector<int> input_value{11,12,13,14,15};
+
   EXPECT_THAT(count_occurance_from_sequence(input_value, 1), 6);
+  EXPECT_THAT(count_occurance_from_sequence_0719(input_value, 1), 6);
 }
 
 
@@ -4832,7 +4861,7 @@ uint32_t atoi_hex(const char *str)
 }
 
 
-TEST(CxxAlgoAtoiTest, RunWithVariousValues)
+TEST(AlgoConversion, AtoI)
 {
     EXPECT_THAT(atoi_navie("123"), Eq(123));
     EXPECT_THAT(atoi_isdigit("123"), Eq(123));
@@ -4848,7 +4877,7 @@ TEST(CxxAlgoAtoiTest, RunWithVariousValues)
 
 
 // ={=========================================================================
-// itoa
+// algo-itoa
 //
 // * input type? digits only? no space?
 // * input size?
@@ -4889,7 +4918,9 @@ std::string itoa_no_reverse(const int input)
     {
         letter = '0' + (value % 10);
         temp += letter;
-        result.insert( 0, temp );
+        // result.insert( 0, temp );
+        // result.insert( result.begin(), 1, temp );
+        cout << "1" << endl;
         value /= 10;
     }
 
@@ -4903,19 +4934,117 @@ std::string itoa_no_reverse(const int input)
 //   Actual: "321323" (of type std::string)
 // [  FAILED  ] CxxAlgoItoaTest.RunWithVariousValues (0 ms)
 
-TEST(DISABLED_CxxAlgoItoaTest, RunWithVariousValues)
+TEST(AlgoConversion, ItoA)
 {
     EXPECT_THAT(itoa_navie(123), Eq("123"));
-    EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
+    // EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
 }
 
 
 // ={=========================================================================
 // algo-list-simple
 
+namespace list_simple
+{
+  // 1. ListEntry can be any type.
+  // 2. No Remove() to remove entry at random position since it's expensive
+  // operation as with other contiguous implementation; contiguous stack.
+  //
+  // Write a contiguous list implementation which have following interfaces:
+  //  
+  // void CreateList(List*);
+  // void ClearList(List*);
+  // bool ListEmpty(const List*);
+  // bool ListFull(const List*);
+  // int ListSize(const List*);
+  // void AddList(ListEntry x, List* list);
+  // void TraverseList(List* list, void(*visit)(ListEntry));
+
+  const int MAXLIST=50;
+
+  struct Cell 
+  {
+    Cell() : row_(0), col_(0) {}
+    Cell(int row, int col) : row_(row), col_(col) {}
+    int row_, col_;
+  };
+
+  using ListEntry = Cell;
+
+  class Functor
+  {
+    public:
+      void operator() (const ListEntry entry) 
+      {
+        cout << "{" << entry.row_ << ", " << entry.col_ << "}" << endl;
+      }
+  };
+
+  class List
+  {
+    public:
+      void Create() { count = 0; }
+      void Clear() { count = 0; }
+      bool Empty() { return count == 0 ? true : false; }
+      bool Full() { return count == MAXLIST ? true : false; }
+      int Size() { return count; }
+
+      // if use `coll[++count] = entry;` then traverse() shows:
+      //
+      // {0, 0}
+      // {1, 2}
+      // {2, 3}
+      // {3, 4}
+      // {4, 5}
+      //
+      // so have to use side-effect as shown:
+
+      void Add(const ListEntry entry) 
+      {
+        if (Full())
+          cout << "warning: attempt to insert to a full list" << endl;
+        else
+          coll[count++] = entry;
+      }
+
+      void Traverse(Functor f)
+      {
+        for (int i = 0; i < count; ++i)
+          f(coll[i]);
+      }
+
+    private:
+      int count{};
+      // ListEntry coll[MAXLIST] = {ListEntry(0,0)};
+      ListEntry coll[MAXLIST];
+  };
+} // namespace
+
+TEST(AlgoList, SimpleListContiguous)
+{
+  using namespace list_simple;
+
+  auto input_values{
+    ListEntry(1,2), ListEntry(2,3), ListEntry(3,4), ListEntry(4,5), ListEntry(5,6)
+  };
+
+  List simple_list;
+  Functor f;
+  simple_list.Create();
+
+  for (auto e : input_values)
+  {
+    simple_list.Add(e);
+  }
+
+  EXPECT_THAT(simple_list.Size(), 5);
+
+  simple_list.Traverse(f);
+}
+
 
 int main(int argc, char** argv)
 {
-    testing::InitGoogleMock(&argc, argv);
-    return RUN_ALL_TESTS();
+  testing::InitGoogleMock(&argc, argv);
+  return RUN_ALL_TESTS();
 }
