@@ -23,7 +23,7 @@ USER_DIR = .
 CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(GTEST_DIR) \
 			-isystem $(GMOCK_DIR)/include -I$(GMOCK_DIR)
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -lboost_regex
+CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -lboost_regex -D_GLIBCXX_DEBUG
 
 TESTS = $(TARGET)_test
 

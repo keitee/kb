@@ -63,7 +63,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_algo_004| queue {queue-circular-array}
 |kt_dev_algo_005| array: index shift
 |kt_dev_algo_006| the game of life
-|kt_dev_algo_007| recursion
 *kt_dev_algo_008* algo-bigo-notation
 *kt_dev_algo_008* algo-search
 *kt_dev_algo_008* algo-ordered-list
@@ -500,8 +499,8 @@ an odd number of times as output.
 0001 ^ 0011 ^ 0001
 (0001 ^ 0001) ^ 0011 = 0000 ^ 0011 = 0011 (3)
 
-Uses two `XOR properties` and uses that xor is transitive. If do xor even
-times, becomes 0.
+Uses two *cxx-xor* `XOR properties` and uses that xor is transitive. If do xor
+even times, becomes 0.
 
 00 0      Y xor Y = 0  (2 times)
 01 1      0 xor Y = Y  (3 times)
@@ -2046,9 +2045,492 @@ TEST(RomanConvert, ConvertToRomansTDD)
 ={===========================================================================
 *kt_dev_algo_0000* dev-algo-problem algo-recursion
 
+The recursion is [divide-and-conquer] as it reduce the large problem to one or more problems of a
+similar nature but a smaller size. 
+
+Must determine the [stopping-rule], the smallest case because there must be some way that the
+recursion stops.
+
+
+{the-tower-of-hanoi}
+
+The idea is to concentrate not on the first step, but rather on the hardest step: moving the bottom
+disk because condition is that only one disk can be moved at a time and the bottom, largest, one can
+never be on top of any other.
+
+Move( disk, start, finish, temp );
+
+When there are 64 disks:
+
+Move( 63, 1, 2, 3);                             // 63th disk
+printf("move disk 64 from tower 1 to 3.\n");    // 64th disk
+Move( 63, 2, 3, 1);                             // 63th disk
+
+The stopping rule is when there is no disk to be moved, there is nothing to do.
+
+#define DISKS	64
+
+void Move(int count, int start, int finish, int temp)
+{
+	 if( count > 0 )
+	 {
+		  Move( count-1, start, temp, finish );
+		  printf("move a disk from tower %d to %d.\n", start, finish );
+		  Move( count-1, temp, finish, start );
+	}
+}
+
+int main()
+{
+	 Move( DISKS, 1, 3, 2 );
+	 return 0;
+}
+
+The number of non-leaves, that is the number of moves for 64 is 2^64-1. This is about 5x10^11 years
+where 2x10^10 is 20 billion years
+
+{recursion-tree}
+
+This is a tool to visualize recursive call in which node represents recursion call. The time
+requirement is the total number of nodes, vertices, in a recursion tree since traverse all nodes and
+the space(stack space) is the depth of tree, not the number of nodes.
+
+                                                          Move(3, 1,3,2) ()
+
+                             Move(2, 1,2,3) ()                                              ...
+
+         Move(1, 1,3,2) ()                      Move(1, 3,2,1) ()          
+
+Move(0, 1,2,3) ()  Move(0, 2,3,1) ()   Move(0, 3,1,2) ()  Move(0, 1,2,3) ()
+
+
+To get this in programming, can think of:
+
+#include < iostream>
+
+using namespace std;
+
+#define DISKS	3
+
+unsigned int depthRecursion;
+
+void PrintDepth( bool dash, unsigned int depth )
+{
+	for( unsigned int i=0; i <= depth; ++i)
+	{
+		if(dash)
+			cout << "--";
+		else
+			cout << "  ";
+	}
+
+	if(dash)
+		cout << "(" << depth << ") ";
+	else
+		cout << "      ";
+}
+
+void Move(int count, int start, int finish, int temp)
+{
+	 depthRecursion++;
+	 PrintDepth( true, depthRecursion );
+
+	 cout << "Move(" << count << "," << start << "," << finish << "," << temp << ")" << endl;
+
+	 if( count > 0 )
+	 {
+		  Move( count-1, start, temp, finish );
+	 	  PrintDepth( false, depthRecursion );
+		  cout << "move a disk " << count << " from tower " << start << " to " << finish << endl;
+		  Move( count-1, temp, finish, start );
+	 }
+
+	 depthRecursion--;
+}
+
+int main()
+{
+	 Move( DISKS, 1, 3, 2 );
+	 return 0;
+}
+
+kt@kt-ub-vb:~/c++$ ./a.out 
+----(1) Move(3,1,3,2)
+------(2) Move(2,1,2,3)
+--------(3) Move(1,1,3,2)                        // { (1, s,f,t)
+----------(4) Move(0,1,2,3)                      //    { (0, s,f,t)
+              move a disk 1 from tower 1 to 3
+----------(4) Move(0,2,3,1)                      //    } (0, s,f,t)
+            move a disk 2 from tower 1 to 2
+--------(3) Move(1,3,2,1)	                      // } (1, s,f,t)
+
+----------(4) Move(0,3,1,2)
+              move a disk 1 from tower 3 to 2
+----------(4) Move(0,1,2,3)
+
+          move a disk 3 from tower 1 to 3
+------(2) Move(2,2,3,1)
+
+--------(3) Move(1,2,1,3)
+----------(4) Move(0,2,3,1)
+              move a disk 1 from tower 2 to 1
+----------(4) Move(0,3,1,2)
+
+            move a disk 2 from tower 2 to 3
+--------(3) Move(1,1,3,2)
+----------(4) Move(0,1,2,3)
+              move a disk 1 from tower 1 to 3
+----------(4) Move(0,2,3,1)
+
+Here counts is disks which are 1, 2, 3 and when follows the messages, get a problem solved. Note
+that PrintDepth is correct showing the same depth of recursion in column.
+
+
+{eight-queen-puzzle}
+
+From {ref-001} and C version. The chess rules is that a queen can take another queen that is on the
+same row, the same column, or the same diagonal.
+
+<key-step>
+
+This is formulating or outlining that use recursion to mean contiune to the next stage and repeat
+the task.
+
+This is naive approach when 8x8 board:
+
+void AddQueen()
+{
+	 for( every unguarded position p on the board )
+	 {
+		  place a queen in position p;
+		  queen++;
+
+		  if( queen == 8 )
+				print the configuration;
+		  else
+				AddQueen();
+
+		  remove the queen from position p;
+		  queen--;
+	 }
+}
+ 
+4x4 eample
+
+ dead end    dead end    solution    solution
+  0 1 2 3     0 1 2 3     0 1 2 3     0 1 2 3 
+0 Q ? ? ?   0 Q ? ? ?   0 X Q ? ?   0     Q   
+1 X X Q ?   1 X X X Q   1 X X X Q   1 Q       
+2 X X X X   2 X Q X X   2 Q X X X   2       Q 
+3           3 X X X X   3 X X Q X   3   Q     
+
+<backtrack> <postponing-the-work>
+
+When reach a dead end, must backtrack by going back to the most recent choice we have made and
+trying another possibility. Usally called [backtracking-algorithm] which attempt to complete a
+search for a solution by constructing [partial-solution] and which proves useful in situation where
+many possibilities may first appear such as scheduling problems and a compiler parsing to determine
+the meaning of a statement. 
+
+<data-structure>
+
+To choose the data structure to represent data to solve a problem. In this case, array.
+
+<observations>
+
+observation-01: mark guarded and unguarded. 
+If scan the board to see if a position is guarded whenever place a queen, would involve considerable
+searching. As do on a paper, if can mark guarded posion when place a queen, can look for unguarded
+position in the next stage. So reduced searching but a problem arise.
+
+When remove a queen, should not necessrily change a position from false to true(unguarded) because
+some other queen still guard that posiotion. So can use int array instead to count and position is
+unguarded if and only if it has a count of 0. Better than the first approach but involves
+considerable searching and calculation. How to improve? Need more observations.
+
+observation-02: only one queen in each row
+
+int queencol[ rows ] gives the column containing a queen and this covers vertical and horizental
+positions.
+
+observation-03: use [difference] for downwards and [sum] for upwards.
+
+4x4
+00 01 02 03 : down diff -3. 4th covers 1 pos. -> 0th
+10 11 12 13 : down diff -2. 5th covers 2         1th
+20 21 22 23 : down diff -1. 6th covers 3         2th
+30 31 32 33 : down diff  0. 0th covers 4         3th
+            : down diff  1. 1th covers 3         4th
+				: down diff  2. 2th covers 2         5th
+				: down diff  3. 3th covers 1         6th
+
+The down and up diagonal examples are:
+
+00 11 22 33 : down, 30 21 12 03 : up. where these are xy index in a array. 
+
+The obseravtion here is that the main down diagonal has the same difference: 00 11 22 33 and otheres
+are between -3..3. Since there is no minus index in array use offset to map 0..6 (shifted)
+
+up diagonal are ones to upper-right. As down diagonal, cannot use difference because cannot uniquely
+identify up diagonals. For example, 00 and 33 have 0 in difference. Therefore, use sum instead.
+
+Try one example
+
+  0 1 2 3
+0 Q ? ? ?
+1 X X Q ?
+2 X X X X
+3        
+
+pos 00:Q: queencol[0] = 0. down diff 0 and 0th. up 0th.
+pos 12:Q: queencol[1] = 2. down diff -1 and 6th. up sum 3.
+    dead: backtrack. unset down 6th and up 3th. there is no duplicates in set/unset up and down diagonal
+because pos on the same diagonal will not tried.
+
+Therefore, no need to have int array for marking guarded and unguarded cells for a whole board.
+Hence reduced calaulations and searching.
+
+<analysis>
+
+The navie approach which place 8 queens and reject illegal configutation every time when place a
+queen. This is C(64, 8) = 64!/8!(64-8)! = 4,426,165,368. This is [combination] notation in math.
+
+The [observation-02] cuts this to 8^8 = 16,777,216
+The [observation-03] cuts this to 8! = 40,320
+
+This shows the effectiveness of [backtrack] as reduce a recursion tree to manageable step. The
+actual number of cases the program consider will be much less than this.
+
+<code-program>
+
+#include <iostream>
+
+using namespace std;
+
+#define BOARDSIZE 	4						// 4x4 space
+#define DIAGONAL		(2*BOARDSIZE-1)	// up or down diagonal size
+#define DOWNOFFSET	(BOARDSIZE-1)		// down diagonal offset. BOARDSIZE-1
+
+// to set a column where queen is for a each row. For example,
+//
+//   0 1 2
+// 0 Q
+// 1 X X Q
+//
+// queencol has {0, 2, .. } means that row 0 has 0, row 1 has 2. this is the answer when finish.
+//
+int queencol[ BOARDSIZE ];					
+
+// row where queen is and also means the number of queens has been put. recursion depth and
+// horizental
+int queenrow = -1;							
+
+// bitset to mark guarded(occupied) or upguarded position for column, up and down diagonal
+// for [backtrack]
+bool colfree[ BOARDSIZE ];		// cloumn is guarded? vertical.
+bool upfree[ DIAGONAL ];
+bool downfree[ DIAGONAL ];
+
+void PrintDepth( bool dash, unsigned int depth )
+{
+	for( unsigned int i=0; i <= depth; ++i)
+	{
+		if(dash)
+			cout << "-";
+		else
+			cout << " ";
+	}
+
+	if(dash)
+		cout << "(" << depth << ") ";
+	else
+		cout << "    ";
+}
+
+void WriteBoard()
+{
+	cout << "solution {";
+
+	for( int i=0; i < BOARDSIZE; ++i)
+		cout << queencol[i] << ",";
+
+	cout << "}" << endl;
+}
+
+void AddQueen()
+{
+	 int col=0;
+
+	 queenrow++;
+	 PrintDepth(true, queenrow);
+	 cout << "AddQueen(" << queenrow << ", " << col << ")" << endl;
+
+	 for( col = 0; col < BOARDSIZE; col++ )
+	 {
+		  // check if colfree, upfree and downfree are unguarded
+		  //
+		  if( colfree[ col ] && upfree[ queenrow + col ] && downfree[ queenrow - col + DOWNOFFSET ] )
+		  {
+				// put a queen in position( queenrow, col )
+				//
+				PrintDepth(false, queenrow);
+				cout << "added a queen(" << queenrow << ", " << col << ")" << endl;
+
+				queencol[ queenrow ] = col;
+
+				colfree[ col ] = false;
+				upfree[ queenrow + col ] = false;
+				downfree[ queenrow - col + DOWNOFFSET ] = false;
+
+				if( queenrow == BOARDSIZE-1 ) // termination condition
+					 WriteBoard();					// print out and should not terminate program to see all
+					                           // solutions
+				else 									// proceed recursively
+					 AddQueen();
+
+				PrintDepth(false, queenrow);
+				cout << "removed a queen(" << queenrow << ", " << col << ")" << endl;
+
+				// backtrack by removing the queen
+				colfree[ col ] = true;
+				upfree[ queenrow + col ] = true;
+				downfree[ queenrow - col + DOWNOFFSET ] = true;
+		  }
+	 } // for end
+
+	 queenrow--;
+}
+
+int main()
+{
+	 int i;
+	 
+	 // init bitsets
+	 for(i = 0; i < BOARDSIZE; i++)
+		  colfree[i] = true;	// unguarded
+
+	 for(i = 0; i < DIAGONAL; i++)
+	 {
+		  upfree[i] = downfree[i] = true;
+	 }
+
+	 AddQueen();
+	 return 0;
+}
+
+The output when run 4x4:
+
+-(0) AddQueen(0, 0)
+     added a queen(0, 0)
+--(1) AddQueen(1, 0)
+      added a queen(1, 2)
+---(2) AddQueen(2, 0)
+      removed a queen(1, 2)
+      added a queen(1, 3)
+---(2) AddQueen(2, 0)
+       added a queen(2, 1)
+----(3) AddQueen(3, 0)
+       removed a queen(2, 1)
+      removed a queen(1, 3)
+     removed a queen(0, 0)
+     added a queen(0, 1)
+--(1) AddQueen(1, 0)
+      added a queen(1, 3)
+---(2) AddQueen(2, 0)
+       added a queen(2, 0)
+----(3) AddQueen(3, 0)
+        added a queen(3, 2)
+solution {1,3,0,2,}
+        removed a queen(3, 2)
+       removed a queen(2, 0)
+      removed a queen(1, 3)
+     removed a queen(0, 1)
+     added a queen(0, 2)
+--(1) AddQueen(1, 0)
+      added a queen(1, 0)
+---(2) AddQueen(2, 0)
+       added a queen(2, 3)
+----(3) AddQueen(3, 0)
+        added a queen(3, 1)
+solution {2,0,3,1,}
+        removed a queen(3, 1)
+       removed a queen(2, 3)
+      removed a queen(1, 0)
+     removed a queen(0, 2)
+     added a queen(0, 3)
+--(1) AddQueen(1, 0)
+      added a queen(1, 0)
+---(2) AddQueen(2, 0)
+       added a queen(2, 2)
+----(3) AddQueen(3, 0)
+       removed a queen(2, 2)
+      removed a queen(1, 0)
+      added a queen(1, 1)
+---(2) AddQueen(2, 0)
+      removed a queen(1, 1)
+     removed a queen(0, 3)
+
+
+{designing-recursive}
+
+o find the key step to divide a problem into parts
+o find a stopping rule
+o outline your algorithm
+o check it with a small case
+o draw a recursion tree.
+
+
+{when-not-to-use-recursion} {tail-recursion}
+
+The tail recursion when the last-executed statment is a recursive call waste space as do unnecessary
+recusive call. Because when return, restore stack but terminates immediately. For this case, can
+change it to iterative one. 
+
+<example-one>
+
+void Move(int count, int start, int finish, int temp)
+{
+	 if( count > 0 )
+	 {
+		  Move( count-1, start, temp, finish );
+		  printf("move a disk %d from tower %d to %d.\n", count, start, finish );
+		  Move( count-1, temp, finish, start );
+	}
+}
+
+
+void Move(int count, int start, int finish, int temp)
+{
+	 int swap;
+
+	 if( count > 0 )
+	 {
+		  Move( count-1, start, temp, finish );
+		  printf("move a disk %d from tower %d to %d.\n", count, start, finish );
+		  count--;
+		  swap = start;   // swap(start, temp) how does it work???
+		  start = temp;
+		  temp = swap; 
+	}
+}
+
+
+
+
+<make-a-decision>
+
+The good starting point is to study a recursion tree.
+
+o if it has a simple form like a chain, the iterative may be better. Such as factorial and can do by
+reading the recursion tree from bottom to top instead of top to bottom.
+
+o if it has duplicate tasks, use other data structure other than stack. fibonacci iterative version.
+
+So use recursion when the tree appears quite bushy, with little duplication of tasks.
+
 
 ={===========================================================================
-*kt_dev_algo_0000* dev-algo-problem algo-recursion algo-factorial
+*kt_dev_algo_0000* dev-algo-problem algo-recursion algo-factorial algo-fibonacci
 
 // factorial, n!, is the product of all `positive` integers less than or equals
 // to n.
@@ -2108,8 +2590,64 @@ TEST(AlgoRecursion, FactorialIteration_0717)
 }
 
 
-={===========================================================================
-*kt_dev_algo_0000* dev-algo-problem algo-recursion algo-fibonacci
+<fibonacci>
+
+The definition is:
+
+F0 = 0.
+F1 = 1.
+Fn = Fn-1 + Fn-2 for n >= 2
+
+int fibonacci(int n)
+{
+  if( n <= 0 )
+    return 0;
+  else if( n==1 )
+    return 1;
+  else
+    return fibonacci(n-1) + fibonacci(n-2);
+}
+
+Far more wasteful example when use recursive because when see recursion tree,
+    after F5, it is done but lost although it is required later in calculating
+    other nodes. Fn grows exponentially with n. 
+
+The interative version is:
+
+current   one back(fn-1)   two back(fn-2)
+2       = 1              + 0
+3       = 2              + 1
+4       = 3              + 2
+5       = 4              + 3
+6       = 5              + 4
+...
+
+int fibonacci(int n)
+{
+  int n;
+  int twoback; // second previous Fi-2
+  int oneback; // previous number Fi-1
+  int current; // current Fi
+
+  if( n <= 0 )
+    return 0;
+  else if( n==1 )
+    return 1;
+  else
+  {
+    twoback = 0;
+    oneback = 1;
+
+    for( i=2; i <= n; i++ )
+    {
+      current = twoback + oneback;
+      twoback = oneback;
+      oneback = current;
+    }
+
+    return current;
+  }
+}
 
 
 ={============================================================================
@@ -12620,550 +13158,6 @@ The amount of computation is no longer proportional to the size of the grid but 
 changes being made. Has about 2900 statements which is 6 times faster than the first. Is it
 worthwhile although it is more complicated and costly to maintain? Usually there is
 {space-and-time-trade-offs}. Depends on.
-
-
-==============================================================================
-*kt_dev_algo_007*	recursion
-
-The recursion is [divide-and-conquer] as it reduce the large problem to one or more problems of a
-similar nature but a smaller size. 
-
-Must determine the [stopping-rule], the smallest case because there must be some way that the
-recursion stops.
-
-
-{the-tower-of-hanoi}
-
-The idea is to concentrate not on the first step, but rather on the hardest step: moving the bottom
-disk because condition is that only one disk can be moved at a time and the bottom, largest, one can
-never be on top of any other.
-
-Move( disk, start, finish, temp );
-
-When there are 64 disks:
-
-Move( 63, 1, 2, 3);                             // 63th disk
-printf("move disk 64 from tower 1 to 3.\n");    // 64th disk
-Move( 63, 2, 3, 1);                             // 63th disk
-
-The stopping rule is when there is no disk to be moved, there is nothing to do.
-
-#define DISKS	64
-
-void Move(int count, int start, int finish, int temp)
-{
-	 if( count > 0 )
-	 {
-		  Move( count-1, start, temp, finish );
-		  printf("move a disk from tower %d to %d.\n", start, finish );
-		  Move( count-1, temp, finish, start );
-	}
-}
-
-int main()
-{
-	 Move( DISKS, 1, 3, 2 );
-	 return 0;
-}
-
-The number of non-leaves, that is the number of moves for 64 is 2^64-1. This is about 5x10^11 years
-where 2x10^10 is 20 billion years
-
-{recursion-tree}
-
-This is a tool to visualize recursive call in which node represents recursion call. The time
-requirement is the total number of nodes, vertices, in a recursion tree since traverse all nodes and
-the space(stack space) is the depth of tree, not the number of nodes.
-
-                                                          Move(3, 1,3,2) ()
-
-                             Move(2, 1,2,3) ()                                              ...
-
-         Move(1, 1,3,2) ()                      Move(1, 3,2,1) ()          
-
-Move(0, 1,2,3) ()  Move(0, 2,3,1) ()   Move(0, 3,1,2) ()  Move(0, 1,2,3) ()
-
-
-To get this in programming, can think of:
-
-#include < iostream>
-
-using namespace std;
-
-#define DISKS	3
-
-unsigned int depthRecursion;
-
-void PrintDepth( bool dash, unsigned int depth )
-{
-	for( unsigned int i=0; i <= depth; ++i)
-	{
-		if(dash)
-			cout << "--";
-		else
-			cout << "  ";
-	}
-
-	if(dash)
-		cout << "(" << depth << ") ";
-	else
-		cout << "      ";
-}
-
-void Move(int count, int start, int finish, int temp)
-{
-	 depthRecursion++;
-	 PrintDepth( true, depthRecursion );
-
-	 cout << "Move(" << count << "," << start << "," << finish << "," << temp << ")" << endl;
-
-	 if( count > 0 )
-	 {
-		  Move( count-1, start, temp, finish );
-	 	  PrintDepth( false, depthRecursion );
-		  cout << "move a disk " << count << " from tower " << start << " to " << finish << endl;
-		  Move( count-1, temp, finish, start );
-	 }
-
-	 depthRecursion--;
-}
-
-int main()
-{
-	 Move( DISKS, 1, 3, 2 );
-	 return 0;
-}
-
-kt@kt-ub-vb:~/c++$ ./a.out 
-----(1) Move(3,1,3,2)
-------(2) Move(2,1,2,3)
---------(3) Move(1,1,3,2)                        // { (1, s,f,t)
-----------(4) Move(0,1,2,3)                      //    { (0, s,f,t)
-              move a disk 1 from tower 1 to 3
-----------(4) Move(0,2,3,1)                      //    } (0, s,f,t)
-            move a disk 2 from tower 1 to 2
---------(3) Move(1,3,2,1)	                      // } (1, s,f,t)
-
-----------(4) Move(0,3,1,2)
-              move a disk 1 from tower 3 to 2
-----------(4) Move(0,1,2,3)
-
-          move a disk 3 from tower 1 to 3
-------(2) Move(2,2,3,1)
-
---------(3) Move(1,2,1,3)
-----------(4) Move(0,2,3,1)
-              move a disk 1 from tower 2 to 1
-----------(4) Move(0,3,1,2)
-
-            move a disk 2 from tower 2 to 3
---------(3) Move(1,1,3,2)
-----------(4) Move(0,1,2,3)
-              move a disk 1 from tower 1 to 3
-----------(4) Move(0,2,3,1)
-
-Here counts is disks which are 1, 2, 3 and when follows the messages, get a problem solved. Note
-that PrintDepth is correct showing the same depth of recursion in column.
-
-
-{eight-queen-puzzle}
-
-From {ref-001} and C version. The chess rules is that a queen can take another queen that is on the
-same row, the same column, or the same diagonal.
-
-<key-step>
-
-This is formulating or outlining that use recursion to mean contiune to the next stage and repeat
-the task.
-
-This is naive approach when 8x8 board:
-
-void AddQueen()
-{
-	 for( every unguarded position p on the board )
-	 {
-		  place a queen in position p;
-		  queen++;
-
-		  if( queen == 8 )
-				print the configuration;
-		  else
-				AddQueen();
-
-		  remove the queen from position p;
-		  queen--;
-	 }
-}
- 
-4x4 eample
-
- dead end    dead end    solution    solution
-  0 1 2 3     0 1 2 3     0 1 2 3     0 1 2 3 
-0 Q ? ? ?   0 Q ? ? ?   0 X Q ? ?   0     Q   
-1 X X Q ?   1 X X X Q   1 X X X Q   1 Q       
-2 X X X X   2 X Q X X   2 Q X X X   2       Q 
-3           3 X X X X   3 X X Q X   3   Q     
-
-<backtrack> <postponing-the-work>
-
-When reach a dead end, must backtrack by going back to the most recent choice we have made and
-trying another possibility. Usally called [backtracking-algorithm] which attempt to complete a
-search for a solution by constructing [partial-solution] and which proves useful in situation where
-many possibilities may first appear such as scheduling problems and a compiler parsing to determine
-the meaning of a statement. 
-
-<data-structure>
-
-To choose the data structure to represent data to solve a problem. In this case, array.
-
-<observations>
-
-observation-01: mark guarded and unguarded. 
-If scan the board to see if a position is guarded whenever place a queen, would involve considerable
-searching. As do on a paper, if can mark guarded posion when place a queen, can look for unguarded
-position in the next stage. So reduced searching but a problem arise.
-
-When remove a queen, should not necessrily change a position from false to true(unguarded) because
-some other queen still guard that posiotion. So can use int array instead to count and position is
-unguarded if and only if it has a count of 0. Better than the first approach but involves
-considerable searching and calculation. How to improve? Need more observations.
-
-observation-02: only one queen in each row
-
-int queencol[ rows ] gives the column containing a queen and this covers vertical and horizental
-positions.
-
-observation-03: use [difference] for downwards and [sum] for upwards.
-
-4x4
-00 01 02 03 : down diff -3. 4th covers 1 pos. -> 0th
-10 11 12 13 : down diff -2. 5th covers 2         1th
-20 21 22 23 : down diff -1. 6th covers 3         2th
-30 31 32 33 : down diff  0. 0th covers 4         3th
-            : down diff  1. 1th covers 3         4th
-				: down diff  2. 2th covers 2         5th
-				: down diff  3. 3th covers 1         6th
-
-The down and up diagonal examples are:
-
-00 11 22 33 : down, 30 21 12 03 : up. where these are xy index in a array. 
-
-The obseravtion here is that the main down diagonal has the same difference: 00 11 22 33 and otheres
-are between -3..3. Since there is no minus index in array use offset to map 0..6 (shifted)
-
-up diagonal are ones to upper-right. As down diagonal, cannot use difference because cannot uniquely
-identify up diagonals. For example, 00 and 33 have 0 in difference. Therefore, use sum instead.
-
-Try one example
-
-  0 1 2 3
-0 Q ? ? ?
-1 X X Q ?
-2 X X X X
-3        
-
-pos 00:Q: queencol[0] = 0. down diff 0 and 0th. up 0th.
-pos 12:Q: queencol[1] = 2. down diff -1 and 6th. up sum 3.
-    dead: backtrack. unset down 6th and up 3th. there is no duplicates in set/unset up and down diagonal
-because pos on the same diagonal will not tried.
-
-Therefore, no need to have int array for marking guarded and unguarded cells for a whole board.
-Hence reduced calaulations and searching.
-
-<analysis>
-
-The navie approach which place 8 queens and reject illegal configutation every time when place a
-queen. This is C(64, 8) = 64!/8!(64-8)! = 4,426,165,368. This is [combination] notation in math.
-
-The [observation-02] cuts this to 8^8 = 16,777,216
-The [observation-03] cuts this to 8! = 40,320
-
-This shows the effectiveness of [backtrack] as reduce a recursion tree to manageable step. The
-actual number of cases the program consider will be much less than this.
-
-<code-program>
-
-#include <iostream>
-
-using namespace std;
-
-#define BOARDSIZE 	4						// 4x4 space
-#define DIAGONAL		(2*BOARDSIZE-1)	// up or down diagonal size
-#define DOWNOFFSET	(BOARDSIZE-1)		// down diagonal offset. BOARDSIZE-1
-
-// to set a column where queen is for a each row. For example,
-//
-//   0 1 2
-// 0 Q
-// 1 X X Q
-//
-// queencol has {0, 2, .. } means that row 0 has 0, row 1 has 2. this is the answer when finish.
-//
-int queencol[ BOARDSIZE ];					
-
-// row where queen is and also means the number of queens has been put. recursion depth and
-// horizental
-int queenrow = -1;							
-
-// bitset to mark guarded(occupied) or upguarded position for column, up and down diagonal
-// for [backtrack]
-bool colfree[ BOARDSIZE ];		// cloumn is guarded? vertical.
-bool upfree[ DIAGONAL ];
-bool downfree[ DIAGONAL ];
-
-void PrintDepth( bool dash, unsigned int depth )
-{
-	for( unsigned int i=0; i <= depth; ++i)
-	{
-		if(dash)
-			cout << "-";
-		else
-			cout << " ";
-	}
-
-	if(dash)
-		cout << "(" << depth << ") ";
-	else
-		cout << "    ";
-}
-
-void WriteBoard()
-{
-	cout << "solution {";
-
-	for( int i=0; i < BOARDSIZE; ++i)
-		cout << queencol[i] << ",";
-
-	cout << "}" << endl;
-}
-
-void AddQueen()
-{
-	 int col=0;
-
-	 queenrow++;
-	 PrintDepth(true, queenrow);
-	 cout << "AddQueen(" << queenrow << ", " << col << ")" << endl;
-
-	 for( col = 0; col < BOARDSIZE; col++ )
-	 {
-		  // check if colfree, upfree and downfree are unguarded
-		  //
-		  if( colfree[ col ] && upfree[ queenrow + col ] && downfree[ queenrow - col + DOWNOFFSET ] )
-		  {
-				// put a queen in position( queenrow, col )
-				//
-				PrintDepth(false, queenrow);
-				cout << "added a queen(" << queenrow << ", " << col << ")" << endl;
-
-				queencol[ queenrow ] = col;
-
-				colfree[ col ] = false;
-				upfree[ queenrow + col ] = false;
-				downfree[ queenrow - col + DOWNOFFSET ] = false;
-
-				if( queenrow == BOARDSIZE-1 ) // termination condition
-					 WriteBoard();					// print out and should not terminate program to see all
-					                           // solutions
-				else 									// proceed recursively
-					 AddQueen();
-
-				PrintDepth(false, queenrow);
-				cout << "removed a queen(" << queenrow << ", " << col << ")" << endl;
-
-				// backtrack by removing the queen
-				colfree[ col ] = true;
-				upfree[ queenrow + col ] = true;
-				downfree[ queenrow - col + DOWNOFFSET ] = true;
-		  }
-	 } // for end
-
-	 queenrow--;
-}
-
-int main()
-{
-	 int i;
-	 
-	 // init bitsets
-	 for(i = 0; i < BOARDSIZE; i++)
-		  colfree[i] = true;	// unguarded
-
-	 for(i = 0; i < DIAGONAL; i++)
-	 {
-		  upfree[i] = downfree[i] = true;
-	 }
-
-	 AddQueen();
-	 return 0;
-}
-
-The output when run 4x4:
-
--(0) AddQueen(0, 0)
-     added a queen(0, 0)
---(1) AddQueen(1, 0)
-      added a queen(1, 2)
----(2) AddQueen(2, 0)
-      removed a queen(1, 2)
-      added a queen(1, 3)
----(2) AddQueen(2, 0)
-       added a queen(2, 1)
-----(3) AddQueen(3, 0)
-       removed a queen(2, 1)
-      removed a queen(1, 3)
-     removed a queen(0, 0)
-     added a queen(0, 1)
---(1) AddQueen(1, 0)
-      added a queen(1, 3)
----(2) AddQueen(2, 0)
-       added a queen(2, 0)
-----(3) AddQueen(3, 0)
-        added a queen(3, 2)
-solution {1,3,0,2,}
-        removed a queen(3, 2)
-       removed a queen(2, 0)
-      removed a queen(1, 3)
-     removed a queen(0, 1)
-     added a queen(0, 2)
---(1) AddQueen(1, 0)
-      added a queen(1, 0)
----(2) AddQueen(2, 0)
-       added a queen(2, 3)
-----(3) AddQueen(3, 0)
-        added a queen(3, 1)
-solution {2,0,3,1,}
-        removed a queen(3, 1)
-       removed a queen(2, 3)
-      removed a queen(1, 0)
-     removed a queen(0, 2)
-     added a queen(0, 3)
---(1) AddQueen(1, 0)
-      added a queen(1, 0)
----(2) AddQueen(2, 0)
-       added a queen(2, 2)
-----(3) AddQueen(3, 0)
-       removed a queen(2, 2)
-      removed a queen(1, 0)
-      added a queen(1, 1)
----(2) AddQueen(2, 0)
-      removed a queen(1, 1)
-     removed a queen(0, 3)
-
-
-{designing-recursive}
-
-o find the key step to divide a problem into parts
-o find a stopping rule
-o outline your algorithm
-o check it with a small case
-o draw a recursion tree.
-
-
-{when-not-to-use-recursion} {tail-recursion}
-
-The tail recursion when the last-executed statment is a recursive call waste space as do unnecessary
-recusive call. Because when return, restore stack but terminates immediately. For this case, can
-change it to iterative one. 
-
-<example-one>
-
-void Move(int count, int start, int finish, int temp)
-{
-	 if( count > 0 )
-	 {
-		  Move( count-1, start, temp, finish );
-		  printf("move a disk %d from tower %d to %d.\n", count, start, finish );
-		  Move( count-1, temp, finish, start );
-	}
-}
-
-
-void Move(int count, int start, int finish, int temp)
-{
-	 int swap;
-
-	 if( count > 0 )
-	 {
-		  Move( count-1, start, temp, finish );
-		  printf("move a disk %d from tower %d to %d.\n", count, start, finish );
-		  count--;
-		  swap = start;   // swap(start, temp) how does it work???
-		  start = temp;
-		  temp = swap; 
-	}
-}
-
-
-<fibonacci>
-
-The definition is:
-
-F0 = 0.
-F1 = 1.
-Fn = Fn-1 + Fn-2 for n >= 2
-
-int fibonacci(int n)
-{
-	 if( n <= 0 )
-		  return 0;
-	 else if( n==1 )
-		  return 1;
-	 else
-		  return fibonacci(n-1) + fibonacci(n-2);
-}
-
-Far more wasteful example when use recursive because when see recursion tree, after F5, it is done
-but lost although it is required later in calculating other nodes. Fn grows exponentially with n. 
-
-The interative version is:
-
-current   one back(fn-1)   two back(fn-2)
-2       = 1              + 0
-3       = 2              + 1
-4       = 3              + 2
-5       = 4              + 3
-6       = 5              + 4
-...
-
-int fibonacci(int n)
-{
-	 int n;
-	 int twoback; // second previous Fi-2
-	 int oneback; // previous number Fi-1
-	 int current; // current Fi
-
-	 if( n <= 0 )
-		  return 0;
-	 else if( n==1 )
-		  return 1;
-	 else
-	 {
-		  twoback = 0;
-		  oneback = 1;
-
-		  for( i=2; i <= n; i++ )
-		  {
-				current = twoback + oneback;
-				twoback = oneback;
-				oneback = current;
-		  }
-
-		  return current;
-	 }
-}
-
-
-<make-a-decision>
-
-The good starting point is to study a recursion tree.
-
-o if it has a simple form like a chain, the iterative may be better. Such as factorial and can do by
-reading the recursion tree from bottom to top instead of top to bottom.
-
-o if it has duplicate tasks, use other data structure other than stack. fibonacci iterative version.
-
-So use recursion when the tree appears quite bushy, with little duplication of tasks.
 
 
 ={============================================================================
