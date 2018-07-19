@@ -669,7 +669,7 @@ TEST(Time, UseConventionalWay)
 // The local date and time is: Tue Jun 12 14:42:18 2018
 // The local date and time is: Tue Jun 12 14:42:28 2018
 
-TEST(Time, UseConventionalWayToShowPitfall)
+TEST(DISABLED_Time, UseConventionalWayToShowPitfall)
 {
   // tm *localtm = localtime(&now);
   time_t now = time(0);
@@ -1450,7 +1450,8 @@ TEST(Bit, GetLimts)
 
 
 // ={=========================================================================
-
+// cxx-progress
+//
 // Q: If run it standalone, it runs slower than on in GTEST. WHY?
 //
 // #include <iostream>
@@ -1549,6 +1550,143 @@ TEST(Temporary, NativeAndStruct)
   // cout << "return int: " << ++ReturnInteger() << endl;
   
   cout << "return int: " << ++ReturnStruct() << endl;
+}
+
+
+// ={=========================================================================
+// cxx-integer-division
+
+// From ansic 1.2., this is a program to implement a formula "C = (5/9)(F-32)"
+// to print a table of Fahrenheit and Celsius.
+//
+// print Fahrenheit-Celsius table
+
+// fah:   0 cel:   0
+// fah:  20 cel: -17
+// fah:  40 cel:  -6
+// fah:  60 cel:   4
+// fah:  80 cel:  15
+// fah: 100 cel:  26
+//
+// celsius = 5 * (fahr-32) / 9;      // okay
+// celsius = 5/9 * (fahr-32);        // not okay
+// 
+// Since `integer-division` truncates; any fractional part is discarded so 5/9
+// would be trancated to zero.
+
+TEST(IntegerDivision, FahrenheitCelsius)
+{
+  int fah{}, cel{};
+  int high{100}, step{20};
+
+  while (fah <= high)
+  {
+    cout << 
+      " fah: " << setw(3) << setfill(' ') << fah << 
+      " cel: " << setw(3) << setfill(' ') << cel << endl;
+    cel = 5 * (fah-32) / 9;
+    fah += step;
+  }
+}
+
+// "5/9" is still integer division.
+// 
+// If an arithmetic operator has integer operands, an integer operation is
+// performed. If an arithmetic operator has one floating-point operand and one
+// integer operand, howerver, the integer will be converted to floating point
+// before the operation is done. 
+// 
+// "while(fhar <= upper)" and "fahr-32" would be converted to floating point.
+//
+// note: Nevertheless, writing floating-point constants with explicit decimal
+// point 'emphasizes' their floating-point nature for human readers.
+
+// fah: 0.000000 cel: 0.000000
+// fah: 20.000000 cel: -17.777779
+// fah: 40.000000 cel: -6.666667
+// fah: 60.000000 cel: 4.444445
+// fah: 80.000000 cel: 15.555555
+// fah: 100.000000 cel: 26.666666
+
+TEST(IntegerDivision, FahrenheitCelsius_Float)
+{
+  float fah{}, cel{};
+  int high{100}, step{20};
+
+  // no warnings
+  while (fah <= high)
+  {
+    cout << 
+      " fah: " << setw(3) << setfill(' ') << fah << 
+      " cel: " << setw(3) << setfill(' ') << cel << endl;
+
+    // cel = 5 * (fah-32) / 9;
+    // cel = 5/9 * (fah-32);        // not okay
+    // cel = 5/9 * (fah-32.0);      // not okay
+    
+    cel = 5/9.0 * (fah-32);      // okay
+    // cel = 5.0/9.0 * (fah-32.0);  // okay
+
+    fah += step;
+  }
+}
+
+
+// value:  10 perce: 6000
+// value:  40 perce: 1500
+// value: 100 perce: 600
+// value: 200 perce: 300
+// value: 250 perce: 200
+// value: 356 perce: 100
+// value: 450 perce: 100
+// value: 600 perce: 100
+//
+// value:  10 perce:   1
+// value:  40 perce:   6
+// value: 100 perce:  16
+// value: 200 perce:  33
+// value: 250 perce:  41
+// value: 356 perce:  59
+// value: 450 perce:  75
+// value: 600 perce: 100
+//
+// value:  10 perce:   0
+// value:  40 perce:   0
+// value: 100 perce:   0
+// value: 200 perce:   0
+// value: 250 perce:   0
+// value: 356 perce:   0
+// value: 450 perce:   0
+// value: 600 perce: 100
+
+TEST(IntegerDivision, Precentage)
+{
+  int total{600}, perce{};
+  vector<int> values{10,40,100,200,250,356,450,600};
+
+  for (auto value : values)
+  {
+    perce = total / value * 100;
+    cout << 
+      " value: " << setw(3) << setfill(' ') << value << 
+      " perce: " << setw(3) << setfill(' ') << perce << endl;
+  }
+
+  for (auto value : values)
+  {
+    perce = (value * 100)/total;
+    cout << 
+      " value: " << setw(3) << setfill(' ') << value << 
+      " perce: " << setw(3) << setfill(' ') << perce << endl;
+  }
+
+  for (auto value : values)
+  {
+    perce = (value/total)*100;
+    cout << 
+      " value: " << setw(3) << setfill(' ') << value << 
+      " perce: " << setw(3) << setfill(' ') << perce << endl;
+  }
 }
 
 

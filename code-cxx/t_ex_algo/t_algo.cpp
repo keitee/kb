@@ -204,6 +204,7 @@ int count_occurance_from_sequence_0719(const vector<int> &input, int key)
 
   for (auto value : input)
   {
+    // as algo-itoa
     for(; value;)
     {
       digit = value % 10;
@@ -4879,8 +4880,6 @@ TEST(AlgoConversion, AtoI)
 // ={=========================================================================
 // algo-itoa
 //
-// * input type? digits only? no space?
-// * input size?
 // * what base? 10 or 2?
 // * sign support? 
 
@@ -4893,51 +4892,41 @@ TEST(AlgoConversion, AtoI)
 
 std::string itoa_navie(const int input)
 {
-    int value{input};
-    char letter{0};
-    std::string result{};
+  int value{input};
+  char letter{0};
+  std::string result{};
 
-    for (; value;)
-    {
-        letter = '0' + (value % 10);
-        result += letter;
-        value /= 10;
-    }
+  for (; value;)
+  {
+    letter = '0' + (value % 10);
+    result += letter;
+    value /= 10;
+  }
 
-    return std::string(result.crbegin(), result.crend());
+  return std::string(result.crbegin(), result.crend());
 }
 
 std::string itoa_no_reverse(const int input)
 {
-    std::string result{};
-    std::string temp;
-    char letter{0};
-    int value{input};
+  std::string result{};
+  std::string temp{};
+  char letter{0};
+  int value{input};
 
-    for(; value;)
-    {
-        letter = '0' + (value % 10);
-        temp += letter;
-        // result.insert( 0, temp );
-        // result.insert( result.begin(), 1, temp );
-        cout << "1" << endl;
-        value /= 10;
-    }
+  for(; value;)
+  {
+    letter = '0' + (value % 10);
+    result.insert( result.begin(), 1, letter );
+    value /= 10;
+  }
 
-    return result;
+  return result;
 }
-
-
-// t_algo.cpp:1664: Failure
-// Value of: itoa_no_reverse(123)
-// Expected: is equal to 0x46e830 pointing to "123"
-//   Actual: "321323" (of type std::string)
-// [  FAILED  ] CxxAlgoItoaTest.RunWithVariousValues (0 ms)
 
 TEST(AlgoConversion, ItoA)
 {
     EXPECT_THAT(itoa_navie(123), Eq("123"));
-    // EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
+    EXPECT_THAT(itoa_no_reverse(123), Eq("123"));
 }
 
 

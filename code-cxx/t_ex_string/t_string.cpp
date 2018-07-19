@@ -22,7 +22,7 @@ using testing::FloatEq;
 // ={=========================================================================
 // string
 
-TEST(CxxString, ConstructFromChars)
+TEST(String, ConstructFromChars)
 {
     char s1[] = "this is first message";
     char *s2 = "this is first message";
@@ -39,10 +39,11 @@ TEST(CxxString, ConstructFromChars)
     // string string_from_non_const_letter(non_const_letter);
 }
 
+
 // ={=========================================================================
 // string ctors
 
-TEST(CxxString, UseStringCtors)
+TEST(String, UseStringCtors)
 {
     string s1{"zoo"};
     EXPECT_EQ(s1, "zoo");
@@ -86,7 +87,7 @@ TEST(CxxString, UseStringCtors)
 // ={=========================================================================
 // string operations
 
-TEST(CxxString, UseStringOperations)
+TEST(String, UseStringOperations)
 {
     string s1{"zoo"};
     EXPECT_EQ(s1.back(), 'o');
@@ -96,6 +97,13 @@ TEST(CxxString, UseStringOperations)
     
     EXPECT_EQ(string(1, s1.back()), "o");
 }
+
+TEST(String, MaxSize)
+{
+  string s{};
+  EXPECT_THAT(s.max_size(), 4611686018427387897);
+}
+
 
 // ={=========================================================================
 // string and cstring
@@ -164,7 +172,7 @@ bool strend_02(char *s, char *t)
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
 
-TEST(CxxStringTest, CompareStringFromEnd)
+TEST(String, CompareStringFromEnd)
 {
     char s1[] = "this is first message";
     char t1[] = "ssage";
@@ -339,7 +347,7 @@ TEST(StringConverison, NarrowNumericConversion)
 // strlen of s2 cstring: 21
 // size of string      : 21
 
-TEST(CxxStringTest, CompareStringSizes)
+TEST(String, CompareStringSizes)
 {
     const char *s1 = "this is first message";
     const char s2[] = "this is first message";
@@ -362,7 +370,7 @@ TEST(CxxStringTest, CompareStringSizes)
 // cv : 65
 // cv : 65
 
-TEST(CxxStringTest, PrintVariousTypeToOutputSteram)
+TEST(String, PrintVariousTypeToOutputSteram)
 {
     string str{"STRING"};
     int iv{10};
@@ -392,7 +400,7 @@ void pad(T &s, typename T::size_type n, typename T::value_type c)
         s.append(n - s.size(), c);
 }
 
-TEST(CxxStringTest, StringInsertAndAppendMember)
+TEST(String, StringInsertAndAppendMember)
 {
     // string s1{"foo"};
     // s1.insert(0, 20 - s1.size(), 'X');
@@ -423,7 +431,7 @@ TEST(CxxStringTest, StringInsertAndAppendMember)
     EXPECT_EQ(ws1, L"fooXXXXXXXXXXXXXXXXX");
 }
 
-TEST(CxxStringTest, StringAppendNull)
+TEST(String, StringAppendNull)
 {
     string s1{};
 
@@ -431,6 +439,20 @@ TEST(CxxStringTest, StringAppendNull)
         s1 += "";
 
     EXPECT_EQ(s1.length(), 0);
+}
+
+
+// ={=========================================================================
+// string-insert
+// n will be the total lenth of the return
+
+TEST(String, Insert)
+{
+  string s{};
+  s.insert(0, 1, 'X');
+  s.insert(0, 1, 'X');
+  s.insert(0, 1, 'X');
+  EXPECT_EQ(s, "XXX");
 }
 
 
@@ -602,7 +624,7 @@ TEST(SplitString, UseSplitTextVersion)
   // Value of: coll
   // Expected: has 1 element that is equal to "Smith"
   //   Actual: {}
-  // [  FAILED  ] CxxStringTest.SplitString (1 ms)
+  // [  FAILED  ] String.SplitString (1 ms)
   //
   // coll.clear();
   // split_text("Smith", ',', coll); 
@@ -1055,7 +1077,7 @@ TEST(DISABLED_MakeToken, ParseTokensFromVariosInputs)
     EXPECT_THAT(svec, ElementsAre("Name"));
 }
 
-TEST(CxxStringTest, ParseTokensMoreThanHad)
+TEST(String, ParseTokensMoreThanHad)
 {
     std::string token{};
     std::vector<std::string> svec{};
@@ -1469,7 +1491,7 @@ void join(const std::vector<std::string> &vector, const char delim, std::string 
     }
 }
 
-TEST(CxxStringTest, JoinSequnenceString)
+TEST(String, JoinSequnenceString)
 {
     std::vector<string> svec{"fee", "fi", "foe", "fum"};
     std::string s;
@@ -1511,7 +1533,7 @@ bool nth_substring(int n, const std::string &s, const std::string &p)
 //         return (-1);
 // }
 
-TEST(CxxStringTest, FindNthSubstring)
+TEST(String, FindNthSubstring)
 {
     const std::string s{"the wind, the sea, the sky, the trees"};
     const std::string p{"the"};
@@ -1531,7 +1553,7 @@ TEST(CxxStringTest, FindNthSubstring)
 //          "state":"CO",
 //          "country":"US" }}
 
-TEST(CxxStringTest, UseRawString)
+TEST(String, UseRawString)
 {
     const std::string s = R"({ "address": {
          "road":"Drury Ln",
@@ -1576,7 +1598,7 @@ void removeSubstrs3(std::string &s, const std::string &p)
         s.erase(start, size);
 }
 
-TEST(CxxStringTest, RemoveSubString)
+TEST(String, RemoveSubString)
 {
     string s1{"One fish, two fish, red fish, blue fish"};
     string r1{"One , two fish, red fish, blue fish"};
@@ -1613,7 +1635,7 @@ void toLower(std::string &s)
         *i = tolower(*i);
 }
 
-TEST(CxxStringTest, ConvertStringToLowerUpperCase)
+TEST(String, ConvertStringToLowerUpperCase)
 {
     string s{"shazam"};
 
@@ -1639,7 +1661,7 @@ bool caseInsCompare1(const string &s1, const string &s2)
     return true;
 }
 
-TEST(CxxStringTest, CompareCaseInsensitive)
+TEST(String, CompareCaseInsensitive)
 {
     const string s1 = "In the BEGINNING...";
     const string s2 = "In the beginning...";
@@ -1669,7 +1691,7 @@ bool caseInsFind2(string &s, const string &p)
     return it != s.end();
 }
 
-TEST(CxxStringTest, SearchCaseInsensitive)
+TEST(String, SearchCaseInsensitive)
 {
     string s1 = "row, row, row, your boat";
     const string p = "YOUR";
@@ -1688,7 +1710,7 @@ TEST(CxxStringTest, SearchCaseInsensitive)
 // ={=========================================================================
 // 4.15 Converting Between Tabs and Spaces in a Text File
 
-TEST(CxxStringTest, ConvertTabToSpace)
+TEST(String, ConvertTabToSpace)
 {
     ifstream input_file{"input.txt"};
     ofstream output_file{"output_space.txt"};
@@ -1717,7 +1739,7 @@ TEST(CxxStringTest, ConvertTabToSpace)
 //
 // the both case is when see not-space char
 
-TEST(CxxStringTest, ConvertSpaceToTab)
+TEST(String, ConvertSpaceToTab)
 {
     ifstream input_file{"output_space.txt"};
     ofstream output_file{"output_tab.txt"};
@@ -1812,7 +1834,7 @@ void testWrap(istream &in, ostream &out, size_t width)
     }
 }
 
-TEST(CxxStringTest, WrapLinesInTextFile)
+TEST(String, WrapLinesInTextFile)
 {
     ifstream input_file{"input.txt"};
     ofstream output_file{"output_wrap.txt"};
@@ -1827,19 +1849,19 @@ TEST(CxxStringTest, WrapLinesInTextFile)
 // kyoupark@kit-debian64:~/git/kb/code-cxx/t_ex_string$ wc input.txt
 //   3  23 152 input.txt
 //
-// CxxStringTest.CountStuffInTextFile
+// String.CountStuffInTextFile
 //
 // cc: 152
 // wc: 23
 // lc: 3
 //
-// CxxStringTest.CountStuffInTextFile2
+// String.CountStuffInTextFile2
 //
 // cc: 149
 // wc: 23
 // lc: 4
 
-TEST(CxxStringTest, CountStuffInTextFile)
+TEST(String, CountStuffInTextFile)
 {
     ifstream input_file{"input.txt"};
     size_t word_count{};
@@ -1880,7 +1902,7 @@ TEST(CxxStringTest, CountStuffInTextFile)
     cout << "lc: " << line_count << endl;
 }
 
-TEST(CxxStringTest, CountStuffInTextFile2)
+TEST(String, CountStuffInTextFile2)
 {
     ifstream input_file{"input.txt"};
 
@@ -1918,7 +1940,7 @@ TEST(CxxStringTest, CountStuffInTextFile2)
 // ={=========================================================================
 // 4.18 Counting Instances of Each Word in a Text File
 
-TEST(CxxStringTest, CountWordsInTextFile)
+TEST(String, CountWordsInTextFile)
 {
   ifstream input_file{"input.txt"};
   size_t word_count{};
@@ -1950,7 +1972,7 @@ TEST(CxxStringTest, CountWordsInTextFile)
 // to the stream. Format flags are not reset after writes, so I only had to
 // initialize them once and be done with it.
 
-TEST(CxxStringTest, JustifyTextFile)
+TEST(String, JustifyTextFile)
 {
   ifstream input_file{"input.txt"};
   ofstream output_file{"justified.txt"};
@@ -1975,7 +1997,7 @@ TEST(CxxStringTest, JustifyTextFile)
 // to reduce every occurrence of a contiguous span of whitespace characters to a
 // single space.
 
-TEST(CxxStringTest, SqueezeWhitespaceInTextFile)
+TEST(String, SqueezeWhitespaceInTextFile)
 {
   ifstream input_file{"input.txt"};
   ofstream output_file{"squeezed.txt"};
@@ -2009,7 +2031,7 @@ TEST(CxxStringTest, SqueezeWhitespaceInTextFile)
 // operator>>() ignores whitespace, so all I have to do is add a space and each
 // chunk of nonwhitespace.
 
-TEST(CxxStringTest, SqueezeWhitespaceInTextFileTwo)
+TEST(String, SqueezeWhitespaceInTextFileTwo)
 {
   ifstream input_file{"input.txt"};
   ofstream output_file{"squeezed_two.txt"};
@@ -2083,7 +2105,7 @@ void TextAutoCorrectField::append(char c)
   buf_ += c;
 }
 
-TEST(CxxStringTest, AutoCorrectField)
+TEST(String, AutoCorrectField)
 {
   StrStrMap dict{};
   TextAutoCorrectField auto_text(&dict);
@@ -2138,7 +2160,7 @@ void loadCSV(ifstream &ifs, vector<vector<string>*> &data)
   }
 }
 
-TEST(CxxStringTest, ReadCsvFile)
+TEST(String, ReadCsvFile)
 {
   ifstream ifs{"input.csv"};
 
