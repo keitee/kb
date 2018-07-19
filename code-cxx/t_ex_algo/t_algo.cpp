@@ -5032,6 +5032,114 @@ TEST(AlgoList, SimpleListContiguous)
 }
 
 
+// ={=========================================================================
+// algo-sort
+
+// reference code, decending sort
+void sort_insertion_01(vector<int> &coll)
+{
+  // start from 1 since one entry is always sorted.
+  
+  for (int unsorted_index = 1; unsorted_index < (int)coll.size(); ++unsorted_index)
+  {
+    int sorted_index = unsorted_index-1;
+
+    // pick the first from `unsorted` and that is less than the last of the
+    // sorted. so have to place it in the sorted area.
+    
+    if (coll[unsorted_index] < coll[sorted_index]) 
+    { 
+      int unsorted_entry = coll[unsorted_index];
+      int current_index = sorted_index;
+
+      // find the place of picked unsorted in the sorted until see that 
+      // sorted[current-1] < the entry in question by:
+      //
+      // move the last sorted down one which makes a space, and check the one
+      // before the current.
+      //
+      // must have "index == 0" check since have a check on current-1 to see if
+      // or not contine searching.
+
+      for (; 0 <= current_index; --current_index)
+      {
+        // move one entry down
+        coll[current_index+1] = coll[current_index]; 
+
+        if (current_index == 0 || coll[current_index-1] < unsorted_entry)
+          break;
+      }
+
+      coll[current_index] = unsorted_entry;
+    } 
+  } 
+}
+
+
+// removes to check `current-1` from the current in searching the place in the
+// sorted and then no need to check on -1 index.
+
+void sort_insertion_02(vector<int> &coll)
+{
+  for (int unsorted_index = 1; unsorted_index < (int)coll.size(); ++unsorted_index)
+  {
+    int sorted_index = unsorted_index-1;
+
+    if (coll[unsorted_index] < coll[sorted_index]) 
+    { 
+      int unsorted_entry = coll[unsorted_index];
+      int current_index = sorted_index;
+
+      // diffs from 01
+      for (; 0 <= current_index; --current_index)
+      {
+        if (coll[current_index] < unsorted_entry)
+          break;
+
+        coll[current_index+1] = coll[current_index]; 
+      }
+
+      coll[current_index+1] = unsorted_entry;
+    } 
+  } 
+}
+
+// `current` starts from the unsorted and uses swap
+void sort_insertion_03(vector<int> &coll)
+{
+  for (int unsorted_index = 1; unsorted_index < (int)coll.size(); ++unsorted_index)
+    for (int current_index = unsorted_index;
+        0 < current_index && coll[current_index] < coll[current_index-1];
+        --current_index)
+    {
+      // swap current and current-1
+      swap(coll[current_index], coll[current_index-1]);
+    }
+}
+
+
+TEST(AlgoSort, Insertion_01)
+{
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_01(coll); 
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_02(coll);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_03(coll);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleMock(&argc, argv);
