@@ -1210,53 +1210,6 @@ TEST(CxxStlTest, UseAlgoEqual)
                 ));
 }
 
-// ={=========================================================================
-// cxx-algo-partition
-
-// coll1: 1 2 3 4 5 6 7 8 9 (9)
-// coll1: 8 2 6 4 5 3 7 1 9 (9)
-//                ^ first odd element: 5
-//
-// coll2: 1 2 3 4 5 6 7 8 9 (9)
-// coll2: 2 4 6 8 1 3 5 7 9 (9)
-//                ^ first odd element: 1
-
-TEST(StlAlgo, UsePartition)
-{
-  vector<int> coll1;
-  vector<int> coll2;
-
-  INSERT_ELEMENTS(coll1, 1, 9);
-  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-  auto pos1 = partition(coll1.begin(), coll1.end(),    // range
-      [](int elem)
-      {
-      return elem %2 == 0;
-      });
-
-  EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
-
-  // algo-partition retuns returns an iterator to the first element where the
-  // predicate is not true, or the end of the range if all elements satisfy
-  // the predicate. so first odd element:
-
-  EXPECT_EQ(*pos1, 5);
-
-  INSERT_ELEMENTS(coll2, 1, 9);
-  EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-  auto pos2 = stable_partition(coll2.begin(), coll2.end(),
-      [](int elem)
-      {
-      return elem %2 == 0;
-      });
-  EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
-
-  // first odd element:
-  EXPECT_EQ(*pos2, 1);
-}
-
 
 // ={=========================================================================
 // cxx-algo-for-each cxx-algo-transform
@@ -1315,6 +1268,7 @@ TEST(CxxStl, AlgoUnique)
   cout << "input: " << input << endl;
 }
 
+
 // ={=========================================================================
 // cxx-algo-remove
 
@@ -1352,9 +1306,8 @@ TEST(StlAlgoRemove, RemoveDoNotRemove)
 
   remove(coll.begin(), coll.end(), 2);
 
-  // std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-  // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
-  //                                       ^^^^^^^ 
+  // coll{1,2,3,4,5,6,2,7,2,8,2,9};
+  // coll{1,3,4,5,6,7,8,9,2,8,2,9};
 
   EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
 }
@@ -1377,32 +1330,31 @@ TEST(StlAlgoRemove, UseRemoveIf)
 // implement own remove()
 using ITERATOR = std::vector<int>::iterator;
 
-// the key is to move items that are not equal to the value forward in the list
-// and keeps the runner.
 ITERATOR my_remove(ITERATOR begin, ITERATOR end, int value)
 {
   // move up to the first which matches to the value
   // ITERATOR first = find(begin, end, value);
 
   // if not use find()
-  ITERATOR first;
-  for (first = begin; first != end; ++first)
-    if (*first == value)
+  ITERATOR sub_list_end;
+  for (sub_list_end = begin; sub_list_end != end; ++sub_list_end)
+    if (*sub_list_end == value)
       break;
 
-  // moves runner and move item which runner points to only when it see item
-  // thatthat do not match since here we care about items that do not match.
+  // the key is that remvove() partitions the input into two lists; a list that
+  // are not equal to the value and a list that are equals to the value. 
+  //
+  // [0, sub_list_end) ... end)
   
-  ITERATOR runner = first;
-  ++runner;
-  for (; runner != end; ++runner)
+  ITERATOR runner = sub_list_end;
+  for (++runner; runner != end; ++runner)
     if (*runner != value) 
     {
-      *first = *runner;
-      ++first;
+      *sub_list_end = *runner;
+      ++sub_list_end;
     }
 
-  return first;
+  return sub_list_end;
 }
 
 TEST(StlAlgoRemove, UseOwnRemove)
@@ -1418,9 +1370,55 @@ TEST(StlAlgoRemove, UseOwnRemove)
   EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
 }
 
-// ={=========================================================================
 
-// like algo-remove()
+// ={=========================================================================
+// cxx-algo-partition
+
+// coll1: 1 2 3 4 5 6 7 8 9 (9)
+// coll1: 8 2 6 4 5 3 7 1 9 (9)
+//                ^ first odd element: 5
+//
+// coll2: 1 2 3 4 5 6 7 8 9 (9)
+// coll2: 2 4 6 8 1 3 5 7 9 (9)
+//                ^ first odd element: 1
+
+TEST(StlAlgo, UsePartition)
+{
+  vector<int> coll1;
+  vector<int> coll2;
+
+  INSERT_ELEMENTS(coll1, 1, 9);
+  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+  auto pos1 = partition(coll1.begin(), coll1.end(),    // range
+      [](int elem)
+      {
+      return elem %2 == 0;
+      });
+
+  EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
+
+  // algo-partition retuns returns an iterator to the first element where the
+  // predicate is not true, or the end of the range if all elements satisfy
+  // the predicate. so first odd element:
+
+  EXPECT_EQ(*pos1, 5);
+
+  INSERT_ELEMENTS(coll2, 1, 9);
+  EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+  auto pos2 = stable_partition(coll2.begin(), coll2.end(),
+      [](int elem)
+      {
+      return elem %2 == 0;
+      });
+  EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
+
+  // first odd element:
+  EXPECT_EQ(*pos2, 1);
+}
+
+
 using PortfolioIterator = vector<unsigned int>::iterator;
 
 PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
@@ -1469,7 +1467,7 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   //
   // return ++current;
 
-  // not used
+  // this causes the issue as below
   return current;
 }
 

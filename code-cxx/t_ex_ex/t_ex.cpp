@@ -14,10 +14,12 @@
 // g++ -g -std=c++0x t_override.cpp
 
 using namespace std;
-using testing::ElementsAre;
-using testing::Eq;
-using testing::StrEq;
-using testing::FloatEq;
+using namespace testing;
+
+// using testing::ElementsAre;
+// using testing::Eq;
+// using testing::StrEq;
+// using testing::FloatEq;
 
 // ={=========================================================================
 
@@ -926,6 +928,8 @@ TEST(DISABLED_Maze, Array20x20)
   PRINT_ELEMENTS(maze.path_points);
 }
 
+
+// ={=========================================================================
 template <typename T>
 void PRINT_ELEMENTS_MAP(T col, const string mesg, const string sep = ", ")
 {
@@ -963,9 +967,25 @@ TEST(X, XX)
   EXPECT_THAT(count_occurance_from_sequence(input_value, 1), 6);
 }
 
+// ={=========================================================================
+void sort_insertion_01(vector<int> &coll)
+{
+  for (int run = 1; run < (int)coll.size(); ++run)
+    for (int swap_run = run; 0 < swap_run && coll[swap_run] < coll[swap_run-1]; --swap_run)
+      swap(coll[swap_run], coll[swap_run-1]);
+}
+
+TEST(AlgoSort, Insertion_01)
+{
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_01(coll); 
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
+}
 
 // ={=========================================================================
-
 int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);
