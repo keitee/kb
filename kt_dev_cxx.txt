@@ -104,6 +104,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-pass-by-reference cxx-reference
 *kt_dev_cxx_0000* cxx-vexing-parse
 *kt_dev_cxx_0000* cxx-copy-dyn-resource cxx-ex-hasptr-exmaple
+*kt_dev_cpp_0000* cxx-swap
 *kt_dev_cpp_0000* cxx-copy-swap cxx-swap copy-and-swap-idiom
 *kt_dev_cxx_0000* cxx-copy-control cxx-ex-message-example
 *kt_dev_cxx_0000* cxx-copy-control-move cxx-move cxx-ex-strvec-example
@@ -12144,15 +12145,11 @@ The reference is a sub set of pointer which is limited in use?
 
 * No copy made so efficient code
 
-* Syntatic need such as operator[]
+* Syntatic need such as operator[], operator*
 
 vector<T> v; v[5] = 10;
 
-*cxx-swap*
-operator[] returns reference and use swap(&, &)
-
-vector<int> coll;
-swap(coll[current_index], coll[current_index-1]);
+see *cxx-swap*
 
 
 {differences}
@@ -12701,44 +12698,44 @@ namespace VALUELIKE
 // value-like hasptr
 class HasPtr 
 {
-    public:
-        HasPtr(const std::string &s = std::string()):
-            ps_(new std::string(s)), count_(0) 
-        {
-            cout << "::HasPtr(), " << *ps_ << endl;
-        }
+  public:
+    HasPtr(const std::string &s = std::string()):
+      ps_(new std::string(s)), count_(0) 
+  {
+    cout << "::HasPtr(), " << *ps_ << endl;
+  }
 
-        // copy ctor *cxx-except-safety*
-        HasPtr(const HasPtr &rhs):
-            ps_(new std::string(*rhs.ps_)), count_(rhs.count_) 
-        {
-            cout << "::HasPtr(const HasPtr&), " << *ps_ << endl;
-        }
+    // copy ctor *cxx-except-safety*
+  HasPtr(const HasPtr &rhs):
+    ps_(new std::string(*rhs.ps_)), count_(rhs.count_) 
+  {
+    cout << "::HasPtr(const HasPtr&), " << *ps_ << endl;
+  }
 
-        // copy assign
-        HasPtr& operator=(const HasPtr &rhs)
-        {
-            auto newps = new string(*rhs.ps_);
-            // delete old only when copying is okay
-            delete ps_;
-            ps_ = newps;
-            count_ = rhs.count_;
-            return *this;
-        }
+  // copy assign
+  HasPtr& operator=(const HasPtr &rhs)
+  {
+    auto newps = new string(*rhs.ps_);
+    // delete old only when copy is done
+    delete ps_;
+    ps_ = newps;
+    count_ = rhs.count_;
+    return *this;
+  }
 
-        ~HasPtr() { cout << "::~HasPtr(), " << *ps_ << endl; delete ps_; }
+  ~HasPtr() { cout << "::~HasPtr(), " << *ps_ << endl; delete ps_; }
 
-    private:
-        std::string *ps_;
-        int count_;
+  private:
+    std::string *ps_;
+    int count_;
 };
 
 // hp is copy ctor'ed
 HasPtr f(HasPtr hp)
 {
-    // ret is copy ctor'ed
-    HasPtr ret = hp;
-    return ret;
+  // ret is copy ctor'ed
+  HasPtr ret = hp;
+  return ret;
 }
 
 } // namespace
@@ -12755,13 +12752,14 @@ HasPtr f(HasPtr hp)
 
 void t_sp_03()
 {
-    using namespace VALUELIKE;
+  using namespace VALUELIKE;
 
-    // allocate a new copy
-    HasPtr h("hi mom!");
-    // copy ctor copies h in the call f and that copy is destroyed when f exits
-    f(h);
-    cout << "=----======" << endl;
+  // allocate a copy
+  HasPtr h("hi mom!");
+
+  // copy ctor copies h in the call f and that copy is destroyed when f exits
+  f(h);
+  cout << "=----======" << endl;
 }
 
 
@@ -12774,143 +12772,143 @@ namespace VALUELIKE_MOVE
 
 class HasPtr 
 {
-    friend void swap(HasPtr &lhs, HasPtr &rhs);
+  friend void swap(HasPtr &lhs, HasPtr &rhs);
 
-    public:
-        HasPtr(const std::string &s = std::string()):
-            ps_(new std::string(s)), count_(0) 
-        {
-            cout << "::HasPtr(), " << *ps_ << endl;
-        }
+  public:
+  HasPtr(const std::string &s = std::string()):
+    ps_(new std::string(s)), count_(0) 
+  {
+    cout << "::HasPtr(), " << *ps_ << endl;
+  }
 
-        // copy ctor
-        HasPtr(const HasPtr &rhs):
-            ps_(new std::string(*rhs.ps_)), count_(rhs.count_) 
-        {
-            cout << "::HasPtr(const HasPtr&), " << *ps_ << endl;
-        }
+  // copy ctor
+  HasPtr(const HasPtr &rhs):
+    ps_(new std::string(*rhs.ps_)), count_(rhs.count_) 
+  {
+    cout << "::HasPtr(const HasPtr&), " << *ps_ << endl;
+  }
 
-        // move ctor
-        HasPtr(HasPtr &&rhs) noexcept:
-            ps_(rhs.ps_), count_(rhs.count_)
-        {
-            cout << "::HasPtr(HasPtr&&), " << endl;
-            rhs.ps_ = nullptr;
-        }
+  // move ctor
+  HasPtr(HasPtr &&rhs) noexcept:
+    ps_(rhs.ps_), count_(rhs.count_)
+    {
+      cout << "::HasPtr(HasPtr&&), " << endl;
+      rhs.ps_ = nullptr;
+    }
 
-        // // copy assign
-        // HasPtr& operator=(const HasPtr &rhs)
-        // {
-        //     auto newps = new string(*rhs.ps_);
-        //     // delete old only when copying is okay
-        //     delete ps_;
-        //     ps_ = newps;
-        //     count_ = rhs.count_;
-        //     return *this;
-        // }
+  // // copy assign
+  // HasPtr& operator=(const HasPtr &rhs)
+  // {
+  //     auto newps = new string(*rhs.ps_);
+  //     // delete old only when copying is okay
+  //     delete ps_;
+  //     ps_ = newps;
+  //     count_ = rhs.count_;
+  //     return *this;
+  // }
 
-        // move assign is both move- and copy-assign
-        // *cxx-move* *cxx-copy-and-swap*
-        // see that use (HasPtr rhs) but not (HasPtr &&rhs) and since operator=
-        // use non-reference type, use either copy ctor or move ctor depending
-        // on the type of argument.
-        HasPtr &operator=(HasPtr rhs)
-        {
-            cout << "::operator=(HasPtr), " << endl;
-            swap(*this, rhs);
-            return *this;
-        }
+  // move assign is both move- and copy-assign
+  // *cxx-move* *cxx-copy-and-swap*
+  // see that use (HasPtr rhs) but not (HasPtr &&rhs) and since operator=
+  // use non-reference type, use either copy ctor or move ctor depending
+  // on the type of argument.
+  HasPtr &operator=(HasPtr rhs)
+  {
+    cout << "::operator=(HasPtr), " << endl;
+    swap(*this, rhs);
+    return *this;
+  }
 
-        // this causes "seg fault" see *gdb-debug-stl*
-        // ~HasPtr() { cout << "::~HasPtr(), " << *ps_ << endl; delete ps_; }
-        //
-        // #0  0x00007f26b4131f10 in std::basic_ostream<char, std::char_traits<char> >& std::operator<< <char, std::char_traits<char>, std::allocator<char> >(std::basic_ostream<char, std::char_traits<char> >&, std::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) ()
-        //    from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-        // #1  0x0000000000403fa6 in VALUELIKE_MOVE::HasPtr::~HasPtr() ()
-        // #2  0x0000000000402761 in t_sp_13_2() ()
-        // #3  0x000000000040374e in main ()
+  // this causes "seg fault" see *gdb-debug-stl*
+  // ~HasPtr() { cout << "::~HasPtr(), " << *ps_ << endl; delete ps_; }
+  //
+  // #0  0x00007f26b4131f10 in std::basic_ostream<char, std::char_traits<char> >& std::operator<< <char, std::char_traits<char>, std::allocator<char> >(std::basic_ostream<char, std::char_traits<char> >&, std::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) ()
+  //    from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+  // #1  0x0000000000403fa6 in VALUELIKE_MOVE::HasPtr::~HasPtr() ()
+  // #2  0x0000000000402761 in t_sp_13_2() ()
+  // #3  0x000000000040374e in main ()
 
-        // h    -> (1)
-        // h2   -> (2)
-        //
-        // h = h2
-        //
-        // h    -> (1)
-        // h2   -> (2)
-        // arg  -> (3)      // copy ctor'ed from h2
-        //
-        // h    -> (3)
-        // h2   -> (2)
-        // arg  -> (X)      // dtor'ed
-        //
-        // h = std::move(h2);
-        //
-        // h    -> (3)
-        // h2   -> (X)      // moved-from state
-        // arg  -> (2)      // moved-to
-        //
-        // h    -> (2)
-        // h2   -> (X)      // moved-from state
-        // arg  -> (X)      // dtor'ed
-        //
-        // So h2.ps_ is null which HasPtr move ctor did. If comment out the line
-        // to set nullptr to ps_ in move ctor, then this dtor could work? NO
-        // since do *double-delete*
-        //
-        // h    -> (3)
-        // h2   -> (2)      // moved-from state
-        // arg  -> (2)      // moved-to
-        //
-        // h    -> (2)
-        // h2   -> (2)      // moved-from state
-        // arg  -> (X)      // dtor'ed
-        //
-        // ...
-        // =----======
-        // ::~HasPtr(), hi mom!
-        // ::~HasPtr(), !0 
-        // *** Error in `./a.out': free(): invalid pointer: 0x00000000020f2058 ***
-        // Aborted (core dumped)
-        // 
-        // Program terminated with signal SIGABRT, Aborted.
-        // #0  0x00007f81f6370067 in __GI_raise (sig=sig@entry=6)
-        //     at ../nptl/sysdeps/unix/sysv/linux/raise.c:56
-        // 56	../nptl/sysdeps/unix/sysv/linux/raise.c: No such file or directory.
-        // (gdb) bt
-        // #0  0x00007f81f6370067 in __GI_raise (sig=sig@entry=6)
-        //     at ../nptl/sysdeps/unix/sysv/linux/raise.c:56
-        // #1  0x00007f81f6371448 in __GI_abort () at abort.c:89
-        // #2  0x00007f81f63ae1b4 in __libc_message (do_abort=do_abort@entry=1, 
-        //     fmt=fmt@entry=0x7f81f64a3210 "*** Error in `%s': %s: 0x%s ***\n")
-        //     at ../sysdeps/posix/libc_fatal.c:175
-        // #3  0x00007f81f63b398e in malloc_printerr (action=1, 
-        //     str=0x7f81f649f326 "free(): invalid pointer", ptr=<optimized out>)
-        //     at malloc.c:4996
-        // #4  0x00007f81f63b4696 in _int_free (av=<optimized out>, p=<optimized out>, 
-        //     have_lock=0) at malloc.c:3840
-        // #5  0x000000000040bb32 in __gnu_cxx::new_allocator<char>::deallocate (
-        //     this=0x7ffcc426a107, __p=0x20f2058 "!")
-        //     at /usr/include/c++/4.9/ext/new_allocator.h:110
+  // h    -> (1)
+  // h2   -> (2)
+  //
+  // h = h2
+  //
+  // h    -> (1)
+  // h2   -> (2)
+  // arg  -> (3)      // copy ctor'ed from h2
+  //
+  // h    -> (3)
+  // h2   -> (2)
+  // arg  -> (X)      // dtor'ed
+  //
+  // h = std::move(h2);
+  //
+  // h    -> (3)
+  // h2   -> (X)      // moved-from state
+  // arg  -> (2)      // moved-to
+  //
+  // h    -> (2)
+  // h2   -> (X)      // moved-from state
+  // arg  -> (X)      // dtor'ed
+  //
+  // So h2.ps_ is null which HasPtr move ctor did. If comment out the line
+  // to set nullptr to ps_ in move ctor, then this dtor could work? NO
+  // since do *double-delete*
+  //
+  // h    -> (3)
+  // h2   -> (2)      // moved-from state
+  // arg  -> (2)      // moved-to
+  //
+  // h    -> (2)
+  // h2   -> (2)      // moved-from state
+  // arg  -> (X)      // dtor'ed
+  //
+  // ...
+  // =----======
+  // ::~HasPtr(), hi mom!
+  // ::~HasPtr(), !0 
+  // *** Error in `./a.out': free(): invalid pointer: 0x00000000020f2058 ***
+  // Aborted (core dumped)
+  // 
+  // Program terminated with signal SIGABRT, Aborted.
+  // #0  0x00007f81f6370067 in __GI_raise (sig=sig@entry=6)
+  //     at ../nptl/sysdeps/unix/sysv/linux/raise.c:56
+  // 56	../nptl/sysdeps/unix/sysv/linux/raise.c: No such file or directory.
+  // (gdb) bt
+  // #0  0x00007f81f6370067 in __GI_raise (sig=sig@entry=6)
+  //     at ../nptl/sysdeps/unix/sysv/linux/raise.c:56
+  // #1  0x00007f81f6371448 in __GI_abort () at abort.c:89
+  // #2  0x00007f81f63ae1b4 in __libc_message (do_abort=do_abort@entry=1, 
+  //     fmt=fmt@entry=0x7f81f64a3210 "*** Error in `%s': %s: 0x%s ***\n")
+  //     at ../sysdeps/posix/libc_fatal.c:175
+  // #3  0x00007f81f63b398e in malloc_printerr (action=1, 
+  //     str=0x7f81f649f326 "free(): invalid pointer", ptr=<optimized out>)
+  //     at malloc.c:4996
+  // #4  0x00007f81f63b4696 in _int_free (av=<optimized out>, p=<optimized out>, 
+  //     have_lock=0) at malloc.c:3840
+  // #5  0x000000000040bb32 in __gnu_cxx::new_allocator<char>::deallocate (
+  //     this=0x7ffcc426a107, __p=0x20f2058 "!")
+  //     at /usr/include/c++/4.9/ext/new_allocator.h:110
 
-        ~HasPtr() 
-        { 
-            if (this->ps_)
-                cout << "::~HasPtr(), " << *ps_ << endl; 
-            else
-                cout << "::~HasPtr(), " << endl; 
-            delete ps_; 
-        }
+  ~HasPtr() 
+  { 
+    if (this->ps_)
+      cout << "::~HasPtr(), " << *ps_ << endl; 
+    else
+      cout << "::~HasPtr(), " << endl; 
+    delete ps_; 
+  }
 
-    private:
-        std::string *ps_;
-        int count_;
+  private:
+  std::string *ps_;
+  int count_;
 };
 
 inline void swap(HasPtr &lhs, HasPtr &rhs)
 {
-    using std::swap;
-    swap(lhs.ps_, rhs.ps_);
-    swap(lhs.count_, rhs.count_);
+  using std::swap;
+  swap(lhs.ps_, rhs.ps_);
+  swap(lhs.count_, rhs.count_);
 }
 
 } // namespace
@@ -12943,15 +12941,15 @@ inline void swap(HasPtr &lhs, HasPtr &rhs)
 
 void t_sp_13_2()
 {
-    using namespace VALUELIKE_MOVE;
+  using namespace VALUELIKE_MOVE;
 
-    // allocate a new copy
-    HasPtr h("hi mom!");
-    HasPtr h2(h);
+  // allocate a new copy
+  HasPtr h("hi mom!");
+  HasPtr h2(h);
 
-    h = h2;
-    h = std::move(h2);
-    cout << "=----======" << endl;
+  h = h2;
+  h = std::move(h2);
+  cout << "=----======" << endl;
 }
 
 
@@ -13170,10 +13168,89 @@ TEST(CxxSpTest, UseHasPtrUseFunction) {
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-copy-swap cxx-swap
+*kt_dev_cpp_0000* cxx-swap
+
+// stl-swap
+//
+// 9.3.4 iter_swap()
+//
+// #include <algorithm>
+//
+// void iter_swap (ForwardIterator1 pos1, ForwardIterator2 pos2)
+//
+// Swaps the values to which iterators pos1 and pos2 refer.
+// The iterators don’t need to have the same type. However, the values must be
+// assignable.
+//
+
+TEST(StlSwap, Swaps)
+{
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    // std::iter_swap(coll.begin(), next(coll.begin()));
+    std::iter_swap(coll.begin(), ++coll.begin());
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    // std::iter_swap(coll.begin(), prev(coll.end()));
+    std::iter_swap(coll.begin(), --coll.end());
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+
+  // use operator[]()
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    std::swap(coll[0], coll[1]);
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    std::swap(coll[0], coll[8]);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+
+  // use operator*()
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    vector<int>::iterator one, two;
+    one = coll.begin();
+    two = one+1;
+    swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    one = coll.begin();
+    two = one+8;
+    swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+
+  // use operator*()
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    vector<int>::iterator one, two;
+    one = coll.begin();
+    two = one+1;
+    std::swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    one = coll.begin();
+    two = one+8;
+    std::swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+}
+
+
+={============================================================================
+*kt_dev_cpp_0000* cxx-copy-swap cxx-swap copy-and-swap-idiom
 
 If a class defines its own swap, the algorithm uses that class-specific
-version. Otherwise, uses the swap defined by the library, use std::swap().
+version. Otherwise, uses the swap defined by the library; std::swap().
 
 `optimization`
 
@@ -13254,14 +13331,14 @@ inline void swap( HasPtr& lhs, HasPtr& rhs )
 
 Although doesn't matter in this particular case if use std::swap or swap since
 there is no type specific swap for built-in types because ps is a pointer to
-string, 'must' use 'unqualified' swap but not std::swap to try type specific
+string. 'must' use 'unqualified' swap but not std::swap to try type specific
 version first.
 
 If it was pointerlike, own swap is not necessary. The pointerlike is good for
 copy-control and swap.
 
 <swap-and-const>
-swap works always regardless of const.Here swap works on built-in type,
+swap works always regardless of const. Here swap works on built-in type,
      pointer which is not affected by constness check; bitwise const.
 
 
@@ -13285,7 +13362,7 @@ How "try type version and std version next if there isn't" works? Two things:
 * Type specific version is a better match in function matching since std::swap
   is template.
 
-* Use *arg-dependent-lookup* in swap( HasPtr&, HasPtr& ).
+* Use *cxx-arg-dependent-lookup* in swap( HasPtr&, HasPtr& ).
 
 note: 
 Why not "using std::swap" hide swap(T)? Since it simply add name in the
@@ -13293,7 +13370,7 @@ name-lookup search and the swap(T) is better match than std::swap.
 
 
 {ex-define-swap-using-specialization}
-EC++25. *pattern-pimpl-idiom*
+EC++25. *cxx-pattern-pimpl-idiom*
 
 class WidgetImpl {                          // class for Widget data;
    public:                                  // details are unimportant
@@ -13311,7 +13388,7 @@ class Widget {                              // class using the pimpl-idiom
       Widget& operator=(const Widget& rhs)  // to copy a Widget, copy its
       {                                     // WidgetImpl object. For
        ...                                  // details on implementing
-       *pImpl = *(rhs.pImpl);               // operator= in general,
+       `*pImpl = *(rhs.pImpl);`             // operator= in general,
        ...                                  // see Items 10, 11, and 12.
       }
 <
@@ -13328,13 +13405,13 @@ swap(A, B);
 All we really need to do is swap their pImpl pointers, but the default swap
 algorithm has no way to know that. Instead, it would copy not only three
 Widgets, but also three WidgetImpl objects. Very inefficient. Cost three
-copies that use 'operator=' of valuelike class. For some types such as
-pattern-pimpl-idiom none of these copies are really necessary. How to avoid
-these cost? To address this, should provide `type specific` swap to be used
-by clients:
+copies that use `operator=` of valuelike class. For some types such as
+cxx-pattern-pimpl-idiom, none of these copies are really necessary. How to
+avoid these cost? To address this, should provide `type specific` swap to be
+used by clients:
 
 
-<attempt-one> use swap member and total-template-specialization
+<attempt-one> use non-member swap and total-template-specialization
 
 namespace std {
 
@@ -13348,14 +13425,13 @@ namespace std {
 }
 
 This is a way to say that to specialize std::swap for Widget. This is called
-`total-template-specialization`. See *cpp-template-specialization* 
+`total-template-specialization`. See *cxx-template-specialization* 
 
 namespace std {                              
 
-  // note 
-  // 1. in std namespace
-  // 2. this is a specialized version of std::swap when T is Widget.
-  // 3. syntax and own definition.
+  // * in std namespace
+  // * this is a specialized version of std::swap when T is Widget.
+  // * syntax and own definition.
 
   template<>                                 
   void swap<Widget>(Widget& a, Widget& b)    
@@ -13375,11 +13451,11 @@ pointers inside a and b, and they are 'private' so other ways might be:
   * Could declare our specialization a friend, but the convention is different:
     so not consider. 
 
-  * Have a 'public' swap member and specialized std::swap calls member swap.
-    It's okay since do not use friend here.
+  * specialized (overloaded) swap calls public member swap. It's okay since do
+    not use friend here.
 
 class Widget {                     // same as above, except for the
-public:                            // addition of the swap mem func
+public:                            // the public swap member func
   ...
   void swap(Widget& other)
   {
@@ -13439,7 +13515,7 @@ namespace WidgetStuff {
 
   ...
 
-  // overloaded nonmember swap function. not part of the std namespace
+  // overloaded non-member swap function. `not part of the std namespace`
   template<typename T>                    
   void swap(Widget<T>& a, Widget<T>& b)
   {
@@ -13466,8 +13542,9 @@ void doSomething(T& obj1, T& obj2)
 }
 
 There are important subtleties:
-1. use unqualified swap to search for class-specific swap version
-2. use using std::swap to make it visiable in current scope so fall back on
+
+* use unqualified swap to search for class-specific swap version
+* use using std::swap to make it visiable in current scope so fall back on
 std::swap when there is no class-specific version.
 
 
@@ -13520,7 +13597,7 @@ class vector : protected _Vector_base<_Tp, _Alloc>
   ...
 } # end of class template
 
-The key is that this is 'overloaded' global swap() for 'this' type. That means
+The key is that this is `overloaded` global swap() for 'this' type. That means
 that every container has member and nonmember swap.
 
 /// See std::vector::swap().
@@ -13533,19 +13610,22 @@ template<typename _Tp, typename _Alloc>
 There are two use cases:
 <1>
 
-As with "Widget A, B; swap(A,B);"
+As with:
+
+Widget A, B; 
+swap(A,B);
 
 vector<string> svec1(10);
 vector<string> svec2(24);
 
 swap( svec1, svec2 );
 
-Which swap will this call? The type specific which is nonmember in vector
-because *arg-dependent-lookup* try to find nonmember swap and leads to call
-member swap as seen vector code above. This is why nonmbmer swap is introduced
-in the first place. 
+Which swap will this call? The type specific which is non-member in vector
+because *cxx-arg-dependent-lookup* try to find non-member swap and leads to
+call member swap as seen vector code above. This is why non-mbmer swap is
+introduced in the first place. 
 
-Primers p339. In C++, STL container provides member and nonmember swap and
+CPR 339. In C++, STL container provides member and non-member swap and
 previously supports member only.
 
 <2>
@@ -39613,44 +39693,6 @@ for (auto pos = coll.begin(); pos != coll.end(); ++pos) {
 
 for (auto pos = `coll.cbegin()`; pos != coll.cend(); ++pos) {
   cout << *pos << ’ ’;
-}
-
-
-<cxx-iter-swap>
-
-9.3.4 iter_swap()
-
-// #include <algorithm>
-//
-// void iter_swap (ForwardIterator1 pos1, ForwardIterator2 pos2)
-//
-// Swaps the values to which iterators pos1 and pos2 refer.
-// The iterators don’t need to have the same type. However, the values must be
-// assignable.
-//
-// (1,2,3,4,5,6,7,8,9)
-//  ^^^
-// (2,1,3,4,5,6,7,8,9)
-//  ^               ^
-// (9,1,3,4,5,6,7,8,2)
-
-TEST(StlIter, IterSwap)
-{
-  vector<int> coll;
-
-  INSERT_ELEMENTS(coll, 1, 9);
-  PRINT_ELEMENTS(coll);
-  EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6,7,8,9));
-
-  // std::iter_swap(coll.begin(), next(coll.begin()));
-  std::iter_swap(coll.begin(), ++coll.begin());
-  PRINT_ELEMENTS(coll);
-  EXPECT_THAT(coll, ElementsAre(2,1,3,4,5,6,7,8,9));
-
-  // std::iter_swap(coll.begin(), prev(coll.end()));
-  std::iter_swap(coll.begin(), --coll.end());
-  PRINT_ELEMENTS(coll);
-  EXPECT_THAT(coll, ElementsAre(9,1,3,4,5,6,7,8,2));
 }
 
 

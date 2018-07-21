@@ -967,22 +967,49 @@ TEST(X, XX)
   EXPECT_THAT(count_occurance_from_sequence(input_value, 1), 6);
 }
 
+
 // ={=========================================================================
-void sort_insertion_01(vector<int> &coll)
+using ITER = vector<int>::iterator;
+
+ITER partition_01(ITER begin, ITER end, int value)
 {
-  for (int run = 1; run < (int)coll.size(); ++run)
-    for (int swap_run = run; 0 < swap_run && coll[swap_run] < coll[swap_run-1]; --swap_run)
-      swap(coll[swap_run], coll[swap_run-1]);
+  // find the end of the first group which not conforms to the value
+  ITER list_end = begin;
+  for (; list_end != end; ++list_end)
+  {
+    if (*list_end > value)
+      break;
+  }
+
+  ITER run = list_end; 
+  for(++run; run != end; ++run)
+  {
+    if (*run < value)
+    {
+      // cout << "swap(" << *run << ", " << *list_end << ")" << endl;
+      swap(*run, *list_end);
+      ++list_end;
+    }
+  }
+
+  return list_end;
 }
 
-TEST(AlgoSort, Insertion_01)
+TEST(AlgoPartition, UseOwnPartitionTwoPass)
 {
-  {
-    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
-    sort_insertion_01(coll); 
-    EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
-  }
+  vector<int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+  ITER iter = partition_01(coll.begin(), coll.end(), 25);
+
+  // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
+  // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
+  //                                ^^
+                                     
+  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+
+  // this now fails since `current` is iterator of internal coll but not input
+  // call. Have to work out one.
+  EXPECT_THAT(distance(coll.begin(), iter), 11);
 }
 
 // ={=========================================================================

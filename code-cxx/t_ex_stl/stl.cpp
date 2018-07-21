@@ -461,7 +461,7 @@ TEST(StlVector, InitializeForms)
   }
 
   // default init and fails
-  EXPECT_THAT(coll1, ElementsAre(0,0,0,0,0));
+  EXPECT_THAT(coll1, Ne(vector<int>({0,0,0,0,0})));
 
   // value init
   vector<int> coll2(5);
@@ -913,7 +913,7 @@ TEST(CollList, UseListRemoveIf)
 
 
 // ={=========================================================================
-// iter-swap
+// stl-swap
 //
 // 9.3.4 iter_swap()
 //
@@ -925,29 +925,67 @@ TEST(CollList, UseListRemoveIf)
 // The iterators don’t need to have the same type. However, the values must be
 // assignable.
 //
-// (1,2,3,4,5,6,7,8,9)
-//  ^^^
-// (2,1,3,4,5,6,7,8,9)
-//  ^               ^
-// (9,1,3,4,5,6,7,8,2)
 
-TEST(StlIter, IterSwap)
+TEST(StlSwap, Swaps)
 {
-  vector<int> coll;
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-  INSERT_ELEMENTS(coll, 1, 9);
-  PRINT_ELEMENTS(coll);
-  EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6,7,8,9));
+    // std::iter_swap(coll.begin(), next(coll.begin()));
+    std::iter_swap(coll.begin(), ++coll.begin());
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
 
-  // std::iter_swap(coll.begin(), next(coll.begin()));
-  std::iter_swap(coll.begin(), ++coll.begin());
-  PRINT_ELEMENTS(coll);
-  EXPECT_THAT(coll, ElementsAre(2,1,3,4,5,6,7,8,9));
+    // std::iter_swap(coll.begin(), prev(coll.end()));
+    std::iter_swap(coll.begin(), --coll.end());
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
 
-  // std::iter_swap(coll.begin(), prev(coll.end()));
-  std::iter_swap(coll.begin(), --coll.end());
-  PRINT_ELEMENTS(coll);
-  EXPECT_THAT(coll, ElementsAre(9,1,3,4,5,6,7,8,2));
+  // use operator[]()
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    std::swap(coll[0], coll[1]);
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    std::swap(coll[0], coll[8]);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+
+  // use operator*()
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    vector<int>::iterator one, two;
+    one = coll.begin();
+    two = one+1;
+    swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    one = coll.begin();
+    two = one+8;
+    swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
+
+  // use operator*()
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    vector<int>::iterator one, two;
+    one = coll.begin();
+    two = one+1;
+    std::swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
+
+    one = coll.begin();
+    two = one+8;
+    std::swap(*one, *two);
+    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
+  }
 }
 
 
@@ -1459,7 +1497,8 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   // 
   // Objects involved in the operation:
   //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
-  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
+  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, 
+  //          std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
   //       state = singular;
   //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
   //     }
@@ -1489,12 +1528,12 @@ TEST(StlAlgoPartition, UseOwnPartitionTwoPass)
   // EXPECT_THAT(*iter, 43);
 }
 
+
 // unlike remove(), have to keep unmatched item as well
+
 PortfolioIterator my_partition_one(PortfolioIterator begin,
     PortfolioIterator end, unsigned int max_quanity)
 {
-  // move up to the first which *do not* matches to the condition
-  
   PortfolioIterator first = begin;
   for (; first != end; ++first)
     if (*first > max_quanity)
@@ -1515,29 +1554,11 @@ PortfolioIterator my_partition_one(PortfolioIterator begin,
   return first;
 }
 
-TEST(StlAlgoPartition, UseOwnPartitionOnePass)
-{
-  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+// same as algo-partition /usr/include/c++/4.9.2/bits/stl_algo.h
 
-  PortfolioIterator iter = my_partition_one(coll.begin(), coll.end(), 25);
-
-  // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
-  // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
-  //                                ^^
-
-  // see different order to the second pass one
-  // EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
-  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-  EXPECT_THAT(distance(coll.begin(), iter), 11);
-  EXPECT_THAT(*iter, 43);
-}
-
-// same as algo-partition
 PortfolioIterator my_partition_two(PortfolioIterator begin,
     PortfolioIterator end, unsigned int max_quanity)
 {
-  // move up to the first which *do not* matches to the condition
-  
   PortfolioIterator first = begin;
   while (*first <= max_quanity)
     if (++first == end)
@@ -1557,18 +1578,30 @@ PortfolioIterator my_partition_two(PortfolioIterator begin,
   return first;
 }
 
-TEST(StlAlgoPartition, UseOwnPartitionOnePassTwo)
+TEST(StlAlgoPartition, UseOwnPartitionOnePass)
 {
-  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
 
-  PortfolioIterator iter = my_partition_two(coll.begin(), coll.end(), 25);
+    PortfolioIterator iter = my_partition_one(coll.begin(), coll.end(), 25);
 
-  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-  EXPECT_THAT(distance(coll.begin(), iter), 11);
-  EXPECT_THAT(*iter, 43);
+    EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    EXPECT_THAT(distance(coll.begin(), iter), 11);
+    EXPECT_THAT(*iter, 43);
+  }
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    PortfolioIterator iter = my_partition_two(coll.begin(), coll.end(), 25);
+
+    EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    EXPECT_THAT(distance(coll.begin(), iter), 11);
+    EXPECT_THAT(*iter, 43);
+  }
 }
 
-// note: why different order?
+
+// note: why different order from partition() when use the same logic?
 
 TEST(StlAlgoPartition, UsePartition)
 {
@@ -1588,6 +1621,7 @@ TEST(StlAlgoPartition, UsePartition)
   EXPECT_THAT(distance(coll.begin(), iter), 11);
   EXPECT_THAT(*iter, 48);
 }
+
 
 // ={=========================================================================
 // algo-fill
