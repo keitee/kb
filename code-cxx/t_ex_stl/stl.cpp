@@ -1194,37 +1194,19 @@ TEST(AlgoRandom, UseGenerate)
 // or
 //  initValue op a1 op a2 op a3 op ...
 // respectively.
-//
-// sum: 45
-// sum: -55
-// product: 362880
-// product: 0
 
 TEST(AlgoAccumulate, Use)
 {
-    vector<int> coll;
+  vector<int> coll{1,2,3,4,5};
 
-    INSERT_ELEMENTS( coll, 1, 9 );
+  // sum
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0), Eq(15));
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), -50), Eq(-35));
 
-    // PRINT_ELEMENTS( coll );
-    // 
-    // cout << "sum: "
-    //     << accumulate( coll.cbegin(), coll.cend(), 0 ) << endl;
-    //
-    // cout << "sum: "
-    //     << accumulate( coll.cbegin(), coll.cend(), -100 ) << endl;
-    //
-    // cout << "product: "
-    //     << accumulate( coll.cbegin(), coll.cend(), 1, multiplies<int>()) << endl;
-    //
-    // cout << "product: "
-    //     << accumulate( coll.cbegin(), coll.cend(), 0, multiplies<int>()) << endl;
-
-    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 0 ), Eq(45) );
-    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), -100 ), Eq(-55) );
-
-    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 1, multiplies<int>() ), Eq(362880) );
-    ASSERT_THAT( accumulate( coll.cbegin(), coll.cend(), 0, multiplies<int>() ), Eq(0) );
+  // product. multiplies is binary predicate
+  // 1*1*2*3*4*5 = 120
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 1, multiplies<int>()), Eq(120));
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0, multiplies<int>()), Eq(0));
 }
 
 
@@ -1311,7 +1293,7 @@ void square_refer_no_return(int &value)
   value = value*value;
 }
 
-TEST(AlgoForEachAndTransform, Use)
+TEST(AlgoForEach, Use)
 {
   // value
   {
@@ -1337,6 +1319,57 @@ TEST(AlgoForEachAndTransform, Use)
     transform(coll.begin(), coll.end(), back_inserter(result), square_value_with_return);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
     EXPECT_THAT(result, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
+  }
+}
+
+TEST(AlgoForEach, UsePredicates)
+{
+  {
+    vector<int> coll{1,2,3,4,5,6};
+
+    for_each(coll.begin(), coll.end(),
+        [](int &elem)
+        {
+          elem += 10;
+        });
+
+    EXPECT_THAT(coll, ElementsAre(11,12,13,14,15,16));
+  }
+
+  // to see how cxx-range-for could make for_each less useful
+  {
+    vector<int> coll{1,2,3,4,5,6};
+
+    for (auto & elem : coll)
+      elem += 10;
+
+    EXPECT_THAT(coll, ElementsAre(11,12,13,14,15,16));
+  }
+
+  // add value of first element which is copied.
+  {
+    vector<int> coll{1,2,3,4,5,6};
+
+    for_each(coll.begin(), coll.end(),
+        [=](int &elem)
+        {
+          elem += *coll.begin();
+        });
+
+    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7));
+  }
+
+  // add value of first element which is reference so use '2' but not '1'
+  {
+    vector<int> coll{1,2,3,4,5,6};
+
+    for_each(coll.begin(), coll.end(),
+        [&](int &elem)
+        {
+          elem += *coll.begin();
+        });
+
+    EXPECT_THAT(coll, ElementsAre(2,4,5,6,7,8));
   }
 }
 
