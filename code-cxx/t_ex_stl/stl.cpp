@@ -447,6 +447,7 @@ TEST(StlVector, InitializeFromExpression)
 
   EXPECT_THAT(table1.size(), 20);
   EXPECT_THAT(table2.size(), 10);
+  EXPECT_THAT(sizeof(iarray)/sizeof(iarray[0]), 20);
 }
 
 TEST(StlVector, InitializeForms)
@@ -758,6 +759,7 @@ TEST(CxxStlTest, HowMapInsertWorks)
     ASSERT_THAT(pmap[3], Eq("threeeeee"));
 }
 
+
 // ={=========================================================================
 // cxx-map
 
@@ -990,70 +992,17 @@ TEST(StlSwap, Swaps)
 
 
 // ={=========================================================================
-// algo-equal
-
-TEST(AlgoEqual, UseVariousCases)
-{
-  vector<string> vec1{"Charles", "in", "Charge"};
-  vector<string> vec2{"Charles", "in", "charge"};
-
-  // false
-  cout << (vec1 == vec2 ? "true" : "false") << endl;
-
-  // false
-  cout << boolalpha 
-    << equal(vec1.begin(), vec1.end(), vec2.begin()) << endl;
-
-  string s1{"abcde"};
-  string s2{"abcdf"};
-
-  // Testing for “Less Than”
-  //
-  // Both forms return whether the elements in the range [beg1,end1) are
-  // “lexicographically less than” the elements in the range [beg2,end2).
-
-  cout << boolalpha
-    // false
-    << lexicographical_compare(s1.begin(), s1.end(), s1.begin(), s1.end()) 
-    << endl
-    // true
-    << lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end()) 
-    << endl;
-
-  // Search the First Difference
-  //
-  // The first form returns the first two corresponding elements of range
-  // [beg,end) and the range starting with cmpBeg that differ.
-  // 
-  // first mismatch = e second mismatch = f
-
-  auto iter = mismatch(s1.begin(), s1.end(), s2.begin());
-  cout << "first mismatch = " << *(iter.first) << endl;
-  cout << "second mismatch = " << *(iter.second) << endl;
-}
-
-
-// ={=========================================================================
 // cxx-algo-copy
 
-// when use list<int>
-// init: 1 2 3 4 5 6 (6)
-// list: 1 2 3 4 5 6 (6)
-
-TEST(CxxStlTest, UseAlgoCopy)
+TEST(AlgoCopy, UseOnDifferentCollections)
 {
   vector<int> coll{1,2,3,4,5,6};
-
-  PRINT_ELEMENTS(coll, "init: " );
+  EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
 
   list<int> coll1;
-
-  // error
-  // list<string> coll1;
   
-  copy( coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
-
-  PRINT_ELEMENTS(coll1, "list: " );
+  copy(coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
+  EXPECT_THAT(coll1, ElementsAre(1,2,3,4,5,6));
 }
 
 
@@ -1064,7 +1013,7 @@ TEST(CxxStlTest, UseAlgoCopy)
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
 
-TEST(Random, UseRandomEngineAndDistribution)
+TEST(AlgoRandom, UseRandomEngineAndDistribution)
 {
   default_random_engine dre;
 
@@ -1138,7 +1087,7 @@ class CardSequenceUseRandWithRange
 default_random_engine CardSequenceUseRandom::dre;
 uniform_int_distribution<size_t> CardSequenceUseRandom::udist{0, 24};
 
-TEST(Algo, UseGenerate)
+TEST(AlgoRandom, UseGenerate)
 {
     vector<uint32_t> ivec1;
     generate_n( back_inserter(ivec1), 12, CardSequenceUseRandom() );
@@ -1183,7 +1132,7 @@ TEST(Algo, UseGenerate)
 // product: 362880
 // product: 0
 
-TEST(CxxStlTest, UseAlgoAccumulate)
+TEST(AlgoAccumulate, Use)
 {
     vector<int> coll;
 
@@ -1214,11 +1163,37 @@ TEST(CxxStlTest, UseAlgoAccumulate)
 // ={=========================================================================
 // cxx-algo-equal
 
-// coll1 (vector): 1 2 3 4 5 6 7 (7)
-// coll2 (list)  : 3 4 5 6 7 8 9 (7)
-// coll3 (list)  : 1 2 3 4 5 6 7 (7)
+TEST(AlgoEqual, VariousUseCases)
+{
+  vector<string> vec1{"Charles", "in", "Charge"};
+  vector<string> vec2{"Charles", "in", "charge"};
 
-TEST(CxxStlTest, UseAlgoEqual)
+  EXPECT_FALSE(vec1 == vec2);
+  EXPECT_FALSE(equal(vec1.begin(), vec1.end(), vec2.begin()));
+
+  string s1{"abcde"};
+  string s2{"abcdf"};
+
+  // Testing for “Less Than”
+  //
+  // Both forms return whether the elements in the range [beg1,end1) are
+  // “lexicographically less than” the elements in the range [beg2,end2).
+
+  EXPECT_FALSE(lexicographical_compare(s1.begin(), s1.end(), s1.begin(), s1.end())); 
+  EXPECT_TRUE(lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end())); 
+
+  // Search the First Difference
+  //
+  // The first form returns the first two corresponding elements of range
+  // [beg,end) and the range starting with cmpBeg that differ.
+  
+  auto iter = mismatch(s1.begin(), s1.end(), s2.begin());
+  // first mismatch = e second mismatch = f
+  EXPECT_THAT(*iter.first, Eq('e'));
+  EXPECT_THAT(*iter.second, Eq('f'));
+}
+
+TEST(AlgoEqual, UseOnDifferentCollections)
 {
     vector<int> coll1;
     list<int> coll2;
@@ -1228,14 +1203,14 @@ TEST(CxxStlTest, UseAlgoEqual)
     INSERT_ELEMENTS(coll2, 3, 9);
     INSERT_ELEMENTS(coll3, 1, 7);
 
-    PRINT_ELEMENTS(coll1, "coll1 (vector): ");
-    PRINT_ELEMENTS(coll2, "coll2 (list)  : ");
-    PRINT_ELEMENTS(coll3, "coll3 (list)  : ");
+    EXPECT_THAT(coll1, ElementsAre(1,2,3,4,5,6,7));
+    EXPECT_THAT(coll2, ElementsAre(3,4,5,6,7,8,9));
+    EXPECT_THAT(coll3, ElementsAre(1,2,3,4,5,6,7));
 
-    EXPECT_FALSE( equal( coll1.begin(), coll1.end(),
+    EXPECT_FALSE( equal(coll1.begin(), coll1.end(),
                 coll2.begin()));
 
-    EXPECT_TRUE( equal( coll1.begin(), coll1.end(),
+    EXPECT_TRUE( equal(coll1.begin(), coll1.end(),
                 coll3.begin()));
 
     // coll1 and coll2 are different but are the same as to the order of
@@ -1268,42 +1243,96 @@ void square_refer_no_return(int &value)
   value = value*value;
 }
 
-TEST(Algo, UseForEachAndTransform)
+TEST(AlgoForEachAndTransform, Use)
 {
-  set<int> coll1{1,2,3,4,5,6,7,8};
-  for_each(coll1.begin(), coll1.end(), square_value_no_return);
-  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+  // value
+  {
+    set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    for_each(coll.begin(), coll.end(), square_value_no_return);
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+  }
 
-  // error since key in set are const
-  // set<int> coll11{1,2,3,4,5,6,7,8};
-  
-  vector<int> coll11{1,2,3,4,5,6,7,8};
-  for_each(coll11.begin(), coll11.end(), square_refer_no_return);
-  EXPECT_THAT(coll11, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
+  // reference
+  {
+    // compile error since key in set are const if use set
+    // set<int> coll{1,2,3,4,5,6,7,8};
 
-  vector<int> coll2;
-  transform(coll1.begin(), coll1.end(), back_inserter(coll2), square_value_with_return);
-  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
-  EXPECT_THAT(coll2, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    for_each(coll.begin(), coll.end(), square_refer_no_return);
+    EXPECT_THAT(coll, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
+  }
+
+  // transform() differs in that it uses `dest`
+  {
+    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    vector<int> result;
+    transform(coll.begin(), coll.end(), back_inserter(result), square_value_with_return);
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+    EXPECT_THAT(result, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
+  }
 }
 
 
 // ={=========================================================================
 // cxx-algo-unique
-TEST(CxxStl, AlgoUnique)
+
+
+// input: 1   2  3            4
+// input: 1 2 3 4
+
+
+TEST(AlgoUnique, Use)
 {
-  string input{"1   2  3            4           "};
+  // • Both forms collapse consecutive equal elements by removing the following
+  // duplicates.
 
-  cout << "input: " << input << endl;
+  // • The first form removes from the range [beg,end) all elements that are equal
+  // to the previous elements. Thus, only when the elements in the sequence are
+  // sorted, or at least when all elements of the same value are adjacent, does it
+  // remove all duplicates.
 
-  auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y)
-      {
-        return x == y and x == ' ';
-      });
+  {
+    int source[] = {1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+    list<int> coll;
+    copy(begin(source), end(source), back_inserter(coll));
 
-  input.erase(new_end, input.end());
+    auto pos = unique(coll.begin(), coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
 
-  cout << "input: " << input << endl;
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
+    // 1 4 4 6 6 6 6 7
+  }
+
+  // • The second form removes all elements that follow an element e and for
+  // which the binary predicate op(e,elem) yields true. In other words, the
+  // predicate is not used to compare an element with its predecessor; the
+  // element is compared with the previous element that was not removed (see the
+  // following examples).
+
+  // For example, the first 6 is greater than the following 1, 2, 2, 3, and 1,
+  // so all these elements are removed. In other words, the predicate is not
+  // used to compare an element with its predecessor; the element is compared
+  // with the previous element that was not removed 
+  {
+    list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto pos = unique(coll.begin(), coll.end(), greater<int>());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 4, 6, 6, 6, 6, 7}));
+  }
+
+  {
+    string input{"1   2  3            4           "};
+    EXPECT_THAT(input, "1   2  3            4           ");
+
+    auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y) {
+      return x == y and x == ' ';
+    });
+
+    input.erase(new_end, input.end());
+    EXPECT_THAT(input, "1 2 3 4 ");
+  }
 }
 
 
@@ -1311,7 +1340,7 @@ TEST(CxxStl, AlgoUnique)
 // cxx-algo-remove
 
 // remove value 2 from coll
-TEST(StlAlgoRemove, UseErase)
+TEST(AlgoRemove, UseErase)
 {
   std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
@@ -1324,7 +1353,7 @@ TEST(StlAlgoRemove, UseErase)
   EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
 }
 
-TEST(StlAlgoRemove, UseRemoveAndErase)
+TEST(AlgoRemove, UseRemoveAndErase)
 {
   std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
@@ -1338,7 +1367,7 @@ TEST(StlAlgoRemove, UseRemoveAndErase)
 }
 
 // show that algo-remove() do not remove elements
-TEST(StlAlgoRemove, RemoveDoNotRemove)
+TEST(AlgoRemove, RemoveDoNotRemove)
 {
   std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
@@ -1351,7 +1380,7 @@ TEST(StlAlgoRemove, RemoveDoNotRemove)
 }
 
 // show that remove_if() returns end if not found
-TEST(StlAlgoRemove, UseRemoveIf)
+TEST(AlgoRemove, UseRemoveIf)
 {
   std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
@@ -1395,7 +1424,7 @@ ITERATOR my_remove(ITERATOR begin, ITERATOR end, int value)
   return sub_list_end;
 }
 
-TEST(StlAlgoRemove, UseOwnRemove)
+TEST(AlgoRemove, UseOwnRemove)
 {
   std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
@@ -1420,7 +1449,7 @@ TEST(StlAlgoRemove, UseOwnRemove)
 // coll2: 2 4 6 8 1 3 5 7 9 (9)
 //                ^ first odd element: 1
 
-TEST(StlAlgo, UsePartition)
+TEST(AlgoPartition, Use)
 {
   vector<int> coll1;
   vector<int> coll2;
@@ -1511,7 +1540,7 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
 }
 
 
-TEST(StlAlgoPartition, UseOwnPartitionTwoPass)
+TEST(AlgoPartition, UseOwnPartitionTwoPass)
 {
   vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
 
@@ -1578,7 +1607,7 @@ PortfolioIterator my_partition_two(PortfolioIterator begin,
   return first;
 }
 
-TEST(StlAlgoPartition, UseOwnPartitionOnePass)
+TEST(AlgoPartition, UseOwnPartitionOnePass)
 {
   {
     vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
@@ -1603,7 +1632,7 @@ TEST(StlAlgoPartition, UseOwnPartitionOnePass)
 
 // note: why different order from partition() when use the same logic?
 
-TEST(StlAlgoPartition, UsePartition)
+TEST(AlgoPartition, UsePartitionToCompare)
 {
   vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
 
@@ -1626,7 +1655,7 @@ TEST(StlAlgoPartition, UsePartition)
 // ={=========================================================================
 // algo-fill
 
-TEST(StlAlgoFill, Fill)
+TEST(AlgoFill, Fill)
 {
   vector<int> coll;
   fill_n(back_inserter(coll), 8, 7);
@@ -1638,6 +1667,111 @@ TEST(StlAlgoFill, Fill)
   vector<int> coll1(8,0);
   fill_n(coll1.begin(), 8, 7);
   EXPECT_THAT(coll1, ElementsAre(7,7,7,7,7,7,7,7));  
+}
+
+
+// ={=========================================================================
+// algo-rotate
+
+TEST(AlgoRotate, Rotate)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8};
+
+  // rotate one to the left
+  auto pos = rotate(
+    coll.begin(),     // begin  
+    coll.begin()+1,   // new begin
+    coll.end()        // end
+  );
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+  // return the new position of the (pervious) first element.
+  EXPECT_THAT(*pos, 1);
+
+  // rotate two to the right or think that rotate to the left since `no direction` 
+  // in the call definition.
+  // 
+  // from stl
+  //  *  This effectively swaps the ranges @p [__first,__middle) and
+  //  *  @p [__middle,__last).
+
+  pos = rotate(
+    coll.begin(),
+    coll.end()-2,
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+  EXPECT_THAT(*pos, 2);
+
+  // rotate so that 4 is the beginning
+  pos = rotate(
+    coll.begin(),
+    find(coll.begin(), coll.end(), 4),
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  EXPECT_THAT(*pos, 8);
+}
+
+using ROTATE_ITER = vector<int>::iterator;
+
+void my_rotate(ROTATE_ITER begin, ROTATE_ITER new_begin, ROTATE_ITER end)
+{
+  auto num_swap = distance(new_begin, end);
+  for (; new_begin != begin; --new_begin)
+  {
+    auto start = new_begin;
+    for (int i = 0; i < num_swap; ++i)
+    {
+      swap(*start, *(start-1));
+      ++start;
+    }
+  }
+}
+
+// /// This is a helper function for the rotate algorithm.
+// template<typename _ForwardIterator>
+//   _ForwardIterator
+//   __rotate(_ForwardIterator __first,
+//      _ForwardIterator __middle,
+//      _ForwardIterator __last,
+//      forward_iterator_tag)
+// {}
+//
+// /// This is a helper function for the rotate algorithm.
+// template<typename _RandomAccessIterator>
+//   _RandomAccessIterator
+//   __rotate(_RandomAccessIterator __first,
+//      _RandomAccessIterator __middle,
+//      _RandomAccessIterator __last,
+//      random_access_iterator_tag)
+// {}
+
+TEST(AlgoRotate, OwnRotate)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8};
+
+  // rotate one to the left
+  my_rotate(
+    coll.begin(),     // begin  
+    coll.begin()+1,   // new begin
+    coll.end()        // end
+  );
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+  my_rotate(
+    coll.begin(),
+    coll.end()-2,
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+
+  my_rotate(
+    coll.begin(),
+    find(coll.begin(), coll.end(), 4),
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
 }
 
 
