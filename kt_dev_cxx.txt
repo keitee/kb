@@ -19477,7 +19477,7 @@ which creates temporary; temporary is const and rvalue and const-to-nonconst
 is not allowed.
 
 
-<cxx-temporary-is-const>
+{cxx-temporary-is-const}
 WHY? In any case, compiler will create temporary due to type mismatch and if
 temporary was not const (means mutable or can change this) then make a changes
 to temporary. Not expected result.
@@ -19491,6 +19491,69 @@ How to eliminate this?
 make *cxx-ctor-converting-ctor* explit or do not provide them. 
 
 2. MEC++21
+
+
+<ex> *cxx-iter*
+
+9.2.6 The Increment and Decrement Problem of Vector Iterators
+
+Depending on the platform, the compilation of ++coll.begin() might fail.
+However, if you use, for example, a deque rather than a vector, the
+compilation always succeeds.
+
+The reason for this strange problem lies in the fact that iterators of
+vectors, arrays, and strings might be implemented as ordinary pointers. And
+for all fundamental data types, such as pointers, you are not allowed to
+modify temporary values. For structures and classes, however, doing so is
+allowed. Thus, if the iterator is implemented as an ordinary pointer, the
+compilation fails; if implemented as a class, it succeeds.
+
+int ReturnInteger()
+{
+  int value{3301};
+  return value;
+}
+
+struct StructValue
+{
+  int value_;
+
+  StructValue(int value): value_(value) {}
+
+  int operator++() { return ++value_; }
+};
+
+StructValue ReturnStruct()
+{
+  StructValue value{3301};
+  return value;
+}
+
+TEST(Iterator, NativeAndStructTemporary) 
+{
+  // cxx.cpp: In member function ‘virtual void Temporary_NativeAndStruct_Test::TestBody()’:
+  // cxx.cpp:1539:45: error: lvalue required as increment operand
+  //    cout << "return int: " << ++ReturnInteger() << endl;
+  // cout << "return int: " << ++ReturnInteger() << endl;
+  
+  cout << "return int: " << ++ReturnStruct() << endl;
+}
+
+TEST(Iterator, OperationOnTemporary)
+{
+  {
+    vector<int> coll{4,2,6,3,1,5};
+    sort(++coll.begin(), coll.end());
+    EXPECT_THAT(coll, ElementsAre(4,1,2,3,5,6));
+  }
+  {
+    string coll{"this is a string object"};
+    sort(++coll.begin(), coll.end());
+    EXPECT_THAT(coll, Eq("t    abceghiiijnorssstt"));
+  }
+}
+
+GCC 630 shows no errors and no applicable.
 
 
 <in-casting> from ansic, p45.

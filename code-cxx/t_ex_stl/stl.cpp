@@ -66,8 +66,11 @@ void PRINT_Q_ELEMENTS(const T& coll, const string &optstr = "")
 }
 
 
+// ={=========================================================================
+// cxx-iter
+
 // core will be generated
-TEST(StlIterator, InvalidIterator_OnVector)
+TEST(Iterator, InvalidOnVector)
 {
   std::vector<int> coll{1,2,3,4};
 
@@ -105,12 +108,29 @@ TEST(StlIterator, InvalidIterator_OnVector)
 // 
 // Objects involved in the operation:
 //     iterator "this" @ 0x0x7ffcae5ac5d0 {
-//       type = __gnu_debug::_Safe_iterator<std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> >, std::__debug::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> > > > (constant iterator);
-//       state = singular;
-//       references sequence with type 'std::__debug::map<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, int, std::less<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, int> > >' @ 0x0x7ffcae5ac600
-//     }
+//       type =
+//       __gnu_debug::_Safe_iterator<std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char,
+//       std::char_traits<char>, std::allocator<char> > const, int> >,
+//       std::__debug::map<std::__cxx11::basic_string<char,
+//       std::char_traits<char>, std::allocator<char> >, int,
+//       std::less<std::__cxx11::basic_string<char, std::char_traits<char>,
+//       std::allocator<char> > >,
+//       std::allocator<std::pair<std::__cxx11::basic_string<char,
+//       std::char_traits<char>, std::allocator<char> > const, int> > > >
+//       (constant iterator);
+//
+//       state = singular; 
+//
+//       references sequence with type
+//       'std::__debug::map<std::__cxx11::basic_string<char,
+//       std::char_traits<char>, std::allocator<char> >, int,
+//       std::less<std::__cxx11::basic_string<char, std::char_traits<char>,
+//       std::allocator<char> > >,
+//       std::allocator<std::pair<std::__cxx11::basic_string<char,
+//       std::char_traits<char>, std::allocator<char> > const, int> > >' @
+//       0x0x7ffcae5ac600 }
 
-TEST(DISABLED_StlIterator, InvalidIteratorOnMap)
+TEST(DISABLED_Iterator, InvalidOnMap)
 {
   std::map<std::string, int> coll{
     {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
@@ -125,78 +145,80 @@ TEST(DISABLED_StlIterator, InvalidIteratorOnMap)
   }
 }
 
-TEST(StlIterator, ValidIteratorOnMapBeforeC11)
+TEST(Iterator, ValidOnMapBeforeC11)
 {
-  std::map<std::string, int> coll{
-    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
-  };
-
-  int value = 2;
-
-  for (auto it = coll.cbegin(); it != coll.cend();)
+  // before C++11
   {
-    // before C++11 since erase returns nothing. *cxx-side-effect*
-    if (it->second == value)
-      coll.erase(it++);
-    else
-      ++it;
+    std::map<std::string, int> coll{
+      {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
+    };
+
+    int value = 2;
+
+    for (auto it = coll.cbegin(); it != coll.cend();)
+    {
+      // before C++11 since erase returns nothing. *cxx-side-effect*
+      if (it->second == value)
+        coll.erase(it++);
+      else
+        ++it;
+    }
   }
-}
 
-TEST(StlIterator, ValidIteratorOnMapAfterC11)
-{
-  std::map<std::string, int> coll{
-    {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
-  };
-
-  int value = 2;
-
-  for (auto it = coll.cbegin(); it != coll.cend();)
+  // after C++11
   {
-    if (it->second == value)
-      it = coll.erase(it);
-    else
-      ++it;
+    std::map<std::string, int> coll{
+      {"one", 1}, {"two", 2}, {"three", 3}, {"four", 4}, {"five", 5}
+    };
+
+    int value = 2;
+
+    for (auto it = coll.cbegin(); it != coll.cend();)
+    {
+      if (it->second == value)
+        it = coll.erase(it);
+      else
+        ++it;
+    }
   }
 }
 
 
 // https://stackoverflow.com/questions/37280744/got-singular-iterator-error-in-looping-with-iterator-and-pop-back
 
-// why this work?
-TEST(StlIterator, InvalidIteratorOnDeque_Okay_One)
+TEST(Iterator, InvalidOnDeque_Okays)
 {
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend(); ++it)
+  // why this work?
   {
-    cout << "it : " << *it << endl;
-    coll.pop_back();
+    deque<int> coll{1,2,3};
+
+    for (auto it = coll.rbegin(); it != coll.rend(); ++it)
+    {
+      cout << "it : " << *it << endl;
+      coll.pop_back();
+    }
   }
-}
-
-// why this work?
-TEST(StlIterator, InvalidIteratorOnDeque_Okay_Two)
-{
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend();)
+  // why this work?
   {
-    cout << "it : " << *it << endl;
-    coll.pop_back();
-    ++it;
+    deque<int> coll{1,2,3};
+
+    for (auto it = coll.rbegin(); it != coll.rend();)
+    {
+      cout << "it : " << *it << endl;
+      coll.pop_back();
+      ++it;
+    }
   }
-}
 
-TEST(StlIterator, InvalidIteratorOnDeque_Okay_Three)
-{
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend();)
   {
-    cout << "it : " << *it << endl;
-    coll.pop_back();
-    it = coll.rbegin();
+    deque<int> coll{1,2,3};
+
+    for (auto it = coll.rbegin(); it != coll.rend();)
+    {
+      cout << "it : " << *it << endl;
+      coll.pop_back();
+      it = coll.rbegin();
+    }
   }
 }
 
@@ -215,27 +237,73 @@ TEST(StlIterator, InvalidIteratorOnDeque_Okay_Three)
 //     }
 // Aborted
 
-TEST(DISABLED_StlIterator, InvalidIteratorOnDeque_ErrorOne)
+TEST(DISABLED_Iterator, InvalidOnDeque_Errors)
 {
-  deque<int> coll{1,2,3};
-
-  for (auto it = coll.rbegin(); it != coll.rend();)
   {
-    it = coll.rbegin();
-    cout << "it : " << *it << endl;
-    coll.pop_back();
+    deque<int> coll{1,2,3};
+
+    for (auto it = coll.rbegin(); it != coll.rend();)
+    {
+      it = coll.rbegin();
+      cout << "it : " << *it << endl;
+      coll.pop_back();
+    }
+  }
+  {
+    deque<int> coll{1,2,3};
+
+    for (auto it = coll.rbegin(); it != coll.rend();)
+    {
+      ++it;
+      cout << "it : " << *it << endl;
+      coll.pop_back();
+    }
   }
 }
 
-TEST(DISABLED_StlIterator, InvalidIteratorOnDeque_ErrorTwo)
-{
-  deque<int> coll{1,2,3};
 
-  for (auto it = coll.rbegin(); it != coll.rend();)
+int ReturnInteger()
+{
+  int value{3301};
+  return value;
+}
+
+struct StructValue
+{
+  int value_;
+
+  StructValue(int value): value_(value) {}
+
+  int operator++() { return ++value_; }
+};
+
+StructValue ReturnStruct()
+{
+  StructValue value{3301};
+  return value;
+}
+
+TEST(Iterator, NativeAndStructTemporary) 
+{
+  // cxx.cpp: In member function ‘virtual void Temporary_NativeAndStruct_Test::TestBody()’:
+  // cxx.cpp:1539:45: error: lvalue required as increment operand
+  //    cout << "return int: " << ++ReturnInteger() << endl;
+  // cout << "return int: " << ++ReturnInteger() << endl;
+  
+  cout << "return int: " << ++ReturnStruct() << endl;
+}
+
+TEST(Iterator, OperationOnTemporary)
+{
   {
-    ++it;
-    cout << "it : " << *it << endl;
-    coll.pop_back();
+    vector<int> coll{4,2,6,3,1,5};
+    sort(++coll.begin(), coll.end());
+    EXPECT_THAT(coll, ElementsAre(4,1,2,3,5,6));
+  }
+  {
+    string coll{"this is a string object"};
+    sort(++coll.begin(), coll.end());
+    EXPECT_THAT(coll, Eq("t    abceghiiijnorssstt"));
   }
 }
 
@@ -1544,7 +1612,7 @@ TEST(AlgoPartition, UseOwnPartitionTwoPass)
 {
   vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
 
-  PortfolioIterator iter = RearrangeByQuantity(coll.begin(), coll.end(), 25);
+  RearrangeByQuantity(coll.begin(), coll.end(), 25);
 
   // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
   // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,

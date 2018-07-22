@@ -1520,38 +1520,6 @@ TEST(FunctionPointer, X)
 // ={=========================================================================
 // cxx-temporary
 
-int ReturnInteger()
-{
-  int value{3301};
-  return value;
-}
-
-struct StructValue
-{
-  int value_;
-
-  StructValue(int value): value_(value) {}
-
-  int operator++() { return ++value_; }
-};
-
-StructValue ReturnStruct()
-{
-  StructValue value{3301};
-  return value;
-}
-
-TEST(Temporary, NativeAndStruct)
-{
-
-  // cxx.cpp: In member function ‘virtual void Temporary_NativeAndStruct_Test::TestBody()’:
-  // cxx.cpp:1539:45: error: lvalue required as increment operand
-  //    cout << "return int: " << ++ReturnInteger() << endl;
-  // cout << "return int: " << ++ReturnInteger() << endl;
-  
-  cout << "return int: " << ++ReturnStruct() << endl;
-}
-
 
 // ={=========================================================================
 // cxx-integer-division
