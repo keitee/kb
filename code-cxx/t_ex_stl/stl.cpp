@@ -9,6 +9,7 @@
 #include <queue>
 // #include <algorithm>
 #include <numeric>        // std::accumulate for gcc 6
+#include <limits>         // std::numeric_limits
 #include <random>
 
 #include "gmock/gmock.h"
@@ -530,6 +531,7 @@ TEST(StlVector, InitializeForms)
   }
 
   // default init and fails
+  // GCC 4.9.2, this fails since all are initialzed to 0.
   EXPECT_THAT(coll1, Ne(vector<int>({0,0,0,0,0})));
 
   // value init
@@ -697,7 +699,7 @@ TEST(StlMultiArray, UseVectorAndArray)
   // 0 0 0 0 0
   // 0 0 0 0 0
 
-  array<array<int, cols>, rows> coll_array{}; 
+  array<array<int, cols>, rows> coll_array{0}; 
 
   cout << "{" << endl;
   for (size_t i = 0; i < rows; ++i)
@@ -1373,6 +1375,168 @@ TEST(AlgoForEach, UsePredicates)
   }
 }
 
+// 11.4 The for_each() Algorithm
+// A third example demonstrates how to use the return value of the for_each()
+// algorithm. Because for_each() has the special property that it returns its
+// operation, you can process and return a result inside the operation:
+//
+// note that this is not predicate since it has its state.
+
+namespace algo_for_each {
+  class MeanValue {
+    public:
+      MeanValue(): num_(0), sum_(0) {}
+
+      void operator()(int elem) {
+        num_++;
+        sum_ += elem;
+      }
+
+      operator double() {
+        return static_cast<double>(sum_)/num_;
+      }
+
+    private:
+      long num_;
+      long sum_;
+  };
+}
+
+TEST(AlgoForEach, GetMean)
+{
+  using namespace algo_for_each;
+
+  vector<int> coll{1,2,3,4,5,6,7,8};
+
+  double mean = for_each(coll.begin(), coll.end(),
+      MeanValue());
+
+  EXPECT_THAT(mean, DoubleEq(4.5));
+}
+
+
+// ={=========================================================================
+// cxx-algo-min-max
+namespace algo_min_max {
+  bool AbsLess(int elem1, int elem2) {
+    return abs(elem1) < abs(elem2);
+  }
+
+  using ITERATOR = std::deque<int>::iterator;
+
+  pair<ITERATOR, ITERATOR> my_minmax(ITERATOR begin, ITERATOR end)
+  {
+    auto min = numeric_limits<int>::max();
+    auto max = numeric_limits<int>::min();
+
+    ITERATOR min_iter = begin;
+    ITERATOR max_iter = begin;
+
+    for(; begin != end; ++begin) {
+
+      if (*begin < min) {
+        min = *begin;
+        min_iter = begin;
+      }
+
+      // add '=' to support the last max as minmax_element()
+      if (max <= *begin) {
+        max = *begin;
+        max_iter = begin;
+      }
+    }
+
+    return make_pair(min_iter, max_iter);
+  }
+}
+
+TEST(AlgoMinMax, Use)
+{
+  using namespace algo_min_max;
+
+  deque<int> coll;
+  INSERT_ELEMENTS(coll, 2, 6);
+  INSERT_ELEMENTS(coll, -3, 6);
+  EXPECT_THAT(coll, 
+      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
+
+  // returns iterators
+  EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
+  EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+
+  // return iterator pair
+  // Note also that minmax_element() yields `the last maximum`, so the distance
+  // 9.
+  auto minmax = minmax_element(coll.begin(), coll.end());
+  EXPECT_THAT(*(minmax.first), -3);
+  EXPECT_THAT(*(minmax.second), 6);
+  EXPECT_THAT(distance(minmax.first, minmax.second), 9);
+  EXPECT_THAT(distance(
+        min_element(coll.begin(), coll.end()),
+        max_element(coll.begin(), coll.end()))
+      , -1);
+
+  // min/max of absolute values
+  EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
+  EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
+}
+
+TEST(AlgoMinMax, UseOwn)
+{
+  using namespace algo_min_max;
+
+  deque<int> coll;
+  INSERT_ELEMENTS(coll, 2, 6);
+  INSERT_ELEMENTS(coll, -3, 6);
+  EXPECT_THAT(coll, 
+      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
+
+  // return iterator pair
+  // Note also that minmax_element() yields `the last maximum`, so the distance
+  // 9.
+  auto minmax = my_minmax(coll.begin(), coll.end());
+  EXPECT_THAT(*(minmax.first), -3);
+  EXPECT_THAT(*(minmax.second), 6);
+  EXPECT_THAT(distance(minmax.first, minmax.second), 9);
+}
+
+
+// ={=========================================================================
+// cxx-algo-search
+
+TEST(AlgoSearch, SearchN)
+{
+  deque<int> coll{1, 2, 7, 7, 6, 3, 9, 5, 7, 7, 7, 3, 6};
+
+  auto pos = search_n(coll.begin(), coll.end(),
+      3,
+      7);
+  if (pos != coll.end()) {
+    EXPECT_THAT(distance(coll.begin(), pos), 8);
+  }
+}
+
+TEST(AlgoSearch, SearchFirstSubrange)
+{
+  deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+  list<int> subcoll{3,4,5};
+
+  // first sub found
+  auto pos = search(coll.begin(), coll.end(),
+      subcoll.begin(), subcoll.end());
+  if (pos != coll.end()) {
+    EXPECT_THAT(distance(coll.begin(), pos), 2);
+  }
+
+  // second sub found
+  ++pos;
+  pos = search(pos, coll.end(),
+      subcoll.begin(), subcoll.end());
+  if (pos != coll.end()) {
+    EXPECT_THAT(distance(coll.begin(), pos), 9);
+  }
+}
+
 
 // ={=========================================================================
 // cxx-algo-unique
@@ -1495,7 +1659,9 @@ TEST(AlgoRemove, UseRemoveIf)
   EXPECT_THAT(it, coll.end());
 }
 
+namespace algo_remove {
 // implement own remove()
+
 using ITERATOR = std::vector<int>::iterator;
 
 ITERATOR my_remove(ITERATOR begin, ITERATOR end, int value)
@@ -1525,8 +1691,12 @@ ITERATOR my_remove(ITERATOR begin, ITERATOR end, int value)
   return sub_list_end;
 }
 
+}
+
 TEST(AlgoRemove, UseOwnRemove)
 {
+  using namespace algo_remove;
+
   std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
   auto end = my_remove(coll.begin(), coll.end(), 2);
@@ -1779,7 +1949,9 @@ TEST(AlgoRotate, Rotate)
   vector<int> coll{1,2,3,4,5,6,7,8};
 
   // rotate one to the left
-  auto pos = rotate(
+  // GCC 4.9.2, void rotate() so comment out 
+  // auto pos = rotate(
+  rotate(
     coll.begin(),     // begin  
     coll.begin()+1,   // new begin
     coll.end()        // end
@@ -1787,7 +1959,7 @@ TEST(AlgoRotate, Rotate)
   EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
 
   // return the new position of the (pervious) first element.
-  EXPECT_THAT(*pos, 1);
+  // EXPECT_THAT(*pos, 1);
 
   // rotate two to the right or think that rotate to the left since `no direction` 
   // in the call definition.
@@ -1796,22 +1968,24 @@ TEST(AlgoRotate, Rotate)
   //  *  This effectively swaps the ranges @p [__first,__middle) and
   //  *  @p [__middle,__last).
 
-  pos = rotate(
+  // pos = rotate(
+  rotate(
     coll.begin(),
     coll.end()-2,
     coll.end()
   );
   EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
-  EXPECT_THAT(*pos, 2);
+  // EXPECT_THAT(*pos, 2);
 
   // rotate so that 4 is the beginning
-  pos = rotate(
+  // pos = rotate(
+  rotate(
     coll.begin(),
     find(coll.begin(), coll.end(), 4),
     coll.end()
   );
   EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
-  EXPECT_THAT(*pos, 8);
+  // EXPECT_THAT(*pos, 8);
 }
 
 using ROTATE_ITER = vector<int>::iterator;
