@@ -1083,7 +1083,7 @@ TEST(AlgoCopy, UseOnDifferentCollections)
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
 
-TEST(AlgoRandom, UseRandomEngineAndDistribution)
+TEST(AlgoGenerate, UseRandomEngineAndDistribution)
 {
   default_random_engine dre;
 
@@ -1157,7 +1157,7 @@ class CardSequenceUseRandWithRange
 default_random_engine CardSequenceUseRandom::dre;
 uniform_int_distribution<size_t> CardSequenceUseRandom::udist{0, 24};
 
-TEST(AlgoRandom, UseGenerate)
+TEST(AlgoGenerate, Random)
 {
     vector<uint32_t> ivec1;
     generate_n( back_inserter(ivec1), 12, CardSequenceUseRandom() );
@@ -1209,70 +1209,6 @@ TEST(AlgoAccumulate, Use)
   // 1*1*2*3*4*5 = 120
   ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 1, multiplies<int>()), Eq(120));
   ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0, multiplies<int>()), Eq(0));
-}
-
-
-// ={=========================================================================
-// cxx-algo-equal
-
-TEST(AlgoEqual, VariousUseCases)
-{
-  vector<string> vec1{"Charles", "in", "Charge"};
-  vector<string> vec2{"Charles", "in", "charge"};
-
-  EXPECT_FALSE(vec1 == vec2);
-  EXPECT_FALSE(equal(vec1.begin(), vec1.end(), vec2.begin()));
-
-  string s1{"abcde"};
-  string s2{"abcdf"};
-
-  // Testing for “Less Than”
-  //
-  // Both forms return whether the elements in the range [beg1,end1) are
-  // “lexicographically less than” the elements in the range [beg2,end2).
-
-  EXPECT_FALSE(lexicographical_compare(s1.begin(), s1.end(), s1.begin(), s1.end())); 
-  EXPECT_TRUE(lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end())); 
-
-  // Search the First Difference
-  //
-  // The first form returns the first two corresponding elements of range
-  // [beg,end) and the range starting with cmpBeg that differ.
-  
-  auto iter = mismatch(s1.begin(), s1.end(), s2.begin());
-  // first mismatch = e second mismatch = f
-  EXPECT_THAT(*iter.first, Eq('e'));
-  EXPECT_THAT(*iter.second, Eq('f'));
-}
-
-TEST(AlgoEqual, UseOnDifferentCollections)
-{
-    vector<int> coll1;
-    list<int> coll2;
-    list<int> coll3;
-
-    INSERT_ELEMENTS(coll1, 1, 7);
-    INSERT_ELEMENTS(coll2, 3, 9);
-    INSERT_ELEMENTS(coll3, 1, 7);
-
-    EXPECT_THAT(coll1, ElementsAre(1,2,3,4,5,6,7));
-    EXPECT_THAT(coll2, ElementsAre(3,4,5,6,7,8,9));
-    EXPECT_THAT(coll3, ElementsAre(1,2,3,4,5,6,7));
-
-    EXPECT_FALSE( equal(coll1.begin(), coll1.end(),
-                coll2.begin()));
-
-    EXPECT_TRUE( equal(coll1.begin(), coll1.end(),
-                coll3.begin()));
-
-    // coll1 and coll2 are different but are the same as to the order of
-    // even/odd.
-    EXPECT_TRUE( equal( coll1.begin(), coll1.end(),
-                coll2.begin(), [](int lhs, int rhs)
-                {
-                    return lhs % 2 == rhs % 2; 
-                }
-                ));
 }
 
 
@@ -1537,24 +1473,184 @@ TEST(AlgoSearch, SearchFirstSubrange)
   }
 }
 
+namespace algo_search {
+  using ITERATOR = std::deque<int>::iterator;
+
+  // struct _Iter_equal_to_iter
+  // iterator type can be different but value type should be compatible.
+  struct EqualToIter
+  {
+    template<typename Iterator1, typename Iterator2>
+      bool operator()(Iterator1 it1, Iterator2 it2) const
+      { return *it1 == *it2; }
+  };
+
+  ITERATOR my_search(ITERATOR first1, ITERATOR last1, ITERATOR first2, ITERATOR last2)
+  {
+    EqualToIter EQUAL_PREDICATE;
+
+    for (;;)
+    {
+      // find_if() requires unary op and have tried varios attempts but not easy
+      // to make all work.
+      //
+      // first1 = find_if(first1, last1, EQUAL_PREDICATE);
+      // first1 = find_if(first1, last1, bind( EQUAL_PREDICATE, placeholders::_1, first2));
+      // first1 = find_if(first1, last1, __iter_comp_iter(EQUAL_PREDICATE, first2));
+      
+      // works
+      first1 = find_if(first1, last1, [=](int elem)
+          { 
+          return elem == *first2;
+          });
+
+      // not found
+      if (first1 == last1)
+        return last1;
+
+      // cout << "find: " << *first1 << endl;
+
+      ITERATOR p = first2;
+      ITERATOR current = first1;
+
+      // this make the following loop fails so my_search() returns end().
+      // why since it's copied from stl code???
+      //
+      // if(++current == last1)
+      //   return last1;
+
+      while (EQUAL_PREDICATE(current, p))
+      {
+        // cout << "equal: " << *current << "," << *p << endl;
+
+        // the second range matches up and exit loop
+        if (++p == last2)
+          return first1;
+
+        if (++current == last1)
+          return last1;
+      } // while end
+
+      // cout << "not equal: " << *current << "," << *p << endl;
+
+      // wehn found no match, then search again
+      ++first1;
+    } // for end
+
+    return first1;
+  }
+} // namespace
+
+TEST(AlgoSearch, SearchFirstSubrange_UseOwn)
+{
+  using namespace algo_search;
+
+  deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+  deque<int> subcoll{3,4,5};
+
+  // first sub found
+  auto pos = my_search(coll.begin(), coll.end(),
+      subcoll.begin(), subcoll.end());
+  if (pos != coll.end()) {
+    cout << "first" << endl;
+    EXPECT_THAT(distance(coll.begin(), pos), 2);
+  }
+
+  // second sub found
+  ++pos;
+  pos = my_search(pos, coll.end(),
+      subcoll.begin(), subcoll.end());
+  if (pos != coll.end()) {
+    cout << "second" << endl;
+    EXPECT_THAT(distance(coll.begin(), pos), 9);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-algo-equal
+
+TEST(AlgoEqual, VariousUseCases)
+{
+  vector<string> vec1{"Charles", "in", "Charge"};
+  vector<string> vec2{"Charles", "in", "charge"};
+
+  EXPECT_FALSE(vec1 == vec2);
+  EXPECT_FALSE(equal(vec1.begin(), vec1.end(), vec2.begin()));
+
+  string s1{"abcde"};
+  string s2{"abcdf"};
+
+  // Testing for “Less Than”
+  //
+  // Both forms return whether the elements in the range [beg1,end1) are
+  // “lexicographically less than” the elements in the range [beg2,end2).
+
+  EXPECT_FALSE(lexicographical_compare(s1.begin(), s1.end(), s1.begin(), s1.end())); 
+  EXPECT_TRUE(lexicographical_compare(s1.begin(), s1.end(), s2.begin(), s2.end())); 
+
+  // Search the First Difference
+  //
+  // The first form returns the first two corresponding elements of range
+  // [beg,end) and the range starting with cmpBeg that differ.
+  
+  auto iter = mismatch(s1.begin(), s1.end(), s2.begin());
+  // first mismatch = e second mismatch = f
+  EXPECT_THAT(*iter.first, Eq('e'));
+  EXPECT_THAT(*iter.second, Eq('f'));
+}
+
+TEST(AlgoEqual, UseOnDifferentCollections)
+{
+    vector<int> coll1;
+    list<int> coll2;
+    list<int> coll3;
+
+    INSERT_ELEMENTS(coll1, 1, 7);
+    INSERT_ELEMENTS(coll2, 3, 9);
+    INSERT_ELEMENTS(coll3, 1, 7);
+
+    EXPECT_THAT(coll1, ElementsAre(1,2,3,4,5,6,7));
+    EXPECT_THAT(coll2, ElementsAre(3,4,5,6,7,8,9));
+    EXPECT_THAT(coll3, ElementsAre(1,2,3,4,5,6,7));
+
+    EXPECT_FALSE( equal(coll1.begin(), coll1.end(),
+                coll2.begin()));
+
+    EXPECT_TRUE( equal(coll1.begin(), coll1.end(),
+                coll3.begin()));
+
+    // coll1 and coll2 are different but are the same as to the order of
+    // even/odd.
+    EXPECT_TRUE( equal( coll1.begin(), coll1.end(),
+                coll2.begin(), [](int lhs, int rhs)
+                {
+                    return lhs % 2 == rhs % 2; 
+                }
+                ));
+}
+
+TEST(AlgoEqual, UsePermutation)
+{
+  string string1{"PARK"}, string2{"KRAP"};
+
+  // Testing for Unordered Equality
+  EXPECT_TRUE(is_permutation(string1.begin(), string1.end(), string2.begin()));
+}
+
 
 // ={=========================================================================
 // cxx-algo-unique
 
-
-// input: 1   2  3            4
-// input: 1 2 3 4
-
-
 TEST(AlgoUnique, Use)
 {
-  // • Both forms collapse consecutive equal elements by removing the following
-  // duplicates.
+  // • Both forms collapse `consecutive equal elements` by removing the
+  // following duplicates.
 
-  // • The first form removes from the range [beg,end) all elements that are equal
-  // to the previous elements. Thus, only when the elements in the sequence are
-  // sorted, or at least when all elements of the same value are adjacent, does it
-  // remove all duplicates.
+  // • The first form removes from the range [beg,end) all elements that are
+  // equal to the previous elements. Thus, only when the elements in the
+  // sequence are sorted, or at least when all elements of the same value are
+  // adjacent, does it remove all duplicates.
 
   {
     int source[] = {1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
@@ -1566,7 +1662,6 @@ TEST(AlgoUnique, Use)
 
     coll.erase(pos, coll.end());
     EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
-    // 1 4 4 6 6 6 6 7
   }
 
   // • The second form removes all elements that follow an element e and for
@@ -1599,6 +1694,47 @@ TEST(AlgoUnique, Use)
     EXPECT_THAT(input, "1 2 3 4 ");
   }
 }
+
+
+// ={=========================================================================
+// cxx-algo-reverse
+
+TEST(AlgoReverse, Use)
+{
+  vector<int> coll{1,2,3,4,5,6,7};
+
+  reverse(coll.begin(), coll.end());
+  EXPECT_THAT(coll, ElementsAre(7,6,5,4,3,2,1));
+
+  reverse(coll.begin()+1, coll.end()-1);
+  EXPECT_THAT(coll, ElementsAre(7,2,3,4,5,6,1));
+}
+
+namespace algo_reverse 
+{
+  using ITERATOR = vector<int>::iterator;
+  void my_reverse(ITERATOR first, ITERATOR last)
+  {
+    // auto last_end = prev(last);
+    auto last_end = first+6;
+    for (;first < last_end; ++first, --last_end)
+      swap(*first, *last);
+  }
+}
+
+TEST(AlgoReverse, UseOwn)
+{
+  using namespace algo_reverse;
+
+  vector<int> coll{1,2,3,4,5,6,7};
+
+  my_reverse(coll.begin(), coll.end());
+  EXPECT_THAT(coll, ElementsAre(7,6,5,4,3,2,1));
+
+  my_reverse(coll.begin()+1, coll.end()-1);
+  EXPECT_THAT(coll, ElementsAre(7,2,3,4,5,6,1));
+}
+
 
 
 // ={=========================================================================
