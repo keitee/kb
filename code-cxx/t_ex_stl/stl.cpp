@@ -309,6 +309,21 @@ TEST(Iterator, OperationOnTemporary)
 }
 
 
+TEST(Iterator, Next)
+{
+  vector<int> coll{1,2,3,4,5};
+  auto iter = coll.begin();
+  EXPECT_EQ(*iter, 1);
+
+  ++iter;
+  EXPECT_EQ(*iter, 2);
+
+  auto pos = next(iter);
+  EXPECT_EQ(*iter, 2);
+  EXPECT_EQ(*pos, 3);
+}
+
+
 // ={=========================================================================
 // cxx-vector
 

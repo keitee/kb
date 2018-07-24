@@ -5117,6 +5117,14 @@ void sort_insertion_03(vector<int> &coll)
     }
 }
 
+// https://www.codeproject.com/Articles/854127/Top-Beautiful-Cplusplus-std-Algorithms-Examples
+void sort_insertion_04(vector<int> &coll)
+{
+  auto first = coll.begin();
+
+  for (auto run = first; run != coll.end(); ++run)
+    rotate(upper_bound(first, run, *run), run, next(run));
+}
 
 TEST(AlgoSort, Insertion_01)
 {
@@ -5138,7 +5146,14 @@ TEST(AlgoSort, Insertion_01)
     EXPECT_THAT(coll, 
         ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
   }
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_04(coll);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
 }
+
 
 int main(int argc, char** argv)
 {
