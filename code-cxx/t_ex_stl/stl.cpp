@@ -1079,7 +1079,9 @@ TEST(AlgoCopy, UseOnDifferentCollections)
 // ={=========================================================================
 // cxx-algo-generate cxx-random
 
-// 16807, 282475249, 1622650073, 984943658, 1144108930, 470211272, 101027544, 1457850878, 1458777923, 2007237709, 823564440, 1115438165, 1784484492, 74243042, 114807987, 1137522503, 1441282327, 16531729,
+// 16807, 282475249, 1622650073, 984943658, 1144108930, 470211272, 101027544, 
+// 1457850878, 1458777923, 2007237709, 823564440, 1115438165, 1784484492, 
+// 74243042, 114807987, 1137522503, 1441282327, 16531729,
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
 
@@ -1105,12 +1107,6 @@ TEST(AlgoGenerate, UseRandomEngineAndDistribution)
 }
 
 
-// 0 3 18 11 13 5 1 16 16 23 9 12 (12)
-// 20 0 1 13 16 0 9 1 10 17 14 23 (12)
-// 1 0 1 1 1 1 0 0 1 1 0 1 (12)
-// 0 1 1 0 0 0 0 0 1 0 1 1 (12)
-// 8 8 8 9 9 9 7 8 8 8 7 9 (12)
-
 class CardSequenceUseRand
 {
   public:
@@ -1125,7 +1121,7 @@ class CardSequenceUseRand
     int size_{};
 };
 
-class CardSequenceUseRandom
+class CardSequenceUseRandomEngine
 {
   public:
     int operator() () {
@@ -1154,17 +1150,23 @@ class CardSequenceUseRandWithRange
 };
 
 
-default_random_engine CardSequenceUseRandom::dre;
-uniform_int_distribution<size_t> CardSequenceUseRandom::udist{0, 24};
+default_random_engine CardSequenceUseRandomEngine::dre;
+uniform_int_distribution<size_t> CardSequenceUseRandomEngine::udist{0, 24};
+
+// 0 3 18 11 13 5 1 16 16 23 9 12 (12)
+// 20 0 1 13 16 0 9 1 10 17 14 23 (12)
+// 1 0 1 1 1 1 0 0 1 1 0 1 (12)
+// 0 1 1 0 0 0 0 0 1 0 1 1 (12)
+// 8 8 8 9 9 9 7 8 8 8 7 9 (12)
 
 TEST(AlgoGenerate, Random)
 {
     vector<uint32_t> ivec1;
-    generate_n( back_inserter(ivec1), 12, CardSequenceUseRandom() );
+    generate_n( back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
     PRINT_ELEMENTS(ivec1);
 
     vector<uint32_t> ivec2;
-    generate_n( back_inserter(ivec2), 12, CardSequenceUseRandom() );
+    generate_n( back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
     PRINT_ELEMENTS(ivec2);
 
     vector<uint32_t> ivec3;
@@ -1181,11 +1183,45 @@ TEST(AlgoGenerate, Random)
     PRINT_ELEMENTS(ivec5);
 }
 
+// 1 3 9 6 7 8 2 4 5 (9)
+// 8 7 5 6 2 4 9 3 1 (9)
+
+TEST(AlgoShuffle, Random)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8,9};
+
+  // shuffle randomly
+  // The second form shuffles the order of the elements in the range [beg,end),
+  // using an implementation- defined uniform distribution random-number
+  // generator, such as the C function rand().
+
+  random_shuffle(coll.begin(), coll.end());
+  PRINT_ELEMENTS(coll);
+
+  // sort again
+  sort(coll.begin(), coll.end());
+
+  default_random_engine dre;
+  shuffle(coll.begin(), coll.end(), dre);
+  PRINT_ELEMENTS(coll);
+}
+
 
 // ={=========================================================================
 // cxx-algo-accumulate
 //
 // 11.11 Numeric Algorithms
+//
+// The first form computes and returns the sum of initValue and all elements in
+// the range [beg,end).  In particular, it calls the following for each element:
+//
+// initValue = initValue + elem
+//
+// The second form computes and returns the result of calling op for initValue
+// and all elements in the range [beg,end). In particular, it calls the
+// following for each element:
+//
+// initValue = op(initValue,elem)
 //
 // Thus, for the values
 //  a1 a2 a3 a4 ...
@@ -1646,6 +1682,18 @@ TEST(AlgoUnique, Use)
 {
   // • Both forms collapse `consecutive equal elements` by removing the
   // following duplicates.
+  {
+    vector<int> coll{1, 4, 4, 6};
+    auto pos = unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+  {
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto pos = unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
 
   // • The first form removes from the range [beg,end) all elements that are
   // equal to the previous elements. Thus, only when the elements in the
@@ -1695,6 +1743,68 @@ TEST(AlgoUnique, Use)
   }
 }
 
+namespace algo_unique 
+{
+  using ITERATOR = vector<int>::iterator;
+
+  // when see two consequtive equal items, return a iterator to the first.
+  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
+  {
+    if (first == last)
+      return last;
+
+    ITERATOR next = first;
+    while (++next != last)
+    {
+      if (*first == *next)
+        return first;
+      first = next;
+    }
+
+    return last;
+  }
+
+  // from /usr/include/c++/4.9/bits/stl_algo.h
+  ITERATOR my_unique(ITERATOR first, ITERATOR last)
+  {
+    first = adjacent_find(first, last);
+    if (first == last)
+      return last;
+
+    ITERATOR dest = first;
+    ++first;
+    while (++first != last)
+    {
+      // not equal and assign(overwrite). so if equals, keep increase first.
+      if (*dest != *first)
+        *++dest = *first;
+    }
+
+    // one after from the last
+    return ++dest;
+  }
+}
+
+TEST(AlgoUnique, UseOwn)
+{
+  using namespace algo_unique;
+
+  // • Both forms collapse `consecutive equal elements` by removing the
+  // following duplicates.
+  {
+    vector<int> coll{1, 4, 4, 6};
+    auto pos = my_unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+  {
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto pos = my_unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+}
+
 
 // ={=========================================================================
 // cxx-algo-reverse
@@ -1712,12 +1822,26 @@ TEST(AlgoReverse, Use)
 
 namespace algo_reverse 
 {
-  using ITERATOR = vector<int>::iterator;
-  void my_reverse(ITERATOR first, ITERATOR last)
+  using RITERATOR = vector<int>::iterator;
+
+  void my_reverse(RITERATOR first, RITERATOR last)
   {
-    // auto last_end = prev(last);
-    auto last_end = first+6;
-    for (;first < last_end; ++first, --last_end)
+    --last;
+
+    for (;first < last; ++first, --last)
+      swap(*first, *last);
+  }
+
+  using BITERATOR = list<int>::iterator;
+
+  void my_reverse_bi(BITERATOR first, BITERATOR last)
+  {
+    --last;
+
+    // since `<` is only supported for random
+    // for (;first < last; ++first, --last)
+
+    for (;first != last; ++first, --last)
       swap(*first, *last);
   }
 }
@@ -1726,15 +1850,29 @@ TEST(AlgoReverse, UseOwn)
 {
   using namespace algo_reverse;
 
-  vector<int> coll{1,2,3,4,5,6,7};
+  {
+    vector<int> coll{1,2,3,4,5,6,7};
 
-  my_reverse(coll.begin(), coll.end());
-  EXPECT_THAT(coll, ElementsAre(7,6,5,4,3,2,1));
+    my_reverse(coll.begin(), coll.end());
+    EXPECT_THAT(coll, ElementsAre(7,6,5,4,3,2,1));
 
-  my_reverse(coll.begin()+1, coll.end()-1);
-  EXPECT_THAT(coll, ElementsAre(7,2,3,4,5,6,1));
+    my_reverse(coll.begin()+1, coll.end()-1);
+    EXPECT_THAT(coll, ElementsAre(7,2,3,4,5,6,1));
+  }
+
+  {
+    list<int> coll{1,2,3,4,5,6,7};
+
+    my_reverse_bi(coll.begin(), coll.end());
+    EXPECT_THAT(coll, ElementsAre(7,6,5,4,3,2,1));
+
+    // since `+/- is only supported for random
+    // my_reverse_bi(coll.begin()+1, coll.end()-1);
+
+    my_reverse_bi(next(coll.begin()), prev(coll.end()));
+    EXPECT_THAT(coll, ElementsAre(7,2,3,4,5,6,1));
+  }
 }
-
 
 
 // ={=========================================================================
@@ -2056,6 +2194,123 @@ TEST(AlgoPartition, UsePartitionToCompare)
   EXPECT_THAT(coll, ElementsAreArray({23,6,11,6,13,23,21,19,20,15,24,48,37,34,29,26,41,30,42,43}));
   EXPECT_THAT(distance(coll.begin(), iter), 11);
   EXPECT_THAT(*iter, 48);
+}
+
+
+// ={=========================================================================
+// algo-sort
+
+TEST(AlgoSort, NthSort)
+{
+  {
+    vector<int> coll{3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5};
+    sort(coll.begin(), coll.end());
+
+    // 1 2 2 3 3 3 4 4 4 5 5 5 6 6 7 (15)
+    PRINT_ELEMENTS(coll);
+  }
+
+  // do not get that!
+  
+  // Both forms sort the elements in the range [beg,end), so the correct element
+  // is at the nth position, and all elements in front are less than or equal to
+  // this element, and all elements that follow are greater than or equal to it.
+  //
+  // Thus, you get two subsequences separated by the element at position n,
+  // whereby each element of the first subsequence is less than or equal to each
+  // element of the second subsequence. This is helpful if you need only the set
+  // of the n highest or lowest elements without having all the elements sorted.
+
+  {
+    vector<int> coll{3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5};
+    nth_element(coll.begin(), coll.begin()+3, coll.end());
+
+    // 2 1 2 3 3 4 3 4 5 6 4 7 6 5 5 (15)
+    PRINT_ELEMENTS(coll);
+  }
+
+  {
+    vector<int> coll{3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5};
+    nth_element(coll.begin(), coll.end()-4, coll.end());
+
+    // 4 3 4 3 2 2 3 1 5 5 4 5 6 6 7 (15)
+    PRINT_ELEMENTS(coll);
+  }
+}
+
+
+// ={=========================================================================
+// algo-search algo-binary-search
+
+TEST(AlgoSearch, AlgoBinarySearch)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8,9};
+
+  EXPECT_TRUE(binary_search(coll.begin(), coll.end(), 5));
+  EXPECT_FALSE(binary_search(coll.begin(), coll.end(), 42));
+}
+
+
+// ={=========================================================================
+// algo-search algo-include
+
+TEST(AlgoSearch, AlgoInclude)
+{ 
+  {
+    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+    list<int> subcoll{3,4,5};
+
+    // first sub found
+    auto pos = search(coll.begin(), coll.end(),
+        subcoll.begin(), subcoll.end());
+    if (pos != coll.end()) {
+      cout << "search() found" << endl;
+      EXPECT_THAT(distance(coll.begin(), pos), 2);
+    }
+  }
+
+  {
+    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+    list<int> subcoll{3,4,5};
+
+    // first sub found
+    // if do not sort before includes() then aborted when built with DEBUG.
+    sort(coll.begin(), coll.end());
+
+    auto pos = includes(coll.begin(), coll.end(),
+        subcoll.begin(), subcoll.end());
+    EXPECT_TRUE(pos);
+  }
+}
+
+
+// ={=========================================================================
+// algo-search algo-include
+// Searching First or Last Possible Position
+
+TEST(AlgoSearch, AlgoUpperLowerBound)
+{
+  vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+
+  // lower_bound() returns the position of the first element that has a value
+  // equal to or greater than value. This is the first position where an element
+  // with value value could get inserted without breaking the sorting of the
+  // range [beg,end).
+
+  auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
+
+  // upper_bound() returns the position of the first element that has a value
+  // greater than value. This is the last position where an element with value
+  // value could get inserted without breaking the sorting of the range
+  // [beg,end).
+
+  auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
+
+  // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+  //                          ^^^^^^^
+
+  EXPECT_THAT(distance(coll.cbegin(), first)+1, 9);
+  EXPECT_THAT(distance(coll.cbegin(), last)+1, 11);
 }
 
 
