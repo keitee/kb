@@ -1012,6 +1012,12 @@ TEST(AlgoPartition, UseOwnPartitionTwoPass)
   EXPECT_THAT(distance(coll.begin(), iter), 11);
 }
 
+
+TEST(Iter, X)
+{
+  vector<int> coll{1,2,
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {
