@@ -2211,6 +2211,49 @@ TEST(AlgoPartition, UsePartitionToCompare)
   EXPECT_THAT(*iter, 48);
 }
 
+// https://github.com/fenbf/review/blob/master/stl/beautiful_std_alg.cpp
+// 4. gather (cpp seasoning)
+//
+// use case: list of items, select some of items (good guys) and move the to position around p.
+// for instance: multiple selection on a list
+//
+// problem with std::not1: http://channel9.msdn.com/Events/GoingNative/2013/Cpp-Seasoning#c635149692925101916
+
+template <typename Iterator, typename Compare>
+auto gather(Iterator _first, Iterator _last, Iterator _pos, Compare _comp) -> std::pair<Iterator, Iterator>
+{
+  using value_type = typename std::iterator_traits<Iterator>::value_type;
+  auto _begin = partition(_first, _pos, [&](const value_type e) { return !_comp(e); });
+  auto _end = partition(_pos, _last, _comp);
+  return {_begin, _end};
+}
+
+
+TEST(AlgoPartition, Gather)
+{
+  {
+    vector<int> coll(10, 0);
+    coll[0] = coll[2] = coll[7] = coll[8] = 1;
+    EXPECT_THAT(coll, ElementsAre(1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
+
+    // gather(f, l, p, s);
+    std::partition(coll.begin(), coll.begin()+4, [](const int x){ return x != 1; });
+    // 0 0 1 1 0 0 0 1 1 0 (10)
+
+    std::partition(coll.begin()+4, coll.begin()+10, [](const int x){ return x == 1; });
+    EXPECT_THAT(coll, ElementsAre(0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
+  }
+
+  {
+    vector<int> coll(10, 0);
+    coll[0] = coll[2] = coll[7] = coll[8] = 1;
+    EXPECT_THAT(coll, ElementsAre(1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
+
+    gather(coll.begin(), coll.end(), coll.begin()+4, [](const int x){ return x == 1; });
+    EXPECT_THAT(coll, ElementsAre(0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
+  }
+}
+
 
 // ={=========================================================================
 // algo-sort
@@ -2453,6 +2496,46 @@ TEST(AlgoRotate, OwnRotate)
     coll.end()
   );
   EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+}
+
+
+// ={=========================================================================
+// cxx-template
+
+template <typename Iterator>
+typename std::iterator_traits<Iterator>::value_type &return_element_01(Iterator first, Iterator last)
+{
+  (void)last;
+  return *first;
+}
+
+template <typename Iterator>
+auto return_element_02(Iterator first, Iterator last) -> typename std::iterator_traits<Iterator>::reference
+{
+  (void)last;
+  return *first;
+}
+
+template <typename Iterator>
+auto return_element_03(Iterator first, Iterator last) -> decltype(*first)
+{
+  (void)last;
+  return *first;
+}
+
+// : error: ‘first’ was not declared in this scope
+// template <typename Iterator>
+// decltype(*first) return_element_04(Iterator first, Iterator last)
+// {
+//   return *first;
+// }
+
+TEST(Template, TypeTraitsIterator)
+{
+  vector<int> coll{3,4,5,6};
+  EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
+  EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
+  EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
 }
 
 

@@ -1028,43 +1028,6 @@ TEST(AlgoPartition, UseOwnPartitionTwoPass)
 
 
 // ={=========================================================================
-// 4. gather (cpp seasoning)
-//
-// use case: list of items, select some of items (good guys) and move the to position around p.
-// for instance: multiple selection on a list
-//
-// problem with std::not1: http://channel9.msdn.com/Events/GoingNative/2013/Cpp-Seasoning#c635149692925101916
-
-// template <typename I, // I models BidirectionalIterator
-// 	typename S> // S models UnaryPredicate
-
-template <typename I, typename S>
-auto gather(I f, I l, I p, S s) -> std::pair < I, I >
-{
-  using value_type = typename std::iterator_traits<I>::value_type;
-  return{ std::stable_partition(f, p, [&](const value_type& x){ return !s(x); }),
-    std::stable_partition(p, l, s) };
-}
-
-TEST(X, X)
-{
-	vector<int> coll(10, 0);
-	coll[0] = coll[2] = coll[7] = coll[8] = 1;
-  PRINT_ELEMENTS(coll);
-	
-	// gather all '1's and move them around 4th place in the array
-	// auto range = gather(coll, coll.begin() + 10, coll.begin() + 4, [](int x) { return x == 1; });
-
-	auto f = [](int x) { return x == 1; };
-
-  std::stable_partition(coll.begin(), coll.begin()+4, [](const int x){ return x != 1; });
-  PRINT_ELEMENTS(coll);
-
-	// std::cout << "selected items from " << std::distance(intArray, range.first) << " to " << std::distance(intArray, range.second) << " position" << std::endl;
-}
-
-
-// ={=========================================================================
 int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);
