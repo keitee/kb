@@ -16,16 +16,22 @@ using namespace testing;
 
 // ={=========================================================================
 template <typename T>
-void PRINT_ELEMENTS_MAP(T col, const string mesg, const string sep = ", ")
+void PRINT_ELEMENTS( T& coll, const string optstr="" )
 {
-    cout << "=" << mesg << endl;
+    size_t count{};
+    cout << optstr;
 
-    for ( auto &e : col)
-        cout << "{" << e.first << ", " << e.second << "}" << sep;
+    for( const auto &elem : coll )
+    {
+        cout << elem << " ";
+        ++count;
+    }
+
+    cout << "(" << count << ")" << endl;
 }
 
 template <typename T>
-void PRINT_ELEMENTS( T& coll, const string optstr="" )
+void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
 {
     size_t count{};
     cout << optstr;
@@ -107,8 +113,9 @@ unsigned int t_algo_find_a_number_01(const vector<unsigned int> &input)
 
 TEST(AlgoOccurance, FindNumberSeenOddTimes)
 {
-    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    EXPECT_THAT(t_algo_find_a_number_01(input), 12);
+  // 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
+  const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+  EXPECT_THAT(t_algo_find_a_number_01(input), 12);
 }
 
 unsigned int t_algo_find_a_number_02(const vector<unsigned int> &input)
@@ -136,8 +143,18 @@ unsigned int t_algo_find_a_number_02(const vector<unsigned int> &input)
 
 TEST(AlgoOccurance, FindNumberSeenOddTimesUseMap)
 {
+  // find_if() returns the first match. so remove '4' to make it the first odd
+  // num of sequence:
+  // 2 2 4 4 4 6 6 8 8 10 10 12 12 12 (15)
+  {
+    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2};
+    EXPECT_THAT(t_algo_find_a_number_02(input), 4);
+  }
+
+  {
     const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
     EXPECT_THAT(t_algo_find_a_number_02(input), 12);
+  }
 }
 
 unsigned int t_algo_find_a_number_03(const vector<unsigned int> &input)
@@ -160,8 +177,8 @@ unsigned int t_algo_find_a_number_03(const vector<unsigned int> &input)
 
 TEST(AlgoOccurance, FindNumberSeenOddTimesUseSet)
 {
-    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    EXPECT_THAT(t_algo_find_a_number_02(input), 12);
+  const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+  EXPECT_THAT(t_algo_find_a_number_02(input), 12);
 }
 
 
@@ -1692,7 +1709,7 @@ struct Maze
     {
       cout << "RememberPosition: founds duplicates" << endl;
       cout << "RememberPosition: (" << position.first << ", " << position.second << ")" << endl;
-      PRINT_ELEMENTS(visited_points);
+      PRINT_M_ELEMENTS(visited_points);
     }
   }
 
@@ -2003,7 +2020,7 @@ TEST(DISABLED_AlgoMaze, Array5x5)
 
   // use start point (0, 0) rather then (1, 1).
   find_path(maze, 0, 0);
-  PRINT_ELEMENTS(maze.path_points);
+  PRINT_M_ELEMENTS(maze.path_points);
 }
 
 // TEST(DISABLED_Maze, Array10x10)
@@ -2039,7 +2056,7 @@ TEST(AlgoMaze, Array10x10)
   };
  
   find_path(maze, 0, 0);
-  PRINT_ELEMENTS(maze.path_points);
+  PRINT_M_ELEMENTS(maze.path_points);
 }
 
 TEST(DISABLED_AlgoMaze, Array15x15)
@@ -2064,7 +2081,7 @@ TEST(DISABLED_AlgoMaze, Array15x15)
   };
  
   find_path(maze, 0, 0);
-  PRINT_ELEMENTS(maze.path_points);
+  PRINT_M_ELEMENTS(maze.path_points);
 }
 
 // This input select the path which do have have "2" in. How to support this
@@ -2106,7 +2123,7 @@ TEST(DISABLED_AlgoMaze, Array20x20)
   };
  
   find_path(maze, 0, 0);
-  PRINT_ELEMENTS(maze.path_points);
+  PRINT_M_ELEMENTS(maze.path_points);
 }
 
 
