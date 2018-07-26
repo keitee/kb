@@ -1023,9 +1023,9 @@ namespace algo_serch_binary_search {
 
 
   // `less-than` version which do `endless loop` and wrong. 
-  int algo_binary_search_01(ITERATOR first, ITERATOR last, const int key)
+  ITERATOR algo_binary_search_01(ITERATOR first, ITERATOR last, const int key)
   {
-    ITERATOR saved_first = first;
+    ITERATOR saved = last;
 
     for(; first < last;)
     {
@@ -1041,14 +1041,14 @@ namespace algo_serch_binary_search {
 
     // cout << "found: " << *first << endl;
 
-    // when first == last
-    return distance(saved_first, first);
+    // so first == last and do equility check
+    return (key == *first) ? first : saved;
   }
 
   // `grater-than` version which works 
-  int algo_binary_search_02(ITERATOR first, ITERATOR last, const int key)
+  ITERATOR algo_binary_search_02(ITERATOR first, ITERATOR last, const int key)
   {
-    ITERATOR saved_first = first;
+    ITERATOR saved = last;
 
     for(; first < last;)
     {
@@ -1060,48 +1060,45 @@ namespace algo_serch_binary_search {
         last = first + middle;
     }
 
-    // when first == last
-    return distance(saved_first, first);
+    // so first == last and do equility check
+    return (key == *first) ? first : saved;
   }
 
-  // `less-than` version which do `endless loop` and wrong. 
-  int algo_binary_search_03(ITERATOR first, ITERATOR last, const int key)
+  // `less-than` version but has equility check in for loop. So works.
+  ITERATOR algo_binary_search_03(ITERATOR first, ITERATOR last, const int key)
   {
-    ITERATOR saved_first = first;
-    size_t middle{};
+    ITERATOR saved = last;
 
     for(; first < last;)
     {
-      middle = distance(first, last)/2;
-      // cout << "(" << *first << ", " << *last << ")" 
-      //   << " middle: " << middle << " f+m: " << *(first+middle) << endl;
+      auto middle = distance(first, last)/2;
 
       if (key < *(first+middle))
         last = first + (middle-1);
       else if (key > *(first+middle))
         first = first + middle+1;
       else
-        return distance(saved_first, first+middle);
+        return first+middle;
     }
 
-    // cout << "found: " << *first << endl;
-    
-    // when first == last, have equality check.
-    return (key == *(first+middle)) ? distance(saved_first, first) : -1;
+    // so first == last and do equility check
+    return (key == *first) ? first : saved;
   }
 
   // `equality` version.
-  int algo_binary_search_04(ITERATOR first, ITERATOR last, const int key)
+  // 1. have equal in for loop control.
+  // 2. have equality check first
+  
+  ITERATOR algo_binary_search_04(ITERATOR first, ITERATOR last, const int key)
   {
-    ITERATOR saved_first = first;
-    size_t middle{};
+    ITERATOR saved = last;
 
     for(; first <= last;)
     {
-      middle = distance(first, last)/2;
+      auto middle = distance(first, last)/2;
 
       if (key == *(first+middle))
-        return distance(saved_first, first+middle);
+        return first+middle;
       else if (key < *(first+middle))
         last = first + (middle-1);
       else // (key > *(first+middle))
@@ -1109,7 +1106,7 @@ namespace algo_serch_binary_search {
     }
     
     // when not found
-    return -1;
+    return saved;
   }
 
   int algo_binary_search_old(CONTAINER coll, ITERATOR first, ITERATOR last, const int key)
@@ -1147,21 +1144,25 @@ TEST(AlgoSearch, BinarySearch)
  
   //               0  1  2  3   4   5   6   7   8   9  10  11  12
   vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+  ITERATOR pos{};
 
   // auto pos = algo_binary_search_01(coll.begin(), coll.end(), 15);
   // EXPECT_THAT(pos, 7);
 
-  auto pos = algo_binary_search_02(coll.begin(), coll.end(), 15);
-  EXPECT_THAT(pos, 7);
+  pos = algo_binary_search_02(coll.begin(), coll.end(), 15);
+  EXPECT_THAT(*pos, 15);
+  EXPECT_THAT(distance(coll.begin(), pos), 7);
 
   pos = algo_binary_search_03(coll.begin(), coll.end(), 15);
-  EXPECT_THAT(pos, 7);
+  EXPECT_THAT(*pos, 15);
+  EXPECT_THAT(distance(coll.begin(), pos), 7);
 
   pos = algo_binary_search_04(coll.begin(), coll.end(), 15);
-  EXPECT_THAT(pos, 7);
+  EXPECT_THAT(*pos, 15);
+  EXPECT_THAT(distance(coll.begin(), pos), 7);
 
-  pos = algo_binary_search_old(coll, coll.begin(), coll.end(), 15);
-  EXPECT_THAT(pos, 7);
+  // pos = algo_binary_search_old(coll, coll.begin(), coll.end(), 15);
+  // EXPECT_THAT(pos, 7);
 
   // auto pos = algo_binary_search(coll.begin(), coll.end(), 17);
   // EXPECT_THAT(pos, 7);
