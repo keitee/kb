@@ -323,6 +323,17 @@ TEST(Iterator, Next)
   EXPECT_EQ(*pos, 3);
 }
 
+TEST(Iterator, Distance)
+{
+  vector<int> coll{1,2,3,4,5};
+  auto pos = find(coll.begin(), coll.end(), 3);
+  EXPECT_EQ(distance(coll.begin(), pos), 2);
+  EXPECT_EQ(distance(pos, coll.begin()), -2);
+
+  EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
+  EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+}
+
 
 // ={=========================================================================
 // cxx-vector

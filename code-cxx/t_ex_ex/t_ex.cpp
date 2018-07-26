@@ -840,7 +840,7 @@ TEST(DISABLED_Maze, Array5x5)
 }
 
 // TEST(DISABLED_Maze, Array10x10)
-TEST(Maze, Array10x10)
+TEST(DISABLED_Maze, Array10x10)
 {
   // when not support diagonal move
   // Maze maze(10, 10);
@@ -944,86 +944,233 @@ TEST(DISABLED_Maze, Array20x20)
 
 
 // ={=========================================================================
-template <typename T>
-void PRINT_ELEMENTS_MAP(T col, const string mesg, const string sep = ", ")
-{
-    cout << "=" << mesg << endl;
+//
+// STL version:
+//
+// Checking Whether One Element Is Present
+//
+// bool
+// binary_search (ForwardIterator beg, ForwardIterator end, const T& value)
 
-    for ( auto &e : col)
-        cout << "{" << e.first << ", " << e.second << "}" << sep;
-}
+namespace algo_serch_binary_search {
 
-int count_occurance_from_sequence(const vector<int> &input, int key) 
-{
-  map<char,int> count_map;
+  using ITERATOR = vector<int>::iterator;
+  using CONTAINER = vector<int>;
 
-  for (auto value : input)
+  // 0. Recursive version? NO.
+  //
+  // 1. How to get middle?
+  //
+  // If use array index, then no difference between:
+  //
+  // middle = (first + last)/2; or middle = first + (diff/2);
+  //
+  // 2. GT or LT version?
+  //
+  // Before, thought it only affect whether or not it would find the first when
+  // there are multiple matches in the input:
+  //
+  // <gt-comparison>
+  // if( GT(key, middle) )     // key > middle
+  //   bot = middle+1;         // remove `lower-part`
+  // else                      // key <= middle
+  //   top = middle;           // remove `upper-part` including middle
+  // 
+  // <lt-comparison>
+  // if( LT(key, middle) )     // key < middle
+  //   top = middle-1;
+  // else                      // key >= middle
+  //   bot = middle;           
+  // 
+  // The `gt-comparison` will find the `first-occurance` of the target when
+  // there are multiples since it removes the upper and the `lower-part` still
+  // remains in search.  For example, search 2 in the list and middle is ^:
+  //  
+  // 
+  // ..2222...
+  //    ^
+  //
+  // *However*, turns out LT version DO NOT work since:
+  //
+  //
+  //      0  1  2  3   4   5   6   7   8   9  10  11  12
+  // coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+  //
+  // lt runs when key is 15:
+  //
+  // 0, 12  12/2=6  c[6]=13
+  // 6, 12  18/2=9  c[9]=29
+  // 6,  8  14/2=7  c[7]=15
+  // 7,  8  15/2=7  c[7]=15
+  // 7,  8  15/2=7  c[7]=15
+  // ...
+  //
+  // gt runs when key is 15:
+  //
+  // 0, 12  12/2=6  c[6]=13
+  // 7, 12  19/2=9  c[9]=29
+  // 7,  9  16/2=8  c[8]=17
+  // 7,  8  15/2=7  c[7]=15
+  // 7,  7  ends
+  //
+  //
+  // 3. Equality version?
+  //
+  // This forgets(ignores) the possibility that the target might be found in the
+  // middle and continue to search until when there is only one item, that is
+  // when top == bottom. Then see either hit the target or not found. So it
+  // makes possibly unnecessary iterations.
+
+
+  // `less-than` version which do `endless loop` and wrong. 
+  int algo_binary_search_01(ITERATOR first, ITERATOR last, const int key)
   {
-    string str = to_string(value);
-    for (auto e : str)
+    ITERATOR saved_first = first;
+
+    for(; first < last;)
     {
-      ++count_map[e];
+      auto middle = distance(first, last)/2;
+      // cout << "(" << *first << ", " << *last << ")" 
+      //   << " middle: " << middle << " f+m: " << *(first+middle) << endl;
+
+      if (key < *(first+middle))
+        last = first + (middle-1);
+      else
+        first = first + middle;
     }
+
+    // cout << "found: " << *first << endl;
+
+    // when first == last
+    return distance(saved_first, first);
   }
 
-  string stringkey = to_string(key);
-  auto ret = count_map.find(stringkey[0]);
-  
-  // if values are [0,9] and are ASCII then, can use:
-  // auto ret = count_map.find(key+48);
-
-  return ret->second;
-}
-
-TEST(X, XX) 
-{
-  vector<int> input_value{11,12,13,14,15};
-  EXPECT_THAT(count_occurance_from_sequence(input_value, 1), 6);
-}
-
-
-// ={=========================================================================
-using ITER = vector<int>::iterator;
-
-ITER partition_01(ITER begin, ITER end, int value)
-{
-  // find the end of the first group which not conforms to the value
-  ITER list_end = begin;
-  for (; list_end != end; ++list_end)
+  // `grater-than` version which works 
+  int algo_binary_search_02(ITERATOR first, ITERATOR last, const int key)
   {
-    if (*list_end > value)
-      break;
-  }
+    ITERATOR saved_first = first;
 
-  ITER run = list_end; 
-  for(++run; run != end; ++run)
-  {
-    if (*run < value)
+    for(; first < last;)
     {
-      // cout << "swap(" << *run << ", " << *list_end << ")" << endl;
-      swap(*run, *list_end);
-      ++list_end;
+      auto middle = distance(first, last)/2;
+
+      if (key > *(first+middle))
+        first = first + (middle+1);
+      else
+        last = first + middle;
     }
+
+    // when first == last
+    return distance(saved_first, first);
   }
 
-  return list_end;
-}
+  // `less-than` version which do `endless loop` and wrong. 
+  int algo_binary_search_03(ITERATOR first, ITERATOR last, const int key)
+  {
+    ITERATOR saved_first = first;
+    size_t middle{};
 
-TEST(AlgoPartition, UseOwnPartitionTwoPass)
+    for(; first < last;)
+    {
+      middle = distance(first, last)/2;
+      // cout << "(" << *first << ", " << *last << ")" 
+      //   << " middle: " << middle << " f+m: " << *(first+middle) << endl;
+
+      if (key < *(first+middle))
+        last = first + (middle-1);
+      else if (key > *(first+middle))
+        first = first + middle+1;
+      else
+        return distance(saved_first, first+middle);
+    }
+
+    // cout << "found: " << *first << endl;
+    
+    // when first == last, have equality check.
+    return (key == *(first+middle)) ? distance(saved_first, first) : -1;
+  }
+
+  // `equality` version.
+  int algo_binary_search_04(ITERATOR first, ITERATOR last, const int key)
+  {
+    ITERATOR saved_first = first;
+    size_t middle{};
+
+    for(; first <= last;)
+    {
+      middle = distance(first, last)/2;
+
+      if (key == *(first+middle))
+        return distance(saved_first, first+middle);
+      else if (key < *(first+middle))
+        last = first + (middle-1);
+      else // (key > *(first+middle))
+        first = first + middle+1;
+    }
+    
+    // when not found
+    return -1;
+  }
+
+  int algo_binary_search_old(CONTAINER coll, ITERATOR first, ITERATOR last, const int key)
+  {
+    int start = 0;
+    int end = distance(first, last)-1;
+
+    // empty input check
+    if (end == -1)
+      return end;
+
+    while (start < end)
+    {
+      size_t middle = (start+end)/2;
+
+      if (key > coll[middle])
+      {
+        start = middle+1;
+      }
+      else
+      {
+        end = middle;
+      }
+    }
+    
+    return (key == coll[end]) ? end : -1;
+  }
+
+} // namespace
+
+
+TEST(AlgoSearch, BinarySearch)
 {
-  vector<int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+  using namespace algo_serch_binary_search;
+ 
+  //               0  1  2  3   4   5   6   7   8   9  10  11  12
+  vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
 
-  ITER iter = partition_01(coll.begin(), coll.end(), 25);
+  // auto pos = algo_binary_search_01(coll.begin(), coll.end(), 15);
+  // EXPECT_THAT(pos, 7);
 
-  // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
-  // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
-  //                                ^^
-                                     
-  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+  auto pos = algo_binary_search_02(coll.begin(), coll.end(), 15);
+  EXPECT_THAT(pos, 7);
 
-  // this now fails since `current` is iterator of internal coll but not input
-  // call. Have to work out one.
-  EXPECT_THAT(distance(coll.begin(), iter), 11);
+  pos = algo_binary_search_03(coll.begin(), coll.end(), 15);
+  EXPECT_THAT(pos, 7);
+
+  pos = algo_binary_search_04(coll.begin(), coll.end(), 15);
+  EXPECT_THAT(pos, 7);
+
+  pos = algo_binary_search_old(coll, coll.begin(), coll.end(), 15);
+  EXPECT_THAT(pos, 7);
+
+  // auto pos = algo_binary_search(coll.begin(), coll.end(), 17);
+  // EXPECT_THAT(pos, 7);
+
+  // auto pos = algo_binary_search(coll.begin(), coll.end(), 2);
+  // EXPECT_THAT(pos, 7);
+
+  // auto pos = algo_binary_search(coll.begin(), coll.end(), 99);
+  // EXPECT_THAT(pos, 7);
 }
 
 
