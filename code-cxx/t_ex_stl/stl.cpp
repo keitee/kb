@@ -1902,7 +1902,7 @@ TEST(AlgoReverse, UseOwn)
 
 
 // ={=========================================================================
-// cxx-algo-remove
+// cxx-algo-remove algo-unique
 
 // remove value 2 from coll
 TEST(AlgoRemove, UseErase)
@@ -2010,7 +2010,7 @@ TEST(AlgoRemove, UseOwnRemove)
 
 
 // ={=========================================================================
-// cxx-algo-partition
+// cxx-algo-partition algo-gather
 
 // coll1: 1 2 3 4 5 6 7 8 9 (9)
 // coll1: 8 2 6 4 5 3 7 1 9 (9)
@@ -2375,11 +2375,12 @@ TEST(AlgoSearch, AlgoUpperLowerBound)
 
   auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
 
+  //  0  1  2  3  4  5  6  7  8  9 10 11 12
   // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
   //                          ^^^^^^^
 
-  EXPECT_THAT(distance(coll.cbegin(), first)+1, 9);
-  EXPECT_THAT(distance(coll.cbegin(), last)+1, 11);
+  EXPECT_THAT(distance(coll.cbegin(), first), 8);
+  EXPECT_THAT(distance(coll.cbegin(), last), 10);
 }
 
 
@@ -2402,7 +2403,7 @@ TEST(AlgoFill, Fill)
 
 
 // ={=========================================================================
-// algo-rotate
+// algo-rotate, algo-slide
 
 TEST(AlgoRotate, Rotate)
 {

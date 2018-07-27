@@ -5171,6 +5171,416 @@ TEST(AlgoSort, Insertion_01)
   }
 }
 
+// ={=========================================================================
+// algo-search-binary-search
+
+namespace algo_serch_binary_search {
+
+  using ITERATOR = vector<int>::iterator;
+  using CONTAINER = vector<int>;
+
+  // 0. Recursive version? NO.
+  //
+  // 1. How to get middle?
+  //
+  // If use array index, then no difference between:
+  //
+  // middle = (first + last)/2; or middle = first + (diff/2);
+  //
+  // 2. GT or LT version?
+  //
+  // Before, thought it only affect whether or not it would find the first when
+  // there are multiple matches in the input:
+  //
+  // <gt-comparison>
+  // if( GT(key, middle) )     // key > middle
+  //   bot = middle+1;         // remove `lower-part`
+  // else                      // key <= middle
+  //   top = middle;           // remove `upper-part` including middle
+  // 
+  // <lt-comparison>
+  // if( LT(key, middle) )     // key < middle
+  //   top = middle-1;
+  // else                      // key >= middle
+  //   bot = middle;           
+  // 
+  // The `gt-comparison` will find the `first-occurance` of the target when
+  // there are multiples since it removes the upper and the `lower-part` still
+  // remains in search.  For example, search 2 in the list and middle is ^:
+  //  
+  // 
+  // ..2222...
+  //    ^
+  //
+  // *However*, turns out LT version DO NOT work since:
+  //
+  //
+  //      0  1  2  3   4   5   6   7   8   9  10  11  12
+  // coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+  //
+  // lt runs when key is 15:
+  //
+  // 0, 12  12/2=6  c[6]=13
+  // 6, 12  18/2=9  c[9]=29
+  // 6,  8  14/2=7  c[7]=15
+  // 7,  8  15/2=7  c[7]=15
+  // 7,  8  15/2=7  c[7]=15
+  // ...
+  //
+  // gt runs when key is 15:
+  //
+  // 0, 12  12/2=6  c[6]=13
+  // 7, 12  19/2=9  c[9]=29
+  // 7,  9  16/2=8  c[8]=17
+  // 7,  8  15/2=7  c[7]=15
+  // 7,  7  ends
+  //
+  //
+  // 3. Equality version?
+  //
+  // This forgets(ignores) the possibility that the target might be found in the
+  // middle and continue to search until when there is only one item, that is
+  // when top == bottom. Then see either hit the target or not found. So it
+  // makes possibly unnecessary iterations. 
+  //
+  // So have equality check in the loop.
+
+
+  // `less-than` version which do `endless loop` and wrong. 
+  ITERATOR algo_binary_search_01(ITERATOR first, ITERATOR last, const int key)
+  {
+    ITERATOR saved = last;
+
+    for(; first < last;)
+    {
+      auto middle = distance(first, last)/2;
+      // cout << "(" << *first << ", " << *last << ")" 
+      //   << " middle: " << middle << " f+m: " << *(first+middle) << endl;
+
+      if (key < *(first+middle))
+        last = first + (middle-1);
+      else
+        first = first + middle;
+    }
+
+    // cout << "found: " << *first << endl;
+
+    // so first == last and do equility check
+    return (key == *first) ? first : saved;
+  }
+
+  // `grater-than` version which works 
+  ITERATOR algo_binary_search_02(ITERATOR first, ITERATOR last, const int key)
+  {
+    ITERATOR saved = last;
+
+    // can have empty input check here but not necessary since do not run for
+    // loop anyway.
+    
+    for(; first < last;)
+    {
+      auto middle = distance(first, last)/2;
+
+      if (key > *(first+middle))
+        first = first + (middle+1);
+      else
+        last = first + middle;
+    }
+
+    // so first == last and do equility check
+    return (key == *first) ? first : saved;
+  }
+
+  // `less-than` version but has equility check in for loop. So works.
+  ITERATOR algo_binary_search_03(ITERATOR first, ITERATOR last, const int key)
+  {
+    ITERATOR saved = last;
+
+    for(; first < last;)
+    {
+      auto middle = distance(first, last)/2;
+
+      if (key < *(first+middle))
+        last = first + (middle-1);
+      else if (key > *(first+middle))
+        first = first + middle+1;
+      else
+        return first+middle;
+    }
+
+    // so first == last and do equility check
+    return (key == *first) ? first : saved;
+  }
+
+  // `equality` version.
+  // 1. have equal in for loop control so has equality check in the loop
+  // 2. have equality check first
+  
+  ITERATOR algo_binary_search_04(ITERATOR first, ITERATOR last, const int key)
+  {
+    ITERATOR saved = last;
+
+    for(; first <= last;)
+    {
+      auto middle = distance(first, last)/2;
+
+      if (key == *(first+middle))
+        return first+middle;
+      else if (key < *(first+middle))
+        last = first + (middle-1);
+      else // (key > *(first+middle))
+        first = first + middle+1;
+    }
+    
+    // when not found
+    return saved;
+  }
+
+  // note that ansic version also uses equality and greater than approach.
+  //
+  // ansic, p58 `equality-version`
+  // cracking the coding interview, p120
+  //
+  // int binsearch(int x, int v[], int size)
+  // {
+  //   int low, high, mid;
+  // 
+  //   low = 0;
+  //   high = n-1;
+  // 
+  //   while( low <= high )
+  //   {
+  //     mid = (low + high) / 2;
+  // 
+  //     if( x < v[mid] )
+  //       high = mid-1;
+  //     else if( x > v[mid] )
+  //       low = mid+1;
+  //     else    // found match
+  //       return mid;
+  //   }
+  // 
+  //   // no match
+  //   return -1;
+  // }
+
+  int algo_binary_search_old(CONTAINER coll, ITERATOR first, ITERATOR last, const int key)
+  {
+    int start = 0;
+    int end = distance(first, last)-1;
+
+    // empty input check
+    if (end == -1)
+      return end;
+
+    while (start < end)
+    {
+      size_t middle = (start+end)/2;
+
+      if (key > coll[middle])
+      {
+        start = middle+1;
+      }
+      else
+      {
+        end = middle;
+      }
+    }
+    
+    return (key == coll[end]) ? end : -1;
+  }
+
+
+  // 4. Which is better?
+  //
+  // Which one will do fewer comparisons? `equality-version` will if found 
+  // in the beginning of the search but requires 
+  // `two comparisons at each iteration.`
+  // 
+  // Can draw a `comparison-tree` to compare.
+  // 
+  //                    (5) ; root node representing a key
+  //      '<='                       '>'
+  //      (3)                        (8)
+  // '<='       '>'
+  // (2)        (4)
+  //       '<='      '>'
+  // ...   (4)       (5)
+  //     '=' '!='  '=' '!='
+  // ... [4] [F]   [5] [F]
+  // 
+  // For n=10, Binary1 does slightly fewer comparisons both for successful and
+  // for unsuccessful searches. However, an optimizing compiler may not do as
+  // much work as two full comparisons. In that case, Binary2 may be slightly
+  // better choice.
+  // 
+  // 
+  // Sequential search needs O(n) and binary search needs `O(logn) comparisons`
+  // which is excellent since log n grows very slowly as n increases.
+  // 
+  // These are only approximate. For large values of n, the difference between
+  // log n and log(n+1) is insignificant and (n+1)/n is very nearly 1. Hence can
+  // simply results as:
+  // 
+  //                Successful     Unsuccessful search
+  // Binary1Search  logn + 1       logn + 1              `forgettable-version`
+  // Binary2Search  2logn-3        2logn                 `equality-version`
+  // 
+  // All four cases are proportional to logn and the coefficients of logn are
+  // the number of comparisons inside the loop.
+  // 
+  // To conclude, two points:
+  // 
+  // * For large n, Binary1, `forgetful-version` is better and for small,
+  // sequential search is better since when looks at logn and n graph, logn is
+  // bigger for small n. Binary2 may be better when there is optimizing
+  // compiler.
+  // 
+  // * Binary1 pickes up the first occurance when there are many same occurances
+  // but Binary2 don't.
+
+
+  // Checking Whether One Element Is Present
+  //
+  // bool
+  // binary_search (ForwardIterator beg, ForwardIterator end, const T& value)
+
+  ITERATOR algo_binary_search_stl(ITERATOR first, ITERATOR last, const int key)
+  {
+    auto length = distance(first, last);
+
+    while (0 < length)
+    {
+      auto half = length >> 1;
+      ITERATOR middle = first;
+      advance(middle, half);
+
+      if(*middle < key)
+      {
+        // first = middle+1; which limits to random access
+        first = ++middle;
+        length = length - half - 1;
+      }
+      else
+      {
+        length = half;
+      }
+    }
+
+    // to return bool
+    // return (first != last && *first == key);
+    
+    return first;
+  }
+
+} // namespace
+
+
+TEST(AlgoSearch, BinarySearch)
+{
+  using namespace algo_serch_binary_search;
+ 
+  //               0  1  2  3   4   5   6   7   8   9  10  11  12
+  vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+  ITERATOR pos{};
+
+  // auto pos = algo_binary_search_01(coll.begin(), coll.end(), 15);
+  // EXPECT_THAT(pos, 7);
+
+  pos = algo_binary_search_02(coll.begin(), coll.end(), 15);
+  EXPECT_THAT(*pos, 15);
+  EXPECT_THAT(distance(coll.begin(), pos), 7);
+
+  pos = algo_binary_search_03(coll.begin(), coll.end(), 15);
+  EXPECT_THAT(*pos, 15);
+  EXPECT_THAT(distance(coll.begin(), pos), 7);
+
+  pos = algo_binary_search_04(coll.begin(), coll.end(), 15);
+  EXPECT_THAT(*pos, 15);
+  EXPECT_THAT(distance(coll.begin(), pos), 7);
+
+  // forgettable version
+  {
+    pos = algo_binary_search_02(coll.begin(), coll.end(), 15);
+    EXPECT_THAT(*pos, 15);
+    EXPECT_THAT(distance(coll.begin(), pos), 7);
+
+    pos = algo_binary_search_02(coll.begin(), coll.end(), 17);
+    EXPECT_THAT(*pos, 17);
+    EXPECT_THAT(distance(coll.begin(), pos), 8);
+
+    pos = algo_binary_search_02(coll.begin(), coll.end(), 2);
+    EXPECT_THAT(*pos, 2);
+    EXPECT_THAT(distance(coll.begin(), pos), 0);
+
+    pos = algo_binary_search_02(coll.begin(), coll.end(), 99);
+    EXPECT_THAT(pos, coll.end());
+  }
+
+  // equality version
+  {
+    pos = algo_binary_search_04(coll.begin(), coll.end(), 15);
+    EXPECT_THAT(*pos, 15);
+    EXPECT_THAT(distance(coll.begin(), pos), 7);
+
+    pos = algo_binary_search_04(coll.begin(), coll.end(), 17);
+    EXPECT_THAT(*pos, 17);
+    EXPECT_THAT(distance(coll.begin(), pos), 8);
+
+    pos = algo_binary_search_04(coll.begin(), coll.end(), 2);
+    EXPECT_THAT(*pos, 2);
+    EXPECT_THAT(distance(coll.begin(), pos), 0);
+
+    pos = algo_binary_search_04(coll.begin(), coll.end(), 99);
+    EXPECT_THAT(pos, coll.end());
+  }
+
+  // stl version
+  {
+    auto found = binary_search(coll.begin(), coll.end(), 15);
+    EXPECT_TRUE(found);
+
+    found = binary_search(coll.begin(), coll.end(), 99);
+    EXPECT_FALSE(found);
+  }
+
+  {
+    auto pos = algo_binary_search_stl(coll.begin(), coll.end(), 15);
+    EXPECT_THAT(*pos, 15);
+    EXPECT_THAT(distance(coll.begin(), pos), 7);
+
+    pos = algo_binary_search_stl(coll.begin(), coll.end(), 99);
+    EXPECT_THAT(pos, coll.end());
+  }
+
+  // TEST(AlgoSearch, AlgoUpperLowerBound)
+  {
+    vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+
+    //  0  1  2  3  4  5  6  7  8  9 10 11 12
+    // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+    //                          ^^^^^^^
+
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an element
+    // with value value could get inserted without breaking the sorting of the
+    // range [beg,end).
+
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
+    EXPECT_THAT(*first, 5);
+    EXPECT_THAT(distance(coll.cbegin(), first), 8);
+
+    // : error: no matching function for call to 
+    // ‘distance(std::vector<int>::iterator, __gnu_cxx::__normal_iterator<const int*, std::vector<int> >&)’
+    // since lower_bound() uses cbegin().
+    // EXPECT_THAT(distance(coll.begin(), first), 8);
+
+    auto pos = algo_binary_search_stl(coll.begin(), coll.end(), 5);
+    EXPECT_THAT(*pos, 5);
+    EXPECT_THAT(distance(coll.begin(), pos), 8);
+  }
+}
+
 
 int main(int argc, char** argv)
 {
