@@ -5287,6 +5287,18 @@ namespace algo_serch_binary_search {
         last = first + middle;
     }
 
+    // note:
+    // When use iterator, there's no more element when first and last are the
+    // same. When use array index, there is one element and (last-first) == -1
+    // when express there is no element. 
+    //
+    // Whether or not use iterator or array, have the same number of
+    // comparison tree and exit the loop when there is no more comparison to do;
+    // either found or not found when first/end is 0 or end.
+    //
+    // Therefore, have to check if it found the match and return index or
+    // iterator found or return something to mean `not found`. 
+
     // so first == last and do equility check
     return (key == *first) ? first : saved;
   }
@@ -5444,6 +5456,10 @@ namespace algo_serch_binary_search {
   //
   // bool
   // binary_search (ForwardIterator beg, ForwardIterator end, const T& value)
+  //
+  // same as:
+  // __lower_bound(_ForwardIterator __first, _ForwardIterator __last,
+  //    const _Tp& __val, _Compare __comp);
 
   ITERATOR algo_binary_search_stl(ITERATOR first, ITERATOR last, const int key)
   {
@@ -5452,9 +5468,13 @@ namespace algo_serch_binary_search {
     while (0 < length)
     {
       auto half = length >> 1;
+
       ITERATOR middle = first;
       advance(middle, half);
 
+      // error since: void advance().
+      // ITERATOR middle = advance(first, half);
+      
       if(*middle < key)
       {
         // first = middle+1; which limits to random access
@@ -5467,9 +5487,55 @@ namespace algo_serch_binary_search {
       }
     }
 
+    // Repeat:
+    // Whether or not use iterator or array, have the same number of
+    // comparison tree and exit the loop when there is no more comparison to do;
+    // either found or not found when first/end is 0 or end.
+    //
     // to return bool
     // return (first != last && *first == key);
-    
+    //
+    // if return iterator, when not found, first can be either end() or the
+    // first. Is it right to return the first to mean that not found?
+    //
+    // template<typename _ForwardIterator, typename _Tp>
+    //   bool
+    //   binary_search(_ForwardIterator __first, _ForwardIterator __last,
+    //       const _Tp& __val)
+    //   {
+    //     typedef typename iterator_traits<_ForwardIterator>::value_type
+    //       _ValueType;
+    //
+    //     _ForwardIterator __i
+    //       = std::__lower_bound(__first, __last, __val,
+    //           __gnu_cxx::__ops::__iter_less_val());
+    //     return __i != __last && !(__val < *__i);
+    //   }
+    // 
+    // template<typename _ForwardIterator, typename _Tp>
+    //   inline _ForwardIterator
+    //   lower_bound(_ForwardIterator __first, _ForwardIterator __last,
+    //       const _Tp& __val)
+    //   {
+    //     return std::__lower_bound(__first, __last, __val,
+    //         __gnu_cxx::__ops::__iter_less_val());
+    //   }
+    //
+    // As with lower_bound(), it reutns a value "equal to or greater than" and
+    // for "0" scale, goes path "<=" since key is 1.
+    //
+    // {
+    //   vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+    //
+    //   // lower_bound() returns the position of the first element that has a value
+    //   // equal to or greater than value. This is the first position where an
+    //   // element with value value could get inserted without breaking the sorting
+    //   // of the range [beg,end).
+    //
+    //   auto first = lower_bound(coll.cbegin(), coll.cend(), 1);
+    //   EXPECT_THAT(*first, 2);
+    // }
+
     return first;
   }
 
@@ -5578,6 +5644,17 @@ TEST(AlgoSearch, BinarySearch)
     auto pos = algo_binary_search_stl(coll.begin(), coll.end(), 5);
     EXPECT_THAT(*pos, 5);
     EXPECT_THAT(distance(coll.begin(), pos), 8);
+  }
+  {
+    vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an
+    // element with value value could get inserted without breaking the sorting
+    // of the range [beg,end).
+
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 1);
+    EXPECT_THAT(*first, 2);
   }
 }
 

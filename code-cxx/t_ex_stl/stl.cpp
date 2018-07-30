@@ -2359,28 +2359,42 @@ TEST(AlgoSearch, AlgoInclude)
 
 TEST(AlgoSearch, AlgoUpperLowerBound)
 {
-  vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+  {
+    vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
 
-  // lower_bound() returns the position of the first element that has a value
-  // equal to or greater than value. This is the first position where an element
-  // with value value could get inserted without breaking the sorting of the
-  // range [beg,end).
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an
+    // element with value value could get inserted without breaking the sorting
+    // of the range [beg,end).
 
-  auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
 
-  // upper_bound() returns the position of the first element that has a value
-  // greater than value. This is the last position where an element with value
-  // value could get inserted without breaking the sorting of the range
-  // [beg,end).
+    // upper_bound() returns the position of the first element that has a value
+    // greater than value. This is the last position where an element with value
+    // value could get inserted without breaking the sorting of the range
+    // [beg,end).
 
-  auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
+    auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
 
-  //  0  1  2  3  4  5  6  7  8  9 10 11 12
-  // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
-  //                          ^^^^^^^
+    //  0  1  2  3  4  5  6  7  8  9 10 11 12
+    // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+    //                          ^^^^^^^
 
-  EXPECT_THAT(distance(coll.cbegin(), first), 8);
-  EXPECT_THAT(distance(coll.cbegin(), last), 10);
+    EXPECT_THAT(distance(coll.cbegin(), first), 8);
+    EXPECT_THAT(distance(coll.cbegin(), last), 10);
+  }
+
+  {
+    vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an
+    // element with value value could get inserted without breaking the sorting
+    // of the range [beg,end).
+
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 1);
+    EXPECT_THAT(*first, 2);
+  }
 }
 
 
