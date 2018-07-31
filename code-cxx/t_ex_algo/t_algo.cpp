@@ -4950,6 +4950,9 @@ TEST(AlgoConversion, ItoA)
 // ={=========================================================================
 // algo-list-simple
 
+// The stack and `simple-list` are essentially the same implementation in terms
+// of contiguous and linked implementation.
+
 namespace list_simple
 {
   // 1. ListEntry can be any type.
@@ -5062,6 +5065,14 @@ namespace list_simple_linked_list
 {
   // 1. ListEntry can be any type.
   //  
+  // A problem that never arises with contiguous. How do we find the beginning
+  // of the list? 'header' is a pointer variable that locates the beginning of
+  // the list as in {stack-linked-implementation}.
+  //
+  // If it has remove function, then less expansive than
+  // contiguous implementation since it is linked but need to search through
+  // from header to find the node to remove.
+  //
   // void CreateList(List*);
   // void ClearList(List*);
   // bool ListEmpty(const List*);
@@ -5098,6 +5109,7 @@ namespace list_simple_linked_list
         ListNode *current;
         ListNode *temp;
 
+        // works whether or not list is empty
         for (current = head_.next_; current;)
         {
           temp = current;
@@ -5149,16 +5161,26 @@ namespace list_simple_linked_list
           //
           // have to check first and move:
 
+          // algo-list-find-end-idiom
+          //
           // ListNode *run;
           // for (run = head_.next_; run->next_; run = run->next_)
           //   ;
           // run.next_ = node;
           // ++count;
+          //
+          // starts from the header, finds the end node
+          //
+          // node *pend = list->header;
+          // while(pend && pend->next)
+          //   pend = pend->next;
 
           // Like Clear(), has the same form of for loop and unlike Clear(), as
           // the same reason as above, need to loop at next and has `next` in
           // for loop condition which has emphasis on that. Which form is
           // better?
+          //
+          // Clear() and Traverse() has the same loop.
           
           ListNode *current = head_.next_;
           ListNode *next = current->next_;
@@ -5186,6 +5208,7 @@ namespace list_simple_linked_list
       }
 
     private:
+      // there is no need to keep an counter but for size function.
       int count_{};
       ListNode head_;
   };

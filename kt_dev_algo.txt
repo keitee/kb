@@ -11277,327 +11277,191 @@ TEST(AlgoList, SimpleListContiguous)
 }
 
 
-{list-linked}
-A problem that never arises with contiguous. How do we find the beginning of the
-list? 'header' is a pointer variable that locates the beginning of the list as
-in {stack-linked-implementation}.
+{algo-list-simple-linked}
 
-typedef struct node {
-  ListEntry   entry;
-  struct node *next;
-} Node;
-
-typedef struct list {
-  int     count;   // there is no need to keep an counter but for size function.
-  Node*   header;  // header
-} List;
-
-
-If it has remove function, then less expansive than contiguous-implementation
-since it is linked but need to search through from header to find the node to
-remove.
-
-
-<do> 
-Write a linked list implementation which have following interfaces.
-
-void CreateList(List*);
-void ClearList(List*);
-int ListEmpty(const List*);
-int ListSize(const List*);
-void AddList(ListEntry x, List* list);
-void TraverseList(List* list, void(*visit)(ListEntry));
-
-<1>
-#include <stdio.h>
-#include <stdlib.h>
-
-// list
-typedef int ListEntry;
-
-typedef struct node {
-  int       key;
-  struct node *pnext;
-} ListNode;
-
-typedef struct {
-  ListNode *header;
-  int count;
-} List;
-
-void CreateList(List*);
-void ClearList(List*);
-int ListEmpty(const List*);
-int ListSize(const List*);
-void AddList(ListEntry x, List* list);
-void TraverseList(List* list, void(*visit)(ListEntry));
-
-void CreateList( List *list )
+namespace list_simple_linked_list
 {
-  list->header = NULL;
-  list->count = 0;
-}
+  // 1. ListEntry can be any type.
+  //  
+  // A problem that never arises with contiguous. How do we find the beginning
+  // of the list? 'header' is a pointer variable that locates the beginning of
+  // the list as in {stack-linked-implementation}.
+  //
+  // If it has remove function, then less expansive than
+  // contiguous implementation since it is linked but need to search through
+  // from header to find the node to remove.
+  //
+  // void CreateList(List*);
+  // void ClearList(List*);
+  // bool ListEmpty(const List*);
+  // bool ListFull(const List*);
+  // int ListSize(const List*);
+  // void AddList(ListEntry x, List* list);
+  // void TraverseList(List* list, void(*visit)(ListEntry));
 
-// clean-up idiom from ansic, p167
-//
-// for( p = head; p != NULL; p = q )
-// {
-//    q = p->next;
-//    free(p);
-// }
-//
-void ClearList( List *list )
-{
-  ListNode *pend, *ptemp;
-  for( pend = list->header; pend; )
+
+  using ListEntry = int;
+
+  class Functor
   {
-    // save current to the temp, move the current and free temp.
-    ptemp = pend;
-    pend = pend->pnext;
-    free(ptemp);
-    list->count--;
+    public:
+      void operator() (const int index, const ListEntry entry) 
+      {
+        cout << "{" << index << ": " << entry << "}" << endl;
+      }
+  };
+
+  struct ListNode 
+  {
+    ListNode() : key_(0), next_(nullptr) {}
+    ListEntry key_;
+    ListNode *next_;
+  };
+
+  class List
+  {
+    public:
+      void Create() { count_ = 0;}
+      void Clear() 
+      { 
+        ListNode *current;
+        ListNode *temp;
+
+        // works whether or not list is empty
+        for (current = head_.next_; current;)
+        {
+          temp = current;
+          current = current->next_;
+          free(temp);
+          --count_;
+        }
+
+        assert(count_ == 0);
+
+        head_.key_ = 0;
+        head_.next_ = nullptr;
+      }
+
+      bool Empty() { return count_ == 0 ? true : false; }
+
+      bool Full() 
+      { 
+        // since no support max
+        return false; 
+      }
+
+      int Size() { return count_; }
+
+      void Add(const ListEntry entry) 
+      {
+        ListNode *node = new ListNode();
+
+        node->key_ = entry;
+
+        if (head_.next_ == nullptr)
+        {
+          head_.next_ = node;
+          ++count_;
+        }
+        else
+        {
+          // this do "move first to the next and null check later" and when
+          // reaches the end, run points null since it's already moved. so not
+          // right for Add() but right for Clear(). 
+          //
+          // ListNode *run = head_.next_;
+          // while (run)
+          //   run = run->next_;
+          //
+          // ListNode *run;
+          // for (run = head_.next_; run; run = run->next_)
+          //   ;
+          //
+          // have to check first and move:
+
+          // algo-list-find-end-idiom
+          //
+          // ListNode *run;
+          // for (run = head_.next_; run->next_; run = run->next_)
+          //   ;
+          // run.next_ = node;
+          // ++count;
+          //
+          // starts from the header, finds the end node
+          //
+          // node *pend = list->header;
+          // while(pend && pend->next)
+          //   pend = pend->next;
+
+          // Like Clear(), has the same form of for loop and unlike Clear(), as
+          // the same reason as above, need to loop at next and has `next` in
+          // for loop condition which has emphasis on that. Which form is
+          // better?
+          //
+          // Clear() and Traverse() has the same loop.
+          
+          ListNode *current = head_.next_;
+          ListNode *next = current->next_;
+          for (; next;)
+          {
+            current = next;
+            next = next->next_;
+          }
+
+          current->next_ = node;
+          ++count_;
+        }
+      }
+
+      void Traverse(Functor f)
+      {
+        ListNode *current;
+        int index{};
+
+        for (current = head_.next_; current; current = current->next_)
+        {
+          f(index, current->key_);
+          ++index;
+        }
+      }
+
+    private:
+      // there is no need to keep an counter but for size function.
+      int count_{};
+      ListNode head_;
+  };
+} // namespace
+
+TEST(AlgoList, SimpleListLinkedList)
+{
+  using namespace list_simple_linked_list;
+
+  auto input_values{26, 33, 35, 29, 19, 12, 22};
+
+  List simple_list;
+  Functor f;
+  simple_list.Create();
+
+  for (auto e : input_values)
+  {
+    simple_list.Add(e);
   }
 
-  list->header = NULL;
-  list->count = 0;
+  EXPECT_THAT(simple_list.Size(), 7);
+
+  // {0: 26}
+  // {1: 33}
+  // {2: 35}
+  // {3: 29}
+  // {4: 19}
+  // {5: 12}
+  // {6: 22}
+
+  simple_list.Traverse(f);
+
+  simple_list.Clear();
+  EXPECT_THAT(simple_list.Size(), 0);
 }
-
-void AddList(ListEntry x, List *list)
-{
-  // make a node
-  ListNode *pnode = (ListNode*) malloc( sizeof (ListNode) );
-  if(!pnode)
-  { printf("addlist: no more memory\n"); return; }
-
-  // init a node
-  pnode->key = x;
-  pnode->pnext = NULL;
-
-  if( !list->header ) // when it's first node
-  {
-    list->header = pnode;
-    list->count++;
-  }
-  else                // when not a first, search the end
-  {
-    ListNode *pend;
-
-    // note: <list-find-end-idiom>
-    // that 'pend->pnext' in for condition which is different from traversing.
-    // The pend points to the exact last node.
-
-    for( pend = list->header; pend->pnext; pend = pend->pnext )
-      ;
-
-    pend->pnext = pnode;
-    list->count++;
-  }
-}
-
-int ListEmpty(const List *list)
-{
-  if( list->count == 0 )
-    return 1;
-
-  return 0;
-}
-
-int ListSize(const List *list)
-{
-  return list->count;
-}
-
-void TraverseList(List* list, void(*visit)(ListEntry))
-{
-  ListNode *pend;
-  // <list-walk-along-idiom>
-  // notice that pend points to the one off the last
-  for( pend = list->header; pend; pend = pend->pnext )
-    visit( pend->key );
-}
-
-void PrintList( ListEntry entry )
-{
-  printf("print list : %d\n", entry );
-}
-
-
-int main()
-{
-  int values[] = { 26, 33, 35, 29, 19, 12, 22 };
-  List llist;
-
-  CreateList(&llist);
-
-  for(int i = 0; i < (sizeof values/sizeof(int)); i++)
-    AddList( *(values+i), &llist );
-
-  printf("list size is %d\n", ListSize( &llist ));
-
-  TraverseList( &llist, PrintList );
-
-  ClearList( &llist );
-
-  printf("list size is %d\n", ListSize( &llist ));
-
-  return 0;
-}
-
-
-<2>
-#include <iostream>
-
-using namespace std;
-
-// simple list - linked
-
-// node* make_node( NodeEntry entry );
-// void create_list( llist *list );
-// void add_list( llist *list, NodeEntry entry );
-// void traverse_list( llist *list, PRINT_ENTRY);
-// void clear_list( llist *list );
-
-typedef int NodeEntry;
-
-typedef struct node_
-{
-  NodeEntry  entry;
-  node_*      next;
-} node;
-
-typedef struct list_
-{
-  int     count;
-  node    *header;
-} llist;
-
-node* make_node( NodeEntry entry )
-{
-  node *pnode = (node *)malloc(sizeof(node));
-  if(!pnode)
-    return NULL;
-
-  pnode->entry  = entry;
-  pnode->next   = NULL;
-
-  return pnode;
-}
-
-void create_list( llist *list )
-{
-  list->count   = 0;
-  list->header  = NULL;
-}
-
-void add_list( llist *list, NodeEntry entry )
-{
-  // starts from the header
-  node *pend = list->header;
-
-  // finds the end node
-  while(pend && pend->next)
-    pend = pend->next;
-
-  // makes a node
-  node *pnode = make_node(entry);
-  if(!pnode)
-  {
-    cout << "error: add_list: make_node fails to alloc" << endl;
-    return;
-  }
-
-  // if it's the first time
-  if(!pend)
-    list->header = pnode;
-  else
-    pend->next = pnode;
-
-  ++list->count;
-}
-
-typedef void (*PRINT_ENTRY)(int, NodeEntry);
-
-void traverse_list( llist *list, PRINT_ENTRY print)
-{
-  node *prun = list->header;
-
-  // note: 
-  // Not while(prun && prun->next)? It is okay that prun is `off-the-end` after
-  // while unlike add_list() since do not use prun after while.
-
-  while(prun)
-  {
-    // note:
-    // PRINT_ENTRY(prun->entry);
-    // cause no compile error and simply no effect. did debugging exercise!
-    print(list->count, prun->entry);
-    prun = prun->next;
-  }
-}
-
-void clear_list( llist *list )
-{
-  node *prun, *pprev;
-  prun = pprev = list->header;
-
-  while(prun)
-  {
-    pprev = prun;
-    prun = prun->next;
-    std::cout << "free item is: " << pprev->entry << std::endl;
-    free(pprev);
-  }
-
-  list->header  = NULL;
-  list->count   = 0;
-}
-
-void print_entry(int size, NodeEntry item)
-{
-  std::cout << "size: " << size << ", item is: " << item << std::endl;
-}
-
-int main()
-{
-  int item = 0;
-
-  llist list;
-  create_list(&list);
-
-  std::cout << "type in 5 numbers." << std::endl;
-
-  for(int i=0; i < 5; i++)
-  {
-    std::cin >> item;
-    add_list(&list, item);
-  }
-
-  traverse_list(&list, print_entry);
-  clear_list(&list);
-}
-
-$ ./a.out 
-type in 5 numbers.
-1
-2
-3
-4
-5
-size: 5, item is: 1
-size: 5, item is: 2
-size: 5, item is: 3
-size: 5, item is: 4
-size: 5, item is: 5
-free item is: 1
-free item is: 2
-free item is: 3
-free item is: 4
-free item is: 5
-
-
-<keys>
-The stack and `simple-list` are essentially the same implementation in terms of
-contiguous and linked implementation.
 
 
 ={============================================================================
