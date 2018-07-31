@@ -5245,6 +5245,201 @@ TEST(AlgoList, SimpleListLinkedList)
   EXPECT_THAT(simple_list.Size(), 0);
 }
 
+namespace list_simple_linked_list_public
+{
+  // In order to exercise Devide(), have to have access to list structure but do
+  // not see any practical way to do it through class interface. 
+  //
+  // Make private date public now. 
+
+  using ListEntry = int;
+
+  class Functor
+  {
+    public:
+      void operator() (const int index, const ListEntry entry) 
+      {
+        cout << "{" << index << ": " << entry << "}" << endl;
+      }
+  };
+
+  struct ListNode 
+  {
+    ListNode() : key_(0), next_(nullptr) {}
+    ListEntry key_;
+    ListNode *next_;
+  };
+
+  class List
+  {
+    public:
+      void Create() { count_ = 0;}
+      void Clear() 
+      { 
+        ListNode *current;
+        ListNode *temp;
+
+        // works whether or not list is empty
+        for (current = head_.next_; current;)
+        {
+          temp = current;
+          current = current->next_;
+          free(temp);
+          --count_;
+        }
+
+        // assert(count_ == 0);
+
+        head_.key_ = 0;
+        head_.next_ = nullptr;
+      }
+
+      bool Empty() { return count_ == 0 ? true : false; }
+
+      bool Full() 
+      { 
+        // since no support max
+        return false; 
+      }
+
+      int Size() { return count_; }
+
+      void Add(const ListEntry entry) 
+      {
+        ListNode *node = new ListNode();
+
+        node->key_ = entry;
+
+        if (head_.next_ == nullptr)
+        {
+          head_.next_ = node;
+          ++count_;
+        }
+        else
+        {
+          ListNode *current = head_.next_;
+          ListNode *next = current->next_;
+          for (; next;)
+          {
+            current = next;
+            next = next->next_;
+          }
+
+          current->next_ = node;
+          ++count_;
+        }
+      }
+
+      void Traverse(Functor f)
+      {
+        ListNode *current;
+        int index{};
+
+        for (current = head_.next_; current; current = current->next_)
+        {
+          f(index, current->key_);
+          ++index;
+        }
+      }
+
+    public:
+      // there is no need to keep an counter but for size function.
+      int count_{};
+      ListNode head_;
+  };
+
+  // make the input linked list, first, in two as evenly as possible. not use
+  // count.
+  // void DevideList(ListNode **first, ListNode **second)
+  // {
+  //   ListNode *slow;
+  //   ListNode *fast;
+
+  //   for (slow = *first, fast = slow->next_; fast;)
+  //   {
+  //     fast = fast->next_;
+
+  //     if (fast)
+  //     {
+  //       fast = fast->next_;
+  //       slow = slow->next_;
+  //     }
+  //   }
+
+  //   *second = slow->next_;
+  //   slow->next_ = nullptr;
+  // }
+  void DevideList(ListNode *first, ListNode *second)
+  {
+    ListNode *slow;
+    ListNode *fast;
+
+    for (slow = first, fast = slow->next_; fast;)
+    {
+      fast = fast->next_;
+
+      if (fast)
+      {
+        fast = fast->next_;
+        slow = slow->next_;
+      }
+    }
+
+    second = slow->next_;
+    slow->next_ = nullptr;
+  }
+
+} // namespace
+
+
+TEST(AlgoList, Devide)
+{
+  using namespace list_simple_linked_list_public;
+
+  auto input_values{26, 33, 35, 29, 19, 12, 22};
+
+  List simple_list;
+  Functor f;
+  simple_list.Create();
+
+  for (auto e : input_values)
+  {
+    simple_list.Add(e);
+  }
+
+  EXPECT_THAT(simple_list.Size(), 7);
+
+  // {0: 26}
+  // {1: 33}
+  // {2: 35}
+  // {3: 29}
+  // {4: 19}
+  // {5: 12}
+  // {6: 22}
+  // simple_list.Traverse(f);
+
+  // count of simple_list will not be correct after this.
+  
+  ListNode node{};
+  // DevideList(&(simple_list.head_.next_), &node);
+  DevideList(simple_list.head_.next_, &node);
+
+  List simple_second;
+  simple_second.Create();
+
+  for (; node;)
+  {
+    simple_second.Add(node->key_);
+    node = node->next_;
+  }
+
+  simple_list.Traverse(f);
+  simple_second.Traverse(f);
+
+  simple_list.Clear();
+  simple_second.Clear();
+}
+
 
 // ={=========================================================================
 // algo-sort
