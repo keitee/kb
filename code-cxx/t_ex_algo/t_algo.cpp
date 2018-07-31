@@ -5003,7 +5003,13 @@ namespace list_simple
       // {3, 4}
       // {4, 5}
       //
-      // so have to use side-effect as shown:
+      // so have to use side-effect as below to get:
+      //
+      // {1, 2}
+      // {2, 3}
+      // {3, 4}
+      // {4, 5}
+      // {5, 6}
 
       void Add(const ListEntry entry) 
       {
@@ -5046,6 +5052,174 @@ TEST(AlgoList, SimpleListContiguous)
   EXPECT_THAT(simple_list.Size(), 5);
 
   simple_list.Traverse(f);
+
+  simple_list.Clear();
+  EXPECT_THAT(simple_list.Size(), 0);
+}
+
+
+namespace list_simple_linked_list
+{
+  // 1. ListEntry can be any type.
+  //  
+  // void CreateList(List*);
+  // void ClearList(List*);
+  // bool ListEmpty(const List*);
+  // bool ListFull(const List*);
+  // int ListSize(const List*);
+  // void AddList(ListEntry x, List* list);
+  // void TraverseList(List* list, void(*visit)(ListEntry));
+
+
+  using ListEntry = int;
+
+  class Functor
+  {
+    public:
+      void operator() (const int index, const ListEntry entry) 
+      {
+        cout << "{" << index << ": " << entry << "}" << endl;
+      }
+  };
+
+  struct ListNode 
+  {
+    ListNode() : key_(0), next_(nullptr) {}
+    ListEntry key_;
+    ListNode *next_;
+  };
+
+  class List
+  {
+    public:
+      void Create() { count_ = 0;}
+      void Clear() 
+      { 
+        ListNode *current;
+        ListNode *temp;
+
+        for (current = head_.next_; current;)
+        {
+          temp = current;
+          current = current->next_;
+          free(temp);
+          --count_;
+        }
+
+        assert(count_ == 0);
+
+        head_.key_ = 0;
+        head_.next_ = nullptr;
+      }
+
+      bool Empty() { return count_ == 0 ? true : false; }
+
+      bool Full() 
+      { 
+        // since no support max
+        return false; 
+      }
+
+      int Size() { return count_; }
+
+      void Add(const ListEntry entry) 
+      {
+        ListNode *node = new ListNode();
+
+        node->key_ = entry;
+
+        if (head_.next_ == nullptr)
+        {
+          head_.next_ = node;
+          ++count_;
+        }
+        else
+        {
+          // this do "move first to the next and null check later" and when
+          // reaches the end, run points null since it's already moved. so not
+          // right for Add() but right for Clear(). 
+          //
+          // ListNode *run = head_.next_;
+          // while (run)
+          //   run = run->next_;
+          //
+          // ListNode *run;
+          // for (run = head_.next_; run; run = run->next_)
+          //   ;
+          //
+          // have to check first and move:
+
+          // ListNode *run;
+          // for (run = head_.next_; run->next_; run = run->next_)
+          //   ;
+          // run.next_ = node;
+          // ++count;
+
+          // Like Clear(), has the same form of for loop and unlike Clear(), as
+          // the same reason as above, need to loop at next and has `next` in
+          // for loop condition which has emphasis on that. Which form is
+          // better?
+          
+          ListNode *current = head_.next_;
+          ListNode *next = current->next_;
+          for (; next;)
+          {
+            current = next;
+            next = next->next_;
+          }
+
+          current->next_ = node;
+          ++count_;
+        }
+      }
+
+      void Traverse(Functor f)
+      {
+        ListNode *current;
+        int index{};
+
+        for (current = head_.next_; current; current = current->next_)
+        {
+          f(index, current->key_);
+          ++index;
+        }
+      }
+
+    private:
+      int count_{};
+      ListNode head_;
+  };
+} // namespace
+
+TEST(AlgoList, SimpleListLinkedList)
+{
+  using namespace list_simple_linked_list;
+
+  auto input_values{26, 33, 35, 29, 19, 12, 22};
+
+  List simple_list;
+  Functor f;
+  simple_list.Create();
+
+  for (auto e : input_values)
+  {
+    simple_list.Add(e);
+  }
+
+  EXPECT_THAT(simple_list.Size(), 7);
+
+  // {0: 26}
+  // {1: 33}
+  // {2: 35}
+  // {3: 29}
+  // {4: 19}
+  // {5: 12}
+  // {6: 22}
+
+  simple_list.Traverse(f);
+
+  simple_list.Clear();
+  EXPECT_THAT(simple_list.Size(), 0);
 }
 
 
@@ -5294,13 +5468,14 @@ namespace algo_serch_binary_search {
     //
     // Whether or not use iterator or array, have the same number of
     // comparison tree and exit the loop when there is no more comparison to do;
-    // either found or not found when first/end is 0 or end.
+    // either found or not found when first/end is 0 or end. Care not to
+    // dereference end().
     //
     // Therefore, have to check if it found the match and return index or
     // iterator found or return something to mean `not found`. 
 
     // so first == last and do equility check
-    return (key == *first) ? first : saved;
+    return (first != saved && key == *first) ? first : saved;
   }
 
   // `less-than` version but has equility check in for loop. So works.
@@ -5335,6 +5510,10 @@ namespace algo_serch_binary_search {
     for(; first <= last;)
     {
       auto middle = distance(first, last)/2;
+
+      // Care not to dereference end().
+      if (first == saved)
+        break;
 
       if (key == *(first+middle))
         return first+middle;
