@@ -1426,26 +1426,213 @@ TEST(Bit, MaxNegagiveIsSpecial)
   EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
 }
 
-TEST(Bit, GetLimts)
+TEST(Bit, RightShift)
 {
-  // fails
-  // unsigned int int_max = (~((int)0)) >> 1;
-  // int int_max = (~((int)0)) >> 1;
-  
-  // okays
-  // int int_max = (~((unsigned int)0)) >> 1;
-  // unsigned int int_max = (~((unsigned int)0)) >> 1;
-  
-  unsigned int uint_max = ~((unsigned int)0);
-  int int_max = uint_max >> 1;
-  int int_min = int_max + 1;
-  
-  // bitset<32> bitsetx{int_max};
-  // cout << bitsetx << endl;
+  {
+    // fails
+    // unsigned int int_max = (~((int)0)) >> 1;
+    // int int_max = (~((int)0)) >> 1;
+    // 
+    // unsigned int val = ((~0) >> 1);
+    
+    // okays
+    // unsigned int val = (((unsigned)~0) >> 1);
+    // unsigned int val = ((unsigned)~0 >> 1);    // okay, since cast is higher
+    //
+    // int int_max = (~((unsigned int)0)) >> 1;
+    // unsigned int int_max = (~((unsigned int)0)) >> 1;
 
-  EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
-  EXPECT_EQ(int_max, numeric_limits<int>::max());
-  EXPECT_EQ(int_min, numeric_limits<int>::min());
+    unsigned int uint_max = ~((unsigned int)0);
+    int int_max = uint_max >> 1;
+    int int_min = int_max + 1;
+
+    bitset<32> bitsetx{int_max};
+    EXPECT_EQ(bitsetx.to_string(), "01111111111111111111111111111111");
+
+    EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
+    EXPECT_EQ(int_max, numeric_limits<int>::max());
+    EXPECT_EQ(int_min, numeric_limits<int>::min());
+  }
+
+  // why is that different?
+  {
+    // 1. when use `bitwise not`, the size and signness is `independant`. The
+    // result `depends on the other operand` and done at `compile-time`. 
+    //
+    // so ~(0) makes "111...11" which don't have size and signness.
+    //
+    // 2. The signess must be known to compiler when do shift to have guaranteed
+    // result. Since do not know signness, use `signed by default` and gets 1
+    // for MSB when right-shift
+    //
+    // *cxx-shift-right-shift* 
+    // the point is that must use `unsigned` to do `right-shift` 
+    // in order to have guaranteed 0 values. 
+    //
+    // so (~(0)>>1) makes "111...11"
+    //
+    // This is why glibc macro uses unsigned type which set size and signness.
+    // from glibc and see exercise 2-1 for examples.
+    //
+    // # ifndef ULONG_MAX
+    // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
+    // # endif
+    // # ifndef LONG_MAX
+    // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
+    // # endif
+
+    // input3 works since the result is `independant` but assigned to unsigned.
+    // input1 version is shorter version of this.
+
+    unsigned int input1 = ~((unsigned int)0)>>1;
+    unsigned int input2 = (~(0)>>1);
+    unsigned int input3 = ~0;
+    input3 >>=1;
+
+    std::bitset<32> bset1{input1};
+    EXPECT_EQ(bset1.to_string(), "01111111111111111111111111111111");
+
+    // this is wrong
+    std::bitset<32> bset2{input2};
+    EXPECT_EQ(bset2.to_string(), "11111111111111111111111111111111");
+
+    std::bitset<32> bset3{input3};
+    EXPECT_EQ(bset3.to_string(), "01111111111111111111111111111111");
+  }
+}
+
+// Programming Pearl, C 01, Q 02
+// How would you implement bit vectors using bitwise logical operations?
+//
+// C and old C++ programs usually use type long for arrays of bits and
+// manipulate them with the bit operators, such as &, |, and ~.
+
+namespace bit_vectors 
+{
+  const unsigned int BITSPERWORD = 32;
+  const unsigned int SHIFT = 5;
+  const unsigned int MASK = 0x1F;
+  const unsigned int SIZE = 60;
+
+  // bit vector to represent a array of bits. Why +1? Since 0-31 bits falls to
+  // array[0] and 32-63 falls to array[1], and so on. SIZE is num of bits to
+  // represent and BITSPERWORD is num of bits of a word(int). So there should be
+  // one array at least for 0-31 bits. 
+  
+  int a[1 + SIZE/BITSPERWORD];
+
+  void set_bit(int pos)
+  {
+    // MASK
+    // MASK is 11111...1 for [31-0] bits. By &, make only [31-0] bits valid and
+    // not others and effectively pos - 31 for values which are > 32. that is:
+    // 32 -> 0
+    // 33 -> 1
+    // ..
+    //
+    // [pos >> SHIFT]
+    // pos is int and right shift on int may cause problem? Not in [] since it
+    // is unsigned.
+    //
+    // Here, ">> 5" menas to devide 2^5, 32 which is num of bits of a word. so
+    // find array index that pos falls on and this matches up 1 << (pos & MASK)
+
+    a[pos >> SHIFT] |= ( 1 << (pos & MASK));
+  }
+
+  void clear_bit(int pos)
+  {
+    a[pos >> SHIFT] &= ~( 1 << (pos & MASK));
+  }
+
+  bool test_bit(int pos)
+  {
+    return (a[pos >> SHIFT] & ( 1 << (pos & MASK))) ? true : false;
+  }
+} // namespace
+
+TEST(Bit, BitVectors)
+{
+  using namespace bit_vectors;
+
+  auto array_size = sizeof(a)/sizeof(a[0]);
+
+  set_bit(35);
+  set_bit(45);
+  EXPECT_EQ(test_bit(45), true);
+
+  // 45        35
+  // 10000000001000 | 0
+  //
+  // for (int i = 0; i < (int)array_size; ++i)
+  // {
+  //   cout << ":" << hex << (a[i]);
+  // }
+  // cout << endl;
+
+  clear_bit(45);
+  EXPECT_EQ(test_bit(35), true);
+  EXPECT_EQ(test_bit(45), false);
+
+  // 35
+  // 1000 | 0
+  
+  // for (int i = 0; i < (int)array_size; ++i)
+  // {
+  //   cout << ":" << hex << (a[i]);
+  // }
+  // cout << endl;
+}
+
+
+TEST(Bit, BitSet)
+{
+  {
+    bitset<32> bitvec(1U);
+    EXPECT_EQ(bitvec.to_string(), "00000000000000000000000000000001");
+
+    EXPECT_EQ(bitvec.any(), true);
+    EXPECT_EQ(bitvec.none(), false);
+    EXPECT_EQ(bitvec.all(), false);
+    EXPECT_EQ(bitvec.count(), 1);
+    EXPECT_EQ(bitvec.size(), 32);
+
+    bitvec.flip();
+    EXPECT_EQ(bitvec.count(), 31);
+    bitvec.reset();
+    EXPECT_EQ(bitvec.count(), 0);
+    bitvec.set();
+    EXPECT_EQ(bitvec.count(), 32);
+
+    bitset<16> bitvec2("01011001011");
+    EXPECT_EQ(bitvec2.to_string(), "0000001011001011");
+  }
+
+  // see the use of bitset and bitset only supports fixed size.  
+  //
+  // How can use bitset with dynamic size since the size is constant expression?
+  // Options are:
+  // 
+  // o. vector<bool>
+  // o. boost has a dynamic_bitset you can use.
+
+  {
+    unsigned short short11 = 1024;
+    bitset<16> bitset11{short11};
+    EXPECT_EQ(bitset11.to_string(), "0000010000000000");
+
+    unsigned short short12 = short11 >> 1;  // 512
+    bitset<16> bitset12{short12};
+    EXPECT_EQ(bitset12.to_string(), "0000001000000000");
+
+    unsigned short short13 = short11 >> 10;  // 1
+    bitset<16> bitset13{short13};
+    EXPECT_EQ(bitset13.to_string(), "0000000000000001");
+
+    unsigned short short14 = short11 >> 11;  // 0
+    bitset<16> bitset14{short14};
+    EXPECT_EQ(bitset14.to_string(), "0000000000000000");
+  }
 }
 
 

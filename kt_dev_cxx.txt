@@ -61,9 +61,10 @@ KT KB. CPP
 
 #{ cxx
 *kt_dev_cxx_0000* cxx-code-ansi-color
-*kt_dev_cxx_0000* cxx-twos-complement
-*kt_dev_cxx_0000* cxx-builtin-type
-*kt_dev_cxx_0000* cxx-limits
+*kt_dev_cxx_0000* cxx-bits cxx-twos-complement
+*kt_dev_cxx_0000* cxx-bits cxx-builtin-type
+*kt_dev_cxx_0000* cxx-bits cxx-limits
+*kt_dev_cxx_0000* cxx-bits cxx-bitset
 *kt_dev_cxx_0000* cxx-address-alignment
 *kt_dev_cxx_0000* cxx-cast cpp-pointer-handle
 *kt_dev_cxx_0000* cxx-issue-incremental-build
@@ -178,7 +179,6 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-new-delete
 *kt_dev_cxx_0000* cxx-random
 *kt_dev_cxx_0000* cxx-enum
-*kt_dev_cxx_0000* cxx-bitset
 *kt_dev_cxx_0000* cxx-nested-class
 *kt_dev_cxx_0000* cxx-regex
 
@@ -4026,15 +4026,15 @@ echo -e "\E[1;31mThe git hook pre-push runs\E[m";
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-twos-complement
+*kt_dev_cpp_0000* cxx-bits cxx-twos-complement
 
 The int type type on MIPS: size int: 4
 
 signed int  : -219874992
 unsigned int : 4075092304
 
-How to get the negative value in `twos-complement`? "NOT X + 1 = -X" which
-works in both directions.
+How to get the negative value in `twos-complement`? "NOT X + 1 = -X" and this
+show that `negate(-)` is different from `bitwise not(~)`
 
     23:    1 0111
 NOT 23: 1110 1000   // -24, 0xFFFF FFE8
@@ -4049,7 +4049,7 @@ NOT 23: 1110 1000
 
 <twos-complement-bit-pattern>
 
-8bits two's complement
+8 bits two's complement
 ------------------------- 128 elements [0,127]
 0000 0000    : 0
 ------------------------- 127 elements 
@@ -4085,35 +4085,13 @@ i's twos complement is:
 (-ins) = 0xD8420020                          // twos-complement, negate
 1101.1000.0100.0010.0000.0000.0010.0000
 
-TEST(Bit, GetLimts)
-{
-  // fails
-  // unsigned int int_max = (~((int)0)) >> 1;
-  // int int_max = (~((int)0)) >> 1;
-  
-  // okays
-  // int int_max = (~((unsigned int)0)) >> 1;
-  // unsigned int int_max = (~((unsigned int)0)) >> 1;
-  
-  unsigned int uint_max = ~((unsigned int)0);
-  int int_max = uint_max >> 1;
-  int int_min = int_max + 1;
-  
-  // bitset<32> bitsetx{int_max};
-  // cout << bitsetx << endl;
-
-  EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
-  EXPECT_EQ(int_max, numeric_limits<int>::max());
-  EXPECT_EQ(int_min, numeric_limits<int>::min());
-}
-
 
 <the-max-negative-num-is-special>
 
 // The addition operation in the CPU is agnostic to whether the integer is
 // signed or unsigned. The bit representation is the same. 
 //
-// Here `negate` means that -value but not ~value which is bitwise operation.
+// Here `negate` means that -value but not ~value which is bitwise not.
 // 
 // If you `negate` 0x80000000, _MIN, you get the same again and that is
 // something to look out for because there is `no-change` in bit representation.
@@ -4170,7 +4148,10 @@ This means that both has the same offset from 2**8(256) for example.
 -(256-130) = 126     // 130 to signed
 
 
-<ex> The ansic, page 64, exercise 3-4. 
+<ex> *ex-itoa* to support negative and XXX_MIN
+
+The ansic, page 64, exercise 3-4. 
+
 In a two's complement number representation, our version of itoa does 'not'
 handle the 'largest' negative number, that is, the value of n equal to -(2 to
     the power (wordsize - 1)). Explain why not. Modify it to print that value
@@ -4251,11 +4232,11 @@ converted string: -2147483648     // use the revised
 note-2: Change 'while ((n /= 10) > 0)' to 'while (n /= 10)' to make the loop
 continue 'divide' and n will eventually equal zero after successive divides by
 10, and 'n /= 10' will evaluate to false sooner or later. If use
-"while((n/=10)>0)" then handles only positive and stops on the first check since
-n/=10 becomes negative.
+"while((n/=10)>0)" then handles `only positive` and stops on the first check
+since n/=10 becomes negative.
 
 note-1: Change 'n % 10 + '0 to 'abs(n % 10) + '0, to get the correct character
-since n%10 is negative so need to make positive to get correct char back. 
+since n%10 is negative so need to make positive to get correct char back.
 Using abs() here is okay since it was already reduced to smaller one.
 
 note-3: What if use abs(XXX_MIN) here? No effect.
@@ -4491,62 +4472,82 @@ ULLONG_MAX:                                          18446744073709551615
 
 
 ={============================================================================
-*kt_dev_cpp_0000* cxx-limits cxx-bits
+*kt_dev_cpp_0000* cxx-bits cxx-limits
 
-<1> To get INT_MAX, 01111111...1,  ((~0)>>1) is wrong. why?
-
-unsigned int val = ((~0) >> 1) +1;            // wrong
-unsigned int val = (((unsigned)~0) >> 1) +1;  // okay
-unsigned int val = ((unsigned)~0 >> 1) +1;    // okay, since cast is higher
-
-int main()
+TEST(Bit, RightShift)
 {
-  unsigned int input2 = (~(0)>>1);
+  {
+    // fails
+    // unsigned int int_max = (~((int)0)) >> 1;
+    // int int_max = (~((int)0)) >> 1;
+    // 
+    // unsigned int val = ((~0) >> 1);
+    
+    // okays
+    // unsigned int val = (((unsigned)~0) >> 1);
+    // unsigned int val = ((unsigned)~0 >> 1);    // okay, since cast is higher
+    //
+    // int int_max = (~((unsigned int)0)) >> 1;
+    // unsigned int int_max = (~((unsigned int)0)) >> 1;
 
-  // 1. when use `not operation`, the size and signness is `independant`. The
-  // result `depends on the other operand` and done at `compile-time`. 
-  //
-  // so ~(0) makes "111...11" which don't have size and signness.
-  //
-  // 2. The signess must be known to compiler when do shift to have guaranteed
-  // result. Since do not know signness, use `signed by default` and gets 1
-  // for MSB when right-shift
-  //
-  // *cxx-shift-right-shift* Must use `unsigned` to do  `right-shift` in order to have
-  // guaranteed 0 values. 
-  //
-  // so (~(0)>>1) makes "111...11"
-  //
-  // This is why glibc macro uses unsigned type which set size and signness.
-  // from glibc and see exercise 2-1 for examples.
-  //
-  // # ifndef ULONG_MAX
-  // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
-  // # endif
-  // # ifndef LONG_MAX
-  // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
-  // # endif
+    unsigned int uint_max = ~((unsigned int)0);
+    int int_max = uint_max >> 1;
+    int int_min = int_max + 1;
 
+    bitset<32> bitsetx{int_max};
+    EXPECT_EQ(bitsetx.to_string(), "01111111111111111111111111111111");
 
-  // input3 works since the result is `independant` but assigned to unsigned.
-  // input1 version is shorter version of this.
-  
-  unsigned int input1 = ~((unsigned int)0)>>1;
+    EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
+    EXPECT_EQ(int_max, numeric_limits<int>::max());
+    EXPECT_EQ(int_min, numeric_limits<int>::min());
+  }
 
-  unsigned int input3 = ~0;
-  input3 >>=1;
+  // why is that different?
+  {
+    // 1. when use `bitwise not`, the size and signness is `independant`. The
+    // result `depends on the other operand` and done at `compile-time`. 
+    //
+    // so ~(0) makes "111...11" which don't have size and signness.
+    //
+    // 2. The signess must be known to compiler when do shift to have guaranteed
+    // result. Since do not know signness, use `signed by default` and gets 1
+    // for MSB when right-shift
+    //
+    // *cxx-shift-right-shift* 
+    // the point is that must use `unsigned` to do `right-shift` 
+    // in order to have guaranteed 0 values. 
+    //
+    // so (~(0)>>1) makes "111...11"
+    //
+    // This is why glibc macro uses unsigned type which set size and signness.
+    // from glibc and see exercise 2-1 for examples.
+    //
+    // # ifndef ULONG_MAX
+    // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
+    // # endif
+    // # ifndef LONG_MAX
+    // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
+    // # endif
 
-  std::bitset<32> bset1{input1};
-  std::cout << bset1 << std::endl;
-  std::bitset<32> bset2{input2};
-  std::cout << bset2 << std::endl;
-  std::bitset<32> bset3{input3};
-  std::cout << bset3 << std::endl;
+    // input3 works since the result is `independant` but assigned to unsigned.
+    // input1 version is shorter version of this.
+
+    unsigned int input1 = ~((unsigned int)0)>>1;
+    unsigned int input2 = (~(0)>>1);
+    unsigned int input3 = ~0;
+    input3 >>=1;
+
+    std::bitset<32> bset1{input1};
+    EXPECT_EQ(bset1.to_string(), "01111111111111111111111111111111");
+
+    // this is wrong
+    std::bitset<32> bset2{input2};
+    EXPECT_EQ(bset2.to_string(), "11111111111111111111111111111111");
+
+    std::bitset<32> bset3{input3};
+    EXPECT_EQ(bset3.to_string(), "01111111111111111111111111111111");
+  }
 }
-
-01111111111111111111111111111111      // input1
-11111111111111111111111111111111      // input2, wrong
-01111111111111111111111111111111      // input3
 
 
 <cxx-shift>
@@ -4580,8 +4581,8 @@ To explain this point, try this exercise first:
 
 <ex> *ex-getbits* ansic, p49. 
 The function getbits(x, p, n) returns the (right adjusted) n-bit field of x
-that begins at position p. For example, getbits( x, 4, 3 ) returns the three
-bits; 4, 3, 2, right adjusted.
+that begins at position p. For example, getbits(x, 4, 3) returns the three
+bits; 4th, 3th, 2th, right adjusted.
 
 unsigned getbits( unsigned x, int p, int n );
 
@@ -5051,6 +5052,168 @@ to use with bit pattern.
 
 0177 1.111.111
 0x7F 111.1111
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-bitset
+
+12.5 Bitsets
+
+The bitset is a class template and is defined in bitset header. Like array
+class, has a 'fixed' size. This is a exmple of a `non-type template parameter`
+and this is then considered part of the type.
+
+
+Mostly to reduce space complexity. bitset <vector<bool> < bool array
+
+#include <iostream>
+#include <vector>
+#include <bitset>
+
+using namespace std;
+
+int main()
+{
+  vector<bool> boolvec(32,1);
+  bitset<32> bitvec(1U);
+  bool bitbool[32];
+
+  cout << "size: " << boolvec.size() << " sizeof : " << sizeof(boolvec) << endl;
+  cout << "size: " << bitvec.size() << " sizeof : " << sizeof(bitvec) << endl;
+  cout << "size: " << sizeof(bitbool) << endl;
+}
+
+size: 32 sizeof : 20
+size: 32 sizeof : 4
+size: 32
+
+note: can use variable to set size of bitset.
+const int x = 40;
+bitset<x> bitvec(1U);
+
+
+{cxx-bitset-ctors}
+
+bitset<n> b;   
+b has n bits; each bit is 0.
+
+bitset<n> b(u);   
+b is a copy of the n low-order bits of unsigned long long(ULL) value u.
+
+<init-from-unsigned>
+If the size of bitset > the number of bits in ULL, 
+   the remaining high-order are set to 0.
+
+If the size of bitset < the number of bits in ULL, 
+   the only low-order bits are used. 
+
+<init-from-string>
+bitset<n> b(s, pos, m);
+'b' is a copy of the 'm' characters from the 'string' starting at position
+'pos'. s may contain only 0 and 1 and if contains any other characters, throws
+invalid_argument.
+
+The characters with the lowest indices in the string correspond to the
+high-order bits and vice versa.
+
+bitset<n> b(cp, pos, m);
+same as the above but copies from the character array to which cp points.
+
+
+{cxx-bitset-operations}
+<about-the-state-of-the-entire-bitset>
+b.any();       is any bit in b on?
+// Do not use is?? style although returns a bool.
+
+b.all();       are all the bits on?
+b.none();      are no bits on?
+b.count();     number of bits that are on.
+b.size();      return the number of bits in b.
+
+<change-the-bitset>
+b.test(pos);   return true if bit at position is on.
+b.set(pos, v); set the bit at pos to the bool value v.
+b.set();       set all bits.
+b.reset(pos);  turn off the bit at pos.
+b.reset();     turn off all bits.
+b.flip(pos);   change the state of the bit at pos.
+b.flip();      flip all bits.
+
+<subsctipt>
+When read, that is const version, return a bool true if it's on. When write,
+     which is non-const return special type that let us change bit at pos.
+
+bool ret = b[pos];
+b[31] = 0;
+b[0].flip();
+
+<retrive-the-value>
+These return a value that holds the same bit pattern. Can use ONLY IF the size
+of the bitset is less than or equal to the corresponding size; UL or ULL.
+Otherwise, throw overflow_error exception.
+
+b.to_ulong();
+b.to_ullong();
+
+<io-operations>
+This read into a temp string and read until it has read as many as the size of
+bitset.
+
+os << b;
+is >> b;
+
+
+<ex>
+
+TEST(Bit, BitSet)
+{
+  {
+    // 00000000000000000000000000000001
+    bitset<32> bitvec(1U);
+
+    EXPECT_EQ(bitvec.any(), true);
+    EXPECT_EQ(bitvec.none(), false);
+    EXPECT_EQ(bitvec.all(), false);
+    EXPECT_EQ(bitvec.count(), 1);
+    EXPECT_EQ(bitvec.size(), 32);
+
+    bitvec.flip();
+    EXPECT_EQ(bitvec.count(), 31);
+    bitvec.reset();
+    EXPECT_EQ(bitvec.count(), 0);
+    bitvec.set();
+    EXPECT_EQ(bitvec.count(), 32);
+
+    // 0000001011001011
+    bitset<16> bitvec2("01011001011");
+  }
+
+  // Note that you can’t change the number of bits in a bitset. The number of
+  // bits is the template parameter. If you need a container for a variable
+  // number of bits or Boolean values, you can use the class vector<bool>
+  // (described in Section 7.3.6, page 281).
+  //
+  // o. vector<bool> 
+  // o. boost has a dynamic_bitset you can use.
+
+  {
+    unsigned short short11 = 1024;
+    bitset<16> bitset11{short11};
+    EXPECT_EQ(bitset11.to_string(), "0000010000000000");
+
+    unsigned short short12 = short11 >> 1;  // 512
+    bitset<16> bitset12{short12};
+    EXPECT_EQ(bitset12.to_string(), "0000001000000000");
+
+    unsigned short short13 = short11 >> 10;  // 1
+    bitset<16> bitset13{short13};
+    EXPECT_EQ(bitset13.to_string(), "0000000000000001");
+
+    unsigned short short14 = short11 >> 11;  // 0
+    bitset<16> bitset14{short14};
+    EXPECT_EQ(bitset14.to_string(), "0000000000000000");
+  }
+}
 
 
 ={============================================================================
@@ -31359,177 +31522,6 @@ int main(int argc, char** argv)
 // [----------] Global test environment tear-down
 // [==========] 1 test from 1 test case ran. (1 ms total)
 // [  PASSED  ] 1 test.
-
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-bitset
-
-The bitset is a class template and is defined in bitset header. Like array
-class, has a 'fixed' size. This is a exmple of a `non-type template parameter`
-and this is then considered part of the type.
-
-
-{why-bitset}
-Mostly to reduce space complexity. bitset < vector<bool> < bool array
-
-#include <iostream>
-#include <vector>
-#include <bitset>
-
-using namespace std;
-
-int main()
-{
-  vector<bool> boolvec(32,1);
-  bitset<32> bitvec(1U);
-  bool bitbool[32];
-
-  cout << "size: " << boolvec.size() << " sizeof : " << sizeof(boolvec) << endl;
-  cout << "size: " << bitvec.size() << " sizeof : " << sizeof(bitvec) << endl;
-  cout << "size: " << sizeof(bitbool) << endl;
-}
-
-size: 32 sizeof : 20
-size: 32 sizeof : 4
-size: 32
-
-note: can use variable to set size of bitset.
-const int x = 40;
-bitset<x> bitvec(1U);
-
-
-{cpp-bitset-ctors}
-
-bitset<n> b;   
-b has n bits; each bit is 0.
-
-bitset<n> b(u);   
-b is a copy of the n low-order bits of unsigned long long(ULL) value u.
-
-<init-from-unsigned>
-If the size of bitset > the number of bits in ULL, the remaining high-order are set to 0.
-If the size of bitset < the number of bits in ULL, the only low-order bits are used. 
-
-<init-from-string>
-bitset<n> b(s, pos, m);
-'b' is a copy of the 'm' characters from the 'string' starting at position
-'pos'. s may contain only 0 and 1 and if contains any other characters, throws
-invalid_argument.
-
-The characters with the lowest indices in the string correspond to the
-high-order bits and vice versa.
-
-bitset<n> b(cp, pos, m);
-same as the above but copies from the character array to which cp points.
-
-
-{bitset-operations}
-<about-the-state-of-the-entire-bitset>
-b.any();       is any bit in b on?           <DN> Do not use is?? style although returns a bool.
-b.all();       are all the bits on?
-b.none();      are no bits on?
-b.count();     number of bits that are on.
-b.size();      return the number of bits in b.
-
-<change-the-bitset>
-b.test(pos);   return true if bit at position is on.
-b.set(pos, v); set the bit at pos to the bool value v.
-b.set();       set all bits.
-b.reset(pos);  turn off the bit at pos.
-b.reset();     turn off all bits.
-b.flip(pos);   change the state of the bit at pos.
-b.flip();      flip all bits.
-
-<subsctipt>
-When read, that is const version, return a bool true if it's on. When write,
-     which is non-const return special type that let us change bit at pos.
-
-bool ret = b[pos];
-b[31] = 0;
-b[0].flip();
-
-<retrive-the-value>
-These return a value that holds the same bit pattern. Can use ONLY IF the size
-of the bitset is less than or equal to the corresponding size; UL or ULL.
-Otherwise, throw overflow_error exception.
-
-b.to_ulong();
-b.to_ullong();
-
-<io-operations>
-This read into a temp string and read until it has read as many as the size of
-bitset.
-
-os << b;
-is >> b;
-
-
-<ex>
-// with GCC 4.6.3.
-
-#include <iostream>
-#include <bitset>
-
-using std::cout;
-using std::endl;
-using std::bitset;
-
-int main()
-{
-  bitset<32> bitvec(1U);
-
-  bool is_set = bitvec.any();
-  bool is_not_set = bitvec.none();
-  bool all_set = bitvec.all();
-  size_t on_bits = bitvec.count();
-  size_t size = bitvec.size();
-
-  cout << "is_set: " << is_set << ", is_not_set: " << is_not_set 
-    << ", all_set: " << all_set << ", on_bits: " << on_bits
-    << ", size: " << size << endl;
-
-  bitvec.flip();
-  bitvec.reset();
-  bitvec.set();
-
-  bitset<16> bitvec2("01011001011");
-  cout << bitvec2 << endl;             <DN>
-
-  return 0;
-}
-
-<ex>
-// see the use of bitset and bitset only supports fixed size.  
-
-#include <iostream>
-#include <bitset>
-using namespace std;
-
-int main() {
-  unsigned short short11 = 1024;
-  bitset<16> bitset11{short11};
-  cout << bitset11 << endl;     // 0000010000000000
-
-  unsigned short short12 = short11 >> 1;  // 512
-  bitset<16> bitset12{short12};
-  cout << bitset12 << endl;      // 0000010000000000
-
-  unsigned short short13 = short11 >> 10;  // 1
-  bitset<16> bitset13{short13};
-  cout << bitset13 << endl;      // 0000000000000001
-
-  unsigned short short14 = short11 >> 11;  // 0
-  bitset<16> bitset14{short14};
-  cout << bitset14 << endl;      // 0000000000000000
-}
-
-
-note:
-How can use bitset with dynamic size since the size is constant expression?
-Options are:
-
-o. vector<bool>
-o. boost has a dynamic_bitset you can use.
 
 
 ={============================================================================
