@@ -31024,11 +31024,13 @@ distribution object with an engine.
 
 <ex>
 
-// 16807, 282475249, 1622650073, 984943658, 1144108930, 470211272, 101027544, 1457850878, 1458777923, 2007237709, 823564440, 1115438165, 1784484492, 74243042, 114807987, 1137522503, 1441282327, 16531729,
+// 16807, 282475249, 1622650073, 984943658, 1144108930, 470211272, 101027544, 
+// 1457850878, 1458777923, 2007237709, 823564440, 1115438165, 1784484492, 
+// 74243042, 114807987, 1137522503, 1441282327, 16531729,
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
 
-TEST(Random, UseRandomEngineAndDistribution)
+TEST(AlgoGenerate, UseRandomEngineAndDistribution)
 {
   default_random_engine dre;
 
@@ -31082,6 +31084,9 @@ class CardSequenceUseRandom
     static uniform_int_distribution<size_t> udist;
 };
 
+default_random_engine CardSequenceUseRandom::dre;
+uniform_int_distribution<size_t> CardSequenceUseRandom::udist{0, 24};
+
 
 // note: 
 // use rand() but as distribution, limits range
@@ -31102,10 +31107,13 @@ class CardSequenceUseRandWithRange
 };
 
 
-default_random_engine CardSequenceUseRandom::dre;
-uniform_int_distribution<size_t> CardSequenceUseRandom::udist{0, 24};
+// 0 3 18 11 13 5 1 16 16 23 9 12 (12)
+// 20 0 1 13 16 0 9 1 10 17 14 23 (12)
+// 1 0 1 1 1 1 0 0 1 1 0 1 (12)
+// 0 1 1 0 0 0 0 0 1 0 1 1 (12)
+// 8 8 8 9 9 9 7 8 8 8 7 9 (12)
 
-TEST(Algo, UseGenerate)
+TEST(AlgoGenerate, Random)
 {
     vector<uint32_t> ivec1;
     generate_n( back_inserter(ivec1), 12, CardSequenceUseRandom() );
@@ -31129,69 +31137,75 @@ TEST(Algo, UseGenerate)
     PRINT_ELEMENTS(ivec5);
 }
 
+
 {cxx-random-same-sequence}
 Even though the numbers generated appear to be random, a given generator returns
 the 'same' sequence of numbers each time it is run. This is very 'helpful'
 during testing and on the other hand, programs have to take this fact into
 account. note that rand() makes different every time.
 
-
-{different-sequence}
-The right way is to make the engine and distribution objects `static` and they
-will hold their state across calls.
+To have different sequence, make the engine and distribution objects `static`
+and they will hold their state across calls.
 
 <ex>
-#include <iostream>
-#include <random>
-#include <vector>
 
-using namespace std;
-
-vector<unsigned> good_randVec(void)
+TEST(AlgoRandom, Sequence)
 {
-  static default_random_engine e;
-  static uniform_int_distribution<unsigned> u(0,9);
-  vector<unsigned> ret;
-
-  cout << "--------------" << endl;
-
-  for (size_t i = 0; i < 20; i++)
   {
-    unsigned rval = u(e);
-    ret.push_back(rval);
-    cout << rval << " ";
+    default_random_engine dre;
+
+    vector<unsigned int> coll1{};
+
+    for (size_t i = 0; i < 18; ++i)
+    {
+      coll1.push_back(dre());
+    }
+
+    vector<unsigned int> coll2{};
+
+    for (size_t i = 0; i < 18; ++i)
+    {
+      coll2.push_back(dre());
+    }
+
+    // differnt sequence
+    EXPECT_THAT(coll1==coll2, false);
   }
 
-  cout << endl;
+  {
+    vector<unsigned int> coll1{};
+    vector<unsigned int> coll2{};
 
-  return ret;
+    {
+      default_random_engine dre;
+
+      for (size_t i = 0; i < 18; ++i)
+      {
+        coll1.push_back(dre());
+      }
+    }
+    {
+      default_random_engine dre;
+
+      for (size_t i = 0; i < 18; ++i)
+      {
+        coll2.push_back(dre());
+      }
+    }
+
+    // same sequence
+    EXPECT_THAT(coll1==coll2, true);
+  }
 }
 
-int main(void)
-{
-  vector<unsigned> v1(good_randVec());
-  vector<unsigned> v2(good_randVec());
 
-  cout << ((v1 == v2) ? "equal" : "not equal") << endl;
-}
-
---------------
-0 1 7 4 5 2 0 6 6 9 3 5 8 0 0 5 6 0 3 0 
---------------
-4 6 5 9 8 5 0 6 4 7 9 7 2 0 7 3 6 7 9 3 
-not equal
-
-
+<cxx-random-seed>
 The same sequence is helpful during debugging. However, once program is tested
 we often want to cause each run to generate different random results.
 
 <ex>
-#include <iostream>
-#include <random>
 
-using namespace std;
-
-int main(void)
+TEST(AlgoRandom, Seed)
 {
   default_random_engine e1;
   default_random_engine e2(2147483646);
@@ -31200,17 +31214,23 @@ int main(void)
   e3.seed(32767);
   default_random_engine e4(32767);
 
-  for (size_t i = 0; i < 20; i++)
+  int unmatch_count{};
+  int match_count{};
+
+  for (size_t i = 0; i < 100; i++)
   {
+    // two use different seed so expect no matches
     if (e1() == e2())
-      cout << "unseeded match at iteration:" << i << endl;
+      ++match_count;
 
+    // two use same seed so expect all matches
     if (e3() != e4())
-      cout << "seeded differ at iteration:" << i << endl;
+      ++unmatch_count;
   }
-}
 
-no output
+  EXPECT_THAT(match_count, 0);
+  EXPECT_THAT(unmatch_count, 0);
+}
 
 note:
 Picking a good seed, like most things about generating good random numbers, is
@@ -38686,7 +38706,7 @@ set<int, greater<int>> iset{13, 9, 7, 10, 2, 11, 12, 8, 7};
 {cxx-set-type-requirement}
 The elements of a set or a multiset may have any type T that is 'comparable'
 according to the sorting criterion. The optional second template argument
-defines the sorting criterion and if not passed, the default criterion `less`
+defines the sorting criterion and if not passed, the default criterion `less <`
 is used.
 
 
@@ -38714,6 +38734,31 @@ achieve logarithmic complexity instead of the linear complexity of the
 
 c.count(val)      
 Returns the number of elements with value val
+
+TEST(StlSet, CheckDuplicate)
+{
+  {
+    multiset<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
+    size_t duplicate_count{};
+
+    // see duplicates
+    EXPECT_THAT(coll, ElementsAre(13, 12, 11, 10, 9, 8, 7, 7, 2));
+
+    // for (auto e : coll)
+    //   if (coll.count(e) % 2 == 0)
+    //     ++duplicate_count;
+
+    for (auto e : coll)
+      if (1 < coll.count(e))
+        ++duplicate_count;
+
+    // why 2 since see 7 two times in a loop
+    EXPECT_THAT(duplicate_count, 2);
+  }
+}
+
+
+*cxx-set-find*
 
       /**
        *  @brief Tries to locate an element in a %set.
@@ -38802,53 +38847,59 @@ for (auto pos = authors.equal_range(search_item);
 
 
 <ex>
-#include <iostream>
-#include <set>
-
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+TEST(StlSet, HowSearched)
 {
-  std::cout << optstr;
+  {
+    set<int> coll;
 
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
+    coll.insert(1);
+    coll.insert(2);
+    coll.insert(4);
+    coll.insert(5);
+    coll.insert(6);
 
-  std::cout << std::endl;
+    EXPECT_THAT(coll, ElementsAre(1, 2, 4, 5, 6));
+
+    EXPECT_THAT(*coll.lower_bound(3), 4);
+
+    // Returns an iterator to the first element with key greater than val.
+    EXPECT_THAT(*coll.upper_bound(3), 4);
+
+    EXPECT_THAT(*coll.equal_range(3).first, 4);
+    EXPECT_THAT(*coll.equal_range(3).second, 4);
+
+    EXPECT_THAT(*coll.lower_bound(5), 5);
+
+    // Returns an iterator to the first element with key greater than val.
+    EXPECT_THAT(*coll.upper_bound(5), 6);
+
+    EXPECT_THAT(*coll.equal_range(5).first, 5);
+    EXPECT_THAT(*coll.equal_range(5).second, 6);
+  }
+
+  {
+    multiset<int> coll;
+
+    coll.insert(1);
+    coll.insert(2);
+    coll.insert(3);   // 2
+    coll.insert(3);
+    coll.insert(3);   // 4
+    coll.insert(4);   // 5
+    coll.insert(5);
+    coll.insert(6);
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 3, 3, 4, 5, 6));
+
+    EXPECT_THAT(distance(coll.begin(), coll.lower_bound(3)), 2);
+
+    // Returns an iterator to the first element with key greater than val.
+    EXPECT_THAT(distance(coll.begin(), coll.upper_bound(3)), 5);
+
+    EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).first), 2);
+    EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).second), 5);
+  }
 }
-
-int main()
-{
-  set<int> coll;
-
-  coll.insert(1);
-  coll.insert(2);
-  // coll.insert(3);
-  coll.insert(4);
-  coll.insert(5);
-  coll.insert(6);
-
-  PRINT_ELEMENTS( coll, "coll: ");
-
-  cout << "lower_bound(3): " << *coll.lower_bound(3) << endl;
-  cout << "upper_bound(3): " << *coll.upper_bound(3) << endl;
-  cout << "equal_range(3): " << *coll.equal_range(3).first << " "
-                             << *coll.equal_range(3).second << endl;
-
-  cout << "lower_bound(5): " << *coll.lower_bound(5) << endl;
-  cout << "upper_bound(5): " << *coll.upper_bound(5) << endl;
-  cout << "equal_range(5): " << *coll.equal_range(5).first << " "
-                             << *coll.equal_range(5).second << endl;
-}
-
-coll: 1 2 4 5 6
-lower_bound(3): 4
-upper_bound(3): 4          // see it is > 3
-equal_range(3): 4 4
-lower_bound(5): 5
-upper_bound(5): 6          // see it is > 5
-equal_range(5): 5 6
 
 note: 
 these _bound members usually used for multiset, can be used with set.
@@ -39910,7 +39961,6 @@ for (auto pos = `coll.cbegin()`; pos != coll.cend(); ++pos) {
    *  For random access iterators, this uses their @c + and @c - operations
    *  and are constant time.  For other %iterator classes they are linear time.
   */
-
   template<typename _InputIterator, typename _Distance>
     inline void
     advance(_InputIterator& __i, _Distance __n);
@@ -39931,16 +39981,92 @@ TEST(Iterator, Next)
   EXPECT_EQ(*pos, 3);
 }
 
+  /**
+   *  @brief A generalization of pointer arithmetic.
+   *  @param  __first  An input iterator.
+   *  @param  __last  An input iterator.
+   *  @return  The distance between them.
+   *
+   *  Returns @c n such that __first + n == __last.  This requires
+   *  that @p __last must be reachable from @p __first.  Note that @c
+   *  n may be negative.
+   *
+   *  For random access iterators, this uses their @c + and @c - operations
+   *  and are constant time.  For other %iterator classes they are linear time.
+  */
+  template<typename _InputIterator>
+    inline typename iterator_traits<_InputIterator>::difference_type
+    distance(_InputIterator __first, _InputIterator __last);
+
 TEST(Iterator, Distance)
 {
-  vector<int> coll{1,2,3,4,5};
-  auto pos = find(coll.begin(), coll.end(), 3);
-  EXPECT_EQ(distance(coll.begin(), pos), 2);
-  EXPECT_EQ(distance(pos, coll.begin()), -2);
+  {
+    vector<int> coll{1,2,3,4,5};
+    auto pos = find(coll.begin(), coll.end(), 3);
+    EXPECT_EQ(distance(coll.begin(), pos), 2);
+    EXPECT_EQ(distance(pos, coll.begin()), -2);
 
-  EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
-  EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+    EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
+    EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+  }
+  {
+    set<int> coll{1,2,3,4,5};
+    auto pos = find(coll.begin(), coll.end(), 3);
+    EXPECT_EQ(distance(coll.begin(), pos), 2);
+
+    // /usr/include/c++/4.9/debug/safe_iterator.h:289:error: attempt to increment
+    //     a past-the-end iterator.
+    // 
+    // Objects involved in the operation:
+    // iterator "this" @ 0x0x7fff1a6a0580 {
+    // type = N11__gnu_debug14_Safe_iteratorISt23_Rb_tree_const_iteratorIiENSt7__debug3setIiSt4lessIiESaIiEEEEE (mutable iterator);
+    //   state = past-the-end;
+    //   references sequence with type `NSt7__debug3setIiSt4lessIiESaIiEEE' @ 0x0x7fff1a6a0610
+    // }
+    // Aborted (core dumped)
+    //
+    // or when without DEBUG, stucks which seems to be looping.
+    // EXPECT_EQ(distance(pos, coll.begin()), -2);
+    //
+    // since `++first` for non-random iterators:
+    //
+    // template<typename _InputIterator>
+    //   inline typename iterator_traits<_InputIterator>::difference_type
+    //   __distance(_InputIterator __first, _InputIterator __last,
+    //              input_iterator_tag)
+    //   {
+    //     // concept requirements
+    //     __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+    //
+    //     typename iterator_traits<_InputIterator>::difference_type __n = 0;
+    //     while (__first != __last)
+    // {
+    //   ++__first;
+    //   ++__n;
+    // }
+    //     return __n;
+    //   }
+    // 
+    // template<typename _RandomAccessIterator>
+    //   inline typename iterator_traits<_RandomAccessIterator>::difference_type
+    //   __distance(_RandomAccessIterator __first, _RandomAccessIterator __last,
+    //              random_access_iterator_tag)
+    //   {
+    //     // concept requirements
+    //     __glibcxx_function_requires(_RandomAccessIteratorConcept<
+    // 			  _RandomAccessIterator>)
+    //     return __last - __first;
+    //   }
+
+    EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
+    // EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+  }
 }
+
+9.3.3 distance()
+
+If the iterators are not random-access iterators, pos2 `must be reachable` from
+pos1; that is, it must have the same position or a later position.
 
 
 ={============================================================================

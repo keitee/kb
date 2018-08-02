@@ -325,13 +325,67 @@ TEST(Iterator, Next)
 
 TEST(Iterator, Distance)
 {
-  vector<int> coll{1,2,3,4,5};
-  auto pos = find(coll.begin(), coll.end(), 3);
-  EXPECT_EQ(distance(coll.begin(), pos), 2);
-  EXPECT_EQ(distance(pos, coll.begin()), -2);
+  {
+    vector<int> coll{1,2,3,4,5};
+    auto pos = find(coll.begin(), coll.end(), 3);
+    EXPECT_EQ(distance(coll.begin(), pos), 2);
+    EXPECT_EQ(distance(pos, coll.begin()), -2);
 
-  EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
-  EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+    EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
+    EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+  }
+  {
+    set<int> coll{1,2,3,4,5};
+    auto pos = find(coll.begin(), coll.end(), 3);
+    EXPECT_EQ(distance(coll.begin(), pos), 2);
+
+    // /usr/include/c++/4.9/debug/safe_iterator.h:289:error: attempt to increment
+    //     a past-the-end iterator.
+    // 
+    // Objects involved in the operation:
+    // iterator "this" @ 0x0x7fff1a6a0580 {
+    // type = N11__gnu_debug14_Safe_iteratorISt23_Rb_tree_const_iteratorIiENSt7__debug3setIiSt4lessIiESaIiEEEEE (mutable iterator);
+    //   state = past-the-end;
+    //   references sequence with type `NSt7__debug3setIiSt4lessIiESaIiEEE' @ 0x0x7fff1a6a0610
+    // }
+    // Aborted (core dumped)
+    //
+    // or when without DEBUG, stucks which seems to be looping.
+    // EXPECT_EQ(distance(pos, coll.begin()), -2);
+    //
+    // since `++first` for non-random iterators:
+    //
+    // template<typename _InputIterator>
+    //   inline typename iterator_traits<_InputIterator>::difference_type
+    //   __distance(_InputIterator __first, _InputIterator __last,
+    //              input_iterator_tag)
+    //   {
+    //     // concept requirements
+    //     __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+    //
+    //     typename iterator_traits<_InputIterator>::difference_type __n = 0;
+    //     while (__first != __last)
+    // {
+    //   ++__first;
+    //   ++__n;
+    // }
+    //     return __n;
+    //   }
+    // 
+    // template<typename _RandomAccessIterator>
+    //   inline typename iterator_traits<_RandomAccessIterator>::difference_type
+    //   __distance(_RandomAccessIterator __first, _RandomAccessIterator __last,
+    //              random_access_iterator_tag)
+    //   {
+    //     // concept requirements
+    //     __glibcxx_function_requires(_RandomAccessIteratorConcept<
+    // 			  _RandomAccessIterator>)
+    //     return __last - __first;
+    //   }
+
+    EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
+    // EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
+  }
 }
 
 
@@ -809,21 +863,107 @@ TEST(CxxStlTest, QueueProritySort)
 // ={=========================================================================
 // cxx-set
 
-TEST(CxxStlTest, HowSetSorted)
+TEST(StlSet, HowSorted)
 {
-    set<int, greater<int>> iset{13, 9, 7, 10, 2, 11, 12, 8, 7};
+  {
+    // less <
+    set<int> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
+    EXPECT_THAT(coll, ElementsAre(2, 7, 8, 9, 10, 11, 12, 13));
+  }
 
-    PRINT_ELEMENTS(iset);
+  {
+    // greater >
+    set<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
+    EXPECT_THAT(coll, ElementsAre(13, 12, 11, 10, 9, 8, 7, 2));
 
-    auto begin = iset.begin();
-    cout << *begin << ", " << endl;
-    iset.erase(begin);
+    // duplicate, 7, is removed
+    EXPECT_THAT(coll.size(), 8);
 
-    begin = iset.begin();
-    cout << *begin << ", " << endl;
-    iset.erase(begin);
+    auto begin = coll.begin();
+    coll.erase(begin);
 
-    cout << "size : " << iset.size() << endl;
+    begin = coll.begin();
+    coll.erase(begin);
+
+    EXPECT_THAT(coll, ElementsAre(11, 10, 9, 8, 7, 2));
+    EXPECT_THAT(coll.size(), 6);
+  }
+}
+
+TEST(StlSet, HowSearched)
+{
+  {
+    set<int> coll;
+
+    coll.insert(1);
+    coll.insert(2);
+    coll.insert(4);
+    coll.insert(5);
+    coll.insert(6);
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 4, 5, 6));
+
+    EXPECT_THAT(*coll.lower_bound(3), 4);
+
+    // Returns an iterator to the first element with key greater than val.
+    EXPECT_THAT(*coll.upper_bound(3), 4);
+
+    EXPECT_THAT(*coll.equal_range(3).first, 4);
+    EXPECT_THAT(*coll.equal_range(3).second, 4);
+
+    EXPECT_THAT(*coll.lower_bound(5), 5);
+
+    // Returns an iterator to the first element with key greater than val.
+    EXPECT_THAT(*coll.upper_bound(5), 6);
+
+    EXPECT_THAT(*coll.equal_range(5).first, 5);
+    EXPECT_THAT(*coll.equal_range(5).second, 6);
+  }
+
+  {
+    multiset<int> coll;
+
+    coll.insert(1);
+    coll.insert(2);
+    coll.insert(3);   // 2
+    coll.insert(3);
+    coll.insert(3);   // 4
+    coll.insert(4);   // 5
+    coll.insert(5);
+    coll.insert(6);
+
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 3, 3, 4, 5, 6));
+
+    EXPECT_THAT(distance(coll.begin(), coll.lower_bound(3)), 2);
+
+    // Returns an iterator to the first element with key greater than val.
+    EXPECT_THAT(distance(coll.begin(), coll.upper_bound(3)), 5);
+
+    EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).first), 2);
+    EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).second), 5);
+  }
+}
+
+TEST(StlSet, CheckDuplicate)
+{
+  {
+    multiset<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
+    size_t duplicate_count{};
+
+    // see duplicates
+    EXPECT_THAT(coll, ElementsAre(13, 12, 11, 10, 9, 8, 7, 7, 2));
+
+    // for (auto e : coll)
+    //   if (coll.count(e) % 2 == 0)
+    //     ++duplicate_count;
+
+    for (auto e : coll)
+      if (1 < coll.count(e))
+        ++duplicate_count;
+
+    // why 2 since see 7 two times in a loop
+    EXPECT_THAT(duplicate_count, 2);
+  }
 }
 
 
@@ -1111,10 +1251,11 @@ TEST(AlgoCopy, UseOnDifferentCollections)
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
 
-TEST(AlgoGenerate, UseRandomEngineAndDistribution)
+TEST(AlgoRandom, UseRandomEngineAndDistribution)
 {
   default_random_engine dre;
 
+  // always same sequence
   for (size_t i = 0; i < 18; ++i)
     cout << dre() << ", ";
   cout << endl;
@@ -1159,6 +1300,9 @@ class CardSequenceUseRandomEngine
     static uniform_int_distribution<size_t> udist;
 };
 
+default_random_engine CardSequenceUseRandomEngine::dre;
+uniform_int_distribution<size_t> CardSequenceUseRandomEngine::udist{0, 24};
+
 
 class CardSequenceUseRandWithRange
 {
@@ -1176,43 +1320,121 @@ class CardSequenceUseRandWithRange
 };
 
 
-default_random_engine CardSequenceUseRandomEngine::dre;
-uniform_int_distribution<size_t> CardSequenceUseRandomEngine::udist{0, 24};
-
 // 0 3 18 11 13 5 1 16 16 23 9 12 (12)
 // 20 0 1 13 16 0 9 1 10 17 14 23 (12)
 // 1 0 1 1 1 1 0 0 1 1 0 1 (12)
 // 0 1 1 0 0 0 0 0 1 0 1 1 (12)
 // 8 8 8 9 9 9 7 8 8 8 7 9 (12)
 
-TEST(AlgoGenerate, Random)
+TEST(AlgoRandom, RandomEngineVsRand)
 {
-    vector<uint32_t> ivec1;
-    generate_n( back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
-    PRINT_ELEMENTS(ivec1);
+  // always same sequence
+  vector<uint32_t> ivec1;
+  generate_n( back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
+  PRINT_ELEMENTS(ivec1);
 
-    vector<uint32_t> ivec2;
-    generate_n( back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
-    PRINT_ELEMENTS(ivec2);
+  // always same sequence
+  vector<uint32_t> ivec2;
+  generate_n( back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
+  PRINT_ELEMENTS(ivec2);
 
-    vector<uint32_t> ivec3;
-    generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
-    PRINT_ELEMENTS(ivec3);
+  vector<uint32_t> ivec3;
+  generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
+  PRINT_ELEMENTS(ivec3);
 
-    vector<uint32_t> ivec4;
-    generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
-    PRINT_ELEMENTS(ivec4);
+  vector<uint32_t> ivec4;
+  generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
+  PRINT_ELEMENTS(ivec4);
 
-    vector<uint32_t> ivec5;
-    generate_n(back_inserter(ivec5), 12, 
-        CardSequenceUseRandWithRange(6, 9));
-    PRINT_ELEMENTS(ivec5);
+  vector<uint32_t> ivec5;
+  generate_n(back_inserter(ivec5), 12, 
+      CardSequenceUseRandWithRange(6, 9));
+  PRINT_ELEMENTS(ivec5);
 }
+
+
+TEST(AlgoRandom, Sequence)
+{
+  {
+    default_random_engine dre;
+
+    vector<unsigned int> coll1{};
+
+    for (size_t i = 0; i < 18; ++i)
+    {
+      coll1.push_back(dre());
+    }
+
+    vector<unsigned int> coll2{};
+
+    for (size_t i = 0; i < 18; ++i)
+    {
+      coll2.push_back(dre());
+    }
+
+    // differnt sequence
+    EXPECT_THAT(coll1==coll2, false);
+  }
+
+  {
+    vector<unsigned int> coll1{};
+    vector<unsigned int> coll2{};
+
+    {
+      default_random_engine dre;
+
+      for (size_t i = 0; i < 18; ++i)
+      {
+        coll1.push_back(dre());
+      }
+    }
+    {
+      default_random_engine dre;
+
+      for (size_t i = 0; i < 18; ++i)
+      {
+        coll2.push_back(dre());
+      }
+    }
+
+    // same sequence
+    EXPECT_THAT(coll1==coll2, true);
+  }
+}
+
+
+TEST(AlgoRandom, Seed)
+{
+  default_random_engine e1;
+  default_random_engine e2(2147483646);
+
+  default_random_engine e3;
+  e3.seed(32767);
+  default_random_engine e4(32767);
+
+  int unmatch_count{};
+  int match_count{};
+
+  for (size_t i = 0; i < 100; i++)
+  {
+    // two use different seed so expect no matches
+    if (e1() == e2())
+      ++match_count;
+
+    // two use same seed so expect all matches
+    if (e3() != e4())
+      ++unmatch_count;
+  }
+
+  EXPECT_THAT(match_count, 0);
+  EXPECT_THAT(unmatch_count, 0);
+}
+
 
 // 1 3 9 6 7 8 2 4 5 (9)
 // 8 7 5 6 2 4 9 3 1 (9)
 
-TEST(AlgoShuffle, Random)
+TEST(AlgoRandom, AlgoShuffle)
 {
   vector<int> coll{1,2,3,4,5,6,7,8,9};
 
