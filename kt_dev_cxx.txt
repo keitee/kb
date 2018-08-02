@@ -4550,6 +4550,19 @@ TEST(Bit, RightShift)
 }
 
 
+TEST(Bit, Tricks)
+{
+  // get bits which has [5, 0]th bis on. e.g. 0001.1111
+  // in this case, do not need to specify unsigned.
+
+  int value{};
+
+  const int POS_TO_TURN_ON=5;
+  value =  ~(~0 << POS_TO_TURN_ON);
+  EXPECT_THAT(value, 0x1F);
+}
+
+
 <cxx-shift>
 The summary is that for `unsigned`, `zero-filled` when do `right-shift`.
 
@@ -5213,6 +5226,92 @@ TEST(Bit, BitSet)
     bitset<16> bitset14{short14};
     EXPECT_EQ(bitset14.to_string(), "0000000000000000");
   }
+}
+
+
+// Programming Pearl, C 01, Q 02
+// How would you implement bit vectors using bitwise logical operations?
+//
+// C and old C++ programs usually use type long for arrays of bits and
+// manipulate them with the bit operators, such as &, |, and ~.
+
+namespace bit_vectors 
+{
+  const unsigned int BITSPERWORD = 32;
+  const unsigned int SHIFT = 5;
+  const unsigned int MASK = 0x1F;
+  const unsigned int SIZE = 60;
+
+  // bit vector to represent a array of bits. Why +1? Since 0-31 bits falls to
+  // array[0] and 32-63 falls to array[1], and so on. SIZE is num of bits to
+  // represent and BITSPERWORD is num of bits of a word(int). So there should be
+  // one array at least for 0-31 bits. 
+  
+  int a[1 + SIZE/BITSPERWORD];
+
+  void set_bit(int pos)
+  {
+    // MASK
+    // MASK is 11111(31) to convert pos into [31-0] bits. By &, make only [31-0] 
+    // bits valid and not others and effectively pos - 31 for values 
+    // which are > 32. that is:
+    //
+    // 32 -> 0
+    // 33 -> 1
+    // ..
+    //
+    // [pos >> SHIFT]
+    // pos is int and right shift on int may cause problem? Not in [] since it
+    // is unsigned.
+    //
+    // Here, ">> 5" menas to devide 2^5, 32 which is num of bits of a word. so
+    // find array index that pos falls on and this matches up 1 << (pos & MASK)
+
+    a[pos >> SHIFT] |= ( 1 << (pos & MASK));
+  }
+
+  void clear_bit(int pos)
+  {
+    a[pos >> SHIFT] &= ~( 1 << (pos & MASK));
+  }
+
+  bool test_bit(int pos)
+  {
+    return (a[pos >> SHIFT] & ( 1 << (pos & MASK))) ? true : false;
+  }
+} // namespace
+
+TEST(Bit, BitVectors)
+{
+  using namespace bit_vectors;
+
+  auto array_size = sizeof(a)/sizeof(a[0]);
+
+  set_bit(35);
+  set_bit(45);
+  EXPECT_EQ(test_bit(45), true);
+
+  // 45        35
+  // 10000000001000 | 0
+  //
+  // for (int i = 0; i < (int)array_size; ++i)
+  // {
+  //   cout << ":" << hex << (a[i]);
+  // }
+  // cout << endl;
+
+  clear_bit(45);
+  EXPECT_EQ(test_bit(35), true);
+  EXPECT_EQ(test_bit(45), false);
+
+  // 35
+  // 1000 | 0
+  
+  // for (int i = 0; i < (int)array_size; ++i)
+  // {
+  //   cout << ":" << hex << (a[i]);
+  // }
+  // cout << endl;
 }
 
 

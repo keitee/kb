@@ -1426,6 +1426,19 @@ TEST(Bit, MaxNegagiveIsSpecial)
   EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
 }
 
+TEST(Bit, Tricks)
+{
+  // get bits which has [5, 0]th bis on. e.g. 0001.1111
+  // in this case, do not need to specify unsigned.
+
+  int value{};
+
+  const int POS_TO_TURN_ON=5;
+  value =  ~(~0 << POS_TO_TURN_ON);
+  EXPECT_THAT(value, 0x1F);
+}
+
+
 TEST(Bit, RightShift)
 {
   {
@@ -1524,8 +1537,10 @@ namespace bit_vectors
   void set_bit(int pos)
   {
     // MASK
-    // MASK is 11111...1 for [31-0] bits. By &, make only [31-0] bits valid and
-    // not others and effectively pos - 31 for values which are > 32. that is:
+    // MASK is 11111(31) to convert pos into [31-0] bits. By &, make only [31-0] 
+    // bits valid and not others and effectively pos - 31 for values 
+    // which are > 32. that is:
+    //
     // 32 -> 0
     // 33 -> 1
     // ..
