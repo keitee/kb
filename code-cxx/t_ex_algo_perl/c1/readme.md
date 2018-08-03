@@ -4,36 +4,46 @@
 # 10,000,000 ../numbers.in
 
 1.6.1: qsort
-real    0m5.192s
-user    0m5.018s
-sys     0m0.174s
+real    0m5.315s
+user    0m5.279s
+sys     0m0.036s
 
 1.6.1: stl
-real    0m27.502s
-user    0m26.757s
-sys     0m0.745s
+real    0m27.109s
+user    0m26.601s
+sys     0m0.506s
 
 1.6.1: bit
-real    0m3.303s
-user    0m3.202s
-sys     0m0.101s
+real    0m3.410s
+user    0m3.383s
+sys     0m0.027s
+
+1.6.1: stl sort, vector and sort(), vector.reserve() do not make difference.
+real    0m43.999s
+user    0m43.959s
+sys     0m0.039s
 
 # 1,000,000 ../numbers2.in
 
 1.6.1: qsort
-real    0m0.544s
-user    0m0.538s
-sys     0m0.006s
+real    0m0.486s
+user    0m0.478s
+sys     0m0.008s
 
 1.6.1: stl
-real    0m1.796s
-user    0m1.749s
-sys     0m0.047s
+real    0m1.706s
+user    0m1.677s
+sys     0m0.029s
 
 1.6.1: bit
-real    0m0.338s
-user    0m0.313s
-sys     0m0.025s
+real    0m0.332s
+user    0m0.327s
+sys     0m0.005s
+
+1.6.1: stl sort
+real    0m3.768s
+user    0m3.762s
+sys     0m0.006s
 
 # On VM
 

@@ -5270,10 +5270,11 @@ namespace list_simple_linked_list_public
     ListNode *next_;
   };
 
-  class List
+  const int SAFETY_MAX_COUNT = 20;
+
+  struct List
   {
     public:
-      void Create() { count_ = 0;}
       void Clear() 
       { 
         ListNode *current;
@@ -5285,24 +5286,11 @@ namespace list_simple_linked_list_public
           temp = current;
           current = current->next_;
           free(temp);
-          --count_;
         }
-
-        // assert(count_ == 0);
 
         head_.key_ = 0;
         head_.next_ = nullptr;
       }
-
-      bool Empty() { return count_ == 0 ? true : false; }
-
-      bool Full() 
-      { 
-        // since no support max
-        return false; 
-      }
-
-      int Size() { return count_; }
 
       void Add(const ListEntry entry) 
       {
@@ -5313,7 +5301,6 @@ namespace list_simple_linked_list_public
         if (head_.next_ == nullptr)
         {
           head_.next_ = node;
-          ++count_;
         }
         else
         {
@@ -5326,7 +5313,6 @@ namespace list_simple_linked_list_public
           }
 
           current->next_ = node;
-          ++count_;
         }
       }
 
@@ -5339,42 +5325,30 @@ namespace list_simple_linked_list_public
         {
           f(index, current->key_);
           ++index;
+
+          // to test cycle
+          if (index == SAFETY_MAX_COUNT)
+          {
+            cout << "traverse: SAFETY_MAX_COUNT" << endl;
+            break;
+          }
         }
       }
 
     public:
       // there is no need to keep an counter but for size function.
-      int count_{};
       ListNode head_;
   };
 
   // make the input linked list, first, in two as evenly as possible. not use
   // count.
-  // void DevideList(ListNode **first, ListNode **second)
-  // {
-  //   ListNode *slow;
-  //   ListNode *fast;
 
-  //   for (slow = *first, fast = slow->next_; fast;)
-  //   {
-  //     fast = fast->next_;
-
-  //     if (fast)
-  //     {
-  //       fast = fast->next_;
-  //       slow = slow->next_;
-  //     }
-  //   }
-
-  //   *second = slow->next_;
-  //   slow->next_ = nullptr;
-  // }
-  void DevideList(ListNode *first, ListNode *second)
+  void DevideList(List *first, List *second)
   {
     ListNode *slow;
     ListNode *fast;
 
-    for (slow = first, fast = slow->next_; fast;)
+    for (slow = first->head_.next_, fast = slow->next_; fast;)
     {
       fast = fast->next_;
 
@@ -5385,7 +5359,7 @@ namespace list_simple_linked_list_public
       }
     }
 
-    second = slow->next_;
+    second->head_.next_ = slow->next_;
     slow->next_ = nullptr;
   }
 
@@ -5400,14 +5374,11 @@ TEST(AlgoList, Devide)
 
   List simple_list;
   Functor f;
-  simple_list.Create();
 
   for (auto e : input_values)
   {
     simple_list.Add(e);
   }
-
-  EXPECT_THAT(simple_list.Size(), 7);
 
   // {0: 26}
   // {1: 33}
@@ -5418,26 +5389,150 @@ TEST(AlgoList, Devide)
   // {6: 22}
   // simple_list.Traverse(f);
 
-  // count of simple_list will not be correct after this.
+  // note:
+  // count of simple_list, simple_second will not be correct after this.
   
-  ListNode node{};
-  // DevideList(&(simple_list.head_.next_), &node);
-  DevideList(simple_list.head_.next_, &node);
-
   List simple_second;
-  simple_second.Create();
 
-  for (; node;)
-  {
-    simple_second.Add(node->key_);
-    node = node->next_;
-  }
+  DevideList(&simple_list, &simple_second);
+
+  // {0: 26}
+  // {1: 33}
+  // {2: 35}
+  // {3: 29}
+  // {0: 19}
+  // {1: 12}
+  // {2: 22}
 
   simple_list.Traverse(f);
   simple_second.Traverse(f);
 
   simple_list.Clear();
   simple_second.Clear();
+}
+
+namespace list_simple_linked_list_public
+{
+  bool DetectCycle_0803(List *list)
+  {
+    ListNode *slow = list->head_.next_;
+    ListNode *fast = slow->next_;
+
+    for(; fast && slow != fast;)
+    {
+      fast = fast->next_;
+
+      if (fast)
+      {
+        fast = fast->next_;
+        slow = slow->next_;
+      }
+    }
+
+    // exit loop when fast is null when there is no cycle or when fast is not
+    // null and there is cycle so fast equals to slow.
+    
+    return fast != slow ? false : true;
+  }
+
+
+  // The covers all cases so do not need to check if startNode is null and
+  // ListSize.
+
+  bool DetectCycle_01(List *list)
+  {
+    ListNode *slow = list->head_.next_;
+    ListNode *ffast = slow;
+    ListNode *fast = slow;
+
+    // must have (expr); otherwise, compile error
+
+    for(; slow && (fast = ffast->next_) && (ffast = fast->next_);)
+    {
+      if ((slow == fast) || (slow == ffast))
+        return true;
+
+      slow = slow->next_;
+    }
+
+    return false;
+  }
+
+
+  // use single fast
+
+  bool DetectCycle_02(List *list)
+  {
+    ListNode *slow = list->head_.next_;
+    ListNode *fast = slow;
+
+    // must have (expr); otherwise, compile error
+
+    for(; slow && (fast = fast->next_) && (fast = fast->next_);)
+    {
+      if (slow == fast)
+        return true;
+
+      slow = slow->next_;
+    }
+
+    return false;
+  }
+} // namespace
+
+
+TEST(AlgoList, DetectCycle)
+{
+  using namespace list_simple_linked_list_public;
+
+  {
+    auto input_values{26, 33, 35, 29, 19, 12, 22};
+
+    List simple_list;
+    // Functor f;
+
+    for (auto e : input_values)
+    {
+      simple_list.Add(e);
+    }
+
+    // find the end and make a cycle
+    ListNode *first;
+    ListNode *current;
+    ListNode *next;
+
+    first = simple_list.head_.next_;
+    current = first;
+    next = first->next_;
+    for (; next;)
+    {
+      current = next;
+      next = next->next_;
+    }
+
+    current->next_ = first;
+
+    // simple_list.Traverse(f);
+
+    EXPECT_THAT(DetectCycle_0803(&simple_list), true);
+    EXPECT_THAT(DetectCycle_01(&simple_list), true);
+    EXPECT_THAT(DetectCycle_02(&simple_list), true);
+  }
+
+  {
+    auto input_values{26, 33, 35, 29, 19, 12, 22};
+
+    List simple_list;
+
+    for (auto e : input_values)
+    {
+      simple_list.Add(e);
+    }
+
+    EXPECT_THAT(DetectCycle_0803(&simple_list), false);
+    EXPECT_THAT(DetectCycle_01(&simple_list), false);
+    EXPECT_THAT(DetectCycle_02(&simple_list), false);
+  }
 }
 
 
