@@ -5247,7 +5247,7 @@ TEST(AlgoList, SimpleListLinkedList)
 
 namespace list_simple_linked_list_public
 {
-  // In order to exercise Devide(), have to have access to list structure but do
+  // In order to exercise Divide(), have to have access to list structure but do
   // not see any practical way to do it through class interface. 
   //
   // Make private date public now. 
@@ -5342,11 +5342,23 @@ namespace list_simple_linked_list_public
 
   // make the input linked list, first, in two as evenly as possible. not use
   // count.
-
-  void DevideList(List *first, List *second)
+  //
+  // note: when the size of list is odd, the first list will have one more than
+  // the second.
+  //
+  // see *cycle-detection* 
+  
+  void DivideList(List *first, List *second)
   {
     ListNode *slow;
     ListNode *fast;
+
+    // do not check if list is null since there should be at least two and
+    // user's respnsibility to check it before calling this.
+    //
+    // if((midpoint = list->head) == NULL ) // must use ()
+    //   secondhalf->head = NULL;
+    // else
 
     for (slow = first->head_.next_, fast = slow->next_; fast;)
     {
@@ -5366,7 +5378,7 @@ namespace list_simple_linked_list_public
 } // namespace
 
 
-TEST(AlgoList, Devide)
+TEST(AlgoList, Divide)
 {
   using namespace list_simple_linked_list_public;
 
@@ -5394,7 +5406,7 @@ TEST(AlgoList, Devide)
   
   List simple_second;
 
-  DevideList(&simple_list, &simple_second);
+  DivideList(&simple_list, &simple_second);
 
   // {0: 26}
   // {1: 33}
@@ -5533,6 +5545,93 @@ TEST(AlgoList, DetectCycle)
     EXPECT_THAT(DetectCycle_01(&simple_list), false);
     EXPECT_THAT(DetectCycle_02(&simple_list), false);
   }
+}
+
+namespace list_simple_linked_list_public
+{
+  // If List is proper class which has copy or move context then it would be
+  // easy to implement this since can simply call result.Add() to create merged
+  // list.
+  //
+  // However, this is for C and result is the same as first and have to handle
+  // with care such as handle the first comparison.
+  
+  void CombineList(List *first, List *last, List *result)
+  {
+    // set current of first
+    // set current of last
+    // 
+    // while (there is element in the first AND there is element in the last)
+    // {
+    //    compare key between element from the first and the last
+    //
+    //    if (the one of the first is equal or greater then the one of the last)
+    //    {
+    //      then write the one of the last and get the next from the last
+    //    }
+    //
+    //    if (the one of the first is less than the last)
+    //    {
+    //      then, write it out and get the next from the first.
+    //    }
+    // }
+    //
+    // if (no more from the first and there are some from the last)
+    // {
+    //    then write the rest of the last since the rest is already sorted.
+    // }
+    // else if (no more from the second and there are some from the first)
+    // {
+    //    then write the rest of the first.
+    // }
+    // else
+    // {
+    //    // when both are finished, do nothing. SHALL DO THIS to show it's
+    //    // considered?
+    // }
+    //  
+    // set the end of the result for all caese
+  }
+} // namespace
+
+
+TEST(AlgoList, Combine)
+{
+  using namespace list_simple_linked_list_public;
+
+  auto input_values{26, 33, 35, 29, 19, 12, 22};
+
+  List simple_list;
+
+  for (auto e : input_values)
+  {
+    simple_list.Add(e);
+  }
+
+  // {0: 26}
+  // {1: 33}
+  // {2: 35}
+  // {3: 29}
+  // {4: 19}
+  // {5: 12}
+  // {6: 22}
+
+  // note:
+  // count of simple_list, simple_second will not be correct after this.
+  
+  List simple_second;
+
+  DivideList(&simple_list, &simple_second);
+
+  // {0: 26}
+  // {1: 33}
+  // {2: 35}
+  // {3: 29}
+  //
+  // {0: 19}
+  // {1: 12}
+  // {2: 22}
+
 }
 
 
