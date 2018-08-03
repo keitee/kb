@@ -4196,9 +4196,44 @@ When n is INT_MIN=-2147483648
 
 In ansic, p41, arithmetic operators, 
    
-"The direction of truncation for / and the sign of result for
-% are machine dependent for negative operands, as is the action taken on
-overflow or underflow". 
+// Why '%' produce negative value?
+//
+// 51
+// -10
+// 90
+// 6
+// -76
+// 65
+// 69
+// 11
+// 86
+// 64
+//
+// The reason is that rand() makes 32 bit random numbers and bigrand() makes
+// even bigger so overflow happens. overflow happens and return value becomes
+// negative.
+//
+// As ANSIC says:
+//
+// "The direction of truncation for / and the sign of result for % are machine
+// dependent for negative operands, as is the action taken on overflow or
+// underflow". 
+
+namespace bit_overflow 
+{
+  int bigrand()
+  {
+    return RAND_MAX*rand() + rand();
+  }
+} // namespace
+
+TEST(Bit, Overflow)
+{
+  using namespace bit_overflow;
+
+  for (int i = 0; i < 10; ++i)
+    cout << (bigrand() % 100) << endl;
+}
 
 
 // the revised version
@@ -31343,6 +31378,81 @@ it might wind up with the same seed several times.
 
 {other-distribution}
 CPR 749. TBD.
+
+
+{cxx-random-unique}
+
+namespace pearl_1_6_4
+{
+  // How to slect `unique random numbers`?
+  //
+  // https://github.com/filipegoncalves/codinghighway/tree/master/ProgrammingPearls/Column1/1.6.4
+  //
+  // Here, we are faced with the challenge of avoiding duplicates. Column 12 is
+  // a must-read to solve this exercise the good way. It introduces very
+  // important concepts and algorithms to efficiently generating a set of m
+  // unique random integers in [0, n-1], with m <= n.
+  // 
+  // Because we don't want the set to be ordered, we cannot use Knuth's
+  // Algorithm S. Instead, we opt for Knuth's Algorithm P, in which we shuffle
+  // an n-element array that contains the numbers 0..n-1.  To implement
+  // Algorithm P, we need a randint() function. We will learn more about it in
+  // column 13; for now, it simply adds a random quantity to the lower bound
+  // that doesn't exceed the upper bound.
+  // 
+  // The resulting file, numbers2.in, is provided in this column's root folder.
+
+  const int N=10000000;
+  const int M=1000000;
+  int arr[N];
+
+  int randint(int from, int to) {
+    return from + (rand()%(to-from+1));
+  }
+
+  void swap(int i, int j) {
+    int t = arr[i];
+    arr[i] = arr[j];
+    arr[j] = t;
+  }
+}
+
+// so not sorted but makes unique random numbers
+
+TEST(ProgrammingPearl, C1_6_4)
+{
+  using namespace pearl_1_6_4;
+
+  multiset<int> coll{};
+  bool duplicates{false};
+
+	int i;
+
+	srand(time(NULL));
+
+  // makes unique numbers
+	for (i = 0; i < N; i++)
+		arr[i] = i;
+
+  // shuffle
+	for (i = 0; i < M; i++)
+		swap(i, randint(i, N-1));
+
+  // output
+	for (i = 0; i < M; i++)
+  {
+    coll.insert(arr[i]);
+		// printf("%d\n", arr[i]);
+  }
+
+  for (auto e : coll)
+  {
+    if (1 < coll.count(e))
+      duplicates = true;
+  }
+
+  EXPECT_THAT(duplicates, false);
+}
 
 
 ={============================================================================

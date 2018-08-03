@@ -1651,6 +1651,46 @@ TEST(Bit, BitSet)
 }
 
 
+// Why '%' produce negative value?
+//
+// 51
+// -10
+// 90
+// 6
+// -76
+// 65
+// 69
+// 11
+// 86
+// 64
+//
+// The reason is that rand() makes 32 bit random numbers and bigrand() makes
+// even bigger so overflow happens. overflow happens and return value becomes
+// negative.
+//
+// As ANSIC says:
+//
+// "The direction of truncation for / and the sign of result for % are machine
+// dependent for negative operands, as is the action taken on overflow or
+// underflow". 
+
+namespace bit_overflow 
+{
+  int bigrand()
+  {
+    return RAND_MAX*rand() + rand();
+  }
+} // namespace
+
+TEST(Bit, Overflow)
+{
+  using namespace bit_overflow;
+
+  for (int i = 0; i < 10; ++i)
+    cout << (bigrand() % 100) << endl;
+}
+
+
 // ={=========================================================================
 // cxx-progress
 //
