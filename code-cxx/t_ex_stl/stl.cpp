@@ -681,6 +681,62 @@ TEST(StlVector, VecorCtors)
   ASSERT_THAT(icoll3.size(), Eq(10));
 }
 
+void GetVectorArg(const vector<int> &coll)
+{
+  vector<int> coll_;
+
+  coll_ = coll;
+
+  ASSERT_THAT(coll_.size(), 6);
+}
+
+TEST(StlVector, CopyAndMoveAssign)
+{
+  {
+    vector<int> coll1{1,2,3,4,5,6};
+    vector<int> coll2{};
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 0);
+
+    coll2 = coll1;
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 6);
+  }
+
+  {
+    vector<int> coll1{1,2,3,4,5,6};
+    vector<int> coll2{};
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 0);
+
+    coll2 = {1,2,3,4,5,6};
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 6);
+  }
+
+  {
+    vector<int> coll1{1,2,3,4,5,6};
+    vector<int> coll2{};
+
+    ASSERT_THAT(coll1.size(), 6);
+    ASSERT_THAT(coll2.size(), 0);
+
+    coll2 = std::move(coll1);
+
+    ASSERT_THAT(coll1.size(), 0);
+    ASSERT_THAT(coll2.size(), 6);
+  }
+
+  {
+    vector<int> coll1{1,2,3,4,5,6};
+    GetVectorArg(coll1);
+  }
+}
+
 
 // ={=========================================================================
 // cxx-array
