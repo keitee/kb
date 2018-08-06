@@ -43,6 +43,8 @@ TEST_F(CardGame, PouplatePlayers)
   game.PouplatePlayers(2);
 }
 
+// when uses arguments
+//
 // TEST_F(CardGame, PlayGameUseFixedCards)
 // {
 //   one.SetupPlayCard({11,  7,  2,  8,  5,  9, 11, 10,  4,  1,  9,  4}); 
@@ -53,13 +55,14 @@ TEST_F(CardGame, PouplatePlayers)
 //   // player 1 and 2 have the same points, 5.
 //   game.DeclareWinner(one, two);
 // }
-
+//
 // TEST_F(CardGame, PlayGameUseRandomCards)
 // {
 //   game.PrepareCards(one, two);
 //   game.PlayGame(one, two);
 //   game.DeclareWinner(one, two);
 // }
+
 
 // when uses "extended version"
 //

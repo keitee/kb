@@ -145,6 +145,29 @@ uniform_int_distribution<unsigned> CardGenerator::udist{1, NUMBER_OF_CARDS_PER_P
 // Or have players arguments which can be mocks and increase testibility of game
 // class? If not, have to make private area `public` temporaily to test private
 // functions and when done, make it private back again?
+//
+// RewardService
+//
+// class RewardService {
+//     public:
+//         RewardService(const std::shared_ptr<EligibilityService> &eilgibility_service)
+//             : eilgibility_service_(eilgibility_service) {}
+// 
+//     private:
+//         std::shared_ptr<EligibilityService> eilgibility_service_;
+// };
+//
+// TEST(RewardServiceTest, checkRewards_EligibleCustomerVariation1_ReturnRewards)
+// {
+//     auto eilgibility_service = std::make_shared<MockEligibilityService>();
+//     bool account_valid{false};
+//  
+//     EXPECT_CALL(*eilgibility_service, checkEligible(_))
+//         .Times(AtLeast(1))
+//         .WillRepeatedly(Return(Eligibility::CUSTOMER_ELIGIBLE));
+//  
+//     RewardService reward_service(eilgibility_service);
+// }
 
 
 class Game
@@ -221,6 +244,8 @@ class Game
     }
 
     // note: 
+    // can be improved to have unique random numbers
+
     std::pair<Player &, Player &> SelectPlayersToPlay_()
     {
       size_t first_player = GetRandomPlayerIndex_();
