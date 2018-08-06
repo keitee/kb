@@ -738,6 +738,9 @@ TEST(StlVector, CopyAndMoveAssign)
 }
 
 
+TEST(StlVector, CopyAndMoveAssign)
+
+
 // ={=========================================================================
 // cxx-array
 

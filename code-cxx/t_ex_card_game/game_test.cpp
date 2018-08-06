@@ -47,45 +47,45 @@ TEST_F(CardGameTest, PlayTwoPlayeGame) {
     game.AnnounceWinner();
 }
 
-// TEST_F(CardGameTest, DISABLED_PlayForPlayerGame) {
-TEST_F(CardGameTest, PlayForPlayerGame) {
+TEST_F(CardGameTest, DISABLED_PlayForPlayerGame) {
+// TEST_F(CardGameTest, PlayForPlayerGame) {
     game.PopulatePlayer_(4);
     game.Play();
     game.AnnounceWinner();
 }
 
 
-class CardGameSPTest: public Test
-{
-public:
-    CardGameSP game;
-};
-
-TEST_F(CardGameSPTest, PopulatePlayers) {
-// TEST_F(CardGameSPTest, DISABLED_PopulatePlayers) {
-    ASSERT_THAT(game.PopulatePlayer_(4), Eq(4));
-}
-
-TEST_F(CardGameSPTest, PlayTwoPlayeGame) {
-// TEST_F(CardGameSPTest, DISABLED_PlayTwoPlayeGame) {
-    game.PopulatePlayer_(2);
-    game.Play();
-    game.AnnounceWinner();
-}
-
-TEST_F(CardGameSPTest, PlayForPlayerGame) {
-// TEST_F(CardGameSPTest, DISABLED_PlayForPlayerGame) {
-    game.PopulatePlayer_(4);
-    game.Play();
-    game.AnnounceWinner();
-}
-
-TEST_F(CardGameSPTest, PlayEightPlayerGame) {
-// TEST_F(CardGameSPTest, DISABLED_PlayForPlayerGame) {
-    game.PopulatePlayer_(8);
-    game.Play();
-    game.AnnounceWinner();
-}
+// class CardGameSPTest: public Test
+// {
+// public:
+//     CardGameSP game;
+// };
+// 
+// TEST_F(CardGameSPTest, PopulatePlayers) {
+// // TEST_F(CardGameSPTest, DISABLED_PopulatePlayers) {
+//     ASSERT_THAT(game.PopulatePlayer_(4), Eq(4));
+// }
+// 
+// TEST_F(CardGameSPTest, PlayTwoPlayeGame) {
+// // TEST_F(CardGameSPTest, DISABLED_PlayTwoPlayeGame) {
+//     game.PopulatePlayer_(2);
+//     game.Play();
+//     game.AnnounceWinner();
+// }
+// 
+// TEST_F(CardGameSPTest, PlayForPlayerGame) {
+// // TEST_F(CardGameSPTest, DISABLED_PlayForPlayerGame) {
+//     game.PopulatePlayer_(4);
+//     game.Play();
+//     game.AnnounceWinner();
+// }
+// 
+// TEST_F(CardGameSPTest, PlayEightPlayerGame) {
+// // TEST_F(CardGameSPTest, DISABLED_PlayForPlayerGame) {
+//     game.PopulatePlayer_(8);
+//     game.Play();
+//     game.AnnounceWinner();
+// }
 
 int main(int argc, char** argv)
 {

@@ -131,8 +131,12 @@
 // doing these changes. It has been especially true of the candidates that know
 // Python well, as there are great constructs to make this easier.
 //
+// The choosen decisions:
+// 1. Choose players for every turn.
+// 2. When a card is the same, both players score.
+// 3. When lost for a turn, put that back in the cards to play.
 //
-// TODO: Super Bonus Question
+// TODO: Super Bonus Question (not tried in this try)
 //
 // It's a bit more challenging than the previous requirements: "don't assume the
 // cards have unique values". The details are:
@@ -292,6 +296,7 @@ class CardGame
     {
       // NOTE: to aviod reallocations
       running_players_.reserve(10);
+      finished_players_.reserve(10);
     }
 
     // deals players that has cards to play so no check is needed to see if
@@ -308,8 +313,6 @@ class CardGame
       // because it's random to pick up players, some gets finished earlier than
       // others and this makes the number of players odd sometimes. So have to
       // remove a check on odd number of players.
-      
-      // NOTE: 
       //
       // if(running_players_.size() == 0)
       //
@@ -390,6 +393,9 @@ class CardGame
 
         MoveFinishedPlayers_();
       }
+
+      std::cout << "===} Play() ===" << std::endl;
+
     }
 
     void AnnounceWinner() const
@@ -431,7 +437,7 @@ class CardGame
         {
             player_name = "player " + std::to_string(i);
 
-            // NOTE: why dose it involve copy ctor?
+            // note: cause the temporary created and destroyed
             running_players_.push_back(CardPlayer(player_name));
         }
 
@@ -463,6 +469,7 @@ class CardGame
     }
 
     // check and move players which do not have cards to play
+    // note: relocation issue on finished_players
     void MoveFinishedPlayers_()
     {
       for (auto it = running_players_.begin(); it != running_players_.end();)
@@ -508,6 +515,8 @@ class CardGameSP
     {
       Card first_card{}, second_card{};
 
+      std::cout << "==={ Play() ===" << std::endl;
+
       std::shared_ptr<CardPlayer> first_player{};
       std::shared_ptr<CardPlayer> second_player{};
 
@@ -546,6 +555,8 @@ class CardGameSP
 
         MoveFinishedPlayers_();
       }
+
+      std::cout << "===} Play ===" << std::endl;
     }
 
     void AnnounceWinner() const
@@ -641,12 +652,16 @@ class CardGameSP
 // compare vector vs shared_ptr version
 //
 // [ RUN      ] CardGameTest.PlayTwoPlayeGame
+//
+// note: Why happen this? Since uses the temporary in Populate()
+//
 // kit:vector copy ctor
 // kit:vector copy ctor
 // player 0:dtor: (0)
 // kit:vector copy ctor
 // kit:vector copy ctor
 // player 1:dtor: (0)
+//
 // player 0: 0 0 1 1 9 9 12 13 16 20 (10)
 // player 1: 2 10 10 13 14 16 17 17 21 23 (10)
 // Play: 1 {23}, 0 {20}
@@ -659,6 +674,9 @@ class CardGameSP
 // Play: 0 { 1}, 1 {10}
 // Play: 1 {10}, 0 { 0}
 // Play: 0 { 0}, 1 { 2}
+//
+// note: Why two dtors when move player 1? Since rellcation happens.
+//
 // MoveFinishedPlayers_: move player 0
 // kit:vector copy ctor
 // kit:vector copy ctor
@@ -675,7 +693,39 @@ class CardGameSP
 // winner player 1 got 10 scores
 // player 0:dtor: (0)
 // player 1:dtor: 23 21 17 17 16 14 13 10 10 2 (10)
+//
 // [       OK ] CardGameTest.PlayTwoPlayeGame (4 ms)
+//
+//
+// still see many copy and dtors when use reserve() to avoid relocations.
+//
+// [ RUN      ] CardGameTest.PlayTwoPlayeGame
+// player 0:play cards : dtor: (0)
+// player 0:score cards: dtor: (0)
+// player 1:play cards : dtor: (0)
+// player 1:score cards: dtor: (0)
+// player 0: 1 4 5 6 8 11 12 19 22 22 (10)
+// player 1: 1 2 6 7 12 12 12 22 23 24 (10)
+// MoveFinishedPlayers_: move player 0
+// player 1:play cards : dtor: (0)
+// player 1:score cards: dtor: 24 23 22 12 12 12 7 6 2 1 (10)
+// MoveFinishedPlayers_: move player 1
+// player 1:play cards : dtor: (0)
+// player 1:score cards: dtor: 24 23 22 12 12 12 7 6 2 1 (10)
+// ===} Play() ===
+// player 0:play cards : dtor: (0)
+// player 0:score cards: dtor: 22 22 19 12 11 8 6 5 4 1 (10)
+// player 1:play cards : dtor: (0)
+// player 1:score cards: dtor: 24 23 22 12 12 12 7 6 2 1 (10)
+// =================================
+// play stat:
+// plays : 16
+// winner: player 0 got 10 scores
+// player 0:play cards : dtor: (0)
+// player 0:score cards: dtor: 22 22 19 12 11 8 6 5 4 1 (10)
+// player 1:play cards : dtor: (0)
+// player 1:score cards: dtor: 24 23 22 12 12 12 7 6 2 1 (10)
+// [       OK ] CardGameTest.PlayTwoPlayeGame (1 ms)
 //
 //
 // [ RUN      ] CardGameSPTest.PlayTwoPlayeGame
