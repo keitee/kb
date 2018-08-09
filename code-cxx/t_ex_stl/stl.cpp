@@ -738,9 +738,6 @@ TEST(StlVector, CopyAndMoveAssign)
 }
 
 
-TEST(StlVector, CopyAndMoveAssign)
-
-
 // ={=========================================================================
 // cxx-array
 
@@ -2760,6 +2757,8 @@ void my_rotate(ROTATE_ITER begin, ROTATE_ITER new_begin, ROTATE_ITER end)
   }
 }
 
+// /usr/include/c++/4.9.2/bits/stl_algo.h
+//
 // /// This is a helper function for the rotate algorithm.
 // template<typename _ForwardIterator>
 //   _ForwardIterator
@@ -2798,6 +2797,42 @@ TEST(AlgoRotate, OwnRotate)
   EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
 
   my_rotate(
+    coll.begin(),
+    find(coll.begin(), coll.end(), 4),
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+}
+
+
+void reverse_rotate(ROTATE_ITER begin, ROTATE_ITER new_begin, ROTATE_ITER end)
+{
+  // reverse(begin, end) reverse [begin, end)
+  reverse(begin, new_begin);
+  reverse(new_begin, end);
+  reverse(begin, end);
+}
+
+TEST(AlgoRotate, ReverseRotate)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8};
+
+  // rotate one to the left
+  reverse_rotate(
+    coll.begin(),     // begin  
+    coll.begin()+1,   // new begin
+    coll.end()        // end
+  );
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+  reverse_rotate(
+    coll.begin(),
+    coll.end()-2,
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+
+  reverse_rotate(
     coll.begin(),
     find(coll.begin(), coll.end(), 4),
     coll.end()

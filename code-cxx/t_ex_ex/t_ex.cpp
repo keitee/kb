@@ -1389,72 +1389,33 @@ TEST(AlgoSearch, BinarySearch)
 
 
 // ={=========================================================================
-// RandonCard
+// find missing element
 
-const int NUMBER_OF_CARDS_PER_PLAYER = 12;
-
-class RandomCard
+int find_missing_element(const vector<int> &A)
 {
-  public:
-    RandomCard(int from = 0, int to = NUMBER_OF_CARDS_PER_PLAYER) 
-      : from_(from), to_(to) {}
-
-    int operator()()
-    {
-      return to_ + (rand() % (from_ - to_ +1));
-    }
-
-  private:
-    int from_;
-    int to_;
-};
-
-class RandomCardUseRandomEngine
-{
-  public:
-    RandomCardUseRandomEngine() {} 
-
-    int operator()()
-    {
-      return udist(dre);
-    }
-
-  private:
-    static default_random_engine dre;
-    // static uniform_int_distribution<unsigned> udist{0, NUMBER_OF_CARDS_PER_PLAYER};
-    static uniform_int_distribution<unsigned> udist;
-};
-
-default_random_engine RandomCardUseRandomEngine::dre;
-uniform_int_distribution<unsigned> RandomCardUseRandomEngine::udist{0, NUMBER_OF_CARDS_PER_PLAYER};
-
-TEST(RandomCard, Cards)
-{
-  vector<int> coll{};
-
-  generate_n(back_inserter(coll), NUMBER_OF_CARDS_PER_PLAYER, RandomCard());
-
-  PRINT_ELEMENTS(coll);
+  int input_sum{};
+  int expected_sum{};
+  int N = A.size();
+ 
+  for (auto e : A)
+    input_sum += e;
+ 
+  for (int i = 1; i <= N+1; ++i)
+    expected_sum += i;
+ 
+  int result = expected_sum - input_sum;
+ 
+  cout << "result: " << result << endl;
+  return result;
 }
 
-TEST(RandomCardUseRandomEngine, Cards)
+TEST(AlgoFindMissing, find_missing)
 {
-  vector<int> coll1{};
-  vector<int> coll2{};
-
-  // default_random_engine dre;
-  // uniform_int_distribution<unsigned> udist(0, NUMBER_OF_CARDS_PER_PLAYER);
-
-  // for (int i = 0; i < NUMBER_OF_CARDS_PER_PLAYER; ++i)
-  //   cout << "random : " << udist(dre) << endl;
-
-  generate_n(back_inserter(coll1), NUMBER_OF_CARDS_PER_PLAYER, 
-      RandomCardUseRandomEngine());
-  generate_n(back_inserter(coll2), NUMBER_OF_CARDS_PER_PLAYER, 
-      RandomCardUseRandomEngine());
-
-  PRINT_ELEMENTS(coll1);
-  PRINT_ELEMENTS(coll2);
+  EXPECT_THAT(find_missing_element({2,3,1,5}), 4);
+  EXPECT_THAT(find_missing_element({1,2,3,4}), 5);
+  EXPECT_THAT(find_missing_element({2,3,4,5}), 1);
+  EXPECT_THAT(find_missing_element({1,3,4,5}), 2);
+  EXPECT_THAT(find_missing_element({}), 1);
 }
 
 
