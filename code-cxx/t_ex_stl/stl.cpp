@@ -1145,13 +1145,24 @@ TEST(CollList, UseSpliceOrMerge)
     EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
     EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
 
+    // splice, verb, to join two pieces of rope, film, etc. together at their
+    // ends in order to form one long piece:
+    //
+    // c.splice(pos,c2) Moves all elements of c2 to c in front of the iterator
+    // position pos
     // moves all elements of list_one before the pos of '3' element.
+
     list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
     EXPECT_EQ(list_one.size(), 0); 
     // 0 1 2 [0 1 2 3 4 5] 3 4 5 
     EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
 
+    // c.splice(pos,c2,c2pos) 
+    // Moves the element at c2pos in c2 in front of pos of list c 
+    // (c and c2 may be identical)
+    //
     // move first element of list_two to the end
+
     list_two.splice(list_two.end(), list_two, list_two.begin());
     // 1 2 [0 1 2 3 4 5] 3 4 5 0 
     EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
@@ -1203,6 +1214,139 @@ TEST(CollList, UseListRemoveIf)
       { return e % 2 == 0; });
 
   EXPECT_THAT(int_list, ElementsAre(1));
+}
+
+
+TEST(CollList, UseErase)
+{
+  list<int> coll{10,20,30,40,50};
+
+  auto iter = coll.begin();
+
+  ++iter;
+  ++iter;
+
+  coll.erase(coll.begin(), iter);
+
+  EXPECT_THAT(coll, ElementsAre(30,40,50));
+}
+
+TEST(CollList, Devide)
+{
+  list<int> coll{26, 33, 35, 29, 19, 12, 22};
+  auto slow = coll.begin();
+  auto fast = next(slow);
+
+  for(;fast != coll.end();)
+  {
+    ++fast;
+
+    if (fast != coll.end())
+    {
+      ++fast;
+      ++slow;
+    }
+  }
+
+  list<int> coll1;
+  list<int> coll2;
+
+  // due to open end of iterator, increase one more compared to C version.
+  ++slow;
+
+  // c.splice(pos,c2, c2beg,c2end) 
+  // Moves all elements of the range [c2beg,c2end) in c2 in
+  // front of pos of list c (c and c2 may be identical)
+
+  coll1.splice(coll1.begin(), coll, coll.begin(), slow);
+  coll2.splice(coll2.begin(), coll, slow, coll.end());
+
+  EXPECT_THAT(coll1, ElementsAre(26,33,35,29));
+  EXPECT_THAT(coll2, ElementsAre(19,12,22));
+}
+
+
+/*
+If List is proper class which has copy or move context then it would be easy to
+implement this since can simply call result.Add() to create merged list.
+
+However, this is for C and result is the same as first and have to handle with
+care such as handle the first comparison.
+
+{
+  set current of first;
+  set current of last;
+
+  while (there is element in the first AND there is element in the last)
+  {
+    compare key between element from the first and the last;
+
+    if (the one of the first is equal or greater then the one of the last)
+    {
+      then write the one of the last and get the next from the last;
+    }
+
+    if (the one of the first is less than the last)
+    {
+      then, write it out and get the next from the first;
+    }
+  }
+
+  if (no more from the first and there are some from the last)
+  {
+    then write the rest of the last since the rest is already sorted;
+  }
+  else if (no more from the second and there are some from the first)
+  {
+    then write the rest of the first;
+  }
+  else
+  {
+    when both are finished;
+  }
+
+  set the end of the result for all caese;
+}
+*/
+
+TEST(CollList, Combine)
+{
+  list<int> coll1{26,33,35,29};
+  list<int> coll2{9,12,22};
+  list<int> coll;
+
+  auto first = coll1.begin();
+  auto second = coll2.begin();
+
+  while ((first != coll1.end()) && (second != coll2.end()))
+  {
+    if (*second <= *first)
+    {
+      coll.push_back(*second);
+      ++second;
+    }
+    else
+    {
+      coll.push_back(*first);
+      ++first;
+    }
+  }
+
+  if ((first == coll1.end()) && (second != coll2.end())) 
+  {
+    coll.splice(coll.end(), coll2, second, coll2.end());
+  }
+  else if ((first != coll1.end()) && (second == coll2.end())) 
+  {
+    coll.splice(coll.end(), coll1, first, coll1.end());
+  }
+  else
+  {
+    // no left from both.
+  }
+
+  // combined
+  EXPECT_THAT(coll, ElementsAre(9, 12, 22, 26, 33, 35, 29));
 }
 
 

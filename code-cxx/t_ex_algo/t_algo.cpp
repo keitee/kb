@@ -5210,6 +5210,8 @@ namespace list_simple_linked_list
     private:
       // there is no need to keep an counter but for size function.
       int count_{};
+
+      // note that not ListNode* head_;
       ListNode head_;
   };
 } // namespace
@@ -5549,48 +5551,73 @@ TEST(AlgoList, DetectCycle)
 
 namespace list_simple_linked_list_public
 {
-  // If List is proper class which has copy or move context then it would be
-  // easy to implement this since can simply call result.Add() to create merged
-  // list.
-  //
-  // However, this is for C and result is the same as first and have to handle
-  // with care such as handle the first comparison.
-  
+  // C version list from the reference
+
+  typedef int ListEntry;
+
+  typedef struct node {
+    int       key;
+    struct node *pnext;
+  } ListNode;
+
+  typedef struct {
+    ListNode *header;
+    int count;
+  } List;
+
   void CombineList(List *first, List *last, List *result)
   {
-    // set current of first
-    // set current of last
-    // 
-    // while (there is element in the first AND there is element in the last)
-    // {
-    //    compare key between element from the first and the last
-    //
-    //    if (the one of the first is equal or greater then the one of the last)
-    //    {
-    //      then write the one of the last and get the next from the last
-    //    }
-    //
-    //    if (the one of the first is less than the last)
-    //    {
-    //      then, write it out and get the next from the first.
-    //    }
-    // }
-    //
-    // if (no more from the first and there are some from the last)
-    // {
-    //    then write the rest of the last since the rest is already sorted.
-    // }
-    // else if (no more from the second and there are some from the first)
-    // {
-    //    then write the rest of the first.
-    // }
-    // else
-    // {
-    //    // when both are finished, do nothing. SHALL DO THIS to show it's
-    //    // considered?
-    // }
-    //  
-    // set the end of the result for all caese
+    // handle when one of lists is empty
+    if( !first->header )
+    {
+      *merged = *second;
+      return;
+    }
+    else if ( !second->header ) 
+    {
+      *merged  = *first;
+      return;
+    }
+
+    // handle first comparison
+    ListNode *pfirst = first->header, *psecond = second->header;
+    ListNode *psorted;
+
+    if( LE( pfirst->key, psecond->key ) )
+    {
+      merged->header = pfirst;
+      pfirst = pfirst->pnext;
+    }
+    else
+    {
+      merged->header = psecond;
+      psecond = psecond->pnext;
+    }
+
+    psorted = merged->header;
+
+    // sort until finish one of lists because first and second is alreay sorted itself
+    while( pfirst && psecond )
+    {
+      if( LE( pfirst->key, psecond->key ) )
+      {
+        psorted->pnext = pfirst;
+        psorted = pfirst;
+        pfirst = pfirst->pnext;
+      }
+      else
+      {
+        psorted->pnext = psecond;
+        psorted = psecond;
+        psecond = psecond->pnext;
+      }
+    }
+
+    // when one of lists are finished, simply append the other list to the sorted
+    if(!pfirst)
+      psorted->pnext = psecond;
+    else
+      psorted->pnext = pfirst;
   }
 } // namespace
 

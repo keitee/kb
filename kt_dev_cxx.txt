@@ -10353,26 +10353,36 @@ SYSTEM_STATUS SPM_API_Network_GetMainStatus(SPM_API_Network_MainStatus *l_value)
   /* check if the ClientId is arrived...if not wait */
   if (SPM_CLIENT_MSG_waitForClientId() != SPM_API_STATUS_OK)
   {
+    // error case
+
     SPM_CLIENT_DIAG_LOG_ERROR(("Error in acquiring the Client Id"));
   }
   /* Wait for network to become ready */
   else if(SPM_CLIENT_MSG_waitForServerEvent(&f_syncContextNetworkReady, false) 
       != SPM_API_STATUS_OK)  /* wait only if needed */
   {
+    // error case
+
     SPM_CLIENT_DIAG_LOG_WARN(("Returning default main status SPM_API_NETWORK_MAIN_CONFIG_UNSET"));
     *l_value = SPM_API_NETWORK_MAIN_CONFIG_UNSET;
     status = SPM_API_STATUS_OK;
   }
   else
   {
+    // norminal(normal) case
+
     message.event = SPM_CLIENT2SERVER_EVENT_NETWORK_GET_MAIN_STATUS;
     if (SPM_CLIENT_MSG_waitForServer(&f_syncContextServer, &message ) 
         != SPM_API_STATUS_OK)
     {
+      // error case
+
       SPM_CLIENT_DIAG_LOG_ERROR(("SPM_CLIENT_MSG_waitForServer failed"));
     }
     else
     {
+      // norminal case
+
       (void)SYSTEMUTIL_THR_MutexLock(&f_SPM_Network_StaticData_mutex);
 
       *l_value = f_main_status;
@@ -38146,27 +38156,10 @@ A list<> is implemented as a 'doubly' linked list of elements and do not
 provide random access. The advantage of a list is that the insertion or
 removal of an element is fast at any position.
 
-<ex>
-#include <iostream>
-#include <list>
-
-using namespace std;
-
-int main()
-{
-  list<char> coll;
-
-  for(char c = 'a'; c <= 'z'; c++ )
-    coll.push_back(c);
-
-  for( auto &elem : coll )
-    cout << elem << ' ';
-  
-  cout << endl;
-}
-
 
 {no-random-access}
+no operator[] for list. If support then:
+
 A direct element access by using operator[] is not provided for lists. This is
 because lists don't provide random access, and so an operator[] would have bad
 performance.
@@ -38182,83 +38175,27 @@ double& List_container::operator[](int i)
 }
 
 
-{cxx-list-erase}
-the header from begin() gets updated when use erase(start, end) to trim
-entries in the front.
-
-#include <iostream>
-#include <list>
-
-typedef std::list<double> LIST;
-
-int main()
-{
-  int n;
-  double item;
-  LIST dlist; 
-  LIST::iterator iHead;
-
-  std::cout << "type in an integer n(loop count) followed by n decimal numbers." 
-      << std::endl;
-
-  std::cin >> n;
-
-  for(int i=0; i<n; i++)
-  {
-    std::cin >> item;
-    dlist.push_back(item);
-  }
-
-  std::cout << "input is done and you have entered " << dlist.size() 
-      << " items" << std::endl;
-
-  iHead = dlist.begin();
-
-  for(; iHead != dlist.end(); iHead++) 
-  {
-    std::cout << "items: " << *iHead << std::endl; 
-  }
-
-  iHead = dlist.begin(); iHead++; iHead++;
-  std::cout << "items: " << *iHead << std::endl; 
-  dlist.erase( dlist.begin(), iHead );
-
-  std::cout << "input is done and you have entered " << dlist.size() 
-      << " items" << std::endl;
-
-  iHead = dlist.begin();
-
-  for(; iHead != dlist.end(); iHead++) 
-  {
-    std::cout << "items: " << *iHead << std::endl; 
-  }
-}
-
-$ ./a.out 
-type in an integer n(loop count) followed by n decimal numbers.
-5
-10
-20
-30
-40
-50
-input is done and you have entered 5 items
-items: 10
-items: 20
-items: 30
-items: 40
-items: 50
-items: 30
-input is done and you have entered 3 items
-items: 30
-items: 40
-items: 50
-
-
 {member-function}
 
 c.clear() 
 Removes all elements (empties the container)
+
+
+<cxx-list-erase>
+
+TEST(CollList, UseErase)
+{
+  list<int> coll{10,20,30,40,50};
+
+  auto iter = coll.begin();
+
+  ++iter;
+  ++iter;
+
+  coll.erase(coll.begin(), iter);
+
+  EXPECT_THAT(coll, ElementsAre(30,40,50));
+}
 
 
 <cxx-list-splice>
@@ -38270,7 +38207,7 @@ this advantage doubles in that you need only redirect some internal
 pointers
 
 To support this ability, lists provide not only remove() but also additional
-modifying member functions to change the order of and relink elements and
+modifying `member functions` to change the order of and relink elements and
 ranges. You can call these operations to move elements inside a single list or
 between two lists, provided that the lists have the same type.
 
@@ -38326,55 +38263,92 @@ merged and still sorted according to op()
 <ex>
 TEST(CollList, UseSpliceOrMerge)
 {
-    list<int> list_one, list_two;
+  list<int> list_one, list_two;
 
-    for(int i=0; i < 6; ++i)
-    {
-        list_one.push_back(i);
-        list_two.push_back(i);
-    }
+  for(int i=0; i < 6; ++i)
+  {
+    // cxx-list-push-back
+    list_one.push_back(i);
+    list_two.push_back(i);
+  }
 
-    EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
-    EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
+  EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
+  EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
 
-    // moves all elements of list_one before the pos of '3' element.
-    list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
-    EXPECT_EQ(list_one.size(), 0); 
-    // 0 1 2 [0 1 2 3 4 5] 3 4 5 
-    EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
+  // moves all elements of list_one before the pos of '3' element.
+  list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
+  EXPECT_EQ(list_one.size(), 0); 
+  // 0 1 2 [0 1 2 3 4 5] 3 4 5 
+  EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
 
-    // move first element of list_two to the end
-    list_two.splice(list_two.end(), list_two, list_two.begin());
-    // 1 2 [0 1 2 3 4 5] 3 4 5 0 
-    EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
+  // move first element of list_two to the end
+  list_two.splice(list_two.end(), list_two, list_two.begin());
+  // 1 2 [0 1 2 3 4 5] 3 4 5 0 
+  EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
 
-    list<int> list_three;
-    // move first element of list_two to the first of list_three
-    list_three.splice(list_three.begin(), list_two, list_two.begin());
+  list<int> list_three;
+  // move first element of list_two to the first of list_three
+  list_three.splice(list_three.begin(), list_two, list_two.begin());
 
-    EXPECT_THAT(list_two, ElementsAreArray({2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
-    EXPECT_THAT(list_three, ElementsAre(1)); 
+  EXPECT_THAT(list_two, ElementsAreArray({2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
+  EXPECT_THAT(list_three, ElementsAre(1)); 
 
-    list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
-    list<int> list5{0, 1, 2, 3, 4, 5};
-    
-    // 8.8.1 Special Member Functions for Lists (and Forward Lists)
-    //
-    // Strictly speaking, the standard requires that both (forward) lists be
-    // sorted on entry. In practice, however, merging is also possible for
-    // unsorted lists.  However, you should check this before you rely on it.
-    // 
-    // So will be sorted?
-    //
-    // list<int> list5;
-    // list5.merge({4, 1, 0, 3, 2, 5});
-    // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
-    //
-    // NO and failed on gcc.
+  list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
+  list<int> list5{0, 1, 2, 3, 4, 5};
 
-    list5.merge(list4);
-    EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
+  // 8.8.1 Special Member Functions for Lists (and Forward Lists)
+  //
+  // Strictly speaking, the standard requires that both (forward) lists be
+  // sorted on entry. In practice, however, merging is also possible for
+  // unsorted lists.  However, you should check this before you rely on it.
+  // 
+  // So will be sorted?
+  //
+  // list<int> list5;
+  // list5.merge({4, 1, 0, 3, 2, 5});
+  // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
+  //
+  // NO and failed on gcc.
+
+  list5.merge(list4);
+  EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
 }
+
+
+// c.splice(pos,c2, c2beg,c2end) 
+// Moves all elements of the range [c2beg,c2end) in c2 in
+// front of pos of list c (c and c2 may be identical)
+
+TEST(CollList, Devide)
+{
+  list<int> coll{26, 33, 35, 29, 19, 12, 22};
+  auto slow = coll.begin();
+  auto fast = next(slow);
+
+  for(;fast != coll.end();)
+  {
+    ++fast;
+
+    if (fast != coll.end())
+    {
+      ++fast;
+      ++slow;
+    }
+  }
+
+  list<int> coll1;
+  list<int> coll2;
+
+  // due to open end of iterator, increase one more compared to C version.
+  ++slow;
+
+  coll1.splice(coll1.begin(), coll, coll.begin(), slow);
+  coll2.splice(coll2.begin(), coll, slow, coll.end());
+
+  EXPECT_THAT(coll1, ElementsAre(26,33,35,29));
+  EXPECT_THAT(coll2, ElementsAre(19,12,22));
+}
+
 
 TEST(CollList, UseListRemoveIf)
 {
@@ -40177,6 +40151,18 @@ TEST(Iterator, Next)
   EXPECT_EQ(*iter, 2);
   EXPECT_EQ(*pos, 3);
 }
+
+
+  template<typename _RandomAccessIterator>
+    inline typename iterator_traits<_RandomAccessIterator>::difference_type
+    __distance(_RandomAccessIterator __first, _RandomAccessIterator __last,
+               random_access_iterator_tag)
+    {
+      // concept requirements
+      __glibcxx_function_requires(_RandomAccessIteratorConcept<
+				  _RandomAccessIterator>)
+      return __last - __first;
+    }
 
   /**
    *  @brief A generalization of pointer arithmetic.

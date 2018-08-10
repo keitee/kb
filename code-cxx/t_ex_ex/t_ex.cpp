@@ -1389,35 +1389,6 @@ TEST(AlgoSearch, BinarySearch)
 
 
 // ={=========================================================================
-// find missing element
-
-int find_missing_element(const vector<int> &A)
-{
-  int input_sum{};
-  int expected_sum{};
-  int N = A.size();
- 
-  for (auto e : A)
-    input_sum += e;
- 
-  for (int i = 1; i <= N+1; ++i)
-    expected_sum += i;
- 
-  int result = expected_sum - input_sum;
- 
-  cout << "result: " << result << endl;
-  return result;
-}
-
-TEST(AlgoFindMissing, find_missing)
-{
-  EXPECT_THAT(find_missing_element({2,3,1,5}), 4);
-  EXPECT_THAT(find_missing_element({1,2,3,4}), 5);
-  EXPECT_THAT(find_missing_element({2,3,4,5}), 1);
-  EXPECT_THAT(find_missing_element({1,3,4,5}), 2);
-  EXPECT_THAT(find_missing_element({}), 1);
-}
-
 
 // ={=========================================================================
 int main(int argc, char **argv)
