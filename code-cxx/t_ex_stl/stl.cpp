@@ -1844,6 +1844,7 @@ TEST(AlgoForEach, GetMean)
 
 // ={=========================================================================
 // cxx-algo-min-max
+
 namespace algo_min_max {
   bool AbsLess(int elem1, int elem2) {
     return abs(elem1) < abs(elem2);

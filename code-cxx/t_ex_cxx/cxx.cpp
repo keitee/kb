@@ -1760,7 +1760,15 @@ TEST(FunctionPointer, X)
 
 
 // ={=========================================================================
-// cxx-temporary
+// cxx-max
+
+TEST(MinMax, Order)
+{
+  auto value1 = max(10, 20);
+  auto value2 = max(20, 10);
+
+  EXPECT_TRUE(value1 == value2);
+}
 
 
 // ={=========================================================================
