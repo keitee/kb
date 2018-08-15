@@ -83,87 +83,171 @@ void sprinkle()
 // algo3: from PP, Column 8, p80
 //
 // n : 20
-//  0, -0.680375
-//   , 0.211234
-//   , -0.566198
-//   , -0.59688
-//   , -0.823295
-//   , 0.604897
-//   , 0.329554
-//   , -0.536459
-//   , 0.444451
-//   , -0.10794
-//   , 0.0452059
-//   , -0.257742
-//   , 0.270431
-//   , -0.0268018
-//   , -0.904459
+// 00, -0.680375
+// 01, 0.211234
+// 02, -0.566198
+// 03, -0.59688
+// 04, -0.823295
+// 05, 0.604897
+// 06, 0.329554
+// 07, -0.536459
+// 08, 0.444451
+// 09, -0.10794
+// 10, 0.0452059
+// 11, -0.257742
+// 12, 0.270431
+// 13, -0.0268018
+// 14, -0.904459
 // 15, -0.83239
 // 16, -0.271423
 // 17, -0.434594
 // 18, 0.716795
 // 19, -0.213938
 
+
 // recmax(0, 19)
+// l: 0, u: 19, m: 9, lmax: 0.734503
+// l: 0, u: 19, m: 9, rmax: 0.0578951
 // recmax(10, 19)
+// l: 10, u: 19, m: 14, lmax: 0
+// l: 10, u: 19, m: 14, rmax: 0
+//
 // recmax(15, 19)
+// l: 15, u: 19, m: 17, lmax: 0
+// l: 15, u: 19, m: 17, rmax: 0.716795
+//
 // recmax(18, 19)
-// recmax(19, 19)
+// l: 18, u: 19, m: 18, lmax: 0.716795
+// l: 18, u: 19, m: 18, rmax: 0
+//
+// recmax(19, 19)   // negative so return 0
 // recmax(18, 18)
+//
+// lmax is sum of left side that calcs itself and lowmax is sum of recmax(low
+// part). return max(rmax+lmax, lowermax, uppermax)
+//
 // l: 18, u: 19, m: 18, lmax: 0.716795, rmax: 0, lowmax: 0.716795, uppermax: 0
+// l: 18, u: 19, m: 18, return: 0.716795
+//
 // recmax(15, 17)
-// recmax(17, 17)
+// l: 15, u: 17, m: 16, lmax: 0
+// l: 15, u: 17, m: 16, rmax: 0
+// recmax(17, 17)   // negative
 // recmax(15, 16)
-// recmax(16, 16)
-// recmax(15, 15)
+// l: 15, u: 16, m: 15, lmax: 0
+// l: 15, u: 16, m: 15, rmax: 0
+// recmax(16, 16)   // negative
+// recmax(15, 15)   // negative
+//
 // l: 15, u: 16, m: 15, lmax: 0, rmax: 0, lowmax: 0, uppermax: 0
+// l: 15, u: 16, m: 15, return: 0
 // l: 15, u: 17, m: 16, lmax: 0, rmax: 0, lowmax: 0, uppermax: 0
+// l: 15, u: 17, m: 16, return: 0
 // l: 15, u: 19, m: 17, lmax: 0, rmax: 0.716795, lowmax: 0, uppermax: 0.716795
+// l: 15, u: 19, m: 17, return: 0.716795
+//
 // recmax(10, 14)
+// l: 10, u: 14, m: 12, lmax: 0.270431
+// l: 10, u: 14, m: 12, rmax: 0
 // recmax(13, 14)
+// l: 13, u: 14, m: 13, lmax: 0
+// l: 13, u: 14, m: 13, rmax: 0
 // recmax(14, 14)
 // recmax(13, 13)
 // l: 13, u: 14, m: 13, lmax: 0, rmax: 0, lowmax: 0, uppermax: 0
+// l: 13, u: 14, m: 13, return: 0
+//
 // recmax(10, 12)
+// l: 10, u: 12, m: 11, lmax: 0
+// l: 10, u: 12, m: 11, rmax: 0.270431
 // recmax(12, 12)
 // recmax(10, 11)
+// l: 10, u: 11, m: 10, lmax: 0.0452059
+// l: 10, u: 11, m: 10, rmax: 0
 // recmax(11, 11)
 // recmax(10, 10)
+//
 // l: 10, u: 11, m: 10, lmax: 0.0452059, rmax: 0, lowmax: 0.0452059, uppermax: 0
+// l: 10, u: 11, m: 10, return: 0.0452059
+//
+// (see that lmax and lowmax becomes different since lmax do sum on range and
+// lowmax discards negatives.
 // l: 10, u: 12, m: 11, lmax: 0, rmax: 0.270431, lowmax: 0.0452059, uppermax: 0.270431
+// l: 10, u: 12, m: 11, return: 0.270431
 // l: 10, u: 14, m: 12, lmax: 0.270431, rmax: 0, lowmax: 0.270431, uppermax: 0
+// l: 10, u: 14, m: 12, return: 0.270431
+//
 // l: 10, u: 19, m: 14, lmax: 0, rmax: 0, lowmax: 0.270431, uppermax: 0.716795
+// l: 10, u: 19, m: 14, return: 0.716795
+//
+//
 // recmax(0, 9)
+// l: 0, u: 9, m: 4, lmax: 0
+// l: 0, u: 9, m: 4, rmax: 0.934452
 // recmax(5, 9)
+// l: 5, u: 9, m: 7, lmax: 0.397993
+// l: 5, u: 9, m: 7, rmax: 0.444451
 // recmax(8, 9)
+// l: 8, u: 9, m: 8, lmax: 0.444451
+// l: 8, u: 9, m: 8, rmax: 0
 // recmax(9, 9)
 // recmax(8, 8)
 // l: 8, u: 9, m: 8, lmax: 0.444451, rmax: 0, lowmax: 0.444451, uppermax: 0
+// l: 8, u: 9, m: 8, return: 0.444451
+//
 // recmax(5, 7)
+// l: 5, u: 7, m: 6, lmax: 0.934452
+// l: 5, u: 7, m: 6, rmax: 0
 // recmax(7, 7)
 // recmax(5, 6)
+// l: 5, u: 6, m: 5, lmax: 0.604897
+// l: 5, u: 6, m: 5, rmax: 0.329554
 // recmax(6, 6)
 // recmax(5, 5)
+//
+// (see that return lmax+rmax which is bigger)
 // l: 5, u: 6, m: 5, lmax: 0.604897, rmax: 0.329554, lowmax: 0.604897, uppermax: 0.329554
+// l: 5, u: 6, m: 5, return: 0.934452
+//
 // l: 5, u: 7, m: 6, lmax: 0.934452, rmax: 0, lowmax: 0.934452, uppermax: 0
+// l: 5, u: 7, m: 6, return: 0.934452
+//
+// (see that lowmax is bigger than lmax)
 // l: 5, u: 9, m: 7, lmax: 0.397993, rmax: 0.444451, lowmax: 0.934452, uppermax: 0.444451
+// l: 5, u: 9, m: 7, return: 0.934452
+//
 // recmax(0, 4)
+// l: 0, u: 4, m: 2, lmax: 0
+// l: 0, u: 4, m: 2, rmax: 0
 // recmax(3, 4)
+// l: 3, u: 4, m: 3, lmax: 0
+// l: 3, u: 4, m: 3, rmax: 0
 // recmax(4, 4)
 // recmax(3, 3)
 // l: 3, u: 4, m: 3, lmax: 0, rmax: 0, lowmax: 0, uppermax: 0
+// l: 3, u: 4, m: 3, return: 0
 // recmax(0, 2)
+// l: 0, u: 2, m: 1, lmax: 0.211234
+// l: 0, u: 2, m: 1, rmax: 0
 // recmax(2, 2)
 // recmax(0, 1)
+// l: 0, u: 1, m: 0, lmax: 0
+// l: 0, u: 1, m: 0, rmax: 0.211234
 // recmax(1, 1)
 // recmax(0, 0)
 // l: 0, u: 1, m: 0, lmax: 0, rmax: 0.211234, lowmax: 0, uppermax: 0.211234
+// l: 0, u: 1, m: 0, return: 0.211234
 // l: 0, u: 2, m: 1, lmax: 0.211234, rmax: 0, lowmax: 0.211234, uppermax: 0
+// l: 0, u: 2, m: 1, return: 0.211234
 // l: 0, u: 4, m: 2, lmax: 0, rmax: 0, lowmax: 0.211234, uppermax: 0
+// l: 0, u: 4, m: 2, return: 0.211234
 // l: 0, u: 9, m: 4, lmax: 0, rmax: 0.934452, lowmax: 0.211234, uppermax: 0.934452
+// l: 0, u: 9, m: 4, return: 0.934452
+//
 // l: 0, u: 19, m: 9, lmax: 0.734503, rmax: 0.0578951, lowmax: 0.934452, uppermax: 0.716795
+// l: 0, u: 19, m: 9, return: 0.934452
+//
 // result: 0.934452
-
 
 float recmax(int l, int u)
 {
@@ -187,7 +271,7 @@ float recmax(int l, int u)
 
   m = (l + u)/2;
 
-  // find max crossing to left
+  // find max crossing to left, sum[l, m] and minimum is 0.
   lmax = sum = 0;
 
   for (i = m; l <= i; --i)
@@ -199,8 +283,9 @@ float recmax(int l, int u)
 
     lmax = max(sum, lmax);
   }
+  cout << "l: " << l << ", u: " << u << ", m: " << m  << ", lmax: " << lmax << endl;
 
-  // find max crossing to right
+  // find max crossing to right, sum[m+1, u] and minimum is 0.
   rmax = sum = 0;
 
   for (i = m + 1; i <= u; ++i)
@@ -208,6 +293,7 @@ float recmax(int l, int u)
     sum += x[i];
     rmax = max(sum, rmax);
   }
+  cout << "l: " << l << ", u: " << u << ", m: " << m  << ", rmax: " << rmax << endl;
 
   //
   auto uppermax = recmax(m+1, u);
@@ -215,6 +301,9 @@ float recmax(int l, int u)
 
   cout << "l: " << l << ", u: " << u << ", m: " << m 
     << ", lmax: " << lmax << ", rmax: " << rmax << ", lowmax: " << lowmax << ", uppermax: " << uppermax << endl;
+
+  cout << "l: " << l << ", u: " << u << ", m: " << m 
+    << ", return: " << max(lmax + rmax, max(lowmax, uppermax)) << endl;
 
   return max(lmax + rmax, max(lowmax, uppermax));
 
