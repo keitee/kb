@@ -14,6 +14,14 @@ Rectangle {
         width: 732
         height: 437
 
+        // filename is type name.
+        // can directly create a Button object by declaring Button{}, similar to
+        // a Rectangle{} declaration.
+        //
+        // access `properties` exposed.
+        // New property bindings can be declared within the newly created
+        // buttons, effectively overwriting the properties set in Button.qml. 
+
         Simplebutton {
             id: saveButton
             label: "Save"
