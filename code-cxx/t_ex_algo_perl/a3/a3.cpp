@@ -195,90 +195,175 @@ TEST(Appendix3, SpaceCostModel)
 }
 
 
-// Copyright (C) 1999 Lucent Technologies
-// From 'Programming Pearls' by Jon Bentley
-// timemod.cpp -- simple model for C++ run time costs
-//
-//
-// (VM, Linux kit-debian64 3.16.0-4-amd64 #1 SMP Debian 3.16.36-1+deb8u1 (2016-09-03) x86_64 GNU/Linux)
-//
-// C Time Cost Model, n=5000
-// 
-// Integer Arithmetic(n=5000)
-//  {}                         36797     36729     35255     35179     35139       1
-//  k++                        49811     49684     48032     48518     49267       2
-//  k = i + j                  40464     40432     38640     38963     39150       2
-//  k = i - j                  39693     40412     38841     38921     39535       2
-//  k = i * j                  39111     38745     37284     37214     37793       2
-//  k = i / j                  55687     55335     53961     55504     53681       2
-//  k = i % j                  56043     55277     55272     54311     53333       2
-//  k = i & j                  39602     40539     38743     39598     38617       2
-//  k = i | j                  39654     39877     38924     39506     38434       2
-// 
-// Floating Point Arithmetic(n=5000)
-//  fj=j;                      57166     57057     57058     56929     55879       2
-//  fj=j; fk = fi + fj;        46843     46379     45374     46174     45746       2
-//  fj=j; fk = fi - fj;        49856     46376     46492     46366     48340       2
-//  fj=j; fk = fi * fj;        47819     46584     46612     46887     45862       2
-//  fj=j; fk = fi / fj;        46528     44958     43810     46752     49824       2
-// 
-// Array Operations(n=5000)
-//  k = i + j                  39115     39279     38530     37596     37984       2
-//  k = x[i] + j               41939     40577     39627     39737     39490       2
-//  k = i + x[j]               49330     48821     47019     49139     50191       2
-//  k = x[i] + x[j]            55689     52794     51838     52385     52561       2
-// 
-// Comparisons(n=5000)
-//  if (i < j) k++             42400     41887     40565     40890     41131       2
-//  if (x[i] < x[j]) k++      107669    102913    102090    102485    103682       4
-// 
-// Array Comparisons and Swaps(n=5000)
-//  k = (x[i]<x[k]) ? -1:1     37253     37922     36369     35770     37140       1
-//  k = intcmp(x+i, x+j)      122573    119309    126385    136072    119631       5
-//  swapmac(i, j)              62142     61524     59777     59922     59717       2
-//  swapfunc(i, j)            117157    114001    115626    117863    114425       5
-// 
-// Max Function, Macro and Inline(n=5000)
-//  k = (i > j) ? i : j        49272     47541     47194     46313     46994       2
-//  k = maxmac(i, j)           48781     48097     46721     47788     46927       2
-//  k = maxfunc(i, j)         107599    102703    104602    109470    117149       4
-// 
-// Math Functions(n=1000)
-//  fk = j+fi;                  1604      1664      1549      1723      1500       2
-//  k = rand();                23308     21475     21629     21416     20340      22
-//  fk = sqrt(j+fi)             4377      4276      4218      4486      4312       4
-//  fk = sin(j+fi)             19498     18466     18478     18086     18083      19
-//  fk = sinh(j+fi)            35833     38332     35108     34404     35250      36
-//  fk = asin(j+fi)            29286     31486     28412     29238     29298      30
-//  fk = cos(j+fi)             18042     19361     19236     18553     19163      19
-//  fk = tan(j+fi)            228162    220731    221708    221563    223463     223
-// 
-// Memory Allocation(n=500)
-//  free(malloc(16));           8529      8328      8476      9696      9157      35
-//  free(malloc(100));         10416     10867      9707     10160      9297      40
-//  free(malloc(2000));        11163     10934     12934     10745     11737      46
-// 
-// Memory Allocation - malloc/free(n=500)
-//  free(malloc(sizeof(structc12)))      9289      8363      8632      9224      8999      36
-//  free(malloc(sizeof(structc13)))      8433      9255      8419      9635      8864      36
-//  free(malloc(sizeof(structc28)))      9465      8860      8307     10570      8371      36
-//  free(malloc(sizeof(structc29)))      9392      8215      8942     10547      8787      37
-//  free(malloc(sizeof(structc44)))      8658      8235      8329      9214      8865      35
-//  free(malloc(sizeof(structc45)))      8507      8669      8247      8501     10739      36
-//  free(malloc(sizeof(structc60)))      8958      8892      8400      9506     10322      37
-//  free(malloc(sizeof(structc61)))      9031      8795     11371      9443     10132      39
-// 
-// Memory Allocation - new/delete(n=500)
-//  delete(new structc12)      16235     13919     14321     12987     12597      56
-//  delete(new structc13)      12949     12805     14786     13563     12831      54
-//  delete(new structc28)      12787     12166     13438     13130     13259      52
-//  delete(new structc29)      12968     13382     14429     13003     12834      53
-//  delete(new structc44)      12671     13852     13652     13849     12834      53
-//  delete(new structc45)      12739     14240     13389     12750     12897      53
-//  delete(new structc60)      12815     13391     12964     13081     13502      53
-//  delete(new structc61)      13320     12894     14239     14814     12952      55
-//  Secs: 10.33
+/*
+ Copyright (C) 1999 Lucent Technologies
+ From 'Programming Pearls' by Jon Bentley
+ timemod.cpp -- simple model for C++ run time costs
 
+
+ (VM, Linux kit-debian64 3.16.0-4-amd64 #1 SMP Debian 3.16.36-1+deb8u1 (2016-09-03) 
+ x86_64 GNU/Linux)
+
+ C Time Cost Model, n=5000
+ 
+ Integer Arithmetic(n=5000)
+  {}                         36797     36729     35255     35179     35139       1
+  k++                        49811     49684     48032     48518     49267       2
+  k = i + j                  40464     40432     38640     38963     39150       2
+  k = i - j                  39693     40412     38841     38921     39535       2
+  k = i * j                  39111     38745     37284     37214     37793       2
+  k = i / j                  55687     55335     53961     55504     53681       2
+  k = i % j                  56043     55277     55272     54311     53333       2
+  k = i & j                  39602     40539     38743     39598     38617       2
+  k = i | j                  39654     39877     38924     39506     38434       2
+ 
+ Floating Point Arithmetic(n=5000)
+  fj=j;                      57166     57057     57058     56929     55879       2
+  fj=j; fk = fi + fj;        46843     46379     45374     46174     45746       2
+  fj=j; fk = fi - fj;        49856     46376     46492     46366     48340       2
+  fj=j; fk = fi * fj;        47819     46584     46612     46887     45862       2
+  fj=j; fk = fi / fj;        46528     44958     43810     46752     49824       2
+ 
+ Array Operations(n=5000)
+  k = i + j                  39115     39279     38530     37596     37984       2
+  k = x[i] + j               41939     40577     39627     39737     39490       2
+  k = i + x[j]               49330     48821     47019     49139     50191       2
+  k = x[i] + x[j]            55689     52794     51838     52385     52561       2
+ 
+ Comparisons(n=5000)
+  if (i < j) k++             42400     41887     40565     40890     41131       2
+  if (x[i] < x[j]) k++      107669    102913    102090    102485    103682       4
+ 
+ Array Comparisons and Swaps(n=5000)
+  k = (x[i]<x[k]) ? -1:1     37253     37922     36369     35770     37140       1
+  k = intcmp(x+i, x+j)      122573    119309    126385    136072    119631       5
+  swapmac(i, j)              62142     61524     59777     59922     59717       2
+  swapfunc(i, j)            117157    114001    115626    117863    114425       5
+ 
+ Max Function, Macro and Inline(n=5000)
+  k = (i > j) ? i : j        49272     47541     47194     46313     46994       2
+  k = maxmac(i, j)           48781     48097     46721     47788     46927       2
+  k = maxfunc(i, j)         107599    102703    104602    109470    117149       4
+ 
+ Math Functions(n=1000)
+  fk = j+fi;                  1604      1664      1549      1723      1500       2
+  k = rand();                23308     21475     21629     21416     20340      22
+  fk = sqrt(j+fi)             4377      4276      4218      4486      4312       4
+  fk = sin(j+fi)             19498     18466     18478     18086     18083      19
+  fk = sinh(j+fi)            35833     38332     35108     34404     35250      36
+  fk = asin(j+fi)            29286     31486     28412     29238     29298      30
+  fk = cos(j+fi)             18042     19361     19236     18553     19163      19
+  fk = tan(j+fi)            228162    220731    221708    221563    223463     223
+ 
+ Memory Allocation(n=500)
+  free(malloc(16));           8529      8328      8476      9696      9157      35
+  free(malloc(100));         10416     10867      9707     10160      9297      40
+  free(malloc(2000));        11163     10934     12934     10745     11737      46
+ 
+ Memory Allocation - malloc/free(n=500)
+  free(malloc(sizeof(structc12)))      9289      8363      8632      9224      8999      36
+  free(malloc(sizeof(structc13)))      8433      9255      8419      9635      8864      36
+  free(malloc(sizeof(structc28)))      9465      8860      8307     10570      8371      36
+  free(malloc(sizeof(structc29)))      9392      8215      8942     10547      8787      37
+  free(malloc(sizeof(structc44)))      8658      8235      8329      9214      8865      35
+  free(malloc(sizeof(structc45)))      8507      8669      8247      8501     10739      36
+  free(malloc(sizeof(structc60)))      8958      8892      8400      9506     10322      37
+  free(malloc(sizeof(structc61)))      9031      8795     11371      9443     10132      39
+ 
+ Memory Allocation - new/delete(n=500)
+  delete(new structc12)      16235     13919     14321     12987     12597      56
+  delete(new structc13)      12949     12805     14786     13563     12831      54
+  delete(new structc28)      12787     12166     13438     13130     13259      52
+  delete(new structc29)      12968     13382     14429     13003     12834      53
+  delete(new structc44)      12671     13852     13652     13849     12834      53
+  delete(new structc45)      12739     14240     13389     12750     12897      53
+  delete(new structc60)      12815     13391     12964     13081     13502      53
+  delete(new structc61)      13320     12894     14239     14814     12952      55
+  Secs: 10.33
+
+
+(Linux st-castor-03.cisco.com 
+ 3.10.0-514.26.2.el7.x86_64 #1 SMP Tue Jul 4 15:04:05 UTC 2017 
+ x86_64 x86_64 x86_64 GNU/Linux)
+
+C Time Cost Model, n=5000                                                                                                                                                                             [19/1657]
+
+Integer Arithmetic(n=5000)
+ {}                         60000     50000     60000     50000     50000       2
+ k++                        70000     60000     60000     70000     60000       3
+ k = i + j                  70000     60000     70000     70000     70000       3
+ k = i - j                  60000     60000     70000     70000     70000       3
+ k = i * j                  50000     60000     50000     50000     50000       2
+ k = i / j                  80000     70000     80000     70000     70000       3
+ k = i % j                  70000     70000     80000     70000     80000       3
+ k = i & j                  60000     70000     60000     70000     60000       3
+ k = i | j                  70000     70000     60000     70000     70000       3
+
+Floating Point Arithmetic(n=5000)
+ fj=j;                      50000     60000     60000     50000     60000       2
+ fj=j; fk = fi + fj;       100000     90000    100000     90000    100000       4
+ fj=j; fk = fi - fj;       100000     90000    100000    100000    100000       4
+ fj=j; fk = fi * fj;       110000    110000    110000    120000    110000       4
+ fj=j; fk = fi / fj;       180000    180000    180000    180000    180000       7
+
+Array Operations(n=5000)
+ k = i + j                  60000     70000     60000     70000     60000       3
+ k = x[i] + j               60000     70000     60000     70000     60000       3
+ k = i + x[j]               60000     60000     50000     60000     50000       2
+ k = x[i] + x[j]            60000     60000     60000     60000     60000       2
+
+Comparisons(n=5000)
+ if (i < j) k++             50000     60000     60000     60000     50000       2
+ if (x[i] < x[j]) k++      130000    120000    110000    120000    120000       5
+
+Array Comparisons and Swaps(n=5000)
+ k = (x[i]<x[k]) ? -1:1     50000     50000     40000     50000     50000       2
+ k = intcmp(x+i, x+j)       80000     90000     90000     90000     80000       3
+ swapmac(i, j)              70000     80000     70000     70000     80000       3
+ swapfunc(i, j)            100000    100000    100000    100000    100000       4
+
+Max Function, Macro and Inline(n=5000)
+ k = (i > j) ? i : j        60000     60000     60000     60000     70000       2
+ k = maxmac(i, j)           60000     60000     70000     60000     60000       2
+ k = maxfunc(i, j)          80000     70000     80000     70000     80000       3
+
+Math Functions(n=1000)
+ fk = j+fi;                     0     10000         0         0         0       2
+ k = rand();                10000     10000     10000     10000     10000      10
+ fk = sqrt(j+fi)            10000     10000     10000     10000     10000      10
+ fk = sin(j+fi)             40000     30000     30000     30000     30000      32
+ fk = sinh(j+fi)            20000     20000     20000     10000     20000      18
+ fk = asin(j+fi)            10000     10000     10000     10000     10000      10
+ fk = cos(j+fi)             40000     30000     40000     40000     30000      36
+ fk = tan(j+fi)            260000    230000    230000    240000    230000     238
+
+Memory Allocation(n=500)
+ free(malloc(16));          10000     10000         0     10000         0      24
+ free(malloc(100));         10000         0     10000         0     10000      24
+ free(malloc(2000));        10000     10000         0     10000     10000      32
+
+Memory Allocation - malloc/free(n=500)
+ free(malloc(sizeof(structc12)))         0     10000         0     10000         0      16
+ free(malloc(sizeof(structc13)))     10000     10000         0     10000         0      24
+ free(malloc(sizeof(structc28)))     10000         0     10000         0     10000      24
+ free(malloc(sizeof(structc29)))     10000         0     10000         0     10000      24
+ free(malloc(sizeof(structc44)))         0     10000         0     10000         0      16
+ free(malloc(sizeof(structc45)))     10000         0     10000     10000         0      24
+ free(malloc(sizeof(structc60)))     10000         0     10000         0     10000      24
+ free(malloc(sizeof(structc61)))         0     10000         0     10000         0      16
+
+Memory Allocation - new/delete(n=500)
+ delete(new structc12)      10000     10000         0     10000     10000      32
+ delete(new structc13)          0     10000         0     10000     10000      24
+ delete(new structc28)          0     10000         0     10000     10000      24
+ delete(new structc29)          0     10000         0     10000     10000      24
+ delete(new structc44)          0     10000         0     10000     10000      24
+ delete(new structc45)          0     10000         0     10000     10000      24
+ delete(new structc60)          0     10000     10000         0     10000      24
+ delete(new structc61)          0     10000     10000         0     10000      24
+ Secs: 12.61
+
+*/
 
 #define MAXN 100000
 int x[MAXN];
@@ -360,6 +445,7 @@ TEST(Appendix3, TimeCostModel)
   M(k = i - j);
   M(k = i * j);
   M(k = i / j);
+  M(k = i >> j);
   M(k = i % j);
   M(k = i & j);
   M(k = i | j);
