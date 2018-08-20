@@ -11,7 +11,8 @@ using namespace std;
 // From 'Programming Pearls' by Jon Bentley
 // spacemod.cpp -- simple model for C++ space
 // 
-// (Linux kt-office-debian 4.9.0-7-686-pae #1 SMP Debian 4.9.110-3+deb9u1 (2018-08-03) i686 GNU/Linux) 
+// (Linux kt-office-debian 4.9.0-7-686-pae #1 SMP Debian 4.9.110-3+deb9u1 (2018-08-03) 
+// i686 GNU/Linux) 
 //
 // Raw sizeof:
 // sizeof(char)      = 1
@@ -362,6 +363,88 @@ Memory Allocation - new/delete(n=500)
  delete(new structc60)          0     10000     10000         0     10000      24
  delete(new structc61)          0     10000     10000         0     10000      24
  Secs: 12.61
+
+
+(Linux kt-office-debian 4.9.0-7-686-pae #1 SMP Debian 4.9.110-3+deb9u1 (2018-08-03) 
+i686 GNU/Linux) 
+
+C Time Cost Model, n=5000
+
+Integer Arithmetic(n=5000)
+ {}                         49754     49069     49329     49408     49196       2
+ k++                        56924     56908     56908     56904     56904       2
+ k = i + j                  61400     61391     61379     61531     61371       2
+ k = i - j                  63604     63602     63601     63602     63597       3
+ k = i * j                  63616     63650     63601     63612     63600       3
+ k = i / j                  77444     77438     77444     77452     77440       3
+ k = i >> j                 68434     67582     68487     68167     68052       3
+ k = i % j                  77454     77444     77446     77449     77448       3
+ k = i & j                  62780     61798     61910     61787     62196       2
+ k = i | j                  63594     63590     63594     63602     63599       3
+
+Floating Point Arithmetic(n=5000)
+ fj=j;                      57184     56919     56935     56914     56917       2
+ fj=j; fk = fi + fj;        66965     66965     66969     66966     66964       3
+ fj=j; fk = fi - fj;        66965     66965     66960     66964     66964       3
+ fj=j; fk = fi * fj;        66989     66981     66980     66985     66981       3
+ fj=j; fk = fi / fj;       183729    183733    183728    183727    183731       7
+
+Array Operations(n=5000)
+ k = i + j                  61463     61368     61369     61406     61371       2
+ k = x[i] + j               55676     55365     55365     55361     55438       2
+ k = i + x[j]               58774     58771     58770     58845     58782       2
+ k = x[i] + x[j]            63739     63732     63731     63733     63736       3
+
+Comparisons(n=5000)
+ if (i < j) k++             65165     65001     65136     65130     65128       3
+ if (x[i] < x[j]) k++      117402    117397    117404    117392    117397       5
+
+Array Comparisons and Swaps(n=5000)
+ k = (x[i]<x[k]) ? -1:1     62769     62756     62758     62958     62779       3
+ k = intcmp(x+i, x+j)      133261    131906    132740    133142    132273       5
+ swapmac(i, j)              93827     93817     93836     93818     93821       4
+ swapfunc(i, j)            177569    177658    177587    177601    177663       7
+
+Max Function, Macro and Inline(n=5000)
+ k = (i > j) ? i : j        70632     70587     70588     70583     70620       3
+ k = maxmac(i, j)           71486     71435     70847     70957     71190       3
+ k = maxfunc(i, j)         140236    140248    140231    140232    140305       6
+
+Math Functions(n=1000)
+ fk = j+fi;                  1886      1848      1855      1848      1855       2
+ k = rand();                14998     15001     15007     15000     14995      15
+ fk = sqrt(j+fi)            11748     11738     11736     11736     11736      12
+ fk = sin(j+fi)             26410     26409     26400     26408     26410      26
+ fk = sinh(j+fi)           138529    140887    142813    142813    142712     142
+ fk = asin(j+fi)           105416    105415    105410    105414    105435     105
+ fk = cos(j+fi)             26586     26603     26639     26633     26637      27
+ fk = tan(j+fi)            658495    658682    657875    657161    657684     658
+
+Memory Allocation(n=500)
+ free(malloc(16));           8993      8978      8990      8982      8976      36
+ free(malloc(100));         12658     12666     12665     12666     12688      51
+ free(malloc(2000));        12303     12405     12442     12289     12392      49
+
+Memory Allocation - malloc/free(n=500)
+ free(malloc(sizeof(structc12)))      8967      8965      8958      8956      8957      36
+ free(malloc(sizeof(structc13)))      8964      8957      8957      8957      8962      36
+ free(malloc(sizeof(structc28)))      8958      8956      8957      8957      8962      36
+ free(malloc(sizeof(structc29)))      8957      8957      8957      8962      8957      36
+ free(malloc(sizeof(structc44)))      8958      8957      8962      8956      8958      36
+ free(malloc(sizeof(structc45)))      8957      8962      8956      8959      8957      36
+ free(malloc(sizeof(structc60)))      8962      8957      8957      8957      8963      36
+ free(malloc(sizeof(structc61)))     12972     12992     13057     12968     12905      52
+
+Memory Allocation - new/delete(n=500)
+ delete(new structc12)      10384     10384     10383     10376     10324      41
+ delete(new structc13)      10380     10382     10383     10377     10382      42
+ delete(new structc28)      10376     10391     10294     10358     10346      41
+ delete(new structc29)      10406     10407     10377     10383     10382      42
+ delete(new structc44)      10415     10453     10397     10299     10299      41
+ delete(new structc45)      10377     10382     10378     10387     10384      42
+ delete(new structc60)      10378     10382     10348     10382     10315      41
+ delete(new structc61)      14727     14699     14743     14809     14728      59
+ Secs: 17.20
 
 */
 
