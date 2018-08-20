@@ -1,10 +1,4 @@
 #include <iostream>
-#include <cstring>
-#include <vector>
-#include <map>
-#include <set>
-#include <algorithm>
-#include <bitset>
 
 #include "gmock/gmock.h"
 
@@ -13,42 +7,7 @@
 using namespace std;
 using namespace testing;
 
-
 // ={=========================================================================
-template <typename T>
-void PRINT_ELEMENTS( T& coll, const string optstr="" )
-{
-    size_t count{};
-    cout << optstr;
-
-    for( const auto &elem : coll )
-    {
-        cout << elem << " ";
-        ++count;
-    }
-
-    cout << "(" << count << ")" << endl;
-}
-
-template <typename T>
-void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
-{
-    size_t count{};
-    cout << optstr;
-
-    for( const auto &elem : coll )
-    {
-        cout << "(" << elem.first << ", " << elem.second << ") ";
-        ++count;
-    }
-
-    cout << "(" << count << ")" << endl;
-}
-
-
-// ={=========================================================================
-// rotate
-
 /* Copyright (C) 1999 Lucent Technologies
 From 'Programming Pearls' by Jon Bentley
 
@@ -158,6 +117,11 @@ void test(int maxn)
   cout << endl;
 }
 
+// why conversion factor, 1e9?
+// CLOCKS_PER_SEC is 1e+06 and 6.11223e-08 is too small number. So multiply 1e9,
+// 10^9, this makes "average cost of a search in nanoseconds".
+//
+// algnum: 1, n: 1000, numtests: 10000, clicks: 611223, 6.11223e-08, 61.1223
 
 // algnum: 1, n: 1000, numtests: 10000
 // algnum: 1, n: 1000, numtests: 10000, clicks: 608031, 60.8031
@@ -198,6 +162,8 @@ void timedriver()
       << ", n: " << n
       << ", numtests: " << numtests
       << ", clicks: " << clicks
+      << ", " << (float)CLOCKS_PER_SEC
+      << ", " << (clicks/((float)CLOCKS_PER_SEC*n*numtests))
       << ", " << (1e9*clicks/((float)CLOCKS_PER_SEC*n*numtests)) << endl;
   }
 }
