@@ -7,6 +7,7 @@ using namespace std;
 
 // ={=========================================================================
 
+// ()
 // Raw sizeof:
 // sizeof(char)      = 1
 // sizeof(short)     = 2
@@ -35,6 +36,40 @@ using namespace std;
 //       structc60   60 :   80 :   80 :   80 :   80 :   80 :   80 :   80 :   80 :   80 :   80
 //       structc61   61 :   80 :   80 :   80 :   80 :   80 :   80 :   80 :   80 :   80 :   80
 //
+// Measure template:
+//  measure: int   4
+//  measure: structc       1
+//  measure: structic      8
+//
+// (Linux kt-office-debian 4.9.0-7-686-pae #1 SMP Debian 4.9.110-3+deb9u1 (2018-08-03) i686 GNU/Linux) 
+// Raw sizeof:
+// sizeof(char)      = 1
+// sizeof(short)     = 2
+// sizeof(int)       = 4
+// sizeof(float)     = 4
+// sizeof(structc *) = 4
+// sizeof(long)      = 4
+// sizeof(double)    = 8
+// 
+// Measure macro:
+//             int    4 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//         structc    1 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//        structic    8 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//        structip    8 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//        structdc   12 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//        structcd   12 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//       structcdc   16 :   24 :   24 :   24 :   24 :   24 :   24 :   24 :   24 :   24 :   24
+//       structiii   12 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//       structiic   12 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//       structc12   12 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16 :   16
+//       structc13   13 :   24 :   24 :   24 :   24 :   24 :   24 :   24 :   24 :   24 :   24
+//       structc28   28 :   32 :   32 :   32 :   32 :   32 :   32 :   32 :   32 :   32 :   32
+//       structc29   29 :   40 :   40 :   40 :   40 :   40 :   40 :   40 :   40 :   40 :   40
+//       structc44   44 :   48 :   48 :   48 :   48 :   48 :   48 :   48 :   48 :   48 :   48
+//       structc45   45 :   56 :   56 :   56 :   56 :   56 :   56 :   56 :   56 :   56 :   56
+//       structc60   60 :   64 :   64 :   64 :   64 :   64 :   64 :   64 :   64 :   64 :   64
+//       structc61   61 :   72 :   72 :   72 :   72 :   72 :   72 :   72 :   72 :   72 :   72
+// 
 // Measure template:
 //  measure: int   4
 //  measure: structc       1
