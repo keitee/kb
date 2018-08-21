@@ -590,40 +590,6 @@ float algo44()
 }
 
 
-// algnum: 1, n: 100, numtests: 10
-// algnum: 1, n: 100, numtests: 10, result: 4.50922, clicks: 480934, 480934
-// algnum: 2, n: 100, numtests: 10
-// algnum: 2, n: 100, numtests: 10, result: 4.50922, clicks: 16614, 16614
-// algnum: 3, n: 100, numtests: 10
-// algnum: 3, n: 100, numtests: 10, result: 4.50922, clicks: 13468, 13468
-// algnum: 4, n: 100, numtests: 10
-// algnum: 4, n: 100, numtests: 10, result: 4.50922, clicks: 6396, 6396
-//
-// algo 4, use inline
-// algnum: 5, n: 100, numtests: 10
-// algnum: 5, n: 100, numtests: 10, result: 4.50922, clicks: 1048, 1048
-//
-// algo42,  use if
-// algnum: 6, n: 100, numtests: 10
-// algnum: 6, n: 100, numtests: 10, result: 4.50922, clicks: 468, 468
-//
-// algo43, use macro
-// algnum: 7, n: 100, numtests: 10
-// algnum: 7, n: 100, numtests: 10, result: 4.50922, clicks: 376, 376
-//
-// algo44, use function
-// algnum: 8, n: 100, numtests: 10
-// algnum: 8, n: 100, numtests: 10, result: 4.50922, clicks: 1594, 1594
-
-// when n=1000
-// algnum: 1, n: 1000, numtests: 10
-// algnum: 1, n: 1000, numtests: 10, result: 15.6175, clicks: 819738644, 8.19739e+07
-// algnum: 2, n: 1000, numtests: 10
-// algnum: 2, n: 1000, numtests: 10, result: 15.6175, clicks: 17779096, 1.77791e+06
-// algnum: 3, n: 1000, numtests: 10
-// algnum: 3, n: 1000, numtests: 10, result: 15.6175, clicks: 21752900, 2.17529e+06
-
-
 void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
 {
   int i, algnum, numtests, start, clicks;
@@ -704,6 +670,39 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
   }
 }
 
+
+// algnum: 1, n: 100, numtests: 10
+// algnum: 1, n: 100, numtests: 10, result: 4.50922, clicks: 480934, 480934
+// algnum: 2, n: 100, numtests: 10
+// algnum: 2, n: 100, numtests: 10, result: 4.50922, clicks: 16614, 16614
+// algnum: 3, n: 100, numtests: 10
+// algnum: 3, n: 100, numtests: 10, result: 4.50922, clicks: 13468, 13468
+// algnum: 4, n: 100, numtests: 10
+// algnum: 4, n: 100, numtests: 10, result: 4.50922, clicks: 6396, 6396
+//
+// algo 4, use inline
+// algnum: 5, n: 100, numtests: 10
+// algnum: 5, n: 100, numtests: 10, result: 4.50922, clicks: 1048, 1048
+//
+// algo42,  use if
+// algnum: 6, n: 100, numtests: 10
+// algnum: 6, n: 100, numtests: 10, result: 4.50922, clicks: 468, 468
+//
+// algo43, use macro
+// algnum: 7, n: 100, numtests: 10
+// algnum: 7, n: 100, numtests: 10, result: 4.50922, clicks: 376, 376
+//
+// algo44, use function
+// algnum: 8, n: 100, numtests: 10
+// algnum: 8, n: 100, numtests: 10, result: 4.50922, clicks: 1594, 1594
+
+// when n=1000
+// algnum: 1, n: 1000, numtests: 10
+// algnum: 1, n: 1000, numtests: 10, result: 15.6175, clicks: 819738644, 8.19739e+07
+// algnum: 2, n: 1000, numtests: 10
+// algnum: 2, n: 1000, numtests: 10, result: 15.6175, clicks: 17779096, 1.77791e+06
+// algnum: 3, n: 1000, numtests: 10
+// algnum: 3, n: 1000, numtests: 10, result: 15.6175, clicks: 21752900, 2.17529e+06
 
 TEST(C8, MaxSubVector)
 {

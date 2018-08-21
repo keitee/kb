@@ -48,14 +48,14 @@ int ssearch1(int t)
 int ssearch2(int t)
 {
   int i;
-  int hold = x[n];
+  // int hold = x[n];
   x[n] = t;
 
   for (i = 0; ; ++i)
     if (x[i] == t)
       break;
 
-  x[n] = hold;
+  // x[n] = hold;
 
   if (i == n)
     return -1;
@@ -142,6 +142,13 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
   }
 }
 
+
+// algnum: 1, n: 99999, numtests: 10
+// algnum: 1, n: 99999, numtests: 10, result: -1, clicks: 217437429, 217.437, 0.00021744, 2.1744e-13
+// algnum: 2, n: 99999, numtests: 10
+// algnum: 2, n: 99999, numtests: 10, result: -1, clicks: 157730780, 157.731, 0.000157732, 1.57732e-13
+// algnum: 3, n: 99999, numtests: 10
+// algnum: 3, n: 99999, numtests: 10, result: -1, clicks: 56838075, 56.8381, 5.68386e-05, 5.68386e-14
 
 TEST(c9, SequentialSearch)
 {
