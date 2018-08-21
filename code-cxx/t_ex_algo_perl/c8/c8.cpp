@@ -695,7 +695,11 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
       << ", numtests: " << numtests
       << ", result: " << result
       << ", clicks: " << clicks
+      // total
+      << ", " << (clicks/((float)CLOCKS_PER_SEC))
+      // average
       << ", " << (clicks/((float)CLOCKS_PER_SEC*n*numtests))
+      // average in ns
       << ", " << (clicks/(1e9*(float)CLOCKS_PER_SEC*n*numtests)) << endl;
   }
 }
