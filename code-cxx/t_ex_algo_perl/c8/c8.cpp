@@ -698,11 +698,22 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
 
 // when n=1000
 // algnum: 1, n: 1000, numtests: 10
-// algnum: 1, n: 1000, numtests: 10, result: 15.6175, clicks: 819738644, 8.19739e+07
+// algnum: 1, n: 1000, numtests: 10, result: 15.6175, clicks: 822669000, 822.669, 0.0822669, 8.22669e-11
 // algnum: 2, n: 1000, numtests: 10
-// algnum: 2, n: 1000, numtests: 10, result: 15.6175, clicks: 17779096, 1.77791e+06
+// algnum: 2, n: 1000, numtests: 10, result: 15.6175, clicks: 17739750, 17.7397, 0.00177397, 1.77398e-12
 // algnum: 3, n: 1000, numtests: 10
-// algnum: 3, n: 1000, numtests: 10, result: 15.6175, clicks: 21752900, 2.17529e+06
+// algnum: 3, n: 1000, numtests: 10, result: 15.6175, clicks: 21753486, 21.7535, 0.00217535, 2.17535e-12
+// algnum: 4, n: 1000, numtests: 10
+// algnum: 4, n: 1000, numtests: 10, result: 15.6175, clicks: 1354480, 1.35448, 0.000135448, 1.35448e-13
+// algnum: 5, n: 1000, numtests: 10
+// algnum: 5, n: 1000, numtests: 10, result: 15.6175, clicks: 119573, 0.119573, 1.19573e-05, 1.19573e-14
+// algnum: 6, n: 1000, numtests: 10
+// algnum: 6, n: 1000, numtests: 10, result: 15.6175, clicks: 57457, 0.057457, 5.7457e-06, 5.7457e-15
+// algnum: 7, n: 1000, numtests: 10
+// algnum: 7, n: 1000, numtests: 10, result: 15.6175, clicks: 70497, 0.070497, 7.0497e-06, 7.0497e-15
+// algnum: 8, n: 1000, numtests: 10
+// algnum: 8, n: 1000, numtests: 10, result: 15.6175, clicks: 138631, 0.138631, 1.38631e-05, 1.38631e-14
+
 
 TEST(C8, MaxSubVector)
 {
