@@ -38,7 +38,7 @@ TEST(Pair, UsePairType)
   // ^
   // cxx.cpp:36:5: note: for deduction to ‘std::initializer_list’, use
   // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)          
-
+  //
   // const auto pair_map{
   //     make_pair(10, "X"),
   //     make_pair(9, "IX"),
@@ -74,9 +74,8 @@ TEST(Pair, UsePairType)
 }
 
 
-// ={=========================================================================
 // cxx-pair-reference cxx-std-ref
-
+//
 // val pair {11, 21}
 // i and j  {10, 20}      // not changed
 // ref pair {11, 21}
@@ -102,6 +101,188 @@ TEST(CxxPair, UsePairWithReference)
 
   cout << "ref pair {" << ref.first << ", " << ref.second << "}" << endl;
   cout << "i and j  {" << i << ", " << j << "}" << endl;
+}
+
+
+TEST(Pair, Initialisation)
+{
+  // initializer_list that has pairs
+  
+  // gcc 4.9.2 is fine but 6.3.0 emits error:
+  //
+  // cxx.cpp:36:5: error: direct-list-initialization of ‘auto’ requires exactly
+  // one element [-fpermissive] 
+  //
+  // };
+  // ^
+  // cxx.cpp:36:5: note: for deduction to ‘std::initializer_list’, use
+  // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)          
+  //
+  // const auto pair_map{
+  //     make_pair(10, "X"),
+  //     make_pair(9, "IX"),
+  //     make_pair(5, "V")
+  // };
+
+  const auto pair_init_01{
+    make_pair(10, "X"),
+    make_pair(9, "IX"),
+    make_pair(5, "V")
+  };
+
+  const auto pair_init_02 = {
+    make_pair(10, "X"),
+    make_pair(9, "IX"),
+    make_pair(5, "V")
+  };
+
+  // vector that has pairs
+
+  std::vector<std::pair<int,string>> pair_init_03{
+    make_pair(10, "X"),
+    make_pair(9, "IX"),
+    make_pair(5, "V")
+  };
+
+  std::vector<std::pair<int,string>> pair_init_04{
+    {10, "X"},
+    {9, "IX"},
+    {5, "V"}
+  };
+
+  // vector that has tuples
+
+  std::vector<std::tuple<int, string, int>> tuple_init_01{
+    make_tuple(10, "X", 1),
+    make_tuple(9, "IX", 2),
+    make_tuple(5, "V", 3)
+  };
+
+  // cxx.cpp:165:3: error: converting to ‘std::tuple<int,
+  // std::basic_string<char, std::char_traits<char>, std::allocator<char> >,
+  // int>’ 
+  //
+  // from initializer list would use explicit constructor ‘constexpr std::tuple<
+  // <template-parameter-1-1> >::tuple(_UElements&& ...) [with _UElements =
+  // {int, const char (&)[2], int}; <template-parameter-2-2> = void; _Elements =
+  // {int, std::basic_string<char, std::char_traits<char>, std::allocator<char>
+  //
+  // >, int}]’
+  //    };
+  //    ^
+  //
+  // why error fot both? However, std-pair has no explicit ctors
+  //
+  // /usr/include/c++/4.9/tuple
+  // /// Primary class template, tuple
+  // template<typename... _Elements> 
+  //   class tuple : public _Tuple_impl<0, _Elements...>
+  //   {
+  //     typedef _Tuple_impl<0, _Elements...> _Inherited;
+  //
+  //     explicit
+  //     constexpr tuple(const _Elements&... __elements)
+  //     : _Inherited(__elements...) { }
+  //
+  // std::vector<std::tuple<int,string, int>> tuple_init_02{
+  //   {10, "X", 1},
+  //   {9, "IX", 2},
+  //   {5, "V", 3}
+  // };
+  //
+  // std::vector<std::tuple<int,string, int>> tuple_init_02 = {
+  //   {10, "X", 1},
+  //   {9, "IX", 2},
+  //   {5, "V", 3}
+  // };
+  
+}
+
+
+// ={=========================================================================
+// cxx-tuple
+
+// tup1: 41 6.3 nico 
+// tup2: 22 44 two 
+// tup1: 41 44 nico 
+// tup1 is bigger than tup2
+// tup1: 22 44 two 
+
+TEST(Tuple, UseTupleType)
+{
+  tuple<int, float, string> tup1{41, 6.3, "nico"};
+
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
+
+  auto tup2 = make_tuple(22, 44, "two");
+
+  cout << "tup2: ";
+  cout << get<0>(tup2) << " ";
+  cout << get<1>(tup2) << " ";
+  cout << get<2>(tup2) << " " << endl;;
+
+  get<1>(tup1) = get<1>(tup2);
+
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;;
+
+  if( tup1 > tup2 )
+  {
+    cout << "tup1 is bigger than tup2" << endl;
+    tup1 = tup2;
+  }
+
+  cout << "tup1: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;;
+}
+
+
+// tup: 41 6.3 nico 
+// tup: 41 6.3 nico 
+// tup: 41 6.3 nico 
+// tup: 22 44 two 
+
+TEST(Tuple, UseTupleTie)
+{
+  tuple<int, float, string> tup1{41, 6.3, "nico"};
+  int i;
+  float f;
+  string s;
+
+  tie(i, f, s) = tup1;
+
+  cout << "tup: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
+
+  cout << "tup: ";
+  cout << i << " ";
+  cout << f << " ";
+  cout << s << " " << endl;
+
+  i = 45;
+  f = 7.3;
+  s = "nico mom";
+
+  cout << "tup: ";
+  cout << get<0>(tup1) << " ";
+  cout << get<1>(tup1) << " ";
+  cout << get<2>(tup1) << " " << endl;
+
+  tie(i, f, s) = make_tuple(22, 44, "two");
+
+  cout << "tup: ";
+  cout << i << " ";
+  cout << f << " ";
+  cout << s << " " << endl;
 }
 
 
@@ -272,93 +453,6 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 // 
 //   CopyControlDerivedUseDelete d6(d4);
 // }
-
-
-// ={=========================================================================
-// cxx-tuple
-
-// tup1: 41 6.3 nico 
-// tup2: 22 44 two 
-// tup1: 41 44 nico 
-// tup1 is bigger than tup2
-// tup1: 22 44 two 
-
-TEST(CxxFeaturesTest, UseTupleType)
-{
-  tuple<int, float, string> tup1{41, 6.3, "nico"};
-
-  cout << "tup1: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;
-
-  auto tup2 = make_tuple(22, 44, "two");
-
-  cout << "tup2: ";
-  cout << get<0>(tup2) << " ";
-  cout << get<1>(tup2) << " ";
-  cout << get<2>(tup2) << " " << endl;;
-
-  get<1>(tup1) = get<1>(tup2);
-
-  cout << "tup1: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;;
-
-  if( tup1 > tup2 )
-  {
-    cout << "tup1 is bigger than tup2" << endl;
-    tup1 = tup2;
-  }
-
-  cout << "tup1: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;;
-}
-
-
-// tup: 41 6.3 nico 
-// tup: 41 6.3 nico 
-// tup: 41 6.3 nico 
-// tup: 22 44 two 
-
-TEST(CxxFeaturesTest, UseTupleTie)
-{
-  tuple<int, float, string> tup1{41, 6.3, "nico"};
-  int i;
-  float f;
-  string s;
-
-  tie(i, f, s) = tup1;
-
-  cout << "tup: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;
-
-  cout << "tup: ";
-  cout << i << " ";
-  cout << f << " ";
-  cout << s << " " << endl;
-
-  i = 45;
-  f = 7.3;
-  s = "nico mom";
-
-  cout << "tup: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;
-
-  tie(i, f, s) = make_tuple(22, 44, "two");
-
-  cout << "tup: ";
-  cout << i << " ";
-  cout << f << " ";
-  cout << s << " " << endl;
-}
 
 
 // ={=========================================================================

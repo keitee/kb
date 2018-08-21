@@ -13,39 +13,6 @@
 using namespace std;
 using namespace testing;
 
-
-// ={=========================================================================
-template <typename T>
-void PRINT_ELEMENTS( T& coll, const string optstr="" )
-{
-    size_t count{};
-    cout << optstr;
-
-    for( const auto &elem : coll )
-    {
-        cout << elem << " ";
-        ++count;
-    }
-
-    cout << "(" << count << ")" << endl;
-}
-
-template <typename T>
-void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
-{
-    size_t count{};
-    cout << optstr;
-
-    for( const auto &elem : coll )
-    {
-        cout << "(" << elem.first << ", " << elem.second << ") ";
-        ++count;
-    }
-
-    cout << "(" << count << ")" << endl;
-}
-
-
 // ={=========================================================================
 
 /* Copyright (C) 1999 Lucent Technologies
@@ -61,6 +28,25 @@ The problem is easy when all the numbers are positive; the maximum subvector is
 the entire input vector. The difficulty comes when some of the numbers are
 negative. To complete the problem definition, will say that when all inputs are
 negative the maximum-sum subvector is the empty vector, which has sum zero.
+
+        | 0 | 1 | 2 | 3 |
+
+i = 0   j = 0   0           -> sum
+        j = 1   0, 1        -> sum
+        j = 2   0, 1, 2     -> sum
+        j = 3   0, 1, 2, 3  -> sum
+
+i = 1   j = 1   1           -> sum
+        j = 2   1, 2        -> sum
+        j = 3   1, 2, 3     -> sum
+        ...
+
+Depending on how to get sum:
+
+1. use loop and cubic algorithm, algo1
+2. use prefix sum, algo22
+3. use the previous sum, algo21
+
 */
 
 #define MAXN  10000
@@ -119,6 +105,8 @@ float algo1()
         maxsofar = sum;
     }
   }
+
+  return maxsofar;
 }
 
 
@@ -175,6 +163,66 @@ algo22()
     }
 }
 */
+
+float algo21()
+{
+  int i{}, j{};
+  float sum{}, maxsofar{0.0};
+
+  for (i =0; i < n; ++i)
+  {
+    sum = 0.0;
+
+    for (j = i; j < n; ++j)
+    {
+      // for (s = i; s <= j; ++s)
+      //   sum += x[s];
+      
+      sum += x[j];
+
+      if (maxsofar < sum)
+        maxsofar = sum;
+    }
+  }
+
+  return maxsofar;
+}
+
+
+float cumvec[MAXN+1];
+
+float algo22()
+{
+  int i{}, j{};
+  float sum{}, maxsofar{0.0};
+  float *cumarr;
+
+  // build prefix sum array
+  
+  cumarr = cumvec + 1;  // to access cumarr[-1]
+  cumarr[-1] = 0;
+  for (i = 0; i < n; ++i)
+    cumarr[i] = cumarr[i-1] + x[i];
+
+
+  for (i = 0; i < n; ++i)
+  {
+    sum = 0.0;
+
+    for (j = i; j < n; ++j)
+    {
+      // for (s = i; s <= j; ++s)
+      //   sum += x[s];
+      
+      sum = cumarr[j] - cumarr[i-1];
+
+      if (maxsofar < sum)
+        maxsofar = sum;
+    }
+  }
+
+  return maxsofar;
+}
 
 
 /*
@@ -441,27 +489,46 @@ float algo3()
 // algnum: 1, n: 100000, numtests: 10
 // algnum: 1, n: 10000, numtests: 10, clicks: 7871, 78.71
 
-void timedriver()
+void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
 {
-  int i, algnum, numtests, test, start, clicks;
+  int i, algnum, numtests, start, clicks;
+  float result{};
 
-  while (cin >> algnum >> n >> numtests)
+  // to use the same input vector for all algos.
+  n = 1000;
+  sprinkle();
+
+  // while (cin >> algnum >> n >> numtests)
+  for (const auto & e: tests)
   {
+    algnum    = get<0>(e);
+    // n         = get<1>(e);
+    n         = 1000;
+    numtests  = get<2>(e);
+    result    = 0;
+
     cout << "algnum: " << algnum << ", n: " << n << ", numtests: " << numtests << endl;
 
-    for (i = 0; i < n; ++i)
-      x[i] = i;
+    // sprinkle();
 
     start = clock();
 
-    for (test = 0; test < numtests; ++test)
+    for (int test = 0; test < numtests; ++test)
     {
       for (i = 0; i < n; ++i)
       {
         switch (algnum)
         {
           case 1: 
-            // assert(binarysearch1(i)==i); break;
+            result = algo1();
+            break;
+
+          case 2: 
+            result = algo21();
+            break;
+
+          case 3: 
+            result = algo22();
             break;
         }
       }
@@ -471,26 +538,23 @@ void timedriver()
     cout << "algnum: " << algnum 
       << ", n: " << n
       << ", numtests: " << numtests
+      << ", result: " << result
       << ", clicks: " << clicks
       << ", " << (1e9*clicks/((float)CLOCKS_PER_SEC*n*numtests)) << endl;
   }
 }
 
 
-TEST(MaxSubArray, Run)
+TEST(C8, MaxSubVector)
 {
-  cin >> n;
-  cout << "n : " << n << endl;
+  // tuple{algnum, n, numtests}
+  std::vector<std::tuple<int, int, int>> tests{
+    make_tuple(1, 20, 10),
+    make_tuple(2, 20, 10),
+    make_tuple(3, 20, 10)
+  };
 
-  sprinkle();
-
-  int i;
-  for (i = 0; i < n; ++i)
-    cout << ", " << x[i] << endl;
-
-  auto result = recmax(0, n-1);
-
-  cout << "result: " << result << endl;
+  timedriver(tests);
 }
 
 

@@ -12077,7 +12077,7 @@ If not defined, complier will synthesise them. Don't use syn version of copy
 controls when use dyn allocated resource. *kt_dev_cpp_004* 
 
 
-{cpp-copy-ctor} copy-init, pass-by-value
+{cxx-copy-ctor} copy-init, pass-by-value
 Initialize object `from the other of the same-type` Ask compiler to copy the
 right-hand operand into the object being created, and to convert that operand
 if necessary.
@@ -12091,7 +12091,7 @@ class Foo {
 
 Used in contexts:
 
-* `copy-form-init` for the same type and converting-ctor for different type
+* `cxx-copy-form-init` for the same type and converting-ctor for different type
 * `pass-by-value` function call 
 * `return-by-value` return *cppy-copy-ctor-return*
 
@@ -35419,7 +35419,7 @@ initialize a tuple because that is considered to be an implicit conversion:
 
 std::tuple<int,double> t1(42, 3.14);    // OK, old syntax
 std::tuple<int,double> t2{42, 3.14};    // OK, new syntax
-std::tuple<int,double> t3 = {42, 3.14}; // ERROR <Q> why? See copy ctor
+std::tuple<int,double> t3 = {42, 3.14}; // ERROR, Why? *cxx-copy-form-init*
 
 
 std::vector<std::tuple<int,float>> v { {1,1.0}, {2,2.0} }; // ERROR
@@ -35442,6 +35442,102 @@ std::vector<std::tuple<int,float>>
 
 std::tuple<int,int,int> foo() {
   return std::make_tuple(1,2,3); // OK
+}
+
+
+<ex>
+TEST(Pair, Initialisation)
+{
+  // initializer_list that has pairs
+  
+  // gcc 4.9.2 is fine but 6.3.0 emits error:
+  //
+  // cxx.cpp:36:5: error: direct-list-initialization of ‘auto’ requires exactly
+  // one element [-fpermissive] 
+  //
+  // };
+  // ^
+  // cxx.cpp:36:5: note: for deduction to ‘std::initializer_list’, use
+  // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)          
+  //
+  // const auto pair_map{
+  //     make_pair(10, "X"),
+  //     make_pair(9, "IX"),
+  //     make_pair(5, "V")
+  // };
+
+  const auto pair_init_01{
+    make_pair(10, "X"),
+    make_pair(9, "IX"),
+    make_pair(5, "V")
+  };
+
+  const auto pair_init_02 = {
+    make_pair(10, "X"),
+    make_pair(9, "IX"),
+    make_pair(5, "V")
+  };
+
+  // vector that has pairs
+
+  std::vector<std::pair<int,string>> pair_init_03{
+    make_pair(10, "X"),
+    make_pair(9, "IX"),
+    make_pair(5, "V")
+  };
+
+  std::vector<std::pair<int,string>> pair_init_04{
+    {10, "X"},
+    {9, "IX"},
+    {5, "V"}
+  };
+
+  // vector that has tuples
+
+  std::vector<std::tuple<int, string, int>> tuple_init_01{
+    make_tuple(10, "X", 1),
+    make_tuple(9, "IX", 2),
+    make_tuple(5, "V", 3)
+  };
+
+  // cxx.cpp:165:3: error: converting to ‘std::tuple<int,
+  // std::basic_string<char, std::char_traits<char>, std::allocator<char> >,
+  // int>’ 
+  //
+  // from initializer list would use explicit constructor ‘constexpr std::tuple<
+  // <template-parameter-1-1> >::tuple(_UElements&& ...) [with _UElements =
+  // {int, const char (&)[2], int}; <template-parameter-2-2> = void; _Elements =
+  // {int, std::basic_string<char, std::char_traits<char>, std::allocator<char>
+  //
+  // >, int}]’
+  //    };
+  //    ^
+  //
+  // why error fot both? However, std-pair has no explicit ctors
+  //
+  // /usr/include/c++/4.9/tuple
+  // /// Primary class template, tuple
+  // template<typename... _Elements> 
+  //   class tuple : public _Tuple_impl<0, _Elements...>
+  //   {
+  //     typedef _Tuple_impl<0, _Elements...> _Inherited;
+  //
+  //     explicit
+  //     constexpr tuple(const _Elements&... __elements)
+  //     : _Inherited(__elements...) { }
+  //
+  // std::vector<std::tuple<int,string, int>> tuple_init_02{
+  //   {10, "X", 1},
+  //   {9, "IX", 2},
+  //   {5, "V", 3}
+  // };
+  //
+  // std::vector<std::tuple<int,string, int>> tuple_init_02 = {
+  //   {10, "X", 1},
+  //   {9, "IX", 2},
+  //   {5, "V", 3}
+  // };
+  
 }
 
 
@@ -35499,6 +35595,9 @@ compile time over the elements of a tuple. Each call of PRINT_TUPLE<>::print()
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-min-max cxx-min cxx-max
+
+  note: 
+  cxx-max is inline function and not macro
 
 // /usr/include/c++/4.9/bits/stl_algobase.h
   /**
