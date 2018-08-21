@@ -418,7 +418,9 @@ float recmax(int l, int u)
   int i, m;
   float lmax, rmax, sum;
 
+#ifdef ALGO3_DEBUG
   cout << "recmax(" << l << ", " << u << ")" << endl;
+#endif
 
   // handle small vectors:
 
@@ -447,7 +449,10 @@ float recmax(int l, int u)
 
     lmax = max(sum, lmax);
   }
+
+#ifdef ALGO3_DEBUG
   cout << "l: " << l << ", u: " << u << ", m: " << m  << ", lmax: " << lmax << endl;
+#endif
 
   // find max crossing to right, sum[m+1, u] and minimum is 0.
   rmax = sum = 0;
@@ -457,17 +462,22 @@ float recmax(int l, int u)
     sum += x[i];
     rmax = max(sum, rmax);
   }
+
+#ifdef ALGO3_DEBUG
   cout << "l: " << l << ", u: " << u << ", m: " << m  << ", rmax: " << rmax << endl;
+#endif
 
   //
   auto uppermax = recmax(m+1, u);
   auto lowmax = recmax(l, m);
 
+#ifdef ALGO3_DEBUG
   cout << "l: " << l << ", u: " << u << ", m: " << m 
     << ", lmax: " << lmax << ", rmax: " << rmax << ", lowmax: " << lowmax << ", uppermax: " << uppermax << endl;
 
   cout << "l: " << l << ", u: " << u << ", m: " << m 
     << ", return: " << max(lmax + rmax, max(lowmax, uppermax)) << endl;
+#endif
 
   return max(lmax + rmax, max(lowmax, uppermax));
 
@@ -480,14 +490,139 @@ float algo3()
   return recmax(0, n-1);
 }
 
-// algnum: 1, n: 1000, numtests: 10000
-// algnum: 1, n: 1000, numtests: 10000, clicks: 608031, 60.8031
-// algnum: 1, n: 10000, numtests: 1000
-// algnum: 1, n: 10000, numtests: 1000, clicks: 776978, 77.6978
-// algnum: 1, n: 10000, numtests: 100
-// algnum: 1, n: 10000, numtests: 100, clicks: 79751, 79.751
-// algnum: 1, n: 100000, numtests: 10
-// algnum: 1, n: 10000, numtests: 10, clicks: 7871, 78.71
+
+// use inline 
+// the key point is that when it goes negative, it is reset to zero and means
+// that i is now the empty vector. That is when sum is zero, discard elements to
+// i as if they are not there. Tried to find input array that proves this wrong
+// but not found.
+//
+// How about when the first, 2, is out of sum range?
+//
+// | 2 | 1 | -5 | 3 | 2 | 1 |
+//     <------------------->
+//     <--------------->
+//     ...
+//              <----------> this is max from all combinations.
+
+float algo4()
+{
+  int i{};
+
+  // sum is maxendingshere in the book
+  float sum{0.0}, maxsofar{0.0};
+
+  for (i =0; i < n; ++i)
+  {
+    sum += x[i];
+
+    sum = std::max(sum, (float)0);
+    maxsofar = std::max(maxsofar, sum);
+  }
+
+  return maxsofar;
+}
+
+// use if
+float algo42()
+{
+  int i{};
+
+  // sum is maxendingshere in the book
+  float sum{0.0}, maxsofar{0.0};
+
+  for (i =0; i < n; ++i)
+  {
+    sum += x[i];
+
+    if (sum < 0)
+      sum = 0;
+    if (maxsofar < sum)
+      maxsofar = sum;
+  }
+
+  return maxsofar;
+}
+
+// use macro
+#define maxmac(a, b) ((a) > (b) ? (a) : (b))
+
+float algo43()
+{
+  int i{};
+
+  // sum is maxendingshere in the book
+  float sum{0.0}, maxsofar{0.0};
+
+  for (i =0; i < n; ++i)
+  {
+    sum += x[i];
+
+    sum = maxmac(sum, (float)0);
+    maxsofar = maxmac(maxsofar, sum);
+  }
+
+  return maxsofar;
+}
+
+// use function
+float maxfunc(float a, float b)
+{
+  return a > b ? a : b;
+}
+
+float algo44()
+{
+  int i{};
+
+  // sum is maxendingshere in the book
+  float sum{0.0}, maxsofar{0.0};
+
+  for (i =0; i < n; ++i)
+  {
+    sum += x[i];
+
+    sum = maxfunc(sum, (float)0);
+    maxsofar = maxfunc(maxsofar, sum);
+  }
+
+  return maxsofar;
+}
+
+
+// algnum: 1, n: 100, numtests: 10
+// algnum: 1, n: 100, numtests: 10, result: 4.50922, clicks: 480934, 480934
+// algnum: 2, n: 100, numtests: 10
+// algnum: 2, n: 100, numtests: 10, result: 4.50922, clicks: 16614, 16614
+// algnum: 3, n: 100, numtests: 10
+// algnum: 3, n: 100, numtests: 10, result: 4.50922, clicks: 13468, 13468
+// algnum: 4, n: 100, numtests: 10
+// algnum: 4, n: 100, numtests: 10, result: 4.50922, clicks: 6396, 6396
+//
+// algo 4, use inline
+// algnum: 5, n: 100, numtests: 10
+// algnum: 5, n: 100, numtests: 10, result: 4.50922, clicks: 1048, 1048
+//
+// algo42,  use if
+// algnum: 6, n: 100, numtests: 10
+// algnum: 6, n: 100, numtests: 10, result: 4.50922, clicks: 468, 468
+//
+// algo43, use macro
+// algnum: 7, n: 100, numtests: 10
+// algnum: 7, n: 100, numtests: 10, result: 4.50922, clicks: 376, 376
+//
+// algo44, use function
+// algnum: 8, n: 100, numtests: 10
+// algnum: 8, n: 100, numtests: 10, result: 4.50922, clicks: 1594, 1594
+
+// when n=1000
+// algnum: 1, n: 1000, numtests: 10
+// algnum: 1, n: 1000, numtests: 10, result: 15.6175, clicks: 819738644, 8.19739e+07
+// algnum: 2, n: 1000, numtests: 10
+// algnum: 2, n: 1000, numtests: 10, result: 15.6175, clicks: 17779096, 1.77791e+06
+// algnum: 3, n: 1000, numtests: 10
+// algnum: 3, n: 1000, numtests: 10, result: 15.6175, clicks: 21752900, 2.17529e+06
+
 
 void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
 {
@@ -495,7 +630,7 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
   float result{};
 
   // to use the same input vector for all algos.
-  n = 1000;
+  n = 100;
   sprinkle();
 
   // while (cin >> algnum >> n >> numtests)
@@ -503,7 +638,7 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
   {
     algnum    = get<0>(e);
     // n         = get<1>(e);
-    n         = 1000;
+    n         = 100;
     numtests  = get<2>(e);
     result    = 0;
 
@@ -530,6 +665,26 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
           case 3: 
             result = algo22();
             break;
+
+          case 4: 
+            result = algo3();
+            break;
+
+          case 5: 
+            result = algo4();
+            break;
+
+          case 6: 
+            result = algo42();
+            break;
+
+          case 7: 
+            result = algo43();
+            break;
+
+          case 8: 
+            result = algo44();
+            break;
         }
       }
     }
@@ -540,7 +695,8 @@ void timedriver(const std::vector<std::tuple<int, int, int>> &tests)
       << ", numtests: " << numtests
       << ", result: " << result
       << ", clicks: " << clicks
-      << ", " << (1e9*clicks/((float)CLOCKS_PER_SEC*n*numtests)) << endl;
+      << ", " << (clicks/((float)CLOCKS_PER_SEC*n*numtests))
+      << ", " << (clicks/(1e9*(float)CLOCKS_PER_SEC*n*numtests)) << endl;
   }
 }
 
@@ -551,7 +707,12 @@ TEST(C8, MaxSubVector)
   std::vector<std::tuple<int, int, int>> tests{
     make_tuple(1, 20, 10),
     make_tuple(2, 20, 10),
-    make_tuple(3, 20, 10)
+    make_tuple(3, 20, 10),
+    make_tuple(4, 20, 10),
+    make_tuple(5, 20, 10),
+    make_tuple(6, 20, 10),
+    make_tuple(7, 20, 10),
+    make_tuple(8, 20, 10)
   };
 
   timedriver(tests);
