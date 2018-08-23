@@ -5549,135 +5549,136 @@ TEST(AlgoList, DetectCycle)
   }
 }
 
-namespace list_simple_linked_list_public
-{
-  // C version list from the reference
-
-  typedef int ListEntry;
-
-  typedef struct node {
-    int       key;
-    struct node *pnext;
-  } ListNode;
-
-  typedef struct {
-    ListNode *header;
-    int count;
-  } List;
-
-  void CombineList(List *first, List *last, List *result)
-  {
-    // handle when one of lists is empty
-    if( !first->header )
-    {
-      *merged = *second;
-      return;
-    }
-    else if ( !second->header ) 
-    {
-      *merged  = *first;
-      return;
-    }
-
-    // handle first comparison
-    ListNode *pfirst = first->header, *psecond = second->header;
-    ListNode *psorted;
-
-    if( LE( pfirst->key, psecond->key ) )
-    {
-      merged->header = pfirst;
-      pfirst = pfirst->pnext;
-    }
-    else
-    {
-      merged->header = psecond;
-      psecond = psecond->pnext;
-    }
-
-    psorted = merged->header;
-
-    // sort until finish one of lists because first and second is alreay sorted itself
-    while( pfirst && psecond )
-    {
-      if( LE( pfirst->key, psecond->key ) )
-      {
-        psorted->pnext = pfirst;
-        psorted = pfirst;
-        pfirst = pfirst->pnext;
-      }
-      else
-      {
-        psorted->pnext = psecond;
-        psorted = psecond;
-        psecond = psecond->pnext;
-      }
-    }
-
-    // when one of lists are finished, simply append the other list to the sorted
-    if(!pfirst)
-      psorted->pnext = psecond;
-    else
-      psorted->pnext = pfirst;
-  }
-} // namespace
-
-
-TEST(AlgoList, Combine)
-{
-  using namespace list_simple_linked_list_public;
-
-  auto input_values{26, 33, 35, 29, 19, 12, 22};
-
-  List simple_list;
-
-  for (auto e : input_values)
-  {
-    simple_list.Add(e);
-  }
-
-  // {0: 26}
-  // {1: 33}
-  // {2: 35}
-  // {3: 29}
-  // {4: 19}
-  // {5: 12}
-  // {6: 22}
-
-  // note:
-  // count of simple_list, simple_second will not be correct after this.
-  
-  List simple_second;
-
-  DivideList(&simple_list, &simple_second);
-
-  // {0: 26}
-  // {1: 33}
-  // {2: 35}
-  // {3: 29}
-  //
-  // {0: 19}
-  // {1: 12}
-  // {2: 22}
-
-}
+// namespace list_simple_linked_list_public_two
+// {
+//   // C version list from the reference
+// 
+//   typedef int ListEntry;
+// 
+//   typedef struct node {
+//     int       key;
+//     struct node *pnext;
+//   } ListNode;
+// 
+//   typedef struct {
+//     ListNode *header;
+//     int count;
+//   } List;
+// 
+//   void CombineList(List *first, List *last, List *result)
+//   {
+//     // handle when one of lists is empty
+//     if( !first->header )
+//     {
+//       *result = *last;
+//       return;
+//     }
+//     else if ( !last->header ) 
+//     {
+//       *result  = *first;
+//       return;
+//     }
+// 
+//     // handle first comparison
+//     ListNode *pfirst = first->header, *psecond = last->header;
+//     ListNode *psorted;
+// 
+//     if(pfirst->key < psecond->key)
+//     {
+//       result->header = pfirst;
+//       pfirst = pfirst->pnext;
+//     }
+//     else
+//     {
+//       result->header = psecond;
+//       psecond = psecond->pnext;
+//     }
+// 
+//     psorted = result->header;
+// 
+//     // sort until finish one of lists because first and second is alreay sorted itself
+//     while( pfirst && psecond )
+//     {
+//       if(pfirst->key < psecond->key)
+//       {
+//         psorted->pnext = pfirst;
+//         psorted = pfirst;
+//         pfirst = pfirst->pnext;
+//       }
+//       else
+//       {
+//         psorted->pnext = psecond;
+//         psorted = psecond;
+//         psecond = psecond->pnext;
+//       }
+//     }
+// 
+//     // when one of lists are finished, simply append the other list to the sorted
+//     if(!pfirst)
+//       psorted->pnext = psecond;
+//     else
+//       psorted->pnext = pfirst;
+//   }
+// } // namespace
+// 
+// 
+// TEST(AlgoList, Combine)
+// {
+//   using namespace list_simple_linked_list_public_two;
+// 
+//   auto input_values{26, 33, 35, 29, 19, 12, 22};
+// 
+//   List simple_list;
+// 
+//   for (auto e : input_values)
+//   {
+//     simple_list.Add(e);
+//   }
+// 
+//   // {0: 26}
+//   // {1: 33}
+//   // {2: 35}
+//   // {3: 29}
+//   // {4: 19}
+//   // {5: 12}
+//   // {6: 22}
+// 
+//   // note:
+//   // count of simple_list, simple_second will not be correct after this.
+//   
+//   List simple_second;
+// 
+//   DivideList(&simple_list, &simple_second);
+// 
+//   // {0: 26}
+//   // {1: 33}
+//   // {2: 35}
+//   // {3: 29}
+//   //
+//   // {0: 19}
+//   // {1: 12}
+//   // {2: 22}
+// }
 
 
 // ={=========================================================================
-// algo-sort
+// algo-sort-insert
 
 // reference code, decending sort
 void sort_insertion_01(vector<int> &coll)
 {
   // start from 1 since one entry is always sorted.
-  
-  for (int unsorted_index = 1; unsorted_index < (int)coll.size(); ++unsorted_index)
+  int size = (int) coll.size(); 
+
+  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
   {
     int sorted_index = unsorted_index-1;
 
     // pick the first from `unsorted` and that is less than the last of the
     // sorted. so have to place it in the sorted area.
     
-    if (coll[unsorted_index] < coll[sorted_index]) 
+    // if (coll[unsorted_index] < coll[sorted_index]) 
+    if (coll[sorted_index] > coll[unsorted_index]) 
     { 
       int unsorted_entry = coll[unsorted_index];
       int current_index = sorted_index;
@@ -5711,7 +5712,9 @@ void sort_insertion_01(vector<int> &coll)
 
 void sort_insertion_02(vector<int> &coll)
 {
-  for (int unsorted_index = 1; unsorted_index < (int)coll.size(); ++unsorted_index)
+  int size = (int) coll.size(); 
+
+  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
   {
     int sorted_index = unsorted_index-1;
 
@@ -5737,7 +5740,9 @@ void sort_insertion_02(vector<int> &coll)
 // `current` starts from the unsorted and uses swap
 void sort_insertion_03(vector<int> &coll)
 {
-  for (int unsorted_index = 1; unsorted_index < (int)coll.size(); ++unsorted_index)
+  int size = (int) coll.size(); 
+
+  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
     for (int current_index = unsorted_index;
         0 < current_index && coll[current_index] < coll[current_index-1];
         --current_index)
@@ -5754,6 +5759,46 @@ void sort_insertion_04(vector<int> &coll)
 
   for (auto run = first; run != coll.end(); ++run)
     rotate(upper_bound(first, run, *run), run, next(run));
+}
+
+// From Programming Pearl 11.1
+//
+// for i = [1, n)
+//  // invariant: x[0..i-1] is sorted
+//  // shift x[i] down to its proper place in x[0..i]
+//
+// From the swap version which do two operations, move down elements and put the
+// saved back when loop ends as 01/02 version. So one update rather than doing
+// it every time which runs faster.
+
+void sort_insertion_05(vector<int> &coll)
+{
+  int size = (int) coll.size(); 
+
+  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
+  {
+    int unsorted = coll[unsorted_index];
+    int current_index = unsorted_index;
+
+    for (; 0 < current_index && unsorted < coll[current_index-1];
+        --current_index)
+    {
+      // swap current and current-1
+      // swap(coll[current_index], coll[current_index-1]);
+      coll[current_index] = coll[current_index-1];
+    }
+
+    coll[current_index] = unsorted;
+
+#ifdef SORT_INSERT_DEBUG
+    cout << "coll(" << unsorted_index << ", " << current_index << "): ";
+
+    for (int i = 0; i < size; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+#endif // SORT_INSERT_DEBUG
+  }
 }
 
 TEST(AlgoSort, Insertion_01)
@@ -5782,7 +5827,187 @@ TEST(AlgoSort, Insertion_01)
     EXPECT_THAT(coll, 
         ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
   }
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_05(coll);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
 }
+
+
+// ={=========================================================================
+// algo-sort-quick
+
+namespace algo_sort_quick {
+
+  // note that swap happens on the same index and `lastsmall` vary. 
+
+  int build_partition(vector<int> &coll, int first, int last)
+  {
+    int lastsmall = first;
+
+    // as with binary search, chance to overflow
+    int pivot = (first + last)/2;
+
+    int pivot_value = coll[pivot];
+
+#ifdef SORT_QUICK_DEBUG
+    cout << "build i(" << first << ", " << last << "): ";
+
+    for (int i = first; i <= last; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+#endif // SORT_QUICK_DEBUG
+
+    // move it to the first pos
+    swap(coll[first], coll[pivot]);
+
+    for (int i = first+1; i <= last; ++i)
+    {
+      if (coll[i] < pivot_value)
+        swap(coll[++lastsmall], coll[i]);
+    }
+
+    swap(coll[first], coll[lastsmall]);
+
+#ifdef SORT_QUICK_DEBUG
+    cout << "build o(" << first << ", " << last << "): ";
+
+    for (int i = first; i <= last; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+#endif // SORT_QUICK_DEBUG
+
+    return lastsmall;
+  }
+
+  // from ansic, p87. exactly same way.
+  //
+  // void cqsort( int v[], int left, int right )
+  // {
+  //   int i, last;
+  //
+  //   // do nothing if array contains fewer than two elements
+  //   if( left >= right )
+  //     return;
+  //
+  //   // move partition elem
+  //   swap( v, left, (left+right)/2 );
+  //
+  //   last = left;  // to v[0]
+  //
+  //   // partition
+  //   for(i = left+1; i <= right; i++)
+  //     if( v[i] < v[left] )
+  //       swap( v, ++last, i );   // shall ++last
+  //
+  //   // restore partition elem
+  //   swap(v, left, last);
+  //
+  //   cqsort( v, left, last-1 );
+  //   cqsort( v, last+1, right );
+  // }
+}
+
+void sort_quick_01(vector<int> &coll, int first, int last)
+{
+  using namespace algo_sort_quick;
+
+  int lastsmall{};
+
+  // when has more than one element
+  if (first < last)
+  {
+    lastsmall = build_partition(coll, first, last);
+    sort_quick_01(coll, first, lastsmall-1);
+    sort_quick_01(coll, lastsmall+1, last);
+  }
+}
+
+TEST(AlgoSort, Quick_01)
+{
+  //   29, 33, 35, 26, 19, 12, 22,
+  // [26]| 33 35 29 | 19 12 22
+  // [26]| 19 | 35 29 33 | 12 22
+  // [26]| 19 12 | 29 33 35 | 22
+  // [26]| 19 12 22 | 33 35 29 |
+  // 22 19 12 | 26 | 33 35 29 |
+  // ...
+  //
+  // build i(0, 6): 29, 33, 35, 26, 19, 12, 22,
+  // build o(0, 6): 22, 19, 12, 26, 33, 35, 29,
+  // build i(0, 2): 22, 19, 12,
+  // build o(0, 2): 12, 19, 22,
+  // build i(4, 6): 33, 35, 29,
+  // build o(4, 6): 29, 33, 35,
+  // build i(4, 5): 29, 33,
+  // build o(4, 5): 29, 33,
+
+  {
+    vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+
+    sort_quick_01(coll, 0, coll.size()-1);
+
+    EXPECT_THAT(coll, 
+        ElementsAre(12, 19, 22, 26, 29, 33, 35));
+  }
+
+  // build i(0, 12): 30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6,
+  // build o(0, 12): 6, 2, 5, 6, 10, 12, 30, 33, 13, 15, 17, 29, 31,
+  // build i(0, 4): 6, 2, 5, 6, 10,
+  // build o(0, 4): 2, 5, 6, 6, 10,
+  // build i(2, 4): 6, 6, 10,
+  // build o(2, 4): 6, 6, 10,
+  // build i(3, 4): 6, 10,
+  // build o(3, 4): 6, 10,
+  // build i(6, 12): 30, 33, 13, 15, 17, 29, 31,
+  // build o(6, 12): 13, 15, 33, 30, 17, 29, 31,
+  // build i(8, 12): 33, 30, 17, 29, 31,
+  // build o(8, 12): 17, 30, 33, 29, 31,
+  // build i(9, 12): 30, 33, 29, 31,
+  // build o(9, 12): 31, 30, 29, 33,
+  // build i(9, 11): 31, 30, 29,
+  // build o(9, 11): 29, 30, 31,
+
+  {
+    vector<int> coll{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
+
+    sort_quick_01(coll, 0, coll.size()-1);
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+  }
+
+  // when input is already sorted
+  //
+  // build i(0, 12): 2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33,
+  // build o(0, 12): 2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33,
+  // build i(0, 5): 2, 5, 6, 6, 10, 12,
+  // build o(0, 5): 2, 5, 6, 6, 10, 12,
+  // build i(0, 1): 2, 5,
+  // build o(0, 1): 2, 5,
+  // build i(3, 5): 6, 10, 12,
+  // build o(3, 5): 6, 10, 12,
+  // build i(7, 12): 15, 17, 29, 30, 31, 33,
+  // build o(7, 12): 15, 17, 29, 30, 31, 33,
+  // build i(7, 8): 15, 17,
+  // build o(7, 8): 15, 17,
+  // build i(10, 12): 30, 31, 33,
+  // build o(10, 12): 30, 31, 33,
+
+  {
+    vector<int> coll{2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+
+    sort_quick_01(coll, 0, coll.size()-1);
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+  }
+}
+
 
 // ={=========================================================================
 // algo-search-binary-search

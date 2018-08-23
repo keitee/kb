@@ -14637,6 +14637,55 @@ void sort_insertion_03(vector<int> &coll)
     }
 }
 
+// https://www.codeproject.com/Articles/854127/Top-Beautiful-Cplusplus-std-Algorithms-Examples
+void sort_insertion_04(vector<int> &coll)
+{
+  auto first = coll.begin();
+
+  for (auto run = first; run != coll.end(); ++run)
+    rotate(upper_bound(first, run, *run), run, next(run));
+}
+
+// From Programming Pearl 11.1
+//
+// for i = [1, n)
+//  // invariant: x[0..i-1] is sorted
+//  // shift x[i] down to its proper place in x[0..i]
+//
+// From the swap version which do two operations, move down elements and put the
+// saved back when loop ends as 01/02 version. So one update rather than doing
+// it every time which runs faster.
+
+void sort_insertion_05(vector<int> &coll)
+{
+  int size = (int) coll.size(); 
+
+  for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
+  {
+    int unsorted = coll[unsorted_index];
+    int current_index = unsorted_index;
+
+    for (; 0 < current_index && unsorted < coll[current_index-1];
+        --current_index)
+    {
+      // swap current and current-1
+      // swap(coll[current_index], coll[current_index-1]);
+      coll[current_index] = coll[current_index-1];
+    }
+
+    coll[current_index] = unsorted;
+
+#ifdef SORT_INSERT_DEBUG
+    cout << "coll(" << unsorted_index << ", " << current_index << "): ";
+
+    for (int i = 0; i < size; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+#endif // SORT_INSERT_DEBUG
+  }
+}
+
 
 TEST(AlgoSort, Insertion_01)
 {
@@ -14655,6 +14704,18 @@ TEST(AlgoSort, Insertion_01)
   {
     vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
     sort_insertion_03(coll);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_04(coll);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
+  {
+    vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_insertion_05(coll);
     EXPECT_THAT(coll, 
         ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
   }
@@ -15551,13 +15612,13 @@ size: 2 ~
 { 2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33, }
 
 
-{algo-sort-quicksort}
-This is great for 'contiguous' list and the contiguous list is the most
+{algo-sort-quick}
+This is `great for contiguous` list and the contiguous list is the most
 important application for quicksort because prove to be fast and has the
 advantage over contiguous mergesort of not requiring extra space, complicated
 and difficult programming effort. Unlike mergesort, the size of the sublist
 cannot be predicted in advance since it depends on pivot selection. Poor worst
-case, O(n2) and excellent average case O(nlogn).
+case, O(n2) and excellent average case `O(nlogn)`.
 
 * uses swapping entries and keep sublists(subsets) in the same list so no
   extra space. 
@@ -15571,11 +15632,16 @@ case, O(n2) and excellent average case O(nlogn).
 * The sublists are 'not' sorted and entry is 'not' in the final position
   during running. 
 
+* Compared with the mergesort, see that it has rather simple tree. Hence
+  better.
 
-<partioning> <choice-of-pivot> how to partition as evenly as possible
+
+<partioning> <choice-of-pivot> 
 There are several methods but the algorithm we develop is much simpler and
 easier to understand, and not slow; in fact it does the smallest possible
 number of key comparisons of any partitioning algorithm. 
+
+How to partition as evenly as possible?
 
 This algorithm uses the `middle as a pivot and swap it to the first`, and do
 partitioning.
@@ -15589,10 +15655,15 @@ pivot.
 The average when applied to lists in random order turns out to be the best of
 any sorting algorithms.
 
-note WHY is it better to have about half on each side? Otherwise, will end up
-with long and narrow comparison tree, meaning a chain which is a bad case for
-comparison tree. The worst case is when the keys are in their natural order or
-in their reverse order if choose the pivot as the first or the last key. 
+// note:
+// not sure why the sorted input is worst since do almost comparison but swap
+// calls can be different.
+//
+// Why is it better to have about half on each side? Otherwise, will end up
+// with long and narrow comparison tree, meaning a chain which is a bad case
+// for comparison tree. The worst case is when the keys are in their natural
+// order or in their reverse order if choose the pivot as the first or the
+// last key. 
 
 
 <algo>
@@ -15632,419 +15703,172 @@ Then swap(low, lastsmall) and get
 |      < p     | p |      p <=       | 
 
 
-<ex> reference ex
-
-(29  33 35 <26> 19 12 22) 
-<26> 33 35  29  19 12 22 [pivot]
-
-< 26              => 26
-[19] 12 22        [33] 35 29
-
-12 
-...
-
-// execution-trace
-Sort( 26, 33, 35, 29, 19, 12, 22 )
-  Partition into ( 19, 12, 22 ) and ( 33, 35, 29 ); pivot = 26, pivotpos = 3
-
-  Sort( 19, 12, 22 )    // [0-2]
-    Partition into ( 12 ) and ( 22 ); pivot = 19, pivotpis = 1   // 12 19 22
-    Sort(12)
-    Sort(22)
-
-  Sort( 33, 35, 29 )    // [4-6]
-    Partition into ( 29 ) and ( 35 ); pivot = 33, pivotpos = 5   // 29 33 35
-    Sort(29)
-    Sort(35)
-
-
-   0   1   2   3   4   5   6
-(  29, 33, 35, <26>, 19, 12, 22 )
-(<26>, 33, 35,   29, 19, 12, 22 )
-(  26, 19, 12,   22, 33, 35, 29 )   // lastsmall == 3
-(  22, 19, 12, <26>, 33, 35, 29 )
-
-( 22, <19>, 12 )  ( 33, <35>, 29 )
-( 19,   22, 12 )  ( 35,   33, 29 )
-( 19,   12, 22 )  ( 29,   33, 35 )   // here pivotpos is 6
-( 12,   19, 22 )  
- <12>      <22>   ( 29,  33) <35>
-                   <29> <33>
-
-(12, 19, 22, 26, 29, 33, 35)
-
-
-// recustion-tree
-
-----(1) sortQuick(0, 6)
-          buildPartion( Pivot[26]), middle[3
-          buildPartion(0, 6) returned posPivot = 3, Pivot[26]
-------(2) sortQuick(0, 2)
-            buildPartion( Pivot[19]), middle[1
-            buildPartion(0, 2) returned posPivot = 1, Pivot[19]
-------(2) sortQuick(4, 6)
-            buildPartion( Pivot[35]), middle[5
-            buildPartion(4, 6) returned posPivot = 6, Pivot[35]
---------(3) sortQuick(4, 5)
-              buildPartion( Pivot[29]), middle[4
-              buildPartion(4, 5) returned posPivot = 4, Pivot[29]
-
-{ 12, 19, 22, 26, 29, 33, 35, }
-
-// excludes a pivot itself when calls next
-void RecQuickSort( List* list, Position low, Position high )
-{
-  Position pivotpos;
-
-  if( low < high )
-  {
-    pivotpos = Partition( list, low, high );
-    RecQuickSort( list, low, pivotpos-1 );
-    RecQuickSort( list, pivotpos+1, high );
-  }
-}
-
-// This returns the last index of lastsmall. The exact outline of explanation above.
-Position Partition(List* list, Position low, Position high)
-{
-  ListEntry pivot;
-  Position i, lastsmall, pivotpos;
-
-  Swap( low, (low+high)/2, list );
-  pivot = list->entry[low];
-  pivotpos = low;
-  for( i=low+1; i <= high; i++ )
-    if( LT( list->entry[i].key, pivot.key ))
-      Swap( ++pivotpos, i, list );
-
-  Swap(low, pivotpos, list);
-  return pivotpos;
-}
-
 <code>
-<1>
-#include <iostream>
+namespace algo_sort_quick {
 
-#define GT(x,y) ((x)>(y))
-#define LT(x,y) ((x)<(y))
-#define EQ(x,y) ((x)==(y))
+  // note that swap happens on the same index and `lastsmall` vary. 
 
-typedef int Position;
-typedef int Entry;
-
-unsigned int depthRecursion;
-void PrintDepth( bool dash, unsigned int depth )
-{
-  for( unsigned int i=0; i <= depth; ++i)
+  int build_partition(vector<int> &coll, int first, int last)
   {
-    if(dash)
-      std::cout << "--";
-    else
-      std::cout << "  ";
+    int lastsmall = first;
+
+    // as with binary search, chance to overflow
+    int pivot = (first + last)/2;
+
+    int pivot_value = coll[pivot];
+
+    // debug
+    cout << "build i(" << first << ", " << last << "): ";
+
+    for (int i = first; i <= last; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+
+    // move it to the first pos
+    swap(coll[first], coll[pivot]);
+
+    for (int i = first+1; i <= last; ++i)
+    {
+      if (coll[i] < pivot_value)
+        swap(coll[++lastsmall], coll[i]);
+    }
+
+    swap(coll[first], coll[lastsmall]);
+
+    // debug
+    cout << "build o(" << first << ", " << last << "): ";
+
+    for (int i = first; i <= last; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+
+    return lastsmall;
   }
 
-  if(dash)
-    std::cout << "(" << depth << ") ";
-  else
-    std::cout << "      ";
+  // from ansic, p87. exactly same way.
+  //
+  // void cqsort( int v[], int left, int right )
+  // {
+  //   int i, last;
+  //
+  //   // do nothing if array contains fewer than two elements
+  //   if( left >= right )
+  //     return;
+  //
+  //   // move partition elem
+  //   swap( v, left, (left+right)/2 );
+  //
+  //   last = left;  // to v[0]
+  //
+  //   // partition
+  //   for(i = left+1; i <= right; i++)
+  //     if( v[i] < v[left] )
+  //       swap( v, ++last, i );   // shall ++last
+  //
+  //   // restore partition elem
+  //   swap(v, left, last);
+  //
+  //   cqsort( v, left, last-1 );
+  //   cqsort( v, last+1, right );
+  // }
 }
 
-// expects start and end in index
-void swapEntry( Position x, Position y, int* array)
+void sort_quick_01(vector<int> &coll, int first, int last)
 {
-  int xval = array[x];
+  using namespace algo_sort_quick;
 
-  array[x] = array[y];
-  array[y] = xval;
-}
+  int lastsmall{};
 
-Position buildPartion( Entry* array, Position start, Position end )
-{
-  Position idx, posPivot;
-  Entry entryPivot;
-
-  // use the center as a pivot, <key> swap happens on the 'same' index 
-  swapEntry( start, (start+end)/2, array );
-
-  // from start+1 since start is a pivot
-  for( idx = start+1, posPivot = start, entryPivot = array[start]; idx <= end; idx++ )
+  // when has more than one element
+  if (first < last)
   {
-    if( LT( array[idx], entryPivot ))
-      swapEntry( ++posPivot, idx, array );  // <key> swap happens on the 'same' index
-  }
-
-  // swap back <key> swap happens on the 'different' index from the middle
-  swapEntry( start, posPivot, array );
-
-  PrintDepth( false, depthRecursion );
-  std::cout << "buildPartion(" << start << ", " << end << ") returned posPivot = " << posPivot << std::endl;
-
-  // this posPivot varies depending on input
-  return posPivot;
-}
-
-// expects the length of array
-void sortQuick( Entry* array, Position start, Position end )
-{
-  Position posPivot;
-
-  if( start < end )  // <key> this means when there is one is the stop condition.
-  {
-    depthRecursion++;
-    PrintDepth( true, depthRecursion );
-
-    std::cout << "sortQuick(" << start << ", " << end << ")" << std::endl;
-
-    posPivot = buildPartion( array, start, end );
-    sortQuick( array, start, posPivot-1 );  // <key> +1 and -1.
-    sortQuick( array, posPivot+1, end );
-
-    depthRecursion--;
-  }
-}
-
-int main()
-{
-   // int arr[] = { 2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 };
-   int arr[] = { 30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6 };
-   int size = ( sizeof(arr)/sizeof(arr[0]));
-
-   sortQuick( arr, 0, size-1 );
-
-   std::cout << "{ "; 
-   
-   for(int idx = 0; idx < size; idx++)
-      std::cout << arr[idx] << ", "; 
-
-   std::cout << "}" << std::endl; 
-}
-
-<recustion-tree>
-//    0  1   2  3   4  5   6   7   8   9  10  11  12
-//  {30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6, }
-
-----(1) sortQuick(0, 12)
-          // input
-          before: {30, 2, 31, 5, 33, 6, <12>, 10, 13, 15, 17, 29, 6, }
-          // move pivot to 0th
-          before: {12, 2, 31, 5, 33, 6, 30, 10, 13, 15, 17, 29, 6, }
-          //                         5 
-          before: {12, 2, 5, 6, 10,  <6>, 30, 33, 13, 15, 17, 29, 31, }
-          buildPartion(0, 12) returned posPivot = 5
-          after : { 6, 2, 5, 6, 10, <12>, 30, 33, 13, 15, 17, 29, 31, }
-------(2) sortQuick(0, 4)
-            before: {6, 2, 5, 6, 10, }
-            before: {5, 2, 6, 6, 10, }
-            before: {5, 2, 6, 6, 10, }
-            buildPartion(0, 4) returned posPivot = 1
-            after: {2, 5, 6, 6, 10, }
---------(3) sortQuick(2, 4)
-              before: {6, 6, 10, }
-              before: {6, 6, 10, }
-              before: {6, 6, 10, }
-              buildPartion(2, 4) returned posPivot = 2
-              after: {6, 6, 10, }
-----------(4) sortQuick(3, 4)
-                before: {6, 10, }
-                before: {6, 10, }
-                before: {6, 10, }
-                buildPartion(3, 4) returned posPivot = 3
-                after: {6, 10, }
-------(2) sortQuick(6, 12)
-            before: {30, 33, 13, 15, 17, 29, 31, }
-            before: {15, 33, 13, 30, 17, 29, 31, }
-            before: {15, 13, 33, 30, 17, 29, 31, }
-            buildPartion(6, 12) returned posPivot = 7
-            after: {13, 15, 33, 30, 17, 29, 31, }
---------(3) sortQuick(8, 12)
-              before: {33, 30, 17, 29, 31, }
-              before: {17, 30, 33, 29, 31, }
-              before: {17, 30, 33, 29, 31, }
-              buildPartion(8, 12) returned posPivot = 8
-              after: {17, 30, 33, 29, 31, }
-----------(4) sortQuick(9, 12)
-                before: {30, 33, 29, 31, }
-                before: {33, 30, 29, 31, }
-                before: {33, 30, 29, 31, }
-                buildPartion(9, 12) returned posPivot = 12
-                after: {31, 30, 29, 33, }
-------------(5) sortQuick(9, 11)
-                  before: {31, 30, 29, }
-                  before: {30, 31, 29, }
-                  before: {30, 29, 31, }
-                  buildPartion(9, 11) returned posPivot = 10
-                  after: {29, 30, 31, }
-
-{ 2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33, }
-
-
-Compared with the mergesort, see that it has rather simple tree. Hence better.
-
-<when-input-is-already-sorted>
-----(1) sortQuick(0, 12)
-swap: x == y
-swap: x == y
-swap: x == y
-swap: x == y
-swap: x == y
-swap: x == y
-          buildPartion(0, 12) returned posPivot = 6
-------(2) sortQuick(0, 5)
-swap: x == y
-swap: x == y
-            buildPartion(0, 5) returned posPivot = 2
---------(3) sortQuick(0, 1)
-swap: x == y
-swap: x == y
-              buildPartion(0, 1) returned posPivot = 0
---------(3) sortQuick(3, 5)
-swap: x == y
-              buildPartion(3, 5) returned posPivot = 4
-------(2) sortQuick(7, 12)
-swap: x == y
-swap: x == y
-            buildPartion(7, 12) returned posPivot = 9
---------(3) sortQuick(7, 8)
-swap: x == y
-swap: x == y
-              buildPartion(7, 8) returned posPivot = 7
---------(3) sortQuick(10, 12)
-swap: x == y
-              buildPartion(10, 12) returned posPivot = 11
-
-{ 2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33, }
-
-
-<when-is-not-sorted>
-
-{ 30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6 };
-
-----(1) sortQuick(0, 12)
-          swap: 1, 1
-          buildPartion(0, 12) returned posPivot = 5, Pivot[12]
-------(2) sortQuick(0, 4)
-            swap: 1, 1
-            buildPartion(0, 4) returned posPivot = 1, Pivot[5]
---------(3) sortQuick(2, 4)
-              swap: 2, 2
-              buildPartion(2, 4) returned posPivot = 2, Pivot[6]
-----------(4) sortQuick(3, 4)
-                swap: 3, 3
-                swap: 3, 3
-                buildPartion(3, 4) returned posPivot = 3, Pivot[6]
-------(2) sortQuick(6, 12)
-            buildPartion(6, 12) returned posPivot = 7, Pivot[15]
---------(3) sortQuick(8, 12)
-              swap: 8, 8
-              buildPartion(8, 12) returned posPivot = 8, Pivot[17]
-----------(4) sortQuick(9, 12)
-                swap: 10, 10
-                swap: 11, 11
-                swap: 12, 12
-                buildPartion(9, 12) returned posPivot = 12, Pivot[33]
-------------(5) sortQuick(9, 11)
-                  buildPartion(9, 11) returned posPivot = 10, Pivot[30]
-
-{ 2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33, }
-
-<2>
-#include <iostream>
-
-#define LT(x,y) ((x)<(y))
-
-void swap( int *array, int x, int y )
-{
-  int temp = array[x];
-
-  array[x] = array[y];
-  array[y] = temp;
-}
-
-int divide( int *array, int start, int end )
-{
-  int pospiv = (start+end)/2;
-  int pivot = array[pospiv];
-  int lastsmall = start;
-  
-  // swap start and selected pivot
-  swap( array, start, pospiv );
-
-  // divide as to property
-  for( int i = start+1; i <= end; i++ )
-    if( LT( array[i], pivot ) )
-      swap( array, ++lastsmall, i );
-
-  // swap back
-  swap( array, start, lastsmall );
-
-  return lastsmall;
-}
-
-// do not work, why?
-int divide_mod( int *array, int start, int end )
-{
-  int pospiv = (start+end)/2;
-  int pivot = array[pospiv];
-  int lastsmall = start;
-  
-  // divide as to property
-  for( int i = start; i <= end; i++ )
-    if( LT( array[i], pivot ) )
-      swap( array, lastsmall++, i );
-
-  return lastsmall;
-}
-
-void mqsort( int *array, int start, int end )
-{
-  if( start < end ) 
-  {
-    int posdiv = divide_mod( array, start, end );
-    //int posdiv = divide( array, start, end );
-    mqsort( array, start, posdiv-1 );
-    mqsort( array, posdiv+1, end );
+    lastsmall = build_partition(coll, first, last);
+    sort_quick_01(coll, first, lastsmall-1);
+    sort_quick_01(coll, lastsmall+1, last);
   }
 }
 
-int main()
+TEST(AlgoSort, Quick_01)
 {
-  int arr[] = { 30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6 };
-  int size = ( sizeof(arr)/sizeof(arr[0]));
+  //   29, 33, 35, 26, 19, 12, 22,
+  // [26]| 33 35 29 | 19 12 22
+  // [26]| 19 | 35 29 33 | 12 22
+  // [26]| 19 12 | 29 33 35 | 22
+  // [26]| 19 12 22 | 33 35 29 |
+  // 22 19 12 | 26 | 33 35 29 |
+  // ...
+  //
+  // build i(0, 6): 29, 33, 35, 26, 19, 12, 22,
+  // build o(0, 6): 22, 19, 12, 26, 33, 35, 29,
+  // build i(0, 2): 22, 19, 12,
+  // build o(0, 2): 12, 19, 22,
+  // build i(4, 6): 33, 35, 29,
+  // build o(4, 6): 29, 33, 35,
+  // build i(4, 5): 29, 33,
+  // build o(4, 5): 29, 33,
 
-  mqsort( arr, 0, size-1 );
+  {
+    vector<int> coll{29, 33, 35, 26, 19, 12, 22};
 
-  std::cout << "{ "; 
+    sort_quick_01(coll, 0, coll.size()-1);
 
-  for(int idx = 0; idx < size; idx++)
-    std::cout << arr[idx] << ", "; 
+    EXPECT_THAT(coll, 
+        ElementsAre(12, 19, 22, 26, 29, 33, 35));
+  }
 
-  std::cout << "}" << std::endl; 
-}
+  // build i(0, 12): 30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6,
+  // build o(0, 12): 6, 2, 5, 6, 10, 12, 30, 33, 13, 15, 17, 29, 31,
+  // build i(0, 4): 6, 2, 5, 6, 10,
+  // build o(0, 4): 2, 5, 6, 6, 10,
+  // build i(2, 4): 6, 6, 10,
+  // build o(2, 4): 6, 6, 10,
+  // build i(3, 4): 6, 10,
+  // build o(3, 4): 6, 10,
+  // build i(6, 12): 30, 33, 13, 15, 17, 29, 31,
+  // build o(6, 12): 13, 15, 33, 30, 17, 29, 31,
+  // build i(8, 12): 33, 30, 17, 29, 31,
+  // build o(8, 12): 17, 30, 33, 29, 31,
+  // build i(9, 12): 30, 33, 29, 31,
+  // build o(9, 12): 31, 30, 29, 33,
+  // build i(9, 11): 31, 30, 29,
+  // build o(9, 11): 29, 30, 31,
 
-<3> from ansic, p87. exactly same way.
-void cqsort( int v[], int left, int right )
-{
-  int i, last;
+  {
+    vector<int> coll{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
 
-  // do nothing if array contains fewer than two elements
-  if( left >= right )
-    return;
+    sort_quick_01(coll, 0, coll.size()-1);
 
-  // move partition elem
-  swap( v, left, (left+right)/2 );
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+  }
 
-  last = left;  // to v[0]
+  // when input is already sorted
+  //
+  // build i(0, 12): 2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33,
+  // build o(0, 12): 2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33,
+  // build i(0, 5): 2, 5, 6, 6, 10, 12,
+  // build o(0, 5): 2, 5, 6, 6, 10, 12,
+  // build i(0, 1): 2, 5,
+  // build o(0, 1): 2, 5,
+  // build i(3, 5): 6, 10, 12,
+  // build o(3, 5): 6, 10, 12,
+  // build i(7, 12): 15, 17, 29, 30, 31, 33,
+  // build o(7, 12): 15, 17, 29, 30, 31, 33,
+  // build i(7, 8): 15, 17,
+  // build o(7, 8): 15, 17,
+  // build i(10, 12): 30, 31, 33,
+  // build o(10, 12): 30, 31, 33,
 
-  // partition
-  for(i = left+1; i <= right; i++)
-    if( v[i] < v[left] )
-      swap( v, ++last, i );   // shall ++last
+  {
+    vector<int> coll{2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
 
-  // restore partition elem
-  swap(v, left, last);
+    sort_quick_01(coll, 0, coll.size()-1);
 
-  cqsort( v, left, last-1 );
-  cqsort( v, last+1, right );
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 5, 6, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+  }
 }
 
 
