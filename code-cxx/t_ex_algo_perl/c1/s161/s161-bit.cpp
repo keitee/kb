@@ -1,5 +1,13 @@
 #include <iostream>
 
+/*
+1.6.1
+
+If memory were not sparce, how would you implement a sort in a language with
+libraries for representing and sorting sets?
+
+*/ 
+
 const unsigned int BITSPERWORD = 32;
 const unsigned int SHIFT = 5;
 const unsigned int MASK = 0x1F;
