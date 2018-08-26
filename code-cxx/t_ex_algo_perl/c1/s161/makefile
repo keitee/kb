@@ -10,6 +10,9 @@ TARGET1 = s161-qsort
 TARGET2 = s161-stl
 TARGET3 = s161-bit
 TARGET4 = s161-stl-sort
+TARGET5 = s161-stl-sort-array
+TARGET6 = s161-isort
+TARGET7 = s161-qsort-own
 
 # Where to find user code.
 USER_DIR = .
@@ -18,7 +21,8 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 
-TESTS = $(TARGET1)_test $(TARGET2)_test $(TARGET3)_test $(TARGET4)_test
+TESTS = $(TARGET1)_test $(TARGET2)_test $(TARGET3)_test $(TARGET4)_test \
+	$(TARGET5)_test $(TARGET6)_test $(TARGET7)_test
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -80,4 +84,25 @@ $(TARGET4).o : $(TARGET4).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET4).cpp -o $(TARGET4).o
 
 $(TARGET4)_test : $(TARGET4).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET5).o : $(TARGET5).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET5).cpp -o $(TARGET5).o
+
+$(TARGET5)_test : $(TARGET5).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET6).o : $(TARGET6).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET6).cpp -o $(TARGET6).o
+
+$(TARGET6)_test : $(TARGET6).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET7).o : $(TARGET7).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET7).cpp -o $(TARGET7).o
+
+$(TARGET7)_test : $(TARGET7).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

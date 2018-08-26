@@ -1,11 +1,10 @@
 #include <iostream>
 
 /*
-1.6.1
+1.6.2
 
-If memory were not sparce, how would you implement a sort in a language with
-libraries for representing and sorting sets?
-
+How would you implement bit vectors using bitwise logical operations(such as
+and, or an shift)?
 */ 
 
 const unsigned int BITSPERWORD = 32;
@@ -79,7 +78,9 @@ int main(void)
 
   // don't have output part to focus on sorting time rather than input/output
 
-  std::cout << "1.6.1: bit" << std::endl;
+  // sizeof(a): 1,250,004
+  std::cout << "sizeof(a): " << sizeof(a) << std::endl;
+  std::cout << "1.6.1: bit vector" << std::endl;
 
   return 0;
 }
