@@ -53,7 +53,7 @@ int main(void)
   // for (int i = 0; i < n; i++)
   //   std::cout << a[i] << std::endl;
 
-  std::cout << "1.6.1: library qsort" << std::endl;
+  std::cout << "1.6.1: n: " << n << " library qsort" << std::endl;
 
   return 0;
 }

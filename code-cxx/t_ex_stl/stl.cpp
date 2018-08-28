@@ -54,17 +54,17 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
     cout << " (" << count << ")" << endl;
 }
 
-template <typename T>
-void PRINT_Q_ELEMENTS(const T& coll, const string &optstr = "")
-{
-  size_t count = coll.size();
-  cout << optstr;
-
-  for(size_t i = 0; i < count; ++i)
-    cout << coll.top() << " ";
-
-  cout << "(" << count << ")" << endl;
-}
+// template <typename T>
+// void PRINT_Q_ELEMENTS(const T& coll, const string &optstr = "")
+// {
+//   size_t count = coll.size();
+//   cout << optstr;
+// 
+//   for(size_t i = 0; i < count; ++i)
+//     cout << coll.top() << " ";
+// 
+//   cout << "(" << count << ")" << endl;
+// }
 
 
 // ={=========================================================================
@@ -893,26 +893,48 @@ TEST(DISABLED_StlDeque, HowDequeSupportEmpty)
 // ={=========================================================================
 // cxx-queue-priority
 
-TEST(CxxStlTest, QueueProritySort)
+TEST(CollQueue, PriorityQueue)
 {
-  priority_queue<float> pq;
+  // priority_queue<float> pq;
+  priority_queue<int> pq;
 
-  pq.push(66.6);
-  pq.push(22.2);
-  pq.push(44.4);
+  pq.push(66);
+  pq.push(22);
+  pq.push(44);
 
+  // EXPECT_THAT(pq.top(), FloatEq(66.6));
+  // pq.pop();
+
+  // EXPECT_THAT(pq.top(), FloatEq(44.4));
+  // pq.pop();
+
+  EXPECT_THAT(pq.top(), Eq(66));
   pq.pop();
 
-  PRINT_Q_ELEMENTS(pq, "1: ");
+  EXPECT_THAT(pq.top(), Eq(44));
+  pq.pop();
 
   // insert more
-  pq.push(11.1);
-  pq.push(55.5);
-  pq.push(33.3);
+  pq.push(11);
+  pq.push(55);
+  pq.push(33);
 
-  PRINT_Q_ELEMENTS(pq, "2: ");
   pq.pop();
-  PRINT_Q_ELEMENTS(pq, "3: ");
+
+  // since queue do not support begin()/end(), cannot use ElementsAre and copy
+  // to transform it to a vector. Did it manually.
+
+  vector<int> coll;
+
+  while (!pq.empty())
+  {
+    coll.push_back(pq.top());
+    pq.pop();
+  }
+
+  // copy(pq.begin(), pq.end(), back_inserter(coll));
+
+  EXPECT_THAT(coll, ElementsAre(33, 22, 11));
 }
 
 

@@ -61,7 +61,8 @@ bool test_bit(int pos)
 
 int main(void)
 {
-  int value;
+  int value; 
+  int n{};
 
   // To compare C++ version, use the same cin.
   //
@@ -69,7 +70,10 @@ int main(void)
   //   ++n;
   
   while (std::cin >> value)
+  {
     set_bit(value);
+    ++n;
+  }
 
   // To verify:
   // for (int i = 0; i < INPUT_MAX; ++i)
@@ -80,7 +84,7 @@ int main(void)
 
   // sizeof(a): 1,250,004
   std::cout << "sizeof(a): " << sizeof(a) << std::endl;
-  std::cout << "1.6.1: bit vector" << std::endl;
+  std::cout << "1.6.1: n: " << n << " bit vector" << std::endl;
 
   return 0;
 }

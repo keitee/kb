@@ -32,7 +32,7 @@ int main(void)
 
   // void sort_insertion_05(vector<int> &coll)
   {
-    int size = INPUT_MAX;
+    int size = n;
 
     for (int unsorted_index = 1; unsorted_index < size; ++unsorted_index)
     {
@@ -53,7 +53,7 @@ int main(void)
 
   // don't have output part to focus on sorting time rather than input/output
 
-  std::cout << "1.6.1: inseriton sort on array" << std::endl;
+  std::cout << "1.6.1: n: " << n << " inseriton sort on array" << std::endl;
 
   return 0;
 }

@@ -46,47 +46,66 @@ user    0m3.762s
 sys     0m0.006s
 
 # On VM
+1.6.1: n: 10000000 library qsort
+real    0m10.935s
+user    0m10.852s
+sys     0m0.052s
 
-# 10,000,000 ../numbers.in
+1.6.1: n: 10000000 stl set
+real    0m36.295s
+user    0m36.008s
+sys     0m0.180s
 
-1.6.1: qsort
-real    0m11.318s
-user    0m11.164s
-sys     0m0.064s
-
-1.6.1: stl
-real    0m40.574s
-user    0m39.940s
-sys     0m0.504s
-
-1.6.1: bit
-real    0m8.120s
-user    0m8.048s
+sizeof(a): 1250004
+1.6.1: n: 10000000 bit vector
+real    0m7.961s
+user    0m7.904s
 sys     0m0.024s
 
-1.6.1: stl sort, vector and sort(), vector.reserve() do not make difference.
-real    3m18.967s
-user    3m18.248s
-sys     0m0.156s
+1.6.1: n: 0 stl sort on vector
+real    3m16.282s
+user    3m15.136s
+sys     0m0.236s
 
-# 1,000,000 ../numbers2.in
+1.6.1: n: 10000000 stl sort on array
+real    0m11.207s
+user    0m11.140s
+sys     0m0.040s
 
-1.6.1: qsort
-real    0m1.102s
-user    0m1.068s
-sys     0m0.012s
+1.6.1: n: 10000000 quick sort on array
+real    0m11.234s
+user    0m11.168s
+sys     0m0.024s
 
-1.6.1: stl, set
-real    0m3.107s
-user    0m3.064s
-sys     0m0.032s
+#
+1.6.1: n: 1000000 library qsort
+real    0m1.106s
+user    0m1.092s
+sys     0m0.008s
 
-1.6.1: bit
-real    0m0.834s
-user    0m0.828s
+1.6.1: n: 1000000 stl set
+real    0m3.382s
+user    0m3.344s
+sys     0m0.016s
+
+sizeof(a): 1250004
+1.6.1: n: 1000000 bit vector
+real    0m1.056s
+user    0m1.048s
 sys     0m0.000s
 
-1.6.1: stl sort, vector and sort(), vector.reserve() do not make difference.
-real    0m18.328s
-user    0m18.268s
-sys     0m0.008s
+1.6.1: n: 0 stl sort on vector
+real    0m17.711s
+user    0m17.608s
+sys     0m0.040s
+
+1.6.1: n: 1000000 stl sort on array
+real    0m1.035s
+user    0m1.032s
+sys     0m0.000s
+
+1.6.1: n: 1000000 quick sort on array
+real    0m1.066s
+user    0m1.060s
+sys     0m0.000s
+
