@@ -16,19 +16,17 @@ using namespace testing;
 From 'Programming Pearls' by Jon Bentley
 
 14 Heap
+
+Heap has two properties; order and shape
+
+root = 1
+value(i) = x[i]
+leftchild(i) = 2i
+rightchild(i) = 2i + 1
+parent(i) = i/2
+null(i) = i < 1 or i > n (n is current size of heap)
+
 */
-
-// #define MAXN  100000
-
-// using DataType = int;
-
-// DataType x[MAXN];
-
-// // note:
-// // n is global which binarysearch uses and also tests uses. n is range that
-// // binarysearch works on. The good thing is that runs on various input easily.
-
-// int n = MAXN-1;
 
 #define USE_MINE
 
@@ -88,19 +86,27 @@ class priqueue {
     int maxsize;
     T *x;
 
+    // add it to the end
+    //
     // void siftup(n)
-    //   pre n > 0 && heap(1, n-1)
-    //   post heap(1, n)
+    //   pre  : n > 0 && heap(1, n-1)
+    //   post : heap(1, n)
     // 
     //   i = n;
     // 
-    //   loop
+    //   loop:
+    //
     //     // invariant: heap(1, n) except perhaps between i and its parent
+    //     // note: "perhaps" since they are i and parent when progressing
+    //     // towards the root. 
+    //
+    //     // reaches the root 
     //     if i == 1
     //       break;
     //
     //     p = i / 2;
     // 
+    //     // meets parent condition
     //     if x[p] <= x[i]
     //       break;
     // 
@@ -114,24 +120,37 @@ class priqueue {
 
       i = n;
 
-      // p = i / 2;
+// #define PROBLEM_FOR
+#ifdef PROBLEMATIC_FOR
+      p = i / 2;
 
-      for (i = n; i > 1 && x[p = i/2] > x[i]; i = p)
+      for (i = n; i > 1 && x[p] > x[i]; i = p)
       {
-        // p = i / 2;
-
+        p = i / 2;
         swap(x[p], x[i]);
       }
+#else        
+      // this is the original
+      for (i = n; i > 1 && x[p = i/2] > x[i]; i = p)
+      {
+        swap(x[p], x[i]);
+      }
+#endif
     }
 
+
+    // add it to the root
+    //
     // void siftdown(n)
-    //   pre heap(2, n) && n >= 0
-    //   post heap(1, n)
+    //   pre  : heap(2, n) && n >= 0 (note on =)
+    //   post : heap(1, n)
     // 
     //   i = 1;
     // 
-    //   loop
-    //   // invariant: heap(1, n) except perhaps between i and its(0,1, or 2) children
+    //   loop:
+    //
+    //   // invariant: heap(1, n) except perhaps between i 
+    //   // and its(0,1, or 2) children
     //   
     //   c = 2 * i;
     // 
@@ -144,8 +163,8 @@ class priqueue {
     //     if x[c+1] < x[c]
     //       c++;
     // 
-    //   // c is the lesser child of i
-    //   if x[i] <= x[c]   // since it already meets heap condition so terminate.
+    //   // c is the lesser child of i with is either the left or right
+    //   if x[i] <= x[c]   // since it already meets parent condition so terminate.
     //     break;    
     // 
     //   swap(i, c);
@@ -158,12 +177,16 @@ class priqueue {
 
       i = 1;
 
-      // c = 2 * i;
+#ifdef PROBLEMATIC_FOR
+      c = 2 * i;
 
+      for (i = 1; c <= n; i = c)
+      {
+        c = 2 * i;
+#else        
       for (i = 1; (c = 2*i) <= n; i = c)
       {
-        // c = 2 * i;
-
+#endif
         if (c+1 <= n && x[c+1] < x[c])
           c++;
 
@@ -272,7 +295,7 @@ class priqueue {
 // }
 
 
-TEST(c14, PriQueue)
+TEST(c14, PriQueueSort)
 {
   {
     vector<int> coll;
