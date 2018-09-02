@@ -591,6 +591,11 @@ namespace heap_sort {
 
 
 /*
+heap is one-based array; the easiest approach is to declare x[n+1] and waste
+x[0]. Can use [0]  so that heapsort can be used to sort any input without
+consdiering [0]? NO since "root == 1" affects how child and parent index is
+calculated.
+
 The simple one uses two arrays, one for the priority queue and one for the
 element to be sorted.
 
@@ -617,9 +622,6 @@ sorted
 void sort_heap_01(vector<int> &coll)
 {
   using namespace heap_sort;
-
-  // heap is one-based array; the easiest approach is to declare x[n+1] and
-  // waste x[0].
 
   int n = coll.size()-1;
 
