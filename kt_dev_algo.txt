@@ -14620,7 +14620,7 @@ $dog$          $dog$           $dog$
 <code> 
 
 // reference code, decending sort
-// contiguous version from the book. This is O(n2) in worst as to comparison.
+// contiguous version from the book. This is O(n^2) in worst as to comparison.
 
 // reference code, decending sort
 void sort_insertion_01(vector<int> &coll)
@@ -15692,7 +15692,8 @@ case, O(n2) and excellent average case `O(nlogn)`.
 * uses swapping entries and keep sublists(subsets) in the same list so no
   extra space. 
 
-* is sorted during partition
+* is sorted during partition. Exclude lastsmall from search for every
+  recursion which has a final position.
  
 * choose different pivot for each sublist. 
 
@@ -15735,7 +15736,6 @@ any sorting algorithms.
 // last key. 
 
 
-<algo>
 To allow for the possibility that more than one entry has key equal to p, 
    
 the left of pivotpos have keys strictly less than p and the right have greater
@@ -15786,13 +15786,14 @@ namespace algo_sort_quick {
 
     int pivot_value = coll[pivot];
 
-    // debug
+#ifdef SORT_QUICK_DEBUG
     cout << "build i(" << first << ", " << last << "): ";
 
     for (int i = first; i <= last; ++i)
       cout << coll[i] << ", ";
 
     cout << endl;
+#endif // SORT_QUICK_DEBUG
 
     // move it to the first pos
     swap(coll[first], coll[pivot]);
@@ -15805,13 +15806,14 @@ namespace algo_sort_quick {
 
     swap(coll[first], coll[lastsmall]);
 
-    // debug
+#ifdef SORT_QUICK_DEBUG
     cout << "build o(" << first << ", " << last << "): ";
 
     for (int i = first; i <= last; ++i)
       cout << coll[i] << ", ";
 
     cout << endl;
+#endif // SORT_QUICK_DEBUG
 
     return lastsmall;
   }
@@ -15941,134 +15943,658 @@ TEST(AlgoSort, Quick_01)
 }
 
 
-{heapsort}
-Some kind of input can make quicksort misbehave badly and heapsort overcomes this problem. Like the
-pecking order in a corporate hierarchy and each employee supervises exactly two others.
+Programming Pearl, 11.3 Better Quicksorts
 
-When putting 2-tree into a list, found that:
-
-The left and right children of the node with position k are in positions 2k+1 and 2k+2 of the list.
-If these positions are beyond the end of the list, then these children do not exist. means leaf.
-(this is about position)
-
-The heap is a list in which each entry contains a key, and, for all positions k in the list, the key
-a position k is at least [as-large-as-the-key] in positions 2k+1 and 2k+2, provided these positions
-exist in the list. (this is about key)
-
-The sample heap as a 2-tree and a list
-
-                () y
-        () r          () p
-  () d     () f    () b   () k
-() a () c
+The algo-sort-quick sorts an array of random integers, O(nlogn), but how does
+it perform on nonrandom inputs? An extreme case: an array of n identical
+elements. Insertion sort performs very well on this input: each element is
+sifted down zero positions, so the total run time is O(n). The quicksort, on
+the other hand, blows this case badly. Each of n-1 partitioning passes uses
+O(n) time to peel off a single element, so the total run time is O(n^2).
 
 
-[y r p d f b k a c]
+{algo-sort-heap}
 
-The first entry must be the largest key in the heap. Heapsort has two phases: arrange a list to make
-a heap and remove the top of the heap and promote another entry to take its place.
+/* Copyright (C) 1999 Lucent Technologies
+From 'Programming Pearls' by Jon Bentley
 
-For second phase, move the first entry to the last position: save the last to current, move the
-first to the last, and place the current to the right position while building the heap. Decrease a
-counter lu(last unsorted). 
+14 Heap
 
-This means that heap sort needs random-access and only for contiguous list.
+*algo-sort-heap* guranteed O(nlogn) for any n
 
-void HeapSort(List* list)
+Heap has two properties; order and shape
+
+root = 1
+value(i) = x[i]
+leftchild(i) = 2i
+rightchild(i) = 2i + 1
+parent(i) = i/2
+null(i) = i < 1 or i > n (n is current size of heap)
+
+*/
+
+#define USE_MINE
+
+#ifdef USE_MINE
+
+template<typename T>
+class priqueue {
+  public:
+    priqueue(int m)
+    {
+      cout << "use USE_MINE" << endl;
+
+      maxsize = m;
+      x = new T[maxsize+1];
+      n = 0;  // size
+    }
+
+    ~priqueue()
+    {
+      if (x)
+        delete[] x;
+    }
+
+    void insert(T t)
+    {
+      // if (n >= maxsize)
+      //  report error
+
+      x[++n] = t;
+
+      // heap(1, n-1)
+      siftup();
+      // heap(1, n)
+    }
+
+    // void pop()
+    T extractmin()
+    {
+      T t{};
+
+      // if (n < 1)
+      //  report error
+
+      t = x[1];
+      x[1] = x[n--];
+
+      // heap(2, n)
+      siftdown();
+      // heap(1, n)
+
+      return t;
+    }
+
+
+  private:
+    int n;
+    int maxsize;
+    T *x;
+
+    // add it to the end
+    //
+    // void siftup(n)
+    //   pre  : n > 0 && heap(1, n-1)
+    //   post : heap(1, n)
+    // 
+    //   i = n;
+    // 
+    //   loop:
+    //
+    //     // invariant: heap(1, n) except perhaps between i and its parent
+    //     // note: "perhaps" since they are i and parent when progressing
+    //     // towards the root. 
+    //
+    //     // reaches the root 
+    //     if i == 1
+    //       break;
+    //
+    //     p = i / 2;
+    // 
+    //     // meets parent condition
+    //     if x[p] <= x[i]
+    //       break;
+    // 
+    //     swap(p, i);
+    // 
+    //     i = p;
+
+    void siftup()
+    {
+      int i{}, p{};
+
+      i = n;
+
+// #define PROBLEM_FOR
+#ifdef PROBLEMATIC_FOR
+      p = i / 2;
+
+      for (i = n; i > 1 && x[p] > x[i]; i = p)
+      {
+        p = i / 2;
+        swap(x[p], x[i]);
+      }
+#else        
+      // this is the original
+      for (i = n; i > 1 && x[p = i/2] > x[i]; i = p)
+      {
+        swap(x[p], x[i]);
+      }
+#endif
+    }
+
+
+    // add it to the root
+    //
+    // void siftdown(n)
+    //   pre  : heap(2, n) && n >= 0 (note on =)
+    //   post : heap(1, n)
+    // 
+    //   i = 1;
+    // 
+    //   loop:
+    //
+    //   // invariant: heap(1, n) except perhaps between i 
+    //   // and its(0,1, or 2) children
+    //   
+    //   c = 2 * i;
+    // 
+    //   if c > n
+    //     break;  // no childrens and terminate.
+    // 
+    //   // c is the left child of i
+    //   if c+1 <= n
+    //     // c+1 is the right child of i, the right is the lesser
+    //     if x[c+1] < x[c]
+    //       c++;
+    // 
+    //   // c is the lesser child of i with is either the left or right
+    //   if x[i] <= x[c]   // since it already meets parent condition so terminate.
+    //     break;    
+    // 
+    //   swap(i, c);
+    // 
+    //   i = c;
+
+    void siftdown()
+    {
+      int c{}, i{};
+
+      i = 1;
+
+#ifdef PROBLEMATIC_FOR
+      c = 2 * i;
+
+      for (i = 1; c <= n; i = c)
+      {
+        c = 2 * i;
+#else        
+      for (i = 1; (c = 2*i) <= n; i = c)
+      {
+#endif
+        if (c+1 <= n && x[c+1] < x[c])
+          c++;
+
+        if (x[i] <= x[c])
+          break;
+
+        swap(x[c], x[i]);
+      }
+    }
+};
+
+
+template<typename T>
+class priqueuemax {
+  public:
+    priqueuemax(int m)
+    {
+      cout << "use USE_MINE_MAX" << endl;
+
+      maxsize = m;
+      x = new T[maxsize+1];
+      n = 0;  // size
+    }
+
+    ~priqueuemax()
+    {
+      if (x)
+        delete[] x;
+    }
+
+    void insert(T t)
+    {
+      // if (n >= maxsize)
+      //  report error
+
+      x[++n] = t;
+
+      // heap(1, n-1)
+      siftup();
+      // heap(1, n)
+    }
+
+    // void pop()
+    T extractmin()
+    {
+      T t{};
+
+      // if (n < 1)
+      //  report error
+
+      t = x[1];
+      x[1] = x[n--];
+
+      // heap(2, n)
+      siftdown();
+      // heap(1, n)
+
+      return t;
+    }
+
+
+  private:
+    int n;
+    int maxsize;
+    T *x;
+
+    // add it to the end
+    //
+    // void siftup(n)
+    //   pre  : n > 0 && heap(1, n-1)
+    //   post : heap(1, n)
+    // 
+    //   i = n;
+    // 
+    //   loop:
+    //
+    //     // invariant: heap(1, n) except perhaps between i and its parent
+    //     // note: "perhaps" since they are i and parent when progressing
+    //     // towards the root. 
+    //
+    //     // reaches the root 
+    //     if i == 1
+    //       break;
+    //
+    //     p = i / 2;
+    // 
+    //     // meets parent condition for max
+    //     // note: change op for max
+    //     if x[p] >= x[i]
+    //       break;
+    // 
+    //     swap(p, i);
+    // 
+    //     i = p;
+
+    void siftup()
+    {
+      int i{}, p{};
+
+      i = n;
+
+      // this is the original
+      for (i = n; i > 1 && x[p = i/2] < x[i]; i = p)
+      {
+        swap(x[p], x[i]);
+      }
+    }
+
+
+    // add it to the root
+    //
+    // void siftdown(n)
+    //   pre  : heap(2, n) && n >= 0 (note on =)
+    //   post : heap(1, n)
+    // 
+    //   i = 1;
+    // 
+    //   loop:
+    //
+    //   // invariant: heap(1, n) except perhaps between i 
+    //   // and its(0,1, or 2) children
+    //   
+    //   c = 2 * i;
+    // 
+    //   if c > n
+    //     break;  // no childrens and terminate.
+    // 
+    //   // c is the left child of i
+    //   if c+1 <= n
+    //     // c+1 is the right child of i, the right is the bigger
+    //     // note: change op for max
+    //     if x[c+1] > x[c]
+    //       c++;
+    // 
+    //   // c is the lesser child of i with is either the left or right
+    //   // note: change op for max
+    //   if x[i] >= x[c]   // since it already meets parent condition so terminate.
+    //     break;    
+    // 
+    //   swap(i, c);
+    // 
+    //   i = c;
+    //
+    // note:
+    // WHY it should be like below?
+    //
+    //     // c+1 is the right child of i, the right is the bigger
+    //     // note: change op for max
+    //     if x[c+1] > x[c]
+    //
+
+    void siftdown()
+    {
+      int c{}, i{};
+
+      i = 1;
+
+      for (i = 1; (c = 2*i) <= n; i = c)
+      {
+        if (c+1 <= n && x[c+1] > x[c])
+          c++;
+
+        if (x[i] >= x[c])
+          break;
+
+        swap(x[c], x[i]);
+      }
+    }
+};
+
+#else // USE_MINE
+
+template<class T>
+class priqueue {
+
+  private:
+    int n, maxsize;
+    T *x;
+    void swap(int i, int j)
+    { T t = x[i]; x[i] = x[j]; x[j] = t; }
+
+  public:
+    priqueue(int m)
+    { 
+      maxsize = m;
+      x = new T[maxsize+1];
+      n = 0;
+    }
+    void insert(T t)
+    { 
+      int i, p;
+      x[++n] = t;
+      for (i = n; i > 1 && x[p=i/2] > x[i]; i = p)
+        swap(p, i);
+    }
+    T extractmin()
+    { 
+      int i, c;
+      T t = x[1];
+      x[1] = x[n--];
+      for (i = 1; (c=2*i) <= n; i = c) {
+        if (c+1<=n && x[c+1]<x[c])
+          c++;
+        if (x[i] <= x[c])
+          break;
+        swap(c, i);
+      }
+      return t;
+    }
+};
+
+#endif // USE_MINE
+
+
+// ={=========================================================================
+
+TEST(c14, PriQueueSort)
 {
-	Position lu;
-	ListEntry current;
+  {
+    vector<int> coll;
 
-	BuildHeap(list);
+    int n = 10;
+    priqueue<int> pq(n);
 
-	for( lu = list->count-1; lu >=1; lu-- )
-	{
-		current = list->entry[lu];
-		list->entry[lu] = list->entry[0];
-		InsertHeap( current, 0, lu-1, list );
-	}
+    for (int i = 0; i < n; ++i)
+      pq.insert(i);
+
+    for (int i = 0; i < n; ++i)
+      coll.push_back(pq.extractmin());
+
+    EXPECT_THAT(coll, ElementsAreArray({0,1,2,3,4,5,6,7,8,9}));
+  }
+
+  {
+    vector<int> coll{4,5,6,7,8,9,1,2,3,0};
+    vector<int> collo;
+
+    int n = 10;
+    priqueue<int> pq(n);
+
+    for (int i = 0; i < n; ++i)
+      pq.insert(coll[i]);
+
+    for (int i = 0; i < n; ++i)
+      collo.push_back(pq.extractmin());
+
+    EXPECT_THAT(collo, ElementsAreArray({0,1,2,3,4,5,6,7,8,9}));
+  }
 }
 
-[y r p d f b k a c]
-[  r p d f b k a | y] c = c
-[r f p d c b k a | y] 
-[p f k d c b a | r y] 
-...
-[a | b c d f k p r y]
-
-// see the left and right child of low and promote the bigger into low. also loop throuth the list.
-
-void InsertHeap( ListEntry current, Position low, Position high, List* list )
+TEST(c14, PriQueueMaxSort)
 {
-	Position large;
-	large = 2*low+1;	// index of left child
+  {
+    vector<int> coll;
 
-	while( large <= high )
-	{
-		// LT(left, right) and choose bigger one
-		if( large < high && LT(list->entry[large].key, list->entry[large+1].key ))
-			large++;
+    int n = 10;
+    priqueuemax<int> pq(n);
 
-		// if current is bigger then
-		if( GE( current.key, list->entry[large].key ))
-			break;
-		else
-		{
-			list->entry[low] = list->entry[large];
-			low = large;
-			large = 2*low+1;
-		}
-	}
+    for (int i = 0; i < n; ++i)
+      pq.insert(i);
 
-	// when current is bigger or is out of index meaning there is no child
-	list->entry[low] = current;
+    for (int i = 0; i < n; ++i)
+      coll.push_back(pq.extractmin());
+
+    EXPECT_THAT(coll, ElementsAreArray({9,8,7,6,5,4,3,2,1,0}));
+  }
+
+  {
+    vector<int> coll{4,5,6,7,8,9,1,2,3,0};
+    vector<int> collo;
+
+    int n = 10;
+    priqueuemax<int> pq(n);
+
+    for (int i = 0; i < n; ++i)
+      pq.insert(coll[i]);
+
+    for (int i = 0; i < n; ++i)
+      collo.push_back(pq.extractmin());
+
+    EXPECT_THAT(collo, ElementsAreArray({9,8,7,6,5,4,3,2,1,0}));
+  }
 }
 
-// p326. 2-tree with one node automatically satisfies heap and therefore not worry about leaves of
-// the tree. Idea is if begin at the midpoint of the list and work our way back toward the start,
-// can use InsertHeap to insert each entry into the partial heap consisting all later entries.
+namespace heap_sort {
 
-void BuildHeap(List* list)
-{
-	Position low;
+  void siftup_min(int n, vector<int> &coll)
+  {
+    int i{}, p{};
 
-	for(low = list->count/2-1; low >= 0; low-- )
-		InsertHeap( list->entry[low], low, list->count, list );
+    i = n;
+
+    // this is the original
+    for (i = n; i > 1 && coll[p = i/2] > coll[i]; i = p)
+    {
+      swap(coll[p], coll[i]);
+    }
+  }
+
+  void siftdown_min(int n, vector<int> &coll)
+  {
+    int c{}, i{};
+
+    i = 1;
+
+    for (i = 1; (c = 2*i) <= n; i = c)
+    {
+      if (c+1 <= n && coll[c+1] < coll[c])
+        c++;
+
+      if (coll[i] <= coll[c])
+        break;
+
+      swap(coll[c], coll[i]);
+    }
+  }
+
+  void siftup_max(int n, vector<int> &coll)
+  {
+    int i{}, p{};
+
+    i = n;
+
+    // this is the original
+    for (i = n; i > 1 && coll[p = i/2] < coll[i]; i = p)
+    {
+      swap(coll[p], coll[i]);
+    }
+  }
+
+  void siftdown_max(int n, vector<int> &coll)
+  {
+    int c{}, i{};
+
+    i = 1;
+
+    for (i = 1; (c = 2*i) <= n; i = c)
+    {
+      if (c+1 <= n && coll[c+1] > coll[c])
+        c++;
+
+      if (coll[i] >= coll[c])
+        break;
+
+      swap(coll[c], coll[i]);
+    }
+  }
 }
 
- 0 1 2 3 4 5 6 7 8
-[y r p d f b k a c] low=3, list->count=9 IH( [3], 3, 9 ) : 3, 6, 7 
-                    low=2, list->coutt=9 IH( [2], 2, 9 ) : 2, 4, 5
-                    low=1, list->coutt=9 IH( [1], 1, 9 ) : 1, 2, 3, 4, 5, 6, 7
-                    low=0, list->coutt=9 IH( [0], 0, 9 ) : 0, 1, 2, 3, 4, 5, 6, 7
+
+/*
+heap is one-based array; the easiest approach is to declare x[n+1] and waste
+x[0]. Can use [0]  so that heapsort can be used to sort any input without
+consdiering [0]? NO since "root == 1" affects how child and parent index is
+calculated.
+
+The simple one uses two arrays, one for the priority queue and one for the
+element to be sorted.
+
+Heapsort saves space by using just one. Two stage process:
+
+1. build input into a heap
+establish heap(1, n), by sifting elements to move up front in the array, the one
+single array.
+
+  | heap | ?  |
+  1      i    n
+
+[0] is not used and [1] so put from [2] into heap. 
+
+2. the next n step extract the elements in `decreasing` order and build the
+sorted
+
+  | heap | sorted  |
+  1      i         n
+
+*/
 
 
-<heapsort-application> {priority-queue}
+void sort_heap_01(vector<int> &coll)
+{
+  using namespace heap_sort;
 
-The priority queue. each contains a key called priority and queue has two operations: insert and
-remove the entry having largest (or smallest) key.
+  int n = coll.size()-1;
 
-If represent a priority queue as a [sorted] contiguous list, in which case removal is immediate but
-insertion take time proportional to n. Or represent it as an [unsorted], in which case insertion is
-rapid but removal is slow.
+  for(int i = 2; i <= n; ++i)
+  {
+    // invariant: heap(1, i-1)
+    siftup_min(i, coll);
+    // invariant: heap(1, i)
+  }
 
-The representation of a priority queue as a heap proves advantageous [for large n] since it is
-represented efficiently in contiguous storage and is guaranteeded to need only logarithmic time for
-both insertion and deletion.
+  // since [1] is the minimum, the sorted is {9,8,7,6,5,4,3,2,1} for example.
+  for(int i = n; i >= 2; --i)
+  {
+    // heap(1, i) && sorted(i+1, n) && x[1..i] >= x[i+1..n]
+    swap(coll[1], coll[i]);
+    // heap(2, i-1) && sorted(i, n)
+    siftdown_min(i-1, coll);
+    // heap (1, i-1) && sorted(i, n)
+  }
+}
+
+// max version
+void sort_heap_02(vector<int> &coll)
+{
+  using namespace heap_sort;
+
+  int n = coll.size()-1;
+
+  for(int i = 2; i <= n; ++i)
+    siftup_max(i, coll);
+
+  for(int i = n; i >= 2; --i)
+  {
+    swap(coll[1], coll[i]);
+    siftdown_max(i-1, coll);
+  }
+}
+
+TEST(c14, HeapSort)
+{
+  {
+    // add the dummpy at 0 to make heap
+    vector<int> coll{0,4,5,6,7,8,9,1,2,3,0};
+
+    sort_heap_01(coll);
+
+    EXPECT_THAT(coll, ElementsAreArray({0,9,8,7,6,5,4,3,2,1,0}));
+  }
+
+  {
+    // add the dummpy at 0 to make heap
+    vector<int> coll{0,4,5,6,7,8,9,1,2,3,0};
+
+    sort_heap_02(coll);
+
+    EXPECT_THAT(coll, ElementsAreArray({0,0,1,2,3,4,5,6,7,8,9}));
+  }
+
+  {
+    vector<int> coll{ 0, 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
+    sort_heap_02(coll); 
+    EXPECT_THAT(coll, 
+        ElementsAreArray({0, 2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+  }
+}
 
 
-{sort-summary}
+{algo-sort-summary}
 
-o in choosing a method, take into account the ways in which the keys will usually be arranged before
-sorting, the size of application, the amount of time available for programming, the need to save
-computer time and space. Futhermore, see statistical analysis such as standard deviation and
-empirical testing.
+o in choosing a method, take into account the ways in which the keys will
+usually be arranged before sorting, the size of application, the amount of
+time available for programming, the need to save computer time and space.
+Futhermore, see statistical analysis such as standard deviation and empirical
+testing.
 
-o merge, quick and heapsort are powerful and efficient but more difficult to program when applied to
-large lists.
+o merge, quick and heapsort are powerful and efficient but more difficult to
+program when applied to large lists.
 
-o heapsort is like an insurance: usually slower than quicksort but guarantees that sorting will be
-completed in O(nlogn) comparison of keys, something that quicksort cannot always do.
+o heapsort is like an insurance: usually slower than quicksort but guarantees
+that sorting will be completed in O(nlogn) comparison of keys, something that
+quicksort cannot always do.
 
 
 ={============================================================================
