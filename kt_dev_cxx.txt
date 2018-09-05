@@ -3958,8 +3958,123 @@ which ensures the ellipses loop will terminate after a reasonable number of iter
 produces a garbage value.
 
 
-#{============================================================================
-#{ C AND C++
+#{ cxx issues 
+={============================================================================
+*kt_dev_cpp_0000* cxx-issue-string
+
+{cxx-issue-strncpy}
+
+SYNOPSIS
+       #include <string.h>
+
+       char *strcpy(char *dest, const char *src);
+       char *strncpy(char *dest, const char *src, size_t n);
+
+DESCRIPTION
+       The  strcpy() function copies the string pointed to by src, including
+       the terminating null byte ('\0'), to the buffer pointed to by dest.
+
+       The strings may not overlap, and the destination string dest must be
+       large enough to receive the copy.  Beware of buffer overruns!  (See BUGS.)
+
+       The strncpy() function is similar, except that at most n bytes of src
+       are copied.  Warning: If there is no null byte among the first n bytes
+       of src, the string placed in dest will not  be  null- terminated.
+
+
+<ex-real> `stack buffer-overflow` was detected by ASan:
+==283== ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7c25d990
+at pc 0xb4e02520 bp 0x989fe85c sp 0x989fe43c
+READ of size 4 at 0x7c25d990 thread T145 (CnS Server Mana)
+==283== SetCurrent: 0x9c230000 for thread 0x641ff430
+==283== T503: stack [0x64100000,0x64200000) size 0x100000; local=0x641fed74
+0x7d519d53 is located 0 bytes to the right of 3-byte region [0x7d519d50,0x7d519d53)
+allocated by thread T144 (CnS Server Mana) here:
+    #0 0xb4e0251f (/mtd_exe/lib/libasan.so.0+0xe51f)
+    #1 0xa8cde413 (/mtd_exe/Comp_LIB/libjson.so+0x20413)
+    #2 0xa8bf81f7 (/mtd_exe/lib/libstdc++.so.6.0.17+0xa31f7)
+    #3 0x7cb85c3 (/mtd_exe/exeAPP+0x7cb85c3)
+    #4 0x7cb8803 (/mtd_exe/exeAPP+0x7cb8803)
+    #5 0x7c73cbf (/mtd_exe/exeAPP+0x7c73cbf)
+    #6 0x7c8e13f (/mtd_exe/exeAPP+0x7c8e13f)
+    #7 0x7c1d60f (/mtd_exe/exeAPP+0x7c1d60f)
+    #8 0x7c1e74b (/mtd_exe/exeAPP+0x7c1e74b)
+    #9 0x158c3db (/mtd_exe/exeAPP+0x158c3db)
+    #10 0x158c2d3 (/mtd_exe/exeAPP+0x158c2d3)
+    #11 0x159133f (/mtd_exe/exeAPP+0x159133f)
+    #12 0xb4e11397 (/mtd_exe/lib/libasan.so.0+0x1d397)
+    #13 0xa93070f7 (/mtd_exe/lib/libpthread-2.17.so+0x70f7)
+Shadow bytes around the buggy address:
+  0x2faa3350: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fd fd
+  0x2faa3360: fa fa fa fa fa fa fa fa fa fa fd fd fa fa fd fd
+  0x2faa3370: fa fa fd fd fa fa fd fa fa fa fd fa fa fa fa fa
+  0x2faa3380: fa fa fd fd fa fa fa fa fa fa fd fd fa fa fd fd
+  0x2faa3390: fa fa fd fd fa fa fd fd fa fa fd fd fa fa fd fd
+=>0x2faa33a0: fa fa fd fd fa fa 00 04 fa fa[03]fa fa fa fa fa
+  0x2faa33b0: fa fa fd fa fa fa fd fd fa fa fa fa fa fa fd fd
+  0x2faa33c0: fa fa fa fa fa fa fd fd fa fa fa fa fa fa fa fa
+  0x2faa33d0: fa fa fa fa fa fa fd fa fa fa fd fd fa fa fd fa
+  0x2faa33e0: fa fa fd fd fa fa fd fa fa fa fd fd fa fa fa fa
+  0x2faa33f0: fa fa fd fa fa fa fd fd fa fa fd fa fa fa fd fd
+
+Here is the backtrace analyzed with addr2line tool:
+
+#0 0xb4e0251f (/mtd_exe/lib/libasan.so.0+0xe51f)
+`__interceptor_memcpy`
+/fox-p/vd47_a15/toolchain/build.arm.cortex-a15/sources/gcc_1/libsanitizer/
+asan/asan_interceptors.cc:288
+288     ASAN_READ_RANGE(from, size);
+289     ASAN_WRITE_RANGE(to, size);
+
+#1 0xa8cde413 (/mtd_exe/Comp_LIB/libjson.so+0x20413)
+char* std::string::_S_construct<char const*>(char const*, char const*, std::allocator<char> const&, std::forward_iterator_tag)
+??:?
+
+#2 0xa8bf81f7 (/mtd_exe/lib/libstdc++.so.6.0.17+0xa31f7)
+_S_construct_aux<const char*>
+/fox-p/vd47_a15/toolchain/build/obj/gcc_final/arm-v7a15v4r3-linux-gnueabi/
+libstdc++-v3/include/bits/basic_string.h:1722
+
+#3 0x7cb85c3 (/mtd_exe/exeAPP+0x7cb85c3)
+CCNSVTP::PrintVTPLocal(CCNSVTP::CCNSVTP_TYPE type, char* str)
+/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSProfile.cpp:416
+414         if (NULL != str)^M
+415         {^M
+416                 std::string str_text = (std::string)str;^M
+
+#4 0x7cb8803 (/mtd_exe/exeAPP+0x7cb8803)
+CCNSVTP::PrintVTP(CCNSVTP::CCNSVTP_TYPE type, char * str, int bool_result)
+/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSProfile.cpp:241
+241   PrintVTPLocal(VTP_CONVERSATION_STATE_DATA,str);^M
+242   break;^M
+
+
+#5 0x7c73cbf (/mtd_exe/exeAPP+0x7c73cbf)
+CCnSParsePacket::t_ParseConnectionInfo(std::string&)
+/GOLFP_2014/AP_MM/AP_ConversationApp/ClientAgent/Src/CnSParsePacket.cpp:639
+635   char * pChar = NULL ;
+636   int length = stConfServer.szStat.size();
+637   pChar = new char[length+1];
+638  ::strncpy(`pChar`,stConfServer.szStat.c_str(),length);
+639  CCNSVTP::GetInstance()->PrintVTP(CCNSVTP::CCNSVTP_TYPE_STATE_DATA,pChar,0);
+
+Again:
+  "Warning: If there is no null byte among the first n bytes of src, the
+  string placed in dest will not be null-terminated."
+
+So strncpy copies m most chars but the pChar actually is not null terminated.
+This cause a issue when converted to a std::string.
+
+The proposed fix is:
+
+$ diff CnSParsePacket.cpp.orig CnSParsePacket.cpp
+638c638
+<  ::strncpy(pChar,stConfServer.szStat.c_str(),length);
+---
+>  ::strncpy(pChar,stConfServer.szStat.c_str(),length+1);
+
+
+#{ c and c++
 ={============================================================================
 *kt_dev_cpp_0000* cxx-code-ansi-color
 
