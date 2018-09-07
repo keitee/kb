@@ -7,6 +7,8 @@ GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
 TARGET = ins
+TARGET2 = bintree
+TARGET3 = artificialarray
 
 # Where to find user code.
 USER_DIR = .
@@ -15,7 +17,7 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 
-TESTS = $(TARGET)_test
+TESTS = $(TARGET)_test $(TARGET2)_test $(TARGET3)_test
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -56,4 +58,18 @@ $(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 
 $(TARGET)_test : $(TARGET).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET2).o : $(TARGET2).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET2).cpp -o $(TARGET2).o
+
+$(TARGET2)_test : $(TARGET2).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET3).o : $(TARGET3).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET3).cpp -o $(TARGET3).o
+
+$(TARGET3)_test : $(TARGET3).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
