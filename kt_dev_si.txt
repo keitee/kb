@@ -80,7 +80,6 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| comp-tree
 |kt_dev_si_0001| comp-term
 |kt_dev_si_0001| comp-cdi comp-ioctl
-|kt_dev_si_0001| comp-build enable-comp-diag
 |kt_dev_si_0001| comp-jpa
 |kt_dev_si_0001| comp-jpa-print-systemstring
 |kt_dev_si_0001| comp-jvm
@@ -5368,28 +5367,212 @@ COMPILER_PREFIX := i686-nptl-linux-gnu
 NDS_GCOV_PATH := $(COMPILER_ROOT)/lib/gcc/$(COMPILER_PREFIX)/4.9.1
 
 
-<platform-mk> build-option
-// FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
+NDS_BUILD_SYSTEM=FUSION 
 
-# Compiler flags according to compilation debug level
-ifeq ($(NDS_BUILD_TYPE_$(COMPONENT_NAME)), debug)
-    LOCAL_PLATFORM_CC_FLAGS += -O0 -g
-else
-    ifeq ($(NDS_BUILD_TYPE_$(COMPONENT_NAME)), release_dbg)
-        LOCAL_PLATFORM_CC_FLAGS += -g -Os
-    else    
-        ifneq ($(NDS_GCOV_$(COMPONENT_NAME)), YES)
-            LOCAL_PLATFORM_CC_FLAGS += -Os
-        endif
+NDS_BUILD_PROJECT=picasso NDS_PLATFORM=AMS_BCM_MIPS4K_LNUX_DARWIN_01 NDS_ROOT=/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build NDS_PROJECT=picasso NDS_BUILD_ROOT=/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso NDS_BUILD_TYPE=debug make makefile
+
+NDS_ROOT_UNIX=/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build NDS_LOCAL_TOOLS= 
+
+NDS_STB=  NDS_HOST=linux NDS_MAKE=make --debug NDS_PARALLEL=1 NDS_BUILD_TYPE_DEFAULT=release_dbg NDS_DEFINES="" NDS_LOCATION=ST COMPONENTS_DIR="/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components" NDS_TOOLS_ROOT="/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build" VOB_ROOT="/home/NDS-UK/kyoupark/STB_SW" VOB_ROOT_UNIX="/home/NDS-UK/kyoupark/STB_SW" PLATFORMS_TOOLS_ROOT="/home/NDS-UK/kyoupark/STB_SW" NDS_FUSIONOS="FUSIONOS_2" NDS_FUSIONOS_PRE="FUSIONOS" NDS_FUSIONOS_VER=" _2" NDS_USE_CCACHE= NDS_USE_REL_PATHS= NDS_CCACHE_EXE= NDS_HOST_CC=/usr/bin/ NDS_TARGET:=install install
+
+<component-makefile>
+
+Each component makefile defines:
+
+$/comp/src/makefile
+
+  COMPONENT_NAME := darwin_planner_src
+  COMPONENT_CC_DEFINES :=
+
+  # this starts the process of refering global make files.
+  include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
+  # see  *build-options-mk* *enable-comp-diag*
+
+  // include $(NDS_ROOT)/projects/fusion2/build_options.mk
+  {
+    // For example, suppose build "darwin_planner_src" and if NDS_BUILD_TYPE
+    // is defined for this component, define macros for debug diag build.
+    //
+    // ifeq (NDS_BUILD_TYPE_darwin_planner_src, debug)
+
+    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),debug)
+      GLOBAL_DEFINES += DEBUG
+      GLOBAL_DEFINES += DIAG_DEBUG    *diag-debug*
     endif
-    LOCAL_PLATFORM_CC_FLAGS += -fno-strict-aliasing
+
+    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release)
+      GLOBAL_DEFINES += RELEASE
+      ifeq (YES,$(DIAG_RELEASE_MIL))
+        GLOBAL_DEFINES += DIAG_RELEASE_MIL
+      else
+        GLOBAL_DEFINES += DIAG_RELEASE
+      endif
+    endif
+
+    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release_dbg)
+      ifeq (YES,$(DIAG_ENABLE_ALL_LEVELS))
+        GLOBAL_DEFINES += RELEASE_DBG
+        GLOBAL_DEFINES += DIAG_DEBUG
+      else
+        GLOBAL_DEFINES += RELEASE_DBG
+        GLOBAL_DEFINES += DIAG_RELEASE_DBG
+      endif
+    endif
+  }
+
+
+<platform-mk> build-option which is platform dependant
+// FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
+// FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/platform.mk
+
+LOCAL_PLATFORM_CC_DEFINE_FLAGS += $(COMPONENT_CC_DEFINES:%=-D%)
+
+ifeq ($(NDS_BUILD_TYPE_$(COMPONENT_NAME)), debug)
+  LOCAL_PLATFORM_CC_FLAGS += -O0
+else
+  ifneq ($(NDS_GCOV_$(COMPONENT_NAME)), YES)
+    LOCAL_PLATFORM_CC_FLAGS += -Os
+  endif
+  LOCAL_PLATFORM_CC_FLAGS += -fno-strict-aliasing
 endif
 
-LOCAL_PLATFORM_CC_FLAGS += -fsanitize=address
+LOCAL_PLATFORM_CC_FLAGS += $(LOCAL_PLATFORM_CC_DEFINE_FLAGS)
 
-LOCAL_PLATFORM_CPP_FLAGS += -fsanitize=address
 
-LOCAL_PLATFORM_TOOLSET_LIBRARIES := -lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib -lgio -lgobject -ldbus -lz -lasan
+// note: to print custom message in make
+
+##################################################################
+#
+# Dependency builder.Notice that the generated dependency file
+# is placed in the build tree.
+# gcc is used to build dependencies using the MM option.
+# The MT option specifies the name of dependent file.
+# Dependency generation works in the same way on all platforms.
+#
+##################################################################
+
+define PLATFORM_CC_BUILD_DEPENDENCY                                                                                                                                                                        
+  @$(COMMANDS_MKDIR_EX) $(dir $@)
+  @echo +++ Message from $(NDS_PLATFORM)/platform.mk - building dependencies for $@
+  $(LOCAL_PLATFORM_CC) -MM $(LOCAL_PLATFORM_DEP_FLAGS) -MT $@ $< -o $(@:$(PLATFORM_OBJ_SUFFIX)=$(PLATFORM_DEPS_SUFFIX))
+endef
+
+<build-option-compile> <build-defines>
+# +++ Message from AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform.mk - 
+# building dependencies for /home/NDS-UK/kyoupark/STB_SW/\
+# FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/\
+# /AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/components/\
+# darwin_platform_components/darwin_player/src/player_xx_.o
+
+@472
+define PLATFORM_CC_BUILD_OBJECT
+     echo +++ Message from $(NDS_PLATFORM)/platform.mk - Creating object $@
+     echo "KT: $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@"
+     $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@
+endef
+
+// as of 02/09/2016
+//
+KT:CC: /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gcc 
+-Os -fno-strict-aliasing -Wall -g -fno-builtin -DNeedFunctioPrototypes=1 -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations   
+
+-DAPP_MGMT_SIGNAL_24_7_SERVICE_TYPE_82H -DAPP_MGMT_SIGNAL_ETV_OTV_TRIGGER_MOD -DAPP_MGMT_SIGNAL_RECOMMENDATION_OTV_PROMO_MOD 
+-DAUTHENTICATION_NDS_SAC -DBSKYB_SUPPORT_HEP_WITH_OIG -DCALLBACK_PSTN -DCAPTION_TELETEXT_LEGACY_LAYOUT -DCAROUSEL_MHC -DCAROUSEL_OTV -DCA_VIDEOGUARD_NDS_SECURE_RETURN_PATH 
+-DCA_VIDEOGUARD_PARENTAL_RESTRICT -DCA_VIDEOGUARD_WATERSHED -DFRONT_END_DTT_USB -DFRONT_END_SAT 
+-DFRONT_END_SAT_SCR -DFUSION_APP_MGMT_SUPPORTED -DFUSION_AUTHENTICATION_SUPPORTED -DFUSION_BDL_SUPPORTED 
+-DFUSION_CA_VIDEOGUARD_SUPPORTED -DFUSION_DYNAMIC_TSA_SUPPORTED -DFUSION_HEADEND_METADATA_SUPPORTED 
+-DFUSION_HOME_NETWORK_SUPPORTED -DFUSION_METADATA_SUPPORTED -DFUSION_NETWORK_SUPPORTED -DFUSION_PDL_SUPPORTED 
+-DFUSION_PVOD_SUPPORTED -DFUSION_PVR_SUPPORTED -DFUSION_TARGETED_MESSAGING_SERVICE_SUPPORTED 
+-DFUSION_USER_ACTIVITY_SUPPORTED -DFUSION_VIDEOGUARD_NOTIFY_SUPPORTED -DFUSION_VWS_SUPPORTED -DGUIDE_BSKYB_FORMAT_LOGICAL_CHAN_NO 
+-DGUIDE_BSKYB_SUBSCRIBER_PROPERTIES_USED -DHEADEND_METADATA_OIGC -DHOME_NETWORK_MEDIA_RENDERER 
+-DHOME_NETWORK_PLANNER_SERVER -DHOME_NETWORK_REMOTE_UI -DHOTPLUG_SUPPORT -DIPPV -DMCM_PVR_RECORD_CA_HOLES 
+-DMETADATA_SI_XSI_SSR -DNETWORK_CONFIGURE_LAN -DPDL_NDS_SECURE_AUTH -DPLAYER_PIN_HANDLING_A 
+-DPLAYER_REMOTE_UI_HTTP -DPVOD_LINEAR_TRANSPORT -DPVR_CHECK_XTV_STATUS -DPVR_CLASSIC_REVIEW_BUFFER 
+-DSERIES_IMPLICIT_SERIES_DELETION -DSERIES_SYNCHRONIZE_BOOKINGS_WITH_SIGNUPS -DSI_SERVICE_SCAN_XSI 
+-DSOFTWARE_DOWNLOAD_OTV -DSRM_ELEMENTARY_STREAMS_SELECTION_A -DSRM_USE_PI_SCHEDULE_FLAG_FOR_AVAILABILITY 
+-DUSBTUNER_SUPPORTED -DUSB_SUPPORTED -DUSER_ACTIVITY_BARB -DUSER_ACTIVITY_SSP 
+-DWIFI_SUPPORTED -DWLM_SUPPORTED -DRELEASE_DBG -DDIAG_RELEASE_DBG 
+-DDIAG_MIN_FOOTPRINT -DOTV_CAROUSEL_SUPPORTED -DXSI_SUPPORTED -DLINT_ERRORS_ONLY= 
+-DLINT_RESTORE= -DPROFILE_A -DDIAG_LOG_NDEBUG -DNDEBUG -DMEMMAN_TRUSTED_CLIENT 
+-DGFX_NO_SHAPE -DGFX_IMAGE_NO_DITHERING -DGFX_PAINTER_NO_ARGB16_4444 
+-DGFX_PAINTER_NO_ARGB16_4444_PREMULT -DGFX_PAINTER_NO_RGB16_565 
+-DGFX_PAINTER_NO_SURFACE_RW -DMSCQ189287_CLOCK_MONOTONIC_NOT_SUPPORTED 
+-DCQ171339 -DLEGACY_MIGRATION_SUPPORT -DSUN_BUILD -DNDS_APP_TYPE_PICASSO 
+-DDIAG_JAVA_DEBUG -D_XOPEN_SOURCE=600 -DAMS_BCM_MIPS4K_LNUX_DARWIN_01 
+-DFUSION_PROFILE -DMEMMAN_TRUSTED_CLIENT -DMSCQ1854424_SP_SCHEMA_ONLY 
+-DMSCQ2375670_SET_PROVIDER_CLASS_MEMBERSHIP -DCQ380004_USE_STB_SW_01 
+-D`MEMMAN_FORCE_USE_MALLOC_DIRECTLY` -DBUILDING_DISK_PARTITION 
+
+-DCDI_IOCTL_DEFINITIONS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/ioctl_magic.h" 
+-DCDI -DIS_BIG_ENDIAN -D__BIG_ENDIAN -D_XOPEN_SOURCE=600 -D__USE_XOPEN2K -D_GNU_SOURCE 
+
+-I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/fusion2/helper_libraries/storage_helper/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_S
+YSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemcommon/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlang/
+inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlocator/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/b
+uild/components/system_libraries/systemutil/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemstring/inc -I/home/NDS-UK/kyoupark/STB_SW/FU
+SION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemtime/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemi
+tc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemconfig/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION
+/build/components/system_libraries/systemobject/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/diag/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION
+_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/memman/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemitc/inc -
+I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/ssm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
+components/system_libraries/ipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/common_middleware/xipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRA
+TION/BSKYB_INTEGRATION/build/components/system_control_and_diagnostics/sysinit/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/i
+nc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/src/server/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INT
+EGRATION/build/components/system_resource_management/pdm/src/common/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/tests/CUnit-2.0-2/CUnit/Headers -I/home/NDS
+-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemalarm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linu
+x/inc/CDI_INC/include -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BL
+D_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/nds -include /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/
+BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc/clocks.h -ffunction-sections -fdata-sections   -c /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSK
+YB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/components/system_resource_management/pdm/makefile_generated_config.c -o /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTE
+GRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/components/system_resource_management/pdm/src/disk_partition//home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION
+/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/components/system_resource_management/pdm/makefile_generated_config.o
+
+// $(LOCAL_PLATFORM_CC)
+// /STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/\
+// linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gcc,
+//
+// $(LOCAL_PLATFORM_CC_FLAGS)
+// -Os -fno-strict-aliasing -Wall -g -fno-builtin -DNeedFunctioPrototypes=1 \
+// -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes \
+// -Wmissing-declarations -DAPP_MGMT_SIGNAL_24_7_SERVICE_TYPE_82H 
+// -DAPP_MGMT_SIGNAL_ETV_OTV_TRIGGER_MOD 
+// ...
+// -D_GNU_SOURCE \
+// -I/... -ffunction-sections -fdata-sections,
+//
+// $(COMMON_CC_FLAGS)
+// -DDIAG_FILE_ID=111, 
+//
+// -c aem_version.c 
+// -o ../build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/\
+// components/platform_management/aem/src/aem_version.o
+
+<build-option-link>
+#  PLATFORM_BUILD_PROCESS_FROM_OBJECTS      Function to create a process from 
+#                                           a list of objects
+
+define PLATFORM_BUILD_PROCESS_FROM_OBJECTS
+    @echo +++ Message from $(NDS_PLATFORM)/platform.mk Linking Process $@
+    @echo "KT: $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group $(^:$(PLATFORM_LIB_PREFIX)%$(PLATFORM_LIB_SUFFIX)=-l%) $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) -Xlinker --end-group -o $@"
+    $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group $(^:$(PLATFORM_LIB_PREFIX)%$(PLATFORM_LIB_SUFFIX)=-l%) $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) -Xlinker --end-group -o $@
+endef
+
+PLATFORM_STRIP := $(COMPILER_ROOT)/bin/$(MIPS)-linux-uclibc-strip
+
+# BUILD_SYSTEM/COMMON_MAKEFILES/process.mk
+ifeq (YES,$(NDS_STRIP_PROCESS))
+define LOCAL_PROCESS_STRIP_PROCESS
+    $(COMMANDS_MKDIR) $(NDS_BUILD_ROOT)/$(NDS_PLATFORM)/$(NDS_PLATFORM_ENDIAN)/unstripped_processes
+    $(COMMANDS_CP) $@ $(NDS_BUILD_ROOT)/$(NDS_PLATFORM)/$(NDS_PLATFORM_ENDIAN)/unstripped_processes/$(notdir $@)
+    @echo Removing debug information from $@
+    $(PLATFORM_STRIP) $@
+endef
+
+
+To set defines for a component, change component's makefile
+
+COMPONENT_CC_DEFINES :=PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
+COMPONENT_CC_DEFINES +=PCAT_LOG_POSSIBLE_VL_LEAKS                             
 
 
 <linking>
@@ -9999,219 +10182,6 @@ bslcomm.h              demuxchunkinput.h      esprocessor.h            masterclo
 bslcomm_tables.h       demuxclockfilter.h     flash.h                  mpegencoder.h         power.h          secondaryscramblingcontrol.h  vgdemuxecmcorruptor.h
 
 
-={============================================================================
-|kt_dev_si_0001| comp-build enable-comp-diag
-
-NDS_BUILD_SYSTEM=FUSION 
-
-NDS_BUILD_PROJECT=picasso NDS_PLATFORM=AMS_BCM_MIPS4K_LNUX_DARWIN_01 NDS_ROOT=/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build NDS_PROJECT=picasso NDS_BUILD_ROOT=/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso NDS_BUILD_TYPE=debug make makefile
-
-NDS_ROOT_UNIX=/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build NDS_LOCAL_TOOLS= 
-
-NDS_STB=  NDS_HOST=linux NDS_MAKE=make --debug NDS_PARALLEL=1 NDS_BUILD_TYPE_DEFAULT=release_dbg NDS_DEFINES="" NDS_LOCATION=ST COMPONENTS_DIR="/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components" NDS_TOOLS_ROOT="/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build" VOB_ROOT="/home/NDS-UK/kyoupark/STB_SW" VOB_ROOT_UNIX="/home/NDS-UK/kyoupark/STB_SW" PLATFORMS_TOOLS_ROOT="/home/NDS-UK/kyoupark/STB_SW" NDS_FUSIONOS="FUSIONOS_2" NDS_FUSIONOS_PRE="FUSIONOS" NDS_FUSIONOS_VER=" _2" NDS_USE_CCACHE= NDS_USE_REL_PATHS= NDS_CCACHE_EXE= NDS_HOST_CC=/usr/bin/ NDS_TARGET:=install install
-
-<component-makefile>
-
-Each component makefile defines:
-
-$/comp/src/makefile
-
-  COMPONENT_NAME := darwin_planner_src
-  COMPONENT_CC_DEFINES :=
-
-  # this starts the process of refering global make files.
-  include $(NDS_ROOT)/projects/$(NDS_PROJECT)/build_options.mk
-  # see  *build-options-mk* *enable-comp-diag*
-
-  // include $(NDS_ROOT)/projects/fusion2/build_options.mk
-  {
-    // For example, suppose build "darwin_planner_src" and if NDS_BUILD_TYPE
-    // is defined for this component, define macros for debug diag build.
-    //
-    // ifeq (NDS_BUILD_TYPE_darwin_planner_src, debug)
-
-    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),debug)
-      GLOBAL_DEFINES += DEBUG
-      GLOBAL_DEFINES += DIAG_DEBUG    *diag-debug*
-    endif
-
-    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release)
-      GLOBAL_DEFINES += RELEASE
-      ifeq (YES,$(DIAG_RELEASE_MIL))
-        GLOBAL_DEFINES += DIAG_RELEASE_MIL
-      else
-        GLOBAL_DEFINES += DIAG_RELEASE
-      endif
-    endif
-
-    ifeq ($(strip $(NDS_BUILD_TYPE_$(COMPONENT_NAME))),release_dbg)
-      ifeq (YES,$(DIAG_ENABLE_ALL_LEVELS))
-        GLOBAL_DEFINES += RELEASE_DBG
-        GLOBAL_DEFINES += DIAG_DEBUG
-      else
-        GLOBAL_DEFINES += RELEASE_DBG
-        GLOBAL_DEFINES += DIAG_RELEASE_DBG
-      endif
-    endif
-  }
-
-
-<platform-mk> build-option
-// FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/platform.mk
-
-LOCAL_PLATFORM_CC_DEFINE_FLAGS += $(COMPONENT_CC_DEFINES:%=-D%)
-
-ifeq ($(NDS_BUILD_TYPE_$(COMPONENT_NAME)), debug)
-  LOCAL_PLATFORM_CC_FLAGS += -O0
-else
-  ifneq ($(NDS_GCOV_$(COMPONENT_NAME)), YES)
-    LOCAL_PLATFORM_CC_FLAGS += -Os
-  endif
-  LOCAL_PLATFORM_CC_FLAGS += -fno-strict-aliasing
-endif
-
-LOCAL_PLATFORM_CC_FLAGS += $(LOCAL_PLATFORM_CC_DEFINE_FLAGS)
-
-
-// note: to print custom message in make
-
-##################################################################
-#
-# Dependency builder.Notice that the generated dependency file
-# is placed in the build tree.
-# gcc is used to build dependencies using the MM option.
-# The MT option specifies the name of dependent file.
-# Dependency generation works in the same way on all platforms.
-#
-##################################################################
-
-define PLATFORM_CC_BUILD_DEPENDENCY                                                                                                                                                                        
-  @$(COMMANDS_MKDIR_EX) $(dir $@)
-  @echo +++ Message from $(NDS_PLATFORM)/platform.mk - building dependencies for $@
-  $(LOCAL_PLATFORM_CC) -MM $(LOCAL_PLATFORM_DEP_FLAGS) -MT $@ $< -o $(@:$(PLATFORM_OBJ_SUFFIX)=$(PLATFORM_DEPS_SUFFIX))
-endef
-
-<build-option-compile> <build-defines>
-# +++ Message from AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform.mk - 
-# building dependencies for /home/NDS-UK/kyoupark/STB_SW/\
-# FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/\
-# /AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/components/\
-# darwin_platform_components/darwin_player/src/player_xx_.o
-
-@472
-define PLATFORM_CC_BUILD_OBJECT
-     echo +++ Message from $(NDS_PLATFORM)/platform.mk - Creating object $@
-     echo "KT: $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@"
-     $(LOCAL_PLATFORM_CC) $(LOCAL_PLATFORM_CC_FLAGS) $(COMMON_CC_FLAGS) -c $< -o $@
-endef
-
-// as of 02/09/2016
-//
-KT:CC: /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gcc 
--Os -fno-strict-aliasing -Wall -g -fno-builtin -DNeedFunctioPrototypes=1 -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations   
-
--DAPP_MGMT_SIGNAL_24_7_SERVICE_TYPE_82H -DAPP_MGMT_SIGNAL_ETV_OTV_TRIGGER_MOD -DAPP_MGMT_SIGNAL_RECOMMENDATION_OTV_PROMO_MOD 
--DAUTHENTICATION_NDS_SAC -DBSKYB_SUPPORT_HEP_WITH_OIG -DCALLBACK_PSTN -DCAPTION_TELETEXT_LEGACY_LAYOUT -DCAROUSEL_MHC -DCAROUSEL_OTV -DCA_VIDEOGUARD_NDS_SECURE_RETURN_PATH 
--DCA_VIDEOGUARD_PARENTAL_RESTRICT -DCA_VIDEOGUARD_WATERSHED -DFRONT_END_DTT_USB -DFRONT_END_SAT 
--DFRONT_END_SAT_SCR -DFUSION_APP_MGMT_SUPPORTED -DFUSION_AUTHENTICATION_SUPPORTED -DFUSION_BDL_SUPPORTED 
--DFUSION_CA_VIDEOGUARD_SUPPORTED -DFUSION_DYNAMIC_TSA_SUPPORTED -DFUSION_HEADEND_METADATA_SUPPORTED 
--DFUSION_HOME_NETWORK_SUPPORTED -DFUSION_METADATA_SUPPORTED -DFUSION_NETWORK_SUPPORTED -DFUSION_PDL_SUPPORTED 
--DFUSION_PVOD_SUPPORTED -DFUSION_PVR_SUPPORTED -DFUSION_TARGETED_MESSAGING_SERVICE_SUPPORTED 
--DFUSION_USER_ACTIVITY_SUPPORTED -DFUSION_VIDEOGUARD_NOTIFY_SUPPORTED -DFUSION_VWS_SUPPORTED -DGUIDE_BSKYB_FORMAT_LOGICAL_CHAN_NO 
--DGUIDE_BSKYB_SUBSCRIBER_PROPERTIES_USED -DHEADEND_METADATA_OIGC -DHOME_NETWORK_MEDIA_RENDERER 
--DHOME_NETWORK_PLANNER_SERVER -DHOME_NETWORK_REMOTE_UI -DHOTPLUG_SUPPORT -DIPPV -DMCM_PVR_RECORD_CA_HOLES 
--DMETADATA_SI_XSI_SSR -DNETWORK_CONFIGURE_LAN -DPDL_NDS_SECURE_AUTH -DPLAYER_PIN_HANDLING_A 
--DPLAYER_REMOTE_UI_HTTP -DPVOD_LINEAR_TRANSPORT -DPVR_CHECK_XTV_STATUS -DPVR_CLASSIC_REVIEW_BUFFER 
--DSERIES_IMPLICIT_SERIES_DELETION -DSERIES_SYNCHRONIZE_BOOKINGS_WITH_SIGNUPS -DSI_SERVICE_SCAN_XSI 
--DSOFTWARE_DOWNLOAD_OTV -DSRM_ELEMENTARY_STREAMS_SELECTION_A -DSRM_USE_PI_SCHEDULE_FLAG_FOR_AVAILABILITY 
--DUSBTUNER_SUPPORTED -DUSB_SUPPORTED -DUSER_ACTIVITY_BARB -DUSER_ACTIVITY_SSP 
--DWIFI_SUPPORTED -DWLM_SUPPORTED -DRELEASE_DBG -DDIAG_RELEASE_DBG 
--DDIAG_MIN_FOOTPRINT -DOTV_CAROUSEL_SUPPORTED -DXSI_SUPPORTED -DLINT_ERRORS_ONLY= 
--DLINT_RESTORE= -DPROFILE_A -DDIAG_LOG_NDEBUG -DNDEBUG -DMEMMAN_TRUSTED_CLIENT 
--DGFX_NO_SHAPE -DGFX_IMAGE_NO_DITHERING -DGFX_PAINTER_NO_ARGB16_4444 
--DGFX_PAINTER_NO_ARGB16_4444_PREMULT -DGFX_PAINTER_NO_RGB16_565 
--DGFX_PAINTER_NO_SURFACE_RW -DMSCQ189287_CLOCK_MONOTONIC_NOT_SUPPORTED 
--DCQ171339 -DLEGACY_MIGRATION_SUPPORT -DSUN_BUILD -DNDS_APP_TYPE_PICASSO 
--DDIAG_JAVA_DEBUG -D_XOPEN_SOURCE=600 -DAMS_BCM_MIPS4K_LNUX_DARWIN_01 
--DFUSION_PROFILE -DMEMMAN_TRUSTED_CLIENT -DMSCQ1854424_SP_SCHEMA_ONLY 
--DMSCQ2375670_SET_PROVIDER_CLASS_MEMBERSHIP -DCQ380004_USE_STB_SW_01 
--D`MEMMAN_FORCE_USE_MALLOC_DIRECTLY` -DBUILDING_DISK_PARTITION 
-
--DCDI_IOCTL_DEFINITIONS="/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/ioctl_magic.h" 
--DCDI -DIS_BIG_ENDIAN -D__BIG_ENDIAN -D_XOPEN_SOURCE=600 -D__USE_XOPEN2K -D_GNU_SOURCE 
-
--I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/fusion2/helper_libraries/storage_helper/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_S
-YSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemcommon/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlang/
-inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemlocator/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/b
-uild/components/system_libraries/systemutil/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemstring/inc -I/home/NDS-UK/kyoupark/STB_SW/FU
-SION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemtime/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemi
-tc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemconfig/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION
-/build/components/system_libraries/systemobject/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/diag/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION
-_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/memman/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemitc/inc -
-I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/ssm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
-components/system_libraries/ipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/common_middleware/xipc/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRA
-TION/BSKYB_INTEGRATION/build/components/system_control_and_diagnostics/sysinit/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/i
-nc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_resource_management/pdm/src/server/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INT
-EGRATION/build/components/system_resource_management/pdm/src/common/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/tests/CUnit-2.0-2/CUnit/Headers -I/home/NDS
--UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/system_libraries/systemalarm/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linu
-x/inc/CDI_INC/include -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BL
-D_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc -I/home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/inc/nds -include /home/NDS-UK/kyoupark/STB_SW/FUSIONOS_2/
-BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/nds/inc/clocks.h -ffunction-sections -fdata-sections   -c /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSK
-YB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/components/system_resource_management/pdm/makefile_generated_config.c -o /home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTE
-GRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/components/system_resource_management/pdm/src/disk_partition//home/NDS-UK/kyoupark/STB_SW/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION
-/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/components/system_resource_management/pdm/makefile_generated_config.o
-
-// $(LOCAL_PLATFORM_CC)
-// /STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/\
-// linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gcc,
-//
-// $(LOCAL_PLATFORM_CC_FLAGS)
-// -Os -fno-strict-aliasing -Wall -g -fno-builtin -DNeedFunctioPrototypes=1 \
-// -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes \
-// -Wmissing-declarations -DAPP_MGMT_SIGNAL_24_7_SERVICE_TYPE_82H 
-// -DAPP_MGMT_SIGNAL_ETV_OTV_TRIGGER_MOD 
-// ...
-// -D_GNU_SOURCE \
-// -I/... -ffunction-sections -fdata-sections,
-//
-// $(COMMON_CC_FLAGS)
-// -DDIAG_FILE_ID=111, 
-//
-// -c aem_version.c 
-// -o ../build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/release_dbg/\
-// components/platform_management/aem/src/aem_version.o
-
-<build-option-link>
-#  PLATFORM_BUILD_PROCESS_FROM_OBJECTS      Function to create a process from 
-#                                           a list of objects
-
-define PLATFORM_BUILD_PROCESS_FROM_OBJECTS
-    @echo +++ Message from $(NDS_PLATFORM)/platform.mk Linking Process $@
-    @echo "KT: $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group $(^:$(PLATFORM_LIB_PREFIX)%$(PLATFORM_LIB_SUFFIX)=-l%) $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) -Xlinker --end-group -o $@"
-    $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group $(^:$(PLATFORM_LIB_PREFIX)%$(PLATFORM_LIB_SUFFIX)=-l%) $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) -Xlinker --end-group -o $@
-endef
-
-PLATFORM_STRIP := $(COMPILER_ROOT)/bin/$(MIPS)-linux-uclibc-strip
-
-# BUILD_SYSTEM/COMMON_MAKEFILES/process.mk
-ifeq (YES,$(NDS_STRIP_PROCESS))
-define LOCAL_PROCESS_STRIP_PROCESS
-    $(COMMANDS_MKDIR) $(NDS_BUILD_ROOT)/$(NDS_PLATFORM)/$(NDS_PLATFORM_ENDIAN)/unstripped_processes
-    $(COMMANDS_CP) $@ $(NDS_BUILD_ROOT)/$(NDS_PLATFORM)/$(NDS_PLATFORM_ENDIAN)/unstripped_processes/$(notdir $@)
-    @echo Removing debug information from $@
-    $(PLATFORM_STRIP) $@
-endef
-
-
-={============================================================================
-|kt_dev_si_0001| comp-build-define
-
-To set defines for a component, change component's makefile
-
-COMPONENT_CC_DEFINES :=PCAT_ENABLE_EXTRA_CLIENT_VIEW_DEBUG
-COMPONENT_CC_DEFINES +=PCAT_LOG_POSSIBLE_VL_LEAKS                             
-
- 
 ={============================================================================
 |kt_dev_si_0001| comp-jpa
 

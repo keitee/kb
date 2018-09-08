@@ -15296,12 +15296,13 @@ They also instrument builtin compiler intrinsic e.g. __builtin_memcpy, etc.
 
 
 ={============================================================================
-*kt_linux_tool_100* tool-asan-code
+*kt_linux_tool_100* tool-asan-flag
 
 https://github.com/google/sanitizers/wiki/AddressSanitizerFlags
 
 To get the idea of what's supported in your version, run
 
+// only works for GCC 6.3.0
 ASAN_OPTIONS=help=1 ./a.out
 
 ASAN_OPTIONS=verbosity=1:malloc_context_size=20 ./a.out
@@ -15387,7 +15388,6 @@ static void AsanInitInternal() {
 *kt_linux_tool_100* tool-asan-use
 
 {tool-asan-static}
-
 /bin/i686-nptl-linux-gnu-gcc -static-libasan -fsanitize=address uaf.c
 
 
@@ -17666,6 +17666,39 @@ crosstool-ng.config.
 // GNU ld (crosstool-NG 1.21.0) 2.25
 
 
+<build-mw-with-asan>
+
+// changed to make
+
+kyoupark@st-castor-03:~/STB_SW_o/NDS_INTEL_X86_LNUX_MRFUSION_01$ git diff BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
+diff --git a/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk b/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
+index 07c8118..4553ac0 100755
+--- a/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
++++ b/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
+@@ -275,6 +275,7 @@ ifeq (shared,$(NDS_LINK_TYPE_$(COMPONENT_NAME)))
+ endif
+
+ # Global compiler flags
++LOCAL_PLATFORM_CC_FLAGS += -fsanitize=address
+ LOCAL_PLATFORM_CC_FLAGS += -Wall
+ LOCAL_PLATFORM_CC_FLAGS += -fno-builtin
+ LOCAL_PLATFORM_CC_FLAGS += -Wno-unused-but-set-variable
+@@ -408,6 +409,7 @@ ifeq (shared, $(NDS_LINK_TYPE_$(COMPONENT_NAME)))
+ endif
+
+ # Global compiler flags
++LOCAL_PLATFORM_CPP_FLAGS += -fsanitize=address
+ LOCAL_PLATFORM_CPP_FLAGS += -Wall
+ LOCAL_PLATFORM_CPP_FLAGS += -Wno-unused-but-set-variable
+ LOCAL_PLATFORM_CPP_FLAGS += -Wno-maybe-uninitialized
+@@ -581,7 +583,7 @@ endif
+
+ # Set libraries required by tools.
+ # For example: LOCAL_PLATFORM_TOOLSET_LIBRARIES := -lm -lpthread -lrt
+-LOCAL_PLATFORM_TOOLSET_LIBRARIES := -lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib -lgio -lgobject -ldbus -lz
++LOCAL_PLATFORM_TOOLSET_LIBRARIES := -lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib -lgio -lgobject -ldbus -lz -lasan
+
+
 <new-vstb>
 // BSKYB_GM_Integration/BSKYB_INTEGRATION_BLD_42.25.00_BSKYB_GM_Integration
 
@@ -17688,10 +17721,7 @@ lrwxrwxrwx 1 kyoupark ccisco      16 Nov 13  2017 libasan.so -> libasan.so.1.0.0
 // However, on vstb, there is no libasan* under lib, so have to do:
 // copy libasan* into /flash0
 
-kyoupark@st-castor-03:~/si_logs/flash0-r16/flash0$ pwd
-/home/kyoupark/si_logs/flash0-r16/flash0
-
-kyoupark@st-castor-03:~/si_logs/flash0-r16/flash0$ cp ~/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/libasan* .                
+cp ~/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/libasan* .                
 
 kyoupark@st-castor-03:~/si_logs/flash0-r16/flash0$ ls libasan*
 libasan.a  libasan_preinit.o  libasan.so  libasan.so.1  libasan.so.1.0.0
@@ -17718,6 +17748,8 @@ LD_PRELOAD=/flash0/libasan.so:/usr/lib/libforcesched.so:/lib/libresolv-refresh.s
 export ASAN_OPTIONS="verbosity=2:halt_on_error=0:debug=1"
 export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
 mkdir /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v4/flash0 /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-r16/flash0 /flash0
 ulimit -c unlimited
 ./asan_uaf
@@ -17729,11 +17761,16 @@ export STREAM_NETWORK=BSKYB_DARWIN
 export ASAN_OPTIONS="verbosity=2:halt_on_error=0:debug=1"
 export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
 mkdir /flash0
-# mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-r16/flash0 /flash0
 
-/flash0/scripts/startstack.sh
+# mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
+
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-pete/ /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb/flash0 /flash0
+
 ulimit -c unlimited
+/flash0/scripts/startstack.sh
+
+//
 /flash0/scripts/run.sh
 
 // to run mw process only, do not change run.sh but change mw process:
@@ -17760,12 +17797,20 @@ LD_PRELOAD=/flash0/libasan.so /NDS/bin/MW_Process.org
 //
 // mw build and asan runs but asan, mw process exits soon. around diag. 
 //
-// (diag error)
+// (asan error on diag)
+// 0x08140086 is located 0 bytes to the right of global variable 'gClientName' from 'diagctl_log_req_handler.c' (0x8140080) of size 6
+//   'gClientName' is ascii string '_DLRH'
+// SUMMARY: AddressSanitizer: global-buffer-overflow ??:0 memcpy
+//
 // 0x0819b606 is located 0 bytes to the right of global variable 'gClientName' from 'diagctl_log_req_handler.c' (0x819b600) of size 6
 //   'gClientName' is ascii string '_DLRH'
 // 
 // /home/kyoupark/STB_SW/CMS_SYSTEM_INFRASTRUCTURE/
 // DIAG/src/log/src/diagctl_log_req_handler.c
+//
+// /* IPC client name */
+//-static char gClientName[] = "_DLRH";
+//+static char gClientName[6] = "_DLRH";
 //
 // so to use "after-error" of asan, tried "-fsanitizer_recover=address" but
 // it's not supported in the current version.
@@ -37059,6 +37104,19 @@ to use errno, perror(), or strerror() to diagnose errors.
 
 
 {errno-values}
+kyoupark@kit-debian64:~$ cat /usr/include/linux/errno.h
+#include <asm/errno.h>
+
+/usr/include/asm-generic/errno.h
+#ifndef _ASM_GENERIC_ERRNO_H
+#define _ASM_GENERIC_ERRNO_H
+
+#include <asm-generic/errno-base.h>
+
+#define EDEADLK         35      /* Resource deadlock would occur */
+#define ENAMETOOLONG    36      /* File name too long */
+...
+
 // <linux>/include/asm-generic/errno-base.h
 
 #ifndef _ASM_GENERIC_ERRNO_BASE_H
@@ -38591,6 +38649,34 @@ unused, so that it isn't necessary to maintain corresponding page-table entries.
 
 If a process tries to access an address for which there is 'no' corresponding
 page-table entry, it receives a SIGSEGV signal. *sigseg*
+
+Whenever that process runs, the hardware’s page table register will point to
+that table.
+
+pages are the smallest unit of memory manipulated by the VM system. This is an
+important point to understand when debugging, because it implies that some
+erroneous memory accesses by the program will not trigger seg faults, as you
+will see below. In other words, during your de- bugging session, you cannot
+say something like, “This line of source code must be okay, since it didn’t
+cause a seg fault.”
+
+During the execution of the program, the addresses it generates will be
+virtual. When the program attempts to access memory at a certain virtual ad-
+dress, say y, the hardware will convert that to a virtual page number v, which
+equals y divided by 4,096 (where the division uses integer arithmetic, dis-
+    carding the remainder). The hardware will then check entry v in the page
+table to see whether the permissions for the page match the operation to be
+performed. 
+
+If they do match, the hardware will get the desired location’s actual physical
+page number from this table entry and then carry out the re- quested memory
+operation. 
+
+But if the table entry shows that the requested operation does not have the
+proper permission, the hardware will execute an internal interrupt. This will
+cause a jump to the OS’s error-handling rou- tine. The OS will normally then
+announce a memory access violation and discontinue execution of the program
+(i.e., remove it from the process table and from memory).
 
 
 <page-fault-seg-fault>
