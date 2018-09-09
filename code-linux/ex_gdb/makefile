@@ -11,6 +11,7 @@ TARGET2 = bintree
 TARGET3 = artificialarray
 TARGET4 = server
 TARGET5 = client
+TARGET6 = threads
 
 # Where to find user code.
 USER_DIR = .
@@ -20,7 +21,8 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 
 TESTS = $(TARGET)_test $(TARGET2)_test $(TARGET3)_test \
-				$(TARGET4)_test $(TARGET5)_test
+				$(TARGET4)_test $(TARGET5)_test \
+				$(TARGET6)_test
 
 # GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
 #                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -90,3 +92,10 @@ $(TARGET5).o : $(TARGET5).c $(GTEST_HEADERS)
 
 $(TARGET5)_test : $(TARGET5).o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET6).o : $(TARGET6).c $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET6).c -o $(TARGET6).o
+
+$(TARGET6)_test : $(TARGET6).o
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread -lm $^ -o $@
