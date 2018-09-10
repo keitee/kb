@@ -12,6 +12,7 @@ TARGET3 = artificialarray
 TARGET4 = server
 TARGET5 = client
 TARGET6 = threads
+TARGET7 = psax
 
 # Where to find user code.
 USER_DIR = .
@@ -22,7 +23,8 @@ CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 
 TESTS = $(TARGET)_test $(TARGET2)_test $(TARGET3)_test \
 				$(TARGET4)_test $(TARGET5)_test \
-				$(TARGET6)_test
+				$(TARGET6)_test \
+				$(TARGET7)_test
 
 # GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
 #                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -99,3 +101,12 @@ $(TARGET6).o : $(TARGET6).c $(GTEST_HEADERS)
 
 $(TARGET6)_test : $(TARGET6).o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread -lm $^ -o $@
+
+#
+#	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET7).c -o $(TARGET7).o
+$(TARGET7).o : $(TARGET7).c $(GTEST_HEADERS)
+	gcc -g -c $(TARGET7).c -o $(TARGET7).o
+
+#	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread -lcurses $^ -o $@
+$(TARGET7)_test : $(TARGET7).o
+	gcc -g -lpthread -lcurses $^ -o $@
