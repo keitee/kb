@@ -11,6 +11,7 @@ if __name__ == "__main__":
     dirs = [
         './CMS_PLATFORM_SERVICES', 
         './CMS_SYSTEM_INFRASTRUCTURE',
+        './CMS_SYSTEM_RESOURCE',
         './DARWIN_PLATFORM', 
         './CMS_MEDIA_SERVICES', 
         './CMS_INFORMATION_SERVICES',
