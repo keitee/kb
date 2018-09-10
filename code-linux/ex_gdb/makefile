@@ -13,6 +13,7 @@ TARGET4 = server
 TARGET5 = client
 TARGET6 = threads
 TARGET7 = psax
+TARGET8 = hello
 
 # Where to find user code.
 USER_DIR = .
@@ -24,7 +25,8 @@ CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 TESTS = $(TARGET)_test $(TARGET2)_test $(TARGET3)_test \
 				$(TARGET4)_test $(TARGET5)_test \
 				$(TARGET6)_test \
-				$(TARGET7)_test
+				$(TARGET7)_test \
+				$(TARGET8)_test
 
 # GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
 #                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -109,4 +111,11 @@ $(TARGET7).o : $(TARGET7).c $(GTEST_HEADERS)
 
 #	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread -lcurses $^ -o $@
 $(TARGET7)_test : $(TARGET7).o
+	gcc -g -lpthread -lcurses $^ -o $@
+
+#
+$(TARGET8).o : $(TARGET8).c $(GTEST_HEADERS)
+	gcc -g -pg -c $(TARGET8).c -o $(TARGET8).o
+
+$(TARGET8)_test : $(TARGET8).o
 	gcc -g -lpthread -lcurses $^ -o $@

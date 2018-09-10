@@ -95,8 +95,9 @@
 *kt_linux_tool_014* tool-putty-xwin
 *kt_linux_tool_015* tool-pgrep, tool-pidof
 |kt_linux_tool_018| tool-ls
-*kt_linux_tool_019* tool-trace tool-ftrace
+*kt_linux_tool_019* tool-trace tool-ftrace tool-uftrace
 |kt_linux_tool_019| tool-trace tool-strace
+*kt_linux_tool_020* tool-trace-case
 |kt_linux_tool_020| tool-date
 |kt_linux_tool_021| tool-chmod
 |kt_linux_tool_022| mknod
@@ -8044,6 +8045,30 @@ is that it does not provide an easy mechanism to invoke an executable and just
 trace that executable. Here is a simple shell script which provides that
 functionality:
 
+https://lwn.net/Articles/365835/
+
+// should be root to do that:
+
+    [~]# cd /sys/kernel/debug/tracing
+    [tracing]#
+
+// sample output
+tail -f trace
+            ...
+            bash-6210  [000] .... 13588.205993: kmem_cache_alloc_trace <-seq_open
+            bash-6210  [000] .... 13588.205993: _cond_resched <-kmem_cache_alloc_trace
+            bash-6210  [000] .... 13588.205993: __mutex_init <-seq_open
+            bash-6210  [000] .... 13588.205993: __kmalloc <-__tracing_open
+            bash-6210  [000] .... 13588.205993: kmalloc_slab <-__kmalloc
+            bash-6210  [000] .... 13588.205994: _cond_resched <-__kmalloc
+            bash-6210  [000] .... 13588.205994: mutex_lock <-__tracing_open
+            bash-6210  [000] .... 13588.205994: _cond_resched <-mutex_lock
+            bash-6210  [000] .... 13588.205994: kmem_cache_alloc_trace <-__tracing_open
+            bash-6210  [000] .... 13588.205994: _cond_resched <-kmem_cache_alloc_trace
+            bash-6210  [000] .... 13588.205995: __mutex_init <-__tracing_open
+            bash-6210  [000] .... 13588.205995: _raw_spin_lock_irqsave <-tracing_stop
+
+
 #!/bin/bash
 # Read more: https://blog.fpmurphy.com/2014/05/kernel-tracing-using-ftrace.html#ixzz5KIDBCBAz
  
@@ -8101,7 +8126,10 @@ marker buffer. This allows you to print messages directly into your ftrace
 capture.
 
 /usr/bin/trace-cmd stop
-echo 3500 > /sys/kernel/debug/tracing/buffer_size_kb #set ftrace buffer size default is probably to low
+
+# set ftrace buffer size default is probably to low
+echo 3500 > /sys/kernel/debug/tracing/buffer_size_kb 
+
 /usr/bin/trace-cmd start -e sched -e irq
 chmod 777 /sys/kernel/debug
 chmod 222 /sys/kernel/debug/tracing/trace_marker
@@ -8126,6 +8154,7 @@ if ( true == visibility )
 }
 else
 
+
 Debugging the kernel using Ftrace - part 2
 https://lwn.net/Articles/366796/
 
@@ -8136,7 +8165,7 @@ https://github.com/brendangregg/perf-tools
 
 <tool-trace-tool-uftrace>
 The uftrace tool is to trace and analyze execution of a program written in
-C/C++. It was heavily inspired by the ftrace framework of the Linux kernel
+C/C++. It was heavily inspired by the `ftrace` framework of the Linux kernel
 (especially function graph tracer) and supports userspace programs. It
 supports various kind of commands and filters to help analysis of the program
 execution and performance.
@@ -8356,6 +8385,95 @@ exec strace -ff -o /opt/adobe/stagecraft/data/trace.log -s 128 \
 
 <ex>
 LD_PRELOAD=/libyouviewrcushim.so strace /bin/true
+
+
+={============================================================================
+*kt_linux_tool_020* tool-trace-case
+
+<ex>
+#include <stdio.h>
+
+int main()
+{
+  printf("hello world.\n");
+}
+
+// strace output
+...
+getrlimit(RLIMIT_STACK, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+fstat(1, {st_mode=S_IFCHR|0620, st_rdev=makedev(136, 3), ...}) = 0
+mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f7148b54000
+write(1, "hello world.\n", 13)          = 13
+exit_group(13)                          = ?
++++ exited with 13 +++
+
+// ltrace output
+__libc_start_main(0x400686, 1, 0x7ffe950fa958, 0x4006a0 <unfinished ...>
+puts("hello world.")                                                                                                            = 13
++++ exited (status 13) +++
+
+// uftrace output
+kyoupark@kit-debian64:~/git/kb/code-linux/ex_gdb$ uftrace ./hello_test
+hello world.
+# DURATION     TID     FUNCTION
+            [  3901] | main() {
+   4.507 us [  3901] |   puts();
+   6.538 us [  3901] | } /* main */
+
+
+http://blog.hostilefork.com/where-printf-rubber-meets-road/
+
+// <glibc>/libio/stdio.h
+
+__BEGIN_NAMESPACE_STD
+/* Write formatted output to STREAM.
+
+   This function is a possible cancellation point and therefore not
+   marked with __THROW.  */
+extern int fprintf (FILE *__restrict __stream,
+		    __const char *__restrict __format, ...);
+
+
+// <glibc>/stdio-common/printf.c
+
+/* Write formatted output to stdout from the format string FORMAT.  */
+/* VARARGS1 */
+int
+__printf (const char *format, ...)
+{
+  va_list arg;
+  int done;
+
+  va_start (arg, format);
+  done = vfprintf (stdout, format, arg);
+  va_end (arg);
+
+  return done;
+}
+
+ldbl_strong_alias (__printf, printf);
+
+// <glibc>/stdio-common/vfprintf.c
+
+/* The function itself.  */
+int
+vfprintf (FILE *s, const CHAR_T *format, va_list ap)
+{
+
+}
+
+#define	outchar(Ch)							      \
+  do									      \
+    {									      \
+      register const INT_T outc = (Ch);					      \
+      if (PUTC (outc, s) == EOF || done == INT_MAX)			      \
+	{								      \
+	  done = -1;							      \
+	  goto all_done;						      \
+	}								      \
+      ++done;								      \
+    }									      \
+  while (0)
 
 
 ={============================================================================
