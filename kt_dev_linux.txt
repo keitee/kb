@@ -175,7 +175,7 @@
 *kt_linux_tool_100* tool-efence-dmalloc
 *kt_linux_tool_100* tool-efence-fortify
 *kt_linux_tool_100* tool-asan tool-efence cpp-memory-issue
-*kt_linux_tool_100* tool-asan-code
+*kt_linux_tool_100* tool-asan-flag asan-code
 *kt_linux_tool_100* tool-asan-use
 *kt_linux_tool_100* tool-asan tool-kasan
 *kt_linux_tool_000* tool-asan-llvm
@@ -15419,6 +15419,35 @@ They also instrument builtin compiler intrinsic e.g. __builtin_memcpy, etc.
 
 https://github.com/google/sanitizers/wiki/AddressSanitizerFlags
 
+<x>
+Clang 3.1 and 3.2 supported __attribute__((no_address_safety_analysis)) instead.
+
+You may also ignore certain functions using a blacklist: create a file
+my_ignores.txt and pass it to AddressSanitizer at compile time using
+-fsanitize-blacklist=my_ignores.txt (This flag is new and is only supported by
+    Clang now): 
+  
+<x>
+Q: Can AddressSanitizer continue running after reporting first error?
+
+A: Yes it can, AddressSanitizer has recently got continue-after-error mode.
+This is somewhat experimental so may not yet be as reliable as default setting
+(and not as timely supported). Also keep in mind that errors after the first
+one may actually be spurious. 
+
+To enable continue-after-error, compile with -fsanitize-recover=address and
+then run your code with ASAN_OPTIONS=halt_on_error=0.
+
+// GCC 6.3.0
+// ok
+~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g 
+  -fsanitize=address uaf.c -o out_uaf_v6_wo_recover
+
+// nk since asan do not run.
+~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g 
+  -fsanitize-recover=address uaf.c -o out_uaf_v6_w_recover
+
+
 To get the idea of what's supported in your version, run
 
 // only works for GCC 6.3.0
@@ -15510,7 +15539,7 @@ static void AsanInitInternal() {
 /bin/i686-nptl-linux-gnu-gcc -static-libasan -fsanitize=address uaf.c
 
 
-{asn-uaf} `use after free` *cpp-memory-issue*
+{asn-uaf} `use after free` *cxx-memory-issue*
 
 from ansic, p167, another uaf
 
@@ -15796,18 +15825,9 @@ Disassembly of section .text:
  8048707:	c7 01 0a 00 00 00    	movl   $0xa,(%ecx)
 
 
-<5> *asan-recover*
-// ok
-~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g -fsanitize=address uaf.c -o out_uaf_v6_wo_recover
+{asn-overflow} `heap buffer overflow, out of index` *cxx-memory-issue*
 
-// nk since asan do not run.
-~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g -fsanitize-recover=address uaf.c -o out_uaf_v6_w_recover
-
-
-
-{asn-vo} `heap buffer overflow, out of index` *cpp-memory-issue*
-
-<02>
+<ex>
 The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
 sometimes. But crashed
 
@@ -15951,7 +15971,7 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==132== ABORTING
 
 
-{asn-vo} `global buffer overflow, out of index` *cpp-memory-issue*
+<ex> `global buffer overflow, out of index` *cxx-memory-issue*
 
 Accessing out of index of array is 'undefined' so sometimes work or sometimes
 not.
@@ -15989,7 +16009,8 @@ on address 0x00010b54 at pc 0x86f0 bp 0xbee97cf4 sp 0xbee97cec
 READ of size 4 at 0x00010b54 thread T0
     #0 0x86ef (/a.out+0x86ef)
     #1 0xb56ccbcb (/lib/libc.so.6+0x17bcb)
-0x00010b54 `is located 4 bytes to the right of global variable` 'global_array (global_oob.c)' (0x109c0) of size 400
+0x00010b54 `is located 4 bytes to the right of global variable` 
+  'global_array (global_oob.c)' (0x109c0) of size 400
 Shadow bytes around the buggy address:
   0x20002110: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 // 16*8 = 128
   0x20002120: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
@@ -16021,18 +16042,94 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==138== ABORTING
 
 
+<asan-vstb>
+when use LD_PRELOAD=libasan.so and binary which not compiled for asan.
+
+==1226==Parsed ASAN_OPTIONS: verbosity=2:halt_on_error=0:debug=1
+==1226==AddressSanitizer: failed to intercept 'read'
+==1226==AddressSanitizer: failed to intercept 'write'
+==1226==AddressSanitizer: failed to intercept 'strnlen'
+==1226==AddressSanitizer: libc interceptors initialized
+|| `[0x40000000, 0xffffffff]` || HighMem    ||
+|| `[0x28000000, 0x3fffffff]` || HighShadow ||
+|| `[0x24000000, 0x27ffffff]` || ShadowGap  ||
+|| `[0x20000000, 0x23ffffff]` || LowShadow  ||
+|| `[0x00000000, 0x1fffffff]` || LowMem     ||
+MemToShadow(shadow): 0x24000000 0x247fffff 0x25000000 0x27ffffff
+red_zone=16
+quarantine_size=64M
+malloc_context_size=30
+SHADOW_SCALE: 3
+SHADOW_GRANULARITY: 8
+SHADOW_OFFSET: 20000000
+==1226==Installed the sigaction for signal 11
+==1226==SetCurrentThread: 0xb71e9000 for thread 0xb6b091c0
+==1226==T0: stack [0xbf3de000,0xbfbde000) size 0x800000; local=0xbfbdbcdc
+==1226==AddressSanitizer Init done
+ASAN:SIGSEGV
+=================================================================
+==1226==ERROR: AddressSanitizer: SEGV on unknown address 0xfffffb40 (pc 0xb7176309 sp 0xbfbdadf0 bp 0xbfbdae78 T0)
+NDS: ^0000000070.457736 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMCONFIG         : SYSTEMCONFIG:Sep 11 2018:UNKNOWN:RELEASE_DBG
+NDS: ^0000000070.457756 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMSTRING         : SYSTEMSTRING:Sep 11 2018:UNKNOWN:RELEASE_DBG
+NDS: ^0000000070.457768 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMLANG           : SYSTEMLANG:Sep 11 2018:UNKNOWN:RELEASE_DBG
+NDS: ^0000000070.457778 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMTIME           : SYSTEMTIME:Sep 11 2018:UNKNOWN:RELEASE_DBG
+NDS: ^0000000070.457788 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMOBJECT         : SYSTEMOBJECT:Sep 11 2018:UNKNOWN:RELEASE_DBG
+NDS: ^0000000070.457802 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > MM                   : MODEM:Sep 11 2018:4.0.27
+NDS: ^0000000070.457815 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > PPPD                 : PPPD:Sep 11 2018:3.0.12
+NDS: ^0000000070.458169 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00251 > -----------------------------------------------------------------------
+    #0 0xb7176308 in __pthread_create_2_1 (/lib/libpthread.so.0+0x7308)
+    #1 0xb71766ea in __pthread_create_2_0 (/lib/libpthread.so.0+0x76ea)
+    #2 0xb724fdd3 in pthread_create (/flash0/libasan.so+0x61dd3)
+    #3 0x8d1123a in SYSTEMUTIL_THR_Create (/NDS/bin/bins/MW_Process+0x8d1123a)
+    #4 0x8566c4a in DIAG_IPC_CLIENT_Open (/NDS/bin/bins/MW_Process+0x8566c4a)
+    #5 0x856adc7 in DIAGCTL_LOG_OpenCommunicationChannel (/NDS/bin/bins/MW_Process+0x856adc7)
+    #6 0x85699da in DIAGCTL_LOG_Init (/NDS/bin/bins/MW_Process+0x85699da)
+    #7 0x8562c44 in __DIAG_LOG_Init (/NDS/bin/bins/MW_Process+0x8562c44)
+    #8 0x8cc93aa in SYSINIT_ClientInit (/NDS/bin/bins/MW_Process+0x8cc93aa)
+    #9 0x8202dde in main (/NDS/bin/bins/MW_Process+0x8202dde)
+    #10 0xb6c5b31f in __libc_start_main ../csu/libc-start.c:295
+    #11 0x8202f93 (/NDS/bin/bins/MW_Process+0x8202f93)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV ??:0 __pthread_create_2_1
+==1226==ABORTING
+
+
 <ex>
+The issue is that DIAG_CMN_ALIGN() makes 6 bytes to 8 bytes by assuming that
+it is aligned and which is not.
+
 /* IPC client name */
 static char gClientName[] = "_DLRH";
+
+    if (0 != DIAG_IPC_CLIENT_Open(gClientName,)
 
 int DIAG_IPC_CLIENT_Open(char *client_name)
 {
     diag_ipc_client_P_notify_server(DIAG_IPC_MSG_TYPE_REG, client_name,strlen(client_name)+1)
     {
-      /* client name */
-      memcpy(msg+16,client_name,(int32_t)DIAG_CMN_ALIGN(client_name_len));
+
+      /* Prepare message header */
+      diag_ipc_client_P_format_message_header(msg_to_server, msg_type, g_ipc_ack_value, client_name, client_name_len)
+      {
+        /* client name */
+        memcpy(msg+16,client_name,(int32_t)DIAG_CMN_ALIGN(client_name_len));
+      }
     }
 }
+
+    /**
+     * @def DIAG_CMN_ALIGN
+     *
+     * Make a value or an address multiple of __DIAG_ALIGNMENT
+     */
+#ifndef __DIAG_ALIGNMENT
+#define __DIAG_ALIGNMENT	(4U)
+#endif
+
+#define DIAG_CMN_ALIGN(x)	(((x) + (__DIAG_ALIGNMENT-1)) &~ (__DIAG_ALIGNMENT-1))
+
+// when use stripped binary
 
 =================================================================
 ==1334==ERROR: AddressSanitizer: global-buffer-overflow on address 0x0818a606 at pc 0xb6f46711 bp 0xbfdf5778 sp 0xbfdf5358
@@ -16048,7 +16145,8 @@ READ of size 8 at 0x0818a606 thread T0
     #8 0xb6d735ef in __libc_start_main (/lib/libc.so.6+0x185ef)
     #9 0x804b890 (/NDS/bin/PWM_Process+0x804b890)
 
-0x0818a606 is located 0 bytes to the right of global variable 'gClientName' from 'diagctl_log_req_handler.c' (0x818a600) of size 6
+0x0818a606 is located 0 bytes to the right of global variable 'gClientName' 
+  from 'diagctl_log_req_handler.c' (0x818a600) of size 6
   'gClientName' is ascii string '_DLRH'
 SUMMARY: AddressSanitizer: global-buffer-overflow /home/kyoupark/asan/cross-build/.build/src/gcc-4.9.4/libsanitizer/asan/asan_interceptors.cc:375 __interceptor_memcpy
 Shadow bytes around the buggy address:
@@ -16081,6 +16179,94 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
   Contiguous container OOB:fc
   ASan internal:           fe
 ==1334==ABORTING
+
+
+// when use unstripped binary
+
+=================================================================
+==1247==ERROR: AddressSanitizer: global-buffer-overflow on address 0x0af71e46 at pc 0xb6e79af3 bp 0xbfd624f8 sp 0xbfd62484
+READ of size 8 at 0x0af71e46 thread T0
+NDS: ^0000000057.680445 !WARN  -MEMMAN       < p:000004d3 t:b6ff7ec0 T:no name M:memman_pinit.c F:PoolCreate L:00386 > Memory pools are not growable for the moment
+    #0 0xb6e79af2 in memcpy (/flash0/libasan.so.1+0x62af2)
+    #1 0x8a80090 in diag_ipc_client_P_format_message_header /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/ipc/src/client/diag_ipc_client.c:821
+    #2 0x8a80090 in diag_ipc_client_P_notify_server /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/ipc/src/client/diag_ipc_client.c:762
+    #3 0x8a80a73 in DIAG_IPC_CLIENT_Open /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/ipc/src/client/diag_ipc_client.c:238
+    #4 0x8a7dcc9 in DIAGCTL_LOG_REQ_HANDLER_Init /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diagctl_log_req_handler.c:158
+    #5 0x8a7a3c9 in __DIAG_LOG_Init /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diag_log.c:1603
+    #6 0x9c00e57 in SYSINIT_ClientInit /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/SYSINIT/src/client/sysinit_api.c:333
+    #7 0x82252fd in main /home/kyoupark/STB_SW_o/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/mw_process_main.c:85
+    #8 0xb6c5031f in __libc_start_main ../csu/libc-start.c:295
+    #9 0x8233260 (/NDS/bin/bin-asan-compiled-without-diag/MW_Process+0x8233260)
+
+0x0af71e46 is located 0 bytes to the right of global variable 'gClientName' from 'diagctl_log_req_handler.c' (0xaf71e40) of size 6
+  'gClientName' is ascii string '_DLRH'
+SUMMARY: AddressSanitizer: global-buffer-overflow ??:0 memcpy
+Shadow bytes around the buggy address:
+  0x215ee370: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee380: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee390: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee3a0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee3b0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x215ee3c0: 00 00 00 00 00 00 00 00[06]f9 f9 f9 f9 f9 f9 f9
+  0x215ee3d0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee3e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee3f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee400: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x215ee410: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07
+  Heap left redzone:       fa
+  Heap right redzone:      fb
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack partial redzone:   f4
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Contiguous container OOB:fc
+  ASan internal:           fe
+==1247==ABORTING
+
+
+<ex> asan-vstb
+when get around diag issue but see the issue use unstripped mw binary
+
+=================================================================
+==1221==ERROR: AddressSanitizer: `heap-use-after-free` on address 0xb46021d8 at pc 0x8d41268 bp 0xb38bd2c8 sp 0xb38bd2b0
+READ of size 4 at 0xb46021d8 thread T16777215
+==1221==WARNING: readlink("/proc/self/exe") failed with errno 2, some stack frames may not be symbolized
+    #0 0x8d41267 (/proc/self/exe+0x8d41267)
+    #1 0x8ca5408 (/proc/self/exe+0x8ca5408)
+    #2 0x8ca89f0 (/proc/self/exe+0x8ca89f0)
+    #3 0x9cc3f0c (/proc/self/exe+0x9cc3f0c)
+    #4 0xb770e5bc (/lib/libpthread.so.0+0x65bc)
+    #5 0xb6dbe8e5 (/lib/libc.so.6+0xf68e5)
+
+0xb46021d8 is located 8 bytes inside of 44-byte region [0xb46021d0,0xb46021fc)
+==1221==AddressSanitizer CHECK failed: /home/pete/vstb_toolchain/32/.build/src/gcc-4.9.4/
+  libsanitizer/asan/asan_allocator2.cc:234 "((id)) != (0)" (0x0, 0x0)
+    #0 0xb6f1959f (/flash0/libasan.so.1+0x7259f)
+    #1 0xb6f1f5d1 (/flash0/libasan.so.1+0x785d1)
+    #2 0xb6ebbfe1 (/flash0/libasan.so.1+0x14fe1)
+    #3 0xb6ebc0b3 (/flash0/libasan.so.1+0x150b3)
+    #4 0xb6f17346 (/flash0/libasan.so.1+0x70346)
+    #5 0xb6f17641 (/flash0/libasan.so.1+0x70641)
+    #6 0xb6f18d02 (/flash0/libasan.so.1+0x71d02)
+    #7 0xb6f1a105 (/flash0/libasan.so.1+0x73105)
+    #8 0x8d41267 (/proc/self/exe+0x8d41267)
+    #9 0x8ca5408 (/proc/self/exe+0x8ca5408)
+    #10 0x8ca89f0 (/proc/self/exe+0x8ca89f0)
+    #11 0x9cc3f0c (/proc/self/exe+0x9cc3f0c)
+    #12 0xb770e5bc (/lib/libpthread.so.0+0x65bc)
+    #13 0xb6dbe8e5 (/lib/libc.so.6+0xf68e5)
+
+~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-addr2line -e MW_Process 0x8d41268
+/home/kyoupark/STB_SW_o/CMS_MEDIA_SERVICES/BEM/src/server/bem_link_discovery.c:957
 
 
 <ex> *cpp-memory-issue* *cpp-memcpy-issue-issue*
@@ -17027,7 +17213,7 @@ user space analogues.
 
 
 ={============================================================================
-*kt_linux_tool_000* tool-efence-asan-llvm-build
+*kt_linux_tool_000* tool-asan-llvm
 
 http://llvm.org/
 
@@ -17885,6 +18071,16 @@ mkdir /flash0
 
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-pete/ /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb/flash0 /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-gm/flash0 /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-r16/flash0 /flash0
+
+
+// clean vstb build
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-clean-build/flash0 /flash0
+
+// compiled with asan
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-asan-build/flash0 /flash0
+
 
 ulimit -c unlimited
 /flash0/scripts/startstack.sh
@@ -73142,6 +73338,34 @@ $ /lib64/ld-linux-x86-64.so.2 --list /bin/echo
         linux-vdso.so.1 =>  (0x00007fff94f8e000)
         libc.so.6 => /lib64/libc.so.6 (0x0000003ba8000000)
         /lib64/ld-linux-x86-64.so.2 (0x0000003ba7c00000)
+
+$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-
+gnu/bin/i686-nptl-linux-gnu-ldd PWM_Process
+i686-nptl-linux-gnu-ldd: no root given
+Try `i686-nptl-linux-gnu-ldd --help' for more information
+
+$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-ldd --root ~/si_logs/flash0-vstb-asan-build/flash0/fs/ PWM_Process
+        libm.so.6 => /lib/libm.so.6 (0x8badf00d)
+        libc.so.6 => /lib/libc.so.6 (0x8badf00d)
+        ld-linux.so.2 => /lib/ld-linux.so.2 (0x8badf00d)
+        libpthread.so.0 => /lib/libpthread.so.0 (0x8badf00d)
+        librt.so.1 => /lib/librt.so.1 (0x8badf00d)
+        libdl.so.2 => /lib/libdl.so.2 (0x8badf00d)
+        libtirpc.so.1 not found
+        libsky_airplay_helper.so.0 not found
+        libminizip.so.1 not found
+        libjsoncpp.so.1 not found
+        libglib-2.0.so.0 not found
+        libgio-2.0.so.0 not found
+        libgobject-2.0.so.0 not found
+        libdbus-1.so.3 not found
+        libz.so.1 not found
+        libasan.so.1 => /lib/libasan.so.1 (0x8badf00d)
+        libstdc++.so.6 => /lib/libstdc++.so.6 (0x8badf00d)
+        libgcc_s.so.1 => /lib/libgcc_s.so.1 (0x8badf00d)
+        libusb.so => /NDS/lib/libusb.so (0xdeadc0de)
+        libxpower.so.0 not found
+
 
 https://blog.ksub.org/bytes/2016/07/23/ld.so-glibcs-dynanic-linker/loader/
 
