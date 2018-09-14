@@ -267,6 +267,7 @@
 *kt_linux_tool_300* tool-apache-ivy
 
 #{ gdb
+*kt_linux_gdb_000* gdb-how-works
 *kt_linux_gdb_001* gdb-error gdb-target
 |kt_linux_gdb_300| gdb-term and links
 *kt_linux_gdb_300* gdb-check-built-with-debug
@@ -289,7 +290,7 @@
 
 *kt_linux_tool_300* gdb-sources, source path, and substitute
 *kt_linux_tool_300* gdb-exem-memory
-*kt_linux_gdb_300* gdb-exam-address-and-code
+*kt_linux_gdb_300* gdb-exam-address-and-code gdb-disassemble
 *kt_linux_gdb_000* gdb-cpp
 *kt_linux_gdb_300* gdb-symbol
 *kt_linux_gdb_300* gdb-exam-symbol-loading
@@ -425,13 +426,11 @@
 *kt_linux_core_402* linux-lib-ld-resolve-order
 *kt_linux_core_400* linux-lib-ld-debug
 *kt_linux_core_405* linux-lib-ld-api
-*kt_linux_core_412* linux-lib-search-ld-conf ld-so-cache
-*kt_linux_core_402* linux-lib-search lib-rpath ld-library-path
-*kt_linux_core_400* lib-shared-soname
+*kt_linux_core_412* linux-lib-search
+*kt_linux_core_400* linux-lib-shared-soname
 *kt_linux_core_406* lib-shared-elf-edit 
-|kt_linux_core_406| lib-shared-preload
+|kt_linux_core_406| linux-lib-shared-preload
 *kt_linux_core_410* lib-shared: check libraries that process uses
-*kt_linux_core_410* lib-shared: check libraries loading
 *kt_linux_core_411* lib-shared: case problem in open failure
 *kt_linux_core_401* slib: --as-needed flag and link error
 *kt_linux_core_403* slib-case-problem in name resolve. crash
@@ -6783,7 +6782,7 @@ lscpu
 cat /proc/cpuinfo
 
 
-{linux-check-distribution}
+{linux-check-distribution} *32bit-64bit*
 The machine hardware name lists whether your system is 32-bit (“i686” or
 “i386”) or 64-bit (“x86_64”).
 
@@ -26671,6 +26670,7 @@ Precede each symbol by the name of the input file (or archive member) in which
 it was found, rather than identifying the input file once only, before all of
 its symbols.
 
+*symbol-global* *symbol-local*
            `uppercase` means global and `lowercase` means local. 
 
            "R"
@@ -27294,6 +27294,357 @@ Examples: zip, tar, tar.gz, rar, jar, war, ear, txt, doc, xml, html
 
 # ============================================================================
 #{ gdb
+={============================================================================
+*kt_linux_gdb_000* gdb-how-works
+
+https://eli.thegreenplace.net/2011/01/23/how-debuggers-work-part-1/
+
+This is the first part in a series of articles on how debuggers work. I'm
+still not sure how many articles the series will contain and what topics it
+will cover, but I'm going to start with the basics.
+
+In this part I'm going to present the main building block of a debugger's
+implementation on Linux - the ptrace system call. All the code in this article
+is developed on a 32-bit Ubuntu machine. Note that the code is very much
+platform specific, although porting it to other platforms shouldn't be too
+difficult.
+
+Motivation
+
+To understand where we're going, try to imagine what it takes for a debugger
+to do its work. A debugger can start some process and debug it, or attach
+itself to an existing process. It can single-step through the code, set
+breakpoints and run to them, examine variable values and stack traces. Many
+debuggers have advanced features such as executing expressions and calling
+functions in the debbugged process's address space, and even changing the
+process's code on-the-fly and watching the effects.
+
+Although modern debuggers are complex beasts [1], it's surprising how simple
+is the foundation on which they are built. Debuggers start with only a few
+basic services provided by the operating system and the compiler/linker, all
+the rest is just a simple matter of programming.
+
+Linux debugging - ptrace
+
+The Swiss army knife of Linux debuggers is the ptrace system call [2]. It's a
+versatile and rather complex tool that allows one process to control the
+execution of another and to peek and poke at its innards [3]. ptrace can take
+a mid-sized book to explain fully, which is why I'm just going to focus on
+some of its practical uses in examples.
+
+Let's dive right in.
+
+Stepping through the code of a process
+
+I'm now going to develop an example of running a process in "traced" mode in
+which we're going to single-step through its code - the machine code (assembly
+    instructions) that's executed by the CPU. I'll show the example code in
+parts, explaining each, and in the end of the article you will find a link to
+download a complete C file that you can compile, execute and play with.
+
+The high-level plan is to write code that splits into a child process that
+will execute a user-supplied command, and a parent process that traces the
+child. First, the main function:
+
+int main(int argc, char** argv)
+{
+    pid_t child_pid;
+
+    if (argc < 2) {
+        fprintf(stderr, "Expected a program name as argument\n");
+        return -1;
+    }
+
+    child_pid = fork();
+    if (child_pid == 0)
+        run_target(argv[1]);
+    else if (child_pid > 0)
+        run_debugger(child_pid);
+    else {
+        perror("fork");
+        return -1;
+    }
+
+    return 0;
+}
+
+Pretty simple: we start a new child process with fork [4]. The if branch of
+the subsequent condition runs the child process (called "target" here), and
+the else if branch runs the parent process (called "debugger" here).
+
+Here's the target process:
+
+void run_target(const char* programname)
+{
+    procmsg("target started. will run '%s'\n", programname);
+
+    /* Allow tracing of this process */
+    if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
+        perror("ptrace");
+        return;
+    }
+
+    /* Replace this process's image with the given program */
+    execl(programname, programname, 0);
+}
+
+The most interesting line here is the ptrace call. ptrace is declared thus (in
+    sys/ptrace.h):
+
+long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data);
+
+The first argument is a request, which may be one of many predefined PTRACE_*
+constants. The second argument specifies a process ID for some requests. The
+third and fourth arguments are address and data pointers, for memory
+manipulation. The ptrace call in the code snippet above makes the
+PTRACE_TRACEME request, which means that this child process asks the OS kernel
+to let its parent trace it. The request description from the man-page is quite
+clear:
+
+Indicates that this process is to be traced by its parent. Any signal (except
+    SIGKILL) delivered to this process will cause it to stop and its parent to
+be notified via wait(). Also, all subsequent calls to exec() by this process
+will cause a SIGTRAP to be sent to it, giving the parent a chance to gain
+control before the new program begins execution. A process probably shouldn't
+make this request if its parent isn't expecting to trace it. (pid, addr, and
+    data are ignored.) I've highlighted the part that interests us in this
+example. Note that the very next thing run_target does after ptrace is invoke
+the program given to it as an argument with execl. This, as the highlighted
+part explains, causes the OS kernel to stop the process just before it begins
+executing the program in execl and send a signal to the parent.
+
+Thus, time is ripe to see what the parent does:
+
+void run_debugger(pid_t child_pid)
+{
+    int wait_status;
+    unsigned icounter = 0;
+    procmsg("debugger started\n");
+
+    /* Wait for child to stop on its first instruction */
+    wait(&wait_status);
+
+    while (WIFSTOPPED(wait_status)) {
+        icounter++;
+        /* Make the child execute another instruction */
+        if (ptrace(PTRACE_SINGLESTEP, child_pid, 0, 0) < 0) {
+            perror("ptrace");
+            return;
+        }
+
+        /* Wait for child to stop on its next instruction */
+        wait(&wait_status);
+    }
+
+    procmsg("the child executed %u instructions\n", icounter);
+}
+
+Recall from above that once the child starts executing the exec call, it will
+stop and be sent the SIGTRAP signal. The parent here waits for this to happen
+with the first wait call. wait will return once something interesting happens,
+     and the parent checks that it was because the child was stopped
+     (WIFSTOPPED returns true if the child process was stopped by delivery of
+      a signal).
+
+What the parent does next is the most interesting part of this article. It
+invokes ptrace with the PTRACE_SINGLESTEP request giving it the child process
+ID. What this does is tell the OS - please restart the child process, but stop
+it after it executes the next instruction. Again, the parent waits for the
+child to stop and the loop continues. The loop will terminate when the signal
+that came out of the wait call wasn't about the child stopping. During a
+normal run of the tracer, this will be the signal that tells the parent that
+the child process exited (WIFEXITED would return true on it).
+
+Note that icounter counts the amount of instructions executed by the child
+process. So our simple example actually does something useful - given a
+program name on the command line, it executes the program and reports the
+amount of CPU instructions it took to run from start to finish. Let's see it
+in action.
+
+A test run
+
+I compiled the following simple program and ran it under the tracer:
+
+#include <stdio.h>
+
+int main()
+{
+    printf("Hello, world!\n");
+    return 0;
+}
+
+To my surprise, the tracer took quite long to run and reported that there were
+more than 100,000 instructions executed. For a simple printf call? What gives?
+The answer is very interesting [5]. By default, gcc on Linux links programs to
+the C runtime libraries dynamically. What this means is that one of the first
+things that runs when any program is executed is the dynamic library loader
+that looks for the required shared libraries. This is quite a lot of code -
+and remember that our basic tracer here looks at each and every instruction,
+    not of just the main function, but of the whole process.
+
+So, when I linked the test program with the -static flag (and verified that
+    the executable gained some 500KB in weight, as is logical for a static
+    link of the C runtime), the tracing reported only 7,000 instructions or
+so. This is still a lot, but makes perfect sense if you recall that libc
+initialization still has to run before main, and cleanup has to run after
+main. Besides, printf is a complex function.
+
+Still not satisfied, I wanted to see something testable - i.e. a whole run in
+which I could account for every instruction executed. This, of course, can be
+done with assembly code. So I took this version of "Hello, world!" and
+assembled it:
+
+// for 32 bits
+
+section    .text
+    ; The _start symbol must be declared for the linker (ld)
+    global _start
+
+_start:
+
+    ; Prepare arguments for the sys_write system call:
+    ;   - eax: system call number (sys_write)
+    ;   - ebx: file descriptor (stdout)
+    ;   - ecx: pointer to string
+    ;   - edx: string length
+    mov    edx, len
+    mov    ecx, msg
+    mov    ebx, 1
+    mov    eax, 4
+
+    ; Execute the sys_write system call
+    int    0x80
+
+    ; Execute sys_exit
+    mov    eax, 1
+    int    0x80
+
+section   .data
+msg db    'Hello, world!', 0xa
+len equ    $ - msg
+
+Sure enough. Now the tracer reported that 7 instructions were executed, which
+is something I can easily verify.
+
+Deep into the instruction stream
+
+The assembly-written program allows me to introduce you to another powerful
+use of ptrace - closely examining the state of the traced process. Here's
+another version of the run_debugger function:
+
+void run_debugger(pid_t child_pid)
+{
+    int wait_status;
+    unsigned icounter = 0;
+    procmsg("debugger started\n");
+
+    /* Wait for child to stop on its first instruction */
+    wait(&wait_status);
+
+    while (WIFSTOPPED(wait_status)) {
+        icounter++;
+        struct user_regs_struct regs;
+        ptrace(PTRACE_GETREGS, child_pid, 0, &regs);
+        unsigned instr = ptrace(PTRACE_PEEKTEXT, child_pid, regs.eip, 0);
+
+        procmsg("icounter = %u.  EIP = 0x%08x.  instr = 0x%08x\n",
+                    icounter, regs.eip, instr);
+
+        /* Make the child execute another instruction */
+        if (ptrace(PTRACE_SINGLESTEP, child_pid, 0, 0) < 0) {
+            perror("ptrace");
+            return;
+        }
+
+        /* Wait for child to stop on its next instruction */
+        wait(&wait_status);
+    }
+
+    procmsg("the child executed %u instructions\n", icounter);
+}
+
+The only difference is in the first few lines of the while loop. There are two
+new ptrace calls. The first one reads the value of the process's registers
+into a structure. user_regs_struct is defined in sys/user.h. Now here's the
+fun part - if you look at this header file, a comment close to the top says:
+
+/* The whole purpose of this file is for GDB and GDB only.
+   Don't read too much into it. Don't use it for
+   anything other than GDB unless know what you are
+   doing.  */
+
+Now, I don't know about you, but it makes me feel we're on the right track :-)
+Anyway, back to the example. Once we have all the registers in regs, we can
+peek at the current instruction of the process by calling ptrace with
+PTRACE_PEEKTEXT, passing it regs.eip (the extended instruction pointer on x86)
+  as the address. What we get back is the instruction [6]. Let's see this new
+  tracer run on our assembly-coded snippet:
+
+$ simple_tracer traced_helloworld
+[5700] debugger started
+[5701] target started. will run 'traced_helloworld'
+[5700] icounter = 1.  EIP = 0x08048080.  instr = 0x00000eba
+[5700] icounter = 2.  EIP = 0x08048085.  instr = 0x0490a0b9
+[5700] icounter = 3.  EIP = 0x0804808a.  instr = 0x000001bb
+[5700] icounter = 4.  EIP = 0x0804808f.  instr = 0x000004b8
+[5700] icounter = 5.  EIP = 0x08048094.  instr = 0x01b880cd
+Hello, world!
+[5700] icounter = 6.  EIP = 0x08048096.  instr = 0x000001b8
+[5700] icounter = 7.  EIP = 0x0804809b.  instr = 0x000080cd
+[5700] the child executed 7 instructions
+
+OK, so now in addition to icounter we also see the instruction pointer and the
+instruction it points to at each step. How to verify this is correct? By using
+objdump -d on the executable:
+
+$ objdump -d traced_helloworld
+
+traced_helloworld:     file format elf32-i386
+
+Disassembly of section .text:
+
+08048080 <.text>:
+ 8048080:     ba 0e 00 00 00          mov    $0xe,%edx
+ 8048085:     b9 a0 90 04 08          mov    $0x80490a0,%ecx
+ 804808a:     bb 01 00 00 00          mov    $0x1,%ebx
+ 804808f:     b8 04 00 00 00          mov    $0x4,%eax
+ 8048094:     cd 80                   int    $0x80
+ 8048096:     b8 01 00 00 00          mov    $0x1,%eax
+ 804809b:     cd 80                   int    $0x80
+
+The correspondence between this and our tracing output is easily observed.
+
+Attaching to a running process
+
+As you know, debuggers can also attach to an already-running process. By now
+you won't be surprised to find out that this is also done with ptrace, which
+can get the PTRACE_ATTACH request. I won't show a code sample here since it
+should be very easy to implement given the code we've already gone through.
+For educational purposes, the approach taken here is more convenient (since we
+    can stop the child process right at its start).
+
+The code
+
+The complete C source-code of the simple tracer presented in this article (the
+    more advanced, instruction-printing version) is available here. It
+compiles cleanly with -Wall -pedantic --std=c99 on version 4.4 of gcc.
+
+Conclusion and next steps
+
+Admittedly, this part didn't cover much - we're still far from having a real
+debugger in our hands. However, I hope it has already made the process of
+debugging at least a little less mysterious. ptrace is truly a versatile
+system call with many abilities, of which we've sampled only a few so far.
+
+Single-stepping through the code is useful, but only to a certain degree. Take
+the C "Hello, world!" sample I demonstrated above. To get to main it would
+probably take a couple of thousands of instructions of C runtime
+initialization code to step through. This isn't very convenient. What we'd
+ideally want to have is the ability to place a breakpoint at the entry to main
+and step from there. Fair enough, and in the next part of the series I intend
+to show how breakpoints are implemented.
+
+
 ={============================================================================
 *kt_linux_gdb_001* gdb-error gdb-target
 
@@ -29080,6 +29431,7 @@ After info line, the default address for the x command is 'changed' to the
 starting address of the line, so that 'x/i' is sufficient to begin examining the
 machine code
 
+*gdb-disassemble*
 disassemble
 disassemble /m
 disassemble /r
@@ -55705,7 +56057,7 @@ http://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
 -l library
 Search the library `named library` when `linking`. 
 
-<gcc-link-order>
+*lib-static-link-order*
 See link errors although all are defined in the library? Becuase:
 
 It makes a difference where in the command you write this option; the linker
@@ -70247,7 +70599,7 @@ A relocation is a computation to perform `on the contents.` Most relocations
 refer to a symbol and to an offset within the contents. Many relocations will
 also provide an additional operand, known as the `addend`.
 
-note: from one of linker operations.
+// from one of program linker operations.
 Read the contents data and the relocations. `Apply the relocations` to the
 contents. Write the result to the output file.
 
@@ -70273,6 +70625,8 @@ dynamic shared objects (DSOs), dynamically linked libraries (DLLs - if you're
     coming from a Windows background). For the sake of consistency, I will try
   to just use the name "shared library" throughout this article.
 
+
+<elf-entry>
 Loading executables
 
 Linux, similarly to other OSes with virtual memory support, loads executables
@@ -70284,13 +70638,20 @@ ELF Header:
   Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00
   Class:                             ELF32
   [...] some header fields
-  Entry point address:               0x8048470
+  `Entry point address:               0x8048470`
   [...] some header fields
+
+// e_entry 
+//
+// This member gives the virtual address to which the system first transfers
+// control, thus starting the process. If the file has no associated entry
+// point, this member holds zero.
 
 This is placed by the linker to tell the OS where to start executing the
   executable's code [1]. And indeed if we then load the executable with GDB
   and examine the address 0x8048470, we'll see the first instructions of the
   executable's .text segment there.
+
 
 <linktime-relocations>
 What this means is that the linker, when linking the executable, can fully
@@ -70305,7 +70666,7 @@ eventually the output it produces contains no additional relocations.
 // Link-time relocation is a more complex topic than load-time relocation, and
 // I won't cover it in this article.
 //
-// PIC is 'not' the same as relocatable code. Relocatable code is code whose
+// `PIC is not the same as relocatable code.` Relocatable code is code whose
 // address may be assigned at `linktime`. Position independent code is code
 // whose address may be assigned at `runtime`. 
 // 
@@ -70332,11 +70693,12 @@ eventually the output it produces contains no additional relocations.
 // to run at any virtula address, given sufficient relocation information. 
 // 
 // However, performing the reloc computations must be done every time the
-// program starts, implying that it will start more slowly. Therefore, any
-// shared library system seeks to generate position independent code which
-// requires a `minimal` number of relocations to be applied at runtime, while
-// still running at close to the runtime efficiency of position dependent
-// code.
+// program starts, implying that it will start more slowly. 
+//
+// Therefore, any shared library system seeks to generate position independent
+// code which requires a `minimal` number of relocations to be applied at
+// runtime, while still running at close to the runtime efficiency of position
+// dependent code.
 
 Or does it? Note that I emphasized the word `internal` in the previous
 paragraph. As long as the executable needs no shared libraries [3], it needs
@@ -70352,7 +70714,7 @@ be relocated, because of how shared libraries are loaded.
 
 Loading shared libraries
 
-  note: this is why use loadtime relocation
+  // why use loadtime relocation
   Unlike executables, when shared libraries are being built, the linker can't
   assume a known load address for their code. The reason for this is simple.
   Each program can use any number of shared libraries, and there's simply no
@@ -70362,7 +70724,7 @@ Loading shared libraries
 Many solutions were invented for this problem over the years, but in this
 article I will just focus on the ones currently used by Linux.
 
-But first, let's briefly examine the problem. Here's some sample C code [4]
+But first, let's briefly examine the problem. Here's some sample C code
 which I compile into a shared library:
 
 int myglob = 42;
@@ -70375,21 +70737,23 @@ int ml_func(int a, int b)
 
 Note how ml_func references myglob a few times. When translated to x86
 assembly, this will involve a mov instruction to pull the value of myglob from
-its location in memory into a register. mov requires an absolute address - so
-how does the linker know which address to place in it? The answer is - it
-doesn't. As I mentioned above, shared libraries have no pre-defined load
-address - it will be decided at runtime.
+its location in memory into a register. 
+
+`mov requires an absolute address` - so how does the linker know which address
+to place in it? The answer is - it doesn't. As I mentioned above, shared
+libraries have no pre-defined load address - it will be decided at runtime.
 
 In Linux, the dynamic loader [5] is a piece of code responsible for preparing
 programs for running. One of its tasks is to load shared libraries from disk
 into memory, when the running executable requests them. When a shared library
-is loaded into memory, it is then adjusted for its newly determined load
+is loaded into memory, `it is then adjusted for` its newly determined load
 location. It is the job of the dynamic loader to solve the problem presented
 in the previous paragraph.
 
 // [5] Also called "dynamic linker". It's a shared object itself (though it
 // can also run as an executable), residing at /lib/ld-linux.so.2 (the last
 // number is the SO version and may be different).
+
 
 There are two main approaches to solve this problem in Linux ELF shared
 libraries:
@@ -70402,6 +70766,19 @@ article I will focus on load-time relocation. Eventually I plan to cover both
 approaches and write a separate article on PIC, and I think starting with
 load-time relocation will make PIC easier to explain later. 
 
+// note:
+// This article is about "relocation" since not works on 64 bits and even 32
+// bits with different gcc shows different results such as so file do not have
+// program header.
+//
+// errors on 64 so builds only on 32 bits
+// kyoupark@kit-debian64:~/git/kb/code-linux/ex_shared$ gcc -shared -o limmlreloc.so ml_mainreloc.o
+// /usr/bin/ld: ml_mainreloc.o: relocation R_X86_64_PC32 against symbol `myglob' can not be used when making a shared object; recompile with -fPIC
+// /usr/bin/ld: final link failed: Bad value
+// collect2: error: ld returned 1 exit status
+// gcc -g -fpic -c ml_main.c -o ml_mainreloc.o
+// gcc -shared -o libmlreloc.so ml_mainreloc.o
+
 
 Linking the shared library for load-time relocation
 
@@ -70410,6 +70787,7 @@ it `without the -fPIC flag` (which would otherwise trigger PIC generation):
 
 gcc -g -c ml_main.c -o ml_mainreloc.o
 gcc -shared -o libmlreloc.so ml_mainreloc.o
+
 
 The first interesting thing to see is the entry point of libmlreloc.so:
 
@@ -70425,13 +70803,14 @@ For simplicity, the linker just links the shared object for address 0x0 (the
     .text section starting at 0x3b0), knowing that the loader will move it
 anyway. Keep this fact in mind - it will be useful later in the article.
 
-// from own build
+// from own build and can see the same fro tool-objdump
 // Section Headers:
 //  [11] .text             PROGBITS        000003b0 0003d0 000155 00  AX  0   0 16
 
 
 Now let's look at the disassembly of the shared library, focusing on ml_func:
 
+*tool-objdump*
 $ objdump -d -Mintel libmlreloc.so
 
 libmlreloc.so:     file format elf32-i386
@@ -70465,16 +70844,113 @@ memory into eax, incremented by a (which is at ebp+0x8) and then placed back
 into memory.
 
 But wait, the mov takes myglob? Why? It appears that the actual operand of mov
-is just 0x0 [8]. What gives? This is how relocations work. The linker places
-some provisional pre-defined value (0x0 in this case) into the instruction
-stream, and then creates a special `relocation entry` pointing to this place.
+is just 0x0 [8]. 
+
+// eax,`ds:0x0`
+
+What gives? This is how relocations work. The linker places some provisional
+pre-defined value (0x0 in this case) into the instruction stream, and then
+creates a special `relocation entry` pointing to this place.
+
+
+kyoupark@kt-office-debian:~/works$ objdump -d ml_reloc.o
+
+ml_reloc.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <ml_func>:
+   0:   55                      push   %ebp
+   1:   89 e5                   mov    %esp,%ebp
+   3:   e8 fc ff ff ff          call   4 <ml_func+0x4>
+   8:   05 01 00 00 00          add    $0x1,%eax
+   d:   8b 88 00 00 00 00       mov    0x0(%eax),%ecx
+  13:   8b 55 08                mov    0x8(%ebp),%edx
+  16:   01 ca                   add    %ecx,%edx
+  18:   89 90 00 00 00 00       mov    %edx,0x0(%eax)
+  1e:   8b 90 00 00 00 00       mov    0x0(%eax),%edx
+  24:   8b 45 0c                mov    0xc(%ebp),%eax
+  27:   01 d0                   add    %edx,%eax
+  29:   5d                      pop    %ebp
+  2a:   c3                      ret
+
+Disassembly of section .text.__x86.get_pc_thunk.ax:
+
+00000000 <__x86.get_pc_thunk.ax>:
+   0:   8b 04 24                mov    (%esp),%eax
+   3:   c3                      ret
+
+// note see that differnece when use -Mintel
+
+kyoupark@kt-office-debian:~/works$ objdump -d -Mintel ml_reloc.o
+
+ml_reloc.o:     file format elf32-i386
+
+
+Disassembly of section .text:
+
+00000000 <ml_func>:
+   0:   55                      push   ebp
+   1:   89 e5                   mov    ebp,esp
+   3:   e8 fc ff ff ff          call   4 <ml_func+0x4>
+   8:   05 01 00 00 00          add    eax,0x1
+   d:   8b 88 00 00 00 00       mov    ecx,DWORD PTR [eax+0x0]
+  13:   8b 55 08                mov    edx,DWORD PTR [ebp+0x8]
+  16:   01 ca                   add    edx,ecx
+  18:   89 90 00 00 00 00       mov    DWORD PTR [eax+0x0],edx
+  1e:   8b 90 00 00 00 00       mov    edx,DWORD PTR [eax+0x0]
+  24:   8b 45 0c                mov    eax,DWORD PTR [ebp+0xc]
+  27:   01 d0                   add    eax,edx
+  29:   5d                      pop    ebp
+  2a:   c3                      ret
+
+Disassembly of section .text.__x86.get_pc_thunk.ax:
+
+00000000 <__x86.get_pc_thunk.ax>:
+   0:   8b 04 24                mov    eax,DWORD PTR [esp]
+   3:   c3                      ret
+kyoupark@kt-office-debian:~/works$
+
 
 // [6] If you're not familiar with how x86 structures its stack frames, this
 // would be a good time to read this article.  
+// https://eli.thegreenplace.net/2011/02/04/where-the-top-of-the-stack-is-on-x86/
 //
 // [7] You can provide the -l flag to objdump to add C source lines into the
 // disassembly, making it clearer what gets compiled to what. I've omitted it
 // here to make the output shorter.  
+//
+// kyoupark@kt-office-debian:~/works$ cat -n ml_main.c
+//      1  int myglob = 42;
+//      2
+//      3  int ml_func(int a, int b)
+//      4  {
+//      5      myglob += a;
+//      6      return b + myglob;
+//      7  }
+//
+// $ objdump -d -Mintel -l ml_reloc.o
+//
+// 00000000 <ml_func>:
+// ml_func():
+// /home/kyoupark/works/ml_main.c:4
+//    0:   55                      push   ebp
+//    1:   89 e5                   mov    ebp,esp
+//    3:   e8 fc ff ff ff          call   4 <ml_func+0x4>
+//    8:   05 01 00 00 00          add    eax,0x1
+// /home/kyoupark/works/ml_main.c:5
+//    d:   8b 88 00 00 00 00       mov    ecx,DWORD PTR [eax+0x0]
+//   13:   8b 55 08                mov    edx,DWORD PTR [ebp+0x8]
+//   16:   01 ca                   add    edx,ecx
+//   18:   89 90 00 00 00 00       mov    DWORD PTR [eax+0x0],edx
+// /home/kyoupark/works/ml_main.c:6
+//   1e:   8b 90 00 00 00 00       mov    edx,DWORD PTR [eax+0x0]
+//   24:   8b 45 0c                mov    eax,DWORD PTR [ebp+0xc]
+//   27:   01 d0                   add    eax,edx
+// /home/kyoupark/works/ml_main.c:7
+//   29:   5d                      pop    ebp
+//   2a:   c3                      ret
 //
 // [8] I'm looking at the left-hand side of the output of objdump, where the
 // raw memory bytes are. a1 00 00 00 00 means mov to eax with operand 0x0,
@@ -70482,6 +70958,8 @@ stream, and then creates a special `relocation entry` pointing to this place.
 
 
 Let's examine the relocation entries for this shared library:
+
+// note: cannot see the same on 32 bits and gcc 6.3.0
 
 $ readelf -r libmlreloc.so
 
@@ -70492,6 +70970,7 @@ Relocation section '.rel.dyn' at offset 0x2fc contains 7 entries:
 00000478  00000401 R_386_32          0000200C   myglob
 0000047d  00000401 R_386_32          0000200C   myglob
 [...] skipping stuff
+
 
 <loadtime-relocations>
 The `rel.dyn` section of ELF is reserved for dynamic (load-time) relocations, to
@@ -70548,12 +71027,15 @@ enabled in Linux, relocation is relatively difficult to follow, because every
 time I run the executable, the libmlreloc.so shared library gets placed in a
 different virtual memory address [9].
 
+
 // [9] So ldd invoked on the executable will report a different load address
 // for the shared library each time it's run.
 // note: this is true. try ldd /bin/sh
 
+
 This is a rather weak deterrent, however. There is a way to make sense in it
 all. But first, let's talk about the segments our shared library consists of:
+
 
 $ readelf --segments libmlreloc.so
 
@@ -70646,7 +71128,7 @@ gcc -g -c driver.c -o driver.o
 gcc -o driver driver.o -L. -lmlreloc
 
 Running the driver stand-alone we get the information, but for each run the
-addresses are different. So what I'm going to do is run it under gdb [10], see
+`addresses are different.` So what I'm going to do is `run it under gdb` [10], see
 what it says, and then use gdb to further query the process's memory space:
 
 // [10] Experienced readers will probably note that I could use `i shared` to
@@ -70654,7 +71136,9 @@ what it says, and then use gdb to further query the process's memory space:
 // the load location of the whole library (or, even more accurately, its entry
 // point), and I was interested in the segments.
 
-// note set LD_LIBRARY_PATH to run
+// note 
+// LD_LIBRARY_PATH=. ./driver to run driver itself and it under gdb
+// export LD_LIBRARY_PATH=. to run driver under gdb
 
  $ gdb -q driver
  Reading symbols from driver...done.
@@ -70666,7 +71150,7 @@ what it says, and then use gdb to further query the process's memory space:
  name=./libmlreloc.so (6 segments) address=0x12e000
                 header  0: address=  0x12e000
                         type=1, flags=0x5
-                header  1: address=  0x12ff04
+                header  1: address=  `0x12ff04`
                         type=1, flags=0x6
                 header  2: address=  0x12ff18
                         type=2, flags=0x6
@@ -70687,7 +71171,7 @@ Since driver reports all the libraries it loads (even implicitly, like libc or
     the dynamic loader itself), the output is lengthy and I will just focus on
 the report about libmlreloc.so. 
 
-// note this list matches up to ldd output
+// note that ldd output can show load address
 
 Note that the 6 segments are the same segments reported by readelf, but this
 time `relocated into their final memory locations.`
@@ -70699,7 +71183,7 @@ address 0x12ff04. And since myglob is at offset 0x200c in the file, we'd
 expect it to now be at address 0x13000c.
 
 // note: why 0x13000c?
-// 0x12e000 + 0x200c. that is, the offset 0x200c is from the 1st segment.
+// 0x12e000 + 0x200c = 0x13000c. so the offset 0x200c is from the load address.
 // 
 // then how nm results matches up with? From program header, can know the size
 // of each segment?
@@ -70794,11 +71278,11 @@ of ml_func in the linked shared library:
 What's interesting here is the instruction at address 0x4b3 - it's the call to
 ml_util_func. Let's dissect it:
 
-e8 is the opcode for call. The argument of this call is the offset relative to
-the next instruction. In the disassembly above, this argument is 0xfffffffc,
-    or simply -4. So the call currently points to itself.(4b4) This clearly
-    isn't right - but let's not forget about relocation. Here's what the
-    relocation section of the shared library looks like now:
+e8 is the opcode for call. The argument of this call is the offset `relative`
+to the next instruction. In the disassembly above, this argument is
+0xfffffffc, or simply -4. So the call currently points to itself.(4b4) This
+clearly isn't right - but let's not forget about relocation. Here's what the
+relocation section of the shared library looks like now:
 
 $ readelf -r libmlreloc.so
 
@@ -70911,7 +71395,7 @@ The important parts here are:
   ml_util_func.
 
 
-Obviously we're most interested in how (4) was done. Again, it's time for some
+Obviously we're most interested in `how (4) was done.` Again, it's time for some
 math. Interpreting the R_386_PC32 relocation entry mentioned above, we have:
 
   Take the (original) value at the offset specified in the entry (0xfffffffc), 
@@ -70926,8 +71410,17 @@ math. Interpreting the R_386_PC32 relocation entry mentioned above, we have:
 Everything is done assuming 32-bit 2-s complement, of course. The result is
 0xffffffe4, as expected.
 
-// >>> hex(0xfffffffc+0x0012e49c-0x0012e4b4)
-// '0xffffffe4L', 0x1c (28)
+// As shown above, it was 0xfffffffc, -4, since it reads 4 bytes already so -4
+// from 0xffffffff. 
+//
+// Here when see relocated address, so should add 4 to the difference 
+// 
+// 0x0012e4b3 and reads 4 bytes. becomes 0x12e4b7 and goes back 23+4:
+// >>> hex(0x12e4b7-(23+4))
+// '0x12e49c'
+// 
+// >>> 0xffffffff-0xffffffe4
+// 27L
 
 
 Extra credit: Why was the call relocation needed?
@@ -70942,16 +71435,18 @@ relative offset. Surely the offset between the call and ml_util_func itself
 doesn't change when the library is loaded - they both are in the code segment
 which gets moved as one whole chunk. `So why is the relocation needed at all?`
 
-// note: this is the same question I had. explains why PIC function call are
-// only for non-static functions.
+// this is the same question I had. explains why PIC function call are only
+// for non-static functions.
 
 Here's a small experiment to try: go back to the code of the shared library,
   add `static` to the declaration of ml_util_func. Re-compile and look at the
   output of readelf -r again.
 
+// static make it file scope
+
 Done? Anyway, I will reveal the outcome - the relocation is gone! Examine the
 disassembly of ml_func - there's now a correct offset placed as the argument
-of call - no relocation required. What's going on?
+of call - `no relocation required.` What's going on?
 
 When tying global symbol references to their actual definitions, the dynamic
 loader has some rules about the order in which shared libraries are searched.
@@ -70963,10 +71458,13 @@ you'll have to take a look at the ELF standard, the dynamic loader man page
 and do some Googling. In short, however, when ml_util_func is global, it may
 be overridden in the executable or another shared library, so when linking our
 shared library, the linker can't just assume the offset is known and hard-code
-it [12]. It makes `all references to global symbols` relocatable in order to
-allow the dynamic loader to decide how to resolve them. This is why declaring
-the function static makes a difference - since it's no longer global or
-exported, the linker can hard-code its offset in the code.
+it [12]. 
+
+It makes `all references to global symbols` relocatable in order to allow the
+dynamic loader to decide how to resolve them. This is why declaring the
+function static makes a difference - since it's no longer global or exported,
+the linker can hard-code its offset in the code.
+
 
 // [12] Unless it's passed the -Bsymbolic flag. Read all about it in the man
 // page of ld.
@@ -71049,8 +71547,13 @@ Conclusion
 Load-time relocation is one of the methods used in Linux (and other OSes) to
 resolve internal data and code references in shared libraries when loading
 them into memory. These days, position independent code (PIC) is a more
-popular approach, and some modern systems (such as x86-64) no longer support
-load-time relocation.
+popular approach, and 
+
+`some modern systems (such as x86-64) no longer support load-time relocation.`
+
+// appears that x86 32 bits and gcc 6.3.0 no longer use relocation and produce
+// PIC binary and that's why see difference from this article when tried. 
+
 
 Still, I decided to write an article on load-time relocation for two reasons.
 First, load-time relocation has a couple of advantages over PIC on some
@@ -71077,7 +71580,8 @@ loaded. This creates a problem for the data and code references within the
 library, which should be somehow made to point to the correct memory
 locations.
 
-There are two main approaches to solve this problem in Linux ELF shared libraries:
+There are two main approaches to solve this problem in Linux ELF shared
+libraries:
 
 Load-time relocation
 Position independent code (PIC)
@@ -71103,10 +71607,11 @@ approach - PIC.
 // addresses, since those would be relocatable and wouldn’t be PIC. 
 // 
 // The usual solution is to create a table of data addresses in a data page
-// and keep a pointer to that table in a register, so the code can use indexed
+// and keep a `pointer to that table in a register`, so the code can use indexed
 // addressing relative to that register to pick up the data. This works at the
 // cost of an extra indirection for each data reference, but there’s still the
 // question of how to get the initial data address into the register.
+
 
 I originally planned to focus on both x86 and x64 (a.k.a. x86-64) in this
 article, but as it grew longer and longer I decided it won't be practical. So,
@@ -71139,7 +71644,7 @@ it makes the text section of the library `non-shareable`.
   relocations applied, these costs can build up and result in a noticeable
   delay in the start-up time of the application.
 
-  note: this is why use pic
+  // this is why use pic
   Second, `the non-shareable text section problem`, which is somewhat more
   serious. One of the main points of having shared libraries in the first
   place, is saving RAM. Some common shared libraries are used by multiple
@@ -71152,7 +71657,10 @@ it makes the text section of the library `non-shareable`.
   library, it will have to be wholly placed in RAM again [1]. Different
   applications won't be able to really share it.
 
-Moreover, having a writable text section (it must be kept writable, to allow
+// [1] Unless all applications load this library into the exact same virtual
+// memory address. But this usually isn't done on Linux.
+
+Moreover, having a `writable text section` (it must be kept writable, to allow
     the dynamic loader to perform the relocations) poses a security risk,
 making it easier to exploit the application.
 
@@ -71210,7 +71718,7 @@ insight holds.
 
 Key insight #2 - making an IP-relative offset work on x86
 
-note: IP or PC relative
+// trick to get `ip or pc` and to get GOT addresss in essence
 
 The above is only useful if we can actually put the `relative offset` to work.
 But data references (i.e. in the mov instruction) on x86 require `absolute`
@@ -71250,6 +71758,7 @@ some instruction in the code section wants to refer to a variable. Instead of
 referring to it directly by absolute address (which would require a
     relocation), it refers to an entry in the GOT. Since the GOT is in a known
 place in the data section, this reference is relative and known to the linker.
+
 The GOT entry, in turn, will contain the absolute address of the variable:
 
    -> +----------------------+
@@ -71272,12 +71781,16 @@ data  | GOT#0 var #1 address |   |
 
 In pseudo-assembly, we replace an absolute addressing instruction:
 
+// from
+
 ; Place the value of the variable in edx
 mov edx, [ADDR_OF_VAR]
 
+// to
+
 With displacement addressing from a register, along with an extra indirection:
 
-; 1. Somehow get the address of the GOT into ebx
+; 1. `Somehow get the address of the GOT into ebx`
 lea ebx, ADDR_OF_GOT
 
 ; 2. Suppose ADDR_OF_VAR is stored at offset 0x10
@@ -71295,7 +71808,7 @@ the data section. Why? Because the GOT still has to contain the absolute
 address of the variable for the scheme described above to work. So what have
 we gained?
 
-note: stil need relocation of data since GOT entries need to be updated.
+// still need data relocation since GOT entries need absoule address
 
 
 A lot, it turns out. A `relocation in the data section` is much less
@@ -71335,7 +71848,7 @@ Let's take a look at its disassembly, focusing on the ml_func function:
  43c:   55                      push   ebp
  43d:   89 e5                   mov    ebp,esp
  43f:   e8 16 00 00 00          call   45a <__i686.get_pc_thunk.cx>
- `444`:   81 c1 b0 1b 00 00       add    ecx,0x1bb0
+>`444`:   81 c1 b0 1b 00 00       add    ecx,`0x1bb0`
  44a:   8b 81 f0 ff ff ff       mov    eax,DWORD PTR [ecx-0x10]
  450:   8b 00                   mov    eax,DWORD PTR [eax]
  452:   03 45 08                add    eax,DWORD PTR [ebp+0x8]
@@ -71346,9 +71859,6 @@ Let's take a look at its disassembly, focusing on the ml_func function:
 0000045a <__i686.get_pc_thunk.cx>:
  45a:   8b 0c 24                mov    ecx,DWORD PTR [esp]
  45d:   c3                      ret
-
-note: 0x1bb0 is offset to GOT as shown in Key insight #1 - offset between text
-and data sections
 
 // function-prolog
 // the address of the GOT is held in the register %ecx. This register is
@@ -71384,9 +71894,25 @@ Section Headers:
 
 Let's do some math to check the computation done by the compiler to find
 myglob. As I mentioned above, the call to __i686.get_pc_thunk.cx places the
-address of the next instruction into ecx. That address is 0x444 [2]. The next
-instruction then adds 0x1bb0 to it, and the result in ecx is going to be
-0x1ff4. Finally, to actually obtain the GOT entry holding the address of
+address of the next instruction into ecx. That address is 0x444 [2]. 
+
+// [2] 0x444 (and all other addresses mentioned in this computation) is
+// relative to the load address of the shared library, which is unknown until
+// an executable actually loads it at runtime. Note how it doesn't matter in
+// the code since it only juggles relative addresses.
+
+
+// 0x1bb0 is offset to GOT as shown in Key insight #1 - offset between text
+// and data sections
+// 
+// >>> hex(0x1bb0+0x444)
+// '0x1ff4'
+//
+// >>> hex(0x1ff4-0x10)
+// '0x1fe4'
+
+The next instruction then adds 0x1bb0 to it, and the result in ecx is going to
+be 0x1ff4. Finally, to actually obtain the GOT entry holding the address of
 myglob, displacement addressing is used - [ecx - 0x10], so the entry is at
 `0x1fe4`, which is the first entry in the GOT according to the section header.
 
@@ -71394,6 +71920,17 @@ Why there's another section whose name starts with .got will be explained
 later in the article [3]. Note that `the compiler chooses` to point ecx to after
 the GOT and then use negative offsets to obtain entries. This is fine, as long
 as the math works out. And so far it does.
+
+// [3] The astute reader may wonder why .got is a separate section at all.
+// Didn't I just show in the diagrams that it's located in the data section?
+// In practice, it is. I don't want to get into the distinction between ELF
+// sections and segments here, since that would take use too far away from the
+// point. But briefly, any number of "data" sections can be defined for a
+// library and mapped into a read-write segment. This doesn't really matter,
+// as long as the ELF file is organized correctly. Separating the data segment
+// into different logical sections provides modularity and makes the linker's
+// job easier.
+
 
 <got-relocation>
 // Like the PLT, the GOT does not exist in an .o file, but is created by the
@@ -71454,7 +71991,7 @@ Dump of assembler code for function ml_func:
 End of assembler dump.
 (gdb) i registers
 eax            0x1    1
-ecx            0x132ff4       1257460   // GOT ~
+ecx            0x132ff4       1257460   ~
 [...] skipping output
 
 The debugger has entered ml_func, and stopped at IP 0x0013144a [4]. 
@@ -71499,9 +72036,10 @@ The lazy binding optimization
 When a shared library refers to some function, the real address of that
 function is not known until load time. Resolving this address is called
 `binding`, and it's something the dynamic loader does when it loads the shared
-library into the process's memory space. This binding process is non-trivial,
-        since the loader has to actually look up the function symbol in
-        special tables [5].
+library into the process's memory space. 
+
+This binding process is non-trivial, since the loader has to actually look up
+the function symbol in special tables [5].
 
 // [5] Shared library ELF objects actually come with special hash table
 // sections for this purpose.
@@ -71513,12 +72051,13 @@ vain, because in a typical run of a program only a fraction of functions
 actually get called (think about various functions handling error and special
     conditions, which typically don't get called at all).
 
-So, to speed up this process, a clever lazy binding scheme was devised. "Lazy"
-is a generic name for a family of optimizations in computer programming, where
-work is delayed until the last moment when it's actually needed, with the
-intention of avoiding doing this work if its results are never required during
-a specific run of a program. Good examples of laziness are copy-on-write and
-lazy evaluation.
+So, `to speed up this process`, a clever lazy binding scheme was devised.
+
+"Lazy" is a generic name for a family of optimizations in computer
+programming, where work is delayed until the last moment when it's actually
+needed, with the intention of avoiding doing this work if its results are
+never required during a specific run of a program. Good examples of laziness
+are copy-on-write and lazy evaluation.
 
 This lazy binding scheme is attained by adding yet another level of
 indirection - the PLT.
@@ -71602,7 +72141,11 @@ Explanation:
   dynamic loader itself [6]. This routine resolves the actual address of the
   function. More on its action a bit later.
 
-  // note: GOT[1] GOT[2]
+// [6] The dynamic loader on Linux is just another shared library which gets
+// loaded into the address space of all running processes.
+
+
+  // GOT[1] GOT[2]
   //
   // Linkers, Ian Lance Taylor 
   //
@@ -71656,18 +72199,11 @@ PLT:
 
 After the first call, the diagram looks a bit differently:
 
-Code:
-  call func@PLT
-
-PLT:
-  PLT[0]:
-    call resolver
-  ...
-
   PLT[n]:                         GOT:
     jmp *GOT[n]                     GOT[n]:
     prepare resolver                  addr -> `resolved address`
     jmp PLT[0]
+
 
 Note that GOT[n] now points to the actual func [7] instead of back into the
 PLT. So, when func is called again:
@@ -71683,12 +72219,12 @@ PLT. So, when func is called again:
 
 In other words, now func is being actually called, without going through the
 resolver, at the cost of one additional jump. That's all there is to it,
-  really. 
+really. 
   
 note: this is why use lazy and plt for function calls rather than simply using
 GOT.
 
-This mechanism allows lazy resolution of functions, and no resolution at all
+This mechanism allows `lazy resolution of functions`, and no resolution at all
 for functions that aren't actually called.
 
 It also leaves the code/text section of the library completely position
@@ -71770,9 +72306,10 @@ added. So the base of the GOT is at 0x1ff4. We can take a peek at the GOT
 contents with readelf [8]:
 
 // [8] Recall that in the data reference example I promised to explain why
-// there are apparently two GOT sections in the object: .got and .got.plt. Now
-// it should become obvious that this is just to conveniently split the GOT
-// entries required for global data from GOT entries required for the PLT.
+// there are apparently two GOT sections in the object: `.got and .got.plt` 
+//
+// Now it should become obvious that this is just to conveniently split the
+// GOT entries required for global data from GOT entries required for the PLT.
 // This is also why when the GOT offset is computed in functions, it points to
 // .got.plt, which comes right after .got. This way, negative offsets lead us
 // to .got, while positive offsets lead us to .got.plt. While convenient, such
@@ -71786,9 +72323,12 @@ Hex dump of section '.got.plt':
   0x00002004 96030000 a6030000                   ........
                       ^^^^
 
+// >>> hex(0x2004-0x1ff4)
+// '0x10'
+
 The GOT entry ml_util_func@plt looks at is at offset +0x14, or `0x2008`. From
 above, the word at that location is 0x3a6, which is the address of the push
-instruction in ml_util_func@plt.
+instruction in ml_util_func@plt. (see above)
 
 To help the dynamic loader do its job, a relocation entry is also added and
 specifies which place in the GOT to relocate for ml_util_func:
@@ -71802,12 +72342,14 @@ Relocation section '.rel.plt' at offset 0x328 contains 3 entries:
 00002004  00000207 R_386_JUMP_SLOT   00000000   __gmon_start__
 00002008  00000707 R_386_`JUMP_SLOT`   0000046c   ml_util_func
 
-note: this is relocation for got.plt and relocation entry is kind of command
-to dynamic loader
+// this is relocation for got.plt and relocation entry is kind of command to
+// dynamic loader
 
 The last line means that the dynamic loader should place the value (address)
-  of symbol ml_util_func into 0x2008 (which, recall, is the GOT entry for this
-      function).
+of symbol ml_util_func into 0x2008 (which, recall, is the GOT entry for this
+function).
+
+// go to 00002008 and update it with 0000046c
 
 It would be interesting to see this GOT entry modification actually happen
 after the first call. Let's once again use GDB for the inspection.
@@ -71823,6 +72365,8 @@ Starting program: /pic_tests/driver
 Breakpoint 1, ml_func (a=1, b=1) at ml_main.c:10
 10        int c = b + ml_util_func(a);
 (gdb)
+
+// is inside ml_main
 
 We're now before the first call to ml_util_func. Recall that GOT is pointed to
 by ebx in this code. Let's see what's in it:
@@ -71844,6 +72388,7 @@ ml_util_func and check again:
 (gdb) step
 ml_util_func (a=1) at ml_main.c:5
 5         return a + 1;
+
 (gdb) x/w 0x133008
 0x133008:     0x0013146c
 
@@ -71889,6 +72434,8 @@ each reference to a global variable, and for each call to a function. How
 problematic this is in practice depends on the compiler, the CPU architecture
 and the particular application.
 
+// register for GOT?
+
 Another, less apparent cost, is the increased register usage required to
 implement PIC. In order to avoid locating the GOT too frequently, it makes
 sense for the compiler to generate code that keeps its address in a register
@@ -71926,6 +72473,332 @@ All relocations in PIC uses symbol values(actual absolute address) from
 relocation entry of dynamic section which is the same as ones from symbol
 tables. That means program linker knows all and makes dynamic sections for all
 relocations.
+
+
+https://eli.thegreenplace.net/2011/11/11/position-independent-code-pic-in-shared-libraries-on-x64
+
+The previous article explained how position independent code (PIC) works, with
+code compiled for the x86 architecture as an example. I promised to cover PIC
+on x64 [1] in a separate article, so here we are. This article will go into
+much less detail, since it assumes an understanding of how PIC works in
+theory. In general, the idea is similar for both platforms, but some details
+differ because of unique features of each architecture.
+
+RIP-relative addressing
+
+On x86, while function references (with the call instruction) use relative
+offsets from the instruction pointer, data references (with the mov
+    instruction) only support absolute addresses. As we've seen in the
+previous article, this makes PIC code somewhat less efficient, since PIC by
+its nature requires making all offsets IP-relative; absolute addresses and
+position independence don't go well together.
+
+x64 fixes that, with a new "RIP-relative addressing mode", which is the
+default for all 64-bit mov instructions that reference memory (it's used for
+    other instructions as well, such as lea). A quote from the "Intel
+Architecture Manual vol 2a":
+
+  A new addressing form, RIP-relative (relative instruction-pointer)
+  addressing, is implemented in 64-bit mode. An effective address is formed by
+  adding displacement to the 64-bit RIP of the next instruction.  The
+  displacement used in RIP-relative mode is 32 bits in size. Since it should
+  be useful for both positive and negative offsets, roughly +/- 2GB is the
+  maximal offset from RIP supported by this addressing mode.
+
+x64 PIC with data references - an example
+
+For easier comparison, I will use the same C source as in the data reference
+example of the previous article:
+
+int myglob = 42;
+
+int ml_func(int a, int b)
+{
+    return myglob + a + b;
+}
+Let's look at the disassembly of ml_func:
+
+00000000000005ec <ml_func>:
+ 5ec:   55                      push   rbp
+ 5ed:   48 89 e5                mov    rbp,rsp
+ 5f0:   89 7d fc                mov    DWORD PTR [rbp-0x4],edi
+ 5f3:   89 75 f8                mov    DWORD PTR [rbp-0x8],esi
+>5f6:   48 8b 05 db 09 20 00    mov    rax,QWORD PTR [rip+0x2009db]
+ 5fd:   8b 00                   mov    eax,DWORD PTR [rax]
+ 5ff:   03 45 fc                add    eax,DWORD PTR [rbp-0x4]
+ 602:   03 45 f8                add    eax,DWORD PTR [rbp-0x8]
+ 605:   c9                      leave
+ 606:   c3                      ret
+
+The most interesting instruction here is at 0x5f6: it places the address of
+myglobal into rax, by referencing an entry in the GOT. As we can see, it uses
+RIP relative addressing. Since it's relative to the address of the next
+instruction, what we actually get is 0x5fd + 0x2009db = `0x200fd8`. So the GOT
+entry holding the address of myglob is at 0x200fd8. Let's check if it makes
+sense:
+
+$ readelf -S libmlpic_dataonly.so
+There are 35 section headers, starting at offset 0x13a8:
+
+Section Headers:
+  [Nr] Name              Type             Address           Offset
+       Size              EntSize          Flags  Link  Info  Align
+
+[...]
+  [20] .got              PROGBITS         `0000000000200fc8`  00000fc8
+       0000000000000020  0000000000000008  WA       0     0     8
+[...]
+
+// >>> hex(0x200fc8+4)
+// '0x200fcc'
+// >>> hex(0x200fc8+8)
+// '0x200fd0'
+// >>> hex(0x200fc8+12)
+// '0x200fd4'
+// >>> hex(0x200fc8+16)
+// '0x200fd8'
+
+GOT starts at 0x200fc8, so myglob is in its third entry. We can also see the
+relocation inserted for the GOT reference to myglob:
+
+$ readelf -r libmlpic_dataonly.so
+
+Relocation section '.rela.dyn' at offset 0x450 contains 5 entries:
+
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+[...]
+000000200fd8  000500000006 R_X86_64_GLOB_DAT 0000000000201010 myglob + 0
+[...]
+
+// still not actual address but has all `instruction` to make all right when
+// loaded.
+
+Indeed, a relocation entry for 0x200fd8 telling the dynamic linker to place
+the address of myglob into it once the final address of this symbol is known.
+
+So it should be quite clear how the address of myglob is obtained in the code.
+The next instruction in the disassembly (at 0x5fd) then dereferences the
+address to get the value of myglob into eax [2].
+
+// [2] Into eax and not rax because the type of myglob is int, which is still
+// 32-bit on x64.
+
+
+x64 PIC with function calls - an example
+
+Now let's see how function calls work with PIC code on x64. Once again, we'll
+use the same example from the previous article:
+
+int myglob = 42;
+
+int ml_util_func(int a)
+{
+    return a + 1;
+}
+
+int ml_func(int a, int b)
+{
+    int c = b + ml_util_func(a);
+    myglob += c;
+    return b + myglob;
+}
+
+Disassembling ml_func, we get:
+
+000000000000064b <ml_func>:
+ 64b:   55                      push   rbp
+ 64c:   48 89 e5                mov    rbp,rsp
+ 64f:   48 83 ec 20             sub    rsp,0x20
+ 653:   89 7d ec                mov    DWORD PTR [rbp-0x14],edi
+ 656:   89 75 e8                mov    DWORD PTR [rbp-0x18],esi
+ 659:   8b 45 ec                mov    eax,DWORD PTR [rbp-0x14]
+ 65c:   89 c7                   mov    edi,eax
+ 65e:   e8 fd fe ff ff          call   560 <ml_util_func@plt>
+ [... snip more code ...]
+
+The call is, as before, to ml_util_func@plt. Let's see what's there:
+
+0000000000000560 <ml_util_func@plt>:
+ 560:   ff 25 a2 0a 20 00       jmp    QWORD PTR [rip+0x200aa2]
+ 566:   68 01 00 00 00          push   0x1
+ 56b:   e9 d0 ff ff ff          jmp    540 <_init+0x18>
+
+So, the GOT entry holding the actual address of ml_util_func is at 0x200aa2 +
+0x566 = `0x201008`.
+
+And there's a relocation for it, as expected:
+
+$ readelf -r libmlpic.so
+
+Relocation section '.rela.dyn' at offset 0x480 contains 5 entries:
+[...]
+
+Relocation section '.rela.plt' at offset 0x4f8 contains 2 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+[...]
+000000201008  000600000007 R_X86_64_JUMP_SLO 000000000000063c ml_util_func + 0
+
+
+Performance implications
+
+In both examples, it can be seen that PIC on x64 requires `less instructions`
+than on x86. On x86, the GOT address is loaded into some base register (ebx by
+    convention) in two steps - first the address of the instruction is
+obtained with a special function call, and then the offset to GOT is added.
+
+Both steps aren't required on x64, since the relative offset to GOT is known
+to the linker and can simply be `encoded in the instruction` itself with RIP
+relative addressing.
+
+When calling a function, there's also no need to prepare the GOT address in
+ebx for the trampoline, as the x86 code does, since the trampoline just
+accesses its GOT entry directly through RIP-relative addressing.
+
+So PIC on x64 still requires extra instructions when compared to non-PIC code,
+   but the additional cost is smaller. The indirect cost of tying down a
+   register to use as the GOT pointer (which is painful on x86) is also gone,
+   since no such register is needed with RIP-relative addressing [3]. All in
+   all, x64 PIC results in a much smaller performance hit than on x86, making
+   it much more attractive. So attractive, in fact, that it's the default
+   method for writing shared libraries for this architecture.
+
+// [3] By the way, it would be much less "painful" to tie down a register on
+// x64, since it has twice as many GPRs as x86
+
+
+Extra credit: Non-PIC code on x64
+
+Not only does gcc encourage you to use PIC for shared libraries on x64, it
+`requires it by default.` For instance, if we compile the first example without
+-fpic [4] and then try to link it into a shared library (with -shared), we'll
+get an error from the linker, something like this:
+
+// [4] It also happens if we explicitly specify we don't want PIC by passing
+// -fno-pic to gcc.
+
+/usr/bin/ld: ml_nopic_dataonly.o: relocation R_X86_64_PC32 against 
+  symbol `myglob' can not be used when making a shared object; recompile with -fPIC
+/usr/bin/ld: final link failed: Bad value
+collect2: ld returned 1 exit status
+
+What's going on? Let's look at the disassembly of ml_nopic_dataonly.o [5]:
+
+// [5] Note that unlike other disassembly listings we've been looking at in
+// this and the previous article, this is an object file, not a shared library
+// or executable. Therefore it will contain some relocations for the linker.
+
+0000000000000000 <ml_func>:
+   0:   55                      push   rbp
+   1:   48 89 e5                mov    rbp,rsp
+   4:   89 7d fc                mov    DWORD PTR [rbp-0x4],edi
+   7:   89 75 f8                mov    DWORD PTR [rbp-0x8],esi
+>  a:   8b 05 00 00 00 00       mov    eax,DWORD PTR [rip+0x0]
+  10:   03 45 fc                add    eax,DWORD PTR [rbp-0x4]
+  13:   03 45 f8                add    eax,DWORD PTR [rbp-0x8]
+  16:   c9                      leave
+  17:   c3                      ret
+
+Note how myglob is accessed here, in instruction at address 0xa. It expects
+the linker to patch in a relocation to the actual location of myglob into the
+operand of the instruction (so no GOT redirection is required):
+
+$ readelf -r ml_nopic_dataonly.o
+
+Relocation section '.rela.text' at offset 0xb38 contains 1 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+00000000000c  000f00000002 R_X86_64_PC32     0000000000000000 myglob - 4
+[...]
+
+Here is the R_X86_64_PC32 relocation the linker was complaining about. It just
+can't link an object with such relocation into a shared library. Why? Because
+the displacement of the mov (the part that's added to rip) must fit in 32
+bits, and when a code gets into a shared library, we just can't know in
+advance that 32 bits will be enough. After all, this is a full 64-bit
+architecture, with a vast address space. The symbol may eventually be found in
+some shared library that's farther away from the reference than 32 bits will
+allow to reference. This makes R_X86_64_PC32 an invalid relocation for shared
+libraries on x64.
+
+But can we still somehow create non-PIC code on x64? Yes! We should be
+instructing the compiler to use the "large code model", by adding the
+-mcmodel=large flag. The topic of code models is interesting, but explaining
+it would just take us too far from the real goal of this article [6]. So I'll
+just say briefly that a code model is a kind of agreement between the
+programmer and the compiler, where the programmer makes a certain promise to
+the compiler about the size of offsets the program will be using. In exchange,
+    the compiler can generate better code.
+
+It turns out that to make the compiler generate non-PIC code on x64 that
+actually pleases the linker, only the large code model is suitable, because
+it's the least restrictive. Remember how I explained why the simple relocation
+isn't good enough on x64, for fear of an offset which will get farther than 32
+bits away during linking? Well, the large code model basically gives up on all
+offset assumptions and uses the largest 64-bit offsets for all its data
+references. This makes load-time relocations always safe, and enables non-PIC
+code generation on x64. Let's see the disassembly of the first example
+compiled without -fpic and with -mcmodel=large:
+
+0000000000000000 <ml_func>:
+   0:   55                      push   rbp
+   1:   48 89 e5                mov    rbp,rsp
+   4:   89 7d fc                mov    DWORD PTR [rbp-0x4],edi
+   7:   89 75 f8                mov    DWORD PTR [rbp-0x8],esi
+   a:   48 b8 00 00 00 00 00    mov    rax,0x0
+  11:   00 00 00
+  14:   8b 00                   mov    eax,DWORD PTR [rax]
+  16:   03 45 fc                add    eax,DWORD PTR [rbp-0x4]
+  19:   03 45 f8                add    eax,DWORD PTR [rbp-0x8]
+  1c:   c9                      leave
+  1d:   c3                      ret
+
+The instruction at address 0xa places the address of myglob into eax. Note
+that its argument is currently 0, which tells us to expect a relocation. Note
+also that it has a full 64-bit address argument. Moreover, the argument is
+absolute and not RIP-relative [7]. Note also that two instructions are
+actually required here to get the value of myglob into eax. This is one reason
+why the large code model is less efficient than the alternatives.
+
+Now let's see the relocations:
+
+$ readelf -r ml_nopic_dataonly.o
+
+Relocation section '.rela.text' at offset 0xb40 contains 1 entries:
+  Offset          Info           Type           Sym. Value    Sym. Name + Addend
+00000000000c  000f00000001 R_X86_64_64       0000000000000000 myglob + 0
+[...]
+
+Note the relocation type has changed to R_X86_64_64, which is an absolute
+relocation that can have a 64-bit value. It's acceptable by the linker, which
+will now gladly agree to link this object file into a shared library.
+
+Some judgmental thinking may bring you to ponder why the compiler generated
+code that isn't suitable for load-time relocation by default. The answer to
+this is simple. Don't forget that code also tends to get directly linked into
+executables, which don't require load-time relocations at all. Therefore, by
+default the compiler assumes the small code model to generate the most
+efficient code. If you know your code is going to get into a shared library,
+          and you don't want PIC, then just tell it to use the large code
+          model explicitly. I think gcc's behavior makes sense here.
+
+Another thing to think about is why there are no problems with PIC code using
+the small code model. The reason is that the GOT is always located in the same
+shared library as the code that references it, and unless a single shared
+library is big enough for a 32-bit address space, there should be no problems
+addressing the PIC with 32-bit RIP-relative offsets. Such huge shared
+libraries are unlikely, but in case you're working on one, the AMD64 ABI has a
+"large PIC code model" for this purpose.
+
+Conclusion
+
+This article complements its predecessor by showing how PIC works on the x64
+architecture. This architecture has a new addressing mode that helps PIC code
+be faster, and thus makes it more desirable for shared libraries than on x86,
+   where the cost is higher. Since x64 is currently the most popular
+   architecture used in servers, desktops and laptops, this is important to
+   know. Therefore, I tried to focus on additional aspects of compiling code
+   into shared libraries, such as non-PIC code. If you have any questions
+   and/or suggestions on future directions to explore, please let me know in
+   the comments or by email.
 
 
 ={============================================================================
@@ -72149,15 +73022,95 @@ note: this output is output in memory for DSO.
 ={============================================================================
 *kt_linux_core_400* linux-elf-start
 
-How main() is executed on Linux
+<elf-entry>
+https://eli.thegreenplace.net/2011/01/27/how-debuggers-work-part-2-breakpoints/
+
+Digression - process addresses and entry point
+
+Frankly, 0x8048096 itself doesn't mean much, it's just a few bytes away from
+the beginning of the text section of the executable. If you look carefully at
+the dump listing above, you'll see that the text section starts at 0x08048080.
+This tells the OS to map the text section starting at this address in the
+virtual address space given to the process. On Linux these addresses can be
+absolute (i.e. the executable isn't being relocated when it's loaded into
+    memory), because with the virtual memory system each process gets its own
+chunk of memory and sees the whole 32-bit address space as its own (called
+    "linear" address).
+
+If we examine the ELF [5] header with readelf, we get:
+
+$ readelf -h traced_printer2
+ELF Header:
+  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00
+  Class:                             ELF32
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Intel 80386
+  Version:                           0x1
+  Entry point address:               0x8048080
+  Start of program headers:          52 (bytes into file)
+  Start of section headers:          220 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               52 (bytes)
+  Size of program headers:           32 (bytes)
+  Number of program headers:         2
+  Size of section headers:           40 (bytes)
+  Number of section headers:         4
+  Section header string table index: 3
+
+Note the "entry point address" section of the header, which also points to
+0x8048080. So if we interpret the directions encoded in the ELF file for the
+OS, it says:
+
+Map the text section (with given contents) to address 0x8048080
+Start executing at the entry point - address 0x8048080
+
+But still, why 0x8048080? For historic reasons, it turns out. Some googling
+led me to a few sources that claim that the first 128MB of each process's
+address space were reserved for the stack. 128MB happens to be 0x8000000,
+which is where other sections of the executable may start. 0x8048080, in
+  particular, is the default entry point used by the Linux ld linker. This
+  entry point can be modified by passing the -Ttext argument to ld.
+
+To conclude, there's nothing really special in this address and we can freely
+change it. As long as the ELF executable is properly structured and the entry
+point address in the header matches the real beginning of the program's code
+(text section), we're OK.
+
+<ex>
+
+$ readelf -h hello_test
+ELF Header:
+  Entry point address:               0x4005e0
+
+$ objdump -d hello_test
+Disassembly of section .text:
+
+00000000004005e0 <_start>:
+  4005e0:       31 ed                   xor    %ebp,%ebp
+
+$ readelf -h a.out
+ELF Header:
+  Entry point address:               0x4006c0
+
+$ objdump -d a.out
+Disassembly of section .text:
+
+00000000004006c0 <_start>:
+  4006c0:       31 ed                   xor    %ebp,%ebp
+
 
 http://www.tldp.org/LDP/LGNET/issue84/hawk.html
+
+How main() is executed on Linux
 
 note: this is elf from debian VM.
 
 $ readelf -h a-ng.out
   Entry point address:               0x8048300
-
 
 $ objdump -S a-ng.out
 
@@ -72697,11 +73650,12 @@ config SUPPORT_LD_DEBUG
 
 
 ={============================================================================
-*kt_linux_core_400* linux-lib-shared
+*kt_linux_core_400* linux-lib-shared linux-shared
 
 LPI 41.
 
-{static-library}
+{linux-static}
+
 <create> ar-command
 The archive also records various attributes of each of the component object
 files, including file permissions, numeric user and group IDs, and last
@@ -72765,7 +73719,7 @@ the fact that the system administrator needs to be aware of which applications
 were linked against the library.
 
 
-{what-is-shared}
+{linux-shared}
 Although the code of a shared library is shared among multiple processes, its
 `variables are not.` Each process that uses the library has its own copies of
 the `global and static variables` that are defined within the library.
@@ -72795,23 +73749,23 @@ existing version of the shared library.
   symbol is placed in virtual memory. Take a little more time to execute.
 
 
-{position-independent-code}
+{linux-shared-pic} position-independent-code
 These changes allow the code to be located at any virtual address at run time.
-This is necessary for shared libraries, since there is no way of knowing at link
-time where the shared library code will be located in memory.
+This is necessary for shared libraries, since there is no way of knowing at
+link time where the shared library code will be located in memory.
 
-In order to determine whether an existing object file has been compiled with the
--fPIC option, can check for the presence of the name _GLOBAL_OFFSET_TABLE_ in
-the object file's symbol table, using either of the following commands:
+In order to determine whether an existing object file has been compiled with
+the -fPIC option, can check for the presence of the name _GLOBAL_OFFSET_TABLE_
+in the object file's symbol table, using either of the following commands:
 
 $ nm mod1.o | grep _GLOBAL_OFFSET_TABLE_
 $ readelf -s mod1.o | grep _GLOBAL_OFFSET_TABLE_         // -s, --syms|--symbols
 
-note: as shown above, this not necessarily means 'shared' object. It's only tell
+As shown above, this not necessarily means 'shared' object. It's only tell
 -fPIC used.
 
 
-{shared}
+<ex>
 $ gcc -g -c -fPIC -Wall mod1.c mod2.c mod3.c
 $ gcc -g -shared -o libfoo.so mod1.o mod2.o mod3.o
 
@@ -73040,7 +73994,7 @@ rebuilding the duma and relinking the binary, but not whole thing.
 
 $ gcc -g testmain.c mod.host.o libduma.a.for.buildsvr -lpthread -o out_duma_host
 $ nm out_duma_host | grep malloc
-59:0000000000403451 T _duma_malloc
+59 :0000000000403451 T _duma_malloc
 111:0000000000403e31 T malloc
 
 
@@ -73057,10 +74011,12 @@ Segmentation fault (core dumped)
 To see library dependancy of a application. This is a `script file` and shows a
 `dynamic-library-dependancy`. If not, shows not a dynamic executable message.
 
+*libc-check-version*
 The simplest approach is to pick a binary that you consider is typical (e.g.
-    /bin/ls and run ldd on it. One of the listed libraries should be libc -
-    check its version number.
+    /bin/ls and run ldd on it.) One of the listed libraries should be libc -
+check its version number.
 
+*tool-ldd*
 $ ldd /bin/ls
         libc.so.6 => /lib/libc.so.6 (0x4000e000)
         /lib/ld-linux.so.2 => /lib/ld-linux.so.2 (0x40000000)
@@ -73102,8 +74058,8 @@ checking sub-depends for '/opt/zinc/oss/lib/libffi.so.5'
   libffi.so.5 => /opt/zinc/oss/lib/libffi.so.5 (0x00000000)
   not a dynamic executable
 
+<ex>
 
-{libc-case}
 #include <stdio.h>
 
 int main()
@@ -73114,7 +74070,8 @@ int main()
 gcc sample.c
 
 
-<on-debian-vm>
+// debian vm libc case
+
 @kit-debian:~$ readelf -d a.out | grep NEEDED
 4: 0x00000001 (NEEDED)                     Shared library: [libc.so.6]
 
@@ -73124,7 +74081,7 @@ gcc sample.c
 	/lib/ld-linux.so.2 (0xb77b8000)
 
 
-<on-mips-cross-gcc>
+// mips-cross-gcc
 // same when use mips-unknown-linux-uclibc-readelf
 
 @kit-debian:~$ readelf -d a.out | grep NEEDED
@@ -73147,7 +74104,7 @@ $ ldd -v nexus-inspect
 	not a dynamic executable
 
 
-note:
+<ex>
 mips-unknown-linux-uclibc-ldd is a script and not part of binutil build.
 
 @kit-debian:~$ ./x-tools/mips-unknown-linux-uclibc/bin/mips-unknown-linux-uclibc-ldd \
@@ -73158,6 +74115,35 @@ mips-unknown-linux-uclibc-ldd is a script and not part of binutil build.
 // x-tools/mips-unknown-linux-uclibc/mips-unknown-linux-uclibc/lib
 lrwxrwxrwx 1 kyoupark ccusers       18 Dec  2 10:17 libc.so.1 -> libuClibc-1.0.9.so*
 -r-xr-xr-x 1 kyoupark ccusers   612272 Dec  2 10:17 libuClibc-1.0.9.so*
+
+
+<ex>
+$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-
+gnu/bin/i686-nptl-linux-gnu-ldd PWM_Process
+i686-nptl-linux-gnu-ldd: no root given
+Try `i686-nptl-linux-gnu-ldd --help' for more information
+
+$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-ldd --root ~/si_logs/flash0-vstb-asan-build/flash0/fs/ PWM_Process
+        libm.so.6 => /lib/libm.so.6 (0x8badf00d)
+        libc.so.6 => /lib/libc.so.6 (0x8badf00d)
+        ld-linux.so.2 => /lib/ld-linux.so.2 (0x8badf00d)
+        libpthread.so.0 => /lib/libpthread.so.0 (0x8badf00d)
+        librt.so.1 => /lib/librt.so.1 (0x8badf00d)
+        libdl.so.2 => /lib/libdl.so.2 (0x8badf00d)
+        libtirpc.so.1 not found
+        libsky_airplay_helper.so.0 not found
+        libminizip.so.1 not found
+        libjsoncpp.so.1 not found
+        libglib-2.0.so.0 not found
+        libgio-2.0.so.0 not found
+        libgobject-2.0.so.0 not found
+        libdbus-1.so.3 not found
+        libz.so.1 not found
+        libasan.so.1 => /lib/libasan.so.1 (0x8badf00d)
+        libstdc++.so.6 => /lib/libstdc++.so.6 (0x8badf00d)
+        libgcc_s.so.1 => /lib/libgcc_s.so.1 (0x8badf00d)
+        libusb.so => /NDS/lib/libusb.so (0xdeadc0de)
+        libxpower.so.0 not found
 
 
 ={============================================================================
@@ -73173,10 +74159,10 @@ could be used efficiently at runtime by the `dynamic linker.`
 
 LPI 41.4.3 Using a Shared Library
 
-{dynamic-linking}
 $ ./prog 
 ./prog: error while loading shared libraries: libfoo.so: cannot open shared
   object file: No such file or directory
+
 
 This brings us to the second required step: dynamic linking, which is the task
 of resolving the embedded library name at run time. This task is performed by
@@ -73187,7 +74173,7 @@ The dynamic linker is `itself a shared library`, named /lib/ld-linux.so.2,
 which is employed `by every ELF executable` that uses shared libraries.
 
 
-<two-step-link>
+<lib-shared-two-step-link>
 Every program-including those that use shared libraries-goes through a
 static-linking phase. At run time, a program that employs shared libraries
 `additionally` undergoes dynamic linking.
@@ -73228,27 +74214,18 @@ loaded only when it is needed. This functionality is provided by an API to the
 dynamic linker.
 
 
-<ld-so-intereter>
+<lib-shared-intereter>
 the kernel sees this an ELF file, then it looks for a piece of information
 called the "requesting program interpreter" and it calls that program with
 your program as argument. Only available for a executable.
 
-<uclibc-ex>
-$ file --version
-file-5.04
-magic file from /usr/share/misc/magic
+<ex> uclibc
 
 $ file busybox
-busybox: ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked (uses shared libs), stripped
-
-
-$ file --version
-file-5.22
-magic file from /etc/magic:/usr/share/misc/magic
-
-$ file busybox
-busybox: setuid ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked, interpreter /lib/ld-uClibc.so.0, corrupted section header size
-busybox: setuid ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked, interpreter /lib/ld.so.1, stripped
+busybox: setuid ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked, 
+  interpreter /lib/ld-uClibc.so.0, corrupted section header size
+busybox: setuid ELF 32-bit MSB executable, MIPS, MIPS32 version 1 (SYSV), dynamically linked, 
+  interpreter /lib/ld.so.1, stripped
 
 
 $ readelf -l busybox
@@ -73306,7 +74283,7 @@ note:
 Standalone execution is not supported yet
 
 $ /lib64/ld-linux-x86-64.so.2
-Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]
+`Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]`
 You have invoked `ld.so', the helper program for shared library executables.
 This program usually lives in the file `/lib/ld.so', and special directives
 in executable files using ELF shared libraries tell the system's program
@@ -73332,40 +74309,11 @@ of this helper program; chances are you did not intend to run this program.
 $ /lib64/ld-linux-x86-64.so.2 /bin/echo 'Hello, world!'
 Hello, world!
 
-
-<ex> *tool-ldd*
+<ex> see that has the same result as *tool-ldd*
 $ /lib64/ld-linux-x86-64.so.2 --list /bin/echo
         linux-vdso.so.1 =>  (0x00007fff94f8e000)
         libc.so.6 => /lib64/libc.so.6 (0x0000003ba8000000)
         /lib64/ld-linux-x86-64.so.2 (0x0000003ba7c00000)
-
-$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-
-gnu/bin/i686-nptl-linux-gnu-ldd PWM_Process
-i686-nptl-linux-gnu-ldd: no root given
-Try `i686-nptl-linux-gnu-ldd --help' for more information
-
-$ ~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-ldd --root ~/si_logs/flash0-vstb-asan-build/flash0/fs/ PWM_Process
-        libm.so.6 => /lib/libm.so.6 (0x8badf00d)
-        libc.so.6 => /lib/libc.so.6 (0x8badf00d)
-        ld-linux.so.2 => /lib/ld-linux.so.2 (0x8badf00d)
-        libpthread.so.0 => /lib/libpthread.so.0 (0x8badf00d)
-        librt.so.1 => /lib/librt.so.1 (0x8badf00d)
-        libdl.so.2 => /lib/libdl.so.2 (0x8badf00d)
-        libtirpc.so.1 not found
-        libsky_airplay_helper.so.0 not found
-        libminizip.so.1 not found
-        libjsoncpp.so.1 not found
-        libglib-2.0.so.0 not found
-        libgio-2.0.so.0 not found
-        libgobject-2.0.so.0 not found
-        libdbus-1.so.3 not found
-        libz.so.1 not found
-        libasan.so.1 => /lib/libasan.so.1 (0x8badf00d)
-        libstdc++.so.6 => /lib/libstdc++.so.6 (0x8badf00d)
-        libgcc_s.so.1 => /lib/libgcc_s.so.1 (0x8badf00d)
-        libusb.so => /NDS/lib/libusb.so (0xdeadc0de)
-        libxpower.so.0 not found
-
 
 https://blog.ksub.org/bytes/2016/07/23/ld.so-glibcs-dynanic-linker/loader/
 
@@ -75314,7 +76262,7 @@ failed
 ={============================================================================
 *kt_linux_core_402* linux-lib-ld-resolve-order
 
-{runtime-resolution}
+{lib-shared-runtime-resolution}
 Suppose that a global symbol (i.e., a 'function' or variable) is defined in
 multiple locations, such as in an executable and in a shared library, or in
 'multiple' shared libraries. How is a reference to that symbol resolved?
@@ -75343,7 +76291,7 @@ The following semantics apply:
   A definition of a global symbol in the 'main' program 'overrides' a
   definition in a library.
 
-<resolve-order>
+<lib-shared-resolve-order> lib-static-link-order
   If a global symbol is defined in 'multiple' libraries, then a reference to
   that symbol is bound to the 'first' definition found by scanning libraries
   in the left-to-right 'order' in which they were listed on the static 'link'
@@ -75355,7 +76303,7 @@ relatively straightforward, they can cause some problems. The most significant
 problem is that these semantics conflict with the model of a shared library as
 implementing a self-contained subsystem. 
 
-By default, a shared library can 'not' guarantee that a reference to one of its
+By default, a shared library `can not guarantee` that a reference to one of its
 own global symbols will actually be bound to the library's definition of that
 symbol.
 
@@ -75381,6 +76329,34 @@ a shared library should be preferentially bound to definitions (if they exist)
   within that library. Note that, regardless of this option, calling xyz()
   from the main program would always invoke the version of xyz() defined in
   the main program.
+
+
+<ex>
+03/07/2014. At samsung. 
+When moves application which was a process and uses static link to the shared
+library application to be used by other processes. The codes which works well
+before starts to fail since crash happens when try to create a thread using
+custom thread library. 
+
+Problem of linking? Problem of the thread library when used in shared library
+application? Somehow linker picks up the wrong libaray since a debugger shows
+odd address when thread creation call is made and causes a crash? 
+
+Tried various directions and spent many days. Eventually, found out that
+PCThread::Create() is a problem and works fine when changes parameter orders.
+
+The problem was that the process loads a lot of shared library and one of
+those has the same PCThread class in it but different signature. When our
+library make a call, it picks it up from the other shared library in which has
+different signature so crashes. Sovled when wraps PCThread class with a
+namespace.
+
+note: So this was a problem of symbols between shared libraries.
+
+The typical example is to use third party library and name conflict happens
+when other parties develops a libaray separately. In static link, conflict
+happens in link stage. In dynamic loading, this happens at run time and called
+dynamic binding. So more difficult to find out.
 
 
 ={============================================================================
@@ -75681,9 +76657,9 @@ global symbols in the main program.
 
 
 ={============================================================================
-*kt_linux_core_412* linux-lib-search-ld-conf ld-so-cache
-
-ldconfig
+*kt_linux_core_412* linux-lib-search 
+  
+{ldconfig} ld-conf ld-so-cache
 
 The ldconfig(8) program addresses two potential problems with shared libraries:
 
@@ -75696,11 +76672,13 @@ The ldconfig(8) program addresses two potential problems with shared libraries:
 
 The ldconfig program solves these problems by performing two tasks:
 
-1. It searches a standard set of directories and creates or `updates a cache
-file`, `/etc/ld.so.cache`, to contain a list of the (latest minor versions of
-    each of the) major library versions in all of these directories. The
-dynamic linker in turn uses this cache file when resolving library names at
-run time. 
+1. It searches a standard set of directories and 
+
+creates or `updates a cache file`, `/etc/ld.so.cache`, text file
+
+to contain a list of the (latest minor versions of each of the) major library
+  versions in all of these directories. The dynamic linker in turn uses this
+  cache file when resolving library names at run time. 
   
 To build the cache, ldconfig searches the directories specified in the file
 `/etc/ld.so.conf` and then /lib and /usr/lib. The /etc/ld.so.conf file
@@ -75739,24 +76717,21 @@ should generate /etc/ld.so.cache with every build as the list of the shared
 libraries may differ.
 
 
-={============================================================================
-*kt_linux_core_402* linux-lib-search lib-rpath ld-library-path
+{ld-library-path}
 
 41.10 Specifying Library Search Directories in an Object File
 
 standard library directories (/lib, /usr/lib, or one of the directories listed
 in /etc/ld.so.conf).
 
-{ld-library-path}
 Some of these rules specify a set of `standard directories` in which shared
 libraries normally reside. To inform the dynamic linker that a shared library
 resides in a nonstandard directory
 
 If LD_LIBRARY_PATH is defined, then the dynamic linker searches for the shared
-library in the directories it lists `before` looking in the standard library
-directories.
+library in the directories `before looking in the standard library directories.`
 
-note: 
+*sh-env-export* 
 Creates an environment variable definition 'within' the process executing
 prog. Since if you don't export the changes to an environment variable, they
 won't be inherited by the child processes. The loader and our test program
@@ -75807,7 +76782,7 @@ additionally employ the enablenewdtags (enable new dynamic tags) linker
 option.
 
 
-note: From ld linker docs:
+// from ld linker docs:
 
 2. Any directories specified by -rpath options. The difference between -rpath
 and -rpath-link is that directories specified by -rpath options are included in
@@ -75981,7 +76956,7 @@ $ echo "/lib" | gawk -f gen-trusted-dirs.awk
 
 #define SYSTEM_DIRS_MAX_LEN     5
 
-<ex> *ld-search-order*
+<ex> *lib-shared-ld-search-order*
 *** KT: force LD_DEBUG=libs ***
          1:      KT: system_dirs: /lib/
          1:   find library=libdl.so.2 [0]; searching
@@ -76004,7 +76979,7 @@ file /lib/libc_nonshared.a /home/nds-uk/kyoupark/spk-out-use-own-brcm-gdb/projec
 slink /lib/libc.so.6 libc-2.13.so 777 0 0
 slink /init ../bin/sh 777 0 1
 
- 0x00000001 (NEEDED)                     Shared library: [libdl.so.2]
+  0x00000001 (NEEDED)                     Shared library: [libdl.so.2]
   0x00000001 (NEEDED)                     Shared library: [libc.so.6]
   0x00000001 (NEEDED)                     Shared library: [ld.so.1]
 
@@ -76241,9 +77216,9 @@ readelf -S libgcc_s.so.1 | egrep -A1 '(\[Nr\]|dynstr)'
 
 
 ={============================================================================
-*kt_linux_core_406* lib-shared-preload 
+*kt_linux_core_406* linux-lib-shared-preload 
 
-{ld-preload}
+{lib-shared-preload}
 For testing purposes, it can sometimes be useful to 'selectively' override
 functions and other symbols that would normally be found by the dynamic linker
 using the search rules. 
@@ -76266,16 +77241,16 @@ Called mod1-x1 ALT      // x1 in libalt.so and changed this only, selectively.
 Called mod2-x2 DEMO
 
 <process-and-system-wide>
-The LD_PRELOAD environment variable controls preloading on a <per-process>
+The LD_PRELOAD environment variable controls preloading on a `per-process`
 basis. Alternatively, the file `/etc/ld.so.preload`, which lists libraries
-separated by white space, can be used to perform the same task on a system-wide
-basis. Libraries specified by LD_PRELOAD are loaded before those specified in
-/etc/ld.so.preload. 
+separated by white space, can be used to perform the same task on a
+system-wide basis. Libraries specified by LD_PRELOAD are loaded before those
+specified in /etc/ld.so.preload. 
 
 <security>
 For security reasons, set-user-ID and set-group-ID programs ignore LD_PRELOAD.
 
-<tip>
+<lib-shared-check-loading>
 You can use the following command to test if the driver (the driver itself just
         dlopen() this lib) is happy to load:
 
@@ -76288,6 +77263,9 @@ if libraries are loaded fine, run that with simple utility.
 note:
 have to use absolute path.
 
+https://github.com/google/sanitizers/issues/796
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=64234
+
 
 ={============================================================================
 *kt_linux_core_410* lib-shared: check libraries that process uses
@@ -76297,12 +77275,6 @@ cat /proc/NNNN/maps | awk '{print $6}' | grep '\.so' | sort | uniq
 or
 
 can use ldd.
-
-
-={============================================================================
-*kt_linux_core_410* lib-shared: check libraries loading
-
-LD_PRELOAD=/libyouviewrcushim.so /bin/true
 
 
 ={============================================================================
