@@ -176,11 +176,11 @@
 *kt_linux_tool_100* tool-efence-fortify
 *kt_linux_tool_100* tool-asan tool-efence cpp-memory-issue
 *kt_linux_tool_100* tool-asan-flag asan-code
-*kt_linux_tool_100* tool-asan-use
+*kt_linux_tool_100* tool-asan-usecase
 *kt_linux_tool_100* tool-asan tool-kasan
 *kt_linux_tool_000* tool-asan-llvm
 *kt_linux_tool_000* tool-asan-gcc
-*kt_linux_tool_000* tool-asan-gcc-vstb
+*kt_linux_tool_000* tool-asan-vstb
 *kt_linux_tool_100* tool-efence-others
 *kt_linux_tool_100* tool-valgrind
 *kt_linux_tool_100* tool-valgrind-memcheck
@@ -268,9 +268,9 @@
 
 #{ gdb
 *kt_linux_gdb_000* gdb-how-works
+*kt_linux_gdb_300* gdb-debugging-info
 *kt_linux_gdb_001* gdb-error gdb-target
 |kt_linux_gdb_300| gdb-term and links
-*kt_linux_gdb_300* gdb-check-built-with-debug
 *kt_linux_tool_300* gdb-sample session
 *kt_linux_tool_300* gdb-start
 *kt_linux_gdb_000* gdb-start-options gdb-start-order
@@ -15251,7 +15251,6 @@ AddressSanitizer is a tool that detects `memory corruption bugs` such as
 buffer overflows or accesses to a dangling pointer (use-after-free). 
 
 
-From doc:
 Applications are implemented in `unmanaged` programming languages (C and C++)
 which do not provide any protection against invalid memory accesses. Such
 accesses often result in memory corruption and eventually cause program
@@ -15328,7 +15327,7 @@ inline byte *MemToShadow(byte *address) {
 }
 
 The shadow memory region is invisible to the program and occupies 1/8 of
-address space . It?s initialized in the following way:
+address space. It's initialized in the following way:
 
   bits that correspond to static variables are marked as unpoisoned
 
@@ -15414,7 +15413,7 @@ They also instrument builtin compiler intrinsic e.g. __builtin_memcpy, etc.
 
 
 ={============================================================================
-*kt_linux_tool_100* tool-asan-flag
+*kt_linux_tool_100* tool-asan-flag tool-asan-code
 
 https://github.com/google/sanitizers/wiki/AddressSanitizerFlags
 
@@ -15531,14 +15530,290 @@ static void AsanInitInternal() {
 }
 
 
+{asan-code-asm}
+
+     1  #include <stdio.h>
+     2  #include <stdlib.h>
+     3
+     4  //      gcc -fsanitize=address testmain.c -o out_asn
+     5  int main(int argc, char **argv)
+     6  {
+     7      printf("====> \n" );
+     8      printf("====> this is uaf(use after free)..\n" );
+     9      printf("====> \n" );
+    10      int *x = malloc(10*sizeof(int));
+    11      free(x);
+    12      x[5] = 10;
+    13      return;
+    14  }
+    15
+
+// no-sanitized
+
+000005f0 <main>:
+main():
+/home/kyoupark/asan/gcc/uaf.c:6
+ 5f0:	8d 4c 24 04          	lea    ecx,[esp+0x4]
+ 5f4:	83 e4 f0             	and    esp,0xfffffff0
+ 5f7:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
+ 5fa:	55                   	push   ebp
+ 5fb:	89 e5                	mov    ebp,esp
+ 5fd:	53                   	push   ebx
+ 5fe:	51                   	push   ecx
+ 5ff:	83 ec 10             	sub    esp,0x10
+ 602:	e8 b9 fe ff ff       	call   4c0 <__x86.get_pc_thunk.bx>
+ 607:	81 c3 f9 19 00 00    	add    ebx,0x19f9
+/home/kyoupark/asan/gcc/uaf.c:7
+ 60d:	83 ec 0c             	sub    esp,0xc
+ 610:	8d 83 00 e7 ff ff    	lea    eax,[ebx-0x1900]
+ 616:	50                   	push   eax
+ 617:	e8 34 fe ff ff       	call   450 <puts@plt>
+ 61c:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:8
+ 61f:	83 ec 0c             	sub    esp,0xc
+ 622:	8d 83 08 e7 ff ff    	lea    eax,[ebx-0x18f8]
+ 628:	50                   	push   eax
+ 629:	e8 22 fe ff ff       	call   450 <puts@plt>
+ 62e:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:9
+ 631:	83 ec 0c             	sub    esp,0xc
+ 634:	8d 83 00 e7 ff ff    	lea    eax,[ebx-0x1900]
+ 63a:	50                   	push   eax
+ 63b:	e8 10 fe ff ff       	call   450 <puts@plt>
+ 640:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:10
+ 643:	83 ec 0c             	sub    esp,0xc
+ 646:	6a 28                	push   0x28
+ 648:	e8 f3 fd ff ff       	call   440 <malloc@plt>
+ 64d:	83 c4 10             	add    esp,0x10
+ 650:	89 45 f4             	mov    DWORD PTR [ebp-0xc],eax
+/home/kyoupark/asan/gcc/uaf.c:11
+ 653:	83 ec 0c             	sub    esp,0xc
+ 656:	ff 75 f4             	push   DWORD PTR [ebp-0xc]
+ 659:	e8 d2 fd ff ff       	call   430 <free@plt>
+ 65e:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:12
+ 661:	8b 45 f4             	mov    eax,DWORD PTR [ebp-0xc]
+ 664:	83 c0 14             	add    eax,0x14
+ 667:	c7 00 0a 00 00 00    	mov    DWORD PTR [eax],0xa
+/home/kyoupark/asan/gcc/uaf.c:13
+ 66d:	90                   	nop
+ 66e:	90                   	nop
+/home/kyoupark/asan/gcc/uaf.c:14
+ 66f:	8d 65 f8             	lea    esp,[ebp-0x8]
+ 672:	59                   	pop    ecx
+ 673:	5b                   	pop    ebx
+ 674:	5d                   	pop    ebp
+ 675:	8d 61 fc             	lea    esp,[ecx-0x4]
+ 678:	c3                   	ret    
+ 679:	66 90                	xchg   ax,ax
+ 67b:	66 90                	xchg   ax,ax
+ 67d:	66 90                	xchg   ax,ax
+ 67f:	90                   	nop
+
+
+// sanitized
+
+00000820 <main>:
+main():
+/home/kyoupark/asan/gcc/uaf.c:6
+ 820:	8d 4c 24 04          	lea    ecx,[esp+0x4]
+ 824:	83 e4 f0             	and    esp,0xfffffff0
+ 827:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
+ 82a:	55                   	push   ebp
+ 82b:	89 e5                	mov    ebp,esp
+ 82d:	57                   	push   edi
+ 82e:	56                   	push   esi
+ 82f:	53                   	push   ebx
+ 830:	51                   	push   ecx
+ 831:	83 ec 28             	sub    esp,0x28
+ 834:	e8 b7 fe ff ff       	call   6f0 <__x86.get_pc_thunk.bx>
+ 839:	81 c3 c7 17 00 00    	add    ebx,0x17c7
+/home/kyoupark/asan/gcc/uaf.c:7
+ 83f:	83 ec 0c             	sub    esp,0xc
+ 842:	8d 83 00 ea ff ff    	lea    eax,[ebx-0x1600]
+ 848:	50                   	push   eax
+ 849:	e8 42 fe ff ff       	call   690 <puts@plt>
+ 84e:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:8
+ 851:	83 ec 0c             	sub    esp,0xc
+ 854:	8d 83 40 ea ff ff    	lea    eax,[ebx-0x15c0]
+ 85a:	50                   	push   eax
+ 85b:	e8 30 fe ff ff       	call   690 <puts@plt>
+ 860:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:9
+ 863:	83 ec 0c             	sub    esp,0xc
+ 866:	8d 83 00 ea ff ff    	lea    eax,[ebx-0x1600]
+ 86c:	50                   	push   eax
+ 86d:	e8 1e fe ff ff       	call   690 <puts@plt>
+ 872:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:10
+ 875:	83 ec 0c             	sub    esp,0xc
+ 878:	6a 28                	push   0x28
+ 87a:	e8 f1 fd ff ff       	call   670 <malloc@plt>
+ 87f:	83 c4 10             	add    esp,0x10
+ 882:	89 45 e4             	mov    DWORD PTR [ebp-0x1c],eax
+/home/kyoupark/asan/gcc/uaf.c:11
+ 885:	83 ec 0c             	sub    esp,0xc
+ 888:	ff 75 e4             	push   DWORD PTR [ebp-0x1c]
+ 88b:	e8 a0 fd ff ff       	call   630 <free@plt>
+ 890:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:12
+ 893:	8b 45 e4             	mov    eax,DWORD PTR [ebp-0x1c]
+ 896:	8d 78 14             	lea    edi,[eax+0x14]
+ 899:	89 f8                	mov    eax,edi
+ 89b:	89 c2                	mov    edx,eax
+ 89d:	c1 ea 03             	shr    edx,0x3
+ 8a0:	81 c2 00 00 00 20    	add    edx,0x20000000
+ 8a6:	0f b6 12             	movzx  edx,BYTE PTR [edx]
+ 8a9:	84 d2                	test   dl,dl
+ 8ab:	0f 95 45 d7          	setne  BYTE PTR [ebp-0x29]
+ 8af:	89 c6                	mov    esi,eax
+ 8b1:	83 e6 07             	and    esi,0x7
+ 8b4:	8d 4e 03             	lea    ecx,[esi+0x3]
+ 8b7:	38 d1                	cmp    cl,dl
+ 8b9:	0f 9d c2             	setge  dl
+ 8bc:	22 55 d7             	and    dl,BYTE PTR [ebp-0x29]
+ 8bf:	84 d2                	test   dl,dl
+ 8c1:	74 09                	je     8cc <main+0xac>
+ 8c3:	83 ec 0c             	sub    esp,0xc
+ 8c6:	50                   	push   eax
+ 8c7:	e8 44 fd ff ff       	call   610 <__asan_report_store4@plt>
+ 8cc:	c7 07 0a 00 00 00    	mov    DWORD PTR [edi],0xa
+/home/kyoupark/asan/gcc/uaf.c:13
+ 8d2:	90                   	nop
+ 8d3:	90                   	nop
+/home/kyoupark/asan/gcc/uaf.c:14
+ 8d4:	8d 65 f0             	lea    esp,[ebp-0x10]
+ 8d7:	59                   	pop    ecx
+ 8d8:	5b                   	pop    ebx
+ 8d9:	5e                   	pop    esi
+ 8da:	5f                   	pop    edi
+ 8db:	5d                   	pop    ebp
+ 8dc:	8d 61 fc             	lea    esp,[ecx-0x4]
+ 8df:	c3                   	ret    
+
+
+// static sanitized
+
+000e5d78 <main>:
+main():
+/home/kyoupark/asan/gcc/uaf.c:6
+   e5d78:	8d 4c 24 04          	lea    ecx,[esp+0x4]
+   e5d7c:	83 e4 f0             	and    esp,0xfffffff0
+   e5d7f:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
+   e5d82:	55                   	push   ebp
+   e5d83:	89 e5                	mov    ebp,esp
+   e5d85:	57                   	push   edi
+   e5d86:	56                   	push   esi
+   e5d87:	53                   	push   ebx
+   e5d88:	51                   	push   ecx
+   e5d89:	83 ec 28             	sub    esp,0x28
+   e5d8c:	e8 2f 3f f2 ff       	call   9cc0 <__x86.get_pc_thunk.bx>
+   e5d91:	81 c3 6f 12 04 00    	add    ebx,0x4126f
+/home/kyoupark/asan/gcc/uaf.c:7
+   e5d97:	83 ec 0c             	sub    esp,0xc
+   e5d9a:	8d 83 60 16 fd ff    	lea    eax,[ebx-0x2e9a0]
+   e5da0:	50                   	push   eax
+   e5da1:	e8 2a 3c f2 ff       	call   99d0 <puts@plt>
+   e5da6:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:8
+   e5da9:	83 ec 0c             	sub    esp,0xc
+   e5dac:	8d 83 a0 16 fd ff    	lea    eax,[ebx-0x2e960]
+   e5db2:	50                   	push   eax
+   e5db3:	e8 18 3c f2 ff       	call   99d0 <puts@plt>
+   e5db8:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:9
+   e5dbb:	83 ec 0c             	sub    esp,0xc
+   e5dbe:	8d 83 60 16 fd ff    	lea    eax,[ebx-0x2e9a0]
+   e5dc4:	50                   	push   eax
+   e5dc5:	e8 06 3c f2 ff       	call   99d0 <puts@plt>
+   e5dca:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:10
+   e5dcd:	83 ec 0c             	sub    esp,0xc
+   e5dd0:	6a 28                	push   0x28
+   e5dd2:	e8 f9 a6 fc ff       	call   b04d0 <__interceptor_malloc>
+   e5dd7:	83 c4 10             	add    esp,0x10
+   e5dda:	89 45 e4             	mov    DWORD PTR [ebp-0x1c],eax
+/home/kyoupark/asan/gcc/uaf.c:11
+   e5ddd:	83 ec 0c             	sub    esp,0xc
+   e5de0:	ff 75 e4             	push   DWORD PTR [ebp-0x1c]
+   e5de3:	e8 a8 a3 fc ff       	call   b0190 <__interceptor_free>
+   e5de8:	83 c4 10             	add    esp,0x10
+/home/kyoupark/asan/gcc/uaf.c:12
+   e5deb:	8b 45 e4             	mov    eax,DWORD PTR [ebp-0x1c]
+   e5dee:	8d 78 14             	lea    edi,[eax+0x14]
+   e5df1:	89 f8                	mov    eax,edi
+   e5df3:	89 c2                	mov    edx,eax
+   e5df5:	c1 ea 03             	shr    edx,0x3
+   e5df8:	81 c2 00 00 00 20    	add    edx,0x20000000
+   e5dfe:	0f b6 12             	movzx  edx,BYTE PTR [edx]
+   e5e01:	84 d2                	test   dl,dl
+   e5e03:	0f 95 45 d7          	setne  BYTE PTR [ebp-0x29]
+   e5e07:	89 c6                	mov    esi,eax
+   e5e09:	83 e6 07             	and    esi,0x7
+   e5e0c:	8d 4e 03             	lea    ecx,[esi+0x3]
+   e5e0f:	38 d1                	cmp    cl,dl
+   e5e11:	0f 9d c2             	setge  dl
+   e5e14:	22 55 d7             	and    dl,BYTE PTR [ebp-0x29]
+   e5e17:	84 d2                	test   dl,dl
+   e5e19:	74 09                	je     e5e24 <main+0xac>
+   e5e1b:	83 ec 0c             	sub    esp,0xc
+   e5e1e:	50                   	push   eax
+   e5e1f:	e8 0c 4e fd ff       	call   bac30 <__asan_report_store4>
+   e5e24:	c7 07 0a 00 00 00    	mov    DWORD PTR [edi],0xa
+/home/kyoupark/asan/gcc/uaf.c:13
+   e5e2a:	90                   	nop
+   e5e2b:	90                   	nop
+/home/kyoupark/asan/gcc/uaf.c:14
+   e5e2c:	8d 65 f0             	lea    esp,[ebp-0x10]
+   e5e2f:	59                   	pop    ecx
+   e5e30:	5b                   	pop    ebx
+   e5e31:	5e                   	pop    esi
+   e5e32:	5f                   	pop    edi
+   e5e33:	5d                   	pop    ebp
+   e5e34:	8d 61 fc             	lea    esp,[ecx-0x4]
+   e5e37:	c3                   	ret    
+
+
 ={============================================================================
-*kt_linux_tool_100* tool-asan-use
+*kt_linux_tool_100* tool-asan-usecase
 
-{tool-asan-static}
-/bin/i686-nptl-linux-gnu-gcc -static-libasan -fsanitize=address uaf.c
+{tool-asan-build}
+i686-nptl-linux-gnu-gcc -static-libasan -fsanitize=address uaf.c -o static_asan
+i686-nptl-linux-gnu-gcc -fsanitize=address uaf.c -o dynamic_asan
+i686-nptl-linux-gnu-gcc uaf.c -o no_asan
+
+*asan-optimisation* uaf-write when use optimization. no asan for all optimization.
+
+$ i686-nptl-linux-gnu-gcc -O2 -fsanitize=address 
+$ i686-nptl-linux-gnu-gcc -Os -fsanitize=address
+$ i686-nptl-linux-gnu-gcc -O -fsanitize=address
+
+*TODO* clang examples use optimization but still see asan running. is it GCC
+version limitation?
+
+find the same on debian PC server:
+
+$ gcc -v
+gcc version 6.3.0 20170516 (Debian 6.3.0-18+deb9u1)
+
+$ uname -a
+Linux kt-office-debian 4.9.0-7-686-pae #1 SMP Debian 4.9.110-3+deb9u2 (2018-08-13) i686 GNU/Linux
 
 
-{asn-uaf} `use after free` *cxx-memory-issue*
+{tool-asan-run}
+
+* unsanitized binary meaning not use -fsanitize
+  use LD_PRELOAD=libasan.so
+
+* sanitized and dynamic
+  0x00000001 (NEEDED)                     Shared library: [libasan.so.3]
+
+* sanitized and static
+
+
+{asn-usecase-uaf} `use after free` *cxx-memory-issue*
 
 from ansic, p167, another uaf
 
@@ -15758,7 +16033,7 @@ $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-addr2line out_uaf_no_g_n
 ??:0
 /home/kyoupark/asn/uaf.c:12
 
-// objdump
+// *tool-objdump*
 $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-objdump -d -Mintel out_uaf_no_g_no_opt > out_uaf_dump_no_g_no_opt
 
  80486b5:	e8 06 fe ff ff       	call   80484c0 <__asan_report_store4@plt>
@@ -15767,7 +16042,8 @@ $ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-objdump -d -Mintel out_u
 
 <3> uaf-write, `use -g and no -O`
 
-$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g -fsanitize=address uaf.c -o out_uaf_no_g_no_opt
+$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g \
+    -fsanitize=address uaf.c -o out_uaf_no_g_no_opt
 
 [root@vSTB flash0]# ./out_uaf_yo_g_no_opt
 ====>
@@ -15783,48 +16059,7 @@ WRITE of size 4 at 0xb5b00fe4 thread T0
 0xb5b00fe4 is located 20 bytes inside of 40-byte region [0xb5b00fd0,0xb5b00ff8)
 
 
-<4> *asan-optimisation* uaf-write when use optimization. no asan for all optimization.
-
-$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -O2 -fsanitize=address uaf.c -o out_uaf_no_g_yo_opt_2
-$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -Os -fsanitize=address uaf.c -o out_uaf_no_g_yo_opt_2
-$ ~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -O -fsanitize=address uaf.c -o out_uaf_no_g_yo_opt_2
-
-[root@vSTB flash0]# ./out_uaf_no_g_yo_opt_2
-====>
-====> this is uaf(use after free)..
-====>
-[root@vSTB flash0]#
-
-*TODO* clang examples use optimization but still see asan running. is it GCC
-version limitation?
-
-*asan-check-it-is-in*
-How to check whether output has asan? when do objdump, code which has asan
-will have malloc is replaced and report routine:
-
-Disassembly of section .plt:
-
-080484b0 <malloc@plt>:
- 80484b0:	ff 25 10 a0 04 08    	jmp    *0x804a010
- 80484b6:	68 08 00 00 00       	push   $0x8
- 80484bb:	e9 d0 ff ff ff       	jmp    8048490 <.plt>
-
-Disassembly of section .text:
-
- 80486b3:	e8 f8 fd ff ff       	call   80484b0 <malloc@plt>
- 80486b8:	83 c4 10             	add    $0x10,%esp
- 80486bb:	89 45 e4             	mov    %eax,-0x1c(%ebp)
- 80486be:	83 ec 0c             	sub    $0xc,%esp
- 80486c1:	ff 75 e4             	pushl  -0x1c(%ebp)
- 80486c4:	e8 47 fe ff ff       	call   8048510 <free@plt>
- 80486c9:	83 c4 10             	add    $0x10,%esp
- 80486cc:	8b 45 e4             	mov    -0x1c(%ebp),%eax
-
- 8048702:	e8 c9 fd ff ff       	call   80484d0 <__asan_report_store4@plt>
- 8048707:	c7 01 0a 00 00 00    	movl   $0xa,(%ecx)
-
-
-{asn-overflow} `heap buffer overflow, out of index` *cxx-memory-issue*
+{asn-usecase-overflow} `heap buffer overflow, out of index` *cxx-memory-issue*
 
 <ex>
 The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
@@ -16041,59 +16276,6 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==138== ABORTING
 
 
-<asan-vstb>
-when use LD_PRELOAD=libasan.so and binary which not compiled for asan.
-
-==1226==Parsed ASAN_OPTIONS: verbosity=2:halt_on_error=0:debug=1
-==1226==AddressSanitizer: failed to intercept 'read'
-==1226==AddressSanitizer: failed to intercept 'write'
-==1226==AddressSanitizer: failed to intercept 'strnlen'
-==1226==AddressSanitizer: libc interceptors initialized
-|| `[0x40000000, 0xffffffff]` || HighMem    ||
-|| `[0x28000000, 0x3fffffff]` || HighShadow ||
-|| `[0x24000000, 0x27ffffff]` || ShadowGap  ||
-|| `[0x20000000, 0x23ffffff]` || LowShadow  ||
-|| `[0x00000000, 0x1fffffff]` || LowMem     ||
-MemToShadow(shadow): 0x24000000 0x247fffff 0x25000000 0x27ffffff
-red_zone=16
-quarantine_size=64M
-malloc_context_size=30
-SHADOW_SCALE: 3
-SHADOW_GRANULARITY: 8
-SHADOW_OFFSET: 20000000
-==1226==Installed the sigaction for signal 11
-==1226==SetCurrentThread: 0xb71e9000 for thread 0xb6b091c0
-==1226==T0: stack [0xbf3de000,0xbfbde000) size 0x800000; local=0xbfbdbcdc
-==1226==AddressSanitizer Init done
-ASAN:SIGSEGV
-=================================================================
-==1226==ERROR: AddressSanitizer: SEGV on unknown address 0xfffffb40 (pc 0xb7176309 sp 0xbfbdadf0 bp 0xbfbdae78 T0)
-NDS: ^0000000070.457736 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMCONFIG         : SYSTEMCONFIG:Sep 11 2018:UNKNOWN:RELEASE_DBG
-NDS: ^0000000070.457756 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMSTRING         : SYSTEMSTRING:Sep 11 2018:UNKNOWN:RELEASE_DBG
-NDS: ^0000000070.457768 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMLANG           : SYSTEMLANG:Sep 11 2018:UNKNOWN:RELEASE_DBG
-NDS: ^0000000070.457778 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMTIME           : SYSTEMTIME:Sep 11 2018:UNKNOWN:RELEASE_DBG
-NDS: ^0000000070.457788 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > SYSTEMOBJECT         : SYSTEMOBJECT:Sep 11 2018:UNKNOWN:RELEASE_DBG
-NDS: ^0000000070.457802 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > MM                   : MODEM:Sep 11 2018:4.0.27
-NDS: ^0000000070.457815 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00218 > PPPD                 : PPPD:Sep 11 2018:3.0.12
-NDS: ^0000000070.458169 !WARN  -SCD_Process  < p:000004bb t:b704aec0 T:no name M:scd_process_main.c F:display_components_version L:00251 > -----------------------------------------------------------------------
-    #0 0xb7176308 in __pthread_create_2_1 (/lib/libpthread.so.0+0x7308)
-    #1 0xb71766ea in __pthread_create_2_0 (/lib/libpthread.so.0+0x76ea)
-    #2 0xb724fdd3 in pthread_create (/flash0/libasan.so+0x61dd3)
-    #3 0x8d1123a in SYSTEMUTIL_THR_Create (/NDS/bin/bins/MW_Process+0x8d1123a)
-    #4 0x8566c4a in DIAG_IPC_CLIENT_Open (/NDS/bin/bins/MW_Process+0x8566c4a)
-    #5 0x856adc7 in DIAGCTL_LOG_OpenCommunicationChannel (/NDS/bin/bins/MW_Process+0x856adc7)
-    #6 0x85699da in DIAGCTL_LOG_Init (/NDS/bin/bins/MW_Process+0x85699da)
-    #7 0x8562c44 in __DIAG_LOG_Init (/NDS/bin/bins/MW_Process+0x8562c44)
-    #8 0x8cc93aa in SYSINIT_ClientInit (/NDS/bin/bins/MW_Process+0x8cc93aa)
-    #9 0x8202dde in main (/NDS/bin/bins/MW_Process+0x8202dde)
-    #10 0xb6c5b31f in __libc_start_main ../csu/libc-start.c:295
-    #11 0x8202f93 (/NDS/bin/bins/MW_Process+0x8202f93)
-
-AddressSanitizer can not provide additional info.
-SUMMARY: AddressSanitizer: SEGV ??:0 __pthread_create_2_1
-==1226==ABORTING
-
-
 <ex>
 The issue is that DIAG_CMN_ALIGN() makes 6 bytes to 8 bytes by assuming that
 it is aligned and which is not.
@@ -16230,42 +16412,6 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
   Contiguous container OOB:fc
   ASan internal:           fe
 ==1247==ABORTING
-
-
-<ex> asan-vstb
-when get around diag issue but see the issue use unstripped mw binary
-
-=================================================================
-==1221==ERROR: AddressSanitizer: `heap-use-after-free` on address 0xb46021d8 at pc 0x8d41268 bp 0xb38bd2c8 sp 0xb38bd2b0
-READ of size 4 at 0xb46021d8 thread T16777215
-==1221==WARNING: readlink("/proc/self/exe") failed with errno 2, some stack frames may not be symbolized
-    #0 0x8d41267 (/proc/self/exe+0x8d41267)
-    #1 0x8ca5408 (/proc/self/exe+0x8ca5408)
-    #2 0x8ca89f0 (/proc/self/exe+0x8ca89f0)
-    #3 0x9cc3f0c (/proc/self/exe+0x9cc3f0c)
-    #4 0xb770e5bc (/lib/libpthread.so.0+0x65bc)
-    #5 0xb6dbe8e5 (/lib/libc.so.6+0xf68e5)
-
-0xb46021d8 is located 8 bytes inside of 44-byte region [0xb46021d0,0xb46021fc)
-==1221==AddressSanitizer CHECK failed: /home/pete/vstb_toolchain/32/.build/src/gcc-4.9.4/
-  libsanitizer/asan/asan_allocator2.cc:234 "((id)) != (0)" (0x0, 0x0)
-    #0 0xb6f1959f (/flash0/libasan.so.1+0x7259f)
-    #1 0xb6f1f5d1 (/flash0/libasan.so.1+0x785d1)
-    #2 0xb6ebbfe1 (/flash0/libasan.so.1+0x14fe1)
-    #3 0xb6ebc0b3 (/flash0/libasan.so.1+0x150b3)
-    #4 0xb6f17346 (/flash0/libasan.so.1+0x70346)
-    #5 0xb6f17641 (/flash0/libasan.so.1+0x70641)
-    #6 0xb6f18d02 (/flash0/libasan.so.1+0x71d02)
-    #7 0xb6f1a105 (/flash0/libasan.so.1+0x73105)
-    #8 0x8d41267 (/proc/self/exe+0x8d41267)
-    #9 0x8ca5408 (/proc/self/exe+0x8ca5408)
-    #10 0x8ca89f0 (/proc/self/exe+0x8ca89f0)
-    #11 0x9cc3f0c (/proc/self/exe+0x9cc3f0c)
-    #12 0xb770e5bc (/lib/libpthread.so.0+0x65bc)
-    #13 0xb6dbe8e5 (/lib/libc.so.6+0xf68e5)
-
-~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-addr2line -e MW_Process 0x8d41268
-/home/kyoupark/STB_SW_o/CMS_MEDIA_SERVICES/BEM/src/server/bem_link_discovery.c:957
 
 
 <ex> *cpp-memory-issue* *cpp-memcpy-issue-issue*
@@ -17933,12 +18079,13 @@ https://gcc.gnu.org/ml/gcc-patches/2013-05/msg00338.html
 
 
 ={============================================================================
-*kt_linux_tool_000* tool-asan-gcc-vstb
+*kt_linux_tool_000* tool-asan-vstb
 
 <old-vstb>
-x86_64 (32bits)
+32bits
 
 CC=/home/kyoupark/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc
+*i686-nptl-linux-gnu-gcc*
 
 kyoupark@st-castor-03:~/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu$ ll
 total 1816
@@ -17953,27 +18100,10 @@ drwxr-xr-x 2 kyoupark ccisco    4096 Nov 13  2017 bin/
 drwxr-xr-x 6 kyoupark ccisco    4096 Nov 13  2017 i686-nptl-linux-gnu/
 -rw-r--r-- 1 kyoupark ccisco   10949 Nov 13  2017 crosstool-ng.config
 
-more README
-
-Mr Fusion Toolchain
--------------------
-
-This toolchain has been automatically generated by Crosstool-ng v1.23.0
-(http://crosstool-ng.org/), and the configuration is available as
-crosstool-ng.config.
-
-// i686-nptl-linux-gnu-gcc (crosstool-NG 1.21.0) 4.9.1
-// Copyright (C) 2014 Free Software Foundation, Inc.
-// This is free software; see the source for copying conditions.  There is NO
-// warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-// 
-// GNU ld (crosstool-NG 1.21.0) 2.25
-
-
 <build-mw-with-asan>
 
 // changed to make
-
+cd NDS_INTEL_X86_LNUX_MRFUSION_01/
 kyoupark@st-castor-03:~/STB_SW_o/NDS_INTEL_X86_LNUX_MRFUSION_01$ git diff BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
 diff --git a/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk b/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
 index 07c8118..4553ac0 100755
@@ -18002,9 +18132,41 @@ index 07c8118..4553ac0 100755
 -LOCAL_PLATFORM_TOOLSET_LIBRARIES := -lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib -lgio -lgobject -ldbus -lz
 +LOCAL_PLATFORM_TOOLSET_LIBRARIES := -lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib -lgio -lgobject -ldbus -lz -lasan
 
+// to build static
++LOCAL_PLATFORM_TOOLSET_LIBRARIES := -lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib -lgio -lgobject -ldbus -lz
+
++LOCAL_PLATFORM_CC_FLAGS += -static-libasan -fsanitize=address
++LOCAL_PLATFORM_CPP_FLAGS += -static-libasan -fsanitize=address
+
++    $(LOCAL_PLATFORM_LD) -Xlinker -Map -Xlinker $@.map -Xlinker --start-group `echo $^ | sed -e 's/[^ ]*libvg[^ ]*//g; s/[^ ]*libdsam[^ ]*//g'` $(COMPILER_ROOT)/$(COMPILER_PREFIX)/lib/libasan.a $(LOCAL_PLATFORM_PROCESS_LD_FLAGS) $(PROCESS_PROCESS_OPTIONS_ADD) -Xlinker --end-group -o $@
+
+--- a/CMS_MEDIA_SERVICES/Media_Streamer/generic/src/ms_utils.cpp
++++ b/CMS_MEDIA_SERVICES/Media_Streamer/generic/src/ms_utils.cpp
+@@ -104,7 +104,8 @@ extern "C"
+        MS_ASSERT_ZERO("Pure virtual function call");
+     }
+
+-#if !defined(STBS)
++// #if !defined(STBS)
++#if 0
+     void operator delete(void *)
+     {
+        XDEBUG_DEFINE_FUNC_INFO("operator delete");
+
+./make.sh --debug_level release_dbg --os_debug_level release --project picasso --platform vstb --output $PWD --baseline ENG_vSTB --epg_bld_type release-trials
+./release.sh --platform vstb
+
 
 <new-vstb>
-https://ftp.gnu.org/gnu/binutils/binutils-2.28.tar.gz
+more README
+
+Mr Fusion Toolchain
+-------------------
+
+This toolchain has been automatically generated by Crosstool-ng v1.23.0
+(http://crosstool-ng.org/), and the configuration is available as
+crosstool-ng.config.
+
 CT_BINUTILS_VERSION="2.28"
 CT_KERNEL_VERSION="3.14.43"
 CT_LIBC_VERSION="2.25"
@@ -18033,8 +18195,6 @@ lrwxrwxrwx 1 kyoupark ccisco      16 Nov 13  2017 libasan.so -> libasan.so.1.0.0
 
 cp ~/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/libasan* .                
 
-kyoupark@st-castor-03:~/si_logs/flash0-r16/flash0$ ls libasan*
-libasan.a  libasan_preinit.o  libasan.so  libasan.so.1  libasan.so.1.0.0
 
 // comment out run.sh from startstack.sh in flash0/scripts since /root/run.sh
 // is in read-only fs.
@@ -18058,9 +18218,7 @@ LD_PRELOAD=/flash0/libasan.so:/usr/lib/libforcesched.so:/lib/libresolv-refresh.s
 export ASAN_OPTIONS="verbosity=2:halt_on_error=0:debug=1"
 export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
 mkdir /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v4/flash0 /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-r16/flash0 /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan /flash0
 ulimit -c unlimited
 ./asan_uaf
 
@@ -18070,7 +18228,6 @@ export PROFILE=FUSION-MRFUSION-01
 export STREAM_NETWORK=BSKYB_DARWIN
 export ASAN_OPTIONS="verbosity=2:halt_on_error=0:debug=1"
 export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
-mkdir /flash0
 
 # mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
 
@@ -18081,9 +18238,11 @@ mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-r16/flash0 /
 
 
 // clean vstb build
+mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-clean-build/flash0 /flash0
 
 // compiled with asan
+mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-asan-build/flash0 /flash0
 
 
@@ -18183,33 +18342,7 @@ GNU gdb (crosstool-NG crosstool-ng-1.23.0) 7.12.1
 Copyright (C) 2017 Free Software Foundation, Inc.
 
 
-<when-use-libasan-from-vstb-toolset>
-
-when run on PWM, MW process
-
-ERROR: ld.so: object '/usr/lib/libforcesched.so' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
-ERROR: ld.so: object '/lib/libresolv-refresh.so' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
-ERROR: ld.so: object '/lib/libifnameindex.so' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
-ERROR: ld.so: object '/usr/lib/libmutex-desched.so' from LD_PRELOAD cannot be preloaded (cannot open shared object file): ignored.
-==1186==Parsed ASAN_OPTIONS: verbosity=2:halt_on_error=0
-==1186==AddressSanitizer: failed to intercept 'strnlen'
-==1186==AddressSanitizer: libc interceptors initialized
-|| `[0x40000000, 0xffffffff]` || HighMem    ||
-|| `[0x28000000, 0x3fffffff]` || HighShadow ||
-|| `[0x24000000, 0x27ffffff]` || ShadowGap  ||
-|| `[0x20000000, 0x23ffffff]` || LowShadow  ||
-|| `[0x00000000, 0x1fffffff]` || LowMem     ||
-MemToShadow(shadow): 0x24000000 0x247fffff 0x25000000 0x27ffffff
-red_zone=16
-quarantine_size=64M
-malloc_context_size=30
-SHADOW_SCALE: 3
-SHADOW_GRANULARITY: 8
-SHADOW_OFFSET: 20000000
-==1186==Installed the sigaction for signal 11
-==1186==SetCurrentThread: 0xb71f9000 for thread 0xb6b1a300
-==1186==T0: stack [0xbf7c1000,0xbffc1000) size 0x800000; local=0xbffbf7dc
-==1186==AddressSanitizer Init done
+<ex> unsanitized binary
 ASAN:SIGSEGV
 =================================================================
 ==1186==ERROR: AddressSanitizer: SEGV on unknown address 0xfffffb40 (pc 0xb7186309 sp 0xbffbf080 bp 0xbffbf108 T0)
@@ -18231,9 +18364,100 @@ SUMMARY: AddressSanitizer: SEGV ??:0 __pthread_create_2_1
 ==1186==ABORTING
 
 
+ASAN:SIGSEGV
+=================================================================
+==1310==ERROR: AddressSanitizer: SEGV on unknown address 0xfffffb40 (pc 0xb71e5309 sp 0xbf8155d0 bp 0xbf815658 T0)
+    #0 0xb71e5308 in __pthread_create_2_1 (/lib/libpthread.so.0+0x7308)
+    #1 0xb71e56ea in __pthread_create_2_0 (/lib/libpthread.so.0+0x76ea)
+    #2 0xb72bedd3 in pthread_create (/flash0/libasan.so+0x61dd3)
+    #3 0x8d1123a in SYSTEMUTIL_THR_Create (/NDS/bin/bins/MW_Process+0x8d1123a)
+    #4 0x8566c4a in DIAG_IPC_CLIENT_Open (/NDS/bin/bins/MW_Process+0x8566c4a)
+    #5 0x856adc7 in DIAGCTL_LOG_OpenCommunicationChannel (/NDS/bin/bins/MW_Process+0x856adc7)
+    #6 0x85699da in DIAGCTL_LOG_Init (/NDS/bin/bins/MW_Process+0x85699da)
+    #7 0x8562c44 in __DIAG_LOG_Init (/NDS/bin/bins/MW_Process+0x8562c44)
+    #8 0x8cc93aa in SYSINIT_ClientInit (/NDS/bin/bins/MW_Process+0x8cc93aa)
+    #9 0x8202dde in main (/NDS/bin/bins/MW_Process+0x8202dde)
+    #10 0xb6cca31f in __libc_start_main ../csu/libc-start.c:295
+    #11 0x8202f93 (/NDS/bin/bins/MW_Process+0x8202f93)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV ??:0 __pthread_create_2_1
+==1310==ABORTING
+
+
+<ex>
+fix diag issue. use sanitized mw process binary and non-sanitized binaries for
+others. 
+
+=================================================================
+==1221==ERROR: AddressSanitizer: `heap-use-after-free` on address 0xb46021d8 at pc 0x8d41268 bp 0xb38bd2c8 sp 0xb38bd2b0
+READ of size 4 at 0xb46021d8 thread T16777215
+==1221==WARNING: readlink("/proc/self/exe") failed with errno 2, some stack frames may not be symbolized
+    #0 0x8d41267 (/proc/self/exe+0x8d41267)
+    #1 0x8ca5408 (/proc/self/exe+0x8ca5408)
+    #2 0x8ca89f0 (/proc/self/exe+0x8ca89f0)
+    #3 0x9cc3f0c (/proc/self/exe+0x9cc3f0c)
+    #4 0xb770e5bc (/lib/libpthread.so.0+0x65bc)
+    #5 0xb6dbe8e5 (/lib/libc.so.6+0xf68e5)
+
+0xb46021d8 is located 8 bytes inside of 44-byte region [0xb46021d0,0xb46021fc)
+==1221==AddressSanitizer CHECK failed: /home/pete/vstb_toolchain/32/.build/src/gcc-4.9.4/
+  libsanitizer/asan/asan_allocator2.cc:234 "((id)) != (0)" (0x0, 0x0)
+    #0 0xb6f1959f (/flash0/libasan.so.1+0x7259f)
+    #1 0xb6f1f5d1 (/flash0/libasan.so.1+0x785d1)
+    #2 0xb6ebbfe1 (/flash0/libasan.so.1+0x14fe1)
+    #3 0xb6ebc0b3 (/flash0/libasan.so.1+0x150b3)
+    #4 0xb6f17346 (/flash0/libasan.so.1+0x70346)
+    #5 0xb6f17641 (/flash0/libasan.so.1+0x70641)
+    #6 0xb6f18d02 (/flash0/libasan.so.1+0x71d02)
+    #7 0xb6f1a105 (/flash0/libasan.so.1+0x73105)
+    #8 0x8d41267 (/proc/self/exe+0x8d41267)
+    #9 0x8ca5408 (/proc/self/exe+0x8ca5408)
+    #10 0x8ca89f0 (/proc/self/exe+0x8ca89f0)
+    #11 0x9cc3f0c (/proc/self/exe+0x9cc3f0c)
+    #12 0xb770e5bc (/lib/libpthread.so.0+0x65bc)
+    #13 0xb6dbe8e5 (/lib/libc.so.6+0xf68e5)
+
+~/STB_SW_o/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-addr2line -e MW_Process 0x8d41268
+/home/kyoupark/STB_SW_o/CMS_MEDIA_SERVICES/BEM/src/server/bem_link_discovery.c:957
+
+
+<ex>
+fix diag issue and static asan.
+
+ASAN:SIGSEGV
+=================================================================
+==1221==ERROR: AddressSanitizer: SEGV on unknown address 0xfffffb40 (pc 0xb76c0309 sp 0xbfd59eb0 bp 0xbfd59f38 T0)
+    #0 0xb76c0308 in __pthread_create_2_1 (/lib/libpthread.so.0+0x7308)
+    #1 0xb76c06ea in __pthread_create_2_0 (/lib/libpthread.so.0+0x76ea)
+    #2 0xa14c591 in pthread_create (/NDS/bin/bin-static-asan-with-diag-fix/MW_Process+0xa14c591)
+    #3 0x9cd413b in SYSTEMUTIL_THR_Create /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/SYSTEMUTIL/src/thread/systemutil_thread.c:465
+    #4 0x8a8fe14 in DIAG_IPC_CLIENT_Open /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/ipc/src/client/diag_ipc_client.c:224
+    #5 0x8a9a514 in DIAGCTL_LOG_OpenCommunicationChannel /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diagctl_log_ipc.c:675
+    #6 0x8a98078 in DIAGCTL_LOG_Init /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diagctl_log.c:218
+    #7 0x8a89791 in __DIAG_LOG_Init /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diag_log.c:1594
+    #8 0x9c100c7 in SYSINIT_ClientInit /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/SYSINIT/src/client/sysinit_api.c:333
+    #9 0x82346ed in main /home/kyoupark/STB_SW_o/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/mw_process_main.c:85
+    #10 0xb71a531f in __libc_start_main ../csu/libc-start.c:295
+    #11 0x8242650 (/NDS/bin/bin-static-asan-with-diag-fix/MW_Process+0x8242650)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV ??:0 __pthread_create_2_1
+==1221==ABORTING
+
+
 <vstb>
 [root@vSTB lib]# ./ld-2.25.so
 Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]
+
+
+// okay
+[root@vSTB flash0]# LD_LIBRARY_PATH=. ./vstb_asan_uaf
+[root@vSTB flash0]# ./vstb_static_asan_uaf
+
+// okay
+[root@vSTB flash0]# LD_LIBRARY_PATH=. ./own_asan_uaf
+[root@vSTB flash0]# ./own_static_asan_uaf
 
 
 ={============================================================================
@@ -26806,6 +27030,16 @@ complilation.
            libraries.  As for -r, if used with -d or -D, the relocations are
            printed interspersed with the disassembly.
 
+
+       -l
+       --line-numbers
+           Label the display (`using debugging information`) with the filename
+           and source line numbers corresponding to the object code or relocs
+           shown.  Only useful with -d, -D, or -r.
+
+          $ objdump -d -Mintel -l ml_reloc.o
+
+
 $ objdump -f a.out_from_mips_asan
 
 a.out_from_mips_asan:     file format elf32-big
@@ -27652,6 +27886,544 @@ to show how breakpoints are implemented.
 
 
 ={============================================================================
+*kt_linux_gdb_300* gdb-debugging-info
+
+https://eli.thegreenplace.net/2011/02/07/how-debuggers-work-part-3-debugging-information
+
+How debuggers work: Part 3 - Debugging information
+
+This is the third part in a series of articles on how debuggers work. Make
+sure you read the first and the second parts before this one.
+
+In this part I'm going to explain how the debugger figures out where to find
+the C functions and variables in the machine code it wades through, and the
+data it uses to map between C source code lines and machine language words.
+
+Debugging information
+
+Modern compilers do a pretty good job converting your high-level code, with
+its nicely indented and nested control structures and arbitrarily typed
+variables into a big pile of bits called machine code, the sole purpose of
+which is to run as fast as possible on the target CPU. Most lines of C get
+converted into several machine code instructions. Variables are shoved all
+over the place - into the stack, into registers, or completely optimized away.
+Structures and objects don't even exist in the resulting code - they're merely
+an abstraction that gets translated to hard-coded offsets into memory buffers.
+
+So how does a debugger know where to stop when you ask it to break at the
+entry to some function? How does it manage to find what to show you when you
+ask it for the value of a variable? The answer is - debugging information.
+
+Debugging information is generated by the compiler together with the machine
+code. It is a representation of the relationship between the executable
+program and the original source code. This information is encoded into a
+pre-defined format and stored alongside the machine code. Many such formats
+were invented over the years for different platforms and executable files.
+Since the aim of this article isn't to survey the history of these formats,
+but rather to show how they work, we'll have to settle on something. This
+  something is going to be DWARF, which is almost ubiquitously used today as
+  the debugging information format for ELF executables on Linux and other
+  Unix-y platforms.
+
+
+The DWARF in the ELF
+
+According to its Wikipedia page, DWARF was designed alongside ELF, although it
+can in theory be embedded in other object file formats as well [1].
+
+DWARF is a complex format, building on many years of experience with previous
+formats for various architectures and operating systems. It has to be complex,
+since it solves a very tricky problem - presenting debugging information from
+  any high-level language to debuggers, providing support for arbitrary
+  platforms and ABIs. It would take much more than this humble article to
+  explain it fully, and to be honest I don't understand all its dark corners
+  well enough to engage in such an endeavor anyway [2]. In this article I will
+  take a more hands-on approach, showing just enough of DWARF to explain how
+  debugging information works in practical terms.
+
+
+Debug sections in ELF files
+
+First let's take a glimpse of where the DWARF info is placed inside ELF files.
+ELF defines arbitrary sections that may exist in each object file. A section
+header table defines which sections exist and their names. Different tools
+treat various sections in special ways - for example the linker is looking for
+some sections, the debugger for others.
+
+We'll be using an executable built from this C source for our experiments in
+this article, compiled into tracedprog2:
+
+#include <stdio.h>
+
+void do_stuff(int my_arg)
+{
+    int my_local = my_arg + 2;
+    int i;
+
+    for (i = 0; i < my_local; ++i)
+        printf("i = %d\n", i);
+}
+
+
+int main()
+{
+    do_stuff(2);
+    return 0;
+}
+
+Dumping the section headers from the ELF executable using objdump -h we'll
+notice several sections with names beginning with .debug_ - these are the
+DWARF debugging sections:
+
+26 .debug_aranges 00000020  00000000  00000000  00001037
+                 CONTENTS, READONLY, DEBUGGING
+27 .debug_pubnames 00000028  00000000  00000000  00001057
+                 CONTENTS, READONLY, DEBUGGING
+28 .debug_info   000000cc  00000000  00000000  0000107f
+                 CONTENTS, READONLY, DEBUGGING
+29 .debug_abbrev 0000008a  00000000  00000000  0000114b
+                 CONTENTS, READONLY, DEBUGGING
+30 .debug_line   0000006b  00000000  00000000  000011d5
+                 CONTENTS, READONLY, DEBUGGING
+31 .debug_frame  00000044  00000000  00000000  00001240
+                 CONTENTS, READONLY, DEBUGGING
+32 .debug_str    000000ae  00000000  00000000  00001284
+                 CONTENTS, READONLY, DEBUGGING
+33 .debug_loc    00000058  00000000  00000000  00001332
+                 CONTENTS, READONLY, DEBUGGING
+
+The first number seen for each section here is its size, and the last is the
+offset where it begins in the ELF file. The debugger uses this information to
+read the section from the executable.
+
+Now let's see a few practical examples of finding useful debug information in
+DWARF.
+
+
+Finding functions
+
+One of the most basic things we want to do when debugging is placing
+breakpoints at some function, expecting the debugger to break right at its
+entrance. To be able to perform this feat, the debugger must have some mapping
+between a function name in the high-level code and the address in the machine
+code where the instructions for this function begin.
+
+This information can be obtained from DWARF by looking at the .debug_info
+section. Before we go further, a bit of background. The basic descriptive
+entity in DWARF is called the Debugging Information Entry (DIE). Each DIE has
+a tag - its type, and a set of attributes. DIEs are interlinked via sibling
+and child links, and values of attributes can point at other DIEs.
+
+Let's run:
+
+// readelf --debug-dump=info 
+objdump --dwarf=info tracedprog2
+
+The output is quite long, and for this example we'll just focus on these lines
+[3]:
+
+<1><71>: Abbrev Number: 5 (DW_TAG_subprogram)
+    <72>   DW_AT_external    : 1
+    <73>   DW_AT_name        : (...): do_stuff
+    <77>   DW_AT_decl_file   : 1
+    <78>   DW_AT_decl_line   : 4
+    <79>   DW_AT_prototyped  : 1
+    <7a>   DW_AT_low_pc      : `0x8048604`
+    <7e>   DW_AT_high_pc     : 0x804863e
+    <82>   DW_AT_frame_base  : 0x0      (location list)
+    <86>   DW_AT_sibling     : <0xb3>
+
+<1><b3>: Abbrev Number: 9 (DW_TAG_subprogram)
+    <b4>   DW_AT_external    : 1
+    <b5>   DW_AT_name        : (...): main
+    <b9>   DW_AT_decl_file   : 1
+    <ba>   DW_AT_decl_line   : 14
+    <bb>   DW_AT_type        : <0x4b>
+    <bf>   DW_AT_low_pc      : 0x804863e
+    <c3>   DW_AT_high_pc     : 0x804865a
+    <c7>   DW_AT_frame_base  : 0x2c     (location list)
+
+There are two entries (DIEs) tagged DW_TAG_subprogram, which is a function in
+DWARF's jargon. Note that there's an entry for do_stuff and an entry for main.
+There are several interesting attributes, but the one that interests us here
+is DW_AT_low_pc. This is the program-counter (EIP in x86) value for the
+beginning of the function. Note that it's 0x8048604 for do_stuff. Now let's
+see what this address is in the disassembly of the executable by running
+objdump -d:
+
+`08048604` <do_stuff>:
+ 8048604:       55           push   ebp
+ 8048605:       89 e5        mov    ebp,esp
+ 8048607:       83 ec 28     sub    esp,0x28
+ 804860a:       8b 45 08     mov    eax,DWORD PTR [ebp+0x8]
+ 804860d:       83 c0 02     add    eax,0x2
+ 8048610:       89 45 f4     mov    DWORD PTR [ebp-0xc],eax
+ 8048613:       c7 45 (...)  mov    DWORD PTR [ebp-0x10],0x0
+ 804861a:       eb 18        jmp    8048634 <do_stuff+0x30>
+ 804861c:       b8 20 (...)  mov    eax,0x8048720
+ 8048621:       8b 55 f0     mov    edx,DWORD PTR [ebp-0x10]
+ 8048624:       89 54 24 04  mov    DWORD PTR [esp+0x4],edx
+ 8048628:       89 04 24     mov    DWORD PTR [esp],eax
+ 804862b:       e8 04 (...)  call   8048534 <printf@plt>
+ 8048630:       83 45 f0 01  add    DWORD PTR [ebp-0x10],0x1
+ 8048634:       8b 45 f0     mov    eax,DWORD PTR [ebp-0x10]
+ 8048637:       3b 45 f4     cmp    eax,DWORD PTR [ebp-0xc]
+ 804863a:       7c e0        jl     804861c <do_stuff+0x18>
+ 804863c:       c9           leave
+ 804863d:       c3           ret
+
+Indeed, 0x8048604 is the beginning of do_stuff, so the debugger can have a
+mapping between functions and their locations in the executable.
+
+// -Mintel and on x86_64
+
+0000000000400506 <do_stuff>:
+  400506:       55                      push   rbp
+  400507:       48 89 e5                mov    rbp,rsp
+  40050a:       48 83 ec 20             sub    rsp,0x20
+  40050e:       89 7d ec                mov    DWORD PTR [rbp-0x14],edi
+  400511:       8b 45 ec                mov    eax,DWORD PTR [rbp-0x14]
+  400514:       83 c0 02                add    eax,0x2
+  400517:       89 45 f8                mov    DWORD PTR [rbp-0x8],eax
+  40051a:       c7 45 fc 00 00 00 00    mov    DWORD PTR [rbp-0x4],0x0
+  400521:       eb 18                   jmp    40053b <do_stuff+0x35>
+  400523:       8b 45 fc                mov    eax,DWORD PTR [rbp-0x4]
+  400526:       89 c6                   mov    esi,eax
+  400528:       bf e4 05 40 00          mov    edi,0x4005e4
+  40052d:       b8 00 00 00 00          mov    eax,0x0
+  400532:       e8 a9 fe ff ff          call   4003e0 <printf@plt>
+  400537:       83 45 fc 01             add    DWORD PTR [rbp-0x4],0x1
+  40053b:       8b 45 fc                mov    eax,DWORD PTR [rbp-0x4]
+  40053e:       3b 45 f8                cmp    eax,DWORD PTR [rbp-0x8]
+  400541:       7c e0                   jl     400523 <do_stuff+0x1d>
+  400543:       c9                      leave  
+  400544:       c3                      ret    
+
+
+Finding variables
+
+Suppose that we've indeed stopped at a breakpoint inside do_stuff. We want to
+ask the debugger to show us the value of the my_local variable. How does it
+know where to find it? Turns out this is much trickier than finding functions.
+Variables can be located in global storage, on the stack, and even in
+registers. Additionally, variables with the same name can have different
+values in different lexical scopes. The debugging information has to be able
+to reflect all these variations, and indeed DWARF does.
+
+I won't cover all the possibilities, but as an example I'll demonstrate how
+the debugger can find my_local in do_stuff. Let's start at .debug_info and
+look at the entry for do_stuff again, this time also looking at a couple of
+its sub-entries:
+
+<1><71>: Abbrev Number: 5 (DW_TAG_subprogram)
+    <72>   DW_AT_external    : 1
+    <73>   DW_AT_name        : (...): do_stuff
+    <77>   DW_AT_decl_file   : 1
+    <78>   DW_AT_decl_line   : 4
+    <79>   DW_AT_prototyped  : 1
+    <7a>   DW_AT_low_pc      : 0x8048604
+    <7e>   DW_AT_high_pc     : 0x804863e
+    <82>   DW_AT_frame_base  : 0x0      (location list)
+    <86>   DW_AT_sibling     : <0xb3>
+ <2><8a>: Abbrev Number: 6 (DW_TAG_formal_parameter)
+    <8b>   DW_AT_name        : (...): my_arg
+    <8f>   DW_AT_decl_file   : 1
+    <90>   DW_AT_decl_line   : 4
+    <91>   DW_AT_type        : <0x4b>
+    <95>   DW_AT_location    : (...)       (DW_OP_fbreg: 0)
+ <2><98>: Abbrev Number: 7 (DW_TAG_variable)
+    <99>   DW_AT_name        : (...): my_local
+    <9d>   DW_AT_decl_file   : 1
+    <9e>   DW_AT_decl_line   : 6
+    <9f>   DW_AT_type        : <0x4b>
+    <a3>   DW_AT_location    : (...)      `(DW_OP_fbreg: -20)`
+<2><a6>: Abbrev Number: 8 (DW_TAG_variable)
+    <a7>   DW_AT_name        : i
+    <a9>   DW_AT_decl_file   : 1
+    <aa>   DW_AT_decl_line   : 7
+    <ab>   DW_AT_type        : <0x4b>
+    <af>   DW_AT_location    : (...)      (DW_OP_fbreg: -24)
+
+Note the first number inside the angle brackets in each entry. This is the
+`nesting level` - in this example entries with <2> are children of the entry
+with <1>. So we know that the variable my_local (marked by the DW_TAG_variable
+    tag) is a child of the do_stuff function. The debugger is also interested
+in a variable's type to be able to display it correctly. In the case of
+my_local the type points to another DIE - <0x4b>. If we look it up in the
+output of objdump we'll see it's a signed 4-byte integer.
+
+To actually locate the variable in the memory image of the executing process,
+   the debugger will look at the DW_AT_location attribute. 
+   
+For my_local it says DW_OP_fbreg: -20. This means that the variable is stored
+at offset -20 from the DW_AT_frame_base attribute of its containing function -
+which is the base of the frame for the function.
+
+The DW_AT_frame_base attribute of do_stuff has the value 0x0 (location list),
+`which means that this value actually has to be looked up` in the location
+list section. Let's look at it:
+
+$ objdump --dwarf=loc tracedprog2
+
+tracedprog2:     file format elf32-i386
+
+Contents of the .debug_loc section:
+
+    Offset   Begin    End      Expression
+    00000000 08048604 08048605 (DW_OP_breg4: 4 )
+    00000000 08048605 08048607 (DW_OP_breg4: 8 )
+    00000000 08048607 0804863e (DW_OP_breg5: 8 )
+    00000000 <End of list>
+    0000002c 0804863e 0804863f (DW_OP_breg4: 4 )
+    0000002c 0804863f 08048641 (DW_OP_breg4: 8 )
+    0000002c 08048641 0804865a (DW_OP_breg5: 8 )
+    0000002c <End of list>
+
+The location information we're interested in is the first one [4]. For each
+address where the debugger may be, it specifies the current frame base from
+which offsets to variables are to be computed as an offset from a register.
+For x86, bpreg4 refers to esp and bpreg5 refers to ebp.
+
+// [4] Because the DW_AT_frame_base attribute of do_stuff contains offset
+// 0x0 into the location list. Note that the same attribute for main contains
+// the offset 0x2c which is the offset for the second set of location
+// expressions.  
+//
+// <82>   DW_AT_frame_base  : 0x0      (location list)
+
+void do_stuff(int my_arg)
+{
+    int my_local = my_arg + 2;
+    ...
+}
+
+It's educational to look at the first several instructions of do_stuff again:
+
+08048604 <do_stuff>:
+ 8048604:       55          push   ebp
+ 8048605:       89 e5       mov    ebp,esp
+ 8048607:       83 ec 28    sub    esp,0x28
+ 804860a:       8b 45 08    mov    eax,DWORD PTR [ebp+0x8]  // my_arg
+ 804860d:       83 c0 02    add    eax,0x2
+ 8048610:       89 45 f4    mov    DWORD PTR [ebp-0xc],eax
+
+Note that ebp becomes relevant only after the second instruction is executed,
+     and indeed for the first two addresses the base is computed from esp in
+     the location information listed above. Once ebp is valid, it's convenient
+     to compute offsets relative to it because it stays constant while esp
+     keeps moving with data being pushed and popped from the stack.
+
+So where does it leave us with my_local? We're only really interested in its
+value after the instruction at 0x8048610 (where its value is placed in memory
+    after being computed in eax), so the debugger will be using the
+`DW_OP_breg5: 8` frame base to find it. Now it's time to rewind a little and
+recall that the DW_AT_location attribute for my_local says DW_OP_fbreg: -20.
+
+// not sure
+Let's do the math: -20 from the frame base, which is ebp + 8. We get ebp - 12.
+Now look at the disassembly again and note where the data is moved from eax -
+indeed, ebp - 12 is where my_local is stored.
+
+
+Looking up line numbers
+
+When we talked about finding functions in the debugging information, I was
+cheating a little. When we debug C source code and put a breakpoint in a
+function, we're usually not interested in the first machine code instruction
+[5]. What we're really interested in is the first C code line of the function.
+
+
+// [5] Where the function prologue is usually executed and the local variables
+// aren't even valid yet.
+
+This is why DWARF encodes a full mapping between lines in the C source code
+and machine code addresses in the executable. This information is contained in
+the .debug_line section and can be extracted in a readable form as follows:
+
+$ objdump --dwarf=decodedline tracedprog2
+
+tracedprog2:     file format elf32-i386
+
+Decoded dump of debug contents of section .debug_line:
+
+CU: /home/eliben/eli/eliben-code/debugger/tracedprog2.c:
+File name           Line number    Starting address
+tracedprog2.c                5           0x8048604
+tracedprog2.c                6           0x804860a
+tracedprog2.c                9           0x8048613
+tracedprog2.c               10           0x804861c
+tracedprog2.c                9           0x8048630
+tracedprog2.c               11           0x804863c
+tracedprog2.c               15           0x804863e
+tracedprog2.c               16           0x8048647
+tracedprog2.c               17           0x8048653
+tracedprog2.c               18           0x8048658
+
+It shouldn't be hard to see the correspondence between this information, the C
+source code and the disassembly dump. Line number 5 points at the entry point
+to do_stuff - 0x8040604. The next line, 6, is where the debugger should really
+stop when asked to break in do_stuff, and it points at 0x804860a which is just
+past the prologue of the function. This line information easily allows
+bi-directional mapping between lines and addresses:
+
+When asked to place a breakpoint at a certain line, the debugger will use it
+to find which address it should put its trap on (remember our friend int 3
+    from the previous article?)
+
+*seg-fault*
+When an instruction causes a segmentation fault, the debugger will use it to
+find the source code line on which it happened.
+
+
+libdwarf - Working with DWARF programmatically
+
+Employing command-line tools to access DWARF information, while useful, isn't
+fully satisfying. As programmers, we'd like to know how to write actual code
+that can read the format and extract what we need from it.
+
+Naturally, one approach is to grab the DWARF specification and start hacking
+away. Now, remember how everyone keeps saying that you should never, ever
+parse HTML manually but rather use a library? Well, with DWARF it's even
+worse. DWARF is much more complex than HTML. What I've shown here is just the
+tip of the iceberg, and to make things even harder, most of this information
+is encoded in a very compact and compressed way in the actual object file [6].
+
+So we'll take another road and use a library to work with DWARF. There are two
+major libraries I'm aware of (plus a few less complete ones):
+
+BFD (libbfd) is used by the GNU binutils, including objdump which played a
+star role in this article, ld (the GNU linker) and as (the GNU assembler).
+
+libdwarf - which together with its big brother libelf are used for the tools
+on Solaris and FreeBSD operating systems.
+
+I'm picking libdwarf over BFD because it appears less arcane to me and its
+license is more liberal (LGPL vs. GPL).
+
+Since libdwarf is itself quite complex it requires a lot of code to operate.
+I'm not going to show all this code here, but you can download and run it
+yourself. To compile this file you'll need to have libelf and libdwarf
+installed, and pass the -lelf and -ldwarf flags to the linker.
+
+The demonstrated program takes an executable and prints the names of functions
+in it, along with their entry points. Here's what it produces for the C
+program we've been playing with in this article:
+
+$ dwarf_get_func_addr tracedprog2
+DW_TAG_subprogram: 'do_stuff'
+low pc  : 0x08048604
+high pc : 0x0804863e
+DW_TAG_subprogram: 'main'
+low pc  : 0x0804863e
+high pc : 0x0804865a
+
+The documentation of libdwarf (linked in the References section of this
+    article) is quite good, and with some effort you should have no problem
+pulling any other information demonstrated in this article from the DWARF
+sections using it.
+
+Conclusion and next steps
+
+Debugging information is a simple concept in principle. The implementation
+details may be intricate, but in the end of the day what matters is that we
+now know how the debugger finds the information it needs about the original
+source code from which the executable it's tracing was compiled. With this
+information in hand, the debugger bridges between the world of the user, who
+thinks in terms of lines of code and data structures, and the world of the
+executable, which is just a bunch of machine code instructions and data in
+registers and memory.
+
+This article, with its two predecessors, concludes an introductory series that
+explains the inner workings of a debugger. Using the information presented
+here and some programming effort, it should be possible to create a basic but
+functional debugger for Linux.
+
+As for the next steps, I'm not sure yet. Maybe I'll end the series here, maybe
+I'll present some advanced topics such as backtraces, and perhaps debugging on
+Windows. Readers can also suggest ideas for future articles in this series or
+related material. Feel free to use the comments or send me an email.
+
+References
+
+objdump man page
+
+Wikipedia pages for ELF and DWARF.
+
+Dwarf Debugging Standard home page - from here you can obtain the excellent
+DWARF tutorial by Michael Eager, as well as the DWARF standard itself. You'll
+probably want version 2 since it's what gcc produces.
+
+libdwarf home page - the download package includes a comprehensive reference
+document for the library
+
+BFD documentation
+
+note:
+file command do not show difference between nodebug and debug binary.
+
+<when-build-with-g>
+
+$ readelf -S
+  ...
+  [31] .debug_aranges    MIPS_DWARF      0000 206cf0 008908 00      0   0  1 { ~
+  [32] .debug_pubnames   MIPS_DWARF      0000 20f5f8 0c6fea 00      0   0  1
+  [33] .debug_info       MIPS_DWARF      0000 2d65e2 1a07f7 00      0   0  1
+  [34] .debug_abbrev     MIPS_DWARF      0000 476dd9 006741 00      0   0  1
+  [35] .debug_line       MIPS_DWARF      0000 47d51a 039d68 00      0   0  1
+  [36] .debug_frame      MIPS_DWARF      0000 4b7284 03f620 00      0   0  4
+  [37] .debug_str        MIPS_DWARF      0000 4f68a4 14d3fc 01  MS  0   0  1
+  [38] .debug_loc        MIPS_DWARF      0000 643ca0 05326e 00      0   0  1
+  [39] .debug_ranges     MIPS_DWARF      0000 696f0e 013188 00      0   0  1 } ~
+  ...
+
+
+{tool-readelf-dump}
+note: This is better since there will be 'no' output on release version.
+
+Also this command line shows no output on nodebug version but shows all symbols
+on debug version. 
+
+$ readelf --debug-dump=decodedline nickelmediad 
+
+--debug-dump[=rawline,=decodedline,=info,=abbrev,=pubnames,=aranges,=macro,
+  =frames,=frames-interp,=str,=loc,=Ranges,=pubtypes,=trace_info,
+  =trace_abbrev,=trace_aranges,=gdb_index]
+
+   Displays the contents of the debug sections in the file, if any are
+   present.  If one of the optional letters or words follows the switch then
+   only data found in those specific sections will be dumped.
+
+   Note that there is no single letter option to display the content of trace
+   sections or .gdb_index.
+
+   Note: the =decodedline option will display the interpreted contents of a
+   .debug_line section whereas the =rawline option dumps the contents in a raw
+   format.
+
+   Note: the =frames-interp option will display the interpreted contents of a
+   .debug_frame section whereas the =frames option dumps the contents in a raw
+   format.
+
+   Note: the output from the =info option can also be affected by the options
+   --dwarf-depth and --dwarf-start.
+
+
+{whe-use-gdb}
+
+# gdb /bin/nickelmediad
+...
+Reading symbols from /bin/nickelmediad...(no debugging symbols found)...done. ~
+(gdb) 
+
+for debug version.
+
+# gdb /bin/nickelmediad
+...
+Reading symbols from /lds/Nickel.System.DBusServer/.libs/nickelmediad...done.
+(gdb)
+
+
+={============================================================================
 *kt_linux_gdb_001* gdb-error gdb-target
 
 # see this when uses cross gdb which built with different configuration.
@@ -27677,171 +28449,6 @@ info files shows your active targets.
 http://www.gnu.org/software/gdb/
 https://sourceware.org/gdb/current/onlinedocs/gdb/
 http://visualgdb.com/gdbreference/commands/sharedlibrary 
-
-
-={============================================================================
-*kt_linux_gdb_300* gdb-check-built-with-debug
-
-note:
-file command do not show difference between nodebug and debug binary.
-
-{readelf}
-
-<on-nodebug-build>
-
-note: see no debug sections
-
-$ readelf -S nickelmediad 
-There are 37 section headers, starting at offset 0xe4bfc:
-
-$ readelf -S
-Section Headers:
-  [Nr] Name              Type            Addr Off    Size   ES Flg Lk Inf Al
-  [ 0]                   NULL            0000 000000 000000 00      0   0  0
-  [ 1] .interp           PROGBITS        0040 000194 000014 00   A  0   0  1
-  [ 2] .reginfo          MIPS_REGINFO    0040 0001a8 000018 18   A  0   0  4
-  [ 3] .dynamic          DYNAMIC         0040 0001c0 000188 08   A  6   0  4
-  [ 4] .hash             HASH            0040 000348 000998 04   A  5   0  4
-  [ 5] .dynsym           DYNSYM          0040 000ce0 0015d0 10   A  6   1  4
-  [ 6] .dynstr           STRTAB          0040 0022b0 003d20 00   A  0   0  1
-  [ 7] .gnu.version      VERSYM          0040 005fd0 0002ba 02   A  5   0  2
-  [ 8] .gnu.version_r    VERNEED         0040 00628c 000080 00   A  6   2  4
-  [ 9] .rel.dyn          REL             0040 00630c 000238 08   A  5   0  4
-  [10] .rel.plt          REL             0040 006bfc 0003b0 08   A  5  12  4
-  [11] .init             PROGBITS        0040 006fac 000048 00  AX  0   0  4
-  [12] .plt              PROGBITS        0040 007000 000784 00  AX  0   0 32
-  [13] .text             PROGBITS        0040 007790 0aa1f0 00  AX  0   0 16
-  [14] .MIPS.stubs       PROGBITS        004b 0b1980 000670 00  AX  0   0  4
-  [15] .fini             PROGBITS        004b 0b1ff0 000038 00  AX  0   0  4
-  [16] .rodata           PROGBITS        004b 0b2030 009a78 00   A  0   0 16
-  [17] .eh_frame_hdr     PROGBITS        004b 0bbaa8 001afc 00   A  0   0  4
-  [18] .eh_frame         PROGBITS        004c 0bdbc0 009068 00  WA  0   0  4
-  [19] .gcc_except_table PROGBITS        004d 0c6c28 011914 00  WA  0   0  4
-  [20] .ctors            PROGBITS        004e 0d853c 000024 00  WA  0   0  4
-  [21] .dtors            PROGBITS        004e 0d8560 000008 00  WA  0   0  4
-  [22] .jcr              PROGBITS        004e 0d8568 000004 00  WA  0   0  4
-  [23] .data.rel.ro      PROGBITS        004e 0d8570 001a8c 00  WA  0   0  8
-  [24] .data             PROGBITS        004e 0da000 0003d0 00  WA  0   0 16
-  [25] .rld_map          PROGBITS        004e 0da3d0 000004 00  WA  0   0  4
-  [26] .got.plt          PROGBITS        004e 0da3d4 0001e0 00  WA  0   0  4
-  [27] .got              PROGBITS        004e 0da5c0 00079c 04 WAp  0   0 16
-  [28] .sdata            PROGBITS        004e 0dad5c 000004 00 WAp  0   0  4
-  [29] .bss              NOBITS          004e 0dad60 001270 00  WA  0   0 16
-  [30] .comment          PROGBITS        0000 0dad60 00018c 00      0   0  1
-  [31] .gnu.attributes   LOOS+ffffff5    0000 0daeec 000010 00      0   0  1
-  [32] .mdebug.abi32     PROGBITS        0000 0daefc 000000 00      0   0  1
-  [33] .pdr              PROGBITS        0000 0daefc 009bc0 00      0   0  4
-  [34] .shstrtab         STRTAB          0000 0e4abc 00013e 00      0   0  1
-  [35] .symtab           SYMTAB          0000 0e51c4 009b20 10     36 2134  4
-  [36] .strtab           STRTAB          0000 0eece4 0457fd 00      0   0  1
-Key to Flags:
-  W (write), A (alloc), X (execute), M (merge), S (strings)
-  I (info), L (link order), G (group), T (TLS), E (exclude), x (unknown)
-  O (extra OS processing required) o (OS specific), p (processor specific)
-
-<on-debug-build>
-There are 46 section headers, starting at offset 0x6e857c:
-
-Section Headers:
-  [Nr] Name              Type            Addr Off    Size   ES Flg Lk Inf Al
-  [ 0]                   NULL            0000 000000 000000 00      0   0  0
-  [ 1] .interp           PROGBITS        0040 000194 000014 00   A  0   0  1
-  [ 2] .reginfo          MIPS_REGINFO    0040 0001a8 000018 18   A  0   0  4
-  [ 3] .dynamic          DYNAMIC         0040 0001c0 000188 08   A  6   0  4
-  [ 4] .hash             HASH            0040 000348 001814 04   A  5   0  4
-  [ 5] .dynsym           DYNSYM          0040 001b5c 003fa0 10   A  6   1  4
-  [ 6] .dynstr           STRTAB          0040 005afc 0121b8 00   A  0   0  1
-  [ 7] .gnu.version      VERSYM          0041 017cb4 0007f4 02   A  5   0  2
-  [ 8] .gnu.version_r    VERNEED         0041 0184a8 000060 00   A  6   2  4
-  [ 9] .rel.dyn          REL             0041 018508 000328 08   A  5   0  4
-  [10] .rel.plt          REL             0041 019000 0003f8 08   A  5  12  4
-  [11] .init             PROGBITS        0041 0193f8 000048 00  AX  0   0  4
-  [12] .plt              PROGBITS        0041 019440 000814 00  AX  0   0 32
-  [13] .text             PROGBITS        0041 019c60 187120 00  AX  0   0 16
-  [14] .MIPS.stubs       PROGBITS        005a 1a0d80 000620 00  AX  0   0  4
-  [15] .fini             PROGBITS        005a 1a13a0 000038 00  AX  0   0  4
-  [16] .rodata           PROGBITS        005a 1a13e0 017438 00   A  0   0 16
-  [17] .eh_frame_hdr     PROGBITS        005b 1b8818 009114 00   A  0   0  4
-  [18] .eh_frame         PROGBITS        005d 1c1bb0 02c034 00  WA  0   0  4
-  [19] .gcc_except_table PROGBITS        005f 1edbe4 0147bc 00  WA  0   0  4
-  [20] .ctors            PROGBITS        0061 2023a0 000024 00  WA  0   0  4
-  [21] .dtors            PROGBITS        0061 2023c4 000008 00  WA  0   0  4
-  [22] .jcr              PROGBITS        0061 2023cc 000004 00  WA  0   0  4
-  [23] .data.rel.ro      PROGBITS        0061 2023d0 001c2c 00  WA  0   0  8
-  [24] .data             PROGBITS        0061 204000 0003d0 00  WA  0   0 16
-  [25] .rld_map          PROGBITS        0061 2043d0 000004 00  WA  0   0  4
-  [26] .got.plt          PROGBITS        0061 2043d4 000204 00  WA  0   0  4
-  [27] .got              PROGBITS        0061 2045e0 002580 04 WAp  0   0 16
-  [28] .sdata            PROGBITS        0061 206b60 000004 00 WAp  0   0  4
-  [29] .bss              NOBITS          0061 206b64 001270 00  WA  0   0 16
-  [30] .comment          PROGBITS        0000 206b64 00018c 00      0   0  1
-  [31] .debug_aranges    MIPS_DWARF      0000 206cf0 008908 00      0   0  1 { ~
-  [32] .debug_pubnames   MIPS_DWARF      0000 20f5f8 0c6fea 00      0   0  1
-  [33] .debug_info       MIPS_DWARF      0000 2d65e2 1a07f7 00      0   0  1
-  [34] .debug_abbrev     MIPS_DWARF      0000 476dd9 006741 00      0   0  1
-  [35] .debug_line       MIPS_DWARF      0000 47d51a 039d68 00      0   0  1
-  [36] .debug_frame      MIPS_DWARF      0000 4b7284 03f620 00      0   0  4
-  [37] .debug_str        MIPS_DWARF      0000 4f68a4 14d3fc 01  MS  0   0  1
-  [38] .debug_loc        MIPS_DWARF      0000 643ca0 05326e 00      0   0  1
-  [39] .debug_ranges     MIPS_DWARF      0000 696f0e 013188 00      0   0  1 } ~
-  [40] .gnu.attributes   LOOS+ffffff5    0000 6aa096 000010 00      0   0  1
-  [41] .mdebug.abi32     PROGBITS        0000 6aa0a6 000000 00      0   0  1
-  [42] .pdr              PROGBITS        0000 6aa0a8 03e320 00      0   0  4
-  [43] .shstrtab         STRTAB          0000 6e83c8 0001b4 00      0   0  1
-  [44] .symtab           SYMTAB          0000 6e8cac 020680 10     45 7279  4
-  [45] .strtab           STRTAB          0000 70932c 10ffac 00      0   0  1
-
-
-{readelf-dump}
-note: This is better since there will be 'no' output on release version.
-
-Also this command line shows no output on nodebug version but shows all symbols
-on debug version. 
-
-$ readelf --debug-dump=decodedline nickelmediad 
-
-readelf -w
-
--w[lLiaprmfFsoRt]
---debug-dump[=rawline,=decodedline,=info,=abbrev,=pubnames,=aranges,=macro,
-  =frames,=frames-interp,=str,=loc,=Ranges,=pubtypes,=trace_info,
-  =trace_abbrev,=trace_aranges,=gdb_index]
-
-   Displays the contents of the debug sections in the file, if any are
-   present.  If one of the optional letters or words follows the switch then
-   only data found in those specific sections will be dumped.
-
-   Note that there is no single letter option to display the content of trace
-   sections or .gdb_index.
-
-   Note: the =decodedline option will display the interpreted contents of a
-   .debug_line section whereas the =rawline option dumps the contents in a raw
-   format.
-
-   Note: the =frames-interp option will display the interpreted contents of a
-   .debug_frame section whereas the =frames option dumps the contents in a raw
-   format.
-
-   Note: the output from the =info option can also be affected by the options
-   --dwarf-depth and --dwarf-start.
-
-
-{use-gdb}
-Used gdb on host.
-
-for nodebug version.
-
-# gdb /bin/nickelmediad
-...
-Reading symbols from /bin/nickelmediad...(no debugging symbols found)...done. ~
-(gdb) 
-
-for debug version.
-
-# gdb /bin/nickelmediad
-...
-Reading symbols from /lds/Nickel.System.DBusServer/.libs/nickelmediad...done.
-(gdb)
 
 
 ={============================================================================
@@ -33784,8 +34391,8 @@ Now, all the user needs to do is instantiate Bar without a thought to the Foo<>
 
 int DoSomething()
 {
-Bar b;
-return b.Baz();
+  Bar b;
+  return b.Baz();
 }
 
 So far so good? Okay, now how the heck do you set a breakpoint in the Baz()
@@ -33802,7 +34409,7 @@ Now, simply copy-n-paste the full method definition to GDB when setting the brea
 (gdb) b MY_PLUGIN_A::Foo<MY_PLUGIN_A::BarAbstract>::Baz()
 Breakpoint 6 at 0×8048890: file Source/Bar.cpp, line 355
 
-
+*tool-demangle*
 $ man c++filt
 
 NAME
@@ -55217,7 +55824,7 @@ above.
     command.  Directories specified this way are searched at the point in
     which the linker script appears in the command line.
 
-
+*link-rpath*
 -rpath=dir
     Add a directory to the runtime library search path. This is used when
     linking an ELF executable with shared objects. All -rpath arguments are
@@ -56100,6 +56707,7 @@ The linker searches a standard list of directories for the library, which is
 actually a file named liblibrary.a. The linker then uses this file as if it
 had been specified precisely by name.
 
+*gcc-link-search*
 The directories searched include several standard system directories plus any
 that you specify with -L.
 
@@ -59268,10 +59876,10 @@ it to a default empty directory. By default the linker refuses to use sysroots
 for no good technical reason, while gcc is able to handle both cases at
   runtime. This will be useful later on. 
 
-<gcc-ld>
+<gcc-sysroot>
 --sysroot=directory
     Use directory as the location of the sysroot, overriding the
-    configure-time default. This option is only supported by linkers that were
+    configure-time default. This option `is only supported` by linkers that were
     configured using --with-sysroot. 
 
 
@@ -63640,6 +64248,13 @@ binutils-2.24, linux-3.17.2, glibc-2.20
 4.9.2 builds with exact version and settings in the blog.
 4.8.2 builds with no changes on prerequsites.
 
+binutils-2.28, linux-3.14.43, glibc-2.25 gcc 4.9.4 builds on build server
+
+note:
+Since do not support sysroot *gcc-sysroot* for this build, need to have same
+directory layout if want to move toolchain built to other servers.
+
+
 Required Packages
 =================
 Starting with a clean Debian system, you must first install a few packages:
@@ -63650,19 +64265,18 @@ Everything else will be built from source. Create a new directory somewhere,
 and download the following source packages. 
 
 *gcc-source*
-// old, wget http://ftpmirror.gnu.org/binutils/binutils-2.24.tar.gz
-wget https://ftp.gnu.org/gnu/binutils/binutils-2.28.tar.gz
+wget https://ftp.gnu.org/gnu/binutils/binutils-2.24.tar.gz
 wget http://ftpmirror.gnu.org/gcc/gcc-4.9.2/gcc-4.9.2.tar.gz
-
-
-wget --no-check-certificate https://mirrors.edge.kernel.org/pub/linux/kernel/v3.x/linux-3.14.43.tar.xz
-// old, wget --no-check-certificate https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.17.2.tar.xz
-
-wget --no-check-certificate http://mirror.koddos.net/gnu/glibc/glibc-2.25.tar.xz
-// wget --no-check-certificate http://ftpmirror.gnu.org/glibc/glibc-2.20.tar.xz
+wget --no-check-certificate https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.17.2.tar.xz
+wget --no-check-certificate http://ftpmirror.gnu.org/glibc/glibc-2.20.tar.xz
 
 wget --no-check-certificate ftp://gcc.gnu.org/pub/gcc/infrastructure/isl-0.12.2.tar.bz2
 wget --no-check-certificate ftp://gcc.gnu.org/pub/gcc/infrastructure/cloog-0.18.1.tar.gz
+
+wget https://ftp.gnu.org/gnu/binutils/binutils-2.28.tar.gz
+wget http://ftpmirror.gnu.org/gcc/gcc-4.9.4/gcc-4.9.4.tar.gz
+wget --no-check-certificate https://mirrors.edge.kernel.org/pub/linux/kernel/v3.x/linux-3.14.43.tar.xz
+wget --no-check-certificate http://mirror.koddos.net/gnu/glibc/glibc-2.25.tar.xz
 
 The first four packages  Binutils, GCC, the Linux kernel and Glibc  are the
 main ones. We could have installed the next three packages in binary form
@@ -63731,47 +64345,6 @@ multithreaded programs for AArch64. That’s why I chose not to use it here.
 
 Build Steps
 ===============================
-Extract all the source packages.
-
-$ for f in *.tar*; do tar xf $f; done
-
-Create symbolic links from the GCC directory to some of the other directories.
-These five packages are dependencies of GCC, and when the symbolic links are
-present, GCC's build script will build them automatically.
-
-$ cd gcc-4.9.2
-
-// run this script which will download and set up sym links
-./contrib/download_prerequisites
-
-// ln -s ../mpfr-3.1.2 mpfr
-// ln -s ../gmp-6.0.0 gmp
-// ln -s ../mpc-1.0.2 mpc
-
-
-note:
-https://gcc.gnu.org/install/download.html
-
-Downloading GCC
-
-If you also intend to build binutils (either to upgrade an existing
-    installation or for use in place of the corresponding tools of your OS),
-unpack the binutils distribution either in the same directory or a separate
-  one. In the latter case, add symbolic links to any components of the
-  binutils you intend to build alongside the compiler (bfd, binutils, gas,
-      gprof, ld, opcodes, ...) to the directory containing the GCC sources.
-
-Likewise the GMP, MPFR and MPC libraries can be automatically built together
-with GCC. You may simply run the contrib/download_prerequisites script in the
-GCC source directory to set up everything. Otherwise unpack the GMP, MPFR
-and/or MPC source distributions in the directory containing the GCC sources
-and rename their directories to gmp, mpfr and mpc, respectively (or use
-    symbolic links with the same name). 
-
-tar -xvjf gcc-4.8.2.tar.bz2
-cd gcc-4.8.2
-
-
 Choose an installation directory, and make sure you have write permission to
 it. In the steps that follow, I'll install the new toolchain to /opt/cross.
 
@@ -63796,8 +64369,10 @@ PREFIX=/home/nds-uk/kyoupark/asn/gcc/gcc-glibc-mips-reference
 TARGET=mips-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
-// x86
-PREFIX=/home/nds-uk/kyoupark/asn/gcc/i686-nptl-linux-gnu-gcc
+*build-gcc-x86*
+cd /home/kyoupark/asan/gcc
+mkdir i686-nptl-linux-gnu-gcc
+PREFIX=/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc
 TARGET=i686-nptl-linux-gnu
 export PATH=${PREFIX}/bin:$PATH
 
@@ -63821,7 +64396,7 @@ it in the different directory.
 
 This step builds and installs the cross-assembler, cross-linker, and other tools.
 
-$ mkdir build-binutils
+$ mkdir build-binutils-xx
 $ cd build-binutils
 $ ../binutils-2.24/configure --prefix=/opt/cross --target=aarch64-linux --disable-multilib
 $ make -j4
@@ -63855,9 +64430,13 @@ with programs and libraries using the AArch64 instruction set, and not any
 related instruction sets such as AArch32.
 
 
-note: failed to build 2.24 but build 2.25.1 on debian VM.
+note: 
+failed to build 2.24 but build 2.25.1 on debian VM.
 kyoupark@kit-debian:~/si-logs/gcc/build-binutil$ uname -a
 Linux kit-debian 3.16.0-4-686-pae #1 SMP Debian 3.16.7-ckt25-2+deb8u3 (2016-07-02) i686 GNU/Linux
+
+kyoupark@kit-debian64:~/asan/gcc$ uname -a
+Linux kit-debian64 3.16.0-4-amd64 #1 SMP Debian 3.16.36-1+deb8u1 (2016-09-03) x86_64 GNU/Linux
 
 kyoupark@kit-debian:~/si-logs/gcc/build-binutil$ gcc --version
 gcc (Debian 4.9.2-10) 4.9.2
@@ -63891,10 +64470,12 @@ it has a `different way of identifying the target` CPU architecture:
 ARCH=arm64
 
 
-// for mips
+*build-gcc-mips*
 cd linux-3.17.2
 make ARCH=mips INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 
+*build-gcc-x86*
+cd linux-3.17.2
 make ARCH=x86 INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 
 // this installs to ${PREFIX}/${TARGET}/include
@@ -63928,6 +64509,50 @@ This step will build `GCC's C and C++ cross-compilers only`, and install them to
 /opt/cross/bin. It won't invoke those compilers to build any libraries just
 yet.
 
+
+Extract all the source packages.
+
+$ for f in *.tar*; do tar xf $f; done
+
+Create symbolic links from the GCC directory to some of the other directories.
+These five packages are dependencies of GCC, and when the symbolic links are
+present, GCC's build script will build them automatically.
+
+$ cd gcc-4.9.2
+
+// note:
+// https://gcc.gnu.org/install/download.html
+// 
+// Downloading GCC
+// 
+// If you also intend to build binutils (either to upgrade an existing
+// installation or for use in place of the corresponding tools of your OS),
+// unpack the binutils distribution either in the same directory or a separate
+// one. In the latter case, add symbolic links to any components of the
+// binutils you intend to build alongside the compiler (bfd, binutils, gas,
+// gprof, ld, opcodes, ...) to the directory containing the GCC sources.
+// 
+// Likewise the GMP, MPFR and MPC libraries can be automatically built
+// together with GCC. You may simply run the contrib/download_prerequisites
+// script in the GCC source directory to set up everything. Otherwise unpack
+// the GMP, MPFR and/or MPC source distributions in the directory containing
+// the GCC sources and rename their directories to gmp, mpfr and mpc,
+// respectively (or use symbolic links with the same name). 
+
+
+// run this script which will download and set up sym links
+./contrib/download_prerequisites
+
+// when downloads fails, do manually and make sym links like:
+wget https://ftp.gnu.org/gnu/mpfr/mpfr-2.4.2.tar.bz2
+wget https://ftp.gnu.org/gnu/gmp/gmp-4.3.2.tar.bz2
+...
+ln -s ../mpfr-3.1.2 mpfr
+ln -s ../gmp-6.0.0 gmp
+ln -s ../mpc-1.0.2 mpc
+...
+
+
 *build-gcc-reference*
 $ mkdir -p build-gcc
 $ cd build-gcc
@@ -63943,6 +64568,7 @@ make -j4 all-gcc
 make install-gcc
 
 *build-gcc-x86*
+cd build-gcc
 ../gcc-4.9.4/configure --prefix=${PREFIX} --target=${TARGET} --enable-languages=c,c++ --disable-multilib
 
 
@@ -64148,19 +64774,50 @@ drwxr-xr-x 2 kyoupark ccusers 4096 Apr  6 07:35 ldscripts/
 
 
 *build-gcc-x86*
-cd glibc-2.20-build
+cd builddir
 ../glibc-2.25/configure --prefix=${PREFIX}/${TARGET} \
 --build=$MACHTYPE --host=${TARGET} --target=${TARGET} \
 --with-headers=${PREFIX}/${TARGET}/include \
 --disable-multilib libc_cv_forced_unwind=yes
 
 make install-bootstrap-headers=yes install-headers
+make -j4 csu/subdir_lib
 
-[DEBUG]      ==> Executing: 'touch' '/home/kyoupark/asan/cross-build/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot/.libc_headers_installed' 
-[DEBUG]      ==> Executing: 'make' '-j3' '-l' 'install_root=/home/kyoupark/asan/cross-build/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot' 'install-bootstrap-headers=yes' 'BUILD_CFLAGS=-O2 -g -I/home/kyoupark/asan/cross-build/.build/i686-nptl-linux-gnu/buildtools/include  ' 'BUILD_CPPFLAGS=' 'BUILD_LDFLAGS=-L/home/kyoupark/asan/cross-build/.build/i686-nptl-linux-gnu/buildtools/lib  ' 'install-headers' 
+// fails on VM on "make -j4 csu/subdir_lib" but works on server
 
-// make -j4 csu/subdir_lib
+make[2]: Entering directory '/home/kyoupark/asan/gcc/glibc-2.25/csu'
+gawk -f ../scripts/gen-as-const.awk ../sysdeps/i386/nptl/tcb-offsets.sym \ |
+gcc -S -o /home/kyoupark/asan/gcc/build-glibc/tcb-offsets.hT3 -std=gnu11
+-fgnu89-inline  -O2 -Wall -Werror -Wundef -Wwrite-strings
+-fmerge-all-constants -fno-stack-protector -frounding-math -g
+-Wstrict-prototypes -Wold-style-definition -mpreferred-stack-boundary=4
+-ftls-model=initial-exec      -I../include
+-I/home/kyoupark/asan/gcc/build-glibc/csu
+-I/home/kyoupark/asan/gcc/build-glibc  -I../sysdeps/unix/sysv/linux/i386/i686
+-I../sysdeps/i386/i686/nptl  -I../sysdeps /unix/sysv/linux/i386
+-I../sysdeps/unix/sysv/linux/x86  -I../sysdeps/i386/nptl
+-I../sysdeps/unix/sysv/linux/include -I../sysdeps/unix/sysv/linux
+-I../sysdeps/nptl  -I../sysdeps/pthread  -I../sysdeps/gnu
+-I../sysdeps/unix/inet  -I../sy sdeps/unix/sysv  -I../sysdeps/unix/i386
+-I../sysdeps/unix  -I../sysdeps/posix  -I../sysdeps/i386/i686/fpu/multiarch
+-I../sysdeps/i386/i686/fpu  -I../sysdeps/i386/i686/multiarch
+-I../sysdeps/i386/i686  -I../sysdeps/i386/fpu  -I../sysdep s/x86/fpu/include
+-I../sysdeps/x86/fpu  -I../sysdeps/i386  -I../sysdeps/x86
+-I../sysdeps/wordsize-32  -I../sysdeps/ieee754/ldbl-96/include
+-I../sysdeps/ieee754/ldbl-96  -I../sysdeps/ieee754/dbl-64
+-I../sysdeps/ieee754/flt-32  -I../sysde ps/ieee754  -I../sysdeps/generic  -I..
+-I../libio -I. -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/4.9/include
+-isystem /usr/lib/gcc/x86_64-linux-gnu/4.9/include-fixed -isystem
+/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/i686-nptl -linux-gnu/include
+-D_LIBC_REENTRANT -include /home/kyoupark/asan/gcc/build-glibc/libc-modules.h
+-DMODULE_NAME=libc -include ../include/libc-symbols.h       -x c - \ -MD -MP
+-MF /home/kyoupark/asan/gcc/build-glibc/tcb-offsets.h.dT -MT
+'/home/kyoupark/asan/gcc/build-glibc/tcb-offsets.h.d
+/home/kyoupark/asan/gcc/build-glibc/tcb-offsets.h'
 
+install csu/crt1.o csu/crti.o csu/crtn.o ${PREFIX}/${TARGET}/lib
+${TARGET}-gcc -nostdlib -nostartfiles -shared -x c /dev/null -o ${PREFIX}/${TARGET}/lib/libc.so
+touch ${PREFIX}/${TARGET}/include/gnu/stubs.h
 
 note:
 If miss out these, then cause libgcc in step 5 failed with errors around gcov
@@ -70991,7 +71648,7 @@ kyoupark@kt-office-debian:~/works$
 //      5      myglob += a;
 //      6      return b + myglob;
 //      7  }
-//
+// *tool-objdump*
 // $ objdump -d -Mintel -l ml_reloc.o
 //
 // 00000000 <ml_func>:
