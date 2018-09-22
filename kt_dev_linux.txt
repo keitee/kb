@@ -81,7 +81,7 @@
 *kt_linux_tool_005* tool-uname linux-check-distribution
 |kt_linux_tool_006| tool-cp
 |kt_linux_tool_007| mkdir
-|kt_linux_tool_008| strings
+*kt_linux_tool_008* tool-strings
 *kt_linux_tool_009* tool-head
 |kt_linux_tool_002| tool-cut
 |kt_linux_tool_009| tool-sort
@@ -403,6 +403,7 @@
 *kt_linux_arch_001* arch-mips-for-and-while
 *kt_linux_arch_001* arch-mips-power-on-reset
 *kt_linux_arch_001* arch-mips-qemu tool-qemu
+*kt_linux_arch_001* arch-x86-stack
 
 *kt_linux_core_400* linux-elf-readelf
 *kt_linux_core_400* linux-elf
@@ -6864,7 +6865,7 @@ Use to make parent directories as well.
 
 
 ={============================================================================
-*kt_linux_tool_008* strings
+*kt_linux_tool_008* tool-strings
 
 To find string in the library.
 
@@ -15446,6 +15447,7 @@ then run your code with ASAN_OPTIONS=halt_on_error=0.
   -fsanitize-recover=address uaf.c -o out_uaf_v6_w_recover
 
 
+<x>
 To get the idea of what's supported in your version, run
 
 // only works for GCC 6.3.0
@@ -15471,6 +15473,26 @@ The default is "stderr".
 
 verbosity	0	
 Verbosity level (0 - silent, 1 - a bit of output, 2+ - more output).
+
+
+<x>
+chefmax commented on Nov 20, 2017
+
+@keitee Do you have an ability to rebuild ASan by your own? If so, you can
+backport this patch (https://reviews.llvm.org/rL309854) and use
+sleep_after_init flag in ASAN_OPTIONS and attach to the process under test.
+
+compiler-rt/trunk/lib/asan/asan_flags.inc
+
+ASAN_FLAG(
+    int, sleep_after_init, 0,
+    "Number of seconds to sleep after AddressSanitizer is initialized. "
+    "Useful for debugging purposes (e.g. when one needs to attach gdb).")
+
+  if (flags()->sleep_after_init) {
+    Report("Sleeping for %d second(s)\n", flags()->sleep_after_init);
+    SleepForSeconds(flags()->sleep_after_init);
+  }
 
 
 // from runs
@@ -18232,7 +18254,6 @@ export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
 # mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
 
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-pete/ /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb/flash0 /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-gm/flash0 /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-r16/flash0 /flash0
 
@@ -18245,9 +18266,15 @@ mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-clean-build/
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-asan-build/flash0 /flash0
 
-
 ulimit -c unlimited
 /flash0/scripts/startstack.sh
+
+
+// copy from office debian
+scp libasan* 10.209.62.106:/home/kyoupark/si_logs/flash0-asan
+mkdir /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan/ /flash0
+
 
 //
 /flash0/scripts/run.sh
@@ -64888,6 +64915,10 @@ make install
 
 7. Standard C++ Library (back to gcc) *gcc-libstdc++*
 =======================
+
+note:
+run this step when make changes libs like *tool-asan* in gcc
+
 Finally, we finish off the GCC package, which builds the standard C++ library
 and installs it to /opt/cross/aarch64-linux/lib64/. It depends on the C
 library built in step 6. The resulting static library is named libstdc++.a and
@@ -66353,7 +66384,7 @@ gcc-glibc-brcm-mips-install/mips-linux-gnu/include/bits/local_lim.h
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-enable-asan
+*kt_linux_gcc_400* gcc-build-tool-asan
 
 gcc/gcc.c:7683:   /* -fsanitize= and -fsanitize-recover= can take
 gcc/opts.c:958:    error_at (loc, "-fsanitize-recover=thread is not supported");
@@ -70752,6 +70783,307 @@ Wait gdb connection to port
 
 
 ={============================================================================
+*kt_linux_arch_001* arch-x86-stack
+
+https://eli.thegreenplace.net/2011/02/04/where-the-top-of-the-stack-is-on-x86/
+Where the top of the stack is on x86
+
+I've noticed more than once that some programmers are confused about the
+direction in which the stack grows on x86, and what "top of the stack" and
+"bottom of the stack" mean. It appears that this confusion is caused by a
+basic mismatch in the way people are used to thinking about stacks, and in the
+way the stack on x86 actually behaves [1].
+
+// [1] It doesn't help that some online resources mistakenly call the top of
+// the stack "bottom". The version presented here is the correct one of x86,
+// since it relies on terminology defined in Intel's x86 architecture manuals
+
+In this article, I intend to resolve this confusion with a few helpful
+diagrams.
+
+
+The stack analogy
+
+Back to the basics. The stack analogy is sometimes demonstrated to new
+students of computing with a stack of plates. You push a plate onto the stack
+and pop a plate off the stack. The top of the stack is where your next plate
+goes when pushing, and from where you take a plate when popping.
+
+
+Hardware stacks
+
+In computers, the stack is usually a specially treated region of memory. In
+the abstract sense, the analogy applies - you push data by placing it on the
+top of the stack, and pop data by taking it from the top of the stack. Note
+that this doesn't address `the issue of where the top of the stack is` located
+in memory.
+
+
+The stack in x86
+
+Herein lies the source of the confusion. Intel's x86 architecture places its
+stack "head down". It starts at some address and grows down to a lower
+address. Here's how it looks:
+
+
+So when we say "top of the stack" on x86, we actually mean the lowest address
+in the memory area occupied by the stack. This may be unnatural for some
+people [2]. As long as we keep the diagram shown above firmly in mind,
+however, we should be OK.
+
+// [2] You may try to fix the confusion by viewing memory with its low
+// addresses at the top and high addresses at the bottom. While this would
+// indeed make stack movement more natural, it would also mean that increasing
+// some memory address would take it down in the graphical representation,
+// which is probably even more counter-intuitive.
+
+While we're at it, let's see how some common idioms of x86 assembly
+programming map to this graphical representation.
+
+
+Pushing and popping data with the stack pointer
+
+The x86 architecture reserves a special register for working with the stack -
+ESP (Extended Stack Pointer). The ESP, by definition, always points to the top
+of the stack:
+
+// Whereas most of the registers have lost their special purposes in the
+// modern instruction set, by convention, two are reserved for special
+// purposes  the stack pointer (ESP) and the base pointer (EBP).
+
+In this diagram, address 0x9080ABCC is the top of the stack. The word located
+in it is some "foo" and ESP contains the address 0x9080ABCC - in other words,
+points to it.
+
+// [3] There are several instructions x86 defines in the "push family". I'm
+// demonstrating push since it's the simplest and most generally applicable.
+
+To push new data onto the stack we use the push instruction [3]. What push
+does is first decrement esp by 4, and then store its operand in the location
+esp points to. So this:
+
+push eax
+
+Is actually equivalent to this:
+
+sub esp, 4
+mov [esp], eax
+
+Taking the previous diagram as the starting point, and supposing that eax held
+the venerable value 0xDEADBEEF, after the push the stack will look as follows:
+
+high
+            |             |
+0x9080ABCC  |   foo       |
+0x9080ABC8  | 0xDEADBEEF  |   <- esp
+            |             |
+low
+
+
+Similarly, the pop instruction takes a value off the top of stack and places
+it in its operand, increasing the stack pointer afterwards. In other words,
+this:
+
+pop eax
+
+Is equivalent to this:
+
+mov eax, [esp]
+add esp, 4
+
+So, again, taking the previous diagram (after the push) as a starting point,
+pop eax will do the following:
+
+And the value 0xDEADBEEF will be written into eax. Note that 0xDEADBEEF also
+stays at address 0x9080ABC8, since we did nothing to overwrite it yet.
+
+
+Stack frames and calling conventions
+
+When looking at assembly code generated from C, you will find a lot of
+interesting patterns. Perhaps the most recognizable pattern is the way
+parameters are passed into functions using the stack, and the way local
+variables are allocated on the stack [4].
+
+// [4] This only applies to some calling conventions and architectures, of
+// course. In others, some parameters are passed in registers.
+
+I'll demonstrate this with a simple C program:
+
+int foobar(int a, int b, int c)
+{
+    int xx = a + 2;
+    int yy = b + 3;
+    int zz = c + 4;
+    int sum = xx + yy + zz;
+
+    return xx * yy * zz + sum;
+}
+
+int main()
+{
+    return foobar(77, 88, 99);
+}
+
+Both the arguments passed into foobar and the local variables of that
+function, along with some other data, are going to be stored on the stack when
+foobar is called. This set of data on the stack is called a frame for this
+function. Right before the return statement, the stack frame for foobar looks
+like this:
+
+high
+
+epb + 16  [       c         ]
+epb + 12  [       b         ]
+epb + 8   [       a         ]
+ebp + 4   [ return address  ]
+ebp       | saved ebp       | <- ebp
+epb - 4   |       xx        |
+epb - 8   |       yy        |
+epb - 12  |       zz        |
+ebp - 16  | sum             | <- esp
+
+low
+
+The green data, marked with [], were pushed onto the stack by the calling
+function, and the blue ones, ||, by foobar itself.
+
+Compiled with gcc into assembly as follows:
+
+gcc -masm=intel -S z.c -o z.s
+
+The following assembly listing is generated for foobar. I commented it heavily
+for easy understanding:
+
+_foobar:
+    ; ebp must be preserved across calls. Since
+    ; this function `modifies` it, it must be
+    ; saved.
+    ;
+    push    ebp   // esp -= 4, esp = ebp 
+
+    ; From now on, ebp points to the current stack
+    ; frame of the function
+    ;
+    mov     ebp, esp
+
+    ; Make space on the stack for local variables
+    ;
+    sub     esp, 16
+
+    ; eax <-- a. eax += 2. then store eax in xx
+    ;
+    mov     eax, DWORD PTR [ebp+8]
+    add     eax, 2
+    mov     DWORD PTR [ebp-4], eax
+
+    ; eax <-- b. eax += 3. then store eax in yy
+    ;
+    mov     eax, DWORD PTR [ebp+12]
+    add     eax, 3
+    mov     DWORD PTR [ebp-8], eax
+
+    ; eax <-- c. eax += 4. then store eax in zz
+    ;
+    mov     eax, DWORD PTR [ebp+16]
+    add     eax, 4
+    mov     DWORD PTR [ebp-12], eax
+
+    ; add xx + yy + zz and store it in sum
+    ;
+    mov     eax, DWORD PTR [ebp-8]
+    mov     edx, DWORD PTR [ebp-4]
+    lea     eax, [edx+eax]
+    add     eax, DWORD PTR [ebp-12]
+    mov     DWORD PTR [ebp-16], eax
+
+    ; Compute final result into eax, which
+    ; stays there until return
+    ;
+    mov     eax, DWORD PTR [ebp-4]
+    imul    eax, DWORD PTR [ebp-8]
+    imul    eax, DWORD PTR [ebp-12]
+    add     eax, DWORD PTR [ebp-16]
+
+    ; The leave instruction here is equivalent to:
+    ;
+    ;   mov esp, ebp
+    ;   pop ebp     // ebp = esp, esp += 4
+    ;
+    ; Which cleans the allocated locals and restores
+    ; ebp.
+    ;
+    leave
+    ret
+
+Since esp keeps moving as the function executes, ebp (`base pointer`, also
+    known as `frame pointer` in other architectures) is used as a convenient
+anchor relatively to which all function arguments and locals can be found.
+Arguments are above ebp in the stack (hence the positive offset when accessing
+    them), while locals are below ebp in the stack.
+
+
+// asm file from gcc -masm=intel -S z.c -o z.s on 32 bit
+
+foobar:
+.LFB0:
+	.cfi_startproc
+	push	ebp
+	.cfi_def_cfa_offset 8
+	.cfi_offset 5, -8
+	mov	ebp, esp
+	.cfi_def_cfa_register 5
+	sub	esp, 16
+	call	__x86.get_pc_thunk.ax
+	add	eax, OFFSET FLAT:_GLOBAL_OFFSET_TABLE_
+	mov	eax, DWORD PTR 8[ebp]
+	add	eax, 2
+	mov	DWORD PTR -4[ebp], eax
+	mov	eax, DWORD PTR 12[ebp]
+	add	eax, 3
+	mov	DWORD PTR -8[ebp], eax
+	mov	eax, DWORD PTR 16[ebp]
+	add	eax, 4
+	mov	DWORD PTR -12[ebp], eax
+	mov	edx, DWORD PTR -4[ebp]
+	mov	eax, DWORD PTR -8[ebp]
+	add	edx, eax
+	mov	eax, DWORD PTR -12[ebp]
+	add	eax, edx
+	mov	DWORD PTR -16[ebp], eax
+	mov	eax, DWORD PTR -4[ebp]
+	imul	eax, DWORD PTR -8[ebp]
+	imul	eax, DWORD PTR -12[ebp]
+	mov	edx, eax
+	mov	eax, DWORD PTR -16[ebp]
+	add	eax, edx
+	leave
+	.cfi_restore 5
+	.cfi_def_cfa 4, 4
+	ret
+	.cfi_endproc
+.LFE0:
+	.size	foobar, .-foobar
+	.globl	main
+	.type	main, @function
+
+note that do not use leave and may be because this function do not have local
+variables so don't need to increase esp?
+
+0000043c <ml_func>:
+ 43c:   55                      push   ebp
+ 43d:   89 e5                   mov    ebp,esp
+ 43f:   e8 16 00 00 00          call   45a <__i686.get_pc_thunk.cx>
+>`444`:   81 c1 b0 1b 00 00       add    ecx,`0x1bb0`
+ 44a:   8b 81 f0 ff ff ff       mov    eax,DWORD PTR [ecx-0x10]
+ 450:   8b 00                   mov    eax,DWORD PTR [eax]
+ 452:   03 45 08                add    eax,DWORD PTR [ebp+0x8]
+ 455:   03 45 0c                add    eax,DWORD PTR [ebp+0xc]
+ 458:   5d                      pop    ebp
+ 459:   c3                      ret
+
+
+={============================================================================
 *kt_linux_core_400* linux-elf-readelf
 
 <elf-sections>
@@ -71576,7 +71908,6 @@ kyoupark@kt-office-debian:~/works$ objdump -d ml_reloc.o
 
 ml_reloc.o:     file format elf32-i386
 
-
 Disassembly of section .text:
 
 00000000 <ml_func>:
@@ -71605,7 +71936,6 @@ Disassembly of section .text.__x86.get_pc_thunk.ax:
 kyoupark@kt-office-debian:~/works$ objdump -d -Mintel ml_reloc.o
 
 ml_reloc.o:     file format elf32-i386
-
 
 Disassembly of section .text:
 
@@ -72579,6 +72909,40 @@ Let's take a look at its disassembly, focusing on the ml_func function:
 0000045a <__i686.get_pc_thunk.cx>:
  45a:   8b 0c 24                mov    ecx,DWORD PTR [esp]
  45d:   c3                      ret
+
+// from office-debian
+//
+// 00000530 <ml_func>:
+//  530:   55                      push   ebp
+//  531:   89 e5                   mov    ebp,esp
+//  533:   53                      push   ebx
+//  534:   e8 c7 fe ff ff          call   400 <__x86.get_pc_thunk.bx>
+//  539:   81 c3 c7 1a 00 00       add    ebx,0x1ac7
+//  53f:   ff 93 f0 ff ff ff       call   DWORD PTR [ebx-0x10]
+//  545:   89 d8                   mov    eax,ebx
+//  547:   8b 90 e8 ff ff ff       mov    edx,DWORD PTR [eax-0x18]
+//  54d:   8b 0a                   mov    ecx,DWORD PTR [edx]
+//  54f:   8b 55 08                mov    edx,DWORD PTR [ebp+0x8]
+//  552:   01 d1                   add    ecx,edx
+//  554:   8b 90 e8 ff ff ff       mov    edx,DWORD PTR [eax-0x18]
+//  55a:   89 0a                   mov    DWORD PTR [edx],ecx
+//  55c:   8b 80 e8 ff ff ff       mov    eax,DWORD PTR [eax-0x18]
+//  562:   8b 10                   mov    edx,DWORD PTR [eax]
+//  564:   8b 45 0c                mov    eax,DWORD PTR [ebp+0xc]
+//  567:   01 d0                   add    eax,edx
+//  569:   5b                      pop    ebx
+//  56a:   5d                      pop    ebp
+//  56b:   c3                      ret
+//
+// 00000400 <__x86.get_pc_thunk.bx>:
+//  400:   8b 1c 24                mov    ebx,DWORD PTR [esp]
+//  403:   c3                      ret
+//  404:   66 90                   xchg   ax,ax
+//  406:   66 90                   xchg   ax,ax
+//  408:   66 90                   xchg   ax,ax
+//  40a:   66 90                   xchg   ax,ax
+//  40c:   66 90                   xchg   ax,ax
+//  40e:   66 90                   xchg   ax,ax
 
 // function-prolog
 // the address of the GOT is held in the register %ecx. This register is
