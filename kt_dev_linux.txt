@@ -404,6 +404,7 @@
 *kt_linux_arch_001* arch-mips-power-on-reset
 *kt_linux_arch_001* arch-mips-qemu tool-qemu
 *kt_linux_arch_001* arch-x86-stack
+*kt_linux_arch_001* arch-x86-asm
 
 *kt_linux_core_400* linux-elf-readelf
 *kt_linux_core_400* linux-elf
@@ -56225,6 +56226,8 @@ elf32-tradlittlemips
 ={============================================================================
 *kt_linux_gcc_400* gcc-asm
 
+https://maksimdan.gitbooks.io/intel-x86-assembly-gcc/content/inline_assembly.html
+
 https://gcc.gnu.org/onlinedocs/gcc/Extended-Asm.html#AssemblerTemplate
 6.45.2 Extended Asm - Assembler Instructions with C Expression Operands
 
@@ -70946,10 +70949,11 @@ ebp - 16  | sum             | <- esp
 low
 
 The green data, marked with [], were pushed onto the stack by the calling
-function, and the blue ones, ||, by foobar itself.
+function, `caller`, and the blue ones, ||, by foobar itself, `callee`.
 
 Compiled with gcc into assembly as follows:
 
+*gcc-asm*
 gcc -masm=intel -S z.c -o z.s
 
 The following assembly listing is generated for foobar. I commented it heavily
@@ -70958,9 +70962,9 @@ for easy understanding:
 _foobar:
     ; ebp must be preserved across calls. Since
     ; this function `modifies` it, it must be
-    ; saved.
+    ; saved. save ebp of the previous.
     ;
-    push    ebp   // esp -= 4, esp = ebp 
+    push    ebp   // esp -= 4, [esp] = ebp 
 
     ; From now on, ebp points to the current stack
     ; frame of the function
@@ -71008,7 +71012,7 @@ _foobar:
     ; The leave instruction here is equivalent to:
     ;
     ;   mov esp, ebp
-    ;   pop ebp     // ebp = esp, esp += 4
+    ;   pop ebp     // ebp = [esp], esp += 4
     ;
     ; Which cleans the allocated locals and restores
     ; ebp.
@@ -71021,6 +71025,34 @@ Since esp keeps moving as the function executes, ebp (`base pointer`, also
 anchor relatively to which all function arguments and locals can be found.
 Arguments are above ebp in the stack (hence the positive offset when accessing
     them), while locals are below ebp in the stack.
+
+
+http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
+
+Example 
+
+The code below shows a function call that follows the caller rules. The caller
+is calling a function _myFunc that takes three integer parameters. First
+parameter is in EAX, the second parameter is the constant 216; the third
+parameter is in memory location var.
+
+push [var] ; Push last parameter first
+push 216   ; Push the second parameter
+push eax   ; Push first parameter last
+
+call _myFunc ; Call the function (assume C naming)
+
+add esp, 12
+
+Note that after the call returns, the caller cleans up the stack using the add
+instruction. We have 12 bytes (3 parameters * 4 bytes each) on the stack, and
+the stack grows down. Thus, to get rid of the parameters, we can simply add 12
+to the stack pointer.  
+
+The result produced by _myFunc is now available for use in the register EAX.
+The values of the caller-saved registers (ECX and EDX), may have been changed.
+If the caller uses them after the call, it would have needed to save them on
+the stack before the call and restore them after it.
 
 
 // asm file from gcc -masm=intel -S z.c -o z.s on 32 bit
@@ -71081,6 +71113,285 @@ variables so don't need to increase esp?
  455:   03 45 0c                add    eax,DWORD PTR [ebp+0xc]
  458:   5d                      pop    ebp
  459:   c3                      ret
+
+
+<arch-x86-64-stack>
+https://eli.thegreenplace.net/2011/09/06/stack-frame-layout-on-x86-64
+
+
+={============================================================================
+*kt_linux_arch_001* arch-x86-asm
+
+*gcc-asm*
+
+3.17 Hardware Models and Configurations
+
+-masm=dialect
+Output assembly instructions using selected dialect. Supported choices are
+‘intel’ or ‘att’ (the default). Darwin does not support ‘intel’.
+
+-fverbose-asm
+Put extra commentary information in the generated assembly code to make it
+more readable. This option is generally only of use to those who actually need
+to read the generated assembly code (perhaps while debugging the compiler
+    itself).  ‘-fno-verbose-asm’, the default, causes the extra information to
+be omitted and is useful when comparing two assembler files.
+
+
+3.17.16 Intel 386 and AMD x86-64 Options
+
+-m32
+-m64
+-mx32 
+
+Generate code for a 32-bit or 64-bit environment. The ‘-m32’ option sets int,
+long, and pointer types to 32 bits, and generates code that runs on any i386
+  system.  The ‘-m64’ option sets int to 32 bits and long and pointer types to
+  64 bits, and generates code for the x86-64 architecture. For Darwin only the
+  ‘-m64’ option also turns off the ‘-fno-pic’ and ‘-mdynamic-no-pic’ options.
+  The ‘-mx32’ option sets int, long, and pointer types to 32 bits, and
+  generates code for the x86-64 architecture.
+
+
+http://asm.sourceforge.net/howto/gas.html
+
+<gcc-asm-att>
+What is this AT&T syntax
+
+Because GAS was invented to support a 32-bit unix compiler, it uses standard
+AT&T syntax, which resembles a lot the syntax for standard m68k assemblers,
+and is standard in the UNIX world. This syntax is neither worse, nor better
+  than the Intel syntax. It's just different. When you get used to it, you
+  find it much more regular than the Intel syntax, though a bit boring.
+
+Here are the major caveats about GAS syntax:
+
+`Register names are prefixed with %`, so that registers are %eax, %dl and so
+on, instead of just eax, dl, etc. This makes it possible to include external C
+symbols directly in assembly source, without any risk of confusion, or any
+need for ugly underscore prefixes.
+
+
+The `order of operands` is source(s) first, and destination last, as opposed
+to the Intel convention of destination first and sources last. Hence, what in
+Intel syntax is mov eax,edx (move contents of register edx into register eax)
+will be in GAS syntax mov %edx,%eax.
+
+
+The operand size is specified as a `suffix` to the instruction name. The suffix
+is b for (8-bit) byte, w for (16-bit) word, and l for (32-bit) long. For
+instance, the correct syntax for the above instruction would have been movl
+%edx,%eax. However, gas does not require strict AT&T syntax, so the suffix is
+optional when size can be guessed from register operands, and else defaults to
+32-bit (with a warning).
+
+
+Immediate operands are marked with a $ prefix, as in 
+
+addl $5,%eax 
+(add immediate long value 5 to register %eax).
+
+// The `immediate value` is fixed (not variable), and is coded into the
+// instruction itself. Immediate values are prefixed with $.
+
+
+Missing operand prefix indicates that it is memory-contents; hence 
+
+movl $foo,%eax 
+puts the address of variable foo into register %eax, but 
+
+movl foo,%eax 
+puts the contents of variable foo into register %eax.
+
+
+Indexing or `indirection` is done by enclosing the index register or indirection
+memory cell address in parentheses, as in 
+
+testb $0x80,17(%ebp) 
+
+(test the high bit of the byte value at offset 17 from the cell pointed to by
+ %ebp).
+
+
+Addressing modes
+
+When we write code that has loops, often one register holds the base address
+of an array and another register holds the current index being processed.
+Although it’s possible to manually compute the address of the element being
+processed, the x86 ISA provides a more elegant solution – there are memory
+addressing modes that let you add and multiply certain registers together.
+This is probably easier to illustrate than describe:
+
+movb (%eax,%ecx), %bh         // means bh = *(eax + ecx);.
+
+movb -10(%eax,%ecx,4), %bh    // means bh = *(eax + (ecx * 4) - 10);.
+
+The address format is offset(base, index, scale), where offset is an integer
+constant (can be positive, negative, or zero), base and index are 32-bit
+registers (but a few combinations are disallowed), and scale is either
+{1,2,4,8}. For example if an array holds a series of 64-bit integers, we would
+use scale = 8 because each element is 8 bytes long.
+
+The memory addressing modes are valid wherever a memory operand is permitted.
+Thus if you can write sbbl %eax, (%eax), then you can certainly write sbbl
+%eax, (%eax,%eax,2) if you need the indexing capability. Also note that the
+address being computed is a temporary value that is not saved in any register.
+This is good because if you wanted to compute the address explicitly, you
+would need to allocate a register for it, and having only 8 GPRs is rather
+tight when you want to store other variables.
+
+There is one special instruction that uses memory addressing but does not
+actually access memory. The `leal (load effective address)` instruction
+computes the final memory address according to the addressing mode, and stores
+the result in a register. For example, 
+    
+leal 5(%eax,%ebx,8), %ecx     // means ecx = eax + ebx*8 + 5;. 
+
+Note that this is entirely an arithmetic operation and does not involve
+dereferencing a memory address.
+
+
+Although jmp is unconditional, it has sibling instructions that look at the
+state of `eflags`, and either jumps to the label if the condition is met or
+otherwise advances to the next instruction below. 
+
+Conditional jump instructions include:  ja (jump if above), jle (jump if less
+    than or equal), jo (jump if overflow), jnz (jump if non-zero), et cetera.
+There are 16 of them in all, and some have synonyms – e.g. jz (jump if zero)
+is the same as je (jump if equal), ja (jump if above) is the same as jnbe
+(jump if not below or equal). An example of using conditional jump:
+
+jc skip  /* If carry flag is on, then jump away */
+/* Otherwise CF is off, then execute this stuff */
+notl %eax
+/* Implicitly fall into the next instruction */
+skip:
+adcl %eax, %eax
+
+Label addresses are fixed in the code when it is compiled, but it is also
+possible to jump to an arbitrary memory address computed at run time. In
+particular, it is possible to jump to the value of a register: jmp *%ecx
+essentially means to copy ecx’s value into eip, the instruction pointer
+register.
+
+
+Now is a perfect time to discuss a concept that was glossed over in section 1
+about instructions and execution. Each instruction in assembly language is
+ultimately translated into 1 to 15 bytes of machine code, and these machine
+instructions are strung together to create an executable file. The CPU has a
+32-bit register named `eip (extended instruction pointer)` which, during
+program execution, holds the memory address of the current instruction being
+executed.  Note that there are very few ways to read or write the eip
+register, hence why it behaves very differently from the 8 main
+general-purpose registers.  Whenever an instruction is executed, the CPU knows
+how many bytes long it was, and advances eip by that amount so that it points
+to the next instruction.
+
+
+http://www.cs.virginia.edu/~evans/cs216/guides/x86.html
+
+*x86-registares-32*
+               16       8    8
+EAX       |       AX | AH | AL |
+EBX       |       BX | BH | BL |
+ECX       |       CX | CH | CL |
+EDX       |       DX | DH | DL |
+ESI       |          |    |    |
+EDI       |          |    |    |
+ESP       |          |    |    |
+EBP       |          |    |    |
+
+For the EAX, EBX, ECX, and EDX registers, subsections may be used. For
+example, the least significant 2 bytes of EAX can be treated as a 16-bit
+register called AX. The least significant byte of AX can be used as a single
+8-bit register called AL, while the most significant byte of AX can be used as
+a single 8-bit register called AH. These names refer to the same physical
+register. When a two-byte quantity is placed into DX, the update affects the
+value of DH, DL, and EDX. These sub-registers are mainly hold-overs from
+older, 16-bit versions of the instruction set. However, they are sometimes
+convenient when dealing with data that are smaller than 32-bits (e.g. 1-byte
+    ASCII characters).
+
+
+lea — Load effective address
+
+The lea instruction places the address specified by its second operand into
+the register specified by its first operand. Note, the contents of the memory
+location are not loaded, only the effective address is computed and placed
+into the register. This is useful for obtaining a pointer into a memory
+region.
+
+Syntax
+lea <reg32>,<mem>
+
+Examples
+lea edi, [ebx+4*esi] — the quantity EBX+4*ESI is placed in EDI.
+lea eax, [var] — the value in var is placed in EAX.
+lea eax, [val] — the value val is placed in EAX.
+
+
+shl, shr — Shift Left, Shift Right
+
+These instructions shift the bits in their first operand's contents left and
+right, padding the resulting empty bit positions with zeros. The shifted
+operand can be shifted up to 31 places. The number of bits to shift is
+specified by the second operand, which can be either an 8-bit constant or the
+register CL. In either case, shifts counts of greater then 31 are performed
+modulo 32.
+
+Syntax
+shl <reg>,<con8>
+shl <mem>,<con8>
+shl <reg>,<cl>
+shl <mem>,<cl>
+
+shr <reg>,<con8>
+shr <mem>,<con8>
+shr <reg>,<cl>
+shr <mem>,<cl>
+
+Examples
+shl eax, 1 — Multiply the value of EAX by 2 (if the most significant bit is 0)
+
+shr ebx, cl — Store in EBX the floor of result of dividing the value of EBX by
+2n wheren is the value in CL.
+
+test — Logical Compare
+
+Computes the bit-wise logical AND of first operand (source 1 operand) and the
+second operand (source 2 operand) and sets the SF, ZF, and PF status flags
+according to the result. The result is then discarded.
+
+
+set`cc` — Set Byte on Condition
+
+SETNE Set byte if not equal (ZF=0).
+
+Sets the destination operand to 0 or 1 depending on the settings of the status
+flags (CF, SF, OF, ZF, and PF) in the EFLAGS register. The destination operand
+points to a byte register or a byte in memory. The condition code suffix (cc)
+  indicates the condition being tested for.
+
+The terms “above” and “below” are associated with the CF flag and refer to the
+relationship between two unsigned integer values. The terms “greater” and
+“less” are associated with the SF and OF flags and refer to the relationship
+between two signed integer values.
+
+Many of the SETcc instruction opcodes have alternate mnemonics. For example,
+     SETG (set byte if greater) and SETNLE (set if not less or equal) have the
+     same opcode and test for the same condition: ZF equals 0 and SF equals
+     OF. These alternate mnemonics are provided to make code more
+     intelligible. Appendix B, “EFLAGS Condition Codes,” in the Intel® 64 and
+     IA-32 Architectures Software Developer’s Manual, Volume 1, shows the
+     alternate mnemonics for various test conditions.
+
+Some languages represent a logical one as an integer with all bits set. This
+representation can be obtained by choosing the logically opposite condition
+for the SETcc instruction, then decrementing the result. For example, to test
+for overflow, use the SETNO instruction, then decrement the result.
+
+The reg field of the ModR/M byte is not used for the SETCC instruction and
+those opcode bits are ignored by the processor.
 
 
 ={============================================================================
@@ -72120,6 +72431,7 @@ here. Note a couple of things:
   has size 0x10c, meaning that it extends until 0x2010 and thus contains
   myglob which is at 0x200C.
 
+*dl-iterate*
 Use a nice tool Linux gives us to examine the `load-time linking process` - the
 dl_iterate_phdr function, which allows an application to inquire at runtime
 which shared libraries it has loaded, and more importantly - take a peek at
@@ -78085,9 +78397,9 @@ process_envvars (enum mode *modep)
 ={============================================================================
 *kt_linux_core_405* linux-lib-ld-api
 
-{dl-apis} LPI42.1
+LPI42.1
 
-<dlopen>
+<dl-dlopen>
 #include <dlfcn.h>
 
 void *dlopen(const char *libfilename, int flags);
@@ -78099,8 +78411,8 @@ calls. Loads the shared library named in libfilename into the calling process's
 virtual address space and increments the count of open references to the
 library.
 
-If the shared library specified by libfilename contains 'dependencies' on other
-shared libraries, dlopen() also automatically loads those libraries. This
+If the shared library specified by libfilename contains dependencies on other
+shared libraries, `dlopen() also automatically loads those libraries.` This
 procedure occurs recursively if necessary. We refer to the set of such loaded
 libraries as this library's dependency tree.
 
@@ -78108,7 +78420,7 @@ RTLD_LAZY
 
 Undefined function symbols in the library should be resolved only as the code is
 executed. If a piece of code requiring a particular symbol is not executed, that
-symbol is 'never' resolved. Lazy resolution is performed 'only' for function
+symbol is 'never' resolved. Lazy resolution is performed `only for function`
 references; references to variables are always resolved immediately. Specifying
 the RTLD_LAZY flag provides behavior that corresponds to the normal operation of
 the dynamic linker when loading the shared libraries identified in an
@@ -78124,7 +78436,7 @@ references in other libraries loaded by this process and also for lookups via
 dlsym().
 
 
-{dlerror}
+<dl-dlerror>
 If we receive an error return from dlopen() or one of the other functions in the
 dlopen API, we can use dlerror() to obtain a pointer to a string that indicates
 the cause of the error.
@@ -78142,7 +78454,7 @@ to dlerror(). We'll see how this is useful in the next section.
 (void) dlerror(); /* Clear dlerror() */
 
 
-{dlsym}
+<dl-dlsym>
 #include <dlfcn.h>
 
 void *dlsym(void *handle, char *symbol);
@@ -78194,11 +78506,45 @@ if (!bcmInit) {
 } else if (!bcmInit()) {
 
 
-{dlclose}
+<dl-dlclose>
 The dlclose() function closes a library previously opened by dlopen().
 
 
-<to-link>
+<dl-iterate>
+
+// /usr/include/link.h
+/* Data structure for communication from the run-time dynamic linker for
+   loaded ELF shared objects.
+   Copyright (C) 1995-2014 Free Software Foundation, Inc.
+   This file is part of the GNU C Library.
+
+   The GNU C Library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
+
+   The GNU C Library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Lesser General Public License for more details.
+
+   You should have received a copy of the GNU Lesser General Public
+   License along with the GNU C Library; if not, see
+   <http://www.gnu.org/licenses/>.  */
+
+#ifndef _LINK_H
+#define _LINK_H 1
+
+#include <features.h>
+#include <elf.h>
+#include <dlfcn.h>
+#include <sys/types.h>
+...
+
+see *dl-iterate* example.
+
+
+<dl-link>
 To build programs that use the dlopen API on Linux, we must specify the -ldl
 option, in order to link against the libdl library.
 
