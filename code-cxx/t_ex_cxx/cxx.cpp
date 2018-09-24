@@ -2003,6 +2003,24 @@ TEST(IntegerDivision, Precentage)
 
 
 // ={=========================================================================
+// cxx-shift
+
+TEST(Shift, Precentage)
+{
+  int value = 9;
+
+  cout << 
+    "division: " << (value/2) << endl <<  
+    "shift   : " << (value>>1) << endl;
+
+  float result = value/2.0;
+  cout << 
+    "ceil  : " << ceil(result) << endl <<
+    "floor : " << floor(result) << endl;
+}
+
+
+// ={=========================================================================
 
 int main(int argc, char** argv)
 {

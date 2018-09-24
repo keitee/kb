@@ -315,7 +315,7 @@
 *kt_linux_gdb_000* gdb-frame
 *kt_linux_gdb_300* gdb-core-backtrace gdb-bt
 |kt_linux_gdb_300| gdb-core-analysis-on-mips
-*kt_linux_gdb_001* gdb-break-continue step
+*kt_linux_gdb_001* gdb-break-continue gdb-step
 *kt_linux_gdb_000* gdb-break
 *kt_linux_gdb_000* gdb-break-condition gdb-break-temp gdb-condition
 *kt_linux_gdb_000* gdb-break-convenience-variable
@@ -15553,250 +15553,366 @@ static void AsanInitInternal() {
 }
 
 
+<asan-code-report>
+
+// asan/asan_rtl.cc
+ASAN_REPORT_ERROR(store, true, 4)
+
+// exported functions
+#define ASAN_REPORT_ERROR(type, is_write, size)                     \
+extern "C" NOINLINE INTERFACE_ATTRIBUTE                        \
+void __asan_report_ ## type ## size(uptr addr);                \
+void __asan_report_ ## type ## size(uptr addr) {               \
+  GET_CALLER_PC_BP_SP;                                              \
+  __asan_report_error(pc, bp, sp, addr, is_write, size);            \
+}
+
+// asan/asan_report.cc
+void __asan_report_error(uptr pc, uptr bp, uptr sp,
+                         uptr addr, bool is_write, uptr access_size) {
+  ScopedInErrorReport in_report;
+}
+
 {asan-code-asm}
+
+modified it to have function call to see the sanitized code more clearly.
 
      1  #include <stdio.h>
      2  #include <stdlib.h>
      3
      4  //      gcc -fsanitize=address testmain.c -o out_asn
-     5  int main(int argc, char **argv)
-     6  {
-     7      printf("====> \n" );
-     8      printf("====> this is uaf(use after free)..\n" );
-     9      printf("====> \n" );
-    10      int *x = malloc(10*sizeof(int));
-    11      free(x);
-    12      x[5] = 10;
-    13      return;
-    14  }
-    15
+     5
+     6  int call_add(int a, int b)
+     7  {
+     8      int c = a*10 + b;
+     9      return c;
+    10  }
+    11
+    12  void call_uaf()
+    13  {
+    14      int *x = malloc(10*sizeof(int));
+    15      free(x);
+    16      x[5] = 10;
+    17
+    18      return;
+    19  }
+    20
+    21  int main(int argc, char **argv)
+    22  {
+    23      printf("main: begin.\n" );
+    24      printf("main: this is uaf(use after free)..\n" );
+    25      printf("main: \n" );
+    26
+    27      call_uaf();
+    28
+    29      printf("main: returns from call_add() is %d\n", call_add(10, 20));
+    30      printf("main: ends.\n" );
+    31
+    32      return 0;
+    33  }
 
 // no-sanitized
 
-000005f0 <main>:
+080484fc <call_uaf>:
+call_uaf():
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:13
+ 80484fc:	55                   	push   ebp
+ 80484fd:	89 e5                	mov    ebp,esp
+ 80484ff:	83 ec 18             	sub    esp,0x18
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:14
+ 8048502:	83 ec 0c             	sub    esp,0xc
+ 8048505:	6a 28                	push   0x28
+ 8048507:	e8 54 fe ff ff       	call   8048360 <malloc@plt>
+ 804850c:	83 c4 10             	add    esp,0x10
+ 804850f:	89 45 f4             	mov    DWORD PTR [ebp-0xc],eax
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:15
+ 8048512:	83 ec 0c             	sub    esp,0xc
+ 8048515:	ff 75 f4             	push   DWORD PTR [ebp-0xc]
+ 8048518:	e8 33 fe ff ff       	call   8048350 <free@plt>
+ 804851d:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:16
+ 8048520:	8b 45 f4             	mov    eax,DWORD PTR [ebp-0xc]
+ 8048523:	83 c0 14             	add    eax,0x14
+ 8048526:	c7 00 0a 00 00 00    	mov    DWORD PTR [eax],0xa
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:18
+ 804852c:	90                   	nop
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:19
+ 804852d:	c9                   	leave  
+ 804852e:	c3                   	ret    
+
+0804852f <main>:
 main():
-/home/kyoupark/asan/gcc/uaf.c:6
- 5f0:	8d 4c 24 04          	lea    ecx,[esp+0x4]
- 5f4:	83 e4 f0             	and    esp,0xfffffff0
- 5f7:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
- 5fa:	55                   	push   ebp
- 5fb:	89 e5                	mov    ebp,esp
- 5fd:	53                   	push   ebx
- 5fe:	51                   	push   ecx
- 5ff:	83 ec 10             	sub    esp,0x10
- 602:	e8 b9 fe ff ff       	call   4c0 <__x86.get_pc_thunk.bx>
- 607:	81 c3 f9 19 00 00    	add    ebx,0x19f9
-/home/kyoupark/asan/gcc/uaf.c:7
- 60d:	83 ec 0c             	sub    esp,0xc
- 610:	8d 83 00 e7 ff ff    	lea    eax,[ebx-0x1900]
- 616:	50                   	push   eax
- 617:	e8 34 fe ff ff       	call   450 <puts@plt>
- 61c:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:8
- 61f:	83 ec 0c             	sub    esp,0xc
- 622:	8d 83 08 e7 ff ff    	lea    eax,[ebx-0x18f8]
- 628:	50                   	push   eax
- 629:	e8 22 fe ff ff       	call   450 <puts@plt>
- 62e:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:9
- 631:	83 ec 0c             	sub    esp,0xc
- 634:	8d 83 00 e7 ff ff    	lea    eax,[ebx-0x1900]
- 63a:	50                   	push   eax
- 63b:	e8 10 fe ff ff       	call   450 <puts@plt>
- 640:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:10
- 643:	83 ec 0c             	sub    esp,0xc
- 646:	6a 28                	push   0x28
- 648:	e8 f3 fd ff ff       	call   440 <malloc@plt>
- 64d:	83 c4 10             	add    esp,0x10
- 650:	89 45 f4             	mov    DWORD PTR [ebp-0xc],eax
-/home/kyoupark/asan/gcc/uaf.c:11
- 653:	83 ec 0c             	sub    esp,0xc
- 656:	ff 75 f4             	push   DWORD PTR [ebp-0xc]
- 659:	e8 d2 fd ff ff       	call   430 <free@plt>
- 65e:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:12
- 661:	8b 45 f4             	mov    eax,DWORD PTR [ebp-0xc]
- 664:	83 c0 14             	add    eax,0x14
- 667:	c7 00 0a 00 00 00    	mov    DWORD PTR [eax],0xa
-/home/kyoupark/asan/gcc/uaf.c:13
- 66d:	90                   	nop
- 66e:	90                   	nop
-/home/kyoupark/asan/gcc/uaf.c:14
- 66f:	8d 65 f8             	lea    esp,[ebp-0x8]
- 672:	59                   	pop    ecx
- 673:	5b                   	pop    ebx
- 674:	5d                   	pop    ebp
- 675:	8d 61 fc             	lea    esp,[ecx-0x4]
- 678:	c3                   	ret    
- 679:	66 90                	xchg   ax,ax
- 67b:	66 90                	xchg   ax,ax
- 67d:	66 90                	xchg   ax,ax
- 67f:	90                   	nop
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:22
+ 804852f:	8d 4c 24 04          	lea    ecx,[esp+0x4]
+ 8048533:	83 e4 f0             	and    esp,0xfffffff0
+ 8048536:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
+ 8048539:	55                   	push   ebp
+ 804853a:	89 e5                	mov    ebp,esp
+ 804853c:	51                   	push   ecx
+ 804853d:	83 ec 04             	sub    esp,0x4
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:23
+ 8048540:	83 ec 0c             	sub    esp,0xc
+ 8048543:	68 88 86 04 08       	push   0x8048688
+ 8048548:	e8 23 fe ff ff       	call   8048370 <puts@plt>
+ 804854d:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:24
+ 8048550:	83 ec 0c             	sub    esp,0xc
+ 8048553:	68 98 86 04 08       	push   0x8048698
+ 8048558:	e8 13 fe ff ff       	call   8048370 <puts@plt>
+ 804855d:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:25
+ 8048560:	83 ec 0c             	sub    esp,0xc
+ 8048563:	68 bc 86 04 08       	push   0x80486bc
+ 8048568:	e8 03 fe ff ff       	call   8048370 <puts@plt>
+ 804856d:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:27
+ 8048570:	e8 87 ff ff ff       	call   80484fc <call_uaf>
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:29
+ 8048575:	83 ec 08             	sub    esp,0x8
+ 8048578:	6a 14                	push   0x14
+ 804857a:	6a 0a                	push   0xa
+ 804857c:	e8 5a ff ff ff       	call   80484db <call_add>
+ 8048581:	83 c4 10             	add    esp,0x10
+ 8048584:	83 ec 08             	sub    esp,0x8
+ 8048587:	50                   	push   eax
+ 8048588:	68 c4 86 04 08       	push   0x80486c4
+ 804858d:	e8 ae fd ff ff       	call   8048340 <printf@plt>
+ 8048592:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:30
+ 8048595:	83 ec 0c             	sub    esp,0xc
+ 8048598:	68 e9 86 04 08       	push   0x80486e9
+ 804859d:	e8 ce fd ff ff       	call   8048370 <puts@plt>
+ 80485a2:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:32
+ 80485a5:	b8 00 00 00 00       	mov    eax,0x0
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:33
+ 80485aa:	8b 4d fc             	mov    ecx,DWORD PTR [ebp-0x4]
+ 80485ad:	c9                   	leave  
+ 80485ae:	8d 61 fc             	lea    esp,[ecx-0x4]
+ 80485b1:	c3                   	ret    
+ 80485b2:	66 90                	xchg   ax,ax
+ 80485b4:	66 90                	xchg   ax,ax
+ 80485b6:	66 90                	xchg   ax,ax
+ 80485b8:	66 90                	xchg   ax,ax
+ 80485ba:	66 90                	xchg   ax,ax
+ 80485bc:	66 90                	xchg   ax,ax
+ 80485be:	66 90                	xchg   ax,ax
 
 
 // sanitized
 
-00000820 <main>:
+080486ac <call_uaf>:
+call_uaf():
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:13
+ 80486ac:	55                   	push   ebp
+ 80486ad:	89 e5                	mov    ebp,esp
+ 80486af:	57                   	push   edi
+ 80486b0:	56                   	push   esi
+ 80486b1:	53                   	push   ebx
+ 80486b2:	83 ec 1c             	sub    esp,0x1c
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:14
+ 80486b5:	83 ec 0c             	sub    esp,0xc
+ 80486b8:	6a 28                	push   0x28
+ 80486ba:	e8 01 fe ff ff       	call   80484c0 <malloc@plt>
+ 80486bf:	83 c4 10             	add    esp,0x10
+ 80486c2:	89 45 e4             	mov    DWORD PTR [ebp-0x1c],eax
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:15
+ 80486c5:	83 ec 0c             	sub    esp,0xc
+ 80486c8:	ff 75 e4             	push   DWORD PTR [ebp-0x1c]
+ 80486cb:	e8 60 fe ff ff       	call   8048530 <free@plt>
+ 80486d0:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:16
+ 80486d3:	8b 45 e4             	mov    eax,DWORD PTR [ebp-0x1c]
+ 80486d6:	8d 48 14             	lea    ecx,[eax+0x14]
+ 80486d9:	89 c8                	mov    eax,ecx
+ 80486db:	89 c2                	mov    edx,eax
+ 80486dd:	c1 ea 03             	shr    edx,0x3
+ 80486e0:	81 c2 00 00 00 20    	add    edx,0x20000000
+ 80486e6:	0f b6 12             	movzx  edx,BYTE PTR [edx]
+ 80486e9:	84 d2                	test   dl,dl
+ 80486eb:	0f 95 c3             	setne  bl
+ 80486ee:	89 df                	mov    edi,ebx
+ 80486f0:	89 c6                	mov    esi,eax
+ 80486f2:	83 e6 07             	and    esi,0x7
+ 80486f5:	83 c6 03             	add    esi,0x3
+ 80486f8:	89 f3                	mov    ebx,esi
+ 80486fa:	38 d3                	cmp    bl,dl
+ 80486fc:	0f 9d c2             	setge  dl
+ 80486ff:	21 fa                	and    edx,edi
+ 8048701:	84 d2                	test   dl,dl
+ 8048703:	74 09                	je     804870e <call_uaf+0x62>
+ 8048705:	83 ec 0c             	sub    esp,0xc
+ 8048708:	50                   	push   eax
+ 8048709:	e8 e2 fd ff ff       	call   80484f0 <__asan_report_store4@plt>
+ 804870e:	c7 01 0a 00 00 00    	mov    DWORD PTR [ecx],0xa
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:18
+ 8048714:	90                   	nop
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:19
+ 8048715:	8d 65 f4             	lea    esp,[ebp-0xc]
+ 8048718:	5b                   	pop    ebx
+ 8048719:	5e                   	pop    esi
+ 804871a:	5f                   	pop    edi
+ 804871b:	5d                   	pop    ebp
+ 804871c:	c3                   	ret    
+
+0804871d <main>:
 main():
-/home/kyoupark/asan/gcc/uaf.c:6
- 820:	8d 4c 24 04          	lea    ecx,[esp+0x4]
- 824:	83 e4 f0             	and    esp,0xfffffff0
- 827:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
- 82a:	55                   	push   ebp
- 82b:	89 e5                	mov    ebp,esp
- 82d:	57                   	push   edi
- 82e:	56                   	push   esi
- 82f:	53                   	push   ebx
- 830:	51                   	push   ecx
- 831:	83 ec 28             	sub    esp,0x28
- 834:	e8 b7 fe ff ff       	call   6f0 <__x86.get_pc_thunk.bx>
- 839:	81 c3 c7 17 00 00    	add    ebx,0x17c7
-/home/kyoupark/asan/gcc/uaf.c:7
- 83f:	83 ec 0c             	sub    esp,0xc
- 842:	8d 83 00 ea ff ff    	lea    eax,[ebx-0x1600]
- 848:	50                   	push   eax
- 849:	e8 42 fe ff ff       	call   690 <puts@plt>
- 84e:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:8
- 851:	83 ec 0c             	sub    esp,0xc
- 854:	8d 83 40 ea ff ff    	lea    eax,[ebx-0x15c0]
- 85a:	50                   	push   eax
- 85b:	e8 30 fe ff ff       	call   690 <puts@plt>
- 860:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:9
- 863:	83 ec 0c             	sub    esp,0xc
- 866:	8d 83 00 ea ff ff    	lea    eax,[ebx-0x1600]
- 86c:	50                   	push   eax
- 86d:	e8 1e fe ff ff       	call   690 <puts@plt>
- 872:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:10
- 875:	83 ec 0c             	sub    esp,0xc
- 878:	6a 28                	push   0x28
- 87a:	e8 f1 fd ff ff       	call   670 <malloc@plt>
- 87f:	83 c4 10             	add    esp,0x10
- 882:	89 45 e4             	mov    DWORD PTR [ebp-0x1c],eax
-/home/kyoupark/asan/gcc/uaf.c:11
- 885:	83 ec 0c             	sub    esp,0xc
- 888:	ff 75 e4             	push   DWORD PTR [ebp-0x1c]
- 88b:	e8 a0 fd ff ff       	call   630 <free@plt>
- 890:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:12
- 893:	8b 45 e4             	mov    eax,DWORD PTR [ebp-0x1c]
- 896:	8d 78 14             	lea    edi,[eax+0x14]
- 899:	89 f8                	mov    eax,edi
- 89b:	89 c2                	mov    edx,eax
- 89d:	c1 ea 03             	shr    edx,0x3
- 8a0:	81 c2 00 00 00 20    	add    edx,0x20000000
- 8a6:	0f b6 12             	movzx  edx,BYTE PTR [edx]
- 8a9:	84 d2                	test   dl,dl
- 8ab:	0f 95 45 d7          	setne  BYTE PTR [ebp-0x29]
- 8af:	89 c6                	mov    esi,eax
- 8b1:	83 e6 07             	and    esi,0x7
- 8b4:	8d 4e 03             	lea    ecx,[esi+0x3]
- 8b7:	38 d1                	cmp    cl,dl
- 8b9:	0f 9d c2             	setge  dl
- 8bc:	22 55 d7             	and    dl,BYTE PTR [ebp-0x29]
- 8bf:	84 d2                	test   dl,dl
- 8c1:	74 09                	je     8cc <main+0xac>
- 8c3:	83 ec 0c             	sub    esp,0xc
- 8c6:	50                   	push   eax
- 8c7:	e8 44 fd ff ff       	call   610 <__asan_report_store4@plt>
- 8cc:	c7 07 0a 00 00 00    	mov    DWORD PTR [edi],0xa
-/home/kyoupark/asan/gcc/uaf.c:13
- 8d2:	90                   	nop
- 8d3:	90                   	nop
-/home/kyoupark/asan/gcc/uaf.c:14
- 8d4:	8d 65 f0             	lea    esp,[ebp-0x10]
- 8d7:	59                   	pop    ecx
- 8d8:	5b                   	pop    ebx
- 8d9:	5e                   	pop    esi
- 8da:	5f                   	pop    edi
- 8db:	5d                   	pop    ebp
- 8dc:	8d 61 fc             	lea    esp,[ecx-0x4]
- 8df:	c3                   	ret    
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:22
+ 804871d:	8d 4c 24 04          	lea    ecx,[esp+0x4]
+ 8048721:	83 e4 f0             	and    esp,0xfffffff0
+ 8048724:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
+ 8048727:	55                   	push   ebp
+ 8048728:	89 e5                	mov    ebp,esp
+ 804872a:	51                   	push   ecx
+ 804872b:	83 ec 04             	sub    esp,0x4
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:23
+ 804872e:	83 ec 0c             	sub    esp,0xc
+ 8048731:	68 c0 88 04 08       	push   0x80488c0
+ 8048736:	e8 c5 fd ff ff       	call   8048500 <puts@plt>
+ 804873b:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:24
+ 804873e:	83 ec 0c             	sub    esp,0xc
+ 8048741:	68 00 89 04 08       	push   0x8048900
+ 8048746:	e8 b5 fd ff ff       	call   8048500 <puts@plt>
+ 804874b:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:25
+ 804874e:	83 ec 0c             	sub    esp,0xc
+ 8048751:	68 60 89 04 08       	push   0x8048960
+ 8048756:	e8 a5 fd ff ff       	call   8048500 <puts@plt>
+ 804875b:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:27
+ 804875e:	e8 49 ff ff ff       	call   80486ac <call_uaf>
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:29
+ 8048763:	83 ec 08             	sub    esp,0x8
+ 8048766:	6a 14                	push   0x14
+ 8048768:	6a 0a                	push   0xa
+ 804876a:	e8 1c ff ff ff       	call   804868b <call_add>
+ 804876f:	83 c4 10             	add    esp,0x10
+ 8048772:	83 ec 08             	sub    esp,0x8
+ 8048775:	50                   	push   eax
+ 8048776:	68 a0 89 04 08       	push   0x80489a0
+ 804877b:	e8 60 fd ff ff       	call   80484e0 <printf@plt>
+ 8048780:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:30
+ 8048783:	83 ec 0c             	sub    esp,0xc
+ 8048786:	68 00 8a 04 08       	push   0x8048a00
+ 804878b:	e8 70 fd ff ff       	call   8048500 <puts@plt>
+ 8048790:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:32
+ 8048793:	b8 00 00 00 00       	mov    eax,0x0
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:33
+ 8048798:	8b 4d fc             	mov    ecx,DWORD PTR [ebp-0x4]
+ 804879b:	c9                   	leave  
+ 804879c:	8d 61 fc             	lea    esp,[ecx-0x4]
+ 804879f:	c3                   	ret    
 
 
 // static sanitized
 
-000e5d78 <main>:
+080aceca <call_uaf>:
+call_uaf():
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:13
+ 80aceca:	55                   	push   ebp
+ 80acecb:	89 e5                	mov    ebp,esp
+ 80acecd:	57                   	push   edi
+ 80acece:	56                   	push   esi
+ 80acecf:	53                   	push   ebx
+ 80aced0:	83 ec 1c             	sub    esp,0x1c
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:14
+ 80aced3:	83 ec 0c             	sub    esp,0xc
+ 80aced6:	6a 28                	push   0x28
+ 80aced8:	e8 83 bc fd ff       	call   8088b60 <__interceptor_malloc>
+ 80acedd:	83 c4 10             	add    esp,0x10
+ 80acee0:	89 45 e4             	mov    DWORD PTR [ebp-0x1c],eax
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:15
+ 80acee3:	83 ec 0c             	sub    esp,0xc
+ 80acee6:	ff 75 e4             	push   DWORD PTR [ebp-0x1c]
+ 80acee9:	e8 32 ba fd ff       	call   8088920 <__interceptor_free>
+ 80aceee:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:16
+ 80acef1:	8b 45 e4             	mov    eax,DWORD PTR [ebp-0x1c]
+ 80acef4:	8d 48 14             	lea    ecx,[eax+0x14]
+ 80acef7:	89 c8                	mov    eax,ecx
+ 80acef9:	89 c2                	mov    edx,eax
+ 80acefb:	c1 ea 03             	shr    edx,0x3
+ 80acefe:	81 c2 00 00 00 20    	add    edx,0x20000000
+ 80acf04:	0f b6 12             	movzx  edx,BYTE PTR [edx]
+ 80acf07:	84 d2                	test   dl,dl
+ 80acf09:	0f 95 c3             	setne  bl
+ 80acf0c:	89 df                	mov    edi,ebx
+ 80acf0e:	89 c6                	mov    esi,eax
+ 80acf10:	83 e6 07             	and    esi,0x7
+ 80acf13:	83 c6 03             	add    esi,0x3
+ 80acf16:	89 f3                	mov    ebx,esi
+ 80acf18:	38 d3                	cmp    bl,dl
+ 80acf1a:	0f 9d c2             	setge  dl
+ 80acf1d:	21 fa                	and    edx,edi
+ 80acf1f:	84 d2                	test   dl,dl
+ 80acf21:	74 09                	je     80acf2c <call_uaf+0x62>
+ 80acf23:	83 ec 0c             	sub    esp,0xc
+ 80acf26:	50                   	push   eax
+ 80acf27:	e8 14 1e fe ff       	call   808ed40 <__asan_report_store4>
+ 80acf2c:	c7 01 0a 00 00 00    	mov    DWORD PTR [ecx],0xa
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:18
+ 80acf32:	90                   	nop
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:19
+ 80acf33:	8d 65 f4             	lea    esp,[ebp-0xc]
+ 80acf36:	5b                   	pop    ebx
+ 80acf37:	5e                   	pop    esi
+ 80acf38:	5f                   	pop    edi
+ 80acf39:	5d                   	pop    ebp
+ 80acf3a:	c3                   	ret    
+
+080acf3b <main>:
 main():
-/home/kyoupark/asan/gcc/uaf.c:6
-   e5d78:	8d 4c 24 04          	lea    ecx,[esp+0x4]
-   e5d7c:	83 e4 f0             	and    esp,0xfffffff0
-   e5d7f:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
-   e5d82:	55                   	push   ebp
-   e5d83:	89 e5                	mov    ebp,esp
-   e5d85:	57                   	push   edi
-   e5d86:	56                   	push   esi
-   e5d87:	53                   	push   ebx
-   e5d88:	51                   	push   ecx
-   e5d89:	83 ec 28             	sub    esp,0x28
-   e5d8c:	e8 2f 3f f2 ff       	call   9cc0 <__x86.get_pc_thunk.bx>
-   e5d91:	81 c3 6f 12 04 00    	add    ebx,0x4126f
-/home/kyoupark/asan/gcc/uaf.c:7
-   e5d97:	83 ec 0c             	sub    esp,0xc
-   e5d9a:	8d 83 60 16 fd ff    	lea    eax,[ebx-0x2e9a0]
-   e5da0:	50                   	push   eax
-   e5da1:	e8 2a 3c f2 ff       	call   99d0 <puts@plt>
-   e5da6:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:8
-   e5da9:	83 ec 0c             	sub    esp,0xc
-   e5dac:	8d 83 a0 16 fd ff    	lea    eax,[ebx-0x2e960]
-   e5db2:	50                   	push   eax
-   e5db3:	e8 18 3c f2 ff       	call   99d0 <puts@plt>
-   e5db8:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:9
-   e5dbb:	83 ec 0c             	sub    esp,0xc
-   e5dbe:	8d 83 60 16 fd ff    	lea    eax,[ebx-0x2e9a0]
-   e5dc4:	50                   	push   eax
-   e5dc5:	e8 06 3c f2 ff       	call   99d0 <puts@plt>
-   e5dca:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:10
-   e5dcd:	83 ec 0c             	sub    esp,0xc
-   e5dd0:	6a 28                	push   0x28
-   e5dd2:	e8 f9 a6 fc ff       	call   b04d0 <__interceptor_malloc>
-   e5dd7:	83 c4 10             	add    esp,0x10
-   e5dda:	89 45 e4             	mov    DWORD PTR [ebp-0x1c],eax
-/home/kyoupark/asan/gcc/uaf.c:11
-   e5ddd:	83 ec 0c             	sub    esp,0xc
-   e5de0:	ff 75 e4             	push   DWORD PTR [ebp-0x1c]
-   e5de3:	e8 a8 a3 fc ff       	call   b0190 <__interceptor_free>
-   e5de8:	83 c4 10             	add    esp,0x10
-/home/kyoupark/asan/gcc/uaf.c:12
-   e5deb:	8b 45 e4             	mov    eax,DWORD PTR [ebp-0x1c]
-   e5dee:	8d 78 14             	lea    edi,[eax+0x14]
-   e5df1:	89 f8                	mov    eax,edi
-   e5df3:	89 c2                	mov    edx,eax
-   e5df5:	c1 ea 03             	shr    edx,0x3
-   e5df8:	81 c2 00 00 00 20    	add    edx,0x20000000
-   e5dfe:	0f b6 12             	movzx  edx,BYTE PTR [edx]
-   e5e01:	84 d2                	test   dl,dl
-   e5e03:	0f 95 45 d7          	setne  BYTE PTR [ebp-0x29]
-   e5e07:	89 c6                	mov    esi,eax
-   e5e09:	83 e6 07             	and    esi,0x7
-   e5e0c:	8d 4e 03             	lea    ecx,[esi+0x3]
-   e5e0f:	38 d1                	cmp    cl,dl
-   e5e11:	0f 9d c2             	setge  dl
-   e5e14:	22 55 d7             	and    dl,BYTE PTR [ebp-0x29]
-   e5e17:	84 d2                	test   dl,dl
-   e5e19:	74 09                	je     e5e24 <main+0xac>
-   e5e1b:	83 ec 0c             	sub    esp,0xc
-   e5e1e:	50                   	push   eax
-   e5e1f:	e8 0c 4e fd ff       	call   bac30 <__asan_report_store4>
-   e5e24:	c7 07 0a 00 00 00    	mov    DWORD PTR [edi],0xa
-/home/kyoupark/asan/gcc/uaf.c:13
-   e5e2a:	90                   	nop
-   e5e2b:	90                   	nop
-/home/kyoupark/asan/gcc/uaf.c:14
-   e5e2c:	8d 65 f0             	lea    esp,[ebp-0x10]
-   e5e2f:	59                   	pop    ecx
-   e5e30:	5b                   	pop    ebx
-   e5e31:	5e                   	pop    esi
-   e5e32:	5f                   	pop    edi
-   e5e33:	5d                   	pop    ebp
-   e5e34:	8d 61 fc             	lea    esp,[ecx-0x4]
-   e5e37:	c3                   	ret    
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:22
+ 80acf3b:	8d 4c 24 04          	lea    ecx,[esp+0x4]
+ 80acf3f:	83 e4 f0             	and    esp,0xfffffff0
+ 80acf42:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
+ 80acf45:	55                   	push   ebp
+ 80acf46:	89 e5                	mov    ebp,esp
+ 80acf48:	51                   	push   ecx
+ 80acf49:	83 ec 04             	sub    esp,0x4
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:23
+ 80acf4c:	83 ec 0c             	sub    esp,0xc
+ 80acf4f:	68 c0 83 0b 08       	push   0x80b83c0
+ 80acf54:	e8 f7 0a fa ff       	call   804da50 <puts@plt>
+ 80acf59:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:24
+ 80acf5c:	83 ec 0c             	sub    esp,0xc
+ 80acf5f:	68 00 84 0b 08       	push   0x80b8400
+ 80acf64:	e8 e7 0a fa ff       	call   804da50 <puts@plt>
+ 80acf69:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:25
+ 80acf6c:	83 ec 0c             	sub    esp,0xc
+ 80acf6f:	68 60 84 0b 08       	push   0x80b8460
+ 80acf74:	e8 d7 0a fa ff       	call   804da50 <puts@plt>
+ 80acf79:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:27
+ 80acf7c:	e8 49 ff ff ff       	call   80aceca <call_uaf>
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:29
+ 80acf81:	83 ec 08             	sub    esp,0x8
+ 80acf84:	6a 14                	push   0x14
+ 80acf86:	6a 0a                	push   0xa
+ 80acf88:	e8 1c ff ff ff       	call   80acea9 <call_add>
+ 80acf8d:	83 c4 10             	add    esp,0x10
+ 80acf90:	83 ec 08             	sub    esp,0x8
+ 80acf93:	50                   	push   eax
+ 80acf94:	68 a0 84 0b 08       	push   0x80b84a0
+ 80acf99:	e8 02 0a fa ff       	call   804d9a0 <printf@plt>
+ 80acf9e:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:30
+ 80acfa1:	83 ec 0c             	sub    esp,0xc
+ 80acfa4:	68 00 85 0b 08       	push   0x80b8500
+ 80acfa9:	e8 a2 0a fa ff       	call   804da50 <puts@plt>
+ 80acfae:	83 c4 10             	add    esp,0x10
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:32
+ 80acfb1:	b8 00 00 00 00       	mov    eax,0x0
+/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:33
+ 80acfb6:	8b 4d fc             	mov    ecx,DWORD PTR [ebp-0x4]
+ 80acfb9:	c9                   	leave  
+ 80acfba:	8d 61 fc             	lea    esp,[ecx-0x4]
+ 80acfbd:	c3                   	ret    
 
 
 ={============================================================================
@@ -34043,6 +34159,7 @@ advance location
     function calls, and the target location does 'not' have to be in the same
     frame as the current one. 
 
+*gdb-step*
 step, s
     Continue running your program until control reaches a different source line,
              then stop it and return control to gdb.
@@ -34081,6 +34198,7 @@ si
     It is often useful to do "display/i $pc" when stepping by machine
     instructions. This makes gdb automatically display the next instruction to
     be executed, each time your program stops. See Automatic Display.
+    *gdb-disp*
 
     An argument is a repeat count, as in step. 
 
@@ -71250,6 +71368,8 @@ leal 5(%eax,%ebx,8), %ecx     // means ecx = eax + ebx*8 + 5;.
 Note that this is entirely an arithmetic operation and does not involve
 dereferencing a memory address.
 
+// https://www.nayuki.io/page/a-fundamental-introduction-to-x86-assembly-programming
+// 4. Flags register and comparisons
 
 Although jmp is unconditional, it has sibling instructions that look at the
 state of `eflags`, and either jumps to the label if the condition is met or
@@ -71258,8 +71378,12 @@ otherwise advances to the next instruction below.
 Conditional jump instructions include:  ja (jump if above), jle (jump if less
     than or equal), jo (jump if overflow), jnz (jump if non-zero), et cetera.
 There are 16 of them in all, and some have synonyms – e.g. jz (jump if zero)
-is the same as je (jump if equal), ja (jump if above) is the same as jnbe
-(jump if not below or equal). An example of using conditional jump:
+is the same as 
+
+`je (jump if equal)`, 
+ja (jump if above) is the same as jnbe (jump if not below or equal). 
+
+An example of using conditional jump:
 
 jc skip  /* If carry flag is on, then jump away */
 /* Otherwise CF is off, then execute this stuff */
@@ -71355,6 +71479,7 @@ shl eax, 1 — Multiply the value of EAX by 2 (if the most significant bit is 0)
 
 shr ebx, cl — Store in EBX the floor of result of dividing the value of EBX by
 2n wheren is the value in CL.
+
 
 test — Logical Compare
 
