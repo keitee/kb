@@ -1,9 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// gcc -fsanitize=address testmain.c -o out_asn
-// home/kyoupark/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -fsanitize=address uaf.c
-
+//	gcc -fsanitize=address testmain.c -o out_asn
 int main(int argc, char **argv)
 {
     printf("====> \n" );

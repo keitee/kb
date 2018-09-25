@@ -11701,6 +11701,10 @@ look at `man 5 exports`
 /home/client1   192.168.0.101(rw,sync,no_subtree_check)
 /var/www        192.168.0.101(rw,sync,fsid=0,crossmnt,no_subtree_check,no_root_squash)
 
+// which solves when gets permission denied
+// /home/kyoupark/xxx      *(rw,sync,no_root_squash)
+/home/kyoupark/xxx      *(rw,sync,no_root_squash,no_all_squash,sync,insecure)
+
 note: 
 You can replace * with one of the hostname formats. Make the hostname
 declaration as specific as possible so unwanted systems cannot access the NFS
@@ -11781,7 +11785,7 @@ mount: mounting 172.20.33.215:/home/kpark/src-dev on /mnt/tmp failed: Connection
 DEVARCH/         GPATH            GRTAGS           GTAGS            
 
 
-<check-on-client>
+<check-on-client> tool-df tool-mount
 df -h
 mount
 
@@ -15573,7 +15577,19 @@ void __asan_report_error(uptr pc, uptr bp, uptr sp,
   ScopedInErrorReport in_report;
 }
 
-{asan-code-asm}
+
+<asan-code-xxx>
+
+>>> 2**29
+536870912
+
+>>> hex(2**29)
+'0x20000000'
+
+>>> bin(2**29)
+'0b10.0000.0000.0000.0000.0000.0000.0000'
+
+<asan-code-asm> *arch-x86-asm*
 
 modified it to have function call to see the sanitized code more clearly.
 
@@ -15611,29 +15627,32 @@ modified it to have function call to see the sanitized code more clearly.
     32      return 0;
     33  }
 
+
 // no-sanitized
+
+own_no_asan_uaf:     file format elf32-i386
 
 080484fc <call_uaf>:
 call_uaf():
 /home/kyoupark/si_logs/flash0-asan/uaf_mod.c:13
  80484fc:	55                   	push   ebp
  80484fd:	89 e5                	mov    ebp,esp
- 80484ff:	83 ec 18             	sub    esp,0x18
+ 80484ff:	83 ec 18             	sub    esp,0x18                 ; -24
 /home/kyoupark/si_logs/flash0-asan/uaf_mod.c:14
- 8048502:	83 ec 0c             	sub    esp,0xc
- 8048505:	6a 28                	push   0x28
- 8048507:	e8 54 fe ff ff       	call   8048360 <malloc@plt>
- 804850c:	83 c4 10             	add    esp,0x10
- 804850f:	89 45 f4             	mov    DWORD PTR [ebp-0xc],eax
+ 8048502:	83 ec 0c             	sub    esp,0xc                  ; -12
+ 8048505:	6a 28                	push   0x28                     ; 40 bytes
+ 8048507:	e8 54 fe ff ff       	call   8048360 <malloc@plt>     ; call malloc
+ 804850c:	83 c4 10             	add    esp,0x10                 ; move sp back, +16
+ 804850f:	89 45 f4             	mov    DWORD PTR [ebp-0xc],eax  ; int *x = malloc()
 /home/kyoupark/si_logs/flash0-asan/uaf_mod.c:15
  8048512:	83 ec 0c             	sub    esp,0xc
- 8048515:	ff 75 f4             	push   DWORD PTR [ebp-0xc]
- 8048518:	e8 33 fe ff ff       	call   8048350 <free@plt>
- 804851d:	83 c4 10             	add    esp,0x10
+ 8048515:	ff 75 f4             	push   DWORD PTR [ebp-0xc]      ; x
+ 8048518:	e8 33 fe ff ff       	call   8048350 <free@plt>       ; call free
+ 804851d:	83 c4 10             	add    esp,0x10                 ; move sp back,
 /home/kyoupark/si_logs/flash0-asan/uaf_mod.c:16
- 8048520:	8b 45 f4             	mov    eax,DWORD PTR [ebp-0xc]
- 8048523:	83 c0 14             	add    eax,0x14
- 8048526:	c7 00 0a 00 00 00    	mov    DWORD PTR [eax],0xa
+ 8048520:	8b 45 f4             	mov    eax,DWORD PTR [ebp-0xc]  ; x
+ 8048523:	83 c0 14             	add    eax,0x14                 ; x+20
+ 8048526:	c7 00 0a 00 00 00    	mov    DWORD PTR [eax],0xa      ; x[5] = 10
 /home/kyoupark/si_logs/flash0-asan/uaf_mod.c:18
  804852c:	90                   	nop
 /home/kyoupark/si_logs/flash0-asan/uaf_mod.c:19
@@ -15667,36 +15686,54 @@ main():
  804856d:	83 c4 10             	add    esp,0x10
 /home/kyoupark/si_logs/flash0-asan/uaf_mod.c:27
  8048570:	e8 87 ff ff ff       	call   80484fc <call_uaf>
-/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:29
- 8048575:	83 ec 08             	sub    esp,0x8
- 8048578:	6a 14                	push   0x14
- 804857a:	6a 0a                	push   0xa
- 804857c:	e8 5a ff ff ff       	call   80484db <call_add>
- 8048581:	83 c4 10             	add    esp,0x10
- 8048584:	83 ec 08             	sub    esp,0x8
- 8048587:	50                   	push   eax
- 8048588:	68 c4 86 04 08       	push   0x80486c4
- 804858d:	e8 ae fd ff ff       	call   8048340 <printf@plt>
- 8048592:	83 c4 10             	add    esp,0x10
-/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:30
- 8048595:	83 ec 0c             	sub    esp,0xc
- 8048598:	68 e9 86 04 08       	push   0x80486e9
- 804859d:	e8 ce fd ff ff       	call   8048370 <puts@plt>
- 80485a2:	83 c4 10             	add    esp,0x10
-/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:32
- 80485a5:	b8 00 00 00 00       	mov    eax,0x0
-/home/kyoupark/si_logs/flash0-asan/uaf_mod.c:33
- 80485aa:	8b 4d fc             	mov    ecx,DWORD PTR [ebp-0x4]
- 80485ad:	c9                   	leave  
- 80485ae:	8d 61 fc             	lea    esp,[ecx-0x4]
- 80485b1:	c3                   	ret    
- 80485b2:	66 90                	xchg   ax,ax
- 80485b4:	66 90                	xchg   ax,ax
- 80485b6:	66 90                	xchg   ax,ax
- 80485b8:	66 90                	xchg   ax,ax
- 80485ba:	66 90                	xchg   ax,ax
- 80485bc:	66 90                	xchg   ax,ax
- 80485be:	66 90                	xchg   ax,ax
+
+
+host_no_asan_uaf:     file format elf64-x86-64
+
+00000000004005fb <call_uaf>:
+call_uaf():
+/home/kyoupark/git/kb/asan/uaf_mod.c:13
+  4005fb:	55                   	push   rbp
+  4005fc:	48 89 e5             	mov    rbp,rsp
+  4005ff:	48 83 ec 10          	sub    rsp,0x10
+/home/kyoupark/git/kb/asan/uaf_mod.c:14
+  400603:	bf 28 00 00 00       	mov    edi,0x28                   ; 40 bytes
+  400608:	e8 c3 fe ff ff       	call   4004d0 <malloc@plt>
+  40060d:	48 89 45 f8          	mov    QWORD PTR [rbp-0x8],rax    ; get return
+/home/kyoupark/git/kb/asan/uaf_mod.c:15
+  400611:	48 8b 45 f8          	mov    rax,QWORD PTR [rbp-0x8]    ; get x
+  400615:	48 89 c7             	mov    rdi,rax                    ; rdi = x
+  400618:	e8 63 fe ff ff       	call   400480 <free@plt>
+/home/kyoupark/git/kb/asan/uaf_mod.c:16
+  40061d:	48 8b 45 f8          	mov    rax,QWORD PTR [rbp-0x8]    ; get x
+  400621:	48 83 c0 14          	add    rax,0x14                   ; x+20
+  400625:	c7 00 0a 00 00 00    	mov    DWORD PTR [rax],0xa        ; x[5] = 10
+/home/kyoupark/git/kb/asan/uaf_mod.c:18
+  40062b:	90                   	nop
+/home/kyoupark/git/kb/asan/uaf_mod.c:19
+  40062c:	c9                   	leave  
+  40062d:	c3                   	ret    
+
+000000000040062e <main>:
+main():
+/home/kyoupark/git/kb/asan/uaf_mod.c:22
+  40062e:	55                   	push   rbp
+  40062f:	48 89 e5             	mov    rbp,rsp
+  400632:	48 83 ec 10          	sub    rsp,0x10
+  400636:	89 7d fc             	mov    DWORD PTR [rbp-0x4],edi
+  400639:	48 89 75 f0          	mov    QWORD PTR [rbp-0x10],rsi
+/home/kyoupark/git/kb/asan/uaf_mod.c:23
+  40063d:	bf 28 07 40 00       	mov    edi,0x400728
+  400642:	e8 49 fe ff ff       	call   400490 <puts@plt>
+/home/kyoupark/git/kb/asan/uaf_mod.c:24
+  400647:	bf 38 07 40 00       	mov    edi,0x400738
+  40064c:	e8 3f fe ff ff       	call   400490 <puts@plt>
+/home/kyoupark/git/kb/asan/uaf_mod.c:25
+  400651:	bf 5c 07 40 00       	mov    edi,0x40075c
+  400656:	e8 35 fe ff ff       	call   400490 <puts@plt>
+/home/kyoupark/git/kb/asan/uaf_mod.c:27
+  40065b:	b8 00 00 00 00       	mov    eax,0x0
+  400660:	e8 96 ff ff ff       	call   4005fb <call_uaf>
 
 
 // sanitized
@@ -18391,6 +18428,22 @@ ulimit -c unlimited
 scp libasan* 10.209.62.106:/home/kyoupark/si_logs/flash0-asan
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan/ /flash0
+
+
+mkdir /flash0
+mount -o nfsvers=4 10.209.60.101:/home/kyoupark/ /flash0
+
+add-auto-load-safe-path /flash0/
+set breakpoint pending on
+set environment LD_LIBRARY_PATH=.
+set substitute-path /home/kyoupark/asan/gcc/build-gcc/i686-nptl-linux-gnu/libsanitizer/asan/../../../../gcc-4.9.4/libsanitizer/ /flash0/asan/gcc/gcc-4.9.4/libsanitizer
+b __asan_init_v3
+b main
+b call_uaf
+b __asan_report_store4
+b __asan_report_error
+
+gdb -command=cmd ./own_asan_uaf
 
 
 //
@@ -29447,7 +29500,7 @@ Argument list to give program being debugged when it is started
   is "-b Zinc.MediaProxy".
 
 
-<gdb-set-env>
+<gdb-setenv>
 4.4 Your Program's Environment
 
 Usually you set up environment variables with the shell and they are inherited
@@ -32094,6 +32147,7 @@ and track explicitly loaded dynamic code.
 0xb63da7c0 in ?? ()
 
 // to set a breakpoint in the gdbint; otherwise, gdb set no since no input from the user
+*gdb-break*
 (gdb) set breakpoint pending on
 
 // this is a warning at this moment
@@ -71236,6 +71290,15 @@ variables so don't need to increase esp?
 <arch-x86-64-stack>
 https://eli.thegreenplace.net/2011/09/06/stack-frame-layout-on-x86-64
 
+Argument passing
+
+I'm going to simplify the discussion here on purpose and focus on
+integer/pointer arguments [3]. According to the ABI, the first 6 integer or
+pointer arguments to a function are passed in registers. 
+
+The first is placed in rdi, the second in rsi, the third in rdx, and then rcx,
+r8 and r9. Only the 7th argument and onwards are passed on the stack.
+
 
 ={============================================================================
 *kt_linux_arch_001* arch-x86-asm
@@ -71490,7 +71553,7 @@ according to the result. The result is then discarded.
 
 set`cc` — Set Byte on Condition
 
-SETNE Set byte if not equal (ZF=0).
+`setne` Set byte if not equal (ZF=0).
 
 Sets the destination operand to 0 or 1 depending on the settings of the status
 flags (CF, SF, OF, ZF, and PF) in the EFLAGS register. The destination operand
@@ -71517,6 +71580,9 @@ for overflow, use the SETNO instruction, then decrement the result.
 
 The reg field of the ModR/M byte is not used for the SETCC instruction and
 those opcode bits are ignored by the processor.
+
+
+movzx  Move with Zero-Extend
 
 
 ={============================================================================
@@ -73485,6 +73551,7 @@ looks when the library is loaded. We can do this by writing a simple "driver"
 executable that links to libmlpic_dataonly.so and calls ml_func, and then
 running it through GDB.
 
+*gdb-setenv*
 > gdb driver
 [...] skipping output
 (gdb) `set environment LD_LIBRARY_PATH=.`

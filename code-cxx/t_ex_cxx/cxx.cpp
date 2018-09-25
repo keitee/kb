@@ -1550,6 +1550,8 @@ TEST(Bit, RightShift)
     // unsigned int int_max = (~((unsigned int)0)) >> 1;
 
     unsigned int uint_max = ~((unsigned int)0);
+    unsigned int uint_max_two = (1U << 32) -1;
+
     int int_max = uint_max >> 1;
     int int_min = int_max + 1;
 
@@ -1557,6 +1559,8 @@ TEST(Bit, RightShift)
     EXPECT_EQ(bitsetx.to_string(), "01111111111111111111111111111111");
 
     EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
+    EXPECT_EQ(uint_max_two, numeric_limits<unsigned int>::max());
+
     EXPECT_EQ(int_max, numeric_limits<int>::max());
     EXPECT_EQ(int_min, numeric_limits<int>::min());
   }
