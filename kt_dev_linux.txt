@@ -251,7 +251,7 @@
 *kt_linux_tool_150* make-automake-ex-packages
 *kt_linux_tool_150* make-automake-macros
 *kt_linux_tool_150* make-automake-building programs and libraries
-*kt_linux_tool_150* make-automake-building variables
+*kt_linux_tool_150* make-automake-build-variables
 *kt_linux_tool_150* automake: 08: program variables: case issue
 *kt_linux_tool_150* automake: 09: scripts
 *kt_linux_tool_150* automake: 15: test and make check
@@ -15617,7 +15617,25 @@ void __asan_init() {
   // get kHighMemEnd = 0xffffffff for 32 bits
   InitializeHighMemEnd();
 
+  // #define ASAN_INTERCEPT_FUNC(name)                                      \
+  //   do {                                                                 \
+  //     if ((!INTERCEPT_FUNCTION(name) || !REAL(name)) &&                  \
+  //         common_flags()->verbosity > 0)                                 \
+  //       Report("AddressSanitizer: failed to intercept '" #name "'\n");   \
+  //   } while (0)
   //
+  // #if defined(__linux__)
+  // # include "interception_linux.h"
+  // # define INTERCEPT_FUNCTION(func) INTERCEPT_FUNCTION_LINUX(func)
+  // # define INTERCEPT_FUNCTION_VER(func, symver) \
+  //    INTERCEPT_FUNCTION_VER_LINUX(func, symver)
+
+  // #define INTERCEPT_FUNCTION_LINUX(func) \
+  //     ::__interception::GetRealFunctionAddress( \
+  //           #func, (::__interception::uptr*)&REAL(func), \
+  //           (::__interception::uptr)&(func), \
+  //           (::__interception::uptr)&WRAP(func))
+
   InitializeAsanInterceptors();
 
   // static const u64 kDefaultShadowOffset32 = 1ULL << 29;
@@ -15626,6 +15644,14 @@ void __asan_init() {
   // '0x20000000'
   //
   // #define kLowShadowBeg   SHADOW_OFFSET
+
+  // 504          Report("[KT] ReserveShadowMemoryRange(0x%x, 0x%x)\n", shadow_start, kLowShadowEnd);
+  // ==1024==[KT] ReserveShadowMemoryRange(0x1ffff000, 0x23ffffff)
+  // 509          Report("[KT] ReserveShadowMemoryRange(0x%x, 0x%x)\n", kHighShadowBeg, kHighShadowEnd);
+  // ==1024==[KT] ReserveShadowMemoryRange(0x28000000, 0x0)
+  // 512          Report("[KT] ProtectGap(0x%x, 0x%x)\n", kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
+  // ==1024==[KT] ProtectGap(0x24000000, 0x0)
+
 }
 
 
@@ -18466,9 +18492,17 @@ ulimit -c unlimited
 
 // copy from office debian
 scp libasan* 10.209.62.106:/home/kyoupark/si_logs/flash0-asan
-mkdir /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan/ /flash0
 
+kyoupark@kt-office-debian:~/asan/gcc/i686-nptl-linux-gnu-gcc/i686-nptl-linux-gnu/lib$ ll libasan*
+-rw-r--r-- 1 kyoupark kyoupark   14708 Sep 27 15:58 libasan_preinit.o
+-rwxr-xr-x 1 kyoupark kyoupark 3510988 Sep 27 15:58 libasan.so.1.0.0*
+lrwxrwxrwx 1 kyoupark kyoupark      16 Sep 27 15:58 libasan.so.1 -> libasan.so.1.0.0*
+lrwxrwxrwx 1 kyoupark kyoupark      16 Sep 27 15:58 libasan.so -> libasan.so.1.0.0*
+-rwxr-xr-x 1 kyoupark kyoupark    1099 Sep 27 15:58 libasan.la*
+-rw-r--r-- 1 kyoupark kyoupark 5319534 Sep 27 15:58 libasan.a
+
+// mkdir /flash0
+// mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan/ /flash0
 
 mkdir /flash0
 mount -o nfsvers=4 10.209.60.101:/home/kyoupark/ /flash0
@@ -18483,6 +18517,7 @@ b call_uaf
 b __asan_report_store4
 b __asan_report_error
 
+cd 
 gdb -command=cmd ./own_asan_uaf
 
 
@@ -19723,6 +19758,14 @@ pkg-config --modversion `name`
 
 $ pkg-config --modversion gstreamer-1.0
 1.6.2
+
+
+={============================================================================
+*kt_linux_tool_140* make-error build-error
+
+17:09:01 make: *** [all] Error 2
+
+egrep -an "Error [0-9]" build.log or make.log
 
 
 ={============================================================================
@@ -22649,14 +22692,9 @@ this variable is empty. Note that this variable should be used only in special
 
 
 ={============================================================================
-*kt_linux_tool_150* make-autoconf-autotool
-
-http://autotoolset.sourceforge.net/tutorial.html
-
-
-={============================================================================
 *kt_linux_tool_150* make-autoconf
 
+http://autotoolset.sourceforge.net/tutorial.html
 http://www.gnu.org/software/autoconf/autoconf.html
 http://www.gnu.org/software/autoconf/manual/index.html
 
@@ -24960,7 +24998,7 @@ SUBDIRS = src
 dist_doc_DATA = README
 
 
-<ac-file>
+<ac-file> *make-autoconf*
 Finally, `configure.ac` contains Autoconf instructions to create the configure
 script.
 
@@ -25991,7 +26029,7 @@ The libtool rules also use a ‘LIBTOOLFLAGS’ variable that should not be set 
 
 
 ={============================================================================
-*kt_linux_tool_150* make-automake-building variables
+*kt_linux_tool_150* make-automake-build-variables
 
 8.4 Program and Library Variables
 
@@ -58193,7 +58231,6 @@ value: 10
 CONCAT       CONST_VALUE  
 (gdb) p CONST_VALUE
 $1 = 10
-
 
 
 ={============================================================================
