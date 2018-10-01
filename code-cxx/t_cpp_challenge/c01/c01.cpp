@@ -64,6 +64,15 @@ TEST(CH3,GreatestCommonDivisor)
 }
 
 
+/*
+
+3. The least common multiple (lcm) of two or more non-zero integers, also known
+as the lowest common multiple, or smallest common multiple, is the smallest
+positive integer that is divisible by all of them.
+
+*/
+
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

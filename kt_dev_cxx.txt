@@ -44,7 +44,6 @@ KT KB. CPP
 |kt_dev_gcc_105| gcc likely and unlikely 
 |kt_dev_gcc_106| gcc: link: lrt
 |kt_dev_gcc_107| gcc: link: sysroot and rpath-link
-|kt_dev_gcc_110| gcc-attributes
 |kt_dev_gcc_111| gcc: profiling
 
 *kt_dev_gcc_200* gcc-cpp
@@ -54,9 +53,9 @@ KT KB. CPP
 *kt_dev_gcc_203* gcc-cpp-isystem option
 *kt_dev_gcc_204* gcc-cpp-use
 *kt_dev_gcc_204* gcc-cpp-issue
-*kt_dev_gcc_205* gcc-cpp-vaarg
-*kt_dev_gcc_206* gcc-cpp-stringification
-*kt_dev_gcc_207* gcc-cpp-concatenation
+*kt_dev_gcc_205* gcc-cpp-vaarg cpp-do-while
+*kt_dev_gcc_206* gcc-cpp-stringification cpp-#
+*kt_dev_gcc_207* gcc-cpp-concatenation cpp-##
 *kt_dev_gcc_208* cpp-stringification
 
 #{ cxx
@@ -2200,142 +2199,6 @@ link.
 
 
 ={============================================================================
-*kt_dev_gcc_110* gcc-attributes
-
-https://gcc.gnu.org/onlinedocs/gcc-4.1.2/gcc/Function-Attributes.html
-
-5.24 Declaring Attributes of Functions
-
-In GNU C, you declare certain things about functions which help the compiler
-optimize function calls and check your code more carefully.
-
-The keyword __attribute__ allows you to specify special attributes when making a
-declaration. This keyword is followed by an attribute specification inside
-'double' parentheses. The following attributes are currently defined for
-functions on all targets: noreturn, returns_twice, noinline, always_inline,
-flatten, pure, const, nothrow, sentinel, format, format_arg,
-no_instrument_function, section, constructor, destructor, used, unused,
-deprecated, weak, malloc, alias, warn_unused_result, nonnull and
-  externally_visible. 
-  
-Several other attributes are defined for functions on particular target systems.
-
-unused
-    This attribute, attached to a function, means that the function is meant to
-    be possibly unused. GCC will not produce a warning for this function.
-
-note: can be used on object?
-
-#define ZINC_UNUSED __attribute__((unused))
-
-try
-{
-  ...
-}
-catch(ZINC_UNUSED const NS_RUBIDIUM_SYSTEM::NetworkProblemException& e)
-{
-  ...
-}
-
-used
-    This attribute, attached to a function, means that code must be emitted for
-    the function even if it appears that the function is 'not' referenced. This
-    is useful, for example, when the function is referenced only in inline
-    assembly.
-
-
-<visibility>
-visibility ("visibility_type")
-
-The visibility attribute on ELF targets causes the declaration to be emitted
-with default, hidden, protected or internal visibility.
-
-void __attribute__ ((visibility ("protected")))
-f () { /* Do something. */; }
-
-int i __attribute__ ((visibility ("hidden")));
-         
-
-See the ELF gABI for complete details, but the short story is:
-
-default
-    Default visibility is the normal case for ELF. This value is available for
-    the visibility attribute to override other options that may change the
-    assumed visibility of symbols.
-
-#define ZINC_EXPORT __attribute__((visibility("default")))
-
-
-hidden
-Hidden visibility indicates that the 'symbol' will not be placed into the
-dynamic symbol table, so no other module (executable or shared library) can
-reference it 'directly'. 
-
-note: Then 'indirectly'?
-
-
-internal 
-Internal visibility is like hidden visibility, but with additional processor
-specific semantics.  Unless otherwise specified by the psABI, GCC defines
-internal visibility to mean that the function is never called from another
-module. Note that hidden symbols, while they cannot be referenced directly by
-other modules, can be referenced indirectly via function pointers. By indicating
-that a symbol cannot be called from outside the module, GCC may for instance
-omit the load of a PIC register since it is known that the calling function
-loaded the correct value.  
-
-protected 
-Protected visibility indicates that the symbol will be placed in the dynamic
-symbol table, but that references within the defining module will bind to the
-local symbol. That is, the symbol cannot be overridden by another module. 
-
-Not all ELF targets support this attribute. 
-
-
-3.18 Options for Code Generation Conventions
-
--fvisibility=default | internal | hidden | protected
-    Set the default ELF image symbol visibility to the specified option-all
-    symbols will be marked with this unless overridden within the code. Using
-    this feature can very substantially improve linking and load times of shared
-    object libraries, produce more optimized code, provide near-perfect API
-    export and prevent symbol clashes. It is strongly recommended that you use
-    this in any shared objects you distribute.
-
-    Despite the nomenclature, default always means public ie; available to be
-    linked against from outside the shared object. protected and internal are
-    pretty useless in real-world usage so the only other commonly used option
-    will be hidden. The "default" if -fvisibility isn't specified is default,
-    i.e., make every symbol public-this causes the same behavior as previous
-    versions of GCC.
-
-    A good explanation of the benefits offered by ensuring ELF symbols have the
-    correct visibility is given by "How To Write Shared Libraries" by Ulrich
-    Drepper (which can be found at http://people.redhat.com/~drepper/) - however
-    a superior solution made possible by this option to marking things hidden
-    when the default is public is to make the default hidden and mark things
-    public.  This is the norm with DLL's on Windows and with -fvisibility=hidden
-    and __attribute__ ((visibility("default"))) instead of __declspec(dllexport)
-    you get almost identical semantics with identical syntax. This is a great
-    boon to those working with cross-platform projects.
-
-    For those adding visibility support to existing code, you may find `#pragma
-    GCC visibility' of use. This works by you enclosing the declarations you
-    wish to set visibility for with (for example) `#pragma GCC visibility
-    push(hidden)' and `#pragma GCC visibility pop'. Bear in mind that symbol
-    visibility should be viewed as part of the API interface contract and thus
-    all new code should always specify visibility when it is not the default ie;
-    declarations only for use within the local DSO should always be marked
-    explicitly as hidden as so to avoid PLT indirection overheads—making this
-    abundantly clear also aids readability and self-documentation of the code.
-    Note that due to ISO C++ specification requirements, operator new and
-    operator delete must always be of default visibility.
-
-    An overview of these techniques, their benefits and how to use them is at
-    http://gcc.gnu.org/wiki/Visibility. 
-
-
-={============================================================================
 *kt_dev_gcc_111* gcc: profiling
 
 {how-to-use-gcc-optimisation} {gcc-profiling}
@@ -2926,14 +2789,15 @@ If want to avoid function call cost, use 'inline' instead.
 
 
 ={============================================================================
-*kt_dev_gcc_205* gcc-cpp-vaarg
+*kt_dev_gcc_205* gcc-cpp-vaarg cpp-do-while
 
 {variable-arguments}
-The va_arg, va_copy, va_end, and va_start macros provide a portable way to access the arguments to a
-function when the function takes a variable number of arguments. There are two versions of the
-macros: The macros defined in STDARG.H conform to the ISO C99 standard; the macros defined in
-VARARGS.H are deprecated but are retained for backward compatibility with code that was written
-before the ANSI C89 standard. 
+The va_arg, va_copy, va_end, and va_start macros provide a portable way to
+access the arguments to a function when the function takes a variable number
+of arguments. There are two versions of the macros: The macros defined in
+STDARG.H conform to the ISO C99 standard; the macros defined in VARARGS.H are
+deprecated but are retained for backward compatibility with code that was
+written before the ANSI C89 standard. 
 
 <from-linux>
 STDARG(3) Linux Programmer's Manual
@@ -3083,21 +2947,22 @@ the output was truncated.  (See also below under NOTES.) If an output error is e
 negative value is returned.
 
 
-{swallowing-the-semicolon}
+<cpp-do-while> swallowing-the-semicolon
 http://gcc.gnu.org/onlinedocs/cpp/Swallowing-the-Semicolon.html#Swallowing-the-Semicolon
 
-<keys>
-This is only when uses macros which has block, is used like function in a single statement but not
-in expression. For example, think
+The summary is:
+
+This is only when uses macros `which has block, is used like function` in a
+single statement but not in expression. For example, think
 
 if( do { ... } while(0); )
 
 Not valid code. This trick is useful but macros still has its own limiations.
-<keys>
 
-Often it is desirable to define a macro that expands into a compound statement. Consider, for
-example, the following macro, that advances a pointer (the argument p says where to find it) across
-whitespace characters:
+
+Often it is desirable to define a macro that expands into a compound
+statement. Consider, for example, the following macro, that advances a pointer
+(the argument p says where to find it) across whitespace characters:
 
 #define SKIP_SPACES(p, limit)  \
 { char *lim = (limit);         \
@@ -3105,28 +2970,33 @@ whitespace characters:
    if (*p++ != ' ') {         \
      p--; break; }}}
 
-Here backslash-newline is used to split the macro definition, which must be a single logical line,
-so that it resembles the way such code would be laid out if not part of a macro definition.
+Here backslash-newline is used to split the macro definition, which must be a
+single logical line, so that it resembles the way such code would be laid out
+if not part of a macro definition.
 
-A call to this macro might be SKIP_SPACES (p, lim). Strictly speaking, the call expands to a
-compound statement, which is a complete statement with no need for a semicolon to end it. However,
-since it looks like a function call, it minimizes confusion if you can use it like a function call,
-writing a semicolon afterward, as in SKIP_SPACES (p, lim);
+A call to this macro might be SKIP_SPACES (p, lim). Strictly speaking, the
+call expands to a compound statement, which is a complete statement with no
+need for a semicolon to end it. 
 
-This can cause trouble before 'else' statements, because the semicolon is actually a null statement.
-Suppose you write
+However, since it looks like a function call, it minimizes confusion if you
+can use it like a function call, writing a semicolon afterward, as in
+SKIP_SPACES (p, lim);
+
+This can `cause trouble before else` statements, because the semicolon is
+actually a null statement.  Suppose you write
 
 if (*p != 0)                     // if (*p != 0)
  SKIP_SPACES (p, lim);           //    {...};
 else ...                         // else ...
 
-The presence of two statements(the compound statement and a null statement) in between the if
-condition and the else makes 'invalid' C code because must be one statement.
+The presence of two statements(the compound statement and a null statement) in
+between the if condition and the else makes 'invalid' C code because must be
+one statement.
 
 sam01.c:161:3: error: 'else' without a previous 'if'
 
-The definition of the macro SKIP_SPACES can be altered to solve this problem, using a do ... while
-statement. Here is how:
+The definition of the macro SKIP_SPACES can be altered to solve this problem,
+    using a do ... while statement. Here is how:
 
 #define SKIP_SPACES(p, limit)     \
 do { char *lim = (limit);         \
@@ -3141,10 +3011,10 @@ if (*p != 0)
    do {...} while (0);
 else ...
 
-which is one statement. The loop executes exactly once; most compilers generate no extra code for
-it. 
+which is one statement. The loop executes exactly once; most compilers
+generate no extra code for it. 
 
-note that there should be NO spaces after \;otherwise compile error.
+note that there should be NO spaces after "\"; otherwise compile error.
 
 
 ={============================================================================
@@ -3153,6 +3023,7 @@ note that there should be NO spaces after \;otherwise compile error.
 http://gcc.gnu.org/onlinedocs/cpp/Stringification.html#Stringification
 
 Sometimes you may want to convert a macro argument `into a string constant`
+
 Parameters are not replaced inside string constants, but you can use the '#'
 preprocessing operator instead. When a macro parameter is used with a leading
 '#', the preprocessor replaces it with the literal text of the actual
@@ -3310,7 +3181,7 @@ JPA_CREATE: value=is_this_my_own value=4...
 
 
 ={============================================================================
-*kt_dev_gcc_207* gcc-cpp-concatenation
+*kt_dev_gcc_207* gcc-cpp-concatenation cpp-##
 
 https://gcc.gnu.org/onlinedocs/cpp/Concatenation.html#Concatenation
 
