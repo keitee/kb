@@ -193,26 +193,26 @@ __x86.get_pc_thunk.dx():
 
 00000590 <call_gbo>:
 call_gbo():
-/home/kyoupark/git/kb/asan/gbo.c:60
+/home/kyoupark/git/kb/asan/gbo.c:114
  590:	55                   	push   ebp
  591:	89 e5                	mov    ebp,esp
  593:	83 ec 10             	sub    esp,0x10
  596:	e8 90 00 00 00       	call   62b <__x86.get_pc_thunk.ax>
  59b:	05 65 1a 00 00       	add    eax,0x1a65
-/home/kyoupark/git/kb/asan/gbo.c:62
+/home/kyoupark/git/kb/asan/gbo.c:116
  5a0:	8b 90 20 00 00 00    	mov    edx,DWORD PTR [eax+0x20]
  5a6:	8b 80 1c 00 00 00    	mov    eax,DWORD PTR [eax+0x1c]
  5ac:	89 45 f6             	mov    DWORD PTR [ebp-0xa],eax
  5af:	89 55 fa             	mov    DWORD PTR [ebp-0x6],edx
-/home/kyoupark/git/kb/asan/gbo.c:63
+/home/kyoupark/git/kb/asan/gbo.c:117
  5b2:	90                   	nop
-/home/kyoupark/git/kb/asan/gbo.c:64
+/home/kyoupark/git/kb/asan/gbo.c:118
  5b3:	c9                   	leave  
  5b4:	c3                   	ret    
 
 000005b5 <main>:
 main():
-/home/kyoupark/git/kb/asan/gbo.c:67
+/home/kyoupark/git/kb/asan/gbo.c:121
  5b5:	8d 4c 24 04          	lea    ecx,[esp+0x4]
  5b9:	83 e4 f0             	and    esp,0xfffffff0
  5bc:	ff 71 fc             	push   DWORD PTR [ecx-0x4]
@@ -222,35 +222,35 @@ main():
  5c3:	51                   	push   ecx
  5c4:	e8 97 fe ff ff       	call   460 <__x86.get_pc_thunk.bx>
  5c9:	81 c3 37 1a 00 00    	add    ebx,0x1a37
-/home/kyoupark/git/kb/asan/gbo.c:68
+/home/kyoupark/git/kb/asan/gbo.c:122
  5cf:	83 ec 0c             	sub    esp,0xc
  5d2:	8d 83 b0 e6 ff ff    	lea    eax,[ebx-0x1950]
  5d8:	50                   	push   eax
  5d9:	e8 12 fe ff ff       	call   3f0 <puts@plt>
  5de:	83 c4 10             	add    esp,0x10
-/home/kyoupark/git/kb/asan/gbo.c:69
+/home/kyoupark/git/kb/asan/gbo.c:123
  5e1:	83 ec 0c             	sub    esp,0xc
  5e4:	8d 83 c0 e6 ff ff    	lea    eax,[ebx-0x1940]
  5ea:	50                   	push   eax
  5eb:	e8 00 fe ff ff       	call   3f0 <puts@plt>
  5f0:	83 c4 10             	add    esp,0x10
-/home/kyoupark/git/kb/asan/gbo.c:70
+/home/kyoupark/git/kb/asan/gbo.c:124
  5f3:	83 ec 0c             	sub    esp,0xc
  5f6:	8d 83 e4 e6 ff ff    	lea    eax,[ebx-0x191c]
  5fc:	50                   	push   eax
  5fd:	e8 ee fd ff ff       	call   3f0 <puts@plt>
  602:	83 c4 10             	add    esp,0x10
-/home/kyoupark/git/kb/asan/gbo.c:72
+/home/kyoupark/git/kb/asan/gbo.c:126
  605:	e8 86 ff ff ff       	call   590 <call_gbo>
-/home/kyoupark/git/kb/asan/gbo.c:74
+/home/kyoupark/git/kb/asan/gbo.c:128
  60a:	83 ec 0c             	sub    esp,0xc
  60d:	8d 83 eb e6 ff ff    	lea    eax,[ebx-0x1915]
  613:	50                   	push   eax
  614:	e8 d7 fd ff ff       	call   3f0 <puts@plt>
  619:	83 c4 10             	add    esp,0x10
-/home/kyoupark/git/kb/asan/gbo.c:76
+/home/kyoupark/git/kb/asan/gbo.c:130
  61c:	b8 00 00 00 00       	mov    eax,0x0
-/home/kyoupark/git/kb/asan/gbo.c:77
+/home/kyoupark/git/kb/asan/gbo.c:131
  621:	8d 65 f8             	lea    esp,[ebp-0x8]
  624:	59                   	pop    ecx
  625:	5b                   	pop    ebx
