@@ -176,7 +176,7 @@
 *kt_linux_tool_100* tool-efence-fortify
 *kt_linux_tool_100* tool-asan tool-efence cpp-memory-issue
 *kt_linux_tool_100* tool-asan-flag asan-code
-*kt_linux_tool_100* tool-asan-usecase
+*kt_linux_tool_100* tool-asan-case
 *kt_linux_tool_100* tool-asan tool-kasan
 *kt_linux_tool_000* tool-asan-llvm
 *kt_linux_tool_000* tool-asan-gcc
@@ -15634,18 +15634,10 @@ void __asan_report_error(uptr pc, uptr bp, uptr sp,
 
 void __asan_init() {
 
-  // get kHighMemEnd = 0xffffffff for 32 bits
+  // `kHighMemEnd` = 0xffffffff for 32 bits
   InitializeHighMemEnd();
 
   /*
-
-  98:384:000000000043ec90 T __interceptor_malloc
-  99:385:000000000043f520 T __interceptor_malloc_stats
-  100:386:000000000043f170 T __interceptor_malloc_usable_size
-  262:2401:00000000008a5898 B _ZN14__interception11real_mallocE
-  412:2551:00000000008a5840 B _ZN14__interception17real_malloc_statsE
-  439:2578:00000000008a5870 B _ZN14__interception23real_malloc_usable_sizeE
-
   // asan/asan_interceptors.cc
   InitializeHighMemEnd()
   {
@@ -15654,46 +15646,105 @@ void __asan_init() {
     ASAN_INTERCEPT_FUNC(memmove);
   }
 
-  // #define ASAN_INTERCEPT_FUNC(name)                                      \
-  //   do {                                                                 \
-  //     if ((!INTERCEPT_FUNCTION(name) || !REAL(name)) &&                  \
-  //         common_flags()->verbosity > 0)                                 \
-  //       Report("AddressSanitizer: failed to intercept '" #name "'\n");   \
-  //   } while (0)
-  //
-  // #if defined(__linux__)
-  // # include "interception_linux.h"
-  // # define INTERCEPT_FUNCTION(func) INTERCEPT_FUNCTION_LINUX(func)
-  // # define INTERCEPT_FUNCTION_VER(func, symver) \
-  //    INTERCEPT_FUNCTION_VER_LINUX(func, symver)
-
-  // #define INTERCEPT_FUNCTION_LINUX(func) \
-  //     ::__interception::GetRealFunctionAddress( \
-  //           #func, (::__interception::uptr*)&REAL(func), \
-  //           (::__interception::uptr)&(func), \
-  //           (::__interception::uptr)&WRAP(func))
-  
   // asan/asan_interceptors.cc
   INTERCEPTOR(int, memcmp, const void *a1, const void *a2, uptr size) {
+    ...
   }
   */
 
   InitializeAsanInterceptors();
 
+  // For 32 bits:
+  //
+  // one shadow byte represents 8 bytes applicaion memory. 512M (2**29) shadow
+  // space(1/8) represents the whole space(2G, 8/8)
+  //
   // static const u64 kDefaultShadowOffset32 = 1ULL << 29;
   //
   // >>> hex(2**29)
   // '0x20000000'
   //
+  // #define SHADOW_OFFSET kDefaultShadowOffset32
   // #define kLowShadowBeg   SHADOW_OFFSET
+  //
+  
+  // #define kLowMemEnd      (SHADOW_OFFSET ? SHADOW_OFFSET - 1 : 0)
+  // #define kLowShadowEnd   MEM_TO_SHADOW(kLowMemEnd)
+
+  // pagesize is 4096
+  //
+  // >>> hex(4096)
+  // '0x1000'
+  // >>> hex(0x20000000-0x1000)
+  // '0x1ffff000'
+
+  if (kLowShadowBeg)
+    shadow_start -= GetMmapGranularity();
+
+  // MEM_TO_SHADOW()
+  //
+  // // If set, asan uses the values of SHADOW_SCALE and SHADOW_OFFSET
+  // // provided by the instrumented objects. Otherwise constants are used.
+  // # define ASAN_FLEXIBLE_MAPPING_AND_OFFSET 0
+  //
+  // # define SHADOW_SCALE kDefaultShadowScale
+  // static const u64 kDefaultShadowScale = 3;
+  // static const u64 kDefaultShadowOffset32 = 1ULL << 29;
+  // 
+  // #define MEM_TO_SHADOW(mem) (((mem) >> SHADOW_SCALE) + (SHADOW_OFFSET))
+  //
+  // `kHighMemEnd` = 0xffffffff for 32 bits
+  // #define `kHighMemBeg`     (MEM_TO_SHADOW(kHighMemEnd) + 1)
+  //
+  // PrintAddressSpaceLayout();
+  //
+  // (void*)kHighMemBeg, (void*)kHighMemEnd);
+  // || `[0x40000000, 0xffffffff]` || HighMem    ||   
+  //
+  // #define kHighShadowEnd  MEM_TO_SHADOW(kHighMemEnd)
+  // #define kHighShadowBeg  MEM_TO_SHADOW(kHighMemBeg)
+  //
+  // (void*)kHighShadowBeg, (void*)kHighShadowEnd); 384M
+  // || `[0x28000000, 0x3fffffff]` || HighShadow ||
+  //
+  // (void*)kShadowGapBeg, (void*)kShadowGapEnd);   64M
+  // || `[0x24000000, 0x27ffffff]` || ShadowGap  ||
+  //
+  // (void*)kLowShadowBeg, (void*)kLowShadowEnd);   64M
+  // || `[0x20000000, 0x23ffffff]` || LowShadow  ||
+  //
+  // (void*)kLowMemBeg, (void*)kLowMemEnd);
+  // || `[0x00000000, 0x1fffffff]` || LowMem     ||
+  //
+  // MemToShadow(shadow): 0x24000000 0x247fffff 0x25000000 0x27ffffff
+  // red_zone=16
+  // quarantine_size=64M
+  // malloc_context_size=30
+  // SHADOW_SCALE: 3
+  // SHADOW_GRANULARITY: 8
+  // SHADOW_OFFSET: 20000000
+
+  // check mem aginst /proc/maps
+
+  bool full_shadow_is_available =
+      MemoryRangeIsAvailable(shadow_start, kHighShadowEnd);
+        
+  if (full_shadow_is_available) {
+
+  // mmap the low shadow plus at least one page at the left.
+  ReserveShadowMemoryRange(shadow_start, kLowShadowEnd);
 
   // 504          Report("[KT] ReserveShadowMemoryRange(0x%x, 0x%x)\n", shadow_start, kLowShadowEnd);
   // ==1024==[KT] ReserveShadowMemoryRange(0x1ffff000, 0x23ffffff)
+
+  // mmap the high shadow.
+  ReserveShadowMemoryRange(kHighShadowBeg, kHighShadowEnd);
   // 509          Report("[KT] ReserveShadowMemoryRange(0x%x, 0x%x)\n", kHighShadowBeg, kHighShadowEnd);
   // ==1024==[KT] ReserveShadowMemoryRange(0x28000000, 0x0)
+
   // 512          Report("[KT] ProtectGap(0x%x, 0x%x)\n", kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
   // ==1024==[KT] ProtectGap(0x24000000, 0x0)
-
+  }
 }
 
 
@@ -16061,7 +16112,7 @@ main():
 
 
 ={============================================================================
-*kt_linux_tool_100* tool-asan-usecase
+*kt_linux_tool_100* tool-asan-case
 
 {tool-asan-build}
 i686-nptl-linux-gnu-gcc -static-libasan -fsanitize=address uaf.c -o static_asan
@@ -16097,7 +16148,7 @@ Linux kt-office-debian 4.9.0-7-686-pae #1 SMP Debian 4.9.110-3+deb9u2 (2018-08-1
 * sanitized and static
 
 
-{asn-usecase-uaf} `use after free` *cxx-memory-issue*
+{tool-asan-case-heap-usecase} `use after free` *cxx-memory-issue*
 
 from ansic, p167, another uaf
 
@@ -16343,7 +16394,7 @@ WRITE of size 4 at 0xb5b00fe4 thread T0
 0xb5b00fe4 is located 20 bytes inside of 40-byte region [0xb5b00fd0,0xb5b00ff8)
 
 
-{asn-usecase-overflow} `heap buffer overflow, out of index` *cxx-memory-issue*
+{tool-asan-case-overflow} `heap buffer overflow, out of index` *cxx-memory-issue*
 
 <ex>
 The issue was that index(dbConId) was -1(0xFFFFFFFF used as a handle) and worked
@@ -16392,7 +16443,7 @@ int main(int argc, char **argv) {
 
 $ ssh root@myboard /a.out
 =================================================================
-==126== ERROR: AddressSanitizer: heap-buffer-overflow on address 0xb5503fb4
+==126== ERROR: AddressSanitizer: `heap-buffer-overflow` on address 0xb5503fb4
 at pc 0x8788 bp 0xbefc7cec sp 0xbefc7ce4
 `READ` of size m
     #0 0x8787 (/a.out+0x8787)
@@ -16448,7 +16499,7 @@ int main(int argc, char **argv) {
 
 $ ssh root@myboard /a.out
 =================================================================
-==132== ERROR: AddressSanitizer: stack-buffer-overflow
+==132== ERROR: AddressSanitizer: `stack-buffer-overflow`
 on address 0xbec82ccc at pc 0x875c bp 0xbec82b0c sp 0xbec82b04
 READ of size 4 at 0xbec82ccc thread T0
     #0 0x875b (/a.out+0x875b)
@@ -16522,7 +16573,7 @@ int main(int argc, char **argv) {
 
 $ ssh root@myboard /a.out
 =================================================================
-==138== ERROR: AddressSanitizer: global-buffer-overflow
+==138== ERROR: AddressSanitizer: `global-buffer-overflow`
 on address 0x00010b54 at pc 0x86f0 bp 0xbee97cf4 sp 0xbee97cec
 READ of size 4 at 0x00010b54 thread T0
     #0 0x86ef (/a.out+0x86ef)
@@ -16560,9 +16611,9 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==138== ABORTING
 
 
-<ex>
-The issue is that DIAG_CMN_ALIGN() makes 6 bytes to 8 bytes by assuming that
-it is aligned and which is not.
+{tool-asan-case-overflow} <ex> *cxx-memcpy-issue*
+The issue is that DIAG_CMN_ALIGN(6) becomes 8 bytes to make it aligned but it
+has only 6 space. 
 
 /* IPC client name */
 static char gClientName[] = "_DLRH";
@@ -16571,11 +16622,13 @@ static char gClientName[] = "_DLRH";
 
 int DIAG_IPC_CLIENT_Open(char *client_name)
 {
-    diag_ipc_client_P_notify_server(DIAG_IPC_MSG_TYPE_REG, client_name,strlen(client_name)+1)
+    diag_ipc_client_P_notify_server(DIAG_IPC_MSG_TYPE_REG, 
+        client_name,strlen(client_name)+1)
     {
 
       /* Prepare message header */
-      diag_ipc_client_P_format_message_header(msg_to_server, msg_type, g_ipc_ack_value, client_name, client_name_len)
+      diag_ipc_client_P_format_message_header(msg_to_server, 
+          msg_type, g_ipc_ack_value, client_name, client_name_len)
       {
         /* client name */
         memcpy(msg+16,client_name,(int32_t)DIAG_CMN_ALIGN(client_name_len));
@@ -16597,7 +16650,7 @@ int DIAG_IPC_CLIENT_Open(char *client_name)
 // when use stripped binary
 
 =================================================================
-==1334==ERROR: AddressSanitizer: global-buffer-overflow on address 0x0818a606 at pc 0xb6f46711 bp 0xbfdf5778 sp 0xbfdf5358
+==1334==ERROR: AddressSanitizer: `global-buffer-overflow` on address 0x0818a606 at pc 0xb6f46711 bp 0xbfdf5778 sp 0xbfdf5358
 READ of size 8 at 0x0818a606 thread T0
     #0 0xb6f46710 in __interceptor_memcpy /home/kyoupark/asan/cross-build/.build/src/gcc-4.9.4/libsanitizer/asan/asan_interceptors.cc:375
     #1 0x80948f1 (/NDS/bin/PWM_Process+0x80948f1)
@@ -16649,7 +16702,7 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 // when use unstripped binary
 
 =================================================================
-==1247==ERROR: AddressSanitizer: global-buffer-overflow on address 0x0af71e46 at pc 0xb6e79af3 bp 0xbfd624f8 sp 0xbfd62484
+==1247==ERROR: AddressSanitizer: `global-buffer-overflow` on address 0x0af71e46 at pc 0xb6e79af3 bp 0xbfd624f8 sp 0xbfd62484
 READ of size 8 at 0x0af71e46 thread T0
 NDS: ^0000000057.680445 !WARN  -MEMMAN       < p:000004d3 t:b6ff7ec0 T:no name M:memman_pinit.c F:PoolCreate L:00386 > Memory pools are not growable for the moment
     #0 0xb6e79af2 in memcpy (/flash0/libasan.so.1+0x62af2)
@@ -16758,9 +16811,9 @@ is a null in src (destination then padded out with nulls) or a maximum of 40
 is copied if the source string is over 40.
 
 
-<ex-real> `heap buffer-overflow` was detected by ASan:
+<ex-real>
 
-==136== ERROR: AddressSanitizer: heap-buffer-overflow on address 0xad651b10
+==136== ERROR: AddressSanitizer: `heap-buffer-overflow` on address 0xad651b10
 at pc 0xb4e03054 bp 0x75c35ac4 sp 0x75c35aac
 READ of size 17 at 0xad651b10 thread T457 (homesetting)
     #0 0xb4e03053 (/mtd_exe/lib/libasan.so.0+0xf053)
@@ -18532,7 +18585,7 @@ ulimit -c unlimited
 /flash0/scripts/startstack.sh
 
 
-// copy from office debian
+// copy to build server
 scp libasan* 10.209.62.106:/home/kyoupark/si_logs/flash0-asan
 
 kyoupark@kt-office-debian:~/asan/gcc/i686-nptl-linux-gnu-gcc/i686-nptl-linux-gnu/lib$ ll libasan*
@@ -18546,6 +18599,8 @@ lrwxrwxrwx 1 kyoupark kyoupark      16 Sep 27 15:58 libasan.so -> libasan.so.1.0
 // mkdir /flash0
 // mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan/ /flash0
 
+
+// debian office
 mkdir /flash0
 mount -o nfsvers=4 10.209.60.101:/home/kyoupark/ /flash0
 
@@ -18559,7 +18614,7 @@ b call_uaf
 b __asan_report_store4
 b __asan_report_error
 
-cd 
+cd /flash0/asan/flash0
 gdb -command=cmd ./own_asan_uaf
 
 
@@ -30906,16 +30961,18 @@ Print the names and data types of all variables that are defined 'outside' of
 functions i.e. excluding local variables.
 
 
-{gdb-symbol-list}
+{gdb-symbol-find}
 info functions
 Print the names and data types of all defined functions.
 
 info functions regexp
 Print the names and data types of all defined functions whose names contain a
-match for regular expression regexp. Thus, ‘info fun step’ finds all functions
-whose names include step; ‘info fun ^step’ finds those whose names start with
-step. If a function name contains characters that conflict with the regular
-expression language (e.g. ‘operator*()’), they may be quoted with a backslash.
+match for regular expression regexp. 
+
+Thus, ‘info fun step’ finds all functions whose names include step; ‘info fun
+^step’ finds those whose names start with step. If a function name contains
+characters that conflict with the regular expression language (e.g.
+‘operator*()’), they may be quoted with a backslash.
 
 
 ={============================================================================
@@ -57065,7 +57122,7 @@ You can specify the input language explicitly with the -x option:
     Input files that don’t require compilation are ignored.
 
 
-<gcc-option-verbose>
+<gcc-option-verbose> gcc-debug
 -v
 
 Print (on standard error output) the commands executed to run the stages of
@@ -65262,6 +65319,8 @@ ln -s ../mpc-1.0.2 mpc
 $ mkdir -p build-gcc
 $ cd build-gcc
 $ ../gcc-4.9.2/configure --prefix=/opt/cross --target=aarch64-linux --enable-languages=c,c++ --disable-multilib
+$ ../gcc-4.9.4/configure --prefix=/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc --target=i686-nptl-linux-gnu --enable-languages=c,c++ --disable-multilib CFLAGS=-g3 -Og CXXFLAGS=-g3 -Og
+build-glibc-refe
 $ make -j4 all-gcc
 $ make install-gcc
 $ cd ..
@@ -79182,7 +79241,7 @@ The following semantics apply:
   A definition of a global symbol in the 'main' program 'overrides' a
   definition in a library.
 
-<lib-resolve-order>
+<lib-resolve-order> lib-link-order
 If a global symbol is defined in 'multiple' libraries, then a reference to
 that symbol is bound to the `first definition found` by scanning libraries in
 the left-to-right 'order' in which they were listed on the static 'link'
@@ -79221,6 +79280,14 @@ Dynamic section at offset 0xbf0 contains 27 entries:
  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 
 The order of runtime loading also follows the order of dynamic section.
+
+When use:
+
+	g++ -### -g $(TARGET5)_main.c lib$(TARGET5).so -ldl -o $@
+
+libintercept.so -ldl "-lstdc++" -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc \
+    /usr/lib/gcc/x86_64-linux-gnu/4.9/crtend.o \
+    /usr/lib/gcc/x86_64-linux-gnu/4.9/../../../x86_64-linux-gnu/crtn.o
 
 
 <problem>
@@ -79757,8 +79824,27 @@ process_envvars (enum mode *modep)
 
 LPI42.1
 
+DLOPEN(3)
+
+NAME
+       dladdr, dlclose, dlerror, dlopen, dlsym, dlvsym - programming interface
+       to dynamic linking loader
+
+SYNOPSIS
+       #include <dlfcn.h>
+
+       void *dlopen(const char *filename, int flag);
+
+       char *dlerror(void);
+
+       void *dlsym(void *handle, const char *symbol);
+
+       int dlclose(void *handle);
+
+       `Link with -ldl.`
+
+
 <dl-dlopen>
-#include <dlfcn.h>
 
 void *dlopen(const char *libfilename, int flags);
 
@@ -79820,15 +79906,23 @@ void *dlsym(void *handle, char *symbol);
 Returns address of symbol, or NULL if symbol is not found
 
 searches a library for a symbol (a string containing the name of a function or
-variable) and returns its address.
+    variable) and returns its address.
 
 The value of a symbol returned by dlsym() 'may' be NULL, which is
 'indistinguishable' from the "symbol not found" return. 
 
 In order to differentiate the two possibilities, we must call dlerror()
-    beforehand (to make sure that any previously held error string is cleared)
-    and then if, after the call to dlsym(), dlerror() returns a non-NULL value,
-    we know that an error occurred.
+beforehand (to make sure that any previously held error string is cleared) and
+then if, after the call to dlsym(), dlerror() returns a non-NULL value, we
+know that an error occurred.
+
+       There  are  two special pseudo-handles, RTLD_DEFAULT and RTLD_NEXT.
+       The former will find the first occurrence of the desired symbol using
+       the default library search order.  
+       
+       The latter will find the next occurrence of a function in the search
+       order after the current library.  This allows one to provide a wrapper
+       around a function in another shared library.
 
 <ex>
 

@@ -1272,12 +1272,72 @@ TEST(CxxFeaturesTest, UseHashOnString)
 
 
 // ={=========================================================================
-// cxx-bool
+// cxx-bool cxx-check
 
 TEST(Bool, CheckBoolDefault)
 {
   bool value{};
   EXPECT_EQ(value, false);
+}
+
+namespace __cxx_check {
+
+void CheckFailed(const char *file, int line, const char *cond,
+                          unsigned int v1, unsigned int v2) {
+  printf("Sanitizer CHECK failed: %s:%d %s (%lld, %lld)\n", file, line, cond,
+                                                            v1, v2);
+}
+
+void CheckPassed(const char *file, int line, const char *cond,
+                          unsigned int v1, unsigned int v2) {
+  printf("Sanitizer CHECK passed: %s:%d %s (%lld, %lld)\n", file, line, cond,
+                                                            v1, v2);
+}
+
+#define CHECK_IMPL(c1, op, c2) \
+  do { \
+    unsigned int v1 = (unsigned int)(c1); \
+    unsigned int v2 = (unsigned int)(c2); \
+    if (!(v1 op v2)) \
+      CheckFailed(__FILE__, __LINE__, \
+        "(" #c1 ") " #op " (" #c2 ")", v1, v2); \
+    else \
+      CheckPassed(__FILE__, __LINE__, \
+        "(" #c1 ") " #op " (" #c2 ")", v1, v2); \
+  } while (false) \
+
+#define CHECK(a)       CHECK_IMPL((a), !=, 0)
+#define CHECK_EQ(a, b) CHECK_IMPL((a), ==, (b))
+#define CHECK_NE(a, b) CHECK_IMPL((a), !=, (b))
+#define CHECK_LT(a, b) CHECK_IMPL((a), <,  (b))
+#define CHECK_LE(a, b) CHECK_IMPL((a), <=, (b))
+#define CHECK_GT(a, b) CHECK_IMPL((a), >,  (b))
+#define CHECK_GE(a, b) CHECK_IMPL((a), >=, (b))
+
+} // namespace
+
+TEST(Bool, Precentage)
+{
+  using namespace __cxx_check;
+
+  // Like assert(), CHECK(x) expect x is true.
+  //
+  // if("Address is not in memory and not in shadow?")
+  // becomes true
+  
+  // CHECK("Address is not in memory and not in shadow?");
+  // this do not work since cannot cast to const char* to unsigned int
+
+  // if( (0 && "Address is not in memory and not in shadow?"))
+  // becomes false
+
+  // Sanitizer CHECK failed: cxx.cpp:1322 ((0 && "Address is not in memory and not in shadow?")) != (0) (0, 0)
+  // Sanitizer CHECK failed: cxx.cpp:1325 ((100 != 100)) != (0) (0, 0)
+
+  CHECK(0 && "Address is not in memory and not in shadow?");
+
+  CHECK(100 != 101);
+  CHECK(100 != 100);
 }
 
 
