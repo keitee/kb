@@ -273,16 +273,17 @@ call_two():
 ; 0xbffff188:     0xb7e6088b      0x00402000      0x00000001      0x00402000
 ; 0xbffff198:     0xbffff1b8      0x00400759      0x0000000a      0x00000014
 ;
-; ebp + 12  : arg2
-; ebp + 8   : arg1
+; ebp + 12  : arg2, a2
+; ebp + 8   : arg1, a1
 ; ebp + 4   : ra
-; ebp       : 
+; ebp       : saved ebp, ebp = esp
 ; ebp - 4   : ebx
-; ebp - 8   : 
+; ebp - 8   : eax
 ; ebp - 12  : a1_
 ; ebp - 16  : s2_
-; ebp - 20  : i
-; ebp - 24  : result
+; ebp - 20        : i
+; ebp - 24, 0x18  : result
+; ebp - 28        : 
 
 00000658 <call_one>:
 call_one():
@@ -291,13 +292,13 @@ call_one():
  659:	89 e5                	mov    ebp,esp
 
 ; save ebx, -4
- 65b:	53                   	push   ebx
- 65c:	83 ec 14             	sub    esp,0x14   ; -20
+ 65b:	53                   	push   ebx        ; -4
+ 65c:	83 ec 14             	sub    esp,0x14   ; -20, ebp-24
 
  65f:	e8 2c fe ff ff       	call   490 <__x86.get_pc_thunk.bx> ; get ebx
  664:	81 c3 9c 19 00 00    	add    ebx,0x199c
 /home/kyoupark/git/kb/asan/stack.c:28
- 66a:	83 ec 0c             	sub    esp,0xc    ; -12
+ 66a:	83 ec 0c             	sub    esp,0xc    ; -12, ebp-36
 
 ; to get global const string
 ; (gdb) x/20c ($ebx-0x17c9)
@@ -306,12 +307,12 @@ call_one():
 ; 0x400847:       0 '\000'        99 'c'  97 'a'  108 'l'
  66d:	8d 83 37 e8 ff ff    	lea    eax,[ebx-0x17c9]
 
- 673:	50                   	push   eax
+ 673:	50                   	push   eax        ; -4, ebp-40
  674:	e8 a7 fd ff ff       	call   420 <puts@plt>
 
 ; int puts(const char *s);
 ; 16, why 16? may be because more args to make system call?
- 679:	83 c4 10             	add    esp,0x10
+ 679:	83 c4 10             	add    esp,0x10   ; +16, ebp-24
 
 ; -12, a1_
 /home/kyoupark/git/kb/asan/stack.c:30
@@ -343,11 +344,12 @@ call_one():
 /home/kyoupark/git/kb/asan/stack.c:35 (discriminator 3)
  6a7:	83 45 ec 01          	add    DWORD PTR [ebp-0x14],0x1
 
-; if i <= 9?
+; if i <= 9? if so, contine loop and if not move to next loop
 /home/kyoupark/git/kb/asan/stack.c:35 (discriminator 1)
  6ab:	83 7d ec 09          	cmp    DWORD PTR [ebp-0x14],0x9
  6af:	7e f0                	jle    6a1 <call_one+0x49>
 
+; i = 0, inside for()
 /home/kyoupark/git/kb/asan/stack.c:38
  6b1:	c7 45 ec 00 00 00 00 	mov    DWORD PTR [ebp-0x14],0x0
  6b8:	eb 0a                	jmp    6c4 <call_one+0x6c>
@@ -365,29 +367,29 @@ call_one():
  6c8:	7e f0                	jle    6ba <call_one+0x62>
 
 /home/kyoupark/git/kb/asan/stack.c:41
- 6ca:	83 ec 04             	sub    esp,0x4
+ 6ca:	83 ec 04             	sub    esp,0x4                ; -4, ebp-28
 
-; 3 args + ra and call
- 6cd:	6a 64                	push   0x64
- 6cf:	ff 75 f0             	push   DWORD PTR [ebp-0x10]
- 6d2:	ff 75 f4             	push   DWORD PTR [ebp-0xc]
+; 3 args + ra, 16 and call
+ 6cd:	6a 64                	push   0x64                   ; 100 
+ 6cf:	ff 75 f0             	push   DWORD PTR [ebp-0x10]   ; a2
+ 6d2:	ff 75 f4             	push   DWORD PTR [ebp-0xc]    ; a1
  6d5:	e8 e6 fe ff ff       	call   5c0 <call_two>
- 6da:	83 c4 10             	add    esp,0x10
+ 6da:	83 c4 10             	add    esp,0x10               ; +16
 
 ; save return to result var
- 6dd:	89 45 e8             	mov    DWORD PTR [ebp-0x18],eax
+ 6dd:	89 45 e8             	mov    DWORD PTR [ebp-0x18],eax   ; ebp-24 = eax
 
 /home/kyoupark/git/kb/asan/stack.c:42
- 6e0:	83 ec 08             	sub    esp,0x8
+ 6e0:	83 ec 08             	sub    esp,0x8                ; -8, ebp-20
 
-; push result as arg
- 6e3:	ff 75 e8             	push   DWORD PTR [ebp-0x18]
+; push result as arg. push itslef and regarded it as arg? so 2 args + ea?
+ 6e3:	ff 75 e8             	push   DWORD PTR [ebp-0x18]   ; -4, ebp-24
 
-; ebx which has access to global still remains
+; ebx which has access to global still remains.
  6e6:	8d 83 48 e8 ff ff    	lea    eax,[ebx-0x17b8]
  6ec:	50                   	push   eax
  6ed:	e8 1e fd ff ff       	call   410 <printf@plt>
- 6f2:	83 c4 10             	add    esp,0x10
+ 6f2:	83 c4 10             	add    esp,0x10               ; +16
 
 ; save result
 /home/kyoupark/git/kb/asan/stack.c:43
@@ -397,8 +399,8 @@ call_one():
  6f8:	8b 5d fc             	mov    ebx,DWORD PTR [ebp-0x4]
 
 ; epilog
- 6fb:	c9                   	leave  
- 6fc:	c3                   	ret    
+ 6fb:	c9                   	leave   ; esp = ebp, ebp+4  
+ 6fc:	c3                   	ret     ; ebp+8
 
 
 000006fd <main>:
@@ -431,12 +433,15 @@ main():
  744:	50                   	push   eax
  745:	e8 d6 fc ff ff       	call   420 <puts@plt>
  74a:	83 c4 10             	add    esp,0x10
+
+; 2 args + ra but use 16, 0x8
 /home/kyoupark/git/kb/asan/stack.c:52
  74d:	83 ec 08             	sub    esp,0x8
->750:	6a 14                	push   0x14
->752:	6a 0a                	push   0xa
->754:	e8 ff fe ff ff       	call   658 <call_one>
->759:	83 c4 10             	add    esp,0x10
+ 750:	6a 14                	push   0x14
+ 752:	6a 0a                	push   0xa
+ 754:	e8 ff fe ff ff       	call   658 <call_one>
+ 759:	83 c4 10             	add    esp,0x10
+
  75c:	83 ec 08             	sub    esp,0x8
  75f:	50                   	push   eax
  760:	8d 83 98 e8 ff ff    	lea    eax,[ebx-0x1768]

@@ -71693,6 +71693,7 @@ To push new data onto the stack we use the push instruction [3]. What push
 does is first decrement esp by 4, and then store its operand in the location
 esp points to. So this:
 
+*x86-asm-push*
 push eax
 
 Is actually equivalent to this:
@@ -72074,14 +72075,22 @@ call_gbo():
  d22:	57                   	push   edi
  d23:	56                   	push   esi
  d24:	53                   	push   ebx
+
+; -124, get global var
  d25:	83 ec 7c             	sub    esp,0x7c
  d28:	e8 c3 fb ff ff       	call   8f0 <__x86.get_pc_thunk.bx>
  d2d:	81 c3 d3 22 00 00    	add    ebx,0x22d3
+
+; -120, use callee-saved reg. do not set local var and ebp-0x78? 
  d33:	8d 75 88             	lea    esi,[ebp-0x78]
  d36:	89 75 84             	mov    DWORD PTR [ebp-0x7c],esi
+
+; ebx-0x10 ?
  d39:	8b 83 f0 ff ff ff    	mov    eax,DWORD PTR [ebx-0x10]
  d3f:	83 38 00             	cmp    DWORD PTR [eax],0x0
  d42:	74 13                	je     d57 <call_gbo+0x38>
+
+; asan/asan_fake_stack.cc
  d44:	83 ec 0c             	sub    esp,0xc
  d47:	6a 60                	push   0x60
  d49:	e8 b2 fa ff ff       	call   800 <__asan_stack_malloc_1@plt>
@@ -72105,6 +72114,7 @@ call_gbo():
  d8d:	c7 81 08 00 00 20 f3 	mov    DWORD PTR [ecx+0x20000008],0xf3f3f3f3
  d94:	f3 f3 f3 
 
+; ebx+0x60?
 /home/kyoupark/git/kb/asan/gbo.c:132
  d97:	8d 83 60 00 00 00    	lea    eax,[ebx+0x60]
  d9d:	89 c2                	mov    edx,eax
@@ -72158,13 +72168,23 @@ call_gbo():
  721:	55                   	push   ebp
  722:	89 e5                	mov    ebp,esp
  724:	83 ec 10             	sub    esp,0x10
+
+; get global var
  727:	e8 a4 00 00 00       	call   7d0 <__x86.get_pc_thunk.ax>
  72c:	05 d4 18 00 00       	add    eax,0x18d4
+
 /home/kyoupark/git/kb/asan/gbo.c:132
+; read 4 from gclientname[4]
  731:	8b 90 2c 00 00 00    	mov    edx,DWORD PTR [eax+0x2c]
+; read 4 from gclientname[0]
  737:	8b 80 28 00 00 00    	mov    eax,DWORD PTR [eax+0x28]
+
+; *x86-asm-endian* endian-little-endian
+; ebp-10 = (0,3)
  73d:	89 45 f6             	mov    DWORD PTR [ebp-0xa],eax
+; ebp-6  = (4,7)
  740:	89 55 fa             	mov    DWORD PTR [ebp-0x6],edx
+
 /home/kyoupark/git/kb/asan/gbo.c:133
  743:	90                   	nop
 /home/kyoupark/git/kb/asan/gbo.c:134
@@ -72336,6 +72356,9 @@ test cl, cl   ; set ZF to 1 if cl == 0
 je 0x804f430  ; jump if ZF == 1
 
 
+instruction would set or clear flags like carry (CF), overflow (OF), sign
+(SF), parity (PF), zero (ZF), etc.
+
 *x86-asm-jmp*
 Although jmp is unconditional, it has sibling instructions that look at the
 state of `eflags`, and either jumps to the label if the condition is met or
@@ -72479,6 +72502,31 @@ those opcode bits are ignored by the processor.
 
 
 movzx  Move with Zero-Extend
+
+                    ; 11000011 11101110
+mov     bx, 0C3EEh  ; Sign bit of bl is now 1: BH == 1100 0011, BL == 1110 1110
+movsx   ebx, bx     ; Load signed 16-bit value into 32-bit register and sign-extend
+                    ; EBX is now equal FFFFC3EEh
+
+movzx   dx, bl      ; Load unsigned 8-bit value into 16-bit register and zero-extend
+                    ; DX is now equal 00EEh
+
+
+*x86-asm-and* *x86-asm-test*
+
+and, or, xor — Bitwise logical and, or and exclusive or
+
+These instructions perform the specified logical operation (logical bitwise
+    and, or, and exclusive or, respectively) on their operands, placing the
+result in the first operand location.  Syntax
+
+and <reg>,<reg>
+or <reg>,<reg>
+xor <reg>,<reg>
+
+Examples
+and eax, 0fH — clear all but the last 4 bits of EAX.
+xor edx, edx — set the contents of EDX to zero.
 
 
 ={============================================================================
