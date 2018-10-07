@@ -10,6 +10,7 @@ if __name__ == "__main__":
     parser.add_argument("--host32", help="build for host 32", action="store_true")
     parser.add_argument("--host32m", help="build for host 32m", action="store_true")
     parser.add_argument("--host64", help="build for host 64", action="store_true")
+    parser.add_argument("--host64_recover", help="build for host 64 with recover", action="store_true")
     parser.add_argument("--target", help="build for target", action="store_true")
     parser.add_argument("--clang", help="build for clang", action="store_true")
     args = parser.parse_args()
@@ -41,6 +42,13 @@ if __name__ == "__main__":
         subprocess.call(["gcc", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_host_asan_64"])
         subprocess.call(["gcc", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_host_static_asan_64"])
         subprocess.call(["gcc", "-g", "gbo.c", "-o", "gbo_host_no_asan_64"])
+        sys.stdout.write("done\n")
+
+    if args.host64_recover:
+        sys.stdout.write("builds asan/static/no gbo using 64 host tools ...\n")
+        subprocess.call(["gcc", "-g", "-fsanitize-recover=address", "gbo_recover.c", "-o", "gbo_host_asan_64_recover"])
+        subprocess.call(["gcc", "-g", "-static-libasan", "-fsanitize-recover=address", "gbo_recover.c", "-o", "gbo_host_static_asan_64_recover"])
+        subprocess.call(["gcc", "-g", "gbo_recover.c", "-o", "gbo_host_no_asan_64_recover"])
         sys.stdout.write("done\n")
 
     # for clang which use static by default
