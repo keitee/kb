@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+#include <link.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -108,6 +110,21 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 
 */
 
+static int header_handler(struct dl_phdr_info* info, size_t size, void* data)
+{
+  int j = 0;
+  printf("name=%s (%d segments) address=%p\n",
+      info->dlpi_name, info->dlpi_phnum, (void*)info->dlpi_addr);
+  for (j = 0; j < info->dlpi_phnum; j++) {
+    printf("\t\t header %2d: address=%10p\n", j,
+        (void*) (info->dlpi_addr + info->dlpi_phdr[j].p_vaddr));
+    printf("\t\t\t type=%u, flags=0x%X\n",
+        info->dlpi_phdr[j].p_type, info->dlpi_phdr[j].p_flags);
+  }
+  printf("\n");
+  return 0;
+}
+
 static char gclientname[] = "_DLRH";
 
 void call_gbo()
@@ -119,14 +136,16 @@ void call_gbo()
 
 int main(int argc, char **argv)
 {
-    printf("main: begin.\n" );
-    printf("main: this global buffer overflow..\n" );
-    printf("main: \n" );
+  dl_iterate_phdr(header_handler, NULL);
 
-    call_gbo();
+  printf("main: begin.\n" );
+  printf("main: this global buffer overflow..\n" );
+  printf("main: \n" );
 
-    printf("main: ends.\n" );
+  call_gbo();
 
-    return 0;
+  printf("main: ends.\n" );
+
+  return 0;
 }
 
