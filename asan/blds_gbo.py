@@ -22,9 +22,9 @@ if __name__ == "__main__":
 
     if args.host:
         sys.stdout.write("builds asan/static/no gbo using host tools ...\n")
-        subprocess.call(["gcc", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_host_asan"])
-        subprocess.call(["gcc", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_host_static_asan"])
-        subprocess.call(["gcc", "-g", "gbo.c", "-o", "gbo_host_no_asan"])
+        subprocess.call(["gcc", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_host_asan_32"])
+        subprocess.call(["gcc", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_host_static_asan_32"])
+        subprocess.call(["gcc", "-g", "gbo.c", "-o", "gbo_host_no_asan_32"])
         sys.stdout.write("done\n")
 
     # for clang which use static by default
