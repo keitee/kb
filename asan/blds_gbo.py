@@ -30,12 +30,13 @@ if __name__ == "__main__":
         subprocess.call(["gcc", "-g", "gbo.c", "-o", "gbo_host_no_asan_32"])
         sys.stdout.write("done\n")
 
-    if args.host32m:
-        sys.stdout.write("builds asan/static/no gbo using m32 host tools ...\n")
-        subprocess.call(["gcc", "-m32", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_host_asan_m32"])
-        subprocess.call(["gcc", "-m32", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_host_static_asan_m32"])
-        subprocess.call(["gcc", "-m32", "-g", "gbo.c", "-o", "gbo_host_no_asan_m32"])
-        sys.stdout.write("done\n")
+    # do not work
+    # if args.host32m:
+    #     sys.stdout.write("builds asan/static/no gbo using m32 host tools ...\n")
+    #     subprocess.call(["gcc", "-m32", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_host_asan_m32"])
+    #     subprocess.call(["gcc", "-m32", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_host_static_asan_m32"])
+    #     subprocess.call(["gcc", "-m32", "-g", "gbo.c", "-o", "gbo_host_no_asan_m32"])
+    #     sys.stdout.write("done\n")
 
     if args.host64:
         sys.stdout.write("builds asan/static/no gbo using 64 host tools ...\n")
