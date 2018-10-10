@@ -18,9 +18,9 @@ if __name__ == "__main__":
     # 32 bits output may not work on 64 bit host
     if args.target:
         sys.stdout.write("builds asan/static/no gbo using target tools ...\n")
-        subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_target_asan"])
-        subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_target_static_asan"])
-        subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "gbo.c", "-o", "gbo_target_no_asan"])
+        subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_target_asan_32"])
+        subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_target_static_asan_32"])
+        subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "gbo.c", "-o", "gbo_target_no_asan_32"])
         sys.stdout.write("done\n")
 
     if args.host32:
@@ -30,12 +30,13 @@ if __name__ == "__main__":
         subprocess.call(["gcc", "-g", "gbo.c", "-o", "gbo_host_no_asan_32"])
         sys.stdout.write("done\n")
 
-    if args.host32m:
-        sys.stdout.write("builds asan/static/no gbo using m32 host tools ...\n")
-        subprocess.call(["gcc", "-m32", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_host_asan_m32"])
-        subprocess.call(["gcc", "-m32", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_host_static_asan_m32"])
-        subprocess.call(["gcc", "-m32", "-g", "gbo.c", "-o", "gbo_host_no_asan_m32"])
-        sys.stdout.write("done\n")
+    # do not work
+    # if args.host32m:
+    #     sys.stdout.write("builds asan/static/no gbo using m32 host tools ...\n")
+    #     subprocess.call(["gcc", "-m32", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_host_asan_m32"])
+    #     subprocess.call(["gcc", "-m32", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_host_static_asan_m32"])
+    #     subprocess.call(["gcc", "-m32", "-g", "gbo.c", "-o", "gbo_host_no_asan_m32"])
+    #     sys.stdout.write("done\n")
 
     if args.host64:
         sys.stdout.write("builds asan/static/no gbo using 64 host tools ...\n")
