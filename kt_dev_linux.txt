@@ -385,7 +385,7 @@
 *kt_linux_gcc_400* gcc-toolchain-spec gcc-spec
 *kt_linux_gcc_400* gcc-build-spk-using-own-toolchain current-working
 *kt_linux_gcc_400* gcc-build-spk-gdb gcc-build-spk-bash
-*kt_linux_gcc_400* gcc-build-glibc-reference
+*kt_linux_gcc_400* gcc-build-toolchain-reference
 *kt_linux_gcc_400* gcc-build-c-library
 *kt_linux_gcc_400* gcc-toolchain-glibc-mips buildroot-glic-mips-internal-toolchain
 *kt_linux_gcc_400* gcc-toolchain-glibc-mips-own
@@ -401,6 +401,7 @@
 *kt_linux_arch_001* arch-mips-registers mips-instruction
 *kt_linux_arch_001* arch-mips-stack
 *kt_linux_arch_001* arch-mips-backtrace mips-membuster
+*kt_linux_arch_001* arch-backtrace
 *kt_linux_arch_001* arch-mips-for-and-while
 *kt_linux_arch_001* arch-mips-power-on-reset
 *kt_linux_arch_001* arch-mips-qemu tool-qemu
@@ -12022,6 +12023,18 @@ zb/DEVARCH-8092-TEMP: failure'
 
 $ nm MW_Process | less -N +4213
 
+$ less +G app.log
+
+       G or > or ESC->
+              Go to line N in the file, default the end of the file.
+              (Warning: this may be slow if N is large, or if N is not
+               specified and standard input, rather than a file, is being
+               read.)
+
+       +cmd   Causes the specified cmd to be executed each time a new file is
+       examined.  For example, +G causes less to initially display each file
+       starting at the end rather than the beginning.
+
 
 ={============================================================================
 *kt_linux_tool_042* tool-tail: print multiple files with filename
@@ -15807,6 +15820,9 @@ void foo() {
 
 // asan/asan_rtl.cc
 ASAN_REPORT_ERROR(store, true, 4)
+
+// __asan_report_load8
+ASAN_REPORT_ERROR(load, false, 8)
 
 // exported functions
 #define ASAN_REPORT_ERROR(type, is_write, size)                     \
@@ -65820,7 +65836,7 @@ CCFLAGS_FOR_BUILD="" \
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-glibc-reference
+*kt_linux_gcc_400* gcc-build-toolchain-reference
 
 http://preshing.com/20141119/how-to-build-a-gcc-cross-compiler/
 
@@ -65829,11 +65845,18 @@ binutils-2.24, linux-3.17.2, glibc-2.20
 4.9.2 builds with exact version and settings in the blog.
 4.8.2 builds with no changes on prerequsites.
 
-vstb builds
+// ok, vstb builds
 CT_BINUTILS_VERSION="2.28"
 CT_KERNEL_VERSION="4.10.8"
 CT_LIBC_VERSION="2.25"
 CT_CC_GCC_VERSION="4.9.4"
+
+// ok, 
+CT_TOOLCHAIN_PKGVERSION="for-host-32"
+CT_KERNEL_VERSION="4.9"
+CT_BINUTILS_VERSION="2.28"
+CT_LIBC_VERSION="2.24"
+CT_CC_GCC_VERSION="6.3.0"
 
 binutils-2.28, linux-3.14.43, glibc-2.25 gcc 4.9.4 builds on build server
 binutils-2.28, linux-3.14.43, glibc-2.25 gcc 4.9.4 not builds on VM when do
@@ -66070,7 +66093,6 @@ make ARCH=x86 INSTALL_HDR_PATH=${PREFIX}/${TARGET} headers_install
 
 // this installs to ${PREFIX}/${TARGET}/include
 // asm  asm-generic  linux  mtd  rdma  scsi  sound  video
-
 
 All of the remaining steps involve building GCC and Glibc. The trick is that
 there are parts of GCC which depend on parts of Glibc already being built, and
@@ -66483,6 +66505,10 @@ make install
 
 note:
 run this step when make changes libs like *tool-asan* in gcc
+
+../gcc-4.9.4/configure --prefix=/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc --target=i686-nptl-linux-gnu --enable-languages=c,c++ --disable-multilib \
+CFLAGS="-g3 -Og" CXXFLAGS="-g3 -Og"
+
 
 Finally, we finish off the GCC package, which builds the standard C++ library
 and installs it to /opt/cross/aarch64-linux/lib64/. It depends on the C
@@ -69574,6 +69600,35 @@ Re-building an existing toolchain
 ${CT_TARGET}-ct-ng.config >.config
 ct-ng oldconfig
 
+
+<to-set-custom-string>
+Mark the toolchain as a VSTB one:
+    CT_TOOLCHAIN_PKGVERSION="vstb"
+    CT_TOOLCHAIN_BUGURL="http://vstb.cisco.com"
+
+$ ./i686-nptl-linux-gnu-gcc --version
+i686-nptl-linux-gnu-gcc (crosstool-NG crosstool-ng-1.23.0 - vstb) `4.9.4`
+Copyright (C) 2015 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+
+<ct-ng-issue>
+when use custom kernel, see build errors:
+
+[INFO ]  Installing kernel headers
+[EXTRA]    Installing kernel headers
+[ERROR]    make[1]: *** No rule to make target 'headers_install'.  Stop.
+
+
+CT_KERNEL_LINUX_CUSTOM_LOCATION="/home/kyoupark/asan/cross-build-for-host/"
+
+the issue is that ct-ng use this value to make a sym link to kernel source
+under .build dir. so check if that link is right.
+
+CT_KERNEL_LINUX_CUSTOM_LOCATION="/home/kyoupark/asan/cross-build-for-host/"
+
+
 <steps>
 kyoupark@kit-debian:~/cross/work$ ct-ng list-steps
 Available build steps, in order:
@@ -69696,8 +69751,77 @@ note:see build.log
 [INFO ]  =================================================================
 [INFO ]  Installing final gcc compiler
 [EXTRA]    Configuring final gcc compiler
+
+[DEBUG]    Entering '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final'
+[EXTRA]    Configuring final gcc compiler
+[DEBUG]    Extra config passed: '--enable-languages=c,c++ --with-arch=i686 --with-pkgversion=crosstool-NG crosstool-ng-1.23.0 - for-host-32 --enable-__cxa_atexit --disable-libmudflap --disable-libgomp --disable-libssp --disable-libquadmath --disable-libquadmath-support --enable-libsanitizer --enable-libmpx --with-gmp=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-mpfr=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-mpc=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-isl=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --enable-lto --with-host-libstdcxx=-static-libgcc -Wl,-Bstatic,-lstdc++,-Bdynamic -lm --enable-threads=posix --enable-target-optspace --enable-plugin --enable-gold --disable-nls --disable-multilib'
+
+[DEBUG]    ==> Executing: 'CC_FOR_BUILD=i686-build_pc-linux-gnu-gcc'
+  'CFLAGS=-O2 -g -pipe
+    -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include
+    ' 'CFLAGS_FOR_BUILD=-O2 -g -pipe
+    -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include
+    ' 'CXXFLAGS=-O2 -g -pipe
+    -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include
+    ' 'CXXFLAGS_FOR_BUILD=-O2 -g -pipe
+    -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include
+    '
+    'LDFLAGS=-L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/lib
+    -lstdc++ -lm' 'CFLAGS_FOR_TARGET=    -march=i686      '
+    'CXXFLAGS_FOR_TARGET=    -march=i686      ' 'LDFLAGS_FOR_TARGET=    '
+    '/bin/bash'
+    '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/configure'
+    '--build=i686-build_pc-linux-gnu' '--host=i686-build_pc-linux-gnu'
+    '--target=i686-nptl-linux-gnu'
+    '--prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu'
+    '--with-sysroot=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot'
+    '--enable-languages=c,c++' '--with-arch=i686'
+    '--with-pkgversion=crosstool-NG crosstool-ng-1.23.0 - for-host-32'
+    '--enable-__cxa_atexit' '--disable-libmudflap' '--disable-libgomp'
+    '--disable-libssp' '--disable-libquadmath' '--disable-libquadmath-support'
+    '--enable-libsanitizer' '--enable-libmpx'
+    '--with-gmp=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools'
+    '--with-mpfr=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools'
+    '--with-mpc=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools'
+    '--with-isl=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools'
+    '--enable-lto' '--with-host-libstdcxx=-static-libgcc
+    -Wl,-Bstatic,-lstdc++,-Bdynamic -lm' '--enable-threads=posix'
+    '--enable-target-optspace' '--enable-plugin' '--enable-gold'
+    '--disable-nls' '--disable-multilib'
+    '--with-local-prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot'
+    '--enable-long-long' 
+
+'CC_FOR_BUILD=i686-build_pc-linux-gnu-gcc' 'CFLAGS=-O2 -g -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include  ' 'CFLAGS_FOR_BUILD=-O2 -g -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include  ' 'CXXFLAGS=-O2 -g -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include  ' 'CXXFLAGS_FOR_BUILD=-O2 -g -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include  ' 'LDFLAGS=-L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/lib   -lstdc++ -lm' 'CFLAGS_FOR_TARGET=    -march=i686      ' 'CXXFLAGS_FOR_TARGET=    -march=i686      ' 'LDFLAGS_FOR_TARGET=    ' '/bin/bash' '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/configure' '--build=i686-build_pc-linux-gnu' '--host=i686-build_pc-linux-gnu' '--target=i686-nptl-linux-gnu' '--prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu' '--with-sysroot=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot' '--enable-languages=c,c++' '--with-arch=i686' '--with-pkgversion=crosstool-NG crosstool-ng-1.23.0 - for-host-32' '--enable-__cxa_atexit' '--disable-libmudflap' '--disable-libgomp' '--disable-libssp' '--disable-libquadmath' '--disable-libquadmath-support' '--enable-libsanitizer' '--enable-libmpx' '--with-gmp=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools' '--with-mpfr=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools' '--with-mpc=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools' '--with-isl=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools' '--enable-lto' '--with-host-libstdcxx=-static-libgcc -Wl,-Bstatic,-lstdc++,-Bdynamic -lm' '--enable-threads=posix' '--enable-target-optspace' '--enable-plugin' '--enable-gold' '--disable-nls' '--disable-multilib' '--with-local-prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot' '--enable-long-long' 
+
+// CC and CXX uses host version
+[DEBUG]  ==> Executing: 'chmod' '700' '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/bin/i686-build_pc-linux-gnu-as' 
+[DEBUG]    Missing: 'i686-pc-linux-gnu-dlltool' or 'i686-pc-linux-gnu-dlltool' or 'dlltool' : not required.
+[DEBUG]    'i686-build_pc-linux-gnu-gcc' -> '/usr/bin/gcc'
+[DEBUG]  ==> Executing: 'chmod' '700' '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/bin/i686-build_pc-linux-gnu-gcc' 
+[DEBUG]    'i686-build_pc-linux-gnu-g++' -> '/usr/bin/g++'
+
+find . -name config.cache -exec rm -f {} ;\
+cd '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final'
+CC_FOR_BUILD=/usr/bin/gcc \
+CFLAGS="-Og -g3 -pipe -I/mnt/bcb7779e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include" \
+CFLAGS_FOR_BUILD="-Og -g3 -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include" \
+CXXFLAGS="-Og -g3 -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include" \
+CXXFLAGS_FOR_BUILD="-Og -g3 -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include" \
+LDFLAGS="-L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/lib   -lstdc++ -lm" \
+CFLAGS_FOR_TARGET="    -march=i686" \
+CXXFLAGS_FOR_TARGET="    -march=i686" \
+LDFLAGS_FOR_TARGET= \
+/bin/bash /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/configure --build=i686-build_pc-linux-gnu --host=i686-build_pc-linux-gnu --target=i686-nptl-linux-gnu --prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu --with-sysroot=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot --enable-languages=c,c++ --with-arch=i686 \
+--with-pkgversion=crosstool-NG crosstool-ng-1.23.0-for-host-32 --enable-__cxa_atexit --disable-libmudflap --disable-libgomp --disable-libssp --disable-libquadmath --disable-libquadmath-support --enable-libsanitizer --enable-libmpx --with-gmp=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-mpfr=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-mpc=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-isl=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --enable-lto \
+--with-host-libstdcxx="-static-libgcc -Wl,-Bstatic,-lstdc++,-Bdynamic -lm" --enable-threads=posix --enable-target-optspace --enable-plugin --enable-gold --disable-nls --disable-multilib --with-local-prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot --enable-long-long 
+
+
 [EXTRA]    Building final gcc compiler
+[DEBUG]    ==> Executing: 'make' '-j3' '-l' 'all' 
+
 [EXTRA]    Installing final gcc compiler
+[DEBUG]    ==> Executing: 'make' 'install' 
+
 [EXTRA]    Housekeeping for final gcc compiler
 [INFO ]  Installing final gcc compiler: done in 1458.59s (at 74:54)
 [INFO ]  =================================================================
@@ -71736,6 +71860,352 @@ M:mbuster_pinit.c
 ={============================================================================
 *kt_linux_arch_001* arch-backtrace
 
+https://eli.thegreenplace.net/2015/programmatic-access-to-the-call-stack-in-c/
+
+Programmatic access to the call stack in C++
+
+July 15, 2015 at 05:33 Tags Debuggers , C & C++
+
+Sometimes when working on a large project, I find it useful to figure out all
+the places from which some function or method is called. Moreover, more often
+than not I don't just want the immediate caller, but the whole call stack.
+This is most useful in two scenarios - when debugging and when trying to
+figure out how some code works.
+
+One possible solution is to use a debugger - run the program within a
+debugger, place a breakpoint in the interesting place, examine call stack when
+stopped. While this works and can sometimes be very useful, I personally
+prefer a more `programmatic approach.` 
+
+I want to change the code in a way that will print out the call stack in every
+place I find interesting. Then I can use grepping and more sophisticated tools
+to analyze the call logs and thus gain a better understanding of the workings
+of some piece of code.
+
+In this post, I want to present a relatively simple method to do this. It's
+aimed mainly at Linux, but should work with little modification on other
+Unixes (including OS X).
+
+
+Obtaining the backtrace - libunwind
+
+I'm aware of three reasonably well-known methods of accessing the call stack
+programmatically:
+
+o The gcc builtin macro __builtin_return_address: very crude, low-level
+approach. This obtains the return address of the function on each frame on the
+stack. Note: just the address, not the function name. So extra processing is
+required to obtain the function name.
+
+o glibc's backtrace and backtrace_symbols: can obtain the actual symbol names
+for the functions on the call stack.
+
+o libunwind
+
+Between the three, I strongly prefer libunwind, as it's the most modern,
+        widespread and portable solution. It's also more flexible than
+          backtrace, being able to provide extra information such as values of
+          CPU registers at each stack frame.
+
+Moreover, in the zoo of system programming, libunwind is the closest to the
+"official word" you can get these days. For example, gcc can use libunwind for
+implementing zero-cost C++ exceptions (which requires stack unwinding when an
+    exception is actually thrown) [2]. LLVM also has a re-implementation of
+the libunwind interface in libc++, which is used for unwinding in LLVM
+toolchains based on this library.
+
+[1] AFAIK, gcc indeed uses libunwind by default on some architectures, though
+it uses an alternative unwinder on others. Please correct me if I'm missing
+  something here.
+
+
+Code sample
+
+Here's a complete code sample for using libunwind to obtain the backtrace from
+an arbitrary point in the execution of a program. Refer to the libunwind
+documentation for more details about the API functions invoked here:
+
+http://www.nongnu.org/libunwind/docs.html
+
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+#include <stdio.h>
+
+// Call this function to get a backtrace.
+void backtrace() {
+  unw_cursor_t cursor;
+  unw_context_t context;
+
+  // Initialize cursor to current frame for local unwinding.
+  unw_getcontext(&context);
+  unw_init_local(&cursor, &context);
+
+  // Unwind frames one by one, going up the frame stack.
+  while (unw_step(&cursor) > 0) {
+    unw_word_t offset, pc;
+    unw_get_reg(&cursor, UNW_REG_IP, &pc);
+    if (pc == 0) {
+      break;
+    }
+    printf("0x%lx:", pc);
+
+    char sym[256];
+    if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
+      printf(" (%s+0x%lx)\n", sym, offset);
+    } else {
+      printf(" -- error: unable to obtain symbol name for this frame\n");
+    }
+  }
+}
+
+void foo() {
+  backtrace(); // <-------- backtrace here!
+}
+
+void bar() {
+  foo();
+}
+
+int main(int argc, char **argv) {
+  bar();
+
+  return 0;
+}
+
+
+libunwind is easy to install from source or as a package. I just built it from
+source with the usual configure, make and make install sequence and placed it
+into /usr/local/lib.
+
+// git clone git://git.sv.gnu.org/libunwind.git
+// 
+// * General Build Instructions
+// 
+// In general, this library can be built and installed with the following
+// commands:
+// 
+//         $ ./autogen.sh # Needed only for building from git. Depends on libtool.
+//         $ ./configure
+//         $ make
+//         $ make install prefix=PREFIX
+
+Once you have libunwind installed in a place the compiler can find [2],
+     compile the code snippet with:
+
+[2] If your libunwind is in a non-standard location, you'll need to provide
+additional -I and -L flags.
+
+gcc -o libunwind_backtrace -Wall -g libunwind_backtrace.c -lunwind
+
+Finally, run:
+
+kyoupark@kit-debian64:~/git/kb/code-linux/ex_backtrace$ 
+LD_LIBRARY_PATH=/usr/local/lib ./unwind_c_out
+0x40094e: (foo+0xe)
+0x40095e: (bar+0xe)
+0x400979: (main+0x19)
+0x7f6bbb661b45: (__libc_start_main+0xf5)
+0x400789: (_start+0x29)
+
+
+0000000000400940 <foo>:
+foo():
+/home/kyoupark/git/kb/code-linux/ex_backtrace/unwind_c.c:32
+  400940:	55                   	push   rbp
+  400941:	48 89 e5             	mov    rbp,rsp
+/home/kyoupark/git/kb/code-linux/ex_backtrace/unwind_c.c:33
+  400944:	b8 00 00 00 00       	mov    eax,0x0
+  400949:	e8 08 ff ff ff       	call   400856 <backtrace>
+/home/kyoupark/git/kb/code-linux/ex_backtrace/unwind_c.c:34
+  40094e:	5d                   	pop    rbp
+  40094f:	c3                   	ret    
+
+0000000000400950 <bar>:
+bar():
+/home/kyoupark/git/kb/code-linux/ex_backtrace/unwind_c.c:36
+  400950:	55                   	push   rbp
+  400951:	48 89 e5             	mov    rbp,rsp
+/home/kyoupark/git/kb/code-linux/ex_backtrace/unwind_c.c:37
+  400954:	b8 00 00 00 00       	mov    eax,0x0
+  400959:	e8 e2 ff ff ff       	call   400940 <foo>
+/home/kyoupark/git/kb/code-linux/ex_backtrace/unwind_c.c:38
+  40095e:	5d                   	pop    rbp
+  40095f:	c3                   	ret    
+
+note that this is the case when build it with gcc but not g++
+
+So we get the complete call stack at the point where backtrace is called. We
+can obtain the function symbol names and the address of the instruction where
+the call was made (more precisely, the `return address` which is the next
+    instruction).
+
+Sometimes, however, we want not only the caller's name, but also the call
+location (source file name + line number). This is useful when one function
+calls another from multiple locations and we want to pinpoint which one is
+actually part of a given call stack. libunwind gives us the call address, but
+nothing beyond. Fortunately, it's all in the DWARF information of the binary,
+        and given the address we can extract the exact call location in a
+        number of ways. The simplest is probably to call addr2line:
+
+$ addr2line 0x400968 -e libunwind_backtrace
+libunwind_backtrace.c:37
+
+We pass the PC address to the left of the bar frame to addr2line and get the
+file name and line number.
+
+Alternatively, we can use the dwarf_decode_address example from pyelftools to
+obtain the same information:
+
+$ python <path>/dwarf_decode_address.py 0x400968 libunwind_backtrace
+Processing file: libunwind_backtrace
+Function: bar
+File: libunwind_backtrace.c
+Line: 37
+
+If printing out the exact locations is important for you during the backtrace
+call, you can also go fully programmatic by using `libdwarf` to open the
+executable and read this information from it, in the backtrace call. There's a
+section and a code sample about a very similar task in my blog post on
+debuggers.
+
+
+C++ and mangled function names
+
+The code sample above works well, but these days one is most likely writing
+C++ code and not C, so there's a slight problem. In C++, names of functions
+and methods are mangled. This is essential to make C++ features like function
+overloading, namespaces and templates work. Let's say the actual call sequence
+is:
+
+namespace ns {
+
+template <typename T, typename U>
+void foo(T t, U u) {
+  backtrace(); // <-------- backtrace here!
+}
+
+}  // namespace ns
+
+template <typename T>
+struct Klass {
+  T t;
+  void bar() {
+    ns::foo(t, true);
+  }
+};
+
+int main(int argc, char** argv) {
+  Klass<double> k;
+  k.bar();
+
+  return 0;
+}
+
+The backtrace printed will then be:
+
+0x400b3d: (_ZN2ns3fooIdbEEvT_T0_+0x17)
+0x400b24: (_ZN5KlassIdE3barEv+0x26)
+0x400af6: (main+0x1b)
+0x7fc02c0c4ec5: (__libc_start_main+0xf5)
+0x4008b9: (_start+0x29)
+
+Oops, that's not nice. While some seasoned C++ veterans can usually make sense
+of simple mangled names (kinda like system programmers who can read text from
+    hex ASCII), when the code is heavily templated this can get ugly very
+quickly.
+
+One solution is to use a command-line tool - c++filt:
+
+$ c++filt _ZN2ns3fooIdbEEvT_T0_
+void ns::foo<double, bool>(double, bool)
+
+However, it would be nicer if our backtrace dumper would print the demangled
+name directly. Luckily, this is pretty easy to do, using the cxxabi.h API
+that's part of libstdc++ (more precisely, libsupc++). libc++ also provides it
+in the low-level libc++abi. `All we need to do is call abi::__cxa_demangle.`
+
+Here's a complete example:
+
+#define UNW_LOCAL_ONLY
+#include <cxxabi.h>
+#include <libunwind.h>
+#include <cstdio>
+#include <cstdlib>
+
+void backtrace() {
+  unw_cursor_t cursor;
+  unw_context_t context;
+
+  // Initialize cursor to current frame for local unwinding.
+  unw_getcontext(&context);
+  unw_init_local(&cursor, &context);
+
+  // Unwind frames one by one, going up the frame stack.
+  while (unw_step(&cursor) > 0) {
+    unw_word_t offset, pc;
+    unw_get_reg(&cursor, UNW_REG_IP, &pc);
+    if (pc == 0) {
+      break;
+    }
+    std::printf("0x%lx:", pc);
+
+    char sym[256];
+    if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
+
+      // {
+      char* nameptr = sym;
+      int status;
+      char* demangled = abi::__cxa_demangle(sym, nullptr, nullptr, &status);
+      if (status == 0) {
+        nameptr = demangled;
+      }
+      std::printf(" (%s+0x%lx)\n", nameptr, offset);
+      std::free(demangled);
+      // }
+
+    } else {
+      std::printf(" -- error: unable to obtain symbol name for this frame\n");
+    }
+  }
+}
+
+namespace ns {
+
+template <typename T, typename U>
+void foo(T t, U u) {
+  backtrace(); // <-------- backtrace here!
+}
+
+}  // namespace ns
+
+template <typename T>
+struct Klass {
+  T t;
+  void bar() {
+    ns::foo(t, true);
+  }
+};
+
+int main(int argc, char** argv) {
+  Klass<double> k;
+  k.bar();
+
+  return 0;
+}
+
+This time, the backtrace is printed with all names nicely demangled:
+
+kyoupark@kit-debian64:~/git/kb/code-linux/ex_backtrace$ 
+LD_LIBRARY_PATH=/usr/local/lib ./unwind_cpp_out
+
+0x400a4b: (foo()+0x9)
+0x400a56: (bar()+0x9)
+0x400a6c: (main+0x14)
+0x7f9a3cc0fb45: (__libc_start_main+0xf5)
+0x400849: (_start+0x29)
+
+
+<ex>
 `regarding symbol resolution`, the current glibc (version 2.3.1 at the time of
     this writing) allows users to obtain the function name and offset only on
 systems based on the ELF binary format. Furthermore, static symbols' names
@@ -71785,10 +72255,12 @@ https://www.gnu.org/software/libc/manual/html_node/Backtraces.html
 
 // backtrace from glibc
 
-BACKTRACE(3)                                                                            Linux Programmer's Manual                                                                            BACKTRACE(3)
+BACKTRACE(3)
+Linux Programmer's Manual                                                                            BACKTRACE(3)
 
 NAME
-       backtrace, backtrace_symbols, backtrace_symbols_fd - support for application self-debugging
+       backtrace, backtrace_symbols, backtrace_symbols_fd - support for
+       application self-debugging
 
 SYNOPSIS
        #include <execinfo.h>
@@ -71836,7 +72308,8 @@ int main(int argc, char **argv) {
   foo(); // this will call foo, bar, and baz.  baz segfaults.
 }
 
-// on x86_64 VM
+
+// on x86_64 VM and note that do not show function name
 
 $ gcc -g t_backtrace.c
 $ ./a.out
@@ -71852,8 +72325,8 @@ Error: signal 11:
 
 
 <ex>
-
-// do not build on x86_64 VM and see how to use backtrace call family
+do not build on x86_64 VM and do not print names when changed it to use rip
+for x86_64
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -71881,37 +72354,43 @@ typedef struct _sig_ucontext {
 
 void crit_err_hdlr(int sig_num, siginfo_t * info, void * ucontext)
 {
- void *             array[50];
- void *             caller_address;
- char **            messages;
- int                size, i;
- sig_ucontext_t *   uc;
+  void *             array[50];
+  void *             caller_address;
+  char **            messages;
+  int                size, i;
+  sig_ucontext_t *   uc;
 
- uc = (sig_ucontext_t *)ucontext;
+  uc = (sig_ucontext_t *)ucontext;
 
- /* Get the address at the time the signal was raised from the EIP (x86) */
- caller_address = (void *) uc->uc_mcontext.eip;   
+  // Get the address at the time the signal was raised from the EIP (x86)
 
- fprintf(stderr, "signal %d (%s), address is %p from %p\n", 
-  sig_num, strsignal(sig_num), info->si_addr, 
-  (void *)caller_address);
+  // btrace_name.c:36:44: error: ‘struct sigcontext’ has no member named ‘eip’
+  // caller_address = (void *) uc->uc_mcontext.eip;
+  //                                           ^
+  // caller_address = (void *) uc->uc_mcontext.rip;   
 
- size = backtrace(array, 50);
+  caller_address = (void *) uc->uc_mcontext.eip;   
 
- /* overwrite sigaction with caller's address */
- array[1] = caller_address;
+  fprintf(stderr, "signal %d (%s), address is %p from %p\n", 
+      sig_num, strsignal(sig_num), info->si_addr, 
+      (void *)caller_address);
 
- messages = backtrace_symbols(array, size);
+  size = backtrace(array, 50);
 
- /* skip first stack frame (points here) */
- for (i = 1; i < size && messages != NULL; ++i)
- {
-  fprintf(stderr, "[bt]: (%d) %s\n", i, messages[i]);
- }
+  /* overwrite sigaction with caller's address */
+  array[1] = caller_address;
 
- free(messages);
+  messages = backtrace_symbols(array, size);
 
- exit(EXIT_FAILURE);
+  /* skip first stack frame (points here) */
+  for (i = 1; i < size && messages != NULL; ++i)
+  {
+    fprintf(stderr, "[bt]: (%d) %s\n", i, messages[i]);
+  }
+
+  free(messages);
+
+  exit(EXIT_FAILURE);
 }
 
 int crash()
@@ -71966,7 +72445,7 @@ int main(int argc, char ** argv)
 }
 
 
-(output)
+// output on 32?
 signal 11 (Segmentation fault), address is (nil) from 0x8c50
 [bt]: (1) ./test(crash+0x24) [0x8c50]
 [bt]: (2) ./test(foo4+0x10) [0x8c70]
@@ -71976,7 +72455,20 @@ signal 11 (Segmentation fault), address is (nil) from 0x8c50
 [bt]: (6) ./test(main+0x74) [0x8d44]
 [bt]: (7) /lib/libc.so.6(__libc_start_main+0xa8) [0x40032e44]
 
+// output on 64
+signal 11 (Segmentation fault), address is (nil) from 0x400926
+[bt]: (1) ./btrace_name_out() [0x400926]
+[bt]: (2) ./btrace_name_out() [0x400926]
+[bt]: (3) ./btrace_name_out() [0x400939]
+[bt]: (4) ./btrace_name_out() [0x400949]
+[bt]: (5) ./btrace_name_out() [0x400959]
+[bt]: (6) ./btrace_name_out() [0x400969]
+[bt]: (7) ./btrace_name_out() [0x4009f9]
+[bt]: (8) /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xf5) [0x7f8f8c623b45]
+[bt]: (9) ./btrace_name_out() [0x400729]
 
+
+<ex>
 The problem is that there is no backtrace.c for mips.
 
 ./uClibc-ng-1.0.17/libubacktrace/arm/backtrace.c
