@@ -298,7 +298,8 @@
 *kt_linux_gdb_300* gdb-exam-debug-searate-file
 *kt_linux_gdb_300* gdb-exam-debug-with-and-without-g gdb-debug
 *kt_linux_gdb_300* gdb-slib-search
-*kt_linux_gdb_300* gdb-slib-case
+*kt_linux_gdb_300* gdb-solib-break
+*kt_linux_gdb_300* gdb-solib-case
 *kt_linux_tool_300* gdb-case: debugging with strace and gdb in sandbox
 |kt_linux_gdb_300| gdb-remote
 *kt_linux_gdb_300* gdb-remote-gdbserver
@@ -321,7 +322,6 @@
 *kt_linux_gdb_000* gdb-break-convenience-variable
 *kt_linux_gdb_000* gdb-break-info
 *kt_linux_tool_309* gdb-break: ignore
-*kt_linux_tool_309* gdb-break: set in shared
 *kt_linux_gdb_000* gdb-break-watch gdb-watch
 *kt_linux_gdb_000* gdb-break-catch
 *kt_linux_gdb_000* gdb-break-control
@@ -15816,7 +15816,7 @@ void foo() {
 }
 
 
-<asan-code-report>
+<asan-code-report-gcc494>
 
 // asan/asan_rtl.cc
 ASAN_REPORT_ERROR(store, true, 4)
@@ -15838,6 +15838,65 @@ void __asan_report_error(uptr pc, uptr bp, uptr sp,
                          uptr addr, bool is_write, uptr access_size) {
   ScopedInErrorReport in_report;
 }
+
+
+<asan-code-report-gcc630>
+
+extern "C" __attribute__((noinline)) __attribute__((visibility("default")))
+void __asan_report_load8(uptr addr) 
+{ 
+  uptr bp = (uptr)__builtin_frame_address(0); 
+  uptr pc = (uptr)__builtin_return_address(0); 
+  uptr local_stack; 
+  uptr sp = (uptr)&local_stack; 
+  ReportGenericError(pc, bp, sp, addr, false, 8, 0, true);
+
+} extern "C" __attribute__((noinline)) __attribute__((visibility("default"))) 
+void __asan_report_exp_load8(uptr addr, u32 exp) 
+{ uptr bp = (uptr)__builtin_frame_address(0); uptr pc =
+      (uptr)__builtin_return_address(0); uptr local_stack; uptr sp =
+        (uptr)&local_stack; ReportGenericError(pc, bp, sp, addr, false, 8,
+            exp, true); 
+} extern "C" __attribute__((noinline)) __attribute__((visibility("default"))) 
+void __asan_report_load8_noabort(uptr addr) 
+{ uptr bp = (uptr)__builtin_frame_address(0); uptr pc =
+            (uptr)__builtin_return_address(0); uptr local_stack; uptr sp =
+            (uptr)&local_stack; ReportGenericError(pc, bp, sp, addr, false, 8,
+                0, false); 
+}
+
+
+// Use this macro if you want to print stack trace with the caller
+// of the current function in the top frame.
+#define GET_CALLER_PC_BP_SP \
+  uptr bp = GET_CURRENT_FRAME();              \
+  uptr pc = GET_CALLER_PC();                  \
+  uptr local_stack;                           \
+  uptr sp = (uptr)&local_stack
+
+
+// exported functions
+#define ASAN_REPORT_ERROR(type, is_write, size)                     \
+extern "C" NOINLINE INTERFACE_ATTRIBUTE                             \
+void __asan_report_ ## type ## size(uptr addr) {                    \
+  GET_CALLER_PC_BP_SP;                                              \
+  ReportGenericError(pc, bp, sp, addr, is_write, size, 0, true);    \
+}                                                                   \
+
+void __asan_report_error(uptr pc, uptr bp, uptr sp, uptr addr, int is_write,
+                         uptr access_size, u32 exp) {
+  ENABLE_FRAME_POINTER;
+  bool fatal = flags()->`halt_on_error`;
+  ReportGenericError(pc, bp, sp, addr, is_write, access_size, exp, fatal);
+}
+
+void ReportGenericError(uptr pc, uptr bp, uptr sp, uptr addr, bool is_write,
+                        uptr access_size, u32 exp, bool fatal) {
+
+  ScopedInErrorReport in_report(&report, fatal);
+
+}
+
 
 <asan-code-xxx>
 
@@ -32401,7 +32460,50 @@ solib-search-path command.
 
 
 ={============================================================================
-*kt_linux_gdb_300* gdb-slib-case
+*kt_linux_gdb_300* gdb-solib-break
+
+5.1.1 Setting Breakpoints
+
+<pending-breakpoint>
+
+Shared libraries can be loaded and unloaded explicitly, and possibly repeatedly,
+as the program is executed.  To support this use case, gdb updates breakpoint
+  locations 'whenever' any shared library is loaded or unloaded.  Typically, you
+  would set a breakpoint in a shared library at the 'beginning' of your
+  debugging session, when the library is not loaded, and when the symbols from
+  the library are not available. When you try to set breakpoint, gdb will ask
+  you if you want to set a so called 'pending' breakpoint-breakpoint whose
+  address is not yet resolved.  After the program is run, whenever a new shared
+  library is loaded, gdb reevaluates all the breakpoints. When a newly loaded
+  shared library contains the symbol or line referred to by some pending
+  breakpoint, that breakpoint is resolved and becomes an ordinary breakpoint.
+  When a library is unloaded, all breakpoints that refer to its symbols or
+  source lines become pending again.
+
+This logic works for breakpoints with multiple locations, too. For example, if
+you have a breakpoint in a C++ template function, and a newly loaded shared
+library has an instantiation of that template, a new location is added to the
+list of locations for the breakpoint.
+
+Except for having unresolved address, pending breakpoints do not differ from
+regular breakpoints.  You can set conditions or commands, enable and disable
+them and perform other breakpoint operations.
+
+set breakpoint pending auto
+
+This is the 'default' behavior. When gdb cannot find the breakpoint location, it
+queries you whether a pending breakpoint should be created.
+
+*gdb-break-solib*
+set breakpoint pending on
+
+This indicates that an unrecognized breakpoint location should automatically
+result in a pending
+breakpoint being created.
+
+
+={============================================================================
+*kt_linux_gdb_300* gdb-solib-case
 
 In this example we will disable shared library loading using the set
 auto-solib-add command, then run the application, list the source files and load
@@ -36063,48 +36165,6 @@ such as ‘$foo-- <= 0’ using a debugger convenience variable that is decremen
 each time. See Section 10.11 [Convenience Variables], page 132.
 
 Ignore counts apply to breakpoints, watchpoints, and catchpoints.
-
-
-={============================================================================
-*kt_linux_tool_309* gdb-break: set in shared
-
-5.1.1 Setting Breakpoints
-
-<pending-breakpoint>
-
-Shared libraries can be loaded and unloaded explicitly, and possibly repeatedly,
-as the program is executed.  To support this use case, gdb updates breakpoint
-  locations 'whenever' any shared library is loaded or unloaded.  Typically, you
-  would set a breakpoint in a shared library at the 'beginning' of your
-  debugging session, when the library is not loaded, and when the symbols from
-  the library are not available. When you try to set breakpoint, gdb will ask
-  you if you want to set a so called 'pending' breakpoint-breakpoint whose
-  address is not yet resolved.  After the program is run, whenever a new shared
-  library is loaded, gdb reevaluates all the breakpoints. When a newly loaded
-  shared library contains the symbol or line referred to by some pending
-  breakpoint, that breakpoint is resolved and becomes an ordinary breakpoint.
-  When a library is unloaded, all breakpoints that refer to its symbols or
-  source lines become pending again.
-
-This logic works for breakpoints with multiple locations, too. For example, if
-you have a breakpoint in a C++ template function, and a newly loaded shared
-library has an instantiation of that template, a new location is added to the
-list of locations for the breakpoint.
-
-Except for having unresolved address, pending breakpoints do not differ from
-regular breakpoints.  You can set conditions or commands, enable and disable
-them and perform other breakpoint operations.
-
-set breakpoint pending auto
-
-This is the 'default' behavior. When gdb cannot find the breakpoint location, it
-queries you whether a pending breakpoint should be created.
-
-set breakpoint pending on
-
-This indicates that an unrecognized breakpoint location should automatically
-result in a pending
-breakpoint being created.
 
 
 ={============================================================================
@@ -69710,6 +69770,35 @@ note:see build.log
 [EXTRA]    Configuring binutils
 [EXTRA]    Building binutils
 [EXTRA]    Installing binutils
+
+[DEBUG]    ==> Executing: 'CC_FOR_BUILD=i686-build_pc-linux-gnu-gcc'
+  'CFLAGS_FOR_BUILD=' 'CFLAGS=-O2 -g -pipe
+    -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include
+    ' 'CXXFLAGS=-O2 -g -pipe
+    -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include
+    '
+    'LDFLAGS=-L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/lib
+    ' '/bin/bash'
+    '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/binutils-2.28/configure'
+    '--build=i686-build_pc-linux-gnu' '--host=i686-build_pc-linux-gnu'
+    '--target=i686-nptl-linux-gnu'
+    '--prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu' '--disable-werror'
+    '--enable-ld=default' '--enable-gold=yes' '--enable-threads'
+    '--enable-plugins' '--with-pkgversion=crosstool-NG crosstool-ng-1.23.0 -
+    for-host-32' '--disable-multilib' '--disable-sim' '--disable-gdb'
+      '--disable-nls'
+        '--with-sysroot=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot' 
+
+[ALL  ]    libtool: install:
+/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/tools/bin/install
+  -c size
+  /home/kyoupark/x-tools/i686-nptl-linux-gnu/bin/./i686-nptl-linux-gnu-size
+
+[ALL  ]      /bin/bash ./libtool   --mode=install
+  /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/tools/bin/install
+    -c objdump
+    '/home/kyoupark/x-tools/i686-nptl-linux-gnu/bin/./i686-nptl-linux-gnu-objdump'
+
 [INFO ]  Installing binutils for host: done in 175.28s (at 08:22)
 [INFO ]  =================================================================
 [INFO ]  Installing pass-1 core C gcc compiler
@@ -69800,8 +69889,16 @@ note:see build.log
 [DEBUG]  ==> Executing: 'chmod' '700' '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/bin/i686-build_pc-linux-gnu-gcc' 
 [DEBUG]    'i686-build_pc-linux-gnu-g++' -> '/usr/bin/g++'
 
+// to delete old configs
 find . -name config.cache -exec rm -f {} ;\
+
+// to use bintuils
+export PATH="/home/kyoupark/x-tools/i686-nptl-linux-gnu/bin:$PATH"
+
+// to move build dir
 cd '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final'
+
+// to change build flags
 CC_FOR_BUILD=/usr/bin/gcc \
 CFLAGS="-Og -g3 -pipe -I/mnt/bcb7779e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include" \
 CFLAGS_FOR_BUILD="-Og -g3 -pipe -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools/include" \
@@ -69815,7 +69912,6 @@ LDFLAGS_FOR_TARGET= \
 --with-pkgversion=crosstool-NG crosstool-ng-1.23.0-for-host-32 --enable-__cxa_atexit --disable-libmudflap --disable-libgomp --disable-libssp --disable-libquadmath --disable-libquadmath-support --enable-libsanitizer --enable-libmpx --with-gmp=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-mpfr=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-mpc=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --with-isl=/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/buildtools --enable-lto \
 --with-host-libstdcxx="-static-libgcc -Wl,-Bstatic,-lstdc++,-Bdynamic -lm" --enable-threads=posix --enable-target-optspace --enable-plugin --enable-gold --disable-nls --disable-multilib --with-local-prefix=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sysroot --enable-long-long 
 
-
 [EXTRA]    Building final gcc compiler
 [DEBUG]    ==> Executing: 'make' '-j3' '-l' 'all' 
 
@@ -69825,6 +69921,18 @@ LDFLAGS_FOR_TARGET= \
 [EXTRA]    Housekeeping for final gcc compiler
 [INFO ]  Installing final gcc compiler: done in 1458.59s (at 74:54)
 [INFO ]  =================================================================
+
+
+<compile-single-file> 
+
+[ALL  ]    make[5]: Entering directory '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libsanitizer/asan'
+
+cd '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libsanitizer/asan'
+// xgcc is gcc binary
+
+// to get preprocessed output using *cpp-e*
+[ALL  ]    libtool: compile:  /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc/xgcc -shared-libgcc -B/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc -nostdinc++ -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src/.libs -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/libsupc++/.libs -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/bin/ -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/ -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/include -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sys-include -D_GNU_SOURCE -D_DEBUG -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DASAN_HAS_EXCEPTIONS=1 -DASAN_NEEDS_SEGV=1 -DCAN_SANITIZE_UB=0 -D_OBSTACK_SIZE_T=SIZE_T -I. -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan -I.. -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/include -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer -Wall -W -Wno-unused-parameter -Wwrite-strings -pedantic -Wno-long-long -fPIC -fno-builtin -fno-exceptions -fno-rtti -fomit-frame-pointer -funwind-tables -fvisibility=hidden -Wno-variadic-macros -fno-ipa-icf -I../../libstdc++-v3/include -I../../libstdc++-v3/include/i686-nptl-linux-gnu -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/../libstdc++-v3/libsupc++ -std=gnu++11 -march=i686 -D_GNU_SOURCE -g -Os -MT asan_rtl.lo -MD -MP -MF .deps/asan_rtl.Tpo -c /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan/asan_rtl.cc -o asan_rtl.o >/dev/null 2>&1
+/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc/xgcc -shared-libgcc -B/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc -nostdinc++ -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src/.libs -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/libsupc++/.libs -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/bin/ -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/ -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/include -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sys-include -D_GNU_SOURCE -D_DEBUG -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DASAN_HAS_EXCEPTIONS=1 -DASAN_NEEDS_SEGV=1 -DCAN_SANITIZE_UB=0 -D_OBSTACK_SIZE_T=SIZE_T -I. -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan -I.. -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/include -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer -Wall -W -Wno-unused-parameter -Wwrite-strings -pedantic -Wno-long-long -fPIC -fno-builtin -fno-exceptions -fno-rtti -fomit-frame-pointer -funwind-tables -fvisibility=hidden -Wno-variadic-macros -fno-ipa-icf -I../../libstdc++-v3/include -I../../libstdc++-v3/include/i686-nptl-linux-gnu -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/../libstdc++-v3/libsupc++ -std=gnu++11 -march=i686 -D_GNU_SOURCE -g -Os -MT asan_rtl.lo -MD -MP -MF .deps/asan_rtl.Tpo -E /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan/asan_rtl.cc > asan_rtl.cpp
 
 
 ={============================================================================
@@ -72205,6 +72313,82 @@ LD_LIBRARY_PATH=/usr/local/lib ./unwind_cpp_out
 0x400849: (_start+0x29)
 
 
+<gcc-builtin>
+https://gcc.gnu.org/onlinedocs/gcc/Return-Address.html
+
+6.49 Getting the Return or Frame Address of a Function
+
+These functions may be used to get information about the callers of a function.
+
+Built-in Function: void * __builtin_return_address (unsigned int level)
+
+This function returns the return address of the current function, or of one of
+its callers. The level argument is number of frames to scan up the call stack.
+
+`A value of 0 yields the return address of the current function`, a value of 1
+yields the return address of the caller of the current function, and so forth.
+When inlining the expected behavior is that the function returns the address
+of the function that is returned to. To work around this behavior use the
+noinline function attribute.
+
+The level argument must be a constant integer.
+
+On some machines it may be impossible to determine the return address of any
+function other than the current one; in such cases, or when the top of the
+stack has been reached, this function returns 0 or a random value. In
+addition, __builtin_frame_address may be used to determine if the top of the
+stack has been reached.
+
+Additional post-processing of the returned value may be needed, see
+__builtin_extract_return_addr.
+
+Calling this function with a nonzero argument can have unpredictable effects,
+        including crashing the calling program. As a result, calls that are
+        considered unsafe are diagnosed when the -Wframe-address option is in
+        effect. Such calls should only be made in debugging situations.
+
+
+Built-in Function: void * __builtin_extract_return_addr (void *addr)
+
+The address as returned by __builtin_return_address may have to be fed through
+this function to get the actual encoded address. For example, on the 31-bit
+S/390 platform the highest bit has to be masked out, or on SPARC platforms an
+offset has to be added for the true next instruction to be executed.
+
+If no fixup is needed, this function simply passes through addr.
+
+Built-in Function: void * __builtin_frob_return_address (void *addr)
+
+This function does the reverse of __builtin_extract_return_addr.
+
+
+Built-in Function: void * __builtin_frame_address (unsigned int level)
+
+This function is similar to __builtin_return_address, but it returns the
+address of the function frame rather than the return address of the function.
+Calling __builtin_frame_address with a value of 0 yields the frame address of
+the current function, a value of 1 yields the frame address of the caller of
+the current function, and so forth.
+
+*x86-asm-ebp*
+The frame is the area on the stack that holds local variables and saved
+registers. The frame address is normally the address of the first word pushed
+on to the stack by the function. However, the exact definition depends upon
+the processor and the calling convention. If the processor has a dedicated
+frame pointer register, and the function has a frame, then
+__builtin_frame_address returns the value of the frame pointer register.
+
+On some machines it may be impossible to determine the frame address of any
+function other than the current one; in such cases, or when the top of the
+stack has been reached, this function returns 0 if the first frame pointer is
+properly initialized by the startup code.
+
+Calling this function with a nonzero argument can have unpredictable effects,
+        including crashing the calling program. As a result, calls that are
+        considered unsafe are diagnosed when the -Wframe-address option is in
+        effect. Such calls should only be made in debugging situations.
+
+
 <ex>
 `regarding symbol resolution`, the current glibc (version 2.3.1 at the time of
     this writing) allows users to obtain the function name and offset only on
@@ -72213,6 +72397,7 @@ cannot be resolved internally, because they cannot be accessed by the dynamic
 linking facilities. In this case, the external command `addr2line` can be used
 instead.
 
+*gcc-builtin*
 The implementation of backtrace() in the glibc library contains
 platform-specific code for each platform, which is based either on GCC
 internal variables (__builtin_frame_address and __builtin_return_address) or
