@@ -24,8 +24,8 @@ using testing::FloatEq;
 
 TEST(String, ConstructFromChars)
 {
-    char s1[] = "this is first message";
-    char *s2 = "this is first message";
+    const char s1[] = "this is first message";
+    const char *s2 = "this is first message";
 
     string string_from_char(s1);
     string string_from_const_char(s2);
@@ -101,32 +101,38 @@ TEST(String, UseStringOperations)
 TEST(String, MaxSize)
 {
   string s{};
+#if __GNUC__ && !__x86_64__
   EXPECT_THAT(s.max_size(), 4611686018427387897);
+#else
+  EXPECT_THAT(s.max_size(), 9223372036854775807);
+#endif
 }
 
 
 // ={=========================================================================
 // string and cstring
 
-// s[0] : z
-// s[1] : o
-// s[2] : o
-// s[3] : 
-// s[3] is null
-
-TEST(CxxString, UseStringVsCstring)
+TEST(String, CompareStringAndCstring)
 {
-  string s{"zoo"};
+  string sz{"zoo"};
+  EXPECT_EQ(sz.size(), 3);
 
-  cout << "s[0] : " << s[0] << endl;  // z
-  cout << "s[1] : " << s[1] << endl;  // o
-  cout << "s[2] : " << s[2] << endl;  // o
-  cout << "s[3] : " << s[3] << endl;  // o
+  char cs[] = "zoo";
+  EXPECT_EQ(strlen(cs),3);
+  EXPECT_EQ(sizeof(cs)/sizeof(char),4);
 
-  if (s[3] == 0)
-    cout << "s[3] is null" << endl;
-  else
-    cout << "s[3] is not null" << endl;
+  const char *s1  = "this is first message";
+  const char s2[] = "this is first message";
+
+  EXPECT_THAT(sizeof(s1), 8);                 // pointer
+  EXPECT_THAT(sizeof s1, 8);                  // pointer
+  EXPECT_THAT(sizeof *s1, 1);                 // byte
+  EXPECT_THAT(sizeof(s2), 22);                // array
+  EXPECT_THAT(sizeof(s2)/sizeof(s2[0]), 22);  // array
+  EXPECT_THAT(strlen(s2), 21);
+
+  string ss{s1};
+  EXPECT_THAT(ss.size(), 21);                  // string
 }
 
 
@@ -318,11 +324,13 @@ TEST(StringConverison, ToNumber)
 
 TEST(StringConverison, NarrowNumericConversion)
 {
+  // warning/error
   // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’ inside { } [-Wnarrowing]
   //    int x{5.0};
   //            ^
-
-  int x{5.0};
+  // int x{5.0};
+ 
+  int x = 5.0;
   EXPECT_EQ(x, 5);
 
   // I am cramming an int into a short. On my (Windows XP) system, an int is
@@ -338,29 +346,6 @@ TEST(StringConverison, NarrowNumericConversion)
 }
 
 
-// ={=========================================================================
-// size of s1 cstring  : 8
-// size of s1 cstring  : 8
-// size of s1 cstring  : 1
-// size of s2 cstring  : 22
-// size of s2 cstring  : 22
-// strlen of s2 cstring: 21
-// size of string      : 21
-
-TEST(String, CompareStringSizes)
-{
-    const char *s1 = "this is first message";
-    const char s2[] = "this is first message";
-    cout << "size of s1 cstring  : " << sizeof(s1) << endl;
-    cout << "size of s1 cstring  : " << sizeof s1 << endl;
-    cout << "size of s1 cstring  : " << sizeof *s1 << endl;
-    cout << "size of s2 cstring  : " << sizeof(s2) << endl;
-    cout << "size of s2 cstring  : " << sizeof(s2) / sizeof(s2[0]) << endl;
-    cout << "strlen of s2 cstring: " << strlen(s2) << endl;
-
-    string s{s1};
-    cout << "size of string      : " << s.size() << endl;
-}
 
 // ={=========================================================================
 
