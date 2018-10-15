@@ -1,6 +1,7 @@
 #include "gmock/gmock.h"
 
 #include <iostream>
+#include <cctype>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -66,11 +67,54 @@ TEST(CH3,GreatestCommonDivisor)
 
 /*
 
-3. The least common multiple (lcm) of two or more non-zero integers, also known
-as the lowest common multiple, or smallest common multiple, is the smallest
-positive integer that is divisible by all of them.
+14. Validating ISBNs                                                        
+
+The International Standard Book Number (ISBN) is a unique numeric identifier for
+books. Currently, a 13-digit format is used. However, for this problem, you are
+to validate the former format that used 10 digits. 
+
+The last of the 10 digits is a checksum. This digit is chosen so that the sum of
+all the ten digits, each multiplied by its (integer) weight, descending from 10
+to 1, is a multiple of 11.
+
+The validate_isbn_10 function, shown as follows, takes an ISBN as a string, and
+returns true if the length of the string is 10, all ten elements are digits, and
+the sum of all digits multiplied by their weight (or position) is a multiple of
+11:
+
+You can take it as a further exercise to improve this function to also correctly
+validate ISBN-10 numbers that include hyphens, such as 3-16-148410-0. Also, you
+can write a function that validates ISBN-13 numbers.
 
 */
+
+bool validate_isbn_10(const string isbn)
+{
+  int sum{};
+
+  // why compile error?
+  // if (10 == isbn.size() &&
+  //     10 == count_if(isbn.begin(), isbn.end(), std::isdigit))
+
+  if (10 == isbn.size() &&
+      10 == count_if(isbn.begin(), isbn.end(), [](const char c){return isdigit(c);}))
+  {
+    int weight=10;
+    sum = accumulate(isbn.begin(), isbn.end(), 0,
+        [&](int init, char elem)
+        {
+          return init + weight--*(elem-'0');
+        });
+  }
+
+  return (sum % 11) ? false : true;
+}
+
+TEST(CH3,ValidateISBN)
+{
+  auto result = validate_isbn_10("7500558088");
+  EXPECT_EQ(result, false);
+}
 
 
 // ={=========================================================================

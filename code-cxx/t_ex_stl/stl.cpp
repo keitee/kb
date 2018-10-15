@@ -1737,6 +1737,14 @@ TEST(AlgoAccumulate, Use)
           return init*elem;
         })
         , Eq(120));
+
+  // sum, if use cxx-rambda
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0, 
+        [](int init, int elem)
+        { 
+          return init+elem;
+        })
+        , Eq(15));
 }
 
 

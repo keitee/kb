@@ -15709,7 +15709,7 @@ static void AsanInitInternal() {
 }
 
 
-<tool-asan-shadow>
+<asan-shadow>
 
 Every aligned 8-byte word of memory have only 9 states:
 first k (0<=k<=8) bytes are addressable, the rest are not.
@@ -15762,6 +15762,51 @@ if (*shadow &&
 0x200, 10.0000.0000. 10 bytes since first byte is 0 which means 8 bytes and
 second bytes is 10 which is 2. So 10 bytes in total.
 
+*asan-shadow-magic*
+
+0xf0, 1111.0000
+
+// These magic values are written to shadow for better error reporting.
+const int kAsanHeapLeftRedzoneMagic = 0xfa;
+const int kAsanHeapRightRedzoneMagic = 0xfb;
+const int kAsanHeapFreeMagic = 0xfd;
+const int kAsanStackLeftRedzoneMagic = 0xf1;
+const int kAsanStackMidRedzoneMagic = 0xf2;
+const int kAsanStackRightRedzoneMagic = 0xf3;
+const int kAsanStackPartialRedzoneMagic = 0xf4;
+const int kAsanStackAfterReturnMagic = 0xf5;
+const int kAsanInitializationOrderMagic = 0xf6;
+const int kAsanUserPoisonedMemoryMagic = 0xf7;
+const int kAsanContiguousContainerOOBMagic = 0xfc;
+const int kAsanStackUseAfterScopeMagic = 0xf8;
+const int kAsanGlobalRedzoneMagic = 0xf9;
+const int kAsanInternalHeapMagic = 0xfe;
+
+static const uptr kCurrentStackFrameMagic = 0x41B58AB3;
+static const uptr kRetiredStackFrameMagic = 0x45E0360E;
+
+; from gcc630
+; Shadow byte legend (one shadow byte represents 8 application bytes):
+;   Addressable:           00
+;   Partially addressable: 01 02 03 04 05 06 07
+;   Heap left redzone:       fa
+;   Heap right redzone:      fb
+;   Freed heap region:       fd
+;   Stack left redzone:      f1
+;   Stack mid redzone:       f2
+;   Stack right redzone:     f3
+;   Stack partial redzone:   f4
+;   Stack after return:      f5
+;   Stack use after scope:   f8
+;   Global redzone:          f9
+;   Global init order:       f6
+;   Poisoned by user:        f7
+;   Container overflow:      fc
+;   Array cookie:            ac
+;   Intra object redzone:    bb
+;   ASan internal:           fe
+;   Left alloca redzone:     ca
+;   Right alloca redzone:    cb
 
 Instrumenting stack
 
@@ -15833,38 +15878,91 @@ void __asan_report_ ## type ## size(uptr addr) {               \
   __asan_report_error(pc, bp, sp, addr, is_write, size);            \
 }
 
-// asan/asan_report.cc
-void __asan_report_error(uptr pc, uptr bp, uptr sp,
-                         uptr addr, bool is_write, uptr access_size) {
-  ScopedInErrorReport in_report;
-}
-
-
-<asan-code-report-gcc630>
-
-extern "C" __attribute__((noinline)) __attribute__((visibility("default")))
-void __asan_report_load8(uptr addr) 
-{ 
+void __asan_report_load8(uptr addr)
+{
   uptr bp = (uptr)__builtin_frame_address(0); 
   uptr pc = (uptr)__builtin_return_address(0); 
   uptr local_stack; 
   uptr sp = (uptr)&local_stack; 
-  ReportGenericError(pc, bp, sp, addr, false, 8, 0, true);
-
-} extern "C" __attribute__((noinline)) __attribute__((visibility("default"))) 
-void __asan_report_exp_load8(uptr addr, u32 exp) 
-{ uptr bp = (uptr)__builtin_frame_address(0); uptr pc =
-      (uptr)__builtin_return_address(0); uptr local_stack; uptr sp =
-        (uptr)&local_stack; ReportGenericError(pc, bp, sp, addr, false, 8,
-            exp, true); 
-} extern "C" __attribute__((noinline)) __attribute__((visibility("default"))) 
-void __asan_report_load8_noabort(uptr addr) 
-{ uptr bp = (uptr)__builtin_frame_address(0); uptr pc =
-            (uptr)__builtin_return_address(0); uptr local_stack; uptr sp =
-            (uptr)&local_stack; ReportGenericError(pc, bp, sp, addr, false, 8,
-                0, false); 
+  __asan_report_error(pc, bp, sp, addr, is_write, size);
 }
 
+// asan/asan_report.cc
+void __asan_report_error(uptr pc, uptr bp, uptr sp, uptr addr, 
+    bool is_write, uptr access_size) {
+
+  ScopedInErrorReport in_report;
+
+  // decide access type depending on asan-shadow-magic value
+  // set bug_descr
+  switch (*shadow_addr) {
+  }
+
+  Report("ERROR: AddressSanitizer: %s on address "
+             "%p at pc 0x%zx bp 0x%zx sp 0x%zx\n",
+             bug_descr, (void*)addr, pc, bp, sp);
+
+  GET_STACK_TRACE_FATAL(pc, bp);
+  PrintStack(&stack);
+
+  DescribeAddress(addr, access_size);
+
+  // bool DescribeAddressRelativeToGlobal(uptr addr, uptr size,
+  //                                      const __asan_global &g) {
+  //   static const uptr kMinimalDistanceFromAnotherGlobal = 64;
+  //   if (addr <= g.beg - kMinimalDistanceFromAnotherGlobal) return false;
+  //   if (addr >= g.beg + g.size_with_redzone) return false;
+  //   Decorator d;
+  //   Printf("%s", d.Location());
+  //   if (addr < g.beg) {
+  //     Printf("[KT:6] %p is located %zd bytes to the left", (void*)addr, g.beg - addr);
+  //   } else if (addr + size > g.beg + g.size) {
+  //     if (addr < g.beg + g.size)
+  //       addr = g.beg + g.size;
+  //     Printf("[KT:6] %p is located %zd bytes to the right", (void*)addr,
+  //            addr - (g.beg + g.size));
+  //   } else {
+  //     // Can it happen?
+  //     Printf("[KT:6] %p is located %zd bytes inside", (void*)addr, addr - g.beg);
+  //   }
+  //   Printf(" of global variable '%s' from '%s' (0x%zx) of size %zu\n",
+  //              MaybeDemangleGlobalName(g.name), g.module_name, g.beg, g.size);
+  //   Printf("%s", d.EndLocation());
+  //   PrintGlobalNameIfASCII(g);
+  //   return true;
+  // }
+
+  ReportErrorSummary(bug_descr, &stack);
+  // void ReportErrorSummary(const char *error_message) {
+  //   if (!common_flags()->print_summary)
+  //     return;
+  //   InternalScopedBuffer<char> buff(kMaxSummaryLength);
+  //   internal_snprintf(buff.data(), buff.size(),
+  //                     "[KT] SUMMARY: %s: %s", SanitizerToolName, error_message);
+  //   __sanitizer_report_error_summary(buff.data());
+  // }
+
+  PrintShadowMemoryForAddress(addr);
+  // static void PrintShadowMemoryForAddress(uptr addr) {
+  //   if (!AddrIsInMem(addr))
+  //     return;
+  //   uptr shadow_addr = MemToShadow(addr);
+  //   const uptr n_bytes_per_row = 16;
+  //   uptr aligned_shadow = shadow_addr & ~(n_bytes_per_row - 1);
+  //   Printf("[KT] Shadow bytes around the buggy address:\n");
+  //   for (int i = -5; i <= 5; i++) {
+  //     const char *prefix = (i == 0) ? "=>" : "  ";
+  //     PrintShadowBytes(prefix,
+  //                      (u8*)(aligned_shadow + i * n_bytes_per_row),
+  //                      (u8*)shadow_addr, n_bytes_per_row);
+  //   }
+  //   if (flags()->print_legend)
+  //     PrintLegend();
+  // }
+}
+
+
+<asan-code-report-gcc630>
 
 // Use this macro if you want to print stack trace with the caller
 // of the current function in the top frame.
@@ -15883,6 +15981,33 @@ void __asan_report_ ## type ## size(uptr addr) {                    \
   ReportGenericError(pc, bp, sp, addr, is_write, size, 0, true);    \
 }                                                                   \
 
+extern "C" __attribute__((noinline)) __attribute__((visibility("default")))
+void __asan_report_`load8`(uptr addr) 
+{ 
+  uptr bp = (uptr)__builtin_frame_address(0); 
+  uptr pc = (uptr)__builtin_return_address(0); 
+  uptr local_stack; 
+  uptr sp = (uptr)&local_stack; 
+  ReportGenericError(pc, bp, sp, addr, false, 8, `0, true`);
+
+} 
+extern "C" __attribute__((noinline)) __attribute__((visibility("default"))) 
+void __asan_report_`exp_load8`(uptr addr, u32 exp) 
+{ 
+  uptr bp = (uptr)__builtin_frame_address(0); 
+  uptr pc = (uptr)__builtin_return_address(0); 
+  uptr local_stack; uptr sp = (uptr)&local_stack; 
+  ReportGenericError(pc, bp, sp, addr, false, 8, `exp, true`); 
+} 
+extern "C" __attribute__((noinline)) __attribute__((visibility("default"))) 
+void __asan_report_`load8_noabort`(uptr addr) 
+{ 
+  uptr bp = (uptr)__builtin_frame_address(0); 
+  uptr pc = (uptr)__builtin_return_address(0); 
+  uptr local_stack; uptr sp = (uptr)&local_stack; 
+  ReportGenericError(pc, bp, sp, addr, false, 8, `0, false`); 
+}
+
 void __asan_report_error(uptr pc, uptr bp, uptr sp, uptr addr, int is_write,
                          uptr access_size, u32 exp) {
   ENABLE_FRAME_POINTER;
@@ -15890,11 +16015,11 @@ void __asan_report_error(uptr pc, uptr bp, uptr sp, uptr addr, int is_write,
   ReportGenericError(pc, bp, sp, addr, is_write, access_size, exp, fatal);
 }
 
-void ReportGenericError(uptr pc, uptr bp, uptr sp, uptr addr, bool is_write,
-                        uptr access_size, u32 exp, bool fatal) {
-
+void ReportGenericError(uptr pc, uptr bp, uptr sp, uptr addr, 
+    bool is_write, uptr access_size, 
+    u32 exp, bool fatal) 
+{
   ScopedInErrorReport in_report(&report, fatal);
-
 }
 
 
