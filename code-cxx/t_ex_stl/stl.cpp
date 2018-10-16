@@ -1718,10 +1718,33 @@ TEST(AlgoAccumulate, Use)
   ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0), Eq(15));
   ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), -50), Eq(-35));
 
+  // it does have return value
+  auto sum = accumulate(coll.cbegin(), coll.cend(), 0);
+  ASSERT_THAT(sum, Eq(15));
+
+  sum = accumulate(coll.cbegin(), coll.cend(), -50);
+  ASSERT_THAT(sum, Eq(-35));
+
   // product. multiplies is binary predicate
   // 1*1*2*3*4*5 = 120
   ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 1, multiplies<int>()), Eq(120));
   ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0, multiplies<int>()), Eq(0));
+
+  // if use cxx-rambda
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 1, 
+        [](int init, int elem)
+        { 
+          return init*elem;
+        })
+        , Eq(120));
+
+  // sum, if use cxx-rambda
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0, 
+        [](int init, int elem)
+        { 
+          return init+elem;
+        })
+        , Eq(15));
 }
 
 

@@ -18292,7 +18292,7 @@ diag_hlp_debug.h
 #define __DIAG_HLP_DEBUG_ENABLE_FN_ENTER_EXIT
 
 
-<diag-format>
+<diag-format> *diag-time*
 
 // 10-6  1 `microsecond`  us
 
@@ -19782,6 +19782,47 @@ We are trying to get hold of SCHED.DB from disk
 
 // Darwin
 FSN_DATA/
+
+
+<comp-sim-time> comp-systemtime comp-time
+
+CMS_INFORMATION_SERVICES/SIM/src/plug-in/xsi/sql/src/sim_pi_xsi_time.c
+/**
+ * @brief Set system time from the TOT section and make a callback to the user if required.
+ *
+ * @param[in]      section_data         TOT section data.
+ *
+ * @retval SIM_STATUS_OK if time is set correctly.
+ * @retval SIM_STATUS_FAILED if there was an error processing the section or setting the time.
+ */
+static SIM_STATUS SIM_pi_xsi_time_ProcessTot(const uint8_t *section_data)
+{
+
+  // CMS_SYSTEM_INFRASTRUCTURE/SYSTEMTIME/src/systemtime.c
+  /* Set the UTC and local time offset */
+    SYSTEMTIME_SetTime(&utc_time_date, local_offset)
+    {
+
+      SYSTEMTIME_RTCSetClock(systemtime)
+      {
+        ioctl(fd, RTC_SET_CLOCK, &rtc_value);
+      }
+
+      /* Even if RTC operations fail, go ahead and store the time offsets in the file.
+       * Systemtime should be able to function without an RTC device.
+       */
+
+      // not a text file
+      // #define SYSTEMTIME_OFFSET_FILENAME              ((char*)g_systemtime_offset_filename)
+      // [SET_TIMEOFFSET_FILE_PATH]
+      // DEFAULT_TIMEOFFSET_FILE_PATH="/tmp/time_offset"
+      
+      fd = SYSTEMTIME_OpenOrCreateTimeFile();
+
+      DIAG_LOG_MIL(g_systemtime_diag_id,("Time has been updated to (Year:Month:Day:Hour:Min:Sec) %04d:%02d:%02d:%02d:%02d:%02d",
+        utc_time->year,utc_time->month,utc_time->day,utc_time->hour,utc_time->minute,utc_time->second));
+    }
+}
 
 
 ={============================================================================
@@ -27032,7 +27073,16 @@ typedef struct SYSTEMTIME_CLOCK_CALENDAR_TAG
 
 SYSTEM_STATUS SYSTEMTIME_SetTime(const SYSTEMTIME_CLOCK_CALENDAR *utc_time, int32_t local_offset)
 
-NDS: ^[20:00:18]0946756818.527260 !MIL    -SYSTEMTIME           < p:0x00000000 P: t:0x2b149b80 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_SetTime L:929 > Time has been updated to (Year:Month:Day:Hour:Min:Sec) 2011:12:16:8:50:59
+NDS: ^[2018:10:11 11:43:50]0946690091.665627 !ENTER  -SYSTEMTIME   		< p:0x000001cc P:MW t:0x01c36520 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_SetTime L:831 > |-> SYSTEMTIME_SetTime
+NDS: ^[2018:10:11 11:43:50]0946690091.665646 !ENTER  -SYSTEMTIME   		< p:0x000001cc P:MW t:0x01c36520 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_GetTimeOffsets L:215 > |-> SYSTEMTIME_GetTimeOffsets
+NDS: ^[2018:10:11 11:43:50]0946690091.665762 !ENTER  -SYSTEMTIME   		< p:0x000001cc P:MW t:0x01c36520 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_ConvertClockCalendarToTimeDate L:1344 > |-> SYSTEMTIME_ConvertClockCalendarToTimeDate
+NDS: ^[2018:10:11 11:43:50]0946690091.665780 !ENTER  -SYSTEMTIME   		< p:0x000001cc P:MW t:0x01c36520 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_CountLeapYears L:323 > |-> SYSTEMTIME_CountLeapYears
+NDS: ^[2018:10:11 11:43:50]0946690091.665838 !ENTER  -SYSTEMTIME   		< p:0x000001cc P:MW t:0x01c36520 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_RTCGetClock L:602 > |-> SYSTEMTIME_RTCGetClock
+NDS: ^[2018:10:11 11:43:50]0946690091.730235 !MIL    -SYSTEMTIME   		< p:0x000001cc P:MW t:0x01c36520 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_SetTime L:1058 > Time has been updated to (Year:Month:Day:Hour:Min:Sec) 2018:10:11:11:45:26 
+NDS: ^[2018:10:11 11:43:50]0946690091.730263 !EXIT   -SYSTEMTIME   		< p:0x000001cc P:MW t:0x01c36520 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_SetTime L:1073 > <-| SYSTEMTIME_SetTime : return_status = 0xc401000
+
+NDS: ^[20:00:18]0946756818.527260 !MIL    -SYSTEMTIME           < p:0x00000000 P: t:0x2b149b80 T:SIM_PLUGIN_XSI_MC_ENGINE_THREAD M:systemtime.c F:SYSTEMTIME_SetTime L:929 
+  > Time has been updated to (Year:Month:Day:Hour:Min:Sec) 2011:12:16:8:50:59
 
 
 <sytemtime-heart-beat>
@@ -27045,6 +27095,23 @@ systemtime.cfg:11:SYSTEMTIME_TIMESTAMP_INTERVAL=5
                                                                "SYSTEMTIME_CONFIGURATION",
                                                                "SYSTEMTIME_TIMESTAMP_INTERVAL",
                                                                &f_systemtime_timestamp_interval) )
+
+
+static void* SYSTEMTIME_NotificationThread(void *arg)
+{
+
+  SYSTEMTIME_TimeStampCallback();
+
+  /* Notify all registered listeners of the new time */
+  for (slot = 0u; slot < f_max_notifications; slot++)
+  {
+    if (NULL != f_systemtime_notification_data[slot].listener)
+    {
+      /* Found a used slot - call the listener */
+      f_systemtime_notification_data[slot].listener(systemtime,f_systemtime_notification_data[slot].user_tag);
+    }
+  }
+}
 
 
 static void SYSTEMTIME_TimeStampCallback(void)
@@ -27066,7 +27133,7 @@ static void SYSTEMTIME_TimeStampCallback(void)
 
 
 ^[2016:08:21 14:09:07]0946685094.138404 !MIL    -SYSTEMTIME                < T:SYSTEMTIME_NOTIFICATION_THREAD M:systemtime_thread.c F:SYSTEMTIME_TimeStampCallback L:153 >
-is (Year:Month:Day:Hour:Min:Sec) 2016:08:21:14:09:07
+Time is (Year:Month:Day:Hour:Min:Sec) 2016:08:21:14:09:07
 
 ^[2016:08:21 14:09:12]0946685099.144471 !MIL    -SYSTEMTIME                < T:SYSTEMTIME_NOTIFICATION_THREAD M:systemtime_thread.c F:SYSTEMTIME_TimeStampCallback L:153 >
 Time is (Year:Month:Day:Hour:Min:Sec) 2016:08:21:14:09:12
@@ -28960,7 +29027,7 @@ see <dialog-1042> <dialog-1235>
 				}
 
 
-<comp-ca-vespa> comp-ams ca-callback
+<comp-vespa> comp-ams ca-callback
 
 http://theyard.cisco.com/si_logs/translation/darwin_0019fb1ae3ac_26e9bedf8a00f6a9636c102f2f87b941/vespa_results.txt
 

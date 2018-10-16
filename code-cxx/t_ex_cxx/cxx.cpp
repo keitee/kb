@@ -1349,7 +1349,8 @@ TEST(CxxStdio, UseInput)
   int i{};
   double d{};
   string s{};
-
+  int i1, i2, i3, i4;
+  
   // show the same result when use cin. To emulate input:
   // 10
   // 4.0
@@ -1363,6 +1364,10 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "This");
 
+  // why s is null? 
+  // "If you read token by token, the newline character is not a special
+  // character. In this case, the tokens might contain a newline character."
+
   stringstream iss2("10\n4.0\nThis is a text\n");
   iss2 >> i;
   iss2 >> d;
@@ -1371,6 +1376,8 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(i, 10);
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "");
+
+  // so use stream-maniplulator ws to remove whitespaces
 
   stringstream iss3("10\n4.0\nThis is a text\n");
   iss3 >> i;
@@ -1381,29 +1388,99 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "This is a text");
 
-  // cin >> i;
-  // cin >> d;
-  // cin.ignore(numeric_limits<streamsize>::max(), '\n');
-  // getline(cin, s);
-  //
-  // cout << i << endl;
-  // cout << d << endl;
-  // cout << s << endl;
 
-  stringstream iss4("10\n4.0\n1 2 3 4\n");
-  int i1, i2, i3, i4;
+  // also works but more types
+
+  stringstream iss4("10\n4.0\nThis is a text\n");
   iss4 >> i;
   iss4 >> d;
-  iss4 >> i1;
-  iss4 >> i2;
-  iss4 >> i3;
-  iss4 >> i4;
+  iss4.ignore(numeric_limits<streamsize>::max(), '\n');
+  getline(iss4, s);
+  
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "This is a text");
+
+  // whitespaces
+
+  stringstream iss5("10\n4.0\n1 2 3 4\n");
+  iss5 >> i;
+  iss5 >> d;
+  iss5 >> i1;
+  iss5 >> i2;
+  iss5 >> i3;
+  iss5 >> i4;
 
   vector<int> coll{i1, i2, i3, i4};
   
   EXPECT_EQ(i, 10);
   EXPECT_EQ(d, 4.0);
   EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+}
+
+
+TEST(CxxStdio, SpecialTypes)
+{
+  int i1{}, i2{}, i3{}, i4{};
+
+  // 15.3.3 Input/Output of Special Types
+  //
+  // Numeric Types
+  // When reading numeric values, the input must start with at least one digit.
+  // Otherwise, the numeric value will be set to 0 and the failbit (see Section
+  // 15.4.1, page 758) is set:
+  //
+  // int x;
+  // std::cin >> x; // assigns 0 to x, if the next character does not fit
+  //
+  // However, if there is no input or if the failbit is set already, calling the
+  // input operator will not modify x. This also applies to bool.
+
+  // fail
+  stringstream iss6("1.2.3.4\n");
+
+  iss6 >> i1;
+  iss6 >> i2;
+  iss6 >> i3;
+  iss6 >> i4;
+
+  vector<int> coll1{i1, i2, i3, i4};
+  EXPECT_THAT(coll1, ElementsAre(1,0,0,0));
+  EXPECT_THAT(iss6.fail(), true);
+
+  // fail
+  stringstream iss7("1.2.3.4\n");
+  i1 = i2 = i3 = i4 = 0;
+  int idummy;
+
+  iss7 >> i1;
+  iss7 >> idummy;
+  iss7 >> i2;
+  iss7 >> idummy;
+  iss7 >> i3;
+  iss7 >> idummy;
+  iss7 >> i4;
+
+  vector<int> coll2{i1, i2, i3, i4};
+  EXPECT_THAT(coll2, ElementsAre(1,0,0,0));
+  EXPECT_THAT(iss7.fail(), true);
+
+  // okay
+  stringstream iss8("1.2.3.4\n");
+  i1 = i2 = i3 = i4 = 0;
+  char cdummy;
+
+  iss8 >> i1;
+  iss8 >> cdummy;
+  iss8 >> i2;
+  iss8 >> cdummy;
+  iss8 >> i3;
+  iss8 >> cdummy;
+  iss8 >> i4;
+
+  vector<int> coll3{i1, i2, i3, i4};
+  EXPECT_THAT(coll3, ElementsAre(1,2,3,4));
+  EXPECT_THAT(iss8.good(), true);
 }
 
 

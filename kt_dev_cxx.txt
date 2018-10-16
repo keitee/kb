@@ -6009,7 +6009,8 @@ TEST(CxxStdio, UseInput)
   int i{};
   double d{};
   string s{};
-
+  int i1, i2, i3, i4;
+  
   // show the same result when use cin. To emulate input:
   // 10
   // 4.0
@@ -6023,6 +6024,10 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "This");
 
+  // why s is null? 
+  // "If you read token by token, the newline character is not a special
+  // character. In this case, the tokens might contain a newline character."
+
   stringstream iss2("10\n4.0\nThis is a text\n");
   iss2 >> i;
   iss2 >> d;
@@ -6031,6 +6036,8 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(i, 10);
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "");
+
+  // so use stream-maniplulator ws to remove whitespaces
 
   stringstream iss3("10\n4.0\nThis is a text\n");
   iss3 >> i;
@@ -6041,15 +6048,101 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "This is a text");
 
-  cin >> i;
-  cin >> d;
-  cin.ignore(numeric_limits<streamsize>::max(), '\n');
-  getline(cin, s);
 
-  cout << i << endl;
-  cout << d << endl;
-  cout << s << endl;
+  // also works but more types
+
+  stringstream iss4("10\n4.0\nThis is a text\n");
+  iss4 >> i;
+  iss4 >> d;
+  iss4.ignore(numeric_limits<streamsize>::max(), '\n');
+  getline(iss4, s);
+  
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "This is a text");
+
+  // whitespaces
+
+  stringstream iss5("10\n4.0\n1 2 3 4\n");
+  iss5 >> i;
+  iss5 >> d;
+  iss5 >> i1;
+  iss5 >> i2;
+  iss5 >> i3;
+  iss5 >> i4;
+
+  vector<int> coll{i1, i2, i3, i4};
+  
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_THAT(coll, ElementsAre(1,2,3,4));
 }
+
+
+TEST(CxxStdio, SpecialTypes)
+{
+  int i1{}, i2{}, i3{}, i4{};
+
+  // 15.3.3 Input/Output of Special Types
+  //
+  // Numeric Types
+  // When reading numeric values, the input must start with at least one digit.
+  // Otherwise, the numeric value will be set to 0 and the failbit (see Section
+  // 15.4.1, page 758) is set:
+  //
+  // int x;
+  // std::cin >> x; // assigns 0 to x, if the next character does not fit
+  //
+  // However, if there is no input or if the failbit is set already, calling the
+  // input operator will not modify x. This also applies to bool.
+
+  // fail
+  stringstream iss6("1.2.3.4\n");
+
+  iss6 >> i1;
+  iss6 >> i2;
+  iss6 >> i3;
+  iss6 >> i4;
+
+  vector<int> coll1{i1, i2, i3, i4};
+  EXPECT_THAT(coll1, ElementsAre(1,0,0,0));
+  EXPECT_THAT(iss6.fail(), true);
+
+  // fail
+  stringstream iss7("1.2.3.4\n");
+  i1 = i2 = i3 = i4 = 0;
+  int idummy;
+
+  iss7 >> i1;
+  iss7 >> idummy;
+  iss7 >> i2;
+  iss7 >> idummy;
+  iss7 >> i3;
+  iss7 >> idummy;
+  iss7 >> i4;
+
+  vector<int> coll2{i1, i2, i3, i4};
+  EXPECT_THAT(coll2, ElementsAre(1,0,0,0));
+  EXPECT_THAT(iss7.fail(), true);
+
+  // okay
+  stringstream iss8("1.2.3.4\n");
+  i1 = i2 = i3 = i4 = 0;
+  char cdummy;
+
+  iss8 >> i1;
+  iss8 >> cdummy;
+  iss8 >> i2;
+  iss8 >> cdummy;
+  iss8 >> i3;
+  iss8 >> cdummy;
+  iss8 >> i4;
+
+  vector<int> coll3{i1, i2, i3, i4};
+  EXPECT_THAT(coll3, ElementsAre(1,2,3,4));
+  EXPECT_THAT(iss8.good(), true);
+}
+
 
 http://www.cplusplus.com/reference/istream/ws/
 Extract whitespaces
@@ -6101,6 +6194,21 @@ istream& istream::ignore (streamsize count, int delim)
   cin.ignore(numeric_limits<std::streamsize>::max());
 
 
+15.4.2 Member Functions Accessing the State of Streams
+
+The current state of the flags can be determined by the member functions, as
+presented in Table 15.4.
+
+good()              Returns true if the stream is OK (goodbit is “set”)
+eof()               Returns true if end-of-file was hit (eofbit is set)
+fail()              Returns true if an error has occurred (failbit or badbit is set)
+bad()               Returns true if a fatal error has occurred (badbit is set)
+rdstate()           Returns the currently set flags
+clear()             Clears all flags
+clear(state)        Clears all and sets state flags
+setstate(state)     Sets additional state flags
+
+
 <cxx-stream-format> cxx-stream-manipulator
 
 CLR 15.6 Manipulators
@@ -6111,7 +6219,7 @@ read or written. The basic manipulators defined in <istream> or <ostream> are
 presented in Table 15.8.
 
 endl    basic_ostream Inserts a newline character into the buffer and
-        flushes the output buffer to its device
+        `flushes the output buffer to its device`
 
 ends    basic_ostream Inserts a (terminating) null character into the buffer
 
@@ -9975,6 +10083,8 @@ using PropertiesMap = hash_map<UrlTableProperties *, string>;
 enum UrlTableErrors { ...
 
 
+*cxx-code-style*
+
 Variable Names, `Namespace` Names, Instance Names, Function Parameters
 ---------------
 The names of variables (including function parameters) and data members are
@@ -12073,6 +12183,9 @@ other is from the user.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-copy-control
 
+Q: How copy control can access private members of rhs?
+
+
 {copy-control}
 copy ctor, copy assign, move ctor(C++11), move assign(C++11)
 
@@ -12096,7 +12209,7 @@ Used in contexts:
 
 * `cxx-copy-form-init` for the same type and converting-ctor for different type
 * `pass-by-value` function call 
-* `return-by-value` return *cppy-copy-ctor-return*
+* `return-by-value` return *cxx-copy-ctor-return*
 
   *cpp-remember*
   converting-ctor will be used if return statement requires conversion.
@@ -12205,9 +12318,9 @@ FooFoo's copy ctor: 200
 Why copy-ctor own parameter `must-be-a-reference`? 
 
 If it is not a reference, then the call would never succeed. To copy-construct
-object, use copy-ctor and copy-ctor itself is a function. Need to use
-copy-ctor to copy argument and to copy the argument, use copy-ctor.
-`indefinite-recursive` 
+object, use copy-ctor which is itself a function. Need to use copy-ctor to
+copy argument and to copy the argument, use copy-ctor. `cxx-indefinite` Use
+reference so that remove need of copy.
 
 NO. Actualy, compile error:
 
@@ -12234,8 +12347,9 @@ Assign with different types? Need additional copy-assign.
 
 
 <assignment-must-return-a-reference-to-this>
-EC++10. All assign operations must follow this convention like built-in types
-because of 'chain' of assignment and should behave the same as built-in types.
+EC++10. All assign operations *cxx-overload-operator-assign* must follow this
+convention like built-in types because of 'chain' of assignment and should
+behave the same as built-in types.
 
 x = y = z = 15;   // right associative
 
@@ -18690,7 +18804,7 @@ data1.operator+=(data2);
     allow 'conversion' since member fixes ths lhs type.
 
 
-{assignment-version} {compound-op}
+{cxx-overload-assignment} {compound-op}
 The standalone version of op 'must' be `nonmember` since the literal, "hi!",
     do not have member operations.
 
@@ -18723,9 +18837,10 @@ T& T::operator+=(const T& other)
   return *this;
 }
 
-This must return `const return` and see *const-return* to prevent this:
+This must return `const return` and see *cxx-const-return* to prevent this:
 
 const Number operator+( const Number& lhs, const Number& rhs );
+
 Number a, b, c;
 a + b = c;
 
@@ -18741,7 +18856,8 @@ const T operator+(const T& a, const T& b)
 }
 
 
-<ex> case that is based on syntax and library requirement.
+<cxx-overload-operator-io>
+it is based on syntax and library requirement.
 
 If IO-op for Sales_data was member, then:
 
@@ -18749,6 +18865,8 @@ Sales_data data;
 
 data << cout;     // since against to usual syntax of built-in type
 cout << data;     // since cannot change the library
+
+*cxx-overload-operator-io* should be nonmember
 
 
 {assign-op}
@@ -20415,7 +20533,7 @@ kit:vector move ctor
 {cxx-return-what-should-return} {cxx-reference-return-by-value} EC++21
 The `pass-by-reference` is great so always use reference? 
 
-note:
+note: *cxx-overload-operator*
 How distinguish between two multiply and dereferene?
 
 // dereferene operator, member
@@ -20425,8 +20543,8 @@ T& operator*() { return *ptr_; }
 friend const T operator*( const T &lhs, const T &rhs );
 
 
-These are tries to save a construction cost by using pass-by-reference. Not
-quite right.
+These are tries to save a construction cost by using pass-by-reference. 
+Not quite right.
 
 <1> 
 Use stack but remember a refenrece is a name for some 'existing' object. Here
@@ -20513,7 +20631,7 @@ void g()
 
 The increment(x) notation doesn't give a clue to the reader that x's value is
 being modified, the way x = next(x) does. Consequently, "plain" reference
-arguments should be used only where the name of the function gives a strong
+arguments should be used `only where` the name of the function gives a strong
 hint that the reference argument is modified.
 
 
@@ -41068,6 +41186,68 @@ T accumulate (InputIterator first, InputIterator last, T init)
 istream_iterator<int> in_iter(cin), eof;
 cout << std::accumulate(in_iter, eof, 0) << endl;
 
+// cxx-algo-accumulate
+//
+// 11.11 Numeric Algorithms
+//
+// The first form computes and returns the sum of initValue and all elements in
+// the range [beg,end).  In particular, it calls the following for each element:
+//
+// initValue = initValue + elem
+//
+// The second form computes and returns the result of calling op for initValue
+// and all elements in the range [beg,end). In particular, it calls the
+// following for each element:
+//
+// initValue = op(initValue,elem)
+//
+// Thus, for the values
+//  a1 a2 a3 a4 ...
+//
+// they compute and return either
+//  initValue + a1 + a2 + a3 + ...
+//
+// or
+//  initValue op a1 op a2 op a3 op ...
+// respectively.
+
+TEST(AlgoAccumulate, Use)
+{
+  vector<int> coll{1,2,3,4,5};
+
+  // sum
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0), Eq(15));
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), -50), Eq(-35));
+
+  // it does have return value
+  auto sum = accumulate(coll.cbegin(), coll.cend(), 0);
+  ASSERT_THAT(sum, Eq(15));
+
+  sum = accumulate(coll.cbegin(), coll.cend(), -50);
+  ASSERT_THAT(sum, Eq(-35));
+
+  // product. multiplies is binary predicate
+  // 1*1*2*3*4*5 = 120
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 1, multiplies<int>()), Eq(120));
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0, multiplies<int>()), Eq(0));
+
+  // if use cxx-lambda
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 1, 
+        [](int init, int elem)
+        { 
+          return init*elem;
+        })
+        , Eq(120));
+
+  // sum, if use cxx-lambda
+  ASSERT_THAT(accumulate(coll.cbegin(), coll.cend(), 0, 
+        [](int init, int elem)
+        { 
+          return init+elem;
+        })
+        , Eq(15));
+}
+
 
 <ex> *ex-algo-unique-copy*
 #include <iostream>
@@ -42439,7 +42619,7 @@ reference to a local variable. If possible, avoid capturing pointers or
 reference.
 
 
-<implicit-capture>
+<cxx-lambda-capture> <implicit-capture>
 Let the compiler 'infer' variables we use from the code in the lambda body.
 Use an & or = in the capture list. The revised is:
 
@@ -42450,7 +42630,7 @@ auto wc = find_if( words.begin(), words.end(),
 
 // C++PL
 The [&] is a capture list specifying that local names used (such as x) will be
-accessed through references. Had we wanted to “capture” only x, we could have
+accessed through references. Had we wanted `to “capture” only x`, we could have
 said so: [&x]. Had we wanted to give the generated object a `copy of x`, we
 could have said so: [=x]. Capture nothing is [], capture all local names used
 by reference is [&], and capture all local names used by value is [=].
@@ -44525,7 +44705,7 @@ alg( beg, end, beg2, other args );
 alg( beg, end, beg2, end2, other args );
 
 
-<ex> algorithm-accumulate
+<ex> algo-accumulate
 The third argument determines which addition operator is used and the type of
 return. Seems clever.
 

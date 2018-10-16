@@ -1488,6 +1488,41 @@ const string roman_numeral_0711(unsigned int value)
   return result;
 }
 
+// 2018
+const string roman_numeral_1011(unsigned int value)
+{
+  const initializer_list<pair<unsigned int, string>> roman_table{
+    {1000u, "M"},
+    {900u, "CM"},
+    {500u, "D"},
+    {400u, "CD"},
+    {100u, "C"},
+    {90u, "XC"},
+    {50u, "L"},
+    {40u, "XL"},
+    {10u, "X"},
+    {9u, "IX"},
+    {5u, "V"},
+    {4u, "IV"},
+    {1u, "I"}
+  };
+
+  string result{};
+
+  for (const auto &e : roman_table)
+  {
+    // note: must be "<=" but not "<"
+    
+    while (e.first <= value)
+    {
+      value -= e.first;
+      result += e.second;
+    }
+  }
+
+  return result;
+}
+
 TEST(RomanConvert, 0711) 
 {
   EXPECT_THAT(roman_numeral_0711(1), Eq("I"));
@@ -1526,6 +1561,46 @@ TEST(RomanConvert, 0711)
   EXPECT_THAT(roman_numeral_0711(1513), Eq("MDXIII"));
   EXPECT_THAT(roman_numeral_0711(2999), Eq("MMCMXCIX"));
   EXPECT_THAT(roman_numeral_0711(3447), Eq("MMMCDXLVII"));
+}
+
+TEST(RomanConvert, 1011) 
+{
+  EXPECT_THAT(roman_numeral_1011(1), Eq("I"));
+  EXPECT_THAT(roman_numeral_1011(2), Eq("II"));
+  EXPECT_THAT(roman_numeral_1011(3), Eq("III"));
+  EXPECT_THAT(roman_numeral_1011(4), Eq("IV"));
+  EXPECT_THAT(roman_numeral_1011(5), Eq("V"));
+  EXPECT_THAT(roman_numeral_1011(6), Eq("VI"));
+  EXPECT_THAT(roman_numeral_1011(7), Eq("VII"));
+  EXPECT_THAT(roman_numeral_1011(8), Eq("VIII"));
+  EXPECT_THAT(roman_numeral_1011(9), Eq("IX"));
+  EXPECT_THAT(roman_numeral_1011(10), Eq("X"));
+  EXPECT_THAT(roman_numeral_1011(11), Eq("XI"));
+  EXPECT_THAT(roman_numeral_1011(12), Eq("XII"));
+  EXPECT_THAT(roman_numeral_1011(13), Eq("XIII"));
+  EXPECT_THAT(roman_numeral_1011(16), Eq("XVI"));
+  EXPECT_THAT(roman_numeral_1011(17), Eq("XVII"));
+  EXPECT_THAT(roman_numeral_1011(18), Eq("XVIII"));
+  EXPECT_THAT(roman_numeral_1011(20), Eq("XX"));
+  EXPECT_THAT(roman_numeral_1011(23), Eq("XXIII"));
+  EXPECT_THAT(roman_numeral_1011(41), Eq("XLI"));
+  EXPECT_THAT(roman_numeral_1011(45), Eq("XLV"));
+  EXPECT_THAT(roman_numeral_1011(50), Eq("L"));
+  EXPECT_THAT(roman_numeral_1011(80), Eq("LXXX"));
+  EXPECT_THAT(roman_numeral_1011(91), Eq("XCI"));
+  EXPECT_THAT(roman_numeral_1011(95), Eq("XCV"));
+  EXPECT_THAT(roman_numeral_1011(100), Eq("C"));
+  EXPECT_THAT(roman_numeral_1011(122), Eq("CXXII"));
+  EXPECT_THAT(roman_numeral_1011(152), Eq("CLII"));
+  EXPECT_THAT(roman_numeral_1011(196), Eq("CXCVI"));
+  EXPECT_THAT(roman_numeral_1011(247), Eq("CCXLVII"));
+  EXPECT_THAT(roman_numeral_1011(288), Eq("CCLXXXVIII"));
+  EXPECT_THAT(roman_numeral_1011(298), Eq("CCXCVIII"));
+  EXPECT_THAT(roman_numeral_1011(500), Eq("D"));
+  EXPECT_THAT(roman_numeral_1011(1000), Eq("M"));
+  EXPECT_THAT(roman_numeral_1011(1513), Eq("MDXIII"));
+  EXPECT_THAT(roman_numeral_1011(2999), Eq("MMCMXCIX"));
+  EXPECT_THAT(roman_numeral_1011(3447), Eq("MMMCDXLVII"));
 }
 
 
