@@ -6009,7 +6009,8 @@ TEST(CxxStdio, UseInput)
   int i{};
   double d{};
   string s{};
-
+  int i1, i2, i3, i4;
+  
   // show the same result when use cin. To emulate input:
   // 10
   // 4.0
@@ -6023,6 +6024,10 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "This");
 
+  // why s is null? 
+  // "If you read token by token, the newline character is not a special
+  // character. In this case, the tokens might contain a newline character."
+
   stringstream iss2("10\n4.0\nThis is a text\n");
   iss2 >> i;
   iss2 >> d;
@@ -6031,6 +6036,8 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(i, 10);
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "");
+
+  // so use stream-maniplulator ws to remove whitespaces
 
   stringstream iss3("10\n4.0\nThis is a text\n");
   iss3 >> i;
@@ -6041,15 +6048,101 @@ TEST(CxxStdio, UseInput)
   EXPECT_EQ(d, 4.0);
   EXPECT_EQ(s, "This is a text");
 
-  cin >> i;
-  cin >> d;
-  cin.ignore(numeric_limits<streamsize>::max(), '\n');
-  getline(cin, s);
 
-  cout << i << endl;
-  cout << d << endl;
-  cout << s << endl;
+  // also works but more types
+
+  stringstream iss4("10\n4.0\nThis is a text\n");
+  iss4 >> i;
+  iss4 >> d;
+  iss4.ignore(numeric_limits<streamsize>::max(), '\n');
+  getline(iss4, s);
+  
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_EQ(s, "This is a text");
+
+  // whitespaces
+
+  stringstream iss5("10\n4.0\n1 2 3 4\n");
+  iss5 >> i;
+  iss5 >> d;
+  iss5 >> i1;
+  iss5 >> i2;
+  iss5 >> i3;
+  iss5 >> i4;
+
+  vector<int> coll{i1, i2, i3, i4};
+  
+  EXPECT_EQ(i, 10);
+  EXPECT_EQ(d, 4.0);
+  EXPECT_THAT(coll, ElementsAre(1,2,3,4));
 }
+
+
+TEST(CxxStdio, SpecialTypes)
+{
+  int i1{}, i2{}, i3{}, i4{};
+
+  // 15.3.3 Input/Output of Special Types
+  //
+  // Numeric Types
+  // When reading numeric values, the input must start with at least one digit.
+  // Otherwise, the numeric value will be set to 0 and the failbit (see Section
+  // 15.4.1, page 758) is set:
+  //
+  // int x;
+  // std::cin >> x; // assigns 0 to x, if the next character does not fit
+  //
+  // However, if there is no input or if the failbit is set already, calling the
+  // input operator will not modify x. This also applies to bool.
+
+  // fail
+  stringstream iss6("1.2.3.4\n");
+
+  iss6 >> i1;
+  iss6 >> i2;
+  iss6 >> i3;
+  iss6 >> i4;
+
+  vector<int> coll1{i1, i2, i3, i4};
+  EXPECT_THAT(coll1, ElementsAre(1,0,0,0));
+  EXPECT_THAT(iss6.fail(), true);
+
+  // fail
+  stringstream iss7("1.2.3.4\n");
+  i1 = i2 = i3 = i4 = 0;
+  int idummy;
+
+  iss7 >> i1;
+  iss7 >> idummy;
+  iss7 >> i2;
+  iss7 >> idummy;
+  iss7 >> i3;
+  iss7 >> idummy;
+  iss7 >> i4;
+
+  vector<int> coll2{i1, i2, i3, i4};
+  EXPECT_THAT(coll2, ElementsAre(1,0,0,0));
+  EXPECT_THAT(iss7.fail(), true);
+
+  // okay
+  stringstream iss8("1.2.3.4\n");
+  i1 = i2 = i3 = i4 = 0;
+  char cdummy;
+
+  iss8 >> i1;
+  iss8 >> cdummy;
+  iss8 >> i2;
+  iss8 >> cdummy;
+  iss8 >> i3;
+  iss8 >> cdummy;
+  iss8 >> i4;
+
+  vector<int> coll3{i1, i2, i3, i4};
+  EXPECT_THAT(coll3, ElementsAre(1,2,3,4));
+  EXPECT_THAT(iss8.good(), true);
+}
+
 
 http://www.cplusplus.com/reference/istream/ws/
 Extract whitespaces
@@ -6101,6 +6194,21 @@ istream& istream::ignore (streamsize count, int delim)
   cin.ignore(numeric_limits<std::streamsize>::max());
 
 
+15.4.2 Member Functions Accessing the State of Streams
+
+The current state of the flags can be determined by the member functions, as
+presented in Table 15.4.
+
+good()              Returns true if the stream is OK (goodbit is “set”)
+eof()               Returns true if end-of-file was hit (eofbit is set)
+fail()              Returns true if an error has occurred (failbit or badbit is set)
+bad()               Returns true if a fatal error has occurred (badbit is set)
+rdstate()           Returns the currently set flags
+clear()             Clears all flags
+clear(state)        Clears all and sets state flags
+setstate(state)     Sets additional state flags
+
+
 <cxx-stream-format> cxx-stream-manipulator
 
 CLR 15.6 Manipulators
@@ -6111,7 +6219,7 @@ read or written. The basic manipulators defined in <istream> or <ostream> are
 presented in Table 15.8.
 
 endl    basic_ostream Inserts a newline character into the buffer and
-        flushes the output buffer to its device
+        `flushes the output buffer to its device`
 
 ends    basic_ostream Inserts a (terminating) null character into the buffer
 
@@ -12075,6 +12183,9 @@ other is from the user.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-copy-control
 
+Q: How copy control can access private members of rhs?
+
+
 {copy-control}
 copy ctor, copy assign, move ctor(C++11), move assign(C++11)
 
@@ -12098,7 +12209,7 @@ Used in contexts:
 
 * `cxx-copy-form-init` for the same type and converting-ctor for different type
 * `pass-by-value` function call 
-* `return-by-value` return *cppy-copy-ctor-return*
+* `return-by-value` return *cxx-copy-ctor-return*
 
   *cpp-remember*
   converting-ctor will be used if return statement requires conversion.
@@ -12207,9 +12318,9 @@ FooFoo's copy ctor: 200
 Why copy-ctor own parameter `must-be-a-reference`? 
 
 If it is not a reference, then the call would never succeed. To copy-construct
-object, use copy-ctor and copy-ctor itself is a function. Need to use
-copy-ctor to copy argument and to copy the argument, use copy-ctor.
-`indefinite-recursive` 
+object, use copy-ctor which is itself a function. Need to use copy-ctor to
+copy argument and to copy the argument, use copy-ctor. `cxx-indefinite` Use
+reference so that remove need of copy.
 
 NO. Actualy, compile error:
 
@@ -12236,8 +12347,9 @@ Assign with different types? Need additional copy-assign.
 
 
 <assignment-must-return-a-reference-to-this>
-EC++10. All assign operations must follow this convention like built-in types
-because of 'chain' of assignment and should behave the same as built-in types.
+EC++10. All assign operations *cxx-overload-operator-assign* must follow this
+convention like built-in types because of 'chain' of assignment and should
+behave the same as built-in types.
 
 x = y = z = 15;   // right associative
 
@@ -20421,7 +20533,7 @@ kit:vector move ctor
 {cxx-return-what-should-return} {cxx-reference-return-by-value} EC++21
 The `pass-by-reference` is great so always use reference? 
 
-note:
+note: *cxx-overload-operator*
 How distinguish between two multiply and dereferene?
 
 // dereferene operator, member
@@ -20431,8 +20543,8 @@ T& operator*() { return *ptr_; }
 friend const T operator*( const T &lhs, const T &rhs );
 
 
-These are tries to save a construction cost by using pass-by-reference. Not
-quite right.
+These are tries to save a construction cost by using pass-by-reference. 
+Not quite right.
 
 <1> 
 Use stack but remember a refenrece is a name for some 'existing' object. Here
@@ -20519,7 +20631,7 @@ void g()
 
 The increment(x) notation doesn't give a clue to the reader that x's value is
 being modified, the way x = next(x) does. Consequently, "plain" reference
-arguments should be used only where the name of the function gives a strong
+arguments should be used `only where` the name of the function gives a strong
 hint that the reference argument is modified.
 
 
