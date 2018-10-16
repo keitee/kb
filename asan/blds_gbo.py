@@ -12,6 +12,7 @@ if __name__ == "__main__":
     parser.add_argument("--host64", help="build for host 64", action="store_true")
     parser.add_argument("--host64_recover", help="build for host 64 with recover", action="store_true")
     parser.add_argument("--target", help="build for target", action="store_true")
+    parser.add_argument("--target_host", help="build for target host 32", action="store_true")
     parser.add_argument("--clang", help="build for clang", action="store_true")
     args = parser.parse_args()
 
@@ -21,6 +22,19 @@ if __name__ == "__main__":
         subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_target_asan_32"])
         subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_target_static_asan_32"])
         subprocess.call(["/home/kyoupark/asan/gcc/i686-nptl-linux-gnu-gcc/bin/i686-nptl-linux-gnu-gcc", "-g", "gbo.c", "-o", "gbo_target_no_asan_32"])
+        sys.stdout.write("done\n")
+
+    # toolchain for host 32 bit
+    # both works
+    # ./gbo_targe_host_asan_32
+    # $
+    # LD_LIBRARY_PATH=/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib ./gbo_target_host_asan_32
+
+    if args.target_host:
+        sys.stdout.write("builds asan/static/no gbo using target tools ...\n")
+        subprocess.call(["/home/kyoupark/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc", "-g", "-fsanitize=address", "gbo.c", "-o", "gbo_target_host_asan_32"])
+        subprocess.call(["/home/kyoupark/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc", "-g", "-static-libasan", "-fsanitize=address", "gbo.c", "-o", "gbo_target_host_static_asan_32"])
+        subprocess.call(["/home/kyoupark/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc", "-g", "gbo.c", "-o", "gbo_target_host_no_asan_32"])
         sys.stdout.write("done\n")
 
     if args.host32:
