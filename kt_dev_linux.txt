@@ -461,9 +461,10 @@
 *kt_linux_core_006* linux-portability
 |kt_linux_core_007| /dev/null
 
-|kt_linux_core_050| signal
-*kt_linux_core_051* signal-names
-|kt_linux_core_051| signal: example: use signal as synchronization
+*kt_linux_core_050* linux-signal
+*kt_linux_core_050* linux-signal-handler
+*kt_linux_core_051* linux-signal-names
+*kt_linux_core_051* linux-signal-ex: use signal as synchronization
 |kt_linux_core_052| signal: kill: checking for the existence of a process
 *kt_linux_core_052* signal-raise-call
 
@@ -9225,6 +9226,9 @@ to prevent data loss:
 
 rsync -a --delete source destination
 
+<ex> to see a list of files which are different
+
+rsync -rvn --size-only /home/kyoupark/git/kb/asan/libsanitizer-from-630/ libsanitizer
 
 <example> over SSH
 rsync -a ~/dir1 username@remote_host:destination_directory
@@ -12034,6 +12038,35 @@ $ less +G app.log
        +cmd   Causes the specified cmd to be executed each time a new file is
        examined.  For example, +G causes less to initially display each file
        starting at the end rather than the beginning.
+
+
+colordiff -r libsanitizer/ ../xxx/gcc-4.9.4/libsanitizer/ | less -R
+
+-r or --raw-control-chars
+       Causes "raw" control characters to be displayed.  The default is to
+       display control characters using the caret notation; for example, a
+       control-A (octal 001) is displayed as "^A".   Warn‐ ing:  when  the  -r
+       option is used, less cannot keep track of the actual appearance of the
+       screen (since this depends on how the screen responds to each type of
+           control character).  Thus, various display problems may result,
+       such as long lines being split in the wrong place.
+
+-R or --RAW-CONTROL-CHARS
+       Like -r, but only ANSI "color" escape sequences are output in "raw"
+       form.  Unlike -r, the screen appearance is maintained correctly in most
+       cases.   ANSI  "color"  escape  sequences  are sequences of the form:
+
+            ESC [ ... m
+
+       where  the "..." is zero or more color specification characters For the
+       purpose of keeping track of screen appearance, ANSI color escape
+       sequences are assumed to not move the cursor.  You can make less think
+       that characters other than "m" can end ANSI color escape sequences by
+       setting the environment variable LESSANSIENDCHARS to the list of
+       characters which can end a color escape sequence.  And you can make
+       less think that characters other than the standard ones may appear
+       between the ESC and the m by setting the environment variable
+       LESSANSIMIDCHARS to the list of characters which can appear.
 
 
 ={============================================================================
@@ -16022,6 +16055,18 @@ void ReportGenericError(uptr pc, uptr bp, uptr sp, uptr addr,
   ScopedInErrorReport in_report(&report, fatal);
 }
 
+// 494
+asan/asan_report.cc
+
+  NORETURN ~ScopedInErrorReport() {
+    Report("ABORTING\n");
+    Die();
+
+// 630
+    if (halt_on_error_) {
+      Report("ABORTING\n");
+      Die();
+    }
 
 <asan-code-xxx>
 
@@ -31566,6 +31611,22 @@ GDB also allows casts to be used when appropriate, for example,
 $2 = {0, 0, 0, 12, 0 <repeats 21 times>}
 
 
+<gdb-print-pretty>
+set print pretty on
+
+Cause gdb to print structures in an indented format with one member per line,
+like this:
+
+$1 = {
+  next = 0x0,
+  flags = {
+    sweet = 1,
+    sour = 1
+  },
+  meat = 0x54 "Pork"
+}
+
+
 ={============================================================================
 *kt_linux_gdb_300* gdb-exam-address-and-code
 
@@ -40578,14 +40639,28 @@ stdout/err is). No idea why...
 
 
 ={============================================================================
-*kt_linux_core_050* signal
+*kt_linux_core_050* linux-signal
 
-LPI 20 SIGNALS: FUNDAMENTAL CONCEPTS
+LPI-20 SIGNALS: FUNDAMENTAL CONCEPTS
 
 {signal-is-notification}
 A signal is a notification to a process that an event has occurred. Sometimes
 described as `software-interrupts` and are analogous to hardware interrupts in
 that they interrupt the normal flow of execution of a program.
+
+20.4 Introduction to Signal Handlers
+
+Invocation of a signal handler may interrupt the main program flow at any
+time; the kernel calls the handler on the process’s behalf, and when the
+handler returns, execution of the program resumes at the point where the
+handler interrupted it.
+
+21.2 Other Methods of Terminating a Signal Handler
+
+All of the signal handlers that we have looked at so far complete by returning
+to the main program. However, simply returning from a signal handler sometimes
+isn’t desirable, or in some cases, isn’t even useful.
+
 
 {signal-and-kernel}
 One process can (if it has suitable permissions) send a signal to another
@@ -40594,136 +40669,71 @@ form of interprocess communication (IPC). It is also possible for a process to
 send a signal to itself. However, the usual source of many signals sent to a
 process is the kernel.
 
+
 {signal-symbolic-names}
 Each signal is defined as a unique (small) integer, starting sequentially from
 1. These integers are defined in <signal.h> with symbolic names of the form
 SIGxxxx. Since the actual numbers used for each signal vary across
 implementations, it is these symbolic names that are always used in programs.
 
-note: 
-$kill -l to see symbolic names.
+*signal-list* to see symbolic names.
+
+$kill -l
 
 
-{pending}
+<signal-standard-and-realtime>
+Signals fall into two broad categories. The first set constitutes the
+traditional or standard signals, which are used by the kernel to notify
+processes of events. On Linux, the standard signals are numbered from 1 to 31.
+
+The other set of signals consists of the realtime signals
+
+
+{signal-mask-per-process} {signal-block} {signal-pending}
 A signal is said to be generated by some event. Once generated, a signal is
 later delivered to a process, which then takes some action in response to the
 signal. Between the time it is generated and the time it is delivered, a signal
 is said to be pending. Why pending since do not know when it is next scheduled
 to run, or immediately if the process is already running
 
-
-{signal-mask-per-process} {signal-block}
 Sometimes, however, we need to ensure that a segment of code is 'not'
-interrupted by the delivery of a signal. To do this, we can add a signal to the
-process's `signal-mask`; a set of signals whose delivery is currently blocked.
-If a signal is generated while it is blocked, it `remains-pending` until it is
-later unblocked (removed from the signal mask).
+interrupted by the delivery of a signal. To do this, we can add a signal to
+the process's `signal-mask`; a set of signals whose delivery is currently
+blocked.  If a signal is generated while it is blocked, it `remains pending`
+until it is later unblocked (removed from the signal mask).
 
 If a process receives a signal that it is currently blocking, that signal is
 added to the process's `set-of-pending-signals`.
 
-That delivery of a signal is blocked during the execution of its handler (unless
-    we specify the SA_NODEFER flag to sigaction()). If the signal is (again)
-generated while the handler is executing, then it is marked as pending and later
-delivered when the handler returns.
+That delivery of a signal is blocked during the execution of its handler
+(unless we specify the SA_NODEFER flag to sigaction()). If the signal is
+(again) generated while the handler is executing, then it is marked as pending
+and later delivered when the handler returns.
 
 note:
 Signals can be pending due to either blocked or its handling running.
 
+
 <signal-is-queued-or-not>
 `standard-signals` can't be queued; delivered only once. The set of pending
 signals is only a mask; it indicates whether or not a signal has occurred, but
-not how many times it has occurred. In other words, if the same signal is
-generated multiple times while it is blocked, then it is recorded in the set of
-pending signals, and later delivered, just once. One of the differences between
-standard and realtime signals is that `realtime-signals` are queued.
+not how many times it has occurred. 
+
+In other words, if the same signal is generated multiple times while it is
+blocked ot the handler is executing, then it is recorded in the set of pending
+signals, and later delivered, `just once.` 
+
+One of the differences between standard and realtime signals is that
+`realtime-signals` are queued.
 
 
-{signal-handler}
-Instead of accepting the default for a particular signal, a program can change
-the action that occurs when the signal is delivered. Can be used to ignore
-signals or to change the default. To change a default is usually referred to as
-`installing` or establishing a signal handler. When a signal handler is invoked
-in response to the delivery of a signal, we say that the signal has been handled
-or, synonymously, caught.
-
-<not-for-all-signals>
-It isn't possible to set the disposition of a signal to terminate or dump core
-unless one of these is the default disposition of the signal. The nearest we can
-get to this is to install a handler for the signal that then calls either exit()
-  or abort(). 
-  
-*coredump*
-The abort() function generates a SIGABRT signal for the process, which causes it
-to dump core and terminate.
-
-note:
-After all, can install signal handler only for signals which do exit() or
-abort() by default?
-
-
-{signal-reentrant}
-Because a signal handler may asynchronously interrupt the execution of a program
-at any point in time, the main program and the signal handler in effect form
-`two-independent` (although not concurrent) threads of execution within the same
-process.
-
-
-A function is said to be `reentrant` if it can safely be simultaneously executed
-by multiple threads of execution in the `same-process`. In this context, "safe"
-means that the function achieves its expected result, regardless of the state of
-execution of any other thread of execution.
-
-A function may be `nonreentrant` if it updates global or static data structures. A
-function that employs only local variables is guaranteed to be reentrant because
-of race-condition. This book shows an example using crypt() in both main and
-signal handler. This corrupts internal buffer which is statically allocated and
-crypt uses when calls it with differnt parameter.
-
-note:
-`nonreentrant` means that function is not safe when gets called by multiple
-threads. Using only local variables means reentrant. Why mentions race
-condition?
-
-Such possibilities are in fact rife within the standard C library. For example,
-     we already noted in Section 7.1.3 that malloc() and free() maintain a
-     linked list of freed memory blocks available for reallocation from the
-     heap. If a call to malloc() in the main program is interrupted by a signal
-     handler that also calls malloc(), then this linked list can be corrupted.
-     For this reason, the malloc() family of functions, and other library
-     functions that use them, are nonreentrant.
-
-Even if we are not using nonreentrant library functions, reentrancy issues can
-still be relevant. If a signal handler updates programmer-defined global data
-structures that are also updated within the main program, then we can say that
-the signal handler is nonreentrant with respect to the main program.
-
-If a function is nonreentrant, then its manual page will normally provide an
-explicit or implicit indication of this fact. In particular, watch out for
-statements that the function uses or returns information in statically allocated
-variables.
-
-
-{async-signal-safe-function}
-An `async-signal-safe` function is one that the implementation guarantees to be
-safe when called from a signal handler. A function is async-signal-safe either
-because it is reentrant or because it is not interruptible by a signal handler.
-
-Table 21-1: Functions required to be async-signal-safe by POSIX.1-1990, SUSv2,
-      and SUSv3
-
-Real-world applications should avoid calling non-async-signal-safe functions
-from signal handlers.
-
-
-{signal-and-proc}
+<signal-proc> *proc-status*
 The Linux-specific /proc/PID/status file contains various bit-mask fields that
 can be inspected to determine a process's treatment of signals. The bit masks
 are displayed as hexadecimal numbers, with the least significant bit
 representing signal 1, the next bit to the left representing signal 2, and so
 on. 
 
-<signals>
 SigQ: 0/3941
 SigPnd: 0000000000000000
 ShdPnd: 0000000000000000
@@ -40742,6 +40752,285 @@ The difference between the SigPnd and ShdPnd fields will become clear when we
 describe the handling of signals in multithreaded processes in Section 33.2.
 The same information can also be obtained using various options to the ps(1)
   command.
+
+
+={============================================================================
+*kt_linux_core_050* linux-signal-handler
+
+LPI-20, 21
+
+Instead of accepting the default for a particular signal, a program can change
+the action that occurs when the signal is delivered. This is known as setting
+the `disposition` of the signal. A program can set one of the following
+dispositions for a signal:
+
+o The default action should occur. This is useful to undo an earlier change of
+the disposition of the signal to something other than its default.
+
+o The signal is ignored. This is useful for a signal whose default action
+would be to terminate the process.
+
+o A signal handler is executed.
+
+To change a default is usually referred to as `installing` or establishing a
+signal handler. When a signal handler is invoked in response to the delivery
+of a signal, we say that the signal has been handled or, synonymously, caught.
+
+
+<signal-abort> *sigabrt*
+It isn't possible to set the disposition of a signal to terminate or dump core
+unless one of these is the default disposition of the signal. The nearest we
+can get to this is to install a handler for the signal that then calls either
+exit() or abort(). 
+  
+*coredump* 
+The abort() function generates a SIGABRT signal for the process, which causes
+it to dump core and terminate.
+
+note:
+After all, can install signal handler only for signals which do exit() or
+abort() by default?
+
+
+{signal-reentrant} *thread-safe*
+
+21.1.2 Reentrant and Async-Signal-Safe Functions
+
+Because a signal handler may asynchronously interrupt the execution of a
+program at any point in time, the main program and the signal handler in
+effect `form two-independent` (although not concurrent) threads of execution
+within the same process.
+
+
+A function is said to be `reentrant` if it can safely be simultaneously
+executed by multiple threads of execution in the `same-process`. In this
+context, "safe" means that the function achieves its expected result,
+  regardless of the state of execution of any other thread of execution.
+
+A function may be `nonreentrant` if it updates global or static data
+structures. A function that employs only local variables is guaranteed to be
+reentrant because of race-condition. 
+
+This book shows an example using crypt() in both main and signal handler. This
+corrupts internal buffer which is statically allocated and crypt uses when
+calls it with differnt parameter.
+
+note:
+`nonreentrant` means that function is not safe when gets called by multiple
+threads. Using only local variables means reentrant. 
+
+
+*call-malloc*
+Such possibilities are in fact rife within the standard C library. For
+example, we already noted in Section 7.1.3 that malloc() and free() maintain a
+linked list of freed memory blocks available for reallocation from the heap.
+If a call to malloc() in the main program is interrupted by a signal handler
+that also calls malloc(), then this linked list can be corrupted.  For this
+reason, the malloc() family of functions, and other library functions that use
+them, are nonreentrant.
+
+Even if we are not using nonreentrant library functions, reentrancy issues can
+still be relevant. If a signal handler updates programmer-defined global data
+structures that are also updated within the main program, then we can say that
+the signal handler is nonreentrant with respect to the main program.
+
+If a function is nonreentrant, then its manual page will normally provide an
+explicit or implicit indication of this fact. In particular, watch out for
+statements that the function uses or returns information in statically
+allocated variables.
+
+
+{async-signal-safe-function} *signal-safe*
+An `async-signal-safe` function is one that the implementation guarantees to
+be safe when called from a signal handler. A function is async-signal-safe
+either because it is reentrant or because it is not interruptible by a signal
+handler.
+
+Table 21-1: Functions required to be async-signal-safe by POSIX.1-1990, SUSv2,
+      and SUSv3
+
+Real-world applications should avoid calling non-async-signal-safe functions
+from signal handlers.
+
+
+<signal-frame>
+
+21.3 Handling a Signal on an Alternate Stack: sigaltstack()
+
+Normally, when a signal handler is invoked, the kernel creates a frame for it
+on the process stack.
+
+// skipped
+
+
+<signal-and-sigaction>
+
+20.3 Changing Signal Dispositions: signal()
+
+UNIX systems provide two ways of changing the disposition of a signal:
+signal() and sigaction(). 
+
+  The signal() system call, which is described in this section, was the
+  original API for setting the disposition of a signal, and it provides a
+  simpler interface than sigaction(). On the other hand, sigaction() provides
+  functionality that is not available with signal(). Furthermore, there are
+  variations in the behavior of signal() across UNIX implementations 
+
+which mean that `it should never be used` for establishing signal handlers in
+portable programs. 
+
+Because of these portability issues, sigaction() is the (strongly) preferred
+API for establishing a signal handler.  After we explain the use of
+sigaction() in Section 20.13, we’ll always employ that call when establishing
+signal handlers in our example programs.
+
+Although documented in section 2 of the Linux manual pages, signal() is
+actually implemented in glibc as a library function layered on top of the
+sigaction() system call.
+
+
+<signal-info>
+
+21.4 The SA_SIGINFO Flag
+
+Setting the SA_SIGINFO flag when establishing a handler with sigaction()
+  allows the handler to obtain `additional information` about a signal when it
+  is delivered. In order to obtain this information, we must declare the
+  handler as follows:
+
+void handler(int sig, siginfo_t *siginfo, void *ucontext);
+
+Instead, we must use an alternative field: sa_sigaction
+
+struct sigaction {
+  union {
+    void (*sa_handler)(int);
+    `void (*sa_sigaction)(int, siginfo_t *, void *);`
+  } __sigaction_handler;
+  sigset_t sa_mask;
+  int sa_flags;
+  void (*sa_restorer)(void);
+};
+
+
+On Linux, as on most UNIX implementations, many of the fields in the siginfo_t
+structure are combined into a union, since not all of the fields are needed
+for each signal. (See <bits/siginfo.h> for details.)
+
+typedef struct {
+  int si_signo; /* Signal number */
+  int si_code; /* Signal code */
+  int si_trapno; /* Trap number for hardware-generated signal
+                    (unused on most architectures) */
+  union sigval si_value; /* Accompanying data from sigqueue() */
+  pid_t si_pid; /* Process ID of sending process */
+  uid_t si_uid; /* Real user ID of sender */
+  int si_errno; /* Error number (generally unused) */
+
+  `void *si_addr;` /* Address that generated signal
+                    (hardware-generated signals only) */
+
+  int si_overrun; /* Overrun count (Linux 2.6, POSIX timers) */
+  int si_timerid; /* (Kernel-internal) Timer ID
+                     (Linux 2.6, POSIX timers) */
+  long si_band; /* Band event (SIGPOLL/SIGIO) */
+  int si_fd; /* File descriptor (SIGPOLL/SIGIO) */
+  int si_status; /* Exit status or signal (SIGCHLD) */
+  clock_t si_utime; /* User CPU time (SIGCHLD) */
+  clock_t si_stime; /* System CPU time (SIGCHLD) */
+} siginfo_t;
+
+si_signo
+
+This field is set for all signals. It contains the number of the signal
+causing invocation of the handler - that is, the same value as the sig
+argument to the handler.
+
+si_code
+
+This field is set for all signals. It contains a code providing further
+information about the origin of the signal, as shown in Table 21-1.
+
+si_addr
+
+This field is set only for hardware-generated SIGBUS, SIGSEGV, SIGILL, and
+SIGFPE signals. For the SIGBUS and SIGSEGV signals, this field contains the
+address that caused the invalid memory reference. For the SIGILL and SIGFPE
+signals, this field contains the address of the program instruction that
+caused the signal.
+
+
+The si_code field provides further information about the origin of the signal,
+using the values shown in Table 21-2.
+
+<ex>
+(gdb) print (siginfo_t) siginfo
+$4 = {
+  si_signo = -1213998068,
+  si_errno = -1213997940,
+  si_code = 11,
+  _sifields = {
+    _pad = {0, 1, -536876672, 0 <repeats 26 times>},
+    _kill = {
+      si_pid = 0,
+      si_uid = 1
+    },
+    _timer = {
+      si_tid = 0,
+      si_overrun = 1,
+      si_sigval = {
+        sival_int = -536876672,
+        sival_ptr = 0xdfffe980
+      }
+    },
+    _rt = {
+      si_pid = 0,
+      si_uid = 1,
+      si_sigval = {
+        sival_int = -536876672,
+        sival_ptr = 0xdfffe980
+      }
+    },
+    _sigchld = {
+      si_pid = 0,
+      si_uid = 1,
+      si_status = -536876672,
+      si_utime = 0,
+      si_stime = 0
+    },
+    _sigfault = {
+      si_addr = 0x0,
+      si_addr_lsb = 1,
+      si_addr_bnd = {
+        _lower = 0xdfffe980,
+        _upper = 0x0
+      }
+    },
+    _sigpoll = {
+      si_band = 0,
+      si_fd = 1
+    },
+    _sigsys = {
+      _call_addr = 0x0,
+      _syscall = 1,
+      _arch = 3758090624
+    }
+  }
+}
+
+
+The ucontext argument
+
+The final argument passed to a handler established with the SA_SIGINFO flag,
+    ucontext, is a pointer to a structure of type ucontext_t (defined in
+        <ucontext.h>).(SUSv3 uses a void pointer for this argument because
+          it doesn’t specify any of the details of the argument.) 
+        
+This structure provides so-called user-context information describing the
+process state prior to invocation of the signal handler, including the
+previous process signal mask and saved register values (e.g., program counter
+    and stack pointer). This information is rarely used in signal handlers, so
+we don’t go into further details.
 
 
 {standard-and-realtime-signal}
@@ -40763,7 +41052,29 @@ other UNIX implementations. Other names are defined but unused.
 
 
 ={============================================================================
-*kt_linux_core_051* signal-names
+*kt_linux_core_051* linux-signal-names
+
+LPI-20.2 Signal Types and Default Actions
+
+Earlier, we mentioned that the standard signals are numbered from 1 to 31 on
+Linux. However, the Linux signal(7) manual page lists more than 31 signal
+names.  The excess names can be accounted for in a variety of ways. Some of
+the names are simply synonyms for other names, and are defined for source
+compatibility with other UNIX implementations. Other names are defined but
+unused. The following list describes the various signals:
+
+Table 20-1 summarizes a range of information about signals on Linux. Note the
+following points about this table:
+
+The Default column indicates the default action of the signal: 
+
+term means that the signal terminates the process, 
+core means that the process produces a core
+dump file and terminates, 
+ignore means that the signal is ignored, 
+stop means that the signal stops the process, 
+and cont means that the signal resumes a stopped process.
+
 
 <SIGHUP> see process group for more.
 When a terminal disconnect (hangup) occurs, this signal is sent to the
@@ -40775,9 +41086,11 @@ SIGHUP to the daemon, either by using an explicit kill command or by executing a
 program or script that does the same.
 
 
-<SIGABRT> *coredump*
-The abort() function (Section 21.2.2) generates a SIGABRT signal for the
-process, which causes it to dump core and terminate.
+<sigabrt-SIGABRT> *coredump*
+A process is sent this signal when it calls the abort() function (Section
+21.2.2). By default, this signal terminates the process with a core dump.
+This achieves the intended purpose of the abort() call: to produce a core dump
+for debugging.
 
 
 SIGBUS
@@ -40793,14 +41106,14 @@ When the user types the terminal interrupt character (usually Control-C), the
 terminal driver sends this signal to the foreground process group. The default
 action for this signal is to terminate the process.
 
-<sigpipe> *broken-pipe*
+<sigpipe-SIGPIPE> *broken-pipe*
 This signal is generated when a process tries to write to a pipe, a FIFO, or a
 socket for which there is no corresponding reader process. This normally
 occurs because the reading process has closed its file descriptor for the IPC
 channel. See Section 44.2 for further details.
 
 
-<SIGSEGV> *sigseg* 11
+<sigsegv-SIGSEGV> *sigseg* 11
 This very popular signal is generated when a program makes an
 `invalid-memory-reference`. A memory reference may be invalid because:
 
@@ -40817,14 +41130,19 @@ In C, these events often result from dereferencing a pointer containing a bad
 address (e.g., an uninitialized pointer) or passing an invalid argument in a
 function call. 
 
-<case>
-Since there is no enough memory to create a thread stack due to memory leak,
-coredump is made. `process-resource-case`
-
 The name of this signal derives from the term segmentation violation.
 
+<ex> from 21.3 Handling a Signal on an Alternate Stack: sigaltstack()
 
-<SIGKILL> 9
+When a process attempts to grow its stack beyond the maximum possible size,
+the kernel generates a SIGSEGV signal for the process. 
+However, since the stack space is exhausted, the kernel can’t create a frame
+for any SIGSEGV handler that the program may have established. Consequently,
+the handler is not invoked, and the process is terminated 
+(`core is the default action for SIGSEGV`).
+
+
+<sigkill-SIGKILL> 9
 This is the `sure-kill-signal`. It can't be blocked, ignored, or caught by a
 handler, and thus always terminates a process.
 
@@ -40873,9 +41191,20 @@ signals for a process.  Modern UNIX implementations provide a large set of
 realtime signals that are also available for programmer-defined purposes
 (Section 22.8).
 
+<sigquit-SIGQUIT>
+When the user types the quit character (usually Control-\), this signal is
+sent to the foreground process group. By default, this signal terminates a
+process and causes it to produce a core dump, which can then be used for
+debugging. Using SIGQUIT in this manner is useful with a program that is stuck
+in an infinite loop or is otherwise not responding. 
+
+By typing Control-\ and then loading the resulting core dump with the gdb
+debugger and using the backtrace command to obtain a stack trace, we can find
+out which part of the program code was executing.
+    
 
 ={============================================================================
-*kt_linux_core_051* signal: example: use signal as synchronization
+*kt_linux_core_051* linux-signal-ex: use signal as synchronization
 
 #include <signal.h>
 #include "curr_time.h" /* Declaration of currTime() */
@@ -70056,7 +70385,41 @@ cd '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-n
 // xgcc is gcc binary
 
 // to get preprocessed output using *cpp-e*
-[ALL  ]    libtool: compile:  /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc/xgcc -shared-libgcc -B/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc -nostdinc++ -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src/.libs -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/libsupc++/.libs -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/bin/ -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/ -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/include -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sys-include -D_GNU_SOURCE -D_DEBUG -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DASAN_HAS_EXCEPTIONS=1 -DASAN_NEEDS_SEGV=1 -DCAN_SANITIZE_UB=0 -D_OBSTACK_SIZE_T=SIZE_T -I. -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan -I.. -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/include -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer -Wall -W -Wno-unused-parameter -Wwrite-strings -pedantic -Wno-long-long -fPIC -fno-builtin -fno-exceptions -fno-rtti -fomit-frame-pointer -funwind-tables -fvisibility=hidden -Wno-variadic-macros -fno-ipa-icf -I../../libstdc++-v3/include -I../../libstdc++-v3/include/i686-nptl-linux-gnu -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/../libstdc++-v3/libsupc++ -std=gnu++11 -march=i686 -D_GNU_SOURCE -g -Os -MT asan_rtl.lo -MD -MP -MF .deps/asan_rtl.Tpo -c /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan/asan_rtl.cc -o asan_rtl.o >/dev/null 2>&1
+[ALL  ]    libtool: compile:
+/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc/xgcc
+  -shared-libgcc
+  -B/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc
+  -nostdinc++
+  -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src
+  -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src/.libs
+  -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/libsupc++/.libs
+  -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/bin/
+  -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/
+  -isystem
+  /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/include
+  -isystem
+  /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sys-include
+  -D_GNU_SOURCE -D_DEBUG -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS
+  -D__STDC_LIMIT_MACROS -DASAN_HAS_EXCEPTIONS=1 -DASAN_NEEDS_SEGV=1
+  -DCAN_SANITIZE_UB=0 -D_OBSTACK_SIZE_T=SIZE_T -I.
+  -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan
+  -I.. -I
+  /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/include
+  -I
+  /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer
+  -Wall -W -Wno-unused-parameter -Wwrite-strings -pedantic -Wno-long-long
+  -fPIC -fno-builtin -fno-exceptions -fno-rtti -fomit-frame-pointer
+  -funwind-tables -fvisibility=hidden -Wno-variadic-macros -fno-ipa-icf
+  -I../../libstdc++-v3/include
+  -I../../libstdc++-v3/include/i686-nptl-linux-gnu
+  -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/../libstdc++-v3/libsupc++
+  -std=gnu++11 -march=i686 -D_GNU_SOURCE -g -Os -MT asan_rtl.lo -MD -MP -MF
+  .deps/asan_rtl.Tpo -c
+
+  `/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan/asan_rtl.cc`
+
+  -o asan_rtl.o >/dev/null 2>&1
+
 /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc/xgcc -shared-libgcc -B/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/./gcc -nostdinc++ -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/src/.libs -L/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final/i686-nptl-linux-gnu/libstdc++-v3/libsupc++/.libs -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/bin/ -B/home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/ -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/include -isystem /home/kyoupark/x-tools/i686-nptl-linux-gnu/i686-nptl-linux-gnu/sys-include -D_GNU_SOURCE -D_DEBUG -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -DASAN_HAS_EXCEPTIONS=1 -DASAN_NEEDS_SEGV=1 -DCAN_SANITIZE_UB=0 -D_OBSTACK_SIZE_T=SIZE_T -I. -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan -I.. -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/include -I /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer -Wall -W -Wno-unused-parameter -Wwrite-strings -pedantic -Wno-long-long -fPIC -fno-builtin -fno-exceptions -fno-rtti -fomit-frame-pointer -funwind-tables -fvisibility=hidden -Wno-variadic-macros -fno-ipa-icf -I../../libstdc++-v3/include -I../../libstdc++-v3/include/i686-nptl-linux-gnu -I/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/../libstdc++-v3/libsupc++ -std=gnu++11 -march=i686 -D_GNU_SOURCE -g -Os -MT asan_rtl.lo -MD -MP -MF .deps/asan_rtl.Tpo -E /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src/gcc-6.3.0/libsanitizer/asan/asan_rtl.cc > asan_rtl.cpp
 
 
