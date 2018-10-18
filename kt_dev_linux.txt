@@ -114,6 +114,7 @@
 *kt_linux_tool_032* tool-dd
 |kt_linux_tool_033| getconf
 |kt_linux_tool_034| tool-ps tool-pstree
+*kt_linux_tool_300* tool-kill
 |kt_linux_tool_034| tool-mem
 |kt_linux_tool_034| tool-chrt
 *kt_linux_tool_034* tool-nproc
@@ -283,7 +284,7 @@
 *kt_linux_gdb_000* gdb-attach-debug already running process
 *kt_linux_tool_300* gdb-thread-multiple threads
 *kt_linux_tool_300* gdb-thread: tid on ps and gdb
-*kt_linux_tool_300* gdb-log
+*kt_linux_gdb_300* gdb-log
 *kt_linux_tool_300* gdb-shell
 *kt_linux_tool_300* gdb-general and help
 *kt_linux_gdb_300* gdb-info
@@ -313,6 +314,7 @@
 *kt_linux_tool_300* gdb-core-settting-run-commands when makes core
 *kt_linux_gdb_300* gdb-core-signal tool-kill
 *kt_linux_tool_300* gdb-core-force-core-command
+*kt_linux_gdb_300* gdb-signal
 *kt_linux_gdb_000* gdb-frame
 *kt_linux_gdb_300* gdb-core-backtrace gdb-bt
 |kt_linux_gdb_300| gdb-core-analysis-on-mips
@@ -465,8 +467,6 @@
 *kt_linux_core_050* linux-signal-handler
 *kt_linux_core_051* linux-signal-names
 *kt_linux_core_051* linux-signal-ex: use signal as synchronization
-|kt_linux_core_052| signal: kill: checking for the existence of a process
-*kt_linux_core_052* signal-raise-call
 
 |kt_linux_core_100| linux-process
 *kt_linux_core_107* linux-process-argv
@@ -3165,7 +3165,7 @@ When a positional parameter consisting of more than a single digit is expanded,
 it must be enclosed in `braces`. 
 
 
-3.4.2 Special Parameters *sh-special*
+3.4.2 Special Parameters *sh-variable-special*
 
 The shell treats several parameters specially. These parameters may only be
 referenced; assignment to them is not allowed. 
@@ -3292,6 +3292,11 @@ pipeline.
 $
 ($$) Expands to the `process ID` of the shell. In a () subshell, it expands to
 the process ID of the invoking shell, not the subshell.
+
+'!'
+($!)  Expands to the process ID of the job most recently placed into the
+background, whether executed as an asynchronous command or using the 'bg'
+builtin (*note Job Control Builtins::).
 
 
 {global-and-local}
@@ -10357,6 +10362,122 @@ Window 1:Def: Cumulative mode Off.  System: Delay 3.0 secs; Secure mode Off.
           ( commands shown with '.' require a visible task display window )
 Press 'h' or '?' for help with Windows,
 any other key to continue
+
+
+={============================================================================
+*kt_linux_tool_300* tool-kill
+
+kill -s SIGSEGV 113
+kill -s 11 113
+kill -11 `pidof w3cEngine`
+kill -s 11 `pidof w3cEngine`
+
+note:
+kill -9 do not create a core.
+
+export P=`ps -a | grep APP_Process | cut -d' ' -f3`;echo $P;kill -s 11 $P;
+export P=`ps -a | grep MW_Process | cut -d' ' -f3`;echo $P;kill -s 11 $P;
+
+SIG_KERNEL_COREDUMP_MASK (.../kernel/signal.c) defines sianals to create a core.
+
+SIGSEGV(segmentation fault)
+
+#define SIG_KERNEL_COREDUMP_MASK (\
+        M(SIGQUIT)   |  M(SIGILL)    |  M(SIGTRAP)   |  M(SIGABRT)   | \
+        M(SIGFPE)    |  M(SIGSEGV)   |  M(SIGBUS)    |  M(SIGSYS)    | \
+        M(SIGXCPU)   |  M(SIGXFSZ)   |  M_SIGEMT                     )
+
+{kill-0}
+
+while kill -0 "${parent_pid}" &>/dev/null;
+do
+   usleep 500
+done
+
+From man 2 kill
+
+If sig is 0, then no signal is sent, but error checking is still performed; this
+can be used to check for the existence of a process ID or process group ID.
+
+<ex>
+#!/bin/bash
+kill -0 323232 && echo "pid 323232 is present.."
+kill -0 4355 && echo "pid 4355 x sess mgr is present.."
+
+$ ./sbsh.sh 
+./sbsh.sh: line 3: kill: (323232) - No such process
+pid 4355 x sess mgr is present..
+
+<ex>
+$ killall -0 `name`             // when the process is running
+$
+$ killall -0 `name`             // when no process is running
+killall: `name`: no process killed
+
+
+{kill}
+       -l, --list [signal]
+              List  signal  names.   This  option has optional argument, which
+              will convert signal number to signal name, or other way round.
+
+
+// for embedded
+
+# kill -l
+HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM USR1 USR2
+CHLD PWR WINCH URG IO STOP TSTP CONT TTIN TTOU VTALRM PROF XCPU XFSZ
+
+// for pc
+
+$ kill -l
+ 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP
+ 6) SIGABRT	 7) SIGBUS	 8) SIGFPE	 9) SIGKILL	10) SIGUSR1
+11) SIGSEGV	12) SIGUSR2	13) SIGPIPE	14) SIGALRM	15) SIGTERM
+16) SIGSTKFLT	17) SIGCHLD	18) SIGCONT	19) SIGSTOP	20) SIGTSTP
+21) SIGTTIN	22) SIGTTOU	23) SIGURG	24) SIGXCPU	25) SIGXFSZ
+26) SIGVTALRM	27) SIGPROF	28) SIGWINCH	29) SIGIO	30) SIGPWR
+31) SIGSYS	34) SIGRTMIN	35) SIGRTMIN+1	36) SIGRTMIN+2	37) SIGRTMIN+3
+...
+63) SIGRTMAX-1	64) SIGRTMAX	
+
+
+{default-signal}
+The signal name difference cause compatibility between machines. For example,
+    the below do not work on embedded.
+
+kill -SIGINT dbussenddaemon &>/dev/null
+
+The default signal for kill is TERM. So uses default signal to kill remaining
+processes
+
+-INT only interrupted a process rather request terminating it.
+
+-    kill -INT %?dbussenddaemon &>/dev/null
++    kill %?dbussenddaemon &>/dev/null
+
+       -s <signal>
+       --signal <signal>
+              Specify the signal to be sent.  The signal can be specified by
+              using name or number.  The behavior of signals is explained in
+              signal(7) manual page.
+
+
+{tool-killall}
+killall - kill processes by name
+
+killall sends a signal to all processes running any of the specified commands.
+If no signal name is specified, SIGTERM is sent.
+
+
+<ex> from core(5) man example
+
+           $ sleep 100
+           ^\                     # type control-backslash
+           Quit (core dumped)
+
+           argc[4]=<sig=3>
+
+^\ causes SIGQUIT and quit but not cause a core.
 
 
 ={============================================================================
@@ -30140,9 +30261,16 @@ gdb program core
 You can, instead, specify a process ID as a second argument, if you want to debug a
 running process:
 
+*gdb-attach*
 gdb program 1234
 
 would attach gdb to process 1234
+
+-pid number
+-p number
+
+Connect to process ID number, as with the attach command.
+
 
 To pass any arguments after the executable file to the inferior using --args.
 This option stops option processing.
@@ -31020,7 +31148,7 @@ thread apply all bt full
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-log
+*kt_linux_gdb_300* gdb-log
 
 2.4 Logging Output
 
@@ -31034,7 +31162,7 @@ set logging off
     Disable logging.
 
 set logging file file
-    Change the name of the current logfile. The default logfile is gdb.txt.
+    Change the name of the current logfile. `The default logfile is gdb.txt.`
 
 set logging overwrite [on|off]
     By default, gdb will append to the logfile. Set overwrite if you want set
@@ -31136,7 +31264,7 @@ info args
 info registers
 info breakpoints
 
-<gdb-info-proc>
+<gdb-info-proc> gdb-proc
 (gdb) help info proc
 Show /proc process information about any running process.
 Specify any process id, or use the program being debugged by default.
@@ -31150,6 +31278,13 @@ info proc exe -- List absolute filename for executable of the process
 info proc mappings -- List of mapped memory regions
 info proc stat -- List process info from /proc/PID/stat
 info proc status -- List process info from /proc/PID/status
+
+
+(gdb) info inferior
+  Num  Description       Executable
+* 1    process 25854     /home/kyoupark/git/kb/asan/gbo_target_host_recover_asan_32
+(gdb) p getpid()
+$1 = 25854
 
 
 {show}
@@ -31761,7 +31896,7 @@ catch rethrow
 catch catch
     Debug C++ exception handling using these commands. See Setting Catchpoints.
 
-<gdb-ptype>
+<gdb-ptype> gdb-print
 ptype typename
     Print inheritance relationships as well as other information for type
     typename. See Examining the Symbol Table.
@@ -31876,7 +32011,7 @@ The parameter demangle-style specifies how to interpret the kind of mangling
 used. See Section 10.8 [Print Settings], page 121.
 
 
-{whatis}
+{gdb-whatis} gdb-print
 whatis[/flags] [arg]
 
 Print the data 'type' of arg, which can be either an expression or a name of a
@@ -31923,7 +32058,7 @@ Print typedefs defined in the class. This is the default, but the flag exists in
 case you change the default with set print type typedefs.
 
 
-{gdb-ptype}
+{gdb-ptype} gdb-print
 ptype[/flags] [arg]
 
 ptype accepts the same arguments as whatis, but prints a 'detailed' description
@@ -34588,123 +34723,6 @@ int main()
 
 
 ={============================================================================
-*kt_linux_tool_300* gdb-core-signal tool-kill
-
-kill -s SIGSEGV 113
-kill -s 11 113
-kill -11 `pidof w3cEngine`
-kill -s 11 `pidof w3cEngine`
-
-note:
-kill -9 do not create a core.
-
-export P=`ps -a | grep APP_Process | cut -d' ' -f3`;echo $P;kill -s 11 $P;
-export P=`ps -a | grep MW_Process | cut -d' ' -f3`;echo $P;kill -s 11 $P;
-
-SIG_KERNEL_COREDUMP_MASK (.../kernel/signal.c) defines sianals to create a core.
-
-SIGSEGV(segmentation fault)
-
-#define SIG_KERNEL_COREDUMP_MASK (\
-        M(SIGQUIT)   |  M(SIGILL)    |  M(SIGTRAP)   |  M(SIGABRT)   | \
-        M(SIGFPE)    |  M(SIGSEGV)   |  M(SIGBUS)    |  M(SIGSYS)    | \
-        M(SIGXCPU)   |  M(SIGXFSZ)   |  M_SIGEMT                     )
-
-{kill-0}
-
-while kill -0 "${parent_pid}" &>/dev/null;
-do
-   usleep 500
-done
-
-From man 2 kill
-
-If sig is 0, then no signal is sent, but error checking is still performed; this
-can be used to check for the existence of a process ID or process group ID.
-
-<ex>
-#!/bin/bash
-kill -0 323232 && echo "pid 323232 is present.."
-kill -0 4355 && echo "pid 4355 x sess mgr is present.."
-
-$ ./sbsh.sh 
-./sbsh.sh: line 3: kill: (323232) - No such process
-pid 4355 x sess mgr is present..
-
-<ex>
-$ killall -0 `name`             // when the process is running
-$
-$ killall -0 `name`             // when no process is running
-killall: `name`: no process killed
-
-
-{kill}
-       -l, --list [signal]
-              List  signal  names.   This  option has optional argument, which
-              will convert signal number to signal name, or other way round.
-
-
-// for embedded
-
-# kill -l
-HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM USR1 USR2
-CHLD PWR WINCH URG IO STOP TSTP CONT TTIN TTOU VTALRM PROF XCPU XFSZ
-
-// for pc
-
-$ kill -l
- 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP
- 6) SIGABRT	 7) SIGBUS	 8) SIGFPE	 9) SIGKILL	10) SIGUSR1
-11) SIGSEGV	12) SIGUSR2	13) SIGPIPE	14) SIGALRM	15) SIGTERM
-16) SIGSTKFLT	17) SIGCHLD	18) SIGCONT	19) SIGSTOP	20) SIGTSTP
-21) SIGTTIN	22) SIGTTOU	23) SIGURG	24) SIGXCPU	25) SIGXFSZ
-26) SIGVTALRM	27) SIGPROF	28) SIGWINCH	29) SIGIO	30) SIGPWR
-31) SIGSYS	34) SIGRTMIN	35) SIGRTMIN+1	36) SIGRTMIN+2	37) SIGRTMIN+3
-...
-63) SIGRTMAX-1	64) SIGRTMAX	
-
-
-{default-signal}
-The signal name difference cause compatibility between machines. For example,
-    the below do not work on embedded.
-
-kill -SIGINT dbussenddaemon &>/dev/null
-
-The default signal for kill is TERM. So uses default signal to kill remaining
-processes
-
--INT only interrupted a process rather request terminating it.
-
--    kill -INT %?dbussenddaemon &>/dev/null
-+    kill %?dbussenddaemon &>/dev/null
-
-       -s <signal>
-       --signal <signal>
-              Specify the signal to be sent.  The signal can be specified by
-              using name or number.  The behavior of signals is explained in
-              signal(7) manual page.
-
-
-{killall}
-killall - kill processes by name
-
-killall sends a signal to all processes running any of the specified commands.
-If no signal name is specified, SIGTERM is sent.
-
-
-<ex> from core(5) man example
-
-           $ sleep 100
-           ^\                     # type control-backslash
-           Quit (core dumped)
-
-           argc[4]=<sig=3>
-
-^\ causes SIGQUIT and quit but not cause a core.
-
-
-
-={============================================================================
 *kt_linux_tool_300* gdb-core-force-core-command
 
 10.19 How to Produce a Core File from Your Program
@@ -34734,6 +34752,425 @@ this command is implemented only for some systems (as of this writing,
 On gnu/Linux, this command can take into account the value of the file
 '/proc/pid/coredump_filter' when generating the core dump (see [set
         use-coredump-filter], page 144).
+
+
+={============================================================================
+*kt_linux_gdb_300* gdb-signal
+
+5.4 Signals
+
+A signal is an asynchronous event that can happen in a program. The operating
+system defines the possible kinds of signals, and gives each kind a name and a
+number. For example, in Unix SIGINT is the signal a program gets when you type
+an interrupt character (often Ctrl-c); SIGSEGV is the signal a program gets
+from referencing a place in memory far away from all the areas in use; SIGALRM
+occurs when the alarm clock timer goes off (which happens only if your program
+    has requested an alarm).
+
+Some signals, including SIGALRM, are a normal part of the functioning of your
+program. Others, such as SIGSEGV, indicate errors; these signals are fatal
+(they kill your program immediately) if the program has not specified in
+advance some other way to handle the signal. SIGINT does not indicate an error
+in your program, but it is normally fatal so it can carry out the purpose of
+the interrupt: to kill the program.
+
+GDB has the ability to detect any occurrence of a signal in your program. You
+can tell GDB in advance what to do for each kind of signal.
+
+Normally, GDB is set up to let the non-erroneous signals like SIGALRM be
+silently passed to your program (so as not to interfere with their role in the
+    program’s functioning) but to stop your program immediately whenever an
+error signal happens. You can change these settings with the handle command.
+
+info signals
+info handle
+
+Print a table of all the kinds of signals and how GDB has been told to handle
+each one. You can use this to see the signal numbers of all the defined types
+of signals.
+
+info signals sig
+
+Similar, but print information only about the specified signal number.
+
+info handle is an alias for info signals.
+
+catch signal [signal... | ‘all’]
+
+Set a catchpoint for the indicated signals. See Set Catchpoints, for details
+about this command. *gdb-catch*
+
+handle signal [keywords...]
+
+Change the way GDB handles signal signal. The signal can be the number of a
+signal or its name (with or without the ‘SIG’ at the beginning); a list of
+signal numbers of the form ‘low-high’; or the word ‘all’, meaning all the
+known signals. Optional arguments keywords, described below, say what change
+to make.
+
+The keywords allowed by the handle command can be abbreviated. Their full
+names are:
+
+nostop
+
+GDB should not stop your program when this signal happens. It may still print
+a message telling you that the signal has come in.
+
+stop
+
+GDB should stop your program when this signal happens. This implies the print
+keyword as well.
+
+print
+
+GDB should print a message when this signal happens.
+
+noprint
+
+GDB should not mention the occurrence of the signal at all. This implies the
+nostop keyword as well.
+
+pass
+noignore
+
+GDB should allow your program to see this signal; your program can handle the
+signal, or else it may terminate if the signal is fatal and not handled. pass
+and noignore are synonyms.
+
+nopass
+ignore
+
+GDB should not allow your program to see this signal. nopass and ignore are
+synonyms.
+
+When a signal stops your program, the signal is not visible to the program
+until you continue. Your program sees the signal then, if pass is in effect
+for the signal in question at that time. 
+
+In other words, after GDB reports a signal, you can use the `handle command`
+  with pass or nopass to control whether your program sees that signal when
+  you continue.
+
+The default is set to `nostop, noprint, pass for non-erroneous signals` such
+as SIGALRM, SIGWINCH and SIGCHLD, and to `stop, print, pass` for the erroneous
+signals.
+
+<ex>
+(gdb) info signals SIGSEGV
+Signal        Stop      Print   Pass to program Description
+SIGSEGV       Yes       Yes     Yes             Segmentation fault
+
+You can also use the signal command to prevent your program from seeing a
+signal, or cause it to see a signal it normally would not see, or to give it
+any signal at any time. For example, if your program stopped due to some sort
+of memory reference error, you might store correct values into the erroneous
+variables and continue, hoping to see more execution; but your program would
+probably terminate immediately as a result of the fatal signal once it saw the
+signal. To prevent this, you can continue with ‘signal 0’. See Giving your
+Program a Signal.
+
+GDB optimizes for stepping the mainline code. If a signal that has 
+`handle nostop and handle pass set` arrives while a stepping command (e.g.,
+    stepi, step, next) is in progress, GDB lets the signal handler run and
+then resumes stepping the mainline code once the signal handler returns. In
+other words, `GDB steps over the signal handler.` This prevents signals that
+you’ve specified `as not interesting (with handle nostop)` from changing the
+focus of debugging unexpectedly. Note that the signal handler itself may still
+hit a breakpoint, stop for another signal that has handle stop in effect, or
+for any other event that normally results in stopping the stepping command
+  sooner. Also note that GDB still informs you that the program received a
+    signal if handle print is set.
+
+  If you set `handle pass` for a signal, and your program sets up a handler for
+  it, then issuing a stepping command, such as step or stepi, when your
+  program is `stopped` due to the signal `will step into the signal handler` (if
+      the target supports that).
+
+Likewise, if you use the queue-signal command to queue a signal to be
+delivered to the current thread when execution of the thread resumes (see
+    Giving your Program a Signal), then a stepping command will step into the
+signal handler.
+
+
+On some targets, GDB can inspect extra signal information associated with the
+intercepted signal, before it is actually delivered to the program being
+debugged. This information is exported by the convenience variable $_siginfo,
+  and consists of data that is passed by the kernel to the signal handler at
+    the time of the receipt of a signal. The data type of the information
+    itself is target dependent. You can see the data type using the ptype
+    $_siginfo command. On Unix systems, it typically corresponds to the
+    standard siginfo_t type, as defined in the signal.h system header.
+
+Here’s an example, on a GNU/Linux system, printing the stray referenced
+address that raised a segmentation fault.
+
+(gdb) continue
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000400766 in main ()
+69        *(int *)p = 0;
+(gdb) ptype $_siginfo
+type = struct {
+    int si_signo;
+    int si_errno;
+    int si_code;
+    union {
+        int _pad[28];
+        struct {...} _kill;
+        struct {...} _timer;
+        struct {...} _rt;
+        struct {...} _sigchld;
+        struct {...} _sigfault;
+        struct {...} _sigpoll;
+    } _sifields;
+}
+(gdb) ptype $_siginfo._sifields._sigfault
+type = struct {
+    void *si_addr;
+}
+(gdb) p $_siginfo._sifields._sigfault.si_addr
+$1 = (void *) 0x7ffff7ff7000
+
+
+<ex>
+(gdb) info signal SIGSEGV
+Signal        Stop      Print   Pass to program Description
+SIGSEGV       Yes       Yes     Yes             Segmentation fault
+
+(gdb) i b
+No breakpoints or watchpoints.
+
+(gdb) run
+Starting program: /home/kyoupark/git/kb/code-linux/ex_signal/sig_info_out
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x400ac2 ~ 0x400b5f ~ 0x400b6c
+
+Program received signal SIGSEGV, Segmentation fault.
+`0x0000000000400b66` in main () at sig_info.c:45
+45          *causecrash = 0;
+
+
+(gdb) stepi
+handler (si=0x0, ptr=0x0) at sig_info.c:20
+20      {
+
+(gdb) next
+21         ucontext_t *uc = (ucontext_t *)ptr;
+(gdb) next
+23         cout << "si:" << si->si_addr << '\n';
+
+(gdb) ptype uc
+type = struct ucontext {
+    unsigned long uc_flags;
+    ucontext *uc_link;
+    stack_t uc_stack;
+    mcontext_t uc_mcontext;
+    __sigset_t uc_sigmask;
+    _libc_fpstate __fpregs_mem;
+} *
+
+(gdb) p/x (ucontext_t)*uc
+$6 = {
+  uc_flags = 0x1,
+  uc_link = 0x0,
+  uc_stack = {
+    ss_sp = 0x0,
+    ss_flags = 0x2,
+    ss_size = 0x0
+  },
+  uc_mcontext = {
+    gregs = {0x0, 0x7fffffffdf30, 0x8, 0x202, 0x400930, 0x7fffffffe160, 0x0, 0x0, 0xb, 0x7fffffffde90, 0x7fffffffe080, 0x0, 0x0, 0x0, 0x7ffff719599d, 0x7fffffffdfe0, 
+      `0x400b66`, 0x10206, 0x33, 0x6, 0xe, 0x0, 0x0},
+    fpregs = 0x7fffffffdc00,
+    __reserved1 = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
+  },
+  uc_sigmask = {
+    __val = {0x0, 0xb, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x7ffff7de4e4c, 0x0, 0xd827524, 0x6, 0x8, 0x7ffff7fd6658}
+  },
+  __fpregs_mem = {
+    cwd = 0x57be,
+    swd = 0xf7de,
+    ftw = 0x7fff,
+    fop = 0x0,
+    rip = 0x7ffff7fd6658,
+    rdp = 0x7ffff7de4e4c,
+    mxcsr = 0x37f,
+    mxcr_mask = 0x0,
+    _st = {{
+        significand = {0x0, 0x0, 0x0, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }, {
+        significand = {0x1f80, 0x0, 0xffff, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }, {
+        significand = {0x0, 0x0, 0x0, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }, {
+        significand = {0x0, 0x0, 0x0, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }, {
+        significand = {0x0, 0x0, 0x0, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }, {
+        significand = {0x0, 0x0, 0x0, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }, {
+        significand = {0x0, 0x0, 0x0, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }, {
+        significand = {0x0, 0x0, 0x0, 0x0},
+        exponent = 0x0,
+        padding = {0x0, 0x0, 0x0}
+      }},
+    _xmm = {{
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0xeae9e8e7, 0xeeedeceb}
+      }, {
+        element = {0xf2f1f0ef, 0xf6f5f4f3, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0xff, 0x0}
+      }, {
+        element = {0xff0000, 0x0, 0xff0000, 0xff00}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0xff000000, 0x0}
+      }, {
+        element = {0xffff00, 0x0, 0x0, 0x0}
+      }, {
+        element = {0x0, 0x0, 0x0, 0x0}
+      }},
+    padding = {0x0 <repeats 18 times>, 0x46505853, 0x344, 0x7, 0x0, 0x340, 0x0}
+  }
+}
+
+<ex>
+which one is right to see siginfo?
+
+kyoupark@kit-debian64:/mnt/git/kb/asan$ kill -l
+
+5) SIGTRAP
+11) SIGSEGV
+
+(gdb) p $_siginfo
+$7 = {
+  si_signo = 5,
+  si_errno = 0,
+  si_code = 2,
+  _sifields = {
+    _pad = {4196922, 0, 0, 0, 0, 0, 7, 1, 62, 0, 16213600, 0, 16278992, 0, 5666947, 0, 4196922, 0, 0, 0, 16308384, 0, 16213600, 0, 17288048, 0, -1321253344, 32763},
+    _kill = {
+      si_pid = 4196922,
+      si_uid = 0
+    },
+    _timer = {
+      si_tid = 4196922,
+      si_overrun = 0,
+      si_sigval = {
+        sival_int = 0,
+        sival_ptr = 0x0
+      }
+    },
+    _rt = {
+      si_pid = 4196922,
+      si_uid = 0,
+      si_sigval = {
+        sival_int = 0,
+        sival_ptr = 0x0
+      }
+    },
+    _sigchld = {
+      si_pid = 4196922,
+      si_uid = 0,
+      si_status = 0,
+      si_utime = 0,
+      si_stime = 30064771072
+    },
+    _sigfault = {
+      si_addr = 0x400a3a <handler(int, siginfo_t*, void*)+20>
+    },
+    _sigpoll = {
+      si_band = 4196922,
+      si_fd = 0
+    }
+  }
+}
+
+(gdb) p (siginfo_t) si
+
+// shows wrong values
+
+(gdb) p (siginfo_t) *si
+$11 = {
+  si_signo = 11,
+  si_errno = 0,
+  si_code = 1,
+  _sifields = {
+    _pad = {0 <repeats 14 times>, -136425908, 32767, 0, 0, 226653476, 0, 6, 0, 8, 0, -134388136, 32767, -136423490, 32767},
+    _kill = {
+      si_pid = 0,
+      si_uid = 0
+    },
+    _timer = {
+      si_tid = 0,
+      si_overrun = 0,
+      si_sigval = {
+        sival_int = 0,
+        sival_ptr = 0x0
+      }
+    },
+    _rt = {
+      si_pid = 0,
+      si_uid = 0,
+      si_sigval = {
+        sival_int = 0,
+        sival_ptr = 0x0
+      }
+    },
+    _sigchld = {
+      si_pid = 0,
+      si_uid = 0,
+      si_status = 0,
+      si_utime = 0,
+      si_stime = 0
+    },
+    _sigfault = {
+      si_addr = 0x0,
+      si_addr_lsb = 0
+    },
+    _sigpoll = {
+      si_band = 0,
+      si_fd = 0
+    },
+    _sigsys = {
+      _call_addr = 0x0,
+      _syscall = 0,
+      _arch = 0
+    }
+  }
+}
 
 
 ={============================================================================
@@ -36528,8 +36965,9 @@ expression in all threads.
 
 
 ={============================================================================
-*kt_linux_gdb_000* gdb-break-catch
+*kt_linux_gdb_000* gdb-break-catch gdb-catch
 
+*gdb-signal*
 C++ programmers will want to check out the catch command, which sets
 catchpoints. Catchpoints are similar to breakpoints, but can be triggered by
 different things like thrown exceptions, caught exceptions, signals, calls to
@@ -36539,8 +36977,8 @@ fork(), loading and unloading of libraries, and many other events.
 5.1.3 Setting Catchpoints
 
 You can use catchpoints to cause the debugger to stop for certain kinds of
-program events, such as C++ 'exceptions' or the loading of a shared library. Use
-the catch command to set a catchpoint.
+program events, such as C++ 'exceptions' or the loading of a shared library.
+Use the catch command to set a catchpoint.
 
 catch event
     Stop when event occurs. The event can be any of the following:
@@ -40863,6 +41301,113 @@ on the process stack.
 // skipped
 
 
+<signal-kill>
+
+20.5 Sending Signals: kill()
+
+One process can send a signal to another process using the kill() system call,
+
+#include <signal.h>
+int kill(pid_t pid, int sig); Returns 0 on success, or -1 on error
+
+Four different cases determine how pid is interpreted:
+
+*process-group*
+o If pid equals 0, the signal is sent to every process in the same process
+group as the calling process, `including the calling process itself.`
+
+// skipped
+
+If no process matches the specified pid, kill() fails and sets errno to ESRCH
+("No such process"). 
+
+A process needs appropriate permissions to be able send a signal to another
+process. The permission rules are as follows:
+
+// skipped
+
+
+20.6 Checking for the Existence of a Process
+
+The kill() system call can serve another purpose. If the sig argument is
+specified as 0, the so-called null signal, then no signal is sent. 
+Instead, kill() merely performs error checking to see if the process 'can' be
+signaled. 
+
+Read another way, this means we can use the null signal to test if a process
+with a specific process ID exists. 
+
+  o If sending a null signal fails with the error ESRCH, then we know the
+  process doesn't exist. 
+  
+  o If the call fails with the error EPERM (meaning the process exists, but we
+      don't have permission to send a signal to it) or 
+
+  o or succeeds (meaning we do have permission to send a signal to the
+      process), then we know that the process exists.
+
+So this code do sleep while a process of pid is alive.
+
+while (0 == kill(parent_pid, 0))
+{
+    sleep(1);
+}
+
+Verifying the existence of a particular process ID doesn't guarantee that a
+'particular' program is still running. Because the kernel recycles process IDs
+as processes are born and die, the same process ID may, over time, refer to a
+different process. Furthermore, a particular process ID may exist, but be a
+zombie (i.e., a process that has died, but whose parent has not yet performed
+a wait() to obtain its termination status) *process-zombie*
+
+Various other techniques can also be used to check whether a particular
+process is running, including the following:
+
+// skipped
+
+All of these techniques, except the last, are unaffected by recycling of
+process IDs.
+
+
+<signal-raise>
+
+20.7 Other Ways of Sending Signals: raise() and killpg()
+
+Sometimes, it is useful for a process to `send a signal to itself.` (We see an
+example of this in Section 34.7.3.) The raise() function performs this task.
+
+RAISE(3)
+Linux Programmer's Manual
+
+#include <signal.h>
+int raise(int sig);
+
+In a single-threaded program, a call to raise() is equivalent to the following
+call to kill():
+
+kill(getpid(), sig);
+
+On a system that supports threads, raise(sig) is implemented as:
+
+pthread_kill(pthread_self(), sig)
+
+The only error that can occur with raise() is EINVAL, because sig was invalid.
+Therefore, where we specify one of the SIGxxxx constants, we don’t check the
+return status of this function.
+
+We describe the pthread_kill() function in Section 33.2.3, but for now it is
+sufficient to say that this implementation means that the signal will be
+delivered to the specific thread that called raise(). By contrast, the call
+kill(getpid(), sig) sends a signal to the calling process, and that signal may
+be delivered to any thread in the process.
+
+When a process sends itself a signal using raise() (or kill()), the signal is
+delivered immediately (i.e., before raise() returns to the caller).
+
+
+The killpg() function sends a signal to all of the members of a process group.
+
+
 <signal-and-sigaction>
 
 20.3 Changing Signal Dispositions: signal()
@@ -40889,11 +41434,48 @@ actually implemented in glibc as a library function layered on top of the
 sigaction() system call.
 
 
+20.13 Changing Signal Dispositions: sigaction()
+
+#include <signal.h>
+int sigaction(int sig, const struct sigaction *act, struct sigaction *oldact);
+
+
+The sa_handler field corresponds to the handler argument given to signal(). It
+specifies the address of a signal handler, or one of the constants SIG_IGN or
+SIG_DFL.
+
+
+The sa_flags field is a bit mask specifying various options controlling how
+the signal is handled. The following bits may be ORed (|) together in this
+field:
+
+// skipped
+
+SA_RESETHAND
+
+When this signal is caught, reset its disposition to the default (i.e.,
+    SIG_DFL) before invoking the handler. (By default, a signal handler
+      remains established until it is explicitly disestablished by a further
+      call to sigaction().) The name SA_ONESHOT is provided as a historical
+    synonym for SA_RESETHAND, but the latter name is preferable because it is
+    standardized in SUSv3.
+
+SA_SIGINFO
+
+Invoke the signal handler with additional arguments providing further
+information about the signal. We describe this flag in Section 21.4.
+
+SA_ONSTACK
+
+Invoke the handler for this signal using an alternate stack installed by
+sigaltstack(). Refer to Section 21.3.
+
+
 <signal-info>
 
 21.4 The SA_SIGINFO Flag
 
-Setting the SA_SIGINFO flag when establishing a handler with sigaction()
+Setting the `SA_SIGINFO flag` when establishing a handler with sigaction()
   allows the handler to obtain `additional information` about a signal when it
   is delivered. In order to obtain this information, we must declare the
   handler as follows:
@@ -40964,60 +41546,6 @@ The si_code field provides further information about the origin of the signal,
 using the values shown in Table 21-2.
 
 <ex>
-(gdb) print (siginfo_t) siginfo
-$4 = {
-  si_signo = -1213998068,
-  si_errno = -1213997940,
-  si_code = 11,
-  _sifields = {
-    _pad = {0, 1, -536876672, 0 <repeats 26 times>},
-    _kill = {
-      si_pid = 0,
-      si_uid = 1
-    },
-    _timer = {
-      si_tid = 0,
-      si_overrun = 1,
-      si_sigval = {
-        sival_int = -536876672,
-        sival_ptr = 0xdfffe980
-      }
-    },
-    _rt = {
-      si_pid = 0,
-      si_uid = 1,
-      si_sigval = {
-        sival_int = -536876672,
-        sival_ptr = 0xdfffe980
-      }
-    },
-    _sigchld = {
-      si_pid = 0,
-      si_uid = 1,
-      si_status = -536876672,
-      si_utime = 0,
-      si_stime = 0
-    },
-    _sigfault = {
-      si_addr = 0x0,
-      si_addr_lsb = 1,
-      si_addr_bnd = {
-        _lower = 0xdfffe980,
-        _upper = 0x0
-      }
-    },
-    _sigpoll = {
-      si_band = 0,
-      si_fd = 1
-    },
-    _sigsys = {
-      _call_addr = 0x0,
-      _syscall = 1,
-      _arch = 3758090624
-    }
-  }
-}
-
 
 The ucontext argument
 
@@ -41031,6 +41559,101 @@ process state prior to invocation of the signal handler, including the
 previous process signal mask and saved register values (e.g., program counter
     and stack pointer). This information is rarely used in signal handlers, so
 we don’t go into further details.
+
+
+/usr/include/signal.h
+
+# include <bits/sigstack.h>
+# if defined __USE_XOPEN || defined __USE_XOPEN2K8
+/* This will define `ucontext_t' and `mcontext_t'.  */
+#  include <sys/ucontext.h>
+# endif
+
+
+/usr/include/i386-linux-gnu/sys/ucontext.h
+
+# else
+
+// can see *x86-asm-reg-enums*
+
+/* Context to describe whole processor state.  */
+typedef struct
+  {
+    gregset_t gregs;
+    /* Due to Linux's history we have to use a pointer here.  The SysV/i386
+       ABI requires a struct with the values.  */
+    fpregset_t fpregs;
+    unsigned long int oldmask;
+    unsigned long int cr2;
+  } mcontext_t;
+
+/* Userlevel context.  */
+typedef struct ucontext
+  {
+    unsigned long int uc_flags;
+    struct ucontext *uc_link;
+    stack_t uc_stack;
+    mcontext_t uc_mcontext;
+    __sigset_t uc_sigmask;
+    struct _libc_fpstate __fpregs_mem;
+  } ucontext_t;
+
+#endif /* !__x86_64__ */
+
+<ex>
+// this ex works. However, the gregs are empty for above asan case.
+//
+// from SO
+// kyoupark@kt-office-debian:~/works$ ./a.out
+// 0x40793a ~ 0x407a0d ~ 0x407a19
+// si:0
+// ip:407a13
+// Segmentation fault
+
+#define _GNU_SOURCE 1
+#include <iostream>
+#include <iomanip>
+#include <signal.h>
+#include <ucontext.h>
+
+using std::cout;
+
+static volatile int *causecrash;
+
+static void handler(int, siginfo_t *si, void *ptr)
+{
+   ucontext_t *uc = (ucontext_t *)ptr;
+
+   cout << "si:" << si->si_addr << '\n';
+   cout << "ip:" << std::hex << uc->uc_mcontext.gregs[REG_EIP] << '\n';
+}
+
+int main()
+{
+begin:
+    cout.setf(std::ios::unitbuf);
+    cout << &&begin << " ~ " << &&before << " ~ " << &&after << '\n';
+
+    struct sigaction s;
+    s.sa_flags = SA_SIGINFO|SA_RESETHAND;
+    s.sa_sigaction = handler;
+    sigemptyset(&s.sa_mask);
+    sigaction(SIGSEGV, &s, 0);
+
+before:
+    *causecrash = 0;
+after:
+    cout << "End.\n";
+}
+
+
+<signal-pause>
+
+20.14 Waiting for a Signal: pause()
+
+Calling pause() suspends execution of the process until the call is
+interrupted by a signal handler (or until an unhandled signal terminates the
+    process).
 
 
 {standard-and-realtime-signal}
@@ -41285,144 +41908,6 @@ main(int argc, char *argv[])
       exit(EXIT_SUCCESS);
   }
 }
-
-
-={============================================================================
-*kt_linux_core_052* signal: kill: checking for the existence of a process
-
-Can send a signal to another process using the kill() system call, which is the analog of the kill
-shell command.
-
-#include <signal.h>
-
-int kill(pid_t pid, int sig); Returns 0 on success, or -1 on error
-
-If no process matches the specified pid, kill() fails and sets errno to ESRCH ("No such process"). A
-process needs appropriate permissions to be able send a signal to another process.
-
-If pid equals 0, the signal is sent to every process in the same process group as the calling
-process, including the calling process itself. 
-
-<signal-to-process-group>
-If pid is less than -1, the signal is sent to all of the processes in the process group whose ID
-equals the absolute value of pid. Sending a signal to all of the processes in a process group finds
-particular use in shell job control.
-
-<check-existence>
-The kill() system call can serve another purpose. If the sig argument is specified as 0, the
-so-called null signal, then no signal is sent. Instead, kill() merely performs error checking to see
-if the process 'can' be signaled. 
-
-Read another way, this means we can use the null signal to test if a process with a specific process
-  ID exists. 
-
-1. If sending a null signal fails with the error ESRCH, then we know the process doesn't exist. 
-  
-2. If the call fails with the error EPERM (meaning the process exists, but we don't have permission
-    to send a signal to it) or 
-
-3. succeeds (meaning we do have permission to send a signal to the process), then we know that the
-process exists.
-
-So this code do sleep while a process of pid is alive.
-
-while (0 == kill(parent_pid, 0))
-{
-    sleep(1);
-}
-
-
-<but>
-Verifying the existence of a particular process ID doesn't guarantee that a 'particular' program is
-still running. Because the kernel recycles process IDs as processes are born and die, the same
-process ID may, over time, refer to a different process.
-
-
-={============================================================================
-*kt_linux_core_052* signal-raise-call
-
-RAISE(3)
-Linux Programmer's Manual
-
-NAME
-       raise - send a signal to the caller
-
-SYNOPSIS
-       #include <signal.h>
-
-       int raise(int sig);
-
-DESCRIPTION
-       The raise() function sends a signal to the calling process or thread.  In
-       a single-threaded program it is equivalent to
-
-           kill(getpid(), sig);
-
-       In a multithreaded program it is equivalent to
-
-           pthread_kill(pthread_self(), sig);
-
-       If the signal causes a handler to be called, raise() will only return
-         after the signal handler has returned.
-
-RETURN VALUE
-       raise() returns 0 on success, and nonzero for failure.
-
-CONFORMING TO
-       C89, C99, POSIX.1-2001.
-
-NOTES
-       Since version 2.3.3, glibc implements raise() by calling tgkill(2), if
-       the kernel supports that system call.  Older glibc versions implemented
-       raise() using kill(2).
-
-
-/**
- * g_logv:
- * @log_domain: the log domain
- * @log_level: the log level
- * @format: the message format. See the printf() documentation
- * @args: the parameters to insert into the format string
- *
- * Logs an error or debugging message.
- *
- * If the log level has been set as fatal, the abort()
- * function is called to terminate the program.
- */
-void
-g_logv (const gchar   *log_domain,
-  GLogLevelFlags log_level,
-  const gchar   *format,
-  va_list       args)
-{
-  ...
-  _g_log_abort (!(test_level & G_LOG_FLAG_RECURSION));
-  ...
-}
-
-static void
-_g_log_abort (gboolean breakpoint)
-{
-  if (g_test_subprocess ())
-    {
-      /* If this is a test case subprocess then it probably caused
-       * this error message on purpose, so just exit() rather than
-       * abort()ing, to avoid triggering any system crash-reporting
-       * daemon.
-       */
-      _exit (1);
-    }
-
-  if (breakpoint)
-    G_BREAKPOINT ();
-  else
-    abort ();
-}
-
-
-#else   /* !__i386__ && !__alpha__ */
-#  define G_BREAKPOINT()        G_STMT_START{ raise (SIGTRAP); }G_STMT_END
-#endif  /* __i386__ */
 
 
 ={============================================================================
@@ -46954,7 +47439,7 @@ command, which sends standard error down the same pipe as standard output:
 $ ./myscript 2>&1 | less
 
 
-<dup-call>
+<call-dup>
 The dup() call takes oldfd, an open file descriptor, and returns a new
 descriptor that refers to the `same open file description` The new descriptor
 is guaranteed to be `the lowest unused file descriptor`
