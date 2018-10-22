@@ -139,7 +139,21 @@ int call_normal()
   return result;
 }
 
-void call_gbo()
+void call_gbo_1()
+{
+  char buffer[10];
+  memcpy(buffer, gclientname, 8);
+  return;
+}
+
+void call_gbo_2()
+{
+  char buffer[10];
+  memcpy(buffer, gclientname, 8);
+  return;
+}
+
+void call_gbo_3()
 {
   char buffer[10];
   memcpy(buffer, gclientname, 8);
@@ -154,12 +168,19 @@ int main(int argc, char **argv)
   printf("main: this global buffer overflow..\n" );
   printf("main: \n" );
 
-  call_gbo();
+  printf("main: call gbo 1..\n" );
+  call_gbo_1();
 
-  printf("main: continue running..\n" );
+  printf("main: call gbo 2..\n" );
+  call_gbo_2();
+
+  printf("main: call gbo 3..\n" );
+  call_gbo_3();
+
+  printf("main: call normal..\n" );
   call_normal();
-  printf("main: ends.\n" );
 
+  printf("main: ends.\n" );
   return 0;
 }
 
