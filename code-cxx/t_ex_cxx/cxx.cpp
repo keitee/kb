@@ -2162,6 +2162,37 @@ TEST(Shift, Precentage)
 
 
 // ={=========================================================================
+// cxx-operator
+
+// Minimum and Maximum Value Operators
+// 
+// GCC’s g++ compiler adds the <? and >? operators, which, respectively, return the minimum and
+// maximum of two integer arguments. For example, the following statement would assign 10 to the
+// min variable:
+// 
+// min = 10 <? 15 ;
+// 
+// Similarly, the following statement would assign 15 to the max variable:
+// 
+// max = 10 >? 15;
+// 
+// DO NOT COMPILE 
+//
+// TEST(Operator, MinMax)
+// {
+//   int value{};
+// 
+//   // min
+//   value = 10 <? 20;
+//   EXPECT_THAT(value, 10);
+// 
+//   // max
+//   value = 10 >? 20;
+//   EXPECT_THAT(value, 10);
+// }
+
+
+// ={=========================================================================
 
 int main(int argc, char** argv)
 {

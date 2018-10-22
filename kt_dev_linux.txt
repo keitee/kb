@@ -318,8 +318,8 @@
 *kt_linux_gdb_000* gdb-frame
 *kt_linux_gdb_300* gdb-core-backtrace gdb-bt
 |kt_linux_gdb_300| gdb-core-analysis-on-mips
-*kt_linux_gdb_001* gdb-break-continue gdb-step
 *kt_linux_gdb_000* gdb-break
+*kt_linux_gdb_001* gdb-break-continue gdb-step
 *kt_linux_gdb_000* gdb-break-condition gdb-break-temp gdb-condition
 *kt_linux_gdb_000* gdb-break-convenience-variable
 *kt_linux_gdb_000* gdb-break-info
@@ -387,11 +387,11 @@
 *kt_linux_gcc_400* gcc-toolchain-spec gcc-spec
 *kt_linux_gcc_400* gcc-build-spk-using-own-toolchain current-working
 *kt_linux_gcc_400* gcc-build-spk-gdb gcc-build-spk-bash
-*kt_linux_gcc_400* gcc-build-toolchain-reference
+*kt_linux_gcc_400* gcc-toolchain-reference gcc-build
 *kt_linux_gcc_400* gcc-build-c-library
 *kt_linux_gcc_400* gcc-toolchain-glibc-mips buildroot-glic-mips-internal-toolchain
 *kt_linux_gcc_400* gcc-toolchain-glibc-mips-own
-*kt_linux_gcc_400* gcc-build-enable-asan
+*kt_linux_gcc_400* gcc-toolchain-tool-asan
 *kt_linux_gcc_400* gcc-build-mips-uclibc
 *kt_linux_gcc_400* gcc-build-mips-uclibc-asan
 *kt_linux_gcc_400* gcc-build-mips-uclibc-asan-combinations
@@ -7349,6 +7349,7 @@ EXPRESSIONS
 
 
    ACTIONS
+       *tool-find-delete*
        -delete
               Delete files; true if removal succeeded.  If the removal failed,
               an error message is issued.  If -delete fails, find's exit
@@ -7405,6 +7406,18 @@ EXPRESSIONS
        fails for it), an error message is issued, and find exits with a
        nonzero status.
 
+       -executable
+              Matches  files  which  are executable and directories which are
+              searchable (in a file name resolution sense).  This takes into
+              account access control lists and other permissions artefacts
+              which the -perm test ignores.  This test makes use of the
+              access(2) system call, and so can be fooled by NFS servers which
+              do UID mapping (or root-squashing), since many systems implement
+              access(2)  in  the  client's  kernel and so cannot make use of
+              the UID mapping information held on the server.  Because this
+              test is based only on the result of the access(2) system call,
+              there is no guarantee that a file for which this test succeeds
+              can actually be executed.
 
        -type c
               File is of type c:
@@ -15737,7 +15750,8 @@ my_ignores.txt and pass it to AddressSanitizer at compile time using
 -fsanitize-blacklist=my_ignores.txt (This flag is new and is only supported by
     Clang now): 
   
-<x>
+
+<tool-asan-recover>
 Q: Can AddressSanitizer continue running after reporting first error?
 
 A: Yes it can, AddressSanitizer has recently got continue-after-error mode.
@@ -15748,14 +15762,33 @@ one may actually be spurious.
 To enable continue-after-error, compile with -fsanitize-recover=address and
 then run your code with ASAN_OPTIONS=halt_on_error=0.
 
-// GCC 6.3.0
-// ok
-~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g 
-  -fsanitize=address uaf.c -o out_uaf_v6_wo_recover
+// 494
+// i686-nptl-linux-gnu-gcc: error: unrecognized command line option ‘-fsanitize-recover=address’
 
-// nk since asan do not run.
-~/x-tools/i686-nptl-linux-gnu/bin/i686-nptl-linux-gnu-gcc -g 
-  -fsanitize-recover=address uaf.c -o out_uaf_v6_w_recover
+
+https://gcc.gnu.org/onlinedocs/gcc-6.4.0/gcc/Instrumentation-Options.html#Instrumentation-Options
+
+-fsanitize-recover[=opts]
+-fsanitize-recover= controls error recovery mode for sanitizers mentioned in comma-separated list of opts. Enabling this option for a sanitizer component causes it to attempt to continue running the program as if no error happened. This means multiple runtime errors can be reported in a single program run, and the exit code of the program may indicate success even when errors have been reported. The -fno-sanitize-recover= option can be used to alter this behavior: only the first detected error is reported and program then exits with a non-zero exit code.
+
+Currently this feature only works for -fsanitize=undefined (and its suboptions
+    except for -fsanitize=unreachable and -fsanitize=return),
+  -fsanitize=float-cast-overflow, -fsanitize=float-divide-by-zero,
+  -fsanitize=kernel-address and -fsanitize=address. 
+
+For these sanitizers error recovery is turned on by default, 
+`except -fsanitize=address`, for which this feature is experimental.
+
+-fsanitize-recover=all and -fno-sanitize-recover=all is also accepted, the
+former enables recovery for all sanitizers that support it, the latter
+disables recovery for all sanitizers that support it.
+
+Syntax without explicit opts parameter is deprecated. It is equivalent to
+
+-fsanitize-recover=undefined,float-cast-overflow,float-divide-by-zero
+Similarly -fno-sanitize-recover is equivalent to
+
+-fno-sanitize-recover=undefined,float-cast-overflow,float-divide-by-zero
 
 
 <x>
@@ -16988,7 +17021,7 @@ call_gbo():
 
 ; (gdb) x/34x $esp    ; 136 bytes [esp:ebp]
 ; 0xbffff120:     0xb6103780      0x00401160      0xb7a25d60      0xb78dcc9b
-; `0xbffff130`:    -0x78:0xb7a25d60      0xb6103780      0x00000007      0xb7a25000
+; `0xbffff130`: -0x78:0xb7a25d60      0xb6103780      0x00000007      0xb7a25000
 ; 0xbffff140:     0x00000000      0xb7a2ced8      0xb78dcbc9      0xb7a23960
 ; 0xbffff150:     0x00000006      0xb7a25000      0xbffff198      0xb78d1a2b
 ; 0xbffff160:     0xb7a25d60      0x0000000a      0x00000006      0x00000000
@@ -16999,6 +17032,7 @@ call_gbo():
 ; 
 ; esi            0xbffff130       -1073745616
 
+; esi is &buffer
 ; save address from ebp-0x78 but not contents to esi and to ebp-0x7c
 
  d3a:	8d 75 88             	lea    esi,[ebp-0x78]
@@ -17058,6 +17092,7 @@ call_gbo():
  d5e:	8d 46 60             	lea    eax,[esi+0x60]
  d61:	89 c7                	mov    edi,eax
 
+; static const uptr kCurrentStackFrameMagic = 0x41B58AB3;
 ; not in mapping?
  d63:	c7 06 b3 8a b5 41    	mov    DWORD PTR [esi],0x41b58ab3
 
@@ -17245,6 +17280,175 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
  e21:	5f                   	pop    edi
  e22:	5d                   	pop    ebp
  e23:	c3                   	ret    
+
+
+<ex> from x86_32, 630
+
+(gdb) disassemble call_gbo_1
+Dump of assembler code for function call_gbo_1:
+   0x08048c08 <+0>:     push   ebp
+   0x08048c09 <+1>:     mov    ebp,esp
+   0x08048c0b <+3>:     push   edi
+   0x08048c0c <+4>:     push   esi
+   0x08048c0d <+5>:     push   ebx
+   0x08048c0e <+6>:     sub    esp,0x6c
+
+; ebx, edi is &buffer
+   0x08048c11 <+9>:     lea    ebx,[ebp-0x78]
+   0x08048c14 <+12>:    mov    edi,ebx
+
+; check this option
+; (gdb) info symbol 0x804b270
+; __asan_option_detect_stack_use_after_return in section 
+; .bss of /home/kyoupark/git/kb/asan/gbo_target_host_recover_asan_32
+
+   0x08048c16 <+14>:    cmp    DWORD PTR ds:0x804b270,0x0
+   0x08048c1d <+21>:    je     0x8048c32 <call_gbo_1+42>
+   0x08048c1f <+23>:    sub    esp,0xc
+   0x08048c22 <+26>:    push   0x60
+   0x08048c24 <+28>:    call   0x80486f0 <__asan_stack_malloc_1@plt>
+   0x08048c29 <+33>:    add    esp,0x10
+   0x08048c2c <+36>:    test   eax,eax
+   0x08048c2e <+38>:    je     0x8048c32 <call_gbo_1+42>
+   0x08048c30 <+40>:    mov    ebx,eax
+
+   0x08048c32 <+42>:    lea    eax,[ebx+0x60]
+   0x08048c35 <+45>:    mov    esi,eax
+
+; static const uptr kCurrentStackFrameMagic = 0x41B58AB3;
+
+   0x08048c37 <+47>:    mov    DWORD PTR [ebx],0x41b58ab3
+   0x08048c3d <+53>:    mov    DWORD PTR [ebx+0x4],0x8049200
+   0x08048c44 <+60>:    mov    DWORD PTR [ebx+0x8],0x8048c08
+   0x08048c4b <+67>:    mov    eax,ebx
+   0x08048c4d <+69>:    shr    eax,0x3
+   0x08048c50 <+72>:    mov    DWORD PTR [eax+0x20000000],0xf1f1f1f1
+   0x08048c5a <+82>:    mov    DWORD PTR [eax+0x20000004],0xf4f40200
+   0x08048c64 <+92>:    mov    DWORD PTR [eax+0x20000008],0xf3f3f3f3
+
+; (gdb) info symbol 0x804b080
+; gclientname in section .data of /home/kyoupark/git/kb/asan/gbo_target_host_recover_asan_32
+; note: this where stops when use "b call_gbo_1"
+
+=> 0x08048c6e <+102>:   mov    edx,0x804b080
+   0x08048c73 <+107>:   mov    ecx,edx
+   0x08048c75 <+109>:   shr    ecx,0x3
+   0x08048c78 <+112>:   add    ecx,0x20000000
+   0x08048c7e <+118>:   movzx  ecx,BYTE PTR [ecx]
+   0x08048c81 <+121>:   test   cl,cl
+   0x08048c83 <+123>:   je     0x8048c8e <call_gbo_1+134>
+   0x08048c85 <+125>:   sub    esp,0xc
+   0x08048c88 <+128>:   push   edx
+   0x08048c89 <+129>:   call   0x8048760 <__asan_report_load8@plt>
+
+   0x08048c8e <+134>:   mov    edx,DWORD PTR ds:0x804b080
+   0x08048c94 <+140>:   mov    ecx,DWORD PTR ds:0x804b084
+   0x08048c9a <+146>:   mov    DWORD PTR [esi-0x40],edx
+   0x08048c9d <+149>:   mov    DWORD PTR [esi-0x3c],ecx
+   0x08048ca0 <+152>:   nop
+
+; is buffer is changed?
+; when buffer is not the same
+   0x08048ca1 <+153>:   cmp    edi,ebx
+   0x08048ca3 <+155>:   je     0x8048ccb <call_gbo_1+195>
+
+; static const uptr kRetiredStackFrameMagic = 0x45E0360E;
+   0x08048ca5 <+157>:   mov    DWORD PTR [ebx],0x45e0360e
+   0x08048cab <+163>:   mov    DWORD PTR [eax+0x20000000],0xf5f5f5f5
+   0x08048cb5 <+173>:   mov    DWORD PTR [eax+0x20000004],0xf5f5f5f5
+   0x08048cbf <+183>:   mov    DWORD PTR [eax+0x20000008],0xf5f5f5f5
+   0x08048cc9 <+193>:   jmp    0x8048ce9 <call_gbo_1+225>
+
+; when buffer is the same
+   0x08048ccb <+195>:   mov    DWORD PTR [eax+0x20000000],0x0
+   0x08048cd5 <+205>:   mov    DWORD PTR [eax+0x20000004],0x0
+   0x08048cdf <+215>:   mov    DWORD PTR [eax+0x20000008],0x0
+
+   0x08048ce9 <+225>:   lea    esp,[ebp-0xc]
+   0x08048cec <+228>:   pop    ebx
+   0x08048ced <+229>:   pop    esi
+   0x08048cee <+230>:   pop    edi
+   0x08048cef <+231>:   pop    ebp
+   0x08048cf0 <+232>:   ret
+
+
+<ex> from x86_32, 630, recover option
+
+08048b6a <call_gbo_1>:
+call_gbo_1():
+/home/kyoupark/git/kb/asan/gbo_recover.c:143
+ 8048b6a:	55                   	push   ebp
+ 8048b6b:	89 e5                	mov    ebp,esp
+ 8048b6d:	57                   	push   edi
+ 8048b6e:	56                   	push   esi
+ 8048b6f:	53                   	push   ebx
+ 8048b70:	83 ec 7c             	sub    esp,0x7c
+ 8048b73:	8d 75 88             	lea    esi,[ebp-0x78]
+ 8048b76:	89 75 84             	mov    DWORD PTR [ebp-0x7c],esi
+ 8048b79:	83 3d 50 b2 04 08 00 	cmp    DWORD PTR ds:0x804b250,0x0
+ 8048b80:	74 13                	je     8048b95 <call_gbo_1+0x2b>
+ 8048b82:	83 ec 0c             	sub    esp,0xc
+ 8048b85:	6a 60                	push   0x60
+ 8048b87:	e8 04 fb ff ff       	call   8048690 <__asan_stack_malloc_1@plt>
+ 8048b8c:	83 c4 10             	add    esp,0x10
+ 8048b8f:	85 c0                	test   eax,eax
+ 8048b91:	74 02                	je     8048b95 <call_gbo_1+0x2b>
+ 8048b93:	89 c6                	mov    esi,eax
+ 8048b95:	8d 46 60             	lea    eax,[esi+0x60]
+ 8048b98:	89 c7                	mov    edi,eax
+ 8048b9a:	c7 06 b3 8a b5 41    	mov    DWORD PTR [esi],0x41b58ab3
+ 8048ba0:	c7 46 04 80 91 04 08 	mov    DWORD PTR [esi+0x4],0x8049180
+ 8048ba7:	c7 46 08 6a 8b 04 08 	mov    DWORD PTR [esi+0x8],0x8048b6a
+ 8048bae:	89 f3                	mov    ebx,esi
+ 8048bb0:	c1 eb 03             	shr    ebx,0x3
+ 8048bb3:	c7 83 00 00 00 20 f1 	mov    DWORD PTR [ebx+0x20000000],0xf1f1f1f1
+ 8048bba:	f1 f1 f1 
+ 8048bbd:	c7 83 04 00 00 20 00 	mov    DWORD PTR [ebx+0x20000004],0xf4f40200
+ 8048bc4:	02 f4 f4 
+ 8048bc7:	c7 83 08 00 00 20 f3 	mov    DWORD PTR [ebx+0x20000008],0xf3f3f3f3
+ 8048bce:	f3 f3 f3 
+/home/kyoupark/git/kb/asan/gbo_recover.c:145
+ 8048bd1:	b8 60 b0 04 08       	mov    eax,0x804b060
+ 8048bd6:	89 c2                	mov    edx,eax
+ 8048bd8:	c1 ea 03             	shr    edx,0x3
+ 8048bdb:	81 c2 00 00 00 20    	add    edx,0x20000000
+ 8048be1:	0f b6 12             	movzx  edx,BYTE PTR [edx]
+ 8048be4:	84 d2                	test   dl,dl
+ 8048be6:	74 0c                	je     8048bf4 <call_gbo_1+0x8a>
+ 8048be8:	83 ec 0c             	sub    esp,0xc
+ 8048beb:	50                   	push   eax
+ 8048bec:	e8 0f fb ff ff       	call   8048700 <__asan_report_load8_noabort@plt>
+ 8048bf1:	83 c4 10             	add    esp,0x10
+ 8048bf4:	a1 60 b0 04 08       	mov    eax,ds:0x804b060
+ 8048bf9:	8b 15 64 b0 04 08    	mov    edx,DWORD PTR ds:0x804b064
+ 8048bff:	89 47 c0             	mov    DWORD PTR [edi-0x40],eax
+ 8048c02:	89 57 c4             	mov    DWORD PTR [edi-0x3c],edx
+/home/kyoupark/git/kb/asan/gbo_recover.c:146
+ 8048c05:	90                   	nop
+/home/kyoupark/git/kb/asan/gbo_recover.c:143
+ 8048c06:	39 75 84             	cmp    DWORD PTR [ebp-0x7c],esi
+ 8048c09:	74 26                	je     8048c31 <call_gbo_1+0xc7>
+ 8048c0b:	c7 06 0e 36 e0 45    	mov    DWORD PTR [esi],0x45e0360e
+ 8048c11:	c7 83 00 00 00 20 f5 	mov    DWORD PTR [ebx+0x20000000],0xf5f5f5f5
+ 8048c18:	f5 f5 f5 
+ 8048c1b:	c7 83 04 00 00 20 f5 	mov    DWORD PTR [ebx+0x20000004],0xf5f5f5f5
+ 8048c22:	f5 f5 f5 
+ 8048c25:	c7 83 08 00 00 20 f5 	mov    DWORD PTR [ebx+0x20000008],0xf5f5f5f5
+ 8048c2c:	f5 f5 f5 
+ 8048c2f:	eb 1e                	jmp    8048c4f <call_gbo_1+0xe5>
+ 8048c31:	c7 83 00 00 00 20 00 	mov    DWORD PTR [ebx+0x20000000],0x0
+ 8048c38:	00 00 00 
+ 8048c3b:	c7 83 04 00 00 20 00 	mov    DWORD PTR [ebx+0x20000004],0x0
+ 8048c42:	00 00 00 
+ 8048c45:	c7 83 08 00 00 20 00 	mov    DWORD PTR [ebx+0x20000008],0x0
+ 8048c4c:	00 00 00 
+/home/kyoupark/git/kb/asan/gbo_recover.c:147
+ 8048c4f:	8d 65 f4             	lea    esp,[ebp-0xc]
+ 8048c52:	5b                   	pop    ebx
+ 8048c53:	5e                   	pop    esi
+ 8048c54:	5f                   	pop    edi
+ 8048c55:	5d                   	pop    ebp
+ 8048c56:	c3                   	ret    
 
 
 ={============================================================================
@@ -34886,6 +35090,10 @@ for any other event that normally results in stopping the stepping command
   program is `stopped` due to the signal `will step into the signal handler` (if
       the target supports that).
 
+
+// so can use stop and pass to setp into handler or can use nostop and pass
+// and set a break on handler to step into handler
+
 Likewise, if you use the queue-signal command to queue a signal to be
 delivered to the current thread when execution of the thread resumes (see
     Giving your Program a Signal), then a stepping command will step into the
@@ -34929,6 +35137,37 @@ type = struct {
 }
 (gdb) p $_siginfo._sifields._sigfault.si_addr
 $1 = (void *) 0x7ffff7ff7000
+
+
+17.3 Giving your Program a Signal
+
+signal signal
+
+Resume execution where your program is stopped, but immediately give it the
+signal signal. The signal can be the name or the number of a signal. For
+example, on many systems signal 2 and signal SIGINT are both ways of sending
+an interrupt signal.
+
+Alternatively, if signal is zero, continue execution without giving a signal.
+This is useful when your program stopped on account of a signal and would
+ordinarily see the signal when resumed with the continue command; ‘signal 0’
+causes it to resume without a signal.
+
+Note: When resuming a multi-threaded program, signal is delivered to the
+currently selected thread, not the thread that last reported a stop. This
+includes the situation where a thread was stopped due to a signal. So if you
+want to continue execution suppressing the signal that stopped a thread, you
+should select that same thread before issuing the ‘signal 0’ command. If you
+issue the ‘signal 0’ command with another thread as the selected one, GDB
+detects that and asks for confirmation.
+
+Invoking the signal command is not the same as invoking the kill utility from
+the shell. Sending a signal with kill causes GDB to decide what to do with the
+signal depending on the signal handling tables (see Signals). The signal
+command passes the signal directly to your program.
+
+signal does not repeat when you press RET a second time after executing the
+command.
 
 
 <ex>
@@ -35067,7 +35306,8 @@ $6 = {
 }
 
 <ex>
-which one is right to see siginfo?
+which one is right to see siginfo? do not use $_siginfo since it represents
+SIGTRAP which is used for gdb
 
 kyoupark@kit-debian64:/mnt/git/kb/asan$ kill -l
 
@@ -35843,204 +36083,6 @@ note that the line number of source do not exactly match to gdb.
 
 
 ={============================================================================
-*kt_linux_gdb_001* gdb-break-continue
-
-5.2 Continuing and Stepping
-
-until
-u
-    Continue running until a source line past the current line, in the current
-    stack frame, is reached. This command is used to avoid single stepping
-    through a loop more than once. It is like the next command, except that when
-    until encounters a jump, it automatically continues execution until the
-    program counter is greater than the address of the jump.
-
-    This means that when you reach the end of a loop after single stepping
-    though it, until makes your program continue execution until it exits the
-    loop. In contrast, a next command at the end of a loop simply steps back to
-    the beginning of the loop, which forces you to step through the next
-    iteration.
-
-    until always stops your program if it attempts to exit the current stack
-    frame.
-
-    until may produce somewhat counterintuitive results if the order of machine
-    code does not match the order of the source lines. For example, in the
-    following excerpt from a debugging session, the f (frame) command shows that
-    execution is stopped at line 206; yet when we use until, we get to line 195:
-
-              (gdb) f
-              #0  main (argc=4, argv=0xf7fffae8) at m4.c:206
-              206                 expand_input();
-              (gdb) until
-              195             for ( ; argc > 0; NEXTARG) {
-
-    This happened because, for execution efficiency, the compiler had generated
-        code for the loop closure test at the end, rather than the start, of the
-        loop - even though the test in a C for-loop is written before the body
-        of the loop. The until command appeared to step back to the beginning of
-        the loop when it advanced to this expression; however, it has not really
-        gone to an earlier statement - not "in terms of" the actual machine
-        code.
-
-    until with no argument works by means of single instruction stepping, and
-    hence is slower than until with an argument.
-
-*gdb-until*
-until location
-u location
-    Continue running your program until either the specified location is
-    reached, or the current stack frame returns. The location is any of the
-    forms described in Specify Location. This form of the command uses temporary
-    breakpoints, and hence is quicker than until without an argument. The
-    specified location is actually reached 'only' if it is in the current frame.
-    This implies that until can be used to skip over recursive function
-    invocations. For instance in the code below, if the current location is line
-    96, issuing until 99 will execute the program up to line 99 in the same
-    invocation of factorial, i.e., after the inner invocations have returned.
-
-              94	int factorial (int value)
-              95	{
-              96	    if (value > 1) {
-              97            value *= factorial (value - 1);
-              98	    }
-              99	    return (value);
-              100     }
-
-  what until really does is execute until it reaches a machine instruction
-    that has a higher memory address than the current one, rather than until
-    it reaches a larger line number in the source code.
-
-
-advance location
-    Continue running the program up to the given location. An argument is
-    required, which should be of one of the forms described in Specify Location.
-    Execution will also stop upon exit from the current stack frame. This
-    command is similar to until, but advance will not skip over recursive
-    function calls, and the target location does 'not' have to be in the same
-    frame as the current one. 
-
-*gdb-step*
-step, s
-    Continue running your program until control reaches a different source line,
-             then stop it and return control to gdb.
-
-    Warning: If you use the step command while control is within a function that
-    was compiled without debugging information, execution proceeds until control
-    reaches a function that does have debugging information. Likewise, it will
-    'not' step into a function which is compiled without debugging information.
-    To step through functions without debugging information, use the `stepi`
-    command, described below. 
-
-    The step command only stops at the first instruction of a source line. This
-    prevents the multiple stops that could otherwise occur in switch statements,
-    for loops, etc. step continues to stop if a function that has debugging
-        information is called within the line. In other words, step steps inside
-            any functions called within the line.
-
-    Also, the step command 'only' enters a function if there is line number
-    information for the function. Otherwise it acts like the next command. This
-    avoids problems when using cc -gl on MIPS machines. Previously, step entered
-    subroutines if there was any debugging information about the routine. 
-
-<gdb-finish> out of step
-finish
-    Continue running until just after function in the selected `stack frame`
-    returns. Print the returned value (if any). This command can be
-    abbreviated as fin.
-
-    Contrast this with the return command (see Returning from a Function).
-
-stepi
-stepi arg
-si
-    Execute one machine instruction, then stop and return to the debugger.
-
-    It is often useful to do "display/i $pc" when stepping by machine
-    instructions. This makes gdb automatically display the next instruction to
-    be executed, each time your program stops. See Automatic Display.
-    *gdb-disp*
-
-    An argument is a repeat count, as in step. 
-
-    note:
-    `stepi` shows more than when use "set step-mode on; step".
-
-nexti
-nexti arg
-ni
-    Execute one machine instruction, but if it is a function call, proceed until
-    the function returns.
-
-    An argument is a repeat count, as in next. 
-
-
-<ex>
-The "at lineno" means the line to be run next.
-
-(gdb) n
-main () at sample.c:28
-28	    printf("ends main\n");
-(gdb)
-
-<ex>
-This shows something puzzling.
-
-template<typename T, typename A1>
-void expose_impl(DBus::Connection conn, const char* path,
-        boost::shared_ptr<T> obj, A1 a1) {
-    using namespace std;
-
-// note: the first break
-46:	expose(conn, path, obj, a1);
-}
-
-template<typename T, typename A1>
-void DBusService::expose(const char* path, boost::shared_ptr<T> obj, A1 a1) {
-    using namespace std;
-145:	detail::expose_impl(conn, path, obj, a1);
-      objects.push_back(path);
-}
-
-
-// note: the first break
-(gdb) bt
-#0  expose_impl<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
-    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
-    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, conn=<incomplete type>, path=<optimized out>)
-    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:46
-
-#1  expose<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
-    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
-    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, this=0x7fff6510, path=<optimized out>)
-    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
-
-#2  (anonymous namespace)::MediaDaemon::start (this=0x7fff64e4, argc=<optimized out>, argv=<optimized out>)
-    at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:123
-#3  0x77e57404 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc/lib/libdbus-c++-1.so.0
-#4  0x77e58ff0 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc/lib/libdbus-c++-1.so.0
-#5  0x77e5a6c4 in DBus::BusDispatcher::run() () from /opt/zinc/lib/libdbus-c++-1.so.0
-#6  0x77ec24ec in zinc::binding::dbus::MainLoop::run (this=0x7fff64c8)
-    at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/MainLoop.cpp:70
-#7  0x00408150 in main (argc=1, argv=0x7fff6864) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:234
-
-
-// note: when do n(next) the line 46 has no effect and goes back to where
-// expose_impl gets called.
-
-(gdb) n
-expose<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
-    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
-    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, this=0x7fff6510, path=<optimized out>)
-    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
-145		detail::expose_impl(conn, path, obj, a1);
-
-
-={============================================================================
-*kt_linux_tool_300* gdb-print-gdb-set
-
-
-={============================================================================
 *kt_linux_gdb_000* gdb-break
 
 5.1 Breakpoints, Watchpoints, and Catchpoints
@@ -36321,6 +36363,200 @@ $ man c++filt
 
 NAME
        c++filt - Demangle C++ and Java symbols.
+
+
+={============================================================================
+*kt_linux_gdb_001* gdb-break-continue
+
+5.2 Continuing and Stepping
+
+until
+u
+    Continue running until a source line past the current line, in the current
+    stack frame, is reached. This command is used to avoid single stepping
+    through a loop more than once. It is like the next command, except that when
+    until encounters a jump, it automatically continues execution until the
+    program counter is greater than the address of the jump.
+
+    This means that when you reach the end of a loop after single stepping
+    though it, until makes your program continue execution until it exits the
+    loop. In contrast, a next command at the end of a loop simply steps back to
+    the beginning of the loop, which forces you to step through the next
+    iteration.
+
+    until always stops your program if it attempts to exit the current stack
+    frame.
+
+    until may produce somewhat counterintuitive results if the order of machine
+    code does not match the order of the source lines. For example, in the
+    following excerpt from a debugging session, the f (frame) command shows that
+    execution is stopped at line 206; yet when we use until, we get to line 195:
+
+              (gdb) f
+              #0  main (argc=4, argv=0xf7fffae8) at m4.c:206
+              206                 expand_input();
+              (gdb) until
+              195             for ( ; argc > 0; NEXTARG) {
+
+    This happened because, for execution efficiency, the compiler had generated
+        code for the loop closure test at the end, rather than the start, of the
+        loop - even though the test in a C for-loop is written before the body
+        of the loop. The until command appeared to step back to the beginning of
+        the loop when it advanced to this expression; however, it has not really
+        gone to an earlier statement - not "in terms of" the actual machine
+        code.
+
+    until with no argument works by means of single instruction stepping, and
+    hence is slower than until with an argument.
+
+*gdb-until*
+until location
+u location
+    Continue running your program until either the specified location is
+    reached, or the current stack frame returns. The location is any of the
+    forms described in Specify Location. This form of the command uses temporary
+    breakpoints, and hence is quicker than until without an argument. The
+    specified location is actually reached 'only' if it is in the current frame.
+    This implies that until can be used to skip over recursive function
+    invocations. For instance in the code below, if the current location is line
+    96, issuing until 99 will execute the program up to line 99 in the same
+    invocation of factorial, i.e., after the inner invocations have returned.
+
+              94	int factorial (int value)
+              95	{
+              96	    if (value > 1) {
+              97            value *= factorial (value - 1);
+              98	    }
+              99	    return (value);
+              100     }
+
+  what until really does is execute until it reaches a machine instruction
+    that has a higher memory address than the current one, rather than until
+    it reaches a larger line number in the source code.
+
+
+advance location
+    Continue running the program up to the given location. An argument is
+    required, which should be of one of the forms described in Specify Location.
+    Execution will also stop upon exit from the current stack frame. This
+    command is similar to until, but advance will not skip over recursive
+    function calls, and the target location does 'not' have to be in the same
+    frame as the current one. 
+
+*gdb-step*
+step, s
+    Continue running your program until control reaches a different source line,
+             then stop it and return control to gdb.
+
+    Warning: If you use the step command while control is within a function that
+    was compiled without debugging information, execution proceeds until control
+    reaches a function that does have debugging information. Likewise, it will
+    'not' step into a function which is compiled without debugging information.
+    To step through functions without debugging information, use the `stepi`
+    command, described below. 
+
+    The step command only stops at the first instruction of a source line. This
+    prevents the multiple stops that could otherwise occur in switch statements,
+    for loops, etc. step continues to stop if a function that has debugging
+        information is called within the line. In other words, step steps inside
+            any functions called within the line.
+
+    Also, the step command 'only' enters a function if there is line number
+    information for the function. Otherwise it acts like the next command. This
+    avoids problems when using cc -gl on MIPS machines. Previously, step entered
+    subroutines if there was any debugging information about the routine. 
+
+<gdb-finish> out of step
+finish
+    Continue running until just after function in the selected `stack frame`
+    returns. Print the returned value (if any). This command can be
+    abbreviated as fin.
+
+    Contrast this with the return command (see Returning from a Function).
+
+stepi
+stepi arg
+si
+    Execute one machine instruction, then stop and return to the debugger.
+
+    It is often useful to do "display/i $pc" when stepping by machine
+    instructions. This makes gdb automatically display the next instruction to
+    be executed, each time your program stops. See Automatic Display.
+    *gdb-disp*
+
+    An argument is a repeat count, as in step. 
+
+    note:
+    `stepi` shows more than when use "set step-mode on; step".
+
+nexti
+nexti arg
+ni
+    Execute one machine instruction, but if it is a function call, proceed until
+    the function returns.
+
+    An argument is a repeat count, as in next. 
+
+
+<ex>
+The "at lineno" means the line to be run next.
+
+(gdb) n
+main () at sample.c:28
+28	    printf("ends main\n");
+(gdb)
+
+<ex>
+This shows something puzzling.
+
+template<typename T, typename A1>
+void expose_impl(DBus::Connection conn, const char* path,
+        boost::shared_ptr<T> obj, A1 a1) {
+    using namespace std;
+
+// note: the first break
+46:	expose(conn, path, obj, a1);
+}
+
+template<typename T, typename A1>
+void DBusService::expose(const char* path, boost::shared_ptr<T> obj, A1 a1) {
+    using namespace std;
+145:	detail::expose_impl(conn, path, obj, a1);
+      objects.push_back(path);
+}
+
+
+// note: the first break
+(gdb) bt
+#0  expose_impl<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
+    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, conn=<incomplete type>, path=<optimized out>)
+    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:46
+
+#1  expose<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
+    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, this=0x7fff6510, path=<optimized out>)
+    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
+
+#2  (anonymous namespace)::MediaDaemon::start (this=0x7fff64e4, argc=<optimized out>, argv=<optimized out>)
+    at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:123
+#3  0x77e57404 in DBus::DefaultMainLoop::processCommands() () from /opt/zinc/lib/libdbus-c++-1.so.0
+#4  0x77e58ff0 in DBus::DefaultMainLoop::dispatch(unsigned int) () from /opt/zinc/lib/libdbus-c++-1.so.0
+#5  0x77e5a6c4 in DBus::BusDispatcher::run() () from /opt/zinc/lib/libdbus-c++-1.so.0
+#6  0x77ec24ec in zinc::binding::dbus::MainLoop::run (this=0x7fff64c8)
+    at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Zinc/Zinc.DBus.BindingRuntime/src/dbus/MainLoop.cpp:70
+#7  0x00408150 in main (argc=1, argv=0x7fff6864) at /home/kpark/builds/_virtual_/humax.2100/DEVARCH/Nickel/Nickel.System.DBusServer/src/MediaDaemon.cpp:234
+
+
+// note: when do n(next) the line 46 has no effect and goes back to where
+// expose_impl gets called.
+
+(gdb) n
+expose<Zinc::Media::MediaRouterFactoryAsync, boost::shared_ptr<zinc::binding::dbus::NonInheritingAdaptorFactory<Zinc::Media::MediaRouterAsync> > > (
+    a1=<error reading variable: access outside bounds of object referenced via synthetic pointer>, 
+    obj=<error reading variable: access outside bounds of object referenced via synthetic pointer>, this=0x7fff6510, path=<optimized out>)
+    at /opt/zinc-trunk/include/zinc-binding-runtime/dbus/DBusService.h:145
+145		detail::expose_impl(conn, path, obj, a1);
 
 
 ={============================================================================
@@ -36888,6 +37124,7 @@ info watchpoints [n...]
     This command prints a list of watchpoints, using the same format as info
     break (see Set Breaks). 
 
+*gdb-watch-address*
 If you watch for a change in a numerically entered address you need to
 'dereference' it, as the address itself is just a constant number which will
 never change. gdb refuses to create a watchpoint that watches a never-changing
@@ -41230,7 +41467,7 @@ After all, can install signal handler only for signals which do exit() or
 abort() by default?
 
 
-{signal-reentrant} *thread-safe*
+{signal-reentrant} *thread-safe-thread-reentrant*
 
 21.1.2 Reentrant and Async-Signal-Safe Functions
 
@@ -41246,8 +41483,8 @@ context, "safe" means that the function achieves its expected result,
   regardless of the state of execution of any other thread of execution.
 
 A function may be `nonreentrant` if it updates global or static data
-structures. A function that employs only local variables is guaranteed to be
-reentrant because of race-condition. 
+structures because of race-condition. A function that employs only local
+variables is guaranteed to be reentrant because of race-condition. 
 
 This book shows an example using crypt() in both main and signal handler. This
 corrupts internal buffer which is statically allocated and crypt uses when
@@ -41571,10 +41808,34 @@ we don’t go into further details.
 
 
 /usr/include/i386-linux-gnu/sys/ucontext.h
+/usr/include/x86_64-linux-gnu/sys/ucontext.h
 
 # else
 
 // can see *x86-asm-reg-enums*
+enum
+{
+  REG_GS = 0,
+  REG_FS,
+  REG_ES,
+  REG_DS,
+  REG_EDI,
+  REG_ESI,
+  REG_EBP,
+  REG_ESP,
+  REG_EBX,
+  REG_EDX,
+  REG_ECX,
+  REG_EAX,
+  REG_TRAPNO,
+  REG_ERR,
+  REG_EIP,
+  REG_CS,
+  REG_EFL,
+  REG_UESP,
+  REG_SS
+};
+
 
 /* Context to describe whole processor state.  */
 typedef struct
@@ -41599,6 +41860,74 @@ typedef struct ucontext
   } ucontext_t;
 
 #endif /* !__x86_64__ */
+
+
+// *x86-asm-reg*
+/usr/include/x86_64-linux-gnu/sys/user.h
+
+The whole purpose of this file is for GDB and GDB only.  Don't read
+   too much into it.  Don't use it for anything other than GDB unless
+   you know what you are doing.
+
+#ifdef __x86_64__
+
+struct user_regs_struct
+{
+  __extension__ unsigned long long int r15;
+  __extension__ unsigned long long int r14;
+  __extension__ unsigned long long int r13;
+  __extension__ unsigned long long int r12;
+  __extension__ unsigned long long int rbp;
+  __extension__ unsigned long long int rbx;
+  __extension__ unsigned long long int r11;
+  __extension__ unsigned long long int r10;
+  __extension__ unsigned long long int r9;
+  __extension__ unsigned long long int r8;
+  __extension__ unsigned long long int rax;
+  __extension__ unsigned long long int rcx;
+  __extension__ unsigned long long int rdx;
+  __extension__ unsigned long long int rsi;
+  __extension__ unsigned long long int rdi;
+  __extension__ unsigned long long int orig_rax;
+  __extension__ unsigned long long int rip;
+  __extension__ unsigned long long int cs;
+  __extension__ unsigned long long int eflags;
+  __extension__ unsigned long long int rsp;
+  __extension__ unsigned long long int ss;
+  __extension__ unsigned long long int fs_base;
+  __extension__ unsigned long long int gs_base;
+  __extension__ unsigned long long int ds;
+  __extension__ unsigned long long int es;
+  __extension__ unsigned long long int fs;
+  __extension__ unsigned long long int gs;
+};
+
+#else
+// These are the 32-bit x86 structures.
+
+struct user_regs_struct
+{
+  long int ebx;
+  long int ecx;
+  long int edx;
+  long int esi;
+  long int edi;
+  long int ebp;
+  long int eax;
+  long int xds;
+  long int xes;
+  long int xfs;
+  long int xgs;
+  long int orig_eax;
+  long int eip;
+  long int xcs;
+  long int eflags;
+  long int esp;
+  long int xss;
+};
+
+#endif
+
 
 <ex>
 // this ex works. However, the gregs are empty for above asan case.
@@ -41644,6 +41973,98 @@ before:
     *causecrash = 0;
 after:
     cout << "End.\n";
+}
+
+
+<ex>
+Program received signal SIGSEGV, Segmentation fault.
+0x08048ccb in call_gbo_1 () at gbo_recover.c:143
+143	{
+   0x08048ca1 <call_gbo_1+153>:	39 df	cmp    edi,ebx
+   0x08048ca3 <call_gbo_1+155>:	74 26	je     0x8048ccb <call_gbo_1+195>
+   0x08048ca5 <call_gbo_1+157>:	c7 03 0e 36 e0 45	mov    DWORD PTR [ebx],0x45e0360e
+   0x08048cab <call_gbo_1+163>:	c7 80 00 00 00 20 f5 f5 f5 f5	mov    DWORD PTR [eax+0x20000000],0xf5f5f5f5
+   0x08048cb5 <call_gbo_1+173>:	c7 80 04 00 00 20 f5 f5 f5 f5	mov    DWORD PTR [eax+0x20000004],0xf5f5f5f5
+   0x08048cbf <call_gbo_1+183>:	c7 80 08 00 00 20 f5 f5 f5 f5	mov    DWORD PTR [eax+0x20000008],0xf5f5f5f5
+   0x08048cc9 <call_gbo_1+193>:	eb 1e	jmp    0x8048ce9 <call_gbo_1+225>
+=> 0x08048ccb <call_gbo_1+195>:	c7 80 00 00 00 20 00 00 00 00	mov    DWORD PTR [eax+0x20000000],0x0
+   0x08048cd5 <call_gbo_1+205>:	c7 80 04 00 00 20 00 00 00 00	mov    DWORD PTR [eax+0x20000004],0x0
+   0x08048cdf <call_gbo_1+215>:	c7 80 08 00 00 20 00 00 00 00	mov    DWORD PTR [eax+0x20000008],0x0
+
+(gdb) p *((ucontext_t*)context)
+$6 = {
+  uc_flags = 0x1, 
+  uc_link = 0x0, 
+  uc_stack = {
+    ss_sp = 0xb7a36000, 
+    ss_flags = 0x0, 
+    ss_size = 0x8000
+  }, 
+  uc_mcontext = {
+    gregs = {0x33, 0x0, 0x7b, 0x7b, 0xbffff0b0, 0xbffff110, 0xbffff128, 0xbffff0a0, 0xbffff0b0, 0x524c445f, 0x48, 0xbfffe980, 0xe, 0x7, 0x8048ccb, 0x73, 0x10246, 0xbffff0a0, 0x7b}, 
+    fpregs = 0xb7a3dd10, 
+    oldmask = 0x0, 
+    cr2 = 0xdfffe980
+  }, 
+  uc_sigmask = {
+    __val = {0x0, 0x0, 0xadb8, 0x80cd00, 0x0, 0x0, 0xffff037f, 0xffff0000, 0xffffffff, 0xb776aafd, 0x5980073, 0xb784795c, 0x7b, 0x0 <repeats 19 times>}
+  }, 
+
+  //
+}
+
+(gdb) p/x *((siginfo_t*)siginfo)
+$4 = {
+  si_signo = 11, 
+  si_errno = 0, 
+  si_code = 1, 
+  _sifields = {
+    _pad = {-536876672, 0 <repeats 28 times>}, 
+    _kill = {
+      si_pid = -536876672, 
+      si_uid = 0
+    }, 
+    _timer = {
+      si_tid = -536876672, 
+      si_overrun = 0, 
+      si_sigval = {
+        sival_int = 0, 
+        sival_ptr = 0x0
+      }
+    }, 
+    _rt = {
+      si_pid = -536876672, 
+      si_uid = 0, 
+      si_sigval = {
+        sival_int = 0, 
+        sival_ptr = 0x0
+      }
+    }, 
+    _sigchld = {
+      si_pid = -536876672, 
+      si_uid = 0, 
+      si_status = 0, 
+      si_utime = 0, 
+      si_stime = 0
+    }, 
+    _sigfault = {
+      si_addr = 0xdfffe980, 
+      si_addr_lsb = 0, 
+      si_addr_bnd = {
+        _lower = 0x0, 
+        _upper = 0x0
+      }
+    }, 
+    _sigpoll = {
+      si_band = -536876672, 
+      si_fd = 0
+    }, 
+    _sigsys = {
+      _call_addr = 0xdfffe980, 
+      _syscall = 0, 
+      _arch = 0
+    }
+  }
 }
 
 
@@ -46760,19 +47181,22 @@ resPOSIX = pthread_create(&(ptThreadInfo->idThread), &threadAttrs, pfThreadMain,
 ={============================================================================
 *kt_linux_core_157* linux-thread-safe linux-thread-storage
 
-LPI 31.1 Thread Safety (and Reentrancy Revisited)
+LPI-31.1 Thread Safety (and Reentrancy Revisited)
 
-<thread-safety-is>
+<thread-safety-is> *thread-safe*
 A function is said to be `thread-safe` if it can safely be invoked by multiple
 threads at the same time.
 
 There are various methods of rendering a function thread-safe.
+
 
 <serialisation>
 One way is to associate a mutex with the function, lock that mutex when the
 function is called, and unlock it when the mutex returns. We say that access
 to the function is `serialized`.
 
+
+<critical-section>
 A more sophisticated solution is to associate the mutex with a shared
 variable.  We then determine which parts of the function are critical sections
 that access the shared variable, and acquire and release the mutex only during
@@ -46780,17 +47204,26 @@ the execution of these critical sections. This allows multiple threads to
 execute the function at the same time and to operate in parallel, except when
 more than one thread needs to execute a critical section.
 
-<reentrant-function>
-A reentrant function achieves thread safety without the use of mutexes. It
-does this by avoiding the use of global and static variables. However, not all
-functions can be made reentrant. SUSv3 specifies reentrant equivalents with
-names ending with the suffix _r.
-
 
 SUSv3 are required to be implemented in a thread-safe manner, except
 those listed in Table 31-1.
 
 Table 31-1: Functions that SUSv3 does not require to be thread-safe
+
+
+<reentrant-function> *thread-reentrant*
+Although the use of critical sections to implement thread safety is a
+significant improvement over the use of per-function mutexes, it is still
+somewhat inefficient because there is a cost to locking and unlocking a mutex.
+
+A reentrant function achieves thread safety without the use of mutexes. It
+does this by avoiding the use of global and static variables. It does this by
+avoiding the use of global and static variables. Any information that must be
+returned to the caller, or maintained between calls to the function, is stored
+in buffers allocated by the caller.
+
+However, not all functions can be made reentrant. SUSv3 specifies reentrant
+equivalents with names ending with the suffix _r.
 
 
 31.4 Thread-Local Storage
@@ -59539,7 +59972,7 @@ note:
 Shows code replaced with define values.
 
 
-<cpp-debug>
+<cpp-debug> *cxx-check-define*
 -dCHARS -dletters
 Says to make debugging dumps during compilation as specified by letters. The
 flags documented here are those relevant to the preprocessor.
@@ -59582,6 +60015,11 @@ gcc -E sample-two.c | egrep '\<size_t\>'
 
 note:
 Both do the job but using option -E requires c file.
+
+g++ -E -dM - < /dev/null | awk '/GXX_ABI/ {print $3}'
+
+This command will display 102 for g++ compilers using version 1 of the C++
+ABI, and 1002 for g++ compilers using version 2 of the C++ ABI.
 
 
 <cpp-check-macro>
@@ -60353,7 +60791,7 @@ Not all ELF targets support this attribute.
 
 -fvisibility=default | internal | hidden | protected
     Set the default ELF image symbol visibility to the specified option-all
-    symbols will be marked with this unless overridden within the code. Using
+    symbols will be marked with this `unless overridden within the code.` Using
     this feature can very substantially improve linking and load times of shared
     object libraries, produce more optimized code, provide near-perfect API
     export and prevent symbol clashes. It is strongly recommended that you use
@@ -60390,6 +60828,91 @@ Not all ELF targets support this attribute.
 
     An overview of these techniques, their benefits and how to use them is at
     http://gcc.gnu.org/wiki/Visibility. 
+
+
+Visibility Attributes and Pragmas for GCC C++ Libraries
+
+A traditional problem when writing C++ libraries is that the number of visible
+ELF symbols can become huge, even when symbols are not used externally and
+therefore need not be made public.  
+
+GCC versions 4.02 and later provide the new –fvisibility=value option and
+related internal attributes to enable you to control this behavior in a
+fashion similar to the mechanism provided by __declspec(dllexport) in
+Microsoft’s C++ compilers. The new –fhidden option takes two possible values:
+default, to continue to export all symbols from the current object file (which
+    is the default value if this option is not specified), and hidden, which
+causes g++ not to export the symbols from the current object module. These two
+visibility cases are reflected by two new per-function/class attributes for
+use in C++ applications: __attribute__ ((visibility("default"))) and
+__attribute__ ((visibility("hidden"))).
+
+By default, ELF symbols are still exported. To prevent ELF symbols from being
+exported from a specific object file, use the –fvisibility=hidden option when
+compiling that file. This can lead to increased complexity when creating a C++
+library using a single Makefile because it requires that you either set manual
+compilation options for each object file contained in a shared library, or
+that you add this option to your global compilation flags for the library and
+therefore do not export any symbols from any of a shared library’s component
+object files. This can be a pain and is actually the wrong thing if you need
+to make certain symbols visible externally for debugging purposes or for
+catching exceptions for throwable entities within a library.
+
+Caution: Being able to catch an exception for any user-defined type in a
+binary other than the one that threw the exception requires a typeinfo lookup.
+Because typeinfo information is part of the information that is hidden by the
+–fvisibility=hidden option or the visibility __attribute__ attribute
+specification, you must be very careful not to hide symbols for any class or
+method that can throw exceptions across object file boundaries.
+
+The best mechanism for making selected symbols visible is through a
+combination of using the visibility attributes and the –fvisibility=hidden
+command-line option. 
+
+Method 1: use "default" attribute and "hidden" command option
+that is to say something to show and otherwise to hide
+
+For any structs, classes, or methods whose symbols must be externally visible,
+    add the __attribute__ ((visibility("default"))) attribute to their
+    definition, as in the following example:
+
+class MyClass
+{
+  int i;
+  __attribute__ ((visibility("default"))) void MyMethod();
+  …
+};
+
+You can then add the –fvisibility=hidden option to the generic Makefile
+compilation flags for all of your object files, which will cause symbols to be
+hidden for all structs, classes, and methods that are not explicitly marked
+with the default visibility attribute. When the source module containing this
+code fragment is compiled, symbols are hidden by default, but those for the
+MyMethod() method would be externally visible.
+
+
+Method 2: use "hidden" attribute and no command option, "default"
+that is to say something to hide
+
+A slightly more elegant and memorable solution to symbol visibility is to
+define a local visibility macro in a global header file shared by all of the
+object modules in a library, and then put that macro in front of the
+declaration for any class or method definition whose symbols you do not want
+to export. In the converse of the previous example, if you want to export
+symbols by default but restrict those for selected classes and methods, this
+might look something like the following:
+
+#define LOCAL __attribute__ ((visibility("hidden")))
+class MyClass
+{
+  int i;
+  LOCAL void MyMethod();
+  ...
+};
+
+The source module containing this sample code could be compiled without using
+the –fvisibility=value option and would export all symbols from MyClass with
+the exception of those in the method MyMethod().
 
 
 ={============================================================================
@@ -66835,7 +67358,7 @@ CCFLAGS_FOR_BUILD="" \
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-toolchain-reference
+*kt_linux_gcc_400* gcc-toolchain-reference gcc-build
 
 http://preshing.com/20141119/how-to-build-a-gcc-cross-compiler/
 
@@ -68974,7 +69497,7 @@ gcc-glibc-brcm-mips-install/mips-linux-gnu/include/bits/local_lim.h
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-tool-asan
+*kt_linux_gcc_400* gcc-toolchain-tool-asan
 
 gcc/gcc.c:7683:   /* -fsanitize= and -fsanitize-recover= can take
 gcc/opts.c:958:    error_at (loc, "-fsanitize-recover=thread is not supported");
@@ -70621,11 +71144,18 @@ when use custom kernel, see build errors:
 
 
 CT_KERNEL_LINUX_CUSTOM_LOCATION="/home/kyoupark/asan/cross-build-for-host/"
+CT_KERNEL_LINUX_CUSTOM_LOCATION="${PWD}/linux-${CT_KERNEL_VERSION}.tar.xz"
 
 the issue is that ct-ng use this value to make a sym link to kernel source
 under .build dir. so check if that link is right.
 
-CT_KERNEL_LINUX_CUSTOM_LOCATION="/home/kyoupark/asan/cross-build-for-host/"
+
+<ct-prefix>
+// install under {CMAKE_BUILD}
+CT_PREFIX_DIR="${PWD}/x-tools/${CT_TARGET}"
+
+// install to ~/x-tools
+CT_PREFIX_DIR="${CT_PREFIX:-${HOME}/x-tools}/${CT_HOST:+HOST-${CT_HOST}/}${CT_TARGET}"
 
 
 <steps>
@@ -70835,6 +71365,7 @@ find . -name config.cache -exec rm -f {} ;\
 export PATH="/home/kyoupark/x-tools/i686-nptl-linux-gnu/bin:$PATH"
 
 // to move build dir
+// source dir is /mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/src
 cd '/mnt/bcb7778e-e87e-4609-857b-cada2826a487/cross-build-for-host/.build/i686-nptl-linux-gnu/build/build-cc-gcc-final'
 
 // to change build flags
@@ -74215,7 +74746,7 @@ _foobar:
     add     eax, DWORD PTR [ebp-12]
     mov     DWORD PTR [ebp-16], eax
 
-    ; *x86-asm-return*
+    ; *x86-asm-return* *x86-asm-eax*
     ; EAX which was needed to return the result
     ; Compute final result into eax, which
     ; stays there until return
@@ -74299,6 +74830,43 @@ are passed in registers.
 
 The first is placed in rdi, the second in rsi, the third in rdx, and then rcx,
     r8 and r9. Only the 7th argument and onwards are passed on the stack.
+
+
+<x86-asm-return-value>
+see use of eax after the call
+
+41: result = call_two(a1_, a2_, 100);
+
+/home/kyoupark/git/kb/asan/stack.c:41
+ 6ca:	83 ec 04             	sub    esp,0x4                ; -4, ebp-28
+
+; 3 args + ra, 16 and call
+ 6cd:	6a 64                	push   0x64                   ; 100 
+ 6cf:	ff 75 f0             	push   DWORD PTR [ebp-0x10]   ; a2
+ 6d2:	ff 75 f4             	push   DWORD PTR [ebp-0xc]    ; a1
+ 6d5:	e8 e6 fe ff ff       	call   5c0 <call_two>
+ 6da:	83 c4 10             	add    esp,0x10               ; +16
+
+; save return to result var
+ 6dd:	89 45 e8             	mov    DWORD PTR [ebp-0x18],eax   ; ebp-24 = eax
+
+
+;  call void function and no use of eax
+;  call_one(10, 20);
+
+   0x08048824 <+63>:    call   0x804876f <call_one>
+   0x08048829 <+68>:    add    esp,0x10
+   0x0804882c <+71>:    sub    esp,0xc
+   0x0804882f <+74>:    push   0x8048ae0
+   0x08048834 <+79>:    call   0x80485a0 <puts@plt>
+
+;  call int return function and use it
+;  result = call_two(10, 20, 30);
+;  printf("main: calls two result %ld\n", result );
+
+   0x08048845 <+96>:    call   0x80486f4 <call_two>
+   0x0804884a <+101>:   add    esp,0x10
+   0x0804884d <+104>:   mov    DWORD PTR [ebp-0xc],eax
 
 
 ={============================================================================
@@ -79541,6 +80109,8 @@ lrwxrwxrwx 1 kyoupark ccusers     10 Dec 15 08:16 ld.so.1 -> ld-2.20.so
 note:
 -sh-3.2# ./ld-uClibc-0.9.29.so
 Standalone execution is not supported yet
+
+<check-ld-versoin>
 
 $ /lib64/ld-linux-x86-64.so.2
 `Usage: ld.so [OPTION]... EXECUTABLE-FILE [ARGS-FOR-PROGRAM...]`
