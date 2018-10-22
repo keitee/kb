@@ -130,7 +130,7 @@ static char gclientname[] = "_DLRH";
 void call_gbo()
 {
   char buffer[10];
-  memcpy(buffer, gclientname, 8);
+  memcpy(buffer, gclientname, 10);
   return;
 }
 
