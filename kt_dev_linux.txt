@@ -16048,7 +16048,7 @@ void foo() {
 }
 
 
-<asan-code-report-gcc494>
+<tool-asan-report-gcc494>
 
 // asan/asan_rtl.cc
 ASAN_REPORT_ERROR(store, true, 4)
@@ -16186,6 +16186,8 @@ void __asan_report_`exp_load8`(uptr addr, u32 exp)
   uptr local_stack; uptr sp = (uptr)&local_stack; 
   ReportGenericError(pc, bp, sp, addr, false, 8, `exp, true`); 
 } 
+
+*tool-asan-recover-noabort*
 extern "C" __attribute__((noinline)) __attribute__((visibility("default"))) 
 void __asan_report_`load8_noabort`(uptr addr) 
 { 
@@ -17294,6 +17296,11 @@ Dump of assembler code for function call_gbo_1:
    0x08048c0e <+6>:     sub    esp,0x6c
 
 ; ebx, edi is &buffer
+; (gdb) p/x $ebx
+; $1 = 0xbffff0d0
+; (gdb) p/x &buffer
+; $2 = 0xbffff0f0
+
    0x08048c11 <+9>:     lea    ebx,[ebp-0x78]
    0x08048c14 <+12>:    mov    edi,ebx
 
@@ -17316,10 +17323,37 @@ Dump of assembler code for function call_gbo_1:
    0x08048c35 <+45>:    mov    esi,eax
 
 ; static const uptr kCurrentStackFrameMagic = 0x41B58AB3;
+; 0x8049200, 0x8048c08 are addresses somewhere is the executable
 
    0x08048c37 <+47>:    mov    DWORD PTR [ebx],0x41b58ab3
    0x08048c3d <+53>:    mov    DWORD PTR [ebx+0x4],0x8049200
    0x08048c44 <+60>:    mov    DWORD PTR [ebx+0x8],0x8048c08
+
+; use `eax`
+; so the trick is that "no recover" version uses $eax which is modified from
+; report function and "recover" version uses $ebx which is not modified from
+; report? *x86-asm-return* *x86-asm-eax* $eax gets changed even after calling
+; void function.
+; 
+; or 
+;
+; https://wiki.skullsecurity.org/index.php?title=Registers
+; Volatility
+; 
+; Some registers are typically volatile across functions, and others remain
+; unchanged. This is a feature of the compiler's standards and must be looked
+; after in the code, registers are not preserved automatically (although in some
+;     assembly languages they are -- but not in x86). What that means is, when a
+; function is called, there is no guarantee that volatile registers will retain
+; their value when the function returns, and it's the function's responsibility
+; to preserve non-volatile registers.
+; 
+; The conventions used by Microsoft's compiler are:
+; 
+; Volatile: ecx, edx
+; Non-Volatile: ebx, esi, edi, ebp
+; Special: eax, esp (discussed later)
+
    0x08048c4b <+67>:    mov    eax,ebx
    0x08048c4d <+69>:    shr    eax,0x3
    0x08048c50 <+72>:    mov    DWORD PTR [eax+0x20000000],0xf1f1f1f1
@@ -17347,7 +17381,7 @@ Dump of assembler code for function call_gbo_1:
    0x08048c9d <+149>:   mov    DWORD PTR [esi-0x3c],ecx
    0x08048ca0 <+152>:   nop
 
-; is buffer is changed?
+; is buffer changed?
 ; when buffer is not the same
    0x08048ca1 <+153>:   cmp    edi,ebx
    0x08048ca3 <+155>:   je     0x8048ccb <call_gbo_1+195>
@@ -17383,8 +17417,10 @@ call_gbo_1():
  8048b6e:	56                   	push   esi
  8048b6f:	53                   	push   ebx
  8048b70:	83 ec 7c             	sub    esp,0x7c
+
  8048b73:	8d 75 88             	lea    esi,[ebp-0x78]
  8048b76:	89 75 84             	mov    DWORD PTR [ebp-0x7c],esi
+
  8048b79:	83 3d 50 b2 04 08 00 	cmp    DWORD PTR ds:0x804b250,0x0
  8048b80:	74 13                	je     8048b95 <call_gbo_1+0x2b>
  8048b82:	83 ec 0c             	sub    esp,0xc
@@ -17399,6 +17435,8 @@ call_gbo_1():
  8048b9a:	c7 06 b3 8a b5 41    	mov    DWORD PTR [esi],0x41b58ab3
  8048ba0:	c7 46 04 80 91 04 08 	mov    DWORD PTR [esi+0x4],0x8049180
  8048ba7:	c7 46 08 6a 8b 04 08 	mov    DWORD PTR [esi+0x8],0x8048b6a
+
+; use `$ebx`
  8048bae:	89 f3                	mov    ebx,esi
  8048bb0:	c1 eb 03             	shr    ebx,0x3
  8048bb3:	c7 83 00 00 00 20 f1 	mov    DWORD PTR [ebx+0x20000000],0xf1f1f1f1
@@ -17407,6 +17445,7 @@ call_gbo_1():
  8048bc4:	02 f4 f4 
  8048bc7:	c7 83 08 00 00 20 f3 	mov    DWORD PTR [ebx+0x20000008],0xf3f3f3f3
  8048bce:	f3 f3 f3 
+
 /home/kyoupark/git/kb/asan/gbo_recover.c:145
  8048bd1:	b8 60 b0 04 08       	mov    eax,0x804b060
  8048bd6:	89 c2                	mov    edx,eax
@@ -17418,6 +17457,7 @@ call_gbo_1():
  8048be8:	83 ec 0c             	sub    esp,0xc
  8048beb:	50                   	push   eax
  8048bec:	e8 0f fb ff ff       	call   8048700 <__asan_report_load8_noabort@plt>
+
  8048bf1:	83 c4 10             	add    esp,0x10
  8048bf4:	a1 60 b0 04 08       	mov    eax,ds:0x804b060
  8048bf9:	8b 15 64 b0 04 08    	mov    edx,DWORD PTR ds:0x804b064
@@ -17425,9 +17465,12 @@ call_gbo_1():
  8048c02:	89 57 c4             	mov    DWORD PTR [edi-0x3c],edx
 /home/kyoupark/git/kb/asan/gbo_recover.c:146
  8048c05:	90                   	nop
+
+; is buffer changed? 
 /home/kyoupark/git/kb/asan/gbo_recover.c:143
  8048c06:	39 75 84             	cmp    DWORD PTR [ebp-0x7c],esi
  8048c09:	74 26                	je     8048c31 <call_gbo_1+0xc7>
+
  8048c0b:	c7 06 0e 36 e0 45    	mov    DWORD PTR [esi],0x45e0360e
  8048c11:	c7 83 00 00 00 20 f5 	mov    DWORD PTR [ebx+0x20000000],0xf5f5f5f5
  8048c18:	f5 f5 f5 
@@ -17436,12 +17479,14 @@ call_gbo_1():
  8048c25:	c7 83 08 00 00 20 f5 	mov    DWORD PTR [ebx+0x20000008],0xf5f5f5f5
  8048c2c:	f5 f5 f5 
  8048c2f:	eb 1e                	jmp    8048c4f <call_gbo_1+0xe5>
+
  8048c31:	c7 83 00 00 00 20 00 	mov    DWORD PTR [ebx+0x20000000],0x0
  8048c38:	00 00 00 
  8048c3b:	c7 83 04 00 00 20 00 	mov    DWORD PTR [ebx+0x20000004],0x0
  8048c42:	00 00 00 
  8048c45:	c7 83 08 00 00 20 00 	mov    DWORD PTR [ebx+0x20000008],0x0
  8048c4c:	00 00 00 
+
 /home/kyoupark/git/kb/asan/gbo_recover.c:147
  8048c4f:	8d 65 f4             	lea    esp,[ebp-0xc]
  8048c52:	5b                   	pop    ebx
@@ -19779,8 +19824,24 @@ drwxr-xr-x 6 kyoupark ccisco    4096 Nov 13  2017 i686-nptl-linux-gnu/
 
 <build-mw-with-asan>
 
+// setenv.mk
+
+ifeq ($(COMPILER_ROOT),)
+    COMPILER_ROOT := $(PLATFORM_ROOT)/compiler/i686-nptl-linux-gnu
+endif
+
+
+ifeq ($(COMPILER_ROOT),)
+    # COMPILER_ROOT := $(PLATFORM_ROOT)/compiler/i686-nptl-linux-gnu
+		COMPILER_ROOT := /home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630
+endif
+
+COMPILER_ROOT := /home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630
+
+
 // changed to make
 cd NDS_INTEL_X86_LNUX_MRFUSION_01/
+
 kyoupark@st-castor-03:~/STB_SW_o/NDS_INTEL_X86_LNUX_MRFUSION_01$ git diff BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
 diff --git a/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk b/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/platform.mk
 index 07c8118..4553ac0 100755
@@ -19832,6 +19893,34 @@ index 07c8118..4553ac0 100755
 
 ./make.sh --debug_level release_dbg --os_debug_level release --project picasso --platform vstb --output $PWD --baseline ENG_vSTB --epg_bld_type release-trials
 ./release.sh --platform vstb
+
+// more to use 630 toolchain
+
+diff --git a/CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mem_allocator.c b/CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mem_allocator.c
+index c602286789..4ac3ce2ec4 100644
+--- a/CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mem_allocator.c
++++ b/CMS_SYSTEM_INFRASTRUCTURE/MEMMAN/src/mem_allocator.c
+@@ -443,7 +443,7 @@ SYSTEM_STATUS MHWMemFreeElement(MEMMAN_API_MemoryPoolHandle *pool,
+     return error;
+ }
+
+-MHWMEMORYINLINE SYSTEM_STATUS MHWMemGetElement(MEMMAN_API_MemoryPoolHandle *pool,
++SYSTEM_STATUS MHWMemGetElement(MEMMAN_API_MemoryPoolHandle *pool,
+                                                MEMMAN_API_Allocator *theAllocator,
+                                                uint32_t theIndex, void **theElement)
+ {
+@@ -555,7 +555,7 @@ SYSTEM_STATUS MHWMemIndexIsFree(MEMMAN_API_MemoryPoolHandle *pool,
+     return MEMMAN_API_STATUS_OK;
+ }
+
+-MHWMEMORYINLINE SYSTEM_STATUS MHWMemGetIndex(MEMMAN_API_MemoryPoolHandle *pool,
++SYSTEM_STATUS MHWMemGetIndex(MEMMAN_API_MemoryPoolHandle *pool,
+                                              MEMMAN_API_Allocator *theAllocator, void *theElement,
+                                              uint32_t *theIndex)
+ {
+
+
+LOCAL_PLATFORM_CPP_FLAGS += -fsanitize=address -fsanitize-recover=address -Wno-narrowing
 
 
 <new-vstb>
