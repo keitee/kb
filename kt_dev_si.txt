@@ -2102,7 +2102,7 @@ telnet localhost 8023
 tail -f /mnt/nds/dev_6/part_1/FSN_DATA/LOG
 
 
-<build>
+<vstb-build>
 ./initialise_hooks
 Resolve_Deps/scripts/resolve_deps.sh FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01 FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01
 
@@ -4281,7 +4281,7 @@ bem_composition.o                 bem_device_configure.o      bem_internal_event
 ={============================================================================
 |kt_dev_si_0002| si-core si-gdb
 
-// 890
+// *si-build-gcc* 890
 ~/STB_SW/FUSIONOS_2/BLD_AMS_BCM_MIPS4K_LNUX_DARWIN_01/platform_cfg/linux/compiler/mips4k_gcc_x86_linux_hound_2/bin/mips-linux-uclibc-gdb
 
 $ file 498.COR
@@ -5157,8 +5157,10 @@ cc1: warnings being treated as errors
 # ./make.sh --clean --profile nds_si_devel --project picasso -a picasso --box ams_bcm 
 # --output /home/NDS-UK/parkkt/cc/parkkt_BSKYB_GM_001/vobs/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build --baseline  
 #
+# <si-build-output>
+# /home/kyoupark/STB_SW_t/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/fs/NDS/bin
 # BUILD_OUTPUT_ROOT == .../picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/fs/NDS
-#
+
 parse_args "$@"
 
 if [ -z "${WORKSPACE}" ]; then
@@ -10694,6 +10696,69 @@ ADAPTOR_INIT_RunLevelRequest
 			ADAPTOR_INIT_ChangeWrapperEndState
 				f_adaptor_init_adaptors[i](newstate,&env)
 					SYSINIT_API_NotifyRunLevelChanged
+
+
+<comp-spm>
+
+// java/com/nds/fusion/spmimpl/SpmNetworkSessionImpl.java
+
+	@Override public SpmNetworkWirelessInterface[] getWirelessInterfaces()
+	{
+		String[] wirelessInterfaceNames = natNetworkSessionGetWirelessInterfaces(nativeHandle);
+		SpmNetworkWirelessInterface[] wirelessInterfaces = new SpmNetworkWirelessInterface[wirelessInterfaceNames.length];
+		for (int i = 0; i < wirelessInterfaceNames.length; i++)
+		{
+			wirelessInterfaces[i] = new SpmNetworkWirelessInterfaceImpl(this, wirelessInterfaceNames[i]);
+		}
+		return wirelessInterfaces;
+	}
+
+
+// c/src/natSpmNetworkWirelessInterfaceImpl.c
+JNIEXPORT jobject JNICALL Java_com_nds_fusion_spmimpl_SpmNetworkWirelessInterfaceImpl_`natGetCurrentNetwork`
+
+		status = `SPM_API_Network_Wifi_GetConnectionConfig`((SPM_API_Network_SessionHandle)jsessionHandle, ifName, &AP, &credentials);
+
+
+/*!< @brief Retrieve the information about the current connection.
+    See NCM_Wifi_GetConnectionConfig for details
+
+  * @param[in] sessionHandle - sessionHandle
+  * @param[in] ifName - Interface name
+  *
+  * @retval #SPM_API_STATUS_OK Operation was successfull
+  * @retval #SPM_API_STATUS_ERROR Operation failed
+*/
+SYSTEM_STATUS SPM_API_Network_Wifi_GetConnectionConfig(
+                                                    SPM_API_Network_SessionHandle    sessionHandle,
+                                                    const SPM_API_Network_IfName     ifName,
+                                                    SPM_API_Network_Wifi_AP * AP,
+                                                    SPM_API_Network_Wifi_Connect * connectionKey)
+{
+    SYSTEM_STATUS status = SPM_API_STATUS_OK;
+
+    SPM_CLIENT_DIAG_LOG_FN_ENTRY(("SPM_API_Network_Wifi_GetConnectionConfig"));
+
+    status = SPM_API_Network_Wifi_GetConnectionConfigInternal( sessionHandle,
+                                                               ifName,
+                                                               AP,
+                                                               connectionKey );
+    SPM_CLIENT_DIAG_LOG_FN_EXIT(status);
+    return status;
+}
+
+// DARWIN_PLATFORM/DARWIN_SPM/src/client/spm_client_network.c
+static SYSTEM_STATUS SPM_API_Network_Wifi_GetConnectionConfigInternal(
+
+        if(NCM_Wifi_GetConnectionConfig((NCM_SESSION_Handle_t)sessionHandle, ncmifName,&ncmAP,&ncmEncryption)!= NCM_STATUS_OK)
+
+// CMS_SYSTEM_INFRASTRUCTURE/NCM/src/client/ncm.c
+
+SYSTEM_STATUS NCM_Wifi_GetConnectionConfig(
+
+
+git diff BSKYB_HR021_Int:DARWIN_PLATFORM/DARWIN_SPM/src/client/spm_client_network.c BSKYB_HR020_88.24_Int:DARWIN_PLATFORM/DARWIN_SPM/src/client/spm_client_network.c
+git diff BSKYB_HR021_Int:CMS_SYSTEM_INFRASTRUCTURE/NCM/src/client/ncm.c BSKYB_HR020_88.24_Int:CMS_SYSTEM_INFRASTRUCTURE/NCM/src/client/ncm.c
 
 
 ={============================================================================
@@ -18739,6 +18804,9 @@ NDS: ^0946932953.045506 !WARN  -EPG_INIT     < p:00000079 t:2be8f520 T:no name M
 ={============================================================================
 |kt_dev_si_0001| comp-ncm comp-network
 
+note:
+in SCD_process
+
 NDS_BUILD_TYPE_ncm_server = debug
 
 # to DHCP
@@ -22510,7 +22578,7 @@ unsigned.
 #define PLAYER_EVENT_SESSION_PIN_NOT_REQUIRED       0x80100200      /*!< @brief Notification that a PIN is no longer required and the session can proceed @see #PLAYER_EVENT_Session_Pin_Not_Required_PropId */
 
 
-*app-register-listener* *player-event*
+*app-register-listener* *player-event* *comp-jpa*
 
 // /Picasso/src/java/picasso/mediaengine/PlayerEventPump.java
 public void registerWithMiddleware(PlayerSession playerSession)
@@ -30538,6 +30606,53 @@ NDS: ^0946686085.188970 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS 
 NDS: ^0946686085.189150 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_PartitionUnmount L:01238 > If no debug has been produced, recompile Storage Helper library in debug mode.
 NDS: ^0946686085.189279 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_PartitionUnmount L:01239 > Storage Helper library has reported:  failure to unmount partition /dev/sda1 (/mnt/nds/dev_5/part_0)
 NDS: ^0946686085.189416 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_PartitionUnmount L:01240 > error: 16: Undefined error
+
+
+<comp-helper-wifi>
+
+== NDS: ^[2018:10:23 13:05:42]0946685125.038661 !MIL    -NCM_SERVER   		< p:0x0000064e P:SCD t:0x006b6530 T:NCM_SERVER_APPLY M:ncm_server_xwifi.c F:ncm_server_xwifi_event_cb L:629 > Received WiFi helper event \"XWIFI_EVENT_WPS_REGISTRATION_SUCCESSFUL\" for interface \"wlan0\". 
+== NDS: ^[2018:10:23 13:05:42]0946685125.039130 !ERROR  -J_SPM        		< p:0x00000652 P:APP t:0x011b4520 T:XCLT_NCM_XIPC_SERVER M:modules/jpa-impl/src/c/src/natSpmNetworkSessionI F:SPM_API_COMMON_JAVA_Network_SessionListener L:189 > SPM_API_COMMON_JAVA_Network_SessionListener:WirelessEvent
+== NDS: ^[2018:10:23 13:05:42]0946685125.041702 !MIL    -EPG_NET      		< p:0x00000652 P:APP t:0x2ed9e520 T:no name M:Spm F:doNotifyEvent L:257 > T:PooledExecutor#2:WIFI: WPS registration successful
+
+kyoupark@st-castor-03:~/STB_SW_t$ git grep xwifi_subscribe_events
+CMS_SYSTEM_INFRASTRUCTURE/NCM/src/server/xnet/ncm_server_xwifi.c:2223:    l_ret = xwifi_subscribe_events(l_event_queue_fd, l_eventsMask);
+CMS_SYSTEM_INFRASTRUCTURE/NCM/test/wifi_helper_mock/wifi_helper_mock.c:416:int32_t xwifi_subscribe_events(const int fd,// The event queue file descriptor.
+
+// delivered from a driver
+/home/kyoupark/nds-driver/AMS_BCM_MIPS4K_LNUX_DARWIN_01-AMS_BCM_MIPS4K_LNUX_DARWIN_01_16.16.1-h1.19p20/KERN_AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/debug/debug/lib
+libwifi_helper.so
+nm libwifi_helper.so | grep xwifi_open_event_queue
+341:0001518c T xwifi_open_event_queue
+
+// on a box
+./usr/lib/libwifi_helper.so
+
+kyoupark@st-castor-03:~/STB_SW_t/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/AMS_BCM_MIPS4K_LNUX_DARWIN_01/BigEndian/unstripped_processes$ nm SCD_Process | grep xwifi
+
+4931:         U xwifi_abort_scan_request
+4932:         U xwifi_ap_configure
+4933:         U xwifi_ap_get_associated_device_addr
+4934:         U xwifi_ap_get_num_associated_devices
+4935:         U xwifi_close_event_queue
+4936:         U xwifi_connect
+4937:         U xwifi_disconnect
+4938:         U xwifi_get_access_point_info
+4939:         U xwifi_get_capabilities
+4940:         U xwifi_get_connection_info
+4941:         U xwifi_get_event
+4942:         U xwifi_get_num_scan_result_entries
+4943:         U xwifi_initialise
+4944:         U xwifi_interface_configure
+4945:         U xwifi_open_event_queue
+4946:         U xwifi_power_control
+4947:         U xwifi_scan_request
+4948:         U xwifi_scan_retrieve_results
+4949:         U xwifi_subscribe_events
+4950:         U xwifi_terminate
+4951:         U xwifi_wps_cancel_registration
+4952:         U xwifi_wps_generate_dev_pwd
+4953:         U xwifi_wps_get_credentials
+4954:         U xwifi_wps_initiate_registration_ex
 
 
 ={============================================================================

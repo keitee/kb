@@ -10265,6 +10265,7 @@ PROCESS SELECTION BY LIST
 THREAD DISPLAY
        H      Show threads as if they were processes.
 
+       *linux-tid*
        -L     Show threads, possibly with LWP and NLWP columns.
 
 OUTPUT FORMAT CONTROL
@@ -10315,6 +10316,17 @@ STANDARD FORMAT SPECIFIERS
        lwp         LWP       light weight process (thread) ID of the
        dispatchable entity (alias spid, tid).  See tid for additional
        information.
+
+       tgid        TGID      a number representing the thread group to which a
+       task belongs (alias pid).  It is the process ID of the thread group
+       leader.
+
+       *linux-tid*
+       tid         TID       the unique number representing a dispatacable
+       entity (alias lwp, spid).  This value may also appear as: a process ID
+       (pid); a process group ID (pgrp); a session ID for the session leader
+       (sid); a thread group ID for the thread group leader (tgid); and a tty
+       process group ID for the process group leader (tpgid).
 
 
 <ex>
@@ -19923,6 +19935,12 @@ index c602286789..4ac3ce2ec4 100644
 LOCAL_PLATFORM_CPP_FLAGS += -fsanitize=address -fsanitize-recover=address -Wno-narrowing
 
 
+
+cd FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
+./make.sh --debug_level release_dbg --os_debug_level release --project picasso --platform vstb --output $PWD --baseline ENG_vSTB --epg_bld_type release-trials
+./release.sh --platform vstb
+
+
 <new-vstb>
 more README
 
@@ -19984,7 +20002,7 @@ LD_PRELOAD=/flash0/libasan.so:/usr/lib/libforcesched.so:/lib/libresolv-refresh.s
 export ASAN_OPTIONS="verbosity=2:halt_on_error=0:debug=1"
 export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
 mkdir /flash0
-mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-xxx /flash0
 ulimit -c unlimited
 ./asan_uaf
 
@@ -19995,11 +20013,13 @@ export STREAM_NETWORK=BSKYB_DARWIN
 export ASAN_OPTIONS="verbosity=2:halt_on_error=0:debug=1"
 export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
 
-# mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-asan-v6/flash0 /flash0
-
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-pete/ /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-gm/flash0 /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-r16/flash0 /flash0
+
+// vstb 630
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-630/flash0 /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-630-clean/flash0 /flash0
 
 
 // clean vstb build
@@ -20047,10 +20067,13 @@ cd /flash0/asan/flash0
 gdb -command=cmd ./own_asan_uaf
 
 
-//
-/flash0/scripts/run.sh
+// things need to do
 
-// to run mw process only, do not change run.sh but change mw process:
+1. to run mw process only, do not change run.sh but instead make mw process
+script which runs actuall mw process
+
+2. copy asan lib files 
+
 
 /flash0/fs/NDS/bin$ more MW_Process
 #!/bin/sh
@@ -40552,7 +40575,7 @@ The setenv() function adds the variable name to the environment with the value
 ={============================================================================
 *kt_linux_core_004* linux-errno
 
-LPI. 3.4 Handling Errors from System Calls and Library Functions
+LPI-3.4 Handling Errors from System Calls and Library Functions
 
 {system-call-on-error}
 A few system calls never fail. For example, getpid() always successfully
@@ -40641,7 +40664,11 @@ documented in the function's manual page. For these functions, it is a mistake
 to use errno, perror(), or strerror() to diagnose errors.
 
 
-{errno-values}
+{linux-errno-values}
+
+#include <errno.h>
+
+
 kyoupark@kit-debian64:~$ cat /usr/include/linux/errno.h
 #include <asm/errno.h>
 
@@ -41191,12 +41218,23 @@ cmdLineErr(const char *format, ...)
 ={============================================================================
 *kt_linux_core_006* linux-portability
 
-LPI. 3.6 Portability Issues
+LPI-3.6 Portability Issues
 
 <feature-test-macros>
 Sometimes, when writing a portable application, we may want the various header
 files to expose only the definitions (constants, function prototypes, and so
     on) that follow a particular standard.
+
+To do this, we define one or more of the feature test macros listed below when
+compiling a program. One way that we can do this is by defining the macro in
+the program source code before including any header files:
+
+#define _BSD_SOURCE 1
+
+Alternatively, we can use the D option to the C compiler:
+
+$ cc -D_BSD_SOURCE prog.c
+
 
 The following feature test macros listed are glibc-specific:
 
@@ -41216,6 +41254,14 @@ _GNU_SOURCE
 
 If defined (with any value), expose all of the definitions provided by setting
 all of the preceding macros, as well as various GNU extensions.
+
+
+https://www.gnu.org/software/libc/manual/html_node/Feature-Test-Macros.html
+Macro: _GNU_SOURCE
+If you define this macro, everything is included: ISO C89, ISO C99, POSIX.1,
+POSIX.2, BSD, SVID, X/Open, LFS, and GNU extensions. In the cases where
+POSIX.1 conflicts with BSD, the POSIX definitions take precedence.
+
 
 If individual macros are defined, or the compiler is invoked in one of its
 standard modes (e.g., cc –ansi or cc –std=c99), then only the requested
@@ -42867,7 +42913,7 @@ void _exit(int status);
 void exit(int status); 
 
 
-{exit-value}
+{linux-exit-value}
 This is exception to the rule that a function with a return type 'must' return a
 value. If control reaches the end of main and there is no return, then the
 compiler inserts a return of 0.
@@ -42892,7 +42938,7 @@ results that vary depending on the version of the C standard supported and the
 compilation options employed:
 
 
-{exit-call}
+{linux-exit-call}
 Programs generally don't call _exit() directly, but instead call the exit()
 library function, which performs various actions before calling _exit().
 
@@ -43929,7 +43975,7 @@ TODO: security example
 ={============================================================================
 *kt_linux_core_110* linux-process-exec-clone-call linux-thread-id
 
-LPI 28.2 The clone() System Call
+LPI-28.2 The clone() System Call
 
 Linux-specific clone() system call creates a new process. It differs from the
 other two calls in allowing finer control over the steps that occur during
@@ -43991,7 +44037,7 @@ any process ID on the system, except when a thread is the thread group leader
 for a process.
 
 The first thread in a new thread group has a thread ID that is the same as its
-  thread group ID. This thread is referred to as the thread group leader.
+  thread group ID. This thread is referred to as `the thread group leader`
 
 note:
 The thread IDs that we are discussing here `are not the same` as the thread IDs
@@ -43999,7 +44045,7 @@ The thread IDs that we are discussing here `are not the same` as the thread IDs
 generated and maintained internally (in user space) by a POSIX threads
 implementation.
 
-<ex> *tool-ps*
+<ex> *tool-ps* *linux-tid*
 -sh-3.2# ps -eLf
 UID        PID  PPID   LWP  C NLWP STIME TTY          TIME CMD
 NDS_U5     581   130   581  0   15 Jan01 ?        00:00:03 /NDS/bin/PWM_Process
@@ -44083,22 +44129,23 @@ NOTES
        The thread ID returned by pthread_self() is not the same thing as the
        kernel thread ID returned by a call to gettid(2).
 
-<gettid>
+<call-gettid> *linux-tid*
 SYNOPSIS
        #include <sys/types.h>
+       #include <unistd.h>
 
        pid_t gettid(void);
 
        Note: There is no glibc wrapper for this system call; see NOTES.
 
 NOTES
-       Glibc does not provide a wrapper for this system call; call it 'using'
+       `Glibc does not provide a wrapper for this system call`; call it using
        syscall(2).
 
        The thread ID returned by this call is not the same thing as a POSIX
        thread ID (i.e., the opaque value returned by pthread_self(3)).
 
-<code>
+<ex> *linux-syscall*
 #include <sys/syscall.h>
 
 static void * threadFunc(void *arg)
