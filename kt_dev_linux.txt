@@ -397,7 +397,7 @@
 *kt_linux_gcc_400* gcc-build-mips-uclibc-asan-combinations
 *kt_linux_gcc_400* gcc-build-tc-mips-target-tree
 *kt_linux_gcc_400* gcc-build-uclibc-target-tree
-*kt_linux_gcc_400* gcc-build-cross-ng-mips-uclibc
+*kt_linux_gcc_400* gcc-toolchain-cross-ng-mips-uclibc
 
 *kt_linux_arch_001* arch-endian
 *kt_linux_arch_001* arch-mips-registers mips-instruction
@@ -494,7 +494,7 @@
 |kt_linux_core_153| linux-thread-compile
 *kt_linux_core_154* linux-thread-api
 *kt_linux_core_157* linux-thread-attribute
-*kt_linux_core_157* linux-thread-safe linux-thread-storage
+*kt_linux_core_157* linux-thread-safe linux-thread-specific-data
 *kt_linux_core_157* linux-thread-stack
 *kt_linux_core_157* linux-thread-nptl
 |kt_linux_core_102| linux-thread-q how to run three threads sequencially
@@ -47315,7 +47315,7 @@ resPOSIX = pthread_create(&(ptThreadInfo->idThread), &threadAttrs, pfThreadMain,
 
 
 ={============================================================================
-*kt_linux_core_157* linux-thread-safe linux-thread-storage
+*kt_linux_core_157* linux-thread-safe linux-thread-specific-data
 
 LPI-31.1 Thread Safety (and Reentrancy Revisited)
 
@@ -47360,6 +47360,136 @@ in buffers allocated by the caller.
 
 However, not all functions can be made reentrant. SUSv3 specifies reentrant
 equivalents with names ending with the suffix _r.
+
+
+<thread-specific-data>
+
+31.2 One-Time Initialization
+
+Sometimes, a threaded application needs to ensure that some initialization
+action occurs just once, regardless of how many threads are created. For
+example, a mutex may need to be initialized with special attributes using
+pthread_mutex_init(), and that initialization must occur just once. If we are
+creating the threads from the main program, then this is generally easy to
+achievewe perform the initialization before creating any threads that depend
+on the initialization. 
+
+However, in a library function, this is not possible, because the calling
+program may create the threads before the first call to the library function.
+Therefore, the library function needs a method of performing the
+initialization the first time that it is called from any thread.
+
+#include <pthread.h>
+int pthread_once(pthread_once_t *once_control, void (*init)(void));
+Returns 0 on success, or a positive error number on error
+
+The once_control argument is a pointer to a variable that must be statically
+initialized with the value PTHREAD_ONCE_INIT:
+
+pthread_once_t once_var = PTHREAD_ONCE_INIT;
+
+
+31.3 Thread-Specific Data
+
+The most efficient way of making a function thread-safe is to make it
+reentrant. All new library functions should be implemented in this way.
+However, for an existing nonreentrant library function (one that was perhaps
+    designed before the use of threads became common), this approach usually
+requires changing the function’s interface, which means modifying all of the
+programs that use the function. 
+
+Thread-specific data is a technique for making an existing function
+thread-safe `without changing its interface.`
+
+Thread-specific data allows a function to maintain a separate copy of a
+variable for each thread that calls the function. This allows the function to
+maintain per-thread information between calls to the function
+
+
+#include <pthread.h>
+int pthread_key_create(pthread_key_t *key, void (*destructor)(void *));
+
+Returns 0 on success, or a positive error number on error
+Different (i.e., independent) functions may each need thread-specific data.
+Each function needs a method of identifying its thread-specific data (`a key`),
+as distinct from the thread-specific data used by other functions.
+
+The function creates a key, which is the means of differentiating the
+thread-specific data item used by this function from the thread-specific data
+items used by other functions. The key is created by calling the
+pthread_key_create() function. Creating a key needs to be done only once, when
+the first thread calls the function.  For this purpose, pthread_once() is
+employed.
+
+
+#include <pthread.h>
+
+int pthread_setspecific(pthread_key_t key, const void *value);
+Returns 0 on success, or a positive error number on error
+
+void *pthread_getspecific(pthread_key_t key);
+Returns pointer, or NULL if no thread-specific data isassociated with key
+
+In order to save a pointer to the storage allocated in the previous step, the
+function employs two Pthreads functions: pthread_setspecific() and
+pthread_getspecific().  A call to pthread_setspecific() is a request to the
+Pthreads implementation to say “save this pointer, recording the fact that it
+is associated with a particular key (the one for this function) and a
+particular thread (the calling thread).” Calling pthread_getspecific()
+performs the complementary task, returning the pointer previously associated
+with a given key for the calling thread. If no pointer was previously
+associated with a particular key and thread, then pthread_getspecific()
+returns NULL. This is how a function can determine that it is being called for
+the first time by this thread, and thus must allocate the storage block for
+the thread.
+
+
+A typical implementation (NPTL is typical), involves the following arrays:
+
+o a single global (i.e., process-wide) array of information about
+thread-specific data keys; and
+
+o a set of per-thread arrays, each containing pointers to all of the
+thread-specific data blocks allocated for a particular thread (i.e., this
+    array contains the pointers stored by calls to pthread_setspecific()).
+
+
+Figure 31-3: Data structure used to implement thread-specific data (TSD)
+pointers
+
+// pthread implementation know mapping key(which function) and thread which
+// calls function
+
+process-wide array              thread #0
+
+keys[0]                         tsd[0]  -> buffer allocaed for this thread 
+keys[1]                         tsd[1]
+keys[2]                         tsd[2]
+...                             ...                                          
+
+                                thread #1
+                                                                           
+                                tsd[0]  -> buffer allocaed for this thread 
+                                tsd[1]
+                                tsd[2]
+                                ...                                         
+
+the key is simply index of keys array which directly maps to tsd array of each
+thread.
+
+
+When a thread is first created, all of its thread-specific data pointers are
+`initialized to NULL.` This means that when our library function is called by
+a thread for the first time, it must begin by using pthread_getspecific() to
+check whether the thread already has an associated value for key. If it does
+not, then the function allocates a block of memory and saves a pointer to the
+block using pthread_setspecific(). We show an example of this in the
+thread-safe strerror() implementation presented in the next section.
+
+
+31.3.4 Employing the Thread-Specific Data API
+
+31.3.5 Thread-Specific Data Implementation Limits
 
 
 31.4 Thread-Local Storage
@@ -71144,7 +71274,7 @@ libc.a  libcrypt.so     libdl.so     libnsl.a    libpthread_nonshared.a  libreso
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-build-cross-ng-mips-uclibc
+*kt_linux_gcc_400* gcc-toolchain-cross-ng-mips-uclibc
 
 // not on the build server since some tools are missing which requires root
 // permission. should do on private VM or build server.
