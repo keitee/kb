@@ -17,6 +17,36 @@ using namespace testing;
 
 
 // ={=========================================================================
+// cxx-size
+
+// x86_64/VM
+// size of (int) is           : 4
+// size of (unsigned int) is  : 4
+// size of (long) is          : 8
+// size of (unsigned long) is : 8
+// size of (long int) is      : 8
+// size of (unsigned int) is  : 8
+// size of (* int) is         : 8
+// size of (* unsigned int) is: 8
+
+TEST(Size, SizeOfTypes)
+{
+  cout << "size of (int) is           : " << sizeof (int) << endl;
+  cout << "size of (unsigned int) is  : " << sizeof (unsigned int) << endl;
+  cout << "size of (long) is          : " << sizeof (long ) << endl;
+  cout << "size of (unsigned long) is : " << sizeof (unsigned long) << endl;
+  cout << "size of (long int) is      : " << sizeof (long int) << endl;
+  cout << "size of (unsigned int) is  : " << sizeof (unsigned long int) << endl;
+
+  int *pint;
+  unsigned int *puint;
+
+  cout << "size of (* int) is         : " << sizeof pint << endl;
+  cout << "size of (* unsigned int) is: " << sizeof puint << endl;
+}
+
+
+// ={=========================================================================
 // cxx-pair
 
 // {10, X}
