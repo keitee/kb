@@ -79562,15 +79562,17 @@ However, the running sequence of such programs is more involved, which is why
 The Linux kernel
 
 Program execution begins in the Linux kernel. To run a program, a process will
-call a function from the exec family. The functions in this family are all
-very similar, differing only in small details regarding the manner of passing
-arguments and environment variables to the invoked program. What they all end
-up doing is issuing the sys_execve system call to the Linux kernel.
+call a function from the *call-exec* family. The functions in this family are
+all very similar, differing only in small details regarding the manner of
+passing arguments and environment variables to the invoked program. What they
+all end up doing is issuing the sys_execve system call to the Linux kernel.
 
-sys_execve does a lot of work to prepare the new program for execution.
+*call-sys_execve* does a lot of work to prepare the new program for execution.
 Explaining it all is far beyond the scope of this article - a good book on
 kernel internals can be helpful to understand the details [1]. I'll just focus
 on the stuff useful for our current discussion.
+
+// [1] Or just read the source, if you're brave.
 
 As part of its job, the kernel must read the program's executable file from
 disk into memory and prepare it for execution. The kernel knows how to handle
@@ -79582,7 +79584,7 @@ the action happens in function `load_elf_binary` (in fs/binfmt_elf.c).
 The kernel reads the ELF header of the program, and looks for a PT_INTERP
 segment to see if an interpreter was specified. 
 
-`Here the statically linked vs.  dynamically linked distinction kicks in.` For
+`Here the statically linked vs. dynamically linked distinction kicks in.` For
 statically linked programs, there is no PT_INTERP segment. This is the
 scenario this article covers.
 *tool-readelf-l*
@@ -79595,8 +79597,10 @@ to the information contained in the ELF program headers. Finally, it passes
 the execution, by directly modifying the IP register, to the entry address
 read from the ELF header of the program (e_entry). Arguments are passed to the
 program on the stack (the code responsible for this is in `create_elf_tables`).
+
 Here's the stack layout when the program is called, for x64:
 
+// see picture
 
 At the top of the stack is argc, the amount of command-line arguments. It is
 followed by all the arguments themselves (each a char*), terminated by a zero
@@ -79614,9 +79618,9 @@ So, the Linux kernel reads the program's entry address from the ELF header.
 Let's now explore how this address gets there.
 
 Unless you're doing something very funky, the final program binary image is
-probably being created by the system linker - ld. By default, ld looks for a
+probably being created by the system linker - *gnu-ld* By default, ld looks for a
 special symbol called `_start` in one of the object files linked into the
-program, and sets the entry point to the address of that symbol. This will be
+program, and `sets the entry point to the address of that symbol.` This will be
 simplest to demonstrate with an example written in assembly (the following is
 NASM syntax):
 
@@ -79686,7 +79690,14 @@ ld, like I did with the assembly:
 $ gcc -c c_rc.c
 $ ld -o c_rc c_rc.o
 ld: warning: cannot find entry symbol _start; defaulting to 00000000004000b0
-Whoops, ld can't find the entry point. It tries to guess using a default, but it won't work - the program will segfault when run. ld obviously needs some additional object files where it will find the entry point. But which object files are these? Luckily, we can use gcc to find out. gcc can act as a full compilation driver, invoking ld as needed. Let's now use gcc to link our object file into a program. Note that the -static flag is passed to force static linking of the C library and the gcc runtime library:
+
+Whoops, ld can't find the entry point. It tries to guess using a default, but
+it won't work - the program will segfault when run. ld obviously needs some
+additional object files where it will find the entry point. But which object
+files are these? Luckily, we can use gcc to find out. gcc can act as a full
+compilation driver, invoking ld as needed. Let's now use gcc to link our
+object file into a program. Note that the -static flag is passed to force
+static linking of the C library and the gcc runtime library:
 
 $ gcc -o c_rc -static c_rc.o
 $ c_rc; echo $?
