@@ -15,7 +15,7 @@ GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
 
-TARGET = procmap
+TARGET = syscall
 
 # Where to find user code.
 USER_DIR = .
