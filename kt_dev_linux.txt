@@ -361,7 +361,8 @@
 *kt_linux_gcc_400* gcc-option-link
 *kt_linux_gcc_400* gcc-option-link-order gcc-link-order
 *kt_linux_gcc_400* gcc-option-warning
-*kt_linux_gcc_400* gcc-option-cpp
+*kt_linux_gcc_400* gcc-option-cpp gcc-cpp
+*kt_linux_gcc_203* gcc-option-cpp-search gcc-cpp-isystem
 *kt_linux_gcc_400* gcc-option-cpp-dependancies
 *kt_linux_gcc_400* gcc-option-cpp-check-defines
 *kt_linux_gcc_400* gcc-option-cpp-where-comes-from
@@ -550,15 +551,8 @@
 *kt_linux_core_202* linux-sync-cond-examples
 *kt_linux_core_202* linux-sync-between-processes
 |kt_linux_core_220| sync: read-write lock
-
-|kt_linux_core_230|  sync: file-lock
-
-|kt_linux_core_240|  sync: common problems when use threads {race-condition}
-
-|kt_linux_core_250|  sync: reentrant and thread-safe {thread-specific-data} {thread-local-storage}
-|kt_linux_core_260|  sync: atomic operations {lock-free-programming}
-|kt_linux_core_261|  sync: ref: locks aren't slow; lock contention is
-|kt_linux_core_262|  sync: ref: always use a lightweight mutex {mutex-vs-semaphore}
+*kt_linux_core_230* linux-sync-file-lock
+*kt_linux_core_260* linux-sync-atomic
 |kt_linux_core_263|  conc: ref: lock-free code: a false sense of security
 |kt_linux_core_264|  conc: ref: the free lunch is over 
 *kt_linux_core_265* sync: case: subtle race
@@ -39773,6 +39767,11 @@ $ egrep -lr --include *.c mhvSessionCancel . \
   | xargs sed -i 's/mhvSessionCancel/mmhv_session_cancel/'
 
 
+       -R, --dereference-recursive
+              Read all files under each directory, recursively.  Follow all
+              symbolic links, unlike -r.
+
+
 # ============================================================================
 #{
 ={============================================================================
@@ -53195,7 +53194,7 @@ each item would require us to design a convention for generating a (unique)
 ={============================================================================
 *kt_linux_core_201* linux-sync-mutex
 
-LPI 30 Thread Synchronization
+LPI-30 Thread Synchronization
 
 Mutexes allow threads to synchronize their use of a shared resource, so that,
 for example, one thread doesn’t try to access a shared variable at the same
@@ -53235,23 +53234,51 @@ The scheduler time slice for thread 1 expires, and thread 2 commences execution.
 In complex programs, this `nondeterministic` behavior means that such errors may
 occur only rarely, be hard to reproduce, and therefore be difficult to find.
 
+
 static int glob = 0;
 
-staic void threadFunc()
+// Loop 'arg' times incrementing 'glob'
+static void * threadFunc(void *arg)
 {
   int loops = *((int *) arg);
   int loc, j;
-
-  for(j=0; j < loops; j++)
-  {
+  for (j = 0; j < loops; j++) {
     loc = glob;
     loc++;
     glob = loc;
   }
+  return NULL;
+}
+
+} // namespace
+
+TEST(Async, RaceCondition)
+{
+  using namespace lpi_30_1;
+
+  pthread_t t1, t2;
+
+  int loops, s;
+
+  loops = 10000000; // 10M
+
+  s = pthread_create(&t1, NULL, threadFunc, &loops);
+  EXPECT_EQ(s, 0);
+
+  s = pthread_create(&t2, NULL, threadFunc, &loops);
+  EXPECT_EQ(s, 0);
+
+  s = pthread_join(t1, NULL);
+  EXPECT_EQ(s, 0);
+
+  s = pthread_join(t2, NULL);
+  EXPECT_EQ(s, 0);
+
+  // expects 20M if there's no race
+  cout << "glob = " << glob << endl;
 }
 
 
-<solution>
 It might seem that we could eliminate the problem by replacing the three
 statements inside the for loop with a single statement. Looks atomic?
 
@@ -55306,25 +55333,219 @@ rwlock_cancelwrwait(void *arg)
 /* end rwlock_cancelwrwait */
 
 
-==============================================================================
-*kt_linux_core_230*	sync: file-lock
+={============================================================================
+*kt_linux_core_230* linux-sync-file-lock
 
-File locks: File locks are a synchronization method explicitly designed to coordinate the actions of
-multiple processes operating [on-the-same-file]. They can also be used to coordinate access to other
-shared resources. File locks come in two flavors: read (shared) locks and write (exclusive) locks.
-Any number of processes can hold a read lock on the same file (or region of a file). However, when
-one process holds a write lock on a file (or file region), other processes are prevented from
-holding either read or write locks on that file (or file region). Linux provides file-locking
-facilities via the flock() and fcntl() system calls. The flock() system call provides a simple
-locking mechanism, allowing processes to place a shared or an exclusive lock on an entire file.
-Because of its limited functionality, flock() locking facility is rarely used nowadays. The fcntl()
-  system call provides record locking, allowing processes to place multiple read and write locks on
-  different regions of the same file.
-
+File locks: File locks are a synchronization method explicitly designed to
+coordinate the actions of multiple processes operating [on-the-same-file].
+They can also be used to coordinate access to other shared resources. File
+locks come in two flavors: read (shared) locks and write (exclusive) locks.
+Any number of processes can hold a read lock on the same file (or region of a
+    file). However, when one process holds a write lock on a file (or file
+      region), other processes are prevented from holding either read or write
+    locks on that file (or file region). Linux provides file-locking
+    facilities via the flock() and fcntl() system calls. The flock() system
+    call provides a simple locking mechanism, allowing processes to place a
+    shared or an exclusive lock on an entire file.  Because of its limited
+    functionality, flock() locking facility is rarely used nowadays. The
+    fcntl() system call provides record locking, allowing processes to place
+    multiple read and write locks on different regions of the same file.
 
 
 ={============================================================================
 *kt_linux_core_260* linux-sync-atomic
+
+https://gcc.gnu.org/onlinedocs/gcc-4.9.4/gcc/_005f_005fsync-Builtins.html#_005f_005fsync-Builtins
+
+6.51 Legacy __sync Built-in Functions for Atomic Memory Access
+
+The following built-in functions are intended to be compatible with those
+described in the Intel Itanium Processor-specific Application Binary Interface,
+section 7.4. As such, they depart from the normal GCC practice of using the
+‘__builtin_’ prefix, and further that they are overloaded such that they work on
+multiple types.
+
+The definition given in the Intel documentation allows only for the use of the
+types int, long, long long as well as their unsigned counterparts. GCC allows
+any integral scalar or pointer type that is 1, 2, 4 or 8 bytes in length.
+
+Not all operations are supported by all target processors. If a particular
+operation cannot be implemented on the target processor, a warning is generated
+and a call an external function is generated. The external function carries the
+same name as the built-in version, with an additional suffix ‘_n’ where n is the
+size of the data type.  In most cases, these built-in functions are considered a
+full barrier. That is, no memory operand is moved across the operation, either
+forward or backward. Further, instructions are issued as necessary to prevent
+the processor from speculating loads across the operation and from queuing
+stores after the operation.
+
+All of the routines are described in the Intel documentation to take “an
+optional list of variables protected by the memory barrier”. It's not clear what
+is meant by that; it could mean that only the following variables are protected,
+or it could mean that these variables should in addition be protected. At
+present GCC ignores this list and protects all variables that are globally
+accessible. If in the future we make some use of this list, an empty list will
+continue to mean all globally accessible variables.
+
+type __sync_fetch_and_add (type *ptr, type value, ...)
+type __sync_fetch_and_sub (type *ptr, type value, ...)
+type __sync_fetch_and_or (type *ptr, type value, ...)
+type __sync_fetch_and_and (type *ptr, type value, ...)
+type __sync_fetch_and_xor (type *ptr, type value, ...)
+type __sync_fetch_and_nand (type *ptr, type value, ...)
+
+These built-in functions perform the operation suggested by the name, and
+returns the value that had previously been in memory. That is,
+
+          { tmp = *ptr; *ptr op= value; return tmp; }
+          { tmp = *ptr; *ptr = ~(tmp & value); return tmp; }   // nand
+
+Note: GCC 4.4 and later implement __sync_fetch_and_nand as *ptr = ~(tmp & value)
+instead of *ptr = ~tmp & value. 
+
+// skipped
+
+//Source: http://golubenco.org/atomic-operations.html
+#ifndef _ATOMIC_H
+#define _ATOMIC_H
+
+/* Check GCC version, just to be safe */
+#if !defined(__GNUC__) || (__GNUC__ < 4) || (__GNUC_MINOR__ < 1)
+# error atomic.h works only with GCC newer than version 4.1
+#endif /* GNUC >= 4.1 */
+
+/**
+ * Atomic type.
+ */
+typedef struct {
+	volatile int counter;
+} atomic_t;
+
+#define ATOMIC_INIT(i)  { (i) }
+
+/**
+ * Read atomic variable
+ * @param v pointer of type atomic_t
+ *
+ * Atomically reads the value of @v.
+ */
+#define atomic_read(v) ((v)->counter)
+
+/**
+ * Set atomic variable
+ * @param v pointer of type atomic_t
+ * @param i required value
+ */
+#define atomic_set(v,i) (((v)->counter) = (i))
+
+/**
+ * Add to the atomic variable
+ * @param i integer value to add
+ * @param v pointer of type atomic_t
+ */
+static inline void atomic_add( int i, atomic_t *v )
+{
+	(void)__sync_add_and_fetch(&v->counter, i);
+}
+
+/**
+ * Subtract the atomic variable
+ * @param i integer value to subtract
+ * @param v pointer of type atomic_t
+ *
+ * Atomically subtracts @i from @v.
+ */
+static inline void atomic_sub( int i, atomic_t *v )
+{
+	(void)__sync_sub_and_fetch(&v->counter, i);
+}
+
+/**
+ * Subtract value from variable and test result
+ * @param i integer value to subtract
+ * @param v pointer of type atomic_t
+ *
+ * Atomically subtracts @i from @v and returns
+ * true if the result is zero, or false for all
+ * other cases.
+ */
+static inline int atomic_sub_and_test( int i, atomic_t *v )
+{
+	return !(__sync_sub_and_fetch(&v->counter, i));
+}
+
+/**
+ * Increment atomic variable
+ * @param v pointer of type atomic_t
+ *
+ * Atomically increments @v by 1.
+ */
+static inline void atomic_inc( atomic_t *v )
+{
+	(void)__sync_fetch_and_add(&v->counter, 1);
+}
+
+/**
+ * @brief decrement atomic variable
+ * @param v: pointer of type atomic_t
+ *
+ * Atomically decrements @v by 1.  Note that the guaranteed
+ * useful range of an atomic_t is only 24 bits.
+ */
+static inline void atomic_dec( atomic_t *v )
+{
+	(void)__sync_fetch_and_sub(&v->counter, 1);
+}
+
+/**
+ * @brief Decrement and test
+ * @param v pointer of type atomic_t
+ *
+ * Atomically decrements @v by 1 and
+ * returns true if the result is 0, or false for all other
+ * cases.
+ */
+static inline int atomic_dec_and_test( atomic_t *v )
+{
+	return !(__sync_sub_and_fetch(&v->counter, 1));
+}
+
+/**
+ * @brief Increment and test
+ * @param v pointer of type atomic_t
+ *
+ * Atomically increments @v by 1
+ * and returns true if the result is zero, or false for all
+ * other cases.
+ */
+static inline int atomic_inc_and_test( atomic_t *v )
+{
+	return !(__sync_add_and_fetch(&v->counter, 1));
+}
+
+/**
+ * @brief add and test if negative
+ * @param v pointer of type atomic_t
+ * @param i integer value to add
+ *
+ * Atomically adds @i to @v and returns true
+ * if the result is negative, or false when
+ * result is greater than or equal to zero.
+ */
+static inline int atomic_add_negative( int i, atomic_t *v )
+{
+	return (__sync_add_and_fetch(&v->counter, i) < 0);
+}
+
+#endif
+
+
+https://gcc.gnu.org/onlinedocs/gcc-4.9.4/gcc/_005f_005fatomic-Builtins.html#_005f_005fatomic-Builtins
+
+6.52 Built-in functions for memory model aware atomic operations
+
+// skipped
+
 
 {atomic-operations}
 
@@ -55333,14 +55554,16 @@ http://www.informit.com/guides/content.aspx?g=cplusplus&seqNum=469
 
 Atomicity
 
-An atomic operation is a sequence of one or more machine instructions that are executed
-sequentially, without interruption. By default, any sequence of two or more machine instructions
-isn't atomic since the operating system may suspend the execution of the current sequence of
-operations in favor of another task. If you want to ensure that a sequence of operations is atomic
+An atomic operation is a sequence of one or more machine instructions that are
+executed sequentially, without interruption. By default, any sequence of two
+or more machine instructions isn't atomic since the operating system may
+suspend the execution of the current sequence of operations in favor of
+another task. If you want to ensure that a sequence of operations is atomic
 you must use some form of locking or other types of synchronization. 
 
-Without that, the only guarantee you have is that a single machine instruction is always atomic. the
-CPU will not interrupt a single instruction in the middle. [KT] Not entirely true. 
+Without that, the only guarantee you have is that a single machine instruction
+is always atomic. the CPU will not interrupt a single instruction in the
+middle. [KT] Not entirely true. 
 
 We can conclude from that minimal guarantee that if you can prove that your compiler translates a
 certain C++ statement into a single machine instruction, that C++ statement is naturally atomic
@@ -61158,7 +61381,16 @@ void t_cxx_03(int arg1, int arg2, int arg3)
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-option-cpp
+*kt_linux_gcc_400* gcc-option-cpp gcc-cpp
+
+http://gcc.gnu.org/onlinedocs/cpp/
+
+/usr/bin/cpp
+
+The C preprocessor, often known as cpp, is a "macro processor" that is used
+automatically by the C compiler to transform your program before compilation.
+It is called a macro processor because it allows you to define 'macros', which
+are brief abbreviations for longer constructs. 
 
 https://gcc.gnu.org/onlinedocs/gcc/Preprocessor-Options.html#Preprocessor-Options
 
@@ -61197,6 +61429,44 @@ Options to control preprocessor diagnostics are listed in Warning Options.
 note: does generate a.out
 
 gcc -imacros "/usr/include/linux/version.h" -x c sample.c
+
+
+={============================================================================
+*kt_linux_gcc_203* gcc-option-cpp-search gcc-cpp-isystem
+
+-isystem dir 
+
+Mark it as a system directory, so that it gets the same special treatment as
+is applied to the standard system directories. See System Headers. 
+
+*option-sysroot*
+If dir begins with =, then the = will be replaced by the sysroot prefix; see
+--sysroot and -isysroot. 
+
+
+2.8 System Headers
+
+The header files declaring interfaces to the operating system and runtime
+libraries often cannot be written in strictly conforming C. Therefore, GCC
+gives code found in system headers 'special' treatment. All warnings, other
+than those generated by '#warning' are suppressed while GCC is processing a
+system header. Macros defined in a system header are immune to a few warnings
+wherever they are expanded. This immunity is granted on an ad-hoc basis, when
+we find that a warning generates lots of false positives because of code in
+macros defined in system headers.
+
+Normally, only the headers found in specific directories are considered system
+headers. These directories are determined when GCC is compiled. There are,
+however, two ways to make normal headers into system headers.
+
+The -isystem command line option adds its argument to the list of directories
+to search for headers, just like -I. Any headers found in that directory will
+be considered system headers. 
+
+All directories named by -isystem are searched after all directories named by
+-I, no matter what their order was on the command line. If the same directory
+is named by both -I and -isystem, the -I option is ignored. GCC provides an
+informative message when this occurs if -v is used.
 
 
 ={============================================================================
