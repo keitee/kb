@@ -20,29 +20,36 @@ using namespace testing;
 // cxx-size
 
 // x86_64/VM
-// size of (int) is           : 4
-// size of (unsigned int) is  : 4
-// size of (long) is          : 8
-// size of (unsigned long) is : 8
-// size of (long int) is      : 8
-// size of (unsigned int) is  : 8
-// size of (* int) is         : 8
-// size of (* unsigned int) is: 8
+// size of (int) is                 : 4
+// size of (unsigned int) is        : 4
+// size of (long) is                : 8
+// size of (unsigned long) is       : 8
+// size of (long int) is            : 8
+// size of (unsigned int) is        : 8
+// size of (long long) is           : 8
+// size of (unsigned long long) is  : 8
+// size of (* int) is               : 8
+// size of (* unsigned int) is      : 8
 
 TEST(Size, SizeOfTypes)
 {
-  cout << "size of (int) is           : " << sizeof (int) << endl;
-  cout << "size of (unsigned int) is  : " << sizeof (unsigned int) << endl;
-  cout << "size of (long) is          : " << sizeof (long ) << endl;
-  cout << "size of (unsigned long) is : " << sizeof (unsigned long) << endl;
-  cout << "size of (long int) is      : " << sizeof (long int) << endl;
-  cout << "size of (unsigned int) is  : " << sizeof (unsigned long int) << endl;
+  cout << "size of (int) is                 : " << sizeof (int) << endl;
+  cout << "size of (unsigned int) is        : " << sizeof (unsigned int) << endl;
+
+  cout << "size of (long) is                : " << sizeof (long ) << endl;
+  cout << "size of (unsigned long) is       : " << sizeof (unsigned long) << endl;
+
+  cout << "size of (long int) is            : " << sizeof (long int) << endl;
+  cout << "size of (unsigned long int) is   : " << sizeof (unsigned long int) << endl;
+
+  cout << "size of (long long) is           : " << sizeof (long long) << endl;
+  cout << "size of (unsigned long long) is  : " << sizeof (unsigned long long) << endl;
 
   int *pint;
   unsigned int *puint;
 
-  cout << "size of (* int) is         : " << sizeof pint << endl;
-  cout << "size of (* unsigned int) is: " << sizeof puint << endl;
+  cout << "size of (* int) is               : " << sizeof pint << endl;
+  cout << "size of (* unsigned int) is      : " << sizeof puint << endl;
 }
 
 
@@ -364,6 +371,8 @@ TEST(CxxTemplate, UseForward)
 // ={=========================================================================
 // cxx-copy-control
 
+namespace copy_control {
+
 class CopyControlBaseUsePrivate {
   public:
     CopyControlBaseUsePrivate() = default;
@@ -402,6 +411,8 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
   public:
     void getShout() { cout << "derived get shout" << endl; };
 };
+
+} // namespace
 
 // TEST(CxxCopyControl, UsePrivateAndDelete)
 // {
@@ -482,6 +493,77 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 //   //      ^
 // 
 //   CopyControlDerivedUseDelete d6(d4);
+// }
+
+
+// ={=========================================================================
+// cxx-copy-control-assign
+
+// cxx.cpp: In member function ‘virtual void CopyControl_AssignWithVoidReturn_Test::TestBody()’:
+// cxx.cpp:527:6: error: use of deleted function ‘void copy_control_assign::CopyControlBaseUseDelete::operator=(const copy_control_assign::CopyControlBaseUseDelete&)’
+//    d2 = d1;
+//       ^
+// namespace copy_control_assign {
+// 
+// class CopyControlBaseUseDelete {
+//   public:
+//     CopyControlBaseUseDelete(int value = 0) : value_(value) {}
+//     ~CopyControlBaseUseDelete() = default;
+// 
+//   public:
+//     CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
+// 
+//     void operator=(const CopyControlBaseUseDelete& base) = delete;
+// 
+//   public:
+//     int value_;
+// };
+// 
+// } // namespace
+// 
+// TEST(CopyControl, AssignWithVoidReturn)
+// {
+//   using namespace copy_control_assign;
+// 
+//   CopyControlBaseUseDelete d1(100);
+//   CopyControlBaseUseDelete d2;
+// 
+//   d2 = d1;
+// }
+
+
+// cxx.cpp: In member function ‘virtual void CopyControl_AssignWithVoidReturn_Test::TestBody()’:
+// cxx.cpp:542:10: error: ‘void copy_control_assign_use_private::CopyControlBaseUseDelete::operator=(const copy_control_assign_use_private::CopyControlBaseUseDelete&)’ is private
+//      void operator=(const CopyControlBaseUseDelete& base);
+//           ^
+// cxx.cpp:557:6: error: within this context
+//    d2 = d1;
+//       ^
+// namespace copy_control_assign_use_private {
+// 
+// class CopyControlBaseUseDelete {
+//   public:
+//     CopyControlBaseUseDelete(int value = 0) : value_(value) {}
+//     ~CopyControlBaseUseDelete() = default;
+// 
+//   private:
+//     CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base);
+//     void operator=(const CopyControlBaseUseDelete& base);
+// 
+//   public:
+//     int value_;
+// };
+// 
+// } // namespace
+// 
+// TEST(CopyControl, AssignWithVoidReturn)
+// {
+//   using namespace copy_control_assign_use_private;
+// 
+//   CopyControlBaseUseDelete d1(100);
+//   CopyControlBaseUseDelete d2;
+// 
+//   d2 = d1;
 // }
 
 
@@ -1346,7 +1428,7 @@ void CheckPassed(const char *file, int line, const char *cond,
 
 } // namespace
 
-TEST(Bool, Precentage)
+TEST(Bool, CheckUsage)
 {
   using namespace __cxx_check;
 
@@ -1354,17 +1436,20 @@ TEST(Bool, Precentage)
   //
   // if("Address is not in memory and not in shadow?")
   // becomes true
-  
+  //  
   // CHECK("Address is not in memory and not in shadow?");
   // this do not work since cannot cast to const char* to unsigned int
-
+  //
   // if( (0 && "Address is not in memory and not in shadow?"))
   // becomes false
-
+  // 
   // Sanitizer CHECK failed: cxx.cpp:1322 ((0 && "Address is not in memory and not in shadow?")) != (0) (0, 0)
   // Sanitizer CHECK failed: cxx.cpp:1325 ((100 != 100)) != (0) (0, 0)
+  //
+  // CHECK("unable to unmap" && 0);
 
   CHECK(0 && "Address is not in memory and not in shadow?");
+  CHECK("Address is not in memory and not in shadow?" && 0);
 
   CHECK(100 != 101);
   CHECK(100 != 100);
