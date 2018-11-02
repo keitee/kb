@@ -1459,7 +1459,7 @@ TEST(Bool, CheckUsage)
 // ={=========================================================================
 // cxx-stdio
 
-TEST(CxxStdio, UseInput)
+TEST(Stdio, UseInput)
 {
   int i{};
   double d{};
@@ -1534,7 +1534,7 @@ TEST(CxxStdio, UseInput)
 }
 
 
-TEST(CxxStdio, SpecialTypes)
+TEST(Stdio, SpecialTypes)
 {
   int i1{}, i2{}, i3{}, i4{};
 
@@ -1596,6 +1596,43 @@ TEST(CxxStdio, SpecialTypes)
   vector<int> coll3{i1, i2, i3, i4};
   EXPECT_THAT(coll3, ElementsAre(1,2,3,4));
   EXPECT_THAT(iss8.good(), true);
+}
+
+
+TEST(Stdio, Manipulators)
+{
+  // showpos Forces writing a positive sign on positive numbers 
+  // noshowpos Forces not writing a positive sign on positive numbers 
+  // uppercase Forces uppercase letters for numeric values 
+  // nouppercase Forces lowercase letters for numeric values 
+
+  int value = 3301;
+  cout.setf(ios::showpos | ios::uppercase);
+  cout << "value: " << value << ", value: " << -value << endl;
+
+  // not all flags are supported as manipulator object so have to use
+  // setiosflags()
+
+  cout << setiosflags(ios::showpos | ios::uppercase) 
+    << "value: " << value << ", value: " << -value << endl;
+
+  // address           perms offset  dev   inode       pathname
+  // 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
+
+  // cout.width(8);
+  cout.setf(std::ios::left);
+  cout << setw(20) << "| start" << 
+    setw(20) << "| end" << setw(20) << "| perms" << setw(20) << "| offset" 
+    << setw(40) << "| pathname" << endl;
+
+  cout.setf(std::ios::right);
+  cout << setw(20) << "| start" << 
+    setw(20) << "| end" << setw(20) << "| perms" << setw(20) << "| offset" 
+    << setw(40) << "| pathname" << endl;
+
+  cout << setw(20) << right << "| start" << 
+    setw(20) << "| end" << setw(20) << "| perms" << setw(20) << "| offset" 
+    << setw(40) << "| pathname" << endl;
 }
 
 

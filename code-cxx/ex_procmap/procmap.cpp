@@ -222,6 +222,16 @@ static uptr internal_syscall(u64 nr, T1 arg1, T2 arg2, T3 arg3, T4 arg4,
   return retval;
 }
 
+// sanitizer_common/sanitizer_libc.cc
+void *internal_memchr(const void *s, int c, uptr n) {
+  const char *t = (const char *)s;
+  for (uptr i = 0; i < n; ++i, ++t)
+    if (*t == c)
+      return reinterpret_cast<void *>(const_cast<char *>(t));
+  return nullptr;
+}
+
+// sanitizer_common/sanitizer_linux.cc
 uptr internal_mmap(void *addr, uptr length, int prot, int flags, int fd,
                    OFF_T offset) {
   return internal_syscall(SYSCALL(mmap), (uptr)addr, length, prot, flags, fd,
@@ -432,7 +442,7 @@ void ReadProcMaps(ProcSelfMapsBuff *proc_maps)
 
 
 //=============================================================================
-// syscall
+// MemoryMappingLayout
 
 static bool IsOneOf(char c, char c1, char c2)
 {
@@ -451,6 +461,12 @@ static int TranslateDigit(char c)
     return c = 'A' + 10;
 
   return -1;
+}
+
+bool IsDecimal(char c)
+{
+  int d = TranslateDigit(c);
+  return d >= 0 && d <= 9;
 }
 
 // like atoi and move up the given arg
@@ -599,27 +615,92 @@ void MemoryMappingLayout::Print()
   cout << proc_self_maps_.data << endl;
 }
 
-// // sanitizer_common/sanitizer_procmaps_linux.cc
-// bool MemoryMappingLayout::Next(uptr *start, uptr *end, uptr *offset,
-//         char *filename, uptr filename_size, uptr *protection)
-// {
-//   char *last = proc_self_maps_.dat + proc_self_maps_.len;
+// sanitizer_common/sanitizer_procmaps_linux.cc
+bool MemoryMappingLayout::Next(uptr *start, uptr *end, uptr *offset,
+        char *filename, uptr filename_size, uptr *protection)
+{
+  char *last = proc_self_maps_.data + proc_self_maps_.len;
 
-//   if (current_ >= last) returl false;
+  if (current_ >= last) return false;
 
-//   uptr dummy;
+  uptr dummy;
 
-//   if (!start) start = &dummy;
-//   if (!end) = &dummy;
-//   if (!offset) = &dummy;
-//   if (!protection) = &dummy;
+  // when not interested to have back these
 
-//   char *next_line = (char*)internal_memchr(current_, '\n', last-current_);
-//   if (next_line == nullptr)
-//     next_line = last;
+  if (!start) start = &dummy;
+  if (!end) end = &dummy;
+  if (!offset) offset = &dummy;
+  if (!protection) protection = &dummy;
 
-//   *start = ParseHex(&current_);
-// }
+  char *next_line = (char*)internal_memchr(current_, '\n', last-current_);
+  if (next_line == nullptr)
+    next_line = last;
+
+  // address           perms offset  dev   inode       pathname
+  // 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
+
+  *start = ParseHex(&current_);
+  CHECK_EQ(*current_++, '-');
+
+  *end = ParseHex(&current_);
+  CHECK_EQ(*current_++, ' ');
+
+  // check, read and incease
+  CHECK(IsOneOf(*current_, '-', 'r'));
+  *protection = 0;
+  if (*current_++ == 'r')
+    *protection |= 1; // kProtectionRead
+
+  // check, read and incease
+  CHECK(IsOneOf(*current_, '-', 'w'));
+  if (*current_++ == 'r')
+    *protection |= 2; // kProtectionWrite
+
+  // check, read and incease
+  CHECK(IsOneOf(*current_, '-', 'x'));
+  if (*current_++ == 'r')
+    *protection |= 4; // kProtectionExecute
+
+  // check, read and incease
+  CHECK(IsOneOf(*current_, 's', 'p'));
+  if (*current_++ == 'r')
+    *protection |= 8; // kProtectionShared
+
+  CHECK_EQ(*current_++, ' ');
+  *offset = ParseHex(&current_);
+
+  // dev part
+  CHECK_EQ(*current_++, ' ');
+  ParseHex(&current_);
+  CHECK_EQ(*current_++, ':');
+  ParseHex(&current_);
+  CHECK_EQ(*current_++, ' ');
+
+  // discard inode
+  while (IsDecimal(*current_))
+    ++current_;
+
+  // skip spaces
+  while (current_ < next_line && *current_ == ' ')
+    ++current_;
+
+  // pathname
+  uptr i = 0;
+  while (current_ < next_line)
+  {
+    if (filename && i < filename_size-1)
+      filename[i++] = *current_;
+    
+    ++current_;
+  }
+
+  if (filename && i < filename_size)
+    filename[i] = 0;
+
+  current_ = next_line + 1;
+
+  return true;
+}
 
 
 //=============================================================================
@@ -682,7 +763,7 @@ TEST(ProcMap, ReadProcMaps)
 // 7ffea6fb6000-7ffea6fb8000 r--p 00000000 00:00 0                          [vvar]
 // ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0                  [vsyscall]
 
-TEST(ProcMap, MappingPrint)
+TEST(DISABLED_ProcMap, MappingPrint)
 {
   MemoryMappingLayout proc_maps(/*cache_enabled*/true);
   proc_maps.Print();
@@ -691,57 +772,128 @@ TEST(ProcMap, MappingPrint)
 // break ProcMap_TranslateDigit_Test::ProcMap_TranslateDigit_Test
 TEST(ProcMap, TranslateDigit)
 {
-  int protection{};
+  uptr *start{};
+  uptr *end{};
+  uptr *offset{};
+  uptr *protection{};
+  char filename[8*10];
+  uptr filename_size = 8*10;
+  uptr dummy;
 
-  const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar";
+  // when not interested to have back these
 
-  auto value = ParseHex(&current);
-  EXPECT_EQ(value, 0x08048000);
+  if (!start) start = &dummy;
+  if (!end) end = &dummy;
+  if (!offset) offset = &dummy;
+  if (!protection) protection = &dummy;
+
+  // address           perms offset  dev   inode       pathname
+  // 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
+
+  const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar\n";
+
+  char *next_line = (char *)memchr(current, '\n', strlen(current));
+  EXPECT_TRUE(next_line);
+
+  *start = ParseHex(&current);
+  EXPECT_EQ(*start, 0x08048000);
   EXPECT_EQ(*current++, '-');
 
-  value = ParseHex(&current);
-  EXPECT_EQ(value, 0x08056000);
+  *end = ParseHex(&current);
+  EXPECT_EQ(*end, 0x08056000);
   EXPECT_EQ(*current++, ' ');
 
   // check read permission, do not increase current
   EXPECT_TRUE(IsOneOf(*current, '-', 'r'));
-  protection = 0;
+  *protection = 0;
   
   if (*current++ == 'r')
-    protection |= 1; // read
+    *protection |= 1; // read
 
   // check write permission, do not increase current
   EXPECT_TRUE(IsOneOf(*current, '-', 'w'));
-  protection = 0;
+  *protection = 0;
   
   if (*current++ == 'w')
-    protection |= 2; // read
+    *protection |= 2; // read
 
   // check exec permission, do not increase current
   EXPECT_TRUE(IsOneOf(*current, '-', 'x'));
-  protection = 0;
+  *protection = 0;
   
   if (*current++ == 'x')
-    protection |= 4; // read
+    *protection |= 4; // read
 
   // check shared permission, do not increase current
   EXPECT_TRUE(IsOneOf(*current, 's', 'p'));
-  protection = 0;
+  *protection = 0;
   
   if (*current++ == 's')
-    protection |= 8; // read
+    *protection |= 8; // shared
+
+  EXPECT_EQ(*current++, ' ');
+  *offset = ParseHex(&current);
+
+  // discard `dev` part
+  EXPECT_EQ(*current++, ' ');
+  ParseHex(&current);
+  EXPECT_EQ(*current++, ':');
+  ParseHex(&current);
+  EXPECT_EQ(*current++, ' ');
+
+  // discard `inode` part
+  while (IsDecimal(*current))
+    ++current;
+
+  // skip spaces
+  while (current < next_line && *current == ' ')
+    ++current;
+
+  // fill in the filename only when filename and filename_size(array size) are
+  // not null
+  // commented out filename to avoid warnings.
+
+  unsigned int i = 0;
+  while (current < next_line)
+  {
+    if (/* filename && */ i < filename_size-1)
+      filename[i++] = *current;
+
+    ++current;
+  }
+
+  if (/* filename && */ i < filename_size)
+    filename[i] = 0;
+
+  EXPECT_STREQ(filename, "/foo/bar");
+
+  // since it deals with many lines 
+  // current = next_line + 1;
 }
 
-// TEST(ProcMap, MappingNext)
-// {
-//   MemoryMappingLayout proc_maps(/*cache_enabled*/true);
-//   char filename[128];
-//   while (proc_maps.Next(nullptr, nullptr, nullptr, filename,
-//         sizeof(filename), nullptr)) 
-//   {
-//     cout << filename << endl;
-//   }
-// }
+
+TEST(ProcMap, MappingNext)
+{
+  MemoryMappingLayout proc_maps(/*cache_enabled*/true);
+
+  uptr start, end, offset, protection;
+
+  char filename[128];
+
+  cout << setw(20) << left << "| start " 
+    << setw(20) << "| end" << setw(20) << "| perms" << setw(20) << "| offset" 
+    << setw(40) << "| pathname" << endl;
+  cout << "=================================================================" 
+    << endl;
+
+  while (proc_maps.Next(&start, &end, &offset, filename,
+        128, &protection)) 
+  {
+    cout << setw(20) << left << hex << start
+      << setw(20) << hex << end << setw(20) << hex << protection 
+      << setw(20) << hex << offset << setw(40) << hex << filename << endl;
+  }
+}
 
 
 // ={=========================================================================
