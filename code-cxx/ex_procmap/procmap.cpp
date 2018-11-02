@@ -54,9 +54,9 @@ enum FileAccessMode
 
 
 //=============================================================================
-// locks
+// locks TODO
 
-typedef GenericScopedLock<StaticSpinMutex> SpinMutexLock;
+// typedef GenericScopedLock<StaticSpinMutex> SpinMutexLock;
 
 template<typename MutexType>
 class GenericScopedLock 
@@ -431,7 +431,67 @@ void ReadProcMaps(ProcSelfMapsBuff *proc_maps)
 }
 
 
-// 2018.10.27
+//=============================================================================
+// syscall
+
+static bool IsOneOf(char c, char c1, char c2)
+{
+  return c == c1 || c == c2;
+}
+
+static int TranslateDigit(char c)
+{
+  if (c >= '0' && c <= '9')
+    return c - '0';
+
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+
+  if (c >= 'A' && c <= 'F')
+    return c = 'A' + 10;
+
+  return -1;
+}
+
+// like atoi and move up the given arg
+//
+// note:
+// although p is defined as const, this function modifies variable via pointer.
+//
+// const char *current = "08048000-...";
+// ParseHex(&current);
+// ParseNumber(&current)
+// {
+//  (*p)++; means that changes current vaiable. 
+// }
+//
+// That's okay from compiler pov since &current is address and it not changed,
+// that is, maintained constness.
+//
+// Even this do not cause error:
+//
+// current++;
+// ++current;
+//
+
+static uptr ParseNumber(const char **p, int base)
+{
+  uptr n = 0;
+  int d;
+  CHECK(base >= 2 && base <= 16);
+  while ((d = TranslateDigit(**p)) >= 0 && d < base)
+  {
+    n = n * base + d;
+    (*p)++;
+  }
+
+  return n;
+}
+
+uptr ParseHex(const char **p)
+{
+  return ParseNumber(p, 16);
+}
 
 class MemoryMappingLayout
 {
@@ -439,11 +499,28 @@ class MemoryMappingLayout
     explicit MemoryMappingLayout(bool cache_enabled);
     ~MemoryMappingLayout();
 
+    bool Next(uptr *start, uptr *end, uptr *offset,
+        char *filename, uptr filename_size, uptr *protection);
+
+    void Print();
+
   private:
     void LoadFromCache();
+    void Reset();
+
+    // asan reads:
+    // In some cases, e.g. when running under a sandbox on Linux, ASan is unable
+    // to obtain the memory mappings. It should fall back to pre-cached data
+    // instead of aborting.
+    static void CacheMemoryMappings();
 
     ProcSelfMapsBuff proc_self_maps_;
+    static ProcSelfMapsBuff cached_proc_self_maps_;
+    const char *current_;
 };
+
+// asan says it "linker initialized"
+ProcSelfMapsBuff MemoryMappingLayout::cached_proc_self_maps_;
 
 
 MemoryMappingLayout::MemoryMappingLayout(bool cache_enabled)
@@ -455,13 +532,94 @@ MemoryMappingLayout::MemoryMappingLayout(bool cache_enabled)
     if (proc_self_maps_.mmapped_size == 0)
     {
       LoadFromCache();
+      CHECK_GT(proc_self_maps_.len, 0);
+    }
+  }
+  else
+  {
+    CHECK_GT(proc_self_maps_.len, 0);
+  }
+
+  Reset();
+
+  if (cache_enabled)
+    CacheMemoryMappings();
+}
+
+MemoryMappingLayout::~MemoryMappingLayout()
+{
+  //  Q: who's unmap cached_proc_self_maps_?
+  
+  // asan reads:
+  // Only unmap the buffer if it is different from the cached one. Otherwise
+  // it will be unmapped when the cache is refreshed.
+  if (proc_self_maps_.data != cached_proc_self_maps_.data)
+  {
+    UnmapOrDie(proc_self_maps_.data, proc_self_maps_.mmapped_size);
+  }
+}
+
+void MemoryMappingLayout::CacheMemoryMappings()
+{
+  // TODO SpinMutexLock l(&cache_lock_);
+  ProcSelfMapsBuff old_proc_self_maps;
+  old_proc_self_maps = cached_proc_self_maps_;
+  ReadProcMaps(&cached_proc_self_maps_);
+
+  if (cached_proc_self_maps_.mmapped_size == 0)
+  {
+    cached_proc_self_maps_ = old_proc_self_maps;
+  }
+  else
+  {
+    if (old_proc_self_maps.mmapped_size)
+    {
+      UnmapOrDie(old_proc_self_maps.data, old_proc_self_maps.mmapped_size);
     }
   }
 }
 
-MemoryMappingLayout::LoadFromCache()
+void MemoryMappingLayout::LoadFromCache()
 {
+  // TODO SpinMutexLock l(&cache_lock_);
+  if (cached_proc_self_maps_.data)
+  {
+    proc_self_maps_ = cached_proc_self_maps_;
+  }
 }
+
+void MemoryMappingLayout::Reset()
+{
+  current_ = proc_self_maps_.data;
+}
+
+void MemoryMappingLayout::Print()
+{
+  cout << "mapping print: " << endl;
+  cout << proc_self_maps_.data << endl;
+}
+
+// // sanitizer_common/sanitizer_procmaps_linux.cc
+// bool MemoryMappingLayout::Next(uptr *start, uptr *end, uptr *offset,
+//         char *filename, uptr filename_size, uptr *protection)
+// {
+//   char *last = proc_self_maps_.dat + proc_self_maps_.len;
+
+//   if (current_ >= last) returl false;
+
+//   uptr dummy;
+
+//   if (!start) start = &dummy;
+//   if (!end) = &dummy;
+//   if (!offset) = &dummy;
+//   if (!protection) = &dummy;
+
+//   char *next_line = (char*)internal_memchr(current_, '\n', last-current_);
+//   if (next_line == nullptr)
+//     next_line = last;
+
+//   *start = ParseHex(&current_);
+// }
 
 
 //=============================================================================
@@ -484,6 +642,106 @@ TEST(ProcMap, ReadProcMaps)
   ReadProcMaps(&proc_self_maps);
   EXPECT_NE(proc_self_maps.len, proc_self_maps.mmapped_size);
 }
+
+
+// mapping print:
+// 00400000-0047a000 r-xp 00000000 08:01 85197425                           /home/kyoupark/git/kb/code-cxx/t_ex_procmap/procmap_out
+// 00679000-0067a000 rw-p 00079000 08:01 85197425                           /home/kyoupark/git/kb/code-cxx/t_ex_procmap/procmap_out
+// 0067a000-0067b000 rw-p 00000000 00:00 0
+// 01b13000-01b34000 rw-p 00000000 00:00 0                                  [heap]
+// 7f96319a8000-7f9631b49000 r-xp 00000000 08:01 55184367                   /lib/x86_64-linux-gnu/libc-2.19.so
+// 7f9631b49000-7f9631d49000 ---p 001a1000 08:01 55184367                   /lib/x86_64-linux-gnu/libc-2.19.so
+// 7f9631d49000-7f9631d4d000 r--p 001a1000 08:01 55184367                   /lib/x86_64-linux-gnu/libc-2.19.so
+// 7f9631d4d000-7f9631d4f000 rw-p 001a5000 08:01 55184367                   /lib/x86_64-linux-gnu/libc-2.19.so
+// 7f9631d4f000-7f9631d53000 rw-p 00000000 00:00 0
+// 7f9631d53000-7f9631d69000 r-xp 00000000 08:01 55181316                   /lib/x86_64-linux-gnu/libgcc_s.so.1
+// 7f9631d69000-7f9631f68000 ---p 00016000 08:01 55181316                   /lib/x86_64-linux-gnu/libgcc_s.so.1
+// 7f9631f68000-7f9631f69000 rw-p 00015000 08:01 55181316                   /lib/x86_64-linux-gnu/libgcc_s.so.1
+// 7f9631f69000-7f9632069000 r-xp 00000000 08:01 55184371                   /lib/x86_64-linux-gnu/libm-2.19.so
+// 7f9632069000-7f9632268000 ---p 00100000 08:01 55184371                   /lib/x86_64-linux-gnu/libm-2.19.so
+// 7f9632268000-7f9632269000 r--p 000ff000 08:01 55184371                   /lib/x86_64-linux-gnu/libm-2.19.so
+// 7f9632269000-7f963226a000 rw-p 00100000 08:01 55184371                   /lib/x86_64-linux-gnu/libm-2.19.so
+// 7f963226a000-7f9632356000 r-xp 00000000 08:01 104206913                  /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.20
+// 7f9632356000-7f9632556000 ---p 000ec000 08:01 104206913                  /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.20
+// 7f9632556000-7f963255e000 r--p 000ec000 08:01 104206913                  /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.20
+// 7f963255e000-7f9632560000 rw-p 000f4000 08:01 104206913                  /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.20
+// 7f9632560000-7f9632575000 rw-p 00000000 00:00 0
+// 7f9632575000-7f963258d000 r-xp 00000000 08:01 55184363                   /lib/x86_64-linux-gnu/libpthread-2.19.so
+// 7f963258d000-7f963278c000 ---p 00018000 08:01 55184363                   /lib/x86_64-linux-gnu/libpthread-2.19.so
+// 7f963278c000-7f963278d000 r--p 00017000 08:01 55184363                   /lib/x86_64-linux-gnu/libpthread-2.19.so
+// 7f963278d000-7f963278e000 rw-p 00018000 08:01 55184363                   /lib/x86_64-linux-gnu/libpthread-2.19.so
+// 7f963278e000-7f9632792000 rw-p 00000000 00:00 0
+// 7f9632792000-7f96327b3000 r-xp 00000000 08:01 55184364                   /lib/x86_64-linux-gnu/ld-2.19.so
+// 7f963298c000-7f9632992000 rw-p 00000000 00:00 0
+// 7f96329ab000-7f96329b2000 rw-p 00000000 00:00 0
+// 7f96329b2000-7f96329b3000 r--p 00020000 08:01 55184364                   /lib/x86_64-linux-gnu/ld-2.19.so
+// 7f96329b3000-7f96329b4000 rw-p 00021000 08:01 55184364                   /lib/x86_64-linux-gnu/ld-2.19.so
+// 7f96329b4000-7f96329b5000 rw-p 00000000 00:00 0
+// 7ffea6f7a000-7ffea6f9b000 rw-p 00000000 00:00 0                          [stack]
+// 7ffea6fb4000-7ffea6fb6000 r-xp 00000000 00:00 0                          [vdso]
+// 7ffea6fb6000-7ffea6fb8000 r--p 00000000 00:00 0                          [vvar]
+// ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0                  [vsyscall]
+
+TEST(ProcMap, MappingPrint)
+{
+  MemoryMappingLayout proc_maps(/*cache_enabled*/true);
+  proc_maps.Print();
+}
+
+// break ProcMap_TranslateDigit_Test::ProcMap_TranslateDigit_Test
+TEST(ProcMap, TranslateDigit)
+{
+  int protection{};
+
+  const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar";
+
+  auto value = ParseHex(&current);
+  EXPECT_EQ(value, 0x08048000);
+  EXPECT_EQ(*current++, '-');
+
+  value = ParseHex(&current);
+  EXPECT_EQ(value, 0x08056000);
+  EXPECT_EQ(*current++, ' ');
+
+  // check read permission, do not increase current
+  EXPECT_TRUE(IsOneOf(*current, '-', 'r'));
+  protection = 0;
+  
+  if (*current++ == 'r')
+    protection |= 1; // read
+
+  // check write permission, do not increase current
+  EXPECT_TRUE(IsOneOf(*current, '-', 'w'));
+  protection = 0;
+  
+  if (*current++ == 'w')
+    protection |= 2; // read
+
+  // check exec permission, do not increase current
+  EXPECT_TRUE(IsOneOf(*current, '-', 'x'));
+  protection = 0;
+  
+  if (*current++ == 'x')
+    protection |= 4; // read
+
+  // check shared permission, do not increase current
+  EXPECT_TRUE(IsOneOf(*current, 's', 'p'));
+  protection = 0;
+  
+  if (*current++ == 's')
+    protection |= 8; // read
+}
+
+// TEST(ProcMap, MappingNext)
+// {
+//   MemoryMappingLayout proc_maps(/*cache_enabled*/true);
+//   char filename[128];
+//   while (proc_maps.Next(nullptr, nullptr, nullptr, filename,
+//         sizeof(filename), nullptr)) 
+//   {
+//     cout << filename << endl;
+//   }
+// }
 
 
 // ={=========================================================================
