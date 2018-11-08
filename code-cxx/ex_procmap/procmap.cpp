@@ -53,7 +53,7 @@ enum FileAccessMode
 };
 
 
-//=============================================================================
+//={===========================================================================
 // locks TODO
 
 // typedef GenericScopedLock<StaticSpinMutex> SpinMutexLock;
@@ -78,7 +78,7 @@ class GenericScopedLock
 };
 
 
-//=============================================================================
+//={===========================================================================
 // check
 
 // #define FORMAT(f, a)  __attribute__((format(printf, f, a)))
@@ -128,7 +128,7 @@ void CheckFailed(const char *file, int line, const char *cond,
 #define CHECK_GT(a, b)  CHECK_IMPL((a), >, (b))
 
 
-//=============================================================================
+//={===========================================================================
 // syscall
 // sanitizer_common/sanitizer_syscall_linux_x86_64.inc
 
@@ -258,8 +258,8 @@ uptr internal_read(int fd, void *buf, uptr count) {
 }
 
 
-//=============================================================================
-// syscall
+//={===========================================================================
+// common
 
 uptr GetPageSize()
 {
@@ -565,6 +565,7 @@ MemoryMappingLayout::MemoryMappingLayout(bool cache_enabled)
 MemoryMappingLayout::~MemoryMappingLayout()
 {
   //  Q: who's unmap cached_proc_self_maps_?
+  //  Under normal condition, proc_self_maps and cached are the same. 
   
   // asan reads:
   // Only unmap the buffer if it is different from the cached one. Otherwise
@@ -574,6 +575,9 @@ MemoryMappingLayout::~MemoryMappingLayout()
     UnmapOrDie(proc_self_maps_.data, proc_self_maps_.mmapped_size);
   }
 }
+
+// If reading cache fails then fall back to the old and if that success, then
+// unmaps the old and the cache will have the latest.
 
 void MemoryMappingLayout::CacheMemoryMappings()
 {
@@ -701,6 +705,82 @@ bool MemoryMappingLayout::Next(uptr *start, uptr *end, uptr *offset,
 
   return true;
 }
+
+
+//={===========================================================================
+// InternalScopedBuffer
+
+// asan reads:
+// InternalScopedBuffer can be used instead of large stack arrays to
+// keep frame size low.
+// FIXME: use InternalAlloc instead of MmapOrDie once
+// InternalAlloc is made libc-free.
+//
+// what does it mean? probably it means that it uses heap instead
+
+
+//     InternalScopedBuffer<LoadedModule> modules(kMaxNumberOfModules);
+//     CHECK(modules.data());
+//     int n_modules = GetListOfModules(modules.data(), kMaxNumberOfModules,
+//                                      /* filter */ nullptr);
+// 
+//     MemoryMappingLayout memory_mapping(false);
+//     return memory_mapping.DumpListOfModules(modules, max_modules, filter);
+// 
+// uptr MemoryMappingLayout::DumpListOfModules(LoadedModule *modules,
+//                                             uptr max_modules,
+//                                             string_predicate_t filter) {
+// }
+
+template<typename T>
+class InternalScopedBuffer 
+{
+  public:
+    explicit InternalScopedBuffer(uptr count)
+    {
+      count_ = count;
+      ptr_ = (T*)MmapOrDie(count_ * sizeof(T), "InternalScopedBuffer");
+    }
+
+    ~InternalScopedBuffer()
+    {
+      UnmapOrDie(ptr_, count_ * sizeof(T));
+    }
+
+    InternalScopedBuffer(const InternalScopedBuffer &) = delete;
+    InternalScopedBuffer operator=(const InternalScopedBuffer &) = delete;
+
+    uptr size() { return count_ * sizeof(T); }
+    T *data() { return ptr_; }
+    T &operator[](uptr i) { ptr_[i]; } 
+
+  private:
+    T *ptr_;
+    uptr count_;
+};
+
+#if 0
+
+//={===========================================================================
+// LoadedModule
+
+// Represents a binary loaded into virtual memory (e.g. this can be an
+// executable or a shared object).
+
+class LoadedModule
+{
+  public:
+    LoadedModule() : fullname_(nullptr), base_address_(0)
+  {
+    ranges_.clear();
+  }
+  private:
+    char *fullname_;
+    uptr base_address_;
+    IntrusiveList<AddressRange> ranges_;
+};
+
+#endif 
 
 
 //=============================================================================
@@ -892,6 +972,22 @@ TEST(ProcMap, MappingNext)
     cout << setw(20) << left << hex << start
       << setw(20) << hex << end << setw(20) << hex << protection 
       << setw(20) << hex << offset << setw(40) << hex << filename << endl;
+  }
+}
+
+
+TEST(ProcMap, InternalScopedBuffer)
+{
+  InternalScopedBuffer<char> buffer(100);
+  string str{};
+
+  cout << "buffer size: " << buffer.size() << endl;
+
+  for (int i = 0; i < 20; ++i)
+  {
+    str = "this is a loop on buffer for " + to_string(i) + "th";
+    strcpy(buffer.data(), str.c_str());
+    cout << buffer.data() << endl;
   }
 }
 

@@ -11872,7 +11872,7 @@ Assign with different types? Need additional copy-assign.
 
 <assignment-must-return-a-reference-to-this>
 EC++10. All assign operations *cxx-overload-operator-assign* must follow this
-convention like built-in types because of 'chain' of assignment and should
+convention like built-in types `because of chain of assignment` and should
 behave the same as built-in types.
 
 x = y = z = 15;   // right associative
@@ -31447,7 +31447,7 @@ A class defined within another class, called nested class or nested type.
 Most used to define implementation class. This defines `type-member` of
 enclosing class. The nested class are:
 
-* independent classes in terms of object to their enclosing class.
+* `independent classes` in terms of object to their enclosing class.
 * `type members` of enclosing class and are under access control.
 * types which are scope.
 
@@ -31455,7 +31455,7 @@ enclosing class. The nested class are:
 A companion class, QueryResult, which is 'tightly' coupled to TextQuery class.
 It would make little sense to use QueryResult for any other purpose than to
 represent the result of a query operation. To reflect this coupling, make
-QueryResult a 'member' of TextQuery.
+QueryResult a `type member` of TextQuery.
 
 class TextQuery {
   public:
@@ -38262,113 +38262,164 @@ sort()
 ={============================================================================
 *kt_dev_cxx_0000* cxx-container-cxx-forward-list
 
-A forward_list<> is implemented as a 'singly' linked list of elements. As a
-consequence, where all operations that move backward or would cause a
-performance penalty are not supported. 
+7.6.1 Abilities of Forward Lists
 
-note: For this reason, member functions such as push_back() and even size()
-are not provided.
+Forward lists have the following limitations compared to lists:
 
-<example>
-#include <iostream>
-#include <forward_list>
+o A forward list does not provide a size() member function. This is a
+consequence of omitting features that create time or space overhead relative
+to a handwritten singly linked list.
 
-using namespace std;
+Forward lists provide no size() operation. The reason is that it is not
+possible to store or compute the current number of elements in constant time.
+And to make the fact visible that size() is an expensive operation, it is not
+provided. If you have to compute the number of elements, you can use
+distance()
 
-int main()
-{
-  forward_list<long> coll{2,3,5,7,11,13,17};
+So, if you need the size, either track it outside the forward_list or use a
+list instead.
 
-  // poor performance
-  coll.resize(9);
-  coll.resize(10,99);
+o The anchor of a forward list `has no pointer to the last element.` For this
+reason, a forward list does not provide the special member functions to deal
+with the last element, back(), push_back(), and pop_back().
 
-  for( auto &elem : coll )
-    cout << elem << ' ';
-  
-  cout << endl;
-}
+Other than these differences, forward lists behave just like lists:
 
-2 3 5 7 11 13 17 0 0 99
+
+c.front() 
+Returns the first element (no check whether a first element exists)
+
+c.begin() 
+Returns a bidirectional iterator for the first element
+
+c.end() 
+Returns a bidirectional iterator for the position after the last element
+
+c.cbegin() 
+Returns a constant bidirectional iterator for the first element (since C++11)
+
+c.cend() 
+Returns a constant bidirectional iterator for the position after the last
+element (since C++11)
+
+c.before_begin() 
+Returns a forward iterator for the position before the first element
+
+c.cbefore_begin() 
+Returns a constant forward iterator for the position before the first element
+
+Note that before_begin() and cbefore_begin() do not represent a valid position
+of a forward list.
+
+Besides copying and assignments, the only valid operations for return values
+of before_begin() are ++, ==, and !=.
+
+xxx_begin() or insert_xxx()
+
+Note that for all the insert, emplace, and erase member functions provided for
+forward lists, you have a problem: They usually get a position of an element,
+where you have to insert a new element or must delete. But this requires a
+  modification of the preceding element, because there the pointer to the next
+  element has to get modified. For lists, you can just go backward to the
+  previous element to manipulate it, `but for forward lists, you can’t.` For
+  this reason, the member functions behave differently than for lists, which
+  is reflected by the name of the member functions. All end with _after, which
+  means that they insert a new element after the one passed (i.e., they
+      append) or delete the element after the element passed.
+
+
+Table 7.32. Insert and Remove Operations of Forward Lists
+
+c.push_front(elem)
+c.pop_front()
+
+c.insert_after(pos,elem)
+c.insert_after(pos,n,elem) 
+c.insert_after(pos,beg,end) 
+c.insert_after(pos,initlist) 
+c.emplace_after(pos,args...) 
+c.emplace_front(args...) 
+
+c.erase_after(pos)
+c.erase_after(beg,end)
+c.remove(val)
+c.remove_if(op)
+
+c.resize(num)
+c.resize(num,elem)
+c.clear()
+
 
 <ex> 
-// This is *cpp-is-implemented-in-terms-of* to have size() which is not
-// supported.
-
-#include <iostream>
-#include <forward_list>
-
-template<typename T>
-class Forward_list {
-  private:
-    size_t count;
-    std::forward_list<T> list;
-
-  public:
-    typedef typename std::forward_list<T>::iterator iterator;
-
-    Forward_list() : count(0) {}
-
-    void push_front(const T& elem) {
-      count++;
-      list.push_front(elem);
-    }
-
-    size_t size() const {
-      return count;
-    }
-
-    // note: "iterator begin() const" causes compile error
-    iterator begin() {
-      return list.begin();
-    }
-
-    iterator end() {
-      return list.end();
-    }
-};
-
-int main()
+TEST(ForwardList, InsertAfter)
 {
-  int n, item;
-  Forward_list<int> ilist;
-  Forward_list<int>::iterator ihead;
-
-  std::cout << 
-    "type in an integer n(loop count) followed by n decimal numbers." << std::endl;
-
-  std::cin >> n;
-
-  for(int i=0; i<n; i++)
-  {
-    std::cin >> item;
-    ilist.push_front(item);
-  }
-
-  std::cout << 
-    "input is done and you have entered " << ilist.size() << " items" << std::endl;
-
-  ihead = ilist.begin();
-
-  for(; ihead != ilist.end(); ihead++) 
-  {
-    std::cout << "items: " << *ihead << std::endl; 
-  }
+  forward_list<int> coll{1,2,3};
+  coll.insert_after(coll.before_begin(), {77, 88, 99});
+  EXPECT_THAT(coll, ElementsAre(77, 88, 99, 1, 2, 3));
 }
 
-type in an integer n(loop count) followed by n decimal numbers.
-5
-10
-20
-30
-40
-50
-input is done and you have entered 5 items
-items: 50
-items: 40
-items: 30
-items: 20
-items: 10
+// This is *cxx-is-implemented-in-terms-of* to have size() which is not
+// supported.
+
+namespace use_forward_list
+{
+  template<typename T>
+    class ForwardList
+    {
+      public:
+        typedef typename std::forward_list<T>::iterator iterator;
+
+        ForwardList() : count_(0) {}
+
+        size_t size() const { return count_; }
+        void push_front(const T& elem)
+        {
+          ++count_;
+          list_.push_front(elem);
+        }
+
+        iterator begin() { return list_.begin(); }
+        iterator end() { return list_.end(); }
+
+      private:
+        size_t count_;
+        std::forward_list<T> list_;
+    };
+}
+
+TEST(ForwardList, ImplementedInTermsOf)
+{
+  using namespace use_forward_list;
+
+  ForwardList<int> coll;
+
+  for (int i = 0; i < 8; ++i)
+  {
+    coll.push_front(i);
+  }
+
+  // {7, 6, 5, 4, 3, 2, 1}
+  
+  ForwardList<int> rcoll;
+
+  auto iter = coll.begin();
+  for (iter; iter != coll.end(); ++iter)
+  {
+    rcoll.push_front(*iter);
+  }
+
+  // {1, 2, 3, 4, 5, 6, 7}
+ 
+  //iter = rcoll.begin();
+  //for (iter; iter != rcoll.end(); ++iter)
+  //{
+  //  cout << "iter: " << *iter << endl;
+  //}
+
+  // do not work since ForwardList is not complete and may not support gtest
+  // expects
+  // EXPECT_THAT(rcoll, ElementsAre(7, 6, 5, 4, 3, 2, 1, 0));
+}
 
 
 ={============================================================================
@@ -45672,7 +45723,9 @@ namespace std {
       // this emits const error:
       // return std::string(encoding.back());
 
-      /**
+      // *cxx-string-ctor*
+
+      /** *cxx-cstring*
        *  @brief  Construct string as copy of a C string.
        *  @param  __s  Source C string.
        *  @param  __a  Allocator to use (default is default allocator).
@@ -45979,8 +46032,9 @@ s.copy(buffer,100); // copy at most 100 characters of s into buffer
 
 data(), c_str()   Returns the value as C-string or character array
 
+*cxx-cstring*
 data() and c_str() return the contents of the string as an array of characters.
-The array 'includes' the end-of-string character at position [size()]. 
+`The array includes the end-of-string character at position [size()].` 
 
 note: 
 use c_str() since before C++11, the return type of data() was not a valid
