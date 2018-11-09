@@ -17,7 +17,7 @@ using namespace testing;
 
 
 // ={=========================================================================
-// cxx-size
+// cxx-size cxx-sizeof
 
 // x86_64/VM
 // size of (int) is                 : 4
@@ -50,6 +50,62 @@ TEST(Size, SizeOfTypes)
 
   cout << "size of (* int) is               : " << sizeof pint << endl;
   cout << "size of (* unsigned int) is      : " << sizeof puint << endl;
+}
+
+namespace use_sizeof {
+
+struct nlist {
+  struct nlist *next;
+  char *name;
+  char *defn;
+};
+
+} // namespace
+
+TEST(Size, Arrays)
+{
+  using namespace use_sizeof;
+
+  // array, sizeof, strlen and valid index:
+  // 
+  //   0   1   2   3   4   5 
+  //   D   S   M   :   !   \0
+  // 
+  // valid array index     [0, 6) [0, size(), sizeof()) or [0, 5] [0, size()-1]
+  // valid cstring index   [0, 5) [0, strlen()) or [0, 4] [0, strlen()-1]
+
+  char *s1 = "this is first message";
+  char s2[] = "this is first message";
+
+  // is a pointer
+  EXPECT_EQ(sizeof(s1), 8);
+  EXPECT_EQ(sizeof s1, 8);
+
+  // is object
+  EXPECT_EQ(sizeof(*s1), 1);
+
+  // is array
+  EXPECT_EQ(sizeof(s2), 22);
+  EXPECT_EQ(sizeof(s2)/sizeof(s2[0]), 22);
+
+  // strlen
+  EXPECT_EQ(strlen(s2), 21);
+
+  string s{s1};
+  EXPECT_EQ(s.size(), 21);
+
+
+  char coll1[100];
+  EXPECT_EQ(sizeof(coll1), 100);
+
+  char coll2[] = {1,2,3,4,5,6,7};
+  EXPECT_EQ(sizeof(coll2), 7);
+
+  struct nlist *plist;
+  EXPECT_EQ(sizeof(plist), 8);
+  // 8 or else?
+  // Here a pointer points to a 'type' and this is a struct in this case.
+  EXPECT_EQ(sizeof(*plist), 24);
 }
 
 
@@ -662,49 +718,6 @@ TEST(CxxFeaturesTest, UseEnumHack)
 
 
 // ={=========================================================================
-// cxx-reference-const
-
-struct Snitch_X {   // Note: All methods have side effects
-    Snitch_X(int value): value_(value) { cout << "c'tor" << endl; }
-    ~Snitch_X() { cout << "d'tor" << endl; }
-
-    Snitch_X(Snitch_X const&) { cout << "copy c'tor" << endl; }
-    Snitch_X(Snitch_X&&) { cout << "move c'tor" << endl; }
-
-    Snitch_X& operator=(Snitch_X const&) {
-        cout << "copy assignment" << endl;
-        return *this;
-    }
-
-    Snitch_X& operator=(Snitch_X&&) {
-        cout << "move assignment" << endl;
-        return *this;
-    }
-
-    int getValue() const { return value_;}
-
-    private:
-        int value_{0};
-};
-
-Snitch_X ExampleRVO_X() {
-
-  Snitch_X sn(100);
-
-  cout << "in example rvo: " << sn.getValue() << endl;
-
-  return sn;
-}
-
-TEST(CxxFeaturesTest, UseConstReference)
-{
-    cout << "----------" << endl;
-    Snitch_X snitch = ExampleRVO_X();
-    cout << "----------" << endl;
-}
-
-
-// ={=========================================================================
 // cxx-rvo
 
 struct Snitch {   // Note: All methods have side effects
@@ -788,44 +801,188 @@ TEST(CxxFeaturesTest, UseAssignment)
 
 
 // ={=========================================================================
+// cxx-reference-const
+
+struct Snitch_X {   // Note: All methods have side effects
+    Snitch_X(int value): value_(value) { cout << "c'tor" << endl; }
+    ~Snitch_X() { cout << "d'tor" << endl; }
+
+    Snitch_X(Snitch_X const&) { cout << "copy c'tor" << endl; }
+    Snitch_X(Snitch_X&&) { cout << "move c'tor" << endl; }
+
+    Snitch_X& operator=(Snitch_X const&) {
+        cout << "copy assignment" << endl;
+        return *this;
+    }
+
+    Snitch_X& operator=(Snitch_X&&) {
+        cout << "move assignment" << endl;
+        return *this;
+    }
+
+    int getValue() const { return value_;}
+
+    private:
+        int value_{0};
+};
+
+Snitch_X ExampleRVO_X() {
+
+  Snitch_X sn(100);
+
+  cout << "in example rvo: " << sn.getValue() << endl;
+
+  return sn;
+}
+
+TEST(Reference, UseConstReference)
+{
+  cout << "----------" << endl;
+  Snitch_X snitch = ExampleRVO_X();
+  cout << "----------" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-reference-callby
+
+namespace use_reference_callby
+{
+  void swap_by_value(int x, int y)
+  {
+    int temp;
+    temp = x;
+    x = y;
+    y = temp;
+  }
+
+  void swap_by_pointer(int *x, int *y)
+  {
+    int temp;
+    temp = *x;
+    *x = *y;
+    *y = temp;
+  }
+
+  void swap_by_reference(int &x, int &y)
+  {
+    int temp;
+    temp = x;
+    x = y;
+    y = temp;
+  }
+
+  void fill_buffer_by_pointer(char *buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
+
+  // cxx.cpp: In function ‘void use_reference_callby::fill_buffer_by_reference(char&)’:
+  // cxx.cpp:826:52: error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
+  //      sprintf(buffer, "is filled by pointer %d\n", 10);
+  //                                                     ^
+
+  // void fill_buffer_by_reference(char &buffer)
+  // {
+  //   sprintf(buffer, "is filled by pointer %d\n", 10);
+  // }
+
+} // namespace
+
+TEST(Reference, CallBy)
+{
+  using namespace use_reference_callby;
+
+  // no swap
+  {
+    int x = 10, y = 20;
+    swap_by_value(x, y);
+    EXPECT_EQ(x, 10);
+    EXPECT_EQ(y, 20);
+  }
+
+  // swap
+  {
+    int x = 10, y = 20;
+    swap_by_pointer(&x, &y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+
+  // swap
+  // note: no need to pass its address
+  {
+    int x = 10, y = 20;
+    swap_by_reference(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+}
+
+TEST(Reference, OnCFunctions)
+{
+  using namespace use_reference_callby;
+
+  {
+    char buffer[100];
+    fill_buffer_by_pointer(buffer);
+    cout << buffer << endl;
+  }
+}
+
+
+// ={=========================================================================
 // cxx-reference-and-access
 
-// value: 10
-// value: 100
-// value: 200
+// Q: does it work to access private of that?
+// 
+// bool operator==(const Location &that)
+// {
+//   return longitude_ == that.longitude_ &&
+//     latitude_ == that.latitude_;
+// }
+//
+// while use of reference member is error when returning whole object but use of
+// reference member is find when returning that reference member
 
 class AUsePrivateMemberThroughReference
 {
-    private:
-        int val_;
+  private:
+    int val_;
 
-    public:
-        AUsePrivateMemberThroughReference() : val_(10) {}
+  public:
+    AUsePrivateMemberThroughReference() : val_(10) {}
 
-        int &returnReference()
-        {
-           return val_;
-        }
-        
-        // error
-        // AUsePrivateMemberThroughReference &returnReference()
-        // {
-        //     return *this;
-        // }
+    int &returnReference()
+    {
+      return val_;
+    }
 
-        void changePrivate(AUsePrivateMemberThroughReference &that)
-        {
-            that.val_ = 200;
-        }
+    // cxx.cpp: In member function ‘virtual void Reference_UsePrivateMemberThroughReference_Test::TestBody()’:
+    // cxx.cpp:800:9: error: ‘int AUsePrivateMemberThroughReference::val_’ is private
+    //      int val_;
+    //          ^
+    // cxx.cpp:840:9: error: within this context
+    //      ref.val_ = 100;
 
-        void printValue() const
-        {
-            std::cout << "value: " << val_ << std::endl;
-        }
+    // AUsePrivateMemberThroughReference &returnReference()
+    // {
+    //     return *this;
+    // }
+
+    void changePrivate(AUsePrivateMemberThroughReference &that)
+    {
+      that.val_ = 200;
+    }
+
+    void printValue() const
+    {
+      std::cout << "value: " << val_ << std::endl;
+    }
 };
 
 
-TEST(CxxFeaturesTest, UsePrivateMemberThroughReference)
+TEST(Reference, AccessOnReference)
 {
     AUsePrivateMemberThroughReference firstObjectWithValue10;
 

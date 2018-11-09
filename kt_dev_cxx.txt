@@ -6455,43 +6455,8 @@ different.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-cstring cxx-check cxx-sizeof
 
-array, sizeof, strlen and valid index:
-
-  0   1   2   3   4   5 
-  D   S   M   :   !   \0
-
-valid array index     [0, 6) [0, size(), sizeof()) or [0, 5] [0, size()-1]
-valid cstring index   [0, 5) [0, strlen()) or [0, 4] [0, strlen()-1]
-
-// = 03 ======
-// size of s1 cstring  : 8
-// size of s1 cstring  : 8
-// size of s1 cstring  : 1
-// size of s2 cstring  : 22
-// size of s2 cstring  : 22
-// strlen of s2 cstring: 21
-// size of string      : 21
-
-int t_string_03()
-{
-    char *s1 = "this is first message";
-    char s2[] = "this is first message";
-    cout << "size of s1 cstring  : " << sizeof(s1) << endl;
-    cout << "size of s1 cstring  : " << sizeof s1 << endl;
-    cout << "size of s1 cstring  : " << sizeof *s1 << endl;
-    cout << "size of s2 cstring  : " << sizeof(s2) << endl;
-    cout << "size of s2 cstring  : " << sizeof(s2)/sizeof(s2[0]) << endl;
-    cout << "strlen of s2 cstring: " << strlen(s2) << endl;
-
-    string s{s1};
-    cout << "size of string      : " << s.size() << endl;
-}
-
-
-{cxx-sizeof}
-
 Queries size of the 'object' or 'type'. Used when actual size of the object
-must be known at compile time:
+must be known `at compile time`:
 
 sizeof (type)
 sizeof expression/object
@@ -6532,30 +6497,6 @@ val1 = sizeof int;
 : error: expected ';' before 'int
 
 
-struct nlist {
-  struct nlist *next;
-  char *name;
-  char *defn;
-};
-
-int main( int argc, char *argv[] )
-{
-  char val = sizeof(val);
-  printf("sizeof is %d\n", val );
-
-  int *pint;
-  printf("sizeof is %d\n", sizeof(*pint));
-
-  struct nlist *plist;
-  printf("sizeof is %d\n", sizeof(*plist));  
-
-  // <Q> 4 or 12? 12 since it is the same as printf("sizeof is %d\n",
-  // sizeof(struct nlist));
-}
-
-Here a pointer points to a 'type' and this is a struct in this case.
-
-
 <to-get-array-size> cpp-array
 Two forms and the 'latter' is 'better' since do not need to be changed if the
 type changes.
@@ -6581,6 +6522,60 @@ int func(int arr[])
   ...
 }
 
+
+namespace use_sizeof {
+
+struct nlist {
+  struct nlist *next;
+  char *name;
+  char *defn;
+};
+
+} // namespace
+
+TEST(Size, Arrays)
+{
+  using namespace use_sizeof;
+
+  // array, sizeof, strlen and valid index:
+  // 
+  //   0   1   2   3   4   5 
+  //   D   S   M   :   !   \0
+  // 
+  // valid array index     [0, 6) [0, size(), sizeof()) or [0, 5] [0, size()-1]
+  // valid cstring index   [0, 5) [0, strlen()) or [0, 4] [0, strlen()-1]
+
+  char *s1 = "this is first message";
+  char s2[] = "this is first message";
+
+  // is a pointer
+  EXPECT_EQ(sizeof(s1), 8);
+  EXPECT_EQ(sizeof s1, 8);
+
+  // is object
+  EXPECT_EQ(sizeof(*s1), 1);
+
+  // is array
+  EXPECT_EQ(sizeof(s2), 22);
+  EXPECT_EQ(sizeof(s2)/sizeof(s2[0]), 22);
+
+  // strlen
+  EXPECT_EQ(strlen(s2), 21);
+
+  string s{s1};
+  EXPECT_EQ(s.size(), 21);
+
+  char coll1[100];
+  EXPECT_EQ(sizeof(coll1), 100);
+
+  char coll2[] = {1,2,3,4,5,6,7};
+  EXPECT_EQ(sizeof(coll2), 7);
+
+  struct nlist *plist;
+  EXPECT_EQ(sizeof(plist), 8);
+  // 8 or else?
+  EXPECT_EQ(sizeof(*plist), 24);
+}
 
 
 {cxx-strlen} *cxx-side-effect*  
@@ -12099,7 +12094,7 @@ The reference is a sub set of pointer which is limited in use?
 
 * No copy made so efficient code
 
-* Syntatic need such as operator[], operator*
+* Syntatic need such as return of operator[], operator*
 
 vector<T> v; v[5] = 10;
 
@@ -12110,7 +12105,7 @@ see *cxx-swap*
 "No operator operates on a reference" which means operation becomes operation
 on underlying object since a reference is another name.
 
-* `no-null-reference` and 'must' be initialized. 
+* `no-null-reference` and `must be initialized(binded)` 
 
 From MEC++01. Unlike pointer, `no need to check its validity` since always
 refers to an object.
@@ -12151,8 +12146,7 @@ int &refVal = iVal;        // the same and no compile error
 int &refVal3 = iVal;
 
 
-<6>
-Reference should 'match' to type and cannot bind to a literal.
+* Reference should 'match' to type and cannot bind to a literal.
 
 int &ref = 10;                        // error
 double dval = 3.14; int &ref = dval;  // error
@@ -12207,8 +12201,9 @@ int* ptrs[10];
 int& refs[10];    // error. no arrays of ref
 
 
-note:
-C++PL p198. If you need a notion of "no value", pointers offer nullptr.  There
+* no-null-reference
+
+C++PL p198. If you need a notion of "no value", pointers offer nullptr. There
 is no equivalent null reference, so if you need a no value using a pointer may
 be most appropriate.
 
@@ -12242,7 +12237,7 @@ Use refernece to avoid these cost of copying:
 
 bool validateStudent(const Student& s);
 
-The good points: 
+The good points: *cxx-reference-arg*
 
 * Less expensive since no object creation so more 'performance'. So
   recommendation is that: 
@@ -12252,7 +12247,7 @@ The good points:
 
 * The `const` is necessary since in pass-by-value case, the caller know that
   they are shielded from any changes the function might make. To have the same
-  for pass-by-reference, need const. 
+  protection for pass-by-reference, need const. 
 
 * Can avoid `sliced-off` problem. For example:
 
@@ -12290,39 +12285,96 @@ void printNameAndDisplay(const Window& w)
 
 
 <ex>
-There is a difference between called-by-reference(passed-by-reference) and
-called-by-value.
+namespace use_reference_callby
+{
+  void swap_by_value(int x, int y)
+  {
+    int temp;
+    temp = x;
+    x = y;
+    y = temp;
+  }
 
-void reset( int i )
-{ i = 0; }
+  void swap_by_pointer(int *x, int *y)
+  {
+    int temp;
+    temp = *x;
+    *x = *y;
+    *y = temp;
+  }
 
-int j = 42;
-void reset (j); 
+  void swap_by_reference(int &x, int &y)
+  {
+    int temp;
+    temp = x;
+    x = y;
+    y = temp;
+  }
+} // namespace
 
-what's the value of j here?
+TEST(Reference, CallBy)
+{
+  using namespace use_reference_callby;
+
+  // no swap
+  {
+    int x = 10, y = 20;
+    swap_by_value(x, y);
+    EXPECT_EQ(x, 10);
+    EXPECT_EQ(y, 20);
+  }
+
+  // swap
+  {
+    int x = 10, y = 20;
+    swap_by_pointer(&x, &y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+
+  // swap
+  // note: no need to pass its address
+  {
+    int x = 10, y = 20;
+    swap_by_reference(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+}
 
 
-void reset( int* pi )
-{ *pi = 100; pi = 100; }
+<ex>
+*cxx-reference* is binds to `object` whereas pointer can points many.
 
-int j = 42;
-void reset( &j );
+namespace use_reference_callby
+{
+  void fill_buffer_by_pointer(char *buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
 
-what's the value of j here?
+  // cxx.cpp: In function ‘void use_reference_callby::fill_buffer_by_reference(char&)’:
+  // cxx.cpp:826:52: error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
+  //      sprintf(buffer, "is filled by pointer %d\n", 10);
+  //                                                     ^
 
-Here reference i will be bounded to whatever int object we pass and say "pass
-an object" directly. So no need to pass its address.
+  void fill_buffer_by_reference(char &buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
 
-void reset(int &i)
-{ i = 0; }
+} // namespace
 
-int j = 42;
-reset(j);      // note: no need to pass its address
+TEST(Reference, OnCFunctions)
+{
+  using namespace use_reference_callby;
 
-what's the value of j here?
-
-For called-by-reference, C uses pointers and C++ uses reference. Use C++ way
-of doing it.
+  {
+    char buffer[100];
+    fill_buffer_by_pointer(buffer);
+    cout << buffer << endl;
+  }
+}
 
 
 <ex> *cpp-ex-tree* *cpp-recursive*
@@ -12508,43 +12560,55 @@ end of main
 
 <cxx-return-reference-cxx-access-private> cxx-operator-==
 
-        // Q: does it work to access private of that?
-        bool operator==(const Location &that)
-        {
-            return longitude_ == that.longitude_ &&
-                latitude_ == that.latitude_;
-        }
+// Q: does it work to access private of that?
 
-// value: 10
-// value: 100
-// value: 200
+bool operator==(const Location &that)
+{
+  return longitude_ == that.longitude_ &&
+    latitude_ == that.latitude_;
+}
+
+// while use of reference member is error when returning whole object but use of
+// reference member is find when returning that reference member
 
 class AUsePrivateMemberThroughReference
 {
-    private:
-        int val_;
+  private:
+    int val_;
 
-    public:
-        AUsePrivateMemberThroughReference() : val_(10) {}
+  public:
+    AUsePrivateMemberThroughReference() : val_(10) {}
 
-        int &returnReference()
-        {
-            return val_;
-        }
+    int &returnReference()
+    {
+      return val_;
+    }
 
-        void changePrivate(AUsePrivateMemberThroughReference &that)
-        {
-            that.val_ = 200;
-        }
+    // cxx.cpp: In member function ‘virtual void Reference_UsePrivateMemberThroughReference_Test::TestBody()’:
+    // cxx.cpp:800:9: error: ‘int AUsePrivateMemberThroughReference::val_’ is private
+    //      int val_;
+    //          ^
+    // cxx.cpp:840:9: error: within this context
+    //      ref.val_ = 100;
 
-        void printValue() const
-        {
-            std::cout << "value: " << val_ << std::endl;
-        }
+    // AUsePrivateMemberThroughReference &returnReference()
+    // {
+    //     return *this;
+    // }
+
+    void changePrivate(AUsePrivateMemberThroughReference &that)
+    {
+      that.val_ = 200;
+    }
+
+    void printValue() const
+    {
+      std::cout << "value: " << val_ << std::endl;
+    }
 };
 
 
-TEST(CxxFeaturesTest, UsePrivateMemberThroughReference)
+TEST(Reference, AccessOnReference)
 {
     AUsePrivateMemberThroughReference firstObjectWithValue10;
 
@@ -12553,14 +12617,7 @@ TEST(CxxFeaturesTest, UsePrivateMemberThroughReference)
     ref = 100;
     firstObjectWithValue10.printValue();
 
-    // *TN* compiler flag an error:
-    //
-    // cxx.cpp:216:13: error: ‘int AUsePrivateMemberThroughReference::val_’ is private
-    //          int val_;
-    //              ^
-    // cxx.cpp:254:9: error: within this context
-    //      ref.val_ = 100;
-    //
+    // error
     // firstObjectWithValue10.printValue();
     // AUsePrivateMemberThroughReference &ref = firstObjectWithValue10.returnReference();
     // ref.val_ = 100;
@@ -21204,7 +21261,7 @@ collect2: error: ld returned 1 exit status
 All in all, 1 is C++ feature which makes const file-scope.
 
 
-{top-and-low-level-const} *cxx-base-type*
+{top-and-low-level-const} *cxx-base-type* *cxx-declarator*
 This is only for pointer which has 'indirect' access so makes two level in
 terms of constness. This matters when copy an object.
 

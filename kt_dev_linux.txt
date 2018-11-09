@@ -19229,6 +19229,16 @@ not found. This means you need to tweak the -rpath linker flag.
 CC=$HOME/toolchains/bin/gcc CXX=$HOME/toolchains/bin/g++ \
 cmake .. -DCMAKE_CXX_LINK_FLAGS="-Wl,-rpath,$HOME/toolchains/lib64 -L$HOME/toolchains/lib64" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_ENABLE_WERROR=ON -DLLVM_TARGETS_TO_BUILD=X86
 
+make check-sanitizer -j12 # build and run sanitizer_common tests
+...
+[100%] Built target SanitizerUnitTests
+[100%] Built target SanitizerLintCheck
+[100%] Running sanitizer_common tests
+Testing Time: 79.34s
+  Expected Passes    : 376
+  Expected Failures  : 11
+  Unsupported Tests  : 93
+
 
 {x86}
 cmake .. -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON -DLLVM_ENABLE_WERROR=ON -DLLVM_TARGETS_TO_BUILD=X86
@@ -20051,7 +20061,7 @@ lrwxrwxrwx 1 kyoupark ccisco      16 Nov 13  2017 libasan.so -> libasan.so.1.0.0
 // However, on vstb, there is no libasan* under lib, so have to do:
 // copy libasan* into /flash0
 
-cp ~/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/libasan* .                
+cp ~/STB_SW/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/compiler/i686-nptl-linux-gnu/i686-nptl-linux-gnu/lib/libasan* .
 
 
 // comment out run.sh from startstack.sh in flash0/scripts since /root/run.sh
@@ -20125,6 +20135,22 @@ ulimit -c unlimited
 /flash0/scripts/startstack.sh $PROFILE
 
 
+// 430 clean and asan (no recovery) mw binary
+// clean(no asan) output and only changes mw which is asaned.
+
+export VSTB_CORE_FORCE_BLENDER_ID=1
+export VSTB_CORE_DISPMAN_FPS=25
+export PROFILE=BSKYB-VSTBPVR-01
+export STREAM_NETWORK=BSKYB_DARWIN
+export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
+
+mkdir /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-430-asan-run/flash0 /flash0
+ulimit -c unlimited
+touch /flash0/scripts/this_is_first_boot
+/flash0/scripts/startstack.sh $PROFILE
+
+
 // 630 clean and no asan 
 
 export VSTB_CORE_FORCE_BLENDER_ID=1
@@ -20150,6 +20176,22 @@ export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
 
 mkdir /flash0
 mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-630-clean-and-recover/flash0 /flash0
+ulimit -c unlimited
+touch /flash0/scripts/this_is_first_boot
+/flash0/scripts/startstack.sh $PROFILE
+
+
+// 630 clean and no asan recover mw binary
+// clean(no asan) output and only changes mw which is asaned.
+
+export VSTB_CORE_FORCE_BLENDER_ID=1
+export VSTB_CORE_DISPMAN_FPS=25
+export PROFILE=BSKYB-VSTBPVR-01
+export STREAM_NETWORK=BSKYB_DARWIN
+export LD_LIBRARY_PATH="/flash0:${LD_LIBRARY_PATH}"
+
+mkdir /flash0
+mount -o nfsvers=4 10.209.62.106:/home/kyoupark/si_logs/flash0-vstb-630-clean-and-asan/flash0 /flash0
 ulimit -c unlimited
 touch /flash0/scripts/this_is_first_boot
 /flash0/scripts/startstack.sh $PROFILE
@@ -51216,7 +51258,7 @@ IPC mechanisms.
 ={============================================================================
 *kt_linux_core_800* linux-proc
 
-LPI 12 System and Process Information
+LPI-12 System and Process Information
 
 Although many UNIX implementations provide a /proc file system, SUSv3 doesn’t
 specify this file system; the details described in this book are
@@ -51280,8 +51322,8 @@ Gid:  1025  1025  1025  1025
 
 The credentials of any process can be found by examining the Uid, Gid, and
 Groups lines provided in the Linux-specific /proc/PID/status file. The Uid and
-Gid lines list the identifiers in the order real, effective, saved set, and file
-system.
+Gid lines list the identifiers in the order real, effective, saved set, and
+file system.
 
 FDSize:	32
 Groups:	
@@ -78222,7 +78264,11 @@ gcc -g -c driver.c -o driver.o
 // gcc -std=c99 -g -c driver.c -o driver.o
 gcc -o driver driver.o -L. -lmlreloc
 
-*gdb-address-random*
+
+/usr/include/link.h
+
+
+*gdb-address-random* *dl-iterate*
 Running the driver stand-alone we get the information, but for each run the
 `addresses are different.` So what I'm going to do is `run it under gdb` [10], see
 what it says, and then use gdb to further query the process's memory space:
@@ -85001,6 +85047,22 @@ The dlclose() function closes a library previously opened by dlopen().
 
 <dl-iterate>
 
+DL_ITERATE_PHDR(3)
+
+NAME
+       dl_iterate_phdr - walk through list of shared objects
+
+SYNOPSIS
+       #define _GNU_SOURCE         /* See feature_test_macros(7) */
+       #include <link.h>
+
+       int dl_iterate_phdr(
+                 int (*callback) (struct dl_phdr_info *info,
+                                  size_t size, void *data),
+                 void *data);
+
+// skipped
+
 // /usr/include/link.h
 /* Data structure for communication from the run-time dynamic linker for
    loaded ELF shared objects.
@@ -85031,6 +85093,123 @@ The dlclose() function closes a library previously opened by dlopen().
 ...
 
 see *dl-iterate* example.
+
+#define _GNU_SOURCE
+#include <link.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+// kyoupark@kit-debian64:~/git/kb/code-linux/ex_shared/dl-iterate$ LD_LIBRARY_PATH=. ./driver_out
+//
+// name= (8 segments) address=(nil)
+//                  header  0: address=  0x400040 type=6, flags=0x5
+//                  header  1: address=  0x400200 type=3, flags=0x4
+//                  header  2: address=  0x400000 type=1, flags=0x5
+//                  header  3: address=  0x600ac8 type=1, flags=0x6
+//                  header  4: address=  0x600ae0 type=2, flags=0x6
+//                  header  5: address=  0x40021c type=4, flags=0x4
+//                  header  6: address=  0x400974 type=1685382480, flags=0x4
+//                  header  7: address=     (nil) type=1685382481, flags=0x6
+// 
+// name=linux-vdso.so.1 (4 segments) address=0x7ffc273f4000
+//                  header  0: address=0x7ffc273f4000 type=1, flags=0x5
+//                  header  1: address=0x7ffc273f4318 type=2, flags=0x4
+//                  header  2: address=0x7ffc273f4818 type=4, flags=0x4
+//                  header  3: address=0x7ffc273f4854 type=1685382480, flags=0x4
+// 
+// name=./libshared.so (6 segments) address=0x7f72375d7000
+//                  header  0: address=0x7f72375d7000 type=1, flags=0x5
+//                  header  1: address=0x7f72377d7758 type=1, flags=0x6
+//                  header  2: address=0x7f72377d7770 type=2, flags=0x6
+//                  header  3: address=0x7f72375d7190 type=4, flags=0x4
+//                  header  4: address=0x7f72375d76d0 type=1685382480, flags=0x4
+//                  header  5: address=0x7f72375d7000 type=1685382481, flags=0x6
+// 
+// name=/lib/x86_64-linux-gnu/libc.so.6 (10 segments) address=0x7f723722c000
+//                  header  0: address=0x7f723722c040 type=6, flags=0x5
+//                  header  1: address=0x7f723739a650 type=3, flags=0x4
+//                  header  2: address=0x7f723722c000 type=1, flags=0x5
+//                  header  3: address=0x7f72375cd748 type=1, flags=0x6
+//                  header  4: address=0x7f72375d0ba0 type=2, flags=0x6
+//                  header  5: address=0x7f723722c270 type=4, flags=0x4
+//                  header  6: address=0x7f72375cd748 type=7, flags=0x4
+//                  header  7: address=0x7f723739a66c type=1685382480, flags=0x4
+//                  header  8: address=0x7f723722c000 type=1685382481, flags=0x6
+//                  header  9: address=0x7f72375cd748 type=1685382482, flags=0x4
+// 
+// name=/lib64/ld-linux-x86-64.so.2 (7 segments) address=0x7f72377d8000
+//                  header  0: address=0x7f72377d8000 type=1, flags=0x5
+//                  header  1: address=0x7f72379f8c00 type=1, flags=0x6
+//                  header  2: address=0x7f72379f8e70 type=2, flags=0x6
+//                  header  3: address=0x7f72377d81c8 type=4, flags=0x4
+//                  header  4: address=0x7f72377f5680 type=1685382480, flags=0x4
+//                  header  5: address=0x7f72377d8000 type=1685382481, flags=0x6
+//                  header  6: address=0x7f72379f8c00 type=1685382482, flags=0x4
+
+// /usr/include/link.h
+//
+// struct dl_phdr_info
+//   {
+//     ElfW(Addr) dlpi_addr;
+//     const char *dlpi_name;
+//     const ElfW(Phdr) *dlpi_phdr;
+//     ElfW(Half) dlpi_phnum;
+//   };
+// 
+// /usr/include/elf.h
+// 
+// /* Program segment header.  */
+// 
+// typedef struct
+// {
+//   Elf32_Word	p_type;			/* Segment type */
+//   Elf32_Off	p_offset;		/* Segment file offset */
+//   Elf32_Addr	p_vaddr;		/* Segment virtual address */
+//   Elf32_Addr	p_paddr;		/* Segment physical address */
+//   Elf32_Word	p_filesz;		/* Segment size in file */
+//   Elf32_Word	p_memsz;		/* Segment size in memory */
+//   Elf32_Word	p_flags;		/* Segment flags */
+//   Elf32_Word	p_align;		/* Segment alignment */
+// } Elf32_Phdr;
+// 
+// Program Headers:
+//   Type           Offset             VirtAddr           PhysAddr
+//                  FileSiz            MemSiz              Flags  Align
+//   PHDR           0x0000000000000040 0x0000000000400040 0x0000000000400040
+//                  0x00000000000001c0 0x00000000000001c0  R E    8
+//   INTERP         0x0000000000000200 0x0000000000400200 0x0000000000400200
+//                  0x000000000000001c 0x000000000000001c  R      1
+//       [Requesting program interpreter: /lib64/ld-linux-x86-64.so.2]
+
+static int header_handler(struct dl_phdr_info* info, size_t size, void* data)
+{
+    printf("name=%s (%d segments) address=%p\n",
+            info->dlpi_name, info->dlpi_phnum, (void*)info->dlpi_addr);
+
+    for (int j = 0; j < info->dlpi_phnum; j++) {
+
+         printf("\t\t header %2d: address=%10p type=%u, flags=0x%X\n", j,
+             (void*) (info->dlpi_addr + info->dlpi_phdr[j].p_vaddr),
+                 info->dlpi_phdr[j].p_type, info->dlpi_phdr[j].p_flags);
+
+         // printf("\t\t\t type=%u, flags=0x%X\n",
+         //        info->dlpi_phdr[j].p_type, info->dlpi_phdr[j].p_flags);
+    }
+
+    printf("\n");
+    return 0;
+}
+
+
+extern int ml_func(int, int);
+
+int main(int argc, const char* argv[])
+{
+    dl_iterate_phdr(header_handler, NULL);
+
+    int t = ml_func(argc, argc);
+    return t;
+}
 
 
 <dl-link>

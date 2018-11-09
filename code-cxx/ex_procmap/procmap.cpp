@@ -1,5 +1,9 @@
 #include "gmock/gmock.h"
 
+#define _GNU_SOURCE
+#include <link.h>
+#include <stdarg.h>
+
 #include <iostream>
 #include <syscall.h>    // system call symbolic names
 #include <unistd.h>
@@ -126,12 +130,15 @@ void CheckFailed(const char *file, int line, const char *cond,
 #define CHECK(a)        CHECK_IMPL((a), !=, 0)
 #define CHECK_EQ(a, b)  CHECK_IMPL((a), ==, (b))
 #define CHECK_GT(a, b)  CHECK_IMPL((a), >, (b))
+#define CHECK_LT(a, b)  CHECK_IMPL((a), <, (b))
 
 
 //={===========================================================================
 // syscall
 // sanitizer_common/sanitizer_syscall_linux_x86_64.inc
-
+//
+// SANITIZER_USES_CANONICAL_LINUX_SYSCALLS 0
+//
 // *call-syscall-return*
 // On Linux, system call service routines follow a convention of returning a
 // nonnegative value to indicate success. In case of an error, the routine
@@ -255,6 +262,31 @@ uptr internal_read(int fd, void *buf, uptr count) {
   HANDLE_EINTR(res, (sptr)internal_syscall(SYSCALL(read), fd, (uptr)buf,
                count));
   return res;
+}
+
+uptr internal_readlink(const char *path, char *buf, uptr bufsize) {
+  return internal_syscall(SYSCALL(readlink), (uptr)path, (uptr)buf, bufsize);
+}
+
+uptr internal_strlen(const char *s)
+{
+  uptr i = 0;
+  while (s[i]) ++i;
+  return i;
+}
+
+char *internal_strchr(const char *s, int c)
+{
+  while (true)
+  {
+    if (*s == (char)c)
+      return const_cast<char *>(s);
+
+    if (0 == *s)
+      return nullptr;
+
+    s++;
+  }
 }
 
 
@@ -719,6 +751,8 @@ bool MemoryMappingLayout::Next(uptr *start, uptr *end, uptr *offset,
 // what does it mean? probably it means that it uses heap instead
 
 
+// LoadedModule has IntrusiveList
+//
 //     InternalScopedBuffer<LoadedModule> modules(kMaxNumberOfModules);
 //     CHECK(modules.data());
 //     int n_modules = GetListOfModules(modules.data(), kMaxNumberOfModules,
@@ -752,12 +786,54 @@ class InternalScopedBuffer
 
     uptr size() { return count_ * sizeof(T); }
     T *data() { return ptr_; }
-    T &operator[](uptr i) { ptr_[i]; } 
+    T &operator[](uptr i) { return ptr_[i]; } 
 
   private:
     T *ptr_;
     uptr count_;
 };
+
+class InternalScopedString : public InternalScopedBuffer<char>
+{
+  public:
+    explicit InternalScopedString(uptr max_length) 
+      : InternalScopedBuffer<char>(max_length), length_(0) 
+    {
+      // this is interesting and works because of operator[]
+      (*this)[0] = '\0';
+    }
+
+    uptr length() { return length_; }
+    void clear() 
+    {
+      (*this)[0] = '\0';
+      length_ = 0;
+    }
+
+    void append(const char *format, ...);
+
+  private:
+      uptr length_;
+};
+
+void InternalScopedString::append(const char *format, ...)
+{
+  CHECK_LT(length_, size());
+
+  // NOTE: why use custom printf?
+  // va_list args;
+  // va_start(args, format);
+  // VSNPrintf(data() + length_, size() - length_, format, args);
+
+  va_list args;
+  va_start(args, format);
+  vsnprintf(data()+length_, size()-length_, format, args);
+  va_end(args);
+
+  length_  += strlen(data() + length_);
+  CHECK_LT(length_, size());
+}
+
 
 #if 0
 
@@ -781,6 +857,114 @@ class LoadedModule
 };
 
 #endif 
+
+//=============================================================================
+//
+
+uptr ReadBinaryName(char *buf, uptr buf_len)
+{
+  const char *default_module_name = "/proc/self/exe";
+  uptr module_name_len = internal_readlink(default_module_name,
+      buf, buf_len);
+  int readlink_error;
+  bool is_error = internal_iserror(module_name_len, &readlink_error);
+  if(is_error)
+  {
+    // We can't read binary name for some reason, assume it's unknown.
+    printf("WARNING: reading executable name failed with errno %d, "
+        "some stack frames may not be symbolized\n", readlink_error);
+    // module_name_len = internal_snprintf(buf, buf_len, "%s",
+    //     default_module_name);
+
+    module_name_len = snprintf(buf, buf_len, "%s",
+        default_module_name);
+
+    CHECK_LT(module_name_len, buf_len);
+  }
+
+  return module_name_len;
+}
+
+uptr ReadLongProcessName(/* out */ char *buf, uptr buf_len)
+{
+  char *tmpbuf;
+  uptr tmpsize;
+  uptr tmplen;
+
+  if (ReadFileToBuffer("/proc/self/cmdline", &tmpbuf, &tmpsize, &tmplen, 
+        1024 * 1024))
+  {
+    // internal_strncpy(buf, tmpbuf, buf_len);
+    strncpy(buf, tmpbuf, buf_len);
+
+    // NOTE: here do unmap
+    UnmapOrDie(tmpbuf, tmpsize);
+    return internal_strlen(buf);
+  }
+
+  // is there case when getting name from cmdline fails?
+  return ReadBinaryName(buf, buf_len);
+}
+
+// remove the first '/' from module name.
+const char *StripModuleName(const char *module)
+{
+  if (!module)
+    return nullptr;
+
+  if (const char *slash_pos = internal_strchr(module, '/'))
+  {
+    return slash_pos + 1;
+  }
+
+  return module;
+}
+
+uptr ReadProcessName(char *buf, uptr buf_len)
+{
+  ReadLongProcessName(buf, buf_len);
+  char *s = const_cast<char *>(StripModuleName(buf));
+  uptr len = internal_strlen(s);
+
+  // if something is stripped(removed) from buf
+  if (s != buf)
+  {
+    // internal_memmove()
+    memmove(buf, s, len);
+    buf[len] = '\0';
+  }
+  return len;
+}
+
+// const uptr kMaxPathLength = 4096;
+static char binary_name_cache_str[4096];
+static char process_name_cache_str[4096];
+
+// Call once to make sure that binary_name_cache_str is initialized
+void CacheBinaryName() 
+{
+  if (binary_name_cache_str[0] != '\0')
+    return;
+  ReadBinaryName(binary_name_cache_str, sizeof(binary_name_cache_str));
+  ReadProcessName(process_name_cache_str, sizeof(process_name_cache_str));
+}
+
+uptr ReadBinaryNameCached(/*out*/char *buf, uptr buf_len) 
+{
+  CacheBinaryName();
+
+  uptr name_len = internal_strlen(binary_name_cache_str);
+  name_len = (name_len < buf_len - 1) ? name_len : buf_len - 1;
+
+  // why do check in the middle?
+  if (buf_len == 0)
+    return 0;
+
+  memcpy(buf, binary_name_cache_str, name_len);
+  buf[name_len] = '\0';
+
+  return name_len;
+}
 
 
 //=============================================================================
@@ -991,6 +1175,101 @@ TEST(ProcMap, InternalScopedBuffer)
   }
 }
 
+TEST(ProcMap, InternalScopedString)
+{
+  InternalScopedString sstring(200);
+  sstring.append("this is internal scoped string %d", 1);
+  sstring.append(" which is derived from %s", "InternalScopedBuffer");
+  cout << sstring.data() << endl;
+}
+
+
+TEST(ProcMap, ReadProcessName)
+{
+  char buf[200];
+  ReadLongProcessName(buf, 200);
+  EXPECT_STREQ(buf, "./procmap_out");
+
+  ReadProcessName(buf, 200);
+  EXPECT_STREQ(buf, "procmap_out");
+}
+
+TEST(ProcMap, CacheBinaryName)
+{
+  CacheBinaryName();
+  EXPECT_STREQ(binary_name_cache_str, "/home/kyoupark/git/kb/code-cxx/ex_procmap/procmap_out");
+  EXPECT_STREQ(process_name_cache_str, "procmap_out");
+}
+
+
+#if 0
+namespace use_get_list_of_modules {
+
+// sanitizer_common/sanitizer_common.h
+// OS-dependent function that fills array with descriptions of at most
+// "max_modules" currently loaded modules. Returns the number of
+// initialized modules. If filter is nonzero, ignores modules for which
+// filter(full_name) is false.
+typedef bool (*string_predicate_t)(const char *);
+// uptr GetListOfModules(LoadedModule *modules, uptr max_modules,
+//                      string_predicate_t filter);
+//
+// sanitizer_common/sanitizer_linux_libcdep.cc
+// GetListOfModules(LoadedModule *modules, uptr max_modules,
+//  string_predicate_t filter);
+
+struct DlIteratePhdrData
+{
+  LoadedModule *modules;
+  uptr current_n;
+  bool first;
+  uptr max_n;
+  string_predicate_t filter;
+};
+
+static int dl_iterate_phdr_cb(struct dl_phdr_info *info, size_t size, void *arg)
+{
+  DlIteratePhdrData *data = (DlIteratePhdrData*)arg;
+  if (data->current_n == data->max_n)
+    return 0;
+
+  InternalScopedString module_name(kMaxNumberOfModules);
+  if (data->first)
+  {
+    data->first = false;
+  }
+  // when there is module name
+  else if (info->dlpi_name)
+  {
+    module_name.append("%s", info->dlpi_name);
+  }
+}
+
+} // namespace
+
+TEST(ProcMap, DlIterate)
+{
+  // 16K loaded modules should be enough for everyone.
+  const uptr kMaxNumberOfModules = 1 << 14;
+  InternalScopedBuffer<LoadedModule> modules(kMaxNumberOfModules);
+  CHECK(modules.data());
+
+  //   int n_modules = GetListOfModules(modules.data(), kMaxNumberOfModules,
+  //                                     /* filter */ nullptr);
+ 
+  DlIteratePhdrData data = {modules, 0, true, kMaxNumberOfModules, nullptr};  
+  dl_iterate_phdr(dl_iterate_phdr_cb, &data);
+}
+
+// TEST(ProcMap, Dump)
+// {
+//   // 16K loaded modules should be enough for everyone.
+//   const uptr kMaxNumberOfModules = 1 << 14;
+//   InternalScopedBuffer<LoadedModule> modules(kMaxNumberOfModules);
+//   CHECK(modules.data());
+// }
+
+#endif
 
 // ={=========================================================================
 int main(int argc, char **argv)
