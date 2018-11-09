@@ -23,6 +23,10 @@ TESTS = $(TARGET1)_out \
 				$(TARGET4)_out \
 				$(TARGET5)_out
 
+# target
+$(TARGET5) :$(TARGET5)_out
+
+
 # House-keeping build targets.
 all : $(TESTS)
 
@@ -75,4 +79,4 @@ $(TARGET5)_so.o : $(TARGET5)_so.c
 	g++ -g -shared $(TARGET5)_so.o -o lib$(TARGET5).so
 
 $(TARGET5)_out : $(TARGET5)_so.o $(TARGET5)_main.c
-	g++ -### -g $(TARGET5)_main.c lib$(TARGET5).so -ldl -o $@
+	g++ -g $(TARGET5)_main.c lib$(TARGET5).so -ldl -o $@

@@ -53,8 +53,11 @@ name=/lib/x86_64-linux-gnu/libc.so.6 (10 segments) address=0x7f3f5bc3f000
 ====> try to intercept malloc..
 ====>
 intercept_so(): {
-real function address: 0x7f3f5bcbafc0
-wrapper function address: 0x7f3f5ca10970
+
+real function address from ld: 0x7f2d90b4cfc0
+real function address: 0x7f2d918a29b0
+wrapper function address: 0x7f2d918a29b0
+
 ml_util_func in 1:
 interceptor_malloc: {
 interceptor_malloc: size: 1000
@@ -72,10 +75,22 @@ typedef unsigned long uptr;  // NOLINT
 
 int myglob_1 = 10;
 
-// # define FUNC_TYPE(x) x##_f
-// # define PTR_TO_REAL(x) real_##x
-// # define REAL(x) __interception::PTR_TO_REAL(x)
-// # define WRAP(x) __interceptor_ ## x
+// define malloc interceptor:
+//
+// void *malloc(size_t size);
+//
+// INTERCEPTOR(void*, malloc, uptr size) {
+//  ...
+//  return REAL(memcmp(a1, a2, size));
+// }
+//
+// #define INTERCEPTOR(ret_type, func, ...) \
+//   DEFINE_REAL(ret_type, func, __VA_ARGS__) \
+//   DECLARE_WRAPPER(ret_type, func, __VA_ARGS__) \
+//   extern "C" \
+//   INTERCEPTOR_ATTRIBUTE \
+//   ret_type WRAP(func)(__VA_ARGS__)
+//
 // # define INTERCEPTOR_ATTRIBUTE __attribute__((visibility("default")))
 // 
 // # define DECLARE_WRAPPER(ret_type, func, ...) \
@@ -88,15 +103,10 @@ int myglob_1 = 10;
 //       FUNC_TYPE(func) PTR_TO_REAL(func); \
 //     }
 // 
-// #define INTERCEPTOR(ret_type, func, ...) \
-//   DEFINE_REAL(ret_type, func, __VA_ARGS__) \
-//   DECLARE_WRAPPER(ret_type, func, __VA_ARGS__) \
-//   extern "C" \
-//   INTERCEPTOR_ATTRIBUTE \
-//   ret_type WRAP(func)(__VA_ARGS__)
-//
-// INTERCEPTOR(char*, strcat, char *to, const char *from) {  // NOLINT
-// }
+// # define FUNC_TYPE(x) x##_f
+// # define PTR_TO_REAL(x) real_##x
+// # define REAL(x) __interception::PTR_TO_REAL(x)
+// # define WRAP(x) __interceptor_ ## x
 
 typedef void* (*malloc_f)(size_t size); 
 namespace __interception { malloc_f real_malloc; } 
@@ -110,6 +120,19 @@ extern "C" __attribute__((visibility("default"))) void* __interceptor_malloc(siz
   return (void *)0;
 }
 
+// real and wrapper comes at link time and func_adder comes from libc
+//
+// There  are  two special pseudo-handles: 
+//
+// RTLD_DEFAULT
+// The former will find the first occurrence of the desired symbol using the
+// default library search order.  
+//
+// RTLD_NEXT
+// The latter will find the next occurrence of a function in the search order
+// after the current library. This allows one to provide a wrapper around a
+// function in another shared library.
+
 bool GetRealFunctionAddress(
     const char *func_name, 
     uptr *func_addr,
@@ -117,7 +140,8 @@ bool GetRealFunctionAddress(
     uptr wrapper) 
 {
   *func_addr = (uptr)dlsym(RTLD_NEXT, func_name);
-  printf("real function address: 0x%lx \n", *func_addr); 
+  printf("real function address from ld: 0x%lx \n", *func_addr); 
+  printf("real function address: 0x%lx \n", real); 
   printf("wrapper function address: 0x%lx \n", wrapper); 
   return real == wrapper;
 }
@@ -135,13 +159,8 @@ void intercept_so(int size)
 {
   printf("intercept_so(): {\n");
 
-  // # define INTERCEPT_FUNCTION(func) INTERCEPT_FUNCTION_LINUX(func)
-  // 
-  // #define INTERCEPT_FUNCTION_LINUX(func) \
-  //     ::__interception::GetRealFunctionAddress( \
-  //           #func, (::__interception::uptr*)&REAL(func), \
-  //           (::__interception::uptr)&(func), \
-  //           (::__interception::uptr)&WRAP(func))
+  // e.g.
+  // ASAN_INTERCEPT_FUNC(memcmp);
   //
   // ASAN_INTERCEPT_FUNC(strcat);  // NOLINT
   //
@@ -151,6 +170,14 @@ void intercept_so(int size)
   //         common_flags()->verbosity > 0)                                 \
   //       Report("AddressSanitizer: failed to intercept '" #name "'\n");   \
   //   } while (0)
+  //
+  // # define INTERCEPT_FUNCTION(func) INTERCEPT_FUNCTION_LINUX(func)
+  // 
+  // #define INTERCEPT_FUNCTION_LINUX(func) \
+  //     ::__interception::GetRealFunctionAddress( \
+  //           #func, (::__interception::uptr*)&REAL(func), \
+  //           (::__interception::uptr)&(func), \
+  //           (::__interception::uptr)&WRAP(func))
 
   do { 
     if (!GetRealFunctionAddress( 

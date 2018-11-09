@@ -16308,6 +16308,77 @@ asan/asan_report.cc
       Die();
     }
 
+
+<asan-code-abort>
+// to copy asan libs from 494 toolchain
+kyoupark@kt-office-debian:~/asan/gcc/i686-nptl-linux-gnu-gcc/i686-nptl-linux-gnu/lib$ scp libasan* st-castor-03:/home/kyoupark/si_logs/flash0-vstb-430-asan-run/flash0
+
+b __asan::AsanOnDeadlySignal
+
+gdb --eval-command=run /NDS/asan_bin/MW_Process -b "__asan::ASAN_OnSIGSEGV"
+
+void __asan_init() {
+  InstallSignalHandlers();
+}
+
+void InstallSignalHandlers() {
+  // Set the alternate signal stack for the main thread.
+  // This will cause SetAlternateSignalStack to be called twice, but the stack
+  // will be actually set only once.
+  if (flags()->use_sigaltstack) SetAlternateSignalStack();
+  MaybeInstallSigaction(SIGSEGV, ASAN_OnSIGSEGV);
+  MaybeInstallSigaction(SIGBUS, ASAN_OnSIGSEGV);
+}
+
+static void     ASAN_OnSIGSEGV(int, siginfo_t *siginfo, void *context) {
+  uptr addr = (uptr)siginfo->si_addr;
+  // Write the first message using the bullet-proof write.
+  if (13 != internal_write(2, "ASAN:SIGSEGV\n", 13)) Die();
+  uptr pc, sp, bp;
+  GetPcSpBp(context, &pc, &sp, &bp);
+  ReportSIGSEGV(pc, sp, bp, addr);
+}
+
+ASAN:SIGSEGV
+=================================================================
+==1311==ERROR: AddressSanitizer: SEGV on unknown address 0xfffffb40 (pc 0xb71a7309 sp 0xbfaf0780 bp 0xbfaf0808 T0)
+    #0 0xb71a7308 in __pthread_create_2_1 (/lib/libpthread.so.0+0x7308)
+    #1 0xb71a76ea in __pthread_create_2_0 (/lib/libpthread.so.0+0x76ea)
+    #2 0xb7280dd3 in pthread_create (/flash0/libasan.so+0x61dd3)
+    #3 0x9cc4d5b in SYSTEMUTIL_THR_Create /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/SYSTEMUTIL/src/thread/systemutil_thread.c:465
+    #4 0x8a80a34 in DIAG_IPC_CLIENT_Open /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/ipc/src/client/diag_ipc_client.c:224
+    #5 0x8a8b134 in DIAGCTL_LOG_OpenCommunicationChannel /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diagctl_log_ipc.c:675
+    #6 0x8a88c98 in DIAGCTL_LOG_Init /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diagctl_log.c:218
+    #7 0x8a7a3b1 in __DIAG_LOG_Init /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/DIAG/src/log/src/diag_log.c:1594
+    #8 0x9c00ce7 in SYSINIT_ClientInit /home/kyoupark/STB_SW_o/CMS_SYSTEM_INFRASTRUCTURE/SYSINIT/src/client/sysinit_api.c:333
+    #9 0x822530d in main /home/kyoupark/STB_SW_o/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/processes/MW_Process/mw_process_main.c:85
+    #10 0xb6c8c31f in __libc_start_main ../csu/libc-start.c:295
+    #11 0x8233270 (/NDS/asan_bin/MW_Process_dynamic_unstripped+0x8233270)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV ??:0 __pthread_create_2_1
+==1311==ABORTING
+
+
+[KT:1]=================================================================
+[1m[31m==1308==ERROR: AddressSanitizer: SEGV on unknown address 0xfffffb40 (pc 0xb7258309 sp 0xbf838c70 bp 0xbf838cf8 T0)
+[1m[0m[KT:4]     #0 0xb7258308 in __pthread_create_2_1 (/lib/libpthread.so.0+0x7308)
+[KT:4]     #1 0xb72586ea in __pthread_create_2_0 (/lib/libpthread.so.0+0x76ea)
+[KT:4]     #2 0xb72fb943 in __interceptor_pthread_create ../../../../gcc-4.9.4/libsanitizer/asan/asan_interceptors.cc:192
+[KT:4]     #3 0x9cc4d5b in SYSTEMUTIL_THR_Create (/NDS/asan_bin/MW_Process_dynamic+0x9cc4d5b)
+[KT:4]     #4 0x8a80a34 in DIAG_IPC_CLIENT_Open (/NDS/asan_bin/MW_Process_dynamic+0x8a80a34)
+[KT:4]     #5 0x8a8b134 in DIAGCTL_LOG_OpenCommunicationChannel (/NDS/asan_bin/MW_Process_dynamic+0x8a8b134)
+[KT:4]     #6 0x8a88c98 in DIAGCTL_LOG_Init (/NDS/asan_bin/MW_Process_dynamic+0x8a88c98)
+[KT:4]     #7 0x8a7a3b1 in __DIAG_LOG_Init (/NDS/asan_bin/MW_Process_dynamic+0x8a7a3b1)
+[KT:4]     #8 0x9c00ce7 in SYSINIT_ClientInit (/NDS/asan_bin/MW_Process_dynamic+0x9c00ce7)
+[KT:4]     #9 0x822530d in main (/NDS/asan_bin/MW_Process_dynamic+0x822530d)
+[KT:4]     #10 0xb6d3d31f in __libc_start_main ../csu/libc-start.c:295
+[KT:4]     #11 0x8233270 (/NDS/asan_bin/MW_Process_dynamic+0x8233270)
+
+AddressSanitizer can not provide additional info.
+[KT] [KT] SUMMARY: AddressSanitizer: SEGV ??:0 __pthread_create_2_1
+
+
 <asan-code-xxx>
 
 void __asan_init() {
@@ -16823,7 +16894,7 @@ Program Headers:
    `03`     .init_array .fini_array .jcr .dynamic .got .got.plt `.data` .bss
    ...
 
-*cxx-static* as 'd' which means local
+*cxx-static* as 'd(data)' which means local
 $ nm gbo_host_no_asan
 00002028 d gclientname
 
@@ -16945,6 +17016,7 @@ see that no memcpy function call even when use -O0 to build.
 133:   memcpy(buffer, gclientname, 8);
 134:   return;
 135: }
+
 
 00000721 <call_gbo>:
 call_gbo():
@@ -17266,7 +17338,7 @@ call_gbo():
  db0:	0f b6 00             	movzx  eax,BYTE PTR [eax]
 
 ; gclientname is 6 bytes and if its fitst shadow byte is zero, do memcpy. if
-; not, call report
+; not, call report which is void function.
 
  db3:	84 c0                	test   al,al
  db5:	74 09                	je     dc0 <call_gbo+0x9a>
@@ -17413,7 +17485,7 @@ Dump of assembler code for function call_gbo_1:
    0x08048c3d <+53>:    mov    DWORD PTR [ebx+0x4],0x8049200
    0x08048c44 <+60>:    mov    DWORD PTR [ebx+0x8],0x8048c08
 
-; use `eax`
+; *tool-asan-recover* use `eax`
 ; so the trick is that "no recover" version uses $eax which is modified from
 ; report function and "recover" version uses $ebx which is not modified from
 ; report? *x86-asm-return* *x86-asm-eax* $eax gets changed even after calling
@@ -17454,12 +17526,12 @@ Dump of assembler code for function call_gbo_1:
    0x08048c78 <+112>:   add    ecx,0x20000000
    0x08048c7e <+118>:   movzx  ecx,BYTE PTR [ecx]
    0x08048c81 <+121>:   test   cl,cl
-   0x08048c83 <+123>:   je     0x8048c8e <call_gbo_1+134>
+   0x08048c83 <+123>:   je     `0x8048c8e` <call_gbo_1+134>
    0x08048c85 <+125>:   sub    esp,0xc
    0x08048c88 <+128>:   push   edx
    0x08048c89 <+129>:   call   0x8048760 <__asan_report_load8@plt>
 
-   0x08048c8e <+134>:   mov    edx,DWORD PTR ds:0x804b080
+   `0x08048c8e` <+134>:   mov    edx,DWORD PTR ds:0x804b080
    0x08048c94 <+140>:   mov    ecx,DWORD PTR ds:0x804b084
    0x08048c9a <+146>:   mov    DWORD PTR [esi-0x40],edx
    0x08048c9d <+149>:   mov    DWORD PTR [esi-0x3c],ecx
@@ -17540,7 +17612,7 @@ call_gbo_1():
  8048be6:	74 0c                	je     8048bf4 <call_gbo_1+0x8a>
  8048be8:	83 ec 0c             	sub    esp,0xc
  8048beb:	50                   	push   eax
- 8048bec:	e8 0f fb ff ff       	call   8048700 <__asan_report_load8_noabort@plt>
+ 8048bec:	e8 0f fb ff ff       	call   8048700 <__asan_report_load8_`noabort`@plt>
 
  8048bf1:	83 c4 10             	add    esp,0x10
  8048bf4:	a1 60 b0 04 08       	mov    eax,ds:0x804b060
@@ -43368,7 +43440,7 @@ message passing.
 ={============================================================================
 *kt_linux_core_102* linux-process-termination
 
-LPI 25 Process Termination
+LPI-25 Process Termination
 
 <exit-function-system-call>
 The exit(status) library function terminates a process, making all resources
@@ -84301,7 +84373,7 @@ multiple locations, such as in an executable and in a shared library, or in
 'multiple' shared libraries. How is a reference to that symbol resolved?
 
          prog                                   libfoo.so
------------------------------          -----------------------------
+ -----------------------------          -----------------------------
 xyz() {                                xyz() {               
   printf("main-xyz\n");                  printf("foo-xyz\n");
 }                                      }
@@ -84316,19 +84388,16 @@ $ gcc -g -o prog prog.c libfoo.so
 $ LD_LIBRARY_PATH=. ./prog
 main-xyz
 
-See that the definition of xyz() in the main program overrides the one in the
-shared library.
-
 The following semantics apply:
 
   A definition of a global symbol in the 'main' program 'overrides' a
   definition in a library.
 
+
 <lib-resolve-order> lib-link-order
 If a global symbol is defined in 'multiple' libraries, then a reference to
 that symbol is bound to the `first definition found` by scanning libraries in
-the left-to-right 'order' in which they were listed on the static 'link'
-command line.
+the `left-to-right order` in which they were listed on the link command line.
 
 This applies for static and dynamic as well. For example:
 
@@ -84362,7 +84431,8 @@ Dynamic section at offset 0xbf0 contains 27 entries:
  0x0000000000000001 (NEEDED)             Shared library: [liborder_1.so]
  0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
 
-The order of runtime loading also follows the order of dynamic section.
+
+`The order of runtime loading also follows the order of dynamic section`
 
 When use:
 
@@ -84373,7 +84443,7 @@ libintercept.so -ldl "-lstdc++" -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc \
     /usr/lib/gcc/x86_64-linux-gnu/4.9/../../../x86_64-linux-gnu/crtn.o
 
 
-<problem>
+<case>
 Although these semantics make the transition from static to shared libraries
 relatively straightforward, they can cause some problems. The most significant
 problem is that these semantics conflict with the model of a shared library as
@@ -84427,7 +84497,7 @@ o For library calls, cannot use different call signature:
    extern void *malloc (size_t __size) __THROW __attribute_malloc__ __wur;
 
 
-<case-link> crash
+<case> crash
 2014/07. Samsung. 
 
 When moves application which was a process and uses static link to the shared
@@ -84448,7 +84518,8 @@ library make a call, it picks it up from the other shared library in which has
 different signature so crashes. Sovled when wraps PCThread class with a
 namespace.
 
-note: So this was a problem of symbols between shared libraries.
+// Q: How could this happen since declaration would be also differnet? Should
+// we see compile error before? 
 
 The typical example is to use third party library and name conflict happens
 when other parties develops a libaray separately. In static link, conflict
@@ -84475,7 +84546,7 @@ o Unlike the case-example, this example is a problem between main and shared
   library.
 
 
-<ex-case>
+<case>
 2015.05. YouView.
 
 When uses a wrapper process which in short exec application given, hangs on
@@ -84496,11 +84567,12 @@ shell exec -> application                 // okay
 #3 0x2adcc59c in ?? () from /opt/zinc-trunk/lib/libZincCommon.so.0
 
 
-Since known that pthread stub from glibc was used from call stack and found
+Since known that pthread stub from libc was used from call stack and found
 that `works okay when specify pthread library in LD_PRELOAD explicitly,` looked
 at library dependancy and found difference between two platforms:
 
 for not working platform
+
 : wrapper                    
  0x00000001 (NEEDED)                     Shared library: [libgcc_s.so.1]
  0x00000001 (NEEDED)                     Shared library: [libc.so.0]
@@ -84530,9 +84602,9 @@ for working platforms
 
 
 So "libxx" has libpthread for working case and thought this explains the
-problem since the stub was used for not working case. While having problem to
-mess with as-needed in the build system and libtool, eventually turned out
-that the problem happens regardless of pthread so in libxx.
+problem since the stub from libc was used for not working case. While having
+problem to mess with as-needed in the build system and libtool, eventually
+turned out that the problem happens regardless of pthread so in libxx.
 
 
 // *ld-so* and believe this is uclibc in this case
@@ -84691,7 +84763,7 @@ $ nm -D libc.so.0 | ag pthread
 000570b8 T pthread_setschedparam
 
 
-{lib-preload} *linux-ld-load-rule*                
+{lib-preload} *linux-ld-load-rule*
 For testing purposes, it can sometimes be useful to `selectively override`
 functions and other symbols that would normally be found by the dynamic linker
 using the search rules. 
@@ -84999,13 +85071,18 @@ beforehand (to make sure that any previously held error string is cleared) and
 then if, after the call to dlsym(), dlerror() returns a non-NULL value, we
 know that an error occurred.
 
-       There  are  two special pseudo-handles, RTLD_DEFAULT and RTLD_NEXT.
-       The former will find the first occurrence of the desired symbol using
-       the default library search order.  
-       
-       The latter will find the next occurrence of a function in the search
-       order after the current library.  This allows one to provide a wrapper
-       around a function in another shared library.
+There  are  two special pseudo-handles: 
+
+RTLD_DEFAULT
+
+The former will find the first occurrence of the desired symbol using the
+default library search order.  
+
+RTLD_NEXT *linux-dl-next*
+
+The latter will find the next occurrence of a function in the search order
+after the current library. This allows one to provide a wrapper around a
+function in another shared library.
 
 <ex>
 
