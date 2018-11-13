@@ -1,10 +1,20 @@
 /* 
-   A program to test posix_spawn.
+   A program to test posix_spawn and tool-asan
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>   // sleep
+#include <string.h>   // sleep
+
+static char gclientname[] = "_DLRH";
+
+void call_gbo()
+{
+  char buffer[10];
+  memcpy(buffer, gclientname, 10);
+  return;
+}
 
 int main(int argc, char *argv[])
 {
@@ -20,6 +30,8 @@ int main(int argc, char *argv[])
   {
     printf("child: sleep %d\n", 1);
     sleep(1);
+    if (i == 30)
+      call_gbo();
   }
 
   printf("child: exit\n");

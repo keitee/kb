@@ -11,6 +11,7 @@ TARGET2 = ex_signal
 TARGET3 = ex_buserror
 TARGET4 = ex_segfault
 TARGET5 = mem
+TARGET6 = ex_argv
 
 # Where to find user code.
 USER_DIR = .
@@ -23,7 +24,8 @@ TESTS = $(TARGET1)_out \
 				$(TARGET2)_out \
 				$(TARGET3)_out \
 				$(TARGET4)_out \
-				$(TARGET5)_out
+				$(TARGET5)_out \
+				$(TARGET6)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -99,4 +101,11 @@ $(TARGET5).o : $(TARGET5).cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET5).cpp -o $(TARGET5).o
 
 $(TARGET5)_out : $(TARGET5).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+
+$(TARGET6).o : $(TARGET6).c
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET6).c -o $(TARGET6).o
+
+$(TARGET6)_out : $(TARGET6).o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

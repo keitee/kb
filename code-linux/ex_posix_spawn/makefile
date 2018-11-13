@@ -8,15 +8,18 @@ GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
 TARGET1 = child
 TARGET2 = parent
+TARGET3 = child_gbo
 
 # Where to find user code.
 USER_DIR = .
 
 CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include 
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
+# CXXFLAGS += -std=c99 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
+CXXFLAGS += -std=c99 -g -Wall -Wextra -pthread
 
-TESTS = $(TARGET1)_out $(TARGET2)_out
+TESTS = $(TARGET1)_out $(TARGET2)_out \
+				$(TARGET3)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -73,10 +76,9 @@ $(TARGET2).o : $(TARGET2).c
 $(TARGET2)_out : $(TARGET2).o
 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
 
-# # cpp version
-# $(TARGET2).o : $(TARGET2).cpp
-# 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET2).cpp -o $(TARGET2).o
-# 
-# $(TARGET2)_out : $(TARGET2).o
-# 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lunwind $^ -o $@
+# gbo client
+$(TARGET3)_out : $(TARGET3).c
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -fsanitize=address $(TARGET3).c -o $@
 
+# $(TARGET3)_out : $(TARGET3).o
+# 	$(CC) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@
