@@ -106,6 +106,46 @@ TEST(IPV4, 20181015)
 }
 
 
+// ={=========================================================================
+
+/*
+
+2018.11.14
+
+15. IPv4 data type                                                        
+
+Write a class that represents an IPv4 address. Implement the functions required
+to be able to read and write such addresses from or to the console. The user
+should be able to input values in dotted form, such
+as 127.0.0.1 or 168.192.0.100. This is also the form in which IPv4 addresses
+should be formatted to an output stream.
+
+*/
+
+namespace _ip4_2018_11_14 
+{
+  class IPAddress
+  {
+    public:
+      explicit IPAddress(const std::string &address = "") : address_(address) {}
+
+      // input and output ops
+      istream &operator>>(istream &is)
+      {
+      }
+
+    private:
+      std::string address_;
+  };
+
+} // namespace
+
+TEST(IP4, 20181114)
+{
+}
+
+
+// ={=========================================================================
 // textbook
 
 namespace textbook

@@ -15,7 +15,7 @@ GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
 
-TARGET1 = ex_string
+TARGET = c01
 
 # Where to find user code.
 USER_DIR = .
@@ -23,9 +23,10 @@ USER_DIR = .
 CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(GTEST_DIR) \
 			-isystem $(GMOCK_DIR)/include -I$(GMOCK_DIR)
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -lboost_regex -D_GLIBCXX_DEBUG
+# CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -pg
+CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread
 
-TESTS = $(TARGET1)_out
+TESTS = $(TARGET)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -62,8 +63,8 @@ gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
 #
-$(TARGET1).o : $(TARGET1).cpp $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET1).cpp -o $(TARGET1).o
+$(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 
-$(TARGET1)_out : $(TARGET1).o gtest.a gmock.a
+$(TARGET)_out : $(TARGET).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

@@ -1200,6 +1200,9 @@ TEST(CollList, UseSpliceOrMerge)
     list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
     list<int> list5{0, 1, 2, 3, 4, 5};
     
+    list5.merge(list4);
+    EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
+
     // 8.8.1 Special Member Functions for Lists (and Forward Lists)
     //
     // Strictly speaking, the standard requires that both (forward) lists be
@@ -1214,8 +1217,11 @@ TEST(CollList, UseSpliceOrMerge)
     //
     // NO and failed on gcc.
 
-    list5.merge(list4);
-    EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
+    // Actual: { 4, 1, 0, 3, 2, 5 }, whose element #0 doesn't match
+
+    list<int> list6;
+    list6.merge({4, 1, 0, 3, 2, 5});
+    EXPECT_THAT(list6, Not(ElementsAreArray({0, 1, 2, 3, 4, 5})));
 }
 
 

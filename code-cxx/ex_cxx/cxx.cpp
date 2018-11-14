@@ -1557,11 +1557,8 @@ void CheckFailed(const char *file, int line, const char *cond,
                                                             v1, v2);
 }
 
-void CheckPassed(const char *file, int line, const char *cond,
-                          unsigned int v1, unsigned int v2) {
-  printf("Sanitizer CHECK passed: %s:%d %s (%lld, %lld)\n", file, line, cond,
-                                                            v1, v2);
-}
+/*
+original code from asan. see '\' at while(0 which has no difference. 
 
 #define CHECK_IMPL(c1, op, c2) \
   do { \
@@ -1570,10 +1567,17 @@ void CheckPassed(const char *file, int line, const char *cond,
     if (!(v1 op v2)) \
       CheckFailed(__FILE__, __LINE__, \
         "(" #c1 ") " #op " (" #c2 ")", v1, v2); \
-    else \
-      CheckPassed(__FILE__, __LINE__, \
-        "(" #c1 ") " #op " (" #c2 ")", v1, v2); \
   } while (false) \
+*/
+
+#define CHECK_IMPL(c1, op, c2) \
+  do { \
+    unsigned int v1 = (unsigned int)(c1); \
+    unsigned int v2 = (unsigned int)(c2); \
+    if (!(v1 op v2)) \
+      CheckFailed(__FILE__, __LINE__, \
+        "(" #c1 ") " #op " (" #c2 ")", v1, v2); \
+  } while (false)
 
 #define CHECK(a)       CHECK_IMPL((a), !=, 0)
 #define CHECK_EQ(a, b) CHECK_IMPL((a), ==, (b))
