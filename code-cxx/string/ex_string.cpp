@@ -37,7 +37,7 @@ TEST(StringIterator, PosEnd)
 
 
 // ={=========================================================================
-// string ctors
+// string-ctors
 //
 // // *cxx-string-ctor*
 //
@@ -118,7 +118,7 @@ TEST(StringCtors, Various)
 
 
 // ={=========================================================================
-// string operations
+// string-operations
 
 // string-back
 
@@ -314,7 +314,7 @@ TEST(StringOperations, AssignSwap)
 
 
 // ={=========================================================================
-// string and cstring
+// string-cstring
 
 TEST(CString, CompareStringAndCstring)
 {
@@ -824,7 +824,7 @@ TEST(StringTrim, 2018_11)
 
 
 // ={=========================================================================
-// cxx-string-split 
+// string-split 
 //
 // 4.6 Splitting a String
 // You want to split a delimited string into multiple strings. For example, you
@@ -1094,6 +1094,9 @@ TEST(StringSplit, ByDelimeter_2018_11)
 //
 // * there are couple of points that are different from the book
 
+namespace tokenizer_book
+{
+
 class StringTokenizer
 {
   public:
@@ -1105,7 +1108,7 @@ class StringTokenizer
         else
             delim_ = delim;
 
-        // *TDD* fix-on-next-token
+        // NOTE: *TDD*
         // this causes to fail on the "||Name" and loop on nextToken has
         // {"Name", "Name"}
         //
@@ -1121,6 +1124,7 @@ class StringTokenizer
         // if (begin_ == string::npos && end_ == string::npos)
         // is when input is null.
         //
+        // NOTE:
         // This is not supposed be called since hasMoreTokens() return false.
         // However, when user call it wihtout checking with hasMoreTokens() then
         // do nothing and more defensive. 
@@ -1182,508 +1186,187 @@ class StringTokenizer
     size_t end_{};
 };
 
-TEST(StringTokenizer, UseString_Input1)
+} // namespace
+
+
+namespace tokenizer_2018_05_29
 {
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    StringTokenizer st("Name|Address|Phone");
-
-    EXPECT_EQ(3, st.countTokens());
-
-    while (st.hasMoreTokens())
-    {
-        st.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
-}
-
-TEST(StringTokenizer, UseString_Input2)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    StringTokenizer st("Name|Address");
-
-    EXPECT_EQ(2, st.countTokens());
-
-    while (st.hasMoreTokens())
-    {
-        st.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
-}
-
-TEST(StringTokenizer, UseString_Input3)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    StringTokenizer st("Name");
-
-    EXPECT_EQ(1, st.countTokens());
-
-    while (st.hasMoreTokens())
-    {
-        st.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-}
-
-TEST(StringTokenizer, UseString_Input4)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    StringTokenizer st("Name|");
-
-    EXPECT_EQ(1, st.countTokens());
-
-    while (st.hasMoreTokens())
-    {
-        st.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-}
-
-TEST(StringTokenizer, UseString_Input5)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    StringTokenizer st("Name||Address");
-
-    EXPECT_EQ(2, st.countTokens());
-
-    while (st.hasMoreTokens())
-    {
-        st.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
-}
-
-TEST(StringTokenizer, UseString_Input6)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    StringTokenizer st("||Name");
-
-    EXPECT_EQ(1, st.countTokens());
-
-    while (st.hasMoreTokens())
-    {
-        st.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-}
-
-
-// * not boost-split style which means do not support null token.
-
-class MakeToken
-{
-  public:
-    MakeToken(const std::string &input, const std::string &delim = "|")
-      : str_(input), delim_(delim)
-      {
-        begin_ = str_.find_first_not_of('|');
-        end_ = str_.find_first_of('|', begin_);
-      }
-
-    // get token and updates begin_ and end_ for the next 
-    //
-    // note: here check if nextToken() is called more than # of tokens which
-    // hasMoreTokens() is for. If do not support this, then can make it simple
-    // as no check is required. 
-    void nextToken(std::string &token)
-    {
-      // there are more tokens to process
-      if (end_ != string::npos)
-      {
-        // cxx-string-substr substr(start, length)
-        token = str_.substr(begin_, end_ - begin_);
-        begin_ = str_.find_first_not_of('|', end_);
-        end_ = str_.find_first_of('|', begin_);
-      }
-
-      // seen the hand and to see it, run it input "xxx" as
-      // TEST(DISABLED_MakeToken, ParseTokensFromInput)
-
-      else if (begin_ != string::npos && end_ == string::npos)
-      {
-        token = str_.substr(begin_);
-        // to make the condition to stop
-        begin_ = end_ = string::npos;
-      }
-    }
-
-    // do not update states since it just counts
-    int countTokens()
-    {
-      auto begin = str_.find_first_not_of('|');
-      auto end = str_.find_first_of('|', begin);
-
-      while (begin != end)
-      {
-        ++count_;
-        begin = str_.find_first_not_of('|', end);
-        end = str_.find_first_of('|', begin);
-      }
-
-      return count_;
-    }
-
-    // to do this, need to have member variables to keep state
-    bool hasMoreTokens() const
-    {
-      return begin_ != end_;
-    }
-
-  private:
-    MakeToken() = default;
-    string str_{};
-    string delim_{};
-    int count_{};
-    size_t begin_{};
-    size_t end_{};
-};
-
-// to see nextToken() hang
-TEST(DISABLED_MakeToken, ParseTokensFromInput)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    // 3. "Name"
-    token.clear();
-    svec.clear();
-    MakeToken mt3("Name");
-    EXPECT_EQ(1, mt3.countTokens());
-
-    while (mt3.hasMoreTokens())
-    {
-        mt3.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-}
-
-TEST(DISABLED_MakeToken, ParseTokensFromVariosInputs)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    // 1. "Name|Address|Phone"
-    MakeToken mt1("Name|Address|Phone");
-    EXPECT_EQ(3, mt1.countTokens());
-
-    while (mt1.hasMoreTokens())
-    {
-        mt1.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
-
-    // 2. "Name|Address"
-    token.clear();
-    svec.clear();
-    MakeToken mt2("Name|Address");
-    EXPECT_EQ(2, mt2.countTokens());
-
-    while (mt2.hasMoreTokens())
-    {
-        mt2.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
-
-    // 3. "Name"
-    token.clear();
-    svec.clear();
-    MakeToken mt3("Name");
-    EXPECT_EQ(1, mt3.countTokens());
-
-    while (mt3.hasMoreTokens())
-    {
-        mt3.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-
-    // 4. "Name|"
-    token.clear();
-    svec.clear();
-    MakeToken mt4("Name|");
-    EXPECT_EQ(1, mt4.countTokens());
-
-    while (mt4.hasMoreTokens())
-    {
-        mt4.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-
-    // 5. "Name||Address"
-    token.clear();
-    svec.clear();
-    MakeToken mt5("Name||Address");
-    EXPECT_EQ(2, mt5.countTokens());
-
-    while (mt5.hasMoreTokens())
-    {
-        mt5.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
-
-    // 6. "||Name"
-    // exception where end > begin
-    token.clear();
-    svec.clear();
-    MakeToken mt6("||Name");
-    EXPECT_EQ(1, mt6.countTokens());
-
-    while (mt6.hasMoreTokens())
-    {
-        mt6.nextToken(token);
-        svec.push_back(token);
-    }
-
-    EXPECT_THAT(svec, ElementsAre("Name"));
-}
-
-TEST(String, ParseTokensMoreThanHad)
-{
-    std::string token{};
-    std::vector<std::string> svec{};
-
-    MakeToken mt1("Name|Address|Phone");
-    EXPECT_EQ(3, mt1.countTokens());
-
-    for (int i = 0; i < 6; ++i)
-    {
-        mt1.nextToken(token);
-        svec.push_back(token);
-    }
-
-    // *TDD*
-    // when calls it more than # of elements, do not clear token input string so
-    // has the same string. Need to clear input in this case?
-    EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone", "Phone", "Phone", "Phone"));
-}
-
-
-// MakeTonen_0529
-//
-// int main( ) {
-//    string tmp;
-//    MakeToken_0529 st("Name|Address|Phone");
-//    cout << "there are " << st.countTokens( ) << " tokens.\n";
-//    while (st.hasMoreTokens( )) {
-//        st.nextToken(tmp);
-//        cout << "token = " << tmp << '\n';
-//    }
-// }
-//
-// 1. countTokens() count number of tokens, cache it, and return it. Then how
-// about hasMoreTokens()? This means that don't need to keep input_ and change
-// it whenever nextToken() gets called. So count number of tokens whenever it
-// gets called and keep a contailer which has tokens.
-//
-// int main( ) {
-//    string tmp;
-//    MakeToken st("Name|Address|Phone");
-//    cout << "there are " << st.countTokens( ) << " tokens.\n";
-//    while (st.countTokens( )) {
-//        st.nextToken(tmp);
-//        cout << "token = " << tmp << '\n';
-//    }
-// }
-
-// TDD on 2018.05.29
-// * Like cxx-boost-split, "||Name" has {"", "", "Name"}
-// * Has token array member so remove hadMoreToken() and countToken() do not
-// calculate count everytime when gets called.
-// * note: may not work with "|||"
-
-class MakeToken_0529
-{
-  public:
-    MakeToken_0529(const string &input, const string &delim = "|"):
-      input_(input), delim_(delim)
-      {
-        size_t i{};
-        size_t found = input_.find_first_of(delim_, i);
-
-        while (found != string::npos)
+  // use internal vector and find(). do not have hasMore() since countTokens()
+  // returns size of vector.
+
+  // MakeTonen_0529
+  //
+  // int main( ) {
+  //    string tmp;
+  //    MakeToken_0529 st("Name|Address|Phone");
+  //    cout << "there are " << st.countTokens( ) << " tokens.\n";
+  //    while (st.hasMoreTokens( )) {
+  //        st.nextToken(tmp);
+  //        cout << "token = " << tmp << '\n';
+  //    }
+  // }
+  //
+  // 1. countTokens() count number of tokens, cache it, and return it. Then how
+  // about hasMoreTokens()? This means that don't need to keep input_ and change
+  // it whenever nextToken() gets called. So count number of tokens whenever it
+  // gets called and keep a contailer which has tokens.
+  //
+  // int main( ) {
+  //    string tmp;
+  //    MakeToken st("Name|Address|Phone");
+  //    cout << "there are " << st.countTokens( ) << " tokens.\n";
+  //    while (st.countTokens( )) {
+  //        st.nextToken(tmp);
+  //        cout << "token = " << tmp << '\n';
+  //    }
+  // }
+
+  // TDD on 2018.05.29
+  // * Like cxx-boost-split, "||Name" has {"", "", "Name"}
+  // * Has token array member so remove hadMoreToken() and countToken() do not
+  // calculate count everytime when gets called.
+  // * note: may not work with "|||"
+
+  class MakeToken_0529
+  {
+    public:
+      MakeToken_0529(const string &input, const string &delim = "|"):
+        input_(input), delim_(delim)
         {
-          tokens_.push_back(input_.substr(i, found-i));
-          i = ++found;
-          found = input_.find_first_of(delim_, i);
+          size_t i{};
+          size_t found = input_.find_first_of(delim_, i);
 
+          while (found != string::npos)
+          {
+            tokens_.push_back(input_.substr(i, found-i));
+            i = ++found;
+            found = input_.find_first_of(delim_, i);
+
+          }
+
+          if (found == string::npos)
+            tokens_.push_back(input_.substr(i, found));
         }
 
-        if (found == string::npos)
-          tokens_.push_back(input_.substr(i, found));
-      }
-
-    size_t countTokens()
-    {
-      return tokens_.size();
-    }
-
-    void nextToken(string &token)
-    {
-      auto it = tokens_.begin();
-      if (it != tokens_.end())
+      size_t countTokens()
       {
-        token = *it;
-        tokens_.erase(it);
+        return tokens_.size();
       }
-    }
 
-  private:
-    const string input_;
-    const string delim_;
-    size_t number_of_tokens_{};
-    vector<string> tokens_{};
-};
+      void nextToken(string &token)
+      {
+        auto it = tokens_.begin();
+        if (it != tokens_.end())
+        {
+          token = *it;
+          tokens_.erase(it);
+        }
+      }
 
-TEST(MakeToken_0529, UseCountTokens)
-{
-  MakeToken_0529 st("Name|Address|Phone");
+    private:
+      const string input_;
+      const string delim_;
+      size_t number_of_tokens_{};
+      vector<string> tokens_{};
+  };
 
-  EXPECT_THAT(st.countTokens(), Eq(3));
-  EXPECT_THAT(st.countTokens(), Eq(3));
-}
+} // namespace
 
-TEST(MakeToken_0529, UseGetTokens)
-{
-  vector<string> coll{};
-  MakeToken_0529 st("Name|Address|Phone");
-  string token;
-
-  while (st.countTokens())
-  {
-    st.nextToken(token);
-    coll.push_back(token);
-  }
-
-  EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
-}
 
 TEST(MakeToken_0529, UseVariousInputs)
 {
-    std::string token{};
-    std::vector<std::string> svec{};
+  using namespace tokenizer_2018_05_29;
 
-    // 1. "Name|Address|Phone"
-    MakeToken_0529 mt1("Name|Address|Phone");
-    EXPECT_EQ(3, mt1.countTokens());
+  std::string token{};
+  std::vector<std::string> svec{};
 
-    while (mt1.countTokens())
-    {
-        mt1.nextToken(token);
-        svec.push_back(token);
-    }
+  // 1. "Name|Address|Phone"
+  MakeToken_0529 mt1("Name|Address|Phone");
+  EXPECT_EQ(3, mt1.countTokens());
 
-    EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
+  while (mt1.countTokens())
+  {
+    mt1.nextToken(token);
+    svec.push_back(token);
+  }
 
-    // 2. "Name|Address"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt2("Name|Address");
-    EXPECT_EQ(2, mt2.countTokens());
+  EXPECT_THAT(svec, ElementsAre("Name", "Address", "Phone"));
 
-    while (mt2.countTokens())
-    {
-        mt2.nextToken(token);
-        svec.push_back(token);
-    }
+  // 2. "Name|Address"
+  token.clear();
+  svec.clear();
+  MakeToken_0529 mt2("Name|Address");
+  EXPECT_EQ(2, mt2.countTokens());
 
-    EXPECT_THAT(svec, ElementsAre("Name", "Address"));
+  while (mt2.countTokens())
+  {
+    mt2.nextToken(token);
+    svec.push_back(token);
+  }
 
-    // 3. "Name"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt3("Name");
-    EXPECT_EQ(1, mt3.countTokens());
+  EXPECT_THAT(svec, ElementsAre("Name", "Address"));
 
-    while (mt3.countTokens())
-    {
-        mt3.nextToken(token);
-        svec.push_back(token);
-    }
+  // 3. "Name"
+  token.clear();
+  svec.clear();
+  MakeToken_0529 mt3("Name");
+  EXPECT_EQ(1, mt3.countTokens());
 
-    EXPECT_THAT(svec, ElementsAre("Name"));
+  while (mt3.countTokens())
+  {
+    mt3.nextToken(token);
+    svec.push_back(token);
+  }
 
-    // 4. "Name|"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt4("Name|");
-    EXPECT_EQ(2, mt4.countTokens());
+  EXPECT_THAT(svec, ElementsAre("Name"));
 
-    while (mt4.countTokens())
-    {
-        mt4.nextToken(token);
-        svec.push_back(token);
-    }
+  // 4. "Name|"
+  token.clear();
+  svec.clear();
+  MakeToken_0529 mt4("Name|");
+  EXPECT_EQ(2, mt4.countTokens());
 
-    EXPECT_THAT(svec, ElementsAre("Name", ""));
+  while (mt4.countTokens())
+  {
+    mt4.nextToken(token);
+    svec.push_back(token);
+  }
 
-    // 5. "Name||Address"
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt5("Name||Address");
-    EXPECT_EQ(3, mt5.countTokens());
+  EXPECT_THAT(svec, ElementsAre("Name", ""));
 
-    while (mt5.countTokens())
-    {
-        mt5.nextToken(token);
-        svec.push_back(token);
-    }
+  // 5. "Name||Address"
+  token.clear();
+  svec.clear();
+  MakeToken_0529 mt5("Name||Address");
+  EXPECT_EQ(3, mt5.countTokens());
 
-    EXPECT_THAT(svec, ElementsAre("Name", "", "Address"));
+  while (mt5.countTokens())
+  {
+    mt5.nextToken(token);
+    svec.push_back(token);
+  }
 
-    // 6. "||Name"
-    // exception where end > begin
-    token.clear();
-    svec.clear();
-    MakeToken_0529 mt6("||Name");
-    EXPECT_EQ(3, mt6.countTokens());
+  EXPECT_THAT(svec, ElementsAre("Name", "", "Address"));
 
-    while (mt6.countTokens())
-    {
-        mt6.nextToken(token);
-        svec.push_back(token);
-    }
+  // 6. "||Name"
+  // exception where end > begin
+  token.clear();
+  svec.clear();
+  MakeToken_0529 mt6("||Name");
+  EXPECT_EQ(3, mt6.countTokens());
 
-    EXPECT_THAT(svec, ElementsAre("", "", "Name"));
+  while (mt6.countTokens())
+  {
+    mt6.nextToken(token);
+    svec.push_back(token);
+  }
+
+  EXPECT_THAT(svec, ElementsAre("", "", "Name"));
 }
 
+namespace tokenizer_2018_06_06
+{
 
-// ={=========================================================================
-// StringTokenizer_0606
-//
 // int main( ) {
 //    string s = " razzle dazzle giddyup ";
 //    string tmp;
@@ -1695,17 +1378,6 @@ TEST(MakeToken_0529, UseVariousInputs)
 //    }
 // }
 //
-// class StringTokenizer {
-//
-//   private:
-//     StringTokenizer() {}
-//     string delim_;
-//     string str_;
-//     size_t count_{};
-//     size_t begin_{};
-//     size_t end_{};
-// };
-// 
 // * not boost-split style which means do not support null token.
 
 class StringTokenizer_0606
@@ -1760,29 +1432,13 @@ class StringTokenizer_0606
     size_t pos_delim_{};
 };
 
-TEST(StringTokenizer_0606, UseCountTokens)
-{
-  StringTokenizer_0606 st1("Name|Address|Phone");
-  EXPECT_EQ(st1.countTokens(), 3);
+} // namespace
 
-  StringTokenizer_0606 st2("Name|Address");
-  EXPECT_EQ(2, st2.countTokens());
-
-  StringTokenizer_0606 st3("Name");
-  EXPECT_EQ(1, st3.countTokens());
-
-  StringTokenizer_0606 st4("Name||Address");
-  EXPECT_EQ(2, st4.countTokens());
-
-  StringTokenizer_0606 st5("||Name");
-  EXPECT_EQ(1, st5.countTokens());
-
-  StringTokenizer_0606 st6("|||");
-  EXPECT_EQ(0, st6.countTokens());
-}
 
 TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
 {
+  using namespace tokenizer_2018_06_06;
+
   string token{};
   vector<string> coll{};
 
@@ -1867,6 +1523,508 @@ TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
   }
 
   EXPECT_THAT(coll, ElementsAre("Name"));
+}
+
+
+namespace tokenizer_2018_11_split {
+
+  // use split()
+
+  // o '|' is default delim
+  //
+  // int main( ) {
+  //    string s = " razzle dazzle giddyup ";
+  //    string tmp;
+  //    StringTokenizer st(s, "|");
+  //    cout << "there are " << st.countTokens( ) << " tokens.\n";
+  //    while (st.hasMoreTokens( )) {
+  //        st.nextToken(tmp);
+  //        cout << "token = " << tmp << '\n';
+  //    }
+  // }
+
+  class StringTokenizer
+  {
+    public:
+    explicit StringTokenizer(const string &s, const char delim = '|')
+      : delim_(delim)
+    {
+      split(s, delim);
+    }
+
+    int countTokens() { return token_.size(); }
+
+    // meaning of empty()
+    bool hasMoreTokens() { return !token_.empty(); }
+
+    // have to remove one
+    void nextToken(string &next) 
+    { 
+      // since vector don't have interface to pop from the front
+      next = token_.front();
+      token_.erase(token_.begin());
+    }
+
+    private:
+
+    void split(const string &s, const char delim)
+    {
+      auto length = s.length();
+      auto end = s.find(delim);
+      decltype(end) start{};
+      string token;
+
+      while (end < length)
+      {
+        token = s.substr(start, end - start);
+        if (!token.empty())
+          token_.push_back(token);
+
+        // this fails on caes which has empty token like "||Name" so have to
+        // have to check before inserting and this is improvement from
+        // *string-split*
+        //
+        // token_.push_back(s.substr(start, end - start));
+
+        start = end + 1;
+        end = s.find(delim, start);
+      }
+
+      // // this covers either last or single split
+      // token_.push_back(s.substr(start, end - start));
+
+      // this covers either last or single split
+      token = s.substr(start, end - start);
+      if (!token.empty())
+        token_.push_back(token);
+    }
+
+    vector<string> token_;
+    char delim_;
+  };
+
+} // namespace
+
+
+// cases:
+//
+// "Name|Address|Phone"
+// "Name|Address"
+// "Name"
+// "Name|"
+// "Name||Address"
+// "||Name"
+//  "||"
+
+TEST(StringTokenizer, 2018_11_split)
+{
+  using namespace tokenizer_2018_11_split;
+
+  // "Name|Address|Phone"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name|Address|Phone");
+
+    EXPECT_EQ(3, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+  }
+
+  // "Name|Address"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name|Address");
+
+    EXPECT_EQ(2, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address"));
+  }
+
+  // "Name"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name"));
+  }
+
+  // "Name|"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name|");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name"));
+  }
+
+  // "Name||Address"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name||Address");
+
+    EXPECT_EQ(2, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address"));
+  }
+
+  // "||Name"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("||Name");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name"));
+  }
+
+  //  "||"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("||");
+
+    EXPECT_EQ(0, st.countTokens());
+  }
+
+  // this fails
+  //
+  // //  ""
+  // {
+  //   std::string token{};
+  //   std::vector<std::string> coll{};
+
+  //   StringTokenizer st("");
+
+  //   EXPECT_EQ(0, st.countTokens());
+
+  //   for (int i = 0; i < 5; ++i)
+  //   {
+  //     st.nextToken(token);
+  //     if (!token.empty())
+  //       coll.push_back(token);
+  //   }
+
+  //   EXPECT_TRUE(coll.empty());
+  // }
+}
+
+namespace tokenizer_2018_11_find {
+
+  // use find() family
+  // do not use internal coll such as vector which means that do everything on
+  // the fly when requested
+
+  // o '|' is default delim
+  // o countToken() returns # of tokens of input
+  //
+  // int main( ) {
+  //    string s = " razzle dazzle giddyup ";
+  //    string tmp;
+  //    StringTokenizer st(s, "|");
+  //    cout << "there are " << st.countTokens( ) << " tokens.\n";
+  //    while (st.hasMoreTokens( )) {
+  //        st.nextToken(tmp);
+  //        cout << "token = " << tmp << '\n';
+  //    }
+  // }
+
+  class StringTokenizer
+  {
+    public:
+      StringTokenizer(const string &s, const char delim = '|')
+      : input_(s), delim_(delim)
+      {
+        count_ = 0;
+        start_ = input_.find_first_not_of(delim_);
+        end_ = input_.find_first_of(delim_, start_);
+      }
+
+      void nextToken(string &s)
+      {
+        // works for all except when call nextToken() without checking on
+        // hasMore(). crashes.
+        //
+        // s = input_.substr(start_, end_ - start_);
+        // start_ = input_.find_first_not_of(delim_, end_);
+        // end_ = input_.find_first_of(delim_, start_);
+
+        if (start_ != string::npos && end_ != string::npos)
+        {
+          s = input_.substr(start_, end_ - start_);
+          start_ = input_.find_first_not_of(delim_, end_);
+          end_ = input_.find_first_of(delim_, start_);
+        }
+        else if (start_ != string::npos && end_ == string::npos)
+        {
+          s = input_.substr(start_, end_ - start_);
+          start_ = input_.find_first_not_of(delim_, end_);
+        }
+      }
+
+      bool hasMoreTokens()
+      {
+        return start_ != end_;
+      }
+
+      size_t countTokens()
+      {
+        if (count_)
+          return count_;
+
+        // use two variables:
+        //
+        // decltype(start_) start{}, end{};
+        // 
+        // start = input_.find_first_not_of(delim_);
+        // end = input_.find_first_of(delim_);
+        //
+        // while (end < string::npos)
+        // {
+        //   ++count_;
+        //   start = input_.find_first_not_of(delim_, end);
+        //   end = input_.find_first_of(delim_, start);
+        // }
+
+
+        // do not support cases which has only delims:
+        //
+        // decltype(start_) run{};
+        //
+        // run = input_.find_first_of(delim_);
+        //
+        // while (run < string::npos)
+        // {
+        //   ++count_;
+        //   run = input_.find_first_not_of(delim_, run);
+        //   run = input_.find_first_of(delim_, run);
+        // }
+        //
+        // return ++count_;
+
+
+        // same approach as the book. the difference is that
+        // o do find_first_not_of() and this makes no need to increase count out
+        // of while loop which enables to return 0.
+        //
+        // o there is at least one token whenever see a char which is not delim,
+        // so find_first_not_of()
+
+        decltype(start_) run{};
+
+        while (run < string::npos)
+        {
+          if ((run = input_.find_first_not_of(delim_, run)) == string::npos)
+            break;
+
+          ++count_;
+          run = input_.find_first_of(delim_, run);
+        }
+
+        return count_;
+      }
+
+    private:
+      string input_;
+      char delim_;
+      size_t start_, end_;
+      decltype(start_) count_;
+  };
+
+} // namespace
+
+
+TEST(StringTokenizer, 2018_11_find)
+{
+  using namespace tokenizer_2018_11_find;
+
+  // "Name|Address|Phone"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name|Address|Phone");
+
+    EXPECT_EQ(3, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+  }
+
+  // "Name|Address"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name|Address");
+
+    EXPECT_EQ(2, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address"));
+  }
+
+  // "Name"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name"));
+  }
+
+  // "Name|"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name|");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name"));
+  }
+
+  // "Name||Address"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("Name||Address");
+
+    EXPECT_EQ(2, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address"));
+  }
+
+  // "||Name"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("||Name");
+
+    EXPECT_EQ(1, st.countTokens());
+
+    while (st.hasMoreTokens())
+    {
+      st.nextToken(token);
+      coll.push_back(token);
+    }
+
+    EXPECT_THAT(coll, ElementsAre("Name"));
+  }
+
+  //  "||"
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("||");
+
+    EXPECT_EQ(0, st.countTokens());
+  }
+
+  //  ""
+  {
+    std::string token{};
+    std::vector<std::string> coll{};
+
+    StringTokenizer st("");
+
+    EXPECT_EQ(0, st.countTokens());
+
+    for (int i = 0; i < 5; ++i)
+    {
+      st.nextToken(token);
+      if (!token.empty())
+        coll.push_back(token);
+    }
+
+    EXPECT_TRUE(coll.empty());
+  }
 }
 
 
