@@ -393,185 +393,101 @@ TEST(Iterator, Distance)
 // ={=========================================================================
 // cxx-vector
 
-// no compile error but errors when built with -D_GLIBCXX_DEBUG and run
+// CXXSLR-7.3.5 Examples of Using Vectors
 //
-// /usr/include/c++/6/debug/safe_iterator.h:191:
-// Error: attempt to construct a constant iterator from a singular mutable 
-// iterator.
-// 
-// Objects involved in the operation:
-//     iterator "this" @ 0x0x7ffcc61e9980 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int const*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (constant iterator);
-//       state = singular;
-//     }
-//     iterator "other" @ 0x0x7ffcc61e97f0 {
-//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
-//       state = singular;
-//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffcc61e9820
-//     }
-// Aborted
+//  max_size(): 2305843009213693951
+//  size()    : 0
+//  capacity(): 5
+// Hello, how are you ?
+//  max_size(): 2305843009213693951
+//  size()    : 5
+//  capacity(): 5
+// Hello, you are how always !
+//  size()    : 6
+//  capacity(): 10
+//  size()    : 4
+//  capacity(): 4
 
-TEST(DISABLED_StlVector, EraseChangesEnd_EmitRuntimeError)
+TEST(Vector, Capacity)
 {
-  vector<int> coll1;
-  INSERT_ELEMENTS(coll1, 0, 8);
-  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
+  // create empty vector for strings
+  vector<string> sentence;
+  // reserve memory for five elements to avoid reallocation
+  sentence.reserve(5);
 
-  auto it = coll1.begin()+1;
+  // *TN* reserve() do not change size()
+  cout << " max_size(): " << sentence.max_size() << endl;
+  cout << " size()    : " << sentence.size() << endl;
+  cout << " capacity(): " << sentence.capacity() << endl;
 
-  // note: it is not valid after this
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
+  // append some elements
+  sentence.push_back("Hello,");
+  sentence.insert(sentence.end(),{"how","are","you","?"});
 
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
+  // print elements separated with spaces
+  copy (sentence.cbegin(), sentence.cend(),
+      ostream_iterator<string>(cout," "));
+  cout << endl;
 
-  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
+  // print ‘‘technical data’’
+  cout << " max_size(): " << sentence.max_size() << endl;
+  cout << " size()    : " << sentence.size() << endl;
+  cout << " capacity(): " << sentence.capacity() << endl;
 
-  // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
-  {
-    // if see even values, remove it
-    if(!(*it % 2))
-      it = coll2.erase(it);
-    else
-      ++it;
-  }
+  // swap second and fourth element
+  swap (sentence[1], sentence[3]);
+  // insert element "always" before element "?"
+  sentence.insert (find(sentence.begin(),sentence.end(),"?"), "always");
+  // assign "!" to the last element
+  sentence.back() = "!";
 
-  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
-}
+  // print elements separated with spaces
+  copy (sentence.cbegin(), sentence.cend(),
+      ostream_iterator<string>(cout," "));
+  cout << endl;
 
-TEST(StlVector, EraseChangesEnd_NoError)
-{
-  vector<int> coll1;
-  INSERT_ELEMENTS(coll1, 0, 8);
-  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
+  // print some ‘‘technical data’’ again
+  cout << " size()    : " << sentence.size() << endl;
+  cout << " capacity(): " << sentence.capacity() << endl;
 
-  auto it = coll1.begin()+1;
+  // delete last two elements
+  sentence.pop_back();
+  sentence.pop_back();
 
-  it = coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
-
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
-
-  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
-  {
-    // if see even values, remove it
-    if(!(*it % 2))
-      it = coll2.erase(it);
-    else
-      ++it;
-  }
-
-  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
+  // shrink capacity (since C++11)
+  sentence.shrink_to_fit();
+  // print some ‘‘technical data’’ again
+  cout << " size()    : " << sentence.size() << endl;
+  cout << " capacity(): " << sentence.capacity() << endl;
 }
 
 
-TEST(StlVector, InsertAndErase)
-{
-  vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-  EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-  // in every iteration, update it which is invalidated after insert/erase.
-  for(auto it = coll.begin(); it != coll.end(); /* no */)
-  {
-    // if see odd values, repeat it in front of it.
-    if(*it % 2)
-    {
-      it = coll.insert(it, *it);
-      it += 2;
-    }
-    else
-      it = coll.erase(it);
-  }
-
-  EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
-}
-
-class VectorEraseCallsDtor
+class VectorCtorsTest
 {
   public:
-    VectorEraseCallsDtor(const string name="vector"): name_(name) 
-      { cout << "VectorEraseCallsDtor::ctor: " << name_ << endl; }
-    ~VectorEraseCallsDtor() 
-      { cout << "VectorEraseCallsDtor::dtor: " << name_ << endl; }
-
-    string GetName() { return name_; }
+  VectorCtorsTest(int size, int value = 10) : icoll(size, value) {}
+  int size() { return icoll.size(); }
+  void print() { PRINT_ELEMENTS(icoll, "clsss : "); }
 
   private:
-    string name_;
+  vector<int> icoll;
 };
 
-TEST(StlVector, CreateOnDemand)
+TEST(Vector, Ctors)
 {
-  vector<VectorEraseCallsDtor> ovec{};
+  vector<int> icoll1(5);
+  // PRINT_ELEMENTS(icoll1, "default init: ");
+  ASSERT_THAT(icoll1.size(), Eq(5));
+  EXPECT_THAT(icoll1, ElementsAre(0,0,0,0,0));
 
-  for(int i = 0; i < 5; ++i)
-  {
-    cout << "-for ---------" << endl;
-    string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
-  }
+  vector<int> icoll2(5, 10);
+  // PRINT_ELEMENTS(icoll2, "value   init: ");
+  ASSERT_THAT(icoll2.size(), Eq(5));
+  EXPECT_THAT(icoll2, ElementsAre(10,10,10,10,10));
 
-  auto it = ovec.begin();
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-}
-
-TEST(StlVector, CreateWithReserve)
-{
-  vector<VectorEraseCallsDtor> ovec{};
-  ovec.reserve(10);
-
-  for(int i = 0; i < 5; ++i)
-  {
-    cout << "-for ---------" << endl;
-    string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
-  }
-
-  auto it = ovec.begin();
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-}
-
-TEST(StlVector, CreateWithPreAllocation)
-{
-  vector<VectorEraseCallsDtor> ovec(10);
-
-  // for(int i = 0; i < 5; ++i)
-  // {
-  //   cout << "-for ---------" << endl;
-  //   string name = "name " + to_string(i);
-  //   ovec.push_back(VectorEraseCallsDtor(name));
-  // }
-
-  auto it = ovec.begin();
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
-
-  it = ovec.erase(it);
-  cout << "-erase---------" << endl;
+  VectorCtorsTest icoll3(10, 100);
+  // icoll3.print();
+  ASSERT_THAT(icoll3.size(), Eq(10));
 }
 
 void StlVectorFillVector(vector<int> &coll)
@@ -580,7 +496,7 @@ void StlVectorFillVector(vector<int> &coll)
     coll.insert(coll.end(), i);
 }
 
-TEST(StlVector, InitializeFromExpression)
+TEST(Vector, CtorFromExpression)
 {
   vector<int> coll;
   StlVectorFillVector(coll);
@@ -600,87 +516,6 @@ TEST(StlVector, InitializeFromExpression)
   EXPECT_THAT(sizeof(iarray)/sizeof(iarray[0]), 20);
 }
 
-TEST(StlVector, InitializeForms)
-{
-  // default init
-  vector<int> coll1;
-
-  for (int i = 0; i < 5; i++)
-  {
-    int val;
-    coll1.push_back(val);
-  }
-
-  // default init and fails
-  // GCC 4.9.2, this fails since all are initialzed to 0.
-  EXPECT_THAT(coll1, Ne(vector<int>({0,0,0,0,0})));
-
-  // value init
-  vector<int> coll2(5);
-  EXPECT_THAT(coll2, ElementsAre(0,0,0,0,0));
-
-  // value init
-  vector<int> coll3(5, 10);
-  EXPECT_THAT(coll3, ElementsAre(10,10,10,10,10));
-}
-
-
-// cause seg fault
-TEST(DISABLED_StlVector, AccessInvalidIndex)
-{
-  vector<VectorEraseCallsDtor> ovec{};
-
-  for(int i = 0; i < 5; ++i)
-  {
-    string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
-  }
-
-  cout << "name: " << ovec[8].GetName() << endl;
-}
-
-// cxx-undefined
-TEST(DISABLED_StlVector, AccessInvalidIndexWithReserve)
-{
-  vector<VectorEraseCallsDtor> ovec{};
-  ovec.reserve(10);
-
-  for(int i = 0; i < 5; ++i)
-  {
-    string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
-  }
-
-  cout << "name: " << ovec[8].GetName() << endl;
-}
-
-
-class VectorCtorsTest
-{
-  public:
-  VectorCtorsTest(int size, int value = 10) : icoll(size, value) {}
-  int size() { return icoll.size(); }
-  void print() { PRINT_ELEMENTS(icoll, "clsss : "); }
-
-  private:
-  vector<int> icoll;
-};
-
-
-TEST(StlVector, VecorCtors)
-{
-  vector<int> icoll1(5);
-  PRINT_ELEMENTS(icoll1, "default init: ");
-  ASSERT_THAT(icoll1.size(), Eq(5));
-
-  vector<int> icoll2(5, 10);
-  PRINT_ELEMENTS(icoll2, "value   init: ");
-  ASSERT_THAT(icoll2.size(), Eq(5));
-
-  VectorCtorsTest icoll3(10, 100);
-  icoll3.print();
-  ASSERT_THAT(icoll3.size(), Eq(10));
-}
 
 void GetVectorArg(const vector<int> &coll)
 {
@@ -736,6 +571,337 @@ TEST(StlVector, CopyAndMoveAssign)
     vector<int> coll1{1,2,3,4,5,6};
     GetVectorArg(coll1);
   }
+}
+
+
+// no compile error but errors when built with -D_GLIBCXX_DEBUG and run
+//
+// /usr/include/c++/6/debug/safe_iterator.h:191:
+// Error: attempt to construct a constant iterator from a singular mutable 
+// iterator.
+// 
+// Objects involved in the operation:
+//     iterator "this" @ 0x0x7ffcc61e9980 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int const*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (constant iterator);
+//       state = singular;
+//     }
+//     iterator "other" @ 0x0x7ffcc61e97f0 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+//       state = singular;
+//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffcc61e9820
+//     }
+// Aborted
+
+TEST(DISABLED_Vector, EraseRuntimeError)
+{
+  vector<int> coll1;
+  INSERT_ELEMENTS(coll1, 0, 8);
+  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
+
+  auto it = coll1.begin()+1;
+
+  // note: it is not valid after this
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
+
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
+
+  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
+  {
+    // if see even values, remove it
+    if(!(*it % 2))
+      it = coll2.erase(it);
+    else
+      ++it;
+  }
+
+  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
+}
+
+TEST(Vector, EraseNoError)
+{
+  vector<int> coll1;
+  INSERT_ELEMENTS(coll1, 0, 8);
+  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
+
+  auto it = coll1.begin()+1;
+
+  it = coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,2,3,4,5,6,7,8));
+
+  coll1.erase(it);
+  EXPECT_THAT(coll1, ElementsAre(0,3,4,5,6,7,8));
+
+  vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = coll2.begin(); it != coll2.end(); /* no */)
+  {
+    // if see even values, remove it
+    if(!(*it % 2))
+      it = coll2.erase(it);
+    else
+      ++it;
+  }
+
+  EXPECT_THAT(coll2, ElementsAre(1,3,5,7));
+}
+
+
+TEST(Vector, InsertAndErase)
+{
+  vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  EXPECT_THAT(coll, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+  // in every iteration, update it which is invalidated after insert/erase.
+  for(auto it = coll.begin(); it != coll.end(); /* no */)
+  {
+    // if see odd values, repeat it in front of it.
+    if(*it % 2)
+    {
+      it = coll.insert(it, *it);
+      it += 2;
+    }
+    else
+      it = coll.erase(it);
+  }
+
+  EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
+}
+
+class VectorEraseCallsDtor
+{
+  public:
+    VectorEraseCallsDtor(const string name="vector"): name_(name) 
+      { cout << "VectorEraseCallsDtor::ctor: " << name_ << endl; }
+    ~VectorEraseCallsDtor() 
+      { cout << "VectorEraseCallsDtor::dtor: " << name_ << endl; }
+
+    string GetName() { return name_; }
+
+  private:
+    string name_;
+};
+
+// 1. cxx-vector-reallocation is not something when create a vector with big
+// numbers. This happens from the start.
+//
+// 2. do not predict how rellocation or destruction gets called.
+// 
+// When doing push_back(), cannot predict the output since relocation is
+// involved.
+// 
+// When erasing from the beginning, cannot predict the output since moves
+// element from the end to the beginning. 
+//
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 0
+// VectorEraseCallsDtor::dtor: name 0
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 1
+// VectorEraseCallsDtor::dtor: name 0
+// VectorEraseCallsDtor::dtor: name 1
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 2
+// VectorEraseCallsDtor::dtor: name 0
+// VectorEraseCallsDtor::dtor: name 1
+// VectorEraseCallsDtor::dtor: name 2
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 3
+// VectorEraseCallsDtor::dtor: name 3
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 4
+// VectorEraseCallsDtor::dtor: name 0
+// VectorEraseCallsDtor::dtor: name 1
+// VectorEraseCallsDtor::dtor: name 2
+// VectorEraseCallsDtor::dtor: name 3
+// VectorEraseCallsDtor::dtor: name 4
+// for: name 0
+// for: name 1
+// for: name 2
+// for: name 3
+// for: name 4
+// -erase---------
+// VectorEraseCallsDtor::dtor: name 4
+// -erase---------
+// VectorEraseCallsDtor::dtor: name 4
+// -erase---------
+// VectorEraseCallsDtor::dtor: name 4
+// VectorEraseCallsDtor::dtor: name 3
+// VectorEraseCallsDtor::dtor: name 4
+
+TEST(Vector, CreateWithOnDemand)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+
+  for(int i = 0; i < 5; ++i)
+  {
+    cout << "-for ---------" << endl;
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  for (auto &e : ovec)
+    cout << "for: " << e.GetName() << endl;
+
+  cout << "-erase---------" << endl;
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+
+  cout << "-erase---------" << endl;
+  it = ovec.erase(it);
+
+  cout << "-erase---------" << endl;
+  it = ovec.erase(it);
+}
+
+
+// see no relocation happens
+//
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 0
+// VectorEraseCallsDtor::dtor: name 0
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 1
+// VectorEraseCallsDtor::dtor: name 1
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 2
+// VectorEraseCallsDtor::dtor: name 2
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 3
+// VectorEraseCallsDtor::dtor: name 3
+// -for ---------
+// VectorEraseCallsDtor::ctor: name 4
+// VectorEraseCallsDtor::dtor: name 4
+// -erase---------
+// VectorEraseCallsDtor::dtor: name 4
+// -erase---------
+// VectorEraseCallsDtor::dtor: name 4
+// -erase---------
+// VectorEraseCallsDtor::dtor: name 4
+// VectorEraseCallsDtor::dtor: name 3
+// VectorEraseCallsDtor::dtor: name 4
+
+TEST(Vector, CreateWithReserve)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+  ovec.reserve(10);
+
+  for(int i = 0; i < 5; ++i)
+  {
+    cout << "-for ---------" << endl;
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  cout << "-erase---------" << endl;
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+
+  cout << "-erase---------" << endl;
+  it = ovec.erase(it);
+
+  cout << "-erase---------" << endl;
+  it = ovec.erase(it);
+}
+
+
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// VectorEraseCallsDtor::ctor: vector
+// -erase---------
+// VectorEraseCallsDtor::dtor: vector
+// -erase---------
+// VectorEraseCallsDtor::dtor: vector
+// -erase---------
+// VectorEraseCallsDtor::dtor: vector
+// VectorEraseCallsDtor::dtor: vector
+// VectorEraseCallsDtor::dtor: vector
+// VectorEraseCallsDtor::dtor: vector
+// VectorEraseCallsDtor::dtor: vector
+// VectorEraseCallsDtor::dtor: vector
+// VectorEraseCallsDtor::dtor: vector
+// VectorEraseCallsDtor::dtor: vector
+
+TEST(Vector, CreateWithPreAllocation)
+{
+  vector<VectorEraseCallsDtor> ovec(10);
+
+  cout << "-erase---------" << endl;
+  auto it = ovec.begin();
+  it = ovec.erase(it);
+
+  cout << "-erase---------" << endl;
+  it = ovec.erase(it);
+
+  cout << "-erase---------" << endl;
+  it = ovec.erase(it);
+}
+
+
+// cxx-seg-fault
+//
+// can benefit from -D_GLIBCXX_DEBUG
+//
+// /usr/include/c++/4.9/debug/vector:357:error: attempt to subscript container
+//     with out-of-bounds index 8, but container only holds 5 elements.
+// 
+// Objects involved in the operation:
+// sequence "this" @ 0x0x7ffe287d4590 {
+//   type = NSt7__debug6vectorI20VectorEraseCallsDtorSaIS1_EEE;
+// }
+// Aborted
+
+TEST(DISABLED_Vector, AccessInvalidIndex)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+
+  for(int i = 0; i < 5; ++i)
+  {
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  cout << "name: " << ovec[8].GetName() << endl;
+}
+
+// cxx-undefined
+//
+// can benefit from -D_GLIBCXX_DEBUG
+//
+// /usr/include/c++/4.9/debug/vector:357:error: attempt to subscript container
+//     with out-of-bounds index 8, but container only holds 5 elements.
+// 
+// Objects involved in the operation:
+// sequence "this" @ 0x0x7ffe5c578460 {
+//   type = NSt7__debug6vectorI20VectorEraseCallsDtorSaIS1_EEE;
+// }
+// Aborted
+
+TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
+{
+  vector<VectorEraseCallsDtor> ovec{};
+  ovec.reserve(10);
+
+  for(int i = 0; i < 5; ++i)
+  {
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorEraseCallsDtor(name));
+  }
+
+  cout << "name: " << ovec[8].GetName() << endl;
 }
 
 
@@ -1081,43 +1247,45 @@ TEST(CxxStlTest, HowMapInsertWorks)
 // key 3.0 found!(3,2)
 // value 3.0 found!(4,3)
 
-MATCHER_P(EqPair, expected, "")
-{
-    return arg->first == expected.first && arg->second == expected.second;
-}
+// error when use -D_GLIBCXX_DEBUG
+//
+// MATCHER_P(EqPair, expected, "")
+// {
+//     return arg->first == expected.first && arg->second == expected.second;
+// }
 
-TEST(CxxStlTest, HowMapFindWorks)
-{
-    map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
-
-    auto posKey = coll.find(3.0);
-    if( posKey != coll.end() )
-    {
-        // cout << "key 3.0 found!(" << posKey->first << "," << 
-        //     posKey->second << ")" << endl;
-        ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
-        // ASSERT_THAT(posKey->first, Eq(3));
-        // ASSERT_THAT(posKey->second, Eq(2));
-    }
-
-
-    // *algo-find-if-const* error if there is no const on predicate. 
-    // since it's *cxx-algo-non-modifying* ?
-
-    auto posVal = find_if( coll.cbegin(), coll.cend(),
-            // [] ( const pair<float,float> &elem ) {
-            // [] ( const map<float,float>::value_type &elem ) {
-            [] ( const decltype(coll)::value_type &elem ) {
-            return elem.second == 3.0;
-            } );
-    if( posVal != coll.end() )
-    {
-        // cout << "value 3.0 found!(" << posVal->first << "," << 
-        //     posVal->second << ")" << endl;
-        ASSERT_THAT(posVal->first, Eq(4));
-        ASSERT_THAT(posVal->second, Eq(3));
-    }
-}
+// TEST(CxxStlTest, HowMapFindWorks)
+// {
+//     map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+// 
+//     auto posKey = coll.find(3.0);
+//     if( posKey != coll.end() )
+//     {
+//         // cout << "key 3.0 found!(" << posKey->first << "," << 
+//         //     posKey->second << ")" << endl;
+//         ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
+//         // ASSERT_THAT(posKey->first, Eq(3));
+//         // ASSERT_THAT(posKey->second, Eq(2));
+//     }
+// 
+// 
+//     // *algo-find-if-const* error if there is no const on predicate. 
+//     // since it's *cxx-algo-non-modifying* ?
+// 
+//     auto posVal = find_if( coll.cbegin(), coll.cend(),
+//             // [] ( const pair<float,float> &elem ) {
+//             // [] ( const map<float,float>::value_type &elem ) {
+//             [] ( const decltype(coll)::value_type &elem ) {
+//             return elem.second == 3.0;
+//             } );
+//     if( posVal != coll.end() )
+//     {
+//         // cout << "value 3.0 found!(" << posVal->first << "," << 
+//         //     posVal->second << ")" << endl;
+//         ASSERT_THAT(posVal->first, Eq(4));
+//         ASSERT_THAT(posVal->second, Eq(3));
+//     }
+// }
 
 
 // ={=========================================================================
