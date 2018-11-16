@@ -22,26 +22,38 @@ should be formatted to an output stream.
 
 */
 
+namespace ipv4_2018_10 {
+
 // 2018.10.15
+
+// usage:
+//
+// ipv4 address(168, 192, 0, 1);   
+// std::cout << address << std::endl;   
+// cin >> ip;   
 
 class ipv4
 {
   friend ostream &operator<<(ostream &os, ipv4 ip);
+
   // friend istream &operator>>(istream &is, const ipv4 ip);
-  friend istream &operator>>(istream &is, ipv4 &ip);
+  friend istream &operator>>(istream &is, ipv4 ip);
+  // friend istream &operator>>(istream &is, ipv4 &ip);
 
   public:
   ipv4(const int value1=0, const int value2=0, 
       const int value3=0, const int value4=0)
     : value1_(value1), value2_(value2), value3_(value3), value4_(value4)
-  {
-    cout << "ipv4:ctor" << endl;
-  }
+  {}
 
   ipv4(const ipv4 &rhs)
     : value1_(rhs.value1_), value2_(rhs.value2_), value3_(rhs.value3_), value4_(rhs.value4_)
+  {}
+
+  string return_address()
   {
-    cout << "ipv4:copy ctor" << endl;
+    return to_string(value1_) + "." + to_string(value2_) + "." 
+      + to_string(value3_) + "." + to_string(value4_);
   }
 
   private:
@@ -51,11 +63,7 @@ class ipv4
 
 ostream &operator<<(ostream &os, const ipv4 ip)
 {
-  // convert them into string
-  stringstream address{};
-  address << "ip address is: " << 
-    ip.value1_ << "." << ip.value2_ << "." << ip.value3_ << "." << ip.value4_;
-  cout << address.str();
+  os << ip.value1_ << "." << ip.value2_ << "." << ip.value3_ << "." << ip.value4_;
   return os;
 }
 
@@ -65,90 +73,181 @@ ostream &operator<<(ostream &os, const ipv4 ip)
 // 15.3.2 Input Operator >>
 //
 // Note that the second argument is modified. To make this possible, the second
-// argument is passed by nonconstant reference.
+// argument is passed by non-constant reference.
 // 
-// seg fault
-// istream &operator>>(istream &is, const ipv4 ip);
-//
-// okay. see that tempory is made to maintain constness but don't know why it
-// causes a infinite ctor.
-//
-// no seg fault but result is wrong
+// no seg fault but result is wrong since uses a copy
 // istream &operator>>(istream &is, ipv4 ip);
 //
 // result is right
 // istream &operator>>(istream &is, ipv4 &ip);
+//
+// seg fault when use:
+//
+// istream &operator>>(istream &is, const ipv4 ip);
+//
+// see that tempory is made to maintain constness but don't know why it
+// causes a infinite ctor.
+// 
+// run gdb
+//
+// os >> address;
+//
+// causes call operator>>() which calls ipv4 ctor since it needs const copy.
+//
+// operator>>() calls
+//
+// is >> ip.value1_>> delim;
+//
+// this calls operator>>() which calls ipv4 ctor since it needs const copy.
+//
+// operator>>() calls
+//
+// is >> ip.value1_>> delim;
+//
+// ... cxx-recursive
+// 
+// even if operator>>() is called with const copy, it needs another const copy
+// when execute "is >> ip.value1_>> delim;"
+//
+// when use istream &operator>>(istream &is, ipv4 ip)
+//
+// is >> ip.value1_>> delim;
+//
+// do not cause to call operator>>() again.
+//
+// so the key is when operator>>() is called ip is not writable so create one
+// and this cause recursive. 
 
-istream &operator>>(istream &is, ipv4 &ip)
+
+// istream &operator>>(istream &is, const ipv4 ip)
+istream &operator>>(istream &is, ipv4 ip)
 {
   char delim{};
-  is >> ip.value1_>> delim 
-    >> ip.value2_ >> delim 
-    >> ip.value3_ >> delim
-    >> ip.value4_;
+  is >> ip.value1_>> delim;
+  // is >> ip.value1_>> delim 
+  //   >> ip.value2_ >> delim 
+  //   >> ip.value3_ >> delim
+  //   >> ip.value4_;
   return is;
 }
 
+} // namespace
+
+// (gdb) 
+// b IPV4_20181015_Test::TestBody()
+// b ipv4_2018_10::ipv4::ipv4(int,int,int,int)
 
 TEST(IPV4, 20181015)
 {
-  ipv4 address(168, 192, 0, 1);   
-  std::cout << address << std::endl;   
+  using namespace ipv4_2018_10;
 
-  ipv4 ip;   
-  std::cout << ip << std::endl;   
+  {
+    stringstream os;
+    ipv4 address(168, 192, 0, 1);   
+    os << address;
+    EXPECT_THAT(os.fail(), false);
+    EXPECT_EQ(os.str(), "168.192.0.1");
+  }
 
-  stringstream ss{"10.10.10.10"};
-  ss >> ip;   
+  {
+    stringstream os;
+    ipv4 address;   
+    os << address;
+    EXPECT_EQ(os.str(), "0.0.0.0");
+  }
 
-  EXPECT_THAT(ss.fail(), false);
-  std::cout << ip << std::endl;
+  {
+    stringstream os{"10.20.30.40"};
+    ipv4 address;   
+    os >> address;
+    EXPECT_THAT(os.fail(), false);
+    EXPECT_EQ(address.return_address(), "10.20.30.40");
+  }
 }
 
 
-// ={=========================================================================
-
-/*
-
-2018.11.14
-
-15. IPv4 data type                                                        
-
-Write a class that represents an IPv4 address. Implement the functions required
-to be able to read and write such addresses from or to the console. The user
-should be able to input values in dotted form, such
-as 127.0.0.1 or 168.192.0.100. This is also the form in which IPv4 addresses
-should be formatted to an output stream.
-
-*/
-
-namespace _ip4_2018_11_14 
+namespace ip4_2018_11_14 
 {
-  class IPAddress
-  {
-    public:
-      explicit IPAddress(const std::string &address = "") : address_(address) {}
 
-      // input and output ops
-      istream &operator>>(istream &is)
+  // usage:
+  //
+  // ipv4 address(168, 192, 0, 1);   
+  // std::cout << address << std::endl;   
+  // cin >> ip;   
+
+  class ipv4
+  {
+    friend istream &operator>>(istream &is, ipv4 &ip);
+    friend ostream &operator<<(ostream &os, const ipv4 &ip);
+
+    public:
+      explicit ipv4(int value1 = 0, int value2 = 0, int value3 = 0, int value4 = 0):
+        value1_(value1), value2_(value2), value3_(value3), value4_(value4) {}
+
+      string return_address()
       {
+        return to_string(value1_) + "." + to_string(value2_) + "." 
+          + to_string(value3_) + "." + to_string(value4_);
       }
 
     private:
-      std::string address_;
+      int value1_{}, value2_{}, value3_{}, value4_{};
   };
+
+  // input and output ops
+  istream &operator>>(istream &is, ipv4 &ip)
+  {
+    char delim{};
+    is >> ip.value1_ >> delim 
+      >> ip.value2_ >> delim 
+      >> ip.value3_ >> delim 
+      >> ip.value4_;
+
+    return is;
+  }
+
+  ostream &operator<<(ostream &os, const ipv4 &ip)
+  {
+    os << ip.value1_ << "." 
+      << ip.value2_ << "." 
+      << ip.value3_ << "." 
+      << ip.value4_;
+    return os;
+  }
 
 } // namespace
 
 TEST(IP4, 20181114)
 {
+  using namespace ip4_2018_11_14;
+
+  {
+    stringstream os;
+    ipv4 address(168, 192, 0, 1);   
+    os << address;
+    EXPECT_THAT(os.fail(), false);
+    EXPECT_EQ(os.str(), "168.192.0.1");
+  }
+
+  {
+    stringstream os;
+    ipv4 address;   
+    os << address;
+    EXPECT_EQ(os.str(), "0.0.0.0");
+  }
+
+  {
+    stringstream os{"10.20.30.40"};
+    ipv4 address;   
+    os >> address;
+    EXPECT_THAT(os.fail(), false);
+    EXPECT_EQ(address.return_address(), "10.20.30.40");
+  }
 }
 
 
-// ={=========================================================================
 // textbook
-
-namespace textbook
+namespace ipv4_textbook
 {
 
 class ipv4

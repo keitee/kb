@@ -1019,7 +1019,16 @@ TEST(StringSplit, ByBoost)
 
     EXPECT_THAT(coll, ElementsAre("", "", "Name"));
   }
+
+  {
+    // note: cxx-boost-split see how boost works
+    vector<string> coll;
+    boost::split(coll, "||", boost::is_any_of("|"));
+
+    EXPECT_THAT(coll, ElementsAre("", "", ""));
+  }
 }
+
 
 namespace stringsplit_2018_11 {
 
@@ -1073,7 +1082,31 @@ TEST(StringSplit, ByDelimeter_2018_11)
     split("Name|Address|Phone", '|', coll);
     EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
   }
+
+  {
+    // same as how boost works
+    vector<string> coll;
+    split("||Name", '|', coll);
+
+    EXPECT_THAT(coll, ElementsAre("", "", "Name"));
+  }
+
+  {
+    // same as how boost works
+    vector<string> coll;
+    split("||", '|', coll);
+
+    EXPECT_THAT(coll, ElementsAre("", "", ""));
+  }
 }
+
+
+namespace stringsplit_2018_11_strchr {
+
+  // 2018.11.14
+  // should try memchar/strchr way? nope.
+  
+} // namespace
 
 
 // ={=========================================================================
@@ -1998,6 +2031,7 @@ TEST(StringTokenizer, 2018_11_find)
   }
 
   //  "||"
+  //  this is different how boost-split works.
   {
     std::string token{};
     std::vector<std::string> coll{};
@@ -2025,6 +2059,186 @@ TEST(StringTokenizer, 2018_11_find)
 
     EXPECT_TRUE(coll.empty());
   }
+}
+
+
+// ={=========================================================================
+// string-parse
+
+namespace string_parse {
+
+  // from asan tool
+  
+  // usage:
+  //
+  // const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar\n";
+  //
+  // char *next_line = (char *)memchr(current, '\n', strlen(current));
+  // EXPECT_TRUE(next_line);
+  //
+  // *start = ParseHex(&current);
+  // EXPECT_EQ(*start, 0x08048000);
+  // EXPECT_EQ(*current++, '-');
+
+
+  // covers hex
+  int TranslateDigit(const char c)
+  {
+    if (c >= '0' && c <= '9')
+      return c - '0';
+
+    if (c >= 'a' && c <= 'f')
+      return c - 'a' + 10;
+
+    if (c >= 'A' && c <= 'F')
+      return c - 'A' + 10;
+
+    return -1;
+  }
+
+
+  // function modifies input pointer variable
+  //
+  // const char *current = "08048000-...";
+  // ParseHex(&current);
+  // ParseNumber(&current)
+  // {
+  //  (*p)++; means that changes current vaiable. 
+  // }
+  //
+  // That's okay from compiler pov since this is pointer to const char and const
+  // char is not changed, that is, maintained constness.
+  //
+  // these do not cause error:
+  //
+  // current++; ++current;
+
+  // like atoi()
+  // stops when there is non-translatable char and *p points that char. So that
+  // start parse again from where it stops.
+
+  int ParseNumber(const char **p, int base)
+  {
+    int value{};
+    int digit{};
+
+    assert(base >= 2 && base <= 16);
+
+    while ((digit = TranslateDigit(**p)) >= 0 && (digit < base))
+    {
+      value = base*value + digit;
+      // increase pointer to process next char
+      (*p)++;
+    }
+
+    return value;
+  }
+
+  int ParseHex(const char **p)
+  {
+    return ParseNumber(p, 16);
+  }
+
+  int ParseDecimal(const char **p)
+  {
+    return ParseNumber(p, 10);
+  }
+
+  bool IsOneOf(char c, char c1, char c2)
+  {
+    return (c == c1) || (c == c2);
+  }
+
+} // namespace
+
+
+TEST(StringParse, Hex)
+{
+  using namespace string_parse;
+ 
+  // example from /proc/map
+  // address           perms offset  dev   inode       pathname
+  // 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
+
+  int value{}, protection{};
+  char filename[100]={};
+
+  const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar\n";
+
+  // char *next_line = (char *)memchr(current, '\n', strlen(current));
+  char *next_line = (char *)strchr(current, '\n');
+  
+  value = ParseHex(&current);
+  EXPECT_EQ(value, 0x08048000);
+  EXPECT_EQ(*current, '-');
+  current++;
+
+  value = ParseHex(&current);
+  EXPECT_EQ(value, 0x08056000);
+  // now use single expr to check and to increase
+  EXPECT_EQ(*current++, ' ');
+
+  // as can see, have a control if need to increase pointer to char or not.
+
+  // check read permission
+  EXPECT_TRUE(IsOneOf(*current, '-', 'r'));
+
+  if (*current++ == 'r')
+    protection |= 1;
+
+  // check write permission
+  EXPECT_TRUE(IsOneOf(*current, '-', 'w'));
+
+  if (*current++ == 'w')
+    protection |= 2;
+
+  // check exec permission
+  EXPECT_TRUE(IsOneOf(*current, '-', 'x'));
+
+  if (*current++ == 'x')
+    protection |= 4;
+
+  // check shared permission
+  EXPECT_TRUE(IsOneOf(*current, '-', 'p'));
+
+  if (*current++ == 'p')
+    protection |= 8;
+
+  EXPECT_EQ(*current++, ' ');
+
+  // offset
+  value = ParseHex(&current);
+  EXPECT_EQ(value, 0);
+
+  EXPECT_EQ(*current++, ' ');
+  ParseHex(&current);
+  EXPECT_EQ(*current++, ':');
+  ParseHex(&current);
+  EXPECT_EQ(*current++, ' ');
+
+  // inode
+  ParseDecimal(&current);
+
+  // skip spaces
+  while (current < next_line && *current == ' ')
+    ++current;
+
+  // filename
+  // function suggest that filename can be bigger than filename[]
+
+  int i = 0;
+  while (current < next_line)
+  {
+    if ( /* filename && */ i < 100 /* filename_size-1 */)
+      filename[i++] = *current;
+
+    ++current;
+  }
+
+  if ( /* filename && */ i < 100 /* filename_size-1 */)
+    filename[i] = 0;
+
+  EXPECT_STREQ(filename, "/foo/bar");
 }
 
 

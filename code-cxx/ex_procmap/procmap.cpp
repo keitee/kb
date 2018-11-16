@@ -504,7 +504,7 @@ bool IsDecimal(char c)
 // like atoi and move up the given arg
 //
 // note:
-// although p is defined as const, this function modifies variable via pointer.
+// function modifies input pointer variable
 //
 // const char *current = "08048000-...";
 // ParseHex(&current);
@@ -513,14 +513,13 @@ bool IsDecimal(char c)
 //  (*p)++; means that changes current vaiable. 
 // }
 //
-// That's okay from compiler pov since &current is address and it not changed,
-// that is, maintained constness.
+// That's okay from compiler pov since this is pointer to const char and const
+// char is not changed, that is, maintained constness.
 //
-// Even this do not cause error:
+// these do not cause error:
 //
-// current++;
-// ++current;
-//
+// current++; ++current;
+
 
 static uptr ParseNumber(const char **p, int base)
 {
@@ -596,8 +595,8 @@ MemoryMappingLayout::MemoryMappingLayout(bool cache_enabled)
 
 MemoryMappingLayout::~MemoryMappingLayout()
 {
-  //  Q: who's unmap cached_proc_self_maps_?
-  //  Under normal condition, proc_self_maps and cached are the same. 
+  // Q: who's unmap cached_proc_self_maps_?
+  // Under normal condition, proc_self_maps and cached are the same. 
   
   // asan reads:
   // Only unmap the buffer if it is different from the cached one. Otherwise
@@ -668,7 +667,9 @@ bool MemoryMappingLayout::Next(uptr *start, uptr *end, uptr *offset,
   if (!offset) offset = &dummy;
   if (!protection) protection = &dummy;
 
-  char *next_line = (char*)internal_memchr(current_, '\n', last-current_);
+  // see that "last - current" but not "last-current"
+
+  char *next_line = (char*)internal_memchr(current_, '\n', last - current_);
   if (next_line == nullptr)
     next_line = last;
 
@@ -733,6 +734,7 @@ bool MemoryMappingLayout::Next(uptr *start, uptr *end, uptr *offset,
   if (filename && i < filename_size)
     filename[i] = 0;
 
+  // update member to process next line in the next call
   current_ = next_line + 1;
 
   return true;
@@ -968,7 +970,7 @@ uptr ReadBinaryNameCached(/*out*/char *buf, uptr buf_len)
 
 
 //=============================================================================
-//
+// tests
 
 TEST(ProcMap, PageSize)
 {
@@ -1096,6 +1098,8 @@ TEST(ProcMap, TranslateDigit)
     *protection |= 8; // shared
 
   EXPECT_EQ(*current++, ' ');
+
+  // offset
   *offset = ParseHex(&current);
 
   // discard `dev` part

@@ -87,6 +87,8 @@ TEST(Strchar, Base)
 
   char text2[] = "memchr, memrchr, rawmemchr - scan memory for a character\n";
 
+  // note that strchr() have two args
+
   start = (char *)strchr(text2, '\n');
   EXPECT_TRUE(start);
 

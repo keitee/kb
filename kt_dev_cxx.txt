@@ -9736,6 +9736,17 @@ Does this compare function run for loop only once? When changes tabstop, it is
     }
 
 
+<ex>
+Search through "last-current_" as a variable which do not exist and wondered
+it for long. 
+
+  char *next_line = (char*)internal_memchr(current_, '\n', last-current_);
+
+This is not variable after all.
+
+  char *next_line = (char*)internal_memchr(current_, '\n', last - current_);
+
+
 <cxx-code-style-header>
 
 Names and Order of Includes
@@ -11833,7 +11844,7 @@ Foo's copy ctor: 200
 FooFoo's copy ctor: 200
 
 
-{cxx-copy-why-reference-parameter}
+{cxx-copy-why-reference-parameter} cxx-recursive cxx-const
 Why copy-ctor own parameter `must-be-a-reference`? 
 
 If it is not a reference, then the call would never succeed. To copy-construct
@@ -11844,6 +11855,74 @@ reference so that remove need of copy.
 NO. Actualy, compile error:
 
 :35:28: error: invalid constructor; you probably meant ‘FooFoo (const FooFoo&)’
+
+
+<ex>
+
+this causes infinite loop on cin and eventually seg fault because
+ip's ctor is called on and on.
+
+15.3.2 Input Operator >>
+
+Note that the second argument is modified. To make this possible, the second
+argument is passed by non-constant reference.
+ 
+no seg fault but result is wrong since uses a copy
+istream &operator>>(istream &is, ipv4 ip);
+
+result is right
+istream &operator>>(istream &is, ipv4 &ip);
+
+seg fault when use:
+
+istream &operator>>(istream &is, const ipv4 ip);
+
+see that tempory is made to maintain constness but don't know why it
+causes a infinite ctor.
+ 
+run gdb
+
+os >> address;
+
+causes call operator>>() which calls ipv4 ctor since it needs const copy.
+
+operator>>() calls
+
+is >> ip.value1_>> delim;
+
+this calls operator>>() which calls ipv4 ctor since it needs const copy.
+
+operator>>() calls
+
+is >> ip.value1_>> delim;
+
+... cxx-recursive
+ 
+even if operator>>() is called with const copy, it needs another const copy
+when execute "is >> ip.value1_>> delim;"
+
+when use istream &operator>>(istream &is, ipv4 ip)
+
+is >> ip.value1_>> delim;
+
+do not cause to call operator>>() again.
+
+so the key is when operator>>() is called ip is not writable so create one
+and this cause recursive. 
+
+
+// istream &operator>>(istream &is, ipv4 ip)
+
+istream &operator>>(istream &is, const ipv4 ip)
+{
+  char delim{};
+  is >> ip.value1_>> delim;
+  // is >> ip.value1_>> delim 
+  //   >> ip.value2_ >> delim 
+  //   >> ip.value3_ >> delim
+  //   >> ip.value4_;
+  return is;
+}
 
 
 {cxx-copy-assign} deleted-copy-controls. reference-member.
@@ -18361,7 +18440,7 @@ of a 'class' type.
   * note: +, - for unary?
   
 
-{member-or-nonmember}
+{cxx-overload-member-or-nonmember}
 Decide whether to implement operator function as either a member or nonmember?
 
 // nonmember case
@@ -18439,7 +18518,7 @@ const T operator+(const T& a, const T& b)
 }
 
 
-<cxx-overload-operator-io>
+<cxx-overload-operator-io> cxx-operator-io
 it is based on syntax and library requirement.
 
 If IO-op for Sales_data was member, then:
@@ -18447,9 +18526,9 @@ If IO-op for Sales_data was member, then:
 Sales_data data;
 
 data << cout;     // since against to usual syntax of built-in type
-cout << data;     // since cannot change the library
+cout << data;     // since cannot change the library for any type
 
-*cxx-overload-operator-io* should be nonmember
+*cxx-overload-operator-io* should be non-member
 
 
 {assign-op}
