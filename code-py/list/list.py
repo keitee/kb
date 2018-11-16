@@ -21,8 +21,14 @@ class TestList(unittest.TestCase):
         list always `returns a new list`.
 
         """
-
         self.assertEqual( L[1:], ['Spam', 'SPAM!'])
+
+
+    def test_comprehension(self):
+        strings = ['a', 'as', 'bat', 'car', 'dove', 'python']
+        results = [x.upper() for x in strings if len(x) > 2 ]
+        self.assertEqual( results, ['BAT', 'CAR', 'DOVE', 'PYTHON'])
+
 
 if __name__ == '__main__':
     unittest.main()
