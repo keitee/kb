@@ -328,6 +328,44 @@ class ipv4
 
 
 // ={=========================================================================
+
+/*
+
+16. Enumerating IPv4 addresses in a range
+
+Write a program that allows the user to input two IPv4 addresses representing a
+range and list all the addresses in that range. Extend the structure defined for
+the previous problem to implement the requested functionality.
+
+{
+   std::cout << "input range: ";
+   ipv4 a1, a2;
+   std::cin >> a1 >> a2;
+
+   if (a2 > a1)
+   {
+      for (ipv4 a = a1; a <= a2; a++)
+      {
+         std::cout << a << std::endl;
+      }
+   }
+   else 
+   {
+      std::cerr << "invalid range!" << std::endl;
+   }
+}
+
+To be able to enumerate IPv4 addresses in a given range, it should first be
+possible to compare IPv4 values. Therefore, we should implement at least
+operator<, but the following listing contains implementation for all comparison
+operators: ==, !=, <, >, <=, and >=. Also, in order to increment an IPv4 value,
+implementations for both the prefix and postfix operator++ are provided. The
+following code is an extension of the IPv4 class from the previous problem:
+
+*/
+
+
+// ={=========================================================================
 int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);
