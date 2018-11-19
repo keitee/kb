@@ -37,8 +37,9 @@ class ipv4
   friend ostream &operator<<(ostream &os, ipv4 ip);
 
   // friend istream &operator>>(istream &is, const ipv4 ip);
-  friend istream &operator>>(istream &is, ipv4 ip);
-  // friend istream &operator>>(istream &is, ipv4 &ip);
+  // friend istream &operator>>(istream &is, ipv4 ip);
+
+  friend istream &operator>>(istream &is, ipv4 &ip);
 
   public:
   ipv4(const int value1=0, const int value2=0, 
@@ -120,14 +121,15 @@ ostream &operator<<(ostream &os, const ipv4 ip)
 
 
 // istream &operator>>(istream &is, const ipv4 ip)
-istream &operator>>(istream &is, ipv4 ip)
+// istream &operator>>(istream &is, ipv4 ip)
+
+istream &operator>>(istream &is, ipv4 &ip)
 {
   char delim{};
-  is >> ip.value1_>> delim;
-  // is >> ip.value1_>> delim 
-  //   >> ip.value2_ >> delim 
-  //   >> ip.value3_ >> delim
-  //   >> ip.value4_;
+  is >> ip.value1_>> delim 
+    >> ip.value2_ >> delim 
+    >> ip.value3_ >> delim
+    >> ip.value4_;
   return is;
 }
 
@@ -137,7 +139,7 @@ istream &operator>>(istream &is, ipv4 ip)
 // b IPV4_20181015_Test::TestBody()
 // b ipv4_2018_10::ipv4::ipv4(int,int,int,int)
 
-TEST(IPV4, 20181015)
+TEST(IPV4_U15, 20181015)
 {
   using namespace ipv4_2018_10;
 
@@ -168,7 +170,6 @@ TEST(IPV4, 20181015)
 
 namespace ip4_2018_11_14 
 {
-
   // usage:
   //
   // ipv4 address(168, 192, 0, 1);   
@@ -217,7 +218,7 @@ namespace ip4_2018_11_14
 
 } // namespace
 
-TEST(IP4, 20181114)
+TEST(IPV4_U15, 20181114)
 {
   using namespace ip4_2018_11_14;
 
@@ -247,7 +248,7 @@ TEST(IP4, 20181114)
 
 
 // textbook
-namespace ipv4_textbook
+namespace u15_book
 {
 
 class ipv4
@@ -311,7 +312,7 @@ class ipv4
 } // namespace
 
 
-// TEST(IPV4, textbook)
+// TEST(IPV4, Text)
 // {
 //   // using namespace textbook;
 // 
@@ -363,6 +364,409 @@ implementations for both the prefix and postfix operator++ are provided. The
 following code is an extension of the IPv4 class from the previous problem:
 
 */
+
+// unit16
+namespace u16_2018_11_19
+{
+  // usage:
+  //
+  // ipv4 address(168, 192, 0, 1);   
+  // std::cout << address << std::endl;   
+  // cin >> ip;   
+
+  class ipv4
+  {
+    friend istream &operator>>(istream &is, ipv4 &ip);
+    friend ostream &operator<<(ostream &os, const ipv4 &ip);
+
+    public:
+    explicit ipv4(int value1 = 0, int value2 = 0, int value3 = 0, int value4 = 0):
+      value1_(value1), value2_(value2), value3_(value3), value4_(value4) {}
+
+    string return_address()
+    {
+      return to_string(value1_) + "." + to_string(value2_) + "." 
+        + to_string(value3_) + "." + to_string(value4_);
+    }
+
+    vector<int> return_list() const
+    {
+      return vector<int>{value1_, value2_, value3_, value4_};
+    }
+
+    // pre and post.
+    //
+    // Q: How about when value_4 > 255?
+
+    ipv4 &operator++()
+    {
+      ++value4_;
+      return *this;
+    }
+
+    // post
+    const ipv4 operator++(int)
+    {
+      const ipv4 old = *this;
+      ++(*this);
+      return old;
+    }
+
+    private:
+    int value1_{}, value2_{}, value3_{}, value4_{};
+  };
+
+  // input and output ops
+  istream &operator>>(istream &is, ipv4 &ip)
+  {
+    char delim{};
+    is >> ip.value1_ >> delim 
+      >> ip.value2_ >> delim 
+      >> ip.value3_ >> delim 
+      >> ip.value4_;
+
+    return is;
+  }
+
+  ostream &operator<<(ostream &os, const ipv4 &ip)
+  {
+    os << ip.value1_ << "." 
+      << ip.value2_ << "." 
+      << ip.value3_ << "." 
+      << ip.value4_;
+    return os;
+  }
+
+  // o do not need to be friend
+  //
+  // o could use if or tenary op to make comparison. better way? if ipv4 supports
+  // iterator then would be simpler. so have a function to return vector which
+  // supports access or iterator
+
+  //  a < b excludes a == b and a > b. 
+  //
+  //  Also 
+  //
+  //  ip(value1, value2, value3, value4), 
+  //  ip(value1, value2, value3, value4)
+  //
+  //  ip == ip means equal but not value1 == value1
+
+  bool operator<(const ipv4 &a, const ipv4 &b)
+  {
+    auto list_a = a.return_list();
+    auto list_b = b.return_list();
+
+    // assumes that ipv4 has always four field set
+    for (auto ai = list_a.begin(), bi = list_b.begin();
+        ai != list_a.end(); ++ai, ++bi)
+    {
+      if (*ai > *bi)
+        return false;
+    }
+
+    return (list_a == list_b) ? false : true;
+  }
+
+  // cannot use like this since operator<() only supports '<' case and ! makes
+  // it supports '==' and '>' which is different to support '>' only.
+  //
+  // bool operator>(const ipv4 &a, const ipv4 &b)
+  // {
+  //   return !operator<(a, b);
+  // }
+
+  bool operator>(const ipv4 &a, const ipv4 &b)
+  {
+    auto list_a = a.return_list();
+    auto list_b = b.return_list();
+
+    // assumes that ipv4 has always four field set
+    for (auto ai = list_a.begin(), bi = list_b.begin();
+        ai != list_a.end(); ++ai, ++bi)
+    {
+      if (*ai < *bi)
+        return false;
+    }
+
+    return (list_a == list_b) ? false : true;
+  }
+
+  bool operator<=(const ipv4 &a, const ipv4 &b)
+  {
+    auto list_a = a.return_list();
+    auto list_b = b.return_list();
+
+    // assumes that ipv4 has always four field set
+    for (auto ai = list_a.begin(), bi = list_b.begin();
+        ai != list_a.end(); ++ai, ++bi)
+    {
+      if (*ai > *bi)
+        return false;
+    }
+
+    return true;
+  }
+
+  // cannot use like this since
+  //
+  // bool operator>=(const ipv4 &a, const ipv4 &b)
+  // {
+  //   return !operator<=(a, b);
+  // }
+
+  bool operator>=(const ipv4 &a, const ipv4 &b)
+  {
+    auto list_a = a.return_list();
+    auto list_b = b.return_list();
+
+    // assumes that ipv4 has always four field set
+    for (auto ai = list_a.begin(), bi = list_b.begin();
+        ai != list_a.end(); ++ai, ++bi)
+    {
+      if (*ai < *bi)
+        return false;
+    }
+
+    return true;
+  }
+
+} // namespace
+
+
+TEST(IPV4_U16, 20181119)
+{
+  using namespace u16_2018_11_19;
+
+  {
+    ipv4 a(10,209,60,1), b(10,209,60,2);
+
+    EXPECT_TRUE(a < b);
+    EXPECT_TRUE(b > a);
+  }
+
+  {
+    ipv4 a(10,209,60,1), b(10,209,60,1);
+
+    EXPECT_FALSE(a < b);
+    EXPECT_FALSE(a > b);
+
+    EXPECT_TRUE(a <= b);
+    EXPECT_TRUE(a >= b);
+  }
+
+  {
+    ipv4 a(10,209,60,1);
+    a++;
+    EXPECT_EQ(a.return_address(), "10.209.60.2");
+    ++a;
+    EXPECT_EQ(a.return_address(), "10.209.60.3");
+  }
+}
+
+
+// unit16
+// do not copy the whole source here and repeat the key idea/difference 
+
+namespace u16_book
+{
+
+  // copied from namespace ip4_2018_11_14 
+  // {
+  // usage:
+  //
+  // ipv4 address(168, 192, 0, 1);   
+  // std::cout << address << std::endl;   
+  // cin >> ip;   
+
+  class ipv4
+  {
+    friend istream &operator>>(istream &is, ipv4 &ip);
+    friend ostream &operator<<(ostream &os, const ipv4 &ip);
+
+    public:
+    explicit ipv4(int value1 = 0, int value2 = 0, int value3 = 0, int value4 = 0):
+      value1_(value1), value2_(value2), value3_(value3), value4_(value4) {}
+
+    string return_address()
+    {
+      return to_string(value1_) + "." + to_string(value2_) + "." 
+        + to_string(value3_) + "." + to_string(value4_);
+    }
+
+    //
+    unsigned long to_long() const
+    {
+      unsigned long value{};
+
+      // value = (unsigned long)(value1_ << 24) 
+      //   | (unsigned long)(value2_ << 16) 
+      //   | (unsigned long)(value3_ << 8) 
+      //   | (unsigned long)value4_;
+
+      value = static_cast<unsigned long>(value1_ << 24) 
+        | static_cast<unsigned long>(value2_ << 16) 
+        | static_cast<unsigned long>(value3_ << 8) 
+        | static_cast<unsigned long>(value4_);
+
+      // '|' means '+'
+      // unsigned long value_sum{};
+      // value_sum = (unsigned long)(value1_ << 24) 
+      //   + (unsigned long)(value2_ << 16) 
+      //   + (unsigned long)(value3_ << 8) 
+      //   + (unsigned long)value4_;
+      //
+      // if (value != value_sum)
+      //   cout << "** differ **" << endl;
+
+      return value;
+    }
+
+    // pre. the text uses another ctor() instead
+    ipv4 &operator++()
+    {
+      unsigned long value = 1 + (*this).to_long();
+
+      value1_ = static_cast<int>(value >> 24) & 0xFF;
+      value2_ = static_cast<int>(value >> 16) & 0xFF;
+      value3_ = static_cast<int>(value >> 8) & 0xFF;
+      value4_ = static_cast<int>(value) & 0xFF;
+
+      return *this;
+    }
+
+    // post
+    const ipv4 operator++(int)
+    {
+      ipv4 old = *this;
+      ++(*this);
+      return old;
+    }
+
+    private:
+    int value1_{}, value2_{}, value3_{}, value4_{};
+  };
+
+  // input and output ops
+  istream &operator>>(istream &is, ipv4 &ip)
+  {
+    char delim{};
+    is >> ip.value1_ >> delim 
+      >> ip.value2_ >> delim 
+      >> ip.value3_ >> delim 
+      >> ip.value4_;
+
+    return is;
+  }
+
+  ostream &operator<<(ostream &os, const ipv4 &ip)
+  {
+    os << ip.value1_ << "." 
+      << ip.value2_ << "." 
+      << ip.value3_ << "." 
+      << ip.value4_;
+    return os;
+  }
+  
+  // } // namespace
+
+
+  // operator <, >
+  bool operator<(const ipv4 &a, const ipv4 &b)
+  {
+    if (a.to_long() < b.to_long())
+      return true;
+
+    return false;
+  }
+
+  bool operator>(const ipv4 &a, const ipv4 &b)
+  {
+    return (a.to_long() > b.to_long()) ? true : false;
+  }     
+
+  bool operator<=(const ipv4 &a, const ipv4 &b)
+  {
+    return (a.to_long() <= b.to_long()) ? true : false;
+  }     
+
+  bool operator>=(const ipv4 &a, const ipv4 &b)
+  {
+    return (a.to_long() >= b.to_long()) ? true : false;
+  }     
+}
+
+TEST(IPV4_U16, Text)
+{
+  using namespace u16_book;
+
+  {
+    ipv4 a(10,209,60,1), b(10,209,60,2);
+
+    EXPECT_TRUE(a < b);
+    EXPECT_TRUE(b > a);
+  }
+
+  {
+    ipv4 a(10,209,60,1), b(10,209,60,1);
+
+    EXPECT_FALSE(a < b);
+    EXPECT_FALSE(a > b);
+
+    EXPECT_TRUE(a <= b);
+    EXPECT_TRUE(a >= b);
+  }
+
+  {
+    ipv4 a(10,209,60,1);
+    a++;
+    EXPECT_EQ(a.return_address(), "10.209.60.2");
+    ++a;
+    EXPECT_EQ(a.return_address(), "10.209.60.3");
+  }
+}
+
+
+// ={=========================================================================
+
+/*
+
+17. Creating a 2D array with basic operations
+
+Write a class template that represents a two-dimensional array container with
+methods for element access (at() and data()), capacity querying, iterators,
+filling, and swapping. It should be possible to move objects of this type.
+
+{
+   // element access
+   array2d<int, 2, 3> a {1, 2, 3, 4, 5, 6};
+   for (size_t i = 0; i < a.size(1); ++i)
+      for (size_t j = 0; j < a.size(2); ++j)
+      a(i, j) *= 2;
+
+   // iterating
+   std::copy(std::begin(a), std::end(a), 
+      std::ostream_iterator<int>(std::cout, " "));
+ 
+   // filling 
+   array2d<int, 2, 3> b;
+   b.fill(1);
+
+   // swapping
+   a.swap(b);
+
+   // moving
+   array2d<int, 2, 3> c(std::move(b));
+}
+
+*/
+
+// unit17
+namespace u17_2018_11_20
+{
+  template<typename Row, typename Col>
+  calss array2d
+} // namespace
 
 
 // ={=========================================================================

@@ -2479,9 +2479,9 @@ TEST(Shift, Precentage)
 
 // Minimum and Maximum Value Operators
 // 
-// GCC’s g++ compiler adds the <? and >? operators, which, respectively, return the minimum and
-// maximum of two integer arguments. For example, the following statement would assign 10 to the
-// min variable:
+// GCC’s g++ compiler adds the <? and >? operators, which, respectively, return
+// the minimum and maximum of two integer arguments. For example, the following
+// statement would assign 10 to the min variable:
 // 
 // min = 10 <? 15 ;
 // 
@@ -2489,7 +2489,7 @@ TEST(Shift, Precentage)
 // 
 // max = 10 >? 15;
 // 
-// DO NOT COMPILE 
+// NOTE: DO NOT COMPILE 
 //
 // TEST(Operator, MinMax)
 // {
@@ -2503,6 +2503,20 @@ TEST(Shift, Precentage)
 //   value = 10 >? 20;
 //   EXPECT_THAT(value, 10);
 // }
+
+TEST(Operator, PrefixPostfix)
+{
+  int i = 2;
+
+  i++;
+  EXPECT_THAT(i, 3);
+
+  // error: lvalue required as increment operand
+  // i++++;
+
+  ++++i;
+  EXPECT_THAT(i, 5);
+}
 
 
 // ={=========================================================================

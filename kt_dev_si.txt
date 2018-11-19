@@ -1458,6 +1458,7 @@ Checking action for each STB...
   10.209.56.84, 783e533494e9, drx890 - R017.085.06.00U (4o7gmjs) -> SYSF85.06.00, SNUG rack 2(kyoupark)
    - No need to upgrade. 085.06.00, SYSF85.06.00, 85.15.00
 
+*snug-box*
   10.209.56.189, 783e533494c2, drx890 - R017.085.06.00U (4o7gmjs) -> SYSF85.15.00, SNUG rack 1(kyoupark)
    - No need to upgrade. 085.06.00, SYSF85.15.00, 85.15.00
 
@@ -8210,7 +8211,7 @@ like. When you run it, it will give you a table like this:
 
 
 ={============================================================================
-|kt_dev_si_0002| si-log-parser sh-test-log
+|kt_dev_si_0002| si-log-parser sh-test-log comp-parser
 
 http://hetty.cisco.com/fusionmadesimple/index.php/TEST_LOG
 
@@ -8506,7 +8507,7 @@ cp ../S474.CUR binary_log_full
 
 
 ={============================================================================
-|kt_dev_si_0002| si-log-parser-entry
+|kt_dev_si_0002| si-log-parser-entry comp-parser-entry
 
 {testlist}
 http://theyard.cisco.com/cgi-bin/test_list.sh
@@ -8522,6 +8523,8 @@ http://theyard.uk.nds.com/logparseradmin/admin/logparser/test/442/
 <log-parser-core>
 // line # in the result page is not relavant
 check_log::handle_core()
+
+echo "1 0 $LINE Core dump found in $WHICH" > .all_tests_found
 
 
 <log-parser-2>
@@ -20500,6 +20503,19 @@ POWER_SAVE_MODE=1
 POWER_SAVE_START_PERIOD1_HOURS=1
 POWER_SAVE_START_PERIOD1_MINUTES=1
 
+// CMS_SYSTEM_RESOURCE/PDM/src/server/fs/pdm_srv_fs_thread.c
+
+!MIL    -PDM_FS       		< p:0x00000680 P:STM t:0x004cc530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+!MIL    -PDM_FS       		< p:0x00000680 P:STM t:0x004cc530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+!MIL    -PDM_FS       		< p:0x00000680 P:STM t:0x004cc530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+
+CMS_SYSTEM_RESOURCE/PDM/src/server/inc/pdm_srv_helpers.h #define XSTORE_POWER_CONTROL                 xstore_power_control
+
+static SYSTEM_STATUS PDM_FS_DevicePowerdown(PDM_FS_physDev *physDev)
+
+                /* all partitions on this device are marked as idle timeout, and its standby mode, so time to sleep */
+                if (XSTORE_POWER_CONTROL(&physDev->shDevice.device, l_command) == 0)
+
 
 <passive-deep-standby>
 During passive standby, the STB front panel is running. The STB front end and
@@ -22327,6 +22343,14 @@ typedef enum PDM_FP_STATE_Tag
 55353:NDS: ^[2018:03:19 11:32:17]0000020739.319866 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x4 state=0x4 
 55354:NDS: ^[2018:03:19 11:32:17]0000020739.319898 !MIL    -PDM_MW       		< p:0x000009aa P:MW t:0xb6308450 T:PREFS_PTHREAD M:pdm_srv_fp_support.c F:PDM_FP_SetState L:1084 > PDM_FP_SetState handle=0x6 state=0x2 
 55356:NDS: ^[2018:03:19 11:32:17]0000020739.321815 !MIL    -AMS          		< p:0x000009aa P:MW t:0xb61e0450 T:UAM_HP_THREAD M:dataClient.cpp F:DataClient::handleLiveEvents L:83 > STANDBY_OUT event 
+
+
+<comp-pdm-state-machine>
+/**  @brief Device state machine.
+  */
+SYSTEM_STATUS PDM_FS_ThreadDeviceStateAction(PDM_FS_physDev *physDev, PDM_FS_DevAction action)
+{
+}
 
 
 ={============================================================================
@@ -30924,6 +30948,18 @@ NDS: ^0946686085.188970 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS 
 NDS: ^0946686085.189150 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_PartitionUnmount L:01238 > If no debug has been produced, recompile Storage Helper library in debug mode.
 NDS: ^0946686085.189279 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_PartitionUnmount L:01239 > Storage Helper library has reported:  failure to unmount partition /dev/sda1 (/mnt/nds/dev_5/part_0)
 NDS: ^0946686085.189416 !ERROR -STORAGE_HELPER < p:00000077 t:01146180 T:PDM_FS M:pdm_srv_fs_utility.c F:PDM_FS_PartitionUnmount L:01240 > error: 16: Undefined error
+
+<comp-power>
+../../FOS_INC/nds/xstore.h
+
+/* Power Levels definitions. */
+#define XSTORE_POWER_NORMAL     (0x00000001U)
+#define XSTORE_POWER_IDLE       (0x00000002U)
+#define XSTORE_POWER_STANDBY    (0x00000004U)
+#define XSTORE_POWER_SLEEP      (0x00000008U)
+
+// storage_power.c
+int32_t xstore_power_control(const DeviceName * const device, const uint32_t powerState)
 
 
 <comp-helper-wifi> comp-wifi
