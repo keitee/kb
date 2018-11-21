@@ -20517,6 +20517,191 @@ static SYSTEM_STATUS PDM_FS_DevicePowerdown(PDM_FS_physDev *physDev)
                 if (XSTORE_POWER_CONTROL(&physDev->shDevice.device, l_command) == 0)
 
 
+int32_t xstore_power_control(const DeviceName * const device, const uint32_t powerState)
+{
+  case XSTORE_POWER_STANDBY:
+    {
+      pXStoreATAInRegisters->commandReg = XSTORE_ATA_STANDBY_IMMEDIATE;
+      DBUG_PRINT("xstore_power_control", ("INFO##  POWER_STANDBY"));
+      break;
+    }
+}
+
+#define XSTORE_ATA_STANDBY_IMMEDIATE         (0xE0U)
+
+ATA STANDBY mode
+Spins down the drive, but leaves the controller board awake. The drive is
+supposed to accept the next command normally; but it will take lots of time to
+complete the command (and return to Active mode). The maximum time limit in
+the ATA spec is 30 seconds, but most drives spin up in a second or two. Use
+the STANDBY (0xE2) or STANDBY IMMEDIATE (0xE0) commands to put the drive in
+this mode. 
+
+// ./CMS_SYSTEM_RESOURCE/PDM/src/server/fs/pdm_srv_fs_support.c
+
+uint32_t g_pdm_fs_idleTimer = 30U;             /*!< idle timeout (seconds) */
+
+l_alarm.alarm_data.rel_info.timeout = g_pdm_fs_idleTimer * 1000U;
+
+// idle corresponds to standby command
+
+132205:NDS: ^[2018:11:20 00:43:34]0946719954.568310 !MIL    -PDM_FS       		< p:0x00000688 P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+133505:NDS: ^[2018:11:20 00:44:04]0946719984.569271 !INFO   -PDM_FS       		< p:0x00000688 P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:2482 > device: /dev/sda  action: PDM_FS_DevActionIdleTimeout  current state: PDM_FS_StateIdle  system state: PDM_FS_SystemStateStandby 
+133510:NDS: ^[2018:11:20 00:44:04]0946719984.569351 !INFO   -PDM_FS       		< p:0x00000688 P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3189 > device: /dev/sda  spinning down (if possible) 
+133511:NDS: ^[2018:11:20 00:44:04]0946719984.569366 !INFO   -PDM_FS       		< p:0x00000688 P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+133512:NDS: ^[2018:11:20 00:44:04]0946719984.569382 !INFO   -PDM_FS       		< p:0x00000688 P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+133513:NDS: ^[2018:11:20 00:44:06]0946719986.438836 !INFO   -PDM_FS       		< p:0x00000688 P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+
+
+// alternating between idle and active
+
+59654:NDS: ^[2018:11:19 16:03:08]!MIL    -EPG_INIT     		< P:APP t:0x01269520 T:PREFS_PTHREAD M:PowerOperatingModes F:setState L:231 > T:threadtracker:setState > STANDBY
+60482:NDS: ^[2018:11:19 16:05:45]!MIL    -EPG_MISC     		< P:APP t:0x2ed85520 T:no name M:MilestoneNotifier F:send L:21 > T:PooledExecutor#1:{"category": "Linear","action": "ProgrammeChange","label": "name=Sky Intro;serviceName=998;serviceKey=1022;programStartTime=19/11/2018 15:00:00","currentscreen": "/unsupported"}
+60675:NDS: ^[2018:11:19 16:07:22]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+
+60946:NDS: ^[2018:11:19 16:07:31]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+62285:NDS: ^[2018:11:19 16:08:01]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+62286:NDS: ^[2018:11:19 16:08:01]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+62291:NDS: ^[2018:11:19 16:08:02]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+
+63435:NDS: ^[2018:11:19 16:22:19]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+63436:NDS: ^[2018:11:19 16:22:19]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+63437:NDS: ^[2018:11:19 16:22:19]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+66490:NDS: ^[2018:11:19 16:40:33]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+
+66751:NDS: ^[2018:11:19 16:40:41]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+68083:NDS: ^[2018:11:19 16:41:11]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+68084:NDS: ^[2018:11:19 16:41:11]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+68087:NDS: ^[2018:11:19 16:41:13]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+
+68686:NDS: ^[2018:11:19 16:47:44]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+68687:NDS: ^[2018:11:19 16:47:44]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+68688:NDS: ^[2018:11:19 16:47:44]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+71478:NDS: ^[2018:11:19 17:02:13]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+
+71739:NDS: ^[2018:11:19 17:02:21]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+73040:NDS: ^[2018:11:19 17:02:51]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+73041:NDS: ^[2018:11:19 17:02:51]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+73042:NDS: ^[2018:11:19 17:02:53]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+73568:NDS: ^[2018:11:19 17:07:45]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+73569:NDS: ^[2018:11:19 17:07:45]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+
+73570:NDS: ^[2018:11:19 17:07:45]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+76375:NDS: ^[2018:11:19 17:22:37]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+
+76636:NDS: ^[2018:11:19 17:22:45]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+77969:NDS: ^[2018:11:19 17:23:15]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+77970:NDS: ^[2018:11:19 17:23:15]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+78051:NDS: ^[2018:11:19 17:23:17]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+84008:NDS: ^[2018:11:19 18:22:20]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+84009:NDS: ^[2018:11:19 18:22:20]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+
+84010:NDS: ^[2018:11:19 18:22:20]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+86328:NDS: ^[2018:11:19 18:33:14]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+86669:NDS: ^[2018:11:19 18:33:22]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+87988:NDS: ^[2018:11:19 18:33:52]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+87989:NDS: ^[2018:11:19 18:33:52]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+87990:NDS: ^[2018:11:19 18:33:54]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+89777:NDS: ^[2018:11:19 18:56:44]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+89778:NDS: ^[2018:11:19 18:56:44]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+89779:NDS: ^[2018:11:19 18:56:44]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+92189:NDS: ^[2018:11:19 19:05:39]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+92450:NDS: ^[2018:11:19 19:05:47]!MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+93782:NDS: ^[2018:11:19 19:06:17]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+93783:NDS: ^[2018:11:19 19:06:17]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+93784:NDS: ^[2018:11:19 19:06:19]!INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+117829:NDS: ^[2018:11:19 23:05:39 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+117830:NDS: ^[2018:11:19 23:05:39 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+117831:NDS: ^[2018:11:19 23:05:39 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+121090:NDS: ^[2018:11:19 23:27:29 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+121351:NDS: ^[2018:11:19 23:27:37 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+122674:NDS: ^[2018:11:19 23:28:07 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+122675:NDS: ^[2018:11:19 23:28:07 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+122676:NDS: ^[2018:11:19 23:28:08 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+128136:NDS: ^[2018:11:20 00:20:50 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+128137:NDS: ^[2018:11:20 00:20:50 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+128138:NDS: ^[2018:11:20 00:20:50 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+131917:NDS: ^[2018:11:20 00:43:26 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+132205:NDS: ^[2018:11:20 00:43:34 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+133511:NDS: ^[2018:11:20 00:44:04 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+133512:NDS: ^[2018:11:20 00:44:04 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+133513:NDS: ^[2018:11:20 00:44:06 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+134157:NDS: ^[2018:11:20 00:52:20 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+134158:NDS: ^[2018:11:20 00:52:20 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+134159:NDS: ^[2018:11:20 00:52:20 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+139920:NDS: ^[2018:11:20 01:06:58 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+140221:NDS: ^[2018:11:20 01:07:06 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+141611:NDS: ^[2018:11:20 01:07:36 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+141612:NDS: ^[2018:11:20 01:07:36 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+141614:NDS: ^[2018:11:20 01:07:38 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+165341:NDS: ^[2018:11:20 05:06:58 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+165342:NDS: ^[2018:11:20 05:06:58 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+165343:NDS: ^[2018:11:20 05:06:58 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+168949:NDS: ^[2018:11:20 05:31:09 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+169255:NDS: ^[2018:11:20 05:31:17 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+170708:NDS: ^[2018:11:20 05:31:47 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+170709:NDS: ^[2018:11:20 05:31:47 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+170710:NDS: ^[2018:11:20 05:31:48 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+176687:NDS: ^[2018:11:20 06:22:20 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:575 > executing power_control(XSTORE_POWER_NORMAL) on device /dev/sda 
+176688:NDS: ^[2018:11:20 06:22:20 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerup L:578 > device /dev/sda now awake 
+176689:NDS: ^[2018:11:20 06:22:20 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateActive 
+179500:NDS: ^[2018:11:20 06:34:42 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdlePending 
+179761:NDS: ^[2018:11:20 06:34:50 !MIL    -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:3296 > device: /dev/sda  new state: PDM_FS_StateIdle 
+181164:NDS: ^[2018:11:20 06:35:20 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:482 > executing power_control(XSTORE_POWER_STANDBY) on device /dev/sda 
+181165:NDS: ^[2018:11:20 06:35:20 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:502 > device /dev/sda lastPowerstate=1 l_command=4 
+181166:NDS: ^[2018:11:20 06:35:22 !INFO   -PDM_FS       		< P:STM t:0x004fe530 T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DevicePowerdown L:512 > device /dev/sda now in power saving mode 
+185486:NDS: ^[2018:11:20 07:11:20 !MIL    -aem          		< P:APP t:0x01508520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(STANDBY)e000 
+
+
+// called when from standby to active
+
+/**  @brief Forces a file system to be active, regardless of the system state.
+  *  @param[in] handle The handle provided by #PDM_FS_RegisterStateListener().
+  *  @param[in] requested True to start the forced request, false to end it.
+  *  @retval #PDM_FS_STATUS_OK
+  *  @retval #PDM_FS_STATUS_FAILURE
+  *  @retval #PDM_FS_STATUS_HEALTH_CHECK
+  *  @pre PDM_FS Interface must be initialised.
+  *  @pre The handle must be one previously obtained using #PDM_FS_RegisterStateListener.
+  *
+  *  PDM considers the forced request for a file system ended, when the requested
+  *  flag is clear for all the notification handles registered with the file system.
+  *  When a notification handle is created, the requested flag is set to false.
+  *  This method is blocking.
+  *  Disk may be powered up as necessary to satisfy a request (if requested = true).
+  *  Method may block while this happens. If requested = false, method is effectively
+  *  non blocking.
+  *
+  */
+SYSTEM_STATUS PDM_FS_SetForcedRequest(PDM_FS_NotifyHandle handle, bool requested);
+
+!MIL    -ATM          		< p:0x00000695 P:MW t:0x01d72520 T:CAMPMAN_THREAD M:campman_manager.c F:HandleMsgNewManifest L:309 > @@PMON@@,mark,d-targeting,d-manifest-start,0 
+!MIL    -ATM          		< p:0x00000695 P:MW t:0x01d72520 T:CAMPMAN_THREAD M:diag_smartmon.c F:SMARTMON_DYNAMIC_MANIFEST_START L:249 > @@SMON@@,scenario,d-MANIFEST,d-manifest-start,7 
+!MIL    -ATM          		< p:0x00000695 P:MW t:0x01d72520 T:CAMPMAN_THREAD M:diag_smartmon.c F:SMARTMON_DYNAMIC_MANIFEST_CAMPAIGN_MODULE_START L:258 > @@SMON@@,mark,d-MANIFEST,d-module-start,8 
+
+!INFO   -PDM_MW       		< T:CAMPMAN_THREAD M:pdm_api_fs.c F:PDM_FS_SetForcedRequest L:823 > handle=0x90104 value requested =1 
+!INFO   -PDM_MW       		< T:CAMPMAN_THREAD M:pdm_api_fs.c F:PDM_FS_SetForcedRequest L:861 > handle=0x90104 requested=true f_pdm_setTrueCnt=0 f_pdm_setForcedFalseAlarmHandle=0xffffffff 
+!INFO   -PDM_MW       		< T:CAMPMAN_THREAD M:pdm_api_fs.c F:PDM_FS_SetForcedRequestSend L:89 > handle=0x90104 requested=true 
+!INFO   -PDM_MW       		< T:CAMPMAN_THREAD M:stm_c2s.c F:STM_C2S_SendPayloadActual L:392 > Send: event=PDM_IPC_EV_FS_SETFRCREQREPLY func=PDM_FS_SetForcedRequestSend 
+!INFO   -PDM_FS       		< T:XSRV_STM_Interface M:pdm_srv_fs_thread.c F:PDM_SERVER_Listener L:156 > messageLen=20 
+!INFO   -PDM_FS       		< T:XSRV_STM_Interface M:pdm_server_shared.c F:PDM_Util_Alloc_Debug L:303 > Allocated block of size 20 (pdm_srv_fs_thread.c, 158) at address: 0x4e5484 
+!INFO   -PDM_FS       		< T:XSRV_STM_Interface M:pdm_srv_fs_thread.c F:PDM_SERVER_Listener L:168 > Receive: event=PDM_IPC_EV_FS_SETFRCREQREPLY func=PDM_SERVER_Listener 
+!INFO   -PDM_FS       		< T:XSRV_STM_Interface M:pdm_srv_fs_thread.c F:PDM_PostToQueueActual L:388 > Send: event=PDM_IPC_EV_FS_SETFRCREQREPLY func=PDM_SERVER_Listener 
+!INFO   -PDM_FS       		< T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_Thread L:4063 > Receive: event=PDM_IPC_EV_FS_SETFRCREQREPLY func=PDM_FS_Thread 
+!INFO   -PDM_FS       		< T:PDM_FS M:pdm_srv_fs.c F:PDM_FS_SetForcedRequestInThr L:1024 > handle:00090104 requested:true 
+!INFO   -PDM_FS       		< T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DeviceIsActive L:658 > shDeviceName=/dev/sda setForcedRequestCount=0 
+!INFO   -PDM_FS       		< T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_DeviceIsActive L:658 > shDeviceName=/dev/sda setForcedRequestCount=1 
+!INFO   -PDM_FS       		< T:PDM_FS M:pdm_srv_fs.c F:PDM_FS_SetForcedRequestInThr L:1087 > l_wasActive:false l_isActive:true 
+!INFO   -PDM_FS       		< T:PDM_FS M:pdm_srv_fs_thread.c F:PDM_FS_ThreadDeviceStateAction L:2482 > device: /dev/sda  action: PDM_FS_DevActionSetForcedTrue  current state: PDM_FS_StateIdle  system state: PDM_FS_SystemStateStandby 
+
+// called when from active to standby
+
+T:SIM_CMC_THREAD M:pdm_api_fs.c F:PDM_FS_SetForcedRequest L:823 > handle=0x70102 value requested =0 
+
+!INFO   -PDM_MW       		< p:0x00000695 P:MW t:0x01bdc520 T:SIM_CMC_THREAD M:pdm_api_fs.c F:PDM_FS_SetForcedRequest L:823 > handle=0x70102 value requested =0 
+!INFO   -PDM_MW       		< p:0x00000695 P:MW t:0x01bdc520 T:SIM_CMC_THREAD M:pdm_api_fs.c F:PDM_FS_SetForcedRequest L:861 > handle=0x70102 requested=false f_pdm_setTrueCnt=1 f_pdm_setForcedFalseAlarmHandle=0xffffffff 
+
+
 <passive-deep-standby>
 During passive standby, the STB front panel is running. The STB front end and
 Fusion Product are not running. EMMs are not filtered. Alarms can be triggered
@@ -27416,6 +27601,22 @@ SYSTEM_STATUS SYSTEMALARM_Set(const SYSTEMALARM_ALARM_INFO *info,SYSTEMALARM_ALA
 
 static void *AlarmThreadFunction(void *data)
                         gAlarmList.alarmList[idx].info.alarm_data.rel_info.callback(gAlarmList.alarmList[idx].handle,gAlarmList.alarmList[idx].info.alarm_data.rel_info.user_data);
+
+
+// CMS_SYSTEM_INFRASTRUCTURE/SYSTEMALARM/inc/systemalarm.h
+
+/** @brief
+* This structure holds the information for a relative alarm. 
+* The data structure is passed when setting the alarm.
+*/
+typedef struct SYSTEMALARM_ALARM_REL_INFO_TAG
+{
+	SYSTEMALARM_API_TAG user_data; /*!< @brief User data that is transferred to the callback.  */
+	uint32_t  timeout; /*!< @brief Relative timeout value `in msecs` (for relative alarm). */
+	bool is_repeating;/*!< @brief Determines if the alarm should reset itself after timeout. The new timeout it calculated before the callback is called. */
+	SYSTEMALARM_Callback callback; /*!< @brief The callback function to call when the timeout is over. */
+} SYSTEMALARM_ALARM_REL_INFO;
+
 
 ={============================================================================
 |kt_dev_si_0001| comp-systemtime

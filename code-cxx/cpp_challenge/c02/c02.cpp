@@ -764,8 +764,11 @@ filling, and swapping. It should be possible to move objects of this type.
 // unit17
 namespace u17_2018_11_20
 {
-  template<typename Row, typename Col>
+  template<typename T, typename Row, typename Col>
   calss array2d
+  {
+    explicit array2d(T type, Row row, Col col)
+  };
 } // namespace
 
 

@@ -1419,12 +1419,13 @@ TEST(CxxFeaturesTest, UseFunctionAdaptor)
 
 
 // ={=========================================================================
-// cxx-unique-ptr
+// cxx-shared-ptr
 
 class Foo 
 {
   private:
     int id;
+
   public:
     Foo(int val = 1):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
     ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
@@ -1443,26 +1444,30 @@ class Foo
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(CxxFeaturesTest, UseUniquePtrMove)
+TEST(SharedPointer, UniqueAndMove)
 {
   unique_ptr<Foo> p1(new Foo(1));
   unique_ptr<Foo> p2(new Foo(2));
   unique_ptr<Foo> p3(new Foo(3));
   unique_ptr<Foo> p4(new Foo(4));
 
-  if (p3)
-    cout << "p3 is not null" << endl;
-  else
-    cout << "p3 is null" << endl;
+  // if (p3)
+  //   cout << "p3 is not null" << endl;
+  // else
+  //   cout << "p3 is null" << endl;
+
+  EXPECT_TRUE(p3);
 
   p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
   p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
   p3 = std::move(p1);     // p1->null , p2->F3, p3->null
 
-  if (p3)
-    cout << "p3 is not null" << endl;
-  else
-    cout << "p3 is null" << endl;
+  EXPECT_FALSE(p3);
+ 
+  // if (p3)
+  //   cout << "p3 is not null" << endl;
+  // else
+  //   cout << "p3 is null" << endl;
 }
 
 unique_ptr<Foo> source()
@@ -2516,6 +2521,110 @@ TEST(Operator, PrefixPostfix)
 
   ++++i;
   EXPECT_THAT(i, 5);
+}
+
+
+// ={=========================================================================
+// cxx-template
+
+namespace cxx_template 
+{
+  template <typename T>
+    int compare(const T& a, const T& b)
+    {
+      if (a < b) return -1;
+      if (b < a) return 1;
+      return 0;
+    }
+} // namespace
+
+TEST(Template, Function)
+{
+  using namespace cxx_template;
+
+  EXPECT_THAT(compare(1, 2), -1);
+  EXPECT_THAT(compare(2, 1), 1);
+  EXPECT_THAT(compare(2, 2), 0);
+
+  vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+  EXPECT_THAT(compare(coll1, coll2), -1);
+  EXPECT_THAT(compare(coll2, coll1), 1);
+}
+
+namespace cxx_template_default
+{
+  // `This shows how function-object is useful` *cpp-functor*
+  // default template argument, the 'type' of callable 
+  // default function argument, F()
+
+  template <typename T, typename F = less<T>>
+    int compare(const T& a, const T& b, F f = F())
+    {
+      if (f(a, b)) return -1;
+      if (f(b, a)) return 1;
+      return 0;
+    }
+} // namespace
+
+TEST(Template, FunctionWithDefaultArg)
+{
+  using namespace cxx_template_default;
+
+  EXPECT_THAT(compare(1, 2), -1);
+  EXPECT_THAT(compare(2, 1), 1);
+  EXPECT_THAT(compare(2, 2), 0);
+
+  vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+  EXPECT_THAT(compare(coll1, coll2), -1);
+  EXPECT_THAT(compare(coll2, coll1), 1);
+}
+
+namespace cxx_template_member 
+{
+  class DebugDelete
+  {
+    public:
+      DebugDelete(ostream &os = cerr) : os_(os) {}
+
+      template <typename T>
+      void operator() (T *p) const
+      {
+        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        delete p;
+      }
+
+    private:
+
+      // *cxx-reference-member
+      ostream &os_;
+  };
+
+} // namespace
+
+TEST(Template, MemberTemplate)
+{
+  using namespace cxx_template_member; 
+
+  // output:
+  // deleting Pd, p = 0x9be7008
+  // deleting Pi, p = 0x9be7018
+
+  {
+    double *pd = new double();
+    int *pi = new int();
+    DebugDelete d;
+    d(pd);
+    d(pi);
+  }
+
+  // output:
+  // deleting PSs, p = 0x1d5e830
+  // deleting Pi, p = 0x1d5e850
+
+  {
+    unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
+    unique_ptr<string, DebugDelete> ps(new string, DebugDelete());
+  }
 }
 
 

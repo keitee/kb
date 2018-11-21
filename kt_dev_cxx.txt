@@ -31917,34 +31917,36 @@ int compare(const T& v1, const T& v2)
   return 0;
 }
 
-// `function-argument` T is "int" instantiates
-cout << compare( 1, 0 ) << endl;
 
-// `template-parameter-type` T is "int"
-int compare(const int& v1, const int& v2)
+TEST(Template, Function)
 {
-  if( v1 < v2 ) return -1;
-  if( v2 < v1 ) return 1;
-  return 0;
+  using namespace cxx_template;
+
+  // `template-parameter-type` T is "int"
+  // int compare(const int& v1, const int& v2)
+
+  EXPECT_THAT(compare(1, 2), -1);
+  EXPECT_THAT(compare(2, 1), 1);
+  EXPECT_THAT(compare(2, 2), 0);
+
+  // T is "vector<int>" and  instantiates to 
+  // "int compare(const vector<int>&, const vector<int>&)"
+
+  vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+  EXPECT_THAT(compare(coll1, coll2), -1);
+  EXPECT_THAT(compare(coll2, coll1), 1);
 }
-
-
-// T is "vector<int>", 
-// instantiates "int compare(const vector<int>&, const vector<int>&)"
-
-vector<int> vec1{1, 2, 3}, vec2{4, 5, 6};
-cout << compare( vec1, vec2 ) << endl;
 
 
 <principle-to-write-generic-code>
 Here two important principles for writing generic codes from this example:
 
-* The function parameters in the templeate are `reference to const`.
+o The function parameters in the templeate are `reference to const`.
 
 This makes the function runs faster and also it 'can' be uses on types that
 cannot be copied such as IO types and unique_ptr.
 
-* Used only < comparison. More genarally, reduce the requirement on element or
+o Used only < comparison. More genarally, reduce the requirement on element or
   argument type.
 
 Instead of:
@@ -31965,14 +31967,14 @@ must be available but the definition of the member functions need not be
 present. As a result, put class definition and function declaration in header
 file and definition of ordinary and class member function is source files. 
 
-`Templates are different` since the compiler generates code 'only' when use a
+`Templates are different` since the compiler generates code `only when use` a
 template; instantiate a specific instance of the template. So to generate an
 instantiation, needs to have the code that defines a function and class
 template member function. As a result, headers includes definitions as well as
 declarations.
 
 *cxx-remember*
-template should be in header which is must and otherwise, face link errors.
+template should be in header which is must and otherwise, see link errors.
 
 
 The fact that the compiler generates code 'only' when use a template affects
@@ -31988,14 +31990,16 @@ No errors when use with types which supports operator<.
 The 'instantiation' is a process that create a concrete 'independent' function
 or class from a template when compiling. Code generation and these compiler
 generated function or class are an 'instantiation' of the template. Must be
-defined in the same namespace that contains the original template. See p675
-for C++ feature to control this. note: what does it mean?
+defined in the same namespace that contains the original template. 
+
+see *template-control-instantiation* p675 for C++ feature to control this.
+
 
 <overloading-and-templates>
 function templetes can be overloaded by other templates or by ordinary
 nontemplate functions. The things to remember is:
 
-As shown in function-matching, nontemplate and then the more speciailized
+As shown in function-matching, non-template and then the more speciailized
 function are preferred.
 
 
@@ -32261,42 +32265,36 @@ template while the earlier version support only for class.
 The rewritten example of the previous example and see that F represent the
 type of a callable objects.
 
-template <typename T>
-int compare( const T& v1, const T& v2 )
+namespace cxx_template_default
 {
-  if( v1 < v2 ) return -1;
-  if( v2 < v1 ) return 1;
-  return 0;
+  // `This shows how function-object is useful` *cpp-functor*
+  // default template argument, the 'type' of callable 
+  // default function argument, F()
+
+  template <typename T, typename F = less<T>>
+    int compare(const T& a, const T& b, F f = F())
+    {
+      if (f(a, b)) return -1;
+      if (f(b, a)) return 1;
+      return 0;
+    }
+} // namespace
+
+TEST(Template, FunctionWithDefaultArg)
+{
+  using namespace cxx_template_default;
+
+  EXPECT_THAT(compare(1, 2), -1);
+  EXPECT_THAT(compare(2, 1), 1);
+  EXPECT_THAT(compare(2, 2), 0);
+
+  vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+  EXPECT_THAT(compare(coll1, coll2), -1);
+  EXPECT_THAT(compare(coll2, coll1), 1);
 }
 
-// `This shows how function-object is useful` *cpp-functor*
-// default template argument, the 'type' of callable 
-// default function argument, F()
 
-template <typename T, typename F = less<T>>        
-int compare( const T &v1, const T &v2, F f = F())  
-{
-  if (f(v1, v2)) return -1;
-  if (f(v2, v1)) return 1;
-  return 0;
-}
-
-{
-  cout << "compare_f(1, 2): " << compare(1, 2) << endl;
-  cout << "compare_f(1, 1): " << compare(1, 1) << endl;
-  cout << "compare_f(2, 1): " << compare(2, 1) << endl;
-
-  cout << "compare_f(1, 2): " << compare(1, 2, greater<int>()) << endl;
-  cout << "compare_f(1, 1): " << compare(1, 1, greater<int>()) << endl;
-  cout << "compare_f(2, 1): " << compare(2, 1, greater<int>()) << endl;
-}
-
-May supply their own comparison operation but are not required to do so since
-T is `int`.
-
-bool i = compare(0, 42);
-
-However, this depends on the isbn in item1 and item2.
+Can use it with user type, Sales_data, if provides own comparision function.
 
 Sales_data item1(cin), item2(cin);
 
@@ -32344,50 +32342,55 @@ the default deleter in unique_ptr since overloads operator(). Unlike default
 deleter, support debug print and any type, use template.
 
 
-#include <iostream>
-#include <string>
-#include <typeinfo>
-
-using namespace std;
-
-// *cxx-functor*
-class DebugDelete
+namespace cxx_template_member 
 {
-  private:
-    // *cxx-member-reference*
-    ostream &os;
+  class DebugDelete
+  {
+    public:
+      DebugDelete(ostream &os = cerr) : os_(os) {}
 
-  public:
-    DebugDelete(ostream &s = cerr) : os(s) {}
-
-    // as with any function template, T is *cxx-templete-decuction*
-
-    template<typename T>
-      void operator() (T* p) const
-      { 
-        os << "deleting " << typeid(p).name() << ", p = " << p << endl; 
-        delete p; 
+      template <typename T>
+      void operator() (T *p) const
+      {
+        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        delete p;
       }
-};
 
-int main()
+    private:
+
+      // *cxx-reference-member
+      ostream &os_;
+  };
+
+} // namespace
+
+TEST(Template, MemberTemplate)
 {
-  double *pd = new double();
-  int *pi = new int();
-  DebugDelete d;
+  using namespace cxx_template_member; 
 
-  cout << "in main" << endl;
+  // output:
+  // deleting Pd, p = 0x9be7008
+  // deleting Pi, p = 0x9be7018
 
-  d(pd); // now instantiated, T is double *
-  d(pi); // now instantiated, T is int *
+  {
+    double *pd = new double();
+    int *pi = new int();
+    DebugDelete d;
+    d(pd);
+    d(pi);
+  }
 
-  cout << "end main" << endl;
+  // *cxx-sp-delete*
+  // output:
+  // deleting PSs, p = 0x1d5e830
+  // deleting Pi, p = 0x1d5e850
+
+  {
+    unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
+    unique_ptr<string, DebugDelete> ps(new string, DebugDelete());
+  }
 }
 
-in main
-deleting Pd, p = 0x9be7008
-deleting Pi, p = 0x9be7018
-end main
 
 <ex>
 Can be used with unique_ptr as a deleter:
@@ -48324,37 +48327,37 @@ EC++13. Why RAII? When use dynamic resource, client is fully resposible for
 releasing it after use but it is very difficult to do 'bookkeeping' and
 problems are:
 
-* Very tricky to ensure that reference lifetime and the lifetime of the objects
+o Very tricky to ensure that reference lifetime and the lifetime of the objects
   they refer to match, especially when multiple pointers refer to the same
   object.
 
-    * When the objects outlives, means "resource leak". 
+    o When the objects outlives, means "resource leak". 
 
-    * When the references outlives, means "dangling reference". 
+    o When the references outlives, means "dangling reference". 
 
-        * "double free" that means to try to release what it do not own. For
+        o "double free" that means to try to release what it do not own. For
           example, passing pointers via function calls or between components. 
 
-        * "invalid access" to objects which are released already. 
+        o "invalid access" to objects which are released already. 
 
-* Interrupted code path due to exception. the usual path is interrupted and
+o Interrupted code path due to exception. the usual path is interrupted and
   may cannot release it as expected.
 
-With RAII, such as smart poitners, good things are: 
+With *cxx-raii* such as smart poitners, good things are: 
 
-* Make resource bookkeeping easier.
-* Can minimize client's burden to use resource properly. For example, raii
+o Make resource bookkeeping easier.
+o Can minimize client's burden to use resource properly. For example, raii
   with deleter.
 
 // * Support sharing resources. note that this is from smart pointers but not
 // from RAII.
 
 
-<exception-problem>
+The exception problem:
 
 void f()
 {
-  // createInvestment() is `factory-function` that returns a pointer to
+  // createInvestment() is `cxx-pattern-factory-function` that returns a pointer to
   // dynamically created resource or derived class. client must delete it after
   // use
 
@@ -48395,7 +48398,9 @@ void f()
   // a block 
 }
 
-*cpp-raii*
+
+*cxx-raii*
+
   Use resource managing class by putting reference(resource) 'inside' object
   and use the fact that dtor is called automatically when object is destroyed;
   use resource-managing-class object lifetime. As soon as get resource,
@@ -48410,10 +48415,9 @@ void f()
   and far easier to keep free of resource leaks
 
 
-Acquire and initialize a resource-managing-class in the same statement. In
-other words, reference should be 'encapsulated' in a object,
-      resouce-managing-class, but raii do not exist to encapsulate resource
-      but to 'prevent' leak.
+Acquire and initialize a resource-managing-class in the same statement.
+reference should be 'encapsulated' in a object, resouce-managing-class, but
+raii do not exist to encapsulate resource but to 'prevent' leak.
 
 However, auto_ptr is not the best way to manage all dyn resources since
 containers of auto_ptr aren't allowed. Use `unique_ptr` instead.
@@ -48441,7 +48445,7 @@ void use_factory(T arg)
 EC++14. There should be 'own' raii class for resource that uses own interface
 to create and delete it because cannot use delete operator on it.
 
-<ex> `cpp-auto-lock` 
+<ex> `cxx-auto-lock` 
 void lock(Mutex* pm);      // int pthread_mutex_lock( pthread_mutex_t *mptr); 
 void unlock(Mutex* pm);
 
@@ -48467,7 +48471,8 @@ function()
   ...
 }
 
-<ex> 
+
+<case> 
 AUTOLOCK example. This is a case example seen in the code:
 
 class CCAutoLock
@@ -48492,7 +48497,7 @@ void func()
 <ex>
 When there is a nested call tree used AUTOLOCK, will the value of lock be
 maintained? That is the lock of func1 in the below example will BE
-VALID/LOCKED when func3 gets run? Will do. However, all three uses the same
+VALID/LOCKED when func3 gets run? Will do. However, if all three uses the same
 mutex then deadlock.
 
 #include <iostream>
@@ -48579,7 +48584,7 @@ class WindowHandle {
   private:
     WINDOW_HANDLE w;
 
-    // `preventing-copies`
+    // `cxx-preventing-copy`
     WindowHandle( const WindowHandle& );
     WindowHandle& operator=( const WindowHandle& );
 };
@@ -49674,7 +49679,7 @@ return one from a function. How about `unique_ptr`?
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cpp-sp-delete
+*kt_dev_cxx_0000* cxx-sp-delete
 
 {sp-nullptr} {when-deletion-happens}
 Such a deletion does not necessarily have to happen at the end of the scope.
