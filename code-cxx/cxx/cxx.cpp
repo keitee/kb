@@ -425,6 +425,252 @@ TEST(CxxTemplate, UseForward)
 
 
 // ={=========================================================================
+// cxx-ctor
+
+// o `If defines any other ctor for the class, the compiler do not generates`
+//   default ctor. So if a class requires control to init an object in one case,
+//   then the class is likely to require control in all cases.
+
+class ConstructionNoDefault
+{
+  public:
+    ConstructionNoDefault(const std::string &name) 
+    {
+      (void)name;
+    }
+
+  private:
+    int value_;
+};
+
+// cause compile error
+// cxx.cpp: In constructor ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
+// cxx.cpp:450:37: error: no matching function for call to ‘ConstructionNoDefault::ConstructionNoDefault()’
+//      ConstructionWitNoCtorInitList() {}
+
+// class ConstructionWitNoCtorInitList
+// {
+//   public:
+//     ConstructionWitNoCtorInitList() {}
+
+//   private:
+//     ConstructionNoDefault member;
+// };
+
+// TEST(Ctor, CtorInitList)
+// {
+//   ConstructionWitNoCtorInitList cwo;
+// }
+
+
+// okay
+
+class ConstructionWitCtorInitList
+{
+  public:
+    ConstructionWitCtorInitList()
+      : member("construction with init list") {}
+ 
+  private:
+    ConstructionNoDefault member;
+};
+
+TEST(Ctor, CtorInitList)
+{
+  ConstructionWitCtorInitList cw;
+}
+
+
+// ={=========================================================================
+// cxx-ctor-forms
+
+// To sum, cxx-init-copy-form uses copy ctor which is counted as implicit
+// conversion. So it cannot use with explicit copy ctor and in cases more
+// conversion since only one conversion is allowed at a time. 
+
+namespace ctor_init
+{
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {} 
+
+      // mesg_ is updated only here
+      Foo(const string &mesg) : mesg_(mesg) 
+      {
+        os_ << mesg_ << " and converting ctor";
+      }
+
+      Foo(const Foo &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+} // namespace
+
+TEST(Ctor, CtorInitForms)
+{
+  using namespace ctor_init;
+
+  // direct
+  {
+    // conversion from char * to string before calling ctor
+    Foo foo1("use direct init");
+    EXPECT_THAT(foo1.return_mesg(), "use direct init and converting ctor");
+  }
+
+  // copy for foo2
+  {
+    // conversion from char * to string before calling ctor
+    Foo foo1("use direct init");
+    Foo foo2(foo1);
+    EXPECT_THAT(foo2.return_mesg(), "use direct init and copy ctor");
+  }
+
+  // copy
+  {
+    Foo foo1("use copy init");
+    Foo foo2 = foo1;
+    EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  }
+
+  // copy error
+  // // cxx.cpp:533:16: error: conversion from ‘const char [14]’ to non-scalar type ‘ctor_init::Foo’ requested
+  // //      Foo foo2 = "use copy init";
+  // //                 ^
+  // {
+  //   Foo foo2 = "use copy init";
+  //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  // }
+}
+
+namespace ctor_init_converting_ctor
+{
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {} 
+
+      Foo(const string &mesg) : mesg_(mesg) 
+      {
+        os_ << mesg_ << " and string converting ctor";
+      }
+
+      Foo(const Foo &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
+
+      // added
+      Foo(const char *mesg) : mesg_(mesg)
+      {
+        os_ << mesg_ << " and char converting ctor";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+} // namespace
+
+TEST(Ctor, CtorInitFromMore)
+{
+  using namespace ctor_init_converting_ctor;
+
+  {
+    Foo foo2 = "use copy init";
+    EXPECT_THAT(foo2.return_mesg(), "use copy init and char converting ctor");
+  }
+}
+
+namespace ctor_init_explicit
+{
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {} 
+
+      explicit Foo(const string &mesg) : mesg_(mesg) 
+      {
+        os_ << mesg_ << " and string converting ctor";
+      }
+
+      explicit Foo(const Foo &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
+
+      // added
+      explicit Foo(const char *mesg) : mesg_(mesg)
+      {
+        os_ << mesg_ << " and char converting ctor";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+} // namespace
+
+TEST(Ctor, CtorInitFromExplicit)
+{
+  using namespace ctor_init_explicit;
+
+  // copy
+  {
+    // conversion from char * to string before calling ctor
+    Foo foo1("use direct init");
+    Foo foo2(foo1);
+    EXPECT_THAT(foo2.return_mesg(), "use direct init and copy ctor");
+  }
+
+  // // copy 
+  // {
+  //   Foo foo1("use copy init");
+  //
+  //  when use explicit Foo(const Foo &foo);
+  //
+  //   // cxx.cpp:628:16: error: no matching function for call to
+  //   // ‘ctor_init_explicit::Foo::Foo(ctor_init_explicit::Foo&)’
+  //
+  //   Foo foo2 = foo1;
+  //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  // }
+
+  // copy error
+  // // cxx.cpp:533:16: error: conversion from ‘const char [14]’ to non-scalar type ‘ctor_init::Foo’ requested
+  // //      Foo foo2 = "use copy init";
+  // //                 ^
+  // {
+  //   Foo foo2 = "use copy init";
+  //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  // }
+}
+
+
+// ={=========================================================================
 // cxx-copy-control
 
 namespace copy_control {
@@ -1421,15 +1667,47 @@ TEST(CxxFeaturesTest, UseFunctionAdaptor)
 // ={=========================================================================
 // cxx-shared-ptr
 
-class Foo 
-{
-  private:
-    int id;
+// :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+//   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+//   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+//   std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+// 
+// :12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+// std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+// = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+// std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
-  public:
-    Foo(int val = 1):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
-    ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
-};
+// TEST(SharedPointer, UniqueDoNotAllowCopy)
+// {
+//   unique_ptr<std::string> p1(new std::string("nico"));
+//   unique_ptr<std::string> p2(p1);
+//   unique_ptr<std::string> p3;
+//   p3 = p2;
+// }
+
+// TEST(SharedPointer, UniqueDoNotAllowInitCopyForm)
+// {
+//   // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+//   // std::basic_string<char>*}’ to non-scalar type
+//   // ‘std::unique_ptr<std::basic_string<char> >’ requested
+//   //
+//   // unique_ptr<std::string> p1 = new string;
+//
+//   unique_ptr<std::string> p2(new string);
+// }
+
+namespace cxx_sp_shared
+{
+  class Foo 
+  {
+    private:
+      int id;
+
+    public:
+      Foo(int val = 1):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
+      ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+  };
+} // namespace
 
 // [ RUN      ] CxxFeaturesTest.UseUniquePtrMove
 // Foo ctor(1)
@@ -1446,6 +1724,8 @@ class Foo
 
 TEST(SharedPointer, UniqueAndMove)
 {
+  using namespace cxx_sp_shared;
+
   unique_ptr<Foo> p1(new Foo(1));
   unique_ptr<Foo> p2(new Foo(2));
   unique_ptr<Foo> p3(new Foo(3));
@@ -1469,6 +1749,7 @@ TEST(SharedPointer, UniqueAndMove)
   // else
   //   cout << "p3 is null" << endl;
 }
+
 
 unique_ptr<Foo> source()
 {
@@ -1501,8 +1782,10 @@ void sink(unique_ptr<Foo> p)
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(CxxFeaturesTest, UseUniqueSinkSource)
+TEST(SharedPointer, UniqueSinkSource)
 {
+  using namespace cxx_sp_shared;
+
   cout << "call source()" << endl;
   unique_ptr<Foo> up = source();
 
@@ -1851,47 +2134,6 @@ TEST(Rtti, UseDynamicCast)
   }
   else
     cout << "derived is NOT a subclass of base" << endl;
-}
-
-
-// ={=========================================================================
-// cxx-ctor
-class ConstructionNoDefault
-{
-  public:
-    ConstructionNoDefault(const std::string &name) 
-    {
-      (void)name;
-    }
-
-  private:
-    int value_;
-};
-
-// class ConstructionWitNoCtorInitList
-// {
-//   public:
-//     // cause compile error
-//     ConstructionWitNoCtorInitList() {}
-// 
-//   private:
-//     ConstructionNoDefault member;
-// };
-
-class ConstructionWitCtorInitList
-{
-  public:
-    ConstructionWitCtorInitList()
-      : member("construction with init list") {}
-
-  private:
-    ConstructionNoDefault member;
-};
-
-TEST(Construction, CtorInitList)
-{
-  // ConstructionWitNoCtorInitList cwo;
-  ConstructionWitCtorInitList cw;
 }
 
 

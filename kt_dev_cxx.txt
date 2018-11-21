@@ -84,10 +84,10 @@ KT KB. CPP
 
 *kt_dev_cxx_0000* cxx-reference
 *kt_dev_cxx_0000* cxx-oop
+*kt_dev_cxx_0000* cxx-ctor
 *kt_dev_cxx_0000* cxx-init-form
 *kt_dev_cxx_0000* cxx-init-copy-form
 *kt_dev_cxx_0000* cxx-list-init cxx-initializer-list
-*kt_dev_cxx_0000* cxx-ctor
 *kt_dev_cxx_0000* cxx-dtor cxx-non-virtial-destruction-problem
 *kt_dev_cxx_0000* cxx-default-argument
 *kt_dev_cxx_0000* cxx-copy-control
@@ -10100,6 +10100,565 @@ of the same type as the class from which it inherits.
 
 
 ={============================================================================
+*kt_dev_cxx_0000* cxx-ctor cxx-in-class-init
+
+{cxx-ctor-default}
+There are operations synthesized by compiler if they are not defined by user
+and `only if` they are needed. These are `public and inline` according to
+EC++05.
+
+dtor, default-ctor, copy controls; copy ctor, copy assign, move ctor(C++11),
+move assign(C++11)
+
+
+<cxx-deleted>
+However, not always possible since there are cases when compiler cannot:
+
+* When a class has reference or const member.
+* When there's a class member that don't have default ctor.
+* When base class have private on any of synthesized default-operations.
+
+
+{default-ctor} default-initialization
+The `default-ctor` is a special constructor which takes `no-arguments`.
+
+The recommendation on initialization is to avoid syn-version and do it
+explicitly:
+
+`cxx-in-class-init` (C++11) or `ctor-init-list`
+
+
+The reasons to avoid the syn-version:
+
+* The `default-init` for built-in types means `undefined value.`
+
+  The synthesised detault-ctor will use `cxx-in-class-init` if there is and
+  otherwise `default-init` its member and use default ctor for its class
+  member. So undefined value for built-in types and default constructed
+  value for user types.
+
+* Compile error when there's a class member that don't have default ctor since
+  compiler cannot syn default ctor for this class.
+
+o `If defines any other ctor for the class, the compiler do not generates`
+  default ctor. So if a class requires control to init an object in one case,
+  then the class is likely to require control in all cases.
+
+
+<ex>
+class ConstructionNoDefault
+{
+  public:
+    ConstructionNoDefault(const std::string &name) 
+    {
+      (void)name;
+    }
+
+  private:
+    int value_;
+};
+
+// cause compile error
+// cxx.cpp: In constructor ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
+// cxx.cpp:450:37: error: no matching function for call to ‘ConstructionNoDefault::ConstructionNoDefault()’
+//      ConstructionWitNoCtorInitList() {}
+
+// class ConstructionWitNoCtorInitList
+// {
+//   public:
+//     ConstructionWitNoCtorInitList() {}
+
+//   private:
+//     ConstructionNoDefault member;
+// };
+
+// TEST(Ctor, CtorInitList)
+// {
+//   ConstructionWitNoCtorInitList cwo;
+// }
+
+That's why `default-ctor` is almost nearly required.
+
+
+To see when syn versions are useful. see {make-base-class-for-reference-counting}
+
+
+{cxx-ctor-const}
+The ctor `cannot-be-const`. When create a const object of a class type, the
+object does not assume its constness until after the ctor completes the
+object's initialisation. Thus, ctor can write to const objects during their
+construction.
+
+Tried copy-ctor and compile error:
+
+    FooFoo(const FooFoo& arg) const : foo()
+    { cout << "FooFoo's copy ctor: " << endl; }
+
+:38:31: error: constructors may not be cv-qualified
+
+
+{cxx-default-keyword}
+To tell the compiler to create syn version for functions `but-not-limited` to
+default ctor. 
+
+For `default-ctor`, if there are other ctor, then compiler will 'not' make a
+default ctor and can ask the compiler to create one.
+
+class Sales_data {
+  public:
+    Sales_data() = default;
+    Sales_data(const Sales_data&) = default;
+    Sales_data& operator=(const Sales_data &);
+    ~Sales_data() = default;
+    ...
+};
+
+Q: use case other than default ctor?
+
+
+{cxx-ctor-inclass-init} *C++11* CPR 73
+in-class-init are `restricted as to the form`: must either be enclosed inside
+curly braces or follow an = sign. May not specify an inclass-init inside
+parentheses.
+
+class Game
+{
+  public:
+
+    // CardPlayer player1("this is player");
+    //
+    // t_string.cpp:53:23: error: expected identifier before string constant
+    //      CardPlayer player("this is player");
+    //                        ^
+    // t_string.cpp:53:23: error: expected ‘,’ or ‘...’ before string constant
+    
+    CardPlayer player2{"this is player"};
+    CardPlayer player3 = {"this is player"};
+};
+
+
+<ex>
+class window_mgr {
+
+  private:
+    // to start up with a single, default-inited screen.
+    vector<Screen> screens{ Screen(24, 80, ' ') };       // direct init form 
+    vector<Screen> screens = { Screen(24, 80, ' ') };    // copy init form
+};
+
+
+<ex>
+class T {
+  T() = default;
+  T(const string &s) : bookNo(s) {}
+  ...
+  string bookNo;
+  unsigned units_sold = 0;
+  double revenue = 0.0;
+};
+
+The `inclass-init` do like `default-arg` because:
+
+T(const string &s) : bookNo(s) {}
+
+is equivalent to:
+
+T(const string &s) : bookNo(s), units_sole(0), revenue(0) {}
+
+Before C++11 then:
+
+class T {
+  T(): bookNo(), units_sold(0), revenue(0.0) {}
+  T(const string &s) : bookNo(s) {}
+  ...
+  string bookNo;
+  unsigned units_sold;
+  double revenue;
+};
+
+  *cxx-remember*
+  No semicolon when defines member functions in class definition.
+
+  class T {
+    T(): bookNo(), units_sold(0), revenue(0.0) {}
+    T(const string &s);
+  };
+
+
+{cxx-ctor-init-list} 
+The following is initialization and assignment but not initialization since
+members are default initialized `before-ctor-body-runs`. 
+
+ABEntry::ABEntry(...)
+{
+  theName = name;
+  theAddress = address;
+  thePhones = phones;
+  numTimesConsulted = 0;
+}
+
+Why `ctor-init-list`? From CPR 289 and EC++04.
+
+o Efficient than initialization-and-assignment.
+
+  <when-ctor-init-list-is-must>
+o By the time the body of ctor begins excuting, initialization is completed so
+  there are 'three' cases that must use `ctor-init-list`: 
+
+  const, reference, and class member that do not have a default ctor.
+
+o Only for ctor
+  :38:38: error: only constructors take member initializers
+     MSTR &operator=(const MSTR &m) : mesg(m.mesg)
+
+// C++ cookbook
+
+Handled in the caller:
+you also gain automatic exception handling. If an object is constructed in the
+initializer list, and that object throws an exception during construction, the
+runtime environment destroys all other previously constructed objects in the
+list, and the exception continues to the caller of the constructor.
+
+Handled in the callee:
+On the other hand, if you assign the argument in the body of the constructor,
+   then you have to handle the exception with a try/catch block.
+
+
+CPR 265. When a data memder is omitted from the ctor-init-list, it is
+'implicitly' initialized using the same process as is used by the synthesized
+default-ctor; in-class-init if there is or default-init.
+
+
+Use `ctor-init-list` always:
+
+ABEntry::ABEntry(...)
+: theName(name),
+  theAddress(address),
+  thePhones(phones),
+  numTimesConsulted(0)
+{}
+
+ABEntry::ABEntry(...)
+: theName(),                  // value-init
+  theAddress(),
+  thePhones(),
+  numTimesConsulted(0)
+{}
+
+The ctor-init-list is all about making sure that built-in type do not have
+undefined values since user type has constructors so no undefined value. Is it
+overkill when use constructor initializer for all members since default ctor
+will be used when omitted? Use ctor-init-list always since:
+
+o Avoid to remember which memebers may go uninitialized if they are omitted.
+o Cover data members which are const or reference.
+
+
+Must be done in class definition? NO. can be done in memeber definition in cpp
+file.
+
+class Derived: public Base 
+{ 
+  public: Derived( parms ) : Base( parms ), m_xxx(param), ... 
+          { ... }
+};
+
+
+{cxx-ctor-init-order}
+CPR 289. Members are initialized in the order in which they appear in the class
+definition. The order of initialization often doesn't matter unless one member
+is initialized in terms of another.
+
+* Good idea to write ctor-init in the same order as the members are declared.
+
+// :293:21: warning: ‘MakeToken::str_’ will be initialized after [-Wreorder]
+//         string str_{};
+
+
+* Good idea to write member initializer to use the ctor's parameters rather
+  than another data member from the same object.
+
+// EXC++47
+class Array : private ArrayBase, public Container
+{
+  public:
+    Array (size_t startingSize = 10)
+      : size_(startingSize),
+      buffer_(new T[size_]) {}              // *cpp-error*
+
+  private:
+    T* buffer_;
+    size_t used_, size_;
+};
+
+
+<cxx-ctor-type-member> <cxx-typename> CPR 272
+As with data and function member, type member is a local name and is subject
+to the access control. Users can use that name.
+
+CPR 259. The data member can be used `regardless of where` they are defined
+because the compiler processes classes in two steps; the data member are
+compiled first and then function member. 
+
+However, `type member must appear before` they are used. So usually appear at
+the beginning of the class.
+
+class Screen {
+  public:
+    typedef std::string::size_type pos;
+
+    OR
+
+    using pos = std::string::size_type;
+
+  private:
+    pos cursor = 0;
+};
+
+
+<type-member-error> CPR 285
+An inner scope can redefine a name from an outer scope. However, if that is a
+type member, `may not redefine that name.`
+
+typedef double Money;
+
+class Account {
+  public:
+    Money balance() { return bal; }
+
+  private:
+    typedef double Money;
+    Money bal;
+    ...
+};
+
+Although it is an error to redefine a type name, compilers are not required to
+diagnose this error. Some compilers will quietly accept such code, even though
+the program is in error.
+
+note: VC emits no errors.
+
+<ex>
+Some compliers are kind enough to generate a warning if the data members are
+listed in the ctor-init in a different order from the order in which the
+members are declared.
+
+This is a warning and turned to an error due to compiler flag:
+
+class X {
+  // ...
+  GstMediaRouterSize videoSize;
+
+  SetSourceReason::Enum setSourceReason;
+};
+
+: error: 'X::setSourceReason' will be initialized after
+: error:   'GstMediaRouterSize videoSize'
+: error:   when initialized here  // points to the ctor.
+
+X::X() :
+  ...
+  setSourceReason(SetSourceReason::unspecified),
+  videoSize(0, 0)                 // points to the ctor.
+{}
+
+It solves the errors when changes the order of declaration:
+
+class X {
+  // ...
+  
+  SetSourceReason::Enum setSourceReason;
+
+  GstMediaRouterSize videoSize;
+};
+
+
+// *TN*
+// Always get a derived version since it's static binding and so this item is
+// wrong as:
+//
+// namespace OR6 {
+// 
+// using namespace std;
+// 
+// class B0 {
+//     public:
+//         B0() 
+//         { 
+//             cout << "B0::B0" << endl; 
+//             call_virtual_function();
+//         }
+// 
+//         virtual ~B0() 
+//         { 
+//             cout << "B0::~B0" << endl; 
+//         }
+// 
+//         virtual void call_virtual_function()
+//         {
+//             cout << "B0::call_virtual_function()" << endl; 
+//         }
+// };
+// 
+// class D0 {
+//     public:
+//         D0() 
+//         { 
+//             cout << "D0::D0" << endl; 
+//             call_virtual_function();
+//         }
+// 
+//         virtual ~D0() 
+//         { 
+//             cout << "D0::~D0" << endl; 
+//         }
+// 
+//         virtual void call_virtual_function()
+//         {
+//             cout << "D0::call_virtual_function()" << endl; 
+//         }
+// };
+// 
+// } // namespace
+// 
+// = 06 ======
+// D0::D0
+// D0::call_virtual_function()
+// end of main
+// D0::~D0
+// 
+// void t_override_06()
+// {
+//     using namespace OR6;
+// 
+//     D0 d1;
+//     cout << "end of main" << endl;
+// }
+//
+// <cxx-ctor-no-virtual> EC++09, no virtual call in ctor or dtor 
+// Assume that each time a transaction object is created, an appropriate log
+// entry needs to be created in a log. If it is a derived object, then need to
+// have a log entry for that type.
+// 
+// Solution?:
+// 
+// class Transaction {
+//   public:
+//     Transaction();
+// 
+//     // to make type-dependent-log-entry
+//     virtual void logTransaction() const = 0;
+//     ...
+// };
+// 
+// Transaction::Transaction()
+// {
+//   // call
+//   logTransaction();
+// }
+// 
+// class BuyTransaction: public Transaction {
+//   public:
+//     virtual void logTransaction() const;
+//     ...
+// };
+// 
+// class SellTransaction: public Transaction {
+//   public:
+//     virtual void logTransaction() const;
+//     ...
+// };
+// 
+// // use
+// {
+//    BuyTransaction buy;
+// }
+// 
+// Will it have a log entry of BuyTransaction as expected? NO. Will have the base
+// class version if there is one. 
+// 
+// // this is becuase it is a virtual call in base ctor
+// 
+// C++ don't allow this because when base ctor runs, 'only' base part is created.
+// Hence base version. If it was allowed, then derived call would access derived
+// part which is not created or initialized. This is undefined so 'not' allowed.
+// 
+// Remember that construction happens first from base. Also this can be explained
+// as this is becuase it is static bining at compile time. Has nothing to do with
+// virtual mechanism since not through reference or pointer.
+// 
+// 1. For the example above, some compilers issue a warning. Even if there is no
+// warnings, there will be a link error unless there is a definition of pure
+// virtual function. Remember pure virtual can have definition. 
+// 
+// 2. Can use normal virtual function (not pure) but still get base version.
+// 
+// 
+// Solution. Make it non virtual, move up the implementation in class tree to
+// have single implementation, and pass up the type dependent info to the base
+// class.
+// 
+// class Transaction {
+//   public:
+//     explicit Transaction( const std::string& logInfo );
+// 
+//     // non virtual function
+//     void logTransaction( const std::string& logInfo) const;
+//     ...
+// };
+// 
+// Transaction::Transaction( const std::string& logInfo )
+// {
+//   ...
+//   logTransaction( logInfo );
+// }
+// 
+// class BuyTransaction: public Transaction {
+//   public:
+//     // pass-log-to-base-class
+//     BuyTransaction( parameters ) 
+//       : Transaction( createLogString(parameters) )
+//     { ... }
+//     ...
+//   private:
+//       'static' std::string createLogString( parameters );
+// };
+// 
+// See the use of createLogString, helper func, instead of initializing each
+// member and it is more convenient and consider this when there are many
+// parameters.
+// 
+// *cxx-static-members* 
+// Why static? By doing this, there is no danger of accidentally referring to the
+// BuyTransaction object's as-yet-uninitialized data or function members when
+// base ctor and part runs.
+
+
+{cxx-ctor-class-invariant}
+Such a statement of what is assumed to be true for a class is called a class
+invariant. It is `the job of a constructor` to establish the invariant for its
+class (so that the member functions can rely on it) and for the member
+functions to make sure that the invariant holds when they exit. 
+
+Unfortunately, our Vector constructor only partially did its job. It properly
+initialized the Vector members, but it failed to check that the arguments
+passed to it made sense. Consider:
+
+Vector v(27);
+
+This is likely to cause chaos. Here is a more appropriate definition:
+
+Vector::Vector(int s)
+{
+  if (s<0) throw length_error{};
+
+  elem = new double[s];
+
+  sz = s;
+}
+
+
+={============================================================================
 *kt_dev_cxx_0000* cxx-init-form
 
 // `default-init`
@@ -10114,6 +10673,7 @@ string null_book( "9-999-99999-9" );
 
 // `copy-init when converting-ctor` 
 string null_book = "9-999-99999-9"; 
+
 // `copy-init when copy-ctor` but no copy-assign called
 string s2 = s1;                     
 
@@ -10157,7 +10717,7 @@ vector<T> v4(n);              // has n copies of a value-init objects
 double salePrice = applyDiscount(price, discount);
 
 
-*cpp-remember*
+*cxx-remember*
 The `value-init` uses the form `T()` and is a special or narrow case of
 `default-init`. The value-init only matters for built-in types since default
 and value init do the same for other types since class type will have default
@@ -10228,228 +10788,191 @@ string s2("9-999");                 // `direct-init when converting-ctor` called
 
 
 <ex>
-// g++ -g -std=c++0x -c a.c
-#include<iostream>
-#include<string>
-#include<vector>
+// To sum, cxx-init-copy-form uses copy ctor which is counted as implicit
+// conversion. So it cannot use with explicit copy ctor and in cases more
+// conversion since only one conversion is allowed at a time. 
 
-using namespace std;
-
-// without explicit converting ctor
-namespace CT1 {
-
-using namespace std;
-
-class MSTR
+namespace ctor_init
 {
-  private:
-    string mesg;
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {} 
 
-  public:
-    // default ctor
-    MSTR() : mesg() 
-    {
-      cout << "mstr::mstr()" << endl;
-    }
+      // mesg_ is updated only here
+      Foo(const string &mesg) : mesg_(mesg) 
+      {
+        os_ << mesg_ << " and converting ctor";
+      }
 
-    // converting ctor
-    // note: can access private member before initialization
-    MSTR(const string &m) : mesg(m)
-    {
-      cout << "mstr::mstr(const string &)" << endl;
-    }
+      Foo(const Foo &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
 
-    // copy ctor
-    MSTR(const MSTR &m) : mesg(m.mesg)
-    {
-      cout << "mstr::mstr(const mstr &)" << endl;
-    }
+      string return_mesg()
+      {
+        return os_.str();
+      }
 
-    const string &print_mesg() const
-    {
-        return mesg;
-    }
-};
-
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
 } // namespace
 
-
-// = 01 ======
-// mstr::mstr(const string &)
-// use direct init
-
-void t_ctor_01()
+TEST(Ctor, CtorInitForms)
 {
-    using namespace CT1;
+  using namespace ctor_init;
 
-    // direct-init, uses string()
-    // note: allows char * to string convertion before using converting ctor
-    // but it's not allowed for copy-init
-    MSTR m1("use direct init");
-    cout << m1.print_mesg() << endl;
+  // direct
+  {
+    // conversion from char * to string before calling ctor
+    Foo foo1("use direct init");
+    EXPECT_THAT(foo1.return_mesg(), "use direct init and converting ctor");
+  }
+
+  // copy for foo2
+  {
+    // conversion from char * to string before calling ctor
+    Foo foo1("use direct init");
+    Foo foo2(foo1);
+    EXPECT_THAT(foo2.return_mesg(), "use direct init and copy ctor");
+  }
+
+  // copy
+  {
+    Foo foo1("use copy init");
+    Foo foo2 = foo1;
+    EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  }
+
+  // copy error
+  // // cxx.cpp:533:16: error: conversion from ‘const char [14]’ to non-scalar type ‘ctor_init::Foo’ requested
+  // //      Foo foo2 = "use copy init";
+  // //                 ^
+  // {
+  //   Foo foo2 = "use copy init";
+  //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  // }
 }
 
-
-// = 01_01 ======
-// mstr::mstr(const string &)
-// mstr::mstr(const mstr &)
-// use copy init
-
-void t_ctor_01_01()
+namespace ctor_init_converting_ctor
 {
-    using namespace CT1;
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {} 
 
-    // direct-init, uses string()
-    MSTR m1("use copy init");
-    // copy init, use copy ctor
-    MSTR m2 = m1;
-    cout << m2.print_mesg() << endl;
-}
+      Foo(const string &mesg) : mesg_(mesg) 
+      {
+        os_ << mesg_ << " and string converting ctor";
+      }
 
-// // since there is no converting ctor(const char *);
-// //
-// // t_ctor.cpp: In function ‘void t_ctor_01_02()’:
-// // t_ctor.cpp:81:15: error: conversion from ‘const char [14]’ to non-scalar type ‘CT1::MSTR’ requested
-// //      MSTR m1 = "use copy init";
-// //                ^
-// 
-// void t_ctor_01_02()
-// {
-//     using namespace CT1;
-// 
-//     // copy-init, use converting ctor
-//     MSTR m1 = "use copy init";
-// }
+      Foo(const Foo &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
 
+      // added
+      Foo(const char *mesg) : mesg_(mesg)
+      {
+        os_ << mesg_ << " and char converting ctor";
+      }
 
-// without explicit converting ctor
-namespace CT1_1 {
+      string return_mesg()
+      {
+        return os_.str();
+      }
 
-using namespace std;
-
-class MSTR
-{
-  private:
-    string mesg;
-
-  public:
-    // default ctor
-    MSTR() : mesg() 
-    {
-      cout << "mstr::mstr()" << endl;
-    }
-
-    // converting ctor
-    MSTR(const string &m) : mesg(m)
-    {
-      cout << "mstr::mstr(const string &)" << endl;
-    }
-
-    // converting ctor
-    MSTR(const char *p) : mesg(p)
-    {
-      cout << "mstr::mstr(const char *)" << endl;
-    }
-
-    // copy ctor
-    MSTR(const MSTR &m) : mesg(m.mesg)
-    {
-      cout << "mstr::mstr(const mstr &)" << endl;
-    }
-
-    const string &print_mesg() const
-    {
-        return mesg;
-    }
-};
-
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
 } // namespace
 
-
-// = 01_03 ======
-// mstr::mstr(const char *)
-// use copy init
-
-void t_ctor_01_03()
+TEST(Ctor, CtorInitFromMore)
 {
-    using namespace CT1_1;
+  using namespace ctor_init_converting_ctor;
 
-    // copy-init, use converting ctor
-    MSTR m1 = "use copy init";
-    cout << m1.print_mesg() << endl;
+  {
+    Foo foo2 = "use copy init";
+    EXPECT_THAT(foo2.return_mesg(), "use copy init and char converting ctor");
+  }
 }
 
-
-/////////////////////////////////////////////////////////////////////////////
-// with explicit converting ctor
-
-namespace CT1E {
-
-using namespace std;
-
-class MSTR
+namespace ctor_init_explicit
 {
-  private:
-    string mesg;
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {} 
 
-  public:
-    // default ctor
-    MSTR() : mesg() 
-    {
-      cout << "mstr::mstr()" << endl;
-    }
+      explicit Foo(const string &mesg) : mesg_(mesg) 
+      {
+        os_ << mesg_ << " and string converting ctor";
+      }
 
-    // converting ctor
-    explicit MSTR(const string &m) : mesg(m)
-    {
-      cout << "mstr::mstr(const string &)" << endl;
-    }
+      explicit Foo(const Foo &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
 
-    // copy ctor
-    explicit MSTR(const MSTR &m) : mesg(m.mesg)
-    {
-      cout << "mstr::mstr(const mstr &)" << endl;
-    }
+      // added
+      explicit Foo(const char *mesg) : mesg_(mesg)
+      {
+        os_ << mesg_ << " and char converting ctor";
+      }
 
-    const string &print_mesg() const
-    {
-        return mesg;
-    }
-};
+      string return_mesg()
+      {
+        return os_.str();
+      }
 
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
 } // namespace
 
-
-// = 01_e ======
-// mstr::mstr(const string &)
-// use direct init
-// mstr::mstr(const mstr &)
-// use direct init
-
-void t_ctor_01_e()
+TEST(Ctor, CtorInitFromExplicit)
 {
-    using namespace CT1E;
+  using namespace ctor_init_explicit;
 
-    // direct-init
-    MSTR m1("use direct init");
-    cout << m1.print_mesg() << endl;
+  // copy
+  {
+    // conversion from char * to string before calling ctor
+    Foo foo1("use direct init");
+    Foo foo2(foo1);
+    EXPECT_THAT(foo2.return_mesg(), "use direct init and copy ctor");
+  }
 
-    // direct-init
-    MSTR m2(m1);
-    cout << m2.print_mesg() << endl;
+  // // copy 
+  // {
+  //   Foo foo1("use copy init");
+  //
+  //  when use explicit Foo(const Foo &foo);
+  //
+  //   // cxx.cpp:628:16: error: no matching function for call to
+  //   // ‘ctor_init_explicit::Foo::Foo(ctor_init_explicit::Foo&)’
+  //
+  //   Foo foo2 = foo1;
+  //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  // }
+
+  // copy error
+  // // cxx.cpp:533:16: error: conversion from ‘const char [14]’ to non-scalar type ‘ctor_init::Foo’ requested
+  // //      Foo foo2 = "use copy init";
+  // //                 ^
+  // {
+  //   Foo foo2 = "use copy init";
+  //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  // }
 }
 
-
-// void t_ctor_01_01_e()
-// {
-//     using namespace CT1E;
-//
-//     // direct-init
-//     MSTR m1("use copy init");
-//     // copy init, use copy ctor. error since explicit
-//     MSTR m2 = m1;
-//     cout << m2.print_mesg() << endl;
-// }
 
 <ex>
 Question is "does these above statements involve copy-assign?"
@@ -10815,546 +11338,6 @@ TEST(StlMultiArray, UseVectorAndArray)
 }
 
 
-={============================================================================
-*kt_dev_cxx_0000* cxx-ctor cxx-in-class-init
-
-{cxx-ctor-default}
-There are operations synthesized by compiler if they are not defined by user
-and `only if` they are needed. These are `public and inline` according to
-EC++05.
-
-dtor, default-ctor, copy controls; copy ctor, copy assign, move ctor(C++11),
-move assign(C++11)
-
-
-<cxx-deleted>
-However, not always possible since there are cases when compiler cannot:
-
-* When a class has reference or const member.
-* When there's a class member that don't have default ctor.
-* When base class have private on any of synthesized default-operations.
-
-
-{default-ctor} default-initialization
-The `default-ctor` is a special constructor which takes `no-arguments`.
-
-The recommendation on initialization is to avoid syn-version and do it
-explicitly:
-
-`cxx-in-class-init` (C++11) or `ctor-init-list`
-
-
-The reasons to avoid the syn-version:
-
-* The `default-init` for built-in types means `undefined value.`
-
-  The synthesised detault-ctor will use `cxx-in-class-init` if there is and
-  otherwise `default-init` its member and use default ctor for its class
-  member. So undefined value for built-in types and default constructed
-  value for user types.
-
-* Compile error when there's a class member that don't have default ctor since
-  compiler cannot syn default ctor for this class.
-
-* If defines any other ctor for the class, the compiler do not generates
-  default ctor. So if a class requires control to init an object in one case,
-  then the class is likely to require control in all cases.
-
-To see when syn versions are useful. see {make-base-class-for-reference-counting}
-
-
-{cxx-ctor-const}
-The ctor `cannot-be-const`. When create a const object of a class type, the
-object does not assume its constness until after the ctor completes the
-object's initialisation. Thus, ctor can write to const objects during their
-construction.
-
-Tried copy-ctor and compile error:
-
-    FooFoo(const FooFoo& arg) const : foo()
-    { cout << "FooFoo's copy ctor: " << endl; }
-
-:38:31: error: constructors may not be cv-qualified
-
-
-{cxx-default-keyword}
-To tell the compiler to create syn version for functions `but-not-limited` to
-default ctor. 
-
-For `default-ctor`, if there are other ctor, then compiler will 'not' make a
-default ctor and can ask the compiler to create one.
-
-class Sales_data {
-  public:
-    Sales_data() = default;
-    Sales_data(const Sales_data&) = default;
-    Sales_data& operator=(const Sales_data &);
-    ~Sales_data() = default;
-    ...
-};
-
-Q: use case other than default ctor?
-
-
-{cxx-ctor-inclass-init} *C++11* CPR 73
-in-class-init are `restricted as to the form`: must either be enclosed inside
-curly braces or follow an = sign. May not specify an inclass-init inside
-parentheses.
-
-class Game
-{
-  public:
-
-    // CardPlayer player1("this is player");
-    //
-    // t_string.cpp:53:23: error: expected identifier before string constant
-    //      CardPlayer player("this is player");
-    //                        ^
-    // t_string.cpp:53:23: error: expected ‘,’ or ‘...’ before string constant
-    
-    CardPlayer player2{"this is player"};
-    CardPlayer player3 = {"this is player"};
-};
-
-
-<ex>
-class window_mgr {
-
-  private:
-    // to start up with a single, default-inited screen.
-    vector<Screen> screens{ Screen(24, 80, ' ') };       // direct init form 
-    vector<Screen> screens = { Screen(24, 80, ' ') };    // copy init form
-};
-
-class T {
-  T() = default;
-  T(const string &s) : bookNo(s) {}
-  ...
-  string bookNo;
-  unsigned units_sold = 0;
-  double revenue = 0.0;
-};
-
-The `in-class-init` do like `default-arg` because:
-
-T(const string &s) : bookNo(s) {}
-
-is equivalent to:
-
-T(const string &s) : bookNo(s), units_sole(0), revenue(0) {}
-
-Before C++11 then:
-
-class T {
-  T(): bookNo(), units_sold(0), revenue(0.0) {}
-  T(const string &s) : bookNo(s) {}
-  ...
-  string bookNo;
-  unsigned units_sold;
-  double revenue;
-};
-
-  *cxx-remember*
-  No semicolon when defines member functions in class definition.
-
-  class T {
-    T(): bookNo(), units_sold(0), revenue(0.0) {}
-    T(const string &s);
-  };
-
-
-{cxx-ctor-init-list} 
-The following is initialization and assignment but not initialization since
-members are default initialized `before-ctor-body-runs`. 
-
-ABEntry::ABEntry(...)
-{
-  theName = name;
-  theAddress = address;
-  thePhones = phones;
-  numTimesConsulted = 0;
-}
-
-Why `ctor-init-list`? From CPR 289 and EC++04.
-
-* Efficient than initialization-and-assignment.
-
-  <when-ctor-init-list-is-must>
-* By the time the body of ctor begins excuting, initialization is completed so
-  there are 'three' cases that must use `ctor-init-list`: 
-
-  const, reference, and class member that do not have a default ctor.
-
-* Only for ctor
-  :38:38: error: only constructors take member initializers
-     MSTR &operator=(const MSTR &m) : mesg(m.mesg)
-
-note:
-// C++ cookbook
-but you also gain automatic exception handling. If an object is constructed in
-the initializer list, and that object throws an exception during construction,
-    the runtime environment destroys all other previously constructed objects
-    in the list, and the exception continues to the caller of the constructor.
-    On the other hand, if you assign the argument in the body of the
-    constructor, then you have to handle the exception with a try/catch block.
-
-note: 
-Since NoDefault do not have default ctor and A do not use
-Again the same reason as recommendation on initialization above. For the last
-case, that is because will try to use default-ctor for class memeber data when
-there is no ctor initializer but there is no default-ctor and 'no' way to init.
-Hence this is error. This applies to all other cases that need a default-ctor
-and that's why `default-ctor` is almost nearly required.
-
-class NoDefault {
-  public:
-    NoDefault(const std::string&);
-};
-
-struct A {
-  NoDefault my_mem;
-};
-
-A a;
-
-:26:5: error: use of deleted function ‘A::A()’
-:20:8: note: ‘A::A()’ is implicitly deleted because the default definition 
-       would be ill-formed:
-
-
-note: 
-CPR 265. When a data memder is omitted from the ctor-init-list, it is
-'implicitly' initialized using the same process as is used by the synthesized
-default-ctor. in-class-init if there is or default-init.
-
-
-Use `ctor-init-list` always:
-
-ABEntry::ABEntry(...)
-: theName(name),
-  theAddress(address),
-  thePhones(phones),
-  numTimesConsulted(0)
-{}
-
-ABEntry::ABEntry(...)
-: theName(),                  // value-init
-  theAddress(),
-  thePhones(),
-  numTimesConsulted(0)
-{}
-
-The ctor-initializer is all about making sure that built-in type do not have
-undefined values since user type has constructors so no undefined value. Is it
-overkill when use constructor initializer for all members since default ctor
-will be used when omitted? Use ctor-init-list always since:
-
-* Avoid to remember which memebers may go uninitialized if they are omitted.
-* Cover data members which are const or reference.
-
-<syntax> 
-Must be done in class definition? NO. can be done in memeber definition in cpp
-file.
-
-class Derived: public Base 
-{ 
-  public: Derived( parms ) : Base( parms ), m_xxx(param), ... 
-          { ... }
-};
-
-
-{cxx-ctor-init-order}
-CPR 289. Members are initialized in the order in which they appear in the class
-definition. The order of initialization often doesn't matter unless one member
-is initialized in terms of another.
-
-* Good idea to write ctor-init in the same order as the members are declared.
-
-// :293:21: warning: ‘MakeToken::str_’ will be initialized after [-Wreorder]
-//         string str_{};
-
-
-* Good idea to write member initializer to use the ctor's parameters rather
-  than another data member from the same object.
-
-// EXC++47
-class Array : private ArrayBase, public Container
-{
-  public:
-    Array (size_t startingSize = 10)
-      : size_(startingSize),
-      buffer_(new T[size_]) {}              // *cpp-error*
-
-  private:
-    T* buffer_;
-    size_t used_, size_;
-};
-
-
-<cxx-ctor-type-member> <cxx-typename> CPR 272
-As with data and function member, type member is a local name and is subject
-to the access control. Users can use that name.
-
-CPR 259. The data member can be used `regardless of where` they are defined
-because the compiler processes classes in two steps; the data member are
-compiled first and then function member. 
-
-However, `type member must appear before` they are used. So usually appear at
-the beginning of the class.
-
-class Screen {
-  public:
-    typedef std::string::size_type pos;
-
-    OR
-
-    using pos = std::string::size_type;
-
-  private:
-    pos cursor = 0;
-};
-
-
-<type-member-error> CPR 285
-An inner scope can redefine a name from an outer scope. However, if that is a
-type member, `may not redefine that name.`
-
-typedef double Money;
-
-class Account {
-  public:
-    Money balance() { return bal; }
-
-  private:
-    typedef double Money;
-    Money bal;
-    ...
-};
-
-Although it is an error to redefine a type name, compilers are not required to
-diagnose this error. Some compilers will quietly accept such code, even though
-the program is in error.
-
-note: VC emits no errors.
-
-<ex>
-Some compliers are kind enough to generate a warning if the data members are
-listed in the ctor-init in a different order from the order in which the
-members are declared.
-
-This is a warning and turned to an error due to compiler flag:
-
-class X {
-  // ...
-  GstMediaRouterSize videoSize;
-
-  SetSourceReason::Enum setSourceReason;
-};
-
-: error: 'X::setSourceReason' will be initialized after
-: error:   'GstMediaRouterSize videoSize'
-: error:   when initialized here  // points to the ctor.
-
-X::X() :
-  ...
-  setSourceReason(SetSourceReason::unspecified),
-  videoSize(0, 0)                 // points to the ctor.
-{}
-
-It solves the errors when changes the order of declaration:
-
-class X {
-  // ...
-  
-  SetSourceReason::Enum setSourceReason;
-
-  GstMediaRouterSize videoSize;
-};
-
-
-// *TN*
-// Always get a derived version since it's static binding and so this item is
-// wrong as:
-//
-// namespace OR6 {
-// 
-// using namespace std;
-// 
-// class B0 {
-//     public:
-//         B0() 
-//         { 
-//             cout << "B0::B0" << endl; 
-//             call_virtual_function();
-//         }
-// 
-//         virtual ~B0() 
-//         { 
-//             cout << "B0::~B0" << endl; 
-//         }
-// 
-//         virtual void call_virtual_function()
-//         {
-//             cout << "B0::call_virtual_function()" << endl; 
-//         }
-// };
-// 
-// class D0 {
-//     public:
-//         D0() 
-//         { 
-//             cout << "D0::D0" << endl; 
-//             call_virtual_function();
-//         }
-// 
-//         virtual ~D0() 
-//         { 
-//             cout << "D0::~D0" << endl; 
-//         }
-// 
-//         virtual void call_virtual_function()
-//         {
-//             cout << "D0::call_virtual_function()" << endl; 
-//         }
-// };
-// 
-// } // namespace
-// 
-// = 06 ======
-// D0::D0
-// D0::call_virtual_function()
-// end of main
-// D0::~D0
-// 
-// void t_override_06()
-// {
-//     using namespace OR6;
-// 
-//     D0 d1;
-//     cout << "end of main" << endl;
-// }
-//
-// <cxx-ctor-no-virtual> EC++09, no virtual call in ctor or dtor 
-// Assume that each time a transaction object is created, an appropriate log
-// entry needs to be created in a log. If it is a derived object, then need to
-// have a log entry for that type.
-// 
-// Solution?:
-// 
-// class Transaction {
-//   public:
-//     Transaction();
-// 
-//     // to make type-dependent-log-entry
-//     virtual void logTransaction() const = 0;
-//     ...
-// };
-// 
-// Transaction::Transaction()
-// {
-//   // call
-//   logTransaction();
-// }
-// 
-// class BuyTransaction: public Transaction {
-//   public:
-//     virtual void logTransaction() const;
-//     ...
-// };
-// 
-// class SellTransaction: public Transaction {
-//   public:
-//     virtual void logTransaction() const;
-//     ...
-// };
-// 
-// // use
-// {
-//    BuyTransaction buy;
-// }
-// 
-// Will it have a log entry of BuyTransaction as expected? NO. Will have the base
-// class version if there is one. 
-// 
-// // this is becuase it is a virtual call in base ctor
-// 
-// C++ don't allow this because when base ctor runs, 'only' base part is created.
-// Hence base version. If it was allowed, then derived call would access derived
-// part which is not created or initialized. This is undefined so 'not' allowed.
-// 
-// Remember that construction happens first from base. Also this can be explained
-// as this is becuase it is static bining at compile time. Has nothing to do with
-// virtual mechanism since not through reference or pointer.
-// 
-// 1. For the example above, some compilers issue a warning. Even if there is no
-// warnings, there will be a link error unless there is a definition of pure
-// virtual function. Remember pure virtual can have definition. 
-// 
-// 2. Can use normal virtual function (not pure) but still get base version.
-// 
-// 
-// Solution. Make it non virtual, move up the implementation in class tree to
-// have single implementation, and pass up the type dependent info to the base
-// class.
-// 
-// class Transaction {
-//   public:
-//     explicit Transaction( const std::string& logInfo );
-// 
-//     // non virtual function
-//     void logTransaction( const std::string& logInfo) const;
-//     ...
-// };
-// 
-// Transaction::Transaction( const std::string& logInfo )
-// {
-//   ...
-//   logTransaction( logInfo );
-// }
-// 
-// class BuyTransaction: public Transaction {
-//   public:
-//     // pass-log-to-base-class
-//     BuyTransaction( parameters ) 
-//       : Transaction( createLogString(parameters) )
-//     { ... }
-//     ...
-//   private:
-//       'static' std::string createLogString( parameters );
-// };
-// 
-// See the use of createLogString, helper func, instead of initializing each
-// member and it is more convenient and consider this when there are many
-// parameters.
-// 
-// *cxx-static-members* 
-// Why static? By doing this, there is no danger of accidentally referring to the
-// BuyTransaction object's as-yet-uninitialized data or function members when
-// base ctor and part runs.
-
-
-{cxx-ctor-class-invariant}
-Such a statement of what is assumed to be true for a class is called a class
-invariant. It is `the job of a constructor` to establish the invariant for its
-class (so that the member functions can rely on it) and for the member
-functions to make sure that the invariant holds when they exit. 
-
-Unfortunately, our Vector constructor only partially did its job. It properly
-initialized the Vector members, but it failed to check that the arguments
-passed to it made sense. Consider:
-
-Vector v(27);
-
-This is likely to cause chaos. Here is a more appropriate definition:
-
-Vector::Vector(int s)
-{
-  if (s<0) throw length_error{};
-
-  elem = new double[s];
-
-  sz = s;
-}
 
 
 ={============================================================================
@@ -33602,22 +33585,22 @@ CPR 16.5
 Not always possible to write a 'single' template suited for every possible
 template argument. In some cases, the general template is wrong for a type. 
 
-  * When the general template definition might not compile or might do the
-    wrong thing.
+o When the general template definition might not compile or might do the wrong
+  thing.
 
-  * When can take advantage of some specific knowledge to write more efficient
-    code.
+o When can take advantage of some specific knowledge to write more efficient
+  code.
 
 When cannot or do not want to use the template version, can define a
 specialized version of the class or function template.
 
 CPR 16.1
 
-* A nontype parameter represents `a value rather than a type.` These value must
+o A non-type parameter represents `a value rather than a type.` These value must
   be constant expression and is a constant value inside the template
   definition.
 
-* A nontype parameters are specified by using a specific type name instead of
+o A non-type parameters are specified by using a specific type name instead of
   the class or typename keyword.
 
 Again, compare() is an example for which the general definition is not
@@ -33636,6 +33619,7 @@ int compare(const T&, const T&)
 
 // nontype-template-parameter version for string literals
 // define parameters as references to an array since cannot copy an array.
+// *cxx-declarator*
 
 template <unsigned N, unsigned M> 
 int compare(const char (&p1) [N], const (&p2) [M])
@@ -48612,15 +48596,15 @@ need to provide a deleter. CPR 479
 {raii-and-two-cautions}
 The raii is great but there are two cautions when use raii.
 
-* When use resources which has own interface such as mutex and db connection, it
+o When use resources which has own interface such as mutex and db connection, it
   can raise exception in destructor. Since raii uses destructor, it can cause
-  the problem is described in {problem-of-exception-in-dtor}.
+  the problem is described in *problem-of-exception-in-dtor*
 
-* Acquire and initialize a raii in the same statement. In other words, use
+o Acquire and initialize a raii in the same statement. In other words, use
   constructor. If not, can be a problem as described in EC++17.
-  `evaluation-order`
+  `cxx-evaluation-order`
 
-processWidget( std::shared_ptr<Widget>( new Widget ), priority() );
+processWidget(std::shared_ptr<Widget>( new Widget ), priority());
 
 The problem is that there is no order in evaluating the arguments between new,
     shared_ptr constructor, and priority() call. 
@@ -48638,23 +48622,23 @@ EC++14. What should happen when a Lock object, more generally raii object, is
 'copied' or 'assigned'? There are four approaches depending on the type of
 resource.
 
-* No copying
+o No copying
  
-Likely to be true for Lock. See `preventing-copies` So,
+Likely to be true for Lock. See `cxx-preventing-copy` So,
 
 class Lock: private Uncopyable {
   ...
 };
 
 
-* Reference counting underlying resources
+o Reference counting underlying resources
 
 By using shared_ptr with delete, do not need to concern about clean up. 
 
 <raii-vs-shared-pointer>
-This is a decision point; use own raii and concern about copy or use
-shared_ptr with deleter and don't concern about copy. Here, use 'deleter' to
-use unlock instead of default delete.
+This is a decision point; use own raii and concern about copy OR use
+shared_ptr with deleter and don't concern about copy. Here, use
+*cxx-sp-deleter* to use unlock instead of default delete.
 
 class Lock {
   public:
@@ -48672,7 +48656,7 @@ To:
 class Lock {
   public:
     explicit Lock( Mutex* pm )
-      :mutexPtr( pm, unlock )    // note: deleter
+      :mutexPtr( pm, unlock )    // *cxx-sp-deleter*
       {  
           // to get law pointer assuming this is C interface
           lock( mutexPtr.get() );
@@ -48686,13 +48670,14 @@ Set deleter using shared_ptr ctor in ctor init list. No longer declares a
 destructor.
 
 
-* Copy the underlying resource
+o Copy the underlying resource
 
-This is {valuelike} in *kt_dev_cpp_004* Such as string class which uses heap
-for characters. Copying the resource managing object should also copy the
-resource it wraps. deep-copy.
+This is *cxx-valuelike* such as string class which uses heap for characters.
+Copying the resource managing object should also copy the resource it wraps.
+*cxx-deep-copy*
 
-* Transfer ownership of underlying resource
+
+o Transfer ownership of underlying resource
 
 This is unique_ptr. Only one raii refers to a raw resource and when raii is
 copied ownership of the resource is transfered. 
@@ -48706,12 +48691,45 @@ associated resources get released whenever the last reference to it gets
 destroyed. To perform this task in more complicated scenarios, helper classes,
 such as `weak_ptr`, `bad_weak_ptr`, and `enable_shared_from_this` are provided.
 
-  * Defined in the <memory> 
-  * The default initialized holds a nullptr. 
-  * The template and use "T" but not "T*".
+  o Defined in the <memory> 
+  o The default initialized holds a nullptr. 
+  o The template and use "T" but not "T*".
 
 shared_ptr<T> plist;
 shared_ptr<list<int>> plist;
+
+
+<cxx-sp-code>
+
+/usr/include/c++/4.9/bits/shared_ptr.h
+
+  /**
+   *  @brief  A smart pointer with reference-counted copy semantics.
+   *
+   *  The object pointed to is deleted when the last shared_ptr pointing to
+   *  it is destroyed or reset.
+  */
+  template<typename _Tp>
+    class shared_ptr : public __shared_ptr<_Tp>
+    {
+
+      /**
+       *  @brief  Construct a %shared_ptr that owns the pointer @a __p
+       *          and the deleter @a __d.
+       *  @param  __p  A pointer.
+       *  @param  __d  A deleter.
+       *  @post   use_count() == 1 && get() == __p
+       *  @throw  std::bad_alloc, in which case @a __d(__p) is called.
+       *
+       *  Requirements: _Deleter's copy constructor and destructor must
+       *  not throw
+       *
+       *  __shared_ptr will release __p by calling __d(__p)
+       */
+      template<typename _Tp1, typename _Deleter>
+        shared_ptr(_Tp1* __p, _Deleter __d)
+          : __shared_ptr<_Tp>(__p, __d) { }
+    };
 
 
 {cxx-sp-shared-operations}
@@ -49270,8 +49288,38 @@ In contrast to shared pointers, a 'minimum' space and time overhead is the
 focus of this class.
 
 
-<code> *cxx-delete*
+<cxx-sp-code> *cxx-sp-delete*
 /usr/include/c++/4.9/bits/unique_ptr.h
+
+  // cxx-callable
+
+  /// Primary template of default_delete, used by unique_ptr
+  template<typename _Tp>
+    struct default_delete
+    {
+      /// Default constructor
+      constexpr default_delete() noexcept = default;
+
+      /** @brief Converting constructor.
+       *
+       * Allows conversion from a deleter for arrays of another type, @p _Up,
+       * only if @p _Up* is convertible to @p _Tp*.
+       */
+      template<typename _Up, typename = typename
+        enable_if<is_convertible<_Up*, _Tp*>::value>::type>
+        default_delete(const default_delete<_Up>&) noexcept { }
+
+      /// Calls @c delete @p __ptr
+      void
+        operator()(_Tp* __ptr) const
+        {
+          // *cxx-static-assert*
+          static_assert(sizeof(_Tp)>0, "can't delete pointer to incomplete type");
+
+          delete __ptr;
+        }
+    };
+
   /// 20.7.12.2 unique_ptr for single objects.
 
   template <typename _Tp, typename _Dp = default_delete<_Tp>>
@@ -49279,15 +49327,42 @@ focus of this class.
     {
       //...
 
-      *cxx-sp-unique-no-copy-support*
+      class _Pointer 
+      { 
+
+      };
+
+      public:
+
+      // *cpp-stl-tuple* set tuple with pointer and a default created
+      // deleter
+
+      typedef std::tuple<typename _Pointer::type, _Dp>  __tuple_type;
+      __tuple_type                                      _M_t;
+
+      typedef _Dp                       deleter_type;
+
+      /** Takes ownership of a pointer.
+       *
+       * @param __p  A pointer to an object of @c element_type
+       *
+       * The deleter will be value-initialized.
+       */
+      explicit
+        unique_ptr(pointer __p) noexcept
+        : _M_t(__p, `deleter_type()`)
+        { static_assert(!is_pointer<deleter_type>::value,
+            "constructed with null function pointer deleter"); }
+
+      // *cxx-sp-unique-no-copy-support*
       // Disable copy from lvalue.
       unique_ptr(const unique_ptr&) = delete;             // @262
       unique_ptr& operator=(const unique_ptr&) = delete;  // @263
 
-      *cxx-sp-unique-move*
+      // *cxx-sp-unique-move*
       /// Move constructor.
       unique_ptr(unique_ptr&& __u) noexcept
-      : _M_t(__u.release(), std::forward<deleter_type>(__u.get_deleter())) { }
+        : _M_t(__u.release(), std::forward<deleter_type>(__u.get_deleter())) { }
 
       /** @brief Move assignment operator.
        *
@@ -49296,18 +49371,18 @@ focus of this class.
        * Invokes the deleter first if this object owns a pointer.
        */
       unique_ptr&
-      operator=(unique_ptr&& __u) noexcept
-      {
-        /* */
-      }
+        operator=(unique_ptr&& __u) noexcept
+        {
+          /* */
+        }
 
       /// Reset the %unique_ptr to empty, invoking the deleter if necessary.
       unique_ptr&
-      operator=(nullptr_t) noexcept
-      {
-        reset();
-        return *this;
-      }
+        operator=(nullptr_t) noexcept
+        {
+          reset();
+          return *this;
+        }
 
       /** @brief Replace the stored pointer.
        *
@@ -49316,61 +49391,69 @@ focus of this class.
        * The deleter will be invoked if a pointer is already owned.
        */
       void
-      reset(pointer __p = pointer()) noexcept
-      {
-        using std::swap;
-        swap(std::get<0>(_M_t), __p);
-        if (__p != pointer())
-          get_deleter()(__p);
-      }
+        reset(pointer __p = pointer()) noexcept
+        {
+          using std::swap;
+          swap(std::get<0>(_M_t), __p);
+          if (__p != pointer())
+            get_deleter()(__p);
+        }
 
-      *cxx-conversion-to-bool*
+      // *cxx-conversion-to-bool*
       /// Return @c true if the stored pointer is not null.
       explicit operator bool() const noexcept
       { return get() == pointer() ? false : true; }
+
+      // Destructor.
+      ~unique_ptr() noexcept
+      {
+        // get first of tuple which is pointer and 
+        // if not null, call deleter() which has `single argument`
+
+        auto& __ptr = std::get<0>(_M_t);
+        if (__ptr != nullptr)
+          get_deleter()(__ptr);
+        __ptr = pointer();
+      }
+
+      deleter_type&
+        get_deleter() noexcept
+        { return std::get<1>(_M_t); }
 
     };
 
 
 <ex>
-#include <iostream>
-#include <string>
-#include <memory>
 
-using namespace std;
+// :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+//   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+//   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+//   std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+// 
+// :12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+// std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+// = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+// std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
-int main()
+TEST(SharedPointer, UniqueDoNotAllowCopy)
 {
   unique_ptr<std::string> p1(new std::string("nico"));
-  unique_ptr<string> p2(p1);      // 10: error
-  unique_ptr<string> p3;
-  p3 = p2;                        // 12: error
+  unique_ptr<std::string> p2(p1);
+  unique_ptr<std::string> p3;
+  p3 = p2;
 }
 
-:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
-  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
-  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
-In file included from /usr/include/c++/4.7/memory:86:0,
-                 from t_sp_uni.cpp:3:
-/usr/include/c++/4.7/bits/unique_ptr.h:262:7: error: declared here
-
-:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
-std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
-= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
-
-In file included from /usr/include/c++/4.7/memory:86:0,
-                 from t_sp_uni.cpp:3:
-/usr/include/c++/4.7/bits/unique_ptr.h:263:19: error: declared here
-
-
-{cxx-sp-unique-ctor}
-Do not support copy init since do not have copy ctor.
-
-std::unique_ptr<int> up = new int;  // ERROR
-std::unique_ptr<int> up(new int);   // OK
+// TEST(SharedPointer, UniqueDoNotAllowInitCopyForm)
+// {
+//   // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+//   // std::basic_string<char>*}’ to non-scalar type
+//   // ‘std::unique_ptr<std::basic_string<char> >’ requested
+//   //
+//   // unique_ptr<std::string> p1 = new string;
+//
+//   unique_ptr<std::string> p2(new string);
+// }
 
 
 A unique_ptr does not have to own an object, so it can be empty.
@@ -49388,8 +49471,11 @@ if (up.get() != nullptr)  // if up is not empty
 
 
 {cxx-sp-unique-transfer-ownership}
-The `unique_ptr` do not support copy so `have-to transfer ownership.` Two
-options:
+The `unique_ptr` do not support copy so `have-to transfer ownership.` 
+
+note: no such a thing in shared_ptr
+
+Two options:
 
 up.reset() 
 Calls the deleter for an owned object and makes up empty 
@@ -49403,11 +49489,8 @@ up.release()
 Gives up ownership back to the caller (returns owned object without calling
 the deleter)
 
-note: 
-no such a thing in shared_ptr
 
-
-* Use release() and reset() pair
+o Use release() and reset() pair
 
 The release() return the pointer it held and make the unique ptr null so using
 reset/release pair to transfer ownerships.
@@ -49416,13 +49499,13 @@ unique_ptr<string> p2(up.release());  // up loses it and up is nullptr
 sp.reset(up.release());               // up loses it and up is nullptr
 
 
-* Use a temporty (use move semantics)
+o Use a temporty (use move semantics)
 
 unique_ptr<Foo> p4(new Foo(4));
 p4 = unique_ptr<Foo>(new Foo(5));     // move assign
 
 
-* Use move semantics *cxx-prefered* since intention is clear
+o Use move semantics *cxx-prefered* since intention is clear
 
 // initialize a unique_ptr with a new object
 std::unique_ptr<ClassA> up1(new ClassA);
@@ -49450,14 +49533,18 @@ up2 = std::move(up1);
 
 <ex>
 
-class Foo 
+namespace cxx_sp_shared
 {
-  private:
-    int id;
-  public:
-    Foo(int val):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
-    ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
-};
+  class Foo 
+  {
+    private:
+      int id;
+
+    public:
+      Foo(int val = 1):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
+      ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+  };
+} // namespace
 
 // [ RUN      ] CxxFeaturesTest.UseUniquePtrMove
 // Foo ctor(1)
@@ -49472,26 +49559,32 @@ class Foo
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(CxxFeaturesTest, UseUniquePtrMove)
+TEST(SharedPointer, UniqueAndMove)
 {
+  using namespace cxx_sp_shared;
+
   unique_ptr<Foo> p1(new Foo(1));
   unique_ptr<Foo> p2(new Foo(2));
   unique_ptr<Foo> p3(new Foo(3));
   unique_ptr<Foo> p4(new Foo(4));
 
-  if (p3)
-    cout << "p3 is not null" << endl;
-  else
-    cout << "p3 is null" << endl;
+  // if (p3)
+  //   cout << "p3 is not null" << endl;
+  // else
+  //   cout << "p3 is null" << endl;
+
+  EXPECT_TRUE(p3);
 
   p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
   p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
   p3 = std::move(p1);     // p1->null , p2->F3, p3->null
 
-  if (p3)
-    cout << "p3 is not null" << endl;
-  else
-    cout << "p3 is null" << endl;
+  EXPECT_FALSE(p3);
+ 
+  // if (p3)
+  //   cout << "p3 is not null" << endl;
+  // else
+  //   cout << "p3 is null" << endl;
 }
 
 
@@ -49574,6 +49667,7 @@ void sink(unique_ptr<Foo> p)
 // main: ends
 
 [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
+
 TEST(CxxFeaturesTest, UseUniqueSinkSource)
 {
   cout << "call source()" << endl;
@@ -49666,16 +49760,16 @@ class ClassB {
 
 
 note: 
-* Can skip the destructor now because unique_ptr does the job for you. 
+o Can skip the destructor now because unique_ptr does the job for you. 
 
-* Also have to implement the copy constructor and assignment operator. By
+o Also have to implement the copy constructor and assignment operator. By
   default, both would try to copy or assign the members, which isn't possible.
   If you don't provide them, ClassB also would provide only move semantics.
   see *cxx-move-synthesized*
 
 <use-with-containers>
 `auto_ptr` is not possible to store an auto_ptr in a container, nor could we
-return one from a function. How about `unique_ptr`?
+return one from a function. How about `unique_ptr`? solved.
 
 
 ={============================================================================
@@ -49905,72 +49999,6 @@ Foo dtor(3)
 
 
 {sp-default-deleter}
-The deleter is callable and is called when is needed. Here the excerpt from stl
-unique_ptr.h. See default_delete is overload operator().
-
-/// Primary template, default_delete.
-template<typename _Tp>
-struct default_delete
-{
-    constexpr default_delete() noexcept = default;
-
-    template<typename _Up, typename = typename
-        std::enable_if<std::is_convertible<_Up*, _Tp*>::value>::type>
-        default_delete(const default_delete<_Up>&) noexcept { }
-
-    void
-        operator()(_Tp* __ptr) const
-        {
-          *cpp-static-assert*
-          static_assert(sizeof(_Tp)>0, "can't delete pointer to incomplete type");
-
-          `delete __ptr;`
-        }
-};
-
-/// 20.7.12.2 unique_ptr for single objects.
-template <typename _Tp, typename _Dp = default_delete<_Tp> >
-class unique_ptr
-{
-    class _Pointer 
-    { 
-
-    };
-
-    typedef std::tuple<typename _Pointer::type, _Dp>  __tuple_type;
-    __tuple_type                                      _M_t;
-
-      typedef typename _Pointer::type   pointer;
-      typedef _Dp                       deleter_type;
-
-    explicit
-        unique_ptr(pointer __p) noexcept
-
-        // *cpp-stl-tuple* set tuple with pointer and a default created
-        // deleter
-
-        : _M_t(__p, deleter_type())
-        { static_assert(!std::is_pointer<deleter_type>::value,
-                "constructed with null function pointer deleter"); }
-
-    // Destructor.
-    ~unique_ptr() noexcept
-    {
-        // get first of tuple which is pointer and 
-        // if not null, call deleter() which has `single argument`
-        
-        auto& __ptr = std::get<0>(_M_t);
-        if (__ptr != nullptr)
-            get_deleter()(__ptr);
-        __ptr = pointer();
-    }
-
-    deleter_type&
-        get_deleter() noexcept
-        { return std::get<1>(_M_t); }
-}
-
-
 {set-own-deleter}
 
 shared_ptr<T> p(q, d);      // built-in pointer q
