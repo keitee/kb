@@ -1,6 +1,7 @@
 #include "gmock/gmock.h"
 
 #include <iostream>
+#include <functional>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -730,7 +731,6 @@ TEST(IPV4_U16, Text)
 // ={=========================================================================
 
 /*
-
 17. Creating a 2D array with basic operations
 
 Write a class template that represents a two-dimensional array container with
@@ -761,13 +761,17 @@ filling, and swapping. It should be possible to move objects of this type.
 
 */
 
-// unit17
+// unit17 - when not use stl container as internal data
 namespace u17_2018_11_20
 {
   template<typename T, int Row, int Col>
   class array2d
   {
     public:
+      typedef T value_type;
+      typedef value_type *iterator;
+      typedef const value_type *const_iterator;
+
       explicit array2d(std::initializer_list<T> values)
       {
         int row{}, col{};
@@ -782,8 +786,8 @@ namespace u17_2018_11_20
 
           array_[row][col] = e;
 
-          cout << "row: " << row << ", col: " << col << " = " <<
-            array_[row][col] << endl;
+          // cout << "row: " << row << ", col: " << col << " = " <<
+          //   array_[row][col] << endl;
 
           ++col;
         }
@@ -799,6 +803,13 @@ namespace u17_2018_11_20
         cout << endl;
       }
 
+      // iterators
+      iterator begin() { return (T*) &array_; }
+      iterator end() { return (T*)&array_ + Row*Col; }
+
+      const_iterator begin() const { return (T*)&array_; }
+      const_iterator end() const { return (T*)&array_ + Row*Col; }
+
     private:
         T array_[Row][Col];
         T *current_;
@@ -806,30 +817,119 @@ namespace u17_2018_11_20
 } // namespace
 
 
+TEST(U17, 20181120)
+{
+  using namespace u17_2018_11_20;
+
+  {
+    array2d<int, 2, 3> coll{1,2,3,4,5,6};
+    ostringstream os;
+
+    for (auto e : coll)
+      os << e << ", ";
+    os << endl;
+
+    std::copy(std::begin(coll), std::end(coll),
+        ostream_iterator<int>(os, ", "));
+    os << endl;
+
+    EXPECT_THAT(os.str(), Eq("1, 2, 3, 4, 5, 6, \n1, 2, 3, 4, 5, 6, \n"));
+  }
+}
+
+
+// unit17 - when use stl container as internal data
 namespace u17_2018_11_23
 {
   template<typename T, int Row, int Col>
     class array2d
     {
-      typedef T value_type;
-      typedef value_type *iterator;
-      typedef value_type const* const_iterator;
-
       public:
-      explicit array2d(std::initializer_list<T> values) : array_(values)
-      {}
 
-      // iterators
+        //  *cxx-remember* *cxx-gtest* shall be public to use ElementsAre()
+        typedef T value_type;
+        typedef value_type *iterator;
+        typedef value_type const* const_iterator;
 
-      iterator begin() { return array_.data(); }
-      iterator end() { return array_.data() + array_.size(); }
 
-      const_iterator begin() const { return array_.data(); }
-      const_iterator end() const { return array_.data() + array_.size(); }
+        // default ctor
+        explicit array2d() : array_(Row * Col) {}
+
+        explicit array2d(std::initializer_list<T> values) : array_(values) {}
+
+        // note that how specify array2d arg
+
+        void swap(array2d &rhs)
+        {
+          array_.swap(rhs.array_);
+        }
+
+        // move support??
+        //
+        // If class do not define copy ctor and assign then compiler 'always'
+        // make these operations; defined either as memberwise or deleted.
+        // 
+        // Move operations are different. The compiler make move operations
+        // `only if` a class does 'not' define any copy ctor and assign and
+        // `only if` all non-static members can be move constructed and assigned
+        // because if a class doesn't have a move operation, `the corresponding
+        // copy operation is used` in place of move through function matching. 
+
+        void fill(T const value)
+        {
+          // algo-fill
+          std::fill(begin(), end(), value);
+        }
+
+        size_t size(size_t rank)
+        {
+          if (rank == 1) return Row;
+          else if (rank == 2) return Col;
+
+          return 0;
+        }
+
+        // operator()
+        // why do not need to implement operator*() for iterator to work? since
+        // it's pointer.
+
+        T& operator() (size_t const row, size_t const col)
+        {
+          return array_[row * col + col];
+        }
+
+        constexpr const T& operator() (size_t const row, size_t const col) const
+        {
+          return array_[row * col + col];
+        }
+
+        // iterators
+
+        iterator begin() { return array_.data(); }
+        iterator end() { return array_.data() + array_.size(); }
+
+        const_iterator begin() const { return array_.data(); }
+        const_iterator end() const { return array_.data() + array_.size(); }
 
       private:
-      std::vector<T> array_;
+        std::vector<T> array_;
     };
+
+  // note that how specify array2d arg
+  template<typename T, size_t Row, size_t Col>
+    void print_array2d(array2d<T, Row, Col> const &arr)
+    {
+      for (int i = 0; i < Row; ++i)
+      {
+        for (int j = 0; j < Col; ++j)
+        {
+          std::cout << arr.at(i, j) << ' ';
+        }
+
+        std::cout << std::endl;
+      }
+    }
+
 } // namespace
 
 TEST(U17, 20181123)
@@ -850,7 +950,238 @@ TEST(U17, 20181123)
 
     EXPECT_THAT(os.str(), Eq("1, 2, 3, 4, 5, 6, \n1, 2, 3, 4, 5, 6, \n"));
   }
+
+  // fill
+  {
+    array2d<int, 2, 3> coll;
+    coll.fill(1);
+    EXPECT_THAT(coll, ElementsAre(1,1,1,1,1,1));
+  }
+
+  // operator(x,y)
+  {
+    array2d<int, 2, 3> coll;
+
+    for (size_t i = 0; i < coll.size(1); ++i)
+      for (size_t j = 0; j < coll.size(2); ++j)
+        coll(i, j) = 1 + i * 3 + j;
+
+    EXPECT_THAT(coll, ElementsAre(4,2,5,0,6,0));
+  }
+
+  // move
+  {
+    array2d<int, 2, 3> a{10,20,30,40,50,60};
+    array2d<int, 2, 3> coll(std::move(a));
+
+    EXPECT_THAT(coll, ElementsAre(10,20,30,40,50,60));
+  }
+
+  // swap
+  {
+    array2d<int, 2, 3> coll1 { 1,2,3,4,5,6 };
+    array2d<int, 2, 3> coll2 { 10,20,30,40,50,60 };
+
+    EXPECT_THAT(coll1, ElementsAre(1,2,3,4,5,6));
+    EXPECT_THAT(coll2, ElementsAre(10,20,30,40,50,60));
+
+    coll1.swap(coll2);
+
+    EXPECT_THAT(coll1, ElementsAre(10,20,30,40,50,60));
+    EXPECT_THAT(coll2, ElementsAre(1,2,3,4,5,6));
+  }
 }
+
+/*
+
+Note that for element access, we are using operator(), such as in a(i,j), and
+not operator[], such as in a[i][j], because only the former can take multiple
+arguments (one for the index on each dimension). The latter can only have a
+single argument, and in order to enable expressions like a[i][j], it has to
+return an intermediate type (one that basically represents a row) that in turn
+overloads operator[] to return a single element. 
+
+There are already standard containers that store either fixed or variable-length
+sequences of elements. This two-dimensional array class should be just an
+`adapter` for such a container. In choosing between std::array and std::vector,
+we should consider two things:
+
+The array2d class should have move semantics to be able to move objects It
+should be possible to list initialize an object of this type The std::array
+container is movable only if the elements it holds are move-constructible and
+move-assignable. On the other hand, it cannot be constructed from an
+std::initializer_list. (that's not ture)
+
+Therefore, the more viable option remains an std::vector.
+
+Internally, this adapter container can store its data either in a vector of
+vectors (each row is a vector<T> with C elements, and the 2D array has R such
+elements stored in a vector<vector<T>>) or single vector of RC elements of type
+T. In the latter case, the element on row i and column j is found at index i * C
++ j. This approach has a smaller memory footprint, stores all data in a single
+contiguous chunk, and is also simpler to implement. For these reasons, it is the
+preferred solution.
+
+*/
+
+
+// ={=========================================================================
+
+/*
+
+18. Minimum function with any number of arguments
+
+Write a function template that can take any number of arguments and returns the
+minimum value of them all, using operator < for comparison. 
+
+Write a variant of this function template that can be parameterized with a
+binary comparison function to use instead of operator <.
+
+*/
+
+namespace u18_2018_11_23
+{
+  template <typename T>
+    T get_minimum(initializer_list<T> values)
+    {
+      T running_value = std::numeric_limits<T>::max();
+
+      for (const auto e : values)
+      {
+        if (e < running_value)
+          running_value = e;
+      }
+
+      return running_value;
+    }
+
+  template <typename T, typename Comp>
+    T get_minimum(initializer_list<T> values, Comp comp)
+    {
+      T running_value = std::numeric_limits<T>::max();
+
+      for (const auto e : values)
+      {
+        if (comp(e,running_value))
+          running_value = e;
+      }
+
+      return running_value;
+    }
+} // namespace
+
+TEST(U18, 20181123)
+{
+  using namespace u18_2018_11_23;
+
+  EXPECT_THAT(get_minimum({5, 4, 2, 3}), 2);
+
+  EXPECT_THAT(get_minimum({5, 4, 2, 3}, std::less<int>()), 2);
+}
+
+
+#if 0
+
+o the text means variadic and recursive call
+
+o Do not compile
+
+namespace u18_text
+{
+  template <typename T>
+    T minimum(T const a, T const b) { return a < b ? a : b; }
+
+  template <typename T1, typename... T>
+    T1 minimum(T1 a, T... args)
+    {
+      return minimum(a, minimum(args...));
+    }
+
+  template <class Compare, typename T>
+    T minimumc(Compare comp, T const a, T const b) { return comp(a, b) ? a : b; }
+
+  template <class Compare, typename T1, typename... T>
+    T1 minimumc(Compare comp, T1 a, T... args)
+    {
+      return minimumc(comp, a, minimumc(comp, args...));
+    }
+} // namespace
+
+TEST(U18, Text)
+{
+  using namespace u18_text;
+
+  EXPECT_THAT(minimum(5, 4, 2, 3), 2);
+
+  EXPECT_THAT(minimum(less<int>(), 5, 4, 2, 3), 2);
+
+  // EXPECT_THAT(minimum(5, 4, 2, 3, std::less<>()), 2);
+}
+
+#endif
+
+
+// ={=========================================================================
+
+/*
+
+19. Adding a range of values to a container
+
+Write a general-purpose function that can add any number of elements to the end
+of a container that has a method push_back(T&& value).
+
+*/
+
+
+// ={=========================================================================
+
+/*
+
+20. Container any, all, none
+
+Write a set of general-purpose functions that enable checking whether any, all,
+or none of the specified arguments are present in a given container. These
+functions should make it possible to write code as follows:
+
+std::vector<int> v{ 1, 2, 3, 4, 5, 6 };
+assert(contains_any(v, 0, 3, 30));
+
+std::array<int, 6> a{ { 1, 2, 3, 4, 5, 6 } };
+assert(contains_all(a, 1, 3, 5, 6));
+
+std::list<int> l{ 1, 2, 3, 4, 5, 6 };
+assert(!contains_none(l, 0, 6));
+
+*/
+
+
+// ={=========================================================================
+
+/*
+
+21. System handle wrapper
+
+Consider an operating system handle, such as a file handle. Write a wrapper that
+handles the acquisition and release of the handle, as well as other operations
+such as verifying the validity of the handle and moving handle ownership from
+one object to another.
+
+*/
+
+
+// ={=========================================================================
+
+/*
+
+22. Literals of various temperature scales
+
+Write a small library that enables expressing temperatures in the three most
+used scales, Celsius, Fahrenheit, and Kelvin, and converting between them. The
+library must enable you to write temperature literals in all these scales, such
+as 36.5_deg for Celsius, 97.7_f for Fahrenheit, and 309.65_K for Kelvin; perform
+operations with these values; and convert between them.
+
+*/
 
 
 // ={=========================================================================
