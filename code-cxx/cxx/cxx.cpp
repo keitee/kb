@@ -482,7 +482,7 @@ TEST(Ctor, CtorInitList)
 
 
 // ={=========================================================================
-// cxx-ctor-forms
+// cxx-ctor-init-forms
 
 // To sum, cxx-init-copy-form uses copy ctor which is counted as implicit
 // conversion. So it cannot use with explicit copy ctor and in cases more
@@ -540,6 +540,13 @@ TEST(Ctor, CtorInitForms)
   // copy
   {
     Foo foo1("use copy init");
+    Foo foo2 = foo1;
+    EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
+  }
+
+  // copy, brace init
+  {
+    Foo foo1{"use copy init"};
     Foo foo2 = foo1;
     EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
   }
@@ -667,6 +674,65 @@ TEST(Ctor, CtorInitFromExplicit)
   //   Foo foo2 = "use copy init";
   //   EXPECT_THAT(foo2.return_mesg(), "use copy init and copy ctor");
   // }
+}
+
+
+// ={=========================================================================
+// cxx-ctor-initialize-list
+
+namespace ctor_init_list
+{
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {} 
+
+      // mesg_ is updated only here
+      Foo(const string &mesg) : mesg_(mesg) 
+      {
+        os_ << mesg_ << " and converting ctor";
+      }
+
+      Foo(const Foo &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
+
+      Foo(std::initializer_list<std::string> values)
+      {
+        for (auto &e : values)
+          os_ << e << ", ";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+} // namespace
+
+TEST(Ctor, CtorInitFromList)
+{
+  using namespace ctor_init_list;
+
+  // copy, brace init
+  {
+
+    // when no Foo(std::initializer_list<std::string> values);
+    //
+    // cxx.cpp:719:35: error: no matching function for call to
+    // ‘ctor_init_list::Foo::Foo(<brace-enclosed initializer list>)’
+    //
+    //      Foo foo1{"one", "two", "three"};
+
+    Foo foo1{"one", "two", "three"};
+    EXPECT_THAT(foo1.return_mesg(), "one, two, three, ");
+  }
 }
 
 
@@ -1665,7 +1731,7 @@ TEST(CxxFeaturesTest, UseFunctionAdaptor)
 
 
 // ={=========================================================================
-// cxx-shared-ptr
+// cxx-smart-ptr cxx-sp
 
 // :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
 //   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
@@ -1751,23 +1817,25 @@ TEST(SharedPointer, UniqueAndMove)
 }
 
 
-unique_ptr<Foo> source()
+namespace cxx_sp_shared
 {
-  unique_ptr<Foo> ret(new Foo);
-  cout << "source: create up" << endl;
-  cout << "source: owns " << ret.get() << endl;
-  cout << "source: ends" << endl;
+  unique_ptr<Foo> source()
+  {
+    unique_ptr<Foo> ret(new Foo);
+    cout << "source: create up" << endl;
+    cout << "source: owns " << ret.get() << endl;
+    cout << "source: ends" << endl;
 
-  // *cxx-return-cxx-move*
-  return ret;
-}
+    // *cxx-return-cxx-move*
+    return ret;
+  }
 
-void sink(unique_ptr<Foo> p)
-{
-  cout << "sink: owns " << p.get() << endl;
-  cout << "sink: ends" << endl;
-}
-
+  void sink(unique_ptr<Foo> p)
+  {
+    cout << "sink: owns " << p.get() << endl;
+    cout << "sink: ends" << endl;
+  }
+} // namespace
 
 // [ RUN      ] CxxFeaturesTest.UseUniqueSinkSource
 // call source()
@@ -1797,6 +1865,271 @@ TEST(SharedPointer, UniqueSinkSource)
 }
 
 
+namespace cxx_sp_delete
+{
+  class ClassA
+  {
+    public:
+      ClassA(string mesg = {}) : mesg_(mesg) {}
+      
+      void print_mesg()
+      {
+        cout << "ClassA: " << mesg_ << endl;
+      }
+
+    private:
+      string mesg_;
+  };
+
+  class DebugDeleteClassA
+  {
+    public:
+      DebugDeleteClassA(ostream &os = cerr) : os_(os) {}
+
+      void operator() (ClassA* p)
+      {
+        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        delete p;
+      }
+
+    private:
+      // *cxx-reference-member*
+      ostream &os_;
+  };
+
+
+  class DebugDelete
+  {
+    public:
+      DebugDelete(ostream &os = cerr) : os_(os) {}
+
+      // *cxx-template-member*
+      template <typename T>
+      void operator() (T* p)
+      {
+        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        delete p;
+      }
+
+    private:
+      // *cxx-reference-member*
+      ostream &os_;
+  };
+
+  void delete_mesg(string *str)
+  {
+    cout << "deleting " << *str << endl;
+    delete str;
+  }
+
+} // namespace
+
+TEST(SharedPointer, Deleter)
+{
+  using namespace cxx_sp_delete;
+
+  {
+    unique_ptr<ClassA, DebugDeleteClassA> up(new ClassA());
+    up->print_mesg();
+  }
+
+  {
+    unique_ptr<ClassA, DebugDeleteClassA> up(new ClassA(), DebugDeleteClassA());
+    up->print_mesg();
+  }
+
+  {
+    unique_ptr<ClassA, DebugDelete> up(new ClassA(), DebugDelete());
+    up->print_mesg();
+  }
+
+  {
+    shared_ptr<string> sp1(new string("nico"), delete_mesg);
+    shared_ptr<string> sp2(new string("jutta"), delete_mesg);
+  }
+
+  {
+    // *cxx-lambda*
+    shared_ptr<string> sp1(new string("nico"), 
+        [] (string *str)
+        {
+          cout << "deleting " << *str << endl;
+          delete str;
+        });
+  }
+}
+
+// name: Jutta ,name: Jutta ,name: Nico ,name: Jutta ,name: Nico ,
+// name: Jutta ,name: Jutta ,name: Nicolai ,name: Jutta ,name: Nicolai ,
+// deleting Nicolai
+// deleting Jutta
+
+TEST(SharedPointer, DeleteTime)
+{
+  using namespace cxx_sp_delete;
+
+  shared_ptr<string> pnico(new string("nico"), delete_mesg);
+  shared_ptr<string> pjutta(new string("jutta"), delete_mesg);
+
+  // uppercase the first char
+  (*pnico)[0] = 'N';
+  pjutta->replace(0, 1, "J");
+
+  // put them in a container
+  vector<shared_ptr<string>> coll;
+  coll.push_back(pjutta);
+  coll.push_back(pjutta);
+  coll.push_back(pnico);
+  coll.push_back(pjutta);
+  coll.push_back(pnico);
+
+  for (auto e: coll)
+    cout << "name: " << *e << " ,";
+  cout << endl;
+
+  // overwrite name
+  *pnico = "Nicolai";
+
+  // print again to see changes
+  for (auto e: coll)
+    cout << "name: " << *e << " ,";
+  cout << endl;
+
+  // jutta's use count
+  EXPECT_THAT(coll[0].use_count(), 4);
+
+  pjutta = nullptr;
+
+  EXPECT_THAT(coll[0].use_count(), 3);
+
+  // pico's use count
+  EXPECT_THAT(coll[2].use_count(), 3);
+
+  coll.resize(2);
+
+  pnico = nullptr;
+
+  // WHY 0?
+  //
+  // *cxx-sp-shared-check-users* do not rely on use_count()
+  // use_count() may not be reliable since C++P 453 reads "may be a slow
+  // operation, intended primarily for debugging purpose"
+
+  EXPECT_THAT(pnico.use_count(), 0);
+  EXPECT_THAT(pjutta.use_count(), 0);
+}
+
+// Foo ctor(1)
+// Foo ctor(2)
+// Foo ctor(3)
+// Foo dtor(2)    // p2.reset() frees p2
+// -----------
+// -----------    // p3.reset() frees nothing and just change referrring object
+// Foo dtor(1)    // p3.reset() frees p1
+// -----------
+// end of main
+// Foo dtor(3)
+
+TEST(SharedPointer, DeleteReleaseReset)
+{
+  using namespace cxx_sp_shared;
+
+  unique_ptr<Foo> p1(new Foo(1));
+  unique_ptr<Foo> p2(new Foo(2));
+  unique_ptr<Foo> p3(new Foo(3));
+
+  p2.reset(p3.release());
+  cout << "-----------" << endl;
+
+  p3.reset(p1.release());
+  cout << "-----------" << endl;
+
+  p3.reset(p1.release());
+  cout << "-----------" << endl;
+
+  cout << "end of main" << endl;
+}
+
+
+namespace cxx_sp_use_count
+{
+  class Foo 
+  {
+    private:
+      int id;
+    public:
+      Foo(int val):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
+      ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+  };
+} // namespace
+
+// Again, shows use_count() is not reliable but does match when object is
+// deleted.
+//
+// Foo ctor(1)
+// p1.use_count: 2
+// p2.use_count: 2
+// p1.use_count: 0
+// p2.use_count: 1
+// p1.use_count: 0
+// p2.use_count: 1
+// p1.use_count: 0
+// p2.use_count: 1
+// -----------
+// p1.use_count: 0
+// p2.use_count: 1
+// Foo dtor(1)
+// p1.use_count: 0
+// p2.use_count: 0
+// p1.use_count: 0
+// p2.use_count: 0
+// p1.use_count: 0
+// p2.use_count: 0
+// end of main
+
+TEST(SharedPointer, UseCount)
+{
+  using namespace cxx_sp_use_count;
+
+  shared_ptr<Foo> p1(new Foo(1));
+  shared_ptr<Foo> p2(p1);
+
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  p1 = nullptr;
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  p1 = nullptr;
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  p1 = nullptr;
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  cout << "-----------" << endl;
+
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  p2 = nullptr;
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  p2 = nullptr;
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  p2 = nullptr;
+  cout << "p1.use_count: " << p1.use_count() << endl;
+  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  cout << "end of main" << endl;
+}
+
+
 // ={=========================================================================
 // cxx-range-for
 
@@ -1816,6 +2149,7 @@ TEST(SharedPointer, UniqueSinkSource)
 
 // ={=========================================================================
 // cxx-hash
+
 TEST(CxxFeaturesTest, UseHashOnString)
 {
   cout << "hash(one): " << string("xxx") << endl;
@@ -2793,6 +3127,101 @@ TEST(Template, Function)
   EXPECT_THAT(compare(coll2, coll1), 1);
 }
 
+
+namespace cxx_template 
+{
+  // Q: strcmp returns +5/-5 than 1/-1
+
+  int internal_strcmp(const char *p1, const char *p2)
+  {
+    while (true)
+    {
+      unsigned int c1 = *p1;
+      unsigned int c2 = *p2;
+
+      if (c1 == c2) break;
+      if (c1 != c2) return c1 < c2 ? -1 : 1;
+    }
+
+    return 0;
+  }
+
+  template <unsigned N, unsigned M>
+    int compare(const char (&p1) [N], const char (&p2) [M])
+    {
+      return internal_strcmp(p1, p2);
+    }
+
+  template <>
+    int compare(const char* const &p1, const char *const &p2)
+    {
+      return internal_strcmp(p1, p2);
+    }
+
+  template <typename T, int size>
+    class FileBuf
+    {
+      public:
+        int get_size()
+        {
+          return sizeof(array_)/sizeof(T); 
+        }
+
+      private:
+        T array_[size];
+    };
+
+  template<int MIN, int MAX>
+  struct RangedIntPolicy
+  {
+    typedef int value_type;
+    value_type value_ = MIN;
+    // value_type value_{MIN};
+
+    int assign(value_type value)
+    {
+      if ((value < MIN) || (value > MAX))
+        return -1;
+
+      value_ = value;
+      return 0;
+    }
+  };
+
+} // namespace
+
+TEST(Template, Specialisation)
+{
+  using namespace cxx_template;
+
+  {
+    EXPECT_THAT(compare("mon", "hi"), 1);
+    EXPECT_THAT(compare("hi", "mon"), -1);
+
+    // cxx.cpp:2829:33: error: call of overloaded ‘compare(const char [3], const
+    // char [3])’ is ambiguous
+
+    // EXPECT_THAT(compare("hi", "hi"), 0);
+
+    const char *p1 = "hi";
+    const char *p2 = "mon";
+    EXPECT_THAT(compare(p1, p2), -1);
+  }
+
+  {
+    FileBuf<int, 20> fbuf;
+    EXPECT_THAT(fbuf.get_size(), 20);
+  }
+
+  {
+    RangedIntPolicy<10, 100> rint;
+    EXPECT_THAT(rint.assign(9), -1);
+    EXPECT_THAT(rint.assign(101), -1);
+    EXPECT_THAT(rint.assign(30), 0);
+  }
+}
+
+
 namespace cxx_template_default
 {
   // `This shows how function-object is useful` *cpp-functor*
@@ -2866,6 +3295,152 @@ TEST(Template, MemberTemplate)
   {
     unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
     unique_ptr<string, DebugDelete> ps(new string, DebugDelete());
+  }
+}
+
+
+// ={=========================================================================
+// cxx-const
+
+TEST(Const, NoViaConstReference)
+{
+  int i{};
+  int &ri = i;
+  const int &rc = i;  // non-const to const is fine
+
+  ri = 0;
+
+  // cxx.cpp:3312:6: error: assignment of read-only reference ‘rc’
+  // rc = 0;
+  (void) rc;
+}
+
+TEST(Const, NoConstToNonConst)
+{
+  {
+    const int ci{100};
+
+    // const to non-const
+    // cxx-const-error cxx-error: invalid initialization of reference of type
+    // ‘int&’ from expression of type ‘const int’
+
+    // int &ri = ci;
+    (void) ci;
+
+    // int &ri = (int &)ci;   // no error since used cast
+  }
+
+  {
+    int nci{100};
+    const int *pci = &nci;
+    EXPECT_THAT(*pci, 100);
+
+    // cxx-error: invalid conversion from ‘const int*’ to ‘int*’ [-fpermissive]
+    // int *pi = pci;
+  }
+}
+
+namespace const_member_function
+{
+  class Screen
+  {
+    public:
+      Screen() : mesg_("screen") {}
+
+      string get_message() const { return mesg_; }
+      string get_message() { return mesg_; }
+
+    private:
+      string mesg_;
+  };
+
+  // *cxx-const-error-const* when there's no const version of get_message()
+  //
+  // cxx.cpp: In function ‘std::string const_member_function::print_screen(const
+  // const_member_function::Screen&)’:
+  //
+  // cxx.cpp:3359:26: error: passing ‘const const_member_function::Screen’ as
+  // ‘this’ argument of ‘std::string
+  // const_member_function::Screen::get_message()’ discards qualifiers
+  // [-fpermissive]
+  // 
+  //      return s.get_message();
+
+  string print_screen(const Screen &s)
+  {
+    return s.get_message();
+  }
+
+  template <class T, size_t R, size_t C>
+    class array2d
+    {
+      std::vector<T> arr;
+
+      public:
+      array2d() :arr(R*C) {}
+      explicit array2d(std::initializer_list<T> l):arr(l) {}
+
+      // *cxx-const-error-const* when there's no const version
+      //
+      // when use constexpr function
+      //  
+      //  constexpr T& at(size_t const r, size_t const c)
+      //  {
+      //     return arr.at(r*C + c);
+      //  }
+      //
+      // cxx.cpp: In instantiation of ‘constexpr T& const_member_function::array2d<T, R, C>::at(size_t, size_t) const [with T = int; long unsigned int R = 2ul; long unsigned int C = 3ul; size_t = long unsigned int]’:
+      // cxx.cpp:3420:21:   required from ‘void const_member_function::print_array2d(const const_member_function::array2d<T, R, C>&) [with T = int; long unsigned int R = 2ul; long unsigned int C = 3ul]’
+      // cxx.cpp:3439:20:   required from here
+      // cxx.cpp:3403:31: error: invalid initialization of reference of type ‘int&’ from expression of type ‘const value_type {aka const int}’
+      //           return arr.at(r*C + c);
+
+      // non-const version
+      //
+      // *cxx-const-error-const* when there's no const version
+      //
+      // cxx.cpp:3409:21: error: passing ‘const const_member_function::array2d<int, 2ul, 3ul>’ as ‘this’ argument of ‘T& const_member_function::array2d<T, R, C>::at(size_t, size_t) [with T = int; long unsigned int R = 2ul; long unsigned int C = 3ul; size_t = long unsigned int]’ discards qualifiers [-fpermissive]
+      //            std::cout << arr.at(i, j) << ' ';
+      //
+      // T& at(size_t const r, size_t const c)
+      // {
+      //    return arr.at(r*C + c);
+      // }
+
+      // const version covers both const and non-const use
+      constexpr T const & at(size_t const r, size_t const c) const 
+      {
+        return arr.at(r*C + c);
+      }
+    };
+
+  template <class T, size_t R, size_t C>
+    void print_array2d(array2d<T, R, C> const & arr)
+    {
+      for (int i = 0; i < R; ++i)
+      {
+        for (int j = 0; j < C; ++j)
+        {
+          std::cout << arr.at(i, j) << ' ';
+        }
+
+        std::cout << std::endl;
+      }
+    }
+
+} // namespace
+
+TEST(Const, ForMemberFunction)
+{
+  using namespace const_member_function;
+  {
+    Screen screen;
+    print_screen(screen);
+  }
+
+  {
+    array2d<int, 2, 3> a;
+    print_array2d(a);
   }
 }
 

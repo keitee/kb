@@ -390,6 +390,24 @@ TEST(Iterator, Distance)
 }
 
 
+TEST(Iterator, Array)
+{
+  int vals[] = {33, 67, -4, 13, 5, 2};
+
+  std::vector<int> coll(std::begin(vals), std::end(vals));
+  decltype(coll) out;
+
+  // These functions are also overloaded, so you can use STL containers or all
+  // classes that provide begin() and end() as member functions:
+  // 
+  // std::begin(v)  // yields v.begin()
+  // std::end(v)    // yields v.end()
+
+  std::copy(std::begin(coll), std::end(coll), back_inserter(out));
+  EXPECT_THAT(out, ElementsAre(33, 67, -4, 13, 5, 2));
+}
+
+
 // ={=========================================================================
 // cxx-vector
 
@@ -475,20 +493,33 @@ class VectorCtorsTest
 
 TEST(Vector, Ctors)
 {
-  vector<int> icoll1(5);
-  // PRINT_ELEMENTS(icoll1, "default init: ");
-  ASSERT_THAT(icoll1.size(), Eq(5));
-  EXPECT_THAT(icoll1, ElementsAre(0,0,0,0,0));
+  {
+    vector<int> coll(5);
+    // PRINT_ELEMENTS(icoll1, "default init: ");
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(0,0,0,0,0));
+  }
 
-  vector<int> icoll2(5, 10);
-  // PRINT_ELEMENTS(icoll2, "value   init: ");
-  ASSERT_THAT(icoll2.size(), Eq(5));
-  EXPECT_THAT(icoll2, ElementsAre(10,10,10,10,10));
+  {
+    vector<int> coll(5, 10);
+    // PRINT_ELEMENTS(icoll2, "value   init: ");
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(10,10,10,10,10));
+  }
 
-  VectorCtorsTest icoll3(10, 100);
-  // icoll3.print();
-  ASSERT_THAT(icoll3.size(), Eq(10));
+  {
+    VectorCtorsTest coll(10, 100);
+    // icoll3.print();
+    ASSERT_THAT(coll.size(), Eq(10));
+  }
+
+  // initializer_list
+  {
+    vector<int> coll{1,2,3,4,5,6};
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
 }
+
 
 void StlVectorFillVector(vector<int> &coll)
 {
@@ -526,7 +557,7 @@ void GetVectorArg(const vector<int> &coll)
   ASSERT_THAT(coll_.size(), 6);
 }
 
-TEST(StlVector, CopyAndMoveAssign)
+TEST(Vector, CopyAndMoveAssign)
 {
   {
     vector<int> coll1{1,2,3,4,5,6};
@@ -905,23 +936,65 @@ TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
 }
 
 
+TEST(Vector, AsCArray)
+{
+  {
+    vector<char> coll;
+    coll.resize(41);
+
+    // stl.cpp:943:32: error: invalid conversion from
+    // ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type {aka char}’
+    // to ‘char*’ [-fpermissive]
+    //
+    //    strcpy(coll[0], "hello world");
+
+    strcpy(&coll[0], "hello world");
+    printf("%s\n", &coll[0]);
+  }
+
+  {
+    vector<char> coll;
+    coll.resize(41);
+    strcpy(coll.data(), "hello world");
+    printf("%s\n", coll.data());
+  }
+}
+
+
 // ={=========================================================================
 // cxx-array
 
-TEST(StlArray, ArrayCtors)
-{
-  array<int, 8> coll = {11,22,33};
-  coll.back() = 999;
-  coll[coll.size()-2] = 42;
+// 7.2.2 Array Operations
+// 
+// Create, Copy, and Destroy
+// 
+// Table 7.4 lists the constructors and destructors for arrays. Because class
+// array<> is an aggregate, these constructors are only implicitly defined. You can
+// create arrays with and without elements for initialization. The default
+// constructor default initializes the elements, which means that the value of
+// fundamental types is undefined.
 
-  EXPECT_THAT(coll, ElementsAre(11,22,33,0,0,0,42,999));
+TEST(Array, ArrayCtors)
+{
+  {
+    array<int, 8> coll = {11,22,33};
+    coll.back() = 999;
+    coll[coll.size()-2] = 42;
+
+    EXPECT_THAT(coll, ElementsAre(11,22,33,0,0,0,42,999));
+  }
+
+  {
+    array<int, 3> coll{1,2,3};
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3));
+  }
 }
 
 // initialized: t.h.i.s. .i.s. .a.n. .c.h.a.r. .a.r.r.a.y.....................(41)
 // strcpyed   : u.s.e. .t.h.e. .a.d.d.r.e.s.s. .o.f. .f.i.r.s.t..................(41)
 // strcpyed   : u.s.e. .d.a.t.a. .m.e.m.b.e.r..o.f. .f.i.r.s.t..................(41)
 
-TEST(StlArray, ArrayAccess)
+TEST(Array, ArrayAccess)
 {
   // *TN* 
   // array size is 41 and the initializer is less than this. does array handle
@@ -945,6 +1018,28 @@ TEST(StlArray, ArrayAccess)
   PRINT_ELEMENTS(coll, "strcpyed   : " );
 }
 
+TEST(Array, AsCArray)
+{
+  {
+    array<char, 41> coll;
+
+    // stl.cpp:943:32: error: invalid conversion from
+    // ‘__gnu_cxx::__alloc_traits<std::allocator<char> >::value_type {aka char}’
+    // to ‘char*’ [-fpermissive]
+    //
+    //    strcpy(coll[0], "hello world");
+
+    strcpy(&coll[0], "hello world");
+    printf("%s\n", &coll[0]);
+  }
+
+  {
+    array<char, 41> coll;
+
+    strcpy(coll.data(), "hello world");
+    printf("%s\n", coll.data());
+  }
+}
 
 
 // ={=========================================================================

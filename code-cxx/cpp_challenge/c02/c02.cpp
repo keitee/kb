@@ -764,12 +764,93 @@ filling, and swapping. It should be possible to move objects of this type.
 // unit17
 namespace u17_2018_11_20
 {
-  template<typename T, typename Row, typename Col>
-  calss array2d
+  template<typename T, int Row, int Col>
+  class array2d
   {
-    explicit array2d(T type, Row row, Col col)
+    public:
+      explicit array2d(std::initializer_list<T> values)
+      {
+        int row{}, col{};
+
+        for (auto e: values)
+        {
+          // cxx-modulus
+          if (col && ((col % Col) == 0)) 
+          {
+            ++row; col = 0;
+          }
+
+          array_[row][col] = e;
+
+          cout << "row: " << row << ", col: " << col << " = " <<
+            array_[row][col] << endl;
+
+          ++col;
+        }
+      }
+
+      void print_array()
+      {
+        int row{}, col{};
+
+        for (row = 0; row < Row; ++row)
+          for (col = 0; col < Col; ++col)
+            cout << array_[row][col] << ", ";
+        cout << endl;
+      }
+
+    private:
+        T array_[Row][Col];
+        T *current_;
   };
 } // namespace
+
+
+namespace u17_2018_11_23
+{
+  template<typename T, int Row, int Col>
+    class array2d
+    {
+      typedef T value_type;
+      typedef value_type *iterator;
+      typedef value_type const* const_iterator;
+
+      public:
+      explicit array2d(std::initializer_list<T> values) : array_(values)
+      {}
+
+      // iterators
+
+      iterator begin() { return array_.data(); }
+      iterator end() { return array_.data() + array_.size(); }
+
+      const_iterator begin() const { return array_.data(); }
+      const_iterator end() const { return array_.data() + array_.size(); }
+
+      private:
+      std::vector<T> array_;
+    };
+} // namespace
+
+TEST(U17, 20181123)
+{
+  using namespace u17_2018_11_23;
+
+  {
+    array2d<int, 2, 3> coll{1,2,3,4,5,6};
+    ostringstream os;
+
+    for (auto e : coll)
+      os << e << ", ";
+    os << endl;
+
+    std::copy(std::begin(coll), std::end(coll),
+        ostream_iterator<int>(os, ", "));
+    os << endl;
+
+    EXPECT_THAT(os.str(), Eq("1, 2, 3, 4, 5, 6, \n1, 2, 3, 4, 5, 6, \n"));
+  }
+}
 
 
 // ={=========================================================================
