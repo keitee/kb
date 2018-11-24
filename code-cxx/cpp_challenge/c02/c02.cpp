@@ -1,7 +1,8 @@
 #include "gmock/gmock.h"
 
 #include <iostream>
-#include <functional>
+#include <list>
+#include <deque>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -1132,6 +1133,80 @@ of a container that has a method push_back(T&& value).
 
 */
 
+namespace u19_2018_11_23
+{
+  template <typename T>
+  void add_elements(T &coll, initializer_list<typename T::value_type> values)
+  {
+    for (auto &e : values)
+      coll.push_back(e);
+  }
+} // namespace
+
+TEST(U19, 20181123)
+{
+  using namespace u19_2018_11_23;
+
+  {
+    std::vector<int> coll;
+    add_elements(coll, {5, 4, 2, 3});
+    EXPECT_THAT(coll, ElementsAre(5, 4, 2, 3));
+  }
+
+  {
+    std::list<int> coll;
+    add_elements(coll, {5, 4, 2, 3});
+    EXPECT_THAT(coll, ElementsAre(5, 4, 2, 3));
+  }
+
+  {
+    std::deque<int> coll;
+    add_elements(coll, {5, 4, 2, 3});
+    EXPECT_THAT(coll, ElementsAre(5, 4, 2, 3));
+  }
+}
+
+
+#if 0
+
+Writing functions with any number of arguments is possible using variadic
+function templates. The function should have the container as the first
+parameter, followed by a variable number of arguments representing the values to
+be added at the back of the container. However, writing such a function template
+can be significantly simplified using fold expressions. Such an implementation
+is shown here:
+
+fold expression needs:
+
+C++17 features are available as part of "mainline" GCC in the trunk of GCCs
+repository and in GCC 5 and later.
+
+namespace u19_text
+{
+  template<typename C, typename... Args>
+    void push_back(C& c, Args&&... args)
+    {
+      (c.push_back(args), ...);
+    }
+}
+
+TEST(U19, Text)
+{
+  using namespace u19_text;
+
+  std::vector<int> v;
+  push_back(v, 1, 2, 3, 4);
+  std::copy(std::begin(v), std::end(v), 
+      std::ostream_iterator<int>(std::cout, " "));
+
+  std::list<int> l;
+  push_back(l, 1, 2, 3, 4);
+  std::copy(std::begin(l), std::end(l), 
+      std::ostream_iterator<int>(std::cout, " "));
+}
+
+#endif
+
 
 // ={=========================================================================
 
@@ -1153,6 +1228,100 @@ std::list<int> l{ 1, 2, 3, 4, 5, 6 };
 assert(!contains_none(l, 0, 6));
 
 */
+
+namespace u20_2018_11_24
+{
+  template <typename C>
+    bool contains_any(C coll, initializer_list<typename C::value_type> values)
+    {
+      for (const auto e : values)
+        if (coll.end() != find(coll.begin(), coll.end(), e))
+          return true;
+
+      return false;
+    }
+
+  template <typename C>
+    bool contains_all(C coll, initializer_list<typename C::value_type> values)
+    {
+      for (const auto e : values)
+        if (coll.end() == find(coll.begin(), coll.end(), e))
+          return false;
+
+      return true;
+    }
+
+  template <typename C>
+    bool contains_none(C coll, initializer_list<typename C::value_type> values)
+    {
+      for (const auto e : values)
+        if (coll.end() != find(coll.begin(), coll.end(), e))
+          return false;
+
+      return true;
+    }
+} // namespace
+
+TEST(U20, 20081124)
+{
+  using namespace u20_2018_11_24;
+
+  {
+    std::vector<int> coll{ 1, 2, 3, 4, 5, 6 };
+    EXPECT_TRUE(contains_any(coll, {0, 3, 30}));
+  }
+
+  {
+    std::vector<int> coll{ 1, 2, 3, 4, 5, 6 };
+    EXPECT_TRUE(contains_all(coll, {1, 3, 5, 6}));
+  }
+
+  {
+    std::vector<int> coll{ 1, 2, 3, 4, 5, 6 };
+    EXPECT_TRUE(!contains_none(coll, {1, 0, 6}));
+  }
+}
+
+#if 0
+
+The requirement to be able to check the presence or absence of a variable number
+of arguments suggests that we should write variadic function templates. However,
+   these functions require a helper function, a general-purpose one that checks
+   whether an element is found in a container or not and returns a bool to
+   indicate success or failure. Since all these functions, which we could call
+   contains_all, contains_any, and contains_none, do is apply logical operators
+   on the results returned by the helper function, we would use fold expressions
+   to simplify the code. Short circuit evaluation is enabled after the expansion
+   of the fold expression, which means we are evaluating only the elements that
+   lead to a definitive result. So if we are looking for the presence of all 1,
+   2, and 3, and 2 is missing, the function will return after looking up value 2
+   in the container without checking value 3:
+
+template<class C, class T>
+bool contains(C const & c, T const & value)
+{
+   return std::end(c) != std::find(std::begin(c), std::end(c), value);
+}
+
+template<class C, class... T>
+bool contains_any(C const & c, T &&... value)
+{
+   return (... || contains(c, value));
+}
+
+template<class C, class... T>
+bool contains_all(C const & c, T &&... value)
+{
+   return (... && contains(c, value));
+}
+
+template<class C, class... T>
+bool contains_none(C const & c, T &&... value)
+{
+   return !contains_any(c, std::forward<T>(value)...);
+}
+
+#endif
 
 
 // ={=========================================================================

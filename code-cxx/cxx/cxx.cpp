@@ -3298,6 +3298,50 @@ TEST(Template, MemberTemplate)
   }
 }
 
+namespace cxx_template_return_type
+{
+  template <typename T>
+    typename std::iterator_traits<T>::value_type &
+    return_element_01(T first, T last)
+    {
+      (void)last;
+      return *first;
+    }
+
+  template <typename T>
+    auto return_element_02(T first, T last) -> typename std::iterator_traits<T>::reference
+    {
+      (void)last;
+      return *first;
+    }
+
+  template <typename T>
+    auto return_element_03(T first, T last) -> decltype(*first)
+    {
+      (void)last;
+      return *first;
+    }
+} // namespace
+
+
+// : error: ‘first’ was not declared in this scope
+// template <typename Iterator>
+// decltype(*first) return_element_04(Iterator first, Iterator last)
+// {
+//   return *first;
+// }
+
+TEST(Template, TypeTraitsIterator)
+{
+  using namespace cxx_template_return_type;
+
+  vector<int> coll{3,4,5,6};
+
+  EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
+  EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
+  EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
+}
+
 
 // ={=========================================================================
 // cxx-const

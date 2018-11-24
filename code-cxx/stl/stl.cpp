@@ -2486,6 +2486,159 @@ TEST(AlgoSearch, SearchFirstSubrange_UseOwn)
   }
 }
 
+// algo-search algo-binary-search
+
+TEST(AlgoSearch, AlgoBinarySearch)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8,9};
+
+  EXPECT_TRUE(binary_search(coll.begin(), coll.end(), 5));
+  EXPECT_FALSE(binary_search(coll.begin(), coll.end(), 42));
+}
+
+
+// algo-search algo-include
+
+TEST(AlgoSearch, AlgoInclude)
+{ 
+  {
+    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+    list<int> subcoll{3,4,5};
+
+    // first sub found
+    auto pos = search(coll.begin(), coll.end(),
+        subcoll.begin(), subcoll.end());
+    if (pos != coll.end()) {
+      cout << "search() found" << endl;
+      EXPECT_THAT(distance(coll.begin(), pos), 2);
+    }
+  }
+
+  {
+    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+    list<int> subcoll{3,4,5};
+
+    // first sub found
+    // if do not sort before includes() then aborted when built with DEBUG.
+    sort(coll.begin(), coll.end());
+
+    auto pos = includes(coll.begin(), coll.end(),
+        subcoll.begin(), subcoll.end());
+    EXPECT_TRUE(pos);
+  }
+}
+
+
+// algo-search algo-include
+// Searching First or Last Possible Position
+
+TEST(AlgoSearch, AlgoUpperLowerBound)
+{
+  {
+    vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an
+    // element with value value could get inserted without breaking the sorting
+    // of the range [beg,end).
+
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
+
+    // upper_bound() returns the position of the first element that has a value
+    // greater than value. This is the last position where an element with value
+    // value could get inserted without breaking the sorting of the range
+    // [beg,end).
+
+    auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
+
+    //  0  1  2  3  4  5  6  7  8  9 10 11 12
+    // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+    //                          ^^^^^^^
+
+    EXPECT_THAT(distance(coll.cbegin(), first), 8);
+    EXPECT_THAT(distance(coll.cbegin(), last), 10);
+  }
+
+  {
+    vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an
+    // element with value value could get inserted without breaking the sorting
+    // of the range [beg,end).
+
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 1);
+    EXPECT_THAT(*first, 2);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-algo-find-if
+
+namespace algo_find
+{
+  bool is_prime(int number)
+  {
+    number = abs(number);
+
+    // 0 and 1 are not prime numbers
+    if (number == 0 || number == 1)
+      return false;
+
+    int divisor;
+
+    // until find divisor which leaves 0 remainder, that is when divisor is 1 or
+    // when other divisor
+    for (divisor = number/2; number % divisor != 0; --divisor)
+      ;
+
+    // if divisor is 1 then no ther is found.
+    return divisor == 1;
+  }
+} // namespace
+
+// is used to search for the 'first' element of the given range for which the
+// passed unary predicate yields true. If it does not find any element that
+// matches the predicate, the algorithm returns the end of the range (its
+// 'second' argument).
+
+TEST(AlgoFind, FindIf)
+{
+  using namespace algo_find;
+
+  list<int> coll;
+
+  for (int i = 24; i <= 30; ++i)
+    coll.push_back(i);
+
+  auto pos = find_if(coll.begin(), coll.end(), is_prime);
+  EXPECT_THAT(*pos, 29);
+}
+
+TEST(AlgoFind, Find)
+{
+  vector<int> coll{2, 5, 4, 1, 6, 3};
+
+  // *algo-min-element*
+  // if there are duplicates, return the first
+  auto minpos = min_element(coll.begin(), coll.end());
+  EXPECT_THAT(*minpos, 1);
+
+  auto maxpos = max_element(coll.begin(), coll.end());
+  EXPECT_THAT(*maxpos, 6);
+
+  // *algo-sort*
+  sort(coll.begin(), coll.end());
+
+  auto found = find(coll.begin(), coll.end(), 3);
+
+  // *algo-reverse*
+  // reverse the range
+  reverse(found, coll.end());
+  EXPECT_THAT(coll, ElementsAre(1, 2, 6, 5, 4, 3));
+}
+
 
 // ={=========================================================================
 // cxx-algo-equal
@@ -3167,96 +3320,6 @@ TEST(AlgoSort, NthSort)
 
 
 // ={=========================================================================
-// algo-search algo-binary-search
-
-TEST(AlgoSearch, AlgoBinarySearch)
-{
-  vector<int> coll{1,2,3,4,5,6,7,8,9};
-
-  EXPECT_TRUE(binary_search(coll.begin(), coll.end(), 5));
-  EXPECT_FALSE(binary_search(coll.begin(), coll.end(), 42));
-}
-
-
-// ={=========================================================================
-// algo-search algo-include
-
-TEST(AlgoSearch, AlgoInclude)
-{ 
-  {
-    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
-    list<int> subcoll{3,4,5};
-
-    // first sub found
-    auto pos = search(coll.begin(), coll.end(),
-        subcoll.begin(), subcoll.end());
-    if (pos != coll.end()) {
-      cout << "search() found" << endl;
-      EXPECT_THAT(distance(coll.begin(), pos), 2);
-    }
-  }
-
-  {
-    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
-    list<int> subcoll{3,4,5};
-
-    // first sub found
-    // if do not sort before includes() then aborted when built with DEBUG.
-    sort(coll.begin(), coll.end());
-
-    auto pos = includes(coll.begin(), coll.end(),
-        subcoll.begin(), subcoll.end());
-    EXPECT_TRUE(pos);
-  }
-}
-
-
-// ={=========================================================================
-// algo-search algo-include
-// Searching First or Last Possible Position
-
-TEST(AlgoSearch, AlgoUpperLowerBound)
-{
-  {
-    vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
-
-    // lower_bound() returns the position of the first element that has a value
-    // equal to or greater than value. This is the first position where an
-    // element with value value could get inserted without breaking the sorting
-    // of the range [beg,end).
-
-    auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
-
-    // upper_bound() returns the position of the first element that has a value
-    // greater than value. This is the last position where an element with value
-    // value could get inserted without breaking the sorting of the range
-    // [beg,end).
-
-    auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
-
-    //  0  1  2  3  4  5  6  7  8  9 10 11 12
-    // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
-    //                          ^^^^^^^
-
-    EXPECT_THAT(distance(coll.cbegin(), first), 8);
-    EXPECT_THAT(distance(coll.cbegin(), last), 10);
-  }
-
-  {
-    vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
-
-    // lower_bound() returns the position of the first element that has a value
-    // equal to or greater than value. This is the first position where an
-    // element with value value could get inserted without breaking the sorting
-    // of the range [beg,end).
-
-    auto first = lower_bound(coll.cbegin(), coll.cend(), 1);
-    EXPECT_THAT(*first, 2);
-  }
-}
-
-
-// ={=========================================================================
 // algo-fill
 
 TEST(AlgoFill, Fill)
@@ -3418,46 +3481,6 @@ TEST(AlgoRotate, ReverseRotate)
     coll.end()
   );
   EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
-}
-
-
-// ={=========================================================================
-// cxx-template
-
-template <typename Iterator>
-typename std::iterator_traits<Iterator>::value_type &return_element_01(Iterator first, Iterator last)
-{
-  (void)last;
-  return *first;
-}
-
-template <typename Iterator>
-auto return_element_02(Iterator first, Iterator last) -> typename std::iterator_traits<Iterator>::reference
-{
-  (void)last;
-  return *first;
-}
-
-template <typename Iterator>
-auto return_element_03(Iterator first, Iterator last) -> decltype(*first)
-{
-  (void)last;
-  return *first;
-}
-
-// : error: ‘first’ was not declared in this scope
-// template <typename Iterator>
-// decltype(*first) return_element_04(Iterator first, Iterator last)
-// {
-//   return *first;
-// }
-
-TEST(Template, TypeTraitsIterator)
-{
-  vector<int> coll{3,4,5,6};
-  EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
-  EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
-  EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
 }
 
 

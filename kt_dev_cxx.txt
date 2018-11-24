@@ -18960,6 +18960,8 @@ note that:
 2 % 3 == 2
 3 % 3 == 0
 
+X % 1 == 0
+
 
 // F: 60 > score
 // D: 70 >
@@ -32678,7 +32680,7 @@ Return &fcn( It beg, It end );
 Sure, can have more arguments but more template argument imposes a burden on
 the user. How to solve?
 
-<cxx-trailing-return-type> *cxx-c++11*
+<cxx-trailing-return-type> *cxx-cxx11*
 May use decltype(*beg) to get the type but beg don't exist until the parameter
 list has been seen. The trailing return type allows us define the return type
 after the parameter list is seen.
@@ -32694,26 +32696,32 @@ This say fcn's return type is the same as the type returned by dereferencing
 its beg parameter and which is a reference to the type.
 
 <ex>
-template <typename Iterator>
-typename std::iterator_traits<Iterator>::value_type &return_element_01(Iterator first, Iterator last)
-{
-  (void)last;
-  return *first;
-}
 
-template <typename Iterator>
-auto return_element_02(Iterator first, Iterator last) -> typename std::iterator_traits<Iterator>::reference
+namespace cxx_template_return_type
 {
-  (void)last;
-  return *first;
-}
+  template <typename T>
+    typename std::iterator_traits<T>::value_type &
+    return_element_01(T first, T last)
+    {
+      (void)last;
+      return *first;
+    }
 
-template <typename Iterator>
-auto return_element_03(Iterator first, Iterator last) -> decltype(*first)
-{
-  (void)last;
-  return *first;
-}
+  template <typename T>
+    auto return_element_02(T first, T last) -> typename std::iterator_traits<T>::reference
+    {
+      (void)last;
+      return *first;
+    }
+
+  template <typename T>
+    auto return_element_03(T first, T last) -> decltype(*first)
+    {
+      (void)last;
+      return *first;
+    }
+} // namespace
+
 
 // : error: ‘first’ was not declared in this scope
 // template <typename Iterator>
@@ -32724,7 +32732,10 @@ auto return_element_03(Iterator first, Iterator last) -> decltype(*first)
 
 TEST(Template, TypeTraitsIterator)
 {
+  using namespace cxx_template_return_type;
+
   vector<int> coll{3,4,5,6};
+
   EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
   EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
   EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
@@ -32760,7 +32771,10 @@ Returns a copy of an element's value.
 *cpp-q* : Still use C++11 feature, trailing return. How to do that before C++11? 
 
 
-{cxx-type-traits} CLR 5.4
+{cxx-type-traits} 
+
+CXXSLR 5.4
+
 Almost everything in the C++ standard library is template based. To support
 the programming of templates, sometimes called metaprogramming, template
 utilities are provided to help both programmers and library implementers.
@@ -35924,11 +35938,12 @@ std::vector<int> v1;
 std::vector<int> v2 = std::move(v1);
 
 
-<push_back>
+<coll-push_back>
 provided for `all sequence containers,` where appending an element is possible
 and reasonably fast.
 
 coll.push_back(i);
+
 
 <cxx-size-cxx-empty>
 size() is provided for any container class except forward_list because it
@@ -41856,61 +41871,45 @@ std::sort(begin(v), end(v), std::greater<>);
 
 
 <ex> *algo-find-if*
-#include <iostream>
-#include <list>
-#include <string>
-#include <algorithm>
 
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+namespace algo_find
 {
-  std::cout << optstr;
+  bool is_prime(int number)
+  {
+    number = abs(number);
 
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
+    // 0 and 1 are not prime numbers
+    if (number == 0 || number == 1)
+      return false;
 
-  std::cout << std::endl;
-}
+    int divisor;
 
-bool isPrime(int number)
+    // until find divisor which leaves 0 remainder, that is when divisor is 1 or
+    // when other divisor
+    for (divisor = number/2; number % divisor != 0; --divisor)
+      ;
+
+    // if divisor is 1 then no ther is found.
+    return divisor == 1;
+  }
+} // namespace
+
+// is used to search for the 'first' element of the given range for which the
+// passed unary predicate yields true. If it does not find any element that
+// matches the predicate, the algorithm returns the end of the range (its
+// 'second' argument).
+
+TEST(AlgoFind, FindIf)
 {
-  number = abs(number);
-  
-  // 0 and 1 are no prime numbers
-  if( number == 0 || number == 1 )
-    return false;
+  using namespace algo_find;
 
-  int divisor;
-
-  // find divisor that divides without a remainder
-  for( divisor = number/2; number % divisor != 0; --divisor )
-    ;
-
-  // if no divisor greater than 1 is found, it is a prime number
-  return divisor == 1;
-}
-
-int main()
-{
   list<int> coll;
 
-  for( int i = 24; i <= 30; i++ )
+  for (int i = 24; i <= 30; ++i)
     coll.push_back(i);
 
-  PRINT_ELEMENTS(coll, "initialized  : ");
-
-  // is used to search for the 'first' element of the given range for which the
-  // passed unary predicate yields true. If it does not find any element that
-  // matches the predicate, the algorithm returns the end of the range (its
-  // 'second' argument).
-
-  auto pos = find_if( coll.cbegin(), coll.cend(), isPrime );
-  if( pos != coll.end() )
-    cout << *pos << " is first prime number found" << endl;
-  else
-    cout << "no prime number found" << endl;
+  auto pos = find_if(coll.begin(), coll.end(), is_prime);
+  EXPECT_THAT(*pos, 29);
 }
 
 
@@ -44586,48 +44585,33 @@ Second, some combinations of data structures and algorithms might not work.
 Even worse, a combination of a container type and an algorithm might be
 possible but not useful (for example, it may lead to bad performance).
 
-<key>
 Thus, it is important to learn the 'concepts' and the 'pitfalls' of the STL to
 benefit from it without abusing it.
 
 <ex> algo-max-element algo-min-element algo-find algo-sort 
-#include <iostream>
-#include <vector>
-#include <algorithm>
 
-using namespace std;
-
-int main()
+TEST(AlgoFind, Find)
 {
-  vector<int> coll{2,5,4,1,6,3};
+  vector<int> coll{2, 5, 4, 1, 6, 3};
 
-  // find and print min and max. 
-  // If there is more than one minimum element, the algorithm returns the first.
-  auto minpos = min_element( coll.cbegin(), coll.cend() );
-  cout << "min: " << *minpos << endl;
+  // *algo-min-element*
+  // if there are duplicates, return the first
+  auto minpos = min_element(coll.begin(), coll.end());
+  EXPECT_THAT(*minpos, 1);
 
-  auto maxpos = max_element( coll.cbegin(), coll.cend() );
-  cout << "max: " << *maxpos << endl;
+  auto maxpos = max_element(coll.begin(), coll.end());
+  EXPECT_THAT(*maxpos, 6);
 
-  // sort
-  sort( coll.begin(), coll.end() );
+  // *algo-sort*
+  sort(coll.begin(), coll.end());
 
-  // find the first with value 3
-  // no cbegin since used in reverse() later. otherwise, compile error in reverse
-  auto pos3 = find( coll.begin(), coll.end(), 3 );
+  auto found = find(coll.begin(), coll.end(), 3);
 
-  // *algo-reverse* reverse the order of the found and all following elements
-  reverse( pos3, coll.end() );
-
-  for( const auto &elem : coll )
-    cout << elem << ' ';
-  
-  cout << endl;
+  // *algo-reverse*
+  // reverse the range
+  reverse(found, coll.end());
+  EXPECT_THAT(coll, ElementsAre(1, 2, 6, 5, 4, 3));
 }
-
-min: 1
-max: 6
-1 2 6 5 4 3 
 
 
 {algorithm-category}
