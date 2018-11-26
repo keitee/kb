@@ -1337,6 +1337,93 @@ one object to another.
 
 */
 
+namespace u21_2018_11_24
+{
+  using HANDLE = void *;
+
+  struct null_handle_traits
+  {
+    using pointer = HANDLE;
+
+    static pointer invalid() noexcept
+    { return nullptr; }
+
+    static void close(pointer handle) noexcept
+    { CloseHandle(handle); }
+  };
+
+  template <typename T>
+    class unique_handle
+    {
+      private:
+        using pointer = typename T::pointer;
+        pointer handle_;
+
+      public:
+        // no copy support
+        unique_handle(const unique_handle &) = delete;
+        unique_handle &operator=(const unique_handle &) = delete;
+
+        explicit unique_handle(pointer handle = T::invalid()) noexcept
+          : handle_(handle) {}
+
+        // move ctor
+        unique_handle(unique_handle &&rhs) noexcept
+          : handle_(rhs.release()) {}
+
+        // move assign
+        unique_handle &operator=(unique_handle &&rhs) noexcept
+        {
+          // self assign check
+          if (this != &rhs)
+            reset(rhs.release());
+
+          return *this;
+        }
+
+        ~unique_handle() noexcept
+        { T::close(handle_); }
+
+        // bool conversion
+        explicit operator bool() const noexcept
+        { return handle_ != T::invalid(); }
+
+        pointer get() const noexcept
+        { return handle_; }
+
+        pointer release() noexcept
+        {
+          auto handle = handle_;
+          handle_ = T::invalid();
+          return handle;
+        }
+
+        bool reset(pointer handle = T::invalid()) noexcept
+        {
+          if (handle_ != handle)
+          {
+            T::close(handle_);
+            handle_ = handle;
+          }
+
+          // call bool conversion
+          return static_cast<bool>(*this);
+        }
+
+        void swap(unique_handle<T> &rhs) noexcept
+        { std::swap(handle_, rhs.handle_); }
+    };
+
+  template <typename T>
+    void swap(unique_handle<T> &lhs, unique_handle<T> &rhs) noexcept
+    {
+      lhs.swap(rhs);
+    }
+
+  using null_handle = unique_handle<null_handle_traits>;
+
+} // namespace
+
 
 // ={=========================================================================
 

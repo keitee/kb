@@ -1733,6 +1733,65 @@ TEST(CxxFeaturesTest, UseFunctionAdaptor)
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp
 
+// shared_ptr<int> clone(int p) {
+//   return new int(p);
+// }
+
+TEST(SharedPointerShared, Ctors)
+{
+  {
+    shared_ptr<string> pNico(new string("nico"));           // OK
+  }
+  {
+    shared_ptr<string> pNico{new string("nico")};           // OK
+  }
+  {
+    shared_ptr<string> pNico = make_shared<string>("nico"); // OK
+  }
+
+  // // NO since requires copy init but shared ptr's ctor are explicit 
+  // {
+  //   shared_ptr<string> pNico = new string("nico");
+  // }
+
+  // // NO
+  // {
+  //   shared_ptr<int> p (new int(42));
+  //   // since ctor is explicit
+  //   // cxx.cpp:1739:5: error: no match for ‘operator=’ (operand types are ‘std::shared_ptr<int>’ and ‘int*’)
+  //   p = new int(1024);                      
+  // }
+
+  // points to '9999999999'
+  shared_ptr<string> p4 = make_shared<string>(10, '9');
+
+  // points to empty vector<string>
+  auto p6 = make_shared<vector<string>>();
+}
+
+TEST(SharedPointerShared, Copy)
+{
+  auto p = make_shared<int>(42);
+
+  // p.use++
+  auto q(p);
+
+  // all prints 2
+  EXPECT_THAT(p.use_count(), 2);
+  EXPECT_THAT(q.use_count(), 2);
+
+  auto r = make_shared<int>(52);
+
+  // q.use++ and r.use--. destroies a object which r pointed. 
+  r = q;
+
+  // all prints 3
+  EXPECT_THAT(p.use_count(), 3);
+  EXPECT_THAT(q.use_count(), 3);
+  EXPECT_THAT(p.use_count(), 3);
+}
+
+
 // :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
 //   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
 //   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
@@ -1788,7 +1847,7 @@ namespace cxx_sp_shared
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SharedPointer, UniqueAndMove)
+TEST(SharedPointerUnique, UniqueAndMove)
 {
   using namespace cxx_sp_shared;
 
@@ -1850,7 +1909,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(SharedPointer, UniqueSinkSource)
+TEST(SharedPointerUnique, UniqueSinkSource)
 {
   using namespace cxx_sp_shared;
 
@@ -2030,7 +2089,7 @@ TEST(SharedPointer, DeleteTime)
 // end of main
 // Foo dtor(3)
 
-TEST(SharedPointer, DeleteReleaseReset)
+TEST(SharedPointerUnique, DeleteReleaseReset)
 {
   using namespace cxx_sp_shared;
 

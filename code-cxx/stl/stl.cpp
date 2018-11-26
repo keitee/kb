@@ -1763,7 +1763,7 @@ TEST(ForwadList, BookExample)
 
 
 // ={=========================================================================
-// stl-swap
+// algo-swap
 //
 // 9.3.4 iter_swap()
 //
@@ -1776,7 +1776,7 @@ TEST(ForwadList, BookExample)
 // assignable.
 //
 
-TEST(StlSwap, Swaps)
+TEST(AlgoSwap, IterSwap)
 {
   {
     vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -1811,29 +1811,12 @@ TEST(StlSwap, Swaps)
     vector<int>::iterator one, two;
     one = coll.begin();
     two = one+1;
-    swap(*one, *two);
+    swap(*one, *two);   // calls std::swap()
     EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
 
     one = coll.begin();
     two = one+8;
     swap(*one, *two);
-    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
-  }
-
-  // use operator*()
-  {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-    vector<int>::iterator one, two;
-    one = coll.begin();
-    two = one+1;
-    std::swap(*one, *two);
-    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
-
-    one = coll.begin();
-    two = one+8;
-    std::swap(*one, *two);
     EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
   }
 }
