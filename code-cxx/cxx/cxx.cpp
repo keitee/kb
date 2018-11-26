@@ -2189,6 +2189,135 @@ TEST(SharedPointer, UseCount)
 }
 
 
+// From CPP code challenge, 21. System handle wrapper
+//
+// template <typename>
+// class unique_ptr<T>
+// {
+//  no copy support
+//  move support
+//  operator bool();
+//  T* get();
+//  T* release();
+//  void reset(T*);
+//  void swap(uniqie_ptr<T> &);
+// }
+//
+// + non-member swap
+// + self-assign
+//
+// note that this version uses T which provides pointer and close() in it.
+// changes it to delete().
+
+namespace cxx_sp_unique_own_version
+{
+  struct pointer_int_trait
+  {
+    using pointer = int *;
+
+    // *cxx-static*
+    // without static, cause build error:
+    //
+    // cxx.cpp:2243:24: error: cannot call member function 
+    // ‘void cxx_sp_unique_own_version::pointer_int_trait::deleter(cxx_sp_unique_own_version::pointer_int_trait::pointer)’ 
+    // without object
+    //
+    //           T::deleter(p_);
+
+    static void deleter(pointer p)
+    {
+      delete p;
+    }
+  };
+
+  template <typename T>
+    class unique_own
+    {
+      using pointer = typename T::pointer;
+
+      public:
+        // no copy support
+        
+        // not a build error but don't need to do this as *cxx-scope*
+        // unique_own(const unique_own<T> &) = delete;
+        // unique_own<T> &operator=(const unique_own<T> &) = delete;
+
+        unique_own(const unique_own &) = delete;
+        unique_own &operator=(const unique_own &) = delete;
+
+        // ctor & dtor
+        explicit unique_own(typename T::pointer p = nullptr)
+          : p_(p) {}
+
+        // move support
+        // handle moved-from by using release() and moved-to by using reset().
+
+        unique_own(unique_own &&other) noexcept
+          : p_(other.release())
+        {
+          // don't need to do since it's ctor and p_ is not assigned.
+          // if (p_)
+          //   T::deleter(p_);
+          //
+          // p_ = other.p_;
+        }
+
+        unique_own &operator=(unique_own &&other) noexcept
+        {
+          // if (p_)
+          //   T::deleter(p_);
+          //
+          // p_ = other.p_;
+
+          if (this != other)
+            reset(other.release());
+
+          return *this;
+        }
+
+        ~unique_own() noexcept
+        {
+          if (p_)
+          {
+            // this is not `typename`
+            T::deleter(p_);
+          }
+        }
+
+        pointer release() noexcept
+        {
+          auto p = p_;
+          p_ = nullptr;
+          return p;
+        }
+
+        // free resource and set p
+        void reset(pointer p = nullptr) noexcept
+        {
+          // check self-assign
+          if (p_ != p)
+          {
+            T::deleter(p_);
+            p_ = p;
+          }
+        }
+
+      private:
+        pointer p_;
+    };
+
+  using unique_own_int = unique_own<pointer_int_trait>;
+
+} // namespace
+
+TEST(SharedPointerUnique, OwnVersion)
+{
+  using namespace cxx_sp_unique_own_version;
+
+  unique_own_int usp{new int(100)};
+}
+
+
 // ={=========================================================================
 // cxx-range-for
 
@@ -3544,6 +3673,69 @@ TEST(Const, ForMemberFunction)
   {
     array2d<int, 2, 3> a;
     print_array2d(a);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-except
+
+namespace cxx_except 
+{
+  class my_exception : public exception
+  {
+    virtual const char *what() const throw()
+    {
+      return "my exception happened";
+    }
+  };
+
+  my_exception myex;
+
+} // namespace
+
+
+TEST(Exception, OwnException)
+{
+  using namespace cxx_except;
+
+  try
+  {
+    throw myex;
+  }
+  catch (exception &e)
+  {
+    EXPECT_THAT(e.what(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (exception &e)
+  {
+    ostringstream os;
+    os << "my exception happened";
+    EXPECT_THAT(os.str(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (...)
+  {
+    ostringstream os;
+    os << "my exception happened";
+    EXPECT_THAT(os.str(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (...)
+  {
   }
 }
 

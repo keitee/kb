@@ -1341,6 +1341,52 @@ namespace u21_2018_11_24
 {
   using HANDLE = void *;
 
+#if __GNUC__ && __x86_64__
+#define LONG_PTR long long
+#else
+#define LONG_PTR long
+#endif
+
+// win32 specifics
+#define DWORD     unsigned long
+#define GENERIC_READ           0x80000000L
+#define GENERIC_WRITE          0x40000000L
+#define CREATE_NEW             1
+#define CREATE_ALWAYS          2
+#define OPEN_EXISTING          3
+#define OPEN_ALWAYS            4
+#define TRUNCATE_EXISTING      5
+#define FILE_SHARE_READ        1
+#define FILE_ATTRIBUTE_NORMAL  0x00000080
+
+#define INVALID_HANDLE  ((HANDLE)(LONG_PTR)-1)
+
+  int CloseHandle(HANDLE hObject) 
+  {
+    (void) hObject;
+    cout << "Handle is closed" << endl;
+    return 0;
+  }
+
+  int ReadFile(HANDLE,
+      void*,
+      DWORD,
+      DWORD *,
+      void *)
+  {return 0;}
+
+  HANDLE CreateFile(char const *,
+      DWORD,
+      DWORD,
+      void *,
+      DWORD,
+      DWORD,
+      HANDLE)
+  {
+    cout << "Handle is created" << endl;
+    return INVALID_HANDLE;
+  }
+
   struct null_handle_traits
   {
     using pointer = HANDLE;
@@ -1352,66 +1398,84 @@ namespace u21_2018_11_24
     { CloseHandle(handle); }
   };
 
+  struct invalid_handle_traits
+  {
+    using pointer = HANDLE;
+
+    // added to avoid error
+    explicit invalid_handle_traits(HANDLE handle) : handle_(handle) {}
+
+    static pointer invalid() noexcept
+    { return INVALID_HANDLE; }
+
+    static void close(pointer handle) noexcept
+    { CloseHandle(handle); }
+
+    pointer handle_;
+  };
+
   template <typename T>
     class unique_handle
     {
-      private:
-        using pointer = typename T::pointer;
-        pointer handle_;
+      using pointer = typename T::pointer;
 
       public:
-        // no copy support
-        unique_handle(const unique_handle &) = delete;
-        unique_handle &operator=(const unique_handle &) = delete;
+      // no copy support
+      unique_handle(const unique_handle &) = delete;
+      unique_handle &operator=(const unique_handle &) = delete;
 
-        explicit unique_handle(pointer handle = T::invalid()) noexcept
-          : handle_(handle) {}
+      explicit unique_handle(pointer handle = T::invalid()) noexcept
+        : handle_(handle) {}
 
-        // move ctor
-        unique_handle(unique_handle &&rhs) noexcept
-          : handle_(rhs.release()) {}
+      // move ctor
+      unique_handle(unique_handle &&rhs) noexcept
+        : handle_(rhs.release()) {}
 
-        // move assign
-        unique_handle &operator=(unique_handle &&rhs) noexcept
+      // move assign
+      unique_handle &operator=(unique_handle &&rhs) noexcept
+      {
+        // self assign check
+        if (this != &rhs)
+          reset(rhs.release());
+
+        return *this;
+      }
+
+      ~unique_handle() noexcept
+      { T::close(handle_); }
+
+      // bool conversion
+      explicit operator bool() const noexcept
+      { return handle_ != T::invalid(); }
+
+      pointer get() const noexcept
+      { return handle_; }
+
+      pointer release() noexcept
+      {
+        auto handle = handle_;
+        handle_ = T::invalid();
+        return handle;
+      }
+
+      bool reset(pointer handle = T::invalid()) noexcept
+      {
+        if (handle_ != handle)
         {
-          // self assign check
-          if (this != &rhs)
-            reset(rhs.release());
-
-          return *this;
+          T::close(handle_);
+          handle_ = handle;
         }
 
-        ~unique_handle() noexcept
-        { T::close(handle_); }
+        // call bool conversion
+        return static_cast<bool>(*this);
+      }
 
-        // bool conversion
-        explicit operator bool() const noexcept
-        { return handle_ != T::invalid(); }
+      void swap(unique_handle<T> &rhs) noexcept
+      { std::swap(handle_, rhs.handle_); }
 
-        pointer get() const noexcept
-        { return handle_; }
+      private:
+      pointer handle_;
 
-        pointer release() noexcept
-        {
-          auto handle = handle_;
-          handle_ = T::invalid();
-          return handle;
-        }
-
-        bool reset(pointer handle = T::invalid()) noexcept
-        {
-          if (handle_ != handle)
-          {
-            T::close(handle_);
-            handle_ = handle;
-          }
-
-          // call bool conversion
-          return static_cast<bool>(*this);
-        }
-
-        void swap(unique_handle<T> &rhs) noexcept
-        { std::swap(handle_, rhs.handle_); }
     };
 
   template <typename T>
@@ -1420,9 +1484,123 @@ namespace u21_2018_11_24
       lhs.swap(rhs);
     }
 
-  using null_handle = unique_handle<null_handle_traits>;
+  // template <typename T>
+  //   bool operator!(const unique_handle<T> &lhs, const unique_handle<T> &rhs) noexcept
+  //   {
+  //     return lhs.get() != rhs.get();
+  //   }
+
+  using invalid_handle = unique_handle<invalid_handle_traits>;
+
+  void function_that_throws()
+  {
+    cout << "function throws" << endl;
+    throw std::runtime_error("an error has occurred");
+  }
+
+  // void bad_handle_example()
+  // {
+  //   bool condition1 = false;
+  //   bool condition2 = true;
+  //
+  //   HANDLE handle = CreateFile("sample.txt",
+  //       GENERIC_READ,
+  //       FILE_SHARE_READ,
+  //       nullptr,
+  //       OPEN_EXISTING,
+  //       FILE_ATTRIBUTE_NORMAL,
+  //       nullptr);
+  //   if (handle == INVALID_HANDLE)
+  //     return;
+  //
+  //   if (condition1)
+  //   {
+  //     CloseHandle(handle);
+  //     return;
+  //   }
+  //
+  //   std::vector<char> buffer(1024);
+  //   unsigned long bytesRead = 0;
+  //   ReadFile(handle, buffer.data(), buffer.size(), &bytesRead, nullptr);
+  //
+  //   if (condition2)
+  //   {
+  //     // forgot to close handle, lose handle
+  //     return;
+  //   }
+  //
+  //   // lose handle
+  //   function_that_throws();
+  //
+  //   CloseHandle(handle);
+  // }
+
+
+  // handle should be closed no matter what exit path there are
+
+  void good_handle_example()
+  {
+    bool condition1 = false;
+    bool condition2 = true;
+
+    // should not 
+    // invalid_handle_traits handle{CreateFile("sample.txt",
+    // since we use using typedef
+
+    invalid_handle handle{CreateFile("sample.txt",
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr)};
+
+    function_that_throws();
+
+    if (!handle) return;
+
+    if (condition1) return;
+
+    std::vector<char> buffer(1024);
+    unsigned long bytesRead = 0;
+    ReadFile(handle.get(),
+        buffer.data(),
+        buffer.size(),
+        &bytesRead,
+        nullptr);
+
+    if (condition2) return;
+  }
 
 } // namespace
+
+
+TEST(U21, 20081124)
+{
+  using namespace u21_2018_11_24;
+
+  // try
+  // {
+  //   bad_handle_example();
+  // }
+  // catch (...)
+  // {
+  //   ostringstream os;
+  //   os << "bad handle example happened";
+  //   EXPECT_THAT(os.str(), "bad handle example happened");
+  // }
+
+  try
+  {
+    good_handle_example();
+  }
+  catch (...)
+  {
+    ostringstream os;
+    os << "good handle example happened";
+    EXPECT_THAT(os.str(), "good handle example happened");
+  }
+}
 
 
 // ={=========================================================================

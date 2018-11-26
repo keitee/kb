@@ -17554,7 +17554,7 @@ int main()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-function-matching
+*kt_dev_cxx_0000* cxx-function-matching cxx-overload
 
 Known as *cxx-overload-resolution* and function matchins means the same.
 
@@ -17597,7 +17597,7 @@ the set of overloaded functions and should be the same name and visible.
 Include any function-template instantiation for which template argument
 deduction succeeds.
 
-// <cxx-overload-condition>
+// *cxx-overload-condition* *cxx-scope*
 // Member functions differing only in their constness can be overloaded.
 // Conditons for overloading
 //
@@ -20771,6 +20771,13 @@ bool QueueFull(Queue* queue)
       return val < 0 ? -val : val;
     }
   };
+
+
+note that operator bool() also covers !(not) operator as well which is member
+of user_class. there is no such thing like "bool operator!() {}"
+
+    if (!user_class) return;
+
 
 The classes 'rarely' provide conversion operator but one important exception
 is convertion to bool.
@@ -23985,19 +23992,16 @@ and handling parts of a program.
 
 MEC++09: What's different to the approach of returning error code? 
 
-  * Exception 'cannot' be 'ignored' and if do, it is terminated. 
+  o Exception `cannot be ignored` and if do, it is terminated. 
   
-  * From MEC++12. The execution return to call site for func call but never
+  o From MEC++12. The execution return to call site for func call but never
     for exception when think that throw is a function call.
 
 Exception handling involves:
 
-  * throw expression
-  * try blocks and catch clauses or exception handlers
-  * exception classes
-
-
-{form}
+  o throw expression
+  o try blocks and catch clauses or exception handlers
+  o exception classes
 
 try {
   program-statements
@@ -24008,7 +24012,7 @@ try {
 }
 
 
-{standard-exception}
+{cxx-except-standard}
 Exception classes are defined in four headers.
 
   * exception header
@@ -24089,32 +24093,65 @@ Exception classes are defined in four headers.
 
 
 <ex>
-#include <iostream>
-#include <exception>
 
-using namespace std;
-
-class myexception: public exception
+namespace cxx_except 
 {
-  virtual const char* what() const throw()
+  class my_exception : public exception
   {
-    return "My exception happened";
-  }
-} myex;
+    virtual const char *what() const throw()
+    {
+      return "my exception happened";
+    }
+  };
 
-int main () {
+  my_exception myex;
+
+} // namespace
+
+
+TEST(Exception, OwnException)
+{
+  using namespace cxx_except;
+
   try
   {
-    throw myex;      // or throw myexception();
+    throw myex;
   }
-  catch (exception& e)
+  catch (exception &e)
   {
-    cout << e.what() << '\n';
+    EXPECT_THAT(e.what(), "my exception happened");
   }
-  return 0;
-}
 
-My exception happened
+  try
+  {
+    throw myex;
+  }
+  catch (exception &e)
+  {
+    ostringstream os;
+    os << "my exception happened";
+    EXPECT_THAT(os.str(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (...)
+  {
+    ostringstream os;
+    os << "my exception happened";
+    EXPECT_THAT(os.str(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (...)
+  {
+  }
+}
 
 
 All exceptions thrown by components of the C++ Standard library derived from
@@ -24134,7 +24171,7 @@ logic_error          error related to the internal logic of the program
 runtime_error        error detected during runtime
 
 
-{stack-unwinding}
+{cxx-except-stack-unwinding}
 A `throw` acts like a return; statements following a throw are not executed.
 If no 'matching' catch found, current/calling function is exited until found
 one in the call tree.
@@ -49517,6 +49554,15 @@ focus of this class.
         {
           reset();
           return *this;
+        }
+
+      /// Release ownership of any stored pointer.
+      `pointer`
+        release() noexcept
+        {
+          pointer __p = get();
+          std::get<0>(_M_t) = pointer();
+          return __p;
         }
 
       /** @brief Replace the stored pointer.
