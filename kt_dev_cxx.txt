@@ -20760,7 +20760,7 @@ bool QueueFull(Queue* queue)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-bool-conversion-cxx-conversion-to-bool
 
-// *cxx-conversion-op* *cxx-overload-call*
+// *cxx-conversion-op* *cxx-overload-call* *operator-bool*
 // operator T() const;     where T represents `type`
 
   `explicit` operator bool() const
@@ -48855,10 +48855,234 @@ such as `weak_ptr`, `bad_weak_ptr`, and `enable_shared_from_this` are provided.
 shared_ptr<T> plist;
 shared_ptr<list<int>> plist;
 
+<ex>
+
+MEC++29.
+
+Once an object is allocated by calling new, it's crucial to keep track of who
+owns that object because the owner - and only the owner - is responsible for
+calling delete on it. But ownership can be transferred from object to object as
+a program runs by passing pointers as parameters, for example, so keeping track
+of an object's ownership is hard work. Classes like auto_ptr can help with this
+task, but experience has shown that most programs still fail to get it right. 
+
+Reference counting eliminates the burden of tracking object ownership, because
+when an object employs reference counting, it owns itself. When nobody is using
+it any longer, it destroys itself automatically. Thus, reference counting
+constitutes a simple form of garbage collection.
+
+The bookkeeping is "who is allowed to delete what". 
+
+// problem
+
+class String {
+  public:
+    String( const char *value="" );
+    String& operator=( const String& rhs );
+    ...
+  private:
+      char* data;
+};
+
+// handles self-assign but not exception safe
+String& String::operator=( const String& rhs )
+{
+  if( this == &rhs ) return *this;
+
+  delete[] data;
+  data = new char[ strlen(rhs.dat) +1 ];
+  strcpy( data, rhs.data );
+  return *this;
+}
+
+With this implementation, use:
+
+String a, b, c, d;
+a = b = c = d = "Hello";
+
+This means:
+
+a -> "Hello"
+b -> "Hello"
+c -> "Hello"
+d -> "Hello"
+
+How can we make those share one copy of Hello?
+
 
 <cxx-sp-code>
 
+// bits/shared_ptr_base.h @759
+
+  template<_Lock_policy _Lp>  // @442
+    class __shared_count
+    {
+      public:
+        constexpr __shared_count() noexcept : _M_pi(0)
+        { }
+
+        template<typename _Ptr>
+          explicit
+          __shared_count(_Ptr __p) : _M_pi(0)
+          {
+            __try
+            {
+              _M_pi = new _Sp_counted_ptr<_Ptr, _Lp>(__p);
+            }
+            __catch(...)
+            {
+              delete __p;
+              __throw_exception_again;
+            }
+          }
+
+        ~__shared_count() noexcept
+        {
+          if (_M_pi != 0)
+            _M_pi->_M_release();
+        }
+
+        __shared_count(const __shared_count& __r) noexcept
+          : _M_pi(__r._M_pi)
+          {
+            if (_M_pi != 0)
+              _M_pi->_M_add_ref_copy();
+          }
+
+        __shared_count&
+          operator=(const __shared_count& __r) noexcept
+          {
+            _Sp_counted_base<_Lp>* __tmp = __r._M_pi;
+            if (__tmp != _M_pi)
+            {
+              if (__tmp != 0)
+                __tmp->_M_add_ref_copy();
+              if (_M_pi != 0)
+                _M_pi->_M_release();
+              _M_pi = __tmp;
+            }
+            return *this;
+          }
+
+        void
+          _M_swap(__shared_count& __r) noexcept
+          {
+            _Sp_counted_base<_Lp>* __tmp = __r._M_pi;
+            __r._M_pi = _M_pi;
+            _M_pi = __tmp;
+          }
+
+        long
+          _M_get_use_count() const noexcept
+          { return _M_pi != 0 ? _M_pi->_M_get_use_count() : 0; }
+
+        bool
+          _M_unique() const noexcept
+          { return this->_M_get_use_count() == 1; }
+
+        // Friend function injected into enclosing namespace and found by ADL
+        friend inline bool
+          operator==(const __shared_count& __a, const __shared_count& __b) noexcept
+          { return __a._M_pi == __b._M_pi; }
+
+      private:
+        _Sp_counted_base<_Lp>*  _M_pi;
+    };
+
+  template<typename _Tp, _Lock_policy _Lp>
+    class __shared_ptr
+    {
+      public:
+        typedef _Tp   element_type;
+
+        constexpr __shared_ptr() noexcept
+          : _M_ptr(0), _M_refcount()
+          { }
+
+        template<typename _Tp1>
+          explicit __shared_ptr(_Tp1* __p)
+          : _M_ptr(__p), _M_refcount(__p)
+          {
+            __glibcxx_function_requires(_ConvertibleConcept<_Tp1*, _Tp*>)
+              static_assert( sizeof(_Tp1) > 0, "incomplete type" );
+            __enable_shared_from_this_helper(_M_refcount, __p, __p);
+          }
+
+        __shared_ptr(const __shared_ptr&) noexcept = default;
+        __shared_ptr& operator=(const __shared_ptr&) noexcept = default;
+        ~__shared_ptr() = default;
+
+        template<typename _Tp1>
+          __shared_ptr&
+          operator=(const __shared_ptr<_Tp1, _Lp>& __r) noexcept
+          {
+            _M_ptr = __r._M_ptr;
+            _M_refcount = __r._M_refcount; // __shared_count::op= doesn't throw
+            return *this;
+          }
+
+        void
+          reset() noexcept
+          { __shared_ptr().swap(*this); }
+
+        template<typename _Tp1>
+          void
+          reset(_Tp1* __p) // _Tp1 must be complete.
+          {
+            // Catch self-reset errors.
+            _GLIBCXX_DEBUG_ASSERT(__p == 0 || __p != _M_ptr);
+            __shared_ptr(__p).swap(*this);
+          }
+
+        // Allow class instantiation when _Tp is [cv-qual] void.
+        typename std::add_lvalue_reference<_Tp>::type
+          operator*() const noexcept
+          {
+            _GLIBCXX_DEBUG_ASSERT(_M_ptr != 0);
+            return *_M_ptr;
+          }
+
+        _Tp*
+          operator->() const noexcept
+          {
+            _GLIBCXX_DEBUG_ASSERT(_M_ptr != 0);
+            return _M_ptr;
+          }
+
+        _Tp*
+          get() const noexcept
+          { return _M_ptr; }
+
+        explicit operator bool() const // never throws
+        { return _M_ptr == 0 ? false : true; }
+
+        bool
+          unique() const noexcept
+          { return _M_refcount._M_unique(); }
+
+        long
+          use_count() const noexcept
+          { return _M_refcount._M_get_use_count(); }
+
+        void
+          swap(__shared_ptr<_Tp, _Lp>& __other) noexcept
+          {
+            std::swap(_M_ptr, __other._M_ptr);
+            _M_refcount._M_swap(__other._M_refcount);
+          }
+
+        _Tp*                  _M_ptr;         // Contained pointer.
+        __shared_count<_Lp>   _M_refcount;    // Reference counter.
+    };
+
+
 /usr/include/c++/4.9/bits/shared_ptr.h
+
+namespace std {
+
+  // note: 
+  // no other operators so use operators in bits/shared_ptr_base.h
+  // no member data, no dtor
 
   /**
    *  @brief  A smart pointer with reference-counted copy semantics.
@@ -48869,6 +49093,44 @@ shared_ptr<list<int>> plist;
   template<typename _Tp>
     class shared_ptr : public __shared_ptr<_Tp>
     {
+
+    public:
+      /**
+       *  @brief  Construct an empty %shared_ptr.
+       *  @post   use_count()==0 && get()==0
+       */
+      constexpr shared_ptr() noexcept
+        : __shared_ptr<_Tp>() { }
+
+      shared_ptr(const shared_ptr&) noexcept = default;
+
+      /**
+       *  @brief  Construct a %shared_ptr that owns the pointer @a __p.
+       *  @param  __p  A pointer that is convertible to element_type*.
+       *  @post   use_count() == 1 && get() == __p
+       *  @throw  std::bad_alloc, in which case @c delete @a __p is called.
+       */
+      template<typename _Tp1>
+        explicit shared_ptr(_Tp1* __p)
+        : __shared_ptr<_Tp>(__p) { }
+
+      /**
+       *  @brief  Construct an empty %shared_ptr.
+       *  @param  __p  A null pointer constant.
+       *  @post   use_count() == 0 && get() == nullptr
+       */
+      constexpr shared_ptr(nullptr_t __p) noexcept
+        : __shared_ptr<_Tp>(__p) { }
+
+      shared_ptr& operator=(const shared_ptr&) noexcept = default;
+
+      template<typename _Tp1>
+        shared_ptr&
+        operator=(const shared_ptr<_Tp1>& __r) noexcept
+        {
+          this->__shared_ptr<_Tp>::operator=(__r);
+          return *this;
+        }
 
       /**
        *  @brief  Construct a %shared_ptr that owns the pointer @a __p
@@ -48887,6 +49149,23 @@ shared_ptr<list<int>> plist;
         shared_ptr(_Tp1* __p, _Deleter __d)
           : __shared_ptr<_Tp>(__p, __d) { }
     };
+
+  /**
+   *  @brief  Create an object that is owned by a shared_ptr.
+   *  @param  __args  Arguments for the @a _Tp object's constructor.
+   *  @return A shared_ptr that owns the newly created object.
+   *  @throw  std::bad_alloc, or an exception thrown from the
+   *          constructor of @a _Tp.
+   */
+  template<typename _Tp, typename... _Args>
+    inline shared_ptr<_Tp>
+    make_shared(_Args&&... __args)
+    {
+      typedef typename std::remove_const<_Tp>::type _Tp_nc;
+      return std::allocate_shared<_Tp>(std::allocator<_Tp_nc>(),
+              std::forward<_Args>(__args)...);
+    }
+}
 
 
 {cxx-sp-shared-operations}
@@ -49580,7 +49859,7 @@ focus of this class.
             get_deleter()(__p);
         }
 
-      // *cxx-conversion-to-bool*
+      // *cxx-conversion-to-bool* *operator-bool*
       /// Return @c true if the stored pointer is not null.
       explicit operator bool() const noexcept
       { return get() == pointer() ? false : true; }
@@ -49640,7 +49919,7 @@ TEST(SharedPointer, UniqueDoNotAllowCopy)
 A unique_ptr does not have to own an object, so it can be empty.
 
 *cxx-conversion-to-bool*
-You can check whether a unique_ptr owns an object by calling operator bool():
+You can check whether a unique_ptr owns an object by calling *operator-bool*
 
 // if up is not empty
 if (up) {
@@ -49649,6 +49928,14 @@ if (up) {
 
 if (up != nullptr)        // if up is not empty
 if (up.get() != nullptr)  // if up is not empty
+
+TEST(SharedPointerUnique, OperatorBool)
+{
+  unique_ptr<int> up{new int(100)};
+
+  EXPECT_TRUE(up);
+  EXPECT_THAT(*up, 100);
+}
 
 
 {cxx-sp-unique-transfer-ownership}
@@ -51618,675 +51905,408 @@ dtor on :0x9fdf008
 
 
 ={============================================================================
-*kt_dev_stl_103* sp-shared-implement
+*kt_dev_cxx_0000* cxx-sp-own
 
-MEC++29.
+// From CPP code challenge, 21. System handle wrapper
+//
+// template <typename>
+// class unique_ptr<T>
+// {
+//  no copy support
+//  move support
+//  operator bool();
+//  T* get();
+//  T* release();
+//  void reset(T*);
+//  void swap(uniqie_ptr<T> &);
+// }
+//
+// + non-member swap
+// + self-assign
+//
+// note that this version uses T which provides pointer and close() in it.
+// changes it to delete().
 
-Once an object is allocated by calling new, it's crucial to keep track of who
-owns that object because the owner - and only the owner - is responsible for
-calling delete on it. But ownership can be transferred from object to object as
-a program runs by passing pointers as parameters, for example, so keeping track
-of an object's ownership is hard work. Classes like auto_ptr can help with this
-task, but experience has shown that most programs still fail to get it right. 
-
-Reference counting eliminates the burden of tracking object ownership, because
-when an object employs reference counting, it owns itself. When nobody is using
-it any longer, it destroys itself automatically. Thus, reference counting
-constitutes a simple form of garbage collection.
-
-The bookkeeping is "who is allowed to delete what". 
-
-
-<problem>
-
-class String {
-  public:
-    String( const char *value="" );
-    String& operator=( const String& rhs );
-    ...
-  private:
-      char* data;
-};
-
-// handles self-assign but not exception safe
-String& String::operator=( const String& rhs )
+namespace cxx_sp_unique_own_version
 {
-  if( this == &rhs ) return *this;
-
-  delete[] data;
-  data = new char[ strlen(rhs.dat) +1 ];
-  strcpy( data, rhs.data );
-  return *this;
-}
-
-With this implementation, use:
-
-String a, b, c, d;
-a = b = c = d = "Hello";
-
-This means:
-
-a -> "Hello"
-b -> "Hello"
-c -> "Hello"
-d -> "Hello"
-
-How can we make those share one copy of Hello?
-
-
-<approach>
-Need one reference count per string 'value', not one reference count per string
-object. That implies a coupling between values and reference counts, so we'll
-create a class to store reference counts and the values they track; StringValue.
-Since this is only to help implement String, nest it inside in private and as a
-struct to give full access to String members but nothing else.
-
-class String {
-  public:
-    String( const char *initValue = "" );
-    String( const String& rhs );
-
-    String& operator=( const String& rhs );
-    ...
-  private:
-      struct StringValue {
-        size_t refCount;
-        char* data;
-        StringValue( const char* initValue );
-        ~StringValue();
-      };
-
-      StringValue* value;
-};
-
-// StringValue implementation and default value of refCount
-String::StringValue::StringValue( const char* initValue ) : refCount(1)
-{
-  data = new char[ strlen(initValue) +1 ];
-  strcpy( data, initValue );
-}
-
-String::StringValue::~StringValue()
-{
-  delete [] data;
-}
-
-
-<implementation>
-
-// String s("Hello");   // s -> 1 -> "Hello"
-
-String::String( const char* initValue ) 
-  : value( 'new' StringValue( initValue )) {}
-
-But cannot avoid duplication:
-
-String s1("Hello");
-String s2("Hello");
-
-s1 -> 1 -> "Hello"
-s2 -> 1 -> "Hello"
-
-The solution is to create new one only when it is unique string and leave it as
-exercise. Does it need for shared pointer?
-
-
-// String S1(S2);
-
-String::String( const String& rhs ) : value( rhs.value )
-{
-  ++value->refCount;
-}
-
-String::~String()
-{
-  if( --value->refCount == 0 ) delete value;
-}
-
-// S1 = S2; reference count of S1 is decreased by 1 and S2 is increased by 1
-
-String& String::operator=( const String& rhs )
-{
-  if( value == rhs.value ) return *this;
-
-  if( --value->refCount == 0 ) delete value;
-
-  value = rhs.value;
-  ++value->refCount;
-
-  return *this;
-}
-
-See efficiency here since there is no alloc, free, and copy.
-
-
-<ex> From pointerlike again.
-
-class HasPtr {
-  public:
-    // see default arg and new size_t
-    HasPtr(const std::string& s = std::string() ) : 
-      ps( new std::string(s)), i(0), use( new std::size_t(1) ) {}
-
-    HasPtr(const HasPtr& p): ps( p.ps ), use( p.use ) { ++*use; };
-
-    HasPtr& operator=(const HasPtr& p);
-    ~HasPtr();
-      
-  private:
-    std::string* ps;
-    std::size_t* use; 
-};
-
-HasPtr::~HasPtr()
-{
-   if( --*use == 0 )             // --*use but not --use
-   {
-      delete ps; delete use;
-   }
-}
-
-// Combine dtor and copy ctor. handle self-assign so no need to have if check.
-HasPtr& HasPtr::operator=(const HasPtr &rhs)
-{
-  ++*rhs.use;
-
-  // lhs
-  if( --*use == 0 )
+  struct pointer_int_trait
   {
-    delete ps; delete use;
-  }
+    typedef int value_type;
+    using pointer = value_type *;
 
-  ps = rhs.ps;
-  use = rhs.use;
+    // *cxx-static*
+    // without static, cause build error:
+    //
+    // cxx.cpp:2243:24: error: cannot call member function 
+    // ‘void cxx_sp_unique_own_version::pointer_int_trait::deleter(cxx_sp_unique_own_version::pointer_int_trait::pointer)’ 
+    // without object
+    //
+    //           T::deleter(p_);
 
-  return *this;
-}
-
-
-{reference-implementation}
-
-#include <iostream>
-#include <memory>
-
-using namespace std;
-
-class Foo {  
-  public:
-    void whoami() { cout << "this is foo" << endl; }
-};
-
-template<typename T>
-class mshared_ptr {
-  public:
-    mshared_ptr( T* arg = nullptr )
-      : pointee(arg), prefcount( new size_t(1)) 
-    { cout << "mshared ctor: " << endl; }
-
-    ~mshared_ptr()
-    { 
-      if(--*prefcount == 0)
-      {
-        cout << "mshared dtor: " << endl; 
-        delete pointee; delete prefcount;
-      }
+    static void deleter(pointer p)
+    {
+      delete p;
     }
-
-    // copy ctor
-    mshared_ptr( const mshared_ptr<T> & rhs )
-    {
-      pointee = rhs.pointee;
-      prefcount = rhs.prefcount;
-      ++*prefcount;
-    }
-
-    // copy assign
-    mshared_ptr<T> & operator=( const mshared_ptr<T> & rhs )
-    {
-      // note: no need to have this for correctness but seems better to have for
-      // efficiency 
-
-      if( this == &rhs ) return *this;
-
-      ++*rhs.prefcount;
-
-      if( --*prefcount == 0 )
-      {
-        delete pointee; delete prefcount;
-      }
-
-      pointee = rhs.pointee;
-      prefcount = rhs.prefcount;
-
-      return *this;
-    }
-
-    // * operator
-    T& operator*() { return *pointee; }
-
-    // -> operator
-    T* operator->() { return pointee; }
-
-    operator void*() { return pointee === nullptr ? (void*)0 : 1; }
-
-    size_t use_count() { return *prefcount; };
-
-  private:
-    T* pointee;
-    size_t* prefcount;
-};
-
-int main()
-{
-  {
-    cout << "{ start block: " << endl;
-    mshared_ptr<Foo> p(new Foo());
-    cout << "  use_count: " << p.use_count() << ", p->whoami: ";
-    p->whoami();
-
-    {
-      mshared_ptr<Foo> q(p);
-      cout << "  use_count: " << q.use_count() << ", q->whoami: ";
-      q->whoami();
-    }
-
-    cout << "  use_count: " << p.use_count() << ", p->whoami: " << endl;
-
-    cout << "} end block: " << endl;
-  }
-
-  cout << "} end main: " << endl;
-}
-
-{ start block: 
-mshared ctor: 
-  use_count: 1, p->whoami: this is foo
-  use_count: 2, q->whoami: this is foo
-  use_count: 1, p->whoami: 
-} end block: 
-mshared dtor: 
-} end main: 
-
-
-{reference-implementation}
-Revised based on std::shared_ptr code.
-
-#include <iostream>
-#include <memory>
-
-using namespace std;
-
-class Foo {  
-  public:
-    void whoami() { cout << "this is foo" << endl; }
-};
-
-template<typename T>
-class mshared_ptr {
-  private:
-    T *ptr_;
-    size_t *prefcount_;
-
-  public:
-    // default ctor
-    mshared_ptr() 
-      : ptr_(0), prefcount_(new size_t(0)) {}
-
-    // ctor
-    explicit mshared_ptr(T *p_)
-      : ptr_(p_), prefcount_(new size_t(1)) {}
-
-    // dtor
-    ~mshared_ptr()
-    {
-      if(--*prefcount_ == 0)
-      {
-        delete ptr_; delete prefcount_;
-      }
-    }
-
-    // copy ctor
-    mshared_ptr(const mshared_ptr<T> &rhs) noexcept
-    {
-      ptr_ = rhs.ptr_;
-      prefcount_ = rhs.prefcount_;
-      ++*prefcount_;
-    }
-
-    // copy assign
-    const mshared_ptr<T> &
-      operator=(const mshared_ptr<T> &rhs)
-      {
-        if(this == &rhs)
-          return *this;
-
-        if(--*prefcount_ == 0)
-        {
-          delete ptr_; delete prefcount_;
-        }
-
-        ++*rhs.prefcount_;
-
-        ptr_ = rhs.ptr_;
-        prefcount_ = rhs.prefcount_;
-
-        return *this;
-      }
-
-    // swap
-    void swap(mshared_ptr<T> &other)
-    {
-      std::swap(ptr_, other.ptr_);
-      std::swap(prefcount_, other.prefcount_);
-    }
-
-    // reset
-    void reset() noexcept
-    {
-      mshared_ptr<T>().swap(*this);
-    }
-
-    // reset
-    void reset(T* p_) noexcept
-    {
-      mshared_ptr<T>(p_).swap(*this);
-    }
-
-    // operator*
-    T& operator*() const noexcept
-    {
-      return *ptr_;
-    }
-
-    // operator->
-    T* operator->() const noexcept
-    {
-      return ptr_;
-    }
-
-    // get()
-    T* get() const noexcept
-    {
-      return ptr_;
-    }
-
-    explicit operator bool() const
-    {
-      return ptr_ == 0 ? false : true; 
-    }
-
-    size_t use_count() const noexcept
-    {
-      return *prefcount_;
-    }
-};
-
-int main()
-{
-  {
-    cout << "{ start block: " << endl;
-    mshared_ptr<Foo> p(new Foo());
-    cout << "  use_count: " << p.use_count() << ", p->whoami: ";
-    p->whoami();
-
-    if(p)
-    {
-      cout << "  p is not null" << endl; 
-    }
-
-    {
-      mshared_ptr<Foo> q(p);
-      cout << "  use_count: " << q.use_count() << ", q->whoami: ";
-      q->whoami();
-    }
-
-    cout << "  use_count: " << p.use_count() << ", p->whoami: " << endl;
-
-    cout << "} end block: " << endl;
-  }
-
-  cout << "} end main: " << endl;
-}
-
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-sp-shared-code
-
-// bits/shared_ptr_base.h @759
-
-  template<_Lock_policy _Lp>  // @442
-    class __shared_count
-    {
-      public:
-        constexpr __shared_count() noexcept : _M_pi(0)
-        { }
-
-        template<typename _Ptr>
-          explicit
-          __shared_count(_Ptr __p) : _M_pi(0)
-          {
-            __try
-            {
-              _M_pi = new _Sp_counted_ptr<_Ptr, _Lp>(__p);
-            }
-            __catch(...)
-            {
-              delete __p;
-              __throw_exception_again;
-            }
-          }
-
-        ~__shared_count() noexcept
-        {
-          if (_M_pi != 0)
-            _M_pi->_M_release();
-        }
-
-        __shared_count(const __shared_count& __r) noexcept
-          : _M_pi(__r._M_pi)
-          {
-            if (_M_pi != 0)
-              _M_pi->_M_add_ref_copy();
-          }
-
-        __shared_count&
-          operator=(const __shared_count& __r) noexcept
-          {
-            _Sp_counted_base<_Lp>* __tmp = __r._M_pi;
-            if (__tmp != _M_pi)
-            {
-              if (__tmp != 0)
-                __tmp->_M_add_ref_copy();
-              if (_M_pi != 0)
-                _M_pi->_M_release();
-              _M_pi = __tmp;
-            }
-            return *this;
-          }
-
-        void
-          _M_swap(__shared_count& __r) noexcept
-          {
-            _Sp_counted_base<_Lp>* __tmp = __r._M_pi;
-            __r._M_pi = _M_pi;
-            _M_pi = __tmp;
-          }
-
-        long
-          _M_get_use_count() const noexcept
-          { return _M_pi != 0 ? _M_pi->_M_get_use_count() : 0; }
-
-        bool
-          _M_unique() const noexcept
-          { return this->_M_get_use_count() == 1; }
-
-        // Friend function injected into enclosing namespace and found by ADL
-        friend inline bool
-          operator==(const __shared_count& __a, const __shared_count& __b) noexcept
-          { return __a._M_pi == __b._M_pi; }
-
-      private:
-        _Sp_counted_base<_Lp>*  _M_pi;
-    };
-
-  template<typename _Tp, _Lock_policy _Lp>
-    class __shared_ptr
-    {
-      public:
-        typedef _Tp   element_type;
-
-        constexpr __shared_ptr() noexcept
-          : _M_ptr(0), _M_refcount()
-          { }
-
-        template<typename _Tp1>
-          explicit __shared_ptr(_Tp1* __p)
-          : _M_ptr(__p), _M_refcount(__p)
-          {
-            __glibcxx_function_requires(_ConvertibleConcept<_Tp1*, _Tp*>)
-              static_assert( sizeof(_Tp1) > 0, "incomplete type" );
-            __enable_shared_from_this_helper(_M_refcount, __p, __p);
-          }
-
-        __shared_ptr(const __shared_ptr&) noexcept = default;
-        __shared_ptr& operator=(const __shared_ptr&) noexcept = default;
-        ~__shared_ptr() = default;
-
-        template<typename _Tp1>
-          __shared_ptr&
-          operator=(const __shared_ptr<_Tp1, _Lp>& __r) noexcept
-          {
-            _M_ptr = __r._M_ptr;
-            _M_refcount = __r._M_refcount; // __shared_count::op= doesn't throw
-            return *this;
-          }
-
-        void
-          reset() noexcept
-          { __shared_ptr().swap(*this); }
-
-        template<typename _Tp1>
-          void
-          reset(_Tp1* __p) // _Tp1 must be complete.
-          {
-            // Catch self-reset errors.
-            _GLIBCXX_DEBUG_ASSERT(__p == 0 || __p != _M_ptr);
-            __shared_ptr(__p).swap(*this);
-          }
-
-        // Allow class instantiation when _Tp is [cv-qual] void.
-        typename std::add_lvalue_reference<_Tp>::type
-          operator*() const noexcept
-          {
-            _GLIBCXX_DEBUG_ASSERT(_M_ptr != 0);
-            return *_M_ptr;
-          }
-
-        _Tp*
-          operator->() const noexcept
-          {
-            _GLIBCXX_DEBUG_ASSERT(_M_ptr != 0);
-            return _M_ptr;
-          }
-
-        _Tp*
-          get() const noexcept
-          { return _M_ptr; }
-
-        explicit operator bool() const // never throws
-        { return _M_ptr == 0 ? false : true; }
-
-        bool
-          unique() const noexcept
-          { return _M_refcount._M_unique(); }
-
-        long
-          use_count() const noexcept
-          { return _M_refcount._M_get_use_count(); }
-
-        void
-          swap(__shared_ptr<_Tp, _Lp>& __other) noexcept
-          {
-            std::swap(_M_ptr, __other._M_ptr);
-            _M_refcount._M_swap(__other._M_refcount);
-          }
-
-        _Tp*                  _M_ptr;         // Contained pointer.
-        __shared_count<_Lp>   _M_refcount;    // Reference counter.
-    };
-
-
-// bits/shared_ptr.h @92
-
-namespace std {
-
-  // note: 
-  // no other operators so use operators in bits/shared_ptr_base.h
-  // no member data, no dtor
-
-  /**
-   *  @brief  A smart pointer with reference-counted copy semantics.
-   *
-   *  The object pointed to is deleted when the last shared_ptr pointing to
-   *  it is destroyed or reset.
-  */
-  template<typename _Tp>
-    class shared_ptr : public __shared_ptr<_Tp>
-  {
-    public:
-      /**
-       *  @brief  Construct an empty %shared_ptr.
-       *  @post   use_count()==0 && get()==0
-       */
-      constexpr shared_ptr() noexcept
-        : __shared_ptr<_Tp>() { }
-
-      shared_ptr(const shared_ptr&) noexcept = default;
-
-      /**
-       *  @brief  Construct a %shared_ptr that owns the pointer @a __p.
-       *  @param  __p  A pointer that is convertible to element_type*.
-       *  @post   use_count() == 1 && get() == __p
-       *  @throw  std::bad_alloc, in which case @c delete @a __p is called.
-       */
-      template<typename _Tp1>
-        explicit shared_ptr(_Tp1* __p)
-        : __shared_ptr<_Tp>(__p) { }
-
-      /**
-       *  @brief  Construct an empty %shared_ptr.
-       *  @param  __p  A null pointer constant.
-       *  @post   use_count() == 0 && get() == nullptr
-       */
-      constexpr shared_ptr(nullptr_t __p) noexcept
-        : __shared_ptr<_Tp>(__p) { }
-
-      shared_ptr& operator=(const shared_ptr&) noexcept = default;
-
-      template<typename _Tp1>
-        shared_ptr&
-        operator=(const shared_ptr<_Tp1>& __r) noexcept
-        {
-          this->__shared_ptr<_Tp>::operator=(__r);
-          return *this;
-        }
   };
 
-  /**
-   *  @brief  Create an object that is owned by a shared_ptr.
-   *  @param  __args  Arguments for the @a _Tp object's constructor.
-   *  @return A shared_ptr that owns the newly created object.
-   *  @throw  std::bad_alloc, or an exception thrown from the
-   *          constructor of @a _Tp.
-   */
-  template<typename _Tp, typename... _Args>
-    inline shared_ptr<_Tp>
-    make_shared(_Args&&... __args)
+  template <typename T>
+    class unique_own
     {
-      typedef typename std::remove_const<_Tp>::type _Tp_nc;
-      return std::allocate_shared<_Tp>(std::allocator<_Tp_nc>(),
-              std::forward<_Args>(__args)...);
+      using pointer = typename T::pointer;
+
+      public:
+        // no copy support
+        
+        // not a build error but don't need to do this as *cxx-scope*
+        // unique_own(const unique_own<T> &) = delete;
+        // unique_own<T> &operator=(const unique_own<T> &) = delete;
+
+        unique_own(const unique_own &) = delete;
+        unique_own &operator=(const unique_own &) = delete;
+
+        // ctor & dtor
+        explicit unique_own(typename T::pointer p = nullptr)
+          : p_(p) {}
+
+        // move support
+        // handle moved-from by using release() and moved-to by using reset().
+
+        unique_own(unique_own &&other) noexcept
+          : p_(other.release())
+        {
+          // don't need to do since it's ctor and p_ is not assigned.
+          // if (p_)
+          //   T::deleter(p_);
+          //
+          // p_ = other.p_;
+        }
+
+        unique_own &operator=(unique_own &&other) noexcept
+        {
+          // if (p_)
+          //   T::deleter(p_);
+          //
+          // p_ = other.p_;
+
+          if (this != &other)
+            reset(other.release());
+
+          return *this;
+        }
+
+        ~unique_own() noexcept
+        {
+          if (p_)
+          {
+            // this is not `typename`
+            T::deleter(p_);
+          }
+        }
+
+        pointer release() noexcept
+        {
+          auto p = p_;
+          p_ = nullptr;
+          return p;
+        }
+
+        // free resource and set p
+        void reset(pointer p = nullptr) noexcept
+        {
+          // check self-assign
+          if (p_ != p)
+          {
+            T::deleter(p_);
+            p_ = p;
+          }
+        }
+
+        // swap
+        void swap(unique_own &other) const noexcept
+        {
+          std::swap(p_, other.p_);
+        }
+
+        // *cxx-overload-oparator-bool*
+        // as with unique_ptr, must have const to avoid const error
+        explicit operator bool() const noexcept
+        {
+          return p_ != nullptr;
+        }
+
+        // *cxx-overload-oparator-dereference*
+        typename T::value_type& operator*() const noexcept
+        { return *p_; }
+
+      private:
+        pointer p_;
+    };
+
+  template<typename T>
+
+    // *cxx-error*
+    // void swap(unique_own &lhs, unique_own &rhs)
+    // 
+    // okay
+    // void swap(unique_own<T> &lhs, unique_own<T> &rhs)
+    //
+    // okay
+    void swap(const unique_own<T> &lhs, const unique_own<T> &rhs)
+    {
+      lhs.swap(rhs);
     }
+
+  using unique_own_int = unique_own<pointer_int_trait>;
+
+} // namespace
+
+TEST(SharedPointerOwn, Unique)
+{
+  using namespace cxx_sp_unique_own_version;
+
+  {
+    unique_own_int up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+  }
+
+  {
+    unique_ptr<int> p1(new int(1));
+    unique_ptr<int> p2(new int(2));
+    unique_ptr<int> p3(new int(3));
+    unique_ptr<int> p4(new int(4));
+
+    EXPECT_TRUE(p3);
+
+    p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
+    p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
+    p3 = std::move(p1);     // p1->null , p2->F3, p3->null
+
+    EXPECT_FALSE(p3);
+  }
+
+  {
+    unique_ptr<int> p1(new int(1));
+    unique_ptr<int> p2(new int(2));
+    unique_ptr<int> p3(new int(3));
+
+    p2.reset(p3.release());
+
+    // free int(2) and p3 is null
+    
+    EXPECT_TRUE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_FALSE(p3);
+
+    p3.reset(p1.release());
+
+    // p1 is null
+    EXPECT_FALSE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_TRUE(p3);
+
+    // frees int(1) and set p3 null
+    p3.reset(p1.release());
+
+    // p1 is null
+    EXPECT_FALSE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_FALSE(p3);
+  }
+
+  {
+    unique_own_int up1{new int(100)};
+    unique_own_int up2{new int(200)};
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 100);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 200);
+
+    swap(up1, up2);
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 200);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 100);
+  }
+}
+
+
+// note that shared internal object has two: T and reference count.
+// 
+// template <typename>
+// class shared_ptr<T>
+// {
+//  copy support
+//  - no move support
+//  operator bool();
+//  T* get();
+//  - no T* release(); shared_ptr do not support this
+//  void reset(T*);
+//  void swap(uniqie_ptr<T> &);
+//  operator *()
+//  operator ->()
+//  use_count()
+// }
+//
+// + non-member swap
+// + self-assign
+
+namespace cxx_sp_shared_own_version
+{
+  template <typename T>
+    class shared_own
+    {
+      public:
+        // ctor and dtor
+        explicit shared_own(T * p = nullptr) noexcept
+          : p_(p), pcount_(new size_t(1))
+        {}
+
+        ~shared_own() noexcept
+        {
+          if (--*pcount_ == 0)
+          {
+            delete p_; 
+            delete pcount_;
+          }
+        }
+
+        // copy support
+        shared_own(const shared_own &other)
+        {
+          p_ = other.p_;
+          pcount_ = other.pcount_;
+          ++*pcount_;
+        }
+
+        shared_own &operator=(const shared_own &other)
+        {
+          // this requires operator==()
+          // if (*this != other)
+          
+          if (this != &other)
+          {
+            if (--*pcount_ == 0)
+            {
+              delete p_;
+              delete pcount_;
+            }
+
+            p_ = other.p_;
+            pcount_ = other.pcount_;
+            ++*pcount_;
+          }
+
+          return *this;
+        }
+
+        // *cxx-overload-operators*
+        T& operator *() const noexcept
+        {
+          return *p_;
+        }
+
+        // *cxx-overload-operators*
+        T* operator ->() const noexcept
+        {
+          return p_;
+        }
+
+        explicit operator bool() const noexcept
+        {
+          return p_ != nullptr;
+        }
+
+        size_t use_count()
+        { return *pcount_; }
+
+        // swap
+        void swap(shared_own &other) noexcept
+        {
+          std::swap(p_, other.p_);
+          std::swap(pcount_, other.pcount_);
+        }
+        
+        // reset
+        // use *cxx-tempprary* to delete lhs.
+        void reset(T* p = nullptr) noexcept
+        {
+          shared_own<T>(p).swap(*this);
+        }
+
+        //
+        T* get() noexcept
+        {
+          return p_;
+        }
+
+      private:
+        T *p_;              // pointee
+        size_t *pcount_;
+    };
+
+  template<typename T>
+    void swap(shared_own<T> &lhs, shared_own<T> &rhs)
+    {
+      lhs.swap(rhs);
+    }
+
+} // namespace
+
+TEST(SharedPointerOwn, Shared)
+{
+  using namespace cxx_sp_shared_own_version;
+
+  {
+    auto p = shared_own<int>(new int{42});
+
+    // p.use++
+    auto q(p);
+
+    // all prints 2
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(*p, 42);
+
+    EXPECT_THAT(q.use_count(), 2);
+    EXPECT_THAT(*q, 42);
+
+    auto r = shared_own<int>(new int{52});
+
+    // q.use++ and r.use--. destroies a object which r pointed. 
+    r = q;
+
+    // all prints 3
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+    EXPECT_THAT(r.use_count(), 3);
+    EXPECT_THAT(*p, 42);
+    EXPECT_THAT(*q, 42);
+    EXPECT_THAT(*r, 42);
+  }
+
+  {
+    shared_own<int> up1{new int(100)};
+    shared_own<int> up2{new int(200)};
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 100);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 200);
+
+    swap(up1, up2);
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 200);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 100);
+  }
 }
 
 

@@ -1788,7 +1788,7 @@ TEST(SharedPointerShared, Copy)
   // all prints 3
   EXPECT_THAT(p.use_count(), 3);
   EXPECT_THAT(q.use_count(), 3);
-  EXPECT_THAT(p.use_count(), 3);
+  EXPECT_THAT(r.use_count(), 3);
 }
 
 
@@ -1820,6 +1820,14 @@ TEST(SharedPointerShared, Copy)
 //
 //   unique_ptr<std::string> p2(new string);
 // }
+
+TEST(SharedPointerUnique, OperatorBool)
+{
+  unique_ptr<int> up{new int(100)};
+
+  EXPECT_TRUE(up);
+  EXPECT_THAT(*up, 100);
+}
 
 namespace cxx_sp_shared
 {
@@ -2098,12 +2106,31 @@ TEST(SharedPointerUnique, DeleteReleaseReset)
   unique_ptr<Foo> p3(new Foo(3));
 
   p2.reset(p3.release());
+
+  // free int(2) and p3 is null
+
+  EXPECT_TRUE(p1);
+  EXPECT_TRUE(p2);
+  EXPECT_FALSE(p3);
+
   cout << "-----------" << endl;
 
   p3.reset(p1.release());
+
+  // p1 is null
+  EXPECT_FALSE(p1);
+  EXPECT_TRUE(p2);
+  EXPECT_TRUE(p3);
+
   cout << "-----------" << endl;
 
   p3.reset(p1.release());
+
+  // p1 is null
+  EXPECT_FALSE(p1);
+  EXPECT_TRUE(p2);
+  EXPECT_FALSE(p3);
+
   cout << "-----------" << endl;
 
   cout << "end of main" << endl;
@@ -2189,6 +2216,9 @@ TEST(SharedPointer, UseCount)
 }
 
 
+// ={=========================================================================
+// cxx-smart-ptr cxx-sp-own
+
 // From CPP code challenge, 21. System handle wrapper
 //
 // template <typename>
@@ -2213,7 +2243,8 @@ namespace cxx_sp_unique_own_version
 {
   struct pointer_int_trait
   {
-    using pointer = int *;
+    typedef int value_type;
+    using pointer = value_type *;
 
     // *cxx-static*
     // without static, cause build error:
@@ -2269,7 +2300,7 @@ namespace cxx_sp_unique_own_version
           //
           // p_ = other.p_;
 
-          if (this != other)
+          if (this != &other)
             reset(other.release());
 
           return *this;
@@ -2302,19 +2333,292 @@ namespace cxx_sp_unique_own_version
           }
         }
 
+        // swap
+        void swap(unique_own &other) const noexcept
+        {
+          std::swap(p_, other.p_);
+        }
+
+        // *cxx-overload-oparator-bool*
+        // as with unique_ptr, must have const to avoid const error
+        explicit operator bool() const noexcept
+        {
+          return p_ != nullptr;
+        }
+
+        // *cxx-overload-oparator-dereference*
+        typename T::value_type& operator*() const noexcept
+        { return *p_; }
+
       private:
         pointer p_;
     };
+
+  template<typename T>
+
+    // *cxx-error*
+    // void swap(unique_own &lhs, unique_own &rhs)
+    // 
+    // okay
+    // void swap(unique_own<T> &lhs, unique_own<T> &rhs)
+    //
+    // okay
+    void swap(const unique_own<T> &lhs, const unique_own<T> &rhs)
+    {
+      lhs.swap(rhs);
+    }
 
   using unique_own_int = unique_own<pointer_int_trait>;
 
 } // namespace
 
-TEST(SharedPointerUnique, OwnVersion)
+TEST(SharedPointerOwn, Unique)
 {
   using namespace cxx_sp_unique_own_version;
 
-  unique_own_int usp{new int(100)};
+  {
+    unique_own_int up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+  }
+
+  {
+    unique_ptr<int> p1(new int(1));
+    unique_ptr<int> p2(new int(2));
+    unique_ptr<int> p3(new int(3));
+    unique_ptr<int> p4(new int(4));
+
+    EXPECT_TRUE(p3);
+
+    p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
+    p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
+    p3 = std::move(p1);     // p1->null , p2->F3, p3->null
+
+    EXPECT_FALSE(p3);
+  }
+
+  {
+    unique_ptr<int> p1(new int(1));
+    unique_ptr<int> p2(new int(2));
+    unique_ptr<int> p3(new int(3));
+
+    p2.reset(p3.release());
+
+    // free int(2) and p3 is null
+    
+    EXPECT_TRUE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_FALSE(p3);
+
+    p3.reset(p1.release());
+
+    // p1 is null
+    EXPECT_FALSE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_TRUE(p3);
+
+    // frees int(1) and set p3 null
+    p3.reset(p1.release());
+
+    // p1 is null
+    EXPECT_FALSE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_FALSE(p3);
+  }
+
+  {
+    unique_own_int up1{new int(100)};
+    unique_own_int up2{new int(200)};
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 100);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 200);
+
+    swap(up1, up2);
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 200);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 100);
+  }
+}
+
+
+// note that shared internal object has two: T and reference count.
+// 
+// template <typename>
+// class shared_ptr<T>
+// {
+//  copy support
+//  - no move support
+//  operator bool();
+//  T* get();
+//  - no T* release(); shared_ptr do not support this
+//  void reset(T*);
+//  void swap(uniqie_ptr<T> &);
+//  operator *()
+//  operator ->()
+//  use_count()
+// }
+//
+// + non-member swap
+// + self-assign
+
+namespace cxx_sp_shared_own_version
+{
+  template <typename T>
+    class shared_own
+    {
+      public:
+        // ctor and dtor
+        explicit shared_own(T * p = nullptr) noexcept
+          : p_(p), pcount_(new size_t(1))
+        {}
+
+        ~shared_own() noexcept
+        {
+          if (--*pcount_ == 0)
+          {
+            delete p_; 
+            delete pcount_;
+          }
+        }
+
+        // copy support
+        shared_own(const shared_own &other)
+        {
+          p_ = other.p_;
+          pcount_ = other.pcount_;
+          ++*pcount_;
+        }
+
+        shared_own &operator=(const shared_own &other)
+        {
+          // this requires operator==()
+          // if (*this != other)
+          
+          if (this != &other)
+          {
+            if (--*pcount_ == 0)
+            {
+              delete p_;
+              delete pcount_;
+            }
+
+            p_ = other.p_;
+            pcount_ = other.pcount_;
+            ++*pcount_;
+          }
+
+          return *this;
+        }
+
+        // *cxx-overload-operators*
+        T& operator *() const noexcept
+        {
+          return *p_;
+        }
+
+        // *cxx-overload-operators*
+        T* operator ->() const noexcept
+        {
+          return p_;
+        }
+
+        explicit operator bool() const noexcept
+        {
+          return p_ != nullptr;
+        }
+
+        size_t use_count()
+        { return *pcount_; }
+
+        // swap
+        void swap(shared_own &other) noexcept
+        {
+          std::swap(p_, other.p_);
+          std::swap(pcount_, other.pcount_);
+        }
+        
+        // reset
+        // use *cxx-tempprary* to delete lhs.
+        void reset(T* p = nullptr) noexcept
+        {
+          shared_own<T>(p).swap(*this);
+        }
+
+        //
+        T* get() noexcept
+        {
+          return p_;
+        }
+
+      private:
+        T *p_;              // pointee
+        size_t *pcount_;
+    };
+
+  template<typename T>
+    void swap(shared_own<T> &lhs, shared_own<T> &rhs)
+    {
+      lhs.swap(rhs);
+    }
+
+} // namespace
+
+TEST(SharedPointerOwn, Shared)
+{
+  using namespace cxx_sp_shared_own_version;
+
+  {
+    auto p = shared_own<int>(new int{42});
+
+    // p.use++
+    auto q(p);
+
+    // all prints 2
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(*p, 42);
+
+    EXPECT_THAT(q.use_count(), 2);
+    EXPECT_THAT(*q, 42);
+
+    auto r = shared_own<int>(new int{52});
+
+    // q.use++ and r.use--. destroies a object which r pointed. 
+    r = q;
+
+    // all prints 3
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+    EXPECT_THAT(r.use_count(), 3);
+    EXPECT_THAT(*p, 42);
+    EXPECT_THAT(*q, 42);
+    EXPECT_THAT(*r, 42);
+  }
+
+  {
+    shared_own<int> up1{new int(100)};
+    shared_own<int> up2{new int(200)};
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 100);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 200);
+
+    swap(up1, up2);
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 200);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 100);
+  }
 }
 
 
