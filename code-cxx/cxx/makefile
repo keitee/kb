@@ -53,7 +53,7 @@ gmock.a : gmock-all.o
 gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
-#
+# $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -E > $(TARGET).out
 $(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 

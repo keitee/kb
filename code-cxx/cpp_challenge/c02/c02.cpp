@@ -1615,7 +1615,153 @@ library must enable you to write temperature literals in all these scales, such
 as 36.5_deg for Celsius, 97.7_f for Fahrenheit, and 309.65_K for Kelvin; perform
 operations with these values; and convert between them.
 
+{
+   using namespace temperature;
+   using namespace temperature_scale_literals;
+
+   auto t1{ 36.5_deg };
+   auto t2{ 79.0_f };
+
+   auto tf = temperature_cast<scale::fahrenheit>(t1);
+   auto tc = temperature_cast<scale::celsius>(tf);
+   assert(t1 == tc);
+}
+
+To meet this requirement, we need to provide an implementation for several
+types, operators, and functions:
+
+An enumeration of supported temperature scales called scale.
+
+A class template to represent a temperature value, parameterized with the scale,
+called quantity.
+
+Comparison operators ==, !=, <, >, <=, and >= that compare two quantities of the
+same time.
+
+Arithmetic operators + and - that add and subtract values of the same quantity
+type. Additionally, we could implement member operators += and -+.
+
+A function template to convert temperatures from one scale to another, called
+temperature_cast. This function does not perform the conversion itself but uses
+type traits to do that.
+
+Literal operators ""_deg, ""_f, and ""_k for creating user-defined temperature
+literals.
+
+For brevity, the following snippet only contains the code that handles Celsius
+and Fahrenheit temperatures. You should take it as a further exercise to extend
+the code with support for the Kelvin scale. The code accompanying the book
+contains the full implementation of all three required scales.  
+
 */
+
+#if 0
+
+build error
+
+namespace u22_2018_11_27
+{
+  // The are_equal() function is a utility function used to compare
+  // floating-point values:
+
+  bool are_equal(double const d1, double const d2, const double epsilon = 0.001)
+  {
+    return std::fabs(d1 - d2) < epsilon;
+  }
+
+  // The enumeration of possible temperature scales and the class that
+  // represents a temperature value are defined as follows:
+
+  enum class scale { celsius, fahrenheit, kelvin };
+
+  template <scale S>
+    class quanity
+    {
+      const double amount;
+
+      public:
+      constexpr explicit quanity(const double a) : amount(a) {}
+      explicit operator double() const { return amount; }
+    };
+
+  // The comparison operators for the quantity<S> class can be seen here:
+  template <scale S> 
+  inline bool operator==(const quanity<S> &lhs, const quanity<S> &rhs)
+  {
+    return are_equal(static_cast<double>(lhs), static_cast<double>(rhs));
+  }
+
+  // To convert between temperature values of different scales, we will define a
+  // function template called temperature_cast() that utilizes several type
+  // traits to perform the actual conversion. All these are shown here, although
+  // not all type traits; the others can be found in the code accompanying the
+  // book:
+
+  template<scale S, scale R>
+    struct conversion_traits
+    {
+      static double convert(const double value) = delete;
+    };
+
+  // to fahrenheit
+  template<>
+    struct conversion_traits<scale::celsius, scale::fahrenheit>
+    {
+      static double convert(const double value)
+      {
+        return (value * 9) / 5 + 32;
+      }
+    };
+
+  // to celsius
+  template<>
+    struct conversion_traits<scale::fahrenheit, scale::celsius>
+    {
+      static double convert(const double value)
+      {
+        return (value - 32) * 5 / 9;
+      }
+    };
+
+  template<scale S, scale R>
+    constexpr quanity<R> temperature_cast(quanity<S> const q)
+    {
+      return quanity<R>(conversion_traits<S, R>::convert(
+            static_cast<double>(q)));
+    }
+
+  // The literal operators for creating temperature values are shown in the
+  // following snippet. These operators are defined in a separate namespace,
+  // called temperature_scale_literals, which is a good practice in order to
+  // minimize the risk of name collision with other literal operators:
+
+  constexpr quanity<scale::celsius> operator "" _deg(long double const amount)
+  {
+    return quanity<scale::celsius>(static_cast<double>(amount));
+  }
+
+  constexpr quanity<scale::fahrenheit> operator "" _f(long double const amount)
+  {
+    return quanity<scale::fahrenheit>(static_cast<double>(amount));
+  }
+
+} // namespace
+
+
+TEST(U22, 20081127)
+{
+  using namespace u22_2018_11_27;
+
+  // 36.5 deg == 97.7 f
+  // auto t1{36.5_deg};
+  
+  quanity<scale::celsius> t1(36.5);
+  auto tf = temperature_cast<scale::fahrenheit>(t1);
+
+  cout << "tf: " << tf << endl;
+}
+
+# endif
 
 
 // ={=========================================================================

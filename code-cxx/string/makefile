@@ -15,8 +15,8 @@ GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
 
-TARGET1 = ex_string
-TARGET2 = ex_string_pad
+TARGET1 = string
+TARGET2 = string_ex
 
 # Where to find user code.
 USER_DIR = .

@@ -407,83 +407,12 @@ TEST(CString, OutputCstring)
 // ={=========================================================================
 // string-conversion
 
-TEST(StringConverison, ToString)
+TEST(StringConverison, Functions)
 {
-  // use stringstream
-  // note that os, buffer, has all inputs from << and seek() moves writing pos.
-  // do *cxx-string-convert-to-string*
-  ostringstream os;
-
-  os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
-  EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
-
-  bitset<15> bit_set(5789);
-  os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
-  EXPECT_EQ(os.str(), "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
-
-  os.seekp(0);
-  os << "octal : " << oct << 15;
-  EXPECT_EQ(os.str(), "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
-
-  // use to_string()
-  EXPECT_THAT(to_string(11), "11");
-  EXPECT_THAT(to_string(3301), "3301");
-
-  // use lexical_cast
-  EXPECT_THAT(boost::lexical_cast<std::string>(11), "11");
-  EXPECT_THAT(boost::lexical_cast<std::string>(3301), "3301");
-
-  // use stringstream
-  stringstream ss;
-  vector<string> string_vector{};
-
-  for(int i = 0; i < 4; ++i)
+  // to string
   {
-    ss << "player " << i;
-    string_vector.push_back(string(ss.str()));
-    ss.str("");
-  }
- 
-  EXPECT_THAT(string_vector, ElementsAre("player 0", "player 1", "player 2", "player 3"));
-}
-
-
-TEST(StringConverison, ToNumber)
-{
-  {
-    // The following lines read the integer x with the value 3 and the
-    // floating-point f with the value 0.7 from the stringstream:
-
-    int x{};
-    float f{};
-
-    istringstream is{"3.7"};
-
-    // or
-    // string input{"3.7"};
-    // stringstream is(input);
-    //
-    // or
-    // string input{"3.7"};
-    // stringstream is;
-    // is.str(input);
-
-    is >> x >> f;
-
-    ASSERT_THAT(x, Eq(3));
-    ASSERT_THAT(f, FloatEq(0.7));
-  }
-
-  {
-    // to-number
-    stringstream is{"1 2 3 4"};
-    int value{};
-    vector<int> coll{};
-
-    while (is >> value)
-      coll.push_back(value);
-
-    EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+    EXPECT_THAT(to_string(11), "11");
+    EXPECT_THAT(to_string(3301), "3301");
   }
 
   {
@@ -531,6 +460,110 @@ TEST(StringConverison, ToNumber)
     // try to convert back and throws out_of_range
     EXPECT_THROW(std::stoi("9223372036854775807"), std::out_of_range);
   }
+}
+
+TEST(StringConverison, StringStream)
+{
+  // note that os, buffer, has all inputs from << and seek() moves writing pos.
+  // *cxx-string-convert-to-string*
+
+  // to string
+  {
+    ostringstream os;
+
+    os << "decimal : " << 15 << hex << ", hex : " << 15 << endl;
+    EXPECT_EQ(os.str(), "decimal : 15, hex : f\n");
+
+    bitset<15> bit_set(5789);
+    os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
+    EXPECT_EQ(os.str(), "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+
+    os.seekp(0);
+    os << "octal : " << oct << 15;
+    EXPECT_EQ(os.str(), "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+  }
+
+  // to string
+  {
+    stringstream ss;
+    vector<string> string_vector{};
+
+    for(int i = 0; i < 4; ++i)
+    {
+      ss << "player " << i;
+      string_vector.push_back(string(ss.str()));
+      ss.str("");
+    }
+
+    EXPECT_THAT(string_vector, ElementsAre("player 0", "player 1", "player 2", "player 3"));
+  }
+
+  // to number
+  {
+    // The following lines read the integer x with the value 3 and the
+    // floating-point f with the value 0.7 from the stringstream:
+
+    int x{};
+    float f{};
+
+    istringstream is{"3.7"};
+
+    // or
+    // string input{"3.7"};
+    // stringstream is(input);
+    //
+    // or
+    // string input{"3.7"};
+    // stringstream is;
+    // is.str(input);
+
+    is >> x >> f;
+
+    ASSERT_THAT(x, Eq(3));
+    ASSERT_THAT(f, FloatEq(0.7));
+  }
+
+  // to number
+  {
+    stringstream is{"1 2 3 4"};
+    int value{};
+    vector<int> coll{};
+
+    while (is >> value)
+      coll.push_back(value);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+  }
+
+  // to number
+  {
+    stringstream is{"1234"};
+    int value{};
+
+    is >> setw(2) >> value;
+
+    // actually was 1234
+    // EXPECT_THAT(value, 12);
+  }
+
+  // to number(hex)
+  {
+    stringstream is{"fabc"};
+    int value{};
+
+    is >> hex >> value;
+
+    EXPECT_THAT(value, 64188);
+  }
+}
+
+TEST(StringConverison, BooxtLexicalCast)
+{
+  EXPECT_THAT(boost::lexical_cast<std::string>(11), "11");
+  EXPECT_THAT(boost::lexical_cast<std::string>(3301), "3301");
+
+  EXPECT_THAT(boost::lexical_cast<int>("11"), 11);
+  EXPECT_THAT(boost::lexical_cast<int>("3301"), 3301);
 }
 
 

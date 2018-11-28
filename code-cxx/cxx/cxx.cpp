@@ -4045,6 +4045,176 @@ TEST(Exception, OwnException)
 
 
 // ={=========================================================================
+// cxx-cpp, macro
+
+// 0: 01
+// 0: 012
+// 0: 0123
+// 0: 01234
+// 0: 012345
+
+TEST(Cpp, Precision)
+{
+  // The format argument of printf can be an expression too.
+  {
+    // printf((argc>1) ? "%s " : "%s", *++argv );
+    int argc = 1;
+    printf((argc>1) ? "|%s|\n" : "%s\n", "argc");
+  }
+
+  // print unsigned long value
+  //
+  // ulong max from limits: 18446744073709551615L
+  // ulong max from limits: 18446744073709551615
+  {
+    // here "L" is normal char
+    printf("ulong max from limits: %luL\n", ULONG_MAX );
+    printf("ulong max from limits: %lu\n", ULONG_MAX );
+  }
+
+  {
+    char *pmesg = "0123456789";
+
+    printf("0: %.*s \n", 2, pmesg );
+    printf("0: %.*s \n", 3, pmesg );
+    printf("0: %.*s \n", 4, pmesg );
+    printf("0: %.*s \n", 5, pmesg );
+    printf("0: %.*s \n", 6, pmesg );
+  }
+
+  {
+    // MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s\n",
+    //     (OctetStringVariableEntry(pEntry).m_osValue).size,
+    //     (OctetStringVariableEntry(pEntry).m_osValue).buf,
+    //     osValue.size, osValue.buf,
+    //     osNewValue.size, osNewValue.buf);
+  }
+}
+
+
+#define dprint(expr)    printf(#expr " = %g\n", expr )
+#define dprint_string(expr)    string coll(#expr " = %g\n")
+#define dprint_string_1(expr)    string coll(#expr)
+
+#define xstr(s) str(s)
+#define str(s) #s
+#define foo 4
+
+TEST(Cpp, Stringification)
+{
+  {
+    double x = 10.0;
+    double y = 3.0;
+
+    // printf( "x/y = %g\n", x/y );
+    // x/y = 3.33333
+    dprint(x/y);
+  }
+
+  {
+    dprint_string("string");
+    EXPECT_THAT(coll, "\"string\" = %g\n");
+  }
+
+  {
+    dprint_string_1("string");
+    EXPECT_THAT(coll, "\"string\"");
+  }
+
+  // If you want to stringify the-result-of-expansion of a macro argument, you
+  // have to use two-levels of macros.
+  {
+    // is not "4" because not macro-expanded
+    string coll1{str (foo)};
+    EXPECT_THAT(coll1, "foo");
+
+    // s is stringified when it is used in str, so it is not macro-expanded
+    // first. But s is an ordinary argument to xstr, so it is completely
+    // macro-expanded before xstr itself is expanded (see Argument Prescan).
+    // Therefore, by the time str gets to its argument, it has already been
+    // macro-expanded. 
+    //
+    // xstr (foo)
+    // ==> xstr (4)
+    // ==> str (4)
+    // ==> "4"
+
+    string coll2{xstr(foo)};
+    EXPECT_THAT(coll2, "4");
+  }
+
+  // print the name of an [expression] and its value, along with the file name
+  // and the line number.
+  //
+  // ex
+  // int some_function() {
+  //   int foo;
+  //   /* a lot of complicated code goes here */
+  //   dumpme(foo, "%d");
+  //   /* more complicated code goes here */
+  // }
+  //
+  // cxx.cpp:4157: value=100
+
+  {
+#define dumpme(x, fmt) printf("%s:%u: %s=" fmt "\n", __FILE__, __LINE__, #x, x)
+
+    int value{100};
+    dumpme(value, "%d");
+  }
+
+
+  // void JPA_CREATE(const char* vname, int value)
+  // {
+  //   printf("JPA_CREATE: value=%s value=%d...\n", vname, value );
+  // }
+
+  //  {
+  //#define KT_CREATE(value)	JPA_CREATE( #value, value)
+  //
+  //    int val = 3;
+  //    int is_this_my_own = 4;
+  //
+  //    KT_CREATE(val);
+  //    KT_CREATE(is_this_my_own);
+  //  }
+  
+  // <case>
+  // want to print on console then usuel loggig and macros are defined like:
+  //
+  // PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode", physDev->shDeviceName));
+  //
+  // to
+  // 
+  // printf("device %s now in power saving mode", physDev->shDeviceName);
+  //
+  // #ifdef CQ1840116
+  // #define PDM_DISK_SPINDOWN_LOG           DIAG_LOG_ERROR
+  // #else
+  // #define PDM_DISK_SPINDOWN_LOG           DIAG_LOG_INFO
+  // #endif
+  // 
+  // #define DIAG_LOG_ERROR(id, msg)		DIAG_LOG_F2B_WRITE((id), DIAG_CMN_TRACE_ERROR, msg)
+  //
+  // How?
+
+  {
+#define PDM_DISK_SPINDOWN_LOG           DIAG_LOG_ERROR
+#define DIAG_LOG_ERROR(id, msg)         printf msg
+
+    // #define DIAG_LOG_ERROR(id, msg)         printf msg
+    // printf "(\"device %s now in power saving mode\", \"physDev->shDeviceName\")";
+    //
+    // #define DIAG_LOG_ERROR(id, msg)         printf msg
+    // printf ("device %s now in power saving mode", "physDev->shDeviceName");
+
+    // PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode", "physDev->shDeviceName"));
+    PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode\n", "physDev->shDeviceName"));
+  }
+}
+
+
+// ={=========================================================================
 
 int main(int argc, char** argv)
 {
