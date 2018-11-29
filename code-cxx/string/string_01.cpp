@@ -39,34 +39,9 @@ TEST(StringIterator, PosEnd)
 // ={=========================================================================
 // string-ctors
 //
-// // *cxx-string-ctor*
-//
-// /** *cxx-cstring*
-//  *  @brief  Construct string as copy of a C string.
-//  *  @param  __s  Source C string.
-//  *  @param  __a  Allocator to use (default is default allocator).
-//  */
-// basic_string(`const` _CharT* __s, const _Alloc& __a = _Alloc());
+// *cxx-string-ctor*
 
-TEST(StringCtor, FromChars)
-{
-  // not a problem to construct string from const char*
-  // const char s1[] = "this is first message";
-  // const char *s2 = "this is first message";
-
-  // both cause error
-  //
-  // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
-  //
-  // const char const_letter = 'A';
-  // string string_from_const_letter(const_letter);
-  //
-  // char non_const_letter = 'A';
-  // string string_from_non_const_letter(non_const_letter);
-}
-
-
-TEST(StringCtors, Various)
+TEST(String, Ctors)
 {
   {
     string s1("nico");
@@ -82,37 +57,87 @@ TEST(StringCtors, Various)
 
     string s2("zoo");
     EXPECT_EQ(s1, "zoo");
+  }
+}
 
+
+TEST(String, Const)
+{
+  {
+    // /** *cxx-cstring*
+    //  *  @brief  Construct string as copy of a C string.
+    //  *  @param  __s  Source C string.
+    //  *  @param  __a  Allocator to use (default is default allocator).
+    //  */
+    // basic_string(`const` _CharT* __s, const _Alloc& __a = _Alloc());
+
+    // not a problem to construct string from const char*
+    // const char s1[] = "this is first message";
+    // const char *s2 = "this is first message";
+
+    // both cause error
+    //
+    // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    //
+    // const char const_letter = 'A';
+    // string string_from_const_letter(const_letter);
+    //
+    // char non_const_letter = 'A';
+    // string string_from_non_const_letter(non_const_letter);
+  }
+
+  // *cxx-string-const-ctor-const*
+
+  // ctor and append cause error:
+  //
+  // {
+  //   char letter = 'A';
+  //
+  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+  //   //      string s(letter);
+  // 
+  //   string s(letter);
+  // }
+  //
+  // {
+  //   char letter = 'A';
+  //
+  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+  //   //         s.append(letter);
+  //
+  //   string s;
+  //   s.append(letter);
+  // }
+
+  // HOW TO GET AROUND?
+  
+  // /**
+  //  *  @brief  Append a character.
+  //  *  @param __c  The character to append.
+  //  *  @return  Reference to this string.
+  //  */
+  // basic_string&
+  // operator+=(_CharT __c)
+  // {
+  //  this->push_back(__c);
+  //  return *this;
+  // }
+
+  {
+    string s;
     char letter = 'A';
 
-    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
-    // string s3(letter);
+    s += letter;
 
-    // ok since:
-    //
-    // /**
-    //  *  @brief  Append a character.
-    //  *  @param __c  The character to append.
-    //  *  @return  Reference to this string.
-    //  */
-    // basic_string&
-    // operator+=(_CharT __c)
-    // {
-    //  this->push_back(__c);
-    //  return *this;
-    // }
+    EXPECT_EQ(s, "A");
+  }
 
-    string s4;
-    s4 += letter;
-    EXPECT_EQ(s4, "A");
+  {
+    string s;
+    char letter = 'A';
 
-    string s5;
-
-    // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
-    // s5.append(letter);
-
-    s5.append(1, letter);
-    EXPECT_EQ(s5, "A");
+    s.append(1, letter);
+    EXPECT_EQ(s, "A");
   }
 }
 
@@ -340,42 +365,43 @@ TEST(CString, CompareStringAndCstring)
 }
 
 
-// ={=========================================================================
-// cstring.
 // return bool if source and target are the same from the end.
 // bool strend(char *s, char *t);
 
-bool strend_01(char *s, char *t)
+namespace string_cstring 
 {
+  bool strend_01(char *s, char *t)
+  {
     // assume s is bigger than t
     size_t diff = strlen(s) - strlen(t);
 
     char *psource = s + diff, *ptarget = t;
     while (*psource)
     {
-        if (*psource != *ptarget)
-            return false;
+      if (*psource != *ptarget)
+        return false;
 
-        ++psource, ++ptarget;
+      ++psource, ++ptarget;
     }
 
     return true;
-}
+  }
 
-bool strend_02(char *s, char *t)
-{
+  bool strend_02(char *s, char *t)
+  {
     // assume s is bigger than t. uses parameter
     s += strlen(s) - strlen(t);
 
     while (*s++ == *t++)
     {
-        // if side-effect, +1, points NULL then all matches up.
-        if (*s == '\0')
-            return true;
+      // if side-effect, +1, points NULL then all matches up.
+      if (*s == '\0')
+        return true;
     }
 
     return false;
-}
+  }
+} // namespace
 
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
@@ -384,23 +410,29 @@ bool strend_02(char *s, char *t)
 
 TEST(CString, CompareStringFromEnd)
 {
-    char s1[] = "this is first message";
-    char t1[] = "ssage";
-    char t2[] = "xsage";
+  using namespace string_cstring; 
 
-    EXPECT_EQ(true, strend_01(s1, t1));
-    EXPECT_EQ(false, strend_01(s1, t2));
+  char s1[] = "this is first message";
+  char t1[] = "ssage";
+  char t2[] = "xsage";
 
-    EXPECT_EQ(true, strend_02(s1, t1));
-    EXPECT_EQ(false, strend_02(s1, t2));
+  EXPECT_EQ(true, strend_01(s1, t1));
+  EXPECT_EQ(false, strend_01(s1, t2));
+
+  EXPECT_EQ(true, strend_02(s1, t1));
+  EXPECT_EQ(false, strend_02(s1, t2));
 }
 
 // why this works? since there is std::string ctor(const char*)
 
 TEST(CString, OutputCstring)
 {
-    char s1[] = "this is first message";
-    cout << s1 << endl;
+  ostringstream os;
+
+  char s1[] = "this is first message";
+  // cout << s1 << endl;
+  os << s1 << endl;
+  EXPECT_EQ(os.str(), "this is first message\n");
 }
 
 
@@ -588,34 +620,6 @@ TEST(StringConverison, NarrowNumericConversion)
   EXPECT_EQ(boost::numeric_cast<short>(i), 32767);
   ++i;
   EXPECT_THROW(boost::numeric_cast<short>(i), boost::bad_numeric_cast);
-}
-
-
-
-// ={=========================================================================
-
-// iv : 10
-// id : 10
-// cv : A
-// cv : 65
-// cv : 65
-
-TEST(String, PrintVariousTypeToOutputSteram)
-{
-    string str{"STRING"};
-    int iv{10};
-    double id{10.0};
-    char cv{65};
-
-    cout << "iv : " << iv << endl;
-    cout << "id : " << id << endl;
-    cout << "cv : " << cv << endl;
-    cout << "cv : " << +cv << endl;
-    cout << "cv : " << to_string(cv) << endl;
-
-    cout << "str[0] : " << str[0] << endl;
-    char ch = str[0];
-    cout << "str[0] : " << ch << endl;
 }
 
 
@@ -865,7 +869,8 @@ TEST(StringTrim, 2018_11)
 // strings, "Name", "Address", and "Phone", with the delimiter removed.
 
 
-// cpp-string-find cxx-string-substr cpp-string-replace
+// *cxx-string-find* *cxx-string-substr* *cxx-string-replace*
+//
 // CXXSLR 13.1.1 A First Example: Extracting a Temporary Filename
 // make the original example short.
 
@@ -916,7 +921,7 @@ namespace stringsplit_2018_10
 {
   // note:
   // this has *undefined* behaviour; sometimes works and sometimes infinite loop
-  // since found is npos when not found and do ++found and use it loop condition.
+  // since `found` is npos when not found and do ++found and use it loop condition.
   //
   // void split(const string &s, char delim, vector<string> &coll)
   // {
@@ -1040,6 +1045,16 @@ TEST(StringSplit, ByBoost)
     EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
   }
 
+  // *cxx-boost-is-any-of* for multiple delimeters
+  {
+    vector<string> coll;
+
+    boost::split(coll, "Name|Address,Phone", 
+        boost::is_any_of("|,"));
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+  }
+
   {
     // note: cxx-boost-split see how boost works
     //
@@ -1138,6 +1153,23 @@ namespace stringsplit_2018_11_strchr {
 
   // 2018.11.14
   // should try memchar/strchr way? nope.
+  
+} // namespace
+
+namespace string_split_2018_11 {
+
+  // copied from TEST(Stdio, GetLine)
+
+  // {
+  //   string s{};
+  //   stringstream iss("one|two|three");
+  //   vector<string> coll{};
+
+  //   while (getline(iss , s, '|'))
+  //     coll.push_back(s);
+
+  //   EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
+  // }
   
 } // namespace
 
@@ -2276,21 +2308,24 @@ TEST(StringParse, Hex)
 
 
 // ={=========================================================================
+// string-join
+
+
 void join(const std::vector<std::string> &vector, const char delim, std::string &joined)
 {
     joined.clear();
 
     for (auto it = vector.cbegin(); it != vector.cend(); ++it)
     {
-        joined += *it;
+        joined.append(*it);
 
         // cxx-iter-arithmetic
         if (it < vector.cend() - 1)
-            joined += delim;
+            joined.append(1, delim);
     }
 }
 
-TEST(String, JoinSequnenceString)
+TEST(String, JoinSequnenceString_01)
 {
     std::vector<string> svec{"fee", "fi", "foe", "fum"};
     std::string s;
@@ -2299,6 +2334,84 @@ TEST(String, JoinSequnenceString)
 
     EXPECT_THAT(s, Eq("fee/fi/foe/fum"));
 }
+
+/*
+
+26. Joining strings together separated by a delimiter
+
+Write a function that, given a list of strings and a delimiter, creates a new
+string by concatenating all the input strings separated with the specified
+delimiter. The delimiter must not appear after the last string, and when no
+input string is provided, the function must return an empty string.
+
+Example: 
+input { "this","is","an","example" } and delimiter ' ' (space), 
+output: "this is an example".
+
+{
+   using namespace std::string_literals;
+
+   std::vector<std::string> v1{ "this","is","an","example" };
+   std::vector<std::string> v2{ "example" };
+   std::vector<std::string> v3{ };
+ 
+   assert(join_strings(v1, " ") == "this is an example"s);
+   assert(join_strings(v2, " ") == "example"s);
+   assert(join_strings(v3, " ") == ""s);
+}
+ 
+*/
+
+// to see why the text uses "-1"
+
+// TEST(U26, 2018_11_28)
+TEST(String, JoinSequnenceString_02)
+{
+  ostringstream os;
+  std::vector<std::string> coll{ "this","is","an","example" };
+
+  copy(coll.begin(), coll.end(), ostream_iterator<string>(os, ","));
+  EXPECT_THAT(os.str(), "this,is,an,example,");
+}
+
+
+namespace U26_Text
+{
+  template<typename Iter>
+    string join_string(Iter begin, Iter end, const char *delimeter)
+    {
+      ostringstream os;
+
+      // copy(begin, end-1, ostream_iterator<string>(os, delimeter));
+      // os << *(end-1);
+
+      // *cxx-prev*
+      copy(begin, prev(end), ostream_iterator<string>(os, delimeter));
+      os << *prev(end);
+
+      return os.str();
+    }
+
+  template<typename Coll>
+    string join_string(Coll coll, const char *delimeter)
+    {
+      if (coll.size() == 0)
+        return string();
+
+      return join_string(coll.begin(), coll.end(), delimeter);
+    }
+}
+
+// TEST(U26, Text)
+TEST(String, JoinSequnenceString_03)
+{
+  using namespace U26_Text;
+
+  std::vector<std::string> coll{ "this","is","an","example" };
+
+  EXPECT_THAT(join_string(coll, " "), "this is an example");
+}
+
 
 // ={=========================================================================
 // 4.10 Finding the nth Instance of a Substring

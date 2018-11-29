@@ -2734,78 +2734,115 @@ TEST(Bool, CheckUsage)
 // ={=========================================================================
 // cxx-stdio
 
-TEST(Stdio, UseInput)
+TEST(Stdio, Input)
 {
-  int i{};
-  double d{};
-  string s{};
-  int i1, i2, i3, i4;
-  
-  // show the same result when use cin. To emulate input:
-  // 10
-  // 4.0
-  // This is a text
-  stringstream iss("10\n4.0\nThis is a text\n");
-  iss >> i;
-  iss >> d;
-  iss >> s;
+  {
+    int i{}; double d{}; string s{};
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This");
+    // show the same result when use cin. To emulate input:
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d; iss >> s;
 
-  // why s is null? 
-  // "If you read token by token, the newline character is not a special
-  // character. In this case, the tokens might contain a newline character."
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
+  }
 
-  stringstream iss2("10\n4.0\nThis is a text\n");
-  iss2 >> i;
-  iss2 >> d;
-  getline(iss2, s);
+  {
+    int i{}; double d{}; string s{};
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "");
+    // show the same result when use cin. To emulate input:
+    stringstream iss("10 4.0 This is a text");
+    iss >> i; iss >> d; iss >> s;
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
+  }
+
+  {
+    int i{}; double d{}; string s{};
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    iss.ignore(numeric_limits<streamsize>::max(), '\n');
+    getline(iss, s);
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
+  }
+
+  {
+    int i{}; double d{}; string s{};
+    int i1, i2, i3, i4;
+    stringstream iss("10\n4.0\n1 2 3 4\n");
+    iss >> i; iss >> d;
+    iss >> i1; iss >> i2; iss >> i3; iss >> i4;
+
+    vector<int> coll{i1, i2, i3, i4};
+
+    EXPECT_EQ(i, 10);
+    EXPECT_EQ(d, 4.0);
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+  }
+}
+
+TEST(Stdio, GetLine)
+{
+  {
+    int i{}; double d{}; string s{};
+    // why s is null? 
+    // "If you read token by token, the newline character is not a special
+    // character. In this case, the tokens might contain a newline character."
+
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    getline(iss, s);
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "");
+  }
 
   // so use stream-maniplulator ws to remove whitespaces
+  {
+    int i{}; double d{}; string s{};
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    getline(iss >> ws, s);
 
-  stringstream iss3("10\n4.0\nThis is a text\n");
-  iss3 >> i;
-  iss3 >> d;
-  getline(iss3 >> ws, s);
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
+  }
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This is a text");
+  {
+    string s{};
+    stringstream iss("one|two|three");
+    vector<string> coll{};
 
+    while (getline(iss , s, '|'))
+      coll.push_back(s);
 
-  // also works but more types
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
+  }
 
-  stringstream iss4("10\n4.0\nThis is a text\n");
-  iss4 >> i;
-  iss4 >> d;
-  iss4.ignore(numeric_limits<streamsize>::max(), '\n');
-  getline(iss4, s);
-  
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This is a text");
+  // why loop once?
+  {
+    char buf[100];
+    int bufsize = 100;
 
-  // whitespaces
+    stringstream iss("one|two|three");
+    vector<string> coll{};
 
-  stringstream iss5("10\n4.0\n1 2 3 4\n");
-  iss5 >> i;
-  iss5 >> d;
-  iss5 >> i1;
-  iss5 >> i2;
-  iss5 >> i3;
-  iss5 >> i4;
+    while (iss.get(buf, bufsize, '|'))
+      coll.push_back(buf);
 
-  vector<int> coll{i1, i2, i3, i4};
-  
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+    EXPECT_THAT(coll, ElementsAre("one"));
+  }
+
+  {
+    char buf[100];
+    int bufsize = 100;
+
+    stringstream iss("one|two|three");
+    vector<string> coll{};
+
+    while (iss.getline(buf, bufsize, '|'))
+      coll.push_back(buf);
+
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
+  }
 }
 
 

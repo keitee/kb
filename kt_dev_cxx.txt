@@ -4548,22 +4548,12 @@ int main()
 ={============================================================================
 *kt_dev_cxx_0000* cxx-stream cxx-file
 
-<cxx-getline> <cxx-string-getline>
-15.3.3 Input/Output of Special Types
-
-The type string from the C++ standard library (see Chapter 13) grows as needed
-to accommodate a lengthy string. Rather than using char*, this is much easier
-and less error prone. In addition, strings provide a convenient function
-getline() for line-by-line reading (see Section 13.2.10, page 677). So,
-whenever you can, avoid the use of C-strings and use strings.
-
-
 <cxx-string-getline>
 
-13.2.10 Input/Output Operators
+CXXSLR-13.2.10 Input/Output Operators
 
-This comes from string class but do not need to qualify std:: due to argument
-dependent lookup.
+std::getline() comes from `string class` but do not need to qualify std:: due
+to argument dependent lookup.
 
 This function reads all characters, including leading whitespaces, until the
 line delimiter or end-of-file is reached. 
@@ -4576,17 +4566,9 @@ while (getline(std::cin, s)) {       // for each line from cin
 }
 
 
-can set delimiter. If you read token by token, the newline character is not a
-special character. In this case, the tokens might contain a newline character.
-
-while (getline(std::cin, s, ’:’)) {   // for each token separated by ’:’
-...
-}
-
-// note: if useful, do further reading.
-// can use stringstream. Note also that since C++11, getline() is overloaded for
-// both lvalue and rvalue stream references, which allows using temporary string
-// streams. See Section 15.10, page 802, for details about string streams.
+Note also that since C++11, getline() is overloaded for both lvalue and rvalue
+stream references, which allows using temporary string streams. See Section
+15.10, page 802, for details about string streams.
 
 void process (const std::string& filecontents)
 {
@@ -4597,7 +4579,7 @@ void process (const std::string& filecontents)
   ...
 }
 
-
+// *cxx-string-code*
 // /usr/include/c++/4.9.2/bits/basic_string.h
 
   /**
@@ -4637,79 +4619,128 @@ void process (const std::string& filecontents)
     { return std::getline(__is, __str, __is.widen('\n')); }
 
 
-<ex>
-TEST(CxxStdio, UseInput)
+TEST(Stdio, GetLine)
 {
-  int i{};
-  double d{};
-  string s{};
-  int i1, i2, i3, i4;
-  
-  // show the same result when use cin. To emulate input:
-  // 10
-  // 4.0
-  // This is a text
-  stringstream iss("10\n4.0\nThis is a text\n");
-  iss >> i;
-  iss >> d;
-  iss >> s;
+  {
+    int i{}; double d{}; string s{};
+    // why s is null? 
+    // "If you read token by token, the newline character is not a special
+    // character. In this case, the tokens might contain a newline character."
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This");
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    getline(iss, s);
 
-  // why s is null? 
-  // "If you read token by token, the newline character is not a special
-  // character. In this case, the tokens might contain a newline character."
-
-  stringstream iss2("10\n4.0\nThis is a text\n");
-  iss2 >> i;
-  iss2 >> d;
-  getline(iss2, s);
-
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "");
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "");
+  }
 
   // so use stream-maniplulator ws to remove whitespaces
+  {
+    int i{}; double d{}; string s{};
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    getline(iss >> ws, s);
 
-  stringstream iss3("10\n4.0\nThis is a text\n");
-  iss3 >> i;
-  iss3 >> d;
-  getline(iss3 >> ws, s);
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
+  }
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This is a text");
+  {
+    string s{};
+    stringstream iss("one|two|three");
+    vector<string> coll{};
+
+    while (getline(iss , s, '|'))
+      coll.push_back(s);
+
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
+  }
+
+  // why loop once?
+  {
+    char buf[100];
+    int bufsize = 100;
+
+    stringstream iss("one|two|three");
+    vector<string> coll{};
+
+    while (iss.get(buf, bufsize, '|'))
+      coll.push_back(buf);
+
+    EXPECT_THAT(coll, ElementsAre("one"));
+  }
+
+  {
+    char buf[100];
+    int bufsize = 100;
+
+    stringstream iss("one|two|three");
+    vector<string> coll{};
+
+    // *cxx-stream-member-function*
+    while (iss.getline(buf, bufsize, '|'))
+      coll.push_back(buf);
+
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
+  }
+}
 
 
-  // also works but more types
+The type string from the C++ standard library (see Chapter 13) grows as needed
+to accommodate a lengthy string. Rather than using char*, this is much easier
+and less error prone. In addition, strings provide a convenient function
+getline() for line-by-line reading. So, whenever you can, avoid the use of
+C-strings and use strings.
 
-  stringstream iss4("10\n4.0\nThis is a text\n");
-  iss4 >> i;
-  iss4 >> d;
-  iss4.ignore(numeric_limits<streamsize>::max(), '\n');
-  getline(iss4, s);
-  
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This is a text");
 
-  // whitespaces
+15.3.2 Input Operator >>
 
-  stringstream iss5("10\n4.0\n1 2 3 4\n");
-  iss5 >> i;
-  iss5 >> d;
-  iss5 >> i1;
-  iss5 >> i2;
-  iss5 >> i3;
-  iss5 >> i4;
+<ex>
 
-  vector<int> coll{i1, i2, i3, i4};
-  
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+TEST(Stdio, Input)
+{
+  {
+    int i{}; double d{}; string s{};
+
+    // show the same result when use cin. To emulate input:
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d; iss >> s;
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
+  }
+
+  {
+    int i{}; double d{}; string s{};
+
+    // show the same result when use cin. To emulate input:
+    stringstream iss("10 4.0 This is a text");
+    iss >> i; iss >> d; iss >> s;
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
+  }
+
+  {
+    int i{}; double d{}; string s{};
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    iss.ignore(numeric_limits<streamsize>::max(), '\n');
+    getline(iss, s);
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
+  }
+
+  {
+    int i{}; double d{}; string s{};
+    int i1, i2, i3, i4;
+    stringstream iss("10\n4.0\n1 2 3 4\n");
+    iss >> i; iss >> d;
+    iss >> i1; iss >> i2; iss >> i3; iss >> i4;
+
+    vector<int> coll{i1, i2, i3, i4};
+
+    EXPECT_EQ(i, 10);
+    EXPECT_EQ(d, 4.0);
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+  }
 }
 
 
@@ -4845,7 +4876,7 @@ setstate(state)     Sets additional state flags
 
 <cxx-stream-format> cxx-stream-manipulator
 
-CLR-15.6 Manipulators
+CXXSLR-15.6 Manipulators
 
 Manipulators for streams are `objects` that modify a stream when applied with
 the standard I/O operators. This does not necessarily mean that something is
@@ -13630,6 +13661,7 @@ TEST(AlgoSwap, IterSwap)
     vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
+    // *cxx-next* *cxx-prev*
     // std::iter_swap(coll.begin(), next(coll.begin()));
     std::iter_swap(coll.begin(), ++coll.begin());
     EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
@@ -46096,6 +46128,8 @@ TEST(StringSplit, GetExtension)
 
 // bits/stringfwd.h
 
+*cxx-string-def*
+
 namespace std {
   template <typename charT,
            typename traits = char_traits<charT>,
@@ -46335,7 +46369,7 @@ CXXSLR-13.2
 <cxx-string-ctor>
 In C++, the type of string literals was changed from char* to const char*. 
 
-1. There is an automatic type conversion from const char* into strings.
+  "This enables an automatic type conversion `from const char*` into strings."
 
 The operations that manipulate the value of a string have several overloaded
 versions.
@@ -46352,23 +46386,78 @@ string s2( s1 );           // direct form of initialzation.
 string s2 = s1;            // copy form of initialzation.
 
 
-TEST(CxxStringTest, RunStringCtors)
+TEST(String, Ctors)
 {
-  string s1{"zoo"};
-  EXPECT_EQ( s1, "zoo");
+  {
+    string s1("nico");
+    EXPECT_THAT(s1.length(), 4);
 
-  string s2("zoo");
-  EXPECT_EQ( s1, "zoo");
+    string s2(5, 'c');
+    EXPECT_THAT(s2, ElementsAre('c', 'c', 'c', 'c', 'c'));
+  }
 
-  char letter = 'A';
+  {
+    string s1{"zoo"};
+    EXPECT_EQ(s1, "zoo");
 
-  // *cxx-string-ctor-const*
+    string s2("zoo");
+    EXPECT_EQ(s1, "zoo");
+  }
+}
+
+
+{cxx-string-const} *cxx-string-append*
+
+TEST(String, Const)
+{
+  {
+    // /** *cxx-cstring*
+    //  *  @brief  Construct string as copy of a C string.
+    //  *  @param  __s  Source C string.
+    //  *  @param  __a  Allocator to use (default is default allocator).
+    //  */
+    // basic_string(`const` _CharT* __s, const _Alloc& __a = _Alloc());
+
+    // not a problem to construct string from const char*
+    // const char s1[] = "this is first message";
+    // const char *s2 = "this is first message";
+
+    // both cause error
+    //
+    // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    //
+    // const char const_letter = 'A';
+    // string string_from_const_letter(const_letter);
+    //
+    // char non_const_letter = 'A';
+    // string string_from_non_const_letter(non_const_letter);
+  }
+
+  // *cxx-string-const-ctor-const*
+
+  // ctor and append cause error:
   //
-  // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
-  // string s3(letter);
+  // {
+  //   char letter = 'A';
   //
-  // ok since:
+  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+  //   //      string s(letter);
+  // 
+  //   string s(letter);
+  // }
   //
+  // {
+  //   char letter = 'A';
+  //
+  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+  //   //         s.append(letter);
+  //
+  //   string s;
+  //   s.append(letter);
+  // }
+
+  // HOW TO GET AROUND?
+  
   // /**
   //  *  @brief  Append a character.
   //  *  @param __c  The character to append.
@@ -46376,26 +46465,27 @@ TEST(CxxStringTest, RunStringCtors)
   //  */
   // basic_string&
   // operator+=(_CharT __c)
-  // { 
+  // {
   //  this->push_back(__c);
   //  return *this;
   // }
-  //
-  // this is error since there is no string ctor which takes single
-  // character, char, but there are string ctor which takes char*. so can
-  // create a string from char literal or char array.
 
-  string s4;
-  s4 += letter;
-  EXPECT_EQ( s4, "A");
+  {
+    string s;
+    char letter = 'A';
 
-  string s5;
+    s += letter;
 
-  // error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
-  // s5.append(letter);
+    EXPECT_EQ(s, "A");
+  }
 
-  s5.append(1, letter);
-  EXPECT_EQ( s5, "A");
+  {
+    string s;
+    char letter = 'A';
+
+    s.append(1, letter);
+    EXPECT_EQ(s, "A");
+  }
 }
 
 
@@ -46566,6 +46656,48 @@ TEST(StringOperations, AssignSwap)
 
 
 <cxx-string-insert-cxx-string-append>
+
+In JAVA, the following shows inefficient concatenation. Assume that strings are
+all the same length, x and there are n strings. Just think about concatenation.
+For the first iteration, x copies char by char. Next iteration, 2x and so on.
+This reduces to O(xn^2) but not O((xn)^2)
+
+String sentence = "";
+
+for( String w : words )
+   sentence = sentence + w;
+
+This add string to sentence and copy the temp result to sentence for each loop.
+note: that there is no append() member in String class. Should be written
+
+StringBuffer sentence = new StringBuffer();
+
+for( String w : words )
+   sentence.append(w);
+
+
+How minimize this in C++?
+
+1. Use append
+As for the above, use append since string has append member function.
+
+2. Use move()
+Since C++11, operator + is also overloaded for strings that are rvalue
+references to support the move semantics. If a string argument passed to
+operator + is no longer needed afterward.
+
+string foo()
+{
+  std::string s1("international");
+  std::string s2("ization");
+
+  std::string s = std::move(s1) + std::move(s2); // OK
+  // s1 and s2 have valid state with unspecified value
+
+  return s;
+}
+
+
 To append characters, you can use operator +=, append(), and push_back().
 
 Operator += appends single-argument values, including initializer lists of
@@ -46909,48 +47041,6 @@ s.clear();  // clear contents
 s.erase();  // same as s.erase(0, npos), erase all characters
 
 
-<inefficient-concatenation>
-In JAVA, the following shows inefficient concatenation. Assume that strings are
-all the same length, x and there are n strings. Just think about concatenation.
-For the first iteration, x copies char by char. Next iteration, 2x and so on.
-This reduces to O(xn^2) but not O((xn)^2)
-
-String sentence = "";
-
-for( String w : words )
-   sentence = sentence + w;
-
-This add string to sentence and copy the temp result to sentence for each loop.
-note: that there is no append() member in String class. Should be written
-
-StringBuffer sentence = new StringBuffer();
-
-for( String w : words )
-   sentence.append(w);
-
-
-How minimize this in C++?
-
-1. Use append
-As for the above, use append since string has append member function.
-
-2. Use move()
-Since C++11, operator + is also overloaded for strings that are rvalue
-references to support the move semantics. If a string argument passed to
-operator + is no longer needed afterward.
-
-string foo()
-{
-  std::string s1("international");
-  std::string s2("ization");
-
-  std::string s = std::move(s1) + std::move(s2); // OK
-  // s1 and s2 have valid state with unspecified value
-
-  return s;
-}
-
-
 ={============================================================================
 *kt_dev_cxx_0000* cxx-string-find
 
@@ -47016,7 +47106,7 @@ Since:
       find(_CharT __c, size_type __pos = 0) const _GLIBCXX_NOEXCEPT;
 
 
-Finds the first `character of any of these chars`:
+Finds the first `character of *any* of these chars`:
 
 size_type string::find_first_of (const string& str) const
 size_type string::find_first_of (const string& str, size_type idx) const
