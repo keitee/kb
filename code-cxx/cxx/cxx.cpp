@@ -74,15 +74,21 @@ TEST(Size, Arrays)
   // valid array index     [0, 6) [0, size(), sizeof()) or [0, 5] [0, size()-1]
   // valid cstring index   [0, 5) [0, strlen()) or [0, 4] [0, strlen()-1]
 
-  char *s1 = "this is first message";
+  {
+    // cxx.cpp:77:14: warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]
+    // char *s1 = "this is first message";
+    // is a pointer
+    // EXPECT_EQ(sizeof(s2), 8);
+    // EXPECT_EQ(sizeof s2, 8);
+  }
+
   char s2[] = "this is first message";
 
-  // is a pointer
-  EXPECT_EQ(sizeof(s1), 8);
-  EXPECT_EQ(sizeof s1, 8);
+  EXPECT_EQ(sizeof(s2), 22);
+  EXPECT_EQ(sizeof s2, 22);
 
   // is object
-  EXPECT_EQ(sizeof(*s1), 1);
+  EXPECT_EQ(sizeof(*s2), 1);
 
   // is array
   EXPECT_EQ(sizeof(s2), 22);
@@ -91,7 +97,7 @@ TEST(Size, Arrays)
   // strlen
   EXPECT_EQ(strlen(s2), 21);
 
-  string s{s1};
+  string s{s2};
   EXPECT_EQ(s.size(), 21);
 
 
@@ -223,11 +229,15 @@ TEST(Pair, Initialisation)
     make_pair(5, "V")
   };
 
+  (void)pair_init_01;
+
   const auto pair_init_02 = {
     make_pair(10, "X"),
     make_pair(9, "IX"),
     make_pair(5, "V")
   };
+
+  (void)pair_init_02;
 
   // vector that has pairs
 
@@ -978,11 +988,12 @@ class ScopedEnum {
                     result = 2;
                     break;
 
+                // to avoid warning
                 // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
-                case EnumFlags::SPORT|EnumFlags::MUSIC:
-                    cout << "has sport and music flag" << endl;
-                    result = 3;
-                    break;
+                // case EnumFlags::SPORT|EnumFlags::MUSIC:
+                //     cout << "has sport and music flag" << endl;
+                //     result = 3;
+                //     break;
 
                 default:
                     cout << "has unknown flag" << endl;
@@ -1001,7 +1012,10 @@ TEST(CxxFeaturesTest, UseScopedEnum)
     EXPECT_EQ(0, scoped.checkFlags(EnumFlags::SPORT));
     EXPECT_EQ(1, scoped.checkFlags(EnumFlags::KIDS));
     EXPECT_EQ(2, scoped.checkFlags(EnumFlags::MUSIC));
-    EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
+
+    // to avoid warning
+    // EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
+ 
     EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
     // EXPECT_EQ(100, scoped.checkFlags(200));
 }
@@ -2667,7 +2681,7 @@ namespace __cxx_check {
 
 void CheckFailed(const char *file, int line, const char *cond,
                           unsigned int v1, unsigned int v2) {
-  printf("Sanitizer CHECK failed: %s:%d %s (%lld, %lld)\n", file, line, cond,
+  printf("Sanitizer CHECK failed: %s:%d %s (%d, %d)\n", file, line, cond,
                                                             v1, v2);
 }
 
@@ -3054,11 +3068,6 @@ TEST(Regex, Match)
 
 // CXXSLR-14.2 Dealing with Subexpressions
 
-// Regex: <(.*)>(.*)</(\1)>
-// XML tag: <tag-name>the value</tag-name>.
-//           | m[1] | |  m[2] |  | m[3] | |
-// | prefix|             m[0]            | suffix
-
 TEST(Regex, MatchResult)
 {
   string data{"XML tag: <tag-name>the value</tag-name>."};
@@ -3070,22 +3079,67 @@ TEST(Regex, MatchResult)
   // for returned details of the match
   std::smatch m;
 
-  if (regex_search(data, m, rx))
+  auto found =  regex_search(data, m, rx);
+  EXPECT_TRUE(found);
+
+  if (found)
   {
+    // Regex: <(.*)>(.*)</(\1)>
+    // XML tag: <tag-name>the value</tag-name>.
+    //           | m[1] | |  m[2] |  | m[3] | |
+    // | prefix|             m[0]            | suffix
+    //
+    // In general, the match_results object contains:
+    //
+    //  o A sub_match object m[0] for all the matched characters
+    //
+    //  o A prefix(), a sub_match object that represents all characters before the
+    //  first matched character
+    //
+    //  o A suffix(), a sub_match object that represents all characters after the
+    //  last matched character
+
     EXPECT_THAT(m.empty(), false);
-    EXPECT_THAT(m.size(), 3);
+
+    // size() yields the number of sub_match objects (including m[0]).
+
+    EXPECT_THAT(m.size(), 4);
 
     // member function str() to yield the matched string as a whole (calling
     // str() or str(0)) or the nth matched substring (calling str(n)), which is
     // empty if no matched substring exists (thus, passing an n greater than
     // size() is valid)
+    // that is m[0]
 
-    cout << "m str : " << m.str() << endl;
+    EXPECT_THAT(m.str(), "<tag-name>the value</tag-name>");
 
-    EXPECT_THAT(m.str(), "xx");
+    // member function length() to yield the length of the matched string as a
+    // whole (calling length() or length(0)) or the length of the nth matched
+    // substring (calling length(n)), which is 0 if no matched substring exists
+    // (thus, passing an n greater than size() is valid)
+
+    EXPECT_THAT(m.length(), 30);
+
+    // member function position() to yield the position of the matched string as
+    // a whole (calling position() or position(0)) or the position of the nth
+    // matched substring (calling length(n))
+
+    EXPECT_THAT(m.position(),9);
+    EXPECT_THAT(m.prefix().str(), "XML tag: ");
+    EXPECT_THAT(m.suffix().str(), ".");
+
+    EXPECT_THAT(m[0].str(), "tag-name");
+    EXPECT_THAT(m.str(0), "tag-name");
+    EXPECT_THAT(m.position(), 10);
+
+    EXPECT_THAT(m[1].str(), "the value");
+    EXPECT_THAT(m.str(1), "the value");
+    EXPECT_THAT(m.position(), 19);
+
+    EXPECT_THAT(m[2].str(), "tag-name");
+    EXPECT_THAT(m.str(2), "tag-name");
+    EXPECT_THAT(m.position(), 30);
   }
-  else
-    cout << "no matchs" << endl;
 }
 
 
@@ -3101,6 +3155,68 @@ TEST(Regex, MatchResult)
 // something to look out for because there is `no-change` in bit representation.
 // This means abs() has no effect when fed the largest negative number. So bit
 // representation is 'agnostic' to whether it's signed or unsigned.
+
+// cxx-bitset-code
+//
+// usr/include/c++/4.9/bitset/
+//
+//       /// Initial bits bitwise-copied from a single word (others set to zero).
+// #if __cplusplus >= 201103L
+//       constexpr bitset(unsigned long long __val) noexcept
+//       : _Base(_Sanitize_val<_Nb>::_S_do_sanitize_val(__val)) { }
+// #else
+//       bitset(unsigned long __val)
+//       : _Base(__val)
+//       { _M_do_sanitize(); }
+// #endif
+
+TEST(Bit, BitSetCtor)
+{
+  // {
+  //   int value = 1024;
+  //
+  //   // warning: narrowing conversion of ‘value’ from ‘int’ to ‘long long unsigned int’ inside { } [-Wnarrowing]
+  //   bitset<32> bitsetx{value};
+  //   EXPECT_EQ(bitsetx.to_string(), "00000000000000000000010000000000");
+  // }
+
+  {
+    unsigned int value = 1024;
+    bitset<32> bitsetx{value};
+    EXPECT_EQ(bitsetx.to_string(), "00000000000000000000010000000000");
+  }
+
+  // note: can use variable to set size of bitset.
+  {
+    const int x = 40;
+    bitset<x> coll(1U);
+    EXPECT_THAT(coll.size(), 40);
+  }
+}
+
+TEST(Bit, SizeConsideration)
+{
+  vector<bool> boolvec(32,1);
+  bitset<32> bitvec(1U);
+  bool bitbool[32];
+
+  EXPECT_THAT(boolvec.size(), 32);
+#if __GNUC__ && __x86_64__
+  EXPECT_THAT(sizeof(boolvec), 72);   // 64 bits
+#else
+  EXPECT_THAT(sizeof(boolvec), 20);   // 32 bits
+#endif
+
+  EXPECT_THAT(bitvec.size(), 32);
+#if __GNUC__ && __x86_64__
+  EXPECT_THAT(sizeof(bitvec), 8);     // 64 bits
+#else
+  EXPECT_THAT(sizeof(bitvec), 4);     // 32 bits
+#endif
+
+  EXPECT_THAT(sizeof(bitbool), 32);
+}
+
 
 TEST(Bit, MaxNegagiveIsSpecial)
 {
@@ -3146,16 +3262,17 @@ TEST(Bit, RightShift)
     // unsigned int int_max = (~((unsigned int)0)) >> 1;
 
     unsigned int uint_max = ~((unsigned int)0);
-    unsigned int uint_max_two = (1U << 32) -1;
+
+    // cxx.cpp:3195:56: warning: left shift count >= width of type
+    // unsigned int uint_max_two = (((unsigned int)1U) << 32) -1;
 
     int int_max = uint_max >> 1;
     int int_min = int_max + 1;
 
-    bitset<32> bitsetx{int_max};
+    bitset<32> bitsetx{(unsigned int)int_max};
     EXPECT_EQ(bitsetx.to_string(), "01111111111111111111111111111111");
 
     EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
-    EXPECT_EQ(uint_max_two, numeric_limits<unsigned int>::max());
 
     EXPECT_EQ(int_max, numeric_limits<int>::max());
     EXPECT_EQ(int_min, numeric_limits<int>::min());
@@ -3265,6 +3382,8 @@ TEST(Bit, BitVectors)
   using namespace bit_vectors;
 
   auto array_size = sizeof(a)/sizeof(a[0]);
+
+  EXPECT_THAT(array_size, 2);
 
   set_bit(35);
   set_bit(45);
@@ -4026,9 +4145,9 @@ namespace const_member_function
   template <class T, size_t R, size_t C>
     void print_array2d(array2d<T, R, C> const & arr)
     {
-      for (int i = 0; i < R; ++i)
+      for (size_t i = 0; i < R; ++i)
       {
-        for (int j = 0; j < C; ++j)
+        for (size_t j = 0; j < C; ++j)
         {
           std::cout << arr.at(i, j) << ' ';
         }
@@ -4146,7 +4265,7 @@ TEST(Cpp, Precision)
   }
 
   {
-    char *pmesg = "0123456789";
+    char pmesg[] = "0123456789";
 
     printf("0: %.*s \n", 2, pmesg );
     printf("0: %.*s \n", 3, pmesg );

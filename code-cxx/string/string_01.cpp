@@ -2867,6 +2867,7 @@ TEST(String, CountWordsInTextFile)
 
   for(const auto &e : wm)
   {
+    (void)e; 
     ++word_count;
   }
 
