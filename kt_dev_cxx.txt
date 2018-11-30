@@ -31880,6 +31880,32 @@ TEST(Regex, UseMatch)
   EXPECT_EQ(found, true);
 }
 
+TEST(Regex, MatchFound)
+{
+  string data{"XML tag: <tag-name>the value</tag-name>."};
+
+  {
+    regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>)");
+
+    // for returned details of the match
+    std::smatch m;
+
+    auto found =  regex_search(data, m, rx);
+    EXPECT_TRUE(found);
+  }
+
+  {
+    // ok
+    regex rx("<(.*)>(.*)</(\\1)>");
+
+    // for returned details of the match
+    std::smatch m;
+
+    auto found =  regex_search(data, m, rx);
+    EXPECT_TRUE(found);
+  }
+}
+
 
 <cxx-regex-match-result>
 
@@ -31893,6 +31919,105 @@ some predefined instantiations:
   o cmatch: for details of matches in C-strings (const char*)
   o wsmatch: for details of matches in wstrings
   o wcmatch: for details of matches in wide C-strings (const wchar_t*)
+
+// CXXSLR-14.2 Dealing with Subexpressions
+
+TEST(Regex, MatchResult)
+{
+  string data{"XML tag: <tag-name>the value</tag-name>."};
+  // regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>")");
+  /// regex rx("<([\w-]+)>(.*)<(\/[\w-]+)>");
+  //            <([\w-]+)>(.*)<\/([\w-]+)>
+  regex rx("<(.*)>(.*)</(\\1)>");
+
+  // for returned details of the match
+  std::smatch m;
+
+  auto found =  regex_search(data, m, rx);
+  EXPECT_TRUE(found);
+
+  if (found)
+  {
+    // Regex: <(.*)>(.*)</(\1)>
+    // XML tag: <tag-name>the value</tag-name>.
+    //           | m[1] | |  m[2] |  | m[3] | |
+    // | prefix|             m[0]            | suffix
+    //
+    // In general, the match_results object contains:
+    //
+    //  o A sub_match object m[0] for all the matched characters
+    //
+    //  o A prefix(), a sub_match object that represents all characters before the
+    //  first matched character
+    //
+    //  o A suffix(), a sub_match object that represents all characters after the
+    //  last matched character
+
+    EXPECT_THAT(m.empty(), false);
+
+    // size() yields the number of sub_match objects (including m[0]).
+
+    EXPECT_THAT(m.size(), 4);
+
+    // member function str() to yield the matched string as a whole (calling
+    // str() or str(0)) or the nth matched substring (calling str(n)), which is
+    // empty if no matched substring exists (thus, passing an n greater than
+    // size() is valid)
+    // that is m[0]
+
+    EXPECT_THAT(m.str(), "<tag-name>the value</tag-name>");
+
+    // member function length() to yield the length of the matched string as a
+    // whole (calling length() or length(0)) or the length of the nth matched
+    // substring (calling length(n)), which is 0 if no matched substring exists
+    // (thus, passing an n greater than size() is valid)
+
+    EXPECT_THAT(m.length(), 30);
+
+    // member function position() to yield the position of the matched string as
+    // a whole (calling position() or position(0)) or the position of the nth
+    // matched substring (calling length(n))
+
+    EXPECT_THAT(m.position(),9);
+    EXPECT_THAT(m.prefix().str(), "XML tag: ");
+    EXPECT_THAT(m.suffix().str(), ".");
+
+    EXPECT_THAT(m[1].str(), "tag-name");
+    EXPECT_THAT(m.str(1), "tag-name");
+    EXPECT_THAT(m.position(1), 10);
+
+    EXPECT_THAT(m[2].str(), "the value");
+    EXPECT_THAT(m.str(2), "the value");
+    EXPECT_THAT(m.position(2), 19);
+
+    EXPECT_THAT(m[3].str(), "tag-name");
+    EXPECT_THAT(m.str(3), "tag-name");
+    EXPECT_THAT(m.position(3), 30);
+
+    // use iterator
+
+    ostringstream os;
+
+    for (auto pos = m.begin(); pos != m.end(); ++pos)
+    {
+      os << *pos << ", " << pos->length() << endl;
+    }
+
+    // works
+    // char expected[] = "<tag-name>the value</tag-name>, 30\n"
+    //   "tag-name, 8\n"
+    //   "the value, 9\n"
+    //   "tag-name, 8\n";
+    // EXPECT_THAT(os.str(), expected);
+
+    // works
+    // string expected("<tag-name>the value</tag-name>, 30\ntag-name, 8\nthe value, 9\ntag-name, 8\n");
+    // EXPECT_THAT(os.str(), expected);
+
+    EXPECT_THAT(os.str(), 
+        "<tag-name>the value</tag-name>, 30\ntag-name, 8\nthe value, 9\ntag-name, 8\n");
+  }
+}
 
 
 ={============================================================================
@@ -48470,7 +48595,7 @@ sstream strm(string);
 strm is an sstream that holds a copy of the string s.
 
 strm.str();             
-return a copy of the string that strm holds. Returns the buffer as a string
+return a copy of cxx-string that strm holds. Returns the buffer as a string
 
 strm.str(string);       
 copies the string s into strm. Sets the contents of the buffer to string and

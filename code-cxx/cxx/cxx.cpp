@@ -3066,6 +3066,34 @@ TEST(Regex, Match)
   EXPECT_EQ(found, true);
 }
 
+
+TEST(Regex, MatchFound)
+{
+  string data{"XML tag: <tag-name>the value</tag-name>."};
+
+  {
+    regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>)");
+
+    // for returned details of the match
+    std::smatch m;
+
+    auto found =  regex_search(data, m, rx);
+    EXPECT_TRUE(found);
+  }
+
+  {
+    // ok
+    regex rx("<(.*)>(.*)</(\\1)>");
+
+    // for returned details of the match
+    std::smatch m;
+
+    auto found =  regex_search(data, m, rx);
+    EXPECT_TRUE(found);
+  }
+}
+
+
 // CXXSLR-14.2 Dealing with Subexpressions
 
 TEST(Regex, MatchResult)
@@ -3128,17 +3156,40 @@ TEST(Regex, MatchResult)
     EXPECT_THAT(m.prefix().str(), "XML tag: ");
     EXPECT_THAT(m.suffix().str(), ".");
 
-    EXPECT_THAT(m[0].str(), "tag-name");
-    EXPECT_THAT(m.str(0), "tag-name");
-    EXPECT_THAT(m.position(), 10);
+    EXPECT_THAT(m[1].str(), "tag-name");
+    EXPECT_THAT(m.str(1), "tag-name");
+    EXPECT_THAT(m.position(1), 10);
 
-    EXPECT_THAT(m[1].str(), "the value");
-    EXPECT_THAT(m.str(1), "the value");
-    EXPECT_THAT(m.position(), 19);
+    EXPECT_THAT(m[2].str(), "the value");
+    EXPECT_THAT(m.str(2), "the value");
+    EXPECT_THAT(m.position(2), 19);
 
-    EXPECT_THAT(m[2].str(), "tag-name");
-    EXPECT_THAT(m.str(2), "tag-name");
-    EXPECT_THAT(m.position(), 30);
+    EXPECT_THAT(m[3].str(), "tag-name");
+    EXPECT_THAT(m.str(3), "tag-name");
+    EXPECT_THAT(m.position(3), 30);
+
+    // use iterator
+
+    ostringstream os;
+
+    for (auto pos = m.begin(); pos != m.end(); ++pos)
+    {
+      os << *pos << ", " << pos->length() << endl;
+    }
+
+    // works
+    // char expected[] = "<tag-name>the value</tag-name>, 30\n"
+    //   "tag-name, 8\n"
+    //   "the value, 9\n"
+    //   "tag-name, 8\n";
+    // EXPECT_THAT(os.str(), expected);
+
+    // works
+    // string expected("<tag-name>the value</tag-name>, 30\ntag-name, 8\nthe value, 9\ntag-name, 8\n");
+    // EXPECT_THAT(os.str(), expected);
+
+    EXPECT_THAT(os.str(), 
+        "<tag-name>the value</tag-name>, 30\ntag-name, 8\nthe value, 9\ntag-name, 8\n");
   }
 }
 

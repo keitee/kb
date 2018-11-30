@@ -48,7 +48,8 @@ namespace U30_Text
   // };
 
   uri_parts parse_uri(std::string uri)
-  {
+  { 
+    uri_parts parts;
     std::regex rx(R"(^(\w+):\/\/([\w+.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
 
     auto matches = std::smatch();
@@ -61,20 +62,22 @@ namespace U30_Text
     //   uri_parts parts;
     //   parts.protocol = matches[1].str();
     // }
+    
+    return parts; 
   }
 
 } // namespace
 
-TEST(XX, XX)
+TEST(U30, Text)
 {
   using namespace U30_Text;
 
   {
-    auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
+    auto p1 = parse_uri("https://packt.com");
+    // auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
   }
 
 }
-
 
 
 // ={=========================================================================
