@@ -3005,7 +3005,7 @@ TEST(Rtti, UseDynamicCast)
 
 // 14.1 The Regex Match and Search Interface
 
-TEST(Regex, UseMatch)
+TEST(Regex, Match)
 {
   // find XML/HTML tagged value (using fefault syntax)
   regex reg1("<.*>.*</.*>");
@@ -3050,6 +3050,42 @@ TEST(Regex, UseMatch)
   found = regex_search ("XML tag: <tag>value</tag>",
       regex(".*<(.*)>.*</\\1>.*")); // matches
   EXPECT_EQ(found, true);
+}
+
+// CXXSLR-14.2 Dealing with Subexpressions
+
+// Regex: <(.*)>(.*)</(\1)>
+// XML tag: <tag-name>the value</tag-name>.
+//           | m[1] | |  m[2] |  | m[3] | |
+// | prefix|             m[0]            | suffix
+
+TEST(Regex, MatchResult)
+{
+  string data{"XML tag: <tag-name>the value</tag-name>."};
+  // regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>")");
+  /// regex rx("<([\w-]+)>(.*)<(\/[\w-]+)>");
+  //            <([\w-]+)>(.*)<\/([\w-]+)>
+  regex rx("<(.*)>(.*)</(\\1)>");
+
+  // for returned details of the match
+  std::smatch m;
+
+  if (regex_search(data, m, rx))
+  {
+    EXPECT_THAT(m.empty(), false);
+    EXPECT_THAT(m.size(), 3);
+
+    // member function str() to yield the matched string as a whole (calling
+    // str() or str(0)) or the nth matched substring (calling str(n)), which is
+    // empty if no matched substring exists (thus, passing an n greater than
+    // size() is valid)
+
+    cout << "m str : " << m.str() << endl;
+
+    EXPECT_THAT(m.str(), "xx");
+  }
+  else
+    cout << "no matchs" << endl;
 }
 
 

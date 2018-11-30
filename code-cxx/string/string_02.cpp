@@ -3,6 +3,7 @@
 #include <iostream>
 #include <list>
 #include <deque>
+#include <regex>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -657,8 +658,44 @@ an uppercase letter from A to Z and D is a digit), write:
    assert(expected == extract_license_plate_numbers(text));
 }
 
+requires *cxx-regex*
+
 */
 
+namespace U29_2018_11_29
+{
+  // so it's pattern matching but no idea.
+
+} // namespace
+
+namespace U29_Text
+{
+  // The simplest way to solve this problem is by using regular expressions. The
+  // regular expression that meets the described format is 
+  //
+  // "[A-Z]{3}-[A-Z]{2} \d{3,4}".
+
+  // The first function only has to validate that an input string contains only
+  // text that matches this regular expression. For that, we can use
+  // std::regex_match(), as follows:
+
+  bool validate_license_plate_format(std::string str)
+  {
+    std::regex rx(R"([A-Z]{3}-[A-Z]{2} \d{3,4})");
+    return std::regex_match(str.data(), rx);
+  }
+
+} // namespace
+
+TEST(U29, Text)
+{
+  using namespace U29_Text;
+
+  EXPECT_TRUE(validate_license_plate_format("ABC-DE 123"));
+  EXPECT_TRUE(validate_license_plate_format("ABC-DE 1234"));
+  EXPECT_TRUE(!validate_license_plate_format("ABC-DE 12345"));
+  EXPECT_TRUE(!validate_license_plate_format("abc-de 1234"));
+}
 
 // ={=========================================================================
 
@@ -668,6 +705,36 @@ an uppercase letter from A to Z and D is a digit), write:
 
 Write a function that, given a string that represents a URL, parses and extracts
 the parts of the URL (protocol, domain, port, path, query, and fragment).
+
+{
+   auto p1 = parse_uri("https://packt.com");
+   assert(p1.has_value());
+   assert(p1->protocol == "https");
+   assert(p1->domain == "packt.com");
+   assert(!p1->port.has_value());
+   assert(!p1->path.has_value());
+   assert(!p1->query.has_value());
+   assert(!p1->fragment.has_value());
+
+   auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
+   assert(p2.has_value());
+   assert(p2->protocol == "https");
+   assert(p2->domain == "bbc.com");
+   assert(p2->port == 80);
+   assert(p2->path.value() == "/en/index.html");
+   assert(p2->query.value() == "lite=true");
+   assert(p2->fragment.value() == "ui");
+}
+
+requires *cxx-regex*
+
+For this task we will consider that a URL has the following parts: protocol and
+domain are mandatory, and port, path, query, and fragment are all optional. The
+following structure is used to return results from parsing an URL
+(alternatively, you could return a tuple and use structured binding to bind
+variables to the various sub parts of the tuple):
+
+std::regex rx(R"(^(\w+):\/\/([\w.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
 
 */
 
@@ -681,6 +748,15 @@ the parts of the URL (protocol, domain, port, path, query, and fragment).
 Write a function that, given a text containing dates in the format dd.mm.yyyy or
 dd-mm-yyyy, transforms the text so that it contains dates in the format
 yyyy-mm-dd.
+
+{
+   using namespace std::string_literals;
+
+   assert(transform_date("today is 01.12.2017!"s) == 
+          "today is 2017-12-01!"s);
+}
+
+requires *cxx-regex*
 
 */
 
