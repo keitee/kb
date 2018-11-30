@@ -7,6 +7,7 @@
 #include <boost/regex.hpp>
 #include <boost/cast.hpp>
 #include <boost/lexical_cast.hpp>
+#include <regex>
 
 #include "gmock/gmock.h"
 
@@ -2310,7 +2311,6 @@ TEST(StringParse, Hex)
 // ={=========================================================================
 // string-join
 
-
 void join(const std::vector<std::string> &vector, const char delim, std::string &joined)
 {
     joined.clear();
@@ -2456,8 +2456,9 @@ TEST(String, FindNthSubstring)
     EXPECT_THAT(nth_substring(5, s, p), false);
 }
 
+
 // ={=========================================================================
-// use raw string
+// string-raw
 
 // { "address": {
 //          "road":"Drury Ln",
@@ -2465,7 +2466,7 @@ TEST(String, FindNthSubstring)
 //          "state":"CO",
 //          "country":"US" }}
 
-TEST(String, UseRawString)
+TEST(String, RawString)
 {
     const std::string s = R"({ "address": {
          "road":"Drury Ln",

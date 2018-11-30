@@ -65,102 +65,6 @@ namespace string_ex
 } // namespace
 
 
-namespace U27_Text 
-{
-  // namespace std {
-  //   template <typename charT,
-  //            typename traits = char_traits<charT>,
-  //            typename Allocator = allocator<charT> >
-  //              class basic_string;
-  //  
-  //   typedef basic_string<char> string;
-  // }
-  // 
-  // Q: WHY define tstring when it looks the same as std::string??
-  //
-  // template <typename T>
-  //   using tstring = std::basic_string<T, std::char_traits<T>,
-  //         std::allocator<T>>;
-  //
-  // template <typename T>
-  //   using tstringstream = std::basic_stringstream<T, std::char_traits<T>,
-  //         std::allocator<T>>;
-
-  // template <typename T>
-  //   inline std::vector<tstring<T>> split(tstring<T> text, const T delim)
-  //   {
-  //     auto ss = tstringstream<T>{text};
-  //     auto tokens = std::vector<tstring<T>>{};
-  //     auto token = tstring<T>{};
-
-  //     while (std::getline(ss, token, delim))
-  //     {
-  //       if (!token.empty()) tokens.push_back(token);
-  //     }
-
-  //     return tokens;
-  //   }
-
-  // As boost version, no return and reference arg
-
-  inline void split(std::vector<string> &coll, const std::string &text, const char delim)
-  {
-    std::stringstream ss{text};
-    std::string token{};
-
-    while (std::getline(ss, token, delim))
-    {
-      if (!token.empty()) coll.push_back(token);
-    }
-  }
-
-  inline void split(std::vector<string> &coll, const std::string &text, const string delims)
-  {
-    size_t pos{}, prev_pos{};
-
-    while ((pos = text.find_first_of(delims, prev_pos)) != std::string::npos)
-    {
-      coll.push_back(text.substr(prev_pos, pos - prev_pos));
-      prev_pos = ++pos;
-    }
-
-    coll.push_back(text.substr(prev_pos, pos));
-  }
-
-  // text version
-  //
-  // inline void split(std::vector<string> &coll, const std::string &text, const string delims)
-  // {
-  //   size_t pos{}, prev_pos{};
-  //
-  //   while ((pos = text.find_first_of(delims, prev_pos)) != std::string::npos)
-  //   {
-  //     if (pos > prev_pos)
-  //       coll.push_back(text.substr(prev_pos, pos - prev_pos));
-  //
-  //     prev_pos = ++pos;
-  //   }
-  //
-  //   if (prev_pos < text.length())
-  //     coll.push_back(text.substr(prev_pos, pos));
-  // }
-}
-
-
-TEST(U27, Text)
-{
-  using namespace U27_Text;
-
-  std::vector<std::string> coll1{}, coll2{};
-
-  split(coll1, "this is a sample", ' ');
-  EXPECT_THAT(coll1, ElementsAre("this", "is", "a", "sample"));
-
-  split(coll2, "this is a sample", " |,.");
-  EXPECT_THAT(coll2, ElementsAre("this", "is", "a", "sample"));
-}
-
-
 TEST(XX, XX)
 {
   using namespace string_ex;
@@ -200,14 +104,78 @@ TEST(XX, XX)
     EXPECT_THAT(result, ElementsAre("Name", "Address", "Phone"));
   }
 
-  {
-    vector<string> coll;
-    string delim{"|,."};
-    // auto f = is_any_of<string>(delim);
-    split(coll, "Name|Address|Phone", is_any_of<string>(delim));
+}
 
-    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+namespace U29_2018_11_29
+{
+  // so it's pattern matching but no idea.
+
+} // namespace
+
+namespace U29_Text
+{
+  // The simplest way to solve this problem is by using regular expressions. The
+  // regular expression that meets the described format is 
+  //
+  // "[A-Z]{3}-[A-Z]{2} \d{3,4}".
+
+  // The first function only has to validate that an input string contains only
+  // text that matches this regular expression. For that, we can use
+  // std::regex_match(), as follows:
+
+  bool validate_license_plate_format(std::string str)
+  {
+    std::regex rx(R"([A-Z]{3}-[A-Z]{2} \d{3,4})");
+    return std::regex_match(str.data(), rx);
   }
+
+} // namespace
+
+TEST(U29, Text)
+{
+  using namespace U29_Text;
+
+  EXPECT_TRUE(validate_license_plate_format("ABC-DE 123"));
+  EXPECT_TRUE(validate_license_plate_format("ABC-DE 1234"));
+  EXPECT_TRUE(!validate_license_plate_format("ABC-DE 12345"));
+  EXPECT_TRUE(!validate_license_plate_format("abc-de 1234"));
+}
+
+TEST(XX,XXZ)
+{
+  // find XML/HTML-tagged value (using default syntax):
+  regex reg1("<.*>.*</.*>");
+  bool found = regex_match ("<tag>value</tag>", // data
+      reg1); // regular expression
+  out(found);
+  // find XML/HTML-tagged value (tags before and after the value must match):
+  regex reg2("<(.*)>.*</\\1>");
+  found = regex_match ("<tag>value</tag>", // data
+      reg2); // regular expression
+  out(found);
+  // find XML/HTML-tagged value (using grep syntax):
+  regex reg3("<\\(.*\\)>.*</\\1>",regex_constants::grep);
+  found = regex_match ("<tag>value</tag>", // data
+      reg3); // regular expression
+  out(found);
+  // use C-string as regular expression (needs explicit cast to regex):
+  found = regex_match ("<tag>value</tag>", // data
+      regex("<(.*)>.*</\\1>")); // regular expression
+  out(found);
+  cout << endl;
+  // regex_match() versus regex_search():
+  found = regex_match ("XML tag: <tag>value</tag>",
+      regex("<(.*)>.*</\\1>")); // fails to match
+  out(found);
+  found = regex_match ("XML tag: <tag>value</tag>",
+      regex(".*<(.*)>.*</\\1>.*")); // matches
+  out(found);
+  found = regex_search ("XML tag: <tag>value</tag>",
+      regex("<(.*)>.*</\\1>")); // matches
+  out(found);
+  found = regex_search ("XML tag: <tag>value</tag>",
+      regex(".*<(.*)>.*</\\1>.*")); // matches
+  out(found);
 }
 
 
