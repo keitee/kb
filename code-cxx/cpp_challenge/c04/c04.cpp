@@ -172,6 +172,58 @@ skype.exe       22456  Suspended  marius.bancila      656  64-bit
 
 */
 
+namespace U33_2018_12_03 {
+
+  enum class procstatus {suspended, running};
+  enum class platforms {p32bit, p64bit};
+
+  struct procinfo
+  {
+    int         id;
+    std::string name;
+    procstatus  status;
+    std::string account;
+    size_t      memory;
+    platforms   platform;
+  };
+
+  void print_processes(const std::vector<procinfo> &proc)
+  {
+    for (const auto &e : proc)
+    {
+      cout << setw(20) << left << e.name
+        << setw(20) << left << e.id
+        << setw(20) << left << (e.status == procstatus::running ? "Running" : "Suspended")
+        << setw(20) << left << e.account
+        << setw(20) << right << e.memory
+        << setw(10) << right << (e.platform == platforms::p64bit ? "64-bit" : "32-bit") << endl;
+    }
+  }
+
+} // namespace
+
+TEST(U33, 2018_12_03)
+{
+  using namespace U33_2018_12_03;
+
+   std::vector<procinfo> processes
+   {
+      {512, "cmd.exe", procstatus::running, "SYSTEM", 
+            148293, platforms::p64bit },
+      {1044, "chrome.exe", procstatus::running, "marius.bancila", 
+            25180454, platforms::p32bit},
+      {7108, "explorer.exe", procstatus::running, "marius.bancila",  
+            2952943, platforms::p64bit },
+      {10100, "chrome.exe", procstatus::running, "marius.bancila", 
+            227756123, platforms::p32bit},
+      {22456, "skype.exe", procstatus::suspended, "marius.bancila", 
+            16870123, platforms::p64bit }, 
+   };
+
+   print_processes(processes);
+}
+
+
 
 /*
 
@@ -180,6 +232,30 @@ skype.exe       22456  Suspended  marius.bancila      656  64-bit
 Write a program that, given the path to a text file, modifies the file by
 removing all empty lines. Lines containing only whitespaces are considered
 empty.
+
+namespace U34_2018_12_03 {
+
+} // namespace
+
+namespace U34_Text {
+
+A possible approach to solving this task is to do the following:
+
+Create a temporary file to contain only the text you want to retain from the
+original file
+
+Read line by line from the input file and copy to the temporary file all lines
+that are not empty
+
+Delete the original file after finishing processing it
+
+Move the temporary file to the path of the original file
+
+An alternative is to move the temporary file and overwrite the original one. The
+following implementation follows the steps listed. The temporary file is created
+in the temporary directory returned by filesystem::temp_directory_path():
+
+}
 
 */
 

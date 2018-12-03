@@ -3,12 +3,14 @@
 #include <iostream>
 #include <list>
 #include <deque>
+#include <regex>
 
 // g++ -g -std=c++0x t_override.cpp
 
 using namespace std;
 using namespace testing;
 
+// From The Modern C++ Challenge Chapter 03 since it is about string as well.
 
 // ={=========================================================================
 
@@ -388,6 +390,198 @@ output: {"this", "is", "a", "sample"}.
 
 */
 
+namespace U27_2018_11_29
+{
+  template<typename Coll>
+    class is_any_of
+    {
+      public:
+        explicit is_any_of(const Coll &range) : range_(range) {}
+        bool operator ()(const typename Coll::value_type value)
+        {
+          for (auto const e : range_)
+            if (e == value)
+              return true;
+          return false;
+        }
+
+      private:
+          Coll range_;
+    };
+
+  template<typename Coll, typename Predicate>
+    void split(Coll &coll, const char *text, Predicate pred) 
+    {
+      typename Coll::value_type token{};
+
+      while (*text)
+      {
+        if (pred(*text))
+        {
+          coll.push_back(token);
+          token.clear();
+        } 
+        else
+          token.append(1, *text);
+
+        ++text;
+      }
+
+      coll.push_back(token);
+    }
+} // namespace
+
+TEST(U27, 2018_11_29)
+{
+  using namespace U27_2018_11_29;
+
+  // attempt to write boost::is_any_of(). As boost, can make it function?
+
+  {
+    string coll{"|,."};
+
+    auto f = is_any_of<string>(coll);
+    EXPECT_TRUE(f('|'));
+    EXPECT_TRUE(f(','));
+    EXPECT_TRUE(f('.'));
+  }
+
+  // find and substr approach uses idx and length so to support multiple
+  // delimeters, have to scan. so this approach but later, it turns out that
+  // find_first_of() supports multiple delimeters.
+  
+  {
+    string input{"Name|Address|Phone"};
+    string delim{"|,."};
+    vector<string> result;
+
+    auto f = is_any_of<string>(delim);
+
+    string token{};
+
+    for (const auto ch : input)
+    {
+      if(f(ch))
+      {
+        result.push_back(token);
+        token.clear();
+      }
+      else
+        token += ch;
+    }
+
+    // push what's left.
+    result.push_back(token);
+
+    EXPECT_THAT(result, ElementsAre("Name", "Address", "Phone"));
+  }
+
+  {
+    vector<string> coll;
+    string delim{"|,."};
+    // auto f = is_any_of<string>(delim);
+    split(coll, "Name|Address|Phone", is_any_of<string>(delim));
+
+    EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
+  }
+}
+
+
+namespace U27_Text 
+{
+  // namespace std {
+  //   template <typename charT,
+  //            typename traits = char_traits<charT>,
+  //            typename Allocator = allocator<charT> >
+  //              class basic_string;
+  //  
+  //   typedef basic_string<char> string;
+  // }
+  // 
+  // Q: WHY define tstring when it looks the same as std::string??
+  //
+  // template <typename T>
+  //   using tstring = std::basic_string<T, std::char_traits<T>,
+  //         std::allocator<T>>;
+  //
+  // template <typename T>
+  //   using tstringstream = std::basic_stringstream<T, std::char_traits<T>,
+  //         std::allocator<T>>;
+
+  // template <typename T>
+  //   inline std::vector<tstring<T>> split(tstring<T> text, const T delim)
+  //   {
+  //     auto ss = tstringstream<T>{text};
+  //     auto tokens = std::vector<tstring<T>>{};
+  //     auto token = tstring<T>{};
+
+  //     while (std::getline(ss, token, delim))
+  //     {
+  //       if (!token.empty()) tokens.push_back(token);
+  //     }
+
+  //     return tokens;
+  //   }
+
+  // As boost version, no return and reference arg
+
+  inline void split(std::vector<string> &coll, const std::string &text, const char delim)
+  {
+    std::stringstream ss{text};
+    std::string token{};
+
+    while (std::getline(ss, token, delim))
+    {
+      if (!token.empty()) coll.push_back(token);
+    }
+  }
+
+  inline void split(std::vector<string> &coll, const std::string &text, const string delims)
+  {
+    size_t pos{}, prev_pos{};
+
+    while ((pos = text.find_first_of(delims, prev_pos)) != std::string::npos)
+    {
+      coll.push_back(text.substr(prev_pos, pos - prev_pos));
+      prev_pos = ++pos;
+    }
+
+    coll.push_back(text.substr(prev_pos, pos));
+  }
+
+  // text version
+  //
+  // inline void split(std::vector<string> &coll, const std::string &text, const string delims)
+  // {
+  //   size_t pos{}, prev_pos{};
+  //
+  //   while ((pos = text.find_first_of(delims, prev_pos)) != std::string::npos)
+  //   {
+  //     if (pos > prev_pos)
+  //       coll.push_back(text.substr(prev_pos, pos - prev_pos));
+  //
+  //     prev_pos = ++pos;
+  //   }
+  //
+  //   if (prev_pos < text.length())
+  //     coll.push_back(text.substr(prev_pos, pos));
+  // }
+}
+
+TEST(U27, Text)
+{
+  using namespace U27_Text;
+
+  std::vector<std::string> coll1{}, coll2{};
+
+  split(coll1, "this is a sample", ' ');
+  EXPECT_THAT(coll1, ElementsAre("this", "is", "a", "sample"));
+
+  split(coll2, "this is a sample", " |,.");
+  EXPECT_THAT(coll2, ElementsAre("this", "is", "a", "sample"));
+}
+
+
 // ={=========================================================================
 
 /*
@@ -398,7 +592,180 @@ Write a function that, given an input string, locates and returns the longest
 sequence in the string that is a palindrome. If multiple palindromes of the same
 length exist, the first one should be returned.
 
+// from wikipedia
+
+In computer science, the longest palindromic substring or longest *symmetric*
+factor problem is the problem of finding a maximum-length contiguous substring
+of a given string that is also a palindrome. 
+
+For example, the longest palindromic substring of "bananas" is "anana". The
+longest palindromic substring is not guaranteed to be unique; for example, in
+the string "abracadabra", there is no palindromic substring with length greater
+than three, but there are two palindromic substrings with length three, namely,
+"aca" and "ada". In some applications it may be necessary to return all maximal
+palindromic substrings (that is, all substrings that are themselves palindromes
+and cannot be extended to larger palindromic substrings) rather than returning
+only one substring or returning the maximum length of a palindromic substring.
+
+
+{
+   using namespace std::string_literals;
+   assert(longest_palindrome("sahararahnide") == "hararah");
+   assert(longest_palindrome("level") == "level");
+   assert(longest_palindrome("s") == "s");
+}
+
 */
+
+namespace U28_2018_12_03
+{
+  // palindrome is *symmetric* substr while moving i from input text.
+
+  std::string longest_palindrome(const std::string text)
+  {
+    auto length = text.size();
+    int lidx{}, ridx{};
+    char current_char{};
+    string current{}, saved{};
+
+    // moving i
+    for (decltype(length) i = 0; i < length; ++i)
+    {
+      // whenever moves i, start search again 
+      current.clear();
+      current_char = text[i];
+
+      current.push_back(current_char);
+
+      for (lidx = i - 1, ridx = i + 1; lidx >= 0 && ridx < (int)length;  --lidx, ++ridx)
+      {
+        if (text[lidx] == text[ridx])
+        {
+          current.insert(0, 1, text[lidx]);
+          current.push_back(text[lidx]);
+          if (saved.length() < current.length())
+            saved = current;
+        } 
+        else
+        {
+          // exit as soon as break symmetric condition
+          break;
+        }
+      }
+    }
+
+    // to pass the case when single input char
+    if (saved.length() < current.length())
+      saved = current;
+
+    return saved;
+  }
+
+} // namespace
+
+TEST(U28, 2018_12_03)
+{
+  using namespace U28_2018_12_03;
+  EXPECT_THAT(longest_palindrome("sahararahnide"), "hararah");
+  EXPECT_THAT(longest_palindrome("level"), "level");
+  EXPECT_THAT(longest_palindrome("s"), "s");
+}
+
+/*
+
+The simplest solution to this problem is to try a brute-force approach, checking
+if each substring is a palindrome. However, this means we need to check C(N, 2)
+substrings (where N is the number of characters in the string), and the time
+complexity would be O(N^3). The complexity could be reduced to O(N^2) by storing
+results of sub problems. To do so we need a table of Boolean values, of size,
+where the element at [i, j] indicates whether the substring from position i to j
+is a palindrome. 
+
+We start by initializing all elements [i,i] with true (one-character
+palindromes) and all the elements [i,i+i] with true for all consecutive two
+identical characters (for two-character palindromes). We then go on to inspect
+substrings greater than two characters, setting the element at [i,j] to true if
+the element at [i+i,j-1] is true and the characters on the positions i and j in
+the string are also equal. Along the way, we retain the start position and
+length of the longest palindromic substring in order to extract it after
+finishing computing the table.
+ 
+*/
+
+namespace U28_Text
+{
+  std::string longest_palindrome(std::string str)
+  {
+    size_t const len = str.size();
+    size_t longestBegin = 0;
+    size_t maxLen = 1;
+
+    std::vector<bool> table(len * len, false);
+
+    // diagonal elements
+    // We start by initializing all elements [i,i] with true (one-character
+    // palindromes)
+ 
+    for (size_t i = 0; i < len; i++)
+    {
+      table[i*len + i] = true;
+    }
+
+    // and all the elements [i,i+i] with true for all consecutive two identical
+    // characters (for two-character palindromes). We then go on to inspect
+
+    for (size_t i = 0; i < len - 1; ++i)
+    {
+      if (str[i] == str[i + 1])
+      {
+        table[i*len + i + 1] = true;
+        if (maxLen < 2)
+        {
+          longestBegin = i;
+          maxLen = 2;
+        }
+      }
+    }
+
+    // We then go on to inspect substrings greater than two characters, setting
+    // the element at [i,j] to true if the element at [i+i,j-1] is true and the
+    // characters on the positions i and j in the string are also equal. 
+    //
+    // Along the way, we retain the start position and length of the longest
+    // palindromic substring in order to extract it after finishing computing
+    // the table.
+
+    for (size_t k = 3; k <= len; k++)
+    {
+      for (size_t i = 0; i < len - k + 1; i++)
+      {
+        size_t j = i + k - 1;
+        if (str[i] == str[j] && table[(i + 1)*len + j - 1])
+        {
+          table[i*len +j] = true;
+          if (maxLen < k)
+          {
+            longestBegin = i;
+            maxLen = k;
+          }
+        }
+      }
+    }
+
+    return std::string(str.substr(longestBegin, maxLen));
+  }
+
+} // namespace
+
+TEST(U28, Text)
+{
+  using namespace U28_Text;
+
+  EXPECT_THAT(longest_palindrome("sahararahnide"), "hararah");
+  EXPECT_THAT(longest_palindrome("level"), "level");
+  EXPECT_THAT(longest_palindrome("s"), "s");
+}
+
 
 // ={=========================================================================
 
@@ -409,12 +776,59 @@ length exist, the first one should be returned.
 Considering license plates with the format LLL-LL DDD or LLL-LL DDDD (where L is
 an uppercase letter from A to Z and D is a digit), write:
 
-    One function that validates that a license plate number is of the correct format
+    One function that validates that a license plate number is of the correct
+    format
 
     One function that, given an input text, extracts and returns all the license
     plate numbers found in the text
- 
+
+{
+   std::vector<std::string> expected {
+      "AAA-AA 123", "ABC-DE 1234", "XYZ-WW 0001"};
+
+   std::string text("AAA-AA 123qwe-ty 1234 ABC-DE 123456..XYZ-WW 0001");
+   assert(expected == extract_license_plate_numbers(text));
+}
+
+requires *cxx-regex*
+
 */
+
+namespace U29_2018_11_29
+{
+  // so it's pattern matching but no idea.
+
+} // namespace
+
+namespace U29_Text
+{
+  // The simplest way to solve this problem is by using regular expressions. The
+  // regular expression that meets the described format is 
+  //
+  // "[A-Z]{3}-[A-Z]{2} \d{3,4}".
+
+  // The first function only has to validate that an input string contains only
+  // text that matches this regular expression. For that, we can use
+  // std::regex_match(), as follows:
+
+  bool validate_license_plate_format(std::string str)
+  {
+    std::regex rx(R"([A-Z]{3}-[A-Z]{2} \d{3,4})");
+    return std::regex_match(str.data(), rx);
+  }
+
+} // namespace
+
+TEST(U29, Text)
+{
+  using namespace U29_Text;
+
+  EXPECT_TRUE(validate_license_plate_format("ABC-DE 123"));
+  EXPECT_TRUE(validate_license_plate_format("ABC-DE 1234"));
+  EXPECT_TRUE(!validate_license_plate_format("ABC-DE 12345"));
+  EXPECT_TRUE(!validate_license_plate_format("abc-de 1234"));
+}
+
 
 // ={=========================================================================
 
@@ -425,7 +839,119 @@ an uppercase letter from A to Z and D is a digit), write:
 Write a function that, given a string that represents a URL, parses and extracts
 the parts of the URL (protocol, domain, port, path, query, and fragment).
 
+{
+   auto p1 = parse_uri("https://packt.com");
+   assert(p1.has_value());
+   assert(p1->protocol == "https");
+   assert(p1->domain == "packt.com");
+   assert(!p1->port.has_value());
+   assert(!p1->path.has_value());
+   assert(!p1->query.has_value());
+   assert(!p1->fragment.has_value());
+
+   auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
+   assert(p2.has_value());
+   assert(p2->protocol == "https");
+   assert(p2->domain == "bbc.com");
+   assert(p2->port == 80);
+   assert(p2->path.value() == "/en/index.html");
+   assert(p2->query.value() == "lite=true");
+   assert(p2->fragment.value() == "ui");
+}
+
+requires *cxx-regex*
+
+For this task we will consider that a URL has the following parts: protocol and
+domain are mandatory, and port, path, query, and fragment are all optional. The
+following structure is used to return results from parsing an URL
+(alternatively, you could return a tuple and use structured binding to bind
+variables to the various sub parts of the tuple):
+
+std::regex rx(R"(^(\w+):\/\/([\w.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
+
 */
+
+namespace U30_Text
+{
+  struct uri_parts
+  {
+    std::string protocol;
+    std::string domain;
+    int port;
+    std::string path;
+    std::string query;
+    std::string fragment;
+  };
+
+  // C++17 features:
+  //
+  // struct uri_parts
+  // {
+  //   std::string                protocol;
+  //   std::string                domain;
+  //   std::optional<int>         port;
+  //   std::optional<std::string> path;
+  //   std::optional<std::string> query;
+  //   std::optional<std::string> fragment;
+  // };
+
+  uri_parts parse_uri(std::string uri)
+  { 
+    uri_parts parts;
+
+    //                1          2        3 4       5          6   7        8  9
+    std::regex rx(R"(^(\w+):\/\/([\w+.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
+
+    auto matches = std::smatch();
+
+    auto found = std::regex_match(uri, matches, rx);
+    EXPECT_TRUE(found);
+
+    if (found)
+    {
+      if (matches[1].matched && matches[2].matched)
+      {
+        parts.protocol = matches[1].str();
+        parts.domain = matches[2].str();
+
+        if (matches[4].matched)
+          parts.port = std::stoi(matches[4]);
+
+        if (matches[5].matched)
+          parts.path = matches[5];
+
+        if (matches[7].matched)
+          parts.query = matches[7];
+
+        if (matches[9].matched)
+          parts.fragment = matches[9];
+      }
+    }
+    
+    return parts; 
+  }
+
+} // namespace
+
+TEST(U30, Text)
+{
+  using namespace U30_Text;
+
+  {
+   auto p1 = parse_uri("https://packt.com");
+   EXPECT_TRUE(p1.protocol == "https");
+   EXPECT_TRUE(p1.domain == "packt.com");
+
+   auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
+   // assert(p2.has_value());
+   EXPECT_TRUE(p2.protocol == "https");
+   EXPECT_TRUE(p2.domain == "bbc.com");
+   EXPECT_TRUE(p2.port == 80);
+   EXPECT_TRUE(p2.path == "/en/index.html");
+   EXPECT_TRUE(p2.query == "lite=true");
+   EXPECT_TRUE(p2.fragment == "ui");
+  }
+}
 
 
 // ={=========================================================================
@@ -438,7 +964,94 @@ Write a function that, given a text containing dates in the format dd.mm.yyyy or
 dd-mm-yyyy, transforms the text so that it contains dates in the format
 yyyy-mm-dd.
 
+{
+   using namespace std::string_literals;
+
+   assert(transform_date("today is 01.12.2017!"s) == 
+          "today is 2017-12-01!"s);
+}
+
+requires *cxx-regex*
+
 */
+
+namespace U31_2018_12_03
+{
+  std::string transform_date(const string message)
+  {
+    std::string result{};
+
+    regex rx(R"((^[\w ]+)(\d{2}).(\d{2}).(\d{4})!)");
+
+    std::smatch sm;
+    auto found = std::regex_match(message, sm, rx);
+    EXPECT_TRUE(found);
+
+    if (sm[1].matched)
+      result.append(sm[1].str());
+
+    if (sm[4].matched)
+      result.append(sm[4].str());
+
+    result.push_back('-');
+
+    if (sm[3].matched)
+      result.append(sm[3].str());
+
+    result.push_back('-');
+
+    if (sm[2].matched)
+      result.append(sm[2].str());
+
+    result.push_back('!');
+
+    return result;
+  }
+
+} // namespace
+
+TEST(U31, 2018_12_03)
+{
+  using namespace U31_2018_12_03;
+
+  // *cxx-gtest* prefer EXPECT_THAT for better message when something goes
+  // wrong.
+  // EXPECT_TRUE(transform_date("today is 01.12.2017!") == "today is 2017-12-01!");
+
+  EXPECT_THAT(transform_date("today is 01.12.2017!"), "today is 2017-12-01!");
+}
+
+// Text transformation can be performed with regular expressions using
+// std::regex_replace(). A regular expression that can match dates with the
+// specified formats is (\d{1,2})(\.|-|/)(\d{1,2})(\.|-|/)(\d{4}). This regex
+// defines five capture groups; the 1st is for the day, the 2nd is for the
+// separator (. or -), the 3rd is for the month, the 4th is again for the
+// separator (. or -), and the 5th is for the year.
+//
+// Since we want to transform dates from the format dd.mm.yyyy or dd-mm-yyyy to
+// yyyy-mm-dd, the regex replacement format string for std::regex_replace()
+// should be "($5-$3-$1)":
+
+namespace U31_Text
+{
+  std::string transform_date(const string message)
+  {
+    // ok
+    regex rx(R"((\d{1,2})(\.|-|/)(\d{2})(\.|-|/)(\d{4}))");
+
+    // ok
+    //regex rx(R"((\d{1,2})(\.)(\d{2})(\.)(\d{4}))");
+
+    return std::regex_replace(message, rx, R"($5-$3-$1)");
+  }
+} // namespace
+
+TEST(U31, Text)
+{
+  using namespace U31_Text;
+
+  EXPECT_THAT(transform_date("today is 01.12.2017!"), "today is 2017-12-01!");
+}
 
 
 // ={=========================================================================

@@ -218,6 +218,14 @@ TEST(StringOperations, Substr)
 
 TEST(StringOperations, Insert)
 {
+  // *cxx-string-const-error*
+  //
+  // char x;
+  // string.push_back(x) causes error since x is not const char *. To add char,
+  // use
+  //
+  // string& string::insert (size_type idx, size_type num, char c);
+  
   {
     string s{};
     s.insert(0, 1, 'X');
@@ -2486,6 +2494,7 @@ TEST(String, RawString)
     std::cout << s << std::endl;
 }
 
+
 // ={=========================================================================
 // 4.11 Removing a Substring from a String
 
@@ -2542,6 +2551,7 @@ TEST(String, RemoveSubString)
     EXPECT_THAT(s3, Eq(r3));
 }
 
+
 // ={=========================================================================
 // 4.12 Converting a String to Lower- or Uppercase
 
@@ -2567,6 +2577,7 @@ TEST(String, ConvertStringToLowerUpperCase)
     toLower(s);
     EXPECT_THAT(s, Eq("shazam"));
 }
+
 
 // ={=========================================================================
 // 4.13 Doing a Case-Insensitive String Comparison
@@ -2628,6 +2639,7 @@ TEST(String, SearchCaseInsensitive)
     EXPECT_TRUE(caseInsFind2(s2, p));
     cout << s2 << endl;
 }
+
 
 // ={=========================================================================
 // 4.15 Converting Between Tabs and Spaces in a Text File
@@ -2697,6 +2709,7 @@ TEST(String, ConvertSpaceToTab)
     }
 }
 
+
 // // ={=========================================================================
 // // 4.16 Wrapping Lines in a Text File
 // 
@@ -2763,6 +2776,7 @@ TEST(String, ConvertSpaceToTab)
 // 
 //     testWrap(input_file, output_file, 72);
 // }
+
 
 // ={=========================================================================
 // 4.17 Counting the Number of Characters, Words,
@@ -2886,6 +2900,7 @@ TEST(String, CountWordsInTextFile)
 
 // ={=========================================================================
 // 4.19 Add Margins to a Text File
+
 
 // ={=========================================================================
 // 4.20 Justify a Text File
