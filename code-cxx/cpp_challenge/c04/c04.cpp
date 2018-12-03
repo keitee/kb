@@ -18,37 +18,115 @@ using namespace testing;
 
 Write a function that prints up to 10 rows of Pascal's triangle to the console.
 
+Pascal's triangle is a construction representing binomial coefficients. The
+triangle starts with a row that has a single value of 1. Elements of each row
+are constructed by summing the numbers above, to the left and right, and
+treating blank entries as 0. Here is an example of the triangle with five rows:
+
+        1
+      1   1
+    1   2   1
+  1   3   3   1
+1   4   6   4   1
+
+To print the triangle, we must:
+
+Shift the output position to the right with an appropriate number of spaces, so
+that the top is projected on the middle of the triangle's base. Compute each
+value by summing the above left and right values. A simpler formula is that for
+a row i and column j, each new value x is equal to the previous value of x
+multiplied by (i - j) / (j + 1), where x starts at 1.
+
 */
+
 
 namespace U32_2018_12_03 {
 
-  // as itoa, can use modulus and reverse the result. How does the text? 
-  // use *cxx-stringstream*
-
-  template<typename T>
-    string bytes_to_hexstr(T coll)
-    {
-      ostringstream os;
-
-      for(const auto e : coll)
-        os << hex << (int)e;
-
-      return os.str();
-    }
+  // since the formular is given, looks like that tricky thing is to cal spaces
+  // to space out the first element
+  // - it is about stream
+  // - space between column can be fixed as 1.
+  //
+  // so no more than that. 
 
 } // namespace
 
 
-TEST(U32, 2018_12_03)
-{
-  using namespace U32_2018_12_03;
+// n(row) is 4:
+//
+// temp(0) = 1 * (0 - 0) / (0 + 1);
+// y = 1, maxlen = 0
+// 
+// temp(1) = 1 * (1 - 0) / (0 + 1);
+// y = 1, maxlen = 0
+// temp(0) = 1 * (1 - 1) / (1 + 1);
+// y = 1, maxlen = 0
+// 
+// temp(2) = 1 * (2 - 0) / (0 + 1);
+// y = 1, maxlen = 0
+// temp(1) = 2 * (2 - 1) / (1 + 1);
+// y = 2, maxlen = 0
+// temp(0) = 1 * (2 - 2) / (2 + 1);
+// y = 1, maxlen = 0
+// 
+// temp(3) = 1 * (3 - 0) / (0 + 1);
+// y = 1, maxlen = 0
+// temp(3) = 3 * (3 - 1) / (1 + 1);
+// y = 3, maxlen = 0
+// temp(1) = 3 * (3 - 2) / (2 + 1);
+// y = 3, maxlen = 0
+// temp(0) = 1 * (3 - 3) / (3 + 1);
+// y = 1, maxlen = 0
 
+namespace U32_Text {
+
+  // necessary to cal space between columns 
+  unsigned int number_of_digits(unsigned int i)
   {
-    std::vector<unsigned char> v{ 0xBA, 0xAD, 0xF0, 0x0D };
-
-    // EXPECT_THAT(bytes_to_hexstr(v), "BAADF00D");
-    EXPECT_THAT(bytes_to_hexstr(v), "baadf0d");
+    return i > 0 ? (int)log10((double)i) + 1 : 1;
   }
+
+  void print_pascal_triangle(const int n)
+  {
+    for (int i = 0; i < n; ++i)
+    {
+      auto x = 1;
+
+      // *cxx-string-ctor*
+      std::cout << std::string((n - i - 1)*(n / 2), '.');
+
+      for (int j = 0; j <= i; ++j)
+      {
+        auto y = x;
+
+        // get new x which becomes y so there is no summing and it calculate
+        // values of each row using this formular
+        x = x * (i - j) / (j + 1);
+
+        // auto temp = x * (i - j) / (j + 1);
+        // std::cout << "temp(" << temp << ") = " << x << " * (" << i << " - " << j << ") / (" 
+        //   << j << " + 1);" << endl;
+        // x = temp;
+
+        auto maxlen = number_of_digits(x) - 1;
+
+        // std::cout << "y = " << y << ", maxlen = " << maxlen << endl;
+
+        std::cout << y << std::string(n - 1 - maxlen - n%2, '.');
+      }
+      
+      std::cout << std::endl;
+    }
+  }
+
+} // namespace
+
+
+TEST(U32, Text)
+{
+  using namespace U32_Text;
+
+  print_pascal_triangle(10);
 }
 
 
@@ -71,6 +149,26 @@ chrome.exe      10100  Running    marius.bancila   227756  32-bit
 cmd.exe         512    Running    SYSTEM               48  64-bit
 explorer.exe    7108   Running    marius.bancila    29529  64-bit
 skype.exe       22456  Suspended  marius.bancila      656  64-bit
+
+{
+   using namespace std::string_literals;
+
+   std::vector<procinfo> processes
+   {
+      {512, "cmd.exe"s, procstatus::running, "SYSTEM"s, 
+            148293, platforms::p64bit },
+      {1044, "chrome.exe"s, procstatus::running, "marius.bancila"s, 
+            25180454, platforms::p32bit},
+      {7108, "explorer.exe"s, procstatus::running, "marius.bancila"s,  
+            2952943, platforms::p64bit },
+      {10100, "chrome.exe"s, procstatus::running, "marius.bancila"s, 
+            227756123, platforms::p32bit},
+      {22456, "skype.exe"s, procstatus::suspended, "marius.bancila"s, 
+            16870123, platforms::p64bit }, 
+   };
+
+   print_processes(processes);
+}
 
 */
 

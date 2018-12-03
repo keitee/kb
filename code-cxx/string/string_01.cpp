@@ -45,19 +45,28 @@ TEST(StringIterator, PosEnd)
 TEST(String, Ctors)
 {
   {
-    string s1("nico");
-    EXPECT_THAT(s1.length(), 4);
-
-    string s2(5, 'c');
-    EXPECT_THAT(s2, ElementsAre('c', 'c', 'c', 'c', 'c'));
+    string s("nico");
+    EXPECT_THAT(s.length(), 4);
   }
 
   {
-    string s1{"zoo"};
-    EXPECT_EQ(s1, "zoo");
+    string s(5, 'c');
+    EXPECT_THAT(s, ElementsAre('c', 'c', 'c', 'c', 'c'));
+  }
 
-    string s2("zoo");
-    EXPECT_EQ(s1, "zoo");
+  {
+    string s(5, 'c');
+    EXPECT_THAT(s, "ccccc");
+  }
+
+  {
+    string s{"zoo"};
+    EXPECT_EQ(s, "zoo");
+  }
+
+  {
+    string s("zoo");
+    EXPECT_EQ(s, "zoo");
   }
 }
 
