@@ -3099,10 +3099,12 @@ TEST(Regex, MatchFound)
 TEST(Regex, MatchResult)
 {
   string data{"XML tag: <tag-name>the value</tag-name>."};
-  // regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>")");
-  /// regex rx("<([\w-]+)>(.*)<(\/[\w-]+)>");
-  //            <([\w-]+)>(.*)<\/([\w-]+)>
-  regex rx("<(.*)>(.*)</(\\1)>");
+
+  // ok
+  regex rx(R"(<([\w-]+)>(.*)<\/([\w-]+)>)");
+  
+  // ok
+  // regex rx("<(.*)>(.*)</(\\1)>");
 
   // for returned details of the match
   std::smatch m;

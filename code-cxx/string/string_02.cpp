@@ -697,6 +697,7 @@ TEST(U29, Text)
   EXPECT_TRUE(!validate_license_plate_format("abc-de 1234"));
 }
 
+
 // ={=========================================================================
 
 /*
@@ -765,6 +766,8 @@ namespace U30_Text
   uri_parts parse_uri(std::string uri)
   { 
     uri_parts parts;
+
+    //                1          2        3 4       5          6   7        8  9
     std::regex rx(R"(^(\w+):\/\/([\w+.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
 
     auto matches = std::smatch();
@@ -772,11 +775,26 @@ namespace U30_Text
     auto found = std::regex_match(uri, matches, rx);
     EXPECT_TRUE(found);
 
-    // if (found)
-    // {
-    //   uri_parts parts;
-    //   parts.protocol = matches[1].str();
-    // }
+    if (found)
+    {
+      if (matches[1].matched && matches[2].matched)
+      {
+        parts.protocol = matches[1].str();
+        parts.domain = matches[2].str();
+
+        if (matches[4].matched)
+          parts.port = std::stoi(matches[4]);
+
+        if (matches[5].matched)
+          parts.path = matches[5];
+
+        if (matches[7].matched)
+          parts.query = matches[7];
+
+        if (matches[9].matched)
+          parts.fragment = matches[9];
+      }
+    }
     
     return parts; 
   }
@@ -788,10 +806,19 @@ TEST(U30, Text)
   using namespace U30_Text;
 
   {
-    auto p1 = parse_uri("https://packt.com");
-    // auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
-  }
+   auto p1 = parse_uri("https://packt.com");
+   EXPECT_TRUE(p1.protocol == "https");
+   EXPECT_TRUE(p1.domain == "packt.com");
 
+   auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
+   // assert(p2.has_value());
+   EXPECT_TRUE(p2.protocol == "https");
+   EXPECT_TRUE(p2.domain == "bbc.com");
+   EXPECT_TRUE(p2.port == 80);
+   EXPECT_TRUE(p2.path == "/en/index.html");
+   EXPECT_TRUE(p2.query == "lite=true");
+   EXPECT_TRUE(p2.fragment == "ui");
+  }
 }
 
 
@@ -815,6 +842,84 @@ yyyy-mm-dd.
 requires *cxx-regex*
 
 */
+
+namespace U31_2018_12_03
+{
+  std::string transform_date(const string message)
+  {
+    std::string result{};
+
+    regex rx(R"((^[\w ]+)(\d{2}).(\d{2}).(\d{4})!)");
+
+    std::smatch sm;
+    auto found = std::regex_match(message, sm, rx);
+    EXPECT_TRUE(found);
+
+    if (sm[1].matched)
+      result.append(sm[1].str());
+
+    if (sm[4].matched)
+      result.append(sm[4].str());
+
+    result.push_back('-');
+
+    if (sm[3].matched)
+      result.append(sm[3].str());
+
+    result.push_back('-');
+
+    if (sm[2].matched)
+      result.append(sm[2].str());
+
+    result.push_back('!');
+
+    return result;
+  }
+
+} // namespace
+
+TEST(U31, 2018_12_03)
+{
+  using namespace U31_2018_12_03;
+
+  // *cxx-gtest* prefer EXPECT_THAT for better message when something goes
+  // wrong.
+  // EXPECT_TRUE(transform_date("today is 01.12.2017!") == "today is 2017-12-01!");
+
+  EXPECT_THAT(transform_date("today is 01.12.2017!"), "today is 2017-12-01!");
+}
+
+// Text transformation can be performed with regular expressions using
+// std::regex_replace(). A regular expression that can match dates with the
+// specified formats is (\d{1,2})(\.|-|/)(\d{1,2})(\.|-|/)(\d{4}). This regex
+// defines five capture groups; the 1st is for the day, the 2nd is for the
+// separator (. or -), the 3rd is for the month, the 4th is again for the
+// separator (. or -), and the 5th is for the year.
+//
+// Since we want to transform dates from the format dd.mm.yyyy or dd-mm-yyyy to
+// yyyy-mm-dd, the regex replacement format string for std::regex_replace()
+// should be "($5-$3-$1)":
+
+namespace U31_Text
+{
+  std::string transform_date(const string message)
+  {
+    // ok
+    regex rx(R"((\d{1,2})(\.|-|/)(\d{2})(\.|-|/)(\d{4}))");
+
+    // ok
+    //regex rx(R"((\d{1,2})(\.)(\d{2})(\.)(\d{4}))");
+
+    return std::regex_replace(message, rx, R"($5-$3-$1)");
+  }
+} // namespace
+
+TEST(U31, Text)
+{
+  using namespace U31_Text;
+
+  EXPECT_THAT(transform_date("today is 01.12.2017!"), "today is 2017-12-01!");
+}
 
 
 // ={=========================================================================
