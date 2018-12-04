@@ -1336,45 +1336,65 @@ TEST(Reference, AccessOnReference)
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The UTC date and time is: Tue Jun 12 11:49:12 2018
 
-TEST(Time, UseConventionalWay)
+TEST(Time, UseSystemCall)
 {
+  // #include <time.h>
+  // time_t time(time_t *timep);
   // time_t now = time(0);
+  //
+  // time() system call returns the number of seconds since the Epoch. i.e., the
+  // same value that gettimeofday() returns in the tv_sec field of its tv
+  // argument.
+
   auto now = time(0);
 
-  cout << "The local date and time is: " << ctime(&now) << endl;
+  // The ctime() function provides a simple method of converting a time_t value
+  // `into printable form.` The ctime() function automatically accounts for
+  // local timezone and DST settings when performing the conversion.
+  //
+  // Returns pointer to statically allocated string `terminated by newline` and
+  // \0 on success, or NULL on error
+
+  cout << "The local date and time is: " << ctime(&now);
+
+  // The gmtime() and localtime() functions convert a time_t value into a
+  // so-called brokendown time. The broken-down time is placed in a statically
+  // allocated structure whose address is returned as the function result.
 
   // tm *localtm = localtime(&now);
   auto localtm = localtime(&now);
-  cout << "The local date and time is: " << asctime(localtm) << endl;
+  cout << "The local date and time is: " << asctime(localtm);
 
   // tm *gmtm = gmtime(&now);
   auto gmtm = gmtime(&now);
   if (gmtm != nullptr)
   {
-    cout << "The UTC date and time is: " << asctime(gmtm) << endl;
+    cout << "The UTC date and time is: " << asctime(gmtm);
   }
 }
 
 // The local date and time is: Tue Jun 12 14:42:18 2018
 // The local date and time is: Tue Jun 12 14:42:28 2018
 
-TEST(DISABLED_Time, UseConventionalWayToShowPitfall)
+TEST(Time, SleepFor)
 {
   // tm *localtm = localtime(&now);
   time_t now = time(0);
-  auto localtm = localtime(&now);
-  cout << "The local date and time is: " << asctime(localtm) << endl;
+  auto prev = localtime(&now);
+  cout << "The local date and time is: " << asctime(prev);
 
   std::this_thread::sleep_for(chrono::seconds(10));
 
   now = time(0);
-  localtm = localtime(&now);
-  cout << "The local date and time is: " << asctime(localtm) << endl;
+  auto curr = localtime(&now);
+  cout << "The local date and time is: " << asctime(curr);
+ 
+  // why 0?
+  EXPECT_THAT((curr->tm_sec - prev->tm_sec), 0);
 }
 
 
-// ={=========================================================================
-// cxx-time-crono
+// cxx-time-duration-cast
 //
 // A typical example is code that segments a duration into different units. For
 // example, the following code segments a duration of milliseconds into the
@@ -1383,121 +1403,167 @@ TEST(DISABLED_Time, UseConventionalWayToShowPitfall)
 // raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
 //      02::00::55::42
 
-template <typename V, typename R>
-ostream &operator<<(ostream &os, const chrono::duration<V,R> &d)
+template <typename Unit, typename Ratio>
+ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d)
 {
-    os << "[" << d.count() << " of " << R::num << "/" << R::den << "]";
+    os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
     return os;
 }
 
-TEST(Time, UseCronoDurationCast)
+TEST(Time, DurationCast)
 {
-    chrono::milliseconds ms(7255042);
+  chrono::milliseconds ms(7255042);
 
-    chrono::hours   hh = 
-      chrono::duration_cast<chrono::hours>(ms);
-    chrono::minutes mm = 
-      chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
-    chrono::seconds ss = 
-      chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
-    chrono::milliseconds msec = 
-      chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+  chrono::hours   hh = 
+    chrono::duration_cast<chrono::hours>(ms);
 
-    cout << "raw: " << hh << "::" << mm << "::"
-        << ss << "::" << msec << endl;
-    cout << "     " << setfill('0') << setw(2) << hh.count() << "::" 
-        << setw(2) << mm.count() << "::"
-        << setw(2) << ss.count() << "::"
-        << setw(2) << msec.count() << endl;
+  // take remians which means take hours out
+  chrono::minutes mm = 
+    chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+
+  chrono::seconds ss = 
+    chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+
+  chrono::milliseconds msec = 
+    chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+
+  ostringstream os;
+
+  os << hh << "::" << mm << "::" << ss << "::" << msec;
+
+  EXPECT_THAT(os.str(), "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]");
+
+  os.str("");
+
+  // see that same count() function used as operator<<() above
+  
+  os << hh.count() << "::" << mm.count() << "::" 
+    << ss.count() << "::" << msec.count();
+
+  EXPECT_THAT(os.str(), "2::0::55::42");
 }
 
-// ={=========================================================================
+
 // cxx-time-crono-clock
 
 // the following function prints the properties of a clock
 // C represents clock
 template <typename C>
-void print_clock_data()
+void print_clock_data(ostringstream &os)
 {
-    using namespace std;
+  using namespace std;
 
-    cout << "- precision: ";
+  os << "- precision: ";
 
-    // clock::period 
-    // Yields the type of the unit type (equivalent to clock::duration::period)
-    
-    typedef typename C::period P;
+  // clock::period 
+  // Yields the type of the unit type (equivalent to clock::duration::period)
 
-    // /usr/include/c++/4.9/ratio
-    // typedef ratio<                     1000, 1> kilo;
-    
-    if( ratio_less_equal<P, std::milli>::value )
-    {
-        // This class template alias generates a ratio type that is the
-        // multiplication of the ratio types R1 and R2.
-        // 
-        // The resulting type is the same as if ratio_multiply was defined as:
-        //
-        // template <typename R1, typename R2> 
-        // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den >;
+  typedef typename C::period P;
 
-        typedef typename ratio_multiply<P, std::kilo>::type TT;
-        cout << fixed << double(TT::num)/TT::den << " milliseconds" << endl;
-    } 
-    else
-    {
-        cout << fixed << double(P::num)/P::den << " seconds" << endl;
-    }
+  // /usr/include/c++/4.9/ratio
+  // typedef ratio<                     1000, 1> kilo;
 
-    // clock::is_steady 
-    // Yields true if the clock is steady
-    
-    cout << "- is ready: " << boolalpha << C::is_steady << endl;
+  if( ratio_less_equal<P, std::milli>::value )
+  {
+    // This class template alias generates a ratio type that is the
+    // multiplication of the ratio types R1 and R2.
+    // 
+    // The resulting type is the same as if ratio_multiply was defined as:
+    //
+    // template <typename R1, typename R2> 
+    // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den >;
+
+    typedef typename ratio_multiply<P, std::kilo>::type TT;
+    os << fixed << double(TT::num)/TT::den << " milliseconds" << endl;
+  } 
+  else
+  {
+    os << fixed << double(P::num)/P::den << " seconds" << endl;
+  }
+
+  // clock::is_steady 
+  // Yields true if the clock is steady
+
+  os << "- is ready: " << boolalpha << C::is_steady << endl;
 }
 
-// TN: this is different from CLR result 
-//
-// system_clock:
-// - precision: 0.000001 milliseconds
-// - is ready: false
-// high_resolution_clock:
-// - precision: 0.000001 milliseconds
-// - is ready: false
-// steady_clock:
-// - precision: 0.000001 milliseconds
-// - is ready: true
 
 TEST(Time, ShowCronoClockDetails)
 {
-    cout << "system_clock: " << endl;
-    print_clock_data<std::chrono::system_clock>();
+  ostringstream os;
 
-    cout << "high_resolution_clock: " << endl;
-    print_clock_data<std::chrono::high_resolution_clock>();
+  os << "system_clock: " << endl;
+  print_clock_data<std::chrono::system_clock>(os);
 
-    cout << "steady_clock: " << endl;
-    print_clock_data<std::chrono::steady_clock>();
+  os << "high_resolution_clock: " << endl;
+  print_clock_data<std::chrono::high_resolution_clock>(os);
+
+  os << "steady_clock: " << endl;
+  print_clock_data<std::chrono::steady_clock>(os);
+
+  // TN: this is different from CLR result 
+
+  char expected[] = "system_clock: \n"
+    "- precision: 0.000001 milliseconds\n"
+    "- is ready: false\n"
+    "high_resolution_clock: \n"
+    "- precision: 0.000001 milliseconds\n"
+    "- is ready: false\n"
+    "steady_clock: \n"
+    "- precision: 0.000001 milliseconds\n"
+    "- is ready: true\n";
+
+  EXPECT_THAT(os.str(), expected);
 }
 
 
-// ={=========================================================================
-// cxx-time-crono-timepoint
+TEST(Time, SteadyClock)
+{
+  {
+    // now() is static function
+    auto system_start = chrono::system_clock::now();
+
+    sleep(10);
+
+    auto diff = chrono::system_clock::now() - system_start;
+    auto sec = chrono::duration_cast<chrono::seconds>(diff);
+
+    // cout << "this programs runs: " << sec.count() << " seconds" << endl;
+    EXPECT_THAT(sec.count(), 10);
+  }
+
+  {
+    // now() is static function
+    auto system_start = chrono::steady_clock::now();
+
+    sleep(10);
+
+    auto diff = chrono::steady_clock::now() - system_start;
+    auto sec = chrono::duration_cast<chrono::seconds>(diff);
+
+    // cout << "this programs runs: " << sec.count() << " seconds" << endl;
+    EXPECT_THAT(sec.count(), 10);
+  }
+}
+
+
+// cxx-time-timepoint
 
 std::string as_string(const std::chrono::system_clock::time_point &tp)
 {
-    // static convenience function
-    // Note also that this convenience function probably will work only for
-    // system_clocks, the only clocks that provide an interface for conversions
-    // to and from time_t.
+  // static convenience function
+  // Note also that this convenience function probably will work only for
+  // system_clocks, the only clocks that provide an interface for conversions
+  // to and from time_t.
 
-    std::time_t time = std::chrono::system_clock::to_time_t(tp);
+  std::time_t time = std::chrono::system_clock::to_time_t(tp);
 
-    // std::string ts = std::ctime(&time);
-    std::string ts = std::asctime(gmtime(&time));
+  // std::string ts = std::ctime(&time);
+  std::string ts = std::asctime(gmtime(&time));
 
-    // remove trailing newline
-    ts.resize(ts.size()-1);
-    return ts;
+  // remove trailing newline
+  ts.resize(ts.size()-1);
+  return ts;
 }
 
 // epoch: Thu Jan  1 01:00:00 1970
@@ -1505,9 +1571,11 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 // min  : Tue Sep 21 00:11:29 1677
 // max  : Sat Apr 12 00:47:16 2262
 
+// epoch: Thu Jan  1 01:00:00 1970
+//
 // Note that it’s 1 o’clock rather than midnight. This may look a bit
 // surprising, but remember that the conversion to the calendar time with
-// ctime() inside asString() takes the time zone into account.  Thus, the UNIX
+// ctime() inside asString() takes the time zone into account. Thus, the UNIX
 // epoch used here  which, again, is not always guaranteed to be the epoch of
 // the system time  started at 00:00 in Greenwich, UK. In my time zone, Germany,
 // it was 1 a.m. at that moment, so in my time zone the epoch started at 1 a.m.
@@ -1517,10 +1585,11 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 
 // epoch: Thu Jan  1 00:00:00 1970
 // now  : Thu Apr 12 10:01:32 2018
-// min  : Tue Sep 21 00:12:44 1677
-// max  : Fri Apr 11 23:47:16 2262
+// min  : Tue Sep 21 00:12:44 1677  // this is bigger and different from the book
+// max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from the book
 
-TEST(Time, PrintCronoTimepoint)
+
+TEST(Time, Timepoint)
 {
   // print the epoch of this clock
 
@@ -1540,9 +1609,57 @@ TEST(Time, PrintCronoTimepoint)
   cout << "max  : " << as_string(tp) << endl;
 }
 
-
-TEST(Time, UserTimeFacet)
+TEST(Time, TimePointArithmetic)
 {
+  ostringstream os;
+
+  // one day as seconds
+  typedef chrono::duration<int, ratio<3600*24>> Days;
+
+  chrono::time_point<chrono::system_clock> tp;
+
+  // allow adjusting timepoints by using timepoint arithmetic.
+  
+  // add 1 day, 23 hours, and 55 minutes to the epoch
+  tp += Days(1) + chrono::hours(23) + chrono::minutes(55);
+  os << "later : " << as_string(tp) << endl;
+
+  // diff in minutes
+  auto diff = tp - chrono::system_clock::time_point();
+  os << "diff : " << chrono::duration_cast<chrono::minutes>(diff).count() 
+    << " minutes" << endl;
+
+  // minus 1 year (hoping it is valid and not a leap year
+  tp -= chrono::hours(24*365);
+  os << "-1 year: " << as_string(tp) << endl;
+  
+  // 3600 is 1 year
+  tp -= chrono::duration<int, ratio<3600*24*365>>(50);
+  os << "-50 years: " << as_string(tp) << endl;
+
+  // 3600 is 1 year
+  // works since the min is bigger and different from the book
+
+  tp -= chrono::duration<int, ratio<3600*24*365>>(50);
+  os << "-50 years: " << as_string(tp) << endl;
+
+  char expected[] = "later : Fri Jan  2 23:55:00 1970\n"
+      "diff : 2875 minutes\n"
+      "-1 year: Thu Jan  2 23:55:00 1969\n"
+      "-50 years: Wed Jan 15 23:55:00 1919\n"
+      "-50 years: Tue Jan 26 23:55:00 1869\n";
+
+  EXPECT_THAT(os.str(), expected);
+}
+
+
+// 12/04/18
+// Tuesday 12/04/18 02PM
+
+TEST(Time, Facet)
+{
+  ostringstream os;
+
   auto now = chrono::system_clock::now();
   time_t t = chrono::system_clock::to_time_t(now);
   tm *tm_now = localtime(&t);
@@ -1552,14 +1669,90 @@ TEST(Time, UserTimeFacet)
 
   // %x Locale’s preferred date representation Jul 12 1998
   // 06/12/18
+  
   tp.put(cout , cout, ' ', tm_now, 'x');
   cout << endl;
 
   // use format string
   // Tuesday 06/12/18 04PM
+
   string fmt = "%A %x %I%p\n";
   tp.put(cout, cout, ' ', tm_now,
       fmt.c_str(), fmt.c_str()+fmt.size());
+}
+
+// when this is in scope
+//
+// ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d);
+//
+// time taken (in sec) : [288 of 1/1000000000]
+// time taken (in ms)  : 0
+// time taken (in ns) : [0 of 1/1000000]
+// time taken (in ns) : [0 of 1/1000000]
+// time taken (in ns) : [0 of 1/1000]
+// time taken (in sec) : [245 of 1/1000000000]
+// time taken (in ms)  : 0
+// time taken (in ns) : [0 of 1/1000000]
+// time taken (in ns) : [0 of 1/1000000]
+// time taken (in ns) : [0 of 1/1000]
+
+namespace cxx_time_elapsed
+{
+  struct Timer
+  {
+    Timer(const std::string &text) : text_(text)
+    {
+      start_ = chrono::system_clock::now();
+    }
+    ~Timer()
+    {
+      auto elapsed = chrono::system_clock::now() - start_;
+      auto elapsed_in_ms = chrono::duration_cast<chrono::microseconds>(elapsed);
+      auto elapsed_in_ns = chrono::duration_cast<chrono::milliseconds>(elapsed);
+
+      cout << "time taken (in sec) : " << elapsed << endl;
+      cout << "time taken (in ms)  : " << elapsed_in_ms.count() << endl;
+      cout << "time taken (in ns) : " << elapsed_in_ms/1000 << endl;
+      cout << "time taken (in ns) : " << elapsed_in_ms*0.001 << endl;
+      cout << "time taken (in ns) : " << elapsed_in_ns << endl;
+
+    }
+
+    std::string text_;
+    chrono::system_clock::time_point start_;
+  };
+
+} // namespace
+
+TEST(Time, ElapsedTime)
+{
+  using namespace cxx_time_elapsed;
+
+  {
+    string result{};
+
+    const unsigned int lots {500000};
+    for (unsigned int i{0}; i < lots; i++) {
+      string user{"user" + to_string(i)};
+
+      result += user;
+    }
+
+    Timer timer("StringConcat");
+  }
+
+  {
+    string result{};
+
+    const unsigned int lots {500000};
+    for (unsigned int i{0}; i < lots; i++) {
+      string user{"user" + to_string(i)};
+
+      result.append(user);
+    }
+
+    Timer timer("StringAppend");
+  }
 }
 
 

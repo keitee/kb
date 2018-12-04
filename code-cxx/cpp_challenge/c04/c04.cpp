@@ -3,6 +3,7 @@
 #include <iostream>
 #include <list>
 #include <deque>
+#include <fstream>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -130,6 +131,7 @@ TEST(U32, Text)
 }
 
 
+// ={=========================================================================
 /*
 
 33. Tabular printing of a list of processes
@@ -224,7 +226,7 @@ TEST(U33, 2018_12_03)
 }
 
 
-
+// ={=========================================================================
 /*
 
 34. Removing empty lines from a text file
@@ -232,12 +234,6 @@ TEST(U33, 2018_12_03)
 Write a program that, given the path to a text file, modifies the file by
 removing all empty lines. Lines containing only whitespaces are considered
 empty.
-
-namespace U34_2018_12_03 {
-
-} // namespace
-
-namespace U34_Text {
 
 A possible approach to solving this task is to do the following:
 
@@ -255,11 +251,39 @@ An alternative is to move the temporary file and overwrite the original one. The
 following implementation follows the steps listed. The temporary file is created
 in the temporary directory returned by filesystem::temp_directory_path():
 
-}
-
 */
 
+namespace U34_2018_12_03 
+{
+  void remove_empty_lines(const string &filename)
+  {
+    ifstream ifs{filename};
+    string ofilename = filename + "_removed_empty_lines";
+    ofstream ofs{ofilename};
+    string line{};
 
+    while (std::getline(ifs, line))
+    {
+      // when see a ling which has char other than WS
+      
+      // if (line.length() > 0 && line.find_first_not_of(" \t") != string::npos)
+
+      if (line.length() > 0 && line.find_first_not_of(" ") != string::npos)
+        ofs << line << endl;
+    }
+  }
+
+} // namespace
+
+TEST(U34, 2018_12_03)
+{
+  using namespace U34_2018_12_03;
+
+  remove_empty_lines("readme");
+}
+
+
+// ={=========================================================================
 /*
 
 35. Computing the size of a directory
@@ -267,6 +291,8 @@ in the temporary directory returned by filesystem::temp_directory_path():
 Write a function that computes the size of a directory, in bytes, recursively.
 It should be possible to indicate whether symbolic links should be followed or
 not.
+
+requires *cxx-cxx17-filesystem*
 
 */
 
@@ -282,6 +308,8 @@ minutes, seconds, and so on, or a combination of that, such as one hour and
 twenty minutes. If the specified directory is itself older than the given
 duration, it should be deleted entirely.
 
+requires *cxx-cxx17-filesystem*
+
 */
 
 
@@ -293,9 +321,12 @@ Write a function that, given the path to a directory and a regular expression,
 returns a list of all the directory entries whose names match the regular
 expression.
 
+requires *cxx-cxx17-filesystem*
+
 */
 
 
+// ={=========================================================================
 /*
 
 38. Temporary log files
@@ -305,6 +336,21 @@ text file should have a unique name and must be located in a temporary
 directory. Unless specified otherwise, this log file should be deleted when the
 instance of the class is destroyed. However, it should be possible to retain the
 log file by moving it to a permanent location.
+
+{
+   logger log;
+   try 
+   {
+      log << "this is a line" << "and this is another one";
+      throw std::runtime_error("error");
+   }
+   catch (...) 
+   {
+      log.persist(R"(lastlog.txt)");
+   }
+}
+
+requires *cxx-cxx17-filesystem*
 
 */
 
