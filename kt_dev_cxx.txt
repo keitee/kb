@@ -10247,7 +10247,7 @@ of the same type as the class from which it inherits.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-ctor cxx-in-class-init
+*kt_dev_cxx_0000* cxx-ctor cxx-init-in-class-init
 
 {cxx-ctor-default}
 There are operations synthesized by compiler if they are not defined by user
@@ -10272,7 +10272,7 @@ The `default-ctor` is a special constructor which takes `no-arguments`.
 The recommendation on initialization is to avoid syn-version and do it
 explicitly:
 
-`cxx-in-class-init` (C++11) or `ctor-init-list`
+`cxx-init-in-class-init` (C++11) or `ctor-init-list`
 
 
 The reasons to avoid the syn-version:
@@ -10363,7 +10363,7 @@ class Sales_data {
 Q: use case other than default ctor?
 
 
-{cxx-ctor-inclass-init} *C++11* CPR 73
+{cxx-init-in-class-init} *C++11* CPR 73
 in-class-init are `restricted as to the form`: must either be enclosed inside
 curly braces or follow an = sign. May not specify an inclass-init inside
 parentheses.
@@ -31732,14 +31732,14 @@ A class defined within another class, called nested class or nested type.
 Most used to define implementation class. This defines `type-member` of
 enclosing class. The nested class are:
 
-* `independent classes` in terms of object to their enclosing class.
-* `type members` of enclosing class and are under access control.
-* types which are scope.
+o `independent classes` in terms of object to their enclosing class.
+o `type members` of enclosing class and are under access control.
+o types which are scope.
 
 <ex>
-A companion class, QueryResult, which is 'tightly' coupled to TextQuery class.
+A companion class, QueryResult, which is `tightly coupled` to TextQuery class.
 It would make little sense to use QueryResult for any other purpose than to
-represent the result of a query operation. To reflect this coupling, make
+represent the result of a query operation. `To reflect this coupling,` make
 QueryResult a `type member` of TextQuery.
 
 class TextQuery {
@@ -31798,8 +31798,26 @@ TextQuery::query(const string &sought) const
 // objects of its nested class, have to use members of enclosing class to
 // construct the QueryResult object to return.
 
+
 <ex>
-cxx-ex-perfcounter in *linux-time*
+
+  class Snapper
+  {
+    struct SnapTime
+    {
+      chrono::system_clock::time_point tp;
+      std::string description;
+    }   // missed ';' which causes errors below
+
+  };
+
+cxx.cpp:1817:5: error: new types may not be defined in a return type
+     struct SnapTime
+     ^
+cxx.cpp:1817:5: note: (perhaps a semicolon is missing after the definition of ‘cxx_time_lap::Snapper::SnapTime’)
+cxx.cpp:1823:22: error: return type specification for constructor invalid
+     explicit Snapper()
+                      ^
 
 
 ={============================================================================
@@ -38933,15 +38951,15 @@ sort()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-cxx-forward-list
+*kt_dev_cxx_0000* cxx-container-cxx-list-forward-list
 
 7.6.1 Abilities of Forward Lists
 
 Forward lists have the following limitations compared to lists:
 
 o A forward list does not provide a size() member function. This is a
-consequence of omitting features that create time or space overhead relative
-to a handwritten singly linked list.
+  consequence of omitting features that create time or space overhead relative
+  to a handwritten singly linked list.
 
 Forward lists provide no size() operation. The reason is that it is not
 possible to store or compute the current number of elements in constant time.
@@ -38952,9 +38970,10 @@ distance()
 So, if you need the size, either track it outside the forward_list or use a
 list instead.
 
+*cxx-remember*
 o The anchor of a forward list `has no pointer to the last element.` For this
-reason, `a forward list does not provide` the special member functions to deal
-with the last element, back(), push_back(), and pop_back().
+  reason, `a forward list does not provide` the special member functions to
+  deal with the last element, back(), push_back(), and pop_back().
 
 Other than these differences, forward lists behave just like lists:
 
@@ -38987,18 +39006,21 @@ of a forward list.
 Besides copying and assignments, the only valid operations for return values
 of before_begin() are ++, ==, and !=.
 
-xxx_begin() or insert_xxx()
+
+before_begin() or insert_after()
 
 Note that for all the insert, emplace, and erase member functions provided for
 forward lists, you have a problem: They usually get a position of an element,
 where you have to insert a new element or must delete. But this requires a
   modification of the preceding element, because there the pointer to the next
   element has to get modified. For lists, you can just go backward to the
-  previous element to manipulate it, `but for forward lists, you can’t.` For
-  this reason, the member functions behave differently than for lists, which
-  is reflected by the name of the member functions. All end with _after, which
-  means that they insert a new element after the one passed (i.e., they
-      append) or delete the element after the element passed.
+  previous element to manipulate it, `but for forward lists, you can’t.` 
+
+For this reason, the member functions behave differently than for lists, which
+is reflected by the name of the member functions. All end with _after, which
+means that they insert a new element after the one passed (i.e., they append)
+or delete the element after the element passed.
+
 
 
 Table 7.32. Insert and Remove Operations of Forward Lists
@@ -39024,13 +39046,56 @@ c.clear()
 
 
 <ex> 
+
 TEST(ForwardList, InsertAfter)
 {
-  forward_list<int> coll{1,2,3};
-  coll.insert_after(coll.before_begin(), {77, 88, 99});
-  EXPECT_THAT(coll, ElementsAre(77, 88, 99, 1, 2, 3));
+  {
+    forward_list<int> coll{1,2,3};
+    coll.insert_after(coll.before_begin(), {77, 88, 99});
+    EXPECT_THAT(coll, ElementsAre(77, 88, 99, 1, 2, 3));
+  }
+
+  // Note that calling an _after member function with end() or cend() results in
+  // undefined behavior because to append a new element at the end of a forward
+  // list, you have to pass the position of the last element (or before_begin()
+  // if none): 
+  //
+  // RUNTIME ERROR: appending element after end is undefined behavior 
+  //
+  // fwlist.insert_after(fwlist.end(),9999);
+  //
+  // {
+  //   forward_list<int> coll{1,2,3};
+  //   coll.insert_after(coll.end(), {77, 88, 99});
+  //   EXPECT_THAT(coll, ElementsAre(1, 2, 3, 77, 88, 99));
+  // }
 }
 
+// The drawbacks of having a singly linked list, where you can only traverse
+// forward, gets even worse when trying to find an element to insert or delete
+// something there. The problem is that when you find the element, you are too
+// far, because to insert or delete something there you have to manipulate the
+// element before the element you are searching for. For this reason, you have
+// to find an element by determining whether the next element fits a specific
+// criterion
+
+TEST(ForwardList, DrawBacks)
+{
+  forward_list<int> coll{1, 2, 3, 4, 5, 97, 98, 99};
+
+  auto pos_before = coll.before_begin();
+  for (auto pos = coll.begin(); pos != coll.end(); ++pos, ++pos_before)
+  {
+    if (*pos % 2 == 0)
+      break;
+  }
+
+  coll.insert_after(pos_before, 42);
+  EXPECT_THAT(coll, ElementsAre(1, 42, 2, 3, 4, 5, 97, 98, 99)); 
+}
+
+
+<ex>
 // This is *cxx-is-implemented-in-terms-of* to have size() which is not
 // supported.
 
@@ -53527,82 +53592,356 @@ TEST(Time, Facet)
 
 
 <ex>
-// time.h
 
-#ifndef TIME_H
-#define TIME_H
+// time taken (in ms) : 939987
+// time taken (in ns) : 939         // since integer division
+// time taken (in ns) : 939.987
+// time taken (in ns) : 939
+//
+// time taken (in ms) : 911476
+// time taken (in ns) : 911
+// time taken (in ns) : 911.476
+// time taken (in ns) : 911
 
-#include <string>
-#include <chrono>
-
-struct TestTimer
+namespace cxx_time_elapsed
 {
-    TestTimer(const std::string &text);
-    ~TestTimer();
+  struct Timer
+  {
+    Timer(const std::string &text) : text_(text)
+    {
+      start_ = chrono::system_clock::now();
+    }
+    ~Timer()
+    {
+      auto elapsed = chrono::system_clock::now() - start_;
+      auto elapsed_in_ms = chrono::duration_cast<chrono::microseconds>(elapsed);
+      auto elapsed_in_ns = chrono::duration_cast<chrono::milliseconds>(elapsed);
 
-    std::chrono::time_point<std::chrono::system_clock> start_;
-    // std::chrono::system_clock::time_point start_;
-    
-    // std::chrono::time_point<std::chrono::system_clock> end_;
-    // std::chrono::microseconds elapsed_;
-    
+      // when this is in scope, this uses:
+      //
+      // ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d);
+      //
+      // othrewise, it's error
+      // cout << "time taken (in sec) : " << elapsed << endl;
+      
+      cout << "time taken (in ms) : " << elapsed_in_ms.count() << endl;
+
+      // // *cxx-integer-division* 
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000.0 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()*0.001 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ns.count() << endl;
+
+      cout << "time taken (in ns) : " << elapsed_in_ns.count() 
+        << " for " << text_ << endl;
+    }
+
     std::string text_;
-};
+    chrono::system_clock::time_point start_;
+  };
 
-#endif // TIME_H
+} // namespace
 
-
-// time.cpp
-
-#include <iostream>
-#include "time.h"
-
-using namespace std;
-using namespace std::chrono;
-
-TestTimer::TestTimer(const std::string &text) 
-    : text_(text)
+TEST(Time, ElapsedTime)
 {
-    start_ = system_clock::now();
-}
+  using namespace cxx_time_elapsed;
 
-TestTimer::~TestTimer() 
-{
-    auto diff = system_clock::now() - start_;
-    auto elapsed_ = duration_cast<microseconds>(diff);
-    cout << "time taken for " << text_ << " is " << elapsed_.count() << endl;
-    cout << "time taken for " << text_ << " is " << elapsed_.count()/1000 << endl;
-    cout << "time taken for " << text_ << " is " << elapsed_.count()*0.001 << endl;
-    
-    auto elapsedms_ = duration_cast<milliseconds>(diff);
-    cout << "time taken for " << text_ << " is " << elapsedms_.count() << endl;
-}
+  {
+    Timer timer("StringConcat");
 
+    string result{};
 
-// use
-
-TEST_F(AGeoServerUserInBox, HandlesLargeNumbersOfUsers) {
-   Location anotherLocation{aUserLocation.go(10, West)};
-   const unsigned int lots {500000};
-   for (unsigned int i{0}; i < lots; i++) {
+    const unsigned int lots {500000};
+    for (unsigned int i{0}; i < lots; i++) {
       string user{"user" + to_string(i)};
-      server.track(user);
-      server.updateLocation(user, anotherLocation);
-   }
 
-   TestTimer timer("HandlesLargeNumbersOfUsers");
+      result += user;
+    }
+  }
 
-   auto users = server.usersInBox(aUser, Width, Height);
-   ASSERT_THAT(lots, Eq(users.size()));
+  {
+    Timer timer("StringAppend");
+
+    string result{};
+
+    const unsigned int lots {500000};
+    for (unsigned int i{0}; i < lots; i++) {
+      string user{"user" + to_string(i)};
+
+      result.append(user);
+    }
+  }
 }
 
-note:
-see that when convert to milli sec, use *0.001
+<ex>
 
-time taken for HandlesLargeNumbersOfUsers is 126172
-time taken for HandlesLargeNumbersOfUsers is 126
-time taken for HandlesLargeNumbersOfUsers is 126.172
-time taken for HandlesLargeNumbersOfUsers is 126
+// like lap feature of stopwatch
+//
+// copied from someone's code at YV.
+//
+// {
+//   PerfCounter counter;
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out;
+//     sscanf("42","%d",&out);
+//   }
+//   counter.snap("scanf int");
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out;
+//     std::stringstream ss("42");
+//     ss >> out;
+//   }
+//   counter.snap("stringstream int");
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out = boost::lexical_cast<int>("42");
+//   }
+//   counter.snap("boost::lexical_cast<int>");
+//   std::cout << counter.dump() << std::endl;
+// }
+//
+// Start -> scanf int took 2112us
+// scanf int -> stringstream int took 27859us
+// stringstream int -> boost::lexical_cast<int> took 910us
+// boost::lexical_cast<int> -> end took 0us
+
+namespace cxx_time_lap
+{
+  // design decision:
+  // in order to get diff betwen two snaps, required to access two snap. whether
+  // snap() or dump() do the work to calc diff? use dump() here
+
+  class Snapper
+  {
+    public:
+      explicit Snapper()
+      {
+        start_ = chrono::system_clock::now();
+      }
+
+      void snap(const std::string text)
+      {
+        SnapTime st{};
+        st.tp = chrono::system_clock::now();
+        st.description = text;
+        list_.push_back(st);
+      }
+
+      void dump()
+      {
+        std::string previous{"start"};
+        decltype(start_) previous_time = start_;
+
+        for (const auto &e : list_)
+        {
+          auto diff = e.tp - previous_time;
+          cout << previous << " -> " << e.description << " took " 
+            << chrono::duration_cast<chrono::microseconds>(diff).count() << " us" << endl;
+
+          previous = e.description;
+          previous_time = e.tp;
+        }
+      }
+
+    private:
+
+      struct SnapTime
+      {
+        chrono::system_clock::time_point tp{};
+        std::string description{};
+      };
+
+      std::list<SnapTime> list_;
+      chrono::system_clock::time_point start_;
+  };
+
+  class PerfCounter
+  {
+    public:
+      PerfCounter();
+      ~PerfCounter();
+
+      void snap(const string &name_);
+      void dump();
+
+    private:
+      // *cxx-nested-class*
+      // since the original code uses class but makes it all public, use
+      // struct instead.
+      struct CounterData
+      {
+        CounterData(const string &name_) : name{name_}, pnext{nullptr} {}
+        string name;
+        CounterData *pnext;
+        struct timespec ts;
+      };
+
+      // singly list but has end as well.
+      CounterData *phead;
+      CounterData *pend;
+
+      // utility function
+      CounterData *createSnap(const string &name_);
+  };
+
+  PerfCounter::PerfCounter()
+  {
+    // create a start node
+    phead = pend = createSnap("start");
+  }
+
+  PerfCounter::~PerfCounter()
+  {
+    // clean up a list
+    for (CounterData *psnap = phead; psnap;)
+    {
+      phead = psnap->pnext;
+      std::cout << "delete " << psnap->name << std::endl;
+      delete psnap;
+      psnap = phead;
+    }
+  }
+
+  void PerfCounter::snap(const string &name_)
+  {
+    CounterData *psnap = createSnap(name_);
+
+    pend->pnext = psnap;
+    pend = psnap;
+  }
+
+  // utility function to have common code in one place
+  // note that use of cpp-nested-class type, `PerfCounter::CounterData` 
+  // Otherwise, see compile errors.
+  //
+  // CounterData *PerfCounter::createSnap(const string &name_) {}
+  //
+  // perfcounter.cpp:45:1: error: ‘CounterData’ does not name a type
+  //  CounterData *PerfCounter::createSnap(const string &name_)
+  //  ^
+
+  PerfCounter::CounterData *PerfCounter::createSnap(const string &name_)
+  {
+    CounterData *psnap = new CounterData(name_);
+    clock_gettime(CLOCK_MONOTONIC, &(psnap->ts));
+    return psnap;
+  }
+
+  // cpp-stringstream
+  void PerfCounter::dump()
+  {
+    std::stringstream ss{};
+    uint32_t countSnap{1};
+
+    // only when there are two nodes to use
+    for (CounterData *pstart = phead; 
+        pstart && pstart->pnext; pstart = pstart->pnext)
+    {
+      ss << "snap: " << countSnap << ": ";
+      ss << pstart->name << " -> " << pstart->pnext->name << " took ";
+
+      // time diff in us from current to next
+      uint64_t timeDiff = 
+        (pstart->pnext->ts.tv_sec*1000000 + pstart->pnext->ts.tv_nsec/1000)-
+        (pstart->ts.tv_sec*1000000 + pstart->ts.tv_nsec/1000);
+
+      ss << timeDiff << "us" << std::endl;
+      ++countSnap;
+    }
+
+    std::cout << ss.str();
+  }
+
+} // namespace
+
+
+// on VM:
+//
+// start -> scanf int took 1609 us
+// scanf int -> stringstream int took 22991 us
+// stringstream int -> boost::lexical_cast<int> took 2445 us
+// start -> scanf int took 1709 us
+// scanf int -> stringstream int took 23523 us
+// stringstream int -> boost::lexical_cast<int> took 2065 us
+// ---------
+// snap: 1: start -> scanf int took 1706us
+// snap: 2: scanf int -> stringstream int took 23524us
+// snap: 3: stringstream int -> boost::lexical_cast<int> took 2065us
+// delete start
+// delete scanf int
+// delete stringstream int
+// delete boost::lexical_cast<int>
+
+TEST(Time, Snapper)
+{
+  using namespace cxx_time_lap;
+
+  {
+    Snapper counter;
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      sscanf("42","%d",&out);
+    }
+    counter.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      std::stringstream ss("42");
+      ss >> out;
+    }
+    counter.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out = boost::lexical_cast<int>("42");
+      (void)out;
+    }
+    counter.snap("boost::lexical_cast<int>");
+    counter.dump();
+  }
+
+  {
+    Snapper sn;
+    PerfCounter pc;
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      sscanf("42","%d",&out);
+    }
+    sn.snap("scanf int");
+    pc.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      std::stringstream ss("42");
+      ss >> out;
+    }
+    sn.snap("stringstream int");
+    pc.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out = boost::lexical_cast<int>("42");
+      (void)out;
+    }
+    sn.snap("boost::lexical_cast<int>");
+    pc.snap("boost::lexical_cast<int>");
+
+    sn.dump();
+    cout << "---------" << endl;
+    pc.dump();
+  }
+}
 
 
 ={============================================================================

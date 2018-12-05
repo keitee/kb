@@ -1654,10 +1654,52 @@ TEST(CollList, Sort)
 
 TEST(ForwardList, InsertAfter)
 {
-  forward_list<int> coll{1,2,3};
-  coll.insert_after(coll.before_begin(), {77, 88, 99});
-  EXPECT_THAT(coll, ElementsAre(77, 88, 99, 1, 2, 3));
+  {
+    forward_list<int> coll{1,2,3};
+    coll.insert_after(coll.before_begin(), {77, 88, 99});
+    EXPECT_THAT(coll, ElementsAre(77, 88, 99, 1, 2, 3));
+  }
+
+  // Note that calling an _after member function with end() or cend() results in
+  // undefined behavior because to append a new element at the end of a forward
+  // list, you have to pass the position of the last element (or before_begin()
+  // if none): 
+  //
+  // RUNTIME ERROR: appending element after end is undefined behavior 
+  //
+  // fwlist.insert_after(fwlist.end(),9999);
+  //
+  // {
+  //   forward_list<int> coll{1,2,3};
+  //   coll.insert_after(coll.end(), {77, 88, 99});
+  //   EXPECT_THAT(coll, ElementsAre(1, 2, 3, 77, 88, 99));
+  // }
 }
+
+// The drawbacks of having a singly linked list, where you can only traverse
+// forward, gets even worse when trying to find an element to insert or delete
+// something there. The problem is that when you find the element, you are too
+// far, because to insert or delete something there you have to manipulate the
+// element before the element you are searching for. For this reason, you have
+// to find an element by determining whether the next element fits a specific
+// criterion
+
+TEST(ForwardList, DrawBacks)
+{
+  forward_list<int> coll{1, 2, 3, 4, 5, 97, 98, 99};
+
+  auto pos_before = coll.before_begin();
+  for (auto pos = coll.begin(); pos != coll.end(); ++pos, ++pos_before)
+  {
+    if (*pos % 2 == 0)
+      break;
+  }
+
+  // there is no insert_before()
+  coll.insert_after(pos_before, 42);
+  EXPECT_THAT(coll, ElementsAre(1, 42, 2, 3, 4, 5, 97, 98, 99)); 
+}
+
 
 // poor performance
 TEST(ForwardList, Resize)
@@ -1711,8 +1753,7 @@ TEST(ForwardList, ImplementedInTermsOf)
   
   ForwardList<int> rcoll;
 
-  auto iter = coll.begin();
-  for (iter; iter != coll.end(); ++iter)
+  for (auto iter = coll.begin(); iter != coll.end(); ++iter)
   {
     rcoll.push_front(*iter);
   }

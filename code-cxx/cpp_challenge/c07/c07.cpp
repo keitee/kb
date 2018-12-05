@@ -15,7 +15,7 @@ using namespace testing;
 
 /*
 
-all requires *cxx-cxx17-invoke*
+Concurrency
 
 39. Measuring function execution time
 

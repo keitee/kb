@@ -6,8 +6,9 @@
 #include <limits>
 #include <thread>
 #include <list>
+#include <forward_list>
 #include <regex>
-#include <boost/cast.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include "gmock/gmock.h"
 
@@ -1336,7 +1337,7 @@ TEST(Reference, AccessOnReference)
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The UTC date and time is: Tue Jun 12 11:49:12 2018
 
-TEST(Time, UseSystemCall)
+TEST(Time, SystemCall)
 {
   // #include <time.h>
   // time_t time(time_t *timep);
@@ -1403,15 +1404,21 @@ TEST(Time, SleepFor)
 // raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
 //      02::00::55::42
 
-template <typename Unit, typename Ratio>
-ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d)
+namespace cxx_time_duration_case
 {
-    os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
-    return os;
-}
+  template <typename Unit, typename Ratio>
+    ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d)
+    {
+      os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
+      return os;
+    }
+} // namespace
+
 
 TEST(Time, DurationCast)
 {
+  using namespace cxx_time_duration_case;
+
   chrono::milliseconds ms(7255042);
 
   chrono::hours   hh = 
@@ -1488,7 +1495,7 @@ void print_clock_data(ostringstream &os)
 }
 
 
-TEST(Time, ShowCronoClockDetails)
+TEST(Time, CronoClockDetails)
 {
   ostringstream os;
 
@@ -1681,20 +1688,18 @@ TEST(Time, Facet)
       fmt.c_str(), fmt.c_str()+fmt.size());
 }
 
-// when this is in scope
+
+// time taken (in ms) : 939987
+// time taken (in ns) : 939         // since integer division
+// time taken (in ns) : 939.987
+// time taken (in ns) : 939
 //
-// ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d);
-//
-// time taken (in sec) : [288 of 1/1000000000]
-// time taken (in ms)  : 0
-// time taken (in ns) : [0 of 1/1000000]
-// time taken (in ns) : [0 of 1/1000000]
-// time taken (in ns) : [0 of 1/1000]
-// time taken (in sec) : [245 of 1/1000000000]
-// time taken (in ms)  : 0
-// time taken (in ns) : [0 of 1/1000000]
-// time taken (in ns) : [0 of 1/1000000]
-// time taken (in ns) : [0 of 1/1000]
+// time taken (in ms) : 911476
+// time taken (in ns) : 911
+// time taken (in ns) : 911.476
+// time taken (in ns) : 911
+
+// the name "Timer" is not representative. TimeLog?
 
 namespace cxx_time_elapsed
 {
@@ -1710,12 +1715,23 @@ namespace cxx_time_elapsed
       auto elapsed_in_ms = chrono::duration_cast<chrono::microseconds>(elapsed);
       auto elapsed_in_ns = chrono::duration_cast<chrono::milliseconds>(elapsed);
 
-      cout << "time taken (in sec) : " << elapsed << endl;
-      cout << "time taken (in ms)  : " << elapsed_in_ms.count() << endl;
-      cout << "time taken (in ns) : " << elapsed_in_ms/1000 << endl;
-      cout << "time taken (in ns) : " << elapsed_in_ms*0.001 << endl;
-      cout << "time taken (in ns) : " << elapsed_in_ns << endl;
+      // when this is in scope, this uses:
+      //
+      // ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d);
+      //
+      // othrewise, it's error
+      // cout << "time taken (in sec) : " << elapsed << endl;
+      
+      cout << "time taken (in ms) : " << elapsed_in_ms.count() << endl;
 
+      // // *cxx-integer-division* 
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000.0 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()*0.001 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ns.count() << endl;
+
+      cout << "time taken (in ns) : " << elapsed_in_ns.count() 
+        << " for " << text_ << endl;
     }
 
     std::string text_;
@@ -1729,6 +1745,8 @@ TEST(Time, ElapsedTime)
   using namespace cxx_time_elapsed;
 
   {
+    Timer timer("StringConcat");
+
     string result{};
 
     const unsigned int lots {500000};
@@ -1737,11 +1755,11 @@ TEST(Time, ElapsedTime)
 
       result += user;
     }
-
-    Timer timer("StringConcat");
   }
 
   {
+    Timer timer("StringAppend");
+
     string result{};
 
     const unsigned int lots {500000};
@@ -1750,8 +1768,275 @@ TEST(Time, ElapsedTime)
 
       result.append(user);
     }
+  }
+}
 
-    Timer timer("StringAppend");
+
+// like lap feature of stopwatch
+//
+// copied from someone's code at YV.
+//
+// {
+//   PerfCounter counter;
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out;
+//     sscanf("42","%d",&out);
+//   }
+//   counter.snap("scanf int");
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out;
+//     std::stringstream ss("42");
+//     ss >> out;
+//   }
+//   counter.snap("stringstream int");
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out = boost::lexical_cast<int>("42");
+//   }
+//   counter.snap("boost::lexical_cast<int>");
+//   std::cout << counter.dump() << std::endl;
+// }
+//
+// Start -> scanf int took 2112us
+// scanf int -> stringstream int took 27859us
+// stringstream int -> boost::lexical_cast<int> took 910us
+// boost::lexical_cast<int> -> end took 0us
+
+namespace cxx_time_lap
+{
+  // design decision:
+  // in order to get diff betwen two snaps, required to access two snap. whether
+  // snap() or dump() do the work to calc diff? use dump() here
+
+  class Snapper
+  {
+    public:
+      explicit Snapper()
+      {
+        start_ = chrono::system_clock::now();
+      }
+
+      void snap(const std::string text)
+      {
+        SnapTime st{};
+        st.tp = chrono::system_clock::now();
+        st.description = text;
+        list_.push_back(st);
+      }
+
+      void dump()
+      {
+        std::string previous{"start"};
+        decltype(start_) previous_time = start_;
+
+        for (const auto &e : list_)
+        {
+          auto diff = e.tp - previous_time;
+          cout << previous << " -> " << e.description << " took " 
+            << chrono::duration_cast<chrono::microseconds>(diff).count() << " us" << endl;
+
+          previous = e.description;
+          previous_time = e.tp;
+        }
+      }
+
+    private:
+
+      struct SnapTime
+      {
+        chrono::system_clock::time_point tp{};
+        std::string description{};
+      };
+
+      std::list<SnapTime> list_;
+      chrono::system_clock::time_point start_;
+  };
+
+  class PerfCounter
+  {
+    public:
+      PerfCounter();
+      ~PerfCounter();
+
+      void snap(const string &name_);
+      void dump();
+
+    private:
+      // *cxx-nested-class*
+      // since the original code uses class but makes it all public, use
+      // struct instead.
+      struct CounterData
+      {
+        CounterData(const string &name_) : name{name_}, pnext{nullptr} {}
+        string name;
+        CounterData *pnext;
+        struct timespec ts;
+      };
+
+      // singly list but has end as well.
+      CounterData *phead;
+      CounterData *pend;
+
+      // utility function
+      CounterData *createSnap(const string &name_);
+  };
+
+  PerfCounter::PerfCounter()
+  {
+    // create a start node
+    phead = pend = createSnap("start");
+  }
+
+  PerfCounter::~PerfCounter()
+  {
+    // clean up a list
+    for (CounterData *psnap = phead; psnap;)
+    {
+      phead = psnap->pnext;
+      std::cout << "delete " << psnap->name << std::endl;
+      delete psnap;
+      psnap = phead;
+    }
+  }
+
+  void PerfCounter::snap(const string &name_)
+  {
+    CounterData *psnap = createSnap(name_);
+
+    pend->pnext = psnap;
+    pend = psnap;
+  }
+
+  // utility function to have common code in one place
+  // note that use of cpp-nested-class type, `PerfCounter::CounterData` 
+  // Otherwise, see compile errors.
+  //
+  // CounterData *PerfCounter::createSnap(const string &name_) {}
+  //
+  // perfcounter.cpp:45:1: error: ‘CounterData’ does not name a type
+  //  CounterData *PerfCounter::createSnap(const string &name_)
+  //  ^
+
+  PerfCounter::CounterData *PerfCounter::createSnap(const string &name_)
+  {
+    CounterData *psnap = new CounterData(name_);
+    clock_gettime(CLOCK_MONOTONIC, &(psnap->ts));
+    return psnap;
+  }
+
+  // cpp-stringstream
+  void PerfCounter::dump()
+  {
+    std::stringstream ss{};
+    uint32_t countSnap{1};
+
+    // only when there are two nodes to use
+    for (CounterData *pstart = phead; 
+        pstart && pstart->pnext; pstart = pstart->pnext)
+    {
+      ss << "snap: " << countSnap << ": ";
+      ss << pstart->name << " -> " << pstart->pnext->name << " took ";
+
+      // time diff in us from current to next
+      uint64_t timeDiff = 
+        (pstart->pnext->ts.tv_sec*1000000 + pstart->pnext->ts.tv_nsec/1000)-
+        (pstart->ts.tv_sec*1000000 + pstart->ts.tv_nsec/1000);
+
+      ss << timeDiff << "us" << std::endl;
+      ++countSnap;
+    }
+
+    std::cout << ss.str();
+  }
+
+} // namespace
+
+
+// on VM:
+//
+// start -> scanf int took 1609 us
+// scanf int -> stringstream int took 22991 us
+// stringstream int -> boost::lexical_cast<int> took 2445 us
+// start -> scanf int took 1709 us
+// scanf int -> stringstream int took 23523 us
+// stringstream int -> boost::lexical_cast<int> took 2065 us
+// ---------
+// snap: 1: start -> scanf int took 1706us
+// snap: 2: scanf int -> stringstream int took 23524us
+// snap: 3: stringstream int -> boost::lexical_cast<int> took 2065us
+// delete start
+// delete scanf int
+// delete stringstream int
+// delete boost::lexical_cast<int>
+
+TEST(Time, Snapper)
+{
+  using namespace cxx_time_lap;
+
+  {
+    Snapper counter;
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      sscanf("42","%d",&out);
+    }
+    counter.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      std::stringstream ss("42");
+      ss >> out;
+    }
+    counter.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out = boost::lexical_cast<int>("42");
+      (void)out;
+    }
+    counter.snap("boost::lexical_cast<int>");
+    counter.dump();
+  }
+
+  {
+    Snapper sn;
+    PerfCounter pc;
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      sscanf("42","%d",&out);
+    }
+    sn.snap("scanf int");
+    pc.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      std::stringstream ss("42");
+      ss >> out;
+    }
+    sn.snap("stringstream int");
+    pc.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out = boost::lexical_cast<int>("42");
+      (void)out;
+    }
+    sn.snap("boost::lexical_cast<int>");
+    pc.snap("boost::lexical_cast<int>");
+
+    sn.dump();
+    cout << "---------" << endl;
+    pc.dump();
   }
 }
 
