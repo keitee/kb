@@ -1155,48 +1155,109 @@ TEST(DISABLED_StlDeque, HowDequeSupportEmpty)
 // ={=========================================================================
 // cxx-queue-priority
 
+TEST(CollQueue, Queue)
+{
+  ostringstream os;
+  std::queue<std::string> q;
+
+  q.push("These "); q.push("are "); q.push("more than ");
+  os << q.front(); q.pop();
+  os << q.front(); q.pop();
+
+  q.push("four "); q.push("words!");
+
+  // discard one element
+  q.pop();
+
+  os << q.front(); q.pop();
+  os << q.front(); q.pop();
+
+  EXPECT_THAT(os.str(), "These are four words!");
+  EXPECT_THAT(q.size(), 0);
+}
+
 TEST(CollQueue, PriorityQueue)
 {
-  // priority_queue<float> pq;
-  priority_queue<int> pq;
-
-  pq.push(66);
-  pq.push(22);
-  pq.push(44);
-
-  // EXPECT_THAT(pq.top(), FloatEq(66.6));
-  // pq.pop();
-
-  // EXPECT_THAT(pq.top(), FloatEq(44.4));
-  // pq.pop();
-
-  EXPECT_THAT(pq.top(), Eq(66));
-  pq.pop();
-
-  EXPECT_THAT(pq.top(), Eq(44));
-  pq.pop();
-
-  // insert more
-  pq.push(11);
-  pq.push(55);
-  pq.push(33);
-
-  pq.pop();
-
-  // since queue do not support begin()/end(), cannot use ElementsAre and copy
-  // to transform it to a vector. Did it manually.
-
-  vector<int> coll;
-
-  while (!pq.empty())
   {
-    coll.push_back(pq.top());
+    queue<int> pq;
+
+    pq.push(22);
+    pq.push(66);
+    pq.push(44);
+
+    //         top
+    // 44, 66, 22
+
+    // queue do not have top()
+
+    EXPECT_THAT(pq.front(), Eq(22));
     pq.pop();
+
+    EXPECT_THAT(pq.front(), Eq(66));
+    pq.pop();
+
+    pq.push(11);
+    pq.push(55);
+    pq.push(33);
+
+    //             top
+    // 33, 55, 11, 44
+
+    pq.pop();
+
+    // since queue do not support begin()/end(), cannot use ElementsAre and copy
+    // to transform it to a vector. Did it manually.
+    // copy(pq.begin(), pq.end(), back_inserter(coll));
+
+    vector<int> coll;
+
+    while (!pq.empty())
+    {
+      coll.push_back(pq.front());
+      pq.pop();
+    }
+
+    EXPECT_THAT(coll, ElementsAre(11, 55, 33));
   }
 
-  // copy(pq.begin(), pq.end(), back_inserter(coll));
+  {
+    priority_queue<int> pq;
 
-  EXPECT_THAT(coll, ElementsAre(33, 22, 11));
+    pq.push(22);
+    pq.push(66);
+    pq.push(44);
+
+    //         top
+    // 22, 44, 66
+
+    EXPECT_THAT(pq.top(), Eq(66));
+    pq.pop();
+
+    EXPECT_THAT(pq.top(), Eq(44));
+    pq.pop();
+
+    pq.push(11);
+    pq.push(55);
+    pq.push(33);
+
+    // 11, 22, 33, 55
+
+    pq.pop();
+
+    // since queue do not support begin()/end(), cannot use ElementsAre and copy
+    // to transform it to a vector. Did it manually.
+    // copy(pq.begin(), pq.end(), back_inserter(coll));
+
+    vector<int> coll;
+
+    while (!pq.empty())
+    {
+      coll.push_back(pq.top());
+      pq.pop();
+    }
+
+    EXPECT_THAT(coll, ElementsAre(33, 22, 11));
+  }
 }
 
 

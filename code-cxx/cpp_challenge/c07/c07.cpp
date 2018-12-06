@@ -17,41 +17,52 @@ using namespace testing;
 
 Concurrency
 
-39. Measuring function execution time
+61. Parallel transform algorithm
 
-Write a function that can measure the execution time of a function (with any
-number of arguments) in any required duration (such as seconds, milliseconds,
-microseconds, and so on).
+Write a general-purpose algorithm that applies a given unary function to
+transform the elements of a range in parallel. The unary operation used to
+transform the range must not invalidate range iterators or modify the elements
+of the range. The level of parallelism, that is, the number of execution threads
+and the way it is achieved, is an implementation detail.
+
 
 */
 
 
 /*
 
-40. Number of days between two dates
+62. Parallel min and max element algorithms using threads
 
-Write a function that, given two dates, returns the number of days between the
-two dates. The function should work regardless of the order of the input dates.
+Implement general-purpose parallel algorithms that find the minimum value and,
+respectively, the maximum value in a given range. The parallelism should be
+implemented using threads, although the number of concurrent threads is an
+implementation detail.lgorithms and Data Structures
+
 
 */
 
 
 /*
 
-41. Day of the week
+63. Parallel min and max element algorithms using asynchronous functions
 
-Write a function that, given a date, determines the day of the week. This
-function should return a value between 1 (for Monday) and 7 (for Sunday).
+Implement general-purpose parallel algorithms that find the minimum value and,
+respectively, the maximum value in a given range. The parallelism should be
+implemented using asynchronous functions, although the number of concurrent
+functions is an implementation detail.
 
 */
 
 /*
 
-42. Day and week of the year
+64. Parallel sort algorithm
 
-Write a function that, given a date, returns the day of the year (from 1 to 365
-or 366 for leap years) and another function that, for the same input, returns
-the calendar week of the year.
+Write a parallel version of the sort algorithm as defined for problem 53. Sort
+Algorithm, in Chapter 6, Algorithms and Data Structures, which, given a pair of
+random access iterators to define its lower and upper bounds, sorts the elements
+of the range using the quicksort algorithm. The function should use the
+comparison operators for comparing the elements of the range. The level of
+parallelism and the way to achieve it is an implementation detail.
 
 */
 

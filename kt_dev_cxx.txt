@@ -209,7 +209,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-coll-cxx-vector
 *kt_dev_cxx_0000* cxx-coll-cxx-vector-bool
 *kt_dev_cxx_0000* cxx-container-cxx-deque
-*kt_dev_cxx_0000* cxx-container-cxx-queue cxx-container-adaptor
+*kt_dev_cxx_0000* cxx-coll-cxx-queue cxx-coll-adaptor
 *kt_dev_cxx_0000* cxx-container-cxx-stack cxx-container-adaptor
 *kt_dev_cxx_0000* cxx-container-cxx-list
 *kt_dev_cxx_0000* cxx-container-cxx-forward-list
@@ -38395,19 +38395,39 @@ c.pop_front()       Removes the first element (does not return it)
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-cxx-queue cxx-container-adaptor
+*kt_dev_cxx_0000* cxx-coll-cxx-queue cxx-coll-adaptor
 
 {cxx-queue}
 
 12.2 Queues
 
-Like stack, queue uses deque by default and can change by giving it second
-paramenter.
+// <queue>, the class queue is defined as follows:
 
-You can use any sequence container class that provides the member functions
-front(), back(), push_back(), and pop_front().
+namespace std {
+  template <typename T,
+           typename Container = deque<T>>
+             class queue;
+}
 
-template <class T, class Container = deque<T>> class queue;
+
+Like stack, queue uses deque by default. The optional second template
+parameter defines the container that the queue uses internally for its
+elements.
+
+The queue implementation simply maps the operations into appropriate calls of
+the container that is used internally (Figure 12.4). You can use any sequence
+container class that provides the member functions front(), back(),
+          push_back(), and pop_front(). 
+For example, you could also use a list as the container for the elements:
+
+std::queue<std::string,std::list<std::string>> buffer;
+
+
+12.2.1 The Core Interface
+
+      back()            front()
+          |             |
+push() -> "priority queue" -> pop()
 
 push()    inserts an element into the queue.
 
@@ -38426,6 +38446,28 @@ queue. This interface is somewhat inconvenient, but it performs better if you
 want to only remove the next element without processing it.
 
 
+TEST(CollQueue, Queue)
+{
+  ostringstream os;
+  std::queue<std::string> q;
+
+  q.push("These "); q.push("are "); q.push("more than ");
+  os << q.front(); q.pop();
+  os << q.front(); q.pop();
+
+  q.push("four "); q.push("words!");
+
+  // discard one element
+  q.pop();
+
+  os << q.front(); q.pop();
+  os << q.front(); q.pop();
+
+  EXPECT_THAT(os.str(), "These are four words!");
+  EXPECT_THAT(q.size(), 0);
+}
+
+
 {cxx-queue-priority}
 
 12.3 Priority Queues
@@ -38433,11 +38475,18 @@ want to only remove the next element without processing it.
 The class priority_queue<> implements a queue from which elements are read
 according to their priority.
 
-However, the `next element` is not the first inserted element. Rather, it is
-the element `that has the highest priority.` Thus, elements are partially
-sorted according to their value. As usual, you can provide the sorting
-criterion as a template parameter. By default, the elements are sorted by
-using operator < in descending order.
+                        top()   // like front()
+                        |
+push() -> "priority queue" -> pop()
+
+
+However, the `next element from top()` is not the first inserted element.
+Rather, it is the element `that has the highest priority.` Thus, elements are
+partially sorted according to their value. As usual, you can provide the
+sorting criterion as a template parameter. By default, the elements are sorted
+by using operator < in descending order.
+
+// <queue>, the class queue is defined as follows:
 
 namespace std {
   template <typename T,
@@ -38449,7 +38498,7 @@ namespace std {
 You can use any sequence container class that provides random-access iterators
 and the member functions front(), push_back(), and pop_back(). Random access
 is necessary for sorting the elements, which is performed by the heap
-algorithms of the STL *algo-heap*
+algorithms of the STL *algo-sort-heap*
 
 push() inserts an element into the priority queue.
 
@@ -38460,46 +38509,86 @@ pop() removes an element from the priority queue.
 
 TEST(CollQueue, PriorityQueue)
 {
-  // priority_queue<float> pq;
-  priority_queue<int> pq;
-
-  pq.push(66);
-  pq.push(22);
-  pq.push(44);
-
-  // EXPECT_THAT(pq.top(), FloatEq(66.6));
-  // pq.pop();
-
-  // EXPECT_THAT(pq.top(), FloatEq(44.4));
-  // pq.pop();
-
-  EXPECT_THAT(pq.top(), Eq(66));
-  pq.pop();
-
-  EXPECT_THAT(pq.top(), Eq(44));
-  pq.pop();
-
-  // insert more
-  pq.push(11);
-  pq.push(55);
-  pq.push(33);
-
-  pq.pop();
-
-  // since queue do not support begin()/end(), cannot use ElementsAre and copy
-  // to transform it to a vector. Did it manually.
-
-  vector<int> coll;
-
-  while (!pq.empty())
   {
-    coll.push_back(pq.top());
+    queue<int> pq;
+
+    pq.push(22);
+    pq.push(66);
+    pq.push(44);
+
+    //         top
+    // 44, 66, 22
+
+    // queue do not have top()
+
+    EXPECT_THAT(pq.front(), Eq(22));
     pq.pop();
+
+    EXPECT_THAT(pq.front(), Eq(66));
+    pq.pop();
+
+    pq.push(11);
+    pq.push(55);
+    pq.push(33);
+
+    //             top
+    // 33, 55, 11, 44
+
+    pq.pop();
+
+    // since queue do not support begin()/end(), cannot use ElementsAre and copy
+    // to transform it to a vector. Did it manually.
+    // copy(pq.begin(), pq.end(), back_inserter(coll));
+
+    vector<int> coll;
+
+    while (!pq.empty())
+    {
+      coll.push_back(pq.front());
+      pq.pop();
+    }
+
+    EXPECT_THAT(coll, ElementsAre(11, 55, 33));
   }
 
-  // copy(pq.begin(), pq.end(), back_inserter(coll));
+  {
+    priority_queue<int> pq;
 
-  EXPECT_THAT(coll, ElementsAre(33, 22, 11));
+    pq.push(22);
+    pq.push(66);
+    pq.push(44);
+
+    //         top
+    // 22, 44, 66
+
+    EXPECT_THAT(pq.top(), Eq(66));
+    pq.pop();
+
+    EXPECT_THAT(pq.top(), Eq(44));
+    pq.pop();
+
+    pq.push(11);
+    pq.push(55);
+    pq.push(33);
+
+    // 11, 22, 33, 55
+
+    pq.pop();
+
+    // since queue do not support begin()/end(), cannot use ElementsAre and copy
+    // to transform it to a vector. Did it manually.
+    // copy(pq.begin(), pq.end(), back_inserter(coll));
+
+    vector<int> coll;
+
+    while (!pq.empty())
+    {
+      coll.push_back(pq.top());
+      pq.pop();
+    }
+
+    EXPECT_THAT(coll, ElementsAre(33, 22, 11));
+  }
 }
 
 

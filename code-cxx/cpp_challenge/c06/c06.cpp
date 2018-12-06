@@ -14,14 +14,24 @@ using namespace testing;
 // ={=========================================================================
 
 /*
- *
+
 Algorithms and Data Structures
 
-39. Measuring function execution time
+45. Priority queue
 
-Write a function that can measure the execution time of a function (with any
-number of arguments) in any required duration (such as seconds, milliseconds,
-microseconds, and so on).
+Write a data structure that represents a priority queue that provides constant
+time lookup for the largest element, but has logarithmic time complexity for
+adding and removing elements. A queue inserts new elements at the end and
+removes elements from the top. By default, the queue should use operator< to
+compare elements, but it should be possible for the user to provide a comparison
+function object that returns true if the first argument is less than the second.
+The implementation must provide at least the following operations:
+
+push() to add a new element
+pop() to remove the top element
+top() to provide access to the top element
+size() to indicate the number of elements in the queue
+empty() to indicate whether the queue is empty
 
 */
 
