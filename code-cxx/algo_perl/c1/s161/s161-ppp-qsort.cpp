@@ -37,7 +37,10 @@ int build_partition(int first, int last)
   for (int i = first+1; i <= last; ++i)
   {
     if (coll[i] < pivot_value)
-      swap(coll[++lastsmall], coll[i]);
+    {
+      if (++lastsmall != i)
+        swap(coll[++lastsmall], coll[i]);
+    }
   }
 
   swap(coll[first], coll[lastsmall]);
@@ -85,7 +88,7 @@ int main(void)
 
   // don't have output part to focus on sorting time rather than input/output
 
-  std::cout << "1.6.1: n: " << n << " quick sort on array" << std::endl;
+  std::cout << "sort, 1.6.1, input size: " << n << ", ppp version qsort" << std::endl;
 
   return 0;
 }

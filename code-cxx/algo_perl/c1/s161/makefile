@@ -12,7 +12,7 @@ TARGET4 = s161-stl-sort-vector
 TARGET5 = s161-stl-sort-array
 TARGET3 = s161-bit-array
 TARGET6 = s161-ppp-isort
-TARGET7 = s161-qsort-own
+TARGET7 = s161-ppp-qsort
 TARGET8 = s161-ex
 
 # Where to find user code.
