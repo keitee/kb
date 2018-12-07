@@ -1171,9 +1171,9 @@ TEST(Reference, UseConstReference)
 
 
 // ={=========================================================================
-// cxx-reference-callby
+// cxx-reference
 
-namespace use_reference_callby
+namespace cxx_reference
 {
   void swap_by_value(int x, int y)
   {
@@ -1198,27 +1198,11 @@ namespace use_reference_callby
     x = y;
     y = temp;
   }
-
-  void fill_buffer_by_pointer(char *buffer)
-  {
-    sprintf(buffer, "is filled by pointer %d\n", 10);
-  }
-
-  // cxx.cpp: In function ‘void use_reference_callby::fill_buffer_by_reference(char&)’:
-  // cxx.cpp:826:52: error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
-  //      sprintf(buffer, "is filled by pointer %d\n", 10);
-  //                                                     ^
-
-  // void fill_buffer_by_reference(char &buffer)
-  // {
-  //   sprintf(buffer, "is filled by pointer %d\n", 10);
-  // }
-
 } // namespace
 
-TEST(Reference, CallBy)
+TEST(Reference, Swap)
 {
-  using namespace use_reference_callby;
+  using namespace cxx_reference;
 
   // no swap
   {
@@ -1236,24 +1220,69 @@ TEST(Reference, CallBy)
     EXPECT_EQ(y, 10);
   }
 
-  // swap
-  // note: no need to pass its address
+  // swap, note: no need to pass its address
   {
     int x = 10, y = 20;
     swap_by_reference(x, y);
     EXPECT_EQ(x, 20);
     EXPECT_EQ(y, 10);
   }
+
+  // *cxx-swap* std-swap uses reference
+  {
+    int x = 10, y = 20;
+    swap(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
 }
 
-TEST(Reference, OnCFunctions)
+
+namespace cxx_reference
 {
-  using namespace use_reference_callby;
+  void func_01(char *buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
+
+  void func_02(char *&buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
+
+  // cxx.cpp: In function ‘void use_reference_callby::fill_buffer_by_reference(char&)’:
+  // cxx.cpp:826:52: error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
+  //      sprintf(buffer, "is filled by pointer %d\n", 10);
+  //                                                     ^
+
+  // void fill_buffer_by_reference(char &buffer)
+  // {
+  //   sprintf(buffer, "is filled by pointer %d\n", 10);
+  // }
+
+} // namespace
+
+
+TEST(Reference, CString)
+{
+  using namespace cxx_reference;
 
   {
     char buffer[100];
-    fill_buffer_by_pointer(buffer);
-    cout << buffer << endl;
+    func_01(buffer);
+
+    // *cxx-array* the point is that name of array is "rvalue of char *".
+    //
+    // error: invalid initialization of non-const reference of type ‘char*&’ from an rvalue of type ‘char*’
+    //      func_02(buffer);
+  }
+
+  {
+    char *buffer = new char[100];
+
+    // error: invalid initialization of reference of type ‘char&’ from expression of type ‘char*’
+    func_02(buffer);
+    func_01(buffer);
   }
 }
 
@@ -2475,11 +2504,21 @@ namespace cxx_sp_delete
       ostream &os_;
   };
 
-  void delete_mesg(string *str)
+  void function_debug_delete(string *str)
   {
     cout << "deleting " << *str << endl;
     delete str;
   }
+
+  class ClassDebugDelete
+  {
+    public:
+      void operator() (string *str)
+      {
+        cout << "deleting " << *str << endl;
+        delete str;
+      }
+  };
 
 } // namespace
 
@@ -2502,9 +2541,19 @@ TEST(SharedPointer, Deleter)
     up->print_mesg();
   }
 
+  // *cxx-error*
+  // {
+  //   unique_ptr<string, decltype(function_debug_delete)> up(new string("unique"), function_debug_delete);
+  // }
+
   {
-    shared_ptr<string> sp1(new string("nico"), delete_mesg);
-    shared_ptr<string> sp2(new string("jutta"), delete_mesg);
+    shared_ptr<string> sp1(new string("nico on function"), function_debug_delete);
+    shared_ptr<string> sp2(new string("jutta on function"), function_debug_delete);
+  }
+
+  {
+    shared_ptr<string> sp1(new string("nico on functor"), ClassDebugDelete());
+    shared_ptr<string> sp2(new string("jutta on functor"), ClassDebugDelete());
   }
 
   {
@@ -2527,8 +2576,8 @@ TEST(SharedPointer, DeleteTime)
 {
   using namespace cxx_sp_delete;
 
-  shared_ptr<string> pnico(new string("nico"), delete_mesg);
-  shared_ptr<string> pjutta(new string("jutta"), delete_mesg);
+  shared_ptr<string> pnico(new string("nico"), function_debug_delete);
+  shared_ptr<string> pjutta(new string("jutta"), function_debug_delete);
 
   // uppercase the first char
   (*pnico)[0] = 'N';
@@ -3687,22 +3736,22 @@ TEST(Regex, MatchResult)
 // This means abs() has no effect when fed the largest negative number. So bit
 // representation is 'agnostic' to whether it's signed or unsigned.
 
-// cxx-bitset-code
-//
-// usr/include/c++/4.9/bitset/
-//
-//       /// Initial bits bitwise-copied from a single word (others set to zero).
-// #if __cplusplus >= 201103L
-//       constexpr bitset(unsigned long long __val) noexcept
-//       : _Base(_Sanitize_val<_Nb>::_S_do_sanitize_val(__val)) { }
-// #else
-//       bitset(unsigned long __val)
-//       : _Base(__val)
-//       { _M_do_sanitize(); }
-// #endif
-
 TEST(Bit, BitSetCtor)
 {
+  // cxx-bitset-code
+  //
+  // usr/include/c++/4.9/bitset/
+  //
+  //       /// Initial bits bitwise-copied from a single word (others set to zero).
+  // #if __cplusplus >= 201103L
+  //       constexpr bitset(unsigned long long __val) noexcept
+  //       : _Base(_Sanitize_val<_Nb>::_S_do_sanitize_val(__val)) { }
+  // #else
+  //       bitset(unsigned long __val)
+  //       : _Base(__val)
+  //       { _M_do_sanitize(); }
+  // #endif
+  //
   // {
   //   int value = 1024;
   //
@@ -3713,8 +3762,8 @@ TEST(Bit, BitSetCtor)
 
   {
     unsigned int value = 1024;
-    bitset<32> bitsetx{value};
-    EXPECT_EQ(bitsetx.to_string(), "00000000000000000000010000000000");
+    bitset<32> coll{value};
+    EXPECT_EQ(coll.to_string(), "00000000000000000000010000000000");
   }
 
   // note: can use variable to set size of bitset.
@@ -3725,73 +3774,85 @@ TEST(Bit, BitSetCtor)
   }
 }
 
+
+// bool vector < bitset and bit array < bool array
+
 TEST(Bit, SizeConsideration)
 {
-  vector<bool> boolvec(32,1);
-  bitset<32> bitvec(1U);
-  bool bitbool[32];
+  const int size{1000};
 
-  EXPECT_THAT(boolvec.size(), 32);
+  vector<bool> coll_bool_vector(size, 1);
+  bitset<size> coll_bitset(1U);
+  int coll_bit_array[size/32+1];
+  bool coll_bool_array[size];
+
+  EXPECT_THAT(coll_bool_vector.size(), size);
+
 #if __GNUC__ && __x86_64__
-  EXPECT_THAT(sizeof(boolvec), 72);   // 64 bits
+  EXPECT_THAT(sizeof(coll_bool_vector), 72);   // 64 bits
 #else
-  EXPECT_THAT(sizeof(boolvec), 20);   // 32 bits
+  EXPECT_THAT(sizeof(coll_bool_vector), 1);   // 32 bits, need to update
 #endif
 
-  EXPECT_THAT(bitvec.size(), 32);
+  EXPECT_THAT(coll_bitset.size(), size);
 #if __GNUC__ && __x86_64__
-  EXPECT_THAT(sizeof(bitvec), 8);     // 64 bits
+  EXPECT_THAT(sizeof(coll_bitset), 128);     // 64 bits
 #else
-  EXPECT_THAT(sizeof(bitvec), 4);     // 32 bits
+  EXPECT_THAT(sizeof(coll_bitset), 1);     // 32 bits
 #endif
 
-  EXPECT_THAT(sizeof(bitbool), 32);
-}
+  // 1000/32 = 31, 31+1 = 32, 32*4 = 128
+  EXPECT_THAT(sizeof(coll_bit_array), 128);
 
-
-TEST(Bit, MaxNegagiveIsSpecial)
-{
-  // get max negative, ???_MIN
-  int int_min = (~((unsigned int)0) >> 1)+1;
-
-  bitset<32> bitset_int_min(int_min);
-  EXPECT_EQ(bitset_int_min.to_string(), "10000000000000000000000000000000");
-
-  // what'd happen when negate ???_MIN?
-  int negate_min = -int_min;
-  bitset<32> bitset_negate_min(negate_min);
-  EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
-}
-
-TEST(Bit, Tricks)
-{
-  // get bits which has [5, 0]th bis on. e.g. 0001.1111
-  // in this case, do not need to specify unsigned.
-
-  int value{};
-
-  const int POS_TO_TURN_ON=5;
-  value =  ~(~0 << POS_TO_TURN_ON);
-  EXPECT_THAT(value, 0x1F);
+  EXPECT_THAT(sizeof(coll_bool_array), size);
 }
 
 
 TEST(Bit, RightShift)
 {
+  // fail
   {
-    // fails
-    // unsigned int int_max = (~((int)0)) >> 1;
-    // int int_max = (~((int)0)) >> 1;
-    // 
-    // unsigned int val = ((~0) >> 1);
-    
-    // okays
-    // unsigned int val = (((unsigned)~0) >> 1);
-    // unsigned int val = ((unsigned)~0 >> 1);    // okay, since cast is higher
-    //
-    // int int_max = (~((unsigned int)0)) >> 1;
-    // unsigned int int_max = (~((unsigned int)0)) >> 1;
+    // "01111111111111111111111111111111" is expected but gets
+    // "11111111111111111111111111111111"
 
+    unsigned int int_max_1 = (~((int)0)) >> 1;
+    int int_max_2 = (~((int)0)) >> 1;
+    EXPECT_EQ(int_max_1, numeric_limits<unsigned int>::max());
+    EXPECT_NE(int_max_1, numeric_limits<int>::max());
+
+    // this is wrong
+    std::bitset<32> coll{int_max_1};
+    EXPECT_EQ(coll.to_string(), "11111111111111111111111111111111");
+
+    EXPECT_EQ(int_max_2, numeric_limits<unsigned int>::max());
+    EXPECT_NE(int_max_2, numeric_limits<int>::max());
+  }
+
+  // okay
+  {
+    unsigned int uint_max_1 = (((unsigned)~0) >> 1);
+    unsigned int uint_max_2 = ((unsigned)~0 >> 1);    // okay, since cast is higher
+    EXPECT_EQ(uint_max_1, numeric_limits<int>::max());
+    EXPECT_EQ(uint_max_2, numeric_limits<int>::max());
+  }
+
+  // okay
+  {
+    int uint_max_1 = (((unsigned)~0) >> 1);
+    int uint_max_2 = ((unsigned)~0 >> 1);    // okay, since cast is higher
+    EXPECT_EQ(uint_max_1, numeric_limits<int>::max());
+    EXPECT_EQ(uint_max_2, numeric_limits<int>::max());
+  }
+
+  // okay
+  {
+    // input3 works since the result is `independant` but assigned to unsigned.
+    unsigned int input = ~0;
+    input >>=1;
+    EXPECT_EQ(input, numeric_limits<int>::max());
+  }
+
+  {
     unsigned int uint_max = ~((unsigned int)0);
 
     // cxx.cpp:3195:56: warning: left shift count >= width of type
@@ -3809,60 +3870,76 @@ TEST(Bit, RightShift)
     EXPECT_EQ(int_min, numeric_limits<int>::min());
   }
 
-  // why is that different?
+  // why is that different? the main point is *cxx-shift-right-shift*
+  //
+  // 1. when use `bitwise not`, the size and signness is `independant`. The
+  // result `depends on the other operand` and done at `compile-time`. 
+  //
+  // so ~(0) makes "111...11" which don't have size and signness.
+  //
+  // 2. The signess must be known to compiler when do shift to have guaranteed
+  // result. Since do not know signness, use `signed by default` and gets 1
+  // for MSB when right-shift
+  //
+  // *cxx-shift-right-shift* 
+  // the point is that must use `unsigned` to do `right-shift` 
+  // in order to have guaranteed 0 values. 
+  //
+  // so (~(0)>>1) makes "111...11"
+  //
+  // This is why glibc macro uses unsigned type which set size and signness.
+  // from glibc and see exercise 2-1 for examples.
+  //
+  // # ifndef ULONG_MAX
+  // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
+  // # endif
+  // # ifndef LONG_MAX
+  // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
+  // # endif
+
+  // left-shift do not matter
   {
-    // 1. when use `bitwise not`, the size and signness is `independant`. The
-    // result `depends on the other operand` and done at `compile-time`. 
-    //
-    // so ~(0) makes "111...11" which don't have size and signness.
-    //
-    // 2. The signess must be known to compiler when do shift to have guaranteed
-    // result. Since do not know signness, use `signed by default` and gets 1
-    // for MSB when right-shift
-    //
-    // *cxx-shift-right-shift* 
-    // the point is that must use `unsigned` to do `right-shift` 
-    // in order to have guaranteed 0 values. 
-    //
-    // so (~(0)>>1) makes "111...11"
-    //
-    // This is why glibc macro uses unsigned type which set size and signness.
-    // from glibc and see exercise 2-1 for examples.
-    //
-    // # ifndef ULONG_MAX
-    // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
-    // # endif
-    // # ifndef LONG_MAX
-    // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
-    // # endif
+    unsigned int value = (1 << 10);
+    bitset<32> coll{value};
+    EXPECT_EQ(coll.to_string(), "00000000000000000000010000000000");
+  }
 
-    // input3 works since the result is `independant` but assigned to unsigned.
-    // input1 version is shorter version of this.
+  {
+    // get bits which has [5, 0]th bis on. e.g. 0001.1111
+    // in this case, do not need to specify unsigned.
 
-    unsigned int input1 = ~((unsigned int)0)>>1;
-    unsigned int input2 = (~(0)>>1);
-    unsigned int input3 = ~0;
-    input3 >>=1;
+    int value{};
 
-    std::bitset<32> bset1{input1};
-    EXPECT_EQ(bset1.to_string(), "01111111111111111111111111111111");
-
-    // this is wrong
-    std::bitset<32> bset2{input2};
-    EXPECT_EQ(bset2.to_string(), "11111111111111111111111111111111");
-
-    std::bitset<32> bset3{input3};
-    EXPECT_EQ(bset3.to_string(), "01111111111111111111111111111111");
+    const int POS_TO_TURN_ON=5;
+    value =  ~(~0 << POS_TO_TURN_ON);
+    EXPECT_THAT(value, 0x1F);
   }
 }
 
-// Programming Pearl, C 01, Q 02
+
+// *cxx-twos-complement*
+TEST(Bit, MaxNegagiveIsSpecial)
+{
+  // get max negative, ???_MIN
+  int int_min = (~((unsigned int)0) >> 1)+1;
+
+  bitset<32> bitset_int_min(int_min);
+  EXPECT_EQ(bitset_int_min.to_string(), "10000000000000000000000000000000");
+
+  // what'd happen when negate ???_MIN?
+  int negate_min = -int_min;
+  bitset<32> bitset_negate_min(negate_min);
+  EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
+}
+
+
+// Programming Pearl, Column 01, Q 02
 // How would you implement bit vectors using bitwise logical operations?
 //
 // C and old C++ programs usually use type long for arrays of bits and
 // manipulate them with the bit operators, such as &, |, and ~.
 
-namespace bit_vectors 
+namespace bit_set_array 
 {
   const unsigned int BITSPERWORD = 32;
   const unsigned int SHIFT = 5;
@@ -3910,7 +3987,7 @@ namespace bit_vectors
 
 TEST(Bit, BitVectors)
 {
-  using namespace bit_vectors;
+  using namespace bit_set_array;
 
   auto array_size = sizeof(a)/sizeof(a[0]);
 
@@ -4361,6 +4438,7 @@ namespace cxx_template
     return 0;
   }
 
+  // *cxx-array*
   template <unsigned N, unsigned M>
     int compare(const char (&p1) [N], const char (&p2) [M])
     {
@@ -4439,7 +4517,7 @@ TEST(Template, Specialisation)
 
 namespace cxx_template_default
 {
-  // `This shows how function-object is useful` *cpp-functor*
+  // `This shows how function-object is useful` *cxx-functor*
   // default template argument, the 'type' of callable 
   // default function argument, F()
 
@@ -4452,13 +4530,28 @@ namespace cxx_template_default
     }
 } // namespace
 
-TEST(Template, FunctionWithDefaultArg)
+TEST(Template, FunctionWithDefault)
 {
   using namespace cxx_template_default;
 
-  EXPECT_THAT(compare(1, 2), -1);
-  EXPECT_THAT(compare(2, 1), 1);
-  EXPECT_THAT(compare(2, 2), 0);
+  {
+    // 1 < 2
+    EXPECT_THAT(compare(1, 2), -1);
+    // 2 > 1
+    EXPECT_THAT(compare(2, 1), 1);
+    // 2 == 2
+    EXPECT_THAT(compare(2, 2), 0);
+  }
+
+  {
+    // 1 < 2
+    EXPECT_THAT(compare(1, 2, greater<int>()), 1);
+    // 2 > 1
+    EXPECT_THAT(compare(2, 1, greater<int>()), -1);
+    // 2 == 2
+    EXPECT_THAT(compare(2, 2, greater<int>()), 0);
+  }
+
 
   vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
   EXPECT_THAT(compare(coll1, coll2), -1);

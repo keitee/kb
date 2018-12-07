@@ -3747,28 +3747,44 @@ to use with bit pattern.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-bitset
 
-12.5 Bitsets
+CXXSLR-12.5 Bitsets
 
 The bitset is a class template and is defined in bitset header. Like array
 class, has a 'fixed' size. This is a exmple of a `non-type template parameter`
 and this is then considered part of the type.
 
-
-Mostly to reduce space complexity. cxx-bitset < vector<bool> < bool array
+// bool vector < bitset and bit array < bool array
+//
+// note:
+// sizeof(vector<bool>) is valid? seems not
 
 TEST(Bit, SizeConsideration)
 {
-  vector<bool> boolvec(32,1);
-  bitset<32> bitvec(1U);
-  bool bitbool[32];
+  const int size{1000};
 
-  EXPECT_THAT(boolvec.size(), 32);
-  EXPECT_THAT(sizeof(boolvec), 20);
+  vector<bool> coll_bool_vector(size, 1);
+  bitset<size> coll_bitset(1U);
+  int coll_bit_array[size/32+1];
+  bool coll_bool_array[size];
 
-  EXPECT_THAT(bitvec.size(), 32);
-  EXPECT_THAT(sizeof(bitvec), 4);     //
+  EXPECT_THAT(coll_bool_vector.size(), size);
+#if __GNUC__ && __x86_64__
+  EXPECT_THAT(sizeof(coll_bool_vector), 72);   // 64 bits
+#else
+  EXPECT_THAT(sizeof(coll_bool_vector), 1);   // 32 bits, need to update
+#endif
 
-  EXPECT_THAT(sizeof(bitbool), 32);
+  EXPECT_THAT(coll_bitset.size(), size);
+#if __GNUC__ && __x86_64__
+  EXPECT_THAT(sizeof(coll_bitset), 128);     // 64 bits
+#else
+  EXPECT_THAT(sizeof(coll_bitset), 1);     // 32 bits
+#endif
+
+  // 1000/32 = 31, 31+1 = 32, 32*4 = 128
+  EXPECT_THAT(sizeof(coll_bit_array), 128);
+
+  EXPECT_THAT(sizeof(coll_bool_array), size);
 }
 
 
@@ -3800,22 +3816,23 @@ bitset<n> b(cp, pos, m);
 same as the above but copies from the character array to which cp points.
 
 
-// cxx-bitset-code
-//
-// usr/include/c++/4.9/bitset/
-//
-//       /// Initial bits bitwise-copied from a single word (others set to zero).
-// #if __cplusplus >= 201103L
-//       constexpr bitset(unsigned long long __val) noexcept
-//       : _Base(_Sanitize_val<_Nb>::_S_do_sanitize_val(__val)) { }
-// #else
-//       bitset(unsigned long __val)
-//       : _Base(__val)
-//       { _M_do_sanitize(); }
-// #endif
-
 TEST(Bit, BitSetCtor)
 {
+  // cxx-bitset-code
+  //
+  // usr/include/c++/4.9/bitset/
+  //
+  //       /// Initial bits bitwise-copied from a single word (others set to zero).
+  // #if __cplusplus >= 201103L
+  //       constexpr bitset(unsigned long long __val) noexcept
+  //       : _Base(_Sanitize_val<_Nb>::_S_do_sanitize_val(__val)) { }
+  // #else
+  //       bitset(unsigned long __val)
+  //       : _Base(__val)
+  //       { _M_do_sanitize(); }
+  // #endif
+  //
+  // *cxx-error*
   // {
   //   int value = 1024;
   //
@@ -3826,8 +3843,8 @@ TEST(Bit, BitSetCtor)
 
   {
     unsigned int value = 1024;
-    bitset<32> bitsetx{value};
-    EXPECT_EQ(bitsetx.to_string(), "00000000000000000000010000000000");
+    bitset<32> coll{value};
+    EXPECT_EQ(coll.to_string(), "00000000000000000000010000000000");
   }
 
   // note: can use variable to set size of bitset.
@@ -13418,6 +13435,72 @@ namespace std {
       b = std::move(tmp);
     }
 }
+
+
+namespace cxx_reference
+{
+  void swap_by_value(int x, int y)
+  {
+    int temp;
+    temp = x;
+    x = y;
+    y = temp;
+  }
+
+  void swap_by_pointer(int *x, int *y)
+  {
+    int temp;
+    temp = *x;
+    *x = *y;
+    *y = temp;
+  }
+
+  void swap_by_reference(int &x, int &y)
+  {
+    int temp;
+    temp = x;
+    x = y;
+    y = temp;
+  }
+} // namespace
+
+TEST(Reference, Swap)
+{
+  using namespace cxx_reference;
+
+  // no swap
+  {
+    int x = 10, y = 20;
+    swap_by_value(x, y);
+    EXPECT_EQ(x, 10);
+    EXPECT_EQ(y, 20);
+  }
+
+  // swap
+  {
+    int x = 10, y = 20;
+    swap_by_pointer(&x, &y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+
+  // swap, note: no need to pass its address
+  {
+    int x = 10, y = 20;
+    swap_by_reference(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+
+  // *cxx-swap* std-swap uses reference
+  {
+    int x = 10, y = 20;
+    swap(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+}
+
 
 So which one is better between type specific swap or std::swap given move
 sementics are supported by all containers?
@@ -49687,7 +49770,7 @@ How can we make those share one copy of Hello?
           }
 
         _Tp*                  _M_ptr;         // Contained pointer.
-        __shared_count<_Lp>   _M_refcount;    // Reference counter.
+        __shared_count<_Lp>   `_M_refcount`;    // Reference counter.
     };
 
 
@@ -50400,11 +50483,11 @@ focus of this class.
 
       public:
 
-      // *cpp-stl-tuple* set tuple with pointer and a default created
+      // *cxx-tuple* set tuple with pointer and a default created
       // deleter
 
-      typedef std::tuple<typename _Pointer::type, _Dp>  __tuple_type;
-      __tuple_type                                      _M_t;
+      typedef `std::tuple`<typename _Pointer::type, _Dp>  __tuple_type;
+      __tuple_type                                      `_M_t`;
 
       typedef _Dp                       deleter_type;
 
@@ -50487,7 +50570,7 @@ focus of this class.
 
         auto& __ptr = std::get<0>(_M_t);
         if (__ptr != nullptr)
-          `get_deleter()(__ptr);`
+          `get_deleter()(__ptr);`     // *cxx-sp-call-deleter*
         __ptr = pointer();
       }
 
@@ -50922,6 +51005,7 @@ the passed deleter is not allowed to throw exceptions.
   template<typename _Tp>
     class shared_ptr : public __shared_ptr<_Tp>
     {
+      *cxx-template-member*
       /**
        *  @brief  Construct a %shared_ptr that owns the pointer @a __p
        *          and the deleter @a __d.
@@ -51007,6 +51091,7 @@ namespace cxx_sp_delete
       ostream &os_;
   };
 
+  // *cxx-sp-delete* 
   void delete_mesg(string *str)
   {
     cout << "deleting " << *str << endl;
@@ -51034,9 +51119,19 @@ TEST(SharedPointer, Deleter)
     up->print_mesg();
   }
 
+  // *cxx-error*
+  // {
+  //   unique_ptr<string, decltype(function_debug_delete)> up(new string("unique"), function_debug_delete);
+  // }
+
   {
-    shared_ptr<string> sp1(new string("nico"), delete_mesg);
-    shared_ptr<string> sp2(new string("jutta"), delete_mesg);
+    shared_ptr<string> sp1(new string("nico on function"), function_debug_delete);
+    shared_ptr<string> sp2(new string("jutta on function"), function_debug_delete);
+  }
+
+  {
+    shared_ptr<string> sp1(new string("nico on functor"), ClassDebugDelete());
+    shared_ptr<string> sp2(new string("jutta on functor"), ClassDebugDelete());
   }
 
   {

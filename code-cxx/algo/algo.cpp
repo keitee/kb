@@ -5876,37 +5876,109 @@ void sort_insertion_05(vector<int> &coll)
   }
 }
 
-TEST(AlgoSort, Insertion_01)
+// 2018.12.06
+void sort_insertion_06(vector<int> &coll)
+{
+  size_t sorted{0}, unsorted{0};
+  int target{0}, source{0};
+
+  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted-1)
+  {
+    for (target = sorted, source = unsorted; target >= 0; --target, --source)
+    {
+      // ascending order
+      if (coll[target] > coll[source])
+        std::swap(coll[target], coll[source]);
+      else
+        break;
+    }
+  }
+}
+
+// when move comparison in for loop, can remove `else` as sort_insertion_03
+
+void sort_insertion_07(vector<int> &coll)
+{
+  size_t sorted{0}, unsorted{0};
+  int target{0}, source{0};
+
+  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted-1)
+  {
+    // ascending order
+    for (target = sorted, source = unsorted; 
+        target >= 0 && coll[target] > coll[source]; --target, --source)
+    {
+      std::swap(coll[target], coll[source]);
+    }
+  }
+}
+
+template <typename T, typename F = std::greater<T>>
+void sort_insertion_08(vector<T> &coll, F f)
+{
+  size_t sorted{0}, unsorted{0};
+  int target{0}, source{0};
+
+  for (unsorted = 1; unsorted < coll.size(); ++unsorted, sorted = unsorted-1)
+  {
+    // ascending order
+    for (target = sorted, source = unsorted; 
+        target >= 0 && f(coll[target], coll[source]); --target, --source)
+    {
+      std::swap(coll[target], coll[source]);
+    }
+  }
+}
+
+TEST(AlgoSort, Insertion)
 {
   {
     vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
     sort_insertion_01(coll); 
     EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
     vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
     sort_insertion_02(coll);
     EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
     vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
     sort_insertion_03(coll);
     EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
     vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
     sort_insertion_04(coll);
     EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
   }
   {
     vector<int> coll{ 33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3 };
     sort_insertion_05(coll);
     EXPECT_THAT(coll, 
-        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+  }
+  {
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+    sort_insertion_06(coll); 
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+  }
+  {
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+    sort_insertion_07(coll); 
+    EXPECT_THAT(coll, 
+        ElementsAreArray({2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33}));
+  }
+  {
+    vector<int> coll{33, 2, 31, 5, 30, 6, 12, 10, 13, 15, 17, 29, 3};
+    sort_insertion_08(coll, std::less<int>()); 
+    EXPECT_THAT(coll, 
+        ElementsAreArray({33, 31, 30, 29, 17, 15, 13, 12, 10, 6, 5, 3, 2}));
   }
 }
 
@@ -5914,96 +5986,108 @@ TEST(AlgoSort, Insertion_01)
 // ={=========================================================================
 // algo-sort-quick
 
-namespace algo_sort_quick {
+namespace algo_sort_quick
+{
 
-  // note that swap happens on the same index and `lastsmall` vary. 
+// #define SORT_QUICK_DEBUG
 
-  int build_partition(vector<int> &coll, int first, int last)
+int build_partition(vector<int> &coll, int first, int last)
+{
+  int pivot_pos = (first + last) / 2;
+  int pivot_value = coll[pivot_pos];
+
+#ifdef SORT_QUICK_DEBUG
+    cout << "pivot_pos(" << pivot_pos << ") build before(" << first << ", " << last << "): ";
+
+    for (int i = first; i <= last; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+#endif // SORT_QUICK_DEBUG
+
+  // move the pivot to the first pos
+  swap(coll[first], coll[pivot_pos]);
+
+  int last_small = first;
+
+  for (int inspect = first + 1; inspect <= last; ++inspect)
   {
-    int lastsmall = first;
-
-    // as with binary search, chance to overflow
-    int pivot = (first + last)/2;
-
-    int pivot_value = coll[pivot];
-
-#ifdef SORT_QUICK_DEBUG
-    cout << "build i(" << first << ", " << last << "): ";
-
-    for (int i = first; i <= last; ++i)
-      cout << coll[i] << ", ";
-
-    cout << endl;
-#endif // SORT_QUICK_DEBUG
-
-    // move it to the first pos
-    swap(coll[first], coll[pivot]);
-
-    for (int i = first+1; i <= last; ++i)
+    if (coll[inspect] < pivot_value)
     {
-      if (coll[i] < pivot_value)
-        swap(coll[++lastsmall], coll[i]);
+      ++last_small;
+
+      // last_small == inspect case does happens and it is enhancement from the
+      // previous code
+
+      if (last_small != inspect)
+        swap(coll[last_small], coll[inspect]);
     }
-
-    swap(coll[first], coll[lastsmall]);
-
-#ifdef SORT_QUICK_DEBUG
-    cout << "build o(" << first << ", " << last << "): ";
-
-    for (int i = first; i <= last; ++i)
-      cout << coll[i] << ", ";
-
-    cout << endl;
-#endif // SORT_QUICK_DEBUG
-
-    return lastsmall;
   }
 
-  // from ansic, p87. exactly same way.
-  //
-  // void cqsort( int v[], int left, int right )
-  // {
-  //   int i, last;
-  //
-  //   // do nothing if array contains fewer than two elements
-  //   if( left >= right )
-  //     return;
-  //
-  //   // move partition elem
-  //   swap( v, left, (left+right)/2 );
-  //
-  //   last = left;  // to v[0]
-  //
-  //   // partition
-  //   for(i = left+1; i <= right; i++)
-  //     if( v[i] < v[left] )
-  //       swap( v, ++last, i );   // shall ++last
-  //
-  //   // restore partition elem
-  //   swap(v, left, last);
-  //
-  //   cqsort( v, left, last-1 );
-  //   cqsort( v, last+1, right );
-  // }
+  // move the pivot back
+  swap(coll[first], coll[last_small]);
+
+#ifdef SORT_QUICK_DEBUG
+    cout << "pivot_pos(" << pivot_pos << ") build after (" << first << ", " << last << "): ";
+
+    for (int i = first; i <= last; ++i)
+      cout << coll[i] << ", ";
+
+    cout << endl;
+#endif // SORT_QUICK_DEBUG
+
+  return last_small;
 }
 
 void sort_quick_01(vector<int> &coll, int first, int last)
 {
-  using namespace algo_sort_quick;
+  int last_small{};
 
-  int lastsmall{};
-
-  // when has more than one element
   if (first < last)
   {
-    lastsmall = build_partition(coll, first, last);
-    sort_quick_01(coll, first, lastsmall-1);
-    sort_quick_01(coll, lastsmall+1, last);
+    last_small = build_partition(coll, first, last); 
+    sort_quick_01(coll, first, last_small-1);
+    sort_quick_01(coll, last_small+1, last);
   }
 }
 
-TEST(AlgoSort, Quick_01)
+// from ansic, p87. exactly same way.
+void sort_quick_02(vector<int> &v, int left, int right)
 {
+  int i, last;
+
+  // do nothing if array contains fewer than two elements
+  if( left >= right )
+    return;
+
+  // move partition elem
+  // swap( v, left, (left+right)/2 );
+  swap( v[left], v[(left+right)/2]);
+
+  last = left;  // to v[0]
+
+  // partition
+  for(i = left+1; i <= right; i++)
+    if( v[i] < v[left] )
+    {
+      // swap( v, ++last, i );   // shall ++last
+      swap(v[++last], v[i]);   // shall ++last
+    }
+
+  // restore partition elem
+  // swap(v, left, last);
+  swap(v[left], v[last]);
+
+  sort_quick_02( v, left, last-1 );
+  sort_quick_02( v, last+1, right );
+}
+
+} // namespace
+
+TEST(AlgoSort, Quick)
+{
+  using namespace algo_sort_quick;
+
   //   29, 33, 35, 26, 19, 12, 22,
   // [26]| 33 35 29 | 19 12 22
   // [26]| 19 | 35 29 33 | 12 22
@@ -6012,14 +6096,14 @@ TEST(AlgoSort, Quick_01)
   // 22 19 12 | 26 | 33 35 29 |
   // ...
   //
-  // build i(0, 6): 29, 33, 35, 26, 19, 12, 22,
-  // build o(0, 6): 22, 19, 12, 26, 33, 35, 29,
-  // build i(0, 2): 22, 19, 12,
-  // build o(0, 2): 12, 19, 22,
-  // build i(4, 6): 33, 35, 29,
-  // build o(4, 6): 29, 33, 35,
-  // build i(4, 5): 29, 33,
-  // build o(4, 5): 29, 33,
+  // pivot_pos(3) build before(0, 6): 29, 33, 35, 26, 19, 12, 22,
+  // pivot_pos(3) build after (0, 6): 22, 19, 12, 26, 33, 35, 29,
+  // pivot_pos(1) build before(0, 2): 22, 19, 12,
+  // pivot_pos(1) build after (0, 2): 12, 19, 22,
+  // pivot_pos(5) build before(4, 6): 33, 35, 29,
+  // pivot_pos(5) build after (4, 6): 29, 33, 35,
+  // pivot_pos(4) build before(4, 5): 29, 33,
+  // pivot_pos(4) build after (4, 5): 29, 33,
 
   {
     vector<int> coll{29, 33, 35, 26, 19, 12, 22};

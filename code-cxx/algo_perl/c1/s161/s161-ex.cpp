@@ -1,3 +1,8 @@
+// 
+// Programming Pearl, Column 1, 1.6 Problems
+// - sort, library version
+// - 10 million items
+
 #include <iostream>
 
 const int INPUT_MAX = 10000000;
@@ -5,7 +10,16 @@ const int INPUT_MAX = 10000000;
 int a[INPUT_MAX];
 
 
-// changes:
+// QSORT(3)
+// 
+// NAME
+//        qsort, qsort_r - sort an array
+// 
+// SYNOPSIS
+//        #include <stdlib.h>
+// 
+//        void qsort(void *base, size_t nmemb, size_t size,
+//                   int (*compar)(const void *, const void *));
 //
 //       void qsort_r(void *base, size_t nmemb, size_t size,
 //                  int (*compar)(const void *, const void *, void *),
@@ -25,7 +39,7 @@ int a[INPUT_MAX];
 // up 10000000*sizeof(int) bytes of stack. If sizeof(int) is 4, we would need
 // about 40 MB of stack. Typically, the stack can't afford that, so the program
 // would just segfault.
-
+//
 // An example input file is provided in numbers.in in this column's root
 // directory. This file contains every number from 0 to 9999999 in random order.
 
@@ -53,7 +67,7 @@ int main(void)
   // for (int i = 0; i < n; i++)
   //   std::cout << a[i] << std::endl;
 
-  std::cout << "1.6.1: n: " << n << " library qsort" << std::endl;
+  std::cout << "sort, 1.6.1, input size: " << n << ", library version qsort" << std::endl;
 
   return 0;
 }

@@ -1,11 +1,14 @@
+// 
+// Programming Pearl, Column 1, 1.6 Problems
+//
+// How would you implement bit vectors using bitwise logical operations(such as
+// and, or an shift)?
+//
+// - sort, library version
+// - 10 million items
+
 #include <iostream>
 
-/*
-1.6.2
-
-How would you implement bit vectors using bitwise logical operations(such as
-and, or an shift)?
-*/ 
 
 const unsigned int BITSPERWORD = 32;
 const unsigned int SHIFT = 5;
@@ -83,8 +86,8 @@ int main(void)
   // don't have output part to focus on sorting time rather than input/output
 
   // sizeof(a): 1,250,004
-  std::cout << "sizeof(a): " << sizeof(a) << std::endl;
-  std::cout << "1.6.1: n: " << n << " bit vector" << std::endl;
+  std::cout << "sort, 1.6.1, input size: " << n << " array size: " <<
+    sizeof(a) << ", bit set array version qsort" << std::endl;
 
   return 0;
 }

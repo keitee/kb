@@ -6,13 +6,14 @@
 GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
-TARGET1 = s161-qsort
-TARGET2 = s161-stl
-TARGET3 = s161-bit
-TARGET4 = s161-stl-sort
+TARGET1 = s161-lib-qsort
+TARGET2 = s161-stl-set
+TARGET4 = s161-stl-sort-vector
 TARGET5 = s161-stl-sort-array
-TARGET6 = s161-isort
+TARGET3 = s161-bit-array
+TARGET6 = s161-ppp-isort
 TARGET7 = s161-qsort-own
+TARGET8 = s161-ex
 
 # Where to find user code.
 USER_DIR = .
@@ -21,8 +22,14 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 
-TESTS = $(TARGET1)_test $(TARGET2)_test $(TARGET3)_test $(TARGET4)_test \
-	$(TARGET5)_test $(TARGET6)_test $(TARGET7)_test
+TESTS = $(TARGET1)_out \
+				$(TARGET2)_out \
+				$(TARGET3)_out \
+				$(TARGET4)_out \
+				$(TARGET5)_out \
+				$(TARGET6)_out \
+				$(TARGET7)_out \
+				$(TARGET8)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -62,47 +69,54 @@ gtest.a : gtest-all.o
 $(TARGET1).o : $(TARGET1).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET1).cpp -o $(TARGET1).o
 
-$(TARGET1)_test : $(TARGET1).o gtest.a gmock.a
+$(TARGET1)_out : $(TARGET1).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
 #
 $(TARGET2).o : $(TARGET2).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET2).cpp -o $(TARGET2).o
 
-$(TARGET2)_test : $(TARGET2).o gtest.a gmock.a
+$(TARGET2)_out : $(TARGET2).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
 #
 $(TARGET3).o : $(TARGET3).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET3).cpp -o $(TARGET3).o
 
-$(TARGET3)_test : $(TARGET3).o gtest.a gmock.a
+$(TARGET3)_out : $(TARGET3).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
 #
 $(TARGET4).o : $(TARGET4).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET4).cpp -o $(TARGET4).o
 
-$(TARGET4)_test : $(TARGET4).o gtest.a gmock.a
+$(TARGET4)_out : $(TARGET4).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
 #
 $(TARGET5).o : $(TARGET5).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET5).cpp -o $(TARGET5).o
 
-$(TARGET5)_test : $(TARGET5).o gtest.a gmock.a
+$(TARGET5)_out : $(TARGET5).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
 #
 $(TARGET6).o : $(TARGET6).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET6).cpp -o $(TARGET6).o
 
-$(TARGET6)_test : $(TARGET6).o gtest.a gmock.a
+$(TARGET6)_out : $(TARGET6).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
 
 #
 $(TARGET7).o : $(TARGET7).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET7).cpp -o $(TARGET7).o
 
-$(TARGET7)_test : $(TARGET7).o gtest.a gmock.a
+$(TARGET7)_out : $(TARGET7).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET8).o : $(TARGET8).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET8).cpp -o $(TARGET8).o
+
+$(TARGET8)_out : $(TARGET8).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

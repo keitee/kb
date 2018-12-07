@@ -1,3 +1,17 @@
+// 
+// Programming Pearl, Column 11.1
+//
+// for i = [1, n)
+//  // invariant: x[0..i-1] is sorted
+//  // shift x[i] down to its proper place in x[0..i]
+//
+// From the swap version which do two operations, move down elements and put the
+// saved back when loop ends as 01/02 version. So one update rather than doing
+// it every time which runs faster.
+
+// - sort, library version
+// - 10 million items
+
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -7,16 +21,6 @@
 const int INPUT_MAX = 10000000;
 int coll[INPUT_MAX];
 
-
-// From Programming Pearl 11.1
-//
-// for i = [1, n)
-//  // invariant: x[0..i-1] is sorted
-//  // shift x[i] down to its proper place in x[0..i]
-//
-// From the swap version which do two operations, move down elements and put the
-// saved back when loop ends as 01/02 version. So one update rather than doing
-// it every time which runs faster.
 
 int main(void)
 {
@@ -53,7 +57,7 @@ int main(void)
 
   // don't have output part to focus on sorting time rather than input/output
 
-  std::cout << "1.6.1: n: " << n << " inseriton sort on array" << std::endl;
+  std::cout << "sort, 1.6.1, input size: " << n << ", insertion sort version" << std::endl;
 
   return 0;
 }

@@ -1,6 +1,6 @@
 // 
 // Programming Pearl, Column 1, 1.6 Problems
-// - sort, stl algorithm on array
+// - sort, stl algorithm on std::vector
 // - 10 million items
 
 #include <iostream>
@@ -9,28 +9,30 @@
 
 // $ time ./solution <numbers.in
 
-const int INPUT_MAX = 10000000;
-int a[INPUT_MAX];
-
 int main(void)
 {
+  int value{};
   int n{};
+  std::vector<int> coll{};
+  coll.reserve(10000000);
 
   // To compare C++ version, use the same cin.
   //
   // while (scanf("%d", &a[n]) != EOF)
   //   ++n;
   
-  while (std::cin >> a[n])
+  while (std::cin >> value)
+  {
+    coll.push_back(value);
     ++n;
+  }
 
-  // std::sort(std::begin(a), std::end(a));
-  std::sort(std::begin(a), std::begin(a)+n);
+  sort(coll.begin(), coll.end());
 
   // don't have output part to focus on sorting time rather than input/output
 
   std::cout << "sort, 1.6.1, input size: " << n 
-    << ", stl algorithm sort on array" << std::endl;
+    << ", stl algorithm sort on std::vector" << std::endl;
 
   return 0;
 }
