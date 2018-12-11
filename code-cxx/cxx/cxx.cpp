@@ -391,51 +391,6 @@ TEST(Tuple, UseTupleTie)
 
 
 // ={=========================================================================
-// cxx-std-forward
-template <typename F, typename T1, typename T2>
-void flip(F f, T1 param1, T2 param2)
-{
-  f(param2, param1);
-}
-
-template <typename F, typename T1, typename T2>
-void flip_forward(F f, T1 &&param1, T2 &&param2)
-{
-  f(std::forward<T2>(param2), std::forward<T1>(param1));
-}
-
-void f(int value1, int &value2)
-{
-  cout << "f(" << value1 << ", " << ++value2 << ")" << endl;
-}
-
-// f(20, 11)
-// withoug ref: i and j  {10, 20}
-// f(20, 11)
-// with    ref: i and j  {11, 20}
-// f(20, 11)
-// wit forward: i and j  {11, 20}
-
-TEST(CxxTemplate, UseForward)
-{
-  int i = 10;
-  int j = 20;
-
-  flip(f, i, j);
-  cout << "withoug ref: i and j  {" << i << ", " << j << "}" << endl;
-
-  flip(f, std::ref(i), j);
-  cout << "with    ref: i and j  {" << i << ", " << j << "}" << endl;
-
-  i = 10;
-  j = 20;
-
-  flip_forward(f, i, j);
-  cout << "wit forward: i and j  {" << i << ", " << j << "}" << endl;
-}
-
-
-// ={=========================================================================
 // cxx-ctor
 
 // o `If defines any other ctor for the class, the compiler do not generates`
@@ -4648,6 +4603,51 @@ TEST(Template, TypeTraitsIterator)
   EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
   EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
   EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
+}
+
+
+// ={=========================================================================
+// cxx-template cxx-std-forward
+template <typename F, typename T1, typename T2>
+void flip(F f, T1 param1, T2 param2)
+{
+  f(param2, param1);
+}
+
+template <typename F, typename T1, typename T2>
+void flip_forward(F f, T1 &&param1, T2 &&param2)
+{
+  f(std::forward<T2>(param2), std::forward<T1>(param1));
+}
+
+void f(int value1, int &value2)
+{
+  cout << "f(" << value1 << ", " << ++value2 << ")" << endl;
+}
+
+// f(20, 11)
+// withoug ref: i and j  {10, 20}
+// f(20, 11)
+// with    ref: i and j  {11, 20}
+// f(20, 11)
+// wit forward: i and j  {11, 20}
+
+TEST(Template, Forward)
+{
+  int i = 10;
+  int j = 20;
+
+  flip(f, i, j);
+  cout << "withoug ref: i and j  {" << i << ", " << j << "}" << endl;
+
+  flip(f, std::ref(i), j);
+  cout << "with    ref: i and j  {" << i << ", " << j << "}" << endl;
+
+  i = 10;
+  j = 20;
+
+  flip_forward(f, i, j);
+  cout << "wit forward: i and j  {" << i << ", " << j << "}" << endl;
 }
 
 

@@ -518,6 +518,18 @@ TEST(Vector, Ctors)
     vector<int> coll{1,2,3,4,5,6};
     EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
   }
+
+  // iterator
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
+
+    // *cxx-error* without additional (). WHY?
+    // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
 }
 
 
@@ -3580,7 +3592,7 @@ TEST(AlgoHeap, Calls)
   make_heap(coll.begin(), coll.end());
   EXPECT_THAT(coll, ElementsAreArray({9, 8, 6, 7, 7, 5, 5, 3, 6, 4, 1, 2, 3, 4}));
 
-  // pop next element out of the heap
+  // pop next element, root out of the heap
   pop_heap(coll.begin(), coll.end());
   coll.pop_back();
   EXPECT_THAT(coll, ElementsAreArray({8,7,6,7,4,5,5,3,6,4,1,2,3}));

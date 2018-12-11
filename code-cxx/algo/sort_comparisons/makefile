@@ -8,12 +8,14 @@ GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
 TARGET1 = s161-lib-qsort
 TARGET2 = s161-stl-set
-TARGET4 = s161-stl-sort-vector
+TARGET3 = s161-stl-sort-vector
+TARGET4 = s161-stl-sort-vector-stream
 TARGET5 = s161-stl-sort-array
-TARGET3 = s161-bit-array
-TARGET6 = s161-ppp-isort
-TARGET7 = s161-ppp-qsort
-TARGET8 = s161-ex
+TARGET6 = s161-bit-array
+TARGET7 = s161-ppp-isort
+TARGET8 = s161-ppp-qsort
+TARGET9 = s161-ex
+TARGET10 = s161-ppp-hsort
 
 # Where to find user code.
 USER_DIR = .
@@ -29,7 +31,9 @@ TESTS = $(TARGET1)_out \
 				$(TARGET5)_out \
 				$(TARGET6)_out \
 				$(TARGET7)_out \
-				$(TARGET8)_out
+				$(TARGET8)_out \
+				$(TARGET9)_out \
+				$(TARGET10)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -119,4 +123,18 @@ $(TARGET8).o : $(TARGET8).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET8).cpp -o $(TARGET8).o
 
 $(TARGET8)_out : $(TARGET8).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET9).o : $(TARGET9).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET9).cpp -o $(TARGET9).o
+
+$(TARGET9)_out : $(TARGET9).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET10).o : $(TARGET10).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET10).cpp -o $(TARGET10).o
+
+$(TARGET10)_out : $(TARGET10).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

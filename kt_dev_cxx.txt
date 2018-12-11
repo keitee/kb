@@ -199,7 +199,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-std-ref
 
 *kt_dev_cxx_0000* cxx-container
-*kt_dev_cxx_0000* cxx-container-performance
+*kt_dev_cxx_0000* cxx-coll-performance
 *kt_dev_cxx_0000* cxx-container-element-type
 *kt_dev_cxx_0000* cxx-container-common-operations
 *kt_dev_cxx_0000* cxx-container-insert-erase cxx-iter-invalidate
@@ -8278,19 +8278,13 @@ switch( events )
 ={============================================================================
 *kt_dev_cxx_0000* cxx-loop cxx-for cxx-while cxx-side-effect
 
-The `cxx-for-loop` is preferable when there is a simple initialization and
-increment since it keeps the loop control statement `close together and
-visiable` at the top of the loop.
-
-
-<cxx-range-for>
+{cxx-range-for}
 The `range-for` is supported from GCC 4.6
 
-*TN*
-  * range-for caches `begin()` and `end()` so has risk of using `invalidated-iterators`
-  * shall use `const&` in for loop statement to avoid unnecessary copy.
-  * do not call end() in every loop
-  * range-for do not use iterator but use element itself. 
+o range-for caches `begin()` and `end()` so has risk of using `invalidated-iterators`
+o shall use `const&` in for loop statement to avoid unnecessary copy.
+o do not call end() in every loop
+o range-for do not use iterator but use element itself. 
 
 for( T &r : vec )
    r *= 2;
@@ -8330,9 +8324,225 @@ TEST(CxxFeaturesTest, UseRangeForOnInteger)
   }
 }
 
-cxx.cpp: In member function ‘virtual void CxxFeaturesTest_UseRangeForOnInteger_Test::TestBody()’:
-cxx.cpp:796:24: error: ‘begin’ was not declared in this scope
+: In member function ‘virtual void CxxFeaturesTest_UseRangeForOnInteger_Test::TestBody()’:
+:796:24: error: ‘begin’ was not declared in this scope
    for (const auto &e : num_loops)
+
+
+{cxx-range-for-and-cxx-while}
+
+The `cxx-for-loop` is preferable 
+  `when there is a simple initialization and increment` 
+  since keeps the loop control statement `close together and visiable` 
+  at the top of the loop.
+
+<ex>
+As this case, cxx-while is straightforward but cxx-for requires more thought
+and make clean code.
+
+// algo-sort-heap from programming pearl
+//
+// pre  : heap(1, n-1)
+// post : heap(1, n)
+// 
+// void siftup(n)
+// {
+//   int i = n;
+// 
+// loop:
+//   // invariant: heap(1, n) except between i and its parent
+//   
+//   // terminates when reaches the root
+//   if (i == 1)
+//     break;
+//
+//   p = i / 2;
+//
+//   // terminates when it meets heap property
+//   if (x[i] >= x[p])
+//     break;
+// 
+//   swap(i, p);
+// 
+//   i = p;
+// }
+
+
+// while version
+void siftup_01(vector<int> &coll, int n)
+{
+  int i = n;
+  int p = i / 2;
+
+  for (; (i != 1) && (coll[i] <= coll[p]);)
+  {
+    swap(coll[i], coll[p]);
+    i = p;
+    p = i / 2;
+  }
+}
+
+void siftup_02(vector<int> &coll, int n)
+{
+  int i = n;
+  int p = i / 2;
+
+  while (i != 1 && coll[i] <= coll[p])
+  {
+    swap(coll[i], coll[p]);
+    i = p;
+    p = i / 2;
+  }
+}
+
+However, when tries to use cxx-for causes cxx-error
+
+// *cxx-error*
+void siftup_01(vector<int> &coll, int n)
+{
+  int i = n;
+  int p = i / 2;
+ 
+  for (; (i != 1) && (coll[i] <= coll[p]); i = p)
+  {
+    swap(coll[i], coll[p]);
+    p = i / 2;
+  }
+ 
+  // effectively this and should update p after i so this is an error
+  //
+  // for (; (i != 1) && (coll[i] <= coll[p]);)
+  // {
+  //   swap(coll[i], coll[p]);
+  //   p = i / 2;
+  //   i = p;
+  // }
+}
+
+// *cxx-error*
+void siftup_01_error(vector<int> &coll, int n)
+{
+  int i = n;
+  int p = i / 2;
+ 
+  // for (; (i != 1) && (coll[i] <= coll[p]); i = p)
+  // {
+  //   p = i / 2;
+  //   swap(coll[i], coll[p]);
+  // }
+ 
+  // effectively this and cause error since has different pair of i and p in
+  // check of the lopp.
+  for (; (i != 1) && (coll[i] <= coll[p]);)
+  {
+    p = i / 2;
+    swap(coll[i], coll[p]);
+    i = p;
+  }
+}
+
+// for version from text
+void siftup_03(vector<int> &coll, int n)
+{
+  int i, p;
+  for (i = n; i > 1 && coll[p = i/2] > coll[i]; i = p)
+    swap(coll[i], coll[p]);
+}
+
+
+Again, 
+
+// pre  : heap(2, n)
+// post : heap(1, n)
+// 
+// void siftdown(n)
+// {
+//   int i = 1;
+// 
+// loop:
+//   // invariant: heap(1, n) except between i and its children(0, 1, or 2)
+//   
+//   // c is index of the left child
+//   c = i * 2;
+//
+//   // terminates when no children
+//   if (c > n)
+//     break;
+// 
+//   // when the right child is lesser
+//   if (c+1 <= n)
+//    if (x[c] > x[c+1])
+//      c++;
+//
+//   // terminates when it meets heap property
+//   if (x[i] <= x[c])
+//     break;
+// 
+//   swap(i, c);
+// 
+//   i = c;
+// }
+
+void siftdown_01(vector<int> &coll, int n)
+{
+  int i = 1;
+  int c = i * 2;
+
+  if (c+1 <= n)
+    if (coll[c] > coll[c+1])
+      c++;
+
+  while ((c < n) && (coll[i] > coll[c]))
+  {
+    swap(coll[i], coll[c]);
+
+    i = c;
+
+    c = i * 2;
+
+    if (c+1 <= n)
+      if (coll[c] > coll[c+1])
+        c++;
+  }
+}
+
+// *cxx-error* 
+// void siftdown_01(vector<int> &coll, int n)
+// {
+//   int i = 1;
+//   int c = i * 2;
+// 
+//   if (c+1 <= n)
+//     if (coll[c] > coll[c+1])
+//       c++;
+// 
+//   for (; (c < n) && (coll[i] > coll[c]); i = c)
+//   {
+//     swap(coll[i], coll[c]);
+// 
+//     if (c+1 <= n)
+//       if (coll[c] > coll[c+1])
+//         c++;
+// 
+//     c = i * 2;
+//   }
+// }
+
+void siftdown_02(vector<int> &coll, int n)
+{
+  int c;
+
+  for (int i = 1; (c = i*2) <= n; i = c)
+  {
+    if (c+1 <= n && coll[c] > coll[c+1])
+      c++;
+
+    if (coll[i] <= coll[c])
+      break;
+
+    swap(coll[i], coll[c]);
+  }
+}
 
 
 {cxx-side-effect} from online
@@ -35971,7 +36181,7 @@ implementations differ only in minor details.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-performance
+*kt_dev_cxx_0000* cxx-coll-performance
 
 {cxx-amortized}
 Some complexity definitions in the C++ reference manual are specified as
@@ -35989,6 +36199,8 @@ Reallocations are rather rare, so any sufficiently long sequence of that
 operation behaves as if each operation has constant complexity. Thus, the
 complexity of the insertion is 'amortized' constant time.
 
+
+*algo-bigo*
 
 C++PL 894
 
@@ -36082,69 +36294,6 @@ order matters, a map.
 8. If you need a 'dictionary', use an unordered multimap or, if the element
 order matters, a multimap.
 
-
-<ex>
-A problem that is 'not' easy to solve is how to sort objects according to two
-different sorting criteria.
-
-The automatic sorting of associative containers does 'not' mean that these
-containers perform better when sorting is needed. This is because an
-associative container sorts 'each' time a new element gets inserted. An often
-'faster' way is to use a sequence container and to sort 'all' elements 'after'
-they are all inserted, by using one of the several sort algorithms
-
-// set-version
-#include <iostream>
-#include <string>
-#include <algorithm>
-#include <iterator>
-#include <set>
-
-using namespace std;
-
-int main()
-{
-  // create a string set - initialized by all words from standard input
-  set<string> coll((istream_iterator<string>(cin)), istream_iterator<string>());
-
-  // print all elements
-  copy (coll.cbegin(), coll.cend(), ostream_iterator<string>(cout, "\n"));
-}
-
-// vector-version
-#include <iostream>
-#include <string>
-#include <algorithm>
-#include <iterator>
-#include <vector>
-
-using namespace std;
-
-int main()
-{
-  // create a string vector - initialized by all words from standard input
-  vector<string> coll((istream_iterator<string>(cin)), istream_iterator<string>());
-
-  // sort elements
-  sort (coll.begin(), coll.end());
-
-  // print all elements ignoring subsequent duplicates
-  copy (coll.cbegin(), coll.cend(), ostream_iterator<string>(cout, "\n"));
-  // unique_copy (coll.cbegin(), coll.cend(), ostream_iterator<string>(cout, "\n"));
-}
-
-
-When I tried both programs with about 350,000 strings on one system, the
-'vector' version was approximately 10% 'faster'. Inserting a call of reserve()
-made the vector version 5% faster. 
-
-Allowing duplicates - using a multiset instead of a set and calling copy()
-  instead of unique_copy(), respectively - changed things dramatically: The
-  vector version was more than 40% faster.  note: make both run fast
-
-  "However, on 'another' system, the vector versions were up to 50% slower.
-  These measurements are not representative, but they show that it is often
-  'worth' trying 'different' ways of processing elements."
 
 In practice, predicting which container type is the best is often difficult. 
 
@@ -37774,6 +37923,18 @@ TEST(Vector, Ctors)
   // initializer_list
   {
     vector<int> coll{1,2,3,4,5,6};
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // iterator
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
+
+    // *cxx-error* without additional (). WHY?
+    // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
+
     EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
   }
 }
@@ -50994,6 +51155,18 @@ the passed deleter is not allowed to throw exceptions.
         : _M_t(__p, `deleter_type()`)
         { static_assert(!is_pointer<deleter_type>::value,
             "constructed with null function pointer deleter"); }
+
+      /** Takes ownership of a pointer.
+       *
+       * @param __p  A pointer to an object of @c element_type
+       * @param __d  A reference to a deleter.
+       *
+       * The deleter will be initialized with @p __d
+       */
+      unique_ptr(pointer __p,
+          typename conditional<is_reference<deleter_type>::value,
+          deleter_type, const deleter_type&>::type __d) noexcept
+        : _M_t(__p, __d) { }
     }
 
 /usr/include/c++/4.9/bits/shared_ptr.h
@@ -51021,7 +51194,7 @@ the passed deleter is not allowed to throw exceptions.
        *
        *  __shared_ptr will release __p by calling __d(__p)
        */
-      template<typename _Tp1, typename _Deleter>
+      template<typename _Tp1, `typename _Deleter`>
         shared_ptr(_Tp1* __p, _Deleter __d)
           : __shared_ptr<_Tp>(__p, __d) { }
     };
