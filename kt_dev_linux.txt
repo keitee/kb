@@ -130,7 +130,6 @@
 *kt_linux_tool_051* tool-fs-lvm
 *kt_linux_tool_051* tool-ip
 *kt_linux_tool_039* tool-udhcpc tool-dns
-*kt_linux_tool_039* tool-udhcpc tool-dns
 *kt_linux_tool_039* tool-route
 *kt_linux_tool_039* tool-nfs
 |kt_linux_tool_040| install
@@ -11665,35 +11664,7 @@ still works and available for most of the Linux distributions.
 ={============================================================================
 *kt_linux_tool_039* tool-udhcpc tool-dns
 
--sh-3.2# cat /etc/resolv.conf
-nameserver 10.209.62.111
-
-RESOLV.CONF(5)
-Linux Programmer's Manual
-
-NAME
-       resolv.conf - resolver configuration file
-
-SYNOPSIS
-       /etc/resolv.conf
-
-DESCRIPTION
-       The  resolver  is  a  set  of  routines  in  the C library that provide
-       access to the Internet Domain Name System (DNS).  The resolver
-       configuration file contains information that is read by the resolver
-       routines the first time they are invoked by a process.  The file is
-       designed to be human readable and contains a list of keywords with
-       values that  provide  various  types  of  resolver information.  The
-       configuration file is considered a trusted source of DNS information
-       (e.g., DNSSEC AD-bit information will be returned unmodified from this
-        source).
-
-       If  this file does not exist, only the name server on the local machine
-       will be queried; the domain name is determined from the hostname and
-       the domain search path is constructed from the domain name.
-
-       The different configuration options are:
-
+// udhcpc gets dns from dhcp and update resolv.conf
 
 -sh-3.2# udhcpc
 udhcpc (v1.13.1) started
@@ -11832,6 +11803,7 @@ route add default gw 10.209.59.254 dev eth0
 route del default gw 0.0.0.0 dev eth0
 route add default gw 10.209.60.254 dev eth0
 
+
 // *tool-echo*
 echo -n > /etc/resolv.conf
 
@@ -11840,6 +11812,112 @@ echo "search UK.NDS.com" >> /etc/resolv.conf
 echo "nameserver 10.209.62.1" >> /etc/resolv.conf
 echo "nameserver 10.209.120.1" >> /etc/resolv.conf
 echo "nameserver 10.209.120.2" >> /etc/resolv.conf
+
+
+// to change script to run
+-sh-3.2# udhcpc -s ./default.script
+
+udhcpc (v1.13.1) started
++ '[' -z deconfig ']'
++ RESOLV_CONF=/etc/resolv.conf
++ '[' -n '' ']'
++ '[' -n '' ']'
++ mount
++ grep -q '/dev/root on / type nfs'
++ NFSROOT=1
++ case "$1" in
++ '[' 1 -ne 0 ']'
++ /sbin/ifconfig eth0 0.0.0.0
++ exit 0
+Sending discover...
+Sending select for 10.209.60.53...
+Lease of 10.209.60.53 obtained, lease time 25200
++ '[' -z bound ']'
++ RESOLV_CONF=/etc/resolv.conf
++ '[' -n '' ']'
++ '[' -n 255.255.255.0 ']'
++ NETMASK='netmask 255.255.255.0'
++ mount
++ grep -q '/dev/root on / type nfs'
++ NFSROOT=1
++ case "$1" in
++ '[' 1 -ne 0 ']'
++ /sbin/ifconfig eth0 10.209.60.53 netmask 255.255.255.0
++ '[' -n 10.209.60.254 ']'
++ echo 'deleting routers'
+deleting routers
++ route del default gw 0.0.0.0 dev eth0
+route: ioctl 0x890c failed: No such process
++ for i in '$router'
++ route add default gw 10.209.60.254 dev eth0
++ echo -n
++ '[' -n UK.NDS.com ']'
++ echo search UK.NDS.com
++ for i in '$dns'
++ echo adding dns 10.209.62.253
+adding dns 10.209.62.253
++ echo nameserver 10.209.62.253
++ for i in '$dns'
++ echo adding dns 10.209.120.1
+adding dns 10.209.120.1
++ echo nameserver 10.209.120.1
++ for i in '$dns'
++ echo adding dns 10.209.120.2
+adding dns 10.209.120.2
++ echo nameserver 10.209.120.2
++ /bin/chmod g+rw /etc/resolv.conf
++ /bin/chown NDS_MW /etc/resolv.conf
+chown: unknown user NDS_MW
++ exit 0
+
+
+-sh-3.2# cat /etc/resolv.conf
+nameserver 10.209.62.111
+
+-sh-3.2# cat /etc/resolv.conf
+nameserver 10.209.62.253
+nameserver 10.209.120.1
+-sh-3.2#
+
+
+RESOLV.CONF(5)
+Linux Programmer's Manual
+
+NAME
+       resolv.conf - resolver configuration file
+
+SYNOPSIS
+       /etc/resolv.conf
+
+DESCRIPTION
+       The  resolver  is  a  set  of  routines  in  the C library that provide
+       access to the Internet Domain Name System (DNS).  The resolver
+       configuration file contains information that is read by the resolver
+       routines the first time they are invoked by a process.  The file is
+       designed to be human readable and contains a list of keywords with
+       values that  provide  various  types  of  resolver information.  The
+       configuration file is considered a trusted source of DNS information
+       (e.g., DNSSEC AD-bit information will be returned unmodified from this
+        source).
+
+       If  this file does not exist, only the name server on the local machine
+       will be queried; the domain name is determined from the hostname and
+       the domain search path is constructed from the domain name.
+
+       The different configuration options are:
+
+       nameserver Name server IP address
+              Internet address of a name server that the resolver should
+              query, either an IPv4 address (in dot notation), or an IPv6
+              address in colon (and possibly dot) notation as per RFC 2373.
+              Up to MAXNS  (currently  3, see <resolv.h>) name servers may be
+              listed, one per keyword.  If there are multiple servers, the
+              resolver library queries them in the order listed.  If no
+              nameserver entries are present, the default is to use the name
+              server on the local machine.  (The algorithm used is to try a
+                  name server, and if the query times out, try the next, until
+                  out of  name servers, then repeat trying all the name
+                  servers until a maximum number of retries are made.)
 
 
 ={============================================================================
@@ -43139,13 +43217,18 @@ accommodate very large numbers of processes.
 
 LPI-6.6 Command-Line Arguments (argc, argv)
 
-<argv-trick>
+<busybox-argv-trick>
 The fact that argv[0] contains the name used to invoke the program can be
 employed to perform a useful trick. We can create multiple links to (i.e.,
     names for) the same program, and then have the program look at argv[0] and
 take different actions depending on the name used to invoke it. An example of
 this technique is provided by the gzip(1), gunzip(1), and zcat(1) commands,
 all of which are links to the same executable file. 
+
+lrwxrwxrwx    1 root     root           14 Dec  6  2018 syslogd -> ../bin/busybox
+lrwxrwxrwx    1 root     root           14 Dec  6  2018 telnetd -> ../bin/busybox
+lrwxrwxrwx    1 root     root            7 Dec  6  2018 tune2fs -> e2label
+lrwxrwxrwx    1 root     root           14 Dec  6  2018 udhcpc -> ../bin/busybox
 
 If we employ this technique, we must be careful to handle the possibility that
 the user might invoke the program via a link with a name other than any of

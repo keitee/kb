@@ -33150,10 +33150,147 @@ DARWIN_PLATFORM/DARWIN_ATG/src/atg_api.c
 
 ATG_API_Ctxt_t  ATG_API_Ctxt;      /** @brief ATG Internal Context */
 
-<oigc>
+<comp-oigc>
 !WARN   -ATG_API      		< p:0x00000220 P:APP t:0x0112f520 T:PLANNER_MAIN M:atg_api_object_oigc.c F:ATG_VODCL_Object_CreateStringPropertyUsingKey L:6285 > OIGC indicates property not available 
 !MIL    -aem          		< p:0x00000220 P:APP t:0x01497520 T:AEM_INPUT_MONITOR_THREAD M:aem_gfxevent.c F:AEM_GFXEvent L:240 > KEY_PRESS: code=0x(RECORD)e403 
 !ERROR  -OIGC         		< p:0x00000220 P:APP t:0x012c5520 T:OIGC thread list. M:oigc.c F:oigc_recv_thread L:4382 > error message from server -> 04: Asset is not published in catalogue\n 
+
+
+<comp-dns> <comp-helper-network-helper>
+
+SYSTEM_STATUS OIGC_API_Request(OIGC_API_ResponseCallback_t  callback, OIGC_Request_Handle_t   *req_handle, OIGC_Input_Req_t        *input_req )
+{
+  if(g_oig_server_dns_flag != 0U)
+  {
+    if(`DNS_RESOLVER_ResolvAddr()` != OIGC_DNS_QUERY_PASSED )
+    {
+      `OIGC_ERROR(("DNS query failed , no response from DNS server or traffic blocked\n"));`
+        return OIGC_STATUS_FAILURE;
+    }
+    else
+    {
+      OIGC_DEBUG(("DNS_QUERY_PASSED\n"));
+    }
+  }
+}
+
+// CMS_SYSTEM_INFRASTRUCTURE/OIGC/src/dns_resolver.c
+
+int32_t DNS_RESOLVER_ResolvAddr()
+{
+
+  /*wait for a time equal to the difference between dns_request_timeout and time spent in above loop
+    so that we can return to client in dns_request_timeout seconds*/
+
+  // SYSTEM_STATUS sys_status = SYSTEMITC_API_PostEvent( Dns_Event_Queue_Addr(),
+  //         OIGC_DNS_QUERY_EVENT, &dns_input_cb, sizeof(oigc_dns_input_cb_t) );
+  //
+  // and wait
+  
+  if (oigc_dns_query_wait_on_semaphore( dns_input_parameter,
+        &f_oigc_dns_wait_monitor, time_remaining) != OIGC_DNS_QUERY_PASSED)
+  {
+  }
+}
+
+
+// static void *oigc_dns_query_thread_func(void *param) runs this when has
+// QUERY_EVENT
+
+static int32_t oigc_dns_query(OIGC_DNS_Thread_Event_t event_info)
+{
+  dns_query_status = DNS_QUERY_RUNNING;
+  if((`getaddrinfo`((char *)(input_value.dns_name),NULL,input_value.hints,&res)) != 0)
+  {
+    dns_query_status = DNS_QUERY_FREE;
+    OIGC_ERROR(("%s - Not able to resolve the Domain Name",input_value.dns_name));
+    return OIGC_DNS_QUERY_FAILED;
+  }
+  else
+  {
+    dns_query_status = DNS_QUERY_FREE;
+    OIGC_DEBUG(("%s - Resolved ",input_value.dns_name));
+  }
+}
+
+
+// from ncm to network helper
+
+640:NDS: ^[2018:09:04 12:32:01]0946684943.227794 !INFO   -NCM_SERVER   		< p:0x00000386 P:SCD t:0x00735530 T:NCM_SERVER_MAIN M:ncm_config.c F:NCM_SERVER_GetCurrentConf L:551 > Found 3 DNS server addresses. 
+
+        /* Get the whole interface address list */
+        l_ret = xnet_dns_get_servers(
+                            &(l_current_conf->DNSAddresses[0]),
+                            l_nb_dns, &l_nb_dns);
+
+641:NDS: ^[2018:09:04 12:32:01]0946684943.227828 !INFO   -NCM_SERVER   		< p:0x00000386 P:SCD t:0x00735530 T:NCM_SERVER_MAIN M:ncm_server_event.c F:ncm_server_event_global_status_check_and_notify L:1475 > Prev state flags: Link(0)|DNS(0)|RT(00)|IP(0x01) 
+642:NDS: ^[2018:09:04 12:32:01]0946684943.227846 !INFO   -NCM_SERVER   		< p:0x00000386 P:SCD t:0x00735530 T:NCM_SERVER_MAIN M:ncm_server_event.c F:ncm_server_event_global_status_check_and_notify L:1476 > New state flags:  Link(0)|DNS(0x1)|RT(00)|IP(0x01) 
+643:NDS: ^[2018:09:04 12:32:01]0946684943.227876 !INFO   -NCM_SERVER   		< p:0x00000386 P:SCD t:0x00735530 T:NCM_SERVER_MAIN M:ncm_server_event.c F:ncm_server_event_global_get_event_status L:2588 > Current state flag: Link(0)|DNS(0x1)|RT(00)|IP(0x01) 
+852:NDS: ^[2018:09:04 12:32:01]0946684943.311784 !INFO   -NCM_SERVER   		< p:0x00000386 P:SCD t:0x00735530 T:NCM_SERVER_MAIN M:ncm_config_file.c F:ncm_config_file_update_for_default_conf L:917 > All DNS servers will be deleted. 
+
+        l_status = SYSTEMCONFIG_GetBooleanValue(l_configHandle,
+                        NCM_CONF_SECTION_NAME,
+                        NCM_SERVER_KEEP_BOOT_DNS,
+                        &l_keep_boot_entries);
+        if (SYSTEMCONFIG_STATUS_OK == l_status)
+        {
+            if (false == l_keep_boot_entries)
+            {
+                memset(conf->DNSAddresses,
+                        0,
+                        sizeof(conf->DNSAddresses));
+                NCM_COMMON_BITFIELD_UNSET_BIT(conf->StateFlags, NCM_SERVER_DNS_STATIC);
+                NCM_LOG_INFO(("All DNS servers will be deleted."));
+            }
+            else
+            {
+                NCM_LOG_INFO(("All DNS servers are kept."));
+            }
+            l_status = NCM_STATUS_OK;
+        }
+        else
+        {
+            NCM_LOG_INFO(("All DNS servers are kept."));
+            l_status = NCM_STATUS_OK;
+        }
+
+
+976:NDS: ^[2018:09:04 12:32:01]0946684943.497138 !INFO   -NCM_SERVER   		< p:0x00000386 P:SCD t:0x0074f530 T:NCM_SERVER_APPLY M:ncm_server_xnet_dns.c F:ncm_server_xnet_dns_set_servers L:55 > Set 0 DNS servers. 
+
+SYSTEM_STATUS ncm_server_xnet_dns_set_servers(
+        const struct sockaddr_storage * dnsAddresses,
+        uint8_t                         numAddresses)
+{
+    SYSTEM_STATUS   l_status = NCM_STATUS_OK;
+    int32_t         l_ret = 0;
+    uint32_t        l_i;
+
+    NCM_LOG_FN_ENTRY("ncm_server_xnet_dns_set_servers");
+    NCM_COMMON_ASSERT( ((numAddresses == 0) || (NULL != dnsAddresses)) );
+
+
+    NCM_LOG_INFO(("Set %u DNS servers%c", numAddresses, (numAddresses == 0U ? '.' : ':')));
+    for (l_i = 0U; l_i < numAddresses; l_i++) {
+        NCM_COMMON_DISPLAY_SOCKADDR_STORAGE(&dnsAddresses[l_i], 0U, INFO);
+    }
+
+    // comp-network-helper which updates resolv.conf
+    l_ret = xnet_dns_set_servers(
+            dnsAddresses,
+            numAddresses);
+    if (l_ret != 0)
+    {
+        NCM_COMMON_PRINT_ERRNO();
+        NCM_LOG_ERROR(("Failed to set DNS servers."));
+
+        l_status = NCM_STATUS_FAILURE;
+    }
+
+    NCM_LOG_FN_EXIT(l_status);
+    return l_status;
+}
+
+18232:NDS: ^[2018:12:12 12:06:13]0946685318.336247 !INFO   -NCM_SERVER                  < p:0x0000066a P:SCD t:0x00784530 T:NCM_SERVER_APPLY M:ncm_server_xnet_dns.c F:ncm_server_xnet_dns_set_servers L:57 > address     : 10.209.62.111/0.
 
 
 ={============================================================================

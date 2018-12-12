@@ -495,14 +495,28 @@ TEST(Vector, Ctors)
 {
   {
     vector<int> coll(5);
-    // PRINT_ELEMENTS(icoll1, "default init: ");
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(0,0,0,0,0));
+  }
+
+  // *cxx-vector-resize*
+  {
+    vector<int> coll;
+    coll.resize(5);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(0,0,0,0,0));
   }
 
   {
     vector<int> coll(5, 10);
-    // PRINT_ELEMENTS(icoll2, "value   init: ");
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(10,10,10,10,10));
+  }
+
+  // *cxx-vector-resize*
+  {
+    vector<int> coll;
+    coll.resize(5, 10);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(10,10,10,10,10));
   }
