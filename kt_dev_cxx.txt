@@ -101,7 +101,6 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-copy-control-move-rvalue-reference
 *kt_dev_cxx_0000* cxx-copy-control-move-std-move cxx-move-synthesized
 *kt_dev_cxx_0000* cxx-ex-query-example cpp-interface
-*kt_dev_cxx_0000* cxx-ex-strblob-example
 *kt_dev_cxx_0000* cxx-abc cxx-ex-quote-example cxx-refactoring
 *kt_dev_cxx_0000* cxx-abc-call-in-dtor
 *kt_dev_cxx_0000* cxx-copy-prevent-copies cxx-delete
@@ -221,6 +220,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-container-print-elements
 
 *kt_dev_cxx_0000* cxx-iter
+*kt_dev_cxx_0000* cxx-iter-case cxx-case-iter
 *kt_dev_cxx_0000* cxx-iter-array
 *kt_dev_cxx_0000* cxx-iter-adapters
 *kt_dev_cxx_0000* cxx-iter-external-and-internal
@@ -16435,640 +16435,6 @@ int main()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-ex-strblob-example
-
-<ex>
-#include <iostream>             // for cout
-#include <vector>
-#include <string>
-#include <memory>
-#include <initializer_list>
-
-// g++ -std=c++11 -g t_strblob.cpp
-
-//////////////////////////////////////////////////////////////////////////////
-// StrBlob without StrBlobPtr
-//
-// CPR 455
-//
-// * show how to implement a new collection type using library container.
-// `is-implemented-in-terms-of-model`
-//
-// * This shows when shared_ptr is useful than own raii since this case don't
-// need `copy-controls` and use syn versions but not a problem as it has only
-// one member which is shared_ptr.
-
-namespace SB1
-{
-
-using namespace std;
-
-class StrBlob
-{
-    public:
-        typedef vector<string>::size_type size_type;
-
-        // interface
-        StrBlob() : data_(make_shared<vector<string>>()) {}
-        StrBlob(initializer_list<string> il) :
-            data_(make_shared<vector<string>>(il)) {}
-
-        size_type size() const { return data_->size(); }
-        bool empty() const { return data_->empty(); }
-
-        void push_back(const string &e);
-        void pop_back();
-
-        std::string &front();
-        std::string &back();
-
-    private:
-        shared_ptr<vector<string>> data_;
-
-        // *cpp-except*
-        // see that return type has nothing to do with exception.
-        void check(size_type index, const string &message) const
-        {
-            if (index >= data_->size())
-                throw out_of_range(message);
-        }
-};
-
-void StrBlob::push_back(const string &e)
-{
-    data_->push_back(e);
-}
-
-void StrBlob::pop_back()
-{
-    // check if we calls it on empty vector since calls on empty
-    // vector is `undefined` behavior.
-    check(0, "pop_back() on empty container");
-
-    // std::vector.pop_back() removes the last but do not return.
-    data_->pop_back();
-}
-
-std::string &StrBlob::front()
-{
-    check(0, "front() on empty container");
-    return data_->front();
-}
-
-std::string &StrBlob::back()
-{
-    check(0, "back() on empty container");
-    return data_->back();
-}
-
-} // namespace SB1
-
-
-// = 01 ======
-// size : 4
-// front: one
-// back : four
-// size : 5
-// front: one
-// back : five
-// size : 0
-// terminate called after throwing an instance of 'std::out_of_range'
-//   what():  front() on empty container
-// Aborted
-
-void t_strblob_01()
-{
-    using namespace std;
-
-    SB1::StrBlob sb{"one", "two", "three", "four"};
-
-    cout << "size : " << sb.size() << endl;
-    cout << "front: " << sb.front() << endl;
-    cout << "back : " << sb.back() << endl;
-
-    sb.push_back("five");
-
-    cout << "size : " << sb.size() << endl;
-    cout << "front: " << sb.front() << endl;
-    cout << "back : " << sb.back() << endl;
-
-    SB1::StrBlob s2;
-
-    cout << "size : " << s2.size() << endl;
-    cout << "front: " << s2.front() << endl;
-    cout << "back : " << s2.back() << endl;
-}
-
-
-// = 02 ======
-// b1 size: 1
-// b1 size: 4
-// b2 size: 4
-// b1 size: 4
-
-void t_strblob_02()
-{
-    SB1::StrBlob b1{"b1"};
-    {
-        std::cout << "b1 size: " << b1.size() << std::endl;
-
-        SB1::StrBlob b2{ "this", "is", "second blob" };
-        b1 = b2;
-        b2.push_back(". really?");
-
-        std::cout << "b1 size: " << b1.size() << std::endl;
-        std::cout << "b2 size: " << b2.size() << std::endl;
-    }
-
-    std::cout << "b1 size: " << b1.size() << std::endl;
-}
-
-//////////////////////////////////////////////////////////////////////////////
-// StrBlob with StrBlobPtr
-
-// namespace SB2
-// {
-
-using namespace std;
-
-// forward declaration
-// *cpp-incomplete-type* issue decide which class comes first.
-class StrBlobPtr;
-
-class StrBlob
-{
-    // friend declaration
-    friend class StrBlobPtr;
-
-    public:
-        typedef vector<string>::size_type size_type;
-
-        // interface
-        StrBlob() : data_(make_shared<vector<string>>()) {}
-        StrBlob(initializer_list<string> il) :
-            data_(make_shared<vector<string>>(il)) {}
-
-        size_type size() const { return data_->size(); }
-        bool empty() const { return data_->empty(); }
-
-        void push_back(const string &e);
-        void pop_back();
-
-        std::string &front();
-        std::string &back();
-
-        // iterator support
-        // cause *cpp-incomplete-type* issue and can't be defined until
-        // StrBlobPtr is defined.
-        //
-        // StrBlobPtr begin() { return StrBlobPtr(*this); }
-        // StrBlobPtr end() { return StrBlobPtr(*this, data_->size()); }
-
-        StrBlobPtr begin();
-        StrBlobPtr end();
-
-    private:
-        shared_ptr<vector<string>> data_;
-
-        void check(size_type index, const string &message) const
-        {
-            if (index >= data_->size())
-                throw out_of_range(message);
-        }
-};
-
-void StrBlob::push_back(const string &e)
-{
-    data_->push_back(e);
-}
-
-void StrBlob::pop_back()
-{
-    // check if we calls it on empty vector since calls on empty
-    // vector is `undefined` behavior.
-    check(0, "pop_back() on empty container");
-
-    // std::vector.pop_back() removes the last but do not return.
-    data_->pop_back();
-}
-
-std::string &StrBlob::front()
-{
-    check(0, "front() on empty container");
-    return data_->front();
-}
-
-std::string &StrBlob::back()
-{
-    check(0, "back() on empty container");
-    return data_->back();
-}
-
-// CPR 473, *cpp-iter*
-//
-// <- new container class ->  <- companion class like iterator ->
-//    StrBlob                    StrBlobPtr
-//    - shared_ptr               - weak_ptr
-//
-//                      vector[]
-//                      - underlying container
-class StrBlobPtr
-{
-    friend bool eq(const StrBlobPtr&, const StrBlobPtr&);
-
-    public:
-        StrBlobPtr() {}
-        // cannot use on const StrBlob since ctor uses non-const.
-        StrBlobPtr(StrBlob &blob, size_t size = 0) : blob_(blob.data_), curr_(size) {}
-
-        StrBlobPtr &incr();     // prefix version, ++iter
-        StrBlobPtr &decr();     // prefix version, --iter
-        string &deref() const;  // *iter
-
-        // CPR 566, *cxx-overload-operator-increment-decrement*
-        //
-        // * No language requirement but prefer to be a member since change the
-        // state of the object.
-        //
-        // * As for built-in type, there are both prefix and postfix versions.
-        
-        // prefix versions
-        //
-        // note: 
-        // To be consistent with the built-in operators, the prefix should
-        // return a reference
-
-        StrBlobPtr &operator++();
-        StrBlobPtr &operator--();
-
-        // cxx-operator-increment-postfix versions
-        //
-        // The postfix version takes an extra parameter which is unused and is
-        // to distinguish it from the prefix.
-        //
-        // note:
-        //
-        // To be consistent with the built-in operators, the postfix should
-        // return the old `value`, not a reference.
-
-        StrBlobPtr operator++(int);
-        StrBlobPtr operator--(int);
-
-        // may use const to prevent like, a++++.
-        // const StrBlobPtr operator++(int);
-        // const StrBlobPtr operator--(int);
-        
-
-        // CPR 569, *cxx-overload-operator-member-access*
-        //
-        // * Used in iterator and smart pointer class
-        //
-        // * operator arrow must be a member and dereference usually be a member
-        // as well.
-        //
-        // * const
-        
-        string &operator*() const;
-        string *operator->() const;
-
-    private:
-        shared_ptr<vector<string>> check(size_t index, const string &message) const
-        {
-            // check member differs from the one of StrBlob.
-            auto pblob = blob_.lock();
-            if (!pblob)
-                throw runtime_error("unbound StrBlobPtr");
-
-            if (index >= pblob->size())
-                throw out_of_range(message);
-
-            return pblob;
-        }
-
-        // current index
-        size_t curr_{0};
-        weak_ptr<vector<string>> blob_;
-};
-
-inline string &StrBlobPtr::deref() const
-{
-    auto blob = check(curr_, "dereference nonexistent element");
-    // [] is higher than *
-    return (*blob)[curr_];
-}
-
-inline StrBlobPtr &StrBlobPtr::incr()
-{
-    // if curr_ already points past the end
-    check(curr_, "increment past the end");
-    ++curr_;
-    return *this;
-}
-
-inline StrBlobPtr &StrBlobPtr::decr()
-{
-    // if curr_ is zero, decrementing it will yield an invalid index
-    --curr_;
-    // check(-1, "decrement before the begin");
-    check(curr_, "decrement before the begin");
-    return *this;
-}
-
-// same as incr()
-inline StrBlobPtr &StrBlobPtr::operator++()
-{
-    // if curr_ already points past the end
-    check(curr_, "increment past the end");
-    ++curr_;
-    return *this;
-}
-
-inline StrBlobPtr StrBlobPtr::operator++(int)
-{
-    StrBlobPtr ret = *this;     // saves the current value
-    ++*this;                    // no checks since prefix ++ do.
-    return ret;
-}
-
-// same as decr()
-inline StrBlobPtr &StrBlobPtr::operator--()
-{
-    // if curr_ is zero, decrementing it will yield an invalid index
-    --curr_;
-    // check(-1, "decrement before the begin");
-    check(curr_, "decrement before the begin");
-    return *this;
-}
-
-inline StrBlobPtr StrBlobPtr::operator--(int)
-{
-    StrBlobPtr ret = *this;     // saves the current value
-    --*this;                    // no checks since prefix -- do. R associative
-    return ret;
-}
-
-// same as deref()
-// note:
-// Although it's const member function since do not change its state, returns a
-// reference and client can change through it.
-
-inline string &StrBlobPtr::operator*() const
-{
-    auto blob = check(curr_, "dereference nonexistent element");
-    // [] is higher than *
-    return (*blob)[curr_];
-}
-
-// note:
-//
-// StrBlob a1{"hi", "bye", "now"};
-// StrBlobPtr p{a1};
-//
-// *p = "okay";     // can change. assigns ot the fist element in a1
-//
-// cout << p->size() << endl;       // prints 4, the size of the first element.
-// cout << (*p).size() << endl;     // same
-//
-// The arrow operator never lose its meaning of member access. Depending on the
-// type of point:
-//
-// (*point).mem;                // point is a built-in pointer type
-// point.operator()->mem;       // point is an object of class type. iterator
-// 
-//
-// <ex> when item is shared pointer itself
-//
-// multiset<std::shared_ptr<Quote>, comp> items;
-//
-// for (auto item = items.cbegin(); item != items.cend();
-//  item = items.upper_bound(*item))
-// {
-//  os << (*item)->isbn() << " occurs, " << endl;
-// }
-//
-// <ex> shared pointer is not built-in array type
-//
-// For array:
-// 
-// *(parray+1) is synomym for parray[1]
-// 
-// the same hold for shared_ptr? No. array is special and not vector.
-// 
-// shared_ptr<vector<string>> sp(new vector<string>{"one", "two", "three"});
-// 
-// // OK
-// cout << "0: " << (*sp)[0] << endl;
-//     
-// // OK
-// cout << "0: " << *(sp->begin()+0) << endl;
-// 
-// // ERROR
-// cout << "0: " << *(*sp+0) << endl;
-
-
-inline string *StrBlobPtr::operator->() const
-{
-    // take address of a string reference
-    return & this->operator*();
-}
-
-
-// "casue *cpp-incomplete-type* issue and can't be defined until
-// StrBlobPtr is defined." so defined here.
-// return a temporary which points either begin or end.
-StrBlobPtr StrBlob::begin()
-{
-    return StrBlobPtr(*this);
-}
-
-StrBlobPtr StrBlob::end()
-{
-    return StrBlobPtr(*this, data_->size());
-}
-
-// } // namespace SB2
-
-
-// named equality operators for StrBlobPtr
-inline bool eq(const StrBlobPtr &lhs, const StrBlobPtr &rhs)
-{
-    auto l = lhs.blob_.lock(), r = rhs.blob_.lock();
-
-    // if the underlying vector is the same
-    if (l == r)
-        // then they're equal if they're both null, !r
-        // or if they point to the same element.
-        return (!r || lhs.curr_ == rhs.curr_);
-    else
-        return false;
-}
-
-inline bool neq(const StrBlobPtr &lhs, const StrBlobPtr &rhs)
-{
-    return !eq(lhs, rhs);
-}
-
-
-// = 03 ======
-// b1 size: 1
-// b2 size: 4
-// b1 size: 4
-// a
-// an
-// the
-// about
-
-void t_strblob_03()
-{
-    StrBlob b1{"b1"};
-    {
-        std::cout << "b1 size: " << b1.size() << std::endl;
-
-        StrBlob b2{"a", "an", "the"};
-        b1 = b2;
-        b2.push_back("about");
-
-        std::cout << "b2 size: " << b2.size() << std::endl;
-    }
-
-    std::cout << "b1 size: " << b1.size() << std::endl;
-
-    for (auto it = b1.begin(); neq(it, b1.end()); it.incr())
-        cout << it.deref() << endl;
-}
-
-
-// = 04 ======
-// 10
-// 10
-// b1 size: 5
-// super okay
-// bye
-// for
-// now
-// about
-
-void t_strblob_04()
-{
-    StrBlob a1{"hi", "bye", "for", "now"};
-    StrBlobPtr p{a1};
-    
-    *p = "super okay";     // can change. assigns ot the fist element in a1
-    
-    cout << p->size() << endl;       // prints 4, the size of the first element.
-    cout << (*p).size() << endl;     // same
-
-    a1.push_back("about");
-
-    cout << "b1 size: " << a1.size() << endl;
-
-    for (auto it = a1.begin(); neq(it, a1.end()); ++it)
-        cout << *it << endl;
-}
-
-int main()
-{
-    using namespace std;
-
-    cout << "= 04 ======" << endl;
-    t_strblob_04();
-
-    // cout << "= 03 ======" << endl;
-    // t_strblob_03();
-
-    // cout << "= 02 ======" << endl;
-    // t_strblob_02();
-
-    // cout << "= 01 ======" << endl;
-    // t_strblob_01();
-}
-
-<ex>
-// Blob template <cpp-ex-strblob-template>
-// This is the template-version of the same. No longer specific to `string`.
-//
-template <typename T>
-class Blob
-{
-    public:
-        typedef T value_type;
-
-        // *cxx-template-type-member*
-        typedef typename std::vector<T>::size_type size_type;
-
-        Blob();
-        Blob(std::initializer_list<T> il);
-
-        size_type size() const { return data->size(); }
-        bool empty() const { return data->empty(); }
-
-        void push_back(const T &t) { data->push_back(t); }
-        void pop_back();
-
-        T& front()
-        {
-            check(0, "front() on empty container");
-            return data->front();
-        }
-        T& back();
-
-        T& operator[](size_type i);
-
-        // // const versions
-        // T & back() const;
-        // T & operator[](size_type i) const;
-
-    private:
-        std::shared_ptr<std::vector<T>> data;
-        void check(size_type i, const std::string &message) const;
-};
-
-// ctors
-template <typename T>
-Blob<T>::Blob(): data(make_shared<std::vector<T>>()) {}
-
-template <typename T>
-Blob<T>::Blob(std::initializer_list<T> il) : data(make_shared<std::vector<T>>(il)) {}
-
-// <cpp-template-member-function>
-//
-// To write a member function of class template 'outside' of definition,
-// remember that the instantiated type is a new type and must say to which class
-// the member belongs. see Blob`<T>`
-//
-// it is instantiated `only if` it is used and if not, it is not instantiated.
-
-template <typename T>
-void Blob<T>::check(size_type i, const std::string &message) const
-{
-    if (i >= data->size())
-        throw std::out_of_range(message);
-}
-
-// as stl-vector back() returns the last element
-template <typename T>
-T & Blob<T>::back()
-{
-    check(0, "back on empty blob");
-    return data->back();
-}
-
-template <typename T>
-T & Blob<T>::operator[](size_type i)
-{
-    check(i, "subscript out of range");
-    return (*data)[i];
-}
-
-template <typename T>
-void Blob<T>::pop_back()
-{
-    check(0, "pop_back on empty blob");
-    data->pop_back();
-}
-
-
-={============================================================================
 *kt_dev_cxx_0000* cxx-abc cxx-ex-quote-example cxx-refactoring
 
 * class hierarchy represents book purchase or transaction
@@ -18760,9 +18126,9 @@ of a 'class' type.
   
 
 {cxx-overload-member-or-nonmember}
-Decide whether to implement operator function as either a member or nonmember?
+Whether to implement operator function as either a member or non-member?
 
-// nonmember case
+// non-member case
 data1 + data2;
 operator+(data1, data2);
 
@@ -18770,12 +18136,12 @@ operator+(data1, data2);
 data1 += data2;
 data1.operator+=(data2);
 
-  * For member, the first(lhs) operand is bound to implict `this` 
+  o For member, the first(lhs) operand is bound to implict `this` 
 
-  * For member, the `lhs` operand must be an object of the class of which that
+  o For member, the `lhs` operand must be an object of the class of which that
     operator is a member. 
   
-  * 'symmetric' operators - those that might convert either oparand, such as
+  o 'symmetric' operators - those that might convert either oparand, such as
     arithmetic, equiality, relational, and bitwise operators - usually should
     be nonmember.
 
@@ -18785,9 +18151,9 @@ data1.operator+=(data2);
     allow 'conversion' since member fixes ths lhs type.
 
 
-{cxx-overload-assignment} {compound-op}
-The standalone version of op 'must' be `nonmember` since the literal, "hi!",
-    do not have member operations.
+{cxx-overload-assignment} {operator-compound}
+The standalone version of op `must be nonmember` since the literal, "hi!", do
+not have member operations.
 
 string u = "hi" + s; 
 
@@ -18926,11 +18292,11 @@ inline ostream& operator<<( ostream& os, const NLComponent& c )
 { return c.print(os); }
 
 
-{operator-overload-equal-and-relational} operator-less
+{cxx-operator-overload-equal-and-relational} cxx-operator-less
 
 note: 
-cannot implement it in terms of the other. for example, operator<() cannot be
-implemented by return !operator>();
+cannot implement it in terms of the other; operator<() cannot be implemented
+by return !operator>();
 
 There is a subtle difference between equal and relational(operator <) as to
 define 'ordering'.
@@ -18939,6 +18305,10 @@ o Classes for which there is a logical meaning for equality should define
   operator== to use with the library algorithms.
 
 o If defines operator==, should also define operator!=.
+
+o non-member or member
+
+<ex> non-member case
 
 bool operator==( const Sales_data *lhs, const Sales_data *rhs )
 {
@@ -18995,7 +18365,7 @@ class StrVec {
 See cpp-sp-ex-strblob-example for more.
 
 
-{operator-overload-prefix-postfix}
+{cxx-operator-postfix-cxx-overload-operator-postfix}
 MEC++06. `postfix` can be ineffective when used on user-type.
 
 The prefix form of the increment operator is sometimes called - increment and
@@ -19004,6 +18374,8 @@ fetch, while the postfix form is often known as fetch and increment.
 o member
 o How distinguish between prefix and postfix form?
 o `const UPInt` operator++(int); always use `int` regardless of type to use.
+o `the prefix should return a reference`
+o the postfix should return the old `value`, not a reference.
 
 class UPInt {                           // "unlimited precision int"
   public:
@@ -19089,6 +18461,19 @@ Again, CPR p148 recommends prefix version than postfix because post-inc
 increase first and return(yield) the previous copy and it cost extra. May have
 no effect for built-in types due to optimization but may be expensive for
 `iterators`. 
+
+
+{cxx-operator-dereference}
+
+As with shared pointer, operator->() makes sense when item is pointer.
+
+multiset<std::shared_ptr<Quote>, comp> items;
+
+for (auto item = items.cbegin(); item != items.cend();
+ item = items.upper_bound(*item))
+{
+ os << (*item)->isbn() << " occurs, " << endl;
+}
 
 
 ={============================================================================
@@ -32752,7 +32137,7 @@ ct = fi.count();              // via an object
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-type-member
 
-{template-type-members} <cxx-type-member> <cxx-typename>
+{cxx-template-type-members} <cxx-type-member> <cxx-typename>
 Uses scope operator(::) to access both static member and type members. For
 example, string::size_type. In non-template code, the compiler has access to
 the class definition and knows whether a name accessed through the scope
@@ -41309,6 +40694,675 @@ TEST(Iterator, Distance)
 
 If the iterators are not random-access iterators, pos2 `must be reachable` from
 pos1; that is, it must have the same position or a later position.
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-iter-case cxx-case-iter
+
+// StrBlob without StrBlobPtr
+//
+// CPR 455
+//
+// * show how to implement a new collection type using library container.
+// `is-implemented-in-terms-of-model`
+//
+// * This shows when shared_ptr is useful than own raii since this case don't
+// need `copy-controls` and use syn versions but not a problem as it has only
+// one member which is shared_ptr.
+
+namespace cxx_case_strblob
+{
+  class StrBlob
+  {
+    public:
+      typedef std::vector<std::string>::size_type size_type;
+      
+      explicit StrBlob() : 
+        data_(new std::vector<std::string>()) {}
+
+      explicit StrBlob(std::initializer_list<std::string> il) : 
+        data_(new std::vector<std::string>(il)) {}
+
+      size_type size() const noexcept
+      { return data_->size(); }
+      
+      bool empty() const noexcept
+      { return data_->empty(); }
+
+      void push_back(std::string const& elem)
+      { data_->push_back(elem); }
+
+      void pop_back()
+      {
+        // *cxx-vector* *cxx-undefined* when called on empty vector
+        check(0, "coll is empty");
+
+        // *cxx-vector* do not return value
+        data_->pop_back();
+      }
+
+      std::string& front()
+      {
+        check(0, "coll is empty");
+        return data_->front();
+      }
+
+      std::string& back()
+      {
+        check(0, "coll is empty");
+        return data_->back();
+      }
+
+    private:
+      shared_ptr<std::vector<std::string>> data_;
+
+      // *cxx-except* has nothing to do with return type
+      void check(size_type index, string const& message) const
+      {
+        if (index >= data_->size())
+          throw std::out_of_range(message);
+      }
+  };
+
+} // namespace
+
+
+TEST(CxxCase, StringBlobNoIteratorSupport)
+{ 
+  using namespace cxx_case_strblob;
+
+  {
+    StrBlob sb{"one", "two", "three", "four"};
+
+    EXPECT_THAT(sb.size(), 4);
+    EXPECT_THAT(sb.front(), "one");
+    EXPECT_THAT(sb.back(), "four");
+
+    sb.push_back("five");
+
+    EXPECT_THAT(sb.size(), 5);
+    EXPECT_THAT(sb.front(), "one");
+    EXPECT_THAT(sb.back(), "five");
+  }
+
+  {
+    StrBlob sb;
+
+    EXPECT_THAT(sb.size(), 0);
+    EXPECT_THROW(sb.front(), std::out_of_range);
+  }
+} 
+
+
+// *cxx-iter*
+// see that iterator implementation
+//
+// <- new container class ->  <- companion class like iterator ->
+//    StrBlob                    StrBlobPtr
+//    - shared_ptr               - weak_ptr
+//
+//                      vector[]
+//                      - underlying container
+
+namespace cxx_case_strblob_iterator
+{
+  class StrBlobIterator;
+
+  class StrBlob
+  {
+    friend class StrBlobIterator;
+
+    public:
+      typedef std::vector<std::string>::size_type size_type;
+      
+      explicit StrBlob() : 
+        data_(new std::vector<std::string>()) {}
+
+      explicit StrBlob(std::initializer_list<std::string> il) : 
+        data_(new std::vector<std::string>(il)) {}
+
+      size_type size() const noexcept
+      { return data_->size(); }
+      
+      bool empty() const noexcept
+      { return data_->empty(); }
+
+      void push_back(std::string const& elem)
+      { data_->push_back(elem); }
+
+      void pop_back()
+      {
+        // *cxx-vector* *cxx-undefined* when called on empty vector
+        check(0, "coll is empty");
+
+        // *cxx-vector* do not return value
+        data_->pop_back();
+      }
+
+      std::string& front()
+      {
+        check(0, "coll is empty");
+        return data_->front();
+      }
+
+      std::string& back()
+      {
+        check(0, "coll is empty");
+        return data_->back();
+      }
+
+      // cause *cxx-incomplete-type* so cannot be defined until StrBlobIterator
+      // is defined.
+
+      StrBlobIterator begin();
+
+      StrBlobIterator end();
+
+    private:
+      shared_ptr<std::vector<std::string>> data_;
+
+      // *cxx-except* has nothing to do with return type
+      void check(size_type index, string const& message) const
+      {
+        if (index >= data_->size())
+          throw std::out_of_range(message);
+      }
+  };
+
+
+  // originally StrBlobPtr
+
+  class StrBlobIterator
+  {
+    public:
+      typedef std::vector<std::string>::size_type size_type;
+
+      // *cxx-incomplete-type* so move StrBlobIterator after StrBlob
+      StrBlobIterator(StrBlob& blob, size_type pos = 0)
+        : blob_(blob.data_), curr_(pos)
+      {}
+
+      // *cxx-operator-postfix* prefix version
+      StrBlobIterator& operator++()
+      {
+        check(curr_, "increase past the end");
+        ++curr_;
+        return *this;
+      }
+
+      // *cxx-operator-postfix* postfix version
+      StrBlobIterator const operator++(int)
+      {
+        StrBlobIterator it = *this;
+        ++*this;
+        return it;
+      }
+
+      StrBlobIterator& operator--()
+      {
+        // decrease first and since it is size_type, -1 becomes big
+        --curr_;
+        check(curr_, "decrease before the begin");
+        return *this;
+      }
+
+
+      StrBlobIterator const operator--(int)
+      {
+        StrBlobIterator it = *this;
+        --*this;
+        return it;
+      }
+
+      // *cxx-overload-operator*
+      //
+      // 1. this iterator points vector<string>. return vector<string> or
+      // string?
+      //
+      // 2. Although it's const member function since do not change its state,
+      // returns a reference and client can change through it.
+
+      std::string& operator*() const 
+      {
+        auto blob_ptr = check(curr_, "dereference non-existent element");
+
+        // *cxx-precedence* [] is higher
+        return (*blob_ptr)[curr_];
+      }
+
+      // this is the original code from the book. However, operator->() make
+      // sense when underlying item is pointer. In this case, it's not so
+      // comment it out.
+      //
+      // std::string* operator->() const
+      // {
+      //     // take address of a string reference
+      //     return & this->operator*();
+      // }
+
+      // *cxx-overload-operator-equal*
+
+      bool operator==(StrBlobIterator const& other) const
+      {
+        auto lhs_blob_ptr = blob_.lock();
+
+        // *cxx-access* WHY NOT ERROR???
+        
+        auto rhs_blob_ptr = other.blob_.lock();
+
+        // don't seem to need "curr_ == other.curr_" since it's enough to see
+        // shared pointer is not null
+
+        if (lhs_blob_ptr == rhs_blob_ptr)
+          return (!lhs_blob_ptr || curr_ == other.curr_);
+        else 
+          return false;
+      }
+
+      bool operator!=(StrBlobIterator const& other) const
+      {
+        return !(*this == other);
+      }
+
+    private:
+      std::weak_ptr<std::vector<std::string>> blob_;
+      size_type curr_{0};
+
+      std::shared_ptr<std::vector<std::string>> check(size_type index,
+          string const& message) const
+      {
+        auto blob_ptr = blob_.lock();
+        if (!blob_ptr)
+          throw std::runtime_error("unbounded shared_ptr");
+
+        if (index >= blob_ptr->size())
+          throw std::out_of_range(message);
+
+        return blob_ptr;
+      }
+  };
+
+  // cause *cxx-incomplete-type* so cannot be defined until StrBlobIterator
+  // is defined. so define them here
+
+  StrBlobIterator StrBlob::begin()
+  {
+    return StrBlobIterator(*this, 0);
+  }
+
+  StrBlobIterator StrBlob::end()
+  {
+    return StrBlobIterator(*this, data_->size());
+  }
+
+} // namespace
+
+TEST(CxxCase, StringBlobIteratorSupport)
+{ 
+  using namespace cxx_case_strblob_iterator;
+
+  {
+    vector<string> coll;
+
+    StrBlob sb{"one", "two", "three", "four"};
+
+    // for (auto const& e : sb)
+    // {
+    //   cout <<
+    // }
+    for (auto it = sb.begin(); it != sb.end(); ++it)
+      coll.push_back(*it);
+
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three", "four"));
+  }
+
+  {
+    vector<string> coll;
+
+    StrBlob sb{"one", "two", "three", "four"};
+
+    for (auto const& e : sb)
+      coll.push_back(e);
+
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three", "four"));
+  }
+
+  {
+    vector<string> coll;
+
+    StrBlob sb{"one", "two", "three", "four"};
+
+    // since operator*() returns reference
+    auto it = sb.begin();
+    *it = "I";
+
+    for (auto const& e : sb)
+      coll.push_back(e);
+
+    EXPECT_THAT(coll, ElementsAre("I", "two", "three", "four"));
+  }
+} 
+
+
+namespace cxx_case_strblob_template
+{
+  template <typename T>
+  class StrBlob
+  {
+    public:
+
+      // was:
+      // typedef std::vector<T>::size_type size_type;
+      //
+      // *cxx-template-type-members* it now needs `typename` keyword since it is
+      // a template now.
+
+      typedef typename std::vector<T>::size_type size_type;
+      
+      explicit StrBlob() : 
+        data_(new std::vector<T>()) {}
+
+      explicit StrBlob(std::initializer_list<T> il) : 
+        data_(new std::vector<T>(il)) {}
+
+      size_type size() const noexcept
+      { return data_->size(); }
+      
+      bool empty() const noexcept
+      { return data_->empty(); }
+
+      void push_back(std::string const& elem)
+      { data_->push_back(elem); }
+
+      void pop_back()
+      {
+        // *cxx-vector* *cxx-undefined* when called on empty vector
+        check(0, "coll is empty");
+
+        // *cxx-vector* do not return value
+        data_->pop_back();
+      }
+
+      T& front()
+      {
+        check(0, "coll is empty");
+        return data_->front();
+      }
+
+      T& back()
+      {
+        check(0, "coll is empty");
+        return data_->back();
+      }
+
+    private:
+      shared_ptr<std::vector<T>> data_;
+
+      void check(size_type index, string const& message) const;
+  };
+
+  // *cxx-except* has nothing to do with return type
+  //
+  // to show how to:
+  //
+  // <cxx-template-member-function>
+  //
+  // To write a member function of class template 'outside' of definition,
+  // remember that the instantiated type is a new type and must say to which
+  // class the member belongs. see Blob`<T>`
+  //
+  // it is instantiated `only if` it is used and if not, it is not instantiated.
+
+  template <typename T>
+    void StrBlob<T>::check(size_type index, string const& message) const
+  {
+    if (index >= data_->size())
+      throw std::out_of_range(message);
+  }
+
+} // namespace
+
+
+TEST(CxxCase, StringBlobTemplate)
+{ 
+  using namespace cxx_case_strblob_template;
+
+  {
+    StrBlob<std::string> sb{"one", "two", "three", "four"};
+
+    EXPECT_THAT(sb.size(), 4);
+    EXPECT_THAT(sb.front(), "one");
+    EXPECT_THAT(sb.back(), "four");
+
+    sb.push_back("five");
+
+    EXPECT_THAT(sb.size(), 5);
+    EXPECT_THAT(sb.front(), "one");
+    EXPECT_THAT(sb.back(), "five");
+  }
+
+  {
+    StrBlob<std::string> sb;
+
+    EXPECT_THAT(sb.size(), 0);
+    EXPECT_THROW(sb.front(), std::out_of_range);
+  }
+} 
+
+// from Problem 46, circular buffer, the modern c++ challenge
+// 1. use size(count) and head only
+// 2. in push, no full check since it overwrites and in pop, it simply
+// calculates first from head substracing size.
+// 3. no iterator support is needed if not use begin()/end()
+
+namespace queue_circular_count_iterator
+{
+
+template <typename T>
+class circular_buffer_iterator;
+
+template <typename T>
+class circular_buffer
+{
+  typedef circular_buffer_iterator<T> const_iterator;
+  friend class circular_buffer_iterator<T>;
+
+  public:
+  circular_buffer() = delete;
+  explicit circular_buffer(size_t const size) : data_(size) 
+  {}
+
+  void clear() noexcept 
+  { head_ = -1; size_ = 0; }
+
+  bool empty() const noexcept
+  { return size_ == 0; }
+
+  bool full() const noexcept
+  { return size_ >= data_.size(); }
+
+  size_t capacity() const noexcept
+  { return data_.size(); }
+
+  size_t size() const noexcept
+  { return size_; }
+
+  const_iterator begin() const
+  {
+    return const_iterator(*this, first_pos(), empty());
+  }
+
+  const_iterator end() const
+  {
+    return const_iterator(*this, next_pos(), true);
+  }
+
+  T pop()
+  {
+    if (empty())
+      throw std::runtime_error("buffer is empty");
+
+    auto pos = first_pos();
+    size_--;
+    return data_[pos];
+  }
+
+  void push(T const item)
+  {
+    // if (full())
+    //   throw std::runtime_error("buffer is full");
+
+    head_ = next_pos();
+    data_[head_] = item;
+
+    if (size_ < data_.size())
+      size_++;
+  }
+
+  private:
+  size_t size_{};
+  size_t head_{-1};
+  std::vector<T> data_;
+
+  // return `head` pos to push
+  size_t next_pos() const noexcept
+  {
+    // *cxx-precedence* *cxx-error*
+    // return size_ == 0 ? 0 : (head_ + 1 % data_.size());
+
+    return size_ == 0 ? 0 : ((head_ + 1) % data_.size());
+  }
+
+  // return `tail` pos to pop
+  size_t first_pos() const noexcept
+  {
+    return size_ == 0 ? 0 : (head_ + data_.size() - size_ + 1) % data_.size();
+  }
+};
+
+template <typename T>
+class circular_buffer_iterator
+{
+  typedef circular_buffer_iterator        self_type;
+  typedef T                               value_type;
+  typedef T&                              reference;
+  typedef T const&                        const_reference;
+  typedef T*                              pointer;
+  typedef std::random_access_iterator_tag iterator_category;
+  typedef ptrdiff_t                       difference_type;
+ 
+  public:
+
+  explicit circular_buffer_iterator(circular_buffer<T> const& buf, size_t const pos, bool const last) :
+    buffer_(buf), index_(pos), last_(last)
+  {}
+
+  self_type& operator++()
+  {
+    if (last_)
+      throw std::out_of_range("iterator cannot be incremented past the end of range.");
+    
+    index_ = (index_ + 1) % buffer_.data_.size();
+
+    // that is when index_ == `head`
+    last_ = (index_ == buffer_.next_pos());
+
+    return *this;
+  }
+
+  // *cxx-operator-postfix*
+  self_type const operator++(int)
+  {
+    self_type temp = *this;
+    ++*this;
+    return temp;
+  }
+
+  bool operator==(self_type const& other) const
+  {
+    // assert(compatible(other));
+
+    return &buffer_ == &other.buffer_
+      && index_ == other.index_ 
+      && last_ == other.last_;
+  }
+
+  bool operator!=(self_type const& other) const
+  { return !(*this == other); }
+
+  const_reference operator*() const
+  {
+    return buffer_.data_[index_];
+  }
+
+  private:
+
+  circular_buffer<T> const& buffer_;
+  size_t index_;
+  bool last_;
+};
+
+template <typename T>
+std::vector<T> print(circular_buffer<T> & buf)
+{
+  std::vector<T> coll{};
+
+  for (auto & e : buf)
+    coll.push_back(e);
+
+  return coll;
+}
+
+} // namespace
+
+
+TEST(CxxCase, CircularQueueCountIterator)
+{
+  using namespace queue_circular_count_iterator;
+
+  {
+    circular_buffer<int> cbuf(5);   // {0, 0, 0, 0, 0} -> {}
+
+    cbuf.push(1);                   // {1, 0, 0, 0, 0} -> {1}
+    cbuf.push(2);                   // {1, 2, 0, 0, 0} -> {1, 2}
+    cbuf.push(3);                   // {1, 2, 3, 0, 0} -> {1, 2, 3}
+
+    auto item = cbuf.pop();         // {1, 2, 3, 0, 0} -> {2, 3}
+    EXPECT_THAT(item, 1);
+
+    cbuf.push(4);                   // {1, 2, 3, 4, 0} -> {2, 3, 4}
+    cbuf.push(5);                   // {1, 2, 3, 4, 5} -> {2, 3, 4, 5}
+
+    // see that it overwrites
+    cbuf.push(6);                   // {(6), 2, 3, 4, 5} -> {2, 3, 4, 5, 6}
+    cbuf.push(7);                   // {6, (7), 3, 4, 5} -> {3, 4, 5, 6, 7}
+    cbuf.push(8);                   // {6, 7, (8), 4, 5} -> {4, 5, 6, 7, 8}
+
+    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {5, 6, 7, 8}
+    EXPECT_THAT(item, 4);
+    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {6, 7, 8}
+    EXPECT_THAT(item, 5);
+    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {7, 8}
+    EXPECT_THAT(item, 6);
+
+    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {8}
+    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {}
+    cbuf.push(9);                   // {6, 7, 8, 9, 5} -> {9}
+  }
+
+  {
+    circular_buffer<int> cbuf(5);
+
+    cbuf.push(1);
+    cbuf.push(2);
+    cbuf.push(3);
+    cbuf.push(4);
+    cbuf.push(5);
+    cbuf.push(6);
+    cbuf.push(7);
+    EXPECT_THAT(print(cbuf), ElementsAre(3,4,5,6,7));
+  }
+}
 
 
 ={============================================================================
