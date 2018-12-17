@@ -117,17 +117,25 @@ TEST(Size, Arrays)
 
 
 // ={=========================================================================
+// cxx-arith
+
+TEST(Arith, Comparison)
+{
+  int iv{8};
+  double dv{7.2};
+
+  if (iv < dv)
+    cout << "double is bigger" << endl;
+  else
+    cout << "int is bigger" << endl;
+}
+
+// ={=========================================================================
 // cxx-pair
 
-// {10, X}
-// {9, IX}
-// {5, V}
 // typeid : St16initializer_listIKSt4pairIiPKcEE
-//
-// pair 1 is bigger
-// pair 4 is bigger
 
-TEST(Pair, UsePairType)
+TEST(Pair, Use)
 {
   // gcc 6.3.0 emits error:
   //
@@ -137,7 +145,7 @@ TEST(Pair, UsePairType)
   // };
   // ^
   // cxx.cpp:36:5: note: for deduction to ‘std::initializer_list’, use
-  // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)          
+  // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)
   //
   // const auto pair_map{
   //     make_pair(10, "X"),
@@ -145,62 +153,63 @@ TEST(Pair, UsePairType)
   //     make_pair(5, "V")
   // };
 
-  const auto pair_map = {
-    make_pair(10, "X"),
-    make_pair(9, "IX"),
-    make_pair(5, "V")
-  };
+  {
+    const auto pair_map = {
+      make_pair(10, "X"),
+      make_pair(9, "IX"),
+      make_pair(5, "V")
+    };
   
-  for(const auto &e : pair_map)
-    cout << "{" << e.first << ", " << e.second << "}" << endl;
+    auto it = pair_map.begin();
+    EXPECT_THAT(it->first, 10);
+    EXPECT_THAT(it->second, "X");
+  }
   
-  cout << "typeid : " << typeid(pair_map).name() << endl;
+  {
+    auto pair1 = make_pair(10, 10);
+    auto pair2 = make_pair(10, 9);
   
-  auto pair1 = make_pair(10, 10);
-  auto pair2 = make_pair(10, 9);
+    auto pair3 = make_pair( 9, 11);
+    auto pair4 = make_pair(11, 9);
   
-  auto pair3 = make_pair( 9, 11);
-  auto pair4 = make_pair(11, 9);
-  
-  if(pair1 < pair2)
-    cout << "pair 2 is bigger" << endl;
-  else
-    cout << "pair 1 is bigger" << endl;
-  
-  if(pair3 < pair4)
-    cout << "pair 4 is bigger" << endl;
-  else
-    cout << "pair 3 is bigger" << endl;
+    EXPECT_THAT(pair1 > pair2, true);
+    EXPECT_THAT(pair3 < pair4, true);
+  }
 }
 
 
-// cxx-pair-reference cxx-std-ref
-//
-// val pair {11, 21}
-// i and j  {10, 20}      // not changed
-// ref pair {11, 21}
-// i and j  {11, 21}      // changed
+// cxx-pair-reference cxx-ref
 
-TEST(CxxPair, UsePairWithReference)
+TEST(Pair, WithReference)
 {
-  int i = 10;
-  int j = 20;
+  int i{10};
+  int j{20};
 
-  auto val = make_pair(i, j);
+  {
+    auto val = make_pair(i, j);
 
-  ++val.first;
-  ++val.second;
+    ++val.first;
+    ++val.second;
 
-  cout << "val pair {" << val.first << ", " << val.second << "}" << endl;
-  cout << "i and j  {" << i << ", " << j << "}" << endl;
+    EXPECT_THAT(val.first, 11);
+    EXPECT_THAT(val.second, 21);
+    EXPECT_THAT(i, 10);
+    EXPECT_THAT(j, 20);
+  }
 
-  auto ref = make_pair(std::ref(i), std::ref(j));
+  {
+    auto val = make_pair(std::ref(i), std::ref(j));
 
-  ++ref.first;
-  ++ref.second;
+    ++val.first;
+    ++val.second;
 
-  cout << "ref pair {" << ref.first << ", " << ref.second << "}" << endl;
-  cout << "i and j  {" << i << ", " << j << "}" << endl;
+    EXPECT_THAT(val.first, 11);
+    EXPECT_THAT(val.second, 21);
+
+    // they are changed now
+    EXPECT_THAT(i, 11);
+    EXPECT_THAT(j, 21);
+  }
 }
 
 
@@ -4561,6 +4570,7 @@ TEST(Template, MemberTemplate)
   }
 }
 
+
 namespace cxx_template_return_type
 {
   template <typename T>
@@ -4572,17 +4582,114 @@ namespace cxx_template_return_type
     }
 
   template <typename T>
-    auto return_element_02(T first, T last) -> typename std::iterator_traits<T>::reference
+    auto return_element_02(T first, T last) 
+    -> typename std::iterator_traits<T>::reference
     {
       (void)last;
       return *first;
     }
 
   template <typename T>
-    auto return_element_03(T first, T last) -> decltype(*first)
+    auto return_element_03(T first, T last) 
+    -> decltype(*first)
     {
       (void)last;
       return *first;
+    }
+
+  // 1.3. C++ Templates The Complete Guide Second Edition
+  // 1.3.2 Deducing the Return Type
+
+  template <typename T>
+    T max_01(T const& a, T const& b)
+    {
+      return b < a ? a : b;
+    }
+
+  template <typename T1, typename T2>
+    auto max_02(T1 a, T2 b) -> decltype(b < a ? a : b )
+    {
+      return b < a ? a : b;
+    }
+
+  // *cxx-14*
+  // Since C++14, this is possible by simply not declaring any return type (you
+  // still have to declare the return type to be auto):
+  //
+  // template <typename T1, typename T2>
+  //   auto max_02(T1 a, T2 b)
+  //   {
+  //     return b < a ? a : b;
+  //   }
+
+  // In fact, using true as the condition for operator?: in the declaration is
+  // enough:
+
+  // Note that an initialization of type auto always decays. This also applies
+  // to return values when the return type is just auto.
+
+  template <typename T1, typename T2>
+    auto max_03(T1 a, T2 b) -> decltype(true ? a : b )
+    {
+      return b < a ? a : b;
+    }
+
+  // *cxx-type-trait-decay*
+  // However, in any case this definition has a significant drawback: It might
+  // happen that the return type is a reference type, because under some
+  // conditions T might be a reference. For this reason you should return the
+  // type decayed from T, which looks as follows:
+
+  template <typename T1, typename T2>
+    auto max_04(T1 a, T2 b) 
+    -> typename std::decay<decltype(true ? a : b )>::type
+    {
+      return b < a ? a : b;
+    }
+
+  // cxx-error
+  // template <typename T1, typename T2>
+  //   typename std::decay<decltype(true ? a : b )>::type 
+  //   max_05(T1 a, T2 b) 
+  //   {
+  //     return b < a ? a : b;
+  //   }
+
+  // *cxx-14*
+  // However, since C++14 you can simplify the usage of traits like this by
+  // appending _t to the trait name and skipping typename and ::type
+
+  // template <typename T1, typename T2>
+  //   auto max_05(T1 a, T2 b) 
+  //   -> std::decay_t<decltype(true ? a : b )>
+  //   {
+  //     return b < a ? a : b;
+  //   }
+
+  // *cxx-type-trait-commontype*
+  // CXXSLR-5.4.1 Purpose of Type Traits
+  // For example, the expression std::common_type<T1,T2>::type yields int if
+  // both arguments are int, long, if one is int and the other is long, or
+  // std::string if one is a string and the other is a string literal (type
+  // const char*).
+  //
+  // Again, note that std::common_type<> decays so that the return value can’t
+  // become a reference.
+
+  template <typename T1, typename T2>
+    typename std::common_type<T1, T2>::type 
+    max_06(T1 a, T2 b)
+    {
+      return b < a ? a : b;
+    }
+
+  // "In fact, using true as the condition for operator?: in the declaration is
+  // enough:". Does it mean it ALWAYS picks up type of a?
+
+  template <typename T1, typename T2>
+    auto which_type(T1 a, T2 b) -> decltype(true ? a : b )
+    {
+      return a ? a : b;
     }
 } // namespace
 
@@ -4594,15 +4701,128 @@ namespace cxx_template_return_type
 //   return *first;
 // }
 
-TEST(Template, TypeTraitsIterator)
+TEST(Template, ReturnType)
 {
   using namespace cxx_template_return_type;
 
-  vector<int> coll{3,4,5,6};
+  {
+    vector<int> coll{3,4,5,6};
 
-  EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
-  EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
-  EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
+    EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
+    EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
+    EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
+  }
+
+  {
+    max_01(4, 5);
+
+    // cxx.cpp:4622:16: error: no matching function for call to ‘max_01(int, double)’
+    //    max_01(4, 7.2);
+    //                 ^
+    // cxx.cpp:4622:16: note: candidate is:
+    // cxx.cpp:4591:7: note: template<class T> T cxx_template_return_type::max_01(const T&, const T&)
+    //      T max_01(T const& a, T const& b)
+    //        ^
+    // cxx.cpp:4591:7: note:   template argument deduction/substitution failed:
+    // cxx.cpp:4622:16: note:   deduced conflicting types for parameter ‘const T’ (‘int’ and ‘double’)
+    //    max_01(4, 7.2);
+    //                 ^
+    // max_01(4, 7.2);
+  }
+  {
+    auto result = max_02(4, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+
+  // WHY NOT the result type is int type?
+  // 1.3. C++ Templates The Complete Guide Second Edition
+  // but generally produce an intuitively expected result (e.g., if a and b have
+  // different arithmetic types, a common arithmetic type is found for the
+  // result).
+
+  {
+    auto result = max_02(8, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+  {
+    auto result = max_03(8, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+  {
+    auto result = max_04(8, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+
+  // {
+  //   std::string s{"string"};
+  //   auto result = which_type(s, 0);
+  //   EXPECT_THAT(typeid(result).name(), typeid(std::string).name());
+  // }
+}
+
+namespace cxx_template_reference
+{
+  template <typename T>
+    void foo(T value)
+    {
+      ++value;
+    }
+} // namespace
+
+TEST(Template, Reference)
+{
+  using namespace cxx_template_reference;
+
+  int value{10};
+
+  foo(value);
+  EXPECT_THAT(value, 10);
+
+  foo(std::ref(value));
+  EXPECT_THAT(value, 11);
+}
+
+namespace cxx_template_overload
+{
+  class Mine 
+  {
+    private:
+      string name;
+
+    public:
+      Mine(): name(string("mine")) 
+      { // cout << "mine class" << endl; 
+      }
+
+      const string& get() { return name; }
+  };
+
+  ostringstream& operator<<(ostringstream& os, Mine mine) 
+  { 
+    os << mine.get();
+    return os;
+  }
+
+  template <typename T> string debug_rep(const T &t)
+  {
+    ostringstream ret;
+    ret << t;
+    return ret.str();
+  }
+} // namespace
+
+TEST(Template, Overload)
+{
+  using namespace cxx_template_overload;
+
+  Mine mine;
+  ostringstream os;
+
+  // string str("this is string");
+  // cout << debug_rep(str) << endl;
+
+  os << debug_rep(mine) << endl;   
+  EXPECT_THAT(os.str(), "mine\n");
 }
 
 

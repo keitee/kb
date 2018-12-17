@@ -181,7 +181,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-template-type-traits cxx-type-traits
 *kt_dev_cxx_0000* cxx-template-argument-deduction std-move
 *kt_dev_cxx_0000* cxx-template-std-forward
-*kt_dev_cpp_053* cpp-template-overload
+*kt_dev_cxx_0000* cxx-template-overload
 |kt_dev_cpp_053| cpp-template-variadic
 *kt_dev_cxx_0000* cxx-template-specialization
 *kt_dev_cpp_054* template-inheritance
@@ -195,7 +195,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-stl
 *kt_dev_cxx_0000* cxx-pair cxx-tuple
 *kt_dev_cxx_0000* cxx-min-max cxx-min cxx-max
-*kt_dev_cxx_0000* cxx-std-ref
+*kt_dev_cxx_0000* cxx-ref
 
 *kt_dev_cxx_0000* cxx-container
 *kt_dev_cxx_0000* cxx-coll-performance
@@ -12604,6 +12604,8 @@ is no equivalent null reference, so if you need a no value using a pointer may
 be most appropriate.
 
 
+{cxx-reference-arg}
+
 <ex>
 EC++20
 
@@ -12633,7 +12635,7 @@ Use refernece to avoid these cost of copying:
 
 bool validateStudent(const Student& s);
 
-The good points: *cxx-reference-arg*
+The good points:
 
 * Less expensive since no object creation so more 'performance'. So
   recommendation is that: 
@@ -12681,7 +12683,44 @@ void printNameAndDisplay(const Window& w)
 
 
 <ex>
-namespace use_reference_callby
+
+// C++ Templates The Complete Guide Second Edition
+
+1.6.1 Pass by Value or by Reference?
+
+You might wonder, why we in general declare the functions to pass the
+arguments by value instead of using references. 
+
+In general, passing by reference is recommended for types other than cheap
+simple types (such as fundamental types or std::string_view), because no
+unnecessary copies are created.
+
+However, for a couple of reasons, passing by value in general is often better:
+
+o The syntax is simple.
+o Compilers optimize better.
+o Move semantics often makes copies cheap.
+o And sometimes there is no copy or move at all.
+
+In addition, for templates, specific aspects come into play:
+
+*cxx-template-reference*
+
+o A template might be used for both simple and complex types, so choosing the
+  approach for complex types might be counter-productive for simple types.
+
+o As a caller you can often still decide to pass arguments by reference, using
+  std::ref() and std::cref() (see Section 7.3 on page 112).
+
+o Although passing string literals or raw arrays always can become a problem,
+  passing them by reference often is considered to become the bigger problem.
+  All this will be discussed in detail in Chapter 7. For the moment inside the
+  book we will usually pass arguments by value unless some functionality is
+  only possible when using references.
+
+
+<ex>
+namespace cxx_reference
 {
   void swap_by_value(int x, int y)
   {
@@ -12708,9 +12747,9 @@ namespace use_reference_callby
   }
 } // namespace
 
-TEST(Reference, CallBy)
+TEST(Reference, Swap)
 {
-  using namespace use_reference_callby;
+  using namespace cxx_reference;
 
   // no swap
   {
@@ -12728,11 +12767,18 @@ TEST(Reference, CallBy)
     EXPECT_EQ(y, 10);
   }
 
-  // swap
-  // note: no need to pass its address
+  // swap, note: no need to pass its address
   {
     int x = 10, y = 20;
     swap_by_reference(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+
+  // *cxx-swap* std-swap uses reference
+  {
+    int x = 10, y = 20;
+    swap(x, y);
     EXPECT_EQ(x, 20);
     EXPECT_EQ(y, 10);
   }
@@ -32325,13 +32371,13 @@ class MovingAverage
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-default-argument
 
-Under new standard, supports default argument for both function and class
-template while the earlier version support only for class.
+*cxx-11* Under new standard, supports default argument for both function and
+class template while the earlier version support only for class.
 
 <ex> function template
 
 The rewritten example of the previous example and see that F represent the
-type of a callable objects.
+type of a callable objects. `default type`
 
 namespace cxx_template_default
 {
@@ -32651,6 +32697,8 @@ compare<int>(lng, 1024);    // okay. compare( int, int );
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-type-traits cxx-type-traits
 
+<cxx-trailing-return-type> cxx-template-return-type *cxx-11*
+
 CPR 16.2.3
 
 Suppose that want to write the function that takes a sequence and returns a
@@ -32678,13 +32726,13 @@ Return &fcn( It beg, It end );
 Sure, can have more arguments but more template argument imposes a burden on
 the user. How to solve?
 
-<cxx-trailing-return-type> *cxx-cxx11*
+
 May use decltype(*beg) to get the type but beg don't exist until the parameter
 list has been seen. The trailing return type allows us define the return type
 after the parameter list is seen.
 
 template< typename T > 
-auto &fcn( It beg, It end ) -> decltype(*beg)
+`auto` &fcn( It beg, It end ) -> decltype(*beg)
 {
   // process the range
   return *beg;  // return a reference to an element from the range
@@ -32693,8 +32741,15 @@ auto &fcn( It beg, It end ) -> decltype(*beg)
 This say fcn's return type is the same as the type returned by dereferencing
 its beg parameter and which is a reference to the type.
 
-<ex>
 
+template<typename T> 
+`auto` &fcn(It beg, It end)
+{
+  // process the range
+  return *beg;  // return a reference to an element from the range
+}
+
+<ex>
 namespace cxx_template_return_type
 {
   template <typename T>
@@ -32964,38 +33019,42 @@ arguments type from the function arguments. This generates a version of the
 function that best matches the given call.
 
 <cxx-template-limited-conversion>
-Only allows two converison in a call to function template but not others such
-as derived-to-base, arithmetic, and user defined conversion.
 
-* const conversion
-Can pass a reference(or pointer) to a nonconst to const parameter that is a
-reference(or pointer).
+// 1.3. C++ Templates The Complete Guide Second Edition
 
-* function-to-pointer conversion
-Array or a function parameter will be converted to a pointer to the function's
-type if the function parameter `is not a reference type.`
+Type Conversions During Type Deduction
 
-template <typename T> T fobj(T, T);                   // arguments are copied
-template <typename T> T fref(const &T, const &T);     // references
+automatic type conversions are limited during type deduction:
 
-string s1("a value");
-const string s2("another value");
+o When declaring call parameters by reference, even trivial conversions do not
+  apply to type deduction. Two arguments declared with the same template
+  parameter T must match exactly.
 
-fobj(s1, s2);   // calls fobj(string, string); const is ignored
-                // it's copy in the end
-
-fref(s1, s2);   // calls fref(const string &, const string &); 
-                // use conversion to const on s1
+o When declaring call parameters by value, only trivial conversions that decay
+  are supported: Qualifications with const or volatile are ignored, references
+  convert to the referenced type, and raw arrays or functions convert to the
+  corresponding pointer type. For two arguments declared with the same
+  template parameter T the decayed types must match.
 
 
-int a[10], b[42];
+template<typename T>
+T max (T a, T b);
 
-fobj(a, b);     // fobj(int*, int*);
-                // arrays are different sizes and hence have different type.
-                // but both are converted to pointer.
+max(4, 7.2);            // ERROR: T can be deduced as int or double
+std::string s;
 
-fref(a, b);     // parameters are references so no convertion to pointers.
-                // error since the type of a and b do not match
+There are three ways to handle such errors:
+
+1. Cast the arguments so that they both match:
+
+max(static_cast<double>(4), 7.2); // OK
+
+2. Specify (or qualify) explicitly the type of T to prevent the compiler from
+  attempting type deduction:
+
+max<double>(4, 7.2); // OK
+
+3. Specify that the parameters may have different types.
 
 
 <more-than-one-type>
@@ -33209,7 +33268,7 @@ whether or not type is `const` and whether the argument is an `lvalue` or an
 `rvalue`.
 
 note: 
-see *cxx-std-ref* for comparison.
+see *cxx-ref* for comparison.
 
 template <typename F, typename T1, typename T2>
 void flip(F f, T1 param1, T2 param2)
@@ -33256,7 +33315,7 @@ TEST(CxxTemplate, UseForward)
   cout << "withoug ref: i and j  {" << i << ", " << j << "}" << endl;
 
   // note:
-  // cxx-std-ref works
+  // cxx-ref works
 
   flip(f, std::ref(i), j);
   cout << "with    ref: i and j  {" << i << ", " << j << "}" << endl;
@@ -33316,20 +33375,21 @@ By std::forward() solution, user of template don't need to anyting.
 
 
 ={============================================================================
-*kt_dev_cpp_053* cpp-template-overload
+*kt_dev_cxx_0000* cxx-template-overload
 
 A function return a string representation of a given object.
 
-// print any type
-template <typename T> string debug_rep(const T &t)
+// *cxx-stringstream* print any type
+
+template <typename T> 
+string debug_rep(const T &t)
 {
   ostringstream ret;
   ret << t;           // use T's output operator
   return ret.str();   // return a copy of the string to which ret is bound
 }
 
-note:
-Why it says, "use T's output operator" since operator<< is usually nonmember
+Why it says, "use T's output operator" since operator<< is usually non-member
 function?
 
 When use gdb, this "ret << t" leads to:
@@ -33377,56 +33437,57 @@ In file included from /home/kpark/gcc-build/install/include/c++/4.9.2/iostream:3
      ^
 
 <ex>
-#include<iostream>
-#include<string>
-#include<sstream>
-
-using namespace std;
-
-class Mine 
+namespace cxx_template_overload
 {
+  class Mine 
+  {
     private:
-        string name;
+      string name;
 
     public:
-        Mine(): name(string("mine")) { cout << "mine class" << endl; }
-        const string& get() { return name; }
-};
+      Mine(): name(string("mine")) 
+      { // cout << "mine class" << endl; 
+      }
 
-ostringstream& operator<<(ostringstream& os, Mine mine) 
-{ 
+      const string& get() { return name; }
+  };
+
+  ostringstream& operator<<(ostringstream& os, Mine mine) 
+  { 
     os << mine.get();
     return os;
-}
+  }
 
-template <typename T> string debug_rep(const T &t)
-{
+  template <typename T> string debug_rep(const T &t)
+  {
     ostringstream ret;
     ret << t;
     return ret.str();
-}
+  }
+} // namespace
 
-int main()
+TEST(Template, Overload)
 {
-  cout << "---" << endl;
+  using namespace cxx_template_overload;
 
   Mine mine;
+  ostringstream os;
 
   // string str("this is string");
   // cout << debug_rep(str) << endl;
-  
-  cout << debug_rep(mine) << endl;   
-  cout << "---" << endl;
+
+  os << debug_rep(mine) << endl;   
+  EXPECT_THAT(os.str(), "mine\n");
 }
 
 
 Things to remember:
 
-  When there are several overloaded templates that provide an eqaually good
+o When there are several overloaded templates that provide an eqaually good
   match for a call, the most specialized version is perferred.
 
-  When a nontemplate function provides an equally good match for a call as a
-  function template, the nontemplate version is preferred.
+o When a non-template function provides an equally good match for a call as a
+  function template, the non-template version is preferred.
 
 
 ={============================================================================
@@ -35051,7 +35112,7 @@ std::string s, t;
 auto p = std::make_pair(std::move(s), std::move(t));
 ... // s and t are no longer used
 
-To force reference semantics, you have to use ref(), *cxx-std-ref* which
+To force reference semantics, you have to use ref(), *cxx-ref* which
 forces a reference type, or cref(), which forces a constant reference type.
 For example, in the following statements, a pair refers to an int twice so
 that, finally, i has the value 2:
@@ -35059,35 +35120,37 @@ that, finally, i has the value 2:
 
 // see how references are pakced into the pair.
 
-// val pair {11, 21}
-// i and j  {10, 20}      // not changed
-// ref pair {11, 21}
-// i and j  {11, 21}      // changed
-
-TEST(CxxPair, UsePairWithReference)
+TEST(Pair, WithReference)
 {
-  int i = 10;
-  int j = 20;
+  int i{10};
+  int j{20};
 
-  auto val = make_pair(i, j);
+  {
+    auto val = make_pair(i, j);
 
-  ++val.first;
-  ++val.second;
+    ++val.first;
+    ++val.second;
 
-  cout << "val pair {" << val.first << ", " << val.second << "}" << endl;
-  cout << "i and j  {" << i << ", " << j << "}" << endl;
+    EXPECT_THAT(val.first, 11);
+    EXPECT_THAT(val.second, 21);
+    EXPECT_THAT(i, 10);
+    EXPECT_THAT(j, 20);
+  }
 
-  // note:
-  // have to use std::ref() although used using directive for std since
-  // otherwise see compile errors.
+  {
+    // *cxx-ref*
+    auto val = make_pair(std::ref(i), std::ref(j));
 
-  auto ref = make_pair(std::ref(i), std::ref(j));
+    ++val.first;
+    ++val.second;
 
-  ++ref.first;
-  ++ref.second;
+    EXPECT_THAT(val.first, 11);
+    EXPECT_THAT(val.second, 21);
 
-  cout << "ref pair {" << ref.first << ", " << ref.second << "}" << endl;
-  cout << "i and j  {" << i << ", " << j << "}" << endl;
+    // they are changed now
+    EXPECT_THAT(i, 11);
+    EXPECT_THAT(j, 21);
+  }
 }
 
 
@@ -35496,40 +35559,48 @@ min(90, value) sets 90 as high limit
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-std-ref
+*kt_dev_cxx_0000* cxx-ref
 
-CLR 5.4.3 Reference Wrappers
+CXXSLR-5.4.3 Reference Wrappers
 
 Class std::reference_wrapper<>, declared in <functional>, is used primarily to
 "feed" references to function templates that take their parameter by value.
 
 For a given type T, this class provides ref() for an implicit conversion to T&
 and cref() for an implicit conversion to const T&, which usually allows
-function templates to work on references `without specialization`
+function templates to work on references `without cxx-template-specialization`
 
-For example, after a declaration such as
+<ex>
 
-template <typename T>
-void foo (T val);
+namespace cxx_template_reference
+{
+  template <typename T>
+    void foo(T value)
+    {
+      ++value;
+    }
+} // namespace
 
-by calling
+TEST(Template, Reference)
+{
+  using namespace cxx_template_reference;
 
-int x;
-foo (std::ref(x));
+  int value{10};
 
-T becomes int&, whereas by calling
+  foo(value);
+  EXPECT_THAT(value, 10);
 
-int x;
-foo (std::cref(x));
+  foo(std::ref(value));
+  EXPECT_THAT(value, 11);
+}
 
-T becomes const int&.
 
 This feature is used by the C++ standard library at various places. For example:
 
-* make_pair() uses this to be able to create a pair<> of references
-* make_tuple() uses this to be able to create a tuple<> of references
-* Binders use this to be able to bind references
-* Threads use this to pass arguments by reference
+o make_pair() uses this to be able to create a pair<> of references
+o make_tuple() uses this to be able to create a tuple<> of references
+o Binders use this to be able to bind references
+o Threads use this to pass arguments by reference
 
 
 ={============================================================================
@@ -55892,7 +55963,7 @@ void oops( int some_param )
 
 The solution is to use:
 
-// *cxx-std-ref*
+// *cxx-ref*
 std::thread t( update_data_for_widget, w, std::ref(data) );
 
 

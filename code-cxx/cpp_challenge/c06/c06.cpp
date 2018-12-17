@@ -156,13 +156,20 @@ Support iteration through its elements
 
 */
 
+namespace U46_text
+{
+  // done in cxx-algo
+}
+
 
 /*
 
-41. Day of the week
+47. Double buffer
 
-Write a function that, given a date, determines the day of the week. This
-function should return a value between 1 (for Monday) and 7 (for Sunday).
+Write a class that represents a buffer that could be written and read at the
+same time without the two operations colliding. A read operation must provide
+access to the old data while a write operation is in progress. Newly written
+data must be available for reading upon completion of the write operation.
 
 */
 
