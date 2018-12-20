@@ -9,49 +9,118 @@
 
 #include <boost/thread/shared_mutex.hpp>
 
-#include "gtest/gtest.h"
+#include "gmock/gmock.h"
 
 using namespace std;
+using namespace std::placeholders;
+using namespace testing;
 
 int doSomething (char c)
 {
-    default_random_engine dre(c);
-    uniform_int_distribution<int> id(10, 1000);
+  default_random_engine dre(c);
+  uniform_int_distribution<int> id(10, 1000);
 
-    for(int i=0; i<10; ++i)
-    {
-        this_thread::sleep_for(chrono::milliseconds( id(dre) ));
-        cout.put(c).flush();
-    }
+  for(int i=0; i<10; ++i)
+  {
+    this_thread::sleep_for(chrono::milliseconds( id(dre) ));
+    cout.put(c).flush();
+  }
 
-    return c;
+  return c;
 }
 
 
 // ={=========================================================================
 // cxx-thread
 
-void hello()
+void hello(ostringstream &os)
 {
-    cout << "Hello Concurrent World\n";
+  os << "Hello Concurrent World";
 }
 
-TEST(CconThreadTest, HelloWorld)
+TEST(CConThread, OneAndFunction)
 {
-    std::thread t(hello);
-    t.join();
+  ostringstream os;
+  std::thread t([&]{hello(os);});
+  t.join();
+  EXPECT_THAT(os.str(), "Hello Concurrent World");
 }
 
 // +..+..+...+..+.+++++
 // done
 
-TEST(CconThreadTest, RunTwoThreads)
+TEST(CConThread, TwoAndLambda)
 {
-    std::thread t1([]{doSomething('.');});
-    std::thread t2([]{doSomething('+');});
-    t1.join();
-    t2.join();
-    cout << "\ndone" << endl;
+  std::thread t1([]{doSomething('.');});
+  std::thread t2([]{doSomething('+');});
+  t1.join();
+  t2.join();
+}
+
+
+// ={=========================================================================
+// cxx-lock
+
+namespace cxx_lock
+{
+  template <typename T>
+    class locked_queue
+    {
+      public:
+        // push an item into the end of the queue
+        void push(T const& item)
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          queue_.push(item);
+        }
+
+        size_t size() const noexcept
+        {
+          return queue_.size();
+        }
+
+      private:
+        std::queue<T> queue_;
+        std::mutex mutex_;
+    };
+
+    void do_something(int& start, int& sum, std::mutex& m)
+    {
+      default_random_engine engine(start);  // cxx-random-seed
+      uniform_int_distribution<int> dist(10, 1000);
+
+      while (start < 10)
+      {
+        {
+          std::lock_guard<std::mutex> lock(m);
+          // this_thread::sleep_for(chrono::milliseconds(dist(engine)));
+          cout << "start: " << start << ", sum: " << sum << endl;
+          sum += start;
+          ++start;
+        }
+      }
+    }
+
+} // namespace
+
+TEST(CConThread, LockGuard)
+{
+  using namespace cxx_lock;
+
+  locked_queue<int> lq;
+
+  std::mutex mutex_;
+  int sum{0};
+  int start{1};
+
+  std::thread t1([&]{ do_something(start, sum, mutex_); });
+  std::thread t2([&]{ do_something(start, sum, mutex_); });
+  std::thread t3([&]{ do_something(start, sum, mutex_); });
+  t1.join();
+  t2.join();
+  t3.join();
+
+  EXPECT_THAT(sum, 45);
 }
 
 
@@ -111,7 +180,7 @@ void consumer(locked_queue<int> *q)
   std::cout << "ends consumer: " << i << std::endl;
 }
 
-TEST(CconThreadTest, UseLockedQueue)
+TEST(CConThread, LockedQueue)
 {
   locked_queue<int> lq;
 
@@ -126,13 +195,13 @@ TEST(CconThreadTest, UseLockedQueue)
   this_thread::sleep_for(chrono::seconds(2));
 
   // create the producer to push in two items
-  
+
   std::thread p(&producer, &lq);
 
   c1.join();
   c2.join();
   p.join();
- 
+
   std::cout << "main: ends" << std::endl;
 }
 

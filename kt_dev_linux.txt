@@ -207,6 +207,7 @@
 *kt_linux_tool_140* make-cmake-link-flag
 
 *kt_linux_tool_140* make-kernel-config
+*kt_linux_tool_140* make-gmake-debug
 *kt_linux_tool_140* make-gmake-sample
 *kt_linux_tool_140* make-gmake-rule
 *kt_linux_tool_140* make-gmake-rule-implicit
@@ -20190,6 +20191,38 @@ cd FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
 ./release.sh --platform vstb
 
 
+<tool-asan-build-mw-with-asan-for-clang>
+
+// to use clang
+vstb.mk
+
+# KT
+CC=/home/kyoupark/asan/llvm/cmake_build/bin/clang
+CXX=/home/kyoupark/asan/llvm/cmake_build/bin/clang++
+AR=/home/kyoupark/asan/llvm/cmake_build/bin/llvm-ar
+STRIP=/home/kyoupark/asan/llvm/cmake_build/bin/llvm-strip
+
+PLATFORM_CFLAGS = -DPLATFORM_VSTB -DIS_LITTLE_ENDIAN -D__LITTLE_ENDIAN -fdata-sections -ffunction-sections `-D__i386__`
+
+// remove warning options
+// /home/kyoupark/STB_SW_clang_build/THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/Makefile
+# CFLAGS = -Wall -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations -Werror 
+CFLAGS = -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations
+
+// /CMS_SYSTEM_INFRASTRUCTURE/CISCOSAFEC/src/makefile
+# KT
+# CPP=$(BIN_DIR)/$(COMPILER_PREFIX)-cpp 
+CPP=$(BIN_DIR)/clang-cpp 
+
+# KT
+# CONFIGURE_FLAGS+= --host=$(TARGET)
+CONFIGURE_FLAGS+= --host=i686-nptl-linux-gnu
+
+# clang don't have stropts.h so make a empty file.
+# /home/kyoupark/asan/llvm/cmake_build/lib/clang/8.0.0/include
+touch /usr/include/stropts.h
+
+
 <new-vstb>
 more README
 
@@ -20291,6 +20324,11 @@ touch /flash0/scripts/this_is_first_boot
 
 // touch /flash0/scripts/this_is_first_boot
 /flash0/scripts/startstack.sh
+
+
+// clang
+mkdir /flash0
+mount -o nfsvers=4 10.209.60.101:/home/kyoupark/git/kb/asan /flash0
 
 
 // 430 clean and no asan
@@ -21700,6 +21738,20 @@ egrep -an "Error [0-9]" build.log or make.log
 
 https://cmake.org/
 
+tar xvf cmake-3.13.2.tar.gz
+cd cmake-3.13.2/
+./configure --prefix=/home/kyoupark/
+make 
+make install
+
+CC=gcc CXX=g++ cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=gold -DLLVM_ENABLE_ASSERTIONS=ON [-DLLVM_ENABLE_WERROR=ON] [-DLLVM_TARGETS_TO_BUILD=X86] /home/kyoupark/asan/llvm/llvm
+
+// initially got error saying CMAKE_ROOT is not found and works when did:
+// not sure that's because CMAKE_ROOT or ~/bin/cmake that's installed locally.
+
+export CMAKE_ROOT=/home/kyoupark/share/cmake-3.13
+CC=gcc CXX=g++ ~/bin/cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=gold -DLLVM_ENABLE_ASSERTIONS=ON [-DLLVM_ENABLE_WERROR=ON] [-DLLVM_TARGETS_TO_BUILD=X86] /home/kyoupark/asan/llvm/llvm
+
 
 ={============================================================================
 *kt_linux_tool_140* make-cmake-basic
@@ -22375,6 +22427,22 @@ Target Architecture
   17. sparc64 (BR2_sparc64)
   18. x86_64 (BR2_x86_64)
 choice[1-18?]: 9
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-debug
+
+The make --debug is identical to make -d but you can also specify:
+
+make --debug=FLAGS
+where flags can be:
+
+a for all debugging (same as make -d and make --debug).
+b for basic debugging.
+v for slightly more verbose basic debugging.
+i for implicit rules.
+j for invocation information.
+m for information during makefile remakes.
 
 
 ={============================================================================
@@ -54475,6 +54543,7 @@ main(int argc, char *argv[])
   exit(EXIT_SUCCESS);
 }
 
+multiple producers and single consumer. 
 
 The above code works, but it wastes CPU time, because the main consumer thread
 continually loops, checking the state of the variable avail.
@@ -54590,9 +54659,9 @@ main(int argc, char *argv[])
 UNP-XX, Consumer and Producer
 
 <ex-01> 
-// Multiple producer(writing) and one consumer(reading). Once writing finishs,
-// consumer get started. No sync between producer and consumer and only sync
-// for producers
+// Multiple producer(write) and one consumer(read). No sync between producer
+// and consumer and only sync between producers because consumer starts only
+// when writes finishes.
 
 #include <stdio.h>
 #include <pthread.h>
@@ -54730,11 +54799,12 @@ consume done
 
 <ex-02>
 // Now consumer runs at the same time and runs when there is data to read. All
-// is accessing the same data and all are in the 'same' mutex group. Problem
-// is that when consumer has a lock and wakes up, consumer do polling or
-// spinning to check data. The consumer and producer has the equal opportunity
-// to run since it is 'indeterminate' which thread will succeed in acquiring a
-// lock.
+// is accessing the same data and are in the `same mutex group`, `same contention` 
+//
+// Problem is that when consumer has a lock and wakes up, consumer do polling
+// or spinning to check data. The consumer and producer has the equal
+// opportunity to run since it is 'indeterminate' which thread will succeed in
+// acquiring a lock.
 //
 // Uses shared mutex between producers and consumer. If items to read are
 // ready then returns. Otherwise, do loops. The changes from the previous is:
@@ -61615,6 +61685,28 @@ https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#Warning-Options
 -Werror
   Make all warnings into errors.
 
+-Werror=
+Make the specified warning into an error. The specifier for a warning is
+appended; for example -Werror=switch turns the warnings controlled by -Wswitch
+into errors. This switch takes a negative form, to be used to negate -Werror
+for specific warnings; for example -Wno-error=switch makes -Wswitch warnings
+  not be errors, even when -Werror is in effect.
+
+The warning message for each controllable warning includes the option that
+controls the warning. That option can then be used with -Werror= and
+-Wno-error= as described above. (Printing of the option in the warning message
+    can be disabled using the -fno-diagnostics-show-option flag.)
+
+Note that specifying -Werror=foo automatically implies -Wfoo. However,
+     -Wno-error=foo does not imply anything.
+
+<e>
+option that is set from -Wall
+
+error: unknown warning option '-Werror=unused-but-set-variable';
+  did you mean '-Werror=unused-const-variable'? [-Werror,-Wunknown-warning-option]
+
+
 -Wall
   This enables all the warnings about constructions that some users consider
   questionable, and that are easy to avoid (or modify to prevent the warning),
@@ -61643,6 +61735,34 @@ https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#Warning-Options
   -Wuninitialized  
   -Wunused-parameter (only with -Wunused or -Wall) 
   -Wunused-but-set-parameter (only with -Wunused or -Wall)  
+
+
+<gcc-warining-on-off>
+
+You can request many specific warnings with options beginning with `-W`, for
+example -Wimplicit to request warnings on implicit declarations. Each of these
+specific warning options also has a negative form beginning `-Wno-` to turn
+off warnings; for example, -Wno-implicit. This manual lists only one of the
+two forms, whichever is not the default. For further language-specific options
+also refer to C++ Dialect Options and Objective-C and Objective-C++ Dialect
+Options.
+
+
+Some options, such as -Wall and -Wextra, turn on other options, such as
+`-Wunused`, which may turn on further options, such as -Wunused-value. The
+combined effect of positive and negative forms is that more specific options
+have priority over less specific ones, independently of their position in the
+command-line. For options of the same specificity, the last one takes effect.
+Options enabled or disabled via pragmas (see Diagnostic Pragmas) take effect
+as if they appeared at the end of the command-line.
+
+
+-Wunused-but-set-variable
+
+Warn whenever a local variable is assigned to, but otherwise unused (aside
+    from its declaration). This warning is enabled by -Wall.
+To suppress this warning use the unused attribute (see Variable Attributes).
+This warning is also enabled by -Wunused, which is enabled by -Wall.
 
 
 3.5 Options Controlling C++ Dialect *gcc-cpp-options*
@@ -61678,7 +61798,7 @@ typedef enum {
 		unsigned char	buf[] = {(char)FORWARD_STATUS,(char)0xff};
 
 
-<gcc-unused-parameter> -Wunused-parameter
+<gcc-option-warning-unused-parameter> -Wunused-parameter
 
 // $ g++ -std=c++11 -Werror -Wall -Wextra t_cxx.cpp 
 // t_cxx.cpp:13:39: error: unused parameter ‘arg3’ [-Werror=unused-parameter]
@@ -62038,6 +62158,22 @@ $ /opt/toolchains/humax-dtr_t1000/bin/mipsel-linux-g++ -E -dM -x c++ /dev/null |
 #define __GNUC_MINOR__ 4
 #define __GNUC_GNU_INLINE__ 1
 #define _GNU_SOURCE 1
+
+<ex>
+/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/bin/i686-nptl-linux-gnu-gcc
+-Wall -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes
+-Wmissing-declarations -Werror -std=c99 -MD -MF
+out/release_dbg/vstb/release_dbg/deps/glue/src/ceej_main.d -D_XOPEN_SOURCE=600
+-D__USE_XOPEN2K -D_GNU_SOURCE -DCDI -DCDI_IOCTL_DEFINITIONS="ioctl_magic.h"
+-DLINT_ERRORS_ONLY= -DLINT_RESTORE= -DPLATFORM_VSTB -DIS_LITTLE_ENDIAN
+-D__LITTLE_ENDIAN -fdata-sections -ffunction-sections
+-Wno-error=unused-but-set-variable -Os -fno-strict-aliasing -g -DRELEASE_DBG
+-DDIAG_RELEASE_DBG -DJPA_GFX_SURFACE_DEBUG -DSI_BUILD
+-DJPA_HEAPDUMP_CRASH_WORKAROUND -Imodules/jvm-glue/src/c/inc
+-Imodules/jpa-impl/src/c/inc -Imodules/jvm/inc -I.
+-I/home/kyoupark/STB_SW_o/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_atg/inc
+-Iout/release_dbg/vstb/release_dbg/include/adaptors -E -dM
+modules/jvm-glue/src/c/src/ceej_main.c
 
 
 ={============================================================================

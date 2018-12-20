@@ -284,16 +284,16 @@ KT KB. CPP
 
 
 #{ c++ concurrent in action
-*kt_dev_cxx_0000* cxx-con-thread cxx-boost-thread
+*kt_dev_cxx_0000* cxx-thread cxx-boost-thread
 *kt_dev_cxx_0000* cxx-con-thread-lifetime-issue
-*kt_dev_cxx_0000* cxx-con-mutex cxx-lock-guard cxx-stack
-*kt_dev_cxx_0000* cxx-con-deadlock cxx-deadlock
+*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-stack
+*kt_dev_cxx_0000* cxx-lock cxx-deadlock
 *kt_dev_cxx_0000* cxx-con-unique-lock
 *kt_dev_cxx_0000* cxx-con-call-once
 *kt_dev_cxx_0000* cxx-con-shared-lock cxx-boost-shared-lock
 *kt_dev_cxx_0000* cxx-con-recursive-lock
 *kt_dev_cxx_0000* cxx-con-condition-variable cxx-queue
-*kt_dev_cxx_0000* cxx-con-wait
+*kt_dev_cxx_0000* cxx-wait cxx-sleep
 *kt_dev_cxx_0000* cxx-con-task-model cxx-future cxx-async
 *kt_dev_cxx_0000* cxx-con-packaged-task
 |kt_dev_ccon_018| std::promise
@@ -18456,12 +18456,75 @@ const UPInt UPInt::operator++(int)
   return oldValue;              // return what was fetched
 }
 
+
 *cxx-unused*
 The only purpose of the parameter is to 'distinguish' prefix from postfix
 function invocation. Many compilers issue warnings if you fail to use named
 parameters in the body of the function to which they apply, and this can be
 annoying. To avoid such warnings, a common strategy is to omit names for
 parameters you don't plan to use; that is what is been done above.
+
+namespace cxx_ctor
+{
+
+class foo
+{
+  public:
+
+    explicit foo(int &value) : value_(value) 
+    {
+      cout << "foo(int)" << endl;
+    }
+
+    foo(int &value, int) : value_(value) 
+    {
+      cout << "foo(int, int)" << endl;
+    }
+
+  private:
+    int value_;
+};
+
+} // namespace
+
+
+TEST(Ctor, Unused)
+{
+  using namespace cxx_ctor;
+
+  int value{10};
+
+  // *cxx-error*
+  //
+  // cxx_ex.cpp: In member function ‘virtual void Cxx_Ex_Test::TestBody()’:
+  // cxx_ex.cpp:42:12: error: no matching function for call to ‘foo::foo(int)’
+  //    foo f1(10);
+  //             ^
+  // cxx_ex.cpp:42:12: note: candidates are:
+  // (1)
+  // cxx_ex.cpp:27:5: note: foo::foo(int&, int)
+  //      foo(int &value, int) : value_(value)
+  //      ^
+  // cxx_ex.cpp:27:5: note:   candidate expects 2 arguments, 1 provided
+  // (2)
+  // cxx_ex.cpp:23:14: note: foo::foo(int&)
+  //      explicit foo(int &value) : value_(value)
+  //               ^
+  // cxx_ex.cpp:23:14: note:   no known conversion for argument 1 from ‘int’ to ‘int&’
+  // (3)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(const foo&)
+  //  class foo
+  //        ^
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘const foo&’
+  // (4)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(foo&&)
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘foo&&’
+  //
+  // foo f1(10);
+
+  foo f1(value);
+  foo f2(value, 30);
+}
 
 
 <why-const-in-post-inc> const-return
@@ -30835,7 +30898,7 @@ int PoissonRandom( double expectedvalue )
 
 17.1 Random Numbers and Distributions
 
-engines, which are the sources of randomness. These engines create random
+the engines, which are the sources of randomness. These engines create random
 unsigned values, which are uniformly distributed between a predefined minimum
 and a maximum; 
 
@@ -30846,8 +30909,8 @@ The rand() has several problems. Many programs need random numbers in a
 different range and some require random floating-point numbers. Some needs
 numbers that reflect a nonuniform distribution. 
 
-* engine: types that generate a sequence of random unsigned integers
-* distribution: types that use an engine to retuen numbers according to a
+o engine: types that generate a sequence of random unsigned integers
+o distribution: types that use an engine to retuen numbers according to a
   particular probability distribution.
 
 The engines are function-object class that define a call operator and returns a
@@ -32155,6 +32218,189 @@ templcate <typename T> class C2 {
   // all instances of Pal2 are friends. no forward declaration required.
   template <typename X> friend class Pal2;
 };
+
+
+<ex> *cxx-template-function-template-argument*
+
+// Define function which has template argument
+
+namespace cxx_template_friend
+{
+  // basics/stack1.hpp
+
+  template <typename T>
+    class Stack
+    {
+      public:
+        void push(T const& elem)
+        {
+          elems_.push_back(elem);
+        }
+
+        void pop()
+        {
+          if (elems_.empty())
+            throw std::runtime_error("coll is empty");
+
+          elems_.pop_back();
+        }
+
+        T const& top() const
+        {
+          if (elems_.empty())
+            throw std::runtime_error("coll is empty");
+
+          return elems_.back();
+        }
+
+        bool empty() const
+        {
+          return elems_.empty();
+        }
+
+      private:
+        std::vector<T> elems_;
+    };
+
+  // To show how to define operator<< for template *cxx-overload-operator*
+  //
+  // C++ Templates The Complete Guide Second Edition
+  // 2.4 Friends
+  //
+  // However, when trying to declare the friend function and define it
+  // afterwards, things become more complicated. In fact, we have two options:
+  // 1. We can implicitly declare a new function template, which must use a
+  // different template parameter, such as U:
+
+  template<typename T>
+  ostream& operator<<(ostream& os, Stack<T> const& s)
+  {
+    cout << "stack's top : " << s.top() << endl;
+    return os;
+  }
+
+} // namespace
+
+TEST(Template, Friend)
+{
+  using namespace cxx_template_friend;
+
+  Stack<int> si;
+
+  si.push(1); si.push(2); si.push(3);
+  EXPECT_THAT(si.top(), 3);
+
+  cout << si;
+}
+
+
+// cxx-time-duration-cast
+//
+// A typical example is code that segments a duration into different units. For
+// example, the following code segments a duration of milliseconds into the
+// corresponding hours, minutes, seconds, and milliseconds
+//
+// raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
+//      02::00::55::42
+
+namespace cxx_time_duration_case
+{
+  template <typename Unit, typename Ratio>
+    ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d)
+    {
+      os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
+      return os;
+    }
+} // namespace
+
+
+TEST(Time, DurationCast)
+{
+  using namespace cxx_time_duration_case;
+
+  chrono::milliseconds ms(7255042);
+
+  chrono::hours   hh = 
+    chrono::duration_cast<chrono::hours>(ms);
+
+  // take remians which means take hours out
+  chrono::minutes mm = 
+    chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+
+  chrono::seconds ss = 
+    chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+
+  chrono::milliseconds msec = 
+    chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+
+  ostringstream os;
+
+  os << hh << "::" << mm << "::" << ss << "::" << msec;
+
+  EXPECT_THAT(os.str(), "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]");
+
+  os.str("");
+
+  // see that same count() function used as operator<<() above
+  
+  os << hh.count() << "::" << mm.count() << "::" 
+    << ss.count() << "::" << msec.count();
+
+  EXPECT_THAT(os.str(), "2::0::55::42");
+}
+
+
+namespace cxx_lock
+{
+  template <typename T>
+    class locked_queue
+    {
+      public:
+        // push an item into the end of the queue
+        void push(T const& item)
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          queue_.push(item);
+        }
+
+        size_t size() const noexcept
+        {
+          return queue_.size();
+        }
+
+      private:
+        std::queue<T> queue_;
+        std::mutex mutex_;
+    };
+
+  template<typename T>
+    void do_something(int item, locked_queue<T>& q)
+    {
+      default_random_engine engine(item);  // cxx-random-seed
+      uniform_int_distribution<int> dist(10, 1000);
+
+      for (int i = 0; i < 10; ++i)
+      {
+        this_thread::sleep_for(chrono::milliseconds(dist(engine)));
+        q.push(item + i);
+      }
+    }
+
+} // namespace
+
+TEST(CConThread, LockGuard)
+{
+  using namespace cxx_lock;
+
+  locked_queue<int> lq;
+
+  std::thread t1([&]{ do_something(10, lq); });
+  std::thread t2([&]{ do_something(20, lq); });
+  t1.join();
+  t2.join();
+
+  EXPECT_THAT(lq.size(), 20);
+}
 
 
 {template-static}
@@ -33718,7 +33964,7 @@ int compare(const T&, const T&)
   return 0;
 }
 
-// nontype-template-parameter version for string literals
+// non-type-template-parameter version for string literals
 // define parameters as references to an array since cannot copy an array.
 // *cxx-declarator*
 
@@ -33753,14 +33999,27 @@ types.
 
   *template-specialization-or-template-explitict-argument*
 
-  Can use `cpp-template-explicit-argument` because it specifies the types?
+  Can use `cxx-template-explicit-argument` because it specifies the types?
   No becuase explict-argument `specifies the type` with the same
   defintion(code) but specialization supply different 'definition' and
   specifies definition or instantiation. Hence sometimes called
   `total-specitialzation` as oppose to partial specialization?
 
-  template-explicit-argument is to create one for specific type when try to
-  use it and template-specialization is when defines template. 
+
+// C++ Templates The Complete Guide Second Edition
+
+2.5 Specializations of Class Templates
+
+You can specialize a class template for certain template arguments. Similar to
+the overloading of function templates, specializing class templates allows you
+to optimize implementations for certain types or to fix a misbehavior of
+certain types for an instantiation of the class template. 
+
+However, if you specialize a class template, you must also specialize all
+member functions.  Although it is possible to specialize a single member
+function of a class template, once you have done so, you can no longer
+specialize the whole class template instance that the specialized member
+belongs to.
 
 
 <for-function-template>
@@ -33782,8 +34041,8 @@ template <typename T> int compare(const T&, const T&);
 const char *p1 = "hi", *p2 = "mom";
 
 Want to use T as "const char *" and original template requires "const" version
-of this "type". As with *const-on-base-type* the type to use in specialization
-is "const char const *" since base type is "const char *"
+of the "type". As with *cxx-const-on-base-type* the type to use in
+specialization is "const char * const" since base type is "const char *"
 
 This specialization becomes `non-template-version` which affect function
 matching.
@@ -33996,7 +34255,7 @@ struct remove_reference
 };
 
 // partial specialization used for lvalue and rvalue reference
-// *cpp-reference-quailifier*
+// *cxx-reference-quailifier*
 
 template <typename T> 
 struct remove_reference`<T&>` 
@@ -55745,7 +56004,7 @@ class CustomerList {
 # ============================================================================
 #{ c++ concurrent in action
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-thread cxx-thread cxx-boost-thread
+*kt_dev_cxx_0000* cxx-thread cxx-boost-thread
 
 <cxx-thread-build>
 
@@ -56149,7 +56408,7 @@ make sure that when use thread object.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-mutex cxx-lock-guard cxx-race
+*kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-race
 
 3.1 Problems with sharing data between threads
 
@@ -56191,8 +56450,39 @@ right data and avoid race conditions inherent in your interfaces. Mutexes also
 come with their own problems, in the form of a deadlock and protecting either
 too much or too little data.
 
-<cxx-lock-guard>
+{cxx-lock-guard}
 std::lock_guard class template, which implements that RAII idiom for a mutex;
+it locks the supplied mutex on construction and unlock it on destruction.
+
+<cxx-lock-guard-code>
+
+// /usr/include/c++/4/9/mutex
+
+  /// @brief  Scoped lock idiom.
+  // Acquire the mutex here with a constructor call, then release with
+  // the destructor call in accordance with RAII style.
+  template<typename _Mutex>
+    class lock_guard
+    {
+    public:
+      typedef _Mutex mutex_type;
+
+      explicit lock_guard(mutex_type& __m) : _M_device(__m)
+      { _M_device.lock(); }
+
+      lock_guard(mutex_type& __m, adopt_lock_t) : _M_device(__m)
+      { } // calling thread owns mutex
+
+      ~lock_guard()
+      { _M_device.unlock(); }
+
+      lock_guard(const lock_guard&) = delete;
+      lock_guard& operator=(const lock_guard&) = delete;
+
+    private:
+      mutex_type&  _M_device;
+    };
+
 
 #include <mutex>
 
@@ -56547,7 +56837,7 @@ Even empty() is superfluous.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-deadlock cxx-deadlock
+*kt_dev_cxx_0000* cxx-lock cxx-deadlock
 
 3.2.4 Deadlock: the problem and a solution
 
@@ -56563,7 +56853,7 @@ Simple rules that can help you to write deadlock-free code.
 * Acquire locks in a fixed or the same order
 
 
-<cxx-con-std-lock>
+<cxx-lock-std-lock>
 std::lock() can lock two or more mutexes at 'once' without risk of deadlock
 and provides 'all-or-nothing' semantics.
 
@@ -56714,17 +57004,17 @@ thread_local unsigned long
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-unique-lock
+*kt_dev_cxx_0000* cxx-lock-unique-lock
 
 The standard library offers help in the form of an operation for acquiring
 several locks simultaneously with regard to deadlock problem.
 
 std::unique_lock provides more 'flexibility' than std::lock_guard.
 
-* std::defer_lock to indicate that the mutex should remian unlocked on
+o std::defer_lock to indicate that the mutex should remian unlocked on
   construction then later locked by calling std::unique_lock.lock().
 
-* std::uniqie_lock is typically larger and has a slight performance penalty so
+o std::unique_lock is typically larger and has a slight performance penalty so
   lock_guard is in preference if it suits.
 
 Listing 3.6 Using std::lock() and std::lock_guard in a swap operation
@@ -57229,7 +57519,7 @@ void data_processing_thread()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-wait
+*kt_dev_cxx_0000* cxx-wait cxx-sleep
 
 // CLR and CCON
 

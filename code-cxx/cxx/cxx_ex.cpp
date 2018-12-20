@@ -16,36 +16,61 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
+class foo
+{
+  public:
 
-// cxx_ex.cpp: In instantiation of ‘class Vector<short int, 2>’:
-// cxx_ex.cpp:39:19:   required from here
-// cxx_ex.cpp:31:2: error: static assertion failed: Vector size is too small!
-//   static_assert(Size > 3, "Vector size is too small!");
-//   ^
-//
-// CPP code to demonstrate 
-// static assertion using static_assert 
-#include <iostream> 
-using namespace std; 
+    explicit foo(int &value) : value_(value) 
+    {
+      cout << "foo(int)" << endl;
+    }
 
-template <class T, int Size> 
-class Vector { 
-	// Compile time assertion to check if 
-	// the size of the vector is greater than 
-	// 3 or not. If any vector is declared whose 
-	// size is less than 4, the assertion will fail 
-	static_assert(Size > 3, "Vector size is too small!"); 
+    foo(int &value, int) : value_(value) 
+    {
+      cout << "foo(int, int)" << endl;
+    }
 
-	T m_values[Size]; 
-}; 
+  private:
+    int value_;
+};
 
-TEST(Cpp, Assert)
+
+TEST(Cxx, Ex)
 { 
-	Vector<int, 4> four; // This will work 
-  (void) four;
+  int value{10};
 
-	// Vector<short, 2> two; // This will fail 
+  // *cxx-error*
+  //
+  // cxx_ex.cpp: In member function ‘virtual void Cxx_Ex_Test::TestBody()’:
+  // cxx_ex.cpp:42:12: error: no matching function for call to ‘foo::foo(int)’
+  //    foo f1(10);
+  //             ^
+  // cxx_ex.cpp:42:12: note: candidates are:
+  // (1)
+  // cxx_ex.cpp:27:5: note: foo::foo(int&, int)
+  //      foo(int &value, int) : value_(value)
+  //      ^
+  // cxx_ex.cpp:27:5: note:   candidate expects 2 arguments, 1 provided
+  // (2)
+  // cxx_ex.cpp:23:14: note: foo::foo(int&)
+  //      explicit foo(int &value) : value_(value)
+  //               ^
+  // cxx_ex.cpp:23:14: note:   no known conversion for argument 1 from ‘int’ to ‘int&’
+  // (3)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(const foo&)
+  //  class foo
+  //        ^
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘const foo&’
+  // (4)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(foo&&)
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘foo&&’
+  //
+  // foo f1(10);
+
+  foo f1(value);
+  foo f2(value, 30);
 } 
+
 
 // ={=========================================================================
 

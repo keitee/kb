@@ -455,6 +455,75 @@ TEST(Ctor, CtorInitList)
   ConstructionWitCtorInitList cw;
 }
 
+// *cxx-unused*
+// The only purpose of the parameter is to 'distinguish' prefix from postfix
+// function invocation. Many compilers issue warnings if you fail to use named
+// parameters in the body of the function to which they apply, and this can be
+// annoying. To avoid such warnings, a common strategy is to omit names for
+// parameters you don't plan to use; that is what is been done above.
+
+namespace cxx_ctor
+{
+
+class foo
+{
+  public:
+
+    explicit foo(int &value) : value_(value) 
+    {
+      cout << "foo(int)" << endl;
+    }
+
+    foo(int &value, int) : value_(value) 
+    {
+      cout << "foo(int, int)" << endl;
+    }
+
+  private:
+    int value_;
+};
+
+} // namespace
+
+
+TEST(Ctor, Unused)
+{
+  using namespace cxx_ctor;
+
+  int value{10};
+
+  // *cxx-error*
+  //
+  // cxx_ex.cpp: In member function ‘virtual void Cxx_Ex_Test::TestBody()’:
+  // cxx_ex.cpp:42:12: error: no matching function for call to ‘foo::foo(int)’
+  //    foo f1(10);
+  //             ^
+  // cxx_ex.cpp:42:12: note: candidates are:
+  // (1)
+  // cxx_ex.cpp:27:5: note: foo::foo(int&, int)
+  //      foo(int &value, int) : value_(value)
+  //      ^
+  // cxx_ex.cpp:27:5: note:   candidate expects 2 arguments, 1 provided
+  // (2)
+  // cxx_ex.cpp:23:14: note: foo::foo(int&)
+  //      explicit foo(int &value) : value_(value)
+  //               ^
+  // cxx_ex.cpp:23:14: note:   no known conversion for argument 1 from ‘int’ to ‘int&’
+  // (3)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(const foo&)
+  //  class foo
+  //        ^
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘const foo&’
+  // (4)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(foo&&)
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘foo&&’
+  //
+  // foo f1(10);
+
+  foo f1(value);
+  foo f2(value, 30);
+}
+
 
 // ={=========================================================================
 // cxx-ctor-init-forms
@@ -4516,7 +4585,6 @@ TEST(Template, FunctionWithDefault)
     EXPECT_THAT(compare(2, 2, greater<int>()), 0);
   }
 
-
   vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
   EXPECT_THAT(compare(coll1, coll2), -1);
   EXPECT_THAT(compare(coll2, coll1), 1);
@@ -4823,6 +4891,75 @@ TEST(Template, Overload)
 
   os << debug_rep(mine) << endl;   
   EXPECT_THAT(os.str(), "mine\n");
+}
+
+namespace cxx_template_friend
+{
+  // basics/stack1.hpp
+
+  template <typename T>
+    class Stack
+    {
+      public:
+        void push(T const& elem)
+        {
+          elems_.push_back(elem);
+        }
+
+        void pop()
+        {
+          if (elems_.empty())
+            throw std::runtime_error("coll is empty");
+
+          elems_.pop_back();
+        }
+
+        T const& top() const
+        {
+          if (elems_.empty())
+            throw std::runtime_error("coll is empty");
+
+          return elems_.back();
+        }
+
+        bool empty() const
+        {
+          return elems_.empty();
+        }
+
+      private:
+        std::vector<T> elems_;
+    };
+
+  // To show how to define operator<< for template *cxx-overload-operator*
+  //
+  // C++ Templates The Complete Guide Second Edition
+  // 2.4 Friends
+  //
+  // However, when trying to declare the friend function and define it
+  // afterwards, things become more complicated. In fact, we have two options:
+  // 1. We can implicitly declare a new function template, which must use a
+  // different template parameter, such as U:
+
+  template<typename T>
+  ostream& operator<<(ostream& os, Stack<T> const& s)
+  {
+    cout << "stack's top : " << s.top() << endl;
+    return os;
+  }
+
+} // namespace
+
+TEST(Template, Friend)
+{
+  using namespace cxx_template_friend;
+
+  Stack<int> si;
+
+  si.push(1); si.push(2); si.push(3);
+  EXPECT_THAT(si.top(), 3);
+
+  cout << si;
 }
 
 
