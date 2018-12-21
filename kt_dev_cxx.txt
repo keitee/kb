@@ -288,13 +288,13 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-con-thread-lifetime-issue
 *kt_dev_cxx_0000* cxx-mutex cxx-lock-guard cxx-stack
 *kt_dev_cxx_0000* cxx-lock cxx-deadlock
-*kt_dev_cxx_0000* cxx-con-unique-lock
+*kt_dev_cxx_0000* cxx-lock-unique-lock
 *kt_dev_cxx_0000* cxx-con-call-once
 *kt_dev_cxx_0000* cxx-con-shared-lock cxx-boost-shared-lock
 *kt_dev_cxx_0000* cxx-con-recursive-lock
-*kt_dev_cxx_0000* cxx-con-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-condition-variable cxx-queue
 *kt_dev_cxx_0000* cxx-wait cxx-sleep
-*kt_dev_cxx_0000* cxx-con-task-model cxx-future cxx-async
+*kt_dev_cxx_0000* cxx-task-model cxx-future cxx-async
 *kt_dev_cxx_0000* cxx-con-packaged-task
 |kt_dev_ccon_018| std::promise
 |kt_dev_ccon_019| std::shared_future in multiple threads
@@ -56418,6 +56418,7 @@ of modifying data. The concept used is `invariant` that is statement always
 true about a particular data structures. The problem is when the invariants of
 the system cannot be maintained. Broken invariants.
 
+
 {cxx-race-conditions}
 A race condition is anything where the outcome depends on the relative
 ordering of execution of operations on two or more threads. It is when the
@@ -56427,18 +56428,19 @@ Such problems will show up at the most inconvenient time since the race
 conditions are "timing sensitive" and hard to find and duplicate because the
 window of opportunity is small.
 
-<cxx-data-race>
+
+<cxx-race-data-race>
 The C++ Standard also defines the term data race to mean the specific type of
 race condition that arises because of concurrent modification to a single
 'object'. uncontrolled concurrent access to a variable
 
-<approaches-to-solve>
-* The simplest option is to wrap your data structure with a protection
+<cxx-race-approaches-to-solve>
+o The simplest option is to wrap your data structure with a protection
   mechanism
 
-* lock-free programming
+o lock-free programming
 
-* software transactional memory (STM)
+o software transactional memory (STM)
 
 
 3.2.1 Using mutexes in C++
@@ -56449,6 +56451,7 @@ not a silver bullet; it's important to structure your code to protect the
 right data and avoid race conditions inherent in your interfaces. Mutexes also
 come with their own problems, in the form of a deadlock and protecting either
 too much or too little data.
+
 
 {cxx-lock-guard}
 std::lock_guard class template, which implements that RAII idiom for a mutex;
@@ -56482,25 +56485,6 @@ it locks the supplied mutex on construction and unlock it on destruction.
     private:
       mutex_type&  _M_device;
     };
-
-
-#include <mutex>
-
-std::list<int> some_list;
-std::mutex some_mutex;
-
-void add_to_list(int new_value)
-{
-    std::lock_guard<std::mutex> guard(some_mutex);
-    some_list.push_back(new_value);
-}
-
-bool list_contains(int value_to_find)
-{
-    std::lock_guard<std::mutex> guard(some_mutex);
-    return std::find(some_list.begin(),some_list.end(),value_to_find) 
-      != some_list.end();
-}
 
 
 {not-silver-bullet}
@@ -56839,6 +56823,9 @@ Even empty() is superfluous.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-lock cxx-deadlock
 
+The standard library offers help in the form of an operation for acquiring
+several locks simultaneously with regard to deadlock problem.
+
 3.2.4 Deadlock: the problem and a solution
 
 <cxx-deadlock>
@@ -56854,9 +56841,13 @@ Simple rules that can help you to write deadlock-free code.
 
 
 <cxx-lock-std-lock>
-std::lock() can lock two or more mutexes at 'once' without risk of deadlock
-and provides 'all-or-nothing' semantics.
+The C++ standard library, therefore, provides convenience functions to try to
+lock multiple mutexes.
 
+std::lock() can lock two or more mutexes at `once without risk of deadlock`
+and provides `all-or-nothing semantics`
+
+<ex>
 class X
 {
   private:
@@ -56869,8 +56860,8 @@ class X
       if( &lhs == &rhs )
         return;
 
-      // lock two mutexes
-      std::lock( lhs.m, rhs.m );
+      // lock both mutexes (or none if not possible)
+      std::lock(lhs.m, rhs.m);
 
       // std::adopt_lock to indicate to std::lock_guard objects that the
       // mutexes are 'already' locked.
@@ -56881,6 +56872,15 @@ class X
       swap( lhs.some_detail, rhs.some_detail );
     }
 };
+
+The global std::lock() locks all mutexes passed as arguments, blocking until
+all mutexes are locked or until an exception is thrown. In the latter case, it
+unlocks mutexes already successfully locked. As usual, after successful
+locking, you can and should use a lock guard initialized with adopt_lock as
+second argument to ensure that, in any case, the mutexes are unlocked when
+leaving the scope. Note that this lock() provides a deadlock-avoidance
+mechanism, which, however, means that the order of locking inside a multiple
+lock is undefined.
 
 
 <cxx-con-lock-hierarchy>
@@ -56995,9 +56995,8 @@ class hierarchical_mutex
     }
 };
 
-// *cxx-static*
-// cxx-con-thread-local since it is declared thread_local, every thread has
-// its 'own' copy
+// *cxx-static* *linux-thread-local-storage*
+// since it is declared thread_local, every thread has its 'own' copy
 
 thread_local unsigned long
    hierarchical_mutex::this_thread_hierarchy_value( ULONG_MAX );
@@ -57006,10 +57005,12 @@ thread_local unsigned long
 ={============================================================================
 *kt_dev_cxx_0000* cxx-lock-unique-lock
 
-The standard library offers help in the form of an operation for acquiring
-several locks simultaneously with regard to deadlock problem.
+std::unique_lock provides more `flexibility than std::lock_guard`
 
-std::unique_lock provides more 'flexibility' than std::lock_guard.
+o the ability to program explicitly when and how to lock or unlock its mutex.
+  Thus, this lock object may or may not have a mutex locked (also known as
+      owning a mutex). This differs from a lock_guard<>, which always has an
+  object locked throughout its lifetime.
 
 o std::defer_lock to indicate that the mutex should remian unlocked on
   construction then later locked by calling std::unique_lock.lock().
@@ -57031,14 +57032,13 @@ class X
       if( &lhs == &rhs )
         return;
 
-      // lock two mutexes
       std::lock( lhs.m, rhs.m );
 
       // std::adopt_lock to indicate to std::lock_guard objects that the
       // mutexes are 'already' locked.
 
-      std::lock_guard<std::mutex> lock_a( lhs.m, std::adopt_lock );
-      std::lock_guard<std::mutex> lock_b( rhs.m, std::adopt_lock );
+      std::lock_guard<std::mutex> lock_a(lhs.m, `std::adopt_lock` );
+      std::lock_guard<std::mutex> lock_b(rhs.m, `std::adopt_lock` );
 
       swap( lhs.some_detail, rhs.some_detail );
     }
@@ -57058,10 +57058,9 @@ class X
       if( &lhs == &rhs )
         return;
 
-      std::unique_lock<std::mutex> lock_a( lhs.m, std::defer_lock );
-      std::unique_lock<std::mutex> lock_b( rhs.m, std::defer_lock );
+      std::unique_lock<std::mutex> lock_a(lhs.m, `std::defer_lock` );
+      std::unique_lock<std::mutex> lock_b(rhs.m, `std::defer_lock` );
 
-      // lock two mutexes
       std::lock( lock_a, lock_b );
 
       swap( lhs.some_detail, rhs.some_detail );
@@ -57069,21 +57068,51 @@ class X
 };
 
 
-{flexible-unique-lock} like unique_ptr
+<cxx-lock-unique-lock>
+
+the following supplementary constructors:
+
+You can pass try_to_lock for a nonblocking attempt to lock a mutex:
+
+std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
+...
+if (lock) { // if lock was successful
+...
+}
+
+
+You can pass a duration or timepoint to the constructor to try to lock for a
+specific period of time:
+
+std::unique_lock<std::timed_mutex> lock(mutex, std::chrono::seconds(1));
+...
+
+
+You can pass defer_lock to initialize the lock without locking the mutex
+(yet):
+
+std::unique_lock<std::mutex> lock(mutex, std::defer_lock);
+...
+lock.lock(); // or (timed) try_lock()
+...
+
+
+{transfer-ownership} like unique_ptr
 Because unique_lock instances don't have to own their associated mutexes, the
 ownership of a mutex can be transferred between instances by moving the
 instances around.
 
 One possible use is to allow a function to lock a mutex and transfer ownership
 of that lock to the caller, so the caller can then perform additional actions
-under the protection of the same lock.
+`under the protection of the same lock.`
 
-lk is local variable and can be returned without calling std::move since the
-compiler takes care of calling the move constructor.
+// *cxx-return*
+// lk is local variable and can be returned without calling std::move since
+// the compiler takes care of calling the move constructor.
 
 std::unique_lock<std::mutex> get_lock()
 {
-    // some_mutex is 'extern'
+    // some_mutex is extern
     extern std::mutex some_mutex;
 
     std::unique_lock<std::mutex> lk( some_mutex );
@@ -57099,7 +57128,7 @@ void process_data()
 }
 
 
-<cxx-unique-lock-granulity>
+<cxx-lock-unique-lock-granulity>
 std::unique_lock works well in this situation, because you can call unlock()
 when the code no longer needs access to the shared data and then call lock()
 again if access is required later in the code:
@@ -57334,13 +57363,15 @@ change your design instead.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-condition-variable cxx-queue
 
 4.1.1 Waiting for a condition with condition variables
 
 The Standard C++ Library provides not one but two implementations of a
-condition variable: std::condition_variable and std::condition_variable_any.
-Both of these are declared in the <condition_variable> library header.
+condition variable: 
+
+`std::condition_variable` and `std::condition_variable_any` Both of these are
+declared in the <condition_variable> library header.
 
 the former is limited to working with std::mutex, whereas the latter can work
 with anything that meets some minimal criteria for being mutex-like, hence the
@@ -57373,30 +57404,30 @@ void data_preparation_thread()
 
 void data_processing_thread()
 {
-    while(true)
-    {
-        // cxx-unique-lock
-        std::unique_lock<std::mutex> lk(mut);
+  while(true)
+  {
+    // cxx-lock-unique-lock
+    std::unique_lock<std::mutex> lk(mut);
 
-        // *cxx-con-condition-variable-predicate*
-        // have to use <cxx-unique-lock> and otherwise error
+    // *cxx-con-condition-variable-predicate*
+    // have to use cxx-lock-unique-lock and otherwise error
 
-        data_cond.wait(lk,[]{return !data_queue.empty();});
+    data_cond.wait(lk,[]{return !data_queue.empty();});
 
-        data_chunk data=data_queue.front();
-        data_queue.pop();
+    data_chunk data=data_queue.front();
+    data_queue.pop();
 
-        // Processing data can potentially be a time-consuming operation, and
-        // as you saw in chapter 3, it’s a bad idea to hold a lock on a mutex
-        // for longer than necessary.
+    // Processing data can potentially be a time-consuming operation, and
+    // as you saw in chapter 3, it’s a bad idea to hold a lock on a mutex
+    // for longer than necessary.
 
-        lk.unlock();
+    lk.unlock();
 
-        process(data);
+    process(data);
 
-        if(is_last_chunk(data))
-            break;
-    }
+    if(is_last_chunk(data))
+      break;
+  }
 }
 
 
@@ -57624,11 +57655,11 @@ starts again. This may repeat any number of times, making the total wait time
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-task-model cxx-future cxx-async
+*kt_dev_cxx_0000* cxx-task-model cxx-future cxx-async
 
 C++PL 42.4.
 
-<cxx-con-task-model>
+<cxx-task-model>
 Focuses on specifying a simple kind of task: a task that does one thing given
 arguments and produces one result. 
 
@@ -57670,7 +57701,7 @@ don’t choose shared data for communication because of “efficiency” without
 thought and preferably not without measurement.
 
     
-{future-and-promise}
+{cxx-future-and-cxx-promise}
 `communication between tasks` is handled by a future/promise pair. A task
 'puts' its result into a promise, and a task that needs the result 'retrieves'
 the result from the corresponding future:
@@ -57683,36 +57714,37 @@ The value is known as "shared state". In addition to the return value or
 exception, it contains the information needed for two threads to 'safely'
 exchange the information. For example:
 
-* A ready bit to indicate whether a value or exception is ready to be
+o A ready bit to indicate whether a value or exception is ready to be
   extracted by a future.
 
 An implementation can take action on a shared state:
 
-* Make ready: Set the 'ready bit' and unblock any waiting threads.
+o Make ready: Set the 'ready bit' and unblock any waiting threads.
 
   "Please note the absence of explicit mention of locks in this code: we are
-  able to concentrate on tasks to be done, rather than on the mechanisms used
+  able `to concentrate on tasks to be done, rather than on the mechanisms` used
   to manage their communication."
 
 
 {cxx-future}
-A future is a handle to a shared state. It is where a task can retrieve a result
+`A future is a handle to a shared state.` It is where a task can retrieve a result
 deposited by a promise.
 
 Wait for the future to become ready. Once an event has happened (and the
-future has become ready), the future can't be 'reset'. "one-off" event.
+future has become ready), the future can't be 'reset'. `one-off event`
 
   "A future may have 'data' associated with it or it may not."
 
-<two-types>
+<cxx-future-unique-cxx-future-shared>
 There are two sorts of futures in the C++ Standard Library, implemented as two
-class templates declared in the <future> header: unique futures
-(std::future<>) and shared futures (std::shared_future<>). These are modeled
-after std::unique_ptr and std::shared_ptr. An instance of std::future is the
-one and only instance that refers to its associated event, whereas multiple
-instances of std::shared_future may refer to the same event. In the latter
-case, all the instances will become ready at the same time, and they may all
-access any data associated with the event. 
+class templates declared in the <future> header: `unique futures`
+(std::future<>) and `shared futures` (std::shared_future<>). 
+
+These are modeled after std::unique_ptr and std::shared_ptr. An instance of
+std::future is the one and only instance that refers to its associated event,
+  whereas multiple instances of std::shared_future may refer to the same
+  event. In the latter case, all the instances will become ready at the same
+  time, and they may all access any data associated with the event. 
 
 This associated data is the reason these are templates; just like
 std::unique_ptr and std::shared_ptr, the template parameter is the type of the
@@ -57761,11 +57793,11 @@ pr.set_value()       Set the result of the task for a void future
 pr.set_exception(p)  
 The result of the task is the exception pointed to by p; p is an exception_ptr
 
-TN: there are 'no' copy operations for a promise. A set function throws
+note: there are 'no' copy operations for a promise. A set function throws
 future_error if a value or exception is already set.
 
 
-<single-value>
+<single-value-but-move> *cxx-move*
 Only possible to transmit a single result value through a promise. That may
 seem restrictive, but remember that `the value is moved into` and out of the
 shared state, rather than copied, so that we can cheaply pass a collection of
@@ -57789,13 +57821,56 @@ header, comes in.
 
 note: no need to use cxx-thread-join
 
-std::async start an asynchronous task for which you don't need the result
+`std::async` start an asynchronous task for which you don't need the result
 right away. Rather than giving you back a std::thread object to wait on,
       std::async returns a std::future object, which will eventually hold the
       return value of the function. 
 
 When you need the value, you just call get() on the future, and the thread
 blocks until the future is ready and then returns the value. 
+
+<cxx-async-code>
+
+// /usr/include/c++/4.9/future
+{
+  template<typename _Fn, typename... _Args>
+    future<typename result_of<_Fn(_Args...)>::type>
+    async(launch __policy, _Fn&& __fn, _Args&&... __args);
+
+  template<typename _Fn, typename... _Args>
+    future<typename result_of<_Fn(_Args...)>::type>
+    async(_Fn&& __fn, _Args&&... __args);
+
+
+  /// async
+  template<typename _Fn, typename... _Args>
+    future<typename result_of<_Fn(_Args...)>::type>
+    async(launch __policy, _Fn&& __fn, _Args&&... __args)
+    {
+      typedef typename result_of<_Fn(_Args...)>::type result_type;
+      std::shared_ptr<__future_base::_State_base> __state;
+      if ((__policy & (launch::async|launch::deferred)) == launch::async)
+      {
+        __state = __future_base::_S_make_async_state(std::__bind_simple(
+              std::forward<_Fn>(__fn), std::forward<_Args>(__args)...));
+      }
+      else
+      {
+        __state = __future_base::_S_make_deferred_state(std::__bind_simple(
+              std::forward<_Fn>(__fn), std::forward<_Args>(__args)...));
+      }
+      return future<result_type>(__state);
+    }
+
+  /// async, potential overload
+  template<typename _Fn, typename... _Args>
+    inline future<typename result_of<_Fn(_Args...)>::type>
+    async(_Fn&& __fn, _Args&&... __args)
+    {
+      return async(`launch::async|launch::deferred`, std::forward<_Fn>(__fn),
+          std::forward<_Args>(__args)...);
+    }
+}
 
 
 #include <string>
@@ -57814,10 +57889,10 @@ X x;
 // args... are passed as args to the member function
 
 // calls p->foo(42, "hello") where p is &x
-auto f1=std::async(&X::foo,&x,42,"hello"); 
+auto f1=std::async(&X::foo, &x, 42, "hello"); 
 
-// calls tempx.bar("goodbye") where tempx is a copy of x
-auto f2=std::async(&X::bar,x,"goodbye");   
+// calls tempx.bar("goodbye") where *cxx-temp* is a copy of x
+auto f2=std::async(&X::bar, x, "goodbye");   
 
 struct Y
 {
@@ -57829,10 +57904,10 @@ Y y;
 // arg1 is function or callable
 // args... are passed as args
 
-// calls tempy(3.141) where tempy is move-constructed
-auto f3=std::async(Y(),3.141);         
+// calls tempy(3.141) where *cxx-temp* is move-constructed
+auto f3=std::async(Y(), 3.141);         
 
-// calls y(2.718)
+// calls y(2.718) *cxx-ref*
 auto f4=std::async(std::ref(y),2.718); 
 
 X baz(X&);
@@ -57850,11 +57925,11 @@ class move_only
         void operator()();
 };
 
-// calls tmp() where tmp is constructed from std::move(move_only())
+// calls *cxx-temp* where tmp is constructed from std::move(move_only())
 auto f5=std::async(move_only()); 
 
 
-{cxx-async-specify-when-to-run}
+{cxx-async-launch-policy}
 
 4.2.1 Returning values from background tasks
 
@@ -57868,12 +57943,11 @@ std::launch::deferred
 This is of the type std::launch, std::launch::deferred to indicate that the
 function call is to be deferred until either wait() or get() is called on the
 future, std::launch::async to indicate that the function must be run on its
-own thread, or std::launch::deferred | std::launch::async to indicate that the
-implementation may choose. This last option is the default.
+own thread, or `std::launch::deferred | std::launch::async` to indicate that the
+implementation may choose. This last option is `the default`
 
 If the function call is deferred, it may never actually run because it is
 guaranteed that func1() never gets called without get() or wait()
-
 
 // C++ SRL 18
 
@@ -57882,90 +57956,14 @@ std::system_error exception (see Section 4.3.1, page 43) with the error code
 resource_unavailable_try_again, which is equivalent to the POSIX errno EAGAIN
 (see Section 4.3.2, page 45).
 
-If don't assign the result of std::async(std::launch::async,...) anywhere, the
-caller will block until the passed functionality has finished, which would mean
-that this is nothing but a synchronous call.
 
+// why deffered?
 
-// Q: when use async, when does a thread start and end?
-//
-// ends do_other_stuff
-// ends find_the_answer
-// the answer is 100
+explicitly requesting a deferred launch policy might help to simulate the
+behavior of async() on a single-threaded environment or simplify debugging
+(unless race conditions are the problem).
 
-int find_the_answer()
-{
-    this_thread::sleep_for(chrono::milliseconds(100));
-    std::cout << "ends find_the_answer" << std::endl;
-    return 100;
-}
-
-void do_other_stuff()
-{
-    this_thread::sleep_for(chrono::minutes(1));
-    std::cout << "ends do_other_stuff" << std::endl;
-}
-
-TEST(CconThreadTest, UseAsync)
-{
-    std::future<int> the_answer = std::async( find_the_answer );
-    do_other_stuff();
-    std::cout << "the answer is " << the_answer.get() << std::endl;
-}
-
-
-std::async allows you to pass additional arguments to the function by adding
-extra arguments to the call, in the same way that std::thread does. If the
-arguments are rvalues, the copies are created by moving the originals. This
-allows the use of move-only types as both the function object and the
-arguments.
-
-
-// C++ SRL 18, *cxx-random*
-
-// Here, async() 'tries' to start the passed functionality immediately
-// asynchronously in a separate thread.
-
-int doSomething (char c)
-{
-    default_random_engine dre(c);
-    uniform_int_distribution<int> id(10, 1000);
-
-    for(int i=0; i<10; ++i)
-    {
-        this_thread::sleep_for(chrono::milliseconds( id(dre) ));
-        cout.put(c).flush();
-    }
-
-    return c;
-}
-
-int func1()
-{
-    return doSomething('.');
-}
-
-int func2()
-{
-    return doSomething('+');
-}
-
-TEST(CconThreadTest, UseAsyncInBackground)
-{
-    cout << "starting func1() in background"
-        << " and func2() in foreground:" << endl;
-
-    future<int> result1(std::async(func1));
-
-    int result2 = func2();
-
-    int result = result1.get() + result2;
-
-    cout << "\nresult of func1()+func2(): " << result << endl;
-}
-
-
-Here, with the call of get(), one of three things might happen:
+Here, with the call of f.get(), one of three things might happen:
 
 1. If func1() was started with async() in a separate thread and has already
 finished, you immediately get its result.
@@ -57980,7 +57978,6 @@ This behavior is important because it ensures that the program 'still' works
 on a single-threaded environment or, if for any other reason, it was not
 possible for async() to start a new thread.
 
-
 Thus, the combination of
 
 std::future<int> result1(std::async(func1)); and result1.get()
@@ -57993,45 +57990,190 @@ not possible to run it in parallel, it will be called sequentially when get()
 This means that, in any case, it is guaranteed that after get(), func1() was
 called `either asynchronously or synchronously.`
 
-Two kinds of outputs are possible for this program. If async() could
-successfully start func1(), the output might be something like the following:
 
-starting func1() in background and func2() in foreground:
-++..++++.++.+.+. ...
-result of func1()+func2(): 89
+namespace cxx_async {
 
-If async() couldn't start func1(), it will run after func2(), when get() gets
-called, so that the program will have the following output:
+  int sum{0};
 
-starting func1() in background and func2() in foreground:
-++++++++++..........
-result of func1()+func2(): 89
+  int find_the_answer()
+  {
+    this_thread::sleep_for(chrono::milliseconds(100));
+    return sum + 90;
+  }
 
-// this is result when run it on VM.
+  void do_other_stuff()
+  {
+    this_thread::sleep_for(chrono::seconds(20));
+    sum = 10;
+  }
 
-Note that without calling get(), there is no guarantee that func1() will ever
-be called. As written, if async() couldn't start the passed functionality
-immediately, it will defer the call so that it gets called only when the
-outcome of the passed functionality explicitly is requested with get()
+} // namespace
 
+// expect that do_other_stuff() finishes first
 
-TEST(CconThreadTest, UseAsyncWithAsync)
+TEST(CConAsync, Async)
 {
-    cout << "starting func1() in background"
-        << " and func2() in foreground:" << endl;
+  using namespace cxx_async;
 
-    future<int> result1(std::async(launch::async, func1));  // note:
-
-    int result2 = func2();
-
-    int result = result1.get() + result2;
-
-    cout << "\nresult of func1()+func2(): " << result << endl;
+  std::future<int> the_answer = std::async(find_the_answer);
+  do_other_stuff();
+  EXPECT_THAT(the_answer.get(), 100);
 }
 
-starting func1() in background and func2() in foreground:
-+..+..+...+..+.+++++
-result of func1()+func2(): 89
+namespace cxx_aync_return {
+
+  void use_reference(int &value)
+  {
+    value += 200;
+  }
+
+  void use_value(int value)
+  {
+    value += 200;
+  }
+
+} // namespace
+
+// show how return value from thread via reference
+
+TEST(CConAsync, ReturnViaReference)
+{
+  using namespace cxx_aync_return;
+
+  {
+    int value{1};
+
+    std::thread t(use_value, value); 
+    t.join();
+
+    EXPECT_THAT(value, 1);
+  }
+
+  {
+    int value{1};
+
+    // In file included from /usr/include/c++/4.9/thread:39:0,
+    //                  from ccon.cpp:2:
+    // /usr/include/c++/4.9/functional: In instantiation of ‘struct std::_Bind_simple<void (*(int))(int&)>’:
+    // /usr/include/c++/4.9/thread:140:47:   required from ‘std::thread::thread(_Callable&&, _Args&& ...) [with _Callable = void (&)(int&); _Args = {int&}]’
+    // ccon.cpp:418:36:   required from here
+    // /usr/include/c++/4.9/functional:1665:61: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
+    //        typedef typename result_of<_Callable(_Args...)>::type result_type;
+    //                                                              ^
+    // /usr/include/c++/4.9/functional:1695:9: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
+    //          _M_invoke(_Index_tuple<_Indices...>)
+    //          ^
+    // makefile:58: recipe for target 'ccon.o' failed
+    // make: *** [ccon.o] Error 1
+    //
+    // std::thread t(UseReference, value);  
+
+    std::thread t(use_reference, std::ref(value));  
+    t.join();
+
+    EXPECT_THAT(value, 201);
+  }
+}
+
+// Note, finally, that the object passed to async() may be any type of a
+// callable object:
+//
+// A call of async() does not guarantee that the passed functionality gets
+// started and finished.
+// 
+// It is necessary to ensure that sooner or later, the passed functionality gets
+// called. Note that I wrote that async() `tries` to start the passed
+// functionality. If this didn’t happen we need the future object to force a
+// start when we need the result or want to ensure that the functionality was
+// performed. Thus, you need the future object even if you are not interested in
+// the outcome of a functionality started in the background.
+//
+// Accordingly, two kinds of outputs are possible for this program. 
+
+// cxx-async with no option
+//
+// If async() couldn’t start func1(), it will run after func2(), when get() gets
+// called, so that the program will have the following output:
+//
+// starting func1() in background and func2() in foreground:
+// ++++++++++..........
+// result of func1()+func2(): 89
+
+
+TEST(CConAsync, WithDefault)
+{
+  future<int> result1(std::async([]{return doSomething('.');}));
+
+  int result2 = doSomething('+');
+
+  int result = result1.get() + result2;
+
+  EXPECT_THAT(result, 89);
+}
+
+
+// cxx-async with async option
+//
+// If async() could successfully start func1(), the output might be something
+// like the following:
+//
+// starting func1() in background and func2() in foreground:
+// +..+..+...+..+.+++++
+// result of func1()+func2(): 89
+
+
+// Using Launch Policies
+
+// You can force async() to not defer the passed functionality, by explicitly
+// passing a launch policy directing async() that it should definitely start the
+// passed functionality asynchronously the moment it is called:
+
+TEST(CConAsync, WithAsync)
+{
+  future<int> result1(std::async(launch::async, []{return doSomething('.');}));
+
+  int result2 = doSomething('+');
+
+  int result = result1.get() + result2;
+
+  EXPECT_THAT(result, 89);
+}
+
+// So, based on this first example, we can define a general way to make a
+// program faster: You can modify the program so that it might benefit from
+// parallelization, if the underlying platform supports it, but still works as
+// before on single-threaded environments.
+
+
+// Note also that you have to ensure that you ask for the result of a
+// functionality started with async() no earlier than necessary. For example,
+// the following “optimization” is probably not what you want:
+//
+// std::future<int> result1(std::async(func1));
+// int result = func2() + result1.get(); // might call func2() after func1() ends
+//
+// Because the evaluation order on the right side of the second statement is
+// unspecified, result1.get() might be called before func2() so that you have
+// sequential processing again.
+
+
+// If you don’t assign the result of std::async(std::launch::async,...)
+// anywhere, the caller will block until the passed functionality has finished,
+// which would mean that this is nothing but a synchronous call.
+// 
+// ..........  
+// ++++++++++
+
+TEST(CConAsync, WithAsyncButSequential)
+{
+  // future<int> result1(std::async(launch::async, []{return doSomething('.');}));
+  std::async(launch::async, []{return doSomething('.');});
+
+  doSomething('+');
+}
+
+
+
 
 
 <cxx-future-wait>
