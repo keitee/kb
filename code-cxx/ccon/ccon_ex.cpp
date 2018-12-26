@@ -6,6 +6,7 @@
 #include <queue>
 #include <stack>
 #include <exception>
+#include <condition_variable>
 
 #include <boost/thread/shared_mutex.hpp>
 
@@ -45,7 +46,7 @@ namespace cxx_condition
           std::unique_lock<std::mutex> lock(m_);
 
           while (queue_.empty())
-            cond_.wait(m_);
+            cond_.wait(lock);
 
           T item = queue_.front();
           queue_.pop();
@@ -58,23 +59,28 @@ namespace cxx_condition
         std::condition_variable cond_;
     };
 
-  void producer(locked_queue<int> &q)
+  int consumed{};
+
+  void producer(locked_queue<int>* q)
   {
     for (int i = 0; i < 10; ++i)
     {
-      ++value;
+      q->push(i);
     }
   }
 
-  void consumer(locked_queue<int> &q)
+  void consumer(locked_queue<int>* q)
   {
     for (int i = 0; i < 10; ++i)
     {
-      ++value;
+      q->pop();
+      ++consumed;
     }
   }
 
 } // namesapce
+
+// similar to linux-sync-cond-lpi-example
 
 TEST(CConCondition, ProducerAndConsumer)
 {
@@ -85,6 +91,17 @@ TEST(CConCondition, ProducerAndConsumer)
   std::thread c1(&consumer, &q);
   std::thread c2(&consumer, &q);
   std::thread c3(&consumer, &q);
+
+  this_thread::sleep_for(chrono::seconds(2));
+
+  std::thread p1(&producer, &q);
+  std::thread p2(&producer, &q);
+  std::thread p3(&producer, &q);
+
+  c1.join(); c2.join(); c3.join();
+  p1.join(); p2.join(); p3.join();
+
+  EXPECT_THAT(consumed, 30);
 }
 
 

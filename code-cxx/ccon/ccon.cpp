@@ -459,84 +459,90 @@ TEST(CConLock, X)
 
 
 // ={=========================================================================
-// cxx-lockedqueue
+// cxx-condition
 
-template <typename T>
-class locked_queue
+// class locked_queue {
+//  void push(T &);
+//  T pop();
+// };
+
+namespace cxx_condition
 {
-  public:
-    // push an item into the end of the queue
-    void push(T const &item)
+  template <typename T>
+    class locked_queue {
+      public:
+        void push(T const& item)
+        {
+          std::lock_guard<std::mutex> lock(m_);
+          queue_.push(item);
+
+          // as soon as there are items in queue
+          if (queue_.size())
+            cond_.notify_one();
+        }
+
+        T pop() 
+        {
+          // to use with cxx-condition
+          std::unique_lock<std::mutex> lock(m_);
+
+          while (queue_.empty())
+            cond_.wait(lock);
+
+          T item = queue_.front();
+          queue_.pop();
+          return item;
+        }
+
+      private:
+        std::queue<T> queue_;
+        std::mutex m_;
+        std::condition_variable cond_;
+    };
+
+  int consumed{};
+
+  void producer(locked_queue<int>* q)
+  {
+    for (int i = 0; i < 10; ++i)
     {
-      std::lock_guard<std::mutex> lock(m_mutex);
-      m_queue.push(item);
-      // queue went from empty to one, notify a thread
-      if(m_queue.size() == 1)
-      {
-        m_notEmptyCondition.notify_one();
-      }
+      q->push(i);
     }
+  }
 
-    // pop the oldest item out of the queue
-    // blocks until there are item to be popped
-    T pop()
+  void consumer(locked_queue<int>* q)
+  {
+    for (int i = 0; i < 10; ++i)
     {
-      std::unique_lock<std::mutex> lock(m_mutex);
-      while(m_queue.empty() == true)
-        m_notEmptyCondition.wait(lock);
-
-      T item = m_queue.front();
-      m_queue.pop();
-      return item;
+      q->pop();
+      ++consumed;
     }
+  }
 
-  private:
-    std::queue<T> m_queue;
-    std::mutex m_mutex;
-    std::condition_variable m_notEmptyCondition;
-};
+} // namesapce
 
+// similar to linux-sync-cond-lpi-example
 
-// producer that pushes two items to a queue
-void producer(locked_queue<int> *q)
+TEST(CConCondition, ProducerAndConsumer)
 {
-  std::cout << "starts producer" << std::endl;
-  q->push(1);
-  q->push(2);
-  std::cout << "ends producer" << std::endl;
-}
+  using namespace cxx_condition;
 
-// consumer that pops an item from the queue
-void consumer(locked_queue<int> *q)
-{
-  std::cout << "starts consumer" << std::endl;
-  int i = q->pop();
-  std::cout << "ends consumer: " << i << std::endl;
-}
+  locked_queue<int> q;
 
-TEST(CConThread, LockedQueue)
-{
-  locked_queue<int> lq;
+  std::thread c1(&consumer, &q);
+  std::thread c2(&consumer, &q);
+  std::thread c3(&consumer, &q);
 
-  // set up two consumers to wait for items
-
-  std::cout << "main: starts consumers" << std::endl;
-  std::thread c1(&consumer, &lq);
-  std::thread c2(&consumer, &lq);
-
-  // sleep for a second to ensure c1 and c2 are ready
-  // not the best code, but good enough for a test case
   this_thread::sleep_for(chrono::seconds(2));
 
-  // create the producer to push in two items
+  std::thread p1(&producer, &q);
+  std::thread p2(&producer, &q);
+  std::thread p3(&producer, &q);
 
-  std::thread p(&producer, &lq);
+  c1.join(); c2.join(); c3.join();
+  p1.join(); p2.join(); p3.join();
 
-  c1.join();
-  c2.join();
-  p.join();
-
-  std::cout << "main: ends" << std::endl;
+  EXPECT_THAT(consumed, 30);
 }
 
 

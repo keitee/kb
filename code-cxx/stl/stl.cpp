@@ -1397,37 +1397,30 @@ TEST(StlSet, CheckDuplicate)
 // ={=========================================================================
 // cxx-map
 
-TEST(CxxStlTest, HowMapInsertWorks)
+TEST(Map, Insert)
 {
-    map<unsigned int, string> pmap{ 
-        {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
-    };
+  map<unsigned int, string> pmap{ 
+    {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+  };
 
-    // PRINT_M_ELEMENTS(pmap);
+  // PRINT_M_ELEMENTS(pmap);
 
-    pmap[3] = "threee";
-    pmap[3] = "threeee";
-    pmap[3] = "threeeee";
-    pmap[3] = "threeeeee";
+  pmap[3] = "threee";
+  pmap[3] = "threeee";
+  pmap[3] = "threeeee";
+  pmap[3] = "threeeeee";
 
-    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+  ASSERT_THAT(pmap[3], Eq("threeeeee"));
 
-    // PRINT_M_ELEMENTS(pmap);
+  // PRINT_M_ELEMENTS(pmap);
 
-    pmap.insert({3, "third"});
-    pmap.insert({3, "thirdd"});
-    pmap.insert({3, "thirddd"});
-    pmap.insert({3, "thirdddd"});
+  pmap.insert({3, "third"});
+  pmap.insert({3, "thirdd"});
+  pmap.insert({3, "thirddd"});
+  pmap.insert({3, "thirdddd"});
 
-    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+  ASSERT_THAT(pmap[3], Eq("threeeeee"));
 }
-
-
-// ={=========================================================================
-// cxx-map
-
-// key 3.0 found!(3,2)
-// value 3.0 found!(4,3)
 
 // error when use -D_GLIBCXX_DEBUG
 //
@@ -1436,60 +1429,129 @@ TEST(CxxStlTest, HowMapInsertWorks)
 //     return arg->first == expected.first && arg->second == expected.second;
 // }
 
-// TEST(CxxStlTest, HowMapFindWorks)
-// {
-//     map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
-// 
-//     auto posKey = coll.find(3.0);
-//     if( posKey != coll.end() )
-//     {
-//         // cout << "key 3.0 found!(" << posKey->first << "," << 
-//         //     posKey->second << ")" << endl;
-//         ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
-//         // ASSERT_THAT(posKey->first, Eq(3));
-//         // ASSERT_THAT(posKey->second, Eq(2));
-//     }
-// 
-// 
-//     // *algo-find-if-const* error if there is no const on predicate. 
-//     // since it's *cxx-algo-non-modifying* ?
-// 
-//     auto posVal = find_if( coll.cbegin(), coll.cend(),
-//             // [] ( const pair<float,float> &elem ) {
-//             // [] ( const map<float,float>::value_type &elem ) {
-//             [] ( const decltype(coll)::value_type &elem ) {
-//             return elem.second == 3.0;
-//             } );
-//     if( posVal != coll.end() )
-//     {
-//         // cout << "value 3.0 found!(" << posVal->first << "," << 
-//         //     posVal->second << ")" << endl;
-//         ASSERT_THAT(posVal->first, Eq(4));
-//         ASSERT_THAT(posVal->second, Eq(3));
-//     }
-// }
+TEST(Map, Find)
+{
+  map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+
+  // *cxx-error*
+  // when tries to use custom matcher, get's link error
+  // ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
+
+  auto posKey = coll.find(3.0);
+  EXPECT_THAT(*posKey, make_pair(3,2));
+
+  // *algo-find-if-const* error if there is no const on predicate. 
+  // since it's *cxx-algo-non-modifying* ?
+
+  // *cxx-decltype*
+  auto posVal = find_if( coll.cbegin(), coll.cend(),
+      // [] ( const pair<float,float> &elem ) {
+      // [] ( const map<float,float>::value_type &elem ) {
+      [] ( const decltype(coll)::value_type &elem ) {
+      return elem.second == 3.0;
+      } );
+  EXPECT_THAT(posVal->first, Eq(4));
+  EXPECT_THAT(posVal->second, Eq(3));
+}
+
+TEST(Map, EqualRange)
+{
+  std::string str = "total";
+
+  std::multimap<std::string, std::string> authors;
+
+  // *cxx-map-insert*
+  authors.insert( {"Kit, Park", "How to get through"} );
+  authors.insert( {"Barth, John", "Sot-Weed Factor"} );
+  authors.insert( {"Barth, John", "Lost in the Funhouse"});
+  authors.insert( {"Andy, Steve", "Enterprise"});
+  authors.insert( {"Barth, John", "A way to success"});
+
+  std::string search_item("Barth, John");
+
+  auto entries = authors.count( search_item );  // num of elements
+  EXPECT_THAT(entries, 3);
+
+  // use iter
+  {
+    vector<string> result{};
+    auto iter = authors.find(search_item);      // first entry
+
+    while( entries ) {
+      result.push_back(iter->second);
+      ++iter; --entries;
+    }
+
+    EXPECT_THAT(result, 
+        ElementsAre("Sot-Weed Factor", "Lost in the Funhouse", "A way to success"));
+  }
+
+  // use _bound() calls
+  {
+    vector<string> result{};
+
+    for (auto begin = authors.lower_bound(search_item), end = authors.upper_bound(search_item);
+        begin != end; ++begin)
+    {
+      result.push_back(begin->second);
+    }
+
+    EXPECT_THAT(result, 
+        ElementsAre("Sot-Weed Factor", "Lost in the Funhouse", "A way to success"));
+  }
+
+  // use equal_range()
+  // return pair of iter in range [first, off-the-end). Like above, if not found
+  // return the same.
+  {
+    vector<string> result{};
+    auto iter = authors.find(search_item);      // first entry
+
+    for (auto rpos = authors.equal_range(iter->first);
+        rpos.first != rpos.second; ++rpos.first)
+    {
+      result.push_back(rpos.first->second);
+    }
+
+    EXPECT_THAT(result, 
+        ElementsAre("Sot-Weed Factor", "Lost in the Funhouse", "A way to success"));
+  }
+}
 
 
 // ={=========================================================================
 // cxx-unordered
 
-TEST(CxxStlTest, UnorderedMapDuplicates)
+TEST(Unordered, MapDuplicates)
 {
-  unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", "New York",
-    "Chicago", "Toronto", "Paris", "Frankfurt"};
+  unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", 
+    "New York", "Chicago", "Toronto", "Paris", "Frankfurt"};
 
-  for( const auto &elem : cities )
-    cout << elem << ' ';
+  {
+    vector<string> result{};
 
-  cout << endl;
+    for( const auto &elem : cities )
+      result.push_back(elem);
 
-  // insert additional elements
-  cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
+    EXPECT_THAT(result, 
+        ElementsAre("Paris", "Toronto", "Chicago", "New York", 
+          "Frankfurt", "Frankfurt", "Hanover", "Braunschweig")); 
+  }
 
-  for( const auto &elem : cities )
-    cout << elem << ' ';
+  {
+    // insert additional elements
+    cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
 
-  cout << endl;
+    vector<string> result{};
+
+    for( const auto &elem : cities )
+      result.push_back(elem);
+
+    EXPECT_THAT(result, 
+        ElementsAreArray({"Munich", "London", "Frankfurt", "Frankfurt", 
+          "New York", "Braunschweig", "Braunschweig", "Chicago", 
+          "Toronto", "Hanover", "Hanover", "Paris"})); 
+  }
 }
 
 
@@ -2427,16 +2489,26 @@ TEST(AlgoMinMax, Use)
   EXPECT_THAT(coll, 
       ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
 
-  // returns iterators
-  EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
-  EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+  // If more than one minimum or maximum element exists, min_element() and
+  // max_element() return `the first` found; minmax_element() returns the first
+  // minimum but the last maximum element, so max_element() and minmax_element()
+  // don’t yield the same maximum element.
 
+  EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
+
+  EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+  EXPECT_THAT(distance(coll.begin(),max_element(coll.begin(), coll.end())), 4);
+ 
   // return iterator pair
   // Note also that minmax_element() yields `the last maximum`, so the distance
   // 9.
   auto minmax = minmax_element(coll.begin(), coll.end());
-  EXPECT_THAT(*(minmax.first), -3);
-  EXPECT_THAT(*(minmax.second), 6);
+  EXPECT_THAT(*(minmax.first), -3);   // first minimum
+  EXPECT_THAT(*(minmax.second), 6);   // last maximum
+
+  // last maximum is 6 which is the last element
+  EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size()-1);
+
   EXPECT_THAT(distance(minmax.first, minmax.second), 9);
   EXPECT_THAT(distance(
         min_element(coll.begin(), coll.end()),
@@ -2465,6 +2537,149 @@ TEST(AlgoMinMax, UseOwn)
   EXPECT_THAT(*(minmax.first), -3);
   EXPECT_THAT(*(minmax.second), 6);
   EXPECT_THAT(distance(minmax.first, minmax.second), 9);
+}
+
+namespace cxx_max_element
+{
+  struct _Iter_less
+  {
+    template<typename _Iterator1, typename _Iterator2>
+      bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
+      { return *__it1 < *__it2; }
+  };
+
+  template <typename _Iterator, typename _Compare>
+    _Iterator my_max_element(_Iterator __first, _Iterator __last, 
+        _Compare __comp)
+    {
+      // if thre is only one
+      if (__first == __last)
+        return __first;
+
+      _Iterator __result = __first;
+
+      // if *__result < *__first 
+      while (++__first != __last)
+        if (__comp(__result, __first))
+          __result = __first;
+
+      return __result;
+    }
+
+  // note: do by simply reversing comp()
+
+  template <typename _Iterator, typename _Compare>
+    _Iterator my_min_element(_Iterator __first, _Iterator __last,
+        _Compare __comp)
+    {
+      if (__first == __last)
+        return __first;
+
+      _Iterator __result = __first;
+
+      while (++__first != __last)
+        // if (comp(__result, __first))
+        if (__comp(__first, __result))
+          __result = __first;
+
+      return __result;
+    }
+
+} // namespace
+
+TEST(AlgoMinMax, Map)
+{
+  // on map
+  {
+    // sorted by key
+    std::map<int, size_t> counts{
+      {1, 2},
+        {3, 2},
+        {5, 3},
+        {8, 3},
+        {13, 1} 
+    };
+
+    auto e = max_element(counts.begin(), counts.end());
+    EXPECT_THAT(*e, make_pair(13, 1));
+
+    // ForwardIterator
+    // max_element (ForwardIterator beg, ForwardIterator end, CompFunc op)
+    // op is used to compare two elements:
+    // op(elem1,elem2)
+    // It should return true when the first element is less than the second
+    // element.
+
+    auto maxelem = std::max_element(
+        std::begin(counts), std::end(counts),
+        [](pair<int, size_t> const& e1, pair<int, size_t> const& e2)
+        { return e1.second < e2.second; });
+
+    EXPECT_THAT(*maxelem, make_pair(5, 3));
+  }
+
+  // multimap
+  {
+    // sorted by key and the order in the equal range are the order of input
+    std::multimap<int, size_t> counts{
+      {1, 2},
+        {3, 9},
+        {3, 8},
+        {5, 3},
+        {8, 3},
+        {13, 2},
+        {13, 4},
+        {13, 12},
+        {13, 1}
+    };
+
+    // for (auto &e : counts)
+    //   cout << e.first << ", " << e.second << endl;
+
+    // Q: how max_element() finds the max on the second?
+    // see *cxx-pair-comparison*
+
+    auto e = max_element(counts.begin(), counts.end());
+    EXPECT_THAT(*e, make_pair(13, 12));
+  }
+
+  // max_element
+  {
+    using namespace cxx_max_element;
+
+    // sorted by key
+    std::map<int, size_t> counts{
+      {1, 2},
+        {3, 2},
+        {5, 3},
+        {8, 3},
+        {13, 1} 
+    };
+
+    auto pos = my_max_element(counts.begin(), counts.end(),
+        _Iter_less());
+
+    EXPECT_THAT(*pos, make_pair(13, 1));
+  }
+
+  // min_element
+  {
+    using namespace cxx_max_element;
+
+    // sorted by key
+    std::map<int, size_t> counts{
+      {1, 2},
+        {3, 2},
+        {5, 3},
+        {8, 3},
+        {13, 1} 
+    };
+
+    auto pos = my_min_element(counts.begin(), counts.end(),
+        _Iter_less());
+
+    EXPECT_THAT(*pos, make_pair(1, 2));
+  }
 }
 
 

@@ -308,7 +308,34 @@ TEST(Pair, Initialisation)
   //   {9, "IX", 2},
   //   {5, "V", 3}
   // };
-  
+}
+
+
+TEST(Pair, Comparison)
+{
+  {
+    auto p1 = make_pair(1, 2);
+    auto p2 = make_pair(3, 2);
+
+    EXPECT_THAT(p1 > p2, false);
+    EXPECT_THAT(p1 < p2, true);
+  }
+
+  {
+    auto p1 = make_pair(1, 2);
+    auto p2 = make_pair(1, 3);
+
+    EXPECT_THAT(p1 > p2, false);
+    EXPECT_THAT(p1 < p2, true);
+  }
+
+  {
+    auto p1 = make_pair(13, 2);
+    auto p2 = make_pair(13, 4);
+
+    EXPECT_THAT(p1 > p2, false);
+    EXPECT_THAT(p1 < p2, true);
+  }
 }
 
 
@@ -2203,16 +2230,185 @@ TEST(Static, TrackClassInstancesWhenNothingCreated)
 //     return value;
 // }
 
-TEST(CxxFeaturesTest, UseLambda)
+TEST(Lambda, NoCaptureAndReturn)
 {
-    auto callback = [](){
-        std::string value{"this is a callback"};
-        return value;
+  auto callback = [](){
+    std::string value{"this is a callback"};
+    return value;
+  };
+
+  std::string result = callback();
+  EXPECT_THAT(result, "this is a callback");
+}
+
+
+// initialized  : over quick red fox jumps red the slow turtle the 
+// sorted       : fox jumps over quick red red slow the the turtle 
+// eliminated   : fox jumps over quick red slow the turtle 
+// stable sorted: fox red the over slow jumps quick turtle 
+// 3 words of length 5 or longer
+// for_each     : fox red the over slow jumps quick turtle 
+// jumps quick turtle 
+
+namespace cxx_lambda
+{
+  template<typename T>
+    inline void PRINT_ELEMENTS( const T& coll, const std::string &opt = "")
+    {
+      std::cout << opt;
+
+      for( const auto &elem : coll )
+        std::cout << elem << ' ';
+
+      std::cout << std::endl;
+    }
+
+  void eliminate_duplicates(vector<string>& words)
+  {
+    sort(words.begin(), words.end());
+    auto unique_end = unique(words.begin(), words.end());
+    words.erase(unique_end, words.end());
+  }
+
+  bool check_size(string const& s, string::size_type sz)
+  {
+    return s.size() >= sz;
+  }
+
+  void biggies(vector<string>& words, vector<string>::size_type sz)
+  {
+    eliminate_duplicates(words);
+
+    // PRINT_ELEMENTS(words, "eliminated: ");
+
+    sort(words.begin(), words.end(),
+        [](string const& a, string const& b)
+        { return a.size() < b.size(); });
+
+    // PRINT_ELEMENTS(words, "statle sorted: ");
+
+    // get an iter of the first element whose size is >= sz
+
+    // the problem is that find_if() uses *cxx-predicate* which is unary but we
+    // need two args.
+    //
+    // *cxx-lambda* version
+    //
+    // error when use:
+    //
+    // [](string const& e)
+    //
+    // cxx.cpp:2254:30: error: ‘sz’ is not captured
+    //          { return e.size() >= sz; });
+    //                               ^
+    //
+    // works when use:
+    //
+    // [sz](string const& e)
+
+    // auto wc = find_if(words.begin(), words.end(),
+    //     [=](string const& e)
+    //     { return e.size() >= sz; });
+
+    // *cxx-bind* version
+    auto wc = find_if(words.begin(), words.end(),
+        std::bind(check_size, _1, sz));
+
+    // get the number of elements that are its size >= sz
+    // use *cxx-iter-arithmetic* since it's vector
+    auto num = words.end() - wc;
+
+    EXPECT_THAT(num, 3);
+
+    vector<string> result{};
+
+    for_each(wc, words.end(),
+        [&](string const& e)
+        { result.push_back(e); });
+
+    EXPECT_THAT(result, ElementsAre("jumps", "quick", "turtle"));
+  }
+
+} // namespace
+
+TEST(Lambda, Biggies)
+{
+  using namespace cxx_lambda;
+
+  vector<string> coll{"over", "quick", "red", 
+    "fox", "jumps", "red", "the", "slow", "turtle", "the"};
+
+  // PRINT_ELEMENTS( coll, "initialized  : ");
+
+  biggies( coll, 5 );
+}
+
+
+// Suppose that you search in a collection for the first element with a value
+// that is between x and y.
+
+// If need to use in more than one or two places, use function than a lambda.
+// However, it is not easy to write function to replace a lambda that captures
+// local variables. For example, find_if takes unary predicate and see how to
+// pass more than one as this example.
+
+
+TEST(Lambda, Compare)
+{
+  deque<int> coll = { 1, 3, 19, 5, 13, 7, 11, 2, 17 };
+
+  int x{5};
+  int y{12};
+
+  // use lambda
+  {
+    auto pos = find_if(coll.begin(), coll.end(),
+        [=](int e)
+        { return e > x && e < y; });
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // use cxx-bind
+  {
+    auto pos = find_if (coll.begin(), coll.end(),  // range
+        bind(logical_and<bool>(),     // search criterion
+          bind(greater<int>(),_1,x), // _1 > x
+          bind(less<int>(),_1,y)));  // _1 < y
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // before cxx-11, other ways to do
+
+  // handwritten loop
+  {
+    deque<int>::iterator pos;
+
+    for (pos = coll.begin(); pos != coll.end(); ++pos)
+      if (*pos > x && *pos < y)
+        break;
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // use cxx-fobj cxx-predicate
+  {
+    class Pred
+    {
+      public:
+        Pred(int x, int y) : x_(x), y_(y) {}
+        bool operator()(int value) const
+        { return value > x_ && value < y_; }
+      private:
+        int x_;
+        int y_;
     };
 
-    std::string result = callback();
+    auto pos = find_if(coll.begin(), coll.end(), Pred(x, y));
 
-    cout << "result: " << result << endl;
+    EXPECT_THAT(*pos, 7);
+  }
 }
 
 
