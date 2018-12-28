@@ -407,6 +407,271 @@ TEST(Iterator, Array)
   EXPECT_THAT(out, ElementsAre(33, 67, -4, 13, 5, 2));
 }
 
+TEST(IteratorAdapter, Adapters)
+{
+  list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  // cxx-iter-back-inserter
+  {
+    vector<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        back_inserter(ocoll));
+    EXPECT_THAT(ocoll, ElementsAreArray({1,2,3,4,5,6,7,8,9}));
+  }
+
+  // *cxx-reverse* 
+  // cxx-iter-front-inserter
+  // have to use cxx-deque since it uses push_front
+  {
+    deque<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        front_inserter(ocoll));
+    EXPECT_THAT(ocoll, ElementsAreArray({9,8,7,6,5,4,3,2,1}));
+  }
+
+  // *cxx-iter-inserter*
+  {
+    vector<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        inserter(ocoll, ocoll.begin()));
+    EXPECT_THAT(ocoll, ElementsAreArray({1,2,3,4,5,6,7,8,9}));
+  }
+}
+
+// shows that inserter() uses insert_iterator internally and that how it works.
+
+TEST(IteratorAdapter, InsertIterator)
+{
+  {
+    list<int> coll;
+
+    insert_iterator<list<int>> iter(coll, coll.begin());
+
+    // use usual iterator interface which has the same result
+    // why since this is how insert_iterator is implemented
+    //
+    // *iter = 1; iter++;
+    // *iter = 2; iter++;
+    // *iter = 3; iter++;
+
+    *iter = 1; *iter = 2; *iter = 3; *iter = 44; *iter = 55;
+    EXPECT_THAT(coll, ElementsAre(1,2,3,44,55));
+  }
+
+  {
+    list<int> coll;
+
+    coll.push_back(1); coll.push_back(2); coll.push_back(3);
+    coll.push_back(44); coll.push_back(55);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,44,55));
+  }
+
+  {
+    list<int> coll{1,2,3,44,55};
+    list<int> ocoll{};
+
+    copy(coll.begin(), coll.end(), inserter(ocoll, ocoll.begin()));
+
+    EXPECT_THAT(ocoll, ElementsAre(1,2,3,44,55));
+  }
+}
+
+TEST(IteratorAdapter, ReverseIterator)
+{
+  {
+    string coll{"PARK"};
+    string result;
+
+    string::const_reverse_iterator it = coll.crbegin();
+
+    while (it != coll.crend())
+      result.push_back(*it++);
+
+    EXPECT_THAT(result, "KRAP");
+  }
+
+  {
+    string coll{"FIRST,MIDDLE,LAST"};
+
+    auto delim = find(coll.cbegin(), coll.cend(), ',');
+    EXPECT_THAT(string(coll.cbegin(), delim), "FIRST");
+
+    // The result is "TSAL" since iterator goes backward and means [crbegin(),
+    // rcomma). To get the expected result, shall use instead [rcomma.base(),
+    // cend() ) which converts reverse iterator to normal interator.
+
+    auto rdelim = find(coll.crbegin(), coll.crend(), ',');
+    EXPECT_THAT(string(coll.crbegin(), rdelim), "TSAL");
+
+    EXPECT_THAT(string(rdelim.base(), coll.cend()), "LAST");
+  }
+
+  // reverse_iterator operator*() do --
+  {
+    // create deque with elements from 1 to 9
+    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    deque<int>::const_iterator pos;
+    pos = find(coll.cbegin(), coll.cend(), 7);
+    EXPECT_THAT(*pos, 7);
+    
+    deque<int>::const_reverse_iterator rpos(pos);
+    EXPECT_THAT(*rpos, 6);
+  }
+
+  {
+    ostringstream os;
+
+    // create deque with elements from 1 to 9
+    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    // find range [2,7]
+    deque<int>::const_iterator pos1;
+    pos1 = find(coll.cbegin(), coll.cend(), 2);
+
+    deque<int>::const_iterator pos2;
+    pos2 = find(coll.cbegin(), coll.cend(), 7);
+
+    // [2,6]
+    for_each(pos1, pos2, [&](int e)
+        { os << e << ","; }
+        );
+
+    EXPECT_THAT(os.str(), "2,3,4,5,6,");
+
+    deque<int>::const_reverse_iterator rpos1(pos1);
+    deque<int>::const_reverse_iterator rpos2(pos2);
+
+    os.str("");
+
+    // *cxx-error* cause runtime error -D_GLIBCXX_DEBUG
+    // for_each(rpos1, rpos2, [&](int e)
+    //
+    // since rpos1 that point 2 and rpos1++ means pos1-- and goes below begin()
+
+    for_each(rpos2, rpos1, [&](int e)
+        { os << e << ","; }
+        );
+
+    EXPECT_THAT(os.str(), "6,5,4,3,2,");
+  }
+}
+
+TEST(IteratorAdapter, StreamIterator)
+{
+  // as gets from std::cin, use stream
+  {
+    istringstream is{"1 2 3 4 5 6"};
+    vector<int> coll;
+
+    int value{};
+
+    while (is >> value)
+      coll.push_back(value);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // as gets from std::cin, use iterator
+  {
+    istringstream is{"1 2 3 4 5 6"};
+    vector<int> coll;
+
+    istream_iterator<int> isi(is), eof;
+
+    while (isi != eof)
+      coll.push_back(*isi++);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    istream_iterator<int> isi(is), eof;
+
+    // *cxx-vector-ctor*
+    // no loop and no isi++
+    vector<int> coll(isi, eof);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
+
+    // *cxx-error* without additional (). WHY?
+    // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    istream_iterator<int> isi(is), eof;
+
+    // no loop and no isi++
+    vector<int> coll;
+    std::copy(isi, eof, back_inserter(coll));
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // as gets from std::cin, use stream
+  {
+    // istream_iterator<int> isi(cin), eof;
+
+    istringstream is{"1 2 3 4 5 6"};
+    istream_iterator<int> isi(is), eof;
+
+    auto result = std::accumulate(isi, eof, 0);
+
+    EXPECT_THAT(result, 21);
+  }
+
+  // ostream_iterator as std::cout
+  {
+    vector<int> coll{1,2,3,4,5,6};
+    ostringstream os;
+    ostream_iterator<int> osi(os, ",");
+
+    for (auto e : coll)
+      *osi++ = e;
+
+    EXPECT_THAT(os.str(), "1,2,3,4,5,6,");
+  }
+
+  // With/without "++oo", the result is the same. The ++oo is done to mimic
+  // writing into an array through a pointer.
+
+  {
+    ostringstream os;
+    ostream_iterator<string> osi(os);
+
+    *osi = "Hello, ";
+    ++osi;
+    *osi = "world!";
+
+    EXPECT_THAT(os.str(), "Hello, world!");
+  }
+  {
+    ostringstream os;
+    ostream_iterator<string> osi(os);
+
+    *osi = "Hello, ";
+    *osi = "world!";
+
+    EXPECT_THAT(os.str(), "Hello, world!");
+  }
+}
+
 
 // ={=========================================================================
 // cxx-vector
@@ -2301,6 +2566,31 @@ TEST(AlgoAccumulate, Use)
           return init+elem;
         })
         , Eq(15));
+}
+
+// see how to use acculumate on map
+
+TEST(AlgoAccumulate, Map)
+{
+  std::map<int, size_t> counts{
+    {1, 2},
+      {3, 2},
+      {5, 3},
+      {8, 3},
+      {13, 1} 
+  };
+
+  // *cxx-error*
+  // auto result = std::accumulate(counts.begin(), counts.end(), pair<int const, size_t>());
+
+  // *cxx-const* cause error:
+  //     [](size_t sum, pair<int, size_t>& e)
+  //
+  auto result = std::accumulate(counts.begin(), counts.end(), 0,
+      [](size_t sum, pair<int const, size_t>& e)
+      { return sum + e.second; });
+
+  EXPECT_THAT(result, 11);
 }
 
 

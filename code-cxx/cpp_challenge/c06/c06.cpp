@@ -421,10 +421,6 @@ namespace U48_Text
       // It should return true when the first element is less than the second
       // element.
 
-      // note: don't need to have `op`
-      // auto maxelem = std::max_element(
-      //     std::begin(counts), std::end(counts));
-
       auto maxelem = std::max_element(
           std::begin(counts), std::end(counts),
           [](pair<T, size_t> const& e1, pair<T, size_t> const& e2)
@@ -455,6 +451,244 @@ TEST(U48, Text)
 
   EXPECT_THAT(result, ElementsAre(make_pair(5, 3), make_pair(8, 3)));
 }
+
+
+/*
+
+49. Text histogram
+
+Write a program that, given a text, determines and prints a histogram with the
+frequency of each letter of the alphabet. The frequency is the percentage of the
+number of appearances of each letter from the total count of letters. The
+program should count only the appearances of letters and ignore digits, signs,
+and other possible characters. The frequency must be determined based on the
+count of letters and not the text size.
+
+{
+   auto result = analyze_text(R"(Lorem ipsum dolor sit amet, consectetur 
+      adipiscing elit, sed do eiusmod tempor incididunt ut labore et 
+      dolore magna aliqua.)");
+
+   for (auto const & kvp : result)
+   {
+      std::cout << kvp.first << " : "
+                << std::fixed
+                << std::setw(5) << std::setfill(' ')
+                << std::setprecision(2) << kvp.second << std::endl;
+   }
+}
+
+*/
+
+namespace U49_2018_12_27
+{
+  vector<pair<char, float>> analyze_text(string const& input)
+  {
+    map<char, int> counts{};
+
+    size_t total_count{};
+
+    for (auto e : input)
+    {
+      if (isalpha(e))
+      {
+        ++total_count;
+        ++counts[e];
+      }
+    }
+
+    vector<pair<char, float>> result;
+
+    for (auto& e : counts)
+    {
+      float percent = (e.second * 100.0) / total_count;
+      result.push_back(make_pair(e.first, percent));
+    }
+
+    // for (auto& e : result)
+    //   cout << e.first << ", " << e.second << endl;
+
+    return result;
+  }
+} // namespace
+
+TEST(U49, 2018_12_27)
+{
+  using namespace U49_2018_12_27;
+
+  auto result = analyze_text("Lorem ipsum dolor sit amet, consectetur" 
+      "adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
+      "dolore magna aliqua.");
+  //
+  // auto result = analyze_text(R"(Lorem ipsum dolor sit amet, consectetur 
+   //    adipiscing elit, sed do eiusmod tempor incididunt ut labore et 
+   //    dolore magna aliqua.)");
+
+   for (auto const & kvp : result)
+   {
+      std::cout << kvp.first << " : "
+                << std::fixed
+                << std::setw(5) << std::setfill(' ')
+                << std::setprecision(2) << kvp.second << std::endl;
+   }
+}
+
+
+// the text version use the same map for a return
+// the text version has chars that are not seen input.
+
+namespace U49_Text
+{
+  // *cxx-17*
+  // std::map<char, double> analyze_text(std::string_view text)
+  std::map<char, double> analyze_text(std::string text)
+  {
+    std::map<char, double> frequencies;
+
+    // init a map
+    for (char ch = 'a'; ch <= 'z'; ch++)
+      frequencies[ch] = 0;
+
+    for (auto ch : text)
+    {
+      if (isalpha(ch))
+        frequencies[std::tolower(ch)]++;
+    }
+
+    // adds up occurances
+    // *cxx-const-error* since key is const on map
+    //    [](unsigned long long sum, pair<char, double>& e)
+
+    auto total = std::accumulate(frequencies.begin(), frequencies.end(), 0ull,
+        [](unsigned long long sum, pair<char const, double>& e)
+        { return sum + e.second; });
+
+    // calc percentages
+    // 
+    // *cxx-const-error* since key is const on map
+    //    [=](pair<char, double>&e)
+
+    std::for_each(frequencies.begin(), frequencies.end(),
+        [=](pair<char const, double>&e)
+        { e.second = (100.0 * e.second) / total; });
+
+    return frequencies;
+  }
+} // namespace
+
+TEST(U49, Text)
+{
+  using namespace U49_Text;
+
+  auto result = analyze_text("Lorem ipsum dolor sit amet, consectetur" 
+      "adipiscing elit, sed do eiusmod tempor incididunt ut labore et "
+      "dolore magna aliqua.");
+  //
+  // auto result = analyze_text(R"(Lorem ipsum dolor sit amet, consectetur 
+   //    adipiscing elit, sed do eiusmod tempor incididunt ut labore et 
+   //    dolore magna aliqua.)");
+
+   for (auto const & kvp : result)
+   {
+      std::cout << kvp.first << " : "
+                << std::fixed
+                << std::setw(5) << std::setfill(' ')
+                << std::setprecision(2) << kvp.second << std::endl;
+   }
+}
+
+
+/*
+
+50. Filtering a list of phone numbers
+
+Write a function that, given a list of phone numbers, returns only the numbers
+that are from a specified country. The country is indicated by its phone country
+code, such as 44 for Great Britain. Phone numbers may start with the country
+code, a + followed by the country code, or have no country code. The ones from
+this last category must be ignored.
+
+{
+   std::vector<std::string> numbers{
+      "+40744909080",
+      "44 7520 112233",
+      "+44 7555 123456",
+      "40 7200 123456",
+      "7555 123456"
+   };
+
+   auto result = filter_numbers(numbers, "44");
+
+   for (auto const & number : result)
+   {
+      std::cout << number << std::endl;
+   }
+}
+
+*/
+
+namespace U50_Text
+{
+  bool starts_with(std::string const& text, std::string const& prefix)
+  {
+    // *cxx-string-find* returns index of found so if text start with prefix
+    // then should return 0.
+
+    return text.find(prefix) == 0;
+  }
+
+  std::vector<std::string> filter_numbers(std::vector<std::string> const& numbers,
+      std::string const& code)
+  {
+    std::vector<std::string> result;
+
+    std::copy_if(numbers.begin(), numbers.end(), std::back_inserter(result),
+        [=](std::string const& number)
+        { return starts_with(number, code) || starts_with(number, "+" + code); }
+        );
+
+    return result;
+  }
+} // namespace
+
+TEST(U50, Text)
+{
+  using namespace U50_Text;
+
+  std::vector<std::string> numbers{
+    "+40744909080",
+      "44 7520 112233",
+      "+44 7555 123456",
+      "40 7200 123456",
+      "7555 123456"
+  };
+
+  auto result = filter_numbers(numbers, "44");
+
+  ostringstream os;
+  for (auto const & number : result)
+    os << number << std::endl;
+  
+  EXPECT_THAT(os.str(), "44 7520 112233\n+44 7555 123456\n");
+}
+
+
+/*
+
+51. Transforming a list of phone numbers
+
+Write a function that, given a list of phone numbers, transforms them so they
+all start with a specified phone country code, preceded by the + sign. Any
+whitespaces from a phone number should also be removed. The following is a list
+of input and output examples:
+
+07555 123456    => +447555123456
+07555123456     => +447555123456
++44 7555 123456 => +447555123456
+44 7555 123456  => +447555123456
+7555 123456     => +447555123456
+
+*/
 
 
 // ={=========================================================================

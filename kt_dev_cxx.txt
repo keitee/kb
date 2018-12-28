@@ -36416,7 +36416,7 @@ There are some differences between containers as to what to return from insert
 and erase and arguments. 
 
 
-{cxx-vector-insert-cxx-vector-erase} cxx-insert cxx-erase
+{cxx-insert-cxx-vector-insert-cxx-erase-cxx-vector-erase} cxx-insert cxx-erase
 
 `where, pos, beg, end are iterators`
 
@@ -41938,7 +41938,7 @@ These are several predefined special iterators, called iterator adapters:
 insert, stream, reverse, and move iterators
 
 
-{cxx-inserter}
+{cxx-iter-inserter} cxx-inserter
 `insert-iterator`, or inserters, are used to let algorithms operate in
 'insert' mode rather than in overwrite mode by transforming an assignment of
 an new value into an insertion. (for overwrite example, algorithms using
@@ -41947,10 +41947,13 @@ an new value into an insertion. (for overwrite example, algorithms using
 They fall under the category of 'output' iterators, which are able to
 write/assign values only 'while' iterating forward.
 
-The inserters calls a container operation to add and must use front_inserter
-only if the container has push_front and use back_inserter only if it has
-push_back. These are `back_inserter`, `front_inserter`, `inserter` which bind
-iterator to container operations.
+The inserters calls a container operation to add and must:
+
+use front_inserter only if the container has push_front 
+use back_inserter only if it has push_back. 
+
+These are `back_inserter`, `front_inserter`, `inserter` which bind iterator to
+container operations.
 
 Consider *cxx-algo-copy* :
 
@@ -41978,7 +41981,7 @@ operations are involved: First, operator * returns the `current-element` of the
 iterator; second, operator = assigns the new value. Implementations of insert
 iterators usually use the following two-step trick:
 
-* Operator * is implemented as a no-op that simply returns *this. Thus, for
+o Operator * is implemented as a no-op that simply returns *this. Thus, for
   insert iterators, *pos is equivalent to pos.
 
   template<typename _Container>
@@ -41992,9 +41995,71 @@ iterators usually use the following two-step trick:
 
     };
 
-* The assignment operator is implemented so that it gets transferred into an
+o The assignment operator is implemented so that it gets transferred into an
   insertion. In fact, the insert iterator calls the push_back(), push_front(),
   or insert() member function of the container.
+
+// bits/stl_iterator.h
+
+  /**
+   *  @param __x  A container of arbitrary type.
+   *  @return  An instance of insert_iterator working on @p __x.
+   *
+   *  This wrapper function helps in creating insert_iterator instances.
+   *  Typing the name of the %iterator requires knowing the precise full
+   *  type of the container, which can be tedious and impedes generic
+   *  programming.  Using this function lets you take advantage of automatic
+   *  template parameter deduction, making the compiler match the correct
+   *  types for you.
+  */
+  template<typename _Container, typename _Iterator>
+    inline insert_iterator<_Container>
+    inserter(_Container& __x, _Iterator __i)
+    {
+      return insert_iterator<_Container>(__x,
+					 typename _Container::iterator(__i));
+    }
+
+  /**
+   *  @brief  Turns assignment into insertion.
+   *
+   *  These are output iterators, constructed from a container-of-T.
+   *  Assigning a T to the iterator inserts it in the container at the
+   *  %iterator's position, rather than overwriting the value at that
+   *  position.
+   *
+   *  (Sequences will actually insert a @e copy of the value before the
+   *  %iterator's position.)
+   *
+   *  Tip:  Using the inserter function to create these iterators can
+   *  save typing.
+  */
+  template<typename _Container>
+    class insert_iterator
+    : public iterator<output_iterator_tag, void, void, void, void>
+    {
+      /// Simply returns *this.
+      insert_iterator&
+      operator*()
+      { return *this; }
+
+      insert_iterator&
+        operator=(const typename _Container::value_type& __value)
+        {
+          iter = container->insert(iter, __value);
+          ++iter;
+          return *this;
+        }
+    
+      insert_iterator&
+        operator=(typename _Container::value_type&& __value)
+        {
+          iter = container->insert(iter, std::move(__value));
+          ++iter;
+          return *this;
+        }
+    }
+
 
 Each kind of insert iterator has a convenience function for its creation and
 initialization.
@@ -42012,10 +42077,10 @@ note:
 //   insertion. How? increment operator is no-op as i the CLR 9.4.2.
 
 
-{cxx-insert-member-function}
+<cxx-inserter-member-function>
 Calls `insert(pos, val)` member and insert elements directly in front of the
 position that is passed as the argument of its initialization and as the start
-to insert. For all containers except array and forward_list.
+to insert. `For all containers except array and forward_list.`
 
 Passing a position(iterator) to insert doesn't sound useful? So for
 associative and unordered containers, the position is taken as a 'hint' to
@@ -42023,126 +42088,98 @@ start the search for the correct position. However, containers are free to
 ignore it.
 
 <ex> *ex-algo-copy*
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <set>
-#include <list>
-#include <deque>
 
-using namespace std;
-
-template<typename T>
-void PRINT_ELEMENTS( T& coll, const std::string& mesg = "" )
+TEST(Iterator, Adapter)
 {
-  cout << mesg << ": {";
+  list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-  for( const auto &elem : coll )
-    cout << elem << ",";
+  // cxx-iter-back-inserter
+  {
+    vector<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        back_inserter(ocoll));
+    EXPECT_THAT(ocoll, ElementsAreArray({1,2,3,4,5,6,7,8,9}));
+  }
 
-  cout << "}" << endl;
+  // *cxx-reverse* 
+  // cxx-iter-front-inserter
+  // have to use cxx-deque since it uses push_front
+  {
+    deque<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        front_inserter(ocoll));
+    EXPECT_THAT(ocoll, ElementsAreArray({9,8,7,6,5,4,3,2,1}));
+  }
+
+  // *cxx-iter-inserter*
+  // note see the usage of inserter
+  {
+    vector<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        inserter(ocoll, ocoll.begin()));
+    EXPECT_THAT(ocoll, ElementsAreArray({1,2,3,4,5,6,7,8,9}));
+  }
 }
 
-int main()
-{
-  list<int> coll1{ 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-
-  // copy the elements of coll1 into coll2 by appending them
-  vector<int> coll2;
-  copy (coll1.cbegin(), coll1.cend(),  // source
-      back_inserter(coll2));           // destination
-
-  PRINT_ELEMENTS( coll2, "vector" );
-
-  // copy the elements of coll1 into coll3 by inserting them at the front
-  // *cpp-reverse* reverses the order of the elements
-  deque<int> coll3;
-  copy (coll1.cbegin(), coll1.cend(),  // source
-      front_inserter(coll3));          // destination
-
-  PRINT_ELEMENTS( coll3, "deque " );
-
-  // copy elements of coll1 into coll4
-  set<int> coll4;
-  copy (coll1.cbegin(), coll1.cend(),   // source
-      inserter(coll4, coll4.begin()));  // destination
-
-  PRINT_ELEMENTS( coll4, "set   " );
-
-  vector<int> coll5;
-  copy (coll1.cbegin(), coll1.cend(),  // source
-      inserter(coll5, coll5.begin())); // destination. pos to start
-
-  PRINT_ELEMENTS( coll5, "vector" );
-}
-
-vector: {1,2,3,4,5,6,7,8,9,}
-deque : {9,8,7,6,5,4,3,2,1,}
-set   : {1,2,3,4,5,6,7,8,9,}
-vector: {1,2,3,4,5,6,7,8,9,}
-
-note: 
-see that uses 'collection' in inserter template as a argument without type.
-
-<why-the-order-maintained-in-inserter>
-The general inserter does followings; update and increase pos.
-
-pos = container.insert(pos,value);
-++pos;
 
 <ex>
-#include <iostream>
-#include <list>
-#include <iterator>     // xxx_iterator
 
-using namespace std;
+How *cxx-iter-inserter* inserts:
 
-template<typename T>
-void PRINT_ELEMENTS( T& coll, const std::string& mesg = "" )
+c.insert(pos,elem)
+  
+Inserts a copy of elem before iterator position pos and returns the position
+of the new element
+
+insert_iterator&
+  operator=(const typename _Container::value_type& __value)
+  {
+    iter = container->insert(iter, __value);
+    ++iter;
+    return *this;
+  }
+
+// shows that inserter() uses insert_iterator internally and that how it works.
+
+TEST(Iterator, InsertIterator)
 {
-  cout << mesg << ": {";
+  {
+    list<int> coll;
 
-  for( const auto &elem : coll )
-    cout << elem << ",";
+    insert_iterator<list<int>> iter(coll, coll.begin());
 
-  cout << "}" << endl;
+    // use usual iterator interface which has the same result
+    // why since this is how insert_iterator is implemented
+    //
+    // *iter = 1; iter++;
+    // *iter = 2; iter++;
+    // *iter = 3; iter++;
+
+    *iter = 1; *iter = 2; *iter = 3; *iter = 44; *iter = 55;
+    EXPECT_THAT(coll, ElementsAre(1,2,3,44,55));
+  }
+
+  {
+    list<int> coll;
+
+    coll.push_back(1); coll.push_back(2); coll.push_back(3);
+    coll.push_back(44); coll.push_back(55);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,44,55));
+  }
+
+  {
+    list<int> coll{1,2,3,44,55};
+    list<int> ocoll{};
+
+    copy(coll.begin(), coll.end(), inserter(ocoll, ocoll.begin()));
+
+    EXPECT_THAT(ocoll, ElementsAre(1,2,3,44,55));
+  }
 }
 
-int main()
-{
-  list<int> coll1, coll2;
 
-  // `inconvenient-way` to create `inserter`
-  insert_iterator<list<int>> iter( coll1, coll1.begin() );
-
-  // use usual iterator interface which has the same result
-  // *iter = 1; iter++;
-  // *iter = 2; iter++;
-  // *iter = 3; iter++;
-
-  *iter = 1; *iter = 2; *iter = 3; *iter = 44; *iter = 55;
-  PRINT_ELEMENTS( coll1, "list1: " );
-
-  coll2.push_back(1); coll2.push_back(2); coll2.push_back(3);
-  coll2.push_back(44); coll2.push_back(55);
-  PRINT_ELEMENTS( coll2, "list2: " );
-
-  list<int> coll3;
-  // convenient way to create inserter
-  copy( coll1.begin(), coll1.end(), inserter( coll3, coll3.begin()) );
-  PRINT_ELEMENTS( coll3, "list3: " );
-
-  copy( coll1.begin(), coll1.end(), inserter( coll3, ++coll3.begin()) );
-  PRINT_ELEMENTS( coll3, "list3: " );
-}
-
-list1: : {1,2,3,44,55,}
-list2: : {1,2,3,44,55,}
-list3: : {1,2,3,44,55,}
-list3: : {1,1,2,3,44,55,2,3,44,55,}
-
-
-{cxx-back-inserter}
+{cxx-iter-back-inserter} {cxx-back-inserter}
 Calls push_back so back inserters can be used 'only' for containers that
 provide push_back() as a member function: vector, deque, list, and strings.
 
@@ -42212,53 +42249,7 @@ provide push_back() as a member function: vector, deque, list, and strings.
 };
 
 
-<ex>
-#include <iostream>
-#include <vector>
-#include <iterator>
-
-using namespace std;
-
-template<typename T>
-void PRINT_ELEMENTS( T& coll, const std::string& mesg = "" )
-{
-  cout << mesg << ": {";
-
-  for( const auto &elem : coll )
-    cout << elem << ",";
-
-  cout << "}" << endl;
-}
-
-int main()
-{
-  vector<int> coll;
-
-  back_insert_iterator<vector<int>> iter( coll );
-
-  // use usual iterator interface
-  *iter = 1; iter++;
-  *iter = 2; iter++;
-  *iter = 3; iter++;
-  *iter = 44; iter++;
-  *iter = 45; iter++;
-
-  // *iter = 1; *iter = 2; *iter = 3; *iter = 44; *iter = 55;
-  PRINT_ELEMENTS( coll, "coll: " );
-
-  coll.reserve( 2*coll.size() );
-  copy( coll.begin(), coll.end(), back_inserter(coll) );
-  PRINT_ELEMENTS( coll, "coll: " );
-}
-
-note: 
-you 'must' not forget to reserve enough space before calling copy(). The reason
-is that the back inserter inserts elements, which might cause relocation;
-invalidate all other iterators referring to the same vector. Thus, the algorithm
-invalidates the passed source iterators while running.
-
-
-{cxx-front-inserter}
+{cxx-iter-front-inserter} {cxx-front-inserter}
 Calls push_front so back inserters can be used 'only' for containers that
 provide push_front() as a member function: deque, list, and forward_list.
 
@@ -42266,6 +42257,11 @@ provide push_front() as a member function: deque, list, and forward_list.
 {cxx-iter-stream} cxx-stream-iterator
 
 // /usr/include/c++/4.9/bits/stream_iterator.h
+
+template <class T, class charT=char, class traits=char_traits< charT>>
+class ostream_iterator;
+ 
+ostream_iterator (ostream_type& s, const char_type* delimiter);
 
   "see(treat) stream as a sequence of elements(container) so use iterators"
 
@@ -42277,59 +42273,109 @@ with algorithms.
 
 Need to specify which stream will be used and the type of objects written to it.
 
-<ex> istream_iterator
-Input iterators are used in pairs representing a sequence, so we must provide
-an istream_iterator to indicate the end of input.
-
-string word;
-
-while( cin >> word )
-  vec.push_back(word);
-
-
-istream_iterator<string> in_iter(cin), eof;
-
-while( in_iter != eof )
-  vec.push_back(*in_iter++);
-
-or
-
-istream_iterator<string> in_iter(cin), eof;
-vector<string> vec(in_iter, eof);   // vector ctor which use iter range
-
-
-<ex> algo-copy
-// template <class T, class charT=char, class traits=char_traits< charT>>
-// class ostream_iterator;
-// 
-// ostream_iterator (ostream_type& s, const char_type* delimiter);
-
-copy (list_two.cbegin(), list_two.cend(), ostream_iterator<int>(cout, " "));
-
-std::ostream_iterator<int> out_iter( std::cout, " " );
-for( auto e : vec )
-  *out_iter++ = e;
-cout << endl;
-
-
-vector<Data> e;
-copy( istream_iterator<Date>( cin ), 
-    istream_iterator<Date>(), back_inserter(e) );
-
-
 <ex>
+
+TEST(IteratorAdapter, StreamIterator)
 {
-    ostream_iterator<string> oo{cout};
+  // as gets from std::cin, use stream
+  {
+    istringstream is{"1 2 3 4 5 6"};
+    vector<int> coll;
 
-    *oo = "Hello, ";
-    ++oo;
-    *oo = "world!\n";
+    int value{};
+
+    while (is >> value)
+      coll.push_back(value);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // as gets from std::cin, use iterator
+  {
+    istringstream is{"1 2 3 4 5 6"};
+    vector<int> coll;
+
+    istream_iterator<int> isi(is), eof;
+
+    while (isi != eof)
+      coll.push_back(*isi++);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    istream_iterator<int> isi(is), eof;
+
+    // *cxx-vector-ctor*
+    // no loop and no isi++
+    vector<int> coll(isi, eof);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
+
+    // *cxx-error* without additional (). WHY?
+    // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    istream_iterator<int> isi(is), eof;
+
+    // no loop and no isi++
+    vector<int> coll;
+    std::copy(isi, eof, back_inserter(coll));
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // ostream_iterator as std::cout
+  {
+    vector<int> coll{1,2,3,4,5,6};
+    ostringstream os;
+    ostream_iterator<int> osi(os, ",");
+
+    for (auto e : coll)
+      *osi++ = e;
+
+    EXPECT_THAT(os.str(), "1,2,3,4,5,6,");
+  }
+
+  // With/without "++oo", the result is the same. The ++oo is done to mimic
+  // writing into an array through a pointer.
+
+  {
+    ostringstream os;
+    ostream_iterator<string> osi(os);
+
+    *osi = "Hello, ";
+    ++osi;
+    *osi = "world!";
+
+    EXPECT_THAT(os.str(), "Hello, world!");
+  }
+  {
+    ostringstream os;
+    ostream_iterator<string> osi(os);
+
+    *osi = "Hello, ";
+    *osi = "world!";
+
+    EXPECT_THAT(os.str(), "Hello, world!");
+  }
 }
-
-Hello, world!
-
-With/without "++oo", the result is the same. The ++oo is done to mimic writing
-into an array through a pointer.
 
 
 <ex> how stream-iterator can make code neat
@@ -42423,6 +42469,8 @@ int main()
 
   vector<string> b {ii,eos};              // b is a vector initialized from input
   sort(b.begin(),b.end());                // sort the buffer
+
+  *algo-unique-copy*
   unique_copy(b.begin(),b.end(),oo);      // copy buffer to output, discard replicated values
 
   return !is.eof() || !os;                // return error state (§2.2.1, §38.3)
@@ -42451,13 +42499,23 @@ size of the program
 
 <ex> *ex-algo-accumulate*
 
+#include <numeric>
+
 template <class InputIterator, class T>
 T accumulate (InputIterator first, InputIterator last, T init)
 
-#include <numeric>
 
-istream_iterator<int> in_iter(cin), eof;
-cout << std::accumulate(in_iter, eof, 0) << endl;
+  // as gets from std::cin, use stream
+  {
+    // istream_iterator<int> isi(cin), eof;
+
+    istringstream is{"1 2 3 4 5 6"};
+    istream_iterator<int> isi(is), eof;
+
+    auto result = std::accumulate(isi, eof, 0);
+
+    EXPECT_THAT(result, 21);
+  }
 
 // cxx-algo-accumulate
 //
@@ -42483,6 +42541,52 @@ cout << std::accumulate(in_iter, eof, 0) << endl;
 // or
 //  initValue op a1 op a2 op a3 op ...
 // respectively.
+
+// bits/stl_numeric.h
+
+  /**
+   *  @brief  Accumulate values in a range.
+   *
+   *  Accumulates the values in the range [first,last) using operator+().  The
+   *  initial value is @a init.  The values are processed in order.
+   *
+   *  @param  __first  Start of range.
+   *  @param  __last  End of range.
+   *  @param  __init  Starting value to add other values to.
+   *  @return  The final sum.
+   */
+  template<typename _InputIterator, typename _Tp>
+    inline _Tp
+    accumulate(_InputIterator __first, _InputIterator __last, _Tp __init)
+    {
+      for (; __first != __last; ++__first)
+        __init = __init + *__first;
+      return __init;
+    }
+
+  /**
+   *  @brief  Accumulate values in a range with operation.
+   *
+   *  Accumulates the values in the range [first,last) using the function
+   *  object @p __binary_op.  The initial value is @p __init.  The values are
+   *  processed in order.
+   *
+   *  @param  __first  Start of range.
+   *  @param  __last  End of range.
+   *  @param  __init  Starting value to add other values to.
+   *  @param  __binary_op  Function object to accumulate with.
+   *  @return  The final sum.
+   */
+  template<typename _InputIterator, typename _Tp, typename _BinaryOperation>
+    inline _Tp
+    accumulate(_InputIterator __first, _InputIterator __last, _Tp __init,
+	       _BinaryOperation __binary_op)
+    {
+      for (; __first != __last; ++__first)
+        __init = __binary_op(__init, *__first);
+      return __init;
+    }
+
 
 TEST(AlgoAccumulate, Use)
 {
@@ -42521,218 +42625,225 @@ TEST(AlgoAccumulate, Use)
         , Eq(15));
 }
 
+// see how to use acculumate on map
 
-<ex> *ex-algo-unique-copy*
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <iterator>
-
-using namespace std;
-
-int main()
+TEST(AlgoAccumulate, Map)
 {
-  vector<string> coll;
+  std::map<int, size_t> counts{
+    {1, 2},
+      {3, 2},
+      {5, 3},
+      {8, 3},
+      {13, 1} 
+  };
 
-  // read all words from stdin
-  // istream_iterator<string>() is "end of stream" iterator
-  copy( istream_iterator<string>(cin), istream_iterator<string>(),
-      back_inserter(coll));
+  // *cxx-error*
+  // auto result = std::accumulate(counts.begin(), counts.end(), pair<int const, size_t>());
 
-  cout << "===========" << endl;
+  // *cxx-const* cause error:
+  //     [](size_t sum, pair<int, size_t>& e)
+  //
+  auto result = std::accumulate(counts.begin(), counts.end(), 0,
+      [](size_t sum, pair<int const, size_t>& e)
+      { return sum + e.second; });
 
-  sort( coll.begin(), coll.end() );
-
-  // print all without duplicates
-  unique_copy( coll.begin(), coll.end(), ostream_iterator<string>(cout, "\n"));
+  EXPECT_THAT(result, 11);
 }
 
 
-{reverse-iterator}
-Allow algorithms operate backward by switching the call of an increment operator
-internally into a call of the decrement operator, and vice versa. The advantage
-of using `reverse-iterator` is that all algorithms are able to operate in the
-opposite direction without special code.
+{cxx-iter-reverse-iterator} cxx-reverse-iterator
 
-sort( vec.begin(), vec.end() );     // sort in normal, ascending order
-sort( vec.rbegin(), vec.rend() );   // sort in reverse, decending order
+DO not provide template class as cxx-back-inserter
+
+Allow algorithms operate backward by switching the call of an increment
+operator internally into a call of the decrement operator, and vice versa. The
+advantage of using `reverse-iterator` is that all algorithms are able to
+operate in the opposite direction without special code.
+
+std::sort(vec.begin(), vec.end());    // sort in normal, ascending order
+std::sort(vec.rbegin(), vec.rend());  // sort in reverse, decending order
 
    .cbegin()              .cend()
   [ ] [ ] [ ] [ ] ... [ ]
 .crend()               .crbegin() 
 
-All containers with 'bidirectional' iterators or random-access iterators can create reverse
-interator. That is all containers as well as string except forward_list and unordered, supports
-ability to use reverse iterators.
+All containers with 'bidirectional' iterators or random-access iterators can
+create reverse interator. 
 
-note: 
 CPR read "The containers, aside from forward_list, all have reverse iterators". 
-
 So container shall support ++/-- operator and rbegin/rend/crbegin/crend().
 
-See *kt_dev_quiz_004* and *kt_dev_quiz_005* for more use cases
 
-<ex>
-#include <iostream>
-#include <string>
-
-using std::cout;
-using std::endl;
-using std::string;
-
-void reverse_cpp_two(char* str)
-{
-  if(!str) return;
-  string istr(str);
-
-  string::reverse_iterator it = istr.rbegin();
-  while( it != istr.rend() )
-  {
-    cout << *it << endl;
-    ++it;
-  }
-}
-
-int main () {
-  cout << "=====" << endl;
-  reverse_cpp_two("KEITEE PARK");
-  return 0;
-}
-
-
-<ex>
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <iterator>
-
-using namespace std;
-
-int main()
-{
-  vector<int> coll;
-
-  for(int i = 1; i <= 9; ++i )
-    coll.push_back(i);
-
-  // print all without duplicates note: WHY without duplicates?
-  copy( coll.crbegin(), coll.crend(), ostream_iterator<int>(cout, " "));
-
-  cout << endl;
-}
-
-
-<difference-between-reverse-and-other-iterators> conversion between them
+<difference-between-reverse-and-other-iterators> 
 As the sort example shown above, then use reverse iterator as a range, don't
 need to care about this difference but see the difference when use it as a
 single iterator.
 
-<ex> CPR p408
-
-string line("FIRST,MIDDLE,LAST");
-
-// print the first word, "FIRST"
-auto comma = find(line.cbegin(), line.cend(), ',');
-cout << string(line.cbegin(), comma ) << endl;
-
-// print the last word, "LAST"?
-auto rcomma = find(line.crbegin(), line.crend(), ',');
-cout << string(line.crbegin(), rcomma ) << endl;
-
-The result is "TSAL" since iterator goes backward and means [crbegin(), rcomma
-). To get the expected result, shall use instead [rcomma.base(), cend() ) which
-converts reverse iterator to normal interator.
-
-cout << string(rcomma.base(), line.cend() ) << endl;
+// CPR p408
 
    rcomma.base()   
            cend()
- |       |
+ | ^     | ^
  , L A S T
  |       |
  rcomma  crbegin()
 
-There is the difference when converting reverse to and from since the resulting
-iterator does 'not' refer to the same element. This is a consequence of the fact
-that ranges are half open.
+There is the difference when converting reverse to and from since the
+resulting iterator `does 'not' refer to the same element.` This is a
+consequence of the fact that ranges are half open.
 
-Thus, rbegin() is simply:
-container::reverse_iterator(end())
+// bits/stl_vector.h
 
-and rend() is simply:
-container::reverse_iterator(begin())
+  template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
+    class vector : protected _Vector_base<_Tp, _Alloc>
+    {
+      typedef std::reverse_iterator<const_iterator>  const_reverse_iterator;
+      typedef std::reverse_iterator<iterator>		 reverse_iterator;
 
+      /**
+       *  Returns a read/write reverse iterator that points to the
+       *  last element in the %vector.  Iteration is done in reverse
+       *  element order.
+       */
+      reverse_iterator
+      rbegin() _GLIBCXX_NOEXCEPT
+      { return reverse_iterator(end()); }
 
-<ex> shows the difference and to convert interators
-#include <iostream>
-#include <vector>
-#include <algorithm>
+      /**
+       *  Returns a read/write reverse iterator that points to one
+       *  before the first element in the %vector.  Iteration is done
+       *  in reverse element order.
+       */
+      reverse_iterator
+      rend() _GLIBCXX_NOEXCEPT
+      { return reverse_iterator(begin()); }
+    }
 
-using namespace std;
+This -1 difference is handled by:
 
-int main()
+// bits/stl_iterator.h
+
+  // 24.4.1 Reverse iterators
+  /**
+   *  Bidirectional and random access iterators have corresponding reverse
+   *  %iterator adaptors that iterate through the data structure in the
+   *  opposite direction.  They have the same signatures as the corresponding
+   *  iterators.  The fundamental relation between a reverse %iterator and its
+   *  corresponding %iterator @c i is established by the identity:
+   *  @code
+   *      &*(reverse_iterator(i)) == &*(i - 1)
+   *  @endcode
+   *
+   *  <em>This mapping is dictated by the fact that while there is always a
+   *  pointer past the end of an array, there might not be a valid pointer
+   *  before the beginning of an array.</em> [24.4.1]/1,2
+   *
+   *  Reverse iterators can be tricky and surprising at first.  Their
+   *  semantics make sense, however, and the trickiness is a side effect of
+   *  the requirement that the iterators must be safe.
+  */
+  template<typename _Iterator>
+    class reverse_iterator
+    {
+      /**
+       *  @return  A reference to the value at @c --current
+       *
+       *  This requires that @c --current is dereferenceable.
+       *
+       *  @warning This implementation requires that for an iterator of the
+       *           underlying iterator type, @c x, a reference obtained by
+       *           @c *x remains valid after @c x has been modified or
+       *           destroyed. This is a bug: http://gcc.gnu.org/PR51823
+      */
+      reference
+      operator*() const
+      {
+        _Iterator __tmp = current;
+        return *--__tmp;
+      }
+    }
+
+<ex>
+TEST(IteratorAdapter, ReverseIterator)
 {
-  // create list with elements from 1 to 9
-  vector<int> coll = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+  {
+    string coll{"PARK"};
+    string result;
 
-  // find position of element with value 5
-  vector<int>::const_iterator pos;
+    string::const_reverse_iterator it = coll.crbegin();
 
-  pos = find (coll.cbegin(), coll.cend(), 5);
+    while (it != coll.crend())
+      result.push_back(*it++);
 
-  // print value to which iterator pos refers
-  cout << "pos : " << *pos << endl;
+    EXPECT_THAT(result, "KRAP");
+  }
 
-  // convert iterator to reverse iterator rpos
-  vector<int>::const_reverse_iterator rpos(pos);
+  {
+    string coll{"FIRST,MIDDLE,LAST"};
 
-  // print value to which reverse iterator rpos refers
-  cout << "rpos: " << *rpos << endl;
+    auto delim = find(coll.cbegin(), coll.cend(), ',');
+    EXPECT_THAT(string(coll.cbegin(), delim), "FIRST");
+
+    // The result is "TSAL" since iterator goes backward and means [crbegin(),
+    // rcomma). To get the expected result, shall use instead [rcomma.base(),
+    // cend() ) which converts reverse iterator to normal interator.
+
+    auto rdelim = find(coll.crbegin(), coll.crend(), ',');
+    EXPECT_THAT(string(coll.crbegin(), rdelim), "TSAL");
+
+    EXPECT_THAT(string(rdelim.base(), coll.cend()), "LAST");
+  }
+
+  // reverse_iterator operator*() do --
+  {
+    // create deque with elements from 1 to 9
+    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    deque<int>::const_iterator pos;
+    pos = find(coll.cbegin(), coll.cend(), 7);
+    EXPECT_THAT(*pos, 7);
+    
+    deque<int>::const_reverse_iterator rpos(pos);
+    EXPECT_THAT(*rpos, 6);
+  }
+
+  {
+    ostringstream os;
+
+    // create deque with elements from 1 to 9
+    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    // find range [2,7]
+    deque<int>::const_iterator pos1;
+    pos1 = find(coll.cbegin(), coll.cend(), 2);
+
+    deque<int>::const_iterator pos2;
+    pos2 = find(coll.cbegin(), coll.cend(), 7);
+
+    // [2,6]
+    for_each(pos1, pos2, [&](int e)
+        { os << e << ","; }
+        );
+
+    EXPECT_THAT(os.str(), "2,3,4,5,6,");
+
+    deque<int>::const_reverse_iterator rpos1(pos1);
+    deque<int>::const_reverse_iterator rpos2(pos2);
+
+    os.str("");
+
+    // *cxx-error* cause runtime error -D_GLIBCXX_DEBUG
+    // for_each(rpos1, rpos2, [&](int e)
+    //
+    // since rpos1 that point 2 and rpos1++ means pos1-- and goes below begin()
+
+    for_each(rpos2, rpos1, [&](int e)
+        { os << e << ","; }
+        );
+
+    EXPECT_THAT(os.str(), "6,5,4,3,2,");
+  }
 }
-
-pos : 5
-rpos: 4
-
-<example> when use it as a range
-#include <iostream>
-#include <deque>
-#include <algorithm>
-
-using namespace std;
-
-void print(int elem)
-{
-  cout << elem << ' ';
-}
-
-int main()
-{
-  // create deque with elements from 1 to 9
-  deque<int> coll = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-
-  // find position of element with value 2
-  deque<int>::const_iterator pos1;
-  pos1 = find (coll.cbegin(), coll.cend(), 2);
-
-  // find position of element with value 7
-  deque<int>::const_iterator pos2;
-  pos2 = find (coll.cbegin(), coll.cend(), 7);
-
-  // print all elements in range [pos1,pos2)
-  for_each (pos1, pos2, print);
-  cout << endl;
-
-  // convert iterators to reverse iterators
-  deque<int>::const_reverse_iterator rpos1(pos1);
-  deque<int>::const_reverse_iterator rpos2(pos2);
-
-  // print all elements in range [pos1,pos2) in reverse order
-  for_each (rpos2, rpos1, print); 
-  cout << endl;
-}
-
-2 3 4 5 6 
-6 5 4 3 2 
 
 
 ={============================================================================
@@ -49664,6 +49775,7 @@ copies the string s into strm. Sets the contents of the buffer to string and
   remove the current contents from the stream. Can use the function str() to
   `assign new contents to the buffer`
 
+*cxx-stringstream-clear*
 strm.str(""); 
 clears sstream buffer
 
