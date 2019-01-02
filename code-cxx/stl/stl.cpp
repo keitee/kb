@@ -326,6 +326,7 @@ TEST(Iterator, Next)
 
 TEST(Iterator, Distance)
 {
+  // cxx-distance which returns positive/negative
   {
     vector<int> coll{1,2,3,4,5};
     auto pos = find(coll.begin(), coll.end(), 3);
@@ -335,6 +336,7 @@ TEST(Iterator, Distance)
     EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
     EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
   }
+
   {
     set<int> coll{1,2,3,4,5};
     auto pos = find(coll.begin(), coll.end(), 3);
@@ -4308,34 +4310,76 @@ namespace algo_code
 // prev :1 3 2 (3)
 // prev :1 2 3 (3)
 // finis:3 2 1 (3)
+//
+// start:1 2 3 (3)
+// 123
+// 123
+//
+// start:1 2 3 (3)
+// 123
+// 132
+// 213
+// 231
+// 312
+// 321
 
 TEST(AlgoMutating, AlgoPermutation)
 {
-  vector<int> coll{1,2,3};
-
-  PRINT_ELEMENTS(coll, "start:");
-
-  // permute coll until they are sorted, ascending
-  while(next_permutation(coll.begin(), coll.end()))
   {
-    PRINT_ELEMENTS(coll, "next :");
+    vector<int> coll{1,2,3};
+
+    PRINT_ELEMENTS(coll, "start:");
+
+    // permute coll until they are sorted, ascending
+    while(next_permutation(coll.begin(), coll.end()))
+    {
+      PRINT_ELEMENTS(coll, "next :");
+    }
+
+    // return false when sorted
+    PRINT_ELEMENTS(coll, "finis:");
+
+    // until descending sorted and the loop ends immediately
+    while(prev_permutation(coll.begin(), coll.end()))
+    {
+      PRINT_ELEMENTS(coll, "prev :");
+    }
+    PRINT_ELEMENTS(coll, "now  :");
+
+    while(prev_permutation(coll.begin(), coll.end()))
+    {
+      PRINT_ELEMENTS(coll, "prev :");
+    }
+    PRINT_ELEMENTS(coll, "finis:");
   }
 
-  // return false when sorted
-  PRINT_ELEMENTS(coll, "finis:");
-
-  // until descending sorted and the loop ends immediately
-  while(prev_permutation(coll.begin(), coll.end()))
   {
-    PRINT_ELEMENTS(coll, "prev :");
-  }
-  PRINT_ELEMENTS(coll, "now  :");
+    string coll{"123"};
 
-  while(prev_permutation(coll.begin(), coll.end()))
-  {
-    PRINT_ELEMENTS(coll, "prev :");
+    PRINT_ELEMENTS(coll, "start:");
+
+    while (std::next_permutation(coll.begin(), coll.end()));
+    {
+      cout << coll << endl;
+    }
+
+    cout << coll << endl;
   }
-  PRINT_ELEMENTS(coll, "finis:");
+
+  // why need algo-sort? since input can be any of permutations, sort it first
+  // to make sure permutations from sorted to sorted. 
+  {
+    string coll{"123"};
+
+    PRINT_ELEMENTS(coll, "start:");
+
+    std::sort(coll.begin(), coll.end());
+
+    do
+    {
+      cout << coll << endl;
+    } while (std::next_permutation(coll.begin(), coll.end()));
+  }
 }
 
 
@@ -4386,8 +4430,9 @@ TEST(AlgoMutating, AlgoRotate)
 }
 
 
-// do not use additional space
-// like to slide down sub group
+// 1. do not use additional space
+// 2. like to slide down sub group
+// 3. use of for loop count
 
 template <typename _Iterator>
 void my_rotate(_Iterator __begin, _Iterator __new_end, _Iterator __end)
@@ -4395,13 +4440,13 @@ void my_rotate(_Iterator __begin, _Iterator __new_end, _Iterator __end)
   if ((__begin == __new_end) || (__end == __new_end))
     return;
 
-  auto num_slide = std::distance(__new_end, __end);
+  auto num_swap = std::distance(__new_end, __end);
 
   for (;__new_end != __begin; --__new_end)
   {
     _Iterator start = __new_end;
 
-    for (int i = 0; i < num_slide; ++i)
+    for (int i = 0; i < num_swap; ++i)
     {
       swap(*start, *(start-1));
       ++start;

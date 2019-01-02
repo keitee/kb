@@ -793,6 +793,48 @@ recursion, and one that does not.
 
 */
 
+namespace U52_Text
+{
+  void print_permutations_no_recursive(std::string str)
+  {
+    std::sort(str.begin(), str.end());
+
+    do
+    {
+      cout << str << endl;
+    } while (std::next_permutation(str.begin(), str.end()));
+  }
+
+  void print_permutations_recursive(std::string in, std::string out)
+  {
+    // when input becomes empty
+    if (in.empty())
+      std::cout << out << std::endl;
+    else
+    {
+      for (size_t i = 0; i < in.size(); ++i)
+      {
+        print_permutations_recursive(in.substr(1), out + in[0]);
+
+        std::rotate(in.begin(), in.begin()+1, in.end());
+      }
+    }
+  }
+} // namespace
+
+
+TEST(U52, Text)
+{
+  using namespace U52_Text;
+
+  cout << "----" << endl;
+  print_permutations_no_recursive("123");
+
+  cout << "----" << endl;
+  print_permutations_recursive("123", "");
+}
+
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {
