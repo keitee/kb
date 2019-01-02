@@ -202,7 +202,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-container-element-type
 *kt_dev_cxx_0000* cxx-container-common-operations
 *kt_dev_cxx_0000* cxx-container-insert-erase cxx-iter-invalidate
-*kt_dev_cxx_0000* cxx-container-remove cxx-remove
+*kt_dev_cxx_0000* cxx-coll-remove cxx-remove
 *kt_dev_cxx_0000* cxx-container-sequential
 *kt_dev_cxx_0000* cxx-coll-cxx-array
 *kt_dev_cxx_0000* cxx-coll-cxx-vector
@@ -226,7 +226,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-iter-external-and-internal
 
 *kt_dev_cxx_0000* cxx-fobj cxx-function-object cxx-functor
-*kt_dev_cxx_0000* cxx-fobj-predicate
+*kt_dev_cxx_0000* cxx-fobj-predicate cxx-callable
 |kt_dev_cxx_0000| cxx-fobj-lambda cxx-lambda
 *kt_dev_stl_063* cpp-fobj-as-argument
 *kt_dev_stl_063* cpp-fobj-pass-by-reference
@@ -9381,6 +9381,102 @@ else
   // didn't find any common elements
 
 
+<ex>
+  
+template <typename _Iterator, typename _Compare>
+_Iterator my_partition_02(_Iterator begin, _Iterator end, _Compare comp)
+{
+  // find the start of unmatched(unsorted) sub group
+
+  _Iterator start_of_unmatched = begin;
+  while (comp(*start_of_unmatched))
+    if (++start_of_unmatched == end)
+      return start_of_unmatched;
+
+  cout << "s: " << *start_of_unmatched << endl;
+
+  _Iterator run = start_of_unmatched;
+  while (++run != end)
+  {
+    // if item matches to condition
+    if (comp(*run))
+    {
+      std::iter_swap(run, start_of_unmatched);
+      ++start_of_unmatched;
+    }
+  }
+
+  return start_of_unmatched;
+}
+
+template <typename _Iterator, typename _Compare>
+_Iterator my_partition_02_x(_Iterator begin, _Iterator end, _Compare comp)
+{
+  // find the start of unmatched(unsorted) sub group
+
+  _Iterator start_of_unmatched = begin;
+  while (comp(*start_of_unmatched++))
+    if (start_of_unmatched == end)
+      return start_of_unmatched;
+
+  // `6` but not `43`
+  cout << "s: " << *start_of_unmatched << endl;
+
+  _Iterator run = start_of_unmatched;
+  while (++run != end)
+  {
+    // if item matches to condition
+    if (comp(*run))
+    {
+      std::iter_swap(run, start_of_unmatched);
+      ++start_of_unmatched;
+    }
+  }
+
+  return start_of_unmatched;
+}
+
+TEST(AlgoMutating, AlgoPartition)
+{
+  // pass
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    auto iter = my_partition_02(coll.begin(), coll.end(), 
+        [](unsigned int value)
+        { return value <= 25; }
+        );
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    EXPECT_THAT(distance(coll.begin(), iter), 11);
+    EXPECT_THAT(*iter, 43);
+  }
+
+  // fail 
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    auto iter = my_partition_02_x(coll.begin(), coll.end(), 
+        [](unsigned int value)
+        { return value <= 25; }
+        );
+
+    // { 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    //                                  ^^
+    // {43,11,23,21,19,24,15,20,13,6,23, 6,42,29,34,26,41,30,37,48}));
+    
+    // EXPECT_THAT(coll, 
+    //     ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+
+    EXPECT_THAT(coll, 
+         ElementsAreArray({43,11,23,21,19,24,15,20,13,6,23,6,42,29,34,26,41,30,37,48}));
+
+    EXPECT_THAT(distance(coll.begin(), iter), 11);
+    EXPECT_THAT(*iter, 43);
+  }
+
+
 ={============================================================================
 *kt_dev_cxx_0000* cxx-precedence
 
@@ -18467,25 +18563,23 @@ parameters you don't plan to use; that is what is been done above.
 
 namespace cxx_ctor
 {
+  class foo
+  {
+    public:
 
-class foo
-{
-  public:
-
-    explicit foo(int &value) : value_(value) 
+      explicit foo(int &value) : value_(value) 
     {
       cout << "foo(int)" << endl;
     }
 
-    foo(int &value, int) : value_(value) 
+      foo(int &value, int) : value_(value) 
     {
       cout << "foo(int, int)" << endl;
     }
 
-  private:
-    int value_;
-};
-
+    private:
+      int value_;
+  };
 } // namespace
 
 
@@ -36416,7 +36510,7 @@ There are some differences between containers as to what to return from insert
 and erase and arguments. 
 
 
-{cxx-insert-cxx-vector-insert-cxx-erase-cxx-vector-erase} cxx-insert cxx-erase
+{coll-insert-cxx-vector-insert-coll-erase-cxx-vector-erase} cxx-insert cxx-erase
 
 `where, pos, beg, end are iterators`
 
@@ -37035,53 +37129,51 @@ TEST(StlVector, InsertAndErase)
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-remove cxx-remove
+*kt_dev_cxx_0000* cxx-coll-remove cxx-remove
+
+{algo-remove}
 
 6.7.1 “Removing” Elements
 
-{cxx-remove-sequential} *algo-remove* 
-
-<ex>
-// remove value 2 from coll
-TEST(StlAlgoRemove, UseErase)
+TEST(AlgoMutating, AlgoRemove)
 {
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  for (auto it = coll.begin(); it != coll.end(); ++it)
+  // coll.erase() delete elements but algo-remove do not.
   {
-    if (*it == 2)
-      it = coll.erase(it);
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    for (auto it = coll.begin(); it != coll.end(); ++it)
+    {
+      if (*it == 2)
+        it = coll.erase(it);
+    }
+
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
   }
 
-  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
-}
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
-TEST(StlAlgoRemove, UseRemoveAndErase)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+    auto end = remove(coll.begin(), coll.end(), 2);
 
-  auto end = remove(coll.begin(), coll.end(), 2);
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,2,2,2}));
 
-  // *algo-distance*
-  EXPECT_THAT(distance(end, coll.end()), 4);
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
 
-  coll.erase(end, coll.end());
+  // show that algo-remove() do not remove elements
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
-  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
-}
+    remove(coll.begin(), coll.end(), 2);
 
-// show that algo-remove() do not remove elements
-TEST(StlAlgoRemove, RemoveDoNotRemove)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+    // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
+    //                                       ^^^^^^^ 
 
-  remove(coll.begin(), coll.end(), 2);
-
-  // std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-  // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
-  //                                       ^^^^^^^ 
-
-  EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+    EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+  }
 }
 
 
@@ -37091,22 +37183,25 @@ So *algo-remove* reorder:
                        |
                         += return the past of the last element
 
-Thus, `remove()` did not change the number of elements in the collection for
-which it was called. Have to call erase member function to actually remove.
+Thus, `algo-remove()` did not change the number of elements in the collection
+for which it was called. Have to call erase member function to actually
+remove.
 
-note: cxx-list-remove
+
+<cxx-coll-remove>
 coll.remove() is only for list and forward_list since no such member function
 for others.
 
+
 This explains iterator which glues algorithm and container. In practice, there
 are some limits and workarounds you should know. Many of these have to do with
-modifications. These aspects are surprising and show the 'price' of the STL
+modifications. These aspects are surprising and show `the 'price' of the STL`
 concept that separates containers and algorithms with great flexibility.
 
   Why don't algorithms call erase() by themselves? This question highlights
   the price of the flexibility of the STL. The STL separates data structures
   and algorithms by using iterators as the interface. However, iterators are
-  an abstraction to represent a 'position' in a container. In general,
+  `an abstraction to represent a 'position' in a container.` In general,
   iterators do not know their containers. Thus, the algorithms, which use the
   iterators to access the elements of the container, can't call any member
   function for it.
@@ -37146,7 +37241,7 @@ int main()
   cout << endl;
 
   // algo-remove
-  remove( coll.begin(), coll.end(), 3 );
+  std::remove( coll.begin(), coll.end(), 3 );
 
   // print 
   cout << "post: " << coll.size() << " elements" << endl;
@@ -37608,7 +37703,7 @@ element.
     };
 
 
-{cxx-vector-reallocation}
+{cxx-vector-reallocation} cxx-iter-invalidated
 To support fast random access, vector elements are stored 'contiguously'. To
 maintain contiguous memory and to avoid reallocating a container each time an
 element is added, the allocation strategy is: 
@@ -43135,16 +43230,16 @@ instead of ordinary functions often results in better performance.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-fobj-predicate
+*kt_dev_cxx_0000* cxx-fobj-predicate cxx-callable
 
-To increase their 'flexibility' and power, 'several' algorithms allow the
-passing of user-defined functions. This is 'callables' to change a default
+To increase their `flexibility and power`, several algorithms allow the
+passing of user-defined functions. This is `cxx-callable` to change a default
 operator of algorithms. For example,
 
-  The sort() uses "operator<()" on element type to sort but want to use
-  different order? If sort() was written to simply use "<" then cannot able to
-  change its sort order regardless of whether element type supports the
-  operator for that order. So the supported operator of element type is
+  The sort() uses "*cxx-less* operator<()" on element type to sort but want to
+  use different order? If sort() was written to simply use "<" then cannot
+  able to change its sort order regardless of whether element type supports
+  the operator for that order. So the supported operator of element type is
   different matter.
 
 
@@ -43162,14 +43257,14 @@ should always yield the same result for the same value.
 What predicate is used depends on each algorithm to use. Also see reference
 argument to predicate.  
 
+<ex>
+
+namespace algo_code
+{
   template<typename _InputIterator, typename _Function>
     _Function
     for_each(_InputIterator __first, _InputIterator __last, _Function __f)
     {
-      // concept requirements
-      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
-        __glibcxx_requires_valid_range(__first, __last);
-
       // note: call op but not use return
 
       for (; __first != __last; ++__first)
@@ -43181,19 +43276,17 @@ argument to predicate.
   template<typename _InputIterator, typename _OutputIterator,
     typename _UnaryOperation>
 
-    _OutputIterator
-    transform(_InputIterator __first, _InputIterator __last,
-      _OutputIterator __result, _UnaryOperation __unary_op)
-    {
-      // ...
-      for (; __first != __last; ++__first, ++__result)
-         // note: write to output to output iterator and unary
-         *__result = __unary_op(*__first);
-      return __result;
-    }
+      _OutputIterator
+      transform(_InputIterator __first, _InputIterator __last,
+          _OutputIterator __result, _UnaryOperation __unary_op)
+      {
+        for (; __first != __last; ++__first, ++__result)
+          // note: write to output to output iterator and unary
+          *__result = __unary_op(*__first);
+        return __result;
+      }
+} // namespace
 
-
-<ex>
 int square_value_with_return(int value)
 {
   value = value*value;
@@ -43210,7 +43303,7 @@ void square_refer_no_return(int &value)
   value = value*value;
 }
 
-TEST(AlgoForEachAndTransform, Use)
+TEST(AlgoForEach, Transform)
 {
   // value
   {
@@ -43229,7 +43322,7 @@ TEST(AlgoForEachAndTransform, Use)
     EXPECT_THAT(coll, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
   }
 
-  // transform() differs in that it uses `dest`
+  // algo-transform() differs in that it uses `dest`
   {
     vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     vector<int> result;
@@ -43241,17 +43334,19 @@ TEST(AlgoForEachAndTransform, Use)
 
 
 *algo-sort*
-template< class RandomIt>
-void sort( RandomIt first, RandomIt last );
 
-  The first forms of sort() and stable_sort() sort all elements in the range
-  [beg,end) with operator <. This means that have to provide operator<() for
-  a user type.
+The first forms of sort() and stable_sort() sort all elements in the range
+[beg,end) with *cxx-less* operator<(). This means that have to provide
+operator<() for a user type.
 
-template< class RandomIt, class Compare>
-void sort( RandomIt first, RandomIt last, Compare comp );
+<ex>
 
-// c++/4.7/bits/stl_algo.h, @5484
+namespace algo_code
+{
+  // template< class RandomIt, class Compare>
+  // void sort( RandomIt first, RandomIt last, Compare comp );
+
+  // /usr/include/c++/4.9/bits/stl_algo.h
 
   /**
    *  @brief Sort the elements of a sequence using a predicate for comparison.
@@ -43267,39 +43362,127 @@ void sort( RandomIt first, RandomIt last, Compare comp );
    *
    *  The relative ordering of equivalent elements is not preserved, use
    *  @p stable_sort() if this is needed.
-  */
+   */
   template<typename _RandomAccessIterator, typename _Compare>
     inline void
     sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
-	 _Compare __comp)
+        _Compare __comp)
     {
-      typedef typename iterator_traits<_RandomAccessIterator>::value_type
-        _ValueType;
-
-      // note: _BinaryPredicateConcept
       // concept requirements
       __glibcxx_function_requires(_Mutable_RandomAccessIteratorConcept<
           _RandomAccessIterator>)
-        __glibcxx_function_requires(_BinaryPredicateConcept<_Compare, _ValueType,
-            _ValueType>)
+        __glibcxx_function_requires(_BinaryPredicateConcept<_Compare,
+            typename iterator_traits<_RandomAccessIterator>::value_type,
+            typename iterator_traits<_RandomAccessIterator>::value_type>)
         __glibcxx_requires_valid_range(__first, __last);
 
+      std::__sort(__first, __last, __gnu_cxx::__ops::__iter_comp_iter(__comp));
+    }
+
+  /**
+   *  @brief Sort the elements of a sequence.
+   *  @ingroup sorting_algorithms
+   *  @param  __first   An iterator.
+   *  @param  __last    Another iterator.
+   *  @return  Nothing.
+   *
+   *  Sorts the elements in the range @p [__first,__last) in ascending order,
+   *  such that for each iterator @e i in the range @p [__first,__last-1),  
+   *  *(i+1)<*i is false.
+   *
+   *  The relative ordering of equivalent elements is not preserved, use
+   *  @p stable_sort() if this is needed.
+   */
+  template<typename _RandomAccessIterator>
+    inline void
+    sort(_RandomAccessIterator __first, _RandomAccessIterator __last)
+    {
+      // concept requirements
+      __glibcxx_function_requires(_Mutable_RandomAccessIteratorConcept<
+          _RandomAccessIterator>)
+        __glibcxx_function_requires(_LessThanComparableConcept<
+            typename iterator_traits<_RandomAccessIterator>::value_type>)
+        __glibcxx_requires_valid_range(__first, __last);
+
+      std::__sort(__first, __last, __gnu_cxx::__ops::__iter_less_iter());
+    }
+
+  struct _Iter_less_iter
+  {
+    template<typename _Iterator1, typename _Iterator2>
+      bool
+      operator()(_Iterator1 __it1, _Iterator2 __it2) const
+      { return *__it1 < *__it2; }
+  };
+
+  inline _Iter_less_iter
+    __iter_less_iter()
+    { return _Iter_less_iter(); }
+
+  template<typename _RandomAccessIterator, typename _Compare>
+    inline void
+    __sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
+        _Compare __comp)
+    {
       if (__first != __last)
       {
         std::__introsort_loop(__first, __last,
-            std::__lg(__last - __first) * 2, __comp);
-
-        // *algo-sort-insert*
+            std::__lg(__last - __first) * 2,
+            __comp);
         std::__final_insertion_sort(__first, __last, __comp);
       }
     }
+} // namespace
+
+TEST(AlgoSorting, AlgoSort)
+{
+  {
+    vector<int> coll{3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5};
+    sort(coll.begin(), coll.end());
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,2,2,3,3,3,4,4,4,5,5,5,6,6,7}));
+  }
+
+  {
+    vector<int> coll{3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5};
+    // *cxx-callable*
+    sort(coll.begin(), coll.end(), std::greater<int>());
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({7,6,6,5,5,5,4,4,4,3,3,3,2,2,1}));
+  }
+}
+
+bool shorter(string const& s1, string const& s2)
+{
+  return s1.size() < s2.size();
+}
+
+TEST(AlgoSorting, AlgoStableSort)
+{
+  vector<string> coll{"over", "quick", "red", "fox", "jumps", "red", "the", 
+    "slow", "turtle", "the"};
+
+  // sort by alphabet and remove dups. algo-unique()
+  {
+    std::sort(coll.begin(), coll.end());
+    coll.erase(std::unique(coll.begin(), coll.end()), coll.end());
+  }
+
+  // eliminated
+  EXPECT_THAT(coll, 
+      ElementsAre("fox","jumps","over","quick","red","slow","the","turtle"));
+
+  stable_sort(coll.begin(), coll.end(), shorter);
+
+  // sorted and see that the order before sort is maintained
+  EXPECT_THAT(coll, 
+      ElementsAre("fox","red","the","over","slow","jumps","quick","turtle"));         // by size
+}
 
 
-<ex>
-std::sort(begin(v), end(v), std::greater<>);
-
-
-<ex> *algo-find-if*
+<ex> *algo-find-if* *algo-prime*
 
 namespace algo_find
 {
@@ -43343,275 +43526,57 @@ TEST(AlgoFind, FindIf)
 }
 
 
-<ex-stable-sort> *algo-stable-sort* *algo-unique*
-Sort by length and also want to keep the order among the 'equal' elements.
-
-#include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
-
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
-{
-  std::cout << optstr;
-
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
-
-  std::cout << std::endl;
-}
-
-// binary predicate and sort by size
-bool isShorter(const string &s1, const string &s2)
-{
-  return s1.size() < s2.size();
-}
-
-// sort by alphabet and remove dups. unique() also move elements.
-void elimDups(vector<string> &words)
-{
-  // sort( words.begin(), words.end(), isShorter );
-  sort( words.begin(), words.end() );
-
-  PRINT_ELEMENTS(words, "sorted       : ");
-
-  auto end_unique = unique( words.begin(), words.end() );
-
-  words.erase( end_unique, words.end() );
-}
-
-int main()
-{
-  vector<string> coll{"over", "quick", "red", "fox", "jumps", "red", "the", 
-    "slow", "turtle", "the"};
-
-  PRINT_ELEMENTS(coll, "initialized  : ");
-
-  elimDups(coll);
-
-  PRINT_ELEMENTS(coll, "eliminated   : ");
-
-  stable_sort( coll.begin(), coll.end(), isShorter );
-
-  PRINT_ELEMENTS(coll, "stable sorted: ");
-}
-
-initialized  : over quick red fox jumps red the slow turtle the 
-sorted       : fox jumps over quick red red slow the the turtle // by alphabet
-eliminated   : fox jumps over quick red slow the turtle 
-stable sorted: fox red the over slow jumps quick turtle         // by size
-
-
-<predicate-is-limited>
-Depending on algorithms to use, can use only unary or binary since the
-predicate only supports unary or binary which means must have one or two
-parameters. How to support more arguments?
-
-
-{predicate-must-stateless} CLR 10.1.4
+{cxx-predicate-must-stateless} CLR 10.1.4
 Predicates are functions or function objects that return a boolean value or a
 value that is convertible into bool. However, 'not' every function that
 returns a Boolean value is a valid predicate for the STL. This may lead to
 surprising behavior.
 
-#include <iostream>
-#include <list>
-#include <algorithm>
 
-using namespace std;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+namespace algo_predicate
 {
-  std::cout << optstr;
+  class PredicateWithState
+  {
+    public:
+      PredicateWithState(int value):
+        nth_(value), count_(0) {}
 
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
+      // *cxx-unused*
+      bool operator()(int)
+      {
+        return ++count_ == nth_;
+      }
 
-  std::cout << std::endl;
-}
+    private:
+      int nth_;
+      int count_;
+  };
+} // namespace
 
-// function object that returns true for the nth call
-class Nth {
-  private:
-    int nth;    // call for which to return true
-    int count;  // call counter
-  public:
-    Nth (int n) : nth(n), count(0) { }
-
-    bool operator() (int) {
-      return ++count == nth;
-    }
-};
-
-int main()
+TEST(Predicate, Stateless)
 {
-  list<int> coll = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  using namespace algo_predicate;
 
-  PRINT_ELEMENTS(coll, "coll       : ");
-
-  // remove third element
-  list<int>::iterator pos;
-  pos = remove_if(coll.begin(), coll.end(),   // range
-      Nth(3));                                // remove criterion
+  list<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  
+  auto pos = remove_if(coll.begin(), coll.end(),
+      PredicateWithState(3));
 
   coll.erase(pos, coll.end());
 
-  PRINT_ELEMENTS(coll,"3rd removed: ");
+  // removed 3 and 6. WHY?
+  EXPECT_THAT(coll, ElementsAre(1,2,4,5,7,8,9,10));
 }
 
-// run under GCC 4.7.2
-coll       : 1 2 3 4 5 6 7 8 9 10 
-3rd removed: 1 2 4 5 7 8 9 10 
-
-Two elements, 3 and 6 elements, are removed. This happens because the usual
+`Two elements, 3 and 6 elements, are removed.` This happens because the usual
 implementation of the algorithm copies the predicate internally during the
 algorithm:
 
-*algo-remove-if*
-Both algorithms return the logical `new end of the modified sequence.` the
-position after the last element not removed. See CLR 11.7.1 
+See *algo-remove-if* code which uses __find_if which uses `passed predicate`
+to find the first pos so 3 is found and this is first copy of predicate.
 
-// show that remove_if() returns end if not found
-
-TEST(StlAlgoRemove, UseRemoveIf)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  auto it = remove_if(coll.begin(), coll.end(), [](int e)
-      {
-        if (e == 10)
-          return true;
-        return false;
-      });
-
-  EXPECT_THAT(it, coll.end());
-}
-
-
-The way that makes copy is interesting which uses !bool and copies element to
-the same position when it is not equal.
-
-// /usr/include/c++/4.9.2/bits/stl_algo.h
-
-  /**
-   *  @brief Remove elements from a sequence.
-   *  @ingroup mutating_algorithms
-   *  @param  __first  An input iterator.
-   *  @param  __last   An input iterator.
-   *  @param  __value  The value to be removed.
-   *  @return   An iterator designating the end of the resulting sequence.
-   *
-   *  All elements equal to @p __value are removed from the range
-   *  @p [__first,__last).
-   *
-   *  remove() is stable, so the relative order of elements that are
-   *  not removed is unchanged.
-   *
-   *  Elements between the end of the resulting sequence and @p __last
-   *  are still present, but their value is unspecified.
-  */
-  template<typename _ForwardIterator, typename _Tp>
-    inline _ForwardIterator
-    remove(_ForwardIterator __first, _ForwardIterator __last,
-	   const _Tp& __value)
-    {
-      // concept requirements
-      __glibcxx_function_requires(_Mutable_ForwardIteratorConcept<
-				  _ForwardIterator>)
-      __glibcxx_function_requires(_EqualOpConcept<
-	    typename iterator_traits<_ForwardIterator>::value_type, _Tp>)
-      __glibcxx_requires_valid_range(__first, __last);
-
-      return std::__remove_if(__first, __last,
-		__gnu_cxx::__ops::__iter_equals_val(__value));
-    }
-
-  /**
-   *  @brief Remove elements from a sequence using a predicate.
-   *  @ingroup mutating_algorithms
-   *  @param  __first  A forward iterator.
-   *  @param  __last   A forward iterator.
-   *  @param  __pred   A predicate.
-   *  @return   An iterator designating the end of the resulting sequence.
-   *
-   *  All elements for which @p __pred returns true are removed from the range
-   *  @p [__first,__last).
-   *
-   *  remove_if() is stable, so the relative order of elements that are
-   *  not removed is unchanged.
-   *
-   *  Elements between the end of the resulting sequence and @p __last
-   *  are still present, but their value is unspecified.
-  */
-  template<typename _ForwardIterator, typename _Predicate>
-    _ForwardIterator
-    __remove_if(_ForwardIterator __first, _ForwardIterator __last,
-		_Predicate __pred)
-    {
-      __first = std::__find_if(__first, __last, __pred);
-      if (__first == __last)
-        return __first;
-
-      _ForwardIterator __result = __first;
-      ++__first;
-      for (; __first != __last; ++__first)
-        if (!__pred(__first))
-        {
-          *__result = _GLIBCXX_MOVE(*__first);
-          ++__result;
-        }
-      return __result;
-    }
-
-
-// implement own remove()
-using ITERATOR = std::vector<int>::iterator;
-
-ITERATOR OwnRemove(ITERATOR begin, ITERATOR end, int value)
-{
-  // when not found
-  ITERATOR first = find(begin, end, value);
-  if (first == end)
-    return first;
-
-  ITERATOR result = first;
-  ++first;
-
-  for (; first != end; ++first)
-    if (!(*first == value))
-    {
-      *result = *first;
-      ++result;
-    }
-
-  return result;
-}
-
-TEST(StlAlgoRemove, UseOwnRemove)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  auto end = OwnRemove(coll.begin(), coll.end(), 2);
-
-  EXPECT_THAT(distance(end, coll.end()), 4);
-
-  coll.erase(end, coll.end());
-
-  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
-}
-
-
-However, the algorithm then uses a copy of the passed predicate op to process
-the remaining elements, if any. Here, Nth in its original state is used again
-and also removes the third element of the remaining elements, which is in fact
-the 'sixth' element: starting from the previous 3th. 
-
-note: Nth class do not have copy ctor and use one that compiler make and do
-memberwise copy blindly. So set count to 0 again.
+For the rest, remove_if uses the own copy of passed predicate which finds [3]
+pos item that is 6 but this is [3] pos from this second copy of predicate.
 
 The standard does not specify how often a predicate might be copied internally
 by an algorithm. Thus, to get the guaranteed behavior of the C++ standard
@@ -43619,14 +43584,14 @@ library, you should not pass a function object for which the behavior
 'depends' on how often it is copied or called. In other words: A predicate
 should always be 'stateless'.
 
-note: As seen, function object is flexible since it has state but as seen
-here, must be careful when use it as 'predicate' but not general function
-object.
+  *cxx-callable* 
+  cxx-predicate is not function object since funciton object has state and is
+  flexible but predicate do not have state. 
+  
 
-
-<to-resolve>
+*cxx-const*
 To ensure that you can't change the state of a predicate due to a function
-call, you should declare operator () as a constant member function. 
+call, `you should declare operator () as a constant member function.` 
 
 Or possible to avoid this surprising behavior and to guarantee that this
 algorithm works as expected even for a function object such as Nth, without
@@ -43656,28 +43621,7 @@ You should always declare the function call operator of predicates as being a
 constant member function.
 
 
-<ex-stable-sort-contd>
-Revise the above stable-sort example to report how many words are of a given
-size or greater. From CPR 10.3.2. The sketch is:
-
-void biggies( vector<string> &words, vector<string>::size_type sz )
-{
-  elimDups( words );
-  stable_sort( words.begin(), words.end(), isShorter );
-
-  // stable sorted: fox red the over slow jumps quick turtle         // by size
-  //
-  // 1. get an iterator to the first element whose size is >= sz
-  // 2. print the number of elements with size >= sz
-  // 3. print words of the given size or longer
-}
-
-The problem:
-Can use find_if to find the first whose size is >= sz? However, find_if takes
-'unary' predicate so cannot use f(elem, size_type). How to solve this?
-
-
-<cxx-fobj-predefined> <cxx-less>
+<cxx-predicate-predefined> <cxx-less>
 
 #include <functional> defines library-defined function objects:
 
@@ -43779,12 +43723,11 @@ namespace std {
 
 
 <ex>
+TEST(Predicate, Predefined)
 {
-    std::plus<int> pl;
-    cout << "plus(10, 20) : " << pl(10, 20) << endl;
+  std::plus<int> op;
+  EXPECT_THAT(op(10, 20), 30);
 }
-
-plus(10, 20) : 30
 
 
 ={============================================================================
@@ -46373,14 +46316,20 @@ are two ways to modify elements:
 1. Modify them directly while iterating through a sequence.
 2. Modify them while copying them from a source range to a destination range.
 
-Can't use an associative or unordered container as a destination range, because
-the elements in these containers are constant. 
+*cxx-remember*
+  Can't use an associative or unordered container as a destination range,
+  because the elements in these containers are constant. 
+
+  If you could, it would be possible to compromise the automatic sorting or
+  the hash based position, respectively.
 
 All algorithms that have a separate destination range return the position after
 the last copied element of that (destination) range.
 
 
 <algo-transform>
+
+o Can use the same coll for input and output
 
 11.6.3 Transforming and Combining Elements
 
@@ -46418,10 +46367,9 @@ namespace std {
     transform(_InputIterator __first, _InputIterator __last,
       _OutputIterator __result, _UnaryOperation __unary_op)
     {
-      // ...
       for (; __first != __last; ++__first, ++__result)
          // note: write to output and unary
-         *__result = __unary_op(*__first);
+         `*__result = __unary_op(*__first);`
       return __result;
     }
 
@@ -46684,119 +46632,794 @@ TEST(StlAlgoFill, Fill)
 *kt_dev_cxx_0000* cxx-algo-mutating
 
 Mutating algorithms `change the order of elements but not their values.`
-Because elements of associative and unordered containers have an order defined
-by the container, you can’t use these algorithms as a destination for mutating
-algorithms.
+
+As with algo-modifying, because elements of associative and unordered
+containers have an order defined by the container, you can’t use these
+algorithms as a destination for mutating algorithms.
 
 <algo-partition>
 
 11.8.5 Moving Elements to the Front
 
-* Both algorithms return the first position for which op() yields false.
+ForwardIterator
+partition (ForwardIterator beg, ForwardIterator end,
+  UnaryPredicate op)
 
-As this example shows, stable_partition(), unlike partition(), preserves the
-relative order of the even and the odd elements.
+o Both algorithms move all elements in the range [beg,end) `to the front`, for
+  which the unary predicate op(elem) yields true.
 
-// coll1: 1 2 3 4 5 6 7 8 9 (9)
-// coll1: 8 2 6 4 5 3 7 1 9 (9)
-// first odd element: 5
-// coll2: 1 2 3 4 5 6 7 8 9 (9)
-// coll2: 2 4 6 8 1 3 5 7 9 (9)
-// first odd element: 1
+o Both algorithms return the first position for which op() yields false.
 
-TEST(Algo, UsePartition)
+o stable_partition(), unlike partition(), preserves the relative order of the
+  even and the odd elements.
+
+
+
+// matched group | unmatched group
+//                 ^return
+
+TEST(AlgoMutating, AlgoPartition)
 {
-    vector<int> coll1;
-    vector<int> coll2;
+  vector<int> coll1;
+  vector<int> coll2;
 
-    INSERT_ELEMENTS(coll1, 1, 9);
-    EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+  INSERT_ELEMENTS(coll1, 1, 9);
+  EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-    auto pos1 = partition(coll1.begin(), coll1.end(),    // range
-                [](int elem)
-                {
-                    return elem %2 == 0;
-                });
+  auto pos1 = partition(coll1.begin(), coll1.end(),    // range
+      [](int elem)
+      {
+      return elem %2 == 0;
+      });
 
-    EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
+  EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
 
-    // algo-partition retuns returns an iterator to the first element where the
-    // predicate is not true, or the end of the range if all elements satisfy
-    // the predicate. so first odd element:
+  // algo-partition returns an iterator to the first element where the
+  // predicate is not true, or the end of the range if all elements satisfy
+  // the predicate. so first odd element:
 
-    EXPECT_EQ(*pos1, 5);
+  EXPECT_EQ(*pos1, 5);
 
-    INSERT_ELEMENTS(coll2, 1, 9);
-    EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+  INSERT_ELEMENTS(coll2, 1, 9);
+  EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
 
-    auto pos2 = stable_partition(coll2.begin(), coll2.end(),
-                [](int elem)
-                {
-                    return elem %2 == 0;
-                });
-    EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
+  auto pos2 = stable_partition(coll2.begin(), coll2.end(),
+      [](int elem)
+      {
+      return elem %2 == 0;
+      });
+  EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
 
-    // first odd element:
-    EXPECT_EQ(*pos2, 1);
+  // first odd element:
+  EXPECT_EQ(*pos2, 1);
+}
+
+
+using PortfolioIterator = vector<unsigned int>::iterator;
+
+PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
+{
+  // how to get T of coll such as algo-remove? here, assumes that we know T
+  vector<unsigned int> coll;
+
+  PortfolioIterator start = begin;
+  PortfolioIterator current{};
+
+  // one pass to filter <=
+
+  for (; start != end; ++start)
+  {
+    // not use push_back() since void push_back()
+    if (*start <= max_quanity)
+      current = coll.insert(coll.end(), *start);
+  }
+
+  start = begin;
+
+  // second pass to filter >
+
+  for (; start != end; ++start)
+  {
+    if (*start > max_quanity)
+      coll.push_back(*start);
+  }
+
+  // copy it back
+  copy(coll.begin(), coll.end(), begin);
+
+  // *cxx-vector-reallocation* *cxx-iter-invalidated*
+  // *cxx-iter-singular* means invalidated iterator since there is no gurantee
+  // that current is valid after second pass push_back
+  //
+  // /usr/include/c++/6/debug/safe_iterator.h:298:
+  // Error: attempt to increment a singular iterator.
+  // 
+  // Objects involved in the operation:
+  //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
+  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, 
+  //          std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
+  //       state = singular;
+  //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
+  //     }
+  // Aborted
+  //
+  // return ++current;
+
+  // this returns local *cxx-return-local*
+  return current;
+}
+
+// works like stable_partition
+
+TEST(AlgoMutating, OwnPartitionTwoPass)
+{
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    RearrangeByQuantity(coll.begin(), coll.end(), 25);
+
+    // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
+    // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
+    //                                ^^
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+
+    // this now fails since `current` is iterator of internal coll but not input
+    // call. Have to work out one.
+    // EXPECT_THAT(*iter, 43);
+  }
+
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    stable_partition(coll.begin(), coll.end(),
+        [](int value)
+        { return value <= 25; }
+        );
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+  }
+}
+
+
+// unlike algo-remove(), have to keep unmatched item as well
+
+PortfolioIterator my_partition_one(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
+{
+  // find the first of unmatched(unsorted) sub group
+
+  PortfolioIterator first = begin;
+  for (; first != end; ++first)
+    if (*first > max_quanity)
+      break;
+
+  // scan from the next of the first and take item from unmatched and swap it to
+  // matched group.
+
+  PortfolioIterator runner = first;
+  ++runner;
+  for (; runner != end; ++runner)
+  {
+    // if item matches to condition
+    if (*runner <= max_quanity)
+    {
+      // *cxx-iter-swap*
+      std::iter_swap(runner, first);
+      ++first;
+    }
+  }
+
+  return first;
+}
+
+// same as algo-partition /usr/include/c++/4.9.2/bits/stl_algo.h
+
+PortfolioIterator my_partition_two(PortfolioIterator begin,
+    PortfolioIterator end, unsigned int max_quanity)
+{
+  // find the first of unmatched(unsorted) sub group
+
+  PortfolioIterator first = begin;
+  while (*first <= max_quanity)
+    if (++first == end)
+      return first;
+
+  PortfolioIterator runner = first;
+  while (++runner != end)
+  {
+    // if item matches to condition
+    if (*runner <= max_quanity)
+    {
+      std::iter_swap(runner, first);
+      ++first;
+    }
+  }
+
+  return first;
+}
+
+
+TEST(AlgoMutating, OwnPartitionOnePass)
+{
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    PortfolioIterator iter = my_partition_one(coll.begin(), coll.end(), 25);
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    EXPECT_THAT(distance(coll.begin(), iter), 11);
+    EXPECT_THAT(*iter, 43);
+  }
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    PortfolioIterator iter = my_partition_two(coll.begin(), coll.end(), 25);
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    EXPECT_THAT(distance(coll.begin(), iter), 11);
+    EXPECT_THAT(*iter, 43);
+  }
+}
+
+
+// Q: why my_partiton_xxx() make different order from partition() when use the
+// same logic? but distance is the same.
+
+TEST(AlgoMutating, PartitionCompare)
+{
+  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+  PortfolioIterator iter = partition(coll.begin(), coll.end(), 
+      [](int value)
+      { return value <= 25;}
+      );
+
+  // EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+  // EXPECT_THAT(*iter, 43);
+  EXPECT_THAT(coll, 
+      ElementsAreArray({23,6,11,6,13,23,21,19,20,15,24,48,37,34,29,26,41,30,42,43}));
+
+  EXPECT_THAT(distance(coll.begin(), iter), 11);
+  EXPECT_THAT(*iter, 48);
+}
+
+// https://github.com/fenbf/review/blob/master/stl/beautiful_std_alg.cpp
+// 4. gather (cpp seasoning)
+//
+// use case: list of items, select some of items (good guys) and move the to
+// position around p.  for instance: multiple selection on a list
+//
+// problem with std::not1:
+// http://channel9.msdn.com/Events/GoingNative/2013/Cpp-Seasoning#c635149692925101916
+
+template <typename Iterator, typename Compare>
+auto gather(Iterator _first, Iterator _last, Iterator _pos, Compare _comp) -> std::pair<Iterator, Iterator>
+{
+  using value_type = typename std::iterator_traits<Iterator>::value_type;
+  auto _begin = partition(_first, _pos, [&](const value_type e) { return !_comp(e); });
+  auto _end = partition(_pos, _last, _comp);
+  return {_begin, _end};
+}
+
+
+TEST(AlgoMutating, Gather)
+{
+  {
+    vector<int> coll(10, 0);
+    coll[0] = coll[2] = coll[7] = coll[8] = 1;
+    EXPECT_THAT(coll, ElementsAre(1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
+
+    // gather(begin, end, pos, comp);
+    std::partition(coll.begin(), coll.begin()+4, [](const int x){ return x != 1; });
+    std::partition(coll.begin()+4, coll.begin()+10, [](const int x){ return x == 1; });
+
+    EXPECT_THAT(coll, ElementsAre(0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
+  }
+
+  {
+    vector<int> coll(10, 0);
+    coll[0] = coll[2] = coll[7] = coll[8] = 1;
+    EXPECT_THAT(coll, ElementsAre(1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
+
+    // rearrange coll to centre around `pos`
+    // pos = 4
+    // (1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
+    //              ^
+    // (            ]
+    //              (               ]
+    // (0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
+
+    gather(coll.begin(), coll.end(), coll.begin()+4, [](const int x){ return x == 1; });
+    EXPECT_THAT(coll, ElementsAre(0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
+  }
+}
+
+
+<algo-remove>
+As with modifying algorithms, you can’t use an
+associative or unordered container as a destination, because the elements of
+these containers are considered to be constant.
+
+The following algorithms remove elements from a range according to their value
+or to a criterion.  These algorithms, however, cannot change the number of
+elements. The algorithms move logically only by overwriting “removed” elements
+with the following elements that were not removed. They return the new logical
+end of the range (the position after the last element not removed). 
+
+ForwardIterator
+remove (ForwardIterator beg, ForwardIterator end, const T& value)
+
+
+TEST(AlgoMutating, AlgoRemove)
+{
+  // coll.erase() delete elements but algo-remove do not.
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    for (auto it = coll.begin(); it != coll.end(); ++it)
+    {
+      if (*it == 2)
+        it = coll.erase(it);
+    }
+
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto end = remove(coll.begin(), coll.end(), 2);
+
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,2,2,2}));
+
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+
+  // show that algo-remove() do not remove elements
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    remove(coll.begin(), coll.end(), 2);
+
+    // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
+    //                                       ^^^^^^^ 
+
+    EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+  }
+}
+
+
+// show that remove_if() returns end if not found
+TEST(AlgoMutating, AlgoRemoveIf)
+{
+  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+  auto it = remove_if(coll.begin(), coll.end(), 
+      [](int value)
+      { return value == 10; }
+      );
+
+  EXPECT_THAT(it, coll.end());
+}
+
+// 1. do the same as algo-partition but from the end. 
+// 2. therefore, do not care about the order of unmatched group.
+
+template <typename _Iterator, typename _T>
+_Iterator my_remove_01(_Iterator __begin, _Iterator __end, _T __value)
+{
+  _Iterator run = __end - 1;
+  _Iterator start_of_remove = __end;
+
+  for (; run > __begin; --run)
+  {
+    // swap only when element has the same value and swap is necessary
+    if ((*run == __value) && (run != start_of_remove-1))
+      swap(*run, *(--start_of_remove));
+  }
+
+  // swap only when element has the same value and swap is necessary
+  if ((*run == __value) && (run != start_of_remove-1))
+    swap(*run, *(--start_of_remove));
+
+  return start_of_remove;
+}
+
+
+// same as algo-partition
+// but keep the order of unmatched group
+
+template <typename _Iterator, typename _T>
+_Iterator my_remove_02(_Iterator __begin, _Iterator __end, _T __value)
+{
+  // start of matched or end of unmatched
+  // can use algo-find instead
+  _Iterator start = __begin;
+  while (*start != __value)
+    if (++start == __end)
+      return start;
+
+  _Iterator run = start;
+  while (++run != __end)
+  {
+    if (*run != __value)
+      swap(*run, *start++);
+  }
+
+  return start;
+}
+
+TEST(AlgoMutating, AlgoRemoveOwn)
+{
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto end = my_remove_01(coll.begin(), coll.end(), 2);
+
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,9,3,4,5,6,8,7,2,2,2,2}));
+
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,9,3,4,5,6,8,7}));
+  }
+
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto end = my_remove_02(coll.begin(), coll.end(), 2);
+
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,2,2,2}));
+
+    coll.erase(end, coll.end());
+
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto end = std::remove(coll.begin(), coll.end(), 2);
+
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    PRINT_ELEMENTS(coll, "coll:");
+
+    EXPECT_TRUE((coll != std::vector<int>{1,3,4,5,6,7,8,9,2,2,2,2}));
+
+    // why different from the result of own remove since algo-remove use assign
+
+    EXPECT_THAT(coll,
+        Not(ElementsAreArray({1,3,4,5,6,7,8,9,2,2,2,2})));
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+
+    coll.erase(end, coll.end());
+    PRINT_ELEMENTS(coll, "coll:");
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+}
+
+namespace algo_code 
+{
+  // /usr/include/c++/4.9/bits/predefined_ops.h
+
+  // check if what iter refers to equals to the value.
+
+  template<typename _Value>
+    struct _Iter_equals_val
+    {
+      _Value& _M_value;
+
+      _Iter_equals_val(_Value& __value)
+        : _M_value(__value)
+      { }
+
+      template<typename _Iterator>
+        bool
+        operator()(_Iterator __it)
+        { return *__it == _M_value; }
+    };
+
+  template<typename _Value>
+    inline _Iter_equals_val<_Value>
+    __iter_equals_val(_Value& __val)
+    { return _Iter_equals_val<_Value>(__val); }
+
+  // /usr/include/c++/4.9/bits/stl_algo.h
+
+  /**
+   *  @brief Remove elements from a sequence.
+   *  @ingroup mutating_algorithms
+   *  @param  __first  An input iterator.
+   *  @param  __last   An input iterator.
+   *  @param  __value  The value to be removed.
+   *  @return   An iterator designating the end of the resulting sequence.
+   *
+   *  All elements equal to @p __value are removed from the range
+   *  @p [__first,__last).
+   *
+   *  remove() is stable, so the relative order of elements that are
+   *  not removed is unchanged.
+   *
+   *  Elements between the end of the resulting sequence and @p __last
+   *  are still present, but their value is unspecified.
+   */
+  template<typename _ForwardIterator, typename _Tp>
+    inline _ForwardIterator
+    remove(_ForwardIterator __first, _ForwardIterator __last,
+        const _Tp& __value)
+    {
+      return std::__remove_if(__first, __last,
+          __gnu_cxx::__ops::__iter_equals_val(__value));
+    }
+
+  template<typename _ForwardIterator, typename _Predicate>
+    _ForwardIterator
+    __remove_if(_ForwardIterator __first, _ForwardIterator __last,
+        _Predicate __pred)
+    {
+      __first = std::__find_if(__first, __last, __pred);
+      if (__first == __last)
+        return __first;
+
+      _ForwardIterator __result = __first;
+      ++__first;
+      for (; __first != __last; ++__first)
+        if (!__pred(__first))
+        {
+          // note
+          // this is `assign` but not `swap` which make a difference to own
+          // remove does.
+
+          *__result = _GLIBCXX_MOVE(*__first);
+          ++__result;
+        }
+      return __result;
+    }
+} // namespace
+
+
+<algo-permutation>
+
+// 588 Chapter 11: STL Algorithms
+
+// bool
+// next_permutation (BidirectionalIterator beg, BidirectionalIterator end)
+// 
+// next_permutation() changes the order of the elements in [beg,end) according
+// to the next permutation.
+// 
+// Both algorithms return false if the elements got the “normal”
+// (lexicographical) order: that is, ascending order for next_permutation() and
+// descending order for prev_permutation(). So, to run through all
+// permutations, you have to sort all elements (ascending or descending), and
+// start a loop that calls next_permutation() or prev_permutation() as long as
+// these algorithms return true.
+//
+// that means return false when coll is sorted.
+
+// start:1 2 3 (3)
+// next :1 3 2 (3)
+// next :2 1 3 (3)
+// next :2 3 1 (3)
+// next :3 1 2 (3)
+// next :3 2 1 (3)
+// finis:1 2 3 (3)
+// now  :3 2 1 (3)
+// prev :3 1 2 (3)
+// prev :2 3 1 (3)
+// prev :2 1 3 (3)
+// prev :1 3 2 (3)
+// prev :1 2 3 (3)
+// finis:3 2 1 (3)
+
+TEST(AlgoMutating, AlgoPermutation)
+{
+  vector<int> coll{1,2,3};
+
+  PRINT_ELEMENTS(coll, "start:");
+
+  // permute coll until they are sorted, ascending
+  while(next_permutation(coll.begin(), coll.end()))
+  {
+    PRINT_ELEMENTS(coll, "next :");
+  }
+
+  // return false when sorted
+  PRINT_ELEMENTS(coll, "finis:");
+
+  // until descending sorted and the loop ends immediately
+  while(prev_permutation(coll.begin(), coll.end()))
+  {
+    PRINT_ELEMENTS(coll, "prev :");
+  }
+  PRINT_ELEMENTS(coll, "now  :");
+
+  while(prev_permutation(coll.begin(), coll.end()))
+  {
+    PRINT_ELEMENTS(coll, "prev :");
+  }
+  PRINT_ELEMENTS(coll, "finis:");
+}
+
+
+<algo-rotate> algo-slide algo-reverse
+
+TEST(AlgoMutating, AlgoRotate)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8};
+
+  // rotate one to the left
+  // GCC 4.9.2, void rotate() so comment out 
+  // auto pos = rotate(
+  rotate(
+    coll.begin(),     // begin  
+    coll.begin()+1,   // new begin
+    coll.end()        // end
+  );
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+  // return the new position of the (pervious) first element.
+  // EXPECT_THAT(*pos, 1);
+
+  // rotate two to the right or think that rotate to the left since `no direction` 
+  // in the call definition.
+  // 
+  // from stl
+  //  *  This effectively swaps the ranges @p [__first,__middle) and
+  //  *  @p [__middle,__last).
+
+  // pos = rotate(
+  rotate(
+    coll.begin(),
+    coll.end()-2,
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+  // EXPECT_THAT(*pos, 2);
+
+  // rotate so that 4 is the beginning
+  // pos = rotate(
+  rotate(
+    coll.begin(),
+    find(coll.begin(), coll.end(), 4),
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  // EXPECT_THAT(*pos, 8);
+}
+
+
+// do not use additional space
+// like to slide down sub group
+
+template <typename _Iterator>
+void my_rotate(_Iterator __begin, _Iterator __new_end, _Iterator __end)
+{
+  if ((__begin == __new_end) || (__end == __new_end))
+    return;
+
+  auto num_slide = std::distance(__new_end, __end);
+
+  for (;__new_end != __begin; --__new_end)
+  {
+    _Iterator start = __new_end;
+
+    for (int i = 0; i < num_slide; ++i)
+    {
+      swap(*start, *(start-1));
+      ++start;
+    }
+  }
 }
 
 // /usr/include/c++/4.9.2/bits/stl_algo.h
-  /**
-   *  @brief Move elements for which a predicate is true to the beginning
-   *         of a sequence.
-   *  @ingroup mutating_algorithms
-   *  @param  __first   A forward iterator.
-   *  @param  __last    A forward iterator.
-   *  @param  __pred    A predicate functor.
-   *  @return  An iterator @p middle such that @p __pred(i) is true for each
-   *  iterator @p i in the range @p [__first,middle) and false for each @p i
-   *  in the range @p [middle,__last).
-   *
-   *  @p __pred must not modify its operand. @p partition() does not preserve
-   *  the relative ordering of elements in each group, use
-   *  @p stable_partition() if this is needed.
-  */
-  template<typename _ForwardIterator, typename _Predicate>
-    inline _ForwardIterator
-    partition(_ForwardIterator __first, _ForwardIterator __last,
-	      _Predicate   __pred)
-    {
-      // concept requirements
-      __glibcxx_function_requires(_Mutable_ForwardIteratorConcept<
-				  _ForwardIterator>)
-      __glibcxx_function_requires(_UnaryPredicateConcept<_Predicate,
-	    typename iterator_traits<_ForwardIterator>::value_type>)
-      __glibcxx_requires_valid_range(__first, __last);
+//
+// /// This is a helper function for the rotate algorithm.
+// template<typename _ForwardIterator>
+//   _ForwardIterator
+//   __rotate(_ForwardIterator __first,
+//      _ForwardIterator __middle,
+//      _ForwardIterator __last,
+//      forward_iterator_tag)
+// {}
 
-      return std::__partition(__first, __last, __pred,
-			      std::__iterator_category(__first));
-    }
+TEST(AlgoMutating, AlgoRotateOwn)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8};
 
-  /// This is a helper function...
-  template<typename _ForwardIterator, typename _Predicate>
-    _ForwardIterator
-    __partition(_ForwardIterator __first, _ForwardIterator __last,
-		_Predicate __pred, forward_iterator_tag)
-    {
-      if (__first == __last)
-        return __first;
-    
-      while (__pred(*__first))
-        if (++__first == __last)
-          return __first;
-    
-      _ForwardIterator __next = __first;
-    
-      while (++__next != __last)
-        if (__pred(*__next))
-        {
-          std::iter_swap(__first, __next);
-          ++__first;
-        }
-    
-      return __first;
-    }
+  // rotate one to the left
+  my_rotate(
+    coll.begin(),     // begin  
+    coll.begin()+1,   // new begin
+    coll.end()        // end
+  );
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
 
+  my_rotate(
+    coll.begin(),
+    coll.end()-2,
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+
+  my_rotate(
+    coll.begin(),
+    find(coll.begin(), coll.end(), 4),
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+}
+
+// void
+// reverse (BidirectionalIterator beg, BidirectionalIterator end)
+
+// algo-rotate that use algo-reverse()
+
+template <typename _Iterator>
+void reverse_rotate(_Iterator begin, _Iterator new_begin, _Iterator end)
+{
+  std::reverse(begin, new_begin);
+  std::reverse(new_begin, end);
+  std::reverse(begin, end);
+}
+
+TEST(AlgoMutating, AlgoReverse)
+{
+  {
+    vector<int> coll{1,2,3,4,5,6,7,8};
+
+    std::reverse(coll.begin(), coll.end());
+    EXPECT_THAT(coll, ElementsAre(8,7,6,5,4,3,2,1));
+
+    std::reverse(coll.begin()+1, coll.end()-1);
+    EXPECT_THAT(coll, ElementsAre(8,2,3,4,5,6,7,1));
+
+    vector<int> result;
+    std::reverse_copy(coll.begin(), coll.end(), 
+        back_inserter(result));
+    EXPECT_THAT(result, ElementsAre(1,7,6,5,4,3,2,8));
+  }
+
+  {
+    vector<int> coll{1,2,3,4,5,6,7,8};
+
+    // rotate one to the left
+    reverse_rotate(
+        coll.begin(),     // begin  
+        coll.begin()+1,   // new begin
+        coll.end()        // end
+        );
+    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+    reverse_rotate(
+        coll.begin(),
+        coll.end()-2,
+        coll.end()
+        );
+    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+
+    reverse_rotate(
+        coll.begin(),
+        find(coll.begin(), coll.end(), 4),
+        coll.end()
+        );
+    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  }
+}
 
 algo-sort-insertion is similar to *algo-remove* *algo-partition* *algo-rotate*
 in that it uses two partitions; one that is sorted or meets condition and the
@@ -47848,7 +48471,7 @@ caller must 'not' modify or free the memory. note: seems not possible since it
 is const?
 
 
-{can-be-invalidated} cxx-invalidated <string-reallocation>
+{can-be-invalidated} cxx-iter-invalidated <string-reallocation>
 Convert string into C-strings or character arrays only immediately before you
 need the contents as type char*. Since the return value of c_str() and data() is
 valid 'only' until the next call of a non-const member function for the same

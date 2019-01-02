@@ -707,11 +707,91 @@ of input and output examples:
 
 */
 
-namespace U51_2018_12_28
+// algo-transform uses the same coll as input
+
+namespace U51_Text
 {
-  void 
+  bool starts_with(std::string const& text, std::string const& prefix)
+  {
+    return text.find(prefix) == 0;
+  }
+
+  void normalize_phone_numbers(std::vector<std::string>& numbers,
+      std::string const& code)
+  {
+    std::transform(numbers.cbegin(), numbers.cend(),
+        numbers.begin(),
+        [=](std::string const& number)
+        {
+          std::string result;
+
+          if (number.size() > 0)
+          {
+            if (number[0] == '0')
+              result = "+" + code + number.substr(1);
+            else if (starts_with(number, code))
+              result = "+" + number;
+            else if (starts_with(number, "+" + code))
+              result = number;
+            else
+              result = "+" + code + number;
+          }
+
+          // for each string element of the input
+          result.erase(
+              std::remove_if(result.begin(), result.end(), 
+                [](char const e)
+              { return isspace(e); }
+              ), result.end());
+
+          return result;
+        }
+    );
+  }
 } // namespace
 
+TEST(U51, Text)
+{
+  using namespace U51_Text;
+
+  std::vector<std::string> numbers{
+    "07555 123456",
+      "07555123456",
+      "+44 7555 123456",
+      "44 7555 123456",
+      "7555 123456"
+  };
+
+  normalize_phone_numbers(numbers, "44");
+
+  ostringstream os;
+
+  for (auto const & number : numbers)
+  {
+    os << number << std::endl;
+  }
+
+  EXPECT_THAT(os.str(), 
+      "+447555123456\n+447555123456\n+447555123456\n+447555123456\n+447555123456\n");
+}
+
+
+/*
+52. Generating all the permutations of a string
+
+Write a function that, prints on the console all the possible permutations of a
+given string. You should provide two versions of this function: one that uses
+recursion, and one that does not.
+
+{
+   std::cout << "non-recursive version" << std::endl;
+   print_permutations("main");
+
+   std::cout << "recursive version" << std::endl;
+   print_permutations_recursive("main");
+}
+
+*/
 
 // ={=========================================================================
 int main(int argc, char **argv)
