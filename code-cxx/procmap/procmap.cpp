@@ -1,6 +1,6 @@
 #include "gmock/gmock.h"
 
-#define _GNU_SOURCE
+// #define _GNU_SOURCE
 #include <link.h>
 #include <stdarg.h>
 
@@ -18,10 +18,6 @@ using namespace testing;
 
 
 // ={=========================================================================
-
-/*
-
-*/
 
 // types
 
@@ -83,13 +79,12 @@ class GenericScopedLock
 
 
 //={===========================================================================
-// check
+// asan-check
 
 // #define FORMAT(f, a)  __attribute__((format(printf, f, a)))
 // 
 // static void SharedPrintfCode(bool append_pid, const char *format,
 //                              va_list args) {
-//   // TODO
 // }
 // 
 // // sanitizer_common/sanitizer_printf.cc
@@ -111,6 +106,9 @@ class GenericScopedLock
 //   // Die();
 // }
 
+// Sanitize CHECK failed: procmap.cpp:139 ((0)) != (0) (0, 0)
+// Sanitize CHECK failed: procmap.cpp:140 ((10)) == ((11)) (10, 11)
+
 void CheckFailed(const char *file, int line, const char *cond,
     u64 v1, u64 v2)
 {
@@ -131,6 +129,14 @@ void CheckFailed(const char *file, int line, const char *cond,
 #define CHECK_EQ(a, b)  CHECK_IMPL((a), ==, (b))
 #define CHECK_GT(a, b)  CHECK_IMPL((a), >, (b))
 #define CHECK_LT(a, b)  CHECK_IMPL((a), <, (b))
+
+
+TEST(ProcMap, Check)
+{
+  CHECK(1);
+  CHECK(0);
+  CHECK_EQ(10, 11);
+}
 
 
 //={===========================================================================
@@ -291,11 +297,12 @@ char *internal_strchr(const char *s, int c)
 
 
 //={===========================================================================
-// common
+// asan-common
 
 uptr GetPageSize()
 {
   // from linux
+  // #include <asm/param.h>  // EXEC_PAGESIZE
   return EXEC_PAGESIZE;
 }
 
@@ -306,6 +313,12 @@ uptr GetPageSizeCached()
     page_size = GetPageSize();
   return page_size;
 }
+
+TEST(ProcMap, PageSize)
+{
+  EXPECT_THAT(GetPageSizeCached(), 4096);
+}
+
 
 int OpenFile(const char *file_name, FileAccessMode mode, int *errno_p)
 {
@@ -971,17 +984,6 @@ uptr ReadBinaryNameCached(/*out*/char *buf, uptr buf_len)
 
 //=============================================================================
 // tests
-
-TEST(ProcMap, PageSize)
-{
-  EXPECT_THAT(GetPageSizeCached(), 4096);
-}
-
-TEST(ProcMap, Check)
-{
-  CHECK(1);
-  CHECK(0);
-}
 
 TEST(ProcMap, ReadProcMaps)
 {

@@ -791,6 +791,19 @@ recursion, and one that does not.
    print_permutations_recursive("main");
 }
 
+
+recursive version works:
+
+
+                        {ABC, ""}
+
+    {AB, C}             {CA, B}                 {BC, A}
+
+{A, CB}   {B, CA}   {C, BA}   {A, BC}     {B, AC}   {C, AB}
+
+{"", CBA} {"",CAB}  {"", BAC} {"", BCA}   {"", ACB} {"", ABC}
+
+
 */
 
 namespace U52_Text
@@ -820,6 +833,34 @@ namespace U52_Text
       }
     }
   }
+
+  // this version do not work since:
+  // 1. when input has one char, in becomes empty and has runtime error when calls
+  // rotate() since it has invalid iterator. so has empty check.
+  //
+  // 2. even empty check is in place, the reuslt do not show full permutations
+  // since in gets changed in the loop which is maintained in the verison 01.
+  //
+  // therefore, string handling in above use a trick which always takes sub
+  // string from 1 and take [0] to output
+
+  void print_permutations_recursive_error(std::string in, std::string out)
+  {
+    if (in.empty())
+      cout << out << endl;
+    else
+    {
+      for (size_t i = 0; i < in.size(); ++i)
+      {
+        out.push_back(in[in.size()-1]);
+        in.pop_back();
+        print_permutations_recursive_02(in, out);
+        if(!in.empty())
+          std::rotate(in.begin(), in.begin()+1, in.end());
+      }
+    }
+  }
+
 } // namespace
 
 

@@ -2240,6 +2240,24 @@ namespace algo_predicate
       int nth_;
       int count_;
   };
+
+  class PredicateWithValue
+  {
+    public:
+      void operator()(int value)
+      {
+        value += 10;
+      }
+  };
+
+  class PredicateWithReference
+  {
+    public:
+      void operator()(int& value)
+      {
+        value += 10;
+      }
+  };
 } // namespace
 
 TEST(Predicate, Stateless)
@@ -2261,6 +2279,33 @@ TEST(Predicate, Predefined)
 {
   std::plus<int> op;
   EXPECT_THAT(op(10, 20), 30);
+}
+
+// template<typename _InputIterator, typename _Function>
+//   _Function
+// for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+// {
+//   for (; __first != __last; ++__first)
+//     __f(*__first);
+// 
+//   return _GLIBCXX_MOVE(__f);
+// }
+
+TEST(Predicate, ValueAndReference)
+{
+  using namespace algo_predicate;
+
+  {
+    vector<int> coll{1,2,3,4,5};
+    std::for_each(coll.begin(), coll.end(), PredicateWithValue());
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5));
+  }
+
+  {
+    vector<int> coll{1,2,3,4,5};
+    std::for_each(coll.begin(), coll.end(), PredicateWithReference());
+    EXPECT_THAT(coll, ElementsAre(11,12,13,14,15));
+  }
 }
 
 

@@ -258,6 +258,10 @@ TEST(StringOperations, EraseReplace)
     s.erase(7, 5);                         // internaxxxxxl
     EXPECT_EQ(s, "internal");
 
+    // *cxx-string-pop-back*
+    // void string::pop_back ()
+    // Calling this for an empty string results in undefined behavior.
+
     s.pop_back();                          // s: interna (since C++11)
     EXPECT_EQ(s, "interna");
 
