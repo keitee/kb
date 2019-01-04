@@ -13,10 +13,9 @@ using namespace std;
 using namespace testing;
 
 
-// ={=========================================================================
 
 /*
-
+={=============================================================================
 Algorithms and Data Structures
 
 45. Priority queue
@@ -135,7 +134,7 @@ TEST(U45, Text)
 
 
 /*
- 
+={=============================================================================
 46. Circular buffer
 
 Create a data structure that represents a circular buffer of a fixed size. A
@@ -165,7 +164,7 @@ namespace U46_text
 
 
 /*
-
+={=============================================================================
 47. Double buffer
 
 Write a class that represents a buffer that could be written and read at the
@@ -314,7 +313,7 @@ TEST(U47, Text)
 
 
 /*
-
+={=============================================================================
 48. The most frequent element in a range
 
 Write a function that, given a range, returns the most frequent element and the
@@ -454,7 +453,7 @@ TEST(U48, Text)
 
 
 /*
-
+={=============================================================================
 49. Text histogram
 
 Write a program that, given a text, determines and prints a histogram with the
@@ -599,7 +598,7 @@ TEST(U49, Text)
 
 
 /*
-
+={=============================================================================
 50. Filtering a list of phone numbers
 
 Write a function that, given a list of phone numbers, returns only the numbers
@@ -674,7 +673,7 @@ TEST(U50, Text)
 
 
 /*
-
+={=============================================================================
 51. Transforming a list of phone numbers
 
 Write a function that, given a list of phone numbers, transforms them so they
@@ -777,6 +776,7 @@ TEST(U51, Text)
 
 
 /*
+={=============================================================================
 52. Generating all the permutations of a string
 
 Write a function that, prints on the console all the possible permutations of a
@@ -854,7 +854,7 @@ namespace U52_Text
       {
         out.push_back(in[in.size()-1]);
         in.pop_back();
-        print_permutations_recursive_02(in, out);
+        print_permutations_recursive_error(in, out);
         if(!in.empty())
           std::rotate(in.begin(), in.begin()+1, in.end());
       }
@@ -873,6 +873,273 @@ TEST(U52, Text)
 
   cout << "----" << endl;
   print_permutations_recursive("123", "");
+}
+
+
+/*
+={=============================================================================
+53. Average rating of movies
+
+Write a program that calculates and prints the average rating of a list of
+movies. Each movie has a list of ratings from 1 to 10 (where 1 is the lowest and
+10 is the highest rating). In order to compute the rating, you must remove 5% of
+the highest and lowest ratings before computing their average. The result must
+be displayed with a single decimal point.
+
+{
+   std::vector<movie> movies
+   {
+      { 101, "The Matrix", {10, 9, 10, 9, 9, 8, 7, 10, 5, 9, 9, 8} },
+      { 102, "Gladiator", {10, 5, 7, 8, 9, 8, 9, 10, 10, 5, 9, 8, 10} },
+      { 103, "Interstellar", {10, 10, 10, 9, 3, 8, 8, 9, 6, 4, 7, 10} }
+   };
+
+   print_movie_ratings(movies);
+}
+
+*/
+
+// Initially, thought the way which removes elements based on rating band. 1 +
+// 10*0.05 <= x <= 10 - 10*0.05. However, this removes very little from input so
+// thought about rating value instead.
+//
+// However, the text removes elements based on input order
+
+namespace U53_2019_01_03
+{
+  void print_movie_ratings()
+  {
+    vector<int> coll{10, 9, 10, 9, 9, 8, 7, 10, 5, 9, 9, 8};
+    vector<int> result{};
+
+    auto minmax = minmax_element(coll.begin(), coll.end());
+    auto diff = (*minmax.second - *minmax.first) * 0.05;
+    std::copy_if(coll.begin(), coll.end(), back_inserter(result),
+        [=](int value)
+        {
+          return ((*minmax.first + diff) <= value) && (value <= (*minmax.second - diff));
+        });
+
+    for(auto e : result)
+      cout << e << ", ";
+    cout << endl;
+  }
+} // namespace
+
+TEST(U53, 2019_01_03)
+{
+  using namespace U53_2019_01_03;
+
+  print_movie_ratings();
+}
+
+
+/*
+
+The problem requires the computing of a movie rating using a truncated mean.
+This is a statistical measure of a central tendency where the mean is calculated
+after discarding parts of a probability distribution or sample at the high and
+low ends. Typically, this is done by removing an equal amount of points at the
+two ends. For this problem, you are required to remove 5% of both the highest
+and lowest user ratings.
+
+A function that calculates a truncated mean for a given range should do the
+following:
+
+Sort the range so that elements are ordered (either ascending or descending)
+
+Remove the required percentage of elements at both ends
+
+Count the sum of all remaining elements
+
+Compute the average by dividing the sum to the remaining count of elements
+
+The truncated_mean() function shown here implements the described algorithm:
+
+*/
+
+namespace U53_Text
+{
+  struct movie
+  {
+    int              id;
+    std::string      title;
+    std::vector<int> ratings;
+  };
+
+  double truncated_mean(std::vector<int> values, double const percentage)
+  {
+    std::sort(values.begin(), values.end());
+
+    // this is code in text
+    // auto remove_count = static_cast<size_t>(values.size()*percentage + 0.5);
+    //
+    // should use round()
+    auto remove_count = static_cast<size_t>(round(values.size()*percentage));
+
+    values.erase(values.begin(), values.begin() + remove_count);
+    values.erase(values.end() - remove_count, values.end());
+
+    auto total = std::accumulate(values.begin(), values.end(), 0ul);
+    return static_cast<double>(total) / values.size();
+  }
+
+  void print_movie_ratings(std::vector<movie> const& movies)
+  {
+    for (auto const& e : movies)
+    {
+      cout << std::fixed << std::setprecision(2) 
+        << truncated_mean(e.ratings, 0.05) 
+        << endl;
+    }
+  }
+}
+
+// results:
+//
+// 8.80 
+// 8.45
+// 8.10
+
+TEST(U53, Text)
+{
+  using namespace U53_Text;
+
+  std::vector<movie> movies
+  {
+    { 101, "The Matrix", {10, 9, 10, 9, 9, 8, 7, 10, 5, 9, 9, 8} },
+      { 102, "Gladiator", {10, 5, 7, 8, 9, 8, 9, 10, 10, 5, 9, 8, 10} },
+      { 103, "Interstellar", {10, 10, 10, 9, 3, 8, 8, 9, 6, 4, 7, 10} }
+  };
+
+  print_movie_ratings(movies);
+}
+
+/*
+={=============================================================================
+54. Pairwise algorithm
+
+Write a general-purpose function that, given a range, returns a new range with
+pairs of consecutive elements from the input range. Should the input range have
+an odd number of elements, the last one must be ignored. For example, if the
+input range was {1, 1, 3, 5, 8, 13, 21}, the result must be { {1, 1}, {3, 5},
+{8, 13}}.
+
+{
+   std::vector<int> v{ 1, 1, 3, 5, 8, 13, 21 };
+   auto result = pairwise(v);
+
+   for (auto const & p : result)
+   {
+      std::cout << '{' << p.first << ',' << p.second << '}' << std::endl;
+   }
+}
+
+*/
+
+namespace U54_2019_01_04
+{
+  std::vector<std::pair<int, int>> pairwise_01(std::vector<int> coll)
+  {
+    std::vector<std::pair<int, int>> result;
+
+    auto size = coll.size();
+
+    for (size_t used = 0; (size - used) > 1; used += 2)
+    {
+      result.push_back(make_pair(coll[used], coll[used+1]));
+    }
+
+    return result;
+  }
+
+  std::vector<std::pair<int, int>> pairwise_02(std::vector<int> coll)
+  {
+    std::vector<std::pair<int, int>> result;
+
+    auto fast1 = coll.begin();
+    auto fast2 = std::next(fast1);
+    auto end = coll.end();
+
+    for (; (fast1 != end) 
+        && (fast2 != end);)
+    {
+      result.push_back(make_pair(*fast1, *fast2));
+      fast1 = std::next(fast2);
+      fast2 = std::next(fast1);
+    }
+
+    return result;
+  }
+} // namespace
+
+TEST(U54, 2019_01_04)
+{
+  using namespace U54_2019_01_04;
+
+  {
+    std::vector<int> v{ 1, 1, 3, 5, 8, 13, 21 };
+    auto result = pairwise_01(v);
+
+    std::vector<std::pair<int, int>> expected{{1,1}, {3,5}, {8,13}};
+
+    EXPECT_THAT(result, expected);
+  }
+
+  {
+    std::vector<int> v{ 1, 1, 3, 5, 8, 13, 21 };
+    auto result = pairwise_02(v);
+
+    std::vector<std::pair<int, int>> expected{{1,1}, {3,5}, {8,13}};
+
+    EXPECT_THAT(result, expected);
+  }
+}
+
+namespace U54_Text
+{
+  template <typename Input, typename Output>
+    void pairwise(Input begin, Input end, Output result)
+    {
+      auto it = begin;
+
+      // check both first and second in a loop
+
+      while (it != end)
+      {
+        auto v1 = *it++; 
+
+        // is there next?
+        if (it == end) break;
+
+        auto v2 = *it++;
+
+        result++ = std::make_pair(v1, v2);
+      }
+    }
+
+  template <typename T>
+    std::vector<std::pair<T, T>> pairwise(std::vector<T> const& range)
+    {
+      std::vector<std::pair<T, T>> result;
+      pairwise(range.begin(), range.end(), std::back_inserter(result));
+      return result;
+    }
+} // namespace
+
+TEST(U54, Text)
+{
+  using namespace U54_Text;
+
+  std::vector<int> v{ 1, 1, 3, 5, 8, 13, 21 };
+  auto result = pairwise(v);
+
+  // WHY error in arg deduction?
+  // auto expected{{1,1}, {3,5}, {8,13}};
+
+  std::vector<std::pair<int, int>> expected{{1,1}, {3,5}, {8,13}};
+
+  EXPECT_THAT(result, expected);
 }
 
 

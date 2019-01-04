@@ -3717,6 +3717,14 @@ TEST(Stdio, Manipulators)
     << setw(40) << "| pathname" << endl;
 }
 
+TEST(Stdio, ManipulatorsFloat)
+{
+  double value = 8.809030;
+  ostringstream os;
+  os << std::fixed << std::setprecision(2) << value;
+  EXPECT_THAT(os.str(), "8.81");
+}
+
 
 // ={=========================================================================
 // cxx-rtti
@@ -4527,7 +4535,7 @@ TEST(IntegerDivision, FahrenheitCelsius_Float)
 // value: 450 perce:   0
 // value: 600 perce: 100
 
-TEST(IntegerDivision, Precentage)
+TEST(IntegerDivision, Percentage)
 {
   int total{600}, perce{};
   vector<int> values{10,40,100,200,250,356,450,600};
@@ -4558,21 +4566,57 @@ TEST(IntegerDivision, Precentage)
 }
 
 
-// ={=========================================================================
-// cxx-shift
+// cxx-shift cxx-floor cxx-ceil
 
-TEST(Shift, Precentage)
+TEST(IntegerDivision, Shift)
 {
   int value = 9;
 
-  cout << 
-    "division: " << (value/2) << endl <<  
-    "shift   : " << (value>>1) << endl;
+  EXPECT_THAT(value/2, 4);
+  EXPECT_THAT(value>>1, 4);
+
+  // FLOOR(3)
+  //
+  // double floor(double x);
+  // float floorf(float x);
+  // long double floorl(long double x);
+  //
+  // Link with -lm.
+  //
+  // DESCRIPTION
+  // These functions return the largest integral value that is not greater than
+  // x.
+  //
+  // For example, floor(0.5) is 0.0, and floor(-0.5) is -1.0.
+  //
+  // CEIL(3) 
+  //
+  // DESCRIPTION These functions return the smallest integral value that is not
+  // less than x.
+  //
+  // For example, ceil(0.5) is 1.0, and ceil(-0.5) is 0.0.
+  //
+  // ROUND(3)
+  //
+  // DESCRIPTION
+  // These  functions  round  x to the nearest integer, but round halfway cases
+  // away from zero (regardless of the current rounding direction, see fenv(3)),
+  // instead of to the nearest even integer like rint(3).
+  //
+  // For example, round(0.5) is 1.0, and round(-0.5) is -1.0.
 
   float result = value/2.0;
-  cout << 
-    "ceil  : " << ceil(result) << endl <<
-    "floor : " << floor(result) << endl;
+
+  EXPECT_THAT(ceil(result), 5);
+  EXPECT_THAT(floor(result), 4);
+  EXPECT_THAT(round(result), 5);
+
+  EXPECT_THAT(round(0.4), 0);
+  EXPECT_THAT(round(0.5), 1);
+  EXPECT_THAT(round(0.6), 1);
+
+  EXPECT_THAT(floor(-2.1), -3);
+  EXPECT_THAT(ceil(-2.1), -2);
 }
 
 

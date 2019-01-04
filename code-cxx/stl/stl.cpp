@@ -287,12 +287,14 @@ StructValue ReturnStruct()
 
 TEST(Iterator, NativeAndStructTemporary) 
 {
+  // show that not allowed to modify tempory
+
   // cxx.cpp: In member function ‘virtual void Temporary_NativeAndStruct_Test::TestBody()’:
   // cxx.cpp:1539:45: error: lvalue required as increment operand
   //    cout << "return int: " << ++ReturnInteger() << endl;
   // cout << "return int: " << ++ReturnInteger() << endl;
   
-  cout << "return int: " << ++ReturnStruct() << endl;
+  EXPECT_THAT(++ReturnStruct(), 3302);
 }
 
 TEST(Iterator, OperationOnTemporary)
@@ -302,6 +304,7 @@ TEST(Iterator, OperationOnTemporary)
     sort(++coll.begin(), coll.end());
     EXPECT_THAT(coll, ElementsAre(4,1,2,3,5,6));
   }
+
   {
     string coll{"this is a string object"};
     sort(++coll.begin(), coll.end());
@@ -312,17 +315,35 @@ TEST(Iterator, OperationOnTemporary)
 
 TEST(Iterator, Next)
 {
-  vector<int> coll{1,2,3,4,5};
-  auto iter = coll.begin();
-  EXPECT_EQ(*iter, 1);
+  {
+    vector<int> coll{1,2,3,4,5};
+    auto pos = coll.begin();
+    EXPECT_EQ(*pos, 1);
 
-  ++iter;
-  EXPECT_EQ(*iter, 2);
+    ++pos;
+    EXPECT_EQ(*pos, 2);
 
-  auto pos = next(iter);
-  EXPECT_EQ(*iter, 2);
-  EXPECT_EQ(*pos, 3);
+    // since next() uses copy, do not change input iterator
+
+    auto next_pos = next(pos);
+    EXPECT_EQ(*pos, 2);
+    EXPECT_EQ(*next_pos, 3);
+  }
+
+  // 9.3.2 next() and prev()
+  // Note that next() does not check whether it crosses the end() of a sequence.
+  // Thus, it is up to the caller to ensure that the result is valid.
+  {
+    vector<int> coll{1,2,3,4,5};
+    vector<int> result{};
+
+    for(auto pos = coll.begin(); pos != coll.end(); pos = next(pos))
+      result.push_back(*pos);
+
+    EXPECT_THAT(coll, result);
+  }
 }
+
 
 TEST(Iterator, Distance)
 {
