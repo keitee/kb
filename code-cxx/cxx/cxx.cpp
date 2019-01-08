@@ -4881,6 +4881,7 @@ TEST(Template, MemberTemplate)
 
 namespace cxx_template_return_type
 {
+  // use cxx-iter-trait but limited when T is iterator
   template <typename T>
     typename std::iterator_traits<T>::value_type &
     return_element_01(T first, T last)
@@ -4897,6 +4898,7 @@ namespace cxx_template_return_type
       return *first;
     }
 
+  // use cxx-trailing-return before cxx-14
   template <typename T>
     auto return_element_03(T first, T last) 
     -> decltype(*first)
@@ -4904,6 +4906,13 @@ namespace cxx_template_return_type
       (void)last;
       return *first;
     }
+
+  // : error: ‘first’ was not declared in this scope
+  // template <typename Iterator>
+  // decltype(*first) return_element_04(Iterator first, Iterator last)
+  // {
+  //   return *first;
+  // }
 
   // 1.3. C++ Templates The Complete Guide Second Edition
   // 1.3.2 Deducing the Return Type
@@ -4913,6 +4922,8 @@ namespace cxx_template_return_type
     {
       return b < a ? a : b;
     }
+
+  // declare that the return type is derived from what operator?: yields:
 
   template <typename T1, typename T2>
     auto max_02(T1 a, T2 b) -> decltype(b < a ? a : b )
@@ -4929,10 +4940,11 @@ namespace cxx_template_return_type
   //   {
   //     return b < a ? a : b;
   //   }
-
-  // In fact, using true as the condition for operator?: in the declaration is
-  // enough:
-
+  //
+  // indicates that the actual return type must be deduced from the return
+  // statements in the function body. In fact, using true as the condition for
+  // operator?: in the declaration is enough:
+  //
   // Note that an initialization of type auto always decays. This also applies
   // to return values when the return type is just auto.
 
@@ -4942,11 +4954,22 @@ namespace cxx_template_return_type
       return b < a ? a : b;
     }
 
-  // *cxx-type-trait-decay*
+  // *cxx-type-trait-decay* *cxx-decay*
   // However, in any case this definition has a significant drawback: It might
   // happen that the return type is a reference type, because under some
   // conditions T might be a reference. For this reason you should return the
   // type decayed from T, which looks as follows:
+  //
+  // o Yields the decayed type of T.
+  // o In detail, for type T the following transformations are performed:
+  // – First, remove_reference (see Section D.4 on page 729) is applied.
+  //
+  // xxx_t is the same as xxx<T>::type and which is *cxx-14*
+  //
+  // decay_t<int const&> // yields int
+  // decay_t<int const[4]> // yields int const*
+  // void foo();
+  // decay_t<decltype(foo)> // yields void(*)()
 
   template <typename T1, typename T2>
     auto max_04(T1 a, T2 b) 
@@ -5001,13 +5024,6 @@ namespace cxx_template_return_type
     }
 } // namespace
 
-
-// : error: ‘first’ was not declared in this scope
-// template <typename Iterator>
-// decltype(*first) return_element_04(Iterator first, Iterator last)
-// {
-//   return *first;
-// }
 
 TEST(Template, ReturnType)
 {
@@ -5204,12 +5220,58 @@ TEST(Template, Friend)
 
 
 // ={=========================================================================
-// cxx-template cxx-std-forward
+// cxx-template-forward
+
+namespace cxx_template
+{
+
 template <typename F, typename T1, typename T2>
 void flip(F f, T1 param1, T2 param2)
 {
   f(param2, param1);
 }
+
+// use *cxx-rvalue-reference* to preserve template parameter:
+//
+// A function parameter that is an rvalue reference to a template parameter
+// `preserves` constness and lvalue/rvalue property of its corresponding
+// argument.
+
+template <typename F, typename T1, typename T2>
+void flip_reference(F f, T1&& param1, T2&& param2)
+{
+  f(param2, param1);
+}
+
+void f(int value1, int& value2)
+{
+  (void) value1;
+  ++value2;
+}
+
+void g(int&& value1, int& value2)
+{
+  (void) value1;
+  ++value2;
+}
+
+
+// Use `std::forward()` to preserve the types of the original arguments. Unlike
+// std::move(), std::forward() 'must' be called with an explicit template
+// argument, *cxx-template-explicit-argument* and returns rvalue reference to
+// that type, T &&. 
+// 
+// template <typename F, typename T1, typename T2>
+// void flip(F f, T1 &&t1, T2 &&t2)                    // 1
+// {
+//   f(std::forward<T2>(t2), std::forward<T1>(t1));    // 2
+// }
+// 
+// To preserve type information is two-step process, 1 and 2.
+// 
+// *cxx-ref*
+// What's the difference between std::ref() and std::forward() solution?
+// By std::forward() solution, user of template don't need to anyting.
 
 template <typename F, typename T1, typename T2>
 void flip_forward(F f, T1 &&param1, T2 &&param2)
@@ -5217,34 +5279,163 @@ void flip_forward(F f, T1 &&param1, T2 &&param2)
   f(std::forward<T2>(param2), std::forward<T1>(param1));
 }
 
-void f(int value1, int &value2)
-{
-  cout << "f(" << value1 << ", " << ++value2 << ")" << endl;
-}
-
-// f(20, 11)
-// withoug ref: i and j  {10, 20}
-// f(20, 11)
-// with    ref: i and j  {11, 20}
-// f(20, 11)
-// wit forward: i and j  {11, 20}
+} // namespace
 
 TEST(Template, Forward)
 {
-  int i = 10;
-  int j = 20;
+  using namespace cxx_template;
 
-  flip(f, i, j);
-  cout << "withoug ref: i and j  {" << i << ", " << j << "}" << endl;
+  {
+    int i = 10;
+    int j = 20;
 
-  flip(f, std::ref(i), j);
-  cout << "with    ref: i and j  {" << i << ", " << j << "}" << endl;
+    f(i, j);
 
-  i = 10;
-  j = 20;
+    EXPECT_THAT(i, 10);
+    EXPECT_THAT(j, 21);   // changed
+  }
 
-  flip_forward(f, i, j);
-  cout << "wit forward: i and j  {" << i << ", " << j << "}" << endl;
+  {
+    int i = 10;
+    int j = 20;
+
+    flip(f, i, j);
+
+    // both are not changed since flip() uses local copy and f() changes that
+
+    EXPECT_THAT(i, 10);
+    EXPECT_THAT(j, 20);
+  }
+
+  {
+    int i = 10;
+    int j = 20;
+
+    flip(f, std::ref(i), j);
+
+    // change since passed reference
+
+    EXPECT_THAT(i, 11);   // changed
+    EXPECT_THAT(j, 20);
+  }
+
+  {
+    int i = 10;
+    int j = 20;
+
+    flip_reference(f, i, j);
+
+    EXPECT_THAT(i, 11);   // changed
+    EXPECT_THAT(j, 20);
+  }
+
+  // Still flip_reference() solves half of the problem since cannot be used to
+  // call a function that has an rvalue parameter.
+  //
+  // flip_reference() pass `preserved` parameter down to g and which are int.
+  // They binds to int&& adn this is error.
+  //
+  // WHY not reference-collapsing? Because g() is not template.
+  //
+  // {
+  //   int i = 10;
+  //   int j = 20;
+  //
+  //   // cxx.cpp:5315:27:   required from here
+  //   // cxx.cpp:5240:19: error: cannot bind ‘int’ lvalue to ‘int&&’
+  //   //    f(param2, param1);
+  //   //                    ^
+  //
+  //   flip_reference(g, i, j);
+  //
+  //   EXPECT_THAT(i, 11);   // changed
+  //   EXPECT_THAT(j, 20);
+  // }
+
+  {
+    int i = 10;
+    int j = 20;
+
+    flip_forward(f, i, j);
+
+    EXPECT_THAT(i, 11);   // changed
+    EXPECT_THAT(j, 20);
+  }
+}
+
+// *cxx-rvalue-reference* *cxx-forward*
+//
+// From CPP Challenge, 56. Select algorithm
+// 
+// Write a function that, given a range of values and a projection function,
+// transforms each value into a new one and returns a new range with the selected
+// values. For instance, if you have a type book that has an id, title, and author,
+// and have a range of such book values, it should be possible for the function to
+// select only the title of the books. Here is an example of how the function
+// should be used:
+//
+// *cxx-result-of*
+//
+// std:: result_of <T, Args...>::value
+//
+// o Yields the return type of the callable T called for Args...
+//
+// Since C++11, to get the return type you could call: typename std::result_of<Callable(Args...)>::type
+//
+// typename std::decay<typename std::result_of<typename std::decay<F>::type&(typename std::vector<T>::const_reference)>::type>::type
+//                                            {                                                                       }
+//                    {                                                                                                      }
+// after all,
+// 1. "typename std::decay<F>::type&(vector<T>::const_reference)" gets the address of function that takes const reference
+// 2. result_of<>::type gets return type
+// 3. decay<>::type gets decayed type
+
+namespace cxx_template
+{
+  struct book
+  {
+    int id;
+    string title;
+    string author;
+  };
+
+  template <typename T, typename F,
+           typename R = typename std::decay<typename std::result_of<typename std::decay<F>::type&(typename std::vector<T>::const_reference)>::type>::type>
+             std::vector<R> select(std::vector<T> const& coll, F&& f)
+             {
+               std::vector<R> result{};
+               std::transform(coll.cbegin(), coll.cend(), std::back_inserter(result),
+                   std::forward<F>(f));
+               return result;
+             }
+
+} // namespace
+
+TEST(Template, ForwardEx)
+{
+  using namespace cxx_template;
+
+  std::vector<book> books{
+    {101, "The C++ Programming Language", "Bjarne Stroustrup"},
+      {203, "Effective Modern C++", "Scott Meyers"},
+      {404, "The Modern C++ Programming Cookbook", "Marius Bancila"}};
+
+  auto titles = select(books, [](book const& b) {return b.title;});
+
+  EXPECT_THAT(titles, 
+      ElementsAre("The C++ Programming Language", "Effective Modern C++", "The Modern C++ Programming Cookbook"));
+
+
+  auto authors = select(books, [](book const &b) {return b.author; });
+
+  EXPECT_THAT(authors, 
+      ElementsAre("Bjarne Stroustrup", "Scott Meyers", "Marius Bancila"));
+
+
+  auto ids = select(books, [](book const &b) {return b.id; });
+
+  EXPECT_THAT(ids, 
+      ElementsAre(101, 203, 404));
 }
 
 

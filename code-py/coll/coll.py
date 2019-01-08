@@ -8,14 +8,95 @@ import unittest
 # to run all of a class
 # $ python -m unittest coll_test.TestDictCreation
 
+#={===========================================================================
+# py-list
+
+class TestList(unittest.TestCase):
+
+    # name should start with "test_" and otherwise, will not be run.
+    def test_indexing_slicing(self):
+        L = ['spam', 'Spam', 'SPAM!']
+
+        # Offsets start at zero
+        self.assertEqual( L[2], 'SPAM!')
+
+        # Negative: count from the right
+        self.assertEqual( L[-2], 'Spam')
+
+        """ 
+        slicing retuns a list
+
+        Because lists are sequences, indexing and slicing work the same way for
+        lists as they do for strings. However, the result of indexing a list is
+        whatever type of object lives at the offset you specify, while slicing a
+        list always `returns a new list`.
+
+        """
+        self.assertEqual( L[1:], ['Spam', 'SPAM!'])
+
+
+    def test_comprehension(self):
+        strings = ['a', 'as', 'bat', 'car', 'dove', 'python']
+        results = [x.upper() for x in strings if len(x) > 2 ]
+        self.assertEqual( results, ['BAT', 'CAR', 'DOVE', 'PYTHON'])
+
+    def test_sort_key_lower(self):
+        L = ['abc', 'ABD', 'aBe']
+
+        # normalize to lowercase
+        L.sort(key=str.lower)
+        self.assertEqual(L, ['abc', 'ABD', 'aBe'])
+
+    # py-reverse
+    def test_sort_key_lower_and_reverse(self):
+        L = ['abc', 'ABD', 'aBe']
+
+        # normalize to lowercase and reverse
+        L.sort(key=str.lower, reverse=True)
+        self.assertEqual(L, ['aBe', 'ABD', 'abc'])
+
+    def test_sort_key_len(self):
+        L = ['saw', 'small', 'He', 'foxes', 'six']
+        L.sort(key=len)
+        self.assertEqual(L, ['He', 'saw', 'six', 'small', 'foxes'])
+
+    # case matters
+    def test_sort_key_none(self):
+        L = ['abc', 'ABD', 'aBe']
+        L.sort()
+        self.assertEqual(L, ['ABD', 'aBe', 'abc'])
+
+    def test_range(self):
+        L = range(10)
+        self.assertEqual(L, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+    # `reversed` iterates over the elements of a sequence in reverse order and
+    # return iterator object so have to make it list from it
+    def test_reverse(self):
+        L = list(reversed(range(10)))
+        self.assertEqual(L, [9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+
+    def test_zip(self):
+        coll1 = ['foo','bar','baz']
+        coll2 = ['one','two','three']
+        self.assertEqual(zip(coll1, coll2), 
+                [('foo', 'one'), ('bar', 'two'), ('baz', 'three')])
+
+    def test_zip_different_size(self):
+        coll1 = ['foo','bar','baz']
+        coll2 = ['one','two']
+        self.assertEqual(zip(coll1, coll2), 
+                [('foo', 'one'), ('bar', 'two')])
+
+
+#={===========================================================================
+# py-dict
+
 class TestDictCreation(unittest.TestCase):
 
     # create dict by assign
-
     # The first is handy if you can spell out the entire dictionary ahead of
     # time.
-
-    # note: name should start with "test_" and otherwise, will not be run.
 
     def test_create_by_assign(self):
 
@@ -29,38 +110,29 @@ class TestDictCreation(unittest.TestCase):
 
 
     # create dict by initializers
-
     # The second is of use if you need to create the dictionary one field at a
     # time on the fly.
 
     def test_create_by_initializers(self):
-
-        print
 
         d = {'name': 'Bob', 'age': 40}
         self.assertEqual( d, {'name': 'Bob', 'age': 40})
 
 
     # create dict by keyword argument form
-
     # The third involves less typing than the first, but it requires all keys to
     # be strings.
 
     def test_create_by_keyword_form(self):
 
-        print
-
         d = dict(name='Bob', age=40)
         self.assertEqual( d, {'name': 'Bob', 'age': 40})
 
     # create dict by key, value tuple form
-
     # The last is useful if you need to build up keys and values as sequences at
     # runtime.
 
     def test_create_by_tuple_form(self):
-
-        print
 
         d = dict([('name', 'Bob'), ('age', 40)])
         self.assertEqual( d, {'name': 'Bob', 'age': 40})
@@ -291,6 +363,13 @@ class TestStringSplitMethods(unittest.TestCase):
         # check that s.split fails when the separator is not a string
         with self.assertRaises(TypeError):
             s.split(2)
+
+class TestDict(unittest.TestCase):
+
+    def test_zip(self):
+        mapping = dict(zip(range(5), reversed(range(5))))
+        self.assertEqual(mapping,
+            {0: 4, 1: 3, 2: 2, 3: 1, 4: 0})
 
 if __name__ == '__main__':
     unittest.main()

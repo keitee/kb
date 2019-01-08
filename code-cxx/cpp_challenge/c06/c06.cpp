@@ -1015,15 +1015,17 @@ TEST(U53, Text)
   print_movie_ratings(movies);
 }
 
+
 /*
 ={=============================================================================
 54. Pairwise algorithm
 
 Write a general-purpose function that, given a range, returns a new range with
 pairs of consecutive elements from the input range. Should the input range have
-an odd number of elements, the last one must be ignored. For example, if the
-input range was {1, 1, 3, 5, 8, 13, 21}, the result must be { {1, 1}, {3, 5},
-{8, 13}}.
+an odd number of elements, the last one must be ignored. 
+
+For example, if the input range was {1, 1, 3, 5, 8, 13, 21}, 
+the result must be {{1, 1}, {3, 5}, {8, 13}}.
 
 {
    std::vector<int> v{ 1, 1, 3, 5, 8, 13, 21 };
@@ -1053,6 +1055,8 @@ namespace U54_2019_01_04
     return result;
   }
 
+  // as with *algo-list-cycle-detection*
+
   std::vector<std::pair<int, int>> pairwise_02(std::vector<int> coll)
   {
     std::vector<std::pair<int, int>> result;
@@ -1061,8 +1065,7 @@ namespace U54_2019_01_04
     auto fast2 = std::next(fast1);
     auto end = coll.end();
 
-    for (; (fast1 != end) 
-        && (fast2 != end);)
+    for (; (fast1 != end) && (fast2 != end);)
     {
       result.push_back(make_pair(*fast1, *fast2));
       fast1 = std::next(fast2);
@@ -1134,13 +1137,607 @@ TEST(U54, Text)
   std::vector<int> v{ 1, 1, 3, 5, 8, 13, 21 };
   auto result = pairwise(v);
 
-  // WHY error in arg deduction?
-  // auto expected{{1,1}, {3,5}, {8,13}};
-
   std::vector<std::pair<int, int>> expected{{1,1}, {3,5}, {8,13}};
+
+  // WHY error in arg deduction when use ElementsAre?
 
   EXPECT_THAT(result, expected);
 }
+
+
+/*
+={=============================================================================
+55. Zip algorithm
+
+Write a function that, given two ranges, returns a new range with pairs of
+elements from the two ranges. Should the two ranges have different sizes, the
+result must contain as many elements as the smallest of the input ranges. 
+
+For example, if the input ranges were 
+
+{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 } and 
+{ 1, 1, 3, 5, 8, 13, 21 }, 
+
+the result should be {{1,1}, {2,1}, {3,3}, {4,5}, {5,8}, {6,13}, {7,21}}.
+
+{
+   std::vector<int> v1{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+   std::vector<int> v2{ 1, 1, 3, 5, 8, 13, 21 };
+
+   auto result = zip(v1, v2);
+   for (auto const & p : result)
+   {
+      std::cout << '{' << p.first << ',' << p.second << '}' << std::endl;
+   }
+}
+
+Like py-zip
+
+*/
+
+namespace U55_2019_01_04
+{
+  std::vector<std::pair<int, int>> zip(std::vector<int>& coll1, std::vector<int>& coll2)
+  {
+    std::vector<std::pair<int, int>> result{};
+
+    for (auto pos1 = coll1.cbegin(), pos2 = coll2.cbegin();
+        (pos1 != coll1.cend()) && (pos2 != coll2.cend()); ++pos1, ++pos2)
+    {
+      result.push_back(make_pair(*pos1, *pos2));
+    }
+    return result;
+  }
+} // namespace
+
+TEST(U55, 2019_01_04)
+{
+  using namespace U55_2019_01_04;
+
+  std::vector<int> v1{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  std::vector<int> v2{ 1, 1, 3, 5, 8, 13, 21 };
+
+  auto result = zip(v1, v2);
+
+  decltype(result) expected{{1,1}, {2,1}, {3,3}, {4,5}, {5,8}, {6,13}, {7,21}};
+
+  EXPECT_THAT(result, expected);
+}
+
+/*
+This problem is relatively similar to the previous one, although there are two
+input ranges instead of just one. The result is again a range of std::pair.
+However, the two input ranges may hold elements of different types. Again, the
+implementation shown here contains two overloads:
+
+A general-purpose function with iterators as arguments. A begin and end iterator
+for each input range define its bounds, and an output iterator defines the
+position in the output range where the result must be written.
+
+A function that takes two std::vector arguments, one that holds elements of type
+T and one that holds elements of type U and returns an std::vector<std::pair<T,
+U>>. This overload simply calls the previous one:
+
+*/
+
+namespace U55_Text
+{
+  template <typename Input1, typename Input2, typename Output>
+    void zip(Input1 begin1, Input1 end1, Input2 begin2, Input2 end2, Output out)
+    {
+      while (begin1 != end1 && begin2 != end2)
+        *out++ = make_pair(*begin1++, *begin2++);
+    }
+
+  template <typename T, typename U>
+    std::vector<std::pair<T, U>> zip(std::vector<T>& coll1, std::vector<U>& coll2)
+    {
+      std::vector<std::pair<T, U>> result{};
+
+      zip(coll1.cbegin(), coll1.cend(), coll2.cbegin(), coll2.cend(),
+          std::back_inserter(result));
+
+      return result;
+    }
+} // namespace
+
+TEST(U55, Text)
+{
+  using namespace U55_Text;
+
+  std::vector<int> v1{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  std::vector<int> v2{ 1, 1, 3, 5, 8, 13, 21 };
+
+  auto result = zip(v1, v2);
+
+  decltype(result) expected{{1,1}, {2,1}, {3,3}, {4,5}, {5,8}, {6,13}, {7,21}};
+
+  EXPECT_THAT(result, expected);
+}
+
+
+/*
+={=============================================================================
+56. Select algorithm
+
+Write a function that, given a range of values and a projection function,
+transforms each value into a new one and returns a new range with the selected
+values. For instance, if you have a type book that has an id, title, and author,
+and have a range of such book values, it should be possible for the function to
+select only the title of the books. Here is an example of how the function
+should be used:
+
+struct book
+{
+   int         id;
+   std::string title;
+   std::string author;
+};
+
+std::vector<book> books{
+   {101, "The C++ Programming Language", "Bjarne Stroustrup"},
+   {203, "Effective Modern C++", "Scott Meyers"},
+   {404, "The Modern C++ Programming Cookbook", "Marius Bancila"}};
+
+auto titles = select(books, [](book const & b) {return b.title; });
+
+{
+   std::vector<book> books{
+      {101, "The C++ Programming Language", "Bjarne Stroustrup"},
+      {203, "Effective Modern C++", "Scott Meyers"},
+      {404, "The Modern C++ Programming Cookbook", "Marius Bancila"}};
+
+   auto titles = select(books, [](book const & b) {return b.title; });
+   for (auto const & title : titles)
+   {
+      std::cout << title << std::endl;
+   }
+}
+
+*/
+
+namespace U56_2019_01_05
+{
+  // the problem is how know the typ of a field of a structure in the code? type
+  // trait?
+
+  // template <typename T, typename Callable>
+  //   std::vector<T> select(T, Callable op)
+  //   {
+  //   }
+} // namespace
+
+namespace U56_Text
+{
+  struct book
+  {
+    int         id;
+    std::string title;
+    std::string author;
+  };
+
+  // the text version which works as well:
+  //
+  // template <
+  //   typename T, typename A, typename F,
+  //            typename R = typename std::decay<typename std::result_of<typename std::decay<F>::type&(typename std::vector<T, A>::const_reference)>::type>::type>
+  //              std::vector<R> select(std::vector<T, A> const & c, F&& f)
+  //              {
+  //                std::vector<R> v;
+  //                std::transform(c.cbegin(), c.cend(),
+  //                    std::back_inserter(v),
+  //                    std::forward<F>(f));
+  //                return v;
+  //              }
+  // 
+  // the verion that removed A:
+  //
+  // cxx-result-of
+  //
+  // std:: result_of <T, Args...>::value
+  //
+  // o Yields the return type of the callable T called for Args...
+  //
+  // Since C++11, to get the return type you could call: typename std::result_of<Callable(Args...)>::type
+  //
+  // typename std::decay<typename std::result_of<typename std::decay<F>::type&(typename std::vector<T>::const_reference)>::type>::type
+  //                                            {                                                                       }
+  //                    {                                                                                                      }
+  // after all,
+  // 1. "typename std::decay<F>::type&(vector<T>::const_reference)" gets the address of function that takes const reference
+  // 2. result_of<>::type gets return type
+  // 3. decay<>::type gets decayed type
+
+  template <
+    typename T, typename F,
+             typename R = typename std::decay<typename std::result_of<typename std::decay<F>::type&(typename std::vector<T>::const_reference)>::type>::type>
+               std::vector<R> select(std::vector<T> const & c, F&& f)
+               {
+                 std::vector<R> v;
+                 std::transform(c.cbegin(), c.cend(),
+                     std::back_inserter(v),
+                     std::forward<F>(f));
+                 return v;
+               }
+} // namespace
+
+TEST(U56, Text)
+{
+  using namespace U56_Text;
+
+  std::vector<book> books{
+    {101, "The C++ Programming Language", "Bjarne Stroustrup"},
+      {203, "Effective Modern C++", "Scott Meyers"},
+      {404, "The Modern C++ Programming Cookbook", "Marius Bancila"}};
+
+  auto titles = select(books, [](book const &b) {return b.title; });
+
+  EXPECT_THAT(titles, 
+      ElementsAre("The C++ Programming Language", "Effective Modern C++", "The Modern C++ Programming Cookbook"));
+
+
+  auto authors = select(books, [](book const &b) {return b.author; });
+
+  EXPECT_THAT(authors, 
+      ElementsAre("Bjarne Stroustrup", "Scott Meyers", "Marius Bancila"));
+
+
+  auto ids = select(books, [](book const &b) {return b.id; });
+
+  EXPECT_THAT(ids, 
+      ElementsAre(101, 203, 404));
+}
+
+
+/*
+={=============================================================================
+57. Sort algorithm
+
+Write a function that, given a pair of random-access iterators to define its
+lower and upper bounds, sorts the elements of the range using the quicksort
+algorithm. There should be two overloads of the sort function: one that uses
+operator< to compare the elements of the range and put them in ascending order,
+and one that uses a user-defined binary comparison function for comparing the
+elements.
+
+{
+   std::vector<int> v{ 1,5,3,8,6,2,9,7,4 };
+   quicksorti(std::begin(v), std::end(v));
+}
+
+*/
+
+// *cxx-error*
+//
+//   template <typename Iter>
+//   void quicksorti(Iter begin, Iter end)
+//   {
+//     Iter lastsmall;
+// 
+//     if (begin < end)
+//     {
+//       lastsmall = build_partition(begin, end);
+//       quicksorti(begin, lastsmall-1);
+//       quicksorti(lastsmall+1, end);
+//     }
+//   }
+// 
+//   suffers runtime error when use debug stl:
+// 
+// *cxx-iter-invalidated*
+// /usr/include/c++/4.9/debug/safe_iterator.h:374:error: attempt to retreat a 
+//     dereferenceable (start-of-sequence) iterator 1 steps, which falls 
+//     outside its valid range.
+// 
+// 
+//   which means "out of begin".
+// 
+//   the problem is that `end` is not part of range to work that's different from
+//   when use index.
+// 
+//   so "quicksorti(begin, lastsmall-1);" misses out ont for each run and would
+//   cause "begin -1". When not use debug stl, make a wrong result.
+
+namespace U57_2019_01_05
+{
+  template <typename Iter, typename Comp>
+    Iter build_partition(Iter begin, Iter end, Comp op)
+    {
+      // *cxx-error* since no operator+()
+      // Iter pivotpos = (begin + end) / 2;
+
+      Iter pivotpos = begin + (std::distance(begin, end) / 2);
+      auto pivot_value = *pivotpos;
+      Iter last_small = begin;
+
+      // decltype(op) xx;
+      // // greater
+      // EXPECT_THAT(xx(2, 1), true);
+
+      // // less
+      // EXPECT_THAT(xx(1, 2), true);
+
+      // cout << "{" << endl;
+
+      std::swap(*begin, *pivotpos);
+
+      for(Iter inspect = begin + 1; inspect != end; ++inspect)
+      {
+        // cout << "pv: " << pivot_value << ", inspect: " << *inspect << ", last_small: " << *last_small << endl;
+
+        // if (*inspect > pivot_value)
+        
+        // std::greater<int> xx;
+        // if (xx(*inspect, pivot_value))
+
+        if (op(*inspect, pivot_value))
+        {
+          ++last_small;
+
+          // cout << "op: inspect: " << *inspect << ", last_small: " << *last_small << endl;
+
+          if (last_small != inspect)
+          {
+            // cout << "swap(coll[" << *last_small << "], coll[" << *inspect << "]);" << endl;
+            std::swap(*last_small, *inspect);
+          }
+        }
+      }
+
+      std::swap(*begin, *last_small);
+
+      // cout << "}" << endl;
+
+      return last_small;
+    }
+
+  // template <typename Iter, 
+  //          typename Comp = typename std::decay<typename std::less<typename std::iterator_traits<Iter>::value_type>>::type>
+  // void quicksorti(Iter begin, Iter end, Comp&& op = Comp())
+  // {
+  //   Iter lastsmall;
+
+  //   if (begin < end)
+  //   {
+  //     lastsmall = build_partition(begin, end, std::forward<Comp>(op));
+
+  //     // *cxx-error*
+  //     quicksorti(begin, lastsmall);
+
+  //     quicksorti(lastsmall+1, end);
+  //   }
+  // }
+
+  // without default
+  template <typename Iter, typename Comp>
+  void quicksorti_without_default(Iter begin, Iter end, Comp op)
+  {
+    Iter lastsmall;
+
+    if (begin < end)
+    {
+      lastsmall = build_partition(begin, end, op);
+
+      // *cxx-error*
+      quicksorti_without_default(begin, lastsmall, op);
+
+      quicksorti_without_default(lastsmall+1, end, op);
+    }
+  }
+} // namespace
+
+TEST(U57, 2019_01_05)
+{
+  using namespace U57_2019_01_05;
+
+  // {
+  //   vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+  //   quicksorti(coll.begin(), coll.end());
+  //   EXPECT_THAT(coll, 
+  //       ElementsAre(12, 19, 22, 26, 29, 33, 35));
+  // }
+
+  // // Q:
+  // // when use greater<int>, expected descending result but found that the result
+  // // is:
+  // // { 29, 33, 35, 26, 12, 19, 22 }
+  // //
+  // // the debug session shows that comp is greater<> in the first call but later
+  // // it is less<>. Have tried all I know such as std::forward but still do not
+  // // work as expected. what's the problem?
+
+  // {
+  //   vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+  //   quicksorti(coll.begin(), coll.end(), std::greater<int>());
+
+  //   // EXPECT_THAT(coll, 
+  //   //     ElementsAre(35,33,29,26,22,19,12));
+
+  // }
+
+  {
+    vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+    quicksorti_without_default(coll.begin(), coll.end(), std::less<int>());
+    EXPECT_THAT(coll, 
+        ElementsAre(12, 19, 22, 26, 29, 33, 35));
+  }
+
+  {
+    vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+    quicksorti_without_default(coll.begin(), coll.end(), std::greater<int>());
+
+    EXPECT_THAT(coll, 
+        ElementsAre(35,33,29,26,22,19,12));
+  }
+}
+
+
+/*
+Quicksort is a comparison sorting algorithm for elements of an array for which a
+total order is defined. When implemented well, it is significantly faster than
+merge sort or heap sort.
+
+Although in worst-case scenarios the algorithm makes  comparisons (when the
+range is already sorted), on average the complexity is only . Quicksort is a
+divide and conquer algorithm; it partitions (divides) a large range into smaller
+ones and sorts them recursively. There are several partitioning schemes. In the
+implementation shown here, we use the original one developed by Tony Hoare. The
+algorithm for this scheme is described in pseudocode as follows:
+
+note: do not study fully this algorithm
+
+*/
+
+namespace U57_Text
+{
+  template <class RandomIt, class Compare>
+    RandomIt partitionc(RandomIt first, RandomIt last, Compare comp)
+    {
+      auto pivot = *first;
+      auto i = first + 1;
+      auto j = last - 1;
+
+      // decltype(comp) xx;
+      // // greater
+      // EXPECT_THAT(xx(2, 1), true);
+
+      // // less
+      // EXPECT_THAT(xx(1, 2), true);
+
+      while (i <= j)
+      {
+        // *i <=
+        while (i <= j && comp(*i, pivot)) 
+        {
+          cout << "comp(" << *i << ", " << pivot << "), i++" << endl;
+          i++;
+        }
+
+        // *j >
+        while (i <= j && !comp(*j, pivot)) 
+        {
+          cout << "comp(" << *j << ", " << pivot << "), j--" << endl;
+          j--;
+        }
+
+        if (i < j) 
+        {
+          cout << "swap(" << *i << ", " << *j << ")" << endl;
+
+
+          // this changes value of i and j which will be used in next loop
+          std::iter_swap(i, j);
+        }
+      }
+
+      std::iter_swap(i - 1, first);
+
+      return i - 1;
+    }
+
+  template <class RandomIt, class Compare>
+    void quicksort(RandomIt first, RandomIt last, Compare comp)
+    {
+      if (first < last)
+      {
+        auto p = partitionc(first, last, comp);
+        quicksort(first, p, comp);
+        quicksort(p + 1, last, comp);
+      }
+    }
+} // namespace
+
+TEST(U57, Text)
+{
+  using namespace U57_Text;
+
+  // {
+  //   std::vector<int> v{ 1,5,3,8,6,2,9,7,4 };
+  //   quicksort(std::begin(v), std::end(v), std::less<int>());
+  //   EXPECT_THAT(v, 
+  //       ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+  // }
+
+  {
+    vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+    quicksort(coll.begin(), coll.end(), std::less<int>());
+    EXPECT_THAT(coll, 
+        ElementsAre(12, 19, 22, 26, 29, 33, 35));
+  }
+
+  // {
+  //   vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+  //   quicksort(coll.begin(), coll.end(), std::greater<int>());
+  //   EXPECT_THAT(coll, 
+  //       ElementsAre(35,33,29,26,22,19,12));
+  // }
+}
+
+
+/*
+={=============================================================================
+58. The shortest path between nodes
+
+Write a program that, given a network of nodes and the distances between them,
+computes and displays the shortest distance from a specified node to all the
+others, as well as the path between the start and end node. As input, consider
+the following undirected graph:
+
+<picture>
+
+The program output for this graph should be the following:
+
+A -> A : 0     A
+A -> B : 7     A -> B
+A -> C : 9     A -> C
+A -> D : 20    A -> C -> D
+A -> E : 20    A -> C -> F -> E
+A -> F : 11    A -> C -> F
+ 
+*/
+
+
+/*
+={=============================================================================
+59. The Weasel program
+
+Write a program that implements Richard Dawkins' weasel computer simulation,
+described in Dawkins' words as follows (The Blind Watchmaker, chapter 3):
+
+We again use our computer monkey, but with a crucial difference in its program.
+It again begins by choosing a random sequence of 28 letters, just as before ...
+it duplicates it repeatedly, but with a certain chance of random error
+'mutation'  in the copying. The computer examines the mutant nonsense phrases,
+the 'progeny' of the original phrase, and chooses the one which, however
+slightly, most resembles the target phrase, METHINKS IT IS LIKE A WEASEL.
+
+*/
+
+
+/*
+={=============================================================================
+60. The Game of Life
+
+Write a program that implements the Game of Life cellular automaton proposed by
+John Horton Conway. The universe of this game is a grid of square cells that
+could have one of two states: dead or alive. Every cell interacts with its
+adjacent neighbors, with the following transactions occurring on every step:
+
+Any live cell with fewer than two live neighbors dies, as if caused by
+under-population
+
+Any live cell with two or three live neighbors lives on to the next generation
+
+Any live cell with more than three live neighbors dies, as if by overpopulation
+
+Any dead cell with exactly three live neighbors becomes a live cell, as if by
+reproduction
+
+The status of the game on each iteration should be displayed on the console, and
+for convenience, you should pick a reasonable size, such as 20 rows x 50
+columns.
+
+*/
 
 
 // ={=========================================================================

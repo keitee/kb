@@ -6012,6 +6012,7 @@ int build_partition(vector<int> &coll, int first, int last)
 
   for (int inspect = first + 1; inspect <= last; ++inspect)
   {
+    // *cxx-less*
     if (coll[inspect] < pivot_value)
     {
       ++last_small;
@@ -6020,7 +6021,10 @@ int build_partition(vector<int> &coll, int first, int last)
       // previous code
 
       if (last_small != inspect)
+      {
+        cout << "swap(coll[" << coll[last_small] << "], coll[" << coll[inspect] << "]);" << endl;
         swap(coll[last_small], coll[inspect]);
+      }
     }
   }
 
@@ -6039,6 +6043,39 @@ int build_partition(vector<int> &coll, int first, int last)
   return last_small;
 }
 
+int build_partition_descending(vector<int> &coll, int first, int last)
+{
+  int pivot_pos = (first + last) / 2;
+  int pivot_value = coll[pivot_pos];
+
+  // move the pivot to the first pos
+  swap(coll[first], coll[pivot_pos]);
+
+  int last_small = first;
+
+  for (int inspect = first + 1; inspect <= last; ++inspect)
+  {
+    // *cxx-greater*
+    if (coll[inspect] > pivot_value)
+    {
+      ++last_small;
+
+      // last_small == inspect case does happens and it is enhancement from the
+      // previous code
+
+      if (last_small != inspect)
+      {
+        swap(coll[last_small], coll[inspect]);
+      }
+    }
+  }
+
+  // move the pivot back
+  swap(coll[first], coll[last_small]);
+
+  return last_small;
+}
+
 void sort_quick_01(vector<int> &coll, int first, int last)
 {
   int last_small{};
@@ -6048,6 +6085,18 @@ void sort_quick_01(vector<int> &coll, int first, int last)
     last_small = build_partition(coll, first, last); 
     sort_quick_01(coll, first, last_small-1);
     sort_quick_01(coll, last_small+1, last);
+  }
+}
+
+void sort_quick_01_descending(vector<int> &coll, int first, int last)
+{
+  int last_small{};
+
+  if (first < last)
+  {
+    last_small = build_partition_descending(coll, first, last); 
+    sort_quick_01_descending(coll, first, last_small-1);
+    sort_quick_01_descending(coll, last_small+1, last);
   }
 }
 
@@ -6088,22 +6137,15 @@ TEST(AlgoSort, Quick)
 {
   using namespace algo_sort_quick;
 
-  //   29, 33, 35, 26, 19, 12, 22,
-  // [26]| 33 35 29 | 19 12 22
-  // [26]| 19 | 35 29 33 | 12 22
-  // [26]| 19 12 | 29 33 35 | 22
-  // [26]| 19 12 22 | 33 35 29 |
-  // 22 19 12 | 26 | 33 35 29 |
-  // ...
-  //
-  // pivot_pos(3) build before(0, 6): 29, 33, 35, 26, 19, 12, 22,
+  // pivot_pos(3) build before(0, 6): 29, 33, 35, |26|, 19, 12, 22,
   // pivot_pos(3) build after (0, 6): 22, 19, 12, 26, 33, 35, 29,
-  // pivot_pos(1) build before(0, 2): 22, 19, 12,
+  // pivot_pos(1) build before(0, 2): 22, |19|, 12,
   // pivot_pos(1) build after (0, 2): 12, 19, 22,
-  // pivot_pos(5) build before(4, 6): 33, 35, 29,
-  // pivot_pos(5) build after (4, 6): 29, 33, 35,
-  // pivot_pos(4) build before(4, 5): 29, 33,
-  // pivot_pos(4) build after (4, 5): 29, 33,
+  // pivot_pos(5) build before(4, 6):                 33, |35|, 29,
+  // pivot_pos(5) build after (4, 6):                 29, 33, 35,
+  // pivot_pos(4) build before(4, 5):                 |29|, 33,
+  // pivot_pos(4) build after (4, 5):                 29, 33,
+  //                                  12  19  22  26  29  33  35
 
   {
     vector<int> coll{29, 33, 35, 26, 19, 12, 22};
@@ -6112,6 +6154,15 @@ TEST(AlgoSort, Quick)
 
     EXPECT_THAT(coll, 
         ElementsAre(12, 19, 22, 26, 29, 33, 35));
+  }
+
+  {
+    vector<int> coll{29, 33, 35, 26, 19, 12, 22};
+
+    sort_quick_01_descending(coll, 0, coll.size()-1);
+
+    EXPECT_THAT(coll, 
+        ElementsAre(35, 33, 29, 26, 22, 19, 12));
   }
 
   // build i(0, 12): 30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6,
@@ -7406,70 +7457,93 @@ TEST(AlgoSearch, BinarySearch)
 
 namespace queue_circular_vacant
 {
+  class CircularQueue
+  {
+    public:
 
-class CircularQueue
-{
-  public:
-    // *cxx-vector-ctor*
-    CircularQueue() 
-      : coll_(MAX_SIZE, 0)
-    {
-    }
+      // *cxx-vector-ctor*
+      // CircularQueue() : coll_(MAX_SIZE, 0) {}
 
-    bool empty() const 
-    { return head_ == tail_; }
+      CircularQueue() {}
 
-    bool full() const
-    { return ((head_ + 1) % MAX_SIZE) == tail_; }
+      bool empty() { return head_ == tail_; }
 
-    int size() const 
-    { return (head_ - tail_ + MAX_SIZE) % MAX_SIZE; }
+      bool full() { return (head_ + 1) % MAX_SIZE == tail_; }
 
-    void push(int value) 
-    {
-      if (full())
-        return;
+      size_t size() { return (head_ - tail_ + MAX_SIZE) % MAX_SIZE; }
 
-      head_ = (head_ + 1) % MAX_SIZE;
-      coll_[head_] = value;
-    }
-
-    int pop() 
-    {
-      if (empty())
-        return -1;
-
-      tail_ = (tail_ + 1) % MAX_SIZE;
-      return coll_[tail_];
-    }
-
-    std::vector<int> snap()
-    {
-      std::vector<int> coll;
-
-      // care about start value and <= condition. However, cannot use comparison
-      // on head and tail since it warps around after all.
-      //
-      // for (int i = tail_ + 1; i <= head_; i = (i + 1) % MAX_SIZE)
-      //     coll.push_back(coll_[i]);
-
-      int start = tail_ + 1;
-
-      for (int i = 0; i < size(); ++i)
+      void push(int value)
       {
-        coll.push_back(coll_[start]);
-        start = (start+1) % MAX_SIZE;
+        if (full())
+          throw std::runtime_error("queue is full");
+
+        // to see where exception happens since gmock do not show where it
+        // throws
+        //
+        // if (full())
+        // {
+        //   cout << "queue is full, value = " << value << endl;
+        //   return;
+        // }
+
+        head_ = (head_ + 1) % MAX_SIZE;
+        coll_[head_] = value;
       }
 
-      return coll;
-    }
+      int pop()
+      {
+        if (empty())
+          throw std::runtime_error("queue is empty");
 
-  private:
-    const int MAX_SIZE{10};
-    int head_{};
-    int tail_{};
-    std::vector<int> coll_; // {MAX_SIZE, 0};
-}; 
+        tail_ = (tail_ + 1) % MAX_SIZE;
+        return coll_[tail_];
+      }
+
+      std::vector<int> snap()
+      {
+        std::vector<int> result{};
+
+        // do not work like this
+        //
+        // for (auto run = tail_ + 1; run <= head_; ++run)
+        //   result.push_back(coll_[run]);
+        //
+        // care about start value and <= condition. However, cannot use comparison
+        // on head and tail since it warps around after all.
+        //
+        // for (int i = tail_ + 1; i <= head_; i = (i + 1) % MAX_SIZE)
+        //     coll.push_back(coll_[i]);
+
+        auto run = (tail_ + 1) % MAX_SIZE;
+        for (size_t i = 0; i < size(); ++i)
+        {
+          result.push_back(coll_[run]);
+          run = (run + 1) % MAX_SIZE;
+        }
+
+        return result;
+      }
+
+    private:
+      static size_t const MAX_SIZE{10};
+
+      // if MAX_SIZE is not static
+      // std::vector<int> coll_;
+      // and use ctor
+      
+      // if MAX_SIZE is not static
+      // std::array<int, 10> coll_;
+      
+      // if MAX_SIZE is static
+      std::array<int, MAX_SIZE> coll_;
+
+      // if MAX_SIZE is static but still error
+      // std::vector<int> coll_(MAX_SIZE, 0);
+
+      // they are indexes
+      size_t head_{};
+      size_t tail_{};
+  };
 
 } // namespace
 
@@ -7518,9 +7592,9 @@ TEST(Queue, CircularVacant)
 
   cq.push(400);
   cq.push(401);
-  cq.push(402);
-  cq.push(403);
-  cq.push(404);
+  EXPECT_THROW(cq.push(402), std::runtime_error);   // full, exception
+  EXPECT_THROW(cq.push(403), std::runtime_error);   // full, exception
+  EXPECT_THROW(cq.push(404), std::runtime_error);   // full, exception
 
   // since it is vacant version
   EXPECT_THAT(cq.size(), 9);
@@ -7668,6 +7742,242 @@ TEST(Queue, CircularCount)
   EXPECT_THAT(cq.snap(), ElementsAre(102, 300, 301, 302, 400, 401, 402));
 
   EXPECT_THAT(cq.full(), false);
+}
+
+
+// from Problem 46, circular buffer, the modern c++ challenge
+// 1. use size(count) and head only
+// 2. in push, no full check since it overwrites and in pop, it simply
+// calculates first from head substracing size.
+// 3. no iterator support is needed if not use begin()/end()
+
+// no need to have `count` since std::vector() has size() to get current size
+// and which is different from queue array implementation
+
+namespace queue_circular_count_iterator
+{
+  template <typename T>
+    class circular_buffer_iterator;
+
+  template <typename T>
+    class circular_buffer
+    {
+      typedef circular_buffer_iterator<T> const_iterator;
+      friend class circular_buffer_iterator<T>;
+
+      public:
+      circular_buffer() = delete;
+      explicit circular_buffer(size_t const size) : coll_(size) {}
+
+      bool empty() const noexcept
+      { return size_ == 0; }
+
+      bool full() const noexcept
+      { return size_ >= coll_.size(); }
+
+      size_t capacity() const noexcept
+      { return size_; }
+
+      void clear() noexcept
+      { head_ = -1, size_ = 0; }
+
+      T pop()
+      {
+        if (empty())
+          throw std::runtime_error("buffer is empty");
+
+        auto pos = first_pos();
+
+        #ifdef QUEUE_CIRCULAR_DEBUG
+        cout << "pop: pos: " << pos 
+          << ", coll_[]: " << coll_[pos] << endl;
+        #endif // QUEUE_CIRCULAR_DEBUG
+
+        size_--;
+        return coll_[pos];
+      }
+
+      void push(T const item)
+      {
+        // this is how the text is implemented and this allows overwrites
+        // this make head and tail changed
+        //
+        // if (full())
+        //   throw std::runtime_error("buffer is full");
+
+        head_ = next_pos();
+        coll_[head_] = item;
+
+        #ifdef QUEUE_CIRCULAR_DEBUG
+        cout << "push: head_: " << head_ 
+          << ", coll_[]: " << coll_[head_] << endl;
+        #endif // QUEUE_CIRCULAR_DEBUG
+
+        // due to overwrite feature
+        if (size_ < coll_.size())
+          size_++;
+      }
+
+      // iterators
+      const_iterator begin() const
+      { return const_iterator(*this, first_pos(), empty()); }
+
+      const_iterator end() const
+      { return const_iterator(*this, next_pos(), true); }
+
+      private:
+      // same as `count`
+      size_t size_{};
+
+      // ?, set max value
+      // size_t head_{-1};
+
+      // to aviod narrowing warning
+      int head_{-1};
+
+      std::vector<T> coll_;
+
+      // return `head` pos to push and the reason of having size_t == 0 is
+      // that `head` starts from -1.
+
+      size_t next_pos() const noexcept
+      {
+        return size_ == 0 ? 0 
+          : ((head_ + 1 ) % coll_.size());
+      }
+
+      // return `tail` pos to pop and get tail from head and size
+      // as with vacant case, normalise and +1 since no vacant item.
+
+      size_t first_pos() const noexcept
+      {
+        return size_ == 0 ? 0 
+          : (head_ - size_ + 1 + coll_.size()) % coll_.size();
+      }
+    };
+
+  template <typename T>
+    class circular_buffer_iterator
+    {
+      typedef circular_buffer_iterator    self_type;
+      typedef T const&                    const_reference;
+
+      public:
+      explicit circular_buffer_iterator(circular_buffer<T> const& buffer,
+          size_t position, bool is_last)
+        : buffer_(buffer), position_(position), is_last_(is_last)
+      {}
+
+      // cxx-operator-prefix
+      self_type& operator++()
+      {
+        if (is_last_)
+          throw std::out_of_range("past the end");
+
+        position_ = (position_ + 1) % buffer_.coll_.size();
+
+        // although it's circular queue which wraps around, iterator moves
+        // around [tail, head] range. If increased pos is the same as head
+        // then it reaches to the end.
+        //
+        // is_last_ get set either from ctor or ++()
+
+        is_last_ = (position_ == buffer_.next_pos());
+
+        return *this;
+      }
+
+      // cxx-operator-postfix which use prefix version
+      self_type& operator++(int)
+      {
+        auto temp = *this;
+        ++*this();
+        return temp;
+      }
+
+      bool operator==(self_type const& other) const
+      {
+        // & address? since buffer do not support operator==() 
+        return &buffer_ == &other.buffer_
+          && position_ == other.position_
+          && is_last_ == other.is_last_;
+      }
+
+      bool operator!=(self_type const& other) const
+      { return !(*this == other); }
+
+      const_reference operator*() const
+      {
+        return buffer_.coll_[position_];
+      }
+
+      private:
+      circular_buffer<T> const& buffer_;
+      size_t position_;
+      bool is_last_;
+    };
+
+  template <typename T>
+    std::vector<T> print(circular_buffer<T> & buf)
+    {
+      std::vector<T> coll{};
+
+      for (auto & e : buf)
+        coll.push_back(e);
+
+      return coll;
+    }
+
+} // namespace
+
+
+TEST(Queue, CircularCountIterator)
+{
+  using namespace queue_circular_count_iterator;
+
+  {
+    circular_buffer<int> cbuf(5);   // {0, 0, 0, 0, 0} -> {}
+
+    cbuf.push(1);                   // {1, 0, 0, 0, 0} -> {1}
+    cbuf.push(2);                   // {1, 2, 0, 0, 0} -> {1, 2}
+    cbuf.push(3);                   // {1, 2, 3, 0, 0} -> {1, 2, 3}
+
+    auto item = cbuf.pop();         // {1, 2, 3, 0, 0} -> {X, 2, 3}
+    EXPECT_THAT(item, 1);
+
+    cbuf.push(4);                   // {1, 2, 3, 4, 0} -> {X, 2, 3, 4}
+    cbuf.push(5);                   // {1, 2, 3, 4, (5)} -> {X, 2, 3, 4, 5}
+
+    // see that it overwrites
+    cbuf.push(6);                   // {(6), 2, 3, 4, 5} -> {2, 3, 4, 5, 6}
+    cbuf.push(7);                   // {6, (7), 3, 4, 5} -> {3, 4, 5, 6, 7}
+    cbuf.push(8);                   // {6, 7, (8), 4, 5} -> {4, 5, 6, 7, 8}
+
+    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {5, 6, 7, 8}
+    EXPECT_THAT(item, 4);
+    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {6, 7, 8}
+    EXPECT_THAT(item, 5);
+    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {7, 8}
+    EXPECT_THAT(item, 6);
+
+    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {8}
+    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {}
+    cbuf.push(9);                   // {6, 7, 8, 9, 5} -> {9}
+  }
+
+  // to exercise iterator feature
+  {
+    circular_buffer<int> cbuf(5);
+
+    cbuf.push(1);
+    cbuf.push(2);
+    cbuf.push(3);
+    cbuf.push(4);
+    cbuf.push(5);
+    cbuf.push(6);
+    cbuf.push(7);
+    EXPECT_THAT(print(cbuf), ElementsAre(3,4,5,6,7));
+  }
 }
 
 

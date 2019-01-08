@@ -13112,6 +13112,10 @@ XTV_High_Level_VOB/EGEN/EventGenerator/portinglayer/inc/log_output/diag/egen_dbg
 ={============================================================================
 |kt_dev_si_0001| comp-gfx comp-gfx-image
 
+./CMS_PLATFORM_SERVICES/GFX/inc/gfx_image.h
+
+#define GFX_IMAGE_STATUS_DECOMPRESSION_ERROR     SYSTEM_MAKE_COMPONENT_STATUS(GFX_COMP_ID, GFX_IMAGE_IF_ID, SEVERITY_SEVERE, GFX_STATUS_DECOMPRESSION_ERROR)  /*!< @brief \ref GFX_STATUS_DECOMPRESSION_ERROR "Decompression error" */
+
 <gfx-image>
 kyoupark@st-castor-03:~/STB_SW$ grep GFX_IMAGE FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/projects/picasso/SI_config.xml
 
@@ -13142,6 +13146,50 @@ JNIEXPORT jint JNICALL Java_com_nds_fusion_gfximpl_GfxImageImpl_natCreateImage
     JPA_GFX_MaybeThrowException(env, status);
     return (jint)image;
 }
+
+
+// jpa-impl/src/c/src/natGfxImageImpl.c
+
+SYSTEM_STATUS JPA_GFX_IMAGE_Decode(JNIEnv *env, GFX_IMAGE_Image image, jbyteArray jData, jint jOffset, jint jLength)
+{
+    DIAG_DECLARE_FUNCTION(__FUNCTION__);
+    SYSTEM_STATUS status = GFX_IMAGE_STATUS_NULL_POINTER;
+    jbyte *data = (*env)->GetByteArrayElements(env, jData, NULL);
+    if (data != NULL) {
+	    uint8_t *image_data = (uint8_t *)&data[jOffset];
+        status = GFX_IMAGE_AddData(image, image_data, jLength);
+        if (SYSTEM_STATUS_IS_OK(status)) {
+            // Flush hardware blitter
+            JPA_GFX_BLITTER_CHAIN_Execute("Image decode");
+
+            status = GFX_IMAGE_Resume(image);
+        }
+        if (!SYSTEM_STATUS_IS_OK(status) && JPA_GFX_IMAGE_IsProgressiveJPEG(image_data, jLength)) {
+            DIAG_LOG_ERROR(JPA_GFX_DIAG_segment_id, ("Failed to decode progressive JPEG"));
+        }
+		(*env)->ReleaseByteArrayElements(env, jData, data, JNI_ABORT);
+    }
+    return status;
+}
+
+
+// ./CMS_PLATFORM_SERVICES/GFX/src/image/gfx_image_library.c
+
+SYSTEM_STATUS GFX_IMAGE_AddData (GFX_IMAGE_Image anImage, uint8_t *anAddress, uint32_t aLength) {
+  GFX_IMAGE_PRINT_FN_DECLARE ("GFX_IMAGE_AddData");
+
+  if ((anImage == NULL) || (anAddress == NULL)) {
+    GFX_IMAGE_PRINT_E (("NULL POINTER"));
+    return GFX_IMAGE_STATUS_NULL_POINTER;
+  }
+  if (aLength == 0UL) {
+    GFX_IMAGE_PRINT_E (("BAD ARGUMENT"));
+    return GFX_IMAGE_STATUS_BAD_ARGUMENT;
+  }
+
+  return GFX_IMAGE_RunAutomaton (anImage, GFX_IMAGE_RequestAddData, anAddress, aLength);
+}
+
 
 JNIEXPORT void JNICALL Java_com_nds_fusion_gfximpl_GfxImageImpl_natDestroyGfxImage
   (JNIEnv *env, jclass jClass, jint jImageHandle)

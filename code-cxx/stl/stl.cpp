@@ -2763,6 +2763,13 @@ TEST(AlgoForEach, Transform)
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
   }
 
+  // value with return? same since do not use return value
+  {
+    set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    for_each(coll.begin(), coll.end(), square_value_with_return);
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+  }
+
   // reference
   {
     // compile error since key in set are const if use set
@@ -2773,11 +2780,12 @@ TEST(AlgoForEach, Transform)
     EXPECT_THAT(coll, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
   }
 
-  // algo-transform() differs in that it uses `dest`
+  // algo-transform() differs in that it uses `dest` and use return
   {
     vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     vector<int> result;
-    transform(coll.begin(), coll.end(), back_inserter(result), square_value_with_return);
+    transform(coll.begin(), coll.end(), 
+        back_inserter(result), square_value_with_return);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
     EXPECT_THAT(result, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
   }
