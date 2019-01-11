@@ -5023,412 +5023,540 @@ TEST(AlgoConversion, ItoA)
 
 
 // ={=========================================================================
-// algo-list-simple
+// algo-list
 
 // The stack and `simple-list` are essentially the same implementation in terms
 // of contiguous and linked implementation.
+//
+// o ListEntry can be any type.
+// o No remove() to remove entry at random position since it's expensive
+// operation as with other contiguous implementation; contiguous stack.
 
-namespace list_simple
+namespace algo_list_contiguous
 {
-  // 1. ListEntry can be any type.
-  // 2. No Remove() to remove entry at random position since it's expensive
-  // operation as with other contiguous implementation; contiguous stack.
-  //
-  // Write a contiguous list implementation which have following interfaces:
-  //  
-  // void CreateList(List*);
-  // void ClearList(List*);
-  // bool ListEmpty(const List*);
-  // bool ListFull(const List*);
-  // int ListSize(const List*);
-  // void AddList(ListEntry x, List* list);
-  // void TraverseList(List* list, void(*visit)(ListEntry));
-
-  const int MAXLIST=50;
-
-  struct Cell 
+  struct ListEntry
   {
-    Cell() : row_(0), col_(0) {}
-    Cell(int row, int col) : row_(row), col_(col) {}
-    int row_, col_;
-  };
+    explicit ListEntry(int row = 0, int col = 0) noexcept 
+      : row_(row), col_(col) {}
 
-  using ListEntry = Cell;
-
-  class Functor
-  {
-    public:
-      void operator() (const ListEntry entry) 
-      {
-        cout << "{" << entry.row_ << ", " << entry.col_ << "}" << endl;
-      }
+    int row_{};
+    int col_{};
   };
 
   class List
   {
     public:
-      void Create() { count = 0; }
-      void Clear() { count = 0; }
-      bool Empty() { return count == 0 ? true : false; }
-      bool Full() { return count == MAXLIST ? true : false; }
-      int Size() { return count; }
+      void create() { count_ = 0; }
+      void clear() { count_ = 0; }
+      bool empty() { return count_ == 0 ? true : false; }
+      bool full() { return count_ == MAX_LIST ? true : false; }
+      int size() { return count_; }
 
-      // if use `coll[++count] = entry;` then traverse() shows:
-      //
-      // {0, 0}
-      // {1, 2}
-      // {2, 3}
-      // {3, 4}
-      // {4, 5}
-      //
-      // so have to use side-effect as below to get:
-      //
-      // {1, 2}
-      // {2, 3}
-      // {3, 4}
-      // {4, 5}
-      // {5, 6}
-
-      void Add(const ListEntry entry) 
+      void push(ListEntry const& entry)
       {
-        if (Full())
-          cout << "warning: attempt to insert to a full list" << endl;
-        else
-          coll[count++] = entry;
+        if (full())
+          throw std::runtime_error("list is full");
+
+        coll_[count_++] = entry;
       }
 
-      void Traverse(Functor f)
+      std::vector<ListEntry> snap() noexcept
       {
-        for (int i = 0; i < count; ++i)
-          f(coll[i]);
+        std::vector<ListEntry> result{};
+
+        for (size_t i = 0; i < count_; count_++)
+          result.push_back(coll_[i]);
+
+        return result;
       }
 
     private:
-      int count{};
-      // ListEntry coll[MAXLIST] = {ListEntry(0,0)};
-      ListEntry coll[MAXLIST];
+      static int const MAX_LIST{5};
+      size_t count_{};
+      ListEntry coll_[MAX_LIST];
   };
 } // namespace
 
-TEST(AlgoList, SimpleListContiguous)
+TEST(AlgoList, ContiguousSimple)
 {
-  using namespace list_simple;
+  using namespace algo_list_contiguous;
 
-  auto input_values{
-    ListEntry(1,2), ListEntry(2,3), ListEntry(3,4), ListEntry(4,5), ListEntry(5,6)
+  auto values{
+      ListEntry(1,2), 
+      ListEntry(2,3), 
+      ListEntry(3,4), 
+      ListEntry(4,5), 
+      ListEntry(5,6)
   };
 
-  List simple_list;
-  Functor f;
-  simple_list.Create();
+  List coll;
+  coll.create();
 
-  for (auto e : input_values)
-  {
-    simple_list.Add(e);
-  }
+  for (auto &e : values)
+    coll.push(e);
 
-  EXPECT_THAT(simple_list.Size(), 5);
-
-  simple_list.Traverse(f);
-
-  simple_list.Clear();
-  EXPECT_THAT(simple_list.Size(), 0);
+  EXPECT_THAT(coll.size(), 5);
+  EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
 }
 
 
-namespace list_simple_linked_list
+namespace algo_list_linked
 {
-  // 1. ListEntry can be any type.
-  //  
-  // A problem that never arises with contiguous. How do we find the beginning
-  // of the list? 'header' is a pointer variable that locates the beginning of
-  // the list as in {stack-linked-implementation}.
+  // when Node and Entry are different
   //
-  // If it has remove function, then less expansive than
-  // contiguous implementation since it is linked but need to search through
-  // from header to find the node to remove.
-  //
-  // void CreateList(List*);
-  // void ClearList(List*);
-  // bool ListEmpty(const List*);
-  // bool ListFull(const List*);
-  // int ListSize(const List*);
-  // void AddList(ListEntry x, List* list);
-  // void TraverseList(List* list, void(*visit)(ListEntry));
+  // struct ListNode 
+  // {
+  //   ListNode() : key_(0), next_(nullptr) {}
+  //   ListEntry key_;
+  //   ListNode *next_;
+  // };
 
-
-  using ListEntry = int;
-
-  class Functor
+  struct ListEntry
   {
-    public:
-      void operator() (const int index, const ListEntry entry) 
-      {
-        cout << "{" << index << ": " << entry << "}" << endl;
-      }
+    explicit ListEntry(int row = 0, int col = 0) noexcept 
+      : row_(row), col_(col), next_(nullptr) {}
+
+    int row_{};
+    int col_{};
+
+    ListEntry *next_;
   };
 
-  struct ListNode 
-  {
-    ListNode() : key_(0), next_(nullptr) {}
-    ListEntry key_;
-    ListNode *next_;
-  };
+  // when use ListEntry *head
 
   class List
   {
     public:
-      void Create() { count_ = 0;}
-      void Clear() 
-      { 
-        ListNode *current;
-        ListNode *temp;
+      List() : count_(0), head_(nullptr) {}
 
-        // works whether or not list is empty
-        for (current = head_.next_; current;)
-        {
-          temp = current;
-          current = current->next_;
-          free(temp);
-          --count_;
-        }
+      bool empty() { return count_ == 0 ? true : false; }
 
-        assert(count_ == 0);
+      // no support of max size
+      bool full() { return false; }
 
-        head_.key_ = 0;
-        head_.next_ = nullptr;
-      }
+      size_t size() { return count_; }
 
-      bool Empty() { return count_ == 0 ? true : false; }
+      // works
+      // void push(ListEntry const& entry)
+      // {
+      //   // when add the first
+      //   if (head_ == nullptr)
+      //   {
+      //     head_ = new ListEntry(entry);
+      //     count_++;
+      //   }
+      //   else
+      //   {
+      //     ListEntry *end{};
 
-      bool Full() 
-      { 
-        // since no support max
-        return false; 
-      }
+      //     // find the end *algo-list-find-end*
 
-      int Size() { return count_; }
+      //     for (end = head_; end->next_; end = end->next_)
+      //       ;
 
-      void Add(const ListEntry entry) 
+      //     end->next_ = new ListEntry(entry);
+      //     count_++;
+      //   }
+      // }
+
+      // better version
+      void push(ListEntry const& entry)
       {
-        ListNode *node = new ListNode();
+        ListEntry *end{};
 
-        node->key_ = entry;
+        // find the end *algo-list-find-end*
 
-        if (head_.next_ == nullptr)
-        {
-          head_.next_ = node;
-          ++count_;
-        }
+        for (end = head_; end && end->next_; end = end->next_)
+          ;
+
+        if (end == nullptr)
+          head_ = new ListEntry(entry);
         else
+          end->next_ = new ListEntry(entry);
+
+        count_++;
+      }
+
+      void clear_old()
+      {
+        ListEntry *prev{nullptr};
+        ListEntry *curr{nullptr};
+
+        for (curr = head_; curr;)
         {
-          // this do "move first to the next and null check later" and when
-          // reaches the end, run points null since it's already moved. so not
-          // right for Add() but right for Clear(). 
-          //
-          // ListNode *run = head_.next_;
-          // while (run)
-          //   run = run->next_;
-          //
-          // ListNode *run;
-          // for (run = head_.next_; run; run = run->next_)
-          //   ;
-          //
-          // have to check first and move:
-
-          // algo-list-find-end-idiom
-          //
-          // ListNode *run;
-          // for (run = head_.next_; run->next_; run = run->next_)
-          //   ;
-          // run.next_ = node;
-          // ++count;
-          //
-          // starts from the header, finds the end node
-          //
-          // node *pend = list->header;
-          // while(pend && pend->next)
-          //   pend = pend->next;
-
-          // Like Clear(), has the same form of for loop and unlike Clear(), as
-          // the same reason as above, need to loop at next and has `next` in
-          // for loop condition which has emphasis on that. Which form is
-          // better?
-          //
-          // Clear() and Traverse() has the same loop.
-          
-          ListNode *current = head_.next_;
-          ListNode *next = current->next_;
-          for (; next;)
+          if (prev)
           {
-            current = next;
-            next = next->next_;
+            free(prev);
+            count_--;
           }
-
-          current->next_ = node;
-          ++count_;
+          prev = curr;
+          curr = curr->next_;
         }
+
+        if (prev)
+        {
+          free(prev);
+          count_--;
+        }
+
+        head_ = nullptr;
+        assert(count_ == 0);
       }
 
-      void Traverse(Functor f)
+      // better version
+      void clear()
       {
-        ListNode *current;
-        int index{};
+        ListEntry *prev{nullptr};
+        ListEntry *curr{nullptr};
 
-        for (current = head_.next_; current; current = current->next_)
+        // has different form from *also-list-find-end*
+
+        for (curr = head_; curr;)
         {
-          f(index, current->key_);
-          ++index;
+          prev = curr;
+          curr = curr->next_;
+
+          free(prev);
+          count_--;
         }
+
+        head_ = nullptr;
+        assert(count_ == 0);
+      }
+
+      std::vector<std::pair<int, int>> snap() noexcept
+      {
+        std::vector<std::pair<int, int>> result{};
+        ListEntry *curr{nullptr};
+
+        for (curr = head_; curr; curr = curr->next_)
+          result.push_back(make_pair(curr->row_, curr->col_));
+
+        return result;
+      }
+
+      void reverse()
+      {
+        ListEntry *curr{};
+        ListEntry *prev{};
+        ListEntry *next{};
+
+        curr = head_;
+
+        while (curr)
+        {
+          next = curr->next_;
+          curr->next_ = prev;
+          prev = curr;
+          curr = next;
+        }
+
+        head_ = prev;
       }
 
     private:
-      // there is no need to keep an counter but for size function.
-      int count_{};
+      size_t count_;
+      ListEntry *head_;
+  };
 
-      // note that not ListNode* head_;
-      ListNode head_;
+  // when use ListEntry head
+
+  class List_02
+  {
+    public:
+      List_02() : count_(0) {}
+
+      bool empty() { return count_ == 0 ? true : false; }
+
+      // no support of max size
+      bool full() { return false; }
+
+      size_t size() { return count_; }
+
+      void push(ListEntry const& entry)
+      {
+        ListEntry *end{};
+
+        // find the end
+        for (end = &head_; end->next_; end = end->next_)
+          ;
+
+        end->next_ = new ListEntry(entry);
+        count_++;
+      }
+
+      // better version
+      void clear()
+      {
+        ListEntry *prev{nullptr};
+        ListEntry *curr{nullptr};
+
+        for (curr = head_.next_; curr;)
+        {
+          prev = curr;
+          curr = curr->next_;
+
+          free(prev);
+          count_--;
+        }
+
+        head_.next_ = nullptr;
+        assert(count_ == 0);
+      }
+
+      std::vector<std::pair<int, int>> snap() noexcept
+      {
+        std::vector<std::pair<int, int>> result{};
+        ListEntry *curr{nullptr};
+
+        for (curr = head_.next_; curr; curr = curr->next_)
+          result.push_back(make_pair(curr->row_, curr->col_));
+
+        return result;
+      }
+
+    private:
+      size_t count_;
+
+      ListEntry head_;
   };
 } // namespace
 
-TEST(AlgoList, SimpleListLinkedList)
+TEST(AlgoList, LinkedSimple)
 {
-  using namespace list_simple_linked_list;
+  using namespace algo_list_linked;
 
-  auto input_values{26, 33, 35, 29, 19, 12, 22};
-
-  List simple_list;
-  Functor f;
-  simple_list.Create();
-
-  for (auto e : input_values)
   {
-    simple_list.Add(e);
+    auto values{
+      ListEntry(1,2), 
+        ListEntry(2,3), 
+        ListEntry(3,4), 
+        ListEntry(4,5), 
+        ListEntry(5,6)
+    };
+
+    List coll;
+
+    for (auto &e : values)
+      coll.push(e);
+
+    EXPECT_THAT(coll.size(), 5);
+
+    // now do not expect exception since there's no max
+    // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+
+    coll.push(ListEntry(6,7));
+    EXPECT_THAT(coll.size(), 6);
+
+    EXPECT_THAT(coll.snap(), 
+        ElementsAre(
+          make_pair(1,2), 
+          make_pair(2,3), 
+          make_pair(3,4), 
+          make_pair(4,5), 
+          make_pair(5,6), 
+          make_pair(6,7))
+        );
+
+    coll.clear();
+    EXPECT_THAT(coll.size(), 0);
   }
 
-  EXPECT_THAT(simple_list.Size(), 7);
+  {
+    auto values{
+      ListEntry(1,2), 
+        ListEntry(2,3), 
+        ListEntry(3,4), 
+        ListEntry(4,5), 
+        ListEntry(5,6)
+    };
 
-  // {0: 26}
-  // {1: 33}
-  // {2: 35}
-  // {3: 29}
-  // {4: 19}
-  // {5: 12}
-  // {6: 22}
+    List_02 coll;
 
-  simple_list.Traverse(f);
+    for (auto &e : values)
+      coll.push(e);
 
-  simple_list.Clear();
-  EXPECT_THAT(simple_list.Size(), 0);
+    EXPECT_THAT(coll.size(), 5);
+
+    // now do not expect exception since there's no max
+    // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+
+    coll.push(ListEntry(6,7));
+    EXPECT_THAT(coll.size(), 6);
+
+    EXPECT_THAT(coll.snap(), 
+        ElementsAre(
+          make_pair(1,2), 
+          make_pair(2,3), 
+          make_pair(3,4), 
+          make_pair(4,5), 
+          make_pair(5,6), 
+          make_pair(6,7))
+        );
+
+    coll.clear();
+    EXPECT_THAT(coll.size(), 0);
+  }
 }
 
-namespace list_simple_linked_list_public
+
+TEST(AlgoList, LinkedSimpleReverse)
 {
+  using namespace algo_list_linked;
+
+  {
+    auto values{
+      ListEntry(1,2), 
+        ListEntry(2,3), 
+        ListEntry(3,4), 
+        ListEntry(4,5), 
+        ListEntry(5,6)
+    };
+
+    List coll;
+
+    for (auto &e : values)
+      coll.push(e);
+
+    EXPECT_THAT(coll.size(), 5);
+
+    // now do not expect exception since there's no max
+    // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+
+    coll.push(ListEntry(6,7));
+    EXPECT_THAT(coll.size(), 6);
+
+    EXPECT_THAT(coll.snap(), 
+        ElementsAre(
+          make_pair(1,2), 
+          make_pair(2,3), 
+          make_pair(3,4), 
+          make_pair(4,5), 
+          make_pair(5,6), 
+          make_pair(6,7))
+        );
+
+    coll.reverse();
+
+    EXPECT_THAT(coll.snap(), 
+        ElementsAre(
+          make_pair(6,7),
+          make_pair(5,6), 
+          make_pair(4,5), 
+          make_pair(3,4), 
+          make_pair(2,3), 
+          make_pair(1,2)) 
+        );
+
+    coll.clear();
+    EXPECT_THAT(coll.size(), 0);
+  }
+}
+
+
+namespace algo_list_linked_devide
+{
+  // Make `head_` public:
   // In order to exercise Divide(), have to have access to list structure but do
   // not see any practical way to do it through class interface. 
-  //
-  // Make private date public now. 
 
-  using ListEntry = int;
+  // copied from namespace algo_list_linked
 
-  class Functor
+  struct ListEntry
   {
-    public:
-      void operator() (const int index, const ListEntry entry) 
-      {
-        cout << "{" << index << ": " << entry << "}" << endl;
-      }
+    explicit ListEntry(int value = 0) noexcept 
+      : value_(value), next_{nullptr} {}
+
+    int value_{};
+
+    ListEntry *next_;
   };
 
-  struct ListNode 
-  {
-    ListNode() : key_(0), next_(nullptr) {}
-    ListEntry key_;
-    ListNode *next_;
-  };
+  // when use ListEntry *head
 
-  const int SAFETY_MAX_COUNT = 20;
-
-  struct List
+  class List
   {
     public:
-      void Clear() 
-      { 
-        ListNode *current;
-        ListNode *temp;
+      List() : count_(0), head_(nullptr) {}
 
-        // works whether or not list is empty
-        for (current = head_.next_; current;)
-        {
-          temp = current;
-          current = current->next_;
-          free(temp);
-        }
+      bool empty() { return count_ == 0 ? true : false; }
 
-        head_.key_ = 0;
-        head_.next_ = nullptr;
-      }
+      // no support of max size
+      bool full() { return false; }
 
-      void Add(const ListEntry entry) 
+      size_t size() { return count_; }
+
+      // better version
+      void push(ListEntry const& entry)
       {
-        ListNode *node = new ListNode();
+        ListEntry *end{};
 
-        node->key_ = entry;
+        // find the end *algo-list-find-end*
 
-        if (head_.next_ == nullptr)
-        {
-          head_.next_ = node;
-        }
+        for (end = head_; end && end->next_; end = end->next_)
+          ;
+
+        if (end == nullptr)
+          head_ = new ListEntry(entry);
         else
-        {
-          ListNode *current = head_.next_;
-          ListNode *next = current->next_;
-          for (; next;)
-          {
-            current = next;
-            next = next->next_;
-          }
+          end->next_ = new ListEntry(entry);
 
-          current->next_ = node;
-        }
+        count_++;
       }
 
-      void Traverse(Functor f)
+      // better version
+      void clear()
       {
-        ListNode *current;
-        int index{};
+        ListEntry *prev{nullptr};
+        ListEntry *curr{nullptr};
 
-        for (current = head_.next_; current; current = current->next_)
+        // has different form from *also-list-find-end*
+
+        for (curr = head_; curr;)
         {
-          f(index, current->key_);
-          ++index;
+          prev = curr;
+          curr = curr->next_;
 
-          // to test cycle
-          if (index == SAFETY_MAX_COUNT)
-          {
-            cout << "traverse: SAFETY_MAX_COUNT" << endl;
-            break;
-          }
+          free(prev);
+          count_--;
         }
+
+        head_ = nullptr;
+
+        // comment out since `divide()` do not update count 
+        // assert(count_ == 0);
       }
 
+      // changed since ListEntry is changed
+      std::vector<int> snap() noexcept
+      {
+        std::vector<int> result{};
+        ListEntry *curr{nullptr};
+
+        for (curr = head_; curr; curr = curr->next_)
+          result.push_back(curr->value_);
+
+        return result;
+      }
+
+    // private:
     public:
-      // there is no need to keep an counter but for size function.
-      ListNode head_;
+      size_t count_;
+      ListEntry *head_;
   };
 
-  // make the input linked list, first, in two as evenly as possible. not use
-  // count.
+
+  // o make the input linked list, first, in two as evenly as possible. 
+  // o not use count.
+  // o when the size of list is odd, the first list will have one more than the
+  //   second.
   //
-  // note: when the size of list is odd, the first list will have one more than
-  // the second.
-  //
-  // see *cycle-detection* 
-  
+  // see *algo-cycle-detection* 
+
   void DivideList(List *first, List *second)
   {
-    ListNode *slow;
-    ListNode *fast;
+    ListEntry *slow;
+    ListEntry *fast;
 
     // do not check if list is null since there should be at least two and
     // user's respnsibility to check it before calling this.
@@ -5437,7 +5565,7 @@ namespace list_simple_linked_list_public
     //   secondhalf->head = NULL;
     // else
 
-    for (slow = first->head_.next_, fast = slow->next_; fast;)
+    for (slow = first->head_, fast = slow->next_; fast;)
     {
       fast = fast->next_;
 
@@ -5448,65 +5576,50 @@ namespace list_simple_linked_list_public
       }
     }
 
-    second->head_.next_ = slow->next_;
+    second->head_ = slow->next_;
     slow->next_ = nullptr;
   }
-
 } // namespace
 
 
+// (gdb) b AlgoList_Divide_Test::TestBody()
 TEST(AlgoList, Divide)
 {
-  using namespace list_simple_linked_list_public;
+  using namespace algo_list_linked_devide;
 
-  auto input_values{26, 33, 35, 29, 19, 12, 22};
+  auto values{26, 33, 35, 29, 19, 12, 22};
 
-  List simple_list;
-  Functor f;
+  List coll1;
 
-  for (auto e : input_values)
+  for (auto e : values)
   {
-    simple_list.Add(e);
+    coll1.push(ListEntry(e));
   }
 
-  // {0: 26}
-  // {1: 33}
-  // {2: 35}
-  // {3: 29}
-  // {4: 19}
-  // {5: 12}
-  // {6: 22}
-  // simple_list.Traverse(f);
+  EXPECT_THAT(coll1.snap(), ElementsAre(26,33,35,29,19,12,22));
 
   // note:
   // count of simple_list, simple_second will not be correct after this.
   
-  List simple_second;
+  List coll2;
 
-  DivideList(&simple_list, &simple_second);
+  DivideList(&coll1, &coll2);
 
-  // {0: 26}
-  // {1: 33}
-  // {2: 35}
-  // {3: 29}
-  // {0: 19}
-  // {1: 12}
-  // {2: 22}
+  EXPECT_THAT(coll1.snap(), ElementsAre(26,33,35,29));
+  EXPECT_THAT(coll2.snap(), ElementsAre(19,12,22));
 
-  simple_list.Traverse(f);
-  simple_second.Traverse(f);
-
-  simple_list.Clear();
-  simple_second.Clear();
+  coll1.clear();
+  coll2.clear();
 }
 
-namespace list_simple_linked_list_public
+namespace algo_list_linked_devide
 {
   bool DetectCycle_0803(List *list)
   {
-    ListNode *slow = list->head_.next_;
-    ListNode *fast = slow->next_;
+    ListEntry *slow = list->head_;
+    ListEntry *fast = slow->next_;
 
+    // "slow != fast"
     for(; fast && slow != fast;)
     {
       fast = fast->next_;
@@ -5520,25 +5633,26 @@ namespace list_simple_linked_list_public
 
     // exit loop when fast is null when there is no cycle or when fast is not
     // null and there is cycle so fast equals to slow.
-    
+
     return fast != slow ? false : true;
   }
 
 
   // The covers all cases so do not need to check if startNode is null and
   // ListSize.
+  // this is implementation of {algo-list-tortoise-and-hare}
 
   bool DetectCycle_01(List *list)
   {
-    ListNode *slow = list->head_.next_;
-    ListNode *ffast = slow;
-    ListNode *fast = slow;
+    ListEntry *slow = list->head_;
+    ListEntry *fast1 = slow;
+    ListEntry *fast2 = slow;
 
     // must have (expr); otherwise, compile error
 
-    for(; slow && (fast = ffast->next_) && (ffast = fast->next_);)
+    for (; slow && (fast1 = fast2->next_) && (fast2 = fast1->next_);)
     {
-      if ((slow == fast) || (slow == ffast))
+      if ((slow == fast1) || (slow == fast2))
         return true;
 
       slow = slow->next_;
@@ -5552,8 +5666,8 @@ namespace list_simple_linked_list_public
 
   bool DetectCycle_02(List *list)
   {
-    ListNode *slow = list->head_.next_;
-    ListNode *fast = slow;
+    ListEntry *slow = list->head_;
+    ListEntry *fast = slow;
 
     // must have (expr); otherwise, compile error
 
@@ -5572,25 +5686,24 @@ namespace list_simple_linked_list_public
 
 TEST(AlgoList, DetectCycle)
 {
-  using namespace list_simple_linked_list_public;
+  using namespace algo_list_linked_devide;
 
   {
     auto input_values{26, 33, 35, 29, 19, 12, 22};
 
-    List simple_list;
-    // Functor f;
+    List coll;
 
     for (auto e : input_values)
     {
-      simple_list.Add(e);
+      coll.push(ListEntry(e));
     }
 
     // find the end and make a cycle
-    ListNode *first;
-    ListNode *current;
-    ListNode *next;
+    ListEntry *first;
+    ListEntry *current;
+    ListEntry *next;
 
-    first = simple_list.head_.next_;
+    first = coll.head_;
     current = first;
     next = first->next_;
     for (; next;)
@@ -5601,28 +5714,27 @@ TEST(AlgoList, DetectCycle)
 
     current->next_ = first;
 
-    // simple_list.Traverse(f);
-
-    EXPECT_THAT(DetectCycle_0803(&simple_list), true);
-    EXPECT_THAT(DetectCycle_01(&simple_list), true);
-    EXPECT_THAT(DetectCycle_02(&simple_list), true);
+    EXPECT_THAT(DetectCycle_0803(&coll), true);
+    EXPECT_THAT(DetectCycle_01(&coll), true);
+    EXPECT_THAT(DetectCycle_02(&coll), true);
   }
 
   {
     auto input_values{26, 33, 35, 29, 19, 12, 22};
 
-    List simple_list;
+    List coll;
 
     for (auto e : input_values)
     {
-      simple_list.Add(e);
+      coll.push(ListEntry(e));
     }
 
-    EXPECT_THAT(DetectCycle_0803(&simple_list), false);
-    EXPECT_THAT(DetectCycle_01(&simple_list), false);
-    EXPECT_THAT(DetectCycle_02(&simple_list), false);
+    EXPECT_THAT(DetectCycle_0803(&coll), false);
+    EXPECT_THAT(DetectCycle_01(&coll), false);
+    EXPECT_THAT(DetectCycle_02(&coll), false);
   }
 }
+
 
 // namespace list_simple_linked_list_public_two
 // {
@@ -7547,7 +7659,7 @@ namespace queue_circular_vacant
 
 } // namespace
 
-TEST(Queue, CircularVacant)
+TEST(AlgoQueue, CircularVacant)
 {
   using namespace queue_circular_vacant;
 
@@ -7682,7 +7794,7 @@ class CircularQueue
 
 } // namespace
 
-TEST(Queue, CircularCount)
+TEST(AlgoQueue, CircularCount)
 {
   using namespace queue_circular_count;
 
@@ -7931,7 +8043,7 @@ namespace queue_circular_count_iterator
 } // namespace
 
 
-TEST(Queue, CircularCountIterator)
+TEST(AlgoQueue, CircularCountIterator)
 {
   using namespace queue_circular_count_iterator;
 
