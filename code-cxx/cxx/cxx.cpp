@@ -2432,51 +2432,246 @@ TEST(CxxFeaturesTest, UseIsspace)
 
 
 // ={=========================================================================
-// cxx-function-adaptor
+// cxx-function-object
 
-template <typename T>
-void PRINT_PERSON_ELEMENTS(T &coll, const string &mesg = "")
+namespace cxx_function
 {
-    cout << mesg << endl;
 
-    for(const auto &e : coll)
-        e.PrintName();
-
-    cout << endl;
-}
-class Person {
+  class Foo {
     public:
-    Person(const string &name) : name_(name) {}
-    void PrintName() const { cout << "+" << name_ << endl;}
-    void PrintNameWithPrefix(const string &prefix) const { cout << prefix << name_ << endl; }
-    void SetName(const string &name) { name_ = name;}
+      Foo(size_t value = 0) : value_(value) {}
+
+      void update_10() noexcept
+      { value_ += 10; }
+
+      void update_20() noexcept
+      { value_ += 20; }
+
+      void update_30() noexcept
+      { value_ += 30; }
+
+      size_t get_value() const noexcept
+      { return value_; }
+
     private:
-    string name_;
-};
+      size_t value_;
+  };
 
-TEST(CxxFeaturesTest, UseFunctionAdaptor)
+  size_t print_value(Foo &foo)
+  { return foo.get_value(); }
+
+} // namespace
+
+TEST(FunctionObject, Function)
 {
-    vector<Person> coll={Person("one"), Person("two"), Person("thr")};
-    PRINT_PERSON_ELEMENTS(coll, "init: ");
+  using namespace cxx_function;
 
-    cout << "bind: " << endl;
-    for_each(coll.begin(), coll.end(),
-        bind(&Person::PrintName, _1));
-    cout << endl;
+  {
+    Foo foo = Foo(100);
+    std::function<void(Foo &)> op = &Foo::update_10;
 
-    cout << "bind: " << endl;
-    for_each(coll.begin(), coll.end(),
-        bind(&Person::PrintNameWithPrefix, _1, "*"));
-    cout << endl;
+    // specify the target object
+    //
+    // that performing a function call without having a 'target' to call throws
+    // an exception of type std::bad_function_call (see Section 4.3.1, page 43):
+    // 
+    // std::function<void(int,int)> f; 
+    //
+    // f(33,66);
+    //
+    // throws std::bad_function_call
 
-    cout << "bind: " << endl;
-    for_each(coll.begin(), coll.end(),
-        mem_fn(&Person::PrintName));      
-    cout << endl;        
+    op(foo);
 
-    for_each(coll.begin(), coll.end(),
-        bind(&Person::SetName, _1, "paul"));      
-    PRINT_PERSON_ELEMENTS(coll, "modi: "); 
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // cxx-function use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(11,12,13));
+  }
+
+  // cxx-function use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    std::function<void(Foo &)> op = &Foo::update_20;
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(21,22,23));
+  }
+
+  // cxx-function use copy
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    std::function<void(Foo)> op = &Foo::update_20;
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(1,2,3));
+  }
+}
+
+TEST(FunctionObject, Memfn)
+{
+  using namespace cxx_function;
+
+  {
+    Foo foo = Foo(100);
+    auto op = std::mem_fn(&Foo::update_10);
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    auto op = std::mem_fn(&Foo::update_10);
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(11,12,13));
+  }
+}
+
+TEST(FunctionObject, Bind)
+{
+  using namespace cxx_function;
+
+  {
+    Foo foo = Foo(100);
+    auto op = std::bind(&Foo::update_10, _1);
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    for_each(coll.begin(), coll.end(), std::bind(&Foo::update_10, _1));
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(11,12,13));
+  }
+
+  // use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    for_each(coll.begin(), coll.end(), std::bind(&Foo::update_20, _1));
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(21,22,23));
+  }
+}
+
+TEST(FunctionObject, Pointer)
+{
+  using namespace cxx_function;
+
+  {
+    Foo foo = Foo(100);
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  {
+    Foo foo = Foo(100);
+
+    // error
+    // void (*op)(void);
+
+    // see how to define pointer to member function
+    void (Foo::*op)(void);
+
+    // `Unlike ordinary function pointer, no automatic conversion` between a
+    // member funtion and a pointer to that function.
+    // must explicitly use address-of operator
+    // error
+    // op = Foo::update_10;
+
+    op = &Foo::update_10;
+
+    // cxx.cpp:2631:11: error: must use ‘.*’ or ‘->*’ to call pointer-to-member function in ‘op (...)’, e.g. ‘(... ->* op) (...)’
+    //      op(foo);
+    //            ^
+    // op(foo);
+
+    // When initialize a pointer to member, that pointer does 'not' yet point to
+    // any data. Supply the object when we dereference that pointer. Analogous
+    // to the member access operators, . and ->, 
+
+    // see how to call
+    Foo *pfoo = &foo;
+    (pfoo->*op)();
+
+    EXPECT_THAT(foo.get_value(), 110);
+
+    // see how to call
+    (foo.*op)();
+    EXPECT_THAT(foo.get_value(), 120);
+  }
+
+  // f1 member address 0x43e3c4 | object address: 0x7ffeaf5f0c90
+  // f2 member address 0x43e3c4 | object address: 0x7ffeaf5f0c80
+  {
+    Foo f1, f2;
+
+    cout << "f1 member address " << (void*)(&Foo::update_10) << 
+        " | object address: " << (void*)&f1 << endl;
+
+    cout << "f2 member address " << (void*)&Foo::update_10 << 
+        " | object address: " << (void*)&f2 << endl;
+
+    // as said above, this is error:
+    // cxx.cpp:2676:42: error: invalid use of non-static member function ‘void cxx_function::Foo::update_10()’
+    // cout << "f2 member address " << Foo::update_10 << 
+  }
 }
 
 
@@ -5436,6 +5631,44 @@ TEST(Template, ForwardEx)
 
   EXPECT_THAT(ids, 
       ElementsAre(101, 203, 404));
+}
+
+
+// ={=========================================================================
+// cxx-template-variadic
+
+namespace cxx_template_variadic
+{
+  template <typename T, typename... Args>
+    std::pair<int, int> foo(T const& t, Args const&... args)
+    {
+      (void) t;
+      return make_pair(
+          // number of template parameters
+          sizeof...(Args), 
+          // number of function parameters
+          sizeof...(args)
+          );
+    }
+} // namespace
+
+TEST(Template, VariadicSizeofOperator)
+{
+  using namespace cxx_template_variadic;
+
+  int i = 0; double d = 3.14; std::string s = "how now brown cow";
+
+  // three parameters in the pack
+  EXPECT_THAT(foo(i, s, 42, d), make_pair(3,3));
+
+  // two parameters in the pack
+  EXPECT_THAT(foo(s, 42, "hi"), make_pair(2,2));
+
+  // one parameters in the pack
+  EXPECT_THAT(foo(d, s), make_pair(1,1));
+
+  // empty pack
+  EXPECT_THAT(foo("hi"), make_pair(0,0));
 }
 
 

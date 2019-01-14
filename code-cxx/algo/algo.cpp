@@ -5807,45 +5807,6 @@ TEST(AlgoList, DetectCycle)
 //       psorted->pnext = pfirst;
 //   }
 // } // namespace
-// 
-// 
-// TEST(AlgoList, Combine)
-// {
-//   using namespace list_simple_linked_list_public_two;
-// 
-//   auto input_values{26, 33, 35, 29, 19, 12, 22};
-// 
-//   List simple_list;
-// 
-//   for (auto e : input_values)
-//   {
-//     simple_list.Add(e);
-//   }
-// 
-//   // {0: 26}
-//   // {1: 33}
-//   // {2: 35}
-//   // {3: 29}
-//   // {4: 19}
-//   // {5: 12}
-//   // {6: 22}
-// 
-//   // note:
-//   // count of simple_list, simple_second will not be correct after this.
-//   
-//   List simple_second;
-// 
-//   DivideList(&simple_list, &simple_second);
-// 
-//   // {0: 26}
-//   // {1: 33}
-//   // {2: 35}
-//   // {3: 29}
-//   //
-//   // {0: 19}
-//   // {1: 12}
-//   // {2: 22}
-// }
 
 
 // ={=========================================================================

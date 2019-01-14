@@ -8,6 +8,7 @@
 #include <exception>
 
 #include <boost/thread/shared_mutex.hpp>
+// #include <boost/thread/thread.hpp>
 
 #include "gmock/gmock.h"
 
@@ -40,15 +41,38 @@ int doSomething (char c)
 // ={=========================================================================
 // cxx-thread
 
-void hello(ostringstream &os)
-{
-  os << "Hello Concurrent World";
-}
+namespace cxx_thread {
 
-TEST(CConThread, OneAndFunction)
+  void hello(ostringstream &os)
+  {
+    os << "Hello Concurrent World";
+  }
+
+  void hello_and_thread_id(ostringstream &os)
+  {
+    os << "Hello Concurrent World";
+    cout << "thread id: " << std::this_thread::get_id() << endl;
+  }
+} // namespace
+
+TEST(CConThread, StdThread)
 {
+  using namespace cxx_thread;
+
   ostringstream os;
   std::thread t([&]{hello(os);});
+  t.join();
+  EXPECT_THAT(os.str(), "Hello Concurrent World");
+}
+
+// thread id: 139805217429248
+
+TEST(CConThread, StdThreadId)
+{
+  using namespace cxx_thread;
+
+  ostringstream os;
+  std::thread t([&]{hello_and_thread_id(os);});
   t.join();
   EXPECT_THAT(os.str(), "Hello Concurrent World");
 }
@@ -56,12 +80,258 @@ TEST(CConThread, OneAndFunction)
 // +..+..+...+..+.+++++
 // done
 
-TEST(CConThread, TwoAndLambda)
+TEST(CConThread, Lambda)
 {
   std::thread t1([]{doSomething('.');});
   std::thread t2([]{doSomething('+');});
   t1.join();
   t2.join();
+}
+
+
+namespace cxx_thread {
+
+  void update_data(std::string &data)
+  {
+    data = "updated data";
+  }
+
+  void use_reference(int &value)
+  {
+    value += 200;
+  }
+
+  void use_value(int value)
+  {
+    value += 200;
+  }
+
+} // namespace
+
+
+// show how arg and return value from thread are used
+
+TEST(CConThread, ArgumentAndReturn)
+{
+  using namespace cxx_thread;
+
+  // value
+  {
+    int value{1};
+
+    std::thread t(use_value, value); 
+    t.join();
+
+    EXPECT_THAT(value, 1);
+  }
+
+  // cause error:
+  //
+  // {
+  //   int value{1};
+
+  //   // In file included from /usr/include/c++/4.9/thread:39:0,
+  //   //                  from ccon.cpp:2:
+  //   // /usr/include/c++/4.9/functional: In instantiation of ‘struct std::_Bind_simple<void (*(int))(int&)>’:
+  //   // /usr/include/c++/4.9/thread:140:47:   required from ‘std::thread::thread(_Callable&&, _Args&& ...) [with _Callable = void (&)(int&); _Args = {int&}]’
+  //   // ccon.cpp:418:36:   required from here
+  //   // /usr/include/c++/4.9/functional:1665:61: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
+  //   //        typedef typename result_of<_Callable(_Args...)>::type result_type;
+  //   //                                                              ^
+  //   // /usr/include/c++/4.9/functional:1695:9: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
+  //   //          _M_invoke(_Index_tuple<_Indices...>)
+  //   //          ^
+  //   // makefile:58: recipe for target 'ccon.o' failed
+  //   // make: *** [ccon.o] Error 1
+
+  //   std::thread t(use_reference, value);  
+  //   t.join();
+
+  //   EXPECT_THAT(value, 201);
+  // }
+  // 
+  // TODO:
+  // to understand this error, have to understand cxx-bind in 
+  // /usr/include/c++/4.9/functional since cxx-thread uses __bind_simple()
+
+  {
+    int value{1};
+
+    // *cxx-ref*
+    std::thread t(use_reference, std::ref(value));  
+    t.join();
+
+    EXPECT_THAT(value, 201);
+  }
+
+  {
+    int value{1};
+
+    std::thread t([&]{use_reference(value);}); 
+    t.join();
+
+    EXPECT_THAT(value, 201);
+  }
+
+  // Likewise, have to use std::ref() to compile and to work
+  {
+    std::string data{"data"};
+    std::thread t(update_data, std::ref(data));
+    t.join();
+
+    // data is not updated
+    EXPECT_THAT(data, string("updated data"));
+  }
+}
+
+
+namespace cxx_thread {
+
+  class Foo
+  {
+    public:
+      Foo(int value = 10) : value_(value) {}
+      void update_value() { value_ += 10; };
+      int get_value() { return value_; }
+
+    private:
+      int value_;
+  };
+
+} // namespace
+
+
+TEST(CConThread, MemberFunction)
+{
+  using namespace cxx_thread;
+
+  Foo foo;
+
+  // not
+  // std::thread t(&foo::update_value, &foo);
+
+  std::thread t(&Foo::update_value, &foo);
+  t.join();
+  EXPECT_THAT(foo.get_value(), 20);
+}
+
+
+// CCON listing_2.8
+
+namespace cxx_thread {
+
+  class IntegerSequence
+  {
+    public:
+      IntegerSequence(int value) : value_(value) {}
+
+      int operator()()
+      { return ++value_; }
+
+    private:
+      int value_;
+  };
+
+  // cxx-fobj to use with cxx-thread
+
+  template <typename Iterator, typename T>
+    struct accumulate_block
+    {
+      void operator()(Iterator first, Iterator last, T& result)
+      {
+        // result = std::accumulate(first, last, 0);
+        result = std::accumulate(first, last, result);
+      }
+    };
+
+  template <typename Iterator, typename T>
+    T parallel_accumulate(Iterator first, Iterator last, T init)
+    {
+      unsigned long const length = std::distance(first, last);
+
+      if (!length)
+        return init;
+
+      // minimum block size per thread
+      unsigned long const min_per_thread = 25;
+      unsigned long const max_thread =
+        (length + min_per_thread -1)/min_per_thread;
+
+      unsigned long const hardware_threads = 
+        std::thread::hardware_concurrency();
+
+      // cout << "hardware_threads: " << hardware_threads << endl; 
+
+      // when runs on VM, hardware_threads is 1 and it make num_threads is 1
+      // unsigned long const num_threads =
+      //   std::min(hardware_threads != 0 ? hardware_threads : 2, max_thread);
+
+      unsigned long const num_threads =
+        std::min(hardware_threads > 1 ? hardware_threads : 4, max_thread);
+
+      // block size per thread
+      unsigned long const block_size = length / num_threads;
+
+      // to launch one fewer than num_threads since you have main thread
+      std::vector<T> results(num_threads);
+      std::vector<std::thread> threads(num_threads -1);
+
+      Iterator block_start = first;
+
+      // // input distance
+      // cout << "num_threads: " << num_threads << " distance: " 
+      //   << std::distance(block_start, last) << endl;
+
+      for (unsigned long i = 0; i < (num_threads -1); ++i)
+      {
+        Iterator block_end = block_start;
+        std::advance(block_end, block_size);
+
+        // cout << "num_threads: " << num_threads << " distance: " 
+        //   << std::distance(block_start, block_end) << endl;
+
+        threads[i] = std::thread(
+            accumulate_block<Iterator, T>(),
+            block_start,
+            block_end,
+            std::ref(results[i])
+            );
+        block_start = block_end;
+      }
+
+      // final block for main thread
+      accumulate_block<Iterator, T>()(
+          block_start, last, results[num_threads-1]
+          );
+
+      std::for_each(threads.begin(), threads.end(),
+          std::mem_fn(&std::thread::join));
+
+      return std::accumulate(results.begin(), results.end(), init);
+    }
+
+} // namespace
+
+TEST(CConThread, ParallelAccumulate)
+{
+  using namespace cxx_thread;
+
+  std::vector<int> coll;
+
+  std::generate_n(back_inserter(coll), 10000, IntegerSequence(0));
+
+  auto coll_sum = parallel_accumulate(coll.begin(), coll.end(), 0);
+
+
+  std::vector<int> result;
+
+  // since IntegerSequence starts from value 1.
+  for (int i = 1; i <= 10000; ++i)
+    result.push_back(i);
+
+  auto result_sum = std::accumulate(result.begin(), result.end(), 0);
+
+  EXPECT_THAT(coll_sum, result_sum);
 }
 
 
@@ -95,72 +365,6 @@ TEST(CConAsync, Async)
   std::future<int> the_answer = std::async(find_the_answer);
   do_other_stuff();
   EXPECT_THAT(the_answer.get(), 100);
-}
-
-namespace cxx_aync_return {
-
-  void use_reference(int &value)
-  {
-    value += 200;
-  }
-
-  void use_value(int value)
-  {
-    value += 200;
-  }
-
-} // namespace
-
-// show how return value from thread via reference
-
-TEST(CConAsync, ReturnViaReference)
-{
-  using namespace cxx_aync_return;
-
-  // value
-  {
-    int value{1};
-
-    std::thread t(use_value, value); 
-    t.join();
-
-    EXPECT_THAT(value, 1);
-  }
-
-  {
-    int value{1};
-
-    // In file included from /usr/include/c++/4.9/thread:39:0,
-    //                  from ccon.cpp:2:
-    // /usr/include/c++/4.9/functional: In instantiation of ‘struct std::_Bind_simple<void (*(int))(int&)>’:
-    // /usr/include/c++/4.9/thread:140:47:   required from ‘std::thread::thread(_Callable&&, _Args&& ...) [with _Callable = void (&)(int&); _Args = {int&}]’
-    // ccon.cpp:418:36:   required from here
-    // /usr/include/c++/4.9/functional:1665:61: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
-    //        typedef typename result_of<_Callable(_Args...)>::type result_type;
-    //                                                              ^
-    // /usr/include/c++/4.9/functional:1695:9: error: no type named ‘type’ in ‘class std::result_of<void (*(int))(int&)>’
-    //          _M_invoke(_Index_tuple<_Indices...>)
-    //          ^
-    // makefile:58: recipe for target 'ccon.o' failed
-    // make: *** [ccon.o] Error 1
-    //
-    // std::thread t(UseReference, value);  
-
-    // *cxx-ref*
-    std::thread t(use_reference, std::ref(value));  
-    t.join();
-
-    EXPECT_THAT(value, 201);
-  }
-
-  {
-    int value{1};
-
-    std::thread t([&]{use_reference(value);}); 
-    t.join();
-
-    EXPECT_THAT(value, 201);
-  }
 }
 
 

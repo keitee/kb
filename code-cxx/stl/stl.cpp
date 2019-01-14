@@ -873,6 +873,7 @@ void GetVectorArg(const vector<int> &coll)
 
 TEST(Vector, CopyAndMoveAssign)
 {
+  // assign
   {
     vector<int> coll1{1,2,3,4,5,6};
     vector<int> coll2{};
@@ -886,6 +887,7 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
+  // assign
   {
     vector<int> coll1{1,2,3,4,5,6};
     vector<int> coll2{};
@@ -899,6 +901,7 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
+  // move
   {
     vector<int> coll1{1,2,3,4,5,6};
     vector<int> coll2{};
@@ -912,6 +915,7 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
+  // assign
   {
     vector<int> coll1{1,2,3,4,5,6};
     GetVectorArg(coll1);
@@ -1687,6 +1691,8 @@ TEST(StlSet, CheckDuplicate)
 
 TEST(Map, Insert)
 {
+  // cannot be a const map since operator[] is for non-const.
+
   map<unsigned int, string> pmap{ 
     {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
   };
@@ -2414,6 +2420,72 @@ TEST(AlgoCopy, UseOnDifferentCollections)
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
 
+namespace algo_generate
+{
+  class IntegerSequence
+  {
+    public:
+      IntegerSequence(int value) : value_(value) {}
+
+      int operator()()
+      { return ++value_; }
+
+    private:
+      int value_;
+  };
+} // namespace
+
+TEST(AlgoGenerate, Reference)
+{
+  using namespace algo_generate;
+
+  std::list<int> coll;
+
+  // starting from 1
+  IntegerSequence seq(1);
+
+  std::generate_n<back_insert_iterator<list<int>>, int, IntegerSequence&>(
+      back_inserter(coll),
+      4,                    // number of elements
+      seq
+      );
+
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5));
+
+  // insert values from 43 to 46
+
+  generate_n(
+      back_inserter(coll),  // start
+      4,                    // number of elements
+      IntegerSequence(42)
+      );
+
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,43,44,45,46));
+
+  // currently seq has 6 value and start from that since passed by value
+
+  generate_n(
+      back_inserter(coll),  // start
+      4,                    // number of elements
+      seq
+      );
+
+  EXPECT_THAT(coll, 
+      ElementsAreArray({2,3,4,5,43,44,45,46,6,7,8,9}));
+
+  // no change of sequence values and repeat it again since seq is copied.
+
+  generate_n(
+      back_inserter(coll),  // start
+      4,                    // number of elements
+      seq
+      );
+
+  EXPECT_THAT(coll, 
+      ElementsAreArray({2,3,4,5,43,44,45,46,6,7,8,9,6,7,8,9}));
+}
+
+
 TEST(AlgoRandom, UseRandomEngineAndDistribution)
 {
   default_random_engine dre;
@@ -2644,7 +2716,16 @@ TEST(AlgoRandom, AlgoShuffle)
 //  initValue op a1 op a2 op a3 op ...
 // respectively.
 
-TEST(AlgoAccumulate, Use)
+TEST(AlgoAccumulate, Stream)
+{
+  istringstream is{"1 2 3 4 5 6"};
+  istream_iterator<int> start(is), eof;
+
+  auto sum = std::accumulate(start, eof, 0);
+  EXPECT_THAT(sum, 21);
+}
+
+TEST(AlgoAccumulate, Coll)
 {
   vector<int> coll{1,2,3,4,5};
 
@@ -2886,6 +2967,7 @@ TEST(AlgoForEach, GetMean)
 // cxx-algo-min-max
 
 namespace algo_min_max {
+
   bool AbsLess(int elem1, int elem2) {
     return abs(elem1) < abs(elem2);
   }
@@ -2978,7 +3060,7 @@ TEST(AlgoMinMax, UseOwn)
   EXPECT_THAT(distance(minmax.first, minmax.second), 9);
 }
 
-namespace cxx_max_element
+namespace algo_min_max
 {
   struct _Iter_less
   {
@@ -3084,7 +3166,7 @@ TEST(AlgoMinMax, Map)
 
   // max_element
   {
-    using namespace cxx_max_element;
+    using namespace algo_min_max;
 
     // sorted by key
     std::map<int, size_t> counts{
@@ -3103,7 +3185,7 @@ TEST(AlgoMinMax, Map)
 
   // min_element
   {
-    using namespace cxx_max_element;
+    using namespace algo_min_max;
 
     // sorted by key
     std::map<int, size_t> counts{

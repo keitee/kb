@@ -24,6 +24,7 @@ Use #{ for a group and ={ for a item
 *kt_dev_algo_0000* dev-algo-problem algo-count-bits count same bits between two integers
 *kt_dev_algo_0000* dev-algo-problem algo-partition
 *kt_dev_algo_0000* dev-algo-problem algo-rotate
+*kt_dev_algo_0000* dev-algo-problem algo-game-of-life
 
 *kt_dev_algo_0000* dev-algo-problem code-review
 |kt_dev_quiz_015| sorting and searching questions from {ref-004}
@@ -63,7 +64,6 @@ Use #{ for a group and ={ for a item
 *kt_dev_algo_0000* dev-algo-list-general
 *kt_dev_algo_0000* dev-algo-queue
 |kt_dev_algo_005| array: index shift
-|kt_dev_algo_006| the game of life
 *kt_dev_algo_008* algo-bigo-notation
 *kt_dev_algo_0000* algo-search
 *kt_dev_algo_0000* algo-search-binary-search
@@ -4327,6 +4327,113 @@ TEST(AlgoMutating, AlgoReverse)
     EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
   }
 }
+
+
+={============================================================================
+*kt_dev_algo_0000* dev-algo-problem algo-game-of-life
+
+From {ref-001}. In short, the rule as to the neighbour count is:
+
+o if 3 and the dead cell, gets live in the next run.
+o if > 4 and the live cell, gets dead in the next run.
+o if 2, makes no change.
+o if 0, 1, gets dead. makes no change.
+
+{first-version}
+
+Grid map, newmap; // [MAXROW+2][MAXCOL+2]
+
+do 
+{
+	 for( row = 1; row <= MAXROW; row++ )	// why starts from 1? see {hedge-or-sentinel}
+		  for( col = 1; col <= MAXCOL; col++ )
+				switch( NeighborCount( map, row, col )) 
+				{
+					 case 0: case 1:
+					 newmap[row][col] = DEAD; break;
+
+					 case 2:
+					 newmap[row][col] = map[row][col]; break;
+
+					 case 3:
+					 newmap[row][col] = ALIVE; break;
+
+					 case 4: case 5: case 6: case 7: case 8:
+					 newmap[row][col] = DEAD; break;
+				}
+
+		CopyMap(map, newmap);
+		WriteMap(map);
+
+} while( UserSaysYes());
+
+This approach is:
+
+ map (current gen) -> cal and updated newmap(next gen) -> copy newmap to map
+ ... repeats
+	
+MAXROW x MAXCOL = 20 x 60 = 1200. This amounts to about 18,000 statements.
+
+
+{second-version}
+
+Question is that is it necessary to calculate the number of neighbors of every cell at every
+generation? No and improvements are:
+
+o no copy from newmap to map.
+o no cal for a whole map but for neighboring cells.
+
+Grid map, numbernbrs;	// [MAXROW+2][MAXCOL+2]
+List newlive, newdie;
+List maylive, maydie;
+
+while(UserSaysYes())
+{
+	 // current generation
+	 // Vivify it in [map] and add it from [maylive] to [newlive] when it is dead and 3
+	 TraverseList( &maylive, Vivify );
+	 TraverseList( &maydie, Kill );
+	 ClearList( &maylive );
+	 ClearList( &maydie );
+
+	 WriteMap( map );		// print to user
+
+	 // next generation
+	 // while traversing [newlive], cal neighbor count and update [numbernbrs]. Add it to [maylive]
+	 // or [maydie]
+	 TraverseList( &newlive, AddNeighbors );
+	 TraverseList( &newdie, SubstractNeighbors );
+	 ClearList( &newlive );
+	 ClearList( &newdie );
+}
+
+{postpone-difficulty}
+
+The subtle problem is that maylive/maydie can have multiple same entry and spurious entry and some
+should be changed later because [numbernbrs] is not fully updated while traversing lists. This
+difficluty is handled later when running vivify call because we have now completed neighbor counts,
+that is [numbernbrs]. 
+
+{loop-invariant}
+
+The {loop-invariant} is a statement that is true at the beginning of every iteration of the loop. In
+this example, that is:
+
+At the beginning of the main loop, list maylive contains only dead cells, and list maydie contains
+only living cells, but the list may contain duplicates or spurious entries whose counts are wrong.
+The list newlive and newdie are empty.
+
+The purpose of loop invariant is to capture the essence of the dynamic process. It is not always
+easy to find.
+
+{performance}
+
+The amount of computation is no longer proportional to the size of the grid but to the number of
+changes being made. Has about 2900 statements which is 6 times faster than the first. Is it
+worthwhile although it is more complicated and costly to maintain? Usually there is
+{space-and-time-trade-offs}. Depends on.
+
+
 
 
 ={{===========================================================================
@@ -13943,111 +14050,6 @@ there is one vacant element.
  
 The difference is that there is one vacant element so used QSIZE to shift but not QSIZE-1. 0th is
 not used.
-
-
-==============================================================================
-*kt_dev_algo_006*	the game of life
-
-From {ref-001}. In short, the rule as to the neighbour count is:
-
-o if 3 and the dead cell, gets live in the next run.
-o if > 4 and the live cell, gets dead in the next run.
-o if 2, makes no change.
-o if 0, 1, gets dead. makes no change.
-
-{first-version}
-
-Grid map, newmap; // [MAXROW+2][MAXCOL+2]
-
-do 
-{
-	 for( row = 1; row <= MAXROW; row++ )	// why starts from 1? see {hedge-or-sentinel}
-		  for( col = 1; col <= MAXCOL; col++ )
-				switch( NeighborCount( map, row, col )) 
-				{
-					 case 0: case 1:
-					 newmap[row][col] = DEAD; break;
-
-					 case 2:
-					 newmap[row][col] = map[row][col]; break;
-
-					 case 3:
-					 newmap[row][col] = ALIVE; break;
-
-					 case 4: case 5: case 6: case 7: case 8:
-					 newmap[row][col] = DEAD; break;
-				}
-
-		CopyMap(map, newmap);
-		WriteMap(map);
-
-} while( UserSaysYes());
-
-This approach is:
-
- map (current gen) -> cal and updated newmap(next gen) -> copy newmap to map
- ... repeats
-	
-MAXROW x MAXCOL = 20 x 60 = 1200. This amounts to about 18,000 statements.
-
-
-{second-version}
-
-Question is that is it necessary to calculate the number of neighbors of every cell at every
-generation? No and improvements are:
-
-o no copy from newmap to map.
-o no cal for a whole map but for neighboring cells.
-
-Grid map, numbernbrs;	// [MAXROW+2][MAXCOL+2]
-List newlive, newdie;
-List maylive, maydie;
-
-while(UserSaysYes())
-{
-	 // current generation
-	 // Vivify it in [map] and add it from [maylive] to [newlive] when it is dead and 3
-	 TraverseList( &maylive, Vivify );
-	 TraverseList( &maydie, Kill );
-	 ClearList( &maylive );
-	 ClearList( &maydie );
-
-	 WriteMap( map );		// print to user
-
-	 // next generation
-	 // while traversing [newlive], cal neighbor count and update [numbernbrs]. Add it to [maylive]
-	 // or [maydie]
-	 TraverseList( &newlive, AddNeighbors );
-	 TraverseList( &newdie, SubstractNeighbors );
-	 ClearList( &newlive );
-	 ClearList( &newdie );
-}
-
-{postpone-difficulty}
-
-The subtle problem is that maylive/maydie can have multiple same entry and spurious entry and some
-should be changed later because [numbernbrs] is not fully updated while traversing lists. This
-difficluty is handled later when running vivify call because we have now completed neighbor counts,
-that is [numbernbrs]. 
-
-{loop-invariant}
-
-The {loop-invariant} is a statement that is true at the beginning of every iteration of the loop. In
-this example, that is:
-
-At the beginning of the main loop, list maylive contains only dead cells, and list maydie contains
-only living cells, but the list may contain duplicates or spurious entries whose counts are wrong.
-The list newlive and newdie are empty.
-
-The purpose of loop invariant is to capture the essence of the dynamic process. It is not always
-easy to find.
-
-{performance}
-
-The amount of computation is no longer proportional to the size of the grid but to the number of
-changes being made. Has about 2900 statements which is 6 times faster than the first. Is it
-worthwhile although it is more complicated and costly to maintain? Usually there is
-{space-and-time-trade-offs}. Depends on.
 
 
 ={============================================================================
