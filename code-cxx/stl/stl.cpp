@@ -2433,7 +2433,45 @@ namespace algo_generate
     private:
       int value_;
   };
+
+  class IntegerSequenceNoReturn
+  {
+    public:
+      IntegerSequenceNoReturn(int value) : value_(value) {}
+
+      void operator()()
+      { ++value_; }
+
+    private:
+      int value_;
+  };
 } // namespace
+
+
+// this means that _Generator shall return value and otherwise get errors:
+// 
+// stl.cpp:2464:7:   required from here
+// /usr/include/c++/4.9/bits/stl_algo.h:4325:11: error: no match for ‘operator=’ (operand types are ‘std::back_insert_iterator<std::__debug::list<int> >’ and ‘void’)
+//   *__first = __gen();
+// 
+// TEST(AlgoGenerate, NoReturn)
+// {
+//   using namespace algo_generate;
+// 
+//   std::list<int> coll;
+// 
+//   // starting from 1
+//   IntegerSequenceNoReturn seq(1);
+// 
+//   std::generate_n<back_insert_iterator<list<int>>, int, IntegerSequenceNoReturn&>(
+//       back_inserter(coll),
+//       4,                    // number of elements
+//       seq
+//       );
+// 
+//   EXPECT_THAT(coll, ElementsAre(2,3,4,5));
+// }
+
 
 TEST(AlgoGenerate, Reference)
 {

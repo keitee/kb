@@ -1508,7 +1508,7 @@ namespace U57_2019_01_05
   //   }
   // }
 
-  // without default
+  // without default for Comp
   template <typename Iter, typename Comp>
   void quicksorti_without_default(Iter begin, Iter end, Comp op)
   {

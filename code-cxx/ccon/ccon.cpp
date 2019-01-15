@@ -354,7 +354,37 @@ namespace cxx_async {
     sum = 10;
   }
 
+  // as with cxx-thread
+  class Foo
+  {
+    public:
+      Foo(int value = 10) : value_(value) {}
+      void update_value() { value_ += 10; };
+      int get_value() { return value_; }
+
+    private:
+      int value_;
+  };
+
 } // namespace
+
+
+TEST(CConAsync, MemberFunction)
+{
+  using namespace cxx_async;
+
+  Foo foo;
+
+  auto result = std::async(&Foo::update_value, &foo);
+  // since it's not run yet
+  EXPECT_THAT(foo.get_value(), 10);
+
+  result.get();
+
+  // run and expect the update
+  EXPECT_THAT(foo.get_value(), 20);
+}
+
 
 // expect that do_other_stuff() finishes first
 
@@ -383,47 +413,53 @@ TEST(CConAsync, Async)
 //
 // Accordingly, two kinds of outputs are possible for this program. 
 
+
 // cxx-async with no option
 //
 // If async() couldn’t start func1(), it will run after func2(), when get() gets
 // called, so that the program will have the following output:
 //
-// starting func1() in background and func2() in foreground:
-// ++++++++++..........
-// result of func1()+func2(): 89
+// [ RUN      ] CConAsync.Default
+// ++++++++++
+// ..........
+// [       OK ] CConAsync.Default (7064 ms)
+//
+// this is `sequential`
 
-
-TEST(CConAsync, WithDefault)
+TEST(CConAsync, Default)
 {
-  future<int> result1(std::async([]{return doSomething('.');}));
+  future<int> result1(
+      std::async([]{return doSomething('.');}));
 
   int result2 = doSomething('+');
 
+  // . is 46 and + is 43 since doSomething() returns the input char
   int result = result1.get() + result2;
 
   EXPECT_THAT(result, 89);
 }
 
 
+// Using Launch Policies
+//
+// You can force async() to not defer the passed functionality, by explicitly
+// passing a launch policy directing async() that it should definitely start the
+// passed functionality asynchronously the moment it is called:
+//
 // cxx-async with async option
 //
 // If async() could successfully start func1(), the output might be something
 // like the following:
 //
-// starting func1() in background and func2() in foreground:
-// +..+..+...+..+.+++++
-// result of func1()+func2(): 89
+// [ RUN      ] CConAsync.LaunchPolicy
+// +..+..+...+..+.
+// +++++
+// [       OK ] CConAsync.LaunchPolicy (3874 ms)
 
-
-// Using Launch Policies
-
-// You can force async() to not defer the passed functionality, by explicitly
-// passing a launch policy directing async() that it should definitely start the
-// passed functionality asynchronously the moment it is called:
-
-TEST(CConAsync, WithAsync)
+TEST(CConAsync, LaunchPolicy)
 {
-  future<int> result1(std::async(launch::async, []{return doSomething('.');}));
+  future<int> result1(
+      std::async(launch::async, []{return doSomething('.');}));
 
   int result2 = doSomething('+');
 
@@ -432,12 +468,12 @@ TEST(CConAsync, WithAsync)
   EXPECT_THAT(result, 89);
 }
 
+
 // So, based on this first example, we can define a general way to make a
 // program faster: You can modify the program so that it might benefit from
 // parallelization, if the underlying platform supports it, but still works as
 // before on single-threaded environments.
-
-
+//
 // Note also that you have to ensure that you ask for the result of a
 // functionality started with async() no earlier than necessary. For example,
 // the following “optimization” is probably not what you want:
@@ -450,14 +486,11 @@ TEST(CConAsync, WithAsync)
 // sequential processing again.
 
 
-// If you don’t assign the result of std::async(std::launch::async,...)
+// `If you don’t assign the result of std::async(std::launch::async,...)`
 // anywhere, the caller will block until the passed functionality has finished,
 // which would mean that this is nothing but a synchronous call.
-// 
-// ..........  
-// ++++++++++
 
-TEST(CConAsync, WithAsyncButSequential)
+TEST(CConAsync, NotUseResultAndSequential)
 {
   // future<int> result1(std::async(launch::async, []{return doSomething('.');}));
   std::async(launch::async, []{return doSomething('.');});
@@ -466,48 +499,97 @@ TEST(CConAsync, WithAsyncButSequential)
 }
 
 
-// ={=========================================================================
-// cxx-async with async option
-
+// starting 2 operations synchronously
+// 
+// ..........
+// ++++++++++
+// 
+// done
 // starting 2 operations asynchronously
 // 
-// ..........++++++++++
+// deffered
+// -..
+// 
+// +++++
+// 
 // done
 
-TEST(CConAsync, UseAsyncX)
+TEST(CConAsync, Status)
 {
-  cout << "starting 2 operations asynchronously" << endl;
-
-  // start two loops in the background printing characters . or +
-  auto f1 = async([]{ doSomething('.'); });
-  auto f2 = async([]{ doSomething('+'); });
-
-  // if at least one of the background tasks is running
-  if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
-      f2.wait_for(chrono::seconds(0)) != future_status::deferred) 
   {
-    cout << "\ndeffered" << endl;
+    cout << "starting 2 operations synchronously" << endl;
 
-    // poll until at least one of the loops finished
-    while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
-        f2.wait_for(chrono::seconds(0)) != future_status::ready) 
+    // start two loops in the background printing characters . or +
+    auto f1 = async([]{ doSomething('.'); });
+    auto f2 = async([]{ doSomething('+'); });
+
+    // if at least one of the background tasks is running
+    if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
+        f2.wait_for(chrono::seconds(0)) != future_status::deferred) 
     {
-      //...;
-      cout << "\nyield" << endl;
-      this_thread::yield();  // hint to reschedule to the next thread
-    }
-  }
-  cout.put('\n').flush();
+      cout << "\ndeffered" << endl;
 
-  // wait for all loops to be finished and process any exception
-  try {
-    f1.get();
-    f2.get();
+      // poll until at least one of the loops finished
+      while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
+          f2.wait_for(chrono::seconds(0)) != future_status::ready) 
+      {
+        //...;
+        cout << "yield,";
+        this_thread::yield();  // hint to reschedule to the next thread
+      }
+    }
+    cout.put('\n').flush();
+
+    // wait for all loops to be finished and process any exception
+    try {
+      f1.get();
+      f2.get();
+    }
+    catch (const exception& e) {
+      cout << "\nEXCEPTION: " << e.what() << endl;
+    }
+    cout << "\ndone" << endl;
   }
-  catch (const exception& e) {
-    cout << "\nEXCEPTION: " << e.what() << endl;
+
+  {
+    string const waits{"\\|/-"};
+    int i{};
+
+    cout << "starting 2 operations asynchronously" << endl;
+
+    // start two loops in the background printing characters . or +
+    auto f1 = async(std::launch::async, []{ doSomething('.'); });
+    auto f2 = async(std::launch::async, []{ doSomething('+'); });
+
+    // if at least one of the background tasks is running
+    if (f1.wait_for(chrono::seconds(0)) != future_status::deferred ||
+        f2.wait_for(chrono::seconds(0)) != future_status::deferred) 
+    {
+      cout << "\ndeffered" << endl;
+
+      // poll until at least one of the loops finished
+      while (f1.wait_for(chrono::seconds(0)) != future_status::ready &&
+          f2.wait_for(chrono::seconds(0)) != future_status::ready) 
+      {
+        //...;
+        cout << flush << "\r" << waits[i%4];
+        ++i;
+
+        this_thread::yield();  // hint to reschedule to the next thread
+      }
+    }
+    cout.put('\n').flush();
+
+    // wait for all loops to be finished and process any exception
+    try {
+      f1.get();
+      f2.get();
+    }
+    catch (const exception& e) {
+      cout << "\nEXCEPTION: " << e.what() << endl;
+    }
+    cout << "\ndone" << endl;
   }
-  cout << "\ndone" << endl;
 }
 
 
@@ -992,8 +1074,8 @@ TEST(CconThreadTest, UseThreadSafeLookupTable)
 
 
 // ={=========================================================================
-// cxx-quicksort
-// Listing 4.12 A sequential implementation of Quicksort
+// cxx-sort
+// CCon, Listing 4.12 A sequential implementation of Quicksort
 
 template<typename T>
 std::list<T> sequential_quick_sort(std::list<T> input)

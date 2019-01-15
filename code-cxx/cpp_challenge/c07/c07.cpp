@@ -5,6 +5,7 @@
 #include <deque>
 #include <fstream>
 #include <thread>
+#include <future>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -205,6 +206,7 @@ implementation detail.lgorithms and Data Structures
 
 namespace U62_2019_01_14
 {
+
   template <typename Iterator>
     typename std::iterator_traits<Iterator>::value_type 
     paralle_min_element(Iterator begin, Iterator end)
@@ -214,6 +216,7 @@ namespace U62_2019_01_14
       T result;
 
       auto size = std::distance(begin, end);
+
       if (size <= 10000)
       {
         std::min_element(begin, end);
@@ -222,7 +225,9 @@ namespace U62_2019_01_14
       {
         std::vector<std::thread> threads;
 
+        // for VM
         int thread_count = 4;
+
         auto first = begin;
         auto last = first;
         size /= thread_count;
@@ -238,17 +243,23 @@ namespace U62_2019_01_14
           else 
             std::advance(last, size);
 
-          threads.emplace_back([&]()
+          // wrong result as each thread may use any depending on vaules when
+          // runs since it uses reference
+          // threads.emplace_back([&]()
+
+          threads.emplace_back([first, last, i, &results]()
               {
                 results[i] = *std::min_element(first, last);
+                // cout << "result[" << i << "]: " << results[i]
+                // << ", dist: " << std::distance(first, last) << endl;
               });
         }
 
         for (auto &t : threads)
           t.join();
 
-        for (auto &e : results)
-          cout << "r: " << e << endl;
+        // for (auto &e : results)
+        //   cout << "r: " << e << endl;
 
         result = *std::min_element(results.begin(), results.end());
       }
@@ -258,7 +269,7 @@ namespace U62_2019_01_14
 
 } // namespace
 
-TEST(U62, Text)
+TEST(U62, 2019_01_14)
 {
   using namespace U62_2019_01_14;
 
@@ -273,8 +284,109 @@ TEST(U62, Text)
 }
 
 
-/*
+// Similar to parallel_accumulate and this supports flexibility of having
+// function object.
 
+namespace U62_Text
+{
+
+  template <typename Iterator, typename F>
+    typename std::iterator_traits<Iterator>::value_type
+    parallel_process(Iterator begin, Iterator end, F&& f)
+    {
+      using T = typename std::iterator_traits<Iterator>::value_type;
+
+      auto size = std::distance(begin, end);
+
+      if (size <= 10000)
+      {
+        // return std::forward<F>(f)(begin, end);
+        return f(begin, end);
+      }
+      else
+      {
+        std::vector<std::thread> threads;
+
+        // for VM
+        int thread_count = 4;
+
+        auto first = begin;
+        auto last = first;
+        size /= thread_count;
+
+        std::vector<T> results(thread_count);
+
+        for (int i = 0; i < thread_count; ++i)
+        {
+          first = last;
+
+          if (i == thread_count -1)
+            last = end;
+          else
+            std::advance(last, size);
+
+          threads.emplace_back([first, last, i, &results, f]()
+              {
+                results[i] = f(first, last);
+
+                // compile error and why need to forward rather then simply
+                // calling?
+                // results[i] = std::forward<F>(f)(first, last);
+              });
+        }
+
+        for (auto &t : threads)
+          t.join();
+
+        // return std::forward<F>(f)(results.begin(), results.end());
+        return f(results.begin(), results.end());
+      }
+    }
+
+  template <typename Iterator>
+    typename std::iterator_traits<Iterator>::value_type
+    parallel_min(Iterator begin, Iterator end)
+    {
+      return parallel_process(begin, end,
+          [](Iterator b, Iterator e){return *std::min_element(b, e);});
+    }
+
+  template <typename Iterator>
+    typename std::iterator_traits<Iterator>::value_type
+    parallel_max(Iterator begin, Iterator end)
+    {
+      return parallel_process(begin, end,
+          [](Iterator b, Iterator e){return *std::max_element(b, e);});
+    }
+
+  class IntegerSequence
+  {
+    public:
+      explicit IntegerSequence(int value = 0) : value_(value) {}
+      int operator()() { return ++value_; }
+
+    private:
+      int value_;
+  };
+} // namespace
+
+TEST(U62, Text)
+{
+  using namespace U62_Text;
+
+  std::vector<int> coll;
+  std::generate_n(back_inserter(coll), 1000000, IntegerSequence(0));
+
+  auto min_result = parallel_min(coll.begin(), coll.end());
+  auto max_result = parallel_max(coll.begin(), coll.end());
+
+  EXPECT_THAT(min_result, 1);
+  EXPECT_THAT(max_result, 1000000);
+}
+
+
+/*
+={=============================================================================
 63. Parallel min and max element algorithms using asynchronous functions
 
 Implement general-purpose parallel algorithms that find the minimum value and,
@@ -284,8 +396,112 @@ functions is an implementation detail.
 
 */
 
-/*
+namespace U63_Text
+{
 
+  template <typename Iterator, typename F>
+    typename std::iterator_traits<Iterator>::value_type
+    parallel_process(Iterator begin, Iterator end, F&& f)
+    {
+      using T = typename std::iterator_traits<Iterator>::value_type;
+
+      auto size = std::distance(begin, end);
+
+      if (size <= 10000)
+      {
+        // return std::forward<F>(f)(begin, end);
+        return f(begin, end);
+      }
+      else
+      {
+        // std::vector<std::thread> threads;
+
+        std::vector<std::future<T>> tasks;
+
+        // for VM
+        int thread_count = 4;
+
+        auto first = begin;
+        auto last = first;
+        size /= thread_count;
+
+        std::vector<T> results(thread_count);
+
+        for (int i = 0; i < thread_count; ++i)
+        {
+          first = last;
+
+          if (i == thread_count -1)
+            last = end;
+          else
+            std::advance(last, size);
+
+          // threads.emplace_back([first, last, i, &results, f]()
+          //     {
+          //       results[i] = f(first, last);
+          //     });
+
+          tasks.emplace_back(std::async(std::launch::async, [first, last, f]()
+              {
+                return f(first, last);
+              }));
+        }
+
+        // for (auto &t : threads)
+        //   t.join();
+
+        for (auto &t : tasks)
+          results.push_back(t.get());
+
+        // return std::forward<F>(f)(results.begin(), results.end());
+        return f(results.begin(), results.end());
+      }
+    }
+
+  template <typename Iterator>
+    typename std::iterator_traits<Iterator>::value_type
+    parallel_min(Iterator begin, Iterator end)
+    {
+      return parallel_process(begin, end,
+          [](Iterator b, Iterator e){return *std::min_element(b, e);});
+    }
+
+  template <typename Iterator>
+    typename std::iterator_traits<Iterator>::value_type
+    parallel_max(Iterator begin, Iterator end)
+    {
+      return parallel_process(begin, end,
+          [](Iterator b, Iterator e){return *std::max_element(b, e);});
+    }
+
+  class IntegerSequence
+  {
+    public:
+      explicit IntegerSequence(int value = 0) : value_(value) {}
+      int operator()() { return ++value_; }
+
+    private:
+      int value_;
+  };
+} // namespace
+
+TEST(U63, Text)
+{
+  using namespace U62_Text;
+
+  std::vector<int> coll;
+  std::generate_n(back_inserter(coll), 1000000, IntegerSequence(0));
+
+  auto min_result = parallel_min(coll.begin(), coll.end());
+  auto max_result = parallel_max(coll.begin(), coll.end());
+
+  EXPECT_THAT(min_result, 1);
+  EXPECT_THAT(max_result, 1000000);
+}
+
+
+/*
+={=============================================================================
 64. Parallel sort algorithm
 
 Write a parallel version of the sort algorithm as defined for problem 53. Sort
@@ -294,32 +510,6 @@ random access iterators to define its lower and upper bounds, sorts the elements
 of the range using the quicksort algorithm. The function should use the
 comparison operators for comparing the elements of the range. The level of
 parallelism and the way to achieve it is an implementation detail.
-
-*/
-
-/*
-
-43. Meeting time for multiple time zones
-
-Write a function that, given a list of meeting participants and their time
-zones, displays the local meeting time for each participant.
-
-*/
-
-/*
-
-44. Monthly calendar
-
-Write a function that, given a year and month, prints to the console the month
-calendar. The expected output format is as follows (the example is for December
-2017):
-
-Mon Tue Wed Thu Fri Sat Sun
-                  1   2   3
-  4   5   6   7   8   9  10
- 11  12  13  14  15  16  17
- 18  19  20  21  22  23  24
- 25  26  27  28  29  30  31
 
 */
 
