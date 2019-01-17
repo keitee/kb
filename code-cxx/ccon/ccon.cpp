@@ -598,78 +598,104 @@ TEST(CConAsync, Status)
 
 // CXXSLR 18.5 A First Complete Example for Using a Mutex and a Lock
 
-// see the effect of lock
-//
-// [ RUN      ] CConMutex.LockGuard
-// Hello from a main thread
-// Hello from a second thread
-// Hello from a first thread
-// [       OK ] CConMutex.LockGuard (1520 ms)
-// [ RUN      ] CConMutex.NoLockGuard
-// HHHeeellllllooo   fffrrrooommm   aaa   msfaeiicrnos nttd h trthehrared
-// eaad
-// d
-// [       OK ] CConMutex.NoLockGuard (528 ms)
-
 namespace cxx_mutex
 {
   std::mutex print_mutex;
 
-  void print(std::string const& s)
+  size_t i{};
+
+  std::string print(std::string const& s)
   {
     std::lock_guard<std::mutex> l(print_mutex);
+    std::string result{};
 
-    for (char c : s)
+    for (i = 0; i < s.size(); ++i)
     {
       this_thread::sleep_for(chrono::milliseconds(20));
-      std::cout.put(c);
     }
-    std::cout << std::endl;
+
+    result = "waited for " + to_string(i*20) + "ms and " + s;
+    return result;
   }
+
+  std::string print_no_lock(std::string const& s)
+  {
+    // std::lock_guard<std::mutex> l(print_mutex);
+
+    std::string result{};
+
+    for (i = 0; i < s.size(); ++i)
+    {
+      this_thread::sleep_for(chrono::milliseconds(20));
+    }
+
+    result = "waited for " + to_string(i*20) + "ms and " + s;
+    return result;
+  }
+
+  // void print_no_lock(std::string const& s)
+  // {
+  //   for (char c : s)
+  //   {
+  //     this_thread::sleep_for(chrono::milliseconds(20));
+  //     std::cout.put(c);
+  //   }
+  //   std::cout << std::endl;
+  // }
+
 } // cxx_mutex
 
 TEST(CConLock, LockGuard)
 {
   using namespace cxx_mutex;
 
-  auto f1 = std::async(std::launch::async,
-      print, "Hello from a first thread");
-
-  auto f2 = std::async(std::launch::async,
-      print, "Hello from a second thread");
-
-  print("Hello from a main thread");
-}
-
-namespace cxx_mutex_no_lock
-{
-  std::mutex print_mutex;
-
-  void print(std::string const& s)
   {
-    // std::lock_guard<std::mutex> l(print_mutex);
+    auto f1 = std::async(std::launch::async,
+        print, "Hello from a first thread");
 
-    for (char c : s)
-    {
-      this_thread::sleep_for(chrono::milliseconds(20));
-      std::cout.put(c);
-    }
-    std::cout << std::endl;
+    auto f2 = std::async(std::launch::async,
+        print, "Hello from a second thread");
+
+    EXPECT_THAT(f1.get(), 
+        "waited for 500ms and Hello from a first thread");
+
+    EXPECT_THAT(f2.get(), 
+        "waited for 520ms and Hello from a second thread");
   }
-} // cxx_mutex
 
-TEST(CConLock, NoLockGuard)
-{
-  using namespace cxx_mutex_no_lock;
+  {
+    auto f1 = std::async(std::launch::async,
+        print_no_lock, "Hello from a first thread");
 
-  auto f1 = std::async(std::launch::async,
-      print, "Hello from a first thread");
+    auto f2 = std::async(std::launch::async,
+        print_no_lock, "Hello from a second thread");
 
-  auto f2 = std::async(std::launch::async,
-      print, "Hello from a second thread");
+    EXPECT_THAT(f1.get(), 
+        Ne("waited for 500ms and Hello from a first thread"));
 
-  print("Hello from a main thread");
+    EXPECT_THAT(f2.get(), 
+        Ne("waited for 520ms and Hello from a second thread"));
+  }
+
+  // mangled output when use stdout
+  //
+  // HHHeeellllllooo   fffrrrooommm   aaa   msfaeiicrnos nttd h trthehrared
+  // eaad
+  // d
+  // 
+  // {
+  //   using namespace cxx_mutex_no_lock;
+  //
+  //   auto f1 = std::async(std::launch::async,
+  //       print, "Hello from a first thread");
+  //
+  //   auto f2 = std::async(std::launch::async,
+  //       print, "Hello from a second thread");
+  //
+  //   print("Hello from a main thread");
+  // }
 }
+
 
 // found that sometimes sum is 45 and not sure why?
 
@@ -831,94 +857,122 @@ TEST(CConCondition, ProducerAndConsumer)
   EXPECT_THAT(consumed, 30);
 }
 
+// TEST(CConCondition, NotCopyable)
+// {
+//   using namespace cxx_condition;
+// 
+//   locked_queue<int> q;
+// 
+//   // *cxx-error*
+//   // ccon_ex.cpp:89:30:   required from here
+//   // /usr/include/c++/4.9/tuple:142:42: error: use of deleted function ‘cxx_condition::locked_queue<int>::locked_queue(cxx_condition::locked_queue<int>&&)’
+//   //   : _M_head_impl(std::forward<_UHead>(__h)) { }
+//   //                                           ^
+//   // ccon_ex.cpp:31:11: note: ‘cxx_condition::locked_queue<int>::locked_queue(cxx_condition::locked_queue<int>&&)’ is implicitly deleted because the default definition would be ill-formed:
+//   //      class locked_queue {
+//   //            ^
+//   // ccon_ex.cpp:31:11: error: use of deleted function ‘std::mutex::mutex(const std::mutex&)’
+//   // In file included from /usr/include/c++/4.9/future:39:0,
+//   //                  from ccon_ex.cpp:3:
+//   // /usr/include/c++/4.9/mutex:129:5: note: declared here
+//   //      mutex(const mutex&) = delete;
+//   //      ^
+//   // ...
+// 
+//   std::thread c1(&consumer, q);
+// }
+
 
 // ={=========================================================================
-// cxx-threadsafe-stack
+// cxx-race cxx-stack-threadsafe-stack
 
-struct empty_stack : std::exception
+namespace cxx_ccon
 {
-  const char *what() const noexcept
+  struct empty_stack : std::exception
   {
-    return "empty_stack exception";
-  }
-};
+    const char *what() const noexcept
+    {
+      return "empty_stack exception";
+    }
+  };
 
-template<typename T>
-class threadsafe_stack
+  template<typename T>
+    class threadsafe_stack
+    {
+      public:
+        threadsafe_stack() {}
+        threadsafe_stack(const threadsafe_stack &other)
+        {
+          std::lock_guard<mutex> lock(other.m);
+          data = other.data;
+        }
+
+        threadsafe_stack &operator=(const threadsafe_stack &) = delete;
+
+        void push(T value)
+        {
+          std::lock_guard<mutex> lock(m);
+          data.push(value);
+        }
+
+        // option3, if make_shared() throes, data is not modified.
+        std::shared_ptr<T> pop()
+        {
+          std::lock_guard<mutex> lock(m);
+          if (data.empty())
+            throw empty_stack();
+
+          std::shared_ptr<T> const res(std::make_shared<T>(data.top()));
+          data.pop();
+          return res;
+        }
+
+        // option1, use reference
+        void pop(T &value)
+        {
+          std::lock_guard<mutex> lock(m);
+          if (data.empty())
+            throw empty_stack();
+
+          value = data.top();
+          data.pop();
+        }
+
+        bool empty() const
+        {
+          std::lock_guard<mutex> lock(m);
+          return data.empty();
+        }
+
+      private:
+        std::stack<T> data;
+
+        // *cxx-mutable*
+        mutable std::mutex m;
+    };
+} // namesapce
+
+TEST(CConRace, ThreadSafeStack)
 {
-  public:
-    threadsafe_stack() {}
-    threadsafe_stack(const threadsafe_stack &other)
-    {
-      std::lock_guard<mutex> lock(other.m);
-      data = other.data;
-    }
+  using namespace cxx_ccon;
 
-    threadsafe_stack &operator=(const threadsafe_stack &) = delete;
-
-    void push(T value)
-    {
-      std::lock_guard<mutex> lock(m);
-      data.push(value);
-    }
-
-    std::shared_ptr<T> pop()
-    {
-      std::lock_guard<mutex> lock(m);
-      if (data.empty())
-        throw empty_stack();
-
-      std::shared_ptr<T> const res(std::make_shared<T>(data.top()));
-      data.pop();
-      return res;
-    }
-
-    void pop(T &value)
-    {
-      std::lock_guard<mutex> lock(m);
-      if (data.empty())
-        throw empty_stack();
-
-      value = data.top();
-      data.pop();
-    }
-
-    bool empty() const
-    {
-      std::lock_guard<mutex> lock(m);
-      return data.empty();
-    }
-
-  private:
-    std::stack<T> data;
-    mutable std::mutex m;
-};
-
-// [ RUN      ] CconThreadTest.UseThreadSafeStack
-// returned item is 5
-// unknown file: Failure
-// C++ exception with description "empty_stack exception" thrown in the test body.
-// [  FAILED  ] CconThreadTest.UseThreadSafeStack (0 ms)
-
-TEST(CconThreadTest, UseThreadSafeStack)
-{
   threadsafe_stack<int> tss;
 
   // tss.push(1);
   // tss.push(2);
   // tss.push(3);
   // tss.push(4);
-  
+
   tss.push(5);
   auto sp = tss.pop();
 
-  cout << "returned item is " << *sp << endl;
+  EXPECT_THAT(*sp, 5);
 
   // this raises an exception
   if (tss.empty())
   {
     int x;
-    tss.pop(x);
+    EXPECT_THROW(tss.pop(x), empty_stack);
   }
 }
 

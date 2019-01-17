@@ -1861,77 +1861,77 @@ void PrintLists(const list<int> &list_one, const list<int> &list_two)
     cout << endl << endl;
 }
 
-TEST(CollList, UseSpliceOrMerge)
+TEST(List, SpliceAndMerge)
 {
-    list<int> list_one, list_two;
+  list<int> list_one, list_two;
 
-    for(int i=0; i < 6; ++i)
-    {
-        list_one.push_back(i);
-        list_two.push_back(i);
-    }
+  for(int i=0; i < 6; ++i)
+  {
+    list_one.push_back(i);
+    list_two.push_back(i);
+  }
 
-    EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
-    EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
+  EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
+  EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
 
-    // splice, verb, to join two pieces of rope, film, etc. together at their
-    // ends in order to form one long piece:
-    //
-    // c.splice(pos,c2) Moves all elements of c2 to c in front of the iterator
-    // position pos
-    // moves all elements of list_one before the pos of '3' element.
+  // splice, verb, to join two pieces of rope, film, etc. together at their
+  // ends in order to form one long piece:
+  //
+  // c.splice(pos,c2) Moves all elements of c2 to c in front of the iterator
+  // position pos
+  // moves all elements of list_one before the pos of '3' element.
 
-    list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
-    EXPECT_EQ(list_one.size(), 0); 
-    // 0 1 2 [0 1 2 3 4 5] 3 4 5 
-    EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
+  list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
+  EXPECT_EQ(list_one.size(), 0); 
+  // 0 1 2 [0 1 2 3 4 5] 3 4 5 
+  EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
 
-    // c.splice(pos,c2,c2pos) 
-    // Moves the element at c2pos in c2 in front of pos of list c 
-    // (c and c2 may be identical)
-    //
-    // move first element of list_two to the end
+  // c.splice(pos,c2,c2pos) 
+  // Moves the element at c2pos in c2 in front of pos of list c 
+  // (c and c2 may be identical)
+  //
+  // move first element of list_two to the end
 
-    list_two.splice(list_two.end(), list_two, list_two.begin());
-    // 1 2 [0 1 2 3 4 5] 3 4 5 0 
-    EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
+  list_two.splice(list_two.end(), list_two, list_two.begin());
+  // 1 2 [0 1 2 3 4 5] 3 4 5 0 
+  EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
 
-    list<int> list_three;
-    // move first element of list_two to the first of list_three
-    list_three.splice(list_three.begin(), list_two, list_two.begin());
+  list<int> list_three;
+  // move first element of list_two to the first of list_three
+  list_three.splice(list_three.begin(), list_two, list_two.begin());
 
-    EXPECT_THAT(list_two, ElementsAreArray({2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
-    EXPECT_THAT(list_three, ElementsAre(1)); 
+  EXPECT_THAT(list_two, ElementsAreArray({2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
+  EXPECT_THAT(list_three, ElementsAre(1)); 
 
-    list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
-    list<int> list5{0, 1, 2, 3, 4, 5};
-    
-    list5.merge(list4);
-    EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
+  list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
+  list<int> list5{0, 1, 2, 3, 4, 5};
 
-    // 8.8.1 Special Member Functions for Lists (and Forward Lists)
-    //
-    // Strictly speaking, the standard requires that both (forward) lists be
-    // sorted on entry. In practice, however, merging is also possible for
-    // unsorted lists.  However, you should check this before you rely on it.
-    // 
-    // So will be sorted?
-    //
-    // list<int> list5;
-    // list5.merge({4, 1, 0, 3, 2, 5});
-    // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
-    //
-    // NO and failed on gcc.
+  list5.merge(list4);
+  EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
 
-    // Actual: { 4, 1, 0, 3, 2, 5 }, whose element #0 doesn't match
+  // 8.8.1 Special Member Functions for Lists (and Forward Lists)
+  //
+  // Strictly speaking, the standard requires that both (forward) lists be
+  // sorted on entry. In practice, however, merging is also possible for
+  // unsorted lists.  However, you should check this before you rely on it.
+  // 
+  // So will be sorted?
+  //
+  // list<int> list5;
+  // list5.merge({4, 1, 0, 3, 2, 5});
+  // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
+  //
+  // NO and failed on gcc.
 
-    list<int> list6;
-    list6.merge({4, 1, 0, 3, 2, 5});
-    EXPECT_THAT(list6, Not(ElementsAreArray({0, 1, 2, 3, 4, 5})));
+  // Actual: { 4, 1, 0, 3, 2, 5 }, whose element #0 doesn't match
+
+  list<int> list6;
+  list6.merge({4, 1, 0, 3, 2, 5});
+  EXPECT_THAT(list6, Not(ElementsAreArray({0, 1, 2, 3, 4, 5})));
 }
 
 
-TEST(CollList, UseListRemoveIf)
+TEST(List, RemoveIf)
 {
   list<int> int_list{0, 1, 2, 3, 4};
 
@@ -1952,7 +1952,7 @@ TEST(CollList, UseListRemoveIf)
 }
 
 
-TEST(CollList, UseErase)
+TEST(List, Erase)
 {
   list<int> coll{10,20,30,40,50};
 
@@ -1966,7 +1966,7 @@ TEST(CollList, UseErase)
   EXPECT_THAT(coll, ElementsAre(30,40,50));
 }
 
-TEST(CollList, Devide)
+TEST(List, Devide)
 {
   list<int> coll{26, 33, 35, 29, 19, 12, 22};
   auto slow = coll.begin();
@@ -2044,7 +2044,7 @@ care such as handle the first comparison.
 }
 */
 
-TEST(CollList, Combine)
+TEST(List, Combine)
 {
   list<int> coll1{26,33,35,29};
   list<int> coll2{9,12,22};
@@ -2085,7 +2085,7 @@ TEST(CollList, Combine)
 }
 
 
-TEST(CollList, Sort)
+TEST(List, Sort)
 {
   list<int> coll{26, 33, 35, 29, 19, 12, 22};
   coll.sort();

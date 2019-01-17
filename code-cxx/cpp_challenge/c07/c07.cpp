@@ -514,6 +514,63 @@ parallelism and the way to achieve it is an implementation detail.
 */
 
 
+/*
+={=============================================================================
+65. Thread-safe logging to the console
+
+Write a class that enables components running in different threads to safely
+print log messages to the console by synchronizing access to the standard output
+stream to guarantee the integrity of the output. This logging component should
+have a method called log() with a string argument representing the message to be
+printed to the console.
+
+*/
+
+namespace U65_Text
+{
+  class logger
+  {
+    public:
+      static logger& instance()
+      {
+        static logger lg;
+        return lg;
+      }
+
+      logger(logger const&) = delete;
+      logger& operator=(logger const&) = delete;
+
+      void log(std::string message)
+      {
+        std::lock_guard<std::mutex> lock(mt);
+        std::cout << "LOG: " << message << std::endl;
+      }
+
+    protected:
+      logger() {}
+
+    private:
+      std::mutex mt;
+  };
+} // namespace
+
+
+/*
+={=============================================================================
+66. Customer service system
+
+Write a program that simulates the way customers are served in an office. The
+office has three desks where customers can be served at the same time. Customers
+can enter the office at any time. They take a ticket with a service number from
+a ticketing machine and wait until their number is next for service at one of
+the desks. Customers are served in the order they entered the office, or more
+precisely, in the order given by their ticket. Every time a service desk
+finishes serving a customer, the next customer in order is served. The
+simulation should stop after a particular number of customers have been issued
+tickets and served.
+
+*/
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

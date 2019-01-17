@@ -1584,7 +1584,7 @@ ones and sorts them recursively. There are several partitioning schemes. In the
 implementation shown here, we use the original one developed by Tony Hoare. The
 algorithm for this scheme is described in pseudocode as follows:
 
-note: do not study fully this algorithm
+note: this is different algorithm and do not study fully this algorithm
 
 */
 
