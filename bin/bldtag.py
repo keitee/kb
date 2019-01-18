@@ -22,6 +22,7 @@ if __name__ == "__main__":
         './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-impl/src/c',
         './THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae',
         './FUSIONOS_2/UTILITIES_HELPER',
+        './FUSIONOS_2/NETWORK_HELPER',
         './XTV_High_Level_VOB',
         './FUSIONOS'
         ]
@@ -35,7 +36,7 @@ if __name__ == "__main__":
         "(", 
         "-path",  "*/build", "-o", 
         "-path", "*/mock",  "-o",
-        "-path", "*/lib",  "-o",
+    #    "-path", "*/lib",  "-o",
         "-path", "*/tools",  "-o",
         "-path", "*/VQE_SRC",  "-o",
         "-path", "*/AVCU",  "-o",
