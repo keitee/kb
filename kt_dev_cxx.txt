@@ -286,15 +286,15 @@ KT KB. CPP
 #{ c++ concurrent in action
 *kt_dev_cxx_0000* cxx-ccon-thread-build cxx-boost-thread
 *kt_dev_cxx_0000* cxx-ccon-thread
-*kt_dev_cxx_0000* cxx-ccon-mutex cxx-mutex cxx-lock-guard cxx-race
+*kt_dev_cxx_0000* cxx-ccon-mutex cxx-threadsafe-stack cxx-lock-guard cxx-race
 *kt_dev_cxx_0000* cxx-ccon-not-copyable
 *kt_dev_cxx_0000* cxx-ccon-lock cxx-deadlock
-*kt_dev_cxx_0000* cxx-lock cxx-deadlock
-*kt_dev_cxx_0000* cxx-lock-unique-lock
-*kt_dev_cxx_0000* cxx-con-call-once
-*kt_dev_cxx_0000* cxx-con-shared-lock cxx-boost-shared-lock
-*kt_dev_cxx_0000* cxx-lock-recursive-lock
-*kt_dev_cxx_0000* cxx-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-ccon-lock cxx-deadlock
+*kt_dev_cxx_0000* cxx-ccon-lock-unique-lock
+*kt_dev_cxx_0000* cxx-ccon-call-once
+*kt_dev_cxx_0000* cxx-ccon-lock-shared-lock cxx-boost-shared-lock
+*kt_dev_cxx_0000* cxx-ccon-lock-recursive-lock
+*kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-queue
 *kt_dev_cxx_0000* cxx-wait cxx-sleep
 *kt_dev_cxx_0000* cxx-task-model cxx-future cxx-async
 *kt_dev_cxx_0000* cxx-con-packaged-task
@@ -38918,14 +38918,139 @@ c.pop_front()       Removes the first element (does not return it)
 
 12.2 Queues
 
-// <queue>, the class queue is defined as follows:
+namespace cxx_code
+{
+  // /usr/include/c++/4.9/bits/stl_queue.h
 
-namespace std {
-  template <typename T,
-           typename Container = deque<T>>
-             class queue;
+  /**
+   *  @brief  A standard container giving FIFO behavior.
+   *
+   *  @ingroup sequences
+   *
+   *  @tparam _Tp  Type of element.
+   *  @tparam _Sequence  Type of underlying sequence, defaults to deque<_Tp>.
+   *
+   *  Meets many of the requirements of a
+   *  <a href="tables.html#65">container</a>,
+   *  but does not define anything to do with iterators.  Very few of the
+   *  other standard container interfaces are defined.
+   *
+   *  This is not a true container, but an @e adaptor.  It holds another
+   *  container, and provides a wrapper interface to that container.  The
+   *  wrapper is what enforces strict first-in-first-out %queue behavior.
+   *
+   *  The second template parameter defines the type of the underlying
+   *  sequence/container.  It defaults to std::deque, but it can be any type
+   *  that supports @c front, @c back, @c push_back, and @c pop_front,
+   *  such as std::list or an appropriate user-defined type.
+   *
+   *  Members not found in @a normal containers are @c container_type,
+   *  which is a typedef for the second Sequence parameter, and @c push and
+   *  @c pop, which are standard %queue/FIFO operations.
+   */
+
+  template<typename _Tp, typename _Sequence = deque<_Tp> >
+    class queue
+    {
+      /**
+       *  Returns true if the %queue is empty.
+       */
+      bool
+        empty() const
+        { return c.empty(); }
+
+      /**  Returns the number of elements in the %queue.  */
+      size_type
+        size() const
+        { return c.size(); }
+
+      /**
+       *  Returns a read/write reference to the data at the first
+       *  element of the %queue.
+       */
+      reference
+        front()
+        {
+          __glibcxx_requires_nonempty();
+          return c.front();
+        }
+
+      /**
+       *  Returns a read-only (constant) reference to the data at the first
+       *  element of the %queue.
+       */
+      const_reference
+        front() const
+        {
+          __glibcxx_requires_nonempty();
+          return c.front();
+        }
+
+      /**
+       *  Returns a read/write reference to the data at the last
+       *  element of the %queue.
+       */
+      reference
+        back()
+        {
+          __glibcxx_requires_nonempty();
+          return c.back();
+        }
+
+      /**
+       *  Returns a read-only (constant) reference to the data at the last
+       *  element of the %queue.
+       */
+      const_reference
+        back() const
+        {
+          __glibcxx_requires_nonempty();
+          return c.back();
+        }
+
+      /**
+       *  @brief  Add data to the end of the %queue.
+       *  @param  __x  Data to be added.
+       *
+       *  This is a typical %queue operation.  The function creates an
+       *  element at the end of the %queue and assigns the given data
+       *  to it.  The time complexity of the operation depends on the
+       *  underlying sequence.
+       */
+      void
+        push(const value_type& __x)
+        { c.push_back(__x); }
+
+#if __cplusplus >= 201103L
+      void
+        push(value_type&& __x)
+        { c.push_back(std::move(__x)); }
+
+      template<typename... _Args>
+        void
+        emplace(_Args&&... __args)
+        { c.emplace_back(std::forward<_Args>(__args)...); }
+#endif
+
+      /**
+       *  @brief  Removes first element.
+       *
+       *  This is a typical %queue operation.  It shrinks the %queue by one.
+       *  The time complexity of the operation depends on the underlying
+       *  sequence.
+       *
+       *  Note that no data is returned, and if the first element's
+       *  data is needed, it should be retrieved before pop() is
+       *  called.
+       */
+      void
+        pop()
+        {
+          __glibcxx_requires_nonempty();
+          c.pop_front();
+        }
+    }
 }
-
 
 Like stack, queue uses deque by default. The optional second template
 parameter defines the container that the queue uses internally for its
@@ -44484,8 +44609,9 @@ by reference is [&], and capture all local names used by value is [=].
           else 
             std::advance(last, size);
           
-          // wrong result as each thread may use any depending on vaules when
-          // runs since it uses reference
+          // wrong result as each thread ends up using final value of
+          // iterators since it uses reference but nees snapshot of iterators
+          // to work correctly.
           //
           // threads.emplace_back([&]()
 
@@ -57727,7 +57853,7 @@ TEST(CConThread, ArgumentAndReturn)
   {
     int value{1};
 
-    // *cxx-ref*
+    // *cxx-ref* to solve this error
     std::thread t(use_reference, std::ref(value));  
     t.join();
 
@@ -57936,7 +58062,7 @@ make sure that when use thread object.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-ccon-mutex cxx-mutex cxx-lock-guard cxx-race
+*kt_dev_cxx_0000* cxx-ccon-mutex cxx-threadsafe-stack cxx-lock-guard cxx-race
 
 3.1 Problems with sharing data between threads
 
@@ -58217,7 +58343,7 @@ but the whole data structure, for the whole delete operation. The easiest
 solution in this case is to have a single mutex that protects the entire list.
 
 
-<ex> cxx-stack thread-safe stack
+<ex> cxx-stack cxx-threadsafe-stack
 
 Just because individual operations on the list are safe, you're not out of the
 woods yet; you can still get race conditions, even with a really simple
@@ -58319,7 +58445,7 @@ o protect the internal data with a mutex in stack interface
 
 Still subject to cxx-race and The problem is not about mutex-based
 implementation. `it's an interface problem` so the race would still occur with
-a lock-free implementation. this interface is inherently subject to race.
+a lock-free implementation. the interface is inherently subject to race.
 
 `The problem is that the result of empty() and size() can't be relied on.` 
 
@@ -58433,9 +58559,13 @@ namespace cxx_ccon
 
         threadsafe_stack(const threadsafe_stack &other)
         {
+          // see lock(other.m);
+          
           std::lock_guard<mutex> lock(other.m);
           data = other.data;
         }
+
+        // disallow for simplicity
 
         threadsafe_stack &operator=(const threadsafe_stack &) = delete;
 
@@ -58858,13 +58988,13 @@ thread_local unsigned long
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-lock-unique-lock
+*kt_dev_cxx_0000* cxx-ccon-lock-unique-lock
 
 std::unique_lock provides more `flexibility than std::lock_guard`
 
 o the ability to program explicitly when and how to lock or unlock its mutex.
   Thus, this lock object may or may not have a mutex locked (also known as
-      owning a mutex). This differs from a lock_guard<>, which always has an
+  owning a mutex). This differs from a *cxx-lock-guard* which always has an
   object locked throughout its lifetime.
 
 o std::defer_lock to indicate that the mutex should remian unlocked on
@@ -58875,6 +59005,8 @@ o std::unique_lock is typically larger and has a slight performance penalty so
 
 <cxx-lock-unique-lock>
 
+namespace cxx_ccon
+{
   /// unique_lock
   template<typename _Mutex>
     class unique_lock
@@ -58886,7 +59018,7 @@ o std::unique_lock is typically larger and has a slight performance penalty so
           : _M_device(0), _M_owns(false)
           { }
 
-        // *cxx-lock-uinqie-default*
+        // *cxx-lock-unique-default*
         explicit unique_lock(mutex_type& __m)
           : _M_device(&__m), _M_owns(false)
         {
@@ -58894,7 +59026,7 @@ o std::unique_lock is typically larger and has a slight performance penalty so
           _M_owns = true;
         }
     }
-
+}
 
 Listing 3.6 Using std::lock() and std::lock_guard in a swap operation
 
@@ -59028,39 +59160,50 @@ void get_and_process_data()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-call-once
+*kt_dev_cxx_0000* cxx-ccon-call-once
+
+3.3 Alternative facilities for protecting shared data
 
 One particularly extreme (but remarkably common) case is where the shared data
-needs protection only from concurrent access while it’s being initialized, but
+needs protection `only from concurrent access while it’s being initialized,` but
 after that no explicit synchronization is required. This might be because the
 data is read-only once created, and so there are no possible synchronization
 issues, or it might be because the necessary protection is performed
 implicitly as part of the operations on the data.
+
+Locking a mutex after the data has been initialized is unnecessary and a
+needless hit to performance.
 
 It's for this reason that the C++ Standard provides a mechanism purely for
 protecting shared data during initialization.
 
 Suppose you have a shared resource that's so expensive to construct that you
 want to do so only if it's actually required; maybe it opens a database
-connection or allocates a lot of memory. Lazy initialization such as this is
-common in single-threaded code
+connection or allocates a lot of memory. *cxx-lazy-initialization* such as
+this is common in single-threaded code
 
 std::shared_ptr<some_resource> resource_ptr;
 
 void foo()
 {
-    if(!resource_ptr)
-    {
-        resource_ptr.reset(new some_resource);
-    }
-    resource_ptr->do_something();
+  if(!resource_ptr)
+  {
+    // If the shared resource itself is safe for concurrent access, the only
+    // part that needs protecting when converting this to multithreaded code
+    // is the initialization
+
+    resource_ptr.reset(new some_resource);
+  }
+
+  // If the shared resource itself is safe for concurrent access, the only
+
+  resource_ptr->do_something();
 }
 
 
-A naive translation to multithreaded code which cause unnecessary
-serialization of threads using the resource. This is because each thread must
-wait on the mutex in order to check whether the resource has already been
-initialized.
+A naive translation to multithreaded which cause `unnecessary serialization`
+of threads using the resource. This is because each thread must wait on the
+mutex in order to check whether the resource has already been initialized.
 
 
 std::shared_ptr<some_resource> resource_ptr;
@@ -59069,18 +59212,19 @@ std::mutex resource_mutex;
 
 void foo()
 {
-    std::unique_lock<std::mutex> lk(resource_mutex);
-    if(!resource_ptr)
-    {
-        resource_ptr.reset(new some_resource);
-    }
-    lk.unlock();
+  std::unique_lock<std::mutex> lk(resource_mutex);
 
-    resource_ptr->do_something();
+  if(!resource_ptr)
+  {
+    resource_ptr.reset(new some_resource);
+  }
+  lk.unlock();
+
+  resource_ptr->do_something();
 }
 
 
-<std-once>
+<cxx-call-once>
 C++ provides std::once_flag and std::call_once to handle this situation. Every
 thread can just use std::call_once and this do the same as "naive translation"
 but has a lower overhead.
@@ -59088,17 +59232,17 @@ but has a lower overhead.
 
 std::shared_ptr<some_resource> resource_ptr;
 
-std::once_flag resource_flag;
+`std::once_flag` resource_flag;
 
 void init_resource()
 {
-    resource_ptr.reset(new some_resource);
+  resource_ptr.reset(new some_resource);
 }
 
 void foo()
 {
-    std::call_once(resource_flag,init_resource);      // is called exactly once
-    resource_ptr->do_something();
+  `std::call_once`(resource_flag, init_resource);      // is called exactly once
+  resource_ptr->do_something();
 }
 
 
@@ -59106,36 +59250,40 @@ The example when used with a class:
 
 class X
 {
-    private:
-        connection_info connection_details;
-        connection_handle connection;
-        std::once_flag connection_init_flag;
-        void open_connection()
-        {
-            connection=connection_manager.open(connection_details);
-        }
-    public:
-        X(connection_info const& connection_details_):
-            connection_details(connection_details_)
-    {}
+  private:
+    connection_info connection_details;
+    connection_handle connection;
+    std::once_flag connection_init_flag;
+    void open_connection()
+    {
+      connection=connection_manager.open(connection_details);
+    }
 
-        void send_data(data_packet const& data)
-        {
-            std::call_once(connection_init_flag,&X::open_connection,this);
-            connection.send_data(data);
-        }
+  public:
+    X(connection_info const& connection_details_):
+      connection_details(connection_details_)
+  {}
 
-        data_packet receive_data()
-        {
-            std::call_once(connection_init_flag,&X::open_connection,this);
-            return connection.receive_data();
-        }
+    void send_data(data_packet const& data)
+    {
+      std::call_once(connection_init_flag, &X::open_connection, this);
+      connection.send_data(data);
+    }
+
+    data_packet receive_data()
+    {
+      std::call_once(connection_init_flag,&X::open_connection,this);
+      return connection.receive_data();
+    }
 };
 
 As with std::thread and std::bind, used additional argument to call_once.
 
 
-note:
+*cxx-ccon-not-copyable*
+
+// ???
+
 It's worth noting that, like std::mutex, std::once_flag instances can't be
 copied or moved, so if you use them as a class member like this, you'll have
 to explicitly define these special member functions should you require them.
@@ -59145,14 +59293,15 @@ to explicitly define these special member functions should you require them.
 One scenario where there's a potential race condition over initialization is
 that of a local variable declared with static.
 
-*cxx-singleton* *cxx-init-order-problem*
+*cxx-pattern-singleton* *cxx-init-order-problem*
 
 In C++11 this problem is solved: the initialization is defined to happen on
 exactly one thread, and no other threads will proceed until that
 initialization is complete, so the race condition is just over which thread
 gets to do the initialization rather than anything more problematic. This can
-be used as an alternative to std::call_once for those cases where a single
-global instance is required:
+be used as an alternative to std::call_once for those cases 
+
+`where a single global instance is required:`
 
 Protecting data only for initialization is a special case of a more general
 scenario: that of a rarely updated data structure. For most of the time, such
@@ -59161,7 +59310,7 @@ threads concurrently.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-shared-lock cxx-boost-shared-lock
+*kt_dev_cxx_0000* cxx-ccon-shared-lock cxx-boost-shared-lock
 
 <cxx-shared-lock> 
 
@@ -59234,7 +59383,9 @@ call find_entry() are blocked too.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-lock-recursive-lock
+*kt_dev_cxx_0000* cxx-ccon-lock-recursive-lock
+
+3.3.3 Recursive locking
 
 Most of the time, if you think you want a recursive mutex, you probably need to
 change your design instead.
@@ -59271,15 +59422,15 @@ corresponding unlock() call is called:
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-queue
 
 4.1.1 Waiting for a condition with condition variables
 
 The Standard C++ Library provides not one but two implementations of a
-condition variable: 
+cxx-condition-variable: 
 
 `std::condition_variable` and `std::condition_variable_any` Both of these are
-declared in the <condition_variable> library header.
+declared in the `condition_variable` header.
 
 the former is limited to working with std::mutex, whereas the latter can work
 with anything that meets some minimal criteria for being mutex-like, hence the
@@ -59289,6 +59440,8 @@ Because std::condition_variable_any is more general, there's the potential for
 additional costs in terms of size, performance, or operating system resources,
 so std::condition_variable should be preferred unless the additional
   flexibility is required.
+
+<ex>
 
 std::mutex mut;
 std::queue<data_chunk> data_queue;
@@ -59314,13 +59467,12 @@ void data_processing_thread()
 {
   while(true)
   {
-    // cxx-lock-unique-lock
     std::unique_lock<std::mutex> lk(mut);
 
-    // *cxx-con-condition-variable-predicate*
-    // have to use cxx-lock-unique-lock and otherwise error
+    // *cxx-condition-variable-predicate*
+    // must cxx-lock-unique-lock and otherwise error
 
-    data_cond.wait(lk,[]{return !data_queue.empty();});
+    data_cond.wait(lk, []{return !data_queue.empty();});
 
     data_chunk data=data_queue.front();
     data_queue.pop();
@@ -59339,8 +59491,7 @@ void data_processing_thread()
 }
 
 
-<cxx-con-condition-variable-predicate> <cxx-con-wait-condition-variable>
-
+<cxx-condition-variable-predicate> <cxx-wait-condition-variable>
 a lambda function that expresses the condition being waited for. checks to see
 if the data_queue is not empty() - that is, there's some data in the queue
 ready for processing.
@@ -59357,7 +59508,7 @@ satisfied, the thread unlocks the mutex and resumes waiting.
 
 another wait_for() will check the supplied predicate when woken and will
 return `only when` the supplied predicate is true (and the condition variable
-has been signaled) or the timeout expires. see *cxx-con-wait-unbounded*
+has been signaled) or `the timeout expires.` see *cxx-con-wait-unbounded*
 
 note: predicate is called whenever notify happens
 
@@ -59374,7 +59525,7 @@ wait_for(lock, duration, predicate) wait_until(lock, time_point, predicate)
 note: the timeout expires return false.
 
 
-<cxx-con-condition-variable-suprious-wake>
+<cxx-condition-variable-suprious-wake>
 When the waiting thread reacquires the mutex and checks the condition, if it
 isn't in direct response to a notification from another thread, it's called a
 spurious wake. 
@@ -59382,12 +59533,15 @@ spurious wake.
 Because the number and frequency of any such spurious wakes are by definition
 indeterminate, 
    
-it is 'not' advisable to use a function with side effects for the condition
+it is not advisable to use a function with side effects for the condition
 check. If you do so, you must be prepared for the "side effects" to occur
 multiple times.
 
 
-<cxx-queue-thread-safe>
+{cxx-threadsafe-queue}
+As with *cxx-stack* *cxx-queue* has the same problem, "the interface is
+inherently subject to race."
+
 When using a queue to pass data between threads, the receiving thread often
 needs to wait for the data. Let’s provide two variants on pop(): 
   
@@ -59396,8 +59550,9 @@ immediately (with an indication of failure) even if there wasn’t a value to
 retrieve, and wait_and_pop(), which will wait until there’s a value to
 retrieve.
 
+<ex>
 
-// Listing 4.4 Extracting push() and wait_and_pop() from listing 4.1
+// Listing 4.5
 
 #include <queue>
 #include <mutex>
@@ -59407,29 +59562,94 @@ template<typename T>
 class threadsafe_queue
 {
   private:
-    std::mutex mut;
+    mutable std::mutex mut;
     std::queue<T> data_queue;
     std::condition_variable data_cond;
 
   public:
+    threadsafe_queue() {}
+
+    threadsafe_queue(threadsafe_queue const& other)
+    {
+      std::lock_guard<std::mutex> lk(other.mut);
+      data_queue = other.data_queue;
+    }
+
+    // disallow for simplicity
+    threadsafe_queue& operator=(threadsafe_queue const&) = delete;
+
     void push(T new_value)
     {
       std::lock_guard<std::mutex> lk(mut);
+
       data_queue.push(new_value);
       data_cond.notify_one();
     }
 
+    // differently from threadsafe-stack, do not use exception
+
+    bool try_pop(T& value)
+    {
+      std::lock_guard<std::mutex> lk(mut);
+
+      if (data_queue.empty())
+        return false;
+
+      value = data_queue.front();
+      data_queue.pop();
+      return true;
+    }
+
+    std::shared_ptr<T> try_pop()
+    {
+      std::lock_guard<std::mutex> lk(mut);
+
+      if (data_queue.empty())
+        return std::shared_ptr<T>();
+
+      std::shared_ptr<T> res(std::make_shared<T>(data_queue.front()));
+      data_queue.pop();
+
+      return res;
+    }
+    
     // see no unlock on cxx-unique-lock
-    // *cxx-lambda-this*
 
     void wait_and_pop(T& value)
     {
       std::unique_lock<std::mutex> lk(mut);
-      data_cond.wait(lk,[this]{return !data_queue.empty();});
+
+      // *cxx-lambda-this* ??
+
+      data_cond.wait(lk, [this]{return !data_queue.empty();});
+
+      // as with cxx-threadsafe-statk, combine two operations
+
       value=data_queue.front();
       data_queue.pop();
     }
+
+    std::shared_ptr<T> wait_and_pop()
+    {
+      std::unique_lock<std::mutex> lk(mut);
+
+      data_cond.wait(lk, [this]{return !data_queue.empty();});
+
+      // as with cxx-threadsafe-statk, combine two operations
+
+      std::shared_ptr<T> res(std::make_shared<T>(data_queue.front()));
+      data_queue.pop();
+
+      return res;
+    }
+
+    bool empty() const
+    {
+      std::lock_guard<std::mutex> lk(mut);
+      return data_queue.empty();
+    }
 };
+
 
 threadsafe_queue<data_chunk> data_queue;
 

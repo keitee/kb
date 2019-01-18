@@ -594,7 +594,7 @@ TEST(CConAsync, Status)
 
 
 // ={=========================================================================
-// cxx-lock-mutex cxx-mutex
+// cxx-lock cxx-mutex
 
 // CXXSLR 18.5 A First Complete Example for Using a Mutex and a Lock
 
@@ -697,83 +697,11 @@ TEST(CConLock, LockGuard)
 }
 
 
-// found that sometimes sum is 45 and not sure why?
-
-namespace cxx_lock
-{
-  template <typename T>
-    class locked_queue
-    {
-      public:
-        // push an item into the end of the queue
-        void push(T const& item)
-        {
-          std::lock_guard<std::mutex> lock(mutex_);
-          queue_.push(item);
-        }
-
-        size_t size() const noexcept
-        {
-          return queue_.size();
-        }
-
-      private:
-        std::queue<T> queue_;
-        std::mutex mutex_;
-    };
-
-  void do_something(int& start, int& sum, std::mutex& m)
-  {
-    while (start < 10)
-    {
-      std::lock_guard<std::mutex> lock(m);
-      // this_thread::sleep_for(chrono::milliseconds(dist(engine)));
-      cout << ", start: " << start << ", sum: " << sum << endl;
-      // cout << msg << ", start: " << start << ", sum: " << sum << endl;
-      sum += start;
-      ++start;
-    }
-  }
-
-} // namespace
-
-TEST(CConLock, X)
-{
-  using namespace cxx_lock;
-
-  locked_queue<int> lq;
-
-  std::mutex mutex_;
-  int sum{0};
-  int start{1};
-
-  // OK
-  // std::thread t1([&]{ do_something("t1", start, sum, mutex_); });
-  // std::thread t2([&]{ do_something("t2", start, sum, mutex_); });
-  // std::thread t3([&]{ do_something("t3", start, sum, mutex_); });
-
-  // FAIL or OK
-  std::thread t1([&]{ do_something(start, sum, mutex_); });
-  std::thread t2([&]{ do_something(start, sum, mutex_); });
-  std::thread t3([&]{ do_something(start, sum, mutex_); });
-
-  // OK
-  // std::thread t1([&]{ do_something(std::ref(start), std::ref(sum), std::ref(mutex_)); });
-  // std::thread t2([&]{ do_something(std::ref(start), std::ref(sum), std::ref(mutex_)); });
-  // std::thread t3([&]{ do_something(std::ref(start), std::ref(sum), std::ref(mutex_)); });
-
-  t1.join();
-  t2.join();
-  t3.join();
-
-  EXPECT_THAT(sum, 45);
-}
-
-
 // ={=========================================================================
 // cxx-condition
 
-// class locked_queue {
+// class threadsafe_queue 
+// {
 //  void push(T &);
 //  T pop();
 // };
@@ -781,52 +709,62 @@ TEST(CConLock, X)
 namespace cxx_condition
 {
   template <typename T>
-    class locked_queue {
+    class threadsafe_queue 
+    {
       public:
+        explicit threadsafe_queue() noexcept {}
+        threadsafe_queue(threadsafe_queue const&) = delete;
+        threadsafe_queue& operator=(threadsafe_queue const&) = delete;
+
         void push(T const& item)
         {
           std::lock_guard<std::mutex> lock(m_);
-          queue_.push(item);
 
-          // as soon as there are items in queue
-          if (queue_.size())
-            cond_.notify_one();
+          queue_.push(item);
+          cond_.notify_one();
         }
 
-        T pop() 
+        void wait_and_pop(T& value) 
         {
           // to use with cxx-condition
           std::unique_lock<std::mutex> lock(m_);
 
           while (queue_.empty())
-            cond_.wait(lock);
+            cond_.wait(lock, [&]{return !queue_.empty();});
 
-          T item = queue_.front();
+          value = queue_.front();
           queue_.pop();
-          return item;
+        }
+
+        bool empty() const
+        {
+          std::lock_guard<std::mutex> lock(m_);
+          return queue_.empty();
         }
 
       private:
         std::queue<T> queue_;
-        std::mutex m_;
+        mutable std::mutex m_;
         std::condition_variable cond_;
     };
 
   int consumed{};
 
-  void producer(locked_queue<int>* q)
+  void producer(threadsafe_queue<int>& q)
   {
-    for (int i = 0; i < 10; ++i)
+    for (int i = 0; i < 20; ++i)
     {
-      q->push(i);
+      q.push(i);
     }
   }
 
-  void consumer(locked_queue<int>* q)
+  void consumer(threadsafe_queue<int>& q)
   {
-    for (int i = 0; i < 10; ++i)
+    int value;
+
+    while (!q.empty())
     {
-      q->pop();
+      q.wait_and_pop(value);
       ++consumed;
     }
   }
@@ -839,24 +777,43 @@ TEST(CConCondition, ProducerAndConsumer)
 {
   using namespace cxx_condition;
 
-  locked_queue<int> q;
+  threadsafe_queue<int> q;
 
-  std::thread c1(&consumer, &q);
-  std::thread c2(&consumer, &q);
-  std::thread c3(&consumer, &q);
+  // std::vector<std::thread> consumers;
+  //
+  // for (int i = 0; i < 5; ++i)
+  // {
+  //   // consumers.emplace_back(std::thread(consumer, std::ref(q)));
+  //   consumers.push_back(std::thread(consumer, std::ref(q)));
+  // }
+
+  std::thread c1(consumer, std::ref(q));
+  std::thread c2(consumer, std::ref(q));
+  std::thread c3(consumer, std::ref(q));
+  std::thread c4(consumer, std::ref(q));
+  std::thread c5(consumer, std::ref(q));
 
   this_thread::sleep_for(chrono::seconds(2));
 
-  std::thread p1(&producer, &q);
-  std::thread p2(&producer, &q);
-  std::thread p3(&producer, &q);
+  std::thread p1(&producer, std::ref(q));
+  std::thread p2(&producer, std::ref(q));
+  std::thread p3(&producer, std::ref(q));
 
-  c1.join(); c2.join(); c3.join();
+  // for (auto &c : consumers)
+  //   c.join();
+
+  c1.join(); c2.join(); c3.join(); c4.join(); c5.join();
+
   p1.join(); p2.join(); p3.join();
 
   EXPECT_THAT(consumed, 30);
 }
 
+
+// when 
+//
+// void consumer(locked_queue<int>* q);
+//
 // TEST(CConCondition, NotCopyable)
 // {
 //   using namespace cxx_condition;
@@ -885,6 +842,77 @@ TEST(CConCondition, ProducerAndConsumer)
 
 // ={=========================================================================
 // cxx-race cxx-stack-threadsafe-stack
+
+// Since lock() do not cover the whole use of `start` variable, while condition
+// is not guranteed to work as expected.
+
+namespace cxx_ccon
+{
+  void do_something(std::string const name, int& start, int& sum, std::mutex& m)
+  {
+    while (start < 10)
+    {
+      std::lock_guard<std::mutex> lock(m);
+      this_thread::sleep_for(chrono::milliseconds(30));
+      // cout << name << ", start: " << start << ", sum: " << sum << endl;
+      sum += start;
+      ++start;
+    }
+  }
+
+} // namespace
+
+TEST(CConRace, NotProtectWhole)
+{
+  using namespace cxx_ccon;
+
+  {
+    std::mutex mx;
+    int sum{0};
+    int start{1};
+
+    std::thread t1([&]{ do_something("t1", start, sum, mx); });
+    std::thread t2([&]{ do_something("t2", start, sum, mx); });
+    std::thread t3([&]{ do_something("t3", start, sum, mx); });
+
+    t1.join(); t2.join(); t3.join();
+
+    EXPECT_THAT(sum, Ne(45));
+  }
+
+  {
+    std::mutex mx;
+    int sum{0};
+    int start{1};
+
+    std::thread t1([&start, &sum, &mx]{ do_something("t1", start, sum, mx); });
+    std::thread t2([&start, &sum, &mx]{ do_something("t2", start, sum, mx); });
+    std::thread t3([&start, &sum, &mx]{ do_something("t3", start, sum, mx); });
+
+    t1.join(); t2.join(); t3.join();
+
+    EXPECT_THAT(sum, Ne(45));
+  }
+
+  {
+    std::mutex mx;
+    int sum{0};
+    int start{1};
+
+    // OK
+    std::thread t1([&]{ 
+        do_something("t1", std::ref(start), std::ref(sum), std::ref(mx)); });
+    std::thread t2([&]{ 
+        do_something("t2", std::ref(start), std::ref(sum), std::ref(mx)); });
+    std::thread t3([&]{ 
+        do_something("t3", std::ref(start), std::ref(sum), std::ref(mx)); });
+
+    t1.join(); t2.join(); t3.join();
+
+    EXPECT_THAT(sum, Ne(45));
+  }
+}
+
 
 namespace cxx_ccon
 {

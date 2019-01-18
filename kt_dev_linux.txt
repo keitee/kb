@@ -557,10 +557,6 @@
 *kt_linux_core_265* sync: case: subtle race
 *kt_linux_core_266* sync: case: sync with no lock
 
-|kt_linux_core_290|  ref: concurrency in C++. ch01
-|kt_linux_core_291|  ref: concurrency in C++. ch02 {std::thread}
-|kt_linux_core_293|  ref: concurrency in C++. ch03
-
 |kt_linux_core_300|  case: own semaphore and mutex class using pthread cond-var {cqueue}
 |kt_linux_core_301|  case: use of mutex and thread class
 |kt_linux_core_302|  case: analysis of 200 and 201 case
@@ -54547,8 +54543,8 @@ main(int argc, char *argv[])
 
 multiple producers and single consumer. 
 
-The above code works, but it wastes CPU time, because the main consumer thread
-continually loops, checking the state of the variable avail.
+The above code works, but it wastes CPU time, because all, consumer and
+producer continually loops, checking the state of the variable avail.
 
 A condition variable remedies this and allows a thread to sleep (wait) until
 another thread notifies (signals) it that it must do something. 
@@ -58388,163 +58384,6 @@ This callback is registered to two threads with different obj pointer. When gets
 Since callback thread use queue, it's serialized and no need to have lock on
 objects.
 
-
-# ============================================================================
-#{
-==============================================================================
-*kt_linux_core_290*	ref: concurrency in C++
-
-{what-is-concurrency}
-There is genuine or hardware concurrency or illusion of concurrency. What's new is that the
-increased computing power of these machine comes not from running a single task faster but from
-running multiple tasks in parallel.
-
-<parallelism>
-The task parallelism is to divide a single task into parts and run each in parallel, thus reducing
-the total runtime. It can be complex since there may be many dependencies.
-
-The data parallelism is that each thread performs the same operation on different parts of the data.
-Good scalability; many hands make light work. There's a different focus in which more data can be
-processed in the same amount of time.
-
-
-{when-use-concurrency}
-The use of concurrency is like any other optimisation strategy. Therefore it is only worth doing for
-those performance critical parts of the application where there is the potential for mesurable gain.
-
-{two-approaches-to-concurrency}
-<use-multiple-process>
-The downsides are 
-o communication between processes.
-o inherent overhead such as time to launch and resource in OS
-
-The upsides are:
-o safer code than threads
-o can extend over a network
-
-<use-multiple-thread>
-The low overhead with launching and communicating between threads. So C++11 do not provide any
-support for process and only support for threads.
-
-
-{C++11}
-o Allow writing portable multithreaded code without relying on platform-specific extensions.
-o There is [abstraction penalty] compared to using the underlying low-level facilities directly.
-
-<code-example>
-#include <iostream>
-#include <thread>
-
-void hello()
-{
-  std::cout << "hello con world\n";
-}
-
-int main(int argc, char** argv)
-{
-  std::thread t(hello);
-  t.join();
-  // std::cout << "end of main" << std::endl;
-}
-
-If build and run like below:
-kt@kt-ub-vb:~/work$ g++ -g -std=c++0x use-thread.cpp 
-kt@kt-ub-vb:~/work$ ./a.out 
-terminate called after throwing an instance of 'std::system_error'
-  what():  Operation not permitted
-Aborted (core dumped)
-
-If build and run with pthread option, then works fine. This is known problem in g++.           
-kt@kt-ub-vb:~/work$ g++ -g -std=c++0x -pthread use-thread.cpp 
-
-
-==============================================================================
-*kt_linux_core_291*	ref: concurrency in C++
-
-{std-thread-basic}
-<launch>
-The std::thread works with any [callable] type; function object and lambda.
-
-void do_some_work();
-std::thread my_thread(do_some_work);
-
-or
-
-class background_task
-{
-  public:
-    void operator() () const
-    {
-      do_something();
-      do_something_else();
-    }
-};
-
-background_task f;
-std::thread my_thread(f);
-
-Why callable? In this case, the supplied function object is copied into the storage belonging to the
-created thread and invoked from there.
-
-<join-and-detach>
-If don't decide whether to join or to detach it before std::thread object is destroyed then program
-is terminated since the std::thread destructor calls std::terminate(). Ture even in the presence of
-exceptions.
-
-The join() cleans up any storage associated with the thread so std::thread object isn't associated
-with any thread. Once this, joinable() will return false.
-{Q} what will happen when call join() twice on the same?
-
-When detach a thread, make sure that the data accessed by the thread is vaild until the thread has
-finished with it. For example, creat a thread within a function with thread function hold pointers
-or reference to local varaibles. Bad idea and avoid this. 
-
-void oops()
-{
-  int some_local_state = 0;
-  T my_func(some_local_state);   // T(int&)
-  std::thread my_thread(my_func);
-  my_thread.detach();
-}
-
-<join-raii>
-To avoid program being terminated when an exception is thrown, accidental lifetime problems, how?
-Can use try and catch but verbose and easy to get it wrong. 
-
-If you wan to do particular action for all possible exit path, whether normal or exceptional, use
-raii.
-
-class thread_guard
-{
-  std::thread& t;
-
-  public:
-  explicit thread_guard( std::thread& t_ ): t(t_) {}
-  ~thread_guard()
-  {
-    if( t.joinable() )
-    {
-      t.join();
-    }
-  }
-
-  thread_guard( thread_guard const& )=delete;
-  thread_guard& operator=( thread_guard const&)=delete;
-};
-
-void oops()
-{
-  int some_local_state = 0;
-  T my_func(some_local_state);         // T(int&)
-  std::thread my_thread(my_func);
-  thread_guard g(t);                   // <DN>
-
-  do_something_in_current_thread();    // main thread continue to run
-}
-
-
-==============================================================================
-*kt_linux_core_292*	ref: concurrency in C++
 
 # ============================================================================
 #{
