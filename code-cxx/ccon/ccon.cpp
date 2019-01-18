@@ -700,6 +700,127 @@ TEST(CConLock, LockGuard)
 // ={=========================================================================
 // cxx-condition
 
+namespace cxx_condition
+{
+  void errExitEN(int errnum, const char *format, ...)
+  {
+    cout << errnum << ", " << format << endl;
+  }
+ 
+  // LPI 30c
+  // \tlpi-181022-dist.tar\tlpi-dist\threads\prod_no_condvar.c
+  // A simple POSIX threads producer-consumer example that doesn't use a condition
+  // variable.
+
+  static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+
+  // *sync-cond-predicate* which is global
+  static int avail = 0;
+
+  // producer
+
+  static void* threadFunc(void *arg)
+  {
+    int cnt = atoi((char *)arg);
+    int s, j;
+
+    // each thread has given the number of unit to produce from main argv
+
+    for (j = 0; j < cnt; j++) 
+    {
+      sleep(1);
+
+      /* Code to produce a unit omitted */
+
+      s = pthread_mutex_lock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_lock");
+
+      avail++;        /* Let consumer know another unit is available */
+
+      s = pthread_mutex_unlock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_unlock");
+    }
+
+    return NULL;
+  }
+
+} // namespace
+
+TEST(CConCondition, ProducerAndConsumer_LPI_No_CondVar)
+{
+  using namespace cxx_condition;
+
+  int const NUM_OF_PRODUCERS = 10;
+  int const NUM_OF_ITEMS_TO_PRODUCE = 100;
+
+  pthread_t tid;
+  int s, j;
+  int totRequired;            /* Total number of units that all
+                                 threads will produce */
+  int numConsumed;            /* Total units so far consumed */
+  bool done;
+  time_t t;
+
+  t = time(NULL);
+
+  // Create all producers
+
+  totRequired = 0;
+
+  // for (j = 1; j < argc; j++) {
+  //   totRequired += atoi(argv[j]);
+
+  //   s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  //   if (s != 0)
+  //     errExitEN(s, "pthread_create");
+  // }
+
+  for (j = 1; j < NUM_OF_PRODUCERS; j++) {
+    totRequired += NUM_OF_ITEMS_TO_PRODUCE;
+
+    s = pthread_create(&tid, NULL, threadFunc, (void *)&NUM_OF_ITEMS_TO_PRODUCE);
+    if (s != 0)
+      errExitEN(s, "pthread_create");
+  }
+
+  // single consumer
+  // Use a polling loop to check for available units
+
+  numConsumed = 0;
+  done = false;
+
+  for (;;) {
+    s = pthread_mutex_lock(&mtx);
+    if (s != 0)
+      errExitEN(s, "pthread_mutex_lock");
+
+    // Consume all available units
+    while (avail > 0) {
+
+      // Do something with produced unit
+
+      numConsumed ++;
+      avail--;
+      printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
+          numConsumed);
+
+      done = numConsumed >= totRequired;
+    }
+
+    s = pthread_mutex_unlock(&mtx);
+    if (s != 0)
+      errExitEN(s, "pthread_mutex_unlock");
+
+    if (done)
+      break;
+
+    // Perhaps do other work here that does not require mutex lock
+  }
+}
+
+
 // class threadsafe_queue 
 // {
 //  void push(T &);
