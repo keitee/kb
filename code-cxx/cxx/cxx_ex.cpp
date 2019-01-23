@@ -39,44 +39,103 @@ TEST(Cxx, Ex)
 { 
   int value{10};
 
-  // *cxx-error*
-  //
-  // cxx_ex.cpp: In member function ‘virtual void Cxx_Ex_Test::TestBody()’:
-  // cxx_ex.cpp:42:12: error: no matching function for call to ‘foo::foo(int)’
-  //    foo f1(10);
-  //             ^
-  // cxx_ex.cpp:42:12: note: candidates are:
-  // (1)
-  // cxx_ex.cpp:27:5: note: foo::foo(int&, int)
-  //      foo(int &value, int) : value_(value)
-  //      ^
-  // cxx_ex.cpp:27:5: note:   candidate expects 2 arguments, 1 provided
-  // (2)
-  // cxx_ex.cpp:23:14: note: foo::foo(int&)
-  //      explicit foo(int &value) : value_(value)
-  //               ^
-  // cxx_ex.cpp:23:14: note:   no known conversion for argument 1 from ‘int’ to ‘int&’
-  // (3)
-  // cxx_ex.cpp:19:7: note: constexpr foo::foo(const foo&)
-  //  class foo
-  //        ^
-  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘const foo&’
-  // (4)
-  // cxx_ex.cpp:19:7: note: constexpr foo::foo(foo&&)
-  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘foo&&’
-  //
-  // foo f1(10);
-
   foo f1(value);
   foo f2(value, 30);
 } 
 
+namespace cxx_dtor {
+
+  class NoVirtualDtorBase
+  {
+    public:
+      NoVirtualDtorBase() 
+      { std::cout << "no virtual ctor: base" << std::endl; }
+
+      ~NoVirtualDtorBase() 
+      { std::cout << "no virtual dtor: base" << std::endl; }
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromNoVirtual : public NoVirtualDtorBase
+  {
+    public:
+      DerivedFromNoVirtual() 
+      { std::cout << "no virtual ctor: derived" << std::endl; }
+
+      ~DerivedFromNoVirtual() 
+      { std::cout << "no virtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+  class DerivedDerived : public DerivedFromNoVirtual
+  {
+    public:
+      DerivedDerived() 
+      { std::cout << "no virtual ctor: d derived" << std::endl; }
+
+      ~DerivedDerived() 
+      { std::cout << "no virtual dtor: d derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+  class VirtualDtorBase
+  {
+    public:
+      VirtualDtorBase() 
+      { std::cout << "virtual ctor: base" << std::endl; }
+
+      virtual ~VirtualDtorBase() 
+      { std::cout << "virtual dtor: base" << std::endl; }
+
+    private:
+      int value_;
+  };
+
+  class DerivedFromVirtual : public VirtualDtorBase
+  {
+    public:
+      DerivedFromVirtual() 
+      { std::cout << "virtual ctor: derived" << std::endl; }
+
+      ~DerivedFromVirtual() 
+      { std::cout << "virtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+// TEST(Dtor, NoVirtualDtorProblem)
+int main(int argc, char** argv)
+{
+  using namespace cxx_dtor;
+
+  {
+    cout << "dtor: " << endl;
+    NoVirtualDtorBase* pbase = new DerivedFromNoVirtual;
+    cout << "dtor: " << endl;
+  }
+
+  {
+    cout << "dtor: " << endl;
+    VirtualDtorBase* pbase = new DerivedFromVirtual;
+    cout << "dtor: " << endl;
+  }
+}
+
 
 // ={=========================================================================
 
-int main(int argc, char** argv)
-{
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// int main(int argc, char** argv)
+// {
+//     testing::InitGoogleTest(&argc, argv);
+//     return RUN_ALL_TESTS();
+// }
 

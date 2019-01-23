@@ -472,6 +472,7 @@ class atm
       }
       catch(messaging::close_queue const &)
       {
+        std::cout << "atm::run::end" << std::endl;
         // note: what would happen when catch exception but do nothing?
       }
     }
@@ -479,8 +480,6 @@ class atm
     // Whereas a sender just references a message queue, a receiver owns it. You
     // can obtain a sender that references the queue by using the implicit
     // conversion.
-    //
-    // receive incoming is converted to sender which is temporary.
     //
     // note: this is an interface to expose q to other class and used to set up
     // connection each other

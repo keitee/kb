@@ -54453,80 +54453,169 @@ Have a number of threads that produce some “result units” that are consumed 
 the main thread, and that we use a mutex-protected variable, avail, to
 represent the number of produced units awaiting consumption
 
-<without-cond-var>
-// not a complete code since removed some to show points
-
-/* LPI 30 */ threads/prod_no_condvar.c
-
-/* prod_no_condvar.c
-   A simple POSIX threads producer-consumer example that doesn't use a
-   condition variable.
-*/
-
-// *sync-cond-predicate* which is global
-static int avail = 0;
-
-// producer
-
-static void *
-threadFunc(void *arg)
+namespace cxx_condition
 {
-  // each thread has given the number of unit to produce from main argv
+  void errExitEN(int errnum, const char *format, ...)
+  {
+    cout << errnum << ", " << format << endl;
+  }
+ 
+  // LPI 30c
+  // \tlpi-181022-dist.tar\tlpi-dist\threads\prod_no_condvar.c
+  // A simple POSIX threads producer-consumer example that doesn't use a condition
+  // variable.
 
-  for (j = 0; j < cnt; j++) {
-    sleep(1);
+  static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+  static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
-    /* Code to produce a unit omitted */
+  // *sync-cond-predicate* which is global
+  static int avail = 0;
 
-    s = pthread_mutex_lock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_lock");
+  // producer
 
-    avail++;        /* Let consumer know another unit is available */
+  static void* threadFunc_no_cond_var(void *arg)
+  {
+    // okay
+    // int cnt = *((int *)arg);
 
-    s = pthread_mutex_unlock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_unlock");
+    int cnt = *static_cast<int*>(arg);
+
+    int s, j;
+
+    // each thread has given the number of unit to produce from main argv
+
+    for (j = 0; j < cnt; j++) 
+    {
+      sleep(1);
+
+      /* Code to produce a unit omitted */
+
+      s = pthread_mutex_lock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_lock");
+
+      // Let consumer know another unit is available
+      avail++;
+
+      s = pthread_mutex_unlock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_unlock");
+    }
+
+    return NULL;
   }
 
-  return NULL;
-}
+  static void* threadFunc_with_cond_var(void *arg)
+  {
+    // okay
+    // int cnt = *((int *)arg);
 
-int
-main(int argc, char *argv[])
+    int cnt = *static_cast<int*>(arg);
+
+    int s, j;
+
+    // each thread has given the number of unit to produce from main argv
+
+    for (j = 0; j < cnt; j++) 
+    {
+      sleep(1);
+
+      /* Code to produce a unit omitted */
+
+      s = pthread_mutex_lock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_lock");
+
+      // Let consumer know another unit is available
+      avail++;
+
+      s = pthread_mutex_unlock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_unlock");
+
+      // wake sleeping consumer
+      s = pthread_cond_signal(&cond);
+      if (s != 0)
+        errExitEN(s, "pthread_cond_unlock");
+
+    }
+
+    return NULL;
+  }
+
+} // namespace
+
+
+// multiple producers and single consumer. no condition and all participates in
+// the contention. 
+//
+// this wastes CPU time, because all, consumer and producer continually loops,
+// checking the state of the variable avail.
+//
+// A condition variable remedies this and allows a thread to sleep (wait) until
+// another thread notifies (signals) it that it must do something. 
+
+TEST(Condition, ProducerAndConsumer_LPI_No_CondVar)
 {
-  /* Create all producer threads */
+  using namespace cxx_condition;
+
+  int const NUM_OF_PRODUCERS = 10;
+  int const NUM_OF_ITEMS_TO_PRODUCE = 100;
+
+  pthread_t tid;
+  int s, j;
+  int totRequired;            /* Total number of units that all
+                                 threads will produce */
+  int numConsumed;            /* Total units so far consumed */
+  bool done;
+  time_t t;
+
+  t = time(NULL);
+
+  // Create all producers
 
   totRequired = 0;
-  for (j = 1; j < argc; j++) {
-    totRequired += atoi(argv[j]);
 
-    s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  // for (j = 1; j < argc; j++) {
+  //   totRequired += atoi(argv[j]);
+
+  //   s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  //   if (s != 0)
+  //     errExitEN(s, "pthread_create");
+  // }
+
+  for (j = 1; j < NUM_OF_PRODUCERS; j++) {
+    totRequired += NUM_OF_ITEMS_TO_PRODUCE;
+
+    s = pthread_create(&tid, NULL, threadFunc_no_cond_var, (void *)&NUM_OF_ITEMS_TO_PRODUCE);
     if (s != 0)
       errExitEN(s, "pthread_create");
   }
 
-  /* Use a polling loop to check for available units */
+  // single consumer
+  // Use a polling loop to check for available units
 
   numConsumed = 0;
-  done = FALSE;
+  done = false;
 
   for (;;) {
     s = pthread_mutex_lock(&mtx);
     if (s != 0)
       errExitEN(s, "pthread_mutex_lock");
 
-    while (avail > 0) {             /* Consume all available units */
+    // Consume all available units
+    while (avail > 0) {
 
-      /* Do something with produced unit */
+      // Do something with produced unit
 
-      numConsumed ++;
+      numConsumed++;
       avail--;
-      printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
-          numConsumed);
+
+      // printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
+      //     numConsumed);
 
       done = numConsumed >= totRequired;
-    } // while
+    }
 
     s = pthread_mutex_unlock(&mtx);
     if (s != 0)
@@ -54535,104 +54624,83 @@ main(int argc, char *argv[])
     if (done)
       break;
 
-    /* Perhaps do other work here that does not require mutex lock */
-  } // for
+    // Perhaps do other work here that does not require mutex lock
+  } // for end
 
-  exit(EXIT_SUCCESS);
+  EXPECT_THAT(numConsumed, 900);
 }
 
-multiple producers and single consumer. 
-
-The above code works, but it wastes CPU time, because all, consumer and
-producer continually loops, checking the state of the variable avail.
-
-A condition variable remedies this and allows a thread to sleep (wait) until
-another thread notifies (signals) it that it must do something. 
-
-
-<with-cond-var>
-/* prod_condvar.c
-   A simple POSIX threads producer-consumer example using a condition variable.
-*/
-
-static int avail = 0;
-
-static void *
-threadFunc(void *arg)
+TEST(Condition, ProducerAndConsumer_LPI_CondVar)
 {
-  // each thread has given the number of unit to produce from main argv
+  using namespace cxx_condition;
 
-  for (j = 0; j < cnt; j++) {
-    sleep(1);
+  int const NUM_OF_PRODUCERS = 10;
+  int const NUM_OF_ITEMS_TO_PRODUCE = 100;
 
-    /* Code to produce a unit omitted */
+  pthread_t tid;
+  int s, j;
+  int totRequired;            /* Total number of units that all
+                                 threads will produce */
+  int numConsumed;            /* Total units so far consumed */
+  bool done;
+  time_t t;
 
-    s = pthread_mutex_lock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_lock");
+  t = time(NULL);
 
-    avail++;        /* Let consumer know another unit is available */
-
-    // First unlocked the mutex associated with the shared variable, and then
-    // signaled the corresponding condition variable. We could have reversed
-    // these two steps; `SUSv3 permits them to be done in either order`
-
-    s = pthread_mutex_unlock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_unlock");
-
-    s = pthread_cond_signal(&cond);         /* Wake sleeping consumer */
-    if (s != 0)
-      errExitEN(s, "pthread_cond_signal");
-  }
-
-  return NULL;
-}
-
-int
-main(int argc, char *argv[])
-{
-  /* Create all threads */
+  // Create all producers
 
   totRequired = 0;
-  for (j = 1; j < argc; j++) {
-    totRequired += atoi(argv[j]);
 
-    s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  // for (j = 1; j < argc; j++) {
+  //   totRequired += atoi(argv[j]);
+  //
+  //   s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  //   if (s != 0)
+  //     errExitEN(s, "pthread_create");
+  // }
+
+  for (j = 1; j < NUM_OF_PRODUCERS; j++) {
+    totRequired += NUM_OF_ITEMS_TO_PRODUCE;
+
+    s = pthread_create(&tid, NULL, threadFunc_with_cond_var, (void *)&NUM_OF_ITEMS_TO_PRODUCE);
     if (s != 0)
       errExitEN(s, "pthread_create");
   }
 
-  /* Loop to consume available units */
+  // single consumer
+  // Use a condition variable to check for available units
 
   numConsumed = 0;
-  done = FALSE;
+  done = false;
 
   for (;;) {
     s = pthread_mutex_lock(&mtx);
     if (s != 0)
       errExitEN(s, "pthread_mutex_lock");
 
-    // *linux-sync-cond-spurious-wakeup* sync-cond-predicate
-    // We explain why the pthread_cond_wait() call is placed within a while
-    // loop rather than an if statement
+    // *linux-sync-cond-spurious-wakeup*
+    // the pthread_cond_wait() call is placed within a while loop rather than an
+    // if statement
 
-    while (avail == 0) {            /* Wait for something to consume */
+    while (avail == 0)
+    {
       s = pthread_cond_wait(&cond, &mtx);
       if (s != 0)
         errExitEN(s, "pthread_cond_wait");
     }
 
-    /* At this point, 'mtx' is locked... */
+    // at this point, `mtx` is locked
+    
+    // Consume all available units
+    while (avail > 0) {
 
-    while (avail > 0) {             /* Consume all available units */
+      // Do something with produced unit
 
-      /* Do something with produced unit */
-
-      numConsumed ++;
+      numConsumed++;
       avail--;
-      printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
-          numConsumed);
+
+      // printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
+      //     numConsumed);
 
       done = numConsumed >= totRequired;
     }
@@ -54644,11 +54712,16 @@ main(int argc, char *argv[])
     if (done)
       break;
 
-    /* Perhaps do other work here that does not require mutex lock */
-  }
+    // Perhaps do other work here that does not require mutex lock
+  } // for end
 
-  exit(EXIT_SUCCESS);
+  EXPECT_THAT(numConsumed, 900);
 }
+
+[ RUN      ] Condition.ProducerAndConsumer_LPI_No_CondVar
+[       OK ] Condition.ProducerAndConsumer_LPI_No_CondVar (100099 ms)
+[ RUN      ] Condition.ProducerAndConsumer_LPI_CondVar
+[       OK ] Condition.ProducerAndConsumer_LPI_CondVar (100036 ms)
 
 
 ={============================================================================

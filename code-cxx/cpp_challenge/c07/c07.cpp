@@ -6,6 +6,7 @@
 #include <fstream>
 #include <thread>
 #include <future>
+#include <queue>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -570,6 +571,169 @@ simulation should stop after a particular number of customers have been issued
 tickets and served.
 
 */
+
+namespace U66_Text
+{
+  class logger
+  {
+    public:
+      static logger& instance()
+      {
+        static logger lg;
+        return lg;
+      }
+
+      logger(logger const&) = delete;
+      logger& operator=(logger const&) = delete;
+
+      void log(std::string message)
+      {
+        std::lock_guard<std::mutex> lock(mt);
+        std::cout << "LOG: " << message << std::endl;
+      }
+
+    protected:
+      logger() {}
+
+    private:
+      std::mutex mt;
+  };
+
+  class ticketing_machine
+  {
+    public:
+      ticketing_machine(int const start)
+        : first_ticket(start), last_ticket(start) {}
+
+      int next() { return last_ticket++; }
+      int last() const { return last_ticket -1; }
+      void reset() { last_ticket = first_ticket; }
+
+    private:
+      int first_ticket;
+      int last_ticket;
+  };
+
+  class customer
+  {
+    friend bool operator<(customer const& l, customer const& r);
+
+    public:
+    customer(int const no) 
+      : number(no) {}
+
+    int ticket_number() const noexcept { return number; }
+
+    private:
+    int number;
+  };
+
+  bool operator<(customer const& l, customer const& r)
+  { 
+    return l.number > r.number;
+  }
+
+} // namespace
+
+TEST(U66, Text)
+{
+  using namespace U66_Text;
+
+  std::priority_queue<customer> customers;
+  bool office_open{true};
+  std::mutex mt;
+  std::condition_variable cv;
+  int consumed{};
+
+  // consumers
+
+  std::vector<std::thread> desks;
+
+  for (int i = 1; i <= 3; ++i)
+  {
+    desks.emplace_back([i, &office_open, &mt, &cv, &customers, &consumed]()
+        {
+          // *cxx-randowm*
+          std::default_random_engine dre;
+          std::uniform_int_distribution<unsigned> udist(2000, 3000);
+
+          logger::instance().log("desk " + std::to_string(i) + " open");
+
+          while (office_open || !customers.empty())
+          {
+            std::unique_lock<std::mutex> locker(mt);
+
+            cv.wait_for(locker, std::chrono::seconds(1),
+                [&customers](){ return !customers.empty(); });
+
+            if (!customers.empty())
+            {
+              // not front()?
+              auto const c = customers.top();
+              customers.pop();
+
+              logger::instance().log("[-] desk " + std::to_string(i) 
+                  + " handling customer " + std::to_string(c.ticket_number())
+                  + " queue size: " + std::to_string(customers.size())
+                  );
+
+              ++consumed;
+
+              locker.unlock();
+
+              // okay without this:
+              // cv.notify_one();
+
+              std::this_thread::sleep_for(std::chrono::milliseconds(udist(dre)));
+
+              // logger::instance().log("[ ] desk " 
+              //     + std::to_string(i) + " done with customer " 
+              //     + std::to_string(c.ticket_number()));
+            }
+          }
+
+          logger::instance().log("desk " + std::to_string(i) + " closed");
+
+        });
+  } // end for
+
+
+  // single producer
+
+  std::thread store([&]()
+      {
+        ticketing_machine tm(100);
+
+        // *cxx-randowm*
+        std::default_random_engine dre;
+        std::uniform_int_distribution<unsigned> udist(200, 300);
+
+        for (int i = 1; i <= 25; ++i)
+        {
+          customer c(tm.next());
+          customers.push(c);
+
+          logger::instance().log(
+              "[+] new customer with ticket " + std::to_string(c.ticket_number())
+              + "[=] queue size : " + std::to_string(customers.size())
+              );
+
+          cv.notify_one();
+
+          std::this_thread::sleep_for(std::chrono::milliseconds(udist(dre)));
+        }
+
+        office_open = false;
+      });
+
+  store.join();
+
+  for (auto& desk : desks)
+    desk.join();
+
+  EXPECT_THAT(consumed, 25);
+}
+
 
 // ={=========================================================================
 int main(int argc, char **argv)
