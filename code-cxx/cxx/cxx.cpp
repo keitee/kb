@@ -6150,6 +6150,47 @@ TEST(Exception, OwnException)
   }
 }
 
+namespace cxx_except 
+{
+  class Foo
+  {
+    public:
+      ~Foo()
+      {
+      }
+  };
+
+  class FooAbort
+  {
+    public:
+      ~FooAbort()
+      {
+        throw std::runtime_error("expects abort");
+      }
+  };
+} // namespace
+
+TEST(Exception, Noexcept)
+{
+  using namespace cxx_except;
+
+  {
+    int value{1};
+
+    Foo foo;
+
+    EXPECT_THAT(value, 1);
+  }
+
+  {
+    int value{1};
+
+    FooAbort foo;
+
+    EXPECT_THAT(value, 1);
+  }
+}
+
 
 // ={=========================================================================
 // cxx-cpp, macro
