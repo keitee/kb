@@ -2514,50 +2514,92 @@ TEST(CconThreadTest, UseThreadSafeLookupTable)
 // cxx-atomic
 // Listing 5.4 Sequential consistency implies a total ordering
 
-std::atomic<bool> x, y;
-std::atomic<int> z;
-
-void write_x()
+namespace cxx_atomic
 {
-  // 1
-  x.store(true, std::memory_order_seq_cst);
-}
+  namespace use_atomic
+  {
+    std::atomic<bool> x, y;
+    std::atomic<int> z;
 
-void write_y()
-{
-  // 2
-  y.store(true, std::memory_order_seq_cst);
-}
+    void write_x()
+    {
+      // 1
+      x.store(true, std::memory_order_seq_cst);
+    }
 
-void read_x_then_y()
-{
-  while(!x.load(std::memory_order_seq_cst))
-    ;
+    void write_y()
+    {
+      // 2
+      y.store(true, std::memory_order_seq_cst);
+    }
 
-  // 3
-  if(y.load(std::memory_order_seq_cst))
-    ++z;
-}
+    void read_x_then_y()
+    {
+      while(!x.load(std::memory_order_seq_cst))
+        ;
 
-void read_y_then_x()
-{
-  while(!y.load(std::memory_order_seq_cst))
-    ;
+      // 3
+      if(y.load(std::memory_order_seq_cst))
+        ++z;
+    }
 
-  // 4
-  if(x.load(std::memory_order_seq_cst))
-    ++z;
-}
+    void read_y_then_x()
+    {
+      while(!y.load(std::memory_order_seq_cst))
+        ;
+
+      // 4
+      if(x.load(std::memory_order_seq_cst))
+        ++z;
+    }
+  } // namespace
+
+  namespace not_use_atomic
+  {
+    bool x, y;
+    int z;
+
+    void write_x()
+    {
+      // x.store(true, std::memory_order_seq_cst);
+      x = true;
+    }
+
+    void write_y()
+    {
+      // y.store(true, std::memory_order_seq_cst);
+      y = true;
+    }
+
+    void read_x_then_y()
+    {
+      while(!x)
+        ;
+
+      if(y) ++z;
+    }
+
+    void read_y_then_x()
+    {
+      while(!y)
+        ;
+
+      if(x) ++z;
+    }
+  } // namespace
+
+} // namespace
 
 // Both loads can return true, leading to z being 2, but under no circumstances
 // can z be zero.
+//
+// Not sure if this example is good to study atomic and to represent the point
+// since both shows 1 or 2 output for z when runs over and over.
 
-// [ RUN      ] CconThreadTest.UseSequentialConsistency
-// z: 2
-// [       OK ] CconThreadTest.UseSequentialConsistency (8 ms)
-
-TEST(CconThreadTest, UseSequentialConsistency)
+TEST(CConAtomic, Atomic)
 {
+  using namespace cxx_atomic::use_atomic;
+
   x = false;
   y = false;
   z = 0;
@@ -2578,6 +2620,102 @@ TEST(CconThreadTest, UseSequentialConsistency)
   cout << "z: " << z << endl; 
 
   assert(z.load()!=0);
+}
+
+TEST(CConAtomic, NoAtomic)
+{
+  using namespace cxx_atomic::not_use_atomic;
+
+  x = false;
+  y = false;
+  z = 0;
+
+  // either the store to x or the store to y must happen first, even though it’s
+  // not specified which.
+
+  std::thread a(write_x);
+  std::thread b(write_y);
+  std::thread c(read_x_then_y);
+  std::thread d(read_y_then_x);
+
+  a.join();
+  b.join();
+  c.join();
+  d.join();
+
+  cout << "z: " << z << endl; 
+
+  assert(z!=0);
+}
+
+
+namespace cxx_atomic
+{
+  struct Counter {
+
+    Counter() : value(0) {}
+
+    int value;
+
+    void increment(){
+      ++value;
+    }
+
+    void decrement(){
+      --value;
+    }
+
+    int get(){
+      return value;
+    }
+  };
+
+  void increment_counter(Counter& counter)
+  {
+    for (int i = 0; i < 30; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      counter.increment();
+    }
+  }
+
+  struct AtomicCounter {
+    std::atomic<int> value;
+
+    void increment(){
+      ++value;
+    }
+
+    void decrement(){
+      --value;
+    }
+
+    int get(){
+      return value.load();
+    }
+  };
+
+  void increment_atomic_counter(AtomicCounter& counter)
+  {
+    for (int i = 0; i < 10; ++i)
+      counter.increment();
+  }
+
+} // namespace
+
+TEST(CConAtomic, AtomicExample)
+{
+  using namespace cxx_atomic;
+
+  Counter counter;
+
+  std::thread a(increment_counter, std::ref(counter));
+  std::thread b(increment_counter, std::ref(counter));
+  std::thread c(increment_counter, std::ref(counter));
+
+  a.join(); b.join(); c.join();
+  
+  cout << "counter value: " << counter.get() << endl;
 }
 
 

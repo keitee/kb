@@ -735,6 +735,36 @@ TEST(U66, Text)
 }
 
 
+/*
+={=============================================================================
+Design Pattern
+
+67. Validating passwords
+
+Write a program that validates password strength based on predefined rules,
+which may then be selected in various combinations. At a minimum, every password
+must meet a minimum length requirement. In addition, other rules could be
+enforced, such as the presence of at least one symbol, digit, uppercase and
+lowercase letter, and so on.
+
+The problem described here is a typical case for the decorator pattern. This
+design pattern allows adding behavior to an object without affecting other
+objects of the same type. This is achieved by wrapping an object within another
+object. Multiple decorators could be stacked on top of each other, each time
+adding new functionality. In our case, the functionality would be validating
+that a given password meets a particular requirement.
+
+The following class diagram describes the pattern for validating passwords:
+
+*/
+
+
+namespace U67_Text
+{
+
+} // namespace
+
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {
