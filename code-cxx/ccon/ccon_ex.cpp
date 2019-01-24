@@ -50,6 +50,9 @@ namespace cxx_atomic
   }
 
   struct AtomicCounter {
+
+    AtomicCounter() : value(0) {}
+
     std::atomic<int> value;
 
     void increment(){
@@ -67,13 +70,16 @@ namespace cxx_atomic
 
   void increment_atomic_counter(AtomicCounter& counter)
   {
-    for (int i = 0; i < 10; ++i)
+    for (int i = 0; i < 30; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
       counter.increment();
+    }
   }
 
 } // namespace
 
-TEST(CConAtomic, NoAtomicCounter)
+TEST(DISABLED_CConAtomic, NoAtomicCounter)
 {
   using namespace cxx_atomic;
 
@@ -96,10 +102,10 @@ TEST(CConAtomic, AtomicCounter)
 
   AtomicCounter counter;
 
-  std::thread a(increment_counter, std::ref(counter));
-  std::thread b(increment_counter, std::ref(counter));
-  std::thread c(increment_counter, std::ref(counter));
-  std::thread d(increment_counter, std::ref(counter));
+  std::thread a(increment_atomic_counter, std::ref(counter));
+  std::thread b(increment_atomic_counter, std::ref(counter));
+  std::thread c(increment_atomic_counter, std::ref(counter));
+  std::thread d(increment_atomic_counter, std::ref(counter));
 
   a.join(); b.join(); c.join(); d.join();
   
