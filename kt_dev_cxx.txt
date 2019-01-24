@@ -289,20 +289,17 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-ccon-mutex cxx-threadsafe-stack cxx-lock-guard cxx-race
 *kt_dev_cxx_0000* cxx-ccon-not-copyable
 *kt_dev_cxx_0000* cxx-ccon-lock cxx-deadlock
-*kt_dev_cxx_0000* cxx-ccon-lock cxx-deadlock
 *kt_dev_cxx_0000* cxx-ccon-lock-unique-lock
 *kt_dev_cxx_0000* cxx-ccon-call-once
 *kt_dev_cxx_0000* cxx-ccon-lock-shared-lock cxx-boost-shared-lock
 *kt_dev_cxx_0000* cxx-ccon-lock-recursive-lock
 *kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-queue
 *kt_dev_cxx_0000* cxx-wait cxx-sleep
-*kt_dev_cxx_0000* cxx-task-model cxx-future cxx-async
-*kt_dev_cxx_0000* cxx-con-packaged-task
-|kt_dev_ccon_018| std::promise
-|kt_dev_ccon_019| std::shared_future in multiple threads
-|kt_dev_ccon_002| std::future
+*kt_dev_cxx_0000* cxx-ccon-task-model cxx-future cxx-async
+*kt_dev_cxx_0000* cxx-ccon-promise
+*kt_dev_cxx_0000* cxx-ccon-packaged-task
 *kt_dev_cxx_0000* cxx-con-lock-based-data-structure
-*kt_dev_cxx_0000* cxx-con-functional-programming cxx-con-fsm
+*kt_dev_cxx_0000* cxx-ccon-other-paradigm cxx-fsm
 
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
@@ -11802,44 +11799,6 @@ Under inheritence:
 base     derived
 <------------ dtor
 
-<ex>
-namespace OR5 {
-
-using namespace std;
-
-class B0 {
-    public:
-        B0() { cout << "B0::B0" << endl; }
-        ~B0() { cout << "B0::~B0" << endl; }
-};
-
-class D1 : public B0 {
-    public:
-        D1() { cout << "D1::D1" << endl; }
-        ~D1() { cout << "D1::~D1" << endl; }
-};
-
-}
-
-// = 05 ======
-// B0::B0
-// D1::D1
-// end of main
-// D1::~D1
-// B0::~B0
- 
-void t_override_05()
-{
-    using namespace OR5;
-
-    D1 dobj;
-    cout << "end of main" << endl;
-}
-
-Unlike `non-virtual-destruction-problem`, this case uses only static binding
-and no vtable is involved. The compiler knows only about derived type and do
-not emits code to follow vtables.
-
 
 {cxx-dtor-in-derived-classes}
 The dtor is one of `copy-controls` and means if not defined, the compiler will
@@ -11854,114 +11813,158 @@ only for destroying the resources allocated by the derived class. From user or
 programmer POV.
 
 
-{cxx-non-virtual-destruction-problem}
+{cxx-dtor-non-virtual-destruction-problem}
 EC++07. The problem is that base dtor runs when derived dtor is expected via
 derived-to-base pointer is used.
 
-In GCC spec, it will have 'undefined' result but in reality, destroy only the
+In GCC spec, it will have cxx-undefined result but in reality, destroy only the
 base part; partially destroyed. In GCC, no runtime error in simple test. 
 
 This is the same for other member functions. That is if miss out virtual
 keywords in a base, then will have only base version even if expected derived
 version. 
 
-Therefore, there are two cases when override do not happen; one when argument
-is different, see `cxx-override-condition`, and one when miss out virtual
-keyword in a base as shown here.
+Therefore, there are two cases when override do not happen; 
 
-<ex>
-note that this is a problem only when use dynamic allocation through a base
-pointer. Not a problem when use static allocation and derived pointer.
+o one when argument is different, see `cxx-override-condition`, 
+
+o  one when miss out virtual keyword in a base as shown here.
+
+
+note that:
+
+o `non-virtual-destruction-problem` only for dynamic-binding 
+  if uses static binding and no vtable is involved. The compiler knows only
+  about derived type and do not emits code to follow vtables.
+
+this is a problem only when use dynamic allocation through a base pointer.
+cxx-vector do not have virtual dtor and it is okay if used only statically. 
 
 template<typename T>
 class Vec : public std::vector<T> {
 
   public:
-    
 };
 
-std::vector do not have virtual dtor and it is okay if used only statically. 
 
-
-<ex>
-#include <iostream>
-
-using std::cout; using std::endl;
-
-class Base {
-  private:
-    int m_iDataABCAnimal;
-  public:                                             // <3>
-    Base() { cout << "ctor: base" << endl; }
-    ~Base() { cout << "dtor: base" << endl; }         // <1>
-    virtual ~Base() { cout << "dtor: base" << endl; } // <2>
-};
-
-class Derived: public Base {
-  private:
-    int m_iDataAnimal;
-  public:
-    Derived() { cout << "ctor: derived" << endl; }
-    ~Derived() { cout << "dtor: derived" << endl; }
-};
-
-class DDerived: public Derived {
-  private:
-    int m_iDataDAnimal;
-  public:
-    DDerived() { cout << "ctor: derived derived" << endl; }
-    ~DDerived() { cout << "dtor: derived derived" << endl; }
-};
-
-int main()
-{
-  std::cout << "--{ main " << std::endl;
-
-  Base* pbase = new DDerived;
-
-38:  delete pbase;
-
-  std::cout << "--} main " << std::endl;
-}
-
-<1>
---{ main 
-ctor: base
-ctor: derived
-ctor: derived derived
-`dtor: base`
---} main 
-
-<2>
---{ main 
-ctor: base
-ctor: derived
-ctor: derived derived
-`dtor: derived derived`
-`dtor: derived`
-`dtor: base`
---} main 
-
-<3> compile error
-: In function ‘int main()’:
-:12:5: error: ‘Base::~Base()’ is protected
-:38:10: error: within this context
-
-
-{when-use-virtual-dtor}
 Due to *non-virtual-destruction-problem* All base class 'must' have virtual
 dtor and these are the first and the second at below and as advised in EC++07.
 
-* polymorphic base class
-designed for inheritance and defined virtual funcs. 'must' use virtual dtor.
+o polymorphic base class
+designed for inheritance and defined virtual funcs. `must have virtual dtor.`
 
-* base class to extend 
+o base class to extend 
 designed for inheritance but no virtual funcs. means no overrides and add more
 funcs. However, if no virtual dtor, this causes virtual-destruction-problem. 
 
-* a class not to be inherited
+o a class not to be inherited
 designed for no inheritance like STL. DO NOT use virtual-dtor sicne it will
 increate a size of instance and make it not portable. *cxx-preventing-inheritance* 
+
+
+<ex>
+
+namespace cxx_dtor {
+
+  class NoVirtualDtorBase
+  {
+    public:
+      NoVirtualDtorBase() 
+      { std::cout << "\tno virtual ctor: base" << std::endl; }
+
+      ~NoVirtualDtorBase() 
+      { std::cout << "\tno virtual dtor: base" << std::endl; }
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromNoVirtual : public NoVirtualDtorBase
+  {
+    public:
+      DerivedFromNoVirtual() 
+      { std::cout << "\tno virtual ctor: derived" << std::endl; }
+
+      ~DerivedFromNoVirtual() 
+      { std::cout << "\tno virtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+  class VirtualDtorBase
+  {
+    public:
+      VirtualDtorBase() 
+      { std::cout << "\tvirtual ctor: base" << std::endl; }
+
+      virtual ~VirtualDtorBase() 
+      { std::cout << "\tvirtual dtor: base" << std::endl; }
+
+    private:
+      int value_;
+  };
+
+  class DerivedFromVirtual : public VirtualDtorBase
+  {
+    public:
+      DerivedFromVirtual() 
+      { std::cout << "\tvirtual ctor: derived" << std::endl; }
+
+      ~DerivedFromVirtual() 
+      { std::cout << "\tvirtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+// {
+//         no virtual ctor: base
+//         no virtual ctor: derived
+//         no virtual dtor: base
+// }
+// {
+//         virtual ctor: base
+//         virtual ctor: derived
+//         virtual dtor: derived
+//         virtual dtor: base
+// }
+// {
+//         no virtual ctor: base
+//         no virtual ctor: derived
+// }
+//         no virtual dtor: derived
+//         no virtual dtor: base
+
+TEST(Dtor, NoVirtualDtorProblem)
+{
+  using namespace cxx_dtor;
+
+  {
+    cout << "{" << endl;
+    NoVirtualDtorBase* pbase = new DerivedFromNoVirtual;
+
+    // https://stackoverflow.com/questions/7403883/derived-class-with-non-virtual-destructor
+    // If you don't do delete in the above manner, then it will be fine. 
+    delete pbase; 
+
+    cout << "}" << endl; }
+
+  {
+    cout << "{" << endl;
+    VirtualDtorBase* pbase = new DerivedFromVirtual;
+    delete pbase;
+    cout << "}" << endl;
+  }
+
+  {
+    cout << "{" << endl;
+    DerivedFromNoVirtual object;
+    cout << "}" << endl;
+  }
+}
 
 
 {pure-virtual-dtor}
@@ -24327,6 +24330,8 @@ So no exception in dtor and if necessary, should handle in the same dtor. This
 is the base assumption STL has and STL guarantee that any class's dtor will not
 raise an execption.
 
+see *cxx-except-noexcept*
+
 
 {exception-and-raii}
 To handle exception, shall use resource-managing-class, RAII, since destruction
@@ -24735,13 +24740,62 @@ possible.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-except-noexcept
+*kt_dev_cxx_0000* cxx-except-noexcept cxx-noexcept
 
 CLR 3.1.7 Keyword noexcept
 
-Here, inside noexcept(...), you can specify a Boolean condition under which no
+Here, inside noexcept(...), you can specify a boolean condition under which no
 exception gets thrown: Specifying noexcept without condition is a short form
-of specifying noexcept(true).
+of specifying `noexcept(true)`.
+
+<ex>
+~TemplateDispatcher()
+{}
+
+is same as:
+
+~TemplateDispatcher() noexcept(true)
+
+namespace cxx_except 
+{
+  class Foo
+  {
+    public:
+      ~Foo()
+      {
+      }
+  };
+
+  class FooAbort
+  {
+    public:
+      ~FooAbort()
+      {
+        throw std::runtime_error("expects abort");
+      }
+  };
+} // namespace
+
+TEST(Exception, Noexcept)
+{
+  using namespace cxx_except;
+
+  {
+    int value{1};
+
+    Foo foo;
+
+    EXPECT_THAT(value, 1);
+  }
+
+  {
+    int value{1};
+
+    FooAbort foo;
+
+    EXPECT_THAT(value, 1);
+  }
+}
 
 
 {noexcept-specification}
@@ -25751,6 +25805,90 @@ t_cast.cpp:17:23: error: ‘Base’ is an inaccessible base of ‘DerivedPri’
      Base * pdd2 = new DerivedPri;
                        ^
 
+<ex>
+// cxx-ctor-access
+
+namespace cxx_ctor_access
+{
+  class Bar
+  {
+    public:
+      Bar() : mesg_() {}
+
+      Bar(string const& mesg) : mesg_(mesg) {}
+
+      // copy ctor
+      Bar(Bar const& bar)
+      {
+        mesg_ = bar.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+  
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {}
+
+      Foo(string const& mesg) : mesg_(mesg) {}
+
+      // copy ctor without const 
+      Foo(Foo& foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+        foo.mesg_ = "xxx";
+      }
+
+      // raise error only when that's different type:
+      //
+      // cxx.cpp: In constructor ‘cxx_ctor_access::Foo::Foo(cxx_ctor_access::Bar&)’:
+      // cxx.cpp:835:14: error: ‘std::string cxx_ctor_access::Bar::mesg_’ is private
+      //        string mesg_;
+      //               ^
+      // cxx.cpp:855:13: error: within this context
+      //          bar.mesg_ = "xxx";
+      //              ^
+
+      Foo(Bar& bar)
+      {
+        // both cause errors
+        // mesg_ = bar.mesg_;
+        // bar.mesg_ = "xxx";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+
+} // namespace
+
+TEST(Ctor, Access)
+{
+  using namespace cxx_ctor_access;
+
+  Foo foo1{"foo1"};
+  
+  Foo foo2(foo1);
+  EXPECT_THAT(foo2.return_mesg(), "foo1 and copy ctor");
+}
+
+
 ={============================================================================
 *kt_dev_cxx_0000* cxx-cast cpp-named-cast
   
@@ -26034,52 +26172,62 @@ But dynamic_cast can also 'downcast' (convert from pointer-to-base to
 `if-and only if` the pointed object is a valid 'complete' object of the target
 type. 
 
-#include <iostream>
-#include <exception>
+<ex>
+TEST(Rtti, DynamicCast)
+{
+  using namespace cxx_rtti;
 
-// g++ -g -std=c++0x t_sp.cpp
+  {
+    RttiDerived d;
 
-using namespace std;
+    auto result = dynamic_cast<RttiBase*>(&d);
+    EXPECT_TRUE(result != NULL);
 
-class Base { virtual void dummy() {} };
-class DerivedPub: public Base { int a; };
-class DerivedPri: private Base { int a; };
+    RttiBase *bp = dynamic_cast<RttiBase*>(&d);
 
-void t_cast_01 () {
-  try {
-    DerivedPub dp1;
+    // "derived is a subclass of base"
+    EXPECT_THAT(bp, Ne(nullptr));
+  }
 
-    // upcast
-    Base * pba = new DerivedPub;
+  {
+    try {
+      RttiDerived dp1;
 
-    Base * pbb = new Base;
+      // upcast
+      RttiBase* pbase1 = new RttiDerived;
 
-    Base * pb;
-    DerivedPub * pd;
+      RttiBase* pbase2 = new RttiBase;
 
-    // derived to derived, okay.
-    pd = dynamic_cast<DerivedPub*>(pba);
-    if (pd==0) cout << "Null pointer on first type-cast.\n";
+      RttiBase* pbase3;
+      RttiDerived* pderived;
 
-    // downcast, base to derived, fails.
-    pd = dynamic_cast<DerivedPub*>(pbb);
-    if (pd==0) cout << "Null pointer on second type-cast.\n";
+      // derived to derived, okay.
+      //
+      // *cxx-dtor-non-virtual-destruction-problem* when no virtual keyword in
+      // class definition
+      //
+      // cxx.cpp:4138:51: error: cannot dynamic_cast ‘pbase1’ (of type ‘class cxx_rtti::RttiBase*’) to type ‘class cxx_rtti::RttiDerived*’ (source type is not polymorphic)
+      //        pderived = dynamic_cast<RttiDerived*>(pbase1);
 
-    // upcast, derived to base, fails. WHY??
-    // see EXC++44 for more examples which do not match up with what see here.
+      pderived = dynamic_cast<RttiDerived*>(pbase1);
+      EXPECT_THAT(pderived, Ne(nullptr));
 
-    pb = dynamic_cast<Base*>(pba);
-    if (pd==0) cout << "Null pointer on third type-cast.\n";
-    pb = dynamic_cast<Base*>(&dp1);
-    if (pd==0) cout << "Null pointer on forth type-cast.\n";
+      // downcast from base to derived, fails since pbase2 is not complete objedct
+      pderived = dynamic_cast<RttiDerived*>(pbase2);
+      EXPECT_THAT(pderived, nullptr);
 
-  } catch (exception& e) {cout << "Exception: " << e.what();}
+      // upcast from derived to base
+
+      pbase3 = dynamic_cast<RttiBase*>(pbase1);
+      EXPECT_THAT(pbase3, Ne(nullptr));
+
+      pbase3 = dynamic_cast<RttiBase*>(&dp1);
+      EXPECT_THAT(pbase3, Ne(nullptr));
+
+    } catch (exception& e) {cout << "Exception: " << e.what();}
+  }
 }
 
-Null pointer on second type-cast.
-Null pointer on third type-cast.
-Null pointer on forth type-cast.
-=== end of main
 
 Compatibility note: This type of dynamic_cast requires RTTI to keep track of
 dynamic types. Some compilers support this feature as an option which is
@@ -31164,28 +31312,30 @@ class CardSequenceUseRandWithRange
 // 0 1 1 0 0 0 0 0 1 0 1 1 (12)
 // 8 8 8 9 9 9 7 8 8 8 7 9 (12)
 
-TEST(AlgoGenerate, Random)
+TEST(AlgoRandom, RandomEngineVsRand)
 {
-    vector<uint32_t> ivec1;
-    generate_n( back_inserter(ivec1), 12, CardSequenceUseRandom() );
-    PRINT_ELEMENTS(ivec1);
+  // always same sequence
+  vector<uint32_t> ivec1;
+  generate_n( back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
+  PRINT_ELEMENTS(ivec1);
 
-    vector<uint32_t> ivec2;
-    generate_n( back_inserter(ivec2), 12, CardSequenceUseRandom() );
-    PRINT_ELEMENTS(ivec2);
+  // always same sequence
+  vector<uint32_t> ivec2;
+  generate_n( back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
+  PRINT_ELEMENTS(ivec2);
 
-    vector<uint32_t> ivec3;
-    generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
-    PRINT_ELEMENTS(ivec3);
+  vector<uint32_t> ivec3;
+  generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
+  PRINT_ELEMENTS(ivec3);
 
-    vector<uint32_t> ivec4;
-    generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
-    PRINT_ELEMENTS(ivec4);
+  vector<uint32_t> ivec4;
+  generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
+  PRINT_ELEMENTS(ivec4);
 
-    vector<uint32_t> ivec5;
-    generate_n(back_inserter(ivec5), 12, 
-        CardSequenceUseRandWithRange(6, 9));
-    PRINT_ELEMENTS(ivec5);
+  vector<uint32_t> ivec5;
+  generate_n(back_inserter(ivec5), 12, 
+      CardSequenceUseRandWithRange(6, 9));
+  PRINT_ELEMENTS(ivec5);
 }
 
 
@@ -38920,6 +39070,7 @@ c.pop_front()       Removes the first element (does not return it)
 
 namespace cxx_code
 {
+  // *cxx-queue-code*
   // /usr/include/c++/4.9/bits/stl_queue.h
 
   /**
@@ -39126,9 +39277,7 @@ However, the `next element from top()` is not the first inserted element.
 Rather, it is the element `that has the highest priority.` Thus, elements are
 partially sorted according to their value. As usual, you can provide the
 sorting criterion as a template parameter. By default, the elements are sorted
-by using operator < in descending order.
-
-// <queue>, the class queue is defined as follows:
+by using operator<(), *cxx-less* in descending order.
 
 namespace std {
   template <typename T,
@@ -39142,11 +39291,11 @@ and the member functions front(), push_back(), and pop_back(). Random access
 is necessary for sorting the elements, which is performed by the heap
 algorithms of the STL *algo-sort-heap*
 
-push() inserts an element into the priority queue.
+o push() inserts an element into the priority queue.
 
-top() returns the next element in the priority queue without removing it
+o top() returns the next element in the priority queue without removing it
 
-pop() removes an element from the priority queue.
+o pop() removes an element from the priority queue.
 
 
 TEST(CollQueue, PriorityQueue)
@@ -39158,7 +39307,7 @@ TEST(CollQueue, PriorityQueue)
     pq.push(66);
     pq.push(44);
 
-    //         top
+    //         front
     // 44, 66, 22
 
     // queue do not have top()
@@ -39200,7 +39349,7 @@ TEST(CollQueue, PriorityQueue)
     pq.push(66);
     pq.push(44);
 
-    //         top
+    //         front
     // 22, 44, 66
 
     EXPECT_THAT(pq.top(), Eq(66));
@@ -39237,6 +39386,8 @@ TEST(CollQueue, PriorityQueue)
 {cxx-queue-operations}
 
 12.4 Container Adapters in Detail
+
+cxx-queue do not supports iterators.
 
 // this is wrong
 //
@@ -39476,16 +39627,19 @@ between two lists, provided that the lists have the same type.
 Table 7.25. Special Modifying Operations for Lists
 
 c.splice(pos, c2) 
+
 Moves all elements of c2 to c in front of the iterator position pos.
 
 void list::splice (const_iterator pos, list& source);
 void list::splice (const_iterator pos, list&& source);
 
 c.splice(pos, c2, c2pos) 
-Moves the element at c2pos in c2 `in front of pos` of list c (c and c2 may be
-identical)
+
+Moves the single element at c2pos in c2 `in front of pos` of list c (c and c2
+may be identical)
 
 c.splice(pos, c2, c2beg, c2end) 
+
 Moves all elements of the range [c2beg,c2end) in c2 in front of pos of list c
 (c and c2 may be identical)
 
@@ -39514,7 +39668,7 @@ o The second form is available since C++11. Before C++11, type iterator was
 
 <cxx-list-merge>
 c.merge(c2) 
-Assuming that both containers contain the elements sorted, moves all elements
+Assuming that both containers contain the elements `sorted`, moves all elements
 of c2 into c so that all elements are merged and still sorted
 
 c.merge(c2,op) 
@@ -39528,74 +39682,82 @@ merged and still sorted according to op()
 TEST(List, SpliceAndMerge)
 {
   list<int> list_one, list_two;
-
+ 
   for(int i=0; i < 6; ++i)
   {
     list_one.push_back(i);
-    list_two.push_back(i);
+    list_two.push_back(10 + i);
   }
-
+ 
   EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
-  EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
-
-  // move all
-  //
+  EXPECT_THAT(list_two, ElementsAre(10, 11, 12, 13, 14, 15));
+ 
   // splice, verb, to join two pieces of rope, film, etc. together at their
   // ends in order to form one long piece:
   //
   // c.splice(pos,c2) Moves all elements of c2 to c in front of the iterator
   // position pos
   // moves all elements of list_one before the pos of '3' element.
-
-  list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
+ 
+  list_two.splice(find(list_two.begin(), list_two.end(), 13), list_one);
+ 
   EXPECT_EQ(list_one.size(), 0); 
-  // 0 1 2 [0 1 2 3 4 5] 3 4 5 
-  EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
-
-  // move single
-  //
+  // 10 11 12 [0 1 2 3 4 5] 13 14 15 
+  EXPECT_THAT(list_two, 
+      ElementsAreArray({10, 11, 12, 0, 1, 2, 3, 4, 5, 13, 14, 15})); 
+ 
   // c.splice(pos,c2,c2pos) 
   // Moves the element at c2pos in c2 in front of pos of list c 
   // (c and c2 may be identical)
   //
   // move first element of list_two to the end
-
+ 
   list_two.splice(list_two.end(), list_two, list_two.begin());
-  // 1 2 [0 1 2 3 4 5] 3 4 5 0 
-  EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
-
+  EXPECT_THAT(list_two, 
+      ElementsAreArray({11, 12, 0, 1, 2, 3, 4, 5, 13, 14, 15, 10})); 
+ 
   list<int> list_three;
   // move first element of list_two to the first of list_three
   list_three.splice(list_three.begin(), list_two, list_two.begin());
-
-  EXPECT_THAT(list_two, ElementsAreArray({2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
-  EXPECT_THAT(list_three, ElementsAre(1)); 
-
+ 
+  EXPECT_THAT(list_two, 
+      ElementsAreArray({12, 0, 1, 2, 3, 4, 5, 13, 14, 15, 10})); 
+  EXPECT_THAT(list_three, ElementsAre(11)); 
+ 
+  list<int> coll1{20, 21, 22};
+  list<int> coll2{30, 31, 32};
+  list_three.splice(list_three.begin(), coll1);
+  list_three.splice(list_three.end(), coll2);
+  EXPECT_THAT(list_three, 
+      ElementsAreArray({20,21,22,11,30,31,32}));
+ 
   list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
   list<int> list5{0, 1, 2, 3, 4, 5};
-
+ 
   list5.merge(list4);
-  EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
-
+  EXPECT_THAT(list5, 
+      ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
+ 
   // 8.8.1 Special Member Functions for Lists (and Forward Lists)
   //
   // Strictly speaking, the standard requires that both (forward) lists be
   // sorted on entry. In practice, however, merging is also possible for
   // unsorted lists.  However, you should check this before you rely on it.
   // 
-  // So will be sorted?
-  //
   // list<int> list5;
   // list5.merge({4, 1, 0, 3, 2, 5});
   // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
   //
-  // NO and failed on gcc.
-
-  // Actual: { 4, 1, 0, 3, 2, 5 }, whose element #0 doesn't match
-
-  list<int> list6;
-  list6.merge({4, 1, 0, 3, 2, 5});
-  EXPECT_THAT(list6, Not(ElementsAreArray({0, 1, 2, 3, 4, 5})));
+  // cxx-runtime-error
+  //
+  // /usr/include/c++/4.9/debug/list:691:error: elements in iterator range [
+  //     __x.begin().base(), __x.end().base()) are not sorted.
+  //
+  // Aborted.
+  //
+  // list<int> list6;
+  // list6.merge({4, 1, 0, 3, 2, 5});
+  // EXPECT_THAT(list6, Not(ElementsAreArray({0, 1, 2, 3, 4, 5})));
 }
 
 
@@ -51426,7 +51588,7 @@ void f()
 This approach has duplicated clean-up code. How to improve this? 
 
 
-{raii} <raii-auto-ptr-approach> unique_ptr
+{cxx-raii} <raii-auto-ptr-approach> unique_ptr
 Approaches to implement raii.
 
 void f()
@@ -51810,7 +51972,9 @@ How can we make those share one copy of Hello?
 
 <cxx-sp-code>
 
-// bits/shared_ptr_base.h @759
+namespace cxx_code
+{
+  // bits/shared_ptr_base.h @759
 
   template<_Lock_policy _Lp>  // @442
     class __shared_count
@@ -51974,9 +52138,7 @@ How can we make those share one copy of Hello?
     };
 
 
-/usr/include/c++/4.9/bits/shared_ptr.h
-
-namespace std {
+  // /usr/include/c++/4.9/bits/shared_ptr.h
 
   // note: 
   // no other operators so use operators in bits/shared_ptr_base.h
@@ -51987,10 +52149,10 @@ namespace std {
    *
    *  The object pointed to is deleted when the last shared_ptr pointing to
    *  it is destroyed or reset.
-  */
+   */
   template<typename _Tp>
     class shared_ptr : public __shared_ptr<_Tp>
-    {
+  {
 
     public:
       /**
@@ -52045,8 +52207,8 @@ namespace std {
        */
       template<typename _Tp1, typename _Deleter>
         shared_ptr(_Tp1* __p, _Deleter __d)
-          : __shared_ptr<_Tp>(__p, __d) { }
-    };
+        : __shared_ptr<_Tp>(__p, __d) { }
+  };
 
   /**
    *  @brief  Create an object that is owned by a shared_ptr.
@@ -52061,9 +52223,10 @@ namespace std {
     {
       typedef typename std::remove_const<_Tp>::type _Tp_nc;
       return std::allocate_shared<_Tp>(std::allocator<_Tp_nc>(),
-              std::forward<_Args>(__args)...);
+          std::forward<_Args>(__args)...);
     }
-}
+
+} // namespace
 
 
 {cxx-sp-shared-operations}
@@ -52250,7 +52413,7 @@ shared_ptr<string> pNico4;
 pNico4.reset(new string("nico"));
 
 
-<access-to-pointee>
+<cxx-sp-get> <access-to-pointee>
 The `shared_ptr` provide 'only' operators * and ->. Pointer arithmetic and
 operator[] are not provided. 
 
@@ -59492,11 +59655,14 @@ void data_processing_thread()
 
 
 <cxx-condition-variable-predicate> <cxx-wait-condition-variable>
-a lambda function that expresses the condition being waited for. checks to see
+
+    data_cond.wait(lk, []{return !data_queue.empty();});
+
+A lambda function that expresses the condition being waited for. checks to see
 if the data_queue is not empty() - that is, there's some data in the queue
 ready for processing.
 
-The implementation of wait() then checks the condition by calling the supplied
+`The implementation of wait()` then checks the condition by calling the supplied
 lambda function and `returns if the expression returned true.` If the condition
 isn't satisfied, wait() unlocks the mutex and puts the thread in a blocked or
 waiting state.
@@ -59505,24 +59671,6 @@ the thread wakes from its slumber (unblocks it), reacquires the lock on the
 mutex, and checks the condition again, returning from wait() with the mutex
 still locked if the condition has been satisfied. If the condition hasn't been
 satisfied, the thread unlocks the mutex and resumes waiting. 
-
-another wait_for() will check the supplied predicate when woken and will
-return `only when` the supplied predicate is true (and the condition variable
-has been signaled) or `the timeout expires.` see *cxx-con-wait-unbounded*
-
-note: predicate is called whenever notify happens
-
-
-std::condition_variable or std::condition_variable_any
-
-wait_for(lock, duration) wait_until(lock, time_point)
-
-std::cv_status::timeout or std::cv_status::no_timeout
-
-wait_for(lock, duration, predicate) wait_until(lock, time_point, predicate)
-
-`bool`—the return value of the predicate when awakened
-note: the timeout expires return false.
 
 
 <cxx-condition-variable-suprious-wake>
@@ -59536,6 +59684,67 @@ indeterminate,
 it is not advisable to use a function with side effects for the condition
 check. If you do so, you must be prepared for the "side effects" to occur
 multiple times.
+
+CXXSLR-18.6.1 Purpose of Condition Variables
+
+“Spurious wakes cannot be predicted: they are essentially random from the
+user’s point of view. However, they commonly occur when the thread library
+cannot reliably ensure that a waiting thread will not miss a notification.
+Since a missed notification would render the condition variable useless, the
+thread library wakes the thread from its wait rather than take the risk.”
+
+o this predicate, lambda in this case, is to check this spurious wakes and
+  there is no need to wrap it with while check again.
+
+o This implies that predicates passed to waiting functions are always called
+  under the lock, so they may safely access the object(s) protected by the
+  mutex.
+
+so this is unnecessary:
+
+  while (queue_.empty())
+    cond_.wait(lock, [&]{return !queue_.empty();});
+
+
+<cxx-condition-variable-wait>
+Also note that for condition variables, you have the interface of waiting for
+a maximum amount of time: wait_for() waits for a duration of time, whereas
+wait_until() waits until a timepoint has arrived.
+
+
+wait_for(lock, duration) wait_until(lock, time_point)
+
+Called without the predicate, both wait_for() and wait_until() return the
+following enumeration class (see Section 3.1.13, page 32) values:
+
+o std::cv_status::timeout if the absolute timeout happened
+o std::cv_status::no_timeout if a notification happened
+
+
+wait_for(lock, duration, predicate) wait_until(lock, time_point, predicate)
+
+Called with a predicate as third argument, wait_for() and wait_until() return
+the result of the predicate (whether the condition holds).
+
+wait_for() will check the supplied predicate when woken and will return the
+value of predicate OR `the timeout expires.` see *cxx-con-wait-unbounded*
+
+
+TEST(CConCondition, WaitFor)
+{
+  std::mutex m;
+  std::unique_lock<std::mutex> lock(m);
+  std::condition_variable cond;
+  std::queue<int> q;
+  
+  EXPECT_THAT(q.empty(), true);
+
+  cond.wait_for(lock, std::chrono::seconds(1),
+      [&q](){ return !q.empty(); });
+
+  std::string expected{"it's out of wait"};
+  EXPECT_THAT(expected, "it's out of wait");
+}
 
 
 {cxx-threadsafe-queue}
@@ -59649,7 +59858,6 @@ class threadsafe_queue
       return data_queue.empty();
     }
 };
-
 
 threadsafe_queue<data_chunk> data_queue;
 
@@ -59783,7 +59991,7 @@ starts again. This may repeat any number of times, making the total wait time
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-task-model cxx-future cxx-async
+*kt_dev_cxx_0000* cxx-ccon-task-model cxx-future cxx-async
 
 C++PL 42.4.
 
@@ -59791,27 +59999,29 @@ C++PL 42.4.
 Focuses on specifying a simple kind of task: a task that does one thing given
 arguments and produces one result. 
 
-  "Hiding uses of the messier threads-and-locks level. `abstraction`"
+o "Hiding uses of the messier threads-and-locks level. `cxx-abstraction`"
 
-  "Separating threading logic from application logic"
+o "Separating threading logic from application logic"
 
-Often, we would like to provide a lot of small tasks and let 'the system'
-worry about how to map their execution onto hardware resources and how to keep
-them out of problems with data races, spurious wake-ups, excessive waits, etc.
+Would like to provide a lot of small tasks and let 'the system' worry about
+how to map their execution onto hardware resources and how to keep them out of
+problems with data races, spurious wake-ups, excessive waits, etc.
 
 The importance of these facilities is their simplicity. In a sequential
 program, we usually write something like:
 
 // perform a task given arguments and get the result
+
 res = task(args);
 
 The concurrent version becomes:
 
 // perform a task given arguments
+
 auto handle = async(task, args);  
 
 // ... do something else ...
-//
+
 // get the result
 res = handle.get()               
 
@@ -59855,20 +60065,39 @@ o Make ready: Set the 'ready bit' and unblock any waiting threads.
 
 
 {cxx-future}
+
+4.2 Waiting for one-off events with futures
+
+The C++ Standard Library models this sort of `one-off event` with something
+called a future. If a thread needs to wait for a specific one-off event, it
+somehow obtains `a future representing this event`
+
+// CXXSLR
+
+a future can pass data from one thread to another only once. In fact, a
+future’s major purpose is to deal with return values or exceptions of threads.
+
 `A future is a handle to a shared state.` It is where a task can retrieve a result
 deposited by a promise.
 
-Wait for the future to become ready. Once an event has happened (and the
-future has become ready), the future can't be 'reset'. `one-off event`
+o A future may have 'data' associated with it or it may not.
 
-  "A future may have 'data' associated with it or it may not."
+o Wait for the future to become ready. Once an event has happened (and the
+  future has become ready), the future can't be 'reset'. `one-off event`
+
+o Although futures are used to communicate between threads, the future objects
+  themselves don’t provide synchronized accesses. If multiple threads need to
+  access a single future object, they must protect access via a mutex or other
+  synchronization mechanism
+
 
 <cxx-future-unique-cxx-future-shared>
 There are two sorts of futures in the C++ Standard Library, implemented as two
-class templates declared in the <future> header: `unique futures`
-(std::future<>) and `shared futures` (std::shared_future<>). 
+class templates declared in the `future header`: 
 
-These are modeled after std::unique_ptr and std::shared_ptr. An instance of
+`unique futures` (std::future<>) and `shared futures` (std::shared_future<>). 
+
+`These are modeled after` std::unique_ptr and std::shared_ptr. An instance of
 std::future is the one and only instance that refers to its associated event,
   whereas multiple instances of std::shared_future may refer to the same
   event. In the latter case, all the instances will become ready at the same
@@ -59881,20 +60110,24 @@ associated data.
 The std:future<void>, std::shared_future<void> template specializations should
 be used where there's no associated data.
 
+<ex>
 
 future fu {fu2};
+
 Move constructor: fu gets fu2's shared state, if any; fu2 no longer has a shared
 state; noexcept
 
 fu.get()
+
 For future<void>: like x=fu.get(), but don't move any value
 
 fu.wait() 
+
 Block until a value arrives
 
 <ex>
 
-I can easily implement a version of wait_for_all():
+// implement a version of wait_for_all():
 
 template<typename T>
 vector<T> wait_for_all(vector<future<T>>& vf)
@@ -59906,48 +60139,74 @@ vector<T> wait_for_all(vector<future<T>>& vf)
 }
 
 
-{cxx-promise}
-A promise is the 'handle' to a shared state. It is where a task can deposit its
-result to be retrieved through a future.
+<cxx-future-shared>
 
-promise pr {};       
-Default constructor: pr has a shared state that is not yet ready
+4.2.5 Waiting from multiple threads
 
-fu=pr.get_future()   fu is the future corresponding to pr
+Although std::future handles all the synchronization necessary to transfer
+data from one thread to another, calls to the member functions of a particular
+std::future instance are not synchronized with each other. If you access a
+single std::future object from multiple threads without additional
+synchronization, you have a data race and undefined behavior. This is by
+design: std::future models unique ownership of the asynchronous result, and
+the one-shot nature of get() makes such concurrent access pointless
+anyway—only one thread can retrieve the value, because after the first call to
+get() there’s no value left to retrieve.
 
-pr.set_value(x)      The result of the task is the value x
-pr.set_value()       Set the result of the task for a void future
+If your fabulous design for your concurrent code requires that multiple
+threads can wait for the same event, don’t despair just yet;
+std::shared_future allows exactly that. 
 
-pr.set_exception(p)  
-The result of the task is the exception pointed to by p; p is an exception_ptr
+Whereas std::future is only moveable, so ownership can be transferred between
+instances, but only one instance refers to a particular asynchronous result at
+a time, std::shared_future instances are copyable, so you can have multiple
+objects referring to the same associated state.
 
-note: there are 'no' copy operations for a promise. A set function throws
-future_error if a value or exception is already set.
+o syncronization
 
+multiple threads may each access their own copy of a std::shared_future<>
+without further synchronization, even if they all refer to the same
+asynchronous result.
 
-<single-value-but-move> *cxx-move*
-Only possible to transmit a single result value through a promise. That may
-seem restrictive, but remember that `the value is moved into` and out of the
-shared state, rather than copied, so that we can cheaply pass a collection of
-objects. For example:
+Now, with std::shared_future, member functions on an individual object are
+still unsynchronized, so to avoid data races when accessing a single object
+from multiple threads, you must protect accesses with a lock. The preferred
+way to use it would be to take a copy of the object instead and have each
+thread access its own copy. Accesses to the shared asynchronous state from
+multiple threads are safe if each thread accesses that state through its own
+std::shared_future object. See figure 4.1.
 
-promise<map<string,int>> pr;
-map<string,int>> m;
+o ownership
 
-// ... fill m with a million <string,int> pairs ...
+the ownership must be transferred into the std::shared_future using std::move,
+leaving the std::future in an empty state, as if it was default constructed:
 
-pr.set_value(m);
+std::promise<int> p;
+std::future<int> f(p.get_future());
 
-A task may then extract that map from a corresponding future at essentially
-zero cost.
+assert(f.valid());
+
+std::shared_future<int> sf(std::move(f));
+
+assert(!f.valid());
+assert(sf.valid());
 
 
 {cxx-ccon-async} cxx-async
+
+4.2.1 Returning values from background tasks
+
 std::thread doesn't provide an easy means of returning a value from such a
-task. This is where the std::async function template declared in the <future>
+task. This is where the std::async function template declared in the future
 header, comes in.
 
-note: no need to use cxx-thread-join
+{
+  std::future<int> the_answer=std::async(find_the_answer_to_ltuae);
+  do_other_stuff();
+  std::cout << "The answer is "<< the_answer.get()<< std::endl;
+}
+
+// no need to use cxx-thread-join
 
 `std::async` start an asynchronous task for which you don't need the result
 right away. Rather than giving you back a std::thread object to wait on,
@@ -59957,7 +60216,6 @@ return value of the function.
 When you need the value, you just call get() on the future, and the thread
 blocks until the future is ready and then returns the value. 
 
-<cxx-async-code>
 
 namespace cxx_ccon 
 {
@@ -60003,10 +60261,7 @@ namespace cxx_ccon
 }
 
 
-{cxx-async-launch-policy}
-
-4.2.1 Returning values from background tasks
-
+<cxx-async-launch-policy>
 By default, it's up to the implementation whether std::async starts a new
 thread, or whether the task runs synchronously when the future is waited for.
 
@@ -60519,14 +60774,201 @@ performance because f might run in parallel before the outcome of f is needed.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-packaged-task
+*kt_dev_cxx_0000* cxx-ccon-promise
+
+std::promise<T> provides a means of setting a value (of type T), which can
+later be read through an associated std::future<T> object. 
+
+A std::promise/std::future pair would provide one possible mechanism for this
+facility; the waiting thread could block on the future, while the thread
+providing the data could use the promise half of the pairing to set the
+associated value and make the future ready.
+
+You can obtain the std::future object associated with a given std::promise by
+calling the `get_future()` member function, just like with std::packaged_task.
+When the value of the promise is set (using the set_value() member function),
+the future becomes ready and can be used to retrieve the stored value. 
+
+If you destroy the std::promise without setting a value, an exception is
+stored instead.
+
+
+A promise is the 'handle' to a shared state. It is where a task can deposit its
+result to be retrieved through a future.
+
+<ex>
+
+promise pr {};       
+
+Default constructor: pr has a shared state that is not yet ready
+
+fu=pr.get_future()   fu is the future corresponding to pr
+
+pr.set_value(x)      The result of the task is the value x
+pr.set_value()       Set the result of the task for a void future
+
+pr.set_exception(p)  
+
+The result of the task is the exception pointed to by p; p is an exception_ptr
+
+note: 
+there are 'no' copy operations for a promise. A set function throws
+future_error if a value or exception is already set.
+
+
+<cxx-future-move-cxx-promise-move> *cxx-move*
+Only possible to transmit a single result value through a promise. That may
+seem restrictive, but remember that `the value is moved into` and out of the
+shared state, rather than copied, so that we can cheaply pass a collection of
+objects. For example:
+
+promise<map<string,int>> pr;
+map<string,int>> m;
+
+// ... fill m with a million <string,int> pairs ...
+
+pr.set_value(m);
+
+A task may then extract that map from a corresponding future at essentially
+zero cost.
+
+
+<ex>
+
+In applications with very large numbers of network connections, it’s therefore
+common to have a small number of threads (possibly only one) handling the
+connections, each thread dealing with multiple connections at once. Consider
+one of these threads handling the connections.
+
+void process_connections(connection_set& connections)
+{
+  while(!done(connections))
+  {
+    for(connection_iterator
+        connection=connections.begin(),end=connections.end();
+        connection!=end;
+        ++connection)
+    {
+      // This assumes that an incoming packet has some ID and a payload with
+      // the actual data in it. `The ID is mapped to a std::promise`
+      //
+      // For incoming packets, the data associated with the future is the
+      // payload of the data packet.
+
+      if(connection->has_incoming_data())
+      {
+        data_packet data = connection->incoming();
+
+        std::promise<payload_type>& p = connection->get_promise(data.id);
+        p.set_value(data.payload);
+      }
+
+      // the promise associated with the outgoing data is set to true to
+      // indicate successful transmission
+
+      if(connection->has_outgoing_data())
+      {
+        outgoing_packet data = connection->top_of_outgoing_queue();
+
+        connection->send(data.payload);
+
+        // std::promise<bool> and how to associate data itself?
+
+        data.promise.set_value(true);
+      }
+    }
+  }
+}
+
+The CXXSLR says: 
+
+There is no get_promise() operation to match get_future(). The use of the
+promise is completely handled by the packaged_task.
+
+
+{cxx-promise-save-exception}
+
+4.2.4 Saving an exception for the future
+
+If you pass in -1 to the square_root() function, it throws an exception, and
+this gets seen by the caller:
+
+double square_root(double x)
+{
+  if(x<0)
+  {
+    throw std::out_of_range(“x<0”);
+  }
+  return sqrt(x);
+}
+
+Now suppose that instead of just invoking square_root() from the current thread,
+
+double y=square_root(-1);
+
+you run the call as an asynchronous call:
+
+std::future<double> f=std::async(square_root,-1);
+double y=f.get();
+
+If the function call invoked as part of std::async throws an exception, that
+exception is stored in the future "in place of" a stored value, the future
+becomes ready, and a call to get() rethrows that stored exception. The same
+happens if you wrap the function in a std::packaged_task.
+
+If you wish to store an exception rather than a value, you call the
+set_exception() member function rather than set_value().
+
+extern std::promise<double> some_promise;
+
+try
+{
+    some_promise.set_value(calculate_value());
+}
+catch(...)
+{
+    some_promise.set_exception(std::current_exception());      // note: std::current_ex
+}
+
+the alternative here would be to use std::copy_exception() to store a new
+exception directly without throwing:
+
+some_promise.set_exception(std::copy_exception(std::logic_error("foo ")));
+
+This is much cleaner than using a try/catch block if the type of the exception
+is known, and it should be used in preference; not only does it simplify the
+code, but it also provides the compiler with greater opportunity to optimize
+the code.
+
+note: ?
+
+<broken-promise>
+Another way to store an exception in a future is to destroy the std::promise
+or std::packaged_task associated with the future 'without' calling either of
+the set functions on the promise or invoking the packaged task. In either
+case, the destructor of the std::promise or std::packaged_task will store a
+std::future_error exception with an error code of
+std::future_errc::broken_promise in the associated state if the future isn't
+already ready; by creating a future you make a promise to provide a value or
+exception, and by destroying the source of that value or exception without
+providing one, you break that promise.
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-ccon-packaged-task
+
+cxx-packaged-task
 
 std::async is not the only way to associate a std::future with a task; you can
 also do it by wrapping the task in an instance of the std::packaged_task<>
 class template which is a higher-level abstraction
 
+std::packaged_task<> ties a future to a function or callable object. When the
+std:: packaged_task<> object is invoked, it calls the associated function or
+callable object and makes the future ready, with the return value stored as
+the associated data.
 
-{cxx-packaged-task}
+
 A packaged_task holds a 'task' and a future/promise 'pair'.
 
 task 1                             packaged_task: 
@@ -60535,20 +60977,26 @@ task 1                             packaged_task:
 get()  ->  future  <-> value  <->  promise  <- set_value(x)       <- return x
                                             <- set_exception(px)  <- throw x
 
-We pass a task (a function or a function object) that we want executed to a
-packaged_task. When our task executes a return x, it 'causes' a set_value(x)
-on the packaged_task's promise. Similarly, a throw x causes a
-set_exception(px) where px is an exception_ptr for x. Basically, the
-packaged_task executes its task, f(args), like this:
+When the std::packaged_task<> object is invoked, it calls the associated
+function or callable object and makes the future ready, with the return value
+stored as the associated data.
+
+Pass a task (a function or a function object) that we want executed to a
+packaged_task. When our task executes a return x, it causes a set_value(x) on
+the packaged_task's promise. Similarly, a throw x causes a set_exception(px)
+where px is an exception_ptr for x. 
+
+the packaged_task executes its task, f(args), like this:
 
 try {
-   pr.set_value(f(args));     // assume that the promise is called pr
+   some_promise.set_value(f(args));
 }
 catch(...) {
-   pr.set_exception(current_exception());
+   some_promise.set_exception(current_exception());
 }
 
 
+<ex>
 packaged_task pt {f};
 
 Construct pt holding f; f is moved into pt; use the default allocator;
@@ -60565,13 +61013,7 @@ fu=pt.get_future()
 fu is the future for pt's promise; throws future_error if called twice
 
 
-<cxx-packaged-task-works>
-When the std::packaged_task<> object is invoked, it calls the associated
-function or callable object and makes the future ready, with the return value
-stored as the associated data.
-
-
-<why-packaged-task>
+<cxx-packaged-task-aim>
 This can be used as a building block for thread pools or other task management
 schemes, such as running each task on its own thread, or running them all
 sequentially on a particular background thread. If a large operation can be
@@ -60582,59 +61024,83 @@ scheduler 'just' deals with std::packaged_task<> instances rather than
 individual functions.
 
 
-{associate-a-task-with-future}
-The template parameter for the std::packaged_task<> class template is a
-function signature. The return type of the specified function signature
-identifies the type of the std::future<> returned from the get_future() member
-function, whereas the argument list of the function signature is used to
-specify the signature of the packaged task's function call operator.
+namespace cxx_future
+{
+  int ff(int i)
+  {
+    if (i) return i;
+    throw runtime_error("called as ff(0)");
+  }
+} // namespace
 
-A partial class definition for std::packaged_task
-<std::string(std::vector<char>*,int)> would be: 
+// The 'point' is that the packaged_task version works exactly like the version
+// using 'ordinary' function calls even when the calls of the task (here ff) and
+// the calls of the get()s are in 'different' 'threads'. We can concentrate on
+// specifying the tasks 'rather' than thinking about threads and locks.
+// 
+// We can move the future, the packaged_task, or both around. Eventually, the
+// packaged_task is invoked and its task deposits its result in the future
+// without having to know either which thread executed it or which thread will
+// receive the result. This is simple and general.
+// 
+// The packaged_tasks are actually easier for the server to use than ordinary
+// functions because the handling of their exceptions has been taken care of.
+
+TEST(CConFuture, PackagedTaskPoint)
+{
+  using namespace cxx_future;
+
+  {
+    std::packaged_task<int(int)> pt1{ff};
+    std::packaged_task<int(int)> pt2{ff};
+
+    // call pt
+    pt1(1);
+    pt2(0);   // this would cause exception
+
+    // get futures
+    auto f1 = pt1.get_future();
+    EXPECT_THAT(f1.get(), 1);
+
+    auto f2 = pt2.get_future();
+    EXPECT_THROW(f2.get(), runtime_error);
+  }
+}
+
+
+<see-future-type-and-callable-type>
+
+The return type of the specified function signature identifies the type of the
+std::future<> returned from the get_future() member function, whereas the
+argument list of the function signature is used to specify the signature of
+the packaged task’s function call operator. 
+
+For example, a partial class definition for std::packaged_task
+<std::string(std::vector<char>*,int)> would be as shown in the following
+listing.
 
 template<>
 class packaged_task<std::string(std::vector<char>*,int)>
 {
-    public:
-        template<typename Callable>
-            explicit packaged_task(Callable&& f);
+  public:
+    template<typename Callable>
+      explicit packaged_task(Callable&& f);
 
-        std::future<std::string> get_future();
+    std::future<std::string> get_future();
 
-        void operator()(std::vector<char>*,int);
+    void operator()(std::vector<char>*,int);
 };
-
-The std::packaged_task object is thus a 'callable' object, and it can be
-wrapped in a std::function object, passed to a std::thread as the thread
-function, passed to another function that requires a callable object, or even
-invoked directly. 
-
-note: packaged_task is itself callable object which is different from async.
-
-When the std::packaged_task is invoked as a function object, the arguments
-supplied to the function call operator are passed on to the contained
-function, and the return value is stored as the asynchronous result in the
-std::future obtained from get_future(). You can thus wrap a task in a
-std::packaged_task and retrieve the future before passing the
-std::packaged_task object elsewhere to be invoked in due course. When you need
-the result, you can wait for the future to become ready.
 
 
 <ex>
 Many GUI frameworks require that updates to the GUI be done from specific
 threads, so if another thread needs to update the GUI, it must send a message
 to the right thread in order to do so. std:packaged_task provides one way of
-doing this without requiring a custom message for each and every GUI-related
+doing this `without requiring a custom message` for each and every GUI-related
 activity.
 
-#include <deque>
-#include <mutex>
-#include <future>
-#include <thread>
-#include <utility>
-
 std::mutex m;
-std::deque<std::packaged_task<void()> > tasks;
+std::deque<std::packaged_task<void()>> tasks;
 
 bool gui_shutdown_message_received();
 void get_and_process_gui_message();
@@ -60646,29 +61112,30 @@ void get_and_process_gui_message();
 // then runs the task. The future associated with the task will then be made
 // ready when the task completes.
 
+std::thread gui_bg_thread(gui_thread);
+
 void gui_thread()
 {
-    while(!gui_shutdown_message_received())
+  while(!gui_shutdown_message_received())
+  {
+    get_and_process_gui_message();
+
+    std::packaged_task<void()> task;
+
     {
-        get_and_process_gui_message();
+      std::lock_guard<std::mutex> lk(m);
 
-        std::packaged_task<void()> task;
-        {
-            std::lock_guard<std::mutex> lk(m);
+      if(tasks.empty())
+        continue;
 
-            if(tasks.empty())
-                continue;
+      `task = std::move(tasks.front());`
 
-            task=std::move(tasks.front());
-
-            tasks.pop_front();
-        }
-
-        task();
+      tasks.pop_front();
     }
-}
 
-std::thread gui_bg_thread(gui_thread);
+    task();
+  }
+}
 
 
 Posting a task on the queue is equally simple: a new packaged task is created
@@ -60678,438 +61145,19 @@ future is returned to the caller. The code that posted the message to the GUI
 thread can then wait for the future if it needs to know that the task has been
 completed, or it can discard the future if it doesn't need to know.
 
-// this uses a future as a completion indicator since no associated data,
-// future<void>.
+this is simple case as uses a future as a completion indicator since no
+associated data, future<void>.
 
 template<typename Func>
 std::future<void> post_task_for_gui_thread(Func f)
 {
     std::packaged_task<void()> task(f);
-    std::future<void> res=task.get_future();
+    std::future<void> res = task.get_future();
 
     std::lock_guard<std::mutex> lk(m);
     tasks.push_back(std::move(task));
     return res;
 }
-
-std::packaged_task can also be used in more complex situations; by specifying
-a different function signature as the template parameter, can change the
-return type and thus the type of data stored in the future's associated state
-and also the argument types of the function call operator.
-
-
-={============================================================================
-*kt_dev_ccon_018* std::promise
-
-What about those tasks that can't be expressed as a simple function call or those tasks where the
-result may come from more than one place? These cases are dealt with by the third way of creating a
-future: using a std::promise to set the value 'explicitly'.
-
-std::promise<T> provides a means of setting a value (of type T), which can later be read through an
-associated std::future<T> object. A std::promise/std::future pair would provide one possible
-mechanism for this facility; the waiting thread could block on the future, while the thread
-providing the data could use the promise half of the pairing to set the associated value and make
-the future ready.
-
-You can obtain the std::future object associated with a given std::promise by calling the
-get_future() member function, just like with std::packaged_task. When the value of the promise is
-set (using the set_value() member function), the future becomes ready and can be used to retrieve
-the stored value. 
-
-If you destroy the std::promise without setting a value, an exception is stored instead.
-
-#include <future>
-
-void process_connections(connection_set& connections)
-{
-    while(!done(connections))
-    {
-        for(connection_iterator
-                connection=connections.begin(),end=connections.end();
-                connection!=end;
-                ++connection)
-        {
-            // This assumes that an incoming packet has some ID and a payload with the actual data
-            // in it. The ID is mapped to a std::promise
-            //
-            // For incoming packets, the data associated with the future is the 'payload' of the
-            // data packet.
-
-            if(connection->has_incoming_data())
-            {
-                data_packet data=connection->incoming();
-
-                std::promise<payload_type>& p = connection->get_promise(data.id);
-                p.set_value(data.payload);
-            }
-
-            // the promise associated with the outgoing data is set to true to indicate successful
-            // transmission
-
-            if(connection->has_outgoing_data())
-            {
-                outgoing_packet data = connection->top_of_outgoing_queue();
-
-                connection->send(data.payload);
-                data.promise.set_value(true);
-            }
-        }
-    }
-}
-
-
-{exception-for-future}
-If you pass in -1 to the square_root() function, it throws an exception, and this gets seen by the
-caller:
-
-double square_root(double x)
-{
-    if(x<0)
-    {
-        throw std::out_of_range(“x<0”);
-    }
-    return sqrt(x);
-}
-
-Now suppose that instead of just invoking square_root() from the current thread,
-
-double y=square_root(-1);
-
-you run the call as an asynchronous call:
-
-std::future<double> f=std::async(square_root,-1);
-double y=f.get();
-
-If the function call invoked as part of std::async throws an exception, that exception is stored in
-the future "in place of" a stored value, the future becomes ready, and a call to get() rethrows that
-stored exception. The same happens if you wrap the function in a std::packaged_task.
-
-If you wish to store an exception rather than a value, you call the set_exception() member function
-rather than set_value().
-
-extern std::promise<double> some_promise;
-
-try
-{
-    some_promise.set_value(calculate_value());
-}
-catch(...)
-{
-    some_promise.set_exception(std::current_exception());      // note: std::current_ex
-}
-
-the alternative here would be to use std::copy_exception() to store a new exception directly without
-throwing: some_promise.set_exception(std::copy_exception(std::logic_error("foo "))); This is much
-cleaner than using a try/catch block if the type of the exception is known, and it should be used in
-preference; not only does it simplify the code, but it also provides the compiler with greater
-opportunity to optimize the code.
-
-note: ?
-
-<broken-promise>
-Another way to store an exception in a future is to destroy the std::promise or std::packaged_task
-associated with the future 'without' calling either of the set functions on the promise or invoking
-the packaged task. In either case, the destructor of the std::promise or std::packaged_task will
-store a std::future_error exception with an error code of std::future_errc::broken_promise in the
-associated state if the future isn't already ready; by creating a future you make a promise to
-provide a value or exception, and by destroying the source of that value or exception without
-providing one, you break that promise.
-
-
-={============================================================================
-*kt_dev_ccon_018* std::shared_future in multiple threads
-
-std::future has its limitations, not the least of which being that only one thread can wait for the
-result. If you need to wait for the same event from more than one thread, you need to use
-std::shared_future instead.
-
-Although std::future handles all the 'synchronization' necessary to transfer data from one thread to
-another, calls to the member functions of a particular std::future instance are not synchronized
-with each other. If you access a single std::future object from multiple threads without additional
-synchronization, you have a data race and undefined behavior. This is by design: std::future models
-"unique ownership of the asynchronous result", and the one-shot nature of get() makes such
-concurrent access pointless anyway-only one thread can retrieve the value, because after the first
-call to get() there's no value left to retrieve.
-
-note: what will happen if do call get() more than once?
-
-<shared-is-copyable>
-Whereas std::future is only moveable, so ownership can be transferred between instances, but only
-one instance refers to a particular asynchronous result at a time, std::shared_future instances are
-copyable, so you can have multiple (future) objects referring to "the same associated state".
-
-
-<no-additional-sync>
-Now, with std::shared_future, member functions on an individual object are still unsynchronized, so
-to avoid data races when accessing a single future object from multiple threads, you must protect
-accesses with a lock. The preferred way to use it would be to take a copy of the object instead and
-have each thread access its own copy of future since accesses to the shared asynchronous state from
-multiple threads are 'safe' if each thread accesses that state through its own std::shared_future
-object.
-
-note: why safe? not sure about figure 4.1
-
-<constructed-from-future>
-std::shared_future that reference some asynchronous state are constructed 'from' instances of
-std::future that reference that state. Since std::future objects don't share ownership of the
-asynchronous state with any other object, the ownership 'must' be transferred into the
-std::shared_future using std::move, leaving the std::future in an empty state, as if it was default
-constructed.
-
-std::promise<int> p;
-std::future<int> f(p.get_future());
-assert(f.valid());
-
-std::shared_future<int> sf(std::move(f));
-assert(!f.valid());                             // f is no longer valid
-assert(sf.valid());
-
-can construct a std::shared_future 'directly' from the return value of the get_future() member
-    function of a std::promise object since transfer is implicit for rvalue.
-
-std::promise<std::string> p;
-std::shared_future<std::string> sf(p.get_future());
-
-The other eay that save a lot of typing and makes code easier to change since
-
-std::future also has an additional feature to automatically deducing the type of a variable from its
-initializer and has a share() member function that creates a new std::shared_future and transfers
-ownership to it directly.
-
-std::promise< std::map< SomeIndexType, SomeDataType, SomeComparator, SomeAllocator>::iterator> p;
-auto sf=p.get_future().share();
-
-If type of variable changes, you only need to change the type of the promise; the type of the future
-is automatically updated to match.
-
-
-={============================================================================
-*kt_dev_ccon_002* std::future
-
-<example>
-For a really simple example we don't even need any threads. First define a simple task:
-
-int ff(int i)
-{
-    if (i) return i;
-    throw runtime_error("ff(0)");
-}
-
-packaged_task<int(int)> pt1 {ff};   // store ff in pt1
-packaged_task<int(int)> pt2 {ff};   // store ff in pt2
-
-pt1(1);  // let pt1 call ff(1);
-pt2(0);  // let pt2 call ff(0);
-
-So far, nothing appears to have happened. In particular, we don't see the exception triggered by
-ff(0). In fact, pt1(1) did a set_value(1) on the promise attached to pt1, and pt1(0) did a
-set_exception(px) on the promise attached to pt2; that px is an exception_ptr to a
-runtime_error("ff(0)").
-
-'later', we can try to retrieve the results. The get_future() operation is used to get hold of the
-future into which the packaged thread will deposit the result of its task.
-
-auto v1 = pt1.get_future();
-auto v2 = pt2.get_future();
-
-try {
-    cout << v1.get() << '\n'; // will print
-    cout << v2.get() << '\n'; // will throw
-}
-catch (exception& e) {
-    cout << "exception: " << e.what() << '\n';
-}
-
-The output is:
-
-1
-exception: ff(0)
-
-We could have gotten exactly the same effect by simply writing:
-
-try {
-    cout << ff(1) << '\n'; // will print
-    cout << ff(0) << '\n'; // will throw
-}
-catch (exception& e) {
-    cout << "exception: " << e.what() << '\n';
-}
-
-Then why use task model?
-
-note:
-The 'point' is that the packaged_task version works exactly like the version using 'ordinary'
-function calls even when the calls of the task (here ff) and the calls of the get()s are in
-'different' 'threads'. We can concentrate on specifying the tasks 'rather' than thinking about
-threads and locks.
-
-We can move the future, the packaged_task, or both around. Eventually, the packaged_task is invoked
-and its task deposits its result in the future without having to know either which thread executed
-it or which thread will receive the result. This is simple and general.
-
-The packaged_tasks are actually easier for the server to use than ordinary functions because the
-handling of their exceptions has been taken care of.
-
-From C++ CIA 4.2.1. The use of task make it easy to 'divide' algorithms into tasks taht can be run
-concurrently.
-
-
-<example> From C++ CIA 4.2.2
-This can be used as a building block for thread pools (see chapter 9) or other task management
-schemes, such as running each task on its own thread, or running them all sequentially on a
-particular background thread. 
-
-If a large operation can be divided into 'self-contained' sub-tasks, each of these can be wrapped in
-a std::packaged_task<> instance, and then that instance passed to the task scheduler or thread pool.
-This abstracts out the details of the tasks; the scheduler just deals with std::packaged_task<>
-instances rather than individual functions.
-
-The template parameter for the std::packaged_task<> class template is a function signature. The
-return type of the specified function signature identifies the type of the std::future<> returned
-from the get_future() member function, whereas the argument list of the function signature is used
-to specify the signature of the packaged task's function call operator.
-
-Partial class definition for a specialization of std::packaged_task<>
-
-template<>
-class packaged_task<std::string(std::vector<char>*,int)>
-{
-    public:
-        template<typename Callable>
-            explicit packaged_task(Callable&& f);
-        std::future<std::string> get_future();
-        void operator()(std::vector<char>*,int);
-};
-
-Can thus wrap a task in a std::packaged_task and retrieve the future 'before' passing the
-std::packaged_task object elsewhere to be invoked in due course. When you need the result, you can
-wait for the future to become ready.
-
-Many GUI frameworks require that updates to the GUI be done from specific threads, so if another
-thread needs to update the GUI, it must send a message to the right thread in order to do so.
-
-std:packaged_task provides one way of doing this 'without' requiring a 'custom' message for each and
-every GUI-related activity, as shown here.
-
-#include <deque>
-#include <mutex>
-#include <future>
-#include <thread>
-#include <utility>
-
-std::mutex m;
-std::deque<std::packaged_task<void()> > tasks;
-
-bool gui_shutdown_message_received();
-void get_and_process_gui_message();
-
-// note: future will be fired
-// The future associated with the task will then be 'made' 'ready' when the task completes.
-
-// loops until a message has been received telling the GUI to shut down.
-void gui_thread()
-{
-    // polling for GUI message
-    while(!gui_shutdown_message_received())
-    {
-        get_and_process_gui_message();
-
-        std::packaged_task<void()> task;
-        {
-            std::lock_guard<std::mutex> lk(m);
-
-            // 'tasks' but not task. loops again if there are no tasks on the queue.
-            if(tasks.empty())
-                continue;
-
-            task=std::move(tasks.front());
-            tasks.pop_front();
-        }
-        task();
-    }
-}
-
-
-std::thread gui_bg_thread(gui_thread);
-
-// The code that posted the message to the GUI thread can then wait for the future if it needs to
-// know that the task has been completed, or it can discard the future if it doesn’t need to know.
-
-template<typename Func>
-std::future<void> post_task_for_gui_thread(Func f)
-{
-    std::packaged_task<void()> task(f);
-    std::future<void> res=task.get_future();
-    std::lock_guard<std::mutex> lk(m);
-    tasks.push_back(std::move(task));
-    return res;
-}
-
-note: That is packaged_task is a callable which wraps the given f and associated future and returns
-a future. The user has a returnted future and can wait on that.
-
-note: this way is to set future 'implicitly'.
-
-
-{promise}
-What about those tasks that can't be expressed as a simple function call or those tasks where the
-result may come from more than one place? These cases are dealt with by the 'third' way of creating
-a future: using a std::promise to set the value 'explicitly'.
-
-std::promise<T> provides a means of setting a value (of type T), which can later be read through an
-associated std::future<T> object. A std::promise/std::future pair would provide one possible
-mechanism for this facility; the waiting thread could block on the future, while the thread
-providing the data could use the promise half of the pairing to set the associated value and make
-the future ready.
-
-When the value of the promise is set (using the set_value() member function), the future becomes
-'ready' and can be used to retrieve the stored value.
-
-#include <future>
-
-void process_connections(connection_set& connections)
-{
-    // every time through the loop, checks each connection in turn.
-    while(!done(connections))
-    {
-        for(connection_iterator
-                connection=connections.begin(),end=connections.end();
-                connection!=end;
-                ++connection)
-        {
-            // assumes that packet has some ID and payload
-            if(connection->has_incoming_data())
-            {
-                data_packet data=connection->incoming();
-
-                // ID is mapped to 'promise' and the value is set to payload. future is assocoated
-                // with payload.
-
-                std::promise<payload_type>& p = connection->get_promise(data.id);
-                p.set_value(data.payload);
-            }
-
-            if(connection->has_outgoing_data())
-            {
-                outgoing_packet data= connection->top_of_outgoing_queue();
-
-                connection->send(data.payload);
-
-                // set to true to indicate successful transmission. std::promise<bool> and
-                // std::future<bool>. The value associated with the future is a simple
-                // success/failure flag.
-
-                data.promise.set_value(true);
-            }
-        }
-    }
-}
-
-note: there is no section that describe get_promise() so don't know how to associate promise/future
-pair with user data.
-
-The C++PL says: There is no get_promise() operation to match get_future(). The use of the promise is
-completely handled by the packaged_task.
 
 
 ={============================================================================
@@ -61354,13 +61402,14 @@ pass the value returned from get_tail(), so the invariants are upheld.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-con-functional-programming cxx-fsm
+*kt_dev_cxx_0000* cxx-ccon-other-paradigm cxx-fsm
 
 4.4.1 Functional programming with futures
 
 The term functional programming (FP) refers to a style of programming where
-the result of a function call depends solely on the parameters to that
-function and doesn’t depend on any external state.
+the result of a function call `depends solely on the parameters` to that
+function and `doesn’t depend on any external state.` The effect of the
+functions are entirely limited to the return value.
 
 This makes things easy to think about, especially when concurrency is
 involved, because many of the problems associated with shared memory discussed
@@ -61369,33 +61418,112 @@ in chapter 3 disappear.
 If there are no modifications to shared data, there can be no race conditions
 and thus no need to protect shared data with mutexes either.
 
-The benefits of functional programming aren’t limited to those languages where
-it’s the default paradigm, however. C++ is a multiparadigm language, and it’s
-entirely possible to write programs in the FP style. 
 
-This is even easier in C++11 than it was in C++98, with the advent of lambda
-functions (see appendix A, section A.6), the incorporation of std::bind from
-Boost and TR1, and the introduction of automatic type deduction for variables
-(see appendix A, section A.7). Futures are the final piece of the puzzle that
-makes FP-style concurrency viable in C++; a future can be passed around
-between threads to allow the result of one computation to depend on the result
-of another, without any explicit access to shared data.
+// cxx-sort-quick
+// CCon, 4.4.1 Functional programming with futures
+// Listing 4.12 A sequential implementation of Quicksort
+// use the first than the middle
 
-Functional programming isn’t the only concurrent programming paradigm that
-eschews shared mutable data; another paradigm is CSP (Communicating Sequential
-    Processes), where threads are conceptually entirely separate, with no
-shared data but with communication channels that allow messages to be passed
-between them.
+template<typename T>
+std::list<T> sequential_quick_sort(std::list<T> input)
+{
+  if(input.empty())
+    return input;
+
+  std::list<T> result;
+
+  // move the first of input to the first of result
+  result.splice(result.begin(), input, input.begin());
+  const T &pivot = *result.begin();
+
+  // divide input into; 
+  // one which are < pivot, pivot, >= pivot.
+
+  auto divide_point = std::partition(input.begin(), input.end(),
+      [&](const T &t)
+      {
+      return t < pivot;
+      });
+
+  // make two list; lower_part and input(higher_part)
+  std::list<T> lower_part;
+  lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+
+  auto new_lower(sequential_quick_sort(std::move(lower_part)));
+  auto new_higher(sequential_quick_sort(std::move(input)));
+
+  // make coll: < p, p, p <=
+  result.splice(result.begin(), new_lower);
+  result.splice(result.end(), new_higher);
+  return result;
+}
+
+TEST(CConFuture, SequentialQuickSort)
+{
+  std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
+
+  auto result = sequential_quick_sort(input);
+  EXPECT_THAT(result,
+      ElementsAreArray({2,5,6,6,10,12,13,15,17,29,30,31,33}));
+}
+
+template<typename T>
+std::list<T> parallel_quick_sort(std::list<T> input)
+{
+  if(input.empty())
+    return input;
+
+  std::list<T> result;
+  // move the first of input to the first of result
+  result.splice(result.begin(), input, input.begin());
+  const T &pivot = *result.begin();
+
+  // divide input into two; one which are < pivot and the other which are >= pivot.
+  auto divide_point = std::partition(input.begin(), input.end(),
+      [&](const T &t)
+      {
+      return t < pivot;
+      });
+
+  // make two list; lower_part and input(higher_part)
+  std::list<T> lower_part;
+  lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+
+  // only one more since can use main thread
+  std::future<std::list<T>> new_lower(
+      std::async(parallel_quick_sort<T>, std::move(lower_part))
+      );
+  auto new_higher(parallel_quick_sort(std::move(input)));
+
+  result.splice(result.begin(), new_lower.get());
+  result.splice(result.end(), new_higher);
+  return result;
+}
+
+TEST(CConFuture, ParallelQuickSort)
+{
+  std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
+
+  auto result = parallel_quick_sort(input);
+  EXPECT_THAT(result,
+      ElementsAreArray({2,5,6,6,10,12,13,15,17,29,30,31,33}));
+}
 
 
 4.4.2 Synchronizing operations with message passing
 
+Functional programming isn’t the only concurrent programming paradigm that
+eschews(avoid) shared mutable data; another paradigm is CSP (Communicating
+    Sequential Processes), where threads are conceptually entirely separate,
+  with no shared data `but with communication channels` that allow messages to
+  be passed between them.
+
 The idea of CSP is simple: if there’s no shared data, each thread can be
 reasoned about entirely independently, purely on the basis of how it behaves
-in response to the messages that it received. Each thread is therefore
+`in response to the messages that it received.` Each thread is therefore
 effectively a `state machine`: when it receives a message, it updates its
 state in some manner and maybe sends one or more messages to other threads,
-with the processing performed depending on the initial state. 
+      with the processing performed depending on the initial state. 
   
 One way to write such threads would be to formalize this and implement a
 Finite State Machine model, but this isn’t the only way; the state machine can
@@ -61405,20 +61533,20 @@ Imagine for a moment that you’re implementing the code for an ATM. One way to
 handle everything would be to split the code into three independent threads:
 one to handle the physical machinery, one to handle the ATM logic, and one to
 communicate with the bank. These threads could communicate purely by passing
-messages rather than sharing any data. For example, the thread handling the
-machinery would send a message to the logic thread when the person at the
-machine entered their card or pressed a button, and the logic thread would
-send a message to the machinery thread indicating how much money to dispense,
-and so forth.
+messages rather than sharing any data. 
 
+For example, the thread handling the machinery would send a message to the
+logic thread when the person at the machine entered their card or pressed a
+button, and the logic thread would send a message to the machinery thread
+indicating how much money to dispense, and so forth.
 
-* class that has a member function to represent each state. 
+o class that has a member function to represent each state. 
 
-* Each member function can then wait for specific sets of incoming messages
+o Each member function can then wait for specific sets of incoming messages
   and handle them when they arrive, possibly triggering a switch to another
   state.
 
-* if a message is received that doesn’t match the specified type, it’s
+o if a message is received that doesn’t match the specified type, it’s
   discarded, and the thread continues to wait until a matching message is
   received.
 

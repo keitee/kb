@@ -17,7 +17,7 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG -lboost_system -lboost_thread
 #CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -fno-elide-constructors
 
-TESTS = $(TARGET)_test
+TESTS = $(TARGET)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -60,5 +60,5 @@ gtest.a : gtest-all.o
 message_test.o : message_test.cpp $(GTEST_HEADERS) message.h
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c message_test.cpp -o message_test.o
 
-$(TESTS) : $(TESTS).o gtest.a gmock.a atm.h message_test.o
+$(TESTS) : $(TARGET).o gtest.a gmock.a atm.h message_test.o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

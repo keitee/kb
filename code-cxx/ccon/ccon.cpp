@@ -12,9 +12,13 @@
 
 #include "gmock/gmock.h"
 
+// fsm
+#include "message.h"
+
 using namespace std;
 using namespace std::placeholders;
 using namespace testing;
+
 
 // CXXSLR 18.1 The High-Level Interface: async() and Futures
 //
@@ -729,8 +733,7 @@ namespace cxx_condition
           // to use with cxx-condition
           std::unique_lock<std::mutex> lock(m_);
 
-          while (queue_.empty())
-            cond_.wait(lock, [&]{return !queue_.empty();});
+          cond_.wait(lock, [&]{return !queue_.empty();});
 
           value = queue_.front();
           queue_.pop();
@@ -748,7 +751,8 @@ namespace cxx_condition
         std::condition_variable cond_;
     };
 
-  int consumed{};
+  std::mutex consumed_mtx;
+  int consumed_total{};
 
   void producer(threadsafe_queue<int>& q)
   {
@@ -760,12 +764,31 @@ namespace cxx_condition
 
   void consumer(threadsafe_queue<int>& q)
   {
-    int value;
+    int value{};
 
-    while (!q.empty())
+    for (int i = 0; i < 20; ++i)
     {
       q.wait_and_pop(value);
-      ++consumed;
+      ++consumed_total;
+    }
+  }
+
+  void consumer_error(threadsafe_queue<int>& q)
+  {
+    std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
+  
+    int value{};
+  
+    while (true)
+    {
+      if (consumed_total >= 20*3)
+        break;
+  
+      q.wait_and_pop(value);
+  
+      lock.lock();
+      ++consumed_total;
+      lock.unlock();
     }
   }
 
@@ -779,34 +802,111 @@ TEST(CConCondition, ProducerAndConsumer)
 
   threadsafe_queue<int> q;
 
-  // std::vector<std::thread> consumers;
-  //
-  // for (int i = 0; i < 5; ++i)
-  // {
-  //   // consumers.emplace_back(std::thread(consumer, std::ref(q)));
-  //   consumers.push_back(std::thread(consumer, std::ref(q)));
-  // }
-
-  std::thread c1(consumer, std::ref(q));
-  std::thread c2(consumer, std::ref(q));
-  std::thread c3(consumer, std::ref(q));
-  std::thread c4(consumer, std::ref(q));
-  std::thread c5(consumer, std::ref(q));
+  std::vector<std::thread> consumers;
+  std::vector<std::thread> producers;
+  
+  for (int i = 0; i < 3; ++i)
+  {
+    consumers.emplace_back(consumer, std::ref(q));
+  }
 
   this_thread::sleep_for(chrono::seconds(2));
 
+  for (int i = 0; i < 3; ++i)
+  {
+    producers.emplace_back(producer, std::ref(q));
+  }
+
+  for (auto &c : consumers)
+    c.join();
+
+  for (auto &p : producers)
+    p.join();
+
+  EXPECT_THAT(consumed_total, 60);
+}
+
+// Error which causes consumers waiting and not finished since there are more
+// consumers and many do not wake up from wait since there will be no more
+// notify once they are used up by other consumer.
+
+TEST(DISABLED_CConCondition, ProducerAndConsumerError1)
+{
+  using namespace cxx_condition;
+ 
+  threadsafe_queue<int> q;
+ 
+  std::thread c1(consumer_error, std::ref(q));
+  std::thread c2(consumer_error, std::ref(q));
+  std::thread c3(consumer_error, std::ref(q));
+  std::thread c4(consumer_error, std::ref(q));
+  std::thread c5(consumer_error, std::ref(q));
+ 
+  this_thread::sleep_for(chrono::seconds(2));
+ 
   std::thread p1(&producer, std::ref(q));
   std::thread p2(&producer, std::ref(q));
   std::thread p3(&producer, std::ref(q));
-
-  // for (auto &c : consumers)
-  //   c.join();
-
+ 
   c1.join(); c2.join(); c3.join(); c4.join(); c5.join();
-
   p1.join(); p2.join(); p3.join();
+ 
+  EXPECT_THAT(consumed_total, 60);
+}
 
-  EXPECT_THAT(consumed, 30);
+
+// 18.6.3 Using Condition Variables to Implement a Queue for Multiple Threads
+// Suffers from the same as Error1 as more consumers with no ways to finish all
+// consumers.
+
+namespace cxx_condition_error
+{
+  std::queue<int> queue;
+  std::mutex queueMutex;
+  std::condition_variable queueCondVar;
+
+  void provider (int val)
+  {
+    // push different values (val til val+5 with timeouts of val milliseconds
+    // into the queue
+
+    for (int i=0; i<6; ++i) {
+      {
+        std::lock_guard<std::mutex> lg(queueMutex);
+        queue.push(val+i);
+      } // release lock
+      queueCondVar.notify_one();
+      std::this_thread::sleep_for(std::chrono::milliseconds(val));
+    }
+  }
+  void consumer (int num)
+  {
+    // pop values if available (num identifies the consumer)
+    while (true) {
+      int val;
+      {
+        std::unique_lock<std::mutex> ul(queueMutex);
+        queueCondVar.wait(ul,[]{ return !queue.empty(); });
+        val = queue.front();
+        queue.pop();
+      } // release lock
+      std::cout << "consumer " << num << ": " << val << std::endl;
+    }
+  }
+} // namespace
+
+TEST(DISABLED_CConCondition, ProducerAndConsumerError2)
+{
+  using namespace cxx_condition_error;
+
+  // start three providers for values 100+, 300+, and 500+
+  auto p1 = std::async(std::launch::async,provider,100);
+  auto p2 = std::async(std::launch::async,provider,300);
+  auto p3 = std::async(std::launch::async,provider,500);
+
+  // start two consumers printing the values
+  auto c1 = std::async(std::launch::async,consumer,1);
+  auto c2 = std::async(std::launch::async,consumer,2);
 }
 
 
@@ -840,6 +940,201 @@ TEST(CConCondition, ProducerAndConsumer)
 // }
 
 
+TEST(CConCondition, WaitFor)
+{
+  std::mutex m;
+  std::unique_lock<std::mutex> lock(m);
+  std::condition_variable cond;
+  std::queue<int> q;
+  
+  EXPECT_THAT(q.empty(), true);
+
+  cond.wait_for(lock, std::chrono::seconds(1),
+      [&q](){ return !q.empty(); });
+
+  std::string expected{"it's out of wait"};
+  EXPECT_THAT(expected, "it's out of wait");
+}
+
+
+// from CPP challenge which solves the issue when there are multiple consumers.
+//
+// 66. Customer service system
+// 
+// Write a program that simulates the way customers are served in an office. The
+// office has three desks where customers can be served at the same time. Customers
+// can enter the office at any time. They take a ticket with a service number from
+// a ticketing machine and wait until their number is next for service at one of
+// the desks. Customers are served in the order they entered the office, or more
+// precisely, in the order given by their ticket. Every time a service desk
+// finishes serving a customer, the next customer in order is served. The
+// simulation should stop after a particular number of customers have been issued
+// tickets and served.
+
+namespace U66_Text
+{
+  class logger
+  {
+    public:
+      static logger& instance()
+      {
+        static logger lg;
+        return lg;
+      }
+
+      logger(logger const&) = delete;
+      logger& operator=(logger const&) = delete;
+
+      void log(std::string message)
+      {
+        (void) message;
+        // std::lock_guard<std::mutex> lock(mt);
+        // std::cout << "LOG: " << message << std::endl;
+      }
+
+    protected:
+      logger() {}
+
+    private:
+      std::mutex mt;
+  };
+
+  class ticketing_machine
+  {
+    public:
+      ticketing_machine(int const start)
+        : first_ticket(start), last_ticket(start) {}
+
+      int next() { return last_ticket++; }
+      int last() const { return last_ticket -1; }
+      void reset() { last_ticket = first_ticket; }
+
+    private:
+      int first_ticket;
+      int last_ticket;
+  };
+
+  class customer
+  {
+    friend bool operator<(customer const& l, customer const& r);
+
+    public:
+    customer(int const no) 
+      : number(no) {}
+
+    int ticket_number() const noexcept { return number; }
+
+    private:
+    int number;
+  };
+
+  bool operator<(customer const& l, customer const& r)
+  { 
+    return l.number > r.number;
+  }
+
+} // namespace
+
+TEST(CConCondition, U66_Text)
+{
+  using namespace U66_Text;
+
+  std::priority_queue<customer> customers;
+  bool office_open{true};
+  std::mutex mt;
+  std::condition_variable cv;
+  int consumed{};
+
+  // consumers
+
+  std::vector<std::thread> desks;
+
+  for (int i = 1; i <= 3; ++i)
+  {
+    desks.emplace_back([i, &office_open, &mt, &cv, &customers, &consumed]()
+        {
+          // *cxx-randowm*
+          std::default_random_engine dre;
+          std::uniform_int_distribution<unsigned> udist(2000, 3000);
+
+          logger::instance().log("desk " + std::to_string(i) + " open");
+
+          while (office_open || !customers.empty())
+          {
+            std::unique_lock<std::mutex> locker(mt);
+
+            cv.wait_for(locker, std::chrono::seconds(1),
+                [&customers](){ return !customers.empty(); });
+
+            if (!customers.empty())
+            {
+              // not front()?
+              auto const c = customers.top();
+              customers.pop();
+
+              logger::instance().log("[-] desk " + std::to_string(i) 
+                  + " handling customer " + std::to_string(c.ticket_number())
+                  + " queue size: " + std::to_string(customers.size())
+                  );
+
+              ++consumed;
+
+              locker.unlock();
+
+              // okay without this:
+              // cv.notify_one();
+
+              std::this_thread::sleep_for(std::chrono::milliseconds(udist(dre)));
+
+              // logger::instance().log("[ ] desk " 
+              //     + std::to_string(i) + " done with customer " 
+              //     + std::to_string(c.ticket_number()));
+            }
+          }
+
+          logger::instance().log("desk " + std::to_string(i) + " closed");
+
+        });
+  } // end for
+
+
+  // single producer
+
+  std::thread store([&]()
+      {
+        ticketing_machine tm(100);
+
+        // *cxx-randowm*
+        std::default_random_engine dre;
+        std::uniform_int_distribution<unsigned> udist(200, 300);
+
+        for (int i = 1; i <= 25; ++i)
+        {
+          customer c(tm.next());
+          customers.push(c);
+
+          logger::instance().log(
+              "[+] new customer with ticket " + std::to_string(c.ticket_number())
+              + "[=] queue size : " + std::to_string(customers.size())
+              );
+
+          cv.notify_one();
+
+          std::this_thread::sleep_for(std::chrono::milliseconds(udist(dre)));
+        }
+
+        office_open = false;
+      });
+
+  store.join();
+
+  for (auto& desk : desks)
+    desk.join();
+
+  EXPECT_THAT(consumed, 25);
+}
+
+
 // ={=========================================================================
 // cxx-race cxx-stack-threadsafe-stack
 
@@ -850,6 +1145,8 @@ namespace cxx_ccon
 {
   void do_something(std::string const name, int& start, int& sum, std::mutex& m)
   {
+    (void)name;
+
     while (start < 10)
     {
       std::lock_guard<std::mutex> lock(m);
@@ -1006,6 +1303,1065 @@ TEST(CConRace, ThreadSafeStack)
 
 
 // ={=========================================================================
+// cxx-future
+
+namespace cxx_future
+{
+  int ff(int i)
+  {
+    if (i) return i;
+    throw runtime_error("called as ff(0)");
+  }
+} // namespace
+
+// The 'point' is that the packaged_task version works exactly like the version
+// using 'ordinary' function calls even when the calls of the task (here ff) and
+// the calls of the get()s are in 'different' 'threads'. We can concentrate on
+// specifying the tasks 'rather' than thinking about threads and locks.
+// 
+// We can move the future, the packaged_task, or both around. Eventually, the
+// packaged_task is invoked and its task deposits its result in the future
+// without having to know either which thread executed it or which thread will
+// receive the result. This is simple and general.
+// 
+// The packaged_tasks are actually easier for the server to use than ordinary
+// functions because the handling of their exceptions has been taken care of.
+
+TEST(CConFuture, PackagedTaskPoint)
+{
+  using namespace cxx_future;
+
+  {
+    std::packaged_task<int(int)> pt1{ff};
+    std::packaged_task<int(int)> pt2{ff};
+
+    // call pt
+    pt1(1);
+    pt2(0);   // this would cause exception
+
+    // get futures
+    auto f1 = pt1.get_future();
+    EXPECT_THAT(f1.get(), 1);
+
+    auto f2 = pt2.get_future();
+    EXPECT_THROW(f2.get(), runtime_error);
+  }
+}
+
+
+// cxx-sort-quick
+// CCon, 4.4.1 Functional programming with futures
+// Listing 4.12 A sequential implementation of Quicksort
+// use the first than the middle
+
+template<typename T>
+std::list<T> sequential_quick_sort(std::list<T> input)
+{
+  if(input.empty())
+    return input;
+
+  std::list<T> result;
+
+  // move the first of input to the first of result
+  result.splice(result.begin(), input, input.begin());
+  const T &pivot = *result.begin();
+
+  // divide input into; 
+  // one which are < pivot, pivot, >= pivot.
+
+  auto divide_point = std::partition(input.begin(), input.end(),
+      [&](const T &t)
+      {
+      return t < pivot;
+      });
+
+  // make two list; lower_part and input(higher_part)
+  std::list<T> lower_part;
+  lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+
+  auto new_lower(sequential_quick_sort(std::move(lower_part)));
+  auto new_higher(sequential_quick_sort(std::move(input)));
+
+  // make coll: < p, p, p <=
+  result.splice(result.begin(), new_lower);
+  result.splice(result.end(), new_higher);
+  return result;
+}
+
+TEST(CConFuture, SequentialQuickSort)
+{
+  std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
+
+  auto result = sequential_quick_sort(input);
+  EXPECT_THAT(result,
+      ElementsAreArray({2,5,6,6,10,12,13,15,17,29,30,31,33}));
+}
+
+template<typename T>
+std::list<T> parallel_quick_sort(std::list<T> input)
+{
+  if(input.empty())
+    return input;
+
+  std::list<T> result;
+  // move the first of input to the first of result
+  result.splice(result.begin(), input, input.begin());
+  const T &pivot = *result.begin();
+
+  // divide input into two; one which are < pivot and the other which are >= pivot.
+  auto divide_point = std::partition(input.begin(), input.end(),
+      [&](const T &t)
+      {
+      return t < pivot;
+      });
+
+  // make two list; lower_part and input(higher_part)
+  std::list<T> lower_part;
+  lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
+
+  // only one more since can use main thread
+  std::future<std::list<T>> new_lower(
+      std::async(parallel_quick_sort<T>, std::move(lower_part))
+      );
+  auto new_higher(parallel_quick_sort(std::move(input)));
+
+  result.splice(result.begin(), new_lower.get());
+  result.splice(result.end(), new_higher);
+  return result;
+}
+
+TEST(CConFuture, ParallelQuickSort)
+{
+  std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
+
+  auto result = parallel_quick_sort(input);
+  EXPECT_THAT(result,
+      ElementsAreArray({2,5,6,6,10,12,13,15,17,29,30,31,33}));
+}
+
+
+// ={=========================================================================
+// cxx-fsm
+
+namespace cxx_fsm
+{
+  void push_items_to_queue(messaging::queue& q)
+  {
+    q.push(100);
+  }
+}
+
+TEST(CConFsm, Queue)
+{
+  using namespace cxx_fsm;
+
+  // to avoid conflict with std::queue
+  messaging::queue mq;
+
+  std::async(std::launch::async, push_items_to_queue, std::ref(mq));
+
+  auto message = mq.wait_and_pop();
+
+  EXPECT_THAT(dynamic_cast<messaging::wrapped_message<int>*>(message.get())->contents_,
+      100);
+}
+
+namespace cxx_fsm
+{
+  // define events/messages
+
+  struct money_inserted
+  {
+    unsigned amount_;
+    explicit money_inserted(unsigned const& amount)
+      : amount_(amount) {}
+    std::string get_name() { return "money_inserted"; }
+  };
+
+  struct item_1_purchased
+  {
+    unsigned price_;
+    explicit item_1_purchased()
+      : price_(10) {}
+    std::string get_name() { return "item_1_purchased"; }
+  };
+
+  struct item_2_purchased
+  {
+    unsigned price_;
+    explicit item_2_purchased()
+      : price_(20) {}
+    std::string get_name() { return "item_2_purchased"; }
+  };
+
+  struct item_3_purchased
+  {
+    unsigned price_;
+    explicit item_3_purchased()
+      : price_(30) {}
+    std::string get_name() { return "item_3_purchased"; }
+  };
+
+  // define eafs of fsm
+
+  class simple
+  {
+    public:
+      simple() {}
+      simple(simple const&) = delete;
+      simple& operator=(simple const&) = delete;
+
+      // a sender is a wrapper to a message queue, a receiver owns it. You
+      // can obtain a sender that references the queue by using the implicit
+      // conversion.
+      //
+      // this is an interface to expose q to other class and used to set up
+      // connection each other
+      //
+      // atm machine(bank.get_sender(), intarface_hardware.get_sender());
+      //
+      // atm machine keeps this sender copies to send messages to them.
+
+      messaging::sender get_sender()
+      { return incoming_; }
+
+      // send a message to self
+      void done()
+      {
+        cout << "simple fsm: send done" << endl;
+        get_sender().send(messaging::close_queue());
+      }
+
+      void run()
+      {
+        // init state
+        state = &simple::wait_for_money;
+
+        cout << "starts simple fsm" << endl;
+
+        try
+        {
+          for (;;)
+          {
+            (this->*state)();
+          }
+        }
+        catch (messaging::close_queue const&)
+        {
+          cout << "ends simple fsm" << endl;
+        }
+      }
+
+      // fsm states
+
+      void wait_for_money()
+      {
+        std::cout << "simple fsm: wait_for_money and waits..." 
+          << std::endl; 
+
+        incoming_.wait()
+          .handle<money_inserted>
+          (
+           [&](money_inserted const& message)
+           {
+              amount_ = message.amount_;
+              std::cout << "simple fsm: money_inserted: amount left: " 
+              << amount_ << std::endl;
+
+              // set next state
+              state = &simple::wait_for_action;
+           }
+          );
+      }
+
+      void wait_for_action()
+      {
+        std::cout << "simple fsm: wait_for_action and waits..." 
+          << std::endl; 
+
+        incoming_.wait()
+          .handle<item_1_purchased>
+          (
+           [&](item_1_purchased const& message)
+           {
+              amount_ -= message.price_;
+
+              std::cout << "fsm: wait_for_action: item 1 purchased:"
+              << " amounts left: " << amount_ << std::endl;
+
+              state = &simple::done_processing;   
+           }
+          )
+          .handle<item_2_purchased>
+          (
+           [&](item_2_purchased const& message)
+           {
+              amount_ -= message.price_;
+
+              std::cout << "fsm: wait_for_action: item 2 purchased:"
+              << " amounts left: " << amount_ << std::endl;
+
+              state = &simple::done_processing;   
+           }
+          )
+          .handle<item_3_purchased>
+          (
+           [&](item_3_purchased const& message)
+           {
+              amount_ -= message.price_;
+
+              std::cout << "fsm: wait_for_action: item 3 purchased:"
+              << " amounts left: " << amount_ << std::endl;
+
+              state = &simple::done_processing;   
+           }
+          );
+      }
+
+      void done_processing()
+      {
+        std::cout << "simple fsm: done_processing and no waits..." 
+          << std::endl; 
+
+        state = &simple::wait_for_money;
+      }
+
+    private:
+      messaging::receiver incoming_;
+
+      // state function pointer
+      void (simple::*state)();
+      unsigned amount_;
+  };
+
+} // namespace
+
+TEST(CConFsm, SimpleFsm1)
+{
+  using namespace cxx_fsm;
+
+  simple fsm;
+
+  // make thread which runs fsm
+  std::thread fsm_thread(&simple::run, &fsm);
+
+  // make sender to send a message
+
+  messaging::sender fsm_queue(fsm.get_sender());
+
+  fsm_queue.send(money_inserted(100));
+
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  fsm.done();
+  fsm_thread.join();
+}
+
+TEST(CConFsm, SimpleFsm2)
+{
+  using namespace cxx_fsm;
+
+  simple fsm;
+
+  // make thread which runs fsm
+  std::thread fsm_thread(&simple::run, &fsm);
+
+  // make sender to send a message
+
+  messaging::sender fsm_queue(fsm.get_sender());
+
+  fsm_queue.send(money_inserted(100));
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  fsm_queue.send(item_2_purchased());
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  fsm.done();
+  fsm_thread.join();
+}
+
+namespace cxx_fsm_atm
+{
+  // can be a seperate header
+
+  struct withdraw
+  {
+    std::string account;
+    unsigned amount;
+    mutable messaging::sender atm_queue;
+    withdraw(std::string const& account_,
+        unsigned amount_,
+        messaging::sender atm_queue_):
+      account(account_),amount(amount_),
+      atm_queue(atm_queue_)
+    {}
+  };
+  struct withdraw_ok
+  {};
+  struct withdraw_denied
+  {};
+  struct cancel_withdrawal
+  {
+    std::string account;
+    unsigned amount;
+    cancel_withdrawal(std::string const& account_,
+        unsigned amount_):
+      account(account_),amount(amount_)
+    {}
+  };
+  struct withdrawal_processed
+  {
+    std::string account;
+    unsigned amount;
+    withdrawal_processed(std::string const& account_,
+        unsigned amount_):
+      account(account_),amount(amount_)
+    {}
+  };
+  struct card_inserted
+  {
+    std::string account;
+    explicit card_inserted(std::string const& account_):
+      account(account_)
+    {}
+  };
+  struct digit_pressed
+  {
+    char digit;
+    explicit digit_pressed(char digit_):
+      digit(digit_)
+    {}
+  };
+  struct clear_last_pressed
+  {};
+  struct eject_card
+  {};
+  struct withdraw_pressed
+  {
+    unsigned amount;
+    explicit withdraw_pressed(unsigned amount_):
+      amount(amount_)
+    {}
+  };
+  struct cancel_pressed
+  {};
+  struct issue_money
+  {
+    unsigned amount;
+    issue_money(unsigned amount_):
+      amount(amount_)
+    {}
+  };
+  struct verify_pin
+  {
+    std::string account;
+    std::string pin;
+    mutable messaging::sender atm_queue;
+    verify_pin(std::string const& account_,std::string const& pin_,
+        messaging::sender atm_queue_):
+      account(account_),pin(pin_),atm_queue(atm_queue_)
+    {}
+  };
+  struct pin_verified
+  {};
+  struct pin_incorrect
+  {};
+  struct display_enter_pin
+  {};
+  struct display_enter_card
+  {};
+  struct display_insufficient_funds
+  {};
+  struct display_withdrawal_cancelled
+  {};
+  struct display_pin_incorrect_message
+  {};
+  struct display_withdrawal_options
+  {};
+  struct get_balance
+  {
+    std::string account;
+    mutable messaging::sender atm_queue;
+    get_balance(std::string const& account_,messaging::sender atm_queue_):
+      account(account_),atm_queue(atm_queue_)
+    {}
+  };
+  struct balance
+  {
+    unsigned amount;
+    explicit balance(unsigned amount_):
+      amount(amount_)
+    {}
+  };
+  struct display_balance
+  {
+    unsigned amount;
+    explicit display_balance(unsigned amount_):
+      amount(amount_)
+    {}
+  };
+  struct balance_pressed
+  {};
+
+
+  // listing_c.9.cpp
+  class interface_machine
+  {
+    messaging::receiver incoming;
+    std::mutex iom;
+
+    public:
+    void done()
+    {
+      get_sender().send(messaging::close_queue());
+    }
+
+    void run()
+    {
+      try
+      {
+        for(;;)
+        {
+          incoming.wait()
+            .handle<issue_money>(
+                [&](issue_money const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout<<"Issuing "
+                <<msg.amount<<std::endl;
+                }
+                }
+                )
+            .handle<display_insufficient_funds>(
+                [&](display_insufficient_funds const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout<<"Insufficient funds"<<std::endl;
+                }
+                }
+                )
+            .handle<display_enter_pin>(
+                [&](display_enter_pin const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout
+                <<"Please enter your PIN (0-9)"
+                <<std::endl;
+                }
+                }
+                )
+            .handle<display_enter_card>(
+                [&](display_enter_card const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout<<"Please enter your card (I)"
+                <<std::endl;
+                }
+                }
+                )
+            .handle<display_balance>(
+                [&](display_balance const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout
+                <<"The balance of your account is "
+                <<msg.amount<<std::endl;
+                }
+                }
+                )
+            .handle<display_withdrawal_options>(
+                [&](display_withdrawal_options const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout<<"Withdraw 50? (w)"<<std::endl;
+                std::cout<<"Display Balance? (b)"
+                <<std::endl;
+                std::cout<<"Cancel? (c)"<<std::endl;
+                }
+                }
+                )
+            .handle<display_withdrawal_cancelled>(
+                [&](display_withdrawal_cancelled const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout<<"Withdrawal cancelled"
+                <<std::endl;
+                }
+                }
+                )
+            .handle<display_pin_incorrect_message>(
+                [&](display_pin_incorrect_message const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout<<"PIN incorrect"<<std::endl;
+                }
+                }
+                )
+            .handle<eject_card>(
+                [&](eject_card const& msg)
+                {
+                (void)msg;
+                {
+                std::lock_guard<std::mutex> lk(iom);
+                std::cout<<"Ejecting card"<<std::endl;
+                }
+                }
+                );
+        }
+      }
+      catch(messaging::close_queue&)
+      {
+      }
+    }
+    messaging::sender get_sender()
+    {
+      return incoming;
+    }
+  };
+
+
+  // listing_c.8.cpp
+
+  class bank_machine
+  {
+    messaging::receiver incoming;
+    unsigned balance_;
+
+    public:
+    bank_machine():
+      balance_(199)
+    {}
+    void done()
+    {
+      get_sender().send(messaging::close_queue());
+    }
+
+    void run()
+    {
+      try
+      {
+        for(;;)
+        {
+          incoming.wait()
+            .handle<verify_pin>
+            (
+             [&](verify_pin const& msg)
+             {
+             if(msg.pin=="1937")
+             {
+             msg.atm_queue.send(pin_verified());
+             }
+             else
+             {
+             msg.atm_queue.send(pin_incorrect());
+             }
+             }
+            )
+            .handle<withdraw>
+            (
+             [&](withdraw const& msg)
+             {
+             if(balance_>=msg.amount)
+             {
+             msg.atm_queue.send(withdraw_ok());
+             balance_-=msg.amount;
+             }
+             else
+             {
+             msg.atm_queue.send(withdraw_denied());
+             }
+             }
+            )
+            .handle<get_balance>
+            (
+             [&](get_balance const& msg)
+             {
+             msg.atm_queue.send(balance(balance_));
+             }
+            )
+            .handle<withdrawal_processed>
+            (
+             [&](withdrawal_processed const& msg)
+             {
+             (void)msg;
+             }
+            )
+            .handle<cancel_withdrawal>
+            (
+             [&](cancel_withdrawal const& msg)
+             {
+             (void)msg;
+             }
+            );
+        }
+      }
+      catch(messaging::close_queue const&)
+      {
+      }
+    }
+    messaging::sender get_sender()
+    {
+      return incoming;
+    }
+  };
+
+
+  class atm
+  {
+    private:
+      messaging::receiver incoming_;
+      messaging::sender bank_;
+      messaging::sender interface_hardware_;
+
+      void (atm::*state)();
+
+      std::string account_;
+      std::string pin_;
+      unsigned withdraw_amount_;
+
+      void waiting_for_card()
+      {
+        // interface_hardware.send(display_enter_card());
+        //
+        // state waitinf_for_card -> event card_inserted -> state getting_pin
+        //                              -> eaf, lambda
+
+        incoming_.wait()
+          .handle<card_inserted>
+          (
+           [&](const card_inserted &msg) 
+           {
+           std::cout << "atm::waiting_for_card::card_inserted" << std::endl;
+           account_ = msg.account;
+           pin_ = "";
+           // interface_hardware_.send(display_enter_pin());
+           state = &atm::getting_pin;
+           }
+          );
+      }
+
+      void getting_pin()
+      {
+        incoming_.wait()
+          .handle<digit_pressed>
+          (
+           [&](const digit_pressed &msg)
+           {
+           (void)msg;
+           unsigned const pin_length = 4;
+           pin_ += msg.digit;
+           std::cout << "atm::getting_pin::digit_pressed: " << pin_ << std::endl;
+           if (pin_.length() == pin_length)
+           {
+           // bank.send(verify_pin(account, pin, incoming));
+           state = &atm::verifying_pin;
+           }
+           }
+          )
+          .handle<clear_last_pressed>
+          (
+           [&](const clear_last_pressed &msg)
+           {
+           (void)msg;
+           std::cout << "atm::getting_pin::clear_last_pressed" << std::endl;
+           if (!pin_.empty())
+           {
+           pin_.pop_back();
+           }
+           }
+          )
+          .handle<cancel_pressed>
+          (
+           [&](const cancel_pressed &msg)
+           {
+           (void)msg;
+           std::cout << "atm::getting_pin::cancel_pressed" << std::endl;
+           state = &atm::done_processing;
+           }
+          );
+      }
+
+      // expect pin_* message from back fsm.
+      void verifying_pin()
+      {
+        incoming_.wait()
+          .handle<pin_verified>
+          (
+           [&](const pin_verified &msg)
+           {
+           (void)msg;
+           std::cout << "atm::verify_pin::pin_verified" << std::endl;
+           state = &atm::wait_for_action;
+           }
+          )
+          .handle<pin_incorrect>
+          (
+           [&](const pin_incorrect &msg)
+           {
+           (void)msg;
+           std::cout << "atm::verify_pin::pin_incorrect" << std::endl;
+           // interface_hardware_.send(display_pin_incorrect_message());
+           state = &atm::done_processing;
+           }
+          )
+          .handle<cancel_pressed>
+          (
+           [&](const cancel_pressed &msg)
+           {
+           (void)msg;
+           std::cout << "atm::verify_pin::cancel_pressed" << std::endl;
+           state = &atm::done_processing;
+           }
+          );
+      }
+
+      void wait_for_action()
+      {
+        // interface_hardware_.send(display_withdrawal_options());
+        incoming_.wait()
+          .handle<withdraw_pressed>
+          (
+           [&](const withdraw_pressed &msg)
+           {
+           withdraw_amount_ = msg.amount;
+           std::cout << "atm::wait_for_action::withdraw_pressed: " << withdraw_amount_ << std::endl;
+           // bank_.send(withdraw(account_, msg.account, incoming_));
+           state = &atm::process_withdrawal;
+           }
+          )
+          .handle<balance_pressed>
+          (
+           [&](const balance_pressed &msg)
+           {
+           (void)msg;
+           std::cout << "atm::wait_for_action::balance_pressed" << std::endl;
+           // bank_.send(get_balance(account_, incoming_));
+           state = &atm::process_balance;
+           }
+          )
+          .handle<cancel_pressed>
+          (
+           [&](const cancel_pressed &msg)
+           {
+           (void)msg;
+           std::cout << "atm::wait_for_action::cancel_pressed" << std::endl;
+           state = &atm::done_processing;
+           }
+          );
+      }
+
+      void process_balance()
+      {
+        incoming_.wait()
+          .handle<balance>
+          (
+           [&](const balance &msg)
+           {
+           (void)msg;
+           std::cout << "atm::process_balance::balance" << std::endl;
+           interface_hardware_.send(display_balance(msg.amount));
+           state = &atm::wait_for_action;
+           }
+          )
+          .handle<cancel_pressed>
+          (
+           [&](const cancel_pressed &msg)
+           {
+           (void)msg;
+           std::cout << "atm::process_balance::cancel_pressed" << std::endl;
+           state = &atm::done_processing;
+           }
+          );
+      }
+
+      void process_withdrawal()
+      {
+        incoming_.wait()
+          .handle<withdraw_ok>
+          (
+           [&](const withdraw_ok &msg)
+           {
+           (void)msg;
+           std::cout << "atm::process_withdrawal::withdraw_ok" << std::endl;
+           // interface_hardware_.send(issue_money(withdrawal_amount));
+           // bank_.send(withdrawal_processed(account,withdrawal_amount));
+           state = &atm::done_processing;
+           }
+          )
+          .handle<withdraw_denied>
+          (
+           [&](const withdraw_denied &msg)
+           {
+           (void)msg;
+           std::cout << "atm::process_withdrawal::withdraw_denied" << std::endl;
+           // interface_hardware_.send(display_insufficient_funds());
+           state = &atm::done_processing;
+           }
+          )
+          .handle<cancel_pressed>
+          (
+           [&](const cancel_pressed &msg)
+           {
+           (void)msg;
+           std::cout << "atm::process_withdrawal::cancel_pressed" << std::endl;
+           // bank_.send(cancel_withdrawal(account,withdrawal_amount));
+           // interface_hardware_.send(display_withdrawal_cancelled());
+           state = &atm::done_processing;
+           }
+          );
+      }
+
+      void done_processing()
+      {
+        // interface_hardware_.send(eject_card());
+        state = &atm::getting_pin;
+      }
+
+    public:
+      atm(messaging::sender bank, messaging::sender interface_hardware):
+        bank_(bank), interface_hardware_(interface_hardware) {}
+
+      atm(const atm &) = delete;
+      atm &operator=(const atm &) = delete;
+
+      // send a message to self
+      void done()
+      {
+        get_sender().send(messaging::close_queue());
+      }
+
+      void run()
+      {
+        state = &atm::waiting_for_card;
+
+        std::cout << "atm::run::for" << std::endl;
+
+        try
+        {
+          for (;;)
+          {
+            (this->*state)();
+          }
+        }
+        catch(messaging::close_queue const &)
+        {
+          std::cout << "atm::run::end" << std::endl;
+          // note: what would happen when catch exception but do nothing?
+        }
+      }
+
+      // Whereas a sender just references a message queue, a receiver owns it. You
+      // can obtain a sender that references the queue by using the implicit
+      // conversion.
+      //
+      // note: this is an interface to expose q to other class and used to set up
+      // connection each other
+      //
+      // atm machine(bank.get_sender(), intarface_hardware.get_sender());
+      //
+      // atm machine keeps this sender copies to send messages to them.
+
+      // note: cxx-conversion-op which convert receiver to sender
+      messaging::sender get_sender()
+      {
+        return incoming_;
+      }
+  };
+
+} // namespace
+
+
+// [ RUN      ] AtmFsm.CancelPin
+// atm::run::for
+// atm::waiting_for_card::card_inserted
+// atm::getting_pin::digit_pressed: 3
+// atm::getting_pin::digit_pressed: 33
+// atm::getting_pin::digit_pressed: 330
+// atm::getting_pin::cancel_pressed
+// [       OK ] AtmFsm.CancelPin (1001 ms)
+//
+// [ RUN      ] AtmFsm.DoWithdraw
+// atm::run::for
+// atm::waiting_for_card::card_inserted
+// atm::getting_pin::digit_pressed: 3
+// atm::getting_pin::digit_pressed: 33
+// atm::getting_pin::digit_pressed: 330
+// atm::getting_pin::digit_pressed: 3301
+// atm::verify_pin::pin_verified
+// atm::wait_for_action::withdraw_pressed: 50
+// atm::process_withdrawal::withdraw_ok
+// [       OK ] AtmFsm.DoWithdraw (1000 ms)
+
+TEST(CConFsm, AtmCancelPin)
+{
+  using namespace cxx_fsm_atm;
+
+  bank_machine bank;
+  interface_machine interface_hardware;
+  atm machine(bank.get_sender(),interface_hardware.get_sender());
+
+  std::thread atm_thread(&atm::run, &machine);
+
+  messaging::sender atmqueue(machine.get_sender());
+
+  atmqueue.send(card_inserted("JW1234"));
+  atmqueue.send(digit_pressed('3'));
+  atmqueue.send(digit_pressed('3'));
+  atmqueue.send(digit_pressed('0'));
+  atmqueue.send(cancel_pressed());
+
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  machine.done();
+  atm_thread.join();
+}
+
+TEST(CConFsm, AtmDoWithdraw)
+{
+  using namespace cxx_fsm_atm;
+
+  bank_machine bank;
+  interface_machine interface_hardware;
+  atm machine(bank.get_sender(),interface_hardware.get_sender());
+
+  std::thread atm_thread(&atm::run, &machine);
+
+  messaging::sender atmqueue(machine.get_sender());
+
+  atmqueue.send(card_inserted("JW1234"));
+  atmqueue.send(digit_pressed('3'));
+  atmqueue.send(digit_pressed('3'));
+  atmqueue.send(digit_pressed('0'));
+  atmqueue.send(digit_pressed('1'));
+
+  // message from bank fsm
+  atmqueue.send(pin_verified());
+
+  atmqueue.send(withdraw_pressed(50));
+  atmqueue.send(withdraw_ok());
+
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  machine.done();
+  atm_thread.join();
+}
+
+
+// ={=========================================================================
 // cxx-threadsafe-lookup-table, listing_6.11.cpp
 
 // * each bucket is protected by shared mutex
@@ -1154,146 +2510,96 @@ TEST(CconThreadTest, UseThreadSafeLookupTable)
 }
 
 
-
-// ={=========================================================================
-// cxx-sort
-// CCon, Listing 4.12 A sequential implementation of Quicksort
-
-template<typename T>
-std::list<T> sequential_quick_sort(std::list<T> input)
-{
-    if(input.empty())
-        return input;
-
-    std::list<T> result;
-    // move the first of input to the first of result
-    result.splice(result.begin(), input, input.begin());
-    const T &pivot = *result.begin();
-
-    // divide input into two; one which are < pivot and the other which are >= pivot.
-    auto divide_point = std::partition(input.begin(), input.end(),
-            [&](const T &t)
-            {
-                return t < pivot;
-            });
-
-    // make two list; lower_part and input(higher_part)
-    std::list<T> lower_part;
-    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
-
-    auto new_lower(sequential_quick_sort(std::move(lower_part)));
-    auto new_higher(sequential_quick_sort(std::move(input)));
-
-    result.splice(result.end(), new_higher);
-    result.splice(result.begin(), new_lower);
-    return result;
-}
-
-TEST(CconThreadTest, UseSequentialQuickSort)
-{
-    // result {12, 19, 22, 26, 29, 33, 35 };
-    // std::list<int> input{26, 33, 35, 29, 19, 12, 22};
-    std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
-
-    auto result = sequential_quick_sort(input);
-    copy(result.begin(), result.end(), ostream_iterator<int>(cout, " "));
-    cout << endl;
-}
-
-
-template<typename T>
-std::list<T> parallel_quick_sort(std::list<T> input)
-{
-    if(input.empty())
-        return input;
-
-    std::list<T> result;
-    // move the first of input to the first of result
-    result.splice(result.begin(), input, input.begin());
-    const T &pivot = *result.begin();
-
-    // divide input into two; one which are < pivot and the other which are >= pivot.
-    auto divide_point = std::partition(input.begin(), input.end(),
-            [&](const T &t)
-            {
-                return t < pivot;
-            });
-
-    // make two list; lower_part and input(higher_part)
-    std::list<T> lower_part;
-    lower_part.splice(lower_part.end(), input, input.begin(), divide_point);
-
-    std::future<std::list<T>> new_lower(
-        std::async(parallel_quick_sort<T>, std::move(lower_part))
-        );
-    auto new_higher(parallel_quick_sort(std::move(input)));
-
-    result.splice(result.end(), new_higher);
-    result.splice(result.begin(), new_lower.get());
-    return result;
-}
-
-TEST(CconThreadTest, UseParallelQuickSort)
-{
-    // result {12, 19, 22, 26, 29, 33, 35 };
-    // std::list<int> input{26, 33, 35, 29, 19, 12, 22};
-
-    std::list<int> input{30, 2, 31, 5, 33, 6, 12, 10, 13, 15, 17, 29, 6};
-
-    auto result = parallel_quick_sort(input);
-    copy(result.begin(), result.end(), ostream_iterator<int>(cout, " "));
-    cout << endl;
-}
-
-
 // ={=========================================================================
 // cxx-atomic
 // Listing 5.4 Sequential consistency implies a total ordering
 
-std::atomic<bool> x, y;
-std::atomic<int> z;
-
-void write_x()
+namespace cxx_atomic
 {
-  // 1
-  x.store(true, std::memory_order_seq_cst);
-}
+  namespace use_atomic
+  {
+    std::atomic<bool> x, y;
+    std::atomic<int> z;
 
-void write_y()
-{
-  // 2
-  y.store(true, std::memory_order_seq_cst);
-}
+    void write_x()
+    {
+      // 1
+      x.store(true, std::memory_order_seq_cst);
+    }
 
-void read_x_then_y()
-{
-  while(!x.load(std::memory_order_seq_cst))
-    ;
+    void write_y()
+    {
+      // 2
+      y.store(true, std::memory_order_seq_cst);
+    }
 
-  // 3
-  if(y.load(std::memory_order_seq_cst))
-    ++z;
-}
+    void read_x_then_y()
+    {
+      while(!x.load(std::memory_order_seq_cst))
+        ;
 
-void read_y_then_x()
-{
-  while(!y.load(std::memory_order_seq_cst))
-    ;
+      // 3
+      if(y.load(std::memory_order_seq_cst))
+        ++z;
+    }
 
-  // 4
-  if(x.load(std::memory_order_seq_cst))
-    ++z;
-}
+    void read_y_then_x()
+    {
+      while(!y.load(std::memory_order_seq_cst))
+        ;
+
+      // 4
+      if(x.load(std::memory_order_seq_cst))
+        ++z;
+    }
+  } // namespace
+
+  namespace not_use_atomic
+  {
+    bool x, y;
+    int z;
+
+    void write_x()
+    {
+      // x.store(true, std::memory_order_seq_cst);
+      x = true;
+    }
+
+    void write_y()
+    {
+      // y.store(true, std::memory_order_seq_cst);
+      y = true;
+    }
+
+    void read_x_then_y()
+    {
+      while(!x)
+        ;
+
+      if(y) ++z;
+    }
+
+    void read_y_then_x()
+    {
+      while(!y)
+        ;
+
+      if(x) ++z;
+    }
+  } // namespace
+
+} // namespace
 
 // Both loads can return true, leading to z being 2, but under no circumstances
 // can z be zero.
+//
+// Not sure if this example is good to study atomic and to represent the point
+// since both shows 1 or 2 output for z when runs over and over.
 
-// [ RUN      ] CconThreadTest.UseSequentialConsistency
-// z: 2
-// [       OK ] CconThreadTest.UseSequentialConsistency (8 ms)
-
-TEST(CconThreadTest, UseSequentialConsistency)
+TEST(CConAtomic, Atomic)
 {
+  using namespace cxx_atomic::use_atomic;
+
   x = false;
   y = false;
   z = 0;
@@ -1314,6 +2620,102 @@ TEST(CconThreadTest, UseSequentialConsistency)
   cout << "z: " << z << endl; 
 
   assert(z.load()!=0);
+}
+
+TEST(CConAtomic, NoAtomic)
+{
+  using namespace cxx_atomic::not_use_atomic;
+
+  x = false;
+  y = false;
+  z = 0;
+
+  // either the store to x or the store to y must happen first, even though it’s
+  // not specified which.
+
+  std::thread a(write_x);
+  std::thread b(write_y);
+  std::thread c(read_x_then_y);
+  std::thread d(read_y_then_x);
+
+  a.join();
+  b.join();
+  c.join();
+  d.join();
+
+  cout << "z: " << z << endl; 
+
+  assert(z!=0);
+}
+
+
+namespace cxx_atomic
+{
+  struct Counter {
+
+    Counter() : value(0) {}
+
+    int value;
+
+    void increment(){
+      ++value;
+    }
+
+    void decrement(){
+      --value;
+    }
+
+    int get(){
+      return value;
+    }
+  };
+
+  void increment_counter(Counter& counter)
+  {
+    for (int i = 0; i < 30; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      counter.increment();
+    }
+  }
+
+  struct AtomicCounter {
+    std::atomic<int> value;
+
+    void increment(){
+      ++value;
+    }
+
+    void decrement(){
+      --value;
+    }
+
+    int get(){
+      return value.load();
+    }
+  };
+
+  void increment_atomic_counter(AtomicCounter& counter)
+  {
+    for (int i = 0; i < 10; ++i)
+      counter.increment();
+  }
+
+} // namespace
+
+TEST(CConAtomic, AtomicExample)
+{
+  using namespace cxx_atomic;
+
+  Counter counter;
+
+  std::thread a(increment_counter, std::ref(counter));
+  std::thread b(increment_counter, std::ref(counter));
+  std::thread c(increment_counter, std::ref(counter));
+
+  a.join(); b.join(); c.join();
+  
+  cout << "counter value: " << counter.get() << endl;
 }
 
 

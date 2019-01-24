@@ -8,7 +8,10 @@
 #include <exception>
 #include <condition_variable>
 
-#include <boost/thread/shared_mutex.hpp>
+// #include <string.h>
+// #include <pthread.h>
+// #include <sys/syscall.h>
+// #include <unistd.h>
 
 #include "gmock/gmock.h"
 
@@ -16,96 +19,78 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
-
-// ={=========================================================================
-// cxx-condition
-
-// class locked_queue {
-//  void push(T &);
-//  T pop();
-// };
-
-namespace cxx_condition
+namespace cxx_atomic
 {
-  template <typename T>
-    class locked_queue {
-      public:
-        void push(T const& item)
-        {
-          std::lock_guard<std::mutex> lock(m_);
-          queue_.push(item);
+  struct Counter {
 
-          // as soon as there are items in queue
-          if (queue_.size())
-            cond_.notify_one();
-        }
+    Counter() : value(0) {}
 
-        T pop() 
-        {
-          // to use with cxx-condition
-          std::unique_lock<std::mutex> lock(m_);
+    int value;
 
-          while (queue_.empty())
-            cond_.wait(lock);
+    void increment(){
+      ++value;
+    }
 
-          T item = queue_.front();
-          queue_.pop();
-          return item;
-        }
+    void decrement(){
+      --value;
+    }
 
-      private:
-        std::queue<T> queue_;
-        std::mutex m_;
-        std::condition_variable cond_;
-    };
+    int get(){
+      return value;
+    }
+  };
 
-  int consumed{};
-
-  void producer(locked_queue<int>* q)
+  void increment_counter(Counter& counter)
   {
-    for (int i = 0; i < 10; ++i)
+    for (int i = 0; i < 30; ++i)
     {
-      q->push(i);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      counter.increment();
     }
   }
 
-  void consumer(locked_queue<int>* q)
+  struct AtomicCounter {
+    std::atomic<int> value;
+
+    void increment(){
+      ++value;
+    }
+
+    void decrement(){
+      --value;
+    }
+
+    int get(){
+      return value.load();
+    }
+  };
+
+  void increment_atomic_counter(AtomicCounter& counter)
   {
     for (int i = 0; i < 10; ++i)
-    {
-      q->pop();
-      ++consumed;
-    }
+      counter.increment();
   }
 
-} // namesapce
+} // namespace
 
-// similar to linux-sync-cond-lpi-example
-
-TEST(CConCondition, ProducerAndConsumer)
+TEST(CConAtomic, AtomicExample)
 {
-  using namespace cxx_condition;
+  using namespace cxx_atomic;
 
-  locked_queue<int> q;
+  Counter counter;
 
-  std::thread c1(&consumer, &q);
-  std::thread c2(&consumer, &q);
-  std::thread c3(&consumer, &q);
+  std::thread a(increment_counter, std::ref(counter));
+  std::thread b(increment_counter, std::ref(counter));
+  std::thread c(increment_counter, std::ref(counter));
 
-  this_thread::sleep_for(chrono::seconds(2));
-
-  std::thread p1(&producer, &q);
-  std::thread p2(&producer, &q);
-  std::thread p3(&producer, &q);
-
-  c1.join(); c2.join(); c3.join();
-  p1.join(); p2.join(); p3.join();
-
-  EXPECT_THAT(consumed, 30);
+  a.join(); b.join(); c.join();
+  
+  cout << "counter value: " << counter.get() << endl;
+  ASSERT_THAT(counter.get(), 90);
 }
 
-
 // ={=========================================================================
+
 int main(int argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);

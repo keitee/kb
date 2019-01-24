@@ -6,7 +6,7 @@
 GTEST_DIR = /home/kyoupark/works/googletest/googletest
 GMOCK_DIR = /home/kyoupark/works/googletest/googlemock
 
-TARGET = fsm
+TARGET = fsm_table
 
 # Where to find user code.
 USER_DIR = .
@@ -17,7 +17,7 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG -lboost_system -lboost_thread
 #CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -fno-elide-constructors
 
-TESTS = $(TARGET)_test
+TESTS = $(TARGET)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -57,8 +57,8 @@ gtest.a : gtest-all.o
 # message.o : message.cpp $(GTEST_HEADERS)
 # 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c message.cpp -o message.o
 
-# fsm.o : fsm.c fsm.h
+fsm.o : fsm.c fsm.h
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c fsm.c -o fsm.o
 
-$(TESTS) : fsm_test.o gtest.a gmock.a fsm.o
+$(TARGET)_out : $(TARGET).o gtest.a gmock.a fsm.o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

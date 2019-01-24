@@ -807,6 +807,195 @@ TEST(Ctor, CtorInitFromList)
 }
 
 
+// cxx-ctor-access
+
+namespace cxx_ctor_access
+{
+  class Bar
+  {
+    public:
+      Bar() : mesg_() {}
+
+      Bar(string const& mesg) : mesg_(mesg) {}
+
+      // copy ctor
+      Bar(Bar const& bar)
+      {
+        mesg_ = bar.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+  
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {}
+
+      Foo(string const& mesg) : mesg_(mesg) {}
+
+      // copy ctor without const 
+      Foo(Foo& foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+        foo.mesg_ = "xxx";
+      }
+
+      // raise error only when that's different type:
+      //
+      // cxx.cpp: In constructor ‘cxx_ctor_access::Foo::Foo(cxx_ctor_access::Bar&)’:
+      // cxx.cpp:835:14: error: ‘std::string cxx_ctor_access::Bar::mesg_’ is private
+      //        string mesg_;
+      //               ^
+      // cxx.cpp:855:13: error: within this context
+      //          bar.mesg_ = "xxx";
+      //              ^
+
+      Foo(Bar& bar)
+      {
+        // both cause errors
+        // mesg_ = bar.mesg_;
+        // bar.mesg_ = "xxx";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+
+} // namespace
+
+TEST(Ctor, Access)
+{
+  using namespace cxx_ctor_access;
+
+  Foo foo1{"foo1"};
+  
+  Foo foo2(foo1);
+  EXPECT_THAT(foo2.return_mesg(), "foo1 and copy ctor");
+}
+
+
+// ={=========================================================================
+// cxx-dtor
+
+namespace cxx_dtor {
+
+  class NoVirtualDtorBase
+  {
+    public:
+      NoVirtualDtorBase() 
+      { std::cout << "\tno virtual ctor: base" << std::endl; }
+
+      ~NoVirtualDtorBase() 
+      { std::cout << "\tno virtual dtor: base" << std::endl; }
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromNoVirtual : public NoVirtualDtorBase
+  {
+    public:
+      DerivedFromNoVirtual() 
+      { std::cout << "\tno virtual ctor: derived" << std::endl; }
+
+      ~DerivedFromNoVirtual() 
+      { std::cout << "\tno virtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+  class VirtualDtorBase
+  {
+    public:
+      VirtualDtorBase() 
+      { std::cout << "\tvirtual ctor: base" << std::endl; }
+
+      virtual ~VirtualDtorBase() 
+      { std::cout << "\tvirtual dtor: base" << std::endl; }
+
+    private:
+      int value_;
+  };
+
+  class DerivedFromVirtual : public VirtualDtorBase
+  {
+    public:
+      DerivedFromVirtual() 
+      { std::cout << "\tvirtual ctor: derived" << std::endl; }
+
+      ~DerivedFromVirtual() 
+      { std::cout << "\tvirtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+// {
+//         no virtual ctor: base
+//         no virtual ctor: derived
+//         no virtual dtor: base
+// }
+// {
+//         virtual ctor: base
+//         virtual ctor: derived
+//         virtual dtor: derived
+//         virtual dtor: base
+// }
+// {
+//         no virtual ctor: base
+//         no virtual ctor: derived
+// }
+//         no virtual dtor: derived
+//         no virtual dtor: base
+
+TEST(Dtor, NoVirtualDtorProblem)
+{
+  using namespace cxx_dtor;
+
+  {
+    cout << "{" << endl;
+    NoVirtualDtorBase* pbase = new DerivedFromNoVirtual;
+
+    // https://stackoverflow.com/questions/7403883/derived-class-with-non-virtual-destructor
+    // If you don't do delete in the above manner, then it will be fine. 
+    delete pbase; 
+
+    cout << "}" << endl; }
+
+  {
+    cout << "{" << endl;
+    VirtualDtorBase* pbase = new DerivedFromVirtual;
+    delete pbase;
+    cout << "}" << endl;
+  }
+
+  {
+    cout << "{" << endl;
+    DerivedFromNoVirtual object;
+    cout << "}" << endl;
+  }
+}
+
+
 // ={=========================================================================
 // cxx-copy-control
 
@@ -3588,6 +3777,40 @@ TEST(SharedPointerOwn, Shared)
 
 
 // ={=========================================================================
+// cxx-cast
+
+namespace cxx_cast
+{
+  class VirtualDtorBase
+  {
+    public:
+      VirtualDtorBase() 
+      { std::cout << "\tvirtual ctor: base" << std::endl; }
+
+      virtual ~VirtualDtorBase() 
+      { std::cout << "\tvirtual dtor: base" << std::endl; }
+
+    private:
+      int value_;
+  };
+
+  class DerivedFromVirtual : public VirtualDtorBase
+  {
+    public:
+      DerivedFromVirtual() 
+      { std::cout << "\tvirtual ctor: derived" << std::endl; }
+
+      ~DerivedFromVirtual() 
+      { std::cout << "\tvirtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+
+// ={=========================================================================
 // cxx-range-for
 
 // TEST(CxxFeaturesTest, DISABLED_UseRangeForOnInteger)
@@ -3922,26 +4145,34 @@ TEST(Stdio, ManipulatorsFloat)
 
 
 // ={=========================================================================
-// cxx-rtti
+// cxx-rtti cxx-cast
 
-class RttiBase 
+namespace cxx_rtti
 {
-  public:
-    // to make it polymorphic
-    ~RttiBase() {}
 
-  private:
-    int id_;
-};
+  class RttiBase 
+  {
+    public:
+      // to make it polymorphic
+      // ~RttiBase() {}
+      virtual ~RttiBase() {}
 
-class RttiDerived : public RttiBase 
-{
-  private:
-    int value_;
-};
+    private:
+      int id_;
+  };
+
+  class RttiDerived : public RttiBase 
+  {
+    private:
+      int value_;
+  };
+
+} // namespace
 
 TEST(Rtti, UseTypeid)
 {
+  using namespace cxx_rtti;
+
   RttiBase b, bb;
   RttiDerived d;
   bool result{};
@@ -3956,20 +4187,59 @@ TEST(Rtti, UseTypeid)
   EXPECT_EQ(result, true);
 }
 
-TEST(Rtti, UseDynamicCast)
+TEST(Rtti, DynamicCast)
 {
-  RttiDerived d;
+  using namespace cxx_rtti;
 
-  auto result = dynamic_cast<RttiBase*>(&d);
-  EXPECT_TRUE(result != NULL);
-
-  if (RttiBase *bp = dynamic_cast<RttiBase*>(&d))
   {
-    (void)bp;
-    cout << "derived is a subclass of base" << endl;
+    RttiDerived d;
+
+    auto result = dynamic_cast<RttiBase*>(&d);
+    EXPECT_TRUE(result != NULL);
+
+    RttiBase *bp = dynamic_cast<RttiBase*>(&d);
+
+    // "derived is a subclass of base"
+    EXPECT_THAT(bp, Ne(nullptr));
   }
-  else
-    cout << "derived is NOT a subclass of base" << endl;
+
+  {
+    try {
+      RttiDerived dp1;
+
+      // upcast
+      RttiBase* pbase1 = new RttiDerived;
+
+      RttiBase* pbase2 = new RttiBase;
+
+      RttiBase* pbase3;
+      RttiDerived* pderived;
+
+      // derived to derived, okay.
+      //
+      // *cxx-dtor-non-virtual-destruction-problem* when no virtual keyword in
+      // class definition
+      //
+      // cxx.cpp:4138:51: error: cannot dynamic_cast ‘pbase1’ (of type ‘class cxx_rtti::RttiBase*’) to type ‘class cxx_rtti::RttiDerived*’ (source type is not polymorphic)
+      //        pderived = dynamic_cast<RttiDerived*>(pbase1);
+
+      pderived = dynamic_cast<RttiDerived*>(pbase1);
+      EXPECT_THAT(pderived, Ne(nullptr));
+
+      // downcast from base to derived, fails since pbase2 is not complete objedct
+      pderived = dynamic_cast<RttiDerived*>(pbase2);
+      EXPECT_THAT(pderived, nullptr);
+
+      // upcast from derived to base
+
+      pbase3 = dynamic_cast<RttiBase*>(pbase1);
+      EXPECT_THAT(pbase3, Ne(nullptr));
+
+      pbase3 = dynamic_cast<RttiBase*>(&dp1);
+      EXPECT_THAT(pbase3, Ne(nullptr));
+
+    } catch (exception& e) {cout << "Exception: " << e.what();}
+  }
 }
 
 
@@ -5877,6 +6147,47 @@ TEST(Exception, OwnException)
   }
   catch (...)
   {
+  }
+}
+
+namespace cxx_except 
+{
+  class Foo
+  {
+    public:
+      ~Foo()
+      {
+      }
+  };
+
+  class FooAbort
+  {
+    public:
+      ~FooAbort()
+      {
+        throw std::runtime_error("expects abort");
+      }
+  };
+} // namespace
+
+TEST(Exception, Noexcept)
+{
+  using namespace cxx_except;
+
+  {
+    int value{1};
+
+    Foo foo;
+
+    EXPECT_THAT(value, 1);
+  }
+
+  {
+    int value{1};
+
+    FooAbort foo;
+
+    EXPECT_THAT(value, 1);
   }
 }
 
