@@ -73,7 +73,7 @@ namespace cxx_atomic
 
 } // namespace
 
-TEST(CConAtomic, AtomicExample)
+TEST(CConAtomic, NoAtomicCounter)
 {
   using namespace cxx_atomic;
 
@@ -89,6 +89,24 @@ TEST(CConAtomic, AtomicExample)
   cout << "counter value: " << counter.get() << endl;
   ASSERT_THAT(counter.get(), 120);
 }
+
+TEST(CConAtomic, AtomicCounter)
+{
+  using namespace cxx_atomic;
+
+  AtomicCounter counter;
+
+  std::thread a(increment_counter, std::ref(counter));
+  std::thread b(increment_counter, std::ref(counter));
+  std::thread c(increment_counter, std::ref(counter));
+  std::thread d(increment_counter, std::ref(counter));
+
+  a.join(); b.join(); c.join(); d.join();
+  
+  cout << "counter value: " << counter.get() << endl;
+  ASSERT_THAT(counter.get(), 120);
+}
+
 
 // ={=========================================================================
 
