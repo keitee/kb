@@ -82,11 +82,12 @@ TEST(CConAtomic, AtomicExample)
   std::thread a(increment_counter, std::ref(counter));
   std::thread b(increment_counter, std::ref(counter));
   std::thread c(increment_counter, std::ref(counter));
+  std::thread d(increment_counter, std::ref(counter));
 
-  a.join(); b.join(); c.join();
+  a.join(); b.join(); c.join(); d.join();
   
   cout << "counter value: " << counter.get() << endl;
-  ASSERT_THAT(counter.get(), 90);
+  ASSERT_THAT(counter.get(), 120);
 }
 
 // ={=========================================================================
