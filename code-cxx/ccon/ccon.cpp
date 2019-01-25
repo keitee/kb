@@ -2649,6 +2649,13 @@ TEST(CConAtomic, NoAtomic)
 }
 
 
+// https://baptiste-wicht.com/posts/2012/07/c11-concurrency-tutorial-part-4-atomic-type.html
+//
+// 1. TEST(DISABLED_CConAtomic, NoAtomicCounter)
+// only failes when run on real server but not on VM.
+// 
+// 2. Not much difference in time to run for Atomic and LockCounter
+
 namespace cxx_atomic
 {
   struct Counter {
@@ -2707,6 +2714,39 @@ namespace cxx_atomic
     }
   }
 
+  struct LockCounter {
+
+    std::mutex m_;
+
+    LockCounter() : value(0) {}
+
+    std::atomic<int> value;
+
+    void increment(){
+      std::lock_guard<std::mutex> lock(m_);
+      ++value;
+    }
+
+    void decrement(){
+      std::lock_guard<std::mutex> lock(m_);
+      --value;
+    }
+
+    int get(){
+      std::lock_guard<std::mutex> lock(m_);
+      return value.load();
+    }
+  };
+
+  void increment_lock_counter(LockCounter& counter)
+  {
+    for (int i = 0; i < 30; ++i)
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      counter.increment();
+    }
+  }
+
 } // namespace
 
 TEST(DISABLED_CConAtomic, NoAtomicCounter)
@@ -2741,6 +2781,34 @@ TEST(CConAtomic, AtomicCounter)
   
   cout << "counter value: " << counter.get() << endl;
   ASSERT_THAT(counter.get(), 120);
+}
+
+TEST(CConAtomic, LockCounter)
+{
+  using namespace cxx_atomic;
+
+  LockCounter counter;
+
+  std::thread a(increment_lock_counter, std::ref(counter));
+  std::thread b(increment_lock_counter, std::ref(counter));
+  std::thread c(increment_lock_counter, std::ref(counter));
+  std::thread d(increment_lock_counter, std::ref(counter));
+
+  a.join(); b.join(); c.join(); d.join();
+  
+  cout << "counter value: " << counter.get() << endl;
+  ASSERT_THAT(counter.get(), 120);
+}
+
+
+TEST(CConAtomic, AtomicTypes)
+{
+  // atomic<bool> may not be lock-free depending on implementation/platform.
+  std::atomic<bool> abool;
+  EXPECT_THAT(abool.is_lock_free(), true);
+
+  std::atomic<int> aint;
+  EXPECT_THAT(aint.is_lock_free(), true);
 }
 
 

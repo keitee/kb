@@ -759,12 +759,6 @@ The following class diagram describes the pattern for validating passwords:
 */
 
 
-namespace U67_Text
-{
-
-} // namespace
-
-
 // ={=========================================================================
 int main(int argc, char **argv)
 {
