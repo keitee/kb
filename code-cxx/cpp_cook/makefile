@@ -7,6 +7,7 @@ GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
 TINYXML_DIR = $(HOME)/works/tinyxml2
 PUGIXML_DIR = $(HOME)/works/pugixml
+NLOHMANN_JSON_DIR = $(HOME)/works/json/single_include/nlohmann
 
 TARGET = cpp_cook
 
@@ -14,7 +15,8 @@ TARGET = cpp_cook
 USER_DIR = .
 
 CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include \
-	-isystem $(TINYXML_DIR) -isystem $(PUGIXML_DIR)/src
+	-isystem $(TINYXML_DIR) -isystem $(PUGIXML_DIR)/src \
+	-isystem $(NLOHMANN_JSON_DIR)
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -L$(TINYXML_DIR) \
 	$(PUGIXML_DIR)/build/make-g++-debug-standard-c++11/src/pugixml.cpp.o

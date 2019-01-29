@@ -155,6 +155,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-pattern-factory
 *kt_dev_cxx_0000* cxx-pattern-strategy
 *kt_dev_cxx_0000* cxx-pattern-observer
+*kt_dev_cxx_0000* cxx-pattern-decorator
+*kt_dev_cxx_0000* cxx-pattern-composite
 *kt_dev_cxx_0000* cxx-incomplete-type cpp-forward-declaration cpp-layout
 *kt_dev_cxx_0000* cxx-empty-base-class-optimization
 
@@ -5184,7 +5186,7 @@ Manipulator Meaning
 skipws  Skips leading whitespaces with operator >> (sets the flag ios::skipws)
 
 
-*cxx-stream-file*
+*cxx-file-stream-file*
 
 CXXSLR-15.9
 
@@ -5199,6 +5201,73 @@ stream such as getline(). Further, *cxx-stream-iterator* add iterator features
 to a stream. However freopen binds file to stdin and can use cin >> to read
 data.
 
+namespace cxx_code
+{
+  {
+    // iosfwd
+
+    typedef basic_ifstream<char>              ifstream;
+    typedef basic_ifstream<wchar_t>   wifstream;
+  }
+
+  {
+    // fstream
+    
+    // [27.8.1.5] Template class basic_ifstream
+    /**
+     *  @brief  Controlling input for files.
+     *  @ingroup io
+     *
+     *  @tparam _CharT  Type of character stream.
+     *  @tparam _Traits  Traits for character type, defaults to
+     *                   char_traits<_CharT>.
+     *
+     *  This class supports reading from named files, using the inherited
+     *  functions from std::basic_istream.  To control the associated
+     *  sequence, an instance of std::basic_filebuf is used, which this page
+     *  refers to as @c sb.
+     */
+    template<typename _CharT, typename _Traits>
+      class basic_ifstream : public basic_istream<_CharT, _Traits>
+    {
+      /**
+       *  @brief  Create an input file stream.
+       *  @param  __s  Null terminated string specifying the filename.
+       *  @param  __mode  Open file in specified mode (see std::ios_base).
+       *
+       *  @c ios_base::in is automatically included in @a __mode.
+       *
+       *  Tip:  When using std::string to hold the filename, you must use
+       *  .c_str() before passing it to this constructor.
+       */
+      explicit
+        basic_ifstream(const char* __s, ios_base::openmode __mode = ios_base::in)
+        : __istream_type(), _M_filebuf()
+        {
+          this->init(&_M_filebuf);
+          this->open(__s, __mode);
+        }
+
+#if __cplusplus >= 201103L
+      /**
+       *  @brief  Create an input file stream.
+       *  @param  __s  std::string specifying the filename.
+       *  @param  __mode  Open file in specified mode (see std::ios_base).
+       *
+       *  @c ios_base::in is automatically included in @a __mode.
+       */
+      explicit
+        basic_ifstream(const std::string& __s,
+            ios_base::openmode __mode = ios_base::in)
+        : __istream_type(), _M_filebuf()
+        {
+          this->init(&_M_filebuf);
+          this->open(__s, __mode);
+        }
+#endif
+    }
+  }
+} // namespace
 
 15.9.3 File Flags
 
@@ -5206,7 +5275,7 @@ in    Opens for reading (default for ifstream)
 out   Opens for writing (default for ofstream)
 
 
-<ex> *cxx-ex-ifstream* for input.txt
+<ex> *cxx-file-ifstream* for input.txt
 
 // * fstream is stream so that can use stream operation with no effort.
 // * use istream to take ifstream.
@@ -10581,12 +10650,12 @@ https://github.com/Microsoft/GSL
 
 The key ideas in OOP are data abstraction, inheritance, and dynamic binding.
 
-* `data-abstration` CPR 254 
+o `data-abstration` CPR 254 
 
 Data Abstraction is a programming and design technique that relies on the
 `separation of interface and implementation.` 
 
-  * `encapsulation`
+  o `encapsulation`
     `enforces the separation` of a class interface and implementation and
     hides its implementation. 
 
@@ -10594,7 +10663,7 @@ Class users need not know or care how the type actually works and can instead
 think abstractly about what the type does. 
 
 
-* `inheritance` 
+o `inheritance` 
 Can define classes that `model the relationships` among similar types. 
 
 Conceptually, neither the kind of device nor the character size affects the IO
@@ -10611,7 +10680,7 @@ inheritance lets us say that a particular class inherits from another class.
 Ordinarily, we can use an object of an inherited class as if it were an object
 of the same type as the class from which it inherits.
 
-  * `dynamic-binding` 
+  o `dynamic-binding` 
     Use objects of these types while ignoring the details of how they differ.
     This is mechnism to make inheritance work along with virtual mechnism and
     object layout(subobject) scheme.
@@ -11950,7 +12019,8 @@ TEST(Dtor, NoVirtualDtorProblem)
     // If you don't do delete in the above manner, then it will be fine. 
     delete pbase; 
 
-    cout << "}" << endl; }
+    cout << "}" << endl; 
+  }
 
   {
     cout << "{" << endl;
@@ -11967,9 +12037,9 @@ TEST(Dtor, NoVirtualDtorProblem)
 }
 
 
-{pure-virtual-dtor}
+{dtor-in-cxx-abc} {dtor-pure} *cxx-abc*
 EC++07. Why use this? Sometimes you have a class that you'd like to be abstract
-but you don't have any pure virtual functions. Like <2> base class to extend. 
+but you don't have any pure virtual functions.
 
 class AWOW {
   public:
@@ -11978,104 +12048,141 @@ class AWOW {
 
 AWOW::~AWOW() {}
 
-The pure-virtual-dtor 'must' have a definition(implementation) and 'must' be
+The pure-virtual-dtor `must` have a definition(implementation) and must be
 implemeted outside class definitions.
 
-MEC++33. Pure virtual do not mean it has no implementation and means that the
-class is abstract and the derived func must be nomal virtual. True, most pure
-virtual functions are never implemented, but pure-virtual-dtor are a
-special-case. They must be implemented, because they are called whenever a
-derived class destructor is invoked.  
+MEC++33. `pure virtual do not mean it has no implementation` and means that
+the class is abstract and the derived func must be non-virtual. True, most
+pure virtual functions are never implemented, but `dtor are a special-case.`
+They must be implemented, because they are called whenever a derived class
+destructor is invoked.  
+
+o if there is no dtor implementation when use pure dtor in base, will cause
+link error when use drived object.
+
+o if there is no dtor in cxx-abc, compiler will make it but will suffer from 
+*cxx-dtor-non-virtual-destruction-problem*
+
+o this is why cxx-abc should have virtual dtor
 
 <ex>
-#include <iostream>
+// Why dtor should be virtual in cxx-abc?
 
-using std::cout; using std::endl;
+namespace cxx_dtor {
 
-class Base {
-  private:
-    int m_iDataABCAnimal;
+  class AbstractBase
+  {
+    public:
+      AbstractBase() : base_(0)
+      { std::cout << "\tabstract ctor: base" << std::endl; }
 
-  public:
-    virtual ~Base() {};
-    virtual void shout(void)=0;
-};
+      ~AbstractBase() 
+      { std::cout << "\tabstract dtor: base" << std::endl; }
 
-void Base::shout(void)
-{ cout << "base shout" << endl; }
+      virtual int get_value() = 0;
 
-class Derived: public Base {
-  private:
-    int m_iDataAnimal;
+    private:
+      int base_;
+  };
 
-  public:
-    void sample() { cout << "sample: derived" << endl; }
-    void shout(void) { Base::shout(); cout << "derived shout" << endl; }
-};
+  class DerivedFromAbstract : public AbstractBase
+  {
+    public:
+      DerivedFromAbstract() : derived_(10)
+      { std::cout << "\tabstract ctor: derived" << std::endl; }
 
-int main()
+      ~DerivedFromAbstract() 
+      { std::cout << "\tabstract dtor: derived" << std::endl; }
+
+      virtual int get_value() override { return derived_; };
+
+    private:
+      int derived_;
+  };
+
+
+  class AbstractBaseNoDtor
+  {
+    public:
+      AbstractBaseNoDtor() : base_(0)
+      { std::cout << "\tabstract ctor: base" << std::endl; }
+
+      // ~AbstractBase() 
+      // { std::cout << "\tabstract dtor: base" << std::endl; }
+
+      virtual int get_value() = 0;
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromAbstractNoDtor : public AbstractBaseNoDtor
+  {
+    public:
+      DerivedFromAbstractNoDtor() : derived_(10)
+      { std::cout << "\tabstract ctor: derived" << std::endl; }
+
+      ~DerivedFromAbstractNoDtor() 
+      { std::cout << "\tabstract dtor: derived" << std::endl; }
+
+      virtual int get_value() override { return derived_; };
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+TEST(Dtor, AbstractBaseClassNoCompileError)
 {
-  std::cout << "--{ main " << std::endl;
+  {
+    using namespace cxx_dtor;
 
-  Derived d;
-  d.shout();
+    DerivedFromAbstract* pabc1; 
+    DerivedFromAbstract* pabc2; 
 
-  std::cout << "--} main " << std::endl;
+    (void) pabc1;
+    (void) pabc2;
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract abc; 
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstractNoDtor* pabc1; 
+    DerivedFromAbstractNoDtor* pabc2; 
+
+    (void) pabc1;
+    (void) pabc2;
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract abc; 
+  }
 }
 
---{ main 
-base shout
-derived shout
---} main 
+// shows *cxx-dtor-non-virtual-destruction-problem*
 
-<ex>
-class ABCAnimal {
-  public:
-    ...
-    virtual ~ABCAnimal() = 0;     // pure-virtual-dtor
-};
-
-class Lizard: public ABCAnimal {
-  public:
-    ...                           // no dtor
-};
-
-int main(int argc, char** argv)
+TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
 {
-  ABCAnimal* pabc1;
-  ABCAnimal* pabc2;
+  using namespace cxx_dtor;
 
-  cout << "end of main" << endl;
+  cout << "{" << endl;
+  AbstractBaseNoDtor* pbase = new DerivedFromAbstractNoDtor;
+
+  // cxx.cpp:1108:10: warning: deleting object of abstract class type ‘cxx_dtor::AbstractBaseNoDtor’ which has non-virtual destructor will cause undefined behaviour [-Wdelete-non-virtual-dtor]
+  //    delete pbase; 
+
+  delete pbase; 
+  cout << "}" << endl; 
 }
-
-Upto here, NO comile error and works fine. However, the following emits errors:
-
-int main(int argc, char** argv)
-{
-  ABCAnimal* pabc1;
-  ABCAnimal* pabc2;
-
-  Lizard liz1;
-
-  cout << "end of main" << endl;
-}
-
-GCC error is:
-
-/tmp/cciltEbG.o: In function `Lizard::~Lizard()':
-abc.cpp:(.text._ZN6LizardD2Ev[_ZN6LizardD5Ev]+0x16): 
-  undefined reference to `ABCAnimal::~ABCAnimal()'
-collect2: ld returned 1 exit status
-
-To fix this, add implementation:
-
-class ABCAnimal {
-  public:
-    ...
-      virtual ~ABCAnimal() = 0;       // pure dtor
-};
-
-ABCAnimal::~ABCAnimal() {}
 
 
 ={============================================================================
@@ -21460,13 +21567,26 @@ gst_caps_unref(GetCaps *caps);
 :44: error: invalid conversion from 'const GstCaps*' to 'GstCaps*' :44: error:
 initializing argument 1 of 'void gst_caps_unref(GstCaps*)'
  
-<ex> *cxx-temporary* 
+<ex> *cxx-const-cxx-temporary* 
 
 find_char(const string& s, char c);   // ok, match to literal, temporary
 find_char("Hello", 'o');   
 
 find_char(string& s, char c);         // ERROR,  literal is temporary
 find_char("Hello", 'o');   
+
+
+EXPECT_THAT(validator2->validate("abc123!@#"), true);
+
+// error
+bool validate(std::string& password) override
+
+// okay
+bool validate(std::string password) override
+
+// okay
+bool validate(std::string const& password) override
+
 
 <ex> *cxx-temporary*
 // miss out const on argument
@@ -25458,8 +25578,9 @@ binding and polymorphism in C++.
 
 {preventing-inheritance}
 
-* Use C++11 final keyward
-class Last 'final' : Base { ... };
+o *cxx-11* *cxx-final*
+
+class Last final : Base { ... };
 
 * Use private ctor. See {control-the-number-of-object}
 
@@ -26652,69 +26773,130 @@ exception.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-override
 
-{problem-when-override-do-not-work}
+{when-override-do-not-work}
 Believe that made an override and expect that derived version gets called. no
 compile error and why? Two things:
 
-#include <iostream>
-
-// g++ -g -std=c++0x t_override.cpp
-
-using namespace std;
-
-class B0 {
-  public:
-    virtual int foo() { cout << "B0::foo" << endl; }
-};
-
-class D1 : public B0 {
-  public:
-    int foo(int) { cout << "D1::foo(int) " << endl; }
-};
-
-// = 01 ======
-// B0::foo
-
-// No override since it do not meet *cxx-override-condition* Hence no vtable
-// update and base version called.
-
-void t_override_01()
+namespace cxx_override
 {
-    D1 dobj;
-    B0* p = &dobj;
-    p->foo();
+  namespace no_override
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10)
+      {}
+
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20)
+      {} 
+
+        virtual int get_value(int value)
+        { 
+          (void)value;
+          return derived_; 
+        };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition)
+{
+  using namespace cxx_override::no_override;
+
+  // No override since it do not meet *cxx-override-condition* Hence no vtable
+  // update and base version called.
+  {
+    Derived derived;
+    Base* pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 10);
+  }
+
+  // cxx.cpp: In member function ‘virtual void Override_Condition_Test::TestBody()’:
+  // cxx.cpp:4285:34: error: no matching function for call to ‘cxx_override::no_override::Derived::get_value()’
+  //      EXPECT_THAT(pbase->get_value(), 20);
+  //
+  // Effectively defines a new function in the derived, inner scope, name found
+  // and stops lookup. so hide the name in the base in *cxx-name-lookup* 
+  //
+  // {
+  //   Derived derived;
+  //
+  //   // see Derived
+  //   Derived* pbase = &derived;
+  //
+  //   EXPECT_THAT(pbase->get_value(), 20);
+  // }
 }
 
-// t_override.cpp: In function ‘void t_override_02()’:
-// t_override.cpp:92:12: error: no matching function for call to ‘D1::foo()’
-//      p->foo();
-//             ^
-// t_override.cpp:92:12: note: candidate is:
-// t_override.cpp:14:9: note: int D1::foo(int)
-//      int foo(int) { cout << "D1::foo(int) " << endl; }
-//          ^
-// t_override.cpp:14:9: note:   candidate expects 1 argument, 0 provided
-//
-// Effectively defines a new function in the derived, inner scope, name found
-// and stops lookup. so hide the name in the base in *cxx-name-lookup* 
-//
-// Q: ?? As EC++33 said, since not use some overloads in the derived class due
-// to hide, it also break "is-a" relationship.
 
-void t_override_02()
-{
-    D1 dobj;
-    D1* p = &dobj;
-    p->foo();
-}
- 
-int main()
-{
-    cout << "= 02 ======" << endl;
-    t_override_02();
+EC++33. do not find any useful or practical.
+EC++36. If you redefine non-virtual, it hides names. The other problem is to
+exhibit 'inconsistent' behavior depending on type of pointer used.
 
-    cout << "= 01 ======" << endl;
-    t_override_01();
+namespace cxx_override
+{
+  namespace no_virtual
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10)
+      {}
+
+        int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20)
+      {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_2)
+{
+  using namespace cxx_override::no_virtual;
+
+  // No override since no vtable update and base version called.
+  {
+    Derived derived;
+    Base* pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 10);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pbase = &derived;
+  
+    EXPECT_THAT(pbase->get_value(), 20);
+  }
 }
 
 
@@ -26723,20 +26905,9 @@ To override:
 
   name, parameter type, `const`, and return type should be the 'same'. 
 
-An exception to this when return type is a pointer or reference.
-See *cxx-overload-condition*
-
-However, tried pointer return type, no errors so return type in overrides can
-be different only that is pointer. See p606 in ref-CPR.
-
-
-#include <iostream>
-
-// g++ -g -std=c++0x t_override.cpp
-
-namespace OR2 {
-
-using namespace std;
+An exception to this when return type is a pointer or reference. Tried pointer
+return type, no errors so return type in overrides can be different only that
+is pointer. See p606 in ref-CPR.
 
 class B0 {
   public:
@@ -26752,9 +26923,6 @@ class D2 : public D1 {
   public:
     int foo() { cout << "bool D2::foo() " << endl; }
 };
-
-}
-
 
 // t_override.cpp:33:10: error: conflicting return type specified for ‘virtual bool OR2::D1::foo()’
 //      bool foo() { cout << "bool D1::foo() " << endl; }
@@ -26778,10 +26946,10 @@ void t_override_03()
 }
 
 
-{cxx-override-keyword} {final-keyword}
-*problem-when-override-do-not-work* is surprisingly hard(really?) to find
-because there is no compile error. To avoid this, use override keyword from
-*C++11* and cause compile error when it's not overrided:
+{cxx-override-keyword} {cxx-final-keyword}
+*when-override-do-not-work* is surprisingly hard(really?) to find because
+there is no compile error. To avoid this, use override keyword from *C++11*
+and cause compile error when it's not overrided:
 
 using namespace std;
 
@@ -26856,24 +27024,6 @@ void t_override_04()
 }
 
 
-{further-references}
-EC++33. do not find any useful or practical.
-EC++36. If you redefine nonvirtual, as you seen, it hides names. The other
-problem is to exhibit 'inconsistent' behavior depending on type of pointer
-used.
-
-class D: public B {
-  public:
-    void mf();
-};
-
-D x;
-B* pB = &x; D* pD = &x;
-
-pB->mf();      // same object but B::mf
-pD->mf();      // same object but D::mf
-
-
 {which-virtuals}
 EC++34 
 
@@ -26887,7 +27037,7 @@ classes to inherit.
   implementation.
 
 
-{no-separation-between-interface-and-default-implementation}
+{no-separation-between-interface-and-default-implementation} *cxx-class-model-inheritance*
 When use simple virtual, shall be careful since 'default' implementation is
 inherited without 'request' from the derived. This can be a problem when the
 derived not to redefine it.
@@ -28169,26 +28319,9 @@ others can incur significant overhead. These implementation mechanisms are appli
 ={============================================================================
 *kt_dev_cxx_0000* cxx-class-model
 
-{cxx-class-is-a-model} `public-inheritance` 
+<implementation-inheritance-and-interface-inheritance>
 
-// EC++32, 38, 39
-// 
-// The base represent a more 'general' concept than the derived since the derived
-// represent a more `specialised concept.` Means that can use the derived where
-// the base can be used and means anything that is true of the base is also true
-// of the derived.
-// 
-// Think this example and is it right 'relationship' in C++?
-// 
-// class Square : public Rectangle;
-// class Bird : public Penguin;
-// 
-// No. English is different from C++
-
-
-<implementation-inheritance-interface-inheritance>
-
-EXC++22
+EXCEP++22
 
 The two protocols have similarities; some computations and even some messages
 are the same. So the programmer has compe up with the following design to
@@ -28218,30 +28351,33 @@ class Protocol2 : public BasicProtocol
 Each DoMsgXX() calls BasicProtocol::BasicXX() as needed to do the common work
 but the DoMsgXX() performs the actual transmission itself.
 
+This means that derived class do not work like base class. This is clearly
+describing an "is implemented in terms of", so can be rewritten by private
+inheritance or comosiiton. or cxx-class-model-avoid-public
+
 
 <deep-inheritance>
 Problem? If use public inherirance to use implementation, then end up creating
 deep inheritance; interfaces of many classes, impact on memory and performace
 since bigger vtables.
 
-This is `is-implemented-in-terms-of` to use implementation but not public
-inheritance:
-
-* Public inheritance is to use `is-a` and `works-like-a`, when use overrides
+o Public inheritance is to use `is-a` and `works-like-a`, when use overrides
   and all overrides must require no more and promise no less.
 
-* Public inheritance is interface inheritance.
-
+o Public inheritance is interface inheritance.
 
 CodeComplete p144. LSP (Liskov Substitution Principle) All the routines
 defined in the base class should mean the same thing when they are used in
 each of derived classes. Semantic meaning. Reduce complexity. 
 
 
-{cxx-class-has-a-model} EC++38
+{cxx-class-implemented-in-terms-of-model} 
+
+Two variants: composition and private inheritance
+
+<composition> cxx-class-has-a-model EC++38
 The composition has other synonyms such as containment, aggregation, or
-membership. `is-implemented-in-terms-of-model` is spelled either private
-inheritance or membership.
+membership.
 
 <ex> `has-a-model` composition
 This is a composition in application domain and says that Person 'has' a name. 
@@ -28257,18 +28393,18 @@ class Person {
 };
 
 
-<ex> `is-implemented-in-terms-of-model`
-Suppose that need to implement template class that supports no duplicates and
-std::set is an option. However, set is fast but has space overhead per element
-but space is more important for your applicaion. Then can we use std::list
-instead? 
+<ex>
+Suppose that need to implement template class that supports no duplicates,
+then std::set is an option? However, set is fast but has space overhead per
+element but space is more important for your applicaion.  Then can we use
+std::list instead? 
 
 template<typename T>
-class Set: 'public' std::list<T>;
+class Set: `public` std::list<T>;
 
-We 'cannot' use `public-inheritance` since it is not `is-a-model` and
-std::list can have duplicates. The right way is to implement by using it and
-this is a composition in implementation domain.
+We cannot use public-inheritance since it is not `is-a-model` and std::list
+can have duplicates. The right way is to implement by using it and this is a
+composition in implementation domain.
 
 template<class T>
 class Set {
@@ -28310,13 +28446,9 @@ std::size_t Set<T>::size() const
 }
 
 
-{cxx-class-private-inheritance} EC++39
+<private-inheritance> EC++39
 The private inheritance is implementation inheritance; inherits
-impelementation only but not interface which means
-`is-implemented-in-terms-of-model` 
-
-The composition is also is-implemented-in-terms-of so which do we need to use
-between them? `prefer composition whenever possible.`
+impelementation only but not interface. 
 
 Assume Widget class needs to keep track of how many times each member func is
 called and periodically examine the information. Can redefine that virtual
@@ -28329,11 +28461,13 @@ class Timer {
     virtual void onTick() const;
 };
 
-class Widget : 'public' Timer { ... };
+class Widget : public Timer { ... };
 
-No as Widget is not a timer and is not `cxx-class-is-a-model`.
+No as Widget is not a timer and is not `is-a-model`.
 
-class Widget : 'private' Timer {
+class Widget : private Timer {
+
+  // As *cxx-override-access-control* override do not respect access control.
 
   private:
     virtual void onTick() const;
@@ -28358,20 +28492,23 @@ class Widget {
 };
 
 
-<cpp-prevent-derivation>
+<prevent-inheritance> cxx-final
 When derives a class from Widget but want that class do not redefine onTick?
 Not possible using private inheritance. So the composition is an approach
 before C++11 to prevent derivation and final keyword in C++11.
 
 
-{compositions-over-private}
+{cxx-class-compositions-over-private}
 
-* If use composition approach, takes out WidgetTimer out of Widget, and use
+Between composition and private inheritance, which do we need to use between
+them? `prefer composition whenever possible.`
+
+o If use composition approach, takes out WidgetTimer out of Widget, and use
   pointer instead, then can minimize compilation dependency since otherwise
   inheritance must see base class definition. Timer's definition. No need to
   include Timer header in Widget user. *cxx-pattern-pimpl*
  
-* The composition is eaiser to understand.
+o The composition is eaiser to understand.
 
 Use `private-inheritance` only when is absolutely necessary; when need to
 access protected area of the base and to redefine virtual functions of base
@@ -28384,10 +28521,23 @@ errors that should be resolved.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-class-model-avoid-public
 
-EXC++23. How to avoid public-inheritance using *cxx-pattern-template-method* 
+EXCEP++23. way to improve encapsulation
+
 See *cxx-pattern-nvi* and *cxx-ex-query-example*
 
-// Have to use inheritance to provide/extend specific operation.
+Intention: Instead of rewriting much of the `common logic` each time, has
+tried to provide a generic reusable framework, abstract class, that
+encapsulate the repetitive work. So uses two pattern:
+
+o The `cxx-pattern-pimpl` hides the implementation behind an opaque pointer so
+  that any changes to them will not require client code to compile. Called
+  `compiler-firewall-idiom` and `opaque-pointer` is a pointer to a declared
+  but undefined class.
+
+  struct XxxxImpl; XxxxImpl* pimpl_;
+
+o *cxx-pattern-template-method*
+
 
 class GenericTableAlgorithm
 {
@@ -28395,7 +28545,7 @@ class GenericTableAlgorithm
     GenericTableAlgorithm(const string& table);
     virtual ~GenericTableAlgorithm();
 
-    // it does all the work:
+    // common logic:
     //
     // a) physically reads the table's records, calling Filter() on each to
     // determine whether it should be included in the rows to be processed 
@@ -28409,17 +28559,19 @@ class GenericTableAlgorithm
     virtual bool Filter(const Record&);
     virtual bool ProcessRow(const PrimaryKey&) = 0;
 
+    // should provide Process() implementation
     struct GenericTableAlgorithmImpl* pimpl_;
 };
 
-// client or other developer's code to extend worker class
 
-class MyAlgorithm : 'public' GenericTableAlgorithm
+// to extend worker class
+
+class MyAlgorithm : `public` GenericTableAlgorithm
 {
   // override Filter() and ProcessRow() `to implement a specific operation`
 };
 
-class YourAlgorithm : 'public' GenericTableAlgorithm
+class YourAlgorithm : `public` GenericTableAlgorithm
 {
   // override Filter() and ProcessRow() to implement a specific operation
 };
@@ -28438,41 +28590,26 @@ int main()
   a.Process();
 }
 
-Uses two pattern:
 
-  * The `cxx-pattern-pimpl` hides the implementation behind an opaque pointer
-    so that any changes to them will not require client code to compile.
-    Called `compiler-firewall-idiom` and `opaque-pointer` is a pointer to a
-    declared but undefined class.
-
-    struct XxxxImpl; XxxxImpl* pimpl_;
-
-  * *cxx-pattern-template-func*
-
-
-<no-inheritance>
-
+<better-way>
 This holds two responsibilities, two purposes:
 
-  "Always give each piece of code module, class, function - a single,
-  well-defined responsibility."
+o user code uses the algorithm. Process()
 
-* Client code uses the algorithm. `cxx-interface`
+o extend GenericTableAlgorithm for specialized specific case or usage.
+  Filter() and ProcessRow()
 
-* Code to extend GenericTableAlgorithm for specialized specific case or usage.
-  `implementation`
 
-// *cxx-framework* 
-// If framework provides implementaion and not intend for use to
-// extend/override it then interface is only exposed to a user. The framework
-// can extend implementation by extending a class that pimpl points to. This
-// case is that both interface and implementaion are exposed to a user.
+How could they be better improved and encapsulated?
+
+"Prefer cohesion. Always give each piece of code module, class, function - a
+single, well-defined responsibility."
 
 
 class GTAClient;
 
-// Provide a public interface that encapsulate common functionality as a
-// *cxx-pattern-template-method* and use *cxx-pattern-pimpl* 
+// Responsibility 1. Provide a public interface that encapsulate common
+// functionality 
 
 class GenericTableAlgorithm
 {
@@ -28491,7 +28628,7 @@ class GenericTableAlgorithm
 };
 
 
-// Provide abstract interface for extensibility 
+// Responsibility 2. Provide abstract interface for extensibility 
 
 class GTAClient
 {
@@ -28519,14 +28656,18 @@ int main()
 
 The good things are:
 
-* Any interface changes to GenericTableAlgorithm does not affect the concrete
-  worker class at all since not in the inheritance.
+o Any `interface changes` to public interface of GenericTableAlgorithm like
+  add more member function does not affect the concrete worker class at all
+  since not in the inheritance. If not, have to recompile all derived classes
 
-* Any protocal changes to GenericTableAlgorithm such as additional arguments
-  to Filter() or ProcessRow()? Not affect external users.
+o Any `protocal changes` to GenericTableAlgorithm such as additional arguments
+  to Filter() or ProcessRow()? All external clients have to be recompiled even
+  though the public interface is unchanged, because a derivation interface is
+  visiable in the class definition. (???, not sure). 
+  So the benefit is that not affect external users.
  
-* Any concrete worker class can be used with any other algorithm using
-  Filter()/ProcessRow() interface.
+o Any concrete worker class can be used with any other algorithm using
+  Filter()/ProcessRow() interface. not just GenericTableAlgorithm.
 
 *cxx-remember*
 Remember the computer science motto:
@@ -28534,8 +28675,9 @@ Remember the computer science motto:
 
 
 <to-further>
-As GenericTableAlgorithm do not have member data, it does not need to keep
-'state' across invocations. So could replace it with function.
+If GenericTableAlgorithm do not have member data and does not need to keep
+`state` across invocations like *cxx-fobj*, then could replace it with
+function.
 
 bool GenericTableAlgorithm(const string& table, GTAClient& worker)
 {
@@ -28567,13 +28709,14 @@ int main()
 ={============================================================================
 *kt_dev_cxx_0000* cxx-class-model-implemented-in-terms-of
 
-EXC++24.
+EXCEP++24.
 
-Always minimise "coupling". The inheritance is strongest and tightly coupling.
+Always minimise "coupling". `The inheritance is strongest and tightly coupling.`
 Second to friendship. Should use `containment` to avoid needless coupling and
 dependencies if can express a class relationship using it.
 
 <when-abuse-inheritance>
+
 template <class T>
 class MyList
 {
@@ -28591,8 +28734,8 @@ Two ways to write a MySet `is-implemented-in-terms-of` MyList;
 `non-public-inheritance` and `containment`.
 
 
-non-public inheritance make using class depend on public and protected area and
-containment usesonly public.
+non-public inheritance uses public and protected area and containment uses
+only public.
 
 template <class T>
 class MySet1 : private MyList<T>
@@ -28601,7 +28744,7 @@ class MySet1 : private MyList<T>
     bool    Add( const T& );            // calls Insert()
     T       Get( size_t index ) const;  // calls Access()
 
-    // to make Size() public
+    // *cxx-access-control* to make Size() public
     using MyList<T>::Size;
 
     // ...
@@ -28620,12 +28763,14 @@ class MySet2
     MyList<T> impl_;
 };
 
-
 The containment is `has-a`, `composition`, `delagation`, and the inheritance is
 a superset of single containment since it has a subobject.
 
 
 <when-inheritance-appropriate>
+
+See *cxx-class-model-inheritance* for other examples.
+
 When use non-public inheritance? To use override. Even when it is the case,
 can avoid this.
 
@@ -28640,9 +28785,9 @@ class Base
 };
 
 
-To get the right behavior, need to override Func1. Allows Derived to override
-Func1 but grants access to Func2 to all members of Derived. Needless made all
-Derived's members depend upon Base's protected interface.
+To get the right behavior, need to override Func1 so inheritance is necessary.
+However, the problem is that grants access to Func2 to all members of Derived.
+Needless made all Derived's members depend upon Base's protected interface.
 
 class Derived : private Base
 {
@@ -28652,7 +28797,8 @@ class Derived : private Base
 };
 
 
-Introduce as much couling as really need; "require no more and promise no less"
+Wouldn't it be nice to introduce as much couling as really need? 
+`"require no more and promise no less"`
 
 class DerivedImpl : private Base
 {
@@ -28671,15 +28817,35 @@ class Derived
 
 this is much better since:
 
-* Separates and encapsulates the dependencies on Base.
+o Separates and encapsulates the dependencies on Base.
 
-* Follows `one-class-one-resposibility` guideline; coustomizing Base and
+o Follows `one-class-one-resposibility` guideline; coustomizing Base and
   implementing itself in-terms-of Base.
 
-* Allows multiple copiles of helper(like DerivedImpl) class.
+o Allows multiple copiles of helper(like DerivedImpl) class. *cxx-helper-class*
 
 note:
-This is similar to `cxx-pattern-pimpl` but not to reduce compiler dependancy.
+Similar to `cxx-pattern-pimpl`? No since not to reduce compiler dependancy.
+
+
+<is-almost-a>
+This is not quite "is-a" model and not behave quite the way that a resonable
+Base client could expect. Do not use public inheritance
+
+EFFC++32, 38, 39
+ 
+The base represent a more 'general' concept than the derived since the derived
+represent a more `specialised concept.` 
+
+For example,
+
+class Square : public Rectangle;
+
+class Bird : public Penguin;
+
+May be true in mathematics but not necessarily true in class. is-a model
+should mean means that can use the derived where the base can be used and
+means anything that is true of the base is also true of the derived.
 
 
 <containment-in-generic-way>
@@ -28715,13 +28881,11 @@ of deque.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-pattern-template-method
 
-EC++35
+Behavioral Pattern, EC++35
 
-The design pattern [REF003] called it `template-method` and define skeleton of
-an algorithm in an operation.
-
-Deferring 'some' steps to subclass without default implementation of some
-steps. Must be overridden.
+The design pattern [REF003] called it `template-method`. base class define
+skeleton of an algorithm in an operation and let subclass redefine certain
+steps without changing the algorithms structure.
 
 <ex>
 Application framework where application subclass application and document to
@@ -28862,6 +29026,249 @@ class SpecialWindow : public Window {
 :26:16: error: 'virtual void Base::doMorePri()' is private
 :51:20: error: within this context
 
+<ex>
+
+cxx_pattern_template
+
+The Morden C++ Challenge, Design Pattern
+
+69. Generating social security numbers
+
+Write a program that can generate social security numbers for two countries,
+Northeria and Southeria, that have different but similar formats for the
+numbers:
+
+In Northeria, the numbers have the format SYYYYMMDDNNNNNC, where
+  S is a digit representing the sex, 9 for females and 7 for males, 
+  YYYYMMDD is the birth date, (same)
+  NNNNN is a five-digit random number, unique for a day (meaning that the same
+  number can appear twice for two different dates, but not the same date), 
+  and C is a digit picked so that the checksum computed as described later is a
+  multiple of 11.  
+
+In Southeria, the numbers have the format SYYYYMMDDNNNNC, where 
+  S is a digit representing the sex, 1 for females and 2 for males, 
+  YYYYMMDD is the birth date, (same)
+  NNNN is a four-digit random number, unique for a day, 
+  and C is a digit picked so that the checksum computed as described below is a
+  multiple of 10.  
+  
+  
+The checksum in both cases is a sum of all the digits, each multiplied by its
+weight (the position from the most significant digit to the least). 
+
+For example, the checksum for the Southerian number 12017120134895 is computed
+as follows:
+
+crc = 14*1 + 13*2 + 12*0 + 11*1 + 10*7 + 9*1 + 8*2 + 7*0 + 6*1 + 5*3 
+           +  4*4 +  3*8 +  2*9 +  1*5
+    = 230 = 23 * 10
+ 
+The formats for both countries are very similar, although several details are
+different:
+
+The value of the digit for the sex
+The length of the random part, and therefore the length of the entire number
+The number the checksum must be a multiple of
+
+This problem can be solved using the template method design pattern, which
+defines the skeleton of an algorithm and lets subclasses redefine particular
+steps:
+
+*/
+
+namespace cxx_pattern_template
+{
+  enum class sex_type {female, male};
+
+  class social_number_generator
+  {
+    public:
+      std::string generate(sex_type sex, unsigned year, unsigned month, unsigned day)
+      {
+        std::stringstream snumber;
+
+        snumber << sex_digit(sex);
+        snumber << year << month << day;
+        snumber << next_random(year, month, day);
+
+        // For example, the checksum for the Southerian number 12017120134895 is
+        // computed as follows:
+        // 
+        // crc = 14*1 + 13*2 + 12*0 + 11*1 + 10*7 + 9*1 + 8*2 + 7*0 + 6*1 + 5*3 
+        //     +  4*4 +  3*8 +  2*9 +  1*5
+
+        auto number = snumber.str();
+        auto index = number.length();
+
+        // cxx-algo-accumulate
+        auto sum = std::accumulate(std::begin(number), std::end(number),
+            0, // init value
+            [&](int init, char c)
+            { return init + (index-- * (c - '0')); });
+
+        auto rest = sum % modulo_value();
+        snumber << modulo_value() - rest;
+
+        return snumber.str();
+      }
+
+      // dtor-in-cxx-abc
+      virtual ~social_number_generator() {}
+
+    // works but public also works
+    // protected:
+    
+    public:
+      social_number_generator(int min, int max) 
+        : ud(min, max)
+      {}
+
+    protected:
+      virtual int sex_digit(sex_type const sex) const noexcept = 0;
+      virtual int next_random(unsigned year, unsigned month, unsigned day) = 0;
+      virtual int modulo_value() const noexcept = 0;
+
+    protected:
+      std::map<unsigned, int> cache;
+      std::uniform_int_distribution<> ud;
+      std::default_random_engine eng;
+  };
+
+  class southeria_social_number_generator final : public social_number_generator
+  {
+    public:
+      southeria_social_number_generator():
+        social_number_generator(1000, 9999)
+    {}
+
+    protected:
+      virtual int sex_digit(sex_type sex) const noexcept override
+      {
+        return sex == sex_type::female ? 1 : 2;
+      }
+
+      // 4 digit.
+      // cxx-algo-unique use cache to have unique number?
+      virtual int next_random(unsigned year, unsigned month, unsigned day) override
+      {
+        auto key = year*10000 + month*100 + day;
+        while (true)
+        {
+          auto number = ud(eng);
+
+          // when not found
+          auto pos = cache.find(number);
+          if (pos == std::end(cache))
+          {
+            cache[key] = number;
+            return number;
+          }
+        }
+      }
+
+      virtual int modulo_value() const noexcept override
+      { return 11; }
+  };
+
+  class northeria_social_number_generator final : public social_number_generator
+  {
+    public:
+      northeria_social_number_generator():
+        social_number_generator(1000, 9999)
+    {}
+
+    protected:
+      virtual int sex_digit(sex_type sex) const noexcept override
+      {
+        return sex == sex_type::female ? 9 : 7;
+      }
+
+      // 5 digit. why are these two functions same as southeria?
+      
+      virtual int next_random(unsigned year, unsigned month, unsigned day) override
+      {
+        auto key = year*10000 + month*100 + day;
+        while (true)
+        {
+          auto number = ud(eng);
+
+          auto pos = cache.find(number);
+          if (pos == std::end(cache))
+          {
+            cache[key] = number;
+            return number;
+          }
+        }
+      }
+
+      virtual int modulo_value() const noexcept override
+      { return 11; }
+  };
+
+  // *cxx-pattern-factory*
+
+  class social_number_generator_factory
+  {
+    public:
+      social_number_generator_factory()
+      {
+        generators_["north"] = 
+          std::unique_ptr<northeria_social_number_generator>(
+              new northeria_social_number_generator());
+
+        generators_["south"] = 
+          std::unique_ptr<southeria_social_number_generator>(
+              new southeria_social_number_generator());
+      }
+
+      social_number_generator* get_generator(std::string country) const
+      {
+        auto it = generators_.find(country);
+        if (it != std::end(generators_))
+          return it->second.get();
+
+        throw std::runtime_error("not found country");
+      }
+
+    private:
+      std::map<std::string,
+        std::unique_ptr<social_number_generator>> generators_;
+  };
+
+} // namespace
+
+TEST(PatternTemplate, GeneratingSecurityNumber)
+{
+  using namespace cxx_pattern_template;
+
+  social_number_generator_factory factory;
+
+  {
+    auto snorth1 = factory.get_generator("north");
+    std::string result;
+    if (snorth1 != nullptr)
+    {
+      result = snorth1->generate(
+          sex_type::female, 2017, 12, 25);
+
+      cout << "snorth1: " << result << endl;
+    }
+  }
+
+  {
+    auto ssouth1 = factory.get_generator("south");
+    std::string result;
+    if (ssouth1 != nullptr)
+    {
+      result = ssouth1->generate(
+          sex_type::female, 2017, 12, 25);
+
+      cout << "ssouth1: " << result << endl;
+    }
+  }
+}
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-pattern-pimpl cpp-minimise-compile-time
@@ -28870,11 +29277,11 @@ class SpecialWindow : public Window {
 
 CPR 270. The benefits of encapsulation.
 
-* The implementation of an encapsulated class can change over time without
+o The implementation of an encapsulated class can change over time without
   requiring changes in user code. User code needs to change only when the
   interface changes.
 
-* The data are protected from mistakes that users might introduce. If there is
+o The data are protected from mistakes that users might introduce. If there is
   a bug that corrupts an object's state, the place to look for the bug are
   localized and limited.
 
@@ -29455,7 +29862,8 @@ MEC++26 shows more such as how limit the number of objects.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-pattern-factory
 
-{creational-pattern}
+Creational Pattern, Factory Method
+
 The factory-function plays the role of the ctor for the derived classes that
 are actually created. Hence called virtual constructor
 
@@ -29463,29 +29871,29 @@ This is about a method but not a class. Two points:
 
 * Encapsulation. No code to create in the client and move it into factory-func. 
  
-* Defer decision on what to create: creation in the base such as parameterized
+o Defer decision on `what to create`: creation in the base such as parameterized
   factory-func or to defer creation to subclass, so any product class in the
   tree. This subclassing often used in framework since no need to make changes
   in framework.
 
 <static-vs-virtual-factory-func>
-The static-factory-func has efficient code because no virtual cost and has
-single point to access but hard-wired to choose classes to create. Have to
-change it when the choice to create changes. 
+The non-virtual factory function is static and efficient because no virtual
+cost and has single point to access. But hard-wired choice of classes to
+create. Have to change it whenever the choice to create changes. 
 
-The virtual-factory-func has bigger code but subclassing can change class to
-create. So useful for framework that cannot be changed. When factory-func is
-on the creator tree and uses virtual func: pure virtual or virtual which as
-default implementation. Let client decide which class to create using
-subclassing, application specific document, to create(manufacture) and defer
-instantiation to subclass which is out of framework.
+The `virtual factory function` has bigger code but subclassing can change
+class to create. So useful for framework that cannot be changed. When
+factory-func is on the creator tree and uses virtual func: pure virtual or
+virtual which as default implementation. Let subclassing decide which class to
+create; application specific document which is out of framework.
+
 
 (client)           (creator class, Application)           (product class, Document) 
 -----------------  ------------------------------------   ------------------------- 
 Creator.NewDoc();  // factory-func.
                    // set impl in factory func.
-                   'virtual' CreateDoc() = 0;
-                   'virtual' CreateDoc();
+                   `virtual` CreateDoc() = 0; or
+                   `virtual` CreateDoc();
 
                    NewDoc()                                Open();
                    { pDoc = CreateDoc(); pDoc->Open(); }
@@ -29493,7 +29901,7 @@ Creator.NewDoc();  // factory-func.
                    (subclass)                              (subclass)
                    -------------------------------------   -------------------------
                    WordApplication, DrawApplicaion, ...    WordDoc, DrawDoc, ...
-                   'virtual' CreateDoc()
+                   `virtual` CreateDoc()
                    { return new WordDoc; }
                    { return new DrawDoc; }
 
@@ -29503,10 +29911,12 @@ more.
 This looks like factory + pimpl and create object in the different tree.
 
 
-<virtual-factory-func> sample-code-from-design-pattern
-The previous has hard-codes for classes to create:
+<ex> 
+virtual-factory-func sample-code-from-design-pattern
 
-Maze* MazeGame::CreateMaze() {         // As with NewDoc()
+Has hard-coded classes to create as with NewDoc:
+
+Maze* MazeGame::CreateMaze() {
   Maze* aMaze = new Maze;
   Room* r1 = new Room(1);
   Room* r2 = new Room(2);
@@ -29517,9 +29927,9 @@ Maze* MazeGame::CreateMaze() {         // As with NewDoc()
   return aMaze;
 }
 
-This is revised to use factory which shows how framework works. The frameworks
-has all logics and user implements interfaces as framework defines and creats
-instance.
+Revised to use virtual factory and which opens a way to redefine factory
+function itself whcih can redefine what to create; Different Maze which has
+different Rooms. 
 
 class MazeGame {
   public:
@@ -29560,7 +29970,7 @@ BombedMazeGame bombMaze;               // BombedMazeGame
 Maze* pMaze = bombMaze.CreateMaze();   // client know what to create
 pMaze->func();
 
-When CreateMaze is called, will use redefined factory-funcs to create
+When CreateMaze() is called, will use redefined factory-funcs to create
 application specific class.
 
 
@@ -29568,6 +29978,24 @@ application specific class.
 The realistic examples may support different derived class to create using
 additional params, file, DB or env var. 
 
+<ex> 
+Can use template instead of subclassing as to what to create:
+
+class Creator {
+  public:
+    virtual Product* CreateProcut() = 0;
+};
+
+template <class T>
+class StandardCreator : public Creator {
+  public:
+    virtual Product* CreateProduct();
+};
+
+template <class T>
+Product* StandardCreator<T>::CreateProduct() {
+   return new T;
+};
 
 <ex> non-member-factory-func
 From EC++40. Use id to select different concrete class and non-member
@@ -29685,32 +30113,6 @@ NewsLetter::NewsLetter( const NewsLetter& rhs )
     components.push_back( (*it)->clone() );
   }
 }
-
-
-{use-template}
-Can use template instead of subclassing as to what to create:
-
-class Creator {
-  public:
-    virtual Product* CreateProcut() = 0;
-};
-
-template <class T>
-class StandardCreator : public Creator {
-  public:
-    virtual Product* CreateProduct();
-};
-
-template <class T>
-Product* StandardCreator<T>::CreateProduct() {
-   return new T;
-};
-
-
-note:
-Use naming convention for factory function.
-For MacApp framework example, class* DoMakeClass() where Class is the product
-class. 
 
 
 {read}
@@ -29896,6 +30298,464 @@ the publisher of notifications. It sends out these notifications without
 having to know who its observers are. Any number of observers can subscribe to
 receive notifications.
 
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-pattern-decorator
+
+Structural Pattern
+
+o flexible `alternative to subclassing for extending functionality` since
+  subclassing is static and inflexible
+
+o enclose(wraps) the component in another object that add functionality and it
+  is also known as "wrapper". builds chain of objects
+
+o do additional work before or after forwarding.
+
+<ex>
+cxx_pattern_decorator
+
+The Morden C++ Challenge, Design Pattern
+
+67. Validating passwords
+
+Write a program that validates password strength based on predefined rules,
+which may then be selected in various combinations. At a minimum, every password
+must meet a minimum length requirement. In addition, other rules could be
+enforced, such as the presence of at least one symbol, digit, uppercase and
+lowercase letter, and so on.
+
+The problem described here is a typical case for the decorator pattern. This
+design pattern allows adding behavior to an object without affecting other
+objects of the same type. This is achieved by wrapping an object within another
+object. Multiple decorators could be stacked on top of each other, each time
+adding new functionality. In our case, the functionality would be validating
+that a given password meets a particular requirement.
+
+The following class diagram describes the pattern for validating passwords:
+
+        password_validator (abc)
+        +                   +
+length_validator         password_validator_decorator 
+
+                         digit_password_validator, case_password_validator, symbol_password_validator
+*/
+
+namespace cxx_pattern_decorator
+{
+  // *cxx-abc*
+  class password_validator
+  {
+    public:
+      virtual ~password_validator() {}
+
+      // virtual bool validate(std::string& password) = 0;
+      // virtual bool validate(std::string password) = 0;
+      virtual bool validate(std::string const& password) = 0;
+  };
+
+  // mandatory(default) implementation
+
+  class length_validator : public password_validator
+  {
+    public:
+      length_validator(unsigned int min_length) noexcept : length_(min_length) 
+      {}
+
+      // bool validate(std::string& password) override
+      // bool validate(std::string password) override
+      bool validate(std::string const& password) override
+      {
+        cout << "length_validator {" << endl;
+
+        auto result = password.length() >= length_;
+
+        cout << "length_validator }" << endl;
+
+        return result;
+      }
+
+    private:
+      unsigned int length_;
+  };
+
+
+  class password_validator_decorator : public password_validator
+  {
+    public:
+
+      // *point* moves unique_ptr to primitive component
+
+      explicit password_validator_decorator(std::unique_ptr<password_validator> validator)
+        : validator_(std::move(validator)) 
+      {}
+
+      // bool validate(std::string& password) override
+      // bool validate(std::string password) override
+      bool validate(std::string const& password) override
+      {
+        cout << "password_validator_decorator {" << endl;
+        auto result = validator_->validate(password);
+        cout << "password_validator_decorator }" << endl;
+
+        return result;
+      }
+
+    private:
+ 
+      // *point* points to the next in the chain.
+
+      std::unique_ptr<password_validator> validator_;
+  };
+
+  // must have one digits
+
+  class digit_password_validator final : public password_validator_decorator
+  {
+    public:
+      explicit digit_password_validator(std::unique_ptr<password_validator> validator)
+        : password_validator_decorator(std::move(validator))
+      {}
+
+      // bool validate(std::string& password) override
+      // bool validate(std::string password) override
+      bool validate(std::string const& password) override
+      {
+        cout << "digit_password_validator {" << endl;
+
+        // *point* forwards to that primitive component
+
+        if (password_validator_decorator::validate(password) == false)
+          return false;
+
+        cout << "digit_password_validator }" << endl;
+
+        // *cxx-algo-unique*
+
+        return password.find_first_of("0123456789") != std::string::npos;
+      }
+  };
+
+  // must have one lower and one upper case
+
+  class case_password_validator final : public password_validator_decorator
+  {
+    public:
+      explicit case_password_validator(std::unique_ptr<password_validator> validator)
+        : password_validator_decorator(std::move(validator))
+      {}
+
+      // bool validate(std::string& password) override
+      // bool validate(std::string password) override
+      bool validate(std::string const& password) override
+      {
+        cout << "case_password_validator {" << endl;
+
+        if (password_validator_decorator::validate(password) == false)
+          return false;
+
+        bool has_lower{false};
+        bool has_upper{false};
+
+        for (size_t i = 0; i < password.size() && !(has_lower && has_upper); ++i)
+        {
+          if (std::islower(password[i])) has_lower = true;
+          else if (std::isupper(password[i])) has_upper = true;
+        }
+
+        cout << "case_password_validator }" << endl;
+
+        return has_lower && has_upper;
+      }
+  };
+
+  // must have one of symbols
+
+  class symbol_password_validator final : public password_validator_decorator
+  {
+    public:
+      explicit symbol_password_validator(std::unique_ptr<password_validator> validator)
+        : password_validator_decorator(std::move(validator))
+      {}
+
+      // error
+      // bool validate(std::string& password) override
+      // okay
+      // bool validate(std::string password) override
+      bool validate(std::string const& password) override
+      {
+        cout << "symbol_password_validator {" << endl;
+
+        if (password_validator_decorator::validate(password) == false)
+          return false;
+
+        cout << "symbol_password_validator }" << endl;
+
+        return password.find_first_of("!@#$%^&*(){}[]?<>") != std::string::npos;
+      }
+  };
+
+} // namespace
+
+
+// shows how chain of objects works
+//
+// [ RUN      ] PatternDecorator.ValidatingPasswords
+// digit_password_validator {
+// password_validator_decorator {
+// length_validator {
+// length_validator }
+// password_validator_decorator }
+// digit_password_validator }
+// [       OK ] PatternDecorator.ValidatingPasswords (1 ms)
+
+TEST(PatternDecorator, ValidatingPasswords_1)
+{ 
+  using namespace cxx_pattern_decorator;
+
+  // okay
+  // std::unique_ptr<length_validator> validator1(new length_validator(8));
+  // std::unique_ptr<digit_password_validator> validator2(new digit_password_validator(std::move(validator1)));
+
+  // use temporary
+  std::unique_ptr<digit_password_validator> validator2(
+      new digit_password_validator(std::unique_ptr<length_validator>(new length_validator(8)))
+      );
+
+  // *cxx-14*
+  // auto validator1 = std::make_unique<digit_password_validator>(
+  //     std::make_unique<length_validator>(8));
+
+  EXPECT_THAT(validator2->validate("abc123!@#"), true);
+
+  // since do not have a digit
+  EXPECT_THAT(validator2->validate("abcde!@#"), false);
+}
+
+
+// now added `case` in the middle of decorator chain and this fails on `case
+// validator` so ends there and see no ends for `digit validator`
+//
+// digit_password_validator {
+// password_validator_decorator {
+// case_password_validator {
+// password_validator_decorator {
+// length_validator {
+// length_validator }
+// password_validator_decorator }
+// case_password_validator }
+// password_validator_decorator }
+// cxx_pattern.cpp:242: Failure
+// Value of: validator2->validate("abc123!@#")
+// Expected: is equal to true
+//   Actual: false (of type bool)
+// [  FAILED  ] PatternDecorator.ValidatingPasswords (3 ms)
+
+TEST(PatternDecorator, ValidatingPasswords_2)
+{
+  using namespace cxx_pattern_decorator;
+
+  // use temporary
+  std::unique_ptr<digit_password_validator> validator2(new digit_password_validator(
+        std::unique_ptr<case_password_validator>(new case_password_validator(
+            std::unique_ptr<length_validator>(new length_validator(8))
+            ))));
+
+  // now expects false
+  EXPECT_THAT(validator2->validate("abc123!@#"), false);
+} 
+
+
+// TEST(PatternDecorator, ValidatingPasswords_3)
+// {
+//    auto validator2 = 
+//       std::make_unique<symbol_password_validator>(
+//          std::make_unique<case_password_validator>(
+//             std::make_unique<digit_password_validator>(
+//                std::make_unique<length_validator>(8))));
+//  
+//    assert(validator2->validate("Abc123!@#"));
+//    assert(!validator2->validate("Abc123567"));
+// }
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-pattern-composite
+
+Structural Pattern
+
+o let clients treat individual objects and compositions of objects `uniformly`
+  the user can group components to form lager components but the problem with
+  this is that must treat "primitive and container object differently"
+  
+o represent both primitives and their containers which means the interface
+  covers both. this is different from *cxx-pattern-decorator*
+
+  So some interface are not implemented. Line, Rectangle, and Text are
+  primitives and they has no child so none implements child related
+  operations. However, Picture that composites primitives implements Draw to
+  call Draw on its children and implements them. 
+
+o cxx-pattern-decorator can be viewed as a degenerated composite with only one
+  component. However, a decorator adds additional responsibilities; it's not
+  intended for object aggregation. 
+
+  (similar in that both have chain of objects and calls)
+
+<ex>
+The Morden C++ Challenge, Design Pattern
+
+68. Generating random passwords
+
+Write a program that can generate random passwords according to some predefined
+rules. Every password must have a configurable minimum length. In addition, it
+should be possible to include in the generation rules such as the presence of at
+least one digit, symbol, lower or uppercase character, and so on. These
+additional rules must be configurable and composable.
+
+This problem could be solved using the composite pattern or a variation of the
+pattern. This design pattern composes objects into tree hierarchies and enables
+treating groups (or trees) of objects the same way as individual objects of the
+same type. The following class diagram shows a hierarchy of classes that can be
+used for generating passwords:
+
+*/
+
+namespace cxx_pattern_composite
+{
+  // *cxx-abc*
+  class password_generator
+  {
+    public:
+      virtual std::string generate() = 0;
+      virtual std::string allowed_chars() const = 0;
+      virtual size_t length() const = 0;
+      virtual void add(std::unique_ptr<password_generator> generator) = 0;
+      virtual ~password_generator() {}
+  };
+
+  class basic_password_generator : public password_generator
+  {
+    public:
+      explicit basic_password_generator(size_t const length) noexcept
+        : len_(length)
+        {}
+
+      virtual std::string generate() override
+      { throw std::runtime_error("not implemented"); }
+
+      virtual void add(std::unique_ptr<password_generator>) override
+      { throw std::runtime_error("not implemented"); }
+
+      virtual size_t length() const override final
+      { return len_; }
+
+    private:
+      size_t len_;
+  };
+
+  class digit_generator : public basic_password_generator
+  {
+    public:
+      explicit digit_generator(size_t const length) noexcept
+        : basic_password_generator(length)
+        {}
+
+      virtual std::string allowed_chars() const override
+      { return "0123456789"; }
+  };
+
+  class symbol_generator : public basic_password_generator
+  {
+    public:
+      explicit symbol_generator(size_t const length) noexcept
+        : basic_password_generator(length)
+        {}
+
+      virtual std::string allowed_chars() const override
+      { return "!@#$%^&*(){}[]?<>"; }
+  };
+
+  class upper_letter_generator : public basic_password_generator
+  {
+    public:
+      explicit upper_letter_generator(size_t const length) noexcept
+        : basic_password_generator(length)
+        {}
+
+      virtual std::string allowed_chars() const override
+      { return "ABCDEFGHIJKLMNOPQRSTUVXYWZ"; }
+  };
+
+  class composite_password_generator : public password_generator
+  {
+    public:
+      composite_password_generator()
+      {}
+
+      virtual std::string generate() override
+      {
+        std::string password{};
+
+        for (auto& g : generators_)
+        {
+          std::string chars = g->allowed_chars();
+          std::uniform_int_distribution<> ud(0, static_cast<int>(chars.length()-1));
+
+          for (size_t i = 0; i < g->length(); ++i)
+            password += chars[ud(eng)];
+        }
+
+        std::shuffle(std::begin(password), std::end(password), eng);
+
+        return password;
+      }
+
+      virtual void add(std::unique_ptr<password_generator> generator) override
+      {
+        generators_.push_back(std::move(generator));
+      }
+
+    private:
+      virtual std::string allowed_chars() const override
+      { throw std::runtime_error("not implemented"); }
+
+      virtual size_t length() const override
+      { throw std::runtime_error("not implemented"); }
+
+      std::default_random_engine eng;
+      std::vector<std::unique_ptr<password_generator>> generators_;
+  };
+
+} // namespace
+
+
+TEST(PatternComposite, PasswordGenerator_1)
+{
+  using namespace cxx_pattern_composite;
+
+  composite_password_generator generator;
+
+  generator.add(std::unique_ptr<symbol_generator>(new symbol_generator(2)));
+  generator.add(std::unique_ptr<digit_generator>(new digit_generator(2)));
+
+  auto password = generator.generate();
+  cout << "password: " << password << endl;
+}
+
+TEST(PatternComposite, PasswordGenerator_2)
+{
+  using namespace cxx_pattern_composite;
+
+  composite_password_generator generator;
+
+  generator.add(std::unique_ptr<symbol_generator>(new symbol_generator(2)));
+  generator.add(std::unique_ptr<digit_generator>(new digit_generator(2)));
+  generator.add(std::unique_ptr<upper_letter_generator>(new upper_letter_generator(2)));
+
+  auto password = generator.generate();
+  cout << "password: " << password << endl;
+}
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-incomplete-type cpp-forward-declaration cpp-layout
@@ -37532,7 +38392,9 @@ TEST(DISABLED_StlIterator, InvalidIteratorOnDeque_ErrorTwo)
 }
 
 
-<ex> *cxx-vector-insert* *cxx-vector-erase*
+<ex>
+
+// shows *cxx-iter-invalidated* case
 
 PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
     PortfolioIterator end, unsigned int max_quanity)
@@ -37565,14 +38427,17 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   // copy it back
   copy(coll.begin(), coll.end(), begin);
 
-  // believed that current is valid and points to where is divided
+  // *cxx-vector-reallocation* *cxx-iter-invalidated*
+  // *cxx-iter-singular* means invalidated iterator since there is no gurantee
+  // that current is valid after second pass push_back due to relocation
   //
   // /usr/include/c++/6/debug/safe_iterator.h:298:
   // Error: attempt to increment a singular iterator.
   // 
   // Objects involved in the operation:
   //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
-  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
+  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, 
+  //          std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
   //       state = singular;
   //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
   //     }
@@ -43419,7 +44284,7 @@ T accumulate (InputIterator first, InputIterator last, T init)
   template<typename _InputIterator, typename _Tp, typename _BinaryOperation>
     inline _Tp
     accumulate(_InputIterator __first, _InputIterator __last, _Tp __init,
-	       _BinaryOperation __binary_op)
+	       `_BinaryOperation` __binary_op)
     {
       for (; __first != __last; ++__first)
         __init = __binary_op(__init, *__first);
@@ -47519,9 +48384,8 @@ o stable_partition(), unlike partition(), preserves the relative order of the
   even and the odd elements.
 
 
-
-// matched group | unmatched group
-//                 ^return
+// |matched group | unmatched group | not checked |
+//                  ^return
 
 TEST(AlgoMutating, AlgoPartition)
 {
@@ -47637,7 +48501,7 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   return current;
 }
 
-// works like stable_partition
+// works like algo-partition-stable_partition
 
 TEST(AlgoMutating, OwnPartitionTwoPass)
 {
@@ -52803,7 +53667,9 @@ focus of this class.
 
 
 <cxx-sp-code> *cxx-sp-delete*
-/usr/include/c++/4.9/bits/unique_ptr.h
+namespace cxx-code
+{
+  // /usr/include/c++/4.9/bits/unique_ptr.h
 
   /// Primary template of default_delete, used by unique_ptr
   template<typename _Tp>
@@ -52934,7 +53800,7 @@ focus of this class.
         auto& __ptr = std::get<0>(_M_t);
         if (__ptr != nullptr)
           `get_deleter()(__ptr);`     // *cxx-sp-call-deleter*
-        __ptr = pointer();
+            __ptr = pointer();
       }
 
       deleter_type&
@@ -52943,20 +53809,22 @@ focus of this class.
 
     };
 
+} // namespace
+
 
 <ex>
 
-// :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
-//   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
-//   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-//   std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
-// 
-// :12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
-// std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
-// = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-// std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+ 
+:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
-TEST(SharedPointer, UniqueDoNotAllowCopy)
+TEST(SharedPointerUnique, DoNotAllowCopy)
 {
   unique_ptr<std::string> p1(new std::string("nico"));
   unique_ptr<std::string> p2(p1);
@@ -52964,20 +53832,19 @@ TEST(SharedPointer, UniqueDoNotAllowCopy)
   p3 = p2;
 }
 
+TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
+{
+  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+  // std::basic_string<char>*}’ to non-scalar type
+  // ‘std::unique_ptr<std::basic_string<char> >’ requested
+  //
+  // unique_ptr<std::string> p1 = new string;
 
-// TEST(SharedPointer, UniqueDoNotAllowInitCopyForm)
-// {
-//   // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
-//   // std::basic_string<char>*}’ to non-scalar type
-//   // ‘std::unique_ptr<std::basic_string<char> >’ requested
-//   //
-//   // unique_ptr<std::string> p1 = new string;
-//
-//   unique_ptr<std::string> p2(new string);
-// }
+  unique_ptr<std::string> p2(new string);
+}
 
 
-A unique_ptr does not have to own an object, so it can be empty.
+o A unique_ptr does not have to own an object, so it can be empty.
 
 *cxx-conversion-to-bool*
 You can check whether a unique_ptr owns an object by calling *operator-bool*
@@ -53088,7 +53955,7 @@ namespace cxx_sp_shared
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SharedPointer, UniqueAndMove)
+TEST(SharedPointerUnique, Move)
 {
   using namespace cxx_sp_shared;
 
@@ -53114,6 +53981,24 @@ TEST(SharedPointer, UniqueAndMove)
   //   cout << "p3 is not null" << endl;
   // else
   //   cout << "p3 is null" << endl;
+}
+
+<ex>
+{ 
+  // okay when use std::move()
+
+  std::unique_ptr<length_validator> validator1(new length_validator(8));
+  std::unique_ptr<digit_password_validator> validator2(
+   new digit_password_validator(std::move(validator1)));
+
+  // do the same when use temporary
+  std::unique_ptr<digit_password_validator> validator2(
+      new digit_password_validator(std::unique_ptr<length_validator>(new length_validator(8)))
+      );
+
+  // *cxx-14*
+  auto validator1 = std::make_unique<digit_password_validator>(
+      std::make_unique<length_validator>(8));
 }
 
 
@@ -53165,23 +54050,25 @@ unique_ptr<int> clone(int p) {
 http://www.gotw.ca/gotw/025.htm
 https://eli.thegreenplace.net/2012/06/20/c11-using-unique_ptr-with-standard-library-containers
 
-unique_ptr<Foo> source()
+namespace cxx_sp_shared
 {
-  unique_ptr<Foo> ret(new Foo);
-  cout << "source: create up" << endl;
-  cout << "source: owns " << ret.get() << endl;
-  cout << "source: ends" << endl;
+  unique_ptr<Foo> source()
+  {
+    unique_ptr<Foo> ret(new Foo);
+    cout << "source: create up" << endl;
+    cout << "source: owns " << ret.get() << endl;
+    cout << "source: ends" << endl;
 
-  // *cxx-return-cxx-move*
-  return ret;
-}
+    // *cxx-return-cxx-move*
+    return ret;
+  }
 
-void sink(unique_ptr<Foo> p)
-{
-  cout << "sink: owns " << p.get() << endl;
-  cout << "sink: ends" << endl;
-}
-
+  void sink(unique_ptr<Foo> p)
+  {
+    cout << "sink: owns " << p.get() << endl;
+    cout << "sink: ends" << endl;
+  }
+} // namespace
 
 // [ RUN      ] CxxFeaturesTest.UseUniqueSinkSource
 // call source()
@@ -53194,16 +54081,18 @@ void sink(unique_ptr<Foo> p)
 // sink: ends
 // Foo dtor(1)
 // main: ends
+// [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-[       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
-
-TEST(CxxFeaturesTest, UseUniqueSinkSource)
+TEST(SharedPointerUnique, SinkSource)
 {
+  using namespace cxx_sp_shared;
+
   cout << "call source()" << endl;
   unique_ptr<Foo> up = source();
 
   cout << "main: owns " << up.get() << endl;
 
+  // *cxx-move*
   sink(move(up));
 
   cout << "main: ends" << endl;

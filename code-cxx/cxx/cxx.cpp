@@ -996,6 +996,125 @@ TEST(Dtor, NoVirtualDtorProblem)
 }
 
 
+// Why dtor should be virtual in cxx-abc?
+
+namespace cxx_dtor {
+
+  class AbstractBase
+  {
+    public:
+      AbstractBase() : base_(0)
+      { std::cout << "\tabstract ctor: base" << std::endl; }
+
+      ~AbstractBase() 
+      { std::cout << "\tabstract dtor: base" << std::endl; }
+
+      virtual int get_value() = 0;
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromAbstract : public AbstractBase
+  {
+    public:
+      DerivedFromAbstract() : derived_(10)
+      { std::cout << "\tabstract ctor: derived" << std::endl; }
+
+      ~DerivedFromAbstract() 
+      { std::cout << "\tabstract dtor: derived" << std::endl; }
+
+      virtual int get_value() override { return derived_; };
+
+    private:
+      int derived_;
+  };
+
+
+  class AbstractBaseNoDtor
+  {
+    public:
+      AbstractBaseNoDtor() : base_(0)
+      { std::cout << "\tabstract ctor: base" << std::endl; }
+
+      // ~AbstractBase() 
+      // { std::cout << "\tabstract dtor: base" << std::endl; }
+
+      virtual int get_value() = 0;
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromAbstractNoDtor : public AbstractBaseNoDtor
+  {
+    public:
+      DerivedFromAbstractNoDtor() : derived_(10)
+      { std::cout << "\tabstract ctor: derived" << std::endl; }
+
+      ~DerivedFromAbstractNoDtor() 
+      { std::cout << "\tabstract dtor: derived" << std::endl; }
+
+      virtual int get_value() override { return derived_; };
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+TEST(Dtor, AbstractBaseClassNoCompileError)
+{
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract* pabc1; 
+    DerivedFromAbstract* pabc2; 
+
+    (void) pabc1;
+    (void) pabc2;
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract abc; 
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstractNoDtor* pabc1; 
+    DerivedFromAbstractNoDtor* pabc2; 
+
+    (void) pabc1;
+    (void) pabc2;
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract abc; 
+  }
+}
+
+// shows *cxx-dtor-non-virtual-destruction-problem*
+
+TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
+{
+  using namespace cxx_dtor;
+
+  cout << "{" << endl;
+  AbstractBaseNoDtor* pbase = new DerivedFromAbstractNoDtor;
+
+  // cxx.cpp:1108:10: warning: deleting object of abstract class type ‘cxx_dtor::AbstractBaseNoDtor’ which has non-virtual destructor will cause undefined behaviour [-Wdelete-non-virtual-dtor]
+  //    delete pbase; 
+
+  delete pbase; 
+  cout << "}" << endl; 
+}
+
+
 // ={=========================================================================
 // cxx-copy-control
 
@@ -2925,35 +3044,38 @@ TEST(SharedPointerShared, Copy)
   EXPECT_THAT(r.use_count(), 3);
 }
 
+/*
 
-// :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
-//   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
-//   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-//   std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
-// 
-// :12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
-// std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
-// = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-// std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+ 
+:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
 
-// TEST(SharedPointer, UniqueDoNotAllowCopy)
-// {
-//   unique_ptr<std::string> p1(new std::string("nico"));
-//   unique_ptr<std::string> p2(p1);
-//   unique_ptr<std::string> p3;
-//   p3 = p2;
-// }
+TEST(SharedPointerUnique, DoNotAllowCopy)
+{
+  unique_ptr<std::string> p1(new std::string("nico"));
+  unique_ptr<std::string> p2(p1);
+  unique_ptr<std::string> p3;
+  p3 = p2;
+}
 
-// TEST(SharedPointer, UniqueDoNotAllowInitCopyForm)
-// {
-//   // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
-//   // std::basic_string<char>*}’ to non-scalar type
-//   // ‘std::unique_ptr<std::basic_string<char> >’ requested
-//   //
-//   // unique_ptr<std::string> p1 = new string;
-//
-//   unique_ptr<std::string> p2(new string);
-// }
+TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
+{
+  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+  // std::basic_string<char>*}’ to non-scalar type
+  // ‘std::unique_ptr<std::basic_string<char> >’ requested
+  //
+  // unique_ptr<std::string> p1 = new string;
+
+  unique_ptr<std::string> p2(new string);
+}
+
+*/
 
 TEST(SharedPointerUnique, OperatorBool)
 {
@@ -2989,7 +3111,7 @@ namespace cxx_sp_shared
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SharedPointerUnique, UniqueAndMove)
+TEST(SharedPointerUnique, Move)
 {
   using namespace cxx_sp_shared;
 
@@ -3051,7 +3173,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(SharedPointerUnique, UniqueSinkSource)
+TEST(SharedPointerUnique, SinkSource)
 {
   using namespace cxx_sp_shared;
 
@@ -3777,40 +3899,6 @@ TEST(SharedPointerOwn, Shared)
 
 
 // ={=========================================================================
-// cxx-cast
-
-namespace cxx_cast
-{
-  class VirtualDtorBase
-  {
-    public:
-      VirtualDtorBase() 
-      { std::cout << "\tvirtual ctor: base" << std::endl; }
-
-      virtual ~VirtualDtorBase() 
-      { std::cout << "\tvirtual dtor: base" << std::endl; }
-
-    private:
-      int value_;
-  };
-
-  class DerivedFromVirtual : public VirtualDtorBase
-  {
-    public:
-      DerivedFromVirtual() 
-      { std::cout << "\tvirtual ctor: derived" << std::endl; }
-
-      ~DerivedFromVirtual() 
-      { std::cout << "\tvirtual dtor: derived" << std::endl; }
-
-    private:
-      int derived_;
-  };
-
-} // namespace
-
-
-// ={=========================================================================
 // cxx-range-for
 
 // TEST(CxxFeaturesTest, DISABLED_UseRangeForOnInteger)
@@ -4141,6 +4229,126 @@ TEST(Stdio, ManipulatorsFloat)
   ostringstream os;
   os << std::fixed << std::setprecision(2) << value;
   EXPECT_THAT(os.str(), "8.81");
+}
+
+// ={=========================================================================
+// cxx-override
+
+namespace cxx_override
+{
+  namespace no_override
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10)
+      {}
+
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20)
+      {} 
+
+        virtual int get_value(int value)
+        { 
+          (void)value;
+          return derived_; 
+        };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_1)
+{
+  using namespace cxx_override::no_override;
+
+  // No override since it do not meet *cxx-override-condition* Hence no vtable
+  // update and base version called.
+  {
+    Derived derived;
+    Base* pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 10);
+  }
+
+  // cxx.cpp: In member function ‘virtual void Override_Condition_Test::TestBody()’:
+  // cxx.cpp:4285:34: error: no matching function for call to ‘cxx_override::no_override::Derived::get_value()’
+  //      EXPECT_THAT(pbase->get_value(), 20);
+  //
+  // Effectively defines a new function in the derived, inner scope, name found
+  // and stops lookup. so hide the name in the base in *cxx-name-lookup* 
+  //
+  // {
+  //   Derived derived;
+  //
+  //   // see Derived
+  //   Derived* pbase = &derived;
+  //
+  //   EXPECT_THAT(pbase->get_value(), 20);
+  // }
+}
+
+namespace cxx_override
+{
+  namespace no_virtual
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10)
+      {}
+
+        int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20)
+      {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_2)
+{
+  using namespace cxx_override::no_virtual;
+
+  // No override since no vtable update and base version called.
+  {
+    Derived derived;
+    Base* pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 10);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pbase = &derived;
+  
+    EXPECT_THAT(pbase->get_value(), 20);
+  }
 }
 
 

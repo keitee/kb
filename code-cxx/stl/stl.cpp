@@ -3869,6 +3869,11 @@ TEST(AlgoMutating, AlgoPartition)
 }
 
 
+// Re-arrange the portfolio between (begin, end)  in such a way that all the
+// stocks with quantity <= maxQuantity precede all those with quantity >
+// maxQuantity Return the iterator to the first element with quantity >
+// maxQuantity
+
 using PortfolioIterator = vector<unsigned int>::iterator;
 
 PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
@@ -3904,7 +3909,7 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
 
   // *cxx-vector-reallocation* *cxx-iter-invalidated*
   // *cxx-iter-singular* means invalidated iterator since there is no gurantee
-  // that current is valid after second pass push_back
+  // that current is valid after second pass push_back due to relocation
   //
   // /usr/include/c++/6/debug/safe_iterator.h:298:
   // Error: attempt to increment a singular iterator.
@@ -3924,7 +3929,7 @@ PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
   return current;
 }
 
-// works like stable_partition
+// works like algo-partition-stable_partition
 
 TEST(AlgoMutating, OwnPartitionTwoPass)
 {
@@ -3999,13 +4004,16 @@ _Iterator my_partition_02(_Iterator begin, _Iterator end, _Compare comp)
   return start_of_unmatched;
 }
 
-// fail since *cxx-loop* issue
 template <typename _Iterator, typename _Compare>
 _Iterator my_partition_02_x(_Iterator begin, _Iterator end, _Compare comp)
 {
   // find the start of unmatched(unsorted) sub group
 
   _Iterator start_of_unmatched = begin;
+
+  // fail since *cxx-loop* issue and the problem is that when see unmached item,
+  // iter is already increased. 
+
   while (comp(*start_of_unmatched++))
     if (start_of_unmatched == end)
       return start_of_unmatched;
@@ -4026,7 +4034,8 @@ _Iterator my_partition_02_x(_Iterator begin, _Iterator end, _Compare comp)
   return start_of_unmatched;
 }
 
-// not optimal
+// not optimal since starts `unmached` group from empty and use run(not
+// checked).
 //
 // 1. find the first of `matched`
 // 2. scan from that to the end while doing swap

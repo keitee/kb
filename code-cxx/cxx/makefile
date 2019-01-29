@@ -9,6 +9,7 @@ GMOCK_DIR = $(HOME)/works/googletest/googlemock
 TARGET = cxx
 TARGET_EX = cxx_ex
 TARGET_CASE = cxx_case
+TARGET_PATTERN = cxx_pattern
 
 # Where to find user code.
 USER_DIR = .
@@ -19,9 +20,10 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG
 #CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -fno-elide-constructors
 
-TESTS = $(TARGET)_out \
-				$(TARGET_EX)_out \
-				$(TARGET_CASE)_out
+TESTS := $(TARGET)_out
+TESTS += $(TARGET_EX)_out
+TESTS += $(TARGET_CASE)_out
+TESTS += $(TARGET_PATTERN)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -76,4 +78,11 @@ $(TARGET_CASE).o : $(TARGET_CASE).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET_CASE).cpp -o $(TARGET_CASE).o
 
 $(TARGET_CASE)_out : $(TARGET_CASE).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+# 
+$(TARGET_PATTERN).o : $(TARGET_PATTERN).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET_PATTERN).cpp -o $(TARGET_PATTERN).o
+
+$(TARGET_PATTERN)_out : $(TARGET_PATTERN).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
