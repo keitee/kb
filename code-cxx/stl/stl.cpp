@@ -820,6 +820,14 @@ TEST(Vector, Ctors)
     vector<int> coll{1,2,3,4,5,6};
     EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
   }
+  {
+    vector<int> coll{1};
+    EXPECT_THAT(coll, ElementsAre(1));
+  }
+  {
+    vector<int> coll{2};
+    EXPECT_THAT(coll, ElementsAre(2));
+  }
 
   // iterator
   {

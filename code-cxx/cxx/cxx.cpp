@@ -3211,7 +3211,7 @@ namespace cxx_sp_delete
 
       void operator() (ClassA* p)
       {
-        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        os_ << "DebugDeleteClassA: deleting " << typeid(p).name() << ", p = " << p << endl;
         delete p;
       }
 
@@ -3230,7 +3230,7 @@ namespace cxx_sp_delete
       template <typename T>
       void operator() (T* p)
       {
-        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        os_ << "DebugDelete: deleting " << typeid(p).name() << ", p = " << p << endl;
         delete p;
       }
 
@@ -3257,6 +3257,20 @@ namespace cxx_sp_delete
 
 } // namespace
 
+// [ RUN      ] SharedPointer.Deleter
+// ClassA:
+// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// ClassA:
+// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// ClassA:
+// DebugDelete: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// deleting jutta on function
+// deleting nico on function
+// deleting jutta on functor
+// deleting nico on functor
+// deleting nico
+// [       OK ] SharedPointer.Deleter (5 ms)
+
 TEST(SharedPointer, Deleter)
 {
   using namespace cxx_sp_delete;
@@ -3266,6 +3280,8 @@ TEST(SharedPointer, Deleter)
     up->print_mesg();
   }
 
+  // same as the above since unique_ptr ctor() uses deleter type to create
+  // delter to use
   {
     unique_ptr<ClassA, DebugDeleteClassA> up(new ClassA(), DebugDeleteClassA());
     up->print_mesg();
@@ -3489,6 +3505,221 @@ TEST(SharedPointer, UseCount)
   cout << "p2.use_count: " << p2.use_count() << endl;
 
   cout << "end of main" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-smart-ptr-weak
+// 5.2.2 Class weak_ptr
+
+TEST(SharedPointerWeak, NoDirectReference)
+{
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    EXPECT_THAT(sp.use_count(), 1);
+
+    if (auto p = wp.lock())
+    {
+      EXPECT_THAT(sp.use_count(), 2);
+      EXPECT_THAT(wp.use_count(), 2);
+    }
+  }
+
+  // Can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a `bad_weak_ptr exception` 
+
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    EXPECT_THAT(sp.use_count(), 1);
+
+    shared_ptr<int> p(wp);
+    if (p)
+    {
+      EXPECT_THAT(sp.use_count(), 2);
+      EXPECT_THAT(wp.use_count(), 2);
+    }
+  }
+
+  // Can call expired(), which returns true if use_count() is zero, false
+  // otherwise. This option is equivalent to checking whether use_count() is
+  // equal to 0 but might be 'faster'.
+  
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    EXPECT_THAT(sp.use_count(), 1);
+
+    sp = nullptr;
+
+    auto p = wp.lock();
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(p, nullptr);
+  }
+}
+
+namespace cxx_sp_weak_problem
+{
+  class Person
+  {
+    public:
+      string name_;
+      shared_ptr<Person> mother_;
+      shared_ptr<Person> father_;
+      vector<shared_ptr<Person>> kids_;
+
+      Person(string const& name,
+          shared_ptr<Person> mother = nullptr, shared_ptr<Person> father = nullptr)
+        : name_(name), mother_(mother), father_(father)
+      {}
+
+      ~Person()
+      { cout << "delete: " << name_ << endl; }
+  };
+
+  shared_ptr<Person> init_family(string const& name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
+
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
+
+    return kid;
+  }
+
+} // namespace
+
+/*
+nico's family exists
+- nico is shared 3 times
+- name of 1st kid of nico's mom: nico
+ 
+jim's family exists
+- jim is shared 3 times
+- name of 1st kid of jim's mom: jim
+ 
+                                     mom, dad <---
+                                               \  \
+mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
+               \ (shared or weak)   \
+                -> kid               -> kid
+ 
+Solution?
+*/
+
+TEST(SharedPointerWeak, CyclicReference)
+{
+  using namespace cxx_sp_weak_problem;
+
+  // return kids, which is 'nico'
+  shared_ptr<Person> p = init_family("nico");
+
+  cout << "nico's family exists" << endl;
+  cout << "- nico is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of nico's mom: " 
+    << p->mother_->kids_[0]->name_ << endl;
+
+  // cxx-cross-reference
+  // assign op decrease count of p but no one from nico family is deleted since
+  // each has a reference to them.
+  //
+  // same for jim family.
+
+  p = init_family("jim");
+
+  cout << "jim's family exists" << endl;
+  cout << "- jim is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of jim's mom: " 
+    << p->mother_->kids_[0]->name_ << endl;
+}
+
+
+namespace cxx_sp_weak_solution
+{
+  class Person
+  {
+    public:
+      string name_;
+      shared_ptr<Person> mother_;
+      shared_ptr<Person> father_;
+
+      // vector<shard_ptr<Person>> kids_;
+      vector<weak_ptr<Person>> kids_;
+
+      Person(string const& name,
+          shared_ptr<Person> mother = nullptr, shared_ptr<Person> father = nullptr)
+        : name_(name), mother_(mother), father_(father)
+      {}
+
+      ~Person()
+      { cout << "delete: " << name_ << endl; }
+  };
+
+  shared_ptr<Person> init_family(string const& name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
+
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
+
+    return kid;
+  }
+
+} // namespace
+
+// As soon as we lose our handle into a kid created - either by assigning a new
+// value to p or by leaving main() - the kid's object of the family loses its
+// last owner, which has the effect that both parents lose their last owner. So
+// 'all' objects, initially created by new, are deleted now so that their
+// destructors get called since weak pointer don't increase count.
+
+// [ RUN      ] SharedPointerWeak.CyclicReferenceSolution
+// nico's family exists
+// - nico is shared 1 times
+// - name of 1st kid of nico's mom: nico
+// delete: nico
+// delete: nico's dad
+// delete: nico's mom
+// jim's family exists
+// - jim is shared 1 times
+// - name of 1st kid of jim's mom: jim
+// delete: jim
+// delete: jim's dad
+// delete: jim's mom
+// [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
+
+TEST(SharedPointerWeak, CyclicReferenceSolution)
+{
+  using namespace cxx_sp_weak_solution;
+
+  // return kids, which is 'nico'
+  shared_ptr<Person> p = init_family("nico");
+
+  cout << "nico's family exists" << endl;
+  cout << "- nico is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of nico's mom: "; 
+
+  // cout << p->mother_->kids_[0]->name_ << endl;
+  cout << p->mother_->kids_[0].lock()->name_ << endl;
+
+  p = init_family("jim");
+
+  cout << "jim's family exists" << endl;
+  cout << "- jim is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of jim's mom: "; 
+
+  // cout << p->mother_->kids_[0]->name_ << endl;
+  cout << p->mother_->kids_[0].lock()->name_ << endl;
 }
 
 

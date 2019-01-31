@@ -17,16 +17,21 @@ using namespace std::placeholders;
 using namespace testing;
 
 
-// StrBlob without StrBlobPtr
-//
-// CPR 455
-//
-// * show how to implement a new collection type using library container.
-// `is-implemented-in-terms-of-model`
-//
-// * This shows when shared_ptr is useful than own raii since this case don't
-// need `copy-controls` and use syn versions but not a problem as it has only
-// one member which is shared_ptr.
+/*
+={=============================================================================
+
+StrBlob without StrBlobPtr
+
+CPR 455
+
+o show how to implement a new collection type using library container.
+`is-implemented-in-terms-of-model`
+
+o This shows when shared_ptr is useful than own raii since this case don't
+need `copy-controls` and use syn versions but not a problem as it has only
+one member which is shared_ptr.
+ 
+*/
 
 namespace cxx_case_strblob
 {
@@ -467,172 +472,177 @@ TEST(CxxCase, StringBlobTemplate)
   }
 } 
 
-// from Problem 46, circular buffer, the modern c++ challenge
-// 1. use size(count) and head only
-// 2. in push, no full check since it overwrites and in pop, it simply
-// calculates first from head substracing size.
-// 3. no iterator support is needed if not use begin()/end()
+
+/*
+={=============================================================================
+
+Problem 46, circular buffer, the modern c++ challenge
+
+1. use size(count) and head only
+2. in push, no full check since it overwrites and in pop, it simply
+calculates first from head substracing size.
+3. no iterator support is needed if not use begin()/end()
+ 
+*/
 
 namespace queue_circular_count_iterator
 {
+  template <typename T>
+    class circular_buffer_iterator;
 
-template <typename T>
-class circular_buffer_iterator;
+  template <typename T>
+    class circular_buffer
+    {
+      typedef circular_buffer_iterator<T> const_iterator;
+      friend class circular_buffer_iterator<T>;
 
-template <typename T>
-class circular_buffer
-{
-  typedef circular_buffer_iterator<T> const_iterator;
-  friend class circular_buffer_iterator<T>;
+      public:
+      circular_buffer() = delete;
+      explicit circular_buffer(size_t const size) : data_(size) 
+      {}
 
-  public:
-  circular_buffer() = delete;
-  explicit circular_buffer(size_t const size) : data_(size) 
-  {}
+      void clear() noexcept 
+      { head_ = -1; size_ = 0; }
 
-  void clear() noexcept 
-  { head_ = -1; size_ = 0; }
+      bool empty() const noexcept
+      { return size_ == 0; }
 
-  bool empty() const noexcept
-  { return size_ == 0; }
+      bool full() const noexcept
+      { return size_ >= data_.size(); }
 
-  bool full() const noexcept
-  { return size_ >= data_.size(); }
+      size_t capacity() const noexcept
+      { return data_.size(); }
 
-  size_t capacity() const noexcept
-  { return data_.size(); }
+      size_t size() const noexcept
+      { return size_; }
 
-  size_t size() const noexcept
-  { return size_; }
+      const_iterator begin() const
+      {
+        return const_iterator(*this, first_pos(), empty());
+      }
 
-  const_iterator begin() const
-  {
-    return const_iterator(*this, first_pos(), empty());
-  }
+      const_iterator end() const
+      {
+        return const_iterator(*this, next_pos(), true);
+      }
 
-  const_iterator end() const
-  {
-    return const_iterator(*this, next_pos(), true);
-  }
+      T pop()
+      {
+        if (empty())
+          throw std::runtime_error("buffer is empty");
 
-  T pop()
-  {
-    if (empty())
-      throw std::runtime_error("buffer is empty");
+        auto pos = first_pos();
+        size_--;
+        return data_[pos];
+      }
 
-    auto pos = first_pos();
-    size_--;
-    return data_[pos];
-  }
+      void push(T const item)
+      {
+        // if (full())
+        //   throw std::runtime_error("buffer is full");
 
-  void push(T const item)
-  {
-    // if (full())
-    //   throw std::runtime_error("buffer is full");
+        head_ = next_pos();
+        data_[head_] = item;
 
-    head_ = next_pos();
-    data_[head_] = item;
+        if (size_ < data_.size())
+          size_++;
+      }
 
-    if (size_ < data_.size())
-      size_++;
-  }
+      private:
+      size_t size_{};
+      size_t head_{-1};
+      std::vector<T> data_;
 
-  private:
-  size_t size_{};
-  size_t head_{-1};
-  std::vector<T> data_;
+      // return `head` pos to push
+      size_t next_pos() const noexcept
+      {
+        // *cxx-precedence* *cxx-error*
+        // return size_ == 0 ? 0 : (head_ + 1 % data_.size());
 
-  // return `head` pos to push
-  size_t next_pos() const noexcept
-  {
-    // *cxx-precedence* *cxx-error*
-    // return size_ == 0 ? 0 : (head_ + 1 % data_.size());
+        return size_ == 0 ? 0 : ((head_ + 1) % data_.size());
+      }
 
-    return size_ == 0 ? 0 : ((head_ + 1) % data_.size());
-  }
+      // return `tail` pos to pop
+      size_t first_pos() const noexcept
+      {
+        return size_ == 0 ? 0 : (head_ + data_.size() - size_ + 1) % data_.size();
+      }
+    };
 
-  // return `tail` pos to pop
-  size_t first_pos() const noexcept
-  {
-    return size_ == 0 ? 0 : (head_ + data_.size() - size_ + 1) % data_.size();
-  }
-};
+  template <typename T>
+    class circular_buffer_iterator
+    {
+      typedef circular_buffer_iterator        self_type;
+      typedef T                               value_type;
+      typedef T&                              reference;
+      typedef T const&                        const_reference;
+      typedef T*                              pointer;
+      typedef std::random_access_iterator_tag iterator_category;
+      typedef ptrdiff_t                       difference_type;
 
-template <typename T>
-class circular_buffer_iterator
-{
-  typedef circular_buffer_iterator        self_type;
-  typedef T                               value_type;
-  typedef T&                              reference;
-  typedef T const&                        const_reference;
-  typedef T*                              pointer;
-  typedef std::random_access_iterator_tag iterator_category;
-  typedef ptrdiff_t                       difference_type;
- 
-  public:
+      public:
 
-  explicit circular_buffer_iterator(circular_buffer<T> const& buf, size_t const pos, bool const last) :
-    buffer_(buf), index_(pos), last_(last)
-  {}
+      explicit circular_buffer_iterator(circular_buffer<T> const& buf, size_t const pos, bool const last) :
+        buffer_(buf), index_(pos), last_(last)
+      {}
 
-  self_type& operator++()
-  {
-    if (last_)
-      throw std::out_of_range("iterator cannot be incremented past the end of range.");
-    
-    index_ = (index_ + 1) % buffer_.data_.size();
+      self_type& operator++()
+      {
+        if (last_)
+          throw std::out_of_range("iterator cannot be incremented past the end of range.");
 
-    // that is when index_ == `head`
-    last_ = (index_ == buffer_.next_pos());
+        index_ = (index_ + 1) % buffer_.data_.size();
 
-    return *this;
-  }
+        // that is when index_ == `head`
+        last_ = (index_ == buffer_.next_pos());
 
-  // *cxx-operator-postfix*
-  self_type const operator++(int)
-  {
-    self_type temp = *this;
-    ++*this;
-    return temp;
-  }
+        return *this;
+      }
 
-  bool operator==(self_type const& other) const
-  {
-    // assert(compatible(other));
+      // *cxx-operator-postfix*
+      self_type const operator++(int)
+      {
+        self_type temp = *this;
+        ++*this;
+        return temp;
+      }
 
-    return &buffer_ == &other.buffer_
-      && index_ == other.index_ 
-      && last_ == other.last_;
-  }
+      bool operator==(self_type const& other) const
+      {
+        // assert(compatible(other));
 
-  bool operator!=(self_type const& other) const
-  { return !(*this == other); }
+        return &buffer_ == &other.buffer_
+          && index_ == other.index_ 
+          && last_ == other.last_;
+      }
 
-  const_reference operator*() const
-  {
-    return buffer_.data_[index_];
-  }
+      bool operator!=(self_type const& other) const
+      { return !(*this == other); }
 
-  private:
+      const_reference operator*() const
+      {
+        return buffer_.data_[index_];
+      }
 
-  circular_buffer<T> const& buffer_;
-  size_t index_;
-  bool last_;
-};
+      private:
 
-template <typename T>
-std::vector<T> print(circular_buffer<T> & buf)
-{
-  std::vector<T> coll{};
+      circular_buffer<T> const& buffer_;
+      size_t index_;
+      bool last_;
+    };
 
-  for (auto & e : buf)
-    coll.push_back(e);
+  template <typename T>
+    std::vector<T> print(circular_buffer<T> & buf)
+    {
+      std::vector<T> coll{};
 
-  return coll;
-}
+      for (auto & e : buf)
+        coll.push_back(e);
+
+      return coll;
+    }
 
 } // namespace
-
 
 TEST(CxxCase, CircularQueueCountIterator)
 {
@@ -681,6 +691,115 @@ TEST(CxxCase, CircularQueueCountIterator)
     EXPECT_THAT(print(cbuf), ElementsAre(3,4,5,6,7));
   }
 }
+
+
+/*
+={=============================================================================
+
+CXXPP, Qoute
+
+1. use size(count) and head only
+2. in push, no full check since it overwrites and in pop, it simply
+calculates first from head substracing size.
+3. no iterator support is needed if not use begin()/end()
+ 
+*/
+
+// when introduce `discount` concept
+
+namespace case_quote
+{
+  class Quote
+  {
+    public:
+
+      Quote() : book_no_(), price(0.0) {}
+
+      Quote(string const& book, double sale_price) :
+        book_no_(book), price_(sale_price) {}
+      
+      virtual ~Quote() {}
+
+      std::string isbn() const { return book_no_; }
+
+      // calculate net price but do not have "discount" concept
+      virtual double net_price(size_t count) const { return count * price_; }
+
+    private:
+      std::string book_no_;
+    protected:
+      double price_;
+  };
+
+  class Discount_Quote : public Quote
+  {
+    public:
+
+      // *cxx-ctor*
+      // Why need to have constructors in abstract class although cannot
+      // define objects of this type directly? Becuase ctors in classes
+      // derived from Disc_quote will use the Disc_quote ctor to construct
+      // the Disc_quote part of their objects. Default ctor default
+      // initialize those members.
+
+      Discount_Quote() : quantity_(0), discount_(0.0) {}
+      Discount_Quote(string const& book, double price, 
+          size_t quantity, double discount_percent) :
+        Quote(book, price), quantity_(quantity), discount_(discount_percent) {}
+
+      // *cxx-dtor*
+      // no need to have virtual dtor here since Quote has it already
+  
+      // *cxx-abc*
+      // okay to have in the middle of inheritance and "discount" concept
+      virtual double net_price(size_t count) const = 0;
+
+    protected:
+      size_t quantity_;
+      double discount_;
+  };
+
+  class Bulk_Quote : public Discount_Quote
+  {
+    public:
+      Bulk_Quote(string const& book, double price, 
+          size_t quanity, double discount_percent) :
+        Discount_Quote(book, price, quantity, discount_percent) {}
+
+      virtual double net_price(size_t count) override
+      {
+        if (count >= quantity_)
+          return count * (1 - discount_) * price_;
+        else
+          return count * price_;
+      }
+  };
+
+  double print_total(ostream& os, Quote const& item, size_t sold)
+  {
+    double net_price = item.net_price(sold);
+
+    os << "isbn: " << item.isbn() << ", sold: " << sold 
+      << ", total due: " << net_price << endl;
+  }
+
+} // namespace
+
+class BulkQuoteTest : public ::testing::Test
+{
+  protected:
+    BulkQuoteTest() : items_{compare} {}
+
+    static bool compare(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs)
+    {
+      return lhs->isbn() < rhs->isbn();
+    }
+
+    using comp = 
+      bool(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs);
+
+    std::multiset<std::shared_ptr<Quote>, comp*> items_;
+};
 
 
 // ={=========================================================================

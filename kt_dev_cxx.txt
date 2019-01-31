@@ -157,6 +157,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-pattern-observer
 *kt_dev_cxx_0000* cxx-pattern-decorator
 *kt_dev_cxx_0000* cxx-pattern-composite
+*kt_dev_cxx_0000* cxx-pattern-chian-of-responsibility
 *kt_dev_cxx_0000* cxx-incomplete-type cpp-forward-declaration cpp-layout
 *kt_dev_cxx_0000* cxx-empty-base-class-optimization
 
@@ -16755,25 +16756,23 @@ Quote -> Bulk_quote -> School_quote
                     -> Xmas_quote
                     ...
 
-However, all do not represent the general concept.
+However, all do not represent the general concept. So:
 
-So:
-
-  Each of these discout strategies requires a quantity and a discount amount
+o Each of these discout strategies requires a quantity and a discount amount
   which are common to all discout strategies. Make it general and abstract.
   
-  Each of the derived classes will implement its discount strategy by defining
+o Each of the derived classes will implement its discount strategy by defining
   its own version of net_price.
 
 This is refactoring example. Refactoring involves redesigning a class
-hierarchy to move operations and/or data from one class to another. It is that
-even though we changed the inheritance hierarchy code that uses Bulk_quote or
-Quote would 'not' need to change but need to recompile.
+hierarchy to move operations and/or data from one class to another. Even
+though we changed the inheritance hierarchy, code that uses Bulk_quote or
+Quote `would 'not' need to change but need to recompile.`
 
 
-So have seperate Disc_quote to represent the general concept, not a concreate
-discount strategy, and make it abstract base class to prevent users creating a
-object of this type.
+So seperate Disc_quote to represent `the general discount concept`, not a
+concreate discount strategy, and make it abstract base class to prevent users
+creating a object of this type.
 
 class Disc_quote : public Quote {
   public:
@@ -16794,7 +16793,7 @@ class Bulk_quote : public Disc_quote {
 };
 
 
-<error-when-create-abc>
+<error-when-create-abc> *cxx-abc* *cxx-override*
 This happens when tries to create an implementation class which is derived
 from ABC class. This is because implementation class did not override some of
 members.
@@ -21409,7 +21408,7 @@ collect2: error: ld returned 1 exit status
 All in all, it is *cxx-feature* C++ feature which makes const file-scope.
 
 
-{top-and-low-level-const} *cxx-base-type* *cxx-declarator*
+{top-and-low-level-const} *cxx-type* *cxx-declarator*
 This is only for pointer which has 'indirect' access so makes two level in
 terms of constness. This matters when copy an object.
 
@@ -30285,18 +30284,501 @@ Can add/change calc func later because can have the drived classes in separate h
 ={============================================================================
 *kt_dev_cxx_0000* cxx-pattern-observer
 
-RDP 293
-
 The observer pattern describes how to establish these relationship. The key
 object in this pattern are `subject` and `observer` A subject may have any
 number of dependent observers. All observers are notified whenever the subject
 undergoes a change in state. In response, each observer will query the subject
 to synchronise its state with the subject's state.
 
-This kind of interaction is also known as publish-subscribe. The subject is
+This kind of interaction is also known as `publish-subscribe`. The subject is
 the publisher of notifications. It sends out these notifications without
 having to know who its observers are. Any number of observers can subscribe to
 receive notifications.
+
+
+cxx_pattern_observer
+
+The Morden C++ Challenge, Design Pattern, Chapter 08
+
+71. Observable vector container
+
+Write a class template that behaves like a vector but can notify registered
+parties of internal state changes. The class must provide at least the following
+operations:
+
+Various constructors for creating new instances of the class
+operator= to assign values to the container
+push_back() to add a new element at the end of the container
+pop_back() to remove the last element from the container
+clear() to remove all the elements from the container
+size() to return the number of elements from the container
+empty() to indicate whether the container is empty or has elements
+
+operator=, push_back(), pop_back(), and clear() must notify others of the state
+changes. The notification should include the type of the change, and, when the
+case, the index of the element that was changed (such as added or removed).
+
+
+The observable vector described in this problem is a typical example of a
+subject in the design pattern called observer. This pattern describes an object,
+called the subject, that maintains a list of dependent objects, called
+observers, and notifies them of any state changes by calling one of their
+methods. The class diagram shown here describes a possible pattern
+implementation for the proposed problem:
+
+
+*/
+
+namespace cxx_pattern_observer
+{
+  enum class collection_action
+  { add, remove, clear, assign };
+
+  std::string to_string(collection_action const action)
+  {
+    switch(action)
+    {
+      case collection_action::add: return "add";
+      case collection_action::remove: return "remove";
+      case collection_action::clear: return "clear";
+      case collection_action::assign: return "assign";
+      default: return "unsupported action";
+    }
+  }
+
+  struct collection_change_notification
+  {
+    collection_action action_;
+    // std::vector<size_t> item_indexes_;
+    size_t item_indexes_;
+  };
+
+  class collection_observer
+  {
+    public:
+      virtual ~collection_observer() {}
+
+      // why not reference?
+      virtual void collection_changed(collection_change_notification notificaiton) = 0;
+  };
+
+  class observer : public collection_observer
+  {
+    public:
+      virtual void collection_changed(collection_change_notification notification) override
+      {
+        std::cout << "action: " << to_string(notification.action_);
+
+        // if (!notification.item_indexes_.empty())
+        {
+          std::cout << ", indexes: ";
+
+          // the index of the element that was changed (such as added or removed)
+          // so no need to have for loop
+          // for (auto i : notification.item_indexes_)
+          //   std::cout << i << ' ';
+
+          std::cout << notification.item_indexes_;
+        }
+
+        std::cout << std::endl;
+      }
+  };
+
+#if 0
+  // this is code from the text which works but not sure why this is complicated
+  // as this.
+
+  // final?
+  template <typename T, typename Allocator = std::allocator<T>>
+  class observable_vector final
+  {
+    typedef typename std::vector<T, Allocator>::size_type size_type;
+
+    public:
+
+    // ???
+    observable_vector() noexcept(noexcept(Allocator()))
+      : observable_vector(Allocator()) 
+    {}
+
+    explicit observable_vector(Allocator const& alloc) noexcept
+      : data_(alloc) 
+      {}
+
+    observable_vector(size_type count, const T& value, 
+        Allocator const& alloc = Allocator())
+      : data_(count, value, alloc)
+    {}
+
+    explicit observable_vector(size_type count, 
+        Allocator const& alloc = Allocator())
+      : data_(count, alloc)
+    {}
+
+    // moves
+
+    observable_vector(observable_vector&& other) noexcept
+      : data_(other.data_)
+      {}
+
+    observable_vector(observable_vector&& other, Allocator const& alloc)
+      : data_(other.data_, alloc)
+    {}
+
+    // init list
+    observable_vector(std::initializer_list<T> init,
+        Allocator const& alloc = Allocator())
+      : data_(init, alloc)
+    {}
+
+    template<typename InputIterator>
+      observable_vector(InputIterator first, InputIterator last,
+          Allocator const& alloc = Allocator())
+      : data_(first, last, alloc)
+      {}
+
+    observable_vector& operator=(observable_vector const& other)
+    {
+      if (this != &other)
+      {
+        data_ = other.data_;
+
+        // 1. weak_ptr?
+        // 2. std::vector<size_t>{} is empty when assign?
+
+        for (auto o : observers_)
+        {
+          if (o != nullptr)
+          {
+            o->collection_changed(
+                // {collection_action::assign, std::vector<size_t>{}}
+                {collection_action::assign, 0}
+                );
+          }
+        }
+      }
+
+      return *this;
+    }
+
+    observable_vector& operator=(observable_vector&& other)
+    {
+      if (this != &other)
+      {
+        data_ = std::move(other.data_);
+
+        for (auto o : observers_)
+        {
+          if (o != nullptr)
+          {
+            o->collection_changed(
+                // {collection_action::assign, std::vector<size_t>{}}
+                {collection_action::assign, 0}
+                );
+          }
+        }
+      }
+
+      return *this;
+    }
+
+    // only rvalue version?
+    // the index of the element that was changed (such as added or removed)
+
+    void push_back(T&& value)
+    {
+      data_.push_back(value);
+
+      for (auto o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->collection_changed(
+              // {collection_action::add, std::vector<size_t>{data_.size()-1}}
+              {collection_action::add, data_.size()-1}
+              );
+        }
+      } // end for
+    }
+
+    void pop_back()
+    {
+      data_.pop_back();
+
+      for (auto o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->collection_changed(
+              // {collection_action::remove, std::vector<size_t>{data_.size()+1}}
+              // {collection_action::remove, std::vector<size_t>{data_.size()}}
+              {collection_action::remove, data_.size()}
+              );
+        }
+      } // end for
+    }
+
+    void clear() noexcept
+    {
+      data_.clear();
+
+      for (auto o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->collection_changed(
+              // {collection_action::clear, std::vector<size_t>{}}
+              {collection_action::clear, 0}
+              );
+        }
+      } // end for
+    }
+
+    size_type size() const noexcept
+    { return data_.size(); }
+
+
+    bool empty() const noexcept
+    { return data_.empty(); }
+
+    void add_observer(collection_observer* const o)
+    { observers_.push_back(o); }
+
+    void remove_observer(collection_observer const* const o)
+    {
+      observers_.erase(
+          std::remove(std::begin(observers_), std::end(observers_), o),
+          std::end(observers_)
+          );
+    }
+
+    private:
+    // what's the difference when use std::vector<T>?
+    std::vector<T, Allocator> data_;
+    std::vector<collection_observer*> observers_;
+  };
+#endif
+
+  template <typename T>
+  class observable_vector
+  {
+    typedef typename std::vector<T>::size_type size_type;
+
+    public:
+
+    observable_vector() noexcept
+      : data_()
+    {}
+
+    // explicit observable_vector(Allocator const& alloc) noexcept
+    //   : data_(alloc) 
+    //   {}
+
+    // observable_vector(size_type count, const T& value, 
+    //     Allocator const& alloc = Allocator())
+    //   : data_(count, value, alloc)
+    // {}
+
+    // explicit observable_vector(size_type count, 
+    //     Allocator const& alloc = Allocator())
+    //   : data_(count, alloc)
+    // {}
+
+    // // moves
+
+    // observable_vector(observable_vector&& other) noexcept
+    //   : data_(other.data_)
+    //   {}
+
+    // observable_vector(observable_vector&& other, Allocator const& alloc)
+    //   : data_(other.data_, alloc)
+    // {}
+
+    // init list
+    explicit observable_vector(std::initializer_list<T> init)
+      : data_(init)
+    {}
+
+    // template<typename InputIterator>
+    //   observable_vector(InputIterator first, InputIterator last,
+    //       Allocator const& alloc = Allocator())
+    //   : data_(first, last, alloc)
+    //   {}
+
+    observable_vector& operator=(observable_vector const& other)
+    {
+      if (this != &other)
+      {
+        data_ = other.data_;
+
+        // 1. weak_ptr?
+        // 2. std::vector<size_t>{} is empty when assign?
+
+        for (auto o : observers_)
+        {
+          if (o != nullptr)
+          {
+            o->collection_changed(
+                // {collection_action::assign, std::vector<size_t>{}}
+                {collection_action::assign, 0}
+                );
+          }
+        }
+      }
+
+      return *this;
+    }
+
+    observable_vector& operator=(observable_vector&& other)
+    {
+      if (this != &other)
+      {
+        data_ = std::move(other.data_);
+
+        for (auto o : observers_)
+        {
+          if (o != nullptr)
+          {
+            o->collection_changed(
+                // {collection_action::assign, std::vector<size_t>{}}
+                {collection_action::assign, 0}
+                );
+          }
+        }
+      }
+
+      return *this;
+    }
+
+    // the index of the element that was changed (such as added or removed)
+
+    void push_back(T&& value)
+    {
+      cout << "push_back(T&&)" << endl;
+
+      data_.push_back(value);
+
+      for (auto o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->collection_changed(
+              {collection_action::add, data_.size()-1}
+              );
+        }
+      } // end for
+    }
+
+    void push_back(T& value)
+    {
+      cout << "push_back(T&)" << endl;
+
+      data_.push_back(value);
+
+      for (auto o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->collection_changed(
+              {collection_action::add, data_.size()-1}
+              );
+        }
+      } // end for
+    }
+
+    void pop_back()
+    {
+      data_.pop_back();
+
+      for (auto o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->collection_changed(
+              {collection_action::remove, data_.size()}
+              );
+        }
+      } // end for
+    }
+
+    void clear() noexcept
+    {
+      data_.clear();
+
+      for (auto o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->collection_changed(
+              {collection_action::clear, 0}
+              );
+        }
+      } // end for
+    }
+
+    size_type size() const noexcept
+    { return data_.size(); }
+
+    bool empty() const noexcept
+    { return data_.empty(); }
+
+    void add_observer(collection_observer* const o)
+    { observers_.push_back(o); }
+
+    void remove_observer(collection_observer const* const o)
+    {
+      observers_.erase(
+          std::remove(std::begin(observers_), std::end(observers_), o),
+          std::end(observers_)
+          );
+    }
+
+    private:
+    // what's the difference when use std::vector<T>?
+    // std::vector<T, Allocator> data_;
+    std::vector<T> data_;
+    std::vector<collection_observer*> observers_;
+  };
+
+} // namespace
+
+TEST(PatternObserver, ObservableVectorContainer)
+{
+  using namespace cxx_pattern_observer;
+
+  observable_vector<int> ov;
+  observer o;
+  int value{5};
+
+  ov.add_observer(&o);
+
+  cout << "=========" << endl;
+  ov.push_back(1);
+
+  cout << "=========" << endl;
+  ov.push_back(2);
+
+  cout << "=========" << endl;
+  ov.push_back(value);
+
+  cout << "=========" << endl;
+  ov.pop_back();
+  cout << "=========" << endl;
+  ov.clear();
+
+  ov.remove_observer(&o);
+
+  // no notification since observer is removed.
+
+  observable_vector<int> ovv{1,2,3};
+
+  cout << "=========" << endl;
+  ov = ovv;
+
+  cout << "=========" << endl;
+  ov = observable_vector<int>{7,8,9};
+}
 
 
 ={============================================================================
@@ -30756,6 +31238,162 @@ TEST(PatternComposite, PasswordGenerator_2)
   auto password = generator.generate();
   cout << "password: " << password << endl;
 }
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-pattern-chian-of-responsibility
+
+Behavioral Patterns
+
+o Lets you send requests to an object implicitly through a `chain of candidate
+  objects`. Any candidate may fullfill the request depending on run-time
+  conditions.
+
+cxx_pattern_chain_of_responsibility
+
+The Morden C++ Challenge, Design Pattern
+
+70. Approval system
+
+Write a program for a purchasing department of a company that allows employees
+to approve new purchases (or expenses). However, based on their position, each
+employee may only approve expenses up to a predefined limit. For instance,
+regular employees can approve expenses up to 1,000 currency units, team managers
+up to 10,000, and the department manager up to 100,000. Any expense greater than
+that must be explicitly approved by the company president.
+
+The problem described can be expressed in a series of if... else if... else...
+endif statements. An object-oriented version of this idiom is the chain of
+responsibility design pattern. This pattern defines a chain of receiver objects
+that have the responsibility of either handling a request or passing it to the
+next receiver in the chain if one exists. The following class diagram shows a
+possible implementation of the pattern for this problem:
+
+*/
+
+namespace cxx_pattern_chain_of_responsibility
+{
+  class role
+  {
+    public:
+      virtual double approval_limit() const noexcept = 0;
+      virtual ~role() {}
+  };
+
+  class employee_role : public role
+  {
+    public:
+      virtual double approval_limit() const noexcept override
+      {
+        return 1000;
+      }
+  };
+
+  class team_manager_role : public role
+  { 
+    public:
+      virtual double approval_limit() const noexcept override
+      {
+        return 10000;
+      }
+  };
+
+  class dept_manager_role : public role
+  {
+    public:
+      virtual double approval_limit() const noexcept override
+      {
+        return 100000;
+      }
+  };
+  
+  class president_role : public role
+  {
+    public:
+      virtual double approval_limit() const noexcept override
+      {
+        return std::numeric_limits<double>::max();
+      }
+  };
+
+
+  struct expense
+  {
+    double amount_;
+    std::string desc_;
+
+    expense(double const amount, std::string desc)
+      : amount_(amount), desc_(desc)
+    {}
+  };
+
+  class employee
+  {
+    public:
+      explicit employee(std::string name, std::unique_ptr<role> role)
+        : name_(name), role_(std::move(role)) 
+      {}
+
+      void set_direct_manager(std::shared_ptr<employee> manager)
+      {
+        manager_ = manager;
+      }
+
+      void approve(expense const& e)
+      {
+        if (e.amount_ <= role_->approval_limit())
+          std::cout << name_ << " approved expense '" << e.desc_ << "', cost= "
+            << e.amount_ << std::endl;
+        else if (manager_ != nullptr)
+          manager_->approve(e);
+      }
+
+    private:
+      std::string name_;
+      std::unique_ptr<role> role_;
+      std::shared_ptr<employee> manager_;
+  };
+
+} // namespace
+
+// [ RUN      ] PatternChainOfResponsibility.ApprovalSystem
+// john smith approved expense 'magazins', cost= 500
+// robert booth approved expense 'hotel accomodation', cost= 5000
+// david jones approved expense 'conference costs', cost= 50000
+// cecil williamson approved expense 'new lorry', cost= 200000
+// [       OK ] PatternChainOfResponsibility.ApprovalSystem (1 ms)
+
+TEST(PatternChainOfResponsibility, ApprovalSystem)
+{
+  using namespace cxx_pattern_chain_of_responsibility;
+
+  // employee
+  auto john = std::make_shared<employee>("john smith",
+      std::unique_ptr<employee_role>(new employee_role()));
+
+  // team manager
+  auto robert = std::make_shared<employee>("robert booth",
+      std::unique_ptr<team_manager_role>(new team_manager_role()));
+
+  // dept manager
+  auto david = std::make_shared<employee>("david jones",
+      std::unique_ptr<dept_manager_role>(new dept_manager_role()));
+
+  // president 
+  auto cecil = std::make_shared<employee>("cecil williamson",
+      std::unique_ptr<president_role>(new president_role()));
+
+  // build approval chain
+  john->set_direct_manager(robert);
+  robert->set_direct_manager(david);
+  david->set_direct_manager(cecil);
+
+  john->approve(expense{500, "magazins"});
+  john->approve(expense{5000, "hotel accomodation"});
+  john->approve(expense{50000, "conference costs"});
+  john->approve(expense{200000, "new lorry"});
+}
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-incomplete-type cpp-forward-declaration cpp-layout
@@ -38942,6 +39580,7 @@ element.
 
 
 {cxx-vector-code}
+
 namespace stl_code
 {
   // /usr/include/c++/4.7.2/bits/vector.tcc
@@ -39009,6 +39648,16 @@ namespace stl_code
 
 
       *cxx-vector-ctor*
+
+        /**
+         *  @brief  Creates a %vector with no elements.
+         */
+        vector()
+#if __cplusplus >= 201103L
+        noexcept(is_nothrow_default_constructible<_Alloc>::value)
+#endif
+        : _Base() { }
+
         /**
          *  @brief  Creates a %vector with default constructed elements.
          *  @param  __n  The number of elements to initially create.
@@ -52834,9 +53483,7 @@ d -> "Hello"
 How can we make those share one copy of Hello?
 
 
-<cxx-sp-code>
-
-namespace cxx_code
+namespace cxx_code *cxx-sp-code*
 {
   // bits/shared_ptr_base.h @759
 
@@ -53046,6 +53693,24 @@ namespace cxx_code
       constexpr shared_ptr(nullptr_t __p) noexcept
         : __shared_ptr<_Tp>(__p) { }
 
+
+      /**
+       *  @brief  Constructs a %shared_ptr that shares ownership with @a __r
+       *          and stores a copy of the pointer stored in @a __r.
+       *  @param  __r  A weak_ptr.
+       *  @post   use_count() == __r.use_count()
+       *  @throw  bad_weak_ptr when __r.expired(),
+       *          in which case the constructor has no effect.
+       */
+      template<typename _Tp1>
+        explicit shared_ptr(const weak_ptr<_Tp1>& __r)
+        : __shared_ptr<_Tp>(__r) { }
+
+      template<typename _Tp1, typename _Del>
+        shared_ptr(std::unique_ptr<_Tp1, _Del>&& __r)
+        : __shared_ptr<_Tp>(std::move(__r)) { }
+
+
       shared_ptr& operator=(const shared_ptr&) noexcept = default;
 
       template<typename _Tp1>
@@ -53104,7 +53769,7 @@ p = q;
 // Return true if p.use_count() is 1
 p.unique();
 
-// May be slow operation, intended for debugging purpose
+// May be slow operation, intended for *cxx-debug* purpose
 p.use_count();
 
 // Swap pointers in p and q
@@ -53256,9 +53921,10 @@ new resource?
   //   increase the one of right. However, cannot increase a count of new
   //   objects. 
 
-  o This is when set shared pointer with new resource and assignment works
-    between shared pointers.
+o This is when set shared pointer with new resource and assignment works
+  between shared pointers.
 
+p = nullptr;
 p.reset();
 p.reset(q);
 p.reset(q, d);
@@ -53421,18 +54087,11 @@ the same hold for shared_ptr? No. array is special and not vector.
 
 The weak pointer is `checked pointer class.` Two points:
 
-  * The weak_ptr `do not participate in the reference count` of shared_ptr and
-    won't affect the lifetime of the object. 
+o The weak_ptr `do not participate in the reference count` of shared_ptr and
+  won't affect the lifetime of the object. 
 
-  * Because the object might no longer exist, cannot use a weak_ptr to access
-    its object directly.
-
-auto p = make_shared<int>(42);
-weak_ptr<int> wp(p);
-
-if (shared_ptr<int> np = wp.lock()) {
-  // inside the if, np shares its object with p
-}
+o Because the object might no longer exist, cannot use a weak_ptr to access
+  its object directly.
 
 
 <cxx-sp-weak-case>
@@ -53440,26 +54099,27 @@ The shared_ptrs are provided to automatically release resources associated
 with objects no longer needed. However, under certain circumstances, this
 behavior doesn't work or is not what is intended:
 
-  * One example is 'cyclic' references. If two objects refer to each other
-    using shared_ptrs, and you want to release the objects and their
-    associated resource if no other references to these objects exist,
-    shared_ptr won't release the data, because the use_count() of each object
-    is still 1. You might want to use ordinary pointers in this situation, but
-    doing so requires explicitly caring for and managing the release of
-    associated resources.
+o One example is `cyclic references` If two objects refer to each other using
+  shared_ptrs, and you want to release the objects and their associated
+  resource if no other references to these objects exist, shared_ptr won't
+  release the data, because the use_count() of each object is still 1. You
+  might want to use ordinary pointers in this situation, but doing so requires
+  explicitly caring for and managing the release of associated resources.
 
-  * Another example occurs when you explicitly want to share but not 'own' an
-    object. Thus, you have the semantics that the lifetime of a reference to
-    an object `outlives the object it refers to.` Here, shared_ptrs would
-    never release the object, and ordinary pointers might not notice that the
-    object they refer to is not valid anymore, which introduces the 'risk' of
-    accessing released data.
+o Another example occurs when you explicitly want to share but not 'own' an
+  object. Thus, you have the semantics that the lifetime of a reference to an
+  object `outlives the object it refers to.` 
+  
+  Here, shared_ptrs would never release the object, and 
+  
+  ordinary pointers might not notice that the object they refer to is not
+  valid anymore, which introduces the 'risk' of accessing released data.
 
 
-<operations>
-* This class requires a shared pointer to get created.
+<cxx-sp-weak-operations>
+o This class requires a shared pointer to get created.
 
-* Besides default and copy constructors, class weak_ptr provides a constructor
+  Besides default and copy constructors, class weak_ptr provides a constructor
   taking a shared_ptr.
 
 * The default constructor creates an empty weak pointer. a weak_ptr can be
@@ -53471,7 +54131,7 @@ behavior doesn't work or is not what is intended:
 
 * Creating a shared pointer out of a weak pointer checks whether there is
   (still) an associated object. If not, this operation will throw an exception
-  or create an 'empty' shared pointer; what exactly happens depends on the
+  or `create an 'empty' shared pointer`; what exactly happens depends on the
   operation used.
 
 * While dealing with the referenced object, the shared pointer can't get
@@ -53485,156 +54145,249 @@ w.use_count();
 w.expired();
 w.lock();
 
+namespace cxx_code *cxx-sp-weak-code*
+{
+  // /usr/include/c++/4.9/bits/shared_ptr.h
 
-<ex> *cxx-ex-weak-sp-example*
-// cyclic reference. none of the Persons gets released, because each still has
-// at least one shared pointer referring to it.
+  /**
+   *  @brief  A smart pointer with weak semantics.
+   *
+   *  With forwarding constructors and assignment operators.
+   */
+  template<typename _Tp>
+    class weak_ptr : public __weak_ptr<_Tp>
+  {
+    public:
+      constexpr weak_ptr() noexcept
+        : __weak_ptr<_Tp>() { }
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <memory>
+      template<typename _Tp1, typename = typename
+        std::enable_if<std::is_convertible<_Tp1*, _Tp*>::value>::type>
+        weak_ptr(const weak_ptr<_Tp1>& __r) noexcept
+        : __weak_ptr<_Tp>(__r) { }
 
-using namespace std;
+      // *cxx-sp-weak-ctor*
+      template<typename _Tp1, typename = typename
+        std::enable_if<std::is_convertible<_Tp1*, _Tp*>::value>::type>
+        weak_ptr(const shared_ptr<_Tp1>& __r) noexcept
+        : __weak_ptr<_Tp>(__r) { }
+  };
 
-class Person {
-  public:
-    string name;
-    shared_ptr<Person> mother;
-    shared_ptr<Person> father;
-    vector<shared_ptr<Person>> kids;
+} // namespace
 
-    Person (const string& n,
-        shared_ptr<Person> m = nullptr, shared_ptr<Person> f = nullptr)
-      : name(n), mother(m), father(f) 
-    {}
 
-    ~Person() {
-      cout << "delete " << name << endl;
+<ex>
+TEST(SharedPointerWeak, NoDirectReference)
+{
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    EXPECT_THAT(sp.use_count(), 1);
+
+    if (auto p = wp.lock())
+    {
+      EXPECT_THAT(sp.use_count(), 2);
+      EXPECT_THAT(wp.use_count(), 2);
     }
-};
+  }
 
-shared_ptr<Person> initFamily (const string& name)
-{
-  shared_ptr<Person> mom(new Person(name + "'s mom"));
-  shared_ptr<Person> dad(new Person(name + "'s dad"));
-  shared_ptr<Person> kid(new Person(name, mom, dad));
-  mom->kids.push_back(kid);
-  dad->kids.push_back(kid);
-  return kid;                                 // return kid
+  // Can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a `bad_weak_ptr exception` 
+
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    EXPECT_THAT(sp.use_count(), 1);
+
+    shared_ptr<int> p(wp);
+    if (p)
+    {
+      EXPECT_THAT(sp.use_count(), 2);
+      EXPECT_THAT(wp.use_count(), 2);
+    }
+  }
+
+  // Can call expired(), which returns true if use_count() is zero, false
+  // otherwise. This option is equivalent to checking whether use_count() is
+  // equal to 0 but might be 'faster'.
+  
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    EXPECT_THAT(sp.use_count(), 1);
+
+    sp = nullptr;
+
+    auto p = wp.lock();
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(p, nullptr);
+  }
 }
 
-int main()
+<ex> *cxx-sp-weak-ex*
+
+namespace cxx_sp_weak_problem
 {
-  shared_ptr<Person> p = initFamily("nico");
+  class Person
+  {
+    public:
+      string name_;
+      shared_ptr<Person> mother_;
+      shared_ptr<Person> father_;
+      vector<shared_ptr<Person>> kids_;
 
-  cout << "nico's family exists" << endl;
-  cout << "- nico is shared " << p.use_count() << " times" << endl;
-  cout << "- name of 1st kid of nico's mom: " 
-    << p->mother->kids[0]->name << endl;
+      Person(string const& name,
+          shared_ptr<Person> mother = nullptr, shared_ptr<Person> father = nullptr)
+        : name_(name), mother_(mother), father_(father)
+      {}
 
-  // note: 
-  // this is when expect dtor happens but not since when assign jim to p, lost
-  // nico family and then p hold jim family, but no dtor since jim's kid count
-  // is not 0.
+      ~Person()
+      { cout << "delete: " << name_ << endl; }
+  };
 
-  p = initFamily("jim");
+  shared_ptr<Person> init_family(string const& name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
 
-  cout << "jim's family exists" << endl;
-  cout << "- jim is shared " << p.use_count() << " times" << endl;
-  cout << "- name of 1st kid of jim's mom: " 
-    << p->mother->kids[0]->name << endl;
-}
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
 
+    return kid;
+  }
+
+} // namespace
+
+/*
 nico's family exists
 - nico is shared 3 times
 - name of 1st kid of nico's mom: nico
-
+ 
 jim's family exists
 - jim is shared 3 times
 - name of 1st kid of jim's mom: jim
-
+ 
                                      mom, dad <---
                                                \  \
 mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
                \ (shared or weak)   \
                 -> kid               -> kid
-
+ 
 Solution?
+*/
 
-class Person {
-  public:
-    string name;
-    shared_ptr<Person> mother;
-    shared_ptr<Person> father;
-    vector<weak_ptr<Person>> kids;           // note: weak pointer
+TEST(SharedPointerWeak, CyclicReference)
+{
+  using namespace cxx_sp_weak_problem;
 
-    Person (const string& n,
-        shared_ptr<Person> m = nullptr, shared_ptr<Person> f = nullptr)
-      : name(n), mother(m), father(f) 
-    {}
+  // return kids, which is 'nico'
+  shared_ptr<Person> p = init_family("nico");
 
-    ~Person() {
-      cout << "delete " << name << endl;
-    }
-};
+  cout << "nico's family exists" << endl;
+  cout << "- nico is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of nico's mom: " 
+    << p->mother_->kids_[0]->name_ << endl;
 
+  // cxx-cross-reference
+  // assign op decrease count of p but no one from nico family is deleted since
+  // each has a reference to them.
+  //
+  // same for jim family.
 
-<cxx-sp-weak-check>
-Have several options to check that the object still exist: 
+  p = init_family("jim");
 
-* Use lock() returns `empty shared ptr if fails`
-
-To use weak pointer approach, instead of calling
-
-p->mother->kids[0]->name
-
-we now have to insert lock() into the expression
-
-p->mother->kids[0].lock()->name
-
-This lock() yields a shared_ptr out of the weak_ptr the vector of kids
-contains. If this modification is not possible, lock() yields an empty
-shared_ptr. In that case, calling operator * or -> would cause 'undefined'
-behavior.
-
-In g++ (Debian 4.7.2-5) 4.7.2, this emits an error:
-
-p->mother->kids[0]->name << endl;
-
-error: base operand of ‘->’ has non-pointer type 
-'__gnu_cxx::__alloc_traits<std::allocator<std::weak_ptr<Person> > >::value_type 
-{aka std::weak_ptr<Person>}'
+  cout << "jim's family exists" << endl;
+  cout << "- jim is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of jim's mom: " 
+    << p->mother_->kids_[0]->name_ << endl;
+}
 
 
-* Can call expired(), which returns true if use_count() is zero, false
-  otherwise. This option is equivalent to checking whether use_count() is
-  equal to 0 but might be 'faster'.
+namespace cxx_sp_weak_solution
+{
+  class Person
+  {
+    public:
+      string name_;
+      shared_ptr<Person> mother_;
+      shared_ptr<Person> father_;
 
-* Can explicitly convert a weak_ptr into a shared_ptr by using a
-  corresponding shared_ptr constructor. If there is no valid referenced
-  object, this constructor will throw a `bad_weak_ptr exception` 
-  
+      // vector<shard_ptr<Person>> kids_;
+      vector<weak_ptr<Person>> kids_;
 
-By doing so, we can break the cycle of shared pointers. The output:
+      Person(string const& name,
+          shared_ptr<Person> mother = nullptr, shared_ptr<Person> father = nullptr)
+        : name_(name), mother_(mother), father_(father)
+      {}
 
-nico's family exists
-- nico shared 1 times
-- name of 1st kid of nicos mom: nico
-delete nico
-delete nico's dad
-delete nico's mom
-jim's family exists
-delete jim
-delete jim's dad
-delete jim's mom
+      ~Person()
+      { cout << "delete: " << name_ << endl; }
+  };
 
+  shared_ptr<Person> init_family(string const& name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
 
-As soon as we lose our handle into a kid created - either by assigning a new
-value to p or by leaving main() - the kid's object of the family loses its
-last owner, which has the effect that both parents lose their last owner. So
-'all' objects, initially created by new, are deleted now so that their
-destructors get called since weak pointer don't increase count.
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
+
+    return kid;
+  }
+
+} // namespace
+
+// As soon as we lose our handle into a kid created - either by assigning a new
+// value to p or by leaving main() - the kid's object of the family loses its
+// last owner, which has the effect that both parents lose their last owner. So
+// 'all' objects, initially created by new, are deleted now so that their
+// destructors get called since weak pointer don't increase count.
+
+// [ RUN      ] SharedPointerWeak.CyclicReferenceSolution
+// nico's family exists
+// - nico is shared 1 times
+// - name of 1st kid of nico's mom: nico
+// delete: nico
+// delete: nico's dad
+// delete: nico's mom
+// jim's family exists
+// - jim is shared 1 times
+// - name of 1st kid of jim's mom: jim
+// delete: jim
+// delete: jim's dad
+// delete: jim's mom
+// [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
+
+TEST(SharedPointerWeak, CyclicReferenceSolution)
+{
+  using namespace cxx_sp_weak_solution;
+
+  // return kids, which is 'nico'
+  shared_ptr<Person> p = init_family("nico");
+
+  cout << "nico's family exists" << endl;
+  cout << "- nico is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of nico's mom: "; 
+
+  // cout << p->mother_->kids_[0]->name_ << endl;
+  cout << p->mother_->kids_[0].lock()->name_ << endl;
+
+  p = init_family("jim");
+
+  cout << "jim's family exists" << endl;
+  cout << "- jim is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of jim's mom: "; 
+
+  // cout << p->mother_->kids_[0]->name_ << endl;
+  cout << p->mother_->kids_[0].lock()->name_ << endl;
+}
 
 
 ={============================================================================
@@ -54227,8 +54980,9 @@ the passed deleter is not allowed to throw exceptions.
 
 
 <cxx-sp-code>
-
-/usr/include/c++/4.9/bits/unique_ptr.h
+namespace cxx_code
+{
+  // /usr/include/c++/4.9/bits/unique_ptr.h
 
   template <typename _Tp, typename _Dp = default_delete<_Tp>>
     class unique_ptr
@@ -54258,18 +55012,18 @@ the passed deleter is not allowed to throw exceptions.
         : _M_t(__p, __d) { }
     }
 
-/usr/include/c++/4.9/bits/shared_ptr.h
+  // /usr/include/c++/4.9/bits/shared_ptr.h
 
   /**
    *  @brief  A smart pointer with reference-counted copy semantics.
    *
    *  The object pointed to is deleted when the last shared_ptr pointing to
    *  it is destroyed or reset.
-  */
+   */
   template<typename _Tp>
     class shared_ptr : public __shared_ptr<_Tp>
-    {
-      *cxx-template-member*
+  {
+    *cxx-template-member*
       /**
        *  @brief  Construct a %shared_ptr that owns the pointer @a __p
        *          and the deleter @a __d.
@@ -54284,10 +55038,11 @@ the passed deleter is not allowed to throw exceptions.
        *  __shared_ptr will release __p by calling __d(__p)
        */
       template<typename _Tp1, `typename _Deleter`>
-        shared_ptr(_Tp1* __p, _Deleter __d)
-          : __shared_ptr<_Tp>(__p, __d) { }
-    };
+      shared_ptr(_Tp1* __p, _Deleter __d)
+      : __shared_ptr<_Tp>(__p, __d) { }
+  };
 
+} // namespace
 
 namespace cxx_sp_delete
 {
@@ -54312,7 +55067,7 @@ namespace cxx_sp_delete
 
       void operator() (ClassA* p)
       {
-        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        os_ << "DebugDeleteClassA: deleting " << typeid(p).name() << ", p = " << p << endl;
         delete p;
       }
 
@@ -54328,25 +55083,10 @@ namespace cxx_sp_delete
       DebugDelete(ostream &os = cerr) : os_(os) {}
 
       // *cxx-template-member*
-      //
-      // How will DebugDelete be instanticated for these cases? These are
-      // equivalent
-      // 
-      // void DebugDelete::operator() (int*) const { delete p; }
-      // void DebugDelete::operator() (string*) const { delete p; }
-      // 
-      // Why? Whenever unique_ptr's dtor is instantiated, DebugDelete's call
-      // operator will also be instantiated.
-      // 
-      // After all, whether it is for ordinary class or class template, member
-      // template is function template so compiler 'deduce' the type of member
-      // template when used(instantiated) so these will be instantiated to use
-      // the correct type when deleter is called.
-
       template <typename T>
       void operator() (T* p)
       {
-        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        os_ << "DebugDelete: deleting " << typeid(p).name() << ", p = " << p << endl;
         delete p;
       }
 
@@ -54355,14 +55095,37 @@ namespace cxx_sp_delete
       ostream &os_;
   };
 
-  // *cxx-sp-delete* 
-  void delete_mesg(string *str)
+  void function_debug_delete(string *str)
   {
     cout << "deleting " << *str << endl;
     delete str;
   }
 
+  class ClassDebugDelete
+  {
+    public:
+      void operator() (string *str)
+      {
+        cout << "deleting " << *str << endl;
+        delete str;
+      }
+  };
+
 } // namespace
+
+// [ RUN      ] SharedPointer.Deleter
+// ClassA:
+// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// ClassA:
+// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// ClassA:
+// DebugDelete: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// deleting jutta on function
+// deleting nico on function
+// deleting jutta on functor
+// deleting nico on functor
+// deleting nico
+// [       OK ] SharedPointer.Deleter (5 ms)
 
 TEST(SharedPointer, Deleter)
 {
@@ -54373,6 +55136,8 @@ TEST(SharedPointer, Deleter)
     up->print_mesg();
   }
 
+  // same as the above since unique_ptr ctor() uses deleter type to create
+  // delter to use
   {
     unique_ptr<ClassA, DebugDeleteClassA> up(new ClassA(), DebugDeleteClassA());
     up->print_mesg();
@@ -54408,6 +55173,46 @@ TEST(SharedPointer, Deleter)
         });
   }
 }
+
+
+<ex>
+
+namespace cxx_code *cxx-set-multi*
+{
+  // stl_multiset.h
+
+  template <typename _Key, typename _Compare = std::less<_Key>,
+           typename _Alloc = std::allocator<_Key> >
+             class multiset
+             {
+               /**
+                *  @brief  Creates a %multiset with no elements.
+                *  @param  __comp  Comparator to use.
+                *  @param  __a  An allocator object.
+                */
+               explicit
+                 multiset(const _Compare& __comp,
+                     const allocator_type& __a = allocator_type())
+                 : _M_t(__comp, _Key_alloc_type(__a)) { }
+             } 
+
+} // namespace
+
+class BulkQuoteTest : public ::testing::Test
+{
+  protected:
+    BulkQuoteTest() : items_{compare} {}
+
+    static bool compare(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs)
+    {
+      return lhs->isbn() < rhs->isbn();
+    }
+
+    using comp = 
+      bool(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs);
+
+    std::multiset<std::shared_ptr<Quote>, comp*> items_;
+};
 
 
 <ex> 
