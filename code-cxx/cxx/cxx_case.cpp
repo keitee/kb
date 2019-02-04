@@ -696,7 +696,7 @@ TEST(CxxCase, CircularQueueCountIterator)
 /*
 ={=============================================================================
 
-CXXPP, Qoute
+CXXPP, Quote
 
 1. use size(count) and head only
 2. in push, no full check since it overwrites and in pop, it simply
@@ -713,7 +713,7 @@ namespace case_quote
   {
     public:
 
-      Quote() : book_no_(), price(0.0) {}
+      Quote() : book_no_(), price_(0.0) {}
 
       Quote(string const& book, double sale_price) :
         book_no_(book), price_(sale_price) {}
@@ -763,10 +763,13 @@ namespace case_quote
   {
     public:
       Bulk_Quote(string const& book, double price, 
-          size_t quanity, double discount_percent) :
+          size_t quantity, double discount_percent) :
         Discount_Quote(book, price, quantity, discount_percent) {}
 
-      virtual double net_price(size_t count) override
+      // cxx-override cxx-const
+      // const is one of override condition
+
+      virtual double net_price(size_t count) const override
       {
         if (count >= quantity_)
           return count * (1 - discount_) * price_;
@@ -781,14 +784,136 @@ namespace case_quote
 
     os << "isbn: " << item.isbn() << ", sold: " << sold 
       << ", total due: " << net_price << endl;
+
+    return net_price;
   }
 
 } // namespace
 
+
+// To use *gtest-fixture* and do not use user class like:
+//
+// class Basket
+// {
+//     public:
+//         Basket() : items(compare) {}
+// 
+//         void add_item(const shared_ptr<Quote> &item);
+// 
+//         // virtual copy, copy version
+//         // which signals to use lvalue object, lvalue reference qualifier
+//         void add_item(const Quote &item)
+//         {
+//             cout << "basket::add_item::copy version" << endl;
+//             items.insert(shared_ptr<Quote>(item.clone()));
+//         }
+// 
+//         // virtual copy, move version
+//         // which signals to use rvalue object, rvalue reference qualifier
+//         void add_item(Quote &&item)
+//         {
+//             cout << "basket::add_item::move version" << endl;
+//             items.insert(shared_ptr<Quote>(std::move(item).clone()));
+//         }
+// 
+// 
+//         double total_receipt(ostream &os) const;
+// 
+//     private:
+//         static bool compare(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs)
+//         { return lhs->isbn() < rhs->isbn(); }
+// 
+//         // using comp = bool (*)(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
+//         // multiset<shared_ptr<Quote>, comp> items;
+// 
+//         using comp = bool (const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
+//         multiset<shared_ptr<Quote>, comp*> items;
+// };
+// 
+// void Basket::add_item(const shared_ptr<Quote> &item)
+// {
+//     cout << "basket::add_item::copy version" << endl;
+//     items.insert(item);
+// }
+// 
+// double Basket::total_receipt(ostream &os) const
+// {
+//     for (auto iter = items.cbegin(); iter != items.cend();
+//             iter = items.upper_bound(*iter))
+//     {
+//         os << "isbn : " << (*iter)->isbn() 
+//             << ", sold : " << items.count(*iter)
+//             << ", total sales: " << (*iter)->net_price( items.count(*iter)) 
+//             << endl;
+//     }
+// }
+//
+// int main()
+// {
+//     Basket sale;
+// 
+//     // Quote sales which has no discount. 45*3 = 135
+//     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
+//     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
+//     sale.add_item(make_shared<Quote>("123", 45));
+// 
+//     // minimum 3 and 15% discount. no discount 45*2 = 90
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
+// 
+//     // Bulk_quote sales which has discount: minimum 3 and 15% discount
+//     // 35*4*(1-.15) = 119
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+// 
+//     // Bulk_quote sales which has discount: minimum 5 and 25% discount
+//     // 35*6*(1-.25) = 157.5
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+// 
+//     sale.display(cout);
+//     sale.total_receipt(cout);
+// }
+
 class BulkQuoteTest : public ::testing::Test
 {
   protected:
+
+    // *cxx-using* is under *cxx-access-control*
+
+    using Quote = case_quote::Quote;
+
     BulkQuoteTest() : items_{compare} {}
+    virtual ~BulkQuoteTest() {}
+
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+
+    double total_receipt() const
+    {
+      double total{};
+
+      // when there are duplicates, skip them since net_price() gets called for
+      // them in single call
+
+      for (auto it = items_.cbegin(); it != items_.cend();
+          it = items_.upper_bound(*it))
+      {
+        total = (*it)->net_price(items_.count(*it));
+
+        cout << "isbn: " << (*it)->isbn()
+          << ", sold: " << items_.count(*it)
+          << ", total sales: " << total << endl;
+      }
+
+      return total;
+    }
 
     static bool compare(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs)
     {
@@ -801,9 +926,67 @@ class BulkQuoteTest : public ::testing::Test
     std::multiset<std::shared_ptr<Quote>, comp*> items_;
 };
 
+TEST_F(BulkQuoteTest, CheckTotal_1)
+{
+  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
+  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
+  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
+
+  // Quote sales which has no discount. 45*3 = 135
+  EXPECT_THAT(total_receipt(), 135);
+
+  items_.clear();
+}
+
+TEST_F(BulkQuoteTest, CheckTotal_2)
+{
+  using namespace case_quote;
+
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
+
+  // minimum 3 to have 15% discount. 2 and no discount 45*2 = 90
+  EXPECT_THAT(total_receipt(), 90);
+
+  items_.clear();
+}
+
+TEST_F(BulkQuoteTest, CheckTotal_3)
+{
+  using namespace case_quote;
+
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+
+  // Bulk_quote sales which has discount: minimum 3 and 15% discount
+  // 35*4*(1-.15) = 119
+  EXPECT_EQ(total_receipt(), 119);
+
+  items_.clear();
+}
+
+TEST_F(BulkQuoteTest, CheckTotal_4)
+{
+  using namespace case_quote;
+
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+
+  // Bulk_quote sales which has discount: minimum 5 and 25% discount
+  // 35*6*(1-.25) = 157.5
+  EXPECT_EQ(157.5, total_receipt());
+
+  items_.clear();
+}
+
 
 // ={=========================================================================
-
 int main(int argc, char** argv)
 {
     testing::InitGoogleTest(&argc, argv);

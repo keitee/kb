@@ -16712,10 +16712,8 @@ int main()
 ={============================================================================
 *kt_dev_cxx_0000* cxx-abc cxx-ex-quote-example cxx-refactoring
 
-* class hierarchy represents book purchase or transaction
-* supports several discount strategy
-* each book has isbn number. the same book has the same isbn. 
-
+o supports several discount strategy
+o each book has isbn number. the same book has the same isbn. 
 
 This is the previous approach to support several discounts:
 
@@ -16831,209 +16829,293 @@ support it. Instead `must use pointers and references.` So often define
 auxiliary class to help manage complexity that pointer use impose.
 
 
-<code>
-#include <iostream>
-#include <set>
-#include <memory>
+<ex>
 
-// g++ -g -std=c++0x -c a.c
+CXXPP, Quote
 
-using namespace std;
+1. use size(count) and head only
+2. in push, no full check since it overwrites and in pop, it simply
+calculates first from head substracing size.
+3. no iterator support is needed if not use begin()/end()
+ 
+// when introduce `discount` concept
 
-class Quote 
+namespace case_quote
 {
+  class Quote
+  {
     public:
-        Quote(): bookNo(""), price(0.0) {}
-        Quote(const string &book, double sales_price):
-            bookNo(book), price(sales_price) {}
 
-        virtual ~Quote() {}
+      Quote() : book_no_(), price_(0.0) {}
 
-        string isbn() const { return bookNo; }
+      Quote(string const& book, double sale_price) :
+        book_no_(book), price_(sale_price) {}
+      
+      virtual ~Quote() {}
 
-        // defines discount strategy
-        virtual double net_price(size_t n) const { return n*price; }
+      std::string isbn() const { return book_no_; }
+
+      // calculate net price but do not have "discount" concept
+      virtual double net_price(size_t count) const { return count * price_; }
 
     private:
-        std::string bookNo;
+      std::string book_no_;
     protected:
-        double price;
-};
+      double price_;
+  };
 
-// abc class which has minimum quantity for a discount and discount rate
-class Disc_quote : public Quote {
+  class Discount_Quote : public Quote
+  {
     public:
-        // Why need to have constructors in abstract class although cannot
-        // define objects of this type directly? Becuase ctors in classes
-        // derived from Disc_quote will use the Disc_quote ctor to construct
-        // the Disc_quote part of their objects. Default ctor default
-        // initialize those members.
-        Disc_quote(): quantity(0), discount(0.0) {}
-        Disc_quote(const string &book, double price, size_t quantity, double discount):
-            Quote(book, price), quantity(quantity), discount(discount) {}
 
-        // *cxx-abc-dtor*
-        // no need to declare virtual dtor since Quote have one and will be
-        // made.
+      // *cxx-ctor*
+      // Why need to have constructors in abstract class although cannot
+      // define objects of this type directly? Becuase ctors in classes
+      // derived from Disc_quote will use the Disc_quote ctor to construct
+      // the Disc_quote part of their objects. Default ctor default
+      // initialize those members.
 
-        // *TN* ok to use pure virtual function in the middle of inheritance.
-        double net_price(size_t n) const = 0;
+      Discount_Quote() : quantity_(0), discount_(0.0) {}
+      Discount_Quote(string const& book, double price, 
+          size_t quantity, double discount_percent) :
+        Quote(book, price), quantity_(quantity), discount_(discount_percent) {}
 
-        pair<size_t, double> discount_policy() const 
-        { return make_pair(quantity, discount); }
+      // *cxx-dtor*
+      // no need to have virtual dtor here since Quote has it already
+  
+      // *cxx-abc*
+      // okay to have in the middle of inheritance and "discount" concept
+      virtual double net_price(size_t count) const = 0;
 
     protected:
-        size_t quantity;
-        double discount;
-};
+      size_t quantity_;
+      double discount_;
+  };
 
-// derived class
-class Bulk_quote: public Disc_quote {
+  class Bulk_Quote : public Discount_Quote
+  {
     public:
-        Bulk_quote(const string &book, double price, size_t quantity, double discount):
-            Disc_quote(book, price, quantity, discount) {}
+      Bulk_Quote(string const& book, double price, 
+          size_t quantity, double discount_percent) :
+        Discount_Quote(book, price, quantity, discount_percent) {}
 
-        // defines discount strategy:
-        // apply discount percentage when sold more than minimum quantity
-        double net_price(size_t n) const override
-        {
-            if (n >= quantity)
-                return n*(1-discount)*price;
-            else
-                return n*price;
-        }
-};
+      // cxx-override cxx-const
+      // const is one of override condition
 
-// utility user function
-double print_total(ostream &os, const Quote &item, size_t sold)
-{
-    // calls type specific version
+      virtual double net_price(size_t count) const override
+      {
+        if (count >= quantity_)
+          return count * (1 - discount_) * price_;
+        else
+          return count * price_;
+      }
+  };
+
+  double print_total(ostream& os, Quote const& item, size_t sold)
+  {
     double net_price = item.net_price(sold);
 
-    os << "isbn: " << item.isbn() << ", sold: " << sold << ", total due: " 
-        << net_price << endl;
-}
+    os << "isbn: " << item.isbn() << ", sold: " << sold 
+      << ", total due: " << net_price << endl;
 
-// *cxx-user-class*
-class Basket {
-    public:
-        // when not use in-class-initializer
-        Basket(): items(compare) {}
+    return net_price;
+  }
 
-        void add_item(const std::shared_ptr<Quote> &sale)
-        { items.insert(sale); }
+} // namespace
 
-        double total_receipt(std::ostream &os) const;
-        void display(std::ostream &os) const;
 
-    private:
-        // there is no less-than(<) operator for shared_ptr and must provice one
-        // to compare keys in multiset since set is sorted container.
-        //
-        // The basket is not in the hierarchy and has multiset to manage
-        // 'multiple' purchase for the same book, isbn. The multiset has
-        // shared_ptr key but equality is decided by compare function.
-        // Therefore, the comparison uses the isbn but not shared_ptr itself.
-        // That is shared_ptr is a key in multiset but the same 'key' is the
-        // same isbn number since comparison function defines the meaning of
-        // the same.
+// To use *gtest-fixture* and do not use user class like:
+//
+// class Basket
+// {
+//     public:
+//         Basket() : items(compare) {}
+// 
+//         void add_item(const shared_ptr<Quote> &item);
+// 
+//         // virtual copy, copy version
+//         // which signals to use lvalue object, lvalue reference qualifier
+//         void add_item(const Quote &item)
+//         {
+//             cout << "basket::add_item::copy version" << endl;
+//             items.insert(shared_ptr<Quote>(item.clone()));
+//         }
+// 
+//         // virtual copy, move version
+//         // which signals to use rvalue object, rvalue reference qualifier
+//         void add_item(Quote &&item)
+//         {
+//             cout << "basket::add_item::move version" << endl;
+//             items.insert(shared_ptr<Quote>(std::move(item).clone()));
+//         }
+// 
+// 
+//         double total_receipt(ostream &os) const;
+// 
+//     private:
+//         static bool compare(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs)
+//         { return lhs->isbn() < rhs->isbn(); }
+// 
+//         // using comp = bool (*)(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
+//         // multiset<shared_ptr<Quote>, comp> items;
+// 
+//         using comp = bool (const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
+//         multiset<shared_ptr<Quote>, comp*> items;
+// };
+// 
+// void Basket::add_item(const shared_ptr<Quote> &item)
+// {
+//     cout << "basket::add_item::copy version" << endl;
+//     items.insert(item);
+// }
+// 
+// double Basket::total_receipt(ostream &os) const
+// {
+//     for (auto iter = items.cbegin(); iter != items.cend();
+//             iter = items.upper_bound(*iter))
+//     {
+//         os << "isbn : " << (*iter)->isbn() 
+//             << ", sold : " << items.count(*iter)
+//             << ", total sales: " << (*iter)->net_price( items.count(*iter)) 
+//             << endl;
+//     }
+// }
+//
+// int main()
+// {
+//     Basket sale;
+// 
+//     // Quote sales which has no discount. 45*3 = 135
+//     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
+//     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
+//     sale.add_item(make_shared<Quote>("123", 45));
+// 
+//     // minimum 3 and 15% discount. no discount 45*2 = 90
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
+// 
+//     // Bulk_quote sales which has discount: minimum 3 and 15% discount
+//     // 35*4*(1-.15) = 119
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+// 
+//     // Bulk_quote sales which has discount: minimum 5 and 25% discount
+//     // 35*6*(1-.25) = 157.5
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+//     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+// 
+//     sale.display(cout);
+//     sale.total_receipt(cout);
+// }
 
-        static bool compare(const std::shared_ptr<Quote> &lhs, 
-            const std::shared_ptr<Quote> &rhs)
-        { return lhs->isbn() < rhs->isbn(); }
+class BulkQuoteTest : public ::testing::Test
+{
+  protected:
 
-        // when uses in-class initializer:
-        //
-        // *gcc-error* when do not support *cxx-in-class-init*
-        //
-        // g++ (Debian 4.9.2-10) 4.9.2 do not support
-        //
-        // t_quote.cpp:88:55: error: could not convert ‘{Basket::compare}’ 
-        // from ‘<brace-enclosed initializer list>’ to ‘std::multiset<std::shared_ptr<Quote> >’
-        //
-        // multiset<std::shared_ptr<Quote>> items{compare};
-        
-        // when not use in-class-initializer *cxx-using-typedef*
-        // using comp = bool (const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
-        using comp = bool (*)(const std::shared_ptr<Quote> &lhs, 
-            const std::shared_ptr<Quote> &rhs);
-        multiset<std::shared_ptr<Quote>, comp> items;
+    // *cxx-using* is under *cxx-access-control*
+
+    using Quote = case_quote::Quote;
+
+    BulkQuoteTest() : items_{compare} {}
+    virtual ~BulkQuoteTest() {}
+
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+
+    double total_receipt() const
+    {
+      double total{};
+
+      // when there are duplicates, skip them since net_price() gets called for
+      // them in single call
+
+      for (auto it = items_.cbegin(); it != items_.cend();
+          it = items_.upper_bound(*it))
+      {
+        total = (*it)->net_price(items_.count(*it));
+
+        cout << "isbn: " << (*it)->isbn()
+          << ", sold: " << items_.count(*it)
+          << ", total sales: " << total << endl;
+      }
+
+      return total;
+    }
+
+    static bool compare(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs)
+    {
+      return lhs->isbn() < rhs->isbn();
+    }
+
+    using comp = 
+      bool(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs);
+
+    std::multiset<std::shared_ptr<Quote>, comp*> items_;
 };
 
-void Basket::display(std::ostream &os) const
+TEST_F(BulkQuoteTest, CheckTotal_1)
 {
-    os << "=> basket size: " << items.size() << endl;
+  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
+  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
+  items_.insert(shared_ptr<Quote>(new Quote("123", 45)));
 
-    // *cxx-multi-set*
-    // print each distinct book(isbn) in the basket. the key is shared ptr.
-    for (auto item = items.cbegin(); item != items.cend();
-            item = items.upper_bound(*item))
-    {
-        os << (*item)->isbn() << " occurs, "
-            << items.count(*item) << " times, "
-            << "net price: " << (*item)->net_price(items.count(*item)) 
-            << endl;
-    }
+  // Quote sales which has no discount. 45*3 = 135
+  EXPECT_THAT(total_receipt(), 135);
+
+  items_.clear();
 }
 
-double Basket::total_receipt(std::ostream &os) const
+TEST_F(BulkQuoteTest, CheckTotal_2)
 {
-    double total_price = 0.0;
+  using namespace case_quote;
 
-    for (auto item = items.cbegin(); item != items.cend();
-            item = items.upper_bound(*item))
-    {
-        total_price += print_total(os, **item, items.count(*item));
-    }
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("345", 45, 3, .15)));
 
-    os << "=> total sale price: " << total_price << endl;
+  // minimum 3 to have 15% discount. 2 and no discount 45*2 = 90
+  EXPECT_THAT(total_receipt(), 90);
 
-    return total_price;
+  items_.clear();
 }
 
-
-int main()
+TEST_F(BulkQuoteTest, CheckTotal_3)
 {
-    Basket sale;
+  using namespace case_quote;
 
-    // Quote sales which has no discount. 45*3 = 135
-    sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
-    sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
-    sale.add_item(make_shared<Quote>("123", 45));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("678", 35, 3, .15)));
 
-    // minimum 3 and 15% discount. no discount 45*2 = 90
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
+  // Bulk_quote sales which has discount: minimum 3 and 15% discount
+  // 35*4*(1-.15) = 119
+  EXPECT_EQ(total_receipt(), 119);
 
-    // Bulk_quote sales which has discount: minimum 3 and 15% discount
-    // 35*4*(1-.15) = 119
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
+  items_.clear();
+}
 
-    // Bulk_quote sales which has discount: minimum 5 and 25% discount
-    // 35*6*(1-.25) = 157.5
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
+TEST_F(BulkQuoteTest, CheckTotal_4)
+{
+  using namespace case_quote;
 
-    sale.display(cout);
-    sale.total_receipt(cout);
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
 
-    // => basket size: 15
-    // 123 occurs, 3 times, net price: 135
-    // 345 occurs, 2 times, net price: 90
-    // 678 occurs, 4 times, net price: 119
-    // 912 occurs, 6 times, net price: 157.5
-    // isbn: 123, sold: 3, total due: 135
-    // isbn: 345, sold: 2, total due: 90
-    // isbn: 678, sold: 4, total due: 119
-    // isbn: 912, sold: 6, total due: 157.5
-    // => total sale price: 2.11371e-314
+  // Bulk_quote sales which has discount: minimum 5 and 25% discount
+  // 35*6*(1-.25) = 157.5
+  EXPECT_EQ(157.5, total_receipt());
+
+  items_.clear();
 }
 
 
@@ -23374,13 +23456,27 @@ int countUnique(const T &s)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-decltype cxx-typedef cxx-struct {class-vs-struct} 
 
-{cpp-decltype-specifier}
-Want to have a type deduced `without defining an initialized variable.` Return
+Want to have a `type deduced without defining an initialized variable.` Return
 the type of expression but do not 'evaluate' it, that is, do not call
 expression.
 
 string s("...");
 decltype( s.size() ) count = 0;
+
+<ex>
+
+static bool compare(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs)
+{
+  return lhs->isbn() < rhs->isbn();
+}
+
+// error
+decltype(compare) comp;
+
+// okay
+using comp = 
+  bool(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs);
+
 
 <when-decltype-return-reference-type> to get reference type of expression
 The decltype return reference type when expression yields objects that is
@@ -23401,7 +23497,7 @@ initialized as usual reference variable does.
 
 
 <typeof-and-decltype>
-The 'typeof' is gcc one and decltype is C++.
+The cxx-typeof is gcc one and cxx-decltype is C++.
 
 The problem is:
 
@@ -23420,12 +23516,13 @@ to have #define to use decltype only for C++0x but typeof for before C++0x.
 The structure is declared like this. No space allocated since it is
 declaration.
 
+// As with class, see terminating ";".
+
 struct point {
   int x;
   int y;
 };
 
-note: As with class, see terminating ";".
 
 Here point is that `structure tag` defines a `type`. So defining structure
 objects is analogous to defining objects of any type.
@@ -26900,9 +26997,9 @@ TEST(Override, Condition_2)
 
 
 {cxx-override-condition}
-To override:
 
-  name, parameter type, `const`, and return type should be the 'same'. 
+To override:
+name, parameter type, `cxx-const`, and return type `should be the same` 
 
 An exception to this when return type is a pointer or reference. Tried pointer
 return type, no errors so return type in overrides can be different only that
@@ -26981,7 +27078,7 @@ int main()
 The final-keyword is used to end override as with final-keyword in inheritance.
 
 
-{cxx-override-access-control} *cpp-access-control*
+{cxx-override-access-control} *cxx-access-control*
 override do not respect access-control in derived class.
 
 namespace OR3 {
@@ -27030,16 +27127,16 @@ When design classes, should think 'three', pure virtual, virtual, and
 non-virtual, separately to specify with precision what you want derived
 classes to inherit.
 
-* Pure virtual (abstract). To have 'only' interface inherited. *cxx-interface* 
+o Pure virtual (abstract). To have 'only' interface inherited. *cxx-interface* 
 
-* (Simple) virtual (overridable). To have interface and 'default'
+o (Simple) virtual (overridable). To have interface and 'default'
   implementation.
 
 
-{no-separation-between-interface-and-default-implementation} *cxx-class-model-inheritance*
+<no-separation-between-interface-and-default-implementation> *cxx-class-model-inheritance*
 When use simple virtual, shall be careful since 'default' implementation is
 inherited without 'request' from the derived. This can be a problem when the
-derived not to redefine it.
+derived do not redefine it.
 
 class Airplane {
   public:
@@ -27056,16 +27153,17 @@ Although this is classic OOD, has a problem. This is okay for model A and B but
 not C because C is different type of plane that has different way to fly and
 should have defined own fly(). 
 
-*cxx-remember* pure-virtual-can-force
+*cxx-remember* 
 If C has forgot to redefine own, it will use the default. The solution is to
 'force' the derived explicitly request implementation if they need.
 
 
-<1> use ABC
+o use *cxx-abc* to force it override 
+
 Has separation between interface and default implementation.
 
 class Airplane {
-  public: >
+  public:
     virtual void fly( const Airport& destination ) = 0;  // pure and interface
     ...
   protected:
@@ -27079,7 +27177,7 @@ void Airplane::defaultFly( ... )
 
 class ModelA : public Airplane {
   public:
-    virtual void fly( ... ) { defaultFly( ... ); }    // explicit request
+    virtual void fly( ... ) { `defaultFly( ... );` }    // explicit request
 };
 
 class ModelC : public Airplane {
@@ -27087,15 +27185,18 @@ class ModelC : public Airplane {
     virtual void fly( ... ) { specific code for model C type }
 };
 
-If forget to redefine ModelC::fly then will get errors in compile time because
-cannot create ModelC objects. That's because ModelC is ABC.
+The derived have to explicitly ask default implementation or if forget to
+redefine ModelC::fly then will get errors in compile time because cannot
+create ModelC objects. That's because ModelC is ABC.
 
 
-<2> <pure-virtual-can-have-implementation> 
-Use the fact that pure virtual can have its implementation.
+o use the fact that *cxx-abc* pure virtual can have implementation
+
+To avoid having a separate function for default implementation, use the fact
+that pure virtual can have its implementation and use it instead 
 
 class Airplane {
-  public: >
+  public: 
     virtual void fly( const Airport& destination ) = 0; // make a pure
 };
 
@@ -27107,7 +27208,7 @@ void Airplane::fly( ... )
 
 class ModelA : public Airplane {
   public:
-    virtual void fly( ... )  { Airplance::fly( ... ); }  // explicit
+    virtual void fly( ... )  { `Airplance::fly( ... );` }  // explicit
 };
 
 class ModelC : public Airplane {
@@ -27119,10 +27220,10 @@ The both approaches are the essentially same in that force the derived to
 override, to request default implementation and if not override, emits errors.
 
 
-<3>
-nonvirtual (non-overridable). invariant `over specialization.` To have
-interface and 'mandatory' implementation that is default implementation but
-not overridable. 
+o non-virtial, non non-overridable
+
+Have interface and 'mandatory' implementation that is default implementation
+but not overridable. 
 
 
 ={============================================================================
@@ -30279,6 +30380,246 @@ class GameCharacter {
 };
 
 Can add/change calc func later because can have the drived classes in separate hierarchy.
+
+
+<ex>
+
+cxx_pattern_strategy
+
+The Morden C++ Challenge, Design Pattern, Chapter 08
+
+72. Computing order price with discounts
+
+// discount for product, each item, customer
+
+A retail store sells a variety of goods and can offer various types of discount,
+for selected customers, articles, or per order. The following types of discount
+could be available:
+
+// discount types
+
+A fixed discount, such as 5%, regardless of the article or the quantity that is
+purchased.
+
+A volume discount, such as 10%, for each article when buying more than a
+particular quantity of that article.
+
+A price discount per total order of an article, that is, a discount for an
+article when a customer buys a quantity of that article so that the total cost
+exceeds a particular amount. For instance, a 15% discount for an article when
+the total cost of that article exceeds $100. If the article costs $5, and the
+customer buys 30 units, the total cost is $150; therefore, a 15% discount
+applies to the order of that article.
+
+A price discount per entire order (regardless what articles and in which
+quantity they were ordered).
+
+Write a program that can calculate the final price of a particular order. It is
+possible to compute the final price in different ways; for instance, all
+discounts could be cumulative, or on the other hand, if an article has a
+discount, a customer or total order discount might not be considered.
+
+
+The problem proposed here can be solved with the strategy pattern. This design
+pattern defines a family of algorithms and makes them interchangeable within the
+family. In this particular problem, both the discounts and the final order price
+calculators could be implemented based on the strategy pattern. The following
+diagram describes the hierarchy of discount types and their interchangeable use
+within the other classes, customer, article, order_line, and order:
+
+*/
+
+namespace cxx_pattern_strategy
+{
+  struct discount_type
+  {
+    virtual ~discount_type() {}
+
+    // get discount percentage for each type
+
+    virtual double 
+      discount_percent(double price, double quantity) const noexcept = 0;
+  };
+
+  struct fixed_discount final : public discount_type
+  {
+    explicit fixed_discount(double discount) noexcept
+      : discount_(discount) 
+      {}
+
+    virtual double
+      discount_percent(double, double) const noexcept override
+      { return discount_; }
+
+    private:
+      double discount_;
+  };
+
+  struct volume_discount final : public discount_type
+  {
+    explicit volume_discount(double quantity, double discount) noexcept
+      : discount_(discount), min_quantity_(quantity)
+      {}
+
+    virtual double
+      discount_percent(double, double quantity) const noexcept override
+      { return quantity >= min_quantity_ ? discount_ : 0; }
+
+    private:
+      double discount_;
+      double min_quantity_;
+  };
+
+  // discount on total price
+  struct price_discount final : public discount_type
+  {
+    explicit price_discount(double price, double discount) noexcept
+      : discount_(discount), min_total_price_(price)
+      {}
+
+    virtual double
+      discount_percent(double price, double quantity) const noexcept override
+      { return (price * quantity) >= min_total_price_ ? discount_ : 0; }
+
+    private:
+      double discount_;
+      double min_total_price_;
+  };
+
+  // discount on item price
+  struct amount_discount final : public discount_type
+  {
+    explicit amount_discount(double price, double discount) noexcept
+      : discount_(discount), min_total_price_(price)
+      {}
+
+    virtual double
+      discount_percent(double price, double) const noexcept override
+      { return price >= min_total_price_ ? discount_ : 0; }
+
+    private:
+      double discount_;
+      double min_total_price_;
+  };
+
+
+  // user(client) class
+
+  struct customer
+  {
+    std::string name_;
+    discount_type* discount_;
+  };
+
+  enum class article_unit
+  { piece, kg, meter, sqmeter, cmeter, liter };
+
+  struct article
+  {
+    int             id_;
+    std::string     name_;
+    double          price_;
+    article_unit    unit_;
+    discount_type*  discount_;
+  };
+
+  struct order_line
+  {
+    article         product_;
+    int             quantity_;
+    discount_type*  discount_;
+  };
+
+  struct order
+  {
+    int                     id_;
+    customer*               buyer_;
+    std::vector<order_line> lines_;
+    discount_type*          discount_;
+  };
+
+  struct price_calculator
+  {
+    virtual double calculate_price(order const& o) = 0;
+  };
+
+  struct cumulative_price_calculator : public price_calculator
+  {
+    virtual double calculate_price(order const& o) override
+    {
+      double price = 0;
+
+      // each item ordered
+      for (auto ol : o.lines_)
+      {
+        double line_price = ol.product_.price_ * ol.quantity_;
+
+        // product discount
+        if (ol.product_.discount_ != nullptr)
+        {
+          line_price *= (1.0 - ol.product_.discount_->discount_percent(
+                ol.product_.price_, ol.quantity_));
+        }
+
+        // order_line discount
+        if (ol.discount_ != nullptr)
+        {
+          line_price *= (1.0 - ol.discount_->discount_percent(
+                ol.product_.price_, ol.quantity_));
+        }
+
+        // buyer discount
+        if (o.buyer_ != nullptr && o.buyer_->discount_ != nullptr)
+        {
+          line_price *= (1.0 - o.buyer_->discount_->discount_percent(
+                ol.product_.price_, ol.quantity_));
+        }
+
+        price += line_price;
+      } // end for
+
+      // whole order discount
+      if (o.discount_ != nullptr)
+        price *= (1.0 - o.discount_->discount_percent(price, 0));
+
+      return price;
+    };
+  };
+
+} // namespace
+
+TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
+{
+  using namespace cxx_pattern_strategy;
+  
+  fixed_discount fd(0.1);   // 10%
+  volume_discount vd(10, 0.15);
+  price_discount pd(100, 0.05);
+  amount_discount ad(100, 0.05);
+
+  // customers, (name, discount)
+  customer c1{"default", nullptr};
+  customer c2{"john", &fd};
+  customer c3{"joane", &pd};
+
+  // items, (id, name, price, unit, discount)
+  article a1{1, "pen", 5, article_unit::piece, nullptr};
+  article a2{2, "expensive pen", 15, article_unit::piece, &fd};
+  article a3{3, "scissors", 10, article_unit::piece, &vd};
+
+  cumulative_price_calculator calc;
+
+  // order, (order id, customer, ordered items, discount)
+  order o1{101, &c1, {{a1, 1, nullptr}}, nullptr};
+  EXPECT_THAT(calc.calculate_price(o1), 5);
+
+  order o2{102, &c2, {{a1, 1, nullptr}}, nullptr};
+  EXPECT_THAT(calc.calculate_price(o2), 4.5);
+}
+
+
+<ex>
+see *cxx-ex-quote*
 
 
 ={============================================================================
@@ -41954,25 +42295,23 @@ lowercase word "unternehmen" note: The signature of operator() must be const.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-container-cxx-set cxx-multiset
 
-// bits/stl_set.h
-
-#include <set>
-
-namespace std {
+namespace cxx_code
+{
+  // bits/stl_set.h
 
   template<typename _Key, 
-    typename _Compare = `std::less<_Key>`,
-	 typename _Alloc = std::allocator<_Key> >
+  typename _Compare = `std::less<_Key>`,
+  typename _Alloc = std::allocator<_Key> >
     class set
     {
     };
 
   template <typename T,
-  typename Compare = less<T>,
-  typename Allocator = allocator<T> >
-    class multiset;
-}
+           typename Compare = less<T>,
+           typename Allocator = allocator<T> >
+             class multiset;
 
+} // namespace
 
 <ex>
 set<int, greater<int>> iset{13, 9, 7, 10, 2, 11, 12, 8, 7};
@@ -41985,7 +42324,7 @@ defines the sorting criterion and if not passed, the default criterion `less <`
 is used.
 
 
-{cxx-set-search-operations} cpp-container-search
+{cxx-set-search-operations} cxx-coll-search
 Because they are optimized for fast searching of elements, sets and multisets
 provide `special search functions` (Table 7.36). These functions are special
 versions of general algorithms that have the same name. 
@@ -41996,21 +42335,24 @@ achieve logarithmic complexity instead of the linear complexity of the
 
 *cxx-set-count*
 
-      /**
-       *  @brief  Finds the number of elements.
-       *  @param  __x  Element to located.
-       *  @return  Number of elements with specified key.
-       *
-       *  This function only makes sense for multisets; for set the result will
-       *  either be 0 (not present) or 1 (present).
-       */
-      size_type
-      count(const key_type& __x) const;
+namespace cxx_code
+{
+  /**
+   *  @brief  Finds the number of elements.
+   *  @param  __x  Element to located.
+   *  @return  Number of elements with specified key.
+   *
+   *  This function only makes sense for multisets; for set the result will
+   *  either be 0 (not present) or 1 (present).
+   */
+  size_type
+    count(const key_type& __x) const;
+}
 
 c.count(val)      
 Returns the number of elements with value val
 
-TEST(StlSet, CheckDuplicate)
+TEST(SetMulti, Duplicate)
 {
   {
     multiset<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
@@ -42035,32 +42377,37 @@ TEST(StlSet, CheckDuplicate)
 
 *cxx-set-find*
 
-      /**
-       *  @brief Tries to locate an element in a %set.
-       *  @param  __x  Element to be located.
-       *  @return  Iterator pointing to sought-after element, or end() if not
-       *           found.
-       *
-       *  This function takes a key and tries to locate the element with which
-       *  the key matches.  If successful the function returns an iterator
-       *  pointing to the sought after element.  If unsuccessful it returns the
-       *  past-the-end ( @c end() ) iterator.
-       */
-      iterator
-      find(const key_type& __x);
+namespace cxx_code
+{
+  /**
+   *  @brief Tries to locate an element in a %set.
+   *  @param  __x  Element to be located.
+   *  @return  Iterator pointing to sought-after element, or end() if not
+   *           found.
+   *
+   *  This function takes a key and tries to locate the element with which
+   *  the key matches.  If successful the function returns an iterator
+   *  pointing to the sought after element.  If unsuccessful it returns the
+   *  past-the-end ( @c end() ) iterator.
+   */
+  iterator
+    find(const key_type& __x);
+}
 
 c.find(val)       
 Returns the position of the `first element` with value val (or end() if none
     found)
 
-  *cxx-set-find-vs-count*
-  For containers with single key, find and count do the same (but the return
-      is different) but for containers with multiple key, count has to do more
-  work since still has to count how many elements have the same key. So if
-  don't need the count, it's best to use find.
+
+*cxx-set-find-vs-count*
+
+For containers with single key, find and count do the same (but the return is
+    different) but for containers with multiple key, count has to do more work
+since still has to count how many elements have the same key. So if don't need
+the count, it's best to use find.
 
 
-<cxx-multi-set-order-of-duplicates>
+<cxx-set-multi-order-of-duplicates>
 For multisets, `since C++11 it is guaranteed that` insert(), emplace(), and
 erase() preserve the relative ordering of equivalent elements, and that
 inserted elements are placed `at-the-end` of existing equivalent values.
@@ -42070,10 +42417,10 @@ inserted elements are placed `at-the-end` of existing equivalent values.
       lower       upper
       
 c.lower_bound(val) 
-Returns an iterator to the first element with key not less than val.
+Returns an iterator to the first element `with key not less than val.`
 
 c.upper_bound(val) 
-Returns an iterator to the first element with key greater than val.
+Returns an iterator to the first element `with key greater than val.`
 
 c.equal_range(val) 
 Returns a range, pair of iterators, denoting the elements with val
@@ -42083,11 +42430,11 @@ greater value than the argument, whereas upper_bound() returns the position of
 the first element with a greater value. Thus, equal_range() returns the range
 of elements that have the same value as the argument.
 
-If lower_bound() or the first value of equal_range() is equal to upper_bound()
-or the second value of equal_range()
-
 Not only to find. Can be used to get a position to be inserted in sorted
 order.
+
+note: 
+these _bound members usually used for multiset, can be used with set.
 
 
 <ex>
@@ -42121,8 +42468,7 @@ for (auto pos = authors.equal_range(search_item);
   cout << pos.first->second << endl;
 
 
-<ex>
-TEST(StlSet, HowSearched)
+TEST(Set, Search)
 {
   {
     set<int> coll;
@@ -42142,6 +42488,7 @@ TEST(StlSet, HowSearched)
 
     EXPECT_THAT(*coll.equal_range(3).first, 4);
     EXPECT_THAT(*coll.equal_range(3).second, 4);
+
 
     EXPECT_THAT(*coll.lower_bound(5), 5);
 
@@ -42175,9 +42522,6 @@ TEST(StlSet, HowSearched)
     EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).second), 5);
   }
 }
-
-note: 
-these _bound members usually used for multiset, can be used with set.
 
 
 ={============================================================================

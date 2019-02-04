@@ -1590,7 +1590,7 @@ TEST(CollQueue, PriorityQueue)
 // ={=========================================================================
 // cxx-set
 
-TEST(StlSet, HowSorted)
+TEST(Set, SortOrder)
 {
   {
     // less <
@@ -1617,7 +1617,7 @@ TEST(StlSet, HowSorted)
   }
 }
 
-TEST(StlSet, HowSearched)
+TEST(Set, Search)
 {
   {
     set<int> coll;
@@ -1637,6 +1637,7 @@ TEST(StlSet, HowSearched)
 
     EXPECT_THAT(*coll.equal_range(3).first, 4);
     EXPECT_THAT(*coll.equal_range(3).second, 4);
+
 
     EXPECT_THAT(*coll.lower_bound(5), 5);
 
@@ -1671,7 +1672,7 @@ TEST(StlSet, HowSearched)
   }
 }
 
-TEST(StlSet, CheckDuplicate)
+TEST(SetMulti, Duplicate)
 {
   {
     multiset<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
