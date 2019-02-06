@@ -234,6 +234,10 @@ class CompositeManager:
         self.person.giveRaise(percent + bonus)
 
     # delegate all other attrs
+    # *py-getattr*
+    # since this class do not use inheritance, all attribute fetch request comes
+    # to this and forward them to the composite.
+
     def __getattr__(self, attr):
         return getattr(self.person, attr)
 
@@ -263,10 +267,9 @@ class TestComposite_1(unittest.TestCase):
         sus = ManagerImproved('Susan King', 1000)
         print(sus)
 
-"""
 class Department:
     # causes an runtime error
-    def __int__(self, *args):
+    def __init__(self, *args):
         self.members = list(args)
 
     def addMember(self, person):
@@ -286,6 +289,11 @@ class TestComposite_2(unittest.TestCase):
         print "===================="
         print "[RUN]", self._testMethodName
     
+    # [RUN] test_department_class
+    # [Person: Bob Smith, None, 0]
+    # [Person: Sue Jones, dev, 11000]
+    # [Person: Tom Jones, 50000, 0]
+
     def test_department_class(self):
         bob = Person('Bob Smith')
         sus = Person('Sue Jones', job='dev', pay=10000)
@@ -295,7 +303,7 @@ class TestComposite_2(unittest.TestCase):
         development.addMember(tom)
         development.giveRaises(.10)
         development.showAll()
-"""
+
 
 ## "Assorted class utilities and tools"
 
@@ -467,6 +475,200 @@ class TestAbstractCreation(unittest.TestCase):
 
     def test_abstract_sub_creation(self):
         x = ABCSub()
+
+
+#={===========================================================================
+# Chapter 31: Designing with Classes
+# Stream Processors Revisited
+
+class Processor:
+    def __init__(self, reader, writer):
+        self.reader = reader
+        self.writer = writer
+
+    def process(self):
+        while True:
+            data = self.reader.readline()
+            if not data: break
+            data = self.converter(data)
+            self.writer.write(data)
+
+    def converter(self, data):
+        assert False, 'converter must be defined'
+
+class Uppercase(Processor):
+    def converter(self, data):
+        return data.upper()
+
+class HTMLize:
+    def write(self, line):
+        print('<PRE>%s</PRE>' % line.rstrip())
+
+# [RUN] test_processor
+# SPAM
+# SPAM
+# SPAM!
+#
+# kyoupark@kit-debian64:~/git/kb/code-py/pyclass$ more trispamup.txt 
+# SPAM
+# SPAM
+# SPAM!
+# 
+# [RUN] test_htmlize_stream
+# <PRE>SPAM</PRE>
+# <PRE>SPAM</PRE>
+# <PRE>SPAM!</PRE>
+
+# If you trace through this example's control flow, you'll see that we get both
+# uppercase conversion (by inheritance) and HTML formatting (by composition),
+
+class TestProcessor(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+    
+    def test_processor(self):
+        import sys
+        obj = Uppercase(open('trispam.txt'), sys.stdout)
+        obj.process()
+
+    # To process different sorts of streams, pass in different sorts of objects
+    def test_different_stream(self):
+        import sys
+        obj = Uppercase(open('trispam.txt'), open('trispamup.txt', 'w'))
+        obj.process()
+
+    # To process different sorts of streams, pass in different sorts of objects
+    def test_htmlize_stream(self):
+        import sys
+        obj = Uppercase(open('trispam.txt'), HTMLize())
+        obj.process()
+
+
+#={===========================================================================
+# py-overload 
+# Chapter 30: Operator Overloading
+
+# py-callable
+class Callee:
+
+    # py-keyward-argument
+    def __call__(self, *pargs, **kargs):
+        # accept arbitrary arguments
+        print('Called:', pargs, kargs)
+
+class Prod:
+    def __init__(self, value):
+        self.value = value
+
+    def __call__(self, other):
+        return self.value * other
+
+class TestOverload(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    # [RUN] test_call_overload
+    # ('Called:', (1, 2, 3), {})
+    # ('Called:', (1, 2, 3), {'y': 5, 'x': 4})
+
+    def test_call_overload(self):
+        # C is callable
+        C = Callee()
+        C(1,2,3)
+        C(1,2,3, x=4, y=5)
+
+    def test_callable(self):
+        x = Prod(2)
+        self.assertEqual(x(3), 6)
+        self.assertEqual(x(4), 8)
+
+class Spam:
+    def doit(self, message):
+        return message
+
+class Number:
+    def __init__(self, base):
+        self.base = base
+
+    def double(self):
+        return self.base * 2
+
+    def triple(self):
+        return self.base * 3
+
+class TestBoundMethod(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    def test_callable_1(self):
+
+        object1 = Spam()
+        self.assertEqual(object1.doit('hello world'), 'hello world')
+
+        # bound
+        object2 = Spam()
+        # x is bound method object
+        x = object2.doit
+        self.assertEqual(x('hello world'), 'hello world')
+
+        # unbound
+        object3 = Spam()
+        t = Spam.doit
+        self.assertEqual(t(object3, 'howdy'), 'howdy')
+        
+    # [RUN] test_callable_2
+    # 4
+    # 6
+    # 9
+    # 8
+
+    def test_callable_2(self):
+        x = Number(2)
+        y = Number(3)
+        z = Number(4)
+
+        # list of bound objects
+        acts = [x.double, y.double, y.triple, z.double]
+
+        for act in acts:
+            print(act())
+
+
+#={===========================================================================
+# py-pattern-facory 
+# Chapter 31: Designing with Classes
+# Classes Are Objects: Generic Object Factories
+
+# The function uses special "varargs" call syntax to call the function and
+# return an instance.
+
+def factory(aClass, *pargs, **kargs):
+    return aClass(*pargs, **kargs)
+
+class TestPatternFactory(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    def test_factory(self):
+        object1 = factory(Spam)
+        object2 = factory(Person, 'Arthur', 'King')
+        object3 = factory(Person, name='Brian')
+
+        self.assertEqual(object1.doit(99), 99)
+
+        self.assertEqual(object2.name, 'Arthur')
+        self.assertEqual(object2.job, 'King')
+
+        self.assertEqual(object3.name, 'Brian')
+        self.assertEqual(object3.job, None)
 
 
 #={===========================================================================

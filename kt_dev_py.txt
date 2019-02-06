@@ -9,7 +9,8 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-check-version
 |kt_dev_py_0001| py-base-indentation
 |kt_dev_py_0001| py-base-basic
-|kt_dev_py_0001| py-base-type
+|kt_dev_py_0001| py-type
+|kt_dev_py_0001| py-attribute
 |kt_dev_py_0001| py-base-none-type
 |kt_dev_py_0001| py-base-control
 |kt_dev_py_0001| py-base-loop
@@ -42,7 +43,9 @@ Use #{ for a group and ={ for a item
 |kt_dev_py_0001| py-function-scope
 |kt_dev_py_0001| py-function-arguments
 |kt_dev_py_0001| py-class
+|kt_dev_py_0001| py-class-overload
 |kt_dev_py_0001| py-class-static py-decorator
+|kt_dev_py_0001| py-pattern
 |kt_dev_py_0001| py-namespace
 |kt_dev_py_0001| py-docstring
 |kt_dev_py_0001| py-exception
@@ -366,25 +369,6 @@ type is among those present in the tuple:
 
 >>> isinstance(b,(int,float))
 True
-
-
-<attribute-and-method>
-Objects in Python typically have both `attributes`, other Python objects
-stored "inside" the object, and `methods`, functions associated with an object
-which can have access to the object's internal data.
-
-Both of them are accessed via the syntax `obj.attribute_name` Attributes and
-methods can also be accessed by name using the `getattr` function:
-
->>> a='foo'
->>> type(a)
-<type 'str'>
->>> getattr(a, 'split')
-<built-in method split of str object at 0xb744dc38>
-
-While we will not extensively use the functions getattr and related functions
-`hasattr` and setattr in this book, they can be used very effectively to write
-generic, reusable code.
 
 
 <iterable>
@@ -759,6 +743,46 @@ Out[286]: 1
 
 
 ={============================================================================
+|kt_dev_py_0001| py-attribute
+
+Objects in Python typically have `both attributes:` 
+
+o other Python objects stored "inside" the object
+
+o `methods`, functions associated with an object which can have access to the
+  object's internal data.
+
+Both of them are accessed via the syntax `obj.attribute_name` 
+
+# 944 | Chapter 31: Designing with Classes
+
+In fact, attributes are all “public” and “virtual,” in C++ terms; they’re all
+accessible everywhere and are looked up dynamically at runtime. As a scripting
+language, Python is more about enabling than restricting.
+
+
+Attributes and methods can also be accessed by name using the `getattr`
+function:
+
+class TestAttribute(unittest.TestCase):
+
+    # [RUN]  test_attribute
+    # <type 'str'>
+    # <built-in method split of str object at 0x7fa77a489a80>
+
+    def test_attribute(self):
+
+        a = 'foo'
+        print(type(a))
+        print(getattr(a, 'split'))
+
+
+While we will not extensively use the functions getattr and related functions
+`hasattr` and setattr in this book, they can be used very effectively to write
+generic, reusable code.
+
+
+={============================================================================
 |kt_dev_py_0001| py-base-none-type py-none
 
 Learning Python 5E, 9, Tuples, Files, and Everything Else
@@ -1073,7 +1097,9 @@ changes support direct modification.
 
 Learning Python 5E, 6, Dynamic Typing
 
-Variable creation
+o a dynamically typed scripting language
+
+Variable creation *py-assign*
 
 A variable (i.e., name), like a, is created when your code first `assigns` it a
 value.
@@ -5044,7 +5070,7 @@ import person         # Lowercase for modules
 x = person.Person()   # Uppercase for classes
 
 
-<py-class-operator-overload>
+<py-class-overload>
 
 o Methods named with double underscores (__X__) are special hooks. In Python
   classes we implement operator overloading by providing specially named
@@ -5213,6 +5239,8 @@ class TestPerson(unittest.TestCase):
 
 <py-class-composition>
 
+Chapter 28: A More Realistic Example
+
 class CompositeManager:
 
     # has a person
@@ -5225,6 +5253,10 @@ class CompositeManager:
         self.person.giveRaise(percent + bonus)
 
     # delegate all other attrs
+    # *py-getattr*
+    # since this class do not use inheritance, all attribute fetch request comes
+    # to this and forward them to the composite.
+
     def __getattr__(self, attr):
         return getattr(self.person, attr)
 
@@ -5312,7 +5344,7 @@ The World’s Simplest Python Class
 'name', 'pay']
 
 
-<py-convention-to-avoid-name-colision>
+<py-convention-for-internal-name>
 To minimize the chances of name collisions like this, Python programmers often
 prefix methods not meant for external use with a single underscore:
 _gatherAttrs in our case. 
@@ -5326,6 +5358,8 @@ the front of the method name only: __gatherAttrs for us. Python automatically
 expands such names to include the enclosing class’s name, which makes them
 truly unique when looked up by the inheritance search. This is a feature
 usually called pseudoprivate class attributes.
+
+TODO: see Name Mangling Overview
 
 
 {py-class-attribute-instance-attribute}
@@ -5556,6 +5590,158 @@ Traceback (most recent call last):
 TypeError: Can't instantiate abstract class ABCSuper with abstract methods method
 
 ----------------------------------------------------------------------
+
+
+={============================================================================
+|kt_dev_py_0001| py-class-overload
+
+Chapter 30: Operator Overloading
+
+<py-getattr> *py-attribute*
+
+Chapter 25: Advanced Module Topics, Example: Modules Are Objects
+
+all the following expressions reach the same attribute and object:
+
+M.name                    # Qualify object by attribute
+M.__dict__['name']        # Index namespace dictionary manually
+sys.modules['M'].name     # Index loaded-modules table manually
+getattr(M, 'name')        # Call built-in fetch function
+
+
+Attribute Access: __getattr__ and __setattr__
+
+classes can also intercept basic `attribute access` (a.k.a. `qualification`) when
+needed or useful. Specifically, for an object created from a class, 
+`dot operator` expression object.attribute can be implemented by your code too.
+
+
+__getattr__, Attribute fetch, X.undefined
+
+Attribute Reference
+
+The __getattr__ method intercepts attribute references. It’s called with the
+attribute name as a string whenever you try to qualify an instance with an
+`undefined (nonexistent) attribute name. It is not called` if Python can find
+the attribute using its inheritance tree search procedure.
+
+
+{py-call} <py-callable>
+
+Call Expressions: __call__
+
+o callable also retain state information for use during calls.
+
+# py-overload 
+# Chapter 30: Operator Overloading
+
+# py-callable
+class Callee:
+
+    # py-keyward-argument
+    def __call__(self, *pargs, **kargs):
+        # accept arbitrary arguments
+        print('Called:', pargs, kargs)
+
+class Prod:
+    def __init__(self, value):
+        self.value = value
+
+    def __call__(self, other):
+        return self.value * other
+
+class TestOverload(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    # [RUN] test_call_overload
+    # ('Called:', (1, 2, 3), {})
+    # ('Called:', (1, 2, 3), {'y': 5, 'x': 4})
+
+    def test_call_overload(self):
+        # C is callable
+        C = Callee()
+        C(1,2,3)
+        C(1,2,3, x=4, y=5)
+
+    def test_callable(self):
+        x = Prod(2)
+        self.assertEqual(x(3), 6)
+        self.assertEqual(x(4), 8)
+
+
+As an example, the tkinter GUI toolkit allows you to register functions as
+  event handlers (callbacks) - when events occur, tkinter calls the registered
+  objects. If you want an event handler to retain state between events, you
+  can register either a class’s bound method, or an instance that conforms to
+  the expected interface with __call__.
+
+
+<py-bound-method>
+
+Chapter 31: Designing with Classes, Methods Are Objects: Bound or Unbound
+
+class’s methods can be accessed from an instance or a class, though, they
+actually come in two flavors in Python:
+
+o Unbound (class) method objects: no self
+
+o Bound (instance) method objects: self + function pairs
+
+class Spam:
+    def doit(self, message):
+        return message
+
+class Number:
+    def __init__(self, base):
+        self.base = base
+
+    def double(self):
+        return self.base * 2
+
+    def triple(self):
+        return self.base * 3
+
+class TestBoundMethod(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    def test_callable_1(self):
+
+        object1 = Spam()
+        self.assertEqual(object1.doit('hello world'), 'hello world')
+
+        # bound
+        object2 = Spam()
+        # x is bound method object
+        x = object2.doit
+        self.assertEqual(x('hello world'), 'hello world')
+
+        # unbound
+        object3 = Spam()
+        t = Spam.doit
+        self.assertEqual(t(object3, 'howdy'), 'howdy')
+        
+    # [RUN] test_callable_2
+    # 4
+    # 6
+    # 9
+    # 8
+
+    def test_callable_2(self):
+        x = Number(2)
+        y = Number(3)
+        z = Number(4)
+
+        # list of bound objects
+        acts = [x.double, y.double, y.triple, z.double]
+
+        for act in acts:
+            print(act())
 
 
 ={============================================================================
@@ -5864,6 +6050,48 @@ Because of these downsides, this book prefers to call superclasses by explicit
 32, The super Built-in Function: For Better or Worse?
 
 TODO: more?
+
+
+={============================================================================
+|kt_dev_py_0001| py-pattern
+
+<py-pattern-factory>
+Factories can be a major undertaking in a strongly typed language such as C++
+but are almost trivial to implement in Python.
+
+o classes are also “first class” objects, it’s easy to pass them around a
+  program, store them in data structures, and so on.
+
+o works for any class and any constructor arguments.
+
+# py-pattern-facory 
+# Chapter 31: Designing with Classes
+# Classes Are Objects: Generic Object Factories
+
+# The function uses special "varargs" call syntax to call the function and
+# return an instance.
+
+def factory(aClass, *pargs, **kargs):
+    return aClass(*pargs, **kargs)
+
+class TestPatternFactory(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    def test_factory(self):
+        object1 = factory(Spam)
+        object2 = factory(Person, 'Arthur', 'King')
+        object3 = factory(Person, name='Brian')
+
+        self.assertEqual(object1.doit(99), 99)
+
+        self.assertEqual(object2.name, 'Arthur')
+        self.assertEqual(object2.job, 'King')
+
+        self.assertEqual(object3.name, 'Brian')
+        self.assertEqual(object3.job, None)
 
 
 ={============================================================================

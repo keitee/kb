@@ -10681,7 +10681,7 @@ inheritance lets us say that a particular class inherits from another class.
 Ordinarily, we can use an object of an inherited class as if it were an object
 of the same type as the class from which it inherits.
 
-  o `dynamic-binding` 
+  o `cxx-dynamic-binding` 
     Use objects of these types while ignoring the details of how they differ.
     This is mechnism to make inheritance work along with virtual mechnism and
     object layout(subobject) scheme.
@@ -15613,7 +15613,7 @@ The std::move() doesn't itself do any moving, but merely converts its argument
 into a so-called rvalue reference.
 
 
-{cxx-reference-quailifier} <reference-member-function> RCPR 546
+{cxx-reference-quailifier} *cxx-move* RCPR 546
 Ordinarily, can call a member function on object, regardless of whether that
 is an lvalue or rvalue. Sometimes such usage can be surprising. Here assign to
 the "rvalue result" of concatentating these strings:
@@ -15624,22 +15624,25 @@ Still allow assignment to rvalues for backward compatability. The new standard
 have a way to `prevent such usage` by forcing the left-hand operand, the
 object to which `this` points, to be an lvalue.
 
-The reference qualifier is either & or && and indicate the lvalue/rvalue
-`property of this` in the same way that define const member function.
+To indicate `the lvalue/rvalue property of this`, use reference qualify:
 
 The refernece qualified and must follow the `const`.
 
 class Foo {
   public:
     Foo someMem() & const;    // error
-    Foo someMem() const &;    // ok, lvalue
-    Foo someMem() const &&;   // ok, rvalue
+
+    // copy version, lvalue reference qualifier
+    Foo someMem() const &;    
+
+    // move version, rvalue reference qualifier
+    Foo someMem() const &&;   
 };
 
 
-<cxx-overload-reference> *cxx-overload-move*
-We can overload a function based on its reference quialifier. See
-*cxx-ex-quote-example*
+<cxx-overload> *cxx-overload-move*
+Why ues it? We can overload a function based on its reference quialifier. See
+see *case_quote_clone*
 
 
 ={============================================================================
@@ -17120,255 +17123,246 @@ TEST_F(BulkQuoteTest, CheckTotal_4)
 
 
 {cxx-virtual-copy} {cxx-clone} // RCPR 633
-The user have to deal with dynamic memory to add items:
 
-void add_item(const std::shared_ptr<Quote> &sale);
+As seen, the user has to use shared_ptr to add items:
 
-sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 55, 5, .25)));
-sale.add_item(make_shared<Quote>("def", 35));
+{
+  sale.add_item(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
+  sale.add_item(shared_ptr<Quote>(new Bulk_Quote("912", 35, 5, .25)));
 
-Hiding the pointers. This new version will handle the memory allocation so
-that users no longer need to do so:
+  or 
+
+  sale.add_item(make_shared<Quote>("912", 35, 5, .25));
+}
+
+
+How can allow the user to add items like?
 
 sale.add_item(Quote("def", 35));
 sale.add_item(Bulk_quote("678", 55, 5, .25));
 
+So can change add_item() as:
+
 void add_item(const Quote &sale);    // copy version
 void add_item(Quote &&sale);         // move version
 
-The problem is that add_item do not know what type to allocate:
-
 void add_item( const Quote &sale )
 {
-  // somewhere
-  new Quote(sale);
+  items_.insert(shared_ptr<Quote>(new Bulk_Quote(sale)));
 }
 
 This won't do right thing. Only handles Quote even if passes Bulke_quote and
-see sliced-off problem. How to solve? Use overloads? Use virtual copy to have
-right version. 
+see cxx-sliced-off problem. How to solve? Use overloads? Use virtual copy to
+have right version. 
 
 
-<code>
-#include <iostream>
-#include <set>
-#include <memory>
-
-using namespace std;
-
-class Quote {
-    private:
-        string s_book_no;
-
-    protected:
-        double price;
-
-    public:
-        Quote() : s_book_no(""), price(0.0) {}
-        Quote(const string book, const double price) : s_book_no(book), price(price) {}
-
-        // have to since it's intended to be inherited
-        virtual ~Quote() {}
-
-        string isbn() const { return s_book_no; }
-
-        // get net price without discount
-        virtual double net_price(size_t sales_count) const
-        { return sales_count*price; }
-
-        // *cxx-virtual-copy* copy version
-        //  *cxx-const-this* if not use `const` on this, 
-        //  see *cxx-const-to-non-const-error* when use
-        //
-        // void add_item( const Quote& sale )
-        // { items.insert( shared_ptr<Quote>( sale.clone())); }
-        //
-        // since sale is const object and error to call non-const version on
-        // const object. *cpp-remember* always makes a call on `object`
-
-        virtual Quote *clone() const &
-        { 
-            cout << "quote::clone::copy" << endl;
-            return new Quote(*this); 
-        }
-
-        // virtual copy, move version
-        //  uses *cxx-reference-qualifier* and *cxx-overload-move*
-        //  if there is no move version, copy version is used when move version
-        //  of add_item() is called.
-
-        virtual Quote *clone() const &&
-        { 
-            cout << "quote::clone::move" << endl;
-            return new Quote(std::move(*this)); 
-        }
-};
-
-class Disc_quote : public Quote
+<ex>
+namespace case_quote_clone
 {
-    protected:
-        double d_quantity;
-        double d_discount;
-
+  class Quote
+  {
     public:
-        Disc_quote(const string book, const double price, const double quantity, const double discount) :
-            Quote(book, price), d_quantity(quantity), d_discount(discount) {}
 
-        double net_price(size_t sales_count) const = 0;
-};
+      Quote() : book_no_(), price_(0.0) {}
 
-class Bulk_quote : public Disc_quote
-{
-    public:
-        Bulk_quote(const string book, const double price, const double quantity, const double discount) :
-            Disc_quote(book, price, quantity, discount) {}
+      Quote(string const& book, double sale_price) :
+        book_no_(book), price_(sale_price) {}
+      
+      virtual ~Quote() {}
 
-        // double net_price(size_t sales_count) const override
-        double net_price(size_t sales_count) const 
-        {
-            if( sales_count >= d_quantity )
-                return sales_count*(1-d_discount)*price;
-            else
-                return sales_count*price;
-        };
+      std::string isbn() const { return book_no_; }
 
-        // virtual copy, copy version
-        //  Unlike Quote::clone(), when there is no const, no compile error but
-        //  gets always Quote version since no override. see
-        //  *cpp-override-condition*
-        virtual Bulk_quote *clone() const &
-        { 
-            cout << "bulk::clone::copy" << endl;
-            return new Bulk_quote(*this); 
-        }
+      // calculate net price but do not have "discount" concept
+      virtual double net_price(size_t count) const { return count * price_; }
 
-        // virtual copy, move version
-        virtual Bulk_quote *clone() const &&
-        { 
-            cout << "bulk::clone::move" << endl;
-            return new Bulk_quote(std::move(*this)); 
-        }
-};
+      // *cxx-clone* *cxx-move* copy version
+      // *cxx-reference-qualifier*
+      // note: shall have `const or see *cxx-const-to-nonconst-error*
+      // note: if there's no move verison, copy version will be used instead
+      virtual Quote* clone() const &
+      {
+        cout << "quote::clone() &" << endl;
+        return new Quote(*this);
+      }
 
-// user class
-class Basket
-{
-    public:
-        Basket() : items(compare) {}
-
-        void add_item(const shared_ptr<Quote> &item);
-
-        // *cxx-virtual-copy* copy version
-        // which signals to use lvalue object, lvalue reference qualifier
-        // *TN* this example works without copy version.
-        void add_item(const Quote &item)
-        {
-            cout << "basket::add_item::copy version" << endl;
-            items.insert(shared_ptr<Quote>(item.clone()));
-        }
-
-        // virtual copy, move version
-        // which signals to use rvalue object, rvalue reference qualifier
-        void add_item(Quote &&item)
-        {
-            cout << "basket::add_item::move version" << endl;
-            items.insert(shared_ptr<Quote>(std::move(item).clone()));
-        }
-
-        double total_receipt(ostream &os) const;
+      // cxx-clone, move version
+      virtual Quote* clone() const &&
+      {
+        cout << "quote::clone() &&" << endl;
+        return new Quote(std::move(*this));
+      }
 
     private:
-        static bool compare(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs)
-        { return lhs->isbn() < rhs->isbn(); }
+      std::string book_no_;
+    protected:
+      double price_;
+  };
 
-        using comp = bool (const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
-        multiset<shared_ptr<Quote>, comp*> items;
-};
+  class Discount_Quote : public Quote
+  {
+    public:
 
-void Basket::add_item(const shared_ptr<Quote> &item)
+      // *cxx-ctor*
+      // Why need to have constructors in abstract class although cannot
+      // define objects of this type directly? Becuase ctors in classes
+      // derived from Disc_quote will use the Disc_quote ctor to construct
+      // the Disc_quote part of their objects. Default ctor default
+      // initialize those members.
+
+      Discount_Quote() : quantity_(0), discount_(0.0) {}
+      Discount_Quote(string const& book, double price, 
+          size_t quantity, double discount_percent) :
+        Quote(book, price), quantity_(quantity), discount_(discount_percent) {}
+
+      // *cxx-dtor*
+      // no need to have virtual dtor here since Quote has it already
+  
+      // *cxx-abc*
+      // okay to have in the middle of inheritance and "discount" concept
+      virtual double net_price(size_t count) const = 0;
+
+    protected:
+      size_t quantity_;
+      double discount_;
+  };
+
+  class Bulk_Quote : public Discount_Quote
+  {
+    public:
+      Bulk_Quote(string const& book, double price, 
+          size_t quantity, double discount_percent) :
+        Discount_Quote(book, price, quantity, discount_percent) {}
+
+      // cxx-override cxx-const
+      // const is one of override condition
+
+      virtual double net_price(size_t count) const override
+      {
+        if (count >= quantity_)
+          return count * (1 - discount_) * price_;
+        else
+          return count * price_;
+      }
+
+      // cxx-clone
+      // cxx-error virtual Bulk_Quote* clone() const override &
+      // cxx-const
+      // if don't have const, no error but no override. so use override keyword
+      virtual Bulk_Quote* clone() const& override
+      {
+        cout << "bulk_quote::clone() &" << endl;
+        return new Bulk_Quote(*this);
+      }
+
+      virtual Bulk_Quote* clone() const&& override
+      {
+        cout << "bulk_quote::clone() &&" << endl;
+        return new Bulk_Quote(std::move(*this));
+      }
+  };
+
+  double print_total(ostream& os, Quote const& item, size_t sold)
+  {
+    double net_price = item.net_price(sold);
+
+    os << "isbn: " << item.isbn() << ", sold: " << sold 
+      << ", total due: " << net_price << endl;
+
+    return net_price;
+  }
+
+
+  class Basket
+  {
+    public:
+      // *cxx-undefined*
+      // Without it, cause core when add_item is called.
+      Basket() : items_{compare}
+      {}
+
+      void add_item(std::shared_ptr<Quote> const& item)
+      {
+        cout << "basket::add_item(shard_ptr)" << endl;
+        items_.insert(item);
+      }
+
+      // copy version
+      void add_item(Quote const& item)
+      {
+        cout << "basket::add_item(Quote const&)" << endl;
+        items_.insert(std::shared_ptr<Quote>(
+              item.clone()));
+      }
+
+      // move version *cxx-dynamic-binding*
+      void add_item(Quote &&item)
+      {
+        cout << "basket::add_item(Quote &&)" << endl;
+        items_.insert(std::shared_ptr<Quote>(
+              std::move(item).clone()));
+      }
+
+      double total_receipt(ostream& os) const
+      {
+        double total{};
+
+        for (auto iter = items_.cbegin(); iter != items_.cend();
+            iter = items_.upper_bound(*iter))
+        {
+          total = (*iter)->net_price(items_.count(*iter));
+          os << "isbn: " << (*iter)->isbn()
+            << ", sold: " << items_.count(*iter)
+            << ", total sales: " << total << endl;
+        }
+
+        return total;
+      }
+
+    private:
+      static bool compare(const std::shared_ptr<Quote> lhs,
+          const std::shared_ptr<Quote> rhs)
+      { return lhs->isbn() < rhs->isbn(); }
+
+      using comp = bool(const std::shared_ptr<Quote>,
+          const std::shared_ptr<Quote>);
+
+      std::multiset<shared_ptr<Quote>, comp*> items_;
+  };
+
+} // namespace
+
+// [ RUN      ] CxxCaseQuote.Clone
+// basket::add_item(Quote &&)
+// quote::clone() &&
+// basket::add_item(Quote &&)
+// quote::clone() &&
+// basket::add_item(Quote &&)
+// quote::clone() &&
+// basket::add_item(Quote &&)
+// bulk_quote::clone() &&
+// basket::add_item(Quote &&)
+// bulk_quote::clone() &&
+// isbn: 123, sold: 3, total sales: 135
+// isbn: 345, sold: 2, total sales: 90
+// [       OK ] CxxCaseQuote.Clone (2 ms)
+
+TEST(CxxCaseQuote, Clone)
 {
-    cout << "basket::add_item::copy version" << endl;
-    items.insert(item);
+  using namespace case_quote_clone;
+
+  Basket sale;
+
+  // Quote sales which has no discount. 45*3 = 135
+  sale.add_item(Quote("123", 45));
+  sale.add_item(Quote("123", 45));
+  sale.add_item(Quote("123", 45));
+
+  // minimum 3 and 15% discount. no discount 45*2 = 90
+  sale.add_item(Bulk_Quote("345", 45, 3, .15));
+  sale.add_item(Bulk_Quote("345", 45, 3, .15));
+
+  sale.total_receipt(cout);
 }
-
-double Basket::total_receipt(ostream &os) const
-{
-    for (auto iter = items.cbegin(); iter != items.cend();
-            iter = items.upper_bound(*iter))
-    {
-        os << "isbn : " << (*iter)->isbn() 
-            << ", sold : " << items.count(*iter)
-            << ", total sales: " << (*iter)->net_price( items.count(*iter)) 
-            << endl;
-    }
-}
-
-int main()
-{
-    Basket sale;
-
-    // to use copy version
-    // // Quote sales which has no discount. 45*3 = 135
-    // sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
-    // sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
-    // sale.add_item(make_shared<Quote>("123", 45));
-
-    // // minimum 3 and 15% discount. no discount 45*2 = 90
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
-
-    // // Bulk_quote sales which has discount: minimum 3 and 15% discount
-    // // 35*4*(1-.15) = 119
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-
-    // // Bulk_quote sales which has discount: minimum 5 and 25% discount
-    // // 35*6*(1-.25) = 157.5
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-    // sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-
-    // to use move version
-    // Quote sales which has no discount. 45*3 = 135
-    sale.add_item(Quote("123", 45));
-    sale.add_item(Quote("123", 45));
-    sale.add_item(Quote("123", 45));
-
-    // minimum 3 and 15% discount. no discount 45*2 = 90
-    sale.add_item(Bulk_quote("345", 45, 3, .15));
-    sale.add_item(Bulk_quote("345", 45, 3, .15));
-
-    // Bulk_quote sales which has discount: minimum 3 and 15% discount
-    // 35*4*(1-.15) = 119
-    sale.add_item(Bulk_quote("678", 35, 3, .15));
-    sale.add_item(Bulk_quote("678", 35, 3, .15));
-    sale.add_item(Bulk_quote("678", 35, 3, .15));
-    sale.add_item(Bulk_quote("678", 35, 3, .15));
-
-    // Bulk_quote sales which has discount: minimum 5 and 25% discount
-    // 35*6*(1-.25) = 157.5
-    sale.add_item(Bulk_quote("912", 35, 5, .25));
-    sale.add_item(Bulk_quote("912", 35, 5, .25));
-    sale.add_item(Bulk_quote("912", 35, 5, .25));
-    sale.add_item(Bulk_quote("912", 35, 5, .25));
-    sale.add_item(Bulk_quote("912", 35, 5, .25));
-    sale.add_item(Bulk_quote("912", 35, 5, .25));
- 
-    sale.total_receipt(cout);
-}
-
-...
-basket::add_item::move version
-bulk::clone::move
-isbn : 123, sold : 3, total sales: 135
-isbn : 345, sold : 2, total sales: 90
-isbn : 678, sold : 4, total sales: 119
-isbn : 912, sold : 6, total sales: 157.5
 
 
 ={============================================================================
@@ -25465,7 +25459,7 @@ A: Allocate local objects whose destructors perform cleanup
 
 The inheritance provides `overriding` and `polymorphism`.
 
-{cpp-polymorphism}
+{cxx-polymorphism} *cxx-dynamic-binding*
 Polymorphism is derived from a Greek words meaning "many forms".
 
 Oppose to compile-time static binding, the compiler generates 'code' to decide
@@ -25492,6 +25486,7 @@ Generally, a well designed static polymorphism performs better than dynamic,
 so it is to be preferred when the design makes it possible. If the information
   to make a choice is not available until run-time, dynamic is the choice.
 
+
 <from-python>
 the meaning of an operation depends on the type of the objects being operated
 on.
@@ -25500,7 +25495,7 @@ How? overloading and overiding
 
 
 {static-dynamic-type}
-The `dynamic-binding` at run-time so called `run-time-binding` because
+The `cxx-dynamic-binding` at run-time so called `run-time-binding` because
 `static-type` is different from `dynamic-type` 
 
 pointer or reference of base class = derived class objects;
@@ -25556,7 +25551,7 @@ Quote item;
 Bulk_quote bulk_item;
 
 print_total( item );          // Quote version
-print_total( bulk_item );     // Bulk version. dynamic-binding.
+print_total( bulk_item );     // Bulk version. *cxx-dynamic-binding*
 
 
 {cxx-sliced-off}
@@ -29969,12 +29964,13 @@ are actually created. Hence called virtual constructor
 
 This is about a method but not a class. Two points:
 
-* Encapsulation. No code to create in the client and move it into factory-func. 
+o Encapsulation. No code to create in the client and move it into factory-func. 
  
 o Defer decision on `what to create`: creation in the base such as parameterized
   factory-func or to defer creation to subclass, so any product class in the
   tree. This subclassing often used in framework since no need to make changes
-  in framework.
+  in framework. `flexibility`
+
 
 <static-vs-virtual-factory-func>
 The non-virtual factory function is static and efficient because no virtual
@@ -34002,7 +33998,7 @@ TEST(Regex, MatchResult)
 
 this is an *cxx-const-to-non-const-error*
 
-// single long erro and if do warpping:
+// single long error and if do warpping:
 
 ccon.cpp:317:16: error: could not convert ‘std::find_if(_IIter, _IIter,
     _Predicate) [with _IIter =
@@ -34128,12 +34124,12 @@ We can use that generic definition to define many different types of
 the `vector` contains.
 
 
-{template-syntax}
+{cxx-template-syntax}
 The requirement to put a space between two closing template expressions has
 gone:
 
 vector<list<int> >;  // OK in each C++ version
-vector<list<int>>;   // OK since *C++11*
+vector<list<int>>;   // OK since *cxx-11*
 
 // Error case as should be 'typename U'
 
@@ -34263,27 +34259,23 @@ function are preferred.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-class cxx-template-friend
 
-Blueprint for generating classes. Unlike function template, compiler 'cannot'
-deduce the type of parameter so user must provide extra 'additional'
-information to instantiate it. Which is the list of template arguments. 
+<cxx-template-argument>
+Unlike function template, compiler `cannot deduce the type of parameter` so
+user must provide extra `additional information` to instantiate it. Which is
+the list of `template arguments` 
 
-  It is up to the user to ensure that the template argument type support any
-  operations that template uses, and that those operations behave correctly in
-  the context in which the template uses them. Include headers for any type to
-  instantiate that template.
+It is up to the user to ensure that the template argument type support any
+operations that template uses, and that those operations behave correctly in
+the context in which the template uses them. Include headers for any type to
+instantiate that template.
 
 see *cpp-ex-strblob-template*
 
-
-<extra-information>
-Unlike function template, must provide the element type which is extra
-information and is template argument which binds to tempalte parameter. Use
-these argument to instantiate a 'specific' and 'independent' class from the
-template. 
+template argument binds to tempalte parameter. Use these argument to
+instantiate a `specific and independent class from the template.` 
 
 note:
-May say "instantiation" rather than "specialization" and think that
-specialzation is a special case of instantiation.
+May think that specialzation is a special case of instantiation.
 
 Blob<int> ia;
 Blob<int> ia2 = { 0, 1, 2, 3, 4 };
@@ -34302,10 +34294,9 @@ template <> class Blob<int> {
 };
 
 
-<instantiated-type>
-The name of a class template is not the name of type. A class template is used
-to instantiate a 'type' and an instantiated type always includes template
-arguments.
+<create-type>
+A class template is used `to instantiate a type` and an instantiated type
+always includes template arguments.
 
 shared_ptr<vector<string>>  // both are different type
 shared_ptr<vector<int>>     
