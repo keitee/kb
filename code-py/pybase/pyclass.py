@@ -9,7 +9,7 @@ import unittest
 # $ python -m unittest coll_test.TestDictCreation
 
 #={===========================================================================
-# pyclass
+# py-class
 
 class FirstClass:
 
@@ -305,7 +305,9 @@ class TestComposite_2(unittest.TestCase):
         development.showAll()
 
 
-## "Assorted class utilities and tools"
+#={===========================================================================
+# py-class-attribute
+# "Assorted class utilities and tools"
 
 class AttrDisplay:
     """
@@ -348,10 +350,18 @@ class TestAttrDisplay(unittest.TestCase):
         print "===================="
         print "[RUN]", self._testMethodName
     
+    # [RUN] test_attr_display
+    # [TopTest: attr1 = 0,attr2 = 1]
+    # [SubTest: attr1 = 2,attr2 = 3]
+
     def test_attr_display(self):
         X, Y = TopTest(), SubTest()
         print(X)
         print(Y)
+
+
+#={===========================================================================
+# py-db
 
 """
 Storing Objects on a Shelve Database
@@ -478,6 +488,7 @@ class TestAbstractCreation(unittest.TestCase):
 
 
 #={===========================================================================
+# py-override
 # Chapter 31: Designing with Classes
 # Stream Processors Revisited
 
@@ -669,6 +680,255 @@ class TestPatternFactory(unittest.TestCase):
 
         self.assertEqual(object3.name, 'Brian')
         self.assertEqual(object3.job, None)
+
+
+#={===========================================================================
+# py-class-static
+
+# tries to mimic c++ cookbook, 8.4 Automatically Adding New Class Instances to a
+# Container
+
+class StaticClass:
+    track_id = 0
+
+    def __init__(self):
+        StaticClass.track_id += 1
+
+    # selfless method
+    def show_id():
+        print 'id: %d' % StaticClass.track_id
+
+
+class TestStaticClass_1(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    def test_static_class_in_py2x(self):
+
+        # TypeError: unbound method show_id() must be called with StaticClass
+        # instance as first argument (got nothing instead)
+
+        # this is okay in *py-3x*
+        # StaticClass.show_id()
+
+        with self.assertRaises(TypeError):
+            StaticClass.show_id()
+
+        # TypeError: show_id() takes no arguments (1 given)
+
+        sc = StaticClass()
+        with self.assertRaises(TypeError):
+            sc.show_id()
+
+
+# use simple method and works for both version
+
+def show_id():
+    print 'id: %d' % StaticClass.track_id
+
+class StaticClass:
+    track_id = 0
+
+    def __init__(self):
+        StaticClass.track_id += 1
+
+class TestStaticClass_2(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    def test_static_class_use_simple_method(self):
+
+        sc = StaticClass()
+        show_id()
+        print(StaticClass.track_id)
+
+
+class Methods:
+    # normal instance method
+    def imeth(self, x):
+        print([self, x])
+
+    # static method
+    def smeth(x):
+        print([x])
+
+    # class method
+    def cmeth(cls, x):
+        print([cls, x])
+
+    # Notice how the last two assignments in this code simply reassign
+    # (a.k.a. rebind) the method names smeth and cmeth.
+
+    smeth = staticmethod(smeth)
+    cmeth = classmethod(cmeth)
+
+
+class TestStaticClass_3(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    # [RUN] test_static_class_use_staticmethod
+    # [<pyclass.Methods instance at 0x7efd73c7d1b8>, 1]
+    # [<pyclass.Methods instance at 0x7efd73c7d1b8>, 2]
+    # [3]
+    # [4]
+    # [<class pyclass.Methods at 0x7efd73c67f58>, 5]
+    # [<class pyclass.Methods at 0x7efd73c67f58>, 6]
+
+    def test_static_class_use_staticmethod(self):
+
+        m = Methods()
+        m.imeth(1)
+        Methods.imeth(m, 2)
+
+        # now worlks for *py-2x*
+        Methods.smeth(3)
+        m.smeth(4)
+
+        # Class methods are similar, but Python automatically passes the class
+        # (not an instance) in to a class method's first (leftmost) argument,
+        # whether it is called through a class or an instance:
+
+        # Class method: call through class
+        # Becomes cmeth(Methods, 5)
+
+        Methods.cmeth(5)
+
+        # Class method: call through instance
+        # Becomes cmeth(Methods, 5)
+
+        m.cmeth(6)
+
+
+class Spam:
+
+    numInstances = 0
+
+    def __init__(self):
+        Spam.numInstances += 1
+
+    def printNumInstances():
+        print('number of instances: %s' % Spam.numInstances)
+
+    printNumInstances = staticmethod(printNumInstances)
+
+class TestStaticClass_4(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    # [RUN] test_static_class_use_staticmethod_2
+    # number of instances: 2
+    # number of instances: 2
+
+    def test_static_class_use_staticmethod_2(self):
+        a = Spam()
+        b = Spam()
+        Spam.printNumInstances()
+        a.printNumInstances()
+
+class Sub(Spam):
+
+    def printNumInstances():
+        print('extra stuff...')
+        Spam.printNumInstances()
+
+    printNumInstances = staticmethod(printNumInstances)
+
+class TestStaticClass_5(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    # [RUN] test_static_class_use_staticmethod_2
+    # extra stuff...
+    # number of instances: 2
+    # number of instances: 2
+    # extra stuff...
+    # number of instances: 2
+
+    def test_static_class_use_staticmethod_2(self):
+        a = Sub()
+        b = Sub()
+        Sub.printNumInstances()
+        Spam.printNumInstances()
+        a.printNumInstances()
+
+
+#={===========================================================================
+# py-decorator
+
+class DecoratedSpam:
+
+    numInstances = 0
+
+    def __init__(self):
+        Spam.numInstances += 1
+
+    @staticmethod
+    def printNumInstances():
+        print('number of instances: %s' % Spam.numInstances)
+
+
+class TestStaticClass_6(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    # [RUN] test_static_class_use_staticmethod_2
+    # number of instances: 2
+    # number of instances: 2
+
+    def test_static_class_use_staticmethod_2(self):
+        a = DecoratedSpam()
+        b = DecoratedSpam()
+        DecoratedSpam.printNumInstances()
+        a.printNumInstances()
+
+
+# LPY5, Decorators and Metaclasses: Part 1
+# A First Look at User-Defined Function Decorators
+
+class tracer:
+    def __init__(self, func):
+        self.calls = 0
+        self.func = func
+
+    # add logic and run original
+
+    def __call__(self, *args):
+        self.calls += 1
+        print('call %s to %s' % (self.calls, self.func.__name__))
+        return self.func(*args)
+
+@tracer
+def spam(a, b, c):
+    return a + b + c
+
+class TestDecorator_1(unittest.TestCase):
+
+    def setUp(self):
+        print "===================="
+        print "[RUN]", self._testMethodName
+
+    # [RUN] test_decorator_user_defined
+    # call 1 to spam
+    # 6
+    # call 2 to spam
+    # abc
+
+    def test_decorator_user_defined(self):
+        print(spam(1, 2, 3))
+        print(spam('a', 'b', 'c'))
 
 
 #={===========================================================================
