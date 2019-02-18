@@ -237,6 +237,12 @@ class TestString(unittest.TestCase):
         self.assertEqual(coll.replace('SPAM', 'EGGS', 1),
                 'xxxxEGGSxxxxSPAMxxxx')
 
+    def test_string_title(self):
+
+        coll = 'this is python title method'
+        self.assertEqual(coll.title(),
+                'This Is Python Title Method')
+
     def test_string_performance(self):
 
         # to list
@@ -349,8 +355,8 @@ class TestList(unittest.TestCase):
 
     def test_list_range(self):
 
-        # py-range
-        coll = range(10)
+        # py-range py-3
+        coll = list(range(10))
         self.assertEqual(coll, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
         #
@@ -364,15 +370,16 @@ class TestList(unittest.TestCase):
 
         self.assertEqual(coll2, coll3)
 
-        # py-modulo
-        sum = 0
-        for i in xrange(10000):
+        # xrange() is for py-2
+        # # py-modulo
+        # sum = 0
+        # for i in list(xrange(10000)):
 
-            # py-way no precedence between ops?
-            if i % 3 == 0 or i % 5 == 0:
-                sum += i
+        #     # py-way no precedence between ops?
+        #     if i % 3 == 0 or i % 5 == 0:
+        #         sum += i
 
-        self.assertEqual(sum, 23331668)
+        # self.assertEqual(sum, 23331668)
 
 
     def test_list_delete(self):
@@ -425,6 +432,11 @@ class TestList(unittest.TestCase):
         self.assertEqual(coll, 
                 ['foo', 'red', 'red', 'baz', 'dwarf'])
 
+        # py-list-extend
+        coll = ['foo', 'red']
+        coll.extend(['red', 'baz', 'dwarf'])
+        self.assertEqual(coll, 
+                ['foo', 'red', 'red', 'baz', 'dwarf'])
 
     def test_list_concatenate(self):
 
@@ -468,12 +480,6 @@ class TestList(unittest.TestCase):
         self.assertEqual(M, ['cc', 'aa', 'bb'])
 
 
-    def test_list_comprehension(self):
-        coll = ['a', 'as', 'bat', 'car', 'dove', 'python']
-        result = [e.upper() for e in coll if len(e) > 2]
-        self.assertEqual(result, ['BAT', 'CAR', 'DOVE', 'PYTHON'])
-
-
     # [RUN]  test_list_elements
     # ['l', 'i', 's', 't', 1, 2, 3, 'type']
 
@@ -487,63 +493,135 @@ class TestList(unittest.TestCase):
 
 
 #={===========================================================================
-# py-dict
+# py-set
 
-class TestDictCreation(unittest.TestCase):
+class TestSet(unittest.TestCase):
 
     def setUp(self):
         print("====================")
         print("[RUN] ", self._testMethodName)
 
-    # create dict by assign
-    # The first is handy if you can spell out the entire dictionary ahead of
-    # time.
+    def test_set_ctor(self):
 
-    def test_create_by_assign(self):
+        # use built-in function
+        coll1 = set([2,2,2,1,3,3])
+        self.assertEqual(coll1, {1,2,3})
 
-        # to print a empty line. why?
-        # print
+        # a new set literal form, using the curly braces formerly reserved for
+        # dictionaries. In 3.X and 2.7, the following are equivalent
+
+        coll2 = {2,2,2,1,3,3}
+        self.assertEqual(coll2, {1,2,3})
+
+    def test_set_ops(self):
+
+        a = {1,2,3,4,5}
+        b = {3,4,5,6,7,8}
+
+        # union(or)
+        self.assertEqual(a | b, {1, 2, 3, 4, 5, 6, 7, 8})
+
+        # intersection(and)
+        self.assertEqual(a & b, {3, 4, 5})
+
+        # difference
+        self.assertEqual(a - b, {1, 2})
+
+        # symmetric difference
+        self.assertEqual(a ^ b, {1, 2, 6, 7, 8})
+
+        # super or sub
+        self.assertTrue({1,2,3}.issubset(a))
+        self.assertTrue(a.issuperset({1,2,3}))
+
+        # equal
+        self.assertTrue({1,2,3} == {3,2,1})
+
+        # sets can only contain immutable (a.k.a. “hashable”) object types as
+        # keys in dict does. so tuple is okay and note that set ctor can use
+        # listlist.
+        #
+        # TypeError: unhashable type: 'list'
+
+        coll = set()
+        coll.add(1.23)
+        coll.add((1,2,3))
+        self.assertEqual(coll, {1.23, (1, 2, 3)})
+
+        z = {'b', 'd'}
+        z.add('SPAM')
+        self.assertEqual(z, {'b', 'd', 'SPAM'})
+
+        # merge: in-place union
+        z.update(set(['X', 'Y']))
+        self.assertEqual(z, {'Y', 'X', 'b', 'd', 'SPAM'})
+
+        z.remove('b') # Delete one item
+        self.assertEqual(z, {'Y', 'X', 'd', 'SPAM'})
+
+    def test_set_iteration(self):
+        
+        for item in set('abc'):
+            print(item * 3)
+
+        coll = {x ** 2 for x in [1,2,3,4]}
+        self.assertEqual(coll, {1,4,9,16})
+
+
+#={===========================================================================
+# py-dict
+
+class TestDict(unittest.TestCase):
+
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def test_dict_key_type(self):
+
+        hash('string')
+        # -1542666171
+
+        hash((1,2,(2,3)))
+        # 1387206534
+
+        # TypeError: unhashable type: 'list'
+        with self.assertRaises(TypeError):
+            hash((1,2,[2,3]))
+            
+
+    def test_dict_ctor(self):
+
+        # create dict by assign
+        # is handy if you can spell out the entire dictionary ahead of time.
 
         d = {}
         d['name'] = 'Bob'
         d['age'] = 40
         self.assertEqual( d, {'name': 'Bob', 'age': 40})
 
-
-    # create dict by initializers
-    # The second is of use if you need to create the dictionary one field at a
-    # time on the fly.
-
-    def test_create_by_initializers(self):
+        # create dict by initializers
+        # The second is of use if you need to create the dictionary one field at
+        # a time on the fly.
 
         d = {'name': 'Bob', 'age': 40}
         self.assertEqual( d, {'name': 'Bob', 'age': 40})
 
 
-    # create dict by keyword argument form
-    # The third involves less typing than the first, but it requires all keys to
-    # be strings.
-
-    def test_create_by_keyword_form(self):
+        # create dict by keyword argument form
+        # The third involves less typing than the first, but it requires all
+        # keys to be strings.
 
         d = dict(name='Bob', age=40)
         self.assertEqual( d, {'name': 'Bob', 'age': 40})
 
-    # create dict by key, value tuple form
-    # The last is useful if you need to build up keys and values as sequences at
-    # runtime.
-
-    def test_create_by_tuple_form(self):
+        # create dict by key, value tuple form
+        # The last is useful if you need to build up keys and values as
+        # sequences at runtime.
 
         d = dict([('name', 'Bob'), ('age', 40)])
         self.assertEqual( d, {'name': 'Bob', 'age': 40})
 
-
-class TestDictSort(unittest.TestCase):
-
-    def setUp(self):
-        print("====================")
-        print("[RUN] ", self._testMethodName)
 
     # ('a', '=>', 100)
     # ('c', '=>', 300)
@@ -553,12 +631,10 @@ class TestDictSort(unittest.TestCase):
     # ('b', '=>', 200)
     # ('c', '=>', 300)
 
-    # in recent versions of Python it can be done in one step with the newer
-    # `sorted()` built-in function.
+    def test_dict_sort(self):
 
-    def test_sort_dict_not_use_member(self):
-
-        print
+        # in recent versions of Python it can be done in one step with the newer
+        # `sorted()` built-in function.
 
         d = {'a':100, 'c':300, 'b':200}
 
@@ -571,9 +647,7 @@ class TestDictSort(unittest.TestCase):
         for key in sorted(d):
             print(key, '=>', d[key])
 
-    def test_sort_dict_use_member(self):
-
-        print
+        # use list-sort member 
 
         d = {'a':100, 'c':300, 'b':200}
 
@@ -588,11 +662,8 @@ class TestDictSort(unittest.TestCase):
         for key in key_list:
             print(key, '=>', d[key])
 
-class TestDictIteration(unittest.TestCase):
 
-    def test_show_return_value_when_found(self):
-
-        print
+    def test_dict_iterator(self):
 
         d = {'a':100, 'c':300, 'b':200}
 
@@ -601,102 +672,116 @@ class TestDictIteration(unittest.TestCase):
         else: 
             print('not exist')
 
-class TestDictInsertAndErase(unittest.TestCase):
 
-    # test_pop_and_del (__main__.TestDictInsertAndErase) ...
-    # {'a': 'some value', 'dummy': 'another value', 'b': [1, 2, 3, 4], 5: 'some value', 7: 'an integer'}
-    # {'a': 'some value', 'dummy': 'another value', 'b': [1, 2, 3, 4], 7: 'an integer'}
-    # {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'}
-    # ok
+    def test_dict_insert(self):
 
-    def test_pop_and_del(self):
-        print
+        # *py-dict-update* insert
+
+        # note that b is overwritten
+        # {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'}
+        # {'a': 'some value', 'c': 12, 'b': 'foo', 7: 'an integer'}
+
+        d = {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'}
+        self.assertEqual(d, 
+                {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'})
+
+        d.update({'b':'foo','c':12})
+        self.assertEqual(d, 
+                {'a': 'some value', 'c': 12, 'b': 'foo', 7: 'an integer'})
+
+        # update and insert a item.
+        d = {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'}
+        d['b'] = 'foo'
+        d['c'] = 12
+        self.assertEqual(d, 
+                {'a': 'some value', 'c': 12, 'b': 'foo', 7: 'an integer'})
+
+
+    def test_dict_ops(self):
 
         d = {'a': 'some value', 'dummy': 'another value', 'b': [1, 2, 3, 4], 5: 'some value', 7: 'an integer'}
-        print(d)
+        self.assertEqual(d, 
+                {'a': 'some value', 'dummy': 'another value', 'b': [1, 2, 3, 4], 5: 'some value', 7: 'an integer'})
 
+        # *py-del*
         del d[5]
-        print(d)
+        self.assertEqual(d, 
+                {'a': 'some value', 'dummy': 'another value', 'b': [1, 2, 3, 4], 7: 'an integer'})
 
         d.pop('dummy')
-        print(d)
+        self.assertEqual(d, 
+                {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'})
 
 
-class TestDictMemberFunctions(unittest.TestCase):
-
-    # test_use_keys_and_values (__main__.TestDictMemberFunctions) ...
-    # ['a', 'dummy', 'b', 5, 7]
-    # ['some value', 'another value', [1, 2, 3, 4], 'some value', 'an integer']
-    # ok
-
-    def test_use_keys_and_values(self):
-        print
+        # *py-dict-keys* 
+        # use print() since the order of result varies.
+        #
+        # ['a', 'dummy', 'b', 5, 7]
+        # ['some value', 'another value', [1, 2, 3, 4], 'some value', 'an integer']
 
         d = {'a': 'some value', 'dummy': 'another value', 'b': [1, 2, 3, 4], 5: 'some value', 7: 'an integer'}
 
         print(d.keys())
         print(d.values())
 
-    # note: b is overwritten
-    #
-    # test_use_update (__main__.TestDictMemberFunctions) ...
-    # {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'}
-    # {'a': 'some value', 'c': 12, 'b': 'foo', 7: 'an integer'}
-    # ok
 
-    def test_use_update(self):
-        print
+        # items()
+        # Return a copy of the dictionary's list of (key, value) pairs.
+        # searching through sequences like this is generally much slower 
+        # than a direct key index
 
-        d = {'a': 'some value', 'b': [1, 2, 3, 4], 7: 'an integer'}
-        print(d)
+        # [('The Meaning of Life', '1983'), ('Life of Brian', '1979'), ('Holy Grail', '1975')]
+        # ['Holy Grail']
 
-        d.update({'b':'foo','c':12})
-        print(d)
+        # py-dict-items, Key, Value
+        d = {'Holy Grail': '1975', 'Life of Brian': '1979','The Meaning of Life': '1983'}
 
-    # items()
-    # Return a copy of the dictionary's list of (key, value) pairs.
-    # searching through sequences like this is generally much slower 
-    # than a direct key index
-
-    # [('The Meaning of Life', '1983'), ('Life of Brian', '1979'), ('Holy Grail', '1975')]
-    # ['Holy Grail']
-
-    def test_uset_items(self):
-        print
-
-        # Key, Value
-        table = {'Holy Grail': '1975', 'Life of Brian': '1979','The Meaning of Life': '1983'}
-        print(table.items())
-
-        # *list-comprehension*
-        print([title for (title, year) in table.items() if year == '1975'])
+        # *py-comprehension*
+        self.assertEqual(
+                [title for title, year in d.items() if year == '1975'], 
+                ['Holy Grail'])
 
 
-class TestDictDefaultValue(unittest.TestCase):
-
-    # test_dict_basic (__main__.TestDictDefaultValue) ...
-    # when found: a is      100
-    # when not found: d is  None
-    # when not found: d is  400
-    # ok
-
-    def test_dict_basic(self):
-        print
+        # get(key[, default])
+        # Return the value for key if key is in the dictionary, else default. If
+        # default is not given, it defaults to None, so that this method never
+        # raises a KeyError.
 
         d = {'a':100, 'c':300, 'b':200}
 
-        print("when found: a is     " , d.get('a', 400))
-        print("when not found: d is " , d.get('d'))
-        print("when not found: d is " , d.get('d', 400))
+        self.assertEqual(d.get('a', 400), 100)
+        self.assertEqual(d.get('a'), 100)
+        self.assertEqual(d.get('d', 400), 400)
 
 
-    # test_dict_get (__main__.TestDictDefaultValue) ...
-    # egrep -an "0x145|0x345"
-    # {'0x145': 1, '0x678': 2, '0x123': 2, '0x345': 1}
-    # ok
+        # Suppose that there are log lines which logs creation and deletion of a handle.
+        # So use a handle as a key and see occurances. If occurances is 1 then deletion
+        # of a handle is missing so leaks resources. The code below is for this case. 
+        # 
+        # If want to map a line as well, for example, 
 
-    def test_dict_get(self):
-        print
+        #  {handle, [occurance, line]}
+        #
+        # how can we support this? The below give an error:
+
+        d['0x123'] = d.get('0x123', [0, ''])[0]+1
+
+        # more compact than if/else
+
+        # if 'a' not in d:
+        #     d['a'] = 1
+        # else:
+        #     d['a'] += 1
+
+        # if 'a' not in d:
+        #     d['a'] = 1
+        # else:
+        #     d['a'] += 1
+
+        # if 'b' not in d:
+        #     d['b'] = 1
+        # else:
+        #     d['b'] += 1
 
         d = {}
 
@@ -707,58 +792,51 @@ class TestDictDefaultValue(unittest.TestCase):
         d['0x678'] = d.get('0x678', 0)+1
         d['0x145'] = d.get('0x145', 0)+1
 
+        # {'0x145': 1, '0x678': 2, '0x123': 2, '0x345': 1}
+
         result = [handle for (handle, occurance) in d.items() if occurance == 1]
-        print('egrep -an "' + '|'.join(result) + '"')
+        command = 'egrep -an "' + '|'.join(result) + '"'
+
+        # cannot use this since the result list varies in order
+        # self.assertEqual(command, 'egrep -an "0x145|0x345"')
 
         # for (handle, occurance) in d.items():
         #     if occurance == 1:
         #         print handle
 
-        print(d)
 
-    # group words by the first char of a word
-
-    # test_dict_use_default_value (__main__.TestDictDefaultValue) ...
-    # {'a': ['apple', 'atom'], 'b': ['bat', 'bar', 'book']}
-    # ok
-
-    def test_dict_use_default_value(self):
-        print
+        # group input words by the first char of a word
+        # {'a': ['apple', 'atom'], 'b': ['bat', 'bar', 'book']}
 
         words=['apple', 'bat', 'bar', 'atom', 'book']
-
+ 
         by_letter={}
-
+ 
         for word in words:
             letter = word[0]
             if letter not in by_letter:
                 by_letter[letter] = [word]
             else:
                 by_letter[letter].append(word)
-
+ 
         print(by_letter)
 
-    # the same result. Q: how does the first word get added?
 
-    def test_dict_use_get_to_set_default_value(self):
-        print
+        # the same result
+
+        # setdefault(key[, default])
+        # If key is in the dictionary, return its value. If not, insert key with
+        # a value of default and return default. default defaults to None.
 
         words=['apple', 'bat', 'bar', 'atom', 'book']
-
+ 
         by_letter={}
-
+ 
         for word in words:
             letter = word[0]
             by_letter.setdefault(letter, []).append(word)
-
+ 
         print(by_letter)
-
-class TestDict(unittest.TestCase):
-
-    def test_zip(self):
-        mapping = dict(zip(range(5), reversed(range(5))))
-        self.assertEqual(mapping,
-            {0: 4, 1: 3, 2: 2, 3: 1, 4: 0})
 
 
 #={===========================================================================
@@ -772,6 +850,43 @@ class TestCollDeque(unittest.TestCase):
         print("====================")
         print("[RUN] ", self._testMethodName)
 
+    # When new items are added and the queue is full, the oldest item is
+    # automatically removed.
+
+    def test_coll_deque(self):
+        q = deque(maxlen = 3)
+        q.append(1)
+        q.append(2)
+        q.append(3)
+
+        # AssertionError: deque([1, 2, 3], maxlen=3) != [1, 2, 3]
+        # self.assertEqual(q, [1,2,3])
+        self.assertEqual(list(q), [1,2,3])
+
+        q.append(4)
+        self.assertEqual(list(q), [2,3,4])
+
+        q.append(5)
+        self.assertEqual(list(q), [3,4,5])
+
+        q = deque()
+        q.append(1)
+        q.append(2)
+        q.append(3)
+        self.assertEqual(list(q), [1,2,3])
+
+        q.appendleft(4)
+        self.assertEqual(list(q), [4,1,2,3])
+
+        q.pop()
+        self.assertEqual(list(q), [4,1,2])
+
+        q.popleft()
+        self.assertEqual(list(q), [1,2])
+
+    # *py-generator*
+    # search() yields the matched line and five previous lines from that
+
     @staticmethod
     def search(lines, pattern, history = 5):
         previous_lines = deque(maxlen = history)
@@ -783,13 +898,53 @@ class TestCollDeque(unittest.TestCase):
 
             previous_lines.append(line)
 
-    def test_coll_deque(self):
-        with open('pycore.py') as f:
+    def test_cookbook_1_3(self):
+        with open('some.txt') as f:
             for line, previous_lines in TestCollDeque.search(f, 'python', 5):
-                for pline in previous_lines:
-                    print(pline, end='')
+                for num, pline in enumerate(previous_lines):
+                    print(num, ':', pline, end='')
                 print(line, end='')
                 print('-'*20)
+
+
+#={===========================================================================
+# py-coll-heapq
+
+import heapq
+
+class TestCollHeapq(unittest.TestCase):
+
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def test_coll_heapq(self):
+        coll = [1, 8, 2, 23, 7, -4, 18, 23, 42, 37, 2]
+
+        self.assertEqual(heapq.nlargest(3, coll), 
+                [42,37,23])
+
+        self.assertEqual(heapq.nsmallest(3, coll), 
+                [-4,1,2])
+
+        # same result
+        coll = sorted([1, 8, 2, 23, 7, -4, 18, 23, 42, 37, 2])
+        coll_reversed = sorted([1, 8, 2, 23, 7, -4, 18, 23, 42, 37, 2],
+                reverse=True)
+
+        # nlargest, different order
+        self.assertEqual(coll[-3:], 
+                [23,37,42])
+
+        # nlargest
+        self.assertEqual(coll_reversed[:3], 
+                [42,37,23])
+
+        # nsmallest
+        self.assertEqual(coll[:3], 
+                 [-4,1,2])
+
+    # def test_cookbook_1_4(self):
 
 
 #={===========================================================================
@@ -1007,33 +1162,6 @@ class TestBase(unittest.TestCase):
         self.assertFalse(self.isiterable(4))
 
 
-    def test_is(self):
-
-        a = [1,2,3]
-        b = a
-        c = list(a)
-        d = [1,2,3]
-
-        # since py-reference
-        self.assertTrue(a is b)
-        self.assertTrue(a == b)
-
-        # c is a different list
-        self.assertTrue(a is not c)
-
-        # same value
-        self.assertTrue(a == d)
-
-        # but different object
-        self.assertFalse(a is d)
-
-        # py-comparison
-        coll1 = [1, ('a', 3)]
-        coll2 = [1, ('a', 2)]
-        # Less, equal, greater: tuple of results
-        result = coll1 < coll2, coll1 == coll2, coll1 > coll2
-        self.assertEqual(result, (False, False, True))
-
     def compare_version_1(self, lhs, rhs):
         # makes int list
         lhs = [int(i) for i in lhs.split('.')]
@@ -1056,7 +1184,15 @@ class TestBase(unittest.TestCase):
         else:
             return 0
 
-    def test_compare(self):
+    def test_base_compare(self):
+
+        # py-comparison
+        coll1 = [1, ('a', 3)]
+        coll2 = [1, ('a', 2)]
+        # Less, equal, greater: tuple of results
+        result = coll1 < coll2, coll1 == coll2, coll1 > coll2
+        self.assertEqual(result, (False, False, True))
+
         version1 = '40.65.00'
         version2 = '40.66.00'
         version3 = '40.66.00'
@@ -1068,6 +1204,44 @@ class TestBase(unittest.TestCase):
         self.assertEqual(self.compare_version_2(version1, version2), -1)
         self.assertEqual(self.compare_version_2(version2, version1), 1)
         self.assertEqual(self.compare_version_2(version2, version3), 0)
+
+
+#={===========================================================================
+# py-reference
+
+class TestReference(unittest.TestCase):
+
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def test_reference(self):
+
+        a = [1,2,3]
+        b = a
+
+        c = list(a)
+        # *py-copy*
+        cc = a[:]
+
+        d = [1,2,3]
+
+        # since py-reference py-is
+        self.assertTrue(a is b)
+        self.assertTrue(a == b)
+
+        # c is a different list
+        self.assertTrue(a is not c)
+
+        # c and cc is a different list
+        self.assertTrue(c is not cc)
+        self.assertTrue(c == cc)
+
+        # same value
+        self.assertTrue(a == d)
+
+        # but different object
+        self.assertFalse(a is d)
 
 
 #={===========================================================================
@@ -1096,6 +1270,12 @@ class TestSorted(unittest.TestCase):
         result = sorted([x.lower() for x in coll2], reverse=True)
         self.assertEqual(result, ['abe', 'abd', 'abc'])
 
+        coll3 = sorted([7,1,2,6,0,3,2,3,2])
+        self.assertEqual(coll3, [0, 1, 2, 2, 2, 3, 3, 6, 7])
+
+        coll3 = sorted(set([7,1,2,6,0,3,2,3,2]))
+        self.assertEqual(coll3, [0, 1, 2, 3, 6, 7])
+
 
 #={===========================================================================
 # py-to tidy up
@@ -1111,19 +1291,6 @@ class TestXXXX(unittest.TestCase):
     def test_reverse(self):
         L = list(reversed(range(10)))
         self.assertEqual(L, [9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
-
-    def test_zip(self):
-        coll1 = ['foo','bar','baz']
-        coll2 = ['one','two','three']
-        self.assertEqual(zip(coll1, coll2), 
-                [('foo', 'one'), ('bar', 'two'), ('baz', 'three')])
-
-    def test_zip_different_size(self):
-        coll1 = ['foo','bar','baz']
-        coll2 = ['one','two']
-        self.assertEqual(zip(coll1, coll2), 
-                [('foo', 'one'), ('bar', 'two')])
-
 
 
 #={===========================================================================
@@ -1300,9 +1467,12 @@ class TestIterator(unittest.TestCase):
     # line strings already have one (without this, our output would be
     # double-spaced; in 2.X, a trailing comma works the same as the end).
 
+    # read all lines
     def test_iterator_on_file(self):
-        for line in open('trispam.txt'):
+        f = open('trispam.txt')
+        for line in f:
             print(line, end='')
+        f.close()
 
 
     # how for loops internally process built-in sequence types such as lists:
@@ -1321,6 +1491,759 @@ class TestIterator(unittest.TestCase):
 
         with self.assertRaises(StopIteration):
             print(it.__next__())
+
+    def test_iterator_pass(self):
+
+        # py-range do support multiple active iterators
+
+        coll = range(3)
+
+        it1 = iter(coll)
+        it2 = iter(coll)
+
+        self.assertEqual(next(it1), 0)
+        self.assertEqual(next(it1), 1)
+
+        self.assertEqual(next(it2), 0)
+
+        # py-zip do not support multiple active iterators
+        # By contrast, in 3.X zip, map, and filter do not support multiple
+        # active iterators
+
+        coll = zip((1,2,3), (10,11,12))
+
+        it1 = iter(coll)
+        it2 = iter(coll)
+
+        self.assertEqual(next(it1), (1, 10))
+        self.assertEqual(next(it1), (2, 11))
+
+        self.assertEqual(next(it2), (3, 12))
+
+
+    def test_iterator_on_any(self):
+
+        f  = open('trispam.txt')
+        coll = list(f)
+        self.assertEqual(coll, 
+                ['spam\n', 'Spam\n', 'SPAM!\n'])
+
+        f.close()
+
+        f  = open('trispam.txt')
+        coll = tuple(f)
+        self.assertEqual(coll, 
+                ('spam\n', 'Spam\n', 'SPAM!\n'))
+
+        f.close()
+
+        f  = open('trispam.txt')
+        coll = '&&'.join(f)
+        self.assertEqual(coll, 
+                'spam\n&&Spam\n&&SPAM!\n')
+
+        f.close()
+
+        f  = open('trispam.txt')
+        coll = list(f)
+        f.close()
+
+        # sequence assignment
+        a, b, c = coll
+        self.assertEqual(a, 'spam\n')
+
+        # *py-3* star expression
+        a, *b = coll
+        self.assertEqual(b, ['Spam\n', 'SPAM!\n'])
+
+        # *py-membership*
+        self.assertTrue('spam\n' in coll)
+
+        # slice
+        result = [11, 12, 13, 44]
+        result[1:3] = coll
+        self.assertEqual(result, 
+                [11, 'spam\n', 'Spam\n', 'SPAM!\n', 44])
+
+        # py-zip py-dict
+        mapping = dict(zip(range(5), reversed(range(5))))
+        self.assertEqual(mapping,
+            {0: 4, 1: 3, 2: 2, 3: 1, 4: 0})
+
+
+    def test_comprehension_on_any(self):
+
+        # use py-range to loop and it not best approach
+        coll = [1,2,3,4,5]
+
+        for i in range(len(coll)):
+            coll[i] += 10
+
+        self.assertEqual(coll, [11, 12, 13, 14, 15])
+
+        # use for
+        coll = [1,2,3,4,5]
+        result = []
+        for i in coll:
+            result.append(i + 10)
+
+        self.assertEqual(result, [11, 12, 13, 14, 15])
+
+        # use py-comprehension
+        coll = [1,2,3,4,5]
+
+        coll = [x + 10 for x in coll]
+
+        self.assertEqual(coll, [11, 12, 13, 14, 15])
+
+        # use filter condition
+        coll = ['a', 'as', 'bat', 'car', 'dove', 'python']
+        result = [e.upper() for e in coll if len(e) > 2]
+        self.assertEqual(result, ['BAT', 'CAR', 'DOVE', 'PYTHON'])
+
+        # nested
+        coll = [x + y for x in 'abc' for y in 'lmn']
+        self.assertEqual(coll, 
+                ['al', 'am', 'an', 'bl', 'bm', 'bn', 'cl', 'cm', 'cn'])
+
+        #
+        coll = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        result = [e[1] for e in coll]
+        self.assertEqual(result, [2,5,8])
+
+        # collect a diagonal from matrix
+        coll = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+        result = [coll[i][i] for i in [0, 1, 2]]
+        self.assertEqual(result, [1, 5, 9])
+
+        # repeat characters in a string
+        coll = [c * 2 for c in 'spam']     
+        self.assertEqual(coll, ['ss', 'pp', 'aa', 'mm'])
+
+        # multiple values, "if" filters
+        coll = [[x ** 2, x ** 3] for x in range(4)]  
+        self.assertEqual(coll, [[0, 0], [1, 1], [4, 8], [9, 27]])
+
+
+    # py-readlines method that loads the file into a list of line strings all at
+    # once:
+
+    def test_comprehension_on_file(self):
+
+        f  = open('trispam.txt')
+        lines = f.readlines()
+        self.assertEqual(lines, ['spam\n', 'Spam\n', 'SPAM!\n'])
+        f.close()
+
+        # It would be nice if we could get rid of these newlines all at once,
+        # wouldn’t it?
+
+        f  = open('trispam.txt')
+        lines = f.readlines()
+        result = [line.rstrip() for line in lines]
+        self.assertEqual(result, ['spam', 'Spam', 'SPAM!'])
+        f.close()
+
+        # do the same
+        f = open('trispam.txt')
+        result = [line.rstrip() for line in f]
+        self.assertEqual(result, ['spam', 'Spam', 'SPAM!'])
+        f.close()
+
+    # *py-enumerater*
+    def test_iterator_enumerate(self):
+
+        f  = open('trispam.txt')
+        coll = list(enumerate(f))
+        self.assertEqual(coll, 
+                [(0, 'spam\n'), (1, 'Spam\n'), (2, 'SPAM!\n')])
+        f.close()
+
+        coll = ['one', 'two', 'three']
+        mapping = dict((v,i) for i,v in enumerate(coll))
+        self.assertEqual(mapping, {'three': 2, 'two': 1, 'one': 0})
+
+    # *py-reversed*
+    def test_iterator_reversed(self):
+
+        coll = list(range(10))
+        self.assertEqual(coll, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(list(reversed(coll)), 
+                [9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+
+    # *py-map*
+    def test_comprehension_on_map(self):
+
+        f  = open('trispam.txt')
+        coll = [line.upper() for line in f]
+        self.assertEqual(coll, 
+                ['SPAM\n', 'SPAM\n', 'SPAM!\n'])
+        f.close()
+
+        f  = open('trispam.txt')
+        coll = list(map(str.upper, f))
+        self.assertEqual(coll, 
+                ['SPAM\n', 'SPAM\n', 'SPAM!\n'])
+        f.close()
+
+    # *py-zip* *py-3*
+    def test_comprehension_on_zip(self):
+
+        coll1 = ['foo','bar','baz']
+        coll2 = ['one','two','three']
+        self.assertEqual(list(zip(coll1, coll2)), 
+                [('foo', 'one'), ('bar', 'two'), ('baz', 'three')])
+
+        coll1 = ['foo','bar','baz']
+        coll2 = ['one','two']
+        self.assertEqual(list(zip(coll1, coll2)), 
+                [('foo', 'one'), ('bar', 'two')])
+
+        coll1 = (1, 2)
+        coll2 = (3, 4)
+        self.assertEqual(list(zip(coll1, coll2)), 
+                [(1,3), (2,4)])
+
+        self.assertEqual(list(zip(*zip(coll1, coll2))), 
+                [(1,2), (3,4)])
+
+        #
+        coll1 = ['foo','bar','baz']
+        coll2 = ['one','two','three']
+        zipped = zip(coll1, coll2)
+
+        # *py-unpack*
+        names, numbers = zip(*zipped)
+
+        self.assertEqual(names, ('foo', 'bar', 'baz'))
+        self.assertEqual(numbers, ('one', 'two', 'three'))
+
+
+#={===========================================================================
+# py-iterator py-generator
+
+class TestGenerator(unittest.TestCase):
+    
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    @staticmethod
+    def squares(n):
+        result = []
+        for i in range(n):
+            result.append(i ** 2)
+        return result
+
+    @staticmethod
+    def gensquares(n):
+        for i in range(n):
+            yield i ** 2
+
+    @staticmethod
+    def ups(line):
+        for sub in line.split(','):
+            yield sub.upper()
+
+    def test_generator(self):
+
+        result = []
+        for i in TestGenerator.squares(5):
+            result.append(i)
+
+        self.assertEqual(result, [0,1,4,9,16])
+
+        result = []
+        for i in TestGenerator.gensquares(5):
+            result.append(i)
+
+        self.assertEqual(result, [0,1,4,9,16])
+
+        # iter(gen) is not required since generators are their own iterator,
+        # supporting just one active iteration scan.
+
+        gen = TestGenerator.gensquares(4)
+        self.assertEqual(next(gen), 0)
+        self.assertEqual(next(gen), 1)
+        self.assertEqual(next(gen), 4)
+        self.assertEqual(next(gen), 9)
+
+        # 
+        coll = tuple(TestGenerator.ups('aaa,bbb,ccc'))
+        self.assertEqual(coll, ('AAA', 'BBB', 'CCC'))
+
+    @staticmethod
+    def frange(start, stop, increment):
+
+        x = start
+
+        while x < stop:
+            yield x
+            x += increment
+
+    def test_cookbook_4_3(self):
+
+        coll = [e for e in TestGenerator.frange(0, 4, 0.5)]
+        self.assertEqual(coll, 
+                [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5])
+
+
+#={===========================================================================
+# py-function
+
+import re
+
+# apply str functions to remove puncuations
+
+def clean_strings(strings):
+
+    result = []
+
+    for e in strings:
+        e = e.strip()
+        e = re.sub('[!?#]', '', e)
+        e = e.title()
+        result.append(e)
+
+    return result
+
+# py-resulable it is more resuable
+
+def clean_strings_use_ops(strings, ops):
+
+    result = []
+
+    for e in strings:
+        for f in ops:
+            e = f(e)
+        result.append(e)
+
+    return result
+
+def remove_punctuation(value):
+    return re.sub('[!?#]', '', value)
+
+X = 99
+
+def selector1():
+    print(X)
+
+def selector2():
+    print(X)
+    X = 88
+
+class TestFunction(unittest.TestCase):
+    
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def test_function_objects(self):
+
+        states = [' Alabama ', 'Georgia!', 'FlOrIda', 
+                'south carolina##', 'West virginia?']
+
+        result = clean_strings(states)
+
+        self.assertEqual(result, 
+                ['Alabama', 'Georgia', 'Florida', 
+                    'South Carolina', 'West Virginia'])
+
+        # use list of operations
+        # *py-fobj* if change remove_punctuation() then have to redefine
+        # clean_ops again since clean_ops has old function address
+        # 
+        # defining a function with same name will create function on different
+        # address
+
+        clean_ops = [str.strip, remove_punctuation, str.title]
+
+        result = clean_strings_use_ops(states, clean_ops)
+
+        self.assertEqual(result, 
+                ['Alabama', 'Georgia', 'Florida', 
+                    'South Carolina', 'West Virginia'])
+
+    def _times(self, x, y):
+        return x * y
+
+    def _intersect(self, coll1, coll2):
+        result = []
+
+        for e in coll1:
+            if e in coll2:
+                result.append(e)
+
+        return result
+
+    # py-argument
+
+    def _f(self, a):
+        a = 99
+
+    def _changer(self, a, b):
+        a = 2
+        b[0] = 'spam'
+
+    def test_function_argument(self):
+
+        b = 88
+
+        self._f(b)
+
+        # expected the change of b?
+        self.assertEqual(b, 88)
+
+        X = 1
+        L = [1, 2]
+        self._changer(X, L)
+
+        # expected the change of L?
+        self.assertEqual(L, ['spam', 2])
+
+
+    def test_function_argument_type(self):
+
+        result = self._times(2, 4)
+        self.assertEqual(result, 8)
+
+        result = self._times(3.14, 4)
+        self.assertEqual(result, 12.56)
+
+        result = self._times('Ni', 4)
+        self.assertEqual(result, 'NiNiNiNi')
+
+        # see that TypeError gets raised from _times()
+        #
+        # Traceback (most recent call last):
+        #   File "/home/kyoupark/git/kb/code-py/pybase/pycore.py", line 1778, in test_function_arg_type
+        #     result = self._times('Ni', 'Pi')
+        #   File "/home/kyoupark/git/kb/code-py/pybase/pycore.py", line 1765, in _times
+        #     return x * y
+        # TypeError: can't multiply sequence by non-int of type 'str'
+
+        with self.assertRaises(TypeError):
+            result = self._times('Ni', 'Pi')
+
+        #
+        result = self._intersect([1, 2, 3], (1, 4))
+        self.assertEqual(result, [1])
+
+
+    #   File "/home/kyoupark/git/kb/code-py/pybase/pycore.py", line 1737, in selector2
+    #     print(X)
+    # UnboundLocalError: local variable 'X' referenced before assignment
+
+    def test_function_local_namespace(self):
+        selector1()
+
+        with self.assertRaises(UnboundLocalError):
+            selector2()
+
+    # py-closure
+
+    def _make_closure(self, value):
+
+        def closure():
+            return 'value is ' + str(value)
+
+        return closure
+
+    def test_function_closure_1(self):
+        clo = self._make_closure(5)
+
+        self.assertEqual(clo(), 'value is 5')
+        self.assertEqual(clo(), 'value is 5')
+        self.assertEqual(clo(), 'value is 5')
+
+
+    def _make_counter(self):
+        count = [0]
+
+        def counter():
+            count[0] += 1
+            return count[0]
+
+        return counter
+
+    def test_function_closure_2(self):
+
+        clo = self._make_counter()
+
+        self.assertEqual(clo(), 1)
+        self.assertEqual(clo(), 2)
+        self.assertEqual(clo(), 3)
+
+
+    def _format_and_pad(self, format, space):
+        def formatter(x):
+            return (format % x).rjust(space)
+        return formatter
+
+    def test_function_closure_3(self):
+
+        clo = self._format_and_pad('%.4f', 15)
+
+        self.assertEqual(clo(1.756), '         1.7560')
+        self.assertEqual(clo(1.7), '         1.7000')
+        self.assertEqual(clo(1), '         1.0000')
+
+
+    # py-lambda
+
+    def _apply_to_list(self, coll, f):
+        return [f(e) for e in coll]
+
+    def test_function_lambda(self):
+
+        coll = [4,0,1,5,6]
+        result = self._apply_to_list(coll, lambda x: x * 2)
+        self.assertEqual(result, 
+                [8, 0, 2, 10, 12])
+
+    # py-variable-arg
+
+    def _print_variable_args(self, *arg, **karg):
+        print(arg, karg)
+
+    # [RUN]  test_function_vaarg
+    # () {}
+    # (1,) {}
+    # (1, 2, 3) {}
+    # (1, 2, 3) {'a': 1, 'b': 2}
+
+    def test_function_vaarg_1(self):            
+        self._print_variable_args()
+        self._print_variable_args(1)
+        self._print_variable_args(1,2,3)
+        self._print_variable_args(1,2,3, a = 1, b = 2)
+
+
+    def _print_variable_tuple(self, a, b, c, d):
+        print(a, b, c, d)
+
+    # [RUN]  test_function_vaarg_2
+    # (1, 2, 3, 4) {}
+    # 1 2 3 4
+    # 1 2 3 4
+
+    def test_function_vaarg_2(self):            
+        coll  = (1,2,3,4)
+        self._print_variable_args(*coll)
+        self._print_variable_tuple(*coll)
+
+        coll = {'a':1, 'b':2, 'c':3, 'd':4}
+        # same as func(a=1, b=2, c=3, d=4)
+        self._print_variable_tuple(**coll)
+
+
+#={===========================================================================
+# py-exception py-with
+
+class AlreadyGotOne(Exception):
+    pass
+
+# Notice that this class’s __exit__ method returns False to propagate the
+# exception; deleting the return statement would have the same effect, as the
+# default None return value of functions is False by definition. Also notice
+# that the __enter__ method returns self as the object to assign to the as
+# variable; in other use cases, this might return a completely different object
+# instead.
+
+class TraceBlock:
+    def message(self, arg):
+        print('running ' + arg)
+
+    def __enter__(self):
+        print('starting with block')
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        if exc_type is None:
+            print('exited normally\n')
+        else:
+            print('raise an exception!' + str(exc_type))
+            # propagate
+            return False
+
+class TestException(unittest.TestCase):
+    
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def _fetcher(self, obj, index):
+        return obj[index]
+
+    def test_exception_default_handler(self):
+
+        self.assertEqual(self._fetcher('spam', 3), 'm')
+
+        # py-exception-default-handler
+        #
+        # >>> fetcher(x, 4) 
+        # Traceback (most recent call last):
+        # File "<stdin>", line 1, in <module>
+        # File "<stdin>", line 2, in fetcher
+        # IndexError: string index out of range
+
+        # default handler of unittest
+        #
+        # ======================================================================
+        # ERROR: test_exception_default_handler (pycore.TestException)
+        # ----------------------------------------------------------------------
+        # Traceback (most recent call last):
+        #   File "/home/kyoupark/git/kb/code-py/pybase/pycore.py", line 1935, in test_exception_default_handler
+        #     self.assertEqual(self._fetcher('spam', 4), 'm')
+        #   File "/home/kyoupark/git/kb/code-py/pybase/pycore.py", line 1929, in _fetcher
+        #     return obj[index]
+        # IndexError: string index out of range
+
+        # self.assertEqual(self._fetcher('spam', 4), 'm')
+
+        # now handles exception
+
+        try:
+            # trigger manually
+            # raise IndexError
+            self.assertEqual(self._fetcher('spam', 4), 'm')
+        except IndexError:
+            print('got exception')
+
+        print('continuing')
+
+
+    def _grail(self):
+        raise AlreadyGotOne()
+
+    def test_exception_user_defined(self):
+
+        try:
+            self._grail()
+        except AlreadyGotOne:
+            print('got exception')
+
+
+    def _after(self):
+
+        try:
+            self._fetcher('spam', 4)
+        finally:
+            print('after fetch')
+        print('after try?')
+
+    def test_exception_termination(self):
+        
+        with self.assertRaises(IndexError):
+            self._after()
+
+
+    def test_exception_context_manager(self):
+
+        # there is warning if not call close()
+
+        f  = open('trispam.txt')
+        coll = list(f)
+        self.assertEqual(coll, 
+                ['spam\n', 'Spam\n', 'SPAM!\n'])
+        f.close()
+
+        # general and explicit try/finally statement, but it requires three more
+        # lines of administrative code
+
+        f  = open('trispam.txt')
+        try:
+            coll = list(f)
+            self.assertEqual(coll, 
+                    ['spam\n', 'Spam\n', 'SPAM!\n'])
+        finally:
+            f.close()
+
+        # file objects have a context manager that automatically closes the file
+        # after the with block regardless of whether an exception is raised,
+        
+        with open('trispam.txt') as f:
+            cpll = list(f)
+            self.assertEqual(coll, 
+                    ['spam\n', 'Spam\n', 'SPAM!\n'])
+
+    # [RUN]  test_exception_context_manager_user
+    # starting with block
+    # running test 1
+    # reached
+    # exited normally
+    # 
+    # starting with block
+    # running test 2
+    # raise an exception!<class 'TypeError'>
+
+    def test_exception_context_manager_user(self):
+
+        with TraceBlock() as action:
+            action.message('test 1')
+            print('reached')
+
+        with TraceBlock() as action:
+            action.message('test 2')
+            raise TypeError
+            print('not reached')
+
+
+#={===========================================================================
+# py-exception py-cookbook_8_3
+
+# PYCB3, 8.3. Making Objects Support the Context-Management Protocol
+#
+# Problem
+#
+# You want to make your objects support the context-management protocol (the
+# with statement).
+
+from socket import socket, AF_INET, SOCK_STREAM
+from functools import partial
+
+class LazyConnection:
+
+    # *py-error* see that "__init___" has more _ !
+    # TypeError: object() takes no parameters
+    # def __init___(self, address, family = AF_INET, type = SOCK_STREAM):
+
+    def __init__(self, address, family = AF_INET, type = SOCK_STREAM):
+        self.address = address
+        self.family = AF_INET
+        self.type = SOCK_STREAM
+        self.sock = None
+
+    def __enter__(self):
+        print('__enter__ is called')
+        if self.sock is not None:
+            raise RuntimeError('Alreay connected')
+        self.sock = socket(self.family, self.type)
+        self.sock.connect(self.address)
+        return self.sock
+
+    def __exit__(self, exc_ty, exc_val, tb):
+        print('__exit__ is called')
+        self.sock.close()
+        self.sock = None
+
+class TestExceptionContext(unittest.TestCase):
+    
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def test_coookbook_8_3(self):
+
+        conn = LazyConnection(('www.python.org', 80))
+
+        with conn as s:
+            # conn.__enter__() executes: connection open
+            s.send(b'GET /index.html HTTP/1.0\r\n')
+            s.send(b'Host: www.python.org\r\n')
+            s.send(b'\r\n')
+            resp = b''.join(iter(partial(s.recv, 8192), b''))
+            # conn.__exit__() executes: connection closed
 
 
 #={===========================================================================

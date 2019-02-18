@@ -18,26 +18,68 @@ class FirstClass:
 
     def display(self):
         # print(self.data)
-        return self.data
+        # return self.data
+        return 'superclass: data is {}'.format(self.data)
 
     def print_data(self):
-        print "superclass: data is {}".format(self.data)
+        return 'superclass: data is {}'.format(self.data)
 
 class SubClass(FirstClass):
 
     def display(self):
-        print "subclass: data is {}".format(self.data)
-        return self.data
+        return 'subclass: data is {}'.format(self.data)
 
-#={===========================================================================
+# py-overload
+
+class ThirdClass(SubClass):
+
+    # ctor. ThirdClass(value). 
+    # Q: possible to have other ctors?
+
+    def __init__(self, value):
+        print("ThirdClass: ctor: value {}".format(value))
+        self.data = value
+
+    # + operator.
+
+    def __add__(self, other):
+        print("ThirdClass: add: value {}".format(self.data + other.data))
+        return ThirdClass(self.data + other.data)
+
+    # print(instance) or instance.str()
+
+    def __str__(self):
+        print("ThirdClass: str: value {}".format(self.data))
+        return "ThirdClass data {}".format(self.data)
+
+    # this is function that intentionally wrong and not evaluated unless used.
+
+    def xxx(self):
+        print("ThirdClass: str: value {}" % (self.data))
+        return xxx
+
+
+class SampleClass:
+
+    def __init__(self, value):
+        print('SampleClass: ctor', value)
+        self.data = value
+
+
 class TestClass(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN] ", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
+
+    def test_class_ctor(self):
+
+        # can take tuple and any
+        so = SampleClass(('sample', 'class'))
+
 
     # name should start with "test_" and otherwise, will not be run.
-    def test_attribute(self):
+    def test_class_attribute(self):
 
         # create two instances which has own namespace
 
@@ -47,72 +89,56 @@ class TestClass(unittest.TestCase):
         o1.set_data("King Arthur")
         o2.set_data(3.1459)
 
-        self.assertEqual(o1.display(), "King Arthur")
-        self.assertEqual(o2.display(), 3.1459)
-
+        self.assertEqual(o1.display(), 
+                'superclass: data is King Arthur')
+        self.assertEqual(o2.display(), 
+                'superclass: data is 3.1459') 
 
         # no type, no access control
 
         o1.data = "Type Checking?"
-        self.assertEqual(o1.display(), "Type Checking?")
+        self.assertEqual(o1.display(), 
+                'superclass: data is Type Checking?')
 
         o2.data = "Access Control?"
-        self.assertEqual(o2.display(), "Access Control?")
+        self.assertEqual(o2.display(), 
+                'superclass: data is Access Control?')
 
-
-class TestClassInheritance(unittest.TestCase):
-
-    def setUp(self):
-        print "===================="
-        print "[RUN] ", self._testMethodName
-
-    def test_inheritance(self):
+    def test_class_inheritance(self):
 
         o1 = SubClass()
 
+        # *py-assign* *py-error-unbound*
+
         # if do not call set_data(), no `data` attribute is created.
+        # since __init__() is not used
+
+        # if we were to call display on one of our instances before calling
+        # setdata, we would trigger an undefined name error—the attribute
+        # named data doesn’t even exist in memory until it is assigned within
+        # the setdata method.
+
         o1.set_data("SubClass")
 
-        self.assertEqual(o1.display(), "SubClass")
+        self.assertEqual(o1.display(), 
+                'subclass: data is SubClass')
 
-        # prints "SubClass"
-        o1.print_data()
+        # use it for free
+        self.assertEqual(o1.print_data(), 
+                'superclass: data is SubClass')
 
 
-class ThirdClass(SubClass):
+    # [RUN]  test_class_operator_overload
+    # ThirdClass: ctor: value 100
+    # ThirdClass: ctor: value 200
+    # ThirdClass: add: value 300
+    # ThirdClass: ctor: value 300
+    # ThirdClass: str: value 300
+    # ThirdClass data 300
+    # ThirdClass: str: value 300
+    # ThirdClass data 300
 
-    # ctor. ThirdClass(value). 
-    # Q: possible to have other ctors?
-
-    def __init__(self, value):
-        print "ThirdClass: ctor: value {}".format(value)
-        self.data = value
-
-    # + operator.
-
-    def __add__(self, other):
-        print "ThirdClass: add: value {}".format(self.data + other.data)
-        return ThirdClass(self.data + other.data)
-
-    # print(instance) or instance.str()
-
-    def __str__(self):
-        print "ThirdClass: str: value {}".format(self.data)
-        return "ThirdClass data {}".format(self.data)
-
-    # this is function that intentionally wrong and not evaluated unless used.
-
-    def xxx(self):
-        print "ThirdClass: str: value {}" % (self.data)
-        return xxx
-
-class TestClassOperatorOverload(unittest.TestCase):
-
-    def setUp(self):
-        print "===================="
-        print "[RUN] ", self._testMethodName
-
-    def test_operator_overload(self):
+    def test_class_operator_overload(self):
 
         # py-error
         # TypeError: __init__() takes exactly 2 arguments (1 given)
@@ -126,11 +152,26 @@ class TestClassOperatorOverload(unittest.TestCase):
         # both are same
 
         print(o3)
-        print "{}".format(str(o3))
+        print("{}".format(str(o3)))
 
 
 #={===========================================================================
-# CHAPTER 28 A More Realistic Example
+# py-class py-introspection
+
+class TestClassIntrospection(unittest.TestCase):
+
+    def setUp(self):
+        print('====================')
+        print('[RUN] ', self._testMethodName)
+
+    def test_class_operator_overload(self):
+
+        tc = ThirdClass(100)
+        print(tc.__dict__)
+
+
+#={===========================================================================
+# py-override, CHAPTER 28 A More Realistic Example
 
 class Person:
 
@@ -158,13 +199,17 @@ class Manager(Person):
         # in Person.
 
     def giveRaise(self, percent, bonus=.10):
-        # Bad: cut and paste
+
+        # *py-override*
+        # Same result but bad way: cut and paste
+        # The problem here is a very general one: anytime you copy code with cut
+        # and paste, you essentially double your maintenance effort in the
+        # future.
         # self.pay = int(self.pay * (1 + percent + bonus)) 
 
         # *py-class-call-base-version*
         # Good: augment original
         Person.giveRaise(self, percent + bonus)
-
 
 class ManagerImproved(Person):
 
@@ -180,11 +225,33 @@ class ManagerImproved(Person):
         # Good: augment original
         Person.giveRaise(self, percent + bonus)
 
+
+# ====================
+# [RUN]  test_manager_class
+# [Person: Tom Jones, None, 0]
+# [Person: Ian King, 1000, 0]
+# [Person: Pat King, 1000, manager]
+# [Person: Susan King, manager, 1000]
+#
+# .====================
+# [RUN]  test_preson_class
+# [Person: Bob Smith, None, 0]
+# [Person: Sue Jones, dev, 100000]
+# Smith Jones
+# [Person: Sue Jones, dev, 110000]
+# == overrides ==
+# Jones
+# [Person: Tom Jones, mgr, 60000]
+# == all three ==
+# [Person: Bob Smith, None, 0]
+# [Person: Sue Jones, dev, 121000]
+# [Person: Tom Jones, mgr, 72000]
+
 class TestPerson(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     def test_preson_class(self):
         bob = Person('Bob Smith')
@@ -233,7 +300,7 @@ class CompositeManager:
         # Person.giveRaise(self, percent + bonus)
         self.person.giveRaise(percent + bonus)
 
-    # delegate all other attrs
+    # delegate all other undefined attrs in this class
     # *py-getattr*
     # since this class do not use inheritance, all attribute fetch request comes
     # to this and forward them to the composite.
@@ -251,8 +318,8 @@ class CompositeManager:
 class TestComposite_1(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     def test_composite_manager_class(self):
         tom = Manager('Tom Jones')
@@ -286,8 +353,8 @@ class Department:
 class TestComposite_2(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     # [RUN] test_department_class
     # [Person: Bob Smith, None, 0]
@@ -347,8 +414,8 @@ class SubTest(TopTest):
 class TestAttrDisplay(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     # [RUN] test_attr_display
     # [TopTest: attr1 = 0,attr2 = 1]
@@ -404,8 +471,8 @@ import Person in the interactive. None of these works. WHY?
 class TestDatabase(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     def test_shelve(self):
         bob = Person('Bob Smith')
@@ -432,8 +499,7 @@ class TestDatabase(unittest.TestCase):
 
 
 #={===========================================================================
-# CHAPTER 29 Class Coding Details
-
+# py-class-abc, CHAPTER 29 Class Coding Details
 # Class Interface Techniques
 
 class Super:
@@ -441,6 +507,7 @@ class Super:
         print('in Super.method')
 
     def delegate(self):
+
         # expected to be defined
         self.action()
 
@@ -455,14 +522,15 @@ class Provider(Super):
 class TestAbstract(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     def test_abstract_method(self):
         x = Provider()
         x.delegate()
         
 # in Python 2.6 and 2.7, we use a class attribute instead:
+
 from abc import ABCMeta, abstractmethod
 
 class ABCSuper:
@@ -477,8 +545,8 @@ class ABCSub(ABCSuper):
 class TestAbstractCreation(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     def test_abstract_super_creation(self):
         x = ABCSuper()
@@ -536,8 +604,8 @@ class HTMLize:
 class TestProcessor(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
     
     def test_processor(self):
         import sys
@@ -576,26 +644,66 @@ class Prod:
     def __call__(self, other):
         return self.value * other
 
+class Empty:
+
+    # if has this, __getattr__() will be called
+    # def __init__(self, value):
+    #     self.age = value
+    #     self.attrname = value
+
+    # Here, the Empty class and its instance X have no real attributes of their
+    # own, so the access to X.age gets routed to the __getattr__ method; self is
+    # assigned the instance (X), and attrname is assigned the undefined
+    # attribute name string ('age'). The class makes age look like a real
+    # attribute by returning a real value as the result of the X.age
+    # qualification expression (40). In effect, age becomes a dynamically
+    # computed attribute
+
+    def __getattr__(self, attrname):
+        print('__getattr__ is called')
+        if attrname == 'age':
+            return 40
+        else:
+            raise AttributeError(attrname)
+
+    # to avoid infinite recursion loop, use __dict__{}
+
+    def __setattr__(self, attr, value):
+        print('__setattr__ is called')
+        if attr == 'age':
+            self.__dict__[attr] = value + 10
+        else:
+            raise AttributeError(attr + ' not allowed')
+
+
 class TestOverload(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     # [RUN] test_call_overload
     # ('Called:', (1, 2, 3), {})
     # ('Called:', (1, 2, 3), {'y': 5, 'x': 4})
 
-    def test_call_overload(self):
+    def test_overload_call_op(self):
         # C is callable
         C = Callee()
         C(1,2,3)
         C(1,2,3, x=4, y=5)
 
-    def test_callable(self):
         x = Prod(2)
         self.assertEqual(x(3), 6)
         self.assertEqual(x(4), 8)
+
+    def test_overload_getattr_op(self):
+
+        # X = Empty(10)
+        X = Empty()
+        X.age
+        X.age = 100
+        with self.assertRaises(AttributeError):
+            X.attrname
 
 class Spam:
     def doit(self, message):
@@ -614,10 +722,10 @@ class Number:
 class TestBoundMethod(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
-    def test_callable_1(self):
+    def test_bound_callable_1(self):
 
         object1 = Spam()
         self.assertEqual(object1.doit('hello world'), 'hello world')
@@ -639,7 +747,7 @@ class TestBoundMethod(unittest.TestCase):
     # 9
     # 8
 
-    def test_callable_2(self):
+    def test_bound_callable_2(self):
         x = Number(2)
         y = Number(3)
         z = Number(4)
@@ -665,8 +773,8 @@ def factory(aClass, *pargs, **kargs):
 class TestPatternFactory(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     def test_factory(self):
         object1 = factory(Spam)
@@ -696,14 +804,14 @@ class StaticClass:
 
     # selfless method
     def show_id():
-        print 'id: %d' % StaticClass.track_id
+        print('id: %d' % StaticClass.track_id)
 
 
 class TestStaticClass_1(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     def test_static_class_in_py2x(self):
 
@@ -726,7 +834,7 @@ class TestStaticClass_1(unittest.TestCase):
 # use simple method and works for both version
 
 def show_id():
-    print 'id: %d' % StaticClass.track_id
+    print('id: %d' % StaticClass.track_id)
 
 class StaticClass:
     track_id = 0
@@ -737,8 +845,8 @@ class StaticClass:
 class TestStaticClass_2(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     def test_static_class_use_simple_method(self):
 
@@ -770,8 +878,8 @@ class Methods:
 class TestStaticClass_3(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     # [RUN] test_static_class_use_staticmethod
     # [<pyclass.Methods instance at 0x7efd73c7d1b8>, 1]
@@ -821,8 +929,8 @@ class Spam:
 class TestStaticClass_4(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     # [RUN] test_static_class_use_staticmethod_2
     # number of instances: 2
@@ -845,8 +953,8 @@ class Sub(Spam):
 class TestStaticClass_5(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     # [RUN] test_static_class_use_staticmethod_2
     # extra stuff...
@@ -881,8 +989,8 @@ class DecoratedSpam:
 class TestStaticClass_6(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     # [RUN] test_static_class_use_staticmethod_2
     # number of instances: 2
@@ -917,8 +1025,8 @@ def spam(a, b, c):
 class TestDecorator_1(unittest.TestCase):
 
     def setUp(self):
-        print "===================="
-        print "[RUN]", self._testMethodName
+        print('====================')
+        print('[RUN] ', self._testMethodName)
 
     # [RUN] test_decorator_user_defined
     # call 1 to spam
@@ -929,6 +1037,238 @@ class TestDecorator_1(unittest.TestCase):
     def test_decorator_user_defined(self):
         print(spam(1, 2, 3))
         print(spam('a', 'b', 'c'))
+
+
+#={===========================================================================
+# py-property
+
+class PersonProperty:
+    def __init__(self, name):
+        self._name = name
+
+    def getName(self):
+        print('fetch...')
+        return self._name
+
+    def setName(self, value):
+        print('change...')
+        self._name = value
+
+    def delName(self):
+        print('remove...')
+        del self._name
+
+    name = property(getName, setName, delName, 'name property docs')
+
+class PersonPropertyDecorator:
+    def __init__(self, name):
+        self._name = name
+
+    # name = property(name)
+    @property
+    def name(self):
+        "name property docs"
+        print('fetch...')
+        return self._name
+
+    # name = name.setter(name)
+    @name.setter
+    def name(self, value):
+        print('change...')
+        self._name = value
+
+    # name = name.deleter(name)
+    @name.deleter
+    def name(self):
+        print('remove...')
+        del self._name
+
+    # name = property(getName, setName, delName, 'name property docs')
+
+
+# PYCB3, 8.6. Creating Managed Attributes
+
+class PersonCookbook_8_6:
+
+    def __init__(self, first_name):
+        self.first_name = first_name
+
+    @property
+    def first_name(self):
+        return self._first_name
+
+    @first_name.setter
+    def first_name(self, value):
+        if not isinstance(value, str):
+            raise TypeError('Expected a string')
+        self._first_name = value
+
+    @first_name.deleter
+    def first_name(self):
+        raise AttributeError("can't delete attribute")
+
+class TestDecoratorProperty(unittest.TestCase):
+
+    def setUp(self):
+        print('====================')
+        print('[RUN] ', self._testMethodName)
+
+    # [RUN]  test_decorator_property
+    # fetch...
+    # Bob Smith
+    # change...
+    # fetch...
+    # Robert Smith
+    # remove...
+    # fetch...
+    # Sue Jones
+    # name property docs
+
+    def test_decorator_property(self):
+        bob = PersonProperty('Bob Smith')
+        print(bob.name)
+
+        bob.name = 'Robert Smith'
+        print(bob.name)
+
+        del bob.name
+
+        # AttributeError: 'PersonProperty' object has no attribute '_name'
+        # print(bob.name)
+
+        sue = PersonProperty('Sue Jones')
+        print(sue.name)
+        print(PersonProperty.name.__doc__)
+
+    def test_decorator_property_decorator(self):
+        bob = PersonPropertyDecorator('Bob Smith')
+        print(bob.name)
+
+        bob.name = 'Robert Smith'
+        print(bob.name)
+
+        del bob.name
+
+        # AttributeError: 'PersonProperty' object has no attribute '_name'
+        # print(bob.name)
+
+        sue = PersonPropertyDecorator('Sue Jones')
+        print(sue.name)
+        print(PersonPropertyDecorator.name.__doc__)
+
+    def test_decorator_cookbook_8_3(self):
+        a = PersonCookbook_8_6('Guido')
+        print(a.first_name)
+
+        with self.assertRaises(TypeError):
+            a.first_name = 42
+
+        with self.assertRaises(AttributeError):
+            del a.first_name 
+
+
+#={===========================================================================
+# py-descriptor
+
+class Name:
+    "name descriptor docs"
+    def __get__(self, instance, owner):
+        print('fetch...')
+        return instance._name
+
+    def __set__(self, instance, value):
+        print('change...')
+        instance._name = value
+    
+    def __delete__(self, instance):
+        print('remove...')
+        del instance._name
+
+class PersonDescriptor:
+    def __init__(self, name):
+        self._name = name
+
+    # assign descriptor to attr
+    name = Name()
+
+
+# PYCB3, 8.9. Creating a New Kind of Class or Instance Attribute
+
+class Integer:
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, instance, cls):
+        if instance is None:
+            return self
+        else:
+            # return instance.x or return instance.y?
+            # use Integer(str) and str is attribute name.
+            return instance.__dict__[self.name]
+
+    def __set__(self, instance, value):
+        if not isinstance(value, int):
+            raise TypeError('Expected an int')
+        instance.__dict__[self.name] = value
+
+    def __delete__(self, instance):
+        del instance.__dict__[self.name]
+
+class Point:
+
+    # py-class-variable
+    x = Integer('x')
+    y = Integer('y')
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class TestDescriptor(unittest.TestCase):
+
+    def setUp(self):
+        print('====================')
+        print('[RUN] ', self._testMethodName)
+
+    # [RUN]  test_descriptor
+    # fetch...
+    # Bob Smith
+    # change...
+    # fetch...
+    # Robert Smith
+    # remove...
+    # fetch...
+    # Sue Jones
+    # name property docs
+
+    def test_descriptor(self):
+
+        # as `int type`
+        xxx = PersonProperty(100)
+        self.assertEqual(type(xxx.name), type(int()))
+
+        # as `str type`
+        bob = PersonProperty('Bob Smith')
+        self.assertEqual(type(bob.name), type(str()))
+        print(bob.name)
+
+        bob.name = 'Robert Smith'
+        print(bob.name)
+
+        del bob.name
+
+        sue = PersonProperty('Sue Jones')
+        print(sue.name)
+        print(PersonProperty.name.__doc__)
+
+    def test_cookbook_8_9(self):
+
+        p = Point(2, 3)
+        self.assertEqual(p.x, 2)
+        p.y = 5
+
+        with self.assertRaises(TypeError):
+            p.x = 2.3
 
 
 #={===========================================================================
