@@ -361,9 +361,9 @@ class TestList(unittest.TestCase):
 
         #
         coll2 = [0] * 4;
-        coll3 = [5,6,7,8]
-
         self.assertEqual(coll2, [0, 0, 0, 0])
+
+        coll3 = [5,6,7,8]
 
         for i in range(len(coll2)):
             coll2[i] = coll3[i]
@@ -491,6 +491,25 @@ class TestList(unittest.TestCase):
         coll.append('type')
         print(coll)
 
+    def test_list_nested(self):
+        coll = [
+                [["AMS"], ["AMS"]], 
+                [["PROX"], ["darwin"]],
+                # can have comment in the middle.  
+                [["PPCM_CF"], ["ppcm", "ppcm_core"]] 
+               ]
+
+        self.assertEqual(coll[0], [["AMS"], ["AMS"]])
+        self.assertEqual(coll[0][0], ["AMS"])
+
+        # Q: why cannot use multiple lines?
+
+        coll = "[[['AMS'], ['AMS']], [['PROX'], ['darwin']], [['PPCM_CF'], ['ppcm', 'ppcm_core']]]"
+        self.assertEqual(type(coll), type(str()))
+
+        coll = eval("[[['AMS'], ['AMS']], [['PROX'], ['darwin']], [['PPCM_CF'], ['ppcm', 'ppcm_core']]]")
+        self.assertEqual(type(coll), type(list()))
+
 
 #={===========================================================================
 # py-set
@@ -526,6 +545,8 @@ class TestSet(unittest.TestCase):
 
         # difference
         self.assertEqual(a - b, {1, 2})
+        # differences, filter duplicates
+        self.assertEqual({1,3,5,7} - {1,2,4,5,6}, {3,7})
 
         # symmetric difference
         self.assertEqual(a ^ b, {1, 2, 6, 7, 8})
@@ -535,7 +556,11 @@ class TestSet(unittest.TestCase):
         self.assertTrue(a.issuperset({1,2,3}))
 
         # equal
+        # the order matters in py-list but not in py-set. Can user sorted() on
+        # list to have the same result.
+
         self.assertTrue({1,2,3} == {3,2,1})
+        self.assertFalse([1,2,3] == [3,2,1])
 
         # sets can only contain immutable (a.k.a. “hashable”) object types as
         # keys in dict does. so tuple is okay and note that set ctor can use
@@ -1040,6 +1065,32 @@ class TestNone(unittest.TestCase):
 
         self.assertEqual(result, False)
 
+        coll1 = dict()
+
+        if coll1:
+            result = True
+        else:
+            result = False
+
+        self.assertEqual(result, False)
+
+        coll1['a'] = (1, 2)
+
+        if coll1:
+            result = True
+        else:
+            result = False
+
+        self.assertEqual(result, True)
+
+        # empty list
+        coll1 = []
+
+        if not coll1:
+            result = False
+
+        self.assertEqual(result, False)
+
 
 #={===========================================================================
 # py-print
@@ -1120,7 +1171,7 @@ class TestBase(unittest.TestCase):
         print("====================")
         print("[RUN] ", self._testMethodName)
 
-    def test_pass(self):
+    def test_base_pass(self):
         value = 10
 
         if value < 0:
@@ -1148,7 +1199,6 @@ class TestBase(unittest.TestCase):
     #
     #     self.assertEqual(result, 'positive')
 
-
     def isiterable(self, object):
         try:
             iter(object)
@@ -1156,7 +1206,7 @@ class TestBase(unittest.TestCase):
         except TypeError:
             return False
 
-    def test_iter(self):
+    def test_base_iterable(self):
         self.assertTrue(self.isiterable('string'))
         self.assertTrue(self.isiterable([1,2,3]))
         self.assertFalse(self.isiterable(4))
@@ -1204,6 +1254,25 @@ class TestBase(unittest.TestCase):
         self.assertEqual(self.compare_version_2(version1, version2), -1)
         self.assertEqual(self.compare_version_2(version2, version1), 1)
         self.assertEqual(self.compare_version_2(version2, version3), 0)
+
+
+    def test_base_ternary(self):
+
+        coll = 'spam'
+
+        a = 'true' if coll else 'false'
+
+        self.assertEqual(a, 'true')
+
+    # py-eval
+    def test_base_eval(self):
+        # Q: why cannot use multiple lines?
+
+        coll = "[[['AMS'], ['AMS']], [['PROX'], ['darwin']], [['PPCM_CF'], ['ppcm', 'ppcm_core']]]"
+        self.assertEqual(type(coll), type(str()))
+
+        coll = eval("[[['AMS'], ['AMS']], [['PROX'], ['darwin']], [['PPCM_CF'], ['ppcm', 'ppcm_core']]]")
+        self.assertEqual(type(coll), type(list()))
 
 
 #={===========================================================================
@@ -2244,6 +2313,37 @@ class TestExceptionContext(unittest.TestCase):
             s.send(b'\r\n')
             resp = b''.join(iter(partial(s.recv, 8192), b''))
             # conn.__exit__() executes: connection closed
+
+
+#={===========================================================================
+# py-reverse
+
+class TestReverse(unittest.TestCase):
+    
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def test_reverse(self):
+
+        # py-list sort
+        coll = ['abc', 'ABD', 'aBe']
+        coll.sort(key = str.lower, reverse = True)
+        self.assertEqual(coll, ['aBe', 'ABD', 'abc'])
+
+        # py-slice
+        # A clever use of this is to pass -1 which has the useful effect of
+        # reversing a list or tuple:
+
+        coll = [7, 2, 3, 6, 3, 5, 6, 0, 1]
+        self.assertEqual(coll[::-1], [1, 0, 6, 5, 3, 6, 3, 2, 7])
+
+        # *py-reversed*
+        # `reversed` iterates over the elements of a sequence in reverse order:
+        coll = list(range(10))
+        self.assertEqual(coll, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(list(reversed(coll)), 
+                [9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
 
 
 #={===========================================================================

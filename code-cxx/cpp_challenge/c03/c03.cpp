@@ -585,7 +585,6 @@ TEST(U27, Text)
 // ={=========================================================================
 
 /*
-
 28. Longest palindromic substring
 
 Write a function that, given an input string, locates and returns the longest
@@ -620,6 +619,11 @@ only one substring or returning the maximum length of a palindromic substring.
 namespace U28_2018_12_03
 {
   // palindrome is *symmetric* substr while moving i from input text.
+  //
+  // start from 0th and for every char of input:
+  //  scan to right and left from that
+  //  keep update current symetric substr and save it if that's longer
+  //  return the input when there's no finding such as single input
 
   std::string longest_palindrome(const std::string text)
   {
@@ -637,7 +641,9 @@ namespace U28_2018_12_03
 
       current.push_back(current_char);
 
-      for (lidx = i - 1, ridx = i + 1; lidx >= 0 && ridx < (int)length;  --lidx, ++ridx)
+      for (lidx = i - 1, ridx = i + 1; 
+          lidx >= 0 && ridx < (int)length; 
+          --lidx, ++ridx)
       {
         if (text[lidx] == text[ridx])
         {
@@ -676,10 +682,11 @@ TEST(U28, 2018_12_03)
 The simplest solution to this problem is to try a brute-force approach, checking
 if each substring is a palindrome. However, this means we need to check C(N, 2)
 substrings (where N is the number of characters in the string), and the time
-complexity would be O(N^3). The complexity could be reduced to O(N^2) by storing
-results of sub problems. To do so we need a table of Boolean values, of size,
-where the element at [i, j] indicates whether the substring from position i to j
-is a palindrome. 
+complexity would be O(N^3). 
+
+The complexity could be reduced to O(N^2) by storing results of sub problems. To
+do so we need a table of Boolean values, of size, where the element at [i, j]
+indicates whether the substring from position i to j is a palindrome. 
 
 We start by initializing all elements [i,i] with true (one-character
 palindromes) and all the elements [i,i+i] with true for all consecutive two

@@ -48,6 +48,7 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
 
 // ={=========================================================================
 // algo-swap: swap without a temporary
+
 void t_algo_swap_01(int &a, int &b)
 {
   a = a + b;
@@ -101,6 +102,7 @@ TEST(AlgoSwap, SwapUseXOR)
 
 // ={=========================================================================
 // algo-occurance find a number seen odd times
+
 unsigned int t_algo_find_a_number_01(const vector<unsigned int> &input)
 {
   unsigned int uireturn{};

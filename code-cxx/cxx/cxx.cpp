@@ -4985,6 +4985,17 @@ TEST(Bit, RightShift)
     EXPECT_EQ(uint_max_2, numeric_limits<int>::max());
   }
 
+  // signed int and unsigned int
+  {
+    // >>> 2**31-1
+    // 2147483647
+    EXPECT_EQ(2147483647, numeric_limits<int>::max());
+
+    // >>> 2**32-1
+    // 4294967295
+    EXPECT_EQ(4294967295, numeric_limits<unsigned int>::max());
+  }
+
   // okay
   {
     // input3 works since the result is `independant` but assigned to unsigned.
@@ -6833,6 +6844,30 @@ TEST(Assert, StaticAssert)
 
 	// Vector<short, 2> two; // This will fail 
 } 
+
+
+// ={=========================================================================
+// cxx-numeric cxx-abs
+
+TEST(Numeric, Abs)
+{
+  EXPECT_THAT(abs(-121), 121);
+
+  {
+    // abs() do not work and return input value
+    // since -2**31, -2147483648, is min value and if abs it, it is bigger than
+    // max, 2**31-1, so overflows and wrong result
+    int value = abs(-2147483648);
+    EXPECT_THAT(value, -2147483648);
+  }
+
+  {
+    // abs() works
+    long long value = abs(-2147483648);
+    EXPECT_THAT(value, 2147483648);
+  }
+}
+
 
 // ={=========================================================================
 

@@ -65,6 +65,9 @@ class SampleClass:
         print('SampleClass: ctor', value)
         self.data = value
 
+class SubSampleClass(SampleClass):
+    def get_value(self):
+        return self.data
 
 class TestClass(unittest.TestCase):
 
@@ -72,10 +75,18 @@ class TestClass(unittest.TestCase):
         print('====================')
         print('[RUN] ', self._testMethodName)
 
+    # [RUN]  test_class_ctor
+    # SampleClass: ctor ('sample', 'class')
+    # SampleClass: ctor subsample
+    # subsample
+
     def test_class_ctor(self):
 
         # can take tuple and any
         so = SampleClass(('sample', 'class'))
+
+        sso = SubSampleClass('subsample')
+        print(sso.get_value())
 
 
     # name should start with "test_" and otherwise, will not be run.
@@ -776,7 +787,7 @@ class TestPatternFactory(unittest.TestCase):
         print('====================')
         print('[RUN] ', self._testMethodName)
 
-    def test_factory(self):
+    def test_pattern_factory(self):
         object1 = factory(Spam)
         object2 = factory(Person, 'Arthur', 'King')
         object3 = factory(Person, name='Brian')
@@ -788,6 +799,94 @@ class TestPatternFactory(unittest.TestCase):
 
         self.assertEqual(object3.name, 'Brian')
         self.assertEqual(object3.job, None)
+
+
+#={===========================================================================
+# py-pattern-visitor 
+# PYCB3, 8.21. Implementing the Visitor Pattern
+
+class Node:
+    pass
+
+class UnaryOperator(Node):
+    def __init__(self, operand):
+        self.operand = operand
+
+class BinaryOperator(Node):
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+class AddNumber(BinaryOperator):
+    pass
+
+class SubNumber(BinaryOperator):
+    pass
+
+class MulNumber(BinaryOperator):
+    pass
+
+class DivNumber(BinaryOperator):
+    pass
+
+class NegateNumber(UnaryOperator):
+    pass
+
+class Number(Node):
+    def __init__(self, value):
+        self.value = value
+
+class NodeVisitor:
+
+    def visit(self, node):
+
+        # get method
+        methname = 'visit_' + type(node).__name__
+        meth = getattr(self, methname, None)
+        if meth is None:
+            meth = self.generic_visit
+        return meth(node)
+
+    def generic_visit(self, node):
+        raise RuntimeError(
+                'No {} method'.format('visit_' + type(node).__name__)
+                )
+
+class Evaluator(NodeVisitor):
+
+    def visit_SubNumber(self, node):
+        return self.visit(node.left) - self.visit(node.right)
+
+    def visit_AddNumber(self, node):
+        return self.visit(node.left) + self.visit(node.right)
+
+    def visit_MulNumber(self, node):
+        return self.visit(node.left) * self.visit(node.right)
+
+    def visit_DivNumber(self, node):
+        return self.visit(node.left) / self.visit(node.right)
+
+    def visit_Number(self, node):
+        return node.value
+
+
+class TestPatternVisitor(unittest.TestCase):
+
+    def setUp(self):
+        print('====================')
+        print('[RUN] ', self._testMethodName)
+
+    def test_pattern_visitor(self):
+        t1 = SubNumber(Number(3), Number(4))
+        t2 = MulNumber(Number(2), t1)
+        t3 = DivNumber(t2, Number(5))
+        t4 = AddNumber(Number(1), t3)
+
+        e = Evaluator()
+        print(e.visit(t1))
+        print(e.visit(t2))
+        print(e.visit(t3))
+        print(e.visit(t4))
 
 
 #={===========================================================================

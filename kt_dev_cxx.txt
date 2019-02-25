@@ -105,6 +105,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-abc-call-in-dtor
 *kt_dev_cxx_0000* cxx-copy-prevent-copies cxx-delete
 |kt_dev_cxx_0000| cxx-function-matching
+*kt_dev_cxx_0000* cxx-function-alias
 *kt_dev_cxx_0000* cxx-namespace cxx-interface
 *kt_dev_cxx_0000* cxx-overload-operator
 *kt_dev_cxx_0000* cxx-builtin-conversion
@@ -212,14 +213,14 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-coll-cxx-vector-bool
 *kt_dev_cxx_0000* cxx-container-cxx-deque
 *kt_dev_cxx_0000* cxx-coll-cxx-queue cxx-coll-adaptor
-*kt_dev_cxx_0000* cxx-container-cxx-stack cxx-container-adaptor
+*kt_dev_cxx_0000* cxx-coll-cxx-stack cxx-coll-cxx-adaptor
 *kt_dev_cxx_0000* cxx-container-cxx-list
 *kt_dev_cxx_0000* cxx-container-cxx-forward-list
 
 *kt_dev_cxx_0000* cxx-coll-associative
 *kt_dev_cxx_0000* cxx-container-cxx-set cxx-multiset
 *kt_dev_cpp_0000* cxx-coll-map cxx-map cxx-multimap cxx-size-t
-*kt_dev_cxx_0000* cxx-container-cpp-unordered
+*kt_dev_cxx_0000* cxx-coll-unordered
 *kt_dev_cxx_0000* cxx-container-print-elements
 
 *kt_dev_cxx_0000* cxx-iter
@@ -2729,7 +2730,7 @@ NOT 23: 1110 1000
 1000 0010    : -126 (0111 1101 + 1 = 0111 1110 (126)) // not -2
 ...
 1111 1110    : -2
-1111 1111 }} : -1         Uxxx_MAX, 255
+1111 1111 }} : -1         Uxxx_MAX, 255, 2**8-1 *NOT* 256, 2**8
 ------------------------- 
 
 To get two's complement in programmatic way
@@ -8986,7 +8987,7 @@ void escape(char* s, char* t)
   re-evaluated." 
 
 
-<ex> *ex-atoi* atoi second version in ansic p61
+<ex> *cxx-atoi* atoi second version in ansic p61
 #include <ctype.h>
 
 int atoi(char s[])
@@ -16762,12 +16763,12 @@ However, all do not represent the general concept. So:
 o Each of these discout strategies requires a quantity and a discount amount
   which are common to all discout strategies. Make it general and abstract.
   
-o Each of the derived classes will implement its discount strategy by defining
+o Each of the derived classes `will implement its discount strategy` by defining
   its own version of net_price.
 
 This is refactoring example. Refactoring involves redesigning a class
 hierarchy to move operations and/or data from one class to another. Even
-though we changed the inheritance hierarchy, code that uses Bulk_quote or
+though we changed the inheritance hierarchy, `code that uses` Bulk_quote or
 Quote `would 'not' need to change but need to recompile.`
 
 
@@ -17902,6 +17903,63 @@ int main()
   N::C a[10];
   std::accumulate(a, a+10, 0);
 }
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-function-alias
+
+https://www.fluentcpp.com/2017/10/27/function-aliases-cpp/
+
+C++11: function aliases
+
+C++11 provides another approach for this:
+
+const auto newId = newIdFromDatabase;
+
+This solves most of the above drawbacks: it makes no extra copy, since calling
+  newId is calling newIdFromDatabase, and the declaration is quite
+  straightforward.
+
+EDIT: Note the const! As Stephan T. Lavavej pointed out, having a bare auto
+newId = newIdFromDatabase would be dangerous because the function pointer
+newId could be changed and point to something else. It would be like a global
+variable, but in the form of a function. Very complex and bug-prone.
+
+Here, newId was a function pointer. We could also define it a function
+reference:
+
+
+auto& newId = newIdFromDatabase;
+
+In this case we no longer needs a const because this function reference, like
+  all references, can’t be reassigned. But the resulting declaration looks a
+  bit weird. A big thank you to Stephan for those observations.
+
+Note that you don’t even need to have the full definition of newIdFromDatabase
+available at the point of the function alias declaration. Only its declaration
+needs to be visible from it. Indeed, the actual resolution is made by the
+linker, like with any other function.
+
+EDIT: Note that newId is not strictly a function alias since there is no such
+thing in C++, but a function pointer that semantically plays the role of an
+alias here.
+
+Let’s mention that C++98 could achieve an roughly equivalent result, as it
+could manipulate functions:
+
+
+typedef int (&IdFunction)();
+IdFunction newId = newIdFromDatabase;
+
+But the syntax was really not natural to read, and you can imagine that it
+  doesn’t get better when there are more arguments. The real new feature that
+  enables practical function aliasing here is auto.
+
+Note that while one-liners added an extra step in debugging, this approach
+kind of removes one step. Indeed, when you step in newId at call site, you
+directly fall into newIdFromDatabase and you don’t even see newId in the call
+stack. This can be disturbing. Another drawback is that since newId is a
+function reference, it will not be inlined.
 
 
 ={============================================================================
@@ -31214,6 +31272,7 @@ namespace cxx_pattern_decorator
       bool validate(std::string const& password) override
       {
         cout << "password_validator_decorator {" << endl;
+        // *point*
         auto result = validator_->validate(password);
         cout << "password_validator_decorator }" << endl;
 
@@ -31337,6 +31396,8 @@ TEST(PatternDecorator, ValidatingPasswords_1)
   // std::unique_ptr<digit_password_validator> validator2(new digit_password_validator(std::move(validator1)));
 
   // use temporary
+  // *point* build chain of approval
+
   std::unique_ptr<digit_password_validator> validator2(
       new digit_password_validator(std::unique_ptr<length_validator>(new length_validator(8)))
       );
@@ -31405,7 +31466,7 @@ Structural Pattern
 
 o let clients treat individual objects and compositions of objects `uniformly`
   the user can group components to form lager components but the problem with
-  this is that must treat "primitive and container object differently"
+  this is that must treat "`primitive` and `container` object differently"
   
 o represent both primitives and their containers which means the interface
   covers both. this is different from *cxx-pattern-decorator*
@@ -31518,7 +31579,9 @@ namespace cxx_pattern_composite
 
         for (auto& g : generators_)
         {
+          // calls a generator
           std::string chars = g->allowed_chars();
+
           std::uniform_int_distribution<> ud(0, static_cast<int>(chars.length()-1));
 
           for (size_t i = 0; i < g->length(); ++i)
@@ -31679,8 +31742,11 @@ namespace cxx_pattern_chain_of_responsibility
       void approve(expense const& e)
       {
         if (e.amount_ <= role_->approval_limit())
+        {
           std::cout << name_ << " approved expense '" << e.desc_ << "', cost= "
             << e.amount_ << std::endl;
+        }
+        // *point* calls manager_
         else if (manager_ != nullptr)
           manager_->approve(e);
       }
@@ -31720,7 +31786,8 @@ TEST(PatternChainOfResponsibility, ApprovalSystem)
   auto cecil = std::make_shared<employee>("cecil williamson",
       std::unique_ptr<president_role>(new president_role()));
 
-  // build approval chain
+  // *point* build chain of approval
+
   john->set_direct_manager(robert);
   robert->set_direct_manager(david);
   david->set_direct_manager(cecil);
@@ -41251,167 +41318,151 @@ cxx-queue do not supports iterators.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-cxx-stack cxx-container-adaptor
+*kt_dev_cxx_0000* cxx-coll-cxx-stack cxx-coll-cxx-adaptor
 
 {cxx-stack}
 
 stack, queue, priority_queue
 
-{stack-stl}
-The {ref-001} says that STL stack uses deque by default and can change by giving it second
-paramenter.
+STL stack uses deque by default and can change by giving it second paramenter.
 
 template <class T, class Container = deque<T> > class stack;
 
 std::stack<int,std::vector<int>> st;
 
-<container>
-The deque was chosen because, unlike vectors, deques free their memory when elements are removed and
-don't have to copy all elements on reallocation (see Section 7.12, page 392, for a discussion of
-when to use which container).
+The cxx-deque was chosen because, 
 
-<interface>
-This interface is somewhat inconvenient, but it performs better if you want only to remove the next
-element without processing it. Note that the behavior of top() and pop() is 'undefined' if the stack
-contains no elements. The member functions size() and empty() are provided to check whether the
-stack contains elements.
+o unlike vectors, deques free their memory when elements are removed and don't
+  have to copy all elements on reallocation (see Section 7.12, page 392, for a
+  discussion of when to use which container).
 
-<example>
-#include <iostream>
-#include <stack>
 
-int main()
+This interface is somewhat inconvenient, but it performs better if you want
+only to remove the next element without processing it. Note that the behavior
+of top() and pop() is 'undefined' if the stack contains no elements. The
+member functions size() and empty() are provided to check whether the stack
+contains elements.
+
+
+<ex>
+
+TEST(Stack, BookExample)
 {
-  int n;
-  double item;
-  std::stack<double> numbers;
+  std::vector<int> coll{1,2,3,4,5,6,7,8,9,10,11,12};
 
-  std::cout << "type in an integer n followed by n decimal numbers." << std::endl;
+  std::stack<int> result1; 
+  std::vector<int> result2; 
 
-  std::cin >> n;
+  // fill in stack
+  for (auto e : coll)
+    result1.push(e);
 
-  for(int i=0; i<n; i++)
+  // cxx-stack not work with gtest
+  // EXPECT_THAT(result1, ElementsAreArray({12,11,10,9,8,7,6,5,4,3,2,1}));
+
+  // change top element
+  result1.top() = 98;
+
+  // EXPECT_THAT(result1, ElementsAreArray({98,11,10,9,8,7,6,5,4,3,2,1}));
+
+  while (!result1.empty())
   {
-    std::cin >> item;
-    numbers.push(item);
+    result2.push_back(result1.top());
+    result1.pop();
   }
 
-  std::cout << "input is done and you have entered." << std::endl;
-
-  numbers.top() = 99;         // modify top element
-
-  while( !numbers.empty() )
-  {
-    // access next element. top() returns a reference to the top element in a stack. 
-    std::cout << numbers.top() << " : ";
-    numbers.pop();            // void pop()
-  }
-
-  std::cout << std::endl;
+  EXPECT_THAT(result2, ElementsAreArray({98,11,10,9,8,7,6,5,4,3,2,1}));
 }
 
-$ ./usestack
-type in an integer n followed by n decimal numbers.
-10
-1 2 3 4 5 6 7 8 9 10 11 12
-input is done and you have entered.
-99 : 9 : 8 : 7 : 6 : 5 : 4 : 3 : 2 : 1 : 
 
-<example> from the reference 12.1.3 <is-implemented-in-terms-of-example>
-The standard class stack<> prefers speed over convenience and safety. This is own stack class, which
-has the following two advantages:
+<ex> *cxx-class-model* is-implemented-in-terms-of
 
-1. pop() returns the next element.
-2. pop() and top() throw exceptions when the stack is empty. Unlike the standard stack class, this
-one throws an exception rather than resulting in undefined behavior.
+The standard class stack<> prefers speed over convenience and safety. This is
+own stack class, which has the following two advantages:
 
-In addition, have skipped the members that are not necessary for the ordinary stack user, such as
-the comparison operations.
+o pop() returns the next element.
+o pop() and top() throw exceptions when the stack is empty. Unlike the
+  standard stack class, this one throws an exception rather than resulting in
+  undefined behavior.
 
-#include <deque>
-#include <exception>
+In addition, have skipped the members that are not necessary for the ordinary
+stack user, such as the comparison operations.
 
-template<typename T>
-class Stack {
-  private:
-    std::deque<T> coll;
+namespace cxx_stack
+{
+  class ReadEmptyStack : public std::exception
+  {
+    public:
+      virtual const char* what() const noexcept
+      { return "cannot read on empty stack"; }
+  };
 
-  public:
-    // exception class for pop and top with empty stack
-    class ReadEmptyStack : public std::exception {
+  template <typename T>
+    class Stack
+    {
       public:
-        virtual const char* what() const noexcept {
-          return "read empty stack";
+        typename std::deque<T>::size_type size() const
+        { return coll_.size(); }
+
+        bool empty() const
+        { return coll_.empty(); }
+
+        void push(T const& elem)
+        { coll_.push_back(elem); }
+
+        T pop()
+        {
+          if (coll_.empty())
+            throw ReadEmptyStack();
+
+          T elem(coll_.back());
+          coll_.pop_back();
+          return elem;
         }
+
+        T& top()
+        {
+          if (coll_.empty())
+            throw ReadEmptyStack();
+
+          return coll_.back();
+        }
+
+      private:
+        std::deque<T> coll_;
     };
 
-    typename std::deque<T>::size_type size() const {
-      return coll.size();
-    }
+} // namespace
 
-    bool empty() const {
-      return coll.empty();
-    }
-
-    void push(const T& elem) {
-      coll.push_back(elem);
-    }
-
-    T pop() {
-      if( coll.empty() )
-        throw ReadEmptyStack();
-
-      T elem( coll.back() );
-      coll.pop_back();
-      return elem;
-    }
-
-    T& top() {
-      if( coll.empty() )
-        throw ReadEmptyStack();
-
-      return coll.back();
-    }
-};
-
-#include <iostream>
-
-using namespace std;
-
-int main()
+TEST(Stack, ImplementedInTermsOf)
 {
-  cout << "main: { " << endl;
+  using namespace cxx_stack;
 
-  try {
-    Stack<int> st;
+  Stack<int> coll;
+  vector<int> result;
 
-    st.push(1); st.push(2); st.push(3);
+  coll.push(10);
+  coll.push(20);
+  coll.push(30);
 
-    cout << st.pop() << ' ' << st.pop() << ' ';
+  EXPECT_THAT(coll.pop(), 30);
 
-    st.top() = 77;
+  coll.top() = 80;
 
-    st.push(4); st.push(5);
+  coll.push(100);
+  coll.push(200);
 
-    st.pop();
-
-    // at this point, there are two elements in the stack and expect a exception.
-    cout << st.pop() << ' ';
-    cout << st.pop() << endl;
-    cout << st.pop() << endl;
-  }
-  catch( const exception& e ) {
-    cerr << "execption: " << e.what() << endl;
+  while (!coll.empty())
+  {
+    result.push_back(coll.pop());
   }
 
-  cout << "main: } " << endl;
+  EXPECT_THAT(result, ElementsAre(200, 100, 80, 10));
+
+  // stack is already empty
+
+  EXPECT_THROW(coll.pop(), ReadEmptyStack);
 }
-
-main: { 
-2 3 4 77
-execption: read empty stack
-main: } 
-
 
 
 ={============================================================================
@@ -43205,7 +43256,7 @@ size of dict1: 8, size of dict2: 8
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-cxx-unordered
+*kt_dev_cxx_0000* cxx-coll-unordered
 
 7.9 Unordered Containers
 
@@ -43234,7 +43285,7 @@ when you have two containers with equal elements inside, the order might be
 different.
 
 
-<cxx-unordered-hash>
+<cxx-hash>
 Unordered containers are typically implemented as a 'hash' table. 
 
 For unordered set or multiset, for each value to store, the hash function maps
@@ -43268,18 +43319,18 @@ sorting.
 
 <cxx-unordered-properties>
 
-* the iterators are guaranteed only to be forward iterators
+o the iterators are guaranteed only to be forward iterators
   reverse iterators, including rbegin(), rend(), crbegin(), and crend(), are
   not supported
 
-* lower_bound() and upper_bound() are not provided.
+o lower_bound() and upper_bound() are not provided.
 
 
 <cxx-unordered-exception>
 Unordered containers are `node-based containers`, so any failure to construct
 a node simply leaves the container as it was.
 
-* erase() does not throw an exception, provided that the hash function and the
+o erase() does not throw an exception, provided that the hash function and the
   equivalence criterion don’t throw, which is the case for the default
   functions.
 
@@ -43288,27 +43339,41 @@ a node simply leaves the container as it was.
 The only guarantee is that duplicates, which are possible because a multiset
 is used, are grouped together in the order of their insertion.
 
-TEST(CxxStlTest, UnorderedMapDuplicates)
+TEST(Unordered, MapDuplicates)
 {
-  unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", "New York",
-    "Chicago", "Toronto", "Paris", "Frankfurt"};
+  unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", 
+    "New York", "Chicago", "Toronto", "Paris", "Frankfurt"};
 
-  for( const auto &elem : cities )
-    cout << elem << ' ';
+  {
+    vector<string> result{};
 
-  cout << endl;
+    for( const auto &elem : cities )
+      result.push_back(elem);
 
-  // insert additional elements
-  cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
+    EXPECT_THAT(result, 
+        ElementsAre("Paris", "Toronto", "Chicago", "New York", 
+          "Frankfurt", "Frankfurt", "Hanover", "Braunschweig")); 
+  }
 
-  for( const auto &elem : cities )
-    cout << elem << ' ';
+  {
+    // insert additional elements
+    cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
 
-  cout << endl;
+    vector<string> result{};
+
+    for( const auto &elem : cities )
+      result.push_back(elem);
+
+    EXPECT_THAT(result, 
+        ElementsAreArray({"Munich", "London", 
+          "Frankfurt", "Frankfurt",         // duplicates
+          "New York", 
+          "Braunschweig", "Braunschweig",   // duplicates
+          "Chicago", "Toronto", 
+          "Hanover", "Hanover",             // duplicates
+          "Paris"})); 
+  }
 }
-
-Paris Toronto Chicago New York Frankfurt Frankfurt Hanover Braunschweig
-Munich London Frankfurt Frankfurt New York Braunschweig Braunschweig Chicago Toronto Hanover Hanover Paris
 
 
 <cxx-hash>
@@ -52480,7 +52545,7 @@ such conversions. However, they vary with their ease of use, extensibility,
      and safety.
 
 For instance, there are a number of limitations with the family of standard C
-functions typified by 'atoi':
+functions typified by 'cxx-atoi':
 
 * Conversion is supported in one direction only: from text to internal data
   type. Converting the other way using the C library requires either the

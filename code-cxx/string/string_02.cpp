@@ -592,45 +592,7 @@ Write a function that, given an input string, locates and returns the longest
 sequence in the string that is a palindrome. If multiple palindromes of the same
 length exist, the first one should be returned.
 
-// from wikipedia
-
-In computer science, the longest palindromic substring or longest *symmetric*
-factor problem is the problem of finding a maximum-length contiguous substring
-of a given string that is also a palindrome. 
-
-For example, the longest palindromic substring of "bananas" is "anana". The
-longest palindromic substring is not guaranteed to be unique; for example, in
-the string "abracadabra", there is no palindromic substring with length greater
-than three, but there are two palindromic substrings with length three, namely,
-"aca" and "ada". In some applications it may be necessary to return all maximal
-palindromic substrings (that is, all substrings that are themselves palindromes
-and cannot be extended to larger palindromic substrings) rather than returning
-only one substring or returning the maximum length of a palindromic substring.
-
-
-The simplest solution to this problem is to try a brute-force approach, checking
-if each substring is a palindrome. However, this means we need to check C(N, 2)
-substrings (where N is the number of characters in the string), and the time
-complexity would be O(N^3). The complexity could be reduced to O(N^2) by storing
-results of sub problems. To do so we need a table of Boolean values, of size,
-where the element at [i, j] indicates whether the substring from position i to j
-is a palindrome. 
-
-We start by initializing all elements [i,i] with true (one-character
-palindromes) and all the elements [i,i+i] with true for all consecutive two
-identical characters (for two-character palindromes). We then go on to inspect
-substrings greater than two characters, setting the element at [i,j] to true if
-the element at [i+i,j-1] is true and the characters on the positions i and j in
-the string are also equal. Along the way, we retain the start position and
-length of the longest palindromic substring in order to extract it after
-finishing computing the table.
-
-{
-   using namespace std::string_literals;
-   assert(longest_palindrome("sahararahnide") == "hararah");
-   assert(longest_palindrome("level") == "level");
-   assert(longest_palindrome("s") == "s");
-}
+moved to algo
 
 */
 

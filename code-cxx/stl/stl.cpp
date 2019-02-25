@@ -8,6 +8,7 @@
 #include <forward_list>
 #include <unordered_set>
 #include <queue>
+#include <stack>
 // #include <algorithm>
 #include <numeric>        // std::accumulate for gcc 6
 #include <limits>         // std::numeric_limits
@@ -1851,9 +1852,13 @@ TEST(Unordered, MapDuplicates)
       result.push_back(elem);
 
     EXPECT_THAT(result, 
-        ElementsAreArray({"Munich", "London", "Frankfurt", "Frankfurt", 
-          "New York", "Braunschweig", "Braunschweig", "Chicago", 
-          "Toronto", "Hanover", "Hanover", "Paris"})); 
+        ElementsAreArray({"Munich", "London", 
+          "Frankfurt", "Frankfurt",         // duplicates
+          "New York", 
+          "Braunschweig", "Braunschweig",   // duplicates
+          "Chicago", "Toronto", 
+          "Hanover", "Hanover",             // duplicates
+          "Paris"})); 
   }
 }
 
@@ -2264,6 +2269,115 @@ TEST(ForwadList, BookExample)
   coll2.unique();
 
   EXPECT_THAT(coll2, ElementsAreArray({1,2,3,4,10,11,12,13,77,88,99}));
+}
+
+
+// ={=========================================================================
+// cxx-stack
+
+TEST(Stack, BookExample)
+{
+  std::vector<int> coll{1,2,3,4,5,6,7,8,9,10,11,12};
+
+  std::stack<int> result1; 
+  std::vector<int> result2; 
+
+  // fill in stack
+  for (auto e : coll)
+    result1.push(e);
+
+  // cxx-stack not work with gtest
+  // EXPECT_THAT(result1, ElementsAreArray({12,11,10,9,8,7,6,5,4,3,2,1}));
+
+  // change top element
+  result1.top() = 98;
+
+  // EXPECT_THAT(result1, ElementsAreArray({98,11,10,9,8,7,6,5,4,3,2,1}));
+
+  while (!result1.empty())
+  {
+    result2.push_back(result1.top());
+    result1.pop();
+  }
+
+  EXPECT_THAT(result2, ElementsAreArray({98,11,10,9,8,7,6,5,4,3,2,1}));
+}
+
+
+namespace cxx_stack
+{
+  class ReadEmptyStack : public std::exception
+  {
+    public:
+      virtual const char* what() const noexcept
+      { return "cannot read on empty stack"; }
+  };
+
+  template <typename T>
+    class Stack
+    {
+      public:
+        typename std::deque<T>::size_type size() const
+        { return coll_.size(); }
+
+        bool empty() const
+        { return coll_.empty(); }
+
+        void push(T const& elem)
+        { coll_.push_back(elem); }
+
+        T pop()
+        {
+          if (coll_.empty())
+            throw ReadEmptyStack();
+
+          T elem(coll_.back());
+          coll_.pop_back();
+          return elem;
+        }
+
+        T& top()
+        {
+          if (coll_.empty())
+            throw ReadEmptyStack();
+
+          return coll_.back();
+        }
+
+      private:
+        std::deque<T> coll_;
+    };
+
+} // namespace
+
+TEST(Stack, ImplementedInTermsOf)
+{
+  using namespace cxx_stack;
+
+  Stack<int> coll;
+  vector<int> result;
+
+  coll.push(10);
+  coll.push(20);
+  coll.push(30);
+
+  EXPECT_THAT(coll.pop(), 30);
+
+  coll.top() = 80;
+
+  coll.push(100);
+  coll.push(200);
+
+  while (!coll.empty())
+  {
+    result.push_back(coll.pop());
+  }
+
+  EXPECT_THAT(result, ElementsAre(200, 100, 80, 10));
+
+  // stack is already empty
+
+  EXPECT_THROW(coll.pop(), ReadEmptyStack);
 }
 
 
