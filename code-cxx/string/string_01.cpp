@@ -189,10 +189,18 @@ TEST(StringOperations, MaxSize)
 #endif
 }
 
+// string-find
+
+TEST(String, Find)
+{
+  EXPECT_THAT(string("hello").find("ll"), 2);
+  EXPECT_THAT(string("aaaaa").find("bba"), string::npos);
+  EXPECT_THAT(string("aaaaa").find("bba"), -1);
+}
 
 // string-substr
 
-TEST(StringOperations, Substr)
+TEST(String, Substr)
 {
   std::string coll{"interchangeability"};
 

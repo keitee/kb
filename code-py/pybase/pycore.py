@@ -109,10 +109,14 @@ class TestNumeric(unittest.TestCase):
 
     def test_integer_division(self):
 
-        self.assertEqual(3 / 2, 1)
+        # fpr *py-2*
+        # self.assertEqual(3 / 2, 1)
+        # for *py-3*
+        self.assertEqual(3 / 2, 1.5)
         self.assertEqual(3 / float(2), 1.5)
 
-        self.assertEqual(21600/90000, 0)
+        # self.assertEqual(21600/90000, 0)
+        self.assertEqual(21600/90000, 0.24)
         self.assertEqual(21600/float(90000), 0.24)
 
         # SyntaxError: from __future__ imports must occur at the beginning of the file
@@ -151,6 +155,11 @@ class TestNumeric(unittest.TestCase):
         print(coll2)
         random.shuffle(coll2)
         print(coll2)
+
+    def test_min(self):
+        coll = ['hearts', 'clubs', 'diamonds', 'spades']
+        result = min(coll)
+        self.assertEqual(result, 'clubs')
 
 
 #={===========================================================================
@@ -478,6 +487,16 @@ class TestList(unittest.TestCase):
         M = ['bb', 'aa', 'cc']
         M.reverse() 
         self.assertEqual(M, ['cc', 'aa', 'bb'])
+
+        # py-sorted or py-list-sort?
+        coll1 = ["flower","flow","flight"]
+        coll1.sort()
+
+        self.assertEqual(coll1, ['flight', 'flow', 'flower'])
+
+        coll2 = sorted(coll1)
+
+        self.assertEqual(coll1, coll2)
 
 
     # [RUN]  test_list_elements

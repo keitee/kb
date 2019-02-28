@@ -5,10 +5,12 @@
 #include <set>
 #include <algorithm>
 #include <bitset>
+#include <list>
 
 #include "gmock/gmock.h"
 
 // g++ -g -std=c++0x t_override.cpp
+// (gdb) b AlgoList_Divide_Test::TestBody()
 
 using namespace std;
 using namespace testing;
@@ -5034,6 +5036,19 @@ TEST(AlgoConversion, ItoA)
 // o No remove() to remove entry at random position since it's expensive
 // operation as with other contiguous implementation; contiguous stack.
 
+// class List
+// {
+//   public:
+//     void create();
+//     void clear();
+//     bool empty();
+//     bool full();
+//     int size();
+//     // as push_back();
+//     void push(ListEntry const& entry);
+//     std::vector<ListEntry> snap();
+// };
+
 namespace algo_list_contiguous
 {
   struct ListEntry
@@ -5045,45 +5060,74 @@ namespace algo_list_contiguous
     int col_{};
   };
 
+  // cxx-operator-overload
+  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
+  }
+
+  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return !(lhs == rhs);
+  }
+
   class List
   {
     public:
-      void create() { count_ = 0; }
-      void clear() { count_ = 0; }
-      bool empty() { return count_ == 0 ? true : false; }
-      bool full() { return count_ == MAX_LIST ? true : false; }
-      int size() { return count_; }
+      explicit List() : count_(0)
+      {}
 
+      void clear() 
+      { count_ = 0;}
+
+      bool empty()
+      { return count_ == 0 ? true : false; }
+
+      bool full()
+      { return count_ >= MAX_ENTRY ? true : false; }
+
+      int size()
+      { return count_; }
+
+      // as push_back();
       void push(ListEntry const& entry)
       {
         if (full())
-          throw std::runtime_error("list is full");
+          throw runtime_error("list is full");
 
         coll_[count_++] = entry;
       }
 
-      std::vector<ListEntry> snap() noexcept
+      std::vector<ListEntry> snap()
       {
-        std::vector<ListEntry> result{};
+        std::vector<ListEntry> coll;
 
-        for (size_t i = 0; i < count_; count_++)
-          result.push_back(coll_[i]);
+        for (int i = 0; i < count_; ++i)
+          coll.push_back(coll_[i]);
 
-        return result;
+        return coll;
       }
 
     private:
-      static int const MAX_LIST{5};
-      size_t count_{};
-      ListEntry coll_[MAX_LIST];
+
+      // cxx-static
+      // error: invalid use of non-static data member ‘algo_list_contiguous::List::MAX_ENTRY’
+      // const int MAX_ENTRY{5};
+
+      static const int MAX_ENTRY{5};
+
+      // count_ should be [0, 4] or [1, 5]? choose [1,5]
+      int count_;
+
+      ListEntry coll_[MAX_ENTRY];
   };
-} // namespace
+}
 
 TEST(AlgoList, ContiguousSimple)
 {
   using namespace algo_list_contiguous;
 
-  auto values{
+  std::vector<ListEntry> values{
       ListEntry(1,2), 
       ListEntry(2,3), 
       ListEntry(3,4), 
@@ -5092,648 +5136,658 @@ TEST(AlgoList, ContiguousSimple)
   };
 
   List coll;
-  coll.create();
 
   for (auto &e : values)
     coll.push(e);
 
   EXPECT_THAT(coll.size(), 5);
+
+  // requires cxx-operator-overload
+  EXPECT_THAT(coll.snap(), values);
+
   EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
 }
 
 
 namespace algo_list_linked
 {
-  // when Node and Entry are different
-  //
-  // struct ListNode 
-  // {
-  //   ListNode() : key_(0), next_(nullptr) {}
-  //   ListEntry key_;
-  //   ListNode *next_;
-  // };
+  // when node and entry are in a single structure and these can be different
+  // structure such as ListEntry and ListNode
 
   struct ListEntry
   {
     explicit ListEntry(int row = 0, int col = 0) noexcept 
-      : row_(row), col_(col), next_(nullptr) {}
+      : row_(row), col_(col), next_(nullptr) 
+    {}
 
     int row_{};
     int col_{};
 
-    ListEntry *next_;
+    ListEntry* next_;
   };
 
-  // when use ListEntry *head
+  // cxx-operator-overload
+  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
+  }
+
+  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return !(lhs == rhs);
+  }
 
   class List
   {
     public:
-      List() : count_(0), head_(nullptr) {}
+      explicit List() noexcept
+        : head_(nullptr)
+        {}
 
-      bool empty() { return count_ == 0 ? true : false; }
+      bool emptry()
+      { return count_ == 0 ? true : false; }
 
-      // no support of max size
-      bool full() { return false; }
+      int size()
+      { return count_; }
 
-      size_t size() { return count_; }
-
-      // works
-      // void push(ListEntry const& entry)
-      // {
-      //   // when add the first
-      //   if (head_ == nullptr)
-      //   {
-      //     head_ = new ListEntry(entry);
-      //     count_++;
-      //   }
-      //   else
-      //   {
-      //     ListEntry *end{};
-
-      //     // find the end *algo-list-find-end*
-
-      //     for (end = head_; end->next_; end = end->next_)
-      //       ;
-
-      //     end->next_ = new ListEntry(entry);
-      //     count_++;
-      //   }
-      // }
-
-      // better version
-      void push(ListEntry const& entry)
+      // push_back()
+      void push_old(ListEntry const& entry)
       {
-        ListEntry *end{};
-
-        // find the end *algo-list-find-end*
-
-        for (end = head_; end && end->next_; end = end->next_)
-          ;
-
-        if (end == nullptr)
+        if (!head_)
           head_ = new ListEntry(entry);
         else
-          end->next_ = new ListEntry(entry);
-
-        count_++;
-      }
-
-      void clear_old()
-      {
-        ListEntry *prev{nullptr};
-        ListEntry *curr{nullptr};
-
-        for (curr = head_; curr;)
         {
-          if (prev)
-          {
-            free(prev);
-            count_--;
-          }
-          prev = curr;
-          curr = curr->next_;
-        }
+          ListEntry* run = head_;
 
-        if (prev)
-        {
-          free(prev);
-          count_--;
-        }
+          // unlike clear(), snap(), run shall be before end() so that can
+          // insert new one. Hence check run->next
 
-        head_ = nullptr;
-        assert(count_ == 0);
+          while (run->next_)
+            run = run->next_;
+
+          run->next_ = new ListEntry(entry);
+        }
+        
+        ++count_;
       }
 
-      // better version
-      void clear()
-      {
-        ListEntry *prev{nullptr};
-        ListEntry *curr{nullptr};
-
-        // has different form from *also-list-find-end*
-
-        for (curr = head_; curr;)
-        {
-          prev = curr;
-          curr = curr->next_;
-
-          free(prev);
-          count_--;
-        }
-
-        head_ = nullptr;
-        assert(count_ == 0);
-      }
-
-      std::vector<std::pair<int, int>> snap() noexcept
-      {
-        std::vector<std::pair<int, int>> result{};
-        ListEntry *curr{nullptr};
-
-        for (curr = head_; curr; curr = curr->next_)
-          result.push_back(make_pair(curr->row_, curr->col_));
-
-        return result;
-      }
-
-      void reverse()
-      {
-        ListEntry *curr{};
-        ListEntry *prev{};
-        ListEntry *next{};
-
-        curr = head_;
-
-        while (curr)
-        {
-          next = curr->next_;
-          curr->next_ = prev;
-          prev = curr;
-          curr = next;
-        }
-
-        head_ = prev;
-      }
-
-    private:
-      size_t count_;
-      ListEntry *head_;
-  };
-
-  // when use ListEntry head
-
-  class List_02
-  {
-    public:
-      List_02() : count_(0) {}
-
-      bool empty() { return count_ == 0 ? true : false; }
-
-      // no support of max size
-      bool full() { return false; }
-
-      size_t size() { return count_; }
-
+      // push_back()
       void push(ListEntry const& entry)
       {
-        ListEntry *end{};
+        ListEntry* run{};
 
-        // find the end
-        for (end = &head_; end->next_; end = end->next_)
+        // find node for insertion *algo-list-find-end*
+        // works both when head_ is null and is not null
+
+        for (run = head_; run && run->next_; run = run->next_)
           ;
 
-        end->next_ = new ListEntry(entry);
-        count_++;
+        // first item
+        if (!run)
+          head_ = new ListEntry(entry);
+        else
+          run->next_ = new ListEntry(entry);
+
+        ++count_;
       }
 
-      // better version
       void clear()
       {
-        ListEntry *prev{nullptr};
-        ListEntry *curr{nullptr};
+        ListEntry* run = head_;
+        ListEntry* prev{};
 
-        for (curr = head_.next_; curr;)
+        while (run)
         {
-          prev = curr;
-          curr = curr->next_;
-
+          prev = run;
+          run = run->next_;
           free(prev);
-          count_--;
+          --count_;
         }
 
-        head_.next_ = nullptr;
-        assert(count_ == 0);
+        head_ = run;
       }
 
-      std::vector<std::pair<int, int>> snap() noexcept
+      std::vector<ListEntry> snap()
       {
-        std::vector<std::pair<int, int>> result{};
-        ListEntry *curr{nullptr};
+        ListEntry* run = head_;
+        std::vector<ListEntry> coll;
 
-        for (curr = head_.next_; curr; curr = curr->next_)
-          result.push_back(make_pair(curr->row_, curr->col_));
+        while (run)
+        {
+          // ok as well
+          // coll.push_back(ListEntry(*run));
+          coll.push_back(*run);
+          run = run->next_;
+        }
 
-        return result;
+        return coll;
       }
 
     private:
-      size_t count_;
+      int count_{};
 
-      ListEntry head_;
+      // can use ListEntry head_; which changes member implementation
+
+      ListEntry* head_;
   };
+
 } // namespace
+
 
 TEST(AlgoList, LinkedSimple)
 {
   using namespace algo_list_linked;
 
-  {
-    auto values{
-      ListEntry(1,2), 
-        ListEntry(2,3), 
-        ListEntry(3,4), 
-        ListEntry(4,5), 
-        ListEntry(5,6)
-    };
+  std::vector<ListEntry> values{
+    ListEntry(1,2), 
+    ListEntry(2,3), 
+    ListEntry(3,4), 
+    ListEntry(4,5), 
+    ListEntry(5,6)
+  };
 
-    List coll;
+  List coll;
 
-    for (auto &e : values)
-      coll.push(e);
+  for (auto &e : values)
+    coll.push(e);
 
-    EXPECT_THAT(coll.size(), 5);
+  EXPECT_THAT(coll.size(), 5);
 
-    // now do not expect exception since there's no max
-    // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+  coll.push(ListEntry(6,7));
+  EXPECT_THAT(coll.size(), 6);
 
-    coll.push(ListEntry(6,7));
-    EXPECT_THAT(coll.size(), 6);
+  // requires cxx-operator-overload
+  std::vector<ListEntry> expected{
+    ListEntry(1,2), 
+    ListEntry(2,3),
+    ListEntry(3,4),
+    ListEntry(4,5),
+    ListEntry(5,6),
+    ListEntry(6,7)
+  };
 
-    EXPECT_THAT(coll.snap(), 
-        ElementsAre(
-          make_pair(1,2), 
-          make_pair(2,3), 
-          make_pair(3,4), 
-          make_pair(4,5), 
-          make_pair(5,6), 
-          make_pair(6,7))
-        );
+  EXPECT_THAT(coll.snap(), expected);
 
-    coll.clear();
-    EXPECT_THAT(coll.size(), 0);
-  }
-
-  {
-    auto values{
-      ListEntry(1,2), 
-        ListEntry(2,3), 
-        ListEntry(3,4), 
-        ListEntry(4,5), 
-        ListEntry(5,6)
-    };
-
-    List_02 coll;
-
-    for (auto &e : values)
-      coll.push(e);
-
-    EXPECT_THAT(coll.size(), 5);
-
-    // now do not expect exception since there's no max
-    // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
-
-    coll.push(ListEntry(6,7));
-    EXPECT_THAT(coll.size(), 6);
-
-    EXPECT_THAT(coll.snap(), 
-        ElementsAre(
-          make_pair(1,2), 
-          make_pair(2,3), 
-          make_pair(3,4), 
-          make_pair(4,5), 
-          make_pair(5,6), 
-          make_pair(6,7))
-        );
-
-    coll.clear();
-    EXPECT_THAT(coll.size(), 0);
-  }
+  coll.clear();
+  EXPECT_THAT(coll.size(), 0);
 }
 
 
-TEST(AlgoList, LinkedSimpleReverse)
+// TEST(AlgoList, LinkedSimpleReverse)
+// {
+//   using namespace algo_list_linked;
+// 
+//   {
+//     auto values{
+//       ListEntry(1,2), 
+//         ListEntry(2,3), 
+//         ListEntry(3,4), 
+//         ListEntry(4,5), 
+//         ListEntry(5,6)
+//     };
+// 
+//     List coll;
+// 
+//     for (auto &e : values)
+//       coll.push(e);
+// 
+//     EXPECT_THAT(coll.size(), 5);
+// 
+//     // now do not expect exception since there's no max
+//     // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+// 
+//     coll.push(ListEntry(6,7));
+//     EXPECT_THAT(coll.size(), 6);
+// 
+//     EXPECT_THAT(coll.snap(), 
+//         ElementsAre(
+//           make_pair(1,2), 
+//           make_pair(2,3), 
+//           make_pair(3,4), 
+//           make_pair(4,5), 
+//           make_pair(5,6), 
+//           make_pair(6,7))
+//         );
+// 
+//     coll.reverse();
+// 
+//     EXPECT_THAT(coll.snap(), 
+//         ElementsAre(
+//           make_pair(6,7),
+//           make_pair(5,6), 
+//           make_pair(4,5), 
+//           make_pair(3,4), 
+//           make_pair(2,3), 
+//           make_pair(1,2)) 
+//         );
+// 
+//     coll.clear();
+//     EXPECT_THAT(coll.size(), 0);
+//   }
+// }
+
+
+// In order to exercise Divide(), have to have access to list structure but do
+// not see any practical way to do it through class interface. so make `head_`
+// public. same as algo_list_linked
+
+namespace algo_list_linked_divide
 {
-  using namespace algo_list_linked;
-
-  {
-    auto values{
-      ListEntry(1,2), 
-        ListEntry(2,3), 
-        ListEntry(3,4), 
-        ListEntry(4,5), 
-        ListEntry(5,6)
-    };
-
-    List coll;
-
-    for (auto &e : values)
-      coll.push(e);
-
-    EXPECT_THAT(coll.size(), 5);
-
-    // now do not expect exception since there's no max
-    // EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
-
-    coll.push(ListEntry(6,7));
-    EXPECT_THAT(coll.size(), 6);
-
-    EXPECT_THAT(coll.snap(), 
-        ElementsAre(
-          make_pair(1,2), 
-          make_pair(2,3), 
-          make_pair(3,4), 
-          make_pair(4,5), 
-          make_pair(5,6), 
-          make_pair(6,7))
-        );
-
-    coll.reverse();
-
-    EXPECT_THAT(coll.snap(), 
-        ElementsAre(
-          make_pair(6,7),
-          make_pair(5,6), 
-          make_pair(4,5), 
-          make_pair(3,4), 
-          make_pair(2,3), 
-          make_pair(1,2)) 
-        );
-
-    coll.clear();
-    EXPECT_THAT(coll.size(), 0);
-  }
-}
-
-
-namespace algo_list_linked_devide
-{
-  // Make `head_` public:
-  // In order to exercise Divide(), have to have access to list structure but do
-  // not see any practical way to do it through class interface. 
-
-  // copied from namespace algo_list_linked
+  // when node and entry are in a single structure and these can be different
+  // structure such as ListEntry and ListNode
 
   struct ListEntry
   {
-    explicit ListEntry(int value = 0) noexcept 
-      : value_(value), next_{nullptr} {}
+    explicit ListEntry(int row = 0, int col = 0) noexcept 
+      : row_(row), col_(col), next_(nullptr) 
+    {}
 
-    int value_{};
+    int row_{};
+    int col_{};
 
-    ListEntry *next_;
+    ListEntry* next_;
   };
 
-  // when use ListEntry *head
+  // cxx-operator-overload
+  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
+  }
+
+  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return !(lhs == rhs);
+  }
 
   class List
   {
     public:
-      List() : count_(0), head_(nullptr) {}
+      explicit List() noexcept
+        : head_(nullptr)
+        {}
 
-      bool empty() { return count_ == 0 ? true : false; }
+      bool emptry()
+      { return count_ == 0 ? true : false; }
 
-      // no support of max size
-      bool full() { return false; }
+      int size()
+      { return count_; }
 
-      size_t size() { return count_; }
-
-      // better version
-      void push(ListEntry const& entry)
+      // push_back()
+      void push_old(ListEntry const& entry)
       {
-        ListEntry *end{};
-
-        // find the end *algo-list-find-end*
-
-        for (end = head_; end && end->next_; end = end->next_)
-          ;
-
-        if (end == nullptr)
+        if (!head_)
           head_ = new ListEntry(entry);
         else
-          end->next_ = new ListEntry(entry);
+        {
+          ListEntry* run = head_;
 
-        count_++;
+          // unlike clear(), snap(), run shall be before end() so that can
+          // insert new one. Hence check run->next
+
+          while (run->next_)
+            run = run->next_;
+
+          run->next_ = new ListEntry(entry);
+        }
+        
+        ++count_;
       }
 
-      // better version
+      // push_back()
+      void push(ListEntry const& entry)
+      {
+        ListEntry* run{};
+
+        // find node for insertion *algo-list-find-end*
+        // works both when head_ is null and is not null
+
+        for (run = head_; run && run->next_; run = run->next_)
+          ;
+
+        // first item
+        if (!run)
+          head_ = new ListEntry(entry);
+        else
+          run->next_ = new ListEntry(entry);
+
+        ++count_;
+      }
+
       void clear()
       {
-        ListEntry *prev{nullptr};
-        ListEntry *curr{nullptr};
+        ListEntry* run = head_;
+        ListEntry* prev{};
 
-        // has different form from *also-list-find-end*
-
-        for (curr = head_; curr;)
+        while (run)
         {
-          prev = curr;
-          curr = curr->next_;
-
+          prev = run;
+          run = run->next_;
           free(prev);
-          count_--;
+          --count_;
         }
 
-        head_ = nullptr;
-
-        // comment out since `divide()` do not update count 
-        // assert(count_ == 0);
+        head_ = run;
       }
 
-      // changed since ListEntry is changed
-      std::vector<int> snap() noexcept
+      std::vector<ListEntry> snap()
       {
-        std::vector<int> result{};
-        ListEntry *curr{nullptr};
+        ListEntry* run = head_;
+        std::vector<ListEntry> coll;
 
-        for (curr = head_; curr; curr = curr->next_)
-          result.push_back(curr->value_);
+        while (run)
+        {
+          // ok as well
+          // coll.push_back(ListEntry(*run));
+          coll.push_back(*run);
+          run = run->next_;
+        }
 
-        return result;
+        return coll;
       }
 
-    // private:
     public:
-      size_t count_;
-      ListEntry *head_;
+      int count_{};
+
+      // can use ListEntry head_; which changes member implementation
+      ListEntry* head_;
   };
 
 
-  // o make the input linked list, first, in two as evenly as possible. 
-  // o not use count.
-  // o when the size of list is odd, the first list will have one more than the
-  //   second.
-  //
-  // see *algo-cycle-detection* 
+  // o slow and ffast starts from same place, begin()
+  // o slow goes 1 and ffast goes 2
+  // o this is implementation of {algo-list-tortoise-and-hare}
 
-  void DivideList(List *first, List *second)
+  bool detect_cycle_01(List const &list)
   {
     ListEntry *slow;
     ListEntry *fast;
+    ListEntry *ffast;
 
-    // do not check if list is null since there should be at least two and
-    // user's respnsibility to check it before calling this.
-    //
-    // if((midpoint = list->head) == NULL ) // must use ()
-    //   secondhalf->head = NULL;
-    // else
-
-    for (slow = first->head_, fast = slow->next_; fast;)
+    for (slow = fast = ffast = list.head_;
+        slow && (fast = ffast->next_) && (ffast = fast->next_);)
     {
-      fast = fast->next_;
-
-      if (fast)
-      {
-        fast = fast->next_;
-        slow = slow->next_;
-      }
-    }
-
-    second->head_ = slow->next_;
-    slow->next_ = nullptr;
-  }
-} // namespace
-
-
-// (gdb) b AlgoList_Divide_Test::TestBody()
-TEST(AlgoList, Divide)
-{
-  using namespace algo_list_linked_devide;
-
-  auto values{26, 33, 35, 29, 19, 12, 22};
-
-  List coll1;
-
-  for (auto e : values)
-  {
-    coll1.push(ListEntry(e));
-  }
-
-  EXPECT_THAT(coll1.snap(), ElementsAre(26,33,35,29,19,12,22));
-
-  // note:
-  // count of simple_list, simple_second will not be correct after this.
-  
-  List coll2;
-
-  DivideList(&coll1, &coll2);
-
-  EXPECT_THAT(coll1.snap(), ElementsAre(26,33,35,29));
-  EXPECT_THAT(coll2.snap(), ElementsAre(19,12,22));
-
-  coll1.clear();
-  coll2.clear();
-}
-
-namespace algo_list_linked_devide
-{
-  bool DetectCycle_0803(List *list)
-  {
-    ListEntry *slow = list->head_;
-    ListEntry *fast = slow->next_;
-
-    // "slow != fast"
-    for(; fast && slow != fast;)
-    {
-      fast = fast->next_;
-
-      if (fast)
-      {
-        fast = fast->next_;
-        slow = slow->next_;
-      }
-    }
-
-    // exit loop when fast is null when there is no cycle or when fast is not
-    // null and there is cycle so fast equals to slow.
-
-    return fast != slow ? false : true;
-  }
-
-
-  // The covers all cases so do not need to check if startNode is null and
-  // ListSize.
-  // this is implementation of {algo-list-tortoise-and-hare}
-
-  bool DetectCycle_01(List *list)
-  {
-    ListEntry *slow = list->head_;
-    ListEntry *fast1 = slow;
-    ListEntry *fast2 = slow;
-
-    // must have (expr); otherwise, compile error
-
-    for (; slow && (fast1 = fast2->next_) && (fast2 = fast1->next_);)
-    {
-      if ((slow == fast1) || (slow == fast2))
+      if (slow == fast || slow == ffast)
         return true;
 
       slow = slow->next_;
     }
-
+    
     return false;
   }
 
 
-  // use single fast
+  // o use single fast
+  // o see *cxx-for-while*
 
-  bool DetectCycle_02(List *list)
+  bool detect_cycle_02(List const &list)
   {
-    ListEntry *slow = list->head_;
-    ListEntry *fast = slow;
+    ListEntry *slow;
+    ListEntry *fast;
 
-    // must have (expr); otherwise, compile error
-
-    for(; slow && (fast = fast->next_) && (fast = fast->next_);)
+    for (slow = fast = list.head_;
+        slow && (fast = fast->next_) && (fast = fast->next_);)
     {
       if (slow == fast)
         return true;
 
       slow = slow->next_;
     }
-
+    
     return false;
   }
-} // namespace
 
+  bool detect_cycle_03(List const &list)
+  {
+    ListEntry *slow;
+    ListEntry *fast;
+
+    // do not check when head_ is null
+    for (slow = list.head_, fast = slow->next_;
+        fast && slow != fast; )
+    {
+      fast = fast->next_;
+
+      if (fast)
+      {
+        fast = fast->next_;
+        slow = slow->next_;
+      }
+    }
+
+    // loop ends when fast is null or when there is cycle so need to check if it
+    // was when there is a cycle
+
+    return fast != slow ? false : true;
+  }
+
+} // namespace
 
 TEST(AlgoList, DetectCycle)
 {
-  using namespace algo_list_linked_devide;
+  using namespace algo_list_linked_divide;
 
   {
-    auto input_values{26, 33, 35, 29, 19, 12, 22};
+    std::vector<ListEntry> values{
+      ListEntry(1,2), 
+        ListEntry(2,3), 
+        ListEntry(3,4), 
+        ListEntry(4,5), 
+        ListEntry(5,6)
+    };
 
     List coll;
 
-    for (auto e : input_values)
-    {
-      coll.push(ListEntry(e));
-    }
+    for (auto &e : values)
+      coll.push(e);
 
-    // find the end and make a cycle
-    ListEntry *first;
-    ListEntry *current;
-    ListEntry *next;
-
-    first = coll.head_;
-    current = first;
-    next = first->next_;
-    for (; next;)
-    {
-      current = next;
-      next = next->next_;
-    }
-
-    current->next_ = first;
-
-    EXPECT_THAT(DetectCycle_0803(&coll), true);
-    EXPECT_THAT(DetectCycle_01(&coll), true);
-    EXPECT_THAT(DetectCycle_02(&coll), true);
+    EXPECT_THAT(detect_cycle_01(coll), false);
+    EXPECT_THAT(detect_cycle_02(coll), false);
+    EXPECT_THAT(detect_cycle_03(coll), false);
   }
 
   {
-    auto input_values{26, 33, 35, 29, 19, 12, 22};
+    std::vector<ListEntry> values{
+      ListEntry(1,2), 
+        ListEntry(2,3), 
+        ListEntry(3,4), 
+        ListEntry(4,5), 
+        ListEntry(5,6)
+    };
 
     List coll;
 
-    for (auto e : input_values)
+    for (auto &e : values)
+      coll.push(e);
+
+    // to make a cycle
+    ListEntry *current;
+    ListEntry *next;
+
+    current = coll.head_;
+
+    // find end()-1
+    for (next = current; next; next = next->next_)
     {
-      coll.push(ListEntry(e));
+      current = next;
     }
 
-    EXPECT_THAT(DetectCycle_0803(&coll), false);
-    EXPECT_THAT(DetectCycle_01(&coll), false);
-    EXPECT_THAT(DetectCycle_02(&coll), false);
+    // makes a cycle
+    current->next_ = coll.head_;
+
+    EXPECT_THAT(detect_cycle_01(coll), true);
+    EXPECT_THAT(detect_cycle_02(coll), true);
+    EXPECT_THAT(detect_cycle_03(coll), true);
+  }
+}
+
+namespace algo_list_linked_divide
+{
+  // o devide the first list in two as evenly as possible
+  // o when the size of the first is odd, the divided first will have one more
+  //   than the second
+  // o as with detect_cycle_03(), slow starts from 0 and fast starts from 1.
+ 
+  void divide_list_01(List &first, List &second)
+  {
+    ListEntry *slow;
+    ListEntry *fast;
+
+    // do not check if slow is null or not
+
+    for (slow = first.head_, fast = slow->next_; 
+        fast; )
+    {
+      fast = fast->next_;
+
+      if (fast)
+      {
+        fast = fast->next_;
+        slow = slow->next_;
+      }
+    }
+
+    // `slow` is the end of divided first list
+    second.head_ = slow->next_;
+    slow->next_ = nullptr;
+  }
+
+  // as with detect_cycle_01(), both starts from the same pos
+
+  void divide_list_02(List &first, List &second)
+  {
+    ListEntry *slow;
+    ListEntry *fast;
+
+    for (slow = fast = first.head_;
+        slow && (fast = fast->next_) && (fast = fast->next_); )
+    {
+      slow = slow->next_;
+    }
+
+    // `slow` is the end of divided first list
+    second.head_ = slow->next_;
+    slow->next_ = nullptr;
+  }
+} // namespace
+
+TEST(AlgoList, Divide)
+{
+  using namespace algo_list_linked_divide;
+
+  std::vector<ListEntry> values{
+    ListEntry(1,2), 
+    ListEntry(2,3), 
+    ListEntry(3,4), 
+    ListEntry(4,5), 
+    ListEntry(5,6),
+    ListEntry(6,7)
+  };
+
+  {
+    const auto func = divide_list_01;
+
+    List coll1;
+
+    for (auto &e : values)
+      coll1.push(e);
+
+    // requires cxx-operator-overload
+    std::vector<ListEntry> divided_first{
+      ListEntry(1,2), 
+      ListEntry(2,3),
+      ListEntry(3,4)
+    };
+
+    std::vector<ListEntry> divided_second{
+      ListEntry(4,5),
+      ListEntry(5,6),
+      ListEntry(6,7)
+    };
+
+    // note:
+    // since divide_list_01() do not change `count_`, count of simple_list,
+    // simple_second will not be correct after this.
+
+    List coll2;
+
+    func(coll1, coll2);
+
+    EXPECT_THAT(coll1.snap(), divided_first);
+    EXPECT_THAT(coll2.snap(), divided_second);
+
+    coll1.clear();
+    coll2.clear();
+  }
+
+  {
+    const auto func = divide_list_02;
+
+    List coll1;
+
+    for (auto &e : values)
+      coll1.push(e);
+
+    // requires cxx-operator-overload
+    std::vector<ListEntry> divided_first{
+      ListEntry(1,2), 
+      ListEntry(2,3),
+      ListEntry(3,4)
+    };
+
+    std::vector<ListEntry> divided_second{
+      ListEntry(4,5),
+      ListEntry(5,6),
+      ListEntry(6,7)
+    };
+
+    // note:
+    // since divide_list_01() do not change `count_`, count of simple_list,
+    // simple_second will not be correct after this.
+
+    List coll2;
+
+    func(coll1, coll2);
+
+    EXPECT_THAT(coll1.snap(), divided_first);
+    EXPECT_THAT(coll2.snap(), divided_second);
+
+    coll1.clear();
+    coll2.clear();
+  }
+
+  // TEST(List, SpliceAndDivide)
+  {
+    std::list<int> coll{26, 33, 35, 29, 19, 12, 22};
+    auto slow = coll.begin();
+    auto fast = next(slow);
+
+    for(;fast != coll.end();)
+    {
+      ++fast;
+
+      if (fast != coll.end())
+      {
+        ++fast;
+        ++slow;
+      }
+    }
+
+    list<int> coll1;
+    list<int> coll2;
+
+    // due to open end of iterator, increase one more compared to C version.
+    EXPECT_THAT(*slow, 29);
+    ++slow;
+
+    // c.splice(pos,c2, c2beg,c2end) 
+    // Moves all elements of the range [c2beg,c2end) in c2 in
+    // front of pos of list c (c and c2 may be identical)
+
+    coll1.splice(coll1.begin(), coll, coll.begin(), slow);
+    coll2.splice(coll2.begin(), coll, slow, coll.end());
+
+    EXPECT_THAT(coll1, ElementsAre(26,33,35,29));
+    EXPECT_THAT(coll2, ElementsAre(19,12,22));
   }
 }
 
@@ -5812,9 +5866,155 @@ TEST(AlgoList, DetectCycle)
 
 
 // ={=========================================================================
+// algo-stack
+
+// class Stack
+// {
+//   public:
+//     void create();
+//     void clear();
+//     bool empty();
+//     bool full();
+//     int size();
+//
+//     // as push_back();
+//     void push(ListEntry const& entry);
+//     void pop();
+//     ListEntry top();
+//
+//     // as traverse()
+//     std::vector<ListEntry> snap();
+// };
+
+namespace algo_stack_contiguous
+{
+  struct ListEntry
+  {
+    explicit ListEntry(int row = 0, int col = 0) noexcept 
+      : row_(row), col_(col) {}
+
+    int row_{};
+    int col_{};
+  };
+
+  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
+  }
+
+  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return !(lhs == rhs);
+  }
+
+  class Stack
+  {
+    public:
+      void create()
+      { top_ = 0; }
+
+      void clear() 
+      { top_ = 0;}
+
+      bool empty()
+      { return top_ == 0 ? true : false; }
+
+      bool full()
+      { return top_ >= MAX_ENTRY ? true : false; }
+
+      int size()
+      { return top_; }
+
+      // as push_back();
+      void push(ListEntry const& entry)
+      {
+        if (full())
+          throw runtime_error("list is full");
+
+        coll_[top_++] = entry;
+      }
+
+      void pop()
+      {
+        --top_;
+      }
+
+      ListEntry top()
+      {
+        if (empty())
+          throw runtime_error("list is empty");
+
+        return coll_[top_ - 1];
+      }
+
+      std::vector<ListEntry> snap()
+      {
+        std::vector<ListEntry> coll;
+
+        for (int i = 0; i < top_; ++i)
+          coll.push_back(coll_[i]);
+
+        return coll;
+      }
+
+    private:
+
+      // cxx-static
+      // error: invalid use of non-static data member ‘algo_list_contiguous::List::MAX_ENTRY’
+      // const int MAX_ENTRY{5};
+
+      static const int MAX_ENTRY{5};
+
+      // top_ is next positon to push
+      int top_;
+
+      ListEntry coll_[MAX_ENTRY];
+  };
+}
+
+TEST(AlgoStack, ContiguousSimple)
+{
+  using namespace algo_stack_contiguous;
+
+  std::vector<ListEntry> values{
+      ListEntry(1,2), 
+      ListEntry(2,3), 
+      ListEntry(3,4), 
+      ListEntry(4,5), 
+      ListEntry(5,6)
+  };
+
+  Stack coll;
+  coll.create();
+
+  for (auto &e : values)
+    coll.push(e);
+
+  EXPECT_THAT(coll.size(), 5);
+  EXPECT_THROW(coll.push(ListEntry(6,7)), runtime_error); 
+
+  EXPECT_THAT(coll.top(), ListEntry(5,6));
+
+  coll.pop();
+  coll.pop();
+  coll.pop();
+
+  EXPECT_THAT(coll.size(), 2);
+
+  // requires cxx-operator-overload
+  auto expected{
+    ListEntry(1,2), 
+    ListEntry(2,3)
+  };
+
+  EXPECT_THAT(coll.snap(), expected);
+}
+
+
+// ={=========================================================================
 // algo-sort-insert
 
-// reference code, decending sort
+// reference code, ascending sort
 void sort_insertion_01(vector<int> &coll)
 {
   // start from 1 since one entry is always sorted.
@@ -6054,6 +6254,583 @@ TEST(AlgoSort, Insertion)
     sort_insertion_08(coll, std::less<int>()); 
     EXPECT_THAT(coll, 
         ElementsAreArray({33, 31, 30, 29, 17, 15, 13, 12, 10, 6, 5, 3, 2}));
+  }
+}
+
+
+
+// ={=========================================================================
+// algo-sort-insert algo-partition 
+
+// algo-partition which uses the same grouping trick as algo-sort-insert
+
+namespace algo_partition
+{
+  // Re-arrange the portfolio between (begin, end)  in such a way that all the
+  // stocks with quantity <= maxQuantity precede all those with quantity >
+  // maxQuantity Return the iterator to the first element with quantity >
+  // maxQuantity
+
+  using PortfolioIterator = vector<unsigned int>::iterator;
+
+  // replace Stock to simple int 
+  // std::vector<Stock> PortfolioGreater, PortfolioLesser;
+
+  // 2N space and 2N time(2 pass)
+
+  PortfolioIterator rearrangeByQuantity_1(PortfolioIterator begin,
+      PortfolioIterator end,
+      unsigned int maxQuantity)
+  {
+    // implement me
+    std::vector<unsigned int> PortfolioGreater, PortfolioLesser;
+    PortfolioIterator run = begin;
+
+    for( ; run != end; ++run)
+    {
+      // greater
+      // if( run->quantity > maxQuantity )
+      if( *run > maxQuantity )
+        PortfolioGreater.push_back(*run);
+      else
+        PortfolioLesser.push_back(*run);
+    }
+
+    run = begin;
+    for(const auto& elem : PortfolioLesser) {
+      *run++ = elem;
+    }
+    begin = run;
+
+    for(const auto& elem : PortfolioGreater) {
+      *run++ = elem;
+    }
+
+    return begin;
+  }
+
+  // less space but still 2 pass
+
+  PortfolioIterator rearrangeByQuantity_2(PortfolioIterator begin,
+      PortfolioIterator end, unsigned int max_quanity)
+  {
+    // how to get T of coll such as algo-remove? here, assumes that we know T
+    vector<unsigned int> coll;
+
+    PortfolioIterator start = begin;
+    PortfolioIterator current{};
+
+    // one pass to filter <=
+
+    for (; start != end; ++start)
+    {
+      // not use push_back() since void push_back()
+      if (*start <= max_quanity)
+        current = coll.insert(coll.end(), *start);
+    }
+
+    start = begin;
+
+    // second pass to filter >
+
+    for (; start != end; ++start)
+    {
+      if (*start > max_quanity)
+        coll.push_back(*start);
+    }
+
+    // copy it back
+    copy(coll.begin(), coll.end(), begin);
+
+    // *cxx-vector-reallocation* *cxx-iter-invalidated*
+    // *cxx-iter-singular* means invalidated iterator since there is no guarantee
+    // that current is valid after second pass push_back due to relocation
+    //
+    // /usr/include/c++/6/debug/safe_iterator.h:298:
+    // Error: attempt to increment a singular iterator.
+    // 
+    // Objects involved in the operation:
+    //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
+    //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, 
+    //          std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
+    //       state = singular;
+    //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
+    //     }
+    // Aborted
+    //
+    // return ++current;
+
+    return current;
+  }
+
+  namespace algo_code
+  {
+    // /usr/include/c++/4.9.2/bits/stl_algo.h
+
+    /**
+     *  @brief Move elements for which a predicate is true to the beginning
+     *         of a sequence.
+     *  @ingroup mutating_algorithms
+     *  @param  __first   A forward iterator.
+     *  @param  __last    A forward iterator.
+     *  @param  __pred    A predicate functor.
+     *  @return  An iterator @p middle such that @p __pred(i) is true for each
+     *  iterator @p i in the range @p [__first,middle) and false for each @p i
+     *  in the range @p [middle,__last).
+     *
+     *  @p __pred must not modify its operand. @p partition() does not preserve
+     *  the relative ordering of elements in each group, use
+     *  @p stable_partition() if this is needed.
+     */
+    template<typename _ForwardIterator, typename _Predicate>
+      inline _ForwardIterator
+      partition(_ForwardIterator __first, _ForwardIterator __last,
+          _Predicate   __pred)
+      {
+        return std::__partition(__first, __last, __pred,
+            std::__iterator_category(__first));
+      }
+
+    /// This is a helper function...
+    template<typename _ForwardIterator, typename _Predicate>
+      _ForwardIterator
+      __partition(_ForwardIterator __first, _ForwardIterator __last,
+          _Predicate __pred, forward_iterator_tag)
+      {
+        if (__first == __last)
+          return __first;
+
+        while (__pred(*__first))
+          if (++__first == __last)
+            return __first;
+
+        _ForwardIterator __next = __first;
+
+        while (++__next != __last)
+          if (__pred(*__next))
+          {
+            std::iter_swap(__first, __next);
+            ++__first;
+          }
+
+        return __first;
+      }
+  } // namespace
+
+
+  // same as algo-partition in /usr/include/c++/4.9.2/bits/stl_algo.h
+  //
+  // o is to find the first unmatched
+
+  template <typename _Iterator, typename _Compare>
+    _Iterator partition_1(_Iterator begin, _Iterator end, _Compare comp)
+    {
+      if (begin == end)
+        return begin;
+
+      // skip matched elements and begin becomes the first unmatched item.
+      // begin is "start of the unmatched"
+      // note that begin is increased in "if"
+ 
+      while (comp(*begin))
+        if (++begin == end)
+          return begin;
+
+      // do the same
+      // _Iterator first = begin;
+      // for (; first != end; ++first)
+      //   if (!comp(*first))
+      //     break;
+
+      _Iterator run = begin;
+
+      // increase first since knows *run is already unmatched.
+      while (++run != end)
+      {
+        // see matched and move it to matched group
+        if (comp(*run))
+        {
+          // cannot use "=" since it's not algo-remove
+          std::iter_swap(run, begin);
+          ++begin;
+        }
+      }
+
+      return begin;
+    }
+
+} // namespace
+
+
+TEST(Algo, Partition)
+{
+  using namespace algo_partition;
+
+  // | matched | unmatched |
+  //
+  // algo-partition returns an iterator to the first element where the
+  // predicate is not true, or the end of the range if all elements satisfy
+  // the predicate. so first odd element:
+
+  {
+    vector<int> coll1;
+    vector<int> coll2;
+
+    // INSERT_ELEMENTS(coll1, 1, 9);
+    coll1 = {1,2,3,4,5,6,7,8,9};
+    EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    auto pos1 = partition(coll1.begin(), coll1.end(),    // range
+        [](int elem)
+        {
+        return elem %2 == 0;
+        });
+
+    EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
+
+    EXPECT_EQ(*pos1, 5);
+
+    // INSERT_ELEMENTS(coll2, 1, 9);
+    coll2 = {1,2,3,4,5,6,7,8,9};
+    EXPECT_THAT(coll2, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+    auto pos2 = stable_partition(coll2.begin(), coll2.end(),
+        [](int elem)
+        {
+        return elem %2 == 0;
+        });
+    EXPECT_THAT(coll2, ElementsAre(2, 4, 6, 8, 1, 3, 5, 7, 9));
+
+    // first odd element:
+    EXPECT_EQ(*pos2, 1);
+  }
+
+  // works like algo-partition-stable_partition
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    const auto func = rearrangeByQuantity_1;
+
+    auto it = func(coll.begin(), coll.end(), 25);
+
+    // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
+    // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
+    //                                ^^
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+
+    EXPECT_THAT(*it, 43);
+  }
+
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    const auto func = rearrangeByQuantity_2;
+
+    auto it = func(coll.begin(), coll.end(), 25);
+
+    // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
+    // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
+    //                                ^^
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
+
+    // this now fails since `current` is iterator of internal coll but not input
+    // coll. Have to work out one.
+    // EXPECT_THAT(*it, 43);
+  }
+
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    // this prevents cxx-template-deduction
+    // const auto func = partition_1;
+
+    auto it = partition_1(coll.begin(), coll.end(), 
+        [](unsigned int value)
+        { return value <= 25; }
+        );
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+    EXPECT_THAT(distance(coll.begin(), it), 11);
+    EXPECT_THAT(*it, 43);
+  }
+
+
+  // Q: why partiton_xxx() make different order from partition() when use the
+  // same logic? but distance is the same.
+
+  {
+    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
+
+    auto it = partition(coll.begin(), coll.end(), 
+        [](unsigned int value)
+        { return value <= 25; }
+        );
+
+    // EXPECT_THAT(coll, 
+    //     ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({23,6,11,6,13,23,21,19,20,15,24,48,37,34,29,26,41,30,42,43}));
+
+    EXPECT_THAT(distance(coll.begin(), it), 11);
+
+    // EXPECT_THAT(*it, 43);
+    EXPECT_THAT(*it, 48);
+  }
+}
+
+
+// ={=========================================================================
+// algo-sort-insert algo-remove 
+
+namespace algo_remove
+{
+
+  namespace algo_code 
+  {
+    // /usr/include/c++/4.9/bits/predefined_ops.h
+
+    // check if when predicate is called, what arg iter refers to equals to the
+    // value.
+
+    template<typename _Value>
+      struct _Iter_equals_val
+      {
+        _Value& _M_value;
+
+        _Iter_equals_val(_Value& __value)
+          : _M_value(__value)
+        { }
+
+        template<typename _Iterator>
+          bool
+          operator()(_Iterator __it)
+          { return *__it == _M_value; }
+      };
+
+    template<typename _Value>
+      inline _Iter_equals_val<_Value>
+      __iter_equals_val(_Value& __val)
+      { return _Iter_equals_val<_Value>(__val); }
+
+    // /usr/include/c++/4.9/bits/stl_algo.h
+
+    /**
+     *  @brief Remove elements from a sequence.
+     *  @ingroup mutating_algorithms
+     *  @param  __first  An input iterator.
+     *  @param  __last   An input iterator.
+     *  @param  __value  The value to be removed.
+     *  @return   An iterator designating the end of the resulting sequence.
+     *
+     *  All elements equal to @p __value are removed from the range
+     *  @p [__first,__last).
+     *
+     *  remove() is stable, so the relative order of elements that are
+     *  not removed is unchanged.
+     *
+     *  Elements between the end of the resulting sequence and @p __last
+     *  are still present, but their value is unspecified.
+     */
+    template<typename _ForwardIterator, typename _Tp>
+      inline _ForwardIterator
+      remove(_ForwardIterator __first, _ForwardIterator __last,
+          const _Tp& __value)
+      {
+        return std::__remove_if(__first, __last,
+            __gnu_cxx::__ops::__iter_equals_val(__value));
+      }
+
+    template<typename _ForwardIterator, typename _Predicate>
+      _ForwardIterator
+      __remove_if(_ForwardIterator __first, _ForwardIterator __last,
+          _Predicate __pred)
+      {
+        __first = std::__find_if(__first, __last, __pred);
+        if (__first == __last)
+          return __first;
+
+        _ForwardIterator __result = __first;
+        ++__first;
+        for (; __first != __last; ++__first)
+          if (!__pred(__first))
+          {
+            // note
+            // this is `assign` but not `swap` which make a difference to own
+            // remove does.
+
+            *__result = _GLIBCXX_MOVE(*__first);
+            ++__result;
+          }
+        return __result;
+      }
+
+    // /usr/include/c++/4.9/bits/predefined_ops.h
+    template<typename _Predicate>
+      struct _Iter_pred
+      {
+        _Predicate _M_pred;
+
+        _Iter_pred(_Predicate __pred)
+          : _M_pred(__pred)
+        { }
+
+        template<typename _Iterator>
+          bool
+          operator()(_Iterator __it)
+          { return bool(_M_pred(*__it)); }
+      };
+
+    template<typename _Predicate>
+      inline _Iter_pred<_Predicate>
+      __pred_iter(_Predicate __pred)
+      { return _Iter_pred<_Predicate>(__pred); }
+
+    template<typename _ForwardIterator, typename _Predicate>
+      inline _ForwardIterator
+      remove_if(_ForwardIterator __first, _ForwardIterator __last,
+          _Predicate __pred)
+      {
+        return std::__remove_if(__first, __last,
+            __gnu_cxx::__ops::__pred_iter(__pred));
+      }
+  } // namespace
+
+
+  // same as partition_1() but | unmatched | matched |
+
+  template <typename _Iterator, typename _T>
+    _Iterator remove_1(_Iterator begin, _Iterator end, _T value)
+    {
+      if (begin == end)
+        return begin;
+
+      // skip *not* matched elements and begin becomes the first unmatched item.
+      // begin is "start of the unmatched"
+      // note that begin is increased in "if"
+ 
+      while (*begin != value)
+        if (++begin == end)
+          return begin;
+
+      _Iterator run = begin;
+
+      // increase first since knows *run is already unmatched.
+      while (++run != end)
+      {
+        // see matched and move it to matched group
+        if (*run != value)
+        {
+          // cannot use "=" since it's not algo-remove
+          // std::iter_swap(run, begin);
+          *begin = *run;
+          ++begin;
+        }
+      }
+
+      return begin;
+    }
+
+  // 1. do the same as algo-partition but from the end. 
+  // 2. therefore, do not care about the order of unmatched group.
+
+  template <typename _Iterator, typename _T>
+    _Iterator remove_2(_Iterator __begin, _Iterator __end, _T __value)
+    {
+      _Iterator run = __end - 1;
+      _Iterator start_of_remove = __end;
+
+      for (; run > __begin; --run)
+      {
+        // swap only when element has the same value and swap is necessary
+        if ((*run == __value) && (run != start_of_remove-1))
+          swap(*run, *(--start_of_remove));
+      }
+
+      // swap only when element has the same value and swap is necessary
+      if ((*run == __value) && (run != start_of_remove-1))
+        swap(*run, *(--start_of_remove));
+
+      return start_of_remove;
+    }
+
+} // namespace
+
+
+TEST(Algo, Remove)
+{
+  using namespace algo_remove;
+
+  // algo-remove which is opposite from algo-partition
+  // | unmatched | matched |
+  
+  // coll.erase() delete elements but algo-remove do not.
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    for (auto it = coll.begin(); it != coll.end(); ++it)
+    {
+      if (*it == 2)
+        it = coll.erase(it);
+    }
+
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto end = remove(coll.begin(), coll.end(), 2);
+
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+
+  // show that algo-remove() do not remove elements
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    remove(coll.begin(), coll.end(), 2);
+
+    // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
+    //                                       ^^^^^^^ 
+
+    EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+  }
+
+  // show that remove_if() returns end if not found
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto it = remove_if(coll.begin(), coll.end(), 
+        [](int value)
+        { return value == 10; }
+        );
+
+    EXPECT_THAT(it, coll.end());
+  }
+
+  // own remove
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto end = remove_1(coll.begin(), coll.end(), 2);
+
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
   }
 }
 
@@ -6500,7 +7277,7 @@ namespace algo_sort_heap
   }
 } // namespace
 
-TEST(Heap, SiftUp)
+TEST(AlgoSort, HeapSiftUp)
 {
   using namespace algo_sort_heap;
 
@@ -6532,7 +7309,7 @@ TEST(Heap, SiftUp)
   }
 }
 
-TEST(Heap, SiftDown)
+TEST(AlgoSort, HeapSiftDown)
 {
   using namespace algo_sort_heap;
 
@@ -6816,7 +7593,8 @@ namespace algo_sort_heap
 
 } // namespace
 
-TEST(Heap, PriQueue)
+
+TEST(AlgoSort, HeapPriQueue)
 {
   using namespace algo_sort_heap;
 
@@ -7001,7 +7779,7 @@ namespace algo_sort_heap
   }
 } // namespace
 
-TEST(Heap, Sort)
+TEST(AlgoSort, HeapSort)
 {
   using namespace algo_sort_heap;
 
@@ -7031,6 +7809,51 @@ TEST(Heap, Sort)
   //   EXPECT_THAT(coll, 
   //       ElementsAreArray({0, 2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33 }));
   // }
+}
+
+
+// ={=========================================================================
+// algo-sort-merge
+
+// merge(combine) sorted input list
+
+TEST(AlgoSort, MergeSortedList)
+{
+  std::list<int> coll1{26, 33, 35, 29};
+  std::list<int> coll2{9, 12, 22};
+  std::list<int> result{};
+
+  auto first = coll1.begin();
+  auto second = coll2.begin();
+
+  for (; first != coll1.end() && (second != coll2.end());)
+  {
+    // ascending order
+    if (*first <= *second)
+    {
+      result.push_back(*first);
+      ++first;
+    }
+    else
+    {
+      result.push_back(*second);
+      ++second;
+    }
+  }
+
+  // second has some left
+  if (first == coll1.end() && second != coll2.end())
+    result.splice(result.end(), coll2, second, coll2.end());
+  // first has some left
+  else if (first != coll1.end() && second == coll2.end())
+    result.splice(result.end(), coll1, first, coll1.end());
+  else
+  {
+    // no left from the both
+  }
+
+  // combined
+  EXPECT_THAT(result, ElementsAre(9, 12, 22, 26, 33, 35, 29));
 }
 
 

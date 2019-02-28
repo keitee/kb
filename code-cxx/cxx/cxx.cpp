@@ -4565,7 +4565,7 @@ TEST(Override, Condition_2)
 {
   using namespace cxx_override::no_virtual;
 
-  // No override since no vtable update and base version called.
+  // No override keyword is used and no vtable update. Hence base version called.
   {
     Derived derived;
     Base* pbase = &derived;
@@ -4576,9 +4576,89 @@ TEST(Override, Condition_2)
     Derived derived;
   
     // see Derived
-    Derived* pbase = &derived;
+    Derived* pderived = &derived;
   
+    EXPECT_THAT(pderived->get_value(), 20);
+  }
+}
+
+// cxx-override
+
+namespace cxx_override
+{
+  namespace no_pure
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        virtual int get_value() = 0;
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        virtual int get_value()
+        { 
+          return derived_; 
+        };
+
+      private:
+        int derived_;
+    };
+
+    class DerivedNoPure: public Base
+    {
+      public:
+        DerivedNoPure() : derived_(20) {} 
+
+        // without this, compile fails and with this, will see link error in the
+        // end. 
+        // gcc (Debian 4.9.2-10) 4.9.2
+        // : undefined reference to `vtable for cxx_override::no_pure::DerivedNoPure'
+        // collect2: error: ld returned 1 exit status
+
+        virtual int get_value();
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+
+TEST(Override, PureVirtual)
+{
+  using namespace cxx_override::no_pure;
+
+  {
+    Derived derived;
+    Base* pbase = &derived;
     EXPECT_THAT(pbase->get_value(), 20);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pderived = &derived;
+  
+    EXPECT_THAT(pderived->get_value(), 20);
+  }
+
+  {
+    DerivedNoPure derived;
+  
+    // see Derived
+    DerivedNoPure* pderived = &derived;
+  
+    EXPECT_THAT(pderived->get_value(), 20);
   }
 }
 

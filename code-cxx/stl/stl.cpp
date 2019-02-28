@@ -343,6 +343,17 @@ TEST(Iterator, Next)
 
     EXPECT_THAT(coll, result);
   }
+
+  // what would happen when call next() on empty? cxx-undefined
+  //
+  // /usr/include/c++/4.9/debug/safe_iterator.h:356:error: attempt to advance a
+  //     past-the-end iterator 1 steps, which falls outside its valid range.
+
+  {
+    vector<int> coll{};
+    auto pos = coll.begin();
+    auto result = next(pos);
+  }
 }
 
 
@@ -1866,15 +1877,6 @@ TEST(Unordered, MapDuplicates)
 // ={=========================================================================
 // cxx-list
 
-void PrintLists(const list<int> &list_one, const list<int> &list_two)
-{
-    cout << "list 1: ";
-    copy(list_one.cbegin(), list_one.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl << "list 2: ";
-    copy(list_two.cbegin(), list_two.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl << endl;
-}
-
 TEST(List, SpliceAndMerge)
 {
   list<int> list_one, list_two;
@@ -1903,7 +1905,7 @@ TEST(List, SpliceAndMerge)
       ElementsAreArray({10, 11, 12, 0, 1, 2, 3, 4, 5, 13, 14, 15})); 
  
   // c.splice(pos,c2,c2pos) 
-  // Moves the element at c2pos in c2 in front of pos of list c 
+  // Moves the *single* element at c2pos in c2 in front of pos of list c 
   // (c and c2 may be identical)
   //
   // move first element of list_two to the end
@@ -1957,11 +1959,43 @@ TEST(List, SpliceAndMerge)
 }
 
 
+TEST(List, Ops)
+{
+  std::list<int> coll1, coll2;
+
+  for (int i = 0; i < 6; ++i)
+  {
+    coll1.push_back(i);
+    coll2.push_front(i);
+  }
+
+  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5));
+  EXPECT_THAT(coll1.size(), 6); 
+  EXPECT_THAT(coll2, ElementsAre(5,4,3,2,1,0));
+  EXPECT_THAT(coll2.size(), 6); 
+
+  EXPECT_THAT(coll1.front(), 0);
+  EXPECT_THAT(coll1.back(), 5);
+  EXPECT_THAT(coll1.size(), 6); 
+
+  // void pop_front() so cannot use EXPECT_THAT()
+  coll1.pop_front();
+  EXPECT_THAT(coll1.size(), 5); 
+
+  coll1.pop_back();
+  EXPECT_THAT(coll1.size(), 4); 
+
+  EXPECT_THAT(coll1, ElementsAre(1,2,3,4));
+}
+
+
 TEST(List, RemoveIf)
 {
-  list<int> int_list{0, 1, 2, 3, 4};
+  std::list<int> coll{0, 1, 2, 3, 4};
 
-  int_list.remove_if([](int e)
+  // remove if e > 2
+
+  coll.remove_if([](int e)
       { 
         if (e > 2) 
           return true;
@@ -1969,18 +2003,20 @@ TEST(List, RemoveIf)
         return false;
       });
 
-  EXPECT_THAT(int_list, ElementsAre(0, 1, 2));
+  EXPECT_THAT(coll, ElementsAre(0, 1, 2));
 
-  int_list.remove_if([](int e)
+  // remove if can be divided by 2
+
+  coll.remove_if([](int e)
       { return e % 2 == 0; });
 
-  EXPECT_THAT(int_list, ElementsAre(1));
+  EXPECT_THAT(coll, ElementsAre(1));
 }
 
 
 TEST(List, Erase)
 {
-  list<int> coll{10,20,30,40,50};
+  std::list<int> coll{10,20,30,40,50};
 
   auto iter = coll.begin();
 
@@ -1992,9 +2028,9 @@ TEST(List, Erase)
   EXPECT_THAT(coll, ElementsAre(30,40,50));
 }
 
-TEST(List, Devide)
+TEST(List, SpliceAndDivide)
 {
-  list<int> coll{26, 33, 35, 29, 19, 12, 22};
+  std::list<int> coll{26, 33, 35, 29, 19, 12, 22};
   auto slow = coll.begin();
   auto fast = next(slow);
 
@@ -2025,91 +2061,6 @@ TEST(List, Devide)
   EXPECT_THAT(coll1, ElementsAre(26,33,35,29));
   EXPECT_THAT(coll2, ElementsAre(19,12,22));
 }
-
-
-/*
-If List is proper class which has copy or move context then it would be easy to
-implement this since can simply call result.Add() to create merged list.
-
-However, this is for C and result is the same as first and have to handle with
-care such as handle the first comparison.
-
-{
-  set current of first;
-  set current of last;
-
-  while (there is element in the first AND there is element in the last)
-  {
-    compare key between element from the first and the last;
-
-    if (the one of the first is equal or greater then the one of the last)
-    {
-      then write the one of the last and get the next from the last;
-    }
-
-    if (the one of the first is less than the last)
-    {
-      then, write it out and get the next from the first;
-    }
-  }
-
-  if (no more from the first and there are some from the last)
-  {
-    then write the rest of the last since the rest is already sorted;
-  }
-  else if (no more from the second and there are some from the first)
-  {
-    then write the rest of the first;
-  }
-  else
-  {
-    when both are finished;
-  }
-
-  set the end of the result for all caese;
-}
-*/
-
-TEST(List, Combine)
-{
-  list<int> coll1{26,33,35,29};
-  list<int> coll2{9,12,22};
-  list<int> coll;
-
-  auto first = coll1.begin();
-  auto second = coll2.begin();
-
-  while ((first != coll1.end()) && (second != coll2.end()))
-  {
-    if (*second <= *first)
-    {
-      coll.push_back(*second);
-      ++second;
-    }
-    else
-    {
-      coll.push_back(*first);
-      ++first;
-    }
-  }
-
-  if ((first == coll1.end()) && (second != coll2.end())) 
-  {
-    coll.splice(coll.end(), coll2, second, coll2.end());
-  }
-  else if ((first != coll1.end()) && (second == coll2.end())) 
-  {
-    coll.splice(coll.end(), coll1, first, coll1.end());
-  }
-  else
-  {
-    // no left from both.
-  }
-
-  // combined
-  EXPECT_THAT(coll, ElementsAre(9, 12, 22, 26, 33, 35, 29));
-}
-
 
 TEST(List, Sort)
 {
@@ -3752,137 +3703,6 @@ TEST(AlgoEqual, UsePermutation)
 
 
 // ={=========================================================================
-// cxx-algo-unique
-
-TEST(AlgoUnique, Use)
-{
-  // • Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
-  {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-
-  // • The first form removes from the range [beg,end) all elements that are
-  // equal to the previous elements. Thus, only when the elements in the
-  // sequence are sorted, or at least when all elements of the same value are
-  // adjacent, does it remove all duplicates.
-
-  {
-    int source[] = {1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-    list<int> coll;
-    copy(begin(source), end(source), back_inserter(coll));
-
-    auto pos = unique(coll.begin(), coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
-
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
-  }
-
-  // • The second form removes all elements that follow an element e and for
-  // which the binary predicate op(e,elem) yields true. In other words, the
-  // predicate is not used to compare an element with its predecessor; the
-  // element is compared with the previous element that was not removed (see the
-  // following examples).
-
-  // For example, the first 6 is greater than the following 1, 2, 2, 3, and 1,
-  // so all these elements are removed. In other words, the predicate is not
-  // used to compare an element with its predecessor; the element is compared
-  // with the previous element that was not removed 
-  {
-    list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-
-    auto pos = unique(coll.begin(), coll.end(), greater<int>());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 4, 6, 6, 6, 6, 7}));
-  }
-
-  {
-    string input{"1   2  3            4           "};
-    EXPECT_THAT(input, "1   2  3            4           ");
-
-    auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y) {
-      return x == y and x == ' ';
-    });
-
-    input.erase(new_end, input.end());
-    EXPECT_THAT(input, "1 2 3 4 ");
-  }
-}
-
-namespace algo_unique 
-{
-  using ITERATOR = vector<int>::iterator;
-
-  // when see two consequtive equal items, return a iterator to the first.
-  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
-  {
-    if (first == last)
-      return last;
-
-    ITERATOR next = first;
-    while (++next != last)
-    {
-      if (*first == *next)
-        return first;
-      first = next;
-    }
-
-    return last;
-  }
-
-  // from /usr/include/c++/4.9/bits/stl_algo.h
-  ITERATOR my_unique(ITERATOR first, ITERATOR last)
-  {
-    first = adjacent_find(first, last);
-    if (first == last)
-      return last;
-
-    ITERATOR dest = first;
-    ++first;
-    while (++first != last)
-    {
-      // not equal and assign(overwrite). so if equals, keep increase first.
-      if (*dest != *first)
-        *++dest = *first;
-    }
-
-    // one after from the last
-    return ++dest;
-  }
-}
-
-TEST(AlgoUnique, UseOwn)
-{
-  using namespace algo_unique;
-
-  // • Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
-  {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = my_unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = my_unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-}
-
-
-// ={=========================================================================
 // cxx-algo-reverse
 
 TEST(AlgoReverse, Use)
@@ -3992,274 +3812,6 @@ TEST(AlgoMutating, AlgoPartition)
 }
 
 
-// Re-arrange the portfolio between (begin, end)  in such a way that all the
-// stocks with quantity <= maxQuantity precede all those with quantity >
-// maxQuantity Return the iterator to the first element with quantity >
-// maxQuantity
-
-using PortfolioIterator = vector<unsigned int>::iterator;
-
-PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
-    PortfolioIterator end, unsigned int max_quanity)
-{
-  // how to get T of coll such as algo-remove? here, assumes that we know T
-  vector<unsigned int> coll;
-
-  PortfolioIterator start = begin;
-  PortfolioIterator current{};
-
-  // one pass to filter <=
-
-  for (; start != end; ++start)
-  {
-    // not use push_back() since void push_back()
-    if (*start <= max_quanity)
-      current = coll.insert(coll.end(), *start);
-  }
-
-  start = begin;
-
-  // second pass to filter >
-
-  for (; start != end; ++start)
-  {
-    if (*start > max_quanity)
-      coll.push_back(*start);
-  }
-
-  // copy it back
-  copy(coll.begin(), coll.end(), begin);
-
-  // *cxx-vector-reallocation* *cxx-iter-invalidated*
-  // *cxx-iter-singular* means invalidated iterator since there is no gurantee
-  // that current is valid after second pass push_back due to relocation
-  //
-  // /usr/include/c++/6/debug/safe_iterator.h:298:
-  // Error: attempt to increment a singular iterator.
-  // 
-  // Objects involved in the operation:
-  //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
-  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, 
-  //          std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
-  //       state = singular;
-  //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
-  //     }
-  // Aborted
-  //
-  // return ++current;
-
-  // this returns local *cxx-return-local*
-  return current;
-}
-
-// works like algo-partition-stable_partition
-
-TEST(AlgoMutating, OwnPartitionTwoPass)
-{
-  {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-    RearrangeByQuantity(coll.begin(), coll.end(), 25);
-
-    // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
-    // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
-    //                                ^^
-
-    EXPECT_THAT(coll, 
-        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
-
-    // this now fails since `current` is iterator of internal coll but not input
-    // call. Have to work out one.
-    // EXPECT_THAT(*iter, 43);
-  }
-
-  {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-    stable_partition(coll.begin(), coll.end(),
-        [](int value)
-        { return value <= 25; }
-        );
-
-    EXPECT_THAT(coll, 
-        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
-  }
-}
-
-
-// same as algo-partition /usr/include/c++/4.9.2/bits/stl_algo.h
-//
-// 1. find the first of `unmatched`
-// 2. scan from the next of that to the end while doing swap
-//
-// do not care the order of unmatched group
-
-template <typename _Iterator, typename _Compare>
-_Iterator my_partition_02(_Iterator begin, _Iterator end, _Compare comp)
-{
-  // find the start of unmatched(unsorted) sub group
-
-  _Iterator start_of_unmatched = begin;
-  while (comp(*start_of_unmatched))
-    if (++start_of_unmatched == end)
-      return start_of_unmatched;
-
-  // do the same
-  // _Iterator first = begin;
-  // for (; first != end; ++first)
-  //   if (!comp(*first))
-  //     break;
-
-  cout << "s: " << *start_of_unmatched << endl;
-
-  _Iterator run = start_of_unmatched;
-  while (++run != end)
-  {
-    // if item matches to condition
-    if (comp(*run))
-    {
-      // *cxx-iter-swap*
-      std::iter_swap(run, start_of_unmatched);
-      ++start_of_unmatched;
-    }
-  }
-
-  return start_of_unmatched;
-}
-
-template <typename _Iterator, typename _Compare>
-_Iterator my_partition_02_x(_Iterator begin, _Iterator end, _Compare comp)
-{
-  // find the start of unmatched(unsorted) sub group
-
-  _Iterator start_of_unmatched = begin;
-
-  // fail since *cxx-loop* issue and the problem is that when see unmached item,
-  // iter is already increased. 
-
-  while (comp(*start_of_unmatched++))
-    if (start_of_unmatched == end)
-      return start_of_unmatched;
-
-  cout << "s: " << *start_of_unmatched << endl;
-
-  _Iterator run = start_of_unmatched;
-  while (++run != end)
-  {
-    // if item matches to condition
-    if (comp(*run))
-    {
-      std::iter_swap(run, start_of_unmatched);
-      ++start_of_unmatched;
-    }
-  }
-
-  return start_of_unmatched;
-}
-
-// not optimal since starts `unmached` group from empty and use run(not
-// checked).
-//
-// 1. find the first of `matched`
-// 2. scan from that to the end while doing swap
-//
-// pitfalls are:
-// 1. do comp() twice on the same element
-// 2. if there are already matched in the front such as [0] then swap the same
-
-template <typename _Iterator, typename _Compare>
-_Iterator my_partition_03(_Iterator __begin, _Iterator __end, _Compare __comp)
-{
-  _Iterator start_of_unmatched = __begin;
-  _Iterator run = __begin;
-
-  // get pos of the first mached.
-  for (; run != __end; ++run)
-    if (__comp(*run))
-      break;
-
-  for (; run != __end; ++run)
-  {
-    if (__comp(*run))
-      swap(*run, *start_of_unmatched++);
-  }
-
-  return start_of_unmatched;
-}
-
-TEST(AlgoMutating, AlgoPartitionOwn)
-{
-  {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-    auto iter = my_partition_02(coll.begin(), coll.end(), 
-        [](unsigned int value)
-        { return value <= 25; }
-        );
-
-    EXPECT_THAT(coll, 
-        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-    EXPECT_THAT(distance(coll.begin(), iter), 11);
-    EXPECT_THAT(*iter, 43);
-  }
-  
-  {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-    auto iter = my_partition_02_x(coll.begin(), coll.end(), 
-        [](unsigned int value)
-        { return value <= 25; }
-        );
-
-    // { 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-    //                                  ^^
-    // {43,11,23,21,19,24,15,20,13,6,23, 6,42,29,34,26,41,30,37,48}));
-    
-    // EXPECT_THAT(coll, 
-    //     ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-
-    EXPECT_THAT(coll, 
-         ElementsAreArray({43,11,23,21,19,24,15,20,13,6,23,6,42,29,34,26,41,30,37,48}));
-  }
-
-  {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-    auto iter = my_partition_03(coll.begin(), coll.end(), 
-        [](unsigned int value)
-        { return value <= 25; }
-        );
-
-    EXPECT_THAT(coll, 
-        ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-    EXPECT_THAT(distance(coll.begin(), iter), 11);
-    EXPECT_THAT(*iter, 43);
-  }
-}
-
-// Q: why my_partiton_xxx() make different order from partition() when use the
-// same logic? but distance is the same.
-
-TEST(AlgoMutating, PartitionCompare)
-{
-  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-  auto iter = partition(coll.begin(), coll.end(), 
-      [](int value)
-      { return value <= 25;}
-      );
-
-  // EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-  // EXPECT_THAT(*iter, 43);
-
-  EXPECT_THAT(coll, 
-      ElementsAreArray({23,6,11,6,13,23,21,19,20,15,24,48,37,34,29,26,41,30,42,43}));
-
-  EXPECT_THAT(distance(coll.begin(), iter), 11);
-  EXPECT_THAT(*iter, 48);
-}
-
-
 // https://github.com/fenbf/review/blob/master/stl/beautiful_std_alg.cpp
 // 4. gather (cpp seasoning)
 //
@@ -4310,60 +3862,6 @@ TEST(AlgoMutating, Gather)
   }
 }
 
-namespace algo_code
-{
-  // /usr/include/c++/4.9.2/bits/stl_algo.h
-
-  /**
-   *  @brief Move elements for which a predicate is true to the beginning
-   *         of a sequence.
-   *  @ingroup mutating_algorithms
-   *  @param  __first   A forward iterator.
-   *  @param  __last    A forward iterator.
-   *  @param  __pred    A predicate functor.
-   *  @return  An iterator @p middle such that @p __pred(i) is true for each
-   *  iterator @p i in the range @p [__first,middle) and false for each @p i
-   *  in the range @p [middle,__last).
-   *
-   *  @p __pred must not modify its operand. @p partition() does not preserve
-   *  the relative ordering of elements in each group, use
-   *  @p stable_partition() if this is needed.
-  */
-  template<typename _ForwardIterator, typename _Predicate>
-    inline _ForwardIterator
-    partition(_ForwardIterator __first, _ForwardIterator __last,
-	      _Predicate   __pred)
-    {
-      return std::__partition(__first, __last, __pred,
-			      std::__iterator_category(__first));
-    }
-
-  /// This is a helper function...
-  template<typename _ForwardIterator, typename _Predicate>
-    _ForwardIterator
-    __partition(_ForwardIterator __first, _ForwardIterator __last,
-		_Predicate __pred, forward_iterator_tag)
-    {
-      if (__first == __last)
-        return __first;
-    
-      while (__pred(*__first))
-        if (++__first == __last)
-          return __first;
-    
-      _ForwardIterator __next = __first;
-    
-      while (++__next != __last)
-        if (__pred(*__next))
-        {
-          std::iter_swap(__first, __next);
-          ++__first;
-        }
-    
-      return __first;
-    }
-} // namespace
-
 
 // cxx-algo-remove algo-unique
 
@@ -4389,7 +3887,7 @@ TEST(AlgoMutating, AlgoRemove)
 
     EXPECT_THAT(distance(end, coll.end()), 4);
     EXPECT_THAT(coll, 
-        ElementsAreArray({1,3,4,5,6,7,8,9,2,2,2,2}));
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
 
     coll.erase(end, coll.end());
     EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
@@ -4406,232 +3904,152 @@ TEST(AlgoMutating, AlgoRemove)
 
     EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
   }
-}
 
-
-// show that remove_if() returns end if not found
-TEST(AlgoMutating, AlgoRemoveIf)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  auto it = remove_if(coll.begin(), coll.end(), 
-      [](int value)
-      { return value == 10; }
-      );
-
-  EXPECT_THAT(it, coll.end());
-}
-
-// 1. do the same as algo-partition but from the end. 
-// 2. therefore, do not care about the order of unmatched group.
-
-template <typename _Iterator, typename _T>
-_Iterator my_remove_01(_Iterator __begin, _Iterator __end, _T __value)
-{
-  _Iterator run = __end - 1;
-  _Iterator start_of_remove = __end;
-
-  for (; run > __begin; --run)
-  {
-    // swap only when element has the same value and swap is necessary
-    if ((*run == __value) && (run != start_of_remove-1))
-      swap(*run, *(--start_of_remove));
-  }
-
-  // swap only when element has the same value and swap is necessary
-  if ((*run == __value) && (run != start_of_remove-1))
-    swap(*run, *(--start_of_remove));
-
-  return start_of_remove;
-}
-
-
-// same as algo-partition
-// but keep the order of unmatched group
-
-template <typename _Iterator, typename _T>
-_Iterator my_remove_02(_Iterator __begin, _Iterator __end, _T __value)
-{
-  // start of matched or end of unmatched
-  // can use algo-find instead
-  _Iterator start = __begin;
-  while (*start != __value)
-    if (++start == __end)
-      return start;
-
-  _Iterator run = start;
-  while (++run != __end)
-  {
-    if (*run != __value)
-      swap(*run, *start++);
-  }
-
-  return start;
-}
-
-TEST(AlgoMutating, AlgoRemoveOwn)
-{
+  // show that remove_if() returns end if not found
   {
     std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
 
-    auto end = my_remove_01(coll.begin(), coll.end(), 2);
+    auto it = remove_if(coll.begin(), coll.end(), 
+        [](int value)
+        { return value == 10; }
+        );
 
-    EXPECT_THAT(distance(end, coll.end()), 4);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,9,3,4,5,6,8,7,2,2,2,2}));
-
-    coll.erase(end, coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,9,3,4,5,6,8,7}));
-  }
-
-  {
-    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-    auto end = my_remove_02(coll.begin(), coll.end(), 2);
-
-    EXPECT_THAT(distance(end, coll.end()), 4);
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,3,4,5,6,7,8,9,2,2,2,2}));
-
-    coll.erase(end, coll.end());
-
-    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
-  }
-
-  {
-    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-    auto end = std::remove(coll.begin(), coll.end(), 2);
-
-    EXPECT_THAT(distance(end, coll.end()), 4);
-    PRINT_ELEMENTS(coll, "coll:");
-
-    EXPECT_TRUE((coll != std::vector<int>{1,3,4,5,6,7,8,9,2,2,2,2}));
-
-    // why different from the result of own remove since algo-remove use assign
-
-    EXPECT_THAT(coll,
-        Not(ElementsAreArray({1,3,4,5,6,7,8,9,2,2,2,2})));
-
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
-
-    coll.erase(end, coll.end());
-    PRINT_ELEMENTS(coll, "coll:");
-    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+    EXPECT_THAT(it, coll.end());
   }
 }
 
-namespace algo_code 
+
+// cxx-algo-unique
+
+namespace algo_unique 
 {
-  // /usr/include/c++/4.9/bits/predefined_ops.h
+  using ITERATOR = vector<int>::iterator;
 
-  // check if when predicate is called, what arg iter refers to equals to the
-  // value.
+  // when see two consequtive equal items, return a iterator to the first.
+  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
+  {
+    if (first == last)
+      return last;
 
-  template<typename _Value>
-    struct _Iter_equals_val
+    ITERATOR next = first;
+    while (++next != last)
     {
-      _Value& _M_value;
+      if (*first == *next)
+        return first;
+      first = next;
+    }
 
-      _Iter_equals_val(_Value& __value)
-        : _M_value(__value)
-      { }
-
-      template<typename _Iterator>
-        bool
-        operator()(_Iterator __it)
-        { return *__it == _M_value; }
-    };
-
-  template<typename _Value>
-    inline _Iter_equals_val<_Value>
-    __iter_equals_val(_Value& __val)
-    { return _Iter_equals_val<_Value>(__val); }
+    return last;
+  }
 
   // /usr/include/c++/4.9/bits/stl_algo.h
 
-  /**
-   *  @brief Remove elements from a sequence.
-   *  @ingroup mutating_algorithms
-   *  @param  __first  An input iterator.
-   *  @param  __last   An input iterator.
-   *  @param  __value  The value to be removed.
-   *  @return   An iterator designating the end of the resulting sequence.
-   *
-   *  All elements equal to @p __value are removed from the range
-   *  @p [__first,__last).
-   *
-   *  remove() is stable, so the relative order of elements that are
-   *  not removed is unchanged.
-   *
-   *  Elements between the end of the resulting sequence and @p __last
-   *  are still present, but their value is unspecified.
-   */
-  template<typename _ForwardIterator, typename _Tp>
-    inline _ForwardIterator
-    remove(_ForwardIterator __first, _ForwardIterator __last,
-        const _Tp& __value)
+  ITERATOR unique_1(ITERATOR first, ITERATOR last)
+  {
+    first = adjacent_find(first, last);
+    if (first == last)
+      return last;
+
+    ITERATOR dest = first;
+    ++first;
+    while (++first != last)
     {
-      return std::__remove_if(__first, __last,
-          __gnu_cxx::__ops::__iter_equals_val(__value));
+      // not equal and assign(overwrite). so if equals, keep increase first.
+      if (*dest != *first)
+        *++dest = *first;
     }
 
-  template<typename _ForwardIterator, typename _Predicate>
-    _ForwardIterator
-    __remove_if(_ForwardIterator __first, _ForwardIterator __last,
-        _Predicate __pred)
-    {
-      __first = std::__find_if(__first, __last, __pred);
-      if (__first == __last)
-        return __first;
-
-      _ForwardIterator __result = __first;
-      ++__first;
-      for (; __first != __last; ++__first)
-        if (!__pred(__first))
-        {
-          // note
-          // this is `assign` but not `swap` which make a difference to own
-          // remove does.
-
-          *__result = _GLIBCXX_MOVE(*__first);
-          ++__result;
-        }
-      return __result;
-    }
-
-  // /usr/include/c++/4.9/bits/predefined_ops.h
-  template<typename _Predicate>
-    struct _Iter_pred
-    {
-      _Predicate _M_pred;
-
-      _Iter_pred(_Predicate __pred)
-        : _M_pred(__pred)
-      { }
-
-      template<typename _Iterator>
-        bool
-        operator()(_Iterator __it)
-        { return bool(_M_pred(*__it)); }
-    };
-
-  template<typename _Predicate>
-    inline _Iter_pred<_Predicate>
-    __pred_iter(_Predicate __pred)
-    { return _Iter_pred<_Predicate>(__pred); }
-
-  template<typename _ForwardIterator, typename _Predicate>
-    inline _ForwardIterator
-    remove_if(_ForwardIterator __first, _ForwardIterator __last,
-        _Predicate __pred)
-    {
-      return std::__remove_if(__first, __last,
-          __gnu_cxx::__ops::__pred_iter(__pred));
-    }
+    // one after from the last
+    return ++dest;
+  }
 } // namespace
+
+TEST(AlgoMutating, AlgoUnique)
+{
+  using namespace algo_unique;
+  
+  // o Both forms collapse `consecutive equal elements` by removing the
+  // following duplicates.
+  {
+    vector<int> coll{1, 4, 4, 6};
+    auto pos = unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+  {
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto pos = unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+
+  // o The first form removes from the range [beg,end) all elements that are
+  // equal to `the previous elements.` Thus, only when the elements in the
+  // sequence are sorted, or at least when all elements of the same value are
+  // adjacent, does it remove all duplicates.
+  //
+  // o sorted input is not assumed
+
+  {
+    int source[] = {1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+    list<int> coll;
+    copy(begin(source), end(source), back_inserter(coll));
+
+    auto pos = unique(coll.begin(), coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
+  }
+
+  // o The second form removes all elements that follow an element e and for
+  // which the binary predicate op(e,elem) yields true. In other words, the
+  // predicate is not used to compare an element with its predecessor; the
+  // element is compared with the previous element that was not removed (see the
+  // following examples).
+
+  // For example, the first 6 is greater than the following 1, 2, 2, 3, and 1,
+  // so all these elements are removed. In other words, the predicate is not
+  // used to compare an element with its predecessor; the element is compared
+  // with the previous element that was not removed 
+  {
+    list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto pos = unique(coll.begin(), coll.end(), greater<int>());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 4, 6, 6, 6, 6, 7}));
+  }
+
+  {
+    string input{"1   2  3            4           "};
+    EXPECT_THAT(input, "1   2  3            4           ");
+
+    auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y) {
+      return x == y and x == ' ';
+    });
+
+    input.erase(new_end, input.end());
+    EXPECT_THAT(input, "1 2 3 4 ");
+  }
+
+
+  // o Both forms collapse `consecutive equal elements` by removing the
+  // following duplicates.
+  {
+    vector<int> coll{1, 4, 4, 6};
+    auto pos = unique_1(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+  {
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto pos = unique_1(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+}
 
 
 // algo-permutation

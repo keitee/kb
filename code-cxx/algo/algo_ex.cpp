@@ -6,6 +6,8 @@
 #include <set>
 #include <algorithm>
 #include <bitset>
+#include <stack>
+#include <list>
 
 #include "gmock/gmock.h"
 
@@ -1191,6 +1193,7 @@ TEST(LeetCode, Easy_005_LongestCommonPrefix)
   }
 }
 
+
 // ={=========================================================================
 // algo-leetcode-6
 /*
@@ -1228,7 +1231,926 @@ Output: true
 
 namespace leetcode_easy_006
 {
+  bool ValidParentheses_01(string input)
+  {
+    std::stack<char> coll;
+
+    for (const auto e : input)
+    {
+      switch (e)
+      {
+        case '(':
+        case '[':
+        case '{':
+          // cout << "push: " << e << endl;
+          coll.push(e);
+          break;
+
+        case ']':
+
+          // cout << "]: " << e << endl;
+
+          if (coll.empty())
+            return false;
+          else if (!coll.empty() && ('[' != coll.top()))
+            return false;
+          else
+            coll.pop();
+
+          break;
+
+        case ')':
+
+          // cout << "): " << e << endl;
+
+          if (coll.empty())
+            return false;
+          else if (!coll.empty() && ('(' != coll.top()))
+            return false;
+          else
+            coll.pop();
+
+          break;
+
+        case '}':
+
+          // cout << "}: " << e << endl;
+
+          if (coll.empty())
+            return false;
+          else if (!coll.empty() && ('{' != coll.top()))
+            return false;
+          else
+            coll.pop();
+
+          break;
+
+          // for other chars
+        default:
+          break;
+      } // switch
+    } // for
+
+    // should be empty if all matches up
+    return coll.empty() ? true : false;
+  }
+
+  // algo-stack
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Valid
+  // Parentheses.  
+  //
+  // Memory Usage: 8.9 MB, less than 81.58% of C++ online submissions for Valid
+  // Parentheses.
+
+  bool ValidParentheses_02(string input)
+  {
+    std::stack<char> coll;
+
+    for (const auto e : input)
+    {
+      if (e == '(' || e == '[' || e == '{')
+        coll.push(e);
+
+      if (e == ')' || e == ']' || e == '}')
+      {
+        if (coll.empty())
+          return false;
+        else
+        {
+          // do not need to keep item since will return as soon as see
+          // not-match.
+
+          auto prev = coll.top();
+          coll.pop();
+
+          auto match = (prev == '(' && e == ')') 
+            || (prev == '[' && e == ']')
+            || (prev == '{' && e == '}');
+
+          if (!match)
+            return false;
+        }
+      }
+
+      // do not handle other chars
+
+    } // for
+
+    // should be empty if all matches up
+    return coll.empty() ? true : false;
+  }
 } // namespace
+
+TEST(LeetCode, Easy_006_ValidParentheses)
+{
+  using namespace leetcode_easy_006;
+
+  {
+    const auto func = ValidParentheses_01;
+
+    EXPECT_THAT(func("()"), true);
+    EXPECT_THAT(func("()[]{}"), true);
+    EXPECT_THAT(func("(]"), false);
+    EXPECT_THAT(func("([)]"), false);
+    EXPECT_THAT(func("{[]}"), true);
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("([{}"), false);
+
+    EXPECT_THAT(func("abc(defg{hijk}lmn)opq"), true);
+  }
+
+  {
+    const auto func = ValidParentheses_02;
+
+    EXPECT_THAT(func("()"), true);
+    EXPECT_THAT(func("()[]{}"), true);
+    EXPECT_THAT(func("(]"), false);
+    EXPECT_THAT(func("([)]"), false);
+    EXPECT_THAT(func("{[]}"), true);
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("([{}"), false);
+
+    EXPECT_THAT(func("abc(defg{hijk}lmn)opq"), true);
+
+    EXPECT_THAT(func("{a = (1 + v(b[3 + c[4]]))"), false);
+    EXPECT_THAT(func("{ a = (b[0) + 1]; }"), false);
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-7
+/*
+21. Merge Two Sorted Lists, Easy
+
+Merge two sorted linked lists and return it as a new list. The new list should
+be made by splicing together the nodes of the first two lists.
+
+Example:
+
+Input: 1->2->4, 1->3->4
+Output: 1->1->2->3->4->4
+
+//
+// Definition for singly-linked list.
+// struct ListNode {
+//     int val;
+//     ListNode *next;
+//     ListNode(int x) : val(x), next(NULL) {}
+// };
+
+class Solution {
+public:
+    ListNode* mergeTwoLists(ListNode* l1, ListNode* l2) {
+    }
+};
+
+*/
+
+namespace leetcode_easy_007
+{
+  struct ListNode {
+    int val;
+    ListNode *next;
+    ListNode(int x) : val(x), next(NULL) {}
+  };
+
+  ListNode* mergeTwoLists(ListNode* l1, ListNode* l2) 
+  {
+    if (l1 == nullptr && l2 != nullptr)
+      return l1;
+    else if (l1 != nullptr && l2 == nullptr)
+      return l2;
+    else if (l1 == nullptr && l2 == nullptr)
+      return nullptr;
+
+    auto first = l1;
+    auto second = l2;
+
+    ListNode *result_head{};
+    ListNode *result_end{};
+
+    for (; first != nullptr && (second != nullptr);)
+    {
+      // ascending order
+      if (first->val <= second->val)
+      {
+        if(!result_head)
+        {
+          result_head = result_end = first;
+        }
+
+        result_end->next = first;
+        result_end = first;
+
+        first = first->next;
+      }
+      else
+      {
+        if(!result_head)
+        {
+          result_head = result_end = second;
+        }
+
+        result_end->next = second;
+        result_end = second;
+
+        second = second->next;
+      }
+    }
+
+    // second has some left
+    if (first == nullptr && second != nullptr)
+      result_end->next = second;
+    // first has some left
+    else if (first != nullptr && second == nullptr)
+      result_end->next = first;
+    else
+    {
+      // no left from the both
+    }
+
+    return result_head;
+  }
+
+  void print_list(ListNode* l1) 
+  {
+    ListNode *run = l1;
+
+    for(; run; run = run->next)
+    {
+      cout << "val : " << run->val << endl;
+    }
+  }
+} // namespace
+
+// Input: 1->2->4, 1->3->4
+// Output: 1->1->2->3->4->4
+TEST(LeetCode, Easy_007_MergeSortedList)
+{
+  using namespace leetcode_easy_007;
+
+  ListNode e1(1);
+  ListNode e2(2);
+  ListNode e3(4);
+
+  e1.next = &e2;
+  e2.next = &e3;
+
+  print_list(&e1);
+
+  ListNode s1(1);
+  ListNode s2(3);
+  ListNode s3(4);
+
+  s1.next = &s2;
+  s2.next = &s3;
+
+  print_list(&s1);
+
+  cout << "====" << endl;
+  auto x = mergeTwoLists(&e1, &s1); 
+  print_list(x);
+}
+
+
+// ={=========================================================================
+// algo-leetcode-8
+/*
+26. Remove Duplicates from Sorted Array, Easy
+
+Given a sorted array nums, remove the duplicates in-place such that each element
+appear only once and return *the new length.*
+
+Do not allocate extra space for another array, you must do this by modifying the
+input array in-place with O(1) extra memory.
+
+Example 1:
+
+Given nums = [1,1,2],
+
+Your function should return length = 2, with the first two elements of nums
+being 1 and 2 respectively.
+
+It doesn't matter what you leave beyond the returned length.
+
+Example 2:
+
+Given nums = [0,0,1,1,1,2,2,3,3,4],
+
+Your function should return length = 5, with the first five elements of nums
+being modified to 0, 1, 2, 3, and 4 respectively.
+
+It doesn't matter what values are set beyond the returned length.
+
+Clarification:
+
+Confused why the returned value is an integer but your answer is an array?
+
+Note that the input array is passed in by reference, which means modification to
+the input array will be known to the caller as well.
+
+Internally you can think of this:
+
+// nums is passed in by reference. (i.e., without making a copy)
+int len = removeDuplicates(nums);
+
+// any modification to nums in your function would be known by the caller.
+// using the length returned by your function, it prints the first len elements.
+
+for (int i = 0; i < len; i++) {
+    print(nums[i]);
+}
+
+*/
+
+namespace leetcode_easy_008
+{
+  // num is sorted (ascending)
+  // the key idea is to swap to the right
+  int RemoveDuplicates_01(vector<int> &nums)
+  {
+    if (nums.empty())
+      return 0;
+
+    int value = nums[0];
+    size_t i{};
+
+    for (i = 1; i < nums.size(); ++i)
+    {
+      int run = nums[i];
+
+      // cout << "for i: " << i << ", run: " << run 
+      //   << ", value: " << value << endl;
+
+      // update current max when current value is bigger
+      if (run > value)
+        value = run;
+      // ends when see smaller and means reaches the the new end
+      else if(run < value)
+      {
+        // cout << "break i: " << i << endl;
+        break;
+      }
+      // when run == value, swap it to tne end.
+      else
+      {
+        for (size_t s = i; s < nums.size()-1; ++s)
+          swap(nums[s], nums[s+1]);
+
+        if (nums[i] > value)
+          value = nums[i];
+      }
+    }
+
+    // cout << "return i: " << i << endl;
+
+    return i;
+  }
+
+  // o the key idea is to swap to the left
+  // o no repeated swap until see the new end. single swap is enough 
+  // o swap() should be done after updating current_max
+  // o end is index but shold return len so +1
+
+  // Runtime: 24 ms, faster than 100.00% of C++ online submissions for Remove
+  // Duplicates from Sorted Array.
+  //
+  // Memory Usage: 11 MB, less than 24.81% of C++ online submissions for Remove
+  // Duplicates from Sorted Array.
+
+  int RemoveDuplicates_02(vector<int> &nums)
+  {
+    if (nums.empty())
+      return 0;
+
+    int current_max = nums[0];
+    size_t end{};
+
+    for (size_t i = 1; i < nums.size(); ++i)
+    {
+      if (nums[i] > current_max)
+      {
+        current_max = nums[i];
+        ++end;
+        swap(nums[end], nums[i]);
+      }
+    }
+
+    return end+1;
+  }
+
+} // namespace
+
+TEST(LeetCode, Easy_008_RemoveDuplicates)
+{
+  using namespace leetcode_easy_008;
+
+  // okay
+  {
+    const auto func = RemoveDuplicates_01;
+
+    vector<int> coll{1,1,2};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 2);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,2));
+  }
+
+  // fails
+  {
+    const auto func = RemoveDuplicates_01;
+
+    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, Not(5));
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, Not(ElementsAre(0,1,2,3,4)));
+  }
+
+  // okay
+  {
+    const auto func = RemoveDuplicates_02;
+
+    vector<int> coll{1,1,2};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 2);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,2));
+  }
+
+  // fails
+  {
+    const auto func = RemoveDuplicates_02;
+
+    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 5);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(0,1,2,3,4));
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-9
+/*
+27. Remove Element, Easy
+
+Given an array nums and a value val, remove all instances of that value in-place
+and return the new length.
+
+Do not allocate extra space for another array, you must do this by modifying the
+input array in-place with O(1) extra memory.
+
+The order of elements can be changed. It doesn't matter what you leave beyond
+the new length.
+
+Example 1:
+
+Given nums = [3,2,2,3], val = 3,
+
+Your function should return length = 2, with the first two elements of nums
+being 2.
+
+It doesn't matter what you leave beyond the returned length.
+
+Example 2:
+
+Given nums = [0,1,2,2,3,0,4,2], val = 2,
+
+Your function should return length = 5, with the first five elements of nums
+containing 0, 1, 3, 0, and 4.
+
+Note that the order of those five elements can be arbitrary.
+
+It doesn't matter what values are set beyond the returned length.
+
+Clarification:
+
+Confused why the returned value is an integer but your answer is an array?
+
+Note that the input array is passed in by reference, which means modification to
+the input array will be known to the caller as well.
+
+Internally you can think of this:
+
+// nums is passed in by reference. (i.e., without making a copy)
+int len = removeElement(nums, val);
+
+// any modification to nums in your function would be known by the caller.
+// using the length returned by your function, it prints the first len elements.
+for (int i = 0; i < len; i++) {
+    print(nums[i]);
+}
+
+*/
+
+namespace leetcode_easy_009
+{
+  // o Unlike RemoveDuplicates_02, end is not index but index+1
+
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Remove
+  // Element.
+  //
+  // Memory Usage: 9.3 MB, less than 56.68% of C++ online submissions for Remove
+  // Element.
+
+  int RemoveIf_01(vector<int> &nums, int val)
+  {
+    if (nums.empty())
+      return 0;
+
+    size_t end{};
+
+    for (size_t i = 0; i < nums.size(); ++i)
+    {
+      if (nums[i] != val)
+      {
+        if (end != i)
+          swap(nums[end], nums[i]);
+
+        ++end;
+      }
+    }
+
+    return end;
+  }
+
+} // namespace
+
+TEST(LeetCode, Easy_009_RemoveIf)
+{
+  using namespace leetcode_easy_009;
+
+  {
+    const auto func = RemoveIf_01;
+
+    vector<int> coll{3,2,2,3};
+    auto len = func(coll, 3);
+
+    EXPECT_THAT(len, 2);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(2,2));
+  }
+
+  {
+    const auto func = RemoveIf_01;
+
+    vector<int> coll{0,1,2,2,3,0,4,2};
+    auto len = func(coll, 2);
+
+    EXPECT_THAT(len, 5);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(0,1,3,0,4));
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-10
+/*
+28. Implement strStr(), Easy
+
+Implement strStr().
+
+Return the index of the first occurrence of needle in haystack, or -1 if needle
+is not part of haystack.
+
+Example 1:
+Input: haystack = "hello", needle = "ll"
+Output: 2
+
+Example 2:
+Input: haystack = "aaaaa", needle = "bba"
+Output: -1
+
+Clarification:
+
+What should we return when needle is an empty string? This is a great question
+to ask during an interview.
+
+For the purpose of this problem, we will return 0 when needle is an empty
+string. This is consistent to C's strstr() and Java's indexOf().
+
+STRSTR(3)
+
+Linux Programmer's Manual                                                                               STRSTR(3)
+
+NAME
+       strstr, strcasestr - locate a substring
+
+DESCRIPTION
+       The strstr() function finds the first occurrence of the substring needle
+       in the string haystack.  The terminating null bytes ('\0') are not
+       compared.
+
+       The strcasestr() function is like strstr(), but ignores the case of both
+       arguments.
+
+*/
+
+namespace leetcode_easy_010
+{
+  // Runtime: 8 ms, faster than 99.35% of C++ online submissions for Implement
+  // strStr().
+  //
+  // Memory Usage: 9.3 MB, less than 96.70% of C++ online submissions for
+  // Implement strStr().
+
+  int strStr_1(string haystack, string needle) 
+  {
+    int result{-1};
+    size_t count{};
+
+    if (haystack == needle || needle.empty())
+      return 0;
+
+    if (haystack.size() < needle.size())
+      return result;
+
+    for (size_t hay = 0; hay < haystack.size(); ++hay)
+    {
+      if (haystack[hay] == needle[0] 
+          && ((hay + needle.size() -1) < haystack.size()))
+      {
+        for (size_t ni = 0, hi = hay; ni < needle.size(); ++ni, ++hi)
+          if (haystack[hi] == needle[ni])
+            ++count;
+
+        // cout << "needle: " << needle << ", count: " << count << ", result: " << result << endl;
+
+        if(count == needle.size())
+        {
+          result = hay;
+          // cout << "needle: " << needle << ", count: " << count << ", result: " << result << endl;
+          return result;
+        }
+
+        // do not hit return above and means not found match. so reset it
+        count = 0;
+      }
+    }
+
+    return result;
+  }
+
+  // int strStr_2(string haystack, string needle) 
+  // {
+  //   hay_size = haystack.size();
+  //   needle_size = needle.size();
+  //   size_t pos{};
+
+  //   if (needle_size <= hay_size)
+  //   {
+  //     for (; pos <= hay_size - needle_size; ++pos)
+
+  //   }
+  // }
+
+} // namespace
+
+TEST(LeetCode, Easy_010_StrStr)
+{
+  using namespace leetcode_easy_010;
+
+  EXPECT_THAT(strStr_1("hello", "ll"), 2);
+  EXPECT_THAT(strStr_1("aaaaa", "bba"), -1);
+
+  // as to problem description
+  EXPECT_THAT(strStr_1("", ""), 0);
+
+  EXPECT_THAT(strStr_1("", "a"), -1);
+
+  // mississippi"
+  //  issipi"
+  //     issipi"
+
+  EXPECT_THAT(strStr_1("mississippi", "issipi"), -1);
+
+
+  EXPECT_THAT(string("hello").find("ll"), 2);
+  EXPECT_THAT(string("aaaaa").find("bba"), string::npos);
+  EXPECT_THAT(string("aaaaa").find("bba"), -1);
+}
+
+
+// ={=========================================================================
+// algo-list
+
+// single
+//
+// class List
+// {
+//   public:
+//     void clear();
+//     bool empty();
+//     int size();
+//
+//     // as push_back();
+//     void push(ListEntry const& entry);
+//
+//     // as traverse()
+//     std::vector<ListEntry> snap();
+// };
+
+namespace algo_list_linked
+{
+  // when node and entry are in a single structure and these can be different
+  // structure such as ListEntry and ListNode
+
+  struct ListEntry
+  {
+    explicit ListEntry(int row = 0, int col = 0) noexcept 
+      : row_(row), col_(col), next_(nullptr) 
+    {}
+
+    int row_{};
+    int col_{};
+
+    ListEntry* next_;
+  };
+
+  // cxx-operator-overload
+  bool operator==(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return (lhs.row_ == rhs.row_) && (lhs.col_ == rhs.col_) ? true : false;
+  }
+
+  bool operator!=(ListEntry const& lhs, ListEntry const& rhs)
+  {
+    return !(lhs == rhs);
+  }
+
+  class List
+  {
+    public:
+      explicit List() noexcept
+        : head_(nullptr)
+        {}
+
+      bool emptry()
+      { return count_ == 0 ? true : false; }
+
+      int size()
+      { return count_; }
+
+      // push_back()
+      void push_old(ListEntry const& entry)
+      {
+        if (!head_)
+          head_ = new ListEntry(entry);
+        else
+        {
+          ListEntry* run = head_;
+
+          // unlike clear(), snap(), run shall be before end() so that can
+          // insert new one. Hence check run->next
+
+          while (run->next_)
+            run = run->next_;
+
+          run->next_ = new ListEntry(entry);
+        }
+        
+        ++count_;
+      }
+
+      // push_back()
+      void push(ListEntry const& entry)
+      {
+        ListEntry* run{};
+
+        // find node for insertion *algo-list-find-end*
+        // works both when head_ is null and is not null
+
+        for (run = head_; run && run->next_; run = run->next_)
+          ;
+
+        // first item
+        if (!run)
+          head_ = new ListEntry(entry);
+        else
+          run->next_ = new ListEntry(entry);
+
+        ++count_;
+      }
+
+      void clear()
+      {
+        ListEntry* run = head_;
+        ListEntry* prev{};
+
+        while (run)
+        {
+          prev = run;
+          run = run->next_;
+          free(prev);
+          --count_;
+        }
+
+        head_ = run;
+      }
+
+      std::vector<ListEntry> snap()
+      {
+        ListEntry* run = head_;
+        std::vector<ListEntry> coll;
+
+        while (run)
+        {
+          // ok as well
+          // coll.push_back(ListEntry(*run));
+          coll.push_back(*run);
+          run = run->next_;
+        }
+
+        return coll;
+      }
+
+    private:
+      int count_{};
+
+      // can use ListEntry head_; which changes member implementation
+
+      ListEntry* head_;
+  };
+
+} // namespace
+
+
+TEST(AlgoList, LinkedSimple)
+{
+  using namespace algo_list_linked;
+
+  std::vector<ListEntry> values{
+    ListEntry(1,2), 
+    ListEntry(2,3), 
+    ListEntry(3,4), 
+    ListEntry(4,5), 
+    ListEntry(5,6)
+  };
+
+  List coll;
+
+  for (auto &e : values)
+    coll.push(e);
+
+  EXPECT_THAT(coll.size(), 5);
+
+  coll.push(ListEntry(6,7));
+  EXPECT_THAT(coll.size(), 6);
+
+  // requires cxx-operator-overload
+  std::vector<ListEntry> expected{
+    ListEntry(1,2), 
+    ListEntry(2,3),
+    ListEntry(3,4),
+    ListEntry(4,5),
+    ListEntry(5,6),
+    ListEntry(6,7)
+  };
+
+  EXPECT_THAT(coll.snap(), expected);
+
+  coll.clear();
+  EXPECT_THAT(coll.size(), 0);
+}
 
 
 // ={=========================================================================
