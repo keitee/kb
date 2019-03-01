@@ -1612,7 +1612,10 @@ namespace leetcode_easy_008
   // o the key idea is to swap to the left
   // o no repeated swap until see the new end. single swap is enough 
   // o swap() should be done after updating current_max
-  // o end is index but shold return len so +1
+  //
+  // o end is index but shold return len so +1 -> revised. As algo-partition,
+  // end represet start of not-interested, that is end of interested group. so
+  // no need to +1. have to think about swap on the same index
 
   // Runtime: 24 ms, faster than 100.00% of C++ online submissions for Remove
   // Duplicates from Sorted Array.
@@ -1626,19 +1629,67 @@ namespace leetcode_easy_008
       return 0;
 
     int current_max = nums[0];
-    size_t end{};
+    size_t end{1};
 
     for (size_t i = 1; i < nums.size(); ++i)
     {
       if (nums[i] > current_max)
       {
         current_max = nums[i];
+        if (end != i)
+          swap(nums[end], nums[i]);
         ++end;
-        swap(nums[end], nums[i]);
       }
     }
 
-    return end+1;
+    return end;
+  }
+  
+  using ITERATOR = vector<int>::iterator;
+
+  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
+  {
+    if (first == last)
+      return last;
+
+    auto next = first;
+    while (++next != last)
+    {
+      // found two consecutive items
+      if (*first == *next)
+        return first;
+
+      first = next;
+    }
+
+    // no two consecutive items found.
+    return last;
+  }
+
+  // algo-unique, same as unique_1()
+  // `first` is end of the interested group
+
+  int RemoveDuplicates_03(vector<int> &nums)
+  {
+    auto first = nums.begin();
+    auto last = nums.end();
+
+    auto end = adjacent_find(first, last);
+
+    // means empty or no duplicates
+    if (end == last)
+      return 0;
+
+    auto run = end;
+
+    while (++run != last)
+    {
+      // see different item
+      if (*end != *run)
+        *++end = *run;
+    }
+
+    return distance(first, end) + 1;
   }
 
 } // namespace
@@ -1681,7 +1732,6 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     EXPECT_THAT(result, Not(ElementsAre(0,1,2,3,4)));
   }
 
-  // okay
   {
     const auto func = RemoveDuplicates_02;
 
@@ -1698,7 +1748,6 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
     EXPECT_THAT(result, ElementsAre(1,2));
   }
 
-  // fails
   {
     const auto func = RemoveDuplicates_02;
 
@@ -1713,6 +1762,57 @@ TEST(LeetCode, Easy_008_RemoveDuplicates)
       result.push_back(coll[i]);
 
     EXPECT_THAT(result, ElementsAre(0,1,2,3,4));
+  }
+
+  // same ex as AlgoUnique
+  {
+    const auto func = RemoveDuplicates_03;
+
+    vector<int> coll{1, 4, 4, 6};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 3);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,4,6));
+  }
+  {
+    const auto func = RemoveDuplicates_03;
+
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 3);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,4,6));
+  }
+  {
+    const auto func = RemoveDuplicates_03;
+
+    vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto len = func(coll);
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4,5,7,5,4,4}));
+    EXPECT_THAT(len, 12);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, 
+        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4}));
   }
 }
 
@@ -1870,7 +1970,7 @@ string. This is consistent to C's strstr() and Java's indexOf().
 
 STRSTR(3)
 
-Linux Programmer's Manual                                                                               STRSTR(3)
+Linux Programmer's Manual
 
 NAME
        strstr, strcasestr - locate a substring
@@ -1968,6 +2068,74 @@ TEST(LeetCode, Easy_010_StrStr)
   EXPECT_THAT(string("aaaaa").find("bba"), string::npos);
   EXPECT_THAT(string("aaaaa").find("bba"), -1);
 }
+
+
+// ={=========================================================================
+// algo-leetcode-11
+/*
+35. Search Insert Position, Easy
+
+Given a sorted array and a target value, return the index if the target is
+found. If not, return the index where it would be if it were inserted in order.
+
+You may assume no duplicates in the array.
+
+Example 1:
+Input: [1,3,5,6], 5
+Output: 2
+
+Example 2:
+Input: [1,3,5,6], 2
+Output: 1
+
+Example 3:
+Input: [1,3,5,6], 7
+Output: 4
+
+Example 4:
+Input: [1,3,5,6], 0
+Output: 0
+
+*/
+
+// see algo-binary-search
+
+
+// ={=========================================================================
+// algo-leetcode-12
+/*
+38. Count and Say, Easy
+
+The count-and-say sequence is the sequence of integers with the first five terms
+as following:
+
+1.     1
+2.     11
+3.     21
+4.     1211
+5.     111221
+
+1 is read off as "one 1" or 11.
+
+11 is read off as "two 1s" or 21.
+
+21 is read off as "one 2, then one 1" or 1211.
+
+Given an integer n where 1 ≤ n ≤ 30, generate the nth term of the count-and-say
+sequence.
+
+Note: Each term of the sequence of integers will be represented as a string.
+
+Example 1:
+
+Input: 1
+Output: "1"
+
+Example 2:
+Input: 4
+Output: "1211"
+
+*/
 
 
 // ={=========================================================================

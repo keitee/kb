@@ -4049,6 +4049,19 @@ TEST(AlgoMutating, AlgoUnique)
     coll.erase(pos, coll.end());
     EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
   }
+
+  // o sorted input is not assumed
+  {
+    vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto pos = unique_1(coll.begin(), coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
+  }
 }
 
 
