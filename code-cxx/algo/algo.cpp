@@ -8059,7 +8059,7 @@ namespace algo_binary_search
   // to return bool
   // return (first != last && *first == key);
   //
-  // if return iterator, when not found, first can be either end() or the
+  // Q: if return iterator, when not found, first can be either end() or the
   // first. Is it right to return the first to mean that not found?
   //
   // template<typename _ForwardIterator, typename _Tp>

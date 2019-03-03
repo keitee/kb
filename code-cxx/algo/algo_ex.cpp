@@ -8,6 +8,7 @@
 #include <bitset>
 #include <stack>
 #include <list>
+#include <queue>
 
 #include "gmock/gmock.h"
 
@@ -2135,7 +2136,462 @@ Example 2:
 Input: 4
 Output: "1211"
 
+note:
+
+the problem is to make string output which is done by counting numbers and what
+the number is for the previous. That is "count and what"
+
+starts new counting when see different char.
+
 */
+
+namespace leetcode_easy_012
+{
+  string count_string_1(string const &input)
+  {
+    char current_char{};
+    size_t count{};
+    string result{};
+
+    for (auto ch : input)
+    {
+      if (ch == current_char)
+        ++count;
+      else
+      {
+        // to handle the first read
+        if (count != 0)
+          result += to_string(count) + current_char;
+
+        current_char = ch;
+        count = 1;
+      }
+    }
+
+    // to handle then input ends
+    result += to_string(count) + current_char;
+
+    // cout << "result: " << result << endl;
+
+    return result;
+  }
+
+  // to remove handling of the first read
+
+  string count_string_2(string const &input)
+  {
+    char current_char = input[0];
+    size_t count{1};
+    string result{};
+
+    for (size_t i = 1; i < input.size(); ++i)
+    {
+      if (input[i] == current_char)
+        ++count;
+      else
+      {
+        result += to_string(count) + current_char;
+        current_char = input[i];
+        count = 1;
+      }
+    }
+
+    // to handle then input ends
+    result += to_string(count) + current_char;
+
+    return result;
+  }
+
+  // Given an integer n where 1 ≤ n ≤ 30,
+
+  string count_and_say_1(int n)
+  {
+    if (n == 1)
+      return "1";
+
+    auto result = count_and_say_1(n-1);
+    return count_string_1(result);
+  }
+
+  string count_and_say_2(int n)
+  {
+    if (n == 1)
+      return "1";
+
+    auto result = count_and_say_2(n-1);
+    return count_string_2(result);
+  }
+
+  // to make a single function
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Count and
+  // Say.
+  //
+  // Memory Usage: 9.1 MB, less than 35.44% of C++ online submissions for Count
+  // and Say.
+
+  string count_and_say_3(int n)
+  {
+    if (n == 1)
+      return "1";
+
+    auto input = count_and_say_3(n-1);
+
+    // return count_string_2(result);
+    // string count_string_2(string const &input)
+    {
+      char current_char = input[0];
+      size_t count{1};
+      string result{};
+
+      for (size_t i = 1; i < input.size(); ++i)
+      {
+        if (input[i] == current_char)
+          ++count;
+        else
+        {
+          result += to_string(count) + current_char;
+          current_char = input[i];
+          count = 1;
+        }
+      }
+
+      // to handle then input ends
+      result += to_string(count) + current_char;
+
+      return result;
+    }
+  }
+} // namespace 
+
+TEST(LeetCode, Easy_012_CountAndSay_1)
+{
+  using namespace leetcode_easy_012;
+
+  // 2th
+  EXPECT_THAT(count_string_1("1"), "11");
+  // 3th
+  EXPECT_THAT(count_string_1("11"), "21");
+  // 4th
+  EXPECT_THAT(count_string_1("21"), "1211");
+  // 5th 
+  EXPECT_THAT(count_string_1("1211"), "111221");
+  // 6th
+  EXPECT_THAT(count_string_1("111221"), "312211");
+
+  EXPECT_THAT(count_and_say_1(2), "11");
+  EXPECT_THAT(count_and_say_1(3), "21");
+  EXPECT_THAT(count_and_say_1(4), "1211");
+  EXPECT_THAT(count_and_say_1(5), "111221");
+  EXPECT_THAT(count_and_say_1(6), "312211");
+
+  EXPECT_THAT(count_and_say_3(2), "11");
+  EXPECT_THAT(count_and_say_3(3), "21");
+  EXPECT_THAT(count_and_say_3(4), "1211");
+  EXPECT_THAT(count_and_say_3(5), "111221");
+  EXPECT_THAT(count_and_say_3(6), "312211");
+}
+
+// to see string sizes of results
+// 1
+// 2
+// 2
+// 4
+// 6
+// 6
+// 8
+// 10
+// 14
+// 20
+// 26
+// 34
+// 46
+// 62
+// 78
+// 102
+// 134
+// 176
+// 226
+// 302
+// 408
+// 528
+// 678
+// 904
+// 1182
+// 1540
+// 2012
+// 2606
+// 3410
+// 4462
+
+TEST(LeetCode, Easy_012_CountAndSay_2)
+{
+  using namespace leetcode_easy_012;
+
+  for (int i = 1; i <= 30; ++i)
+  {
+    count_and_say_1(i).size();
+    // cout << count_and_say(i).size() << endl;
+  }
+}
+
+TEST(LeetCode, Easy_012_CountAndSay_3)
+{
+  using namespace leetcode_easy_012;
+
+  for (int i = 1; i <= 30; ++i)
+  {
+    count_and_say_2(i).size();
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-13
+/*
+53. Maximum Subarray, Easy
+
+Given an integer array nums, find the contiguous subarray (containing at least
+one number) which has the largest sum and return its sum.
+
+Example:
+
+Input: [-2,1,-3,4,-1,2,1,-5,4],
+Output: 6
+Explanation: [4,-1,2,1] has the largest sum = 6.
+
+Follow up:
+If you have figured out the O(n) solution, try coding another solution using the
+divide and conquer approach, which is more subtle.
+
+int maxSubArray(vector<int>& nums) {}
+
+
+In discussion, by _LeetCode,  Last Edit: October 24, 2018 8:10 PM
+for python
+
+for i in range(1, len(nums)):
+        if nums[i-1] > 0:
+            nums[i] += nums[i-1]
+    return max(nums)
+
+The key observation is:
+
+[i-1]   [i]
+
+if the previous, [i-1], is positive, then "sum" gets bigger whether or not the
+current element is positive or negative.
+
+
+if make sum regardless of singness of the previous, then it makes *prefix-sum*
+
+-2  1   -3  4   -1  2   1   -5  4
+    -1  -2  2   1   3   4   -1  3
+
+if runs the above code, then 6 is max sum
+
+-2  1   -3  4   -1  2   1   -5  4
+        -2      3   5   6   1   5 
+
+if make the previous value bigger? affect on next sum and will be covered
+
+-2  100   -3    4    -1     2     1   -5    4
+          97  101   100   102   103   98  102 
+
+
+This is about "sum" but not "sub array" How about returnning "sub array"?
+
+-2  1   -3 [4   -1  2   1]  -5  4
+        -2      3   5   6   1   5 
+        *       *
+        *
+"*" starts and max_element() is ends.
+
+*/
+
+namespace leetcode_easy_013
+{
+  int maxSubArray_1(vector<int>& nums)
+  {
+    int current_max{};
+
+    // do not solve all
+    // if (nums.size() == 1)
+    // {
+    //   return nums[0];
+    // }
+
+    for (size_t i = 1; i < nums.size(); ++i)
+    {
+      // only for positive previous item
+      if (nums[i-1] > 0)
+      {
+        // update input to keep *prefix-sum* since do not care changes to the
+        // input
+
+        nums[i] += nums[i-1];
+
+        // to find max sum
+        if (nums[i] > current_max)
+          current_max = nums[i];
+      }
+    }
+
+    return current_max;
+  }
+
+  // Runtime: 12 ms, faster than 98.45% of C++ online submissions for Maximum
+  // Subarray.
+  //
+  // Memory Usage: 10.5 MB, less than 15.81% of C++ online submissions for
+  // Maximum Subarray.
+
+  int maxSubArray_2(vector<int>& nums)
+  {
+    for (size_t i = 1; i < nums.size(); ++i)
+    {
+      // only for positive previous item
+      if (nums[i-1] > 0)
+      {
+        // update input to keep *prefix-sum* since do not care changes to the
+        // input
+
+        nums[i] += nums[i-1];
+      }
+    }
+
+    return *std::max_element(nums.begin(), nums.end());
+  }
+} // namespace
+
+TEST(LeetCode, Easy_013_MaxSubArray_1)
+{
+  using namespace leetcode_easy_013;
+
+  auto func = maxSubArray_1;
+
+  // fails on :
+  // input "1" and expected "1"
+  {
+    vector<int> coll{1};
+    EXPECT_THAT(func(coll), Not(1));
+  }
+
+  // fails on
+  // input "-2, 1" and expected 1
+  {
+    vector<int> coll{-2, 1};
+    EXPECT_THAT(func(coll), Not(1));
+  }
+
+  {
+    vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+    EXPECT_THAT(func(coll), 6);
+  }
+
+  {
+    // >>> sum([100,-3,4,-1,2,1,-5,4])
+    // 102
+    // >>> sum([100,-3,4,-1,2,1])
+    // 103
+    vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+    EXPECT_THAT(func(coll), 103);
+  }
+}
+
+TEST(LeetCode, Easy_013_MaxSubArray_2)
+{
+  using namespace leetcode_easy_013;
+
+  auto func = maxSubArray_2;
+
+  {
+    vector<int> coll{1};
+    EXPECT_THAT(func(coll), 1);
+  }
+
+  {
+    vector<int> coll{-2, 1};
+    EXPECT_THAT(func(coll), 1);
+  }
+
+  {
+    vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+    EXPECT_THAT(func(coll), 6);
+  }
+
+  {
+    // >>> sum([100,-3,4,-1,2,1,-5,4])
+    // 102
+    // >>> sum([100,-3,4,-1,2,1])
+    // 103
+    vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+    EXPECT_THAT(func(coll), 103);
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-14
+/*
+58. Length of Last Word, Easy
+
+Given a string s consists of upper/lower-case alphabets and empty space
+characters ' ', return the length of last word in the string.
+
+If the last word does not exist, return 0.
+
+Note: A word is defined as a character sequence consists of non-space characters
+only.
+
+Example:
+Input: "Hello World"
+Output: 5
+
+*/
+
+namespace leetcode_easy_014
+{
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Length of
+  // Last Word.
+  //
+  // Memory Usage: 8.9 MB, less than 90.45% of C++ online submissions for Length
+  // of Last Word.
+
+  int lengthOfLastWord(string s)
+  {
+    int count{};
+
+    int i = s.size() -1;
+
+    for (; i >= 0; --i)
+      if (!isspace(s[i]))
+        break;
+
+    for (; i >= 0; --i)
+    {
+      if (s[i] == ' ')
+          return count;
+
+      ++count;
+    }
+
+    return count;
+  }
+}
+
+TEST(LeetCode, Easy_014_LengthOfLastWord_1)
+{
+  using namespace leetcode_easy_014;
+
+  EXPECT_THAT(lengthOfLastWord("Hello World"), 5);
+  EXPECT_THAT(lengthOfLastWord("HelloWorld"), 10);
+  EXPECT_THAT(lengthOfLastWord(""), 0);
+
+  // failed case and change code accordingly
+  EXPECT_THAT(lengthOfLastWord("a"), 1);
+  EXPECT_THAT(lengthOfLastWord("a "), 1);
+}
 
 
 // ={=========================================================================

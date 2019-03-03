@@ -163,6 +163,57 @@ class TestNumeric(unittest.TestCase):
 
 
 #={===========================================================================
+# py-range
+
+class TestRange(unittest.TestCase):
+
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    # With one argument, range generates a list of integers from zero up to but
+    # not including the argument’s value. 
+    
+    # If you pass in two arguments, the first is taken as the lower bound. An
+    # optional third argument can give a step; if it is used, Python adds the
+    # step to each successive integer in the result (the step defaults to +1).
+
+    # Ranges can also be nonpositive and nonascending, if you want them to be:
+
+    def test_range(self):
+
+        self.assertEqual(list(range(5)), [0,1,2,3,4])
+
+        self.assertEqual(list(range(3, 5)), [3,4])
+
+        # py-range py-3
+        coll = list(range(10))
+        self.assertEqual(coll, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+        #
+        coll2 = [0] * 4;
+        self.assertEqual(coll2, [0, 0, 0, 0])
+
+        coll3 = [5,6,7,8]
+
+        for i in range(len(coll2)):
+            coll2[i] = coll3[i]
+
+        self.assertEqual(coll2, coll3)
+
+        # xrange() is for py-2
+        # # py-modulo
+        # sum = 0
+        # for i in list(xrange(10000)):
+
+        #     # py-way no precedence between ops?
+        #     if i % 3 == 0 or i % 5 == 0:
+        #         sum += i
+
+        # self.assertEqual(sum, 23331668)
+
+
+#={===========================================================================
 # py-string
 
 class TestString(unittest.TestCase):
@@ -362,35 +413,6 @@ class TestList(unittest.TestCase):
         self.assertEqual(type(coll2), type([1]))
 
 
-    def test_list_range(self):
-
-        # py-range py-3
-        coll = list(range(10))
-        self.assertEqual(coll, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-
-        #
-        coll2 = [0] * 4;
-        self.assertEqual(coll2, [0, 0, 0, 0])
-
-        coll3 = [5,6,7,8]
-
-        for i in range(len(coll2)):
-            coll2[i] = coll3[i]
-
-        self.assertEqual(coll2, coll3)
-
-        # xrange() is for py-2
-        # # py-modulo
-        # sum = 0
-        # for i in list(xrange(10000)):
-
-        #     # py-way no precedence between ops?
-        #     if i % 3 == 0 or i % 5 == 0:
-        #         sum += i
-
-        # self.assertEqual(sum, 23331668)
-
-
     def test_list_delete(self):
 
         coll = ['spam', 'eggs', 'ham', 'toast']
@@ -581,7 +603,7 @@ class TestSet(unittest.TestCase):
         self.assertTrue({1,2,3} == {3,2,1})
         self.assertFalse([1,2,3] == [3,2,1])
 
-        # sets can only contain immutable (a.k.a. “hashable”) object types as
+        # sets can only contain immutable (a.k.a. "hashable") object types as
         # keys in dict does. so tuple is okay and note that set ctor can use
         # listlist.
         #

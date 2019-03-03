@@ -66,6 +66,69 @@ def LongestCommonPrefix(strs):
 
 
 #={===========================================================================
+# py-leetcode-012, CountAndSay
+# from leetcode online comments
+
+class Solution_CountAndSay:
+    def countAndSay(self, n):
+        """
+        :type n: int
+        :rtype: str
+        """
+        if n == 1:
+            return "1"
+        return self.count(self.countAndSay(n - 1))
+
+    def count(self , s):
+        c = s[0]
+        count = 1
+        res = ""
+        for char in s[1 : ]:
+            if char == c:
+                count += 1
+            else:
+                res  = res + str(count) + c
+                c = char
+                count = 1
+
+        res = res + str(count) + c
+        return res
+
+
+#={===========================================================================
+# py-leetcode-013, 53. Maximum Subarray
+# from leetcode online comments
+
+#   0  1   2  3  4   5  6   7  8
+# [-2, 1, -3, 4, -1, 2, 1, -5, 4]
+#
+# i: 2, nums[2] : -3 += nums[1] : 1
+# nums[2] : -2
+# i: 4, nums[4] : -1 += nums[3] : 4
+# nums[4] : 3
+# i: 5, nums[5] : 2 += nums[4] : 3
+# nums[5] : 5
+# i: 6, nums[6] : 1 += nums[5] : 5
+# nums[6] : 6
+# i: 7, nums[7] : -5 += nums[6] : 6
+# nums[7] : 1
+# i: 8, nums[8] : 4 += nums[7] : 1
+# nums[8] : 5
+# nums: [-2, 1, -2, 4, 3, 5, 6, 1, 5]
+
+class Solution_MaxSubArray:
+    def answer(self, nums):
+        for i in range(1, len(nums)):
+            if nums[i-1] > 0:
+                print('i: %s, nums[%s] : %s += nums[%s] : %s' % 
+                        (i, i, nums[i], i-1, nums[i-1]))
+                nums[i] += nums[i-1]
+                print('nums[%s] : %s' % (i, nums[i]))
+        print('nums: %s' % nums)        
+        return max(nums)
+
+
+#={===========================================================================
 
 class TestAlgo(unittest.TestCase):
 
@@ -92,6 +155,15 @@ class TestAlgo(unittest.TestCase):
         self.assertEqual(LongestCommonPrefix(["dog","racecar","car"]), "")
         self.assertEqual(LongestCommonPrefix(["aa","aa"]), "aa")
         self.assertEqual(LongestCommonPrefix(["aa","bb"]), "")
+
+    def test_algo_count_and_say(self):
+        co = Solution_CountAndSay()
+        print(co.countAndSay(6))
+        print(co.countAndSay(7))
+
+    def test_algo_max_sub_array(self):
+        co = Solution_MaxSubArray()
+        print(co.answer([-2,1,-3,4,-1,2,1,-5,4]))
 
 
 #={===========================================================================

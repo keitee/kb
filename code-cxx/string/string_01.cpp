@@ -714,6 +714,7 @@ TEST(StringPad, AppendNull)
 // 4.2 Trimming a String
 // 
 // void trim(std::string &s, char c);
+//
 // remove chars from the end which matches with the given char
 //
 // string s1{"zoo"};
@@ -725,46 +726,52 @@ TEST(StringPad, AppendNull)
 
 // use single call to erase than removing one at a time.
 
-namespace trim_2018_11_14 {
+namespace string_trim 
+{
 
-  void trim(string &s, const char c)
+  void trim_1(string &s, const char c)
   {
     int start = s.size()-1;
 
-    while (start)
+    // failes on "ooo" since don not chacek when start == 0
+    //
+    // while (start)
+    // {
+    //   if (s[start] != c)
+    //     break;
+    //
+    //   --start;
+    // }
+
+    for (; start >= 0; --start)
     {
       if (s[start] != c)
         break;
-
-      --start;
     }
 
     // same as
     // s.erase(start+1, s.size());
    
+    // +1 since start is the pos that is not c
     s.erase(start+1);
   }
 
   // if use iterators
-  void trim_iter(string &s, const char c)
+  void trim_2(string &s, const char c)
   {
     if (s.empty()) return;
 
     auto end = s.end();
 
-    // it do not check on the first, *begin
- 
-    // for (; end != s.begin(); --end)
-    // {
-    //   if (*end != c)
-    //     break;
-    // }
+    // skip `c` chars if there are and note that `end` is decreased and is
+    // checked. hence need to ++end at below.
+    //
+    // also note that ulike trim_1(), works on "ooo" since `end` is begin.
 
     for (; end != s.begin() && *--end == c;)
       ;
 
-    // if the first is not the same, +iter
-    if (end != s.end() && *end != c)
+    if (*end != c)
       ++end;
 
     s.erase(end, s.end());
@@ -834,58 +841,67 @@ namespace trim_2018_11_14 {
 
 TEST(StringTrim, 2018_11)
 {
-  using namespace trim_2018_11_14;
+  using namespace string_trim;
 
   {
     string s1{"zoo"};
-    trim(s1, 'o');
-    EXPECT_EQ(s1, "z");
+    trim_1(s1, 'o');
+    EXPECT_THAT(s1, "z");
   }
 
   {
     string s1{"zzz"};
-    trim(s1, 'o');
-    EXPECT_EQ(s1, "zzz");
+    trim_1(s1, 'o');
+    EXPECT_THAT(s1, "zzz");
   }
 
-  // trim whitespace
   {
     string s1{"zoo                              "};
-    trim(s1,' ');
-    EXPECT_EQ(s1, "zoo");
+    trim_1(s1,' ');
+    EXPECT_THAT(s1, "zoo");
   }
 
   {
     string s1{"zoo"};
-    trim(s1,' ');
-    EXPECT_EQ(s1, "zoo");
+    trim_1(s1,' ');
+    EXPECT_THAT(s1, "zoo");
+  }
+
+  {
+    string s1{"ooo"};
+    trim_1(s1,'o');
+    EXPECT_THAT(s1, "");
   }
 
   // trim iterator version
   {
     string s1{"zoo"};
-    trim_iter(s1, 'o');
-    // EXPECT_EQ(s1, string("z"));
-    EXPECT_EQ(s1, "z");
+    trim_2(s1, 'o');
+    EXPECT_THAT(s1, "z");
   }
 
   {
     string s1{"zzz"};
-    trim_iter(s1, 'o');
-    EXPECT_EQ(s1, "zzz");
+    trim_2(s1, 'o');
+    EXPECT_THAT(s1, "zzz");
   }
 
-  // trim_iter whitespace
   {
     string s1{"zoo                              "};
-    trim_iter(s1,' ');
-    EXPECT_EQ(s1, "zoo");
+    trim_2(s1,' ');
+    EXPECT_THAT(s1, "zoo");
   }
 
   {
     string s1{"zoo"};
-    trim_iter(s1,' ');
-    EXPECT_EQ(s1, "zoo");
+    trim_2(s1,' ');
+    EXPECT_THAT(s1, "zoo");
+  }
+
+  {
+    string s1{"ooo"};
+    trim_2(s1,'o');
+    EXPECT_THAT(s1, "");
   }
 }
 
