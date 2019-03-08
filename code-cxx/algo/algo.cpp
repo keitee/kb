@@ -317,113 +317,167 @@ TEST(AlgoUnique, FindIUniqueCharsUseStringFind)
 
 // ={=========================================================================
 // algo-reserve
+//
 // * use in/out parameter
 // * cstring but efficient
 // * strlen()-1 since array indexing is always [0, size-1], or [0,size) and in
 //   this code, [begin, end] but not [begin, end)
 
-void reverse_string_01(char *input)
+namespace algo_reverse
 {
+  void reverse_string_1(char *input)
+  {
+    if (!input)
+      return;
+
     char *begin = input;
     char *end = input + strlen(input)-1;
     char temp{};
 
     for (; begin < end; ++begin, --end)
     {
-        // swap(begin, end);
-        temp = *begin;
-        *begin = *end;
-        *end = temp;
+      // swap(begin, end);
+      temp = *begin;
+      *begin = *end;
+      *end = temp;
     }
-}
+  }
 
-TEST(AlgoReverse, ReverseCstring)
-{
-    char input[] = "REVERSE IT";
-    reverse_string_01(input);
-    EXPECT_THAT(input, StrEq("TI ESREVER"));
-}
+  // ansic, p62
 
-// ansic, p62
-
-void reverse_string_02(char *input)
-{
+  void reverse_string_2(char *input)
+  {
     int str{}, end{};
     char temp{}; 
 
     for (end = strlen(input)-1; str < end; ++str, --end)
     {
-        // swap(str, end)
-        temp = input[str], input[str] = input[end], input[end] = temp;
+      // swap(str, end)
+      temp = input[str], input[str] = input[end], input[end] = temp;
     }
-}
+  }
 
-TEST(AlgoReverse, ReverseCstringAnsiVersion)
-{
-    char input[] = "REVERSE IT";
-    reverse_string_02(input);
-    EXPECT_THAT(input, StrEq("TI ESREVER"));
-}
+  // * if can use std::string and can return although c version is better.
+  // * use *cxx-reverse-iterator*
 
-
-// * if can use std::string and can return although c version is better.
-// * use *cpp-reverse-iterator*
-
-std::string reverse_string_03(const std::string &input)
-{
+  std::string reverse_string_3(const std::string &input)
+  {
     return std::string(input.crbegin(), input.crend());
-}
+  }
+  // when want to modify input itself
 
-TEST(AlgoReverse, ReverseCppStringUseRevrseIterator)
-{
-    std::string input{"REVERSE IT"};
-    EXPECT_THAT(reverse_string_03(input), Eq("TI ESREVER"));
-}
-
-
-// when want to modify input itself
-
-void reverse_string_04(std::string &input)
-{
+  void reverse_string_4(std::string &input)
+  {
     std::reverse(input.begin(), input.end());
-}
+  }
 
-TEST(AlgoReverse, ReverseCppStringUseAlgorithm)
-{
-    std::string input{"REVERSE IT"};
-    reverse_string_04(input);
-    EXPECT_THAT(input, Eq("TI ESREVER"));
-}
-
-std::string reverse_string_05(const std::string &input)
-{
+  std::string reverse_string_5(const std::string &input)
+  {
     std::string reversed{};
 
     for (auto len = input.size(); len > 0; --len)
-        reversed.push_back(input[len-1]);
+      reversed.push_back(input[len-1]);
 
     return reversed;
-}
+  }
 
-TEST(AlgoReverse, ReverseCppStringUsePushBack)
+} // namespace
+
+TEST(AlgoReverse, ReverseCstring)
 {
+  using namespace algo_reverse;
+
+  {
+    auto func = reverse_string_1;
+    char input[] = "REVERSE IT";
+    func(input);
+    EXPECT_THAT(input, StrEq("TI ESREVER"));
+  }
+
+  {
+    auto func = reverse_string_2;
+    char input[] = "REVERSE IT";
+    func(input);
+    EXPECT_THAT(input, StrEq("TI ESREVER"));
+  }
+  {
+    auto func = reverse_string_3;
     std::string input{"REVERSE IT"};
-    EXPECT_THAT(reverse_string_05(input), Eq("TI ESREVER"));
+    EXPECT_THAT(func(input), Eq("TI ESREVER"));
+  }
+
+  {
+    auto func = reverse_string_4;
+    std::string input{"REVERSE IT"};
+    func(input);
+    EXPECT_THAT(input, Eq("TI ESREVER"));
+  }
+
+  {
+    auto func = reverse_string_5;
+    std::string input{"REVERSE IT"};
+    EXPECT_THAT(func(input), Eq("TI ESREVER"));
+  }
+}
+
+TEST(AlgoReverse, ReverseCstringTestCases)
+{
+  using namespace algo_reverse;
+
+  auto func = reverse_string_1;
+
+  {
+    char input[] = "REVERSE IT";
+    func(input);
+    EXPECT_THAT(input, StrEq("TI ESREVER"));
+  }
+
+  {
+    char *input = nullptr;
+    func(input);
+    EXPECT_THAT(input, nullptr);
+  }
+
+  {
+    char input[] = "";
+    func(input);
+    EXPECT_THAT(input, StrEq(""));
+  }
+
+  {
+    char input[] = "         HAY";
+    func(input);
+    EXPECT_THAT(input, StrEq("YAH         "));
+  }
+
+  {
+    char input[] = "HAY         ";
+    func(input);
+    EXPECT_THAT(input, StrEq("         YAH"));
+  }
+
+  {
+    char input[] = "\n\r\a\bHAY\n\r\a\b";
+    func(input);
+    EXPECT_THAT(input, StrEq("\b\a\r\nYAH\b\a\r\n"));
+  }
 }
 
 
-// Write a program to reverse a string with all its duplicates removed. Only the
-// last instance of a character in the reverse string has to appear. Also, the
-// following conditions are to be satisfied: Assume only Capital Letters.
-//
-// o. assume that input is ASCII and is all upper case chars. so can use
-// unsigned int to check if it's a duplicate or not. if needs more range to
-// cover then need to use something else.
-//
-// o. from the net
-
-std::string reverse_string_06(const std::string &input)
+namespace algo_reverse
 {
+  // Write a program to reverse a string with all its duplicates removed. Only the
+  // last instance of a character in the reverse string has to appear. Also, the
+  // following conditions are to be satisfied: Assume only Capital Letters.
+  //
+  // o. assume that input is ASCII and is all upper case chars. so can use
+  // unsigned int to check if it's a duplicate or not. if needs more range to
+  // cover then need to use something else.
+  //
+  // o. from the net
+
+  std::string reverse_string_6(const std::string &input)
+  {
     std::string sin{input};
     std::string sout{};
     unsigned int bappeared{};
@@ -431,24 +485,29 @@ std::string reverse_string_06(const std::string &input)
     // remove duplicates from input
     for (size_t i = 0, size = sin.size(); i < size; ++i)
     {
-        // only if not appeared before. use bitwise
-        if (!(bappeared & (1 << (sin[i] - 'A'))))
-        {
-            sout += sin[i];
-            bappeared |= (1 << (sin[i]-'A'));
-        }
+      // only if not appeared before. use bitwise
+      if (!(bappeared & (1 << (sin[i] - 'A'))))
+      {
+        sout += sin[i];
+        bappeared |= (1 << (sin[i]-'A'));
+      }
     }
 
     // sout: JTVAKISHL
 
     // return reverse;
     return std::string{sout.crbegin(), sout.crend()};
-}
+  }
+} // namespace
 
-TEST(AlgoReverse, ReverseCppStringRemoveDuplicates)
+TEST(AlgoReverse, ReverseCstringRemoveDuplicates)
 {
-    std::string input{"JTVAKAVISHAAAL"};
-    EXPECT_THAT(reverse_string_06(input), Eq("LHSIKAVTJ"));
+  using namespace algo_reverse;
+
+  auto func = reverse_string_6;
+
+  std::string input{"JTVAKAVISHAAAL"};
+  EXPECT_THAT(func(input), Eq("LHSIKAVTJ"));
 }
 
 
@@ -1609,63 +1668,489 @@ TEST(RomanConvert, 1011)
 
 
 // ={=========================================================================
+// algo-recursion-hanoi
+
+namespace algo_recursion_hanoi
+{
+  unsigned int recursion_depth;
+
+  void print_depth(bool dash, unsigned int depth)
+  {
+    for( unsigned int i=0; i <= depth; ++i)
+    {
+      if(dash)
+        cout << "--";
+      else
+        cout << "  ";
+    }
+
+    if(dash)
+      cout << "(" << depth << ") ";
+    else
+      cout << "      ";
+  }
+
+  void move_disk(int count, int start, int finish, int temp)
+  {
+    // ++calls;
+    ++recursion_depth;
+    print_depth(true, recursion_depth);
+
+    cout << "Move(" << count << "," << start << "," << finish << "," << temp << ")" << endl;
+
+    if (count > 0)
+    {
+      move_disk(count-1, start, temp, finish);
+
+      print_depth(false, recursion_depth);
+      cout << "move " << count << " disk, " << start << " -> " << finish << endl;
+
+      move_disk(count-1, temp, finish, start);
+    }
+    else
+    {
+      print_depth(false, recursion_depth);
+      cout << "move " << count << " disk, " << start << " -> " << finish << endl;
+    }
+
+    --recursion_depth;
+  }
+
+} // namespace
+
+// disks are 0, 1, 2, 3
+//
+// [ RUN      ] AlgoRecursion.Hanoi
+// ----(1) Move(3,1,3,2)
+// ------(2) Move(2,1,2,3)                {
+// --------(3) Move(1,1,3,2)
+// ----------(4) Move(0,1,2,3)
+//                 move 0 disk, 1 -> 2
+//               move 1 disk, 1 -> 3
+// ----------(4) Move(0,2,3,1)
+//                 move 0 disk, 2 -> 3
+//
+//             move 2 disk, 1 -> 2
+//
+// --------(3) Move(1,3,2,1)
+// ----------(4) Move(0,3,1,2)
+//                 move 0 disk, 3 -> 1
+//               move 1 disk, 3 -> 2
+// ----------(4) Move(0,1,2,3)
+//                 move 0 disk, 1 -> 2    }
+//
+//           move 3 disk, 1 -> 3
+//
+// ------(2) Move(2,2,3,1)
+// --------(3) Move(1,2,1,3)
+// ----------(4) Move(0,2,3,1)
+//                 move 0 disk, 2 -> 3
+//               move 1 disk, 2 -> 1
+// ----------(4) Move(0,3,1,2)
+//                 move 0 disk, 3 -> 1
+//             move 2 disk, 2 -> 3
+// --------(3) Move(1,1,3,2)
+// ----------(4) Move(0,1,2,3)
+//                 move 0 disk, 1 -> 2
+//               move 1 disk, 1 -> 3
+// ----------(4) Move(0,2,3,1)
+//                 move 0 disk, 2 -> 3
+// [       OK ] AlgoRecursion.Hanoi (3 ms)
+
+TEST(AlgoRecursion, Hanoi) 
+{
+  using namespace algo_recursion_hanoi;
+
+  const int DISKS{3};
+
+  move_disk(DISKS, 1, 3, 2);
+}
+
+
+// ={=========================================================================
+// algo-recursion-fibonacci
+
+namespace algo_recursion_fibonacci
+{
+  // n is nth fibonacci term
+
+  int fibonacci_1(int n)
+  {
+    if (n <= 0)
+      return 0;
+    else if (n == 1)
+      return 1;
+    else
+      return fibonacci_1(n-1) + fibonacci_1(n-2);
+  }
+
+  int fibonacci_2(int n)
+  {
+    int twoback{};  // f(n-2)
+    int oneback{};  // f(n-1)
+    int current{};
+
+    if (n <= 0)
+      return 0;
+    else if (n == 1)
+      return 1;
+    else
+    {
+      // back from current
+      twoback = 0;
+      oneback = 1;
+
+      for (int i = 2; i <= n; ++i)
+      {
+        current = twoback + oneback;
+
+        // for next f
+        twoback = oneback;
+        oneback = current;
+      }
+    }
+
+    return current;
+  }
+
+} // namespace
+
+TEST(AlgoRecursion, Fibonacci) 
+{
+  using namespace algo_recursion_fibonacci;
+
+  EXPECT_THAT(fibonacci_1(4), 3);
+  EXPECT_THAT(fibonacci_1(5), 5);
+  EXPECT_THAT(fibonacci_1(6), 8);
+  EXPECT_THAT(fibonacci_1(7), 13);
+
+  EXPECT_THAT(fibonacci_2(4), 3);
+  EXPECT_THAT(fibonacci_2(5), 5);
+  EXPECT_THAT(fibonacci_2(6), 8);
+  EXPECT_THAT(fibonacci_2(7), 13);
+}
+
+
+// algo-leetcode-18
+/*
+70. Climbing Stairs, Easy
+
+You are climbing a stair case. It takes n steps to reach to the top.
+
+Each time you can either climb 1 or 2 steps. In how many distinct ways can you
+climb to the top?
+
+Note: Given n will be a positive integer.
+
+Example 1:
+Input: 2
+Output: 2
+Explanation: There are two ways to climb to the top.
+1. 1 step + 1 step
+2. 2 steps
+
+Example 2:
+Input: 3
+Output: 3
+Explanation: There are three ways to climb to the top.
+1. 1 step + 1 step + 1 step
+2. 1 step + 2 steps
+3. 2 steps + 1 step
+ 
+*/
+
+/*
+
+Approach 1: Brute Force
+
+In this brute force approach we take all possible step combinations i.e. 1 and
+2, at every step. At every step we are calling the function
+climbStairsclimbStairs for step 1 and 2, and return the sum of returned values
+of both functions.
+
+climbStairs(i,n)=(i+1,n)+climbStairs(i+2,n)
+
+where i defines the current step and n defines the destination step.
+
+Time complexity : O(2^n)
+
+since the size of recursion tree will be 2^n
+
+N = 2
+          (0,2)
+
+    (1,2)       (2,2)
+                ret 1
+(2,2)   (3,2) 
+ret 1   ret 0
+
+return 1 means found and return 0 means not found.
+
+Space complexity : O(n) The depth of the recursion tree can go upto n.
+
+*/ 
+
+namespace leetcode_easy_018
+{
+  int climb_stairs(int start, int end)
+  {
+    if (start == end)
+      return 1;
+    else if (start > end)
+      return 0;
+
+    return climb_stairs(start + 1, end) + climb_stairs(start + 2, end);
+  }
+
+  int climbStairs_1(int n) 
+  {
+    return climb_stairs(0, n);
+  }
+} // namespace
+
+TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_1)
+{
+  using namespace leetcode_easy_018;
+  auto func = climbStairs_1;
+
+  EXPECT_THAT(func(2), 2);
+  EXPECT_THAT(func(3), 3);
+  EXPECT_THAT(func(4), 5);
+  EXPECT_THAT(func(30), 1346269);
+}
+
+
+/*
+Approach 2: Recursion with memoization
+
+In the previous approach we are redundantly calculating the result for every
+step. Instead, we can store the result at each step in memomemo array and
+directly returning the result from the memo array whenever that function is
+called again.
+
+In this way we are *pruning* recursion tree with the help of memo array and
+reducing the size of recursion tree upto n.
+
+(Like fibonacci problem, the right part of recursion tree uses the same
+calculation which are calculated already but calculate them again since they are
+lost. So can keep them and use it then better performance)
+
+Time complexity : O(n). Size of recursion tree can go upto nn.
+Space complexity : O(n). The depth of recursion tree can go upto nn. 
+
+see time difference between recursion and iterative version
+
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_1
+[       OK ] LeetCode.Easy_018_ClimbStairs_1 (52 ms)
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_2
+[       OK ] LeetCode.Easy_018_ClimbStairs_2 (0 ms)
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_3
+[       OK ] LeetCode.Easy_018_ClimbStairs_3 (0 ms)
+ 
+*/
+
+namespace leetcode_easy_018
+{
+  int climb_stairs(int start, int end, vector<int> &memo)
+  {
+    if (start == end)
+      return 1;
+    else if (start > end)
+      return 0;
+    else if(memo[start])
+      return memo[start];
+
+    memo[start] = climb_stairs(start + 1, end, memo) + climb_stairs(start + 2, end, memo);
+    return memo[start];
+  }
+
+  int climbStairs_2(int n) 
+  {
+    vector<int> memo(n + 1, 0);
+    return climb_stairs(0, n, memo);
+  }
+} // namespace
+
+TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_2)
+{
+  using namespace leetcode_easy_018;
+  auto func = climbStairs_2;
+
+  EXPECT_THAT(func(2), 2);
+  EXPECT_THAT(func(3), 3);
+  EXPECT_THAT(func(4), 5);
+  EXPECT_THAT(func(30), 1346269);
+}
+
+
+/*
+Approach 3: Dynamic Programming
+
+As we can see this problem can be broken into subproblems, and it contains the
+optimal substructure property i.e. its optimal solution can be constructed
+efficiently from optimal solutions of its subproblems, we can use dynamic
+programming to solve this problem.
+
+One can reach ith step in one of the two ways:
+
+Taking a single step from (i-1) th step.
+
+Taking two step from (i−2) th step.
+
+(since it is about way to reach to n but not number of steps)
+
+So, the total number of ways to reach i th is equal to sum of ways of reaching
+(i−1)th step and ways of reaching (i-2)th step.  
+
+Let dp[i] denotes the number of ways to reach on i th step:
+
+dp[i]=dp[i-1]+dp[i-2]
+
+
+Approach 4: Fibonacci Number
+
+In the above approach we have used dpdp array where dp[i]=dp[i-1]+dp[i-2]. It
+can be easily analysed that dp[i] is nothing but ith fibonacci number.
+
+means the dp value sequence. this is fibonacci sequence:
+
+0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
+
+dp value sequence:
+
+0, 1, 2, 3, 5, 8, 13, 21, 34, ...
+
+Now we just have to find n th number of the fibonacci series having 1 and 2
+their first and second term respectively, i.e. Fib(1)=1 and Fib(2)=2.
+
+
+  int fibonacci_2(int n)
+  {
+    int twoback{};  // f(n-2)
+    int oneback{};  // f(n-1)
+    int current{};
+
+    if (n <= 0)
+      return 0;
+    else if (n == 1)
+      return 1;
+    else
+    {
+      // back from current
+      twoback = 0;
+      oneback = 1;
+
+      for (int i = 2; i <= n; ++i)
+      {
+        current = twoback + oneback;
+
+        // for next f
+        twoback = oneback;
+        oneback = current;
+      }
+    }
+
+    return current;
+  }
+*/
+
+namespace leetcode_easy_018
+{
+  int climbStairs_3(int n) 
+  {
+    // base cases
+    if(n <= 0) return 0;
+    if(n == 1) return 1;
+    if(n == 2) return 2;
+
+    int one_step_before = 2;    // when n == 2
+    int two_steps_before = 1;   // when n == 1
+    int all_ways = 0;
+
+    // starts from n == 3
+    for(int i=3; i <= n; i++)
+    {
+      all_ways = one_step_before + two_steps_before;
+      two_steps_before = one_step_before;
+      one_step_before = all_ways;
+    }
+
+    return all_ways;
+  };
+} // namespace
+
+TEST(AlgoRecusrion, LeetCode_Easy_018_ClimbStairs_3)
+{
+  using namespace leetcode_easy_018;
+  auto func = climbStairs_3;
+
+  EXPECT_THAT(func(2), 2);
+  EXPECT_THAT(func(3), 3);
+  EXPECT_THAT(func(4), 5);
+  EXPECT_THAT(func(30), 1346269);
+}
+
+
+// ={=========================================================================
 // algo-recursion-factorial
 
-// factorial, n!, is the product of all `positive` integers less than or equals
-// to n.
-
-// CPR 227
-int factorial(int value)
+namespace algo_recursion_factorial
 {
-  // CodeComplete 440, #19
-  if (1 < value)
-    return factorial(value-1)*value;
-
-  return 1;
-}
-
-TEST(AlgoRecursion, FactorialRecursion) 
-{
-  EXPECT_THAT(factorial(5), 120);
-}
-
-// CodeComplete 397, #17.2,
-// Don’t use recursion for factorials or Fibonacci numbers
-
-int factorial_iteration(int value)
-{
-  int result{1};
-
-  // for (int i = 1; i <= value; ++i)
-
-  for (int i = 2; i <= value; ++i)
+  // CPR 227
+  int factorial_1(int value)
   {
-    result *= i;
+    // CodeComplete 440, #19
+    if (value > 1)
+      return factorial_1(value-1)*value;
+
+    return 1;
   }
 
-  return result;
-}
+  // CodeComplete 397, #17.2,
+  // Don’t use recursion for factorials or Fibonacci numbers
 
-TEST(AlgoRecursion, FactorialIteration) 
-{
-  EXPECT_THAT(factorial_iteration(5), 120);
-}
-
-int factorial_iteration_0717(int value)
-{
-  int result{1};
-
-  for (; 0 < value; --value)
+  int factorial_2(int value)
   {
-    result *= value;
+    int result{1};
+
+    // for (int i = 1; i <= value; ++i)
+
+    for (int i = 2; i <= value; ++i)
+    {
+      result *= i;
+    }
+
+    return result;
   }
 
-  return result;
-}
+  int factorial_3(int value)
+  {
+    int result{1};
 
-TEST(AlgoRecursion, FactorialIteration_0717) 
+    for (; 0 < value; --value)
+    {
+      result *= value;
+    }
+
+    return result;
+  }
+} // namespace
+
+
+// not good idea to use factorial to see performance difference due to tail
+// recursion since number gets bigger quickly
+
+TEST(AlgoRecursion, Factorial) 
 {
-  EXPECT_THAT(factorial_iteration(5), 120);
+  using namespace algo_recursion_factorial;
+
+  EXPECT_THAT(factorial_1(5), 120);
+  EXPECT_THAT(factorial_1(10), 3628800);
+
+  EXPECT_THAT(factorial_2(5), 120);
+  EXPECT_THAT(factorial_2(10), 3628800);
+
+  EXPECT_THAT(factorial_3(5), 120);
 }
 
 
@@ -7947,6 +8432,7 @@ namespace algo_binary_search
 
 
   // `equality-version`
+  // note that while loop has `=` now
 
   template <typename _Iterator, typename _T> 
     _Iterator binary_search_4(_Iterator begin, _Iterator end, _T const key) 
@@ -8359,6 +8845,321 @@ TEST(AlgoSearch, BinarySearchStl)
     EXPECT_THAT(binary_search_8(coll, 2), 1);
     EXPECT_THAT(binary_search_8(coll, 7), 4);
     EXPECT_THAT(binary_search_8(coll, 0), 0);
+  }
+}
+
+
+// algo-binary-search algo-leetcode-17
+/*
+69. Sqrt(x), Easy
+
+Implement int sqrt(int x).
+
+Compute and return the square root of x, where x is guaranteed to be a
+non-negative integer.
+
+Since the return type is an integer, the decimal digits are truncated and only
+the integer part of the result is returned.
+
+Example 1:
+Input: 4
+Output: 2
+
+Example 2:
+Input: 8
+Output: 2
+Explanation: The square root of 8 is 2.82842..., and since 
+             the decimal part is truncated, 2 is returned.
+*/
+
+namespace algo_binary_search
+{
+namespace leetcode_easy_017
+{
+
+  // https://www.geeksforgeeks.org/square-root-of-an-integer/
+  // binary search version
+  //
+  // O(Log x)
+  //
+  //  0   1       mid   sqrt(x)                 x = sqrt(x)*sqrt(x)
+  //  |---|--------|-------|--------------------|
+  //
+  //  actually, trying to find sqrt(x) from [1, x] and x is ^2 domain and big
+  //  value but used 
+
+  int floor_sqrt_1(int x)
+  {
+    // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{1};
+    int end{x-1};
+    int ans{};
+
+    while (start <= end)
+    {
+      int mid = (start + end) / 2;
+
+      // equality; perfect square
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+  // Note: The Binary Search can be further optimized to start with ‘start’ = 0
+  // and ‘end’ = x/2. Floor of square root of x cannot be more than x/2 when x >
+  // 1.
+  //
+  // cxx-error-overflow
+  // Line 18: Char 15: runtime error: signed integer overflow: 536848899 *
+  // 536848899 cannot be represented in type 'int' (solution.cpp)
+
+  int floor_sqrt_2(int x)
+  {
+    // // base cases
+    // if (x == 0 || x == 1)
+    //   return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{0};
+    int end{x/2};
+    int ans{};
+
+    while (start <= end)
+    {
+      int mid = (start + end) / 2;
+
+      // equality; perfect square
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+  // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
+  // Sqrt(x).
+
+  int floor_sqrt_3(int x)
+  {
+    // // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{0};
+    int end{x/2};
+    int ans{};
+
+    while (start <= end)
+    {
+      long long mid = (start + end) / 2;
+      long long sqare = mid * mid;
+
+      // equality; perfect square
+      if (sqare == x)
+        return mid;
+      else if (sqare < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+
+  // having square variable for mid * mid causes performance penalty?
+  //
+  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
+  // Sqrt(x).
+
+  int floor_sqrt_4(int x)
+  {
+    // // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{0};
+    int end{x/2};
+    int ans{};
+
+    long long mid{};
+
+    while (start <= end)
+    {
+      mid = (start + end) / 2;
+
+      // equality; perfect square
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+  // code discussion forum
+  //
+  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.8 MB, less than 73.75% of C++ online submissions for
+  // Sqrt(x).
+
+  int floor_sqrt_5(int x)
+  {
+    long long l=1,r=x,mid;
+
+    if(x==0)
+      return 0;
+
+    while(l<=r)
+    {
+      mid = l+(r-l)/2;
+
+      if( mid*mid==x)
+        return mid;
+      else if( mid*mid>x)
+        r=mid-1;
+      else
+      {
+        l=mid+1;
+        if(l*l>x)
+          return mid;
+      }
+    }
+
+    // just to avoid warning
+    return mid;
+  }
+} // namespace
+} // namespace
+
+
+TEST(AlgoSearch, LeetCode_Easy_017_Sqrt)
+{
+  using namespace algo_binary_search::leetcode_easy_017;
+
+  {
+    // #include <math.h>
+    // double sqrt(double x);
+    // float sqrtf(float x);
+    // long double sqrtl(long double x);
+
+    // 2
+    // 2.82843
+    // 3.16228
+    // 4
+
+    EXPECT_DOUBLE_EQ(sqrt(4), 2);
+    EXPECT_NEAR(sqrt(8), 2.82843, 0.00001);
+
+    // Expected equality of these values:
+    //   sqrt(10)
+    //     Which is: 3.1622776601683795
+    //   3.16228
+    // EXPECT_DOUBLE_EQ(sqrt(10), 3.16228);
+
+    EXPECT_NEAR(sqrt(10), 3.16228, 0.00001);
+    EXPECT_DOUBLE_EQ(sqrt(16), 4);
+  }
+
+  {
+    auto func = floor_sqrt_1;
+
+    EXPECT_THAT(func(4), 2);
+    EXPECT_THAT(func(8), 2);
+    EXPECT_THAT(func(10), 3);
+    EXPECT_THAT(func(16), 4);
+  }
+  {
+    auto func = floor_sqrt_2;
+
+    EXPECT_THAT(func(4), 2);
+    EXPECT_THAT(func(8), 2);
+    EXPECT_THAT(func(10), 3);
+    EXPECT_THAT(func(16), 4);
+  }
+  {
+    // >>> 46339*46339, floor
+    // 2,147,302,921
+    //
+    // 2,147,395,599
+    //
+    // >>> 46340*46340, ceiling
+    // 2,147,395,600
+    
+    auto func = floor_sqrt_3;
+    EXPECT_THAT(func(2147395599), 46339);
+    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
+  }
+
+  {
+    // >>> 46339*46339, floor
+    // 2,147,302,921
+    //
+    // 2,147,395,599
+    //
+    // >>> 46340*46340, ceiling
+    // 2,147,395,600
+    
+    auto func = floor_sqrt_4;
+    EXPECT_THAT(func(1), 1);
+    EXPECT_THAT(func(2147395599), 46339);
+    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
   }
 }
 

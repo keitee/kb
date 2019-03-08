@@ -2103,7 +2103,7 @@ Output: 0
 
 
 // ={=========================================================================
-// algo-leetcode-12
+// algo-leetcode-12 algo-recursion
 /*
 38. Count and Say, Easy
 
@@ -2168,7 +2168,7 @@ namespace leetcode_easy_012
       }
     }
 
-    // to handle then input ends
+    // to handle when input ends
     result += to_string(count) + current_char;
 
     // cout << "result: " << result << endl;
@@ -2176,7 +2176,7 @@ namespace leetcode_easy_012
     return result;
   }
 
-  // to remove handling of the first read
+  // to remove handling of the first char read
 
   string count_string_2(string const &input)
   {
@@ -2591,6 +2591,797 @@ TEST(LeetCode, Easy_014_LengthOfLastWord_1)
   // failed case and change code accordingly
   EXPECT_THAT(lengthOfLastWord("a"), 1);
   EXPECT_THAT(lengthOfLastWord("a "), 1);
+}
+
+
+// ={=========================================================================
+// algo-leetcode-15
+/*
+66. Plus One, Easy
+
+Given a non-empty array of digits representing a non-negative integer, plus one
+to the integer.
+
+The digits are stored such that the most significant digit is at the head of the
+list, and each element in the array contain a single digit.
+
+You may assume the integer does not contain any leading zero, except the number
+0 itself.
+
+Example 1:
+Input: [1,2,3]
+Output: [1,2,4]
+Explanation: The array represents the integer 123.
+
+Example 2:
+Input: [4,3,2,1]
+Output: [4,3,2,2]
+Explanation: The array represents the integer 4321.
+
+*/
+
+namespace leetcode_easy_015
+{
+  // initially, thought
+  //
+  // o like atoi, convert input to nmumber
+  // o add +1
+  // o like itoa, conver it back to array
+  // o reverse it
+  //
+  // but looks it's not right approach
+  //
+  // vector<int> plusOne_1(vector<int>& digits) 
+  // {
+  // }
+  //
+  //  python solution:
+  //
+  //  def answer(self, digits):
+  //      return [int(c) for c in str(int(''.join(str(d) for d in digits)) + 1)] 
+ 
+  // solution from lonelydream
+  //
+  // the key idea is that:
+  //
+  // if addition cause a carry made then continue doing so until it do not
+  // create a carry. 
+  //
+  // when done, if [0] == 0, means there was a carry so insert 1 at the
+  // beginning.
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Plus One.
+  //
+  // Memory Usage: 8.7 MB, less than 15.95% of C++ online submissions for Plus
+  // One.
+
+  vector<int> plusOne_2(vector<int>& digits) 
+  {
+    for (int i = digits.size()-1; i >= 0; --i)
+    {
+      digits[i] += 1; 
+
+      if (digits[i] > 9)
+      {
+        digits[i] = 0;
+        continue;
+      }
+      // else
+      //   break;
+
+      // also works without else clause
+      break;
+    }
+
+    if (digits[0] == 0)
+      digits.insert(digits.begin(), 1);
+
+    return digits;
+  }
+}
+
+TEST(LeetCode, Easy_015_PlusOne)
+{
+  using namespace leetcode_easy_015;
+
+  auto func = plusOne_2;
+
+  {
+    vector<int> coll{1,2,3};
+    EXPECT_THAT(func(coll), ElementsAre(1,2,4));
+  }
+  {
+    vector<int> coll{4,3,2,1};
+    EXPECT_THAT(func(coll), ElementsAre(4,3,2,2));
+  }
+  {
+    vector<int> coll{9,9,9};
+    EXPECT_THAT(func(coll), ElementsAre(1,0,0,0));
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-16
+/*
+67. Add Binary, Easy
+
+Given two binary strings, return their sum (also a binary string).
+
+The input strings are both non-empty and contains only characters 1 or 0.
+
+Example 1:
+Input: a = "11", b = "1"
+Output: "100"
+
+Example 2:
+Input: a = "1010", b = "1011"
+Output: "10101"
+
+*/
+
+// Like, Plus One, loop on input strings while caring about `carry`
+//
+// o since the length of inputs can be different, loops on max between them,
+// decrease them and note that then can go negative.
+//
+// o convert char to int
+
+namespace leetcode_easy_016
+{
+  // Runtime: 8 ms, faster than 95.80% of C++ online submissions for Add Binary.
+  //
+  // Memory Usage: 8.6 MB, less than 55.73% of C++ online submissions for Add
+  // Binary.
+  
+  string addBinary_1(string a, string b)
+  {
+    int i = a.size() -1;
+    int j = b.size() -1;
+    auto len = max(i, j);
+
+    int carry{};
+    int sum{};
+    string result{};
+
+    for (; len >= 0; --len, --i, --j)
+    {
+      // sum = (i >= 0 ? stoi(a.substr(i, 1)) : 0) + (j >= 0 ? stoi(b.substr(j, 1)) : 0) + carry;
+
+      // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Add
+      // Binary.
+
+      sum = (i >= 0 ? a[i] - '0' : 0) + (j >= 0 ? b[j] - '0' : 0) + carry;
+
+      sum >= 2 ? carry = sum / 2 : carry = 0;
+
+      // cout << "insert: " << (sum % 2) << endl;
+
+      result.insert(0, to_string(sum % 2));
+    }
+
+    // cout << "sum: " << sum << ", carry: " << carry << endl;
+
+    if (carry)
+    {
+      // cout << "insert: " << (1) << endl;
+      result.insert(0, to_string(1));
+    }
+
+    return result;
+  }
+}
+
+TEST(LeetCode, Easy_016_AddBinary)
+{
+  using namespace leetcode_easy_016;
+
+  auto func = addBinary_1;
+
+  EXPECT_THAT(func("10", "11"), "101");
+  EXPECT_THAT(func("1", "11"), "100");
+  EXPECT_THAT(func("1010", "1011"), "10101");
+  EXPECT_THAT(func("", ""), "");
+
+  // fails at run and fixed
+  EXPECT_THAT(func("0", "0"), "0");
+}
+
+
+// ={=========================================================================
+// algo-leetcode-17
+/*
+69. Sqrt(x), Easy
+
+Implement int sqrt(int x).
+
+Compute and return the square root of x, where x is guaranteed to be a
+non-negative integer.
+
+Since the return type is an integer, the decimal digits are truncated and only
+the integer part of the result is returned.
+
+Example 1:
+Input: 4
+Output: 2
+
+Example 2:
+Input: 8
+Output: 2
+Explanation: The square root of 8 is 2.82842..., and since 
+             the decimal part is truncated, 2 is returned.
+*/
+
+namespace leetcode_easy_017
+{
+
+  // https://www.geeksforgeeks.org/square-root-of-an-integer/
+  // binary search version
+  //
+  // O(Log x)
+  //
+  //  0   1       mid   sqrt(x)                 x = sqrt(x)*sqrt(x)
+  //  |---|--------|-------|--------------------|
+  //
+  //  actually, trying to find sqrt(x) from [1, x] and x is ^2 domain and big
+  //  value but used 
+
+  int floor_sqrt_1(int x)
+  {
+    // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{1};
+    int end{x-1};
+    int ans{};
+
+    while (start <= end)
+    {
+      int mid = (start + end) / 2;
+
+      // equality; perfect square
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+  // Note: The Binary Search can be further optimized to start with ‘start’ = 0
+  // and ‘end’ = x/2. Floor of square root of x cannot be more than x/2 when x >
+  // 1.
+  //
+  // cxx-error-overflow
+  // Line 18: Char 15: runtime error: signed integer overflow: 536848899 *
+  // 536848899 cannot be represented in type 'int' (solution.cpp)
+
+  int floor_sqrt_2(int x)
+  {
+    // // base cases
+    // if (x == 0 || x == 1)
+    //   return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{0};
+    int end{x/2};
+    int ans{};
+
+    while (start <= end)
+    {
+      int mid = (start + end) / 2;
+
+      // equality; perfect square
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+  // Runtime: 24 ms, faster than 21.88% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.9 MB, less than 49.57% of C++ online submissions for
+  // Sqrt(x).
+
+  int floor_sqrt_3(int x)
+  {
+    // // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{0};
+    int end{x/2};
+    int ans{};
+
+    while (start <= end)
+    {
+      long long mid = (start + end) / 2;
+      long long sqare = mid * mid;
+
+      // equality; perfect square
+      if (sqare == x)
+        return mid;
+      else if (sqare < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+
+  // having square variable for mid * mid causes performance penalty?
+  //
+  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.8 MB, less than 84.46% of C++ online submissions for
+  // Sqrt(x).
+
+  int floor_sqrt_4(int x)
+  {
+    // // base cases
+    if (x == 0 || x == 1)
+      return x;
+
+    // starts from 1 since it's covered in base cases
+    int start{0};
+    int end{x/2};
+    int ans{};
+
+    long long mid{};
+
+    while (start <= end)
+    {
+      mid = (start + end) / 2;
+
+      // equality; perfect square
+      if (mid * mid == x)
+        return mid;
+      else if (mid * mid < x)
+      {
+        // so discard [1, mid], update start and move closer to sqrt(x)
+        start = mid + 1;
+
+        // we need floor answer so update ans  
+        ans = mid;
+      }
+      // discard [mid, x]
+      else
+        end = mid - 1;
+    }
+
+    // return floor value rather than `not found`
+    return ans;
+  }
+
+  // code discussion forum
+  //
+  // Runtime: 12 ms, faster than 99.18% of C++ online submissions for Sqrt(x).
+  //
+  // Memory Usage: 13.8 MB, less than 73.75% of C++ online submissions for
+  // Sqrt(x).
+
+  int floor_sqrt_5(int x)
+  {
+    long long l=1,r=x,mid;
+
+    if(x==0)
+      return 0;
+
+    while(l<=r)
+    {
+      mid = l+(r-l)/2;
+
+      if( mid*mid==x)
+        return mid;
+      else if( mid*mid>x)
+        r=mid-1;
+      else
+      {
+        l=mid+1;
+        if(l*l>x)
+          return mid;
+      }
+    }
+
+    // just to avoid warning
+    return mid;
+  }
+} // namespace
+
+TEST(LeetCode, Easy_017_Sqrt)
+{
+  using namespace leetcode_easy_017;
+
+  {
+    // #include <math.h>
+    // double sqrt(double x);
+    // float sqrtf(float x);
+    // long double sqrtl(long double x);
+
+    // 2
+    // 2.82843
+    // 3.16228
+    // 4
+
+    EXPECT_DOUBLE_EQ(sqrt(4), 2);
+    EXPECT_NEAR(sqrt(8), 2.82843, 0.00001);
+
+    // Expected equality of these values:
+    //   sqrt(10)
+    //     Which is: 3.1622776601683795
+    //   3.16228
+    // EXPECT_DOUBLE_EQ(sqrt(10), 3.16228);
+
+    EXPECT_NEAR(sqrt(10), 3.16228, 0.00001);
+    EXPECT_DOUBLE_EQ(sqrt(16), 4);
+  }
+
+  {
+    auto func = floor_sqrt_1;
+
+    EXPECT_THAT(func(4), 2);
+    EXPECT_THAT(func(8), 2);
+    EXPECT_THAT(func(10), 3);
+    EXPECT_THAT(func(16), 4);
+  }
+  {
+    auto func = floor_sqrt_2;
+
+    EXPECT_THAT(func(4), 2);
+    EXPECT_THAT(func(8), 2);
+    EXPECT_THAT(func(10), 3);
+    EXPECT_THAT(func(16), 4);
+  }
+  {
+    // >>> 46339*46339, floor
+    // 2,147,302,921
+    //
+    // 2,147,395,599
+    //
+    // >>> 46340*46340, ceiling
+    // 2,147,395,600
+    
+    auto func = floor_sqrt_3;
+    EXPECT_THAT(func(2147395599), 46339);
+    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
+  }
+
+  {
+    // >>> 46339*46339, floor
+    // 2,147,302,921
+    //
+    // 2,147,395,599
+    //
+    // >>> 46340*46340, ceiling
+    // 2,147,395,600
+    
+    auto func = floor_sqrt_4;
+    EXPECT_THAT(func(1), 1);
+    EXPECT_THAT(func(2147395599), 46339);
+    EXPECT_NEAR(sqrt(2147395599), 46340, 0.1);
+  }
+}
+
+TEST(LeetCode, Easy_017_Sqrt_Performance_1)
+{
+  using namespace leetcode_easy_017;
+  auto func = floor_sqrt_3;
+
+  for (int i = 0; i < 1000; ++i)
+  {
+    EXPECT_THAT(func(1), 1);
+    EXPECT_THAT(func(2147395599), 46339);
+  }
+}
+
+TEST(LeetCode, Easy_017_Sqrt_Performance_2)
+{
+  using namespace leetcode_easy_017;
+  auto func = floor_sqrt_4;
+
+  for (int i = 0; i < 1000; ++i)
+  {
+    EXPECT_THAT(func(1), 1);
+    EXPECT_THAT(func(2147395599), 46339);
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-18
+/*
+70. Climbing Stairs, Easy
+
+You are climbing a stair case. It takes n steps to reach to the top.
+
+Each time you can either climb 1 or 2 steps. In how many distinct ways can you
+climb to the top?
+
+Note: Given n will be a positive integer.
+
+Example 1:
+Input: 2
+Output: 2
+Explanation: There are two ways to climb to the top.
+1. 1 step + 1 step
+2. 2 steps
+
+Example 2:
+Input: 3
+Output: 3
+Explanation: There are three ways to climb to the top.
+1. 1 step + 1 step + 1 step
+2. 1 step + 2 steps
+3. 2 steps + 1 step
+ 
+*/
+
+/*
+
+Approach 1: Brute Force
+
+In this brute force approach we take all possible step combinations i.e. 1 and
+2, at every step. At every step we are calling the function
+climbStairsclimbStairs for step 1 and 2, and return the sum of returned values
+of both functions.
+
+climbStairs(i,n)=(i+1,n)+climbStairs(i+2,n)
+
+where i defines the current step and n defines the destination step.
+
+Time complexity : O(2^n)
+
+since the size of recursion tree will be 2^n
+
+N = 2
+          (0,2)
+
+    (1,2)       (2,2)
+                ret 1
+(2,2)   (3,2) 
+ret 1   ret 0
+
+return 1 means found and return 0 means not found.
+
+Space complexity : O(n) The depth of the recursion tree can go upto n.
+
+*/ 
+
+namespace leetcode_easy_018
+{
+  int climb_stairs(int start, int end)
+  {
+    if (start == end)
+      return 1;
+    else if (start > end)
+      return 0;
+
+    return climb_stairs(start + 1, end) + climb_stairs(start + 2, end);
+  }
+
+  int climbStairs_1(int n) 
+  {
+    return climb_stairs(0, n);
+  }
+} // namespace
+
+TEST(LeetCode, Easy_018_ClimbStairs_1)
+{
+  using namespace leetcode_easy_018;
+  auto func = climbStairs_1;
+
+  EXPECT_THAT(func(2), 2);
+  EXPECT_THAT(func(3), 3);
+  EXPECT_THAT(func(4), 5);
+  EXPECT_THAT(func(30), 1346269);
+}
+
+
+/*
+Approach 2: Recursion with memoization
+
+In the previous approach we are redundantly calculating the result for every
+step. Instead, we can store the result at each step in memomemo array and
+directly returning the result from the memo array whenever that function is
+called again.
+
+In this way we are *pruning* recursion tree with the help of memo array and
+reducing the size of recursion tree upto n.
+
+(Like fibonacci problem, the right part of recursion tree uses the same
+calculation which are calculated already but calculate them again since they are
+lost. So can keep them and use it then better performance)
+
+Time complexity : O(n). Size of recursion tree can go upto nn.
+Space complexity : O(n). The depth of recursion tree can go upto nn. 
+
+see time difference between recursion and iterative version
+
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_1
+[       OK ] LeetCode.Easy_018_ClimbStairs_1 (52 ms)
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_2
+[       OK ] LeetCode.Easy_018_ClimbStairs_2 (0 ms)
+[ RUN      ] LeetCode.Easy_018_ClimbStairs_3
+[       OK ] LeetCode.Easy_018_ClimbStairs_3 (0 ms)
+ 
+*/
+
+namespace leetcode_easy_018
+{
+  int climb_stairs(int start, int end, vector<int> &memo)
+  {
+    if (start == end)
+      return 1;
+    else if (start > end)
+      return 0;
+    else if(memo[start])
+      return memo[start];
+
+    memo[start] = climb_stairs(start + 1, end, memo) + climb_stairs(start + 2, end, memo);
+    return memo[start];
+  }
+
+  int climbStairs_2(int n) 
+  {
+    vector<int> memo(n + 1, 0);
+    return climb_stairs(0, n, memo);
+  }
+} // namespace
+
+TEST(LeetCode, Easy_018_ClimbStairs_2)
+{
+  using namespace leetcode_easy_018;
+  auto func = climbStairs_2;
+
+  EXPECT_THAT(func(2), 2);
+  EXPECT_THAT(func(3), 3);
+  EXPECT_THAT(func(4), 5);
+  EXPECT_THAT(func(30), 1346269);
+}
+
+
+/*
+Approach 3: Dynamic Programming
+
+As we can see this problem can be broken into subproblems, and it contains the
+optimal substructure property i.e. its optimal solution can be constructed
+efficiently from optimal solutions of its subproblems, we can use dynamic
+programming to solve this problem.
+
+One can reach ith step in one of the two ways:
+
+Taking a single step from (i-1) th step.
+
+Taking two step from (i−2) th step.
+
+(since it is about way to reach to n but not number of steps)
+
+So, the total number of ways to reach i th is equal to sum of ways of reaching
+(i−1)th step and ways of reaching (i-2)th step.  
+
+Let dp[i] denotes the number of ways to reach on i th step:
+
+dp[i]=dp[i-1]+dp[i-2]
+
+
+Approach 4: Fibonacci Number
+
+In the above approach we have used dpdp array where dp[i]=dp[i-1]+dp[i-2]. It
+can be easily analysed that dp[i] is nothing but ith fibonacci number.
+
+means the dp value sequence. this is fibonacci sequence:
+
+0, 1, 1, 2, 3, 5, 8, 13, 21, 34, ...
+
+dp value sequence:
+
+0, 1, 2, 3, 5, 8, 13, 21, 34, ...
+
+Now we just have to find n th number of the fibonacci series having 1 and 2
+their first and second term respectively, i.e. Fib(1)=1 and Fib(2)=2.
+
+
+  int fibonacci_2(int n)
+  {
+    int twoback{};  // f(n-2)
+    int oneback{};  // f(n-1)
+    int current{};
+
+    if (n <= 0)
+      return 0;
+    else if (n == 1)
+      return 1;
+    else
+    {
+      // back from current
+      twoback = 0;
+      oneback = 1;
+
+      for (int i = 2; i <= n; ++i)
+      {
+        current = twoback + oneback;
+
+        // for next f
+        twoback = oneback;
+        oneback = current;
+      }
+    }
+
+    return current;
+  }
+*/
+
+namespace leetcode_easy_018
+{
+  int climbStairs_3(int n) 
+  {
+    // base cases
+    if(n <= 0) return 0;
+    if(n == 1) return 1;
+    if(n == 2) return 2;
+
+    int one_step_before = 2;    // when n == 2
+    int two_steps_before = 1;   // when n == 1
+    int all_ways = 0;
+
+    // starts from n == 3
+    for(int i=3; i <= n; i++)
+    {
+      all_ways = one_step_before + two_steps_before;
+      two_steps_before = one_step_before;
+      one_step_before = all_ways;
+    }
+
+    return all_ways;
+  };
+} // namespace
+
+TEST(LeetCode, Easy_018_ClimbStairs_3)
+{
+  using namespace leetcode_easy_018;
+  auto func = climbStairs_3;
+
+  EXPECT_THAT(func(2), 2);
+  EXPECT_THAT(func(3), 3);
+  EXPECT_THAT(func(4), 5);
+  EXPECT_THAT(func(30), 1346269);
 }
 
 

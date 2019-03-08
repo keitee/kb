@@ -608,6 +608,22 @@ TEST(StringConverison, StringStream)
     // EXPECT_THAT(value, 12);
   }
 
+  // to number
+  {
+    string coll{"10101"};
+    string token = coll.substr(0, 1);
+    EXPECT_EQ(stoi(token), 1);
+  }
+
+  // to number
+  {
+    string coll{"10101"};
+    stringstream is{coll.substr(0, 1)};
+    int value{};
+    is >> value;
+    EXPECT_EQ(value, 1);
+  }
+
   // to number(hex)
   {
     stringstream is{"fabc"};
