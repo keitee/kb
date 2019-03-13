@@ -1276,6 +1276,11 @@ TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
 
 TEST(Vector, AsCArray)
 {
+  // {
+  //   vector<int> coll{1,2,3,4,5};
+  //   cout << "coll: " << coll[-1] << endl;
+  // }
+
   {
     vector<char> coll;
     coll.resize(41);
@@ -1961,31 +1966,41 @@ TEST(List, SpliceAndMerge)
 
 TEST(List, Ops)
 {
-  std::list<int> coll1, coll2;
-
-  for (int i = 0; i < 6; ++i)
   {
-    coll1.push_back(i);
-    coll2.push_front(i);
+    std::list<int> coll1, coll2;
+
+    for (int i = 0; i < 6; ++i)
+    {
+      coll1.push_back(i);
+      coll2.push_front(i);
+    }
+
+    EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5));
+    EXPECT_THAT(coll1.size(), 6); 
+    EXPECT_THAT(coll2, ElementsAre(5,4,3,2,1,0));
+    EXPECT_THAT(coll2.size(), 6); 
+
+    EXPECT_THAT(coll1.front(), 0);
+    EXPECT_THAT(coll1.back(), 5);
+    EXPECT_THAT(coll1.size(), 6); 
+
+    // void pop_front() so cannot use EXPECT_THAT()
+    coll1.pop_front();
+    EXPECT_THAT(coll1.size(), 5); 
+
+    coll1.pop_back();
+    EXPECT_THAT(coll1.size(), 4); 
+
+    EXPECT_THAT(coll1, ElementsAre(1,2,3,4));
   }
 
-  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5));
-  EXPECT_THAT(coll1.size(), 6); 
-  EXPECT_THAT(coll2, ElementsAre(5,4,3,2,1,0));
-  EXPECT_THAT(coll2.size(), 6); 
-
-  EXPECT_THAT(coll1.front(), 0);
-  EXPECT_THAT(coll1.back(), 5);
-  EXPECT_THAT(coll1.size(), 6); 
-
-  // void pop_front() so cannot use EXPECT_THAT()
-  coll1.pop_front();
-  EXPECT_THAT(coll1.size(), 5); 
-
-  coll1.pop_back();
-  EXPECT_THAT(coll1.size(), 4); 
-
-  EXPECT_THAT(coll1, ElementsAre(1,2,3,4));
+  // no such interface to assign.
+  // {
+  //   std::list<int> coll{0,1,2,3,4,5};
+  //   EXPECT_THAT(coll, ElementsAre(0,1,2,3,4,5));
+  //   coll.assign(++coll.begin(), 10);
+  //   EXPECT_THAT(coll, ElementsAre(0,10,2,3,4,5));
+  // }
 }
 
 
@@ -3115,33 +3130,7 @@ namespace algo_min_max {
     return abs(elem1) < abs(elem2);
   }
 
-  using ITERATOR = std::deque<int>::iterator;
-
-  pair<ITERATOR, ITERATOR> my_minmax(ITERATOR begin, ITERATOR end)
-  {
-    auto min = numeric_limits<int>::max();
-    auto max = numeric_limits<int>::min();
-
-    ITERATOR min_iter = begin;
-    ITERATOR max_iter = begin;
-
-    for(; begin != end; ++begin) {
-
-      if (*begin < min) {
-        min = *begin;
-        min_iter = begin;
-      }
-
-      // add '=' to support the last max as minmax_element()
-      if (max <= *begin) {
-        max = *begin;
-        max_iter = begin;
-      }
-    }
-
-    return make_pair(min_iter, max_iter);
-  }
-}
+} // namespace
 
 TEST(AlgoMinMax, Use)
 {
@@ -3182,168 +3171,6 @@ TEST(AlgoMinMax, Use)
   // min/max of absolute values
   EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
   EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
-}
-
-TEST(AlgoMinMax, UseOwn)
-{
-  using namespace algo_min_max;
-
-  deque<int> coll;
-  INSERT_ELEMENTS(coll, 2, 6);
-  INSERT_ELEMENTS(coll, -3, 6);
-  EXPECT_THAT(coll, 
-      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
-
-  // return iterator pair
-  // Note also that minmax_element() yields `the last maximum`, so the distance
-  // 9.
-  auto minmax = my_minmax(coll.begin(), coll.end());
-  EXPECT_THAT(*(minmax.first), -3);
-  EXPECT_THAT(*(minmax.second), 6);
-  EXPECT_THAT(distance(minmax.first, minmax.second), 9);
-}
-
-namespace algo_min_max
-{
-  struct _Iter_less
-  {
-    template<typename _Iterator1, typename _Iterator2>
-      bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
-      { return *__it1 < *__it2; }
-  };
-
-  template <typename _Iterator, typename _Compare>
-    _Iterator my_max_element(_Iterator __first, _Iterator __last, 
-        _Compare __comp)
-    {
-      // if thre is only one
-      if (__first == __last)
-        return __first;
-
-      _Iterator __result = __first;
-
-      // if *__result < *__first 
-      while (++__first != __last)
-        if (__comp(__result, __first))
-          __result = __first;
-
-      return __result;
-    }
-
-  // note: do by simply reversing comp()
-
-  template <typename _Iterator, typename _Compare>
-    _Iterator my_min_element(_Iterator __first, _Iterator __last,
-        _Compare __comp)
-    {
-      if (__first == __last)
-        return __first;
-
-      _Iterator __result = __first;
-
-      while (++__first != __last)
-        // if (comp(__result, __first))
-        if (__comp(__first, __result))
-          __result = __first;
-
-      return __result;
-    }
-
-} // namespace
-
-TEST(AlgoMinMax, Map)
-{
-  // on map
-  {
-    // sorted by key
-    std::map<int, size_t> counts{
-      {1, 2},
-        {3, 2},
-        {5, 3},
-        {8, 3},
-        {13, 1} 
-    };
-
-    auto e = max_element(counts.begin(), counts.end());
-    EXPECT_THAT(*e, make_pair(13, 1));
-
-    // ForwardIterator
-    // max_element (ForwardIterator beg, ForwardIterator end, CompFunc op)
-    // op is used to compare two elements:
-    // op(elem1,elem2)
-    // It should return true when the first element is less than the second
-    // element.
-
-    auto maxelem = std::max_element(
-        std::begin(counts), std::end(counts),
-        [](pair<int, size_t> const& e1, pair<int, size_t> const& e2)
-        { return e1.second < e2.second; });
-
-    EXPECT_THAT(*maxelem, make_pair(5, 3));
-  }
-
-  // multimap
-  {
-    // sorted by key and the order in the equal range are the order of input
-    std::multimap<int, size_t> counts{
-      {1, 2},
-        {3, 9},
-        {3, 8},
-        {5, 3},
-        {8, 3},
-        {13, 2},
-        {13, 4},
-        {13, 12},
-        {13, 1}
-    };
-
-    // for (auto &e : counts)
-    //   cout << e.first << ", " << e.second << endl;
-
-    // Q: how max_element() finds the max on the second?
-    // see *cxx-pair-comparison*
-
-    auto e = max_element(counts.begin(), counts.end());
-    EXPECT_THAT(*e, make_pair(13, 12));
-  }
-
-  // max_element
-  {
-    using namespace algo_min_max;
-
-    // sorted by key
-    std::map<int, size_t> counts{
-      {1, 2},
-        {3, 2},
-        {5, 3},
-        {8, 3},
-        {13, 1} 
-    };
-
-    auto pos = my_max_element(counts.begin(), counts.end(),
-        _Iter_less());
-
-    EXPECT_THAT(*pos, make_pair(13, 1));
-  }
-
-  // min_element
-  {
-    using namespace algo_min_max;
-
-    // sorted by key
-    std::map<int, size_t> counts{
-      {1, 2},
-        {3, 2},
-        {5, 3},
-        {8, 3},
-        {13, 1} 
-    };
-
-    auto pos = my_min_element(counts.begin(), counts.end(),
-        _Iter_less());
-
-    EXPECT_THAT(*pos, make_pair(1, 2));
-  }
 }
 
 

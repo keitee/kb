@@ -894,6 +894,266 @@ TEST(LeetCode, Easy_003_LongestPalindromicSubstring_2)
 }
 
 
+// algo-leetcode-19
+/*
+125. Valid Palindrome, Easy
+
+Given a string, determine if it is a palindrome, considering only alphanumeric
+characters and ignoring cases.
+
+Note: For the purpose of this problem, we define empty string as valid palindrome.
+
+Example 1:
+Input: "A man, a plan, a canal: Panama"
+Output: true
+
+Example 2:
+Input: "race a car"
+Output: false
+ 
+*/
+
+namespace leetcode_easy_020
+{
+  // Runtime: 16 ms, faster than 17.06% of C++ online submissions for Valid
+  // Palindrome.
+  //
+  // Memory Usage: 9 MB, less than 89.62% of C++ online submissions for Valid
+  // Palindrome.
+
+  bool isPalindrome_1(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      if (!isalnum(*begin))
+      {
+        ++begin;
+        continue;
+      }
+
+      if (!isalnum(*end))
+      {
+        --end;
+        continue;
+      }
+
+      if (toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // from discussion:
+  // Runtime: 12 ms, faster than 81.77% of C++ online submissions for Valid
+  // Palindrome.
+  //
+  // Memory Usage: 9.1 MB, less than 59.56% of C++ online submissions for Valid
+  // Palindrome.
+
+  bool isPalindrome_2(string s) 
+  {
+    int i = 0;
+    int j = s.size() - 1;
+
+    while (i < j) 
+    {
+      if (!isalnum(s[i]))
+        ++i;
+      else if (!isalnum(s[j]))
+        --j;
+      else 
+      {
+        if (tolower(s[i]) != tolower(s[j]))
+          return false;
+        ++i, --j;
+      }
+    }
+
+    return true;
+  }
+
+  // okay, let's make it faster but this iw wrong since "else if" do not run the
+  // rest when meets one of ifs. 
+
+  bool isPalindrome_wrong(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      if (!isalnum(*begin))
+      {
+        ++begin;
+        // cout << "++: " << *begin << endl;
+      }
+      else if (!isalnum(*end))
+      {
+        --end;
+        // cout << "--: " << *end << endl;
+      }
+      else if (toupper(*begin) != toupper(*end))
+      {
+        // cout << "if: " << *begin << " != " << *end << endl;
+        return false;
+      }
+
+      // cout << ": " << *begin << " == " << *end << endl;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  bool isPalindrome_3(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      if (!isalnum(*begin))
+        ++begin;
+      else if (!isalnum(*end))
+        --end;
+      else
+      {
+        if (toupper(*begin) != toupper(*end))
+          return false;
+
+        ++begin;
+        --end;
+      }
+    }
+
+    return true;
+  }
+
+  // after all, "if and else if" is to reduce outer loop so use while instead 
+  // However, inner while changes begin/end and it requires outer check on every
+  // if; makes outer check invalid. 
+  //
+  // is it any better? seems not.
+
+  bool isPalindrome_4_wrong(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      while (!isalnum(*begin))
+        ++begin;
+
+      while (!isalnum(*end))
+        --end;
+
+      if (toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  bool isPalindrome_4(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      while (begin < s.end() && !isalnum(*begin))
+        ++begin;
+
+      while (end > s.begin() && !isalnum(*end))
+        --end;
+
+      if (begin < end && toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // from discussion *py-code*
+  // # trick 1: save re.sub() result to s itself
+  // # trick 2: palindrome is the same when reversed
+  // 
+  // class Solution_isPalindrome:
+  //     def answer(self, s):
+  //         s = re.sub(r'\W', '', s).upper()
+  //         return s == s[::-1]
+
+} // namespace
+
+TEST(LeetCode, Easy_020_IsPalindromString_0)
+{
+  using namespace leetcode_easy_020;
+
+  {
+    auto func = isPalindrome_1; 
+
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("121"), true);
+    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
+    EXPECT_THAT(func("race a car"), false);
+    EXPECT_THAT(func("0P"), false);
+  }
+
+  {
+    auto func = isPalindrome_3; 
+
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("121"), true);
+    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
+    EXPECT_THAT(func("race a car"), false);
+    EXPECT_THAT(func("0P"), false);
+  }
+
+  {
+    auto func = isPalindrome_4; 
+
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("121"), true);
+    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
+    EXPECT_THAT(func("race a car"), false);
+    EXPECT_THAT(func("0P"), false);
+    // fail
+    EXPECT_THAT(func(".,"), true);
+  }
+}
+
+
 // ={=========================================================================
 // algo-leetcode-4
 /*
@@ -1568,8 +1828,10 @@ for (int i = 0; i < len; i++) {
 
 namespace leetcode_easy_008
 {
-  // num is sorted (ascending)
-  // the key idea is to swap to the right
+  // input num is sorted (ascending)
+  // the idea is to move the duplicates to the end of right using swap
+  // don't need to check if run see smaller value since it's sorted input
+
   int RemoveDuplicates_01(vector<int> &nums)
   {
     if (nums.empty())
@@ -1600,6 +1862,8 @@ namespace leetcode_easy_008
         for (size_t s = i; s < nums.size()-1; ++s)
           swap(nums[s], nums[s+1]);
 
+        // since nums[i] is swapped, it may be bigger
+
         if (nums[i] > value)
           value = nums[i];
       }
@@ -1615,8 +1879,10 @@ namespace leetcode_easy_008
   // o swap() should be done after updating current_max
   //
   // o end is index but shold return len so +1 -> revised. As algo-partition,
-  // end represet start of not-interested, that is end of interested group. so
-  // no need to +1. have to think about swap on the same index
+  // end represet start of not-interested, that is end of interested group + 1.
+  // so no need to +1. have to think about swap on the same index
+  //
+  // | ... |end ...|
 
   // Runtime: 24 ms, faster than 100.00% of C++ online submissions for Remove
   // Duplicates from Sorted Array.
@@ -1637,8 +1903,11 @@ namespace leetcode_easy_008
       if (nums[i] > current_max)
       {
         current_max = nums[i];
+
+        // to avoid swap on the same index
         if (end != i)
           swap(nums[end], nums[i]);
+
         ++end;
       }
     }
@@ -1667,8 +1936,9 @@ namespace leetcode_easy_008
     return last;
   }
 
-  // algo-unique, same as unique_1()
-  // `first` is end of the interested group
+  // algo-unique, same as unique_1(), works on not-sorted input.
+  // `end` fro adjacent_find() is end of the interested group
+  // | ... end| ...|
 
   int RemoveDuplicates_03(vector<int> &nums)
   {
@@ -1691,6 +1961,37 @@ namespace leetcode_easy_008
     }
 
     return distance(first, end) + 1;
+  }
+
+  int RemoveDuplicates_04(vector<int> &nums)
+  {
+    if (nums.empty())
+      return 0;
+
+    size_t unique_end{0};
+    size_t current{1};
+    size_t size = nums.size() - 1;
+
+    while (current <= size)
+    {
+      if (nums[unique_end] == nums[current])
+      {
+        ++current;
+      }
+      else
+      {
+        ++unique_end;
+
+        // to avoid assign on the same index
+        if (unique_end != current)
+          nums[unique_end] = nums[current];
+
+        ++current;
+      }
+    }
+
+    // +1 since unique_end is index but return length
+    return unique_end + 1;
   }
 
 } // namespace
@@ -2347,7 +2648,7 @@ TEST(LeetCode, Easy_012_CountAndSay_3)
 
 
 // ={=========================================================================
-// algo-leetcode-13
+// algo-leetcode-53
 /*
 53. Maximum Subarray, Easy
 
@@ -2386,12 +2687,21 @@ current element is positive or negative.
 if make sum regardless of singness of the previous, then it makes *prefix-sum*
 
 -2  1   -3  4   -1  2   1   -5  4
-    -1  -2  2   1   3   4   -1  3
+    -1  -4  0   -1  1   2   -3  1
 
 if runs the above code, then 6 is max sum
 
--2  1   -3  4   -1  2   1   -5  4
+-2  1   -3 [4   -1  2   1]  -5  4
         -2      3   5   6   1   5 
+
+if runs the prefix-sum but do not allow negative value , then 6 is max sum
+
+-2  1   -3 [4   -1  2   1]  -5  4
+0   1   -0  4    3  5   6   1   5 
+
+
+so, the both are basically the same method to get max sub-array
+
 
 if make the previous value bigger? affect on next sum and will be covered
 
@@ -2409,7 +2719,7 @@ This is about "sum" but not "sub array" How about returnning "sub array"?
 
 */
 
-namespace leetcode_easy_013
+namespace leetcode_easy_053
 {
   int maxSubArray_1(vector<int>& nums)
   {
@@ -2462,71 +2772,711 @@ namespace leetcode_easy_013
 
     return *std::max_element(nums.begin(), nums.end());
   }
+
+  // https://www.geeksforgeeks.org/largest-sum-contiguous-subarray/
+  //
+  // Simple idea of the Kadane’s algorithm is to look for all positive
+  // contiguous segments of the array (max_ending_here is used for this). And
+  // keep track of *maximum sum* contiguous segment among all positive segments
+  // (max_so_far is used for this). Each time we get a positive sum compare it
+  // with max_so_far and update max_so_far if it is greater than max_so_far
+
+  int maxSubArray_3(vector<int>& nums)
+  {
+    int max_so_far{std::numeric_limits<int>::min()};
+    int max_current{};
+
+    for (auto e : nums)
+    {
+      // works okay
+      //
+      // in sum, that's to make prefix-sum but do not allow negative value.
+      //
+      // max_current = e + max_current;
+      // if (max_current < 0)
+      //   max_current = 0;
+
+      // same as
+      max_current = e + max_current;
+      max_current = max(0, max_current);
+
+      if (max_current > max_so_far)
+        max_so_far = max_current;
+    }
+
+    return max_so_far;
+  }
+
 } // namespace
 
-TEST(LeetCode, Easy_013_MaxSubArray_1)
+TEST(LeetCode, Easy_053_MaxSubArray_1)
 {
-  using namespace leetcode_easy_013;
+  using namespace leetcode_easy_053;
 
-  auto func = maxSubArray_1;
-
-  // fails on :
-  // input "1" and expected "1"
   {
-    vector<int> coll{1};
-    EXPECT_THAT(func(coll), Not(1));
+    auto func = maxSubArray_1;
+
+    // fails on :
+    // input "1" and expected "1"
+    {
+      vector<int> coll{1};
+      EXPECT_THAT(func(coll), Not(1));
+    }
+
+    // fails on
+    // input "-2, 1" and expected 1
+    {
+      vector<int> coll{-2, 1};
+      EXPECT_THAT(func(coll), Not(1));
+    }
+
+    {
+      vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+      EXPECT_THAT(func(coll), 6);
+    }
+
+    {
+      // >>> sum([100,-3,4,-1,2,1,-5,4])
+      // 102
+      // >>> sum([100,-3,4,-1,2,1])
+      // 103
+      vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+      EXPECT_THAT(func(coll), 103);
+    }
   }
 
-  // fails on
-  // input "-2, 1" and expected 1
   {
-    vector<int> coll{-2, 1};
-    EXPECT_THAT(func(coll), Not(1));
+    auto func = maxSubArray_2;
+
+    {
+      vector<int> coll{1};
+      EXPECT_THAT(func(coll), 1);
+    }
+
+    {
+      vector<int> coll{-2, 1};
+      EXPECT_THAT(func(coll), 1);
+    }
+
+    {
+      vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+      EXPECT_THAT(func(coll), 6);
+    }
+
+    {
+      vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+      EXPECT_THAT(func(coll), 103);
+    }
   }
 
   {
-    vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
-    EXPECT_THAT(func(coll), 6);
-  }
+    auto func = maxSubArray_3;
 
-  {
-    // >>> sum([100,-3,4,-1,2,1,-5,4])
-    // 102
-    // >>> sum([100,-3,4,-1,2,1])
-    // 103
-    vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
-    EXPECT_THAT(func(coll), 103);
+    {
+      vector<int> coll{1};
+      EXPECT_THAT(func(coll), 1);
+    }
+
+    {
+      vector<int> coll{-2, 1};
+      EXPECT_THAT(func(coll), 1);
+    }
+
+    {
+      vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
+      EXPECT_THAT(func(coll), 6);
+    }
+
+    {
+      vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
+      EXPECT_THAT(func(coll), 103);
+    }
   }
 }
 
-TEST(LeetCode, Easy_013_MaxSubArray_2)
+
+// ={=========================================================================
+// algo-leetcode-121
+/*
+121. Best Time to Buy and Sell Stock, Easy
+
+Say you have an array for which the ith element is the price of a given stock on
+day i.
+
+If you were only permitted to complete at most one transaction (i.e., buy one
+and sell one share of the stock), design an algorithm to find the maximum
+profit.
+
+Note that you cannot sell a stock before you buy one.
+
+Example 1:
+
+Input: [7,1,5,3,6,4]
+Output: 5
+
+Explanation: 
+Buy on day 2 (price = 1) and sell on day 5 (price = 6), profit = 6-1 = 5.  Not
+7-1 = 6, as selling price needs to be larger than buying price.
+
+Example 2:
+
+Input: [7,6,4,3,1]
+Output: 0
+
+Explanation: 
+In this case, no transaction is done, i.e. max profit = 0.
+ 
+the key is:
+
+max profit is max (sell - buy)
+
+*/
+
+namespace leetcode_easy_121
 {
-  using namespace leetcode_easy_013;
+  /*
+  algo-minmax variation which has two seperate if for max and min. But this 
+  uses nested if to meet two condition:
 
-  auto func = maxSubArray_2;
+  1. buy first and then can sell
+  2. buy < sell
+   
+  buy:  7   1     x   x   x   x   = 1
+  sell: min min   5   x   6   x   = 6
+ 
+  buy:  7   6   4   3   1   = 1
+  sell: min min min min min = min
+
+  this avoids 1 - 7 case as the problem description
+
+  */
+
+  int maxProfit_1(vector<int>& prices) 
+  {
+    // max
+    int sell{std::numeric_limits<int>::min()};
+    // min
+    int buy{std::numeric_limits<int>::max()};
+
+    // for (auto e : prices)
+    for (size_t i = 0; i < prices.size(); ++i)
+    {
+      // update buy, min
+      if ((i + 1) < prices.size() && prices[i] < buy)
+      {
+        buy = prices[i];
+        sell = std::numeric_limits<int>::min();
+      }
+      // update sell, max
+      else if (prices[i] > sell)
+      {
+        sell = prices[i];
+      }
+    }
+
+    // cout << "buy: " << buy << ", sell: " << sell << endl;
+
+    if (sell > buy)
+      return abs(buy - sell);
+    else
+      return 0;
+  }
+
+
+  // Kadane's Algorithm - Since no one has mentioned about this so far :) (In
+  // case if interviewer twists the input)
+  // andyreadsall
+  //
+  // As with maxSubArray_3(), use the same but is to find max difference, e[i] -
+  // e[i-1] but not sum. 
+
+  int maxProfit_2(vector<int>& prices) 
+  {
+    int current_profit{};
+    int max_profit{};
+
+    for (size_t i = 1; i < prices.size(); ++i)
+    {
+      current_profit = current_profit + (prices[i] - prices[i-1]);
+      current_profit = max(0, current_profit);
+
+      max_profit = max(max_profit, current_profit);
+    }
+
+    return max_profit;
+  }
+
+
+  // Simple java solution, venkim
+  // where keep min, bought value
+
+  int maxProfit_3(vector<int>& prices) 
+  {
+    if (prices.empty())
+      return 0;
+
+    int max_profit{};
+    int bought{prices[0]};
+
+    for (size_t i = 1; i < prices.size(); ++i)
+    {
+      // update profit only when it's bigger
+      max_profit = max(max_profit, prices[i] - bought);
+
+      // update bought which is min 
+      bought = min(bought, prices[i]);
+    }
+
+    return max_profit;
+  }
+
+  // from solution
+  // Approach 2: One Pass
+  // The points of interest are the peaks and valleys in the given graph. We
+  // need to find the largest peak following the smallest valley.
+  //
+  // this is approach that I tried to make it work
+
+  int maxProfit_4(vector<int> &prices)
+  {
+    int max_profit{};
+    int min_price{std::numeric_limits<int>::max()};
+
+    for (auto e : prices)
+    {
+      if (e < min_price)
+        min_price = e;
+      else if (e - min_price > max_profit)
+        max_profit = e - min_price;
+    }
+
+    return max_profit;
+  }
+
+} // namespace
+
+TEST(LeetCode, Easy_121_MaxProfit_1)
+{
+  using namespace leetcode_easy_121;
 
   {
-    vector<int> coll{1};
-    EXPECT_THAT(func(coll), 1);
+    auto func = maxProfit_1;
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 5);
+    }
+    {
+      vector<int> coll{7,6,4,3,1};
+      EXPECT_THAT(func(coll), 0);
+    }
+    {
+      vector<int> coll{};
+      EXPECT_THAT(func(coll), 0);
+    }
+
+    // fails. does it mean that sell should be always after buy in the input?
+    // say, 2(buy) and 4(sell) but not update buy 1 since there is no more element
+    // to update sell?
+
+    {
+      vector<int> coll{2,4,1};
+      EXPECT_THAT(func(coll), 2);
+    }
+
+    {
+      vector<int> coll{2,1,2,0,1};
+      EXPECT_THAT(func(coll), 1);
+    }
+
+    // // fails
+    // {
+    //   vector<int> coll{3,2,6,5,0,3};
+    //   EXPECT_THAT(func(coll), 4);
+    // }
   }
 
   {
-    vector<int> coll{-2, 1};
-    EXPECT_THAT(func(coll), 1);
+    auto func = maxProfit_2;
+
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 5);
+    }
+    {
+      vector<int> coll{7,6,4,3,1};
+      EXPECT_THAT(func(coll), 0);
+    }
+    {
+      vector<int> coll{};
+      EXPECT_THAT(func(coll), 0);
+    }
+    {
+      vector<int> coll{2,4,1};
+      EXPECT_THAT(func(coll), 2);
+    }
+    {
+      vector<int> coll{2,1,2,0,1};
+      EXPECT_THAT(func(coll), 1);
+    }
+    {
+      vector<int> coll{3,2,6,5,0,3};
+      EXPECT_THAT(func(coll), 4);
+    }
   }
 
   {
-    vector<int> coll{-2,1,-3,4,-1,2,1,-5,4};
-    EXPECT_THAT(func(coll), 6);
+    auto func = maxProfit_3;
+
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 5);
+    }
+    {
+      vector<int> coll{7,6,4,3,1};
+      EXPECT_THAT(func(coll), 0);
+    }
+    {
+      vector<int> coll{};
+      EXPECT_THAT(func(coll), 0);
+    }
+    {
+      vector<int> coll{2,4,1};
+      EXPECT_THAT(func(coll), 2);
+    }
+    {
+      vector<int> coll{2,1,2,0,1};
+      EXPECT_THAT(func(coll), 1);
+    }
+    {
+      vector<int> coll{3,2,6,5,0,3};
+      EXPECT_THAT(func(coll), 4);
+    }
   }
 
   {
-    // >>> sum([100,-3,4,-1,2,1,-5,4])
-    // 102
-    // >>> sum([100,-3,4,-1,2,1])
-    // 103
-    vector<int> coll{-2,100,-3,4,-1,2,1,-5,4};
-    EXPECT_THAT(func(coll), 103);
+    auto func = maxProfit_4;
+
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 5);
+    }
+    {
+      vector<int> coll{7,6,4,3,1};
+      EXPECT_THAT(func(coll), 0);
+    }
+    {
+      vector<int> coll{};
+      EXPECT_THAT(func(coll), 0);
+    }
+    {
+      vector<int> coll{2,4,1};
+      EXPECT_THAT(func(coll), 2);
+    }
+    {
+      vector<int> coll{2,1,2,0,1};
+      EXPECT_THAT(func(coll), 1);
+    }
+    {
+      vector<int> coll{3,2,6,5,0,3};
+      EXPECT_THAT(func(coll), 4);
+    }
+  }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-122
+/*
+122. Best Time to Buy and Sell Stock II, Easy
+
+Say you have an array for which the ith element is the price of a given stock on
+day i.
+
+Design an algorithm to find the maximum profit. You may complete as many
+transactions as you like (i.e., buy one and sell one share of the stock multiple
+times).
+
+Note: You may not engage in multiple transactions at the same time (i.e., you
+must sell the stock before you buy again).
+
+Example 1:
+Input: [7,1,5,3,6,4]
+Output: 7
+Explanation: 
+Buy on day 2 (price = 1) and sell on day 3 (price = 5), profit = 5-1 = 4.  Then
+buy on day 4 (price = 3) and sell on day 5 (price = 6), profit = 6-3 = 3.
+
+Example 2:
+Input: [1,2,3,4,5]
+Output: 4
+Explanation: 
+Buy on day 1 (price = 1) and sell on day 5 (price = 5), profit = 5-1 = 4.  Note
+that you cannot buy on day 1, buy on day 2 and sell them later, as you are
+engaging multiple transactions at the same time. You must sell before buying
+again.
+
+Example 3:
+Input: [7,6,4,3,1]
+Output: 0
+Explanation: In this case, no transaction is done, i.e. max profit = 0.
+
+
+note:
+so this is about multiple transaction.
+
+*/
+
+namespace leetcode_easy_122
+{
+  // Runtime: 8 ms, faster than 99.82% of C++ online submissions for Best Time
+  // to Buy and Sell Stock II.
+  //
+  // Memory Usage: 9.6 MB, less than 11.03% of C++ online submissions for Best
+  // Time to Buy and Sell Stock II.
+
+  int maxProfit_1(vector<int>& prices) 
+  {
+    int prev_profit{};
+    int current_profit{};
+    int accumulated_diff{};
+
+    for (size_t i = 1; i < prices.size(); ++i)
+    {
+      current_profit = current_profit + (prices[i] - prices[i-1]);
+      current_profit = max(0, current_profit);
+
+      if (current_profit >= prev_profit)
+      {
+        accumulated_diff += current_profit - prev_profit;
+        prev_profit = current_profit;
+      }
+      else 
+      {
+        // accumulated_diff += current_diff;
+        prev_profit = current_profit;
+      }
+    }
+
+    return accumulated_diff;
+  }
+
+  // from solution:
+  //
+  // Say the given array is:
+  //
+  // [7, 1, 5, 3, 6, 4].
+  //
+  // If we plot the numbers of the given array on a graph, we get:
+  //  
+  // 7                _           _
+  //      _           B     6     C
+  //      A     5
+  //                              4
+  //                  3
+  //      1     
+  // ------------------------------
+  //
+  // If we analyze the graph, we notice that the points of interest are the
+  // consecutive valleys and peaks.
+  //
+  // The key point is we need to consider every peak immediately following a
+  // valley to maximize the profit. In case we skip one of the peaks (trying to
+  // obtain more profit), we will end up losing the profit over one of the
+  // transactions leading to an overall lesser profit.
+  //
+  // For example, in the above case, if we skip peak_i and valley_j trying to
+  // obtain more profit by considering points with more difference in heights,
+  // the net profit obtained will always be lesser than the one obtained by
+  // including them, since C will always be *lesser than A+B*
+  //
+  // note:
+  // [3,6] where 3, buy and 6, sell makes profits
+
+  int maxProfit_2(vector<int> &prices)
+  {
+    int i = 0;
+    int valley = prices[0];
+    int peak = prices[0];
+    int max_profit{};
+
+    // since see i and i+1 in th loop
+    int length = prices.size()-1;
+
+    while (i < length)
+    {
+      // like [5,3]
+      while (i < length && prices[i] >= prices[i+1])
+        ++i;
+      valley = prices[i];
+
+      // like [3,6]
+      while (i < length && prices[i] <= prices[i+1])
+        ++i;
+      peak = prices[i];
+
+      max_profit += peak - valley;
+    }
+
+    return max_profit;
+  }
+
+
+  // Approach 3: Simple One Pass
+  // 
+  // This solution follows the logic used in Approach 2 itself, but with only a
+  // slight variation. In this case, instead of looking for every peak following
+  // a valley, we can simply go on crawling over the slope and keep on adding
+  // the profit obtained from every *consecutive transaction* In the end, we will
+  // be using the peaks and valleys effectively, but we need not track the costs
+  // corresponding to the peaks and valleys along with the maximum profit, but
+  // we can directly keep on adding the difference between the consecutive
+  // numbers of the array if the second number is larger than the first one, and
+  // at the total sum we obtain will be the maximum profit. This approach will
+  // simplify the solution. This can be made clearer by taking this example:
+  //
+  // [1, 7, 2, 3, 6, 7, 6, 7]
+  //        A  B  C  D
+  //
+  // From the above graph, we can observe that the sum A+B+C is equal to the
+  // difference D corresponding to the difference between the heights of the
+  // consecutive peak and valley.
+
+  int maxProfit_3(vector<int> &prices)
+  {
+    int max_profit{};
+
+    for (size_t i = 1; i < prices.size(); ++i)
+    {
+      if (prices[i] > prices[i-1])
+        max_profit += prices[i] - prices[i-1];
+    }
+
+    return max_profit;
+  }
+
+  // Approach 1: Brute Force
+  //
+  // In this case, we simply calculate the profit corresponding to all the
+  // possible sets of transactions and find out the maximum profit out of them.
+  // 
+  // calculate(0, 6)
+  // calculate(start:1, i:2)
+  // calculate(3, 6)
+  // calculate(start:3, i:4)
+  // calculate(5, 6)
+  // calculate(start:3, i:5)
+  // return calculate(6)
+  // calculate(start:1, i:3)
+  // calculate(4, 6)
+  // calculate(start:1, i:4)
+  // calculate(5, 6)
+  // calculate(start:1, i:5)
+  // return calculate(6)
+  // calculate(start:2, i:4)
+  // calculate(5, 6)
+  // calculate(start:3, i:4)
+  // calculate(5, 6)
+  // calculate(start:3, i:5)
+  // return calculate(6)
+
+  int calculate(vector<int> &prices, size_t s)
+  {
+    if (s >= prices.size())
+    {
+      cout << "return calculate(" << s << ")" << endl;
+      return 0;
+    }
+
+    int max = 0;
+
+    cout << "calculate(" << s << ", " << prices.size() << ")" << endl;
+
+    for (size_t start = s; start < prices.size(); ++start)
+    {
+      int max_profit = 0;
+
+      for (size_t i = start + 1; i < prices.size(); ++i)
+      {
+        if (prices[start] < prices[i])
+        {
+          cout << "calculate(start:" << start << ", i:" << i << ")" << endl;
+
+          int profit = calculate(prices, i+1) + prices[i] - prices[start];
+          if (profit > max_profit)
+            max_profit = profit;
+        }
+      } // for
+
+      if (max_profit > max)
+        max = max_profit;
+
+    } // for
+
+    return max;
+  }
+
+  int maxProfit_4(vector<int> &prices)
+  {
+    return calculate(prices, 0);
+  }
+
+} // namespace
+
+
+TEST(LeetCode, Easy_122_MaxProfit_1)
+{
+  using namespace leetcode_easy_122;
+
+  {
+    auto func = maxProfit_1;
+
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 7);
+    }
+    {
+      vector<int> coll{1,2,3,4,5};
+      EXPECT_THAT(func(coll), 4);
+    }
+  }
+
+  {
+    auto func = maxProfit_2;
+
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 7);
+    }
+    {
+      vector<int> coll{1,2,3,4,5};
+      EXPECT_THAT(func(coll), 4);
+    }
+  }
+
+  {
+    auto func = maxProfit_3;
+
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 7);
+    }
+    {
+      vector<int> coll{1,2,3,4,5};
+      EXPECT_THAT(func(coll), 4);
+    }
+  }
+
+  {
+    auto func = maxProfit_4;
+
+    {
+      vector<int> coll{7,1,5,3,6,4};
+      EXPECT_THAT(func(coll), 7);
+    }
+    // {
+    //   vector<int> coll{1,2,3,4,5};
+    //   EXPECT_THAT(func(coll), 4);
+    // }
   }
 }
 
@@ -3386,6 +4336,413 @@ TEST(LeetCode, Easy_018_ClimbStairs_3)
 
 
 // ={=========================================================================
+// algo-leetcode-19
+/*
+100. Same Tree, Easy
+
+Given two binary trees, write a function to check if they are the same or not.
+
+Two binary trees are considered the same if they are structurally identical and
+the nodes have the same value.
+
+Example 1:
+
+Input:     1         1
+          / \       / \
+         2   3     2   3
+
+        [1,2,3],   [1,2,3]
+
+Output: true
+
+Example 2:
+
+Input:     1         1
+          /           \
+         2             2
+
+        [1,2],     [1,null,2]
+
+Output: false
+
+Example 3:
+
+Input:     1         1
+          / \       / \
+         2   1     1   2
+
+        [1,2,1],   [1,1,2]
+
+Output: false
+ 
+*/
+
+
+// ={=========================================================================
+// algo-leetcode-155
+/* 155. Min Stack, Easy
+
+Design a stack that supports push, pop, top, and retrieving the minimum element
+in constant time.
+
+push(x) -- Push element x onto stack.
+pop() -- Removes the element on top of the stack.
+top() -- Get the top element.
+getMin() -- Retrieve the minimum element in the stack.
+Example:
+MinStack minStack = new MinStack();
+minStack.push(-2);
+minStack.push(0);
+minStack.push(-3);
+minStack.getMin();   --> Returns -3.
+minStack.pop();
+minStack.top();      --> Returns 0.
+minStack.getMin();   --> Returns -2.
+
+*/
+
+namespace leetcode_easy_155
+{
+  // o changed from using fixed contiguous arrary to using vector
+  // o passes but slow and do not meet condition, "retrieving the minimum
+  //   element in constant time"
+  
+  class MinStack_1
+  {
+    public:
+      MinStack_1() {}
+
+      bool empty()
+      { return data_.empty(); }
+
+      void push(int x)
+      {
+        data_.push_back(x);
+        min_ = min(min_, x);
+      }
+
+      void pop()
+      { 
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        data_.pop_back();
+
+        auto it = std::min_element(data_.begin(), data_.end());
+        if (it == data_.end())
+          min_ = std::numeric_limits<int>::max();
+        else
+          min_ = *it;
+      }
+
+      int top()
+      {
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        return data_.back();
+      }
+
+      int getMin()
+      {
+        return min_;
+      }
+
+    private:
+      std::vector<int> data_;
+      int min_{std::numeric_limits<int>::max()};
+  };
+
+
+  // o as in the dicusstion, can use priority_queue<> but still do not meet
+  //   condition, "retrieving the minimum element in constant time"
+
+  // o can keep the min value as last min value and pop() without looping until
+  // see that than updating min every time do pop(). 
+  //
+  // improvement but when see the last min and poped it, search min and update
+  // min value. still not constant.
+  // 
+  // Looked at:
+  //
+  // Python single stack O(1) all operations, by destinynitsed
+  //
+  // both uses extra space to keep last min value when that item waw pushed and
+  // use the same idea. 
+  //
+  // Python code is clearer
+  //
+  // class MinStack:
+  // 
+  //     def __init__(self):
+  //         self.stack = []
+  // 
+  //     def push(self, x):
+  //         if self.stack:
+  // 			      self.stack.append(min(self.stack[-2], x))
+  //         else:
+  //             self.stack.append(x)
+  //         self.stack.append(x)
+  //         
+  // 
+  //     def pop(self):
+  //         if self.stack:
+  //             self.stack.pop()
+  //             self.stack.pop()
+  // 
+  //     def top(self):
+  //         if self.stack:
+  //             return self.stack[-1]
+  // 
+  //     def getMin(self):
+  //         if self.stack:
+  //             return self.stack[-2]
+  //
+  // For example, input -2, 0, 3 makes
+  // [-2, -2, -2, 0, -3, -3]
+
+  class MinStack_2
+  {
+    public:
+      MinStack_2() {}
+
+      bool empty()
+      { return data_.empty(); }
+
+      void push(int x)
+      {
+        if (empty())
+        {
+          data_.push_back(x);
+        }
+        else
+        {
+          data_.push_back(min(*(data_.end()-2), x));
+        }
+
+        data_.push_back(x);
+      }
+
+      void pop()
+      { 
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        data_.pop_back();
+        data_.pop_back();
+      }
+
+      int top()
+      {
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        return data_.back();
+      }
+
+      int getMin()
+      {
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        return *(data_.end()-2);
+      }
+
+    private:
+      std::vector<int> data_;
+  };
+
+
+  // Java accepted solution using one stack, by sometimescrazy
+  // saves space by adding previous min only when min changes.
+  //
+  // For example, input -2, 0, 3 makes
+  //
+  // # [-2, -2, -2, 0, -3, -3]
+  // [max, -2, 0, -2, -3]
+
+  class MinStack_3
+  {
+    public:
+      MinStack_3() {}
+
+      bool empty()
+      { return data_.empty(); }
+
+      // only push the old minimum value when the current 
+      // minimum value changes after pushing the new value x
+
+      void push(int x)
+      {
+        if (x <= min_)
+        {
+          data_.push_back(min_);
+          min_ = x;
+        }
+
+        data_.push_back(x);
+      }
+
+      // if pop operation could result in the changing of the current minimum
+      // value, pop twice and change the current minimum value to the last
+      // minimum value.
+
+      void pop()
+      { 
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        if (data_.back() == min_)
+        {
+          data_.pop_back();
+          min_ = data_.back();
+        }
+
+        data_.pop_back();
+      }
+
+      int top()
+      {
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        return data_.back();
+      }
+
+      int getMin()
+      {
+        if (empty())
+          throw runtime_error("stack is empty");
+
+        return min_;
+      }
+
+    private:
+      std::vector<int> data_;
+      int min_{std::numeric_limits<int>::max()};
+  };
+} // namespace
+
+TEST(LeetCode, Easy_155_MinStack_1)
+{
+  using namespace leetcode_easy_155;
+
+  {
+    MinStack_1 ms;
+
+    ms.push(-2);
+    ms.push(0);
+    ms.push(-3);
+
+    EXPECT_THAT(ms.getMin(), -3);
+
+    ms.pop();
+    EXPECT_THAT(ms.top(), 0);
+
+    EXPECT_THAT(ms.getMin(), -2);
+  }
+
+  {
+    MinStack_1 ms;
+
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.top();
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+
+    ms.push(2147483647);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+    ms.push(-2147483648);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), -2147483648);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+  }
+
+  {
+    MinStack_2 ms;
+
+    ms.push(-2);
+    ms.push(0);
+    ms.push(-3);
+
+    EXPECT_THAT(ms.getMin(), -3);
+
+    ms.pop();
+    EXPECT_THAT(ms.top(), 0);
+
+    EXPECT_THAT(ms.getMin(), -2);
+  }
+
+  {
+    MinStack_2 ms;
+
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.top();
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+
+    ms.push(2147483647);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+    ms.push(-2147483648);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), -2147483648);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+  }
+
+  {
+    MinStack_3 ms;
+
+    ms.push(-2);
+    ms.push(0);
+    ms.push(-3);
+
+    EXPECT_THAT(ms.getMin(), -3);
+
+    ms.pop();
+    EXPECT_THAT(ms.top(), 0);
+
+    EXPECT_THAT(ms.getMin(), -2);
+  }
+  {
+    MinStack_3 ms;
+
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.push(2147483646);
+    ms.top();
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483646);
+    ms.pop();
+
+    ms.push(2147483647);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+    ms.push(-2147483648);
+    ms.top();
+    EXPECT_THAT(ms.getMin(), -2147483648);
+    ms.pop();
+    EXPECT_THAT(ms.getMin(), 2147483647);
+  }
+}
+
+
+// ={=========================================================================
 // algo-list
 
 // single
@@ -3413,7 +4770,7 @@ namespace algo_list_linked
   {
     explicit ListEntry(int row = 0, int col = 0) noexcept 
       : row_(row), col_(col), next_(nullptr) 
-    {}
+      {}
 
     int row_{};
     int col_{};
@@ -3462,7 +4819,7 @@ namespace algo_list_linked
 
           run->next_ = new ListEntry(entry);
         }
-        
+
         ++count_;
       }
 
@@ -3525,6 +4882,35 @@ namespace algo_list_linked
 
       ListEntry* head_;
   };
+
+  struct ListNode
+  {
+    explicit ListNode(int row = 0, int col = 0) noexcept 
+      : row_(row), col_(col), next(nullptr) 
+      {}
+
+    int row_{};
+    int col_{};
+
+    ListNode* next;
+  };
+
+  bool hasCycle(ListNode *head) 
+  {
+    ListNode *slow;
+    ListNode *fast;
+
+    for (slow = head, fast = slow; 
+        slow && (fast = fast->next) && (fast = fast->next);)
+    {
+      if (slow == fast)
+        return true;
+    
+      slow = slow->next;
+    }
+
+    return false; 
+  }
 
 } // namespace
 

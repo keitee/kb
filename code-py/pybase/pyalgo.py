@@ -1,4 +1,5 @@
 import unittest
+import re
 
 """
 $ python coll_test.py --verbose
@@ -158,6 +159,32 @@ class Solution_PlusOne:
 
 
 #={===========================================================================
+# py-leetcode-014, 125. Valid Palindrome, Easy
+# 
+# Given a string, determine if it is a palindrome, considering only alphanumeric
+# characters and ignoring cases.
+# 
+# Note: For the purpose of this problem, we define empty string as valid palindrome.
+# 
+# Example 1:
+# Input: "A man, a plan, a canal: Panama"
+# Output: true
+# 
+# Example 2:
+# Input: "race a car"
+# Output: false
+
+# trick 1: save re.sub() result to s itself
+# trick 2: palindrome is the same when reversed
+
+class Solution_isPalindrome:
+    def answer(self, s):
+        s = re.sub(r'\W', '', s).upper()
+        return s == s[::-1]
+
+
+#={===========================================================================
+# $ python3 -m unittest pyalgo.TestAlgo
 
 class TestAlgo(unittest.TestCase):
 
@@ -199,6 +226,11 @@ class TestAlgo(unittest.TestCase):
         self.assertEqual(co.answer([1, 2, 3]), [1,2,4])
         self.assertEqual(co.answer([4,3,2,1]), [4,3,2,2])
         self.assertEqual(co.answer([9,9,9]), [1,0,0,0])
+
+    def test_algo_is_palindrome(self):
+        co = Solution_isPalindrome()
+        self.assertEqual(co.answer('race a car'), False)
+        self.assertEqual(co.answer('A man, a plan, a canal: Panama'), True)
 
 
 #={===========================================================================

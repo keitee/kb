@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <bitset>
 #include <list>
+#include <deque>
 
 #include "gmock/gmock.h"
 
@@ -105,84 +106,87 @@ TEST(AlgoSwap, SwapUseXOR)
 // ={=========================================================================
 // algo-occurance find a number seen odd times
 
-unsigned int t_algo_find_a_number_01(const vector<unsigned int> &input)
+namespace algo_occurance
 {
-  unsigned int uireturn{};
+  unsigned int find_number_odd_times_1(const vector<unsigned int> &input)
+  {
+    unsigned int result{};
 
-  for (const auto e : input)
-    uireturn ^= e;
+    for (const auto e : input)
+      result ^= e;
 
-  return uireturn;
-}
+    return result;
+  }
+
+  unsigned int find_number_odd_times_2(const vector<unsigned int> &input)
+  {
+    size_t result{};
+    map<size_t, size_t> imap{};
+
+    // put them into a map<key, count>
+    for (const auto e : input)
+      ++imap[e];
+
+    auto pos_return = find_if( imap.cbegin(), imap.cend(),
+        [] (const pair<size_t,size_t> &e)
+        { 
+        if (e.second % 2) 
+        return true; 
+
+        return false;
+        }
+        );
+
+    result = (pos_return != imap.cend()) ? pos_return->first : 0;
+    return result;
+  }
+
+  unsigned int find_number_odd_times_3(const vector<unsigned int> &input)
+  {
+    size_t result{};
+    multiset<size_t> imset{input.cbegin(), input.cend()};
+
+    // put them into a map<key, count>
+    for (const auto e : imset)
+    {
+      if ( imset.count(e) % 2)
+      {
+        result = e;
+        break;
+      }
+    }
+
+    return result;
+  }
+} // namespace
 
 TEST(AlgoOccurance, FindNumberSeenOddTimes)
 {
-  // 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
-  const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-  EXPECT_THAT(t_algo_find_a_number_01(input), 12);
-}
+  using namespace algo_occurance;
 
-unsigned int t_algo_find_a_number_02(const vector<unsigned int> &input)
-{
-  size_t uiresult;
-  map<size_t, size_t> imap{};
+  {
+    // 2 2 4 4 4 4 6 6 8 8 10 10 12 12 12 (15)
+    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+    EXPECT_THAT(find_number_odd_times_1(input), 12);
+  }
 
-  // put them into a map<key, count>
-  for (const auto e : input)
-    ++imap[e];
-
-  auto pos_return = find_if( imap.cbegin(), imap.cend(),
-      [] (const pair<size_t,size_t> &e)
-      { 
-        if (e.second % 2) 
-          return true; 
-
-        return false;
-      }
-      );
-
-  uiresult = (pos_return != imap.cend()) ? pos_return->first : 0;
-  return uiresult;
-}
-
-TEST(AlgoOccurance, FindNumberSeenOddTimesUseMap)
-{
   // find_if() returns the first match. so remove '4' to make it the first odd
   // num of sequence:
   // 2 2 4 4 4 6 6 8 8 10 10 12 12 12 (15)
   {
     const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2};
-    EXPECT_THAT(t_algo_find_a_number_02(input), 4);
+    EXPECT_THAT(find_number_odd_times_2(input), 4);
   }
 
   {
     const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-    EXPECT_THAT(t_algo_find_a_number_02(input), 12);
+    EXPECT_THAT(find_number_odd_times_2(input), 12);
   }
-}
 
-unsigned int t_algo_find_a_number_03(const vector<unsigned int> &input)
-{
-  size_t uireturn{};
-  multiset<size_t> imset{input.cbegin(), input.cend()};
-
-  // put them into a map<key, count>
-  for (const auto e : imset)
   {
-    if ( imset.count(e) % 2)
-    {
-      uireturn = e;
-      break;
-    }
+    const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
+    EXPECT_THAT(find_number_odd_times_3(input), 12);
   }
-
-  return uireturn;
-}
-
-TEST(AlgoOccurance, FindNumberSeenOddTimesUseSet)
-{
-  const vector<unsigned int> input{2, 4, 6, 8, 10, 12, 10, 8, 6, 4, 12, 12, 4, 2, 4};
-  EXPECT_THAT(t_algo_find_a_number_02(input), 12);
 }
 
 
@@ -3478,6 +3482,234 @@ int frog_jump_2014_dec( int X, int Y, int D )
 
 
 // ={=========================================================================
+// algo-minmax
+
+namespace algo_min_max {
+
+  bool AbsLess(int elem1, int elem2) {
+    return abs(elem1) < abs(elem2);
+  }
+
+  using ITERATOR = std::deque<int>::iterator;
+
+  pair<ITERATOR, ITERATOR> my_minmax(ITERATOR begin, ITERATOR end)
+  {
+    auto min = numeric_limits<int>::max();
+    auto max = numeric_limits<int>::min();
+
+    ITERATOR min_iter = begin;
+    ITERATOR max_iter = begin;
+
+    for(; begin != end; ++begin) {
+
+      if (*begin < min) {
+        min = *begin;
+        min_iter = begin;
+      }
+
+      // add '=' to support the last max as minmax_element()
+      if (max <= *begin) {
+        max = *begin;
+        max_iter = begin;
+      }
+    }
+
+    return make_pair(min_iter, max_iter);
+  }
+}
+
+TEST(AlgoMinMax, Stl)
+{
+  using namespace algo_min_max;
+
+  deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
+
+  // If more than one minimum or maximum element exists, min_element() and
+  // max_element() return `the first` found; minmax_element() returns the first
+  // minimum but the last maximum element, so max_element() and minmax_element()
+  // don’t yield the same maximum element.
+
+  EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
+
+  EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+  EXPECT_THAT(distance(coll.begin(),max_element(coll.begin(), coll.end())), 4);
+ 
+  // return iterator pair
+  // Note also that minmax_element() yields `the last maximum`, so the distance
+  // 9.
+  auto minmax = minmax_element(coll.begin(), coll.end());
+  EXPECT_THAT(*(minmax.first), -3);   // first minimum
+  EXPECT_THAT(*(minmax.second), 6);   // last maximum
+
+  // last maximum is 6 which is the last element
+  EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size()-1);
+
+  EXPECT_THAT(distance(minmax.first, minmax.second), 9);
+  EXPECT_THAT(distance(
+        min_element(coll.begin(), coll.end()),
+        max_element(coll.begin(), coll.end()))
+      , -1);
+
+  // min/max of absolute values
+  EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
+  EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
+}
+
+namespace algo_min_max
+{
+  struct _Iter_less
+  {
+    template<typename _Iterator1, typename _Iterator2>
+      bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
+      { return *__it1 < *__it2; }
+  };
+
+  template <typename _Iterator, typename _Compare>
+    _Iterator my_max_element(_Iterator __first, _Iterator __last, 
+        _Compare __comp)
+    {
+      // if thre is only one
+      if (__first == __last)
+        return __first;
+
+      _Iterator __result = __first;
+
+      // if *__result < *__first 
+      while (++__first != __last)
+        if (__comp(__result, __first))
+          __result = __first;
+
+      return __result;
+    }
+
+  // note: do by simply reversing comp()
+
+  template <typename _Iterator, typename _Compare>
+    _Iterator my_min_element(_Iterator __first, _Iterator __last,
+        _Compare __comp)
+    {
+      if (__first == __last)
+        return __first;
+
+      _Iterator __result = __first;
+
+      while (++__first != __last)
+        // if (comp(__result, __first))
+        if (__comp(__first, __result))
+          __result = __first;
+
+      return __result;
+    }
+
+} // namespace
+
+TEST(AlgoMinMax, UseOwn)
+{
+  using namespace algo_min_max;
+
+  {
+    deque<int> coll{2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6};
+
+    // return iterator pair
+    // Note also that minmax_element() yields `the last maximum`, so the distance
+    // 9.
+    auto minmax = my_minmax(coll.begin(), coll.end());
+    EXPECT_THAT(*(minmax.first), -3);
+    EXPECT_THAT(*(minmax.second), 6);
+    EXPECT_THAT(distance(minmax.first, minmax.second), 9);
+  }
+
+  // on map
+  {
+    // sorted by key
+    std::map<int, size_t> counts{
+      {1, 2},
+        {3, 2},
+        {5, 3},
+        {8, 3},
+        {13, 1} 
+    };
+
+    auto e = max_element(counts.begin(), counts.end());
+    EXPECT_THAT(*e, make_pair(13, 1));
+
+    // ForwardIterator
+    // max_element (ForwardIterator beg, ForwardIterator end, CompFunc op)
+    // op is used to compare two elements:
+    // op(elem1,elem2)
+    // It should return true when the first element is less than the second
+    // element.
+
+    auto maxelem = std::max_element(
+        std::begin(counts), std::end(counts),
+        [](pair<int, size_t> const& e1, pair<int, size_t> const& e2)
+        { return e1.second < e2.second; });
+
+    EXPECT_THAT(*maxelem, make_pair(5, 3));
+  }
+
+  // multimap
+  {
+    // sorted by key and the order in the equal range are the order of input
+    std::multimap<int, size_t> counts{
+      {1, 2},
+        {3, 9},
+        {3, 8},
+        {5, 3},
+        {8, 3},
+        {13, 2},
+        {13, 4},
+        {13, 12},
+        {13, 1}
+    };
+
+    // for (auto &e : counts)
+    //   cout << e.first << ", " << e.second << endl;
+
+    // Q: how max_element() finds the max on the second?
+    // see *cxx-pair-comparison*
+
+    auto e = max_element(counts.begin(), counts.end());
+    EXPECT_THAT(*e, make_pair(13, 12));
+  }
+
+  // max_element
+  {
+    // sorted by key
+    std::map<int, size_t> counts{
+      {1, 2},
+        {3, 2},
+        {5, 3},
+        {8, 3},
+        {13, 1} 
+    };
+
+    auto pos = my_max_element(counts.begin(), counts.end(),
+        _Iter_less());
+
+    EXPECT_THAT(*pos, make_pair(13, 1));
+  }
+
+  // min_element
+  {
+    // sorted by key
+    std::map<int, size_t> counts{
+      {1, 2},
+        {3, 2},
+        {5, 3},
+        {8, 3},
+        {13, 1} 
+    };
+
+    auto pos = my_min_element(counts.begin(), counts.end(),
+        _Iter_less());
+
+    EXPECT_THAT(*pos, make_pair(1, 2));
+  }
+}
+
+
+// ={=========================================================================
 // algo-find-missing
 
 int find_missing_0623(const vector<int> &A)
@@ -6003,6 +6235,16 @@ namespace algo_list_linked_divide
 
   // o use single fast
   // o see *cxx-for-while*
+  //
+  // algo-leetcode
+  //
+  // 141. Linked List Cycle
+  //
+  // Runtime: 12 ms, faster than 99.74% of C++ online submissions for Linked
+  // List Cycle.
+  //
+  // Memory Usage: 9.7 MB, less than 73.40% of C++ online submissions for Linked
+  // List Cycle.
 
   bool detect_cycle_02(List const &list)
   {
@@ -7318,6 +7560,476 @@ TEST(Algo, Remove)
     EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
   }
 }
+
+
+// ={=========================================================================
+// algo-remove algo-leetcode-8
+/*
+26. Remove Duplicates from Sorted Array, Easy
+
+Given a sorted array nums, remove the duplicates in-place such that each element
+appear only once and return *the new length.*
+
+Do not allocate extra space for another array, you must do this by modifying the
+input array in-place with O(1) extra memory.
+
+Example 1:
+
+Given nums = [1,1,2],
+
+Your function should return length = 2, with the first two elements of nums
+being 1 and 2 respectively.
+
+It doesn't matter what you leave beyond the returned length.
+
+Example 2:
+
+Given nums = [0,0,1,1,1,2,2,3,3,4],
+
+Your function should return length = 5, with the first five elements of nums
+being modified to 0, 1, 2, 3, and 4 respectively.
+
+It doesn't matter what values are set beyond the returned length.
+
+Clarification:
+
+Confused why the returned value is an integer but your answer is an array?
+
+Note that the input array is passed in by reference, which means modification to
+the input array will be known to the caller as well.
+
+Internally you can think of this:
+
+// nums is passed in by reference. (i.e., without making a copy)
+int len = removeDuplicates(nums);
+
+// any modification to nums in your function would be known by the caller.
+// using the length returned by your function, it prints the first len elements.
+
+for (int i = 0; i < len; i++) {
+    print(nums[i]);
+}
+
+*/
+
+namespace leetcode_easy_008
+{
+  // input num is sorted (ascending)
+  // the idea is to move the duplicates to the end of right using swap
+  // don't need to check if run see smaller value since it's sorted input
+
+  int RemoveDuplicates_01(vector<int> &nums)
+  {
+    if (nums.empty())
+      return 0;
+
+    int value = nums[0];
+    size_t i{};
+
+    for (i = 1; i < nums.size(); ++i)
+    {
+      int run = nums[i];
+
+      // cout << "for i: " << i << ", run: " << run 
+      //   << ", value: " << value << endl;
+
+      // update current max when current value is bigger
+      if (run > value)
+        value = run;
+      // ends when see smaller and means reaches the the new end
+      else if(run < value)
+      {
+        // cout << "break i: " << i << endl;
+        break;
+      }
+      // when run == value, swap it to tne end.
+      else
+      {
+        for (size_t s = i; s < nums.size()-1; ++s)
+          swap(nums[s], nums[s+1]);
+
+        // since nums[i] is swapped, it may be bigger
+
+        if (nums[i] > value)
+          value = nums[i];
+      }
+    }
+
+    // cout << "return i: " << i << endl;
+
+    return i;
+  }
+
+  // o the key idea is to swap to the left
+  // o no repeated swap until see the new end. single swap is enough 
+  // o swap() should be done after updating current_max
+  //
+  // o end is index but shold return len so +1 -> revised. As algo-partition,
+  // end represet start of not-interested, that is end of interested group + 1.
+  // so no need to +1. have to think about swap on the same index
+  //
+  // | ... |end ...|
+
+  // Runtime: 24 ms, faster than 100.00% of C++ online submissions for Remove
+  // Duplicates from Sorted Array.
+  //
+  // Memory Usage: 11 MB, less than 24.81% of C++ online submissions for Remove
+  // Duplicates from Sorted Array.
+
+  int RemoveDuplicates_02(vector<int> &nums)
+  {
+    if (nums.empty())
+      return 0;
+
+    int current_max = nums[0];
+    size_t end{1};
+
+    for (size_t i = 1; i < nums.size(); ++i)
+    {
+      if (nums[i] > current_max)
+      {
+        current_max = nums[i];
+
+        // to avoid swap on the same index
+        if (end != i)
+          swap(nums[end], nums[i]);
+
+        ++end;
+      }
+    }
+
+    return end;
+  }
+  
+  using ITERATOR = vector<int>::iterator;
+
+  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
+  {
+    if (first == last)
+      return last;
+
+    auto next = first;
+    while (++next != last)
+    {
+      // found two consecutive items
+      if (*first == *next)
+        return first;
+
+      first = next;
+    }
+
+    // no two consecutive items found.
+    return last;
+  }
+
+  // algo-unique, same as unique_1(), works on not-sorted input.
+  // `end` fro adjacent_find() is end of the interested group
+  // | ... end| ...|
+
+  int RemoveDuplicates_03(vector<int> &nums)
+  {
+    auto first = nums.begin();
+    auto last = nums.end();
+
+    auto end = adjacent_find(first, last);
+
+    // means empty or no duplicates
+    if (end == last)
+      return 0;
+
+    auto run = end;
+
+    while (++run != last)
+    {
+      // see different item
+      if (*end != *run)
+        *++end = *run;
+    }
+
+    return distance(first, end) + 1;
+  }
+
+  int RemoveDuplicates_04(vector<int> &nums)
+  {
+    if (nums.empty())
+      return 0;
+
+    size_t unique_end{0};
+    size_t current{1};
+    size_t size = nums.size() - 1;
+
+    while (current <= size)
+    {
+      if (nums[unique_end] == nums[current])
+      {
+        ++current;
+      }
+      else
+      {
+        ++unique_end;
+
+        // to avoid assign on the same index
+        if (unique_end != current)
+          nums[unique_end] = nums[current];
+
+        ++current;
+      }
+    }
+
+    // +1 since unique_end is index but return length
+    return unique_end + 1;
+  }
+
+} // namespace
+
+TEST(AlgoRemove, LeetCode_Easy_008_RemoveDuplicates)
+{
+  using namespace leetcode_easy_008;
+
+  // okay
+  {
+    const auto func = RemoveDuplicates_01;
+
+    vector<int> coll{1,1,2};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 2);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,2));
+  }
+
+  // fails
+  {
+    const auto func = RemoveDuplicates_01;
+
+    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, Not(5));
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, Not(ElementsAre(0,1,2,3,4)));
+  }
+
+  {
+    const auto func = RemoveDuplicates_02;
+
+    vector<int> coll{1,1,2};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 2);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,2));
+  }
+
+  {
+    const auto func = RemoveDuplicates_02;
+
+    vector<int> coll{0,0,1,1,1,2,2,3,3,4};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 5);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(0,1,2,3,4));
+  }
+
+  // same ex as AlgoUnique
+  {
+    const auto func = RemoveDuplicates_03;
+
+    vector<int> coll{1, 4, 4, 6};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 3);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,4,6));
+  }
+  {
+    const auto func = RemoveDuplicates_03;
+
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto len = func(coll);
+
+    EXPECT_THAT(len, 3);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(1,4,6));
+  }
+  {
+    const auto func = RemoveDuplicates_03;
+
+    vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto len = func(coll);
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4,5,7,5,4,4}));
+    EXPECT_THAT(len, 12);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, 
+        ElementsAreArray({1,4,6,1,2,3,1,6,5,7,5,4}));
+  }
+}
+
+
+// ={=========================================================================
+// algo-remove algo-leetcode-9
+/*
+27. Remove Element, Easy
+
+Given an array nums and a value val, remove all instances of that value in-place
+and return the new length.
+
+Do not allocate extra space for another array, you must do this by modifying the
+input array in-place with O(1) extra memory.
+
+The order of elements can be changed. It doesn't matter what you leave beyond
+the new length.
+
+Example 1:
+
+Given nums = [3,2,2,3], val = 3,
+
+Your function should return length = 2, with the first two elements of nums
+being 2.
+
+It doesn't matter what you leave beyond the returned length.
+
+Example 2:
+
+Given nums = [0,1,2,2,3,0,4,2], val = 2,
+
+Your function should return length = 5, with the first five elements of nums
+containing 0, 1, 3, 0, and 4.
+
+Note that the order of those five elements can be arbitrary.
+
+It doesn't matter what values are set beyond the returned length.
+
+Clarification:
+
+Confused why the returned value is an integer but your answer is an array?
+
+Note that the input array is passed in by reference, which means modification to
+the input array will be known to the caller as well.
+
+Internally you can think of this:
+
+// nums is passed in by reference. (i.e., without making a copy)
+int len = removeElement(nums, val);
+
+// any modification to nums in your function would be known by the caller.
+// using the length returned by your function, it prints the first len elements.
+for (int i = 0; i < len; i++) {
+    print(nums[i]);
+}
+
+*/
+
+namespace leetcode_easy_009
+{
+  // o Unlike RemoveDuplicates_02, end is not index but index+1
+
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Remove
+  // Element.
+  //
+  // Memory Usage: 9.3 MB, less than 56.68% of C++ online submissions for Remove
+  // Element.
+
+  int RemoveIf_01(vector<int> &nums, int val)
+  {
+    if (nums.empty())
+      return 0;
+
+    size_t end{};
+
+    for (size_t i = 0; i < nums.size(); ++i)
+    {
+      if (nums[i] != val)
+      {
+        if (end != i)
+          swap(nums[end], nums[i]);
+
+        ++end;
+      }
+    }
+
+    return end;
+  }
+
+} // namespace
+
+TEST(AlgoRemove, LeetCode_Easy_009_RemoveIf)
+{
+  using namespace leetcode_easy_009;
+
+  {
+    const auto func = RemoveIf_01;
+
+    vector<int> coll{3,2,2,3};
+    auto len = func(coll, 3);
+
+    EXPECT_THAT(len, 2);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(2,2));
+  }
+
+  {
+    const auto func = RemoveIf_01;
+
+    vector<int> coll{0,1,2,2,3,0,4,2};
+    auto len = func(coll, 2);
+
+    EXPECT_THAT(len, 5);
+
+    vector<int> result{};
+
+    for (int i = 0; i < len; ++i)
+      result.push_back(coll[i]);
+
+    EXPECT_THAT(result, ElementsAre(0,1,3,0,4));
+  }
+}
+
+
 
 
 // ={=========================================================================
