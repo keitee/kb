@@ -3265,108 +3265,141 @@ TEST(AlgoDistinctCount, DistinctCount)
 // ={=========================================================================
 // algo-water-volume
 
-size_t water_volume_0621(const vector<int> &A)
+namespace algo_water_volume
 {
-  size_t last_high{}, last_high_index{};
-  size_t prev{}, curr{};
-  size_t volume{}, high{}, width{};
+  // two pass algo
 
-  // cout << "--------" << endl;
-
-  for (size_t i = 0; i < A.size(); ++i)
+  int water_volume_1(vector<int> const &A)
   {
-    curr = A[i];
+    int max_value{};
+    size_t max_index{};
+    size_t volume{};
 
-    // trigger condition to compute volume. that is when it goes up(prev < curr)
-    // and last_high is not null.
-    
-    if (prev < curr && last_high)
+    // get the index of max
+    for (size_t i = 0; i < A.size(); ++i)
     {
-      high = min(curr, last_high) - prev;
-      width = (i - last_high_index) - 1;
-      volume += (high*width);
-
-      // cout << "i:" << i << " c:" << curr << " p:" << prev 
-      //   << " lh:" << last_high << " lhi:" << last_high_index
-      //   << " h:" << high << " w:" << width << " v:" << volume << endl;
+      if (max_value < A[i])
+      {
+        max_value = A[i];
+        max_index = i;
+      } 
     }
 
-    // when it goes down and see bigger than before
-    if(curr < prev && last_high < prev)
+    // from left to the max
+    int max_current{std::numeric_limits<int>::min()};
+
+    for (size_t i = 0; i < max_index; ++i)
     {
-      last_high = prev;
-      last_high_index = i-1;
-      // cout << "i:" << i << " u lh:" << last_high << endl;
+      if (max_current <= A[i])
+        max_current = A[i];
+      else
+        volume += max_current - A[i];
     }
 
-    prev = curr;
+    // from right to the max
+    max_current = std::numeric_limits<int>::min();
+
+    for (size_t i = A.size()-1; i > max_index; --i)
+    {
+      if (max_current <= A[i])
+        max_current = A[i];
+      else
+        volume += max_current - A[i];
+    }
+
+    return volume;
   }
 
-  return volume;
-}
+  // one pass
 
-TEST(AlgoWaterVolume, WaterVolume_0612)
-{
-  vector<int> coll1{2,5,1,2,3,4,7,7,6};
-  EXPECT_THAT(water_volume_0621(coll1), 10);
-
-  // fails
-  // vector<int> coll2{2,5,1,3,1,2,1,7,7,6};
-  // EXPECT_THAT(water_volume_0621(coll2), 17);
-}
-
-// * move the lesser max towards the opposite and by doing this removes the need
-// to get the highest high before. saves one pass.
-//
-// * calculats volume while updating high which removes needs up/down trigger
-// considerations.
-//
-// so calculates volume this way is okay since ww know there is other high point
-// than this and we move the lesser one.
-
-// 2018.06.22
-// Cannot figure out the answer and see the model answer.
-
-int water_volume_0621_model(const vector<int> &A)
-{
-  int left{}, left_high{};
-  int right = A.size()-1, right_high{};
-  int volume{};
-
-  while (left < right)
+  int water_volume_2(vector<int> const &A)
   {
-    if (A[left] > left_high)
-      left_high = A[left];
+    int right_max{std::numeric_limits<int>::min()};
+    int left_max{std::numeric_limits<int>::min()};
 
-    if (A[right] > right_high)
-      right_high = A[right];
+    size_t left_index{0};
+    size_t right_index{A.size()-1};
 
-    // should have equal case since have to have one of max high.
-    if (left_high >= right_high)
+    size_t volume{};
+
+    while (left_index < right_index)
     {
-      volume += right_high - A[right];
-      --right;
+      left_max = max(left_max, A[left_index]);
+      right_max = max(right_max, A[right_index]);
+
+      // cout << "li: " << left_index << ", ri: " << right_index
+      //   << ", lm: " << left_max << ", rm: " << right_max << endl;
+
+      // move left bar to right
+      // note: should have "equal" case on either if. otherwise, loops goes
+      // infinitive.
+
+      if (left_max <= right_max)
+      {
+        if (A[left_index] < left_max)
+        {
+          volume += left_max - A[left_index];
+          // cout << "vol += " << left_max << " - " 
+          //   << A[left_index] << endl;
+        }
+
+        left_index++;
+      }
+
+      // move right bar to left
+      if (left_max > right_max)
+      {
+        if (A[right_index] < right_max)
+        {
+          volume += right_max - A[right_index];
+          // cout << "vol += " << right_max << " - " 
+          //   << A[right_index] << endl;
+        } 
+
+        right_index--;
+      }
     }
-    else
-    {
-      volume += left_high - A[left];
-      ++left;
-    }
+
+    return volume;
   }
+} // namespace
 
-  return volume;
+TEST(AlgoWaterVolume, TwoPass)
+{
+  using namespace algo_water_volume;
+
+  auto func = water_volume_1; 
+  {
+    vector<int> coll{2,5,1,2,3,4,7,7,6};
+    EXPECT_THAT(func(coll), 10);
+  }
+  {
+    vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+    EXPECT_THAT(func(coll), 17);
+  }
+  {
+    vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+    EXPECT_THAT(func(coll), 21);
+  }
 }
 
-TEST(AlgoWaterVolume, WaterVolume_0612_model)
+TEST(AlgoWaterVolume, OnePass)
 {
-  vector<int> coll1{2,5,1,2,3,4,7,7,6};
-  EXPECT_THAT(water_volume_0621_model(coll1), 10);
+  using namespace algo_water_volume;
 
-  vector<int> coll2{2,5,1,3,1,2,1,7,7,6};
-  EXPECT_THAT(water_volume_0621_model(coll2), 17);
-
-  vector<int> coll3{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
-  EXPECT_THAT(water_volume_0621_model(coll3), 21);
+  auto func = water_volume_2; 
+  {
+    vector<int> coll{2,5,1,2,3,4,7,7,6};
+    EXPECT_THAT(func(coll), 10);
+  }
+  {
+    vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+    EXPECT_THAT(func(coll), 17);
+  }
+  {
+    vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+    EXPECT_THAT(func(coll), 21);
+  }
 }
 
 
