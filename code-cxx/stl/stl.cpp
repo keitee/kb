@@ -3746,152 +3746,6 @@ TEST(AlgoMutating, AlgoRemove)
 }
 
 
-// cxx-algo-unique
-
-namespace algo_unique 
-{
-  using ITERATOR = vector<int>::iterator;
-
-  // when see two consequtive equal items, return a iterator to the first.
-  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
-  {
-    if (first == last)
-      return last;
-
-    ITERATOR next = first;
-    while (++next != last)
-    {
-      if (*first == *next)
-        return first;
-      first = next;
-    }
-
-    return last;
-  }
-
-  // /usr/include/c++/4.9/bits/stl_algo.h
-
-  ITERATOR unique_1(ITERATOR first, ITERATOR last)
-  {
-    first = adjacent_find(first, last);
-    if (first == last)
-      return last;
-
-    ITERATOR dest = first;
-    ++first;
-    while (++first != last)
-    {
-      // not equal and assign(overwrite). so if equals, keep increase first.
-      if (*dest != *first)
-        *++dest = *first;
-    }
-
-    // one after from the last
-    return ++dest;
-  }
-} // namespace
-
-TEST(AlgoMutating, AlgoUnique)
-{
-  using namespace algo_unique;
-  
-  // o Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
-  {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-
-  // o The first form removes from the range [beg,end) all elements that are
-  // equal to `the previous elements.` Thus, only when the elements in the
-  // sequence are sorted, or at least when all elements of the same value are
-  // adjacent, does it remove all duplicates.
-  //
-  // o sorted input is not assumed
-
-  {
-    int source[] = {1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-    list<int> coll;
-    copy(begin(source), end(source), back_inserter(coll));
-
-    auto pos = unique(coll.begin(), coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
-
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
-  }
-
-  // o The second form removes all elements that follow an element e and for
-  // which the binary predicate op(e,elem) yields true. In other words, the
-  // predicate is not used to compare an element with its predecessor; the
-  // element is compared with the previous element that was not removed (see the
-  // following examples).
-
-  // For example, the first 6 is greater than the following 1, 2, 2, 3, and 1,
-  // so all these elements are removed. In other words, the predicate is not
-  // used to compare an element with its predecessor; the element is compared
-  // with the previous element that was not removed 
-  {
-    list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-
-    auto pos = unique(coll.begin(), coll.end(), greater<int>());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 4, 6, 6, 6, 6, 7}));
-  }
-
-  {
-    string input{"1   2  3            4           "};
-    EXPECT_THAT(input, "1   2  3            4           ");
-
-    auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y) {
-      return x == y and x == ' ';
-    });
-
-    input.erase(new_end, input.end());
-    EXPECT_THAT(input, "1 2 3 4 ");
-  }
-
-
-  // o Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
-  {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = unique_1(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = unique_1(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-
-  // o sorted input is not assumed
-  {
-    vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-
-    auto pos = unique_1(coll.begin(), coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
-
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, 
-        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
-  }
-}
-
-
 // algo-permutation
 
 // 588 Chapter 11: STL Algorithms
@@ -4005,8 +3859,9 @@ TEST(AlgoMutating, AlgoRotate)
   vector<int> coll{1,2,3,4,5,6,7,8};
 
   // rotate one to the left
-  // GCC 4.9.2, void rotate() so comment out 
+  // before *cxx-11* void rotate() so comment out 
   // auto pos = rotate(
+
   rotate(
     coll.begin(),     // begin  
     coll.begin()+1,   // new begin
@@ -4017,14 +3872,8 @@ TEST(AlgoMutating, AlgoRotate)
   // return the new position of the (pervious) first element.
   // EXPECT_THAT(*pos, 1);
 
-  // rotate two to the right or think that rotate to the left since `no direction` 
-  // in the call definition.
-  // 
-  // from stl
-  //  *  This effectively swaps the ranges @p [__first,__middle) and
-  //  *  @p [__middle,__last).
-
   // pos = rotate(
+
   rotate(
     coll.begin(),
     coll.end()-2,
@@ -4035,6 +3884,7 @@ TEST(AlgoMutating, AlgoRotate)
 
   // rotate so that 4 is the beginning
   // pos = rotate(
+
   rotate(
     coll.begin(),
     find(coll.begin(), coll.end(), 4),
@@ -4044,81 +3894,6 @@ TEST(AlgoMutating, AlgoRotate)
   // EXPECT_THAT(*pos, 8);
 }
 
-
-// 1. do not use additional space
-// 2. like to slide down sub group
-// 3. use of for loop count
-
-template <typename _Iterator>
-void my_rotate(_Iterator __begin, _Iterator __new_end, _Iterator __end)
-{
-  if ((__begin == __new_end) || (__end == __new_end))
-    return;
-
-  auto num_swap = std::distance(__new_end, __end);
-
-  for (;__new_end != __begin; --__new_end)
-  {
-    _Iterator start = __new_end;
-
-    for (int i = 0; i < num_swap; ++i)
-    {
-      swap(*start, *(start-1));
-      ++start;
-    }
-  }
-}
-
-// /usr/include/c++/4.9.2/bits/stl_algo.h
-//
-// /// This is a helper function for the rotate algorithm.
-// template<typename _ForwardIterator>
-//   _ForwardIterator
-//   __rotate(_ForwardIterator __first,
-//      _ForwardIterator __middle,
-//      _ForwardIterator __last,
-//      forward_iterator_tag)
-// {}
-
-TEST(AlgoMutating, AlgoRotateOwn)
-{
-  vector<int> coll{1,2,3,4,5,6,7,8};
-
-  // rotate one to the left
-  my_rotate(
-    coll.begin(),     // begin  
-    coll.begin()+1,   // new begin
-    coll.end()        // end
-  );
-  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
-
-  my_rotate(
-    coll.begin(),
-    coll.end()-2,
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
-
-  my_rotate(
-    coll.begin(),
-    find(coll.begin(), coll.end(), 4),
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
-}
-
-// void
-// reverse (BidirectionalIterator beg, BidirectionalIterator end)
-
-// algo-rotate that use algo-reverse()
-
-template <typename _Iterator>
-void reverse_rotate(_Iterator begin, _Iterator new_begin, _Iterator end)
-{
-  std::reverse(begin, new_begin);
-  std::reverse(new_begin, end);
-  std::reverse(begin, end);
-}
 
 TEST(AlgoMutating, AlgoReverse)
 {
@@ -4135,32 +3910,6 @@ TEST(AlgoMutating, AlgoReverse)
     std::reverse_copy(coll.begin(), coll.end(), 
         back_inserter(result));
     EXPECT_THAT(result, ElementsAre(1,7,6,5,4,3,2,8));
-  }
-
-  {
-    vector<int> coll{1,2,3,4,5,6,7,8};
-
-    // rotate one to the left
-    reverse_rotate(
-        coll.begin(),     // begin  
-        coll.begin()+1,   // new begin
-        coll.end()        // end
-        );
-    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
-
-    reverse_rotate(
-        coll.begin(),
-        coll.end()-2,
-        coll.end()
-        );
-    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
-
-    reverse_rotate(
-        coll.begin(),
-        find(coll.begin(), coll.end(), 4),
-        coll.end()
-        );
-    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
   }
 }
 

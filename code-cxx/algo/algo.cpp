@@ -725,155 +725,192 @@ TEST(AlgoFindUniqueByte, FindFirstUniqueByteFromStream_0618)
 
 
 // ={=========================================================================
-// algo-find the longest sequence of input char array
+// algo-occurance find the longest sequence of input char array
 
-MATCHER_P(EqPair, expected, "")
+namespace algo_occurance
 {
+  MATCHER_P(EqPair, expected, "")
+  {
     return arg.first == expected.first &&
-        arg.second == expected.second;
-}
+      arg.second == expected.second;
+  }
 
-MATCHER_P(NotEqPair, expected, "")
-{
+  MATCHER_P(NotEqPair, expected, "")
+  {
     return arg.first != expected.first ||
-        arg.second != expected.second;
-}
+      arg.second != expected.second;
+  }
 
-// this is the second try and works fine.
-pair<char, size_t> find_longest_01(const string &input)
-{
+  // this is the second try and works fine.
+  // O(n)
+
+  pair<char, size_t> find_longest_1(const string &input)
+  {
     size_t current_occurance{0}, longest_occurance{0};
     char current_char{0}, longest_char{0};
 
     for( auto letter : input )
     {
-        if( letter != current_char )
-        {
-            current_char = letter;
-            current_occurance = 1;
-        }
-        // if( letter == current_char )
-        else
-            ++current_occurance;
+      if( letter != current_char )
+      {
+        current_char = letter;
+        current_occurance = 1;
+      }
+      // if( letter == current_char )
+      else
+        ++current_occurance;
 
-        if( current_occurance > longest_occurance )
-        {
-            longest_char = current_char;
-            longest_occurance = current_occurance;
-        }
+      if( current_occurance > longest_occurance )
+      {
+        longest_char = current_char;
+        longest_occurance = current_occurance;
+      }
     }
 
     return pair<char, size_t>(longest_char, longest_occurance);
+  }
+} // namspace
+
+TEST(AlgoOccurance, FindLongest_1)
+{
+  using namespace algo_occurance;
+
+  auto func = find_longest_1;
+
+  const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
+  EXPECT_THAT(func(input1), 
+      EqPair(pair<char, size_t>('F', 18)));
+
+  const string input2{"AAABBCCCCDDD"};
+  EXPECT_THAT(func(input2), 
+      EqPair(pair<char, size_t>('C', 4)));
+
+  const string input3{"AAAAAAAAAAAA"};
+  EXPECT_THAT(func(input3), 
+      EqPair(pair<char, size_t>('A', 12)));
 }
 
 
-TEST(AlgoLongestSequence, FindLongestSequence)
+namespace algo_occurance
 {
-    const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(find_longest_01(input1), 
-            EqPair(pair<char, size_t>('F', 18)));
-
-    const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(find_longest_01(input2), 
-            EqPair(pair<char, size_t>('C', 4)));
-
-    const string input3{"AAAAAAAAAAAA"};
-    EXPECT_THAT(find_longest_01(input3), 
-            EqPair(pair<char, size_t>('A', 12)));
-}
-
-
-// Firstly, looks better but it fails when the input has one long sequence.
-pair<char, size_t> find_longest_02(const string &input)
-{
+  pair<char, size_t> find_longest_2(const string &input)
+  {
     char current_char{}, longest_char{};
     size_t current_occurance{}, longest_occurance{};
 
     for (auto letter : input)
     {
-        // if see the different char. use XOR and looks fancy?
-        if (current_char^letter)
-        {
-            // save it if it's the longest so far
-            if(current_occurance > longest_occurance)
-            {
-                longest_occurance = current_occurance;
-                longest_char = current_char;
-            }
+      // cout << "diff: curr" << current_char << ", letter: " << letter << endl;
 
-            // reset and str a search again
-            current_char = letter;
-            current_occurance = 1;
+      // if see the different char. use XOR and looks fancy?
+      if (current_char^letter)
+      {
+        // cout << "diff: letter" << letter << endl;
+
+        // save it if it's the longest so far
+        if(current_occurance > longest_occurance)
+        {
+          longest_occurance = current_occurance;
+          longest_char = current_char;
         }
-        // if see the same before
-        else
-            ++current_occurance;
+
+        // reset and str a search again
+        current_char = letter;
+        current_occurance = 1;
+      }
+      // if see the same before
+      else
+        ++current_occurance;
     }
 
     return pair<char, size_t>(longest_char, longest_occurance);
-}
+  }
 
-TEST(AlgoLongestSequence, FindLongestSequenceFail)
-{
-    // fails on this case
-    const string input3{"AAAAAAAAAAAA"};
-    EXPECT_THAT(find_longest_02(input3), 
-            NotEqPair(pair<char, size_t>('A', 12)));
-}
-
-pair<unsigned char, size_t> algo_find_longest_sequence_0618(const string &input)
-{
-  unsigned char current_char{}, saved_char{};
-  size_t        current_occurance{};
-  size_t        saved_occurance = numeric_limits<size_t>::min();
-
-  for(const auto e : input)
+  // 0618
+  pair<unsigned char, size_t> find_longest_3(const string &input)
   {
-    if (e != current_char)
+    unsigned char current_char{}, saved_char{};
+    size_t        current_occurance{};
+    size_t        saved_occurance = numeric_limits<size_t>::min();
+
+    for(const auto e : input)
     {
-      // if see a longer sequence
-      if (saved_occurance < current_occurance)
+      if (e != current_char)
       {
-        saved_char = current_char;
-        saved_occurance = current_occurance;
+        // if see a longer sequence
+        if (saved_occurance < current_occurance)
+        {
+          saved_char = current_char;
+          saved_occurance = current_occurance;
+        }
+
+        current_char = e;
+        current_occurance = 1;
       }
-
-      current_char = e;
-      current_occurance = 1;
+      else
+        ++current_occurance;
     }
-    else
-      ++current_occurance;
+
+    // if see a longer sequence when input ends or input has only one sequence
+    if (saved_occurance < current_occurance)
+    {
+      saved_char = current_char;
+      saved_occurance = current_occurance;
+    }
+
+    return pair<unsigned char, size_t>(saved_char, saved_occurance);
   }
 
-  // if see a longer sequence when input ends or input has only one sequence
-  if (saved_occurance < current_occurance)
-  {
-    saved_char = current_char;
-    saved_occurance = current_occurance;
-  }
+} // namespace
 
-  return pair<unsigned char, size_t>(saved_char, saved_occurance);
-}
-
-TEST(AlgoLongestSequence, FindLongestSequence_0618)
+TEST(AlgoOccurance, FindLongest_2)
 {
+  using namespace algo_occurance;
+
+  {
+    auto func = find_longest_2;
+
     const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(algo_find_longest_sequence_0618(input1), 
-            EqPair(pair<char, size_t>('F', 18)));
+    EXPECT_THAT(func(input1), 
+        EqPair(pair<char, size_t>('F', 18)));
 
     const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(algo_find_longest_sequence_0618(input2), 
-            EqPair(pair<char, size_t>('C', 4)));
+    EXPECT_THAT(func(input2), 
+        EqPair(pair<char, size_t>('C', 4)));
+
+    // Firstly, looks better but it fails when the input has one long sequence.
+    // returns {0, 0} because variable longest_xxx gets updated only in if case
+    // but not else(when char is the same)
 
     const string input3{"AAAAAAAAAAAA"};
-    EXPECT_THAT(algo_find_longest_sequence_0618(input3), 
-            EqPair(pair<char, size_t>('A', 12)));
+    EXPECT_THAT(func(input3), 
+        NotEqPair(pair<char, size_t>('A', 12)));
+  }
+  {
+    auto func = find_longest_3;
+
+    const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
+    EXPECT_THAT(func(input1), 
+        EqPair(pair<char, size_t>('F', 18)));
+
+    const string input2{"AAABBCCCCDDD"};
+    EXPECT_THAT(func(input2), 
+        EqPair(pair<char, size_t>('C', 4)));
+
+    // now okay
+    const string input3{"AAAAAAAAAAAA"};
+    EXPECT_THAT(func(input3), 
+        EqPair(pair<char, size_t>('A', 12)));
+  }
 }
 
 
-// To do better than O(n), can skip some chars in searching a sequence.
-pair<char, size_t> t_algo_find_longest_02(const string &input)
+// Can do better than O(n)? Can skip some chars in searching a sequence.
+
+namespace algo_occurance
 {
+  pair<char, size_t> find_longest_4(const string &input)
+  {
     char current_char{}, longest_char{};
     size_t current_occurance{}, longest_occurance{};
 
@@ -882,76 +919,85 @@ pair<char, size_t> t_algo_find_longest_02(const string &input)
     // take the first
     current_char = input[0];
     current_occurance = 1;
-    
+
     // *TN* 
     // should kepp ++i here. Otherwise, would have no increase of i and
     // compare the same input in a loop.
     for (size_t i = 1; i < input_size; ++i)
     {
-        // if see the different char. use XOR and looks fancy?
-        if (current_char^input[i])
+      // if see the different char. use XOR and looks fancy?
+      if (current_char^input[i])
+      {
+        // save the previous sequence if it's the longest so far
+        if (current_occurance > longest_occurance)
         {
-            // save the previous sequence if it's the longest so far
-            if (current_occurance > longest_occurance)
-            {
-                longest_occurance = current_occurance;
-                longest_char = current_char;
-            }
-
-            // see i and i + (current longest sequence-1) and skip them in
-            // between if they are different
-            //
-            // if they are the same, don't skip so don't change i
-            size_t check_skip = i + (current_occurance-1);
-
-            // *TN*
-            // Have to have this check. Otherwise, access to out of range
-            // of input.
-            if (check_skip > input_size)
-                break;
-
-            // if they are different
-            if (input[i]^input[check_skip])
-            {
-                // cout << "skipped : " << current_occurance-1 << endl;
-                i += current_occurance-1;
-            }
-
-            // reset and str a search again
-            current_char = input[i];
-            current_occurance = 1;
+          longest_occurance = current_occurance;
+          longest_char = current_char;
         }
-        // if see the same before
-        else
-            ++current_occurance;
+
+        // see i and i + (current longest sequence-1) and skip them in
+        // between if they are different
+        //
+        // if they are the same, don't skip so don't change i
+        size_t check_skip = i + (current_occurance-1);
+
+        // *TN*
+        // Have to have this check. Otherwise, access to out of range
+        // of input.
+        if (check_skip > input_size)
+          break;
+
+        // if they are different
+        if (input[i]^input[check_skip])
+        {
+          // cout << "skipped : " << current_occurance-1 << endl;
+          i += current_occurance-1;
+        }
+
+        // reset and str a search again
+        current_char = input[i];
+        current_occurance = 1;
+      }
+      // if see the same before
+      else
+        ++current_occurance;
     }
 
     // cout << "longest char      : " << longest_char << endl;
     // cout << "longest occurance : " << longest_occurance << endl;
 
     return pair<char, size_t>(longest_char, longest_occurance);
-}
+  }
 
-TEST(AlgoLongestSequence, FindLongestSequenceBetter)
+} // namespace
+
+TEST(AlgoOccurance, FindLongest_3)
 {
-    const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
-    EXPECT_THAT(t_algo_find_longest_02(input1), 
-            EqPair(pair<char, size_t>('F', 18)));
+  using namespace algo_occurance;
 
-    const string input2{"AAABBCCCCDDD"};
-    EXPECT_THAT(t_algo_find_longest_02(input2), 
-            EqPair(pair<char, size_t>('C', 4)));
+  auto func = find_longest_4;
 
-    const string input3{"AAAABCBBBBBCCCCDDD"};
-    EXPECT_THAT(t_algo_find_longest_02(input3), 
-            EqPair(pair<char, size_t>('B', 5)));
-}
+  const string input1{"AAABBCCCCDDDEEFFFFFFFFFFFFFFFFFFHHHSSSSSSSSSS"};
+  EXPECT_THAT(func(input1), 
+      EqPair(pair<char, size_t>('F', 18)));
 
-TEST(AlgoLongestSequence, FindLongestSequenceBetterFail)
-{
-    const string input3{"AAAABCCCCCCCC"};
-    EXPECT_THAT(t_algo_find_longest_02(input3), 
-            NotEqPair(pair<char, size_t>('C', 8)));
+  const string input2{"AAABBCCCCDDD"};
+  EXPECT_THAT(func(input2), 
+      EqPair(pair<char, size_t>('C', 4)));
+
+  // fails, return {0, 0}
+  const string input3{"AAAAAAAAAAAA"};
+  EXPECT_THAT(func(input3), 
+      NotEqPair(pair<char, size_t>('A', 12)));
+
+  const string input4{"AAAABCBBBBBCCCCDDD"};
+  EXPECT_THAT(func(input4), 
+      EqPair(pair<char, size_t>('B', 5)));
+
+  // fails, return {A, 4}
+  const string input5{"AAAABCCCCCCCC"};
+  EXPECT_THAT(func(input5), 
+      NotEqPair(pair<char, size_t>('C', 8)));
 }
 
 
@@ -1393,7 +1439,7 @@ class RomanConvert
 };
 
 
-TEST(RomanConvert, ConvertToRomansFirstAttempt) {
+TEST(AlgoRomanConvert, ConvertToRomansFirstAttempt) {
 
   RomanConvert converter;
 
@@ -1481,7 +1527,7 @@ string convert_to_roman(unsigned int arabic)
   return convert;
 }
 
-TEST(RomanConvert, ConvertToRomansTDD) 
+TEST(AlgoRomanConvert, ConvertToRomansTDD) 
 {
   EXPECT_THAT(convert_to_roman(1), Eq("I"));
   EXPECT_THAT(convert_to_roman(2), Eq("II"));
@@ -1590,7 +1636,7 @@ const string roman_numeral_1011(unsigned int value)
   return result;
 }
 
-TEST(RomanConvert, 0711) 
+TEST(AlgoRomanConvert, 0711) 
 {
   EXPECT_THAT(roman_numeral_0711(1), Eq("I"));
   EXPECT_THAT(roman_numeral_0711(2), Eq("II"));
@@ -1630,7 +1676,7 @@ TEST(RomanConvert, 0711)
   EXPECT_THAT(roman_numeral_0711(3447), Eq("MMMCDXLVII"));
 }
 
-TEST(RomanConvert, 1011) 
+TEST(AlgoRomanConvert, 1011) 
 {
   EXPECT_THAT(roman_numeral_1011(1), Eq("I"));
   EXPECT_THAT(roman_numeral_1011(2), Eq("II"));
@@ -2715,231 +2761,414 @@ TEST(DISABLED_AlgoMaze, Array20x20)
 //
 // 3. use independent of type.
 
-// returns MSB position which starts from 1th since input >> is evalueated after
-// ++count but not 0th.
 
-uint32_t get_msb_pos_01(const uint32_t value)
+/* 191. Number of 1 Bits, Easy
+
+Write a function that takes an unsigned integer and return the number of '1'
+bits it has (also known as the Hamming weight).
+
+Example 1:
+
+Input: 00000000000000000000000000001011
+Output: 3
+
+Explanation: 
+The input binary string 00000000000000000000000000001011 has a total of three
+'1' bits.
+
+Example 2:
+
+Input: 00000000000000000000000010000000
+Output: 1
+
+Explanation: 
+The input binary string 00000000000000000000000010000000 has a total of one '1'
+bit.
+
+Example 3:
+
+Input: 11111111111111111111111111111101
+Output: 31
+
+Explanation: 
+The input binary string 11111111111111111111111111111101 has a total of thirty
+one '1' bits.
+ 
+Note:
+
+Note that in some languages such as Java, there is no unsigned integer type. In
+this case, the input will be given as signed integer type and should not affect
+your implementation, as the internal binary representation of the integer is the
+same whether it is signed or unsigned. 
+
+In Java, the compiler represents the signed integers using 2's complement
+notation. Therefore, in Example 3 above the input represents the signed integer
+-3.
+
+*/
+
+// namespace leetcode_easy_191
+namespace algo_bit
 {
+  // as with itoa
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Number of
+  // 1 Bits.
+  //
+  // Memory Usage: 8.1 MB, less than 70.42% of C++ online submissions for Number
+  // of 1 Bits.
+
+  int hammingWeight_1(uint32_t n)
+  {
+    int count{};
+
+    while (n)
+    {
+      if (n % 2)
+        count++;
+
+      n /= 2;
+    }
+
+    return count;
+  }
+
+  // since input is unsigned int, can use >> shift
+
+  int hammingWeight_2(uint32_t n)
+  {
+    int count{};
+
+    while (n)
+    {
+      if (n & 0x01)
+        count++;
+
+      n >>= 1;
+    }
+
+    return count;
+  }
+
+  // page 51. exercise 2-9. In a two's complement number system, x &= (x-1)
+  // deletes the rightmost 1-bit in x. Explain why. Use this observation to write
+  // a 'faster' version of bitcount.
+  //
+  // Answer:
+  // 
+  // If x is odd, then (x-1) has the same bit representation as x except that the
+  // rightmost 1-bit becomes a 0. In this case, (x & (x-1)) == (x-1).
+  // 
+  // x = 5: 5(101) & 4(100) = 100  // 101 -> 100 by having rightmost 1 to 0
+  // 
+  // If x is even, the end result of anding(&) x and x-1 has the rightmost 1 of x to 0.
+  // 
+  // x = 4: 4(100) & 3(11)  = 0    // 100 -> 0   by having rightmost 1 to 0
+  //          ^ rightmost 1
+  //
+  // x = 6: 6(110) & 5(101) = 100  // 110 -> 100 by having rightmost 1 to 0
+  //           ^ rightmost 1
+  //
+  // x = 8: 8(1000) & 7(111) = 0   // 1000 -> 0  by having rightmost 1 to 0
+  // 
+  // 000   0     All even numbers has tailing 0s and it becomes 1 when minus 1
+  // 001   1
+  // 010   2
+  // 011   3
+  // 100   4
+  // 101   5
+  // 110   6
+  // 111   7
+  // ...
+  // 
+  // note: This is about careful observation but not a mechanism of borrowing a
+  // carry for example. For both odd and even case, has the effect of having
+  // rightmost 1 to 0. So clear 1 from x one by one and no need to check on if
+  // to count bits.
+  // 
+  // note: And(&) is faster than shift operation? Yes and also there is no `if`
+  // in the loop.
+
+  int count_bit(uint32_t n)
+  {
+    int count{};
+
+    for (; n; n &= (n-1))
+      count++;
+
+    return count;
+  }
+
+} // namespace
+
+TEST(AlgoBit, CountBits)
+{
+  using namespace algo_bit;
+
+  {
+    auto func = hammingWeight_1;
+
+    // Input: 00000000000000000000000000001011, 11
+    EXPECT_THAT(func(11), 3); 
+
+    // Input: 00000000000000000000000010000000, 128
+    EXPECT_THAT(func(128), 1); 
+
+    // Input: 11111111111111111111111111111101, 4294967293
+    EXPECT_THAT(func(4294967293), 31); 
+  }
+  {
+    auto func = hammingWeight_2;
+
+    // Input: 00000000000000000000000000001011, 11
+    EXPECT_THAT(func(11), 3); 
+
+    // Input: 00000000000000000000000010000000, 128
+    EXPECT_THAT(func(128), 1); 
+
+    // Input: 11111111111111111111111111111101, 4294967293
+    EXPECT_THAT(func(4294967293), 31); 
+  }
+  {
+    auto func = count_bit;
+
+    // Input: 00000000000000000000000000001011, 11
+    EXPECT_THAT(func(11), 3); 
+
+    // Input: 00000000000000000000000010000000, 128
+    EXPECT_THAT(func(128), 1); 
+
+    // Input: 11111111111111111111111111111101, 4294967293
+    EXPECT_THAT(func(4294967293), 31); 
+  }
+}
+
+
+namespace algo_bit
+{
+  // note:
+  // used to loop count running on two inputs to get common bit coutns for early
+  // attempts. However, turns out it's not necessary.
+  //
+  // returns MSB position which starts from 1 since input >> is evalueated after
+  // ++count but not 0th.
+
+  uint32_t get_msb_pos_1(const uint32_t value)
+  {
     uint32_t count{};
     uint32_t input = value;
 
     // do not need to check like: if (input &1) to increase count for every
     // interation since when runs out 1, input becomes 0 and the loop ends. 
     for (; input != 0; input >>= 1)
-        ++count;
-
-    return count;
-}
-
-// page 51. exercise 2-9. In a two's complement number system, x &= (x-1)
-// deletes the rightmost 1-bit in x. Explain why. Use this observation to write
-// a 'faster' version of bitcount.
-//
-// Answer:
-// 
-// If x is odd, then (x-1) has the same bit representation as x except that the
-// rightmost 1-bit becomes a 0. In this case, (x & (x-1)) == (x-1).
-// 
-// x = 5: 5(101) & 4(100) = 100  // 101 -> 100 by having rightmost 1 to 0
-// 
-// If x is even, the end result of anding(&) x and x-1 has the rightmost 1 of x to 0.
-// 
-// x = 4: 4(100) & 3(11)  = 0    // 100 -> 0   by having rightmost 1 to 0
-//          ^ rightmost 1
-// x = 6: 6(110) & 5(101) = 100  // 110 -> 100 by having rightmost 1 to 0
-//           ^ rightmost 1
-// x = 8: 8(1000) & 7(111) = 0   // 1000 -> 0  by having rightmost 1 to 0
-// 
-// 000   0     All even numbers has tailing 0s and it becomes 1 when minus 1
-// 001   1
-// 010   2
-// 011   3
-// 100   4
-// 101   5
-// 110   6
-// 111   7
-// ...
-// 
-// note: This is about careful observation but not a mechanism of borrowing a
-// carry for example. For both odd and even case, has the effect of having
-// rightmost 1 to 0. So clear 1 from x one by one and no need to check on if to
-// count bits.
-// 
-// note: And(&) is faster than shift operation? Yes and also there is no `if` in
-// the loop.
-// 
-// int bitcount(unsigned x)
-// {
-//   int b;
-// 
-//   for (b = 0; x != 0; x &= (x-1))
-//     b++;
-//   return b;
-// }
-
-uint32_t get_msb_pos_02(const uint32_t value)
-{
-    uint32_t count{};
-    uint32_t input = value;
-
-    for (; input != 0; input &= (input-1))
-        ++count;
-
-    return count;
-}
-
-
-TEST(AlgoBitCount, GetMSBPosition)
-{
-    // A = 35 = 10 0011
-    // B =  9 =    1001
-    EXPECT_THAT(get_msb_pos_01(35), Eq(6));
-    EXPECT_THAT(get_msb_pos_01(9), Eq(4));
-
-    // // but this fails. WHY?
-    // EXPECT_THAT(get_msb_pos_02(35), Eq(6));
-    // EXPECT_THAT(get_msb_pos_02(9), Eq(4));
-}
-
-uint32_t count_bits_old(const uint32_t first, const uint32_t second)
-{
-  // get the smaller between inputs
-  uint32_t small = first > second ? second : first;
-
-  // same as get_msg_pos()
-  uint32_t top_pos{};
-
-  for (; small && (small >>=1);)
-    ++top_pos;
-
-  // xor since cxx-xor remains 1 when bits are different.
-  uint32_t diff = first^second;
-  uint32_t count{};
-
-  for(uint32_t i = 0; i <= top_pos; ++i)
-  {
-    if(!(diff & 1u))
       ++count;
 
-    diff >>= 1;
+    return count;
   }
 
-  return count;
+} // namespace
+
+
+TEST(AlgoBit, GetMSBPosition)
+{
+  using namespace algo_bit;
+
+  // A = 35 = 10 0011
+  // B =  9 =    1001
+  EXPECT_THAT(get_msb_pos_1(35), Eq(6));
+  EXPECT_THAT(get_msb_pos_1(9), Eq(4));
+
+  // count_bit() is different since has high MSB and has 0s in the lower bits.
+
+  EXPECT_THAT(count_bit(35), 3);
+  EXPECT_THAT(count_bit(9), 2);
 }
 
-TEST(AlgoBitCount, FindNumberOfBitsBetweenTwoIntegers)
+
+namespace algo_bit
 {
-    // 35 = 10 0011
-    // 9 =     1001
-    //          ^ ^
-    EXPECT_THAT(count_bits_old(35, 9), Eq(2));
-
-    // 55 = 10 0111
-    // 5 =      101
-    //          ^ ^
-    EXPECT_THAT(count_bits_old(55, 5), Eq(2));
-}
-
-// 2018.0619
-// 1. unsigned int
-int count_bits_18_0619(const unsigned int a, const unsigned int b)
-{
-  // get min and max
-  auto input = minmax(a, b);
-
-  // take min value
-  unsigned int min = input.first;
-  unsigned int max = input.second;
-  
-  // get position of the pivot
-  unsigned int num_of_bits = sizeof(min)*8;
-  unsigned int pos_of_msb{};
-  unsigned int pivot = min;
-
-  for (unsigned int i = 0; i < num_of_bits; ++i)
+  // 2018.0619
+  // 1. unsigned int
+  int count_bits_18_0619(const unsigned int a, const unsigned int b)
   {
-    if (pivot & 0x1)
-      pos_of_msb = i;
+    // get min and max
+    auto input = minmax(a, b);
 
-    pivot >>= 1;
+    // take min value
+    unsigned int min = input.first;
+    unsigned int max = input.second;
+
+    // get position of the pivot
+    unsigned int num_of_bits = sizeof(min)*8;
+    unsigned int pos_of_msb{};
+    unsigned int pivot = min;
+
+    for (unsigned int i = 0; i < num_of_bits; ++i)
+    {
+      if (pivot & 0x1)
+        pos_of_msb = i;
+
+      pivot >>= 1;
+    }
+
+    // // get mask value, mask max, and get xor'ed value
+    // unsigned int mask_value{}, calculated_input{};
+
+    // for (unsigned int i = 0; i <= pos_of_msb; ++i)
+    //   mask_value |= (1 << i);
+
+    // max = max & mask_value;
+
+    unsigned int calculated_input = max^min;
+
+    // get num of common bits
+    unsigned int num_of_common_bits{};
+
+    for (unsigned int i = 0; i <= pos_of_msb; ++i)
+    {
+      if (!(calculated_input & 0x1))
+        ++num_of_common_bits;
+
+      calculated_input >>= 1;
+    }
+
+    return num_of_common_bits;
   }
 
-  // // get mask value, mask max, and get xor'ed value
-  // unsigned int mask_value{}, calculated_input{};
-
-  // for (unsigned int i = 0; i <= pos_of_msb; ++i)
-  //   mask_value |= (1 << i);
-
-  // max = max & mask_value;
-  
-  unsigned int calculated_input = max^min;
-
-  // get num of common bits
-  unsigned int num_of_common_bits{};
-
-  for (unsigned int i = 0; i <= pos_of_msb; ++i)
+  // 2018.07
+  int count_bits_18_0717(const unsigned int a, const unsigned int b)
   {
-    if (!(calculated_input & 0x1))
-      ++num_of_common_bits;
+    // get min and max
+    auto input = minmax(a, b);
 
-    calculated_input >>= 1;
+    // take min value
+    unsigned int min = input.first;
+    unsigned int max = input.second;
+
+    unsigned int num_of_common_bits{};
+
+    // no differetn when use for (; min && min >>= 1;)
+    for (; min; min >>= 1, max >>= 1)
+    {
+      // same bit, 0 or 1 between two numbers
+      if ((min & 0x1) == (max &0x1u))
+        ++num_of_common_bits;
+    }
+
+    return num_of_common_bits;
   }
 
-  return num_of_common_bits;
-}
-
-TEST(BitPattern, FindNumberOfBitsBetweenTwoIntegers_0619)
-{
-  //  35, 100011,   mask, 15 (1111),  max, 3(0011)
-  //                                    9,   1001
-  //                                  xor,   1010
-  //                                  ans, 2
-  EXPECT_THAT(count_bits_18_0619(35, 9), 2);
-
-  // 55 = 10 0111,  mask, 7 (0111),   max, 7(0111)
-  //                                    5,    101
-  //                                  xor, 2( 010)
-  //                                  ans, 2 
-  EXPECT_THAT(count_bits_18_0619(55, 5), 2);
-}
-
-
-// 2018.0717
-int count_bits_18_0717(const unsigned int a, const unsigned int b)
-{
-  // get min and max
-  auto input = minmax(a, b);
-
-  // take min value
-  unsigned int min = input.first;
-  unsigned int max = input.second;
-
-  unsigned int num_of_common_bits{};
-  
-  // no differetn when use for (; min && min >>= 1;)
-  for (; min; min >>= 1, max >>= 1)
+  // 2019.03
+  int count_common_bits(uint32_t a, uint32_t b)
   {
-    // same bit, 0 or 1 between two numbers
-    if ((min & 0x1) == (max &0x1u))
-      ++num_of_common_bits;
+    uint32_t count{};
+
+    for (; a && b; a >>= 1, b >>= 1)
+    {
+      if ((a & 0x1) == (b & 0x01))
+        count++;
+    }
+
+    return count;
   }
 
-  return num_of_common_bits;
+} // namespce
+
+TEST(AlgoBit, CommonBits)
+{
+  using namespace algo_bit;
+
+  {
+    //   9,   1001
+    //  35, 100011,   mask, 15 (1111),  max, 3(0011)
+    //                                    9,   1001
+    //                                  xor,   1010
+    //                                  ans, 2
+    EXPECT_THAT(count_bits_18_0717(35, 9), 2);
+
+    // 55 = 100111,  mask, 7 (0111),   max, 7(0111)
+    //                                    5,    101
+    //                                  xor, 2( 010)
+    //                                  ans, 2 
+    EXPECT_THAT(count_bits_18_0717(55, 5), 2);
+  }
+  {
+    auto func = count_common_bits;
+    EXPECT_THAT(func(35, 9), 2);
+    EXPECT_THAT(func(55, 5), 2);
+  }
 }
 
-TEST(BitPattern, FindNumberOfBitsBetweenTwoIntegers_0717)
-{
-  //  35, 100011,   mask, 15 (1111),  max, 3(0011)
-  //                                    9,   1001
-  //                                  xor,   1010
-  //                                  ans, 2
-  EXPECT_THAT(count_bits_18_0717(35, 9), 2);
 
-  // 55 = 10 0111,  mask, 7 (0111),   max, 7(0111)
-  //                                    5,    101
-  //                                  xor, 2( 010)
-  //                                  ans, 2 
-  EXPECT_THAT(count_bits_18_0717(55, 5), 2);
+/* 190. Reverse Bits, Easy
+
+Reverse bits of a given 32 bits unsigned integer.
+
+Example 1:
+
+Input: 00000010100101000001111010011100
+Output: 00111001011110000010100101000000
+
+Explanation: 
+The input binary string 00000010100101000001111010011100 represents the unsigned
+integer 43261596, so return 964176192 which its binary representation is
+00111001011110000010100101000000.
+
+Example 2:
+
+Input: 11111111111111111111111111111101
+Output: 10111111111111111111111111111111
+
+Explanation: 
+The input binary string 11111111111111111111111111111101 represents the unsigned
+integer 4294967293, so return 3221225471 which its binary representation is
+10101111110010110010011101101001.
+ 
+*/
+
+namespace algo_bit
+{
+  // initial thought was to use mix of atoi and itoa
+
+  // from discussion:
+  //
+  // O(1) bit operation C++ solution (8ms), tworuler
+  //
+  // for 8 bit binary number abcdefgh, the process is as follow:
+  // abcdefgh -> efghabcd -> ghefcdab -> hgfedcba
+
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Reverse
+  // Bits.
+  //
+  // Memory Usage: 8 MB, less than 79.46% of C++ online submissions for Reverse
+  // Bits.
+
+  uint32_t reverseBits(uint32_t n) 
+  {
+    // abcdefgh -> efghabcd 
+    n = (n >> 16) | (n << 16);
+
+    // efghabcd -> ghefcdab
+    // ef00ab00 >> 00ef00ab, 00gh00cd << gh00cd00
+    n = ((n & 0xff00ff00) >> 8) | ((n & 0x00ff00ff) << 8);
+
+    // ghefcdab -> hgfedcba
+    n = ((n & 0xf0f0f0f0) >> 4) | ((n & 0x0f0f0f0f) << 4);
+
+    n = ((n & 0xcccccccc) >> 2) | ((n & 0x33333333) << 2);
+    n = ((n & 0xaaaaaaaa) >> 1) | ((n & 0x55555555) << 1);
+
+    return n;
+  }
+
+} // namespace
+
+TEST(AlgoBit, ReverseBits)
+{
+  using namespace algo_bit;
+
+  EXPECT_THAT(reverseBits(43261596), 964176192);
+  EXPECT_THAT(reverseBits(4294967293), 3221225471);
 }
 
 
@@ -7018,9 +7247,8 @@ TEST(AlgoSort, Insertion)
 }
 
 
-
 // ={=========================================================================
-// algo-sort-insert algo-partition 
+// algo-partition algo-sort-insert a
 
 // algo-partition which uses the same grouping trick as algo-sort-insert
 
@@ -7222,7 +7450,7 @@ namespace algo_partition
 } // namespace
 
 
-TEST(Algo, Partition)
+TEST(AlgoPartition, Stl)
 {
   using namespace algo_partition;
 
@@ -7346,11 +7574,10 @@ TEST(Algo, Partition)
 
 
 // ={=========================================================================
-// algo-sort-insert algo-remove 
+// algo-remove algo-sort-insert 
 
 namespace algo_remove
 {
-
   namespace algo_code 
   {
     // /usr/include/c++/4.9/bits/predefined_ops.h
@@ -7522,7 +7749,7 @@ namespace algo_remove
 } // namespace
 
 
-TEST(Algo, Remove)
+TEST(AlgoRemove, Stl)
 {
   using namespace algo_remove;
 
@@ -7591,6 +7818,196 @@ TEST(Algo, Remove)
 
     coll.erase(end, coll.end());
     EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+}
+
+
+// ={=========================================================================
+// algo-unique
+//
+// | matched(unique)  | unmatched |
+//                  ^dest
+//
+// use the dest which is the end of the matched group
+
+namespace algo_unique 
+{
+  using ITERATOR = vector<int>::iterator;
+
+  // when see two consequtive equal items, return a iterator to the first.
+  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
+  {
+    if (first == last)
+      return last;
+
+    ITERATOR next = first;
+    while (++next != last)
+    {
+      if (*first == *next)
+        return first;
+      first = next;
+    }
+
+    return last;
+  }
+
+  // /usr/include/c++/4.9/bits/stl_algo.h
+
+  ITERATOR unique_1(ITERATOR first, ITERATOR last)
+  {
+    first = adjacent_find(first, last);
+    if (first == last)
+      return last;
+
+    ITERATOR dest = first;
+    ++first;
+    while (++first != last)
+    {
+      // not equal and assign(overwrite). so if equals, keep increase first.
+      if (*dest != *first)
+        *++dest = *first;
+    }
+
+    // one after from the last unique
+    return ++dest;
+  }
+
+  template <typename _Iterator>
+    _Iterator unique_2(_Iterator first, _Iterator last)
+    {
+      // first = adjacent_find(first, last);
+      // if (first == last)
+      //   return last;
+
+      _Iterator dest = first;
+      // ++first;
+      while (++first != last)
+      {
+        // not equal and assign(overwrite). so if equals, keep increase first.
+        if (*dest != *first)
+          *++dest = *first;
+      }
+
+      // one after from the last unique
+      return ++dest;
+    }
+} // namespace
+
+TEST(AlgoUnique, Unique)
+{
+  using namespace algo_unique;
+  
+  // o Both forms collapse `consecutive equal elements` by removing the
+  // following duplicates.
+  {
+    vector<int> coll{1, 4, 4, 6};
+    auto pos = unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+  {
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto pos = unique(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+
+  // o algo-unique() is not perferct
+  // The first form removes from the range [beg,end) all elements that are equal
+  // to `the previous elements.` Thus, only when 
+  //
+  // the elements in the sequence are sorted, or at least when all elements of
+  // the same value are adjacent, 
+  //
+  // does it remove all duplicates.
+  //
+  // o sorted input is not assumed
+
+  {
+    list<int> coll{1,2,3,1,2,3,4,4,6,1,2,2,3,1,6,6,6,4,4};
+
+    auto pos = unique(coll.begin(), coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray(
+          {1,2,3,1,2,3,4,6,1,2,3,1,6,4,6,6,6,4,4}));
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray(
+          {1,2,3,1,2,3,4,6,1,2,3,1,6,4}));
+  }
+
+  {
+    list<int> coll{1,2,3,1,2,3,4,4,6,1,2,2,3,1,6,6,6,4,4};
+
+    auto pos = unique_2(coll.begin(), coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray(
+          {1,2,3,1,2,3,4,6,1,2,3,1,6,4,6,6,6,4,4}));
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray(
+          {1,2,3,1,2,3,4,6,1,2,3,1,6,4}));
+  }
+
+  // o The second form removes all elements that follow an element e and for
+  // which the binary predicate op(e,elem) yields true. In other words, the
+  // predicate is not used to compare an element with its predecessor; the
+  // element is compared with the previous element that was not removed (see the
+  // following examples).
+
+  // For example, the first 6 is greater than the following 1, 2, 2, 3, and 1,
+  // so all these elements are removed. In other words, the predicate is not
+  // used to compare an element with its predecessor; the element is compared
+  // with the previous element that was not removed 
+  {
+    list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto pos = unique(coll.begin(), coll.end(), greater<int>());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 4, 6, 6, 6, 6, 7}));
+  }
+
+  {
+    string input{"1   2  3            4           "};
+    EXPECT_THAT(input, "1   2  3            4           ");
+
+    auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y) {
+      return x == y and x == ' ';
+    });
+
+    input.erase(new_end, input.end());
+    EXPECT_THAT(input, "1 2 3 4 ");
+  }
+
+
+  // o Both forms collapse `consecutive equal elements` by removing the
+  // following duplicates.
+  {
+    vector<int> coll{1, 4, 4, 6};
+    auto pos = unique_1(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+  {
+    vector<int> coll{1, 4, 4, 4, 6};
+    auto pos = unique_1(coll.begin(), coll.end());
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
+  }
+
+  // o sorted input is not assumed
+  {
+    vector<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
+
+    auto pos = unique_1(coll.begin(), coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
+
+    coll.erase(pos, coll.end());
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
   }
 }
 
@@ -7815,7 +8232,7 @@ namespace leetcode_easy_008
 
 } // namespace
 
-TEST(AlgoRemove, LeetCode_Easy_008_RemoveDuplicates)
+TEST(AlgoUnique, LeetCode_Easy_008_RemoveDuplicates)
 {
   using namespace leetcode_easy_008;
 
@@ -8063,6 +8480,354 @@ TEST(AlgoRemove, LeetCode_Easy_009_RemoveIf)
 }
 
 
+// ={=========================================================================
+// algo-rotate, algo-slide, algo-reverse
+
+TEST(AlgoRotate, Rotate)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8};
+
+  // rotate one to the left
+  // before *cxx-11* void rotate() so comment out 
+  // auto pos = rotate(
+
+  rotate(
+    coll.begin(),     // begin  
+    coll.begin()+1,   // new begin
+    coll.end()        // end
+  );
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+  // return the new position of the (pervious) first element.
+  // EXPECT_THAT(*pos, 1);
+
+  // pos = rotate(
+
+  rotate(
+    coll.begin(),
+    coll.end()-2,
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+  // EXPECT_THAT(*pos, 2);
+
+  // rotate so that 4 is the beginning
+  // pos = rotate(
+
+  rotate(
+    coll.begin(),
+    find(coll.begin(), coll.end(), 4),
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  // EXPECT_THAT(*pos, 8);
+}
+
+
+// 1. do not use additional space
+// 2. slide down sub group, [ne, e}
+// 3. use of for loop count
+//
+// /usr/include/c++/4.9.2/bits/stl_algo.h
+//
+// /// This is a helper function for the rotate algorithm.
+// template<typename _ForwardIterator>
+//   _ForwardIterator
+//   __rotate(_ForwardIterator __first,
+//      _ForwardIterator __middle,
+//      _ForwardIterator __last,
+//      forward_iterator_tag)
+// {}
+
+//         ne           e
+// 1  2  3 [4  5  6  7]     #1 move
+//       4  3
+//          5  3
+//             6  3
+//       ne       7  3
+//    ne[4  5  6  7] 3      #2 move
+//   [4  5  6  7] 2  3      #3 move
+// 4  5  6  7] 1  2  3
+// 
+// use reverse:
+//
+// 1  2  3 [4  5  6  7]
+// 3  2  1 [7  6  5  4]
+// 4  5  6  7  1  2  3
+
+
+namespace algo_rotate 
+{
+  template <typename _Iterator>
+    void rotate_1(_Iterator __begin, _Iterator __new_begin, _Iterator __end)
+    {
+      if ((__begin == __new_begin) || (__end == __new_begin))
+        return;
+
+      auto num_swap = std::distance(__new_begin, __end);
+
+      for (;__new_begin != __begin; --__new_begin)
+      {
+        _Iterator start = __new_begin;
+
+        for (int i = 0; i < num_swap; ++i)
+        {
+          swap(*start, *(start-1));
+          ++start;
+        }
+      }
+    }
+
+  // algo-rotate that use algo-reverse()
+  // void
+  // reverse (BidirectionalIterator beg, BidirectionalIterator end)
+
+  template <typename _Iterator>
+    void rotate_2(_Iterator begin, _Iterator new_begin, _Iterator end)
+    {
+      std::reverse(begin, new_begin);
+      std::reverse(new_begin, end);
+      std::reverse(begin, end);
+    }
+} // namespace
+
+TEST(AlgoRotate, Rotate_1)
+{
+  using namespace algo_rotate; 
+
+  {
+    vector<int> coll{1,2,3,4,5,6,7,8};
+
+    // cannot use this since it's template
+    // auto func = rotate_1;
+
+    // rotate one to the left
+    rotate_1(
+        coll.begin(),     // begin  
+        coll.begin()+1,   // new begin
+        coll.end()        // end
+        );
+    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+    rotate_1(
+        coll.begin(),
+        coll.end()-2,
+        coll.end()
+        );
+    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+
+    rotate_1(
+        coll.begin(),
+        find(coll.begin(), coll.end(), 4),
+        coll.end()
+        );
+    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  }
+
+  {
+    vector<int> coll{1,2,3,4,5,6,7,8};
+    // auto func = rotate_2;
+
+    // rotate one to the left
+    rotate_2(
+        coll.begin(),     // begin  
+        coll.begin()+1,   // new begin
+        coll.end()        // end
+        );
+    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+    rotate_2(
+        coll.begin(),
+        coll.end()-2,
+        coll.end()
+        );
+    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+
+    rotate_2(
+        coll.begin(),
+        find(coll.begin(), coll.end(), 4),
+        coll.end()
+        );
+    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  }
+}
+
+
+// algo-leetcode-189
+/* 189. Rotate Array, Easy
+
+Given an array, rotate the array to the right by k steps, where k is
+non-negative.
+
+Example 1:
+
+Input: [1,2,3,4,5,6,7] and k = 3
+Output: [5,6,7,1,2,3,4]
+
+Explanation:
+rotate 1 steps to the right: [7,1,2,3,4,5,6]
+rotate 2 steps to the right: [6,7,1,2,3,4,5]
+rotate 3 steps to the right: [5,6,7,1,2,3,4]
+
+Example 2:
+
+Input: [-1,-100,3,99] and k = 2
+Output: [3,99,-1,-100]
+
+Explanation: 
+rotate 1 steps to the right: [99,-1,-100,3]
+rotate 2 steps to the right: [3,99,-1,-100]
+
+Note:
+Try to come up as many solutions as you can, there are at least 3 different ways
+to solve this problem.  Could you do it in-place with O(1) extra space?
+
+*/
+
+namespace leetcode_easy_189
+{
+  // k poins to new end which is size()-k in pos
+
+  void rotate(vector<int>& nums, int k) 
+  {
+    int new_begin = nums.size() - k;
+
+    // note that must be > 0 but not >= 0
+    for(; new_begin > 0; --new_begin)
+    {
+      for(int index = new_begin, i = 0; i < k; ++i, ++index)
+        swap(nums[index-1], nums[index]);
+    }
+  }
+
+  // index :  0   1   2   3   4   5   6
+  // arr   :  1   2   3   4   5   6   7
+  // k     :  7   6   5   4   3   2   1
+  //          14  13  12  11  10  9   8
+  //          21  20  19  18  17  16  15
+  //
+  // so except cases that falls to index 0 (% makes 0), others works with "%
+  // size"
+  // 
+  // However, it's too slow
+
+  void rotate_1(vector<int>& nums, int k) 
+  {
+    // as with condition check in algo-rotate, no need to when it rotates to
+    // itself.
+
+    int count = k % nums.size();
+
+    if (count == 0)
+      return;
+
+    int new_begin = nums.size() - count;
+
+    // note that must be > 0 but not >= 0
+    for(; new_begin > 0; --new_begin)
+    {
+      for(int index = new_begin, i = 0; i < count; ++i, ++index)
+        swap(nums[index-1], nums[index]);
+    }
+  }
+
+  // why faster? less swap() operations.
+  //
+  // Runtime: 16 ms, faster than 100.00% of C++ online submissions for Rotate
+  // Array.
+  //
+  // Memory Usage: 9.6 MB, less than 35.88% of C++ online submissions for Rotate
+  // Array.
+
+  void rotate_2(vector<int>& nums, int k) 
+  {
+    // as with condition check in algo-rotate, no need to when it rotates to
+    // itself.
+
+    int count = k % nums.size();
+
+    if (count == 0)
+      return;
+
+    int new_begin = nums.size() - count;
+
+    std::reverse(nums.begin(), nums.begin()+new_begin);
+    std::reverse(nums.begin()+new_begin, nums.end());
+    std::reverse(nums.begin(), nums.end());
+  }
+} // namespace
+
+
+TEST(AlgoRotate, LeetCode_Easy_189)
+{
+  using namespace leetcode_easy_189;
+
+  {
+    vector<int> coll{1,2,3,4,5,6,7,8};
+
+    // cannot use this since it's template
+    // auto func = rotate_1;
+
+    // rotate one to the left
+    // rotate( 
+    //     coll.begin(),     // begin  
+    //     coll.begin()+1,   // new begin
+    //     coll.end()        // end
+    //     );
+    rotate(coll, 7); 
+    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+    // rotate(
+    //     coll.begin(),
+    //     coll.end()-2,
+    //     coll.end()
+    //     );
+    rotate(coll, 2);
+    EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+
+    // rotate(
+    //     coll.begin(),
+    //     find(coll.begin(), coll.end(), 4),
+    //     coll.end()
+    //     );
+    rotate(coll, 4);
+    EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  }
+
+  {
+    vector<int> coll{1,2,3,4,5,6,7};
+    rotate(coll, 3);
+    EXPECT_THAT(coll, ElementsAre(5,6,7,1,2,3,4));
+  }
+  {
+    vector<int> coll{-1,-100,3,99};
+    rotate(coll, 2);
+    EXPECT_THAT(coll, ElementsAre(3,99,-1,-100));
+  }
+
+  // fails since assumes new begin is within [begin, end)
+  {
+    vector<int> coll{1,2};
+    rotate(coll, 3);
+    EXPECT_THAT(coll, Not(ElementsAre(2,1)));
+  }
+  {
+    vector<int> coll{1,2};
+    rotate_1(coll, 3);
+    EXPECT_THAT(coll, ElementsAre(2,1));
+  }
+  {
+    vector<int> coll{1,2};
+    rotate_1(coll, 99);
+    EXPECT_THAT(coll, ElementsAre(2,1));
+  }
+
+  {
+    vector<int> coll{1,2,3,4,5,6,7,8};
+    rotate_2(coll, 7); 
+    EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+  }
+}
 
 
 // ={=========================================================================
