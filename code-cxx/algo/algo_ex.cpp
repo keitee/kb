@@ -2730,7 +2730,7 @@ TEST(LeetCode, Easy_012_CountAndSay_3)
 // ={=========================================================================
 // algo-leetcode-53
 /*
-53. Maximum Subarray, Easy
+53. Maximum Subarray, Easy, algo-max-sub-array
 
 Given an integer array nums, find the contiguous subarray (containing at least
 one number) which has the largest sum and return its sum.
@@ -2814,6 +2814,8 @@ namespace leetcode_easy_053
     for (size_t i = 1; i < nums.size(); ++i)
     {
       // only for positive previous item
+      // why [i-1]? since updates `nums` and refer back to the previous
+
       if (nums[i-1] > 0)
       {
         // update input to keep *prefix-sum* since do not care changes to the
@@ -2976,295 +2978,6 @@ TEST(LeetCode, Easy_053_MaxSubArray_1)
 
 
 // ={=========================================================================
-// algo-leetcode-121
-/*
-121. Best Time to Buy and Sell Stock, Easy
-
-Say you have an array for which the ith element is the price of a given stock on
-day i.
-
-If you were only permitted to complete at most one transaction (i.e., buy one
-and sell one share of the stock), design an algorithm to find the maximum
-profit.
-
-Note that you cannot sell a stock before you buy one.
-
-Example 1:
-
-Input: [7,1,5,3,6,4]
-Output: 5
-
-Explanation: 
-Buy on day 2 (price = 1) and sell on day 5 (price = 6), profit = 6-1 = 5.  Not
-7-1 = 6, as selling price needs to be larger than buying price.
-
-Example 2:
-
-Input: [7,6,4,3,1]
-Output: 0
-
-Explanation: 
-In this case, no transaction is done, i.e. max profit = 0.
- 
-the key is:
-
-max profit is max (sell - buy)
-
-*/
-
-namespace leetcode_easy_121
-{
-  /*
-  algo-minmax variation which has two seperate if for max and min. But this 
-  uses nested if to meet two condition:
-
-  1. buy first and then can sell
-  2. buy < sell
-   
-  buy:  7   1     x   x   x   x   = 1
-  sell: min min   5   x   6   x   = 6
- 
-  buy:  7   6   4   3   1   = 1
-  sell: min min min min min = min
-
-  this avoids 1 - 7 case as the problem description
-
-  */
-
-  int maxProfit_1(vector<int>& prices) 
-  {
-    // max
-    int sell{std::numeric_limits<int>::min()};
-    // min
-    int buy{std::numeric_limits<int>::max()};
-
-    // for (auto e : prices)
-    for (size_t i = 0; i < prices.size(); ++i)
-    {
-      // update buy, min
-      if ((i + 1) < prices.size() && prices[i] < buy)
-      {
-        buy = prices[i];
-        sell = std::numeric_limits<int>::min();
-      }
-      // update sell, max
-      else if (prices[i] > sell)
-      {
-        sell = prices[i];
-      }
-    }
-
-    // cout << "buy: " << buy << ", sell: " << sell << endl;
-
-    if (sell > buy)
-      return abs(buy - sell);
-    else
-      return 0;
-  }
-
-
-  // Kadane's Algorithm - Since no one has mentioned about this so far :) (In
-  // case if interviewer twists the input)
-  // andyreadsall
-  //
-  // As with maxSubArray_3(), use the same but is to find max difference, e[i] -
-  // e[i-1] but not sum. 
-
-  int maxProfit_2(vector<int>& prices) 
-  {
-    int current_profit{};
-    int max_profit{};
-
-    for (size_t i = 1; i < prices.size(); ++i)
-    {
-      current_profit = current_profit + (prices[i] - prices[i-1]);
-      current_profit = max(0, current_profit);
-
-      max_profit = max(max_profit, current_profit);
-    }
-
-    return max_profit;
-  }
-
-
-  // Simple java solution, venkim
-  // where keep min, bought value
-
-  int maxProfit_3(vector<int>& prices) 
-  {
-    if (prices.empty())
-      return 0;
-
-    int max_profit{};
-    int bought{prices[0]};
-
-    for (size_t i = 1; i < prices.size(); ++i)
-    {
-      // update profit only when it's bigger
-      max_profit = max(max_profit, prices[i] - bought);
-
-      // update bought which is min 
-      bought = min(bought, prices[i]);
-    }
-
-    return max_profit;
-  }
-
-  // from solution
-  // Approach 2: One Pass
-  // The points of interest are the peaks and valleys in the given graph. We
-  // need to find the largest peak following the smallest valley.
-  //
-  // this is approach that I tried to make it work
-
-  int maxProfit_4(vector<int> &prices)
-  {
-    int max_profit{};
-    int min_price{std::numeric_limits<int>::max()};
-
-    for (auto e : prices)
-    {
-      if (e < min_price)
-        min_price = e;
-      else if (e - min_price > max_profit)
-        max_profit = e - min_price;
-    }
-
-    return max_profit;
-  }
-
-} // namespace
-
-TEST(LeetCode, Easy_121_MaxProfit_1)
-{
-  using namespace leetcode_easy_121;
-
-  {
-    auto func = maxProfit_1;
-    {
-      vector<int> coll{7,1,5,3,6,4};
-      EXPECT_THAT(func(coll), 5);
-    }
-    {
-      vector<int> coll{7,6,4,3,1};
-      EXPECT_THAT(func(coll), 0);
-    }
-    {
-      vector<int> coll{};
-      EXPECT_THAT(func(coll), 0);
-    }
-
-    // fails. does it mean that sell should be always after buy in the input?
-    // say, 2(buy) and 4(sell) but not update buy 1 since there is no more element
-    // to update sell?
-
-    {
-      vector<int> coll{2,4,1};
-      EXPECT_THAT(func(coll), 2);
-    }
-
-    {
-      vector<int> coll{2,1,2,0,1};
-      EXPECT_THAT(func(coll), 1);
-    }
-
-    // // fails
-    // {
-    //   vector<int> coll{3,2,6,5,0,3};
-    //   EXPECT_THAT(func(coll), 4);
-    // }
-  }
-
-  {
-    auto func = maxProfit_2;
-
-    {
-      vector<int> coll{7,1,5,3,6,4};
-      EXPECT_THAT(func(coll), 5);
-    }
-    {
-      vector<int> coll{7,6,4,3,1};
-      EXPECT_THAT(func(coll), 0);
-    }
-    {
-      vector<int> coll{};
-      EXPECT_THAT(func(coll), 0);
-    }
-    {
-      vector<int> coll{2,4,1};
-      EXPECT_THAT(func(coll), 2);
-    }
-    {
-      vector<int> coll{2,1,2,0,1};
-      EXPECT_THAT(func(coll), 1);
-    }
-    {
-      vector<int> coll{3,2,6,5,0,3};
-      EXPECT_THAT(func(coll), 4);
-    }
-  }
-
-  {
-    auto func = maxProfit_3;
-
-    {
-      vector<int> coll{7,1,5,3,6,4};
-      EXPECT_THAT(func(coll), 5);
-    }
-    {
-      vector<int> coll{7,6,4,3,1};
-      EXPECT_THAT(func(coll), 0);
-    }
-    {
-      vector<int> coll{};
-      EXPECT_THAT(func(coll), 0);
-    }
-    {
-      vector<int> coll{2,4,1};
-      EXPECT_THAT(func(coll), 2);
-    }
-    {
-      vector<int> coll{2,1,2,0,1};
-      EXPECT_THAT(func(coll), 1);
-    }
-    {
-      vector<int> coll{3,2,6,5,0,3};
-      EXPECT_THAT(func(coll), 4);
-    }
-  }
-
-  {
-    auto func = maxProfit_4;
-
-    {
-      vector<int> coll{7,1,5,3,6,4};
-      EXPECT_THAT(func(coll), 5);
-    }
-    {
-      vector<int> coll{7,6,4,3,1};
-      EXPECT_THAT(func(coll), 0);
-    }
-    {
-      vector<int> coll{};
-      EXPECT_THAT(func(coll), 0);
-    }
-    {
-      vector<int> coll{2,4,1};
-      EXPECT_THAT(func(coll), 2);
-    }
-    {
-      vector<int> coll{2,1,2,0,1};
-      EXPECT_THAT(func(coll), 1);
-    }
-    {
-      vector<int> coll{3,2,6,5,0,3};
-      EXPECT_THAT(func(coll), 4);
-    }
-  }
-}
-
-
-// ={=========================================================================
 // algo-leetcode-122
 /*
 122. Best Time to Buy and Sell Stock II, Easy
@@ -3280,15 +2993,19 @@ Note: You may not engage in multiple transactions at the same time (i.e., you
 must sell the stock before you buy again).
 
 Example 1:
+
 Input: [7,1,5,3,6,4]
 Output: 7
+
 Explanation: 
 Buy on day 2 (price = 1) and sell on day 3 (price = 5), profit = 5-1 = 4.  Then
 buy on day 4 (price = 3) and sell on day 5 (price = 6), profit = 6-3 = 3.
 
 Example 2:
+
 Input: [1,2,3,4,5]
 Output: 4
+
 Explanation: 
 Buy on day 1 (price = 1) and sell on day 5 (price = 5), profit = 5-1 = 4.  Note
 that you cannot buy on day 1, buy on day 2 and sell them later, as you are
@@ -5241,6 +4958,126 @@ TEST(LeetCode, Easy_171_ExcelSheetColumnNumber)
     EXPECT_THAT(func(28), "AB");
     EXPECT_THAT(func(701), "ZY");
   }
+}
+
+
+// ={=========================================================================
+// algo-leetcode-198
+/*
+198. House Robber, Easy
+
+You are a professional robber planning to rob houses along a street. Each house
+has a certain amount of money stashed, the only constraint stopping you from
+robbing each of them is that adjacent houses have security system connected and
+it will automatically contact the police if two adjacent houses were broken into
+on the same night.
+
+Given a list of non-negative integers representing the amount of money of each
+house, determine the maximum amount of money you can rob tonight without
+alerting the police.
+
+Example 1:
+
+Input: [1,2,3,1]
+Output: 4
+
+Explanation: 
+Rob house 1 (money = 1) and then rob house 3 (money = 3).  Total amount you can
+rob = 1 + 3 = 4.
+
+Example 2:
+
+Input: [2,7,9,3,1]
+Output: 12
+
+Explanation: 
+Rob house 1 (money = 2), rob house 3 (money = 9) and rob house 5 (money = 1).
+Total amount you can rob = 2 + 9 + 1 = 12.
+
+*/
+
+namespace leetcode_easy_198
+{
+  int rob_1(vector<int>& nums) 
+  {
+    int sum{};
+    int local_sum{std::numeric_limits<int>::min()};
+
+    for (size_t i = 0; i < nums.size(); ++i)
+    {
+      local_sum = 0;
+
+      for (size_t j = i; j < nums.size(); j += 2)
+      {
+        local_sum += nums[j];
+      }
+
+      sum = max(sum, local_sum);
+    }
+
+    return sum;
+  }
+
+  int rob_2(vector<int>& nums) 
+  {
+    int sum{};
+    int local_sum{std::numeric_limits<int>::min()};
+
+    for (size_t i = 0; i < nums.size(); ++i)
+    {
+      local_sum = 0;
+
+      for (size_t j = i; j < nums.size();)
+      {
+        local_sum += nums[j];
+
+        if (j == 0)
+          j += 2;
+        else
+          j += 1;
+      }
+
+      sum = max(sum, local_sum);
+    }
+
+    return sum;
+  }
+} // namespace
+
+TEST(LeetCode, Easy_198_Rob)
+{
+  using namespace leetcode_easy_198;
+
+  {
+    auto func = rob_1;
+    vector<int> coll{1,2,3,1};
+    EXPECT_THAT(func(coll), 4);
+  }
+  {
+    auto func = rob_1;
+    vector<int> coll{2,7,9,3,1};
+    EXPECT_THAT(func(coll), 12);
+  }
+
+  // falis
+  {
+    auto func = rob_1;
+    vector<int> coll{2,1,1,2};
+    EXPECT_THAT(func(coll), Not(4));
+  }
+
+  {
+    auto func = rob_2;
+    vector<int> coll{2,1,1,2};
+    EXPECT_THAT(func(coll), 4);
+  }
+
+  // // fails
+  // {
+  //   auto func = rob_2;
+  //   vector<int> coll{1,2,3,1};
+  //   EXPECT_THAT(func(coll), Not(4));
+  // }
 }
 
 
