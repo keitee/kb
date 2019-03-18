@@ -1235,147 +1235,6 @@ TEST(LeetCode, Easy_020_IsPalindromString_0)
 
 
 // ={=========================================================================
-// algo-leetcode-4
-/*
-13. Roman to Integer, Easy
-
-Roman numerals are represented by seven different symbols: I, V, X, L, C, D and M.
-
-Symbol       Value
-I             1
-V             5
-X             10
-L             50
-C             100
-D             500
-M             1000
-
-For example, two is written as II in Roman numeral, just two one's added
-together. Twelve is written as, XII, which is simply X + II. The number twenty
-seven is written as XXVII, which is XX + V + II.
-
-Roman numerals are usually written largest to smallest from left to right.
-However, the numeral for four is not IIII. Instead, the number four is written
-as IV. Because the one is before the five we subtract it making four. The same
-principle applies to the number nine, which is written as IX. There are six
-instances where subtraction is used:
-
-I can be placed before V (5) and X (10) to make 4 and 9. 
-X can be placed before L (50) and C (100) to make 40 and 90. 
-C can be placed before D (500) and M (1000) to make 400 and 900.
-
-Given a roman numeral, convert it to an integer. Input is guaranteed to be
-within the range from 1 to 3999.
-
-see algo-roman for integer to roman conversion which is rated as:
-
-12. Integer to Roman, Medium
-
-*/
-
-namespace leetcode_easy_004
-{
-  // Runtime: 52 ms, faster than 97.00% of C++ online submissions for Roman to
-  // Integer.
-  //
-  // Memory Usage: 30.7 MB, less than 96.08% of C++ online submissions for Roman
-  // to Integer.
-
-  int convert_roman_to_integer(std::string input)
-  {
-    // do not use this from since "M" is deduced to "const char*" but want to
-    // use it as string so that cah use size() on it. Or can add size member in
-    // the table.
-    //
-    // const auto table = {
-    //   make_pair("M", 1000),
-    //   make_pair("CM", 900)
-    // };
-
-    // for each char of the table, see if there is matched substr using running
-    // start position and string size. contine doing so until there is no match
-    // and if there is no match, move on to the next char.
-
-    const initializer_list<pair<std::string, int>> table = {
-      {"M", 1000},
-      {"CM", 900},
-      {"D", 500},
-      {"CD", 400},
-      {"C", 100},
-      {"XC", 90},
-      {"L", 50},
-      {"XL", 40},
-      {"X", 10},
-      {"IX", 9},
-      {"V", 5},
-      {"IV", 4},
-      {"I", 1}
-    };
-
-    size_t run{};
-    int result{};
-
-    for (const auto& e : table)
-    {
-      while ((run < input.size()) && (input.substr(run, e.first.size()) == e.first))
-      {
-        // cout << "first: " << e.first << endl;
-        result += e.second;
-        run += e.first.size();
-      }
-    }
-    // cout << "result: " << result << endl;
-
-    return result;
-  }
-} // namespace
-
-
-TEST(LeetCode, Easy_004_RomanToInteger)
-{
-  using namespace leetcode_easy_004;
-  const auto func = convert_roman_to_integer;
-
-  EXPECT_THAT(func("I"), 1);
-  EXPECT_THAT(func("II"), 2);
-  EXPECT_THAT(func("III"), 3);
-  EXPECT_THAT(func("IV"), 4);
-  EXPECT_THAT(func("V"), 5);
-  EXPECT_THAT(func("VI"), 6);
-  EXPECT_THAT(func("VII"), 7);
-  EXPECT_THAT(func("VIII"), 8);
-  EXPECT_THAT(func("IX"), 9);
-  EXPECT_THAT(func("X"), 10);
-  EXPECT_THAT(func("XI"), 11);
-  EXPECT_THAT(func("XII"), 12);
-  EXPECT_THAT(func("XIII"), 13);
-  EXPECT_THAT(func("XVI"), 16);
-  EXPECT_THAT(func("XVII"), 17);
-  EXPECT_THAT(func("XVIII"), 18);
-  EXPECT_THAT(func("XX"), 20);
-  EXPECT_THAT(func("XXIII"), 23);
-  EXPECT_THAT(func("XLI"), 41);
-  EXPECT_THAT(func("XLV"), 45);
-  EXPECT_THAT(func("L"), 50);
-  EXPECT_THAT(func("LXXX"), 80);
-  EXPECT_THAT(func("XCI"), 91);
-  EXPECT_THAT(func("XCV"), 95);
-  EXPECT_THAT(func("C"), 100);
-  EXPECT_THAT(func("CXXII"), 122);
-  EXPECT_THAT(func("CLII"), 152);
-  EXPECT_THAT(func("CXCVI"), 196);
-  EXPECT_THAT(func("CCXLVII"), 247);
-  EXPECT_THAT(func("CCLXXXVIII"), 288);
-  EXPECT_THAT(func("CCXCVIII"), 298);
-  EXPECT_THAT(func("D"), 500);
-  EXPECT_THAT(func("M"), 1000);
-  EXPECT_THAT(func("MDXIII"), 1513);
-  EXPECT_THAT(func("MMCMXCIX"), 2999);
-  EXPECT_THAT(func("MMMCDXLVII"), 3447);
-}
-
-
-// ={=========================================================================
 // algo-leetcode-5
 /*
 14. Longest Common Prefix, Easy
@@ -5042,6 +4901,29 @@ namespace leetcode_easy_198
 
     return sum;
   }
+
+  // C 1ms, O(1)space,  very simple solution, Jasonly
+
+  int rob_3(vector<int>& nums) 
+  {
+    int a = 0;
+    int b = 0;
+
+    for (size_t i = 0; i < nums.size(); i++)
+    {
+      if (i % 2 == 0)
+      {
+        a = max(a + nums[i], b);
+      }
+      else
+      {
+        b = max(a, b + nums[i]);
+      }
+    }
+
+    return max(a, b);
+  }
+
 } // namespace
 
 TEST(LeetCode, Easy_198_Rob)
@@ -5050,34 +4932,127 @@ TEST(LeetCode, Easy_198_Rob)
 
   {
     auto func = rob_1;
-    vector<int> coll{1,2,3,1};
-    EXPECT_THAT(func(coll), 4);
-  }
-  {
-    auto func = rob_1;
-    vector<int> coll{2,7,9,3,1};
-    EXPECT_THAT(func(coll), 12);
-  }
 
-  // falis
-  {
-    auto func = rob_1;
-    vector<int> coll{2,1,1,2};
-    EXPECT_THAT(func(coll), Not(4));
-  }
+    {
+      vector<int> coll{1,2,3,1};
+      EXPECT_THAT(func(coll), 4);
+    }
+    {
+      vector<int> coll{2,7,9,3,1};
+      EXPECT_THAT(func(coll), 12);
+    }
 
+    // falis as expects 4
+    {
+      vector<int> coll{2,1,1,2};
+      EXPECT_THAT(func(coll), 3);
+    }
+  }
   {
     auto func = rob_2;
-    vector<int> coll{2,1,1,2};
-    EXPECT_THAT(func(coll), 4);
+
+    // fails as expects 4
+    {
+      vector<int> coll{2,1,1,2};
+      EXPECT_THAT(func(coll), 5);
+    }
+
+    // fails as expects 4
+    {
+      vector<int> coll{1,2,3,1};
+      EXPECT_THAT(func(coll), 6);
+    }
   }
 
-  // // fails
-  // {
-  //   auto func = rob_2;
-  //   vector<int> coll{1,2,3,1};
-  //   EXPECT_THAT(func(coll), Not(4));
-  // }
+  {
+    auto func = rob_3;
+
+    {
+      vector<int> coll{1,2,3,1};
+      EXPECT_THAT(func(coll), 4);
+    }
+    {
+      vector<int> coll{2,7,9,3,1};
+      EXPECT_THAT(func(coll), 12);
+    }
+    {
+      vector<int> coll{2,1,1,2};
+      EXPECT_THAT(func(coll), 4);
+    }
+    {
+      vector<int> coll{1,2,3,1};
+      EXPECT_THAT(func(coll), 4);
+    }
+    {
+      vector<int> coll{2,7,9,3,1,4};
+      EXPECT_THAT(func(coll), 15);
+    }
+  }
+}
+
+
+// ={=========================================================================
+// algo-xxx
+
+namespace algo_xxx
+{
+  std::string toRoman(int input)
+  {
+    std::string result{};
+
+    auto table{
+      make_pair(10, "X"),
+      make_pair(9, "IX"),
+      make_pair(5, "V"),
+      make_pair(4, "IV"),
+      make_pair(1, "I")
+    };
+
+    for (auto const &e : table)
+    {
+      while (input >= e.first)
+      {
+        input -= e.first;
+        result += e.second;
+      }
+    }
+
+    return result;
+  }
+
+  int toInteger(std::string input)
+  {
+    int result{};
+    int start{};
+
+    auto table{
+      make_pair(string("X"), 10),
+      make_pair(string("IX"), 9),
+      make_pair(string("V"), 5),
+      make_pair(string("IV"), 4),
+      make_pair(string("I"), 1)
+    };
+
+    for (auto const &e : table)
+    {
+      while (input.find(e.first, start) == start)
+      {
+        start += e.first.size();
+        result += e.second;
+      }
+    }
+
+    return result;
+  }
+
+} // namespace
+
+TEST(X, XX)
+{
+  using namespace algo_xxx;
+
+  EXPECT_THAT(toRoman(13), "XIII");
+  EXPECT_THAT(toInteger("XIII"), 13);
 }
 
 

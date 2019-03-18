@@ -1439,8 +1439,8 @@ class RomanConvert
 };
 
 
-TEST(AlgoRomanConvert, ConvertToRomansFirstAttempt) {
-
+TEST(AlgoRoman, ConvertToRomans_1) 
+{
   RomanConvert converter;
 
   EXPECT_THAT(converter.convert(1), Eq("I"));
@@ -1527,7 +1527,7 @@ string convert_to_roman(unsigned int arabic)
   return convert;
 }
 
-TEST(AlgoRomanConvert, ConvertToRomansTDD) 
+TEST(AlgoRoman, ConvertToRomansTDD) 
 {
   EXPECT_THAT(convert_to_roman(1), Eq("I"));
   EXPECT_THAT(convert_to_roman(2), Eq("II"));
@@ -1636,7 +1636,7 @@ const string roman_numeral_1011(unsigned int value)
   return result;
 }
 
-TEST(AlgoRomanConvert, 0711) 
+TEST(AlgoRoman, 0711) 
 {
   EXPECT_THAT(roman_numeral_0711(1), Eq("I"));
   EXPECT_THAT(roman_numeral_0711(2), Eq("II"));
@@ -1676,45 +1676,223 @@ TEST(AlgoRomanConvert, 0711)
   EXPECT_THAT(roman_numeral_0711(3447), Eq("MMMCDXLVII"));
 }
 
-TEST(AlgoRomanConvert, 1011) 
+// algo-leetcode-4
+/*
+13. Roman to Integer, Easy
+
+Roman numerals are represented by seven different symbols: I, V, X, L, C, D and M.
+
+Symbol       Value
+I             1
+V             5
+X             10
+L             50
+C             100
+D             500
+M             1000
+
+For example, two is written as II in Roman numeral, just two one's added
+together. Twelve is written as, XII, which is simply X + II. The number twenty
+seven is written as XXVII, which is XX + V + II.
+
+Roman numerals are usually written largest to smallest from left to right.
+However, the numeral for four is not IIII. Instead, the number four is written
+as IV. Because the one is before the five we subtract it making four. The same
+principle applies to the number nine, which is written as IX. There are six
+instances where subtraction is used:
+
+I can be placed before V (5) and X (10) to make 4 and 9. 
+X can be placed before L (50) and C (100) to make 40 and 90. 
+C can be placed before D (500) and M (1000) to make 400 and 900.
+
+Given a roman numeral, convert it to an integer. Input is guaranteed to be
+within the range from 1 to 3999.
+
+see algo-roman for integer to roman conversion which is rated as:
+
+12. Integer to Roman, Medium
+
+*/
+
+namespace algo_roman
 {
-  EXPECT_THAT(roman_numeral_1011(1), Eq("I"));
-  EXPECT_THAT(roman_numeral_1011(2), Eq("II"));
-  EXPECT_THAT(roman_numeral_1011(3), Eq("III"));
-  EXPECT_THAT(roman_numeral_1011(4), Eq("IV"));
-  EXPECT_THAT(roman_numeral_1011(5), Eq("V"));
-  EXPECT_THAT(roman_numeral_1011(6), Eq("VI"));
-  EXPECT_THAT(roman_numeral_1011(7), Eq("VII"));
-  EXPECT_THAT(roman_numeral_1011(8), Eq("VIII"));
-  EXPECT_THAT(roman_numeral_1011(9), Eq("IX"));
-  EXPECT_THAT(roman_numeral_1011(10), Eq("X"));
-  EXPECT_THAT(roman_numeral_1011(11), Eq("XI"));
-  EXPECT_THAT(roman_numeral_1011(12), Eq("XII"));
-  EXPECT_THAT(roman_numeral_1011(13), Eq("XIII"));
-  EXPECT_THAT(roman_numeral_1011(16), Eq("XVI"));
-  EXPECT_THAT(roman_numeral_1011(17), Eq("XVII"));
-  EXPECT_THAT(roman_numeral_1011(18), Eq("XVIII"));
-  EXPECT_THAT(roman_numeral_1011(20), Eq("XX"));
-  EXPECT_THAT(roman_numeral_1011(23), Eq("XXIII"));
-  EXPECT_THAT(roman_numeral_1011(41), Eq("XLI"));
-  EXPECT_THAT(roman_numeral_1011(45), Eq("XLV"));
-  EXPECT_THAT(roman_numeral_1011(50), Eq("L"));
-  EXPECT_THAT(roman_numeral_1011(80), Eq("LXXX"));
-  EXPECT_THAT(roman_numeral_1011(91), Eq("XCI"));
-  EXPECT_THAT(roman_numeral_1011(95), Eq("XCV"));
-  EXPECT_THAT(roman_numeral_1011(100), Eq("C"));
-  EXPECT_THAT(roman_numeral_1011(122), Eq("CXXII"));
-  EXPECT_THAT(roman_numeral_1011(152), Eq("CLII"));
-  EXPECT_THAT(roman_numeral_1011(196), Eq("CXCVI"));
-  EXPECT_THAT(roman_numeral_1011(247), Eq("CCXLVII"));
-  EXPECT_THAT(roman_numeral_1011(288), Eq("CCLXXXVIII"));
-  EXPECT_THAT(roman_numeral_1011(298), Eq("CCXCVIII"));
-  EXPECT_THAT(roman_numeral_1011(500), Eq("D"));
-  EXPECT_THAT(roman_numeral_1011(1000), Eq("M"));
-  EXPECT_THAT(roman_numeral_1011(1513), Eq("MDXIII"));
-  EXPECT_THAT(roman_numeral_1011(2999), Eq("MMCMXCIX"));
-  EXPECT_THAT(roman_numeral_1011(3447), Eq("MMMCDXLVII"));
+  // Runtime: 52 ms, faster than 97.00% of C++ online submissions for Roman to
+  // Integer.
+  //
+  // Memory Usage: 30.7 MB, less than 96.08% of C++ online submissions for Roman
+  // to Integer.
+
+  int toInteger_1(std::string input)
+  {
+    // do not use this from since "M" is deduced to "const char*" but want to
+    // use it as string so that cah use size() on it. Or can add size member in
+    // the table.
+    //
+    // const auto table = {
+    //   make_pair("M", 1000),
+    //   make_pair("CM", 900)
+    // };
+
+    // for each char of the table, see if there is matched substr using running
+    // start position and string size. contine doing so until there is no match
+    // and if there is no match, move on to the next char.
+
+    const initializer_list<pair<std::string, int>> table = {
+      {"M", 1000},
+      {"CM", 900},
+      {"D", 500},
+      {"CD", 400},
+      {"C", 100},
+      {"XC", 90},
+      {"L", 50},
+      {"XL", 40},
+      {"X", 10},
+      {"IX", 9},
+      {"V", 5},
+      {"IV", 4},
+      {"I", 1}
+    };
+
+    size_t run{};
+    int result{};
+
+    for (const auto& e : table)
+    {
+      while ((run < input.size()) && (input.substr(run, e.first.size()) == e.first))
+      {
+        // cout << "first: " << e.first << endl;
+        result += e.second;
+        run += e.first.size();
+      }
+    }
+    // cout << "result: " << result << endl;
+
+    return result;
+  }
+
+  int toInteger_2(std::string input)
+  {
+    const auto table{
+      make_pair(string("M"), 1000),
+      make_pair(string("CM"), 900),
+      make_pair(string("D"), 500),
+      make_pair(string("CD"), 400),
+      make_pair(string("C"), 100),
+      make_pair(string("XC"), 90),
+      make_pair(string("L"), 50),
+      make_pair(string("XL"), 40),
+      make_pair(string("X"), 10),
+      make_pair(string("IX"), 9),
+      make_pair(string("V"), 5),
+      make_pair(string("IV"), 4),
+      make_pair(string("I"), 1)
+    };
+
+    int result{};
+    size_t start{};
+
+    for (auto const &e : table)
+    {
+      while (input.find(e.first, start) == start)
+      {
+        start += e.first.size();
+        result += e.second;
+      }
+    }
+
+    return result;
+  }
+} // namespace
+
+
+TEST(AlgoRoman, ToInteger)
+{
+  using namespace algo_roman;
+
+  {
+    const auto func = toInteger_1;
+
+    EXPECT_THAT(func("I"), 1);
+    EXPECT_THAT(func("II"), 2);
+    EXPECT_THAT(func("III"), 3);
+    EXPECT_THAT(func("IV"), 4);
+    EXPECT_THAT(func("V"), 5);
+    EXPECT_THAT(func("VI"), 6);
+    EXPECT_THAT(func("VII"), 7);
+    EXPECT_THAT(func("VIII"), 8);
+    EXPECT_THAT(func("IX"), 9);
+    EXPECT_THAT(func("X"), 10);
+    EXPECT_THAT(func("XI"), 11);
+    EXPECT_THAT(func("XII"), 12);
+    EXPECT_THAT(func("XIII"), 13);
+    EXPECT_THAT(func("XVI"), 16);
+    EXPECT_THAT(func("XVII"), 17);
+    EXPECT_THAT(func("XVIII"), 18);
+    EXPECT_THAT(func("XX"), 20);
+    EXPECT_THAT(func("XXIII"), 23);
+    EXPECT_THAT(func("XLI"), 41);
+    EXPECT_THAT(func("XLV"), 45);
+    EXPECT_THAT(func("L"), 50);
+    EXPECT_THAT(func("LXXX"), 80);
+    EXPECT_THAT(func("XCI"), 91);
+    EXPECT_THAT(func("XCV"), 95);
+    EXPECT_THAT(func("C"), 100);
+    EXPECT_THAT(func("CXXII"), 122);
+    EXPECT_THAT(func("CLII"), 152);
+    EXPECT_THAT(func("CXCVI"), 196);
+    EXPECT_THAT(func("CCXLVII"), 247);
+    EXPECT_THAT(func("CCLXXXVIII"), 288);
+    EXPECT_THAT(func("CCXCVIII"), 298);
+    EXPECT_THAT(func("D"), 500);
+    EXPECT_THAT(func("M"), 1000);
+    EXPECT_THAT(func("MDXIII"), 1513);
+    EXPECT_THAT(func("MMCMXCIX"), 2999);
+    EXPECT_THAT(func("MMMCDXLVII"), 3447);
+  }
+
+  {
+    const auto func = toInteger_2;
+
+    EXPECT_THAT(func("I"), 1);
+    EXPECT_THAT(func("II"), 2);
+    EXPECT_THAT(func("III"), 3);
+    EXPECT_THAT(func("IV"), 4);
+    EXPECT_THAT(func("V"), 5);
+    EXPECT_THAT(func("VI"), 6);
+    EXPECT_THAT(func("VII"), 7);
+    EXPECT_THAT(func("VIII"), 8);
+    EXPECT_THAT(func("IX"), 9);
+    EXPECT_THAT(func("X"), 10);
+    EXPECT_THAT(func("XI"), 11);
+    EXPECT_THAT(func("XII"), 12);
+    EXPECT_THAT(func("XIII"), 13);
+    EXPECT_THAT(func("XVI"), 16);
+    EXPECT_THAT(func("XVII"), 17);
+    EXPECT_THAT(func("XVIII"), 18);
+    EXPECT_THAT(func("XX"), 20);
+    EXPECT_THAT(func("XXIII"), 23);
+    EXPECT_THAT(func("XLI"), 41);
+    EXPECT_THAT(func("XLV"), 45);
+    EXPECT_THAT(func("L"), 50);
+    EXPECT_THAT(func("LXXX"), 80);
+    EXPECT_THAT(func("XCI"), 91);
+    EXPECT_THAT(func("XCV"), 95);
+    EXPECT_THAT(func("C"), 100);
+    EXPECT_THAT(func("CXXII"), 122);
+    EXPECT_THAT(func("CLII"), 152);
+    EXPECT_THAT(func("CXCVI"), 196);
+    EXPECT_THAT(func("CCXLVII"), 247);
+    EXPECT_THAT(func("CCLXXXVIII"), 288);
+    EXPECT_THAT(func("CCXCVIII"), 298);
+    EXPECT_THAT(func("D"), 500);
+    EXPECT_THAT(func("M"), 1000);
+    EXPECT_THAT(func("MDXIII"), 1513);
+    EXPECT_THAT(func("MMCMXCIX"), 2999);
+    EXPECT_THAT(func("MMMCDXLVII"), 3447);
+  }
 }
+
+
 
 
 // ={=========================================================================
