@@ -5047,6 +5047,204 @@ TEST(LeetCode, Easy_169_Occurance)
 
 
 // ={=========================================================================
+// algo-leetcode-191
+/*
+171. Excel Sheet Column Number, Easy
+
+Given a column title as appear in an Excel sheet, return its corresponding
+column number.
+
+For example:
+
+    A -> 1
+    B -> 2
+    C -> 3
+    ...
+    Z -> 26
+    AA -> 27
+    AB -> 28 
+    ...
+
+Example 1:
+Input: "A"
+Output: 1
+
+Example 2:
+Input: "AB"
+Output: 28
+
+Example 3:
+Input: "ZY"
+Output: 701
+
+
+168. Excel Sheet Column Title, Easy
+
+Given a positive integer, return its corresponding column title as appear in an
+Excel sheet.
+
+For example:
+
+    1 -> A
+    2 -> B
+    3 -> C
+    ...
+    26 -> Z
+    27 -> AA
+    28 -> AB 
+    ...
+
+*/
+
+namespace leetcode_easy_171
+{
+  // uses *algo-atoi* when base 26
+  //
+  // A  B  C  ... Z
+  // 1  2  3      26
+  //
+  // AA AB AC ... AZ
+  // 27 28 29 ... 52 (26 + 26)
+  //
+  // BA
+  // 53
+  //
+  // assumes that input are uppercase
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Excel
+  // Sheet Column Number.
+  //
+  // Memory Usage: 8.2 MB, less than 27.21% of C++ online submissions for Excel
+  // Sheet Column Number.
+
+  int titleToNumber_1(string s) 
+  {
+    int result{};
+
+    for (auto const e : s)
+    {
+      if (!isalpha(e))
+        return 0;
+
+      result = result*26 + (e - 'A' + 1);
+    }
+
+    return result;
+  }
+
+  // base 10:
+  // 
+  // 0  1   2   3   4   5   6   7   8   9
+  // 10 11  12  13  14  15  16  17  18  19
+  // ...
+  //
+  // 1  2   3   4   5   6   ... 25  26
+  // A  B   C   D   E   F       Y   Z
+  // % 26
+  // 1  1   3   4   5   6   ... 25  0
+  //
+  // 27   28    29                  52
+  // AA   AB    AC                  AZ
+  // 1/1  1/2   1/3                 2/0
+  //
+  // so special handing when % is 0.
+  //
+  // Runtime: 4 ms, faster than 100.00% of C++ online submissions for Excel
+  // Sheet Column Title.
+  //
+  // Memory Usage: 8 MB, less than 84.11% of C++ online submissions for Excel
+  // Sheet Column Title.
+
+  string convertToTitle_1(int n)
+  {
+    string result{};
+    char ch{};
+    int value{};
+
+    while (n)
+    {
+      value = (n % 26);
+      n = value == 0 ? (n / 26) - 1 : n / 26;
+      ch = value == 0 ? 'Z' : 'A' + value - 1;
+
+      // not use algo-reverse
+      // result += ch;
+      result.insert(result.begin(), 1, ch);
+    }
+
+    return result; 
+  }
+
+  // remove special handing by using "--n" and make it same as algo-itoa
+  // from discussion:
+  // Efficient C++ solution (easily transposable) by daedric
+
+  string convertToTitle_2(int n)
+  {
+    string result{};
+    char ch{};
+
+    while (n)
+    {
+      --n;
+      ch = 'A' + n % 26;
+      n /= 26; 
+
+      // not use algo-reverse
+      // result += ch;
+      result.insert(result.begin(), 1, ch);
+    }
+
+    return result; 
+  }
+
+  // algo-recursive 
+  // My 1 lines code in Java, C++, and Python, xcv58
+
+  string convertToTitle_3(int n)
+  {
+    // update: because the behavior of different compilers, the safe version should be:
+    return n == 0 ? "" : convertToTitle_3((n-1)/ 26) + (char) ((n-1) % 26 + 'A');
+  }
+
+} // namespace
+
+TEST(LeetCode, Easy_171_ExcelSheetColumnNumber)
+{
+  using namespace leetcode_easy_171;
+
+  {
+    auto func = titleToNumber_1;
+
+    EXPECT_THAT(func("A"), 1);
+    EXPECT_THAT(func("AB"), 28);
+    EXPECT_THAT(func("ZY"), 701);
+  }
+  {
+    auto func = convertToTitle_1;
+
+    EXPECT_THAT(func(1), "A");
+    EXPECT_THAT(func(28), "AB");
+    EXPECT_THAT(func(701), "ZY");
+  }
+  {
+    auto func = convertToTitle_2;
+
+    EXPECT_THAT(func(1), "A");
+    EXPECT_THAT(func(28), "AB");
+    EXPECT_THAT(func(701), "ZY");
+  }
+  {
+    auto func = convertToTitle_3;
+
+    EXPECT_THAT(func(1), "A");
+    EXPECT_THAT(func(28), "AB");
+    EXPECT_THAT(func(701), "ZY");
+  }
+}
+
+
+// ={=========================================================================
 // algo-list
 
 // single
