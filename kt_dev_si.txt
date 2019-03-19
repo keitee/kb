@@ -10,7 +10,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_si_0001| si-pi-extract-image
 |kt_dev_si_0001| si-pi-snug-mac
 |kt_dev_si_0001| si-pi-sh
-|kt_dev_si_0001| si-pi-signed image-version
+|kt_dev_si_0001| si-pi-signed image-version comp-boot
 |kt_dev_si_0001| si-pi-git-logs
 |kt_dev_si_0001| si-pi-deploy
 |kt_dev_si_0001| si-pi-py
@@ -16970,7 +16970,7 @@ RMF_CONFLICT_STATUS_FAILURE   (0x7802001)
 
 RMF_ALLOCATE_REQUEST_STATUS_SUCCESS(1)
 
-<rmf-request>
+<rmf-request> rmf-permission
 RMF_ALLOCATE_PERMISSION_NONE    (0xf0000000U) /*!< @brief `no permission` */	
 RMF_ALLOCATE_PERMISSION_STORE   (0x10000004U) /*!< @brief Store recording on disk */	
 RMF_ALLOCATE_PERMISSION_RECORD  (0x10000008U) /*!< @brief Recording to disk */	
@@ -16982,8 +16982,10 @@ RMF_ALLOCATE_PERMISSION_EXTEND  (0x10001000U) /*!< @brief Extend quota storage  
 
 
 note: result and status returns okay but released permission is not.
-!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > job=0x20107b0(0)[R] request=0x10000008 released=`0xf0000000` change request if fails. 
-!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > result=1 " " status: OK[0x07802000] 
+!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1012 > 
+  job=0x20107b0(0)[R] request=0x10000008 released=`0xf0000000` change request if fails. 
+!MIL    -RMF < T:VRM_SRV M:rmf_allocate.c F:RMF_ALLOCATE_ControlPermissions L:1022 > 
+  result=1 " " status: OK[0x07802000] 
 
 
 
@@ -17414,7 +17416,7 @@ Units = sectors of 1 * 512 = 512 bytes
 /dev/sda1              64  3907007999  1953503968   1 FAT12
 
 
-<disk-quotas>
+<comp-disk-quotas>
 
 WP 41
 * User Quota: for Viewer-initiated recordings
@@ -17443,26 +17445,66 @@ M:quota_resource.c F:QuotasOnDevice_SetSizes L:04457 > quota recycle: size: 0,0(
 1.4 TB
 
 
+
+PRVFUNC SYSTEM_STATUS QUOTA_RESOURCE_ActionsAfterRestoration(void)
+{
+	SYSTEM_STATUS			stat = RMF_STATUS_FAILURE;
+	RMF_QUOTA_Instance			temp_quota = NULL;
+	xint64_t					mb;
+	xint64_t					temp_max_size;
+	xint64_t					temp_staticUsedSize;
+	uint32_t					i = 0U;
+
+	/* 4. Announce about the quotas statuses after boot up. */
+	mb = i32_to_xint64_t(0, (1024U*1024U));
+	for (i=0u; i < MAX_QUOTAS ; i++)
+	{
+		if (quotas[i] != NULL)
+		{
+			temp_quota = quotas[i];
+			temp_max_size = xint64_t_div(&(temp_quota->creationInfo.max_size), &mb) /* size in MB */;
+			temp_staticUsedSize = xint64_t_div(&(temp_quota->staticUsedSize), &mb) /* size in MB */;
+
 			DIAG_PMON_DISK_QUOTA_INITIAL(gRmfSegmentId,
 					0U /* standart parameter */,
 					temp_quota->creationInfo.name,
 					xint64_t_low(&temp_max_size),
-					xint64_t_low(&temp_staticUsedSize) );
+					xint64_t_low(&temp_staticUsedSize));
+			/* Printing only the low 32 bits, as assuming that disk size in MB will fit into 32 bits */
+		}
+	}
+}
 
-NDS: ^[2017:12:03 00:55:12]0946685068.993551 !MIL    -RMF          		< p:0x000001e5 P:MW t:0x01d72520 T:VRM_SRV M:quota_resource.c F:QUOTA_RESOURCE_ActionsAfterRestoration L:1258 > 
+
+NDS: ^[2017:12:03 00:55:12]0946685068.993551 !MIL    -RMF          		< p:0x000001e5 P:MW t:0x01d72520 T:VRM_SRV M:quota_resource.c 
+       F:QUOTA_RESOURCE_ActionsAfterRestoration L:1258 > 
   @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,user,d-quota-max-MB=,233614,d-quota-cur-MB=,26878 
   @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,system,d-quota-max-MB=,195510,d-quota-cur-MB=,194981 
   @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,NDS_Dynamic,d-quota-max-MB=,38146,d-quota-cur-MB=,15462 
   @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,recycle,d-quota-max-MB=,0,d-quota-cur-MB=,196440 
 
+// user 228 GB
+>>> 233614/1024
+228
 
-<pcat-item-txt> note: so do not show quota size and free space.
+!MIL    -RMF          		< p:0x000008f0 P:MW t:0x01f65520 T:VRM_SRV M:quota_resource.c F:QUOTA_RESOURCE_ActionsAfterRestoration L:1256 > 
+  @@PMON@@,scenario,d-asset,d-quota-disk-init,0,quota-dsk-name=,user,d-quota-max-MB=,233614,d-quota-cur-MB=,161889 
+
+// free space
+>>> (233614-161889)/1024
+70
+
+<pcat-item-txt> 
+note: so do not show quota size and free space. 
+this and df.log are all 0 when do system reset.
 
 // Adds up space used for each recording with `booking_source` catagory.
+
 SPACE USED (Gb): USER :6.90 PVOD :186.12 SLINK:208.91 DYNAM:1.49 
 
 // Adds up space used for each recording with `booking_disk_quota_name`
 // catagory.
+
 Disk usage in quota "NDS_Dynamic": 1.49 Gb
 Disk usage in quota "system": 186.12 Gb
 Disk usage in quota "user": 215.81 Gb
@@ -17566,7 +17608,7 @@ PRVFUNC SYSTEM_STATUS QuotasOnDevice_SetSizes(SYSTEMCOMMON_DEVICE_HANDLE device_
 
 
 ={============================================================================
-|kt_dev_si_0001| comp-rmf-conclict-disk-full
+|kt_dev_si_0001| comp-rmf-conclict-disk-full comp-disk-full
 
 https://www.stb.bskyb.com/jira/browse/SI-10688
 
@@ -17574,7 +17616,76 @@ Here two problem:
   * live pause unavailable when disk is full
   * recording from review buffer failed when disk is full
 
+// when shows
+
+-RMF          		< p:0x000008f0 P:MW t:0x01d80520 T:RMF_Server M:quota_booking_conflict.c F:QuotaBookConf_GetConflictHandle L:300 > Quota booking conflict found for job 0x2010151 
+-EPG_DLG      		< p:0x000008f1 P:APP t:0x2ef3f520 T:no name M:DialogManager F:showDialog L:1207 > T:CEE-J EventQueue Reader 0:Showing dialog 1124
+
+,quota-dsk-name=,user,d-quota-max-MB=,233614,d-quota-cur-MB=,161889 
+,quota-dsk-name=,system,d-quota-max-MB=,195510,d-quota-cur-MB=,103186 
+,quota-dsk-name=,NDS_Dynamic,d-quota-max-MB=,38146,d-quota-cur-MB=,1157 
+,quota-dsk-name=,recycle,d-quota-max-MB=,0,d-quota-cur-MB=,2771 
+
+>>> (233614-161889)/1024
+70
+
+>>> (233614+195510+38146)/1024
+456
+
+>>> (161889+103186+1157+2771)/1024
+262
+
+// df.log
+/dev/sda1            478602880 354205536 124397344  74% /tmp/dummydisk/BLOGDIR
+
+
+// when shows full in the planner
+
+0,quota-dsk-name=,user,d-quota-max-MB=,233614,d-quota-cur-MB=,45207
+0,quota-dsk-name=,system,d-quota-max-MB=,195510,d-quota-cur-MB=,182810
+0,quota-dsk-name=,NDS_Dynamic,d-quota-max-MB=,38146,d-quota-cur-MB=,32207
+0,quota-dsk-name=,recycle,d-quota-max-MB=,0,d-quota-cur-MB=,0
+
+>>> (45207+182810+32207)/1024
+254
+
+// df.log
+/dev/sda1            478602880 381355744  97247136  80% /tmp/dummydisk/BLOGDIR
+
 <live-pause>
+
+	int DISKSPACE_BOOKING_DISK_FAIL_ID                                   = 1124;
+
+		register(dialog(IDialogID.DISKSPACE_BOOKING_DISK_FAIL_ID).type(DialogType.FYI)
+				.with(textContent().title(DialogTitle.FYI)
+						.instruction(BACKUP_TO_CANCEL)
+						.textStrings("There is currently insufficient disk space to make this recording\nTo free up space on your Sky+ HD box, delete an item from your Planner or archive your Buy & Keep purchases"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.DISK_SPACE)
+						.secondaryPriority(ISecondaryPriority.DISK_SPACE)
+						.screenLayer(IScreenLayer.MENU_DIALOG)
+						.modal(true)));
+
+
+	int DISKSPACE_IMMINENT_DISK_ID                                       = 1125;
+
+		register(dialog(IDialogID.DISKSPACE_IMMINENT_DISK_ID).type(DialogType.RESOURCE_CLASH)
+				.with(textContent().title(
+						DialogTitle.DISK_SPACE_WARNING, // default
+						DialogTitle.DISK_SPACE,         // mini-TV
+						DialogTitle.DISK_SPACE,         // fullscreen
+						DialogTitle.DISK_SPACE_WARNING, // sd interactive
+						DialogTitle.DISK_SPACE_WARNING, // homepage
+						DialogTitle.DISK_SPACE_WARNING) // hd interactive
+						.instruction(SELECT_TO_CONFIRM_DEL)
+						.textStrings("There is insufficient disk space available",
+								"To record",
+								"The following programme will be deleted"))
+				.with(behaviour().primaryPriority(IPrimaryPriority.DISK_SPACE)
+						.secondaryPriority(ISecondaryPriority.DISK_SPACE)
+						.screenLayer(IScreenLayer.INTERACTIVE_DIALOG)
+						.flags(MODAL | ASSIGN_FOCUS | HIDE_TVVM_COMPONENTS)
+						.timeout(minutes(3))
+						.actions(BACKUP_DISPEL)));
 
 "Live pause is not available.
 There is currently insufficient disk space.
@@ -17646,6 +17757,8 @@ recordins to make a space and eventually stop a RB.
 
 599193:!MIL    -VRM_SERVER < T:VRM_SRV M:job_man_srv.c F:VRM_JOB_SERVER_Destroy L:1601 > @@PMON@@,mark,job,job-destroy,50331668,job-destroy-type=,jb-rbrec 
 
+	int LIVE_PAUSE_NOT_AVAILABLE_INSUFFICIENT_DISK_SPACE_ID              = 1302;
+
 593555:!ERROR  -EPG_DEV1 < T:no name M:NotificationConverter F:setLastScreenSeen L:11 > 
   T:CEE-J EventQueue Reader 0:setting last screen seen to /tv/live/410/live_pause_not_available_insufficient_disk_space_id
 593556:!MIL    -EPG_MISC < T:no name M:MilestoneNotifier F:send L:21 > 
@@ -17701,6 +17814,7 @@ This matches to the RMF code:
                 resolutionSet = true;
             }
 
+https://www.stb.bskyb.com/jira/browse/SI-11687
 
 <recording-fail-when-disk-space-auto>
 This is a recording from review buffer which showed as failed when:
