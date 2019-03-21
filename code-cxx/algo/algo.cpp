@@ -8,6 +8,7 @@
 #include <bitset>
 #include <list>
 #include <deque>
+#include <memory>
 
 #include "gmock/gmock.h"
 
@@ -49,6 +50,952 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
     cout << "(" << count << ")" << endl;
 }
 
+
+// ={=========================================================================
+// algo-two-player-card-game
+
+/*
+
+https://dev.to/mortoray/interview-question-a-two-player-card-game-67i
+
+I've been asking interviewees, over at interviewing.io, to write a simulation
+of a two-player card game. It's an engaging question, revealing a lot about
+their abilities. It doesn't involve any trickery nor random algorithm
+knowledge. It's suitable for programmers of any skill level and works in all
+common languages.
+
+I'd like to share the question and some of the insights I've had.
+
+
+Two Player Card Game
+
+* design problem
+
+I introduce the question with a preamble about being focused on the design
+and structure of the code.
+
+this is a two player card game
+
+the game starts with a deck of cards
+
+the cards are dealt out to both players
+
+on each turn:
+both players turn over their top-most card
+
+the player with the higher valued card takes the cards and puts them in their
+scoring pile (scoring 1 point per card) 
+note: this may bear question about a lower value card
+ 
+this continues until the players have no cards left
+ 
+the player with the highest score wins 
+
+NOTE: Candidates must identify and resolve issues in the requirements.
+
+ for example:
+
+  What type of cards? only numbers from 1 to 12? Shapes such as heart?
+  How many cards ecah player can have to play?
+  What if a value of cards are the same when turning them over?
+  Unique cards?
+
+TODO: first version
+
+Based on this description I'm expected the person to write code that
+simulates the game: writes out who wins from one round of play.
+
+I'll expect the main sequence to be written. I want to see cards dealt out,
+the turns being taken, and the winner declared.
+
+
+Design
+
+The interviewee asking questions is good, but not necessarily revealing. I
+expect some feedback that they've at least understood the problem. Beyond that
+I'm flexible, having seen several different styles of solving the problem. 
+
+NOTE: do not over-design and top-down
+
+The only definite pattern I've seen is a negative one with over-design: trying
+to plan for everything and writing extensive notes. If people are taking too
+long here I prompt them to start writing code.
+
+*cxx-tdd*
+
+The importance of top-down design is echoed in processes like test-driven
+development and the concept of YAGNI "You aren't gonna need it".
+
+The complexity of this problem doesn't require much prework. Beyond coming up
+with a couple of classes, like Player and Game, possibly Card, you can start
+writing code. The best approach, used by many well-performing candidates, is
+outlining the structure in actual code. Code is often the best pseudo-code:
+just leave out details and take short-cuts as you're planning.
+
+
+The Cards
+
+Several candidates start working from the bottom up: taking a deep dive into
+what defines a card, or creating a Deck class. I ask them why they are
+building these classes, as a hint it's not a good approach. I encourage them
+to think at a higher level, about what they might actually need.
+
+Especially in a time-limited scenario, it's best to think top-down and ignore
+details until you need them. That is, don't design all aspects of a
+theoretical Deck class as they may not be used. It's okay to sketch out
+classes, placing some variables, but the details should be sparse.
+
+I avoid giving too much direction at this point; 
+
+  being able to structure a problem in code is an essential skill of coding. 
+    
+I reserve my comments to when I feel it's going very wrong and the approach
+will not let them finish the task. If they feel confident and making progress,
+I try not to enforce an ideal view, instead I let them go with it.
+
+One critical question that should arise, probably during design, and at the
+latest when comparing cards, is what type of cards we're dealing with. Not
+everyone is familiar with standard playing cards, which is fine; they ask what
+type of cards these are. Others assume suited cards and ask how to compare
+suits. In all cases I simplify the requirement to just be a set of numbered
+cards, from 1 to N. 
+
+*TN* With this requirement it's acceptable to not have a Card class at all,
+instead just using an integer. 
+
+Though, there's nothing wrong with a trivial Card type either.
+
+NOTE: decision on questions made adove and naming.
+
+Regardless of the choice of integer or class, it's important I understand why
+this decision is being made. In particular, I expect the candidate to tell me
+why they've chosen one or the other. The code should also be clear. A variable
+like int[] array is not helpful (yes, this happened once). Name things for
+their logical value, such as deck.
+
+
+The game progress
+
+I mentioned `the programming should be top-down.` After the initial design
+period, and some code sketching, I'll expect the main sequence to be written.
+I want to see cards dealt out, the turns being taken, and the winner declared.
+
+Starting with a rough structure then filling in details is good. My experience
+so far is that people who don't start at the high-level have a hard time
+finishing the problem.
+
+defn play_game = -> {
+    deal_cards()
+
+    take_turns()
+
+    declare_winner()
+}
+
+Given the simplicity of the problem, it's also acceptable code each of these
+directly in the function, provided it can be refactored into functions
+afterwards. Whether the interviewee initiates this refactoring, or I have
+prompt for it, seems to reflect on their experience level.
+
+The importance of `top-down design is echoed in processes like test-driven`
+development and the concept of YAGNI "You aren't gonna need it".
+
+
+NOTE: Common issues
+
+From here it's a matter of filling in details. This question has a lot of
+small things to take care of, none of which are tricky, which is good for an
+interview.
+
+
+The Player class
+
+A common mistake is the failure to identify a Player type. We end up with this
+pattern of coding:
+
+vector<int> player1_cards, player2_cards;
+int player1_score, player2_score;
+
+A series of matching variable names, like player1_* and player2_*, is 
+`a good indication that you should have a Player type.`
+
+Most candidates come to this conclusion their own, either starting with a
+Player class directly, or refactoring it. Others require some prompting but
+usually understand quickly. A select few just didn't comprehend and needed
+explicit instruction.
+
+Prompting people, without just giving away an answer, is difficult. In this
+situation, I like to try things like; "look at those variables starting with
+player1 and player2. Do you see a pattern there?", "Is there some structure
+you can use `to abstract this?"`, or "Couldn't you group this better somehow?".
+
+
+NOTE: Arguments and Member variables
+
+`There should be some Game class managing the simulation.` 
+
+The name isn't that important, but it should contain the players and the
+functions for each phase of the game. Here the candidate's ability in OOP is
+tested.
+
+`Member variables replace the need for repeated arguments to functions.` 
+The functions should all be passed the players, scores, and cards as
+arguments, but instead, the players should be part of the instance. Some
+people immediately do it this way, others require a bit of prompting.
+
+The player details are almost always best as member variables, but there is
+some variation on how to handle the initial deck and dealing.
+
+Again, prompting appropriately is not easy. I try things like "Is it necessary
+to pass the players to all the functions?", "Is it possible to avoid this
+redundancy?", or more directly, "These feel like the players belong to the
+class." Honestly, I don't remember the specific things I've said, but the key
+is to start general, almost mysterious. 
+
+  How much I need to say, and how explicit it needs to be, reflects a lot on the
+  skills of the interviewee.
+
+
+Magic numbers and details
+
+There aren't too many involved in the code, but I don't like seeing them. For
+instance, a loop that runs from 1..52 to create cards uses a magic number.
+There's also a 2 that comes up when adding to the score: it's a bit more
+subtle, but relevant for the extended questions I have planned.
+
+It may seem like a trivial detail, but I've noticed that better programmers
+are attuned to such things. They will create a constant, use an argument to a
+constructor (possibly with default), or just say, "Yeah, this isn't good, I
+should clean it up after."
+
+By this time I usually have a good idea of how well the person knows the
+programming language. 
+
+NOTE: Comparison to natural language seems fair, some people seem to speak
+fluently and the code flows consistently and cleanly. Others seem to be
+stuttering, forgetting words, translating in their brain, and the code is less
+eloquent.
+
+Though people that use advanced syntax fair well, people have also completed
+the question using nothing but basic imperative syntax as well. Real struggles
+though aren't acceptable: the candidate gets to pick the language, so there's
+an absolute expectation of basic knowledge.
+
+
+NOTE: Extended Questions
+
+If the interviewee has solved the base question and we have at least 10
+minutes left I'll add the next requirement:
+
+
+Extend the game to support more than two players
+
+How many changes this requires depends on the initial approach they've taken.
+If they didn't come up with a Player class, I'll request it. I'll also request
+refactoring into functions if they are a bit sparse. The code needs to be in a
+good state. Otherwise, this new requirement is too daunting.
+
+By rough estimation about half of the people make it to this question. That
+makes it a suitable criterion for filtering: I tend not to pass people that
+can't solve this extended question. I make allowance for new grads, but not
+for people with industry experience. I often won't ask this question if I
+estimate they won't finish it, or sometimes I propose to extend just one
+function. I prefer to end the interview early than add additional stress.
+
+
+More Issues
+
+The change to N players introduces a few new problems:
+
+Dealing cards can no longer be done with an if-else to choose the player. I'm
+kind of surprised at how many people do not know how to use modulus % to
+select items from an array in a loop. 
+
+Picking the highest card from a list is no longer an if-else. It challenges
+some people as they know how to get the maximum value, but not always the
+index of that card. 
+
+The loop to decide if the game is over is now non-trivial, especially as
+players may not have the same number of cards. 
+
+  o Choose two players in every turn or all players in every turn?
+    Assuming from "may not have the same number of cards", choose two in every
+    turn.
+
+  o When picks up a card and found the biggest, discards the rest
+
+
+I noticed that better programmers naturally create a helper function, or
+otherwise avoid complex conditions in a loop.  The programmer's knowledge of
+the language seems to play a significant role here.  Individuals that are
+comfortable in their language have an easier time doing these changes. It has
+been especially true of the candidates that know Python well, as there are
+great constructs to make this easier.
+
+Completing this question is a positive indication that the interviewee is
+indeed a good programmer or at least a good coder. I don't even care if they
+had minor issues in the refactoring, but usually, they don't. It's a curious
+pattern, the people that make it this far tend not to have difficulties with
+this question.
+
+The choosen decisions:
+1. Choose players for every turn.
+2. When a card is the same, both players score.
+3. When lost for a turn, put that back in the cards to play.
+
+
+Super Bonus Question
+
+Should the interviewee manage to add N players support, I still have one
+additional change. It's a bit more challenging than the previous requirements:
+"don't assume the cards have unique values". The details are:
+
+Remove the assumption that the cards are unique (that is, go to a standard
+    deck) If players have the same valued card, they draw an additional card,
+       repeat until one has a higher card The person with the highest card
+       takes all the cards, scoring one each Only the players that tie
+       continue drawing cards (1+ players may sit out on the additional draws)
+  Only one person has made it this far, setting the gold standard for this
+  interview question.
+
+Only the time pressure
+
+What I like about this question is that it lacks any trickery or random
+algorithmic knowledge. The pacing seems to work well: interviewees manage
+varying degrees of the problem. Given the difficulties I've seen people have,
+        it seems to test a good cross-section of abilities.
+
+As interview practice, try coding the answer. Pay attention to which bits
+cause you trouble, and watch how long it takes you.
+ 
+*/
+
+namespace algo_two_player_card_game
+{
+  using Card = uint32_t;
+
+  class CardPlayer
+  {
+    public:
+      CardPlayer() = delete;
+      CardPlayer(std::string const &name) : name_(name) {}
+
+      void prepare_cards() 
+      {
+        std::generate_n(
+            back_inserter(cards_), NUM_OF_CARDS_PER_PLAYER, CardRandom()
+            );
+      }
+
+      bool has_card() 
+      { return !cards_.empty(); }
+
+      // assums that client call it when is has a card to return
+      Card get_card() 
+      {
+        auto card = cards_.back();
+        cards_.pop_back();
+        return card;
+      }
+
+      void score_card(Card card) 
+      { scores_.push_back(card); }
+
+      uint32_t get_score() 
+      { return scores_.size(); }
+
+      std::string get_name()
+      { return name_; }
+
+      void print_cards()
+      {
+        PRINT_ELEMENTS(cards_, name_ +  ":play  cards: ");
+        PRINT_ELEMENTS(scores_, name_ + ":score cards: ");
+      }
+
+    private:
+      std::string name_;
+      std::vector<Card> cards_;
+      std::vector<Card> scores_;
+
+      static const uint32_t NUM_OF_CARDS_PER_PLAYER;
+      static const uint32_t MAX_NUM_OF_CARDS;
+
+      class CardRandom
+      {
+        public:
+          int operator() ()
+          { return udist(dre); }
+
+        private:
+          static std::default_random_engine dre;
+          static std::uniform_int_distribution<Card> udist;
+      };
+  };
+
+  // *cxx-static*
+
+  const uint32_t CardPlayer::NUM_OF_CARDS_PER_PLAYER{10};
+  const uint32_t CardPlayer::MAX_NUM_OF_CARDS{24};
+
+  std::default_random_engine 
+    CardPlayer::CardRandom::dre;
+
+  std::uniform_int_distribution<Card> 
+    CardPlayer::CardRandom::udist{1, MAX_NUM_OF_CARDS};
+
+  // simple
+
+  class CardGame_1
+  {
+    public:
+      CardGame_1() : lplayer("player1"), rplayer("player2") 
+      {
+        lplayer.prepare_cards();
+        rplayer.prepare_cards();
+      }
+
+      // when has the same card, score them to both
+
+      void play() 
+      {
+        while (lplayer.has_card())
+        {
+          auto lcard = lplayer.get_card();
+          auto rcard = rplayer.get_card();
+
+          if (lcard < rcard)
+          {
+            rplayer.score_card(rcard);
+          }
+          else if (lcard > rcard)
+          {
+            lplayer.score_card(lcard);
+          }
+          else
+          {
+            lplayer.score_card(lcard);
+            rplayer.score_card(lcard);
+          }
+        }
+      }
+
+      void announce() 
+      {
+        std::string winner{};
+        uint32_t score{};
+
+        lplayer.print_cards();
+        rplayer.print_cards();
+
+        if (lplayer.get_score() < rplayer.get_score()) 
+        {
+          winner = rplayer.get_name();
+          score = rplayer.get_score();
+        }
+        else
+        {
+          winner = lplayer.get_name();
+          score = lplayer.get_score();
+        }
+
+        std::cout << "=================================" << std::endl;
+        std::cout << "winner: " << winner << " got " 
+          << score << " scores" << std::endl;
+      }
+
+    private:
+      CardPlayer lplayer;
+      CardPlayer rplayer;
+  };
+
+} // namespace
+
+TEST(AlgoTwoPlayerCardGame, Player)
+{
+  using namespace algo_two_player_card_game;
+
+  {
+    CardPlayer player1("player 1");
+    EXPECT_THAT(player1.has_card(), false);
+  }
+
+  {
+    CardPlayer player1("player 1");
+    player1.prepare_cards();
+    EXPECT_THAT(player1.has_card(), true);
+  }
+
+  {
+    CardPlayer player1("player 1");
+    player1.score_card(Card{1});
+    player1.score_card(Card{2});
+    player1.score_card(Card{3});
+    EXPECT_THAT(player1.get_score(), 3);
+  }
+
+  {
+    CardPlayer player1("player 1");
+
+    player1.prepare_cards();
+    player1.print_cards();
+
+    player1.get_card();
+    player1.get_card();
+    player1.get_card();
+
+    player1.score_card(player1.get_card());
+    player1.score_card(player1.get_card());
+    player1.score_card(player1.get_card());
+
+    player1.print_cards();
+
+    EXPECT_THAT(player1.get_score(), 3);
+  }
+}
+
+TEST(AlgoTwoPlayerCardGame, Game_1)
+{
+  using namespace algo_two_player_card_game;
+
+  CardGame_1 game;
+
+  game.play();
+  game.announce();
+}
+
+namespace algo_two_player_card_game
+{
+  // extended
+
+  class CardGame_2
+  {
+    public:
+      CardGame_2() = delete;
+
+      CardGame_2(size_t number_of_players)
+      {
+        // to avoid reallocations
+
+        running_players_.reserve(MAX_NUM_OF_PLAYERS);
+        finished_players_.reserve(MAX_NUM_OF_PLAYERS);
+
+        prepare_players_(number_of_players);
+      }
+
+      // o when has the same card, score them to both
+      // o do not put a card back when lost. if dose, will have more turns to
+      // finish.
+
+      // NOTE: when not see the same value, put back the one which is not
+      // scored since GetCard() removes it from the vector. Otherwise, lost
+      // them. so now the number of cards that all players started with should
+      // match with the sum of the number of scores and the number of cards
+      // which is not played at the end of run. 
+
+      void play() 
+      {
+        Card lcard{};
+        Card rcard{};
+
+        while (has_running_players_())
+        {
+          auto selected = get_players_to_play_();
+
+          // to avoid ctors and copying them back to vector once used.
+
+          auto &lplayer = running_players_[selected.first];
+          auto &rplayer = running_players_[selected.second];
+
+          // cards remvoed from players
+          lcard = lplayer.get_card();
+          rcard = rplayer.get_card();
+
+          if (lcard < rcard)
+          {
+            rplayer.score_card(rcard);
+          }
+          else if (lcard > rcard)
+          {
+            lplayer.score_card(lcard);
+          }
+          else
+          {
+            lplayer.score_card(lcard);
+            rplayer.score_card(lcard);
+          }
+
+          move_finished_players_();
+        }
+      }
+
+      // copy version to show and this leads to use shared_ptr
+      //
+      // void Play()
+      // {
+      //   Card first_card{}, second_card{};
+
+      //   // NOTE: this causes two ctor/dtors
+      //   CardPlayer first_player{"first"};
+      //   CardPlayer second_player{"second"};
+
+      //   while(HasRunningPlayers())
+      //   {
+      //     ++number_of_plays_;
+
+      //     auto selected_players = GetRunningPlayers_();
+
+      //     // copy players
+      //     first_player = running_players_[selected_players.first];
+      //     second_player = running_players_[selected_players.second];
+
+      //     first_card = first_player.GetCard();
+      //     second_card = second_player.GetCard();
+
+      //     if(first_card == second_card)
+      //     {
+      //       second_player.SaveCardToScore(second_card);
+      //       first_player.SaveCardToScore(first_card); 
+      //     }
+      //     else if(first_card > second_card)
+      //     {
+      //       first_player.SaveCardToScore(first_card); 
+      //       second_player.SaveCardToPlay(second_card); 
+      //     }
+      //     else
+      //     {
+      //       first_player.SaveCardToPlay(first_card); 
+      //       second_player.SaveCardToScore(second_card);
+      //     }
+
+      //     // copy players back
+      //     running_players_[selected_players.first] = first_player;
+      //     running_players_[selected_players.second] = second_player;
+
+      //     MoveFinishedPlayers_();
+      //   }
+      // }
+
+      void announce()
+      {
+        std::string winner{};
+        uint32_t score{};
+
+        // consider const later
+
+        for (auto &e : finished_players_)
+        {
+          if (score < e.get_score())
+          {
+            score = e.get_score();
+            winner = e.get_name();
+          }
+        }
+
+        std::cout << "=================================" << std::endl;
+        std::cout << "winner: " << winner << " got " 
+          << score << " scores" << std::endl;
+      }
+
+    private:
+      static const uint32_t MAX_NUM_OF_PLAYERS;
+
+      std::vector<CardPlayer> running_players_;
+      std::vector<CardPlayer> finished_players_;
+
+      void prepare_players_(size_t number)
+      {
+        std::string name{};
+
+        for (size_t i = 0; i < number; ++i)
+        {
+          name = "player " + std::to_string(i);
+          auto player = CardPlayer(name);
+          player.prepare_cards();
+          running_players_.push_back(player);
+        }
+      }
+
+      // deals players that has cards to play so no check is needed to see if
+      // it has cards to play
+      //
+      // NOTE that should cover case when there is no running players
+      //
+      // this code works well until have 2 players. However, as soon as moves to
+      // 4 players, shows the issue.
+      //
+      // if(running_players_.size() == 0 || running_players_.size() % 2)
+      // 
+      // because it's random to pick up players, some gets finished earlier than
+      // others and this makes the number of players odd sometimes. So have to
+      // remove a check on odd number of players.
+      //
+      // if(running_players_.size() == 0)
+      //
+      // starts to see hang with > 2 players sometimes but not always. Have to
+      // change since as the reason above, can see odd number of running players
+      // and this cause hang on rand() % 1. Have to end the play when there is
+      // only one running player that still have cards to play.
+
+      bool has_running_players_()
+      {
+        // if (running_players_.size() == 0 ||
+        //     running_players_.size() == 1)
+        //   return false;
+        // return true;
+
+        return running_players_.size() < 2 ? false : true;
+      }
+
+      size_t get_player_index_()
+      {
+        return rand() % running_players_.size();
+      }
+
+      // since running_players_ has only players that has cards to play
+
+      std::pair<size_t, size_t> get_players_to_play_()
+      {
+        auto lplayer = get_player_index_();
+        auto rplayer = get_player_index_();
+
+        // until find the other to play
+        while (lplayer == rplayer)
+          rplayer = get_player_index_();
+
+        return make_pair(lplayer, rplayer);
+      }
+
+      // see how cxx-move and *cxx-iter-invalid* used
+      void move_finished_players_()
+      {
+        for (auto it = running_players_.begin();
+            it != running_players_.end();
+            // nothing
+            )
+        {
+          // if do not cards
+          if (!it->has_card())
+          {
+            finished_players_.push_back(std::move(*it));
+            it = running_players_.erase(it);
+          }
+          else
+            ++it;
+        }
+      }
+  };
+
+  const uint32_t CardGame_2::MAX_NUM_OF_PLAYERS{10};
+
+} // namespace
+
+TEST(AlgoTwoPlayerCardGame, Game_2)
+{
+  using namespace algo_two_player_card_game;
+
+  {
+    CardGame_2 game(2);
+
+    game.play();
+    game.announce();
+  }
+  {
+    CardGame_2 game(4);
+
+    game.play();
+    game.announce();
+  }
+  {
+    CardGame_2 game(3);
+
+    game.play();
+    game.announce();
+  }
+}
+
+
+namespace algo_two_player_card_game
+{
+  // extended and shared_ptr
+  //
+  // note: not much benefit of using shared_ptr since already removed to use
+  // copy overhead in play() by using reference. 
+
+  class CardGame_3
+  {
+    public:
+      CardGame_3() = delete;
+
+      CardGame_3(size_t number_of_players)
+      {
+        prepare_players_(number_of_players);
+      }
+
+      // o when has the same card, score them to both
+      // o do not put a card back when lost. if dose, will have more turns to
+      // finish.
+
+      // NOTE: when not see the same value, put back the one which is not
+      // scored since GetCard() removes it from the vector. Otherwise, lost
+      // them. so now the number of cards that all players started with should
+      // match with the sum of the number of scores and the number of cards
+      // which is not played at the end of run. 
+
+      void play() 
+      {
+        Card lcard{};
+        Card rcard{};
+
+        while (has_running_players_())
+        {
+          auto selected = get_players_to_play_();
+
+          // to avoid ctors and copying them back to vector once used.
+
+          auto &lplayer = running_players_[selected.first];
+          auto &rplayer = running_players_[selected.second];
+
+          // cards remvoed from players
+          // note:
+          lcard = lplayer->get_card();
+          rcard = rplayer->get_card();
+
+          if (lcard < rcard)
+          {
+            rplayer->score_card(rcard);
+          }
+          else if (lcard > rcard)
+          {
+            lplayer->score_card(lcard);
+          }
+          else
+          {
+            lplayer->score_card(lcard);
+            rplayer->score_card(lcard);
+          }
+
+          move_finished_players_();
+        }
+      }
+
+      void announce()
+      {
+        std::string winner{};
+        uint32_t score{};
+
+        // consider const later
+
+        for (auto &e : finished_players_)
+        {
+          // note:
+          if (score < e->get_score())
+          {
+            score = e->get_score();
+            winner = e->get_name();
+          }
+        }
+
+        std::cout << "=================================" << std::endl;
+        std::cout << "winner: " << winner << " got " 
+          << score << " scores" << std::endl;
+      }
+
+    private:
+      static const uint32_t MAX_NUM_OF_PLAYERS;
+
+      // note:
+      std::vector<std::shared_ptr<CardPlayer>> running_players_;
+      std::vector<std::shared_ptr<CardPlayer>> finished_players_;
+
+      void prepare_players_(size_t number)
+      {
+        std::string name{};
+
+        for (size_t i = 0; i < number; ++i)
+        {
+          name = "player " + std::to_string(i);
+
+          // note: to use shared_ptr
+          auto player = make_shared<CardPlayer>(name);
+          player->prepare_cards();
+
+          running_players_.push_back(player);
+        }
+      }
+
+      bool has_running_players_()
+      {
+        return running_players_.size() < 2 ? false : true;
+      }
+
+      size_t get_player_index_()
+      {
+        return rand() % running_players_.size();
+      }
+
+      // since running_players_ has only players that has cards to play
+
+      std::pair<size_t, size_t> get_players_to_play_()
+      {
+        auto lplayer = get_player_index_();
+        auto rplayer = get_player_index_();
+
+        // until find the other to play
+        while (lplayer == rplayer)
+          rplayer = get_player_index_();
+
+        return make_pair(lplayer, rplayer);
+      }
+
+      // see how cxx-move and *cxx-iter-invalid* used
+      void move_finished_players_()
+      {
+        for (auto it = running_players_.begin();
+            it != running_players_.end();
+            // nothing
+            )
+        {
+          // if do not cards
+          // note:
+          if (!(*it)->has_card())
+          {
+            finished_players_.push_back(std::move(*it));
+            it = running_players_.erase(it);
+          }
+          else
+            ++it;
+        }
+      }
+  };
+
+  const uint32_t CardGame_3::MAX_NUM_OF_PLAYERS{10};
+
+} // namespace
+
+TEST(AlgoTwoPlayerCardGame, Game_3)
+{
+  using namespace algo_two_player_card_game;
+
+  {
+    CardGame_3 game(2);
+
+    game.play();
+    game.announce();
+  }
+  {
+    CardGame_3 game(4);
+
+    game.play();
+    game.announce();
+  }
+  {
+    CardGame_3 game(3);
+
+    game.play();
+    game.announce();
+  }
+}
 
 // ={=========================================================================
 // algo-swap: swap without a temporary
@@ -1260,6 +2207,596 @@ TEST(AlgoAnagram, Anagram)
     EXPECT_THAT(func("PARK", "APRKPARK"), false);
     EXPECT_THAT(func("PARK", "CARK"), false);
     EXPECT_THAT(func("PARK", "PAAA"), false);
+  }
+}
+
+
+// ={=========================================================================
+// algo-palindrome
+/* algo-leetcode-9
+9. Palindrome Number, Easy
+
+Determine whether an integer is a palindrome. An integer is a palindrome when it
+reads the same backward as forward.
+
+Example 1:
+
+Input: 121
+Output: true
+
+Example 2:
+
+Input: -121
+Output: false
+
+Explanation: From left to right, it reads -121. From right to left, it becomes
+121-. Therefore it is not a palindrome.
+
+Example 3:
+
+Input: 10
+Output: false
+
+Explanation: Reads 01 from right to left. Therefore it is not a palindrome.
+
+Follow up:
+Coud you solve it without converting the integer to a string?
+
+*/
+
+namespace algo_palindrome
+{
+  // int reverse_integer(int value);
+  // as itoa() reverse input and atoi() makes it to integer
+  //
+  // Runtime: 108 ms, faster than 97.64% of C++ online submissions for
+  // Palindrome Number.
+  //
+  // Memory Usage: 73 MB, less than 63.19% of C++ online submissions for
+  // Palindrome Number.
+
+  bool is_palindrome(int input)
+  {
+    long long result{};
+    int remains{};
+
+    int value = input;
+
+    int sign{};
+    sign = (input < 0) ? -1 : 1;
+    if (sign < 0)
+      return false;
+
+    while (value)
+    {
+      // as itoa(), get right-most value
+      remains = value % 10;
+
+      // as atoi(), reverse it
+      result = remains + 10 * result;
+
+      // as itoa(), reduce value
+      value /= 10;
+      // cout << "value: " << value << ", result: " << result << ", remains: " << remains << endl;
+    }
+
+    return result == input ? true : false;
+  }
+} // namespace
+
+
+TEST(AlgoPalindrome, Integer)
+{
+  using namespace algo_palindrome;
+
+  EXPECT_THAT(is_palindrome(121), true);
+  EXPECT_THAT(is_palindrome(-121), false);
+  EXPECT_THAT(is_palindrome(10), false);
+  EXPECT_THAT(is_palindrome(0), true);
+  EXPECT_THAT(is_palindrome(0000000123), false);
+  EXPECT_THAT(is_palindrome(1230000000), false);
+  EXPECT_THAT(is_palindrome(1234554321), true);
+}
+
+
+/*
+The Modern C++ Challenge
+28. Longest palindromic substring
+
+Write a function that, given an input string, locates and returns the longest
+sequence in the string that is a palindrome. If multiple palindromes of the same
+length exist, the first one should be returned.
+
+// from wikipedia
+
+In computer science, the longest palindromic substring or longest *symmetric*
+factor problem is the problem of finding a maximum-length contiguous substring
+of a given string that is also a palindrome. 
+
+For example, the longest palindromic substring of "bananas" is "anana". The
+longest palindromic substring is not guaranteed to be unique; for example, in
+the string "abracadabra", there is no palindromic substring with length greater
+than three, but there are two palindromic substrings with length three, namely,
+"aca" and "ada". In some applications it may be necessary to return all maximal
+palindromic substrings (that is, all substrings that are themselves palindromes
+and cannot be extended to larger palindromic substrings) rather than returning
+only one substring or returning the maximum length of a palindromic substring.
+
+{
+   using namespace std::string_literals;
+   assert(longest_palindrome("sahararahnide") == "hararah");
+   assert(longest_palindrome("level") == "level");
+   assert(longest_palindrome("s") == "s");
+}
+
+Unlike number version, the difference is "string" and "largest"
+
+*/
+
+// namespace U28_2018_12_03
+namespace algo_palindrome
+{
+  // palindrome is *symmetric* substr while moving i from input text.
+  //
+  // start from 0th and for every char of input:
+  //  scan to right and left from that
+  //  keep update current symetric substr and save it if that's longer
+  //  return the input when there's no finding such as single input
+
+  std::string longest_palindrome(const std::string text)
+  {
+    auto length = text.size();
+    int lidx{}, ridx{};
+    char current_char{};
+    string current{}, saved{};
+
+    // moving i
+    for (decltype(length) i = 0; i < length; ++i)
+    {
+      // whenever moves i, start search again 
+      current.clear();
+      current_char = text[i];
+
+      current.push_back(current_char);
+
+      for (lidx = i - 1, ridx = i + 1; 
+          lidx >= 0 && ridx < (int)length; 
+          --lidx, ++ridx)
+      {
+        if (text[lidx] == text[ridx])
+        {
+          current.insert(0, 1, text[lidx]);
+          current.push_back(text[lidx]);
+          if (saved.length() < current.length())
+            saved = current;
+        } 
+        else
+        {
+          // exit as soon as break symmetric condition
+          break;
+        }
+      }
+    }
+
+    // to pass the case when single input char
+    if (saved.length() < current.length())
+      saved = current;
+
+    return saved;
+  }
+
+  /*
+    The simplest solution to this problem is to try a brute-force approach, checking
+    if each substring is a palindrome. However, this means we need to check C(N, 2)
+    substrings (where N is the number of characters in the string), and the time
+    complexity would be O(N^3). 
+
+    The complexity could be reduced to O(N^2) by storing results of sub problems. To
+    do so we need a table of Boolean values, of size, where 
+
+    the key idea:
+    the element at [i, j] indicates whether the substring from position i to j is
+    a palindrome. 
+
+    We start by initializing all elements [i,i] with true (one-character
+    palindromes) and all the elements [i,i+i] with true for all consecutive two
+    identical characters (for two-character palindromes). We then go on to inspect
+    substrings greater than two characters, setting the element at [i,j] to true if
+    the element at [i+i,j-1] is true and the characters on the positions i and j in
+    the string are also equal. Along the way, we retain the start position and
+    length of the longest palindromic substring in order to extract it after
+    finishing computing the table.
+
+          0 1 2 3 4
+          l e v e l
+    0, l  o       *
+    1, e    o   *
+    2, v      o x
+    3, e        o
+    4, l          o
+     
+    i = 0, maxLen = 5
+    
+    why chekc "table[(i + 1)*len + j - 1]"? To see substr is symetric. ex, to
+    see [0, 4] is symetic, check substr(1,3) is symetric, that is [1, 3] 
+  */
+
+  std::string longest_palindrome_text(std::string str)
+  {
+    size_t const len = str.size();
+    size_t longestBegin = 0;
+    size_t maxLen = 1;
+
+    std::vector<bool> table(len * len, false);
+
+    // diagonal elements
+    // We start by initializing all elements [i,i] with true (one-character
+    // palindromes)
+
+    for (size_t i = 0; i < len; i++)
+    {
+      table[i*len + i] = true;
+    }
+
+    // and all the elements [i,i+i] with true for all consecutive two identical
+    // characters (for two-character palindromes). We then go on to inspect
+    //
+    // why "len -1"? since needs two chars to inspect
+    // 0 1 2 3 4, len is 5 
+    // l e v e 1
+
+    for (size_t i = 0; i < len - 1; ++i)
+    {
+      if (str[i] == str[i + 1])
+      {
+        table[i*len + i + 1] = true;
+        if (maxLen < 2)
+        {
+          longestBegin = i;
+          maxLen = 2;
+        }
+      }
+    }
+
+    // k = 3 which means see three elements range
+    //
+    // We then go on to inspect substrings greater than two characters, setting
+    // the element at [i,j] to true if the element at [i+1,j-1] is true and the
+    // characters on the positions i and j in the string are also equal. 
+    //
+    // Along the way, we retain the start position and length of the longest
+    // palindromic substring in order to extract it after finishing computing
+    // the table.
+
+    for (size_t k = 3; k <= len; k++)
+    {
+      for (size_t i = 0; i < len - k + 1; i++)
+      {
+        size_t j = i + k - 1;
+
+        cout << "k: " << k << ", i: " << i << ", j: " << j << ", table[" << ((i + 1)*len + j - 1) << "]:" 
+          << table[(i + 1)*len + j - 1] << endl;
+
+        if (str[i] == str[j] && table[(i + 1)*len + j - 1])
+        {
+          table[i*len +j] = true;
+
+          cout << "k: " << k << ", i: " << i << ", j: " << j << ", table[" << ((i + 1)*len + j - 1) << "]:" 
+            << table[(i + 1)*len + j - 1] << ", table[" << i*len +j << "] = true" << endl;
+
+          if (maxLen < k)
+          {
+            longestBegin = i;
+            maxLen = k;
+          }
+        }
+      }
+    }
+
+    return std::string(str.substr(longestBegin, maxLen));
+  }
+
+} // namespace
+
+// TEST(U28, 2018_12_03)
+TEST(AlgoPalindrome, LongestSubString)
+{
+  using namespace algo_palindrome;
+
+  { 
+    EXPECT_THAT(longest_palindrome("sahararahnide"), "hararah");
+    EXPECT_THAT(longest_palindrome("level"), "level");
+
+    // this fails
+    // EXPECT_THAT(longest_palindrome("ss"), "ss");
+
+    EXPECT_THAT(longest_palindrome("s"), "s");
+  }
+
+  {
+    auto func = longest_palindrome_text;
+
+    // EXPECT_THAT(longest_palindrome("sahararahnide"), "hararah");
+
+    // k: 3, i: 0, j: 2, table[6]:1
+    // k: 3, i: 1, j: 3, table[12]:1
+    // k: 3, i: 1, j: 3, table[12]:1, table[8] = true
+    // k: 3, i: 2, j: 4, table[18]:1
+    // k: 4, i: 0, j: 3, table[7]:0
+    // k: 4, i: 1, j: 4, table[13]:0
+    // k: 5, i: 0, j: 4, table[8]:1
+    // k: 5, i: 0, j: 4, table[8]:1, table[4] = true
+
+    EXPECT_THAT(func("level"), "level");
+
+    // EXPECT_THAT(longest_palindrome("ss"), "ss");
+    // EXPECT_THAT(longest_palindrome("s"), "s");
+  }
+}
+
+
+// algo-leetcode-19
+/*
+125. Valid Palindrome, Easy
+
+Given a string, determine if it is a palindrome, considering only alphanumeric
+characters and ignoring cases.
+
+Note: For the purpose of this problem, we define empty string as valid palindrome.
+
+Example 1:
+Input: "A man, a plan, a canal: Panama"
+Output: true
+
+Example 2:
+Input: "race a car"
+Output: false
+ 
+*/
+
+namespace algo_palindrome
+{
+  // Runtime: 16 ms, faster than 17.06% of C++ online submissions for Valid
+  // Palindrome.
+  //
+  // Memory Usage: 9 MB, less than 89.62% of C++ online submissions for Valid
+  // Palindrome.
+
+  // use iterator
+  bool isPalindrome_1(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      if (!isalnum(*begin))
+      {
+        ++begin;
+        continue;
+      }
+
+      if (!isalnum(*end))
+      {
+        --end;
+        continue;
+      }
+
+      if (toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // use index
+  bool isPalindrome_1_1(string s) 
+  {
+    int begin{};
+    int end{(int)s.size()-1};
+
+    while (begin < end)
+    {
+      if (!isalnum(s[begin]))
+      {
+        ++begin;
+        continue;
+      }
+
+      if (!isalnum(s[end]))
+      {
+        --end;
+        continue;
+      }
+
+      if (toupper(s[begin]) != toupper(s[end]))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // from discussion:
+
+  bool isPalindrome_2(string s) 
+  {
+    int i = 0;
+    int j = s.size() - 1;
+
+    while (i < j) 
+    {
+      if (!isalnum(s[i]))
+        ++i;
+      else if (!isalnum(s[j]))
+        --j;
+      else 
+      {
+        if (tolower(s[i]) != tolower(s[j]))
+          return false;
+        ++i, --j;
+      }
+    }
+
+    return true;
+  }
+
+  // let's make it faster but this is wrong since ++begin/--end runs in every
+  // runrun. 
+
+  bool isPalindrome_wrong(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      if (!isalnum(*begin))
+      {
+        ++begin;
+        // cout << "++: " << *begin << endl;
+      }
+      else if (!isalnum(*end))
+      {
+        --end;
+        // cout << "--: " << *end << endl;
+      }
+      else if (toupper(*begin) != toupper(*end))
+      {
+        // cout << "if: " << *begin << " != " << *end << endl;
+        return false;
+      }
+
+      // cout << ": " << *begin << " == " << *end << endl;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // after all, "if and else if" is to reduce outer loop so use while instead 
+  // However, inner while changes begin/end and it requires outer check on every
+  // if; makes outer check invalid. 
+  //
+  // is it any better? seems not.
+
+  bool isPalindrome_4_wrong(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      while (!isalnum(*begin))
+        ++begin;
+
+      while (!isalnum(*end))
+        --end;
+
+      if (toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  bool isPalindrome_4(string s) 
+  {
+    if (s.empty())
+      return true;
+
+    auto begin = s.begin();
+    auto end = --s.end();
+
+    while (begin < end)
+    {
+      while (begin < s.end() && !isalnum(*begin))
+        ++begin;
+
+      while (end > s.begin() && !isalnum(*end))
+        --end;
+
+      if (begin < end && toupper(*begin) != toupper(*end))
+        return false;
+
+      ++begin;
+      --end;
+    }
+
+    return true;
+  }
+
+  // from discussion *py-code*
+  // # trick 1: save re.sub() result to s itself
+  // # trick 2: palindrome is the same when reversed
+  // 
+  // class Solution_isPalindrome:
+  //     def answer(self, s):
+  //         s = re.sub(r'\W', '', s).upper()
+  //         return s == s[::-1]
+
+} // namespace
+
+TEST(AlgoPalindrome, String)
+{
+  using namespace algo_palindrome;
+
+  {
+    auto func = isPalindrome_1_1; 
+
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("121"), true);
+    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
+    EXPECT_THAT(func("race a car"), false);
+    EXPECT_THAT(func("0P"), false);
+
+    // 3 spaces
+    EXPECT_THAT(func("   "), true);
+    //               "12345678 12345678"
+    EXPECT_THAT(func("        a        "), true);
+    EXPECT_THAT(func("a                "), true);
+    EXPECT_THAT(func("                a"), true);
+  }
+
+  {
+    auto func = isPalindrome_2; 
+
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("121"), true);
+    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
+    EXPECT_THAT(func("race a car"), false);
+    EXPECT_THAT(func("0P"), false);
+  }
+
+  {
+    auto func = isPalindrome_4; 
+
+    EXPECT_THAT(func(""), true);
+    EXPECT_THAT(func("121"), true);
+    EXPECT_THAT(func("A man, a plan, a canal: Panama"), true);
+    EXPECT_THAT(func("race a car"), false);
+    EXPECT_THAT(func("0P"), false);
+    // fail
+    EXPECT_THAT(func(".,"), true);
   }
 }
 
@@ -4214,6 +5751,33 @@ namespace algo_water_volume
 
     return volume;
   }
+
+  int water_volume_3(vector<int> const &A)
+  {
+    size_t lindex{};
+    size_t rindex{A.size()-1};
+    int lmax{};
+    int rmax{};
+    int volume{};
+
+    while (lindex < rindex)
+    {
+      if (A[lindex] < A[rindex])
+      {
+        lmax = max(lmax, A[lindex]);
+        volume += (lmax - A[lindex]);
+        ++lindex;
+      }
+      else
+      {
+        rmax = max(rmax, A[rindex]);
+        volume += (rmax - A[rindex]);
+        --rindex;
+      }
+    }
+
+    return volume;
+  }
 } // namespace
 
 TEST(AlgoWaterVolume, TwoPass)
@@ -4221,6 +5785,7 @@ TEST(AlgoWaterVolume, TwoPass)
   using namespace algo_water_volume;
 
   auto func = water_volume_1; 
+
   {
     vector<int> coll{2,5,1,2,3,4,7,7,6};
     EXPECT_THAT(func(coll), 10);
@@ -4239,18 +5804,38 @@ TEST(AlgoWaterVolume, OnePass)
 {
   using namespace algo_water_volume;
 
-  auto func = water_volume_2; 
   {
-    vector<int> coll{2,5,1,2,3,4,7,7,6};
-    EXPECT_THAT(func(coll), 10);
+    auto func = water_volume_2; 
+
+    {
+      vector<int> coll{2,5,1,2,3,4,7,7,6};
+      EXPECT_THAT(func(coll), 10);
+    }
+    {
+      vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+      EXPECT_THAT(func(coll), 17);
+    }
+    {
+      vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+      EXPECT_THAT(func(coll), 21);
+    }
   }
+
   {
-    vector<int> coll{2,5,1,3,1,2,1,7,7,6};
-    EXPECT_THAT(func(coll), 17);
-  }
-  {
-    vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
-    EXPECT_THAT(func(coll), 21);
+    auto func = water_volume_3; 
+
+    {
+      vector<int> coll{2,5,1,2,3,4,7,7,6};
+      EXPECT_THAT(func(coll), 10);
+    }
+    {
+      vector<int> coll{2,5,1,3,1,2,1,7,7,6};
+      EXPECT_THAT(func(coll), 17);
+    }
+    {
+      vector<int> coll{2,5,4,3,4,7,6,5,4,5,7,9,5,4,3,4,5,6};
+      EXPECT_THAT(func(coll), 21);
+    }
   }
 }
 
@@ -4258,111 +5843,82 @@ TEST(AlgoWaterVolume, OnePass)
 // ={=========================================================================
 // algo-frog-jump
 
-// this is not O(1)
-int frog_jump_0622(int X, int Y, int D)
+namespace algo_frog_jump
 {
-  int count{};
-  for (long long i = X; i < Y; i += D)
-    ++count;
+  // brute force but this is not O(1) since loop may be long if Y  is big
+  // enough.
 
-  return count;
-}
-
-int frog_jump_0622_model(int X, int Y, int D)
-{
-  int quotient = (Y-X)/D;
-  int remainder = (Y-X)%D;
-
-  return remainder ? quotient+1 : quotient;
-}
-
-TEST(AlgoFrogJump, 0622)
-{
-  EXPECT_THAT(frog_jump_0622(10, 85, 30), 3);
-  EXPECT_THAT(frog_jump_0622(10, 10, 30), 0);
-  EXPECT_THAT(frog_jump_0622_model(10, 85, 30), 3);
-  EXPECT_THAT(frog_jump_0622_model(10, 10, 30), 0);
-}
-
-// Have missed the condition which is O(1) and unit test cases. How to solve?
-
-int frog_jump_old( int X, int Y, int D )
-{
-  int jump = -1;
-
-  if( X == Y )
+  int frog_jump_1(int X, int Y, int D)
   {
-    jump = 0;
-  }
-  else if (X < Y)
-  {
-    int diff = Y-X;
+    int count{};
 
-    if( (diff / D)  == 0)
-    {
-      jump = 1;
-    }
-    else if( ((diff/D) > 0) && ((diff%D) == 0) )
-    {
-      jump = diff/D;
-    }
-    else if( ((diff/D) > 0) && ((diff%D) != 0) )
-    {
-      jump = (diff/D)+1;
-    }
+    for (long long i = X; i < Y; i += D)
+      ++count;
+
+    return count;
   }
 
-  return jump;
-}
+  // model
 
-// score: 100 of 100. Detected time complexity:O(1)
-// 
-// X==Y : no jump
-// X<Y  : ----------------------
-//         X         Y   D         
-//         
-//    (Y-X)/D == 0. needs one jump.
-//    (Y-X)/D > 0. needs more jump.
-//       -----------------------
-//         X         Y
-//              D   D
-//       (Y-X)%D == 0. fall exactly on Y.
-//       (Y-X)%D != 0. +1 jump.
-// 
-// Lesson learned. Read the question carefully such as 'greater or equal', 'X <=
-// Y', and O(1).
+  int frog_jump_2(int X, int Y, int D)
+  {
+    int quotient = (Y-X)/D;
+    int remainder = (Y-X)%D;
 
-// There are three cases:
-// 
-//                   Y    Y   Y
-// -------------- | ----- | ----- | ---------------------- 
-//                       jumps == X + D*jump;
+    return remainder ? quotient+1 : quotient;
+  }
 
-int frog_jump_2014_nov( int X, int Y, int D )
+  // score: 100 of 100. Detected time complexity:O(1)
+  // 
+  // X==Y : no jump
+  // X<Y  : ----------------------
+  //         X         Y   D         
+  //         
+  //    (Y-X)/D == 0. needs one jump.
+  //    (Y-X)/D > 0. needs more jump.
+  //       -----------------------
+  //         X         Y
+  //              D   D
+  //       (Y-X)%D == 0. fall exactly on Y.
+  //       (Y-X)%D != 0. +1 jump.
+  // 
+  // Lesson learned. Read the question carefully such as 'greater or equal', 'X <=
+  // Y', and O(1).
+
+  // There are three cases:
+  // 
+  //                   Y    Y   Y
+  // -------------- | ----- | ----- | ---------------------- 
+  //                       jumps == X + D*jump;
+
+  // 2014.12
+  int frog_jump_3( int X, int Y, int D )
+  {
+    if( X>Y || D==0 ) return -1;
+
+    int diff = (Y-X);
+    int jump = diff/D;
+
+    if( (diff % D) == 0 )
+      return jump;
+    else
+      return jump+1;
+  }
+
+} // namespace
+
+TEST(AlgoFrogJump, FrogJump)
 {
-  if( X>Y || D==0 ) return -1;
+  using namespace algo_frog_jump;
 
-  int jumps = (Y-X)/D;
+  EXPECT_THAT(frog_jump_1(10, 85, 30), 3);
+  EXPECT_THAT(frog_jump_1(10, 10, 30), 0);
 
-  // Y >  X + jumps
-  if( Y > (X + D*jumps) )
-    return jumps+1;
-  // Y <= X + jumps; covers when X == Y
-  else
-    return jumps;
-}
+  EXPECT_THAT(frog_jump_2(10, 85, 30), 3);
+  EXPECT_THAT(frog_jump_2(10, 10, 30), 0);
 
-int frog_jump_2014_dec( int X, int Y, int D )
-{
-  if( X>Y || D==0 ) return -1;
-
-  int diff = (Y-X);
-  int jump = diff/D;
-
-  if( (diff % D) == 0 )
-    return jump;
-  else
-    return jump+1;
+  EXPECT_THAT(frog_jump_3(10, 85, 30), 3);
+  EXPECT_THAT(frog_jump_3(10, 10, 30), 0);
 }
 
 

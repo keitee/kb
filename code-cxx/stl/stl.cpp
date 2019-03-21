@@ -2723,25 +2723,25 @@ TEST(AlgoRandom, RandomEngineVsRand)
 {
   // always same sequence
   vector<uint32_t> ivec1;
-  generate_n( back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
+  generate_n(back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
   PRINT_ELEMENTS(ivec1);
 
   // always same sequence
   vector<uint32_t> ivec2;
-  generate_n( back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
+  generate_n(back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
   PRINT_ELEMENTS(ivec2);
 
   vector<uint32_t> ivec3;
-  generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
+  generate_n(back_inserter(ivec3), 12, CardSequenceUseRand(24) );
   PRINT_ELEMENTS(ivec3);
 
   vector<uint32_t> ivec4;
-  generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
+  generate_n(back_inserter(ivec4), 12, CardSequenceUseRand(24) );
   PRINT_ELEMENTS(ivec4);
 
   vector<uint32_t> ivec5;
   generate_n(back_inserter(ivec5), 12, 
-      CardSequenceUseRandWithRange(6, 9));
+      CardSequenceUseRandWithRange(0, 23));
   PRINT_ELEMENTS(ivec5);
 }
 
