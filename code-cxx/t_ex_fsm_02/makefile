@@ -6,7 +6,7 @@
 GTEST_DIR = /home/kyoupark/works/googletest/googletest
 GMOCK_DIR = /home/kyoupark/works/googletest/googlemock
 
-TARGET = fsm_table
+TARGET = fsm_atm
 
 # Where to find user code.
 USER_DIR = .
@@ -57,8 +57,12 @@ gtest.a : gtest-all.o
 # message.o : message.cpp $(GTEST_HEADERS)
 # 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c message.cpp -o message.o
 
-fsm.o : fsm.c fsm.h
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c fsm.c -o fsm.o
+sfsm.o : sfsm.c sfsm.h
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c sfsm.c -o sfsm.o
 
-$(TARGET)_out : $(TARGET).o gtest.a gmock.a fsm.o
+dfsm.o : dfsm.c dfsm.h
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c dfsm.c -o dfsm.o
+
+$(TARGET)_out : $(TARGET).o gtest.a gmock.a sfsm.o dfsm.o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
