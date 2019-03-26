@@ -1719,27 +1719,26 @@ TEST(Map, Insert)
 {
   // cannot be a const map since operator[] is for non-const.
 
-  map<unsigned int, string> pmap{ 
+  map<unsigned int, string> coll{ 
     {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
   };
 
-  // PRINT_M_ELEMENTS(pmap);
+  coll[3] = "threee";
+  coll[3] = "threeee";
+  coll[3] = "threeeee";
+  coll[3] = "threeeeee";
 
-  pmap[3] = "threee";
-  pmap[3] = "threeee";
-  pmap[3] = "threeeee";
-  pmap[3] = "threeeeee";
+  ASSERT_THAT(coll[3], Eq("threeeeee"));
 
-  ASSERT_THAT(pmap[3], Eq("threeeeee"));
+  coll.insert({3, "third"});
+  coll.insert({3, "thirdd"});
+  coll.insert({3, "thirddd"});
+  coll.insert({3, "thirdddd"});
 
-  // PRINT_M_ELEMENTS(pmap);
+  // not changed since cxx-set and cxx-map do not allow duplicates and nothing
+  // happens when key is already exist
 
-  pmap.insert({3, "third"});
-  pmap.insert({3, "thirdd"});
-  pmap.insert({3, "thirddd"});
-  pmap.insert({3, "thirdddd"});
-
-  ASSERT_THAT(pmap[3], Eq("threeeeee"));
+  ASSERT_THAT(coll[3], Eq("threeeeee"));
 }
 
 // error when use -D_GLIBCXX_DEBUG

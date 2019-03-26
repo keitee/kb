@@ -135,9 +135,18 @@ TEST(Arith, Comparison)
 
 // typeid : St16initializer_listIKSt4pairIiPKcEE
 
-TEST(Pair, Use)
+namespace cxx_pair
 {
-  // gcc 6.3.0 emits error:
+  template <typename T1, typename T2>
+    std::ostream & operator<<(std::ostream &os, std::pair<T1, T2> const & p)
+    {
+      os << "{" << get<0>(p) << ", " << get<1>(p) << "}";
+    }
+} // namespace
+
+TEST(Pair, MakePair)
+{
+  // gcc 4.9.2 emits no error but 6.3.0 emits error:
   //
   // cxx.cpp:36:5: error: direct-list-initialization of ‘auto’ requires exactly
   // one element [-fpermissive] 
@@ -154,7 +163,7 @@ TEST(Pair, Use)
   // };
 
   {
-    const auto pair_map = {
+    const auto pair_map{
       make_pair(10, "X"),
       make_pair(9, "IX"),
       make_pair(5, "V")
@@ -164,27 +173,53 @@ TEST(Pair, Use)
     EXPECT_THAT(it->first, 10);
     EXPECT_THAT(it->second, "X");
   }
-  
+
   {
-    auto pair1 = make_pair(10, 10);
-    auto pair2 = make_pair(10, 9);
-  
-    auto pair3 = make_pair( 9, 11);
-    auto pair4 = make_pair(11, 9);
-  
-    EXPECT_THAT(pair1 > pair2, true);
-    EXPECT_THAT(pair3 < pair4, true);
+    std::vector<std::pair<int,bool>> 
+        coll{
+          {5,false},{3,false},{7,false},
+          {1,true},{2,false},{8,false},
+          {9,false}};
+
+    auto found_value = std::numeric_limits<size_t>::max();
+    decltype(found_value) found_index{}, index{};
+
+    for (auto const &e: coll)
+    {
+      // if not visited before and see min value
+ 
+      // if (!e.second && e.first < found_value)
+      if (!get<1>(e) && get<0>(e) < found_value)
+      {
+        found_value = get<0>(e);
+        found_index = index;
+      }
+
+      ++index;
+    }
+
+    EXPECT_THAT(found_value, 2);
+    EXPECT_THAT(found_index, 4);
+  }
+
+  {
+    using namespace cxx_pair;
+
+    auto p = make_pair(80, 88);
+
+    cout << p << endl;
   }
 }
 
 
 // cxx-pair-reference cxx-ref
 
-TEST(Pair, WithReference)
+TEST(Pair, PackReference)
 {
   int i{10};
   int j{20};
 
+  // no connetion between i, j and val pair
   {
     auto val = make_pair(i, j);
 
@@ -198,6 +233,7 @@ TEST(Pair, WithReference)
   }
 
   {
+    // *cxx-ref*
     auto val = make_pair(std::ref(i), std::ref(j));
 
     ++val.first;
@@ -348,7 +384,7 @@ TEST(Pair, Comparison)
 // tup1 is bigger than tup2
 // tup1: 22 44 two 
 
-TEST(Tuple, UseTupleType)
+TEST(Tuple, MakeTuple)
 {
   tuple<int, float, string> tup1{41, 6.3, "nico"};
 
@@ -383,46 +419,78 @@ TEST(Tuple, UseTupleType)
   cout << get<2>(tup1) << " " << endl;;
 }
 
-
-// tup: 41 6.3 nico 
-// tup: 41 6.3 nico 
-// tup: 41 6.3 nico 
-// tup: 22 44 two 
-
-TEST(Tuple, UseTupleTie)
+TEST(Tuple, Tie)
 {
-  tuple<int, float, string> tup1{41, 6.3, "nico"};
-  int i;
-  float f;
-  string s;
+  {
+    tuple<int, float, string> tup1{41, 6.3, "nico"};
+    int i;
+    float f;
+    string s;
 
-  tie(i, f, s) = tup1;
+    auto tup = make_tuple(std::ref(i), std::ref(f), std::ref(s));
 
-  cout << "tup: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;
+    // if prints out tup here before assigning value, then do not get tup1's
+    // value and see undefined value instead. referece?
 
-  cout << "tup: ";
-  cout << i << " ";
-  cout << f << " ";
-  cout << s << " " << endl;
+    tup = tup1;
 
-  i = 45;
-  f = 7.3;
-  s = "nico mom";
+    // shows the same
 
-  cout << "tup: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;
+    EXPECT_THAT(get<0>(tup), 41);
+    EXPECT_THAT(get<1>(tup), 6.3);
+    EXPECT_THAT(get<2>(tup), "nico");
 
-  tie(i, f, s) = make_tuple(22, 44, "two");
+    EXPECT_THAT(i, 41);
+    EXPECT_THAT(f, 6.3);
+    EXPECT_THAT(s, "nico");
 
-  cout << "tup: ";
-  cout << i << " ";
-  cout << f << " ";
-  cout << s << " " << endl;
+    // changes both tup and i,f,s
+
+    i = 51; f = 7.3; s = "nico nico";
+
+    EXPECT_THAT(get<0>(tup), 51);
+    EXPECT_THAT(get<1>(tup), 7.3);
+    EXPECT_THAT(get<2>(tup), "nico nico");
+
+    EXPECT_THAT(i, 51);
+    EXPECT_THAT(f, 7.3);
+    EXPECT_THAT(s, "nico nico");
+  }
+
+  // cxx-tie do the same
+  {
+    tuple<int, float, string> tup1{41, 6.3, "nico"};
+    int i;
+    float f;
+    string s;
+
+    auto tup = tie(i, f, s);
+    tup = tup1;
+
+    // shows the same
+
+    EXPECT_THAT(get<0>(tup), 41);
+    EXPECT_THAT(get<1>(tup), 6.3);
+    EXPECT_THAT(get<2>(tup), "nico");
+
+    EXPECT_THAT(i, 41);
+    EXPECT_THAT(f, 6.3);
+    EXPECT_THAT(s, "nico");
+
+    // changes both tup and i,f,s
+
+    i = 51; f = 7.3; s = "nico nico";
+
+    EXPECT_THAT(get<0>(tup), 51);
+    EXPECT_THAT(get<1>(tup), 7.3);
+    EXPECT_THAT(get<2>(tup), "nico nico");
+
+    // more convenient way to access
+
+    EXPECT_THAT(i, 51);
+    EXPECT_THAT(f, 7.3);
+    EXPECT_THAT(s, "nico nico");
+  }
 }
 
 
@@ -749,9 +817,9 @@ TEST(Ctor, CtorInitFromExplicit)
 
 
 // ={=========================================================================
-// cxx-ctor-initialize-list
+// cxx-init-list
 
-namespace ctor_init_list
+namespace cxx_init_list
 {
   class Foo
   {
@@ -760,9 +828,9 @@ namespace ctor_init_list
 
       // mesg_ is updated only here
       Foo(const string &mesg) : mesg_(mesg) 
-      {
-        os_ << mesg_ << " and converting ctor";
-      }
+    {
+      os_ << mesg_ << " and converting ctor";
+    }
 
       Foo(const Foo &foo)
       {
@@ -785,11 +853,56 @@ namespace ctor_init_list
       ostringstream os_;
       string mesg_;
   };
+
+  // to show that it can be used in a function and return vector than print out
+  // to be used in test
+
+  // *cxx-const* *cxx-temporary* *cxx-reference*
+
+  std::vector<string> 
+    error_message_1(std::string const &message, std::initializer_list<std::string> const &ls)
+  {
+    std::vector<string> coll{};
+
+    coll.push_back(message);
+
+    for(auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
+  }
+
+  // const is must to use temporary and if not, non-const compile error
+
+  std::vector<int> 
+    error_message_2(std::initializer_list<int> const &ls)
+  {
+    std::vector<int> coll{};
+
+    for(auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
+  }
+
+  // no error when use tempoarary since it not use reference
+
+  std::vector<int> 
+    error_message_3(std::initializer_list<int> ls)
+  {
+    std::vector<int> coll{};
+
+    for(auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
+  }
+
 } // namespace
 
-TEST(Ctor, CtorInitFromList)
+TEST(Initialise, List)
 {
-  using namespace ctor_init_list;
+  using namespace cxx_init_list;
 
   // copy, brace init
   {
@@ -803,6 +916,21 @@ TEST(Ctor, CtorInitFromList)
 
     Foo foo1{"one", "two", "three"};
     EXPECT_THAT(foo1.return_mesg(), "one, two, three, ");
+  }
+
+  {
+    EXPECT_THAT(error_message_1("error", {string("one"), string("two"), string("three")}),
+        ElementsAre("error", "one", "two","three"));
+  }
+
+  {
+    EXPECT_THAT(error_message_2({1,2,3,4,5}),
+        ElementsAre(1,2,3,4,5));
+  }
+
+  {
+    EXPECT_THAT(error_message_3({1,2,3,4,5}),
+        ElementsAre(1,2,3,4,5));
   }
 }
 
@@ -1572,7 +1700,7 @@ TEST(Reference, Swap)
 {
   using namespace cxx_reference;
 
-  // no swap
+  // no swap happens since uses a copy
   {
     int x = 10, y = 20;
     swap_by_value(x, y);
@@ -1588,7 +1716,7 @@ TEST(Reference, Swap)
     EXPECT_EQ(y, 10);
   }
 
-  // swap, note: no need to pass its address
+  // swap, no need to pass its address
   {
     int x = 10, y = 20;
     swap_by_reference(x, y);
@@ -1599,7 +1727,7 @@ TEST(Reference, Swap)
   // *cxx-swap* std-swap uses reference
   {
     int x = 10, y = 20;
-    swap(x, y);
+    std::swap(x, y);
     EXPECT_EQ(x, 20);
     EXPECT_EQ(y, 10);
   }
@@ -1724,6 +1852,23 @@ TEST(Reference, AccessOnReference)
     AUsePrivateMemberThroughReference secondObjectWithValue10;
     secondObjectWithValue10.changePrivate(firstObjectWithValue10);
     firstObjectWithValue10.printValue();
+}
+
+
+// ={=========================================================================
+// cxx-ratio
+
+TEST(Ratio, Ratio)
+{
+  using FiveThirds = std::ratio<5,3>;
+
+  // Numerator and denominator
+  EXPECT_THAT(FiveThirds::num, 5);
+  EXPECT_THAT(FiveThirds::den, 3);
+
+  // Numerator and denominator
+  EXPECT_THAT(std::nano::num, 1);
+  EXPECT_THAT(std::nano::den, 1000000000LL);
 }
 
 
@@ -2532,21 +2677,68 @@ TEST(Static, TrackClassInstancesWhenNothingCreated)
 // ={=========================================================================
 // cxx-lambda
 
-// string callback()
-// {
-//     std::string value{"this is a callback"};
-//     return value;
-// }
-
-TEST(Lambda, NoCaptureAndReturn)
+TEST(Lambda, CaptureAndReturn)
 {
-  auto callback = [](){
-    std::string value{"this is a callback"};
-    return value;
-  };
+  {
+    auto func = []()
+    {
+      std::string value{"this is a callback"};
+      return value;
+    };
 
-  std::string result = callback();
-  EXPECT_THAT(result, "this is a callback");
+    EXPECT_THAT(func(), "this is a callback");
+  }
+
+  // deduced return is integer
+  {
+    auto func = []
+    {
+      return 42;
+    };
+
+    EXPECT_THAT(func(), 42);
+  }
+
+  // deduced return is double
+  {
+    auto func = []
+    {
+      return 42.0;
+    };
+
+    EXPECT_THAT(func(), 42.0);
+  }
+
+  // no deduction
+  {
+    auto func = [] () -> double
+    {
+      return 42;
+    };
+
+    EXPECT_THAT(func(), 42.0);
+  }
+
+  {
+    int x = 0;
+    int y = 42;
+
+    auto func = [x, &y] 
+    {
+      std::cout << "x: " << x << std::endl;
+      std::cout << "y: " << y << std::endl;
+      ++y;
+
+      // *cxx-error*
+      // cxx.cpp:2646:9: error: increment of read-only variable ‘x’
+      //        ++x;
+      // ++x;
+    };
+    
+    x = y = 77;
+    func();
+    func();
+  }
 }
 
 
@@ -4652,14 +4844,14 @@ TEST(Override, PureVirtual)
     EXPECT_THAT(pderived->get_value(), 20);
   }
 
-  {
-    DerivedNoPure derived;
+  // {
+  //   DerivedNoPure derived;
   
-    // see Derived
-    DerivedNoPure* pderived = &derived;
+  //   // see Derived
+  //   DerivedNoPure* pderived = &derived;
   
-    EXPECT_THAT(pderived->get_value(), 20);
-  }
+  //   EXPECT_THAT(pderived->get_value(), 20);
+  // }
 }
 
 
@@ -6473,6 +6665,77 @@ TEST(Template, VariadicSizeofOperator)
 
 
 // ={=========================================================================
+// cxx-template-type-trait cxx-type-trait
+
+namespace cxx_type_trait
+{
+  template <typename T>
+    bool foo(T const &val)
+    {
+
+      // is_pointer<T> yields either a `true_type` ro `false_type`, for which
+      // ::value either yields true or false.
+
+      if (std::is_pointer<T>::value)
+      {
+        // std::cout << "foo() called for a pointer" << std::endl;
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
+  template <typename T>
+    void foo_impl(T value, std::true_type)
+    {
+      (void) value;
+      std::cout << "foo() called for integral type" << std::endl;
+    }
+
+  template <typename T>
+    void foo_impl(T value, std::false_type)
+    {
+      (void) value;
+      std::cout << "foo() called for floating type" << std::endl;
+    }
+
+  template <typename T>
+    void foo_overload(T value)
+    {
+      foo_impl(value, std::is_integral<T>());
+    }
+
+} // namespace
+
+
+// [ RUN      ] Template.TypeTrait
+// foo() called for integral type
+// foo() called for floating type
+// [       OK ] Template.TypeTrait (1 ms)
+
+TEST(Template, TypeTrait)
+{
+  using namespace cxx_type_trait;
+
+  {
+    int *pint;
+
+    EXPECT_THAT(foo(pint), true);
+  }
+
+  {
+    int ivalue{10};
+    double dvalue{10.0};
+
+    foo_overload(ivalue);
+    foo_overload(dvalue);
+  }
+}
+
+
+// ={=========================================================================
 // cxx-const
 
 TEST(Const, NoViaConstReference)
@@ -6945,6 +7208,92 @@ TEST(Numeric, Abs)
     // abs() works
     long long value = abs(-2147483648);
     EXPECT_THAT(value, 2147483648);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-typedef
+
+
+namespace cxx_typedef
+{
+  // defined here since cannot do in the block since:
+  //
+  // cxx.cpp:7062:3: error: a template declaration cannot appear at block scope
+
+  template<typename Value>
+    using mmap = map<unsigned int, Value>; 
+
+} // namespace
+
+
+TEST(Typedef, Alias)
+{
+  {
+    // cannot be a const map since operator[] is for non-const.
+
+    map<unsigned int, string> coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+  }
+
+  {
+    typedef map<unsigned int, string> mmap; 
+
+    mmap coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+  }
+
+  // this is cxx-type-alias
+
+  {
+    using mmap = map<unsigned int, string>; 
+
+    mmap coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+  }
+
+  // this is *cxx-template-alias*
+  // The aliasing mechanism can be used to define a new template by binding some
+  // or all template arguments.
+
+  {
+    using namespace cxx_typedef;
+
+    mmap<std::string> coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
   }
 }
 
