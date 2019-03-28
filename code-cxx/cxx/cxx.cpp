@@ -141,6 +141,7 @@ namespace cxx_pair
     std::ostream & operator<<(std::ostream &os, std::pair<T1, T2> const & p)
     {
       os << "{" << get<0>(p) << ", " << get<1>(p) << "}";
+      return os;
     }
 } // namespace
 
@@ -175,7 +176,7 @@ TEST(Pair, MakePair)
   }
 
   {
-    std::vector<std::pair<int,bool>> 
+    std::vector<std::pair<size_t,bool>> 
         coll{
           {5,false},{3,false},{7,false},
           {1,true},{2,false},{8,false},
@@ -990,6 +991,7 @@ namespace cxx_ctor_access
 
       Foo(Bar& bar)
       {
+        (void) bar;
         // both cause errors
         // mesg_ = bar.mesg_;
         // bar.mesg_ = "xxx";
@@ -4654,6 +4656,7 @@ TEST(Stdio, ManipulatorsFloat)
   EXPECT_THAT(os.str(), "8.81");
 }
 
+
 // ={=========================================================================
 // cxx-override
 
@@ -4664,8 +4667,7 @@ namespace cxx_override
     class Base
     {
       public:
-        Base() : base_(10)
-      {}
+        Base() : base_(10) {}
 
         virtual int get_value()
         { return base_; }
@@ -4677,8 +4679,7 @@ namespace cxx_override
     class Derived: public Base
     {
       public:
-        Derived() : derived_(20)
-      {} 
+        Derived() : derived_(20) {} 
 
         virtual int get_value(int value)
         { 
@@ -4728,8 +4729,7 @@ namespace cxx_override
     class Base
     {
       public:
-        Base() : base_(10)
-      {}
+        Base() : base_(10) {}
 
         int get_value()
         { return base_; }
@@ -4741,8 +4741,7 @@ namespace cxx_override
     class Derived: public Base
     {
       public:
-        Derived() : derived_(20)
-      {} 
+        Derived() : derived_(20) {} 
 
         int get_value()
         { return derived_; };
@@ -4757,7 +4756,7 @@ TEST(Override, Condition_2)
 {
   using namespace cxx_override::no_virtual;
 
-  // No override keyword is used and no vtable update. Hence base version called.
+  // No override happens since there is no virtual used.
   {
     Derived derived;
     Base* pbase = &derived;
@@ -4774,7 +4773,122 @@ TEST(Override, Condition_2)
   }
 }
 
-// cxx-override
+
+namespace cxx_override
+{
+  namespace with_virtual
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_3)
+{
+  using namespace cxx_override::with_virtual;
+
+  {
+    Derived derived;
+    Base* pbase = &derived;
+
+    // now override works
+    EXPECT_THAT(pbase->get_value(), 20);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pderived = &derived;
+  
+    EXPECT_THAT(pderived->get_value(), 20);
+  }
+}
+
+
+namespace cxx_override
+{
+  namespace with_virtual_and_private
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: private Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+// TEST(Override, Condition_4)
+// {
+//   using namespace cxx_override::with_virtual_and_private;
+// 
+//   {
+//     Derived derived;
+// 
+//     // *cxx-error*
+//     // cxx.cpp:4864:20: error: ‘cxx_override::with_virtual_and_private::Base’ is an inaccessible base of ‘cxx_override::with_virtual_and_private::Derived’
+//     //
+//     //      Base* pbase = &derived;
+//     //                     ^
+//     // means that *cxx-override* must use public inheritance
+// 
+//     Base* pbase = &derived;
+// 
+//     // now override works
+//     EXPECT_THAT(pbase->get_value(), 20);
+//   }
+// 
+//   {
+//     Derived derived;
+//   
+//     // see Derived
+//     Derived* pderived = &derived;
+//   
+//     EXPECT_THAT(pderived->get_value(), 20);
+//   }
+// }
+
+
+// cxx-override when not implemented pure virtual member function
 
 namespace cxx_override
 {
@@ -6672,6 +6786,7 @@ namespace cxx_type_trait
   template <typename T>
     bool foo(T const &val)
     {
+      (void)val;
 
       // is_pointer<T> yields either a `true_type` ro `false_type`, for which
       // ::value either yields true or false.
@@ -7153,6 +7268,7 @@ TEST(Cpp, Stringification)
     PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode\n", "physDev->shDeviceName"));
   }
 }
+
 
 // ={=========================================================================
 // cxx-assert

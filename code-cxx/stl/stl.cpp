@@ -442,7 +442,7 @@ TEST(Iterator, Array)
   EXPECT_THAT(out, ElementsAre(33, 67, -4, 13, 5, 2));
 }
 
-TEST(IteratorAdapter, Adapters)
+TEST(Iterator, Adapters)
 {
   list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -475,7 +475,7 @@ TEST(IteratorAdapter, Adapters)
 
 // shows that inserter() uses insert_iterator internally and that how it works.
 
-TEST(IteratorAdapter, InsertIterator)
+TEST(Iterator, InsertIterator)
 {
   {
     list<int> coll;
@@ -483,7 +483,7 @@ TEST(IteratorAdapter, InsertIterator)
     insert_iterator<list<int>> iter(coll, coll.begin());
 
     // use usual iterator interface which has the same result
-    // why since this is how insert_iterator is implemented
+    // no ++? since this is becuase operator=() do that as above
     //
     // *iter = 1; iter++;
     // *iter = 2; iter++;
@@ -512,7 +512,7 @@ TEST(IteratorAdapter, InsertIterator)
   }
 }
 
-TEST(IteratorAdapter, ReverseIterator)
+TEST(Iterator, ReverseIterator)
 {
   {
     string coll{"PARK"};
@@ -593,7 +593,7 @@ TEST(IteratorAdapter, ReverseIterator)
   }
 }
 
-TEST(IteratorAdapter, StreamIterator)
+TEST(Iterator, StreamIterator)
 {
   // as gets from std::cin, use stream
   {

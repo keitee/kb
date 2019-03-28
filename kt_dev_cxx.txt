@@ -11995,7 +11995,7 @@ only for destroying the resources allocated by the derived class. From user or
 programmer POV.
 
 
-{cxx-dtor-non-virtual-destruction-problem}
+{cxx-dtor-non-virtual-destruction-problem} *cxx-override* *cxx-override*
 EC++07. The problem is that base dtor runs when derived dtor is expected via
 derived-to-base pointer is used.
 
@@ -12008,40 +12008,36 @@ version.
 
 Therefore, there are two cases when override do not happen; 
 
-o one when argument is different, see `cxx-override-condition`, 
+o one when argument is different, see `cxx-override-condition`
 
-o  one when miss out virtual keyword in a base as shown here.
+o one when miss out virtual keyword in a base as shown here.
 
 
 note that:
 
-o `non-virtual-destruction-problem` only for dynamic-binding 
+o `non-virtual-destruction-problem` only for `dynamic-binding` 
   if uses static binding and no vtable is involved. The compiler knows only
   about derived type and do not emits code to follow vtables.
 
-this is a problem only when use dynamic allocation through a base pointer.
-cxx-vector do not have virtual dtor and it is okay if used only statically. 
+it is a problem only when use dynamic allocation through a base pointer.
+Although cxx-vector do not have virtual dtor and it is okay if used only
+statically. 
 
-template<typename T>
-class Vec : public std::vector<T> {
-
-  public:
-};
-
-
-Due to *non-virtual-destruction-problem* All base class 'must' have virtual
+Due to *non-virtual-destruction-problem,* all base class `must` have virtual
 dtor and these are the first and the second at below and as advised in EC++07.
 
 o polymorphic base class
-designed for inheritance and defined virtual funcs. `must have virtual dtor.`
+  designed for inheritance and defined virtual funcs. `must have virtual
+  dtor.`
 
 o base class to extend 
-designed for inheritance but no virtual funcs. means no overrides and add more
-funcs. However, if no virtual dtor, this causes virtual-destruction-problem. 
+  designed for inheritance but no virtual funcs, no overrides and add more
+  funcs. However, if no virtual dtor, causes non-virtual-destruction-problem. 
 
 o a class not to be inherited
-designed for no inheritance like STL. DO NOT use virtual-dtor sicne it will
-increate a size of instance and make it not portable. *cxx-preventing-inheritance* 
+  designed for no inheritance like STL. DO NOT use virtual-dtor sicne it will
+  increate a size of instance and make it not portable.
+  *cxx-preventing-inheritance* 
 
 
 <ex>
@@ -12124,12 +12120,14 @@ TEST(Dtor, NoVirtualDtorProblem)
 {
   using namespace cxx_dtor;
 
+  // no "dtor: derived" called
   {
     cout << "{" << endl;
     NoVirtualDtorBase* pbase = new DerivedFromNoVirtual;
 
     // https://stackoverflow.com/questions/7403883/derived-class-with-non-virtual-destructor
     // If you don't do delete in the above manner, then it will be fine. 
+
     delete pbase; 
 
     cout << "}" << endl; 
@@ -27217,8 +27215,7 @@ namespace cxx_override
     class Base
     {
       public:
-        Base() : base_(10)
-      {}
+        Base() : base_(10) {}
 
         virtual int get_value()
         { return base_; }
@@ -27230,8 +27227,7 @@ namespace cxx_override
     class Derived: public Base
     {
       public:
-        Derived() : derived_(20)
-      {} 
+        Derived() : derived_(20) {} 
 
         virtual int get_value(int value)
         { 
@@ -27245,7 +27241,7 @@ namespace cxx_override
   } // namespace
 } // namespace
 
-TEST(Override, Condition)
+TEST(Override, Condition_1)
 {
   using namespace cxx_override::no_override;
 
@@ -27275,6 +27271,15 @@ TEST(Override, Condition)
 }
 
 
+{cxx-override-condition} *cxx-dtor-non-virtual-destruction-problem*
+To override:
+
+name, parameter type, `cxx-const`, and return type `should be the same` 
+
+An exception to this when return type is a pointer or reference. Tried pointer
+return type, no errors so return type in overrides can be different only that
+is pointer. See p606 in ref-CPR.
+
 EC++33. do not find any useful or practical.
 EC++36. If you redefine non-virtual, it hides names. The other problem is to
 exhibit 'inconsistent' behavior depending on type of pointer used.
@@ -27286,8 +27291,7 @@ namespace cxx_override
     class Base
     {
       public:
-        Base() : base_(10)
-      {}
+        Base() : base_(10) {}
 
         int get_value()
         { return base_; }
@@ -27299,8 +27303,7 @@ namespace cxx_override
     class Derived: public Base
     {
       public:
-        Derived() : derived_(20)
-      {} 
+        Derived() : derived_(20) {} 
 
         int get_value()
         { return derived_; };
@@ -27315,7 +27318,7 @@ TEST(Override, Condition_2)
 {
   using namespace cxx_override::no_virtual;
 
-  // No override since no vtable update and base version called.
+  // No override happens since there is no virtual used.
   {
     Derived derived;
     Base* pbase = &derived;
@@ -27326,57 +27329,124 @@ TEST(Override, Condition_2)
     Derived derived;
   
     // see Derived
-    Derived* pbase = &derived;
+    Derived* pderived = &derived;
   
+    EXPECT_THAT(pderived->get_value(), 20);
+  }
+}
+
+namespace cxx_override
+{
+  namespace with_virtual
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_3)
+{
+  using namespace cxx_override::with_virtual;
+
+  {
+    Derived derived;
+    Base* pbase = &derived;
+
+    // now override works
     EXPECT_THAT(pbase->get_value(), 20);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pderived = &derived;
+  
+    EXPECT_THAT(pderived->get_value(), 20);
   }
 }
 
 
-{cxx-override-condition}
-
-To override:
-name, parameter type, `cxx-const`, and return type `should be the same` 
-
-An exception to this when return type is a pointer or reference. Tried pointer
-return type, no errors so return type in overrides can be different only that
-is pointer. See p606 in ref-CPR.
-
-class B0 {
-  public:
-    virtual int foo() { cout << "int B0::foo()" << endl; }
-};
-
-class D1 : public B0 {
-  public:
-    bool foo() { cout << "bool D1::foo() " << endl; }
-};
-
-class D2 : public D1 {
-  public:
-    int foo() { cout << "bool D2::foo() " << endl; }
-};
-
-// t_override.cpp:33:10: error: conflicting return type specified for ‘virtual bool OR2::D1::foo()’
-//      bool foo() { cout << "bool D1::foo() " << endl; }
-//           ^
-// t_override.cpp:28:17: error:   overriding ‘virtual int OR2::B0::foo()’
-//      virtual int foo() { cout << "int B0::foo()" << endl; }
-//                  ^
-// t_override.cpp:38:9: error: conflicting return type specified for ‘virtual int OR2::D2::foo()’
-//      int foo() { cout << "bool D2::foo() " << endl; }
-//          ^
-// t_override.cpp:33:10: error:   overriding ‘virtual bool OR2::D1::foo()’
-//      bool foo() { cout << "bool D1::foo() " << endl; }
-          ^
-void t_override_03()
+namespace cxx_override
 {
-    using namespace OR2;
+  namespace with_virtual_and_private
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
 
-    D2 dobj;
-    D2* p = &dobj;
-    p->foo();
-}
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: private Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+// TEST(Override, Condition_4)
+// {
+//   using namespace cxx_override::with_virtual_and_private;
+// 
+//   {
+//     Derived derived;
+// 
+//     // *cxx-error*
+//     // cxx.cpp:4864:20: error: ‘cxx_override::with_virtual_and_private::Base’ is an inaccessible base of ‘cxx_override::with_virtual_and_private::Derived’
+//     //
+//     //      Base* pbase = &derived;
+//     //                     ^
+//     // means that *cxx-override* must use public inheritance
+// 
+//     Base* pbase = &derived;
+// 
+//     // now override works
+//     EXPECT_THAT(pbase->get_value(), 20);
+//   }
+// 
+//   {
+//     Derived derived;
+//   
+//     // see Derived
+//     Derived* pderived = &derived;
+//   
+//     EXPECT_THAT(pderived->get_value(), 20);
+//   }
+// }
 
 
 {cxx-override-keyword} {cxx-final-keyword}
@@ -38786,7 +38856,7 @@ might change over time.
 unordered_set, unordered_multiset, unordered_map, and unordered_multimap.
 
 
-{implementation}
+{cxx-coll-implementation}
 Sorted collections have the additional ability to be ordered according to a
 sorting criterion.
 
@@ -38854,7 +38924,7 @@ string              `const,O(1)`      O(n)+     O(n)+     const+    `random`
 
 
 <contiguous-and-node-based> the other criteria
-string, vector, deque, and array are 'contiguous' memory. Hence, insert/delete
+string, vector, deque, and array uses `contiguous memory` Hence, insert/delete
 in the middle can be expensive since have to move elements but fast access.
 
 // TODO: incomplete sentence
@@ -43894,26 +43964,26 @@ abstraction to represent a 'position' in a container.
 {cxx-iter-categories}
 An iterator of a higher category provides all the operations of lower ones.
 
-* input iterator 
+o input iterator 
   'read' but not write, single-pass, increment only. Must supports ==, !=, ++,
   *, -> and cannot save the state of an input iterator such as stream. Hence
   single pass.
 
-* output iterator
+o output iterator
   'write' but not read, single-pass, increment only. Must supports ++, * and as
   with input, single pass.
 
-* forward iterator
+o forward iterator
   read and write, multi-pass, increment only. Can read and write a sequence
   forward only; ++ operator. unordered_set, unordered_multiset, unordered_map,
   and unordered_multimap are "at least" forward iterators
 
-* bidirectional iterator
+o bidirectional iterator
   read and write, multi-pass, increment and decrement. Can read and write a
   sequence forward or backword; ++ and -- operator. list, set, multiset, map,
   and multimap.
 
-* `random-access` iterator
+o `random-access` iterator
   read and write, multi-pass, full `iterator-arithmetic`, `constant-time-access`
   to any position in the sequence. Supports all the functionality of
   bidirectional iterators. 
@@ -43997,10 +44067,10 @@ An iterator of a higher category provides all the operations of lower ones.
     };
 
 
-{cxx-iter-range}
+{cxx-iter-notation} *cxx-end*
 [begin, end) notation and `off-the-end` iterator which is one past the last.
 This notation applies to subrange as well in use of algorithm. A half-open
-range has two advantages:
+range has `two advantages`:
 
 o You have a simple end criterion for loops that iterate over the elements:
   They simply continue as long as end() is not reached.
@@ -45100,10 +45170,10 @@ insert, stream, reverse, and move iterators
 
 
 {cxx-iter-inserter} cxx-inserter
-`insert-iterator`, or inserters, are used to let algorithms operate in
-'insert' mode rather than in overwrite mode by transforming an assignment of
-an new value into an insertion. (for overwrite example, algorithms using
-    multiple range) 
+`insert-iterator`, or inserters, are used to let algorithms operate in `insert
+mode` rather than in `overwrite mode` by transforming an assignment of an new
+value into an insertion. (for overwrite example, algorithms using multiple
+    range) 
 
 They fall under the category of 'output' iterators, which are able to
 write/assign values only 'while' iterating forward.
@@ -45116,9 +45186,9 @@ use back_inserter only if it has push_back.
 These are `back_inserter`, `front_inserter`, `inserter` which bind iterator to
 container operations.
 
-Consider *cxx-algo-copy* :
-
-namespace std {
+namespace cxx_code 
+{
+  // *cxx-algo-copy*
   template <typename InputIterator, typename OutputIterator>
     OutputIterator copy (InputIterator from_pos,  // beginning of source
         InputIterator from_end,                   // end of source
@@ -45131,7 +45201,7 @@ namespace std {
       }
       return to_pos;
     }
-}
+} // namespace
 
 The interesting part is the assignment of the new value:
 
@@ -45142,8 +45212,8 @@ operations are involved: First, operator * returns the `current-element` of the
 iterator; second, operator = assigns the new value. Implementations of insert
 iterators usually use the following two-step trick:
 
-o Operator * is implemented as a no-op that simply returns *this. Thus, for
-  insert iterators, *pos is equivalent to pos.
+o operator*() is implemented as a no-op that simply returns *this. Thus, for
+  insert iterators, *pos is equivalent to pos, which is iterator.
 
   template<typename _Container>
     class insert_iterator
@@ -45160,7 +45230,9 @@ o The assignment operator is implemented so that it gets transferred into an
   insertion. In fact, the insert iterator calls the push_back(), push_front(),
   or insert() member function of the container.
 
-// bits/stl_iterator.h
+namespace cxx_code
+{
+  // bits/stl_iterator.h
 
   /**
    *  @param __x  A container of arbitrary type.
@@ -45172,13 +45244,13 @@ o The assignment operator is implemented so that it gets transferred into an
    *  programming.  Using this function lets you take advantage of automatic
    *  template parameter deduction, making the compiler match the correct
    *  types for you.
-  */
+   */
   template<typename _Container, typename _Iterator>
     inline insert_iterator<_Container>
-    inserter(_Container& __x, _Iterator __i)
+    `inserter`(_Container& __x, _Iterator __i)
     {
       return insert_iterator<_Container>(__x,
-					 typename _Container::iterator(__i));
+          typename _Container::iterator(__i));
     }
 
   /**
@@ -45194,24 +45266,24 @@ o The assignment operator is implemented so that it gets transferred into an
    *
    *  Tip:  Using the inserter function to create these iterators can
    *  save typing.
-  */
+   */
   template<typename _Container>
     class insert_iterator
     : public iterator<output_iterator_tag, void, void, void, void>
     {
       /// Simply returns *this.
       insert_iterator&
-      operator*()
-      { return *this; }
+        operator*()
+        { return *this; }
 
       insert_iterator&
         operator=(const typename _Container::value_type& __value)
         {
-          iter = container->insert(iter, __value);
+          iter = `container->insert`(iter, __value);
           ++iter;
           return *this;
         }
-    
+
       insert_iterator&
         operator=(typename _Container::value_type&& __value)
         {
@@ -45220,13 +45292,11 @@ o The assignment operator is implemented so that it gets transferred into an
           return *this;
         }
     }
-
-
-Each kind of insert iterator has a convenience function for its creation and
-initialization.
+}
 
 note:
-* Need to care about underlying container.
+Still need to care about underlying container.
+
 
 // TBD
 // <why-useful>
@@ -45244,13 +45314,13 @@ position that is passed as the argument of its initialization and as the start
 to insert. `For all containers except array and forward_list.`
 
 Passing a position(iterator) to insert doesn't sound useful? So for
-associative and unordered containers, the position is taken as a 'hint' to
+associative and unordered containers, the position is taken as a `hint` to
 start the search for the correct position. However, containers are free to
 ignore it.
 
-<ex> *ex-algo-copy*
+<ex> *algo-copy*
 
-TEST(Iterator, Adapter)
+TEST(Iterator, Adapters)
 {
   list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -45273,7 +45343,6 @@ TEST(Iterator, Adapter)
   }
 
   // *cxx-iter-inserter*
-  // note see the usage of inserter
   {
     vector<int> ocoll;
     std::copy(coll.cbegin(), coll.cend(),
@@ -45292,16 +45361,6 @@ c.insert(pos,elem)
 Inserts a copy of elem before iterator position pos and returns the position
 of the new element
 
-insert_iterator&
-  operator=(const typename _Container::value_type& __value)
-  {
-    iter = container->insert(iter, __value);
-    ++iter;
-    return *this;
-  }
-
-// shows that inserter() uses insert_iterator internally and that how it works.
-
 TEST(Iterator, InsertIterator)
 {
   {
@@ -45310,7 +45369,7 @@ TEST(Iterator, InsertIterator)
     insert_iterator<list<int>> iter(coll, coll.begin());
 
     // use usual iterator interface which has the same result
-    // why since this is how insert_iterator is implemented
+    // no ++? since this is becuase operator=() do that as above
     //
     // *iter = 1; iter++;
     // *iter = 2; iter++;
@@ -45341,11 +45400,12 @@ TEST(Iterator, InsertIterator)
 
 
 {cxx-iter-back-inserter} {cxx-back-inserter}
-Calls push_back so back inserters can be used 'only' for containers that
+Calls push_back so back inserters can be used `only for containers` that
 provide push_back() as a member function: vector, deque, list, and strings.
 
-<code>
-// c++/4.7/bits/stl_iterator.h
+namespace cxx_code
+{
+  // c++/4.7/bits/stl_iterator.h
 
   // 24.4.2.2.1 back_insert_iterator
   /**
@@ -45357,86 +45417,91 @@ provide push_back() as a member function: vector, deque, list, and strings.
    *
    *  Tip:  Using the back_inserter function to create these iterators can
    *  save typing.
-  */
+   */
   template<typename _Container>
     class back_insert_iterator
     : public iterator<output_iterator_tag, void, void, void, void>
     {
-    protected:
-      _Container* container;
+      protected:
+        _Container* container;
 
-    public:
-      /// A nested typedef for the type of whatever container you used.
-      typedef _Container          container_type;
+      public:
+        /// A nested typedef for the type of whatever container you used.
+        typedef _Container          container_type;
 
-      /// The only way to create this %iterator is with a container.
-      explicit
-      back_insert_iterator(_Container& __x) : container(&__x) { }
+        /// The only way to create this %iterator is with a container.
+        explicit
+          back_insert_iterator(_Container& __x) : container(&__x) { }
 
-      /**
-       *  @param  __value  An instance of whatever type
-       *                 container_type::const_reference is; presumably a
-       *                 reference-to-const T for container<T>.
-       *  @return  This %iterator, for chained operations.
-       *
-       *  This kind of %iterator doesn't really have a @a position in the
-       *  container (you can think of the position as being permanently at
-       *  the end, if you like).  Assigning a value to the %iterator will
-       *  always append the value to the end of the container.
-      */
+        /**
+         *  @param  __value  An instance of whatever type
+         *                 container_type::const_reference is; presumably a
+         *                 reference-to-const T for container<T>.
+         *  @return  This %iterator, for chained operations.
+         *
+         *  This kind of %iterator doesn't really have a @a position in the
+         *  container (you can think of the position as being permanently at
+         *  the end, if you like).  Assigning a value to the %iterator will
+         *  always append the value to the end of the container.
+         */
 #ifndef __GXX_EXPERIMENTAL_CXX0X__
-      back_insert_iterator&
-      operator=(typename _Container::const_reference __value)
-      {
-        container->push_back(__value);
-        return *this;
-      }
+        back_insert_iterator&
+          operator=(typename _Container::const_reference __value)
+          {
+            container->push_back(__value);
+            return *this;
+          }
 #else
-      back_insert_iterator&
-      operator=(const typename _Container::value_type& __value)
-      {
-        container->push_back(__value);
-        return *this;
-      }
+        back_insert_iterator&
+          operator=(const typename _Container::value_type& __value)
+          {
+            container->push_back(__value);
+            return *this;
+          }
 
-      back_insert_iterator&
-      operator=(typename _Container::value_type&& __value)
-      {
-        container->push_back(std::move(__value));
-        return *this;
-      }
+        back_insert_iterator&
+          operator=(typename _Container::value_type&& __value)
+          {
+            container->push_back(std::move(__value));
+            return *this;
+          }
 #endif
     }
-};
+} // namespace
 
 
 {cxx-iter-front-inserter} {cxx-front-inserter}
-Calls push_front so back inserters can be used 'only' for containers that
+Calls push_front so back inserters can be used `only for containers` that
 provide push_front() as a member function: deque, list, and forward_list.
 
 
 {cxx-iter-stream} cxx-stream-iterator
 
-// /usr/include/c++/4.9/bits/stream_iterator.h
+namespace cxx_code
+{
+  // /usr/include/c++/4.9/bits/stream_iterator.h
 
-template <class T, class charT=char, class traits=char_traits< charT>>
-class ostream_iterator;
- 
-ostream_iterator (ostream_type& s, const char_type* delimiter);
+  template <class T, class charT=char, class traits=char_traits< charT>>
+    class ostream_iterator;
+
+  ostream_iterator (ostream_type& s, const char_type* delimiter);
+
+} // namespace
 
   "see(treat) stream as a sequence of elements(container) so use iterators"
 
 A stream is an object that represent I/O channel. Treat stream as a sequence
 of elements of a specified 'type' that should have input/output op
 defined(>>/<<) and bind iterator to a stream. In other words, see a stream as
-a sequence of user provided speficified type. Why need this? To use stream
-with algorithms.
+a sequence of user provided speficified type. 
+
+Why? To use stream with algorithms. See *cxx-stringstream*
 
 Need to specify which stream will be used and the type of objects written to it.
 
 <ex>
 
-TEST(IteratorAdapter, StreamIterator)
+TEST(Iterator, StreamIterator)
 {
   // as gets from std::cin, use stream
   {
@@ -45539,7 +45604,7 @@ TEST(IteratorAdapter, StreamIterator)
 }
 
 
-<ex> how stream-iterator can make code neat
+<ex> stream-iterator can make code neat
 
 class Sales_item {
 // these declarations are explained section 7.2.1, p. 270 
@@ -45610,7 +45675,7 @@ int main()
 }
 
 
-<ex> *cxx-ex-ifstream*
+<ex> *cxx-ifstream*
 Typically, istream_iterators and ostream_iterators are not used directly.
 Instead, they are provided as arguments to algorithms. For example, we can
 write a simple program to read a file, sort the words read, eliminate
@@ -45621,18 +45686,18 @@ int main()
   string from, to;
   cin >> from >> to;                      // get source and target file names
 
-  ifstream is {from};                     // input stream for file "from"
-  istream_iterator<string> ii {is};       // input iterator for stream
-  istream_iterator<string> eos {};        // input sentinel
+  ifstream is{from};                      // input stream for file "from"
+  istream_iterator<string> ii{is};        // input iterator for stream
+  istream_iterator<string> eos{};         // input sentinel
 
-  ofstream os {to};                       // output stream for file "to"
-  ostream_iterator<string> oo {os,"\n"};  // output iterator for stream
+  ofstream os{to};                        // output stream for file "to"
+  ostream_iterator<string> oo{os,"\n"};   // output iterator for stream
 
-  vector<string> b {ii,eos};              // b is a vector initialized from input
-  sort(b.begin(),b.end());                // sort the buffer
+  vector<string> b{ii, eos};              // b is a vector initialized from input
+  sort(b.begin(), b.end());               // sort the buffer
 
   *algo-unique-copy*
-  unique_copy(b.begin(),b.end(),oo);      // copy buffer to output, discard replicated values
+  unique_copy(b.begin(), b.end(), oo);    // copy buffer to output, discard replicated values
 
   return !is.eof() || !os;                // return error state (§2.2.1, §38.3)
 }
@@ -45678,7 +45743,7 @@ T accumulate (InputIterator first, InputIterator last, T init)
 // and all elements in the range [beg,end). In particular, it calls the
 // following for each element:
 //
-// initValue = op(initValue,elem)
+// initValue = op(initValue, elem)
 //
 // Thus, for the values
 //  a1 a2 a3 a4 ...
@@ -45688,9 +45753,12 @@ T accumulate (InputIterator first, InputIterator last, T init)
 //
 // or
 //  initValue op a1 op a2 op a3 op ...
+//
 // respectively.
 
-// bits/stl_numeric.h
+namespace cxx_code
+{
+  // bits/stl_numeric.h
 
   /**
    *  @brief  Accumulate values in a range.
@@ -45728,13 +45796,14 @@ T accumulate (InputIterator first, InputIterator last, T init)
   template<typename _InputIterator, typename _Tp, typename _BinaryOperation>
     inline _Tp
     accumulate(_InputIterator __first, _InputIterator __last, _Tp __init,
-	       `_BinaryOperation` __binary_op)
+        `_BinaryOperation` __binary_op)
     {
       for (; __first != __last; ++__first)
         __init = __binary_op(__init, *__first);
       return __init;
     }
 
+} // namespace
 
 TEST(AlgoAccumulate, Stream)
 {
@@ -45798,7 +45867,8 @@ TEST(AlgoAccumulate, Map)
   };
 
   // *cxx-error*
-  // auto result = std::accumulate(counts.begin(), counts.end(), pair<int const, size_t>());
+  // auto result = std::accumulate(
+  //  counts.begin(), counts.end(), pair<int const, size_t>());
 
   // *cxx-const* cause error:
   //     [](size_t sum, pair<int, size_t>& e)
@@ -45852,36 +45922,41 @@ There is the difference when converting reverse to and from since the
 resulting iterator `does 'not' refer to the same element.` This is a
 consequence of the fact that ranges are half open.
 
-// bits/stl_vector.h
+namespace cxx_code
+{
+  // bits/stl_vector.h
 
   template<typename _Tp, typename _Alloc = std::allocator<_Tp> >
     class vector : protected _Vector_base<_Tp, _Alloc>
-    {
-      typedef std::reverse_iterator<const_iterator>  const_reverse_iterator;
-      typedef std::reverse_iterator<iterator>		 reverse_iterator;
+  {
+    typedef std::reverse_iterator<const_iterator>  const_reverse_iterator;
+    typedef std::reverse_iterator<iterator>		 reverse_iterator;
 
-      /**
-       *  Returns a read/write reverse iterator that points to the
-       *  last element in the %vector.  Iteration is done in reverse
-       *  element order.
-       */
-      reverse_iterator
+    /**
+     *  Returns a read/write reverse iterator that points to the
+     *  last element in the %vector.  Iteration is done in reverse
+     *  element order.
+     */
+    reverse_iterator
       rbegin() _GLIBCXX_NOEXCEPT
       { return reverse_iterator(end()); }
 
-      /**
-       *  Returns a read/write reverse iterator that points to one
-       *  before the first element in the %vector.  Iteration is done
-       *  in reverse element order.
-       */
-      reverse_iterator
+    /**
+     *  Returns a read/write reverse iterator that points to one
+     *  before the first element in the %vector.  Iteration is done
+     *  in reverse element order.
+     */
+    reverse_iterator
       rend() _GLIBCXX_NOEXCEPT
       { return reverse_iterator(begin()); }
-    }
+  }
+} // namespace
 
 This -1 difference is handled by:
 
-// bits/stl_iterator.h
+namespace cxx_code
+{
+  // bits/stl_iterator.h
 
   // 24.4.1 Reverse iterators
   /**
@@ -45901,7 +45976,7 @@ This -1 difference is handled by:
    *  Reverse iterators can be tricky and surprising at first.  Their
    *  semantics make sense, however, and the trickiness is a side effect of
    *  the requirement that the iterators must be safe.
-  */
+   */
   template<typename _Iterator>
     class reverse_iterator
     {
@@ -45914,17 +45989,18 @@ This -1 difference is handled by:
        *           underlying iterator type, @c x, a reference obtained by
        *           @c *x remains valid after @c x has been modified or
        *           destroyed. This is a bug: http://gcc.gnu.org/PR51823
-      */
+       */
       reference
-      operator*() const
-      {
-        _Iterator __tmp = current;
-        return *--__tmp;
-      }
+        operator*() const
+        {
+          _Iterator __tmp = current;
+          return *--__tmp;
+        }
     }
+}
 
 <ex>
-TEST(IteratorAdapter, ReverseIterator)
+TEST(Iterator, ReverseIterator)
 {
   {
     string coll{"PARK"};
@@ -46326,7 +46402,7 @@ argument to predicate.
 
 <ex>
 
-namespace algo_code
+namespace cxx_code
 {
   template<typename _InputIterator, typename _Function>
     _Function
@@ -46372,14 +46448,14 @@ void square_refer_no_return(int &value)
 
 TEST(AlgoForEach, Transform)
 {
-  // value
+  // value, no changes on coll
   {
     set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     for_each(coll.begin(), coll.end(), square_value_no_return);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
   }
 
-  // reference
+  // reference, changes on coll
   {
     // compile error since key in set are const if use set
     // set<int> coll{1,2,3,4,5,6,7,8};
@@ -46409,7 +46485,7 @@ operator<() for a user type.
 
 <ex>
 
-namespace algo_code
+namespace cxx_code
 {
   // template< class RandomIt, class Compare>
   // void sort( RandomIt first, RandomIt last, Compare comp );
@@ -46852,13 +46928,27 @@ TEST(Predicate, ValueAndReference)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-fobj-lambda cxx-lambda C++11
 
-Lambdas, introduced with *cxx-11* , define a way to specify functional behavior
-'inside' an expression or statement. You can define 'objects' that represent
-functional behavior and pass these objects as `unnamed inline function` to
-algorithms to be used as predicates or for other purposes.
+Lambdas, introduced with *cxx-11* , define a way to specify functional
+behavior `inside` an expression or statement. You can define objects that
+represent functional behavior and pass these objects as `unnamed inline
+function` to algorithms to be used as predicates or for other purposes.
 
 Like any other function, lambda has return, parameter, and function body but
 unlike function, be defined inside a function.
+
+
+{cxx-lambda-limits}
+
+o not usable for some cases 
+  by rule lambdas have no default constructor and no assignment operator. So,
+  for a sorting criterion, a class defining the function objects might still
+  be more intuitive.
+
+o Another problem of lambdas is that they can’t have an internal state held
+  over multiple calls of a lambda. If you need such a state, you have declare
+  an object or variable in the outer scope and pass it by-reference with a
+  capture into the lambda. In contrast, function objects allow you to
+  encapsulate an internal state
 
 
 // {cxx-predicate}
@@ -46867,11 +46957,12 @@ unlike function, be defined inside a function.
 // Depending on their purpose, predicates are 'unary' or 'binary'.
 
 
-<cxx-lambda-form>
+{cxx-lambda}
+
 [capture list] (parameter list) -> return type { body }
 
 The capture list is a list of `local variables in the enclosing function.`
-The parameter and return are 'optional'. If omits them, will be void for
+`The parameter and return are optional` If omits them, will be void for
 parameter or return. 
 
 When return used in the body, has an `inferred return type.` 
@@ -46928,7 +47019,8 @@ class Work
   public:
     static const int DefaultId{0};
 
-    // see that how cxx-lambda is used to initialize func_
+    // see that cxx-lambda is used to initialize func_
+
     Work(int id=DefaultId)
       : id_{id}, func_{[]{}} {}
 
@@ -47003,7 +47095,7 @@ namespace cxx_lambda
     // works when use:
     //
     // [sz](string const& e)
-
+    //
     // auto wc = find_if(words.begin(), words.end(),
     //     [=](string const& e)
     //     { return e.size() >= sz; });
@@ -47129,14 +47221,15 @@ by reference is [&], and capture all local names used by value is [=].
 
 
 <ex> 
-// Suppose that you search in a collection for the first element with a value
-// that is between x and y.
+/* 
+Suppose that you search in a collection for the first element with a value
+that is between x and y.
 
-// If need to use in more than one or two places, use function than a lambda.
-// However, it is not easy to write function to replace a lambda that captures
-// local variables. For example, find_if takes unary predicate and see how to
-// pass more than one as this example.
-
+If need to use in more than one or two places, use function than a lambda.
+However, it is not easy to write function to replace a lambda that captures
+local variables. For example, find_if takes unary predicate and see how to
+pass more than one as this example.
+*/
 
 TEST(Lambda, Compare)
 {
@@ -47154,19 +47247,17 @@ TEST(Lambda, Compare)
     EXPECT_THAT(*pos, 7);
   }
 
-  // use cxx-bind
+  // use cxx-bind which complicated than other ways
   {
     auto pos = find_if (coll.begin(), coll.end(),  // range
         bind(logical_and<bool>(),     // search criterion
-          bind(greater<int>(),_1,x), // _1 > x
-          bind(less<int>(),_1,y)));  // _1 < y
+          bind(greater<int>(),_1,x),  // _1 > x
+          bind(less<int>(),_1,y)));   // _1 < y
 
     EXPECT_THAT(*pos, 7);
   }
 
-  // before cxx-11, other ways to do
-
-  // handwritten loop
+  // handwritten loop, before cxx-11
   {
     deque<int>::iterator pos;
 
@@ -49157,49 +49248,57 @@ int sum = accumulate( vec.cbegin(), vec.cend(), 0 );
 string sum = accumulate( vec.cbegin(), vec.cend(), string(""));
 
 
-{assumption-on-ranges}
+{cxx-algo-assumption-on-ranges}
+
 <single-range>
+
 To be able to handle subsets of container elements, you pass the beginning and
 the end of the range as two separate arguments rather than the whole
 collection. This interface is flexible but dangerous.
 
 The caller must ensure that the first and second arguments define a valid
-range. Otherwise, the behavior is 'undefined', and endless loops or forbidden
-memory access may result. This means that it is up to the programmer to ensure
-that.
+range. Otherwise, the behavior is *cxx-undefined* and endless loops or
+forbidden memory access may result. This means that it is up to the programmer
+to ensure that.
 
-Two things about 'valid' range when [beg, end) use with algorithm:
+Two things about `valid range` when [beg, end) use with algorithm:
 
-1. The range do not include end.
+o `The beg must come 'first' in order.` Othewise, it is not valid range and
+  undefined.
 
-2. `The beg must come 'first' in order.` Othewise, it is not valid range and
-   'undefined'.
+o The range shall exist.
 
-3. The range shall exist.
-
-// fill_n( dest, size, value ) and assumes that vec is 10 size at least. so if
-// there is no 10 elements before calling fill_n then undefined.
+// algo-fill fill_n( dest, size, value ) and assumes that vec is 10 size at
+// least. so if there is no 10 elements before calling fill_n then undefined.
 
 vector<int> vec;
 fill_n( vec.begin(), 10, 0 );
 
 <multiple-range>
+
 Assumption on the second range is it as big as the first since the number of
-elements of the second is 'deduced' from the first range. If not, undefined.
+elements of the second is `deduced from the first range.` If not, undefined.
 For example, copy algorithm 'overwrite' rather then 'insert'.
 
 This is for only sequence containers with algorithms because associative and
 unordered containers cannot be used as a destination for overwriting
 algorithms.
 
-// reads
+*cxx-coll-associative*
+The reason is simple: If they would work for associative or unordered
+containers, modifying algorithms could change the value or position of
+elements, thereby violating the order maintained by the container (sorted for
+    associative containers or according to the hash function for unordered
+    containers). In order to avoid compromising the internal order, every
+iterator for an associative and unordered container is declared as an iterator
+for a constant value or key. Thus, manipulating elements of or in associative
+and unordered containers results in a failure at compile time.
 
-equal( one.cbegin(), one.cend(), two.cbegin() );   // assumes two >= one
+// reads, assumes two >= one
+equal( one.cbegin(), one.cend(), two.cbegin() );
 
-// write, 'destination'
-
-// coll2 must have enough room to copy
-copy (coll1.cbegin(), coll1.cend(), coll2.begin()); // destination
+// write, 'destination', coll2 must have enough room to copy
+copy(coll1.cbegin(), coll1.cend(), coll2.begin());
 
 
 {copy-version} algo-replace *algo-reverse*

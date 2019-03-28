@@ -1,13 +1,16 @@
 import unittest
+import subprocess
 
 """
-$ python coll_test.py --verbose
+shall use python3
+
+$ python3 coll_test.py --verbose
 
 1. to run single test
 $ python -m unittest coll_test.TestDictCreation.test_create_by_assign
 
    to run single test set
-$ python -m unittest pycore.TestList
+$ python3 -m unittest pycore.TestList
 
 2. to run all of a class
 $ python -m unittest coll_test.TestDictCreation
@@ -172,7 +175,7 @@ class TestRange(unittest.TestCase):
         print("[RUN] ", self._testMethodName)
 
     # With one argument, range generates a list of integers from zero up to but
-    # not including the argument’s value. 
+    # not including the argument's value. 
     
     # If you pass in two arguments, the first is taken as the lower bound. An
     # optional third argument can give a step; if it is used, Python adds the
@@ -269,6 +272,21 @@ class TestString(unittest.TestCase):
         with self.assertRaises(TypeError):
             coll.split(2)
 
+    # str.splitlines([keepends])
+    # Return a list of the lines in the string, breaking at line boundaries.
+    # This method uses the universal newlines approach to splitting lines. Line
+    # breaks are not included in the resulting list unless keepends is given and
+    # true.
+
+    def test_string_splitlines(self):
+
+        lines = 'Milk\nChicken\r\nBread\rButter'
+
+        self.assertEqual(lines.splitlines(), 
+                ['Milk', 'Chicken', 'Bread', 'Butter'])
+
+        self.assertEqual(lines.splitlines(True), 
+                ['Milk\n', 'Chicken\r\n', 'Bread\r', 'Butter'])
 
     def test_string_rstrip(self):
         self.assertEqual('   spacious   '.rstrip(), '   spacious')
@@ -2392,6 +2410,88 @@ class TestReverse(unittest.TestCase):
         self.assertEqual(coll, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
         self.assertEqual(list(reversed(coll)), 
                 [9, 8, 7, 6, 5, 4, 3, 2, 1, 0])
+
+
+#={===========================================================================
+# py-subprocess
+
+class TestSubprocess(unittest.TestCase):
+    
+    def setUp(self):
+        print("====================")
+        print("[RUN] ", self._testMethodName)
+
+    def test_get_output_from_subprocess(self):
+
+        try:
+            p = subprocess.Popen(["pwd"], stdout=subprocess.PIPE)
+        except OSError:
+            return None
+
+        result = p.communicate()
+
+        # In Python3:
+        # Bytes literals are always prefixed with 'b' or 'B'; they produce an
+        # instance of the bytes type instead of the str type. They may only
+        # contain ASCII characters; bytes with a numeric value of 128 or greater
+        # must be expressed with escapes.
+
+        self.assertEqual(result, (b'/home/kyoupark/git/kb/code-py/pybase\n', None))
+
+    def test_get_output_from_subprocess_and_process(self):
+
+        gitcmds = r'git show :./some.txt'
+
+        # make it list to run in Popen()
+        cmds = gitcmds.split()
+
+        try:
+            p = subprocess.Popen(cmds, stdout=subprocess.PIPE)
+        except OSError:
+            return None
+
+        # returns a tuple
+        result = p.communicate()
+
+        # result[0] is a string which has multiple lines with line breaks. so
+        # have to make it to list
+
+        print(result[0])
+
+        output = str(result[0]).splitlines()
+        print(output)
+
+
+        # when runs on python3
+        #
+        # >>> result[0]
+        # b'<?xml version="1.0" encoding="UTF-8"?>\n<ivy-module version="2.0">\n  <info organisation="middleware" module="bin_aem_bin"/>\n       <dependencies>\n<dependency org="middleware" name="aem_bin" rev="AEM_F76.3.REL_AEM_MAIN_2_Integration">\n<artifact name="aem_bin" ext="tar.gz" type="gz"/>\n        </dependency>\n        </dependencies>\n</ivy-module>\n'
+        #
+        # >>> str(result[0])
+        # 'b\'<?xml version="1.0" encoding="UTF-8"?>\\n<ivy-module version="2.0">\\n  <info organisation="middleware" module="bin_aem_bin"/>\\n       <dependencies>\\n<dependency org="middleware" name="aem_bin" rev="AEM_F76.3.REL_AEM_MAIN_2_Integration">\\n<artifact name="aem_bin" ext="tar.gz" type="gz"/>\\n        </dependency>\\n        </dependencies>\\n</ivy-module>\\n\''
+        #
+        # >>> str(result[0]).splitlines()
+        # ['b\'<?xml version="1.0" encoding="UTF-8"?>\\n<ivy-module version="2.0">\\n  <info organisation="middleware" module="bin_aem_bin"/>\\n       <dependencies>\\n<dependency org="middleware" name="aem_bin" rev="AEM_F76.3.REL_AEM_MAIN_2_Integration">\\n<artifact name="aem_bin" ext="tar.gz" type="gz"/>\\n        </dependency>\\n        </dependencies>\\n</ivy-module>\\n\'']
+        #
+        # >>> len(str(result[0]).splitlines())
+        # 1
+
+        # when runs on python2 
+        #
+        # >>> result[0]
+        # '<?xml version="1.0" encoding="UTF-8"?>\n<ivy-module version="2.0">\n  <info organisation="middleware" module="bin_aem_bin"/>\n       <dependencies>\n<dependency org="middleware" name="aem_bin" rev="AEM_F76.3.REL_AEM_MAIN_2_Integration">\n<artifact name="aem_bin" ext="tar.gz" type="gz"/>\n        </dependency>\n        </dependencies>\n</ivy-module>\n'
+        # 
+        # >>> str(result[0])
+        # '<?xml version="1.0" encoding="UTF-8"?>\n<ivy-module version="2.0">\n  <info organisation="middleware" module="bin_aem_bin"/>\n       <dependencies>\n<dependency org="middleware" name="aem_bin" rev="AEM_F76.3.REL_AEM_MAIN_2_Integration">\n<artifact name="aem_bin" ext="tar.gz" type="gz"/>\n        </dependency>\n        </dependencies>\n</ivy-module>\n'
+        # 
+        # >>> str(result[0]).splitlines()
+        # ['<?xml version="1.0" encoding="UTF-8"?>', '<ivy-module version="2.0">', '  <info organisation="middleware" module="bin_aem_bin"/>', '       <dependencies>', '<dependency org="middleware" name="aem_bin" rev="AEM_F76.3.REL_AEM_MAIN_2_Integration">', '<artifact name="aem_bin" ext="tar.gz" type="gz"/>', '        </dependency>', '        </dependencies>', '</ivy-module>']
+        #
+        # >>> len(str(result[0]).splitlines())
+        # 9
+
+        for line in output:
+            print(line)
 
 
 #={===========================================================================
