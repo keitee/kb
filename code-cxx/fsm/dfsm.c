@@ -237,7 +237,7 @@ SYSTEM_STATUS VRM_FSM_Term(void) {
 
 // ={=========================================================================
 // private function
-// set current and previous state
+// change state by seeing current and previous state
 
 static SYSTEM_STATUS 
 FSMSetState(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t state)
@@ -353,7 +353,12 @@ VRM_FSM_SetName(VRM_FSM_INSTANCE_HANDLE fsm_h, const char *name)
 // pointer to the user
 //
 // defintion  - definition info
-//            - transition table, which has <new state, action> pair
+//              this is list and each entry defines a mapping 
+//              <current state, input> -> <next state, action>
+//
+//            - transition table
+//              dynamically made and which has <new state, action> pair
+//
 //                              x num of events
 //              num of state | <trans> <trans> ... <trans>
 //
@@ -381,37 +386,37 @@ VRM_FSM_CreateDefinition(
 
   DIAG_DECLARE_FUNCTION("VRM_FSM_CreateDefinition");
 
-  /* Check for parameter errors */
+  // Check for parameter errors 
   if (pFSM_definition_info->entries == 0) { 
     _fsm_error(par_err); 
     stat = VRM_FSM_FAILURE;
   }
 
-  /* allocate space for definition structure */ 
+  // allocate space for definition structure 
   if (SYSTEM_STATUS_IS_OK(stat)) {
     fsm_definition = (FSM_DEFINITION*)malloc(sizeof(_fsm_definition));
   }
 
-  /* check for allocation error */
+  // check for allocation error
   if (SYSTEM_STATUS_IS_OK(stat) && (fsm_definition == NULL)) { 
     _fsm_error(mem_err); 
     stat = VRM_FSM_FAILURE;
   }
 
-  /* set definition info */ 
+  // set definition info
   if (SYSTEM_STATUS_IS_OK(stat)) { 
 
-    /* copy info */
+    // copy info
     fsm_definition->def_info.entries = pFSM_definition_info->entries;
     fsm_definition->def_info.num_entries = pFSM_definition_info->num_entries; 
 
     // fsm_definition->def_info.timeouts = pFSM_definition_info->timeouts; 
     // fsm_definition->def_info.num_timeouts = pFSM_definition_info->num_timeouts;
 
-    /* no instances at this time */ 
+    // no instances at this time 
     fsm_definition->instances_count = 0u;
 
-    /* Scan for the range of states and inputs */
+    // Scan for the range of states and inputs
     fsm_definition->min_state = (uint16_t) -1;
     fsm_definition->min_input = (uint16_t) -1;
     fsm_definition->max_state = 0u;
@@ -511,7 +516,7 @@ VRM_FSM_CreateDefinition(
       fsm_definition->table[i].new_state = VRM_FSM_ILLEGAL_STATE;
     }
 
-    // Fill the transition table
+    // Fill the transition table using the given definition info 
     //
     // o if ALL_STATES then fill all states in column with the same value and
     // that means that any event can make state transition from that state.
@@ -775,6 +780,22 @@ SYSTEM_STATUS VRM_FSM_GetState(VRM_FSM_INSTANCE_HANDLE fsm_h,
 // This while loops do the trick. Firstly, run the first eaf and this set next
 // state and exit. In the second iteration, run that agian until input_available
 // is true.
+//
+// use fsm->in_action and fsm->input_available to manage when the second event
+// comes while running action of the first and where while loops is used.
+// suppors only one more.
+//
+// set input_available
+//              clear input_available
+//                                set in_action               
+// |            |                 |
+// input()    call run()          call action()
+//
+//                                  |
+//                                  input()
+// 
+// Q: is it necessary since Input() and Run() are all async? so do not pick up
+// the next until finishes the first?
 
 SYSTEM_STATUS 
 VRM_FSM_Input(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t input)
@@ -792,12 +813,13 @@ VRM_FSM_Input(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t input)
 
   // check user is not calling this function from within an action function 
   // if it does, set next state and return
+  
   if (SYSTEM_STATUS_IS_OK(stat)) { 
     if (fsm->in_action) {
       _fsm_error(act_err);
       // stat = VRM_FSM_FAILURE;
       // in release mode, we will recover by:
-      return VRM_FSM_SetNextInput(fsm_h,input);
+      return VRM_FSM_SetNextInput(fsm_h, input);
     }
   }
 
@@ -835,8 +857,11 @@ VRM_FSM_Input(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t input)
 }
 
 
-/*===========================================================================*/
-SYSTEM_STATUS VRM_FSM_SetNextInput(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t input) 
+// ={=========================================================================
+// save next event while the first is in calling action
+
+SYSTEM_STATUS 
+VRM_FSM_SetNextInput(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t input) 
 {
   FSM_DEFINITION* def = NULL; 
   FSM_T fsm = (FSM_T)fsm_h; 
@@ -852,7 +877,6 @@ SYSTEM_STATUS VRM_FSM_SetNextInput(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t input
   if (SYSTEM_STATUS_IS_OK(stat)) {
     def = (FSM_DEFINITION*)(fsm->init.fsm_definition_handle);
   }
-
 
   if (SYSTEM_STATUS_IS_OK(stat)) { 
     if ((input > def->max_input) || (input < def->min_input)) { 
@@ -935,15 +959,17 @@ FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
 
   DIAG_DECLARE_FUNCTION("FSMRun");	 
 
-  // in any case reset input available flag
+  // in any case reset (input) event available flag
   fsm->input_available = false;
 
   def = (FSM_DEFINITION*)(fsm->init.fsm_definition_handle);
 
-  /* calculate offset in states table -> from old state (state_offset) & input */
+  // calculate offset in states table -> from old state (state_offset) & input
   offset = (fsm->state_offset * def->num_inputs) + fsm->input_offset; 
 
-  /* set a pointer to the table's entry */
+  // set a pointer to the table's entry
+  // note: Unlike sfsm, do not loop to find transition
+
   pTrans = def->table + offset;
 
   // if(!ignore_state_change_log(fsm_h, pTrans->new_state))
@@ -967,33 +993,37 @@ FSMRun(VRM_FSM_INSTANCE_HANDLE fsm_h)
   DIAG_LOG_INFO(VRM_diag_segment_id,("current time: %s (%d)\n", timeStrCurrent, currentTime));
 #endif /* 0 */
 
-  /* L.R. */
+  // L.R.
   if ( VRM_FSM_ILLEGAL_STATE == pTrans->new_state ) {	    
     _fsm_error("^__ Attention: Undefined fsm_entry !!!"); 					 
   }
 
-  /* Setup the callback if any */
+  // Setup the callback if any
   if (fsm->init.callback != NULL) {
     cb_entry.state	= fsm->state_offset + def->min_state;
     cb_entry.input = fsm->input_offset + def->min_input;
     cb_entry.new_state = pTrans->new_state + def->min_state;
   }
 
-  /* If there is a real new state, set it */
+  // If there is a real new state, set it
   if (pTrans->new_state != VRM_FSM_ILLEGAL_STATE) {
 
-    /* set the state_offset + initialize timeout if needed */
+    // set new state, the state_offset + initialize timeout if needed
     stat = FSMSetState((VRM_FSM_INSTANCE_HANDLE)fsm, pTrans->new_state);
 
     if (SYSTEM_STATUS_IS_OK(stat)) { 
       fsm->in_action = true;
 
-      /* Carry out action */
+      // Carry out action
       if (pTrans->action) {
         (*pTrans->action)(fsm->init.data);
       }
+      else // (!pTrans->action) 
+      {
+        std::cout << "VRM-FSM: action is null" << std::endl;
+      }
 
-      /* Call the callback if any */
+      // Call the callback if any
       if (fsm->init.callback) {
         fsm->init.callback (fsm->init.data, &cb_entry);
       }
