@@ -815,6 +815,8 @@ Because the message_base class doesn’t have any member functions, the popping
 thread will need to cast the pointer to a suitable wrapped_message<T> pointer
 before it can access the stored message.
 
+key 1: template member function
+
    o why template member function push() than template class queue used above?
   
      template class approach allows to create queue class for any type.
@@ -826,12 +828,15 @@ before it can access the stored message.
     so template member function approach deduce type T when called and passes
     it to create wrapped_message. this support any typle with signle queue.
   
+key 2: polymorphic and pointer
+
    o why use message_base?
   
      wait_and_pop() returns shared_ptr but shared_ptr needs the known type but
      this function is normal function. (cannot be template or template member
      function). so use message_base which is fixed type.
 
+key 3: chain *cxx_pattern_chain_of_responsibility* *cxx_pattern_decorator*
 
 It’s a template, and the message type isn’t deducible, so you must specify which
 message type to handle and pass in a function (or callable object) to handle it. 
@@ -1058,7 +1063,7 @@ namespace messaging
 
       dispatcher(dispatcher &&other):
         pq_(other.pq_), chained_(other.chained_)
-    { other.chained_ = true; }
+        { other.chained_ = true; }
 
       // *cxx-copy-prevent-copies*
       dispatcher(dispatcher const &) = delete;
@@ -1069,7 +1074,7 @@ namespace messaging
 
       explicit dispatcher(queue *pq):
         pq_(pq), chained_(false)
-    {}
+        {}
 
       // *cxx-except-in-dtor*
       ~dispatcher() noexcept(false)
@@ -1166,28 +1171,6 @@ namespace messaging
     private:
       queue q_;
   };
-
-  /*
-     class interface_machine
-     {
-     public:
-     sender get_sender()
-     {
-     return incoming_;
-     }
-
-     void done()
-     {
-     get_sender().send(close_queue());
-     }
-
-
-     private:
-     receiver incoming_;
-     std::mutex iom_;
-     };
-     */
-
 
   struct simple_message
   {
