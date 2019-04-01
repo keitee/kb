@@ -17604,7 +17604,7 @@ will make them if not defined.
 
 Two ways: `delete-keyword` and `private-access-control`.
 
-<cxx-delete> *C++11*
+<cxx-copy-delete> *cxx-11*
 Signal to the compiler `not to define` these members and lead to compile error
 when try to use it. Or syn version will be `deleted` when compiler cannot make
 it.
@@ -17620,11 +17620,11 @@ struct NoCopy {
 
 <not-on-dtor>
 If the dtor is deleted, then there is no way to destory objects of that type.
-The compiler will not 'let' us define variables or create temporaries of that
+The compiler will not let us define variables or create temporaries of that
 type.
 
 
-<before-CPP-11>
+<cxx-copy-private-before-cxx-11>
 To prevent copies before C++11:
 
 class PrivateCopy {
@@ -17640,6 +17640,16 @@ class PrivateCopy {
 
 Since the dtor is public, users will be able to define object but not be able
 to copy such objects.
+
+
+The either way will see errors:
+
+fsm_atm.cpp:1066:7: error: ‘messaging::dispatcher::dispatcher(const messaging::dispatcher&)’ is private
+       dispatcher(dispatcher const &) = delete;
+       ^
+
+fsm_atm.cpp:1142:30: error: use of deleted function ‘messaging::dispatcher::dispatcher(const messaging::dispatcher&)’
+       { return dispatcher(&q_); }
 
 
 <ex>
@@ -18303,7 +18313,8 @@ One place where using directive are useful is in the implementation files of
 the namespace itself.
 
 
-{nested-namespace}
+{cxx-namespace-nested}
+
 namespace X { 
   namespace App {
     class X : public XXX
@@ -18312,6 +18323,15 @@ namespace X {
     };
   }
 }
+
+using namespace X;
+using namespace X::App;
+X a;
+
+or
+
+using namespace X;
+App::X a;
 
 
 {rename-namespace}
@@ -18409,8 +18429,6 @@ class B
     f(parm);
   }
 };
-
-
 
 
 <what-makes-up-the-interface-of-class>
@@ -24691,7 +24709,9 @@ Exception classes are defined in four headers.
   * typeinfo header
     Defines the bad_cast exception type. 
 
-  <exception>
+namespace cxx_code
+{
+  // <exception>
   /**
    *  @brief Base class for all library exceptions.
    *
@@ -24702,43 +24722,40 @@ Exception classes are defined in four headers.
    */
   class exception
   {
-  public:
-    exception() _GLIBCXX_USE_NOEXCEPT { }
-    virtual ~exception() _GLIBCXX_USE_NOEXCEPT;
+    public:
+      exception() _GLIBCXX_USE_NOEXCEPT { }
+      virtual ~exception() _GLIBCXX_USE_NOEXCEPT;
 
-    /** Returns a C-style character string describing the general cause
-     *  of the current error.  */
-    virtual const char* what() const _GLIBCXX_USE_NOEXCEPT;
+      /** Returns a C-style character string describing the general cause
+       *  of the current error.  */
+      virtual const char* what() const _GLIBCXX_USE_NOEXCEPT;
   };
-  
-    note:
-    what() returns "std::exception" when use "throw exception()"
-
-
-  <stdexcept>
 
   // note:
+  // what() returns "std::exception" when use "throw exception()"
+
+  // <stdexcept>
   // exception takes message in ctor
- 
+
   class logic_error : public exception;
 
   /** This represents an argument whose value is not within the expected
    *  range (e.g., boundary checks in basic_string).  */
   class out_of_range : public logic_error 
   {
-  public:
-    explicit out_of_range(const string& __arg);
-    virtual ~out_of_range() _GLIBCXX_USE_NOEXCEPT;
+    public:
+      explicit out_of_range(const string& __arg);
+      virtual ~out_of_range() _GLIBCXX_USE_NOEXCEPT;
   };
 
   class runtime_error : public exception 
   {
     string _M_msg;
 
-  public:
+    public:
     /** Takes a character string describing the error.  */
     explicit 
-    runtime_error(`const string& __arg`);
+      runtime_error(`const string& __arg`);
 
     // note: see noexcept on dtor
     virtual ~runtime_error() _GLIBCXX_USE_NOEXCEPT;
@@ -24746,9 +24763,9 @@ Exception classes are defined in four headers.
     /** Returns a C-style character string describing the general cause of
      *  the current error (the same string passed to the ctor).  */
     virtual const char* 
-    what() const _GLIBCXX_USE_NOEXCEPT;
+      what() const _GLIBCXX_USE_NOEXCEPT;
   };
-
+} // namespace
 
 <ex>
 
@@ -24864,23 +24881,29 @@ But from MEC++10, it shows many ways to handle exceptions in ctor so not sure
 that it is properly destroyed. Seems EC++ is the latest.
 
 
-{problem-of-exception-in-dtor} *cxx-except-stack-unwinding*
+{cxx-except-in-dtor} *cxx-except-stack-unwinding*
 Why exception in dtor is the problem? Since stack-unwinding starts to find
 matching catch and local objects are destroyed. If dtor of object being
-destroyed can raise an execption, then would have two running exceptions and it
-is not allowed in C++. EC++08 says that terminate is called or undefined.
+destroyed can raise an execption, then would have two running exceptions and
+it is not allowed in C++. EC++08 says that terminate is called or undefined.
 
 *cxx-remember*
-The main problem is 'permature' termination which means 'no' chance to do useful
+The main problem is `permature termination` which means no chance to do useful
 things as resource clean-up and making a log entry in handling exception or
 before terminating or swallowing. So premature termination means the undefined
 state of an application or system.
 
 So no exception in dtor and if necessary, should handle in the same dtor. This
-is the base assumption STL has and STL guarantee that any class's dtor will not
-raise an execption.
+is the base assumption STL has and STL guarantee that any class's dtor will
+not raise an execption.
 
 see *cxx-except-noexcept*
+
+      ~dispatcher() noexcept(false)
+      {
+        if (!chained_)
+          wait_and_dispatch();
+      }
 
 
 {exception-and-raii}
@@ -25296,7 +25319,7 @@ CLR 3.1.7 Keyword noexcept
 
 Here, inside noexcept(...), you can specify a boolean condition under which no
 exception gets thrown: Specifying noexcept without condition is a short form
-of specifying `noexcept(true)`.
+of specifying `noexcept(true)` which means exception is not allowed
 
 <ex>
 ~TemplateDispatcher()
@@ -60387,8 +60410,8 @@ TEST(CConThread, ArgumentAndReturn)
 
 <cxx-thread-join>
 
-the error message when thread object gets destroyed without join():
-
+the error message when main thread ends without calling t.join():
+*cxx-error* *cxx-except*
 terminate called without an active exception
 Aborted
 

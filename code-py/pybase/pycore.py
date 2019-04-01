@@ -576,6 +576,20 @@ class TestList(unittest.TestCase):
         coll = eval("[[['AMS'], ['AMS']], [['PROX'], ['darwin']], [['PPCM_CF'], ['ppcm', 'ppcm_core']]]")
         self.assertEqual(type(coll), type(list()))
 
+    # difference between "a[:] = b" and "a = b"
+    # py-reference py-copy
+    def test_list_copy_and_reference(self):
+        coll1 = [1,2,3]
+        coll2 = [4,5,6]
+
+        # copy, smae contents but different colls
+        coll1[:] = coll2
+        self.assertNotEqual(id(coll1), id(coll2))
+
+        # reference, smae colls
+        coll1 = coll2
+        self.assertEqual(id(coll1), id(coll2))
+
 
 #={===========================================================================
 # py-set
