@@ -826,7 +826,7 @@ key 1: template member function
      queue<int>, queue<double>, ..
   
     so template member function approach deduce type T when called and passes
-    it to create wrapped_message. this support any typle with signle queue.
+    it to create wrapped_message. this support any type with signle queue.
   
 key 2: polymorphic and pointer
 
@@ -1050,13 +1050,13 @@ namespace messaging
 
       // *cxx-move* can force move context
       // 
-      // this function requires copy-ctor() or move-ctor() to return:
+      // this function requires copy-ctor() or move-ctor() of dispatcher to return:
       //
       // class receiver
       // {
-      //  dispatcher wait()
-      //  { return dispatcher(&q_); }
-      // }
+      //    dispatcher wait()
+      //    { return dispatcher(&q_); }
+      // };
       //
       // However, copys are not allowed so have move-ctor() and force it to use
       // move context:
@@ -1199,7 +1199,8 @@ TEST(Message, VariousType)
     mq.push(100);
     auto message = mq.wait_and_pop();
 
-    EXPECT_THAT(dynamic_cast<wrapped_message<int>*>(message.get())->contents_, 100);
+    EXPECT_THAT(dynamic_cast<wrapped_message<int>*>(message.get())->contents_, 
+        100);
   }
 
   {
