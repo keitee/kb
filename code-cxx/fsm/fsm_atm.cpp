@@ -817,7 +817,7 @@ before it can access the stored message.
 
 key 1: template member function
 
-   o why template member function push() than template class queue used above?
+  o why template member function push() than template class queue used above?
   
      template class approach allows to create queue class for any type.
      However, if want to support multiple types then have to have queue for
@@ -830,11 +830,27 @@ key 1: template member function
   
 key 2: polymorphic and pointer
 
-   o why use message_base?
+  o why use message_base?
   
      wait_and_pop() returns shared_ptr but shared_ptr needs the known type but
      this function is normal function. (cannot be template or template member
      function). so use message_base which is fixed type.
+
+  o why use wrapper_message<T>?
+
+    struct message_A : public message_base
+    {};
+
+    struct message_B : public message_base
+    {};
+
+    or
+
+    struct message_A
+    {};
+
+    struct message_B
+    {};
 
 key 3: chain *cxx_pattern_chain_of_responsibility* *cxx_pattern_decorator*
 
