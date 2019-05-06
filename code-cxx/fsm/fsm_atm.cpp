@@ -898,7 +898,8 @@ ignored.
           | .handle<msg3>(f) return TD temporary, chain(false) 
             | dtor runs
 
-  disp -> TD(msg1) -> TD(msg2) -> TD(msg3)
+  disp -> TD(msg1) -> TD(msg2) -> TD(msg3)  : creation
+  disp <- TD(msg1) <- TD(msg2) <- TD(msg3)  : chain
                                <- check if it can handle a message
   
 o use chain of temporaries which represent a state and evevnts for that state. 
