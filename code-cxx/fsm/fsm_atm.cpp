@@ -811,9 +811,10 @@ Listing C.1 shows the message queue. It stores a list of messages as pointers to
 a base class; the specific message type is handled with a template class derived
 from that base class. Pushing an entry constructs an appropriate instance of the
 wrapper class and stores a pointer to it; popping an entry returns that pointer.
-Because the message_base class doesn’t have any member functions, the popping
-thread will need to cast the pointer to a suitable wrapped_message<T> pointer
-before it can access the stored message.
+
+  o Because the message_base class doesn’t have any member functions, the
+    popping thread will need to cast the pointer to a suitable
+    wrapped_message<T> pointer before it can access the stored message.
 
 key 1: template member function
 
@@ -896,10 +897,14 @@ ignored.
         | .handle<msg2>(f) return TD temporary, chain(true) 
           | .handle<msg3>(f) return TD temporary, chain(false) 
             | dtor runs
-  
-o use chain of temporaries 
 
-o use "chained_" flag to use the last TD to find a match 
+  disp -> TD(msg1) -> TD(msg2) -> TD(msg3)
+                               <- check if it can handle a message
+  
+o use chain of temporaries which represent a state and evevnts for that state. 
+
+o use "chained_" flag to decide if dtor of current temporary node in the chain
+  shall run wait() and process message.
 
 o if found a match from a chain, end loop and chain is destroyed.  
 
@@ -962,7 +967,13 @@ namespace messaging
   {};
 
 
-  template<typename PreviousDispatcher, typename Message, typename Function>
+// #define DISPATCH_DEBUG
+
+  // note:
+  // type name can be the same as dispatcher
+  // template<typename PreviousDispatcher, typename Message, typename Function>
+
+  template<typename Dispatcher, typename Message, typename Function>
     class TemplateDispatcher
     {
       public:
@@ -971,21 +982,32 @@ namespace messaging
         TemplateDispatcher(TemplateDispatcher const&) = delete;
         TemplateDispatcher &operator=(TemplateDispatcher const &) = delete;
 
-        // *cxx-move*
+        // note: cxx-move which is not used
         TemplateDispatcher(TemplateDispatcher &&other):
           pq_(other.pq_), prev_(other.prev_), f_(std::move(other.f_)),
           chained_(other.chained_)
-      { other.chained_ = true; }
+        { 
+#ifdef DISPATCH_DEBUG
+          std::cout << "TD: move: set chained_ true: " << m_.name_ << std::endl;
+#endif // DISPATCH_DEBUG
 
-        // this is ctor() that get's called whenever handle() from dispatcher
-        // and TD is called and set chained true for the previous
+          other.chained_ = true; 
+        }
 
-        TemplateDispatcher(queue *pq, PreviousDispatcher *prev, Function &&f):
+        // note: add "explicit" which is different from the text
+
+        explicit TemplateDispatcher(queue *pq, Dispatcher *prev, Function &&f):
           pq_(pq), prev_(prev), f_(std::forward<Function>(f)), chained_(false)
-      { 
-        // std::cout << "TD: ctor: set chained_ true: " << m_.name_ << std::endl;
-        prev_->chained_ = true; 
-      }
+        { 
+          // std::cout << "TD: ctor: set chained_ true: " << m_.name_ << std::endl;
+          prev_->chained_ = true; 
+        }
+
+        // note:
+        // 1. have to use "TemplateDispatcher"
+        // 2. have to use other type names like OtherMessage other than Message
+        // since arguments for template function are independant from arguments
+        // for template class
 
         template<typename OtherMessage, typename OtherFunction>
           TemplateDispatcher<TemplateDispatcher, OtherMessage, OtherFunction>
@@ -996,15 +1018,20 @@ namespace messaging
               (pq_, this, std::forward<OtherFunction>(f));
           }
 
-        // required to access "chained_"
         // note:
-        // since it creats new templated class, thought must use the same
-        // typename like "OtherMessage" as handle() but turns out it doesn't
-        // matter.
+        // 1. one to many(all) friend
+        // 2. required to call dispatch_() of object in the chain
+        // 3. have to use the same type name as handle() returns? No and turns
+        // out it doesn't matter.
 
-        template<typename Dispatcher, typename O, typename OtherFunction>
+        template<typename D, typename M, typename F>
           friend class TemplateDispatcher;
 
+        // *cxx-except-in-dtor*
+        // note:
+        // "noexcept(false) is necessary. Although close_queue() is only handled
+        // in dispatcher::dispatch_(), it runs in this dtor.
+        
         ~TemplateDispatcher() noexcept(false)
         {
           if (!chained_)
@@ -1018,12 +1045,13 @@ namespace messaging
 
       private:
         queue *pq_;
-        PreviousDispatcher *prev_;
+        Dispatcher *prev_;
         Function f_;
         bool chained_;
 
-        // // for debug
-        // Message m_;
+#ifdef DISPATCH_DEBUG
+        Message m_;
+#endif
 
         bool dispatch_(std::shared_ptr<message_base> const &message)
         {
@@ -1045,6 +1073,9 @@ namespace messaging
           }
         }
 
+        // not really used since "dispatcher" is always chained and do not
+        // process message.
+        
         void wait_and_dispatch()
         {
           // std::cout << "TD: wait_dispatch_: " << m_.name_ << " { " << std::endl;
@@ -1064,35 +1095,33 @@ namespace messaging
   {
     public:
 
-      // *cxx-move* can force move context
+      // *cxx-move* is used for this?
       // 
-      // this function requires copy-ctor() or move-ctor() of dispatcher to return:
-      //
       // class receiver
       // {
       //    dispatcher wait()
       //    { return dispatcher(&q_); }
       // };
       //
-      // However, copys are not allowed so have move-ctor() and force it to use
-      // move context:
+      // no since *cxx-rvo* removes the need of using move.
 
       dispatcher(dispatcher &&other):
         pq_(other.pq_), chained_(other.chained_)
-        { other.chained_ = true; }
+        { 
+          std::cout << "disp: move: " << std::endl;
+          other.chained_ = true; 
+        }
 
       // *cxx-copy-prevent-copies*
       dispatcher(dispatcher const &) = delete;
-      // okay
-      dispatcher &operator=(const dispatcher &) = delete;
-      // fail, why??
-      //dispatcher &operator=(dispatcher cosnt &) = delete;
+      dispatcher &operator=(dispatcher const &) = delete;
 
       explicit dispatcher(queue *pq):
         pq_(pq), chained_(false)
-        {}
+        {
+          // std::cout << "disp: ctor: " << std::endl;
+        }
 
-      // *cxx-except-in-dtor*
       ~dispatcher() noexcept(false)
       {
         if (!chained_)
@@ -1104,6 +1133,10 @@ namespace messaging
         // std::cout << "disp: ~disp: end: " << std::endl;
       }
 
+      // note:
+      // 1. must use "dispatcher" which is type
+      // 2. "Message" is not used in this but used in TD.
+      
       template<typename Message, typename Function>
         TemplateDispatcher<dispatcher, Message, Function>
         handle(Function &&f)
@@ -1232,7 +1265,8 @@ TEST(Message, VariousType)
     mq.push(text);
     auto message = mq.wait_and_pop();
 
-    EXPECT_THAT(dynamic_cast<wrapped_message<std::string>*>(message.get())->contents_, text);
+    EXPECT_THAT(dynamic_cast<wrapped_message<std::string>*>(message.get())->contents_, 
+        text);
   }
 }
 
@@ -1279,7 +1313,7 @@ namespace messaging
 
     // std::cout << "sender thread: send message..." << std::endl;
     sender.send(pin_incorrect());
-    // sender.send(withdraw_ok());
+    // sender.send(close_queue());
   }
 
 } // namespace
@@ -1324,7 +1358,7 @@ namespace messaging
 // disp: dispatch_: false
 // ^C
 
-TEST(Message, Chain)
+TEST(Message, SingleChain)
 {
   using namespace messaging;
   using namespace messaging::client;
@@ -1358,9 +1392,8 @@ TEST(Message, Chain)
         (
          [&](const pin_incorrect &msg)
          {
-          // std::cout << "atm::verify_pin::" << std::endl;
+          std::cout << "atm::do pin_incorrect" << std::endl;
           EXPECT_THAT(msg.name_, "pin_incorrect");
-          // std::cout << "state = &atm::done_processing" << std::endl;
          }
         )
         .handle<cancel_pressed>
@@ -1373,7 +1406,9 @@ TEST(Message, Chain)
          }
         );
 
-      // to build next chanin
+      // note:
+      // build next chain and if not, ends here since there is no further event
+      // and waits.
       //
       // std::cout << "press.." << std::endl;
       // std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -1389,7 +1424,6 @@ TEST(Message, Chain)
       //    }
       //   );
     }
-
   }
   catch(close_queue const &)
   {
@@ -1399,6 +1433,11 @@ TEST(Message, Chain)
   sender.join();
 }
 
+
+// only for debugging purpose since other messages do not have `name` member and
+// without this, it will cause compile errors.
+
+#if !(defined DISPATCH_DEBUG)
 
 // from listing_c.9.cpp
 
@@ -1739,6 +1778,7 @@ namespace messaging
       messaging::sender bank_;
       messaging::sender interface_hardware_;
 
+      // *cxx-member-function-pointer*
       void (atm::*state)();
 
       std::string account_;
@@ -1761,6 +1801,8 @@ namespace messaging
            account_ = msg.account;
            pin_ = "";
            // interface_hardware_.send(display_enter_pin());
+           
+           // note: set next state
            state = &atm::getting_pin;
            }
           );
@@ -1958,6 +2000,8 @@ namespace messaging
 
       void run()
       {
+        // note: 
+        // set init state
         state = &atm::waiting_for_card;
 
         std::cout << "atm::run::for" << std::endl;
@@ -1994,6 +2038,14 @@ namespace messaging
       }
   };
 }
+
+
+// note:
+// the example in the text uses three threads and three queue:
+//
+// std::thread bank_thread(&bank_machine::run,&bank);
+// std::thread if_thread(&interface_machine::run,&interface_hardware);
+// std::thread atm_thread(&atm::run,&machine);
 
 
 // [ RUN      ] Message.AtmFsmCancelPin
@@ -2071,6 +2123,7 @@ TEST(Message, AtmFsmDoWithdraw)
   atm_thread.join();
 }
 
+#endif
 
 // ={=========================================================================
 

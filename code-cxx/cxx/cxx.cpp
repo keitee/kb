@@ -1545,7 +1545,11 @@ TEST(CxxFeaturesTest, UseEnumHack)
 // ={=========================================================================
 // cxx-rvo
 
-struct Snitch {   // Note: All methods have side effects
+namespace cxx_rvo
+{
+  // Note: All methods have side effects
+  struct Snitch 
+  {
     Snitch(int value): value_(value) { cout << "c'tor" << endl; }
     ~Snitch() { cout << "d'tor" << endl; }
 
@@ -1553,75 +1557,72 @@ struct Snitch {   // Note: All methods have side effects
     Snitch(Snitch&&) { cout << "move c'tor" << endl; }
 
     Snitch& operator=(const Snitch&) {
-        cout << "copy assignment" << endl;
-        return *this;
+      cout << "copy assignment" << endl;
+      return *this;
     }
 
     Snitch& operator=(Snitch&&) {
-        cout << "move assignment" << endl;
-        return *this;
+      cout << "move assignment" << endl;
+      return *this;
     }
 
     int getValue() const { return value_;}
 
     private:
-        int value_{0};
-};
+    int value_{0};
+  };
 
-Snitch ExampleRVO() {
+  Snitch ExampleRVO() {
+    std::cout << "in ExampleRVO: " << std::endl;
+    return Snitch(100);
+  }
 
-  Snitch sn(100);
-
-  cout << "in example rvo: " << sn.getValue() << endl;
-
-  return sn;
-}
-
-TEST(CxxFeaturesTest, UseRVO)
-{
-    cout << "----------" << endl;
-    Snitch snitch = ExampleRVO();
-    cout << "----------" << endl;
-}
-
-
-vector<Snitch> ReturnVector() {
+  vector<Snitch> ReturnVector() {
     // vector<Snitch> ivec(1000000000, 1);
     // vector(n, elem); creates n elements
     vector<Snitch> ivec(10, Snitch(200));
-    cout << "size of vector: " << ivec.size() << endl;
-  return ivec;
-}
+    cout << "in ReturnVector: size of vector: " << ivec.size() << endl;
+    return ivec;
+  }
 
-TEST(CxxFeaturesTest, UseRVOReturnBigVector)
-{
-    cout << "----------" << endl;
-    vector<Snitch> ivec = ReturnVector();
-    cout << "----------" << endl;
-}
-
-void foo(Snitch s) {
-    cout << "snitch value is: " << s.getValue() << endl;
-}
-
-TEST(CxxFeaturesTest, UseCopyElison)
-{
-    cout << "----------" << endl;
-    foo(Snitch(200));
-    cout << "----------" << endl;
-}
-
-Snitch createSnitch() {
+  Snitch createSnitch() {
     return Snitch(200);
+  }
+
+  void foo(Snitch s) {
+    cout << "snitch value is: " << s.getValue() << endl;
+  }
+
+} // namespace
+
+TEST(RVO, OnSingle)
+{
+  using namespace cxx_rvo;
+
+  Snitch snitch = ExampleRVO();
 }
 
-TEST(CxxFeaturesTest, UseAssignment)
+TEST(RVO, OnVector)
 {
-    cout << "----------" << endl;
-    Snitch s = createSnitch();
-    cout << "----------" << endl;
-    s = createSnitch();
-    cout << "----------" << endl;
+  using namespace cxx_rvo;
+
+  vector<Snitch> ivec = ReturnVector();
+}
+
+TEST(RVO, OnArg)
+{
+  using namespace cxx_rvo;
+
+  foo(Snitch(200));
+}
+
+TEST(RVO, OnAssignment)
+{
+  using namespace cxx_rvo;
+
+  Snitch s = createSnitch();
+  cout << "----------" << endl;
+  s = createSnitch();
 }
 
 
@@ -7068,12 +7069,21 @@ namespace cxx_except
       }
   };
 
+  class FooNoAbort
+  {
+    public:
+      ~FooNoAbort() noexcept(false)
+      {
+        throw std::runtime_error("noexcept(false) so expects no abort");
+      }
+  };
+
   class FooAbort
   {
     public:
       ~FooAbort()
       {
-        throw std::runtime_error("expects abort");
+        throw std::runtime_error("noexcept(true) so expects abort");
       }
   };
 } // namespace
@@ -7093,7 +7103,39 @@ TEST(Exception, Noexcept)
   {
     int value{1};
 
-    FooAbort foo;
+    try
+    {
+      FooNoAbort foo;
+    }
+    catch(exception &e)
+    {
+      // why fails???
+      // EXPECT_THAT(e.what(), "noexcept(false) so expects no abort");
+      
+      std::ostringstream os;
+      os << e.what(); 
+      EXPECT_THAT(os.str(), "noexcept(false) so expects no abort");
+    }
+
+    EXPECT_THAT(value, 1);
+  }
+
+  // [ RUN      ] Exception.Noexcept
+  // terminate called after throwing an instance of 'std::runtime_error'
+  //   what():  noexcept(true) so expects abort
+  // Aborted
+
+  {
+    int value{1};
+
+    try
+    {
+      FooAbort foo;
+    }
+    catch(exception &e)
+    {
+      std::cout << e.what() << std::endl;
+    }
 
     EXPECT_THAT(value, 1);
   }

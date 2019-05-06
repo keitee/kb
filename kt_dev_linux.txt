@@ -528,7 +528,9 @@
 *kt_linux_core_0000* linux-ipc-shm-sysv
 *kt_linux_core_0000* linux-ipc-consideration
 *kt_linux_core_0000* linux-ipc-posix
-*kt_linux_core_0000* linux-ipc-socket
+*kt_linux_core_0000* linux-ipc-socket linux-socket
+*kt_linux_core_0000* linux-ipc-socket-unix linux-socket-unix
+*kt_linux_core_0000* linux-ipc-socket-internet linux-socket-internet
 *kt_linux_core_0000* linux-ipc-pipe
 *kt_linux_core_0000* linux-ipc-pipe-check-setup
 |kt_linux_core_0000| linux-ipc-fifo
@@ -18515,7 +18517,7 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==1247==ABORTING
 
 
-<ex> *cpp-memory-issue* *cpp-memcpy-issue-issue*
+<ex> *cxx-memory-issue* *cxx-memcpy-issue* *cxx-strncpy-issue*
 Seen on NDS MW issue
 
 MW_Process crash with core dump in SIM_dbc_query_ReadProgrammeInstanceInfo
@@ -52893,7 +52895,7 @@ note: what deficiencies?
 
 
 ={============================================================================
-*kt_linux_core_0000* linux-ipc-socket
+*kt_linux_core_0000* linux-ipc-socket linux-socket
 
 LPI-56
 
@@ -52901,24 +52903,27 @@ Sockets are a method of IPC that allow data to be exchanged between
 applications, either on the same host (computer) or on different hosts
 connected by a network.
 
-A socket is created using the socket() system call, which returns a file descriptor used to refer to
-the socket in subsequent system calls:
+A socket is created using the socket() system call, which returns a file
+descriptor used to refer to the socket in subsequent system calls:
 
 fd = socket(domain, type, protocol);
 
-For all applications described in this book, protocol is 'always' specified as 0.
+For all applications described in this book, protocol is always specified as
+0.
 
 
-{communication-domain}
-domain determines:
+{socket-domain}
+Sockets exist in a communication domain, which determines:
 
-1. the method of identifying a socket (i.e., the format of a socket “address”)
+o the method of identifying a socket (i.e., the format of a socket “address”)
 
-2. the range of communication (i.e., either between applications on the same host or between
-    applications on different hosts connected via a network).
+o the range of communication (i.e., either between applications on the same
+  host or between applications on different hosts connected via a network).
 
 
-OS supports at least the followings: AF stands for address family
+Modern operating systems support at least the following domains:
+
+AF stands for address family
 
 Table 56-1: Socket domains
 
@@ -52934,8 +52939,9 @@ AF_INET6 via IPv6          on hosts connected      128-bit IPv6 address +  socka
                            via an IPv6 network     16-bit port number
 
 
-{type}
-Every sockets implementation provides at least two types of sockets: stream and datagram.
+{socket-type}
+Every sockets implementation provides at least two types of sockets: stream
+and datagram.
 
 Table 56-2: Socket types and their properties
 
@@ -52944,61 +52950,75 @@ Reliable delivery?               Y                 N
 Message boundaries preserved?    N                 Y
 Connection-oriented?             Y                 N
 
-<stream-socket>
-Stream sockets (SOCK_STREAM) provide a reliable, bidirectional, byte-stream communication channel.
+`Stream sockets (SOCK_STREAM)` provide a reliable, bidirectional, byte-stream
+communication channel.
 
-These socket types are supported in both the UNIX(on same host) and the Internet domains(on
-network).
+These socket types are supported in both the UNIX(on same host) and the
+Internet domains(on network).
 
-1. Reliable means that we are guaranteed that either the transmitted data will arrive intact at the
-receiving application, exactly as it was transmitted by the sender (assuming that neither the
-    network link nor the receiver crashes), or that we'll receive notification of a probable failure
-in transmission.
+o Reliable means that we are guaranteed that either the transmitted data will
+  arrive intact at the receiving application, exactly as it was transmitted by
+  the sender (assuming that neither the network link nor the receiver
+      crashes), or that we'll receive notification of a probable failure in
+  transmission.
 
-2. Bidirectional means that data may be transmitted in either direction between two sockets.
+o Bidirectional means that data may be transmitted in either direction between
+  two sockets.
 
-3. Byte-stream means that, as with pipes, there is no concept of message boundaries
+o Byte-stream means that, as with pipes, there is no concept of message
+  boundaries
 
-Stream sockets operate in connected pairs so described as connection-'oriented'. A stream socket can
-be connected to 'only' one peer.
+A stream socket is similar to using a pair of pipes to allow bidirectional
+communication between two applications, with the difference that (Internet
+domain) sockets permit communication over a network.
 
-<datagram-socket>
-Datagram sockets (SOCK_DGRAM) allow data to be exchanged in the form of 'messages' called datagrams.
-
-With datagram sockets, message boundaries are preserved, but data transmission is not reliable.
-Messages may arrive out of order, be duplicated, or not arrive at all.
-
-Datagram sockets are an example of the more generic concept of a 'connectionless' socket since
-unlike a stream socket, a datagram socket doesn't need to be connected to another socket in order to
-be used.
-
-note:
-In the Internet domain, datagram sockets employ the User Datagram Protocol (UDP), and stream sockets
-(usually) employ the Transmission Control Protocol (TCP).  So often just use the terms UDP socket
-and TCP socket, respectively.
+Stream sockets operate in `connected pairs` so described as connection
+oriented. A stream socket can be connected to only one peer.
 
 
-{socket-io}
-By default, these system calls 'block' if the I/O operation can't be completed immediately.
-Nonblocking I/O is also possible, by using the fcntl() F_SETFL operation (Section 5.3) to enable the
-O_NONBLOCK open file status flag.
+`Datagram sockets (SOCK_DGRAM)` allow data to be exchanged in the form of
+messages called datagrams.
+
+With datagram sockets, message boundaries are preserved, but data transmission
+is not reliable. Messages may arrive out of order, be duplicated, or not
+arrive at all.
+
+Datagram sockets are an example of the more generic concept of a
+connectionless socket since unlike a stream socket, a datagram socket
+doesn't need to be connected to another socket in order to be used.
+
+  "In the Internet domain, datagram sockets employ the User Datagram Protocol
+  (UDP), and stream sockets (usually) employ the Transmission Control Protocol
+  (TCP). So often just use the terms UDP socket and TCP socket, respectively."
 
 
-{stream-example}
+{socket-stream-ex}
+
+56.5 Stream Sockets
+
+Stream sockets are often distinguished as being either active or passive:
+
+o By default, a socket that has been created using socket() is active. An
+  active socket can be used in a connect() call to establish a connection to a
+  passive socket. This is referred to as performing an active open.
+
+o A passive socket (also called a listening socket) is one that has been
+  marked to allow incoming connections by calling listen(). Accepting an
+  incoming connection is referred to as performing a passive open.
 
 Passive socket (server)
 
-  socket()
+  fd = socket()
 
-  bind()
+  bind(fd, addr)
 
   listen()
 
-  accept()                                      Active socket(client)
+  accept(fd, addr)                                 Active socket(client)
       : blocks until client connects
-   ...                                             socket()
+   ...                                             fd = socket()
 
-      : resumes                  <-                connect()
+      : resumes                  <-                connect(fd, addr)
 
 +-------------------------------------------------------------+
 | read()                         <-                write()    |
@@ -53009,127 +53029,184 @@ Passive socket (server)
   close()                                          close()
 
 
-<well-known-address>
-Typically, we bind a server's socket to a well-known address - that is, a fixed address that is
-known in advance to client applications that need to communicate with that server.
+{syscall-socket}
+
+Socket I/O can be performed using the conventional read() and write() system
+calls, or using a range of `socket-specific system calls` (e.g., send(),
+    recv(), sendto(), and recvfrom()).
+
+By default, these system calls `block` if the I/O operation can't be completed
+immediately. Nonblocking I/O is also possible, by using the fcntl() F_SETFL
+operation (Section 5.3) to enable the O_NONBLOCK open file status flag.
 
 
-{syscalls}
 #include <sys/socket.h>
 
-<socket>
-int socket(int domain, int type, int protocol);
+int `socket`(int domain, int type, int protocol);
 
 Creates a new socket. Returns file descriptor on success, or -1 on error.
-note: returns fd on success.
 
-<bind>
-int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+The protocol argument is always specified as 0 for the socket types we
+describe in this book. Nonzero protocol values are used with some socket types
+that we don’t describe. For example, protocol is specified as IPPROTO_RAW for
+raw sockets (SOCK_RAW). On success, socket() returns a file descriptor used
+to refer to the newly created socket in later system calls.
+
+
+int `bind`(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
 Binds a socket to an address. Returns 0 on success, or -1 on error
 
-The sockfd argument is a file descriptor obtained from a previous call to socket(). 
+The sockfd argument is a file descriptor obtained from a previous call to
+socket(). 
 
-<accept>
-int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+The type of structure passed in this argument `depends on the socket domain.`
+
+Typically, we bind a server's socket to a `well-known address` - that is, a
+fixed address that is known in advance to client applications that need to
+communicate with that server.
+
+
+int `listen`(int sockfd, int backlog);
+
+The listen() system call marks the stream socket referred to by the file
+descriptor sockfd as passive.
+
+
+int `accept`(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 
 Returns file descriptor on success, or -1 on error
 
-The accept() system call accepts an incoming connection on the listening stream socket referred to
-by the file descriptor sockfd. If there are no pending connections when accept() is called, the call
-blocks until a connection request arrives.
-
-note: listening vs connection socket
-
-The key point to understand about accept() is that it creates a 'new' socket, and it is this new
-socket that is connected to the peer socket that performed the connect(). A file descriptor for the
-connected socket is returned as the function result of the accept() call. The listening socket
-(sockfd) remains open, and can be used to accept 'further' connections. A typical server application
-creates one listening socket, binds it to a well-known address, and then handles all client requests
-by accepting connections via that socket.
-
-note: this is why accept() requires addr argument
-
-The remaining arguments to accept() 'return' the address of the peer socket. The addr argument
-points to a structure that is used to return the socket address. The type of this argument depends
-on the socket domain
-
-note: <value-result> argument is in-out argument which is also mentioned in man page.
-
-The addrlen argument is a value-result argument. It points to an integer that, prior to the call,
-    must be initialized to the size of the buffer pointed to by addr, 'so' that the kernel 'knows'
-    how much space is available to return the socket address. Upon return from accept(), this
-    integer is set to 'indicate' the number of bytes of data actually copied into the buffer.
-
-If we are not interested in the address of the peer socket, then addr and addrlen should be
-specified as NULL and 0, respectively. If desired, we can retrieve the peer’s address later using
-the getpeername() system call, as described in Section 61.5.
+The accept() system call accepts an incoming connection on the listening
+stream socket referred to by the file descriptor sockfd. If there are no
+pending connections when accept() is called, the call blocks until a
+connection request arrives.
 
 
-{generic-address-structure}
-The addr argument is a pointer to a structure specifying the address to which this socket is to be
-bound. The type of structure passed in this argument 'depends' on the socket domain. The addrlen
-argument specifies the size of the address structure.
+int `connect`(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
-For each socket domain, a 'different' structure type is defined to store a socket address. However,
-    because system calls such as bind() are 'generic' to 'all' socket 'domains', they must be able
-    to accept address structures of any type.
+The connect() system call connects the active socket referred to by the file
+descriptor sockfd to the listening socket whose address is specified by addr
+and addrlen.
 
-How?
 
-In order to permit this, the sockets API defines a 'generic' address structure, struct sockaddr. The
-only purpose for this type is to cast the various domain-specific address structures to a single
-type for use as arguments in the socket system calls.
+WHY addr in accept()?
 
-This structure serves as a template for all of the domain-specific address structures.
+The key point to understand about accept() is that `it creates a new socket`,
+and it is this new socket that is connected to the peer socket that performed
+the connect(). A file descriptor for the connected socket is returned as the
+function result of the accept() call. 
 
-The value in the family field is 'sufficient' to determine the size and format of the address stored
-in the remainder of the structure.
+The listening socket (sockfd) remains open, and can be used to accept further
+connections. A typical server application creates one listening socket, binds
+it to a well-known address, and then handles all client requests by accepting
+connections via that socket.
 
-<sockaddr>
-/* Structure describing a generic socket address.  */
-struct sockaddr
+The remaining arguments to accept() `return the address of the peer socket.`
+The addr argument points to a structure that is used to return the socket
+address. The type of this argument depends on the socket domain
+
+`value-result argument` is in-out argument which is also mentioned in man
+page.
+
+The addrlen argument is a value-result argument. It points to an integer that,
+prior to the call, must be initialized to the size of the buffer pointed to by
+addr, so that the kernel knows how much space is available to return the
+socket address. Upon return from accept(), this integer is set to indicate the
+number of bytes of data actually copied into the buffer.
+
+If we are not interested in the address of the peer socket, then addr and
+addrlen should be specified as NULL and 0, respectively. If desired, we can
+retrieve the peer’s address later using the getpeername() system call, as
+described in Section 61.5.
+
+
+{socket-sockaddr}
+
+56.4 Generic Socket Address Structures: struct sockaddr
+
+Looking at Table 56-1, we see that each socket domain uses a different address
+format. However, because system calls such as bind() are generic to all socket
+domains, they must be able to accept address structures of any type. 
+
+In order to permit this, the sockets API defines a generic address structure,
+struct sockaddr. The only purpose for this type is `to cast` the various
+domain-specific address structures to a single type for use as arguments in
+the socket system calls. The sockaddr structure is typically defined as
+follows:
+
+struct sockaddr {
+  sa_family_t sa_family;  /* Address family (AF_* constant) */
+  char sa_data[14];       /* Socket address (size varies
+                             according to socket domain) */
+};
+
+
+This structure serves as a template for all of the domain-specific address
+structures.
+
+The value in the family field is sufficient to determine the size and format
+of the address stored in the remainder of the structure.
+
+
+{socket-datagram-ex}
+
+56.6 Datagram Sockets
+
+  Server
+
+  fd = socket()
+                                                  Client
+  bind(fd, addr)                                  
+                                                  fd = socket()
+
++-------------------------------------------------------------+
+|                       : (possibly multiple) data            |
+|                          transfers in either direction      |
+| recvfrom()            <-                         sendto()   |
+|                                                             |
+| sendto()              ->                         recvfrom() |
++-------------------------------------------------------------+
+  close()                                          close()
+
+
+={============================================================================
+*kt_linux_core_0000* linux-ipc-socket-unix linux-socket-unix
+
+LPI-57 SOCKETS : UNIX DOMAIN
+
+UNIX domain sockets, which allow communication between processes on the same
+host system.
+
+57.1 UNIX Domain Socket Addresses: struct sockaddr_un
+
+struct sockaddr_un {
+  sa_family_t sun_family; /* Always AF_UNIX */
+  char sun_path[108];     /* Null-terminated socket pathname */
+};
+
+namespace code
 {
-  __SOCKADDR_COMMON (sa_);    /* Common data: address family and length.  */
-  // note: that is sa_family_t sa_family
-  char sa_data[14];           /* Address data.  */
-};
+  /* Structure describing a generic socket address.  */
+  struct sockaddr
+  {
+    __SOCKADDR_COMMON (sa_);    /* Common data: address family and length.  */
+    char sa_data[14];           /* Address data.  */
+  };
 
-#define  __SOCKADDR_COMMON(sa_prefix) \
-  sa_family_t sa_prefix##family
+  #define  __SOCKADDR_COMMON(sa_prefix) \
+    sa_family_t sa_prefix##family
 
-<sockaddr_un>
-/* Structure describing the address of an AF_LOCAL (aka AF_UNIX) socket.  */
-struct sockaddr_un
-{
-  __SOCKADDR_COMMON (sun_);
-  char sun_path[108];   /* Path name.  */          note: bigger size!
-};
-
-<sockaddr_in>
-/* Structure describing an Internet (IP) socket address. */
-#define __SOCK_SIZE__   16    /* sizeof(struct sockaddr) */
-struct sockaddr_in {
-  __kernel_sa_family_t  sin_family;    /* Address family */
-  __be16                sin_port;      /* Port number    */    // 16 bit
-  struct in_addr        sin_addr;      /* Internet address */  // 32 bit
-
-  /* Pad to size of `struct sockaddr'. */
-  unsigned char   __pad[__SOCK_SIZE__ - sizeof(short int) -
-    sizeof(unsigned short int) - sizeof(struct in_addr)];
-};
-
-<sockaddr_in6>
-struct sockaddr_in6 {
-  unsigned short int    sin6_family;    /* AF_INET6 */
-  __be16                sin6_port;      /* Transport layer port # */
-  __be32                sin6_flowinfo;  /* IPv6 flow information */
-  struct in6_addr       sin6_addr;      /* IPv6 address */
-  __u32                 sin6_scope_id;  /* scope id (new in RFC2553) */
-};
+  /* Structure describing the address of an AF_LOCAL (aka AF_UNIX) socket.  */
+  struct sockaddr_un
+  {
+    __SOCKADDR_COMMON (sun_);
+    char sun_path[108];   /* Path name.  */
+  };
+}
 
 
-{code-example}
+Listing 57-1: Binding a UNIX domain socket
 
 {
   const char *SOCKNAME = "/tmp/mysock";
@@ -53151,67 +53228,288 @@ struct sockaddr_in6 {
     errExit("bind");
 }
 
-// net/socket.c
-//
-/*
- * We move the socket address to kernel space before we call
- * the protocol layer (having also checked the address is ok).
- */
-SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
+
+The use of the memset() call in Listing 57-1 ensures that all of the structure
+fields have the value 0. 
+
+o The subsequent strncpy() call takes advantage of this by specifying its
+  final argument as one less than the size of the sun_path field, to ensure
+  that this field always has a terminating null byte.
+
+o Using memset() to zero out the entire structure, rather than initializing
+  individual fields, ensures that any nonstandard fields that are provided by
+  some implementations are also initialized to 0.
+
+
+namespace code
 {
-  sock = sockfd_lookup_light(fd, &err, &fput_needed);
-  if (sock) {
-    err = move_addr_to_kernel(umyaddr, addrlen, &address);
-    if (err >= 0) {
-      err = security_socket_bind(sock,
-          (struct sockaddr *)&address,
-          addrlen);
-      if (!err)
-        err = sock->ops->bind(sock,
-            (struct sockaddr *)
-            &address, addrlen);
+  // net/socket.c
+  /*
+   * We move the socket address to kernel space before we call
+   * the protocol layer (having also checked the address is ok).
+   */
+  SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
+  {
+    sock = sockfd_lookup_light(fd, &err, &fput_needed);
+    if (sock) {
+      err = move_addr_to_kernel(umyaddr, addrlen, &address);
+      if (err >= 0) {
+        err = security_socket_bind(sock,
+            (struct sockaddr *)&address,
+            addrlen);
+        if (!err)
+          err = sock->ops->bind(sock,
+              (struct sockaddr *)
+              &address, addrlen);
+      }
+      fput_light(sock->file, fput_needed);
     }
-    fput_light(sock->file, fput_needed);
+    return err;
   }
-  return err;
-}
 
+  // net/ipv4/af_inet.c
 
-// net/ipv4/af_inet.c
-int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
-{
-  // note: only used to check size
-  if (addr_len < sizeof(struct sockaddr_in))
-    goto out;
-}
-
-
-{
-  struct sockaddr_storage claddr;
-
-  addrlen = sizeof(struct sockaddr_storage);
-  cfd = accept(lfd, (struct sockaddr *) &claddr, &addrlen);
-  if (cfd == -1) {
-    errMsg("accept");
-    continue;
+  int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
+  {
+    // note: only used to check size
+    if (addr_len < sizeof(struct sockaddr_in))
+      goto out;
   }
-}
 
-/*
- * For accept, we attempt to create a new socket, set up the link
- * with the client, wake up the client, then return the new
- * connected fd. We collect the address of the connector in kernel
- * space and 'move' it to user at the very end. This is unclean because
- * we open the socket then return an error.
- *
- * 1003.1g adds the ability to recvmsg() to query connection pending
- * status to recvmsg. We need to add that support in a way thats
- * clean when we restucture accept also.
- */
-SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr, int __user *, upeer_addrlen, int, flags)
+  {
+    struct sockaddr_storage claddr;
+
+    addrlen = sizeof(struct sockaddr_storage);
+    cfd = accept(lfd, (struct sockaddr *) &claddr, &addrlen);
+    if (cfd == -1) {
+      errMsg("accept");
+      continue;
+    }
+  }
+
+  /*
+   * For accept, we attempt to create a new socket, set up the link
+   * with the client, wake up the client, then return the new
+   * connected fd. We collect the address of the connector in kernel
+   * space and 'move' it to user at the very end. This is unclean because
+   * we open the socket then return an error.
+   *
+   * 1003.1g adds the ability to recvmsg() to query connection pending
+   * status to recvmsg. We need to add that support in a way thats
+   * clean when we restucture accept also.
+   */
+  SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr, int __user *, upeer_addrlen, int, flags)
+  {
+    err = move_addr_to_user(&address, len, upeer_sockaddr, upeer_addrlen);
+  }
+
+} // namespace
+
+
+={============================================================================
+*kt_linux_core_0000* linux-ipc-socket-internet linux-socket-internet
+
+LPI-58 SOCKETS : FUNDAMENTALS 
+
+A `router` has multiple network interfaces, one for each of the subnets to which
+it is connected. The more general term multihomed host is used for any hostnot
+necessarily a routerwith multiple network interfaces. 
+
+(Another way of describing a router is to say that it is a multihomed host
+ that forwards packets from one subnet to another.) A multihomed host has a
+different network address for each of its interfaces (i.e., a different
+address on each of the subnets to which it is connected).
+
+
+The TCP/IP protocol suite is a layered networking protocol (Figure 58-2). It
+includes the Internet Protocol (IP) and various protocols layered above it.
+(The code that implements these various layers is commonly referred to as a
+ protocol stack.) The name TCP/IP derives from the fact that the Transmission
+Control Protocol (TCP) is the most heavily used transport-layer protocol.
+
+One characteristic of the data-link layer that is important for our discussion
+of IP is the maximum transmission unit (MTU). A data-link layer’s MTU is the
+upper limit that the layer places on the size of a frame. Different data-link
+layers have different MTUs.
+
+*tool-netstat*
+The command netstat i displays a list of the system’s network interfaces,
+along with their MTUs.
+
+kyoupark@st-castor-03:~/STB_SW_o/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build$ netstat -i
+Kernel Interface table
+Iface      MTU    RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg
+docker0   1500  4453428      0      0 0       6241225      0      0      0 BMRU
+ens160    1500 4874582937      0 234234 0      1944243891      0      0      0 BMRU
+lo       65536 21291968      0      0 0      21291968      0      0      0 LRU
+veth2249  1500  4339888      0      0 0       6088469      0      0      0 BMRU
+veth27a6  1500    35341      0      0 0         38716      0      0      0 BMRU
+
+
+{socket-ip6}
+In the early 1990s, a revised version of IP was devised: IP version 6 (IPv6).
+The most notable difference between the two versions is that IPv4 identifies
+subnets and hosts using 32-bit addresses, while IPv6 uses 128-bit addresses,
+thus providing a much larger range of addresses to be assigned to hosts.
+
+<socket-ip-fragment>
+Modern TCP implementations employ algorithms (path MTU discovery) to determine
+the MTU of a path between hosts, and accordingly break up the data they pass
+to IP, so that IP is not asked to transmit datagrams that exceed this size.
+UDP provides no such mechanism, and we consider how UDPbased applications can
+deal with the possibility of IP fragmentation in Section 58.6.2.
+
+
+<socket-ip-address>
+Since the network ID component always occupies the leftmost part of the mask,
+the following notation is sufficient to specify the range of assigned addresses:
+
+204.152.189.0/24
+
+The /24 indicates that `the network ID part` of the assigned address consists of
+the leftmost 24 bits, with the remaining 8 bits specifying the host ID.
+
+Alternatively, we could say that the network mask in this case is
+255.255.255.0 in dotted-decimal notation.
+
+An organization holding this address can assign 254 unique Internet addresses
+to its computers204.152.189.1 through 204.152.189.254. 
+
+`Two addresses can’t be assigned.` One of these is the address whose host ID
+is all 0 bits, which is used to identify the network itself. The other is the
+address whose host ID is all 1 bits 204.152.189.255 in this examplewhich is
+the subnet broadcast address.
+
+
+<socket-ip-loopback>
+Certain IPv4 addresses have special meanings. The special address 127.0.0.1 is
+normally defined as the loopback address, and is conventionally assigned the
+hostname localhost. A datagram sent to this address never actually reaches the
+network, but instead automatically loops back to become input to the sending
+host. Using this address is convenient for testing client and server programs
+on the same host.
+
+The constant INADDR_ANY is the so-called IPv4 `wildcard address.` The wildcard
+IP address is useful for applications that bind Internet domain sockets on
+multihomed hosts. If an application on a multihomed host binds a socket to
+just one of its host’s IP addresses, then that socket can receive only UDP
+datagrams or TCP connection requests sent to that IP address. However, we
+normally want an application on a multihomed host to be able to receive
+datagrams or connection requests that specify any of the host’s IP addresses,
+and binding the socket to the wildcard IP address makes this possible. SUSv3
+doesn’t specify any particular value for INADDR_ANY, but most implementations
+define it as 0.0.0.0 (all zeros).
+
+
+<socket-ip-subnet>
+each subnetwork being identified by the combination of the network ID plus the
+subnet ID. This combination is usually referred to as the extended network ID.
+
+For example, suppose that our assigned network ID is 204.152.189.0/24, and we
+choose to subnet this address range by splitting the 8 bits of the host ID
+into a 4-bit subnet ID and a 4-bit host ID. Under this scheme, the subnet mask
+would consist of 28 leading ones, followed by 4 zeros, and 
+`the subnet with the ID of 1` would be designated as 204.152.189.16/28.
+
+
+58.6.1 Port Numbers
+
+The task of the transport protocol is to provide an end-to-end communication
+service to applications residing on different hosts (or sometimes on the same
+host). In order to do this, the transport layer requires a method of
+differentiating the applications on a host. In TCP and UDP, this
+differentiation is provided by a 16-bit port number.
+
+
+LPI-59 SOCKETS : INTERNET DOMAIN
+
+59.4 Internet Socket Addresses
+
+namespace code
 {
-  err = move_addr_to_user(&address, len, upeer_sockaddr, upeer_addrlen);
-}
+  // /usr/include/netinet/in.h
+
+  /* Internet address.  */
+  typedef uint32_t in_addr_t;
+
+  /* Type to represent a port.  */
+  typedef uint16_t in_port_t;
+
+  /* Structure describing an Internet socket address.  */
+  struct sockaddr_in
+  {
+    __SOCKADDR_COMMON (sin_);
+    in_port_t sin_port;			/* Port number.  */
+    struct in_addr sin_addr;		/* Internet address.  */
+
+    /* Pad to size of `struct sockaddr'.  */
+    unsigned char sin_zero[sizeof (struct sockaddr) -
+      __SOCKADDR_COMMON_SIZE -
+      sizeof (in_port_t) -
+      sizeof (struct in_addr)];
+  };
+
+  struct sockaddr_in6
+  {
+    __SOCKADDR_COMMON (sin6_);    /* AF_INET6 */
+    in_port_t sin6_port;	       /* Transport layer port # */
+    uint32_t sin6_flowinfo;	    /* IPv6 flow information */
+    struct in6_addr sin6_addr;  	 /* IPv6 address */
+    uint32_t sin6_scope_id;	    /* IPv6 scope-id (new in RFC2553) */
+  };
+
+} // namespace
+
+
+/* IPv4 4-byte address */
+struct in_addr
+  {
+    in_addr_t s_addr;
+  };
+
+struct sockaddr_in {        /* IPv4 socket address */
+  sa_family_t sin_family;   /* Address family (AF_INET) */
+  in_port_t sin_port;       /* Port number */
+  struct in_addr sin_addr;  /* IPv4 address */
+  unsigned char __pad[X];   /* Pad to size of 'sockaddr'
+                             structure (16 bytes) */
+};
+
+/* IPv6 address structure */
+struct in6_addr { 
+  uint8_t s6_addr[16];      /* 16 bytes == 128 bits */
+};
+
+struct sockaddr_in6 {         /* IPv6 socket address */
+  sa_family_t sin6_family;    /* Address family (AF_INET6) */
+  in_port_t sin6_port;        /* Port number */
+  uint32_t sin6_flowinfo;     /* IPv6 flow information */
+  struct in6_addr sin6_addr;  /* IPv6 address */
+  uint32_t sin6_scope_id;     /* Scope ID (new in kernel 2.4) */
+};
+
+All of the fields in the sockaddr_in6 structure are in network byte order.
+
+
+The sockaddr_storage structure
+
+With the IPv6 sockets API, the new generic sockaddr_storage structure was
+introduced.  This structure is defined to be large enough to hold any type of
+socket address (i.e., any type of socket address structure can be cast and
+    stored in it). In particular, this structure allows us to transparently
+store either an IPv4 or an IPv6 socket address, 
+
+thus `removing IP version dependencies from our code.` 
+
+The sockaddr_storage structure is defined on Linux as follows:
+
+#define __ss_aligntype uint32_t     /* On 32-bit architectures */
+
+struct sockaddr_storage {
+  sa_family_t ss_family;
+  __ss_aligntype __ss_align;        /* Force alignment */
+  char __ss_padding[SS_PADSIZE];    /* Pad to 128 bytes */
+};
 
 
 ={============================================================================

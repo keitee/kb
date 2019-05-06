@@ -2514,9 +2514,9 @@ DESCRIPTION
        The strings may not overlap, and the destination string dest must be
        large enough to receive the copy.  Beware of buffer overruns!  (See BUGS.)
 
-       The strncpy() function is similar, except that at most n bytes of src
+       The strncpy() function is similar, except that `at most` n bytes of src
        are copied.  Warning: If there is no null byte among the first n bytes
-       of src, the string placed in dest will not  be  null- terminated.
+       of src, the string placed in dest `will not be null-terminated.`
 
 
 <ex-real> `stack buffer-overflow` was detected by ASan:
@@ -2609,6 +2609,47 @@ $ diff CnSParsePacket.cpp.orig CnSParsePacket.cpp
 <  ::strncpy(pChar,stConfServer.szStat.c_str(),length);
 ---
 >  ::strncpy(pChar,stConfServer.szStat.c_str(),length+1);
+>
+
+<<ex> *cxx-memory-issue* *cxx-memcpy-issue* *cxx-strncpy-issue*
+Seen on NDS MW issue
+
+MW_Process crash with core dump in SIM_dbc_query_ReadProgrammeInstanceInfo
+(during memcpy) 
+
+#define SIM_DBC_MAX_SORT_STRING_LEN   40
+
+// void *memcpy(void *dest, const void *src, size_t n);
+
+(void)memcpy((void*)&obj_array[offset].sort_title[0], 
+    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
+
+// source when crashed
+0x1d8dfec: 0x54495050 0x494e4720 0x504f494e 0x54000000
+0x1d8dffc: 0xc009 0x0 0x0 0x0
+
+// dest
+x/40a obj_array[0].sort_title
+0x204eb20: 0x54495050 0x494e4720 0x504f494e 0x54000000
+0x204eb30: 0x0 0x0 0x0 0x0
+
+DESCRIPTION
+       The memcpy() function copies n bytes from memory area src to memory
+       area dest.  The memory areas must not overlap.  Use memmove(3) if the
+       memory areas do overlap.
+
+// solution
+
+strncpy(&obj_array[offset].sort_title[0], 
+    (const char*)results[24].value.text, SIM_DBC_MAX_SORT_STRING_LEN);
+
+The problem is out of index. Since when src, results[24].value.text, is less
+than SIM_DBC_MAX_SORT_STRING_LEN(40) then memcpy copies blindly over from and
+this cause out of index access on src.
+
+So strncpy will ensure only the length of the value.text is copied when there
+is a null in src (destination then padded out with nulls) or a maximum of 40
+is copied if the source string is over 40.
 
 
 <cxx-snprintf>
@@ -2624,7 +2665,6 @@ null character.
        (including the terminating null byte ('\0')) to str.
 
 
-#{ c and c++
 ={============================================================================
 *kt_dev_cpp_0000* cxx-code-ansi-color
 
@@ -11995,12 +12035,12 @@ only for destroying the resources allocated by the derived class. From user or
 programmer POV.
 
 
-{cxx-dtor-non-virtual-destruction-problem} *cxx-override* *cxx-override*
+{cxx-dtor-non-virtual-destruction-problem} *cxx-override*
 EC++07. The problem is that base dtor runs when derived dtor is expected via
 derived-to-base pointer is used.
 
-In GCC spec, it will have cxx-undefined result but in reality, destroy only the
-base part; partially destroyed. In GCC, no runtime error in simple test. 
+GCC spec says it will have cxx-undefined result but in reality, destroy only
+the base part; `partially destroyed.` In GCC, no runtime error in simple test. 
 
 This is the same for other member functions. That is if miss out virtual
 keywords in a base, then will have only base version even if expected derived
@@ -12024,7 +12064,7 @@ Although cxx-vector do not have virtual dtor and it is okay if used only
 statically. 
 
 Due to *non-virtual-destruction-problem,* all base class `must` have virtual
-dtor and these are the first and the second at below and as advised in EC++07.
+dtor; the first and the second at below and as advised in EC++07.
 
 o polymorphic base class
   designed for inheritance and defined virtual funcs. `must have virtual
@@ -12140,6 +12180,7 @@ TEST(Dtor, NoVirtualDtorProblem)
     cout << "}" << endl;
   }
 
+  // static
   {
     cout << "{" << endl;
     DerivedFromNoVirtual object;
@@ -15525,14 +15566,14 @@ See *cxx-ex-hasptr-exmaple* for the problem when moved-from state is wrong.
 
 
 {cxx-move-synthesized} *cxx-copy-control*
-If class do not define copy ctor and assign then compiler 'always' make these
-operations; defined either as memberwise or deleted.
+If class do not define copy ctor and assign then compiler `always make` these
+operations; either memberwise or deleted.
 
 Move operations are different. The compiler make move operations `only if` a
-class does 'not' define any copy ctor and assign and `only if` all non-static
+class does `not` define any copy ctor and assign and `only if` all non-static
 members can be move constructed and assigned because if a class doesn't have a
 move operation, `the corresponding copy operation is used` in place of move
-through function matching. 
+via function matching. 
 
   *cxx-remember*
   "if class has own copy ctor and assign then move will 'not' be synthesized."
@@ -15551,7 +15592,7 @@ X x, x2 = std::move(x);          // use the synthesized move ctor
 hasX hx, hx2 = std::move(hx);
 
 If class defines either move ctor and/or move assign but not defined copy
-controls, the synthesized copy controls will de defined 'deleted'. 
+controls, the copy controls will de defined `deleted`. 
 
   *cxx-remember*
   "class that define move operations 'must' also define own copy operations." 
@@ -20138,75 +20179,129 @@ item.combine( static_cast<Sales_data>(str) );
 
 https://shaharmike.com/cpp/rvo/
 
-#include <iostream>
-#include <memory>
-#include <vector>
-
-// g++ -g -std=c++11 -fno-elide-constructors t_evo.cpp
-
-using namespace std;
-
-//
-struct Snitch {   // Note: All methods have side effects
-  Snitch() { cout << "c'tor" << endl; }
-  ~Snitch() { cout << "d'tor" << endl; }
-
-  Snitch(const Snitch&) { cout << "copy c'tor" << endl; }
-  Snitch(Snitch&&) { cout << "move c'tor" << endl; }
-
-  Snitch& operator=(const Snitch&) {
-    cout << "copy assignment" << endl;
-    return *this;
-  }
-
-  Snitch& operator=(Snitch&&) {
-    cout << "move assignment" << endl;
-    return *this;
-  }
-};
-
-Snitch ExampleRVO() {
-  return Snitch();
-}
-
-void t_evo_1()
+namespace cxx_rvo
 {
+  // Note: All methods have side effects
+  struct Snitch 
+  {
+    Snitch(int value): value_(value) { cout << "c'tor" << endl; }
+    ~Snitch() { cout << "d'tor" << endl; }
+
+    Snitch(const Snitch&) { cout << "copy c'tor" << endl; }
+    Snitch(Snitch&&) { cout << "move c'tor" << endl; }
+
+    Snitch& operator=(const Snitch&) {
+      cout << "copy assignment" << endl;
+      return *this;
+    }
+
+    Snitch& operator=(Snitch&&) {
+      cout << "move assignment" << endl;
+      return *this;
+    }
+
+    int getValue() const { return value_;}
+
+    private:
+    int value_{0};
+  };
+
+  Snitch ExampleRVO() {
+    std::cout << "in ExampleRVO: " << std::endl;
+    return Snitch(100);
+  }
+
+  vector<Snitch> ReturnVector() {
+    // vector<Snitch> ivec(1000000000, 1);
+    // vector(n, elem); creates n elements
+    vector<Snitch> ivec(10, Snitch(200));
+    cout << "in ReturnVector: size of vector: " << ivec.size() << endl;
+    return ivec;
+  }
+
+  Snitch createSnitch() {
+    return Snitch(200);
+  }
+
+  void foo(Snitch s) {
+    cout << "snitch value is: " << s.getValue() << endl;
+  }
+
+} // namespace
+
+TEST(RVO, OnSingle)
+{
+  using namespace cxx_rvo;
+
   Snitch snitch = ExampleRVO();
-} 
-
-//
-vector<int> ReturnVector() {
-  return vector<int>(1, 1);
 }
 
-void t_evo_2() {
-  for (int i = 0; i < 1000000000; ++i) {
-    ReturnVector();
-  }
-}
-
-
-//
-Snitch CreateSnitch(bool runtime_condition) {
-  Snitch a, b;
-  if (runtime_condition) {
-    return a;
-  } else {
-    return b;
-  }
-}
-
-void t_evo_3() {
-  Snitch snitch = CreateSnitch(true);
-}
-
-int main()
+TEST(RVO, OnVector)
 {
-    t_evo_1();
-    // t_evo_2();
-    t_evo_3();
-    cout << "end of main" << endl;
+  using namespace cxx_rvo;
+
+  vector<Snitch> ivec = ReturnVector();
 }
+
+TEST(RVO, OnArg)
+{
+  using namespace cxx_rvo;
+
+  foo(Snitch(200));
+}
+
+TEST(RVO, OnAssignment)
+{
+  using namespace cxx_rvo;
+
+  Snitch s = createSnitch();
+  cout << "----------" << endl;
+  s = createSnitch();
+}
+
+[ RUN      ] RVO.OnSingle
+in ExampleRVO: 
+c'tor
+d'tor
+[       OK ] RVO.OnSingle (0 ms)
+[ RUN      ] RVO.OnVector
+c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+copy c'tor
+d'tor
+in ReturnVector: size of vector: 10
+d'tor
+d'tor
+d'tor
+d'tor
+d'tor
+d'tor
+d'tor
+d'tor
+d'tor
+d'tor
+[       OK ] RVO.OnVector (2 ms)
+[ RUN      ] RVO.OnArg
+c'tor
+snitch value is: 200
+d'tor
+[       OK ] RVO.OnArg (1 ms)
+[ RUN      ] RVO.OnAssignment
+c'tor
+----------
+c'tor
+move assignment
+d'tor
+d'tor
+[       OK ] RVO.OnAssignment (1 ms)
 
 
 Return Value Optimization (RVO), Named RVO (NRVO) and Copy-Elision are in C++
@@ -20229,12 +20324,17 @@ int main() {
   Snitch snitch = ExampleRVO();
 }
 
-
+// when cxx-rvo is on
 $ clang++ -std=c++11 main.cpp && ./a.out
 c'tor
 d'tor
 
-// gcc shows the same result. see *cxx-return-cxx-move* used here.
+// when cxx-rvo is off. gcc shows the same result.
+
+// As *cxx-return-cxx-move* shows, here uses move context in return but that's
+// not even needed since *cxx-rvo* do not use move context at all and cxx-rvo
+// is default.
+
 $ clang++ -std=c++11 -fno-elide-constructors main.cpp && ./a.out
 c'tor
 move c'tor
@@ -20245,7 +20345,7 @@ d'tor
 
 In the first run (`without -fno-elide-constructors`) the compiler refrained
 from calling user code `despite it having a clear side effect` (being printing
-    to console). 
+to console). 
 
 
 <rvo-is-default>
@@ -24881,7 +24981,7 @@ But from MEC++10, it shows many ways to handle exceptions in ctor so not sure
 that it is properly destroyed. Seems EC++ is the latest.
 
 
-{cxx-except-in-dtor} *cxx-except-stack-unwinding*
+{cxx-except-in-dtor} *cxx-except-stack-unwinding* *cxx-dtor*
 Why exception in dtor is the problem? Since stack-unwinding starts to find
 matching catch and local objects are destroyed. If dtor of object being
 destroyed can raise an execption, then would have two running exceptions and
@@ -25339,12 +25439,21 @@ namespace cxx_except
       }
   };
 
+  class FooNoAbort
+  {
+    public:
+      ~FooNoAbort() noexcept(false)
+      {
+        throw std::runtime_error("noexcept(false) so expects no abort");
+      }
+  };
+
   class FooAbort
   {
     public:
       ~FooAbort()
       {
-        throw std::runtime_error("expects abort");
+        throw std::runtime_error("noexcept(true) so expects abort");
       }
   };
 } // namespace
@@ -25364,7 +25473,39 @@ TEST(Exception, Noexcept)
   {
     int value{1};
 
-    FooAbort foo;
+    try
+    {
+      FooNoAbort foo;
+    }
+    catch(exception &e)
+    {
+      // why fails???
+      // EXPECT_THAT(e.what(), "noexcept(false) so expects no abort");
+      
+      std::ostringstream os;
+      os << e.what(); 
+      EXPECT_THAT(os.str(), "noexcept(false) so expects no abort");
+    }
+
+    EXPECT_THAT(value, 1);
+  }
+
+  // [ RUN      ] Exception.Noexcept
+  // terminate called after throwing an instance of 'std::runtime_error'
+  //   what():  noexcept(true) so expects abort
+  // Aborted
+
+  {
+    int value{1};
+
+    try
+    {
+      FooAbort foo;
+    }
+    catch(exception &e)
+    {
+      std::cout << e.what() << std::endl;
+    }
 
     EXPECT_THAT(value, 1);
   }
@@ -34614,13 +34755,13 @@ definition of a class or function. When use a template, specify template
 arguments to bind to the template parameters.
 
 *cxx-templete-decuction*
-Which actual type T represents is determined at compile time based on how
-template function is used. 'deduce' the argument type to determine what type
+Which actual type T represents `is determined at compile time` based on how
+template function is used. deduce the argument type to determine what type
 to bind to the parameter T.
 
 *template-instantiation*
-Use the deduced template parameters to instantiate a specific version of the
-function. Creates a new 'instance' of the template.
+Use the deduced template parameters `to instantiate a specific version` of the
+function. Creates a new instance of the template.
 
 // `template-parameter-list` is "<typename T>"
 template <typename T>
@@ -34655,9 +34796,9 @@ TEST(Template, Function)
 <principle-to-write-generic-code>
 Here two important principles for writing generic codes from this example:
 
-o The function parameters in the templeate are `reference to const`.
+o The function parameters in the templeate are `reference to const`
 
-This makes the function runs faster and also it 'can' be uses on types that
+This makes the function runs faster and also it can be uses on types that
 cannot be copied such as IO types and unique_ptr.
 
 o Used only < comparison. More genarally, reduce the requirement on element or
@@ -34688,10 +34829,10 @@ template member function. As a result, headers includes definitions as well as
 declarations.
 
 *cxx-remember*
-template should be in header which is must and otherwise, see link errors.
+cxx-template should be in header which is must and otherwise, emit link errors.
 
 
-The fact that the compiler generates code 'only' when use a template affects
+The fact that the compiler generates code only when use a template affects
 when generate compilation errors.
 
 Sales_data data1, data2;
@@ -34701,9 +34842,9 @@ Sales_data don't have operator<(). Errors such as this cannot be detected
 until the compiler instantiates the definition of compare on type Sales_data.
 No errors when use with types which supports operator<.
 
-The 'instantiation' is a process that create a concrete 'independent' function
+The instantiation is a process that create a concrete independent function
 or class from a template when compiling. Code generation and these compiler
-generated function or class are an 'instantiation' of the template. Must be
+generated function or class are an `instantiation of the template` Must be
 defined in the same namespace that contains the original template. 
 
 see *template-control-instantiation* p675 for C++ feature to control this.
@@ -34744,7 +34885,8 @@ Blob<string> names;
 
 From class template, compiler will generate a class:
 
-template <> class Blob<int> {
+template <> 
+class Blob<int> {
   typedef typename std::vector<int>::size_type size_type;
   Blob();
   Blob(std::initializer_list<int> il);
@@ -34755,7 +34897,6 @@ template <> class Blob<int> {
 };
 
 
-<create-type>
 A class template is used `to instantiate a type` and an instantiated type
 always includes template arguments.
 
@@ -34777,9 +34918,10 @@ template <typename T> class BlobPtr;
 template <typename T> class Blob;
 template <typename T> bool operator==(const Blob<T> &, const Blob<T> &);
 
-template <typename T> class Blob {
+template <typename T> 
+class Blob {
 
-    // each intantiation of Blob grants limited access to the instantiation of
+    // `each intantiation of Blob` grants limited access to the instantiation of
     // BlobPtr and the equality operator with the same type, T. 
 
     friend class BlobPtr<T>;
@@ -34793,15 +34935,22 @@ template <typename T> class Blob {
 Can also make every(all) instantiation(type) of another template its friend or
 may limit friendship to a specific instantiation.
 
-templcate <typename T> class C2 {
+templcate <typename T> 
+class C2 {
 
   // single instantiation
   friend claass Pal<T>;
 
   // all instances of Pal2 are friends. no forward declaration required.
+  // do not use T
+
   template <typename X> friend class Pal2;
 };
 
+
+// DO NOT GET IF IT IS ABOUT FRIEND???
+
+#if 0
 
 <ex> *cxx-template-function-template-argument*
 
@@ -34985,11 +35134,12 @@ TEST(CConThread, LockGuard)
   EXPECT_THAT(lq.size(), 20);
 }
 
+#endif
+
 
 {template-static}
 As with a static in ordinary class, there must be exactly one definition of
-each static member. Each instantiation has its 'own' instance of static
-members.
+each static member. Each instantiation has its own instance of static members.
 
 template <typename T> class Foo {
   public:
@@ -35023,7 +35173,7 @@ name is a type or a static member until instantiation is done.
 
 The problem is: 
 
-is it defining a variable named p or multiplying a static data member named
+Is it defining a variable named p or multiplying a static data member named
 size_type by p?
 
 T::size_type *p;
@@ -35041,21 +35191,21 @@ typename T::value_type top( const T& c )
     return `typename` T::value_type();  // "typename T::value_type" is a type
 }
 
-EC++42. This is called 'dependant' type names since it depends on the template
-parameter. This causes 'parsing' difficulty and this is why must tell it to
-compiler and use 'typename' but not class.
+EC++42. This is called `dependant type names` since it depends on the template
+parameter. This causes parsing difficulty and this is why must tell it to
+compiler and use typename but not class.
+
+// template<typename T>
+// void print2nd( const T& container )
+// {
+//   T::const_iterator iter( container.begin() );  // iter is dependant name
+//   ...
+// }
 
 template<typename T>
-void print2nd( const T& container )
+void print2nd(const T& container)
 {
-  T::const_iterator iter( container.begin() );  // iter is dependant name
-  ...
-}
-
-template<typename T>
-void print2nd( const T& container )
-{
-  typename T::const_iterator iter( container.begin() );  // must use typename
+  typename T::const_iterator iter(container.begin()); // must use typename
   ...
 }
 
@@ -35111,12 +35261,14 @@ class StrBlob {
 
 Tried the both and the both compiles and works well.
 
+namespace cxx_code
+{
   template<typename _Tp, typename _Alloc = std::allocator<_Tp>> 
     class vector : protected _Vector_base<_Tp, _Alloc>
     {
       typedef size_t					 size_type;
     };
-
+} // namespace
 
 <ex>
   // error 
@@ -35210,8 +35362,8 @@ type of a callable objects. `default type`
 
 namespace cxx_template_default
 {
-  // `This shows how function-object is useful` *cpp-functor*
-  // default template argument, the 'type' of callable 
+  // `This shows how function-object is useful` *cxx-functor*
+  // default template argument, the type of callable 
   // default function argument, F()
 
   template <typename T, typename F = less<T>>
@@ -35264,8 +35416,9 @@ class Numbers {
 
 Numbers<long double> lots_of_precision;
 
-<cpp-template-default-type>
-The empty braket says we want the 'default' type to instantiate.
+<ex>
+The empty braket *cxx-template-specialization* but do not say about type so
+use default type?
 
 Numbers<> average_precision;
 
@@ -35274,10 +35427,10 @@ Numbers<> average_precision;
 *kt_dev_cxx_0000* cxx-template-member
 
 Either an ordinary class or class template may have a member function that is
-itself a template; `member template.` See this word ordering since it
+itself a template; `member template function.` See this word ordering since it
 summarise that it is member function and function template.
 
-  "member template may 'not' be virtual."
+  " member template `may not be virtual` "
 
 <with-nontemplate-class>
 The member template of ordinary class from CPR 672. This example is similar to
@@ -35292,6 +35445,7 @@ namespace cxx_template_member
     public:
       DebugDelete(ostream &os = cerr) : os_(os) {}
 
+      // *cxx-functor*
       template <typename T>
       void operator() (T *p) const
       {
@@ -35300,8 +35454,7 @@ namespace cxx_template_member
       }
 
     private:
-
-      // *cxx-reference-member
+      // *cxx-reference-member*
       ostream &os_;
   };
 
@@ -35336,11 +35489,13 @@ TEST(Template, MemberTemplate)
 
 
 <with-template-class>
-Both the class and member template have their 'independent' template
-parameters. To support iterators into varying kinds of sequences.
+Both the class and member template have `independent template parameters` 
+To support iterators into varying kinds of sequences.
 
-template <typename T> class Blob {
-  template <typename It> Blob(It b, It e);
+template <typename T> 
+class Blob {
+  template <typename It> 
+    Blob(It b, It e);
   ...
 };
 
@@ -35354,14 +35509,14 @@ Blob<int> a1( begin(iarray), end(iarray));
 Blob<int> a1( ivec.begin(), ivec.end());
 Blob<string> a1( svec.begin(), svec.end());
 
-As with "with-nontemplate-class", function parameter types are 'deduced' as it
+As with "with-nontemplate-class", function parameter types are deduced as it
 is function template.
 
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-template-explicit-instantiation
 
-{template-control-instantiation}
+{cxx-template-control-instantiation}
 
 *cxx-code-bloat*
 
@@ -35382,7 +35537,7 @@ extern template `declaration`     // instantiation `declaration`
 template `declaration`            // instantiation `definition`
 
 When the compiler sees an "extern template declaration", will not generate
-code for that instantiation 'in' that file and it is to say there will be
+code for that instantiation `in that file` and it is to say there will be
 nonextern use of that elsewhere in the program. 
 
 Must be one definition for that particular instantiation and appear before any
@@ -35405,7 +35560,7 @@ Blob<int> a2(a1);
 int i = compare( a1[0], a2[0] );
 
 
-// file2.cc *cpp-template-instantiate-all*
+// file2.cc *cxx-template-instantiate-all*
 // compiler generate `all members` including inline members when see
 // "instantiation definition" and must link file1.o with file2.o.
 
@@ -35431,8 +35586,20 @@ http://stackoverflow.com/questions/2351148/explicit-instantiation-when-is-it-use
 
 For instance, libstdc++ contains the explicit instantiation of
 
-  // std::basic_string<char,char_traits<char>,allocator<char> >
-  typedef basic_string<char> string;
+namespace cxx-code
+{
+  // bits/stringfwd.h
+  //
+  namespace std 
+  {
+    template <typename charT,
+    typename traits = char_traits<charT>,
+    typename Allocator = allocator<charT> >
+      class basic_string;
+
+    typedef basic_string<char> string;
+  }
+} // namespace
 
 so every time you use functions of std::string, the same function code doesn't
 need to be copied to objects. The compiler only need to refer (link) those to
@@ -35448,7 +35615,7 @@ or function without actually using it in your code. Because this is useful
 
   // libstdc++.so.6 => /usr/lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007efe7d4aa000)
   //
-  // {downside-of-static} *why-use-shared-library*
+  // {cxx-shared-downside-of-static} *why-use-shared-library*
   //
   // 1. Duplicates in disk and ram spce.
   // 
@@ -35459,7 +35626,7 @@ or function without actually using it in your code. Because this is useful
   // aware of which applications were linked against the library.
 
   since templates are ordinarily in header files and by using explicit
-  instantiation, make a library. see the same reason of using library.
+  instantiation, make a shared library. so the same reason of using library.
 
 The following explicitly instantiates MyStack for int variables and six items:
 
@@ -35514,7 +35681,8 @@ note: Q: does it have real use case?
 As with ordinary argument, normal conversion applies on
 `cxx-template-explicit-argument` since no deduction involved.
 
-template <typename T> int compare(const T& v1, const T& v2);
+template <typename T> 
+int compare(const T& v1, const T& v2);
 
 long lng;
 
@@ -51016,18 +51184,22 @@ TEST(StringSplit, GetExtension)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-string-code
 
-// bits/stringfwd.h
-
 *cxx-string-def*
 
-namespace std {
-  template <typename charT,
-           typename traits = char_traits<charT>,
-           typename Allocator = allocator<charT> >
-             class basic_string;
+namespace cxx-code
+{
+  // bits/stringfwd.h
+  //
+  namespace std 
+  {
+    template <typename charT,
+    typename traits = char_traits<charT>,
+    typename Allocator = allocator<charT> >
+      class basic_string;
 
-  typedef basic_string<char> string;
-}
+    typedef basic_string<char> string;
+  }
+} // namespace
 
 // bits/ allocator.h
 
@@ -55399,8 +55571,8 @@ auto p = p2.release();
 
 <cxx-sp-unique-return> *cxx-return-cxx-move*
 One exception to the rule that cannot copy a unique_ptr; that according to the
-language rules of C++11, the compiler will try a 'move' automatically. Can
-copy or assign a unique_ptr that is about to be destoryed.
+language rules of C++11, the compiler will try a move automatically. Can copy
+or assign a unique_ptr that is about to be destoryed.
 
 unique_ptr<int> clone(int p) {
   ...
@@ -55411,7 +55583,7 @@ unique_ptr<int> clone(int p) {
 unique_ptr<int> clone(int p) {
   unique_ptr<int> ret( new int(p) );
   ...
-  // can return a copy of local object
+  // return a copy of local object
   return ret;
 }
 
