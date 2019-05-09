@@ -10750,19 +10750,19 @@ There are operations synthesized by compiler if they are not defined by user
 and `only if` they are needed. These are `public and inline` according to
 EC++05.
 
-dtor, default-ctor, copy controls; copy ctor, copy assign, move ctor(C++11),
-move assign(C++11)
+dtor, default-ctor, 
+*cxx-copy-controls* : copy ctor, copy assign, move ctor(C++11), move assign(C++11)
 
 
 <cxx-deleted>
 However, not always possible since there are cases when compiler cannot:
 
-* When a class has reference or const member.
-* When there's a class member that don't have default ctor.
-* When base class have private on any of synthesized default-operations.
+o When a class has reference or cxx-const member.
+o When there's a class member that don't have default ctor.
+o When base class have private on any of synthesized default-operations.
 
 
-{default-ctor} default-initialization
+{cxx-ctor-default} default-initialization
 The `default-ctor` is a special constructor which takes `no-arguments`.
 
 The recommendation on initialization is to avoid syn-version and do it
@@ -10773,14 +10773,14 @@ explicitly:
 
 The reasons to avoid the syn-version:
 
-* The `default-init` for built-in types means `undefined value.`
+o The `default-init` for built-in types means `undefined value.`
 
   The synthesised detault-ctor will use `cxx-in-class-init` if there is and
   otherwise `default-init` its member and use default ctor for its class
   member. So undefined value for built-in types and default constructed
   value for user types.
 
-* Compile error when there's a class member that don't have default ctor since
+o Compile error when there's a class member that don't have default ctor since
   compiler cannot syn default ctor for this class.
 
 o `If defines any other ctor for the class, the compiler do not generates`
@@ -10900,7 +10900,7 @@ class T {
   double revenue = 0.0;
 };
 
-The `inclass-init` do like `default-arg` because:
+The `in-class-init` do like `default-arg` because:
 
 T(const string &s) : bookNo(s) {}
 
@@ -11312,12 +11312,12 @@ string s1;
 string s2(s1);           
 string dots(10, '.');
 string s(dots);
-string null_book( "9-999-99999-9" );
+string null_book("9-999-99999-9");
 
 // `copy-init when converting-ctor` 
 string null_book = "9-999-99999-9"; 
 
-// `copy-init when copy-ctor` but no copy-assign called
+// `copy-init when copy-ctor` 
 string s2 = s1;                     
 
 
@@ -30327,8 +30327,8 @@ class Singleton {
 
   public:
     // `controlled-access` single point of access
-    // `lazy-initialisation` means that do not create instance until its first
-    // access.
+    // `cxx-lazy-initialisation` means that do not create instance until its
+    // first access.
 
     `static` Singleton* Instance()
     {
@@ -44883,6 +44883,7 @@ namespace cxx_case_strblob_iterator
       std::shared_ptr<std::vector<std::string>> check(size_type index,
           string const& message) const
       {
+        // *cxx-sp-weak*
         auto blob_ptr = blob_.lock();
         if (!blob_ptr)
           throw std::runtime_error("unbounded shared_ptr");
@@ -51888,6 +51889,9 @@ o Both forms erase the single character at iterator position pos or all
 o They return the position of the first character after the last removed
   character (thus, the second form returns end).
 
+string& string::replace (size_type idx, size_type len, const string& str)
+string& string::replace (begin_iterator beg, begin_iterator end, const string& str)
+
 TEST(StringOperations, EraseReplace)
 {
   {
@@ -54259,12 +54263,11 @@ String& String::operator=( const String& rhs )
   return *this;
 }
 
-With this implementation, use:
-
 String a, b, c, d;
 a = b = c = d = "Hello";
 
-This means:
+With this implementation, this assignment means that all a, b, c, d point
+different copies:
 
 a -> "Hello"
 b -> "Hello"
@@ -54272,7 +54275,6 @@ c -> "Hello"
 d -> "Hello"
 
 How can we make those share one copy of Hello?
-
 
 namespace cxx_code *cxx-sp-code*
 {
@@ -54571,47 +54573,51 @@ swap(p, q);
 p.swap(q);
 
 
-<ex> CXXSLR 5.2 Smart Pointers
+<ex>
 
-#include <memory>
+// CXXSLR 5.2 Smart Pointers
 
-using namespace std;
-
-int main()
+TEST(SmartPointerShared, Example)
 {
-  shared_ptr<string> pNico(new string("nico"));
-  shared_ptr<string> pJutta(new string("jutta"));
+  std::shared_ptr<std::string> pNico{new std::string("nico")};
+  std::shared_ptr<std::string> pJutta{new std::string("jutta")};
 
-  // capitalize the first char
+  // capitalise the first, cxx-string-replace
+
   (*pNico)[0] = 'N';
-  pJutta->replace(0,1,"J");
+  pJutta->replace(0, 1, "J");
 
-  // put them multiple times in a container
-  vector<shared_ptr<string>> whoMadeCoffee;
+  // put them multiple times in a coll
+
+  std::vector<std::shared_ptr<std::string>> whoMadeCoffee;
   whoMadeCoffee.push_back(pJutta);
   whoMadeCoffee.push_back(pJutta);
   whoMadeCoffee.push_back(pNico);
   whoMadeCoffee.push_back(pJutta);
   whoMadeCoffee.push_back(pNico);
 
-  // print all
-  for( auto ptr : whoMadeCoffee )
-    cout << "*ptr: " << *ptr << endl; 
+  {
+    std::ostringstream os;
+    for(auto const &sp : whoMadeCoffee)
+      os << *sp << ",";
 
-  // overwrite a name
+    EXPECT_THAT(os.str(), "Jutta,Jutta,Nico,Jutta,Nico,");
+  }
+
+  // overwrite name
+
   *pNico = "Nicolai";
 
-  cout << "------------" << endl;
+  {
+    std::ostringstream os;
+    for(auto const &sp : whoMadeCoffee)
+      os << *sp << ",";
 
-  // print all again
-  for( auto ptr : whoMadeCoffee )
-    cout << "*ptr: " << *ptr << endl; 
+    EXPECT_THAT(os.str(), "Jutta,Jutta,Nicolai,Jutta,Nicolai,");
+  }
 
-  // what's the use_count of pJutta?
-  cout << "use_count: " << whoMadeCoffee[0].use_count() << endl;
+  EXPECT_THAT(whoMadeCoffee[0].use_count(), 4);
 }
-
-Here use_count is 4.
 
 
 {cxx-sp-shared-init} {cxx-sp-make-shared}
@@ -54629,8 +54635,7 @@ allocation, and safer because a situation where the allocation of X succeeds
 but the allocation of the control block fails cannot occur: do alloc and bind
 at the same time.
 
-
-TEST(SharedPointerShared, Ctors)
+TEST(SmartPointerShared, Ctors)
 {
   {
     shared_ptr<string> pNico(new string("nico"));           // OK
@@ -54642,7 +54647,7 @@ TEST(SharedPointerShared, Ctors)
     shared_ptr<string> pNico = make_shared<string>("nico"); // OK
   }
 
-  // // NO since requires copy init but shared ptr's ctor are explicit 
+  // // NO since requires cxx-copy-init but shared ptr's ctor are explicit 
   // {
   //   shared_ptr<string> pNico = new string("nico");
   // }
@@ -54650,7 +54655,7 @@ TEST(SharedPointerShared, Ctors)
   // // NO
   // {
   //   shared_ptr<int> p (new int(42));
-  //   // since ctor is explicit
+  //
   //   // cxx.cpp:1739:5: error: no match for ‘operator=’ (operand types are ‘std::shared_ptr<int>’ and ‘int*’)
   //   p = new int(1024);                      
   // }
@@ -54737,6 +54742,50 @@ The reset can be used to bind a pointer with shared pointer later.
 shared_ptr<string> pNico4;
 pNico4.reset(new string("nico"));
 
+TEST(SmartPointerShared, Reset)
+{
+  // 1. sp itself and referenced object, shared structure are separate entity.
+  //
+  // 2. although shared count is 2, q.use_count() return 0 since cxx-sp-code
+  // returns 0 when sp is empty(null)
+  //
+  // EXPECT_THAT(q.use_count(), 0);
+
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    // same as reset()
+    q = nullptr;
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+}
+
 
 <cxx-sp-get> <access-to-pointee>
 The `shared_ptr` provide 'only' operators * and ->. Pointer arithmetic and
@@ -54776,7 +54825,7 @@ intended primarily for debugging purpose"
 
 <copy-shared-ptr>
 
-TEST(SharedPointerShared, Copy)
+TEST(SmartPointerShared, Copy)
 {
   auto p = make_shared<int>(42);
 
@@ -54787,6 +54836,9 @@ TEST(SharedPointerShared, Copy)
   EXPECT_THAT(p.use_count(), 2);
   EXPECT_THAT(q.use_count(), 2);
 
+  EXPECT_THAT(*p, 42);
+  EXPECT_THAT(*q, 42);
+
   auto r = make_shared<int>(52);
 
   // q.use++ and r.use--. destroies a object which r pointed. 
@@ -54795,7 +54847,7 @@ TEST(SharedPointerShared, Copy)
   // all prints 3
   EXPECT_THAT(p.use_count(), 3);
   EXPECT_THAT(q.use_count(), 3);
-  EXPECT_THAT(p.use_count(), 3);
+  EXPECT_THAT(r.use_count(), 3);
 }
 
 
@@ -54901,35 +54953,38 @@ o One example is `cyclic references` If two objects refer to each other using
   might want to use ordinary pointers in this situation, but doing so requires
   explicitly caring for and managing the release of associated resources.
 
-o Another example occurs when you explicitly want to share but not 'own' an
+o Another example occurs when you explicitly `want to share but not own` an
   object. Thus, you have the semantics that the lifetime of a reference to an
   object `outlives the object it refers to.` 
   
   Here, shared_ptrs would never release the object, and 
   
   ordinary pointers might not notice that the object they refer to is not
-  valid anymore, which introduces the 'risk' of accessing released data.
+  valid anymore, which introduces the risk of accessing released data.
 
 
 <cxx-sp-weak-operations>
 o This class requires a shared pointer to get created.
 
-  Besides default and copy constructors, class weak_ptr provides a constructor
-  taking a shared_ptr.
+  Whenever the last shared pointer owning the object loses its ownership, any
+  weak pointer automatically becomes empty. 
+  
+o Cannot use operators * and -> to access a referenced object of a weak_ptr
+  directly. Instead, you `have to create a shared pointer out of it.`
+  
+  Thus, besides default and copy constructors, class weak_ptr provides only a
+  constructor taking a shared_ptr.
 
-* The default constructor creates an empty weak pointer. a weak_ptr can be
+o The default constructor creates an empty weak pointer. a weak_ptr can be
   empty, which is the case if it is not initialized by a shared_ptr or if the
   last owner of the corresponding object was deleted.
 
-* Cannot use operators * and -> to access a referenced object of a weak_ptr
-  directly. Instead, you `have to create a shared pointer out of it.`
-
-* Creating a shared pointer out of a weak pointer checks whether there is
+o Creating a shared pointer out of a weak pointer checks whether there is
   (still) an associated object. If not, this operation will throw an exception
   or `create an 'empty' shared pointer`; what exactly happens depends on the
   operation used.
 
-* While dealing with the referenced object, the shared pointer can't get
+o While dealing with the referenced object, the shared pointer can't get
   released since shared pointer was created out of weak pointer.
 
 As a consequence, class weak_ptr provides only a small number of operations:
@@ -54942,6 +54997,38 @@ w.lock();
 
 namespace cxx_code *cxx-sp-weak-code*
 {
+  // /usr/include/c++/4.9/bits/shared_ptr_base.h @1338
+
+  template<typename _Tp, _Lock_policy _Lp>
+    class __weak_ptr
+    {
+      constexpr __weak_ptr() noexcept
+        : _M_ptr(0), _M_refcount()
+        { }
+
+      template<typename _Tp1>
+        __weak_ptr&
+        operator=(const __shared_ptr<_Tp1, _Lp>& __r) noexcept
+        {
+          _M_ptr = __r._M_ptr;
+          _M_refcount = __r._M_refcount;
+          return *this;
+        }
+
+      long
+        use_count() const noexcept
+        { return _M_refcount._M_get_use_count(); }
+
+      // *cxx-sp-weak-expired*
+
+      bool
+        expired() const noexcept
+        { return _M_refcount._M_get_use_count() == 0; }
+
+      _Tp*	 	 _M_ptr;         // Contained pointer.
+      __weak_count<_Lp>  _M_refcount;    // Reference counter.
+    };
+
   // /usr/include/c++/4.9/bits/shared_ptr.h
 
   /**
@@ -54966,25 +55053,47 @@ namespace cxx_code *cxx-sp-weak-code*
         std::enable_if<std::is_convertible<_Tp1*, _Tp*>::value>::type>
         weak_ptr(const shared_ptr<_Tp1>& __r) noexcept
         : __weak_ptr<_Tp>(__r) { }
+
+      template<typename _Tp1>
+        weak_ptr&
+        operator=(const shared_ptr<_Tp1>& __r) noexcept
+        {
+          this->__weak_ptr<_Tp>::operator=(__r);
+          return *this;
+        }
   };
 
 } // namespace
 
 
 <ex>
-TEST(SharedPointerWeak, NoDirectReference)
+
+TEST(SmartPointerWeak, NotInReferenceCount)
 {
   {
     auto sp = make_shared<int>(42);
+
+    // wp is created out of sp
     weak_ptr<int> wp(sp);
 
+    // wp is not involved in reference of sp. since it's weak, creating wp
+    // doesn't change the reference count of p
     EXPECT_THAT(sp.use_count(), 1);
 
+    // sp is created out of wp. lock() checks whether the object to which the
+    // weak_ptr points still exist
     if (auto p = wp.lock())
     {
       EXPECT_THAT(sp.use_count(), 2);
       EXPECT_THAT(wp.use_count(), 2);
     }
+
+    // since p is only around in if
+    EXPECT_THAT(sp.use_count(), 1);
+
+    // cxx-error compile error
+    // if (wp)
+    //   std::cout << "wp is not null" << std::endl;
   }
 
   // Can explicitly convert a weak_ptr into a shared_ptr by using a
@@ -54993,16 +55102,22 @@ TEST(SharedPointerWeak, NoDirectReference)
 
   {
     auto sp = make_shared<int>(42);
+
+    // wp is created out of sp
     weak_ptr<int> wp(sp);
 
+    // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
 
+    // sp is created out of wp
     shared_ptr<int> p(wp);
     if (p)
     {
       EXPECT_THAT(sp.use_count(), 2);
       EXPECT_THAT(wp.use_count(), 2);
     }
+
+    EXPECT_THAT(sp.use_count(), 2);
   }
 
   // Can call expired(), which returns true if use_count() is zero, false
@@ -55013,16 +55128,104 @@ TEST(SharedPointerWeak, NoDirectReference)
     auto sp = make_shared<int>(42);
     weak_ptr<int> wp(sp);
 
+    // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
 
     sp = nullptr;
 
-    auto p = wp.lock();
+    // sp is gone and wp.lock() returns nullptr
+    // because the last owner of the object released the object in the meantime
+    // — lock() yields an empty shared_ptr.
+
+    auto rp = wp.lock();
 
     EXPECT_THAT(wp.expired(), true);
-    EXPECT_THAT(p, nullptr);
+    EXPECT_THAT(rp, nullptr);
+  }
+
+  // You can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a bad_weak_ptr exception. 
+
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp
+    EXPECT_THAT(sp.use_count(), 1);
+
+    sp = nullptr;
+
+    // EXPECT_THROW(coll.pop(), ReadEmptyStack);
+    try
+    {
+      std::shared_ptr<int> osp(wp);
+    }
+    catch(exception &e)
+    {
+      std::ostringstream os;
+      os << e.what();
+      EXPECT_THAT(os.str(), "bad_weak_ptr");
+    }
+
+    EXPECT_THAT(wp.expired(), true);
+  }
+
+  // assign sp later when use make_shared() directly 
+
+  {
+    weak_ptr<int> wp;
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    // *cxx-error*
+    // EXPECT_THAT(wp, nullptr);
+
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    wp = make_shared<int>(42);
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    auto sp = wp.lock();
+
+    // because the referenced object is already gone
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(sp, nullptr);
+  }
+
+  {
+    weak_ptr<int> wp;
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    auto sp = make_shared<int>(42);
+    wp = sp;
+
+    EXPECT_THAT(wp.expired(), false);
+    EXPECT_THAT(wp.use_count(), 1);
+
+    auto spwp = wp.lock();
+
+    // because the referenced object is still around
+
+    EXPECT_THAT(wp.expired(), false);
+    EXPECT_THAT(wp.use_count(), 2);
+
+    EXPECT_THAT(spwp, Not(nullptr));
   }
 }
+
 
 <ex> *cxx-sp-weak-ex*
 

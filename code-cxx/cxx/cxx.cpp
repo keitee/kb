@@ -641,10 +641,19 @@ namespace ctor_init
         os_ << mesg_ << " and converting ctor";
       }
 
+      // copy-ctor
       Foo(const Foo &foo)
       {
         mesg_ = foo.mesg_;
         os_ << mesg_ << " and copy ctor";
+      }
+
+      // copy-assign
+      Foo &operator=(Foo const &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy assign";
+        return *this;
       }
 
       string return_mesg()
@@ -3181,11 +3190,7 @@ TEST(FunctionObject, Pointer)
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp
 
-// shared_ptr<int> clone(int p) {
-//   return new int(p);
-// }
-
-TEST(SharedPointerShared, Ctors)
+TEST(SmartPointerShared, Ctors)
 {
   {
     shared_ptr<string> pNico(new string("nico"));           // OK
@@ -3197,7 +3202,7 @@ TEST(SharedPointerShared, Ctors)
     shared_ptr<string> pNico = make_shared<string>("nico"); // OK
   }
 
-  // // NO since requires copy init but shared ptr's ctor are explicit 
+  // // NO since requires cxx-copy-init but shared ptr's ctor are explicit 
   // {
   //   shared_ptr<string> pNico = new string("nico");
   // }
@@ -3205,7 +3210,7 @@ TEST(SharedPointerShared, Ctors)
   // // NO
   // {
   //   shared_ptr<int> p (new int(42));
-  //   // since ctor is explicit
+  //
   //   // cxx.cpp:1739:5: error: no match for ‘operator=’ (operand types are ‘std::shared_ptr<int>’ and ‘int*’)
   //   p = new int(1024);                      
   // }
@@ -3217,7 +3222,7 @@ TEST(SharedPointerShared, Ctors)
   auto p6 = make_shared<vector<string>>();
 }
 
-TEST(SharedPointerShared, Copy)
+TEST(SmartPointerShared, Copy)
 {
   auto p = make_shared<int>(42);
 
@@ -3228,6 +3233,9 @@ TEST(SharedPointerShared, Copy)
   EXPECT_THAT(p.use_count(), 2);
   EXPECT_THAT(q.use_count(), 2);
 
+  EXPECT_THAT(*p, 42);
+  EXPECT_THAT(*q, 42);
+
   auto r = make_shared<int>(52);
 
   // q.use++ and r.use--. destroies a object which r pointed. 
@@ -3237,6 +3245,95 @@ TEST(SharedPointerShared, Copy)
   EXPECT_THAT(p.use_count(), 3);
   EXPECT_THAT(q.use_count(), 3);
   EXPECT_THAT(r.use_count(), 3);
+}
+
+TEST(SmartPointerShared, Reset)
+{
+  // 1. sp itself and referenced object, shared structure are separate entity.
+  //
+  // 2. although shared count is 2, q.use_count() return 0 since cxx-sp-code
+  // returns 0 when sp is empty(null)
+  //
+  // EXPECT_THAT(q.use_count(), 0);
+
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    // same as reset()
+    q = nullptr;
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+}
+
+
+// CXXSLR 5.2 Smart Pointers
+
+TEST(SmartPointerShared, Example)
+{
+  std::shared_ptr<std::string> pNico{new std::string("nico")};
+  std::shared_ptr<std::string> pJutta{new std::string("jutta")};
+
+  // capitalise the first, cxx-string-replace
+
+  (*pNico)[0] = 'N';
+  pJutta->replace(0, 1, "J");
+
+  // put them multiple times in a coll
+
+  std::vector<std::shared_ptr<std::string>> whoMadeCoffee;
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pNico);
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pNico);
+
+  {
+    std::ostringstream os;
+    for(auto const &sp : whoMadeCoffee)
+      os << *sp << ",";
+
+    EXPECT_THAT(os.str(), "Jutta,Jutta,Nico,Jutta,Nico,");
+  }
+
+  // overwrite name
+
+  *pNico = "Nicolai";
+
+  {
+    std::ostringstream os;
+    for(auto const &sp : whoMadeCoffee)
+      os << *sp << ",";
+
+    EXPECT_THAT(os.str(), "Jutta,Jutta,Nicolai,Jutta,Nicolai,");
+  }
+
+  EXPECT_THAT(whoMadeCoffee[0].use_count(), 4);
 }
 
 /*
@@ -3707,19 +3804,32 @@ TEST(SharedPointer, UseCount)
 // cxx-smart-ptr-weak
 // 5.2.2 Class weak_ptr
 
-TEST(SharedPointerWeak, NoDirectReference)
+TEST(SmartPointerWeak, NotInReferenceCount)
 {
   {
     auto sp = make_shared<int>(42);
+
+    // wp is created out of sp
     weak_ptr<int> wp(sp);
 
+    // wp is not involved in reference of sp. since it's weak, creating wp
+    // doesn't change the reference count of p
     EXPECT_THAT(sp.use_count(), 1);
 
+    // sp is created out of wp. lock() checks whether the object to which the
+    // weak_ptr points still exist
     if (auto p = wp.lock())
     {
       EXPECT_THAT(sp.use_count(), 2);
       EXPECT_THAT(wp.use_count(), 2);
     }
+
+    // since p is only around in if
+    EXPECT_THAT(sp.use_count(), 1);
+
+    // cxx-error compile error
+    // if (wp)
+    //   std::cout << "wp is not null" << std::endl;
   }
 
   // Can explicitly convert a weak_ptr into a shared_ptr by using a
@@ -3728,16 +3838,22 @@ TEST(SharedPointerWeak, NoDirectReference)
 
   {
     auto sp = make_shared<int>(42);
+
+    // wp is created out of sp
     weak_ptr<int> wp(sp);
 
+    // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
 
+    // sp is created out of wp
     shared_ptr<int> p(wp);
     if (p)
     {
       EXPECT_THAT(sp.use_count(), 2);
       EXPECT_THAT(wp.use_count(), 2);
     }
+
+    EXPECT_THAT(sp.use_count(), 2);
   }
 
   // Can call expired(), which returns true if use_count() is zero, false
@@ -3748,16 +3864,104 @@ TEST(SharedPointerWeak, NoDirectReference)
     auto sp = make_shared<int>(42);
     weak_ptr<int> wp(sp);
 
+    // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
 
     sp = nullptr;
 
-    auto p = wp.lock();
+    // sp is gone and wp.lock() returns nullptr
+    // because the last owner of the object released the object in the meantime
+    // — lock() yields an empty shared_ptr.
+
+    auto rp = wp.lock();
 
     EXPECT_THAT(wp.expired(), true);
-    EXPECT_THAT(p, nullptr);
+    EXPECT_THAT(rp, nullptr);
+  }
+
+  // You can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a bad_weak_ptr exception. 
+
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp
+    EXPECT_THAT(sp.use_count(), 1);
+
+    sp = nullptr;
+
+    // EXPECT_THROW(coll.pop(), ReadEmptyStack);
+    try
+    {
+      std::shared_ptr<int> osp(wp);
+    }
+    catch(exception &e)
+    {
+      std::ostringstream os;
+      os << e.what();
+      EXPECT_THAT(os.str(), "bad_weak_ptr");
+    }
+
+    EXPECT_THAT(wp.expired(), true);
+  }
+
+  // assign sp later when use make_shared() directly 
+
+  {
+    weak_ptr<int> wp;
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    // *cxx-error*
+    // EXPECT_THAT(wp, nullptr);
+
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    wp = make_shared<int>(42);
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    auto sp = wp.lock();
+
+    // because the referenced object is already gone
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(sp, nullptr);
+  }
+
+  {
+    weak_ptr<int> wp;
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    auto sp = make_shared<int>(42);
+    wp = sp;
+
+    EXPECT_THAT(wp.expired(), false);
+    EXPECT_THAT(wp.use_count(), 1);
+
+    auto spwp = wp.lock();
+
+    // because the referenced object is still around
+
+    EXPECT_THAT(wp.expired(), false);
+    EXPECT_THAT(wp.use_count(), 2);
+
+    EXPECT_THAT(spwp, Not(nullptr));
   }
 }
+
 
 namespace cxx_sp_weak_problem
 {
@@ -3793,20 +3997,27 @@ namespace cxx_sp_weak_problem
 } // namespace
 
 /*
-nico's family exists
-- nico is shared 3 times
-- name of 1st kid of nico's mom: nico
- 
-jim's family exists
-- jim is shared 3 times
-- name of 1st kid of jim's mom: jim
- 
                                      mom, dad <---
                                                \  \
 mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
                \ (shared or weak)   \
                 -> kid               -> kid
  
+[ RUN      ] SharedPointerWeak.CyclicReference
+nico's family exists
+- nico is shared 3 times
+- name of 1st kid of nico's mom: nico
+jim's family exists
+- jim is shared 3 times
+- name of 1st kid of jim's mom: jim
+[       OK ] SharedPointerWeak.CyclicReference (1 ms)
+
+if we release our last handle to the family — either by assigning a new person
+or nullptr to p or by leaving the scope of p at the end of main() — none of the
+Persons gets released, because each still has at least one shared pointer
+referring to it. As a result, the destructor of each Person, which would print
+“delete name,” never gets called:
+
 Solution?
 */
 
@@ -3904,7 +4115,7 @@ TEST(SharedPointerWeak, CyclicReferenceSolution)
   cout << "- nico is shared " << p.use_count() << " times" << endl;
   cout << "- name of 1st kid of nico's mom: "; 
 
-  // cout << p->mother_->kids_[0]->name_ << endl;
+  // cout << p->mother_->kids_[0]->name_ << endl; changes to:
   cout << p->mother_->kids_[0].lock()->name_ << endl;
 
   p = init_family("jim");
@@ -3913,10 +4124,67 @@ TEST(SharedPointerWeak, CyclicReferenceSolution)
   cout << "- jim is shared " << p.use_count() << " times" << endl;
   cout << "- name of 1st kid of jim's mom: "; 
 
-  // cout << p->mother_->kids_[0]->name_ << endl;
+  // cout << p->mother_->kids_[0]->name_ << endl; changes to:
   cout << p->mother_->kids_[0].lock()->name_ << endl;
 }
 
+#if 0
+namespace cxx_sp_weak_problem
+{
+  class Resource
+  {
+    public:
+      explicit Resource() : name_("resouce"), count_(0) 
+      {
+        std::cout << "Resource::Resource" << std::endl;
+      }
+      ~Resource()
+      {
+        std::cout << "Resource::~Resource" << std::endl;
+      }
+
+      std::string get_name() const
+      { return name_; }
+
+      int get_count() const
+      { return count_; }
+
+      void increase_count() const
+      { ++count_; }
+
+      void decrease_count() const
+      { ++count_; }
+
+    private:
+      std::string name_;
+      int count_;
+  };
+
+  class ResourceManager
+  {
+    public: 
+      explicit ResourceManager()
+      {
+        std::cout << "ResourceManager::ResourceManager" << std::endl;
+      }
+
+      std::shared_ptr<Resource> get_resource()
+      {
+        auto res = res_.lock();
+
+        // if resource is around
+        if (res)
+          return res;
+        else
+
+      }
+
+    private:
+      std::weak_ptr<Resource> res_;
+  };
+
+} // namespace
+#endif
 
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp-own
