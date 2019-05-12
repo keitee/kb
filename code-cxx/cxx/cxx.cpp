@@ -3249,7 +3249,7 @@ TEST(SmartPointerShared, Copy)
 
 TEST(SmartPointerShared, Reset)
 {
-  // 1. sp itself and referenced object, shared structure are separate entity.
+  // 1. sp, shared structure, and referenced object are separate entity.
   //
   // 2. although shared count is 2, q.use_count() return 0 since cxx-sp-code
   // returns 0 when sp is empty(null)
@@ -3284,6 +3284,26 @@ TEST(SmartPointerShared, Reset)
 
     // same as reset()
     q = nullptr;
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    // multiple reset() are fine
+    q.reset();
+    q.reset();
+    q.reset();
+    q.reset();
 
     EXPECT_THAT(p.use_count(), 2);
     EXPECT_THAT(q.use_count(), 0);
@@ -3681,7 +3701,7 @@ TEST(SharedPointer, DeleteTime)
 // end of main
 // Foo dtor(3)
 
-TEST(SharedPointerUnique, DeleteReleaseReset)
+TEST(SmartPointerUnique, DeleteReleaseReset)
 {
   using namespace cxx_sp_shared;
 
@@ -3757,7 +3777,7 @@ namespace cxx_sp_use_count
 // p2.use_count: 0
 // end of main
 
-TEST(SharedPointer, UseCount)
+TEST(SmartPointer, UseCount)
 {
   using namespace cxx_sp_use_count;
 
@@ -3876,6 +3896,8 @@ TEST(SmartPointerWeak, NotInReferenceCount)
     auto rp = wp.lock();
 
     EXPECT_THAT(wp.expired(), true);
+
+    // rp is shared_ptr
     EXPECT_THAT(rp, nullptr);
   }
 
@@ -3913,13 +3935,11 @@ TEST(SmartPointerWeak, NotInReferenceCount)
     weak_ptr<int> wp;
 
     EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.lock(), nullptr);
     EXPECT_THAT(wp.use_count(), 0);
 
     // *cxx-error*
     // EXPECT_THAT(wp, nullptr);
-
-    EXPECT_THAT(wp.lock(), nullptr);
-    EXPECT_THAT(wp.use_count(), 0);
 
     wp = make_shared<int>(42);
 
@@ -3940,8 +3960,6 @@ TEST(SmartPointerWeak, NotInReferenceCount)
     weak_ptr<int> wp;
 
     EXPECT_THAT(wp.expired(), true);
-    EXPECT_THAT(wp.use_count(), 0);
-
     EXPECT_THAT(wp.lock(), nullptr);
     EXPECT_THAT(wp.use_count(), 0);
 
@@ -3959,6 +3977,21 @@ TEST(SmartPointerWeak, NotInReferenceCount)
     EXPECT_THAT(wp.use_count(), 2);
 
     EXPECT_THAT(spwp, Not(nullptr));
+
+    // separation between sp and wp
+
+    EXPECT_THAT(*sp, 42);
+    EXPECT_THAT(*spwp, 42);
+    EXPECT_THAT(sp.use_count(), 2);
+
+    wp.reset();
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(*sp, 42);
+    EXPECT_THAT(*spwp, 42);
+    EXPECT_THAT(sp.use_count(), 2);
   }
 }
 
@@ -4128,7 +4161,7 @@ TEST(SharedPointerWeak, CyclicReferenceSolution)
   cout << p->mother_->kids_[0].lock()->name_ << endl;
 }
 
-#if 0
+
 namespace cxx_sp_weak_problem
 {
   class Resource
@@ -4138,6 +4171,7 @@ namespace cxx_sp_weak_problem
       {
         std::cout << "Resource::Resource" << std::endl;
       }
+
       ~Resource()
       {
         std::cout << "Resource::~Resource" << std::endl;
@@ -4149,11 +4183,11 @@ namespace cxx_sp_weak_problem
       int get_count() const
       { return count_; }
 
-      void increase_count() const
+      void increase_count()
       { ++count_; }
 
-      void decrease_count() const
-      { ++count_; }
+      void decrease_count() 
+      { --count_; }
 
     private:
       std::string name_;
@@ -4174,9 +4208,17 @@ namespace cxx_sp_weak_problem
 
         // if resource is around
         if (res)
+        {
+          std::cout << "ResourceManager::get_resource: res is around and return sp" << std::endl;
           return res;
+        }
         else
-
+        {
+          std::cout << "ResourceManager::get_resource: res is not around and return new one" << std::endl;
+          auto sp = std::shared_ptr<Resource>{new Resource()};
+          res_ = sp;
+          return sp;
+        }
       }
 
     private:
@@ -4184,7 +4226,88 @@ namespace cxx_sp_weak_problem
   };
 
 } // namespace
-#endif
+
+
+/*
+# The problem:
+# 
+# The issue is that when runs a production box for long time, HDD didn't go to
+# spin-down state when it's supposed to do and do not meet power consumption
+# requirement. Interestingly, only happens on production box and for days run.
+#
+# In Fusion MW, PDM manages HDD resouce and provides APIs to clients. Various
+# clients blindly calls API to get or release HDD resouce. 
+# 
+# So PDM server has own count to make call to HDD up(when count 0->1) or down(1->0)
+# based on number of calls from clients. Also, FDM client maintains own count to
+# control PDM API calls to make release/request calls. 
+# 
+# The problem is that FDM client which has own count get the count wrong and do
+# not make release call to PDM. This leaves PDM count one more and this prevents
+# HDD down when other clients tries to do. THis make HDD is on since because PDM
+# uses this count to control spin down or on of HDD via calls to device. 
+# 
+# How about using smart pointers to this problem?
+*/
+
+TEST(SharedPointerWeak, ResourceManagerSolution)
+{
+  using namespace cxx_sp_weak_problem;
+
+  ResourceManager rm;
+
+  auto client1 = rm.get_resource();
+  auto client2 = rm.get_resource();
+
+  EXPECT_THAT(client1.use_count(), 2);
+
+  std::cout << "clients use res..." << std::endl;
+
+  client1->increase_count();
+  client2->increase_count();
+  client1->increase_count();
+
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // finishes use of resource
+  client1.reset();
+  client2.reset();
+
+  std::cout << "no client and res shall be released..." << std::endl;
+
+  EXPECT_THAT(client1.use_count(), 0);
+
+  // get resource again
+  client1 = rm.get_resource();
+  client2 = rm.get_resource();
+
+  EXPECT_THAT(client1.use_count(), 2);
+
+  std::cout << "clients use res..." << std::endl;
+
+  client1->increase_count();
+  client2->increase_count();
+  client1->increase_count();
+
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // finishes use of resource
+  client1.reset();
+
+  // but client2 still use resource
+  // *cxx-sp-use-count*
+  EXPECT_THAT(client1.use_count(), 0);
+
+  EXPECT_THAT(client2.use_count(), 1);
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // another client use the same resource
+  auto client3 = rm.get_resource();
+  client3->increase_count();
+  client3->increase_count();
+  EXPECT_THAT(client3->get_count(), 5);
+}
+
 
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp-own

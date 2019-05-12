@@ -430,6 +430,14 @@ class TestList(unittest.TestCase):
         self.assertEqual(type(coll1), type((1,)))
         self.assertEqual(type(coll2), type([1]))
 
+    def test_list_ctor_empty(self):
+        coll1 = list()
+        self.assertEqual(type(coll1), type([1]))
+        self.assertEqual(len(coll1), 0)
+
+        coll2 = []
+        self.assertEqual(type(coll2), type([1]))
+        self.assertEqual(len(coll2), 0)
 
     def test_list_delete(self):
 
@@ -452,6 +460,21 @@ class TestList(unittest.TestCase):
         coll2[1:] = []
         self.assertEqual(coll2, ['eggs'])
 
+    def test_list_append_tuple(self):
+        coll1 = []
+        coll1.append('spam')
+        coll1.append(tuple([1,2]))
+        coll1.append('eggs')
+        # print(coll)
+        self.assertEqual(coll1, ['spam', (1, 2), 'eggs'])
+
+        coll2 = []
+        coll2.append('spam')
+        x = (1,2)
+        coll2.append(x)
+        coll2.append('eggs')
+        # print(coll)
+        self.assertEqual(coll2, ['spam', (1, 2), 'eggs'])
 
     def test_list_ops(self):
 
@@ -1067,7 +1090,7 @@ class TestSlice(unittest.TestCase):
         # index is different from slice
         self.assertEqual(coll[2], 3)
 
-        # from right, end()
+        # from right, [..., -2, -1, end())
         self.assertEqual(coll[-2], 0)
 
         # makes a single item list
@@ -1240,6 +1263,18 @@ class TestPrint(unittest.TestCase):
         print("""this is lien one
             \rthis is line two
             \rthis is line three""")
+
+    # "one two three" for py2
+    # def test_print_multiple(self):
+    #     print 'one', 
+    #     print 'two', 
+    #     print 'three'
+
+    # three lines
+    def test_print_multiple_args(self):
+        print('one'), 
+        print('two'), 
+        print('three')
 
 
 #={===========================================================================

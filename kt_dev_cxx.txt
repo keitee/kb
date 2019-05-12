@@ -259,7 +259,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-sp-weak
 *kt_dev_cxx_0000* cxx-sp-exception
 *kt_dev_cxx_0000* cxx-sp-unique cxx-auto-ptr
-*kt_dev_cxx_0000* cpp-sp-delete sp-deleter
+*kt_dev_cxx_0000* cxx-sp-delete sp-deleter
 *kt_dev_cxx_0000* cxx-sp-read: can store unique_ptr in a container?
 *kt_dev_cxx_0000* cxx-sp-misuse cxx-sp-shared-from-this
 *kt_dev_stl_105* smart pointer: gotw #102: exception safety
@@ -54338,6 +54338,7 @@ namespace cxx_code *cxx-sp-code*
             _M_pi = __tmp;
           }
 
+        // *cxx-sp-use-count*
         long
           _M_get_use_count() const noexcept
           { return _M_pi != 0 ? _M_pi->_M_get_use_count() : 0; }
@@ -54387,6 +54388,7 @@ namespace cxx_code *cxx-sp-code*
             return *this;
           }
 
+        // *cxx-sp-reset*
         void
           reset() noexcept
           { __shared_ptr().swap(*this); }
@@ -54744,7 +54746,7 @@ pNico4.reset(new string("nico"));
 
 TEST(SmartPointerShared, Reset)
 {
-  // 1. sp itself and referenced object, shared structure are separate entity.
+  // 1. sp, shared structure, and referenced object are separate entity.
   //
   // 2. although shared count is 2, q.use_count() return 0 since cxx-sp-code
   // returns 0 when sp is empty(null)
@@ -54784,6 +54786,26 @@ TEST(SmartPointerShared, Reset)
     EXPECT_THAT(q.use_count(), 0);
     EXPECT_THAT(r.use_count(), 2);
   }
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    // multiple reset() are fine
+    q.reset();
+    q.reset();
+    q.reset();
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
 }
 
 
@@ -54791,9 +54813,9 @@ TEST(SmartPointerShared, Reset)
 The `shared_ptr` provide 'only' operators * and ->. Pointer arithmetic and
 operator[] are not provided. 
 
-When shared_ptr points to memory block as shm example above, to access the
-memory, you have to use get(), which yields the internal pointer wrapped by
-shared_ptr to provide the full pointer semantics:
+When shared_ptr points to memory block such as shm example above, to access
+the memory, you have to use get(), which yields the internal pointer wrapped
+by shared_ptr to provide the full pointer semantics:
 
 smp.get()[i] = i*42;
 
@@ -54997,6 +55019,15 @@ w.lock();
 
 namespace cxx_code *cxx-sp-weak-code*
 {
+  template<_Lock_policy _Lp>
+    class __weak_count
+    {
+      // *cxx-sp-use-count*
+      long
+        _M_get_use_count() const noexcept
+        { return _M_pi != 0 ? _M_pi->_M_get_use_count() : 0; }
+    };
+
   // /usr/include/c++/4.9/bits/shared_ptr_base.h @1338
 
   template<typename _Tp, _Lock_policy _Lp>
@@ -55387,6 +55418,85 @@ TEST(SharedPointerWeak, CyclicReferenceSolution)
   cout << p->mother_->kids_[0].lock()->name_ << endl;
 }
 
+<ex>
+
+/*
+The problem:
+
+In Fusion MW, PDM manages HDD resouce and provides APIs to clients. Various
+clients blindly calls API to get or release HDD resouce. 
+
+
+PDM server has own count to make call to HDD up(when count 0->1) or down(1->0)
+based on number of calls from clients. Also, one client maintains own count to
+make match between get and release call to FDM.
+
+The problem is that the client which has own count get the count wrong and do
+not make release call to PDM. This leaves PDM count one more and this prevents
+HDD down when other clients tries to do. THis make HDD is on since when it's
+supposed to be down to save power.
+
+How about using smart pointers to this problem?
+*/
+
+TEST(SharedPointerWeak, ResourceManagerSolution)
+{
+  using namespace cxx_sp_weak_problem;
+
+  ResourceManager rm;
+
+  auto client1 = rm.get_resource();
+  auto client2 = rm.get_resource();
+
+  EXPECT_THAT(client1.use_count(), 2);
+
+  std::cout << "clients use res..." << std::endl;
+
+  client1->increase_count();
+  client2->increase_count();
+  client1->increase_count();
+
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // finishes use of resource
+  client1.reset();
+  client2.reset();
+
+  std::cout << "no client and res shall be released..." << std::endl;
+
+  EXPECT_THAT(client1.use_count(), 0);
+
+  // get resource again
+  client1 = rm.get_resource();
+  client2 = rm.get_resource();
+
+  EXPECT_THAT(client1.use_count(), 2);
+
+  std::cout << "clients use res..." << std::endl;
+
+  client1->increase_count();
+  client2->increase_count();
+  client1->increase_count();
+
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // finishes use of resource
+  client1.reset();
+
+  // but client2 still use resource
+  // *cxx-sp-use-count*
+  EXPECT_THAT(client1.use_count(), 0);
+
+  EXPECT_THAT(client2.use_count(), 1);
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // another client use the same resource
+  auto client3 = rm.get_resource();
+  client3->increase_count();
+  client3->increase_count();
+  EXPECT_THAT(client3->get_count(), 5);
+}
+
 
 ={============================================================================
 *kt_dev_cxx_0000* cxx-sp-exception
@@ -55416,9 +55526,7 @@ point to a given object. So limit the use and transfer ownerships.
 In contrast to shared pointers, a 'minimum' space and time overhead is the
 focus of this class.
 
-
-<cxx-sp-code> *cxx-sp-delete*
-namespace cxx-code
+namespace cxx-code *cxx-sp-code* *cxx-sp-delete*
 {
   // /usr/include/c++/4.9/bits/unique_ptr.h
 
@@ -55965,7 +56073,7 @@ User can set deleter of shared_ptr rather than the default deleter, delete.
 This deleter must take a 'single' argument of type T*. otherwise, compile
 error 
 
-void end_connection( connection *p ) { disconnect(*p); }
+void end_connection(connection *p) { disconnect(*p); }
 
 void f()
 {
@@ -55976,9 +56084,7 @@ void f()
 note: 
 the passed deleter is not allowed to throw exceptions.
 
-
-<cxx-sp-code>
-namespace cxx_code
+namespace cxx_code *cxx-sp-code*
 {
   // /usr/include/c++/4.9/bits/unique_ptr.h
 
