@@ -91,7 +91,6 @@
 *kt_linux_tool_013* tool-xargs
 |kt_linux_tool_014| tool-ssh
 *kt_linux_tool_014* tool-putty
-*kt_linux_tool_014* tool-putty-xwin
 *kt_linux_tool_015* tool-pgrep, tool-pidof
 |kt_linux_tool_018| tool-ls
 *kt_linux_tool_019* tool-trace tool-ftrace tool-uftrace
@@ -196,6 +195,7 @@
 
 |kt_linux_tool_100| tool-package-apt
 |kt_linux_tool_101| tool-pkg-config
+*kt_linux_tool_140* tool-service
 
 #{ make and build
 *kt_linux_tool_140* make-cmake
@@ -7682,8 +7682,7 @@ $ ssh-keygen /?
 $ ssh-keygen -y -f id_rsa
 
 
-{caution}
-note:
+{ssh-caution}
 If the file permissions are too open then ssh will not trust them, and will
 still prompt you for your password. 
 
@@ -7692,6 +7691,32 @@ chmod 644 ~/.ssh/authorized_keys  // check this as caused big grief when differe
 chmod 644 ~/.ssh/id_dsa_pub
 chmod 644 ~/.ssh/known_hosts
 chmod 600 ~/.ssh/id_dsa
+
+2019.05.14
+This causes evem more problem with latest ssh and ssh access is denied. Have
+found that following is related and have spend hours since there is little
+error messages which seems to mean "access denied":
+
+Permissions 0777 for '/Users/username/.ssh/id_rsa' are too open. It is
+recommended that your private key files are NOT accessible by others.  This
+private key will be ignored.
+
+Keys need to be only readable by you:
+
+chmod 400 ~/.ssh/id_rsa
+
+600 appears to be fine as well (in fact better in most cases, because you
+    don't need to change file permissions to edit it).
+
+The relevant portion from the manpage (man ssh)
+
+ ~/.ssh/id_rsa
+         Contains the private key for authentication.  These files contain
+         sensitive data and should be readable by the user but not accessible
+         by others (read/write/execute).  ssh will simply ignore a private key
+         file if it is accessible by others.  It is possible to specify a
+         passphrase when generating the key which will be used to encrypt the
+         sensitive part of this file using 3DES.
 
 
 {ssh-config}
@@ -7957,7 +7982,110 @@ the general idea of X forwarding.
 
 
 ={============================================================================
-*kt_linux_tool_014* tool-putty
+*kt_linux_tool_014* tool-serial tool-putty tool-screen
+
+<find-out-serial-port>
+$ dmesg | grep ttyS
+
+
+{tool-screen}
+
+Screen is a full-screen software program that can be used to multiplexes a
+physical console between several processes (typically interactive shells). It
+offers a user to open several separate terminal instances inside a one single
+terminal window manager.
+
+sudo screen -S name -a -D -R -fn -l /dev/ttyUSB0 115200,cs8
+
+note:
+The screen runs in the same terminal but putty runs in a separate application.
+
+
+<help>
+       C-a ?       (help)        Show key bindings.
+
+<close>
+to close screen use Ctrl-a, k, y. Do not use Ctrl-C as it can kill processes
+running on the box.
+
+       C-a k     (kill)        Destroy current window.
+
+
+{logging}
+Use -L for auto logging and will log on 'screenlog.0'. Use this file to see:
+
+-L   tells screen to turn on automatic output logging for the windows.
+
+screen -a -D -R -fn -l -L /dev/ttyUSB0 115200,cs8
+
+
+       C-a h       (hardcopy)    Write a hardcopy of the current window to the
+       file "hardcopy.n".
+
+       C-a H       (log)         Begins/ends logging of the current window to
+       the file "screenlog.n".
+
+<monitoring>
+       C-a M       (monitor)     Toggles monitoring of the current window.
+
+sudo screen -S name -a -D -R -fn -l -L /dev/ttyUSB0 115200,cs8
+
+{tool-minicom}
+
+SYNOPSIS
+       minicom [-somMlwz8] [-c on|off] [-S script] [-d entry]
+               [-a on|off] [-t term] [-p pty] [-C capturefile] [configuration]
+
+       -c   Color usage. Some terminals (such as the Linux console) support
+       color with the standard ANSI escape sequences. Because there is
+       apparently no termcap support for color, these escape sequences are
+       hard-coded  into  mini- com. Therefore this option is off by default.
+       You can turn it on with '-c on'. This, and the '-m' option, are good
+       candidates to put into the MINICOM environment variable.
+
+1. Setup minicon with -s switch
+
+$ minicom -s
+
+COMMAND-LINE
+       -s, --setup
+            Setup.  Root edits the system-wide defaults in
+            /etc/minicom/minirc.dfl with this option.  When it is used,
+            minicom does not initialize, but puts you directly into the
+            configuration menu. This is  very  handy  if  minicom refuses to
+            start up because your system has changed, or for the first time
+            you run minicom. For most systems, reasonable defaults are already
+            compiled in.
+
+Choose Serial port setup and specify below settings, come out of Serial port
+setup by pressing Esc and then save configuration file.
+
+
+<config>
+Once saved, it will store the configuration in /etc/minicom/. To connect to your
+device, run minicom with config file name:
+
+$ minicom cisco or minicom -c on cisco
+
+To Exit from minicom, Click Ctrl-A and Z then X.
+
+alias mc='sudo minicom -C hmax.log -c on hmax'
+
+<when-cannot-get-shell-prompt>
+Without knowing either your set-top box or your cable, I would first try
+disabling hardware flow control, since the set top probably doesn't implement
+it. Essentially your Linux client is waiting for an "OK to send" signal that it
+will never receive because there's no physical wire in the set top to send it
+
+<log>
+C-A Z L
+
+minicom.cap
+
+
+{tool-putty}
+
+sudo apt-get install putty
 
 {putty-ssh-setup}
 When use keys generated from putty.
@@ -7966,6 +8094,7 @@ o run puttygen to make key pairs. rsa or dsa
 o get a pub key and save a pri key(ppk)
 o run putty and set ssh key to use
   menu: connection: ssh: auth: private key file for auth: specify the path to a pri key.
+
 o login to the host and add a pub key in the auth key list
 
 
@@ -10912,89 +11041,6 @@ $ service iptables save
 
 
 ={============================================================================
-*kt_linux_tool_016* tool-screen
-
-Screen is a full-screen software program that can be used to multiplexes a
-physical console between several processes (typically interactive shells). It
-offers a user to open several separate terminal instances inside a one single
-terminal window manager.
-
-sudo screen -S name -a -D -R -fn -l /dev/ttyUSB0 115200,cs8
-
-<help>
-       C-a ?       (help)        Show key bindings.
-
-<close>
-to close screen use Ctrl-A, k, y. Do not use Ctrl-C as it can kill processes
-running on the box.
-
-       C-a k
-       C-a C-k     (kill)        Destroy current window.
-
-
-{logging}
-Use -L for auto logging and will log on 'screenlog.0'. Use this file to see:
-
--L   tells screen to turn on automatic output logging for the windows.
-
-screen -a -D -R -fn -l -L /dev/ttyUSB0 115200,cs8
-
-
-       C-a h       (hardcopy)    Write a hardcopy of the current window to the
-       file "hardcopy.n".
-
-       C-a H       (log)         Begins/ends logging of the current window to
-       the file "screenlog.n".
-
-<monitoring>
-       C-a M       (monitor)     Toggles monitoring of the current window.
-
-
-={============================================================================
-*kt_linux_tool_038* tool-minicom
-
-SYNOPSIS
-       minicom [-somMlwz8] [-c on|off] [-S script] [-d entry]
-               [-a on|off] [-t term] [-p pty] [-C capturefile] [configuration]
-
-       -c   Color usage. Some terminals (such as the Linux console) support
-       color with the standard ANSI escape sequences. Because there is
-       apparently no termcap support for color, these escape sequences are
-       hard-coded  into  mini- com. Therefore this option is off by default.
-       You can turn it on with '-c on'. This, and the '-m' option, are good
-       candidates to put into the MINICOM environment variable.
-
-1. Setup minicon with -s switch
-
-$ minicom -s
-
-Choose Serial port setup and specify below settings, come out of Serial port
-setup by pressing Esc and then save configuration file.
-
-
-<config>
-Once saved, it will store the configuration in /etc/minicom/. To connect to your
-device, run minicom with config file name:
-
-$ minicom cisco or minicom -c on cisco
-
-To Exit from minicom, Click Ctrl-A and Z then X.
-
-alias mc='sudo minicom -C hmax.log -c on hmax'
-
-<when-cannot-get-shell-prompt>
-Without knowing either your set-top box or your cable, I would first try
-disabling hardware flow control, since the set top probably doesn't implement
-it. Essentially your Linux client is waiting for an "OK to send" signal that it
-will never receive because there's no physical wire in the set top to send it
-
-<log>
-C-A Z L
-
-minicom.cap
-
-
-={============================================================================
 *kt_linux_tool_024* tool-du tool-df tool-stat
 
 <tool-du>
@@ -12066,13 +12112,12 @@ to forward the traffic on to the next step towards its destination.
 
 <install> 
 sudo apt-get install nfs-kernel-server
+
+// install nfs-common for a client.
 sudo apt-get install nfs-common
 
-note:
-Install nfs-common for a client.
 
-
-<export>
+<nfs-export>
 The `two different access modes` of the nfs server. 
 
 The directory /home/client1 is shared in standard mode, so all files written
@@ -12093,7 +12138,6 @@ Now we must modify /etc/exports where we "export" our NFS shares. We specify
 /home/client1 and /var/www as NFS shares and tell NFS to make accesses to
 /home/client1 as user nobody.
 
-note
 To learn more about /etc/exports, its format and available options, take a
 look at `man 5 exports`
 
@@ -12144,7 +12188,6 @@ To apply the changes in /etc/exports, we restart the kernel nfs server
 sudo /etc/init.d/nfs-kernel-server stop/start
 sudo service nfs-kernel-server restart
 sudo service idmapd restart 
-
 
 root@kit-debian:/home/kit# service nfs-kernel-server status
 ● nfs-kernel-server.service - LSB: Kernel NFS server support
@@ -21559,6 +21602,18 @@ tftp> get kyoupark/readme.in
 Received 26 bytes in 0.1 seconds
 
 
+<tool-tftp-hpa>
+
+sudo apt-get install tftpd-hpa
+
+# /etc/default/tftpd-hpa
+
+TFTP_USERNAME="tftp"
+TFTP_DIRECTORY="/home/keitee/mw/tftproot/titan"
+TFTP_ADDRESS=":69"
+TFTP_OPTIONS="--secure"
+
+
 ={============================================================================
 *kt_linux_tool_001* tool-rpm
 
@@ -21680,8 +21735,8 @@ rpm -ql `packagename`
 To install a package:
 sudo apt-get install tk8.5 
 
-# -i, --install
-$ sudo dpkg --install skype-debian_4.2.0.11-1_i386.deb
+//  -i, --install
+sudo dpkg --install skype-debian_4.2.0.11-1_i386.deb
 
 To remove a package:
 sudo apt-get purge tk8.5 
@@ -21854,6 +21909,13 @@ pkg-config --modversion `name`
 
 $ pkg-config --modversion gstreamer-1.0
 1.6.2
+
+
+={============================================================================
+*kt_linux_tool_140* tool-service
+
+sudo service --status-all
+sudo service nfs-kernel-server status
 
 
 ={============================================================================
@@ -90325,12 +90387,6 @@ method return sender=:1.247 -> dest=:1.249 reply_serial=2 object path
 {kdbus}
 https://github.com/gregkh/presentation-kdbus
 https://github.com/gregkh/kdbus
-
-
-={============================================================================
-*kt_linux_sete_005* admin-check running services
-
-sudo service --status-all
 
 
 ={============================================================================
