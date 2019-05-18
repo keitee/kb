@@ -6,8 +6,9 @@
 #include <limits>
 #include <thread>
 #include <list>
+#include <forward_list>
 #include <regex>
-#include <boost/cast.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include "gmock/gmock.h"
 
@@ -74,15 +75,21 @@ TEST(Size, Arrays)
   // valid array index     [0, 6) [0, size(), sizeof()) or [0, 5] [0, size()-1]
   // valid cstring index   [0, 5) [0, strlen()) or [0, 4] [0, strlen()-1]
 
-  char *s1 = "this is first message";
+  {
+    // cxx.cpp:77:14: warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]
+    // char *s1 = "this is first message";
+    // is a pointer
+    // EXPECT_EQ(sizeof(s2), 8);
+    // EXPECT_EQ(sizeof s2, 8);
+  }
+
   char s2[] = "this is first message";
 
-  // is a pointer
-  EXPECT_EQ(sizeof(s1), 8);
-  EXPECT_EQ(sizeof s1, 8);
+  EXPECT_EQ(sizeof(s2), 22);
+  EXPECT_EQ(sizeof s2, 22);
 
   // is object
-  EXPECT_EQ(sizeof(*s1), 1);
+  EXPECT_EQ(sizeof(*s2), 1);
 
   // is array
   EXPECT_EQ(sizeof(s2), 22);
@@ -91,7 +98,7 @@ TEST(Size, Arrays)
   // strlen
   EXPECT_EQ(strlen(s2), 21);
 
-  string s{s1};
+  string s{s2};
   EXPECT_EQ(s.size(), 21);
 
 
@@ -110,19 +117,37 @@ TEST(Size, Arrays)
 
 
 // ={=========================================================================
+// cxx-arith
+
+TEST(Arith, Comparison)
+{
+  int iv{8};
+  double dv{7.2};
+
+  if (iv < dv)
+    cout << "double is bigger" << endl;
+  else
+    cout << "int is bigger" << endl;
+}
+
+// ={=========================================================================
 // cxx-pair
 
-// {10, X}
-// {9, IX}
-// {5, V}
 // typeid : St16initializer_listIKSt4pairIiPKcEE
-//
-// pair 1 is bigger
-// pair 4 is bigger
 
-TEST(Pair, UsePairType)
+namespace cxx_pair
 {
-  // gcc 6.3.0 emits error:
+  template <typename T1, typename T2>
+    std::ostream & operator<<(std::ostream &os, std::pair<T1, T2> const & p)
+    {
+      os << "{" << get<0>(p) << ", " << get<1>(p) << "}";
+      return os;
+    }
+} // namespace
+
+TEST(Pair, MakePair)
+{
+  // gcc 4.9.2 emits no error but 6.3.0 emits error:
   //
   // cxx.cpp:36:5: error: direct-list-initialization of ‘auto’ requires exactly
   // one element [-fpermissive] 
@@ -130,7 +155,7 @@ TEST(Pair, UsePairType)
   // };
   // ^
   // cxx.cpp:36:5: note: for deduction to ‘std::initializer_list’, use
-  // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)          
+  // copy-list-initialization (i.e. add ‘ =’ before the ‘{’)
   //
   // const auto pair_map{
   //     make_pair(10, "X"),
@@ -138,62 +163,90 @@ TEST(Pair, UsePairType)
   //     make_pair(5, "V")
   // };
 
-  const auto pair_map = {
-    make_pair(10, "X"),
-    make_pair(9, "IX"),
-    make_pair(5, "V")
-  };
+  {
+    const auto pair_map{
+      make_pair(10, "X"),
+      make_pair(9, "IX"),
+      make_pair(5, "V")
+    };
   
-  for(const auto &e : pair_map)
-    cout << "{" << e.first << ", " << e.second << "}" << endl;
-  
-  cout << "typeid : " << typeid(pair_map).name() << endl;
-  
-  auto pair1 = make_pair(10, 10);
-  auto pair2 = make_pair(10, 9);
-  
-  auto pair3 = make_pair( 9, 11);
-  auto pair4 = make_pair(11, 9);
-  
-  if(pair1 < pair2)
-    cout << "pair 2 is bigger" << endl;
-  else
-    cout << "pair 1 is bigger" << endl;
-  
-  if(pair3 < pair4)
-    cout << "pair 4 is bigger" << endl;
-  else
-    cout << "pair 3 is bigger" << endl;
+    auto it = pair_map.begin();
+    EXPECT_THAT(it->first, 10);
+    EXPECT_THAT(it->second, "X");
+  }
+
+  {
+    std::vector<std::pair<size_t,bool>> 
+        coll{
+          {5,false},{3,false},{7,false},
+          {1,true},{2,false},{8,false},
+          {9,false}};
+
+    auto found_value = std::numeric_limits<size_t>::max();
+    decltype(found_value) found_index{}, index{};
+
+    for (auto const &e: coll)
+    {
+      // if not visited before and see min value
+ 
+      // if (!e.second && e.first < found_value)
+      if (!get<1>(e) && get<0>(e) < found_value)
+      {
+        found_value = get<0>(e);
+        found_index = index;
+      }
+
+      ++index;
+    }
+
+    EXPECT_THAT(found_value, 2);
+    EXPECT_THAT(found_index, 4);
+  }
+
+  {
+    using namespace cxx_pair;
+
+    auto p = make_pair(80, 88);
+
+    cout << p << endl;
+  }
 }
 
 
-// cxx-pair-reference cxx-std-ref
-//
-// val pair {11, 21}
-// i and j  {10, 20}      // not changed
-// ref pair {11, 21}
-// i and j  {11, 21}      // changed
+// cxx-pair-reference cxx-ref
 
-TEST(CxxPair, UsePairWithReference)
+TEST(Pair, PackReference)
 {
-  int i = 10;
-  int j = 20;
+  int i{10};
+  int j{20};
 
-  auto val = make_pair(i, j);
+  // no connetion between i, j and val pair
+  {
+    auto val = make_pair(i, j);
 
-  ++val.first;
-  ++val.second;
+    ++val.first;
+    ++val.second;
 
-  cout << "val pair {" << val.first << ", " << val.second << "}" << endl;
-  cout << "i and j  {" << i << ", " << j << "}" << endl;
+    EXPECT_THAT(val.first, 11);
+    EXPECT_THAT(val.second, 21);
+    EXPECT_THAT(i, 10);
+    EXPECT_THAT(j, 20);
+  }
 
-  auto ref = make_pair(std::ref(i), std::ref(j));
+  {
+    // *cxx-ref*
+    auto val = make_pair(std::ref(i), std::ref(j));
 
-  ++ref.first;
-  ++ref.second;
+    ++val.first;
+    ++val.second;
 
-  cout << "ref pair {" << ref.first << ", " << ref.second << "}" << endl;
-  cout << "i and j  {" << i << ", " << j << "}" << endl;
+    EXPECT_THAT(val.first, 11);
+    EXPECT_THAT(val.second, 21);
+
+    // they are changed now
+    EXPECT_THAT(i, 11);
+    EXPECT_THAT(j, 21);
+  }
 }
 
 
@@ -223,11 +276,15 @@ TEST(Pair, Initialisation)
     make_pair(5, "V")
   };
 
+  (void)pair_init_01;
+
   const auto pair_init_02 = {
     make_pair(10, "X"),
     make_pair(9, "IX"),
     make_pair(5, "V")
   };
+
+  (void)pair_init_02;
 
   // vector that has pairs
 
@@ -288,7 +345,34 @@ TEST(Pair, Initialisation)
   //   {9, "IX", 2},
   //   {5, "V", 3}
   // };
-  
+}
+
+
+TEST(Pair, Comparison)
+{
+  {
+    auto p1 = make_pair(1, 2);
+    auto p2 = make_pair(3, 2);
+
+    EXPECT_THAT(p1 > p2, false);
+    EXPECT_THAT(p1 < p2, true);
+  }
+
+  {
+    auto p1 = make_pair(1, 2);
+    auto p2 = make_pair(1, 3);
+
+    EXPECT_THAT(p1 > p2, false);
+    EXPECT_THAT(p1 < p2, true);
+  }
+
+  {
+    auto p1 = make_pair(13, 2);
+    auto p2 = make_pair(13, 4);
+
+    EXPECT_THAT(p1 > p2, false);
+    EXPECT_THAT(p1 < p2, true);
+  }
 }
 
 
@@ -301,7 +385,7 @@ TEST(Pair, Initialisation)
 // tup1 is bigger than tup2
 // tup1: 22 44 two 
 
-TEST(Tuple, UseTupleType)
+TEST(Tuple, MakeTuple)
 {
   tuple<int, float, string> tup1{41, 6.3, "nico"};
 
@@ -336,91 +420,78 @@ TEST(Tuple, UseTupleType)
   cout << get<2>(tup1) << " " << endl;;
 }
 
-
-// tup: 41 6.3 nico 
-// tup: 41 6.3 nico 
-// tup: 41 6.3 nico 
-// tup: 22 44 two 
-
-TEST(Tuple, UseTupleTie)
+TEST(Tuple, Tie)
 {
-  tuple<int, float, string> tup1{41, 6.3, "nico"};
-  int i;
-  float f;
-  string s;
+  {
+    tuple<int, float, string> tup1{41, 6.3, "nico"};
+    int i;
+    float f;
+    string s;
 
-  tie(i, f, s) = tup1;
+    auto tup = make_tuple(std::ref(i), std::ref(f), std::ref(s));
 
-  cout << "tup: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;
+    // if prints out tup here before assigning value, then do not get tup1's
+    // value and see undefined value instead. referece?
 
-  cout << "tup: ";
-  cout << i << " ";
-  cout << f << " ";
-  cout << s << " " << endl;
+    tup = tup1;
 
-  i = 45;
-  f = 7.3;
-  s = "nico mom";
+    // shows the same
 
-  cout << "tup: ";
-  cout << get<0>(tup1) << " ";
-  cout << get<1>(tup1) << " ";
-  cout << get<2>(tup1) << " " << endl;
+    EXPECT_THAT(get<0>(tup), 41);
+    EXPECT_THAT(get<1>(tup), 6.3);
+    EXPECT_THAT(get<2>(tup), "nico");
 
-  tie(i, f, s) = make_tuple(22, 44, "two");
+    EXPECT_THAT(i, 41);
+    EXPECT_THAT(f, 6.3);
+    EXPECT_THAT(s, "nico");
 
-  cout << "tup: ";
-  cout << i << " ";
-  cout << f << " ";
-  cout << s << " " << endl;
-}
+    // changes both tup and i,f,s
 
+    i = 51; f = 7.3; s = "nico nico";
 
-// ={=========================================================================
-// cxx-std-forward
-template <typename F, typename T1, typename T2>
-void flip(F f, T1 param1, T2 param2)
-{
-  f(param2, param1);
-}
+    EXPECT_THAT(get<0>(tup), 51);
+    EXPECT_THAT(get<1>(tup), 7.3);
+    EXPECT_THAT(get<2>(tup), "nico nico");
 
-template <typename F, typename T1, typename T2>
-void flip_forward(F f, T1 &&param1, T2 &&param2)
-{
-  f(std::forward<T2>(param2), std::forward<T1>(param1));
-}
+    EXPECT_THAT(i, 51);
+    EXPECT_THAT(f, 7.3);
+    EXPECT_THAT(s, "nico nico");
+  }
 
-void f(int value1, int &value2)
-{
-  cout << "f(" << value1 << ", " << ++value2 << ")" << endl;
-}
+  // cxx-tie do the same
+  {
+    tuple<int, float, string> tup1{41, 6.3, "nico"};
+    int i;
+    float f;
+    string s;
 
-// f(20, 11)
-// withoug ref: i and j  {10, 20}
-// f(20, 11)
-// with    ref: i and j  {11, 20}
-// f(20, 11)
-// wit forward: i and j  {11, 20}
+    auto tup = tie(i, f, s);
+    tup = tup1;
 
-TEST(CxxTemplate, UseForward)
-{
-  int i = 10;
-  int j = 20;
+    // shows the same
 
-  flip(f, i, j);
-  cout << "withoug ref: i and j  {" << i << ", " << j << "}" << endl;
+    EXPECT_THAT(get<0>(tup), 41);
+    EXPECT_THAT(get<1>(tup), 6.3);
+    EXPECT_THAT(get<2>(tup), "nico");
 
-  flip(f, std::ref(i), j);
-  cout << "with    ref: i and j  {" << i << ", " << j << "}" << endl;
+    EXPECT_THAT(i, 41);
+    EXPECT_THAT(f, 6.3);
+    EXPECT_THAT(s, "nico");
 
-  i = 10;
-  j = 20;
+    // changes both tup and i,f,s
 
-  flip_forward(f, i, j);
-  cout << "wit forward: i and j  {" << i << ", " << j << "}" << endl;
+    i = 51; f = 7.3; s = "nico nico";
+
+    EXPECT_THAT(get<0>(tup), 51);
+    EXPECT_THAT(get<1>(tup), 7.3);
+    EXPECT_THAT(get<2>(tup), "nico nico");
+
+    // more convenient way to access
+
+    EXPECT_THAT(i, 51);
+    EXPECT_THAT(f, 7.3);
+    EXPECT_THAT(s, "nico nico");
+  }
 }
 
 
@@ -480,6 +551,75 @@ TEST(Ctor, CtorInitList)
   ConstructionWitCtorInitList cw;
 }
 
+// *cxx-unused*
+// The only purpose of the parameter is to 'distinguish' prefix from postfix
+// function invocation. Many compilers issue warnings if you fail to use named
+// parameters in the body of the function to which they apply, and this can be
+// annoying. To avoid such warnings, a common strategy is to omit names for
+// parameters you don't plan to use; that is what is been done above.
+
+namespace cxx_ctor
+{
+
+class foo
+{
+  public:
+
+    explicit foo(int &value) : value_(value) 
+    {
+      cout << "foo(int)" << endl;
+    }
+
+    foo(int &value, int) : value_(value) 
+    {
+      cout << "foo(int, int)" << endl;
+    }
+
+  private:
+    int value_;
+};
+
+} // namespace
+
+
+TEST(Ctor, Unused)
+{
+  using namespace cxx_ctor;
+
+  int value{10};
+
+  // *cxx-error*
+  //
+  // cxx_ex.cpp: In member function ‘virtual void Cxx_Ex_Test::TestBody()’:
+  // cxx_ex.cpp:42:12: error: no matching function for call to ‘foo::foo(int)’
+  //    foo f1(10);
+  //             ^
+  // cxx_ex.cpp:42:12: note: candidates are:
+  // (1)
+  // cxx_ex.cpp:27:5: note: foo::foo(int&, int)
+  //      foo(int &value, int) : value_(value)
+  //      ^
+  // cxx_ex.cpp:27:5: note:   candidate expects 2 arguments, 1 provided
+  // (2)
+  // cxx_ex.cpp:23:14: note: foo::foo(int&)
+  //      explicit foo(int &value) : value_(value)
+  //               ^
+  // cxx_ex.cpp:23:14: note:   no known conversion for argument 1 from ‘int’ to ‘int&’
+  // (3)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(const foo&)
+  //  class foo
+  //        ^
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘const foo&’
+  // (4)
+  // cxx_ex.cpp:19:7: note: constexpr foo::foo(foo&&)
+  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘foo&&’
+  //
+  // foo f1(10);
+
+  foo f1(value);
+  foo f2(value, 30);
+}
+
 
 // ={=========================================================================
 // cxx-ctor-init-forms
@@ -501,10 +641,19 @@ namespace ctor_init
         os_ << mesg_ << " and converting ctor";
       }
 
+      // copy-ctor
       Foo(const Foo &foo)
       {
         mesg_ = foo.mesg_;
         os_ << mesg_ << " and copy ctor";
+      }
+
+      // copy-assign
+      Foo &operator=(Foo const &foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy assign";
+        return *this;
       }
 
       string return_mesg()
@@ -678,9 +827,9 @@ TEST(Ctor, CtorInitFromExplicit)
 
 
 // ={=========================================================================
-// cxx-ctor-initialize-list
+// cxx-init-list
 
-namespace ctor_init_list
+namespace cxx_init_list
 {
   class Foo
   {
@@ -689,9 +838,9 @@ namespace ctor_init_list
 
       // mesg_ is updated only here
       Foo(const string &mesg) : mesg_(mesg) 
-      {
-        os_ << mesg_ << " and converting ctor";
-      }
+    {
+      os_ << mesg_ << " and converting ctor";
+    }
 
       Foo(const Foo &foo)
       {
@@ -714,11 +863,56 @@ namespace ctor_init_list
       ostringstream os_;
       string mesg_;
   };
+
+  // to show that it can be used in a function and return vector than print out
+  // to be used in test
+
+  // *cxx-const* *cxx-temporary* *cxx-reference*
+
+  std::vector<string> 
+    error_message_1(std::string const &message, std::initializer_list<std::string> const &ls)
+  {
+    std::vector<string> coll{};
+
+    coll.push_back(message);
+
+    for(auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
+  }
+
+  // const is must to use temporary and if not, non-const compile error
+
+  std::vector<int> 
+    error_message_2(std::initializer_list<int> const &ls)
+  {
+    std::vector<int> coll{};
+
+    for(auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
+  }
+
+  // no error when use tempoarary since it not use reference
+
+  std::vector<int> 
+    error_message_3(std::initializer_list<int> ls)
+  {
+    std::vector<int> coll{};
+
+    for(auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
+  }
+
 } // namespace
 
-TEST(Ctor, CtorInitFromList)
+TEST(Initialise, List)
 {
-  using namespace ctor_init_list;
+  using namespace cxx_init_list;
 
   // copy, brace init
   {
@@ -733,6 +927,330 @@ TEST(Ctor, CtorInitFromList)
     Foo foo1{"one", "two", "three"};
     EXPECT_THAT(foo1.return_mesg(), "one, two, three, ");
   }
+
+  {
+    EXPECT_THAT(error_message_1("error", {string("one"), string("two"), string("three")}),
+        ElementsAre("error", "one", "two","three"));
+  }
+
+  {
+    EXPECT_THAT(error_message_2({1,2,3,4,5}),
+        ElementsAre(1,2,3,4,5));
+  }
+
+  {
+    EXPECT_THAT(error_message_3({1,2,3,4,5}),
+        ElementsAre(1,2,3,4,5));
+  }
+}
+
+
+// cxx-ctor-access
+
+namespace cxx_ctor_access
+{
+  class Bar
+  {
+    public:
+      Bar() : mesg_() {}
+
+      Bar(string const& mesg) : mesg_(mesg) {}
+
+      // copy ctor
+      Bar(Bar const& bar)
+      {
+        mesg_ = bar.mesg_;
+        os_ << mesg_ << " and copy ctor";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+  
+  class Foo
+  {
+    public:
+      Foo() : mesg_() {}
+
+      Foo(string const& mesg) : mesg_(mesg) {}
+
+      // copy ctor without const 
+      Foo(Foo& foo)
+      {
+        mesg_ = foo.mesg_;
+        os_ << mesg_ << " and copy ctor";
+        foo.mesg_ = "xxx";
+      }
+
+      // raise error only when that's different type:
+      //
+      // cxx.cpp: In constructor ‘cxx_ctor_access::Foo::Foo(cxx_ctor_access::Bar&)’:
+      // cxx.cpp:835:14: error: ‘std::string cxx_ctor_access::Bar::mesg_’ is private
+      //        string mesg_;
+      //               ^
+      // cxx.cpp:855:13: error: within this context
+      //          bar.mesg_ = "xxx";
+      //              ^
+
+      Foo(Bar& bar)
+      {
+        (void) bar;
+        // both cause errors
+        // mesg_ = bar.mesg_;
+        // bar.mesg_ = "xxx";
+      }
+
+      string return_mesg()
+      {
+        return os_.str();
+      }
+
+    private:
+      ostringstream os_;
+      string mesg_;
+  };
+
+} // namespace
+
+TEST(Ctor, Access)
+{
+  using namespace cxx_ctor_access;
+
+  Foo foo1{"foo1"};
+  
+  Foo foo2(foo1);
+  EXPECT_THAT(foo2.return_mesg(), "foo1 and copy ctor");
+}
+
+
+// ={=========================================================================
+// cxx-dtor
+
+namespace cxx_dtor {
+
+  class NoVirtualDtorBase
+  {
+    public:
+      NoVirtualDtorBase() 
+      { std::cout << "\tno virtual ctor: base" << std::endl; }
+
+      ~NoVirtualDtorBase() 
+      { std::cout << "\tno virtual dtor: base" << std::endl; }
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromNoVirtual : public NoVirtualDtorBase
+  {
+    public:
+      DerivedFromNoVirtual() 
+      { std::cout << "\tno virtual ctor: derived" << std::endl; }
+
+      ~DerivedFromNoVirtual() 
+      { std::cout << "\tno virtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+  class VirtualDtorBase
+  {
+    public:
+      VirtualDtorBase() 
+      { std::cout << "\tvirtual ctor: base" << std::endl; }
+
+      virtual ~VirtualDtorBase() 
+      { std::cout << "\tvirtual dtor: base" << std::endl; }
+
+    private:
+      int value_;
+  };
+
+  class DerivedFromVirtual : public VirtualDtorBase
+  {
+    public:
+      DerivedFromVirtual() 
+      { std::cout << "\tvirtual ctor: derived" << std::endl; }
+
+      ~DerivedFromVirtual() 
+      { std::cout << "\tvirtual dtor: derived" << std::endl; }
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+// {
+//         no virtual ctor: base
+//         no virtual ctor: derived
+//         no virtual dtor: base
+// }
+// {
+//         virtual ctor: base
+//         virtual ctor: derived
+//         virtual dtor: derived
+//         virtual dtor: base
+// }
+// {
+//         no virtual ctor: base
+//         no virtual ctor: derived
+// }
+//         no virtual dtor: derived
+//         no virtual dtor: base
+
+TEST(Dtor, NoVirtualDtorProblem)
+{
+  using namespace cxx_dtor;
+
+  {
+    cout << "{" << endl;
+    NoVirtualDtorBase* pbase = new DerivedFromNoVirtual;
+
+    // https://stackoverflow.com/questions/7403883/derived-class-with-non-virtual-destructor
+    // If you don't do delete in the above manner, then it will be fine. 
+    delete pbase; 
+
+    cout << "}" << endl; }
+
+  {
+    cout << "{" << endl;
+    VirtualDtorBase* pbase = new DerivedFromVirtual;
+    delete pbase;
+    cout << "}" << endl;
+  }
+
+  {
+    cout << "{" << endl;
+    DerivedFromNoVirtual object;
+    cout << "}" << endl;
+  }
+}
+
+
+// Why dtor should be virtual in cxx-abc?
+
+namespace cxx_dtor {
+
+  class AbstractBase
+  {
+    public:
+      AbstractBase() : base_(0)
+      { std::cout << "\tabstract ctor: base" << std::endl; }
+
+      ~AbstractBase() 
+      { std::cout << "\tabstract dtor: base" << std::endl; }
+
+      virtual int get_value() = 0;
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromAbstract : public AbstractBase
+  {
+    public:
+      DerivedFromAbstract() : derived_(10)
+      { std::cout << "\tabstract ctor: derived" << std::endl; }
+
+      ~DerivedFromAbstract() 
+      { std::cout << "\tabstract dtor: derived" << std::endl; }
+
+      virtual int get_value() override { return derived_; };
+
+    private:
+      int derived_;
+  };
+
+
+  class AbstractBaseNoDtor
+  {
+    public:
+      AbstractBaseNoDtor() : base_(0)
+      { std::cout << "\tabstract ctor: base" << std::endl; }
+
+      // ~AbstractBase() 
+      // { std::cout << "\tabstract dtor: base" << std::endl; }
+
+      virtual int get_value() = 0;
+
+    private:
+      int base_;
+  };
+
+  class DerivedFromAbstractNoDtor : public AbstractBaseNoDtor
+  {
+    public:
+      DerivedFromAbstractNoDtor() : derived_(10)
+      { std::cout << "\tabstract ctor: derived" << std::endl; }
+
+      ~DerivedFromAbstractNoDtor() 
+      { std::cout << "\tabstract dtor: derived" << std::endl; }
+
+      virtual int get_value() override { return derived_; };
+
+    private:
+      int derived_;
+  };
+
+} // namespace
+
+TEST(Dtor, AbstractBaseClassNoCompileError)
+{
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract* pabc1; 
+    DerivedFromAbstract* pabc2; 
+
+    (void) pabc1;
+    (void) pabc2;
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract abc; 
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstractNoDtor* pabc1; 
+    DerivedFromAbstractNoDtor* pabc2; 
+
+    (void) pabc1;
+    (void) pabc2;
+  }
+
+  {
+    using namespace cxx_dtor;
+
+    DerivedFromAbstract abc; 
+  }
+}
+
+// shows *cxx-dtor-non-virtual-destruction-problem*
+
+TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
+{
+  using namespace cxx_dtor;
+
+  cout << "{" << endl;
+  AbstractBaseNoDtor* pbase = new DerivedFromAbstractNoDtor;
+
+  // cxx.cpp:1108:10: warning: deleting object of abstract class type ‘cxx_dtor::AbstractBaseNoDtor’ which has non-virtual destructor will cause undefined behaviour [-Wdelete-non-virtual-dtor]
+  //    delete pbase; 
+
+  delete pbase; 
+  cout << "}" << endl; 
 }
 
 
@@ -978,11 +1496,12 @@ class ScopedEnum {
                     result = 2;
                     break;
 
+                // to avoid warning
                 // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
-                case EnumFlags::SPORT|EnumFlags::MUSIC:
-                    cout << "has sport and music flag" << endl;
-                    result = 3;
-                    break;
+                // case EnumFlags::SPORT|EnumFlags::MUSIC:
+                //     cout << "has sport and music flag" << endl;
+                //     result = 3;
+                //     break;
 
                 default:
                     cout << "has unknown flag" << endl;
@@ -1001,7 +1520,10 @@ TEST(CxxFeaturesTest, UseScopedEnum)
     EXPECT_EQ(0, scoped.checkFlags(EnumFlags::SPORT));
     EXPECT_EQ(1, scoped.checkFlags(EnumFlags::KIDS));
     EXPECT_EQ(2, scoped.checkFlags(EnumFlags::MUSIC));
-    EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
+
+    // to avoid warning
+    // EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
+ 
     EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
     // EXPECT_EQ(100, scoped.checkFlags(200));
 }
@@ -1032,7 +1554,11 @@ TEST(CxxFeaturesTest, UseEnumHack)
 // ={=========================================================================
 // cxx-rvo
 
-struct Snitch {   // Note: All methods have side effects
+namespace cxx_rvo
+{
+  // Note: All methods have side effects
+  struct Snitch 
+  {
     Snitch(int value): value_(value) { cout << "c'tor" << endl; }
     ~Snitch() { cout << "d'tor" << endl; }
 
@@ -1040,75 +1566,72 @@ struct Snitch {   // Note: All methods have side effects
     Snitch(Snitch&&) { cout << "move c'tor" << endl; }
 
     Snitch& operator=(const Snitch&) {
-        cout << "copy assignment" << endl;
-        return *this;
+      cout << "copy assignment" << endl;
+      return *this;
     }
 
     Snitch& operator=(Snitch&&) {
-        cout << "move assignment" << endl;
-        return *this;
+      cout << "move assignment" << endl;
+      return *this;
     }
 
     int getValue() const { return value_;}
 
     private:
-        int value_{0};
-};
+    int value_{0};
+  };
 
-Snitch ExampleRVO() {
+  Snitch ExampleRVO() {
+    std::cout << "in ExampleRVO: " << std::endl;
+    return Snitch(100);
+  }
 
-  Snitch sn(100);
-
-  cout << "in example rvo: " << sn.getValue() << endl;
-
-  return sn;
-}
-
-TEST(CxxFeaturesTest, UseRVO)
-{
-    cout << "----------" << endl;
-    Snitch snitch = ExampleRVO();
-    cout << "----------" << endl;
-}
-
-
-vector<Snitch> ReturnVector() {
+  vector<Snitch> ReturnVector() {
     // vector<Snitch> ivec(1000000000, 1);
     // vector(n, elem); creates n elements
     vector<Snitch> ivec(10, Snitch(200));
-    cout << "size of vector: " << ivec.size() << endl;
-  return ivec;
-}
+    cout << "in ReturnVector: size of vector: " << ivec.size() << endl;
+    return ivec;
+  }
 
-TEST(CxxFeaturesTest, UseRVOReturnBigVector)
-{
-    cout << "----------" << endl;
-    vector<Snitch> ivec = ReturnVector();
-    cout << "----------" << endl;
-}
-
-void foo(Snitch s) {
-    cout << "snitch value is: " << s.getValue() << endl;
-}
-
-TEST(CxxFeaturesTest, UseCopyElison)
-{
-    cout << "----------" << endl;
-    foo(Snitch(200));
-    cout << "----------" << endl;
-}
-
-Snitch createSnitch() {
+  Snitch createSnitch() {
     return Snitch(200);
+  }
+
+  void foo(Snitch s) {
+    cout << "snitch value is: " << s.getValue() << endl;
+  }
+
+} // namespace
+
+TEST(RVO, OnSingle)
+{
+  using namespace cxx_rvo;
+
+  Snitch snitch = ExampleRVO();
 }
 
-TEST(CxxFeaturesTest, UseAssignment)
+TEST(RVO, OnVector)
 {
-    cout << "----------" << endl;
-    Snitch s = createSnitch();
-    cout << "----------" << endl;
-    s = createSnitch();
-    cout << "----------" << endl;
+  using namespace cxx_rvo;
+
+  vector<Snitch> ivec = ReturnVector();
+}
+
+TEST(RVO, OnArg)
+{
+  using namespace cxx_rvo;
+
+  foo(Snitch(200));
+}
+
+TEST(RVO, OnAssignment)
+{
+  using namespace cxx_rvo;
+
+  Snitch s = createSnitch();
+  cout << "----------" << endl;
+  s = createSnitch();
 }
 
 
@@ -1156,9 +1679,9 @@ TEST(Reference, UseConstReference)
 
 
 // ={=========================================================================
-// cxx-reference-callby
+// cxx-reference
 
-namespace use_reference_callby
+namespace cxx_reference
 {
   void swap_by_value(int x, int y)
   {
@@ -1183,8 +1706,54 @@ namespace use_reference_callby
     x = y;
     y = temp;
   }
+} // namespace
 
-  void fill_buffer_by_pointer(char *buffer)
+TEST(Reference, Swap)
+{
+  using namespace cxx_reference;
+
+  // no swap happens since uses a copy
+  {
+    int x = 10, y = 20;
+    swap_by_value(x, y);
+    EXPECT_EQ(x, 10);
+    EXPECT_EQ(y, 20);
+  }
+
+  // swap
+  {
+    int x = 10, y = 20;
+    swap_by_pointer(&x, &y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+
+  // swap, no need to pass its address
+  {
+    int x = 10, y = 20;
+    swap_by_reference(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+
+  // *cxx-swap* std-swap uses reference
+  {
+    int x = 10, y = 20;
+    std::swap(x, y);
+    EXPECT_EQ(x, 20);
+    EXPECT_EQ(y, 10);
+  }
+}
+
+
+namespace cxx_reference
+{
+  void func_01(char *buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
+
+  void func_02(char *&buffer)
   {
     sprintf(buffer, "is filled by pointer %d\n", 10);
   }
@@ -1201,44 +1770,27 @@ namespace use_reference_callby
 
 } // namespace
 
-TEST(Reference, CallBy)
+
+TEST(Reference, CString)
 {
-  using namespace use_reference_callby;
-
-  // no swap
-  {
-    int x = 10, y = 20;
-    swap_by_value(x, y);
-    EXPECT_EQ(x, 10);
-    EXPECT_EQ(y, 20);
-  }
-
-  // swap
-  {
-    int x = 10, y = 20;
-    swap_by_pointer(&x, &y);
-    EXPECT_EQ(x, 20);
-    EXPECT_EQ(y, 10);
-  }
-
-  // swap
-  // note: no need to pass its address
-  {
-    int x = 10, y = 20;
-    swap_by_reference(x, y);
-    EXPECT_EQ(x, 20);
-    EXPECT_EQ(y, 10);
-  }
-}
-
-TEST(Reference, OnCFunctions)
-{
-  using namespace use_reference_callby;
+  using namespace cxx_reference;
 
   {
     char buffer[100];
-    fill_buffer_by_pointer(buffer);
-    cout << buffer << endl;
+    func_01(buffer);
+
+    // *cxx-array* the point is that name of array is "rvalue of char *".
+    //
+    // error: invalid initialization of non-const reference of type ‘char*&’ from an rvalue of type ‘char*’
+    //      func_02(buffer);
+  }
+
+  {
+    char *buffer = new char[100];
+
+    // error: invalid initialization of reference of type ‘char&’ from expression of type ‘char*’
+    func_02(buffer);
+    func_01(buffer);
   }
 }
 
@@ -1316,51 +1868,88 @@ TEST(Reference, AccessOnReference)
 
 
 // ={=========================================================================
+// cxx-ratio
+
+TEST(Ratio, Ratio)
+{
+  using FiveThirds = std::ratio<5,3>;
+
+  // Numerator and denominator
+  EXPECT_THAT(FiveThirds::num, 5);
+  EXPECT_THAT(FiveThirds::den, 3);
+
+  // Numerator and denominator
+  EXPECT_THAT(std::nano::num, 1);
+  EXPECT_THAT(std::nano::den, 1000000000LL);
+}
+
+
+// ={=========================================================================
 // cxx-time
 
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The local date and time is: Tue Jun 12 12:49:12 2018
 // The UTC date and time is: Tue Jun 12 11:49:12 2018
 
-TEST(Time, UseConventionalWay)
+TEST(Time, SystemCall)
 {
+  // #include <time.h>
+  // time_t time(time_t *timep);
   // time_t now = time(0);
+  //
+  // time() system call returns the number of seconds since the Epoch. i.e., the
+  // same value that gettimeofday() returns in the tv_sec field of its tv
+  // argument.
+
   auto now = time(0);
 
-  cout << "The local date and time is: " << ctime(&now) << endl;
+  // The ctime() function provides a simple method of converting a time_t value
+  // `into printable form.` The ctime() function automatically accounts for
+  // local timezone and DST settings when performing the conversion.
+  //
+  // Returns pointer to statically allocated string `terminated by newline` and
+  // \0 on success, or NULL on error
+
+  cout << "The local date and time is: " << ctime(&now);
+
+  // The gmtime() and localtime() functions convert a time_t value into a
+  // so-called brokendown time. The broken-down time is placed in a statically
+  // allocated structure whose address is returned as the function result.
 
   // tm *localtm = localtime(&now);
   auto localtm = localtime(&now);
-  cout << "The local date and time is: " << asctime(localtm) << endl;
+  cout << "The local date and time is: " << asctime(localtm);
 
   // tm *gmtm = gmtime(&now);
   auto gmtm = gmtime(&now);
   if (gmtm != nullptr)
   {
-    cout << "The UTC date and time is: " << asctime(gmtm) << endl;
+    cout << "The UTC date and time is: " << asctime(gmtm);
   }
 }
 
 // The local date and time is: Tue Jun 12 14:42:18 2018
 // The local date and time is: Tue Jun 12 14:42:28 2018
 
-TEST(DISABLED_Time, UseConventionalWayToShowPitfall)
+TEST(Time, SleepFor)
 {
   // tm *localtm = localtime(&now);
   time_t now = time(0);
-  auto localtm = localtime(&now);
-  cout << "The local date and time is: " << asctime(localtm) << endl;
+  auto prev = localtime(&now);
+  cout << "The local date and time is: " << asctime(prev);
 
   std::this_thread::sleep_for(chrono::seconds(10));
 
   now = time(0);
-  localtm = localtime(&now);
-  cout << "The local date and time is: " << asctime(localtm) << endl;
+  auto curr = localtime(&now);
+  cout << "The local date and time is: " << asctime(curr);
+ 
+  // why 0?
+  EXPECT_THAT((curr->tm_sec - prev->tm_sec), 0);
 }
 
 
-// ={=========================================================================
-// cxx-time-crono
+// cxx-time-duration-cast
 //
 // A typical example is code that segments a duration into different units. For
 // example, the following code segments a duration of milliseconds into the
@@ -1369,121 +1958,173 @@ TEST(DISABLED_Time, UseConventionalWayToShowPitfall)
 // raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
 //      02::00::55::42
 
-template <typename V, typename R>
-ostream &operator<<(ostream &os, const chrono::duration<V,R> &d)
+namespace cxx_time_duration_case
 {
-    os << "[" << d.count() << " of " << R::num << "/" << R::den << "]";
-    return os;
+  template <typename Unit, typename Ratio>
+    ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d)
+    {
+      os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
+      return os;
+    }
+} // namespace
+
+
+TEST(Time, DurationCast)
+{
+  using namespace cxx_time_duration_case;
+
+  chrono::milliseconds ms(7255042);
+
+  chrono::hours   hh = 
+    chrono::duration_cast<chrono::hours>(ms);
+
+  // take remians which means take hours out
+  chrono::minutes mm = 
+    chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
+
+  chrono::seconds ss = 
+    chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
+
+  chrono::milliseconds msec = 
+    chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
+
+  ostringstream os;
+
+  os << hh << "::" << mm << "::" << ss << "::" << msec;
+
+  EXPECT_THAT(os.str(), "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]");
+
+  os.str("");
+
+  // see that same count() function used as operator<<() above
+  
+  os << hh.count() << "::" << mm.count() << "::" 
+    << ss.count() << "::" << msec.count();
+
+  EXPECT_THAT(os.str(), "2::0::55::42");
 }
 
-TEST(Time, UseCronoDurationCast)
-{
-    chrono::milliseconds ms(7255042);
 
-    chrono::hours   hh = 
-      chrono::duration_cast<chrono::hours>(ms);
-    chrono::minutes mm = 
-      chrono::duration_cast<chrono::minutes>(ms % chrono::hours(1));
-    chrono::seconds ss = 
-      chrono::duration_cast<chrono::seconds>(ms % chrono::minutes(1));
-    chrono::milliseconds msec = 
-      chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
-
-    cout << "raw: " << hh << "::" << mm << "::"
-        << ss << "::" << msec << endl;
-    cout << "     " << setfill('0') << setw(2) << hh.count() << "::" 
-        << setw(2) << mm.count() << "::"
-        << setw(2) << ss.count() << "::"
-        << setw(2) << msec.count() << endl;
-}
-
-// ={=========================================================================
 // cxx-time-crono-clock
 
 // the following function prints the properties of a clock
 // C represents clock
 template <typename C>
-void print_clock_data()
+void print_clock_data(ostringstream &os)
 {
-    using namespace std;
+  using namespace std;
 
-    cout << "- precision: ";
+  os << "- precision: ";
 
-    // clock::period 
-    // Yields the type of the unit type (equivalent to clock::duration::period)
-    
-    typedef typename C::period P;
+  // clock::period 
+  // Yields the type of the unit type (equivalent to clock::duration::period)
 
-    // /usr/include/c++/4.9/ratio
-    // typedef ratio<                     1000, 1> kilo;
-    
-    if( ratio_less_equal<P, std::milli>::value )
-    {
-        // This class template alias generates a ratio type that is the
-        // multiplication of the ratio types R1 and R2.
-        // 
-        // The resulting type is the same as if ratio_multiply was defined as:
-        //
-        // template <typename R1, typename R2> 
-        // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den >;
+  typedef typename C::period P;
 
-        typedef typename ratio_multiply<P, std::kilo>::type TT;
-        cout << fixed << double(TT::num)/TT::den << " milliseconds" << endl;
-    } 
-    else
-    {
-        cout << fixed << double(P::num)/P::den << " seconds" << endl;
-    }
+  // /usr/include/c++/4.9/ratio
+  // typedef ratio<                     1000, 1> kilo;
 
-    // clock::is_steady 
-    // Yields true if the clock is steady
-    
-    cout << "- is ready: " << boolalpha << C::is_steady << endl;
-}
+  if( ratio_less_equal<P, std::milli>::value )
+  {
+    // This class template alias generates a ratio type that is the
+    // multiplication of the ratio types R1 and R2.
+    // 
+    // The resulting type is the same as if ratio_multiply was defined as:
+    //
+    // template <typename R1, typename R2> 
+    // using ratio_multiply = std::ratio < R1::num * R2::num, R1::den * R2::den >;
 
-// TN: this is different from CLR result 
-//
-// system_clock:
-// - precision: 0.000001 milliseconds
-// - is ready: false
-// high_resolution_clock:
-// - precision: 0.000001 milliseconds
-// - is ready: false
-// steady_clock:
-// - precision: 0.000001 milliseconds
-// - is ready: true
+    typedef typename ratio_multiply<P, std::kilo>::type TT;
+    os << fixed << double(TT::num)/TT::den << " milliseconds" << endl;
+  } 
+  else
+  {
+    os << fixed << double(P::num)/P::den << " seconds" << endl;
+  }
 
-TEST(Time, ShowCronoClockDetails)
-{
-    cout << "system_clock: " << endl;
-    print_clock_data<std::chrono::system_clock>();
+  // clock::is_steady 
+  // Yields true if the clock is steady
 
-    cout << "high_resolution_clock: " << endl;
-    print_clock_data<std::chrono::high_resolution_clock>();
-
-    cout << "steady_clock: " << endl;
-    print_clock_data<std::chrono::steady_clock>();
+  os << "- is ready: " << boolalpha << C::is_steady << endl;
 }
 
 
-// ={=========================================================================
-// cxx-time-crono-timepoint
+TEST(Time, CronoClockDetails)
+{
+  ostringstream os;
+
+  os << "system_clock: " << endl;
+  print_clock_data<std::chrono::system_clock>(os);
+
+  os << "high_resolution_clock: " << endl;
+  print_clock_data<std::chrono::high_resolution_clock>(os);
+
+  os << "steady_clock: " << endl;
+  print_clock_data<std::chrono::steady_clock>(os);
+
+  // TN: this is different from CLR result 
+
+  char expected[] = "system_clock: \n"
+    "- precision: 0.000001 milliseconds\n"
+    "- is ready: false\n"
+    "high_resolution_clock: \n"
+    "- precision: 0.000001 milliseconds\n"
+    "- is ready: false\n"
+    "steady_clock: \n"
+    "- precision: 0.000001 milliseconds\n"
+    "- is ready: true\n";
+
+  EXPECT_THAT(os.str(), expected);
+}
+
+
+TEST(Time, SteadyClock)
+{
+  {
+    // now() is static function
+    auto system_start = chrono::system_clock::now();
+
+    sleep(10);
+
+    auto diff = chrono::system_clock::now() - system_start;
+    auto sec = chrono::duration_cast<chrono::seconds>(diff);
+
+    // cout << "this programs runs: " << sec.count() << " seconds" << endl;
+    EXPECT_THAT(sec.count(), 10);
+  }
+
+  {
+    // now() is static function
+    auto system_start = chrono::steady_clock::now();
+
+    sleep(10);
+
+    auto diff = chrono::steady_clock::now() - system_start;
+    auto sec = chrono::duration_cast<chrono::seconds>(diff);
+
+    // cout << "this programs runs: " << sec.count() << " seconds" << endl;
+    EXPECT_THAT(sec.count(), 10);
+  }
+}
+
+
+// cxx-time-timepoint
 
 std::string as_string(const std::chrono::system_clock::time_point &tp)
 {
-    // static convenience function
-    // Note also that this convenience function probably will work only for
-    // system_clocks, the only clocks that provide an interface for conversions
-    // to and from time_t.
+  // static convenience function
+  // Note also that this convenience function probably will work only for
+  // system_clocks, the only clocks that provide an interface for conversions
+  // to and from time_t.
 
-    std::time_t time = std::chrono::system_clock::to_time_t(tp);
+  std::time_t time = std::chrono::system_clock::to_time_t(tp);
 
-    // std::string ts = std::ctime(&time);
-    std::string ts = std::asctime(gmtime(&time));
+  // std::string ts = std::ctime(&time);
+  std::string ts = std::asctime(gmtime(&time));
 
-    // remove trailing newline
-    ts.resize(ts.size()-1);
-    return ts;
+  // remove trailing newline
+  ts.resize(ts.size()-1);
+  return ts;
 }
 
 // epoch: Thu Jan  1 01:00:00 1970
@@ -1491,9 +2132,11 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 // min  : Tue Sep 21 00:11:29 1677
 // max  : Sat Apr 12 00:47:16 2262
 
+// epoch: Thu Jan  1 01:00:00 1970
+//
 // Note that it’s 1 o’clock rather than midnight. This may look a bit
 // surprising, but remember that the conversion to the calendar time with
-// ctime() inside asString() takes the time zone into account.  Thus, the UNIX
+// ctime() inside asString() takes the time zone into account. Thus, the UNIX
 // epoch used here  which, again, is not always guaranteed to be the epoch of
 // the system time  started at 00:00 in Greenwich, UK. In my time zone, Germany,
 // it was 1 a.m. at that moment, so in my time zone the epoch started at 1 a.m.
@@ -1503,10 +2146,11 @@ std::string as_string(const std::chrono::system_clock::time_point &tp)
 
 // epoch: Thu Jan  1 00:00:00 1970
 // now  : Thu Apr 12 10:01:32 2018
-// min  : Tue Sep 21 00:12:44 1677
-// max  : Fri Apr 11 23:47:16 2262
+// min  : Tue Sep 21 00:12:44 1677  // this is bigger and different from the book
+// max  : Fri Apr 11 23:47:16 2262  // this is bigger and different from the book
 
-TEST(Time, PrintCronoTimepoint)
+
+TEST(Time, Timepoint)
 {
   // print the epoch of this clock
 
@@ -1526,9 +2170,57 @@ TEST(Time, PrintCronoTimepoint)
   cout << "max  : " << as_string(tp) << endl;
 }
 
-
-TEST(Time, UserTimeFacet)
+TEST(Time, TimePointArithmetic)
 {
+  ostringstream os;
+
+  // one day as seconds
+  typedef chrono::duration<int, ratio<3600*24>> Days;
+
+  chrono::time_point<chrono::system_clock> tp;
+
+  // allow adjusting timepoints by using timepoint arithmetic.
+  
+  // add 1 day, 23 hours, and 55 minutes to the epoch
+  tp += Days(1) + chrono::hours(23) + chrono::minutes(55);
+  os << "later : " << as_string(tp) << endl;
+
+  // diff in minutes
+  auto diff = tp - chrono::system_clock::time_point();
+  os << "diff : " << chrono::duration_cast<chrono::minutes>(diff).count() 
+    << " minutes" << endl;
+
+  // minus 1 year (hoping it is valid and not a leap year
+  tp -= chrono::hours(24*365);
+  os << "-1 year: " << as_string(tp) << endl;
+  
+  // 3600 is 1 year
+  tp -= chrono::duration<int, ratio<3600*24*365>>(50);
+  os << "-50 years: " << as_string(tp) << endl;
+
+  // 3600 is 1 year
+  // works since the min is bigger and different from the book
+
+  tp -= chrono::duration<int, ratio<3600*24*365>>(50);
+  os << "-50 years: " << as_string(tp) << endl;
+
+  char expected[] = "later : Fri Jan  2 23:55:00 1970\n"
+      "diff : 2875 minutes\n"
+      "-1 year: Thu Jan  2 23:55:00 1969\n"
+      "-50 years: Wed Jan 15 23:55:00 1919\n"
+      "-50 years: Tue Jan 26 23:55:00 1869\n";
+
+  EXPECT_THAT(os.str(), expected);
+}
+
+
+// 12/04/18
+// Tuesday 12/04/18 02PM
+
+TEST(Time, Facet)
+{
+  ostringstream os;
+
   auto now = chrono::system_clock::now();
   time_t t = chrono::system_clock::to_time_t(now);
   tm *tm_now = localtime(&t);
@@ -1538,14 +2230,368 @@ TEST(Time, UserTimeFacet)
 
   // %x Locale’s preferred date representation Jul 12 1998
   // 06/12/18
+  
   tp.put(cout , cout, ' ', tm_now, 'x');
   cout << endl;
 
   // use format string
   // Tuesday 06/12/18 04PM
+
   string fmt = "%A %x %I%p\n";
   tp.put(cout, cout, ' ', tm_now,
       fmt.c_str(), fmt.c_str()+fmt.size());
+}
+
+
+// time taken (in ms) : 939987
+// time taken (in ns) : 939         // since integer division
+// time taken (in ns) : 939.987
+// time taken (in ns) : 939
+//
+// time taken (in ms) : 911476
+// time taken (in ns) : 911
+// time taken (in ns) : 911.476
+// time taken (in ns) : 911
+
+// the name "Timer" is not representative. TimeLog?
+
+namespace cxx_time_elapsed
+{
+  struct Timer
+  {
+    Timer(const std::string &text) : text_(text)
+    {
+      start_ = chrono::system_clock::now();
+    }
+    ~Timer()
+    {
+      auto elapsed = chrono::system_clock::now() - start_;
+      auto elapsed_in_ms = chrono::duration_cast<chrono::microseconds>(elapsed);
+      auto elapsed_in_ns = chrono::duration_cast<chrono::milliseconds>(elapsed);
+
+      // when this is in scope, this uses:
+      //
+      // ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d);
+      //
+      // othrewise, it's error
+      // cout << "time taken (in sec) : " << elapsed << endl;
+      
+      cout << "time taken (in ms) : " << elapsed_in_ms.count() << endl;
+
+      // // *cxx-integer-division* 
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000.0 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()*0.001 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ns.count() << endl;
+
+      cout << "time taken (in ns) : " << elapsed_in_ns.count() 
+        << " for " << text_ << endl;
+    }
+
+    std::string text_;
+    chrono::system_clock::time_point start_;
+  };
+
+} // namespace
+
+TEST(Time, ElapsedTime)
+{
+  using namespace cxx_time_elapsed;
+
+  {
+    Timer timer("StringConcat");
+
+    string result{};
+
+    const unsigned int lots {500000};
+    for (unsigned int i{0}; i < lots; i++) {
+      string user{"user" + to_string(i)};
+
+      result += user;
+    }
+  }
+
+  {
+    Timer timer("StringAppend");
+
+    string result{};
+
+    const unsigned int lots {500000};
+    for (unsigned int i{0}; i < lots; i++) {
+      string user{"user" + to_string(i)};
+
+      result.append(user);
+    }
+  }
+}
+
+
+// like lap feature of stopwatch
+//
+// copied from someone's code at YV.
+//
+// {
+//   PerfCounter counter;
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out;
+//     sscanf("42","%d",&out);
+//   }
+//   counter.snap("scanf int");
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out;
+//     std::stringstream ss("42");
+//     ss >> out;
+//   }
+//   counter.snap("stringstream int");
+// 
+//   for(int i=0;i<10000;++i)
+//   {
+//     int out = boost::lexical_cast<int>("42");
+//   }
+//   counter.snap("boost::lexical_cast<int>");
+//   std::cout << counter.dump() << std::endl;
+// }
+//
+// Start -> scanf int took 2112us
+// scanf int -> stringstream int took 27859us
+// stringstream int -> boost::lexical_cast<int> took 910us
+// boost::lexical_cast<int> -> end took 0us
+
+namespace cxx_time_lap
+{
+  // design decision:
+  // in order to get diff betwen two snaps, required to access two snap. whether
+  // snap() or dump() do the work to calc diff? use dump() here
+
+  class Snapper
+  {
+    public:
+      explicit Snapper()
+      {
+        start_ = chrono::system_clock::now();
+      }
+
+      void snap(const std::string text)
+      {
+        SnapTime st{};
+        st.tp = chrono::system_clock::now();
+        st.description = text;
+        list_.push_back(st);
+      }
+
+      void dump()
+      {
+        std::string previous{"start"};
+        decltype(start_) previous_time = start_;
+
+        for (const auto &e : list_)
+        {
+          auto diff = e.tp - previous_time;
+          cout << previous << " -> " << e.description << " took " 
+            << chrono::duration_cast<chrono::microseconds>(diff).count() << " us" << endl;
+
+          previous = e.description;
+          previous_time = e.tp;
+        }
+      }
+
+    private:
+
+      struct SnapTime
+      {
+        chrono::system_clock::time_point tp{};
+        std::string description{};
+      };
+
+      std::list<SnapTime> list_;
+      chrono::system_clock::time_point start_;
+  };
+
+  class PerfCounter
+  {
+    public:
+      PerfCounter();
+      ~PerfCounter();
+
+      void snap(const string &name_);
+      void dump();
+
+    private:
+      // *cxx-nested-class*
+      // since the original code uses class but makes it all public, use
+      // struct instead.
+      struct CounterData
+      {
+        CounterData(const string &name_) : name{name_}, pnext{nullptr} {}
+        string name;
+        CounterData *pnext;
+        struct timespec ts;
+      };
+
+      // singly list but has end as well.
+      CounterData *phead;
+      CounterData *pend;
+
+      // utility function
+      CounterData *createSnap(const string &name_);
+  };
+
+  PerfCounter::PerfCounter()
+  {
+    // create a start node
+    phead = pend = createSnap("start");
+  }
+
+  PerfCounter::~PerfCounter()
+  {
+    // clean up a list
+    for (CounterData *psnap = phead; psnap;)
+    {
+      phead = psnap->pnext;
+      std::cout << "delete " << psnap->name << std::endl;
+      delete psnap;
+      psnap = phead;
+    }
+  }
+
+  void PerfCounter::snap(const string &name_)
+  {
+    CounterData *psnap = createSnap(name_);
+
+    pend->pnext = psnap;
+    pend = psnap;
+  }
+
+  // utility function to have common code in one place
+  // note that use of cpp-nested-class type, `PerfCounter::CounterData` 
+  // Otherwise, see compile errors.
+  //
+  // CounterData *PerfCounter::createSnap(const string &name_) {}
+  //
+  // perfcounter.cpp:45:1: error: ‘CounterData’ does not name a type
+  //  CounterData *PerfCounter::createSnap(const string &name_)
+  //  ^
+
+  PerfCounter::CounterData *PerfCounter::createSnap(const string &name_)
+  {
+    CounterData *psnap = new CounterData(name_);
+    clock_gettime(CLOCK_MONOTONIC, &(psnap->ts));
+    return psnap;
+  }
+
+  // cpp-stringstream
+  void PerfCounter::dump()
+  {
+    std::stringstream ss{};
+    uint32_t countSnap{1};
+
+    // only when there are two nodes to use
+    for (CounterData *pstart = phead; 
+        pstart && pstart->pnext; pstart = pstart->pnext)
+    {
+      ss << "snap: " << countSnap << ": ";
+      ss << pstart->name << " -> " << pstart->pnext->name << " took ";
+
+      // time diff in us from current to next
+      uint64_t timeDiff = 
+        (pstart->pnext->ts.tv_sec*1000000 + pstart->pnext->ts.tv_nsec/1000)-
+        (pstart->ts.tv_sec*1000000 + pstart->ts.tv_nsec/1000);
+
+      ss << timeDiff << "us" << std::endl;
+      ++countSnap;
+    }
+
+    std::cout << ss.str();
+  }
+
+} // namespace
+
+
+// on VM:
+//
+// start -> scanf int took 1609 us
+// scanf int -> stringstream int took 22991 us
+// stringstream int -> boost::lexical_cast<int> took 2445 us
+// start -> scanf int took 1709 us
+// scanf int -> stringstream int took 23523 us
+// stringstream int -> boost::lexical_cast<int> took 2065 us
+// ---------
+// snap: 1: start -> scanf int took 1706us
+// snap: 2: scanf int -> stringstream int took 23524us
+// snap: 3: stringstream int -> boost::lexical_cast<int> took 2065us
+// delete start
+// delete scanf int
+// delete stringstream int
+// delete boost::lexical_cast<int>
+
+TEST(Time, Snapper)
+{
+  using namespace cxx_time_lap;
+
+  {
+    Snapper counter;
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      sscanf("42","%d",&out);
+    }
+    counter.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      std::stringstream ss("42");
+      ss >> out;
+    }
+    counter.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out = boost::lexical_cast<int>("42");
+      (void)out;
+    }
+    counter.snap("boost::lexical_cast<int>");
+    counter.dump();
+  }
+
+  {
+    Snapper sn;
+    PerfCounter pc;
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      sscanf("42","%d",&out);
+    }
+    sn.snap("scanf int");
+    pc.snap("scanf int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out;
+      std::stringstream ss("42");
+      ss >> out;
+    }
+    sn.snap("stringstream int");
+    pc.snap("stringstream int");
+
+    for(int i=0;i<10000;++i)
+    {
+      int out = boost::lexical_cast<int>("42");
+      (void)out;
+    }
+    sn.snap("boost::lexical_cast<int>");
+    pc.snap("boost::lexical_cast<int>");
+
+    sn.dump();
+    cout << "---------" << endl;
+    pc.dump();
+  }
 }
 
 
@@ -1643,22 +2689,238 @@ TEST(Static, TrackClassInstancesWhenNothingCreated)
 // ={=========================================================================
 // cxx-lambda
 
-// string callback()
-// {
-//     std::string value{"this is a callback"};
-//     return value;
-// }
-
-TEST(CxxFeaturesTest, UseLambda)
+TEST(Lambda, CaptureAndReturn)
 {
-    auto callback = [](){
-        std::string value{"this is a callback"};
-        return value;
+  {
+    auto func = []()
+    {
+      std::string value{"this is a callback"};
+      return value;
     };
 
-    std::string result = callback();
+    EXPECT_THAT(func(), "this is a callback");
+  }
 
-    cout << "result: " << result << endl;
+  // deduced return is integer
+  {
+    auto func = []
+    {
+      return 42;
+    };
+
+    EXPECT_THAT(func(), 42);
+  }
+
+  // deduced return is double
+  {
+    auto func = []
+    {
+      return 42.0;
+    };
+
+    EXPECT_THAT(func(), 42.0);
+  }
+
+  // no deduction
+  {
+    auto func = [] () -> double
+    {
+      return 42;
+    };
+
+    EXPECT_THAT(func(), 42.0);
+  }
+
+  {
+    int x = 0;
+    int y = 42;
+
+    auto func = [x, &y] 
+    {
+      std::cout << "x: " << x << std::endl;
+      std::cout << "y: " << y << std::endl;
+      ++y;
+
+      // *cxx-error*
+      // cxx.cpp:2646:9: error: increment of read-only variable ‘x’
+      //        ++x;
+      // ++x;
+    };
+    
+    x = y = 77;
+    func();
+    func();
+  }
+}
+
+
+// initialized  : over quick red fox jumps red the slow turtle the 
+// sorted       : fox jumps over quick red red slow the the turtle 
+// eliminated   : fox jumps over quick red slow the turtle 
+// stable sorted: fox red the over slow jumps quick turtle 
+// 3 words of length 5 or longer
+// for_each     : fox red the over slow jumps quick turtle 
+// jumps quick turtle 
+
+namespace cxx_lambda
+{
+  template<typename T>
+    inline void PRINT_ELEMENTS( const T& coll, const std::string &opt = "")
+    {
+      std::cout << opt;
+
+      for( const auto &elem : coll )
+        std::cout << elem << ' ';
+
+      std::cout << std::endl;
+    }
+
+  void eliminate_duplicates(vector<string>& words)
+  {
+    sort(words.begin(), words.end());
+    auto unique_end = unique(words.begin(), words.end());
+    words.erase(unique_end, words.end());
+  }
+
+  bool check_size(string const& s, string::size_type sz)
+  {
+    return s.size() >= sz;
+  }
+
+  void biggies(vector<string>& words, vector<string>::size_type sz)
+  {
+    eliminate_duplicates(words);
+
+    // PRINT_ELEMENTS(words, "eliminated: ");
+
+    sort(words.begin(), words.end(),
+        [](string const& a, string const& b)
+        { return a.size() < b.size(); });
+
+    // PRINT_ELEMENTS(words, "statle sorted: ");
+
+    // get an iter of the first element whose size is >= sz
+
+    // the problem is that find_if() uses *cxx-predicate* which is unary but we
+    // need two args.
+    //
+    // *cxx-lambda* version
+    //
+    // error when use:
+    //
+    // [](string const& e)
+    //
+    // cxx.cpp:2254:30: error: ‘sz’ is not captured
+    //          { return e.size() >= sz; });
+    //                               ^
+    //
+    // works when use:
+    //
+    // [sz](string const& e)
+
+    // auto wc = find_if(words.begin(), words.end(),
+    //     [=](string const& e)
+    //     { return e.size() >= sz; });
+
+    // *cxx-bind* version
+    auto wc = find_if(words.begin(), words.end(),
+        std::bind(check_size, _1, sz));
+
+    // get the number of elements that are its size >= sz
+    // use *cxx-iter-arithmetic* since it's vector
+    auto num = words.end() - wc;
+
+    EXPECT_THAT(num, 3);
+
+    vector<string> result{};
+
+    for_each(wc, words.end(),
+        [&](string const& e)
+        { result.push_back(e); });
+
+    EXPECT_THAT(result, ElementsAre("jumps", "quick", "turtle"));
+  }
+
+} // namespace
+
+TEST(Lambda, Biggies)
+{
+  using namespace cxx_lambda;
+
+  vector<string> coll{"over", "quick", "red", 
+    "fox", "jumps", "red", "the", "slow", "turtle", "the"};
+
+  // PRINT_ELEMENTS( coll, "initialized  : ");
+
+  biggies( coll, 5 );
+}
+
+
+// Suppose that you search in a collection for the first element with a value
+// that is between x and y.
+
+// If need to use in more than one or two places, use function than a lambda.
+// However, it is not easy to write function to replace a lambda that captures
+// local variables. For example, find_if takes unary predicate and see how to
+// pass more than one as this example.
+
+
+TEST(Lambda, Compare)
+{
+  deque<int> coll = { 1, 3, 19, 5, 13, 7, 11, 2, 17 };
+
+  int x{5};
+  int y{12};
+
+  // use lambda
+  {
+    auto pos = find_if(coll.begin(), coll.end(),
+        [=](int e)
+        { return e > x && e < y; });
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // use cxx-bind
+  {
+    auto pos = find_if (coll.begin(), coll.end(),  // range
+        bind(logical_and<bool>(),     // search criterion
+          bind(greater<int>(),_1,x), // _1 > x
+          bind(less<int>(),_1,y)));  // _1 < y
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // before cxx-11, other ways to do
+
+  // handwritten loop
+  {
+    deque<int>::iterator pos;
+
+    for (pos = coll.begin(); pos != coll.end(); ++pos)
+      if (*pos > x && *pos < y)
+        break;
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // use cxx-fobj cxx-predicate
+  {
+    class Pred
+    {
+      public:
+        Pred(int x, int y) : x_(x), y_(y) {}
+        bool operator()(int value) const
+        { return value > x_ && value < y_; }
+      private:
+        int x_;
+        int y_;
+    };
+
+    auto pos = find_if(coll.begin(), coll.end(), Pred(x, y));
+
+    EXPECT_THAT(*pos, 7);
+  }
 }
 
 
@@ -1682,85 +2944,458 @@ TEST(CxxFeaturesTest, UseIsspace)
 
 
 // ={=========================================================================
-// cxx-function-adaptor
+// cxx-function-object
 
-template <typename T>
-void PRINT_PERSON_ELEMENTS(T &coll, const string &mesg = "")
+namespace cxx_function
 {
-    cout << mesg << endl;
 
-    for(const auto &e : coll)
-        e.PrintName();
-
-    cout << endl;
-}
-class Person {
+  class Foo {
     public:
-    Person(const string &name) : name_(name) {}
-    void PrintName() const { cout << "+" << name_ << endl;}
-    void PrintNameWithPrefix(const string &prefix) const { cout << prefix << name_ << endl; }
-    void SetName(const string &name) { name_ = name;}
+      Foo(size_t value = 0) : value_(value) {}
+
+      void update_10() noexcept
+      { value_ += 10; }
+
+      void update_20() noexcept
+      { value_ += 20; }
+
+      void update_30() noexcept
+      { value_ += 30; }
+
+      size_t get_value() const noexcept
+      { return value_; }
+
     private:
-    string name_;
-};
+      size_t value_;
+  };
 
-TEST(CxxFeaturesTest, UseFunctionAdaptor)
+  size_t print_value(Foo &foo)
+  { return foo.get_value(); }
+
+} // namespace
+
+TEST(FunctionObject, Function)
 {
-    vector<Person> coll={Person("one"), Person("two"), Person("thr")};
-    PRINT_PERSON_ELEMENTS(coll, "init: ");
+  using namespace cxx_function;
 
-    cout << "bind: " << endl;
-    for_each(coll.begin(), coll.end(),
-        bind(&Person::PrintName, _1));
-    cout << endl;
+  {
+    Foo foo = Foo(100);
+    std::function<void(Foo &)> op = &Foo::update_10;
 
-    cout << "bind: " << endl;
-    for_each(coll.begin(), coll.end(),
-        bind(&Person::PrintNameWithPrefix, _1, "*"));
-    cout << endl;
+    // specify the target object
+    //
+    // that performing a function call without having a 'target' to call throws
+    // an exception of type std::bad_function_call (see Section 4.3.1, page 43):
+    // 
+    // std::function<void(int,int)> f; 
+    //
+    // f(33,66);
+    //
+    // throws std::bad_function_call
 
-    cout << "bind: " << endl;
-    for_each(coll.begin(), coll.end(),
-        mem_fn(&Person::PrintName));      
-    cout << endl;        
+    op(foo);
 
-    for_each(coll.begin(), coll.end(),
-        bind(&Person::SetName, _1, "paul"));      
-    PRINT_PERSON_ELEMENTS(coll, "modi: "); 
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // cxx-function use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(11,12,13));
+  }
+
+  // cxx-function use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    std::function<void(Foo &)> op = &Foo::update_20;
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(21,22,23));
+  }
+
+  // cxx-function use copy
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    std::function<void(Foo)> op = &Foo::update_20;
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(1,2,3));
+  }
+}
+
+TEST(FunctionObject, Memfn)
+{
+  using namespace cxx_function;
+
+  {
+    Foo foo = Foo(100);
+    auto op = std::mem_fn(&Foo::update_10);
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    auto op = std::mem_fn(&Foo::update_10);
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(11,12,13));
+  }
+}
+
+TEST(FunctionObject, Bind)
+{
+  using namespace cxx_function;
+
+  {
+    Foo foo = Foo(100);
+    auto op = std::bind(&Foo::update_10, _1);
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    for_each(coll.begin(), coll.end(), std::bind(&Foo::update_10, _1));
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(11,12,13));
+  }
+
+  // use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    for_each(coll.begin(), coll.end(), std::bind(&Foo::update_20, _1));
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(21,22,23));
+  }
+}
+
+TEST(FunctionObject, Pointer)
+{
+  using namespace cxx_function;
+
+  {
+    Foo foo = Foo(100);
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  {
+    Foo foo = Foo(100);
+
+    // error
+    // void (*op)(void);
+
+    // see how to define pointer to member function
+    void (Foo::*op)(void);
+
+    // `Unlike ordinary function pointer, no automatic conversion` between a
+    // member funtion and a pointer to that function.
+    // must explicitly use address-of operator
+    // error
+    // op = Foo::update_10;
+
+    op = &Foo::update_10;
+
+    // cxx.cpp:2631:11: error: must use ‘.*’ or ‘->*’ to call pointer-to-member function in ‘op (...)’, e.g. ‘(... ->* op) (...)’
+    //      op(foo);
+    //            ^
+    // op(foo);
+
+    // When initialize a pointer to member, that pointer does 'not' yet point to
+    // any data. Supply the object when we dereference that pointer. Analogous
+    // to the member access operators, . and ->, 
+
+    // see how to call
+    Foo *pfoo = &foo;
+    (pfoo->*op)();
+
+    EXPECT_THAT(foo.get_value(), 110);
+
+    // see how to call
+    (foo.*op)();
+    EXPECT_THAT(foo.get_value(), 120);
+  }
+
+  // f1 member address 0x43e3c4 | object address: 0x7ffeaf5f0c90
+  // f2 member address 0x43e3c4 | object address: 0x7ffeaf5f0c80
+  {
+    Foo f1, f2;
+
+    cout << "f1 member address " << (void*)(&Foo::update_10) << 
+        " | object address: " << (void*)&f1 << endl;
+
+    cout << "f2 member address " << (void*)&Foo::update_10 << 
+        " | object address: " << (void*)&f2 << endl;
+
+    // as said above, this is error:
+    // cxx.cpp:2676:42: error: invalid use of non-static member function ‘void cxx_function::Foo::update_10()’
+    // cout << "f2 member address " << Foo::update_10 << 
+  }
 }
 
 
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp
 
-// :10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
-//   _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
-//   std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-//   std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
-// 
-// :12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
-// std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
-// = std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-// std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+TEST(SmartPointerShared, Ctors)
+{
+  {
+    shared_ptr<string> pNico(new string("nico"));           // OK
+  }
+  {
+    shared_ptr<string> pNico{new string("nico")};           // OK
+  }
+  {
+    shared_ptr<string> pNico = make_shared<string>("nico"); // OK
+  }
 
-// TEST(SharedPointer, UniqueDoNotAllowCopy)
-// {
-//   unique_ptr<std::string> p1(new std::string("nico"));
-//   unique_ptr<std::string> p2(p1);
-//   unique_ptr<std::string> p3;
-//   p3 = p2;
-// }
+  // // NO since requires cxx-copy-init but shared ptr's ctor are explicit 
+  // {
+  //   shared_ptr<string> pNico = new string("nico");
+  // }
 
-// TEST(SharedPointer, UniqueDoNotAllowInitCopyForm)
-// {
-//   // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
-//   // std::basic_string<char>*}’ to non-scalar type
-//   // ‘std::unique_ptr<std::basic_string<char> >’ requested
-//   //
-//   // unique_ptr<std::string> p1 = new string;
-//
-//   unique_ptr<std::string> p2(new string);
-// }
+  // // NO
+  // {
+  //   shared_ptr<int> p (new int(42));
+  //
+  //   // cxx.cpp:1739:5: error: no match for ‘operator=’ (operand types are ‘std::shared_ptr<int>’ and ‘int*’)
+  //   p = new int(1024);                      
+  // }
+
+  // points to '9999999999'
+  shared_ptr<string> p4 = make_shared<string>(10, '9');
+
+  // points to empty vector<string>
+  auto p6 = make_shared<vector<string>>();
+}
+
+TEST(SmartPointerShared, Copy)
+{
+  auto p = make_shared<int>(42);
+
+  // p.use++
+  auto q(p);
+
+  // all prints 2
+  EXPECT_THAT(p.use_count(), 2);
+  EXPECT_THAT(q.use_count(), 2);
+
+  EXPECT_THAT(*p, 42);
+  EXPECT_THAT(*q, 42);
+
+  auto r = make_shared<int>(52);
+
+  // q.use++ and r.use--. destroies a object which r pointed. 
+  r = q;
+
+  // all prints 3
+  EXPECT_THAT(p.use_count(), 3);
+  EXPECT_THAT(q.use_count(), 3);
+  EXPECT_THAT(r.use_count(), 3);
+}
+
+TEST(SmartPointerShared, Reset)
+{
+  // 1. sp, shared structure, and referenced object are separate entity.
+  //
+  // 2. although shared count is 2, q.use_count() return 0 since cxx-sp-code
+  // returns 0 when sp is empty(null)
+  //
+  // EXPECT_THAT(q.use_count(), 0);
+
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    // same as reset()
+    q = nullptr;
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+  {
+    auto p = make_shared<int>(42);
+
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    // multiple reset() are fine
+    q.reset();
+    q.reset();
+    q.reset();
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+  }
+}
+
+
+// CXXSLR 5.2 Smart Pointers
+
+TEST(SmartPointerShared, Example)
+{
+  std::shared_ptr<std::string> pNico{new std::string("nico")};
+  std::shared_ptr<std::string> pJutta{new std::string("jutta")};
+
+  // capitalise the first, cxx-string-replace
+
+  (*pNico)[0] = 'N';
+  pJutta->replace(0, 1, "J");
+
+  // put them multiple times in a coll
+
+  std::vector<std::shared_ptr<std::string>> whoMadeCoffee;
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pNico);
+  whoMadeCoffee.push_back(pJutta);
+  whoMadeCoffee.push_back(pNico);
+
+  {
+    std::ostringstream os;
+    for(auto const &sp : whoMadeCoffee)
+      os << *sp << ",";
+
+    EXPECT_THAT(os.str(), "Jutta,Jutta,Nico,Jutta,Nico,");
+  }
+
+  // overwrite name
+
+  *pNico = "Nicolai";
+
+  {
+    std::ostringstream os;
+    for(auto const &sp : whoMadeCoffee)
+      os << *sp << ",";
+
+    EXPECT_THAT(os.str(), "Jutta,Jutta,Nicolai,Jutta,Nicolai,");
+  }
+
+  EXPECT_THAT(whoMadeCoffee[0].use_count(), 4);
+}
+
+/*
+
+:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+ 
+:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+
+TEST(SharedPointerUnique, DoNotAllowCopy)
+{
+  unique_ptr<std::string> p1(new std::string("nico"));
+  unique_ptr<std::string> p2(p1);
+  unique_ptr<std::string> p3;
+  p3 = p2;
+}
+
+TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
+{
+  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+  // std::basic_string<char>*}’ to non-scalar type
+  // ‘std::unique_ptr<std::basic_string<char> >’ requested
+  //
+  // unique_ptr<std::string> p1 = new string;
+
+  unique_ptr<std::string> p2(new string);
+}
+
+*/
+
+TEST(SharedPointerUnique, OperatorBool)
+{
+  unique_ptr<int> up{new int(100)};
+
+  EXPECT_TRUE(up);
+  EXPECT_THAT(*up, 100);
+}
 
 namespace cxx_sp_shared
 {
@@ -1788,7 +3423,7 @@ namespace cxx_sp_shared
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SharedPointer, UniqueAndMove)
+TEST(SharedPointerUnique, Move)
 {
   using namespace cxx_sp_shared;
 
@@ -1850,7 +3485,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(SharedPointer, UniqueSinkSource)
+TEST(SharedPointerUnique, SinkSource)
 {
   using namespace cxx_sp_shared;
 
@@ -1888,7 +3523,7 @@ namespace cxx_sp_delete
 
       void operator() (ClassA* p)
       {
-        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        os_ << "DebugDeleteClassA: deleting " << typeid(p).name() << ", p = " << p << endl;
         delete p;
       }
 
@@ -1907,7 +3542,7 @@ namespace cxx_sp_delete
       template <typename T>
       void operator() (T* p)
       {
-        os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+        os_ << "DebugDelete: deleting " << typeid(p).name() << ", p = " << p << endl;
         delete p;
       }
 
@@ -1916,13 +3551,37 @@ namespace cxx_sp_delete
       ostream &os_;
   };
 
-  void delete_mesg(string *str)
+  void function_debug_delete(string *str)
   {
     cout << "deleting " << *str << endl;
     delete str;
   }
 
+  class ClassDebugDelete
+  {
+    public:
+      void operator() (string *str)
+      {
+        cout << "deleting " << *str << endl;
+        delete str;
+      }
+  };
+
 } // namespace
+
+// [ RUN      ] SharedPointer.Deleter
+// ClassA:
+// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// ClassA:
+// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// ClassA:
+// DebugDelete: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
+// deleting jutta on function
+// deleting nico on function
+// deleting jutta on functor
+// deleting nico on functor
+// deleting nico
+// [       OK ] SharedPointer.Deleter (5 ms)
 
 TEST(SharedPointer, Deleter)
 {
@@ -1933,6 +3592,8 @@ TEST(SharedPointer, Deleter)
     up->print_mesg();
   }
 
+  // same as the above since unique_ptr ctor() uses deleter type to create
+  // delter to use
   {
     unique_ptr<ClassA, DebugDeleteClassA> up(new ClassA(), DebugDeleteClassA());
     up->print_mesg();
@@ -1943,9 +3604,19 @@ TEST(SharedPointer, Deleter)
     up->print_mesg();
   }
 
+  // *cxx-error*
+  // {
+  //   unique_ptr<string, decltype(function_debug_delete)> up(new string("unique"), function_debug_delete);
+  // }
+
   {
-    shared_ptr<string> sp1(new string("nico"), delete_mesg);
-    shared_ptr<string> sp2(new string("jutta"), delete_mesg);
+    shared_ptr<string> sp1(new string("nico on function"), function_debug_delete);
+    shared_ptr<string> sp2(new string("jutta on function"), function_debug_delete);
+  }
+
+  {
+    shared_ptr<string> sp1(new string("nico on functor"), ClassDebugDelete());
+    shared_ptr<string> sp2(new string("jutta on functor"), ClassDebugDelete());
   }
 
   {
@@ -1968,8 +3639,8 @@ TEST(SharedPointer, DeleteTime)
 {
   using namespace cxx_sp_delete;
 
-  shared_ptr<string> pnico(new string("nico"), delete_mesg);
-  shared_ptr<string> pjutta(new string("jutta"), delete_mesg);
+  shared_ptr<string> pnico(new string("nico"), function_debug_delete);
+  shared_ptr<string> pjutta(new string("jutta"), function_debug_delete);
 
   // uppercase the first char
   (*pnico)[0] = 'N';
@@ -2030,7 +3701,7 @@ TEST(SharedPointer, DeleteTime)
 // end of main
 // Foo dtor(3)
 
-TEST(SharedPointer, DeleteReleaseReset)
+TEST(SmartPointerUnique, DeleteReleaseReset)
 {
   using namespace cxx_sp_shared;
 
@@ -2039,12 +3710,31 @@ TEST(SharedPointer, DeleteReleaseReset)
   unique_ptr<Foo> p3(new Foo(3));
 
   p2.reset(p3.release());
+
+  // free int(2) and p3 is null
+
+  EXPECT_TRUE(p1);
+  EXPECT_TRUE(p2);
+  EXPECT_FALSE(p3);
+
   cout << "-----------" << endl;
 
   p3.reset(p1.release());
+
+  // p1 is null
+  EXPECT_FALSE(p1);
+  EXPECT_TRUE(p2);
+  EXPECT_TRUE(p3);
+
   cout << "-----------" << endl;
 
   p3.reset(p1.release());
+
+  // p1 is null
+  EXPECT_FALSE(p1);
+  EXPECT_TRUE(p2);
+  EXPECT_FALSE(p3);
+
   cout << "-----------" << endl;
 
   cout << "end of main" << endl;
@@ -2087,7 +3777,7 @@ namespace cxx_sp_use_count
 // p2.use_count: 0
 // end of main
 
-TEST(SharedPointer, UseCount)
+TEST(SmartPointer, UseCount)
 {
   using namespace cxx_sp_use_count;
 
@@ -2127,6 +3817,901 @@ TEST(SharedPointer, UseCount)
   cout << "p2.use_count: " << p2.use_count() << endl;
 
   cout << "end of main" << endl;
+}
+
+
+// ={=========================================================================
+// cxx-smart-ptr-weak
+// 5.2.2 Class weak_ptr
+
+TEST(SmartPointerWeak, NotInReferenceCount)
+{
+  {
+    auto sp = make_shared<int>(42);
+
+    // wp is created out of sp
+    weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp. since it's weak, creating wp
+    // doesn't change the reference count of p
+    EXPECT_THAT(sp.use_count(), 1);
+
+    // sp is created out of wp. lock() checks whether the object to which the
+    // weak_ptr points still exist
+    if (auto p = wp.lock())
+    {
+      EXPECT_THAT(sp.use_count(), 2);
+      EXPECT_THAT(wp.use_count(), 2);
+    }
+
+    // since p is only around in if
+    EXPECT_THAT(sp.use_count(), 1);
+
+    // cxx-error compile error
+    // if (wp)
+    //   std::cout << "wp is not null" << std::endl;
+  }
+
+  // Can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a `bad_weak_ptr exception` 
+
+  {
+    auto sp = make_shared<int>(42);
+
+    // wp is created out of sp
+    weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp
+    EXPECT_THAT(sp.use_count(), 1);
+
+    // sp is created out of wp
+    shared_ptr<int> p(wp);
+    if (p)
+    {
+      EXPECT_THAT(sp.use_count(), 2);
+      EXPECT_THAT(wp.use_count(), 2);
+    }
+
+    EXPECT_THAT(sp.use_count(), 2);
+  }
+
+  // Can call expired(), which returns true if use_count() is zero, false
+  // otherwise. This option is equivalent to checking whether use_count() is
+  // equal to 0 but might be 'faster'.
+  
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp
+    EXPECT_THAT(sp.use_count(), 1);
+
+    sp = nullptr;
+
+    // sp is gone and wp.lock() returns nullptr
+    // because the last owner of the object released the object in the meantime
+    // — lock() yields an empty shared_ptr.
+
+    auto rp = wp.lock();
+
+    EXPECT_THAT(wp.expired(), true);
+
+    // rp is shared_ptr
+    EXPECT_THAT(rp, nullptr);
+  }
+
+  // You can explicitly convert a weak_ptr into a shared_ptr by using a
+  // corresponding shared_ptr constructor. If there is no valid referenced
+  // object, this constructor will throw a bad_weak_ptr exception. 
+
+  {
+    auto sp = make_shared<int>(42);
+    weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp
+    EXPECT_THAT(sp.use_count(), 1);
+
+    sp = nullptr;
+
+    // EXPECT_THROW(coll.pop(), ReadEmptyStack);
+    try
+    {
+      std::shared_ptr<int> osp(wp);
+    }
+    catch(exception &e)
+    {
+      std::ostringstream os;
+      os << e.what();
+      EXPECT_THAT(os.str(), "bad_weak_ptr");
+    }
+
+    EXPECT_THAT(wp.expired(), true);
+  }
+
+  // assign sp later when use make_shared() directly 
+
+  {
+    weak_ptr<int> wp;
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    // *cxx-error*
+    // EXPECT_THAT(wp, nullptr);
+
+    wp = make_shared<int>(42);
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    auto sp = wp.lock();
+
+    // because the referenced object is already gone
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(sp, nullptr);
+  }
+
+  {
+    weak_ptr<int> wp;
+
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    auto sp = make_shared<int>(42);
+    wp = sp;
+
+    EXPECT_THAT(wp.expired(), false);
+    EXPECT_THAT(wp.use_count(), 1);
+
+    auto spwp = wp.lock();
+
+    // because the referenced object is still around
+
+    EXPECT_THAT(wp.expired(), false);
+    EXPECT_THAT(wp.use_count(), 2);
+
+    EXPECT_THAT(spwp, Not(nullptr));
+
+    // separation between sp and wp
+
+    EXPECT_THAT(*sp, 42);
+    EXPECT_THAT(*spwp, 42);
+    EXPECT_THAT(sp.use_count(), 2);
+
+    wp.reset();
+    EXPECT_THAT(wp.expired(), true);
+    EXPECT_THAT(wp.lock(), nullptr);
+    EXPECT_THAT(wp.use_count(), 0);
+
+    EXPECT_THAT(*sp, 42);
+    EXPECT_THAT(*spwp, 42);
+    EXPECT_THAT(sp.use_count(), 2);
+  }
+}
+
+
+namespace cxx_sp_weak_problem
+{
+  class Person
+  {
+    public:
+      string name_;
+      shared_ptr<Person> mother_;
+      shared_ptr<Person> father_;
+      vector<shared_ptr<Person>> kids_;
+
+      Person(string const& name,
+          shared_ptr<Person> mother = nullptr, shared_ptr<Person> father = nullptr)
+        : name_(name), mother_(mother), father_(father)
+      {}
+
+      ~Person()
+      { cout << "delete: " << name_ << endl; }
+  };
+
+  shared_ptr<Person> init_family(string const& name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
+
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
+
+    return kid;
+  }
+
+} // namespace
+
+/*
+                                     mom, dad <---
+                                               \  \
+mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
+               \ (shared or weak)   \
+                -> kid               -> kid
+ 
+[ RUN      ] SharedPointerWeak.CyclicReference
+nico's family exists
+- nico is shared 3 times
+- name of 1st kid of nico's mom: nico
+jim's family exists
+- jim is shared 3 times
+- name of 1st kid of jim's mom: jim
+[       OK ] SharedPointerWeak.CyclicReference (1 ms)
+
+if we release our last handle to the family — either by assigning a new person
+or nullptr to p or by leaving the scope of p at the end of main() — none of the
+Persons gets released, because each still has at least one shared pointer
+referring to it. As a result, the destructor of each Person, which would print
+“delete name,” never gets called:
+
+Solution?
+*/
+
+TEST(SharedPointerWeak, CyclicReference)
+{
+  using namespace cxx_sp_weak_problem;
+
+  // return kids, which is 'nico'
+  shared_ptr<Person> p = init_family("nico");
+
+  cout << "nico's family exists" << endl;
+  cout << "- nico is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of nico's mom: " 
+    << p->mother_->kids_[0]->name_ << endl;
+
+  // cxx-cross-reference
+  // assign op decrease count of p but no one from nico family is deleted since
+  // each has a reference to them.
+  //
+  // same for jim family.
+
+  p = init_family("jim");
+
+  cout << "jim's family exists" << endl;
+  cout << "- jim is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of jim's mom: " 
+    << p->mother_->kids_[0]->name_ << endl;
+}
+
+
+namespace cxx_sp_weak_solution
+{
+  class Person
+  {
+    public:
+      string name_;
+      shared_ptr<Person> mother_;
+      shared_ptr<Person> father_;
+
+      // vector<shard_ptr<Person>> kids_;
+      vector<weak_ptr<Person>> kids_;
+
+      Person(string const& name,
+          shared_ptr<Person> mother = nullptr, shared_ptr<Person> father = nullptr)
+        : name_(name), mother_(mother), father_(father)
+      {}
+
+      ~Person()
+      { cout << "delete: " << name_ << endl; }
+  };
+
+  shared_ptr<Person> init_family(string const& name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
+
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
+
+    return kid;
+  }
+
+} // namespace
+
+// As soon as we lose our handle into a kid created - either by assigning a new
+// value to p or by leaving main() - the kid's object of the family loses its
+// last owner, which has the effect that both parents lose their last owner. So
+// 'all' objects, initially created by new, are deleted now so that their
+// destructors get called since weak pointer don't increase count.
+
+// [ RUN      ] SharedPointerWeak.CyclicReferenceSolution
+// nico's family exists
+// - nico is shared 1 times
+// - name of 1st kid of nico's mom: nico
+// delete: nico
+// delete: nico's dad
+// delete: nico's mom
+// jim's family exists
+// - jim is shared 1 times
+// - name of 1st kid of jim's mom: jim
+// delete: jim
+// delete: jim's dad
+// delete: jim's mom
+// [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
+
+TEST(SharedPointerWeak, CyclicReferenceSolution)
+{
+  using namespace cxx_sp_weak_solution;
+
+  // return kids, which is 'nico'
+  shared_ptr<Person> p = init_family("nico");
+
+  cout << "nico's family exists" << endl;
+  cout << "- nico is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of nico's mom: "; 
+
+  // cout << p->mother_->kids_[0]->name_ << endl; changes to:
+  cout << p->mother_->kids_[0].lock()->name_ << endl;
+
+  p = init_family("jim");
+
+  cout << "jim's family exists" << endl;
+  cout << "- jim is shared " << p.use_count() << " times" << endl;
+  cout << "- name of 1st kid of jim's mom: "; 
+
+  // cout << p->mother_->kids_[0]->name_ << endl; changes to:
+  cout << p->mother_->kids_[0].lock()->name_ << endl;
+}
+
+
+namespace cxx_sp_weak_problem
+{
+  class Resource
+  {
+    public:
+      explicit Resource() : name_("resouce"), count_(0) 
+      {
+        std::cout << "Resource::Resource" << std::endl;
+      }
+
+      ~Resource()
+      {
+        std::cout << "Resource::~Resource" << std::endl;
+      }
+
+      std::string get_name() const
+      { return name_; }
+
+      int get_count() const
+      { return count_; }
+
+      void increase_count()
+      { ++count_; }
+
+      void decrease_count() 
+      { --count_; }
+
+    private:
+      std::string name_;
+      int count_;
+  };
+
+  class ResourceManager
+  {
+    public: 
+      explicit ResourceManager()
+      {
+        std::cout << "ResourceManager::ResourceManager" << std::endl;
+      }
+
+      std::shared_ptr<Resource> get_resource()
+      {
+        auto res = res_.lock();
+
+        // if resource is around
+        if (res)
+        {
+          std::cout << "ResourceManager::get_resource: res is around and return sp" << std::endl;
+          return res;
+        }
+        else
+        {
+          std::cout << "ResourceManager::get_resource: res is not around and return new one" << std::endl;
+          auto sp = std::shared_ptr<Resource>{new Resource()};
+          res_ = sp;
+          return sp;
+        }
+      }
+
+    private:
+      std::weak_ptr<Resource> res_;
+  };
+
+} // namespace
+
+
+/*
+# The problem:
+# 
+# The issue is that when runs a production box for long time, HDD didn't go to
+# spin-down state when it's supposed to do and do not meet power consumption
+# requirement. Interestingly, only happens on production box and for days run.
+#
+# In Fusion MW, PDM manages HDD resouce and provides APIs to clients. Various
+# clients blindly calls API to get or release HDD resouce. 
+# 
+# So PDM server has own count to make call to HDD up(when count 0->1) or down(1->0)
+# based on number of calls from clients. Also, FDM client maintains own count to
+# control PDM API calls to make release/request calls. 
+# 
+# The problem is that FDM client which has own count get the count wrong and do
+# not make release call to PDM. This leaves PDM count one more and this prevents
+# HDD down when other clients tries to do. THis make HDD is on since because PDM
+# uses this count to control spin down or on of HDD via calls to device. 
+# 
+# How about using smart pointers to this problem?
+*/
+
+TEST(SharedPointerWeak, ResourceManagerSolution)
+{
+  using namespace cxx_sp_weak_problem;
+
+  ResourceManager rm;
+
+  auto client1 = rm.get_resource();
+  auto client2 = rm.get_resource();
+
+  EXPECT_THAT(client1.use_count(), 2);
+
+  std::cout << "clients use res..." << std::endl;
+
+  client1->increase_count();
+  client2->increase_count();
+  client1->increase_count();
+
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // finishes use of resource
+  client1.reset();
+  client2.reset();
+
+  std::cout << "no client and res shall be released..." << std::endl;
+
+  EXPECT_THAT(client1.use_count(), 0);
+
+  // get resource again
+  client1 = rm.get_resource();
+  client2 = rm.get_resource();
+
+  EXPECT_THAT(client1.use_count(), 2);
+
+  std::cout << "clients use res..." << std::endl;
+
+  client1->increase_count();
+  client2->increase_count();
+  client1->increase_count();
+
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // finishes use of resource
+  client1.reset();
+
+  // but client2 still use resource
+  // *cxx-sp-use-count*
+  EXPECT_THAT(client1.use_count(), 0);
+
+  EXPECT_THAT(client2.use_count(), 1);
+  EXPECT_THAT(client2->get_count(), 3);
+
+  // another client use the same resource
+  auto client3 = rm.get_resource();
+  client3->increase_count();
+  client3->increase_count();
+  EXPECT_THAT(client3->get_count(), 5);
+}
+
+
+// ={=========================================================================
+// cxx-smart-ptr cxx-sp-own
+
+// From CPP code challenge, 21. System handle wrapper
+//
+// template <typename>
+// class unique_ptr<T>
+// {
+//  no copy support
+//  move support
+//  operator bool();
+//  T* get();
+//  T* release();
+//  void reset(T*);
+//  void swap(uniqie_ptr<T> &);
+// }
+//
+// + non-member swap
+// + self-assign
+//
+// note that this version uses T which provides pointer and close() in it.
+// changes it to delete().
+
+namespace cxx_sp_unique_own_version
+{
+  struct pointer_int_trait
+  {
+    typedef int value_type;
+    using pointer = value_type *;
+
+    // *cxx-static*
+    // without static, cause build error:
+    //
+    // cxx.cpp:2243:24: error: cannot call member function 
+    // ‘void cxx_sp_unique_own_version::pointer_int_trait::deleter(cxx_sp_unique_own_version::pointer_int_trait::pointer)’ 
+    // without object
+    //
+    //           T::deleter(p_);
+
+    static void deleter(pointer p)
+    {
+      delete p;
+    }
+  };
+
+  template <typename T>
+    class unique_own
+    {
+      using pointer = typename T::pointer;
+
+      public:
+        // no copy support
+        
+        // not a build error but don't need to do this as *cxx-scope*
+        // unique_own(const unique_own<T> &) = delete;
+        // unique_own<T> &operator=(const unique_own<T> &) = delete;
+
+        unique_own(const unique_own &) = delete;
+        unique_own &operator=(const unique_own &) = delete;
+
+        // ctor & dtor
+        explicit unique_own(typename T::pointer p = nullptr)
+          : p_(p) {}
+
+        // move support
+        // handle moved-from by using release() and moved-to by using reset().
+
+        unique_own(unique_own &&other) noexcept
+          : p_(other.release())
+        {
+          // don't need to do since it's ctor and p_ is not assigned.
+          // if (p_)
+          //   T::deleter(p_);
+          //
+          // p_ = other.p_;
+        }
+
+        unique_own &operator=(unique_own &&other) noexcept
+        {
+          // if (p_)
+          //   T::deleter(p_);
+          //
+          // p_ = other.p_;
+
+          if (this != &other)
+            reset(other.release());
+
+          return *this;
+        }
+
+        ~unique_own() noexcept
+        {
+          if (p_)
+          {
+            // this is not `typename`
+            T::deleter(p_);
+          }
+        }
+
+        pointer release() noexcept
+        {
+          auto p = p_;
+          p_ = nullptr;
+          return p;
+        }
+
+        // free resource and set p
+        void reset(pointer p = nullptr) noexcept
+        {
+          // check self-assign
+          if (p_ != p)
+          {
+            T::deleter(p_);
+            p_ = p;
+          }
+        }
+
+        // swap
+        void swap(unique_own &other) const noexcept
+        {
+          std::swap(p_, other.p_);
+        }
+
+        // *cxx-overload-oparator-bool*
+        // as with unique_ptr, must have const to avoid const error
+        explicit operator bool() const noexcept
+        {
+          return p_ != nullptr;
+        }
+
+        // *cxx-overload-oparator-dereference*
+        typename T::value_type& operator*() const noexcept
+        { return *p_; }
+
+      private:
+        pointer p_;
+    };
+
+  template<typename T>
+
+    // *cxx-error*
+    // void swap(unique_own &lhs, unique_own &rhs)
+    // 
+    // okay
+    // void swap(unique_own<T> &lhs, unique_own<T> &rhs)
+    //
+    // okay
+    void swap(const unique_own<T> &lhs, const unique_own<T> &rhs)
+    {
+      lhs.swap(rhs);
+    }
+
+  using unique_own_int = unique_own<pointer_int_trait>;
+
+} // namespace
+
+TEST(SharedPointerOwn, Unique)
+{
+  using namespace cxx_sp_unique_own_version;
+
+  {
+    unique_own_int up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+  }
+
+  {
+    unique_ptr<int> p1(new int(1));
+    unique_ptr<int> p2(new int(2));
+    unique_ptr<int> p3(new int(3));
+    unique_ptr<int> p4(new int(4));
+
+    EXPECT_TRUE(p3);
+
+    p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
+    p3 = std::move(p1);     // p1->null , p2->F3, p3->F1
+    p3 = std::move(p1);     // p1->null , p2->F3, p3->null
+
+    EXPECT_FALSE(p3);
+  }
+
+  {
+    unique_ptr<int> p1(new int(1));
+    unique_ptr<int> p2(new int(2));
+    unique_ptr<int> p3(new int(3));
+
+    p2.reset(p3.release());
+
+    // free int(2) and p3 is null
+    
+    EXPECT_TRUE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_FALSE(p3);
+
+    p3.reset(p1.release());
+
+    // p1 is null
+    EXPECT_FALSE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_TRUE(p3);
+
+    // frees int(1) and set p3 null
+    p3.reset(p1.release());
+
+    // p1 is null
+    EXPECT_FALSE(p1);
+    EXPECT_TRUE(p2);
+    EXPECT_FALSE(p3);
+  }
+
+  {
+    unique_own_int up1{new int(100)};
+    unique_own_int up2{new int(200)};
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 100);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 200);
+
+    swap(up1, up2);
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 200);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 100);
+  }
+}
+
+
+// note that shared internal object has two: T and reference count.
+// 
+// template <typename>
+// class shared_ptr<T>
+// {
+//  copy support
+//  - no move support
+//  operator bool();
+//  T* get();
+//  - no T* release(); shared_ptr do not support this
+//  void reset(T*);
+//  void swap(uniqie_ptr<T> &);
+//  operator *()
+//  operator ->()
+//  use_count()
+// }
+//
+// + non-member swap
+// + self-assign
+
+namespace cxx_sp_shared_own_version
+{
+  template <typename T>
+    class shared_own
+    {
+      public:
+        // ctor and dtor
+        explicit shared_own(T * p = nullptr) noexcept
+          : p_(p), pcount_(new size_t(1))
+        {}
+
+        ~shared_own() noexcept
+        {
+          if (--*pcount_ == 0)
+          {
+            delete p_; 
+            delete pcount_;
+          }
+        }
+
+        // copy support
+        shared_own(const shared_own &other)
+        {
+          p_ = other.p_;
+          pcount_ = other.pcount_;
+          ++*pcount_;
+        }
+
+        shared_own &operator=(const shared_own &other)
+        {
+          // this requires operator==()
+          // if (*this != other)
+          
+          if (this != &other)
+          {
+            if (--*pcount_ == 0)
+            {
+              delete p_;
+              delete pcount_;
+            }
+
+            p_ = other.p_;
+            pcount_ = other.pcount_;
+            ++*pcount_;
+          }
+
+          return *this;
+        }
+
+        // *cxx-overload-operators*
+        T& operator *() const noexcept
+        {
+          return *p_;
+        }
+
+        // *cxx-overload-operators*
+        T* operator ->() const noexcept
+        {
+          return p_;
+        }
+
+        explicit operator bool() const noexcept
+        {
+          return p_ != nullptr;
+        }
+
+        size_t use_count()
+        { return *pcount_; }
+
+        // swap
+        void swap(shared_own &other) noexcept
+        {
+          std::swap(p_, other.p_);
+          std::swap(pcount_, other.pcount_);
+        }
+        
+        // reset
+        // use *cxx-tempprary* to delete lhs.
+        void reset(T* p = nullptr) noexcept
+        {
+          shared_own<T>(p).swap(*this);
+        }
+
+        //
+        T* get() noexcept
+        {
+          return p_;
+        }
+
+      private:
+        T *p_;              // pointee
+        size_t *pcount_;
+    };
+
+  template<typename T>
+    void swap(shared_own<T> &lhs, shared_own<T> &rhs)
+    {
+      lhs.swap(rhs);
+    }
+
+} // namespace
+
+TEST(SharedPointerOwn, Shared)
+{
+  using namespace cxx_sp_shared_own_version;
+
+  {
+    auto p = shared_own<int>(new int{42});
+
+    // p.use++
+    auto q(p);
+
+    // all prints 2
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(*p, 42);
+
+    EXPECT_THAT(q.use_count(), 2);
+    EXPECT_THAT(*q, 42);
+
+    auto r = shared_own<int>(new int{52});
+
+    // q.use++ and r.use--. destroies a object which r pointed. 
+    r = q;
+
+    // all prints 3
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+    EXPECT_THAT(r.use_count(), 3);
+    EXPECT_THAT(*p, 42);
+    EXPECT_THAT(*q, 42);
+    EXPECT_THAT(*r, 42);
+  }
+
+  {
+    shared_own<int> up1{new int(100)};
+    shared_own<int> up2{new int(200)};
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 100);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 200);
+
+    swap(up1, up2);
+
+    EXPECT_TRUE(up1);
+    EXPECT_THAT(*up1, 200);
+
+    EXPECT_TRUE(up2);
+    EXPECT_THAT(*up2, 100);
+  }
 }
 
 
@@ -2175,7 +4760,7 @@ namespace __cxx_check {
 
 void CheckFailed(const char *file, int line, const char *cond,
                           unsigned int v1, unsigned int v2) {
-  printf("Sanitizer CHECK failed: %s:%d %s (%lld, %lld)\n", file, line, cond,
+  printf("Sanitizer CHECK failed: %s:%d %s (%d, %d)\n", file, line, cond,
                                                             v1, v2);
 }
 
@@ -2242,78 +4827,115 @@ TEST(Bool, CheckUsage)
 // ={=========================================================================
 // cxx-stdio
 
-TEST(Stdio, UseInput)
+TEST(Stdio, Input)
 {
-  int i{};
-  double d{};
-  string s{};
-  int i1, i2, i3, i4;
-  
-  // show the same result when use cin. To emulate input:
-  // 10
-  // 4.0
-  // This is a text
-  stringstream iss("10\n4.0\nThis is a text\n");
-  iss >> i;
-  iss >> d;
-  iss >> s;
+  {
+    int i{}; double d{}; string s{};
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This");
+    // show the same result when use cin. To emulate input:
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d; iss >> s;
 
-  // why s is null? 
-  // "If you read token by token, the newline character is not a special
-  // character. In this case, the tokens might contain a newline character."
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
+  }
 
-  stringstream iss2("10\n4.0\nThis is a text\n");
-  iss2 >> i;
-  iss2 >> d;
-  getline(iss2, s);
+  {
+    int i{}; double d{}; string s{};
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "");
+    // show the same result when use cin. To emulate input:
+    stringstream iss("10 4.0 This is a text");
+    iss >> i; iss >> d; iss >> s;
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This");
+  }
+
+  {
+    int i{}; double d{}; string s{};
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    iss.ignore(numeric_limits<streamsize>::max(), '\n');
+    getline(iss, s);
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
+  }
+
+  {
+    int i{}; double d{}; string s{};
+    int i1, i2, i3, i4;
+    stringstream iss("10\n4.0\n1 2 3 4\n");
+    iss >> i; iss >> d;
+    iss >> i1; iss >> i2; iss >> i3; iss >> i4;
+
+    vector<int> coll{i1, i2, i3, i4};
+
+    EXPECT_EQ(i, 10);
+    EXPECT_EQ(d, 4.0);
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+  }
+}
+
+TEST(Stdio, GetLine)
+{
+  {
+    int i{}; double d{}; string s{};
+    // why s is null? 
+    // "If you read token by token, the newline character is not a special
+    // character. In this case, the tokens might contain a newline character."
+
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    getline(iss, s);
+
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "");
+  }
 
   // so use stream-maniplulator ws to remove whitespaces
+  {
+    int i{}; double d{}; string s{};
+    stringstream iss("10\n4.0\nThis is a text\n");
+    iss >> i; iss >> d;
+    getline(iss >> ws, s);
 
-  stringstream iss3("10\n4.0\nThis is a text\n");
-  iss3 >> i;
-  iss3 >> d;
-  getline(iss3 >> ws, s);
+    EXPECT_EQ(i, 10); EXPECT_EQ(d, 4.0); EXPECT_EQ(s, "This is a text");
+  }
 
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This is a text");
+  {
+    string s{};
+    stringstream iss("one|two|three");
+    vector<string> coll{};
 
+    while (getline(iss , s, '|'))
+      coll.push_back(s);
 
-  // also works but more types
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
+  }
 
-  stringstream iss4("10\n4.0\nThis is a text\n");
-  iss4 >> i;
-  iss4 >> d;
-  iss4.ignore(numeric_limits<streamsize>::max(), '\n');
-  getline(iss4, s);
-  
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_EQ(s, "This is a text");
+  // why loop once?
+  {
+    char buf[100];
+    int bufsize = 100;
 
-  // whitespaces
+    stringstream iss("one|two|three");
+    vector<string> coll{};
 
-  stringstream iss5("10\n4.0\n1 2 3 4\n");
-  iss5 >> i;
-  iss5 >> d;
-  iss5 >> i1;
-  iss5 >> i2;
-  iss5 >> i3;
-  iss5 >> i4;
+    while (iss.get(buf, bufsize, '|'))
+      coll.push_back(buf);
 
-  vector<int> coll{i1, i2, i3, i4};
-  
-  EXPECT_EQ(i, 10);
-  EXPECT_EQ(d, 4.0);
-  EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+    EXPECT_THAT(coll, ElementsAre("one"));
+  }
+
+  {
+    char buf[100];
+    int bufsize = 100;
+
+    stringstream iss("one|two|three");
+    vector<string> coll{};
+
+    while (iss.getline(buf, bufsize, '|'))
+      coll.push_back(buf);
+
+    EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
+  }
 }
 
 
@@ -2418,28 +5040,356 @@ TEST(Stdio, Manipulators)
     << setw(40) << "| pathname" << endl;
 }
 
+TEST(Stdio, ManipulatorsFloat)
+{
+  double value = 8.809030;
+  ostringstream os;
+  os << std::fixed << std::setprecision(2) << value;
+  EXPECT_THAT(os.str(), "8.81");
+}
+
 
 // ={=========================================================================
-// cxx-rtti
+// cxx-override
 
-class RttiBase 
+namespace cxx_override
 {
-  public:
-    // to make it polymorphic
-    ~RttiBase() {}
+  namespace no_override
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
 
-  private:
-    int id_;
-};
+        virtual int get_value()
+        { return base_; }
 
-class RttiDerived : public RttiBase 
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        virtual int get_value(int value)
+        { 
+          (void)value;
+          return derived_; 
+        };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_1)
 {
-  private:
-    int value_;
-};
+  using namespace cxx_override::no_override;
+
+  // No override since it do not meet *cxx-override-condition* Hence no vtable
+  // update and base version called.
+  {
+    Derived derived;
+    Base* pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 10);
+  }
+
+  // cxx.cpp: In member function ‘virtual void Override_Condition_Test::TestBody()’:
+  // cxx.cpp:4285:34: error: no matching function for call to ‘cxx_override::no_override::Derived::get_value()’
+  //      EXPECT_THAT(pbase->get_value(), 20);
+  //
+  // Effectively defines a new function in the derived, inner scope, name found
+  // and stops lookup. so hide the name in the base in *cxx-name-lookup* 
+  //
+  // {
+  //   Derived derived;
+  //
+  //   // see Derived
+  //   Derived* pbase = &derived;
+  //
+  //   EXPECT_THAT(pbase->get_value(), 20);
+  // }
+}
+
+namespace cxx_override
+{
+  namespace no_virtual
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_2)
+{
+  using namespace cxx_override::no_virtual;
+
+  // No override happens since there is no virtual used.
+  {
+    Derived derived;
+    Base* pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 10);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pderived = &derived;
+  
+    EXPECT_THAT(pderived->get_value(), 20);
+  }
+}
+
+
+namespace cxx_override
+{
+  namespace with_virtual
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+TEST(Override, Condition_3)
+{
+  using namespace cxx_override::with_virtual;
+
+  {
+    Derived derived;
+    Base* pbase = &derived;
+
+    // now override works
+    EXPECT_THAT(pbase->get_value(), 20);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pderived = &derived;
+  
+    EXPECT_THAT(pderived->get_value(), 20);
+  }
+}
+
+
+namespace cxx_override
+{
+  namespace with_virtual_and_private
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        virtual int get_value()
+        { return base_; }
+
+      private:
+        int base_;
+    };
+
+    class Derived: private Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        int get_value()
+        { return derived_; };
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+// TEST(Override, Condition_4)
+// {
+//   using namespace cxx_override::with_virtual_and_private;
+// 
+//   {
+//     Derived derived;
+// 
+//     // *cxx-error*
+//     // cxx.cpp:4864:20: error: ‘cxx_override::with_virtual_and_private::Base’ is an inaccessible base of ‘cxx_override::with_virtual_and_private::Derived’
+//     //
+//     //      Base* pbase = &derived;
+//     //                     ^
+//     // means that *cxx-override* must use public inheritance
+// 
+//     Base* pbase = &derived;
+// 
+//     // now override works
+//     EXPECT_THAT(pbase->get_value(), 20);
+//   }
+// 
+//   {
+//     Derived derived;
+//   
+//     // see Derived
+//     Derived* pderived = &derived;
+//   
+//     EXPECT_THAT(pderived->get_value(), 20);
+//   }
+// }
+
+
+// cxx-override when not implemented pure virtual member function
+
+namespace cxx_override
+{
+  namespace no_pure
+  {
+    class Base
+    {
+      public:
+        Base() : base_(10) {}
+
+        virtual int get_value() = 0;
+
+      private:
+        int base_;
+    };
+
+    class Derived: public Base
+    {
+      public:
+        Derived() : derived_(20) {} 
+
+        virtual int get_value()
+        { 
+          return derived_; 
+        };
+
+      private:
+        int derived_;
+    };
+
+    class DerivedNoPure: public Base
+    {
+      public:
+        DerivedNoPure() : derived_(20) {} 
+
+        // without this, compile fails and with this, will see link error in the
+        // end. 
+        // gcc (Debian 4.9.2-10) 4.9.2
+        // : undefined reference to `vtable for cxx_override::no_pure::DerivedNoPure'
+        // collect2: error: ld returned 1 exit status
+
+        virtual int get_value();
+
+      private:
+        int derived_;
+    };
+  } // namespace
+} // namespace
+
+
+TEST(Override, PureVirtual)
+{
+  using namespace cxx_override::no_pure;
+
+  {
+    Derived derived;
+    Base* pbase = &derived;
+    EXPECT_THAT(pbase->get_value(), 20);
+  }
+
+  {
+    Derived derived;
+  
+    // see Derived
+    Derived* pderived = &derived;
+  
+    EXPECT_THAT(pderived->get_value(), 20);
+  }
+
+  // {
+  //   DerivedNoPure derived;
+  
+  //   // see Derived
+  //   DerivedNoPure* pderived = &derived;
+  
+  //   EXPECT_THAT(pderived->get_value(), 20);
+  // }
+}
+
+
+// ={=========================================================================
+// cxx-rtti cxx-cast
+
+namespace cxx_rtti
+{
+
+  class RttiBase 
+  {
+    public:
+      // to make it polymorphic
+      // ~RttiBase() {}
+      virtual ~RttiBase() {}
+
+    private:
+      int id_;
+  };
+
+  class RttiDerived : public RttiBase 
+  {
+    private:
+      int value_;
+  };
+
+} // namespace
 
 TEST(Rtti, UseTypeid)
 {
+  using namespace cxx_rtti;
+
   RttiBase b, bb;
   RttiDerived d;
   bool result{};
@@ -2454,20 +5404,59 @@ TEST(Rtti, UseTypeid)
   EXPECT_EQ(result, true);
 }
 
-TEST(Rtti, UseDynamicCast)
+TEST(Rtti, DynamicCast)
 {
-  RttiDerived d;
+  using namespace cxx_rtti;
 
-  auto result = dynamic_cast<RttiBase*>(&d);
-  EXPECT_TRUE(result != NULL);
-
-  if (RttiBase *bp = dynamic_cast<RttiBase*>(&d))
   {
-    (void)bp;
-    cout << "derived is a subclass of base" << endl;
+    RttiDerived d;
+
+    auto result = dynamic_cast<RttiBase*>(&d);
+    EXPECT_TRUE(result != NULL);
+
+    RttiBase *bp = dynamic_cast<RttiBase*>(&d);
+
+    // "derived is a subclass of base"
+    EXPECT_THAT(bp, Ne(nullptr));
   }
-  else
-    cout << "derived is NOT a subclass of base" << endl;
+
+  {
+    try {
+      RttiDerived dp1;
+
+      // upcast
+      RttiBase* pbase1 = new RttiDerived;
+
+      RttiBase* pbase2 = new RttiBase;
+
+      RttiBase* pbase3;
+      RttiDerived* pderived;
+
+      // derived to derived, okay.
+      //
+      // *cxx-dtor-non-virtual-destruction-problem* when no virtual keyword in
+      // class definition
+      //
+      // cxx.cpp:4138:51: error: cannot dynamic_cast ‘pbase1’ (of type ‘class cxx_rtti::RttiBase*’) to type ‘class cxx_rtti::RttiDerived*’ (source type is not polymorphic)
+      //        pderived = dynamic_cast<RttiDerived*>(pbase1);
+
+      pderived = dynamic_cast<RttiDerived*>(pbase1);
+      EXPECT_THAT(pderived, Ne(nullptr));
+
+      // downcast from base to derived, fails since pbase2 is not complete objedct
+      pderived = dynamic_cast<RttiDerived*>(pbase2);
+      EXPECT_THAT(pderived, nullptr);
+
+      // upcast from derived to base
+
+      pbase3 = dynamic_cast<RttiBase*>(pbase1);
+      EXPECT_THAT(pbase3, Ne(nullptr));
+
+      pbase3 = dynamic_cast<RttiBase*>(&dp1);
+      EXPECT_THAT(pbase3, Ne(nullptr));
+
+    } catch (exception& e) {cout << "Exception: " << e.what();}
+  }
 }
 
 
@@ -2476,7 +5465,7 @@ TEST(Rtti, UseDynamicCast)
 
 // 14.1 The Regex Match and Search Interface
 
-TEST(Regex, UseMatch)
+TEST(Regex, Match)
 {
   // find XML/HTML tagged value (using fefault syntax)
   regex reg1("<.*>.*</.*>");
@@ -2524,6 +5513,135 @@ TEST(Regex, UseMatch)
 }
 
 
+TEST(Regex, MatchFound)
+{
+  string data{"XML tag: <tag-name>the value</tag-name>."};
+
+  {
+    regex rx(R"(<([\w-]+)>(.*)<(\/[\w-]+)>)");
+
+    // for returned details of the match
+    std::smatch m;
+
+    auto found =  regex_search(data, m, rx);
+    EXPECT_TRUE(found);
+  }
+
+  {
+    // ok
+    regex rx("<(.*)>(.*)</(\\1)>");
+
+    // for returned details of the match
+    std::smatch m;
+
+    auto found =  regex_search(data, m, rx);
+    EXPECT_TRUE(found);
+  }
+}
+
+
+// CXXSLR-14.2 Dealing with Subexpressions
+
+TEST(Regex, MatchResult)
+{
+  string data{"XML tag: <tag-name>the value</tag-name>."};
+
+  // ok
+  regex rx(R"(<([\w-]+)>(.*)<\/([\w-]+)>)");
+  
+  // ok
+  // regex rx("<(.*)>(.*)</(\\1)>");
+
+  // for returned details of the match
+  std::smatch m;
+
+  auto found =  regex_search(data, m, rx);
+  EXPECT_TRUE(found);
+
+  if (found)
+  {
+    // Regex: <(.*)>(.*)</(\1)>
+    // XML tag: <tag-name>the value</tag-name>.
+    //           | m[1] | |  m[2] |  | m[3] | |
+    // | prefix|             m[0]            | suffix
+    //
+    // In general, the match_results object contains:
+    //
+    //  o A sub_match object m[0] for all the matched characters
+    //
+    //  o A prefix(), a sub_match object that represents all characters before the
+    //  first matched character
+    //
+    //  o A suffix(), a sub_match object that represents all characters after the
+    //  last matched character
+
+    EXPECT_THAT(m.empty(), false);
+
+    // size() yields the number of sub_match objects (including m[0]).
+
+    EXPECT_THAT(m.size(), 4);
+
+    // member function str() to yield the matched string as a whole (calling
+    // str() or str(0)) or the nth matched substring (calling str(n)), which is
+    // empty if no matched substring exists (thus, passing an n greater than
+    // size() is valid)
+    // that is m[0]
+
+    EXPECT_THAT(m.str(), "<tag-name>the value</tag-name>");
+
+    // member function length() to yield the length of the matched string as a
+    // whole (calling length() or length(0)) or the length of the nth matched
+    // substring (calling length(n)), which is 0 if no matched substring exists
+    // (thus, passing an n greater than size() is valid)
+
+    EXPECT_THAT(m.length(), 30);
+
+    // member function position() to yield the position of the matched string as
+    // a whole (calling position() or position(0)) or the position of the nth
+    // matched substring (calling length(n))
+
+    EXPECT_THAT(m.position(),9);
+    EXPECT_THAT(m.prefix().str(), "XML tag: ");
+    EXPECT_THAT(m.suffix().str(), ".");
+
+    EXPECT_THAT(m[1].str(), "tag-name");
+    EXPECT_THAT(m.str(1), "tag-name");
+    EXPECT_THAT(m.position(1), 10);
+
+    EXPECT_THAT(m[2].str(), "the value");
+    EXPECT_THAT(m.str(2), "the value");
+    EXPECT_THAT(m.position(2), 19);
+
+    EXPECT_THAT(m[3].str(), "tag-name");
+    EXPECT_THAT(m.str(3), "tag-name");
+    EXPECT_THAT(m.position(3), 30);
+
+    // use iterator
+
+    ostringstream os;
+
+    for (auto pos = m.begin(); pos != m.end(); ++pos)
+    {
+      os << *pos << ", " << pos->length() << endl;
+    }
+
+    // works
+    // char expected[] = "<tag-name>the value</tag-name>, 30\n"
+    //   "tag-name, 8\n"
+    //   "the value, 9\n"
+    //   "tag-name, 8\n";
+    // EXPECT_THAT(os.str(), expected);
+
+    // works
+    // string expected("<tag-name>the value</tag-name>, 30\ntag-name, 8\nthe value, 9\ntag-name, 8\n");
+    // EXPECT_THAT(os.str(), expected);
+
+    EXPECT_THAT(os.str(), 
+        "<tag-name>the value</tag-name>, 30\ntag-name, 8\nthe value, 9\ntag-name, 8\n");
+  }
+}
+
+
 // ={=========================================================================
 // cxx-bit cxx-numeric-limit
 //
@@ -2537,6 +5655,199 @@ TEST(Regex, UseMatch)
 // This means abs() has no effect when fed the largest negative number. So bit
 // representation is 'agnostic' to whether it's signed or unsigned.
 
+TEST(Bit, BitSetCtor)
+{
+  // cxx-bitset-code
+  //
+  // usr/include/c++/4.9/bitset/
+  //
+  //       /// Initial bits bitwise-copied from a single word (others set to zero).
+  // #if __cplusplus >= 201103L
+  //       constexpr bitset(unsigned long long __val) noexcept
+  //       : _Base(_Sanitize_val<_Nb>::_S_do_sanitize_val(__val)) { }
+  // #else
+  //       bitset(unsigned long __val)
+  //       : _Base(__val)
+  //       { _M_do_sanitize(); }
+  // #endif
+  //
+  // {
+  //   int value = 1024;
+  //
+  //   // warning: narrowing conversion of ‘value’ from ‘int’ to ‘long long unsigned int’ inside { } [-Wnarrowing]
+  //   bitset<32> bitsetx{value};
+  //   EXPECT_EQ(bitsetx.to_string(), "00000000000000000000010000000000");
+  // }
+
+  {
+    unsigned int value = 1024;
+    bitset<32> coll{value};
+    EXPECT_EQ(coll.to_string(), "00000000000000000000010000000000");
+  }
+
+  // note: can use variable to set size of bitset.
+  {
+    const int x = 40;
+    bitset<x> coll(1U);
+    EXPECT_THAT(coll.size(), 40);
+  }
+}
+
+
+// bool vector < bitset and bit array < bool array
+
+TEST(Bit, SizeConsideration)
+{
+  const int size{1000};
+
+  vector<bool> coll_bool_vector(size, 1);
+  bitset<size> coll_bitset(1U);
+  int coll_bit_array[size/32+1];
+  bool coll_bool_array[size];
+
+  EXPECT_THAT(coll_bool_vector.size(), size);
+
+#if __GNUC__ && __x86_64__
+  EXPECT_THAT(sizeof(coll_bool_vector), 72);   // 64 bits
+#else
+  EXPECT_THAT(sizeof(coll_bool_vector), 1);   // 32 bits, need to update
+#endif
+
+  EXPECT_THAT(coll_bitset.size(), size);
+#if __GNUC__ && __x86_64__
+  EXPECT_THAT(sizeof(coll_bitset), 128);     // 64 bits
+#else
+  EXPECT_THAT(sizeof(coll_bitset), 1);     // 32 bits
+#endif
+
+  // 1000/32 = 31, 31+1 = 32, 32*4 = 128
+  EXPECT_THAT(sizeof(coll_bit_array), 128);
+
+  EXPECT_THAT(sizeof(coll_bool_array), size);
+}
+
+
+TEST(Bit, RightShift)
+{
+  // fail
+  {
+    // "01111111111111111111111111111111" is expected but gets
+    // "11111111111111111111111111111111"
+
+    unsigned int int_max_1 = (~((int)0)) >> 1;
+    int int_max_2 = (~((int)0)) >> 1;
+    EXPECT_EQ(int_max_1, numeric_limits<unsigned int>::max());
+    EXPECT_NE(int_max_1, numeric_limits<int>::max());
+
+    // this is wrong
+    std::bitset<32> coll{int_max_1};
+    EXPECT_EQ(coll.to_string(), "11111111111111111111111111111111");
+
+    EXPECT_EQ(int_max_2, numeric_limits<unsigned int>::max());
+    EXPECT_NE(int_max_2, numeric_limits<int>::max());
+  }
+
+  // okay
+  {
+    unsigned int uint_max_1 = (((unsigned)~0) >> 1);
+    unsigned int uint_max_2 = ((unsigned)~0 >> 1);    // okay, since cast is higher
+    EXPECT_EQ(uint_max_1, numeric_limits<int>::max());
+    EXPECT_EQ(uint_max_2, numeric_limits<int>::max());
+  }
+
+  // okay
+  {
+    int uint_max_1 = (((unsigned)~0) >> 1);
+    int uint_max_2 = ((unsigned)~0 >> 1);    // okay, since cast is higher
+    EXPECT_EQ(uint_max_1, numeric_limits<int>::max());
+    EXPECT_EQ(uint_max_2, numeric_limits<int>::max());
+  }
+
+  // signed int and unsigned int
+  {
+    // >>> 2**31-1
+    // 2147483647
+    EXPECT_EQ(2147483647, numeric_limits<int>::max());
+
+    // >>> 2**32-1
+    // 4294967295
+    EXPECT_EQ(4294967295, numeric_limits<unsigned int>::max());
+  }
+
+  // okay
+  {
+    // input3 works since the result is `independant` but assigned to unsigned.
+    unsigned int input = ~0;
+    input >>=1;
+    EXPECT_EQ(input, numeric_limits<int>::max());
+  }
+
+  {
+    unsigned int uint_max = ~((unsigned int)0);
+
+    // cxx.cpp:3195:56: warning: left shift count >= width of type
+    // unsigned int uint_max_two = (((unsigned int)1U) << 32) -1;
+
+    int int_max = uint_max >> 1;
+    int int_min = int_max + 1;
+
+    bitset<32> bitsetx{(unsigned int)int_max};
+    EXPECT_EQ(bitsetx.to_string(), "01111111111111111111111111111111");
+
+    EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
+
+    EXPECT_EQ(int_max, numeric_limits<int>::max());
+    EXPECT_EQ(int_min, numeric_limits<int>::min());
+  }
+
+  // why is that different? the main point is *cxx-shift-right-shift*
+  //
+  // 1. when use `bitwise not`, the size and signness is `independant`. The
+  // result `depends on the other operand` and done at `compile-time`. 
+  //
+  // so ~(0) makes "111...11" which don't have size and signness.
+  //
+  // 2. The signess must be known to compiler when do shift to have guaranteed
+  // result. Since do not know signness, use `signed by default` and gets 1
+  // for MSB when right-shift
+  //
+  // *cxx-shift-right-shift* 
+  // the point is that must use `unsigned` to do `right-shift` 
+  // in order to have guaranteed 0 values. 
+  //
+  // so (~(0)>>1) makes "111...11"
+  //
+  // This is why glibc macro uses unsigned type which set size and signness.
+  // from glibc and see exercise 2-1 for examples.
+  //
+  // # ifndef ULONG_MAX
+  // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
+  // # endif
+  // # ifndef LONG_MAX
+  // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
+  // # endif
+
+  // left-shift do not matter
+  {
+    unsigned int value = (1 << 10);
+    bitset<32> coll{value};
+    EXPECT_EQ(coll.to_string(), "00000000000000000000010000000000");
+  }
+
+  {
+    // get bits which has [5, 0]th bis on. e.g. 0001.1111
+    // in this case, do not need to specify unsigned.
+
+    int value{};
+
+    const int POS_TO_TURN_ON=5;
+    value =  ~(~0 << POS_TO_TURN_ON);
+    EXPECT_THAT(value, 0x1F);
+  }
+}
+
+
+// *cxx-twos-complement*
 TEST(Bit, MaxNegagiveIsSpecial)
 {
   // get max negative, ???_MIN
@@ -2551,105 +5862,14 @@ TEST(Bit, MaxNegagiveIsSpecial)
   EXPECT_EQ(bitset_negate_min.to_string(), "10000000000000000000000000000000");
 }
 
-TEST(Bit, Tricks)
-{
-  // get bits which has [5, 0]th bis on. e.g. 0001.1111
-  // in this case, do not need to specify unsigned.
 
-  int value{};
-
-  const int POS_TO_TURN_ON=5;
-  value =  ~(~0 << POS_TO_TURN_ON);
-  EXPECT_THAT(value, 0x1F);
-}
-
-
-TEST(Bit, RightShift)
-{
-  {
-    // fails
-    // unsigned int int_max = (~((int)0)) >> 1;
-    // int int_max = (~((int)0)) >> 1;
-    // 
-    // unsigned int val = ((~0) >> 1);
-    
-    // okays
-    // unsigned int val = (((unsigned)~0) >> 1);
-    // unsigned int val = ((unsigned)~0 >> 1);    // okay, since cast is higher
-    //
-    // int int_max = (~((unsigned int)0)) >> 1;
-    // unsigned int int_max = (~((unsigned int)0)) >> 1;
-
-    unsigned int uint_max = ~((unsigned int)0);
-    unsigned int uint_max_two = (1U << 32) -1;
-
-    int int_max = uint_max >> 1;
-    int int_min = int_max + 1;
-
-    bitset<32> bitsetx{int_max};
-    EXPECT_EQ(bitsetx.to_string(), "01111111111111111111111111111111");
-
-    EXPECT_EQ(uint_max, numeric_limits<unsigned int>::max());
-    EXPECT_EQ(uint_max_two, numeric_limits<unsigned int>::max());
-
-    EXPECT_EQ(int_max, numeric_limits<int>::max());
-    EXPECT_EQ(int_min, numeric_limits<int>::min());
-  }
-
-  // why is that different?
-  {
-    // 1. when use `bitwise not`, the size and signness is `independant`. The
-    // result `depends on the other operand` and done at `compile-time`. 
-    //
-    // so ~(0) makes "111...11" which don't have size and signness.
-    //
-    // 2. The signess must be known to compiler when do shift to have guaranteed
-    // result. Since do not know signness, use `signed by default` and gets 1
-    // for MSB when right-shift
-    //
-    // *cxx-shift-right-shift* 
-    // the point is that must use `unsigned` to do `right-shift` 
-    // in order to have guaranteed 0 values. 
-    //
-    // so (~(0)>>1) makes "111...11"
-    //
-    // This is why glibc macro uses unsigned type which set size and signness.
-    // from glibc and see exercise 2-1 for examples.
-    //
-    // # ifndef ULONG_MAX
-    // #  define ULONG_MAX ((unsigned long int) ~(unsigned long int) 0)
-    // # endif
-    // # ifndef LONG_MAX
-    // #  define LONG_MAX ((long int) (ULONG_MAX >> 1))
-    // # endif
-
-    // input3 works since the result is `independant` but assigned to unsigned.
-    // input1 version is shorter version of this.
-
-    unsigned int input1 = ~((unsigned int)0)>>1;
-    unsigned int input2 = (~(0)>>1);
-    unsigned int input3 = ~0;
-    input3 >>=1;
-
-    std::bitset<32> bset1{input1};
-    EXPECT_EQ(bset1.to_string(), "01111111111111111111111111111111");
-
-    // this is wrong
-    std::bitset<32> bset2{input2};
-    EXPECT_EQ(bset2.to_string(), "11111111111111111111111111111111");
-
-    std::bitset<32> bset3{input3};
-    EXPECT_EQ(bset3.to_string(), "01111111111111111111111111111111");
-  }
-}
-
-// Programming Pearl, C 01, Q 02
+// Programming Pearl, Column 01, Q 02
 // How would you implement bit vectors using bitwise logical operations?
 //
 // C and old C++ programs usually use type long for arrays of bits and
 // manipulate them with the bit operators, such as &, |, and ~.
 
-namespace bit_vectors 
+namespace bit_set_array 
 {
   const unsigned int BITSPERWORD = 32;
   const unsigned int SHIFT = 5;
@@ -2697,9 +5917,11 @@ namespace bit_vectors
 
 TEST(Bit, BitVectors)
 {
-  using namespace bit_vectors;
+  using namespace bit_set_array;
 
   auto array_size = sizeof(a)/sizeof(a[0]);
+
+  EXPECT_THAT(array_size, 2);
 
   set_bit(35);
   set_bit(45);
@@ -3006,7 +6228,7 @@ TEST(IntegerDivision, FahrenheitCelsius_Float)
 // value: 450 perce:   0
 // value: 600 perce: 100
 
-TEST(IntegerDivision, Precentage)
+TEST(IntegerDivision, Percentage)
 {
   int total{600}, perce{};
   vector<int> values{10,40,100,200,250,356,450,600};
@@ -3037,21 +6259,57 @@ TEST(IntegerDivision, Precentage)
 }
 
 
-// ={=========================================================================
-// cxx-shift
+// cxx-shift cxx-floor cxx-ceil
 
-TEST(Shift, Precentage)
+TEST(IntegerDivision, Shift)
 {
   int value = 9;
 
-  cout << 
-    "division: " << (value/2) << endl <<  
-    "shift   : " << (value>>1) << endl;
+  EXPECT_THAT(value/2, 4);
+  EXPECT_THAT(value>>1, 4);
+
+  // FLOOR(3)
+  //
+  // double floor(double x);
+  // float floorf(float x);
+  // long double floorl(long double x);
+  //
+  // Link with -lm.
+  //
+  // DESCRIPTION
+  // These functions return the largest integral value that is not greater than
+  // x.
+  //
+  // For example, floor(0.5) is 0.0, and floor(-0.5) is -1.0.
+  //
+  // CEIL(3) 
+  //
+  // DESCRIPTION These functions return the smallest integral value that is not
+  // less than x.
+  //
+  // For example, ceil(0.5) is 1.0, and ceil(-0.5) is 0.0.
+  //
+  // ROUND(3)
+  //
+  // DESCRIPTION
+  // These  functions  round  x to the nearest integer, but round halfway cases
+  // away from zero (regardless of the current rounding direction, see fenv(3)),
+  // instead of to the nearest even integer like rint(3).
+  //
+  // For example, round(0.5) is 1.0, and round(-0.5) is -1.0.
 
   float result = value/2.0;
-  cout << 
-    "ceil  : " << ceil(result) << endl <<
-    "floor : " << floor(result) << endl;
+
+  EXPECT_THAT(ceil(result), 5);
+  EXPECT_THAT(floor(result), 4);
+  EXPECT_THAT(round(result), 5);
+
+  EXPECT_THAT(round(0.4), 0);
+  EXPECT_THAT(round(0.5), 1);
+  EXPECT_THAT(round(0.6), 1);
+
+  EXPECT_THAT(floor(-2.1), -3);
+  EXPECT_THAT(ceil(-2.1), -2);
 }
 
 
@@ -3146,6 +6404,7 @@ namespace cxx_template
     return 0;
   }
 
+  // *cxx-array*
   template <unsigned N, unsigned M>
     int compare(const char (&p1) [N], const char (&p2) [M])
     {
@@ -3224,7 +6483,7 @@ TEST(Template, Specialisation)
 
 namespace cxx_template_default
 {
-  // `This shows how function-object is useful` *cpp-functor*
+  // `This shows how function-object is useful` *cxx-functor*
   // default template argument, the 'type' of callable 
   // default function argument, F()
 
@@ -3237,13 +6496,27 @@ namespace cxx_template_default
     }
 } // namespace
 
-TEST(Template, FunctionWithDefaultArg)
+TEST(Template, FunctionWithDefault)
 {
   using namespace cxx_template_default;
 
-  EXPECT_THAT(compare(1, 2), -1);
-  EXPECT_THAT(compare(2, 1), 1);
-  EXPECT_THAT(compare(2, 2), 0);
+  {
+    // 1 < 2
+    EXPECT_THAT(compare(1, 2), -1);
+    // 2 > 1
+    EXPECT_THAT(compare(2, 1), 1);
+    // 2 == 2
+    EXPECT_THAT(compare(2, 2), 0);
+  }
+
+  {
+    // 1 < 2
+    EXPECT_THAT(compare(1, 2, greater<int>()), 1);
+    // 2 > 1
+    EXPECT_THAT(compare(2, 1, greater<int>()), -1);
+    // 2 == 2
+    EXPECT_THAT(compare(2, 2, greater<int>()), 0);
+  }
 
   vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
   EXPECT_THAT(compare(coll1, coll2), -1);
@@ -3295,6 +6568,676 @@ TEST(Template, MemberTemplate)
   {
     unique_ptr<int, DebugDelete> pi(new int, DebugDelete());
     unique_ptr<string, DebugDelete> ps(new string, DebugDelete());
+  }
+}
+
+
+namespace cxx_template_return_type
+{
+  // use cxx-iter-trait but limited when T is iterator
+  template <typename T>
+    typename std::iterator_traits<T>::value_type &
+    return_element_01(T first, T last)
+    {
+      (void)last;
+      return *first;
+    }
+
+  template <typename T>
+    auto return_element_02(T first, T last) 
+    -> typename std::iterator_traits<T>::reference
+    {
+      (void)last;
+      return *first;
+    }
+
+  // use cxx-trailing-return before cxx-14
+  template <typename T>
+    auto return_element_03(T first, T last) 
+    -> decltype(*first)
+    {
+      (void)last;
+      return *first;
+    }
+
+  // : error: ‘first’ was not declared in this scope
+  // template <typename Iterator>
+  // decltype(*first) return_element_04(Iterator first, Iterator last)
+  // {
+  //   return *first;
+  // }
+
+  // 1.3. C++ Templates The Complete Guide Second Edition
+  // 1.3.2 Deducing the Return Type
+
+  template <typename T>
+    T max_01(T const& a, T const& b)
+    {
+      return b < a ? a : b;
+    }
+
+  // declare that the return type is derived from what operator?: yields:
+
+  template <typename T1, typename T2>
+    auto max_02(T1 a, T2 b) -> decltype(b < a ? a : b )
+    {
+      return b < a ? a : b;
+    }
+
+  // *cxx-14*
+  // Since C++14, this is possible by simply not declaring any return type (you
+  // still have to declare the return type to be auto):
+  //
+  // template <typename T1, typename T2>
+  //   auto max_02(T1 a, T2 b)
+  //   {
+  //     return b < a ? a : b;
+  //   }
+  //
+  // indicates that the actual return type must be deduced from the return
+  // statements in the function body. In fact, using true as the condition for
+  // operator?: in the declaration is enough:
+  //
+  // Note that an initialization of type auto always decays. This also applies
+  // to return values when the return type is just auto.
+
+  template <typename T1, typename T2>
+    auto max_03(T1 a, T2 b) -> decltype(true ? a : b )
+    {
+      return b < a ? a : b;
+    }
+
+  // *cxx-type-trait-decay* *cxx-decay*
+  // However, in any case this definition has a significant drawback: It might
+  // happen that the return type is a reference type, because under some
+  // conditions T might be a reference. For this reason you should return the
+  // type decayed from T, which looks as follows:
+  //
+  // o Yields the decayed type of T.
+  // o In detail, for type T the following transformations are performed:
+  // – First, remove_reference (see Section D.4 on page 729) is applied.
+  //
+  // xxx_t is the same as xxx<T>::type and which is *cxx-14*
+  //
+  // decay_t<int const&> // yields int
+  // decay_t<int const[4]> // yields int const*
+  // void foo();
+  // decay_t<decltype(foo)> // yields void(*)()
+
+  template <typename T1, typename T2>
+    auto max_04(T1 a, T2 b) 
+    -> typename std::decay<decltype(true ? a : b )>::type
+    {
+      return b < a ? a : b;
+    }
+
+  // cxx-error
+  // template <typename T1, typename T2>
+  //   typename std::decay<decltype(true ? a : b )>::type 
+  //   max_05(T1 a, T2 b) 
+  //   {
+  //     return b < a ? a : b;
+  //   }
+
+  // *cxx-14*
+  // However, since C++14 you can simplify the usage of traits like this by
+  // appending _t to the trait name and skipping typename and ::type
+
+  // template <typename T1, typename T2>
+  //   auto max_05(T1 a, T2 b) 
+  //   -> std::decay_t<decltype(true ? a : b )>
+  //   {
+  //     return b < a ? a : b;
+  //   }
+
+  // *cxx-type-trait-commontype*
+  // CXXSLR-5.4.1 Purpose of Type Traits
+  // For example, the expression std::common_type<T1,T2>::type yields int if
+  // both arguments are int, long, if one is int and the other is long, or
+  // std::string if one is a string and the other is a string literal (type
+  // const char*).
+  //
+  // Again, note that std::common_type<> decays so that the return value can’t
+  // become a reference.
+
+  template <typename T1, typename T2>
+    typename std::common_type<T1, T2>::type 
+    max_06(T1 a, T2 b)
+    {
+      return b < a ? a : b;
+    }
+
+  // "In fact, using true as the condition for operator?: in the declaration is
+  // enough:". Does it mean it ALWAYS picks up type of a?
+
+  template <typename T1, typename T2>
+    auto which_type(T1 a, T2 b) -> decltype(true ? a : b )
+    {
+      return a ? a : b;
+    }
+} // namespace
+
+
+TEST(Template, ReturnType)
+{
+  using namespace cxx_template_return_type;
+
+  {
+    vector<int> coll{3,4,5,6};
+
+    EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
+    EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
+    EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
+  }
+
+  {
+    max_01(4, 5);
+
+    // cxx.cpp:4622:16: error: no matching function for call to ‘max_01(int, double)’
+    //    max_01(4, 7.2);
+    //                 ^
+    // cxx.cpp:4622:16: note: candidate is:
+    // cxx.cpp:4591:7: note: template<class T> T cxx_template_return_type::max_01(const T&, const T&)
+    //      T max_01(T const& a, T const& b)
+    //        ^
+    // cxx.cpp:4591:7: note:   template argument deduction/substitution failed:
+    // cxx.cpp:4622:16: note:   deduced conflicting types for parameter ‘const T’ (‘int’ and ‘double’)
+    //    max_01(4, 7.2);
+    //                 ^
+    // max_01(4, 7.2);
+  }
+  {
+    auto result = max_02(4, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+
+  // WHY NOT the result type is int type?
+  // 1.3. C++ Templates The Complete Guide Second Edition
+  // but generally produce an intuitively expected result (e.g., if a and b have
+  // different arithmetic types, a common arithmetic type is found for the
+  // result).
+
+  {
+    auto result = max_02(8, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+  {
+    auto result = max_03(8, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+  {
+    auto result = max_04(8, 7.2);
+    EXPECT_THAT(typeid(result).name(), typeid(double).name());
+  }
+
+  // {
+  //   std::string s{"string"};
+  //   auto result = which_type(s, 0);
+  //   EXPECT_THAT(typeid(result).name(), typeid(std::string).name());
+  // }
+}
+
+namespace cxx_template_reference
+{
+  template <typename T>
+    void foo(T value)
+    {
+      ++value;
+    }
+} // namespace
+
+TEST(Template, Reference)
+{
+  using namespace cxx_template_reference;
+
+  int value{10};
+
+  foo(value);
+  EXPECT_THAT(value, 10);
+
+  foo(std::ref(value));
+  EXPECT_THAT(value, 11);
+}
+
+namespace cxx_template_overload
+{
+  class Mine 
+  {
+    private:
+      string name;
+
+    public:
+      Mine(): name(string("mine")) 
+      { // cout << "mine class" << endl; 
+      }
+
+      const string& get() { return name; }
+  };
+
+  ostringstream& operator<<(ostringstream& os, Mine mine) 
+  { 
+    os << mine.get();
+    return os;
+  }
+
+  template <typename T> string debug_rep(const T &t)
+  {
+    ostringstream ret;
+    ret << t;
+    return ret.str();
+  }
+} // namespace
+
+TEST(Template, Overload)
+{
+  using namespace cxx_template_overload;
+
+  Mine mine;
+  ostringstream os;
+
+  // string str("this is string");
+  // cout << debug_rep(str) << endl;
+
+  os << debug_rep(mine) << endl;   
+  EXPECT_THAT(os.str(), "mine\n");
+}
+
+namespace cxx_template_friend
+{
+  // basics/stack1.hpp
+
+  template <typename T>
+    class Stack
+    {
+      public:
+        void push(T const& elem)
+        {
+          elems_.push_back(elem);
+        }
+
+        void pop()
+        {
+          if (elems_.empty())
+            throw std::runtime_error("coll is empty");
+
+          elems_.pop_back();
+        }
+
+        T const& top() const
+        {
+          if (elems_.empty())
+            throw std::runtime_error("coll is empty");
+
+          return elems_.back();
+        }
+
+        bool empty() const
+        {
+          return elems_.empty();
+        }
+
+      private:
+        std::vector<T> elems_;
+    };
+
+  // To show how to define operator<< for template *cxx-overload-operator*
+  //
+  // C++ Templates The Complete Guide Second Edition
+  // 2.4 Friends
+  //
+  // However, when trying to declare the friend function and define it
+  // afterwards, things become more complicated. In fact, we have two options:
+  // 1. We can implicitly declare a new function template, which must use a
+  // different template parameter, such as U:
+
+  template<typename T>
+  ostream& operator<<(ostream& os, Stack<T> const& s)
+  {
+    cout << "stack's top : " << s.top() << endl;
+    return os;
+  }
+
+} // namespace
+
+TEST(Template, Friend)
+{
+  using namespace cxx_template_friend;
+
+  Stack<int> si;
+
+  si.push(1); si.push(2); si.push(3);
+  EXPECT_THAT(si.top(), 3);
+
+  cout << si;
+}
+
+
+// ={=========================================================================
+// cxx-template-forward
+
+namespace cxx_template
+{
+
+template <typename F, typename T1, typename T2>
+void flip(F f, T1 param1, T2 param2)
+{
+  f(param2, param1);
+}
+
+// use *cxx-rvalue-reference* to preserve template parameter:
+//
+// A function parameter that is an rvalue reference to a template parameter
+// `preserves` constness and lvalue/rvalue property of its corresponding
+// argument.
+
+template <typename F, typename T1, typename T2>
+void flip_reference(F f, T1&& param1, T2&& param2)
+{
+  f(param2, param1);
+}
+
+void f(int value1, int& value2)
+{
+  (void) value1;
+  ++value2;
+}
+
+void g(int&& value1, int& value2)
+{
+  (void) value1;
+  ++value2;
+}
+
+
+// Use `std::forward()` to preserve the types of the original arguments. Unlike
+// std::move(), std::forward() 'must' be called with an explicit template
+// argument, *cxx-template-explicit-argument* and returns rvalue reference to
+// that type, T &&. 
+// 
+// template <typename F, typename T1, typename T2>
+// void flip(F f, T1 &&t1, T2 &&t2)                    // 1
+// {
+//   f(std::forward<T2>(t2), std::forward<T1>(t1));    // 2
+// }
+// 
+// To preserve type information is two-step process, 1 and 2.
+// 
+// *cxx-ref*
+// What's the difference between std::ref() and std::forward() solution?
+// By std::forward() solution, user of template don't need to anyting.
+
+template <typename F, typename T1, typename T2>
+void flip_forward(F f, T1 &&param1, T2 &&param2)
+{
+  f(std::forward<T2>(param2), std::forward<T1>(param1));
+}
+
+} // namespace
+
+TEST(Template, Forward)
+{
+  using namespace cxx_template;
+
+  {
+    int i = 10;
+    int j = 20;
+
+    f(i, j);
+
+    EXPECT_THAT(i, 10);
+    EXPECT_THAT(j, 21);   // changed
+  }
+
+  {
+    int i = 10;
+    int j = 20;
+
+    flip(f, i, j);
+
+    // both are not changed since flip() uses local copy and f() changes that
+
+    EXPECT_THAT(i, 10);
+    EXPECT_THAT(j, 20);
+  }
+
+  {
+    int i = 10;
+    int j = 20;
+
+    flip(f, std::ref(i), j);
+
+    // change since passed reference
+
+    EXPECT_THAT(i, 11);   // changed
+    EXPECT_THAT(j, 20);
+  }
+
+  {
+    int i = 10;
+    int j = 20;
+
+    flip_reference(f, i, j);
+
+    EXPECT_THAT(i, 11);   // changed
+    EXPECT_THAT(j, 20);
+  }
+
+  // Still flip_reference() solves half of the problem since cannot be used to
+  // call a function that has an rvalue parameter.
+  //
+  // flip_reference() pass `preserved` parameter down to g and which are int.
+  // They binds to int&& adn this is error.
+  //
+  // WHY not reference-collapsing? Because g() is not template.
+  //
+  // {
+  //   int i = 10;
+  //   int j = 20;
+  //
+  //   // cxx.cpp:5315:27:   required from here
+  //   // cxx.cpp:5240:19: error: cannot bind ‘int’ lvalue to ‘int&&’
+  //   //    f(param2, param1);
+  //   //                    ^
+  //
+  //   flip_reference(g, i, j);
+  //
+  //   EXPECT_THAT(i, 11);   // changed
+  //   EXPECT_THAT(j, 20);
+  // }
+
+  {
+    int i = 10;
+    int j = 20;
+
+    flip_forward(f, i, j);
+
+    EXPECT_THAT(i, 11);   // changed
+    EXPECT_THAT(j, 20);
+  }
+}
+
+// *cxx-rvalue-reference* *cxx-forward*
+//
+// From CPP Challenge, 56. Select algorithm
+// 
+// Write a function that, given a range of values and a projection function,
+// transforms each value into a new one and returns a new range with the selected
+// values. For instance, if you have a type book that has an id, title, and author,
+// and have a range of such book values, it should be possible for the function to
+// select only the title of the books. Here is an example of how the function
+// should be used:
+//
+// *cxx-result-of*
+//
+// std:: result_of <T, Args...>::value
+//
+// o Yields the return type of the callable T called for Args...
+//
+// Since C++11, to get the return type you could call: typename std::result_of<Callable(Args...)>::type
+//
+// typename std::decay<typename std::result_of<typename std::decay<F>::type&(typename std::vector<T>::const_reference)>::type>::type
+//                                            {                                                                       }
+//                    {                                                                                                      }
+// after all,
+// 1. "typename std::decay<F>::type&(vector<T>::const_reference)" gets the address of function that takes const reference
+// 2. result_of<>::type gets return type
+// 3. decay<>::type gets decayed type
+
+namespace cxx_template
+{
+  struct book
+  {
+    int id;
+    string title;
+    string author;
+  };
+
+  template <typename T, typename F,
+           typename R = typename std::decay<typename std::result_of<typename std::decay<F>::type&(typename std::vector<T>::const_reference)>::type>::type>
+             std::vector<R> select(std::vector<T> const& coll, F&& f)
+             {
+               std::vector<R> result{};
+               std::transform(coll.cbegin(), coll.cend(), std::back_inserter(result),
+                   std::forward<F>(f));
+               return result;
+             }
+
+} // namespace
+
+TEST(Template, ForwardEx)
+{
+  using namespace cxx_template;
+
+  std::vector<book> books{
+    {101, "The C++ Programming Language", "Bjarne Stroustrup"},
+      {203, "Effective Modern C++", "Scott Meyers"},
+      {404, "The Modern C++ Programming Cookbook", "Marius Bancila"}};
+
+  auto titles = select(books, [](book const& b) {return b.title;});
+
+  EXPECT_THAT(titles, 
+      ElementsAre("The C++ Programming Language", "Effective Modern C++", "The Modern C++ Programming Cookbook"));
+
+
+  auto authors = select(books, [](book const &b) {return b.author; });
+
+  EXPECT_THAT(authors, 
+      ElementsAre("Bjarne Stroustrup", "Scott Meyers", "Marius Bancila"));
+
+
+  auto ids = select(books, [](book const &b) {return b.id; });
+
+  EXPECT_THAT(ids, 
+      ElementsAre(101, 203, 404));
+}
+
+
+// ={=========================================================================
+// cxx-template-variadic
+
+namespace cxx_template_variadic
+{
+  template <typename T, typename... Args>
+    std::pair<int, int> foo(T const& t, Args const&... args)
+    {
+      (void) t;
+      return make_pair(
+          // number of template parameters
+          sizeof...(Args), 
+          // number of function parameters
+          sizeof...(args)
+          );
+    }
+} // namespace
+
+TEST(Template, VariadicSizeofOperator)
+{
+  using namespace cxx_template_variadic;
+
+  int i = 0; double d = 3.14; std::string s = "how now brown cow";
+
+  // three parameters in the pack
+  EXPECT_THAT(foo(i, s, 42, d), make_pair(3,3));
+
+  // two parameters in the pack
+  EXPECT_THAT(foo(s, 42, "hi"), make_pair(2,2));
+
+  // one parameters in the pack
+  EXPECT_THAT(foo(d, s), make_pair(1,1));
+
+  // empty pack
+  EXPECT_THAT(foo("hi"), make_pair(0,0));
+}
+
+
+// ={=========================================================================
+// cxx-template-type-trait cxx-type-trait
+
+namespace cxx_type_trait
+{
+  template <typename T>
+    bool foo(T const &val)
+    {
+      (void)val;
+
+      // is_pointer<T> yields either a `true_type` ro `false_type`, for which
+      // ::value either yields true or false.
+
+      if (std::is_pointer<T>::value)
+      {
+        // std::cout << "foo() called for a pointer" << std::endl;
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
+  template <typename T>
+    void foo_impl(T value, std::true_type)
+    {
+      (void) value;
+      std::cout << "foo() called for integral type" << std::endl;
+    }
+
+  template <typename T>
+    void foo_impl(T value, std::false_type)
+    {
+      (void) value;
+      std::cout << "foo() called for floating type" << std::endl;
+    }
+
+  template <typename T>
+    void foo_overload(T value)
+    {
+      foo_impl(value, std::is_integral<T>());
+    }
+
+} // namespace
+
+
+// [ RUN      ] Template.TypeTrait
+// foo() called for integral type
+// foo() called for floating type
+// [       OK ] Template.TypeTrait (1 ms)
+
+TEST(Template, TypeTrait)
+{
+  using namespace cxx_type_trait;
+
+  {
+    int *pint;
+
+    EXPECT_THAT(foo(pint), true);
+  }
+
+  {
+    int ivalue{10};
+    double dvalue{10.0};
+
+    foo_overload(ivalue);
+    foo_overload(dvalue);
   }
 }
 
@@ -3417,9 +7360,9 @@ namespace const_member_function
   template <class T, size_t R, size_t C>
     void print_array2d(array2d<T, R, C> const & arr)
     {
-      for (int i = 0; i < R; ++i)
+      for (size_t i = 0; i < R; ++i)
       {
-        for (int j = 0; j < C; ++j)
+        for (size_t j = 0; j < C; ++j)
         {
           std::cout << arr.at(i, j) << ' ';
         }
@@ -3441,6 +7384,465 @@ TEST(Const, ForMemberFunction)
   {
     array2d<int, 2, 3> a;
     print_array2d(a);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-except
+
+namespace cxx_except 
+{
+  class my_exception : public exception
+  {
+    virtual const char *what() const throw()
+    {
+      return "my exception happened";
+    }
+  };
+
+  my_exception myex;
+
+} // namespace
+
+
+TEST(Exception, OwnException)
+{
+  using namespace cxx_except;
+
+  try
+  {
+    throw myex;
+  }
+  catch (exception &e)
+  {
+    EXPECT_THAT(e.what(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (exception &e)
+  {
+    ostringstream os;
+    os << "my exception happened";
+    EXPECT_THAT(os.str(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (...)
+  {
+    ostringstream os;
+    os << "my exception happened";
+    EXPECT_THAT(os.str(), "my exception happened");
+  }
+
+  try
+  {
+    throw myex;
+  }
+  catch (...)
+  {
+  }
+}
+
+namespace cxx_except 
+{
+  class Foo
+  {
+    public:
+      ~Foo()
+      {
+      }
+  };
+
+  class FooNoAbort
+  {
+    public:
+      ~FooNoAbort() noexcept(false)
+      {
+        throw std::runtime_error("noexcept(false) so expects no abort");
+      }
+  };
+
+  class FooAbort
+  {
+    public:
+      ~FooAbort()
+      {
+        throw std::runtime_error("noexcept(true) so expects abort");
+      }
+  };
+} // namespace
+
+TEST(Exception, Noexcept)
+{
+  using namespace cxx_except;
+
+  {
+    int value{1};
+
+    Foo foo;
+
+    EXPECT_THAT(value, 1);
+  }
+
+  {
+    int value{1};
+
+    try
+    {
+      FooNoAbort foo;
+    }
+    catch(exception &e)
+    {
+      // why fails???
+      // EXPECT_THAT(e.what(), "noexcept(false) so expects no abort");
+      
+      std::ostringstream os;
+      os << e.what(); 
+      EXPECT_THAT(os.str(), "noexcept(false) so expects no abort");
+    }
+
+    EXPECT_THAT(value, 1);
+  }
+
+  // [ RUN      ] Exception.Noexcept
+  // terminate called after throwing an instance of 'std::runtime_error'
+  //   what():  noexcept(true) so expects abort
+  // Aborted
+
+  {
+    int value{1};
+
+    try
+    {
+      FooAbort foo;
+    }
+    catch(exception &e)
+    {
+      std::cout << e.what() << std::endl;
+    }
+
+    EXPECT_THAT(value, 1);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-cpp, macro
+
+// 0: 01
+// 0: 012
+// 0: 0123
+// 0: 01234
+// 0: 012345
+
+TEST(Cpp, Precision)
+{
+  // The format argument of printf can be an expression too.
+  {
+    // printf((argc>1) ? "%s " : "%s", *++argv );
+    int argc = 1;
+    printf((argc>1) ? "|%s|\n" : "%s\n", "argc");
+  }
+
+  // print unsigned long value
+  //
+  // ulong max from limits: 18446744073709551615L
+  // ulong max from limits: 18446744073709551615
+  {
+    // here "L" is normal char
+    printf("ulong max from limits: %luL\n", ULONG_MAX );
+    printf("ulong max from limits: %lu\n", ULONG_MAX );
+  }
+
+  {
+    char pmesg[] = "0123456789";
+
+    printf("0: %.*s \n", 2, pmesg );
+    printf("0: %.*s \n", 3, pmesg );
+    printf("0: %.*s \n", 4, pmesg );
+    printf("0: %.*s \n", 5, pmesg );
+    printf("0: %.*s \n", 6, pmesg );
+  }
+
+  {
+    // MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s\n",
+    //     (OctetStringVariableEntry(pEntry).m_osValue).size,
+    //     (OctetStringVariableEntry(pEntry).m_osValue).buf,
+    //     osValue.size, osValue.buf,
+    //     osNewValue.size, osNewValue.buf);
+  }
+}
+
+
+#define dprint(expr)    printf(#expr " = %g\n", expr )
+#define dprint_string(expr)    string coll(#expr " = %g\n")
+#define dprint_string_1(expr)    string coll(#expr)
+
+#define xstr(s) str(s)
+#define str(s) #s
+#define foo 4
+
+TEST(Cpp, Stringification)
+{
+  {
+    double x = 10.0;
+    double y = 3.0;
+
+    // printf( "x/y = %g\n", x/y );
+    // x/y = 3.33333
+    dprint(x/y);
+  }
+
+  {
+    dprint_string("string");
+    EXPECT_THAT(coll, "\"string\" = %g\n");
+  }
+
+  {
+    dprint_string_1("string");
+    EXPECT_THAT(coll, "\"string\"");
+  }
+
+  // If you want to stringify the-result-of-expansion of a macro argument, you
+  // have to use two-levels of macros.
+  {
+    // is not "4" because not macro-expanded
+    string coll1{str (foo)};
+    EXPECT_THAT(coll1, "foo");
+
+    // s is stringified when it is used in str, so it is not macro-expanded
+    // first. But s is an ordinary argument to xstr, so it is completely
+    // macro-expanded before xstr itself is expanded (see Argument Prescan).
+    // Therefore, by the time str gets to its argument, it has already been
+    // macro-expanded. 
+    //
+    // xstr (foo)
+    // ==> xstr (4)
+    // ==> str (4)
+    // ==> "4"
+
+    string coll2{xstr(foo)};
+    EXPECT_THAT(coll2, "4");
+  }
+
+  // print the name of an [expression] and its value, along with the file name
+  // and the line number.
+  //
+  // ex
+  // int some_function() {
+  //   int foo;
+  //   /* a lot of complicated code goes here */
+  //   dumpme(foo, "%d");
+  //   /* more complicated code goes here */
+  // }
+  //
+  // cxx.cpp:4157: value=100
+
+  {
+#define dumpme(x, fmt) printf("%s:%u: %s=" fmt "\n", __FILE__, __LINE__, #x, x)
+
+    int value{100};
+    dumpme(value, "%d");
+  }
+
+
+  // void JPA_CREATE(const char* vname, int value)
+  // {
+  //   printf("JPA_CREATE: value=%s value=%d...\n", vname, value );
+  // }
+
+  //  {
+  //#define KT_CREATE(value)	JPA_CREATE( #value, value)
+  //
+  //    int val = 3;
+  //    int is_this_my_own = 4;
+  //
+  //    KT_CREATE(val);
+  //    KT_CREATE(is_this_my_own);
+  //  }
+  
+  // <case>
+  // want to print on console then usuel loggig and macros are defined like:
+  //
+  // PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode", physDev->shDeviceName));
+  //
+  // to
+  // 
+  // printf("device %s now in power saving mode", physDev->shDeviceName);
+  //
+  // #ifdef CQ1840116
+  // #define PDM_DISK_SPINDOWN_LOG           DIAG_LOG_ERROR
+  // #else
+  // #define PDM_DISK_SPINDOWN_LOG           DIAG_LOG_INFO
+  // #endif
+  // 
+  // #define DIAG_LOG_ERROR(id, msg)		DIAG_LOG_F2B_WRITE((id), DIAG_CMN_TRACE_ERROR, msg)
+  //
+  // How?
+
+  {
+#define PDM_DISK_SPINDOWN_LOG           DIAG_LOG_ERROR
+#define DIAG_LOG_ERROR(id, msg)         printf msg
+
+    // #define DIAG_LOG_ERROR(id, msg)         printf msg
+    // printf "(\"device %s now in power saving mode\", \"physDev->shDeviceName\")";
+    //
+    // #define DIAG_LOG_ERROR(id, msg)         printf msg
+    // printf ("device %s now in power saving mode", "physDev->shDeviceName");
+
+    // PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode", "physDev->shDeviceName"));
+    PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode\n", "physDev->shDeviceName"));
+  }
+}
+
+
+// ={=========================================================================
+// cxx-assert
+
+// cxx_ex.cpp: In instantiation of ‘class Vector<short int, 2>’:
+// cxx_ex.cpp:39:19:   required from here
+// cxx_ex.cpp:31:2: error: static assertion failed: Vector size is too small!
+//   static_assert(Size > 3, "Vector size is too small!");
+//   ^
+//
+// CPP code to demonstrate 
+// static assertion using static_assert 
+
+#include <iostream> 
+using namespace std; 
+
+template <class T, int Size> 
+class Vector { 
+	// Compile time assertion to check if 
+	// the size of the vector is greater than 
+	// 3 or not. If any vector is declared whose 
+	// size is less than 4, the assertion will fail 
+	static_assert(Size > 3, "Vector size is too small!"); 
+
+	T m_values[Size]; 
+}; 
+
+TEST(Assert, StaticAssert)
+{ 
+	Vector<int, 4> four; // This will work 
+  (void) four;
+
+	// Vector<short, 2> two; // This will fail 
+} 
+
+
+// ={=========================================================================
+// cxx-numeric cxx-abs
+
+TEST(Numeric, Abs)
+{
+  EXPECT_THAT(abs(-121), 121);
+
+  {
+    // abs() do not work and return input value
+    // since -2**31, -2147483648, is min value and if abs it, it is bigger than
+    // max, 2**31-1, so overflows and wrong result
+    int value = abs(-2147483648);
+    EXPECT_THAT(value, -2147483648);
+  }
+
+  {
+    // abs() works
+    long long value = abs(-2147483648);
+    EXPECT_THAT(value, 2147483648);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-typedef
+
+
+namespace cxx_typedef
+{
+  // defined here since cannot do in the block since:
+  //
+  // cxx.cpp:7062:3: error: a template declaration cannot appear at block scope
+
+  template<typename Value>
+    using mmap = map<unsigned int, Value>; 
+
+} // namespace
+
+
+TEST(Typedef, Alias)
+{
+  {
+    // cannot be a const map since operator[] is for non-const.
+
+    map<unsigned int, string> coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+  }
+
+  {
+    typedef map<unsigned int, string> mmap; 
+
+    mmap coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+  }
+
+  // this is cxx-type-alias
+
+  {
+    using mmap = map<unsigned int, string>; 
+
+    mmap coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
+  }
+
+  // this is *cxx-template-alias*
+  // The aliasing mechanism can be used to define a new template by binding some
+  // or all template arguments.
+
+  {
+    using namespace cxx_typedef;
+
+    mmap<std::string> coll{ 
+      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+    };
+
+    coll[3] = "threee";
+    coll[3] = "threeee";
+    coll[3] = "threeeee";
+    coll[3] = "threeeeee";
+
+    ASSERT_THAT(coll[3], Eq("threeeeee"));
   }
 }
 

@@ -91,7 +91,6 @@
 *kt_linux_tool_013* tool-xargs
 |kt_linux_tool_014| tool-ssh
 *kt_linux_tool_014* tool-putty
-*kt_linux_tool_014* tool-putty-xwin
 *kt_linux_tool_015* tool-pgrep, tool-pidof
 |kt_linux_tool_018| tool-ls
 *kt_linux_tool_019* tool-trace tool-ftrace tool-uftrace
@@ -120,7 +119,7 @@
 *kt_linux_tool_034* tool-nproc
 *kt_linux_tool_035* tool-wget tool-curl
 |kt_linux_tool_036| nc
-|kt_linux_tool_037| port checks
+*kt_linux_tool_037* tool-port tool-iptables
 |kt_linux_tool_016| tool-screen
 |kt_linux_tool_038| tool-minicom
 |kt_linux_tool_024| tool-du tool-df tool-stat
@@ -129,7 +128,6 @@
 *kt_linux_tool_051* tool-fdisk-resize-boot-partition
 *kt_linux_tool_051* tool-fs-lvm
 *kt_linux_tool_051* tool-ip
-*kt_linux_tool_039* tool-udhcpc tool-dns
 *kt_linux_tool_039* tool-udhcpc tool-dns
 *kt_linux_tool_039* tool-route
 *kt_linux_tool_039* tool-nfs
@@ -197,10 +195,11 @@
 
 |kt_linux_tool_100| tool-package-apt
 |kt_linux_tool_101| tool-pkg-config
+*kt_linux_tool_140* tool-service
 
 #{ make and build
 *kt_linux_tool_140* make-cmake
-*kt_linux_tool_140* make-cmake-basic
+*kt_linux_tool_140* make-cmake-tutorial
 *kt_linux_tool_140* make-cmake-add-subdir
 *kt_linux_tool_140* make-cmake-mix-c-and-cpp
 *kt_linux_tool_140* make-cmake-compile-flag
@@ -208,6 +207,7 @@
 *kt_linux_tool_140* make-cmake-link-flag
 
 *kt_linux_tool_140* make-kernel-config
+*kt_linux_tool_140* make-gmake-debug
 *kt_linux_tool_140* make-gmake-sample
 *kt_linux_tool_140* make-gmake-rule
 *kt_linux_tool_140* make-gmake-rule-implicit
@@ -523,18 +523,17 @@
 |kt_linux_core_800| linux-proc
 *kt_linux_core_814* linux-proc-system-info
 
-|kt_linux_core_200| ipc
-|kt_linux_core_201| ipc: system v <ipcs-command>
-|kt_linux_core_202| ipc: system v: shm
-|kt_linux_core_203| ipc: server consideration
-
-|kt_linux_core_250| ipc: posix
-
-|kt_linux_core_300| ipc: socket: LPI 56
-
-*kt_linux_core_101* linux-ipc-pipe
-*kt_linux_core_102* linux-ipc-pipe-check-setup
-|kt_linux_core_103| linux-ipc-fifo
+*kt_linux_core_0000* linux-ipc
+*kt_linux_core_0000* linux-ipc-sysv tools-ipcs
+*kt_linux_core_0000* linux-ipc-shm-sysv
+*kt_linux_core_0000* linux-ipc-consideration
+*kt_linux_core_0000* linux-ipc-posix
+*kt_linux_core_0000* linux-ipc-socket linux-socket
+*kt_linux_core_0000* linux-ipc-socket-unix linux-socket-unix
+*kt_linux_core_0000* linux-ipc-socket-internet linux-socket-internet
+*kt_linux_core_0000* linux-ipc-pipe
+*kt_linux_core_0000* linux-ipc-pipe-check-setup
+|kt_linux_core_0000| linux-ipc-fifo
 |kt_linux_core_104| ipc: semantics of read() and write() on pipes and fifo
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
@@ -557,10 +556,6 @@
 *kt_linux_core_265* sync: case: subtle race
 *kt_linux_core_266* sync: case: sync with no lock
 
-|kt_linux_core_290|  ref: concurrency in C++. ch01
-|kt_linux_core_291|  ref: concurrency in C++. ch02 {std::thread}
-|kt_linux_core_293|  ref: concurrency in C++. ch03
-
 |kt_linux_core_300|  case: own semaphore and mutex class using pthread cond-var {cqueue}
 |kt_linux_core_301|  case: use of mutex and thread class
 |kt_linux_core_302|  case: analysis of 200 and 201 case
@@ -582,7 +577,7 @@
 |kt_linux_core_603| linux-time-realtime
 *kt_linux_core_604* linux-time-ns-stamp
 |kt_linux_core_604| linux-time-ms-stamp
-*kt_linux_core_604* linux-time-us-stamp cxx-ex-perfcounter
+*kt_linux_core_604* linux-time-us-stamp
 |kt_linux_core_606| linux-time-usleep
 
 |kt_linux_core_700| dbus
@@ -2048,6 +2043,26 @@ do
    esac
 done
 
+<ex> *sh-exit-status*
+#/bim/bash
+
+COUNT=0
+
+while :
+do
+  echo ""
+  echo "Looping $COUNT..."
+  echo ""
+  ./ccon_ex_out
+
+  if [ $? -ne 0 ]; then
+    echo "Failed..."
+    exit
+  fi 
+
+  let COUNT=COUNT+1
+done
+
 
 {break-continue}
 The `break` and `continue` builtins (see Bourne Shell Builtins) may be used to
@@ -3160,7 +3175,7 @@ When a positional parameter consisting of more than a single digit is expanded,
 it must be enclosed in `braces`. 
 
 
-3.4.2 Special Parameters *sh-variable-special*
+3.4.2 Special Parameters *sh-special-variable*
 
 The shell treats several parameters specially. These parameters may only be
 referenced; assignment to them is not allowed. 
@@ -7667,8 +7682,7 @@ $ ssh-keygen /?
 $ ssh-keygen -y -f id_rsa
 
 
-{caution}
-note:
+{ssh-caution}
 If the file permissions are too open then ssh will not trust them, and will
 still prompt you for your password. 
 
@@ -7677,6 +7691,32 @@ chmod 644 ~/.ssh/authorized_keys  // check this as caused big grief when differe
 chmod 644 ~/.ssh/id_dsa_pub
 chmod 644 ~/.ssh/known_hosts
 chmod 600 ~/.ssh/id_dsa
+
+2019.05.14
+This causes evem more problem with latest ssh and ssh access is denied. Have
+found that following is related and have spend hours since there is little
+error messages which seems to mean "access denied":
+
+Permissions 0777 for '/Users/username/.ssh/id_rsa' are too open. It is
+recommended that your private key files are NOT accessible by others.  This
+private key will be ignored.
+
+Keys need to be only readable by you:
+
+chmod 400 ~/.ssh/id_rsa
+
+600 appears to be fine as well (in fact better in most cases, because you
+    don't need to change file permissions to edit it).
+
+The relevant portion from the manpage (man ssh)
+
+ ~/.ssh/id_rsa
+         Contains the private key for authentication.  These files contain
+         sensitive data and should be readable by the user but not accessible
+         by others (read/write/execute).  ssh will simply ignore a private key
+         file if it is accessible by others.  It is possible to specify a
+         passphrase when generating the key which will be used to encrypt the
+         sensitive part of this file using 3DES.
 
 
 {ssh-config}
@@ -7942,7 +7982,110 @@ the general idea of X forwarding.
 
 
 ={============================================================================
-*kt_linux_tool_014* tool-putty
+*kt_linux_tool_014* tool-serial tool-putty tool-screen
+
+<find-out-serial-port>
+$ dmesg | grep ttyS
+
+
+{tool-screen}
+
+Screen is a full-screen software program that can be used to multiplexes a
+physical console between several processes (typically interactive shells). It
+offers a user to open several separate terminal instances inside a one single
+terminal window manager.
+
+sudo screen -S name -a -D -R -fn -l /dev/ttyUSB0 115200,cs8
+
+note:
+The screen runs in the same terminal but putty runs in a separate application.
+
+
+<help>
+       C-a ?       (help)        Show key bindings.
+
+<close>
+to close screen use Ctrl-a, k, y. Do not use Ctrl-C as it can kill processes
+running on the box.
+
+       C-a k     (kill)        Destroy current window.
+
+
+{logging}
+Use -L for auto logging and will log on 'screenlog.0'. Use this file to see:
+
+-L   tells screen to turn on automatic output logging for the windows.
+
+screen -a -D -R -fn -l -L /dev/ttyUSB0 115200,cs8
+
+
+       C-a h       (hardcopy)    Write a hardcopy of the current window to the
+       file "hardcopy.n".
+
+       C-a H       (log)         Begins/ends logging of the current window to
+       the file "screenlog.n".
+
+<monitoring>
+       C-a M       (monitor)     Toggles monitoring of the current window.
+
+sudo screen -S name -a -D -R -fn -l -L /dev/ttyUSB0 115200,cs8
+
+{tool-minicom}
+
+SYNOPSIS
+       minicom [-somMlwz8] [-c on|off] [-S script] [-d entry]
+               [-a on|off] [-t term] [-p pty] [-C capturefile] [configuration]
+
+       -c   Color usage. Some terminals (such as the Linux console) support
+       color with the standard ANSI escape sequences. Because there is
+       apparently no termcap support for color, these escape sequences are
+       hard-coded  into  mini- com. Therefore this option is off by default.
+       You can turn it on with '-c on'. This, and the '-m' option, are good
+       candidates to put into the MINICOM environment variable.
+
+1. Setup minicon with -s switch
+
+$ minicom -s
+
+COMMAND-LINE
+       -s, --setup
+            Setup.  Root edits the system-wide defaults in
+            /etc/minicom/minirc.dfl with this option.  When it is used,
+            minicom does not initialize, but puts you directly into the
+            configuration menu. This is  very  handy  if  minicom refuses to
+            start up because your system has changed, or for the first time
+            you run minicom. For most systems, reasonable defaults are already
+            compiled in.
+
+Choose Serial port setup and specify below settings, come out of Serial port
+setup by pressing Esc and then save configuration file.
+
+
+<config>
+Once saved, it will store the configuration in /etc/minicom/. To connect to your
+device, run minicom with config file name:
+
+$ minicom cisco or minicom -c on cisco
+
+To Exit from minicom, Click Ctrl-A and Z then X.
+
+alias mc='sudo minicom -C hmax.log -c on hmax'
+
+<when-cannot-get-shell-prompt>
+Without knowing either your set-top box or your cable, I would first try
+disabling hardware flow control, since the set top probably doesn't implement
+it. Essentially your Linux client is waiting for an "OK to send" signal that it
+will never receive because there's no physical wire in the set top to send it
+
+<log>
+C-A Z L
+
+minicom.cap
+
+
+{tool-putty}
+
+sudo apt-get install putty
 
 {putty-ssh-setup}
 When use keys generated from putty.
@@ -7951,6 +8094,7 @@ o run puttygen to make key pairs. rsa or dsa
 o get a pub key and save a pri key(ppk)
 o run putty and set ssh key to use
   menu: connection: ssh: auth: private key file for auth: specify the path to a pri key.
+
 o login to the host and add a pub key in the auth key list
 
 
@@ -10693,6 +10837,45 @@ ERROR: The certificate of 'stb.co.uk' hasn't got a known issuer.
 
 curl --insecure https://zinc-logs.gz > zinc-logs.gz
 
+wget -v http://23.62.6.185:80/60454/bsky_skymovies_hd/MOVIE/bsky_skymovies_hd-MAIN0000000003996664-201904251740320000.nff?u=53719716&c=i&s=n&p=959433268&a=3&t=p
+
+// when use valid address, shows returned error
+2019-04-26 11:36:20 ERROR 400: Bad Request.
+
+// when use invalid address
+Connecting to 223.62.100.185:80... connected.
+HTTP request sent, awaiting response...
+
+curl -v http://23.62.6.185:80/60454/bsky_skymovies_hd/MOVIE/bsky_skymovies_hd-MAIN0000000003996664-201904251740320000.nff?u=53719716&c=i&s=n&p=959433268&a=3&t=p
+
+// shows returned html page
+
+> GET /60454/bsky_skymovies_hd/MOVIE/bsky_skymovies_hd-MAIN0000000003996664-201904251740320000.nff?u=53719716 HTTP/1.1
+> User-Agent: curl/7.29.0
+> Host: 23.62.6.185
+> Accept: */*
+>
+< HTTP/1.1 400 Bad Request
+< Server: AkamaiGHost
+< Mime-Version: 1.0
+< Expires: Fri, 26 Apr 2019 10:36:25 GMT
+< Date: Fri, 26 Apr 2019 10:36:25 GMT
+< Content-Length: 374
+< Content-Type: text/html
+< Via: 1.1 loncaf-dmz-wsa-5.cisco.com:80 (Cisco-WSA/11.5.1-125)
+< Connection: keep-alive
+<
+<HTML><HEAD>
+<TITLE>Invalid URL</TITLE>
+</HEAD><BODY>
+<H1>Invalid URL</H1>
+The requested URL "http&#58;&#47;&#47;&#37;5bNo&#37;20Host&#37;5d&#47;60454&#47;bsky&#95;skymovies&#95;hd&#47;MOVIE&#47;bsky&#95;skymovies&#95;hd&#45;MAIN0000000003996664&#45;201904251740320000&#46;nff&#63;"
+, is invalid.<p>
+Reference&#32;&#35;9&#46;b5063e17&#46;1556274985&#46;9d97ec
+</BODY></HTML>
+* Connection #0 to host 23.62.6.185 left intact
+
+curl -v http://cdn.sky.com/60454/bsky_skymovies_hd/MOVIE/bsky_skymovies_hd-MAIN0000000003996664-201904251740320000.nff?u=53719716&c=i&s=n&p=959433268&a=3&t=p
 
 <curl-error>
 
@@ -10755,7 +10938,7 @@ negative, wait forever.
 
 
 ={============================================================================
-*kt_linux_tool_037* port checks
+*kt_linux_tool_037* tool-port tool-iptables
 
 Type the following command to see list well-known of TCP and UDP port numbers:
 
@@ -10833,97 +11016,28 @@ ssh       19536     1024    3r  IPv4 1852553      0t0  TCP 172.20.33.215:42930->
 ssh       19607     1024    3r  IPv4 1744563      0t0  TCP 172.20.33.215:43054->172.20.33.192:22 (ESTABLISHED)
 
 
-<firewall>
-In other words, Apache port is open but it may be blocked by UNIX (pf) or Linux (iptables) firewall.
-You also need to open port at firewall level. In this example, open tcp port 80 using Linux iptables
-firewall tool:
+<tool-iptables>
+This tutorial guides you how firewall works in Linux Operating system and what
+is IPTables in Linux? Firewall decides fate of packets incoming and outgoing
+in system. 
+
+iptables is a rule based firewall and it is pre-installed on most of Linux
+operating system. By default it runs without any rules. IPTables was included
+in Kernel 2.4, prior it was called ipchains or ipfwadm. IPTables is a
+front-end tool to talk to the kernel and decides the packets to filter. This
+guide may help you to rough idea and basic commands of IPTables where we are
+going to describe practical iptables rules which you may refer and customized
+as per your need.
+
+
+<tool-firewall>
+In other words, Apache port is open but it may be blocked by UNIX (pf) or
+Linux (iptables) firewall.  You also need to open port at firewall level. In
+this example, open tcp port 80 using Linux iptables firewall tool:
 
 $ /sbin/iptables -A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT
 $ /sbin/iptables -A INPUT -m state --state NEW -m tcp -p tcp --dport 2033 -j ACCEPT
 $ service iptables save
-
-
-={============================================================================
-*kt_linux_tool_016* tool-screen
-
-Screen is a full-screen software program that can be used to multiplexes a
-physical console between several processes (typically interactive shells). It
-offers a user to open several separate terminal instances inside a one single
-terminal window manager.
-
-sudo screen -S name -a -D -R -fn -l /dev/ttyUSB0 115200,cs8
-
-<help>
-       C-a ?       (help)        Show key bindings.
-
-<close>
-to close screen use Ctrl-A, k, y. Do not use Ctrl-C as it can kill processes
-running on the box.
-
-       C-a k
-       C-a C-k     (kill)        Destroy current window.
-
-
-{logging}
-Use -L for auto logging and will log on 'screenlog.0'. Use this file to see:
-
--L   tells screen to turn on automatic output logging for the windows.
-
-screen -a -D -R -fn -l -L /dev/ttyUSB0 115200,cs8
-
-
-       C-a h       (hardcopy)    Write a hardcopy of the current window to the
-       file "hardcopy.n".
-
-       C-a H       (log)         Begins/ends logging of the current window to
-       the file "screenlog.n".
-
-<monitoring>
-       C-a M       (monitor)     Toggles monitoring of the current window.
-
-
-={============================================================================
-*kt_linux_tool_038* tool-minicom
-
-SYNOPSIS
-       minicom [-somMlwz8] [-c on|off] [-S script] [-d entry]
-               [-a on|off] [-t term] [-p pty] [-C capturefile] [configuration]
-
-       -c   Color usage. Some terminals (such as the Linux console) support
-       color with the standard ANSI escape sequences. Because there is
-       apparently no termcap support for color, these escape sequences are
-       hard-coded  into  mini- com. Therefore this option is off by default.
-       You can turn it on with '-c on'. This, and the '-m' option, are good
-       candidates to put into the MINICOM environment variable.
-
-1. Setup minicon with -s switch
-
-$ minicom -s
-
-Choose Serial port setup and specify below settings, come out of Serial port
-setup by pressing Esc and then save configuration file.
-
-
-<config>
-Once saved, it will store the configuration in /etc/minicom/. To connect to your
-device, run minicom with config file name:
-
-$ minicom cisco or minicom -c on cisco
-
-To Exit from minicom, Click Ctrl-A and Z then X.
-
-alias mc='sudo minicom -C hmax.log -c on hmax'
-
-<when-cannot-get-shell-prompt>
-Without knowing either your set-top box or your cable, I would first try
-disabling hardware flow control, since the set top probably doesn't implement
-it. Essentially your Linux client is waiting for an "OK to send" signal that it
-will never receive because there's no physical wire in the set top to send it
-
-<log>
-C-A Z L
-
-minicom.cap
 
 
 ={============================================================================
@@ -11665,36 +11779,7 @@ still works and available for most of the Linux distributions.
 ={============================================================================
 *kt_linux_tool_039* tool-udhcpc tool-dns
 
-
--sh-3.2# cat /etc/resolv.conf
-nameserver 10.209.62.111
-
-RESOLV.CONF(5)
-Linux Programmer's Manual
-
-NAME
-       resolv.conf - resolver configuration file
-
-SYNOPSIS
-       /etc/resolv.conf
-
-DESCRIPTION
-       The  resolver  is  a  set  of  routines  in  the C library that provide
-       access to the Internet Domain Name System (DNS).  The resolver
-       configuration file contains information that is read by the resolver
-       routines the first time they are invoked by a process.  The file is
-       designed to be human readable and contains a list of keywords with
-       values that  provide  various  types  of  resolver information.  The
-       configuration file is considered a trusted source of DNS information
-       (e.g., DNSSEC AD-bit information will be returned unmodified from this
-        source).
-
-       If  this file does not exist, only the name server on the local machine
-       will be queried; the domain name is determined from the hostname and
-       the domain search path is constructed from the domain name.
-
-       The different configuration options are:
-
+// udhcpc gets dns from dhcp and update resolv.conf
 
 -sh-3.2# udhcpc
 udhcpc (v1.13.1) started
@@ -11833,6 +11918,8 @@ route add default gw 10.209.59.254 dev eth0
 route del default gw 0.0.0.0 dev eth0
 route add default gw 10.209.60.254 dev eth0
 
+
+// *tool-echo*
 echo -n > /etc/resolv.conf
 
 -sh-3.2# cat /etc/resolv.conf
@@ -11840,6 +11927,112 @@ echo "search UK.NDS.com" >> /etc/resolv.conf
 echo "nameserver 10.209.62.1" >> /etc/resolv.conf
 echo "nameserver 10.209.120.1" >> /etc/resolv.conf
 echo "nameserver 10.209.120.2" >> /etc/resolv.conf
+
+
+// to change script to run
+-sh-3.2# udhcpc -s ./default.script
+
+udhcpc (v1.13.1) started
++ '[' -z deconfig ']'
++ RESOLV_CONF=/etc/resolv.conf
++ '[' -n '' ']'
++ '[' -n '' ']'
++ mount
++ grep -q '/dev/root on / type nfs'
++ NFSROOT=1
++ case "$1" in
++ '[' 1 -ne 0 ']'
++ /sbin/ifconfig eth0 0.0.0.0
++ exit 0
+Sending discover...
+Sending select for 10.209.60.53...
+Lease of 10.209.60.53 obtained, lease time 25200
++ '[' -z bound ']'
++ RESOLV_CONF=/etc/resolv.conf
++ '[' -n '' ']'
++ '[' -n 255.255.255.0 ']'
++ NETMASK='netmask 255.255.255.0'
++ mount
++ grep -q '/dev/root on / type nfs'
++ NFSROOT=1
++ case "$1" in
++ '[' 1 -ne 0 ']'
++ /sbin/ifconfig eth0 10.209.60.53 netmask 255.255.255.0
++ '[' -n 10.209.60.254 ']'
++ echo 'deleting routers'
+deleting routers
++ route del default gw 0.0.0.0 dev eth0
+route: ioctl 0x890c failed: No such process
++ for i in '$router'
++ route add default gw 10.209.60.254 dev eth0
++ echo -n
++ '[' -n UK.NDS.com ']'
++ echo search UK.NDS.com
++ for i in '$dns'
++ echo adding dns 10.209.62.253
+adding dns 10.209.62.253
++ echo nameserver 10.209.62.253
++ for i in '$dns'
++ echo adding dns 10.209.120.1
+adding dns 10.209.120.1
++ echo nameserver 10.209.120.1
++ for i in '$dns'
++ echo adding dns 10.209.120.2
+adding dns 10.209.120.2
++ echo nameserver 10.209.120.2
++ /bin/chmod g+rw /etc/resolv.conf
++ /bin/chown NDS_MW /etc/resolv.conf
+chown: unknown user NDS_MW
++ exit 0
+
+
+-sh-3.2# cat /etc/resolv.conf
+nameserver 10.209.62.111
+
+-sh-3.2# cat /etc/resolv.conf
+nameserver 10.209.62.253
+nameserver 10.209.120.1
+-sh-3.2#
+
+
+RESOLV.CONF(5)
+Linux Programmer's Manual
+
+NAME
+       resolv.conf - resolver configuration file
+
+SYNOPSIS
+       /etc/resolv.conf
+
+DESCRIPTION
+       The  resolver  is  a  set  of  routines  in  the C library that provide
+       access to the Internet Domain Name System (DNS).  The resolver
+       configuration file contains information that is read by the resolver
+       routines the first time they are invoked by a process.  The file is
+       designed to be human readable and contains a list of keywords with
+       values that  provide  various  types  of  resolver information.  The
+       configuration file is considered a trusted source of DNS information
+       (e.g., DNSSEC AD-bit information will be returned unmodified from this
+        source).
+
+       If  this file does not exist, only the name server on the local machine
+       will be queried; the domain name is determined from the hostname and
+       the domain search path is constructed from the domain name.
+
+       The different configuration options are:
+
+       nameserver Name server IP address
+              Internet address of a name server that the resolver should
+              query, either an IPv4 address (in dot notation), or an IPv6
+              address in colon (and possibly dot) notation as per RFC 2373.
+              Up to MAXNS  (currently  3, see <resolv.h>) name servers may be
+              listed, one per keyword.  If there are multiple servers, the
+              resolver library queries them in the order listed.  If no
+              nameserver entries are present, the default is to use the name
+              server on the local machine.  (The algorithm used is to try a
+                  name server, and if the query times out, try the next, until
+                  out of  name servers, then repeat trying all the name
+                  servers until a maximum number of retries are made.)
 
 
 ={============================================================================
@@ -11861,11 +12054,11 @@ Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 172.17.0.0      0.0.0.0         255.255.0.0     U     0      0        0 docker0
 
 10.209.59.254 is gateway IP address for our computer. The flag U indicates
-that route is up and G indicates that it is gateway. You can print gateway
-name, enter:
+that route is up and G indicates that it is gateway. 
 
-0.0.0.0         `10.209.59.254`   0.0.0.0         UG    1024   0        0 eth0
-
+       -e     use netstat(8)-format for displaying the routing table.  -ee
+       will generate a very long line with all parameters from the routing
+       table.
 
 kyoupark@kit-debian64:~/git/kb$ netstat -r -n
 Kernel IP routing table
@@ -11877,18 +12070,54 @@ Destination     Gateway         Genmask         Flags   MSS Window  irtt Iface
 172.17.0.0      0.0.0.0         255.255.0.0     U         0 0          0 docker0
 
 
+<ex>
+$ route add default gw 192.168.1.10
+
+// note that this command do not work and have gw 0.0.0.0 by not setting in
+// the command line.
+// route add -net 90.222.0.0 netmask 255.254.0.0 gw 0.0.0.0 eth0
+
+route add -net 90.222.0.0 netmask 255.254.0.0 eth0
+
+
+<ex-delete>
+-sh-3.2# route del -net 90.222.0.0 netmask 255.254.0.0 metric 0
+
+
+root@kit-debian64:/home/kyoupark# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+
+90.222.0.0      0.0.0.0         255.254.0.0     U     0      0        0 eth0
+
+<ex>
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+default         192.168.1.2     0.0.0.0         UG    1024   0        0 eth0
+192.168.1.0     *               255.255.255.0   U     0      0        0 eth0
+
+This shows us how the system is currently configured. If a packet comes into
+the system and has a destination in the range 192.168.1.0 through
+192.168.1.255, then it is forwarded to the gateway *, which is 0.0.0.0 — a
+special address which represents an invalid or non-existant destination. So,
+in this case, our system will not route these packets.
+
+If the destination is not in this IP address range, it is forwarded to the
+default gateway (in this case, 192.168.1.2, and that system will determine how
+to forward the traffic on to the next step towards its destination.
+
+
 ={============================================================================
 *kt_linux_tool_039* tool-nfs
 
 <install> 
 sudo apt-get install nfs-kernel-server
+
+// install nfs-common for a client.
 sudo apt-get install nfs-common
 
-note:
-Install nfs-common for a client.
 
-
-<export>
+<nfs-export>
 The `two different access modes` of the nfs server. 
 
 The directory /home/client1 is shared in standard mode, so all files written
@@ -11909,7 +12138,6 @@ Now we must modify /etc/exports where we "export" our NFS shares. We specify
 /home/client1 and /var/www as NFS shares and tell NFS to make accesses to
 /home/client1 as user nobody.
 
-note
 To learn more about /etc/exports, its format and available options, take a
 look at `man 5 exports`
 
@@ -11960,7 +12188,6 @@ To apply the changes in /etc/exports, we restart the kernel nfs server
 sudo /etc/init.d/nfs-kernel-server stop/start
 sudo service nfs-kernel-server restart
 sudo service idmapd restart 
-
 
 root@kit-debian:/home/kit# service nfs-kernel-server status
 ● nfs-kernel-server.service - LSB: Kernel NFS server support
@@ -12682,6 +12909,11 @@ echo
 
 echo -e "\E[1;31mThe commit subject does not match \"DEVARCH-xxxx: <subject>\"";
 
+<ex> *tool-touch*
+create empty file
+
+echo -n > /etc/resolv.conf
+
 
 ={============================================================================
 *kt_linux_tool_051* tool-echo-compile
@@ -13161,6 +13393,32 @@ Answer Key
 Where USERNAME is your username.
 
 4. %users localhost=USERSTUFF
+
+
+={============================================================================
+*kt_linux_tool_051* tool-su
+
+SU(1)   User Commands
+
+NAME
+       su - change user ID or become superuser
+
+       -, -l, --login
+           Provide an environment similar to what the user would expect had
+           the user logged in directly.
+
+           When - is used, it must be specified before any username. For
+           portability it is recommended to use it as last option, before any
+           username. The other forms (-l and --login) do not have this
+           restriction.
+
+su - 
+invokes a login shell after switching the user. A login shell resets most
+environment variables, providing a clean base.
+
+su 
+just switches the user, providing a normal shell with an environment nearly
+the same as with the old user.
 
 
 ={============================================================================
@@ -18302,7 +18560,7 @@ Shadow byte legend (one shadow byte represents 8 application bytes):
 ==1247==ABORTING
 
 
-<ex> *cpp-memory-issue* *cpp-memcpy-issue-issue*
+<ex> *cxx-memory-issue* *cxx-memcpy-issue* *cxx-strncpy-issue*
 Seen on NDS MW issue
 
 MW_Process crash with core dump in SIM_dbc_query_ReadProgrammeInstanceInfo
@@ -20107,6 +20365,38 @@ cd FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/
 ./release.sh --platform vstb
 
 
+<tool-asan-build-mw-with-asan-for-clang>
+
+// to use clang
+vstb.mk
+
+# KT
+CC=/home/kyoupark/asan/llvm/cmake_build/bin/clang
+CXX=/home/kyoupark/asan/llvm/cmake_build/bin/clang++
+AR=/home/kyoupark/asan/llvm/cmake_build/bin/llvm-ar
+STRIP=/home/kyoupark/asan/llvm/cmake_build/bin/llvm-strip
+
+PLATFORM_CFLAGS = -DPLATFORM_VSTB -DIS_LITTLE_ENDIAN -D__LITTLE_ENDIAN -fdata-sections -ffunction-sections `-D__i386__`
+
+// remove warning options
+// /home/kyoupark/STB_SW_clang_build/THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/Makefile
+# CFLAGS = -Wall -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations -Werror 
+CFLAGS = -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes -Wmissing-declarations
+
+// /CMS_SYSTEM_INFRASTRUCTURE/CISCOSAFEC/src/makefile
+# KT
+# CPP=$(BIN_DIR)/$(COMPILER_PREFIX)-cpp 
+CPP=$(BIN_DIR)/clang-cpp 
+
+# KT
+# CONFIGURE_FLAGS+= --host=$(TARGET)
+CONFIGURE_FLAGS+= --host=i686-nptl-linux-gnu
+
+# clang don't have stropts.h so make a empty file.
+# /home/kyoupark/asan/llvm/cmake_build/lib/clang/8.0.0/include
+touch /usr/include/stropts.h
+
+
 <new-vstb>
 more README
 
@@ -20208,6 +20498,11 @@ touch /flash0/scripts/this_is_first_boot
 
 // touch /flash0/scripts/this_is_first_boot
 /flash0/scripts/startstack.sh
+
+
+// clang
+mkdir /flash0
+mount -o nfsvers=4 10.209.60.101:/home/kyoupark/git/kb/asan /flash0
 
 
 // 430 clean and no asan
@@ -21307,6 +21602,18 @@ tftp> get kyoupark/readme.in
 Received 26 bytes in 0.1 seconds
 
 
+<tool-tftp-hpa>
+
+sudo apt-get install tftpd-hpa
+
+# /etc/default/tftpd-hpa
+
+TFTP_USERNAME="tftp"
+TFTP_DIRECTORY="/home/keitee/mw/tftproot/titan"
+TFTP_ADDRESS=":69"
+TFTP_OPTIONS="--secure"
+
+
 ={============================================================================
 *kt_linux_tool_001* tool-rpm
 
@@ -21428,8 +21735,8 @@ rpm -ql `packagename`
 To install a package:
 sudo apt-get install tk8.5 
 
-# -i, --install
-$ sudo dpkg --install skype-debian_4.2.0.11-1_i386.deb
+//  -i, --install
+sudo dpkg --install skype-debian_4.2.0.11-1_i386.deb
 
 To remove a package:
 sudo apt-get purge tk8.5 
@@ -21605,6 +21912,13 @@ $ pkg-config --modversion gstreamer-1.0
 
 
 ={============================================================================
+*kt_linux_tool_140* tool-service
+
+sudo service --status-all
+sudo service nfs-kernel-server status
+
+
+={============================================================================
 *kt_linux_tool_140* make-error build-error
 
 17:09:01 make: *** [all] Error 2
@@ -21617,17 +21931,202 @@ egrep -an "Error [0-9]" build.log or make.log
 
 https://cmake.org/
 
+tar xvf cmake-3.13.2.tar.gz
+cd cmake-3.13.2/
+./configure --prefix=/home/kyoupark/
+make 
+make install
+
+CC=gcc CXX=g++ cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=gold -DLLVM_ENABLE_ASSERTIONS=ON [-DLLVM_ENABLE_WERROR=ON] [-DLLVM_TARGETS_TO_BUILD=X86] /home/kyoupark/asan/llvm/llvm
+
+// initially got error saying CMAKE_ROOT is not found and works when did:
+// not sure that's because CMAKE_ROOT or ~/bin/cmake that's installed locally.
+
+export CMAKE_ROOT=/home/kyoupark/share/cmake-3.13
+CC=gcc CXX=g++ ~/bin/cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=gold -DLLVM_ENABLE_ASSERTIONS=ON [-DLLVM_ENABLE_WERROR=ON] [-DLLVM_TARGETS_TO_BUILD=X86] /home/kyoupark/asan/llvm/llvm
+
 
 ={============================================================================
-*kt_linux_tool_140* make-cmake-basic
+*kt_linux_tool_140* make-cmake-tutorial
 
+<step1>
 https://cmake.org/cmake-tutorial/
 
-Note that this example uses lower case commands in the CMakeLists.txt file.
-Upper, lower, and mixed case commands are supported by CMake. 
+A Basic Starting Point (Step1)
+
+The most basic project is an executable built from source code files. For
+simple projects a two line CMakeLists.txt file is all that is required. This
+will be the starting point for our tutorial. The CMakeLists.txt file looks
+like:
+
+cmake_minimum_required (VERSION 2.6)
+project (Tutorial)
+add_executable(Tutorial tutorial.cxx)
+ 
+
+// A simple program that computes the square root of a number
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+int main (int argc, char *argv[])
+{
+  if (argc < 2)
+    {
+    fprintf(stdout,"Usage: %s number\n",argv[0]);
+    return 1;
+    }
+  double inputValue = atof(argv[1]);
+  double outputValue = sqrt(inputValue);
+  fprintf(stdout,"The square root of %g is %g\n",
+          inputValue, outputValue);
+  return 0;
+}
+
+o this example uses lower case commands in the CMakeLists.txt file.  Upper,
+  lower, and mixed case commands are supported by CMake. 
+
+o must use 'CMakeLists.txt'
+
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step1$ ll
+total 60
+drwxr-xr-x 3 kyoupark kyoupark  4096 May 12 22:14 ../
+-rw-r--r-- 1 kyoupark kyoupark   418 May 12 22:17 tutorial.cxx
+-rw-r--r-- 1 kyoupark kyoupark    94 May 12 22:22 CMakeLists.txt
+drwxr-xr-x 3 kyoupark kyoupark  4096 May 12 22:23 ./
+
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step1$ cmake .
+-- The C compiler identification is GNU 4.9.2
+-- The CXX compiler identification is GNU 4.9.2
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/kyoupark/git/kb/code-make/cmake/tutorial/step1
+
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step1$ ll
+total 60
+drwxr-xr-x 3 kyoupark kyoupark  4096 May 12 22:14 ../
+-rw-r--r-- 1 kyoupark kyoupark   418 May 12 22:17 tutorial.cxx
+-rw-r--r-- 1 kyoupark kyoupark    94 May 12 22:22 CMakeLists.txt
+-rw-r--r-- 1 kyoupark kyoupark 13620 May 12 22:23 CMakeCache.txt
+-rw-r--r-- 1 kyoupark kyoupark  5129 May 12 22:23 Makefile
+-rw-r--r-- 1 kyoupark kyoupark  1550 May 12 22:23 cmake_install.cmake
+drwxr-xr-x 5 kyoupark kyoupark  4096 May 12 22:23 CMakeFiles/
+drwxr-xr-x 3 kyoupark kyoupark  4096 May 12 22:23 ./
+
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step1$ make
+Scanning dependencies of target tutorial
+[ 50%] Building CXX object CMakeFiles/tutorial.dir/tutorial.cxx.o
+[100%] Linking CXX executable tutorial
+[100%] Built target tutorial
+
+
+<step2>
+http://derekmolloy.ie/hello-world-introductions-to-cmake/
+
+Example 2: A Project with Directories
+
+cmake_minimum_required (VERSION 2.6)
+project(directory_test)
+
+# bring the headers into the project
+include_directories(include)
+
+# can manually add the sources using the set command as:
+# set(SOURCES src/main.cxx src/Student.cxx)
+# However, the file(GLOB...) allows wildcard additions:
+
+# *cmake-error* when typo cpp which should be cxx
+# file(GLOB SOURCES "src/*.cpp")
+#
+# CMake Error at CMakeLists.txt:12 (add_executable):
+#   No SOURCES given to target: student
+
+file(GLOB SOURCES "src/*.cxx")
+
+add_executable(student ${SOURCES})
+
+For this example, I wish to place all of the build files in the build
+directory, which is achieved very simply by calling the cmake program from
+within the build directory, as follows:
+
+molloyd@beaglebone:~/exploringBB/extras/cmake/student$ cd build
+molloyd@beaglebone:~/exploringBB/extras/cmake/student/build$ cmake ..
+
+
+<step3>
+Example 3: Building a Shared Library (.so)
+
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step3/build$ cmake ..
+-- The C compiler identification is GNU 4.9.2
+-- The CXX compiler identification is GNU 4.9.2
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/kyoupark/git/kb/code-make/cmake/tutorial/step3/build
+
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step3/build$ make
+Scanning dependencies of target student
+[ 50%] Building CXX object CMakeFiles/student.dir/src/Student.cxx.o
+[100%] Linking CXX shared library libstudent.so
+[100%] Built target student
+
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step3/build$ ll
+total 52
+drwxr-xr-x 5 kyoupark kyoupark  4096 May 13 23:01 ../
+-rw-r--r-- 1 kyoupark kyoupark  7475 May 13 23:02 Makefile
+-rw-r--r-- 1 kyoupark kyoupark  2778 May 13 23:02 cmake_install.cmake
+-rw-r--r-- 1 kyoupark kyoupark 13656 May 13 23:02 CMakeCache.txt
+drwxr-xr-x 3 kyoupark kyoupark  4096 May 13 23:02 ./
+-rwxr-xr-x 1 kyoupark kyoupark  9816 May 13 23:02 libstudent.so*
+drwxr-xr-x 5 kyoupark kyoupark  4096 May 13 23:02 CMakeFiles/
+kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step3/build$ 
+
+
+<step5>
+
+# Example 5: Using a Shared or Static Library
+
+cmake_minimum_required (VERSION 2.6)
+project(use_shared_library)
+
+# for shared library
+set(PROJECT_LINK_LIBS libstudent.so)
+link_directories(~/git/kb/code-make/cmake/tutorial/step3/build)
+
+# bring the headers into the project
+include_directories(~/git/kb/code-make/cmake/tutorial/step3/include)
+
+# make "student" executable
+add_executable(libtest main.cxx)
+
+target_link_libraries(libtest ${PROJECT_LINK_LIBS})
+
 
 
 http://llvm.org/docs/CMakePrimer.html
+
 
 <list>
 Lists of Lists
@@ -22292,6 +22791,22 @@ Target Architecture
   17. sparc64 (BR2_sparc64)
   18. x86_64 (BR2_x86_64)
 choice[1-18?]: 9
+
+
+={============================================================================
+*kt_linux_tool_140* make-gmake-debug
+
+The make --debug is identical to make -d but you can also specify:
+
+make --debug=FLAGS
+where flags can be:
+
+a for all debugging (same as make -d and make --debug).
+b for basic debugging.
+v for slightly more verbose basic debugging.
+i for implicit rules.
+j for invocation information.
+m for information during makefile remakes.
 
 
 ={============================================================================
@@ -39153,6 +39668,12 @@ For example, the command ‘grep -E '{1'’ searches for the two-character strin
   ‘{1’ instead of reporting a syntax error in the regular expression. POSIX
     allows this behavior as an extension, but portable scripts should avoid it. 
 
+<ex>
+since vim-regex uses basic
+
+/w+
+/\w\+       // vim-regex
+
 
 ={============================================================================
 *kt_linux_rege_001* regex-operators
@@ -39223,7 +39744,7 @@ may be concatenated; the resulting regular expression matches any string formed
 by concatenating two substrings that respectively match the concatenated
 expressions.
 
-*regex-alternation* *regex-or*
+*regex-alternation* *regex-meta-or*
 Two regular expressions may be joined by the `infix-operator` ‘|’; the resulting
 regular expression matches any string matching either `alternate` expression.
 
@@ -43072,7 +43593,7 @@ main(int argc, char *argv[])
 ={============================================================================
 *kt_linux_core_100* linux-process
 
-LPI 6 PROCESSES
+LPI-6 PROCESSES
 
 6.1 Processes and Programs
 
@@ -43128,13 +43649,18 @@ accommodate very large numbers of processes.
 
 LPI-6.6 Command-Line Arguments (argc, argv)
 
-<argv-trick>
+<busybox-argv-trick>
 The fact that argv[0] contains the name used to invoke the program can be
 employed to perform a useful trick. We can create multiple links to (i.e.,
     names for) the same program, and then have the program look at argv[0] and
 take different actions depending on the name used to invoke it. An example of
 this technique is provided by the gzip(1), gunzip(1), and zcat(1) commands,
 all of which are links to the same executable file. 
+
+lrwxrwxrwx    1 root     root           14 Dec  6  2018 syslogd -> ../bin/busybox
+lrwxrwxrwx    1 root     root           14 Dec  6  2018 telnetd -> ../bin/busybox
+lrwxrwxrwx    1 root     root            7 Dec  6  2018 tune2fs -> e2label
+lrwxrwxrwx    1 root     root           14 Dec  6  2018 udhcpc -> ../bin/busybox
 
 If we employ this technique, we must be careful to handle the possibility that
 the user might invoke the program via a link with a name other than any of
@@ -43160,10 +43686,13 @@ environ can be controlled via the RLIMIT_STACK resource limit, and a much
 larger limit is permitted for argv and environ.
 
 
-{proc-cmdline}
+{proc-cmdline} *check-boot-params*
 The command-line arguments of any process can be read via the Linux-specific
 /proc/PID/cmdline file, with each argument being terminated by a null byte. A
 program can access its own command-line arguments via /proc/self/cmdline.
+
+-sh-3.2# cat /proc/cmdline
+mem=165M rw console=uart,mmio,0x10400b00,115200n8 ip_conntrack_tftp.ports=4085
 
 
 ={============================================================================
@@ -46142,7 +46671,7 @@ explicitly initialized. The values of these variables are read from the
 executable file when the program is loaded into memory.
 
 <uninitialized-data-segment> <process-bss>
-The uninitialized data segment contains 'global' and 'static' variables that are
+The `uninitialized data segment` contains 'global' and 'static' variables that are
 'not' explicitly initialized. Before starting the program, the system
 initializes all memory in this segment to 0.  For historical reasons, this is
 often called the bss segment, a name derived from an old assembler mnemonic for
@@ -48148,10 +48677,12 @@ thread-safe strerror() implementation presented in the next section.
 31.3.5 Thread-Specific Data Implementation Limits
 
 
+<linux-thread-local-storage>
+
 31.4 Thread-Local Storage
 
 Like thread-specific data, thread-local storage provides persistent per-thread
-storage. This feature is nonstandard, but it is provided in the same or a
+storage. `This feature is non-standard`, but it is provided in the same or a
 similar form on many other UNIX implementations (e.g., Solaris and FreeBSD).
 The main advantage of thread-local storage is that it is `much simpler` to use
 than thread-specific data. To create a thread-local variable, we simply
@@ -51869,7 +52400,7 @@ private:
 
 
 ={============================================================================
-*kt_linux_core_200* ipc
+*kt_linux_core_0000* linux-ipc
 
 CH43, Fig 43-1 in {ref-LPI} which says that the 'general' term IPC is often used to describe them all;
 communication, signal, and synchronization.
@@ -52056,7 +52587,7 @@ performance when different IPC facilities are substituted underneath the abstrac
 
 
 ={============================================================================
-*kt_linux_core_201* ipc: system v
+*kt_linux_core_0000* linux-ipc-sysv
 
 {interfaces}
 A more significant reason for discussing the System V IPC mechanisms together is that their
@@ -52141,7 +52672,7 @@ The second user could bypass this check by specifying 0 for the second argument 
 msgget(key, 0);
 
 
-{ipcs-command}
+{ipcs-command} *tools-ipcs*
 The ipcs command lists the System V IPC objects that currently exist on the system. The ipcrm
 command is used to remove System IPC objects.
 
@@ -52199,44 +52730,44 @@ of whether read permission is available on the objects.
 
 
 ={============================================================================
-*kt_linux_core_202* ipc: system v: shm
+*kt_linux_core_0000* linux-ipc-shm-sysv
 
-{segment}
-Shared memory allows two or more processes to share the same region (usually referred to as a
-segment) of physical memory. 
+Shared memory allows two or more processes to share the same region (usually
+referred to as a segment) of physical memory. 
 
+o Since a shared memory segment becomes part of a process's user-space memory,
+  no kernel intervention is required for IPC.means `the fastest IPC`
 
-{good-and-bad}
-Since a shared memory segment becomes part of a process's user-space memory, no kernel intervention
-is required for IPC. note: means the fastest IPC.
-
-On the other hand, the fact that IPC using shared memory is not mediated by the kernel means that,
-   typically, some method of synchronization is required so that processes don't simultaneously
-   access the shared memory. e.g., two processes performing simultaneous updates, or one process
-   fetching data from the shared memory while another process is in the middle of updating it.
+o On the other hand, the fact that IPC using shared memory is not mediated by
+  the kernel means that, typically, some method of synchronization is required
+  so that processes don't simultaneously access the shared memory. e.g., two
+  processes performing simultaneous updates, or one process fetching data from
+  the shared memory while another process is in the middle of updating it.
 
 
-{interfaces}
-<shmget>
-To create a new shared memory segment or obtain the identifier of an existing segment. note: The
-contents of a newly created shared memory segment are initialized to 0.
+<linux-ipc-shm-sysv-api>
+
+To create a new shared memory segment or obtain the identifier of an existing
+segment. note: The contents of a newly created shared memory segment are
+initialized to 0.
 
 #include <sys/shm.h>
-
 int shmget(key_t key, size_t size, int shmflg);
 
 Returns shared memory segment 'identifier' on success, or -1 on error
 
 <creator-and-size>
-The 'shmflg' argument performs the same task as for the other IPC get calls, specifying the
-permissions to be placed on a new shared memory segment or 'checked' against an existing segment. In
-addition, zero or more of the fol- lowing flags can be ORed (|) in shmflg to control the operation
-of shmget():
+The 'shmflg' argument performs the same task as for the other IPC get calls,
+    specifying the permissions to be placed on a new shared memory segment or
+      'checked' against an existing segment. In addition, zero or more of the
+      fol- lowing flags can be ORed (|) in shmflg to control the operation of
+      shmget():
 
-The 'kernel' allocates shared memory in multiples of the system page size, so size is effectively
-rounded up to the next multiple of the system 'page' size. If we are using shmget() to obtain the
-identifier of an existing segment, then size has 'no' effect on the segment, but it 'must' be less
-than or equal to the size of the segment.
+The 'kernel' allocates shared memory in multiples of the system page size, so
+  size is effectively rounded up to the next multiple of the system 'page'
+  size. If we are using shmget() to obtain the identifier of an existing
+  segment, then size has 'no' effect on the segment, but it 'must' be less
+  than or equal to the size of the segment.
 
 to-creat:
 
@@ -52513,7 +53044,7 @@ limit. See Section 50.2 for details.
 
 
 ={============================================================================
-*kt_linux_core_203* ipc: server consideration
+*kt_linux_core_0000* linux-ipc-consideration
 
 From LPI 45.4.
 
@@ -52587,39 +53118,45 @@ static bool do_platform_init( size_t shMemSz )
 
 
 ={============================================================================
-*kt_linux_core_250* ipc: posix
+*kt_linux_core_0000* linux-ipc-posix
 
-One of the POSIX.1b developers' aims was to devise a set of IPC mechanisms that did not suffer the
-deficiencies of the System V IPC facilities. These IPC mechanisms are collectively referred to as
-POSIX IPC.
+One of the POSIX.1b developers' aims was to devise a set of IPC mechanisms
+that did not suffer the deficiencies of the System V IPC facilities. These IPC
+mechanisms are collectively referred to as POSIX IPC.
 
 note: what deficiencies?
 
 
 ={============================================================================
-*kt_linux_core_300* ipc: socket: LPI 56
+*kt_linux_core_0000* linux-ipc-socket linux-socket
 
-Sockets are a method of IPC that allow data to be exchanged between applications, either on the same
-host (computer) or on different hosts connected by a network.
+LPI-56
 
-A socket is created using the socket() system call, which returns a file descriptor used to refer to
-the socket in subsequent system calls:
+Sockets are a method of IPC that allow data to be exchanged between
+applications, either on the same host (computer) or on different hosts
+connected by a network.
+
+A socket is created using the socket() system call, which returns a file
+descriptor used to refer to the socket in subsequent system calls:
 
 fd = socket(domain, type, protocol);
 
-For all applications described in this book, protocol is 'always' specified as 0.
+For all applications described in this book, protocol is always specified as
+0.
 
 
-{communication-domain}
-domain determines:
+{socket-domain}
+Sockets exist in a communication domain, which determines:
 
-1. the method of identifying a socket (i.e., the format of a socket “address”)
+o the method of identifying a socket (i.e., the format of a socket “address”)
 
-2. the range of communication (i.e., either between applications on the same host or between
-    applications on different hosts connected via a network).
+o the range of communication (i.e., either between applications on the same
+  host or between applications on different hosts connected via a network).
 
 
-OS supports at least the followings: AF stands for address family
+Modern operating systems support at least the following domains:
+
+AF stands for address family
 
 Table 56-1: Socket domains
 
@@ -52635,8 +53172,9 @@ AF_INET6 via IPv6          on hosts connected      128-bit IPv6 address +  socka
                            via an IPv6 network     16-bit port number
 
 
-{type}
-Every sockets implementation provides at least two types of sockets: stream and datagram.
+{socket-type}
+Every sockets implementation provides at least two types of sockets: stream
+and datagram.
 
 Table 56-2: Socket types and their properties
 
@@ -52645,61 +53183,75 @@ Reliable delivery?               Y                 N
 Message boundaries preserved?    N                 Y
 Connection-oriented?             Y                 N
 
-<stream-socket>
-Stream sockets (SOCK_STREAM) provide a reliable, bidirectional, byte-stream communication channel.
+`Stream sockets (SOCK_STREAM)` provide a reliable, bidirectional, byte-stream
+communication channel.
 
-These socket types are supported in both the UNIX(on same host) and the Internet domains(on
-network).
+These socket types are supported in both the UNIX(on same host) and the
+Internet domains(on network).
 
-1. Reliable means that we are guaranteed that either the transmitted data will arrive intact at the
-receiving application, exactly as it was transmitted by the sender (assuming that neither the
-    network link nor the receiver crashes), or that we'll receive notification of a probable failure
-in transmission.
+o Reliable means that we are guaranteed that either the transmitted data will
+  arrive intact at the receiving application, exactly as it was transmitted by
+  the sender (assuming that neither the network link nor the receiver
+      crashes), or that we'll receive notification of a probable failure in
+  transmission.
 
-2. Bidirectional means that data may be transmitted in either direction between two sockets.
+o Bidirectional means that data may be transmitted in either direction between
+  two sockets.
 
-3. Byte-stream means that, as with pipes, there is no concept of message boundaries
+o Byte-stream means that, as with pipes, there is no concept of message
+  boundaries
 
-Stream sockets operate in connected pairs so described as connection-'oriented'. A stream socket can
-be connected to 'only' one peer.
+A stream socket is similar to using a pair of pipes to allow bidirectional
+communication between two applications, with the difference that (Internet
+domain) sockets permit communication over a network.
 
-<datagram-socket>
-Datagram sockets (SOCK_DGRAM) allow data to be exchanged in the form of 'messages' called datagrams.
-
-With datagram sockets, message boundaries are preserved, but data transmission is not reliable.
-Messages may arrive out of order, be duplicated, or not arrive at all.
-
-Datagram sockets are an example of the more generic concept of a 'connectionless' socket since
-unlike a stream socket, a datagram socket doesn't need to be connected to another socket in order to
-be used.
-
-note:
-In the Internet domain, datagram sockets employ the User Datagram Protocol (UDP), and stream sockets
-(usually) employ the Transmission Control Protocol (TCP).  So often just use the terms UDP socket
-and TCP socket, respectively.
+Stream sockets operate in `connected pairs` so described as connection
+oriented. A stream socket can be connected to only one peer.
 
 
-{socket-io}
-By default, these system calls 'block' if the I/O operation can't be completed immediately.
-Nonblocking I/O is also possible, by using the fcntl() F_SETFL operation (Section 5.3) to enable the
-O_NONBLOCK open file status flag.
+`Datagram sockets (SOCK_DGRAM)` allow data to be exchanged in the form of
+messages called datagrams.
+
+With datagram sockets, message boundaries are preserved, but data transmission
+is not reliable. Messages may arrive out of order, be duplicated, or not
+arrive at all.
+
+Datagram sockets are an example of the more generic concept of a
+connectionless socket since unlike a stream socket, a datagram socket
+doesn't need to be connected to another socket in order to be used.
+
+  "In the Internet domain, datagram sockets employ the User Datagram Protocol
+  (UDP), and stream sockets (usually) employ the Transmission Control Protocol
+  (TCP). So often just use the terms UDP socket and TCP socket, respectively."
 
 
-{stream-example}
+{socket-stream-ex}
+
+56.5 Stream Sockets
+
+Stream sockets are often distinguished as being either active or passive:
+
+o By default, a socket that has been created using socket() is active. An
+  active socket can be used in a connect() call to establish a connection to a
+  passive socket. This is referred to as performing an active open.
+
+o A passive socket (also called a listening socket) is one that has been
+  marked to allow incoming connections by calling listen(). Accepting an
+  incoming connection is referred to as performing a passive open.
 
 Passive socket (server)
 
-  socket()
+  fd = socket()
 
-  bind()
+  bind(fd, addr)
 
   listen()
 
-  accept()                                      Active socket(client)
+  accept(fd, addr)                                 Active socket(client)
       : blocks until client connects
-   ...                                             socket()
+   ...                                             fd = socket()
 
-      : resumes                  <-                connect()
+      : resumes                  <-                connect(fd, addr)
 
 +-------------------------------------------------------------+
 | read()                         <-                write()    |
@@ -52710,127 +53262,184 @@ Passive socket (server)
   close()                                          close()
 
 
-<well-known-address>
-Typically, we bind a server's socket to a well-known address - that is, a fixed address that is
-known in advance to client applications that need to communicate with that server.
+{syscall-socket}
+
+Socket I/O can be performed using the conventional read() and write() system
+calls, or using a range of `socket-specific system calls` (e.g., send(),
+    recv(), sendto(), and recvfrom()).
+
+By default, these system calls `block` if the I/O operation can't be completed
+immediately. Nonblocking I/O is also possible, by using the fcntl() F_SETFL
+operation (Section 5.3) to enable the O_NONBLOCK open file status flag.
 
 
-{syscalls}
 #include <sys/socket.h>
 
-<socket>
-int socket(int domain, int type, int protocol);
+int `socket`(int domain, int type, int protocol);
 
 Creates a new socket. Returns file descriptor on success, or -1 on error.
-note: returns fd on success.
 
-<bind>
-int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+The protocol argument is always specified as 0 for the socket types we
+describe in this book. Nonzero protocol values are used with some socket types
+that we don’t describe. For example, protocol is specified as IPPROTO_RAW for
+raw sockets (SOCK_RAW). On success, socket() returns a file descriptor used
+to refer to the newly created socket in later system calls.
+
+
+int `bind`(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
 Binds a socket to an address. Returns 0 on success, or -1 on error
 
-The sockfd argument is a file descriptor obtained from a previous call to socket(). 
+The sockfd argument is a file descriptor obtained from a previous call to
+socket(). 
 
-<accept>
-int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+The type of structure passed in this argument `depends on the socket domain.`
+
+Typically, we bind a server's socket to a `well-known address` - that is, a
+fixed address that is known in advance to client applications that need to
+communicate with that server.
+
+
+int `listen`(int sockfd, int backlog);
+
+The listen() system call marks the stream socket referred to by the file
+descriptor sockfd as passive.
+
+
+int `accept`(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 
 Returns file descriptor on success, or -1 on error
 
-The accept() system call accepts an incoming connection on the listening stream socket referred to
-by the file descriptor sockfd. If there are no pending connections when accept() is called, the call
-blocks until a connection request arrives.
-
-note: listening vs connection socket
-
-The key point to understand about accept() is that it creates a 'new' socket, and it is this new
-socket that is connected to the peer socket that performed the connect(). A file descriptor for the
-connected socket is returned as the function result of the accept() call. The listening socket
-(sockfd) remains open, and can be used to accept 'further' connections. A typical server application
-creates one listening socket, binds it to a well-known address, and then handles all client requests
-by accepting connections via that socket.
-
-note: this is why accept() requires addr argument
-
-The remaining arguments to accept() 'return' the address of the peer socket. The addr argument
-points to a structure that is used to return the socket address. The type of this argument depends
-on the socket domain
-
-note: <value-result> argument is in-out argument which is also mentioned in man page.
-
-The addrlen argument is a value-result argument. It points to an integer that, prior to the call,
-    must be initialized to the size of the buffer pointed to by addr, 'so' that the kernel 'knows'
-    how much space is available to return the socket address. Upon return from accept(), this
-    integer is set to 'indicate' the number of bytes of data actually copied into the buffer.
-
-If we are not interested in the address of the peer socket, then addr and addrlen should be
-specified as NULL and 0, respectively. If desired, we can retrieve the peer’s address later using
-the getpeername() system call, as described in Section 61.5.
+The accept() system call accepts an incoming connection on the listening
+stream socket referred to by the file descriptor sockfd. If there are no
+pending connections when accept() is called, the call blocks until a
+connection request arrives.
 
 
-{generic-address-structure}
-The addr argument is a pointer to a structure specifying the address to which this socket is to be
-bound. The type of structure passed in this argument 'depends' on the socket domain. The addrlen
-argument specifies the size of the address structure.
+int `connect`(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
-For each socket domain, a 'different' structure type is defined to store a socket address. However,
-    because system calls such as bind() are 'generic' to 'all' socket 'domains', they must be able
-    to accept address structures of any type.
+The connect() system call connects the active socket referred to by the file
+descriptor sockfd to the listening socket whose address is specified by addr
+and addrlen.
 
-How?
 
-In order to permit this, the sockets API defines a 'generic' address structure, struct sockaddr. The
-only purpose for this type is to cast the various domain-specific address structures to a single
-type for use as arguments in the socket system calls.
+WHY addr in accept()?
 
-This structure serves as a template for all of the domain-specific address structures.
+The key point to understand about accept() is that `it creates a new socket`,
+and it is this new socket that is connected to the peer socket that performed
+the connect(). A file descriptor for the connected socket is returned as the
+function result of the accept() call. 
 
-The value in the family field is 'sufficient' to determine the size and format of the address stored
-in the remainder of the structure.
+The listening socket (sockfd) remains open, and can be used to accept further
+connections. A typical server application creates one listening socket, binds
+it to a well-known address, and then handles all client requests by accepting
+connections via that socket.
 
-<sockaddr>
-/* Structure describing a generic socket address.  */
-struct sockaddr
+The remaining arguments to accept() `return the address of the peer socket.`
+The addr argument points to a structure that is used to return the socket
+address. The type of this argument depends on the socket domain
+
+`value-result argument` is in-out argument which is also mentioned in man
+page.
+
+The addrlen argument is a value-result argument. It points to an integer that,
+prior to the call, must be initialized to the size of the buffer pointed to by
+addr, so that the kernel knows how much space is available to return the
+socket address. Upon return from accept(), this integer is set to indicate the
+number of bytes of data actually copied into the buffer.
+
+If we are not interested in the address of the peer socket, then addr and
+addrlen should be specified as NULL and 0, respectively. If desired, we can
+retrieve the peer’s address later using the getpeername() system call, as
+described in Section 61.5.
+
+
+{socket-sockaddr}
+
+56.4 Generic Socket Address Structures: struct sockaddr
+
+Looking at Table 56-1, we see that each socket domain uses a different address
+format. However, because system calls such as bind() are generic to all socket
+domains, they must be able to accept address structures of any type. 
+
+In order to permit this, the sockets API defines a generic address structure,
+struct sockaddr. The only purpose for this type is `to cast` the various
+domain-specific address structures to a single type for use as arguments in
+the socket system calls. The sockaddr structure is typically defined as
+follows:
+
+struct sockaddr {
+  sa_family_t sa_family;  /* Address family (AF_* constant) */
+  char sa_data[14];       /* Socket address (size varies
+                             according to socket domain) */
+};
+
+
+This structure serves as a template for all of the domain-specific address
+structures.
+
+The value in the family field is sufficient to determine the size and format
+of the address stored in the remainder of the structure.
+
+
+{socket-datagram-ex}
+
+56.6 Datagram Sockets
+
+  Server
+
+  fd = socket()
+                                                  Client
+  bind(fd, addr)                                  
+                                                  fd = socket()
+
++-------------------------------------------------------------+
+|                       : (possibly multiple) data            |
+|                          transfers in either direction      |
+| recvfrom()            <-                         sendto()   |
+|                                                             |
+| sendto()              ->                         recvfrom() |
++-------------------------------------------------------------+
+  close()                                          close()
+
+
+={============================================================================
+*kt_linux_core_0000* linux-ipc-socket-unix linux-socket-unix
+
+LPI-57 SOCKETS : UNIX DOMAIN
+
+UNIX domain sockets, which allow communication between processes on the same
+host system.
+
+57.1 UNIX Domain Socket Addresses: struct sockaddr_un
+
+struct sockaddr_un {
+  sa_family_t sun_family; /* Always AF_UNIX */
+  char sun_path[108];     /* Null-terminated socket pathname */
+};
+
+namespace code
 {
-  __SOCKADDR_COMMON (sa_);    /* Common data: address family and length.  */
-  // note: that is sa_family_t sa_family
-  char sa_data[14];           /* Address data.  */
-};
+  /* Structure describing a generic socket address.  */
+  struct sockaddr
+  {
+    __SOCKADDR_COMMON (sa_);    /* Common data: address family and length.  */
+    char sa_data[14];           /* Address data.  */
+  };
 
-#define  __SOCKADDR_COMMON(sa_prefix) \
-  sa_family_t sa_prefix##family
+  #define  __SOCKADDR_COMMON(sa_prefix) \
+    sa_family_t sa_prefix##family
 
-<sockaddr_un>
-/* Structure describing the address of an AF_LOCAL (aka AF_UNIX) socket.  */
-struct sockaddr_un
-{
-  __SOCKADDR_COMMON (sun_);
-  char sun_path[108];   /* Path name.  */          note: bigger size!
-};
-
-<sockaddr_in>
-/* Structure describing an Internet (IP) socket address. */
-#define __SOCK_SIZE__   16    /* sizeof(struct sockaddr) */
-struct sockaddr_in {
-  __kernel_sa_family_t  sin_family;    /* Address family */
-  __be16                sin_port;      /* Port number    */    // 16 bit
-  struct in_addr        sin_addr;      /* Internet address */  // 32 bit
-
-  /* Pad to size of `struct sockaddr'. */
-  unsigned char   __pad[__SOCK_SIZE__ - sizeof(short int) -
-    sizeof(unsigned short int) - sizeof(struct in_addr)];
-};
-
-<sockaddr_in6>
-struct sockaddr_in6 {
-  unsigned short int    sin6_family;    /* AF_INET6 */
-  __be16                sin6_port;      /* Transport layer port # */
-  __be32                sin6_flowinfo;  /* IPv6 flow information */
-  struct in6_addr       sin6_addr;      /* IPv6 address */
-  __u32                 sin6_scope_id;  /* scope id (new in RFC2553) */
-};
+  /* Structure describing the address of an AF_LOCAL (aka AF_UNIX) socket.  */
+  struct sockaddr_un
+  {
+    __SOCKADDR_COMMON (sun_);
+    char sun_path[108];   /* Path name.  */
+  };
+}
 
 
-{code-example}
+Listing 57-1: Binding a UNIX domain socket
 
 {
   const char *SOCKNAME = "/tmp/mysock";
@@ -52852,102 +53461,323 @@ struct sockaddr_in6 {
     errExit("bind");
 }
 
-// net/socket.c
-//
-/*
- * We move the socket address to kernel space before we call
- * the protocol layer (having also checked the address is ok).
- */
-SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
+
+The use of the memset() call in Listing 57-1 ensures that all of the structure
+fields have the value 0. 
+
+o The subsequent strncpy() call takes advantage of this by specifying its
+  final argument as one less than the size of the sun_path field, to ensure
+  that this field always has a terminating null byte.
+
+o Using memset() to zero out the entire structure, rather than initializing
+  individual fields, ensures that any nonstandard fields that are provided by
+  some implementations are also initialized to 0.
+
+
+namespace code
 {
-  sock = sockfd_lookup_light(fd, &err, &fput_needed);
-  if (sock) {
-    err = move_addr_to_kernel(umyaddr, addrlen, &address);
-    if (err >= 0) {
-      err = security_socket_bind(sock,
-          (struct sockaddr *)&address,
-          addrlen);
-      if (!err)
-        err = sock->ops->bind(sock,
-            (struct sockaddr *)
-            &address, addrlen);
+  // net/socket.c
+  /*
+   * We move the socket address to kernel space before we call
+   * the protocol layer (having also checked the address is ok).
+   */
+  SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
+  {
+    sock = sockfd_lookup_light(fd, &err, &fput_needed);
+    if (sock) {
+      err = move_addr_to_kernel(umyaddr, addrlen, &address);
+      if (err >= 0) {
+        err = security_socket_bind(sock,
+            (struct sockaddr *)&address,
+            addrlen);
+        if (!err)
+          err = sock->ops->bind(sock,
+              (struct sockaddr *)
+              &address, addrlen);
+      }
+      fput_light(sock->file, fput_needed);
     }
-    fput_light(sock->file, fput_needed);
+    return err;
   }
-  return err;
-}
 
+  // net/ipv4/af_inet.c
 
-// net/ipv4/af_inet.c
-int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
-{
-  // note: only used to check size
-  if (addr_len < sizeof(struct sockaddr_in))
-    goto out;
-}
-
-
-{
-  struct sockaddr_storage claddr;
-
-  addrlen = sizeof(struct sockaddr_storage);
-  cfd = accept(lfd, (struct sockaddr *) &claddr, &addrlen);
-  if (cfd == -1) {
-    errMsg("accept");
-    continue;
+  int inet_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
+  {
+    // note: only used to check size
+    if (addr_len < sizeof(struct sockaddr_in))
+      goto out;
   }
-}
 
-/*
- * For accept, we attempt to create a new socket, set up the link
- * with the client, wake up the client, then return the new
- * connected fd. We collect the address of the connector in kernel
- * space and 'move' it to user at the very end. This is unclean because
- * we open the socket then return an error.
- *
- * 1003.1g adds the ability to recvmsg() to query connection pending
- * status to recvmsg. We need to add that support in a way thats
- * clean when we restucture accept also.
- */
-SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr, int __user *, upeer_addrlen, int, flags)
+  {
+    struct sockaddr_storage claddr;
+
+    addrlen = sizeof(struct sockaddr_storage);
+    cfd = accept(lfd, (struct sockaddr *) &claddr, &addrlen);
+    if (cfd == -1) {
+      errMsg("accept");
+      continue;
+    }
+  }
+
+  /*
+   * For accept, we attempt to create a new socket, set up the link
+   * with the client, wake up the client, then return the new
+   * connected fd. We collect the address of the connector in kernel
+   * space and 'move' it to user at the very end. This is unclean because
+   * we open the socket then return an error.
+   *
+   * 1003.1g adds the ability to recvmsg() to query connection pending
+   * status to recvmsg. We need to add that support in a way thats
+   * clean when we restucture accept also.
+   */
+  SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr, int __user *, upeer_addrlen, int, flags)
+  {
+    err = move_addr_to_user(&address, len, upeer_sockaddr, upeer_addrlen);
+  }
+
+} // namespace
+
+
+={============================================================================
+*kt_linux_core_0000* linux-ipc-socket-internet linux-socket-internet
+
+LPI-58 SOCKETS : FUNDAMENTALS 
+
+A `router` has multiple network interfaces, one for each of the subnets to which
+it is connected. The more general term multihomed host is used for any hostnot
+necessarily a routerwith multiple network interfaces. 
+
+(Another way of describing a router is to say that it is a multihomed host
+ that forwards packets from one subnet to another.) A multihomed host has a
+different network address for each of its interfaces (i.e., a different
+address on each of the subnets to which it is connected).
+
+
+The TCP/IP protocol suite is a layered networking protocol (Figure 58-2). It
+includes the Internet Protocol (IP) and various protocols layered above it.
+(The code that implements these various layers is commonly referred to as a
+ protocol stack.) The name TCP/IP derives from the fact that the Transmission
+Control Protocol (TCP) is the most heavily used transport-layer protocol.
+
+One characteristic of the data-link layer that is important for our discussion
+of IP is the maximum transmission unit (MTU). A data-link layer’s MTU is the
+upper limit that the layer places on the size of a frame. Different data-link
+layers have different MTUs.
+
+*tool-netstat*
+The command netstat i displays a list of the system’s network interfaces,
+along with their MTUs.
+
+kyoupark@st-castor-03:~/STB_SW_o/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build$ netstat -i
+Kernel Interface table
+Iface      MTU    RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg
+docker0   1500  4453428      0      0 0       6241225      0      0      0 BMRU
+ens160    1500 4874582937      0 234234 0      1944243891      0      0      0 BMRU
+lo       65536 21291968      0      0 0      21291968      0      0      0 LRU
+veth2249  1500  4339888      0      0 0       6088469      0      0      0 BMRU
+veth27a6  1500    35341      0      0 0         38716      0      0      0 BMRU
+
+
+{socket-ip6}
+In the early 1990s, a revised version of IP was devised: IP version 6 (IPv6).
+The most notable difference between the two versions is that IPv4 identifies
+subnets and hosts using 32-bit addresses, while IPv6 uses 128-bit addresses,
+thus providing a much larger range of addresses to be assigned to hosts.
+
+<socket-ip-fragment>
+Modern TCP implementations employ algorithms (path MTU discovery) to determine
+the MTU of a path between hosts, and accordingly break up the data they pass
+to IP, so that IP is not asked to transmit datagrams that exceed this size.
+UDP provides no such mechanism, and we consider how UDPbased applications can
+deal with the possibility of IP fragmentation in Section 58.6.2.
+
+
+<socket-ip-address>
+Since the network ID component always occupies the leftmost part of the mask,
+the following notation is sufficient to specify the range of assigned addresses:
+
+204.152.189.0/24
+
+The /24 indicates that `the network ID part` of the assigned address consists of
+the leftmost 24 bits, with the remaining 8 bits specifying the host ID.
+
+Alternatively, we could say that the network mask in this case is
+255.255.255.0 in dotted-decimal notation.
+
+An organization holding this address can assign 254 unique Internet addresses
+to its computers204.152.189.1 through 204.152.189.254. 
+
+`Two addresses can’t be assigned.` One of these is the address whose host ID
+is all 0 bits, which is used to identify the network itself. The other is the
+address whose host ID is all 1 bits 204.152.189.255 in this examplewhich is
+the subnet broadcast address.
+
+
+<socket-ip-loopback>
+Certain IPv4 addresses have special meanings. The special address 127.0.0.1 is
+normally defined as the loopback address, and is conventionally assigned the
+hostname localhost. A datagram sent to this address never actually reaches the
+network, but instead automatically loops back to become input to the sending
+host. Using this address is convenient for testing client and server programs
+on the same host.
+
+The constant INADDR_ANY is the so-called IPv4 `wildcard address.` The wildcard
+IP address is useful for applications that bind Internet domain sockets on
+multihomed hosts. If an application on a multihomed host binds a socket to
+just one of its host’s IP addresses, then that socket can receive only UDP
+datagrams or TCP connection requests sent to that IP address. However, we
+normally want an application on a multihomed host to be able to receive
+datagrams or connection requests that specify any of the host’s IP addresses,
+and binding the socket to the wildcard IP address makes this possible. SUSv3
+doesn’t specify any particular value for INADDR_ANY, but most implementations
+define it as 0.0.0.0 (all zeros).
+
+
+<socket-ip-subnet>
+each subnetwork being identified by the combination of the network ID plus the
+subnet ID. This combination is usually referred to as the extended network ID.
+
+For example, suppose that our assigned network ID is 204.152.189.0/24, and we
+choose to subnet this address range by splitting the 8 bits of the host ID
+into a 4-bit subnet ID and a 4-bit host ID. Under this scheme, the subnet mask
+would consist of 28 leading ones, followed by 4 zeros, and 
+`the subnet with the ID of 1` would be designated as 204.152.189.16/28.
+
+
+58.6.1 Port Numbers
+
+The task of the transport protocol is to provide an end-to-end communication
+service to applications residing on different hosts (or sometimes on the same
+host). In order to do this, the transport layer requires a method of
+differentiating the applications on a host. In TCP and UDP, this
+differentiation is provided by a 16-bit port number.
+
+
+LPI-59 SOCKETS : INTERNET DOMAIN
+
+59.4 Internet Socket Addresses
+
+namespace code
 {
-  err = move_addr_to_user(&address, len, upeer_sockaddr, upeer_addrlen);
-}
+  // /usr/include/netinet/in.h
+
+  /* Internet address.  */
+  typedef uint32_t in_addr_t;
+
+  /* Type to represent a port.  */
+  typedef uint16_t in_port_t;
+
+  /* Structure describing an Internet socket address.  */
+  struct sockaddr_in
+  {
+    __SOCKADDR_COMMON (sin_);
+    in_port_t sin_port;			/* Port number.  */
+    struct in_addr sin_addr;		/* Internet address.  */
+
+    /* Pad to size of `struct sockaddr'.  */
+    unsigned char sin_zero[sizeof (struct sockaddr) -
+      __SOCKADDR_COMMON_SIZE -
+      sizeof (in_port_t) -
+      sizeof (struct in_addr)];
+  };
+
+  struct sockaddr_in6
+  {
+    __SOCKADDR_COMMON (sin6_);    /* AF_INET6 */
+    in_port_t sin6_port;	       /* Transport layer port # */
+    uint32_t sin6_flowinfo;	    /* IPv6 flow information */
+    struct in6_addr sin6_addr;  	 /* IPv6 address */
+    uint32_t sin6_scope_id;	    /* IPv6 scope-id (new in RFC2553) */
+  };
+
+} // namespace
+
+
+/* IPv4 4-byte address */
+struct in_addr
+  {
+    in_addr_t s_addr;
+  };
+
+struct sockaddr_in {        /* IPv4 socket address */
+  sa_family_t sin_family;   /* Address family (AF_INET) */
+  in_port_t sin_port;       /* Port number */
+  struct in_addr sin_addr;  /* IPv4 address */
+  unsigned char __pad[X];   /* Pad to size of 'sockaddr'
+                             structure (16 bytes) */
+};
+
+/* IPv6 address structure */
+struct in6_addr { 
+  uint8_t s6_addr[16];      /* 16 bytes == 128 bits */
+};
+
+struct sockaddr_in6 {         /* IPv6 socket address */
+  sa_family_t sin6_family;    /* Address family (AF_INET6) */
+  in_port_t sin6_port;        /* Port number */
+  uint32_t sin6_flowinfo;     /* IPv6 flow information */
+  struct in6_addr sin6_addr;  /* IPv6 address */
+  uint32_t sin6_scope_id;     /* Scope ID (new in kernel 2.4) */
+};
+
+All of the fields in the sockaddr_in6 structure are in network byte order.
+
+
+The sockaddr_storage structure
+
+With the IPv6 sockets API, the new generic sockaddr_storage structure was
+introduced.  This structure is defined to be large enough to hold any type of
+socket address (i.e., any type of socket address structure can be cast and
+    stored in it). In particular, this structure allows us to transparently
+store either an IPv4 or an IPv6 socket address, 
+
+thus `removing IP version dependencies from our code.` 
+
+The sockaddr_storage structure is defined on Linux as follows:
+
+#define __ss_aligntype uint32_t     /* On 32-bit architectures */
+
+struct sockaddr_storage {
+  sa_family_t ss_family;
+  __ss_aligntype __ss_align;        /* Force alignment */
+  char __ss_padding[SS_PADSIZE];    /* Pad to 128 bytes */
+};
 
 
 ={============================================================================
 *kt_linux_core_101* linux-ipc-pipe
 
-{pipe}
-The pipe is `unnamed-fifo` and is an early form that can be used
+{ipc-pipe}
+pipe is `unnamed-fifo` and is an early form that can be used
 `related-processes` such as parent and child. In other words, created using
-fork() call. Linux supports uni-directional pipe or half-duplex so need 'two'
-pipes for read and write.
+fork() call. 
 
-
-<connect-two-process>
+Linux supports uni-directional pipe or half-duplex so need two pipes for read
+and write.
 
 $ ls | wc -l
 
 ls                          pipe                           wc
 (stdout, fd 1)    ->        unidirectional byte stream  -> (stdin, fd 0)
-                  write end                             read end
+                  `write end`                             `read end`
                   of pipe                               of pipe
 
 
 <byte-stream-and-sequential> LPI 44.1
 When we say that a pipe is a byte stream, we mean that there is no concept of
-'messages' or message boundaries when using a pipe. 
+`messages` or message boundaries when using a pipe. 
 
-The process reading from a pipe can read 'blocks' of data of any size,
-    regardless of the size of blocks written by the writing process.
-Furthermore, the data passes through the pipe 'sequentially'
-- bytes are read from a pipe in exactly the order they were written. It is not
-possible to randomly access the data in a pipe using lseek().
+The process reading from a pipe can read `blocks of data` of any size,
+regardless of the size of blocks written by the writing process.
+
+Furthermore, the data passes through the pipe `sequentially`; bytes are read
+from a pipe in exactly the order they were written. It is not possible to
+randomly access the data in a pipe using lseek().
 
 
-<block-on-read> *sync-deadlock*
-Attempts to read from a pipe that is currently empty 'block' until at least
+<ipc-pipe-block-on-read> *sync-deadlock*
+Attempts to read from a pipe that is currently empty `block` until at least
 one byte has been written to the pipe. 
 
 If the write end of a pipe is closed, then a process reading from the pipe
@@ -52955,39 +53785,37 @@ will see end-of-file (i.e., read() returns 0) once it has read all remaining
 data in the pipe.
 
 
-<block-on-write> <limited-capacity> LPI 44 *sync-deadlock*
+<block-on-write> <limited-capacity> LPI-44 *sync-deadlock*
 A pipe is simply a 'buffer' maintained in kernel memory. This buffer has a
 maximum capacity. Once a pipe is full, further writes to the pipe 'block'
 until the reader removes some data from the pipe.
 
-<wary-of-deadlock> *sync-deadlock*
 If employing two pipes for bi-directional buffer, then we need to be wary of
 deadlocks that may occur if both processes block while trying to read from
 empty pipes OR while trying to write to pipes that are already full.
 
 
-<use-large-buffer-size>
+<ipc-pipe-use-large-buffer-size>
 SUSv3 makes no requirement about the capacity of a pipe. In Linux kernels
 before 2.6.11, the pipe capacity is the same as the system page size (e.g.,
     4096 bytes on x86-32); since Linux 2.6.11, the pipe capacity is 65,536
 bytes. Other UNIX implementations have different pipe capacities.
 
-This means that pipe is kernel resource meaning that there is copy between
+This means that pipe is `kernel resource meaning` that there is copy between
 kernel and process. In theory, there is no reason why a pipe couldn't operate
-with smaller capacities, even with a single-byte buffer. The reason for
-employing large buffer sizes is efficiency: each time a writer fills the pipe,
-          the kernel must perform a context switch to allow the reader to be
-          scheduled so that it can empty some data from the pipe. Employing a
-          larger buffer size means that fewer context switches are required.
+with smaller capacities, even with a single-byte buffer. 
+
+The reason for employing large buffer sizes is efficiency: each time a writer
+fills the pipe, the kernel must perform a context switch to allow the reader
+to be scheduled so that it can empty some data from the pipe. Employing a
+larger buffer size means that fewer context switches are required.
 
 
-<create-pipe-using-pipe-call>
+<ipc-pipe-api>
+
 #include <unistd.h>
-
 int pipe(int filedes[2]);        Returns 0 on success, or -1 on error
 
-
-<use-read-and-write>
 As with any file descriptor, we can use the read() and write() system calls to
 perform I/O on the pipe.
 
@@ -53032,21 +53860,27 @@ switch (fork()) { /* Create a child process */
 }
 
 
-<needs-of-closing-for-reading-process>
-If the reading process doesn't close the write end of the pipe, then, after
+<ipc-pipe-read-and-write>
+`If the reading process` doesn't close the write end of the pipe, then, after
 the other process closes its write descriptor, the reader won't see
-end-of-file, even after it has read all data from the pipe. Instead, a read()
-  would block waiting for data, because the kernel knows that there is still
-  at least one write descriptor open for the pipe. That this descriptor is
-  held open by the reading process itself is irrelevant; in theory, that
-  process could still write to the pipe, even if it is blocked trying to read.
-For example, the read() might be interrupted by a signal handler that writes
-data to the pipe. (This is a realistic scenario, as we’ll see in Section
-    63.5.2.)
+end-of-file, even after it has read all data from the pipe. 
+
+Instead, a read() would block waiting for data, because the kernel knows that
+there is still at least one write descriptor open for the pipe. That this
+descriptor is held open by the reading process itself is irrelevant; in
+theory, that process could still write to the pipe, even if it is blocked
+trying to read. For example, the read() might be interrupted by a signal
+handler that writes data to the pipe. (This is a realistic scenario, as we’ll
+see in Section 63.5.2.)
+
+`If the writing process` doesn't close the read end of the pipe, then, even
+after the other process closes the read end of the pipe, the writing process
+will still be able to write to the pipe.  Eventually, the writing process will
+fill the pipe, and a further attempt to write will block indefinitely.
 
 
-<broken-pipe> *sigpipe*
-When a process tries to write to a pipe for which no process has an open read
+<ipc-pipe-broken-pipe> *sigpipe*
+When a process tries to write to a pipe for `which no process has an open read`
 descriptor, the kernel sends the SIGPIPE signal to the writing process. By
 default, this signal kills a process. A process can instead arrange to catch
 or ignore this signal, in which case the write() on the pipe fails with the
@@ -53055,56 +53889,56 @@ error is a useful indication about the status of the pipe, and this is why
 unused read descriptors for the pipe should be closed.
 
 
-<needs-of-closing-for-writing-process>
-If the writing process doesn't close the read end of the pipe, then, even after the other process
-closes the read end of the pipe, the writing process will still be able to write to the pipe.
-Eventually, the writing process will fill the pipe, and a further attempt to write will block
-indefinitely.
+<ipc-pipe-pipe2>
+Starting with kernel 2.6.27, Linux supports a new, nonstandard system call,
+pipe2(). 
 
-
-<pipe2-call>
-Starting with kernel 2.6.27, Linux supports a new, nonstandard system call, pipe2(). This system
-call performs the same task as pipe(), but supports an additional argument, flags, that can be used
-to modify the behavior of the system call. Two flags are supported. The O_CLOEXEC flag causes the
-kernel to enable the close-on-exec flag (FD_CLOEXEC) for the two new file descriptors. This flag is
-useful for the same reasons as the open() O_CLOEXEC flag described in Section 4.3.1. The O_NONBLOCK
-flag causes the kernel to mark both underlying open file descriptions as nonblocking, so that future
-I/O operations will be nonblocking. This saves additional calls to fcntl() to achieve the same
+This system call performs the same task as pipe(), but supports an additional
+argument, flags, that can be used to modify the behavior of the system call.
+Two flags are supported. The O_CLOEXEC flag causes the kernel to enable the
+close-on-exec flag (FD_CLOEXEC) for the two new file descriptors. This flag is
+useful for the same reasons as the open() O_CLOEXEC flag described in Section
+4.3.1. The O_NONBLOCK flag causes the kernel to mark both underlying open file
+descriptions as nonblocking, so that future I/O operations will be
+nonblocking. This saves additional calls to fcntl() to achieve the same
 result.
 
 
-<pipe-for-unrelated-process>
+<ipc-pipe-for-unrelated-process>
 There is an exception that pipes can be used to communicate only between
 related processes. Passing a file descriptor over a UNIX domain socket (a
-    technique that described in Section 61.13.3) makes it possible to pass a
+technique that described in Section 61.13.3) makes it possible to pass a
 file descriptor for a pipe to an unrelated process.
 
 
-<second> to-create-pipe
-popen() call which simplfies pipe creation, fork, reading/writing setting. However, need to set
-problem to fork in the command line.
+<ex> to-create-pipe
+*call-popen* call which simplfies pipe creation, fork, reading/writing setting.
+However, need to set problem to fork in the command line.
 
-The C standard I/O library popen(3) makes it easy for the application programmer to open a pipe to
-an external process.
+The C standard I/O library popen(3) makes it easy for the application
+programmer to open a pipe to an external process.
 
 #include <stdio.h>
 FILE *popen(const char *command, const char *mode);
 int pclose(FILE *stream);
 
-The argument command must be a command that is acceptable to the UNIX shell. The second argument
-mode must be the C string "r" for reading or "w" for writing.  No other combination, such as "w+",
-is acceptable. 
+The argument command must be a command that is acceptable to the UNIX shell.
+The second argument mode must be the C string "r" for reading or "w" for
+writing.  No other combination, such as "w+", is acceptable. 
 
 (reading example)
+
 FILE *p;
 char cmd[1000];
+
 /* argv[2] is fname */
 sprintf(cmd,"grep 'Time has been updated to (Year:Month' %s | head -1",argv[2]);
 p=popen(cmd,"r");
 fgets(tmp,sizeof(tmp),p);
 pclose(p);
 
-After all, the reason that can use pipe between parent/child is that fds are shared.
+After all, the reason that can use pipe between parent/child is that fds are
+shared.
 
 
 ={============================================================================
@@ -53121,6 +53955,7 @@ lr-x------    1 root     root          64 May  6 14:45 72 -> pipe:[22129]| // no
 lrwx------    1 root     root          64 May  6 14:35 8 -> /dev/fusion0
 lrwx------    1 root     root          64 May  6 14:35 9 -> /dev/nexus_proxy
 
+*tool-lsof*
 [root@HUMAX 856]# lsof | grep 22129
 856	/opt/zinc/bin/bronzemediad.oem	pipe:[22129]
 1067	/run/youview/jail/daemons/linearsourced-S3kWYA/opt/zinc-trunk/bin/linearsourced	pipe:[22129]
@@ -53128,33 +53963,47 @@ lrwx------    1 root     root          64 May  6 14:35 9 -> /dev/nexus_proxy
 This shows 'two' ends of pipe.
 
 
+-sh-3.2# lsof -p 1608
+COMMAND    PID   USER   FD   TYPE DEVICE       SIZE       NODE NAME
+
+
 ={============================================================================
 *kt_linux_core_103* linux-ipc-fifo
 
-{fifo}
-To solve this, fifo was introduced and is called `named-pipe` since has path
-name. Means that it is created in the filesystem as a file. Use usual read and
-write call. Fifo is either read-only or write-only.
+LPI-44.7 FIFOs
 
-* create a fifo using mkfifo call.
-* open a fifo for read or write using open call
+Semantically, a FIFO is similar to a pipe. The principal difference is that a
+FIFO has a name within the file system and is opened in the same way as a
+regular file. This allows a FIFO to be used for communication between
+`unrelated processes` (e.g., a client and server).
 
-<fifo-create>
+fifo is called `named-pipe` since has path name and it is created in the
+filesystem as a file. Use usual read and write call. Fifo is either read-only
+or write-only.
+
+o create a fifo using mkfifo call.
+
+o open a fifo for read or write using open call
+
+<ipc-fifo-api>
+
 #include <sys/stat.h>
 int mkfifo(const char *pathname, mode_t mode);
 
-<fifo-sync>
+
+<ipc-fifo-sync>
 By default, opening a FIFO for reading (the open() O_RDONLY flag) blocks until
 another process opens the FIFO for writing (the open() O_WRONLY flag).
+
 Conversely, opening the FIFO for writing blocks until another process opens
-the FIFO for reading.  In other words, opening a FIFO synchronizes the reading
+the FIFO for reading. In other words, opening a FIFO synchronizes the reading
 and writing processes.
 
 <note-from-nds-fusion-ipc>
 FIFOs have certain natural limitations, they are unidirectional, and fragment
 large message sizes with no built in support for reassembling the fragments.
 Furthermore FIFOs are limited in number due to system resources. The key are
-'fragment' and limit-in-number.
+fragment and limit in number.
 
 Due to the limited number of FIFOs it was determined that there would be one
 control FIFO per server (to establish communication from clients) and one pair
@@ -53172,7 +54021,7 @@ note: KT. do not match with this pic?
 
 To cope with fragmentation and the fact that there may be several interfaces
 being used on a single client instance (and multiple components using that
-client instance in a single process) a protocol was designed as described
+    client instance in a single process) a protocol was designed as described
 below. This protocol is used in both FIFO and TCP/IP IPC communication.
 
 
@@ -54290,80 +55139,169 @@ Have a number of threads that produce some “result units” that are consumed 
 the main thread, and that we use a mutex-protected variable, avail, to
 represent the number of produced units awaiting consumption
 
-<without-cond-var>
-// not a complete code since removed some to show points
-
-/* LPI 30 */ threads/prod_no_condvar.c
-
-/* prod_no_condvar.c
-   A simple POSIX threads producer-consumer example that doesn't use a
-   condition variable.
-*/
-
-// *sync-cond-predicate* which is global
-static int avail = 0;
-
-// producer
-
-static void *
-threadFunc(void *arg)
+namespace cxx_condition
 {
-  // each thread has given the number of unit to produce from main argv
+  void errExitEN(int errnum, const char *format, ...)
+  {
+    cout << errnum << ", " << format << endl;
+  }
+ 
+  // LPI 30c
+  // \tlpi-181022-dist.tar\tlpi-dist\threads\prod_no_condvar.c
+  // A simple POSIX threads producer-consumer example that doesn't use a condition
+  // variable.
 
-  for (j = 0; j < cnt; j++) {
-    sleep(1);
+  static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+  static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
-    /* Code to produce a unit omitted */
+  // *sync-cond-predicate* which is global
+  static int avail = 0;
 
-    s = pthread_mutex_lock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_lock");
+  // producer
 
-    avail++;        /* Let consumer know another unit is available */
+  static void* threadFunc_no_cond_var(void *arg)
+  {
+    // okay
+    // int cnt = *((int *)arg);
 
-    s = pthread_mutex_unlock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_unlock");
+    int cnt = *static_cast<int*>(arg);
+
+    int s, j;
+
+    // each thread has given the number of unit to produce from main argv
+
+    for (j = 0; j < cnt; j++) 
+    {
+      sleep(1);
+
+      /* Code to produce a unit omitted */
+
+      s = pthread_mutex_lock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_lock");
+
+      // Let consumer know another unit is available
+      avail++;
+
+      s = pthread_mutex_unlock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_unlock");
+    }
+
+    return NULL;
   }
 
-  return NULL;
-}
+  static void* threadFunc_with_cond_var(void *arg)
+  {
+    // okay
+    // int cnt = *((int *)arg);
 
-int
-main(int argc, char *argv[])
+    int cnt = *static_cast<int*>(arg);
+
+    int s, j;
+
+    // each thread has given the number of unit to produce from main argv
+
+    for (j = 0; j < cnt; j++) 
+    {
+      sleep(1);
+
+      /* Code to produce a unit omitted */
+
+      s = pthread_mutex_lock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_lock");
+
+      // Let consumer know another unit is available
+      avail++;
+
+      s = pthread_mutex_unlock(&mtx);
+      if (s != 0)
+        errExitEN(s, "pthread_mutex_unlock");
+
+      // wake sleeping consumer
+      s = pthread_cond_signal(&cond);
+      if (s != 0)
+        errExitEN(s, "pthread_cond_unlock");
+
+    }
+
+    return NULL;
+  }
+
+} // namespace
+
+
+// multiple producers and single consumer. no condition and all participates in
+// the contention. 
+//
+// this wastes CPU time, because all, consumer and producer continually loops,
+// checking the state of the variable avail.
+//
+// A condition variable remedies this and allows a thread to sleep (wait) until
+// another thread notifies (signals) it that it must do something. 
+
+TEST(Condition, ProducerAndConsumer_LPI_No_CondVar)
 {
-  /* Create all producer threads */
+  using namespace cxx_condition;
+
+  int const NUM_OF_PRODUCERS = 10;
+  int const NUM_OF_ITEMS_TO_PRODUCE = 100;
+
+  pthread_t tid;
+  int s, j;
+  int totRequired;            /* Total number of units that all
+                                 threads will produce */
+  int numConsumed;            /* Total units so far consumed */
+  bool done;
+  time_t t;
+
+  t = time(NULL);
+
+  // Create all producers
 
   totRequired = 0;
-  for (j = 1; j < argc; j++) {
-    totRequired += atoi(argv[j]);
 
-    s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  // for (j = 1; j < argc; j++) {
+  //   totRequired += atoi(argv[j]);
+
+  //   s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  //   if (s != 0)
+  //     errExitEN(s, "pthread_create");
+  // }
+
+  for (j = 1; j < NUM_OF_PRODUCERS; j++) {
+    totRequired += NUM_OF_ITEMS_TO_PRODUCE;
+
+    s = pthread_create(&tid, NULL, threadFunc_no_cond_var, (void *)&NUM_OF_ITEMS_TO_PRODUCE);
     if (s != 0)
       errExitEN(s, "pthread_create");
   }
 
-  /* Use a polling loop to check for available units */
+  // single consumer
+  // Use a polling loop to check for available units
 
   numConsumed = 0;
-  done = FALSE;
+  done = false;
 
   for (;;) {
     s = pthread_mutex_lock(&mtx);
     if (s != 0)
       errExitEN(s, "pthread_mutex_lock");
 
-    while (avail > 0) {             /* Consume all available units */
+    // Consume all available units
+    while (avail > 0) {
 
-      /* Do something with produced unit */
+      // Do something with produced unit
 
-      numConsumed ++;
+      numConsumed++;
       avail--;
-      printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
-          numConsumed);
+
+      // printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
+      //     numConsumed);
 
       done = numConsumed >= totRequired;
-    } // while
+    }
 
     s = pthread_mutex_unlock(&mtx);
     if (s != 0)
@@ -54372,103 +55310,83 @@ main(int argc, char *argv[])
     if (done)
       break;
 
-    /* Perhaps do other work here that does not require mutex lock */
-  } // for
+    // Perhaps do other work here that does not require mutex lock
+  } // for end
 
-  exit(EXIT_SUCCESS);
+  EXPECT_THAT(numConsumed, 900);
 }
 
-
-The above code works, but it wastes CPU time, because the main consumer thread
-continually loops, checking the state of the variable avail.
-
-A condition variable remedies this and allows a thread to sleep (wait) until
-another thread notifies (signals) it that it must do something. 
-
-
-<with-cond-var>
-/* prod_condvar.c
-   A simple POSIX threads producer-consumer example using a condition variable.
-*/
-
-static int avail = 0;
-
-static void *
-threadFunc(void *arg)
+TEST(Condition, ProducerAndConsumer_LPI_CondVar)
 {
-  // each thread has given the number of unit to produce from main argv
+  using namespace cxx_condition;
 
-  for (j = 0; j < cnt; j++) {
-    sleep(1);
+  int const NUM_OF_PRODUCERS = 10;
+  int const NUM_OF_ITEMS_TO_PRODUCE = 100;
 
-    /* Code to produce a unit omitted */
+  pthread_t tid;
+  int s, j;
+  int totRequired;            /* Total number of units that all
+                                 threads will produce */
+  int numConsumed;            /* Total units so far consumed */
+  bool done;
+  time_t t;
 
-    s = pthread_mutex_lock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_lock");
+  t = time(NULL);
 
-    avail++;        /* Let consumer know another unit is available */
-
-    // First unlocked the mutex associated with the shared variable, and then
-    // signaled the corresponding condition variable. We could have reversed
-    // these two steps; `SUSv3 permits them to be done in either order`
-
-    s = pthread_mutex_unlock(&mtx);
-    if (s != 0)
-      errExitEN(s, "pthread_mutex_unlock");
-
-    s = pthread_cond_signal(&cond);         /* Wake sleeping consumer */
-    if (s != 0)
-      errExitEN(s, "pthread_cond_signal");
-  }
-
-  return NULL;
-}
-
-int
-main(int argc, char *argv[])
-{
-  /* Create all threads */
+  // Create all producers
 
   totRequired = 0;
-  for (j = 1; j < argc; j++) {
-    totRequired += atoi(argv[j]);
 
-    s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  // for (j = 1; j < argc; j++) {
+  //   totRequired += atoi(argv[j]);
+  //
+  //   s = pthread_create(&tid, NULL, threadFunc, argv[j]);
+  //   if (s != 0)
+  //     errExitEN(s, "pthread_create");
+  // }
+
+  for (j = 1; j < NUM_OF_PRODUCERS; j++) {
+    totRequired += NUM_OF_ITEMS_TO_PRODUCE;
+
+    s = pthread_create(&tid, NULL, threadFunc_with_cond_var, (void *)&NUM_OF_ITEMS_TO_PRODUCE);
     if (s != 0)
       errExitEN(s, "pthread_create");
   }
 
-  /* Loop to consume available units */
+  // single consumer
+  // Use a condition variable to check for available units
 
   numConsumed = 0;
-  done = FALSE;
+  done = false;
 
   for (;;) {
     s = pthread_mutex_lock(&mtx);
     if (s != 0)
       errExitEN(s, "pthread_mutex_lock");
 
-    // *linux-sync-cond-spurious-wakeup* sync-cond-predicate
-    // We explain why the pthread_cond_wait() call is placed within a while
-    // loop rather than an if statement
+    // *linux-sync-cond-spurious-wakeup*
+    // the pthread_cond_wait() call is placed within a while loop rather than an
+    // if statement
 
-    while (avail == 0) {            /* Wait for something to consume */
+    while (avail == 0)
+    {
       s = pthread_cond_wait(&cond, &mtx);
       if (s != 0)
         errExitEN(s, "pthread_cond_wait");
     }
 
-    /* At this point, 'mtx' is locked... */
+    // at this point, `mtx` is locked
+    
+    // Consume all available units
+    while (avail > 0) {
 
-    while (avail > 0) {             /* Consume all available units */
+      // Do something with produced unit
 
-      /* Do something with produced unit */
-
-      numConsumed ++;
+      numConsumed++;
       avail--;
-      printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
-          numConsumed);
+
+      // printf("T=%ld: numConsumed=%d\n", (long) (time(NULL) - t),
+      //     numConsumed);
 
       done = numConsumed >= totRequired;
     }
@@ -54480,11 +55398,16 @@ main(int argc, char *argv[])
     if (done)
       break;
 
-    /* Perhaps do other work here that does not require mutex lock */
-  }
+    // Perhaps do other work here that does not require mutex lock
+  } // for end
 
-  exit(EXIT_SUCCESS);
+  EXPECT_THAT(numConsumed, 900);
 }
+
+[ RUN      ] Condition.ProducerAndConsumer_LPI_No_CondVar
+[       OK ] Condition.ProducerAndConsumer_LPI_No_CondVar (100099 ms)
+[ RUN      ] Condition.ProducerAndConsumer_LPI_CondVar
+[       OK ] Condition.ProducerAndConsumer_LPI_CondVar (100036 ms)
 
 
 ={============================================================================
@@ -54493,9 +55416,9 @@ main(int argc, char *argv[])
 UNP-XX, Consumer and Producer
 
 <ex-01> 
-// Multiple producer(writing) and one consumer(reading). Once writing finishs,
-// consumer get started. No sync between producer and consumer and only sync
-// for producers
+// Multiple producer(write) and one consumer(read). No sync between producer
+// and consumer and only sync between producers because consumer starts only
+// when writes finishes.
 
 #include <stdio.h>
 #include <pthread.h>
@@ -54633,11 +55556,12 @@ consume done
 
 <ex-02>
 // Now consumer runs at the same time and runs when there is data to read. All
-// is accessing the same data and all are in the 'same' mutex group. Problem
-// is that when consumer has a lock and wakes up, consumer do polling or
-// spinning to check data. The consumer and producer has the equal opportunity
-// to run since it is 'indeterminate' which thread will succeed in acquiring a
-// lock.
+// is accessing the same data and are in the `same mutex group`, `same contention` 
+//
+// Problem is that when consumer has a lock and wakes up, consumer do polling
+// or spinning to check data. The consumer and producer has the equal
+// opportunity to run since it is 'indeterminate' which thread will succeed in
+// acquiring a lock.
 //
 // Uses shared mutex between producers and consumer. If items to read are
 // ready then returns. Otherwise, do loops. The changes from the previous is:
@@ -58223,163 +59147,6 @@ objects.
 # ============================================================================
 #{
 ==============================================================================
-*kt_linux_core_290*	ref: concurrency in C++
-
-{what-is-concurrency}
-There is genuine or hardware concurrency or illusion of concurrency. What's new is that the
-increased computing power of these machine comes not from running a single task faster but from
-running multiple tasks in parallel.
-
-<parallelism>
-The task parallelism is to divide a single task into parts and run each in parallel, thus reducing
-the total runtime. It can be complex since there may be many dependencies.
-
-The data parallelism is that each thread performs the same operation on different parts of the data.
-Good scalability; many hands make light work. There's a different focus in which more data can be
-processed in the same amount of time.
-
-
-{when-use-concurrency}
-The use of concurrency is like any other optimisation strategy. Therefore it is only worth doing for
-those performance critical parts of the application where there is the potential for mesurable gain.
-
-{two-approaches-to-concurrency}
-<use-multiple-process>
-The downsides are 
-o communication between processes.
-o inherent overhead such as time to launch and resource in OS
-
-The upsides are:
-o safer code than threads
-o can extend over a network
-
-<use-multiple-thread>
-The low overhead with launching and communicating between threads. So C++11 do not provide any
-support for process and only support for threads.
-
-
-{C++11}
-o Allow writing portable multithreaded code without relying on platform-specific extensions.
-o There is [abstraction penalty] compared to using the underlying low-level facilities directly.
-
-<code-example>
-#include <iostream>
-#include <thread>
-
-void hello()
-{
-  std::cout << "hello con world\n";
-}
-
-int main(int argc, char** argv)
-{
-  std::thread t(hello);
-  t.join();
-  // std::cout << "end of main" << std::endl;
-}
-
-If build and run like below:
-kt@kt-ub-vb:~/work$ g++ -g -std=c++0x use-thread.cpp 
-kt@kt-ub-vb:~/work$ ./a.out 
-terminate called after throwing an instance of 'std::system_error'
-  what():  Operation not permitted
-Aborted (core dumped)
-
-If build and run with pthread option, then works fine. This is known problem in g++.           
-kt@kt-ub-vb:~/work$ g++ -g -std=c++0x -pthread use-thread.cpp 
-
-
-==============================================================================
-*kt_linux_core_291*	ref: concurrency in C++
-
-{std-thread-basic}
-<launch>
-The std::thread works with any [callable] type; function object and lambda.
-
-void do_some_work();
-std::thread my_thread(do_some_work);
-
-or
-
-class background_task
-{
-  public:
-    void operator() () const
-    {
-      do_something();
-      do_something_else();
-    }
-};
-
-background_task f;
-std::thread my_thread(f);
-
-Why callable? In this case, the supplied function object is copied into the storage belonging to the
-created thread and invoked from there.
-
-<join-and-detach>
-If don't decide whether to join or to detach it before std::thread object is destroyed then program
-is terminated since the std::thread destructor calls std::terminate(). Ture even in the presence of
-exceptions.
-
-The join() cleans up any storage associated with the thread so std::thread object isn't associated
-with any thread. Once this, joinable() will return false.
-{Q} what will happen when call join() twice on the same?
-
-When detach a thread, make sure that the data accessed by the thread is vaild until the thread has
-finished with it. For example, creat a thread within a function with thread function hold pointers
-or reference to local varaibles. Bad idea and avoid this. 
-
-void oops()
-{
-  int some_local_state = 0;
-  T my_func(some_local_state);   // T(int&)
-  std::thread my_thread(my_func);
-  my_thread.detach();
-}
-
-<join-raii>
-To avoid program being terminated when an exception is thrown, accidental lifetime problems, how?
-Can use try and catch but verbose and easy to get it wrong. 
-
-If you wan to do particular action for all possible exit path, whether normal or exceptional, use
-raii.
-
-class thread_guard
-{
-  std::thread& t;
-
-  public:
-  explicit thread_guard( std::thread& t_ ): t(t_) {}
-  ~thread_guard()
-  {
-    if( t.joinable() )
-    {
-      t.join();
-    }
-  }
-
-  thread_guard( thread_guard const& )=delete;
-  thread_guard& operator=( thread_guard const&)=delete;
-};
-
-void oops()
-{
-  int some_local_state = 0;
-  T my_func(some_local_state);         // T(int&)
-  std::thread my_thread(my_func);
-  thread_guard g(t);                   // <DN>
-
-  do_something_in_current_thread();    // main thread continue to run
-}
-
-
-==============================================================================
-*kt_linux_core_292*	ref: concurrency in C++
-
-# ============================================================================
-#{
-==============================================================================
 *kt_linux_core_300*	case: own semaphore and mutex class using pthred cond var
 
 POSIX semaphore are system calls which means expensive. Is it possible to implement semaphore without it?
@@ -60692,7 +61459,6 @@ both the #include "file" and #include <file> directives.
 
 -Ldir
 Add directory dir to the list of directories to be searched for -l. 
-note: used when compile.
 
 -Lsearchdir 
 --library-path=searchdir 
@@ -61518,6 +62284,28 @@ https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#Warning-Options
 -Werror
   Make all warnings into errors.
 
+-Werror=
+Make the specified warning into an error. The specifier for a warning is
+appended; for example -Werror=switch turns the warnings controlled by -Wswitch
+into errors. This switch takes a negative form, to be used to negate -Werror
+for specific warnings; for example -Wno-error=switch makes -Wswitch warnings
+  not be errors, even when -Werror is in effect.
+
+The warning message for each controllable warning includes the option that
+controls the warning. That option can then be used with -Werror= and
+-Wno-error= as described above. (Printing of the option in the warning message
+    can be disabled using the -fno-diagnostics-show-option flag.)
+
+Note that specifying -Werror=foo automatically implies -Wfoo. However,
+     -Wno-error=foo does not imply anything.
+
+<e>
+option that is set from -Wall
+
+error: unknown warning option '-Werror=unused-but-set-variable';
+  did you mean '-Werror=unused-const-variable'? [-Werror,-Wunknown-warning-option]
+
+
 -Wall
   This enables all the warnings about constructions that some users consider
   questionable, and that are easy to avoid (or modify to prevent the warning),
@@ -61546,6 +62334,34 @@ https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#Warning-Options
   -Wuninitialized  
   -Wunused-parameter (only with -Wunused or -Wall) 
   -Wunused-but-set-parameter (only with -Wunused or -Wall)  
+
+
+<gcc-warining-on-off>
+
+You can request many specific warnings with options beginning with `-W`, for
+example -Wimplicit to request warnings on implicit declarations. Each of these
+specific warning options also has a negative form beginning `-Wno-` to turn
+off warnings; for example, -Wno-implicit. This manual lists only one of the
+two forms, whichever is not the default. For further language-specific options
+also refer to C++ Dialect Options and Objective-C and Objective-C++ Dialect
+Options.
+
+
+Some options, such as -Wall and -Wextra, turn on other options, such as
+`-Wunused`, which may turn on further options, such as -Wunused-value. The
+combined effect of positive and negative forms is that more specific options
+have priority over less specific ones, independently of their position in the
+command-line. For options of the same specificity, the last one takes effect.
+Options enabled or disabled via pragmas (see Diagnostic Pragmas) take effect
+as if they appeared at the end of the command-line.
+
+
+-Wunused-but-set-variable
+
+Warn whenever a local variable is assigned to, but otherwise unused (aside
+    from its declaration). This warning is enabled by -Wall.
+To suppress this warning use the unused attribute (see Variable Attributes).
+This warning is also enabled by -Wunused, which is enabled by -Wall.
 
 
 3.5 Options Controlling C++ Dialect *gcc-cpp-options*
@@ -61581,7 +62397,7 @@ typedef enum {
 		unsigned char	buf[] = {(char)FORWARD_STATUS,(char)0xff};
 
 
-<gcc-unused-parameter> -Wunused-parameter
+<gcc-option-warning-unused-parameter> -Wunused-parameter
 
 // $ g++ -std=c++11 -Werror -Wall -Wextra t_cxx.cpp 
 // t_cxx.cpp:13:39: error: unused parameter ‘arg3’ [-Werror=unused-parameter]
@@ -61828,7 +62644,7 @@ dependency output file.
 ={============================================================================
 *kt_linux_gcc_400* gcc-option-cpp-check-defines
 
-<cpp-E-option>
+<cpp-debug>
 
 -E
 Stop after the preprocessing stage; do not run the compiler proper. The output
@@ -61848,7 +62664,7 @@ note:
 Shows code replaced with define values.
 
 
-<cpp-debug> *cpp-check-define*
+*cpp-debug-cpp-check-define*
 -dCHARS -dletters
 Says to make debugging dumps during compilation as specified by letters. The
 flags documented here are those relevant to the preprocessor.
@@ -61941,6 +62757,22 @@ $ /opt/toolchains/humax-dtr_t1000/bin/mipsel-linux-g++ -E -dM -x c++ /dev/null |
 #define __GNUC_MINOR__ 4
 #define __GNUC_GNU_INLINE__ 1
 #define _GNU_SOURCE 1
+
+<ex>
+/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/bin/i686-nptl-linux-gnu-gcc
+-Wall -Wmissing-prototypes -Wshadow -Wpointer-arith -Wstrict-prototypes
+-Wmissing-declarations -Werror -std=c99 -MD -MF
+out/release_dbg/vstb/release_dbg/deps/glue/src/ceej_main.d -D_XOPEN_SOURCE=600
+-D__USE_XOPEN2K -D_GNU_SOURCE -DCDI -DCDI_IOCTL_DEFINITIONS="ioctl_magic.h"
+-DLINT_ERRORS_ONLY= -DLINT_RESTORE= -DPLATFORM_VSTB -DIS_LITTLE_ENDIAN
+-D__LITTLE_ENDIAN -fdata-sections -ffunction-sections
+-Wno-error=unused-but-set-variable -Os -fno-strict-aliasing -g -DRELEASE_DBG
+-DDIAG_RELEASE_DBG -DJPA_GFX_SURFACE_DEBUG -DSI_BUILD
+-DJPA_HEAPDUMP_CRASH_WORKAROUND -Imodules/jvm-glue/src/c/inc
+-Imodules/jpa-impl/src/c/inc -Imodules/jvm/inc -I.
+-I/home/kyoupark/STB_SW_o/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/components/darwin_platform_components/darwin_atg/inc
+-Iout/release_dbg/vstb/release_dbg/include/adaptors -E -dM
+modules/jvm-glue/src/c/src/ceej_main.c
 
 
 ={============================================================================
@@ -86417,16 +87249,16 @@ kernel to measure real and process time.
 {two-kinds}
 Within a program, we may be interested in two kinds of time
 
-* Real time: This is the time as measured either from some standard point
-(`calendar time`) or from some fixed point (typically the start) in the life
-of a process (elapsed or `wall clock time`). Obtaining the calendar time is
-useful to programs that, for example, timestamp database records or files.
-Measuring elapsed time is useful for a program that takes periodic actions or
-makes regular measurements from some external input device.
+o Real time: This is the time as measured either from some standard point
+  (`calendar time`) or from some fixed point (typically the start) in the life
+  of a process (elapsed or `wall clock time`). Obtaining the calendar time is
+  useful to programs that, for example, timestamp database records or files.
+  Measuring elapsed time is useful for a program that takes periodic actions
+  or makes regular measurements from some external input device.
 
-* Process time: This is the amount of CPU time used by a process. Measuring
-process time is useful for checking or optimizing the performance of a program
-or algorithm.
+o Process time: This is the amount of CPU time used by a process. Measuring
+  process time is useful for checking or optimizing the performance of a
+  program or algorithm.
 
 
 {calender-time}
@@ -86548,8 +87380,9 @@ overwrite it.
 
 char *ctime(const time_t *timep);
 
-Returns pointer to statically allocated string terminated by newline and \0 on
+Returns pointer to statically allocated string `terminated by newline` and \0 on
 success, or NULL on error
+
 
 <statically-allocated>
 SUSv3 states that calls to any of the functions ctime(), gmtime(),
@@ -86930,7 +87763,7 @@ TIMER_ABSTIME flag (and restarting the system call if it is interrupted by a
 ={============================================================================
 *kt_linux_core_603* linux-time-realtime
 
-LPI 23.5 POSIX Clocks
+LPI-23.5 POSIX Clocks
 
 POSIX clocks (originally defined in POSIX.1b) provide an API for accessing
 clocks that measure time with `nanosecond precision` Nanosecond time values
@@ -86945,7 +87778,7 @@ On Linux, programs using this API must be compiled with the `-lrt` option, in
 order to link against the `librt (realtime) library.`
 
 
-{clock-gettime}
+{call-clock-gettime}
 The time value is returned in the timespec structure pointed to by tp.
 
 Although the timespec structure affords nanosecond precision, the granularity
@@ -87244,139 +88077,7 @@ time: 00:00:04.648
 
 
 ={============================================================================
-*kt_linux_core_604* linux-time-us-stamp cxx-ex-perfcounter
-
-<ex>
-#ifndef PERFCOUNTER_H
-#define PERFCOUNTER_H
-
-#include <string>
-
-class PerfCounter
-{
-public:
-    PerfCounter();
-    ~PerfCounter();
-
-    void snap(const char* name);
-
-    std::string dump();
-
-private:
-    class DataRec;
-
-    DataRec* head;
-    DataRec* lastRec;
-};
-
-#endif
-
-
-#include "PerfCounter.h"
-
-#include <time.h>
-#include <sstream>
-
-#include <cstdint>
-
-class PerfCounter::DataRec
-{
-public:
-    DataRec() : next(NULL) {}
-
-    struct timespec ts;
-    const char* name;
-
-    DataRec* next;
-};
-
-PerfCounter::PerfCounter()
-{
-    head = new DataRec;
-    lastRec = head;
-    head->name = "Start";
-    clock_gettime(CLOCK_MONOTONIC,&(head->ts));
-}
-
-PerfCounter::~PerfCounter()
-{
-    //delete our records
-    DataRec* toDel = head;
-    while(toDel)
-    {
-        head = toDel->next;
-        delete toDel;
-        toDel = head;
-    }
-}
-
-void PerfCounter::snap(const char* name)
-{
-    lastRec->next = new DataRec;
-    lastRec = lastRec->next;
-    lastRec->name = name;
-    clock_gettime(CLOCK_MONOTONIC,&(lastRec->ts));
-}
-
-std::string PerfCounter::dump()
-{
-    snap("end");
-    std::stringstream ss;
-
-    DataRec* current = head;
-
-    // ns, micro second, unit
-    while(current && current->next)
-    {
-        //first calculate the number of us difference in the seconds part
-        int64_t usecDiff = (current->next->ts.tv_sec - current->ts.tv_sec)*1000000;
-        //now the nsec part
-        usecDiff += (current->next->ts.tv_nsec - current->ts.tv_nsec)/1000;
-        ss << current->name << " -> " << current->next->name << " took " << usecDiff << "us" << std::endl;
-        current = current->next;
-    }
-    return ss.str();
-}
-
-
-#include "PerfCounter.h"
-
-#include <iostream>
-#include <sstream>
-#include <boost/lexical_cast.hpp>
-
-int main(int argc,char** argv)
-{
-    PerfCounter counter;
-    
-    for(int i=0;i<10000;++i)
-    {
-        int out;
-        sscanf("42","%d",&out);
-    }
-    counter.snap("scanf int");
-
-    for(int i=0;i<10000;++i)
-    {
-        int out;
-        std::stringstream ss("42");
-        ss >> out;
-    }
-    counter.snap("stringstream int");
-
-    for(int i=0;i<10000;++i)
-    {
-        int out = boost::lexical_cast<int>("42");
-    }
-    counter.snap("boost::lexical_cast<int>");
-    std::cout << counter.dump() << std::endl;
-}
-
-Start -> scanf int took 2112us
-scanf int -> stringstream int took 27859us
-stringstream int -> boost::lexical_cast<int> took 910us
-boost::lexical_cast<int> -> end took 0us
-
+*kt_linux_core_604* linux-time-us-stamp
 
 <ex>
 // perfcounter.h
@@ -89686,12 +90387,6 @@ method return sender=:1.247 -> dest=:1.249 reply_serial=2 object path
 {kdbus}
 https://github.com/gregkh/presentation-kdbus
 https://github.com/gregkh/kdbus
-
-
-={============================================================================
-*kt_linux_sete_005* admin-check running services
-
-sudo service --status-all
 
 
 ={============================================================================

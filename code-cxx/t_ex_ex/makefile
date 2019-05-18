@@ -25,7 +25,7 @@ CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(GTEST_DIR) \
 
 CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -pg
 
-TESTS = $(TARGET)_test
+TESTS = $(TARGET)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -65,5 +65,5 @@ gtest.a : gtest-all.o
 $(TARGET).o : $(TARGET).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET).cpp -o $(TARGET).o
 
-$(TARGET)_test : $(TARGET).o gtest.a gmock.a
+$(TARGET)_out : $(TARGET).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

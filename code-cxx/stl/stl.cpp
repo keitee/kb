@@ -8,6 +8,7 @@
 #include <forward_list>
 #include <unordered_set>
 #include <queue>
+#include <stack>
 // #include <algorithm>
 #include <numeric>        // std::accumulate for gcc 6
 #include <limits>         // std::numeric_limits
@@ -287,12 +288,14 @@ StructValue ReturnStruct()
 
 TEST(Iterator, NativeAndStructTemporary) 
 {
+  // show that not allowed to modify tempory
+
   // cxx.cpp: In member function ‘virtual void Temporary_NativeAndStruct_Test::TestBody()’:
   // cxx.cpp:1539:45: error: lvalue required as increment operand
   //    cout << "return int: " << ++ReturnInteger() << endl;
   // cout << "return int: " << ++ReturnInteger() << endl;
   
-  cout << "return int: " << ++ReturnStruct() << endl;
+  EXPECT_THAT(++ReturnStruct(), 3302);
 }
 
 TEST(Iterator, OperationOnTemporary)
@@ -302,6 +305,7 @@ TEST(Iterator, OperationOnTemporary)
     sort(++coll.begin(), coll.end());
     EXPECT_THAT(coll, ElementsAre(4,1,2,3,5,6));
   }
+
   {
     string coll{"this is a string object"};
     sort(++coll.begin(), coll.end());
@@ -312,20 +316,50 @@ TEST(Iterator, OperationOnTemporary)
 
 TEST(Iterator, Next)
 {
-  vector<int> coll{1,2,3,4,5};
-  auto iter = coll.begin();
-  EXPECT_EQ(*iter, 1);
+  {
+    vector<int> coll{1,2,3,4,5};
+    auto pos = coll.begin();
+    EXPECT_EQ(*pos, 1);
 
-  ++iter;
-  EXPECT_EQ(*iter, 2);
+    ++pos;
+    EXPECT_EQ(*pos, 2);
 
-  auto pos = next(iter);
-  EXPECT_EQ(*iter, 2);
-  EXPECT_EQ(*pos, 3);
+    // since next() uses copy, do not change input iterator
+
+    auto next_pos = next(pos);
+    EXPECT_EQ(*pos, 2);
+    EXPECT_EQ(*next_pos, 3);
+  }
+
+  // 9.3.2 next() and prev()
+  // Note that next() does not check whether it crosses the end() of a sequence.
+  // Thus, it is up to the caller to ensure that the result is valid.
+  {
+    vector<int> coll{1,2,3,4,5};
+    vector<int> result{};
+
+    for(auto pos = coll.begin(); pos != coll.end(); pos = next(pos))
+      result.push_back(*pos);
+
+    EXPECT_THAT(coll, result);
+  }
+
+  // what would happen when call next() on empty? cxx-undefined
+  //
+  // /usr/include/c++/4.9/debug/safe_iterator.h:356:error: attempt to advance a
+  //     past-the-end iterator 1 steps, which falls outside its valid range.
+
+  {
+    vector<int> coll{};
+    auto pos = coll.begin();
+    auto result = next(pos);
+  }
 }
+
 
 TEST(Iterator, Distance)
 {
+  // cxx-distance which returns positive/negative
   {
     vector<int> coll{1,2,3,4,5};
     auto pos = find(coll.begin(), coll.end(), 3);
@@ -335,6 +369,7 @@ TEST(Iterator, Distance)
     EXPECT_EQ(distance(coll.begin(), coll.end()), 5);
     EXPECT_EQ(distance(coll.end(), coll.begin()), -5);
   }
+
   {
     set<int> coll{1,2,3,4,5};
     auto pos = find(coll.begin(), coll.end(), 3);
@@ -405,6 +440,271 @@ TEST(Iterator, Array)
 
   std::copy(std::begin(coll), std::end(coll), back_inserter(out));
   EXPECT_THAT(out, ElementsAre(33, 67, -4, 13, 5, 2));
+}
+
+TEST(Iterator, Adapters)
+{
+  list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  // cxx-iter-back-inserter
+  {
+    vector<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        back_inserter(ocoll));
+    EXPECT_THAT(ocoll, ElementsAreArray({1,2,3,4,5,6,7,8,9}));
+  }
+
+  // *cxx-reverse* 
+  // cxx-iter-front-inserter
+  // have to use cxx-deque since it uses push_front
+  {
+    deque<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        front_inserter(ocoll));
+    EXPECT_THAT(ocoll, ElementsAreArray({9,8,7,6,5,4,3,2,1}));
+  }
+
+  // *cxx-iter-inserter*
+  {
+    vector<int> ocoll;
+    std::copy(coll.cbegin(), coll.cend(),
+        inserter(ocoll, ocoll.begin()));
+    EXPECT_THAT(ocoll, ElementsAreArray({1,2,3,4,5,6,7,8,9}));
+  }
+}
+
+// shows that inserter() uses insert_iterator internally and that how it works.
+
+TEST(Iterator, InsertIterator)
+{
+  {
+    list<int> coll;
+
+    insert_iterator<list<int>> iter(coll, coll.begin());
+
+    // use usual iterator interface which has the same result
+    // no ++? since this is becuase operator=() do that as above
+    //
+    // *iter = 1; iter++;
+    // *iter = 2; iter++;
+    // *iter = 3; iter++;
+
+    *iter = 1; *iter = 2; *iter = 3; *iter = 44; *iter = 55;
+    EXPECT_THAT(coll, ElementsAre(1,2,3,44,55));
+  }
+
+  {
+    list<int> coll;
+
+    coll.push_back(1); coll.push_back(2); coll.push_back(3);
+    coll.push_back(44); coll.push_back(55);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,44,55));
+  }
+
+  {
+    list<int> coll{1,2,3,44,55};
+    list<int> ocoll{};
+
+    copy(coll.begin(), coll.end(), inserter(ocoll, ocoll.begin()));
+
+    EXPECT_THAT(ocoll, ElementsAre(1,2,3,44,55));
+  }
+}
+
+TEST(Iterator, ReverseIterator)
+{
+  {
+    string coll{"PARK"};
+    string result;
+
+    string::const_reverse_iterator it = coll.crbegin();
+
+    while (it != coll.crend())
+      result.push_back(*it++);
+
+    EXPECT_THAT(result, "KRAP");
+  }
+
+  {
+    string coll{"FIRST,MIDDLE,LAST"};
+
+    auto delim = find(coll.cbegin(), coll.cend(), ',');
+    EXPECT_THAT(string(coll.cbegin(), delim), "FIRST");
+
+    // The result is "TSAL" since iterator goes backward and means [crbegin(),
+    // rcomma). To get the expected result, shall use instead [rcomma.base(),
+    // cend() ) which converts reverse iterator to normal interator.
+
+    auto rdelim = find(coll.crbegin(), coll.crend(), ',');
+    EXPECT_THAT(string(coll.crbegin(), rdelim), "TSAL");
+
+    EXPECT_THAT(string(rdelim.base(), coll.cend()), "LAST");
+  }
+
+  // reverse_iterator operator*() do --
+  {
+    // create deque with elements from 1 to 9
+    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    deque<int>::const_iterator pos;
+    pos = find(coll.cbegin(), coll.cend(), 7);
+    EXPECT_THAT(*pos, 7);
+    
+    deque<int>::const_reverse_iterator rpos(pos);
+    EXPECT_THAT(*rpos, 6);
+  }
+
+  {
+    ostringstream os;
+
+    // create deque with elements from 1 to 9
+    deque<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    // find range [2,7]
+    deque<int>::const_iterator pos1;
+    pos1 = find(coll.cbegin(), coll.cend(), 2);
+
+    deque<int>::const_iterator pos2;
+    pos2 = find(coll.cbegin(), coll.cend(), 7);
+
+    // [2,6]
+    for_each(pos1, pos2, [&](int e)
+        { os << e << ","; }
+        );
+
+    EXPECT_THAT(os.str(), "2,3,4,5,6,");
+
+    deque<int>::const_reverse_iterator rpos1(pos1);
+    deque<int>::const_reverse_iterator rpos2(pos2);
+
+    os.str("");
+
+    // *cxx-error* cause runtime error -D_GLIBCXX_DEBUG
+    // for_each(rpos1, rpos2, [&](int e)
+    //
+    // since rpos1 that point 2 and rpos1++ means pos1-- and goes below begin()
+
+    for_each(rpos2, rpos1, [&](int e)
+        { os << e << ","; }
+        );
+
+    EXPECT_THAT(os.str(), "6,5,4,3,2,");
+  }
+}
+
+TEST(Iterator, StreamIterator)
+{
+  // as gets from std::cin, use stream
+  {
+    istringstream is{"1 2 3 4 5 6"};
+    vector<int> coll;
+
+    int value{};
+
+    while (is >> value)
+      coll.push_back(value);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // as gets from std::cin, use iterator
+  {
+    istringstream is{"1 2 3 4 5 6"};
+    vector<int> coll;
+
+    istream_iterator<int> isi(is), eof;
+
+    while (isi != eof)
+      coll.push_back(*isi++);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    istream_iterator<int> isi(is), eof;
+
+    // *cxx-vector-ctor*
+    // no loop and no isi++
+    vector<int> coll(isi, eof);
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
+
+    // *cxx-error* without additional (). WHY?
+    // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // use iterator but direct
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    istream_iterator<int> isi(is), eof;
+
+    // no loop and no isi++
+    vector<int> coll;
+    std::copy(isi, eof, back_inserter(coll));
+
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+
+  // as gets from std::cin, use stream
+  {
+    // istream_iterator<int> isi(cin), eof;
+
+    istringstream is{"1 2 3 4 5 6"};
+    istream_iterator<int> isi(is), eof;
+
+    auto result = std::accumulate(isi, eof, 0);
+
+    EXPECT_THAT(result, 21);
+  }
+
+  // ostream_iterator as std::cout
+  {
+    vector<int> coll{1,2,3,4,5,6};
+    ostringstream os;
+    ostream_iterator<int> osi(os, ",");
+
+    for (auto e : coll)
+      *osi++ = e;
+
+    EXPECT_THAT(os.str(), "1,2,3,4,5,6,");
+  }
+
+  // With/without "++oo", the result is the same. The ++oo is done to mimic
+  // writing into an array through a pointer.
+
+  {
+    ostringstream os;
+    ostream_iterator<string> osi(os);
+
+    *osi = "Hello, ";
+    ++osi;
+    *osi = "world!";
+
+    EXPECT_THAT(os.str(), "Hello, world!");
+  }
+  {
+    ostringstream os;
+    ostream_iterator<string> osi(os);
+
+    *osi = "Hello, ";
+    *osi = "world!";
+
+    EXPECT_THAT(os.str(), "Hello, world!");
+  }
 }
 
 
@@ -495,14 +795,28 @@ TEST(Vector, Ctors)
 {
   {
     vector<int> coll(5);
-    // PRINT_ELEMENTS(icoll1, "default init: ");
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(0,0,0,0,0));
+  }
+
+  // *cxx-vector-resize*
+  {
+    vector<int> coll;
+    coll.resize(5);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(0,0,0,0,0));
   }
 
   {
     vector<int> coll(5, 10);
-    // PRINT_ELEMENTS(icoll2, "value   init: ");
+    ASSERT_THAT(coll.size(), Eq(5));
+    EXPECT_THAT(coll, ElementsAre(10,10,10,10,10));
+  }
+
+  // *cxx-vector-resize*
+  {
+    vector<int> coll;
+    coll.resize(5, 10);
     ASSERT_THAT(coll.size(), Eq(5));
     EXPECT_THAT(coll, ElementsAre(10,10,10,10,10));
   }
@@ -516,6 +830,26 @@ TEST(Vector, Ctors)
   // initializer_list
   {
     vector<int> coll{1,2,3,4,5,6};
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  }
+  {
+    vector<int> coll{1};
+    EXPECT_THAT(coll, ElementsAre(1));
+  }
+  {
+    vector<int> coll{2};
+    EXPECT_THAT(coll, ElementsAre(2));
+  }
+
+  // iterator
+  {
+    istringstream is{"1 2 3 4 5 6"};
+
+    vector<int> coll((istream_iterator<int>(is)), istream_iterator<int>());
+
+    // *cxx-error* without additional (). WHY?
+    // vector<int> coll(istream_iterator<int>(is), istream_iterator<int>());
+
     EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
   }
 }
@@ -559,6 +893,7 @@ void GetVectorArg(const vector<int> &coll)
 
 TEST(Vector, CopyAndMoveAssign)
 {
+  // assign
   {
     vector<int> coll1{1,2,3,4,5,6};
     vector<int> coll2{};
@@ -572,6 +907,7 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
+  // assign
   {
     vector<int> coll1{1,2,3,4,5,6};
     vector<int> coll2{};
@@ -585,6 +921,7 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
+  // move
   {
     vector<int> coll1{1,2,3,4,5,6};
     vector<int> coll2{};
@@ -598,6 +935,7 @@ TEST(Vector, CopyAndMoveAssign)
     ASSERT_THAT(coll2.size(), 6);
   }
 
+  // assign
   {
     vector<int> coll1{1,2,3,4,5,6};
     GetVectorArg(coll1);
@@ -938,6 +1276,11 @@ TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
 
 TEST(Vector, AsCArray)
 {
+  // {
+  //   vector<int> coll{1,2,3,4,5};
+  //   cout << "coll: " << coll[-1] << endl;
+  // }
+
   {
     vector<char> coll;
     coll.resize(41);
@@ -1155,55 +1498,116 @@ TEST(DISABLED_StlDeque, HowDequeSupportEmpty)
 // ={=========================================================================
 // cxx-queue-priority
 
+TEST(CollQueue, Queue)
+{
+  ostringstream os;
+  std::queue<std::string> q;
+
+  q.push("These "); q.push("are "); q.push("more than ");
+  os << q.front(); q.pop();
+  os << q.front(); q.pop();
+
+  q.push("four "); q.push("words!");
+
+  // discard one element
+  q.pop();
+
+  os << q.front(); q.pop();
+  os << q.front(); q.pop();
+
+  EXPECT_THAT(os.str(), "These are four words!");
+  EXPECT_THAT(q.size(), 0);
+}
+
 TEST(CollQueue, PriorityQueue)
 {
-  // priority_queue<float> pq;
-  priority_queue<int> pq;
-
-  pq.push(66);
-  pq.push(22);
-  pq.push(44);
-
-  // EXPECT_THAT(pq.top(), FloatEq(66.6));
-  // pq.pop();
-
-  // EXPECT_THAT(pq.top(), FloatEq(44.4));
-  // pq.pop();
-
-  EXPECT_THAT(pq.top(), Eq(66));
-  pq.pop();
-
-  EXPECT_THAT(pq.top(), Eq(44));
-  pq.pop();
-
-  // insert more
-  pq.push(11);
-  pq.push(55);
-  pq.push(33);
-
-  pq.pop();
-
-  // since queue do not support begin()/end(), cannot use ElementsAre and copy
-  // to transform it to a vector. Did it manually.
-
-  vector<int> coll;
-
-  while (!pq.empty())
   {
-    coll.push_back(pq.top());
+    queue<int> pq;
+
+    pq.push(22);
+    pq.push(66);
+    pq.push(44);
+
+    //         top
+    // 44, 66, 22
+
+    // queue do not have top()
+
+    EXPECT_THAT(pq.front(), Eq(22));
     pq.pop();
+
+    EXPECT_THAT(pq.front(), Eq(66));
+    pq.pop();
+
+    pq.push(11);
+    pq.push(55);
+    pq.push(33);
+
+    //             top
+    // 33, 55, 11, 44
+
+    pq.pop();
+
+    // since queue do not support begin()/end(), cannot use ElementsAre and copy
+    // to transform it to a vector. Did it manually.
+    // copy(pq.begin(), pq.end(), back_inserter(coll));
+
+    vector<int> coll;
+
+    while (!pq.empty())
+    {
+      coll.push_back(pq.front());
+      pq.pop();
+    }
+
+    EXPECT_THAT(coll, ElementsAre(11, 55, 33));
   }
 
-  // copy(pq.begin(), pq.end(), back_inserter(coll));
+  {
+    priority_queue<int> pq;
 
-  EXPECT_THAT(coll, ElementsAre(33, 22, 11));
+    pq.push(22);
+    pq.push(66);
+    pq.push(44);
+
+    //         top
+    // 22, 44, 66
+
+    EXPECT_THAT(pq.top(), Eq(66));
+    pq.pop();
+
+    EXPECT_THAT(pq.top(), Eq(44));
+    pq.pop();
+
+    pq.push(11);
+    pq.push(55);
+    pq.push(33);
+
+    // 11, 22, 33, 55
+
+    pq.pop();
+
+    // since queue do not support begin()/end(), cannot use ElementsAre and copy
+    // to transform it to a vector. Did it manually.
+    // copy(pq.begin(), pq.end(), back_inserter(coll));
+
+    vector<int> coll;
+
+    while (!pq.empty())
+    {
+      coll.push_back(pq.top());
+      pq.pop();
+    }
+
+    EXPECT_THAT(coll, ElementsAre(33, 22, 11));
+  }
 }
 
 
 // ={=========================================================================
 // cxx-set
 
-TEST(StlSet, HowSorted)
+TEST(Set, SortOrder)
 {
   {
     // less <
@@ -1230,7 +1634,7 @@ TEST(StlSet, HowSorted)
   }
 }
 
-TEST(StlSet, HowSearched)
+TEST(Set, Search)
 {
   {
     set<int> coll;
@@ -1250,6 +1654,7 @@ TEST(StlSet, HowSearched)
 
     EXPECT_THAT(*coll.equal_range(3).first, 4);
     EXPECT_THAT(*coll.equal_range(3).second, 4);
+
 
     EXPECT_THAT(*coll.lower_bound(5), 5);
 
@@ -1284,7 +1689,7 @@ TEST(StlSet, HowSearched)
   }
 }
 
-TEST(StlSet, CheckDuplicate)
+TEST(SetMulti, Duplicate)
 {
   {
     multiset<int, greater<int>> coll{13, 9, 7, 10, 2, 11, 12, 8, 7};
@@ -1310,37 +1715,31 @@ TEST(StlSet, CheckDuplicate)
 // ={=========================================================================
 // cxx-map
 
-TEST(CxxStlTest, HowMapInsertWorks)
+TEST(Map, Insert)
 {
-    map<unsigned int, string> pmap{ 
-        {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
-    };
+  // cannot be a const map since operator[] is for non-const.
 
-    // PRINT_M_ELEMENTS(pmap);
+  map<unsigned int, string> coll{ 
+    {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}
+  };
 
-    pmap[3] = "threee";
-    pmap[3] = "threeee";
-    pmap[3] = "threeeee";
-    pmap[3] = "threeeeee";
+  coll[3] = "threee";
+  coll[3] = "threeee";
+  coll[3] = "threeeee";
+  coll[3] = "threeeeee";
 
-    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+  ASSERT_THAT(coll[3], Eq("threeeeee"));
 
-    // PRINT_M_ELEMENTS(pmap);
+  coll.insert({3, "third"});
+  coll.insert({3, "thirdd"});
+  coll.insert({3, "thirddd"});
+  coll.insert({3, "thirdddd"});
 
-    pmap.insert({3, "third"});
-    pmap.insert({3, "thirdd"});
-    pmap.insert({3, "thirddd"});
-    pmap.insert({3, "thirdddd"});
+  // not changed since cxx-set and cxx-map do not allow duplicates and nothing
+  // happens when key is already exist
 
-    ASSERT_THAT(pmap[3], Eq("threeeeee"));
+  ASSERT_THAT(coll[3], Eq("threeeeee"));
 }
-
-
-// ={=========================================================================
-// cxx-map
-
-// key 3.0 found!(3,2)
-// value 3.0 found!(4,3)
 
 // error when use -D_GLIBCXX_DEBUG
 //
@@ -1349,150 +1748,268 @@ TEST(CxxStlTest, HowMapInsertWorks)
 //     return arg->first == expected.first && arg->second == expected.second;
 // }
 
-// TEST(CxxStlTest, HowMapFindWorks)
-// {
-//     map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
-// 
-//     auto posKey = coll.find(3.0);
-//     if( posKey != coll.end() )
-//     {
-//         // cout << "key 3.0 found!(" << posKey->first << "," << 
-//         //     posKey->second << ")" << endl;
-//         ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
-//         // ASSERT_THAT(posKey->first, Eq(3));
-//         // ASSERT_THAT(posKey->second, Eq(2));
-//     }
-// 
-// 
-//     // *algo-find-if-const* error if there is no const on predicate. 
-//     // since it's *cxx-algo-non-modifying* ?
-// 
-//     auto posVal = find_if( coll.cbegin(), coll.cend(),
-//             // [] ( const pair<float,float> &elem ) {
-//             // [] ( const map<float,float>::value_type &elem ) {
-//             [] ( const decltype(coll)::value_type &elem ) {
-//             return elem.second == 3.0;
-//             } );
-//     if( posVal != coll.end() )
-//     {
-//         // cout << "value 3.0 found!(" << posVal->first << "," << 
-//         //     posVal->second << ")" << endl;
-//         ASSERT_THAT(posVal->first, Eq(4));
-//         ASSERT_THAT(posVal->second, Eq(3));
-//     }
-// }
+TEST(Map, Find)
+{
+  map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+
+  // *cxx-error*
+  // when tries to use custom matcher, get's link error
+  // ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
+
+  auto posKey = coll.find(3.0);
+  EXPECT_THAT(*posKey, make_pair(3,2));
+
+  // *algo-find-if-const* error if there is no const on predicate. 
+  // since it's *cxx-algo-non-modifying* ?
+
+  // *cxx-decltype*
+  auto posVal = find_if( coll.cbegin(), coll.cend(),
+      // [] ( const pair<float,float> &elem ) {
+      // [] ( const map<float,float>::value_type &elem ) {
+      [] ( const decltype(coll)::value_type &elem ) {
+      return elem.second == 3.0;
+      } );
+  EXPECT_THAT(posVal->first, Eq(4));
+  EXPECT_THAT(posVal->second, Eq(3));
+}
+
+TEST(Map, EqualRange)
+{
+  std::string str = "total";
+
+  std::multimap<std::string, std::string> authors;
+
+  // *cxx-map-insert*
+  authors.insert( {"Kit, Park", "How to get through"} );
+  authors.insert( {"Barth, John", "Sot-Weed Factor"} );
+  authors.insert( {"Barth, John", "Lost in the Funhouse"});
+  authors.insert( {"Andy, Steve", "Enterprise"});
+  authors.insert( {"Barth, John", "A way to success"});
+
+  std::string search_item("Barth, John");
+
+  auto entries = authors.count( search_item );  // num of elements
+  EXPECT_THAT(entries, 3);
+
+  // use iter
+  {
+    vector<string> result{};
+    auto iter = authors.find(search_item);      // first entry
+
+    while( entries ) {
+      result.push_back(iter->second);
+      ++iter; --entries;
+    }
+
+    EXPECT_THAT(result, 
+        ElementsAre("Sot-Weed Factor", "Lost in the Funhouse", "A way to success"));
+  }
+
+  // use _bound() calls
+  {
+    vector<string> result{};
+
+    for (auto begin = authors.lower_bound(search_item), end = authors.upper_bound(search_item);
+        begin != end; ++begin)
+    {
+      result.push_back(begin->second);
+    }
+
+    EXPECT_THAT(result, 
+        ElementsAre("Sot-Weed Factor", "Lost in the Funhouse", "A way to success"));
+  }
+
+  // use equal_range()
+  // return pair of iter in range [first, off-the-end). Like above, if not found
+  // return the same.
+  {
+    vector<string> result{};
+    auto iter = authors.find(search_item);      // first entry
+
+    for (auto rpos = authors.equal_range(iter->first);
+        rpos.first != rpos.second; ++rpos.first)
+    {
+      result.push_back(rpos.first->second);
+    }
+
+    EXPECT_THAT(result, 
+        ElementsAre("Sot-Weed Factor", "Lost in the Funhouse", "A way to success"));
+  }
+}
 
 
 // ={=========================================================================
 // cxx-unordered
 
-TEST(CxxStlTest, UnorderedMapDuplicates)
+TEST(Unordered, MapDuplicates)
 {
-  unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", "New York",
-    "Chicago", "Toronto", "Paris", "Frankfurt"};
+  unordered_multiset<string> cities{"Braunschweig", "Hanover", "Frankfurt", 
+    "New York", "Chicago", "Toronto", "Paris", "Frankfurt"};
 
-  for( const auto &elem : cities )
-    cout << elem << ' ';
+  {
+    vector<string> result{};
 
-  cout << endl;
+    for( const auto &elem : cities )
+      result.push_back(elem);
 
-  // insert additional elements
-  cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
+    EXPECT_THAT(result, 
+        ElementsAre("Paris", "Toronto", "Chicago", "New York", 
+          "Frankfurt", "Frankfurt", "Hanover", "Braunschweig")); 
+  }
 
-  for( const auto &elem : cities )
-    cout << elem << ' ';
+  {
+    // insert additional elements
+    cities.insert({"London", "Munich", "Hanover", "Braunschweig"});
 
-  cout << endl;
+    vector<string> result{};
+
+    for( const auto &elem : cities )
+      result.push_back(elem);
+
+    EXPECT_THAT(result, 
+        ElementsAreArray({"Munich", "London", 
+          "Frankfurt", "Frankfurt",         // duplicates
+          "New York", 
+          "Braunschweig", "Braunschweig",   // duplicates
+          "Chicago", "Toronto", 
+          "Hanover", "Hanover",             // duplicates
+          "Paris"})); 
+  }
 }
 
 
 // ={=========================================================================
 // cxx-list
 
-void PrintLists(const list<int> &list_one, const list<int> &list_two)
+TEST(List, SpliceAndMerge)
 {
-    cout << "list 1: ";
-    copy(list_one.cbegin(), list_one.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl << "list 2: ";
-    copy(list_two.cbegin(), list_two.cend(), ostream_iterator<int>(cout, " "));
-    cout << endl << endl;
+  list<int> list_one, list_two;
+ 
+  for(int i=0; i < 6; ++i)
+  {
+    list_one.push_back(i);
+    list_two.push_back(10 + i);
+  }
+ 
+  EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
+  EXPECT_THAT(list_two, ElementsAre(10, 11, 12, 13, 14, 15));
+ 
+  // splice, verb, to join two pieces of rope, film, etc. together at their
+  // ends in order to form one long piece:
+  //
+  // c.splice(pos,c2) Moves all elements of c2 to c in front of the iterator
+  // position pos
+  // moves all elements of list_one before the pos of '3' element.
+ 
+  list_two.splice(find(list_two.begin(), list_two.end(), 13), list_one);
+ 
+  EXPECT_EQ(list_one.size(), 0); 
+  // 10 11 12 [0 1 2 3 4 5] 13 14 15 
+  EXPECT_THAT(list_two, 
+      ElementsAreArray({10, 11, 12, 0, 1, 2, 3, 4, 5, 13, 14, 15})); 
+ 
+  // c.splice(pos,c2,c2pos) 
+  // Moves the *single* element at c2pos in c2 in front of pos of list c 
+  // (c and c2 may be identical)
+  //
+  // move first element of list_two to the end
+ 
+  list_two.splice(list_two.end(), list_two, list_two.begin());
+  EXPECT_THAT(list_two, 
+      ElementsAreArray({11, 12, 0, 1, 2, 3, 4, 5, 13, 14, 15, 10})); 
+ 
+  list<int> list_three;
+  // move first element of list_two to the first of list_three
+  list_three.splice(list_three.begin(), list_two, list_two.begin());
+ 
+  EXPECT_THAT(list_two, 
+      ElementsAreArray({12, 0, 1, 2, 3, 4, 5, 13, 14, 15, 10})); 
+  EXPECT_THAT(list_three, ElementsAre(11)); 
+ 
+  list<int> coll1{20, 21, 22};
+  list<int> coll2{30, 31, 32};
+  list_three.splice(list_three.begin(), coll1);
+  list_three.splice(list_three.end(), coll2);
+  EXPECT_THAT(list_three, 
+      ElementsAreArray({20,21,22,11,30,31,32}));
+ 
+  list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
+  list<int> list5{0, 1, 2, 3, 4, 5};
+ 
+  list5.merge(list4);
+  EXPECT_THAT(list5, 
+      ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
+ 
+  // 8.8.1 Special Member Functions for Lists (and Forward Lists)
+  //
+  // Strictly speaking, the standard requires that both (forward) lists be
+  // sorted on entry. In practice, however, merging is also possible for
+  // unsorted lists.  However, you should check this before you rely on it.
+  // 
+  // list<int> list5;
+  // list5.merge({4, 1, 0, 3, 2, 5});
+  // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
+  //
+  // cxx-runtime-error
+  //
+  // /usr/include/c++/4.9/debug/list:691:error: elements in iterator range [
+  //     __x.begin().base(), __x.end().base()) are not sorted.
+  //
+  // Aborted.
+  //
+  // list<int> list6;
+  // list6.merge({4, 1, 0, 3, 2, 5});
+  // EXPECT_THAT(list6, Not(ElementsAreArray({0, 1, 2, 3, 4, 5})));
 }
 
-TEST(CollList, UseSpliceOrMerge)
-{
-    list<int> list_one, list_two;
 
-    for(int i=0; i < 6; ++i)
+TEST(List, Ops)
+{
+  {
+    std::list<int> coll1, coll2;
+
+    for (int i = 0; i < 6; ++i)
     {
-        list_one.push_back(i);
-        list_two.push_back(i);
+      coll1.push_back(i);
+      coll2.push_front(i);
     }
 
-    EXPECT_THAT(list_one, ElementsAre(0, 1, 2, 3, 4, 5));
-    EXPECT_THAT(list_two, ElementsAre(0, 1, 2, 3, 4, 5));
+    EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5));
+    EXPECT_THAT(coll1.size(), 6); 
+    EXPECT_THAT(coll2, ElementsAre(5,4,3,2,1,0));
+    EXPECT_THAT(coll2.size(), 6); 
 
-    // splice, verb, to join two pieces of rope, film, etc. together at their
-    // ends in order to form one long piece:
-    //
-    // c.splice(pos,c2) Moves all elements of c2 to c in front of the iterator
-    // position pos
-    // moves all elements of list_one before the pos of '3' element.
+    EXPECT_THAT(coll1.front(), 0);
+    EXPECT_THAT(coll1.back(), 5);
+    EXPECT_THAT(coll1.size(), 6); 
 
-    list_two.splice(find(list_two.begin(), list_two.end(), 3), list_one);
-    EXPECT_EQ(list_one.size(), 0); 
-    // 0 1 2 [0 1 2 3 4 5] 3 4 5 
-    EXPECT_THAT(list_two, ElementsAreArray({0, 1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5})); 
+    // void pop_front() so cannot use EXPECT_THAT()
+    coll1.pop_front();
+    EXPECT_THAT(coll1.size(), 5); 
 
-    // c.splice(pos,c2,c2pos) 
-    // Moves the element at c2pos in c2 in front of pos of list c 
-    // (c and c2 may be identical)
-    //
-    // move first element of list_two to the end
+    coll1.pop_back();
+    EXPECT_THAT(coll1.size(), 4); 
 
-    list_two.splice(list_two.end(), list_two, list_two.begin());
-    // 1 2 [0 1 2 3 4 5] 3 4 5 0 
-    EXPECT_THAT(list_two, ElementsAreArray({1, 2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
+    EXPECT_THAT(coll1, ElementsAre(1,2,3,4));
+  }
 
-    list<int> list_three;
-    // move first element of list_two to the first of list_three
-    list_three.splice(list_three.begin(), list_two, list_two.begin());
-
-    EXPECT_THAT(list_two, ElementsAreArray({2, 0, 1, 2, 3, 4, 5, 3, 4, 5, 0})); 
-    EXPECT_THAT(list_three, ElementsAre(1)); 
-
-    list<int> list4{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5};
-    list<int> list5{0, 1, 2, 3, 4, 5};
-    
-    list5.merge(list4);
-    EXPECT_THAT(list5, ElementsAreArray({0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5}));
-
-    // 8.8.1 Special Member Functions for Lists (and Forward Lists)
-    //
-    // Strictly speaking, the standard requires that both (forward) lists be
-    // sorted on entry. In practice, however, merging is also possible for
-    // unsorted lists.  However, you should check this before you rely on it.
-    // 
-    // So will be sorted?
-    //
-    // list<int> list5;
-    // list5.merge({4, 1, 0, 3, 2, 5});
-    // EXPECT_THAT(list5, ElementsAreArray({0, 1, 2, 3, 4, 5}));
-    //
-    // NO and failed on gcc.
-
-    // Actual: { 4, 1, 0, 3, 2, 5 }, whose element #0 doesn't match
-
-    list<int> list6;
-    list6.merge({4, 1, 0, 3, 2, 5});
-    EXPECT_THAT(list6, Not(ElementsAreArray({0, 1, 2, 3, 4, 5})));
+  // no such interface to assign.
+  // {
+  //   std::list<int> coll{0,1,2,3,4,5};
+  //   EXPECT_THAT(coll, ElementsAre(0,1,2,3,4,5));
+  //   coll.assign(++coll.begin(), 10);
+  //   EXPECT_THAT(coll, ElementsAre(0,10,2,3,4,5));
+  // }
 }
 
 
-TEST(CollList, UseListRemoveIf)
+TEST(List, RemoveIf)
 {
-  list<int> int_list{0, 1, 2, 3, 4};
+  std::list<int> coll{0, 1, 2, 3, 4};
 
-  int_list.remove_if([](int e)
+  // remove if e > 2
+
+  coll.remove_if([](int e)
       { 
         if (e > 2) 
           return true;
@@ -1500,18 +2017,20 @@ TEST(CollList, UseListRemoveIf)
         return false;
       });
 
-  EXPECT_THAT(int_list, ElementsAre(0, 1, 2));
+  EXPECT_THAT(coll, ElementsAre(0, 1, 2));
 
-  int_list.remove_if([](int e)
+  // remove if can be divided by 2
+
+  coll.remove_if([](int e)
       { return e % 2 == 0; });
 
-  EXPECT_THAT(int_list, ElementsAre(1));
+  EXPECT_THAT(coll, ElementsAre(1));
 }
 
 
-TEST(CollList, UseErase)
+TEST(List, Erase)
 {
-  list<int> coll{10,20,30,40,50};
+  std::list<int> coll{10,20,30,40,50};
 
   auto iter = coll.begin();
 
@@ -1523,9 +2042,9 @@ TEST(CollList, UseErase)
   EXPECT_THAT(coll, ElementsAre(30,40,50));
 }
 
-TEST(CollList, Devide)
+TEST(List, SpliceAndDivide)
 {
-  list<int> coll{26, 33, 35, 29, 19, 12, 22};
+  std::list<int> coll{26, 33, 35, 29, 19, 12, 22};
   auto slow = coll.begin();
   auto fast = next(slow);
 
@@ -1557,92 +2076,7 @@ TEST(CollList, Devide)
   EXPECT_THAT(coll2, ElementsAre(19,12,22));
 }
 
-
-/*
-If List is proper class which has copy or move context then it would be easy to
-implement this since can simply call result.Add() to create merged list.
-
-However, this is for C and result is the same as first and have to handle with
-care such as handle the first comparison.
-
-{
-  set current of first;
-  set current of last;
-
-  while (there is element in the first AND there is element in the last)
-  {
-    compare key between element from the first and the last;
-
-    if (the one of the first is equal or greater then the one of the last)
-    {
-      then write the one of the last and get the next from the last;
-    }
-
-    if (the one of the first is less than the last)
-    {
-      then, write it out and get the next from the first;
-    }
-  }
-
-  if (no more from the first and there are some from the last)
-  {
-    then write the rest of the last since the rest is already sorted;
-  }
-  else if (no more from the second and there are some from the first)
-  {
-    then write the rest of the first;
-  }
-  else
-  {
-    when both are finished;
-  }
-
-  set the end of the result for all caese;
-}
-*/
-
-TEST(CollList, Combine)
-{
-  list<int> coll1{26,33,35,29};
-  list<int> coll2{9,12,22};
-  list<int> coll;
-
-  auto first = coll1.begin();
-  auto second = coll2.begin();
-
-  while ((first != coll1.end()) && (second != coll2.end()))
-  {
-    if (*second <= *first)
-    {
-      coll.push_back(*second);
-      ++second;
-    }
-    else
-    {
-      coll.push_back(*first);
-      ++first;
-    }
-  }
-
-  if ((first == coll1.end()) && (second != coll2.end())) 
-  {
-    coll.splice(coll.end(), coll2, second, coll2.end());
-  }
-  else if ((first != coll1.end()) && (second == coll2.end())) 
-  {
-    coll.splice(coll.end(), coll1, first, coll1.end());
-  }
-  else
-  {
-    // no left from both.
-  }
-
-  // combined
-  EXPECT_THAT(coll, ElementsAre(9, 12, 22, 26, 33, 35, 29));
-}
-
-
-TEST(CollList, Sort)
+TEST(List, Sort)
 {
   list<int> coll{26, 33, 35, 29, 19, 12, 22};
   coll.sort();
@@ -1654,10 +2088,52 @@ TEST(CollList, Sort)
 
 TEST(ForwardList, InsertAfter)
 {
-  forward_list<int> coll{1,2,3};
-  coll.insert_after(coll.before_begin(), {77, 88, 99});
-  EXPECT_THAT(coll, ElementsAre(77, 88, 99, 1, 2, 3));
+  {
+    forward_list<int> coll{1,2,3};
+    coll.insert_after(coll.before_begin(), {77, 88, 99});
+    EXPECT_THAT(coll, ElementsAre(77, 88, 99, 1, 2, 3));
+  }
+
+  // Note that calling an _after member function with end() or cend() results in
+  // undefined behavior because to append a new element at the end of a forward
+  // list, you have to pass the position of the last element (or before_begin()
+  // if none): 
+  //
+  // RUNTIME ERROR: appending element after end is undefined behavior 
+  //
+  // fwlist.insert_after(fwlist.end(),9999);
+  //
+  // {
+  //   forward_list<int> coll{1,2,3};
+  //   coll.insert_after(coll.end(), {77, 88, 99});
+  //   EXPECT_THAT(coll, ElementsAre(1, 2, 3, 77, 88, 99));
+  // }
 }
+
+// The drawbacks of having a singly linked list, where you can only traverse
+// forward, gets even worse when trying to find an element to insert or delete
+// something there. The problem is that when you find the element, you are too
+// far, because to insert or delete something there you have to manipulate the
+// element before the element you are searching for. For this reason, you have
+// to find an element by determining whether the next element fits a specific
+// criterion
+
+TEST(ForwardList, DrawBacks)
+{
+  forward_list<int> coll{1, 2, 3, 4, 5, 97, 98, 99};
+
+  auto pos_before = coll.before_begin();
+  for (auto pos = coll.begin(); pos != coll.end(); ++pos, ++pos_before)
+  {
+    if (*pos % 2 == 0)
+      break;
+  }
+
+  // there is no insert_before()
+  coll.insert_after(pos_before, 42);
+  EXPECT_THAT(coll, ElementsAre(1, 42, 2, 3, 4, 5, 97, 98, 99)); 
+}
+
 
 // poor performance
 TEST(ForwardList, Resize)
@@ -1711,8 +2187,7 @@ TEST(ForwardList, ImplementedInTermsOf)
   
   ForwardList<int> rcoll;
 
-  auto iter = coll.begin();
-  for (iter; iter != coll.end(); ++iter)
+  for (auto iter = coll.begin(); iter != coll.end(); ++iter)
   {
     rcoll.push_front(*iter);
   }
@@ -1763,7 +2238,206 @@ TEST(ForwadList, BookExample)
 
 
 // ={=========================================================================
-// stl-swap
+// cxx-stack
+
+TEST(Stack, BookExample)
+{
+  std::vector<int> coll{1,2,3,4,5,6,7,8,9,10,11,12};
+
+  std::stack<int> result1; 
+  std::vector<int> result2; 
+
+  // fill in stack
+  for (auto e : coll)
+    result1.push(e);
+
+  // cxx-stack not work with gtest
+  // EXPECT_THAT(result1, ElementsAreArray({12,11,10,9,8,7,6,5,4,3,2,1}));
+
+  // change top element
+  result1.top() = 98;
+
+  // EXPECT_THAT(result1, ElementsAreArray({98,11,10,9,8,7,6,5,4,3,2,1}));
+
+  while (!result1.empty())
+  {
+    result2.push_back(result1.top());
+    result1.pop();
+  }
+
+  EXPECT_THAT(result2, ElementsAreArray({98,11,10,9,8,7,6,5,4,3,2,1}));
+}
+
+
+namespace cxx_stack
+{
+  class ReadEmptyStack : public std::exception
+  {
+    public:
+      virtual const char* what() const noexcept
+      { return "cannot read on empty stack"; }
+  };
+
+  template <typename T>
+    class Stack
+    {
+      public:
+        typename std::deque<T>::size_type size() const
+        { return coll_.size(); }
+
+        bool empty() const
+        { return coll_.empty(); }
+
+        void push(T const& elem)
+        { coll_.push_back(elem); }
+
+        T pop()
+        {
+          if (coll_.empty())
+            throw ReadEmptyStack();
+
+          T elem(coll_.back());
+          coll_.pop_back();
+          return elem;
+        }
+
+        T& top()
+        {
+          if (coll_.empty())
+            throw ReadEmptyStack();
+
+          return coll_.back();
+        }
+
+      private:
+        std::deque<T> coll_;
+    };
+
+} // namespace
+
+TEST(Stack, ImplementedInTermsOf)
+{
+  using namespace cxx_stack;
+
+  Stack<int> coll;
+  vector<int> result;
+
+  coll.push(10);
+  coll.push(20);
+  coll.push(30);
+
+  EXPECT_THAT(coll.pop(), 30);
+
+  coll.top() = 80;
+
+  coll.push(100);
+  coll.push(200);
+
+  while (!coll.empty())
+  {
+    result.push_back(coll.pop());
+  }
+
+  EXPECT_THAT(result, ElementsAre(200, 100, 80, 10));
+
+  // stack is already empty
+
+  EXPECT_THROW(coll.pop(), ReadEmptyStack);
+}
+
+
+// ={=========================================================================
+// algo-predicate
+
+namespace algo_predicate
+{
+  class PredicateWithState
+  {
+    public:
+      PredicateWithState(int value):
+        nth_(value), count_(0) {}
+
+      // *cxx-unused*
+      bool operator()(int)
+      {
+        return ++count_ == nth_;
+      }
+
+    private:
+      int nth_;
+      int count_;
+  };
+
+  class PredicateWithValue
+  {
+    public:
+      void operator()(int value)
+      {
+        value += 10;
+      }
+  };
+
+  class PredicateWithReference
+  {
+    public:
+      void operator()(int& value)
+      {
+        value += 10;
+      }
+  };
+} // namespace
+
+TEST(Predicate, Stateless)
+{
+  using namespace algo_predicate;
+
+  list<int> coll = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  
+  auto pos = remove_if(coll.begin(), coll.end(),
+      PredicateWithState(3));
+
+  coll.erase(pos, coll.end());
+
+  // removed 3 and 6. WHY?
+  EXPECT_THAT(coll, ElementsAre(1,2,4,5,7,8,9,10));
+}
+
+TEST(Predicate, Predefined)
+{
+  std::plus<int> op;
+  EXPECT_THAT(op(10, 20), 30);
+}
+
+// template<typename _InputIterator, typename _Function>
+//   _Function
+// for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+// {
+//   for (; __first != __last; ++__first)
+//     __f(*__first);
+// 
+//   return _GLIBCXX_MOVE(__f);
+// }
+
+TEST(Predicate, ValueAndReference)
+{
+  using namespace algo_predicate;
+
+  {
+    vector<int> coll{1,2,3,4,5};
+    std::for_each(coll.begin(), coll.end(), PredicateWithValue());
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5));
+  }
+
+  {
+    vector<int> coll{1,2,3,4,5};
+    std::for_each(coll.begin(), coll.end(), PredicateWithReference());
+    EXPECT_THAT(coll, ElementsAre(11,12,13,14,15));
+  }
+}
+
+
+// ={=========================================================================
+// algo-swap
 //
 // 9.3.4 iter_swap()
 //
@@ -1776,7 +2450,7 @@ TEST(ForwadList, BookExample)
 // assignable.
 //
 
-TEST(StlSwap, Swaps)
+TEST(AlgoSwap, IterSwap)
 {
   {
     vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -1811,29 +2485,12 @@ TEST(StlSwap, Swaps)
     vector<int>::iterator one, two;
     one = coll.begin();
     two = one+1;
-    swap(*one, *two);
+    swap(*one, *two);   // calls std::swap()
     EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
 
     one = coll.begin();
     two = one+8;
     swap(*one, *two);
-    EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
-  }
-
-  // use operator*()
-  {
-    vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
-    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
-
-    vector<int>::iterator one, two;
-    one = coll.begin();
-    two = one+1;
-    std::swap(*one, *two);
-    EXPECT_THAT(coll, ElementsAre(2, 1, 3, 4, 5, 6, 7, 8, 9));
-
-    one = coll.begin();
-    two = one+8;
-    std::swap(*one, *two);
     EXPECT_THAT(coll, ElementsAre(9, 1, 3, 4, 5, 6, 7, 8, 2));
   }
 }
@@ -1862,6 +2519,129 @@ TEST(AlgoCopy, UseOnDifferentCollections)
 // 74243042, 114807987, 1137522503, 1441282327, 16531729,
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
+
+namespace algo_generate
+{
+  class IntegerSequence
+  {
+    public:
+      IntegerSequence(int value) : value_(value) {}
+
+      int operator()()
+      { return ++value_; }
+
+    private:
+      int value_;
+  };
+
+  class IntegerSequenceNoReturn
+  {
+    public:
+      IntegerSequenceNoReturn(int value) : value_(value) {}
+
+      void operator()()
+      { ++value_; }
+
+    private:
+      int value_;
+  };
+} // namespace
+
+
+// this means that _Generator shall return value and otherwise get errors:
+// 
+// stl.cpp:2464:7:   required from here
+// /usr/include/c++/4.9/bits/stl_algo.h:4325:11: error: no match for ‘operator=’ (operand types are ‘std::back_insert_iterator<std::__debug::list<int> >’ and ‘void’)
+//   *__first = __gen();
+// 
+// TEST(AlgoGenerate, NoReturn)
+// {
+//   using namespace algo_generate;
+// 
+//   std::list<int> coll;
+// 
+//   // starting from 1
+//   IntegerSequenceNoReturn seq(1);
+// 
+//   std::generate_n<back_insert_iterator<list<int>>, int, IntegerSequenceNoReturn&>(
+//       back_inserter(coll),
+//       4,                    // number of elements
+//       seq
+//       );
+// 
+//   EXPECT_THAT(coll, ElementsAre(2,3,4,5));
+// }
+
+TEST(AlgoGenerate, Types)
+{
+  using namespace algo_generate;
+
+  list<int> coll;
+
+  // insert five random numbers
+  generate_n (back_inserter(coll), // beginning of destination range
+      5, // count
+      rand); // new value generator
+
+  // PRINT_ELEMENTS(coll);
+
+  // `overwrite` with five new random numbers
+  generate (coll.begin(), coll.end(), // destination range
+      IntegerSequence(1)); // new value generator
+
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6));
+}
+
+TEST(AlgoGenerate, Reference)
+{
+  using namespace algo_generate;
+
+  std::list<int> coll;
+
+  // starting from 1
+  IntegerSequence seq(1);
+
+  std::generate_n<back_insert_iterator<list<int>>, int, IntegerSequence&>(
+      back_inserter(coll),
+      4,                    // number of elements
+      seq
+      );
+
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5));
+
+  // insert values from 43 to 46
+
+  generate_n(
+      back_inserter(coll),  // start
+      4,                    // number of elements
+      IntegerSequence(42)
+      );
+
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,43,44,45,46));
+
+  // currently seq has 6 value and start from that since passed by value
+
+  generate_n(
+      back_inserter(coll),  // start
+      4,                    // number of elements
+      seq
+      );
+
+  EXPECT_THAT(coll, 
+      ElementsAreArray({2,3,4,5,43,44,45,46,6,7,8,9}));
+
+  // no change of sequence values and repeat it again since seq is copied.
+
+  generate_n(
+      back_inserter(coll),  // start
+      4,                    // number of elements
+      seq
+      );
+
+  EXPECT_THAT(coll, 
+      ElementsAreArray({2,3,4,5,43,44,45,46,6,7,8,9,6,7,8,9}));
+}
+
 
 TEST(AlgoRandom, UseRandomEngineAndDistribution)
 {
@@ -1942,25 +2722,25 @@ TEST(AlgoRandom, RandomEngineVsRand)
 {
   // always same sequence
   vector<uint32_t> ivec1;
-  generate_n( back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
+  generate_n(back_inserter(ivec1), 12, CardSequenceUseRandomEngine() );
   PRINT_ELEMENTS(ivec1);
 
   // always same sequence
   vector<uint32_t> ivec2;
-  generate_n( back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
+  generate_n(back_inserter(ivec2), 12, CardSequenceUseRandomEngine() );
   PRINT_ELEMENTS(ivec2);
 
   vector<uint32_t> ivec3;
-  generate_n( back_inserter(ivec3), 12, CardSequenceUseRand(2) );
+  generate_n(back_inserter(ivec3), 12, CardSequenceUseRand(24) );
   PRINT_ELEMENTS(ivec3);
 
   vector<uint32_t> ivec4;
-  generate_n( back_inserter(ivec4), 12, CardSequenceUseRand(2) );
+  generate_n(back_inserter(ivec4), 12, CardSequenceUseRand(24) );
   PRINT_ELEMENTS(ivec4);
 
   vector<uint32_t> ivec5;
   generate_n(back_inserter(ivec5), 12, 
-      CardSequenceUseRandWithRange(6, 9));
+      CardSequenceUseRandWithRange(0, 23));
   PRINT_ELEMENTS(ivec5);
 }
 
@@ -2093,7 +2873,16 @@ TEST(AlgoRandom, AlgoShuffle)
 //  initValue op a1 op a2 op a3 op ...
 // respectively.
 
-TEST(AlgoAccumulate, Use)
+TEST(AlgoAccumulate, Stream)
+{
+  istringstream is{"1 2 3 4 5 6"};
+  istream_iterator<int> start(is), eof;
+
+  auto sum = std::accumulate(start, eof, 0);
+  EXPECT_THAT(sum, 21);
+}
+
+TEST(AlgoAccumulate, Coll)
 {
   vector<int> coll{1,2,3,4,5};
 
@@ -2130,9 +2919,62 @@ TEST(AlgoAccumulate, Use)
         , Eq(15));
 }
 
+// see how to use acculumate on map
+
+TEST(AlgoAccumulate, Map)
+{
+  std::map<int, size_t> counts{
+    {1, 2},
+      {3, 2},
+      {5, 3},
+      {8, 3},
+      {13, 1} 
+  };
+
+  // *cxx-error*
+  // auto result = std::accumulate(counts.begin(), counts.end(), pair<int const, size_t>());
+
+  // *cxx-const* cause error:
+  //     [](size_t sum, pair<int, size_t>& e)
+  //
+  auto result = std::accumulate(counts.begin(), counts.end(), 0,
+      [](size_t sum, pair<int const, size_t>& e)
+      { return sum + e.second; });
+
+  EXPECT_THAT(result, 11);
+}
+
 
 // ={=========================================================================
 // cxx-algo-for-each cxx-algo-transform
+
+namespace algo_code
+{
+  template<typename _InputIterator, typename _Function>
+    _Function
+    for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+    {
+      // note: call op but not use return
+
+      for (; __first != __last; ++__first)
+        __f(*__first);
+
+      return _GLIBCXX_MOVE(__f);
+    }
+
+  template<typename _InputIterator, typename _OutputIterator,
+    typename _UnaryOperation>
+
+      _OutputIterator
+      transform(_InputIterator __first, _InputIterator __last,
+          _OutputIterator __result, _UnaryOperation __unary_op)
+      {
+        for (; __first != __last; ++__first, ++__result)
+          // note: write to output to output iterator and unary
+          *__result = __unary_op(*__first);
+        return __result;
+      }
+} // namespace
 
 int square_value_with_return(int value)
 {
@@ -2150,12 +2992,19 @@ void square_refer_no_return(int &value)
   value = value*value;
 }
 
-TEST(AlgoForEach, Use)
+TEST(AlgoForEach, Transform)
 {
   // value
   {
     set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     for_each(coll.begin(), coll.end(), square_value_no_return);
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+  }
+
+  // value with return? same since do not use return value
+  {
+    set<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
+    for_each(coll.begin(), coll.end(), square_value_with_return);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
   }
 
@@ -2169,11 +3018,12 @@ TEST(AlgoForEach, Use)
     EXPECT_THAT(coll, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
   }
 
-  // transform() differs in that it uses `dest`
+  // algo-transform() differs in that it uses `dest` and use return
   {
     vector<int> coll{1, 2, 3, 4, 5, 6, 7, 8};
     vector<int> result;
-    transform(coll.begin(), coll.end(), back_inserter(result), square_value_with_return);
+    transform(coll.begin(), coll.end(), 
+        back_inserter(result), square_value_with_return);
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
     EXPECT_THAT(result, ElementsAre(1, 4, 9, 16, 25, 36, 49, 64));
   }
@@ -2274,37 +3124,12 @@ TEST(AlgoForEach, GetMean)
 // cxx-algo-min-max
 
 namespace algo_min_max {
+
   bool AbsLess(int elem1, int elem2) {
     return abs(elem1) < abs(elem2);
   }
 
-  using ITERATOR = std::deque<int>::iterator;
-
-  pair<ITERATOR, ITERATOR> my_minmax(ITERATOR begin, ITERATOR end)
-  {
-    auto min = numeric_limits<int>::max();
-    auto max = numeric_limits<int>::min();
-
-    ITERATOR min_iter = begin;
-    ITERATOR max_iter = begin;
-
-    for(; begin != end; ++begin) {
-
-      if (*begin < min) {
-        min = *begin;
-        min_iter = begin;
-      }
-
-      // add '=' to support the last max as minmax_element()
-      if (max <= *begin) {
-        max = *begin;
-        max_iter = begin;
-      }
-    }
-
-    return make_pair(min_iter, max_iter);
-  }
-}
+} // namespace
 
 TEST(AlgoMinMax, Use)
 {
@@ -2316,16 +3141,26 @@ TEST(AlgoMinMax, Use)
   EXPECT_THAT(coll, 
       ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
 
-  // returns iterators
-  EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
-  EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+  // If more than one minimum or maximum element exists, min_element() and
+  // max_element() return `the first` found; minmax_element() returns the first
+  // minimum but the last maximum element, so max_element() and minmax_element()
+  // don’t yield the same maximum element.
 
+  EXPECT_THAT(*min_element(coll.begin(), coll.end()), -3);
+
+  EXPECT_THAT(*max_element(coll.begin(), coll.end()), 6);
+  EXPECT_THAT(distance(coll.begin(),max_element(coll.begin(), coll.end())), 4);
+ 
   // return iterator pair
   // Note also that minmax_element() yields `the last maximum`, so the distance
   // 9.
   auto minmax = minmax_element(coll.begin(), coll.end());
-  EXPECT_THAT(*(minmax.first), -3);
-  EXPECT_THAT(*(minmax.second), 6);
+  EXPECT_THAT(*(minmax.first), -3);   // first minimum
+  EXPECT_THAT(*(minmax.second), 6);   // last maximum
+
+  // last maximum is 6 which is the last element
+  EXPECT_THAT(distance(coll.begin(), minmax.second), coll.size()-1);
+
   EXPECT_THAT(distance(minmax.first, minmax.second), 9);
   EXPECT_THAT(distance(
         min_element(coll.begin(), coll.end()),
@@ -2335,25 +3170,6 @@ TEST(AlgoMinMax, Use)
   // min/max of absolute values
   EXPECT_THAT(*min_element(coll.begin(), coll.end(), AbsLess), 0);
   EXPECT_THAT(*max_element(coll.begin(), coll.end(), AbsLess), 6);
-}
-
-TEST(AlgoMinMax, UseOwn)
-{
-  using namespace algo_min_max;
-
-  deque<int> coll;
-  INSERT_ELEMENTS(coll, 2, 6);
-  INSERT_ELEMENTS(coll, -3, 6);
-  EXPECT_THAT(coll, 
-      ElementsAreArray({2, 3, 4, 5, 6, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6}));
-
-  // return iterator pair
-  // Note also that minmax_element() yields `the last maximum`, so the distance
-  // 9.
-  auto minmax = my_minmax(coll.begin(), coll.end());
-  EXPECT_THAT(*(minmax.first), -3);
-  EXPECT_THAT(*(minmax.second), 6);
-  EXPECT_THAT(distance(minmax.first, minmax.second), 9);
 }
 
 
@@ -2486,6 +3302,159 @@ TEST(AlgoSearch, SearchFirstSubrange_UseOwn)
   }
 }
 
+// algo-search algo-binary-search
+
+TEST(AlgoSearch, AlgoBinarySearch)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8,9};
+
+  EXPECT_TRUE(binary_search(coll.begin(), coll.end(), 5));
+  EXPECT_FALSE(binary_search(coll.begin(), coll.end(), 42));
+}
+
+
+// algo-search algo-include
+
+TEST(AlgoSearch, AlgoInclude)
+{ 
+  {
+    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+    list<int> subcoll{3,4,5};
+
+    // first sub found
+    auto pos = search(coll.begin(), coll.end(),
+        subcoll.begin(), subcoll.end());
+    if (pos != coll.end()) {
+      cout << "search() found" << endl;
+      EXPECT_THAT(distance(coll.begin(), pos), 2);
+    }
+  }
+
+  {
+    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
+    list<int> subcoll{3,4,5};
+
+    // first sub found
+    // if do not sort before includes() then aborted when built with DEBUG.
+    sort(coll.begin(), coll.end());
+
+    auto pos = includes(coll.begin(), coll.end(),
+        subcoll.begin(), subcoll.end());
+    EXPECT_TRUE(pos);
+  }
+}
+
+
+// algo-search algo-include
+// Searching First or Last Possible Position
+
+TEST(AlgoSearch, AlgoUpperLowerBound)
+{
+  {
+    vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an
+    // element with value value could get inserted without breaking the sorting
+    // of the range [beg,end).
+
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
+
+    // upper_bound() returns the position of the first element that has a value
+    // greater than value. This is the last position where an element with value
+    // value could get inserted without breaking the sorting of the range
+    // [beg,end).
+
+    auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
+
+    //  0  1  2  3  4  5  6  7  8  9 10 11 12
+    // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
+    //                          ^^^^^^^
+
+    EXPECT_THAT(distance(coll.cbegin(), first), 8);
+    EXPECT_THAT(distance(coll.cbegin(), last), 10);
+  }
+
+  {
+    vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
+
+    // lower_bound() returns the position of the first element that has a value
+    // equal to or greater than value. This is the first position where an
+    // element with value value could get inserted without breaking the sorting
+    // of the range [beg,end).
+
+    auto first = lower_bound(coll.cbegin(), coll.cend(), 1);
+    EXPECT_THAT(*first, 2);
+  }
+}
+
+
+// ={=========================================================================
+// cxx-algo-find-if
+
+namespace algo_find
+{
+  bool is_prime(int number)
+  {
+    number = abs(number);
+
+    // 0 and 1 are not prime numbers
+    if (number == 0 || number == 1)
+      return false;
+
+    int divisor;
+
+    // until find divisor which leaves 0 remainder, that is when divisor is 1 or
+    // when other divisor
+    for (divisor = number/2; number % divisor != 0; --divisor)
+      ;
+
+    // if divisor is 1 then no ther is found.
+    return divisor == 1;
+  }
+} // namespace
+
+// is used to search for the 'first' element of the given range for which the
+// passed unary predicate yields true. If it does not find any element that
+// matches the predicate, the algorithm returns the end of the range (its
+// 'second' argument).
+
+TEST(AlgoFind, FindIf)
+{
+  using namespace algo_find;
+
+  list<int> coll;
+
+  for (int i = 24; i <= 30; ++i)
+    coll.push_back(i);
+
+  auto pos = find_if(coll.begin(), coll.end(), is_prime);
+  EXPECT_THAT(*pos, 29);
+}
+
+TEST(AlgoFind, Find)
+{
+  vector<int> coll{2, 5, 4, 1, 6, 3};
+
+  // *algo-min-element*
+  // if there are duplicates, return the first
+  auto minpos = min_element(coll.begin(), coll.end());
+  EXPECT_THAT(*minpos, 1);
+
+  auto maxpos = max_element(coll.begin(), coll.end());
+  EXPECT_THAT(*maxpos, 6);
+
+  // *algo-sort*
+  sort(coll.begin(), coll.end());
+
+  auto found = find(coll.begin(), coll.end(), 3);
+
+  // *algo-reverse*
+  // reverse the range
+  reverse(found, coll.end());
+  EXPECT_THAT(coll, ElementsAre(1, 2, 6, 5, 4, 3));
+}
+
 
 // ={=========================================================================
 // cxx-algo-equal
@@ -2560,137 +3529,6 @@ TEST(AlgoEqual, UsePermutation)
 
 
 // ={=========================================================================
-// cxx-algo-unique
-
-TEST(AlgoUnique, Use)
-{
-  // • Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
-  {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-
-  // • The first form removes from the range [beg,end) all elements that are
-  // equal to the previous elements. Thus, only when the elements in the
-  // sequence are sorted, or at least when all elements of the same value are
-  // adjacent, does it remove all duplicates.
-
-  {
-    int source[] = {1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-    list<int> coll;
-    copy(begin(source), end(source), back_inserter(coll));
-
-    auto pos = unique(coll.begin(), coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4, 5, 7, 5, 4, 4}));
-
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6, 1, 2, 3, 1, 6, 5, 7, 5, 4}));
-  }
-
-  // • The second form removes all elements that follow an element e and for
-  // which the binary predicate op(e,elem) yields true. In other words, the
-  // predicate is not used to compare an element with its predecessor; the
-  // element is compared with the previous element that was not removed (see the
-  // following examples).
-
-  // For example, the first 6 is greater than the following 1, 2, 2, 3, and 1,
-  // so all these elements are removed. In other words, the predicate is not
-  // used to compare an element with its predecessor; the element is compared
-  // with the previous element that was not removed 
-  {
-    list<int> coll{1, 4, 4, 6, 1, 2, 2, 3, 1, 6, 6, 6, 5, 7, 5, 4, 4};
-
-    auto pos = unique(coll.begin(), coll.end(), greater<int>());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 4, 6, 6, 6, 6, 7}));
-  }
-
-  {
-    string input{"1   2  3            4           "};
-    EXPECT_THAT(input, "1   2  3            4           ");
-
-    auto new_end = unique(input.begin(), input.end(), [](const char &x, const char &y) {
-      return x == y and x == ' ';
-    });
-
-    input.erase(new_end, input.end());
-    EXPECT_THAT(input, "1 2 3 4 ");
-  }
-}
-
-namespace algo_unique 
-{
-  using ITERATOR = vector<int>::iterator;
-
-  // when see two consequtive equal items, return a iterator to the first.
-  ITERATOR adjacent_find(ITERATOR first, ITERATOR last)
-  {
-    if (first == last)
-      return last;
-
-    ITERATOR next = first;
-    while (++next != last)
-    {
-      if (*first == *next)
-        return first;
-      first = next;
-    }
-
-    return last;
-  }
-
-  // from /usr/include/c++/4.9/bits/stl_algo.h
-  ITERATOR my_unique(ITERATOR first, ITERATOR last)
-  {
-    first = adjacent_find(first, last);
-    if (first == last)
-      return last;
-
-    ITERATOR dest = first;
-    ++first;
-    while (++first != last)
-    {
-      // not equal and assign(overwrite). so if equals, keep increase first.
-      if (*dest != *first)
-        *++dest = *first;
-    }
-
-    // one after from the last
-    return ++dest;
-  }
-}
-
-TEST(AlgoUnique, UseOwn)
-{
-  using namespace algo_unique;
-
-  // • Both forms collapse `consecutive equal elements` by removing the
-  // following duplicates.
-  {
-    vector<int> coll{1, 4, 4, 6};
-    auto pos = my_unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-  {
-    vector<int> coll{1, 4, 4, 4, 6};
-    auto pos = my_unique(coll.begin(), coll.end());
-    coll.erase(pos, coll.end());
-    EXPECT_THAT(coll, ElementsAreArray({1, 4, 6}));
-  }
-}
-
-
-// ={=========================================================================
 // cxx-algo-reverse
 
 TEST(AlgoReverse, Use)
@@ -2760,125 +3598,10 @@ TEST(AlgoReverse, UseOwn)
 
 
 // ={=========================================================================
-// cxx-algo-remove algo-unique
+// cxx-algo-mutating
+// cxx-algo-partition algo-gather algo-remove algo-rotate
 
-// remove value 2 from coll
-TEST(AlgoRemove, UseErase)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  for (auto it = coll.begin(); it != coll.end(); ++it)
-  {
-    if (*it == 2)
-      it = coll.erase(it);
-  }
-
-  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
-}
-
-TEST(AlgoRemove, UseRemoveAndErase)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  auto end = remove(coll.begin(), coll.end(), 2);
-
-  EXPECT_THAT(distance(end, coll.end()), 4);
-
-  coll.erase(end, coll.end());
-
-  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
-}
-
-// show that algo-remove() do not remove elements
-TEST(AlgoRemove, RemoveDoNotRemove)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  remove(coll.begin(), coll.end(), 2);
-
-  // coll{1,2,3,4,5,6,2,7,2,8,2,9};
-  // coll{1,3,4,5,6,7,8,9,2,8,2,9};
-
-  EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
-}
-
-// show that remove_if() returns end if not found
-TEST(AlgoRemove, UseRemoveIf)
-{
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  auto it = remove_if(coll.begin(), coll.end(), [](int e)
-      {
-        if (e == 10)
-          return true;
-        return false;
-      });
-
-  EXPECT_THAT(it, coll.end());
-}
-
-namespace algo_remove {
-// implement own remove()
-
-using ITERATOR = std::vector<int>::iterator;
-
-ITERATOR my_remove(ITERATOR begin, ITERATOR end, int value)
-{
-  // move up to the first which matches to the value
-  // ITERATOR first = find(begin, end, value);
-
-  // if not use find()
-  ITERATOR sub_list_end;
-  for (sub_list_end = begin; sub_list_end != end; ++sub_list_end)
-    if (*sub_list_end == value)
-      break;
-
-  // the key is that remvove() partitions the input into two lists; a list that
-  // are not equal to the value and a list that are equals to the value. 
-  //
-  // [0, sub_list_end) ... end)
-  
-  ITERATOR runner = sub_list_end;
-  for (++runner; runner != end; ++runner)
-    if (*runner != value) 
-    {
-      *sub_list_end = *runner;
-      ++sub_list_end;
-    }
-
-  return sub_list_end;
-}
-
-}
-
-TEST(AlgoRemove, UseOwnRemove)
-{
-  using namespace algo_remove;
-
-  std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
-
-  auto end = my_remove(coll.begin(), coll.end(), 2);
-
-  EXPECT_THAT(distance(end, coll.end()), 4);
-
-  coll.erase(end, coll.end());
-
-  EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
-}
-
-
-// ={=========================================================================
-// cxx-algo-partition algo-gather
-
-// coll1: 1 2 3 4 5 6 7 8 9 (9)
-// coll1: 8 2 6 4 5 3 7 1 9 (9)
-//                ^ first odd element: 5
-//
-// coll2: 1 2 3 4 5 6 7 8 9 (9)
-// coll2: 2 4 6 8 1 3 5 7 9 (9)
-//                ^ first odd element: 1
-
-TEST(AlgoPartition, Use)
+TEST(AlgoMutating, AlgoPartition)
 {
   vector<int> coll1;
   vector<int> coll2;
@@ -2894,7 +3617,7 @@ TEST(AlgoPartition, Use)
 
   EXPECT_THAT(coll1, ElementsAre(8, 2, 6, 4, 5, 3, 7, 1, 9));
 
-  // algo-partition retuns returns an iterator to the first element where the
+  // algo-partition returns an iterator to the first element where the
   // predicate is not true, or the end of the range if all elements satisfy
   // the predicate. so first odd element:
 
@@ -2915,178 +3638,14 @@ TEST(AlgoPartition, Use)
 }
 
 
-using PortfolioIterator = vector<unsigned int>::iterator;
-
-PortfolioIterator RearrangeByQuantity(PortfolioIterator begin,
-    PortfolioIterator end, unsigned int max_quanity)
-{
-  // how to get T of coll such as algo-remove? here, assumes that we know T
-  vector<unsigned int> coll;
-
-  PortfolioIterator start = begin;
-  PortfolioIterator current{};
-
-  // one pass to filter <=
-
-  for (; start != end; ++start)
-  {
-    // not use push_back() since void push_back()
-    if (*start <= max_quanity)
-      current = coll.insert(coll.end(), *start);
-  }
-
-  start = begin;
-
-  // second pass to filter >
-
-  for (; start != end; ++start)
-  {
-    if (*start > max_quanity)
-      coll.push_back(*start);
-  }
-
-  // copy it back
-  copy(coll.begin(), coll.end(), begin);
-
-  // here try to increase end() which is current
-  //
-  // /usr/include/c++/6/debug/safe_iterator.h:298:
-  // Error: attempt to increment a singular iterator.
-  // 
-  // Objects involved in the operation:
-  //     iterator "this" @ 0x0x7ffdeb5ea9a0 {
-  //       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<unsigned int*, std::__cxx1998::vector<unsigned int, std::allocator<unsigned int> > >, 
-  //          std::__debug::vector<unsigned int, std::allocator<unsigned int> > > (mutable iterator);
-  //       state = singular;
-  //       references sequence with type 'std::__debug::vector<unsigned int, std::allocator<unsigned int> >' @ 0x0x7ffdeb5eaa00
-  //     }
-  // Aborted
-  //
-  // return ++current;
-
-  // this causes the issue as below
-  return current;
-}
-
-
-TEST(AlgoPartition, UseOwnPartitionTwoPass)
-{
-  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-  RearrangeByQuantity(coll.begin(), coll.end(), 25);
-
-  // 43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23,
-  // 6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30,
-  //                                ^^
-
-  EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,37,48,26,41,30}));
-
-  // this now fails since `current` is iterator of internal coll but not input
-  // call. Have to work out one.
-  // EXPECT_THAT(*iter, 43);
-}
-
-
-// unlike remove(), have to keep unmatched item as well
-
-PortfolioIterator my_partition_one(PortfolioIterator begin,
-    PortfolioIterator end, unsigned int max_quanity)
-{
-  PortfolioIterator first = begin;
-  for (; first != end; ++first)
-    if (*first > max_quanity)
-      break;
-
-  PortfolioIterator runner = first;
-  ++runner;
-  for (; runner != end; ++runner)
-  {
-    // if item matches to condition
-    if (*runner <= max_quanity)
-    {
-      std::iter_swap(runner, first);
-      ++first;
-    }
-  }
-
-  return first;
-}
-
-// same as algo-partition /usr/include/c++/4.9.2/bits/stl_algo.h
-
-PortfolioIterator my_partition_two(PortfolioIterator begin,
-    PortfolioIterator end, unsigned int max_quanity)
-{
-  PortfolioIterator first = begin;
-  while (*first <= max_quanity)
-    if (++first == end)
-      return first;
-
-  PortfolioIterator runner = first;
-  while (++runner != end)
-  {
-    // if item matches to condition
-    if (*runner <= max_quanity)
-    {
-      std::iter_swap(runner, first);
-      ++first;
-    }
-  }
-
-  return first;
-}
-
-TEST(AlgoPartition, UseOwnPartitionOnePass)
-{
-  {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-    PortfolioIterator iter = my_partition_one(coll.begin(), coll.end(), 25);
-
-    EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-    EXPECT_THAT(distance(coll.begin(), iter), 11);
-    EXPECT_THAT(*iter, 43);
-  }
-  {
-    vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-    PortfolioIterator iter = my_partition_two(coll.begin(), coll.end(), 25);
-
-    EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-    EXPECT_THAT(distance(coll.begin(), iter), 11);
-    EXPECT_THAT(*iter, 43);
-  }
-}
-
-
-// note: why different order from partition() when use the same logic?
-
-TEST(AlgoPartition, UsePartitionToCompare)
-{
-  vector<unsigned int> coll{43,6,11,42,29,23,21,19,34,37,48,24,15,20,13,26,41,30,6,23};
-
-  PortfolioIterator iter = partition(coll.begin(), coll.end(), [](int e)
-      {
-        if (e <= 25)
-          return true;
-        return false;
-      }
-      );
-
-  // EXPECT_THAT(coll, ElementsAreArray({6,11,23,21,19,24,15,20,13,6,23,43,42,29,34,26,41,30,37,48}));
-  // EXPECT_THAT(*iter, 43);
-  EXPECT_THAT(coll, ElementsAreArray({23,6,11,6,13,23,21,19,20,15,24,48,37,34,29,26,41,30,42,43}));
-  EXPECT_THAT(distance(coll.begin(), iter), 11);
-  EXPECT_THAT(*iter, 48);
-}
-
 // https://github.com/fenbf/review/blob/master/stl/beautiful_std_alg.cpp
 // 4. gather (cpp seasoning)
 //
-// use case: list of items, select some of items (good guys) and move the to position around p.
-// for instance: multiple selection on a list
+// use case: list of items, select some of items (good guys) and move the to
+// position around p.  for instance: multiple selection on a list
 //
-// problem with std::not1: http://channel9.msdn.com/Events/GoingNative/2013/Cpp-Seasoning#c635149692925101916
+// problem with std::not1:
+// http://channel9.msdn.com/Events/GoingNative/2013/Cpp-Seasoning#c635149692925101916
 
 template <typename Iterator, typename Compare>
 auto gather(Iterator _first, Iterator _last, Iterator _pos, Compare _comp) -> std::pair<Iterator, Iterator>
@@ -3097,19 +3656,17 @@ auto gather(Iterator _first, Iterator _last, Iterator _pos, Compare _comp) -> st
   return {_begin, _end};
 }
 
-
-TEST(AlgoPartition, Gather)
+TEST(AlgoMutating, Gather)
 {
   {
     vector<int> coll(10, 0);
     coll[0] = coll[2] = coll[7] = coll[8] = 1;
     EXPECT_THAT(coll, ElementsAre(1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
 
-    // gather(f, l, p, s);
+    // gather(begin, end, pos, comp);
     std::partition(coll.begin(), coll.begin()+4, [](const int x){ return x != 1; });
-    // 0 0 1 1 0 0 0 1 1 0 (10)
-
     std::partition(coll.begin()+4, coll.begin()+10, [](const int x){ return x == 1; });
+
     EXPECT_THAT(coll, ElementsAre(0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
   }
 
@@ -3117,6 +3674,14 @@ TEST(AlgoPartition, Gather)
     vector<int> coll(10, 0);
     coll[0] = coll[2] = coll[7] = coll[8] = 1;
     EXPECT_THAT(coll, ElementsAre(1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
+
+    // rearrange coll to centre around `pos`
+    // pos = 4
+    // (1, 0, 1, 0, 0, 0, 0, 1, 1, 0));
+    //              ^
+    // (            ]
+    //              (               ]
+    // (0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
 
     gather(coll.begin(), coll.end(), coll.begin()+4, [](const int x){ return x == 1; });
     EXPECT_THAT(coll, ElementsAre(0, 0, 1, 1, 1, 1, 0, 0, 0, 0));
@@ -3124,19 +3689,376 @@ TEST(AlgoPartition, Gather)
 }
 
 
+// cxx-algo-remove algo-unique
+
+TEST(AlgoMutating, AlgoRemove)
+{
+  // coll.erase() delete elements but algo-remove do not.
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    for (auto it = coll.begin(); it != coll.end(); ++it)
+    {
+      if (*it == 2)
+        it = coll.erase(it);
+    }
+
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto end = remove(coll.begin(), coll.end(), 2);
+
+    EXPECT_THAT(distance(end, coll.end()), 4);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+
+    coll.erase(end, coll.end());
+    EXPECT_THAT(coll, ElementsAre(1,3,4,5,6,7,8,9));
+  }
+
+  // show that algo-remove() do not remove elements
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    remove(coll.begin(), coll.end(), 2);
+
+    // std::vector<int> coll{1,3,4,5,6,7,8,9,2,8,2,9};
+    //                                       ^^^^^^^ 
+
+    EXPECT_THAT(coll, ElementsAreArray({1,3,4,5,6,7,8,9,2,8,2,9}));
+  }
+
+  // show that remove_if() returns end if not found
+  {
+    std::vector<int> coll{1,2,3,4,5,6,2,7,2,8,2,9};
+
+    auto it = remove_if(coll.begin(), coll.end(), 
+        [](int value)
+        { return value == 10; }
+        );
+
+    EXPECT_THAT(it, coll.end());
+  }
+}
+
+
+// algo-permutation
+
+// 588 Chapter 11: STL Algorithms
+
+// bool
+// next_permutation (BidirectionalIterator beg, BidirectionalIterator end)
+// 
+// next_permutation() changes the order of the elements in [beg,end) according
+// to the next permutation.
+// 
+// Both algorithms return false if the elements got the “normal”
+// (lexicographical) order: that is, ascending order for next_permutation() and
+// descending order for prev_permutation(). So, to run through all
+// permutations, you have to sort all elements (ascending or descending), and
+// start a loop that calls next_permutation() or prev_permutation() as long as
+// these algorithms return true.
+//
+// that means return false when coll is sorted.
+
+// start:1 2 3 (3)
+// next :1 3 2 (3)
+// next :2 1 3 (3)
+// next :2 3 1 (3)
+// next :3 1 2 (3)
+// next :3 2 1 (3)
+// finis:1 2 3 (3)
+// now  :3 2 1 (3)
+// prev :3 1 2 (3)
+// prev :2 3 1 (3)
+// prev :2 1 3 (3)
+// prev :1 3 2 (3)
+// prev :1 2 3 (3)
+// finis:3 2 1 (3)
+//
+// start:1 2 3 (3)
+// 123
+// 123
+//
+// start:1 2 3 (3)
+// 123
+// 132
+// 213
+// 231
+// 312
+// 321
+
+TEST(AlgoMutating, AlgoPermutation)
+{
+  {
+    vector<int> coll{1,2,3};
+
+    PRINT_ELEMENTS(coll, "start:");
+
+    // permute coll until they are sorted, ascending
+    while(next_permutation(coll.begin(), coll.end()))
+    {
+      PRINT_ELEMENTS(coll, "next :");
+    }
+
+    // return false when sorted
+    PRINT_ELEMENTS(coll, "finis:");
+
+    // until descending sorted and the loop ends immediately
+    while(prev_permutation(coll.begin(), coll.end()))
+    {
+      PRINT_ELEMENTS(coll, "prev :");
+    }
+    PRINT_ELEMENTS(coll, "now  :");
+
+    while(prev_permutation(coll.begin(), coll.end()))
+    {
+      PRINT_ELEMENTS(coll, "prev :");
+    }
+    PRINT_ELEMENTS(coll, "finis:");
+  }
+
+  {
+    string coll{"123"};
+
+    PRINT_ELEMENTS(coll, "start:");
+
+    while (std::next_permutation(coll.begin(), coll.end()));
+    {
+      cout << coll << endl;
+    }
+
+    cout << coll << endl;
+  }
+
+  // why need algo-sort? since input can be any of permutations, sort it first
+  // to make sure permutations from sorted to sorted. 
+  {
+    string coll{"123"};
+
+    PRINT_ELEMENTS(coll, "start:");
+
+    std::sort(coll.begin(), coll.end());
+
+    do
+    {
+      cout << coll << endl;
+    } while (std::next_permutation(coll.begin(), coll.end()));
+  }
+}
+
+
+// algo-rotate, algo-slide, algo-reverse
+
+TEST(AlgoMutating, AlgoRotate)
+{
+  vector<int> coll{1,2,3,4,5,6,7,8};
+
+  // rotate one to the left
+  // before *cxx-11* void rotate() so comment out 
+  // auto pos = rotate(
+
+  rotate(
+    coll.begin(),     // begin  
+    coll.begin()+1,   // new begin
+    coll.end()        // end
+  );
+  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+
+  // return the new position of the (pervious) first element.
+  // EXPECT_THAT(*pos, 1);
+
+  // pos = rotate(
+
+  rotate(
+    coll.begin(),
+    coll.end()-2,
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
+  // EXPECT_THAT(*pos, 2);
+
+  // rotate so that 4 is the beginning
+  // pos = rotate(
+
+  rotate(
+    coll.begin(),
+    find(coll.begin(), coll.end(), 4),
+    coll.end()
+  );
+  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
+  // EXPECT_THAT(*pos, 8);
+}
+
+
+TEST(AlgoMutating, AlgoReverse)
+{
+  {
+    vector<int> coll{1,2,3,4,5,6,7,8};
+
+    std::reverse(coll.begin(), coll.end());
+    EXPECT_THAT(coll, ElementsAre(8,7,6,5,4,3,2,1));
+
+    std::reverse(coll.begin()+1, coll.end()-1);
+    EXPECT_THAT(coll, ElementsAre(8,2,3,4,5,6,7,1));
+
+    vector<int> result;
+    std::reverse_copy(coll.begin(), coll.end(), 
+        back_inserter(result));
+    EXPECT_THAT(result, ElementsAre(1,7,6,5,4,3,2,8));
+  }
+}
+
+
 // ={=========================================================================
 // algo-sort
 
-TEST(AlgoSort, NthSort)
+namespace algo_code
+{
+  // template< class RandomIt, class Compare>
+  // void sort( RandomIt first, RandomIt last, Compare comp );
+
+  // /usr/include/c++/4.9/bits/stl_algo.h
+
+  /**
+   *  @brief Sort the elements of a sequence using a predicate for comparison.
+   *  @ingroup sorting_algorithms
+   *  @param  __first   An iterator.
+   *  @param  __last    Another iterator.
+   *  @param  __comp    A comparison functor.
+   *  @return  Nothing.
+   *
+   *  Sorts the elements in the range @p [__first,__last) in ascending order,
+   *  such that @p __comp(*(i+1),*i) is false for every iterator @e i in the
+   *  range @p [__first,__last-1).
+   *
+   *  The relative ordering of equivalent elements is not preserved, use
+   *  @p stable_sort() if this is needed.
+   */
+  template<typename _RandomAccessIterator, typename _Compare>
+    inline void
+    sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
+        _Compare __comp)
+    {
+      // concept requirements
+      __glibcxx_function_requires(_Mutable_RandomAccessIteratorConcept<
+          _RandomAccessIterator>)
+        __glibcxx_function_requires(_BinaryPredicateConcept<_Compare,
+            typename iterator_traits<_RandomAccessIterator>::value_type,
+            typename iterator_traits<_RandomAccessIterator>::value_type>)
+        __glibcxx_requires_valid_range(__first, __last);
+
+      std::__sort(__first, __last, __gnu_cxx::__ops::__iter_comp_iter(__comp));
+    }
+
+  /**
+   *  @brief Sort the elements of a sequence.
+   *  @ingroup sorting_algorithms
+   *  @param  __first   An iterator.
+   *  @param  __last    Another iterator.
+   *  @return  Nothing.
+   *
+   *  Sorts the elements in the range @p [__first,__last) in ascending order,
+   *  such that for each iterator @e i in the range @p [__first,__last-1),  
+   *  *(i+1)<*i is false.
+   *
+   *  The relative ordering of equivalent elements is not preserved, use
+   *  @p stable_sort() if this is needed.
+   */
+  template<typename _RandomAccessIterator>
+    inline void
+    sort(_RandomAccessIterator __first, _RandomAccessIterator __last)
+    {
+      // concept requirements
+      __glibcxx_function_requires(_Mutable_RandomAccessIteratorConcept<
+          _RandomAccessIterator>)
+        __glibcxx_function_requires(_LessThanComparableConcept<
+            typename iterator_traits<_RandomAccessIterator>::value_type>)
+        __glibcxx_requires_valid_range(__first, __last);
+
+      std::__sort(__first, __last, __gnu_cxx::__ops::__iter_less_iter());
+    }
+
+  struct _Iter_less_iter
+  {
+    template<typename _Iterator1, typename _Iterator2>
+      bool
+      operator()(_Iterator1 __it1, _Iterator2 __it2) const
+      { return *__it1 < *__it2; }
+  };
+
+  inline _Iter_less_iter
+    __iter_less_iter()
+    { return _Iter_less_iter(); }
+
+  template<typename _RandomAccessIterator, typename _Compare>
+    inline void
+    __sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
+        _Compare __comp)
+    {
+      if (__first != __last)
+      {
+        std::__introsort_loop(__first, __last,
+            std::__lg(__last - __first) * 2,
+            __comp);
+        std::__final_insertion_sort(__first, __last, __comp);
+      }
+    }
+} // namespace
+
+TEST(AlgoSorting, AlgoSort)
 {
   {
     vector<int> coll{3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5};
     sort(coll.begin(), coll.end());
 
-    // 1 2 2 3 3 3 4 4 4 5 5 5 6 6 7 (15)
-    PRINT_ELEMENTS(coll);
+    EXPECT_THAT(coll, 
+        ElementsAreArray({1,2,2,3,3,3,4,4,4,5,5,5,6,6,7}));
   }
 
+  {
+    vector<int> coll{3, 4, 5, 6, 7, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5};
+    // *cxx-callable*
+    sort(coll.begin(), coll.end(), std::greater<int>());
+
+    EXPECT_THAT(coll, 
+        ElementsAreArray({7,6,6,5,5,5,4,4,4,3,3,3,2,2,1}));
+  }
+}
+
+bool shorter(string const& s1, string const& s2)
+{
+  return s1.size() < s2.size();
+}
+
+TEST(AlgoSorting, AlgoStableSort)
+{
+  vector<string> coll{"over", "quick", "red", "fox", "jumps", "red", "the", 
+    "slow", "turtle", "the"};
+
+  // sort by alphabet and remove dups. algo-unique()
+  {
+    std::sort(coll.begin(), coll.end());
+    coll.erase(std::unique(coll.begin(), coll.end()), coll.end());
+  }
+
+  // eliminated
+  EXPECT_THAT(coll, 
+      ElementsAre("fox","jumps","over","quick","red","slow","the","turtle"));
+
+  // by size
+  stable_sort(coll.begin(), coll.end(), shorter);
+
+  // sorted and see that the order before sort is maintained
+  EXPECT_THAT(coll, 
+      ElementsAre("fox","red","the","over","slow","jumps","quick","turtle"));         // by size
+}
+
+TEST(AlgoSorting, AlgoSortNth)
+{
   // do not get that!
   
   // Both forms sort the elements in the range [beg,end), so the correct element
@@ -3167,96 +4089,6 @@ TEST(AlgoSort, NthSort)
 
 
 // ={=========================================================================
-// algo-search algo-binary-search
-
-TEST(AlgoSearch, AlgoBinarySearch)
-{
-  vector<int> coll{1,2,3,4,5,6,7,8,9};
-
-  EXPECT_TRUE(binary_search(coll.begin(), coll.end(), 5));
-  EXPECT_FALSE(binary_search(coll.begin(), coll.end(), 42));
-}
-
-
-// ={=========================================================================
-// algo-search algo-include
-
-TEST(AlgoSearch, AlgoInclude)
-{ 
-  {
-    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
-    list<int> subcoll{3,4,5};
-
-    // first sub found
-    auto pos = search(coll.begin(), coll.end(),
-        subcoll.begin(), subcoll.end());
-    if (pos != coll.end()) {
-      cout << "search() found" << endl;
-      EXPECT_THAT(distance(coll.begin(), pos), 2);
-    }
-  }
-
-  {
-    deque<int> coll{1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7};
-    list<int> subcoll{3,4,5};
-
-    // first sub found
-    // if do not sort before includes() then aborted when built with DEBUG.
-    sort(coll.begin(), coll.end());
-
-    auto pos = includes(coll.begin(), coll.end(),
-        subcoll.begin(), subcoll.end());
-    EXPECT_TRUE(pos);
-  }
-}
-
-
-// ={=========================================================================
-// algo-search algo-include
-// Searching First or Last Possible Position
-
-TEST(AlgoSearch, AlgoUpperLowerBound)
-{
-  {
-    vector<int> coll{1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
-
-    // lower_bound() returns the position of the first element that has a value
-    // equal to or greater than value. This is the first position where an
-    // element with value value could get inserted without breaking the sorting
-    // of the range [beg,end).
-
-    auto first = lower_bound(coll.cbegin(), coll.cend(), 5);
-
-    // upper_bound() returns the position of the first element that has a value
-    // greater than value. This is the last position where an element with value
-    // value could get inserted without breaking the sorting of the range
-    // [beg,end).
-
-    auto last = upper_bound(coll.cbegin(), coll.cend(), 5);
-
-    //  0  1  2  3  4  5  6  7  8  9 10 11 12
-    // {1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9};
-    //                          ^^^^^^^
-
-    EXPECT_THAT(distance(coll.cbegin(), first), 8);
-    EXPECT_THAT(distance(coll.cbegin(), last), 10);
-  }
-
-  {
-    vector<int> coll{2, 3, 5, 6, 10, 12, 13, 15, 17, 29, 30, 31, 33};
-
-    // lower_bound() returns the position of the first element that has a value
-    // equal to or greater than value. This is the first position where an
-    // element with value value could get inserted without breaking the sorting
-    // of the range [beg,end).
-
-    auto first = lower_bound(coll.cbegin(), coll.cend(), 1);
-    EXPECT_THAT(*first, 2);
-  }
-}
-
-
-// ={=========================================================================
 // algo-fill
 
 TEST(AlgoFill, Fill)
@@ -3275,189 +4107,30 @@ TEST(AlgoFill, Fill)
 
 
 // ={=========================================================================
-// algo-rotate, algo-slide
+// algo-heap also-sort
 
-TEST(AlgoRotate, Rotate)
+TEST(AlgoHeap, Calls)
 {
-  vector<int> coll{1,2,3,4,5,6,7,8};
+  vector<int> coll{3, 4, 5, 6, 7, 5, 6, 7, 8, 9, 1, 2, 3, 4};
 
-  // rotate one to the left
-  // GCC 4.9.2, void rotate() so comment out 
-  // auto pos = rotate(
-  rotate(
-    coll.begin(),     // begin  
-    coll.begin()+1,   // new begin
-    coll.end()        // end
-  );
-  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
+  // convert collection into a heap
+  make_heap(coll.begin(), coll.end());
+  EXPECT_THAT(coll, ElementsAreArray({9, 8, 6, 7, 7, 5, 5, 3, 6, 4, 1, 2, 3, 4}));
 
-  // return the new position of the (pervious) first element.
-  // EXPECT_THAT(*pos, 1);
+  // pop next element, root out of the heap
+  pop_heap(coll.begin(), coll.end());
+  coll.pop_back();
+  EXPECT_THAT(coll, ElementsAreArray({8,7,6,7,4,5,5,3,6,4,1,2,3}));
 
-  // rotate two to the right or think that rotate to the left since `no direction` 
-  // in the call definition.
-  // 
-  // from stl
-  //  *  This effectively swaps the ranges @p [__first,__middle) and
-  //  *  @p [__middle,__last).
+  // push new element into the heap
+  coll.push_back(17);
+  push_heap(coll.begin(), coll.end());
+  EXPECT_THAT(coll, ElementsAreArray({17,7,8,7,4,5,6,3,6,4,1,2,3,5}));
 
-  // pos = rotate(
-  rotate(
-    coll.begin(),
-    coll.end()-2,
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
-  // EXPECT_THAT(*pos, 2);
-
-  // rotate so that 4 is the beginning
-  // pos = rotate(
-  rotate(
-    coll.begin(),
-    find(coll.begin(), coll.end(), 4),
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
-  // EXPECT_THAT(*pos, 8);
-}
-
-using ROTATE_ITER = vector<int>::iterator;
-
-void my_rotate(ROTATE_ITER begin, ROTATE_ITER new_begin, ROTATE_ITER end)
-{
-  auto num_swap = distance(new_begin, end);
-  for (; new_begin != begin; --new_begin)
-  {
-    auto start = new_begin;
-    for (int i = 0; i < num_swap; ++i)
-    {
-      swap(*start, *(start-1));
-      ++start;
-    }
-  }
-}
-
-// /usr/include/c++/4.9.2/bits/stl_algo.h
-//
-// /// This is a helper function for the rotate algorithm.
-// template<typename _ForwardIterator>
-//   _ForwardIterator
-//   __rotate(_ForwardIterator __first,
-//      _ForwardIterator __middle,
-//      _ForwardIterator __last,
-//      forward_iterator_tag)
-// {}
-//
-// /// This is a helper function for the rotate algorithm.
-// template<typename _RandomAccessIterator>
-//   _RandomAccessIterator
-//   __rotate(_RandomAccessIterator __first,
-//      _RandomAccessIterator __middle,
-//      _RandomAccessIterator __last,
-//      random_access_iterator_tag)
-// {}
-
-TEST(AlgoRotate, OwnRotate)
-{
-  vector<int> coll{1,2,3,4,5,6,7,8};
-
-  // rotate one to the left
-  my_rotate(
-    coll.begin(),     // begin  
-    coll.begin()+1,   // new begin
-    coll.end()        // end
-  );
-  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
-
-  my_rotate(
-    coll.begin(),
-    coll.end()-2,
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
-
-  my_rotate(
-    coll.begin(),
-    find(coll.begin(), coll.end(), 4),
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
-}
-
-
-void reverse_rotate(ROTATE_ITER begin, ROTATE_ITER new_begin, ROTATE_ITER end)
-{
-  // reverse(begin, end) reverse [begin, end)
-  reverse(begin, new_begin);
-  reverse(new_begin, end);
-  reverse(begin, end);
-}
-
-TEST(AlgoRotate, ReverseRotate)
-{
-  vector<int> coll{1,2,3,4,5,6,7,8};
-
-  // rotate one to the left
-  reverse_rotate(
-    coll.begin(),     // begin  
-    coll.begin()+1,   // new begin
-    coll.end()        // end
-  );
-  EXPECT_THAT(coll, ElementsAre(2,3,4,5,6,7,8,1));
-
-  reverse_rotate(
-    coll.begin(),
-    coll.end()-2,
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(8,1,2,3,4,5,6,7));
-
-  reverse_rotate(
-    coll.begin(),
-    find(coll.begin(), coll.end(), 4),
-    coll.end()
-  );
-  EXPECT_THAT(coll, ElementsAre(4,5,6,7,8,1,2,3));
-}
-
-
-// ={=========================================================================
-// cxx-template
-
-template <typename Iterator>
-typename std::iterator_traits<Iterator>::value_type &return_element_01(Iterator first, Iterator last)
-{
-  (void)last;
-  return *first;
-}
-
-template <typename Iterator>
-auto return_element_02(Iterator first, Iterator last) -> typename std::iterator_traits<Iterator>::reference
-{
-  (void)last;
-  return *first;
-}
-
-template <typename Iterator>
-auto return_element_03(Iterator first, Iterator last) -> decltype(*first)
-{
-  (void)last;
-  return *first;
-}
-
-// : error: ‘first’ was not declared in this scope
-// template <typename Iterator>
-// decltype(*first) return_element_04(Iterator first, Iterator last)
-// {
-//   return *first;
-// }
-
-TEST(Template, TypeTraitsIterator)
-{
-  vector<int> coll{3,4,5,6};
-  EXPECT_THAT(return_element_01(coll.begin(), coll.end()), 3);
-  EXPECT_THAT(return_element_02(coll.begin(), coll.end()), 3);
-  EXPECT_THAT(return_element_03(coll.begin(), coll.end()), 3);
+  // convert heap into a sorted collection but note that after this, it is no
+  // lonner a heap
+  sort_heap(coll.begin(), coll.end());
+  EXPECT_THAT(coll, ElementsAreArray({1,2,3,3,4,4,5,5,6,6,7,7,8,17}));
 }
 
 

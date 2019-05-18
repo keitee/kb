@@ -1389,6 +1389,18 @@ TEST(AlgoSearch, BinarySearch)
 
 
 // ={=========================================================================
+template <typename T>
+inline void PRINT_X_ELEMENTS(T const &coll, string const &message = "")
+{
+  cout << message << endl;
+
+  for(auto const &e : coll)
+  {
+    cout << e << ",";
+  }
+  cout << endl;
+}
+
 
 // ={=========================================================================
 int main(int argc, char **argv)

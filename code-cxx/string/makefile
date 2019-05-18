@@ -15,8 +15,9 @@ GTEST_DIR = $(HOME)/works/googletest/googletest
 GMOCK_DIR = $(HOME)/works/googletest/googlemock
 
 
-TARGET1 = ex_string
-TARGET2 = ex_string_pad
+TARGET1 = string_01
+TARGET2 = string_02
+TARGET3 = string_ex
 
 # Where to find user code.
 USER_DIR = .
@@ -24,10 +25,12 @@ USER_DIR = .
 CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(GTEST_DIR) \
 			-isystem $(GMOCK_DIR)/include -I$(GMOCK_DIR)
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -lboost_regex -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
+# CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -lboost_regex -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
+CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG -D_GLIBCXX_DEBUG_PEDANTIC
 
 TESTS = $(TARGET1)_out \
-				$(TARGET2)_out
+				$(TARGET2)_out \
+				$(TARGET3)_out
 
 GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
                 $(GTEST_DIR)/include/gtest/internal/*.h
@@ -73,11 +76,18 @@ $(TARGET1).o : $(TARGET1).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET1).cpp -o $(TARGET1).o
 
 $(TARGET1)_out : $(TARGET1).o gtest.a gmock.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread -lboost_regex $^ -o $@
 
 #
 $(TARGET2).o : $(TARGET2).cpp $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET2).cpp -o $(TARGET2).o
 
 $(TARGET2)_out : $(TARGET2).o gtest.a gmock.a
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
+#
+$(TARGET3).o : $(TARGET3).cpp $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET3).cpp -o $(TARGET3).o
+
+$(TARGET3)_out : $(TARGET3).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

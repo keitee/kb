@@ -1,7 +1,8 @@
 #include "gmock/gmock.h"
 
 #include <iostream>
-#include <functional>
+#include <list>
+#include <deque>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -1132,6 +1133,80 @@ of a container that has a method push_back(T&& value).
 
 */
 
+namespace u19_2018_11_23
+{
+  template <typename T>
+  void add_elements(T &coll, initializer_list<typename T::value_type> values)
+  {
+    for (auto &e : values)
+      coll.push_back(e);
+  }
+} // namespace
+
+TEST(U19, 20181123)
+{
+  using namespace u19_2018_11_23;
+
+  {
+    std::vector<int> coll;
+    add_elements(coll, {5, 4, 2, 3});
+    EXPECT_THAT(coll, ElementsAre(5, 4, 2, 3));
+  }
+
+  {
+    std::list<int> coll;
+    add_elements(coll, {5, 4, 2, 3});
+    EXPECT_THAT(coll, ElementsAre(5, 4, 2, 3));
+  }
+
+  {
+    std::deque<int> coll;
+    add_elements(coll, {5, 4, 2, 3});
+    EXPECT_THAT(coll, ElementsAre(5, 4, 2, 3));
+  }
+}
+
+
+#if 0
+
+Writing functions with any number of arguments is possible using variadic
+function templates. The function should have the container as the first
+parameter, followed by a variable number of arguments representing the values to
+be added at the back of the container. However, writing such a function template
+can be significantly simplified using fold expressions. Such an implementation
+is shown here:
+
+fold expression needs:
+
+C++17 features are available as part of "mainline" GCC in the trunk of GCCs
+repository and in GCC 5 and later.
+
+namespace u19_text
+{
+  template<typename C, typename... Args>
+    void push_back(C& c, Args&&... args)
+    {
+      (c.push_back(args), ...);
+    }
+}
+
+TEST(U19, Text)
+{
+  using namespace u19_text;
+
+  std::vector<int> v;
+  push_back(v, 1, 2, 3, 4);
+  std::copy(std::begin(v), std::end(v), 
+      std::ostream_iterator<int>(std::cout, " "));
+
+  std::list<int> l;
+  push_back(l, 1, 2, 3, 4);
+  std::copy(std::begin(l), std::end(l), 
+      std::ostream_iterator<int>(std::cout, " "));
+}
+
+#endif
+
 
 // ={=========================================================================
 
@@ -1154,6 +1229,100 @@ assert(!contains_none(l, 0, 6));
 
 */
 
+namespace u20_2018_11_24
+{
+  template <typename C>
+    bool contains_any(C coll, initializer_list<typename C::value_type> values)
+    {
+      for (const auto e : values)
+        if (coll.end() != find(coll.begin(), coll.end(), e))
+          return true;
+
+      return false;
+    }
+
+  template <typename C>
+    bool contains_all(C coll, initializer_list<typename C::value_type> values)
+    {
+      for (const auto e : values)
+        if (coll.end() == find(coll.begin(), coll.end(), e))
+          return false;
+
+      return true;
+    }
+
+  template <typename C>
+    bool contains_none(C coll, initializer_list<typename C::value_type> values)
+    {
+      for (const auto e : values)
+        if (coll.end() != find(coll.begin(), coll.end(), e))
+          return false;
+
+      return true;
+    }
+} // namespace
+
+TEST(U20, 20081124)
+{
+  using namespace u20_2018_11_24;
+
+  {
+    std::vector<int> coll{ 1, 2, 3, 4, 5, 6 };
+    EXPECT_TRUE(contains_any(coll, {0, 3, 30}));
+  }
+
+  {
+    std::vector<int> coll{ 1, 2, 3, 4, 5, 6 };
+    EXPECT_TRUE(contains_all(coll, {1, 3, 5, 6}));
+  }
+
+  {
+    std::vector<int> coll{ 1, 2, 3, 4, 5, 6 };
+    EXPECT_TRUE(!contains_none(coll, {1, 0, 6}));
+  }
+}
+
+#if 0
+
+The requirement to be able to check the presence or absence of a variable number
+of arguments suggests that we should write variadic function templates. However,
+   these functions require a helper function, a general-purpose one that checks
+   whether an element is found in a container or not and returns a bool to
+   indicate success or failure. Since all these functions, which we could call
+   contains_all, contains_any, and contains_none, do is apply logical operators
+   on the results returned by the helper function, we would use fold expressions
+   to simplify the code. Short circuit evaluation is enabled after the expansion
+   of the fold expression, which means we are evaluating only the elements that
+   lead to a definitive result. So if we are looking for the presence of all 1,
+   2, and 3, and 2 is missing, the function will return after looking up value 2
+   in the container without checking value 3:
+
+template<class C, class T>
+bool contains(C const & c, T const & value)
+{
+   return std::end(c) != std::find(std::begin(c), std::end(c), value);
+}
+
+template<class C, class... T>
+bool contains_any(C const & c, T &&... value)
+{
+   return (... || contains(c, value));
+}
+
+template<class C, class... T>
+bool contains_all(C const & c, T &&... value)
+{
+   return (... && contains(c, value));
+}
+
+template<class C, class... T>
+bool contains_none(C const & c, T &&... value)
+{
+   return !contains_any(c, std::forward<T>(value)...);
+}
+
+#endif
+
 
 // ={=========================================================================
 
@@ -1172,37 +1341,265 @@ namespace u21_2018_11_24
 {
   using HANDLE = void *;
 
+#if __GNUC__ && __x86_64__
+#define LONG_PTR long long
+#else
+#define LONG_PTR long
+#endif
+
+// win32 specifics
+#define DWORD     unsigned long
+#define GENERIC_READ           0x80000000L
+#define GENERIC_WRITE          0x40000000L
+#define CREATE_NEW             1
+#define CREATE_ALWAYS          2
+#define OPEN_EXISTING          3
+#define OPEN_ALWAYS            4
+#define TRUNCATE_EXISTING      5
+#define FILE_SHARE_READ        1
+#define FILE_ATTRIBUTE_NORMAL  0x00000080
+
+#define INVALID_HANDLE  ((HANDLE)(LONG_PTR)-1)
+
+  int CloseHandle(HANDLE hObject) 
+  {
+    (void) hObject;
+    cout << "Handle is closed" << endl;
+    return 0;
+  }
+
+  int ReadFile(HANDLE,
+      void*,
+      DWORD,
+      DWORD *,
+      void *)
+  {return 0;}
+
+  HANDLE CreateFile(char const *,
+      DWORD,
+      DWORD,
+      void *,
+      DWORD,
+      DWORD,
+      HANDLE)
+  {
+    cout << "Handle is created" << endl;
+    return INVALID_HANDLE;
+  }
+
   struct null_handle_traits
   {
     using pointer = HANDLE;
 
     static pointer invalid() noexcept
-    {
-      return nullptr;
-    }
+    { return nullptr; }
 
     static void close(pointer handle) noexcept
-    {
-      CloseHandle(handle);
+    { CloseHandle(handle); }
+  };
+
+  struct invalid_handle_traits
+  {
+    using pointer = HANDLE;
+
+    // added to avoid error
+    explicit invalid_handle_traits(HANDLE handle) : handle_(handle) {}
+
+    static pointer invalid() noexcept
+    { return INVALID_HANDLE; }
+
+    static void close(pointer handle) noexcept
+    { CloseHandle(handle); }
+
+    pointer handle_;
   };
 
   template <typename T>
     class unique_handle
     {
+      using pointer = typename T::pointer;
+
       public:
-        // no copy support
-        unique_handle(const unique_handle &) = delete;
-        unique_handle &operator=(const unieuq_handle &) = delete;
+      // no copy support
+      unique_handle(const unique_handle &) = delete;
+      unique_handle &operator=(const unique_handle &) = delete;
 
-        explicit unique_handle(pointer handle = T::invalid()) noexcept
-          : handle_(handle) 
-          {}
+      explicit unique_handle(pointer handle = T::invalid()) noexcept
+        : handle_(handle) {}
 
+      // move ctor
+      unique_handle(unique_handle &&rhs) noexcept
+        : handle_(rhs.release()) {}
+
+      // move assign
+      unique_handle &operator=(unique_handle &&rhs) noexcept
+      {
+        // self assign check
+        if (this != &rhs)
+          reset(rhs.release());
+
+        return *this;
+      }
+
+      ~unique_handle() noexcept
+      { T::close(handle_); }
+
+      // bool conversion
+      explicit operator bool() const noexcept
+      { return handle_ != T::invalid(); }
+
+      pointer get() const noexcept
+      { return handle_; }
+
+      pointer release() noexcept
+      {
+        auto handle = handle_;
+        handle_ = T::invalid();
+        return handle;
+      }
+
+      bool reset(pointer handle = T::invalid()) noexcept
+      {
+        if (handle_ != handle)
+        {
+          T::close(handle_);
+          handle_ = handle;
+        }
+
+        // call bool conversion
+        return static_cast<bool>(*this);
+      }
+
+      void swap(unique_handle<T> &rhs) noexcept
+      { std::swap(handle_, rhs.handle_); }
 
       private:
-        using pointer = typename T::pointer;
-        pointer handle_;
+      pointer handle_;
+
     };
+
+  template <typename T>
+    void swap(unique_handle<T> &lhs, unique_handle<T> &rhs) noexcept
+    {
+      lhs.swap(rhs);
+    }
+
+  // template <typename T>
+  //   bool operator!(const unique_handle<T> &lhs, const unique_handle<T> &rhs) noexcept
+  //   {
+  //     return lhs.get() != rhs.get();
+  //   }
+
+  using invalid_handle = unique_handle<invalid_handle_traits>;
+
+  void function_that_throws()
+  {
+    cout << "function throws" << endl;
+    throw std::runtime_error("an error has occurred");
+  }
+
+  // void bad_handle_example()
+  // {
+  //   bool condition1 = false;
+  //   bool condition2 = true;
+  //
+  //   HANDLE handle = CreateFile("sample.txt",
+  //       GENERIC_READ,
+  //       FILE_SHARE_READ,
+  //       nullptr,
+  //       OPEN_EXISTING,
+  //       FILE_ATTRIBUTE_NORMAL,
+  //       nullptr);
+  //   if (handle == INVALID_HANDLE)
+  //     return;
+  //
+  //   if (condition1)
+  //   {
+  //     CloseHandle(handle);
+  //     return;
+  //   }
+  //
+  //   std::vector<char> buffer(1024);
+  //   unsigned long bytesRead = 0;
+  //   ReadFile(handle, buffer.data(), buffer.size(), &bytesRead, nullptr);
+  //
+  //   if (condition2)
+  //   {
+  //     // forgot to close handle, lose handle
+  //     return;
+  //   }
+  //
+  //   // lose handle
+  //   function_that_throws();
+  //
+  //   CloseHandle(handle);
+  // }
+
+
+  // handle should be closed no matter what exit path there are
+
+  void good_handle_example()
+  {
+    bool condition1 = false;
+    bool condition2 = true;
+
+    // should not 
+    // invalid_handle_traits handle{CreateFile("sample.txt",
+    // since we use using typedef
+
+    invalid_handle handle{CreateFile("sample.txt",
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr)};
+
+    function_that_throws();
+
+    if (!handle) return;
+
+    if (condition1) return;
+
+    std::vector<char> buffer(1024);
+    unsigned long bytesRead = 0;
+    ReadFile(handle.get(),
+        buffer.data(),
+        buffer.size(),
+        &bytesRead,
+        nullptr);
+
+    if (condition2) return;
+  }
+
+} // namespace
+
+
+TEST(U21, 20081124)
+{
+  using namespace u21_2018_11_24;
+
+  // try
+  // {
+  //   bad_handle_example();
+  // }
+  // catch (...)
+  // {
+  //   ostringstream os;
+  //   os << "bad handle example happened";
+  //   EXPECT_THAT(os.str(), "bad handle example happened");
+  // }
+
+  try
+  {
+    good_handle_example();
+  }
+  catch (...)
+  {
+    ostringstream os;
+    os << "good handle example happened";
+    EXPECT_THAT(os.str(), "good handle example happened");
+  }
 }
 
 
@@ -1218,7 +1615,153 @@ library must enable you to write temperature literals in all these scales, such
 as 36.5_deg for Celsius, 97.7_f for Fahrenheit, and 309.65_K for Kelvin; perform
 operations with these values; and convert between them.
 
+{
+   using namespace temperature;
+   using namespace temperature_scale_literals;
+
+   auto t1{ 36.5_deg };
+   auto t2{ 79.0_f };
+
+   auto tf = temperature_cast<scale::fahrenheit>(t1);
+   auto tc = temperature_cast<scale::celsius>(tf);
+   assert(t1 == tc);
+}
+
+To meet this requirement, we need to provide an implementation for several
+types, operators, and functions:
+
+An enumeration of supported temperature scales called scale.
+
+A class template to represent a temperature value, parameterized with the scale,
+called quantity.
+
+Comparison operators ==, !=, <, >, <=, and >= that compare two quantities of the
+same time.
+
+Arithmetic operators + and - that add and subtract values of the same quantity
+type. Additionally, we could implement member operators += and -+.
+
+A function template to convert temperatures from one scale to another, called
+temperature_cast. This function does not perform the conversion itself but uses
+type traits to do that.
+
+Literal operators ""_deg, ""_f, and ""_k for creating user-defined temperature
+literals.
+
+For brevity, the following snippet only contains the code that handles Celsius
+and Fahrenheit temperatures. You should take it as a further exercise to extend
+the code with support for the Kelvin scale. The code accompanying the book
+contains the full implementation of all three required scales.  
+
 */
+
+#if 0
+
+build error
+
+namespace u22_2018_11_27
+{
+  // The are_equal() function is a utility function used to compare
+  // floating-point values:
+
+  bool are_equal(double const d1, double const d2, const double epsilon = 0.001)
+  {
+    return std::fabs(d1 - d2) < epsilon;
+  }
+
+  // The enumeration of possible temperature scales and the class that
+  // represents a temperature value are defined as follows:
+
+  enum class scale { celsius, fahrenheit, kelvin };
+
+  template <scale S>
+    class quanity
+    {
+      const double amount;
+
+      public:
+      constexpr explicit quanity(const double a) : amount(a) {}
+      explicit operator double() const { return amount; }
+    };
+
+  // The comparison operators for the quantity<S> class can be seen here:
+  template <scale S> 
+  inline bool operator==(const quanity<S> &lhs, const quanity<S> &rhs)
+  {
+    return are_equal(static_cast<double>(lhs), static_cast<double>(rhs));
+  }
+
+  // To convert between temperature values of different scales, we will define a
+  // function template called temperature_cast() that utilizes several type
+  // traits to perform the actual conversion. All these are shown here, although
+  // not all type traits; the others can be found in the code accompanying the
+  // book:
+
+  template<scale S, scale R>
+    struct conversion_traits
+    {
+      static double convert(const double value) = delete;
+    };
+
+  // to fahrenheit
+  template<>
+    struct conversion_traits<scale::celsius, scale::fahrenheit>
+    {
+      static double convert(const double value)
+      {
+        return (value * 9) / 5 + 32;
+      }
+    };
+
+  // to celsius
+  template<>
+    struct conversion_traits<scale::fahrenheit, scale::celsius>
+    {
+      static double convert(const double value)
+      {
+        return (value - 32) * 5 / 9;
+      }
+    };
+
+  template<scale S, scale R>
+    constexpr quanity<R> temperature_cast(quanity<S> const q)
+    {
+      return quanity<R>(conversion_traits<S, R>::convert(
+            static_cast<double>(q)));
+    }
+
+  // The literal operators for creating temperature values are shown in the
+  // following snippet. These operators are defined in a separate namespace,
+  // called temperature_scale_literals, which is a good practice in order to
+  // minimize the risk of name collision with other literal operators:
+
+  constexpr quanity<scale::celsius> operator "" _deg(long double const amount)
+  {
+    return quanity<scale::celsius>(static_cast<double>(amount));
+  }
+
+  constexpr quanity<scale::fahrenheit> operator "" _f(long double const amount)
+  {
+    return quanity<scale::fahrenheit>(static_cast<double>(amount));
+  }
+
+} // namespace
+
+
+TEST(U22, 20081127)
+{
+  using namespace u22_2018_11_27;
+
+  // 36.5 deg == 97.7 f
+  // auto t1{36.5_deg};
+  
+  quanity<scale::celsius> t1(36.5);
+  auto tf = temperature_cast<scale::fahrenheit>(t1);
+
+  cout << "tf: " << tf << endl;
+}
+
+# endif
 
 
 // ={=========================================================================
