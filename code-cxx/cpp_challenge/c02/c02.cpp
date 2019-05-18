@@ -1168,6 +1168,43 @@ one object to another.
 
 */
 
+namespace u21_2018_11_24
+{
+  using HANDLE = void *;
+
+  struct null_handle_traits
+  {
+    using pointer = HANDLE;
+
+    static pointer invalid() noexcept
+    {
+      return nullptr;
+    }
+
+    static void close(pointer handle) noexcept
+    {
+      CloseHandle(handle);
+  };
+
+  template <typename T>
+    class unique_handle
+    {
+      public:
+        // no copy support
+        unique_handle(const unique_handle &) = delete;
+        unique_handle &operator=(const unieuq_handle &) = delete;
+
+        explicit unique_handle(pointer handle = T::invalid()) noexcept
+          : handle_(handle) 
+          {}
+
+
+      private:
+        using pointer = typename T::pointer;
+        pointer handle_;
+    };
+}
+
 
 // ={=========================================================================
 
