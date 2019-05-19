@@ -498,7 +498,8 @@ namespace queue_circular_count_iterator
 
       public:
       circular_buffer() = delete;
-      explicit circular_buffer(size_t const size) : data_(size) 
+      // explicit circular_buffer(size_t const size) : data_(size) 
+      explicit circular_buffer(T const size) : data_(size) 
       {}
 
       void clear() noexcept 
@@ -549,8 +550,10 @@ namespace queue_circular_count_iterator
       }
 
       private:
-      size_t size_{};
-      size_t head_{-1};
+      // size_t size_{};
+      // size_t head_{-1};
+      T size_{};
+      T head_{-1};
       std::vector<T> data_;
 
       // return `head` pos to push

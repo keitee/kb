@@ -164,7 +164,7 @@ TEST(Pair, MakePair)
   // };
 
   {
-    const auto pair_map{
+    const auto pair_map = {
       make_pair(10, "X"),
       make_pair(9, "IX"),
       make_pair(5, "V")
@@ -270,7 +270,7 @@ TEST(Pair, Initialisation)
   //     make_pair(5, "V")
   // };
 
-  const auto pair_init_01{
+  const auto pair_init_01 = {
     make_pair(10, "X"),
     make_pair(9, "IX"),
     make_pair(5, "V")
@@ -1460,94 +1460,97 @@ enum class EnumFlags :char { SPORT=1, KIDS=2, MUSIC=4 };
 
 constexpr EnumFlags operator| (EnumFlags lhs, EnumFlags rhs)
 {
-    // C++PL 220
-    // explicit converison is nessary since enum class does not support implicit
-    // conversions.
-    return static_cast<EnumFlags>(static_cast<char>(lhs)|static_cast<char>(rhs));
+  // C++PL 220
+  // explicit converison is nessary since enum class does not support implicit
+  // conversions.
+  return static_cast<EnumFlags>(static_cast<char>(lhs)|static_cast<char>(rhs));
 }
 
 constexpr EnumFlags operator& (EnumFlags lhs, EnumFlags rhs)
 {
-    return static_cast<EnumFlags>(static_cast<char>(lhs)&static_cast<char>(rhs));
+  return static_cast<EnumFlags>(static_cast<char>(lhs)&static_cast<char>(rhs));
 }
 
-class ScopedEnum {
-    public:
-        int checkFlags(EnumFlags flag)
-        {
-            int result{};
+class ScopedEnum 
+{
+  public:
+    int checkFlags(EnumFlags flag)
+    {
+      int result{};
 
-            switch(flag)
-            {
-                // used constexpr on oeprator| and & since someone might want to
-                // use them in constant expression.
-                case EnumFlags::SPORT:
-                    cout << "has sport flag" << endl;
-                    result = 0;
-                    break;
+      switch(flag)
+      {
+        // used constexpr on oeprator| and & since someone might want to
+        // use them in constant expression.
+        case EnumFlags::SPORT:
+          cout << "has sport flag" << endl;
+          result = 0;
+          break;
 
-                case EnumFlags::KIDS:
-                    cout << "has kids flas" << endl;
-                    result = 1;
-                    break;
+        case EnumFlags::KIDS:
+          cout << "has kids flas" << endl;
+          result = 1;
+          break;
 
-                case EnumFlags::MUSIC:
-                    cout << "has music flag" << endl;
-                    result = 2;
-                    break;
+        case EnumFlags::MUSIC:
+          cout << "has music flag" << endl;
+          result = 2;
+          break;
 
-                // to avoid warning
-                // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
-                // case EnumFlags::SPORT|EnumFlags::MUSIC:
-                //     cout << "has sport and music flag" << endl;
-                //     result = 3;
-                //     break;
+          // to avoid warning
+          // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
+          // case EnumFlags::SPORT|EnumFlags::MUSIC:
+          //     cout << "has sport and music flag" << endl;
+          //     result = 3;
+          //     break;
 
-                default:
-                    cout << "has unknown flag" << endl;
-                    result = 100;
-            }
+        default:
+          cout << "has unknown flag" << endl;
+          result = 100;
+      }
 
-            return result;
-        }
+      return result;
+    }
 };
 
 
-TEST(CxxFeaturesTest, UseScopedEnum)
+TEST(Enum, ScopedEnum)
 {
-    ScopedEnum scoped;
+  ScopedEnum scoped;
 
-    EXPECT_EQ(0, scoped.checkFlags(EnumFlags::SPORT));
-    EXPECT_EQ(1, scoped.checkFlags(EnumFlags::KIDS));
-    EXPECT_EQ(2, scoped.checkFlags(EnumFlags::MUSIC));
+  EXPECT_EQ(0, scoped.checkFlags(EnumFlags::SPORT));
+  EXPECT_EQ(1, scoped.checkFlags(EnumFlags::KIDS));
+  EXPECT_EQ(2, scoped.checkFlags(EnumFlags::MUSIC));
 
-    // to avoid warning
-    // EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
- 
-    EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
-    // EXPECT_EQ(100, scoped.checkFlags(200));
+  // to avoid warning
+  // EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
+
+  EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
+  // EXPECT_EQ(100, scoped.checkFlags(200));
 }
 
 
-// ={=========================================================================
-// cxx-enum, unscoped enum, enum hack
-
-enum color { red, yellow, green };          // unscoped
-enum class peppers { red, yellow, green };  // scoped
-
-TEST(CxxFeaturesTest, UseEnumHack)
+namespace cxx_enum
 {
-    int value_1 = color::yellow;
+  enum color { red, yellow, green };          // unscoped
+  enum class peppers { red, yellow, green };  // scoped
+} // namespace
 
-    // error: cannot convert ‘peppers’ to ‘int’ in initialization
-    // int value_2 = peppers::red;
+TEST(Enum, EnumHack)
+{
+  using namespace cxx_enum;
 
-    color set_1 = yellow;
+  int value_1 = color::yellow;
 
-    // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
-    // color set_2 = 2;
-    
-    EXPECT_EQ(value_1, set_1);
+  // error: cannot convert ‘peppers’ to ‘int’ in initialization
+  // int value_2 = peppers::red;
+
+  color set_1 = yellow;
+
+  // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+  // color set_2 = 2;
+
+  EXPECT_EQ(value_1, set_1);
 }
 
 
