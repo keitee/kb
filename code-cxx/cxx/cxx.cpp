@@ -1456,6 +1456,119 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 // ={=========================================================================
 // cxx-enum
 
+/*
+The enum hack is only for C but nto C++ since enum in C++ is a type and is
+subject to type check:
+
+The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
+be used where an integral value is required. Called `enum-hack`. 
+
+int i = color::red;                       // ok
+int j = peppers::red;                     // error since it is scoped
+
+open_modes readfile = open_modes::input;  // ok
+open_modes readfile = 2;                  // error
+
+enum color eyes = green;                  // ok
+enum color eyes = 2;                      // ok
+
+class GamePlayer {
+ private:
+   enum { NumTurns = 5; }
+
+   int scopes[NumTurns];
+   ...
+};
+
+
+{
+  enum color { red, yellow, green };          // unscoped
+  enum class peppers { red, yellow, green };  // scoped
+  enum {red, yellow, green};                  // unscoped and unnamed
+}
+
+enum {red, yellow, green}; causes errors with enum color {}:
+
+cxx.cpp:1497:9: error: redeclaration of ‘red’
+   enum {red, yellow, green};                  // unscoped and unnamed
+         ^~~
+cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
+   enum color { red, yellow, green };          // unscoped
+                ^~~
+*/
+
+namespace cxx_enum
+{
+  enum color { red, yellow, green };          // unscoped
+  enum class peppers { red, yellow, green };  // scoped
+} // namespace
+
+TEST(Enum, EnumHack)
+{
+  using namespace cxx_enum;
+
+  int value_1 = color::yellow;
+
+  // note that can use enumerators of unscoped enum and this allows
+  // *cxx-enum-hack* However, type error when:
+  //
+  // cxx-error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+  // color set_2 = 2;
+
+  int value_2 = yellow;
+  int coll[green];
+  EXPECT_THAT(8, sizeof(coll));
+
+  // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization
+  // int value_2 = peppers::red;
+
+  color value_3 = yellow;
+
+  EXPECT_EQ(value_2, value_3);
+}
+
+namespace cxx_enum
+{
+  enum class named_and_scoped {red, yellow, green};
+
+  class Foo
+  {
+    public:
+    enum {red, yellow, green};
+
+    private:
+      std::string name_;
+    public:
+      Foo() : name_("") {} 
+  };
+} // namespace
+
+TEST(Enum, ClassEnum)
+{
+  using namespace cxx_enum;
+
+  named_and_scoped flag1, flag2;
+  flag1 = named_and_scoped::red;
+  flag2 = named_and_scoped::yellow;
+
+  // cxx-error type error
+  // cout << "flag1 : " << flag1 << endl;
+  // EXPECT_THAT(0, named_and_scoped::red);
+
+  EXPECT_THAT(flag1, named_and_scoped::red);
+  EXPECT_THAT(flag2, named_and_scoped::yellow);
+  
+  // when use `private`
+  // cxx.cpp:1563:20: error: ‘cxx_enum::Foo::<unnamed enum> green’ is private within this context
+  //   int flag3 = Foo::green;
+  //                    ^~~~~
+  // Since it's in class, this scoped but not named
+
+  int flag3 = Foo::green;
+  EXPECT_THAT(flag3, 2);
+}
+
+
 enum class EnumFlags :char { SPORT=1, KIDS=2, MUSIC=4 };
 
 constexpr EnumFlags operator| (EnumFlags lhs, EnumFlags rhs)
@@ -1513,7 +1626,6 @@ class ScopedEnum
     }
 };
 
-
 TEST(Enum, ScopedEnum)
 {
   ScopedEnum scoped;
@@ -1528,31 +1640,6 @@ TEST(Enum, ScopedEnum)
   EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
   // EXPECT_EQ(100, scoped.checkFlags(200));
 }
-
-
-namespace cxx_enum
-{
-  enum color { red, yellow, green };          // unscoped
-  enum class peppers { red, yellow, green };  // scoped
-} // namespace
-
-TEST(Enum, EnumHack)
-{
-  using namespace cxx_enum;
-
-  int value_1 = color::yellow;
-
-  // error: cannot convert ‘peppers’ to ‘int’ in initialization
-  // int value_2 = peppers::red;
-
-  color set_1 = yellow;
-
-  // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
-  // color set_2 = 2;
-
-  EXPECT_EQ(value_1, set_1);
-}
-
 
 // ={=========================================================================
 // cxx-rvo
@@ -2601,66 +2688,76 @@ TEST(Time, Snapper)
 // ={=========================================================================
 // cxx-static
 
-class FooStatic {
+namespace cxx_static
+{
+  // shows static member shall be defined outside of class
+  class FooStatic {
     private:
-        static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
-        static const std::string DIGIT_NOT_FOUND;
+      static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
+      static const std::string DIGIT_NOT_FOUND;
 
-        // cause an error
-        // static const std::string DIGIT_NOT_FOUND{"*"};
+      // cause an error
+      // static const std::string DIGIT_NOT_FOUND{"*"};
     public:
-        FooStatic() {}
-};
+      FooStatic() {}
+  };
 
-const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
+  const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
+} // namespace
 
 TEST(Static, DefineStaticOutside)
 {
-    FooStatic foo;
+  using namespace cxx_static;
+
+  FooStatic foo;
 }
 
-// c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
-
-class StaticClass
+namespace cxx_static
 {
-  protected:
-    int value_{};
-    size_t id_{};
+  // c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
 
-    string name_{};
-    static list<StaticClass*> instances_;
-    static size_t track_id_;
+  class StaticClass
+  {
+    protected:
+      int value_{};
+      size_t id_{};
 
-  public:
-    StaticClass(int value, string name =  "static class")
-      : value_(value), name_(name)
-    {
-      id_ = ++track_id_;
-      instances_.push_back(this);
-    }
+      string name_{};
+      static list<StaticClass*> instances_;
+      static size_t track_id_;
 
-    ~StaticClass()
-    {
-      auto it = find(instances_.begin(), instances_.end(), this);
-      if (it != instances_.end())
-        instances_.erase(it);
-    }
+    public:
+      StaticClass(int value, string name =  "static class")
+        : value_(value), name_(name)
+        {
+          id_ = ++track_id_;
+          instances_.push_back(this);
+        }
 
-  public:
-    static void ShowList()
-    {
-      cout << "ShowList: " << instances_.size() << endl;
-      for (const auto &e : instances_)
+      ~StaticClass()
       {
-        cout << "ShowList: name : " << e->name_ << endl;
-        cout << "ShowList: value: " << e->value_ << endl;
-        cout << "ShowList: id   : " << e->id_ << endl;
+        auto it = find(instances_.begin(), instances_.end(), this);
+        if (it != instances_.end())
+          instances_.erase(it);
       }
-    }
-};
 
-list<StaticClass*> StaticClass::instances_;
-size_t StaticClass::track_id_ = 0;
+    public:
+      static void ShowList()
+      {
+        cout << "ShowList: " << instances_.size() << endl;
+        for (const auto &e : instances_)
+        {
+          cout << "ShowList: name : " << e->name_ << endl;
+          cout << "ShowList: value: " << e->value_ << endl;
+          cout << "ShowList: id   : " << e->id_ << endl;
+        }
+      }
+  };
+
+  list<StaticClass*> StaticClass::instances_;
+  size_t StaticClass::track_id_ = 0;
+
+} // namespace
 
 // ShowList: 3
 // ShowList: name : instance 1
@@ -2675,6 +2772,8 @@ size_t StaticClass::track_id_ = 0;
 
 TEST(Static, TrackClassInstances)
 {
+  using namespace cxx_static;
+
   StaticClass sc1(1, "instance 1");
   StaticClass sc2(10, "instance 2");
   StaticClass sc3(100, "instance 3");
@@ -2685,7 +2784,55 @@ TEST(Static, TrackClassInstances)
 
 TEST(Static, TrackClassInstancesWhenNothingCreated)
 {
+  using namespace cxx_static;
+
   StaticClass::ShowList();
+}
+
+namespace cxx_static
+{
+  class Foo
+  {
+    public:
+      Foo() {}
+      static void createInstance()
+      { std::cout << "Foo::createInstance()" << std::endl;}
+  };
+
+  class Bar : public Foo
+  {
+    public:
+      Bar() {}
+      static void createInstance()
+      { std::cout << "Bar::createInstance()" << std::endl;}
+  };
+} // namespace
+
+
+// [ RUN      ] Static.UnderInheritance
+// Foo::createInstance()
+// Bar::createInstance()
+// Foo::createInstance()
+// Bar::createInstance()
+// Foo::createInstance()
+// [       OK ] Static.UnderInheritance (0 ms)
+
+TEST(Static, UnderInheritance)
+{
+  using namespace cxx_static;
+
+  Foo::createInstance();
+  Bar::createInstance();
+
+  Foo foo;
+  foo.createInstance();
+
+  Bar bar;
+  bar.createInstance();
+
+  Foo *p = new Bar;
+  p->createInstance();
+  delete p;
 }
 
 

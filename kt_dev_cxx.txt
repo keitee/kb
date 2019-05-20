@@ -303,6 +303,11 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-con-lock-based-data-structure
 *kt_dev_cxx_0000* cxx-ccon-other-paradigm cxx-fsm
 
+*kt_dev_cxx_0000* cxx-boost-install
+
+*kt_dev_cxx_0000* cxx-fsm-case
+*kt_dev_cxx_0000* cxx-fsm-comparison
+
 #{ BLUSHES OR BUGS
 |kt_dev_blush_001| accessing neighbors in array
 
@@ -24641,46 +24646,52 @@ TEST(Static, DefineStaticOutside)
 <ex>
 // c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
 
-class StaticClass
+namespace cxx_static
 {
-  protected:
-    int value_{};
-    size_t id_{};
+  // c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
 
-    string name_{};
-    static list<StaticClass*> instances_;
-    static size_t track_id_;
+  class StaticClass
+  {
+    protected:
+      int value_{};
+      size_t id_{};
 
-  public:
-    StaticClass(int value, string name =  "static class")
-      : value_(value), name_(name)
-    {
-      id_ = ++track_id_;
-      instances_.push_back(this);
-    }
+      string name_{};
+      static list<StaticClass*> instances_;
+      static size_t track_id_;
 
-    ~StaticClass()
-    {
-      auto it = find(instances_.begin(), instances_.end(), this);
-      if (it != instances_.end())
-        instances_.erase(it);
-    }
+    public:
+      StaticClass(int value, string name =  "static class")
+        : value_(value), name_(name)
+        {
+          id_ = ++track_id_;
+          instances_.push_back(this);
+        }
 
-  public:
-    static void ShowList()
-    {
-      cout << "ShowList: " << instances_.size() << endl;
-      for (const auto &e : instances_)
+      ~StaticClass()
       {
-        cout << "ShowList: name : " << e->name_ << endl;
-        cout << "ShowList: value: " << e->value_ << endl;
-        cout << "ShowList: id   : " << e->id_ << endl;
+        auto it = find(instances_.begin(), instances_.end(), this);
+        if (it != instances_.end())
+          instances_.erase(it);
       }
-    }
-};
 
-list<StaticClass*> StaticClass::instances_;
-size_t StaticClass::track_id_ = 0;
+    public:
+      static void ShowList()
+      {
+        cout << "ShowList: " << instances_.size() << endl;
+        for (const auto &e : instances_)
+        {
+          cout << "ShowList: name : " << e->name_ << endl;
+          cout << "ShowList: value: " << e->value_ << endl;
+          cout << "ShowList: id   : " << e->id_ << endl;
+        }
+      }
+  };
+
+  list<StaticClass*> StaticClass::instances_;
+  size_t StaticClass::track_id_ = 0;
+
+} // namespace
 
 // ShowList: 3
 // ShowList: name : instance 1
@@ -24695,6 +24706,8 @@ size_t StaticClass::track_id_ = 0;
 
 TEST(Static, TrackClassInstances)
 {
+  using namespace cxx_static;
+
   StaticClass sc1(1, "instance 1");
   StaticClass sc2(10, "instance 2");
   StaticClass sc3(100, "instance 3");
@@ -24705,7 +24718,36 @@ TEST(Static, TrackClassInstances)
 
 TEST(Static, TrackClassInstancesWhenNothingCreated)
 {
+  using namespace cxx_static;
+
   StaticClass::ShowList();
+}
+
+
+// [ RUN      ] Static.UnderInheritance
+// Foo::createInstance()
+// Bar::createInstance()
+// Foo::createInstance()
+// Bar::createInstance()
+// Foo::createInstance()
+// [       OK ] Static.UnderInheritance (0 ms)
+
+TEST(Static, UnderInheritance)
+{
+  using namespace cxx_static;
+
+  Foo::createInstance();
+  Bar::createInstance();
+
+  Foo foo;
+  foo.createInstance();
+
+  Bar bar;
+  bar.createInstance();
+
+  Foo *p = new Bar;
+  p->createInstance();
+  delete p;
 }
 
 
@@ -34093,45 +34135,54 @@ enum class procstatus {suspended, running};
 
 
 {cxx-enum-hack}
-May be true for C, but not for C++?
 
-// The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
-// be used where an integral value is required. Called `enum-hack`. 
-// 
-// int i = color::red;                       // ok
-// int j = peppers::red;                     // error since it is scoped
-// 
-// open_modes readfile = open_modes::input;  // ok
-// open_modes readfile = 2;                  // error
-// 
-// enum color eyes = green;                  // ok
-// enum color eyes = 2;                      // ok
-// 
-// class GamePlayer {
-//   private:
-//     enum { NumTurns = 5; }
-// 
-//     int scopes[NumTurns];
-//     ...
-// };
+/*
+The enum hack is only for C but nto C++ since enum in C++ is a type and is
+subject to type check:
 
+The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
+be used where an integral value is required. Called `enum-hack`. 
 
-// cxx-enum, unscoped enum, enum hack
+int i = color::red;                       // ok
+int j = peppers::red;                     // error since it is scoped
 
-enum color { red, yellow, green };          // unscoped
-enum class peppers { red, yellow, green };  // scoped
+open_modes readfile = open_modes::input;  // ok
+open_modes readfile = 2;                  // error
 
-TEST(CxxFeaturesTest, UseEnumHack)
+enum color eyes = green;                  // ok
+enum color eyes = 2;                      // ok
+
+class GamePlayer {
+ private:
+   enum { NumTurns = 5; }
+
+   int scopes[NumTurns];
+   ...
+};
+
+*/
+
+namespace cxx_enum
 {
-    int value_1 = color::yellow;
+  enum color { red, yellow, green };          // unscoped
+  enum class peppers { red, yellow, green };  // scoped
+} // namespace
 
-    // error: cannot convert ‘peppers’ to ‘int’ in initialization
-    // int value_2 = peppers::red;
+TEST(Enum, EnumHack)
+{
+  using namespace cxx_enum;
 
-    color set_1 = green;
+  int value_1 = color::yellow;
 
-    // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
-    color set_2 = 2;
+  // error: cannot convert ‘peppers’ to ‘int’ in initialization
+  // int value_2 = peppers::red;
+
+  color set_1 = yellow;
+
+  // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+  // color set_2 = 2;
+
+  EXPECT_EQ(value_1, set_1);
 }
 
 
@@ -64411,6 +64462,16 @@ designing a concurrent system, because each thread can be treated entirely
 independently. It is thus an example of using multiple threads to separate
 concerns and as such requires you to explicitly decide how to divide the tasks
 between threads.
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-boost-install
+
+https://www.boost.org/doc/libs/1_70_0/more/getting_started/unix-variants.html
+
+cd path/to/boost_1_68_0
+sudo ./bootstrap.sh
+./b2 install
 
 
 ={============================================================================
