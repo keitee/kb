@@ -254,33 +254,57 @@ TEST(AssertTest, AssertOnPair)
 
 
 // ={=========================================================================
-TEST(AssertTest, CheckTheOrderOfAssertArg)
+TEST(Gtest, OrderOfArg)
 {
-    int value{100};
+  int value{100};
 
-    EXPECT_THAT(value, 100);
-    EXPECT_THAT(100, value);
+  EXPECT_THAT(value, 100);
+  EXPECT_THAT(100, value);
 
-    // // t_ex_mock.cpp:262: Failure
-    // // Value of: value
-    // // Expected: is equal to 101
-    // //   Actual: 100 (of type int)
-    // //
-    // // t_ex_mock.cpp:263: Failure
-    // // Value of: 101
-    // // Expected: is equal to 100
-    // //   Actual: 101 (of type int)
-    // EXPECT_THAT(value, 101);
-    // EXPECT_THAT(101, value);
+  // // t_ex_mock.cpp:262: Failure
+  // // Value of: value
+  // // Expected: is equal to 101
+  // //   Actual: 100 (of type int)
+  //
+  // EXPECT_THAT(value, 101);
+
+  // //
+  // // t_ex_mock.cpp:263: Failure
+  // // Value of: 101
+  // // Expected: is equal to 100
+  // //   Actual: 101 (of type int)
+  // EXPECT_THAT(101, value);
+}
+
+// to see which makes better messages
+//
+// [ RUN      ] Gtest.ExpectOrEq
+// gtest.cpp:283: Failure
+// Value of: 101
+// Expected: is equal to 100
+//   Actual: 101 (of type int)
+//
+// gtest.cpp:284: Failure
+// Expected equality of these values:
+//   101
+//   value
+//     Which is: 100
+// [  FAILED  ] Gtest.ExpectOrEq (0 ms)
+// [----------] 2 tests from Gtest (0 ms total)
+
+TEST(Gtest, ExpectOrEq)
+{
+  int value{100};
+
+  EXPECT_THAT(101, value);
+  EXPECT_EQ(101, value);
 }
 
 int main(int argc, char **argv)
 {
-    std::cout << "Running main() from gmock_main.cc\n";
-
-    // Since Google Mock depends on Google Test, InitGoogleMock() is
-    // also responsible for initializing Google Test.  Therefore there's
-    // no need for calling testing::InitGoogleTest() separately.
-    testing::InitGoogleMock(&argc, argv);
-    return RUN_ALL_TESTS();
+  // Since Google Mock depends on Google Test, InitGoogleMock() is
+  // also responsible for initializing Google Test.  Therefore there's
+  // no need for calling testing::InitGoogleTest() separately.
+  testing::InitGoogleMock(&argc, argv);
+  return RUN_ALL_TESTS();
 }

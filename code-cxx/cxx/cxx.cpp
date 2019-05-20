@@ -1457,11 +1457,30 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 // cxx-enum
 
 /*
-The enum hack is only for C but nto C++ since enum in C++ is a type and is
-subject to type check:
+{
+  enum color { red, yellow, green };          // unscoped
+  enum {red, yellow, green};                  // unscoped and unnamed
+}
+
+enum {red, yellow, green}; causes errors with enum color {}:
+
+cxx.cpp:1497:9: error: redeclaration of ‘red’
+   enum {red, yellow, green};                  // unscoped and unnamed
+         ^~~
+cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
+   enum color { red, yellow, green };          // unscoped
+                ^~~
+
+{
+  enum color { red, yellow, green };        // unscoped
+  enum stoplight { red, yellow, green };    // unscoped
+} // namespace
+
+o enumerators of the unscoped enums are open to all and namely `unscoped`
+
 
 The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
-be used where an integral value is required. Called `enum-hack`. 
+be used where an integral value is required. Called `cxx-enum-hack`. 
 
 int i = color::red;                       // ok
 int j = peppers::red;                     // error since it is scoped
@@ -1479,22 +1498,7 @@ class GamePlayer {
    int scopes[NumTurns];
    ...
 };
-
-
-{
-  enum color { red, yellow, green };          // unscoped
-  enum class peppers { red, yellow, green };  // scoped
-  enum {red, yellow, green};                  // unscoped and unnamed
-}
-
-enum {red, yellow, green}; causes errors with enum color {}:
-
-cxx.cpp:1497:9: error: redeclaration of ‘red’
-   enum {red, yellow, green};                  // unscoped and unnamed
-         ^~~
-cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
-   enum color { red, yellow, green };          // unscoped
-                ^~~
+ 
 */
 
 namespace cxx_enum
@@ -1503,38 +1507,50 @@ namespace cxx_enum
   enum class peppers { red, yellow, green };  // scoped
 } // namespace
 
-TEST(Enum, EnumHack)
+TEST(Enum, ScopedAndUnscoped)
 {
   using namespace cxx_enum;
 
-  int value_1 = color::yellow;
+  {
+    // explicitly use unscoped enumerators and implicitly
+    int value_1 = color::yellow;
+    int value_2 = yellow;
+    EXPECT_THAT(value_1, value_2);
+  }
 
-  // note that can use enumerators of unscoped enum and this allows
-  // *cxx-enum-hack* However, type error when:
-  //
-  // cxx-error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
-  // color set_2 = 2;
+  {
+    // so can use enumerators of unscoped enum and this allows *cxx-enum-hack* 
+    int value_1 = yellow;
+    int coll[green];
+    EXPECT_THAT(8, sizeof(coll));
 
-  int value_2 = yellow;
-  int coll[green];
-  EXPECT_THAT(8, sizeof(coll));
+    color value_2 = yellow;
 
-  // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization
-  // int value_2 = peppers::red;
+    EXPECT_THAT(value_1, value_2);
+  }
 
-  color value_3 = yellow;
+  {
+    // However, followings cause type error:
+    //
+    // cxx-error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+    // color color_selected = 2;
 
-  EXPECT_EQ(value_2, value_3);
+    // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization
+    // int value_1 = peppers::red;
+  }
 }
 
-namespace cxx_enum
+namespace cxx_enum_in_class
 {
   enum class named_and_scoped {red, yellow, green};
 
   class Foo
   {
+    // private:
+    //   enum {red, yellow, green};
+
     public:
-    enum {red, yellow, green};
+      enum {red, yellow, green};
 
     private:
       std::string name_;
@@ -1543,29 +1559,49 @@ namespace cxx_enum
   };
 } // namespace
 
-TEST(Enum, ClassEnum)
+TEST(Enum, InClass)
 {
-  using namespace cxx_enum;
+  using namespace cxx_enum_in_class;
 
-  named_and_scoped flag1, flag2;
-  flag1 = named_and_scoped::red;
-  flag2 = named_and_scoped::yellow;
+  // as expected for scoped enum
+  {
+    named_and_scoped value_1, value_2;
+    value_1 = named_and_scoped::red;
+    value_2 = named_and_scoped::yellow;
 
-  // cxx-error type error
-  // cout << "flag1 : " << flag1 << endl;
-  // EXPECT_THAT(0, named_and_scoped::red);
+    // cxx-error followings are type error:
+    //
+    // cout << "value_1 : " << flag1 << endl;
+    // EXPECT_THAT(0, named_and_scoped::red);
 
-  EXPECT_THAT(flag1, named_and_scoped::red);
-  EXPECT_THAT(flag2, named_and_scoped::yellow);
-  
-  // when use `private`
-  // cxx.cpp:1563:20: error: ‘cxx_enum::Foo::<unnamed enum> green’ is private within this context
-  //   int flag3 = Foo::green;
-  //                    ^~~~~
-  // Since it's in class, this scoped but not named
+    EXPECT_THAT(value_1, named_and_scoped::red);
+    EXPECT_THAT(value_2, named_and_scoped::yellow);
+  }
 
-  int flag3 = Foo::green;
-  EXPECT_THAT(flag3, 2);
+
+  // use enum in a class? As with unscoped enum, can use cxx-enum-hack but have
+  // to use "Foo::" prefix as scoped enum. Also, is under cxx-access-control.
+  // benefit? 
+
+  {
+    // when use `private`
+    // cxx.cpp:1563:20: error: ‘cxx_enum::Foo::<unnamed enum> green’ is private within this context
+    //   int flag3 = Foo::green;
+    //                    ^~~~~
+    // Since it's in class, this scoped but not named
+
+    int value_1 = Foo::green;
+
+    // cxx.cpp:1587:19: error: ‘green’ was not declared in this scope
+    //      int value_2 = green;
+    // int value_2 = green;
+
+    EXPECT_THAT(value_1, 2);
+    EXPECT_THAT(2, Foo::green);
+
+    int coll[Foo::green];
+    EXPECT_THAT(8, sizeof(coll));
+  }
 }
 
 
@@ -1626,7 +1662,14 @@ class ScopedEnum
     }
 };
 
-TEST(Enum, ScopedEnum)
+// [ RUN      ] Enum.ScopedEnum
+// has sport flag
+// has kids flas
+// has music flag
+// has unknown flag
+// [       OK ] Enum.ScopedEnum (0 ms)
+
+TEST(Enum, ScopeAndType)
 {
   ScopedEnum scoped;
 
@@ -1640,6 +1683,7 @@ TEST(Enum, ScopedEnum)
   EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
   // EXPECT_EQ(100, scoped.checkFlags(200));
 }
+
 
 // ={=========================================================================
 // cxx-rvo
