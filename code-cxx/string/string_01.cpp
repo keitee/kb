@@ -157,7 +157,7 @@ TEST(String, Const)
 
 // string-back
 
-TEST(StringOperations, Back)
+TEST(String, Back)
 {
     string s1{"zoo"};
     EXPECT_EQ(s1.back(), 'o');
@@ -179,7 +179,7 @@ TEST(StringOperations, Back)
 
 // string-maxsize
 
-TEST(StringOperations, MaxSize)
+TEST(String, MaxSize)
 {
   string s{};
 #if __GNUC__ && __x86_64__
@@ -224,7 +224,7 @@ TEST(String, Substr)
 
 // string-insert
 
-TEST(StringOperations, Insert)
+TEST(String, Insert)
 {
   // *cxx-string-const-error*
   //
@@ -252,7 +252,7 @@ TEST(StringOperations, Insert)
 
 // string-erase, string-replace
 
-TEST(StringOperations, EraseReplace)
+TEST(String, EraseReplace)
 {
   {
     std::string s = "i18n";
@@ -322,7 +322,7 @@ TEST(StringOperations, EraseReplace)
 
 // string-assign, string-swap
 
-TEST(StringOperations, AssignSwap)
+TEST(String, AssignSwap)
 {
   {
     const std::string coll{"othello"};
@@ -367,11 +367,20 @@ TEST(StringOperations, AssignSwap)
   }
 }
 
+// cxx-string-compare
+TEST(String, Compare)
+{
+  std::string coll1{"string compare"};
+  std::string coll2{"string compare"};
+
+  EXPECT_THAT(0, coll1.compare(coll2));
+}
+
 
 // ={=========================================================================
 // string-cstring
 
-TEST(CString, CompareStringAndCstring)
+TEST(String, CompareStringAndCstring)
 {
   string sz{"zoo"};
   EXPECT_EQ(sz.size(), 3);
@@ -438,7 +447,7 @@ namespace string_cstring
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
 
-TEST(CString, CompareStringFromEnd)
+TEST(String, CompareStringFromEnd)
 {
   using namespace string_cstring; 
 
@@ -455,7 +464,7 @@ TEST(CString, CompareStringFromEnd)
 
 // why this works? since there is std::string ctor(const char*)
 
-TEST(CString, OutputCstring)
+TEST(String, OutputCstring)
 {
   ostringstream os;
 
