@@ -8,28 +8,25 @@ if __name__ == "__main__":
     # cleanup files
     subprocess.call(["rm", "-f", "G* tags flist.out"])
 
+    # dirs to include
     dirs = [
-        './CMS_PLATFORM_SERVICES', 
-        './CMS_SYSTEM_INFRASTRUCTURE',
-        './CMS_SYSTEM_RESOURCE',
-        './DARWIN_PLATFORM', 
-        './CMS_MEDIA_SERVICES', 
-        './CMS_INFORMATION_SERVICES',
-        './COMMON_MIDDLEWARE',
-        './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/Picasso/src/java/picasso',
-        './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-api/src/java',
-        './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-impl/src/java',
-        './THIRD_PARTY_LIBRARIES/BSKYB_JTH/build/applications/Picasso/picasso/jpa/modules/jpa-impl/src/c',
-        './THIRD_PARTY_LIBRARIES/CRAFTWORK_LAE/lae',
-        './FUSIONOS_2/UTILITIES_HELPER',
-        './FUSIONOS_2/NETWORK_HELPER',
-        './XTV_High_Level_VOB',
-        './FUSIONOS'
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/include',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/webpage',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/app',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/tools',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/unitTest',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/config',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/build',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/drivers',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/wifiApp',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/source',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/AirplaySdk2'
         ]
 
     listfile = 'flist.out'
     logfile = open(listfile, 'w+')
 
+    # dirs to exclude
     # find {to be replaced} -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
     # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
     command = ["find", ".", "-type", "d", 
