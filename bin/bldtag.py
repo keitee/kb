@@ -20,7 +20,8 @@ if __name__ == "__main__":
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/drivers',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/wifiApp',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/source',
-        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/AirplaySdk2'
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/AirplaySdk2',
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/AirplaySdk'
         ]
 
     listfile = 'flist.out'

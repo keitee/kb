@@ -118,8 +118,8 @@ See <http://gcc.gnu.org/bugs.html> for instructions.
 
 <build-sdk>
 cd /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK
- ./compile_sdkv2.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/ clean
- ./compile_sdkv2.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/
+./compile_sdkv2.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/ clean
+./compile_sdkv2.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/
 
 keitee@keitee-mint:~/mw/ethan-as-source/xSubmoduleDarwinSDK$ 
 
@@ -258,6 +258,87 @@ kAirPlayProperty_NameIsFactoryDefault
 This commit fixes these values to report correct values and add support for
 kAirPlayProperty_NameIsFactoryDefault to report correctly based on names of
 AirPlay network. 
+
+
+<NGDEV-141186>
+
+<decode>
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/Sources/AirPlayReceiverSession.c
+
+_AudioDecoderDecodeFrame()
+{
+    AudioConverterFillComplexBuffer(
+        inSession->audioConverter, _AudioDecoderDecodeCallback, inSession);
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/PlatformEthan/AudioConverterStub.c
+
+AudioConverterFillComplexBuffer()
+{
+  switch (me->sourceFormatID) {
+
+    // ALAC
+    case kAudioFormatAppleLossless:
+      return _AudioConverterFillComplexBufferALACDecode(inConverter, inInputDataProc, inInputDataProcUserData, ioOutputDataPacketSize, outOutputData, outPacketDescription);
+
+    case kAudioFormatMPEG4AAC:
+      // AAC LC to PCM
+      return _AudioConverterFillComplexBufferAACDecode(inConverter, inInputDataProc, inInputDataProcUserData, ioOutputDataPacketSize, outOutputData, outPacketDescription);
+
+    default:
+      return kUnsupportedErr;
+  }
+}
+
+<flush>
+
+static HTTPStatus _requestProcessFlushBuffered()
+{
+  err = AirPlayReceiverSessionFlushAudio(inCnx->session, flushFromP, flushUntil, &lastPlayedTS);
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/Sources/AirPlayReceiverSession.h
+// @abstract 
+// Flush any queued audio until the specified timestamp or sequence number.
+
+AirPlayReceiverSessionFlushAudio()
+{
+  err = AudioConverterReset(inSession->audioConverter);
+}
+
+// AP2 SDK
+
+OSStatus AudioConverterReset(AudioConverterRef inConverter)
+{
+  (void)inConverter;
+
+  // $$$ TODO: Discard any data buffered by the codec
+
+  AudioConverterPrivateRef const me = (AudioConverterPrivateRef)inConverter;
+
+  switch (me->sourceFormatID) {
+
+    case kAudioFormatMPEG4AAC:
+      _FlushAACDecoder(inConverter);
+  }
+
+  return (kNoErr);
+}
+
+
+// AP1 SDK
+
+// AudioStreamer/AirplaySdk/AirPlayAudioPOSIXReceiver211.1.p8/Support/AudioConverterLite.c
+
+OSStatus	AudioConverterReset_compat( AudioConverterRef me )
+{
+  (void) me;
+
+  // Nothing to do here.
+
+  return( kNoErr );
+}
 
 
 #{============================================================================
