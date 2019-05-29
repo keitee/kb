@@ -202,18 +202,270 @@ make libraries platform=Titan
 
 <airplay-logging>
 
-// shall turn on INFO
+// from apple and prints two lines
 
-    AUD_LOG_INFO("KT: INFO 1: Friendly name is: '%s', default name is : %s", 
-        friendlyName.c_str(), m_defaultDeviceName.c_str());
+acs_ulog(kLogLevelNotice, "KT: AudioConverterReset: ALAC: DO NOTHING \n");
+
+NDS: ^0000000694.438133 !MIL   -AS           < p:00000e12 t:6e754dc0 T:no name M:AS_DMS_Writer.cpp F:AirplaySDKDiagLog L:00258 
+  > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(25) 1970-01-01 12:11:34.438098 AM [AirPlayACS] 
+  KT: AudioConverterReset: ALAC: DO NOTHING 
 
 // works by default and on MIL
 
 at_app_ulog(kLogLevelNotice, "KT: kAirPlayProperty_NameIsFactoryDefault = %d\n", value);
   #define at_app_ulog(LEVEL, ...) ulog(at_app_ucat(), (LEVEL), __VA_ARGS__)
 
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/AccessorySDK/Support/LogUtils.c
+int LogPrintF(LogCategory* inCategory, const char* inFunction, LogLevel inLevel, const char* inFormat, ...)
+{
+    int n;
+    va_list args;
+
+    va_start(args, inFormat);
+    n = LogPrintV(inCategory, inFunction, inLevel, inFormat, args);
+    va_end(args);
+    return (n);
+}
+
+
+// print single line
+
 TRACE("KT: integration::checkNameIsFactoryDefault:\n");
   #define TRACE(...) { LogInterfaceInToDiag(0,__VA_ARGS__);}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/PlatformEthan/AirPlayPlayerImpl.cpp
+void LogInterfaceInToDiag(int level,const char*format,...)
+{
+  char buffer[256];
+  va_list args;
+  va_start (args, format);
+  vsnprintf (buffer,256,format, args);
+  va_end (args);
+  if (interfaceLoggingFunction != NULL)
+    interfaceLoggingFunction(level,buffer);
+}
+
+AudioStreamer::AirPlayProtocol::AirPlayProtocol(uint8_t macAddress[6])
+    : m_audioAvailable(true)
+{
+  AUD_LOG_ENTRY("AudioStreamer::AirPlayProtocol::AirPlayProtocol");
+  ::memcpy (m_macAddress, macAddress, 6);
+  AirPlay::Player::createInstance(this);
+  AirPlay::Player::instance().registerAirplaySDKDiagLogFunction(AirplaySDKDiagLog);
+  AirPlay::Player::instance().registerInterfaceDiagLogFunction(AirplayinterfaceDiagLog);
+#ifdef ENABLE_AIRPLAY_2
+  dobbyPTPLxc = std::make_shared<ptpdobbyfactory::PtpDobbyFactory>("PTPAirplay");
+#endif
+
+  AUD_LOG_EXIT("AudioStreamer::AirPlayProtocol::AirPlayProtocol");
+}
+
+void AirplayinterfaceDiagLog(int level ,const char* msg)
+{
+  (void) level;
+  printf("2---%s \n ",msg);
+}
+
+
+// fusion diag
+// home/keitee/mw/ethan-as-source/Components/AS/Diag/include/AS_DIAG_Macros.h
+
+#define AS_LOG_FATAL(msg...)    do {do {AS_DECLARE_FUNCTION;DIAG_LOG_FATAL(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Fatal,writeFatal,handleFatal,msg);} while (0)
+#define AS_LOG_MIL(msg...)      do {do {AS_DECLARE_FUNCTION;DIAG_LOG_MIL(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Mil,writeMil,handleMil,msg);} while (0)
+#define AS_LOG_ERROR(msg...)    do {do {AS_DECLARE_FUNCTION;DIAG_LOG_ERROR(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Error,writeError,handleError,msg);} while (0)
+#define AS_LOG_WARNING(msg...)  do {do {AS_DECLARE_FUNCTION;DIAG_LOG_WARN(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Warning,writeWarning,handleWarning,msg);} while (0)
+#define AS_LOG_INFO(msg...)     do {do {AS_DECLARE_FUNCTION;DIAG_LOG_INFO(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Info,writeInfo,handleInfo,msg);} while (0)
+#define AS_LOG_ENTRY(msg...)    AS_LOG_INFO(msg)
+#define AS_LOG_EXIT(msg...)     AS_LOG_INFO(msg)
+
+
+<airplay-sdk>
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/PlatformEthan/AirPlayMain.c
+
+int AirPlayMain( int argc, const char **argv )
+{
+  AirPlayReceiverServerCreate( &sgReceiverServer );
+
+  AirPlayReceiverServerDelegateInit(&delegate);
+
+  // register delegate to APRS
+  delegate.copyProperty_f = _AirPlayHandleServerCopyProperty;
+  delegate.setProperty_f = _AirPlayHandleServerSetProperty;
+  delegate.sessionCreated_f = _AirPlayHandleSessionCreated;
+  AirPlayReceiverServerSetDelegate(sgReceiverServer, &delegate);
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/Sources/AirPlayReceiverServer.c
+
+AirPlayReceiverServerCreateWithConfigFilePath(CFStringRef inConfigFilePath, AirPlayReceiverServerRef* outServer)
+{
+}
+
+
+// setup path
+
+static OSStatus _HandleHTTPConnectionMessage(HTTPConnectionRef inCnx, HTTPMessageRef inRequest, void* inContext)
+{
+  aprs_ulog(kLogLevelTrace, "method:'%.*s' path:'%.*s'\n", (int)methodLen, methodPtr, (int)pathLen, pathPtr);
+
+  else if (strnicmpx(methodPtr, methodLen, "SETUP") == 0)
+    status = _requestProcessSetup(cnx, inRequest);
+}
+
+static HTTPStatus _requestProcessSetup(AirPlayReceiverConnectionRef inCnx, HTTPMessageRef inRequest)
+{
+  status = _requestProcessSetupPlist(inCnx, inRequest);
+}
+
+static HTTPStatus _requestProcessSetupPlist(AirPlayReceiverConnectionRef inCnx, HTTPMessageRef inRequest)
+{
+    aprs_ulog(kAirPlayPhaseLogLevel, "Setup (%##a)\n", &inCnx->httpCnx->peerAddr);
+}
+
+_requestCreateSession()
+{
+  AirPlayReceiverSessionCreate();
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/Sources/AirPlayReceiverSession.c
+AirPlayReceiverSessionCreate()
+{
+  err = AirPlayReceiverSessionPlatformInitialize(me);
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/Sources/AirPlayReceiverPOSIX.c
+
+OSStatus AirPlayReceiverServerPlatformInitialize(AirPlayReceiverServerRef inServer)
+{}
+
+
+// set audio stream
+
+static OSStatus _UpdateStreams(AirPlayReceiverSessionRef inSession)
+{
+  atrp_ulog(kLogLevelNotice, "Main audio setting up %s for %@, input %s, loopback %s, volume:%f\n",
+      AirPlayAudioFormatToString(streamCtx->format),
+      streamCtx->audioType ? streamCtx->audioType : CFSTR(kAirPlayAudioType_Default),
+      streamCtx->input ? "yes" : "no",
+      streamCtx->loopback ? "yes" : "no",
+      inSession->server->volume);
+
+  // > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(25) 1970-01-01 12:11:37.199742 AM [AirPlay] Main audio setting up ALAC/44100/16/2 for default, input no, loopback no, volume:-8.374125
+
+  AudioStreamSetOutputCallback(streamCtx->stream, _AudioOutputCallBack, streamCtx);
+
+  void AudioStreamSetOutputCallback(AudioStreamRef inStream, AudioStreamOutputCallback_f inFunc, void* inContext)
+  {
+    AudioStreamImpRef const me = _AudioStreamGetImp(inStream);
+    TRACE("AudioStreamSetAudioCallback\n");
+
+    me->callback = inFunc;
+    me->callbackContext = inContext;
+  }
+
+  err = AudioStreamStart(streamCtx->stream);
+}
+
+// Components/AudioStreamer/AirplaySdk2/AirPlaySDK_2/PlatformEthan/AudioUtilsStub.c
+OSStatus AudioStreamPrepare(AudioStreamRef inStream)
+{
+  Trace.cpp(25) 1970-01-01 12:06:46.573261 AM [AirPlay] Main audio setting up ALAC/44100/16/2 for default, input no, loopback no, volume:-21.002514
+  Trace.cpp(25) 1970-01-01 12:06:46.573261 AM [AirPlay] Main audio setting up ALAC/44100/16/2 for default, input no, loopback no, volume:-21.002514
+  _IMPL Trace.cpp(41) AudioStreamCreate
+  _IMPL Trace.cpp(41) New AudioStreamPrivate=(nil)
+  _IMPL Trace.cpp(41) AudioStreamSetAudioCallback
+  _IMPL Trace.cpp(41) AudioStreamPrepare:
+  _IMPL Trace.cpp(41) channels:      2
+  _IMPL Trace.cpp(41) bits/channel:  16
+  _IMPL Trace.cpp(41) sample rate:   44100
+  _IMPL Trace.cpp(41) bytes/frame:   4
+  _IMPL Trace.cpp(41) bytes/packet:  4
+  _IMPL Trace.cpp(41) frames/packet: 1
+  _IMPL Trace.cpp(41) format id:     6c70636d
+  _IMPL Trace.cpp(41) format flags:  c
+  _IMPL Trace.cpp(41) Signed
+  _IMPL Trace.cpp(41) Little endian
+  _IMPL Trace.cpp(41) audioSetFormat returning 1
+}
+
+OSStatus AudioStreamStart(AudioStreamRef inStream)
+{
+  // calls to intergration.cpp
+  if( !sessionInitialize(inStream));
+}
+
+
+// get audio data
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/PlatformEthan/integration.cpp
+
+void audioGetData(uint32_t sampleTime, uint64_t	hostTime, void *buffer, size_t bufferLen)
+{
+  s_audioStream->callback(sampleTime, hostTime, buffer, bufferLen, s_audioStream->callbackContext);
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/Sources/AirPlayReceiverPOSIX.c
+// callback is
+
+static void
+_AudioOutputCallBack(
+    uint32_t inSampleTime,
+    uint64_t inHostTime,
+    void* inBuffer,
+    size_t inLen,
+    void* inContext)
+{
+  AirPlayAudioStreamPlatformContext* const streamCtx = (AirPlayAudioStreamPlatformContext*)inContext;
+  OSStatus err;
+
+  atrp_ulog(kLogLevelNotice, "KT: _AudioOutputCallBack: inLen(%d)\n", inLen);
+
+  err = AirPlayReceiverSessionReadAudio(streamCtx->session, streamCtx->activeType, inSampleTime, inHostTime,
+      inBuffer, inLen);
+  require_noerr(err, exit);
+
+  if (streamCtx->input && streamCtx->loopback) {
+    // not called in the log. use case?
+    err = AirPlayReceiverSessionWriteAudio(streamCtx->session, streamCtx->activeType, inSampleTime, inHostTime,
+        inBuffer, inLen);
+    require_noerr(err, exit);
+  }
+
+exit:
+  return;
+}
+
+
+// start path
+
+// AudioStreamer/source/AirPlayProtocol.cpp
+
+void AudioStreamer::AirPlayProtocol::enable(uint16_t port)
+{
+  AUD_LOG_ENTRY("AudioStreamer::AirPlayProtocol::enable");
+  if( !AirPlay::Player::instance().supported() )
+  {
+    AUD_LOG_WARNING("Airplay not supported on this box, cannot enable");
+    return;
+  }
+  AUD_LOG_INFO("Airplay supported, enabling");
+  AirPlay::Player::instance().startAirPlay();
+  AirPlay::Player::instance().registerHttpService("/index.html", port);
+  AUD_LOG_MIL("Enable airplay done");
+  AUD_LOG_EXIT("AudioStreamer::AirPlayProtocol::enable");
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/PlatformEthan/AirPlayPlayerImpl.cpp
+
+void AirPlay::PlayerImpl::startAirPlay()
+{
+  if( !m_airplayRunning )
+  {
+    TRACE("ASDK0218. AirPlayStartMain()\n");
+    AirPlayStartMain();
+    m_airplayRunning=true;
+  }
+}
 
 
 ={============================================================================
@@ -267,25 +519,6 @@ AirPlay network.
 
 
 <NGDEV-141186>
-
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplaySDKDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(25) 1970-01-01 12:06:46.573261 AM [AirPlay] Main audio setting up ALAC/44100/16/2 for default, input no, loopback no, volume:-21.002514
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplaySDKDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(25) 1970-01-01 12:06:46.573261 AM [AirPlay] Main audio setting up ALAC/44100/16/2 for default, input no, loopback no, volume:-21.002514
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) AudioStreamCreate
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) New AudioStreamPrivate=(nil)
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) AudioStreamSetAudioCallback
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) AudioStreamPrepare:
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) channels:      2
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) bits/channel:  16
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) sample rate:   44100
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) bytes/frame:   4
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) bytes/packet:  4
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) frames/packet: 1
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) format id:     6c70636d
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) format flags:  c
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) Signed
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) Little endian
-!MIL   -AS           < p:00000deb t:6b3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) audioSetFormat returning 1
-
 
 <decode>
 
@@ -410,7 +643,8 @@ OSStatus	AudioConverterReset_compat( AudioConverterRef me )
   return( kNoErr );
 }
 
-
+touch /opt/airplay/audio.out.pcm; chmod 777 /opt/airplay/audio.out.pcm
+tail -f /mnt/nds/dev_13/part_0/FSN_DATA/LOG | egrep "KT|AudioConverterDispose|AudioConverterNew"
 tail -f LOG | egrep "AudioConverterDispose|AudioConverterNew"
 
 

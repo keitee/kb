@@ -14,14 +14,15 @@ if __name__ == "__main__":
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/webpage',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/app',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/tools',
-        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/unitTest',
+        # '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/unitTest',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/config',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/build',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/drivers',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/wifiApp',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/source',
         '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/AirplaySdk2',
-        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/AirplaySdk'
+        '/home/keitee/mw/ethan-as-source/Components/AudioStreamer/AirplaySdk',
+        '/home/keitee/mw/ethan-as-source/Components/AS'
         ]
 
     listfile = 'flist.out'
