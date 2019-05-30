@@ -397,6 +397,80 @@ OSStatus AudioStreamStart(AudioStreamRef inStream)
 
 
 // get audio data
+
+// CMS_MEDIA_SERVICES/MPM/inc/mpm_pres.h
+
+/** @brief Structure that contains properties of a NEED_DATA callback for use in MPM_PRES_ES_EVENT_PROPERTIES */
+typedef struct
+{
+    uint32_t    data_length;        /*!< @brief The amount of data that can be written to the device */
+    uint32_t    current_level;      /*!< @brief The current buffer level on the output device */
+    uint32_t    cumulative_bytes;   /*!< @brief The total amount of bytes written to this handle */
+} MPM_PRES_ES_EVENT_NEED_DATA_PROPERTIES;
+
+// DARWIN_PLATFORM/DARWIN_PLAYER/inc/player_api_events.h
+
+#define PLAYER_EVENT_AUDIO_NEED_DATA                (0x22000000U)   
+/**< Notification sent when the buffer created with PLAYER_API_AVControl_AddSourceBuffer needs more
+ * data. Application should provide more data through PLAYER_API_AVControl_AppendToBuffer */
+
+typedef struct
+{
+  uint32_t length;
+  uint32_t buffer_level;
+  uint32_t bytes_received;
+} PLAYER_PRIV_EVENT_NEED_DATA;
+
+ret = PLAYER_API_Session_RegisterEventListener(playerSession,PLAYER_EVENT_AUDIO_NEED_DATA,playerEventListener,PLAYER_API_TAG(this),&dataEventListenerHandle);
+
+struct event_data_type
+{
+  uint32_t                 eventType;
+
+  /* PLAYER_EVENT_AUDIO_NEED_DATA */
+  uint32_t                 audioLength;
+  uint32_t                 bufferLevel;
+  uint32_t                 bytesReceived;
+
+  /* PLAYER_EVENT_SESSION_START */
+  PLAYER_API_SessionHandle sessionId;
+};
+
+handlePlayerEventNeedData(event_data, audioThread, event);
+
+static void handlePlayerEventNeedData(event_data_type &event_data , AudioStreamer::AudioThread* audioThread,PLAYER_API_Event_Handle event)
+
+audioThread->onPlayerNeedData(event_data.audioLength, event_data.bufferLevel, event_data.bytesReceived);
+
+void AudioStreamer::AudioThread::onPlayerNeedData(uint32_t dataNeeded, uint32_t bufferLevel, uint32_t totalPlayed);
+
+case EVENT_NEED_DATA:
+  handlePlayerNeedData(arg->dataNeeded, arg->bufferLevel, arg->totalPlayed);
+
+case EVENT_PUSH_DATA:
+  pushDataToPlayer(arg->dataNeeded, arg->bufferLevel, arg->totalPlayed);
+
+void AudioStreamer::AudioThread::pushDataToPlayer(uint32_t dataNeeded, uint32_t bufferLevel, uint32_t totalPlayed)
+{
+  currentInstance->audioBufferGet(sampleCount, UpTicks()+inHostTime, m_buffer, dataToCopy);
+}
+
+/*
+ *AirPlayProtocol getAudioData
+ *
+ * inParam :
+ *      sampleTime :- uint32_t , Time in terms of samples , mostly how many samples consumed till now indicate
+ *                              how much time has elapsed. 4410 samples indicate 100ms
+ *      hostTime      :- uint64_t , Approximate time when first sample will be played . Needs to as accurate as possible
+ *                              and any variation of more than 5 ms will lead audio sync delay b/w apple devices
+ *      buffer           :- void * , buffer memory allocated and managed by client
+ *      bufferLen     :- size_t , length of buffer which also indicate the amount of data needs to be copied in bytes
+ *
+ * Function Breif :
+ *       Get audio data from airplay SDK
+ */
+void AudioStreamer::AirPlayProtocol::getAudioData(uint32_t sampleTime, uint64_t hostTime, void *buffer, size_t bufferLen)
+
 // AudioStreamer/AirplaySdk2/AirPlaySDK_2/PlatformEthan/integration.cpp
 
 void audioGetData(uint32_t sampleTime, uint64_t	hostTime, void *buffer, size_t bufferLen)
@@ -648,6 +722,31 @@ OSStatus	AudioConverterReset_compat( AudioConverterRef me )
 touch /opt/airplay/audio.out.pcm; chmod 777 /opt/airplay/audio.out.pcm
 tail -f /mnt/nds/dev_13/part_0/FSN_DATA/LOG | egrep "KT|AudioConverterDispose|AudioConverterNew"
 tail -f LOG | egrep "AudioConverterDispose|AudioConverterNew"
+
+// from LOG
+985635, 22.350
+18051:NDS: ^0000000252.850650 !MIL   -AS           < 1970-01-01 12:04:12.850632 AM [AirPlay] Concealed 1595 unit gap (985635 vs 987230), curr seq 26233
+18052:NDS: ^0000000252.850667 !MIL   -AS           < 1970-01-01 12:04:12.850632 AM [AirPlay] Concealed 1595 unit gap (985635 vs 987230), curr seq 26233
+
+25016:NDS: ^0000000264.298628 !MIL   -AS           < 1970-01-01 12:04:24.298610 AM [AirPlay] Concealed 2042 unit gap (1490580 vs 1492622), curr seq 27667
+25017:NDS: ^0000000264.298645 !MIL   -AS           < 1970-01-01 12:04:24.298610 AM [AirPlay] Concealed 2042 unit gap (1490580 vs 1492622), curr seq 27667
+
+31732:NDS: ^0000000275.496637 !MIL   -AS          < 1970-01-01 12:04:35.496619 AM [AirPlay] Concealed 1612 unit gap (1984500 vs 1986112), curr seq 29063
+31733:NDS: ^0000000275.496655 !MIL   -AS          < 1970-01-01 12:04:35.496619 AM [AirPlay] Concealed 1612 unit gap (1984500 vs 1986112), curr seq 29063
+
+37098:NDS: ^0000000284.702606 !MIL   -AS          < 1970-01-01 12:04:44.702588 AM [AirPlay] Concealed 727 unit gap (2390220 vs 2390947), curr seq 30209
+37099:NDS: ^0000000284.702624 !MIL   -AS          < 1970-01-01 12:04:44.702588 AM [AirPlay] Concealed 727 unit gap (2390220 vs 2390947), curr seq 30209
+
+43855:NDS: ^0000000295.902600 !MIL   -AS          < 1970-01-01 12:04:55.902582 AM [AirPlay] Concealed 302 unit gap (2884140 vs 2884442), curr seq 31608
+43856:NDS: ^0000000295.902618 !MIL   -AS          < 1970-01-01 12:04:55.902582 AM [AirPlay] Concealed 302 unit gap (2884140 vs 2884442), curr seq 31608
+
+3168585, 71.850
+47357:NDS: ^0000000302.348641 !MIL   -AS          < 1970-01-01 12:05:02.348619 AM [AirPlay] Concealed 286 unit gap (3168585 vs 3168871), curr seq 32410
+47358:NDS: ^0000000302.348659 !MIL   -AS          < 1970-01-01 12:05:02.348619 AM [AirPlay] Concealed 286 unit gap (3168585 vs 3168871), curr seq 32410
+
+3318525, 75.250
+48777:NDS: ^0000000305.746622 !MIL   -AS          < 1970-01-01 12:05:05.746564 AM [AirPlay] Concealed 1170 unit gap (3318525 vs 3319695), curr seq 32834
+48778:NDS: ^0000000305.746644 !MIL   -AS          < 1970-01-01 12:05:05.746564 AM [AirPlay] Concealed 1170 unit gap (3318525 vs 3319695), curr seq 32834
 
 
 #{============================================================================
