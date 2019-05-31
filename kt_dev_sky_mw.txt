@@ -396,6 +396,25 @@ OSStatus AudioStreamStart(AudioStreamRef inStream)
 }
 
 
+<airplay-config>
+
+// AudioStreamer/config/audiostreamer.xml
+
+ 151   │    <!--NGDEV-140292:Update audiostreamer.xml to support Titan UK-->
+ 152   │    <profile name="EE_GW_UK_TITAN">
+ 153   │    <file name="audiostreamer.cfg">
+ 154   │    <section name="SYSTEM_DELAY_CONFIG">
+ 155   │     <key name="SYSTEM_DELAY" type="INTEGER" value="137">
+ 156   │         <comment date="2019/05/16 10:13:45" text="NGDEV-141515 The time in mS to provide system delay. This will be used in the calculation of inHostTime" />
+ 157   │     </key>
+ 158   │    </section>
+ 159   │    <section name="PCM_CONFIGURATION">
+ 160   │     <key name="PCM_BUFFERSIZE" type="INTEGER" value="100">
+ 161   │     <comment date="2017/01/19 01:23:45" text="The time in ms" />
+ 162   │     </key>
+ 163   │     <key name="PCM_THRESHOLD" type="INTEGER" value="50">
+ 164   │     <comment date="2017/01/19 01:23:45" text="The time in ms" />
+ 
 
 <airplay-get-audio-data>
 
@@ -405,7 +424,8 @@ case EVENT_SESSION_START:
 {
   PLAYER_API_SessionHandle* sessionId = (PLAYER_API_SessionHandle*)t.data;
 
-  string sourceUri = AsStringTool::stringf("audio/cisco.com_pcm;rate=%d;channels=%d;samplesize=%d;byteorder=%s;sign=%s", m_format.sampleRate, m_format.channels, m_format.sampleSizeBytes*8, m_format.bigEndian?"be":"le", m_format.isSigned?"signed":"unsigned");
+  string sourceUri = AsStringTool::stringf("audio/cisco.com_pcm;rate=%d;channels=%d;samplesize=%d;byteorder=%s;sign=%s", 
+      m_format.sampleRate, m_format.channels, m_format.sampleSizeBytes*8, m_format.bigEndian?"be":"le", m_format.isSigned?"signed":"unsigned");
   AUD_LOG_MIL("AudioThread::EVENT_SESSION_START id=0x%08X, adding source='%s'", *sessionId, sourceUri.c_str());
   ret = PLAYER_API_AVControl_AddSourceBuffer(playerAvControl, sourceUri.c_str(), &m_avControlBufferHandle);
 }
@@ -507,6 +527,7 @@ _AudioOutputCallBack(
   OSStatus err;
 
   atrp_ulog(kLogLevelNotice, "KT: _AudioOutputCallBack: inLen(%d)\n", inLen);
+  //  AM [AirPlay] KT: _AudioOutputCallBack: inLen(8820)
 
   err = AirPlayReceiverSessionReadAudio(streamCtx->session, streamCtx->activeType, inSampleTime, inHostTime,
       inBuffer, inLen);
@@ -521,6 +542,55 @@ _AudioOutputCallBack(
 
 exit:
   return;
+}
+
+// AudioStreamer/AirplaySdk2/AirPlaySDK_2/Sources/AirPlayReceiverSession.c
+
+OSStatus
+AirPlayReceiverSessionReadAudio(
+    AirPlayReceiverSessionRef inSession,
+    AirPlayStreamType inType,
+    uint32_t inSampleTime,
+    uint64_t inHostTime,
+    void* inBuffer,
+    size_t inLen)
+{
+  return AirPlayReceiverSessionReadAudio2(
+      inSession, 
+      inType, 
+      inSampleTime, 
+      inHostTime, 
+      inBuffer, 
+      inLen, 
+      inLen,                  // 7
+      NULL);
+}
+
+AirPlayReceiverSessionReadAudio2(
+    AirPlayReceiverSessionRef inSession,
+    AirPlayStreamType inType,
+    uint32_t inSampleTime,
+    uint64_t inHostTime,
+    void* inBuffer,
+    size_t inLen,
+    size_t inMinLen,          // 7
+    size_t* outSuppliedLen)
+{
+  suppliedLen = _GeneralAudioRender(inSession, inSampleTime, inBuffer, inLen, inMinLen);
+}
+
+static size_t _GeneralAudioRender(
+    AirPlayReceiverSessionRef inSession, 
+    uint32_t inRTPTime, 
+    void* inBuffer, 
+    size_t inSize, 
+    size_t inMinFillSize)
+{
+  // o inMinLen is date bytes for 50ms 
+  //
+  // o ctx->sampleTimeOffset is 0 so has no effect
+  //
+  // o srcTS = pktTS. what's unit?
 }
 
 
@@ -731,11 +801,37 @@ OSStatus	AudioConverterReset_compat( AudioConverterRef me )
   return( kNoErr );
 }
 
+ls -al /opt/airplay/audio.out.pcm
 touch /opt/airplay/audio.out.pcm; chmod 777 /opt/airplay/audio.out.pcm
+rm /mnt/nds/dev_13/part_0/FSN_DATA/LOG
+
+cp /mnt/nds/dev_13/part_0/FSN_DATA/LOG /flash0/LOG_31; chmod 777 /flash0/LOG_31
+cp /opt/airplay/audio.out.pcm /flash0/PCM_31; chmod 777 /flash0/PCM_31
+
 tail -f /mnt/nds/dev_13/part_0/FSN_DATA/LOG | egrep "KT|AudioConverterDispose|AudioConverterNew"
-tail -f LOG | egrep "AudioConverterDispose|AudioConverterNew"
+tail -f /mnt/nds/dev_13/part_0/FSN_DATA/LOG | egrep "pktTS="
 
 // from LOG
+
+KT: audioGetData(0 230596533307 0x78f3597c 8820)
+KT: audioGetData(2205 230646111351 0x78f3597c 8820)
+KT: audioGetData(4410 230696437499 0x78f3597c 8820)
+KT: audioGetData(6615 230746918462 0x78f3597c 8820)
+KT: audioGetData(8820 230796348590 0x78f3597c 8820)
+KT: audioGetData(11025 230846362117 0x78f3597c 8820)
+KT: audioGetData(13230 230896336344 0x78f3597c 8820)
+KT: audioGetData(15435 230946897891 0x78f3597c 8820)
+KT: audioGetData(17640 230996312937 0x78f3597c 8820)
+KT: audioGetData(19845 231046380775 0x78f3597c 8820)
+KT: audioGetData(22050 231096312862 0x78f3597c 8820)
+
+>>> 985635-983430
+2205
+>>> 2205-1595
+610
+>>> 610/44.1
+13.83219954648526 ~~ 14ms but 26ms in PCM output?
+
 985635, 22.350
 18051:NDS: ^0000000252.850650 !MIL   -AS           < 1970-01-01 12:04:12.850632 AM [AirPlay] Concealed 1595 unit gap (985635 vs 987230), curr seq 26233
 18052:NDS: ^0000000252.850667 !MIL   -AS           < 1970-01-01 12:04:12.850632 AM [AirPlay] Concealed 1595 unit gap (985635 vs 987230), curr seq 26233
@@ -759,6 +855,20 @@ tail -f LOG | egrep "AudioConverterDispose|AudioConverterNew"
 3318525, 75.250
 48777:NDS: ^0000000305.746622 !MIL   -AS          < 1970-01-01 12:05:05.746564 AM [AirPlay] Concealed 1170 unit gap (3318525 vs 3319695), curr seq 32834
 48778:NDS: ^0000000305.746644 !MIL   -AS          < 1970-01-01 12:05:05.746564 AM [AirPlay] Concealed 1170 unit gap (3318525 vs 3319695), curr seq 32834
+
+
+>>> 985635/44100
+22
+>>> (985635%44100)/44.1
+350.0
+
+
+KT: nowTs=806326, limTs=807030, minTs=807030, maxTs=1248030, pktTS=3552521935, srcTS=806326
+KT: nowTs=806326, limTs=807030, minTs=807030, maxTs=1248030, pktTS=3552521935, srcTS=806326
+KT: pktTS=3552522287 src->rtpOffsetActive=743240662 inSession->audioLatencyOffset=11025
+KT: pktTS=3552522287 src->rtpOffsetActive=743240662 inSession->audioLatencyOffset=11025
+KT: nowTs=806678, limTs=807030, minTs=807030, maxTs=1248030, pktTS=3552522287, srcTS=806678
+KT: nowTs=806678, limTs=807030, minTs=807030, maxTs=1248030, pktTS=3552522287, srcTS=806678
 
 
 #{============================================================================
