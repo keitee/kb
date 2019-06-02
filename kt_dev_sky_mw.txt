@@ -517,7 +517,7 @@ void audioGetData(uint32_t sampleTime, uint64_t	hostTime, void *buffer, size_t b
 
 static void
 _AudioOutputCallBack(
-    uint32_t inSampleTime,
+    uint32_t inSampleTime,          // sample time
     uint64_t inHostTime,
     void* inBuffer,
     size_t inLen,
@@ -529,8 +529,11 @@ _AudioOutputCallBack(
   atrp_ulog(kLogLevelNotice, "KT: _AudioOutputCallBack: inLen(%d)\n", inLen);
   //  AM [AirPlay] KT: _AudioOutputCallBack: inLen(8820)
 
-  err = AirPlayReceiverSessionReadAudio(streamCtx->session, streamCtx->activeType, inSampleTime, inHostTime,
-      inBuffer, inLen);
+  err = AirPlayReceiverSessionReadAudio(streamCtx->session, streamCtx->activeType, 
+      inSampleTime,                 // 3. sample time 
+      inHostTime,
+      inBuffer, 
+      inLen);
   require_noerr(err, exit);
 
   if (streamCtx->input && streamCtx->loopback) {
@@ -581,7 +584,7 @@ AirPlayReceiverSessionReadAudio2(
 
 static size_t _GeneralAudioRender(
     AirPlayReceiverSessionRef inSession, 
-    uint32_t inRTPTime, 
+    uint32_t inRTPTime,             // sample time
     void* inBuffer, 
     size_t inSize, 
     size_t inMinFillSize)
@@ -591,6 +594,29 @@ static size_t _GeneralAudioRender(
   // o ctx->sampleTimeOffset is 0 so has no effect
   //
   // o srcTS = pktTS. what's unit?
+  //
+  // o minTS == limTS
+
+  nowTS = inRTPTime - ctx->sampleTimeOffset;
+  limTS = nowTS + (uint32_t)(inSize / bytesPerUnit);
+  minTS = nowTS + (uint32_t)(inMinFillSize / bytesPerUnit);
+  maxTS = limTS + kAirTunesRTPOffsetApplyThreshold;
+  pktSeq = 0;
+
+  // sample time
+  //
+  // #define kAirTunesPlayoutDelay 11025 // 250 ms delay to sync with AirPort Express'es 250 ms buffer.
+  // inCnx->minLatency = kAirTunesPlayoutDelay; // Default value for old clients.
+  //
+  // AirPlayReceiverSessionSetProperty()
+  //  gAirTunesRelativeTimeOffset = offset;
+
+  inSession->audioLatencyOffset = inSession->minLatency + gAirTunesRelativeTimeOffset;
+
+  // uint32_t rtpOffsetActive; // RTP offset actively in use (different when deferring).
+  //
+  // static void AirPlayReceiverFlushPackets(AirPlayReceiverSessionRef inSession, AirPlayFlushPoint const* flushFrom, AirPlayFlushPoint flushUntil)
+  //  uint32_t offsetActive = inSession->source.rtpOffsetActive;
 }
 
 
