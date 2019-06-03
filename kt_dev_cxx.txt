@@ -29210,15 +29210,14 @@ errors that should be resolved.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-class-model-avoid-public
+*kt_dev_cxx_0000* cxx-class-model-avoid-public cxx-pattern-strategy
 
-EXCEP++23. way to improve encapsulation
+EXCXX-22, 23. way to improve encapsulation
 
 See *cxx-pattern-nvi* and *cxx-ex-query-example*
 
-Intention: Instead of rewriting much of the `common logic` each time, has
-tried to provide a generic reusable framework, abstract class, that
-encapsulate the repetitive work. So uses two pattern:
+See duplicated code, `common logic`? How to reuse? Move it to the base and use
+public inheritance using two patterns: 
 
 o The `cxx-pattern-pimpl` hides the implementation behind an opaque pointer so
   that any changes to them will not require client code to compile. Called
@@ -29282,16 +29281,27 @@ int main()
 }
 
 
+That is, what want to do is "implemented in terms of" and two ways:
+
+o public inheritance
+
+`is, work-like-a, usable-as-a relationship` and possible due to sub-object.
+The problem is it can cuase `deep inheritance`
+
+public inheritance inherits both interface and implementation which is
+different from override, virtual, or specialisation.
+
+`not to reuse code of base but to be resued by polymorphism`
+
+o private inheritance or membership
+
+
 <better-way>
-This holds two responsibilities, two purposes:
+What's the better way? The current holds two responsibilities, or purposes:
 
-o user code uses the algorithm. Process()
+o interface and algorithm. Process()
 
-o extend GenericTableAlgorithm for specialized specific case or usage.
-  Filter() and ProcessRow()
-
-
-How could they be better improved and encapsulated?
+o extsnsibility. extend GenericTableAlgorithm for specialized case or usage.
 
 "Prefer cohesion. Always give each piece of code module, class, function - a
 single, well-defined responsibility."
@@ -29342,6 +29352,7 @@ class YourWorker : public GTAClient
 int main()
 {
   GenericTableAlgorithm a("Customer", MyWorker());
+  GenericTableAlgorithm a("Customer", YourWorker());
   a.Process();
 }
 
@@ -29363,6 +29374,8 @@ o Any concrete worker class can be used with any other algorithm using
 *cxx-remember*
 Remember the computer science motto:
   "Most problems can be solved by adding a level of indirection."
+
+This becomes very similar to *cxx-pattern-strategy*
 
 
 <to-further>
@@ -29395,6 +29408,249 @@ int main()
   // `cxx-template-explicit-argument`
   GenericTableAlgorithm<MyWorker>("Customer");
 }
+
+
+<ex>
+
+cxx-pattern-strategy
+
+The Morden C++ Challenge, Design Pattern, Chapter 08
+
+72. Computing order price with discounts
+
+// discount for product, each item, customer
+
+A retail store sells a variety of goods and can offer various types of discount,
+for selected customers, articles, or per order. The following types of discount
+could be available:
+
+// discount types
+
+A fixed discount, such as 5%, regardless of the article or the quantity that is
+purchased.
+
+A volume discount, such as 10%, for each article when buying more than a
+particular quantity of that article.
+
+A price discount per total order of an article, that is, a discount for an
+article when a customer buys a quantity of that article so that the total cost
+exceeds a particular amount. For instance, a 15% discount for an article when
+the total cost of that article exceeds $100. If the article costs $5, and the
+customer buys 30 units, the total cost is $150; therefore, a 15% discount
+applies to the order of that article.
+
+A price discount per entire order (regardless what articles and in which
+quantity they were ordered).
+
+Write a program that can calculate the final price of a particular order. It is
+possible to compute the final price in different ways; for instance, all
+discounts could be cumulative, or on the other hand, if an article has a
+discount, a customer or total order discount might not be considered.
+
+
+The problem proposed here can be solved with the `strategy pattern` This design
+pattern defines a family of algorithms and makes them interchangeable within the
+family. In this particular problem, both the discounts and the final order price
+calculators could be implemented based on the strategy pattern. The following
+diagram describes the hierarchy of discount types and their interchangeable use
+within the other classes, customer, article, order_line, and order:
+
+*/
+
+namespace cxx_pattern_strategy
+{
+  struct discount_type
+  {
+    virtual ~discount_type() {}
+
+    // get discount percentage for each type
+
+    virtual double 
+      discount_percent(double price, double quantity) const noexcept = 0;
+  };
+
+  // *cxx-final*
+  struct fixed_discount final : public discount_type
+  {
+    explicit fixed_discount(double discount) noexcept
+      : discount_(discount) 
+      {}
+
+    virtual double
+      discount_percent(double, double) const noexcept override
+      { return discount_; }
+
+    private:
+      double discount_;
+  };
+
+  struct volume_discount final : public discount_type
+  {
+    explicit volume_discount(double quantity, double discount) noexcept
+      : discount_(discount), min_quantity_(quantity)
+      {}
+
+    virtual double
+      discount_percent(double, double quantity) const noexcept override
+      { return quantity >= min_quantity_ ? discount_ : 0; }
+
+    private:
+      double discount_;
+      double min_quantity_;
+  };
+
+  // discount on total price
+  struct price_discount final : public discount_type
+  {
+    explicit price_discount(double price, double discount) noexcept
+      : discount_(discount), min_total_price_(price)
+      {}
+
+    virtual double
+      discount_percent(double price, double quantity) const noexcept override
+      { return (price * quantity) >= min_total_price_ ? discount_ : 0; }
+
+    private:
+      double discount_;
+      double min_total_price_;
+  };
+
+  // discount on item price
+  struct amount_discount final : public discount_type
+  {
+    explicit amount_discount(double price, double discount) noexcept
+      : discount_(discount), min_total_price_(price)
+      {}
+
+    virtual double
+      discount_percent(double price, double) const noexcept override
+      { return price >= min_total_price_ ? discount_ : 0; }
+
+    private:
+      double discount_;
+      double min_total_price_;
+  };
+
+
+  // user(client) class
+
+  struct customer
+  {
+    std::string name_;
+    discount_type* discount_;
+  };
+
+  enum class article_unit
+  { piece, kg, meter, sqmeter, cmeter, liter };
+
+  struct article
+  {
+    int             id_;
+    std::string     name_;
+    double          price_;
+    article_unit    unit_;
+    discount_type*  discount_;
+  };
+
+  struct order_line
+  {
+    article         product_;
+    int             quantity_;
+
+    discount_type*  discount_;
+  };
+
+  struct order
+  {
+    int                     id_;
+    customer*               buyer_;
+    std::vector<order_line> lines_;
+
+    discount_type*          discount_;
+  };
+
+  struct price_calculator
+  {
+    virtual double calculate_price(order const& o) = 0;
+  };
+
+  struct cumulative_price_calculator : public price_calculator
+  {
+    virtual double calculate_price(order const& o) override
+    {
+      double price = 0;
+
+      // each item ordered
+      for (auto ol : o.lines_)
+      {
+        double line_price = ol.product_.price_ * ol.quantity_;
+
+        // product discount
+        if (ol.product_.discount_ != nullptr)
+        {
+          line_price *= (1.0 - ol.product_.discount_->discount_percent(
+                ol.product_.price_, ol.quantity_));
+        }
+
+        // order_line discount
+        if (ol.discount_ != nullptr)
+        {
+          line_price *= (1.0 - ol.discount_->discount_percent(
+                ol.product_.price_, ol.quantity_));
+        }
+
+        // buyer discount
+        if (o.buyer_ != nullptr && o.buyer_->discount_ != nullptr)
+        {
+          line_price *= (1.0 - o.buyer_->discount_->discount_percent(
+                ol.product_.price_, ol.quantity_));
+        }
+
+        price += line_price;
+      } // end for
+
+      // whole order discount
+      if (o.discount_ != nullptr)
+        price *= (1.0 - o.discount_->discount_percent(price, 0));
+
+      return price;
+    };
+  };
+
+} // namespace
+
+TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
+{
+  using namespace cxx_pattern_strategy;
+  
+  fixed_discount fd(0.1);   // 10%
+  volume_discount vd(10, 0.15);
+  price_discount pd(100, 0.05);
+  amount_discount ad(100, 0.05);
+
+  // customers, (name, discount)
+  customer c1{"default", nullptr};
+  customer c2{"john", &fd};
+  customer c3{"joane", &pd};
+
+  // items, (id, name, price, unit, discount)
+  article a1{1, "pen", 5, article_unit::piece, nullptr};
+  article a2{2, "expensive pen", 15, article_unit::piece, &fd};
+  article a3{3, "scissors", 10, article_unit::piece, &vd};
+
+  cumulative_price_calculator calc;
+
+  // order, (order id, customer, ordered items, discount)
+  order o1{101, &c1, {{a1, 1, nullptr}}, nullptr};
+  EXPECT_THAT(calc.calculate_price(o1), 5);
+
+  order o2{102, &c2, {{a1, 1, nullptr}}, nullptr};
+  EXPECT_THAT(calc.calculate_price(o2), 4.5);
+}
+
+
+<ex>
+see *cxx-ex-quote*
 
 
 ={============================================================================
@@ -30974,246 +31230,6 @@ class GameCharacter {
 };
 
 Can add/change calc func later because can have the drived classes in separate hierarchy.
-
-
-<ex>
-
-cxx_pattern_strategy
-
-The Morden C++ Challenge, Design Pattern, Chapter 08
-
-72. Computing order price with discounts
-
-// discount for product, each item, customer
-
-A retail store sells a variety of goods and can offer various types of discount,
-for selected customers, articles, or per order. The following types of discount
-could be available:
-
-// discount types
-
-A fixed discount, such as 5%, regardless of the article or the quantity that is
-purchased.
-
-A volume discount, such as 10%, for each article when buying more than a
-particular quantity of that article.
-
-A price discount per total order of an article, that is, a discount for an
-article when a customer buys a quantity of that article so that the total cost
-exceeds a particular amount. For instance, a 15% discount for an article when
-the total cost of that article exceeds $100. If the article costs $5, and the
-customer buys 30 units, the total cost is $150; therefore, a 15% discount
-applies to the order of that article.
-
-A price discount per entire order (regardless what articles and in which
-quantity they were ordered).
-
-Write a program that can calculate the final price of a particular order. It is
-possible to compute the final price in different ways; for instance, all
-discounts could be cumulative, or on the other hand, if an article has a
-discount, a customer or total order discount might not be considered.
-
-
-The problem proposed here can be solved with the strategy pattern. This design
-pattern defines a family of algorithms and makes them interchangeable within the
-family. In this particular problem, both the discounts and the final order price
-calculators could be implemented based on the strategy pattern. The following
-diagram describes the hierarchy of discount types and their interchangeable use
-within the other classes, customer, article, order_line, and order:
-
-*/
-
-namespace cxx_pattern_strategy
-{
-  struct discount_type
-  {
-    virtual ~discount_type() {}
-
-    // get discount percentage for each type
-
-    virtual double 
-      discount_percent(double price, double quantity) const noexcept = 0;
-  };
-
-  struct fixed_discount final : public discount_type
-  {
-    explicit fixed_discount(double discount) noexcept
-      : discount_(discount) 
-      {}
-
-    virtual double
-      discount_percent(double, double) const noexcept override
-      { return discount_; }
-
-    private:
-      double discount_;
-  };
-
-  struct volume_discount final : public discount_type
-  {
-    explicit volume_discount(double quantity, double discount) noexcept
-      : discount_(discount), min_quantity_(quantity)
-      {}
-
-    virtual double
-      discount_percent(double, double quantity) const noexcept override
-      { return quantity >= min_quantity_ ? discount_ : 0; }
-
-    private:
-      double discount_;
-      double min_quantity_;
-  };
-
-  // discount on total price
-  struct price_discount final : public discount_type
-  {
-    explicit price_discount(double price, double discount) noexcept
-      : discount_(discount), min_total_price_(price)
-      {}
-
-    virtual double
-      discount_percent(double price, double quantity) const noexcept override
-      { return (price * quantity) >= min_total_price_ ? discount_ : 0; }
-
-    private:
-      double discount_;
-      double min_total_price_;
-  };
-
-  // discount on item price
-  struct amount_discount final : public discount_type
-  {
-    explicit amount_discount(double price, double discount) noexcept
-      : discount_(discount), min_total_price_(price)
-      {}
-
-    virtual double
-      discount_percent(double price, double) const noexcept override
-      { return price >= min_total_price_ ? discount_ : 0; }
-
-    private:
-      double discount_;
-      double min_total_price_;
-  };
-
-
-  // user(client) class
-
-  struct customer
-  {
-    std::string name_;
-    discount_type* discount_;
-  };
-
-  enum class article_unit
-  { piece, kg, meter, sqmeter, cmeter, liter };
-
-  struct article
-  {
-    int             id_;
-    std::string     name_;
-    double          price_;
-    article_unit    unit_;
-    discount_type*  discount_;
-  };
-
-  struct order_line
-  {
-    article         product_;
-    int             quantity_;
-    discount_type*  discount_;
-  };
-
-  struct order
-  {
-    int                     id_;
-    customer*               buyer_;
-    std::vector<order_line> lines_;
-    discount_type*          discount_;
-  };
-
-  struct price_calculator
-  {
-    virtual double calculate_price(order const& o) = 0;
-  };
-
-  struct cumulative_price_calculator : public price_calculator
-  {
-    virtual double calculate_price(order const& o) override
-    {
-      double price = 0;
-
-      // each item ordered
-      for (auto ol : o.lines_)
-      {
-        double line_price = ol.product_.price_ * ol.quantity_;
-
-        // product discount
-        if (ol.product_.discount_ != nullptr)
-        {
-          line_price *= (1.0 - ol.product_.discount_->discount_percent(
-                ol.product_.price_, ol.quantity_));
-        }
-
-        // order_line discount
-        if (ol.discount_ != nullptr)
-        {
-          line_price *= (1.0 - ol.discount_->discount_percent(
-                ol.product_.price_, ol.quantity_));
-        }
-
-        // buyer discount
-        if (o.buyer_ != nullptr && o.buyer_->discount_ != nullptr)
-        {
-          line_price *= (1.0 - o.buyer_->discount_->discount_percent(
-                ol.product_.price_, ol.quantity_));
-        }
-
-        price += line_price;
-      } // end for
-
-      // whole order discount
-      if (o.discount_ != nullptr)
-        price *= (1.0 - o.discount_->discount_percent(price, 0));
-
-      return price;
-    };
-  };
-
-} // namespace
-
-TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
-{
-  using namespace cxx_pattern_strategy;
-  
-  fixed_discount fd(0.1);   // 10%
-  volume_discount vd(10, 0.15);
-  price_discount pd(100, 0.05);
-  amount_discount ad(100, 0.05);
-
-  // customers, (name, discount)
-  customer c1{"default", nullptr};
-  customer c2{"john", &fd};
-  customer c3{"joane", &pd};
-
-  // items, (id, name, price, unit, discount)
-  article a1{1, "pen", 5, article_unit::piece, nullptr};
-  article a2{2, "expensive pen", 15, article_unit::piece, &fd};
-  article a3{3, "scissors", 10, article_unit::piece, &vd};
-
-  cumulative_price_calculator calc;
-
-  // order, (order id, customer, ordered items, discount)
-  order o1{101, &c1, {{a1, 1, nullptr}}, nullptr};
-  EXPECT_THAT(calc.calculate_price(o1), 5);
-
-  order o2{102, &c2, {{a1, 1, nullptr}}, nullptr};
-  EXPECT_THAT(calc.calculate_price(o2), 4.5);
-}
-
-
-<ex>
-see *cxx-ex-quote*
 
 
 ={============================================================================
