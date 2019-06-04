@@ -9,6 +9,7 @@
 #include <forward_list>
 #include <regex>
 #include <boost/lexical_cast.hpp>
+#include <cstdarg>  
 
 #include "gmock/gmock.h"
 
@@ -7736,7 +7737,7 @@ TEST(Exception, Noexcept)
 // 0: 01234
 // 0: 012345
 
-TEST(Cpp, Precision)
+TEST(Cpp, Printf)
 {
   // The format argument of printf can be an expression too.
   {
@@ -7807,12 +7808,13 @@ TEST(Cpp, Stringification)
   // If you want to stringify the-result-of-expansion of a macro argument, you
   // have to use two-levels of macros.
   {
-    // is not "4" because not macro-expanded
-    string coll1{str (foo)};
+    // "foo" is stringified when it is used in "str(foo)" but not macro-expanded
+    // first. so not "4"
+
+    string coll1{str(foo)};
     EXPECT_THAT(coll1, "foo");
 
-    // s is stringified when it is used in str, so it is not macro-expanded
-    // first. But s is an ordinary argument to xstr, so it is completely
+    // But "foo" is an ordinary argument to "xstr(foo)", so it is completely
     // macro-expanded before xstr itself is expanded (see Argument Prescan).
     // Therefore, by the time str gets to its argument, it has already been
     // macro-expanded. 
@@ -7894,6 +7896,122 @@ TEST(Cpp, Stringification)
     // PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode", "physDev->shDeviceName"));
     PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode\n", "physDev->shDeviceName"));
   }
+}
+
+namespace cxx_cpp
+{
+  void argprint(int num_args, ...)
+  {
+    va_list ap;
+
+    // The argument `last` is the name of the last argument `before` the
+    // variable argument list, that is, the last argument of `which the calling
+    // function knows the type.`
+
+    va_start(ap, num_args);
+
+    // note that num_arg is valid arg to use
+
+    for (int i = 0; i < num_args; ++i)
+    {
+      std::cout << "arg " << i << " is " << va_arg(ap, int) << std::endl;
+    }
+
+    va_end(ap);
+  }
+
+
+  // The function takes a string of format characters and prints out the
+  // argument associated with each format character based on the type.
+
+  void xprint(char *fmt, ...)
+  {
+    va_list ap;
+    int d;
+    char c, *s;
+
+    va_start(ap, fmt);
+
+    while (*fmt)
+    {
+      switch (*fmt++)
+      {
+        case 's':
+          s = va_arg(ap, char *);
+          printf("string %s\n", s);
+          break;
+        
+        case 'd':
+          d = va_arg(ap, int);
+          printf("int %d\n", d);
+          break;
+
+        case 'c':
+
+          // c = va_arg(ap, char);
+          // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed through ‘...’
+          //            c = va_arg(ap, char);
+          //                           ^
+          // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to ‘va_arg’)
+          // cxx.cpp:7950:26: note: if this code is reached, the program will abort
+          //
+          // need a cast here since va_arg only takes fully promoted types
+
+          c = (char) va_arg(ap, int);
+          printf("char %c\n", c);
+          break;
+      }
+    }
+    va_end(ap);
+  }
+
+} // namespace
+
+
+// arg 0 is 10
+// arg 1 is 20
+// arg 2 is 30
+//
+// string foo
+// int 10
+// char a
+//
+// string foo
+// int 10
+// int 97
+
+TEST(Cpp, Vaarg)
+{
+  using namespace cxx_cpp;
+
+  argprint(3, 10, 20, 30);
+
+  xprint("sdc", "foo", 10, 'a');
+  xprint("sdd", "foo", 10, 'a');
+}
+
+// no napesapce effect but for visual effect
+namespace cxx_cpp
+{
+
+// No for GCC 4.6 and 6.x
+//
+// #define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
+// cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
+//  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
+//                                                                   ^
+
+#define eprintf(fmt, ...)  fprintf(stdout, fmt, ##__VA_ARGS__)
+} // namespace
+
+
+// [ RUN      ] Cpp.VaargMacro
+// success!
+// [       OK ] Cpp.VaargMacro (0 ms)
+
+TEST(Cpp, VaargMacro)
+{
+  eprintf("success!\n");
 }
 
 

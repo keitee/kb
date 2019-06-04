@@ -106,8 +106,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-copy-prevent-copies cxx-delete
 |kt_dev_cxx_0000| cxx-function-matching
 *kt_dev_cxx_0000* cxx-function-alias
-*kt_dev_cxx_0000* cxx-namespace cxx-interface
-*kt_dev_cxx_0000* cxx-overload-operator
+*kt_dev_cxx_0000* cxx-namespace cxx-interface *kt_dev_cxx_0000* cxx-overload-operator
 *kt_dev_cxx_0000* cxx-integer-division
 *kt_dev_cxx_0000* cxx-type-conversion cxx-explicit
 *kt_dev_cxx_0000* cxx-temporary
@@ -147,14 +146,13 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-override
 *kt_dev_cxx_0000* cxx-override-ref: C++ under the hood, Scott Meyers
 *kt_dev_cxx_0000* cxx-class-model
-*kt_dev_cxx_0000* cxx-class-model-avoid-public
+*kt_dev_cxx_0000* cxx-class-model-avoid-public cxx-pattern-strategy
 *kt_dev_cxx_0000* cxx-class-model-implemented-in-terms-of
 *kt_dev_cxx_0000* cxx-pattern-template-method
 *kt_dev_cxx_0000* cxx-pattern-pimpl cxx-minimise-compile-time
 *kt_dev_cxx_0000* cxx-pattern-interface
 *kt_dev_cxx_0000* cxx-pattern-singleton
 *kt_dev_cxx_0000* cxx-pattern-factory
-*kt_dev_cxx_0000* cxx-pattern-strategy
 *kt_dev_cxx_0000* cxx-pattern-observer
 *kt_dev_cxx_0000* cxx-pattern-decorator
 *kt_dev_cxx_0000* cxx-pattern-composite
@@ -7446,7 +7444,7 @@ d_val: 3.140000e+00, i_val: 3.034283e-86,
 d_val: 3.140000e+00, i_val: 3.000000e+00, d_vval: 0.000000e+00
 
 
-{cxx-vaarg} cxx-variable-arguments gcc-cpp
+{cxx-vaarg} cxx-variable-arguments cxx-cpp
 
 The va_arg, va_copy, va_end, and va_start `macros` provide a portable way to
 access the arguments to a function when the function takes a variable number
@@ -7501,7 +7499,7 @@ type.
 va_arg()
 
 The va_arg() macro expands to an expression that has the type and value of the
-next argument in the call. The  argument ap is the va_list ap initialized by
+next argument in the call. The argument ap is the va_list ap initialized by
 va_start(). Each call to va_arg() modifies ap so that the next call returns
 the next argument. `The argument type is a type name specified` so that the
 type of a pointer to an object that has the specified type can be obtained
@@ -7513,9 +7511,9 @@ remaining arguments.
 
   If there is no next argument, or if type is not compatible with the type of
   the actual next argument (as promoted according to the default argument
-  promotions), `random errors will occur.`
+  promotions), `random errors will occur. *cxx-error*`
 
-If ap is passed to a function that uses va_arg(ap,type) then the value of ap
+If ap is passed to a function that uses va_arg(ap, type) then the value of ap
 is undefined after the return of that function.
 
 
@@ -7528,67 +7526,100 @@ va_end() are possible. va_end() may be a macro or a function.
 
 <ex>
 
-#include <iostream>
-#include <cstdarg>
-
-void argprint(int num_args, ...)
+namespace cxx_cpp
 {
-  va_list ap;
-
-  va_start(ap, num_args);
-  for( int i = 0; i < num_args; i++)
+  void argprint(int num_args, ...)
   {
-    std::cout << "arg:" << i << " is " << va_arg(ap, int) << std::endl;
+    va_list ap;
+
+    // The argument `last` is the name of the last argument `before` the
+    // variable argument list, that is, the last argument of `which the calling
+    // function knows the type.`
+
+    va_start(ap, num_args);
+
+    // note that num_arg is valid arg to use
+
+    for (int i = 0; i < num_args; ++i)
+    {
+      std::cout << "arg " << i << " is " << va_arg(ap, int) << std::endl;
+    }
+
+    va_end(ap);
   }
 
-  va_end(ap);
-}
 
-int main()
-{
-  std::cout << "--{ main " << std::endl;
+  // The function takes a string of format characters and prints out the
+  // argument associated with each format character based on the type.
 
-  argprint( 3, 10, 20, 30 );
+  void xprint(char *fmt, ...)
+  {
+    va_list ap;
+    int d;
+    char c, *s;
 
-  std::cout << "--} main " << std::endl;
-}
+    va_start(ap, fmt);
 
-The function foo takes a string of format characters and prints out the
-argument associated with each format character based on the type.
-
-#include <stdio.h>
-#include <stdarg.h>
-
-void
-foo(char *fmt, ...)
-{
-  va_list ap;
-  int d;
-  char c, *s;
-
-  va_start(ap, fmt);
-  while (*fmt)             // null is a termination condition
-      switch (*fmt++) {    // see ++
-      case 's':              /* string */
+    while (*fmt)
+    {
+      switch (*fmt++)
+      {
+        case 's':
           s = va_arg(ap, char *);
           printf("string %s\n", s);
           break;
-      case 'd':              /* int */
+        
+        case 'd':
           d = va_arg(ap, int);
           printf("int %d\n", d);
           break;
-      case 'c':              /* char */
-          /* need a cast here since va_arg only
-             takes fully promoted types */
+
+        case 'c':
+
+          // c = va_arg(ap, char);
+          // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed through ‘...’
+          //            c = va_arg(ap, char);
+          //                           ^
+          // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to ‘va_arg’)
+          // cxx.cpp:7950:26: note: if this code is reached, the program will abort
+          //
+          // need a cast here since va_arg only takes fully promoted types
+
           c = (char) va_arg(ap, int);
           printf("char %c\n", c);
           break;
       }
-  va_end(ap);
+    }
+    va_end(ap);
+  }
+
+} // namespace
+
+
+// arg 0 is 10
+// arg 1 is 20
+// arg 2 is 30
+//
+// string foo
+// int 10
+// char a
+//
+// string foo
+// int 10
+// int 97
+
+TEST(Cpp, Vaarg)
+{
+  using namespace cxx_cpp;
+
+  argprint(3, 10, 20, 30);
+
+  xprint("sdc", "foo", 10, 'a');
+  xprint("sdd", "foo", 10, 'a');
 }
 
 
-{call-snprintf-and-call-vsnprintf}
+<cxx-vprintf>
 
 #include <stdio.h>
 
@@ -7606,9 +7637,9 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap);
 
 The functions vprintf(), vfprintf(), vsprintf(), vsnprintf() are equivalent to
 the functions printf(), fprintf(), sprintf(), snprintf(), respectively, except
-that they are called with a <va_list> instead of a variable number of
-arguments.  These  functions  do not call the va_end macro. Because they
-invoke the va_arg macro, the value of ap is undefined after the call.  See
+that they are called with a `va_list instead of` a variable number of
+arguments. These functions do not call the va_end macro. Because they
+invoke the va_arg macro, the value of ap is undefined after the call. See
 stdarg(3).
 
 The functions snprintf() and vsnprintf() do not write more than size bytes
@@ -7620,17 +7651,17 @@ that the output was truncated.  (See also below under NOTES.) If an output
 error is encountered, a negative value is returned.
 
 
-{variadic-macros}
+{cxx-vaarg-macro} variadic-macros
 
 http://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
 
-A macro can be declared to accept a variable number of arguments much as a
+A `macro` can be declared to accept a variable number of arguments much as a
 function can. The syntax for defining the macro is similar to that of a
 function. Here is an example:
 
      #define eprintf(...) fprintf (stderr, __VA_ARGS__)
 
-This kind of macro is called [variadic]. When the macro is invoked, all the
+This kind of macro is called `variadic`. When the macro is invoked, all the
 tokens in its argument list after the last named argument (this eprintf macro
     has none), including any commas, become the variable argument. This
 sequence of tokens replaces the identifier __VA_ARGS__ in the macro body
@@ -7645,71 +7676,97 @@ the macro expansion, just like an ordinary argument. You may use the '#' and
 trailing token with another token. (But see below for an important special
     case for '##'.)
 
-If your macro is complicated, you may want a more [descriptive-name] for the
+If your macro is complicated, you may want `a more descriptive name` for the
 variable argument than __VA_ARGS__. CPP permits this, as an extension. You may
 write an argument name immediately before the '...'; that name is used for the
 variable argument. The eprintf macro above could be written
 
      #define eprintf(args...) fprintf (stderr, args)
 
-using this extension. You cannot use __VA_ARGS__ and this extension in the
-same macro.
  
-<possible-problem>
+<problems>
 
 You can have named arguments as well as variable arguments in a variadic
 macro. We could define eprintf like this, instead:
 
      #define eprintf(format, ...) fprintf (stderr, format, __VA_ARGS__)
 
-This formulation looks more descriptive, but unfortunately it is [less-flexible]: you must now
-supply at [least-one-argument] after the format string. In standard C, you cannot omit the comma
-separating the named argument from the variable arguments. Furthermore, if you leave the variable
-argument empty, you will get a [syntax-error], because there will be an extra comma after the format
-string.
+This formulation looks more descriptive, but unfortunately it is `less
+flexible`: you must now supply at `least-one-argument` after the format
+string. In standard C, you cannot omit the comma separating the named argument
+from the variable arguments. 
+
+
+Furthermore, `if you leave the variable argument empty,` you will get a
+syntax-error, because there will be an extra comma after the format string.
 
      eprintf("success!\n", );
           ==> fprintf(stderr, "success!\n", );
 
-GNU CPP has a pair of extensions which deal with this problem. First, you are allowed to leave the
-variable argument out entirely:
+// GNU CPP has a pair of extensions which deal with this problem. First, you are
+// allowed to leave the variable argument out entirely:
+// 
+//      eprintf ("success!\n");
+//           ==> fprintf(stderr, "success!\n", );
 
-     eprintf ("success!\n");
-          ==> fprintf(stderr, "success!\n", );
-
- [KT] not works in 4.6 G++. 
-
-Second, the '##' token paste operator has a special meaning when placed between a comma and a
-variable argument. If you write
+Second, `the '##' token paste operator` has a special meaning when placed
+between a comma and a variable argument. If you write
 
      #define eprintf(format, ...) fprintf (stderr, format, ##__VA_ARGS__)
 
-and the variable argument is left out when the eprintf macro is used, then the comma before the '##'
-will be deleted. This does not happen if you pass an empty argument, nor does it happen if the token
-preceding '##' is anything other than a comma.
+and the variable argument is left out when the eprintf macro is used, then the
+`comma before the '##' will be deleted.` This does not happen if you pass an
+empty argument, nor does it happen if the token preceding '##' is anything
+other than a comma.
 
      eprintf ("success!\n")
           ==> fprintf(stderr, "success!\n");
 
- [KT] this works in 4.6 G++.
+// no napesapce effect but for visual effect
+namespace cxx_cpp
+{
 
-The above explanation is ambiguous about the case where the only macro parameter is a variable
-arguments parameter, as it is meaningless to try to distinguish whether no argument at all is an
-empty argument or a missing argument. In this case the C99 standard is clear that the comma must
-remain, however the existing GCC extension used to swallow the comma. So CPP retains the comma when
-conforming to a specific C standard, and drops it otherwise.
+// No for GCC 4.6 and 6.x
+//
+// #define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
+// cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
+//  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
+//                                                                   ^
 
-Variadic macros are a new feature in C99. GNU CPP has supported them for a long time, but only with
-a named variable argument ('args...', not '...' and __VA_ARGS__). If you are concerned with
-portability to previous versions of GCC, you should use only named variable arguments. On the other
-hand, if you are concerned with portability to other conforming implementations of C99, you should
-use only __VA_ARGS__.
+#define eprintf(fmt, ...)  fprintf(stdout, fmt, ##__VA_ARGS__)
+} // namespace
 
-Previous versions of CPP implemented the comma-deletion extension much more generally. We have
-restricted it in this release ( [KT] version? ) to minimize the differences from C99. To get the
-same effect with both this and previous versions of GCC, the token preceding the special '##' must
-be a comma, and there must be white space between that comma and whatever comes immediately before
-it:
+
+// [ RUN      ] Cpp.VaargMacro
+// success!
+// [       OK ] Cpp.VaargMacro (0 ms)
+
+TEST(Cpp, VaargMacro)
+{
+  eprintf("success!\n");
+}
+
+
+The above explanation is ambiguous about the case where the only macro
+parameter is a variable arguments parameter, as it is meaningless to try to
+distinguish whether no argument at all is an empty argument or a missing
+argument. In this case the C99 standard is clear that the comma must remain,
+  however the existing GCC extension used to swallow the comma. So CPP retains
+  the comma when conforming to a specific C standard, and drops it otherwise.
+
+Variadic macros are a new feature in C99. GNU CPP has supported them for a
+long time, but only with a named variable argument ('args...', not '...' and
+    __VA_ARGS__). If you are concerned with portability to previous versions
+of GCC, you should use only named variable arguments. On the other hand, if
+you are concerned with portability to other conforming implementations of C99,
+    you should use only __VA_ARGS__.
+
+Previous versions of CPP implemented the comma-deletion extension much more
+generally. We have restricted it in this release ( [KT] version? ) to minimize
+the differences from C99. To get the same effect with both this and previous
+versions of GCC, the token preceding the special '##' must be a comma, and
+there must be white space between that comma and whatever comes immediately
+before it:
 
      #define eprintf(format, args...) fprintf (stderr, format , ##args)
 
@@ -25981,7 +26038,7 @@ A: Allocate local objects whose destructors perform cleanup
 
 The inheritance provides `overriding` and `polymorphism`.
 
-{cxx-polymorphism} *cxx-dynamic-binding*
+{cxx-polymorphism} *cxx-dynamic-binding* *cxx-override*
 Polymorphism is derived from a Greek words meaning "many forms".
 
 Oppose to compile-time static binding, the compiler generates 'code' to decide
@@ -25996,11 +26053,11 @@ multiple different types to be used in it.
 program is constructed (such as the Template system in C++). Once the program
 is constructed, the choice is made and the type used is known.
 
-`dynamic-polymorphism` is determined at run-time. (Such as a pointer to a base
-    class that allows for descendant class pointers to be passed in. The base
-    class provides the interface and the descendants implement that interface
-    in different ways that are suitable to the specifics of the class.)
-Decisions are made during run time that choose which type to pass.
+`dynamic-polymorphism` is determined at run-time. Through a `pointer` or
+`reference` to a base class that allows for descendant class pointers to be
+passed in. The base class provides the interface and the descendants implement
+that interface in different ways that are suitable to the specifics of the
+class. Decisions are made during run time that choose which type to pass.
 
 The important distinction is deciding at construction (compile) or run-time.
 
@@ -29301,7 +29358,7 @@ What's the better way? The current holds two responsibilities, or purposes:
 
 o interface and algorithm. Process()
 
-o extsnsibility. extend GenericTableAlgorithm for specialized case or usage.
+o extensibility. extend GenericTableAlgorithm for specialized case or usage.
 
 "Prefer cohesion. Always give each piece of code module, class, function - a
 single, well-defined responsibility."
@@ -29651,6 +29708,46 @@ TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
 
 <ex>
 see *cxx-ex-quote*
+
+
+<ex>
+EFCXX-35
+
+cxx-pattern-strategy via function pointers
+
+class GameCharacter;
+
+// default calculation
+int defaultHealthCalc( const GameCharacter& gc );
+
+class GameCharacter {
+  public:
+    typedef int(*HealthCalcFunc)(const GameCharacter&);
+
+    explicit GameCharacter(HealthCalcFunc hcf = defaultHealthCalc) 
+      : healthFunc(hcf) {}
+
+    int healthValue() const
+    { return healthFunc(*this); }
+    ...
+
+  private:
+      HealthCalcFunc healthFunc;
+};
+
+class EvilBadGuy : public GameCharacter {};
+
+int loseHealthQuickly(const GameCharacter&);
+int loseHealthSlowly(const GameCharacter&);
+
+EvilBadGuy ebg1(loseHealthQuickly);
+EvilBadGuy ebg2(loseHealthSlowly);
+
+This is interesting in that calculation function can be set indepandantly with
+game character class tree.
+
+Therefore, *cxx-pattern-strategy* is about seperation between interface and
+extensibility.
 
 
 ={============================================================================
@@ -31134,102 +31231,6 @@ All pages with Singleton in their title at the Portland Pattern Repository
 Wiki
 
 Use Your Singletons Wisely (IBM developerWorks) 
-
-
-={============================================================================
-*kt_dev_cxx_0000* cxx-pattern-strategy
-
-{strategy-pattern} TODO: more clearer
-As with the same example as template pattern, calculate a health for a different game character.
-This design use no virtual and that calculating a health is independent of the character's type. So
-take a calculation out of the class.
-
-<key> The idea is to use function pointer for a calculation. This is simple application of strategy
-pattern.
-
-class GameCharacter;
-
-// default calculation
-int defaultHealthCalc( const GameCharacter& gc );
-
-class GameCharacter {
-  public:
-    typedef int(*HealthCalcFunc)(const GameCharacter&);
-
-    explicit GameCharacter( HealthCalcFunc hcf = defaultHealthCalc ) : healthFunc(hcf) {}
-
-    int healthValue() const
-    { return healthFunc(*this); }
-    ...
-
-  private:
-      HealthCalcFunc healthFunc;
-};
-
-<comparison>
-Interesting flexibilities than virtual approach, template pattern:
-
-1. Each 'instance'(object) of the same type can have different calculation since use constructor to
-set calculation function.
-
-2. Can change the calculation function at runtime.
-
-The possible downside is that calculation function is not member function so could weaken
-encapsulation if need access to non-public part of class to calculation. For example, make it a
-friend or offer more public funcs that are private otherwise.
-
-<when-use-function-type>
-Can use function type to support different callables. See {function-type} for more.
-
-class GameCharacter {
-  public:
-
-    typedef std::tr1::function<int(const GameCharacter&)>HealthCalcFunc;
-    ...
-};
-
-The stl function type is 'generalized' function pointer and allow us to use any compatible callable
-entities such as function object, member funcs, and funcs with different return type.
-
-<classic-strategy-pattern>
-Use two hierarchy. One for characters and the other for calculations. Make calculation function a
-virtual member function of the calculation hierarchy.
-
-GameCharacter <--- CharacterX
-               |- CharacterY
-               |- ...
-    <*>
-    |
-    | composition aggregation
-   1|
-HealCalcFunc  <--- SlowHealthLoser
-               |- FastHealthLoser
-               |- ...
-
-class GameCharacter;
-
-class HealthCalcFunc {
-  public:
-    virtual int calc( const GameCharacter& gc ) const { ... }
-    ...
-};
-
-HealthCalcFunc defaultHealthCalc;
-
-class GameCharacter {
-  public:
-    explicit GameCharacter( HealthCalcFunc* phcf = &defaultHealthCalc )
-      : pHealthCalc( phcf ) {}
-
-    int healthValue() const
-    { return pHealthCalc->calc(*this); }     // see
-    ...
-
-  private:
-      HealthCalcFunc* pHealthCalc;           // see
-};
-
-Can add/change calc func later because can have the drived classes in separate hierarchy.
 
 
 ={============================================================================
