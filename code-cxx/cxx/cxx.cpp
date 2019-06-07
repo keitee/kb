@@ -7770,7 +7770,14 @@ TEST(Printf, Formats)
     printf("0: %.*s \n", 5, pmesg );
     printf("0: %.*s \n", 6, pmesg );
   }
+}
 
+
+// ={=========================================================================
+// cxx-type-conversion
+
+TEST(TypeConversion, Double)
+{
   // double value: 0
   // double value: 0
   // double value is not < or > 0
