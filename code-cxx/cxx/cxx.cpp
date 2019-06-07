@@ -7729,7 +7729,7 @@ TEST(Exception, Noexcept)
 
 
 // ={=========================================================================
-// cxx-cpp, macro
+// cxx-printf
 
 // 0: 01
 // 0: 012
@@ -7737,7 +7737,7 @@ TEST(Exception, Noexcept)
 // 0: 01234
 // 0: 012345
 
-TEST(Cpp, Printf)
+TEST(Printf, Formats)
 {
   // The format argument of printf can be an expression too.
   {
@@ -7756,6 +7756,11 @@ TEST(Cpp, Printf)
     printf("ulong max from limits: %lu\n", ULONG_MAX );
   }
 
+  // MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s\n",
+  //     (OctetStringVariableEntry(pEntry).m_osValue).size,
+  //     (OctetStringVariableEntry(pEntry).m_osValue).buf,
+  //     osValue.size, osValue.buf,
+  //     osNewValue.size, osNewValue.buf);
   {
     char pmesg[] = "0123456789";
 
@@ -7765,16 +7770,34 @@ TEST(Cpp, Printf)
     printf("0: %.*s \n", 5, pmesg );
     printf("0: %.*s \n", 6, pmesg );
   }
+}
 
+
+// ={=========================================================================
+// cxx-type-conversion
+
+TEST(TypeConversion, Double)
+{
+  // double value: 0
+  // double value: 0
+  // double value is not < or > 0
   {
-    // MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s\n",
-    //     (OctetStringVariableEntry(pEntry).m_osValue).size,
-    //     (OctetStringVariableEntry(pEntry).m_osValue).buf,
-    //     osValue.size, osValue.buf,
-    //     osNewValue.size, osNewValue.buf);
+    double value{0};
+    printf("double value: %g\n", value);
+    printf("double value: %u\n", value);
+
+    if (value < 0)
+      printf("double value is < 0\n");
+    else if (value > 0)
+      printf("double value is > 0\n");
+    else
+      printf("double value is not < or > 0\n");
   }
 }
 
+
+// ={=========================================================================
+// cxx-cpp, macro
 
 #define dprint(expr)    printf(#expr " = %g\n", expr )
 #define dprint_string(expr)    string coll(#expr " = %g\n")
