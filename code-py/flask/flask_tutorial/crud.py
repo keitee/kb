@@ -68,15 +68,16 @@ users_schema = UserSchema(many=True)
 @app.route("/user", methods=['POST'])
 def add_user():
     print('post.create user')
-    username = request.json['username']
-    email = request.json['email']
+    # username = request.json['username']
+    # email = request.json['email']
 
-    new_user = User(username, email)
+    # new_user = User(username, email)
 
-    db.session.add(new_user)
-    db.session.commit()
+    # db.session.add(new_user)
+    # db.session.commit()
 
-    return jsonify(new_user)
+    # return jsonify(new_user)
+    return "received /user POST"
 
 
 # On this part we define endpoint to get list of all users and show the result
@@ -86,9 +87,10 @@ def add_user():
 @app.route("/user", methods=['GET'])
 def get_user():
     print('get.user')
-    all_users = User.query.all()
-    result = users_schema.dump(all_users)
-    return jsonify(result.data)
+    # all_users = User.query.all()
+    # result = users_schema.dump(all_users)
+    # return jsonify(result.data)
+    return "received /user GET"
 
 
 # Like on previous part on this part we define endpoint to get user data, but
@@ -101,9 +103,11 @@ def get_user():
 # endpoint to get user detail by id
 @app.route("/user/<id>", methods=['GET'])
 def user_detail(id):
-    print('get.user detail')
-    user = User.query.get(id)
-    return user_schema.jsonify(user)
+    print('get.user.%s detail' % str(id))
+    # user = User.query.get(id)
+    # return user_schema.jsonify(user)
+
+    return "received /user/" + str(id) + " GET"
 
 
 # On this part we define endpoint to update user. First we call user that
