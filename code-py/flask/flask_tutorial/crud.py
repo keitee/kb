@@ -109,6 +109,36 @@ def user_detail(id):
 
     return "received /user/" + str(id) + " GET"
 
+# custom endpoint to have more arguments
+# curl -v -X GET http://localhost:5000/user/200/kit/park
+
+# keitee@keitee-mint:~/mw/ethan-as-source-repo$ curl -v -X GET http://localhost:5000/user/200/kit/park
+# Note: Unnecessary use of -X or --request, GET is already inferred.
+# *   Trying 127.0.0.1...
+# * TCP_NODELAY set
+# * Connected to localhost (127.0.0.1) port 5000 (#0)
+# > GET /user/200/kit/park HTTP/1.1
+# > Host: localhost:5000
+# > User-Agent: curl/7.58.0
+# > Accept: */*
+# >
+# * HTTP 1.0, assume close after body
+# < HTTP/1.0 200 OK
+# < Content-Type: text/html; charset=utf-8
+# < Content-Length: 38
+# < Server: Werkzeug/0.15.4 Python/3.7.3
+# < Date: Wed, 12 Jun 2019 08:14:27 GMT
+# <
+# * Closing connection 0
+# received /user/200 name: kit, park GETkeitee@keitee-mint:~/mw/ethan-as-source-repo$
+
+@app.route("/user/<id>/<givenname>/<surname>", methods=['GET'])
+def user_custom(id, givenname, surname):
+    print('get.user.%s.%s.%s detail' % (str(id), givenname, surname))
+    # user = User.query.get(id)
+    # return user_schema.jsonify(user)
+
+    return "received /user/" + str(id) + " name: " + givenname + ", " + surname +  " GET"
 
 # On this part we define endpoint to update user. First we call user that
 # related with given id on parameter. Then we update username and email value of
