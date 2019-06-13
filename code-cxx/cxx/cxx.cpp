@@ -1457,55 +1457,10 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 // ={=========================================================================
 // cxx-enum
 
-/*
-{
-  enum color { red, yellow, green };          // unscoped
-  enum {red, yellow, green};                  // unscoped and unnamed
-}
-
-enum {red, yellow, green}; causes errors with enum color {}:
-
-cxx.cpp:1497:9: error: redeclaration of ‘red’
-   enum {red, yellow, green};                  // unscoped and unnamed
-         ^~~
-cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
-   enum color { red, yellow, green };          // unscoped
-                ^~~
-
-{
-  enum color { red, yellow, green };        // unscoped
-  enum stoplight { red, yellow, green };    // unscoped
-} // namespace
-
-o enumerators of the unscoped enums are open to all and namely `unscoped`
-
-
-The 'unscoped' enumerators are implicitly converted to 'integral' type. So can
-be used where an integral value is required. Called `cxx-enum-hack`. 
-
-int i = color::red;                       // ok
-int j = peppers::red;                     // error since it is scoped
-
-open_modes readfile = open_modes::input;  // ok
-open_modes readfile = 2;                  // error
-
-enum color eyes = green;                  // ok
-enum color eyes = 2;                      // ok
-
-class GamePlayer {
- private:
-   enum { NumTurns = 5; }
-
-   int scopes[NumTurns];
-   ...
-};
- 
-*/
-
 namespace cxx_enum
 {
   enum color { red, yellow, green };          // unscoped
-  enum class peppers { red, yellow, green };  // scoped
+  enum class peppers { yellow, red, green };  // scoped
 } // namespace
 
 TEST(Enum, ScopedAndUnscoped)
@@ -1513,14 +1468,35 @@ TEST(Enum, ScopedAndUnscoped)
   using namespace cxx_enum;
 
   {
-    // explicitly use unscoped enumerators and implicitly
+    // explicitly use unscoped enumerators and implicitly use unscoped
+
     int value_1 = color::yellow;
     int value_2 = yellow;
     EXPECT_THAT(value_1, value_2);
   }
 
   {
+    // {
+    //   enum color { red, yellow, green };          // unscoped
+    //   enum {red, yellow, green};                  // unscoped and unnamed
+    // }
+    // 
+    // enum {red, yellow, green}; causes errors with enum color {}:
+    // 
+    // cxx.cpp:1497:9: error: redeclaration of ‘red’
+    //    enum {red, yellow, green};                  // unscoped and unnamed
+    //          ^~~
+    // cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
+    //    enum color { red, yellow, green };          // unscoped
+    //                 ^~~
+    // 
+    // {
+    //   enum color { red, yellow, green };        // unscoped
+    //   enum stoplight { red, yellow, green };    // unscoped
+    // } // namespace
+    //
     // so can use enumerators of unscoped enum and this allows *cxx-enum-hack* 
+
     int value_1 = yellow;
     int coll[green];
     EXPECT_THAT(8, sizeof(coll));
@@ -1555,6 +1531,13 @@ namespace cxx_enum_in_class
 
     private:
       std::string name_;
+
+    // private:
+    //   named_and_scoped color_;
+
+    public:
+      named_and_scoped color_;
+
     public:
       Foo() : name_("") {} 
   };
@@ -1570,7 +1553,15 @@ TEST(Enum, InClass)
     value_1 = named_and_scoped::red;
     value_2 = named_and_scoped::yellow;
 
-    // cxx-error followings are type error:
+    // cxx-error followings are type error, no conversion:
+    //
+    // enum class procstatus {suspended, running};
+    // 
+    // // error since no there is no converison to bool
+    // << setw(20) << left << (e.status ? "Running" : "Suspended")
+    // 
+    // // okay
+    // << setw(20) << left << (e.status == procstatus::running ? "Running" : "Suspended")
     //
     // cout << "value_1 : " << flag1 << endl;
     // EXPECT_THAT(0, named_and_scoped::red);
@@ -1602,6 +1593,11 @@ TEST(Enum, InClass)
 
     int coll[Foo::green];
     EXPECT_THAT(8, sizeof(coll));
+  }
+
+  {
+    Foo foo;
+    foo.color_ = named_and_scoped::red;
   }
 }
 

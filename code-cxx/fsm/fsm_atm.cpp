@@ -862,11 +862,12 @@ handle() itself passes the queue, the current dispatcher object, and the handler
 function to a new instance of the TemplateDispatcher class template, to handle
 messages of the specified type.
    
-Your message processing stops when you’ve successfully handled a message, so
-that you can wait for a different set of messages next time. If you do get a
-match for the specified message type, the supplied function is called rather
-than throwing an exception (although the handler function may throw an exception
-itself). 
+o Your message processing stops when you’ve successfully handled a message, so
+  that you can wait for a different set of messages next time. 
+
+o If you do get a match for the specified message type, the `supplied function`
+  is called rather than throwing an exception (although the handler function may
+  throw an exception itself). *eaf*
   
 If you don’t get a match, you chain to the previous dispatcher. In the first
 instance, this will be a dispatcher, but
@@ -911,6 +912,23 @@ o if found a match from a chain, end loop and chain is destroyed.
 
 o if not foudn a match either no event or having event that are not expected in
   this chain, not end loop and so wait for next event.
+
+
+Super State support
+
+To support the super state:
+
+o static fsm add the same transition to the table for all state in the super
+  state group so that fsm can transit from any state to the destination.
+  duplicate table entries.
+
+o dynamic fsm do the same but done it programatically by setting the table. no
+  duplicate and do simply setting value.
+
+o chain of resposibility fsm needs to have the same lambda(duplicate) for all
+  states in the group. can use the same function than duplicating lambda.
+
+In sum, super state is diagram technique and can be implemented in many ways.
 
 */
 
@@ -1786,6 +1804,7 @@ namespace messaging
       std::string pin_;
       unsigned withdraw_amount_;
 
+      // function name is *state*
       void waiting_for_card()
       {
         // interface_hardware.send(display_enter_card());
