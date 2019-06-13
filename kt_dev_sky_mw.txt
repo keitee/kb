@@ -1159,6 +1159,72 @@ exit                                              Quit program
 help                                              Display help about this program
 [bluetooth]#
 
+// check if "controller" is on and if not, run "power on"
+
+[bluetooth]# show
+Controller 38:A6:CE:7E:63:1A (public)
+        Name: "sky-ip100"
+        Alias: "sky-ip100"
+        Class: 0x00000414
+        Powered: yes
+        Discoverable: no
+        Pairable: no
+        UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+        UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+        UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+        UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+        UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
+        Modalias: usb:v1D6Bp0246d0530
+        Discovering: no
+[bluetooth]#
+
+
+// check on "paired" and "connected"
+
+[bluetooth]# info D4:B8:FF:12:E1:A8
+Device D4:B8:FF:12:E1:A8 (public)
+        Name: P199 SkyQ EC101
+        Alias: P199 SkyQ EC101
+        Appearance: 0x0180
+        Paired: yes
+        Trusted: no
+        Blocked: no
+        Connected: no
+        LegacyPairing: no
+        UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
+        UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+        UUID: Immediate Alert           (00001802-0000-1000-8000-00805f9b34fb)
+        UUID: Device Information        (0000180a-0000-1000-8000-00805f9b34fb)
+        UUID: Battery Service           (0000180f-0000-1000-8000-00805f9b34fb)
+        UUID: Human Interface Device    (00001812-0000-1000-8000-00805f9b34fb)
+        UUID: Scan Parameters           (00001813-0000-1000-8000-00805f9b34fb)
+        UUID: Vendor specific           (0000f800-bdf0-407c-aaff-d09967f31acd)
+        UUID: Vendor specific           (0000f801-bdf0-407c-aaff-d09967f31acd)
+        UUID: Vendor specific           (0000f802-bdf0-407c-aaff-d09967f31acd)
+        Modalias: bluetooth:v057Ap0004d0100
+[bluetooth]#
+
+// remove
+
+[bluetooth]# remove D4:B8:FF:12:E1:A8
+[DEL] Primary Service
+...
+Device has been removed
+[bluetooth]#
+
+//
+
+[bluetooth]# scan on
+
+... press "1+3"
+
+[bluetooth]# pair D4:B8:FF:12:E1:A8
+
+[bluetooth]# info D4:B8:FF:12:E1:A8
+
+[U162 SkyQ EC101]# devices
+Device D4:B8:FF:12:E1:A8 P215 SkyQ EC101
+
 
 <bt-remote-pairing>
 https://docs.ubuntu.com/core/en/stacks/bluetooth/bluez/docs/reference/pairing/introduction
@@ -1171,18 +1237,158 @@ used to secure the communication. The pairing process involves authentication
 however due to the nature and variety of Bluetooth devices there will be
 different ways of confirming the pairing attempt:
 
-Devices such as keyboards or car-kits will require authentication by PIN/passkey code
+Devices such as keyboards or car-kits will require authentication by PIN/passkey
+code
 
 Other devices will provide a yes/no choice to the pairing attempt
 
-Devices without an input interface such as headsets or speakers will not require the user to confirm the pairing attempt at all
-
+Devices without an input interface such as headsets or speakers will not require
+the user to confirm the pairing attempt at all
 
 Bluetooth RCU Pairing
 http://192.168.0.104:8280/index.html
 
-
 https://www.stb.bskyb.com/confluence/display/2016/RCU%3A+Pairing+steps+by+steps
+
+
+<bt-remote-evnets>
+1+3 key triggers two things:
+
+o do advertisement from rcu
+o do paring process from a box
+
+// note that "service/android"
+// app/src/main/cpp/service/android/blercuservice.cpp
+
+QSharedPointer<BleRcuController> m_controller;
+
+BleRcuService::BleRcuService(QObject *parent)
+	: QObject(parent)
+	, m_inputDeviceManager(InputDeviceManager::create())
+  {
+    QObject::connect(m_irInputDevice.data(), &LinuxInputDevice::keyPress,
+        this, &BleRcuService::onIrKeyPress);
+  }
+
+void BleRcuService::onIrKeyPress(quint16 keyCode, qint32 scanCode)
+{
+  // check for the pairing keyCode F13 which is the new format
+  if (keyCode == KEY_F13) {
+    const quint8 filterByte = quint8((scanCode >> 16) & 0xff);
+    const quint8 pairingCode = quint8((scanCode >> 0) & 0xff);
+
+    // kick off pairing using supplied pairing code
+    m_controller->startPairing(filterByte, pairingCode);
+  }
+}
+
+
+// app/src/main/cpp/blercu/blercucontroller.cpp
+
+bool BleRcuControllerImpl::startPairing(quint8 filterByte, quint8 pairingCode)
+{
+  // start the pairing process
+  m_pairingStateMachine.start(filterByte, pairingCode);
+}
+
+void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
+{
+  // start the state machine
+  m_stateMachine.start();
+}
+
+// app/src/main/cpp/blercu/blercupairingstatemachine.cpp
+
+void BleRcuPairingStateMachine::setupStateMachine()
+{
+  // connect to the state entry and exit signals
+  QObject::connect(&m_stateMachine, &StateMachine::entered,
+      this, &BleRcuPairingStateMachine::onStateEntry);
+}
+
+
+//
+// app/src/main/cpp/blercu/bluez/interfaces/bluezadapterinterface.h
+
+#include <QtDBus>
+
+class BluezAdapterInterface : public DBusAbstractInterface
+{
+  // ??
+  Q_PROPERTY(bool Discovering READ discovering NOTIFY `discoveringChanged`)
+    inline bool discovering() const
+    { return qvariant_cast< bool >(property("Discovering")); }
+
+signals:
+  void aliasChanged(const QString& newAlias);
+  void deviceClassChanged(quint32 deviceClass);
+  void discoverableChanged(bool discoverable);
+  void discoverableTimeoutChanged(uint newDiscoverableTimeout);
+  void `discoveringChanged`(bool discovering);
+  ...
+};
+
+// dbus -> adapter
+// app/src/main/cpp/blercu/blercuadapter.h
+
+class BleRcuAdapter : public QObject
+{
+signals:
+  void poweredChanged(bool powered, QPrivateSignal);
+
+  void `discoveryChanged`(bool discovering, QPrivateSignal);
+  void pairableChanged(bool pairable, QPrivateSignal);
+
+  void deviceFound(const BleAddress &address, const QString &name, QPrivateSignal);
+  void deviceRemoved(const BleAddress &address, QPrivateSignal);
+
+  void deviceNameChanged(const BleAddress &address, const QString &name, QPrivateSignal);
+  void devicePairingChanged(const BleAddress &address, bool paired, QPrivateSignal);
+  void deviceReadyChanged(const BleAddress &address, bool ready, QPrivateSignal);
+};
+
+// app/src/main/cpp/blercu/bluez/blercuadapter_p.h
+
+class BleRcuAdapterBluez : public BleRcuAdapter
+{
+  private slots:
+    void onAdapterDiscoveringChanged(bool discovering);
+};
+
+// app/src/main/cpp/blercu/bluez/blercuadapter.cpp
+
+bool BleRcuAdapterBluez::attachAdapter(const QDBusObjectPath &adapterPath)
+{
+  // install handlers for the interesting adapter notifications
+  QObject::connect(m_adapterProxy.data(), &BluezAdapterInterface::`discoveringChanged`,
+      this, &BleRcuAdapterBluez::`onAdapterDiscoveringChanged`);
+}
+
+void BleRcuAdapterBluez::`onAdapterDiscoveringChanged`(bool discovering)
+{
+  emit `discoveryChanged`(m_discovering, BleRcuAdapter::privateSignal());
+}
+
+// adapter -> state machine
+// app/src/main/cpp/blercu/blercupairingstatemachine.cpp
+
+class BleRcuPairingStateMachine : public QObject {}
+
+BleRcuPairingStateMachine::BleRcuPairingStateMachine()
+{
+  QObject::connect(m_adapter.data(), `&BleRcuAdapter::discoveryChanged`,
+      this, &BleRcuPairingStateMachine::`onDiscoveryChanged`);
+}
+
+void BleRcuPairingStateMachine::`onDiscoveryChanged`(bool discovering)
+{
+  if (discovering)
+    m_stateMachine.postEvent(DiscoveryStartedEvent);
+  else
+    m_stateMachine.postEvent(DiscoveryStoppedEvent);
+}
+
+
 
 app/src/main/java/com/sky/bluetooth/SkyBroadcastReceiver.java
 124:            filter.addAction(BluetoothDevice.ACTION_PAIRING_REQUEST);
@@ -1193,6 +1399,7 @@ app/src/main/java/com/sky/bluetooth/SkyBroadcastReceiver.java
 /home/keitee/ip/SkyBluetoothRcu/app/src/main/java/com/sky/blercu/BleRcuService.java
 /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/blercuadapter.h
 /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/android/blercuadapter_p.h
+
 
 <log>
 
