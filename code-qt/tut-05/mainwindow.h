@@ -31,6 +31,7 @@ it. The meta-object compiler is used to do this.
 
 signals:
     void counterReached();
+    void signalNotConnected();
 
 private slots:
     void slotButtonClicked(bool checked);

@@ -1069,6 +1069,9 @@ build.
 
 <adb>
 https://developer.android.com/studio/command-line/adb.html
+https://www.stb.bskyb.com/confluence/display/~grayb/Android+Bluez+Stack
+
+// run command from host
 
 adb disable-verity
 adb reboot
@@ -1084,6 +1087,30 @@ You can verify that your device is connected by executing adb devices
 $ adb devices
 List of devices attached
 192.168.0.104:5555      device
+
+
+<adb-logcat> <android-log>
+
+https://developer.android.com/studio/debug/am-logcat.html
+
+keitee@keitee-mint:~/ip$ adb logcat --help
+Usage: logcat [options] [filterspecs]
+options include:
+  -s              Set default filter to silent. Equivalent to filterspec '*:S'
+  -f <file>, --file=<file>               Log to file. Default is stdout
+
+   -e <expr>, --regex=<expr>
+                  Only print lines where the log message matches <expr>
+                  where <expr> is a regular expression
+ 
+
+adb logcat --pid=2208 | tee log.log
+
+06-14 09:36:56.292  2208  2226 I BleRcuQt: < M:blercuadapter.cpp F:onDeviceAdded L:1494 > added device D4:B8:FF:12:E1:A8 named "P215 SkyQ EC101" (connected: false paired: false)
+06-14 09:53:21.869  2208  2226 I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 18:46:44:xx:xx:xx is 'U104 SkyQ EC201'
+06-14 09:53:21.869  2208  2226 I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 70:91:F3:xx:xx:xx is 'U104 SkyQ EC102'
+06-14 09:53:21.870  2208  2226 I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for D4:B8:FF:xx:xx:xx is 'U104 SkyQ EC[12]01'
+06-14 09:53:21.871  2208  2226 I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for E8:0F:C8:xx:xx:xx is 'U104 SkyQ EC202'
 
 <run>
 /home/keitee/Downloads/android/android-studio/bin
@@ -1108,6 +1135,8 @@ persistent storage system is necessary to co-ordinate this.
 
 SKY BLUEZ DEBUG CONSOLE
 http://192.168.0.104:8180/index.html
+
+telnet <stb-ip-address> 8123
 
    Select one of the following tools:
       1 - bluetoothctl
@@ -1245,13 +1274,17 @@ Other devices will provide a yes/no choice to the pairing attempt
 Devices without an input interface such as headsets or speakers will not require
 the user to confirm the pairing attempt at all
 
+https://www.stb.bskyb.com/confluence/display/~grayb/Bluetooth+RCU+Pairing+Without+Infrared
+
 Bluetooth RCU Pairing
-http://192.168.0.104:8280/index.html
+http://192.168.0.100:8280/index.html
 
 https://www.stb.bskyb.com/confluence/display/2016/RCU%3A+Pairing+steps+by+steps
 
 
 <bt-remote-evnets>
+https://www.stb.bskyb.com/confluence/display/~grayb/BLERCU+%3A+State+Diagrams+for+EC10x+Bluetooth+RCUS
+
 1+3 key triggers two things:
 
 o do advertisement from rcu
@@ -1291,20 +1324,78 @@ bool BleRcuControllerImpl::startPairing(quint8 filterByte, quint8 pairingCode)
   m_pairingStateMachine.start(filterByte, pairingCode);
 }
 
+
+// app/src/main/cpp/blercu/blercupairingstatemachine.cpp
+
 void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
 {
   // start the state machine
   m_stateMachine.start();
 }
 
-// app/src/main/cpp/blercu/blercupairingstatemachine.cpp
+bool StateMachine::start()
+{
+  m_currentState = m_initialState;
+  m_running = true;
+
+  logTransition(-1, m_currentState);
+
+  emit entered(m_currentState);
+  return true;
+}
 
 void BleRcuPairingStateMachine::setupStateMachine()
 {
   // connect to the state entry and exit signals
-  QObject::connect(&m_stateMachine, &StateMachine::entered,
-      this, &BleRcuPairingStateMachine::onStateEntry);
+  QObject::connect(&m_stateMachine, &StateMachine::`entered`,
+      this, &BleRcuPairingStateMachine::`onStateEntry`);
+
+  QObject::connect(&m_stateMachine, &StateMachine::`exited`,
+      this, &BleRcuPairingStateMachine::`onStateExit`);
 }
+
+void BleRcuPairingStateMachine::onStateEntry(int state)
+{
+  switch (state) {
+
+    case StartingDiscoveryState:
+      onEnteredStartDiscoveryState();
+      break;
+
+  }
+}
+
+void BleRcuPairingStateMachine::onStateExit(int state)
+{
+  switch (state) {}
+}
+
+
+< M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving to state StartingDiscoveryState(2)"
+< M:blercupairingstatemachine.cpp F:onStateEntry L:306 > KT: state: 2
+< M:blercupairingstatemachine.cpp F:onEnteredStartDiscoveryState L:379 > KT: BleRcuPairingStateMachine::onEnteredStartDiscoveryState
+
+
+// from adaptor signal
+
+< M:blercuadapter.cpp F:onAdapterDiscoveringChanged L:1297 > adapter started discovering
+< M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:422 > KT: postEvent(DiscoveryStartedEvent)
+< M:statemachine.cpp F:postEvent L:766 > KT: event type (1001)
+< M:statemachine.cpp F:moveToState L:193 > KT: set current state (3)
+< M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving from state StartingDiscoveryState(2) to DiscoveringState(3)"
+
+< M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
+< M:blercupairingstatemachine.cpp F:processDevice L:799 > KT: postEvent(DeviceFoundEvent)
+< M:statemachine.cpp F:postEvent L:766 > KT: event type (1009)
+< M:statemachine.cpp F:shouldMoveState L:310 > KT: really happen?? state (1)
+< M:statemachine.cpp F:moveToState L:193 > KT: set current state (5)
+< M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving from state DiscoveringState(3) to StoppingDiscoveryState(5)"
+
+< M:blercuadapter.cpp F:onAdapterDiscoveringChanged L:1297 > adapter stopped discovering
+< M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:427 > KT: postEvent(DiscoveryStoppedEvent)
+< M:statemachine.cpp F:postEvent L:766 > KT: event type (1002)
+< M:statemachine.cpp F:moveToState L:193 > KT: set current state (6)
+< M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving from state StoppingDiscoveryState(5) to EnablePairableState(6)"
 
 
 //

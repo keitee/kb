@@ -1460,6 +1460,8 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 namespace cxx_enum
 {
   enum color { red, yellow, green };          // unscoped
+  // enum { red, yellow, green } color;       // same as above so cause error
+
   enum class peppers { yellow, red, green };  // scoped
 } // namespace
 

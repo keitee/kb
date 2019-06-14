@@ -190,6 +190,9 @@ void MainWindow::slotButtonClicked(bool checked)
 
   ++m_counter;
 
+  // what if emits a signal which is not connected? nothing happens.
+  emit signalNotConnected();
+
   if (m_counter == 10)
   {
     emit counterReached();
