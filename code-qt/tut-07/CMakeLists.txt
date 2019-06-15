@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.0.0)
 
 project(tut-07 VERSION 0.1 LANGUAGES CXX)
 
+set(CMAKE_PREFIX_PATH "/home/keitee/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 
