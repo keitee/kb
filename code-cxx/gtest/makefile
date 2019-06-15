@@ -22,11 +22,11 @@ CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread
 
 TESTS := $(TARGET_1)_out
 
-GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
-                $(GTEST_DIR)/include/gtest/internal/*.h
+# GTEST_HEADERS = $(GTEST_DIR)/include/gtest/*.h \
+#                 $(GTEST_DIR)/include/gtest/internal/*.h
 
-GMOCK_HEADERS = $(GMOCK_DIR)/include/gmock/*.h \
-                $(GMOCK_DIR)/include/gmock/internal/*.h
+# GMOCK_HEADERS = $(GMOCK_DIR)/include/gmock/*.h \
+#                 $(GMOCK_DIR)/include/gmock/internal/*.h
 
 # House-keeping build targets.
 all : $(TESTS)
@@ -35,7 +35,8 @@ clean :
 	rm -f $(TESTS) *.a *.o
 
 # Builds gtest.a and gtest_main.a.
-GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
+# GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
+GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h
 
 # For simplicity and to avoid depending on Google Test's
 gtest-all.o : $(GTEST_SRCS_)
@@ -43,7 +44,8 @@ gtest-all.o : $(GTEST_SRCS_)
             $(GTEST_DIR)/src/gtest-all.cc
 
 # Builds gtest.a and gtest_main.a.
-GMOCK_SRCS_ = $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
+# GMOCK_SRCS_ = $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
+GMOCK_SRCS_ = $(GMOCK_DIR)/src/*.cc)
 
 # For simplicity and to avoid depending on Google Test's
 gmock-all.o : $(GMOCK_SRCS_)
@@ -57,11 +59,13 @@ gtest.a : gtest-all.o
 	$(AR) $(ARFLAGS) $@ $^
 
 # for list example
-$(TARGET_2).o : $(TARGET_2).cpp $(GTEST_HEADERS)
+# $(TARGET_2).o : $(TARGET_2).cpp $(GTEST_HEADERS)
+$(TARGET_2).o : $(TARGET_2).cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET_2).cpp -o $(TARGET_2).o
 
 # for gtest example
-$(TARGET_1)_o : $(TARGET_1).cpp $(GTEST_HEADERS)
+# $(TARGET_1)_o : $(TARGET_1).cpp $(GTEST_HEADERS)
+$(TARGET_1)_o : $(TARGET_1).cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET_1).cpp -o $(TARGET_1).o
 
 $(TARGET_1)_out : $(TARGET_1).o $(TARGET_2).o gtest.a gmock.a

@@ -3,8 +3,8 @@
 #include <memory>
 #include <exception>
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 using namespace std;
 
@@ -234,14 +234,16 @@ TEST_F(ARetweetCollection, MatcherWithSingleArgument)
 
 
 // ={=========================================================================
-// to check on pair
+// gtest-matcher
+// 
+// user matcher for std::pair
 
 MATCHER_P(EqPair, expected, "")
 {
     return arg.first == expected.first && arg.second.empty() == expected.second.empty();
 }
 
-TEST(AssertTest, AssertOnPair)
+TEST(Gtest, MatcherForPair)
 {
     auto p1 = make_pair(1, std::vector<std::string>());
     auto p2 = make_pair(1, std::vector<std::string>());
@@ -254,6 +256,8 @@ TEST(AssertTest, AssertOnPair)
 
 
 // ={=========================================================================
+// gtest-expect
+
 TEST(Gtest, OrderOfArg)
 {
   int value{100};
@@ -292,7 +296,7 @@ TEST(Gtest, OrderOfArg)
 // [  FAILED  ] Gtest.ExpectOrEq (0 ms)
 // [----------] 2 tests from Gtest (0 ms total)
 
-TEST(Gtest, ExpectOrEq)
+TEST(Gtest, DISABLED_ExpectOrEq)
 {
   int value{100};
 

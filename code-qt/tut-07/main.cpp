@@ -9,7 +9,7 @@ Q_LOGGING_CATEGORY(lcEditor, "qtc.editor");
 
 int main(int argc, char *argv[])
 {
-  QCoreApplication a(argc, argv);
+  // QCoreApplication a(argc, argv);
 
   // print QList coll
   {
@@ -70,5 +70,5 @@ int main(int argc, char *argv[])
     qCDebug(lcEditor, "%s", "Hello debug category logging");
   }
 
-  return a.exec();
+  // return a.exec();
 }

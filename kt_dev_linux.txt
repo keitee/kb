@@ -362,7 +362,7 @@
 *kt_linux_gcc_400* gcc-option-link-order gcc-link-order
 *kt_linux_gcc_400* gcc-option-warning
 *kt_linux_gcc_400* gcc-option-cpp gcc-cpp
-*kt_linux_gcc_203* gcc-option-cpp-search gcc-cpp-isystem
+*kt_linux_gcc_203* gcc-option-cpp-search gcc-cpp-system-dir
 *kt_linux_gcc_400* gcc-option-cpp-dependancies
 *kt_linux_gcc_400* gcc-option-cpp-check-defines
 *kt_linux_gcc_400* gcc-option-cpp-where-comes-from
@@ -21995,6 +21995,7 @@ egrep -an "Error [0-9]" build.log or make.log
 *kt_linux_tool_140* make-cmake
 
 https://cmake.org/
+https://cmake.org/download/
 
 tar xvf cmake-3.13.2.tar.gz
 cd cmake-3.13.2/
@@ -22047,10 +22048,11 @@ int main (int argc, char *argv[])
   return 0;
 }
 
-o this example uses lower case commands in the CMakeLists.txt file.  Upper,
-  lower, and mixed case commands are supported by CMake. 
+o this example uses lower case commands in the CMakeLists.txt file. Upper,
+  lower, and mixed case commands are supported by CMake. meaning
+  *case-insensitive* 
 
-o must use 'CMakeLists.txt'
+o must use `CMakeLists.txt`
 
 kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step1$ ll
 total 60
@@ -22098,8 +22100,9 @@ Scanning dependencies of target tutorial
 
 <step2>
 http://derekmolloy.ie/hello-world-introductions-to-cmake/
-
 Example 2: A Project with Directories
+
+CMakeList.txt:
 
 cmake_minimum_required (VERSION 2.6)
 project(directory_test)
@@ -22121,6 +22124,7 @@ file(GLOB SOURCES "src/*.cxx")
 
 add_executable(student ${SOURCES})
 
+
 For this example, I wish to place all of the build files in the build
 directory, which is achieved very simply by calling the cmake program from
 within the build directory, as follows:
@@ -22131,6 +22135,44 @@ molloyd@beaglebone:~/exploringBB/extras/cmake/student/build$ cmake ..
 
 <step3>
 Example 3: Building a Shared Library (.so)
+
+CMakeLists.txt:
+
+cmake_minimum_required (VERSION 2.6)
+project(directory_test)
+
+# added
+# to set the build type to be a release build
+set(CMAKE_BUILD_TYPE Release)
+
+# bring the headers into the project
+include_directories(include)
+
+# can manually add the sources using the set command as:
+# set(SOURCES src/main.cxx src/Student.cxx)
+# However, the file(GLOB...) allows wildcard additions:
+
+# *cmake-error* when typo cpp which should be cxx
+# file(GLOB SOURCES "src/*.cpp")
+#
+# CMake Error at CMakeLists.txt:12 (add_executable):
+#   No SOURCES given to target: student
+
+file(GLOB SOURCES "src/*.cxx")
+
+# add_executable(student ${SOURCES})
+# `generate the shared library from the sources`
+add_library(student SHARED ${SOURCES})
+
+# Set the location for library installation -- i.e., /usr/lib in this case
+# not really necessary in this example. Use "sudo make install" to apply
+
+# The last line uses the install() function to define an installation location
+# for the library (in this case it is /usr/lib). Deployment is invoked using a
+# call to sudo make install in this case.
+
+install(TARGETS student DESTINATION /usr/lib)
+
 
 kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step3/build$ cmake ..
 -- The C compiler identification is GNU 4.9.2
@@ -22170,13 +22212,15 @@ kyoupark@kit-debian64:~/git/kb/code-make/cmake/tutorial/step3/build$
 
 
 <step5>
+Example 5: Using a Shared or Static Library
 
-# Example 5: Using a Shared or Static Library
+
+CMakeLists.txt:
 
 cmake_minimum_required (VERSION 2.6)
 project(use_shared_library)
 
-# for shared library
+# to use shared library
 set(PROJECT_LINK_LIBS libstudent.so)
 link_directories(~/git/kb/code-make/cmake/tutorial/step3/build)
 
@@ -22310,6 +22354,33 @@ Note
 As of CMake 3.5 the cmake_parse_arguments command has become a native command
 and the CMakeParseArguments module is empty and only left around for
 compatibility.
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-
+
+Useful Makefile Targets
+
+There are two built-in make targets that CMake provides that are useful for
+managing the cache. These are especially useful if you work from the command
+line a lot. 
+
+make rebuild_cache 
+
+This target re-runs CMake for your build having the same effect as cmake .,
+this can be handy, though, if you have multiple versions of CMake installed or
+  don't have cmake in your path as this target knows the path to the cmake
+  that was originally used to generate the build. 
+
+make edit_cache 
+
+Very similar to the above target except this one runs the appropriate ccmake,
+or cmake-gui if ccmake isn't installed. The reasons for this being useful are
+  the same, too. Most of the time these targets aren't used, but as they can
+  be handy it's good to know about them. There is one last Makefile target
+  that is useful, especially on larger projects: make help. This prints a list
+  of targets provided by the Makefile. This can be convenient if you only want
+  to build specific targets but aren't sure how they were named.
 
 
 ={============================================================================
@@ -62558,11 +62629,50 @@ gcc -imacros "/usr/include/linux/version.h" -x c sample.c
 
 
 ={============================================================================
-*kt_linux_gcc_203* gcc-option-cpp-search gcc-cpp-isystem
+*kt_linux_gcc_203* gcc-option-cpp-search gcc-cpp-system-dir
+
+2.3 Search Path
+
+By default, the preprocessor looks for header files `included by the quote form`
+of the directive #include "file" first `relative to the directory` of the
+current file, and then in a preconfigured list of standard system directories.
+For example, if /usr/include/sys/stat.h contains #include "types.h", GCC looks
+for types.h first in /usr/include/sys, then in its usual search path.
+
+For the `angle-bracket form` #include <file>, the preprocessor’s default
+behavior is `to look only in the standard system directories.` The exact
+search directory list depends on the target system, how GCC is configured, and
+where it is installed. You can find the default search directory list for your
+version of CPP by invoking it with the -v option. For example,
+
+cpp -v /dev/null -o /dev/null
+
+There are a number of command-line options you can use to add additional
+directories to the search path. The most commonly-used option is -Idir, which
+causes dir to be searched after the current directory (for the quote form of
+    the directive) and ahead of the standard system directories. You can
+specify multiple -I options on the command line, in which case the directories
+are searched in left-to-right order.
+
+If you need separate control over the search paths for the quote and
+angle-bracket forms of the ‘#include’ directive, you can use the -iquote
+and/or -isystem options instead of -I. See Invocation, for a detailed
+description of these options, as well as others that are less generally
+useful.
+
+If you specify other options on the command line, such as -I, that affect
+where the preprocessor searches for header files, the directory list printed
+by the -v option reflects the actual search path used by the preprocessor.
+
+Note that you can also prevent the preprocessor from searching any of the
+default system header directories with the -nostdinc option. This is useful
+when you are compiling an operating system kernel or some other program that
+does not use the standard C library facilities, or the standard C library
+itself.
 
 -isystem dir 
 
-Mark it as a system directory, so that it gets the same special treatment as
+Mark it as a `system directory`, so that it gets the same special treatment as
 is applied to the standard system directories. See System Headers. 
 
 *option-sysroot*
