@@ -20,6 +20,11 @@ class foo
 {
   public:
 
+    explicit foo() : value_(0) 
+    {
+      cout << "foo()" << endl;
+    }
+
     explicit foo(int &value) : value_(value) 
     {
       cout << "foo(int)" << endl;
@@ -30,10 +35,25 @@ class foo
       cout << "foo(int, int)" << endl;
     }
 
+    void print_value()
+    {
+      cout << "value is " << value_ << endl;
+    }
+
+    foo &operator()() { return *this; }
+
   private:
     int value_;
 };
 
+
+TEST(Cxx, XXX)
+{ 
+  foo f1;
+
+  f1().print_value();
+  f1.print_value();
+} 
 
 TEST(Cxx, Ex)
 { 
@@ -113,29 +133,29 @@ namespace cxx_dtor {
 } // namespace
 
 // TEST(Dtor, NoVirtualDtorProblem)
-int main(int argc, char** argv)
-{
-  using namespace cxx_dtor;
+// int main(int argc, char** argv)
+// {
+//   using namespace cxx_dtor;
 
-  {
-    cout << "dtor: " << endl;
-    NoVirtualDtorBase* pbase = new DerivedFromNoVirtual;
-    cout << "dtor: " << endl;
-  }
+//   {
+//     cout << "dtor: " << endl;
+//     NoVirtualDtorBase* pbase = new DerivedFromNoVirtual;
+//     cout << "dtor: " << endl;
+//   }
 
-  {
-    cout << "dtor: " << endl;
-    VirtualDtorBase* pbase = new DerivedFromVirtual;
-    cout << "dtor: " << endl;
-  }
-}
+//   {
+//     cout << "dtor: " << endl;
+//     VirtualDtorBase* pbase = new DerivedFromVirtual;
+//     cout << "dtor: " << endl;
+//   }
+// }
 
 
 // ={=========================================================================
 
-// int main(int argc, char** argv)
-// {
-//     testing::InitGoogleTest(&argc, argv);
-//     return RUN_ALL_TESTS();
-// }
+int main(int argc, char** argv)
+{
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
 

@@ -11,64 +11,67 @@
 #include <QDebug>
 #include <QLoggingCategory>
 
-Q_LOGGING_CATEGORY(lcEditor, "qtc.editor");
-
 using namespace std;
 
+
 // ={=========================================================================
-// -expect
-
-TEST(Qt, OrderOfArg)
-{
-  int value{100};
-
-  EXPECT_THAT(value, 100);
-  EXPECT_THAT(100, value);
-
-  // // t_ex_mock.cpp:262: Failure
-  // // Value of: value
-  // // Expected: is equal to 101
-  // //   Actual: 100 (of type int)
-  //
-  // EXPECT_THAT(value, 101);
-
-  // //
-  // // t_ex_mock.cpp:263: Failure
-  // // Value of: 101
-  // // Expected: is equal to 100
-  // //   Actual: 101 (of type int)
-  // EXPECT_THAT(101, value);
-}
-
-// to see which makes better messages
+// qt-console app
 //
-// [ RUN      ] Gtest.ExpectOrEq
-// gtest.cpp:283: Failure
-// Value of: 101
-// Expected: is equal to 100
-//   Actual: 101 (of type int)
+// main()
+// {
+//   // QCoreApplication a(argc, argv); 
+//   // your code is here
+//   // return a.exec();
+// }
 //
-// gtest.cpp:284: Failure
-// Expected equality of these values:
-//   101
-//   value
-//     Which is: 100
-// [  FAILED  ] Gtest.ExpectOrEq (0 ms)
-// [----------] 2 tests from Gtest (0 ms total)
+// have to comment out lines for QCoreApplication
 
-TEST(Qt, ExpectOrEq)
+
+// ={=========================================================================
+// qt-list
+
+TEST(Qt, ListPrepend)
 {
-  // QCoreApplication a(argc, argv); 
-  // print QList coll
   {
     QList<QString> coll;
+
     coll.prepend("one");
     coll.prepend("two");
     coll.prepend("Three");
+
     qDebug() << coll;
   }
+}
 
-  // print outputs
+/*
+
+Qt Logging Framework - KDAB
+
+http://www.kdab.com/wp-content/uploads/stories/slides/Day2/KaiKoehne_Qt%20Logging%20Framework%2016_9_0.pdf
+
+Logs message, message type, file, line, function
+
+Macros since Qt 5.0:
+
+#define qDebug \
+ QMessageLogger(__FILE__, __LINE__, \
+ Q_FUNC_INFO).debug
+
+qFatal aborts
+
+The QMessageLogger class generates log messages.
+
+QMessageLogger is used to generate messages for the Qt logging framework.
+Usually one uses it through qDebug(), qInfo(), qWarning(), qCritical, or
+qFatal() functions, which are actually macros: For example qDebug() expands to
+QMessageLogger(__FILE__, __LINE__, Q_FUNC_INFO).debug() for debug builds, and
+QMessageLogger(0, 0, 0).debug() for release builds.
+
+*/
+
+TEST(Qt, Logging)
+{
+  // two ways of logging
   {
     // ctor logging
     qDebug("Hello qDebug");
@@ -84,7 +87,9 @@ TEST(Qt, ExpectOrEq)
     qCritical() << "Hello qCritical";
   }
 
+
   // printf() style logging
+
   {
     QString message{"Hello stream logging"};
     qDebug("QString: %s", message.toUtf8().constData());
@@ -96,29 +101,172 @@ TEST(Qt, ExpectOrEq)
     qDebug().nospace() << "RGB: " << hex << uppercasedigits 
       << 0xff << 0x33 << 0x33;
   }
+}
 
-  // Categorized logging
-  //
-  // #define Q_DECLARE_LOGGING_CATEGORY(name) \
-  //    extern const QLoggingCategory &name();
-  //
-  // #define Q_LOGGING_CATEGORY(name, ...) \
-  //    const QLoggingCategory &name() \
-  //    { \
-  //        static const QLoggingCategory category(__VA_ARGS__); \
-  //        return category; \
-  //    }
+
+/*
+
+Categorized logging (Qt 5.2)
+
+Split up logging messages in hierarchical categories.
+
+Category is identified by it's name
+ category.subcategory.subsubcategory[...]
+
+Logging of messages can be enabled or disabled based on the category and
+message type, at runtime.
+
+#define Q_DECLARE_LOGGING_CATEGORY(name) \
+   extern const QLoggingCategory &name();
+
+#define Q_LOGGING_CATEGORY(name, ...) \
+   const QLoggingCategory &name() \
+   { \
+       static const QLoggingCategory category(__VA_ARGS__); \
+       return category; \
+   }
+
+Note: The qCDebug(), qCWarning(), qCCritical() macros prevent arguments from
+being evaluated if the respective message types are not enabled for the
+category, so explicit checking is not needed:
+
+    // usbEntries() will only be called if driverUsb category is enabled
+    qCDebug(driverUsb) << "devices: " << usbEntries();
+
+
+#if !defined(QT_NO_DEBUG_OUTPUT)
+#  define qCDebug(category, ...) \
+    for (bool qt_category_enabled = category().isDebugEnabled(); qt_category_enabled; qt_category_enabled = false) \
+        QMessageLogger(QT_MESSAGELOG_FILE, QT_MESSAGELOG_LINE, QT_MESSAGELOG_FUNC, category().categoryName()).debug(__VA_ARGS__)
+#else
+#  define qCDebug(category, ...) QT_NO_QDEBUG_MACRO()
+#endif
+ 
+*/
+
+Q_LOGGING_CATEGORY(lcEditor1, "qtc.editor.1");
+
+TEST(Qt, LoggingCategory)
+{
   {
     // QLoggingCategory lcEditor("qtc.editor");
-    // Q_LOGGING_CATEGORY(lcEditor, "qtc.editor");
 
-    qCDebug(lcEditor) << "Hello debug category logging";
-    qCWarning(lcEditor) << "Hello warning category logging";
-    qCCritical(lcEditor) << "Hello critical category logging";
-    qCDebug(lcEditor, "%s", "Hello debug category logging");
+    qCDebug(lcEditor1) << "1. Hello debug category logging";
+    qCWarning(lcEditor1) << "1. Hello warning category logging";
+    qCCritical(lcEditor1) << "1. Hello critical category logging";
+    qCDebug(lcEditor1, "%s", "1. Hello debug category logging");
   }
-  // return a.exec();
+
+  {
+    QLoggingCategory lcEditor2("qtc.editor.2");
+
+    qCDebug(lcEditor2) << "2. Hello debug category logging";
+    qCWarning(lcEditor2) << "2. Hello warning category logging";
+    qCCritical(lcEditor2) << "2. Hello critical category logging";
+    qCDebug(lcEditor2, "%s", "2. Hello debug category logging");
+  }
+
+  // QLoggingCategory(const char *, QtMsgType severityLevel) (Qt 5.4)
+  //
+  // Disables message types < severityLevel. ???
+  //
+  // enum QtMsgType
+  //
+  // This enum describes the messages that can be sent to a message handler
+  // (QtMessageHandler). You can use the enum to identify and associate the
+  // various message types with the appropriate actions.
+  // 
+  // Constant	Value	Description
+  // QtDebugMsg	0	A message generated by the qDebug() function.
+  // QtInfoMsg	4	A message generated by the qInfo() function.
+  // QtWarningMsg	1	A message generated by the qWarning() function.
+  // QtCriticalMsg	2	A message generated by the qCritical() function.
+  // QtFatalMsg	3	A message generated by the qFatal() function.
+  // QtSystemMsg	QtCriticalMsg	 
+  // QtInfoMsg was added in Qt 5.5.
+  // enum QtMsgType { QtDebugMsg, QtWarningMsg, QtCriticalMsg, QtFatalMsg, QtInfoMsg, QtSystemMsg = QtCriticalMsg };
+
+
+  // qtc.editor.3: 3. Hello warning category logging
+  // qtc.editor.3: 3. Hello critical category logging
+  // qtc.editor.3: 3. Hello info category logging
+  // qtc.editor.3 isCriticalEnabled
+  // qtc.editor.3 isCriticalEnabled
+  // qtc.editor.3 isInfoEnabled
+  // qtc.editor.3 isWarningEnabled
+
+  {
+    // all but debug. why not see DebugMsg?
+    QLoggingCategory cat("qtc.editor.3", QtInfoMsg);
+
+    qCDebug(cat) << "3. Hello debug category logging";
+    qCWarning(cat) << "3. Hello warning category logging";
+    qCCritical(cat) << "3. Hello critical category logging";
+    qCInfo(cat) << "3. Hello info category logging";
+    qCDebug(cat, "%s", "3. Hello debug category logging");
+
+    // from qCX macros, how is this possible?
+    //
+    // for (bool qt_category_enabled = cat().isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
+    // 
+    // since:
+    //
+    // #define QLOGGINGCATEGORY_H
+    //
+    // // allows usage of both factory method and variable in qCX macros
+    // QLoggingCategory &operator()() { return *this; }
+    // const QLoggingCategory &operator()() const { return *this; }
+
+    for (bool qt_category_enabled = cat.isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat.categoryName() << " isCriticalEnabled" << std::endl;
+
+    for (bool qt_category_enabled = cat().isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isCriticalEnabled" << std::endl;
+
+    for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isDebugEnabled" << std::endl;
+
+    for (bool qt_category_enabled = cat().isInfoEnabled(); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isInfoEnabled" << std::endl;
+
+    // use of isEnabled()
+    for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
+  }
+
+
+  // qtc.editor.4: 4. Hello warning category logging
+  // qtc.editor.4: 4. Hello critical category logging
+  // qtc.editor.4 isCriticalEnabled
+  // qtc.editor.4 isWarningEnabled
+
+  {
+    // all but debug. why not see DebugMsg?
+    QLoggingCategory cat("qtc.editor.4", QtWarningMsg);
+
+    qCDebug(cat) << "4. Hello debug category logging";
+    qCWarning(cat) << "4. Hello warning category logging";
+    qCCritical(cat) << "4. Hello critical category logging";
+    qCInfo(cat) << "4. Hello info category logging";
+    qCDebug(cat, "%s", "4. Hello debug category logging");
+
+    for (bool qt_category_enabled = cat().isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isCriticalEnabled" << std::endl;
+
+    for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isDebugEnabled" << std::endl;
+
+    for (bool qt_category_enabled = cat().isInfoEnabled(); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isInfoEnabled" << std::endl;
+
+    // use of isEnabled()
+    for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg); qt_category_enabled; qt_category_enabled = false)
+      std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
+  }
 }
+
+
+// ={=========================================================================
 
 int main(int argc, char **argv)
 {
