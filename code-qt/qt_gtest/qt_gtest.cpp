@@ -28,6 +28,162 @@ using namespace std;
 
 
 // ={=========================================================================
+// qt-string
+//
+// The QString class provides a Unicode character string.
+//
+// QString stores a string of 16-bit QChars, where each QChar corresponds to one
+// UTF-16 code unit. (Unicode characters with code values above 65535 are stored
+// using surrogate pairs, i.e., two consecutive QChars.)
+//
+// In addition to QString, Qt also provides the "QByteArray" class to store raw
+// bytes and traditional 8-bit '\0'-terminated strings. For most purposes,
+// QString is the class you want to use. It is used throughout the Qt API, and
+// the Unicode support ensures that your applications will be easy to translate
+// if you want to expand your application's market at some point. The two main
+// cases where QByteArray is appropriate are when you need to store raw binary
+// data, and when memory conservation is critical (like in embedded systems).
+
+
+// Converting Between 8-Bit Strings and Unicode Strings
+//
+// QString provides the following three functions that return a const char *
+// version of the string as QByteArray: toUtf8(), toLatin1(), and toLocal8Bit().
+//
+// toLatin1() returns a Latin-1 (ISO 8859-1) encoded 8-bit string.
+//
+// toUtf8() returns a UTF-8 encoded 8-bit string. UTF-8 is a superset of
+// US-ASCII (ANSI X3.4-1986) that supports the entire Unicode character set
+// through multibyte sequences.
+//
+// toLocal8Bit() returns an 8-bit string using the system's local encoding.
+//
+// To convert from one of these encodings, QString provides fromLatin1(),
+// fromUtf8(), and fromLocal8Bit(). Other encodings are supported through the
+// QTextCodec class.
+//
+// As mentioned above, QString provides a lot of functions and operators that
+// make it easy to interoperate with const char * strings. But this
+// functionality is a double-edged sword: It makes QString more convenient to
+// use if all strings are US-ASCII or Latin-1, but there is always the risk that
+// an implicit conversion from or to const char * is done using the wrong 8-bit
+// encoding. To minimize these risks, you can turn off these implicit
+// conversions by defining the following two preprocessor symbols:
+//
+// QT_NO_CAST_FROM_ASCII disables automatic conversions from C string literals
+// and pointers to Unicode.
+//
+// QT_RESTRICTED_CAST_FROM_ASCII allows automatic conversions from C characters
+// and character arrays, but disables automatic conversions from character
+// pointers to Unicode.
+//
+// QT_NO_CAST_TO_ASCII disables automatic conversion from QString to C strings.
+//
+// One way to define these preprocessor symbols globally for your application is
+// to add the following entry to your qmake project file:
+// 
+// DEFINES += QT_NO_CAST_FROM_ASCII \ 
+//  QT_NO_CAST_TO_ASCII
+//
+// You then need to explicitly call fromUtf8(), fromLatin1(), or fromLocal8Bit()
+// to construct a QString from an 8-bit string, or use the lightweight
+// QLatin1String class, for example:
+
+
+// Distinction Between Null and Empty Strings
+//
+// For historical reasons, QString distinguishes between a null string and an
+// empty string. A null string is a string that is initialized using QString's
+// default constructor or by passing (const char *)0 to the constructor. An
+// empty string is any string with size 0. A null string is always empty, but an
+// empty string isn't necessarily null:
+//
+// QString().isNull();               // returns true
+// QString().isEmpty();              // returns true
+//
+// QString("").isNull();             // returns false
+// QString("").isEmpty();            // returns true
+//
+// QString("abc").isNull();          // returns false
+// QString("abc").isEmpty();         // returns false
+//
+// All functions except isNull() treat null strings the same as empty strings.
+// For example, toUtf8().constData() returns a pointer to a '\0' character for a
+// null string (not a null pointer), and QString() compares equal to
+// QString(""). 
+//
+// We recommend that you always use the isEmpty() function and avoid isNull().
+
+TEST(Qt, String)
+{
+  // You can also pass string literals to functions that take QStrings as
+  // arguments, invoking the QString(const char *) constructor. Similarly, you
+  // can pass a QString to a function that takes a const char * argument using
+  // the qPrintable() macro which returns the given QString as a const char *.
+  // This is equivalent to calling <QString>.toLocal8Bit().constData().
+
+  {
+    QString message{"Hello stream logging"};
+    qDebug("QString: %s", message.toUtf8().constData());
+  }
+
+  {
+    QString message{"Hello stream logging"};
+
+    // const char *qPrintable(const QString &str)
+    qDebug("QString: %s", qPrintable(message));
+  }
+
+  // First, arg(i) replaces %1. Then arg(total) replaces %2. Finally,
+  // arg(fileName) replaces %3.
+  //
+  // One advantage of using arg() over asprintf() is that the order of the
+  // numbered place markers can change, if the application's strings are
+  // translated into other languages, but each arg() will still replace the
+  // lowest numbered unreplaced place marker, no matter where it appears. Also,
+  // if place marker %i appears more than once in the string, the arg() replaces
+  // all of them.
+  //
+  // QString QString::asprintf(const char *cformat, ...)
+  //
+  // Warning: We do not recommend using QString::asprintf() in new Qt code.
+  // Instead, consider using QTextStream or arg(), both of which support Unicode
+  // strings seamlessly and are type-safe. Here's an example that uses
+  // QTextStream:
+
+  {
+    QString i{"3"};              // current file's number
+    QString total{"10"};         // number of files to process
+    QString fileName{"readme"};  // current file's name
+
+    QString status = QString("Processing file %1 of %2: %3")
+      .arg(i).arg(total).arg(fileName);
+
+    qDebug("%s", qPrintable(status));
+  }
+}
+
+
+// To obtain a pointer to the actual character data, call data() or constData().
+// These functions return a pointer to the beginning of the data. The pointer is
+// guaranteed to remain valid until a non-const function is called on the
+// QByteArray. It is also guaranteed that the data ends with a '\0' byte unless
+// the QByteArray was created from a raw data. This '\0' byte is automatically
+// provided by QByteArray and is not counted in size().
+
+// [ RUN      ] Qt.StringByteArray
+// QByteArray: U%03hhu SkyQ EC201
+// [       OK ] Qt.StringByteArray (0 ms)
+
+TEST(Qt, StringByteArray)
+{
+  QByteArray coll{"U%03hhu SkyQ EC201"};
+  // qDebug("QByteArray: %s", coll.data());
+  std::cout << "QByteArray: " << coll.data() << std::endl;
+}
+
+
+// ={=========================================================================
 // qt-list
 
 TEST(Qt, ListPrepend)
@@ -263,6 +419,15 @@ TEST(Qt, LoggingCategory)
     for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg); qt_category_enabled; qt_category_enabled = false)
       std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
   }
+}
+
+
+// ={=========================================================================
+// qt-regexp
+
+TEST(Qt, RegExp)
+{
+
 }
 
 
