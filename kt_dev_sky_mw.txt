@@ -123,6 +123,9 @@ curl -v -X POST http://127.0.0.1:8008/pm/downloads/ --data http://192.168.0.105/
 curl -v -X DELETE http://192.168.0.102:8008/pm/packages/com.spotify.Spotify.TVv2
 curl -v -X GET http://192.168.0.102:8008/pm/packages
  
+// to see ip
+cat /proc/net/fib_trie
+
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-q-hardware
@@ -1274,11 +1277,6 @@ Other devices will provide a yes/no choice to the pairing attempt
 Devices without an input interface such as headsets or speakers will not require
 the user to confirm the pairing attempt at all
 
-https://www.stb.bskyb.com/confluence/display/~grayb/Bluetooth+RCU+Pairing+Without+Infrared
-
-Bluetooth RCU Pairing
-http://192.168.0.100:8280/index.html
-
 https://www.stb.bskyb.com/confluence/display/2016/RCU%3A+Pairing+steps+by+steps
 
 
@@ -1290,16 +1288,322 @@ https://www.stb.bskyb.com/confluence/display/~grayb/BLERCU+%3A+State+Diagrams+fo
 o do advertisement from rcu
 o do paring process from a box
 
+
+// app/src/main/cpp/main.cpp
+
+static int doMain()
+{
+  QCoreApplication a(argc, argv);
+
+  // log the start-up
+  qMilestone("====================");
+  qMilestone("KT:");
+  qMilestone("====================");
+
+  // first thing we do is start the Android AIDL service, it has no controller
+  // so won't be useful, but means other clients can connect to it (the controller
+  // is added later)
+  QSharedPointer<BleRcuService> service =
+    QSharedPointer<BleRcuService>::create();
+
+  // create the config options, read from the config.json file
+  QSharedPointer<const ConfigSettings> config = ConfigSettings::defaults();
+
+  // create the factory for creating the BleRcu services for each device
+  QSharedPointer<BleRcuServicesFactory> servicesFactory =
+    QSharedPointer<BleRcuServicesFactory>::create(config);
+
+  // store the backend type
+  g_backend.store(Backend::Bluez);
+
+  // attempt to connect to the android dbus-broker
+  QDBusConnection dbusConn = connectToDBus();
+  if (!dbusConn.isConnected()) {
+    qError() << "failed to connect to dbus due to" << dbusConn.lastError();
+  }
+
+  // and then create the adapter talking to bluez over dbus
+  adapter = QSharedPointer<BleRcuAdapterBluez>::create(config,
+      servicesFactory,
+      dbusConn);
+
+  // create the controller that manages the adapter and paired devices
+  QSharedPointer<BleRcuController> controller =
+    QSharedPointer<BleRcuControllerImpl>::create(config, adapter);
+
+  // give the controller to the Android service, the service is now useful
+  service->setController(controller);
+}
+
+
+<config>
+
+// right config file used?
+// SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json
+
+	"models": [
+		{
+			"name": "ECx01",
+			"manufacturer": "Omni",
+			"oui": "D4:B8:FF",
+			"pairingNameFormat": "U%03hhu SkyQ EC[12]01",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC[12]01",
+			"filterByte": 20,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC201",
+			"manufacturer": "Omni",
+			"oui": "18:46:44",
+			"pairingNameFormat": "U%03hhu SkyQ EC201",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC201",
+			"filterByte": 20,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC102",
+			"manufacturer": "UEI",
+			"oui": "70:91:F3",
+			"pairingNameFormat": "U%03hhu SkyQ EC102",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC102",
+			"filterByte": 19,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC202",
+			"manufacturer": "UEI",
+			"oui": "E8:0F:C8",
+			"pairingNameFormat": "U%03hhu SkyQ EC202",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC202",
+			"filterByte": 19,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC05x",
+			"manufacturer": "Ruwido",
+			"disabled": true,
+			"oui": "1C:A2:B1",
+			"pairingNameFormat": "U%03hhuruwido Sky Remote",
+			"scanNameFormat": "U[0-9][0-9][0-9]ruwido Sky Remote",
+			"filterByte": 27,
+			"connectionParams": {
+				"maxInterval": 15.0,
+				"minInterval": 15.0,
+				"latency": 332,
+				"supervisionTimeout": 15000
+			},
+			"services": {
+				"type": "rci",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"touch"
+				]
+			}
+		}
+
+	]
+	"models": [
+		{
+			"name": "ECx01",
+			"manufacturer": "Omni",
+			"oui": "D4:B8:FF",
+			"pairingNameFormat": "U%03hhu SkyQ EC[12]01",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC[12]01",
+			"filterByte": 20,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC201",
+			"manufacturer": "Omni",
+			"oui": "18:46:44",
+			"pairingNameFormat": "U%03hhu SkyQ EC201",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC201",
+			"filterByte": 20,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC102",
+			"manufacturer": "UEI",
+			"oui": "70:91:F3",
+			"pairingNameFormat": "U%03hhu SkyQ EC102",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC102",
+			"filterByte": 19,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC202",
+			"manufacturer": "UEI",
+			"oui": "E8:0F:C8",
+			"pairingNameFormat": "U%03hhu SkyQ EC202",
+			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC202",
+			"filterByte": 19,
+			"services": {
+				"type": "gatt",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"upgrade"
+				]
+			}
+		},
+		{
+			"name": "EC05x",
+			"manufacturer": "Ruwido",
+			"disabled": true,
+			"oui": "1C:A2:B1",
+			"pairingNameFormat": "U%03hhuruwido Sky Remote",
+			"scanNameFormat": "U[0-9][0-9][0-9]ruwido Sky Remote",
+			"filterByte": 27,
+			"connectionParams": {
+				"maxInterval": 15.0,
+				"minInterval": 15.0,
+				"latency": 332,
+				"supervisionTimeout": 15000
+			},
+			"services": {
+				"type": "rci",
+				"supported": [
+					"audio",
+					"battery",
+					"deviceInfo",
+					"findMe",
+					"infrared",
+					"touch"
+				]
+			}
+		}
+	]
+
+
+// app/src/main/cpp/utils/linuxinputdevice.cpp
+
+signals:
+	void keyPress(quint16 keyCode, qint32 scanCode);
+	void keyRelease(quint16 keyCode, qint32 scanCode);
+
+void LinuxInputDevice::processEvents(const struct input_event *events, size_t nevents)
+{
+  switch (event->type) {
+    case EV_SYN:
+      m_scanCode = 0;
+      break;
+    case EV_KEY:
+      if (event->value)
+        `emit keyPress(event->code, m_scanCode);`
+      else
+        emit keyRelease(event->code, m_scanCode);
+      m_scanCode = 0;
+      break;
+    case EV_MSC:
+      if (event->code == MSC_SCAN)
+        m_scanCode = event->value;
+      break;
+
+    default:
+      break;
+  }
+}
+
+
 // note that "service/android"
 // app/src/main/cpp/service/android/blercuservice.cpp
 
-QSharedPointer<BleRcuController> m_controller;
+class BleRcuService : public QObject
+                    , public QEnableSharedFromThis<BleRcuService>
+{
+  const QSharedPointer<InputDeviceManager> m_inputDeviceManager;
+
+  QSharedPointer<BleRcuController> m_controller;
+
+  QSharedPointer<QAndroidJniObject> m_javaBleRcuService;
+
+  QSharedPointer<LinuxInputDevice> m_irInputDevice;
+
+  QMap<BleAddress, int> m_deviceIdMap;
+}
 
 BleRcuService::BleRcuService(QObject *parent)
 	: QObject(parent)
 	, m_inputDeviceManager(InputDeviceManager::create())
   {
-    QObject::connect(m_irInputDevice.data(), &LinuxInputDevice::keyPress,
+    QObject::connect(m_irInputDevice.data(), `&LinuxInputDevice::keyPress`,
         this, &BleRcuService::onIrKeyPress);
   }
 
@@ -1327,8 +1631,82 @@ bool BleRcuControllerImpl::startPairing(quint8 filterByte, quint8 pairingCode)
 
 // app/src/main/cpp/blercu/blercupairingstatemachine.cpp
 
+class BleRcuControllerImpl : public BleRcuController
+{
+	const QSharedPointer<BleRcuAdapter> m_adapter;
+
+	BleRcuPairingStateMachine m_pairingStateMachine;
+	BleRcuScannerStateMachine m_scannerStateMachine;
+}
+
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 18:46:44:xx:xx:xx is 'U130 SkyQ EC201'
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 70:91:F3:xx:xx:xx is 'U130 SkyQ EC102'
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for D4:B8:FF:xx:xx:xx is 'U130 SkyQ EC[12]01'
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for E8:0F:C8:xx:xx:xx is 'U130 SkyQ EC202'
+I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving to state StartingDiscoveryState(2)"
+
+// /*!
+// 	\internal
+// 
+// 	Called when entering the 'discovering' state.  At this point we query the
+// 	manager for the current list of devices and their names.  We use this to
+// 	determine if any existing devices match the pairing prefix.
+// 
+//  */
+// void BleRcuPairingStateMachine::onEnteredDiscoveringState()
+// {
+//    *get-devices-from-adapter*
+// 	// get the current list of devices
+// 	const QMap<BleAddress, QString> deviceNames = m_adapter->deviceNames();
+// 
+// 	// process each existing device
+// 	QMap<BleAddress, QString>::const_iterator it = deviceNames.begin();
+// 	for (; it != deviceNames.end(); ++it)
+// 		processDevice(it.key(), it.value());
+// }
+// 
+// // -----------------------------------------------------------------------------
+// /*!
+// 	\internal
+// 
+// 	Called when the an outside object has called either deviceAdded() or
+// 	deviceNameChanged(), it then checks if the \a name matches our expected
+// 	pairing prefix.  If it does then we check if we already have a pairing
+// 	target, if not we use this new device.
+// 
+//  */
+// void BleRcuPairingStateMachine::processDevice(const BleAddress &address,
+//                                               const QString &name)
+// {
+//    *match-devices-from-rcu-to-scanned-devices*
+//    QMap<quint32, QRegExp>::const_iterator it = m_pairingPrefixes.find(address.oui());
+// }
+// 
+// I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
+
 void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
 {
+  // FIXME: use the filterByte to narrow the search to a certain RCU model
+  Q_UNUSED(filterByte);
+
+  // create a map of OUI (first 3 bytes of mac address) to a regex to match to
+  // the name of the device
+  m_pairingPrefixes.clear();
+  QMap<quint32, QByteArray>::const_iterator it = m_pairingPrefixFormats.begin();
+  for (; it != m_pairingPrefixFormats.end(); ++it) {
+
+    // construct the wildcard match
+    QRegExp regEx(QString::asprintf(it.value().constData(), `pairingCode`));
+    regEx.setPatternSyntax(QRegExp::WildcardUnix);
+
+    qInfo("pairing regex for %02hhX:%02hhX:%02hhX:xx:xx:xx is '%s'",
+        quint8(it.key() >> 16), quint8(it.key() >> 8), quint8(it.key() >> 0),
+        regEx.pattern().toLatin1().constData());
+
+    // add to the map to use for compare when a device is found
+    m_pairingPrefixes.insert(it.key(), std::move(regEx));
+  }
+
   // start the state machine
   m_stateMachine.start();
 }
@@ -1360,6 +1738,12 @@ void BleRcuPairingStateMachine::onStateEntry(int state)
 
     case StartingDiscoveryState:
       onEnteredStartDiscoveryState();
+
+      // {
+      // tell anyone who cares that pairing has started
+      // `emit started();`
+      // }
+
       break;
 
   }
@@ -1479,8 +1863,6 @@ void BleRcuPairingStateMachine::`onDiscoveryChanged`(bool discovering)
     m_stateMachine.postEvent(DiscoveryStoppedEvent);
 }
 
-
-
 app/src/main/java/com/sky/bluetooth/SkyBroadcastReceiver.java
 124:            filter.addAction(BluetoothDevice.ACTION_PAIRING_REQUEST);
 1
@@ -1491,18 +1873,6 @@ app/src/main/java/com/sky/bluetooth/SkyBroadcastReceiver.java
 /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/blercuadapter.h
 /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/android/blercuadapter_p.h
 
-
-<log>
-
-	// log the start-up
-	qMilestone("====================");
-	qMilestone("KT:");
-	qMilestone("====================");
-
-2019-06-11 10:24:20.782 15453-15472/? I/BleRcuQt: < M:main.cpp F:doMain L:214 > starting native code
-2019-06-11 10:24:20.782 15453-15472/? I/BleRcuQt: < M:main.cpp F:doMain L:217 > ====================
-2019-06-11 10:24:20.782 15453-15472/? I/BleRcuQt: < M:main.cpp F:doMain L:218 > KT:
-2019-06-11 10:24:20.782 15453-15472/? I/BleRcuQt: < M:main.cpp F:doMain L:219 > ====================
 
 <bt-remote-as-api>
 /peripherals/btremotes/status 197
@@ -1557,6 +1927,59 @@ as/iWedia_AS_service/QtRESTService/app/src/main/java/com/iwedia/comedia/qtrestse
         }
 
 <aidl>
+https://developer.android.com/guide/components/aidl#java
+
+Defining an AIDL interface
+
+You must define your AIDL interface in an .aidl file using the Java programming
+language syntax, then save it in the source code (in the src/ directory) of 
+`both the application` hosting the service and any other application that binds
+to the service.
+
+When you build each application that contains the .aidl file, the Android SDK
+tools `generate` an IBinder interface based on the .aidl file and save it in the
+project's gen/ directory. The service must implement the IBinder interface as
+appropriate. The client applications can then bind to the service and call
+methods from the IBinder to perform IPC.
+
+Implement the interface
+
+The Android SDK tools generate an interface in the Java programming language,
+based on your .aidl file. This interface has an inner abstract class named Stub
+that extends Binder and implements methods from your AIDL interface.  You must
+extend the Stub class and implement the methods.
+
+// app/src/main/java/com/sky/blercu/BleRcuService.java
+
+	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+    ...
+   }
+
+
+Expose the interface to clients
+
+Implement a Service and override onBind() to return your implementation of the
+Stub class.
+
+// app/src/main/java/com/sky/blercu/BleRcuService.java
+
+public class BleRcuService extends Service {
+  ...
+}
+
+
+// are the same files
+
+keitee@keitee-mint:~/ip$ find . -name IBleRcuService.aidl
+./SkyBluetoothRcu/example/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+./SkyBluetoothRcu/tests/IrDatabaseTest/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+./SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+./iwedia/as/iWedia_AS_service/QtRESTService/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+./BleRcuExample/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+
+
+// app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+
 interface IBleRcuService {
 	void registerClient(in ParcelUuid appId, in IBleRcuServiceCallback callback);
 	void unregisterClient(in int clientIf);
@@ -1640,6 +2063,140 @@ interface IBleRcuService {
             description.append("Error: ...");
         }
   }
+
+
+// app/build/generated/aidl_source_output_dir/debug/compileDebugAidl/out/com/sky/blercu/IBleRcuService.java
+
+@Override public boolean isDevicePaired(java.lang.String address) throws android.os.RemoteException
+{
+  android.os.Parcel _data = android.os.Parcel.obtain();
+  android.os.Parcel _reply = android.os.Parcel.obtain();
+  boolean _result;
+  try {
+    _data.writeInterfaceToken(DESCRIPTOR);
+    _data.writeString(address);
+    mRemote.transact(Stub.TRANSACTION_isDevicePaired, _data, _reply, 0);
+    _reply.readException();
+    _result = (0!=_reply.readInt());
+  }
+  finally {
+    _reply.recycle();
+    _data.recycle();
+  }
+  return _result;
+}
+
+
+// app/src/main/cpp/blercu/bluez/blercuadapter.cpp
+
+bool BleRcuAdapterBluez::isDevicePaired(const BleAddress &address) const
+{
+	const QSharedPointer<BleRcuDeviceBluez> device = m_devices.value(address);
+	if (!device || !device->isValid()) {
+		qInfo() << "failed to find device with address" << address
+		        << "to query paired status";
+		return false;
+	}
+
+	return device->isPaired();
+}
+
+// app/src/main/java/com/sky/blercu/BleRcuService.java
+	/**
+	 * Returns true if the device with the given address is in the list of paired
+	 * device.
+	 *
+	 */
+	public boolean isDevicePaired(String address) {
+		mServiceLock.readLock().lock();
+		boolean isPaired = mPairedDevices.contains(address);
+		mServiceLock.readLock().unlock();
+
+		return isPaired;
+	}
+
+	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+
+		@Override
+		public boolean isDevicePaired(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.isDevicePaired(address);
+		}
+
+
+<bt-remote-scanning>
+https://www.stb.bskyb.com/confluence/display/~grayb/Bluetooth+RCU+Pairing+Without+Infrared
+
+Bluetooth RCU Pairing
+http://192.168.0.100:8280/index.html
+
+
+// app/src/main/cpp/debug/3rdparty/qhttpengine/src/qhttpserver.cpp
+
+  d->process(socket);
+
+// app/src/main/cpp/debug/httphandler.cpp
+
+void HttpHandler::process(QHttpSocket *socket, const QString &path)
+{}
+
+void HttpHandler::handlePostRequest(QHttpSocket *socket, const QString &path)
+{
+  // ask the controller to start the scan
+  m_controller->startScanning(timeoutMs);
+}
+
+bool BleRcuControllerImpl::startScanning(int timeoutMs)
+{
+  // start the pairing process
+  m_scannerStateMachine.start(timeoutMs);
+  return true;
+}
+
+
+BleRcuControllerImpl::BleRcuControllerImpl()
+{
+  // connect to the signal emitted when the scanner found an RCU device in
+  // pairing mode
+  QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::foundPairableDevice,
+      this, &BleRcuControllerImpl::onFoundPairableDevice,
+      Qt::QueuedConnection);
+}
+
+// app/src/main/cpp/blercu/blercuscannerstatemachine.cpp
+
+void BleRcuScannerStateMachine::onEnteredFinishedState()
+{
+  // if we found a device then tell any clients
+  if (!m_foundDevice.address.isNull()) {
+    `emit foundPairableDevice(m_foundDevice.address, m_foundDevice.name);`
+    m_foundDevice.clear();
+  }
+
+  // and we're done
+  emit finished();
+}
+
+void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
+                                                 const QString &name)
+{
+  qInfo() << "found" << address << "RCU device in pairing mode,"
+    << "kicking off the pairing state machine";
+
+  // sanity check (needed?)
+  if (m_pairingStateMachine.isRunning()) {
+    qWarning("found target device in scan but pairing state machine "
+        "already running?");
+    return;
+  }
+
+  // start pairing the device
+  m_pairingStateMachine.start(address, name);
+}
 
 
 #{============================================================================
