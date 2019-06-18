@@ -1003,6 +1003,12 @@ https://developer.android.com/reference/android/app/Activity.html
 
 
 ={============================================================================
+*kt_dev_skymw_0000* skymw-android-app
+
+https://developer.android.com/training/basics/firstapp/creating-project
+
+
+={============================================================================
 *kt_dev_skymw_0000* skymw-android-studio
 
 {navigation}
@@ -1584,6 +1590,7 @@ void LinuxInputDevice::processEvents(const struct input_event *events, size_t ne
 
 // note that "service/android"
 // app/src/main/cpp/service/android/blercuservice.cpp
+// app/src/main/cpp/service/android/blercuservice.h
 
 class BleRcuService : public QObject
                     , public QEnableSharedFromThis<BleRcuService>
@@ -1639,12 +1646,18 @@ class BleRcuControllerImpl : public BleRcuController
 	BleRcuScannerStateMachine m_scannerStateMachine;
 }
 
-I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 18:46:44:xx:xx:xx is 'U130 SkyQ EC201'
-I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 70:91:F3:xx:xx:xx is 'U130 SkyQ EC102'
-I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for D4:B8:FF:xx:xx:xx is 'U130 SkyQ EC[12]01'
-I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for E8:0F:C8:xx:xx:xx is 'U130 SkyQ EC202'
-I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving to state StartingDiscoveryState(2)"
-
+//   QObject::connect(m_adapter.data(), &BleRcuAdapter::deviceNameChanged,
+//     this, &BleRcuPairingStateMachine::onDeviceNameChanged);
+// 
+// void BleRcuPairingStateMachine::onDeviceNameChanged(const BleAddress &address,
+//                                                     const QString &name)
+// {
+//   qDebug() << "device name changed" << address << name
+//     << "(target" << m_targetAddress << ")";
+// 
+//   `processDevice`(address, name);
+// }
+// 
 // /*!
 // 	\internal
 // 
@@ -1664,6 +1677,7 @@ I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] m
 // 	for (; it != deviceNames.end(); ++it)
 // 		`processDevice`(it.key(), it.value());
 // }
+//
 // 
 // // -----------------------------------------------------------------------------
 // /*!
@@ -1680,11 +1694,22 @@ I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] m
 // {
 //    *match-devices-from-rcu-to-scanned-devices*
 //    QMap<quint32, QRegExp>::const_iterator it = m_pairingPrefixes.find(address.oui());
+//
+//    I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
 // }
 // 
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
 
 // m_pairingPrefixFormats is built from *config*
+
+// I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 18:46:44:xx:xx:xx is 'U130 SkyQ EC201'
+// I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 70:91:F3:xx:xx:xx is 'U130 SkyQ EC102'
+// I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for D4:B8:FF:xx:xx:xx is 'U130 SkyQ EC[12]01'
+// I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for E8:0F:C8:xx:xx:xx is 'U130 SkyQ EC202'
+// I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving to state StartingDiscoveryState(2)"
+//
+// After all, check if current devices does match up with expected pattern in
+// config
 
 void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
 {
@@ -1955,7 +1980,29 @@ extend the Stub class and implement the methods.
 
 	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
     ...
+
+      @Override
+      public String getDeviceMake(String address) {
+        if (!checkAddress(address))
+          return null;
+
+        BleRcuService service = getService();
+
+        if (service == null) return null;
+
+        return service.jniGetDeviceMake(service.mQtObject, address);
+      }
    }
+
+	private native String jniGetDeviceMake(long qtObject, String address);
+
+
+// app/src/main/cpp/service/android/blercuservice.cpp
+
+bool BleRcuService::registerNatives()
+{
+  JNI_ENTRY(jniGetDeviceMake,               "(JLjava/lang/String;)Ljava/lang/String;"),
+}
 
 
 Expose the interface to clients
@@ -2198,6 +2245,9 @@ void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
 
   // start pairing the device
   m_pairingStateMachine.start(address, name);
+
+  // note: this is different start() from pairing mode
+  // void BleRcuPairingStateMachine::start(const BleAddress &target, const QString &name)
 }
 
 

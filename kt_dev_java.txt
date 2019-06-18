@@ -1,0 +1,411 @@
+*kt_dev_08*                                                                tw=100
+
+kt.dev.java
+
+/^[#=]{
+Use #{ for a group and ={ for a item
+
+|kt_dev_java_000| java-jni
+
+
+={============================================================================
+|kt_dev_java_000| java-jni
+
+https://www.baeldung.com/jni
+
+Guide to JNI (Java Native Interface)
+
+<native-keyword>
+Java provides the native keyword that’s used to indicate that the method
+implementation will be provided by a native code.
+
+Therefore, our shared lib will keep the native code separately within its
+.so/.dll/.dylib file (depending on which Operating System we’re using) instead
+of being part of our classes.
+
+The native keyword transforms our method into a sort of abstract method:
+
+private native void aNativeMethod();
+
+With the main difference that instead of being implemented by another Java
+class, it will be implemented in a separated native shared library.
+
+A table with pointers in memory to the implementation of all of our native
+methods will be constructed so they can be called from our Java code.
+
+
+2.3. JNI Elements In Code (Java And C/C++)
+
+Java elements:
+
+o “native” keyword – as we’ve already covered, any method marked as native
+  must be implemented in a native, shared lib.
+
+o System.loadLibrary(String libname) – a static method that loads a shared
+  library from the file system into memory and makes its exported functions
+  available for our Java code.
+
+
+C/C++ elements (many of them defined within jni.h)
+
+o JNIEXPORT- marks the function into the shared lib as exportable so it will
+  be included in the function table, and thus JNI can find it
+
+o JNICALL – combined with JNIEXPORT, it ensures that our methods are available
+  for the JNI framework
+
+o JNIEnv – a structure containing methods that we can use our native code to
+  access Java elements
+
+o JavaVM – a structure that lets us manipulate a running JVM (or even start a
+  new one) adding threads to it, destroying it, etc…
+
+
+3.1. Creating the Java Class
+
+Let’s start creating our first JNI program by implementing a classic “Hello
+World”.
+
+To begin, we create the following Java class that includes the native method
+that will perform the work:
+
+HelloWorldJNI.java:
+
+package com.baeldung.jni;
+ 
+public class HelloWorldJNI {
+ 
+    static {
+        System.loadLibrary("native");
+    }
+     
+    public static void main(String[] args) {
+        new HelloWorldJNI().sayHello();
+    }
+ 
+    // Declare a native method sayHello() that receives no arguments and returns void
+    private native void sayHello();
+}
+
+As we can see, we load the shared library in a static block. This ensures that
+it will be ready when we need it and from wherever we need it.
+
+Alternatively, in this trivial program, we could instead load the library just
+before calling our native method because we’re not using the native library
+anywhere else.
+
+
+3.2. Implementing a Method in C++
+
+Now, we need to create the implementation of our native method in C++.
+
+Within C++ the definition and the implementation are usually stored in .h and
+.cpp files respectively.
+
+First, to create the definition of the method, we have to use the -h flag of
+the Java compiler:
+
+  -h <directory>
+        Specify where to place generated native header files
+ 
+javac -h . HelloWorldJNI.java
+
+This will generate a com_baeldung_jni_HelloWorldJNI.h file with all the native
+methods included in the class passed as a parameter, in this case, only one:
+
+keitee@keitee-mint:~/git/kb/code-java/jni$ javac -h . HelloWorldJNI.java
+keitee@keitee-mint:~/git/kb/code-java/jni$ ll
+total 20K
+drwxr-xr-x 3 keitee keitee 4.0K Jun 18 11:20 ../
+-rw-r--r-- 1 keitee keitee  485 Jun 18 11:28 HelloWorldJNI.java
+-rw-r--r-- 1 keitee keitee  477 Jun 18 11:28 HelloWorldJNI.class
+-rw-r--r-- 1 keitee keitee  483 Jun 18 11:28 com_baeldung_jni_HelloWorldJNI.h
+drwxr-xr-x 2 keitee keitee 4.0K Jun 18 11:28 ./
+
+
+keitee@keitee-mint:~/git/kb/code-java/jni$ more com_baeldung_jni_HelloWorldJNI.h
+
+JNIEXPORT void JNICALL Java_com_baeldung_jni_HelloWorldJNI_sayHello
+  (JNIEnv *, jobject);
+
+As we can see, the function name is automatically generated using the fully
+qualified package, class and method name.
+
+we can notice is that we’re getting `two parameters` passed to our function; a
+pointer to the current JNIEnv; and also the Java object that the method is
+attached to, the instance of our HelloWorldJNI class.
+
+Now, we have to create a new .cpp file for the implementation of the sayHello
+function. This is where we’ll perform actions that print “Hello World” to
+console.
+
+We’ll name our .cpp file with the same name as the .h one containing the
+header and add this code to implement the native function:
+
+JNIEXPORT void JNICALL Java_com_baeldung_jni_HelloWorldJNI_sayHello
+  (JNIEnv* env, jobject thisObject) {
+    std::cout << "Hello from C++ !!" << std::endl;
+}
+
+
+3.3. Compiling And Linking
+
+At this point, we have all parts we need in place and have a connection
+between them.
+
+We need to build our shared library from the C++ code and run it!
+
+To do so, we have to use G++ compiler, not forgetting to include the JNI
+headers from our Java JDK installation.
+
+keitee@keitee-mint:~/git/kb/code-java/jni$ JAVA_HOME=$(readlink -f /usr/bin/java | sed "s:bin/java::")
+keitee@keitee-mint:~/git/kb/code-java/jni$ echo ${JAVA_HOME}
+/usr/lib/jvm/java-11-openjdk-amd64/
+keitee@keitee-mint:~/git/kb/code-java/jni$ readlink -f /usr/bin/java
+/usr/lib/jvm/java-11-openjdk-amd64/bin/java
+
+To make it as shared so. Once we have the code compiled for our platform into
+the file com_baeldung_jni_HelloWorldJNI.o, we have to include it in a new
+shared library. Whatever we decide to name it is the argument passed into the
+method System.loadLibrary.
+
+Ubuntu version:
+
+g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux com_baeldung_jni_HelloWorldJNI.cpp -o com_baeldung_jni_HelloWorldJNI.o
+g++ -shared -fPIC -o libnative.so com_baeldung_jni_HelloWorldJNI.o -lc
+
+// works when do not use package in java code
+g++ -c -fPIC -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux HelloWorldJNI.cpp -o HelloWorldJNI.o
+g++ -shared -fPIC -o libnative.so HelloWorldJNI.o -lc
+
+
+And that’s it!
+
+We can now run our program from the command line.
+
+However, we need to add the full path to the directory containing the library
+we’ve just generated. This way Java will know where to look for our native
+libs:
+
+Usage: java [options] <mainclass> [args...]
+           (to execute a class)
+ 
+    -cp <class search path of directories and zip/jar files>
+
+    -D<name>=<value>
+                  set a system property
+
+java -cp . -Djava.library.path=/NATIVE_SHARED_LIB_FOLDER com.baeldung.jni.HelloWorldJNI
+
+java -cp . -Djava.library.path=/home/keitee/git/kb/code-java/jni com.baeldung.jni.HelloWorldJNI
+
+
+Console output:
+
+Hello from C++ !!
+
+
+4. Using Advanced JNI Features
+
+Saying hello is nice but not very useful. Usually, we would like to exchange
+data between Java and C++ code and manage this data in our program.
+
+4.1. Adding Parameters To Our Native Methods
+
+We’ll add some parameters to our native methods. Let’s create a new class
+called ExampleParametersJNI with two native methods using parameters and
+returns of different types:
+
+private native long sumIntegers(int first, int second);
+     
+private native String sayHelloToMe(String name, boolean isFemale);
+
+And then, repeat the procedure to create a new .h file with “javac -h” as we
+did before.
+
+Now create the corresponding .cpp file with the implementation of the new C++
+method:
+
+JNIEXPORT jlong JNICALL Java_com_baeldung_jni_ExampleParametersJNI_sumIntegers 
+(JNIEnv* env, jobject thisObject, jint first, jint second) {
+  std::cout << "C++: The numbers received are : " << first << " and " << second << std::endl;
+  return (long)first + (long)second;
+}
+
+JNIEXPORT jstring JNICALL Java_com_baeldung_jni_ExampleParametersJNI_sayHelloToMe 
+(JNIEnv* env, jobject thisObject, jstring name, jboolean isFemale) {
+  const char* nameCharPointer = env->GetStringUTFChars(name, NULL);
+  std::string title;
+  if(isFemale) {
+    title = "Ms. ";
+  }
+  else {
+    title = "Mr. ";
+  }
+
+  std::string fullName = title + nameCharPointer;
+  return env->NewStringUTF(fullName.c_str());
+}
+
+
+HelloWorldJNI.h:
+
+/* DO NOT EDIT THIS FILE - it is machine generated */
+#include <jni.h>
+/* Header for class HelloWorldJNI */
+
+#ifndef _Included_HelloWorldJNI
+#define _Included_HelloWorldJNI
+#ifdef __cplusplus
+extern "C" {
+#endif
+/*
+ * Class:     HelloWorldJNI
+ * Method:    sayHello
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_HelloWorldJNI_sayHello
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     HelloWorldJNI
+ * Method:    sumIntegers
+ * Signature: (II)J
+ */
+JNIEXPORT jlong JNICALL Java_HelloWorldJNI_sumIntegers
+  (JNIEnv *, jobject, jint, jint);
+
+/*
+ * Class:     HelloWorldJNI
+ * Method:    sayHelloToMe
+ * Signature: (Ljava/lang/String;Z)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_HelloWorldJNI_sayHelloToMe
+  (JNIEnv *, jobject, jstring, jboolean);
+
+#ifdef __cplusplus
+}
+#endif
+#endif
+
+
+We’ve used the pointer *env of type JNIEnv to access the methods provided by
+the JNI environment instance.
+
+JNIEnv allows us, in this case, to pass Java Strings into our C++ code and
+back out without worrying about the implementation.
+
+We can check the equivalence of Java types and C JNI types into Oracle
+official documentation.
+
+To test our code, we’ve to repeat all the compilation steps of the previous
+HelloWorld example.
+
+
+4.2. Using Objects And Calling Java Methods From Native Code
+
+In this last example, we’re going to see how we can manipulate Java objects into
+our native C++ code.
+
+We’ll start creating a new class UserData that we’ll use to store some user
+info:
+
+package com.baeldung.jni;
+ 
+public class UserData {
+     
+    public String name;
+    public double balance;
+     
+    public String getUserInfo() {
+        return "[name]=" + name + ", [balance]=" + balance;
+    }
+}
+
+Then, we’ll create another Java class called ExampleObjectsJNI with some native
+methods with which we’ll manage objects of type UserData:
+
+public native UserData createUser(String name, double balance);
+     
+public native String printUserData(UserData user);
+
+One more time, let’s create the .h header and then the C++ implementation of our
+native methods on a new .cpp file:
+
+JNIEXPORT jobject JNICALL Java_com_baeldung_jni_ExampleObjectsJNI_createUser
+(JNIEnv *env, jobject thisObject, jstring name, jdouble balance) {
+
+  // Create the object of the class UserData
+  jclass userDataClass = env->FindClass("com/baeldung/jni/UserData");
+  jobject newUserData = env->AllocObject(userDataClass);
+
+  // Get the UserData fields to be set
+  jfieldID nameField = env->GetFieldID(userDataClass , "name", "Ljava/lang/String;");
+  jfieldID balanceField = env->GetFieldID(userDataClass , "balance", "D");
+
+  env->SetObjectField(newUserData, nameField, name);
+  env->SetDoubleField(newUserData, balanceField, balance);
+
+  return newUserData;
+}
+ 
+JNIEXPORT jstring JNICALL Java_com_baeldung_jni_ExampleObjectsJNI_printUserData
+(JNIEnv *env, jobject thisObject, jobject userData) {
+
+  // Find the id of the Java method to be called
+  jclass userDataClass=env->GetObjectClass(userData);
+  jmethodID methodId=env->GetMethodID(userDataClass, "getUserInfo", "()Ljava/lang/String;");
+
+  jstring result = (jstring)env->CallObjectMethod(userData, methodId);
+  return result;
+}
+
+Again, we’re using the JNIEnv *env pointer to access the needed classes,
+  objects, fields and methods from the running JVM.
+
+Normally, we just need to provide the full class name to access a Java class, or
+the correct method name and signature to access an object method.
+
+We’re even creating an instance of the class com.baeldung.jni.UserData in our
+native code. Once we have the instance, we can manipulate all its properties and
+methods in a way similar to Java reflection.
+
+We can check all other methods of JNIEnv into the Oracle official documentation.
+
+
+4. Disadvantages Of Using JNI
+
+JNI bridging does have its pitfalls.
+
+The main downside being the dependency on the underlying platform; we
+essentially lose the “write once, run anywhere” feature of Java. This means
+that we’ll have to build a new lib for each new combination of platform and
+architecture we want to support. Imagine the impact that this could have on
+the build process if we supported Windows, Linux, Android, MacOS…
+
+JNI not only adds a layer of complexity to our program. It also adds a costly
+layer of communication between the code running into the JVM and our native
+code: we need to convert the data exchanged in both ways between Java and C++
+in a marshaling/unmarshaling process.
+
+Sometimes there isn’t even a direct conversion between types so we’ll have to
+write our equivalent.
+
+5. Conclusion
+
+Compiling the code for a specific platform (usually) makes it faster than
+running bytecode.
+
+This makes it useful when we need to speed up a demanding process. Also, when
+we don’t have other alternatives such as when we need to use a library that
+manages a device.
+
+However, this comes at a price as we’ll have to maintain additional code for
+each different platform we support.
+
+That’s why it’s usually a good idea to only use JNI in the cases where there’s
+no Java alternative.
+
+
+={============================================================================
+see |ktkb|                        vim:tw=80:ts=3:ft=help:norl:

@@ -1,5 +1,5 @@
 #include <iostream>
-#include <set>
+#include <sstream>
 #include <memory>
 #include <exception>
 
@@ -123,15 +123,18 @@ TEST(Qt, String)
   // This is equivalent to calling <QString>.toLocal8Bit().constData().
 
   {
+    std::ostringstream os;
     QString message{"Hello stream logging"};
-    qDebug("QString: %s", message.toUtf8().constData());
+    os << message.toUtf8().constData();
+    EXPECT_THAT(os.str(), "Hello stream logging");
   }
 
   {
+    std::ostringstream os;
     QString message{"Hello stream logging"};
-
     // const char *qPrintable(const QString &str)
-    qDebug("QString: %s", qPrintable(message));
+    os << qPrintable(message);
+    EXPECT_THAT(os.str(), "Hello stream logging");
   }
 
   // First, arg(i) replaces %1. Then arg(total) replaces %2. Finally,
@@ -159,7 +162,31 @@ TEST(Qt, String)
     QString status = QString("Processing file %1 of %2: %3")
       .arg(i).arg(total).arg(fileName);
 
-    qDebug("%s", qPrintable(status));
+    std::ostringstream os;
+    os << qPrintable(status);
+    EXPECT_THAT(os.str(), "Processing file 3 of 10: readme");
+  }
+
+  {
+    quint8 i{3};
+    quint8 total{10};
+    QString fileName{"readme"};
+
+    // error caused since asprintf() comes from stdio::asprintf()
+    //
+    // qt_gtest.cpp:169:81: error: cannot convert ‘const char*’ 
+    //  to ‘char**’ for argument ‘1’ to ‘int asprintf(char**, const char*, ...)’
+    //     QString status = asprintf("Processing file %d of %d: %s", i, total, fileName);
+    // QString status = asprintf("Processing file %d of %d: %s", i, total, fileName);
+ 
+    QByteArray format{"Processing file %d of %d: %s"};
+    QString status = QString::asprintf(format.constData(), i, total, qPrintable(fileName));
+
+    // QString status = QString::asprintf("Processing file %d of %d: %s", i, total, qPrintable(fileName));
+
+    std::ostringstream os;
+    os << qPrintable(status);
+    EXPECT_THAT(os.str(), "Processing file 3 of 10: readme");
   }
 }
 
@@ -178,8 +205,13 @@ TEST(Qt, String)
 TEST(Qt, StringByteArray)
 {
   QByteArray coll{"U%03hhu SkyQ EC201"};
+
   // qDebug("QByteArray: %s", coll.data());
-  std::cout << "QByteArray: " << coll.data() << std::endl;
+  // std::cout << "QByteArray: " << coll.data() << std::endl;
+
+  std::ostringstream os;
+  os << coll.data();
+  EXPECT_THAT(os.str(), "U%03hhu SkyQ EC201");
 }
 
 
@@ -193,9 +225,15 @@ TEST(Qt, ListPrepend)
 
     coll.prepend("one");
     coll.prepend("two");
-    coll.prepend("Three");
+    coll.prepend("three");
 
-    qDebug() << coll;
+    // works
+    // qDebug() << coll;
+
+    std::ostringstream os;
+    for (const auto &e : coll)
+      os << qPrintable(e) << ", ";
+    EXPECT_THAT(os.str(), "three, two, one, ");
   }
 }
 
@@ -427,7 +465,53 @@ TEST(Qt, LoggingCategory)
 
 TEST(Qt, RegExp)
 {
+  quint8 code{130};
+  QByteArray pattern{"U%03hhu SkyQ EC201"};
+  QString value = QString::asprintf(pattern, code);
+  QRegExp regex(value);
 
+  // void QRegExp::setPatternSyntax(QRegExp::PatternSyntax syntax)
+  //
+  // Sets the syntax mode for the regular expression. The default is
+  // QRegExp::RegExp.
+  //  
+  // Setting syntax to QRegExp::Wildcard enables simple shell-like QRegExp
+  // wildcard matching. For example, r*.txt matches the string readme.txt in
+  // wildcard mode, but does not match readme.
+
+  // enum QRegExp::PatternSyntax
+  //
+  // The syntax used to interpret the meaning of the pattern.
+  // 
+  // Constant	Value	Description
+  //
+  // QRegExp::RegExp	0	A rich Perl-like pattern matching syntax. This is the
+  // *default*
+  //
+  // QRegExp::RegExp2	3	Like RegExp, but with greedy quantifiers. (Introduced in
+  // Qt 4.2.)
+  //
+  // QRegExp::Wildcard	1	This provides a simple pattern matching syntax similar
+  // to that used by shells (command interpreters) for "file globbing". See
+  // QRegExp wildcard matching.
+  //
+  // QRegExp::WildcardUnix	4	This is similar to Wildcard but with the behavior
+  // of a Unix shell. The wildcard characters can be escaped with the character
+  // "\".
+
+  regex.setPatternSyntax(QRegExp::WildcardUnix);
+  std::ostringstream os;
+  os << qPrintable(regex.pattern());
+  EXPECT_THAT(os.str(), "U130 SkyQ EC201");
+
+  // bool QRegExp::exactMatch(const QString &str) const
+  //
+  // Returns true if str is matched exactly by this regular expression;
+  // otherwise returns false. You can determine how much of the string was
+  // matched by calling matchedLength().
+
+  EXPECT_THAT(regex.exactMatch("U130 SkyQ EC201"), true);
+  EXPECT_THAT(regex.exactMatch("U131 SkyQ EC201"), false);
 }
 
 
