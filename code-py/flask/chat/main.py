@@ -4,6 +4,13 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO
 
+# What is SocketIO?
+# SocketIO is a cross-browser Javascript library that abstracts the client
+# application from the actual transport protocol. For modern browsers the
+# WebSocket protocol is used, but for older browsers that don't have WebSocket
+# SocketIO emulates the connection using one of the older solutions, the best
+# one available for each given client.
+
 # SocketIO is a cross-browser Javascript library that abstracts the client
 # application from the actual transport protocol. Using SocketIO, you can be
 # pretty much sure that any browser out there will be able to connect to your
