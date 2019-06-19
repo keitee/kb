@@ -3383,7 +3383,7 @@ TEST(FunctionObject, Pointer)
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp
 
-TEST(SmartPointerShared, Ctors)
+TEST(SmartPointer, Ctor)
 {
   {
     shared_ptr<string> pNico(new string("nico"));           // OK
@@ -3415,7 +3415,7 @@ TEST(SmartPointerShared, Ctors)
   auto p6 = make_shared<vector<string>>();
 }
 
-TEST(SmartPointerShared, Copy)
+TEST(SmartPointer, SharedCopy)
 {
   auto p = make_shared<int>(42);
 
@@ -3438,9 +3438,11 @@ TEST(SmartPointerShared, Copy)
   EXPECT_THAT(p.use_count(), 3);
   EXPECT_THAT(q.use_count(), 3);
   EXPECT_THAT(r.use_count(), 3);
+
+  EXPECT_THAT(*r, 42);
 }
 
-TEST(SmartPointerShared, Reset)
+TEST(SmartPointer, Reset)
 {
   // 1. sp, shared structure, and referenced object are separate entity.
   //
@@ -3475,7 +3477,7 @@ TEST(SmartPointerShared, Reset)
     EXPECT_THAT(p.use_count(), 3);
     EXPECT_THAT(q.use_count(), 3);
 
-    // same as reset()
+    // same as cxx-sp-reset()
     q = nullptr;
 
     EXPECT_THAT(p.use_count(), 2);
@@ -3502,12 +3504,23 @@ TEST(SmartPointerShared, Reset)
     EXPECT_THAT(q.use_count(), 0);
     EXPECT_THAT(r.use_count(), 2);
   }
+  {
+    unique_ptr<int> up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+
+    up.reset();
+
+    // now, up is nullptr
+    EXPECT_FALSE(up);
+  }
 }
 
 
 // CXXSLR 5.2 Smart Pointers
 
-TEST(SmartPointerShared, Example)
+TEST(SmartPointer, SharedEx)
 {
   std::shared_ptr<std::string> pNico{new std::string("nico")};
   std::shared_ptr<std::string> pJutta{new std::string("jutta")};
@@ -3582,12 +3595,36 @@ TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
 
 */
 
-TEST(SharedPointerUnique, OperatorBool)
+TEST(SmartPointer, OperatorBool)
 {
-  unique_ptr<int> up{new int(100)};
+  {
+    auto p = make_shared<int>(42);
 
-  EXPECT_TRUE(up);
-  EXPECT_THAT(*up, 100);
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+
+    EXPECT_TRUE(p);
+    // cxx-sp-bool, q is nullptr
+    EXPECT_FALSE(q);
+    EXPECT_TRUE(r);
+  }
+
+  {
+    unique_ptr<int> up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+  }
 }
 
 namespace cxx_sp_shared
@@ -3616,7 +3653,7 @@ namespace cxx_sp_shared
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SharedPointerUnique, Move)
+TEST(SmartPointer, UniqueMove)
 {
   using namespace cxx_sp_shared;
 
@@ -3625,11 +3662,6 @@ TEST(SharedPointerUnique, Move)
   unique_ptr<Foo> p3(new Foo(3));
   unique_ptr<Foo> p4(new Foo(4));
 
-  // if (p3)
-  //   cout << "p3 is not null" << endl;
-  // else
-  //   cout << "p3 is null" << endl;
-
   EXPECT_TRUE(p3);
 
   p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
@@ -3637,11 +3669,6 @@ TEST(SharedPointerUnique, Move)
   p3 = std::move(p1);     // p1->null , p2->F3, p3->null
 
   EXPECT_FALSE(p3);
- 
-  // if (p3)
-  //   cout << "p3 is not null" << endl;
-  // else
-  //   cout << "p3 is null" << endl;
 }
 
 
@@ -3678,7 +3705,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(SharedPointerUnique, SinkSource)
+TEST(SmartPointer, UniqueSinkSource)
 {
   using namespace cxx_sp_shared;
 
@@ -3776,7 +3803,7 @@ namespace cxx_sp_delete
 // deleting nico
 // [       OK ] SharedPointer.Deleter (5 ms)
 
-TEST(SharedPointer, Deleter)
+TEST(SmartPointer, Deleter)
 {
   using namespace cxx_sp_delete;
 
@@ -3828,7 +3855,7 @@ TEST(SharedPointer, Deleter)
 // deleting Nicolai
 // deleting Jutta
 
-TEST(SharedPointer, DeleteTime)
+TEST(SmartPointer, DeleteTime)
 {
   using namespace cxx_sp_delete;
 
@@ -3894,7 +3921,7 @@ TEST(SharedPointer, DeleteTime)
 // end of main
 // Foo dtor(3)
 
-TEST(SmartPointerUnique, DeleteReleaseReset)
+TEST(SmartPointer, UniqueDeleteReleaseReset)
 {
   using namespace cxx_sp_shared;
 
@@ -4017,7 +4044,7 @@ TEST(SmartPointer, UseCount)
 // cxx-smart-ptr-weak
 // 5.2.2 Class weak_ptr
 
-TEST(SmartPointerWeak, NotInReferenceCount)
+TEST(SmartPointer, WeakNotInReferenceCount)
 {
   {
     auto sp = make_shared<int>(42);
@@ -4247,7 +4274,7 @@ referring to it. As a result, the destructor of each Person, which would print
 Solution?
 */
 
-TEST(SharedPointerWeak, CyclicReference)
+TEST(SmartPointer, WeakCyclicReference)
 {
   using namespace cxx_sp_weak_problem;
 
@@ -4330,7 +4357,7 @@ namespace cxx_sp_weak_solution
 // delete: jim's mom
 // [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
 
-TEST(SharedPointerWeak, CyclicReferenceSolution)
+TEST(SmartPointer, WeakCyclicReferenceSolution)
 {
   using namespace cxx_sp_weak_solution;
 
@@ -4443,7 +4470,7 @@ namespace cxx_sp_weak_problem
 # How about using smart pointers to this problem?
 */
 
-TEST(SharedPointerWeak, ResourceManagerSolution)
+TEST(SmartPointer, WeakResourceManagerSolution)
 {
   using namespace cxx_sp_weak_problem;
 
@@ -4658,7 +4685,7 @@ namespace cxx_sp_unique_own_version
 
 } // namespace
 
-TEST(SharedPointerOwn, Unique)
+TEST(SmartPointer, OwnUnique)
 {
   using namespace cxx_sp_unique_own_version;
 
@@ -4856,7 +4883,7 @@ namespace cxx_sp_shared_own_version
 
 } // namespace
 
-TEST(SharedPointerOwn, Shared)
+TEST(SmartPointer, OwnShared)
 {
   using namespace cxx_sp_shared_own_version;
 

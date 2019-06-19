@@ -2263,7 +2263,57 @@ void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
 
 app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
 app/src/main/java/com/sky/blercu/BleRcuService.java
+
+
+	public BleRcuService(long qtObject) {
+		//
+		mQtObject = qtObject;
+   }
+
+	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+
+		`private BleRcuService mService;`
+
+		private BleRcuServiceBinder(BleRcuService svc) {
+			mService = svc;
+		}
+		public boolean cleanup() {
+			mService = null;
+			return true;
+		}
+
+		public BleRcuService getService() {
+			if (mService != null && mService.isAvailable()) {
+				return mService;
+			}
+			return null;
+		}
+
+		public String getDeviceName(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceName(`service.mQtObject`, address);
+		}
+
+	private native String jniGetDeviceName(long qtObject, String address);
+
+
 app/src/main/cpp/service/android/blercuservice.cpp
+
+bool BleRcuService::registerNatives()
+{
+		JNI_ENTRY(jniGetDeviceName,               "(JLjava/lang/String;)Ljava/lang/String;"),
+}
+
+jstring BleRcuService::jniGetDeviceName(JNIEnv *env, jobject, `jlong qtObject`,
+                                        jstring address)
+{
+	return jniGetDeviceInfo(env, qtObject, address, DeviceName);
+}
+
 app/src/main/cpp/service/android/blercuservice.h
 
 keitee@keitee-mint:~/ip/BleRcuExample$ cp ../SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl

@@ -54373,8 +54373,8 @@ copied ownership of the resource is transfered.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-sp-shared
 
-This implements the concept of `shared-ownership` so that the object and its
-associated resources get released whenever the last reference to it gets
+This implements the concept of `cxx-sp-shared-ownership` so that the object and
+its associated resources get released whenever the last reference to it gets
 destroyed. To perform this task in more complicated scenarios, helper classes,
 such as `weak_ptr`, `bad_weak_ptr`, and `enable_shared_from_this` are provided.
 
@@ -54583,6 +54583,7 @@ namespace cxx_code *cxx-sp-code*
           get() const noexcept
           { return _M_ptr; }
 
+        // *cxx-sp-bool*
         explicit operator bool() const // never throws
         { return _M_ptr == 0 ? false : true; }
 
@@ -54877,7 +54878,7 @@ bsk.add_item( make_shared<Quote>("123", 45) );
 // void add_item( const std::shared_ptr<Quote>& sale);
 
 
-{cxx-sp-shared-reset}
+{cxx-sp-reset}
 Why not assignment instead of using reset when assign a shared pointer with a
 new resource? 
 
@@ -55261,7 +55262,7 @@ namespace cxx_code *cxx-sp-weak-code*
 
 <ex>
 
-TEST(SmartPointerWeak, NotInReferenceCount)
+TEST(SmartPointer, WeakNotInReferenceCount)
 {
   {
     auto sp = make_shared<int>(42);
@@ -55473,7 +55474,7 @@ mom [ 0, 0, kids ]   dad [ 0, 0, kids ]   kid [ m, f, kids ]
 Solution?
 */
 
-TEST(SharedPointerWeak, CyclicReference)
+TEST(SharedPointer, WeakCyclicReference)
 {
   using namespace cxx_sp_weak_problem;
 
@@ -55509,6 +55510,7 @@ namespace cxx_sp_weak_solution
       shared_ptr<Person> mother_;
       shared_ptr<Person> father_;
 
+      // *cxx-sp-weak*
       // vector<shard_ptr<Person>> kids_;
       vector<weak_ptr<Person>> kids_;
 
@@ -55556,7 +55558,7 @@ namespace cxx_sp_weak_solution
 // delete: jim's mom
 // [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
 
-TEST(SharedPointerWeak, CyclicReferenceSolution)
+TEST(SharedPointer, WeakCyclicReferenceSolution)
 {
   using namespace cxx_sp_weak_solution;
 
@@ -55679,13 +55681,13 @@ namespace boost {
 ={============================================================================
 *kt_dev_cxx_0000* cxx-sp-unique cxx-auto-ptr
 
-`no copy or assign support` that implements the concept of 'exclusive' ownership.
+`no copy or assign support` that implements the concept of `exclusive ownership`
 
 This was `auto_ptr` before C++11 and it has only one user because
-`no-ordinary-copy-and-assign-supported`. Only 'one' `unique_ptr` at a time can
+`no-ordinary-copy-and-assign-supported`. Only `one unique_ptr` at a time can
 point to a given object. So limit the use and transfer ownerships.
 
-In contrast to shared pointers, a 'minimum' space and time overhead is the
+In contrast to shared pointers, a `minimum space and time overhead` is the
 focus of this class.
 
 namespace cxx-code *cxx-sp-code* *cxx-sp-delete*
@@ -55792,6 +55794,7 @@ namespace cxx-code *cxx-sp-code* *cxx-sp-delete*
           return __p;
         }
 
+      // *cxx-sp-reset*
       /** @brief Replace the stored pointer.
        *
        * @param __p  The new pointer to store.
@@ -55807,7 +55810,7 @@ namespace cxx-code *cxx-sp-code* *cxx-sp-delete*
             get_deleter()(__p);
         }
 
-      // *cxx-conversion-to-bool* *cxx-operator-bool*
+      // *cxx-conversion-to-bool* *cxx-operator-bool* *cxx-sp-bool*
       /// Return @c true if the stored pointer is not null.
       explicit operator bool() const noexcept
       { return get() == pointer() ? false : true; }
@@ -55867,7 +55870,8 @@ TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
 
 o A unique_ptr does not have to own an object, so it can be empty.
 
-*cxx-conversion-to-bool*
+
+<cxx-sp-bool> *cxx-conversion-to-bool*
 You can check whether a unique_ptr owns an object by calling *cxx-operator-bool*
 
 // if up is not empty
@@ -55878,12 +55882,36 @@ if (up) {
 if (up != nullptr)        // if up is not empty
 if (up.get() != nullptr)  // if up is not empty
 
-TEST(SharedPointerUnique, OperatorBool)
+TEST(SmartPointer, OperatorBool)
 {
-  unique_ptr<int> up{new int(100)};
+  {
+    auto p = make_shared<int>(42);
 
-  EXPECT_TRUE(up);
-  EXPECT_THAT(*up, 100);
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+
+    EXPECT_TRUE(p);
+    // cxx-sp-bool, q is nullptr
+    EXPECT_FALSE(q);
+    EXPECT_TRUE(r);
+  }
+
+  {
+    unique_ptr<int> up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+  }
 }
 
 
@@ -55893,6 +55921,8 @@ The `unique_ptr` do not support copy so `have-to transfer ownership.`
 note: no such a thing in shared_ptr
 
 Two options:
+
+*cxx-sp-reset*
 
 up.reset() 
 Calls the deleter for an owned object and makes up empty 
@@ -57332,7 +57362,7 @@ RCLR 5.2.3
 * Cyclic reference shown above.
 
 
-* Double delete. 
+o Double delete *cxx-sp-shared-ownership*
 
 Have to ensure that only one 'group' of shared pointers owns an object.
 
@@ -57347,12 +57377,12 @@ shared_ptr<int> sp1(new int);
 shared_ptr<int> sp2(sp1);     // OK
 
 
-* Indirect double delete.
+{cxx-sp-shared-from-this}
 
 Suppose that we want to introduce a member function for a Person that creates
 both the reference from a kid to the parent and a corresponding reference back:
 
-// *cxx-ex-weak-sp-example*
+// *cxx-sp-weak-ex*
 //
 // shared_ptr<Person> initFamily (const string& name)
 // {
@@ -57361,7 +57391,7 @@ both the reference from a kid to the parent and a corresponding reference back:
 //   shared_ptr<Person> kid(new Person(name,mom,dad));
 //   mom->kids.push_back(kid);
 //   dad->kids.push_back(kid);
-//   return kid;                                 // return kid
+//   return kid;                              // return kid
 // }
 
 shared_ptr<Person> initFamily (const string& name)
@@ -57378,13 +57408,14 @@ naive implementation is:
 void setParentsAndTheirKids (shared_ptr<Person> m = nullptr, 
     shared_ptr<Person> f = nullptr) 
 {
-  mother = m;
-  father = f;
+  mother_ = m;
+  father_ = f;
+
   if (m != nullptr) {
-    m->kids.push_back(shared_ptr<Person>(this)); // ERROR 
+    m->kids.push_back(shared_ptr<Person>(this)); // *cxx-error* 
   }
   if (f != nullptr) {
-    f->kids.push_back(shared_ptr<Person>(this)); // ERROR
+    f->kids.push_back(shared_ptr<Person>(this)); // *cxx-error*
   }
 }
 
@@ -57393,16 +57424,13 @@ pointer out of `this` pointer.
 
 Want to pass kid's shared pointer to mother and father but to do that, need a
 shared pointer to the kid, which we don't have at hand since this pointer is
-not shared pointer. So it creates temporary shared pointer from this which is
+not shared pointer. So creates temporary shared pointer from this which is
 `new group of shared pointer.` Two shared pointer group to the kid and when
-mom and dad go free, will do double delete.
+mom and dad go free, will do `double delete`
 
 One way to deal with this problem is to pass the shared pointer to the kid as a
 third argument. But the C++ standard library provides another option: class
 std::enable_shared_from_this<>.
-
-
-{cxx-sp-shared-from-this}
 
 Use class std::enable_shared_from_this<> `to derive your class`, representing
 objects managed by shared pointers, with your class name passed as template
@@ -57414,13 +57442,16 @@ class Person : public std::enable_shared_from_this<Person> {
     ...
       void setParentsAndTheirKids (shared_ptr<Person> m = nullptr,
           shared_ptr<Person> f = nullptr) {
-        mother = m;
-        father = f;
+
+        mother_ = m;
+        father_ = f;
+
         if (m != nullptr) {
-          m->kids.push_back(shared_from_this()); // OK
+          m->kids.push_back(`shared_from_this()`);
         }
+
         if (f != nullptr) {
-          f->kids.push_back(shared_from_this()); // OK
+          f->kids.push_back(shared_from_this());
         }
       }
     ...
