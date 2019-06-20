@@ -11,6 +11,8 @@
 #include <QDebug>
 #include <QLoggingCategory>
 
+#include "qt_class.h"
+
 using namespace std;
 
 
@@ -512,6 +514,22 @@ TEST(Qt, RegExp)
 
   EXPECT_THAT(regex.exactMatch("U130 SkyQ EC201"), true);
   EXPECT_THAT(regex.exactMatch("U131 SkyQ EC201"), false);
+}
+
+
+// ={=========================================================================
+// qt-timer
+
+/*
+
+Signals
+void	timeout()
+
+*/
+
+TEST(Qt, Timer)
+{
+  UseTimer us;
 }
 
 

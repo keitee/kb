@@ -6,6 +6,11 @@ project(cmake_qt VERSION 0.1 LANGUAGES CXX)
 #
 # https://doc.qt.io/qt-5/cmake-manual.html
 #
+
+# The first requirement when using CMake is to use find_package to locate the
+# libraries and header files shipped with Qt. These libraries and header files
+# can then be used to build libraries and applications based on Qt.
+
 # In order for find_package to be successful, Qt 5 must be found below the
 # CMAKE_PREFIX_PATH, or the Qt5<Module>_DIR must be set in the CMake cache to
 # the location of the Qt5WidgetsConfig.cmake file. The easiest way to use CMake
@@ -71,5 +76,20 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 find_package(Qt5Core)
 
 add_executable(${PROJECT_NAME} "qt_gtest.cpp")
+
+qt5_wrap_cpp("qt_class.cpp" "qt_class.h")
+
+# set_target_properties(${PROJECT_NAME}_class PROPERTIES AUTOMOC TRUE)
+
+# add_library(${PROJECT_NAME}_class
+#   SHARED
+#   qt_class.h
+#   )
+
+
+# The recommended way to use Qt libraries and headers with CMake is to use the
+# target_link_libraries command. This command automatically adds appropriate
+# include directories, compile definitions, the position-independent-code flag,
+# and links to the qtmain.lib library on Windows.
 
 target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core)
