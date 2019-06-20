@@ -35,6 +35,7 @@ signals:
 
 private slots:
     void slotButtonClicked(bool checked);
+    void slotButtonMessageLogging(bool checked);
 
 private:
     QPushButton *m_button;

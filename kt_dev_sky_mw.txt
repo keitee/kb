@@ -1004,13 +1004,127 @@ https://developer.android.com/reference/android/app/Activity.html
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-android-app
+*kt_dev_skymw_0000* skymw-android-service
 
-https://developer.android.com/training/basics/firstapp/creating-project
+https://developer.android.com/guide/components/services.html
+
+A Service is an application component that can perform long-running operations
+in the background, and it doesn't provide a user interface. Another application
+component can start a service, and it continues to run in the background even if
+the user switches to another application. Additionally, a component can bind to
+a service to interact with it and even perform interprocess communication (IPC).
+For example, a service can handle network transactions, play music, perform file
+I/O, or interact with a content provider, all from the background.
+
+Bound
+
+A service is bound when an application component binds to it by calling
+bindService(). A bound service offers a client-server interface that allows
+components to interact with the service, send requests, receive results, and
+even do so across processes with interprocess communication (IPC). A bound
+service runs only as long as another application component is bound to it.
+Multiple components can bind to the service at once, but when all of them
+unbind, the service is destroyed.
+
+
+https://developer.android.com/guide/components/bound-services.html#Binder
+
+Creating a bound service
+
+When creating a service that provides binding, you must provide an IBinder that
+provides the programming interface that clients can use to interact with the
+service. There are three ways you can define the interface:
+
+Using AIDL
+
+Android Interface Definition Language (AIDL) decomposes objects into primitives
+that the operating system can understand and marshals them across processes to
+perform IPC. The previous technique, using a Messenger, is actually based on
+AIDL as its underlying structure. As mentioned above, the Messenger creates a
+queue of all the client requests in a single thread, so the service receives
+requests one at a time. If, however, you want your service to handle multiple
+requests simultaneously, then you can use AIDL directly. In this case, your
+service must be thread-safe and capable of multi-threading.  To use AIDL
+directly, you must create an .aidl file that defines the programming interface.
+The Android SDK tools use this file to generate an abstract class that
+implements the interface and handles IPC, which you can then extend within your
+service.
+
+Note: Most applications shouldn't use AIDL to create a bound service, because it
+may require multithreading capabilities and can result in a more complicated
+implementation. As such, AIDL is not suitable for most applications and this
+document does not discuss how to use it for your service. If you're certain that
+you need to use AIDL directly, see the AIDL document.
+
+
+https://developer.android.com/guide/components/aidl#java
+
+Defining an AIDL interface
+
+You must define your AIDL interface in an .aidl file using the Java programming
+language syntax, then save it in the source code (in the src/ directory) of both
+the application hosting the service and any other application that binds to the
+service.
+
+When you build each application that contains the .aidl file, the Android SDK
+tools generate an IBinder interface based on the .aidl file and save it in the
+project's gen/ directory. The service must implement the IBinder interface as
+appropriate. The client applications can then bind to the service and call
+methods from the IBinder to perform IPC.
+
+Implement the interface
+
+The Android SDK tools generate an interface in the Java programming language,
+based on your .aidl file. This interface has an inner abstract class named Stub
+  that extends Binder and implements methods from your AIDL interface. You must
+  extend the `Stub class and implement the methods`
+
+Expose the interface to clients
+
+Implement a Service and override onBind() to return your implementation of the
+Stub class.
+
+public class BleRcuService extends Service {
+
+	public boolean registerService() {
+
+		final String serviceName = "com.sky.blercuservice";
+
+		Method method = null;
+		try {
+			method = Class.forName("android.os.ServiceManager").getMethod("addService", String.class, IBinder.class);
+
+			method.invoke(null, serviceName, new BleRcuServiceBinder(this));
+      }
+   }
+
+	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+  }
+}
+
+When you build your application, the Android SDK tools generate a .java
+interface file named after your .aidl file. The generated interface includes a
+subclass named Stub that is an abstract implementation of its parent interface
+(for example, YourInterface.Stub) and declares all the methods from the .aidl
+file.
+
+Note: Stub also defines a few helper methods, most notably asInterface(), which
+takes an IBinder (usually the one passed to a client's onServiceConnected()
+    callback method) and returns an instance of the stub interface. See the
+section Calling an IPC Method for more details on how to make this cast.
+
+To implement the interface generated from the .aidl, extend the generated Binder
+interface (for example, YourInterface.Stub) and implement the methods inherited
+from the .aidl file.
+
+Here is an example implementation of an interface called IRemoteService (defined
+    by the IRemoteService.aidl example, above) using an anonymous instance:
 
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-android-studio
+
+https://developer.android.com/training/basics/firstapp/creating-project
 
 {navigation}
 
@@ -1113,6 +1227,9 @@ options include:
                   Only print lines where the log message matches <expr>
                   where <expr> is a regular expression
  
+
+// capture all
+adb logcat | tee log.log
 
 adb logcat --pid=2208 | tee log.log
 
@@ -1286,8 +1403,6 @@ the user to confirm the pairing attempt at all
 
 https://www.stb.bskyb.com/confluence/display/2016/RCU%3A+Pairing+steps+by+steps
 
-
-<bt-remote-evnets>
 https://www.stb.bskyb.com/confluence/display/~grayb/BLERCU+%3A+State+Diagrams+for+EC10x+Bluetooth+RCUS
 
 1+3 key triggers two things:
@@ -1701,16 +1816,24 @@ class BleRcuControllerImpl : public BleRcuController
 // 
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
 
-// m_pairingPrefixFormats is built from *config*
 
+// m_pairingPrefixFormats is built from *config* when fsm starts and is used to
+// check if current devices does match up with expected pattern when
+// processDevice gets called by handling events
+
+// "130" is paringcode
+// 
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 18:46:44:xx:xx:xx is 'U130 SkyQ EC201'
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 70:91:F3:xx:xx:xx is 'U130 SkyQ EC102'
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for D4:B8:FF:xx:xx:xx is 'U130 SkyQ EC[12]01'
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for E8:0F:C8:xx:xx:xx is 'U130 SkyQ EC202'
 // I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving to state StartingDiscoveryState(2)"
 //
-// After all, check if current devices does match up with expected pattern in
-// config
+// I BleRcuQt: < M:blercudevice.cpp F:onEnteredResolvingServicesState L:547 > D4:B8:FF:12:E1:A8 entered RESOLVING_SERVICES state
+// I BleRcuQt: < M:blercudevice.cpp F:onDeviceNameChanged L:352 > D4:B8:FF:12:E1:A8 device name changed from "P138 SkyQ EC101" to "U130 SkyQ EC101"
+// I BleRcuQt: < M:blercuadapter.cpp F:onDeviceNameChanged L:1692 > renamed device D4:B8:FF:12:E1:A8 to "U130 SkyQ EC101"
+// I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:773 > found target device D4:B8:FF:12:E1:A8 but it's currently paired, will unpair and wait till it shows up in a scan again
+//
 
 void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
 {
@@ -2251,9 +2374,38 @@ void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
   // start pairing the device
   m_pairingStateMachine.start(address, name);
 
-  // note: this is different start() from pairing mode
-  // void BleRcuPairingStateMachine::start(const BleAddress &target, const QString &name)
 }
+
+// note: this is different start() from pairing mode
+// void BleRcuPairingStateMachine::start(const BleAddress &target, const QString &name)
+// add "single entry"
+
+void BleRcuPairingStateMachine::start(const BleAddress &target, const QString &name)
+{
+  m_pairingPrefixes.insert(target.oui(),
+      QRegExp(name, Qt::CaseInsensitive, QRegExp::FixedString));
+}
+
+I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[ScannerStateMachine] moving from state StoppingDiscoveryState(3) 
+  to FinishedState(4)"
+W BleRcuQt: < M:statemachine.cpp F:moveToState L:206 > new states:  (4)
+W BleRcuQt: < M:statemachine.cpp F:moveToState L:207 > old states:  (3, 0)
+W BleRcuQt: < M:statemachine.cpp F:moveToState L:214 > KT: fire exit only for old state which is not in new states from child to parent state (3)
+W BleRcuQt: < M:statemachine.cpp F:moveToState L:214 > KT: fire exit only for old state which is not in new states from child to parent state (0)
+W BleRcuQt: < M:statemachine.cpp F:moveToState L:227 > KT: fire enter only for new state which is not in old states from parent to child state (4)
+W BleRcuQt: < M:statemachine.cpp F:moveToState L:248 > KT: cleanup events?
+W BleRcuQt: < M:statemachine.cpp F:moveToState L:253 > KT: emit finished?
+
+I BleRcuQt: < M:blercucontroller.cpp F:onFoundPairableDevice L:617 
+  > found D4:B8:FF:12:E1:A8 RCU device in pairing mode, kicking off the pairing state machine
+
+I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[PairingStateMachine] moving to state StartingDiscoveryState(2)"
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:onStateEntry L:306 > KT: state: 2
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:onEnteredStartDiscoveryState L:379 > KT: BleRcuPairingStateMachine::onEnteredStartDiscoveryState
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:280 > started pairing targeting D4:B8:FF:12:E1:A8
+I BleRcuQt: < M:? F:? L:0 > started bluetooth RCU pairing procedure
+I BleRcuQt: < M:blercuadapter.cpp F:onAdapterDiscoveringChanged L:1297 > adapter started discovering
+I BleRcuQt: < M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:422 > KT: postEvent(DiscoveryStartedEvent)
 
 
 ={============================================================================
@@ -2317,6 +2469,194 @@ jstring BleRcuService::jniGetDeviceName(JNIEnv *env, jobject, `jlong qtObject`,
 app/src/main/cpp/service/android/blercuservice.h
 
 keitee@keitee-mint:~/ip/BleRcuExample$ cp ../SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+
+
+<example-client>
+
+app/build/generated/aidl_source_output_dir/debug/compileDebugAidl/out/com/sky/blercu/IBleRcuService.java
+ * This file is auto-generated.  DO NOT MODIFY.
+
+app/src/main/java/com/sky/blercu/BleRcuManager.java
+
+    private static synchronized IBleRcuService getService() {
+
+      try {
+        method = Class.forName("android.os.ServiceManager").getMethod("getService", String.class);
+        IBinder binder = (IBinder) method.invoke(null, BLERCU_SERVICE);
+        if(binder != null) {
+          sService = IBleRcuService.Stub.asInterface(binder);
+        }
+        return sService;
+      }
+    }
+
+    public Set<BleRcuDevice> getPairedDevices() {
+        IBleRcuService service = getService();
+        if (service == null)
+            throw new RuntimeException("Service not available");
+
+        try {
+            Set<BleRcuDevice> deviceSet = new HashSet<BleRcuDevice>();
+
+            final String[] addresses = service.getDevices();
+            for (String address : addresses)
+                deviceSet.add(new BleRcuDevice(address, service));
+
+            return Collections.unmodifiableSet(deviceSet);
+        } catch (RemoteException e) {
+            Log.e(TAG, "", e);
+        }
+        return null;
+    }
+
+app/src/main/java/com/sky/blercu/BleRcuDevice.java
+
+    public void startScanning(int timeout) throws RemoteException {
+        mService.startScanning(timeout);
+    }
+
+app/src/main/java/com/sky/blercuexample/MainActivity.java
+
+    protected void onCreate(Bundle savedInstanceState) {
+
+        // check if any devices already paired
+        final Set<BleRcuDevice> devices = mManager.getPairedDevices();
+        mLogView.d("found " + devices.size() + " paired devices");
+        for (BleRcuDevice device : devices)
+            mLogView.d(device.toString());
+
+        if (!devices.isEmpty())
+            mSideBar.setDeviceDetails(devices.iterator().next());
+    }
+
+
+app/src/main/java/com/sky/blercuexample/SideBar.java
+
+    void setDeviceDetails(BleRcuDevice device) {
+            // KT
+            mDevice = device;
+    }
+
+    private void onClicked(int position) {
+
+        if (position == SCANNING_RCU_LIST_IDX) {
+            mLogView.e("KT: Scanning is pressed..");
+            mLogView.e("KT: Scanning is pressed..");
+            mLogView.e("KT: Scanning is pressed..");
+            try {
+                mDevice.startScanning(30000);
+            } catch (RemoteException e) {
+                Log.e(TAG, "", e);
+            }
+        }
+    }
+
+
+<callback>
+
+// app/src/main/cpp/service/android/blercuservice.cpp
+
+void BleRcuService::setController(const QSharedPointer<BleRcuController> &controller)
+{
+  QObject::connect(controller.data(), &`BleRcuController::pairingStateChanged`,
+      this, &BleRcuService::onPairingStateChanged);
+}
+
+// app/src/main/cpp/blercu/blercucontroller.cpp
+
+BleRcuControllerImpl::BleRcuControllerImpl()
+{
+  // connect to the finished signal of the pairing statemachine, use to update
+  // our list of managed devices
+  QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::finished,
+      this, &BleRcuControllerImpl::onFinishedPairing,
+      Qt::QueuedConnection);
+
+  // connect to the started signal so we can send pairing state notifications
+  QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::started,
+      this, &`BleRcuControllerImpl::onStartedPairing`,
+      Qt::QueuedConnection);
+
+  QObject::connect(this, &`BleRcuController::pairingStateChanged`,
+      m_analytics.data(), &BleRcuAnalytics::logPairingStateChange,
+      Qt::QueuedConnection);
+}
+
+void BleRcuControllerImpl::onStartedPairing()
+{
+  // a queued event so check the state
+  const bool pairing = m_pairingStateMachine.isRunning();
+
+  qMilestone() << "KT: tell clients that the pairing state has changed";
+
+  // tell clients that the pairing state has changed
+  emit pairingStateChanged(pairing);
+}
+
+void BleRcuControllerImpl::onFinishedPairing()
+{
+  // a queued event so check the state
+  const bool pairing = m_pairingStateMachine.isRunning();
+
+  // (re)sync our list of managed devices now pairing has finished
+  if (!pairing)
+    syncManagedDevices();
+
+  qMilestone() << "KT: tell clients that the pairing state has changed";
+
+  // tell clients that the pairing state is changed
+  emit pairingStateChanged(pairing);
+}
+
+void BleRcuService::onPairingStateChanged(bool pairing)
+{
+  m_javaBleRcuService->callMethod<void>("onPairingStateChanged",
+      "(Z)V",
+      static_cast<jboolean>(pairing ? JNI_TRUE : JNI_FALSE));
+}
+
+void BleRcuAnalytics::logPairingStateChange(bool pairing)
+{
+  if (pairing)
+    qProdLog("KT: logPairingStateChange: started bluetooth RCU pairing procedure");
+  else
+    qProdLog("KT: logPairingStateChange: finished bluetooth RCU pairing procedure");
+}
+
+app/src/main/java/com/sky/blercu/BleRcuService.java
+
+	/**
+	 * Expected to be called by the native C++ code when the pairing process
+	 * has started or stopped.
+	 *
+	 */
+	public void onPairingStateChanged(final boolean pairing) {
+
+		mServiceLock.writeLock().lock();
+		boolean triggerCallback = (mIsPairing != pairing);
+		mIsPairing = pairing;
+		mServiceLock.writeLock().unlock();
+
+		if (triggerCallback && mNotifyThread.isAlive()) {
+
+			// broadcast back to clients from the notify thread
+			mNotifyThread.mHandler.post(() -> {
+
+				final int n = mCallbacks.beginBroadcast();
+				for (int i = 0; i < n; i++) {
+					try {
+						mCallbacks.getBroadcastItem(i).onPairingChanged(pairing);
+					} catch (RemoteException e) {
+						// RemoteCallbackList will take care of removing dead objects
+					}
+				}
+				mCallbacks.finishBroadcast();
+
+			});
+
+		}
+	}
+
 
 
 #{============================================================================

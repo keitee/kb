@@ -153,6 +153,8 @@ MainWindow::MainWindow(QWidget *parent)
 
   connect(m_button, SIGNAL(clicked(bool)),
       this, SLOT(slotButtonClicked(bool)));
+  connect(m_button, SIGNAL(clicked(bool)),
+      this, SLOT(slotButtonMessageLogging(bool)));
 
   // Connecting the newly created signal to the quit slot is done as usual:
 
@@ -197,4 +199,13 @@ void MainWindow::slotButtonClicked(bool checked)
   {
     emit counterReached();
   }
+}
+
+void MainWindow::slotButtonMessageLogging(bool checked)
+{
+    if(checked)
+        qDebug("Button is checked");
+    else {
+        qDebug("Button is not checked");
+    }
 }
