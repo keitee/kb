@@ -21,6 +21,7 @@ class Counter : public QObject
     // private slots:
     public slots:
       void setValue(int value);
+      void doSomethingLong();
 
   signals:
     void valueChanged(int newValue);

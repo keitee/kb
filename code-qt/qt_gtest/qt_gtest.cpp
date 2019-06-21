@@ -545,6 +545,16 @@ TEST(Qt, SlotAndSignal)
     EXPECT_THAT(a.value(), 12);
     EXPECT_THAT(b.value(), 48);
   }
+
+  // to show signal/slot is blocking call
+  {
+    Counter a, b;
+    QObject::connect(&a, &Counter::valueChanged,
+        &b, &Counter::doSomethingLong);
+
+    a.valueChanged(12);
+    qCritical() << "Counter finished";
+  }
 }
 
 
