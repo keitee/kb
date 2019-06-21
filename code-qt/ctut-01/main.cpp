@@ -1,7 +1,9 @@
-#include <QApplication>
+#include <QCoreApplication>
 #include <QtWidgets>
 
 /*
+
+created via "Application -> Qt Console Application"
 
 https://wiki.qt.io/Qt_for_Beginners
 
@@ -52,28 +54,28 @@ for children of a given object.
 
 Child widgets in a QWidget automatically appear inside the parent widget.
 
+o The following snippet that creates a QPushButton inside a QPushButton:
+o button(parent) <- button2(child)
+o button2 is on top of button
+o tooltip shows on button2.
+
 */
 
 int main(int argc, char *argv[])
 {
-  QApplication a(argc, argv);
+    // QCoreApplication a(argc, argv);
+    QApplication a(argc, argv);
 
-  QPushButton button(" Hello Qt Widget");
+    // QWidget: Cannot create a QWidget without QApplication
+    QPushButton button(" Hello Qt Widget");
+    button.setToolTip(" Hello Qt Tooltip");
+    QFont font("Hack");
+    button.setFont(font);
+    button.setIcon(QIcon::fromTheme("face-smile"));
 
-  // o The following snippet that creates a QPushButton inside a QPushButton:
-  // o button(parent) <- button2(child)
-  // o button2 is on top of button
+    QPushButton button2(" Other", &button);
 
-  QPushButton button2(" Other", &button);
+    button.show();
 
-  button.setToolTip(" Hello Tootip");
-
-  QFont font("Hack");
-  button.setFont(font);
-
-  button.setIcon(QIcon::fromTheme("face-smile"));
-
-  button.show();
-
-  return a.exec();
+    return a.exec();
 }

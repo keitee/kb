@@ -20,7 +20,18 @@ project(cmake_qt VERSION 0.1 LANGUAGES CXX)
 # The CMAKE_AUTOMOC setting runs moc automatically when required. For more on
 # this feature see the CMake AUTOMOC documentation
 
-set(CMAKE_PREFIX_PATH "$ENV{HOME}/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core")
+# use this CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake .. since
+# it do not work when use Widgets
+# set(CMAKE_PREFIX_PATH "$ENV{HOME}/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core")
+#
+# keitee@keitee-mint:~/Qt/5.12.3/gcc_64/lib/cmake$ ls
+# Qt5             Qt53DQuick           Qt53DRender           Qt5DBus           Qt5Location           Qt5OpenGL            Qt5Qml              Qt5QuickWidgets   Qt5Sensors     Qt5TextToSpeech       Qt5WebChannel        Qt5Widgets
+# Qt53DAnimation  Qt53DQuickAnimation  Qt5Bluetooth          Qt5Designer       Qt5Multimedia         Qt5OpenGLExtensions  Qt5Quick            Qt5RemoteObjects  Qt5SerialBus   Qt5UiPlugin           Qt5WebEngine         Qt5X11Extras
+# Qt53DCore       Qt53DQuickExtras     Qt5Charts             Qt5Gamepad        Qt5MultimediaWidgets  Qt5Positioning       Qt5QuickCompiler    Qt5RepParser      Qt5SerialPort  Qt5UiTools            Qt5WebEngineCore     Qt5Xml
+# Qt53DExtras     Qt53DQuickInput      Qt5Concurrent         Qt5Gui            Qt5Network            Qt5PositioningQuick  Qt5QuickControls2   Qt5Script         Qt5Sql         Qt5VirtualKeyboard    Qt5WebEngineWidgets  Qt5XmlPatterns
+# Qt53DInput      Qt53DQuickRender     Qt5Core               Qt5Help           Qt5NetworkAuth        Qt5PrintSupport      Qt5QuickTemplates2  Qt5ScriptTools    Qt5Svg         Qt5WaylandClient      Qt5WebSockets
+# Qt53DLogic      Qt53DQuickScene2D    Qt5DataVisualization  Qt5LinguistTools  Qt5Nfc                Qt5Purchasing        Qt5QuickTest        Qt5Scxml          Qt5Test        Qt5WaylandCompositor  Qt5WebView
+
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -73,23 +84,14 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
-find_package(Qt5Core)
+# find_package(Qt5Core)
+find_package(Qt5 COMPONENTS Widgets REQUIRED)
 
-add_executable(${PROJECT_NAME} "qt_gtest.cpp")
-
-qt5_wrap_cpp("qt_class.cpp" "qt_class.h")
-
-# set_target_properties(${PROJECT_NAME}_class PROPERTIES AUTOMOC TRUE)
-
-# add_library(${PROJECT_NAME}_class
-#   SHARED
-#   qt_class.h
-#   )
-
+add_executable(${PROJECT_NAME} "qt_gtest.cpp" "qt_class.cpp")
 
 # The recommended way to use Qt libraries and headers with CMake is to use the
 # target_link_libraries command. This command automatically adds appropriate
 # include directories, compile definitions, the position-independent-code flag,
 # and links to the qtmain.lib library on Windows.
 
-target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core)
+target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Widgets)

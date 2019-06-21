@@ -10,6 +10,7 @@
 #include <QString>
 #include <QDebug>
 #include <QLoggingCategory>
+#include <QApplication>
 
 #include "qt_class.h"
 
@@ -518,18 +519,95 @@ TEST(Qt, RegExp)
 
 
 // ={=========================================================================
-// qt-timer
+// qt-slot
 
+TEST(Qt, SlotAndSignal)
+{
+  // Calling a.setValue(12) makes a emit a valueChanged(12) signal, which b will
+  // receive in its setValue() slot, i.e. b.setValue(12) is called. Then b emits
+  // the same valueChanged() signal, but since no slot has been connected to b's
+  // valueChanged() signal, the signal is ignored.
+  //
+  // Note that the setValue() function sets the value and emits the signal only
+  // if value != m_value. This prevents infinite looping in the case of cyclic
+  // connections (e.g., if b.valueChanged() were connected to a.setValue()).
+
+  {
+    Counter a, b;
+    QObject::connect(&a, &Counter::valueChanged,
+        &b, &Counter::setValue);
+
+    a.setValue(12);     // a.value() == 12, b.value() == 12
+    EXPECT_THAT(a.value(), 12);
+    EXPECT_THAT(b.value(), 12);
+
+    b.setValue(48);     // a.value() == 12, b.value() == 48
+    EXPECT_THAT(a.value(), 12);
+    EXPECT_THAT(b.value(), 48);
+  }
+}
+
+
+// ={=========================================================================
+// qt-thread
 /*
 
-Signals
-void	timeout()
+A QThread object manages one thread of control within the program. QThreads
+begin executing in run(). By default, run() starts the `event loop` by calling
+exec() and runs a Qt event loop inside the thread.
+
+Static Public Members
+
+void	msleep(unsigned long msecs)
+void	sleep(unsigned long secs)
+void	usleep(unsigned long usecs)
 
 */
 
-TEST(Qt, Timer)
+TEST(Qt, Thread)
 {
-  UseTimer us;
+  // https://wiki.qt.io/QThreads_general_usage
+  {
+    using namespace qt_thread_1;
+
+    QThread* thread = new QThread;
+    Worker* worker = new Worker();
+    worker->moveToThread(thread);
+    // QObject::connect(worker, SIGNAL (error(QString)), this, SLOT (errorString(QString)));
+    
+    // *qt-runtime-check*
+    // see typo but no compile error. see error only when runs
+    // QObject::connect: No such slot qt_thread_1::Worker::process()
+    // QObject::connect(thread, SIGNAL (started()), worker, SLOT (process()));
+
+    QObject::connect(thread, &QThread::started, worker, &Worker::progress);
+
+    // again, no compile error but when thread finishes and emit signal, nothing
+    // happens and blocks forever. no quit() gets run.
+    //
+    // QObject::connect(worker, SIGNAL (finished()), thread, SLOT (quit()));
+    //
+    // need to make a link to QApplication and also need to run QApplication and
+    // exec in the main.
+
+    QObject::connect(worker, SIGNAL (finished()), QApplication::instance(), SLOT (quit()));
+
+    QObject::connect(worker, SIGNAL (finished()), worker, SLOT (deleteLater()));
+    QObject::connect(thread, SIGNAL (finished()), thread, SLOT (deleteLater()));
+    thread->start();
+  }
+
+  // so, the belows do not runs as QApplication exited already from the above.
+  // https://doc.qt.io/qt-5/qthread.html
+  {
+    using namespace qt_thread_2;
+
+    Controller co;
+
+    qCritical() << "before sending operate..";
+    emit co.operate(QString("send operate"));
+    qCritical() << "after sending operate..";
+  }
 }
 
 
@@ -537,9 +615,16 @@ TEST(Qt, Timer)
 
 int main(int argc, char **argv)
 {
+
+  QCoreApplication a(argc, argv);
+
   // Since Google Mock depends on Google Test, InitGoogleMock() is
   // also responsible for initializing Google Test.  Therefore there's
   // no need for calling testing::InitGoogleTest() separately.
   testing::InitGoogleMock(&argc, argv);
-  return RUN_ALL_TESTS();
+  RUN_ALL_TESTS();
+
+  // return RUN_ALL_TESTS();
+
+  return a.exec();
 }
