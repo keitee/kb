@@ -1247,6 +1247,20 @@ adb logcat --pid=2208 | tee log.log
 ={============================================================================
 *kt_dev_skymw_0000* skymw-android-bluetoothrcu
 
+<things-to-check-to-build>
+
+1. set QT setting
+
+app/CMakeLists.txt
+
+# Sets the path to the Qt5 libraries and headers.
+# You'll need to modify the QT5_SDK path below to point to your Qt5 SDK install
+
+set( QT5_SDK "/home/keitee/Qt/5.12.3" )
+
+
+<xx>
+
 https://www.stb.bskyb.com/confluence/display/2016/Remote+Control+Architecture
 
 The BT Manager component will act as a connector to the underlying Bluez stack,
@@ -1738,7 +1752,7 @@ void BleRcuService::onIrKeyPress(quint16 keyCode, qint32 scanCode)
     const quint8 pairingCode = quint8((scanCode >> 0) & 0xff);
 
     // kick off pairing using supplied pairing code
-    m_controller->startPairing(filterByte, pairingCode);
+    `m_controller->startPairing`(filterByte, pairingCode);
   }
 }
 
@@ -1888,15 +1902,22 @@ void BleRcuPairingStateMachine::onStateEntry(int state)
   switch (state) {
 
     case StartingDiscoveryState:
-      onEnteredStartDiscoveryState();
-
-      // {
-      // tell anyone who cares that pairing has started
-      // `emit started();`
-      // }
+      onEnteredStartDiscoveryState()
+      {
+        // *emit-started*
+        // tell anyone who cares that pairing has started
+        `emit started();`
+      }
 
       break;
 
+    case FinishedState:
+      onEnteredFinishedState()
+      {
+        // finally just emit a finished signal to the BleRcuManagerImpl object
+        `emit finished();`
+      }
+      break;
   }
 }
 
@@ -2304,7 +2325,7 @@ bool BleRcuAdapterBluez::isDevicePaired(const BleAddress &address) const
 <bt-remote-scanning>
 https://www.stb.bskyb.com/confluence/display/~grayb/Bluetooth+RCU+Pairing+Without+Infrared
 
-Bluetooth RCU Pairing
+Bluetooth RCU Pairing(scan)
 http://192.168.0.100:8280/index.html
 
 app/src/main/cpp/debug/www/main.dart.js
@@ -2335,15 +2356,6 @@ bool BleRcuControllerImpl::startScanning(int timeoutMs)
 }
 
 
-BleRcuControllerImpl::BleRcuControllerImpl()
-{
-  // connect to the signal emitted when the scanner found an RCU device in
-  // pairing mode
-  QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::foundPairableDevice,
-      this, &BleRcuControllerImpl::onFoundPairableDevice,
-      Qt::QueuedConnection);
-}
-
 // app/src/main/cpp/blercu/blercuscannerstatemachine.cpp
 
 void BleRcuScannerStateMachine::onEnteredFinishedState()
@@ -2356,6 +2368,17 @@ void BleRcuScannerStateMachine::onEnteredFinishedState()
 
   // and we're done
   emit finished();
+}
+
+
+BleRcuControllerImpl::BleRcuControllerImpl()
+{
+  // connect to the signal emitted when the scanner found an RCU device in
+  // pairing mode
+  QObject::connect(&m_scannerStateMachine, 
+      `&BleRcuScannerStateMachine::foundPairableDevice`,
+      this, &BleRcuControllerImpl::onFoundPairableDevice,
+      Qt::QueuedConnection);
 }
 
 void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
@@ -2410,11 +2433,12 @@ I BleRcuQt: < M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:422 > KT: p
 ={============================================================================
 *kt_dev_skymw_0000* skymw-android-jira
 
-// add startScanning(int timeout); to client if
+<add-start-scan-call>
+
+add startScanning(int timeout); to client if
 
 app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
 app/src/main/java/com/sky/blercu/BleRcuService.java
-
 
 	public BleRcuService(long qtObject) {
 		//
@@ -2470,7 +2494,7 @@ app/src/main/cpp/service/android/blercuservice.h
 keitee@keitee-mint:~/ip/BleRcuExample$ cp ../SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
 
 
-<example-client>
+<ble-example-client>
 
 app/build/generated/aidl_source_output_dir/debug/compileDebugAidl/out/com/sky/blercu/IBleRcuService.java
  * This file is auto-generated.  DO NOT MODIFY.
@@ -2551,28 +2575,21 @@ app/src/main/java/com/sky/blercuexample/SideBar.java
     }
 
 
-<callback>
-
-// app/src/main/cpp/service/android/blercuservice.cpp
-
-void BleRcuService::setController(const QSharedPointer<BleRcuController> &controller)
-{
-  QObject::connect(controller.data(), &`BleRcuController::pairingStateChanged`,
-      this, &BleRcuService::onPairingStateChanged);
-}
+<ble-callback>
 
 // app/src/main/cpp/blercu/blercucontroller.cpp
 
 BleRcuControllerImpl::BleRcuControllerImpl()
 {
+  *emit-started*
   // connect to the finished signal of the pairing statemachine, use to update
   // our list of managed devices
-  QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::finished,
+  QObject::connect(&m_pairingStateMachine, `&BleRcuPairingStateMachine::finished`,
       this, &BleRcuControllerImpl::onFinishedPairing,
       Qt::QueuedConnection);
 
   // connect to the started signal so we can send pairing state notifications
-  QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::started,
+  QObject::connect(&m_pairingStateMachine, `&BleRcuPairingStateMachine::started`,
       this, &`BleRcuControllerImpl::onStartedPairing`,
       Qt::QueuedConnection);
 
@@ -2607,6 +2624,14 @@ void BleRcuControllerImpl::onFinishedPairing()
   emit pairingStateChanged(pairing);
 }
 
+// app/src/main/cpp/service/android/blercuservice.cpp
+
+void BleRcuService::setController(const QSharedPointer<BleRcuController> &controller)
+{
+  QObject::connect(controller.data(), &`BleRcuController::pairingStateChanged`,
+      this, `&BleRcuService::onPairingStateChanged`);
+}
+
 void BleRcuService::onPairingStateChanged(bool pairing)
 {
   m_javaBleRcuService->callMethod<void>("onPairingStateChanged",
@@ -2624,11 +2649,64 @@ void BleRcuAnalytics::logPairingStateChange(bool pairing)
 
 app/src/main/java/com/sky/blercu/BleRcuService.java
 
+public class BleRcuService extends Service {
+
+	final RemoteCallbackList<IBleRcuServiceCallback> mCallbacks =
+		new RemoteCallbackList<IBleRcuServiceCallback>();
+
 	/**
 	 * Expected to be called by the native C++ code when the pairing process
 	 * has started or stopped.
 	 *
 	 */
+	public void onPairingStateChanged(final boolean pairing) {
+
+		mServiceLock.writeLock().lock();
+		boolean triggerCallback = (mIsPairing != pairing);
+		mIsPairing = pairing;
+		mServiceLock.writeLock().unlock();
+
+		if (triggerCallback && mNotifyThread.isAlive()) {
+
+			// broadcast back to clients from the notify thread
+			mNotifyThread.mHandler.post(() -> {
+
+				final int n = mCallbacks.beginBroadcast();
+				for (int i = 0; i < n; i++) {
+					try {
+						mCallbacks.getBroadcastItem(i).onPairingChanged(pairing);
+					} catch (RemoteException e) {
+						// RemoteCallbackList will take care of removing dead objects
+					}
+				}
+
+				`mCallbacks`.finishBroadcast();
+			});
+		}
+	}
+}
+
+
+<to-support-state-changes>
+
+1. change 
+	void onPairingChanged(in boolean isPairing);
+   to:
+
+// IBleRcuServiceCallback.aidl
+package com.sky.blercu;
+
+oneway interface IBleRcuServiceCallback {
+	void onPairingChanged(in boolean isPairing);
+}
+
+oneway interface IBleRcuServiceCallback {
+	void onStatusChanged(in int status);
+}
+
+
+2. app/src/main/java/com/sky/blercu/BleRcuService.java
+
 	public void onPairingStateChanged(final boolean pairing) {
 
 		mServiceLock.writeLock().lock();
@@ -2656,6 +2734,108 @@ app/src/main/java/com/sky/blercu/BleRcuService.java
 		}
 	}
 
+  to:
+
+	public void onStateChanged(final int status) {
+
+		if (triggerCallback && mNotifyThread.isAlive()) {
+
+			// broadcast back to clients from the notify thread
+			mNotifyThread.mHandler.post(() -> {
+
+				final int n = mCallbacks.beginBroadcast();
+				for (int i = 0; i < n; i++) {
+					try {
+						mCallbacks.getBroadcastItem(i).onStateChanged(state);
+					} catch (RemoteException e) {
+						// RemoteCallbackList will take care of removing dead objects
+					}
+				}
+				mCallbacks.finishBroadcast();
+			});
+		}
+	}
+
+
+3.  app/src/main/cpp/service/android/blercuservice.cpp
+
+void BleRcuService::onPairingStateChanged(bool pairing)
+{
+  qWarning("KT: ========================");
+  qDebug() << "KT: on pairing state change, call java" << pairing;
+  qWarning() << "KT: on pairing state change, call java" << pairing;
+  qWarning("KT: ========================");
+
+	if (Q_UNLIKELY(!m_javaBleRcuService))
+		return;
+
+	m_javaBleRcuService->callMethod<void>("onPairingStateChanged",
+	                                      "(Z)V",
+	                                      static_cast<jboolean>(pairing ? JNI_TRUE : JNI_FALSE));
+}
+
+to:
+
+void BleRcuService::onStateChanged(int status)
+{
+  qWarning("KT: ========================");
+  qDebug() << "KT: on pairing state change, call java: " << status;
+  qWarning() << "KT: on pairing state change, call java: " << status;
+  qWarning("KT: ========================");
+
+	if (Q_UNLIKELY(!m_javaBleRcuService))
+		return;
+
+	m_javaBleRcuService->callMethod<void>("onStateChanged",
+	                                      "(I)V",
+	                                      static_cast<jint>(status));
+}
+
+
+4. 
+
+app/src/main/cpp/blercu/blercucontroller_p.h
+
+  enum PairingState {Initialising, Idle, Searching, Pairing, Complete, Failed};
+
+app/src/main/cpp/service/android/blercuservice.cpp
+
+void BleRcuService::setController(const QSharedPointer<BleRcuController> &controller)
+{
+	QObject::connect(controller.data(), &BleRcuController::pairingStateChanged,
+	                 this, &BleRcuService::onStateChanged);
+}
+
+app/src/main/cpp/blercu/blercucontroller.cpp
+
+void BleRcuControllerImpl::onStateChanged()
+{
+  // a queued event so check the state
+  const bool pairing = m_pairingStateMachine.isRunning();
+
+  qMilestone() << "KT: StateChanged(PairingState::Paring)";
+
+  // tell clients that the pairing state has changed
+  emit StateChanged(PairingState::Paring);
+}
+
+BleRcuControllerImpl::BleRcuControllerImpl()
+{
+	// connect to the started signal so we can send pairing state notifications
+	QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::stateChanged,
+	                 this, &BleRcuControllerImpl::onStateChanged,
+	                 Qt::QueuedConnection);
+}
+
+app/src/main/cpp/blercu/blercucontroller.h
+
+class BleRcuController : public QObject
+{
+	void stateChanged(bool pairing);
+};
+
+
+app/src/main/cpp/blercu/blercupairingstatemachine.cpp
 
 
 #{============================================================================
