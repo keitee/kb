@@ -552,8 +552,20 @@ TEST(Qt, SlotAndSignal)
     QObject::connect(&a, &Counter::valueChanged,
         &b, &Counter::doSomethingLong);
 
+    qCritical() << "emit signal via valueChange and runs slot";
     a.valueChanged(12);
-    qCritical() << "Counter finished";
+    qCritical() << "slot finished";
+  }
+
+  // to try QueuedConnection but do not run doSomethingLong()
+  {
+    Counter a, b;
+    QObject::connect(&a, &Counter::valueChanged,
+        &b, &Counter::doSomethingLong, Qt::QueuedConnection);
+
+    qCritical() << "emit signal via valueChange via QueuedConnection and runs slot";
+    a.valueChanged(12);
+    qCritical() << "slot finished";
   }
 }
 

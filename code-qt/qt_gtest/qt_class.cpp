@@ -12,8 +12,10 @@ void Counter::setValue(int value)
 
 void Counter::doSomethingLong()
 {
+  qCritical() << "doSomethingLong: before sleep..";
   // here is the expensive or blocking operations
   QThread::sleep(10);
+  qCritical() << "doSomethingLong: after sleep..";
 }
 
 
