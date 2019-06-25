@@ -131,6 +131,82 @@ TEST(Arith, Comparison)
     cout << "int is bigger" << endl;
 }
 
+
+// ={=========================================================================
+// cxx-switch
+
+TEST(Statement, Switch)
+{
+  {
+    ostringstream os;
+    int value{2};
+
+    switch(value)
+    {
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
+
+      case 2:
+        os << "value is 2";
+        EXPECT_THAT(value, 2);
+        break;
+    }
+
+    EXPECT_THAT(os.str(), "value is 2");
+  }
+
+  // the point is that to show case 8 | 16: is a case for single value which is
+  // 24. And that can mean "logical or" if value is enum which is 24.
+
+  {
+    ostringstream os;
+    int value{8};
+
+    switch(value)
+    {
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
+
+      case 8 | 16:
+        os << "value is 24";
+        EXPECT_THAT(value, 24);
+        break;
+
+      default:
+        os << "value is default";
+        EXPECT_THAT(value, 8);
+        break;
+    }
+
+    EXPECT_THAT(os.str(), "value is default");
+  }
+
+  {
+    ostringstream os;
+    int value{24};
+
+    switch(value)
+    {
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
+
+      case 8 | 16:
+        os << "value is 24";
+        EXPECT_THAT(value, 24);
+        break;
+    }
+
+    EXPECT_THAT(os.str(), "value is 24");
+  }
+}
+
+
 // ={=========================================================================
 // cxx-pair
 
@@ -1651,6 +1727,7 @@ class ScopedEnum
           result = 2;
           break;
 
+          // *cxx-switch*
           // to avoid warning
           // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
           // case EnumFlags::SPORT|EnumFlags::MUSIC:
