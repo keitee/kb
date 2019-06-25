@@ -1510,12 +1510,31 @@ TEST(Enum, ScopedAndUnscoped)
 
   {
     // However, followings cause type error:
-    //
     // cxx-error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+    // note: it's interesting and unscoped is also type?
+    //
     // color color_selected = 2;
+    // 
+    // OK
+    // color color_selected = yellow;
 
     // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization
     // int value_1 = peppers::red;
+  }
+
+  {
+    std::cout << "yellow value " << yellow << std::endl;
+
+    // this also confirms that cxx-enum-class do not support cxx-enum-hack
+    // 
+    // cxx.cpp:1527:43: error: no match for ‘operator<<’ 
+    //  (operand types are ‘std::basic_ostream<char>’ and ‘cxx_enum::peppers’)
+    //      std::cout << "peppers::yellow value " << peppers::yellow << std::endl;
+    //   
+    // std::cout << "peppers::yellow value " << peppers::yellow << std::endl;
+    //
+    // okay and can use in this way
+    // << setw(20) << left << (e.status == procstatus::running ? "Running" : "Suspended")
   }
 }
 
@@ -1554,19 +1573,6 @@ TEST(Enum, InClass)
     named_and_scoped value_1, value_2;
     value_1 = named_and_scoped::red;
     value_2 = named_and_scoped::yellow;
-
-    // cxx-error followings are type error, no conversion:
-    //
-    // enum class procstatus {suspended, running};
-    // 
-    // // error since no there is no converison to bool
-    // << setw(20) << left << (e.status ? "Running" : "Suspended")
-    // 
-    // // okay
-    // << setw(20) << left << (e.status == procstatus::running ? "Running" : "Suspended")
-    //
-    // cout << "value_1 : " << flag1 << endl;
-    // EXPECT_THAT(0, named_and_scoped::red);
 
     EXPECT_THAT(value_1, named_and_scoped::red);
     EXPECT_THAT(value_2, named_and_scoped::yellow);

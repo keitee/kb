@@ -1,4 +1,13 @@
 #!/usr/bin/env python
+
+# #!/bin/bash
+# styles=( LLVM Google Chromium Mozilla WebKit )
+# for s in LLVM Google Chromium Mozilla WebKit
+# do
+#   echo $s...
+#   clang-format -style=$s blercucontroller.cpp > blercucontroller_$s.cpp
+# done
+
 import sys
 import subprocess
 
