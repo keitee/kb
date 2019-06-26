@@ -131,6 +131,11 @@ cat /proc/net/fib_trie
 ={============================================================================
 *kt_dev_skymw_0000* skymw-git
 
+<repo>
+git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/packages/apps/SkyBluetoothRcu
+
+
+<git>
 tag: NGDEV-141186_Delivered_Develop_07062019_1057
 branch NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
 
@@ -1014,6 +1019,113 @@ KT: nowTs=806678, limTs=807030, minTs=807030, maxTs=1248030, pktTS=3552522287, s
 
 
 ={============================================================================
+*kt_dev_skymw_0000* skymw-ai
+
+FactoryContainer::FactoryContainer()
+    : aiDmsFactory(AIDms::Factory::getSharedInstance())
+    , aiConfig(std::make_shared<AppInfrastructureConfig>(aiDmsFactory))
+    , sysInfo(new SystemInfo())
+    , wsMediatorFactory(new WebSocketMediator::WebSocketMediatorFactory(SkyDefinitions::getWebsocketMediatorPorts()))
+    , rmFactory(new RuntimeManagerFactory(aiConfig, sysInfo))
+    , pmFactory(new PackageManagerFactory(aiConfig))
+    , ampFactory(new ApplicationManagerProxy::Factory(aiConfig))
+    , verifierFactory( new xmldsigverifier::Factory(aiConfig))
+    , webServerFactory(new AppWebServerFactory())
+    , softCatFactory(new SoftCatFactory(aiConfig))
+    , applicationLaunchPolicyFactory(new ApplicationLaunchPolicyFactory(aiConfig))
+    , jumperFactory(new jumper::JumperFactory())
+    , dbusServerFactory(new AI_DBUS::DbusServerFactory())
+    , aiDiagnosticsFactory(new AIDiagnostics::DiagnosticsFactory(aiConfig))
+    , credentialsManagerFactory(new CredentialsManagerFactory())
+    , upnpDiscoveryFactory(new UPnPDiscoveryFactory())
+
+    , blercuFactory(std::make_shared<AI_BLERCU::BleRcuFactory>())
+
+    , irrcuFactory(std::make_shared<AI_IRRCU::IrRcuFactory>())
+    , netflixProxyFactory(std::make_shared<Netflix::Factory>())
+    , terminalProxy(std::make_shared<AIDms::TerminalProxy>())
+    {
+      dbusServers[AI_DBUS::DbusServerId::AI_PRIVATE] = dbusServerPrivate;
+      std::shared_ptr<AI_IPC::IIpcService> ipcServicePrivate = AI_IPC::createIpcService(dbusServerPrivate, IPC_SERVICE_APP_PROCESS);
+      ipcServices[AI_DBUS::DbusServerId::AI_PRIVATE] = ipcServicePrivate;
+
+      // create the BleRcu factory, which just launches the daemon (requires the system IPC service)
+      blercuFactory->setLocale(aiDmsFactory->createLocale());
+
+      blercuFactory->setIpcService(ipcServicePrivate);
+
+      blercuFactory->setInputHandler(inputHandler);
+      blercuFactory->startDaemon(dobbyProxy);
+
+      // creates BleRcuContollerProxy
+      blercuFactory->createBleRcuControllerProxy();
+    }
+
+BleRcuContollerProxy::BleRcuContollerProxy(
+    const std::shared_ptr<AI_IPC::IIpcService>& ipcService, const std::shared_ptr<IInputHandler>& inputHandler)
+{
+  // #define BLE_RCU_CONTROLLER_OBJECT               "/com/sky/blercu/controller"
+  // #define BLE_RCU_CONTROLLER_INTERFACE            "com.sky.blercu.Controller1"
+
+  std::string handle = mIpcService->registerSignalHandler(
+      AI_IPC::Signal(BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, "DeviceAdded"),
+      std::bind(&BleRcuContollerProxy::signalHandlerDeviceAdded, this, std::placeholders::_1));
+
+  // and more
+}
+
+void BleRcuContollerProxy::signalHandlerDeviceAdded(const AI_IPC::VariantList& args)
+{
+  {
+    std::string objectPath = boost::get<std::string>(args[0]);
+    std::string address = boost::get<std::string>(args[1]);
+
+    AI_LOG_INFO("Device added [object path: %s] [address: %s]", objectPath.c_str(), address.c_str());
+
+    mDispatcher->post(std::bind(&BleRcuContollerProxy::updateDeviceList, this));
+  }
+}
+
+void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& objectPaths)
+{
+  for (const auto& objectPath : objectPaths)
+  {
+    AI_LOG_INFO("Add new device [object path: %s]", objectPath.c_str());
+
+    try
+    {
+      mRcuDevices[objectPath] = std::make_shared<AI_BLERCU::BleRcuDevice>(
+          mIpcService,
+          mInputHandler,
+          std::bind(&BleRcuContollerProxy::notifyDevicePropertyChanged, this),
+          objectPath);
+    }
+    catch(const std::exception& e)
+    {
+      AI_LOG_ERROR("Failed to create device object [object path: %s]", objectPath.c_str());
+    }
+  }
+}
+
+// each device also registers functions to dbus
+
+BleRcuDevice::BleRcuDevice(const std::shared_ptr<AI_IPC::IIpcService>& ipcService,
+                 const std::shared_ptr<IInputHandler>& inputHandler,
+                 const std::function<void(void)>& notifyPropertyChanged,
+                 const std::string& objectPath)
+    : mIpcService(ipcService), mNotifyPropertyChanged(notifyPropertyChanged), mObjectPath(objectPath)
+{
+  // #define ORG_FREEDESKTOP_DBUS_PROPERTIES         "org.freedesktop.DBus.Properties"
+
+  mPropertyChangedSignalHandler = mIpcService->registerSignalHandler(
+      AI_IPC::Signal(objectPath, ORG_FREEDESKTOP_DBUS_PROPERTIES, "PropertiesChanged"),
+      std::bind(&BleRcuDevice::signalHandlerPropertyChanged, this, std::placeholders::_1));
+
+  // and more
+}
+
+
+={============================================================================
 *kt_dev_skymw_0000* skymw-android
 
 1. android studio
@@ -1281,11 +1393,6 @@ adb logcat --pid=2208 | tee log.log
 ={============================================================================
 *kt_dev_skymw_0000* skymw-android-bluetoothrcu
 
-<repo>
-
-git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/packages/apps/SkyBluetoothRcu
-
-
 <things-to-check-to-build>
 
 1. set QT setting
@@ -1298,8 +1405,27 @@ app/CMakeLists.txt
 set( QT5_SDK "/home/keitee/Qt/5.12.3" )
 
 
-<xx>
+<bt-remote-pairing>
+https://docs.ubuntu.com/core/en/stacks/bluetooth/bluez/docs/reference/pairing/introduction
 
+What is Pairing
+
+In Bluetooth terminology pairing is the process of making two devices know about
+each other. The key concept is about exchanging so called link-keys that are
+used to secure the communication. The pairing process involves authentication
+however due to the nature and variety of Bluetooth devices there will be
+different ways of confirming the pairing attempt:
+
+Devices such as keyboards or car-kits will require authentication by PIN/passkey
+code
+
+Other devices will provide a yes/no choice to the pairing attempt
+
+Devices without an input interface such as headsets or speakers will not require
+the user to confirm the pairing attempt at all
+
+https://www.stb.bskyb.com/confluence/display/2016/RCU%3A+Pairing+steps+by+steps
+https://www.stb.bskyb.com/confluence/display/~grayb/BLERCU+%3A+State+Diagrams+for+EC10x+Bluetooth+RCUS
 https://www.stb.bskyb.com/confluence/display/2016/Remote+Control+Architecture
 
 The BT Manager component will act as a connector to the underlying Bluez stack,
@@ -1312,6 +1438,10 @@ Pairing will generate CA certificate information, which must be placed in
 persistent storage. An API to the wider system, or some knowledge of the final
 persistent storage system is necessary to co-ordinate this.
 
+
+<bluetoothctl>
+Pairing from Ubuntu Core
+https://docs.ubuntu.com/core/en/stacks/bluetooth/bluez/docs/reference/pairing/outbound.html
 
 SKY BLUEZ DEBUG CONSOLE
 http://192.168.0.104:8180/index.html
@@ -1435,29 +1565,7 @@ Device has been removed
 Device D4:B8:FF:12:E1:A8 P215 SkyQ EC101
 
 
-<bt-remote-pairing>
-https://docs.ubuntu.com/core/en/stacks/bluetooth/bluez/docs/reference/pairing/introduction
-
-What is Pairing
-
-In Bluetooth terminology pairing is the process of making two devices know about
-each other. The key concept is about exchanging so called link-keys that are
-used to secure the communication. The pairing process involves authentication
-however due to the nature and variety of Bluetooth devices there will be
-different ways of confirming the pairing attempt:
-
-Devices such as keyboards or car-kits will require authentication by PIN/passkey
-code
-
-Other devices will provide a yes/no choice to the pairing attempt
-
-Devices without an input interface such as headsets or speakers will not require
-the user to confirm the pairing attempt at all
-
-https://www.stb.bskyb.com/confluence/display/2016/RCU%3A+Pairing+steps+by+steps
-
-https://www.stb.bskyb.com/confluence/display/~grayb/BLERCU+%3A+State+Diagrams+for+EC10x+Bluetooth+RCUS
-
+<skyblercu>
 1+3 key triggers two things:
 
 o do advertisement from rcu
@@ -1497,6 +1605,7 @@ static int doMain()
     qError() << "failed to connect to dbus due to" << dbusConn.lastError();
   }
 
+  *when-use-bluez*
   // and then create the adapter talking to bluez over dbus
   adapter = QSharedPointer<BleRcuAdapterBluez>::create(config,
       servicesFactory,
@@ -1773,6 +1882,13 @@ class BleRcuService : public QObject
   QSharedPointer<LinuxInputDevice> m_irInputDevice;
 
   QMap<BleAddress, int> m_deviceIdMap;
+}
+
+{
+  // create the SkyBluetoothLE java object
+  m_javaBleRcuService = QSharedPointer<QAndroidJniObject>::create(
+      "com/sky/blercu/BleRcuService",
+      "(J)V");
 }
 
 BleRcuService::BleRcuService(QObject *parent)
@@ -2085,59 +2201,7 @@ app/src/main/java/com/sky/bluetooth/SkyBroadcastReceiver.java
 /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/android/blercuadapter_p.h
 
 
-<bt-remote-as-api>
-/peripherals/btremotes/status 197
-
-pairinginprogress
-remotes
-bdaddr
-connected
-name
-deviceid
-model
-hwrev
-serialno
-rcuswver
-btlswver
-batterylevel
-
-
-/peripherals/btremotes/edidinfo 199
-/peripherals/btremotes/edidbasedcodes 200
-/peripherals/btremotes/ircodes/manualcodes 201
-/peripherals/btremotes/ircodes/manufacturers 202
-/peripherals/btremotes/ircodes/models 203
-/peripherals/btremotes/ircodes/action/setcode 204
-/peripherals/btremotes/ircodes/action/clear 205
-
-
-<api-getdevicename>
-as/iWedia_AS_service/QtRESTService/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
-24:     String getDeviceName(in String address);
-
-as/iWedia_AS_service/QtRESTService/app/src/main/java/com/iwedia/comedia/qtrestservice/as/services/ServicePeripherals.java
-245:                newDevice.name = BleRcuService.get().getDeviceName(address);
-
-        public void addNewDevice(String address) {
-            BtRemoteDeviceSettings newDevice = new BtRemoteDeviceSettings(address);
-            try {
-                newDevice.connected = BleRcuService.get().isDeviceConnected(address);
-                newDevice.name = BleRcuService.get().getDeviceName(address);
-                newDevice.deviceid = BleRcuService.get().getDeviceId(address);
-                newDevice.make = BleRcuService.get().getDeviceMake(address);
-                newDevice.model = BleRcuService.get().getDeviceModel(address);
-                newDevice.hwrev = BleRcuService.get().getDeviceHardwareVersion(address);
-                newDevice.serialno = BleRcuService.get().getDeviceSerialNumber(address);
-                newDevice.rcuswver = BleRcuService.get().getDeviceSoftwareVersion(address);
-                newDevice.btlswver = BleRcuService.get().getDeviceBootloaderVersion(address);
-                newDevice.batterylevel = BleRcuService.get().getDeviceBatteryLevel(address);
-                mBtRemoteDeviceList.add(newDevice);
-            } catch (RuntimeException | RemoteException | UnknownServiceException e) {
-                e.printStackTrace();
-            }
-        }
-
-<aidl>
+<bt-remote-as-api> <aidl>
 https://developer.android.com/guide/components/aidl#java
 
 Defining an AIDL interface
@@ -2159,6 +2223,15 @@ The Android SDK tools generate an interface in the Java programming language,
 based on your .aidl file. This interface has an inner abstract class named Stub
 that extends Binder and implements methods from your AIDL interface.  You must
 extend the Stub class and implement the methods.
+
+
+as api to support
+
+/peripherals/btremotes/status
+/peripherals/btremotes/action/startsearching
+
+
+as/iWedia_AS_service/QtRESTService/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
 
 // app/src/main/java/com/sky/blercu/BleRcuService.java
 
@@ -2472,28 +2545,62 @@ I BleRcuQt: < M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:422 > KT: p
 ={============================================================================
 *kt_dev_skymw_0000* skymw-android-jira
 
-NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared
+keitee@keitee-mint:~/ip/repo/SkyBluetoothRcu$ git show --stat
 
-Quote from
-https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=~grayb&title=Bluetooth+RCU+Pairing+Without+Infrared:
+commit c472491d870088f3afaffd7863bc5c4ce4697078 (HEAD -> NGDEV-143556_IP100_Support_RCU_pairing_without_infrared, origin/NGDEV-143556_IP100_Support_RCU_pairing_without_infrared)
+Author: Kit Park <kit.park@sky.uk>
+Date:   Tue Jun 25 14:48:07 2019 +0100
 
-In the v2.1.0 release of the SkyBluetoothRcu code for Android an experimental
-feature was added in the debug builds to put the bluetooth code in 'searching'
-mode for 30 seconds. In search mode the code will look for any nearby BT RCU
-devices that are in pairing mode, when / if found it will automatically start
-pairing to it. Only the first RCU found in pairing mode will trigger the STB
-pairing code, subsequent found devices will be ignored (until 'searching' mode
-is enalbed once again).
+    NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared
 
-It works by looking for the special advertising packets sent by the BT RCU
-when you hold the 1 and 3 buttons. The BT RCU will send these special packets
-for 10 seconds after entering pairing mode.
+    Quote from
+    https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=~grayb&title=Bluetooth+RCU+Pairing+Without+Infrared:
 
+    In the v2.1.0 release of the SkyBluetoothRcu code for Android an experimental
+    feature was added in the debug builds to put the bluetooth code in 'searching'
+    mode for 30 seconds. In search mode the code will look for any nearby BT RCU
+    devices that are in pairing mode, when / if found it will automatically start
+    pairing to it. Only the first RCU found in pairing mode will trigger the STB
+    pairing code, subsequent found devices will be ignored (until 'searching' mode
+    is enalbed once again).
 
-NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared
+    It works by looking for the special advertising packets sent by the BT RCU
+    when you hold the 1 and 3 buttons. The BT RCU will send these special packets
+    for 10 seconds after entering pairing mode.
 
-Applies clang style, Mozilla, to files before a commit which has actual
-changes so that can have clean base to show only differences to review. 
+ app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl         |  2 ++
+ app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl |  2 +-
+ app/src/main/cpp/blercu/blercucontroller.cpp                 | 37 +++++++++++++++++++++++++++++++++----
+ app/src/main/cpp/blercu/blercucontroller.h                   | 11 ++++++++++-
+ app/src/main/cpp/blercu/blercucontroller_p.h                 |  2 ++
+ app/src/main/cpp/blercu/blercupairingstatemachine.h          |  1 +
+ app/src/main/cpp/debug/wshandler.cpp                         |  2 +-
+ app/src/main/cpp/service/android/blercuservice.cpp           | 57 +++++++++++++++++++++++++++++++++++++++++++++++++--------
+ app/src/main/cpp/service/android/blercuservice.h             |  9 ++++++++-
+ app/src/main/java/com/sky/blercu/BleRcuService.java          | 24 +++++++++++++-----------
+ 10 files changed, 120 insertions(+), 27 deletions(-)
+
+* c472491 : (HEAD -> NGDEV-143556_IP100_Support_RCU_pairing_without_infrared, origin/NGDEV-143556_IP100_Support_RCU_pairing_without_infrared) NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared (23 hours ago) <Kit Park>
+* d9f1809 : NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared (24 hours ago) <Kit Park>
+
+keitee@keitee-mint:~/ip/repo/SkyBluetoothRcu$ git show --stat d9f1809
+commit d9f1809e6ab0bb5bf4d500dfa82f5207ea3ef605
+Author: Kit Park <kit.park@sky.uk>
+Date:   Tue Jun 25 14:24:20 2019 +0100
+
+    NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared
+
+    As a part of delivery, applies clang style, Mozilla, to files before a commit
+    which has actual changes so that can have clean base to show only differences to
+    review.
+
+ app/src/main/cpp/blercu/blercucontroller.cpp        |  906 ++++++++++++++++++++++++++------------------------
+ app/src/main/cpp/blercu/blercucontroller.h          |   52 ++-
+ app/src/main/cpp/blercu/blercupairingstatemachine.h |  192 +++++------
+ app/src/main/cpp/debug/wshandler.cpp                |  188 ++++++-----
+ app/src/main/cpp/service/android/blercuservice.cpp  | 3192 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++------------------------------------------------------------------------------------
+ app/src/main/cpp/service/android/blercuservice.h    |  447 ++++++++++++++-----------
+ 6 files changed, 2637 insertions(+), 2340 deletions(-)
 
 
 <add-start-scan-call>
@@ -2561,81 +2668,6 @@ keitee@keitee-mint:~/ip/BleRcuExample$ cp ../SkyBluetoothRcu/app/src/main/aidl/c
 
 app/build/generated/aidl_source_output_dir/debug/compileDebugAidl/out/com/sky/blercu/IBleRcuService.java
  * This file is auto-generated.  DO NOT MODIFY.
-
-app/src/main/java/com/sky/blercu/BleRcuManager.java
-
-    private static synchronized IBleRcuService getService() {
-
-      try {
-        method = Class.forName("android.os.ServiceManager").getMethod("getService", String.class);
-        IBinder binder = (IBinder) method.invoke(null, BLERCU_SERVICE);
-        if(binder != null) {
-          sService = IBleRcuService.Stub.asInterface(binder);
-        }
-        return sService;
-      }
-    }
-
-    public Set<BleRcuDevice> getPairedDevices() {
-        IBleRcuService service = getService();
-        if (service == null)
-            throw new RuntimeException("Service not available");
-
-        try {
-            Set<BleRcuDevice> deviceSet = new HashSet<BleRcuDevice>();
-
-            final String[] addresses = service.getDevices();
-            for (String address : addresses)
-                deviceSet.add(new BleRcuDevice(address, service));
-
-            return Collections.unmodifiableSet(deviceSet);
-        } catch (RemoteException e) {
-            Log.e(TAG, "", e);
-        }
-        return null;
-    }
-
-app/src/main/java/com/sky/blercu/BleRcuDevice.java
-
-    public void startScanning(int timeout) throws RemoteException {
-        mService.startScanning(timeout);
-    }
-
-app/src/main/java/com/sky/blercuexample/MainActivity.java
-
-    protected void onCreate(Bundle savedInstanceState) {
-
-        // check if any devices already paired
-        final Set<BleRcuDevice> devices = mManager.getPairedDevices();
-        mLogView.d("found " + devices.size() + " paired devices");
-        for (BleRcuDevice device : devices)
-            mLogView.d(device.toString());
-
-        if (!devices.isEmpty())
-            mSideBar.setDeviceDetails(devices.iterator().next());
-    }
-
-
-app/src/main/java/com/sky/blercuexample/SideBar.java
-
-    void setDeviceDetails(BleRcuDevice device) {
-            // KT
-            mDevice = device;
-    }
-
-    private void onClicked(int position) {
-
-        if (position == SCANNING_RCU_LIST_IDX) {
-            mLogView.e("KT: Scanning is pressed..");
-            mLogView.e("KT: Scanning is pressed..");
-            mLogView.e("KT: Scanning is pressed..");
-            try {
-                mDevice.startScanning(30000);
-            } catch (RemoteException e) {
-                Log.e(TAG, "", e);
-            }
-        }
-    }
 
 
 <ble-callback>
@@ -2750,155 +2782,45 @@ public class BleRcuService extends Service {
 }
 
 
-<to-support-state-changes>
 
-1. change 
-	void onPairingChanged(in boolean isPairing);
-   to:
+<port-to->
 
-// IBleRcuServiceCallback.aidl
-package com.sky.blercu;
+/xSubmoduleAppInfrastructure/AppInfrastructure/BluetoothRcu/daemon/source/
+main.cpp
 
-oneway interface IBleRcuServiceCallback {
-	void onPairingChanged(in boolean isPairing);
-}
-
-oneway interface IBleRcuServiceCallback {
-	void onStatusChanged(in int status);
-}
-
-
-2. app/src/main/java/com/sky/blercu/BleRcuService.java
-
-	public void onPairingStateChanged(final boolean pairing) {
-
-		mServiceLock.writeLock().lock();
-		boolean triggerCallback = (mIsPairing != pairing);
-		mIsPairing = pairing;
-		mServiceLock.writeLock().unlock();
-
-		if (triggerCallback && mNotifyThread.isAlive()) {
-
-			// broadcast back to clients from the notify thread
-			mNotifyThread.mHandler.post(() -> {
-
-				final int n = mCallbacks.beginBroadcast();
-				for (int i = 0; i < n; i++) {
-					try {
-						mCallbacks.getBroadcastItem(i).onPairingChanged(pairing);
-					} catch (RemoteException e) {
-						// RemoteCallbackList will take care of removing dead objects
-					}
-				}
-				mCallbacks.finishBroadcast();
-
-			});
-
-		}
-	}
-
-  to:
-
-	public void onStateChanged(final int status) {
-
-		if (triggerCallback && mNotifyThread.isAlive()) {
-
-			// broadcast back to clients from the notify thread
-			mNotifyThread.mHandler.post(() -> {
-
-				final int n = mCallbacks.beginBroadcast();
-				for (int i = 0; i < n; i++) {
-					try {
-						mCallbacks.getBroadcastItem(i).onStateChanged(state);
-					} catch (RemoteException e) {
-						// RemoteCallbackList will take care of removing dead objects
-					}
-				}
-				mCallbacks.finishBroadcast();
-			});
-		}
-	}
-
-
-3.  app/src/main/cpp/service/android/blercuservice.cpp
-
-void BleRcuService::onPairingStateChanged(bool pairing)
+setupBleRcuController()
 {
-  qWarning("KT: ========================");
-  qDebug() << "KT: on pairing state change, call java" << pairing;
-  qWarning() << "KT: on pairing state change, call java" << pairing;
-  qWarning("KT: ========================");
+  // create the manager object
+  QSharedPointer<BleRcuManager> manager =
+    QSharedPointer<BleRcuManagerImpl>::create(config,
+        deviceFactory,
+        QDBusConnection::systemBus());
 
-	if (Q_UNLIKELY(!m_javaBleRcuService))
-		return;
-
-	m_javaBleRcuService->callMethod<void>("onPairingStateChanged",
-	                                      "(Z)V",
-	                                      static_cast<jboolean>(pairing ? JNI_TRUE : JNI_FALSE));
-}
-
-to:
-
-void BleRcuService::onStateChanged(int status)
-{
-  qWarning("KT: ========================");
-  qDebug() << "KT: on pairing state change, call java: " << status;
-  qWarning() << "KT: on pairing state change, call java: " << status;
-  qWarning("KT: ========================");
-
-	if (Q_UNLIKELY(!m_javaBleRcuService))
-		return;
-
-	m_javaBleRcuService->callMethod<void>("onStateChanged",
-	                                      "(I)V",
-	                                      static_cast<jint>(status));
+  // create the controller object
+  QSharedPointer<BleRcuController> controller =
+    QSharedPointer<BleRcuControllerImpl>::create(
+        config, 
+        `manager`,
+        options->networkNamespace());
 }
 
 
-4. 
+/xSubmoduleAppInfrastructure/AppInfrastructure/BluetoothRcu/daemon/source/
+blercu/blercumanager.cpp
 
-app/src/main/cpp/blercu/blercucontroller_p.h
+class BleRcuManagerImpl : public BleRcuManager
 
-  enum PairingState {Initialising, Idle, Searching, Pairing, Complete, Failed};
-
-app/src/main/cpp/service/android/blercuservice.cpp
-
-void BleRcuService::setController(const QSharedPointer<BleRcuController> &controller)
-{
-	QObject::connect(controller.data(), &BleRcuController::pairingStateChanged,
-	                 this, &BleRcuService::onStateChanged);
-}
-
-app/src/main/cpp/blercu/blercucontroller.cpp
-
-void BleRcuControllerImpl::onStateChanged()
-{
-  // a queued event so check the state
-  const bool pairing = m_pairingStateMachine.isRunning();
-
-  qMilestone() << "KT: StateChanged(PairingState::Paring)";
-
-  // tell clients that the pairing state has changed
-  emit StateChanged(PairingState::Paring);
-}
-
-BleRcuControllerImpl::BleRcuControllerImpl()
-{
-	// connect to the started signal so we can send pairing state notifications
-	QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::stateChanged,
-	                 this, &BleRcuControllerImpl::onStateChanged,
-	                 Qt::QueuedConnection);
-}
-
-app/src/main/cpp/blercu/blercucontroller.h
-
-class BleRcuController : public QObject
-{
-	void stateChanged(bool pairing);
-};
+	StateMachine m_stateMachine;
 
 
-app/src/main/cpp/blercu/blercupairingstatemachine.cpp
+/xSubmoduleAppInfrastructure/AppInfrastructure/BluetoothRcu/daemon/source/
+blercu/blercucontroller.cpp
+
+	BleRcuPairingStateMachine m_pairingStateMachine;
+
+
+xSubmoduleAppInfrastructure/AppInfrastructure/BluetoothRcu/console/source/
+dbus/dbusabstractinterface.cpp
 
 
 #{============================================================================

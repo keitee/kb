@@ -240,7 +240,31 @@ TEST(Qt, ListPrepend)
   }
 }
 
+
+// ={=========================================================================
+// qt-logging
+
 /*
+https://doc.qt.io/qt-5/debug.html
+
+Warning and Debugging Messages
+
+Qt includes global macros for writing out warning and debug text. You can use
+them for the following purposes:
+
+qDebug() is used for writing custom debug output.
+qInfo() is used for informational messages.
+qWarning() is used to report warnings and recoverable errors in your application.
+qCritical() is used for writing critical error messages and reporting system errors.
+qFatal() is used for writing fatal error messages shortly before exiting.
+
+
+*controlled by compilation flag*
+
+qDebug(), qInfo(), and qWarning() are debugging tools. They can be compiled away
+by defining QT_NO_DEBUG_OUTPUT, QT_NO_INFO_OUTPUT, or QT_NO_WARNING_OUTPUT
+during compilation.
+
 
 Qt Logging Framework - KDAB
 
@@ -461,6 +485,78 @@ TEST(Qt, LoggingCategory)
       std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
   }
 }
+/*
+ 
+https://doc.qt.io/qt-5/qtglobal.html#qInstallMessageHandler
+
+QtMessageHandler <QtGlobal>::qInstallMessageHandler(QtMessageHandler handler)
+
+Installs a Qt message handler which has been defined previously. Returns a
+pointer to the previous message handler.
+
+The message handler is a function that prints out debug messages, warnings,
+critical and fatal error messages. The Qt library (debug mode) contains hundreds
+of warning messages that are printed when internal errors (usually invalid
+function arguments) occur. Qt built in release mode also contains such warnings
+unless QT_NO_WARNING_OUTPUT and/or QT_NO_DEBUG_OUTPUT have been set during
+compilation. If you implement your own message handler, you get total control of
+these messages.
+
+The default message handler prints the message to the standard output under X11
+or to the debugger under Windows. If it is a fatal message, the application
+aborts immediately.
+
+Only one message handler can be defined, since this is usually done on an
+application-wide basis to control debug output.
+
+To restore the message handler, call qInstallMessageHandler(0).
+
+Example:
+
+#include <qapplication.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
+    QByteArray localMsg = msg.toLocal8Bit();
+    const char *file = context.file ? context.file : "";
+    const char *function = context.function ? context.function : "";
+    switch (type) {
+    case QtDebugMsg:
+        fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtInfoMsg:
+        fprintf(stderr, "Info: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtWarningMsg:
+        fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtCriticalMsg:
+        fprintf(stderr, "Critical: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtFatalMsg:
+        fprintf(stderr, "Fatal: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    }
+}
+
+int main(int argc, char **argv)
+{
+    qInstallMessageHandler(myMessageOutput);
+    QApplication app(argc, argv);
+    ...
+    return app.exec();
+}
+
+Finally, the QtMsgType definition identifies the various messages that can be
+generated and sent to a Qt message handler; QtMessageHandler is a type
+definition for a pointer to a function with the signature void
+myMessageHandler(QtMsgType, const QMessageLogContext &, const char *).
+QMessageLogContext class contains the line, file, and function the message was
+logged at. This information is created by the QMessageLogger class.
+
+*/
 
 
 // ={=========================================================================
