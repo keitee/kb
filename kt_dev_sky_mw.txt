@@ -140,7 +140,14 @@ git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/pa
 tag: NGDEV-141186_Delivered_Develop_07062019_1057
 branch NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
 
+git checkout -b NGDEV-143556_review_03 develop
 git push -n origin NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
+git push -f origin NGDEV-143556_review:NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_2
+git push -f origin NGDEV-143556_review_03:NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_3
+
+// no permission to do
+// git push origin --delete NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_2
+
 
 <ex>
 NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared
@@ -1022,6 +1029,8 @@ KT: nowTs=806678, limTs=807030, minTs=807030, maxTs=1248030, pktTS=3552522287, s
 ={============================================================================
 *kt_dev_skymw_0000* skymw-ai
 
+// Singletons/lib/source/FactoryContainer.cpp
+
 FactoryContainer::FactoryContainer()
     : aiDmsFactory(AIDms::Factory::getSharedInstance())
     , aiConfig(std::make_shared<AppInfrastructureConfig>(aiDmsFactory))
@@ -1040,7 +1049,7 @@ FactoryContainer::FactoryContainer()
     , credentialsManagerFactory(new CredentialsManagerFactory())
     , upnpDiscoveryFactory(new UPnPDiscoveryFactory())
 
-    , blercuFactory(std::make_shared<AI_BLERCU::BleRcuFactory>())
+    , `blercuFactory(std::make_shared<AI_BLERCU::BleRcuFactory>())`
 
     , irrcuFactory(std::make_shared<AI_IRRCU::IrRcuFactory>())
     , netflixProxyFactory(std::make_shared<Netflix::Factory>())
@@ -1062,6 +1071,13 @@ FactoryContainer::FactoryContainer()
       blercuFactory->createBleRcuControllerProxy();
     }
 
+
+COMPONENT_NAME := BleRcuClientLib
+
+// BluetoothRcu/client/lib/include/BleRcuFactory.h
+
+    std::map<std::string, std::shared_ptr<BleRcuDevice>> mRcuDevices;
+
 BleRcuContollerProxy::BleRcuContollerProxy(
     const std::shared_ptr<AI_IPC::IIpcService>& ipcService, const std::shared_ptr<IInputHandler>& inputHandler)
 {
@@ -1070,7 +1086,7 @@ BleRcuContollerProxy::BleRcuContollerProxy(
 
   std::string handle = mIpcService->registerSignalHandler(
       AI_IPC::Signal(BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, "DeviceAdded"),
-      std::bind(&BleRcuContollerProxy::signalHandlerDeviceAdded, this, std::placeholders::_1));
+      std::bind(`&BleRcuContollerProxy::signalHandlerDeviceAdded`, this, std::placeholders::_1));
 
   // and more
 }
@@ -1083,9 +1099,11 @@ void BleRcuContollerProxy::signalHandlerDeviceAdded(const AI_IPC::VariantList& a
 
     AI_LOG_INFO("Device added [object path: %s] [address: %s]", objectPath.c_str(), address.c_str());
 
-    mDispatcher->post(std::bind(&BleRcuContollerProxy::updateDeviceList, this));
+    mDispatcher->post(std::bind(`&BleRcuContollerProxy::updateDeviceList`, this));
   }
 }
+
+// BleRcuContollerProxy::updateDeviceList calls addDevicesToDeviceList
 
 void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& objectPaths)
 {
@@ -1098,7 +1116,7 @@ void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& o
       mRcuDevices[objectPath] = std::make_shared<AI_BLERCU::BleRcuDevice>(
           mIpcService,
           mInputHandler,
-          std::bind(&BleRcuContollerProxy::notifyDevicePropertyChanged, this),
+          std::bind(`&BleRcuContollerProxy::notifyDevicePropertyChanged`, this),
           objectPath);
     }
     catch(const std::exception& e)
@@ -1108,21 +1126,145 @@ void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& o
   }
 }
 
+
+// BluetoothRcu/client/lib/source/BleRcuDevice.cpp
 // each device also registers functions to dbus
 
 BleRcuDevice::BleRcuDevice(const std::shared_ptr<AI_IPC::IIpcService>& ipcService,
                  const std::shared_ptr<IInputHandler>& inputHandler,
                  const std::function<void(void)>& notifyPropertyChanged,
                  const std::string& objectPath)
-    : mIpcService(ipcService), mNotifyPropertyChanged(notifyPropertyChanged), mObjectPath(objectPath)
+    : mIpcService(ipcService), 
+    `mNotifyPropertyChanged(notifyPropertyChanged)`, 
+    mObjectPath(objectPath)
 {
   // #define ORG_FREEDESKTOP_DBUS_PROPERTIES         "org.freedesktop.DBus.Properties"
 
   mPropertyChangedSignalHandler = mIpcService->registerSignalHandler(
       AI_IPC::Signal(objectPath, ORG_FREEDESKTOP_DBUS_PROPERTIES, "PropertiesChanged"),
-      std::bind(&BleRcuDevice::signalHandlerPropertyChanged, this, std::placeholders::_1));
+      std::bind(`&BleRcuDevice::signalHandlerPropertyChanged`, this, std::placeholders::_1));
 
   // and more
+}
+
+void BleRcuDevice::signalHandlerPropertyChanged(const AI_IPC::VariantList& args)
+{
+  /*org.freedesktop.DBus.Properties.PropertiesChanged (STRING interface_name,
+    DICT<STRING,VARIANT> changed_properties,
+    ARRAY<STRING> invalidated_properties)*/
+
+  if (args.size() >= 2)
+  {
+    try
+    {
+      std::string interface = boost::get<std::string>(args[0]); //STRING interface_name
+      if (interface == BLE_RCU_DEVICE_INTERFACE_DEVICE1)
+      {
+        std::map<std::string, AI_IPC::DictDataType> changedProperties = boost::get<std::map<std::string, AI_IPC::DictDataType>>(args[1]); //DICT<STRING,VARIANT> changed_properties,
+
+        if ((!changedProperties.empty()) || (!invalidatedProperties.empty()))
+        {
+          updateDeviceProperties(changedProperties, invalidatedProperties);
+          mNotifyPropertyChanged();
+        }
+      }
+    }
+  }
+}
+
+void BleRcuContollerProxy::notifyDevicePropertyChanged()
+{
+  mDispatcher->post(std::bind(&BleRcuContollerProxy::notifyDeviceListChanged, this));
+}
+
+void BleRcuContollerProxy::notifyDeviceListChanged()
+{
+  notify( std::bind(&IBleRcuDeviceEvent::deviceListChanged, std::placeholders::_1) );
+}
+
+// Public/Common/Notifier.h
+// class Notifier : virtual public Polymorphic
+
+
+*to-daemon*
+
+// BluetoothRcu/daemon/source/main.cpp
+
+int main(int argc, char *argv[])
+{
+  QCoreApplication app(argc, argv);
+  QCoreApplication::setApplicationName("BleRcuDaemon");
+  QCoreApplication::setApplicationVersion("2.0");
+}
+
+	\internal
+
+	Creates the main \l{BleRcuController} object and returns a shared pointer
+	to it.  This is just a wrapper around the boilerplate needed to create
+	the various class objects needed by the controller.
+ */
+
+static QSharedPointer<BleRcuController> setupBleRcuController(const QSharedPointer<CmdLineOptions> &options,
+                                                              const QSharedPointer<ConfigSettings> &config,
+                                                              const QSharedPointer<IrDatabase> &irDatabase,
+                                                              const QSharedPointer<QDBusConnection> &dbusConn,
+                                                              const QSharedPointer<QDBusConnection> &debugDBusConn)
+{
+  // connect dbus
+  QSharedPointer<QDBusConnection> dbusConn = setupDBus(options->dbusType(),
+      options->dbusAddress(),
+      options->dbusServiceName());
+
+  // create the manager object
+  QSharedPointer<BleRcuManager> manager =
+    QSharedPointer<BleRcuManagerImpl>::create(config,
+        deviceFactory,
+        QDBusConnection::systemBus());
+
+  // create the controller object
+  QSharedPointer<BleRcuController> controller =
+    QSharedPointer<BleRcuControllerImpl>::create(config, manager,
+        options->networkNamespace());
+  if (!controller || !controller->isValid()) {
+    controller.reset();
+    qFatal("failed to setup the BLE RCU controller");
+  }
+}
+
+// BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
+
+class BleRcuControllerImpl : public BleRcuController
+                           , public QDBusContext
+{}
+
+// BluetoothRcu/daemon/source/blercu/blercucontroller_p.h
+
+	BleRcuPairingStateMachine m_pairingStateMachine;
+
+BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSettings> &config,
+                                           const QSharedPointer<BleRcuManager> &manager,
+                                           int networkNamespaceFd,
+                                           QObject *parent)
+
+
+// BluetoothRcu/daemon/source/blercu/blercumanager.cpp
+
+class BleRcuManager : public QObject
+{}
+
+// BluetoothRcu/daemon/source/blercu/blercumanager_p.h
+
+	StateMachine m_stateMachine;
+
+BleRcuManagerImpl::BleRcuManagerImpl(const QSharedPointer<const ConfigSettings> &config,
+                                     const QSharedPointer<IBleRcuDeviceFactory> &deviceFactory,
+                                     const QDBusConnection &bluezBusConn,
+                                     QObject *parent)
+
+// BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.cpp
+
+void BleRcuPairingStateMachine::setupStateMachine()
+{
 }
 
 
@@ -2883,6 +3025,13 @@ blercu/blercucontroller.cpp
 
 xSubmoduleAppInfrastructure/AppInfrastructure/BluetoothRcu/console/source/
 dbus/dbusabstractinterface.cpp
+
+
+<xx>
+I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state StartingServices(5) to ReadyState(6)"
+I BleRcuQt: < M:blercuadapter.cpp F:onDeviceReadyChanged L:1733 > device with address D4:B8:FF:12:E1:A8 is  ready
+D ServicePeripherals: @BTREMOTE: onDeviceConnectionStateChanged | address: D4:B8:FF:12:E1:A8 connected: true
+D BleRcuManager: onDeviceConnectionStateChanged() - D4:B8:FF:12:E1:A8 : true
 
 
 #{============================================================================
