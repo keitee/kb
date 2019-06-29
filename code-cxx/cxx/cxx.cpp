@@ -3051,6 +3051,7 @@ namespace cxx_lambda
       std::cout << std::endl;
     }
 
+  // *algo-sort* *algo-unique*
   void eliminate_duplicates(vector<string>& words)
   {
     sort(words.begin(), words.end());
@@ -3063,6 +3064,7 @@ namespace cxx_lambda
     return s.size() >= sz;
   }
 
+  // keep items in words which is >= sz
   void biggies(vector<string>& words, vector<string>::size_type sz)
   {
     eliminate_duplicates(words);
