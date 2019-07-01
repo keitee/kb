@@ -80,8 +80,8 @@ TFTP_OPTIONS="--secure"
 <nfs>
 sudo apt-get install nfs-kernel-server
 
-<boot>
 
+<boot>
 mount -o rw -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /mnt/x
 
 // should be careful not to include the end of line when pasting it into bolt
@@ -143,8 +143,8 @@ branch NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
 git checkout -b NGDEV-143556_review_03 develop
 git push -n origin NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
 git push -f origin NGDEV-143556_review:NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_2
-git push -f origin NGDEV-143556_review_03:NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_3
-
+git push origin NGDEV-143556_review_03:NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
+NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
 // no permission to do
 // git push origin --delete NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_2
 
@@ -242,9 +242,10 @@ See <http://gcc.gnu.org/bugs.html> for instructions.
 
 
 <build-sdk>
+export LC_ALL=C
 cd /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK
 ./compile_sdkv2.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/ clean
-./compile_sdkv2.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/
+./compile_sdkv3.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/
 
 keitee@keitee-mint:~/mw/ethan-as-source/xSubmoduleDarwinSDK$ 
 
@@ -261,6 +262,24 @@ ll eu-q-titan-uk/SDK/deps/SKYOB_SKY7278_BCM7278_LNUX_01/KERN_SKYOB_SKY7278_BCM72
 
 ll eu-q-titan-uk/SDK/SKYOB_SKY7278_BCM7278_LNUX_01/BLD_SKYOB_SKY7278_BCM7278_LNUX_01/platform_cfg/linux/LittleEndian/debug/BootImage/zImage 
 lrwxrwxrwx 1 keitee keitee 129 May 14 10:41 eu-q-titan-uk/SDK/SKYOB_SKY7278_BCM7278_LNUX_01/BLD_SKYOB_SKY7278_BCM7278_LNUX_01/platform_cfg/linux/LittleEndian/debug/BootImage/zImage -> ../../../../../../deps/SKYOB_SKY7278_BCM7278_LNUX_01/KERN_SKYOB_SKY7278_BCM7278_LNUX_01/LittleEndian/debug/debug/BootImage/zImage*
+
+
+<build-ai>
+
+// build full and AI using AS from AS project
+
+keitee@keitee-mint:~/mw/appinfrastructure/xSubmoduleDarwinSDK$ pwd
+/home/keitee/mw/appinfrastructure/xSubmoduleDarwinSDK
+
+keitee@keitee-mint:~/mw/appinfrastructure/xSubmoduleDarwinSDK$ ll
+total 16K
+-rw-r--r--  1 keitee keitee    6 May 13 16:52 .gitignore
+drwxr-xr-x 11 keitee keitee 4.0K Jul  1 14:25 ../
+lrwxrwxrwx  1 keitee keitee   66 Jul  1 15:53 eu-q-titan-uk -> /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk//
+drwxr-xr-x  2 keitee keitee 4.0K Jul  1 15:53 ./
+
+cd /home/keitee/mw/appinfrastructure/Tools/Jenkins
+./build-AI-fromSDKv2.sh eu-q-titan-uk /home/keitee/mw/appinfrastructure YES
 
 
 <build-tool> *builc-gcc*
@@ -1068,7 +1087,7 @@ FactoryContainer::FactoryContainer()
       blercuFactory->startDaemon(dobbyProxy);
 
       // creates BleRcuContollerProxy
-      blercuFactory->createBleRcuControllerProxy();
+      blercuFactory->`createBleRcuControllerProxy`();
     }
 
 
@@ -1077,6 +1096,20 @@ COMPONENT_NAME := BleRcuClientLib
 // BluetoothRcu/client/lib/include/BleRcuFactory.h
 
     std::map<std::string, std::shared_ptr<BleRcuDevice>> mRcuDevices;
+
+// client/lib/source/BleRcuFactory.cpp
+std::shared_ptr<IBleRcuContoller> BleRcuFactory::createBleRcuControllerProxy()
+{
+  try
+  {
+    mController = std::make_shared<BleRcuContollerProxy>(mIpcService, mInputHandler);
+  }
+}
+
+
+// client/lib/source/BleRcuController.h
+
+class BleRcuContollerProxy : public IBleRcuContoller
 
 BleRcuContollerProxy::BleRcuContollerProxy(
     const std::shared_ptr<AI_IPC::IIpcService>& ipcService, const std::shared_ptr<IInputHandler>& inputHandler)
@@ -1186,7 +1219,7 @@ void BleRcuContollerProxy::notifyDeviceListChanged()
 // class Notifier : virtual public Polymorphic
 
 
-*to-daemon*
+*bluez-daemon*
 
 // BluetoothRcu/daemon/source/main.cpp
 
@@ -1195,7 +1228,23 @@ int main(int argc, char *argv[])
   QCoreApplication app(argc, argv);
   QCoreApplication::setApplicationName("BleRcuDaemon");
   QCoreApplication::setApplicationVersion("2.0");
+
+  // connect dbus
+  QSharedPointer<QDBusConnection> dbusConn = setupDBus(options->dbusType(),
+      options->dbusAddress(),
+      options->dbusServiceName());
+
+  // setup and start the blercu controller object
+  QSharedPointer<BleRcuController> controller =
+    setupBleRcuController(options, config, irDatabase, dbusConn, debugDBusConn);
 }
+
+static QSharedPointer<QDBusConnection> setupDBus(CmdLineOptions::DBusType dbusType,
+                                                 const QString &dbusAddress,
+                                                 const QString &dbusServiceName)
+{}
+
+console/source/console.cpp
 
 	\internal
 
@@ -1229,6 +1278,8 @@ static QSharedPointer<BleRcuController> setupBleRcuController(const QSharedPoint
     controller.reset();
     qFatal("failed to setup the BLE RCU controller");
   }
+
+  return controller;
 }
 
 // BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
@@ -3028,6 +3079,8 @@ dbus/dbusabstractinterface.cpp
 
 
 <xx>
+this is when a device is ready when pairing fsm is not running.
+
 I BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state StartingServices(5) to ReadyState(6)"
 I BleRcuQt: < M:blercuadapter.cpp F:onDeviceReadyChanged L:1733 > device with address D4:B8:FF:12:E1:A8 is  ready
 D ServicePeripherals: @BTREMOTE: onDeviceConnectionStateChanged | address: D4:B8:FF:12:E1:A8 connected: true

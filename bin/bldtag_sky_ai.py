@@ -10,8 +10,8 @@ if __name__ == "__main__":
 
     # dirs to include
     dirs = [
-        '/home/keitee/mw/ethan-as-source/xSubmoduleAppInfrastructure/AppInfrastructure/Common',
-        '/home/keitee/mw/ethan-as-source/xSubmoduleAppInfrastructure/AppInfrastructure/BluetoothRcu'
+        '/home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu',
+        '/home/keitee/mw/appinfrastructure/AppInfrastructure/Common'
         ]
 
     listfile = 'flist.out'
