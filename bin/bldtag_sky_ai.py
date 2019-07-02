@@ -11,6 +11,9 @@ if __name__ == "__main__":
     # dirs to include
     dirs = [
         '/home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu',
+        '/home/keitee/mw/appinfrastructure/AppInfrastructure/Public',
+        '/home/keitee/mw/appinfrastructure/AppInfrastructure/Singletons',
+        '/home/keitee/mw/appinfrastructure/AppInfrastructure/IpcService',
         '/home/keitee/mw/appinfrastructure/AppInfrastructure/Common'
         ]
 
