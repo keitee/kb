@@ -65,7 +65,9 @@ signal time=1562107489.942843 sender=org.freedesktop.DBus -> destination=(null d
    string ":1.94"
 signal time=1562107489.942855 sender=org.freedesktop.DBus -> destination=:1.94 serial=2 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameAcquired
    string ":1.94"
+
 signal time=1562107489.943722 sender=:1.94 -> destination=(null destination) serial=2 path=/org/share/linux; interface=org.share.linux; member=Config
+
 signal time=1562107489.943747 sender=org.freedesktop.DBus -> destination=:1.94 serial=5 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameLost
    string ":1.94"
 signal time=1562107489.943757 sender=org.freedesktop.DBus -> destination=(null destination) serial=913 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=NameOwnerChanged
