@@ -145,8 +145,23 @@ git push -n origin NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
 git push -f origin NGDEV-143556_review:NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_2
 git push origin NGDEV-143556_review_03:NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
 NGDEV-143556_IP100_Support_RCU_pairing_without_infrared
+
 // no permission to do
 // git push origin --delete NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_2
+
+// check the pushed branch
+git diff origin/NGDEV-143556_IP100_Support_RCU_pairing_without_infrared_3 HEAD
+
+// check update
+git pull --rebase origin develop
+
+// check difference
+git log develop..HEAD
+
+git rebase develop
+git rebase --onto develop <topic>
+
+git push -n origin HEAD:refs/for/release/2.2.0
 
 
 <ex>
@@ -1504,6 +1519,15 @@ static QSharedPointer<BleRcuController> setupBleRcuController(const QSharedPoint
                                                               const QSharedPointer<QDBusConnection> &dbusConn,
                                                               const QSharedPointer<QDBusConnection> &debugDBusConn)
 {
+  *ai-bluetooth-ipc-service*
+  // create the factory for generating BleRcuServices using the vendor
+  // supplied IPC service
+  QSharedPointer<IpcServicesFactory> ipcServicesFactory =
+    QSharedPointer<IpcServicesFactory>::create(config,
+        hidrawDevManager,
+        QDBusConnection::systemBus(),
+        options->audioFifoDirectory());
+
   *ai-bluetooth-device*
   // create the factory for generating BleRcuDevices
   QSharedPointer<BleRcuDeviceFactory> deviceFactory =
@@ -1518,6 +1542,7 @@ static QSharedPointer<BleRcuController> setupBleRcuController(const QSharedPoint
         deviceFactory,
         QDBusConnection::systemBus());
 
+  *ai-bluetooth-controller*
   // create the controller object
   QSharedPointer<BleRcuController> controller =
     QSharedPointer<BleRcuControllerImpl>::create(config, `manager`,
@@ -1533,6 +1558,8 @@ static QSharedPointer<BleRcuController> setupBleRcuController(const QSharedPoint
   return controller;
 }
 
+
+<ai-bluetooth-controller>
 // BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
 
 class BleRcuControllerImpl : public BleRcuController
@@ -1548,7 +1575,6 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
                                            int networkNamespaceFd,
                                            QObject *parent)
 
-  *ai-bluetooth-controller*
   , m_dbusObjectPath(QStringLiteral("`/com/sky/blercu/controller`"))
 {
   // create and attach the dbus adaptor for the controller interface to
@@ -1710,7 +1736,6 @@ void BleRcuController1Adaptor::StartPairing(quint8 pairingCode,
 path : "`/com/sky/blercu/controller`"
 iface: "com.sky.blercu.Controller1"
 
-
 void BleRcuPairingStateMachine::onEnteredFinishedState()
 {
   // finally just emit a finished signal to the BleRcuManagerImpl object
@@ -1836,13 +1861,15 @@ void BleRcuManagerImpl::onDeviceAdded(const QDBusObjectPath &path,
 }
 
 QSharedPointer<BleRcuDevice> BleRcuDeviceFactory::create(const BleAddress &address,
-                                                         const QString &name,
-                                                         const QDBusConnection &bluezBusConn,
-                                                         const QDBusObjectPath &bluezObjPath,
-                                                         QObject *parent) const
+  const QString &name,
+  const QDBusConnection &bluezBusConn,
+  const QDBusObjectPath &bluezObjPath,
+  QObject *parent) const
 {
   *ai-bluetooth-device*
   QSharedPointer<BleRcuDevice> device =
+
+    serviceFactory is *ai-bluetooth-ipc-service*
     QSharedPointer<BleRcuDeviceImpl>::create(serviceFactory,
         bluezBusConn,
         bluezObjPath,
@@ -1872,13 +1899,35 @@ QList<DBusAbstractAdaptor*> m_blercuAdaptors;
 
 BleRcuDeviceImpl::BleRcuDeviceImpl(const QSharedPointer<IBleRcuServicesFactory> &servicesFactory)
 {
+  // initialise the dbus interface to bluez
+  (!init(bluezDBusConn, bluezDBusPath))
+  {
+    // create a proxy to the 'org.bluez.Device1' interface on the device object
+    m_deviceProxy =
+      QSharedPointer<BluezDeviceInterface>::create(QStringLiteral("org.bluez"),
+          bluezDBusPath.path(),
+          bluezDBusConn);
+
+    // connect to the property change notifications from the daemon
+    QObject::connect(m_deviceProxy.data(), &BluezDeviceInterface::connectedChanged,
+        this, &BleRcuDeviceImpl::onDeviceConnectedChanged);
+    QObject::connect(m_deviceProxy.data(), &BluezDeviceInterface::pairedChanged,
+        this, &BleRcuDeviceImpl::onDevicePairedChanged);
+    QObject::connect(m_deviceProxy.data(), &BluezDeviceInterface::servicesResolvedChanged,
+        this, &BleRcuDeviceImpl::onDeviceServicesResolvedChanged);
+    QObject::connect(m_deviceProxy.data(), &BluezDeviceInterface::nameChanged,
+        this, &BleRcuDeviceImpl::onDeviceNameChanged);
+  }
+
+  *ai-bluetooth-device*
   // create ourselves a dbus object path
   const QString objPath = 
     QString::asprintf("/com/sky/blercu/device_%02hhX_%02hhX_%02hhX_%02hhX_%02hhX_%02hhX",
         m_address[0], m_address[1], m_address[2],
         m_address[3], m_address[4], m_address[5]);
 
-  m_blercuObjectPath.setPath(objPath);
+  // register this on dbus
+  `m_blercuObjectPath.setPath(objPath);`
 
   m_blercuAdaptors.append( new BleRcuDevice1Adaptor(this, m_blercuObjectPath) );
 }
@@ -2267,6 +2316,14 @@ app/CMakeLists.txt
 # You'll need to modify the QT5_SDK path below to point to your Qt5 SDK install
 
 set( QT5_SDK "/home/keitee/Qt/5.12.3" )
+
+
+<build-release>
+pass for key:
+android
+platform
+
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=~grayb&title=Android+-+HowTo+Release+Components
 
 
 <bt-remote-pairing>
