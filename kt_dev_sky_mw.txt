@@ -17,13 +17,15 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-setup
 *kt_dev_skymw_0000* skymw-pages
 *kt_dev_skymw_0000* skymw-commands
+*kt_dev_skymw_0000* skymw-git
 *kt_dev_skymw_0000* skymw-q-hardware
 *kt_dev_skymw_0000* skymw-q-package
 *kt_dev_skymw_0000* skymw-q-build
 *kt_dev_skymw_0000* skymw-as
 *kt_dev_skymw_0000* skymw-as-ap
 *kt_dev_skymw_0000* skymw-as-ap-jira
-*kt_dev_skymw_0000* skymw-ai
+*kt_dev_skymw_0000* skymw-bluez
+*kt_dev_skymw_0000* skymw-bluez-ai
 *kt_dev_skymw_0000* skymw-android
 *kt_dev_skymw_0000* skymw-android-doc
 *kt_dev_skymw_0000* skymw-android-studio
@@ -32,33 +34,6 @@ KT KB. SKYMW
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-setup
-
-<ssh>
-to register ssh keys
-https://www.stb.bskyb.com/gosa/
-
-
-<repos>
-git clone dwngit@git.stb.bskyb.com:ethan-as-source-repo
-git clone dwngit@git.stb.bskyb.com:ethan-as-source ethan-as-source-repo
-git clone dwngit@git.stb.bskyb.com:ethan-mw-wrt
-git clone dwngit@git.stb.bskyb.com:appinfrastructure
-
-
-<ethan-as-source>
-// needs to run git pull since no default branch?
-// "develop" branch
-
-git pull origin develop
-
-keitee@keitee-mint:~/mw/ethan-as-source$ git checkout develop
-Checking out files: 100% (25967/25967), done.
-
-// update submodule
-
-keitee@keitee-mint:~/mw/ethan-as-source$ git submodule update --init --force
-
-git push -n --set-upstream origin kit-NGDEV-141186
 
 <sdk>
 keitee@keitee-mint:~/mw/ethan-as-source$ cd xSubmoduleDarwinSDK/
@@ -132,9 +107,33 @@ cat /proc/net/fib_trie
 ={============================================================================
 *kt_dev_skymw_0000* skymw-git
 
-<repo>
+<ssh>
+to register ssh keys
+https://www.stb.bskyb.com/gosa/
+
+
+<repos>
+git clone dwngit@git.stb.bskyb.com:ethan-as-source-repo
+git clone dwngit@git.stb.bskyb.com:ethan-as-source ethan-as-source-repo
+git clone dwngit@git.stb.bskyb.com:ethan-mw-wrt
+git clone dwngit@git.stb.bskyb.com:appinfrastructure
 git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/packages/apps/SkyBluetoothRcu
 
+
+<ethan-as-source>
+// needs to run git pull since no default branch?
+// "develop" branch
+
+git pull origin develop
+
+keitee@keitee-mint:~/mw/ethan-as-source$ git checkout develop
+Checking out files: 100% (25967/25967), done.
+
+// update submodule
+
+keitee@keitee-mint:~/mw/ethan-as-source$ git submodule update --init --force
+
+git push -n --set-upstream origin kit-NGDEV-141186
 
 <git>
 tag: NGDEV-141186_Delivered_Develop_07062019_1057
@@ -1043,7 +1042,21 @@ KT: nowTs=806678, limTs=807030, minTs=807030, maxTs=1248030, pktTS=3552522287, s
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-ai
+*kt_dev_skymw_0000* skymw-bluez
+
+TODO:
+
+1. Q version do not supports filtering byte on:
+bool startPairing(quint8 pairingCode) override;
+
+2. Q version calls BleRcuManager and Android version calls BleRcuAdapter.
+
+<compare-both>
+meld /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/blercu /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/source/blercu
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-bluez-ai
 
 <build-ai>
 
@@ -1092,7 +1105,228 @@ flash0/                  flash0_sky_TITAN.tar.gz  flash0.tar.gz
 cp -r flash0/ ~/mw/exports/titan/
 
 
+
+<ai-bluetooth-client-as>
+
+// AppInfrastructure/Public/Common/Notifier.h
+
+template<typename T>
+class Notifier : virtual public Polymorphic
+{
+  /**
+   * @brief Register interest in receiving updates.
+   */
+  void addObserver(const std::shared_ptr<T>& observer)
+  {
+    std::lock_guard<std::mutex> lock(m);
+    observers.push_back(observer);
+  }
+}
+
+// AppInfrastructure/Public/BluetoothRcu/IBluetoothRcu.h
+
+class IBleRcuDeviceEvent : Interface
+{
+public:
+
+    /**
+     * @brief Pairing status changed notification
+     *
+     * @param pairingInProgress Pairing in progress or not.
+     */
+    virtual void pairingStatusChanged(bool pairingInProgress) = 0;
+
+    /**
+     * @brief Device list changed notification
+     */
+    virtual void deviceListChanged() = 0;
+};
+
+class IBleRcuContoller : public AICommon::`Notifier`<IBleRcuDeviceEvent>
+{
+public:
+
+    /**
+    * @brief Get JSON as defined in the AS spec
+    */
+    virtual Json::Value GetJsonRcuDeviceList() const = 0;
+
+    /**
+     * @brief Get information about the RCU devices
+     */
+    virtual std::vector<BleRcuDeviceProperties> getRcuDevices() const = 0;
+
+    /**
+     * @brief Start audio steaming
+     *
+     * @param rcuAddress    [in]    The address of the RCU to use for audio streaming
+     * @param type          [in]    Streaming type such as ADPCM or PCM
+     *
+     * @return If successful then the fd to read the audio data, otherwise a negative value to indicate error
+     */
+    virtual int startAudioStreaming(const std::string& rcuAddress, StreamAudioRequestType type) = 0;
+
+    /**
+     * @brief Stop audio steaming
+     *
+     * @param rcuAddress    [in]    The address of the RCU to use for audio streaming
+     *
+     * @return If successful then true otherwise false
+     */
+    virtual bool stopAudioStreaming(const std::string& rcuAddress) = 0;
+
+
+    /**
+     * @brief Get audio streaming status
+     *
+     * @param rcuAddress     [in]     The address of the RCU to use for audio streaming
+     *
+     * @return It returns a pair. pair.first indicates whether the method can is successful or not
+     *         and pair.second gives us the audio streaming if the method call is successful.
+     */
+    virtual std::pair<bool, BleRcuAudioStatus> getAudioStreamingStatus(const std::string& rcuAddress) = 0;
+
+    /**
+     * @brief Set IR codes
+     *
+     * @param rcuAddress    [in]    The address of the RCU to use for audio streaming
+     * @param deviceType    [in]    Device type such as TV or AMP
+     * @param irCode        [in]    IR code to set
+     *
+     * @return If successful then true otherwise false
+     */
+    virtual bool setIRCode(const std::string& rcuAddress, IrSignalProfile deviceType, int32_t irCode ) = 0;
+
+    /**
+     * @brief Clear IR codes
+     *
+     * @param rcuAddress    [in]    The address of the RCU to use for audio streaming
+     *
+     * @return If successful then true otherwise false
+     */
+    virtual bool clearIRCode(const std::string& rcuAddress) = 0;
+
+    /**
+     * @brief Set RCU mode
+     *
+     * @param rcuAddress    The address of the RCU to use for audio streaming
+     * @param modesBitMask  Flags representing different RCU modes, see RcuMode
+     *
+     * @return If successful then true otherwise false
+     */
+    virtual bool setRcuMode(const std::string& rcuAddress, uint32_t modesBitMask) = 0;
+
+    /**
+     * @brief Get device models
+     *
+     * @param rcuAddress            [in]     The address of the RCU to use for audio streaming
+     * @param deviceManufacturer    [in]     Name of the device manufacturer
+     * @param deviceModelSearchText [in]     Search text indicating the hints about the model
+     * @param searchFlagsBitMask    [in]     Search flags - see RcuDeviceSearchFlags
+     * @param offset                [in]     Offset value in the search result
+     * @param count                 [in]     Maximum number of entries requested
+     * @param totalEntries          [out]    Maximum number of entries available
+     *
+     * @return It returns a pair. pair.first indicates whether the method can is successful or not
+     *         and pair.second gives us the result set (models) if the method call is successful.
+     */
+    virtual std::pair<bool, std::vector<std::string>> getDeviceModels(
+            const std::string& rcuAddress,
+            const std::string &deviceManufacturer,
+            const std::string &deviceModelSearchText,
+            uint32_t searchFlagsBitMask,
+            int64_t offset,
+            int64_t count,
+            uint64_t& totalEntries) = 0;
+
+    /**
+     * @brief Get device manufacturers
+     *
+     * @param rcuAddress                    [in]     The address of the RCU to use for audio streaming
+     * @param deviceManufacturerSearchText  [in]     Search text indicating the hints about the model
+     * @param searchFlagsBitMask            [in]     Search flags - see RcuDeviceSearchFlags
+     * @param offset                        [in]     Offset value in the search result
+     * @param count                         [in]     Maximum number of entries requested
+     * @param totalEntries                  [out]    Maximum number of entries available
+     *
+     * @return It returns a pair. pair.first indicates whether the method can is successful or not
+     *         and pair.second gives us the result set (manufacturers) if the method call is successful.
+     */
+    virtual std::pair<bool, std::vector<std::string>> getDeviceManufacturers(
+            const std::string& rcuAddress,
+            const std::string &deviceManufacturerSearchText,
+            uint32_t searchFlagsBitMask,
+            int64_t offset,
+            int64_t count,
+            uint64_t& totalEntries) = 0;
+
+    /**
+     * @brief Get manual input based IR codes
+     *
+     * @param rcuAddress          [in]     The address of the RCU to use for audio streaming
+     * @param deviceManufacturer  [in]     Name of the device manufacturer
+     * @param deviceModel         [in]     Name of the device model
+     * @param searchFlagsBitMask  [in]     Search flags - see RcuDeviceSearchFlags
+     *
+     * @return It returns a pair. pair.first indicates whether the method can is successful or not
+     *         and pair.second gives us the result set (IR codes) if the method call is successful.
+     */
+    virtual std::pair<bool, std::vector<int32_t>> getManualInputBasedIRCodes(
+            const std::string& rcuAddress,
+            const std::string &deviceManufacturer,
+            const std::string &deviceModel,
+            uint32_t searchFlagsBitMask ) = 0;
+
+    /**
+     * @brief Get manual input based IR codes
+     *
+     * @param rcuAddress     [in]     The address of the RCU to use for audio streaming
+     * @param Edit           [in]     EDID data
+     *
+     * @return It returns a pair. pair.first indicates whether the method can is successful or not
+     *         and pair.second gives us the result set (IR codes) if the method call is successful.
+     */
+    virtual std::pair<bool, std::vector<int32_t>> getEdidBasedIRCodes(
+            const std::string& rcuAddress,
+            const std::vector<uint8_t>& edit ) = 0;
+
+    /**
+     * @brief This method triggers the 'find me' beeping on the RCU.
+     *
+     * @param rcuAddress     [in]     The address of the RCU to use for audio streaming
+     * @param beepLevel      [in]     Beep level
+     * @param duration       [in]     Beep duration
+     *
+     * @return if successful then true else false. We need to check the validity of the future object prior to invoke its get method.
+     **/
+    virtual std::future<bool> findMe(const std::string& rcuAddress, FindMeBeepLevel beepLevel, int32_t duration) = 0;
+};
+
+
+// Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.cpp
+
+m_bluetoothRcuController = getBleRcuControllerProxyInstance();
+
+m_bluetoothRcuController->addObserver( m_bluetoothRcuDeviceObserver );
+
+std::pair<bool, std::vector<std::string>> manufacturers = 
+  m_bluetoothRcuController->getDeviceManufacturers( macaddress, manufacturer, searchFlags, (int64_t) 0, (int64_t) RCU_TOTAL_MANUFACTURER_TO_RETRIEVE, totalEntries );
+
+
+// AppInfrastructure/Singletons/lib/source/Singletons.cpp
+
+std::shared_ptr<AI_BLERCU::IBleRcuContoller> getBleRcuControllerProxyInstance()
+{
+    return FactoryContainer::getInstance().getRcuControllerProxy();
+}
+
+
 // Singletons/lib/source/FactoryContainer.cpp
+
+std::shared_ptr<AI_BLERCU::IBleRcuContoller> FactoryContainer::getRcuControllerProxy() const
+{
+    return blercuFactory->createBleRcuControllerProxy();
+}
 
 FactoryContainer::FactoryContainer()
     : aiDmsFactory(AIDms::Factory::getSharedInstance())
@@ -1141,6 +1375,23 @@ FactoryContainer::FactoryContainer()
     }
 
 
+// -----------------------------------------------------------------------------
+/**
+ * @brief Create RCU controller proxy object
+ *
+ *
+ * @return the RCU controller proxy object, or null pointer in case of failure
+ */
+std::shared_ptr<IBleRcuContoller> BleRcuFactory::createBleRcuControllerProxy()
+{
+  // return the controller if we've already created it
+  if (mController)
+  {
+    AI_LOG_FN_EXIT();
+    return mController;
+  }
+}
+
 <ai-bluetooth-client-side>
 
 COMPONENT_NAME := BleRcuClientLib
@@ -1179,6 +1430,9 @@ class BleRcuContollerProxy : public IBleRcuContoller
   virtual std::vector<BleRcuDeviceProperties> getRcuDevices() const final;
 };
 
+
+// AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.cpp
+
 BleRcuContollerProxy::BleRcuContollerProxy(
     const std::shared_ptr<AI_IPC::IIpcService>& ipcService, const std::shared_ptr<IInputHandler>& inputHandler)
 
@@ -1193,8 +1447,8 @@ BleRcuContollerProxy::BleRcuContollerProxy(
       std::bind(`&BleRcuContollerProxy::signalHandlerDeviceAdded`, this, std::placeholders::_1));
 
   //
-  IInputHandler::KeyListenerV2 irListener = std::bind(&BleRcuContollerProxy::onIrPairingCode,
-      this,
+  IInputHandler::KeyListenerV2 irListener = std::bind(
+      `&BleRcuContollerProxy::onIrPairingCode`, this,
       std::placeholders::_1,  // event source
       std::placeholders::_2,  // filter byte
       std::placeholders::_3,  // key code
@@ -1216,7 +1470,18 @@ void BleRcuContollerProxy::signalHandlerDeviceAdded(const AI_IPC::VariantList& a
   }
 }
 
-// BleRcuContollerProxy::updateDeviceList calls addDevicesToDeviceList
+void BleRcuContollerProxy::updateDeviceList()
+{
+  const AI_IPC::Method method(BLE_RCU_SERVICE, BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, 
+      "GetDevices");
+
+  AI_IPC::VariantList methodParams;
+  AI_IPC::VariantList methodReturnValue;
+
+  AI_LOG_INFO("Updating device list");
+
+  if (mIpcService->invokeMethod(method, methodParams, methodReturnValue))
+}
 
 void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& objectPaths)
 {
@@ -1240,6 +1505,7 @@ void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& o
 }
 
 
+*start-pairing*
 // get input key and kicks off pairing request
 
 void BleRcuContollerProxy::onIrPairingCode(IInputHandler::EventSource eventSource,
@@ -1270,7 +1536,18 @@ void BleRcuContollerProxy::triggerPairing(uint8_t pairingCode)
     return;
   }
 
-  const AI_IPC::Method method(BLE_RCU_SERVICE, BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, "StartPairing");
+  // #define BLE_RCU_SERVICE                         "com.sky.blercu"
+  // #define BLE_RCU_CONTROLLER_OBJECT               "/com/sky/blercu/controller"
+  // #define BLE_RCU_CONTROLLER_INTERFACE            "com.sky.blercu.Controller1"
+  // #define ORG_FREEDESKTOP_DBUS_PROPERTIES         "org.freedesktop.DBus.Properties"
+  // #define BLE_RCU_DEVICE_INTERFACE_DEVICE1        "com.sky.blercu.Device1"
+  // #define BLE_RCU_DEVICE_INTERFACE_INFRARED1      "com.sky.blercu.Infrared1"
+
+  const AI_IPC::Method method(
+      BLE_RCU_SERVICE, 
+      BLE_RCU_CONTROLLER_OBJECT, 
+      BLE_RCU_CONTROLLER_INTERFACE, 
+      "StartPairing");
 
   AI_IPC::VariantList methodParams = {pairingCode};
   AI_IPC::VariantList methodReturnValue;
@@ -1428,8 +1705,9 @@ Device 70:91:F3:22:BC:75 P039 SkyQ EC102
 [blercu]# connected-devices
 Device D4:B8:FF:12:E1:A8 P066 SkyQ EC101
 
-
+*dbus-monitor*
 dbus-monitor "interface=com.sky.BleRcuDevice1"
+
 
 void Console::initReadLine()
 {
@@ -1609,7 +1887,7 @@ bool BleRcuControllerImpl::registerOnBus(const QDBusConnection &dbusConn)
 }
 
 
-<ai-bluetooth-controller>
+<bluez-controller>
 
 dbusxml/com.sky.blercu.Controller1.xml
 
@@ -2325,6 +2603,16 @@ platform
 
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=~grayb&title=Android+-+HowTo+Release+Components
 
+Hi all,
+
+A new release of the SkyBluetoothRcu service - version 2.1.1 - has been tagged
+and pushed to git master.
+
+Gerrit merge requests have been created for sky/QIP100 branch.
+
+Release notes attached, highlights are:
+- Added feature to put the bluetooth code in 'searching' mode for 30 seconds. 
+
 
 <bt-remote-pairing>
 https://docs.ubuntu.com/core/en/stacks/bluetooth/bluez/docs/reference/pairing/introduction
@@ -2558,7 +2846,11 @@ static int doMain()
 }
 
 
-<config>
+<bluez-config>
+
+daemon/resources/resources.default.qrc
+3:      <file alias="defaultconfig.json">config.default.json</file>
+keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$
 
 // right config file used?
 // SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json
@@ -3518,6 +3810,7 @@ I BleRcuQt: < M:? F:? L:0 > started bluetooth RCU pairing procedure
 I BleRcuQt: < M:blercuadapter.cpp F:onAdapterDiscoveringChanged L:1297 > adapter started discovering
 I BleRcuQt: < M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:422 > KT: postEvent(DiscoveryStartedEvent)
 
+	bool startPairing(quint8 pairingCode) override;
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-android-jira
