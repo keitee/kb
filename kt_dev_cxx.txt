@@ -22656,11 +22656,42 @@ const_screen.display();
 
 {cxx-const-to-non-const-error}
 
+<ex>
 Screen& display() `const` { return *this;}
 
 test.cpp: In member function 'Screen& Screen::display() const':
 test.cpp:14:58: error: invalid initialisation of reference of type 'Screen&'
 from expression of type 'const Screen'
+
+<ex>
+ThreadedDispatcher(int priority, std::string &name = std::string());
+
+<ex>
+
+// not okay.
+void _do_work(std::string &name, int priority);
+
+// okay
+void _do_work(std::string const &name, int priority);
+
+ThreadedDispatcher::ThreadedDispatcher(int priority, std::string const &name)
+  : _running(true) 
+  , _t(std::thread(&ThreadedDispatcher::_do_work, this, name, priority))
+{}
+
+cause cryptic errors:
+
+// In file included from /usr/include/c++/6/memory:79:0,
+//                  from cxx_pattern.cpp:4:
+// /usr/include/c++/6/functional: In instantiation of ‘struct std::_Bind_simple<std::_Mem_fn<void (cxx_pattern_dispatcher::ThreadedDispatcher::*)(std::__cxx11::basic_string<char>&, int)>(cxx_pattern_dispatcher::ThreadedDispatcher*, std::__cxx11::basic_string<char>, int)>’:
+// /usr/include/c++/6/thread:138:26:   required from ‘std::thread::thread(_Callable&&, _Args&& ...) [with _Callable = void (cxx_pattern_dispatcher::ThreadedDispatcher::*)(std::__cxx11::basic_string<char>&, int); _Args = {cxx_pattern_dispatcher::ThreadedDispatcher*, const std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, int&}]’
+// cxx_pattern.cpp:1652:75:   required from here
+// /usr/include/c++/6/functional:1365:61: error: no type named ‘type’ in ‘class std::result_of<std::_Mem_fn<void (cxx_pattern_dispatcher::ThreadedDispatcher::*)(std::__cxx11::basic_string<char>&, int)>(cxx_pattern_dispatcher::ThreadedDispatcher*, std::__cxx11::basic_string<char>, int)>’
+//        typedef typename result_of<_Callable(_Args...)>::type result_type;
+//                                                              ^~~~~~~~~~~
+// /usr/include/c++/6/functional:1386:9: error: no type named ‘type’ in ‘class std::result_of<std::_Mem_fn<void (cxx_pattern_dispatcher::ThreadedDispatcher::*)(std::__cxx11::basic_string<char>&, int)>(cxx_pattern_dispatcher::ThreadedDispatcher*, std::__cxx11::basic_string<char>, int)>’
+//          _M_invoke(_Index_tuple<_Indices...>)
+         ^~~~~~~~~
 
 This causes `const-to-non-const` conversion *cxx-const-error-const*
 
@@ -61595,7 +61626,7 @@ namespace cxx_ccon
   class mutex : private __mutex_base
   {
     public:
-      typedef __native_type* 			native_handle_type;
+      typedef __native_type* native_handle_type;
 
 #ifdef __GTHREAD_MUTEX_INIT
       constexpr
@@ -61609,7 +61640,7 @@ namespace cxx_ccon
 
 
   /// @brief  Scoped lock idiom.
-  // Acquire the mutex here with a constructor call, then release with
+  // `Acquire the mutex here with a constructor call`, then release with
   // the destructor call in accordance with RAII style.
   template<typename _Mutex>
     class lock_guard
@@ -62994,13 +63025,52 @@ ready for processing.
 
 `The implementation of wait()` then checks the condition by calling the supplied
 lambda function and `returns if the expression returned true.` If the condition
-isn't satisfied, wait() unlocks the mutex and puts the thread in a blocked or
+isn't satisfied, `wait() unlocks the mutex` and puts the thread in a blocked or
 waiting state.
 
 the thread wakes from its slumber (unblocks it), reacquires the lock on the
 mutex, and checks the condition again, returning from wait() with the mutex
 still locked if the condition has been satisfied. If the condition hasn't been
 satisfied, the thread unlocks the mutex and resumes waiting. 
+
+<ex>
+
+  void ThreadedDispatcher::_do_work(std::string const &name, int priority)
+  {
+    std::unique_lock<std::mutex> lock(_m);
+
+    std::cout << "td is created" << std::endl;
+
+    while (_running)
+    {
+      // (see)
+      // exit wait when _running is false? which means when it's requested to
+      // stop? 
+      //
+      // so when requested to stop, run one work if there is even if it is
+      // possible to have many works in the queue.
+      //
+      // the original code is:
+      // cv.wait(lock, bind(&This::hasMoreWorkOrWasStopRequested, this));
+
+      // cxx_pattern.cpp:1716:27: error: ‘this’ was not captured for this lambda function
+      //       _cv.wait(lock, []{ !_q.empty() || !_running; });
+ 
+      _cv.wait(lock, [this]{ return !_q.empty() || !_running; });
+      if (!_q.empty())
+      {
+        std::function<void()> work = _next();
+
+        // (see) don't block adding work to the queue such as post() while
+        // dispatcher does the work
+
+        lock.unlock();
+        std::cout << "td do work" << std::endl;
+        work();
+        lock.lock();
+      }
+    }
+  }
 
 
 <cxx-condition-variable-suprious-wake>
@@ -63158,7 +63228,22 @@ class threadsafe_queue
     {
       std::unique_lock<std::mutex> lk(mut);
 
-      // *cxx-lambda-this* ??
+      // *cxx-lambda-this* 
+      //
+      // cxx_pattern.cpp:1716:27: error: ‘this’ was not captured for this lambda function
+      //       _cv.wait(lock, []{ !_q.empty() || !_running; });
+      //
+      // or can use [&] 
+
+      // when miss out "return" from lambda:
+      //       _cv.wait(lock, []{ !_q.empty() || !_running; });
+      //
+      // /usr/include/c++/6/condition_variable:98:13: error: could not convert ‘__p.cxx_pattern_dispatcher::ThreadedDispatcher::_do_work(const string&, int)::<lambda()>()’ from ‘void’ to ‘bool’
+      //   while (!__p())
+      //           ~~~^~
+      // /usr/include/c++/6/condition_variable:98:9: error: in argument to unary !
+      //   while (!__p())
+         ^~~~~~
 
       data_cond.wait(lk, [this]{return !data_queue.empty();});
 

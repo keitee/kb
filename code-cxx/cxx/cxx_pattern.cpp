@@ -10,6 +10,8 @@
 #include <regex>
 #include <boost/lexical_cast.hpp>
 #include <random>
+#include <mutex>
+#include <condition_variable>
 
 #include "gmock/gmock.h"
 
@@ -1583,15 +1585,16 @@ namespace cxx_pattern_dispatcher
 
       // ensures that any works that was in the queue before the call has been
       // executed
-      virtual void sync() = 0;
+      // virtual void sync() = 0;
 
-      virtual void invoked_from_this() = 0;
+      // check if it's called from the dispatch thread
+      virtual bool invoked_from_this() = 0;
   };
 
   // ThreadedDispatcher.h
   //
-  // (see that use `public keyword` to interfaces from parent and ones from this
-  // class.)
+  // (see) that use `public keyword` to interfaces from parent and ones from this
+  // class.
 
   class ThreadedDispatcher : public IDispatcher
   {
@@ -1602,15 +1605,270 @@ namespace cxx_pattern_dispatcher
 
       // ensures that any works that was in the queue before the call has been
       // executed
-      virtual void sync() final;
+      // virtual void sync() final;
 
-      virtual void invoked_from_this() final;
+      // true when calling thread is the  dispatcher
+      virtual bool invoked_from_this() final;
 
     public: // this class
+
+      ThreadedDispatcher(std::string const &name = std::string());
+
+      // create dispatcher with supplied SCHED_RR priority and name.
+      ThreadedDispatcher(int priority, std::string const &name = std::string());
+
+      ~ThreadedDispatcher();
+
       void flush();
+
+    private:
+      std::mutex _m;
+      std::condition_variable _cv;
+      bool _running;
+      std::deque<std::function<void()>> _q;
+      std::thread _t;
+
+      // returns next work item to run. this function assumes that there is work
+      // to be done and that the mutex is acquired
+
+      std::function<void()> _next();
+
+      // stop accepting new work
+      void _stop();
+
+      // entry point of the dispatcher 
+      void _do_work(std::string const &name, int priority);
   };
 
+  ThreadedDispatcher::ThreadedDispatcher(std::string const &name)
+    : ThreadedDispatcher(-1, name)
+  {}
+
+  // cxx_pattern.cpp:1645:25: error: ISO C++ forbids taking the address of an
+  // unqualified or parenthesized non-static member function to form a pointer
+  // to member function. 
+  // Say ‘&cxx_pattern_dispatcher::ThreadedDispatcher::_do_work’ [-fpermissive] ,
+  //
+  // _t(std::thread(&_do_work, this, name, priority))
+ 
+  ThreadedDispatcher::ThreadedDispatcher(int priority, std::string const &name)
+    : _running(true) 
+      , _t(std::thread(&ThreadedDispatcher::_do_work, this, name, priority))
+  {}
+
+  ThreadedDispatcher::~ThreadedDispatcher()
+  {
+    if (_running)
+    {
+      _stop();
+    }
+  }
+
+  void ThreadedDispatcher::post(std::function<void()> work)
+  {
+    // (see) this is original. does it make difference?
+    //
+    // std::unique_lock<std::mutex> lock(m);
+    // if(running)
+    // {
+    //     q.push_back(work);
+    //     lock.unlock();
+    //     cv.notify_one();
+    // }
+
+    std::lock_guard<std::mutex> lock(_m);
+
+    if (_running)
+    {
+      _q.push_back(work);
+      _cv.notify_one();
+    }
+    else
+    {
+      std::cout << "Ignoring work because the dispatcher is not running anymore" << std::endl;
+
+      // original comment:
+      // LOG_WARN("Ignoring work because the dispatcher is not running anymore");
+      // can't throw an exception here because if this is executed from destructor,
+      // which occurs when work adds more work things go horribly wrong.
+      // Instead, ignore work.
+    }
+  }
+
+  bool ThreadedDispatcher::invoked_from_this()
+  {
+    bool res = (std::this_thread::get_id() == _t.get_id());
+    return res;
+  }
+
+  void ThreadedDispatcher::_stop()
+  {
+    // (see) have to use unique_lock() since it uses thread::join()
+    
+    std::unique_lock<std::mutex> lock(_m);
+    _running = false;
+    _cv.notify_one();
+    lock.unlock();
+    _t.join();
+  }
+
+  std::function<void()> ThreadedDispatcher::_next()
+  {
+    // (see) std::move() has an effect here?
+    auto work = std::move(_q.front());
+    _q.pop_front();
+    return work;
+  }
+
+  void ThreadedDispatcher::_do_work(std::string const &name, int priority)
+  {
+    std::unique_lock<std::mutex> lock(_m);
+
+    // std::cout << "td is created" << std::endl;
+
+    while (_running)
+    {
+      // (see)
+      // exit wait when _running is false? which means when it's requested to
+      // stop? 
+      //
+      // so when requested to stop, run one work if there is even if it is
+      // possible to have many works in the queue.
+      //
+      // the original code is:
+      // cv.wait(lock, bind(&This::hasMoreWorkOrWasStopRequested, this));
+
+      // cxx_pattern.cpp:1716:27: error: ‘this’ was not captured for this lambda function
+      //       _cv.wait(lock, []{ !_q.empty() || !_running; });
+ 
+      _cv.wait(lock, [this]{ return !_q.empty() || !_running; });
+      if (!_q.empty())
+      {
+        std::function<void()> work = _next();
+
+        // (see) don't block adding work to the queue such as post() while
+        // dispatcher does the work
+
+        lock.unlock();
+        // std::cout << "td do work" << std::endl;
+        work();
+        lock.lock();
+      }
+    }
+  }
+
+  namespace
+  {
+    void unlockAndSetFlagToFalse(std::mutex& m, bool& flag)
+    {
+      using namespace std;
+      m.unlock();
+      flag = false;
+    }
+  }
+
+  /**
+   * @brief Perform any work remaining in the queue, then stop accepting new work.
+   */
+  void ThreadedDispatcher::flush()
+  {
+    //To ensure all the work that is in the queue is done, we lock a mutex.
+    //post a job to the queue that unlocks it and stops running further jobs.
+    //Then block here until that's done.
+    if(_running)
+    {
+      std::mutex m2;
+      m2.lock();
+      post(bind(unlockAndSetFlagToFalse, std::ref(m2), std::ref(this->_running)));
+      m2.lock();
+      m2.unlock();
+      _stop();
+    }
+    else
+    {
+      // AI_LOG_WARN("This dispatcher is no longer running. Ignoring flush request.");
+    }
+  }
 } // namespace
+
+namespace cxx_pattern_dispatcher
+{
+  void assign1(bool &what, bool value)
+  {
+    // std::cout << "assign1 is called, what: " << what << std::endl;
+    what = value;
+  }
+
+  void assign2(bool &what, bool value)
+  {
+    // std::cout << "assign2 is called, what: " << what << std::endl;
+    what = value;
+  }
+} // namespace
+
+TEST(PatternDispatcher, PostedWorkIsDone)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  // use sleep_for() to give dispatcher chance to run
+  {
+    bool isDone{false};
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+    td->post(std::bind(assign1, std::ref(isDone), true));
+    // td->flush();
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+
+    EXPECT_THAT(isDone, true);
+  }
+
+  // use flush() instead
+  {
+    bool isDone{false};
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+    td->post(std::bind(assign1, std::ref(isDone), true));
+    td->flush();
+
+    EXPECT_THAT(isDone, true);
+  }
+
+  // to see second work
+  {
+    bool isDone{false};
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+    td->post(std::bind(assign1, std::ref(isDone), true));
+    td->post(std::bind(assign2, std::ref(isDone), false));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+
+    EXPECT_THAT(isDone, false);
+  }
+
+}
+
+namespace cxx_pattern_dispatcher
+{
+  // dispatcher runs this so std::this_thread::get_id() is dispatcher.
+  void check_thread_id(thread::id test)
+  {
+    EXPECT_NE(std::this_thread::get_id(), test);
+  }
+} // namesapce
+
+
+// expect that gtest thread is different from dispatcher
+
+TEST(PatternDispatcher, PostedWorkIsDoneOnDispatcher)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+    td->post(std::bind(check_thread_id, std::this_thread::get_id()));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+  }
+}
 
 
 // ={=========================================================================
