@@ -1552,6 +1552,67 @@ TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
 }
 
 
+/*
+={=============================================================================
+
+cxx_pattern_dispatcher
+
+*/
+
+namespace cxx_pattern_dispatcher
+{
+  // Polymorphic.h
+  //
+  // original comments:
+  // Inherit from this from all types that have virtual functions. Doing so
+  // ensures that you have virtual destructor and saves you nasty surprises.
+
+  class Polymorphic
+  {
+    public:
+      virtual ~Polymorphic() {};
+  };
+
+  // IDispatcher.h
+
+  class IDispatcher : public Polymorphic
+  {
+    public:
+      // post an work item to be executed
+      virtual void post(std::function<void ()>) = 0;
+
+      // ensures that any works that was in the queue before the call has been
+      // executed
+      virtual void sync() = 0;
+
+      virtual void invoked_from_this() = 0;
+  };
+
+  // ThreadedDispatcher.h
+  //
+  // (see that use `public keyword` to interfaces from parent and ones from this
+  // class.)
+
+  class ThreadedDispatcher : public IDispatcher
+  {
+    public: // IDispatcher
+
+      // post an work item to be executed
+      virtual void post(std::function<void ()>) final;
+
+      // ensures that any works that was in the queue before the call has been
+      // executed
+      virtual void sync() final;
+
+      virtual void invoked_from_this() final;
+
+    public: // this class
+      void flush();
+  };
+
+} // namespace
+
+
 // ={=========================================================================
 int main(int argc, char** argv)
 {

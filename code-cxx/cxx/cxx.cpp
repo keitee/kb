@@ -698,6 +698,45 @@ TEST(Ctor, Unused)
 }
 
 
+namespace cxx_ctor
+{
+  class CtorCallsCtor
+  {
+    public:
+      CtorCallsCtor(std::string const &name)
+        : CtorCallsCtor(10, name)
+      {
+        std::cout << "CtorCallsCtor(string)" << std::endl;
+      }
+
+      CtorCallsCtor(int value, std::string const &name)
+        : value_(value), name_(name)
+      {
+        std::cout << "CtorCallsCtor(int, string)" << std::endl;
+      }
+
+      int get_value() const
+      { return value_; }
+
+      std::string get_name() const
+      { return name_; }
+
+    private:
+      int value_;
+      std::string name_;
+  };
+} // namespace
+
+TEST(Ctor, CtorCallsCtor)
+{
+  using namespace cxx_ctor;
+
+  CtorCallsCtor oo("cxx-oo");
+  EXPECT_THAT(oo.get_value(), 10);
+  EXPECT_THAT(oo.get_name(), "cxx-oo");
+}
+
+
 // ={=========================================================================
 // cxx-ctor-init-forms
 
