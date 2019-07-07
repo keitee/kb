@@ -1619,7 +1619,12 @@ namespace cxx_pattern_dispatcher
 
       ~ThreadedDispatcher();
 
+      // Perform any work remaining in the queue, then stop accepting new work.
       void flush();
+
+      // stop accepting new work and stop dispatcher even if there are works in
+      // the queue.
+      void stop();
 
     private:
       std::mutex _m;
@@ -1632,9 +1637,6 @@ namespace cxx_pattern_dispatcher
       // to be done and that the mutex is acquired
 
       std::function<void()> _next();
-
-      // stop accepting new work
-      void _stop();
 
       // entry point of the dispatcher 
       void _do_work(std::string const &name, int priority);
@@ -1660,7 +1662,7 @@ namespace cxx_pattern_dispatcher
   {
     if (_running)
     {
-      _stop();
+      stop();
     }
   }
 
@@ -1701,7 +1703,7 @@ namespace cxx_pattern_dispatcher
     return res;
   }
 
-  void ThreadedDispatcher::_stop()
+  void ThreadedDispatcher::stop()
   {
     // (see) have to use unique_lock() since it uses thread::join()
     
@@ -1710,6 +1712,7 @@ namespace cxx_pattern_dispatcher
     _cv.notify_one();
     lock.unlock();
     _t.join();
+    // std::cout << "stop: q size is " << _q.size() << std::endl;
   }
 
   std::function<void()> ThreadedDispatcher::_next()
@@ -1761,28 +1764,36 @@ namespace cxx_pattern_dispatcher
   {
     void unlockAndSetFlagToFalse(std::mutex& m, bool& flag)
     {
-      using namespace std;
+      // using namespace std;
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+      std::cout << "flush thread: waits ends" << std::endl;
       m.unlock();
-      flag = false;
+
+      // (see)
+      // without this, still works
+      // flag = false;
     }
   }
 
-  /**
-   * @brief Perform any work remaining in the queue, then stop accepting new work.
-   */
+  // (see)
+  // calling thread post a work and wait the same lock. (this post a work which unlock a lock. 
+
   void ThreadedDispatcher::flush()
   {
-    //To ensure all the work that is in the queue is done, we lock a mutex.
-    //post a job to the queue that unlocks it and stops running further jobs.
-    //Then block here until that's done.
+    // To ensure all the work that is in the queue is done, we lock a mutex.
+    // post a job to the queue that unlocks it and stops running further jobs.
+    // Then block here until that's done.
+
     if(_running)
     {
       std::mutex m2;
       m2.lock();
       post(bind(unlockAndSetFlagToFalse, std::ref(m2), std::ref(this->_running)));
+      std::cout << "flush calling thread: locked again" << std::endl;
       m2.lock();
+      std::cout << "flush calling thread: unlocked" << std::endl;
       m2.unlock();
-      _stop();
+      stop();
     }
     else
     {
@@ -1846,6 +1857,42 @@ TEST(PatternDispatcher, PostedWorkIsDone)
 
 }
 
+
+// [ RUN      ] PatternDispatcher.Flush
+// flush calling thread: locked again
+// assign_wait is called, what: 0
+// assign_wait is called, what: 1
+// flush thread: waits ends
+// flush calling thread: unlocked
+// [       OK ] PatternDispatcher.Flush (9001 ms)
+
+namespace cxx_pattern_dispatcher
+{
+  void assign_wait(bool &what, bool value)
+  {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::cout << "assign_wait is called, what: " << what << std::endl;
+    what = value;
+  }
+} // namespace
+
+TEST(PatternDispatcher, Flush)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  // use flush() instead
+  {
+    bool isDone{false};
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+    td->post(std::bind(assign_wait, std::ref(isDone), true));
+    td->post(std::bind(assign_wait, std::ref(isDone), false));
+    td->flush();
+
+    EXPECT_THAT(isDone, false);
+  }
+}
+
+
 namespace cxx_pattern_dispatcher
 {
   // dispatcher runs this so std::this_thread::get_id() is dispatcher.
@@ -1867,6 +1914,116 @@ TEST(PatternDispatcher, PostedWorkIsDoneOnDispatcher)
     td->post(std::bind(check_thread_id, std::this_thread::get_id()));
 
     std::this_thread::sleep_for(chrono::seconds(1));
+  }
+}
+
+
+namespace cxx_pattern_dispatcher
+{
+  void save_sequence(int &value)
+  {
+    static int sequence = 0;
+    value = ++sequence;
+  }
+} // namesapce
+
+// expect that works will be done in the order that they are posted.
+
+TEST(PatternDispatcher, PostedWorkIsDoneInOrder)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    int first{0};
+    int second{0};
+
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+    td->post(std::bind(save_sequence, std::ref(first)));
+    td->post(std::bind(save_sequence, std::ref(second)));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+
+    EXPECT_THAT(first, 1);
+    EXPECT_THAT(second, 2);
+    EXPECT_LT(first, second);
+  }
+}
+
+// may stop() cause deadlock? why?
+
+TEST(PatternDispatcher, StopDoNotCanuseDeadlock)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    int first{0};
+    int second{0};
+
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+    td->post(std::bind(save_sequence, std::ref(first)));
+    td->post(std::bind(save_sequence, std::ref(second)));
+    td->stop();
+  }
+}
+
+namespace cxx_pattern_dispatcher
+{
+  void increments(int &value)
+  {
+    ++value;
+    std::this_thread::sleep_for(chrono::milliseconds(10));
+  }
+} // namesapce
+
+// expect that all works will be done without one missed.
+
+TEST(DISABLED_PatternDispatcher, DoLotsOfWorks)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    int value{0};
+    const int count{100000};
+    shared_ptr<ThreadedDispatcher> td = make_shared<ThreadedDispatcher>();
+
+    for (int i = 0; i < count; ++i)
+    {
+      td->post(std::bind(increments, std::ref(value)));
+    }
+
+    td->flush();
+
+    EXPECT_THAT(value, count);
+  }
+}
+
+
+namespace cxx_pattern_dispatcher
+{
+  void notify_cv(std::mutex &m, std::condition_variable& cv)
+  {
+    std::lock_guard<std::mutex> lock(m);
+    cv.notify_one();
+  }
+} // namesapce
+
+// what is it going to test for?
+
+TEST(PatternDispatcher, AddMoreWork)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    auto td = std::make_shared<ThreadedDispatcher>();
+    std::mutex m;
+    std::condition_variable cv;
+    std::unique_lock<std::mutex> lock(m);
+
+    td->post(std::bind(notify_cv, std::ref(m), std::ref(cv)));
+
+    EXPECT_THAT(cv.wait_for(lock, std::chrono::seconds(5)), std::cv_status::no_timeout);
+
+    td->flush();
   }
 }
 

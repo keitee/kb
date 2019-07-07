@@ -6,6 +6,7 @@
 #include <queue>
 #include <stack>
 #include <exception>
+#include <random>
 
 #include <boost/thread/shared_mutex.hpp>
 // #include <boost/thread/thread.hpp>
@@ -648,6 +649,53 @@ namespace cxx_mutex
   // }
 
 } // cxx_mutex
+
+
+// note that this shows `deadlock` becuase calls lock() twice already before
+// running a thread which calls unlock().
+//
+// TEST(CConLock, MultipleLockAndUnlock)
+// {
+//   std::mutex print_mutex;
+// 
+//   std::mutex m;
+//   bool result{false};
+// 
+//   m.lock();
+//   m.lock();
+// 
+//   std::thread t([&]{m.unlock(); std::this_thread::sleep_for(std::chrono::seconds(2));});
+//   std::cout << "set" << std::endl;
+//   result = true;
+//   m.unlock();
+//   t.join();
+// 
+//   EXPECT_THAT(result, true);
+// }
+
+
+TEST(CConLock, MultipleLockAndUnlock)
+{
+  std::mutex print_mutex;
+
+  std::mutex m;
+  bool result{false};
+
+  m.lock();
+
+  std::thread t([&]{m.unlock(); std::this_thread::sleep_for(std::chrono::seconds(2));});
+
+  m.lock();
+  std::cout << "set" << std::endl;
+  result = true;
+
+  // note that this works without calling second unlock()
+  // m.unlock();
+
+  t.join();
+
+  EXPECT_THAT(result, true);
+}
 
 TEST(CConLock, LockGuard)
 {
