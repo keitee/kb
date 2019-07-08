@@ -1442,7 +1442,7 @@ BleRcuContollerProxy::BleRcuContollerProxy(
   , mIpcService(ipcService)
 
 {
-  setDispatcher(mDispatcher);
+  `setDispatcher(mDispatcher);`
 
   // #define BLE_RCU_CONTROLLER_OBJECT               "/com/sky/blercu/controller"
   // #define BLE_RCU_CONTROLLER_INTERFACE            "com.sky.blercu.Controller1"
@@ -1521,9 +1521,14 @@ void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& o
 *start-pairing*
 // get input key and kicks off pairing request
 
-void BleRcuContollerProxy::onIrPairingCode(IInputHandler::EventSource eventSource,
-                                           uint8_t filterByte, uint16_t keyCode, bool keyState)
+void BleRcuContollerProxy::onIrPairingCode(
+    IInputHandler::EventSource eventSource,
+    uint8_t filterByte, 
+    uint16_t keyCode, bool keyState)
 {
+  // unused - filter byte is used in the predicate before we get here
+  (void)filterByte;
+
   // sanity check
   if ((keyCode & 0xff00) != (USER_INPUT_KEY_PAIRING_000 & 0xff00))
   {
@@ -1535,7 +1540,8 @@ void BleRcuContollerProxy::onIrPairingCode(IInputHandler::EventSource eventSourc
 
   AI_LOG_MILESTONE("received IR pairing code %03hhu", pairingCode);
 
-  mDispatcher->post(std::bind(&BleRcuContollerProxy::triggerPairing, this, pairingCode));
+  mDispatcher->post(std::bind(
+        &BleRcuContollerProxy::triggerPairing, this, pairingCode));
 }
 
 void BleRcuContollerProxy::triggerPairing(uint8_t pairingCode)
@@ -2865,6 +2871,10 @@ daemon/resources/resources.default.qrc
 3:      <file alias="defaultconfig.json">config.default.json</file>
 keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$
 
+gvimdiff /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json
+cdiff /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json
+meld /home/keitee/ip/SkyBluetoothRcu/app/src/ /home/keitee/ip/repo/SkyBluetoothRcu/app/src/
+
 // right config file used?
 // SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json
 
@@ -3146,7 +3156,11 @@ void BleRcuService::onIrKeyPress(quint16 keyCode, qint32 scanCode)
 {
   // check for the pairing keyCode F13 which is the new format
   if (keyCode == KEY_F13) {
+
+    // 03th byte
     const quint8 filterByte = quint8((scanCode >> 16) & 0xff);
+
+    // 01st byte
     const quint8 pairingCode = quint8((scanCode >> 0) & 0xff);
 
     // kick off pairing using supplied pairing code
@@ -3156,7 +3170,7 @@ void BleRcuService::onIrKeyPress(quint16 keyCode, qint32 scanCode)
 
 
 // app/src/main/cpp/blercu/blercucontroller.cpp
-*start-pairing*
+*start-pairing-android*
 bool BleRcuControllerImpl::startPairing(quint8 filterByte, quint8 pairingCode)
 {
   // start the pairing process
@@ -3229,9 +3243,24 @@ class BleRcuControllerImpl : public BleRcuController
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
 
 
+// *pairing-fsm-regex*
+//
 // m_pairingPrefixFormats is built from *config* when fsm starts and is used to
-// check if current devices does match up with expected pattern when
-// processDevice gets called by handling events
+// check if current devices does match up with expected pattern in
+// `processDevice()` which gets called when device found and added
+//
+// "pairingNameFormat": "U%03hhu SkyQ EC202",
+//
+// BleRcuPairingStateMachine::BleRcuPairingStateMachine(const QSharedPointer<const ConfigSettings> &config)
+// {
+//   // constructs a map of name printf style formats for searching for device
+//   // names that match
+//   const QList<ConfigModelSettings> models = config->modelSettings();
+//   for (const ConfigModelSettings &model : models) {
+//     `m_pairingPrefixFormats`[model.oui()] = model.pairingNameFormat();
+//   }
+// }
+//
 
 // "130" is *paringcode*
 // 
@@ -3267,7 +3296,7 @@ void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
         regEx.pattern().toLatin1().constData());
 
     // add to the map to use for compare when a device is found
-    m_pairingPrefixes.insert(it.key(), std::move(regEx));
+    `m_pairingPrefixes`.insert(it.key(), std::move(regEx));
   }
 
   // start the state machine
@@ -3333,6 +3362,34 @@ void BleRcuPairingStateMachine::onStateExit(int state)
 // from adaptor signal
 
 < M:blercuadapter.cpp F:onAdapterDiscoveringChanged L:1297 > adapter started discovering
+bool BleRcuControllerImpl::startScanning(int timeoutMs)
+{
+	// check we're not currently pairing
+	if (m_pairingStateMachine.isRunning()) {
+		qWarning("currently performing pairing, cannot start new scan");
+		return false;
+	}
+
+	// check we're not already scanning
+	if (m_scannerStateMachine.isRunning()) {
+		qWarning("already scanning, new scan request aborted");
+		return false;
+	}
+
+	// check that the manager has powered on the adapter, without this we
+	// obviously can't scan. The only time the adaptor should (legitimately) be
+	// unavailable is right at start-up
+	if (!m_adapter->isAvailable() || !m_adapter->isPowered()) {
+		m_lastError = BleRcuError(BleRcuError::General,
+		                          QStringLiteral("Adaptor not available or not powered"));
+		return false;
+	}
+
+	// start the pairing process
+	emit stateChanged(PairingState::Searching);
+	m_scannerStateMachine.start(timeoutMs);
+	return true;
+}
 < M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:422 > KT: postEvent(DiscoveryStartedEvent)
 < M:statemachine.cpp F:postEvent L:766 > KT: event type (1001)
 < M:statemachine.cpp F:moveToState L:193 > KT: set current state (3)
@@ -3677,7 +3734,7 @@ bool BleRcuAdapterBluez::isDevicePaired(const BleAddress &address) const
 		}
 
 
-<bt-remote-scanning>
+<bluez-scanning>
 https://www.stb.bskyb.com/confluence/display/~grayb/Bluetooth+RCU+Pairing+Without+Infrared
 
 Bluetooth RCU Pairing(scan)
@@ -3788,6 +3845,7 @@ void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
     return;
   }
 
+*start-pairing-android-from-scan*
   // start pairing the device
   m_pairingStateMachine.start(address, name);
 }

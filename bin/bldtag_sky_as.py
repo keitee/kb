@@ -12,15 +12,15 @@ if __name__ == "__main__":
     # dirs to include
     dirs = [
         # as
-        'Components/AS/Services/Controllers',
-        'Components/Bluetooth',
-        'Components/Main',
+        'ethan-as-source/Components/AS/Services/Controllers',
+        'ethan-as-source/Components/Bluetooth',
+        'ethan-as-source/Components/Main',
         # ai
-        'AppInfrastructure/BluetoothRcu',
-        'AppInfrastructure/Public',
-        'AppInfrastructure/Singletons',
-        'AppInfrastructure/IpcService',
-        'AppInfrastructure/Common'
+        'appinfrastructure/AppInfrastructure/BluetoothRcu',
+        'appinfrastructure/AppInfrastructure/Public',
+        'appinfrastructure/AppInfrastructure/Singletons',
+        'appinfrastructure/AppInfrastructure/IpcService',
+        'appinfrastructure/AppInfrastructure/Common'
         ]
 
     listfile = 'flist.out'

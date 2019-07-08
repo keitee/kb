@@ -2498,16 +2498,34 @@ TEST(AlgoSwap, IterSwap)
 
 // ={=========================================================================
 // cxx-algo-copy
+//
+
+TEST(AlgoCopy, Error)
+{
+  {
+    std::vector<int> coll;
+
+    for (int i = 0; i <= 6; ++i)
+      coll.push_back(i);
+
+    auto first = std::find(coll.begin(), coll.end(), 300);
+    auto last = std::find(coll.begin(), coll.end(), 3);
+
+    std::copy(first, last, std::ostream_iterator<int>(cout, ", "));
+  }
+}
 
 TEST(AlgoCopy, UseOnDifferentCollections)
 {
-  vector<int> coll{1,2,3,4,5,6};
-  EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
+  {
+    vector<int> coll{1,2,3,4,5,6};
+    EXPECT_THAT(coll, ElementsAre(1,2,3,4,5,6));
 
-  list<int> coll1;
-  
-  copy(coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
-  EXPECT_THAT(coll1, ElementsAre(1,2,3,4,5,6));
+    list<int> coll1;
+
+    copy(coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
+    EXPECT_THAT(coll1, ElementsAre(1,2,3,4,5,6));
+  }
 }
 
 
