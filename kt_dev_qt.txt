@@ -1691,6 +1691,75 @@ private:
     QString m_text;
 
 
+<ex>
+When miss out Q_PROPERTY() for added property, see this warning from:
+
+class BleRcuController1Adaptor : public DBusAbstractAdaptor
+{
+  Q_OBJECT
+  Q_CLASSINFO("D-Bus Interface", "com.sky.blercu.Controller1")
+    ...
+  public:
+  Q_PROPERTY(quint32 Status)
+    ...
+};
+
+
+See this message:
+
+odd, no meta property for "Status"
+
+
+void DBusAbstractInterface::onPropertiesChanged(const QString& interfaceName,
+                                                const QVariantMap& changedProperties,
+                                                const QStringList& invalidatedProperties)
+{
+  Q_UNUSED(invalidatedProperties);
+
+  // sanity check the interface is correct
+  if (Q_UNLIKELY(interfaceName != QDBusAbstractInterface::interface())) {
+    qInfo() << "odd, received PropertiesChanged signal from wrong interface";
+    return;
+  }
+
+  // iterate through the changed properties
+  QVariantMap::const_iterator it = changedProperties.begin();
+  for (; it != changedProperties.end(); ++it) {
+
+    const QString &propName = it.key();
+    const QVariant &propValue = it.value();
+
+    // try and find the meta index of the named property
+    const int propIndex = metaObject()->indexOfProperty(propName.toLatin1().constData());
+    if (propIndex < 0) {
+      qInfo("odd, no meta property for %s.%s",
+          qPrintable(interfaceName), qPrintable(propName));
+      continue;
+    }
+
+    // check if the property has the notify flag, if not ignore the change
+    const QMetaProperty propMeta = metaObject()->property(propIndex);
+    if (!propMeta.hasNotifySignal()) {
+      qDebug("skipping property change notification for %s.%s",
+          qPrintable(interfaceName), qPrintable(propName));
+      continue;
+    }
+
+    const QMetaMethod notifyMethod = propMeta.notifySignal();
+    if (Q_UNLIKELY(!notifyMethod.isValid())) {
+      qWarning("odd, invalid property notify signal for %s.%s",
+          qPrintable(interfaceName), qPrintable(propName));
+      continue;
+    }
+
+    // invoke the notify signal
+    invokeNotifySignal(notifyMethod, propName, propValue, propMeta.userType());
+  }
+
+  // TODO: handle invalidatedProperties as well
+}
+
+
 # ============================================================================
 #{
 ={============================================================================

@@ -1099,14 +1099,170 @@ keitee@keitee-mint:~/mw/appinfrastructure/xSubmoduleDarwinSDK$
 lrwxrwxrwx  1 keitee keitee   66 Jul  1 15:53 
 eu-q-titan-uk -> /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk//
 
+keitee@keitee-mint:~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/THIRD_PARTY_LIBS_2/BSKYB_GEN2_APP_INFRASTRUCTURE$ ll
+total 16K
+-rw-r--r--  1 keitee keitee   63 May 14 10:41 BSKYB_GEN2_APP_INFRASTRUCTURE_tag.txt
+drwxr-xr-x 66 keitee keitee 4.0K May 14 10:41 AppInfrastructure_org/
+drwxr-xr-x 10 keitee keitee 4.0K May 14 10:41 ../
+lrwxrwxrwx  1 keitee keitee   51 Jul  9 15:41 AppInfrastructure -> /home/keitee/mw/appinfrastructure/AppInfrastructure/
+drwxr-xr-x  3 keitee keitee 4.0K Jul  9 15:41 ./
+
+
 keitee@keitee-mint:~/mw/appinfrastructure/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK$ ls -al flash0
 flash0/                  flash0_sky_TITAN.tar.gz  flash0.tar.gz
 
 cp -r flash0/ ~/mw/exports/titan/
 
 
+<bluez-factory>
 
-<ai-bluetooth-client-as>
+// Singletons/lib/source/FactoryContainer.cpp
+
+std::shared_ptr<AI_BLERCU::IBleRcuContoller> FactoryContainer::getRcuControllerProxy() const
+{
+    return blercuFactory->createBleRcuControllerProxy();
+}
+
+FactoryContainer::FactoryContainer()
+    : aiDmsFactory(AIDms::Factory::getSharedInstance())
+    , aiConfig(std::make_shared<AppInfrastructureConfig>(aiDmsFactory))
+    , sysInfo(new SystemInfo())
+    , wsMediatorFactory(new WebSocketMediator::WebSocketMediatorFactory(SkyDefinitions::getWebsocketMediatorPorts()))
+    , rmFactory(new RuntimeManagerFactory(aiConfig, sysInfo))
+    , pmFactory(new PackageManagerFactory(aiConfig))
+    , ampFactory(new ApplicationManagerProxy::Factory(aiConfig))
+    , verifierFactory( new xmldsigverifier::Factory(aiConfig))
+    , webServerFactory(new AppWebServerFactory())
+    , softCatFactory(new SoftCatFactory(aiConfig))
+    , applicationLaunchPolicyFactory(new ApplicationLaunchPolicyFactory(aiConfig))
+    , jumperFactory(new jumper::JumperFactory())
+    , dbusServerFactory(new AI_DBUS::DbusServerFactory())
+    , aiDiagnosticsFactory(new AIDiagnostics::DiagnosticsFactory(aiConfig))
+    , credentialsManagerFactory(new CredentialsManagerFactory())
+    , upnpDiscoveryFactory(new UPnPDiscoveryFactory())
+
+    , `blercuFactory(std::make_shared<AI_BLERCU::BleRcuFactory>())`
+
+    , irrcuFactory(std::make_shared<AI_IRRCU::IrRcuFactory>())
+    , netflixProxyFactory(std::make_shared<Netflix::Factory>())
+    , terminalProxy(std::make_shared<AIDms::TerminalProxy>())
+    {
+
+      // setup the dbus daemon for apps to use
+      std::shared_ptr<AI_DBUS::IDbusServer> dbusServerPublic =
+        initAndStartDbusServer(AI_DBUS::DbusServerId::AI_PUBLIC);
+
+      dbusServers[AI_DBUS::DbusServerId::AI_PRIVATE] = dbusServerPrivate;
+      std::shared_ptr<AI_IPC::IIpcService> ipcServicePrivate =
+        AI_IPC::createIpcService(dbusServerPrivate, IPC_SERVICE_APP_PROCESS);
+      ipcServices[AI_DBUS::DbusServerId::AI_PRIVATE] = ipcServicePrivate;
+
+      // create the BleRcu factory, which just launches the daemon (requires the system IPC service)
+      blercuFactory->setLocale(aiDmsFactory->createLocale());
+
+      `blercuFactory->setIpcService(ipcServicePrivate);`
+
+      blercuFactory->setInputHandler(inputHandler);
+      blercuFactory->startDaemon(dobbyProxy);
+
+      // creates BleRcuContollerProxy
+      blercuFactory->`createBleRcuControllerProxy`();
+    }
+
+
+// -----------------------------------------------------------------------------
+/**
+ * @brief Create RCU controller proxy object
+ *
+ *
+ * @return the RCU controller proxy object, or null pointer in case of failure
+ */
+std::shared_ptr<IBleRcuContoller> BleRcuFactory::createBleRcuControllerProxy()
+{
+  // return the controller if we've already created it
+  if (mController)
+  {
+    AI_LOG_FN_EXIT();
+    return mController;
+  }
+}
+
+// AppInfrastructure/Singletons/lib/source/Singletons.cpp
+
+std::shared_ptr<AI_BLERCU::IBleRcuContoller> getBleRcuControllerProxyInstance()
+{
+    return FactoryContainer::getInstance().`getRcuControllerProxy`();
+}
+
+
+<bluez-as-observer>
+
+// ethan-as-source/Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.h
+// Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.cpp
+
+class BluetoothRcuDeviceEventObserver : public AICommon::Observer<AI_BLERCU::IBleRcuDeviceEvent>
+{
+  public:
+    /**
+     * @brief Constructor
+     *
+     * @param[in] queue      : Pointer to queue
+     */
+    BluetoothRcuDeviceEventObserver( AS_WORKER::Queue *queue );
+
+    /**
+     * @brief Listener to be invoked when pairing state has changed
+     *
+     * @param[in] pairingInProgress      : Pairing state
+     */
+    void pairingStatusChanged( bool pairingInProgress );
+
+    /**
+     * @brief Listener to be invoked when rcu device properties has changed
+     */
+    void deviceListChanged();
+
+  private:
+    AS_WORKER::Queue *m_queue;                                ///< Pointer to queue
+};
+
+
+m_bluetoothRcuDeviceObserver = std::make_shared < BluetoothRcuDeviceEventObserver > (m_queue);
+
+m_bluetoothRcuController = `getBleRcuControllerProxyInstance`();
+
+m_bluetoothRcuController->addObserver( m_bluetoothRcuDeviceObserver );
+
+std::pair<bool, std::vector<std::string>> manufacturers = 
+`m_bluetoothRcuController->getDeviceManufacturers`( macaddress, manufacturer, searchFlags, (int64_t) 0, (int64_t) RCU_TOTAL_MANUFACTURER_TO_RETRIEVE, totalEntries );
+
+
+void BleRcuContollerProxy::signalHandlerPropertiesChanged(const AI_IPC::VariantList& args)
+{
+  mDispatcher->post(std::bind(&BleRcuContollerProxy::notifyPairingStatusChanged, this, mPairing.load()));
+}
+
+void BleRcuContollerProxy::notifyPairingStatusChanged(bool pairing)
+{
+  notify( std::bind(&IBleRcuDeviceEvent::pairingStatusChanged, std::placeholders::_1, pairing) );
+}
+
+// ethan-as-source/Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.cpp
+void BluetoothRcuDeviceEventObserver::pairingStatusChanged( bool pairingInProgress )
+{ 
+}
+
+
+<ai-bluetooth-client-side>
+
+COMPONENT_NAME := BleRcuClientLib
+
+// BluetoothRcu/client/lib/include/BleRcuFactory.h
+
+    std::map<std::string, std::shared_ptr<BleRcuDevice>> mRcuDevices;
+
+
+*bluez-sky-controller*
 
 // AppInfrastructure/Public/Common/Notifier.h
 
@@ -1303,102 +1459,6 @@ public:
 };
 
 
-// Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.cpp
-
-m_bluetoothRcuController = getBleRcuControllerProxyInstance();
-
-m_bluetoothRcuController->addObserver( m_bluetoothRcuDeviceObserver );
-
-std::pair<bool, std::vector<std::string>> manufacturers = 
-  m_bluetoothRcuController->getDeviceManufacturers( macaddress, manufacturer, searchFlags, (int64_t) 0, (int64_t) RCU_TOTAL_MANUFACTURER_TO_RETRIEVE, totalEntries );
-
-
-// AppInfrastructure/Singletons/lib/source/Singletons.cpp
-
-std::shared_ptr<AI_BLERCU::IBleRcuContoller> getBleRcuControllerProxyInstance()
-{
-    return FactoryContainer::getInstance().getRcuControllerProxy();
-}
-
-
-// Singletons/lib/source/FactoryContainer.cpp
-
-std::shared_ptr<AI_BLERCU::IBleRcuContoller> FactoryContainer::getRcuControllerProxy() const
-{
-    return blercuFactory->createBleRcuControllerProxy();
-}
-
-FactoryContainer::FactoryContainer()
-    : aiDmsFactory(AIDms::Factory::getSharedInstance())
-    , aiConfig(std::make_shared<AppInfrastructureConfig>(aiDmsFactory))
-    , sysInfo(new SystemInfo())
-    , wsMediatorFactory(new WebSocketMediator::WebSocketMediatorFactory(SkyDefinitions::getWebsocketMediatorPorts()))
-    , rmFactory(new RuntimeManagerFactory(aiConfig, sysInfo))
-    , pmFactory(new PackageManagerFactory(aiConfig))
-    , ampFactory(new ApplicationManagerProxy::Factory(aiConfig))
-    , verifierFactory( new xmldsigverifier::Factory(aiConfig))
-    , webServerFactory(new AppWebServerFactory())
-    , softCatFactory(new SoftCatFactory(aiConfig))
-    , applicationLaunchPolicyFactory(new ApplicationLaunchPolicyFactory(aiConfig))
-    , jumperFactory(new jumper::JumperFactory())
-    , dbusServerFactory(new AI_DBUS::DbusServerFactory())
-    , aiDiagnosticsFactory(new AIDiagnostics::DiagnosticsFactory(aiConfig))
-    , credentialsManagerFactory(new CredentialsManagerFactory())
-    , upnpDiscoveryFactory(new UPnPDiscoveryFactory())
-
-    , `blercuFactory(std::make_shared<AI_BLERCU::BleRcuFactory>())`
-
-    , irrcuFactory(std::make_shared<AI_IRRCU::IrRcuFactory>())
-    , netflixProxyFactory(std::make_shared<Netflix::Factory>())
-    , terminalProxy(std::make_shared<AIDms::TerminalProxy>())
-    {
-
-      // setup the dbus daemon for apps to use
-      std::shared_ptr<AI_DBUS::IDbusServer> dbusServerPublic =
-        initAndStartDbusServer(AI_DBUS::DbusServerId::AI_PUBLIC);
-
-      dbusServers[AI_DBUS::DbusServerId::AI_PRIVATE] = dbusServerPrivate;
-      std::shared_ptr<AI_IPC::IIpcService> ipcServicePrivate =
-        AI_IPC::createIpcService(dbusServerPrivate, IPC_SERVICE_APP_PROCESS);
-      ipcServices[AI_DBUS::DbusServerId::AI_PRIVATE] = ipcServicePrivate;
-
-      // create the BleRcu factory, which just launches the daemon (requires the system IPC service)
-      blercuFactory->setLocale(aiDmsFactory->createLocale());
-
-      `blercuFactory->setIpcService(ipcServicePrivate);`
-
-      blercuFactory->setInputHandler(inputHandler);
-      blercuFactory->startDaemon(dobbyProxy);
-
-      // creates BleRcuContollerProxy
-      blercuFactory->`createBleRcuControllerProxy`();
-    }
-
-
-// -----------------------------------------------------------------------------
-/**
- * @brief Create RCU controller proxy object
- *
- *
- * @return the RCU controller proxy object, or null pointer in case of failure
- */
-std::shared_ptr<IBleRcuContoller> BleRcuFactory::createBleRcuControllerProxy()
-{
-  // return the controller if we've already created it
-  if (mController)
-  {
-    AI_LOG_FN_EXIT();
-    return mController;
-  }
-}
-
-<ai-bluetooth-client-side>
-
-COMPONENT_NAME := BleRcuClientLib
-
-// BluetoothRcu/client/lib/include/BleRcuFactory.h
-
-    std::map<std::string, std::shared_ptr<BleRcuDevice>> mRcuDevices;
 
 // client/lib/source/BleRcuFactory.cpp
 std::shared_ptr<IBleRcuContoller> BleRcuFactory::createBleRcuControllerProxy()
@@ -1408,17 +1468,6 @@ std::shared_ptr<IBleRcuContoller> BleRcuFactory::createBleRcuControllerProxy()
     mController = std::make_shared<BleRcuContollerProxy>(mIpcService, mInputHandler);
   }
 }
-
-
-// appinfrastructure/AppInfrastructure/Public/BluetoothRcu/IBluetoothRcu.h
-class IBleRcuContoller : public AICommon::Notifier<IBleRcuDeviceEvent>
-{
-  public:
-    /**
-     * @brief Get information about the RCU devices
-     */
-    virtual std::vector<BleRcuDeviceProperties> getRcuDevices() const = 0;
-};
 
 
 // client/lib/source/BleRcuController.h
@@ -1432,7 +1481,7 @@ class `BleRcuContollerProxy` : public IBleRcuContoller
 };
 
 
-// AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.cpp
+// AppInfrastructure/BluetoothRcu/`client/lib/source/BleRcuController.cpp`
 
 BleRcuContollerProxy::BleRcuContollerProxy(
     const std::shared_ptr<AI_IPC::IIpcService>& ipcService, const std::shared_ptr<IInputHandler>& inputHandler)
@@ -1447,10 +1496,16 @@ BleRcuContollerProxy::BleRcuContollerProxy(
   // #define BLE_RCU_CONTROLLER_OBJECT               "/com/sky/blercu/controller"
   // #define BLE_RCU_CONTROLLER_INTERFACE            "com.sky.blercu.Controller1"
 
+  // for signals
   std::string handle = mIpcService->registerSignalHandler(
       AI_IPC::Signal(BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, "DeviceAdded"),
       std::bind(`&BleRcuContollerProxy::signalHandlerDeviceAdded`, this, std::placeholders::_1));
 
+  // for properties
+  handle = mIpcService->registerSignalHandler(
+      AI_IPC::Signal(BLE_RCU_CONTROLLER_OBJECT, ORG_FREEDESKTOP_DBUS_PROPERTIES, "PropertiesChanged"),
+      std::bind(`&BleRcuContollerProxy::signalHandlerPropertiesChanged`, this, std::placeholders::_1));
+ 
   //
   IInputHandler::KeyListenerV2 irListener = std::bind(
       `&BleRcuContollerProxy::onIrPairingCode`, this,
@@ -1521,7 +1576,7 @@ void BleRcuContollerProxy::addDevicesToDeviceList(const std::set<std::string>& o
 *start-pairing*
 // get input key and kicks off pairing request
 
-void BleRcuContollerProxy::onIrPairingCode(
+void `BleRcuContollerProxy::onIrPairingCode`(
     IInputHandler::EventSource eventSource,
     uint8_t filterByte, 
     uint16_t keyCode, bool keyState)
@@ -1541,10 +1596,10 @@ void BleRcuContollerProxy::onIrPairingCode(
   AI_LOG_MILESTONE("received IR pairing code %03hhu", pairingCode);
 
   mDispatcher->post(std::bind(
-        &BleRcuContollerProxy::triggerPairing, this, pairingCode));
+        &`BleRcuContollerProxy::triggerPairing`, this, pairingCode));
 }
 
-void BleRcuContollerProxy::triggerPairing(uint8_t pairingCode)
+void `BleRcuContollerProxy::triggerPairing`(uint8_t pairingCode)
 {
   // if the daemon is already signalling that pairing is running don't bother
   // trying to start it again
@@ -1635,9 +1690,6 @@ void BleRcuContollerProxy::notifyDeviceListChanged()
 {
   notify( std::bind(&IBleRcuDeviceEvent::deviceListChanged, std::placeholders::_1) );
 }
-
-// Public/Common/Notifier.h
-// class Notifier : virtual public Polymorphic
 
 
 <ai-bluetooth-console-side>
@@ -1906,7 +1958,7 @@ bool BleRcuControllerImpl::registerOnBus(const QDBusConnection &dbusConn)
 }
 
 
-<bluez-controller>
+<bluez-sky-controller>
 
 dbusxml/com.sky.blercu.Controller1.xml
 
@@ -2872,6 +2924,9 @@ daemon/resources/resources.default.qrc
 keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$
 
 gvimdiff /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json
+cdiff /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json
+cp /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json
+mv /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json.kt
 cdiff /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/resources/config.android.json
 meld /home/keitee/ip/SkyBluetoothRcu/app/src/ /home/keitee/ip/repo/SkyBluetoothRcu/app/src/
 
