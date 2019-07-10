@@ -10,3 +10,6 @@ DBUS_INTERFACES += org.example.chat.xml
 # install
 target.path = $$[QT_INSTALL_EXAMPLES]/dbus/chat
 INSTALLS += target
+
+DISTFILES += \
+    org.example.chat.xml

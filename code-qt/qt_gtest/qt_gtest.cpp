@@ -708,10 +708,13 @@ TEST(Qt, Thread)
     // need to make a link to QApplication and also need to run QApplication and
     // exec in the main.
 
-    QObject::connect(worker, SIGNAL (finished()), QApplication::instance(), SLOT (quit()));
+    // does end main() but do not run a test after this
+    // QObject::connect(worker, SIGNAL (finished()), QApplication::instance(), SLOT (quit()));
 
-    QObject::connect(worker, SIGNAL (finished()), worker, SLOT (deleteLater()));
-    QObject::connect(thread, SIGNAL (finished()), thread, SLOT (deleteLater()));
+    // both do not end main()
+    // QObject::connect(worker, SIGNAL (finished()), worker, SLOT (deleteLater()));
+    // QObject::connect(thread, SIGNAL (finished()), thread, SLOT (deleteLater()));
+
     thread->start();
   }
 
