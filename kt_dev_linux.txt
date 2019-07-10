@@ -539,7 +539,7 @@
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
 *kt_linux_core_200* linux-sync-semaphore
-*kt_linux_core_201* linux-sync-mutex
+*kt_linux_core_201* os-mutex
 *kt_linux_core_202* linux-sync-deadlock
 *kt_linux_core_202* linux-sync-cond
 *kt_linux_core_202* linux-sync-cond-lost-wake-up-issue
@@ -54438,15 +54438,17 @@ each item would require us to design a convention for generating a (unique)
 
 
 ={============================================================================
-*kt_linux_core_201* linux-sync-mutex
+*kt_linux_core_201* os-mutex
 
 LPI-30 Thread Synchronization
 
 Mutexes allow threads to synchronize their use of a shared resource, so that,
 for example, one thread doesn’t try to access a shared variable at the same
-  time as another thread is modifying it. Condition variables perform a
-    `complementary task`: they allow threads to inform each other that a
-    shared variable (or other shared resource) has changed state.
+  time as another thread is modifying it. 
+    
+*os-condition-variable* perform a `complementary task`: they allow threads to
+inform each other that a shared variable (or other shared resource) has
+changed state.
 
 The term critical section is used to refer to a section of code that accesses
 a shared resource and whose execution should be `atomic`; that is, its
@@ -54454,7 +54456,7 @@ execution should not be interrupted by another thread that simultaneously
 accesses the same shared resource.
 
 In the below problem, two threads shares the same code. It is about critial
-region but what is really protected is the 'data' being manipulated within the
+region but what is really protected is the `data` being manipulated within the
 critical region.
 
 note:
@@ -54466,24 +54468,25 @@ From 2.6, NPTL(New Posix Threading Library) that supports futex(fast user
 The kind of problems that can occur when shared resources are not accessed
 atomically.
 
-This program creates two threads, each of which executes the same function. The
-function executes a loop that repeatedly increments a global variable, glob, by
-copying glob into the local variable loc.
-
+This program creates two threads, each of which executes the same function.
+The function executes a loop that repeatedly increments a global variable,
+glob, by copying glob into the local variable loc.
 
 Since loc is an automatic variable allocated on the per-thread stack, each
-thread has its 'own' copy of this variable.
+thread has its `own` copy of this variable.
 
 The vagaries of the kernel's CPU scheduling decisions:
 The scheduler time slice for thread 1 expires, and thread 2 commences execution.
 
+*cxx-race*
 In complex programs, this `nondeterministic` behavior means that such errors may
 occur only rarely, be hard to reproduce, and therefore be difficult to find.
 
 
 static int glob = 0;
 
-// Loop 'arg' times incrementing 'glob'
+// Loop arg times incrementing glob
+
 static void * threadFunc(void *arg)
 {
   int loops = *((int *) arg);
@@ -54541,28 +54544,28 @@ staic void threadFunc()
 However, on many hardware architectures (e.g., RISC architectures), the
 compiler would still need to convert this single statement into machine code
 whose steps are equivalent to the three statements inside the loop. In other
-words, despite its simple appearance, even a C increment operator may 'not' be
+words, despite its simple appearance, even a C increment operator may `not` be
 atomic.
 
 
-{mutex}
+{os-mutex}
 More generally, mutexes can be used to ensure atomic access to any shared
 resource, but protecting shared variables is the most common use.
 
 <mutex-ownership>
-A mutex has two states: locked and unlocked. At any moment, *at-most* one
+A mutex has two states: locked and unlocked. At any moment, `at-most` one
 thread may hold the lock on a mutex. Attempting to lock a mutex that is
-already locked either blocks or fails with an error depending on the method
+already locked `either blocks or fails` with an error depending on the method
 used to place the lock.
 
-When a thread locks a mutex, it becomes the 'owner' of that mutex. 'only' the
+When a thread locks a mutex, it becomes the `owner of that mutex.` only the
 mutex owner can unlock the mutex. Because of this ownership property, the
-terms 'acquire' and 'release' are sometimes used synonymously for lock and
-unlock.
+terms acquire and release are sometimes used synonymously for lock and unlock.
 
 
 <mutex-protocol>
 Each thread employs the following protocol for accessing a resource:
+
 1. lock the mutex for the shared resource;
 2. access the shared resource; and
 3. unlock the mutex.
@@ -54675,32 +54678,33 @@ call to pthread_mutex_unlock(), it is `indeterminate` which thread will
 succeed in acquiring it.
 
 
-<mutex-type>
+<os-mutex-type>
 30.1.7 Mutex Types
 
-  * A single thread may not lock the same mutex twice.
+o A single thread may not lock the same mutex twice.
   
-  * A thread may not unlock a mutex that it doesn’t currently own or locked
+o A thread may not unlock a mutex that it doesn’t currently own (i.e., that it
+  did not lock).
 
-Precisely what happens in each of these cases depends on the type of the
-mutex.
+o A thread may not unlock a mutex that is not currently locked.
 
-note: ownership matters when unlock and semaphore do not
-have ownership. 
+"Precisely what happens in each of these cases depends on the type of the
+mutex."
+
+note: ownership matters when unlock and semaphore do not have ownership. 
 
 
 PTHREAD_MUTEX_NORMAL *mutex-self-lock* *same-thread*
 
 (Self-)deadlock detection is not provided for this type of mutex. If a thread
-tries to lock a mutex that it has already locked, then 'deadlock' results. On
-Linux, the thread deadlocks by default.
+tries to lock a mutex that it has already locked, then *cxx-deadlock* results.
+On Linux, the thread deadlocks by default.
 
 Unlocking a mutex that is not locked or that is locked by another thread
-produces 'undefined' results. 
+produces `cxx-undefined` results.
 
-note: Q: What does this mean?
-On Linux, both of these operations succeed for this mutex type and a
-PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
+  "On Linux, both of these operations succeed for this mutex type and a
+  PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
 
 
 PTHREAD_MUTEX_ERRORCHECK

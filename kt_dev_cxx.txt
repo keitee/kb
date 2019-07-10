@@ -22298,14 +22298,15 @@ o Clearer interface to show which member func can change state; read or write.
 o Make it possible to work with const objects. 
 
 
-{cxx-const-this}
+{cxx-const-this} *cxx-this*
 Member function access the object through an extra, implicit parameter named
 `this`. The compiler passes the address of `total` to the implicit `this`
-parameter as if rewrites this call as:
+parameter `as if` rewrites this call as:
 
 total.isbn();
 
-Sales_data::isbn(&total);  // where Sales_data::isbn(Sales_data *const this);
+// where Sales_data::isbn(Sales_data *const this);
+Sales_data::isbn(&total);
 
 Since `this` is intended to always refer to "this" object, `this` is const
 pointer. When defines const member function:
@@ -39959,14 +39960,14 @@ c.clear()               Removes all elements (empties the container)
 
 
 {cxx-set-insert-cxx-set-erase} cxx-insert cxx-erase
-All elements are considered 'constant'. Means that iterators are also
+All elements in set are considered `constant`. Means that iterators are also
 constant:
 
-  * Can't call any 'modifying' algorithm on the elements of a set or a
-    multiset. 
+o Cannot call any 'modifying' algorithm on the elements of a set or a
+  multiset. 
 
-  * To change the key of an element, you have only one choice: You must
-    replace the old element with a new element that has the same value.
+o To change the key of an element, you have only one choice: You must replace
+  the old element with a new element that has the same value.
 
 
 Table 7.39. Insert and Remove Operations of Sets and Multisets
@@ -40956,7 +40957,7 @@ element.
 
 {cxx-vector-code}
 
-namespace stl_code
+namespace cxx_code
 {
   // /usr/include/c++/4.7.2/bits/vector.tcc
 
@@ -49093,9 +49094,9 @@ o the next argument defines the object for which this member function gets
 
 Use pointer to member function?
 
-a pointer to member is 'not' a callable 'object'; do not support the
-function-call operator and cannot directly pass a pointer to member function
-to an algorithm.
+`a pointer to member is not a callable object`; do not support the function
+call operator and cannot directly pass a pointer to member function to an
+algorithm.
 
 auto fp = &string::empty;
 find_if(svec.begin(), svec.end(), fp);
@@ -49111,14 +49112,25 @@ HOW to slove?
 The `cxx-function` creates a callable for a member function and knows that it
 must use the appropriate pointer-to-member operator to make the call.
 
-The std::function<>, declared in <functional>, provides 'polymorphic' wrappers
-that 'generalize' the notion of a function pointer.
+The std::function<>, declared in <functional>, provides polymorphic wrappers
+that generalize the notion of a function pointer.
 
 o the signature's first parameter must represent the (normally implicit) object
   on which the member will be run. done by `find_if` inside in this case.
 
   When member functions are used, the object they are called for 'has' to be
   the first argument:
+
+// from *cxx-this*
+//
+// Member function access the object through an extra, implicit parameter named
+// `this`. The compiler passes the address of `total` to the implicit `this`
+// parameter `as if` rewrites this call as:
+// 
+// total.isbn();
+// 
+// // where Sales_data::isbn(Sales_data *const this);
+// Sales_data::isbn(&total);
 
 o the signature to `function` must speficy whether the object will be passed as
   a pointer or reference.
@@ -49158,11 +49170,13 @@ TEST(FunctionObject, Function)
 
   {
     Foo foo = Foo(100);
+
+    // std::function<`void(Foo &)`> op = &Foo::update_10;
     std::function<void(Foo &)> op = &Foo::update_10;
 
-    // specify the target object
+    // `specify the target object`
     //
-    // that performing a function call without having a 'target' to call throws
+    // that performing a function call without having a target to call throws
     // an exception of type std::bad_function_call (see Section 4.3.1, page 43):
     // 
     // std::function<void(int,int)> f; 
@@ -49170,6 +49184,8 @@ TEST(FunctionObject, Function)
     // f(33,66);
     //
     // throws std::bad_function_call
+
+    // same as Foo::update_10(&foo);
 
     op(foo);
 
@@ -49212,6 +49228,9 @@ TEST(FunctionObject, Function)
   {
     vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
     vector<size_t> result{};
+
+    // see difference:
+    // std::function<void(`Foo`)> op = &Foo::update_20;
 
     std::function<void(Foo)> op = &Foo::update_20;
 
@@ -49309,6 +49328,7 @@ TEST(FunctionObject, Bind)
   }
 }
 
+
 <4>
 
 TEST(FunctionObject, Pointer)
@@ -49386,8 +49406,20 @@ bound and the object is of a derived class, the correct virtual function of the
 derived class gets called.
 
 
-<bind-with-pointer>
-The bind() works with pointers.
+{cxx-bind-with-pointer}
+The *cxx-bind* works with pointers.
+
+// template<typename _InputIterator, typename _Function>
+//   _Function
+//   for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+//   {
+//     // note: call op but not use return
+//
+//     for (; __first != __last; ++__first)
+//       __f(*__first);
+//
+//     return _GLIBCXX_MOVE(__f);
+//   }
 
 std::vector<Person*> cp;
 for_each (cp.begin(), cp.end(), bind(&Person::print, _1));
@@ -49395,8 +49427,40 @@ for_each (cp.begin(), cp.end(), bind(&Person::print, _1));
 std::vector<std::shared_ptr<Person>> sp;
 for_each (sp.begin(), sp.end(), bind(&Person::print, _1));
 
+<ex>
 
-<cpp-bind-ex> CLR 4.4
+notify(&IBleRcuDeviceEvent::pairingStatusChanged, pairing));
+
+template<typename F, typename... Args>
+  void notify(F f, Args&&... args)
+  {
+    notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+  }
+
+notify(std::bind(&IBleRcuDeviceEvent::pairingStatusChanged, std::placeholders::_1, pairing));
+
+template<typename F>
+  void notify(F f)
+  {
+    notify_impl(f);
+  }
+
+// notify_impl expects void() with target object using shared_ptr
+
+void notify_impl(std::function<void (std::shared_ptr<T> const &)> fun)
+{
+  std::shared_ptr<T> strong = o.lock();
+  dispatcher_->post(std::bind(fun, strong));
+}
+
+
+dispatcher calls f-from-bind()
+  f-from-bind calls fun(strong)
+    fun is f-from-bind so f-from-bind(strong)
+      obj::f(paring)
+
+
+<cxx-bind-ex> CLR 4.4
 
 int main()
 {
@@ -55469,7 +55533,7 @@ namespace cxx_code *cxx-sp-weak-code*
       // *cxx-sp-weak-ctor*
       template<typename _Tp1, typename = typename
         std::enable_if<std::is_convertible<_Tp1*, _Tp*>::value>::type>
-        weak_ptr(const shared_ptr<_Tp1>& __r) noexcept
+        weak_ptr(const `shared_ptr`<_Tp1>& __r) noexcept
         : __weak_ptr<_Tp>(__r) { }
 
       template<typename _Tp1>
@@ -62977,6 +63041,9 @@ namespace cxx-code
   /// condition_variable
   class condition_variable
   {
+    void
+    wait(unique_lock<mutex>& __lock) noexcept;
+
     template<typename _Predicate>
       void
       wait(unique_lock<mutex>& __lock, _Predicate __p)
@@ -63046,10 +63113,11 @@ A lambda function that expresses the condition being waited for. checks to see
 if the data_queue is not empty() - that is, there's some data in the queue
 ready for processing.
 
-`The implementation of wait()` then checks the condition by calling the supplied
-lambda function and `returns if the expression returned true.` If the condition
-isn't satisfied, `wait() unlocks the mutex` and puts the thread in a blocked or
-waiting state.
+`The implementation of wait()` then checks the condition by calling the
+supplied lambda function and `returns if the expression returned true.`
+
+If the condition isn't satisfied, false which is queue is empty in this case,
+`wait() unlocks the mutex` and puts the thread in a blocked or waiting state.
 
 the thread wakes from its slumber (unblocks it), reacquires the lock on the
 mutex, and checks the condition again, returning from wait() with the mutex
@@ -63094,6 +63162,36 @@ satisfied, the thread unlocks the mutex and resumes waiting.
       }
     }
   }
+
+
+<ex>
+where uses condition-variable to use one-by-one
+
+namespace fsm 
+{
+  template <typename T>
+  class queue
+  {
+    public:
+      void push(const T &message)
+      {
+        std::lock_guard<std::mutex> lock(m);
+
+        mq.push(message);
+        cv.notify_all();
+      }
+
+      T wait_and_pop()
+      {
+        std::unique_lock<std::mutex> lock(m);
+
+        cv.wait(lock, [this]{return !mq.empty();});
+        auto message = mq.front();
+        mq.pop();
+        return message;
+      }
+  }
+}
 
 
 <cxx-condition-variable-suprious-wake>

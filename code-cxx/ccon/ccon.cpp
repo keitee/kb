@@ -674,22 +674,25 @@ namespace cxx_mutex
 // }
 
 
+// LPI 30.1.7 Mutex Types
+//
+// "On Linux, both of these operations succeed for this mutex type and a
+// PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
+
 TEST(CConLock, MultipleLockAndUnlock)
 {
-  std::mutex print_mutex;
-
   std::mutex m;
   bool result{false};
 
   m.lock();
 
-  std::thread t([&]{m.unlock(); std::this_thread::sleep_for(std::chrono::seconds(2));});
+  std::thread t([&]{std::this_thread::sleep_for(std::chrono::seconds(2)); m.unlock(); });
 
   m.lock();
   std::cout << "set" << std::endl;
   result = true;
 
-  // note that this works without calling second unlock()
+  // note that this works without calling second unlock() since *cxx-raii*
   // m.unlock();
 
   t.join();

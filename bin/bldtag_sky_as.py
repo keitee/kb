@@ -31,9 +31,10 @@ if __name__ == "__main__":
     # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
     command = ["find", ".", "-type", "d", 
         "(", 
-        "-path",  "*/build", "-o", 
+        # "-path",  "*/build", "-o", 
+        "-path",  "*/build",
         # note on this end entry which is differnt from the above
-        "-path", "*/test",
+        # "-path", "*/test",
         ")", "-prune", "-o", "-type", "f", "-print"]
 
     for e in dirs:
