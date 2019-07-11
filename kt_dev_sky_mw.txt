@@ -1253,7 +1253,7 @@ void BluetoothRcuDeviceEventObserver::pairingStatusChanged( bool pairingInProgre
 }
 
 
-<ai-bluetooth-client-side>
+<bluez-controller-proxy> <ai-bluetooth-client-side>
 
 COMPONENT_NAME := BleRcuClientLib
 
@@ -1261,8 +1261,6 @@ COMPONENT_NAME := BleRcuClientLib
 
     std::map<std::string, std::shared_ptr<BleRcuDevice>> mRcuDevices;
 
-
-*bluez-controller-proxy*
 
 // AppInfrastructure/Public/Common/Notifier.h
 
@@ -1626,7 +1624,7 @@ void `BleRcuContollerProxy::triggerPairing`(uint8_t pairingCode)
   AI_IPC::VariantList methodParams = {pairingCode};
   AI_IPC::VariantList methodReturnValue;
 
-  if (!mIpcService->invokeMethod(method, methodParams, methodReturnValue))
+  `if (!mIpcService->invokeMethod(method, methodParams, methodReturnValue))`
   {
     AI_LOG_ERROR("Failed to invoke '%s.%s'", method.interface.c_str(), method.name.c_str());
   }
@@ -1908,7 +1906,7 @@ static QSharedPointer<BleRcuController> setupBleRcuController(const QSharedPoint
 }
 
 
-<ai-bluetooth-controller>
+<bluez-controller>
 // BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
 
 class BleRcuControllerImpl : public BleRcuController
@@ -1927,9 +1925,10 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
   , m_dbusObjectPath(QStringLiteral("`/com/sky/blercu/controller`"))
 {
   // create and attach the dbus adaptor for the controller interface to
-  // ourselves
+  // ourselves.
   m_dbusAdaptors.append(new `BleRcuController1Adaptor`(
-        this, `m_dbusObjectPath`));
+        this // *pass-bluez-controller*
+        , `m_dbusObjectPath`));
 }
 
 bool BleRcuControllerImpl::registerOnBus(const QDBusConnection &dbusConn)
@@ -1937,7 +1936,7 @@ bool BleRcuControllerImpl::registerOnBus(const QDBusConnection &dbusConn)
   // strip the const'ness off the connection (bit of a hack)
   QDBusConnection dbusConn_(dbusConn);
 
-  if (!dbusConn_.`registerObject`(m_dbusObjectPath.path(), this)) {
+  if (!dbusConn_.`registerObject`(`m_dbusObjectPath`.path(), this)) {
     qError("failed to register blercudevice adaptor object(s)");
     return false;
   }
@@ -1958,82 +1957,84 @@ bool BleRcuControllerImpl::registerOnBus(const QDBusConnection &dbusConn)
 }
 
 
-<bluez-sky-controller>
+<bluez-controller-adaptor>
 
 dbusxml/com.sky.blercu.Controller1.xml
 
-	<interface name="com.sky.blercu.Controller1">
+{
+  <interface name="com.sky.blercu.Controller1">
 
-		<method name="StartPairing">
-			<arg name="pairing_code" type="y" direction="in"/>
-		</method>
+    <method name="StartPairing">
+    <arg name="pairing_code" type="y" direction="in"/>
+    </method>
 
-		<method name="CancelPairing">
-		</method>
+    <method name="CancelPairing">
+    </method>
 
-		<method name="GetDevices">
-			<arg name="devices" type="ao" direction="out"/>
-		</method>
+    <method name="GetDevices">
+    <arg name="devices" type="ao" direction="out"/>
+    </method>
 
-		<method name="IsReady">
-			<annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
-		</method>
+    <method name="IsReady">
+    <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+    </method>
 
-		<signal name="DeviceAdded">
-			<arg name="path" type="o"/>
-			<arg name="address" type="s"/>
-		</signal>
+    <signal name="DeviceAdded">
+    <arg name="path" type="o"/>
+    <arg name="address" type="s"/>
+    </signal>
 
-		<signal name="DeviceRemoved">
-			<arg name="path" type="o"/>
-			<arg name="address" type="s"/>
-		</signal>
+    <signal name="DeviceRemoved">
+    <arg name="path" type="o"/>
+    <arg name="address" type="s"/>
+    </signal>
 
-		<signal name="Ready">
-		</signal>
+    <signal name="Ready">
+    </signal>
 
-		<property name="Pairing" type="b" access="read"/>
-		<property name="PairingCode" type="y" access="read"/>
+    <property name="Pairing" type="b" access="read"/>
+    <property name="PairingCode" type="y" access="read"/>
 
-	</interface>
+    </interface>
+}
 
 // BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.h
 
 class BleRcuController1Adaptor : public DBusAbstractAdaptor
 {
-	Q_OBJECT
-	Q_CLASSINFO("D-Bus Interface", "com.sky.blercu.Controller1")
-	Q_CLASSINFO("D-Bus Introspection", ""
-	            "  <interface name=\"com.sky.blercu.Controller1\">\n"
-	            "    <method name=\"Shutdown\"/>\n"
-	            "    <method name=\"StartPairing\">\n"
-	            "      <arg direction=\"in\" type=\"y\" name=\"pairing_code\"/>\n"
-	            "    </method>\n"
-	            "    <method name=\"CancelPairing\"/>\n"
-	            "    <method name=\"GetDevices\">\n"
-	            "      <arg direction=\"out\" type=\"ao\" name=\"devices\"/>\n"
-	            "    </method>\n"
-	            "    <method name=\"IsReady\">\n"
-	            "      <annotation value=\"true\" name=\"org.freedesktop.DBus.Method.NoReply\"/>\n"
-	            "    </method>\n"
-	            "    <signal name=\"DeviceAdded\">\n"
-	            "      <arg type=\"o\" name=\"path\"/>\n"
-	            "      <arg type=\"s\" name=\"address\"/>\n"
-	            "    </signal>\n"
-	            "    <signal name=\"DeviceRemoved\">\n"
-	            "      <arg type=\"o\" name=\"path\"/>\n"
-	            "      <arg type=\"s\" name=\"address\"/>\n"
-	            "    </signal>\n"
-	            "    <signal name=\"Ready\"/>\n"
-	            "    <property access=\"read\" type=\"b\" name=\"Pairing\"/>\n"
-	            "    <property access=\"read\" type=\"y\" name=\"PairingCode\"/>\n"
-	            "  </interface>\n"
-	            "")
-public:
-	Q_PROPERTY(bool Pairing READ pairing)
-	Q_PROPERTY(quint8 PairingCode READ pairingCode)
+  Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "com.sky.blercu.Controller1")
+    Q_CLASSINFO("D-Bus Introspection", ""
+        "  <interface name=\"com.sky.blercu.Controller1\">\n"
+        "    <method name=\"Shutdown\"/>\n"
+        "    <method name=\"StartPairing\">\n"
+        "      <arg direction=\"in\" type=\"y\" name=\"pairing_code\"/>\n"
+        "    </method>\n"
+        "    <method name=\"CancelPairing\"/>\n"
+        "    <method name=\"GetDevices\">\n"
+        "      <arg direction=\"out\" type=\"ao\" name=\"devices\"/>\n"
+        "    </method>\n"
+        "    <method name=\"IsReady\">\n"
+        "      <annotation value=\"true\" name=\"org.freedesktop.DBus.Method.NoReply\"/>\n"
+        "    </method>\n"
+        "    <signal name=\"DeviceAdded\">\n"
+        "      <arg type=\"o\" name=\"path\"/>\n"
+        "      <arg type=\"s\" name=\"address\"/>\n"
+        "    </signal>\n"
+        "    <signal name=\"DeviceRemoved\">\n"
+        "      <arg type=\"o\" name=\"path\"/>\n"
+        "      <arg type=\"s\" name=\"address\"/>\n"
+        "    </signal>\n"
+        "    <signal name=\"Ready\"/>\n"
+        "    <property access=\"read\" type=\"b\" name=\"Pairing\"/>\n"
+        "    <property access=\"read\" type=\"y\" name=\"PairingCode\"/>\n"
+        "  </interface>\n"
+        "")
+  public:
+        Q_PROPERTY(bool Pairing READ pairing)
+          Q_PROPERTY(quint8 PairingCode READ pairingCode)
 
-   ...
+          ...
 };
 
 
@@ -2041,9 +2042,9 @@ public:
 
 BleRcuController1Adaptor::BleRcuController1Adaptor(BleRcuController *parent,
                                                    const QDBusObjectPath &objPath)
-	: DBusAbstractAdaptor(parent)
-	, `m_controller(parent)`
-	, m_dbusObjPath(objPath)
+  : DBusAbstractAdaptor(parent)
+  , `m_controller(parent)` // *pass-bluez-controller* 
+  , m_dbusObjPath(objPath)
 {
   // don't auto relay signals, we do this manually
   setAutoRelaySignals(false);
@@ -2071,7 +2072,7 @@ void BleRcuController1Adaptor::`StartPairing`(quint8 pairingCode,
 
   *start-pairing*
   // attempt to start pairing using the supplied code
-  if (!m_controller->`startPairing`(pairingCode)) {
+  if (!`m_controller->startPairing`(pairingCode)) {
 
     const BleRcuError error = m_controller->lastError();
     sendErrorReply(message, error.name(), error.message());
