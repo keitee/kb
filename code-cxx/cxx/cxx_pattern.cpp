@@ -2424,6 +2424,20 @@ TEST(PatternDispatcherAndObserver, SendNotificationWithCallerDispatcher)
   noti.setState(5);
 }
 
+TEST(PatternDispatcherAndObserver, SendNotificationManyArgs)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  Observee noti;
+  std::shared_ptr<TestObserver> observer = std::make_shared<TestObserver>();
+  noti.set_dispatcher(std::make_shared<CallerThreadedDispatcher>());
+  noti.add_observer(observer);
+
+  EXPECT_CALL(*observer, keyAndValueChanged("key", "value")).Times(1);
+
+  noti.setKeyAndValue("key", "value");
+}
+
 
 // ={=========================================================================
 int main(int argc, char** argv)
