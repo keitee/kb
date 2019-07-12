@@ -378,16 +378,18 @@ TEST(CConAsync, MemberFunction)
 {
   using namespace cxx_async;
 
-  Foo foo;
+  {
+    Foo foo;
 
-  auto result = std::async(&Foo::update_value, &foo);
-  // since it's not run yet
-  EXPECT_THAT(foo.get_value(), 10);
+    auto result = std::async(&Foo::update_value, &foo);
+    // since it's not run yet
+    EXPECT_THAT(foo.get_value(), 10);
 
-  result.get();
+    result.get();
 
-  // run and expect the update
-  EXPECT_THAT(foo.get_value(), 20);
+    // run and expect the update
+    EXPECT_THAT(foo.get_value(), 20);
+  }
 }
 
 

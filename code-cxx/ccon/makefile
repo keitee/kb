@@ -15,7 +15,8 @@ USER_DIR = .
 CPPFLAGS += -isystem $(GTEST_DIR)/include -isystem $(GMOCK_DIR)/include 
 # CPPFLAGS += -isystem $(GTEST_DIR)/include
 
-CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG -lboost_system -lboost_thread
+# CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG -L/usr/local/lib -lboost_system -lboost_thread
+CXXFLAGS += -std=c++11 -g -Wall -Wextra -lboost_system -lboost_thread -pthread 
 
 # when there's no boost
 # CXXFLAGS += -std=c++11 -g -Wall -Wextra -pthread -D_GLIBCXX_DEBUG 
