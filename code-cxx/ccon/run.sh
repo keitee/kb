@@ -7,7 +7,7 @@ do
   echo ""
   echo "Looping $COUNT..."
   echo ""
-  ./ccon_ex_out
+  ./ccon_out --gtest_filter=*Counter*
 
   if [ $? -ne 0 ]; then
     echo "Failed..."
