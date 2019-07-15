@@ -5094,6 +5094,14 @@ TEST(CxxFeaturesTest, UseHashOnString)
 // ={=========================================================================
 // cxx-bool cxx-check
 
+TEST(Bool, Negate)
+{
+  bool value{false};
+
+  EXPECT_EQ(value, false);
+  EXPECT_EQ(!value, true);
+}
+
 TEST(Bool, CheckBoolDefault)
 {
   bool value{};

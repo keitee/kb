@@ -258,6 +258,39 @@ TEST(Gtest, MatcherForPair)
 // ={=========================================================================
 // gtest-expect
 
+/*
+
+https://github.com/google/googletest/blob/master/googletest/docs/advanced.md
+
+FAIL();
+ADD_FAILURE();
+ADD_FAILURE_AT("file_path", line_number);
+
+FAIL() generates a fatal failure, while ADD_FAILURE() and ADD_FAILURE_AT()
+generate a nonfatal failure. These are useful when control flow, rather than a
+Boolean expression, determines the test's success or failure. For example, you
+might want to write something like:
+
+switch(expression) {
+  case 1:
+     ... some checks ...
+  case 2:
+     ... some other checks ...
+  default:
+     FAIL() << "We shouldn't get here.";
+}
+
+NOTE: you can only use FAIL() in functions that return void. See the Assertion
+Placement section for more information.
+
+*/
+
+TEST(Gtest, FailAssertion)
+{
+  FAIL() << "should generate a fatal failure";
+}
+
+
 TEST(Gtest, OrderOfArg)
 {
   int value{100};

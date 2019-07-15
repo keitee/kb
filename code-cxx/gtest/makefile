@@ -44,9 +44,9 @@ gtest-all.o : $(GTEST_SRCS_)
             $(GTEST_DIR)/src/gtest-all.cc
 
 # Builds gtest.a and gtest_main.a.
-# GMOCK_SRCS_ = $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
-GMOCK_SRCS_ = $(GMOCK_DIR)/src/*.cc)
+GMOCK_SRCS_ = $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 
+#
 # For simplicity and to avoid depending on Google Test's
 gmock-all.o : $(GMOCK_SRCS_)
 	$(CXX) $(CPPFLAGS) -I$(GMOCK_DIR) $(CXXFLAGS) -c \
@@ -68,5 +68,5 @@ $(TARGET_2).o : $(TARGET_2).cpp
 $(TARGET_1)_o : $(TARGET_1).cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TARGET_1).cpp -o $(TARGET_1).o
 
-$(TARGET_1)_out : $(TARGET_1).o $(TARGET_2).o gtest.a gmock.a
+$(TARGET_1)_out : $(TARGET_1).o gtest.a gmock.a
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
