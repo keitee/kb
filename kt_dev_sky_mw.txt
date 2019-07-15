@@ -29,7 +29,10 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-android-doc
 *kt_dev_skymw_0000* skymw-android-studio
 *kt_dev_skymw_0000* skymw-android-bluetoothrcu
+*kt_dev_skymw_0000* skymw-android-ip150
+*kt_dev_skymw_0000* skymw-luna
 *kt_dev_skymw_0000* skymw-jira
+
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-setup
@@ -114,8 +117,7 @@ cat /proc/net/fib_trie
 to register ssh keys
 https://www.stb.bskyb.com/gosa/
 
-
-<repos>
+<git-repos>
 git clone dwngit@git.stb.bskyb.com:ethan-as-source-repo
 git clone dwngit@git.stb.bskyb.com:ethan-as-source ethan-as-source-repo
 git clone dwngit@git.stb.bskyb.com:ethan-mw-wrt
@@ -2623,7 +2625,7 @@ Device has been removed
 Device D4:B8:FF:12:E1:A8 P215 SkyQ EC101
 
 
-<skyblercu>
+<bluez-sky>
 1+3 key triggers two things:
 
 o do advertisement from rcu
@@ -3334,7 +3336,7 @@ app/src/main/java/com/sky/bluetooth/SkyBroadcastReceiver.java
 /home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/android/blercuadapter_p.h
 
 
-<bt-remote-as-api> <aidl>
+<bluez-sky-aidl>
 https://developer.android.com/guide/components/aidl#java
 
 Defining an AIDL interface
@@ -3365,47 +3367,6 @@ as api to support
 
 
 as/iWedia_AS_service/QtRESTService/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
-
-// app/src/main/java/com/sky/blercu/BleRcuService.java
-
-	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
-    ...
-
-      @Override
-      public String getDeviceMake(String address) {
-        if (!checkAddress(address))
-          return null;
-
-        BleRcuService service = getService();
-
-        if (service == null) return null;
-
-        return service.jniGetDeviceMake(service.mQtObject, address);
-      }
-   }
-
-	private native String jniGetDeviceMake(long qtObject, String address);
-
-
-// app/src/main/cpp/service/android/blercuservice.cpp
-
-bool BleRcuService::registerNatives()
-{
-  JNI_ENTRY(jniGetDeviceMake,               "(JLjava/lang/String;)Ljava/lang/String;"),
-}
-
-
-Expose the interface to clients
-
-Implement a Service and override onBind() to return your implementation of the
-Stub class.
-
-// app/src/main/java/com/sky/blercu/BleRcuService.java
-
-public class BleRcuService extends Service {
-  ...
-}
-
 
 // are the same files
 
@@ -3458,71 +3419,400 @@ interface IBleRcuService {
 	++ void cancelDeviceUpgrade(in String address);
 }
 
+
+Expose the interface to clients
+
+Implement a Service and override onBind() to return your implementation of the
+Stub class.
+
+// app/src/main/java/com/sky/blercu/BleRcuService.java
+
+public class BleRcuService extends Service {
+
+  private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+    // ...
+
     @Override
-    public String toString() {
-        StringBuilder description = new StringBuilder();
+      public String getDeviceMake(String address) {
+        if (!checkAddress(address))
+          return null;
 
-        try {
-            // isDeviceConnected
-            final boolean connected = isConnected();
+        BleRcuService service = getService();
 
-            // getDeviceId, getDeviceName
-            description.append("BleRcu Device ").append(getDeviceId()).append(": ").append(getName()).append("\n");
+        if (service == null) return null;
 
-            description.append("  bdaddr: ").append(getAddress()).append("\n");
-            description.append("  connected: ").append(connected);
-            if (connected) {
-                description.append("\n");
-                description.append("  name: ").append(getName()).append("\n");
-                description.append("  deviceid: ").append(getDeviceId()).append("\n");
+        // use of JNI ifs
+        return service.jniGetDeviceMake(service.mQtObject, address);
+      }
 
-                // getDeviceMake, 
-                description.append("  make: ").append(getMake()).append("\n");
+  } // IBleRcuService
 
-                // getDeviceModel
-                description.append("  model: ").append(getModel()).append("\n");
+  // JNI ifs
+  private native String jniGetDeviceMake(long qtObject, String address);
+  // ...
 
-                // getDeviceHardwareVersion
-                description.append("  hwrev: ").append(getHardwareVersion()).append("\n");
-
-                // getDeviceSerialNumber
-                description.append("  serialno: ").append(getSerialNumber()).append("\n");
-
-                // getDeviceSoftwareVersion
-                description.append("  rcuswver: ").append(getSoftwareVersion()).append("\n");
-
-                // getDeviceBootloaderVersion
-                description.append("  btlswver: ").append(getBootloaderVersion()).append("\n");
-
-                // getDeviceBatteryLevel
-                description.append("  batterylevel: ").append(getBatteryLevel());
-            }
-
-        } catch (RemoteException e) {
-            description.append("Error: ...");
-        }
-  }
+} // end of service
 
 
-// app/build/generated/aidl_source_output_dir/debug/compileDebugAidl/out/com/sky/blercu/IBleRcuService.java
+// app/src/main/cpp/service/android/blercuservice.cpp
 
-@Override public boolean isDevicePaired(java.lang.String address) throws android.os.RemoteException
+bool `BleRcuService::registerNatives`()
 {
-  android.os.Parcel _data = android.os.Parcel.obtain();
-  android.os.Parcel _reply = android.os.Parcel.obtain();
-  boolean _result;
-  try {
-    _data.writeInterfaceToken(DESCRIPTOR);
-    _data.writeString(address);
-    mRemote.transact(Stub.TRANSACTION_isDevicePaired, _data, _reply, 0);
-    _reply.readException();
-    _result = (0!=_reply.readInt());
-  }
-  finally {
-    _reply.recycle();
-    _data.recycle();
-  }
-  return _result;
+  JNI_ENTRY(jniGetDeviceMake,               "(JLjava/lang/String;)Ljava/lang/String;"),
+	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+		private BleRcuService mService;
+
+		private BleRcuServiceBinder(BleRcuService svc) {
+			mService = svc;
+		}
+		public boolean cleanup() {
+			mService = null;
+			return true;
+		}
+
+		public BleRcuService getService() {
+			if (mService != null && mService.isAvailable()) {
+				return mService;
+			}
+			return null;
+		}
+
+		@Override
+		public void dump(FileDescriptor fd, String[] args) {
+			// TODO: check if we should be doing this
+			BleRcuService service = getService();
+			if (service == null) return;
+
+			service.jniDump(service.mQtObject, fd, args);
+		}
+
+		@Override
+		public void registerClient(ParcelUuid appId, IBleRcuServiceCallback callback) {
+			if (callback == null)
+				return;
+
+			int callerId = getCallingPid();
+
+			BleRcuService service = getService();
+			if (service == null) return;
+			service.registerClient(callerId, appId, callback);
+		}
+
+		@Override
+		public void unregisterClient(int clientIf) {
+			if (clientIf <= 0)
+				return;
+
+			int callerId = getCallingPid();
+
+			BleRcuService service = getService();
+			if (service == null) return;
+			service.unregisterClient(callerId, clientIf);
+		}
+
+		@Override
+		public boolean isPairing() {
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.isPairing();
+		}
+
+		@Override
+		public String[] getDevices() {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.getPairedDevices();
+		}
+
+		@Override
+		public boolean isDevicePaired(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.isDevicePaired(address);
+		}
+
+		@Override
+		public boolean isDeviceConnected(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+
+			return service.jniIsDeviceConnected(service.mQtObject, address);
+		}
+
+		@Override
+		public int getDeviceId(String address)  {
+			if (!checkAddress(address))
+				return -1;
+
+			BleRcuService service = getService();
+			if (service == null) return -1;
+			return service.jniGetDeviceId(service.mQtObject, address);
+		}
+
+		@Override
+		public int getDeviceBatteryLevel(String address) {
+			if (!checkAddress(address))
+				return 255;
+
+			BleRcuService service = getService();
+			if (service == null) return -1;
+			return service.jniGetDeviceBatteryLevel(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceName(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceName(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceMake(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceMake(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceModel(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceModel(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceSerialNumber(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceSerialNumber(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceHardwareVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceHardwareVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceSoftwareVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceSoftwareVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceBootloaderVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceBootloaderVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public boolean setDeviceFindMe(String address, boolean enable) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniSetDeviceFindMe(service.mQtObject, address, enable);
+		}
+
+		@Override
+		public boolean setDeviceTouchMode(String address, int mode) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniSetDeviceTouchMode(service.mQtObject, address, mode);
+		}
+
+		@Override
+		public int getDeviceTouchMode(String address) {
+			if (!checkAddress(address))
+				return -1;
+
+			BleRcuService service = getService();
+			if (service == null) return 0;
+			return service.jniGetDeviceTouchMode(service.mQtObject, address);
+		}
+
+		@Override
+		public boolean programDeviceIrCode(String address, int type, int code) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniProgramDeviceIrCode(service.mQtObject, address, type, code);
+		}
+
+		@Override
+		public boolean eraseDeviceIrCodes(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniEraseDeviceIrCodes(service.mQtObject, address);
+		}
+
+		@Override
+		public ParcelFileDescriptor startDeviceVoiceRecording(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+
+			try {
+				// create a pipe for sending voice data (nb: a 'reliable' pipe
+				// object also contains a AF_SEQPACKET socket that is used as a
+				// side channel to send back error messages)
+				ParcelFileDescriptor[] fds = ParcelFileDescriptor.createReliablePipe();
+
+				// request the start of voice search, if this fails an exception is
+				// thrown, in which case we mark the pipe as errored
+				try {
+					service.jniStartDeviceVoiceRecording(service.mQtObject, address,
+					                                     fds[1].getFd());
+				} catch (Exception e) {
+					fds[1].closeWithError(e.getMessage());
+					return fds[0];
+				}
+
+				// close the pipe write end (is dup'ed within the native c++ code)
+				// and return the read end of the pipe
+				fds[1].close();
+				return fds[0];
+
+			} catch (IOException e) {
+				Log.e(TAG, "", e);
+				return null;
+			}
+		}
+
+		@Override
+		public VoiceRecordingStats getDeviceVoiceRecordingStats(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+
+			// get the current details from native code
+			int[] details = service.jniGetDeviceVoiceRecordingStats(service.mQtObject, address);
+
+			// return the voice recording stats
+			VoiceRecordingStats stats = new VoiceRecordingStats();
+			stats.errorCode = details[0];
+			stats.receivedPackets = details[1];
+			stats.expectedPackets = details[2];
+			return stats;
+		}
+
+		@Override
+		public String[] getManufacturers(String search, int flags, int offset, int limit) {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.jniGetManufacturers(service.mQtObject, search, flags, offset, limit);
+		}
+
+		@Override
+		public String[] getModels(String manufacturer, String search, int flags, int offset, int limit) {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.jniGetModels(service.mQtObject, manufacturer, search, flags, offset, limit);
+		}
+
+		@Override
+		public int[] getCodes(String manufacturer, String model, int flags) {
+			BleRcuService service = getService();
+			if (service == null) return new int[0];
+			return service.jniGetCodes(service.mQtObject, manufacturer, model, flags);
+		}
+
+		@Override
+		public int[] getCodesFromEDID(byte[] edid) {
+			BleRcuService service = getService();
+			if (service == null) return new int[0];
+			return service.jniGetCodesFromEDID(service.mQtObject, edid);
+		}
+
+
+		@Override
+		public boolean startDeviceUpgrade(String address, byte[] firmware) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null)
+				return false;
+
+			boolean result = false;
+			try {
+				result = service.jniStartDeviceUpgrade(service.mQtObject, address, firmware);
+			} catch (Exception e) {
+				// safe to call this as it just bounces the message through the
+				// notification thread and is non-blocking
+				service.onDeviceFirmwareUpgradeProgressChanged(address, -1, e.getMessage());
+				result = false;
+			}
+
+			return result;
+		}
+
+		@Override
+		public void cancelDeviceUpgrade(String address) {
+			if (!checkAddress(address))
+				return;
+
+			BleRcuService service = getService();
+			if (service != null)
+				service.jniCancelDeviceUpgrade(service.mQtObject, address);
+		}
+
+		@Override
+		public void startScanning(int timeout) {
+			BleRcuService service = getService();
+			if (service != null)
+				service.jniStartScanning(service.mQtObject, timeout);
+		}
+
+		@Override
+		public int getState() {
+			BleRcuService service = getService();
+			return service != null ? service.getState() : PAIRING_STATE_IDLE;
+		}
+	}
 }
 
 
@@ -3681,6 +3971,714 @@ void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
 *start-pairing-android-from-scan*
   // start pairing the device
   m_pairingStateMachine.start(address, name);
+	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+		private BleRcuService mService;
+
+		private BleRcuServiceBinder(BleRcuService svc) {
+			mService = svc;
+		}
+		public boolean cleanup() {
+			mService = null;
+			return true;
+		}
+
+		public BleRcuService getService() {
+			if (mService != null && mService.isAvailable()) {
+				return mService;
+			}
+			return null;
+		}
+
+		@Override
+		public void dump(FileDescriptor fd, String[] args) {
+			// TODO: check if we should be doing this
+			BleRcuService service = getService();
+			if (service == null) return;
+
+			service.jniDump(service.mQtObject, fd, args);
+		}
+
+		@Override
+		public void registerClient(ParcelUuid appId, IBleRcuServiceCallback callback) {
+			if (callback == null)
+				return;
+
+			int callerId = getCallingPid();
+
+			BleRcuService service = getService();
+			if (service == null) return;
+			service.registerClient(callerId, appId, callback);
+		}
+
+		@Override
+		public void unregisterClient(int clientIf) {
+			if (clientIf <= 0)
+				return;
+
+			int callerId = getCallingPid();
+
+			BleRcuService service = getService();
+			if (service == null) return;
+			service.unregisterClient(callerId, clientIf);
+		}
+
+		@Override
+		public boolean isPairing() {
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.isPairing();
+		}
+
+		@Override
+		public String[] getDevices() {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.getPairedDevices();
+		}
+
+		@Override
+		public boolean isDevicePaired(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.isDevicePaired(address);
+		}
+
+		@Override
+		public boolean isDeviceConnected(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+
+			return service.jniIsDeviceConnected(service.mQtObject, address);
+		}
+
+		@Override
+		public int getDeviceId(String address)  {
+			if (!checkAddress(address))
+				return -1;
+
+			BleRcuService service = getService();
+			if (service == null) return -1;
+			return service.jniGetDeviceId(service.mQtObject, address);
+		}
+
+		@Override
+		public int getDeviceBatteryLevel(String address) {
+			if (!checkAddress(address))
+				return 255;
+
+			BleRcuService service = getService();
+			if (service == null) return -1;
+			return service.jniGetDeviceBatteryLevel(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceName(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceName(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceMake(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceMake(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceModel(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceModel(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceSerialNumber(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceSerialNumber(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceHardwareVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceHardwareVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceSoftwareVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceSoftwareVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceBootloaderVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceBootloaderVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public boolean setDeviceFindMe(String address, boolean enable) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniSetDeviceFindMe(service.mQtObject, address, enable);
+		}
+
+		@Override
+		public boolean setDeviceTouchMode(String address, int mode) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniSetDeviceTouchMode(service.mQtObject, address, mode);
+		}
+
+		@Override
+		public int getDeviceTouchMode(String address) {
+			if (!checkAddress(address))
+				return -1;
+
+			BleRcuService service = getService();
+			if (service == null) return 0;
+			return service.jniGetDeviceTouchMode(service.mQtObject, address);
+		}
+
+		@Override
+		public boolean programDeviceIrCode(String address, int type, int code) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniProgramDeviceIrCode(service.mQtObject, address, type, code);
+		}
+
+		@Override
+		public boolean eraseDeviceIrCodes(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniEraseDeviceIrCodes(service.mQtObject, address);
+		}
+
+		@Override
+		public ParcelFileDescriptor startDeviceVoiceRecording(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+
+			try {
+				// create a pipe for sending voice data (nb: a 'reliable' pipe
+				// object also contains a AF_SEQPACKET socket that is used as a
+				// side channel to send back error messages)
+				ParcelFileDescriptor[] fds = ParcelFileDescriptor.createReliablePipe();
+
+				// request the start of voice search, if this fails an exception is
+				// thrown, in which case we mark the pipe as errored
+				try {
+					service.jniStartDeviceVoiceRecording(service.mQtObject, address,
+					                                     fds[1].getFd());
+				} catch (Exception e) {
+					fds[1].closeWithError(e.getMessage());
+					return fds[0];
+				}
+
+				// close the pipe write end (is dup'ed within the native c++ code)
+				// and return the read end of the pipe
+				fds[1].close();
+				return fds[0];
+
+			} catch (IOException e) {
+				Log.e(TAG, "", e);
+				return null;
+			}
+		}
+
+		@Override
+		public VoiceRecordingStats getDeviceVoiceRecordingStats(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+
+			// get the current details from native code
+			int[] details = service.jniGetDeviceVoiceRecordingStats(service.mQtObject, address);
+
+			// return the voice recording stats
+			VoiceRecordingStats stats = new VoiceRecordingStats();
+			stats.errorCode = details[0];
+			stats.receivedPackets = details[1];
+			stats.expectedPackets = details[2];
+			return stats;
+		}
+
+		@Override
+		public String[] getManufacturers(String search, int flags, int offset, int limit) {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.jniGetManufacturers(service.mQtObject, search, flags, offset, limit);
+		}
+
+		@Override
+		public String[] getModels(String manufacturer, String search, int flags, int offset, int limit) {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.jniGetModels(service.mQtObject, manufacturer, search, flags, offset, limit);
+		}
+
+		@Override
+		public int[] getCodes(String manufacturer, String model, int flags) {
+			BleRcuService service = getService();
+			if (service == null) return new int[0];
+			return service.jniGetCodes(service.mQtObject, manufacturer, model, flags);
+		}
+
+		@Override
+		public int[] getCodesFromEDID(byte[] edid) {
+			BleRcuService service = getService();
+			if (service == null) return new int[0];
+			return service.jniGetCodesFromEDID(service.mQtObject, edid);
+		}
+
+
+		@Override
+		public boolean startDeviceUpgrade(String address, byte[] firmware) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null)
+				return false;
+
+			boolean result = false;
+			try {
+				result = service.jniStartDeviceUpgrade(service.mQtObject, address, firmware);
+			} catch (Exception e) {
+				// safe to call this as it just bounces the message through the
+				// notification thread and is non-blocking
+				service.onDeviceFirmwareUpgradeProgressChanged(address, -1, e.getMessage());
+				result = false;
+			}
+
+			return result;
+		}
+
+		@Override
+	private static class BleRcuServiceBinder extends IBleRcuService.Stub {
+		private BleRcuService mService;
+
+		private BleRcuServiceBinder(BleRcuService svc) {
+			mService = svc;
+		}
+		public boolean cleanup() {
+			mService = null;
+			return true;
+		}
+
+		public BleRcuService getService() {
+			if (mService != null && mService.isAvailable()) {
+				return mService;
+			}
+			return null;
+		}
+
+		@Override
+		public void dump(FileDescriptor fd, String[] args) {
+			// TODO: check if we should be doing this
+			BleRcuService service = getService();
+			if (service == null) return;
+
+			service.jniDump(service.mQtObject, fd, args);
+		}
+
+		@Override
+		public void registerClient(ParcelUuid appId, IBleRcuServiceCallback callback) {
+			if (callback == null)
+				return;
+
+			int callerId = getCallingPid();
+
+			BleRcuService service = getService();
+			if (service == null) return;
+			service.registerClient(callerId, appId, callback);
+		}
+
+		@Override
+		public void unregisterClient(int clientIf) {
+			if (clientIf <= 0)
+				return;
+
+			int callerId = getCallingPid();
+
+			BleRcuService service = getService();
+			if (service == null) return;
+			service.unregisterClient(callerId, clientIf);
+		}
+
+		@Override
+		public boolean isPairing() {
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.isPairing();
+		}
+
+		@Override
+		public String[] getDevices() {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.getPairedDevices();
+		}
+
+		@Override
+		public boolean isDevicePaired(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.isDevicePaired(address);
+		}
+
+		@Override
+		public boolean isDeviceConnected(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+
+			return service.jniIsDeviceConnected(service.mQtObject, address);
+		}
+
+		@Override
+		public int getDeviceId(String address)  {
+			if (!checkAddress(address))
+				return -1;
+
+			BleRcuService service = getService();
+			if (service == null) return -1;
+			return service.jniGetDeviceId(service.mQtObject, address);
+		}
+
+		@Override
+		public int getDeviceBatteryLevel(String address) {
+			if (!checkAddress(address))
+				return 255;
+
+			BleRcuService service = getService();
+			if (service == null) return -1;
+			return service.jniGetDeviceBatteryLevel(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceName(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceName(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceMake(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceMake(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceModel(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceModel(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceSerialNumber(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceSerialNumber(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceHardwareVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceHardwareVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceSoftwareVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceSoftwareVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public String getDeviceBootloaderVersion(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+			return service.jniGetDeviceBootloaderVersion(service.mQtObject, address);
+		}
+
+		@Override
+		public boolean setDeviceFindMe(String address, boolean enable) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniSetDeviceFindMe(service.mQtObject, address, enable);
+		}
+
+		@Override
+		public boolean setDeviceTouchMode(String address, int mode) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniSetDeviceTouchMode(service.mQtObject, address, mode);
+		}
+
+		@Override
+		public int getDeviceTouchMode(String address) {
+			if (!checkAddress(address))
+				return -1;
+
+			BleRcuService service = getService();
+			if (service == null) return 0;
+			return service.jniGetDeviceTouchMode(service.mQtObject, address);
+		}
+
+		@Override
+		public boolean programDeviceIrCode(String address, int type, int code) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniProgramDeviceIrCode(service.mQtObject, address, type, code);
+		}
+
+		@Override
+		public boolean eraseDeviceIrCodes(String address) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null) return false;
+			return service.jniEraseDeviceIrCodes(service.mQtObject, address);
+		}
+
+		@Override
+		public ParcelFileDescriptor startDeviceVoiceRecording(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+
+			try {
+				// create a pipe for sending voice data (nb: a 'reliable' pipe
+				// object also contains a AF_SEQPACKET socket that is used as a
+				// side channel to send back error messages)
+				ParcelFileDescriptor[] fds = ParcelFileDescriptor.createReliablePipe();
+
+				// request the start of voice search, if this fails an exception is
+				// thrown, in which case we mark the pipe as errored
+				try {
+					service.jniStartDeviceVoiceRecording(service.mQtObject, address,
+					                                     fds[1].getFd());
+				} catch (Exception e) {
+					fds[1].closeWithError(e.getMessage());
+					return fds[0];
+				}
+
+				// close the pipe write end (is dup'ed within the native c++ code)
+				// and return the read end of the pipe
+				fds[1].close();
+				return fds[0];
+
+			} catch (IOException e) {
+				Log.e(TAG, "", e);
+				return null;
+			}
+		}
+
+		@Override
+		public VoiceRecordingStats getDeviceVoiceRecordingStats(String address) {
+			if (!checkAddress(address))
+				return null;
+
+			BleRcuService service = getService();
+			if (service == null) return null;
+
+			// get the current details from native code
+			int[] details = service.jniGetDeviceVoiceRecordingStats(service.mQtObject, address);
+
+			// return the voice recording stats
+			VoiceRecordingStats stats = new VoiceRecordingStats();
+			stats.errorCode = details[0];
+			stats.receivedPackets = details[1];
+			stats.expectedPackets = details[2];
+			return stats;
+		}
+
+		@Override
+		public String[] getManufacturers(String search, int flags, int offset, int limit) {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.jniGetManufacturers(service.mQtObject, search, flags, offset, limit);
+		}
+
+		@Override
+		public String[] getModels(String manufacturer, String search, int flags, int offset, int limit) {
+			BleRcuService service = getService();
+			if (service == null) return new String[0];
+			return service.jniGetModels(service.mQtObject, manufacturer, search, flags, offset, limit);
+		}
+
+		@Override
+		public int[] getCodes(String manufacturer, String model, int flags) {
+			BleRcuService service = getService();
+			if (service == null) return new int[0];
+			return service.jniGetCodes(service.mQtObject, manufacturer, model, flags);
+		}
+
+		@Override
+		public int[] getCodesFromEDID(byte[] edid) {
+			BleRcuService service = getService();
+			if (service == null) return new int[0];
+			return service.jniGetCodesFromEDID(service.mQtObject, edid);
+		}
+
+
+		@Override
+		public boolean startDeviceUpgrade(String address, byte[] firmware) {
+			if (!checkAddress(address))
+				return false;
+
+			BleRcuService service = getService();
+			if (service == null)
+				return false;
+
+			boolean result = false;
+			try {
+				result = service.jniStartDeviceUpgrade(service.mQtObject, address, firmware);
+			} catch (Exception e) {
+				// safe to call this as it just bounces the message through the
+				// notification thread and is non-blocking
+				service.onDeviceFirmwareUpgradeProgressChanged(address, -1, e.getMessage());
+				result = false;
+			}
+
+			return result;
+		}
+
+		@Override
+		public void cancelDeviceUpgrade(String address) {
+			if (!checkAddress(address))
+				return;
+
+			BleRcuService service = getService();
+			if (service != null)
+				service.jniCancelDeviceUpgrade(service.mQtObject, address);
+		}
+
+		@Override
+		public void startScanning(int timeout) {
+			BleRcuService service = getService();
+			if (service != null)
+				service.jniStartScanning(service.mQtObject, timeout);
+		}
+
+		@Override
+		public int getState() {
+			BleRcuService service = getService();
+			return service != null ? service.getState() : PAIRING_STATE_IDLE;
+		}
+	}
+		public void cancelDeviceUpgrade(String address) {
+			if (!checkAddress(address))
+				return;
+
+			BleRcuService service = getService();
+			if (service != null)
+				service.jniCancelDeviceUpgrade(service.mQtObject, address);
+		}
+
+		@Override
+		public void startScanning(int timeout) {
+			BleRcuService service = getService();
+			if (service != null)
+				service.jniStartScanning(service.mQtObject, timeout);
+		}
+
+		@Override
+		public int getState() {
+			BleRcuService service = getService();
+			return service != null ? service.getState() : PAIRING_STATE_IDLE;
+		}
+	}
 }
 
 // note: this is different start() from pairing mode
@@ -3715,6 +4713,328 @@ I BleRcuQt: < M:blercuadapter.cpp F:onAdapterDiscoveringChanged L:1297 > adapter
 I BleRcuQt: < M:blercupairingstatemachine.cpp F:onDiscoveryChanged L:422 > KT: postEvent(DiscoveryStartedEvent)
 
 	bool startPairing(quint8 pairingCode) override;
+
+
+<bluez-sky-client-example>
+/home/keitee/ip/BleRcuExample
+
+// copy-aidl
+cp SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl BleRcuExample/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+cp SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl BleRcuExample/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl
+
+// app/build/generated/aidl_source_output_dir/debug/compileDebugAidl/out/com/sky/blercu/IBleRcuService.java
+
+@Override public boolean isDevicePaired(java.lang.String address) throws android.os.RemoteException
+{
+  android.os.Parcel _data = android.os.Parcel.obtain();
+  android.os.Parcel _reply = android.os.Parcel.obtain();
+  boolean _result;
+  try {
+    _data.writeInterfaceToken(DESCRIPTOR);
+    _data.writeString(address);
+    mRemote.transact(Stub.TRANSACTION_isDevicePaired, _data, _reply, 0);
+    _reply.readException();
+    _result = (0!=_reply.readInt());
+  }
+  finally {
+    _reply.recycle();
+    _data.recycle();
+  }
+  return _result;
+}
+
+
+// BleRcuExample/app/src/main/java/com/sky/blercuexample/MainActivity.java
+
+public class MainActivity extends Activity {
+
+  protected void onCreate(Bundle savedInstanceState) {
+
+    // get the blercu service
+    mManager = new BleRcuManager(mBleRcuCallback);
+
+    // get the sidebar that displays the device details
+    mSideBar = new SideBar(this,
+        mManager,
+        (TextView)findViewById(R.id.sidebar_heading),
+        (ListView)findViewById(R.id.sidebar_list), mLogView);
+  }
+
+  private final BleRcuManagerCallback mBleRcuCallback = new BleRcuManagerCallback() {
+
+    @Override
+      public void onPairingChanged(BleRcuManager manager, final boolean isPairing) {
+        runOnUiThread(new Runnable() {
+            public void run() {
+            mLogView.i("KT: MainActivity.java, pairing state changed to " + isPairing);
+            }
+            });
+      }
+  }
+
+  /**
+   * Callbacks from the BleRcu service.
+   */
+  private final BleRcuManagerCallback mBleRcuCallback = new BleRcuManagerCallback() {
+
+    @Override
+      public void onPairingChanged(BleRcuManager manager, final boolean isPairing) {
+        runOnUiThread(new Runnable() {
+            public void run() {
+            mLogView.i("KT: MainActivity.java, pairing state changed to " + isPairing);
+            }
+            });
+      }
+  }
+} 
+
+
+// to provice client access to service via IBinder if
+// BleRcuExample/app/src/main/java/com/sky/blercu/BleRcuManager.java
+
+public final class BleRcuManager {
+
+  private static synchronized IBleRcuService getService() {
+    if(binder != null) {
+      sService = IBleRcuService.Stub.asInterface(binder);
+    }
+  }
+}
+
+// BleRcuExample/app/src/main/java/com/sky/blercuexample/SideBar.java
+
+    private void onClicked(int position) {
+
+        if ((mCurrentAddress == null) || mCurrentAddress.isEmpty())
+            return;
+
+        if (position == TRIGGER_FINDME_LIST_IDX) {
+            if (mFindMeListener != null)
+                mFindMeListener.onTriggered(mCurrentAddress);
+        }
+        if (position == UPGRADE_FIRMWARE_LIST_IDX) {
+            if (mFwUpgradeListener != null)
+                mFwUpgradeListener.onTriggered(mCurrentAddress);
+        }
+        if (position == SCANNING_RCU_LIST_IDX) {
+            try {
+                mLogView.e("KT: startScanning(30000)..");
+                mLogView.e("KT: startScanning(30000)..");
+                mLogView.e("KT: startScanning(30000)..");
+                mDevice.startScanning(30000);
+            } catch (RemoteException e) {
+                Log.e(TAG, "", e);
+            }
+        }
+        if (position == GET_STATE_LIST_IDX) {
+            try {
+                mLogView.e("KT: getState() retuns " + mDevice.getState());
+                mLogView.e("KT: getState() retuns " + mDevice.getState());
+                mLogView.e("KT: getState() retuns " + mDevice.getState());
+            } catch (RemoteException e) {
+                Log.e(TAG, "", e);
+            }
+        }
+    }
+
+
+// /BleRcuExample/app/src/main/java/com/sky/blercu/BleRcuDevice.java
+
+    @Override
+    public String toString() {
+        StringBuilder description = new StringBuilder();
+
+        try {
+            // isDeviceConnected
+            final boolean connected = isConnected();
+
+            // getDeviceId, getDeviceName
+            description.append("BleRcu Device ").append(getDeviceId()).append(": ").append(getName()).append("\n");
+
+            description.append("  bdaddr: ").append(getAddress()).append("\n");
+            description.append("  connected: ").append(connected);
+            if (connected) {
+                description.append("\n");
+                description.append("  name: ").append(getName()).append("\n");
+                description.append("  deviceid: ").append(getDeviceId()).append("\n");
+
+                // getDeviceMake, 
+                description.append("  make: ").append(getMake()).append("\n");
+
+                // getDeviceModel
+                description.append("  model: ").append(getModel()).append("\n");
+
+                // getDeviceHardwareVersion
+                description.append("  hwrev: ").append(getHardwareVersion()).append("\n");
+
+                // getDeviceSerialNumber
+                description.append("  serialno: ").append(getSerialNumber()).append("\n");
+
+                // getDeviceSoftwareVersion
+                description.append("  rcuswver: ").append(getSoftwareVersion()).append("\n");
+
+                // getDeviceBootloaderVersion
+                description.append("  btlswver: ").append(getBootloaderVersion()).append("\n");
+
+                // getDeviceBatteryLevel
+                description.append("  batterylevel: ").append(getBatteryLevel());
+            }
+
+        } catch (RemoteException e) {
+            description.append("Error: ...");
+        }
+  }
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-android-ip150
+
+https://www.stb.bskyb.com/confluence/display/2016/IP150+Releases
+
+Programming IP100/IP150 via adb
+
+Note: The box and the laptop must be on the same network before you can try to
+program with this image from the laptop.
+ 
+adb connect 192.168.1.10:5555 
+adb root 
+adb connect 192.168.1.10:5555
+ 
+# Push the OTA package
+adb push IP150-ota.zip /cache/update.zip
+
+<comp-drivers>
+IP150:/vendor/lib/modules # pwd
+/vendor/lib/modules
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-luna
+
+https://www.stb.bskyb.com/confluence/display/~grayb/Android+Luna+-+Runtime+Service
+
+<git-repo>
+git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/packages/apps/SkyLunaRuntime
+
+
+<output-so>
+~/ip/repo/SkyLunaRuntime$ ls -al app/src/main/libs/armeabi-v7a/libluna.so
+-rwxr-xr-x 1 keitee keitee 20257680 Jul 15 14:31 app/src/main/libs/armeabi-v7a/libluna.so
+
+
+// example/app/src/main/java/com/sky/lunaexample/MainActivity.java
+
+public class MainActivity extends Activity {
+
+  protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+
+    // create the runtime object
+    mLuna = new Runtime(this, mCallback);
+  }
+}
+
+
+clientlib/src/main/aidl/com/sky/luna/ILunaRuntime.aidl
+
+interface ILunaRuntime
+{
+  /**
+   * Check/download required libs to run the application
+   *
+   * param callback  - interface used by Minsitro service to notify the client when the loader is ready
+   * param parameters
+   *            parameters fields:
+   *                 * Key Name                   Key type         Explanations
+   *                   "sources"                  StringArray      Sources list from where Ministro will download the libs. Make sure you are using ONLY secure locations.
+   *                   "repository"               String           Overwrites the default Ministro repository. Possible values: default, stable, testing and unstable
+   *                   "required.modules"         StringArray      Required modules by your application
+   *                   "application.title"        String           Application name, used to show more informations to user
+   *                   "qt.provider"              String           Qt libs provider, currently only "necessitas" is supported.
+   *                   "minimum.ministro.api"     Integer          Minimum Ministro API level, used to check if Ministro service compatible with your application. Current API Level is 3 !
+   *                   "minimum.qt.version"       Integer          Minimim Qt version (e.g. 0x040800, which means Qt 4.8.0, check http://qt-project.org/doc/qt-4.8/qtglobal.html#QT_VERSION)!
+   */
+  void requestLoader(in ILunaRuntimeCallback callback, in Bundle parameters);
+}
+
+
+clientlib/build/generated/aidl_source_output_dir/debug/compileDebugAidl/out/com/sky/luna/ILunaRuntime.java
+
+
+// SkyLunaRuntime/clientlib/src/main/java/com/sky/luna/Runtime.java
+
+public class Runtime {
+
+    /**
+     * Async callback object that receives the service updates.
+     * <p>
+     * The com.sky.lunaruntime service works by requesting the loader providing a
+     * callback.  That callback is called with details on the service and triggers
+     * the start of the actual runtime.  At the same time we disconnect from the
+     * remote service because we no longer need it, all the require details were
+     * supplied in the callback.
+     *
+     */
+    private ServiceConnection mRuntimeConnection = new ServiceConnection() {
+
+        private ILunaRuntime mService = null;
+
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service)
+        {
+            mService = ILunaRuntime.Stub.asInterface(service);
+            try {
+                if (mService != null) {
+                    Bundle parameters = new Bundle();
+
+                    // TODO: add any parameters to the engine request
+
+                    mService.requestLoader(mServiceCallback, parameters);
+                }
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            mService = null;
+        }
+
+        private ILunaRuntimeCallback mServiceCallback = new ILunaRuntimeCallback.Stub() {
+
+            // this function is called back by LunaRuntime service.
+            @Override
+            public void loaderReady(final Bundle loaderParams) throws RemoteException {
+                mActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mActivity.unbindService(mRuntimeConnection);
+                        launchLuna(loaderParams);
+                    }
+                });
+            }
+        };
+
+    };
+}
+
+
+app/src/main/aidl/com/sky/luna/ILunaRuntime.aidl
+
+app/src/main/java/com/sky/lunaruntime/LunaRuntimeService.java
+
+public class LunaRuntimeService extends Service {
+
+    public void onCreate() {
+
+        mRuntimeInterface = new ILunaRuntime.Stub() {
+
+            @Override
+            public void requestLoader(ILunaRuntimeCallback callback, Bundle params) throws RemoteException {
+            }
+    }
+}
 
 
 ={============================================================================
@@ -3997,10 +5317,6 @@ Date:   Tue Jun 25 14:24:20 2019 +0100
  6 files changed, 2637 insertions(+), 2340 deletions(-)
 
 
-<copy-iadl>
-cp SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl BleRcuExample/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
-cp SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl BleRcuExample/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl
-
 
 <add-start-scan-call>
 
@@ -4260,13 +5576,18 @@ Therefore, the efforts is made to have as common base as possible between them
 and have a new feature on top of that. Refer to [1] for more details of the new
 feature. 
 
+This also has corresponding test caes in support of features and changes.
+
 [1] NGDEV-143556: IP100 - BLERCU Support RCU Pairing without Infrared
 
+* e8412c9e3 : (HEAD -> feature/NGDEV-143989_CLONE_-Test) NGDEV-143989: CLONE - DTH - BLERCU Support RCU pairing without Infrared (3 days ago) <Kit Park>
+* 2883c3932 : NGDEV-143989: CLONE - DTH - BLERCU Support RCU pairing without Infrared (3 days ago) <Kit Park>
+*   e99b24f0d : (origin/develop, develop) Merge branch 'feature/NGDEV-144392_Fix_Netflix_Main_Sky_DSU_app_launch_issue' into develop (4 days ago) <Riyadh Hossain>
+|
 
-NGDEV-143989: CLONE - DTH - BLERCU Support RCU pairing without Infrared
 
-These are corresponding test caes in support of features and changes from
-NGDEV-143989.
+<skymw-jira-luna>
+git checkout -b NGDEV-144531_Luna_-_update_to_support_DTT_video_on_IP150_/_IP051
 
 
 ={============================================================================

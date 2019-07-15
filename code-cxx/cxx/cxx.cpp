@@ -5094,6 +5094,44 @@ TEST(CxxFeaturesTest, UseHashOnString)
 // ={=========================================================================
 // cxx-bool cxx-check
 
+// cxx-operator-logical-not 
+//
+// negation, !a, 
+//
+// bool T::operator!() const; 
+// bool operator!(const T &a);
+//
+// (ex)
+// std::shared_ptr<IBleRcuContoller> proxy = std::make_shared<BleRcuContollerProxy>(mIpcClientService, mInputHandler);
+// ASSERT_TRUE(!!proxy);
+//
+// https://stackoverflow.com/questions/206106/is-a-safe-way-to-convert-to-bool-in-c
+//
+// Q: Is !! a safe way to convert to bool in C++?
+//
+// typedef long T;       // similar warning with void * or double
+// T t = 0;
+// bool b = t;           // performance warning: forcing 'long' value to 'bool'
+// b = t ? true : false; // ok
+// b = !!t;  
+//
+// The argument of the ! operator and the first argument of the ternary operator
+// are both implicitly converted to bool, so !! and ?: are IMO silly redundant
+// decorations of the cast. I vote for
+// 
+// b = (t != 0);
+//
+// No implicit conversions.
+
+
+TEST(Bool, Negate)
+{
+  bool value{false};
+  EXPECT_THAT(value, false);
+  EXPECT_THAT(!value, true);
+  EXPECT_THAT(!!value, false);
+}
+
 TEST(Bool, CheckBoolDefault)
 {
   bool value{};

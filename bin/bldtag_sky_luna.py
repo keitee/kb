@@ -8,12 +8,13 @@ if __name__ == "__main__":
     # cleanup files
     subprocess.call(["rm", "-f", "G* tags flist.out"])
 
-    # where to run /home/keitee/ip/SkyBluetoothRcu
+    # runs on /ethan-as-source for both as and ai
     # dirs to include
     dirs = [
-        'app/src/main/cpp/blercu',
-        'app/src/main/java',
-        'app/src/main/cpp/configsettings'
+        'app/src/main/java/com/sky/',
+        'clientlib/src/main/java/',
+        'example/app/src/',
+        'app/src/main/cpp/'
         ]
 
     listfile = 'flist.out'
@@ -24,17 +25,10 @@ if __name__ == "__main__":
     # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
     command = ["find", ".", "-type", "d", 
         "(", 
-        "-path",  "*/build", "-o", 
-        "-path", "*/mock",  "-o",
-    #    "-path", "*/lib",  "-o",
-        "-path", "*/tools",  "-o",
-        "-path", "*/Interface",  "-o",
-        "-path", "*/doc",  "-o",
-        "-path", "*/docs",  "-o",
-        "-path", "*/unit_test",  "-o",
-        "-path", "*/cunitTest",  "-o",
-        "-path", "*/test",  "-o",
-        "-path", "*/android",
+        # "-path",  "*/build", "-o", 
+        "-path",  "*/build",
+        # note on this end entry which is differnt from the above
+        # "-path", "*/test",
         ")", "-prune", "-o", "-type", "f", "-print"]
 
     for e in dirs:
