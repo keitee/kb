@@ -8370,6 +8370,95 @@ TEST(Typedef, Alias)
 
 
 // ={=========================================================================
+// cxx-class-nested
+
+namespace cxx_nested_1
+{
+  class Outer 
+  {
+    private:
+    int outer_x = 100;
+
+    public:
+
+    void test() {
+      Inner* inner = new Inner();
+      inner->display();
+    }
+
+    private:
+
+    class Inner {
+
+      public:
+      void display() 
+      {
+        // works for java
+        // have access to enclosing scope? No
+        // cxx.cpp:8397:47: error: invalid use of non-static data member ‘cxx_nested::Outer::outer_x’
+        // std::cout << "display: outer_x = " << outer_x;
+        std::cout << "display: outer_x = " << std::endl; 
+      }
+    };
+  };
+} // namespace
+
+TEST(Class, Nested_1)
+{
+  using namespace cxx_nested_1;
+
+  Outer o;
+  o.test();
+}
+
+namespace cxx_nested_2
+{
+  class Outer 
+  {
+    private:
+    int outer_x = 100;
+
+    public:
+
+    void test() {
+      Inner* inner = new Inner();
+      inner->display();
+
+      // fails in java as well
+      // cxx.cpp:8425:39: error: ‘y’ was not declared in this scope
+      //        std::cout << "display: y = " << y << std::endl;
+      std::cout << "display: y = " << std::endl;
+    }
+
+    private:
+
+    class Inner {
+
+      public:
+        int y = 10;
+
+      public:
+      void display() 
+      {
+        // have access to enclosing scope? No
+        // cxx.cpp:8397:47: error: invalid use of non-static data member ‘cxx_nested::Outer::outer_x’
+        // std::cout << "display: outer_x = " << outer_x;
+        std::cout << "display: outer_x = " << std::endl; 
+      }
+    };
+  };
+} // namespace
+
+TEST(Class, Nested_2)
+{
+  using namespace cxx_nested_2;
+
+  Outer o;
+  o.test();
+}
+
+
+// ={=========================================================================
 
 int main(int argc, char** argv)
 {

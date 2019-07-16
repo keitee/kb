@@ -4891,6 +4891,7 @@ public final class BleRcuManager {
 
 https://www.stb.bskyb.com/confluence/display/2016/IP150+Releases
 
+https://www.stb.bskyb.com/confluence/pages/viewpage.action?pageId=54062914
 Programming IP100/IP150 via adb
 
 Note: The box and the laptop must be on the same network before you can try to
@@ -4917,6 +4918,27 @@ https://www.stb.bskyb.com/confluence/display/~grayb/Android+Luna+-+Runtime+Servi
 git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/packages/apps/SkyLunaRuntime
 
 
+<upgrade-apk>
+
+https://www.stb.bskyb.com/confluence/display/~grayb/Updating+SkyLunaRuntime+Package
+
+IP150:/system/app # readlink -f SkyLunaRuntime/
+/system/app/SkyLunaRuntime
+
+
+Step 1 - Disable Verity
+adb root; adb connect
+adb disable-verity
+
+If verity is not already disabled you'll need then be prompted to reboot you box
+for the change to take effect ... do that.
+
+keitee@keitee-mint:~/Downloads$ adb disable-verity
+Verity disabled on /vendor
+Verity disabled on /system
+Now reboot your device for settings to take effect
+
+
 <output-so>
 ~/ip/repo/SkyLunaRuntime$ ls -al app/src/main/libs/armeabi-v7a/libluna.so
 -rwxr-xr-x 1 keitee keitee 20257680 Jul 15 14:31 app/src/main/libs/armeabi-v7a/libluna.so
@@ -4935,6 +4957,7 @@ public class MainActivity extends Activity {
 }
 
 
+<clientlib>
 clientlib/src/main/aidl/com/sky/luna/ILunaRuntime.aidl
 
 interface ILunaRuntime
@@ -5020,6 +5043,8 @@ public class Runtime {
 }
 
 
+<runtime>
+
 app/src/main/aidl/com/sky/luna/ILunaRuntime.aidl
 
 app/src/main/java/com/sky/lunaruntime/LunaRuntimeService.java
@@ -5033,6 +5058,240 @@ public class LunaRuntimeService extends Service {
             @Override
             public void requestLoader(ILunaRuntimeCallback callback, Bundle params) throws RemoteException {
             }
+    }
+}
+
+
+<so>
+
+// Main Activity of the application, we need to implement SufraceHolder callback
+// from which we obtain the actual SufraceView
+
+public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback {
+
+  @Override
+    public void surfaceCreated(SurfaceHolder surfaceHolder) { //Callback which is called when surface is created
+      A4TVStatus status;
+      mLog.d("SurfaceHolder.Callback surfaceCreated");
+      if (IDTVManager != null) {
+        if (mSurfaceHolder != null) {
+          Surface surface = mSurfaceHolder.getSurface(); //The actual surface object that we want to pass to the AS Service
+          try {
+            //The following line sets the actual surface to the AS service
+            status = IDTVManager.getDisplayControl().setVideoLayerSurface(DISP_PRIMARY_VIDEO_LAYER, new SurfaceBundle(surface));
+            if (status != ASStatus.SUCCESS) {
+              mLog.e("Error on passing surface to AS service");
+            }
+            mLog.d("setVideoLayerSurface[" + surface + "]");
+          } catch (RemoteException re) {
+            re.printStackTrace();
+          }
+        }
+      }
+    }
+}
+
+
+// app/src/main/java/com/sky/lunaruntime/Runtime.java
+
+public class Runtime extends BroadcastReceiver implements IRuntime {
+
+  /**
+   * Attempts to launch the luna runtime executing the contents of the supplied asset.
+   * <p>
+   * The asset must be a zip file containing all the 'stuff' for running the app in Luna.
+   * It will be extracted to the data area of the app and then luna will be launched
+   * from that.
+   *
+   * @param activity the activity to display and run luna in.
+   * @param params the parameters to use for launching the luna runtime.
+   *
+   * @return true if successful otherwise false.
+   */
+  @Override
+    public boolean launch(Activity activity, Bundle params) {
+
+      // load the native luna library(s) .so
+      loadNativeLibraries(params);
+
+      // /app/libs/com.iwedia.comedia.service.comm-release.jar!/com/iwedia/dtv/IDTVManager.class
+      //
+      // connect to the DTV service early, even before extracting the app
+      
+      mDtvManager = new IWediaDTVManager(activity);
+      mDtvManager.connect();
+
+      // latest version already installed, go and run it
+      return launchLuna(AppInstaller.installedDirectory(activity), params);
+
+    }
+
+  /**
+   * This creates all the surfaces and sets the content view for the activity.
+   * All the work to actually kick off Luna is done in the surface creation
+   * callbacks, so this is just the view setup code.
+   *
+   * @param appInstallDir the directory that the app was expanded to.
+   * @param params the parameters that were passed to the app to launch.
+   *
+   * @return true on success or false on failure.
+   */
+  private boolean launchLuna(final File appInstallDir, final Bundle params) {
+
+    // Create the VideoSurface
+    mVideoSurface = `new VideoSurface`(mActivity, mDtvManager);
+  }
+}
+
+app/src/main/java/com/sky/lunaruntime/VideoSurface.java
+
+class `VideoSurface` extends `IWediaDTVSurface` implements `Native.ILunaVideoSurface` {
+
+  public VideoSurface(Activity activity, IWediaDTVManager dtvManager) {
+    super(activity, dtvManager, IWediaDTVManager.DISP_LAYER_PRIMARY_VIDEO_ID);
+
+    mActivity = activity;
+    mDtvManager = dtvManager;
+
+    // get the current screen dims for clamping the video window to the
+    // on screen region
+    // get the screen display size
+    DisplayMetrics displayMetrics = new DisplayMetrics();
+    activity.getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+
+    // hardcode subtitles surface size based on display metrics
+    mScreenWidth = displayMetrics.widthPixels;
+    mScreenHeight = displayMetrics.heightPixels;
+  }
+}
+
+app/src/main/java/com/sky/lunaruntime/IWediaDTVSurface.java
+
+class IWediaDTVSurface extends SurfaceView {
+
+  IWediaDTVSurface(Context context, IWediaDTVManager dtvManager, int layerId) {
+    super(context);
+  }
+
+  @Override
+    public void `surfaceCreated`(SurfaceHolder surfaceHolder) {
+      if (DBG) Log.d(TAG, "Surface for layer " + mLayerId + " created");
+
+      // get the underlying surface
+      Surface surface = surfaceHolder.getSurface();
+      if (surface == null) {
+        Log.e(TAG, "Failed to get the underlying surface");
+        return;
+      }
+
+      // and attach to the DTV manager
+      `mDtvManager.attachSurface`(`mLayerId`, surface);
+    }
+}
+
+Android/Sdk/platforms/android-27/android.jar!/android/view/SurfaceView.class
+import android.view.SurfaceView;
+
+
+class IWediaDTVManager {
+
+  /**
+   * The possible layer ids to assign a surface to.
+   */
+  public static final int DISP_LAYER_PRIMARY_VIDEO_ID = 0;
+  public static final int DISP_LAYER_GFX_ID_0 = 16;
+
+  public void `attachSurface`(int layerId, Surface surface) {
+
+    // add the surface to our internal map
+    mSurfaceMapping.put(layerId, surface);
+
+    // if we have a DTV manager (ie. the service is connected) then add the binding
+    if (mDtvManager != null) {
+      `bindSurface`(layerId, surface);
+    }
+  }
+
+  /**
+   * Binds the supplied surface to the DTV layer in the service.
+   * <p>
+   * The lock must be held before calling this method.
+   *
+   * @param id the id of the layer to bind the surface to.
+   * @param surface the surface to be bound.
+   * @return true on success, false on failure.
+   */
+  private boolean bindSurface(int id, Surface surface) {
+
+    // sanity check the lock is held before this call
+    if (DBG && !mDtvManagerLock.isLocked())
+      Log.e(TAG, "The mDtvManagerLock must be held before calling this method");
+
+    // sanity check we have a DTV manager
+    if (mDtvManager == null) {
+      Log.e(TAG, "Invalid DtvManager");
+      return false;
+    }
+
+    // SkyLunaRuntime/app/libs/com.iwedia.comedia.service.comm-release.jar!/com/iwedia/dtv/display/SurfaceBundle.class
+
+    try {
+     
+      // *plumbing-to-as-iwedia*
+      // The following line sets the actual subtitles surface to the AS service
+
+      // SkyLunaRuntime/app/libs/com.iwedia.comedia.service.comm-release.jar!/com/iwedia/dtv/display/IDisplayControl.class
+
+      A4TVStatus status = mDtvManager.getDisplayControl()
+        .`setVideoLayerSurface`(id, `new SurfaceBundle(surface)`);
+      if (status == A4TVStatus.SUCCESS) {
+        Log.i(TAG, "Surface for layer " + id + " bound to DTV display controller");
+      } else {
+        Log.e(TAG, "Error on passing surface to AS service (" + status.getValue() + ")");
+        return false;
+      }
+
+    } catch (RemoteException e) {
+      Log.e(TAG, "Remote exception occurred talking to AS", e);
+      return false;
+    }
+
+    return true;
+  }
+}
+
+app/src/main/java/com/sky/lunaruntime/Renderer.java
+
+public class Renderer implements ModdedGLSurfaceView.Renderer {
+
+  @Override
+    public void onSurfaceCreated(GL10 gl, EGLConfig config, int width, int height) {
+
+      if (mInited.compareAndSet(false, true)) {
+
+        // get the context, this should never fail, if it does it means the Activity has finished ?
+        Context context = mContext.get();
+        if (context == null)
+          Log.wtf(TAG, "failed to get main android context");
+
+        // initialise the luna engine (even if context is null)
+        `com.sky.lunaruntime.Native.initLuna`(context,
+            getClass().getClassLoader(),
+            width, height,
+            mMetrics.xdpi, mMetrics.ydpi);
+
+        // register video window(s)
+        for(int i = 0; i < mVideoWindows.size(); i++) {
+          com.sky.lunaruntime.Native.registerVideoWindow(
+              mVideoWindows.keyAt(i), mVideoWindows.get(i));
+        }
+
+        // finally start Luna
+        com.sky.lunaruntime.Native.startLuna(mPath, mCallback);
+        return;
+      }
+
+      Native.surfaceRestored();
     }
 }
 
@@ -5317,7 +5576,6 @@ Date:   Tue Jun 25 14:24:20 2019 +0100
  6 files changed, 2637 insertions(+), 2340 deletions(-)
 
 
-
 <add-start-scan-call>
 
 add startScanning(int timeout); to client if
@@ -5545,7 +5803,7 @@ D ServicePeripherals: @BTREMOTE: onDeviceConnectionStateChanged | address: D4:B8
 D BleRcuManager: onDeviceConnectionStateChanged() - D4:B8:FF:12:E1:A8 : true
 
 
-<skymw-jira-bluez>
+<git-flow-bluez>
 git checkout -b NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
 
 meld /home/keitee/ip/SkyBluetoothRcu-clean/app/src/main/cpp/blercu /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/source/blercu &
@@ -5563,7 +5821,38 @@ $ git branch -vv
 
 git push -n origin feature/NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
 
-git flow feature finish NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
+// Someone else might have changed something
+git pull --rebase
+
+*git-two-dot*
+git log origin/develop..HEAD
+
+
+keitee@keitee-mint:~/mw/appinfrastructure$ git flow feature finish --help
+usage: git flow feature finish [-h] [-F] [-r] [-p] [-k] [-D] [-S] [--no-ff] <name|nameprefix>
+
+    Finish feature <name>
+
+    -h, --help            Show this help
+    --showcommands        Show git commands while executing them
+    -F, --[no]fetch       Fetch from origin before performing finish
+    -r, --[no]rebase      Rebase before merging
+    -p, --[no]preserve-merges
+                          Preserve merges while rebasing
+    --[no]push            Push to origin after performing finish
+    -k, --[no]keep        Keep branch after performing finish
+    --keepremote          Keep the remote branch
+    --keeplocal           Keep the local branch
+    -D, --[no]force_delete
+                          Force delete feature branch after finish
+    -S, --[no]squash      Squash feature during merge
+    --no-ff               Never fast-forward during the merge
+
+
+git flow feature finish -S NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
+
+git push
+
 
 NGDEV-143989: CLONE - DTH - BLERCU Support RCU pairing without Infrared
 
