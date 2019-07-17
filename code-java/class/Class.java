@@ -41,11 +41,6 @@ class B extends A {
 class Class {
   public static void main(String args[]) {
 
-    {
-      A a;
-      // a.showij();
-    }
-
     A a = new A();
     B b = new B();
 
