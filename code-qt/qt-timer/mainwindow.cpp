@@ -51,24 +51,40 @@ QTimer objects will gradually be replaced by QThreads.
 
 Accuracy and Timer Resolution
 
-The accuracy of timers depends on the underlying operating system and hardware. Most platforms support a resolution of 1 millisecond, though the accuracy of the timer will not equal this resolution in many real-world situations.
+The accuracy of timers depends on the underlying operating system and hardware.
+Most platforms support a resolution of 1 millisecond, though the accuracy of the
+timer will not equal this resolution in many real-world situations.
 
-The accuracy also depends on the timer type. For Qt::PreciseTimer, QTimer will try to keep the accuracy at 1 millisecond. Precise timers will also never time out earlier than expected.
+The accuracy also depends on the timer type. For Qt::PreciseTimer, QTimer will
+try to keep the accuracy at 1 millisecond. Precise timers will also never time
+out earlier than expected.
 
-For Qt::CoarseTimer and Qt::VeryCoarseTimer types, QTimer may wake up earlier than expected, within the margins for those types: 5% of the interval for Qt::CoarseTimer and 500 ms for Qt::VeryCoarseTimer.
+For Qt::CoarseTimer and Qt::VeryCoarseTimer types, QTimer may wake up earlier
+than expected, within the margins for those types: 5% of the interval for
+Qt::CoarseTimer and 500 ms for Qt::VeryCoarseTimer.
 
-All timer types may time out later than expected if the system is busy or unable to provide the requested accuracy. In such a case of timeout overrun, Qt will emit timeout() only once, even if multiple timeouts have expired, and then will resume the original interval.
+All timer types may time out later than expected if the system is busy or unable
+to provide the requested accuracy. In such a case of timeout overrun, Qt will
+emit timeout() only once, even if multiple timeouts have expired, and then will
+resume the original interval.
 
 
 Alternatives to QTimer
 
-An alternative to using QTimer is to call QObject::startTimer() for your object and reimplement the QObject::timerEvent() event handler in your class (which must inherit QObject). The disadvantage is that timerEvent() does not support such high-level features as single-shot timers or signals.
+An alternative to using QTimer is to call QObject::startTimer() for your object
+and reimplement the QObject::timerEvent() event handler in your class (which
+    must inherit QObject). The disadvantage is that timerEvent() does not
+support such high-level features as single-shot timers or signals.
 
-Another alternative is QBasicTimer. It is typically less cumbersome than using QObject::startTimer() directly. See Timers for an overview of all three approaches.
+Another alternative is QBasicTimer. It is typically less cumbersome than using
+QObject::startTimer() directly. See Timers for an overview of all three
+approaches.
 
-Some operating systems limit the number of timers that may be used; Qt tries to work around these limitations.
+Some operating systems limit the number of timers that may be used; Qt tries to
+work around these limitations.
 
-See also QBasicTimer, QTimerEvent, QObject::timerEvent(), Timers, Analog Clock Example, and Wiggly Example.
+See also QBasicTimer, QTimerEvent, QObject::timerEvent(), Timers, Analog Clock
+Example, and Wiggly Example.
 
 
 https://doc.qt.io/qt-5/qelapsedtimer.html
