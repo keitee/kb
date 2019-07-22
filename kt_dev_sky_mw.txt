@@ -4313,7 +4313,7 @@ public final class BleRcuManager {
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-android-ip150
+*kt_dev_skymw_0000* skymw-ip150
 
 https://www.stb.bskyb.com/confluence/display/2016/IP150+Releases
 
@@ -4329,6 +4329,16 @@ adb connect 192.168.1.10:5555
  
 # Push the OTA package
 adb push IP150-ota.zip /cache/update.zip
+ 
+#(If it already exists you might see the following- mkdir: '/cache/recovery/':
+File exists. Everything is fine and you can proceed to the next step)
+
+adb shell 'mkdir /cache/recovery/'
+adb shell 'echo "--update_package=/cache/update.zip" > /cache/recovery/command'
+ 
+# Reboot in recovery mode
+adb reboot recovery
+
 
 <comp-drivers>
 IP150:/vendor/lib/modules # pwd
@@ -4612,10 +4622,46 @@ public class Runtime extends BroadcastReceiver implements IRuntime {
    */
   private boolean launchLuna(final File appInstallDir, final Bundle params) {
 
+    mRenderer = new Renderer(appInstallDir.getAbsolutePath(), mActivity);
+
     // Create the VideoSurface
     mVideoSurface = `new VideoSurface`(mActivity, mDtvManager);
+
+    // Attach the video surface to Luna so it can adjust it
+    `mRenderer.addVideoWindow(0, mVideoSurface);`
+
+    // Setup and attach the video surface
+    relativeLayout.addView(mVideoSurface, 0,
+          new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT));
+
+    // Create the subtitle surface and add to the layout
+    mSubtitleSurface = new SubtitleSurface(mActivity, mDtvManager);
+
+    // Setup and attach the subtitle surface
+
+    /*
+    https://developer.android.com/reference/android/view/SurfaceView
+    setZOrderMediaOverlay
+    Added in API level 5
+    public void setZOrderMediaOverlay (boolean isMediaOverlay)
+    Control whether the surface view's surface is placed on top of another regular surface view in the window (but still behind the window itself). This is typically used to place overlays on top of an underlying media surface view.
+    
+    Note that this must be set before the surface view's containing window is attached to the window manager.
+    mSubtitleSurface.setZOrderMediaOverlay(true);
+
+    https://developer.android.com/reference/android/view/View#layout
+    and is a top-down traversal of the view tree. 
+     */
+
+    relativeLayout.addView(mSubtitleSurface, 1,
+        new RelativeLayout.LayoutParams(
+          ViewGroup.LayoutParams.MATCH_PARENT,
+          ViewGroup.LayoutParams.MATCH_PARENT));
   }
 }
+
 
 app/src/main/java/com/sky/lunaruntime/VideoSurface.java
 
@@ -4641,10 +4687,12 @@ class `VideoSurface` extends `IWediaDTVSurface` implements `Native.ILunaVideoSur
 
 app/src/main/java/com/sky/lunaruntime/IWediaDTVSurface.java
 
-class IWediaDTVSurface extends SurfaceView {
+class IWediaDTVSurface extends `SurfaceView` {
 
-  IWediaDTVSurface(Context context, IWediaDTVManager dtvManager, int layerId) {
+  IWediaDTVSurface(Context context, IWediaDTVManager dtvManager, `int layerId`) {
     super(context);
+
+    `getHolder().addCallback(mCallback);`
   }
 
   private SurfaceHolder.Callback mCallback = `new SurfaceHolder.Callback`() {
@@ -4654,7 +4702,7 @@ class IWediaDTVSurface extends SurfaceView {
         if (DBG) Log.d(TAG, "Surface for layer " + mLayerId + " created");
 
         // get the underlying surface
-        Surface surface = surfaceHolder.getSurface();
+        `Surface` surface = surfaceHolder.getSurface();
         if (surface == null) {
           Log.e(TAG, "Failed to get the underlying surface");
           return;
@@ -4715,8 +4763,6 @@ class IWediaDTVManager {
     try {
      
       // *plumbing-to-as-iwedia*
-      // The following line sets the actual subtitles surface to the AS service
-
       // SkyLunaRuntime/app/libs/com.iwedia.comedia.service.comm-release.jar!/com/iwedia/dtv/display/IDisplayControl.class
 
       A4TVStatus status = mDtvManager.getDisplayControl()
@@ -4757,10 +4803,11 @@ public class Renderer implements ModdedGLSurfaceView.Renderer {
             width, height,
             mMetrics.xdpi, mMetrics.ydpi);
 
+        // *pass-video-window*
         // register video window(s)
         for(int i = 0; i < mVideoWindows.size(); i++) {
-          com.sky.lunaruntime.Native.registerVideoWindow(
-              mVideoWindows.keyAt(i), mVideoWindows.get(i));
+          `com.sky.lunaruntime.Native.registerVideoWindow`(
+              `mVideoWindows`.keyAt(i), mVideoWindows.get(i));
         }
 
         // finally start Luna
@@ -4773,10 +4820,84 @@ public class Renderer implements ModdedGLSurfaceView.Renderer {
 }
 
 
-{
-  //  Register a callback to be invoked when a hardware key is pressed in this view.
-  mGlView.setOnKeyListener(new KeyListener(mActivity, params));
-}
+// app/src/main/java/com/sky/lunaruntime/VideoSurface.java
+
+    /**
+     * Called by the luna runtime code when we want to adjust the video window parameters.
+     *
+     * @param flags 
+     * Flags that control the visibility, z-ordering and subtitles for the video
+     * surface.
+     *
+     * @param sourceRect 
+     * The cropping rectangle that controls the portion of the video to
+     * display on the surface.
+     *
+     * @param destinationRect 
+     * The position on the display to put the video surface.
+     *
+     * note: (see) only use destination
+     */
+    @Override
+    public void setWindowProperties(int flags, 
+        RectF sourceRect, 
+        Rect destinationRect) {
+
+      if (DBG) {
+        if ((flags & Native.ILunaVideoSurface.VISIBLE) == 0)
+          Log.d(TAG, "Luna app requested video to hidden");
+        else
+          Log.d(TAG, "Luna app requested video size to " + destinationRect);
+      }
+
+      if (destinationRect.right > mScreenWidth)
+        destinationRect.right = mScreenWidth;
+      if (destinationRect.left < 0)
+        destinationRect.left = 0;
+
+      if (destinationRect.bottom > mScreenHeight)
+        destinationRect.bottom = mScreenHeight;
+      if (destinationRect.top < 0)
+        destinationRect.top = 0;
+
+      final int x = destinationRect.left;
+      final int y = destinationRect.top;
+      final int width = destinationRect.width();
+      final int height = destinationRect.height();
+      final boolean visible = ((flags & Native.ILunaVideoSurface.VISIBLE) != 0);
+
+      mActivity.runOnUiThread(new Runnable() {
+          @Override
+          public void run() {
+
+          if (!visible) {
+
+          if (DBG)
+          Log.d(TAG, "Hiding video window");
+
+          setVisibility(View.INVISIBLE);
+          mDtvManager.blankVideo(true);
+
+          } else {
+
+          if (DBG)
+          Log.d(TAG, "Setting video window dims to " +
+              x + "x" + y + " " + width + "x" + height);
+
+          final RelativeLayout.LayoutParams params =
+          new RelativeLayout.LayoutParams(width, height);
+
+          params.setMargins(x, y,
+              mScreenWidth - x - width,
+              mScreenHeight - y - height);
+          setLayoutParams(params);
+
+          setVisibility(View.VISIBLE);
+          mDtvManager.blankVideo(false);
+          }
+          }
+      });
+    }
 
 
 ={============================================================================
@@ -5295,7 +5416,9 @@ gvim /home/keitee/ip/SkyBluetoothRcu-clean/app/src/main/cpp/blercu/blercupairing
 
 git flow feature start NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
 
-$ git branch -vv
+git branch --set-upstream-to=origin/develop
+
+git branch -vv
 * feature/NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared d27b0d10e Increment Telemetria App version to 2.0.2
 
 // for a review
@@ -5368,7 +5491,18 @@ This commit includes changes to update pairing state when pairing attempts fails
 
 <skymw-jira-luna>
 
-git checkout -b NGDEV-144531_Luna_-_update_to_support_DTT_video_on_IP150_/_IP051
+git flow feature start NGDEV-144531_Luna_-_update_to_support_DTT_video_on_IP150_/_IP051
+
+NGDEV-144531: Luna - update to support DTT video on IP150 / IP051
+
+For the new IP150 and IP051 Android boxes the way the iWedia player exposes
+video surfaces has changed. See [1] for more details. Therefore, The Luna
+runtime needs to be updated to reflect this.
+
+This is a temporary commit only to have new jar library and a change to see
+video via Vevo.
+
+[1] https://www.stb.bskyb.com/confluence/display/2016/Creating+and+passing+of+Android+video+surface+to+iWedia+AS+Service+for+IP150
 
 
 ={============================================================================
