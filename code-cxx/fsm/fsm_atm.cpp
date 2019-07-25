@@ -446,7 +446,7 @@ fsm_thread: end
 
 */
 
-TEST(FsmAtm, Static)
+TEST(Fsm, AtmStatic)
 {
   using namespace fsm_static;
 
@@ -746,7 +746,7 @@ fsm_thread: end
  
 */
 
-TEST(FsmAtm, Dynamic)
+TEST(Fsm, AtmDynamic)
 {
   using namespace fsm_dynamic;
 
@@ -862,11 +862,12 @@ handle() itself passes the queue, the current dispatcher object, and the handler
 function to a new instance of the TemplateDispatcher class template, to handle
 messages of the specified type.
    
-Your message processing stops when you’ve successfully handled a message, so
-that you can wait for a different set of messages next time. If you do get a
-match for the specified message type, the supplied function is called rather
-than throwing an exception (although the handler function may throw an exception
-itself). 
+o Your message processing stops when you’ve successfully handled a message, so
+  that you can wait for a different set of messages next time. 
+
+o If you do get a match for the specified message type, the `supplied function`
+  is called rather than throwing an exception (although the handler function may
+  throw an exception itself). *eaf*
   
 If you don’t get a match, you chain to the previous dispatcher. In the first
 instance, this will be a dispatcher, but
@@ -911,6 +912,23 @@ o if found a match from a chain, end loop and chain is destroyed.
 
 o if not foudn a match either no event or having event that are not expected in
   this chain, not end loop and so wait for next event.
+
+
+Super State support
+
+To support the super state:
+
+o static fsm add the same transition to the table for all state in the super
+  state group so that fsm can transit from any state to the destination.
+  duplicate table entries.
+
+o dynamic fsm do the same but done it programatically by setting the table. no
+  duplicate and do simply setting value.
+
+o chain of resposibility fsm needs to have the same lambda(duplicate) for all
+  states in the group. can use the same function than duplicating lambda.
+
+In sum, super state is diagram technique and can be implemented in many ways.
 
 */
 
@@ -1231,7 +1249,30 @@ namespace messaging
 
 } // namespace
 
-TEST(Message, VariousType)
+namespace
+{
+  void push_items_to_queue(messaging::queue& q)
+  {
+    q.push(100);
+  }
+}
+
+TEST(Fsm, MessageUseThread)
+{
+  using namespace messaging;
+
+  // to avoid conflict with std::queue
+  messaging::queue mq;
+
+  std::async(std::launch::async, push_items_to_queue, std::ref(mq));
+
+  auto message = mq.wait_and_pop();
+
+  EXPECT_THAT(dynamic_cast<messaging::wrapped_message<int>*>(message.get())->contents_,
+      100);
+}
+
+TEST(Fsm, MessageVariousType)
 {
   using namespace messaging;
 
@@ -1359,7 +1400,7 @@ namespace messaging
 // disp: dispatch_: false
 // ^C
 
-TEST(Message, SingleChain)
+TEST(Fsm, MessageSingleChain)
 {
   using namespace messaging;
   using namespace messaging::client;
@@ -1432,6 +1473,223 @@ TEST(Message, SingleChain)
   }
 
   sender.join();
+}
+
+namespace cxx_fsm
+{
+  // define events/messages
+
+  using namespace std;
+
+  struct money_inserted
+  {
+    unsigned amount_;
+    explicit money_inserted(unsigned const& amount)
+      : amount_(amount) {}
+    std::string get_name() { return "money_inserted"; }
+  };
+
+  struct item_1_purchased
+  {
+    unsigned price_;
+    explicit item_1_purchased()
+      : price_(10) {}
+    std::string get_name() { return "item_1_purchased"; }
+  };
+
+  struct item_2_purchased
+  {
+    unsigned price_;
+    explicit item_2_purchased()
+      : price_(20) {}
+    std::string get_name() { return "item_2_purchased"; }
+  };
+
+  struct item_3_purchased
+  {
+    unsigned price_;
+    explicit item_3_purchased()
+      : price_(30) {}
+    std::string get_name() { return "item_3_purchased"; }
+  };
+
+  // define eafs of fsm
+
+  class simple
+  {
+    public:
+      simple() {}
+      simple(simple const&) = delete;
+      simple& operator=(simple const&) = delete;
+
+      // a sender is a wrapper to a message queue, a receiver owns it. You
+      // can obtain a sender that references the queue by using the implicit
+      // conversion.
+      //
+      // this is an interface to expose q to other class and used to set up
+      // connection each other
+      //
+      // atm machine(bank.get_sender(), intarface_hardware.get_sender());
+      //
+      // atm machine keeps this sender copies to send messages to them.
+
+      messaging::sender get_sender()
+      { return incoming_; }
+
+      // send a message to self
+      void done()
+      {
+        std::cout << "simple fsm: send done" << endl;
+        get_sender().send(messaging::close_queue());
+      }
+
+      void run()
+      {
+        // init state
+        state = &simple::wait_for_money;
+
+        cout << "starts simple fsm" << endl;
+
+        try
+        {
+          for (;;)
+          {
+            (this->*state)();
+          }
+        }
+        catch (messaging::close_queue const&)
+        {
+          cout << "ends simple fsm" << endl;
+        }
+      }
+
+      // fsm states
+
+      void wait_for_money()
+      {
+        std::cout << "simple fsm: wait_for_money and waits..." 
+          << std::endl; 
+
+        incoming_.wait()
+          .handle<money_inserted>
+          (
+           [&](money_inserted const& message)
+           {
+              amount_ = message.amount_;
+              std::cout << "simple fsm: money_inserted: amount left: " 
+              << amount_ << std::endl;
+
+              // set next state
+              state = &simple::wait_for_action;
+           }
+          );
+      }
+
+      void wait_for_action()
+      {
+        std::cout << "simple fsm: wait_for_action and waits..." 
+          << std::endl; 
+
+        incoming_.wait()
+          .handle<item_1_purchased>
+          (
+           [&](item_1_purchased const& message)
+           {
+              amount_ -= message.price_;
+
+              std::cout << "fsm: wait_for_action: item 1 purchased:"
+              << " amounts left: " << amount_ << std::endl;
+
+              state = &simple::done_processing;   
+           }
+          )
+          .handle<item_2_purchased>
+          (
+           [&](item_2_purchased const& message)
+           {
+              amount_ -= message.price_;
+
+              std::cout << "fsm: wait_for_action: item 2 purchased:"
+              << " amounts left: " << amount_ << std::endl;
+
+              state = &simple::done_processing;   
+           }
+          )
+          .handle<item_3_purchased>
+          (
+           [&](item_3_purchased const& message)
+           {
+              amount_ -= message.price_;
+
+              std::cout << "fsm: wait_for_action: item 3 purchased:"
+              << " amounts left: " << amount_ << std::endl;
+
+              state = &simple::done_processing;   
+           }
+          );
+      }
+
+      void done_processing()
+      {
+        std::cout << "simple fsm: done_processing and no waits..." 
+          << std::endl; 
+
+        state = &simple::wait_for_money;
+      }
+
+    private:
+      messaging::receiver incoming_;
+
+      // state function pointer
+      void (simple::*state)();
+      unsigned amount_;
+  };
+
+} // namespace
+
+
+TEST(Fsm, SimpleFsm1)
+{
+  using namespace cxx_fsm;
+
+  simple fsm;
+
+  // make thread which runs fsm
+  std::thread fsm_thread(&simple::run, &fsm);
+
+  // make sender to send a message
+
+  messaging::sender fsm_queue(fsm.get_sender());
+
+  fsm_queue.send(money_inserted(100));
+
+  std::this_thread::sleep_for(std::chrono::seconds(10));
+
+  fsm.done();
+  fsm_thread.join();
+}
+
+TEST(Fsm, SimpleFsm2)
+{
+  using namespace cxx_fsm;
+
+  simple fsm;
+
+  // make thread which runs fsm
+  std::thread fsm_thread(&simple::run, &fsm);
+
+  // make sender to send a message
+
+  messaging::sender fsm_queue(fsm.get_sender());
+
+  fsm_queue.send(money_inserted(100));
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  fsm_queue.send(item_2_purchased());
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  fsm.done();
+  fsm_thread.join();
 }
 
 
@@ -1786,6 +2044,7 @@ namespace messaging
       std::string pin_;
       unsigned withdraw_amount_;
 
+      // function name is *state*
       void waiting_for_card()
       {
         // interface_hardware.send(display_enter_card());
@@ -2071,7 +2330,7 @@ namespace messaging
 // atm::run::end
 // [       OK ] Message.AtmFsmDoWithdraw (1000 ms)
 
-TEST(Message, AtmFsmCancelPin)
+TEST(Fsm, AtmFsmCancelPin)
 {
   using namespace messaging;
 
@@ -2095,7 +2354,7 @@ TEST(Message, AtmFsmCancelPin)
 }
 
 
-TEST(Message, AtmFsmDoWithdraw)
+TEST(Fsm, AtmFsmDoWithdraw)
 {
   using namespace messaging;
 

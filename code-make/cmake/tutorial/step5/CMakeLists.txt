@@ -11,6 +11,6 @@ link_directories(~/git/kb/code-make/cmake/tutorial/step3/build)
 include_directories(~/git/kb/code-make/cmake/tutorial/step3/include)
 
 # make "student" executable
-add_executable(libtest main.cxx)
+ADD_executable(libtest main.cxx)
 
 target_link_libraries(libtest ${PROJECT_LINK_LIBS})

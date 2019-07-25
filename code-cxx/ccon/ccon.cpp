@@ -6,14 +6,12 @@
 #include <queue>
 #include <stack>
 #include <exception>
+#include <random>
 
 #include <boost/thread/shared_mutex.hpp>
 // #include <boost/thread/thread.hpp>
 
 #include "gmock/gmock.h"
-
-// fsm
-#include "message.h"
 
 using namespace std;
 using namespace std::placeholders;
@@ -377,16 +375,18 @@ TEST(CConAsync, MemberFunction)
 {
   using namespace cxx_async;
 
-  Foo foo;
+  {
+    Foo foo;
 
-  auto result = std::async(&Foo::update_value, &foo);
-  // since it's not run yet
-  EXPECT_THAT(foo.get_value(), 10);
+    auto result = std::async(&Foo::update_value, &foo);
+    // since it's not run yet
+    EXPECT_THAT(foo.get_value(), 10);
 
-  result.get();
+    result.get();
 
-  // run and expect the update
-  EXPECT_THAT(foo.get_value(), 20);
+    // run and expect the update
+    EXPECT_THAT(foo.get_value(), 20);
+  }
 }
 
 
@@ -648,6 +648,56 @@ namespace cxx_mutex
   // }
 
 } // cxx_mutex
+
+
+// note that this shows `deadlock` becuase calls lock() twice already before
+// running a thread which calls unlock().
+//
+// TEST(CConLock, MultipleLockAndUnlock)
+// {
+//   std::mutex print_mutex;
+// 
+//   std::mutex m;
+//   bool result{false};
+// 
+//   m.lock();
+//   m.lock();
+// 
+//   std::thread t([&]{m.unlock(); std::this_thread::sleep_for(std::chrono::seconds(2));});
+//   std::cout << "set" << std::endl;
+//   result = true;
+//   m.unlock();
+//   t.join();
+// 
+//   EXPECT_THAT(result, true);
+// }
+
+
+// LPI 30.1.7 Mutex Types
+//
+// "On Linux, both of these operations succeed for this mutex type and a
+// PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
+
+TEST(CConLock, MultipleLockAndUnlock)
+{
+  std::mutex m;
+  bool result{false};
+
+  m.lock();
+
+  std::thread t([&]{std::this_thread::sleep_for(std::chrono::seconds(2)); m.unlock(); });
+
+  m.lock();
+  std::cout << "set" << std::endl;
+  result = true;
+
+  // note that this works without calling second unlock() since *cxx-raii*
+  // m.unlock();
+
+  t.join();
+
+  EXPECT_THAT(result, true);
+}
 
 TEST(CConLock, LockGuard)
 {
@@ -1305,6 +1355,43 @@ TEST(CConRace, ThreadSafeStack)
 // ={=========================================================================
 // cxx-future
 
+TEST(CConFuture, SetPromise)
+{
+
+  // (not true)
+  // If you destroy the std::promise without setting a value, an exception is
+  // stored instead.
+
+  // this blocks forever
+  // {
+  //   std::promise<int> prom;
+  //   auto f = prom.get_future();
+  //   auto value = f.get();
+  // }
+
+  {
+    std::promise<int> prom;
+    auto f = prom.get_future();
+    prom.set_value(10);
+    auto value = f.get();
+    EXPECT_THAT(value, 10);
+  }
+
+
+  // there are 'no' copy operations for a promise. A set function throws
+  // future_error if a value or exception is already set.
+  // C++ exception with description 
+  // "std::future_error: Promise already satisfied" thrown in the test body.
+
+  {
+    std::promise<int> prom;
+    auto f = prom.get_future();
+    prom.set_value(10);
+    EXPECT_THROW(prom.set_value(10), std::exception);
+  }
+}
+
+
 namespace cxx_future
 {
   int ff(int i)
@@ -1437,927 +1524,6 @@ TEST(CConFuture, ParallelQuickSort)
   auto result = parallel_quick_sort(input);
   EXPECT_THAT(result,
       ElementsAreArray({2,5,6,6,10,12,13,15,17,29,30,31,33}));
-}
-
-
-// ={=========================================================================
-// cxx-fsm
-
-namespace cxx_fsm
-{
-  void push_items_to_queue(messaging::queue& q)
-  {
-    q.push(100);
-  }
-}
-
-TEST(CConFsm, Queue)
-{
-  using namespace cxx_fsm;
-
-  // to avoid conflict with std::queue
-  messaging::queue mq;
-
-  std::async(std::launch::async, push_items_to_queue, std::ref(mq));
-
-  auto message = mq.wait_and_pop();
-
-  EXPECT_THAT(dynamic_cast<messaging::wrapped_message<int>*>(message.get())->contents_,
-      100);
-}
-
-namespace cxx_fsm
-{
-  // define events/messages
-
-  struct money_inserted
-  {
-    unsigned amount_;
-    explicit money_inserted(unsigned const& amount)
-      : amount_(amount) {}
-    std::string get_name() { return "money_inserted"; }
-  };
-
-  struct item_1_purchased
-  {
-    unsigned price_;
-    explicit item_1_purchased()
-      : price_(10) {}
-    std::string get_name() { return "item_1_purchased"; }
-  };
-
-  struct item_2_purchased
-  {
-    unsigned price_;
-    explicit item_2_purchased()
-      : price_(20) {}
-    std::string get_name() { return "item_2_purchased"; }
-  };
-
-  struct item_3_purchased
-  {
-    unsigned price_;
-    explicit item_3_purchased()
-      : price_(30) {}
-    std::string get_name() { return "item_3_purchased"; }
-  };
-
-  // define eafs of fsm
-
-  class simple
-  {
-    public:
-      simple() {}
-      simple(simple const&) = delete;
-      simple& operator=(simple const&) = delete;
-
-      // a sender is a wrapper to a message queue, a receiver owns it. You
-      // can obtain a sender that references the queue by using the implicit
-      // conversion.
-      //
-      // this is an interface to expose q to other class and used to set up
-      // connection each other
-      //
-      // atm machine(bank.get_sender(), intarface_hardware.get_sender());
-      //
-      // atm machine keeps this sender copies to send messages to them.
-
-      messaging::sender get_sender()
-      { return incoming_; }
-
-      // send a message to self
-      void done()
-      {
-        cout << "simple fsm: send done" << endl;
-        get_sender().send(messaging::close_queue());
-      }
-
-      void run()
-      {
-        // init state
-        state = &simple::wait_for_money;
-
-        cout << "starts simple fsm" << endl;
-
-        try
-        {
-          for (;;)
-          {
-            (this->*state)();
-          }
-        }
-        catch (messaging::close_queue const&)
-        {
-          cout << "ends simple fsm" << endl;
-        }
-      }
-
-      // fsm states
-
-      void wait_for_money()
-      {
-        std::cout << "simple fsm: wait_for_money and waits..." 
-          << std::endl; 
-
-        incoming_.wait()
-          .handle<money_inserted>
-          (
-           [&](money_inserted const& message)
-           {
-              amount_ = message.amount_;
-              std::cout << "simple fsm: money_inserted: amount left: " 
-              << amount_ << std::endl;
-
-              // set next state
-              state = &simple::wait_for_action;
-           }
-          );
-      }
-
-      void wait_for_action()
-      {
-        std::cout << "simple fsm: wait_for_action and waits..." 
-          << std::endl; 
-
-        incoming_.wait()
-          .handle<item_1_purchased>
-          (
-           [&](item_1_purchased const& message)
-           {
-              amount_ -= message.price_;
-
-              std::cout << "fsm: wait_for_action: item 1 purchased:"
-              << " amounts left: " << amount_ << std::endl;
-
-              state = &simple::done_processing;   
-           }
-          )
-          .handle<item_2_purchased>
-          (
-           [&](item_2_purchased const& message)
-           {
-              amount_ -= message.price_;
-
-              std::cout << "fsm: wait_for_action: item 2 purchased:"
-              << " amounts left: " << amount_ << std::endl;
-
-              state = &simple::done_processing;   
-           }
-          )
-          .handle<item_3_purchased>
-          (
-           [&](item_3_purchased const& message)
-           {
-              amount_ -= message.price_;
-
-              std::cout << "fsm: wait_for_action: item 3 purchased:"
-              << " amounts left: " << amount_ << std::endl;
-
-              state = &simple::done_processing;   
-           }
-          );
-      }
-
-      void done_processing()
-      {
-        std::cout << "simple fsm: done_processing and no waits..." 
-          << std::endl; 
-
-        state = &simple::wait_for_money;
-      }
-
-    private:
-      messaging::receiver incoming_;
-
-      // state function pointer
-      void (simple::*state)();
-      unsigned amount_;
-  };
-
-} // namespace
-
-TEST(CConFsm, SimpleFsm1)
-{
-  using namespace cxx_fsm;
-
-  simple fsm;
-
-  // make thread which runs fsm
-  std::thread fsm_thread(&simple::run, &fsm);
-
-  // make sender to send a message
-
-  messaging::sender fsm_queue(fsm.get_sender());
-
-  fsm_queue.send(money_inserted(100));
-
-  std::this_thread::sleep_for(std::chrono::seconds(10));
-
-  fsm.done();
-  fsm_thread.join();
-}
-
-TEST(CConFsm, SimpleFsm2)
-{
-  using namespace cxx_fsm;
-
-  simple fsm;
-
-  // make thread which runs fsm
-  std::thread fsm_thread(&simple::run, &fsm);
-
-  // make sender to send a message
-
-  messaging::sender fsm_queue(fsm.get_sender());
-
-  fsm_queue.send(money_inserted(100));
-  std::this_thread::sleep_for(std::chrono::seconds(2));
-
-  fsm_queue.send(item_2_purchased());
-  std::this_thread::sleep_for(std::chrono::seconds(2));
-
-  fsm.done();
-  fsm_thread.join();
-}
-
-namespace cxx_fsm_atm
-{
-  // can be a seperate header
-
-  struct withdraw
-  {
-    std::string account;
-    unsigned amount;
-    mutable messaging::sender atm_queue;
-    withdraw(std::string const& account_,
-        unsigned amount_,
-        messaging::sender atm_queue_):
-      account(account_),amount(amount_),
-      atm_queue(atm_queue_)
-    {}
-  };
-  struct withdraw_ok
-  {};
-  struct withdraw_denied
-  {};
-  struct cancel_withdrawal
-  {
-    std::string account;
-    unsigned amount;
-    cancel_withdrawal(std::string const& account_,
-        unsigned amount_):
-      account(account_),amount(amount_)
-    {}
-  };
-  struct withdrawal_processed
-  {
-    std::string account;
-    unsigned amount;
-    withdrawal_processed(std::string const& account_,
-        unsigned amount_):
-      account(account_),amount(amount_)
-    {}
-  };
-  struct card_inserted
-  {
-    std::string account;
-    explicit card_inserted(std::string const& account_):
-      account(account_)
-    {}
-  };
-  struct digit_pressed
-  {
-    char digit;
-    explicit digit_pressed(char digit_):
-      digit(digit_)
-    {}
-  };
-  struct clear_last_pressed
-  {};
-  struct eject_card
-  {};
-  struct withdraw_pressed
-  {
-    unsigned amount;
-    explicit withdraw_pressed(unsigned amount_):
-      amount(amount_)
-    {}
-  };
-  struct cancel_pressed
-  {};
-  struct issue_money
-  {
-    unsigned amount;
-    issue_money(unsigned amount_):
-      amount(amount_)
-    {}
-  };
-  struct verify_pin
-  {
-    std::string account;
-    std::string pin;
-    mutable messaging::sender atm_queue;
-    verify_pin(std::string const& account_,std::string const& pin_,
-        messaging::sender atm_queue_):
-      account(account_),pin(pin_),atm_queue(atm_queue_)
-    {}
-  };
-  struct pin_verified
-  {};
-  struct pin_incorrect
-  {};
-  struct display_enter_pin
-  {};
-  struct display_enter_card
-  {};
-  struct display_insufficient_funds
-  {};
-  struct display_withdrawal_cancelled
-  {};
-  struct display_pin_incorrect_message
-  {};
-  struct display_withdrawal_options
-  {};
-  struct get_balance
-  {
-    std::string account;
-    mutable messaging::sender atm_queue;
-    get_balance(std::string const& account_,messaging::sender atm_queue_):
-      account(account_),atm_queue(atm_queue_)
-    {}
-  };
-  struct balance
-  {
-    unsigned amount;
-    explicit balance(unsigned amount_):
-      amount(amount_)
-    {}
-  };
-  struct display_balance
-  {
-    unsigned amount;
-    explicit display_balance(unsigned amount_):
-      amount(amount_)
-    {}
-  };
-  struct balance_pressed
-  {};
-
-
-  // listing_c.9.cpp
-  class interface_machine
-  {
-    messaging::receiver incoming;
-    std::mutex iom;
-
-    public:
-    void done()
-    {
-      get_sender().send(messaging::close_queue());
-    }
-
-    void run()
-    {
-      try
-      {
-        for(;;)
-        {
-          incoming.wait()
-            .handle<issue_money>(
-                [&](issue_money const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Issuing "
-                <<msg.amount<<std::endl;
-                }
-                }
-                )
-            .handle<display_insufficient_funds>(
-                [&](display_insufficient_funds const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Insufficient funds"<<std::endl;
-                }
-                }
-                )
-            .handle<display_enter_pin>(
-                [&](display_enter_pin const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout
-                <<"Please enter your PIN (0-9)"
-                <<std::endl;
-                }
-                }
-                )
-            .handle<display_enter_card>(
-                [&](display_enter_card const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Please enter your card (I)"
-                <<std::endl;
-                }
-                }
-                )
-            .handle<display_balance>(
-                [&](display_balance const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout
-                <<"The balance of your account is "
-                <<msg.amount<<std::endl;
-                }
-                }
-                )
-            .handle<display_withdrawal_options>(
-                [&](display_withdrawal_options const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Withdraw 50? (w)"<<std::endl;
-                std::cout<<"Display Balance? (b)"
-                <<std::endl;
-                std::cout<<"Cancel? (c)"<<std::endl;
-                }
-                }
-                )
-            .handle<display_withdrawal_cancelled>(
-                [&](display_withdrawal_cancelled const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Withdrawal cancelled"
-                <<std::endl;
-                }
-                }
-                )
-            .handle<display_pin_incorrect_message>(
-                [&](display_pin_incorrect_message const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"PIN incorrect"<<std::endl;
-                }
-                }
-                )
-            .handle<eject_card>(
-                [&](eject_card const& msg)
-                {
-                (void)msg;
-                {
-                std::lock_guard<std::mutex> lk(iom);
-                std::cout<<"Ejecting card"<<std::endl;
-                }
-                }
-                );
-        }
-      }
-      catch(messaging::close_queue&)
-      {
-      }
-    }
-    messaging::sender get_sender()
-    {
-      return incoming;
-    }
-  };
-
-
-  // listing_c.8.cpp
-
-  class bank_machine
-  {
-    messaging::receiver incoming;
-    unsigned balance_;
-
-    public:
-    bank_machine():
-      balance_(199)
-    {}
-    void done()
-    {
-      get_sender().send(messaging::close_queue());
-    }
-
-    void run()
-    {
-      try
-      {
-        for(;;)
-        {
-          incoming.wait()
-            .handle<verify_pin>
-            (
-             [&](verify_pin const& msg)
-             {
-             if(msg.pin=="1937")
-             {
-             msg.atm_queue.send(pin_verified());
-             }
-             else
-             {
-             msg.atm_queue.send(pin_incorrect());
-             }
-             }
-            )
-            .handle<withdraw>
-            (
-             [&](withdraw const& msg)
-             {
-             if(balance_>=msg.amount)
-             {
-             msg.atm_queue.send(withdraw_ok());
-             balance_-=msg.amount;
-             }
-             else
-             {
-             msg.atm_queue.send(withdraw_denied());
-             }
-             }
-            )
-            .handle<get_balance>
-            (
-             [&](get_balance const& msg)
-             {
-             msg.atm_queue.send(balance(balance_));
-             }
-            )
-            .handle<withdrawal_processed>
-            (
-             [&](withdrawal_processed const& msg)
-             {
-             (void)msg;
-             }
-            )
-            .handle<cancel_withdrawal>
-            (
-             [&](cancel_withdrawal const& msg)
-             {
-             (void)msg;
-             }
-            );
-        }
-      }
-      catch(messaging::close_queue const&)
-      {
-      }
-    }
-    messaging::sender get_sender()
-    {
-      return incoming;
-    }
-  };
-
-
-  class atm
-  {
-    private:
-      messaging::receiver incoming_;
-      messaging::sender bank_;
-      messaging::sender interface_hardware_;
-
-      void (atm::*state)();
-
-      std::string account_;
-      std::string pin_;
-      unsigned withdraw_amount_;
-
-      void waiting_for_card()
-      {
-        // interface_hardware.send(display_enter_card());
-        //
-        // state waitinf_for_card -> event card_inserted -> state getting_pin
-        //                              -> eaf, lambda
-
-        incoming_.wait()
-          .handle<card_inserted>
-          (
-           [&](const card_inserted &msg) 
-           {
-           std::cout << "atm::waiting_for_card::card_inserted" << std::endl;
-           account_ = msg.account;
-           pin_ = "";
-           // interface_hardware_.send(display_enter_pin());
-           state = &atm::getting_pin;
-           }
-          );
-      }
-
-      void getting_pin()
-      {
-        incoming_.wait()
-          .handle<digit_pressed>
-          (
-           [&](const digit_pressed &msg)
-           {
-           (void)msg;
-           unsigned const pin_length = 4;
-           pin_ += msg.digit;
-           std::cout << "atm::getting_pin::digit_pressed: " << pin_ << std::endl;
-           if (pin_.length() == pin_length)
-           {
-           // bank.send(verify_pin(account, pin, incoming));
-           state = &atm::verifying_pin;
-           }
-           }
-          )
-          .handle<clear_last_pressed>
-          (
-           [&](const clear_last_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::getting_pin::clear_last_pressed" << std::endl;
-           if (!pin_.empty())
-           {
-           pin_.pop_back();
-           }
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::getting_pin::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      // expect pin_* message from back fsm.
-      void verifying_pin()
-      {
-        incoming_.wait()
-          .handle<pin_verified>
-          (
-           [&](const pin_verified &msg)
-           {
-           (void)msg;
-           std::cout << "atm::verify_pin::pin_verified" << std::endl;
-           state = &atm::wait_for_action;
-           }
-          )
-          .handle<pin_incorrect>
-          (
-           [&](const pin_incorrect &msg)
-           {
-           (void)msg;
-           std::cout << "atm::verify_pin::pin_incorrect" << std::endl;
-           // interface_hardware_.send(display_pin_incorrect_message());
-           state = &atm::done_processing;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::verify_pin::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void wait_for_action()
-      {
-        // interface_hardware_.send(display_withdrawal_options());
-        incoming_.wait()
-          .handle<withdraw_pressed>
-          (
-           [&](const withdraw_pressed &msg)
-           {
-           withdraw_amount_ = msg.amount;
-           std::cout << "atm::wait_for_action::withdraw_pressed: " << withdraw_amount_ << std::endl;
-           // bank_.send(withdraw(account_, msg.account, incoming_));
-           state = &atm::process_withdrawal;
-           }
-          )
-          .handle<balance_pressed>
-          (
-           [&](const balance_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::wait_for_action::balance_pressed" << std::endl;
-           // bank_.send(get_balance(account_, incoming_));
-           state = &atm::process_balance;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::wait_for_action::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void process_balance()
-      {
-        incoming_.wait()
-          .handle<balance>
-          (
-           [&](const balance &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_balance::balance" << std::endl;
-           interface_hardware_.send(display_balance(msg.amount));
-           state = &atm::wait_for_action;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_balance::cancel_pressed" << std::endl;
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void process_withdrawal()
-      {
-        incoming_.wait()
-          .handle<withdraw_ok>
-          (
-           [&](const withdraw_ok &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_withdrawal::withdraw_ok" << std::endl;
-           // interface_hardware_.send(issue_money(withdrawal_amount));
-           // bank_.send(withdrawal_processed(account,withdrawal_amount));
-           state = &atm::done_processing;
-           }
-          )
-          .handle<withdraw_denied>
-          (
-           [&](const withdraw_denied &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_withdrawal::withdraw_denied" << std::endl;
-           // interface_hardware_.send(display_insufficient_funds());
-           state = &atm::done_processing;
-           }
-          )
-          .handle<cancel_pressed>
-          (
-           [&](const cancel_pressed &msg)
-           {
-           (void)msg;
-           std::cout << "atm::process_withdrawal::cancel_pressed" << std::endl;
-           // bank_.send(cancel_withdrawal(account,withdrawal_amount));
-           // interface_hardware_.send(display_withdrawal_cancelled());
-           state = &atm::done_processing;
-           }
-          );
-      }
-
-      void done_processing()
-      {
-        // interface_hardware_.send(eject_card());
-        state = &atm::getting_pin;
-      }
-
-    public:
-      atm(messaging::sender bank, messaging::sender interface_hardware):
-        bank_(bank), interface_hardware_(interface_hardware) {}
-
-      atm(const atm &) = delete;
-      atm &operator=(const atm &) = delete;
-
-      // send a message to self
-      void done()
-      {
-        get_sender().send(messaging::close_queue());
-      }
-
-      void run()
-      {
-        state = &atm::waiting_for_card;
-
-        std::cout << "atm::run::for" << std::endl;
-
-        try
-        {
-          for (;;)
-          {
-            (this->*state)();
-          }
-        }
-        catch(messaging::close_queue const &)
-        {
-          std::cout << "atm::run::end" << std::endl;
-          // note: what would happen when catch exception but do nothing?
-        }
-      }
-
-      // Whereas a sender just references a message queue, a receiver owns it. You
-      // can obtain a sender that references the queue by using the implicit
-      // conversion.
-      //
-      // note: this is an interface to expose q to other class and used to set up
-      // connection each other
-      //
-      // atm machine(bank.get_sender(), intarface_hardware.get_sender());
-      //
-      // atm machine keeps this sender copies to send messages to them.
-
-      // note: cxx-conversion-op which convert receiver to sender
-      messaging::sender get_sender()
-      {
-        return incoming_;
-      }
-  };
-
-} // namespace
-
-
-// [ RUN      ] AtmFsm.CancelPin
-// atm::run::for
-// atm::waiting_for_card::card_inserted
-// atm::getting_pin::digit_pressed: 3
-// atm::getting_pin::digit_pressed: 33
-// atm::getting_pin::digit_pressed: 330
-// atm::getting_pin::cancel_pressed
-// [       OK ] AtmFsm.CancelPin (1001 ms)
-//
-// [ RUN      ] AtmFsm.DoWithdraw
-// atm::run::for
-// atm::waiting_for_card::card_inserted
-// atm::getting_pin::digit_pressed: 3
-// atm::getting_pin::digit_pressed: 33
-// atm::getting_pin::digit_pressed: 330
-// atm::getting_pin::digit_pressed: 3301
-// atm::verify_pin::pin_verified
-// atm::wait_for_action::withdraw_pressed: 50
-// atm::process_withdrawal::withdraw_ok
-// [       OK ] AtmFsm.DoWithdraw (1000 ms)
-
-TEST(CConFsm, AtmCancelPin)
-{
-  using namespace cxx_fsm_atm;
-
-  bank_machine bank;
-  interface_machine interface_hardware;
-  atm machine(bank.get_sender(),interface_hardware.get_sender());
-
-  std::thread atm_thread(&atm::run, &machine);
-
-  messaging::sender atmqueue(machine.get_sender());
-
-  atmqueue.send(card_inserted("JW1234"));
-  atmqueue.send(digit_pressed('3'));
-  atmqueue.send(digit_pressed('3'));
-  atmqueue.send(digit_pressed('0'));
-  atmqueue.send(cancel_pressed());
-
-  std::this_thread::sleep_for(std::chrono::seconds(1));
-  machine.done();
-  atm_thread.join();
-}
-
-TEST(CConFsm, AtmDoWithdraw)
-{
-  using namespace cxx_fsm_atm;
-
-  bank_machine bank;
-  interface_machine interface_hardware;
-  atm machine(bank.get_sender(),interface_hardware.get_sender());
-
-  std::thread atm_thread(&atm::run, &machine);
-
-  messaging::sender atmqueue(machine.get_sender());
-
-  atmqueue.send(card_inserted("JW1234"));
-  atmqueue.send(digit_pressed('3'));
-  atmqueue.send(digit_pressed('3'));
-  atmqueue.send(digit_pressed('0'));
-  atmqueue.send(digit_pressed('1'));
-
-  // message from bank fsm
-  atmqueue.send(pin_verified());
-
-  atmqueue.send(withdraw_pressed(50));
-  atmqueue.send(withdraw_ok());
-
-  std::this_thread::sleep_for(std::chrono::seconds(1));
-  machine.done();
-  atm_thread.join();
 }
 
 
@@ -2512,7 +1678,7 @@ TEST(CconThreadTest, UseThreadSafeLookupTable)
 
 // ={=========================================================================
 // cxx-atomic
-// Listing 5.4 Sequential consistency implies a total ordering
+// CXXCCON, Listing 5.4 Sequential consistency implies a total ordering
 
 namespace cxx_atomic
 {
@@ -2596,6 +1762,15 @@ namespace cxx_atomic
 // Not sure if this example is good to study atomic and to represent the point
 // since both shows 1 or 2 output for z when runs over and over.
 
+// [ RUN      ] CConAtomic.Atomic
+// z: 2
+// [       OK ] CConAtomic.Atomic (1 ms)
+// 
+// [ RUN      ] CConAtomic.Atomic
+// z: 1
+// [       OK ] CConAtomic.Atomic (0 ms)
+
+
 TEST(CConAtomic, Atomic)
 {
   using namespace cxx_atomic::use_atomic;
@@ -2612,10 +1787,7 @@ TEST(CConAtomic, Atomic)
   std::thread c(read_x_then_y);
   std::thread d(read_y_then_x);
 
-  a.join();
-  b.join();
-  c.join();
-  d.join();
+  a.join(); b.join(); c.join(); d.join();
 
   cout << "z: " << z << endl; 
 
@@ -2651,9 +1823,6 @@ TEST(CConAtomic, NoAtomic)
 
 // https://baptiste-wicht.com/posts/2012/07/c11-concurrency-tutorial-part-4-atomic-type.html
 //
-// 1. TEST(DISABLED_CConAtomic, NoAtomicCounter)
-// only failes when run on real server but not on VM.
-// 
 // 2. Not much difference in time to run for Atomic and LockCounter
 
 namespace cxx_atomic
@@ -2690,7 +1859,10 @@ namespace cxx_atomic
 
     AtomicCounter() : value(0) {}
 
-    std::atomic<int> value;
+    // *cxx-atomic*
+    // std::atomic<int> value;
+    // same as:
+    std::atomic_int value;
 
     void increment(){
       ++value;
@@ -2700,8 +1872,10 @@ namespace cxx_atomic
       --value;
     }
 
+    // *cxx-atomic* Q: show the same result with/without load(). same??
     int get(){
-      return value.load();
+      // return value.load();
+      return value;
     }
   };
 
@@ -2749,12 +1923,28 @@ namespace cxx_atomic
 
 } // namespace
 
-TEST(DISABLED_CConAtomic, NoAtomicCounter)
+
+TEST(CConAtomic, CounterIsAtomic)
+{
+  // atomic<bool> may not be lock-free depending on implementation/platform.
+  std::atomic<bool> abool;
+  EXPECT_THAT(abool.is_lock_free(), true);
+
+  std::atomic<int> aint;
+  EXPECT_THAT(aint.is_lock_free(), true);
+
+  std::atomic_int value;
+  EXPECT_THAT(value.is_lock_free(), true);
+}
+
+
+TEST(CConAtomic, CounterRace)
 {
   using namespace cxx_atomic;
 
   Counter counter;
 
+  // increase 30
   std::thread a(increment_counter, std::ref(counter));
   std::thread b(increment_counter, std::ref(counter));
   std::thread c(increment_counter, std::ref(counter));
@@ -2763,10 +1953,10 @@ TEST(DISABLED_CConAtomic, NoAtomicCounter)
   a.join(); b.join(); c.join(); d.join();
   
   cout << "counter value: " << counter.get() << endl;
-  ASSERT_THAT(counter.get(), 120);
+  // EXPECT_THAT(counter.get(), 120);
 }
 
-TEST(CConAtomic, AtomicCounter)
+TEST(CConAtomic, CounterAtomic)
 {
   using namespace cxx_atomic;
 
@@ -2783,7 +1973,7 @@ TEST(CConAtomic, AtomicCounter)
   ASSERT_THAT(counter.get(), 120);
 }
 
-TEST(CConAtomic, LockCounter)
+TEST(CConAtomic, CounterLock)
 {
   using namespace cxx_atomic;
 
@@ -2798,17 +1988,6 @@ TEST(CConAtomic, LockCounter)
   
   cout << "counter value: " << counter.get() << endl;
   ASSERT_THAT(counter.get(), 120);
-}
-
-
-TEST(CConAtomic, AtomicTypes)
-{
-  // atomic<bool> may not be lock-free depending on implementation/platform.
-  std::atomic<bool> abool;
-  EXPECT_THAT(abool.is_lock_free(), true);
-
-  std::atomic<int> aint;
-  EXPECT_THAT(aint.is_lock_free(), true);
 }
 
 

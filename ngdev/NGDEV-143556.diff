@@ -1,0 +1,523 @@
+diff --git a/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl b/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+index 88760ad..0cf16e0 100644
+--- a/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
++++ b/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+@@ -46,4 +46,7 @@ interface IBleRcuService {
+ 
+ 	boolean startDeviceUpgrade(in String address, in byte[] firmware);
+ 	void cancelDeviceUpgrade(in String address);
++
++	void startScanning(in int timeout);
++	int getState();
+ }
+diff --git a/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl b/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl
+index ec5648c..c3d9ec1 100644
+--- a/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl
++++ b/app/src/main/aidl/com/sky/blercu/IBleRcuServiceCallback.aidl
+@@ -18,4 +18,5 @@ oneway interface IBleRcuServiceCallback {
+ 	void onDeviceFwUpgradeProgress(in String address, in int progress);
+ 
+ 	void onDeviceIdChanged(in String address, in int id);
++	void onStateChanged(in int status);
+ }
+diff --git a/app/src/main/cpp/blercu/blercuadapter.h b/app/src/main/cpp/blercu/blercuadapter.h
+index 9b2bf7c..a0eb616 100644
+--- a/app/src/main/cpp/blercu/blercuadapter.h
++++ b/app/src/main/cpp/blercu/blercuadapter.h
+@@ -60,6 +60,7 @@ public:
+ 
+ signals:
+ 	void poweredChanged(bool powered, QPrivateSignal);
++	void poweredInitialised(QPrivateSignal);
+ 
+ 	void discoveryChanged(bool discovering, QPrivateSignal);
+ 	void pairableChanged(bool pairable, QPrivateSignal);
+diff --git a/app/src/main/cpp/blercu/blercucontroller.cpp b/app/src/main/cpp/blercu/blercucontroller.cpp
+index de81bd0..1bfc3f5 100644
+--- a/app/src/main/cpp/blercu/blercucontroller.cpp
++++ b/app/src/main/cpp/blercu/blercucontroller.cpp
+@@ -50,6 +50,10 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 	                 this, &BleRcuControllerImpl::onStartedPairing,
+ 	                 Qt::QueuedConnection);
+ 
++	// connect to the failed signal so we can send pairing state notifications
++	QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::failed,
++	                 this, &BleRcuControllerImpl::onFailedPairing,
++	                 Qt::QueuedConnection);
+ 
+ 	// connect to the manager's device pairing change signals
+ 	QObject::connect(adapter.data(), &BleRcuAdapter::devicePairingChanged,
+@@ -61,6 +65,10 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 	                 this, &BleRcuControllerImpl::onDeviceReadyChanged,
+ 	                 Qt::QueuedConnection);
+ 
++	// connect to the manager's initialised signal
++	QObject::connect(adapter.data(), &BleRcuAdapter::poweredInitialised,
++	                 this, &BleRcuControllerImpl::onInitialised,
++	                 Qt::QueuedConnection);
+ 
+ 
+ 	// connect the analytics to the signals we generate (does this make more
+@@ -83,6 +91,9 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 	QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::finished,
+ 	                 this, &BleRcuControllerImpl::onFinishedScanning,
+ 	                 Qt::QueuedConnection);
++	QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::failed,
++	                 this, &BleRcuControllerImpl::onFailedScanning,
++	                 Qt::QueuedConnection);
+ 
+ 	// connect to the signal emitted when the scanner found an RCU device in
+ 	// pairing mode
+@@ -323,6 +334,7 @@ bool BleRcuControllerImpl::startScanning(int timeoutMs)
+ 	}
+ 
+ 	// start the pairing process
++	emit stateChanged(PairingState::Searching);
+ 	m_scannerStateMachine.start(timeoutMs);
+ 	return true;
+ }
+@@ -503,6 +515,7 @@ void BleRcuControllerImpl::onStartedPairing()
+ 
+ 	// tell clients that the pairing state has changed
+ 	emit pairingStateChanged(pairing);
++	emit stateChanged(PairingState::Pairing);
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -524,6 +537,40 @@ void BleRcuControllerImpl::onFinishedPairing()
+ 
+ 	// tell clients that the pairing state is changed
+ 	emit pairingStateChanged(pairing);
++	emit stateChanged(PairingState::Complete);
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Queued slot called when the pairing state machine has failed. This doesn't
++	necessarily mean it succeeded, this is called on failure as well.
++
++ */
++void BleRcuControllerImpl::onFailedPairing()
++{
++	// a queued event so check the state
++	const bool pairing = m_pairingStateMachine.isRunning();
++
++	// (re)sync our list of managed devices now pairing has finished
++	if (!pairing)
++		syncManagedDevices();
++
++	// tell clients that the pairing state is changed
++	emit stateChanged(PairingState::Failed);
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Queued slot called when the adaptor is powered on 
++ */
++void BleRcuControllerImpl::onInitialised()
++{
++	// tell clients that the pairing state is changed
++	emit stateChanged(PairingState::Idle);
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -600,6 +647,21 @@ void BleRcuControllerImpl::onFinishedScanning()
+ 	emit scanningStateChanged(false);
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++  \internal
++
++  Queued slot called when the scanner state machine indicates it has failed to
++  find a device from scanning. This may be because it was cancelled, found a
++  target device or timed out.
++ */
++void
++BleRcuControllerImpl::onFailedScanning()
++{
++	emit stateChanged(PairingState::Failed);
++}
++
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	\internal
+diff --git a/app/src/main/cpp/blercu/blercucontroller.h b/app/src/main/cpp/blercu/blercucontroller.h
+index 871ae9d..2aca2f9 100644
+--- a/app/src/main/cpp/blercu/blercucontroller.h
++++ b/app/src/main/cpp/blercu/blercucontroller.h
+@@ -17,7 +17,15 @@
+ #include <QSharedPointer>
+ #include <QSet>
+ 
+-
++enum PairingState
++{
++	Initialsing,
++	Idle,
++	Searching,
++	Pairing,
++	Complete,
++	Failed
++};
+ 
+ class BleRcuDevice;
+ 
+@@ -60,7 +68,7 @@ signals:
+ 	void managedDeviceRemoved(BleAddress address);
+ 	void scanningStateChanged(bool scanning);
+ 	void pairingStateChanged(bool pairing);
+-
++	void stateChanged(int status);
+ };
+ 
+ #endif // !defined(BLERCUCONTROLLER_H)
+diff --git a/app/src/main/cpp/blercu/blercucontroller_p.h b/app/src/main/cpp/blercu/blercucontroller_p.h
+index a4e50a0..c9e3633 100644
+--- a/app/src/main/cpp/blercu/blercucontroller_p.h
++++ b/app/src/main/cpp/blercu/blercucontroller_p.h
+@@ -63,11 +63,14 @@ private:
+ private slots:
+ 	void onStartedPairing();
+ 	void onFinishedPairing();
++	void onFailedPairing();
++	void onInitialised();
+ 	void onDevicePairingChanged(const BleAddress &address, bool paired);
+ 	void onDeviceReadyChanged(const BleAddress &address, bool ready);
+ 
+ 	void onStartedScanning();
+ 	void onFinishedScanning();
++	void onFailedScanning();
+ 	void onFoundPairableDevice(const BleAddress &address, const QString &name);
+ 
+ private:
+diff --git a/app/src/main/cpp/blercu/blercupairingstatemachine.cpp b/app/src/main/cpp/blercu/blercupairingstatemachine.cpp
+index 8435443..19934a8 100644
+--- a/app/src/main/cpp/blercu/blercupairingstatemachine.cpp
++++ b/app/src/main/cpp/blercu/blercupairingstatemachine.cpp
+@@ -22,6 +22,7 @@ BleRcuPairingStateMachine::BleRcuPairingStateMachine(const QSharedPointer<const
+ 	, m_pairingCode(-1)
+ 	, m_pairingAttempts(0)
+ 	, m_pairingSuccesses(0)
++	, m_pairingSucceeded(false)
+ {
+ 
+ 	// constructs a map of name printf style formats for searching for device
+@@ -245,6 +246,7 @@ void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
+ 	m_stateMachine.start();
+ 
+ 	m_pairingAttempts++;
++	m_pairingSucceeded = false;
+ 	qMilestone("started pairing using code %03d", m_pairingCode);
+ }
+ 
+@@ -277,6 +279,7 @@ void BleRcuPairingStateMachine::start(const BleAddress &target, const QString &n
+ 	m_stateMachine.start();
+ 
+ 	m_pairingAttempts++;
++	m_pairingSucceeded = false;
+ 	qMilestone("started pairing targeting %s", qPrintable(target.toString()));
+ }
+ 
+@@ -695,7 +698,7 @@ void BleRcuPairingStateMachine::onEnteredFinishedState()
+ 	Q_ASSERT(!m_unpairingTimer.isActive());
+ 
+ 	// finally just emit a finished signal to the BleRcuManagerImpl object
+-	emit finished();
++	(m_pairingSucceeded ? emit finished() : emit failed());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -880,6 +883,7 @@ void BleRcuPairingStateMachine::onDeviceReadyChanged(const BleAddress &address,
+ 	if (!m_targetAddress.isNull() && (m_targetAddress == address)) {
+ 		if (ready) {
+ 			m_pairingSuccesses++;
++			m_pairingSucceeded = true;
+ 			m_stateMachine.postEvent(DeviceReadyEvent);
+ 		}
+ 	}
+diff --git a/app/src/main/cpp/blercu/blercupairingstatemachine.h b/app/src/main/cpp/blercu/blercupairingstatemachine.h
+index 3e27b79..b6ac91d 100644
+--- a/app/src/main/cpp/blercu/blercupairingstatemachine.h
++++ b/app/src/main/cpp/blercu/blercupairingstatemachine.h
+@@ -63,6 +63,7 @@ public slots:
+ signals:
+ 	void started();
+ 	void finished();
++	void failed();
+ 
+ private slots:
+ 	void onDiscoveryChanged(bool discovering);
+@@ -124,6 +125,7 @@ private:
+ 
+ 	int m_pairingAttempts;
+ 	int m_pairingSuccesses;
++	bool m_pairingSucceeded;
+ 
+ private:
+ 	static const QEvent::Type DiscoveryStartedEvent  = QEvent::Type(QEvent::User + 1);
+diff --git a/app/src/main/cpp/blercu/blercuscannerstatemachine.cpp b/app/src/main/cpp/blercu/blercuscannerstatemachine.cpp
+index 1b91049..5edb02c 100644
+--- a/app/src/main/cpp/blercu/blercuscannerstatemachine.cpp
++++ b/app/src/main/cpp/blercu/blercuscannerstatemachine.cpp
+@@ -507,8 +507,9 @@ void BleRcuScannerStateMachine::onEnteredFinishedState()
+ 	if (!m_foundDevice.address.isNull()) {
+ 		emit foundPairableDevice(m_foundDevice.address, m_foundDevice.name);
+ 		m_foundDevice.clear();
++	} else {
++		emit failed();
+ 	}
+-
+ 	// and we're done
+ 	emit finished();
+ }
+diff --git a/app/src/main/cpp/blercu/blercuscannerstatemachine.h b/app/src/main/cpp/blercu/blercuscannerstatemachine.h
+index dc81a75..8c44d0a 100644
+--- a/app/src/main/cpp/blercu/blercuscannerstatemachine.h
++++ b/app/src/main/cpp/blercu/blercuscannerstatemachine.h
+@@ -54,6 +54,7 @@ public slots:
+ signals:
+ 	void started();
+ 	void finished();
++	void failed();
+ 
+ 	void foundPairableDevice(const BleAddress &address, const QString &name);
+ 
+diff --git a/app/src/main/cpp/blercu/bluez/blercuadapter.cpp b/app/src/main/cpp/blercu/bluez/blercuadapter.cpp
+index 5aaee9c..ad82b1c 100644
+--- a/app/src/main/cpp/blercu/bluez/blercuadapter.cpp
++++ b/app/src/main/cpp/blercu/bluez/blercuadapter.cpp
+@@ -549,6 +549,9 @@ void BleRcuAdapterBluez::onEnteredAdapterPoweredOnState()
+ 
+ 	// finally get a list of currently registered devices (RCUs)
+ 	getRegisteredDevices();
++
++	// signal that the adapter is powered and we got the list of paired devices
++	emit poweredInitialised(BleRcuAdapter::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+diff --git a/app/src/main/cpp/service/android/blercuservice.cpp b/app/src/main/cpp/service/android/blercuservice.cpp
+index ccb8e86..85e4366 100644
+--- a/app/src/main/cpp/service/android/blercuservice.cpp
++++ b/app/src/main/cpp/service/android/blercuservice.cpp
+@@ -227,6 +227,7 @@ bool BleRcuService::registerNatives()
+ 
+ 		JNI_ENTRY(jniDump,                         "(JLjava/io/FileDescriptor;[Ljava/lang/String;)V"),
+ 
++		JNI_ENTRY(jniStartScanning,                "(JI)V"),
+ 	};
+ 
+ 	#undef JNI_ENTRY
+@@ -334,7 +335,8 @@ void BleRcuService::setController(const QSharedPointer<BleRcuController> &contro
+ 	                 this, &BleRcuService::onDeviceRemoved);
+ 	QObject::connect(controller.data(), &BleRcuController::pairingStateChanged,
+ 	                 this, &BleRcuService::onPairingStateChanged);
+-
++	QObject::connect(controller.data(), &BleRcuController::stateChanged,
++	                 this, &BleRcuService::onStateChanged);
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -399,6 +401,26 @@ void BleRcuService::onPairingStateChanged(bool pairing)
+ 	                                      static_cast<jboolean>(pairing ? JNI_TRUE : JNI_FALSE));
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++  \internal
++
++  Called when the pairing state of the controller changes.  This slot just
++  passes the event onto the Java BleRcuService object.
++
++ */
++void BleRcuService::onStateChanged(int status)
++{
++	if (Q_UNLIKELY(!m_javaBleRcuService))
++		return;
++
++	qMilestone() << "on pairing state changes to " << status;
++
++	m_javaBleRcuService->callMethod<void>("onStateChanged", 
++      "(I)V", 
++      static_cast<jint>(status));
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	\internal
+@@ -2205,6 +2227,27 @@ Future<> BleRcuService::cancelDeviceUpgrade(const BleAddress bdaddr) const
+ 	return upgradeService->cancelUpgrade();
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Requests that bluetooth starts scanning with timeout.
++
++	This method is called from the context of the main Qt event loop thread.
++ */
++void BleRcuService::startScanning(int timeout) const
++{
++	Q_ASSERT(QThread::currentThread() == qApp->thread());
++
++	if (Q_UNLIKELY(!m_controller)) {
++		qWarning("Controller not configured");
++		return;
++	}
++
++	qInfo("startScanning(%d)", timeout);
++	m_controller->startScanning(timeout);
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Requests that the f/w image being upgraded on the device with \a address.
+@@ -2342,3 +2385,21 @@ void BleRcuService::jniDump(JNIEnv *env, jobject, jlong qtObject, jobject fdObj,
+ 	self->invokeInMainThread(&BleRcuService::dumpDetails, self, fd, args);
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	Requests that bluetooth starts scanning with timeout.
++ */
++void BleRcuService::jniStartScanning(JNIEnv* env,
++                                jobject,
++                                jlong qtObject,
++                                jint timeout)
++{
++	// get a pointer back to ourselves (set in the constructor when the Java
++	// class is created)
++	QSharedPointer<BleRcuService> self = fromJniQtObject(qtObject);
++	if (Q_UNLIKELY(!self))
++		return;
++
++	// send a request to scan
++	self->invokeInMainThread(&BleRcuService::startScanning, self, timeout);
++}
+diff --git a/app/src/main/cpp/service/android/blercuservice.h b/app/src/main/cpp/service/android/blercuservice.h
+index 28aae87..0109936 100644
+--- a/app/src/main/cpp/service/android/blercuservice.h
++++ b/app/src/main/cpp/service/android/blercuservice.h
+@@ -59,6 +59,7 @@ private:
+ 
+ private:
+ 	void onPairingStateChanged(bool pairing);
++	void onStateChanged(int status);
+ 
+ 	void onDeviceAdded(const BleAddress &address);
+ 	void onDeviceRemoved(const BleAddress &address);
+@@ -124,6 +125,7 @@ private:
+ 	void dumpDetails(int fd, const QStringList &args);
+ 
+ 	void setLogLevel(int fd, const QString &value);
++	void startScanning(int timeout) const;
+ 
+ private:
+ 	bool registerNatives();
+@@ -228,6 +230,7 @@ private:
+ 	static void jniDump(JNIEnv *env, jobject, jlong qtObject, jobject fdObj,
+ 	                    jobjectArray argArray);
+ 
++	static void jniStartScanning(JNIEnv* env, jobject, jlong qtObject, jint timeout);
+ 
+ private:
+ 	const QSharedPointer<InputDeviceManager> m_inputDeviceManager;
+diff --git a/app/src/main/java/com/sky/blercu/BleRcuService.java b/app/src/main/java/com/sky/blercu/BleRcuService.java
+index 2a418d9..67941fd 100644
+--- a/app/src/main/java/com/sky/blercu/BleRcuService.java
++++ b/app/src/main/java/com/sky/blercu/BleRcuService.java
+@@ -87,6 +87,15 @@ public class BleRcuService extends Service {
+ 
+ 	private boolean mIsPairing;
+ 
++	private int mState = PAIRING_STATE_INITIALSING;
++
++	/** This is a list of possible pairing state values */
++	private static final int PAIRING_STATE_INITIALSING  = 0;
++	private static final int PAIRING_STATE_IDLE         = 1;
++	private static final int PAIRING_STATE_SEARCHING    = 2;
++	private static final int PAIRING_STATE_PAIRING      = 3;
++	private static final int PAIRING_STATE_COMPLETE     = 4;
++	private static final int PAIRING_STATE_FAILED       = 5;
+ 
+ 	// -----------------------------------------------------------------------------
+ 	/*!
+@@ -381,6 +390,43 @@ public class BleRcuService extends Service {
+ 		}
+ 	}
+ 
++	/**
++	 * Returns the current pairing state.
++	 *
++	 */
++	public int getState() {
++		return mState;
++	}
++
++	/**
++	 * Expected to be called by the native C++ code when the pairing process
++	 * has changed state. See PAIRING_STATE_ for possible values.
++	 *
++	 */
++	public void onStateChanged(final int status) {
++
++		mServiceLock.writeLock().lock();
++		mState = status;
++		mServiceLock.writeLock().unlock();
++
++		if (mNotifyThread.isAlive()) {
++
++			// broadcast back to clients from the notify thread
++			mNotifyThread.mHandler.post(() -> {
++
++				final int n = mCallbacks.beginBroadcast();
++				for (int i = 0; i < n; i++) {
++					try {
++						mCallbacks.getBroadcastItem(i).onStateChanged(status);
++					} catch (RemoteException e) {
++						// RemoteCallbackList will take care of removing dead objects
++					}
++				}
++				mCallbacks.finishBroadcast();
++			});
++		}
++	}
++
+ 	/**
+ 	 * Expected to be called by the native C++ code when a new device is paired
+ 	 * with the STB.
+@@ -991,8 +1037,20 @@ public class BleRcuService extends Service {
+ 			if (service != null)
+ 				service.jniCancelDeviceUpgrade(service.mQtObject, address);
+ 		}
+-	}
+ 
++		@Override
++		public void startScanning(int timeout) {
++			BleRcuService service = getService();
++			if (service != null)
++				service.jniStartScanning(service.mQtObject, timeout);
++		}
++
++		@Override
++		public int getState() {
++			BleRcuService service = getService();
++			return service != null ? service.getState() : PAIRING_STATE_IDLE;
++		}
++	}
+ 
+ 	private native boolean jniIsDeviceConnected(long qtObject, String address);
+ 	private native int jniGetDeviceId(long qtObject, String address);
+@@ -1025,4 +1083,5 @@ public class BleRcuService extends Service {
+ 	private native boolean jniCancelDeviceUpgrade(long qtObject, String address);
+ 
+ 	private native void jniDump(long qtObject, FileDescriptor fd, String[] args);
++	private native void jniStartScanning(long qtObject, int timeout);
+ }

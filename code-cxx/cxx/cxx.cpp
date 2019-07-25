@@ -9,6 +9,7 @@
 #include <forward_list>
 #include <regex>
 #include <boost/lexical_cast.hpp>
+#include <cstdarg>  
 
 #include "gmock/gmock.h"
 
@@ -130,6 +131,82 @@ TEST(Arith, Comparison)
     cout << "int is bigger" << endl;
 }
 
+
+// ={=========================================================================
+// cxx-switch
+
+TEST(Statement, Switch)
+{
+  {
+    ostringstream os;
+    int value{2};
+
+    switch(value)
+    {
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
+
+      case 2:
+        os << "value is 2";
+        EXPECT_THAT(value, 2);
+        break;
+    }
+
+    EXPECT_THAT(os.str(), "value is 2");
+  }
+
+  // the point is that to show case 8 | 16: is a case for single value which is
+  // 24. And that can mean "logical or" if value is enum which is 24.
+
+  {
+    ostringstream os;
+    int value{8};
+
+    switch(value)
+    {
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
+
+      case 8 | 16:
+        os << "value is 24";
+        EXPECT_THAT(value, 24);
+        break;
+
+      default:
+        os << "value is default";
+        EXPECT_THAT(value, 8);
+        break;
+    }
+
+    EXPECT_THAT(os.str(), "value is default");
+  }
+
+  {
+    ostringstream os;
+    int value{24};
+
+    switch(value)
+    {
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
+
+      case 8 | 16:
+        os << "value is 24";
+        EXPECT_THAT(value, 24);
+        break;
+    }
+
+    EXPECT_THAT(os.str(), "value is 24");
+  }
+}
+
+
 // ={=========================================================================
 // cxx-pair
 
@@ -164,7 +241,7 @@ TEST(Pair, MakePair)
   // };
 
   {
-    const auto pair_map{
+    const auto pair_map = {
       make_pair(10, "X"),
       make_pair(9, "IX"),
       make_pair(5, "V")
@@ -270,7 +347,7 @@ TEST(Pair, Initialisation)
   //     make_pair(5, "V")
   // };
 
-  const auto pair_init_01{
+  const auto pair_init_01 = {
     make_pair(10, "X"),
     make_pair(9, "IX"),
     make_pair(5, "V")
@@ -618,6 +695,45 @@ TEST(Ctor, Unused)
 
   foo f1(value);
   foo f2(value, 30);
+}
+
+
+namespace cxx_ctor
+{
+  class CtorCallsCtor
+  {
+    public:
+      CtorCallsCtor(std::string const &name)
+        : CtorCallsCtor(10, name)
+      {
+        std::cout << "CtorCallsCtor(string)" << std::endl;
+      }
+
+      CtorCallsCtor(int value, std::string const &name)
+        : value_(value), name_(name)
+      {
+        std::cout << "CtorCallsCtor(int, string)" << std::endl;
+      }
+
+      int get_value() const
+      { return value_; }
+
+      std::string get_name() const
+      { return name_; }
+
+    private:
+      int value_;
+      std::string name_;
+  };
+} // namespace
+
+TEST(Ctor, CtorCallsCtor)
+{
+  using namespace cxx_ctor;
+
+  CtorCallsCtor oo("cxx-oo");
+  EXPECT_THAT(oo.get_value(), 10);
+  EXPECT_THAT(oo.get_name(), "cxx-oo");
 }
 
 
@@ -1456,98 +1572,237 @@ class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
 // ={=========================================================================
 // cxx-enum
 
+namespace cxx_enum
+{
+  enum color { red, yellow, green };          // unscoped
+  // enum { red, yellow, green } color;       // same as above so cause error
+
+  enum class peppers { yellow, red, green };  // scoped
+} // namespace
+
+TEST(Enum, ScopedAndUnscoped)
+{
+  using namespace cxx_enum;
+
+  {
+    // explicitly use unscoped enumerators and implicitly use unscoped
+
+    int value_1 = color::yellow;
+    int value_2 = yellow;
+    EXPECT_THAT(value_1, value_2);
+  }
+
+  {
+    // {
+    //   enum color { red, yellow, green };          // unscoped
+    //   enum {red, yellow, green};                  // unscoped and unnamed
+    // }
+    // 
+    // enum {red, yellow, green}; causes errors with enum color {}:
+    // 
+    // cxx.cpp:1497:9: error: redeclaration of ‘red’
+    //    enum {red, yellow, green};                  // unscoped and unnamed
+    //          ^~~
+    // cxx.cpp:1495:16: note: previous declaration ‘cxx_enum::color red’
+    //    enum color { red, yellow, green };          // unscoped
+    //                 ^~~
+    // 
+    // {
+    //   enum color { red, yellow, green };        // unscoped
+    //   enum stoplight { red, yellow, green };    // unscoped
+    // } // namespace
+    //
+    // so can use enumerators of unscoped enum and this allows *cxx-enum-hack* 
+
+    int value_1 = yellow;
+    int coll[green];
+    EXPECT_THAT(8, sizeof(coll));
+
+    color value_2 = yellow;
+
+    EXPECT_THAT(value_1, value_2);
+  }
+
+  {
+    // However, followings cause type error:
+    // cxx-error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
+    // note: it's interesting and unscoped is also type?
+    //
+    // color color_selected = 2;
+    // 
+    // OK
+    // color color_selected = yellow;
+
+    // cxx-error: type error, cannot convert ‘peppers’ to ‘int’ in initialization
+    // int value_1 = peppers::red;
+  }
+
+  {
+    std::cout << "yellow value " << yellow << std::endl;
+
+    // this also confirms that cxx-enum-class do not support cxx-enum-hack
+    // 
+    // cxx.cpp:1527:43: error: no match for ‘operator<<’ 
+    //  (operand types are ‘std::basic_ostream<char>’ and ‘cxx_enum::peppers’)
+    //      std::cout << "peppers::yellow value " << peppers::yellow << std::endl;
+    //   
+    // std::cout << "peppers::yellow value " << peppers::yellow << std::endl;
+    //
+    // okay and can use in this way
+    // << setw(20) << left << (e.status == procstatus::running ? "Running" : "Suspended")
+  }
+}
+
+namespace cxx_enum_in_class
+{
+  enum class named_and_scoped {red, yellow, green};
+
+  class Foo
+  {
+    // private:
+    //   enum {red, yellow, green};
+
+    public:
+      enum {red, yellow, green};
+
+    private:
+      std::string name_;
+
+    // private:
+    //   named_and_scoped color_;
+
+    public:
+      named_and_scoped color_;
+
+    public:
+      Foo() : name_("") {} 
+  };
+} // namespace
+
+TEST(Enum, InClass)
+{
+  using namespace cxx_enum_in_class;
+
+  // as expected for scoped enum
+  {
+    named_and_scoped value_1, value_2;
+    value_1 = named_and_scoped::red;
+    value_2 = named_and_scoped::yellow;
+
+    EXPECT_THAT(value_1, named_and_scoped::red);
+    EXPECT_THAT(value_2, named_and_scoped::yellow);
+  }
+
+
+  // use enum in a class? As with unscoped enum, can use cxx-enum-hack but have
+  // to use "Foo::" prefix as scoped enum. Also, is under cxx-access-control.
+  // benefit? 
+
+  {
+    // when use `private`
+    // cxx.cpp:1563:20: error: ‘cxx_enum::Foo::<unnamed enum> green’ is private within this context
+    //   int flag3 = Foo::green;
+    //                    ^~~~~
+    // Since it's in class, this scoped but not named
+
+    int value_1 = Foo::green;
+
+    // cxx.cpp:1587:19: error: ‘green’ was not declared in this scope
+    //      int value_2 = green;
+    // int value_2 = green;
+
+    EXPECT_THAT(value_1, 2);
+    EXPECT_THAT(2, Foo::green);
+
+    int coll[Foo::green];
+    EXPECT_THAT(8, sizeof(coll));
+  }
+
+  {
+    Foo foo;
+    foo.color_ = named_and_scoped::red;
+  }
+}
+
+
 enum class EnumFlags :char { SPORT=1, KIDS=2, MUSIC=4 };
 
 constexpr EnumFlags operator| (EnumFlags lhs, EnumFlags rhs)
 {
-    // C++PL 220
-    // explicit converison is nessary since enum class does not support implicit
-    // conversions.
-    return static_cast<EnumFlags>(static_cast<char>(lhs)|static_cast<char>(rhs));
+  // C++PL 220
+  // explicit converison is nessary since enum class does not support implicit
+  // conversions.
+  return static_cast<EnumFlags>(static_cast<char>(lhs)|static_cast<char>(rhs));
 }
 
 constexpr EnumFlags operator& (EnumFlags lhs, EnumFlags rhs)
 {
-    return static_cast<EnumFlags>(static_cast<char>(lhs)&static_cast<char>(rhs));
+  return static_cast<EnumFlags>(static_cast<char>(lhs)&static_cast<char>(rhs));
 }
 
-class ScopedEnum {
-    public:
-        int checkFlags(EnumFlags flag)
-        {
-            int result{};
+class ScopedEnum 
+{
+  public:
+    int checkFlags(EnumFlags flag)
+    {
+      int result{};
 
-            switch(flag)
-            {
-                // used constexpr on oeprator| and & since someone might want to
-                // use them in constant expression.
-                case EnumFlags::SPORT:
-                    cout << "has sport flag" << endl;
-                    result = 0;
-                    break;
+      switch(flag)
+      {
+        // used constexpr on oeprator| and & since someone might want to
+        // use them in constant expression.
+        case EnumFlags::SPORT:
+          cout << "has sport flag" << endl;
+          result = 0;
+          break;
 
-                case EnumFlags::KIDS:
-                    cout << "has kids flas" << endl;
-                    result = 1;
-                    break;
+        case EnumFlags::KIDS:
+          cout << "has kids flas" << endl;
+          result = 1;
+          break;
 
-                case EnumFlags::MUSIC:
-                    cout << "has music flag" << endl;
-                    result = 2;
-                    break;
+        case EnumFlags::MUSIC:
+          cout << "has music flag" << endl;
+          result = 2;
+          break;
 
-                // to avoid warning
-                // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
-                // case EnumFlags::SPORT|EnumFlags::MUSIC:
-                //     cout << "has sport and music flag" << endl;
-                //     result = 3;
-                //     break;
+          // *cxx-switch*
+          // to avoid warning
+          // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
+          // case EnumFlags::SPORT|EnumFlags::MUSIC:
+          //     cout << "has sport and music flag" << endl;
+          //     result = 3;
+          //     break;
 
-                default:
-                    cout << "has unknown flag" << endl;
-                    result = 100;
-            }
+        default:
+          cout << "has unknown flag" << endl;
+          result = 100;
+      }
 
-            return result;
-        }
+      return result;
+    }
 };
 
+// [ RUN      ] Enum.ScopedEnum
+// has sport flag
+// has kids flas
+// has music flag
+// has unknown flag
+// [       OK ] Enum.ScopedEnum (0 ms)
 
-TEST(CxxFeaturesTest, UseScopedEnum)
+TEST(Enum, ScopeAndType)
 {
-    ScopedEnum scoped;
+  ScopedEnum scoped;
 
-    EXPECT_EQ(0, scoped.checkFlags(EnumFlags::SPORT));
-    EXPECT_EQ(1, scoped.checkFlags(EnumFlags::KIDS));
-    EXPECT_EQ(2, scoped.checkFlags(EnumFlags::MUSIC));
+  EXPECT_EQ(0, scoped.checkFlags(EnumFlags::SPORT));
+  EXPECT_EQ(1, scoped.checkFlags(EnumFlags::KIDS));
+  EXPECT_EQ(2, scoped.checkFlags(EnumFlags::MUSIC));
 
-    // to avoid warning
-    // EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
- 
-    EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
-    // EXPECT_EQ(100, scoped.checkFlags(200));
-}
+  // to avoid warning
+  // EXPECT_EQ(3, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::MUSIC));
 
-
-// ={=========================================================================
-// cxx-enum, unscoped enum, enum hack
-
-enum color { red, yellow, green };          // unscoped
-enum class peppers { red, yellow, green };  // scoped
-
-TEST(CxxFeaturesTest, UseEnumHack)
-{
-    int value_1 = color::yellow;
-
-    // error: cannot convert ‘peppers’ to ‘int’ in initialization
-    // int value_2 = peppers::red;
-
-    color set_1 = yellow;
-
-    // error: invalid conversion from ‘int’ to ‘color’ [-fpermissive]
-    // color set_2 = 2;
-    
-    EXPECT_EQ(value_1, set_1);
+  EXPECT_EQ(100, scoped.checkFlags(EnumFlags::SPORT|EnumFlags::KIDS));
+  // EXPECT_EQ(100, scoped.checkFlags(200));
 }
 
 
@@ -2598,66 +2853,76 @@ TEST(Time, Snapper)
 // ={=========================================================================
 // cxx-static
 
-class FooStatic {
+namespace cxx_static
+{
+  // shows static member shall be defined outside of class
+  class FooStatic {
     private:
-        static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
-        static const std::string DIGIT_NOT_FOUND;
+      static const size_t MAX_CODE_LENGTH{4};         // *TN* no define
+      static const std::string DIGIT_NOT_FOUND;
 
-        // cause an error
-        // static const std::string DIGIT_NOT_FOUND{"*"};
+      // cause an error
+      // static const std::string DIGIT_NOT_FOUND{"*"};
     public:
-        FooStatic() {}
-};
+      FooStatic() {}
+  };
 
-const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
+  const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
+} // namespace
 
 TEST(Static, DefineStaticOutside)
 {
-    FooStatic foo;
+  using namespace cxx_static;
+
+  FooStatic foo;
 }
 
-// c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
-
-class StaticClass
+namespace cxx_static
 {
-  protected:
-    int value_{};
-    size_t id_{};
+  // c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
 
-    string name_{};
-    static list<StaticClass*> instances_;
-    static size_t track_id_;
+  class StaticClass
+  {
+    protected:
+      int value_{};
+      size_t id_{};
 
-  public:
-    StaticClass(int value, string name =  "static class")
-      : value_(value), name_(name)
-    {
-      id_ = ++track_id_;
-      instances_.push_back(this);
-    }
+      string name_{};
+      static list<StaticClass*> instances_;
+      static size_t track_id_;
 
-    ~StaticClass()
-    {
-      auto it = find(instances_.begin(), instances_.end(), this);
-      if (it != instances_.end())
-        instances_.erase(it);
-    }
+    public:
+      StaticClass(int value, string name =  "static class")
+        : value_(value), name_(name)
+        {
+          id_ = ++track_id_;
+          instances_.push_back(this);
+        }
 
-  public:
-    static void ShowList()
-    {
-      cout << "ShowList: " << instances_.size() << endl;
-      for (const auto &e : instances_)
+      ~StaticClass()
       {
-        cout << "ShowList: name : " << e->name_ << endl;
-        cout << "ShowList: value: " << e->value_ << endl;
-        cout << "ShowList: id   : " << e->id_ << endl;
+        auto it = find(instances_.begin(), instances_.end(), this);
+        if (it != instances_.end())
+          instances_.erase(it);
       }
-    }
-};
 
-list<StaticClass*> StaticClass::instances_;
-size_t StaticClass::track_id_ = 0;
+    public:
+      static void ShowList()
+      {
+        cout << "ShowList: " << instances_.size() << endl;
+        for (const auto &e : instances_)
+        {
+          cout << "ShowList: name : " << e->name_ << endl;
+          cout << "ShowList: value: " << e->value_ << endl;
+          cout << "ShowList: id   : " << e->id_ << endl;
+        }
+      }
+  };
+
+  list<StaticClass*> StaticClass::instances_;
+  size_t StaticClass::track_id_ = 0;
+
+} // namespace
 
 // ShowList: 3
 // ShowList: name : instance 1
@@ -2672,6 +2937,8 @@ size_t StaticClass::track_id_ = 0;
 
 TEST(Static, TrackClassInstances)
 {
+  using namespace cxx_static;
+
   StaticClass sc1(1, "instance 1");
   StaticClass sc2(10, "instance 2");
   StaticClass sc3(100, "instance 3");
@@ -2682,7 +2949,55 @@ TEST(Static, TrackClassInstances)
 
 TEST(Static, TrackClassInstancesWhenNothingCreated)
 {
+  using namespace cxx_static;
+
   StaticClass::ShowList();
+}
+
+namespace cxx_static
+{
+  class Foo
+  {
+    public:
+      Foo() {}
+      static void createInstance()
+      { std::cout << "Foo::createInstance()" << std::endl;}
+  };
+
+  class Bar : public Foo
+  {
+    public:
+      Bar() {}
+      static void createInstance()
+      { std::cout << "Bar::createInstance()" << std::endl;}
+  };
+} // namespace
+
+
+// [ RUN      ] Static.UnderInheritance
+// Foo::createInstance()
+// Bar::createInstance()
+// Foo::createInstance()
+// Bar::createInstance()
+// Foo::createInstance()
+// [       OK ] Static.UnderInheritance (0 ms)
+
+TEST(Static, UnderInheritance)
+{
+  using namespace cxx_static;
+
+  Foo::createInstance();
+  Bar::createInstance();
+
+  Foo foo;
+  foo.createInstance();
+
+  Bar bar;
+  bar.createInstance();
+
+  Foo *p = new Bar;
+  p->createInstance();
+  delete p;
 }
 
 
@@ -2775,6 +3090,7 @@ namespace cxx_lambda
       std::cout << std::endl;
     }
 
+  // *algo-sort* *algo-unique*
   void eliminate_duplicates(vector<string>& words)
   {
     sort(words.begin(), words.end());
@@ -2787,6 +3103,7 @@ namespace cxx_lambda
     return s.size() >= sz;
   }
 
+  // keep items in words which is >= sz
   void biggies(vector<string>& words, vector<string>::size_type sz)
   {
     eliminate_duplicates(words);
@@ -3190,7 +3507,7 @@ TEST(FunctionObject, Pointer)
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp
 
-TEST(SmartPointerShared, Ctors)
+TEST(SmartPointer, Ctor)
 {
   {
     shared_ptr<string> pNico(new string("nico"));           // OK
@@ -3222,7 +3539,7 @@ TEST(SmartPointerShared, Ctors)
   auto p6 = make_shared<vector<string>>();
 }
 
-TEST(SmartPointerShared, Copy)
+TEST(SmartPointer, SharedCopy)
 {
   auto p = make_shared<int>(42);
 
@@ -3245,9 +3562,11 @@ TEST(SmartPointerShared, Copy)
   EXPECT_THAT(p.use_count(), 3);
   EXPECT_THAT(q.use_count(), 3);
   EXPECT_THAT(r.use_count(), 3);
+
+  EXPECT_THAT(*r, 42);
 }
 
-TEST(SmartPointerShared, Reset)
+TEST(SmartPointer, Reset)
 {
   // 1. sp, shared structure, and referenced object are separate entity.
   //
@@ -3282,7 +3601,7 @@ TEST(SmartPointerShared, Reset)
     EXPECT_THAT(p.use_count(), 3);
     EXPECT_THAT(q.use_count(), 3);
 
-    // same as reset()
+    // same as cxx-sp-reset()
     q = nullptr;
 
     EXPECT_THAT(p.use_count(), 2);
@@ -3309,12 +3628,23 @@ TEST(SmartPointerShared, Reset)
     EXPECT_THAT(q.use_count(), 0);
     EXPECT_THAT(r.use_count(), 2);
   }
+  {
+    unique_ptr<int> up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+
+    up.reset();
+
+    // now, up is nullptr
+    EXPECT_FALSE(up);
+  }
 }
 
 
 // CXXSLR 5.2 Smart Pointers
 
-TEST(SmartPointerShared, Example)
+TEST(SmartPointer, SharedEx)
 {
   std::shared_ptr<std::string> pNico{new std::string("nico")};
   std::shared_ptr<std::string> pJutta{new std::string("jutta")};
@@ -3389,12 +3719,36 @@ TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
 
 */
 
-TEST(SharedPointerUnique, OperatorBool)
+TEST(SmartPointer, OperatorBool)
 {
-  unique_ptr<int> up{new int(100)};
+  {
+    auto p = make_shared<int>(42);
 
-  EXPECT_TRUE(up);
-  EXPECT_THAT(*up, 100);
+    // use++
+    auto q(p);
+    auto r(p);
+
+    EXPECT_THAT(p.use_count(), 3);
+    EXPECT_THAT(q.use_count(), 3);
+
+    q.reset();
+
+    EXPECT_THAT(p.use_count(), 2);
+    EXPECT_THAT(q.use_count(), 0);
+    EXPECT_THAT(r.use_count(), 2);
+
+    EXPECT_TRUE(p);
+    // cxx-sp-bool, q is nullptr
+    EXPECT_FALSE(q);
+    EXPECT_TRUE(r);
+  }
+
+  {
+    unique_ptr<int> up{new int(100)};
+
+    EXPECT_TRUE(up);
+    EXPECT_THAT(*up, 100);
+  }
 }
 
 namespace cxx_sp_shared
@@ -3423,7 +3777,7 @@ namespace cxx_sp_shared
 // Foo dtor(3)
 // [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SharedPointerUnique, Move)
+TEST(SmartPointer, UniqueMove)
 {
   using namespace cxx_sp_shared;
 
@@ -3432,11 +3786,6 @@ TEST(SharedPointerUnique, Move)
   unique_ptr<Foo> p3(new Foo(3));
   unique_ptr<Foo> p4(new Foo(4));
 
-  // if (p3)
-  //   cout << "p3 is not null" << endl;
-  // else
-  //   cout << "p3 is null" << endl;
-
   EXPECT_TRUE(p3);
 
   p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
@@ -3444,11 +3793,6 @@ TEST(SharedPointerUnique, Move)
   p3 = std::move(p1);     // p1->null , p2->F3, p3->null
 
   EXPECT_FALSE(p3);
- 
-  // if (p3)
-  //   cout << "p3 is not null" << endl;
-  // else
-  //   cout << "p3 is null" << endl;
 }
 
 
@@ -3485,7 +3829,7 @@ namespace cxx_sp_shared
 // main: ends
 // [       OK ] CxxFeaturesTest.UseUniqueSinkSource (0 ms)
 
-TEST(SharedPointerUnique, SinkSource)
+TEST(SmartPointer, UniqueSinkSource)
 {
   using namespace cxx_sp_shared;
 
@@ -3583,7 +3927,7 @@ namespace cxx_sp_delete
 // deleting nico
 // [       OK ] SharedPointer.Deleter (5 ms)
 
-TEST(SharedPointer, Deleter)
+TEST(SmartPointer, Deleter)
 {
   using namespace cxx_sp_delete;
 
@@ -3635,7 +3979,7 @@ TEST(SharedPointer, Deleter)
 // deleting Nicolai
 // deleting Jutta
 
-TEST(SharedPointer, DeleteTime)
+TEST(SmartPointer, DeleteTime)
 {
   using namespace cxx_sp_delete;
 
@@ -3701,7 +4045,7 @@ TEST(SharedPointer, DeleteTime)
 // end of main
 // Foo dtor(3)
 
-TEST(SmartPointerUnique, DeleteReleaseReset)
+TEST(SmartPointer, UniqueDeleteReleaseReset)
 {
   using namespace cxx_sp_shared;
 
@@ -3824,7 +4168,7 @@ TEST(SmartPointer, UseCount)
 // cxx-smart-ptr-weak
 // 5.2.2 Class weak_ptr
 
-TEST(SmartPointerWeak, NotInReferenceCount)
+TEST(SmartPointer, WeakNotInReferenceCount)
 {
   {
     auto sp = make_shared<int>(42);
@@ -4054,7 +4398,7 @@ referring to it. As a result, the destructor of each Person, which would print
 Solution?
 */
 
-TEST(SharedPointerWeak, CyclicReference)
+TEST(SmartPointer, WeakCyclicReference)
 {
   using namespace cxx_sp_weak_problem;
 
@@ -4137,7 +4481,7 @@ namespace cxx_sp_weak_solution
 // delete: jim's mom
 // [       OK ] SharedPointerWeak.CyclicReferenceSolution (2 ms)
 
-TEST(SharedPointerWeak, CyclicReferenceSolution)
+TEST(SmartPointer, WeakCyclicReferenceSolution)
 {
   using namespace cxx_sp_weak_solution;
 
@@ -4250,7 +4594,7 @@ namespace cxx_sp_weak_problem
 # How about using smart pointers to this problem?
 */
 
-TEST(SharedPointerWeak, ResourceManagerSolution)
+TEST(SmartPointer, WeakResourceManagerSolution)
 {
   using namespace cxx_sp_weak_problem;
 
@@ -4465,7 +4809,7 @@ namespace cxx_sp_unique_own_version
 
 } // namespace
 
-TEST(SharedPointerOwn, Unique)
+TEST(SmartPointer, OwnUnique)
 {
   using namespace cxx_sp_unique_own_version;
 
@@ -4663,7 +5007,7 @@ namespace cxx_sp_shared_own_version
 
 } // namespace
 
-TEST(SharedPointerOwn, Shared)
+TEST(SmartPointer, OwnShared)
 {
   using namespace cxx_sp_shared_own_version;
 
@@ -4749,6 +5093,44 @@ TEST(CxxFeaturesTest, UseHashOnString)
 
 // ={=========================================================================
 // cxx-bool cxx-check
+
+// cxx-operator-logical-not 
+//
+// negation, !a, 
+//
+// bool T::operator!() const; 
+// bool operator!(const T &a);
+//
+// (ex)
+// std::shared_ptr<IBleRcuContoller> proxy = std::make_shared<BleRcuContollerProxy>(mIpcClientService, mInputHandler);
+// ASSERT_TRUE(!!proxy);
+//
+// https://stackoverflow.com/questions/206106/is-a-safe-way-to-convert-to-bool-in-c
+//
+// Q: Is !! a safe way to convert to bool in C++?
+//
+// typedef long T;       // similar warning with void * or double
+// T t = 0;
+// bool b = t;           // performance warning: forcing 'long' value to 'bool'
+// b = t ? true : false; // ok
+// b = !!t;  
+//
+// The argument of the ! operator and the first argument of the ternary operator
+// are both implicitly converted to bool, so !! and ?: are IMO silly redundant
+// decorations of the cast. I vote for
+// 
+// b = (t != 0);
+//
+// No implicit conversions.
+
+
+TEST(Bool, Negate)
+{
+  bool value{false};
+  EXPECT_THAT(value, false);
+  EXPECT_THAT(!value, true);
+  EXPECT_THAT(!!value, false);
+}
 
 TEST(Bool, CheckBoolDefault)
 {
@@ -7534,7 +7916,7 @@ TEST(Exception, Noexcept)
 
 
 // ={=========================================================================
-// cxx-cpp, macro
+// cxx-printf
 
 // 0: 01
 // 0: 012
@@ -7542,7 +7924,7 @@ TEST(Exception, Noexcept)
 // 0: 01234
 // 0: 012345
 
-TEST(Cpp, Precision)
+TEST(Printf, Formats)
 {
   // The format argument of printf can be an expression too.
   {
@@ -7561,6 +7943,11 @@ TEST(Cpp, Precision)
     printf("ulong max from limits: %lu\n", ULONG_MAX );
   }
 
+  // MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s\n",
+  //     (OctetStringVariableEntry(pEntry).m_osValue).size,
+  //     (OctetStringVariableEntry(pEntry).m_osValue).buf,
+  //     osValue.size, osValue.buf,
+  //     osNewValue.size, osNewValue.buf);
   {
     char pmesg[] = "0123456789";
 
@@ -7570,16 +7957,34 @@ TEST(Cpp, Precision)
     printf("0: %.*s \n", 5, pmesg );
     printf("0: %.*s \n", 6, pmesg );
   }
+}
 
+
+// ={=========================================================================
+// cxx-type-conversion
+
+TEST(TypeConversion, Double)
+{
+  // double value: 0
+  // double value: 0
+  // double value is not < or > 0
   {
-    // MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s -> %.*s\n",
-    //     (OctetStringVariableEntry(pEntry).m_osValue).size,
-    //     (OctetStringVariableEntry(pEntry).m_osValue).buf,
-    //     osValue.size, osValue.buf,
-    //     osNewValue.size, osNewValue.buf);
+    double value{0};
+    printf("double value: %g\n", value);
+    printf("double value: %u\n", value);
+
+    if (value < 0)
+      printf("double value is < 0\n");
+    else if (value > 0)
+      printf("double value is > 0\n");
+    else
+      printf("double value is not < or > 0\n");
   }
 }
 
+
+// ={=========================================================================
+// cxx-cpp, macro
 
 #define dprint(expr)    printf(#expr " = %g\n", expr )
 #define dprint_string(expr)    string coll(#expr " = %g\n")
@@ -7613,12 +8018,13 @@ TEST(Cpp, Stringification)
   // If you want to stringify the-result-of-expansion of a macro argument, you
   // have to use two-levels of macros.
   {
-    // is not "4" because not macro-expanded
-    string coll1{str (foo)};
+    // "foo" is stringified when it is used in "str(foo)" but not macro-expanded
+    // first. so not "4"
+
+    string coll1{str(foo)};
     EXPECT_THAT(coll1, "foo");
 
-    // s is stringified when it is used in str, so it is not macro-expanded
-    // first. But s is an ordinary argument to xstr, so it is completely
+    // But "foo" is an ordinary argument to "xstr(foo)", so it is completely
     // macro-expanded before xstr itself is expanded (see Argument Prescan).
     // Therefore, by the time str gets to its argument, it has already been
     // macro-expanded. 
@@ -7700,6 +8106,122 @@ TEST(Cpp, Stringification)
     // PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode", "physDev->shDeviceName"));
     PDM_DISK_SPINDOWN_LOG( g_pdm_diag_segment_id, ("device %s now in power saving mode\n", "physDev->shDeviceName"));
   }
+}
+
+namespace cxx_cpp
+{
+  void argprint(int num_args, ...)
+  {
+    va_list ap;
+
+    // The argument `last` is the name of the last argument `before` the
+    // variable argument list, that is, the last argument of `which the calling
+    // function knows the type.`
+
+    va_start(ap, num_args);
+
+    // note that num_arg is valid arg to use
+
+    for (int i = 0; i < num_args; ++i)
+    {
+      std::cout << "arg " << i << " is " << va_arg(ap, int) << std::endl;
+    }
+
+    va_end(ap);
+  }
+
+
+  // The function takes a string of format characters and prints out the
+  // argument associated with each format character based on the type.
+
+  void xprint(char *fmt, ...)
+  {
+    va_list ap;
+    int d;
+    char c, *s;
+
+    va_start(ap, fmt);
+
+    while (*fmt)
+    {
+      switch (*fmt++)
+      {
+        case 's':
+          s = va_arg(ap, char *);
+          printf("string %s\n", s);
+          break;
+        
+        case 'd':
+          d = va_arg(ap, int);
+          printf("int %d\n", d);
+          break;
+
+        case 'c':
+
+          // c = va_arg(ap, char);
+          // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed through ‘...’
+          //            c = va_arg(ap, char);
+          //                           ^
+          // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to ‘va_arg’)
+          // cxx.cpp:7950:26: note: if this code is reached, the program will abort
+          //
+          // need a cast here since va_arg only takes fully promoted types
+
+          c = (char) va_arg(ap, int);
+          printf("char %c\n", c);
+          break;
+      }
+    }
+    va_end(ap);
+  }
+
+} // namespace
+
+
+// arg 0 is 10
+// arg 1 is 20
+// arg 2 is 30
+//
+// string foo
+// int 10
+// char a
+//
+// string foo
+// int 10
+// int 97
+
+TEST(Cpp, Vaarg)
+{
+  using namespace cxx_cpp;
+
+  argprint(3, 10, 20, 30);
+
+  xprint("sdc", "foo", 10, 'a');
+  xprint("sdd", "foo", 10, 'a');
+}
+
+// no napesapce effect but for visual effect
+namespace cxx_cpp
+{
+
+// No for GCC 4.6 and 6.x
+//
+// #define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
+// cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
+//  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
+//                                                                   ^
+
+#define eprintf(fmt, ...)  fprintf(stdout, fmt, ##__VA_ARGS__)
+} // namespace
+
+
+// [ RUN      ] Cpp.VaargMacro
+// success!
+// [       OK ] Cpp.VaargMacro (0 ms)
+
+TEST(Cpp, VaargMacro)
+{
+  eprintf("success!\n");
 }
 
 
@@ -7844,6 +8366,95 @@ TEST(Typedef, Alias)
 
     ASSERT_THAT(coll[3], Eq("threeeeee"));
   }
+}
+
+
+// ={=========================================================================
+// cxx-class-nested
+
+namespace cxx_nested_1
+{
+  class Outer 
+  {
+    private:
+    int outer_x = 100;
+
+    public:
+
+    void test() {
+      Inner* inner = new Inner();
+      inner->display();
+    }
+
+    private:
+
+    class Inner {
+
+      public:
+      void display() 
+      {
+        // works for java
+        // have access to enclosing scope? No
+        // cxx.cpp:8397:47: error: invalid use of non-static data member ‘cxx_nested::Outer::outer_x’
+        // std::cout << "display: outer_x = " << outer_x;
+        std::cout << "display: outer_x = " << std::endl; 
+      }
+    };
+  };
+} // namespace
+
+TEST(Class, Nested_1)
+{
+  using namespace cxx_nested_1;
+
+  Outer o;
+  o.test();
+}
+
+namespace cxx_nested_2
+{
+  class Outer 
+  {
+    private:
+    int outer_x = 100;
+
+    public:
+
+    void test() {
+      Inner* inner = new Inner();
+      inner->display();
+
+      // fails in java as well
+      // cxx.cpp:8425:39: error: ‘y’ was not declared in this scope
+      //        std::cout << "display: y = " << y << std::endl;
+      std::cout << "display: y = " << std::endl;
+    }
+
+    private:
+
+    class Inner {
+
+      public:
+        int y = 10;
+
+      public:
+      void display() 
+      {
+        // have access to enclosing scope? No
+        // cxx.cpp:8397:47: error: invalid use of non-static data member ‘cxx_nested::Outer::outer_x’
+        // std::cout << "display: outer_x = " << outer_x;
+        std::cout << "display: outer_x = " << std::endl; 
+      }
+    };
+  };
+} // namespace
+
+TEST(Class, Nested_2)
+{
+  using namespace cxx_nested_2;
+
+  Outer o;
+  o.test();
 }
 
 

@@ -329,9 +329,14 @@ class TestString(unittest.TestCase):
 
         l[4] = l[3] = 'x'
 
-        # to string back
+        # to string it back
         coll = ''.join(l)
         self.assertEqual(coll, 'spaxxy')
+
+    def test_string_concat(self):
+
+        coll = "test" + "_" + "string" + "_" + "concat";
+        self.assertEqual(coll, "test_string_concat")
 
 
 #={===========================================================================
@@ -2485,7 +2490,7 @@ class TestSubprocess(unittest.TestCase):
         # contain ASCII characters; bytes with a numeric value of 128 or greater
         # must be expressed with escapes.
 
-        self.assertEqual(result, (b'/home/kyoupark/git/kb/code-py/pybase\n', None))
+        self.assertEqual(result, (b'/home/keitee/git/kb/code-py/pybase\n', None))
 
     def test_get_output_from_subprocess_and_process(self):
 

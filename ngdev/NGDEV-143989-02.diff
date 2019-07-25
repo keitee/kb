@@ -1,0 +1,2666 @@
+diff --git a/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.cpp b/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.cpp
+index 95f3da9a2..588caa02e 100644
+--- a/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.cpp
++++ b/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.cpp
+@@ -49,6 +49,7 @@ BleRcuContollerProxy::BleRcuContollerProxy(const std::shared_ptr<AI_IPC::IIpcSer
+     , mPairingCode(0)
+     , mShutDown(false)
+     , mIrListenerId(-1)
++    , mStatus((uint32_t)PairingState::Initialsing)
+ {
+     AI_LOG_FN_ENTRY();
+ 
+@@ -622,6 +623,32 @@ std::future<bool> BleRcuContollerProxy::findMe(const std::string& rcuAddress, Fi
+     return fut;
+ }
+ 
++void BleRcuContollerProxy::startScanning(const uint32_t timeout)
++{
++    AI_LOG_FN_ENTRY();
++
++    // if the daemon is already signalling that pairing is running don't bother
++    // trying to start it again
++    if (mStatus == (uint32_t)PairingState::Searching || mStatus == (uint32_t)PairingState::Pairing)
++    {
++        AI_LOG_INFO("ignoring scanning request as already in scanning state");
++        AI_LOG_FN_EXIT();
++       return;
++    }
++
++    const AI_IPC::Method method(BLE_RCU_SERVICE, BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, "StartScanning");
++
++    AI_IPC::VariantList methodParams = {timeout};
++    AI_IPC::VariantList methodReturnValue;
++
++    if (!mIpcService->invokeMethod(method, methodParams, methodReturnValue))
++    {
++        AI_LOG_ERROR("Failed to invoke '%s.%s'", method.interface.c_str(), method.name.c_str());
++    }
++
++    AI_LOG_FN_EXIT();
++}
++
+ void BleRcuContollerProxy::signalHandlerDeviceAdded(const AI_IPC::VariantList& args)
+ {
+     AI_LOG_FN_ENTRY();
+@@ -726,6 +753,16 @@ void BleRcuContollerProxy::signalHandlerPropertiesChanged(const AI_IPC::VariantL
+                         mPairingCode = boost::get<uint8_t>(iter->second);
+                         AI_LOG_INFO("Pairing code: %u", mPairingCode.load());
+                     }
++
++                    iter = dict.find("State");
++                    if (iter != dict.end())
++                    {
++                        mStatus = boost::get<uint32_t>(iter->second);
++
++                        AI_LOG_INFO("Status change: %u", mStatus.load());
++                        mDispatcher->post(std::bind(&BleRcuContollerProxy::notifyStateChanged,
++                              this, (PairingState)mStatus.load()));
++                    }
+                 }
+                 else
+                 {
+@@ -852,6 +889,15 @@ void BleRcuContollerProxy::notifyPairingStatusChanged(bool pairing)
+     AI_LOG_FN_EXIT();
+ }
+ 
++void BleRcuContollerProxy::notifyStateChanged(PairingState status)
++{
++    AI_LOG_FN_ENTRY();
++
++    notify( std::bind(&IBleRcuDeviceEvent::stateChanged, std::placeholders::_1, status) );
++
++    AI_LOG_FN_EXIT();
++}
++
+ void BleRcuContollerProxy::pingDaemon()
+ {
+     AI_LOG_FN_ENTRY();
+diff --git a/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.h b/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.h
+index 57b96d91b..27186fa43 100644
+--- a/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.h
++++ b/AppInfrastructure/BluetoothRcu/client/lib/source/BleRcuController.h
+@@ -212,6 +212,15 @@ public:
+ 
+     void enableVoiceStreamSim(bool enable);
+ 
++    /**
++     * @brief Start scanning
++     *
++     * @param timeout       [in]    scanning timeout in ms
++     *
++     * @return void
++     */
++    virtual void startScanning(const uint32_t timeout) final;
++
+ private:
+ 
+     void signalHandlerDeviceAdded(const AI_IPC::VariantList& args);
+@@ -240,6 +249,8 @@ private:
+ 
+     void notifyPairingStatusChanged(bool pairing);
+ 
++    void notifyStateChanged(PairingState status);
++
+     void addDevicesToDeviceList(const std::set<std::string>& objectPaths);
+ 
+     void removeDevicesFromDeviceList(const std::set<std::string>& objectPaths);
+@@ -258,6 +269,8 @@ private:
+ 
+     std::atomic<uint8_t> mPairingCode;
+ 
++    std::atomic<uint32_t> mStatus;
++
+     std::atomic<bool> mShutDown;
+ 
+     int mIrListenerId;
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/base_cmdhandler.h b/AppInfrastructure/BluetoothRcu/console/source/base_cmdhandler.h
+index 3a2e1b60e..c2f3a5b7a 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/base_cmdhandler.h
++++ b/AppInfrastructure/BluetoothRcu/console/source/base_cmdhandler.h
+@@ -54,6 +54,7 @@ public slots:
+ 
+ 	virtual void startPairing(quint8 pairingCode) = 0;
+ 	virtual void cancelPairing() = 0;
++	virtual void startScanning(quint32 timeout) = 0;
+ 
+ 	virtual void unPairDevice(const BleAddress &device) = 0;
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/blercu/blercucontroller1_interface.h b/AppInfrastructure/BluetoothRcu/console/source/blercu/blercucontroller1_interface.h
+index a669afddf..91e5a48b6 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/blercu/blercucontroller1_interface.h
++++ b/AppInfrastructure/BluetoothRcu/console/source/blercu/blercucontroller1_interface.h
+@@ -45,6 +45,10 @@ public:
+ 	inline quint8 pairingCode() const
+ 	{ return qvariant_cast< quint8 >(property("PairingCode")); }
+ 
++	Q_PROPERTY(quint32 State READ state NOTIFY stateChanged)
++	inline quint32 state() const
++	{ return qvariant_cast< quint32 >(property("State")); }
++
+ public Q_SLOTS: // METHODS
+ 	inline QDBusPendingReply<QList<QDBusObjectPath>> GetDevices()
+ 	{
+@@ -77,12 +81,20 @@ public Q_SLOTS: // METHODS
+ 		return asyncCallWithArgumentList(QStringLiteral("CancelPairing"), argumentList);
+ 	}
+ 
++	inline QDBusPendingReply<> StartScanning(quint32 timeout)
++	{
++		QList<QVariant> argumentList;
++		argumentList << QVariant::fromValue(timeout);
++		return asyncCallWithArgumentList(QStringLiteral("StartScanning"), argumentList);
++	}
++
+ Q_SIGNALS: // SIGNALS
+ 	void DeviceAdded(const QDBusObjectPath &path, const QString &address);
+ 	void DeviceRemoved(const QDBusObjectPath &path, const QString &address);
+ 	void Ready();
+ 
+ 	void pairingChanged(bool pairing);
++	void stateChanged(quint32 status);
+ };
+ 
+ namespace com {
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.cpp b/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.cpp
+index 2ea45c110..8b6c81fcb 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.cpp
++++ b/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.cpp
+@@ -33,7 +33,17 @@
+ #define USER_INPUT_KEY_MUTE                  (0xE005U)
+ #define USER_INPUT_KEY_TV                    (0xE010U)
+ 
+-
++namespace {
++	enum PairingState
++	{
++		Initialsing,
++		Idle,
++		Searching,
++		Pairing,
++		Complete,
++		Failed
++	};
++} // namespace
+ 
+ BleRcuCmdHandler::BleRcuCmdHandler(const QDBusConnection &bus,
+                                    const QString &service,
+@@ -94,9 +104,10 @@ void BleRcuCmdHandler::initBleRcuInterfaces(const QDBusConnection &bus,
+ 		                 this, &BleRcuCmdHandler::onDeviceAdded);
+ 		QObject::connect(m_blercuController1.data(), &ComSkyBleRcuController1Interface::DeviceRemoved,
+ 		                 this, &BleRcuCmdHandler::onDeviceRemoved);
+-
+ 		QObject::connect(m_blercuController1.data(), &ComSkyBleRcuController1Interface::pairingChanged,
+ 		                 this, &BleRcuCmdHandler::onPairingStateChanged);
++		QObject::connect(m_blercuController1.data(), &ComSkyBleRcuController1Interface::stateChanged,
++		                 this, &BleRcuCmdHandler::onStateChanged);
+ 	}
+ 
+ 
+@@ -202,6 +213,27 @@ void BleRcuCmdHandler::showDBusError(const QDBusError &error) const
+ 	qWarning() << "dbus error" << error.name() << error.message();
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Get pairing state name from state.
++ */
++
++QString BleRcuCmdHandler::getPairingStateName(qint32 status) const
++{
++	switch(status)
++	{
++		case Initialsing: return "Initialising"; break;
++		case Idle:        return "Idle"; break;
++		case Searching:   return "Searching"; break;
++		case Pairing:     return "Pairing"; break;
++		case Complete:    return "Complete"; break;
++		case Failed:      return "Failed"; break;
++		default:          return "Unknown"; break;
++	}
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Returns \c true if all the required dbus interfaces are setup.
+@@ -328,6 +360,27 @@ void BleRcuCmdHandler::cancelPairing()
+ 		showDBusError(reply.error());
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	Slot called when the user types 'sacn <timeout>'.
++
++	This command sends out the request to start scanning.
++
++ */
++void BleRcuCmdHandler::startScanning(uint32_t timeout)
++{
++	if (!m_blercuController1 || !m_blercuController1->isValid()) {
++		qWarning("Missing one or more required dbus interfaces");
++		return;
++	}
++
++	// send the request to the daemon
++	QDBusPendingReply<> reply = m_blercuController1->StartScanning(timeout);
++	reply.waitForFinished();
++	if (reply.isError())
++		showDBusError(reply.error());
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Slot called when the user types 'unpair <dev>'.
+@@ -1151,6 +1204,17 @@ void BleRcuCmdHandler::onPairingStateChanged(bool isPairing)
+ 	qInfo().noquote() << "[CHG] Pairing:" << (isPairing ? "yes" : "no");
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	Slot called when the com.sky.BleRcuController1.Status property change
++	signal is received.
++
++ */
++void BleRcuCmdHandler::onStateChanged(quint32 status)
++{
++	qInfo().noquote() << "[CHG] State:" << getPairingStateName(status);
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Slot called when the com.sky.BleRcuDevice1.BatteryLevel property change
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.h b/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.h
+index 0ca523dd1..638a363b3 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.h
++++ b/AppInfrastructure/BluetoothRcu/console/source/blercu_cmdhandler.h
+@@ -43,6 +43,7 @@ private:
+ 	                          const QString &service, const QString &path);
+ 
+ 	void showDBusError(const QDBusError &error) const;
++	QString getPairingStateName(qint32 status) const;
+ 
+ public:
+ 	bool isValid() override;
+@@ -55,6 +56,7 @@ public slots:
+ 
+ 	void startPairing(quint8 pairingCode) override;
+ 	void cancelPairing() override;
++	void startScanning(quint32 timeout) override;
+ 
+ 	void unPairDevice(const BleAddress &device) override;
+ 
+@@ -99,6 +101,7 @@ private slots:
+ 	void onDeviceRemoved(const QDBusObjectPath &path, const QString &address);
+ 
+ 	void onPairingStateChanged(bool isPairing);
++	void onStateChanged(quint32 status);
+ 
+ 	void onBatteryLevelChanged(const BleAddress &device, quint8 level);
+ 	void onConnectedChanged(const BleAddress &device, bool connected);
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/console.cpp b/AppInfrastructure/BluetoothRcu/console/source/console.cpp
+index 4ce3295ba..401869a26 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/console.cpp
++++ b/AppInfrastructure/BluetoothRcu/console/source/console.cpp
+@@ -45,6 +45,9 @@ void Console::initReadLine()
+ 	m_readLine.addCommand("pair", { "<on/off>", "<code>" }, "Start/stop pairing using pairing byte code",
+ 	                      this, &Console::onStartPairingCommand);
+ 
++	m_readLine.addCommand("scan", { "<timeout in ms>" }, "Start scanning",
++	                      this, &Console::onStartScanningCommand);
++
+ 	m_readLine.addCommand("unpair", { "<dev>" }, "Unpair device",
+ 	                      this, &Console::onUnpairCommand);
+ 	m_readLine.addCommand("info", { "<dev>" }, "Device information",
+@@ -200,6 +203,31 @@ void Console::onStartPairingCommand(const QStringList &args)
+ 		m_cmdHandler->cancelPairing();
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	Slot called when the user types 'scan <timeout>'.
++
++	This command sends out the request to start scanning.
++
++ */
++void Console::onStartScanningCommand(const QStringList &args)
++{
++	// the first argument should be an 'timeout value'
++	if (args.length() < 1) {
++		qWarning("Missing <timeout> argument");
++		return;
++	}
++
++	bool parsedOk = false;
++	uint32_t timeout = args.first().toUInt(&parsedOk);
++	if (!parsedOk) {
++		qWarning("Invalid timeout argument");
++		return;
++	}
++
++	m_cmdHandler->startScanning(timeout);
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Slot called when the user types 'unpair <dev>'.
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/console.h b/AppInfrastructure/BluetoothRcu/console/source/console.h
+index c5a393508..c1639c381 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/console.h
++++ b/AppInfrastructure/BluetoothRcu/console/source/console.h
+@@ -42,6 +42,7 @@ private slots:
+ 	void onListDevicesCommand(const QStringList &args);
+ 	void onListConnectedDevicesCommand(const QStringList &args);
+ 	void onStartPairingCommand(const QStringList &args);
++	void onStartScanningCommand(const QStringList &args);
+ 	void onInfoCommand(const QStringList &args);
+ 	void onUnpairCommand(const QStringList &args);
+ 	void onFindMeCommand(const QStringList &args);
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.cpp b/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.cpp
+index d58dbdc0d..0a7073e5c 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.cpp
++++ b/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.cpp
+@@ -227,6 +227,12 @@ void RhadCmdHandler::cancelPairing()
+ 	qWarning("Not implemented on RHAD interface");
+ }
+ 
++void RhadCmdHandler::startScanning(quint32 timeout)
++{
++	Q_UNUSED(timeout);
++	qWarning("Not implemented on RHAD interface");
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Slot called when the user types 'unpair <dev>'.
+diff --git a/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.h b/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.h
+index af45906e7..77dbaf3ae 100644
+--- a/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.h
++++ b/AppInfrastructure/BluetoothRcu/console/source/rhad_cmdhandler.h
+@@ -52,6 +52,7 @@ public slots:
+ 
+ 	void startPairing(quint8 pairingCode) override;
+ 	void cancelPairing() override;
++	void startScanning(quint32 timeout) override;
+ 
+ 	void unPairDevice(const BleAddress &device) override;
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json b/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json
+index d2f09a429..6ed339b10 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json
++++ b/AppInfrastructure/BluetoothRcu/daemon/resources/config.default.json
+@@ -10,8 +10,11 @@
+ 		{
+ 			"name": "EC05x",
+ 			"manufacturer": "Ruwido",
++			"disabled": true,
+ 			"oui": "1C:A2:B1",
+-			"pairingNameFormat": "U%03hhu*",
++			"pairingNameFormat": "U%03hhuruwido Sky Remote",
++			"scanNameFormat": "U[0-9][0-9][0-9]ruwido Sky Remote",
++			"filterByte": 27,
+ 			"connectionParams": {
+ 				"maxInterval": 15.0,
+ 				"minInterval": 15.0,
+@@ -55,6 +58,8 @@
+ 			"manufacturer": "Omni",
+ 			"oui": "D4:B8:FF",
+ 			"pairingNameFormat": "U%03hhu SkyQ EC[12]01",
++			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC[12]01",
++			"filterByte": 20,
+ 			"services": {
+ 				"type": "gatt",
+ 				"supported": [
+@@ -62,7 +67,8 @@
+ 					"battery",
+ 					"deviceInfo",
+ 					"findMe",
+-					"infrared"
++					"infrared",
++					"upgrade"
+ 				]
+ 			}
+ 		},
+@@ -71,6 +77,8 @@
+ 			"manufacturer": "Omni",
+ 			"oui": "18:46:44",
+ 			"pairingNameFormat": "U%03hhu SkyQ EC201",
++			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC201",
++			"filterByte": 20,
+ 			"services": {
+ 				"type": "gatt",
+ 				"supported": [
+@@ -78,7 +86,8 @@
+ 					"battery",
+ 					"deviceInfo",
+ 					"findMe",
+-					"infrared"
++					"infrared",
++					"upgrade"
+ 				]
+ 			}
+ 		},
+@@ -87,6 +96,8 @@
+ 			"manufacturer": "UEI",
+ 			"oui": "70:91:F3",
+ 			"pairingNameFormat": "U%03hhu SkyQ EC102",
++			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC102",
++			"filterByte": 19,
+ 			"services": {
+ 				"type": "gatt",
+ 				"supported": [
+@@ -94,7 +105,8 @@
+ 					"battery",
+ 					"deviceInfo",
+ 					"findMe",
+-					"infrared"
++					"infrared",
++					"upgrade"
+ 				]
+ 			}
+ 		},
+@@ -103,6 +115,8 @@
+ 			"manufacturer": "UEI",
+ 			"oui": "E8:0F:C8",
+ 			"pairingNameFormat": "U%03hhu SkyQ EC202",
++			"scanNameFormat": "U[0-9][0-9][0-9] SkyQ EC202",
++			"filterByte": 19,
+ 			"services": {
+ 				"type": "gatt",
+ 				"supported": [
+@@ -110,7 +124,8 @@
+ 					"battery",
+ 					"deviceInfo",
+ 					"findMe",
+-					"infrared"
++					"infrared",
++					"upgrade"
+ 				]
+ 			}
+ 		}
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.cpp b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.cpp
+index 671a90363..21f11b05e 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.cpp
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.cpp
+@@ -18,6 +18,7 @@ BleRcuController1Adaptor::BleRcuController1Adaptor(BleRcuController *parent,
+ 	: DBusAbstractAdaptor(parent)
+ 	, m_controller(parent)
+ 	, m_dbusObjPath(objPath)
++	, m_state(PairingState::Initialsing)
+ {
+ 	// don't auto relay signals, we do this manually
+ 	setAutoRelaySignals(false);
+@@ -32,6 +33,8 @@ BleRcuController1Adaptor::BleRcuController1Adaptor(BleRcuController *parent,
+ 	QObject::connect(m_controller, &BleRcuController::pairingStateChanged,
+ 	                 this, &BleRcuController1Adaptor::onPairingStateChanged);
+ 
++	QObject::connect(m_controller, &BleRcuController::stateChanged,
++	                 this, &BleRcuController1Adaptor::onStateChanged);
+ }
+ 
+ BleRcuController1Adaptor::~BleRcuController1Adaptor()
+@@ -110,6 +113,21 @@ void BleRcuController1Adaptor::onPairingStateChanged(bool pairing)
+ 	emitPropertyChanged(QStringLiteral("Pairing"), pairing);
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Slot called by the \l{BleRcuController} when the state changes. We
++	hook this point so we can send out a property changed signal for the
++	'State' property.
++
++ */
++void BleRcuController1Adaptor::onStateChanged(uint32_t status)
++{
++	m_state = status;
++	emitPropertyChanged(QStringLiteral("State"), status);
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	DBus get property call for com.sky.BleRcuController1.Pairing
+@@ -130,6 +148,16 @@ quint8 BleRcuController1Adaptor::pairingCode() const
+ 	return m_controller->pairingCode();
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	DBus get property call for com.sky.BleRcuController1.State
++
++ */
++quint32 BleRcuController1Adaptor::state() const
++{
++	return m_state;
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	DBus method call handler for com.sky.BleRcuController1.StartPairing
+@@ -172,6 +200,29 @@ void BleRcuController1Adaptor::CancelPairing(const QDBusMessage &message)
+ 	m_controller->cancelPairing();
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	DBus method call handler for com.sky.BleRcuController1.StartScanning
++
++ */
++void BleRcuController1Adaptor::StartScanning(quint32 timeout,
++                                            const QDBusMessage &message)
++{
++	// sanity check we're not already in the scanning state
++	if (m_controller->isScanning()) {
++		sendErrorReply(message, BleRcuError::errorString(BleRcuError::Busy),
++		               QStringLiteral("Already in scanning state"));
++		return;
++	}
++
++	// attempt to start scanning using the supplied timeout
++	if (!m_controller->startScanning(timeout)) {
++
++		const BleRcuError error = m_controller->lastError();
++		sendErrorReply(message, error.name(), error.message());
++	}
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	DBus method call handler for com.sky.BleRcuController1.GetDevices
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.h b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.h
+index 8a0cfc55a..90b2a6a65 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/adaptors/blercucontroller1_adaptor.h
+@@ -28,6 +28,9 @@ class BleRcuController1Adaptor : public DBusAbstractAdaptor
+ 	            "      <arg direction=\"in\" type=\"y\" name=\"pairing_code\"/>\n"
+ 	            "    </method>\n"
+ 	            "    <method name=\"CancelPairing\"/>\n"
++	            "    <method name=\"StartScanning\">\n"
++	            "      <arg direction=\"in\" type=\"i\" name=\"timeout\"/>\n"
++	            "    </method>\n"
+ 	            "    <method name=\"GetDevices\">\n"
+ 	            "      <arg direction=\"out\" type=\"ao\" name=\"devices\"/>\n"
+ 	            "    </method>\n"
+@@ -45,11 +48,13 @@ class BleRcuController1Adaptor : public DBusAbstractAdaptor
+ 	            "    <signal name=\"Ready\"/>\n"
+ 	            "    <property access=\"read\" type=\"b\" name=\"Pairing\"/>\n"
+ 	            "    <property access=\"read\" type=\"y\" name=\"PairingCode\"/>\n"
++	            "    <property access=\"read\" type=\"u\" name=\"State\"/>\n"
+ 	            "  </interface>\n"
+ 	            "")
+ public:
+ 	Q_PROPERTY(bool Pairing READ pairing)
+ 	Q_PROPERTY(quint8 PairingCode READ pairingCode)
++	Q_PROPERTY(quint32 State READ state)
+ 
+ public:
+ 	BleRcuController1Adaptor(BleRcuController *parent,
+@@ -59,10 +64,12 @@ public:
+ public:
+ 	bool pairing() const;
+ 	quint8 pairingCode() const;
++	quint32 state() const;
+ 
+ public slots:
+ 	void StartPairing(quint8 pairingCode, const QDBusMessage &message);
+ 	void CancelPairing(const QDBusMessage &message);
++	void StartScanning(quint32 timeout, const QDBusMessage &message);
+ 
+ 	QList<QDBusObjectPath> GetDevices(const QDBusMessage &message);
+ 
+@@ -82,10 +89,12 @@ private:
+ 	void onDeviceAdded(const BleAddress &address);
+ 	void onDeviceRemoved(const BleAddress &address);
+ 	void onPairingStateChanged(bool pairing);
++	void onStateChanged(uint32_t status);
+ 
+ private:
+ 	BleRcuController * const m_controller;
+ 	const QDBusObjectPath m_dbusObjPath;
++  uint32_t m_state;
+ };
+ 
+ #endif // BLERCUCONTROLLER1_ADAPTOR_H
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercu.pri b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercu.pri
+index 8513bb2d8..a68413f7c 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercu.pri
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercu.pri
+@@ -19,6 +19,7 @@ HEADERS += \
+ 	$$PWD/blercumanager.h \
+ 	$$PWD/blercumanager_p.h \
+ 	$$PWD/blercupairingstatemachine.h \
++	$$PWD/blercuscannerstatemachine.h \
+ 	$$PWD/blercuanalytics.h
+ 
+ 
+@@ -33,6 +34,7 @@ SOURCES += \
+ 	$$PWD/blercucontroller.cpp \
+ 	$$PWD/blercumanager.cpp \
+ 	$$PWD/blercupairingstatemachine.cpp \
++	$$PWD/blercuscannerstatemachine.cpp \
+ 	$$PWD/blercuanalytics.cpp
+ 
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.cpp b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
+index 655e34948..28af7dbb7 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
+@@ -2,7 +2,7 @@
+ //  blercucontroller.cpp
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #include "blercucontroller_p.h"
+@@ -33,10 +33,10 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 	, m_analytics(QSharedPointer<BleRcuAnalytics>::create(config))
+ 	, m_dbusObjectPath(QStringLiteral("/com/sky/blercu/controller"))
+ 	, m_pairingStateMachine(config, manager)
++	, m_scannerStateMachine(config, manager)
+ 	, m_lastError(BleRcuError::NoError)
+ 	, m_maxManagedDevices(1)
+ {
+-
+ 	// connect to the finished signal of the pairing statemachine, use to update
+ 	// our list of managed devices
+ 	QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::finished,
+@@ -48,13 +48,14 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 	                 this, &BleRcuControllerImpl::onStartedPairing,
+ 	                 Qt::QueuedConnection);
+ 
+-
+-	// connect to the manager's device added / removed signals
+-	QObject::connect(manager.data(), &BleRcuManager::deviceAdded,
+-	                 this, &BleRcuControllerImpl::onManagerAddedDevice,
++	// connect to the failed signal so we can send pairing state notifications
++	QObject::connect(&m_pairingStateMachine, &BleRcuPairingStateMachine::failed,
++	                 this, &BleRcuControllerImpl::onFailedPairing,
+ 	                 Qt::QueuedConnection);
+-	QObject::connect(manager.data(), &BleRcuManager::deviceRemoved,
+-	                 this, &BleRcuControllerImpl::onManagerRemovedDevice,
++
++	// connect to the manager's device pairing change signals
++	QObject::connect(manager.data(), &BleRcuManager::devicePairingChanged,
++	                 this, &BleRcuControllerImpl::onDevicePairingChanged,
+ 	                 Qt::QueuedConnection);
+ 
+ 	// connect to the manager's device ready signals
+@@ -62,6 +63,10 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 	                 this, &BleRcuControllerImpl::onDeviceReadyChanged,
+ 	                 Qt::QueuedConnection);
+ 
++	// connect to the manager's initialised signal
++	QObject::connect(manager.data(), &BleRcuManager::poweredInitialised,
++	                 this, &BleRcuControllerImpl::onInitialised,
++	                 Qt::QueuedConnection);
+ 
+ 
+ 	// connect the analytics to the signals we generate (does this make more
+@@ -77,7 +82,22 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 	                 Qt::QueuedConnection);
+ 
+ 
++	// connect to the scanner signals
++	QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::started,
++	                 this, &BleRcuControllerImpl::onStartedScanning,
++	                 Qt::QueuedConnection);
++	QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::finished,
++	                 this, &BleRcuControllerImpl::onFinishedScanning,
++	                 Qt::QueuedConnection);
++	QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::failed,
++	                 this, &BleRcuControllerImpl::onFailedScanning,
++	                 Qt::QueuedConnection);
+ 
++	// connect to the signal emitted when the scanner found an RCU device in
++	// pairing mode
++	QObject::connect(&m_scannerStateMachine, &BleRcuScannerStateMachine::foundPairableDevice,
++	                 this, &BleRcuControllerImpl::onFoundPairableDevice,
++	                 Qt::QueuedConnection);
+ 
+ 	// create and attach the dbus adaptor for the controller interface to
+ 	// ourselves
+@@ -101,6 +121,7 @@ BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSett
+ 
+ BleRcuControllerImpl::~BleRcuControllerImpl()
+ {
++	qInfo("BleRcuController shut down");
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -196,6 +217,14 @@ BleRcuError BleRcuControllerImpl::lastError() const
+ 	return m_lastError;
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\fn bool BleRcuController::isPairing() const
++
++	Returns \c true if pairing is currently in progress.
++
++	\see startPairing()
++ */
+ bool BleRcuControllerImpl::isPairing() const
+ {
+ 	return m_pairingStateMachine.isRunning();
+@@ -203,17 +232,16 @@ bool BleRcuControllerImpl::isPairing() const
+ 
+ // -----------------------------------------------------------------------------
+ /*!
+-	\fn quint8 BleRcuController::pairingCode()
++	\fn int BleRcuController::pairingCode()
+ 
+ 	Returns the current or last 8-bit pairing code used.
+  
+-	If startPairing() has never been called \c 0 will be returned, note however
+-	this is a valid pairing code and shouldn't be used to determine if pairing
+-	has ever been initiated or not.
++	If startPairing() has never been called \c -1 will be returned. Or if
++	pairing was started after a scan then \c -1 will also be returned.
+ 
+ 	\see startPairing()
+  */
+-quint8 BleRcuControllerImpl::pairingCode() const
++int BleRcuControllerImpl::pairingCode() const
+ {
+ 	return m_pairingStateMachine.pairingCode();
+ }
+@@ -222,25 +250,38 @@ quint8 BleRcuControllerImpl::pairingCode() const
+ /*!
+ 	\fn bool BleRcuController::startPairing(quint8 pairingCode)
+ 
+-	Attempts to start the pairing proceedure looking for devices that identify
+-	with the given \a pairingCode.
+- 
++	Attempts to start the pairing procedure looking for devices that identify
++	with the given \a filterByte and \a pairingCode.  Both these byte values
++	are sent in the IR pairing signal and are used to help identify the RCU
++	model and unique name.
++
+ 	If the controller is currently in pairing mode this method will fail and
+ 	return \c false.  If the bluetooth adaptor is not available or not powered
+ 	then this function will also fail and return \c false.
+  
+ 	If \c false is returned use BleRcuController::lastError() to get the failure
+ 	reason.
+- 
+-	\note This object doesn't actually run the pairing procedure, install it
++
++	\note This object doesn't actually run the pairing procedure, instead it
+ 	just starts and stops the \l{BleRcuPairingStateMachine} object.
+ 
+ 	\see cancelPairing(), isPairing() & pairingCode()
+  */
+ bool BleRcuControllerImpl::startPairing(quint8 pairingCode)
+ {
++	// if currently scanning then we have to cancel that first before processing
++	// the IR pairing request (nb - pairing request can only come to this
++	// function from an IR event)
++	if (m_scannerStateMachine.isRunning()) {
++		m_scannerStateMachine.stop();
++
++		qWarning("received IR pairing request in scanning mode, disabling"
++		         " scanner and when stopped will start IR pairing");
++		return false;
++	}
++
+ 	if (m_pairingStateMachine.isRunning()) {
+-		qWarning("requested pairing in already pairing state, ignoring request");
++		qDebug("requested pairing in already pairing state, ignoring request");
+ 		m_lastError = BleRcuError(BleRcuError::Busy,
+ 		                          QStringLiteral("Already in pairing state"));
+ 		return false;
+@@ -260,16 +301,116 @@ bool BleRcuControllerImpl::startPairing(quint8 pairingCode)
+ 	return true;
+ }
+ 
+-void BleRcuControllerImpl::cancelPairing()
++// -----------------------------------------------------------------------------
++/*!
++	\fn void BleRcuController::cancelPairing()
++
++	Cancels the pairing procedure if running.
++
++	\see startPairing(), isPairing() & pairingCode()
++ */
++bool BleRcuControllerImpl::cancelPairing()
+ {
++	if (!m_pairingStateMachine.isRunning())
++		return false;
++
+ 	m_pairingStateMachine.stop();
++	return true;
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\fn bool BleRcuController::isScanning() const
++
++	Returns \c true if scanning is currently in progress.
++
++	\see startScanning()
++ */
++bool BleRcuControllerImpl::isScanning() const
++{
++	return m_scannerStateMachine.isRunning();
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	\fn void BleRcuController::startScanning()
++
++	Starts the scanner looking for RCUs in pairing mode.  The scan will run for
++	\a timeoutMs milliseconds, or until cancelled if less than zero.
++
++	The scanner won't start if the pairing state machine is already running.
++
++	\see cancelScanning() & isScanning()
++ */
++bool BleRcuControllerImpl::startScanning(int timeoutMs)
++{
++	// check we're not currently pairing
++	if (m_pairingStateMachine.isRunning()) {
++		qWarning("currently performing pairing, cannot start new scan");
++		return false;
++	}
++
++	// check we're not already scanning
++	if (m_scannerStateMachine.isRunning()) {
++		qWarning("already scanning, new scan request aborted");
++		return false;
++	}
++
++	// check that the manager has powered on the adapter, without this we
++	// obviously can't scan. The only time the adaptor should (legitimately) be
++	// unavailable is right at start-up
++	if (!m_manager->isAvailable() || !m_manager->isPowered()) {
++		m_lastError = BleRcuError(BleRcuError::General,
++		                          QStringLiteral("Adaptor not available or not powered"));
++		return false;
++	}
++
++	// start the pairing process
++	emit stateChanged(PairingState::Searching);
++	m_scannerStateMachine.start(timeoutMs);
++	return true;
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	\fn void BleRcuController::cancelScanning()
++
++	Cancels the current scanning process.
++
++	\see startScanning()
++ */
++bool BleRcuControllerImpl::cancelScanning()
++{
++	if (!m_scannerStateMachine.isRunning())
++		return false;
++
++	m_scannerStateMachine.stop();
++	return true;
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	\fn QSet<BleAddress> BleRcuController::managedDevices() const
++
++	Returns a set of all the RCU devices currently been managed.
++
++	\see managedDevice()
++ */
+ QSet<BleAddress> BleRcuControllerImpl::managedDevices() const
+ {
+ 	return m_managedDevices;
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\fn QSharedPointer<BleRcuDevice> BleRcuController::managedDevice(const BleAddress &address) const
++
++	Returns a shared pointer to the managed RCU device with the given \a address.
++	If there is no managed RCU with the given address an empty shared pointer
++	is returned.
++
++	\see managedDevices()
++ */
+ QSharedPointer<BleRcuDevice> BleRcuControllerImpl::managedDevice(const BleAddress &address) const
+ {
+ 	if (Q_UNLIKELY(!m_managedDevices.contains(address)))
+@@ -368,7 +509,7 @@ void BleRcuControllerImpl::removeLastConnectedDevice()
+ 		if (device && device->isValid() && device->isPaired()) {
+ 
+ 			// find the spot in the list to insert the item, devices with the
+-			// oldest ready transistion at the front
++			// oldest ready transition at the front
+ 			QList<QSharedPointer<const BleRcuDevice>>::iterator it = pairedDevices.begin();
+ 			for (; it != pairedDevices.end(); ++it) {
+ 				if ((*it)->msecsSinceReady() < device->msecsSinceReady())
+@@ -406,6 +547,7 @@ void BleRcuControllerImpl::onStartedPairing()
+ 
+ 	// tell clients that the pairing state has changed
+ 	emit pairingStateChanged(pairing);
++	emit stateChanged(PairingState::Pairing);
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -427,45 +569,69 @@ void BleRcuControllerImpl::onFinishedPairing()
+ 
+ 	// tell clients that the pairing state is changed
+ 	emit pairingStateChanged(pairing);
++	emit stateChanged(PairingState::Complete);
+ }
+ 
+ // -----------------------------------------------------------------------------
+ /*!
+ 	\internal
+ 
+-	Queued slot called when the \l{BleRcuManager} has added a new device.
++	Queued slot called when the pairing state machine has failed. This doesn't
++	necessarily mean it succeeded, this is called on failure as well.
++
+  */
+-void BleRcuControllerImpl::onManagerAddedDevice(const BleAddress &address,
+-                                                const QString &name)
++void BleRcuControllerImpl::onFailedPairing()
+ {
+-	Q_UNUSED(address);
+-	Q_UNUSED(name);
++	// a queued event so check the state
++	const bool pairing = m_pairingStateMachine.isRunning();
+ 
+-	if (!m_pairingStateMachine.isRunning())
++	// (re)sync our list of managed devices now pairing has finished
++	if (!pairing)
+ 		syncManagedDevices();
++
++	// tell clients that the pairing state is changed
++	emit stateChanged(PairingState::Failed);
+ }
+ 
+ // -----------------------------------------------------------------------------
+ /*!
+ 	\internal
+ 
+-	Queued slot called when the \l{BleRcuManager} has removed a device.
++	Queued slot called when the adaptor is powered on 
++ */
++void BleRcuControllerImpl::onInitialised()
++{
++	// tell clients that the pairing state is changed
++	emit stateChanged(PairingState::Idle);
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	\internal
+ 
++	Queued slot called when the \l{BleRcuManager} has added a new device.
+  */
+-void BleRcuControllerImpl::onManagerRemovedDevice(const BleAddress &address)
++void BleRcuControllerImpl::onDevicePairingChanged(const BleAddress &address,
++                                                  bool paired)
+ {
+-	// if the removed device is in our managed set then we remove it immediately
+-	// even if in the pairing state machine is running.  Previously we didn't do
+-	// this while in pairing mode that meant if you repaired the same device the
+-	// client never got the removed / added notifications.  So although this is
+-	// not technically wrong, some clients were expecting an added notification
+-	// to indicate pairing succeeded, when in fact all they got was an unchanged
+-	// list of devices.
+-	if (m_managedDevices.contains(address)) {
+-		m_managedDevices.remove(address);
+-		emit managedDeviceRemoved(address);
++	if (!paired) {
++		// if the removed device is in our managed set then we remove it
++		// immediately even if the pairing state machine is running.
++		// Previously we didn't do this while in pairing mode, that meant if you
++		// repaired the same device the client never got the removed / added
++		// notifications.  So although this is not technically wrong, some
++		// clients were expecting an added notification to indicate pairing
++		// succeeded, when in fact all they got was an unchanged list of devices.
++		if (m_managedDevices.contains(address)) {
++			m_managedDevices.remove(address);
++			emit managedDeviceRemoved(address);
++		}
+ 	}
+ 
++	// a device has bonded / unbonded, so if the state-machine is not running
++	// then re-sync the list of devices we are managing
++	if (!m_pairingStateMachine.isRunning())
++		syncManagedDevices();
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -489,3 +655,69 @@ void BleRcuControllerImpl::onDeviceReadyChanged(const BleAddress &address,
+ 	if (ready && !m_pairingStateMachine.isRunning())
+ 		syncManagedDevices();
+ }
++
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Queued slot called when the scanner state machine indicates it has started.
++ */
++void BleRcuControllerImpl::onStartedScanning()
++{
++	emit scanningStateChanged(true);
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Queued slot called when the scanner state machine indicates it has stopped.
++	This may be because it was cancelled, found a target device or timed out.
++ */
++void BleRcuControllerImpl::onFinishedScanning()
++{
++	emit scanningStateChanged(false);
++}
++
++// -----------------------------------------------------------------------------
++/*!
++  \internal
++
++  Queued slot called when the scanner state machine indicates it has failed to
++  find a device from scanning. This may be because it was cancelled, found a
++  target device or timed out.
++ */
++void
++BleRcuControllerImpl::onFailedScanning()
++{
++	emit stateChanged(PairingState::Failed);
++}
++
++
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Queued slot called when the scanner state machine found an RCU that was in
++	'pairing' mode.
++
++	This triggers us to start the pairing state machine targeting the device
++	with the given address.
++
++ */
++void BleRcuControllerImpl::onFoundPairableDevice(const BleAddress &address,
++                                                 const QString &name)
++{
++	qInfo() << "found" << address << "RCU device in pairing mode,"
++	        << "kicking off the pairing state machine";
++
++	// sanity check (needed?)
++	if (m_pairingStateMachine.isRunning()) {
++		qWarning("found target device in scan but pairing state machine "
++		         "already running?");
++		return;
++	}
++
++	// start pairing the device
++	m_pairingStateMachine.start(address, name);
++}
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.h b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.h
+index d1f1fa17d..831745cc6 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller.h
+@@ -2,7 +2,7 @@
+ //  blercucontroller.h
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #ifndef BLERCUCONTROLLER_H
+@@ -19,6 +19,15 @@
+ 
+ #include <QtDBus>
+ 
++enum PairingState
++{
++	Initialsing,
++	Idle,
++	Searching,
++	Pairing,
++	Complete,
++	Failed
++};
+ 
+ class BleRcuDevice;
+ 
+@@ -47,10 +56,14 @@ public:
+ 	virtual BleRcuError lastError() const = 0;
+ 
+ 	virtual bool isPairing() const = 0;
+-	virtual quint8 pairingCode() const = 0;
++	virtual int pairingCode() const = 0;
+ 
+ 	virtual bool startPairing(quint8 pairingCode) = 0;
+-	virtual void cancelPairing() = 0;
++	virtual bool cancelPairing() = 0;
++
++	virtual bool isScanning() const = 0;
++	virtual bool startScanning(int timeoutMs) = 0;
++	virtual bool cancelScanning() = 0;
+ 
+ 	virtual QSet<BleAddress> managedDevices() const = 0;
+ 	virtual QSharedPointer<BleRcuDevice> managedDevice(const BleAddress &address) const = 0;
+@@ -58,8 +71,9 @@ public:
+ signals:
+ 	void managedDeviceAdded(BleAddress address);
+ 	void managedDeviceRemoved(BleAddress address);
++	void scanningStateChanged(bool scanning);
+ 	void pairingStateChanged(bool pairing);
+-
++	void stateChanged(uint32_t status);
+ };
+ 
+ #endif // !defined(BLERCUCONTROLLER_H)
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller_p.h b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller_p.h
+index b2c73f41a..3d1bdd7e5 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller_p.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercucontroller_p.h
+@@ -2,7 +2,7 @@
+ //  blercucontroller_p.h
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #ifndef BLERCUCONTROLLER_P_H
+@@ -10,6 +10,7 @@
+ 
+ #include "blercucontroller.h"
+ #include "blercupairingstatemachine.h"
++#include "blercuscannerstatemachine.h"
+ 
+ #include <QObject>
+ #include <QtDBus>
+@@ -50,10 +51,14 @@ public:
+ 	BleRcuError lastError() const override;
+ 
+ 	bool isPairing() const override;
+-	quint8 pairingCode() const override;
++	int pairingCode() const override;
+ 
+ 	bool startPairing(quint8 pairingCode) override;
+-	void cancelPairing() override;
++	bool cancelPairing() override;
++
++	bool isScanning() const override;
++	bool startScanning(int timeoutMs) override;
++	bool cancelScanning() override;
+ 
+ 	QSet<BleAddress> managedDevices() const override;
+ 	QSharedPointer<BleRcuDevice> managedDevice(const BleAddress &address) const override;
+@@ -65,10 +70,16 @@ private:
+ private slots:
+ 	void onStartedPairing();
+ 	void onFinishedPairing();
+-	void onManagerAddedDevice(const BleAddress &address, const QString &name);
+-	void onManagerRemovedDevice(const BleAddress &address);
++	void onFailedPairing();
++	void onInitialised();
++	void onDevicePairingChanged(const BleAddress &address, bool paired);
+ 	void onDeviceReadyChanged(const BleAddress &address, bool ready);
+ 
++	void onStartedScanning();
++	void onFinishedScanning();
++	void onFailedScanning();
++	void onFoundPairableDevice(const BleAddress &address, const QString &name);
++
+ private:
+ 	const QSharedPointer<const ConfigSettings> m_config;
+ 	const QSharedPointer<BleRcuManager> m_manager;
+@@ -78,6 +89,7 @@ private:
+ 	QList<DBusAbstractAdaptor*> m_dbusAdaptors;
+ 
+ 	BleRcuPairingStateMachine m_pairingStateMachine;
++	BleRcuScannerStateMachine m_scannerStateMachine;
+ 
+ 	QSet<BleAddress> m_managedDevices;
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercudevice.cpp b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercudevice.cpp
+index ca0eddda2..4c9d913ff 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercudevice.cpp
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercudevice.cpp
+@@ -2,7 +2,7 @@
+ //  blercudevice.cpp
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #include "blercudevice_p.h"
+@@ -310,6 +310,8 @@ void BleRcuDeviceImpl::onPairRequestReply(QDBusPendingCallWatcher *call)
+  */
+ void BleRcuDeviceImpl::cancelPairing()
+ {
++	qInfo() << "canceling pairing for device" << m_address;
++
+ 	QDBusPendingReply<> reply = m_deviceProxy->CancelPairing();
+ 	QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(reply, this);
+ 
+@@ -359,10 +361,10 @@ void BleRcuDeviceImpl::onCancelPairingRequestReply(QDBusPendingCallWatcher *call
+  */
+ void BleRcuDeviceImpl::setupStateMachine()
+ {
+-	// set the name of the statemachine for logging
++	// set the name of the state machine for logging
+ 	m_stateMachine.setObjectName(QStringLiteral("DeviceStateMachine"));
+ 
+-	// on debug builds to milestone logging of this statemachine
++	// on debug builds to milestone logging of this state machine
+ #if (AI_BUILD_TYPE == AI_DEBUG)
+ 	m_stateMachine.setTransistionLogLevel(QtInfoMsg, &milestone());
+ #endif
+@@ -1003,6 +1005,11 @@ Future<qint16> BleRcuDeviceImpl::rssi() const
+ }
+ 
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\debugging
++
++ */
+ QDebug operator<<(QDebug dbg, const BleRcuDevice &device)
+ {
+ 	if (!device.isValid()) {
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.cpp b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.cpp
+index 168b07264..959c051f4 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.cpp
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.cpp
+@@ -2,7 +2,7 @@
+ //  blercumanager.cpp
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #include "blercumanager_p.h"
+@@ -26,7 +26,6 @@
+ 	interface, however it runs it's own state machine and also stores the
+ 	BleRcuDevice objects for any known device.
+ 
+-	
+ 	State Machine
+ 	This class implements the following state machine, it tries at all times
+ 	to ensure that the adapter is available and powered.
+@@ -65,8 +64,10 @@ QSet<quint32> BleRcuManagerImpl::getSupportedOuis(const QList<ConfigModelSetting
+ {
+ 	QSet<quint32> ouis;
+ 
+-	for (const ConfigModelSettings &model : modelDetails)
+-		ouis.insert(model.oui());
++	for (const ConfigModelSettings &model : modelDetails) {
++		if (!model.disabled())
++			ouis.insert(model.oui());
++	}
+ 
+ 	return ouis;
+ }
+@@ -81,7 +82,7 @@ BleRcuManagerImpl::BleRcuManagerImpl(const QSharedPointer<const ConfigSettings>
+ 	, m_bluezDBusConn(bluezBusConn)
+ 	, m_deviceFactory(deviceFactory)
+ 	, m_bluezService("org.bluez")
+-	, m_discoverying(false)
++	, m_discovering(false)
+ 	, m_pairable(false)
+ 	, m_discoveryRequests(0)
+ 	, m_discoveryRequested(StopDiscovery)
+@@ -100,7 +101,6 @@ BleRcuManagerImpl::BleRcuManagerImpl(const QSharedPointer<const ConfigSettings>
+ 	m_bluezServiceWatcher =
+ 		QSharedPointer<QDBusServiceWatcher>::create(m_bluezService, m_bluezDBusConn);
+ 
+-	
+ 	// connect to the added / remove service signals
+ 	QObject::connect(m_bluezServiceWatcher.data(), &QDBusServiceWatcher::serviceRegistered,
+ 	                 this, &BleRcuManagerImpl::onBluezServiceRegistered,
+@@ -134,7 +134,6 @@ BleRcuManagerImpl::BleRcuManagerImpl(const QSharedPointer<const ConfigSettings>
+ 	m_discoveryWatchdog.setInterval(5000);
+ 	QObject::connect(&m_discoveryWatchdog, &QTimer::timeout,
+ 	                 this, &BleRcuManagerImpl::onDiscoveryWatchdog);
+-
+ }
+ 
+ BleRcuManagerImpl::~BleRcuManagerImpl()
+@@ -144,6 +143,7 @@ BleRcuManagerImpl::~BleRcuManagerImpl()
+ 		m_stateMachine.stop();
+ 	}
+ 
++	qInfo("BleRcuManagerBluez shut down");
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -416,7 +416,9 @@ void BleRcuManagerImpl::onExitedAdapterAvailableSuperState()
+ 		// has disappeared
+ 		it = m_devices.erase(it);
+ 
+-		emit deviceRemoved(bdaddr);
++		// TODO: check replacement
++		// emit deviceRemoved(bdaddr);
++		emit devicePairingChanged(bdaddr, false, BleRcuManager::privateSignal());
+ 	}
+ 
+ 	m_adapterObjectPath = QDBusObjectPath();
+@@ -470,7 +472,7 @@ void BleRcuManagerImpl::onEnteredAdapterPoweredOffState()
+ 
+ 
+ 	// post an event so we retry power on again in 10 seconds time if we don't
+-	// get an acknownledgement
++	// get an acknowledgement
+ 	m_retryEventId = m_stateMachine.postDelayedEvent(AdapterRetryPowerOnEvent, 10000);
+ 
+ }
+@@ -539,11 +541,14 @@ void BleRcuManagerImpl::onEnteredAdapterPoweredOnState()
+ 
+ 
+ 	// signal the power state change before iterating and adding any devices
+-	emit poweredChanged(true);
++	emit poweredChanged(true, BleRcuManager::privateSignal());
+ 
+ 
+ 	// finally get a list of currently registered devices (RCUs)
+ 	getRegisteredDevices();
++
++	// signal that the adapter is powered and we got the list of paired devices
++	emit poweredInitialised(BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -556,7 +561,7 @@ void BleRcuManagerImpl::onEnteredAdapterPoweredOnState()
+  */
+ void BleRcuManagerImpl::onExitedAdapterPoweredOnState()
+ {
+-	emit poweredChanged(false);
++	emit poweredChanged(true, BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -594,7 +599,7 @@ void BleRcuManagerImpl::onBluezServiceUnregistered(const QString &serviceName)
+ 	if (Q_UNLIKELY(serviceName != m_bluezService))
+ 		return;
+ 
+-	qMilestone("detected bluez service has dropped off the dbus, has it crashed?");
++	qError("detected bluez service has dropped off the dbus, has it crashed?");
+ 
+ 	m_stateMachine.postEvent(ServiceUnavailableEvent);
+ }
+@@ -691,14 +696,15 @@ QDBusObjectPath BleRcuManagerImpl::findAdapter(int timeout)
+ 			if (name == BluezAdapterInterface::staticInterfaceName()) {
+ 
+ 				const QVariant addressValue = properties.value("Address");
++				m_address = BleAddress(addressValue.toString());
+ 
+ 				qMilestone() << "found bluez adapter at" << path.path()
+-				             << "with address" << addressValue.toString();
++				             << "with address" << m_address;
+ 
+ 				// use the supplied properties to set the initial discovery
+ 				// and pairable states
+ 				if (properties.contains("Discovering"))
+-					m_discoverying = properties["Discovering"].toBool();
++					m_discovering = properties["Discovering"].toBool();
+ 
+ 				if (properties.contains("Pairable"))
+ 					m_pairable = properties["Pairable"].toBool();
+@@ -761,10 +767,10 @@ bool BleRcuManagerImpl::attachAdapter(const QDBusObjectPath &adapterPath)
+ bool BleRcuManagerImpl::setAdapterDiscoveryFilter()
+ {
+ 	// get and store the current discovery state
+-	m_discoverying = m_adapterProxy->discovering();
++	m_discovering = m_adapterProxy->discovering();
+ 
+ 	// check if the adapter is currently in discovery mode, stop it if so
+-	if (Q_UNLIKELY(m_discoverying)) {
++	if (Q_UNLIKELY(m_discovering)) {
+ 
+ 		QDBusPendingReply<> reply = m_adapterProxy->StopDiscovery();
+ 		reply.waitForFinished();
+@@ -794,7 +800,7 @@ bool BleRcuManagerImpl::setAdapterDiscoveryFilter()
+ /*!
+ 	\internal
+ 
+-	Called at astart-up to get the list of devices already available in the
++	Called at start-up to get the list of devices already available in the
+ 	bluez daemon.
+ 
+ 	For each device found we call addDevice().
+@@ -874,7 +880,7 @@ void BleRcuManagerImpl::onAdapterPowerChanged(bool powered)
+  */
+ bool BleRcuManagerImpl::isDiscovering() const
+ {
+-	return m_discoverying;
++	return m_discovering;
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -891,19 +897,28 @@ bool BleRcuManagerImpl::isDiscovering() const
+ 
+ 	\sa isDiscovering(), stopDiscovery(), discoveryChanged()
+  */
+-bool BleRcuManagerImpl::startDiscovery()
++bool BleRcuManagerImpl::startDiscovery(int pairingCode)
+ {
+-	if (Q_UNLIKELY(!m_stateMachine.inState(AdapterPoweredOnState)))
++	// on bluez we don't use the pairing code to filter the scan results, so
++	// ignore the value
++	Q_UNUSED(pairingCode);
++
++	if (Q_UNLIKELY(!m_stateMachine.inState(AdapterPoweredOnState))) {
++		qError("adapter not powered, can't start discovery");
+ 		return false;
++	}
+ 
+ 	// set the expected discovery state for the watchdog
+ 	m_discoveryRequested = StartDiscovery;
+ 
++	// if not discovery don't send a request
++	if (m_discovering)
++		return true;
++
+ 	// reset the discovery watchdog and increment the discovery pending count
+ 	m_discoveryRequests++;
+ 	m_discoveryWatchdog.start();
+ 
+-
+ 	// otherwise send the request to start discovery
+ 	QDBusPendingReply<> reply = m_adapterProxy->StartDiscovery();
+ 	QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(reply, this);
+@@ -972,6 +987,10 @@ bool BleRcuManagerImpl::stopDiscovery()
+ 	// set the expected discovery state for the watchdog
+ 	m_discoveryRequested = StopDiscovery;
+ 
++	// regardless of whether we think we are in the discovery mode or not
++	// send the request to stop, this is a workaround for a bluetoothd issue
++	// where it gets stuck in the 'starting' phase
++
+ 	// reset the discovery watchdog and increment the discovery pending count
+ 	m_discoveryRequests++;
+ 	m_discoveryWatchdog.start();
+@@ -1040,15 +1059,15 @@ void BleRcuManagerImpl::onDiscoveryWatchdog()
+ 
+ 	// check if the current discovery mode is in the correct state
+ 	const bool requestedMode = (m_discoveryRequested == StartDiscovery);
+-	if (m_discoverying != requestedMode) {
++	if (m_discovering != requestedMode) {
+ 
+ 		qError("detected discovery in the wrong state (expected:%s actual:%s)",
+ 		       (m_discoveryRequested == StartDiscovery) ? "on" : "off",
+-		       m_discoverying ? "on" : "off");
++		       m_discovering ? "on" : "off");
+ 
+ 		// in the wrong state so Start / Stop discovery
+ 		if (m_discoveryRequested == StartDiscovery)
+-			startDiscovery();
++			startDiscovery(-1);
+ 		else
+ 			stopDiscovery();
+ 	}
+@@ -1087,7 +1106,7 @@ bool BleRcuManagerImpl::enablePairable(int timeout)
+ 	qInfo("enabling pairable mode for %d seconds", timeout / 1000);
+ 
+ 	// TODO: should we switch to non-blocking propery write ?
+-	m_adapterProxy->setPairableTimeout(timeout / 1000);
++	m_adapterProxy->setPairableTimeout(static_cast<quint32>(timeout / 1000));
+ 	m_adapterProxy->setPairable(true);
+ 
+ 	return true;
+@@ -1109,17 +1128,17 @@ bool BleRcuManagerImpl::disablePairable()
+ 	if (Q_UNLIKELY(!m_stateMachine.inState(AdapterPoweredOnState)))
+ 		return false;
+ 
+-	qInfo("disabling pairable mode");
+-
+ 	// if any of our devices are in the pairing state then cancel it
+ 	QMap<BleAddress, QSharedPointer<BleRcuDevice>>::const_iterator it =
+-		m_devices.begin();
++			m_devices.begin();
+ 	for (; it != m_devices.end(); ++it) {
+ 		const QSharedPointer<BleRcuDevice> &device = it.value();
+ 		if (device->isPairing())
+ 			device->cancelPairing();
+ 	}
+ 
++	qInfo("disabling pairable mode");
++
+ 	// TODO: should we switch to non-blocking property write ?
+ 	m_adapterProxy->setPairable(false);
+ 
+@@ -1263,12 +1282,12 @@ void BleRcuManagerImpl::onAdapterDiscoveringChanged(bool discovering)
+ 	qInfo() << "adapter" << (discovering ? "started" : "stopped") << "discovering";
+ 
+ 	// skip out early if nothings actually changed
+-	if (Q_UNLIKELY(m_discoverying == discovering))
++	if (Q_UNLIKELY(m_discovering == discovering))
+ 		return;
+ 
+ 	// set the new state then emit a signal
+-	m_discoverying = discovering;
+-	emit discoveryChanged(m_discoverying);
++	m_discovering = discovering;
++	emit discoveryChanged(m_discovering, BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -1291,7 +1310,7 @@ void BleRcuManagerImpl::onAdapterPairableChanged(bool pairable)
+ 
+ 	// set the new state then emit a signal
+ 	m_pairable = pairable;
+-	emit pairableChanged(m_pairable);
++	emit pairableChanged(m_pairable, BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -1462,8 +1481,8 @@ void BleRcuManagerImpl::onDeviceAdded(const QDBusObjectPath &path,
+ 	                       << " paired: " << paired << ")";
+ 
+ 
+-	//
+-	emit deviceAdded(device->address(), device->name());
++	emit deviceFound(device->address(), device->name(),
++	                 BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -1529,13 +1548,20 @@ void BleRcuManagerImpl::onDeviceRemoved(const QDBusObjectPath &objectPath)
+ 	// get the BDADDR of the device we're removing
+ 	const BleAddress bdaddr = it.key();
+ 
++	// check if it was paired
++	const bool wasPaired = it.value()->isPaired();
++
+ 	qMilestone() << "removed device" << bdaddr;
+ 
+ 	// remove the device from the map and send a signal saying the device
+ 	// has disappeared
+ 	m_devices.erase(it);
+ 
+-	emit deviceRemoved(bdaddr);
++	// if was paired then we clearly no longer are so emit a signal
++	if (wasPaired)
++		emit devicePairingChanged(bdaddr, false, BleRcuManager::privateSignal());
++
++	emit deviceRemoved(bdaddr, BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -1553,7 +1579,7 @@ void BleRcuManagerImpl::onBluezInterfacesRemoved(const QDBusObjectPath &objectPa
+ {
+ 	qDebug() << "received interface(s) removed event";
+ 
+-	// check if it's the adpater that was removed (this should never really
++	// check if it's the adapter that was removed (this should never really
+ 	// happen) otherwise check if one of the interfaces being removed is
+ 	// 'org.bluez.Device1'
+ 	if (objectPath == m_adapterObjectPath)
+@@ -1580,7 +1606,8 @@ bool BleRcuManagerImpl::removeDevice(const BleAddress &address)
+ 	if (Q_UNLIKELY(!m_stateMachine.inState(AdapterAvailableSuperState)))
+ 		return false;
+ 
+-	// find the device with the address in our map
++	// find the device with the address in our map, this is so we can cancel
++	// pairing if currently in the pairing procedure
+ 	const QSharedPointer<BleRcuDevice> device = m_devices.value(address);
+ 	if (!device || !device->isValid()) {
+ 		qInfo() << "failed to find device with address" << address << "to remove";
+@@ -1589,6 +1616,11 @@ bool BleRcuManagerImpl::removeDevice(const BleAddress &address)
+ 
+ 	qInfo() << "requesting bluez remove" << device->address();
+ 
++	// if currently pairing then cancel it before removing the device
++	if (device->isPairing())
++		device->cancelPairing();
++
++
+ 	// ask the adapter to remove this device since if failed pairing,
+ 	// we add a listener on the result just so we can log any errors,
+ 	// there is no
+@@ -1621,7 +1653,7 @@ void BleRcuManagerImpl::onRemoveDeviceReply(QDBusPendingCallWatcher *call)
+ 
+ 	} else {
+ 
+-		qDebug("remove device request successiful");
++		qDebug("remove device request successful");
+ 
+ 	}
+ 
+@@ -1643,7 +1675,7 @@ void BleRcuManagerImpl::onDeviceNameChanged(const BleAddress &address,
+ {
+ 	qMilestone() << "renamed device" << address << "to" << name;
+ 
+-	emit deviceNameChanged(address, name);
++	emit deviceNameChanged(address, name, BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -1660,7 +1692,7 @@ void BleRcuManagerImpl::onDevicePairedChanged(const BleAddress &address,
+ {
+ 	// nb: already logged as milestone in BleRcuDeviceImpl, don't log again
+ 
+-	emit devicePairingChanged(address, paired);
++	emit devicePairingChanged(address, paired, BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -1685,7 +1717,7 @@ void BleRcuManagerImpl::onDeviceReadyChanged(const BleAddress &address,
+ 	qMilestone() << "device with address" << address << "is"
+ 	             << (ready ? "" : "not") << "ready";
+ 
+-	emit deviceReadyChanged(address, ready);
++	emit deviceReadyChanged(address, ready, BleRcuManager::privateSignal());
+ }
+ 
+ // -----------------------------------------------------------------------------
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.h b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.h
+index 7e722827d..a8b370875 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager.h
+@@ -2,7 +2,7 @@
+ //  blercumanager.h
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #ifndef BLERCUMANAGER_H
+@@ -38,7 +38,7 @@ public:
+ 	virtual bool isPowered() const = 0;
+ 
+ 	virtual bool isDiscovering() const = 0;
+-	virtual bool startDiscovery() = 0;
++	virtual bool startDiscovery(int pairingCode) = 0;
+ 	virtual bool stopDiscovery() = 0;
+ 
+ 	virtual bool isPairable() const = 0;
+@@ -55,19 +55,23 @@ public:
+ 	virtual bool pairDevice(const BleAddress &address) = 0;
+ 	virtual bool removeDevice(const BleAddress &address) = 0;
+ 
+-	
+ signals:
+-	void poweredChanged(bool powered);
++	void poweredChanged(bool powered, QPrivateSignal);
++	void poweredInitialised(QPrivateSignal);
+ 
+-	void discoveryChanged(bool discovering);
+-	void pairableChanged(bool pairable);
++	void discoveryChanged(bool discovering, QPrivateSignal);
++	void pairableChanged(bool pairable, QPrivateSignal);
+ 
+-	void deviceAdded(const BleAddress &address, const QString &name);
+-	void deviceNameChanged(const BleAddress &address, const QString &name);
+-	void devicePairingChanged(const BleAddress &address, bool paired);
+-	void deviceReadyChanged(const BleAddress &address, bool ready);
+-	void deviceRemoved(const BleAddress &address);
++	void deviceFound(const BleAddress &address, const QString &name, QPrivateSignal);
++	void deviceRemoved(const BleAddress &address, QPrivateSignal);
+ 
++	void deviceNameChanged(const BleAddress &address, const QString &name, QPrivateSignal);
++	void devicePairingChanged(const BleAddress &address, bool paired, QPrivateSignal);
++	void deviceReadyChanged(const BleAddress &address, bool ready, QPrivateSignal);
++
++
++protected:
++	inline struct QPrivateSignal privateSignal() { return QPrivateSignal(); }
+ 
+ };
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager_p.h b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager_p.h
+index e5f273d3b..3981e006d 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager_p.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercumanager_p.h
+@@ -2,7 +2,7 @@
+ //  blercumanager_p.h
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #ifndef BLERCUMANAGER_P_H
+@@ -26,7 +26,6 @@ class IBleRcuDeviceFactory;
+ class BluezAdapterInterface;
+ 
+ 
+-
+ class BleRcuManagerImpl : public BleRcuManager
+ {
+ 	Q_OBJECT
+@@ -47,14 +46,13 @@ private:
+ 
+ 	void getRegisteredDevices();
+ 
+-
+ public:
+ 	bool isValid() const override;
+ 	bool isAvailable() const override;
+ 	bool isPowered() const override;
+ 
+ 	bool isDiscovering() const override;
+-	bool startDiscovery() override;
++	bool startDiscovery(int pairingCode) override;
+ 	bool stopDiscovery() override;
+ 
+ 	bool isPairable() const override;
+@@ -100,7 +98,6 @@ private slots:
+ 	void onStateEntry(int state);
+ 	void onStateExit(int state);
+ 
+-
+ private:
+ 	void onDeviceAdded(const QDBusObjectPath &objectPath,
+ 	                   const QVariantMap &properties);
+@@ -119,14 +116,14 @@ private:
+ 	QSharedPointer<QDBusServiceWatcher> m_bluezServiceWatcher;
+ 	QSharedPointer<DBusObjectManagerInterface> m_bluezObjectMgr;
+ 
++	BleAddress m_address;
+ 	QDBusObjectPath m_adapterObjectPath;
+ 	QSharedPointer<BluezAdapterInterface> m_adapterProxy;
+ 
+ 	QMap<BleAddress, QSharedPointer<BleRcuDevice>> m_devices;
+ 
+ private:
+-
+-	bool m_discoverying;
++	bool m_discovering;
+ 	bool m_pairable;
+ 
+ 	int m_discoveryRequests;
+@@ -141,10 +138,10 @@ private:
+ 	enum State {
+ 		ServiceUnavailableState,
+ 		ServiceAvailableSuperState,
+-			AdapterUnavailableState,
+-			AdapterAvailableSuperState,
+-				AdapterPoweredOffState,
+-				AdapterPoweredOnState,
++		AdapterUnavailableState,
++		AdapterAvailableSuperState,
++		AdapterPoweredOffState,
++		AdapterPoweredOnState,
+ 		ShutdownState
+ 	};
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.cpp b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.cpp
+index b1b5b945b..8b522fdbb 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.cpp
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.cpp
+@@ -2,7 +2,7 @@
+ //  blercupairingstatemachine.cpp
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #include "blercupairingstatemachine.h"
+@@ -20,14 +20,18 @@ BleRcuPairingStateMachine::BleRcuPairingStateMachine(const QSharedPointer<const
+                                                      QObject *parent)
+ 	: QObject(parent)
+ 	, m_manager(manager)
+-	, m_pairingCode(0)
++	, m_pairingCode(-1)
++	, m_pairingAttempts(0)
++	, m_pairingSuccesses(0)
++	, m_pairingSucceeded(false)
+ {
+ 
+ 	// constructs a map of name printf style formats for searching for device
+ 	// names that match
+ 	const QList<ConfigModelSettings> models = config->modelSettings();
+ 	for (const ConfigModelSettings &model : models) {
+-		m_pairingPrefixFormats[model.oui()] = model.pairingNameFormat();
++		if (!model.disabled())
++			m_pairingPrefixFormats[model.oui()] = model.pairingNameFormat();
+ 	}
+ 
+ 
+@@ -40,16 +44,16 @@ BleRcuPairingStateMachine::BleRcuPairingStateMachine(const QSharedPointer<const
+ 	QObject::connect(m_manager.data(), &BleRcuManager::pairableChanged,
+ 	                 this, &BleRcuPairingStateMachine::onPairableChanged);
+ 
+-	QObject::connect(m_manager.data(), &BleRcuManager::deviceAdded,
+-	                 this, &BleRcuPairingStateMachine::onDeviceAdded);
++	QObject::connect(m_manager.data(), &BleRcuManager::deviceFound,
++	                 this, &BleRcuPairingStateMachine::onDeviceFound);
++	QObject::connect(m_manager.data(), &BleRcuManager::deviceRemoved,
++	                 this, &BleRcuPairingStateMachine::onDeviceRemoved);
+ 	QObject::connect(m_manager.data(), &BleRcuManager::deviceNameChanged,
+ 	                 this, &BleRcuPairingStateMachine::onDeviceNameChanged);
+ 	QObject::connect(m_manager.data(), &BleRcuManager::deviceReadyChanged,
+ 	                 this, &BleRcuPairingStateMachine::onDeviceReadyChanged);
+ 	QObject::connect(m_manager.data(), &BleRcuManager::devicePairingChanged,
+ 	                 this, &BleRcuPairingStateMachine::onDevicePairingChanged);
+-	QObject::connect(m_manager.data(), &BleRcuManager::deviceRemoved,
+-	                 this, &BleRcuPairingStateMachine::onDeviceRemoved);
+ 
+ 	QObject::connect(m_manager.data(), &BleRcuManager::poweredChanged,
+ 	                 this, &BleRcuPairingStateMachine::onAdapterPoweredChanged);
+@@ -119,7 +123,7 @@ void BleRcuPairingStateMachine::setupStateMachine()
+ 	m_stateMachine.addTransition(RunningSuperState,         AdapterPoweredOffEvent,     FinishedState);
+ 
+ 	m_stateMachine.addTransition(StartingDiscoveryState,    DiscoveryStartedEvent,      DiscoveringState);
+-	m_stateMachine.addTransition(DiscoveringState,          DeviceAddedEvent,           StoppingDiscoveryState);
++	m_stateMachine.addTransition(DiscoverySuperState,       DeviceFoundEvent,           StoppingDiscoveryState);
+ 	m_stateMachine.addTransition(DiscoverySuperState,       DiscoveryTimeoutEvent,      FinishedState);
+ 	m_stateMachine.addTransition(DiscoverySuperState,       DiscoveryStoppedEvent,      FinishedState);
+ 
+@@ -128,10 +132,12 @@ void BleRcuPairingStateMachine::setupStateMachine()
+ 	m_stateMachine.addTransition(PairingState,              PairableDisabledEvent,      UnpairingState);
+ 	m_stateMachine.addTransition(PairingState,              DevicePairedEvent,          SetupState);
+ 	m_stateMachine.addTransition(PairingSuperState,         DeviceReadyEvent,           FinishedState);
++	m_stateMachine.addTransition(PairingSuperState,         DeviceUnpairedEvent,        FinishedState);
+ 	m_stateMachine.addTransition(PairingSuperState,         DeviceRemovedEvent,         FinishedState);
+ 	m_stateMachine.addTransition(PairingSuperState,         PairingTimeoutEvent,        UnpairingState);
+ 	m_stateMachine.addTransition(PairingSuperState,         SetupTimeoutEvent,          UnpairingState);
+ 
++	m_stateMachine.addTransition(UnpairingState,            DeviceUnpairedEvent,        FinishedState);
+ 	m_stateMachine.addTransition(UnpairingState,            DeviceRemovedEvent,         FinishedState);
+ 	m_stateMachine.addTransition(UnpairingState,            UnpairingTimeoutEvent,      FinishedState);
+ 
+@@ -155,7 +161,7 @@ void BleRcuPairingStateMachine::setupStateMachine()
+ 	If the state machine hasn't been run 0 is returned.
+ 
+  */
+-quint8 BleRcuPairingStateMachine::pairingCode() const
++int BleRcuPairingStateMachine::pairingCode() const
+ {
+ 	return m_pairingCode;
+ }
+@@ -211,14 +217,49 @@ void BleRcuPairingStateMachine::start(quint8 pairingCode)
+ 	// start the state machine
+ 	m_stateMachine.start();
+ 
+-	qMilestone("started pairing using code %03u", m_pairingCode);
++	m_pairingAttempts++;
++	m_pairingSucceeded = false;
++	qMilestone("started pairing using code %03d", m_pairingCode);
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	Starts the pairing state machine, but skips the discovery phase as we
++	already have a \a target device.
++
++ */
++void BleRcuPairingStateMachine::start(const BleAddress &target, const QString &name)
++{
++	// sanity check the state machine is not already running
++	if (Q_UNLIKELY(m_stateMachine.isRunning())) {
++		qWarning("state machine already running");
++		return;
++	}
++
++	// set the target device
++	m_targetAddress = target;
++
++	// clear the pairing code
++	m_pairingCode = -1;
++
++	// set the pairing prefix map to contain just the one name match
++	m_pairingPrefixes.clear();
++	m_pairingPrefixes.insert(target.oui(),
++	                         QRegExp(name, Qt::CaseInsensitive, QRegExp::FixedString));
++
++	// start the state machine
++	m_stateMachine.start();
++
++	m_pairingAttempts++;
++	m_pairingSucceeded = false;
++	qMilestone("started pairing targeting %s", qPrintable(target.toString()));
+ }
+ 
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Stops the state machine by posting a cancel message to it.
+ 
+-	The stop may be asynchronis, you can either poll on the isRunning() call or
++	The stop may be asynchronous, you can either poll on the isRunning() call or
+ 	wait for either the failed() or succeeded() signals.
+ 
+  */
+@@ -286,6 +327,9 @@ void BleRcuPairingStateMachine::onStateExit(int state)
+ 		case UnpairingState:
+ 			onExitedUnpairingState();
+ 			break;
++
++		default:
++			break;
+ 	}
+ }
+ 
+@@ -311,20 +355,20 @@ void BleRcuPairingStateMachine::onEnteredStartDiscoveryState()
+ 	// check if we're already in discovery mode (we shouldn't be) and if so then
+ 	// post a message to move off the initial state
+ 	if (m_manager->isDiscovering()) {
+-		qWarning("bluez was already in discovery mode, this is unusual but "
++		qWarning("adapter was already in discovery mode, this is unusual but "
+ 		         "shouldn't be a problem");
+ 
+-		// even though bluez is telling us we're in discovery mode, sometimes
++		// even though the adapter is telling us we're in discovery mode, sometimes
+ 		// it lies, so issue another start request anyway, it doesn't hurt
+ 		// if it arrives twice
+-		m_manager->startDiscovery();
++		m_manager->startDiscovery(m_pairingCode);
+ 
+ 		// trigger a move to the discovering state
+ 		m_stateMachine.postEvent(DiscoveryStartedEvent);
+ 
+ 	} else {
+ 		// otherwise ask the manager (to ask bluez) to start the scan
+-		m_manager->startDiscovery();
++		m_manager->startDiscovery(m_pairingCode);
+ 	}
+ }
+ 
+@@ -332,7 +376,7 @@ void BleRcuPairingStateMachine::onEnteredStartDiscoveryState()
+ /*!
+ 	\internal
+ 
+-	Slot called when the discovery status of the bluez adaptor changes.
++	Slot called when the discovery status of the bluetooth adapter changes.
+ 
+  */
+ void BleRcuPairingStateMachine::onDiscoveryChanged(bool discovering)
+@@ -361,7 +405,7 @@ void BleRcuPairingStateMachine::onDiscoveryTimeout()
+ 	if (m_stateMachine.inState(DiscoverySuperState)) {
+ 
+ 		if (m_stateMachine.inState(StartingDiscoveryState))
+-			qWarning("timed-out waiting for bluez to signal discovery had started");
++			qError("timed-out waiting for discovery started signal");
+ 		else
+ 			qWarning("timed-out in discovery phase (didn't find target rcu"
+ 			         " device to pair to)");
+@@ -374,7 +418,7 @@ void BleRcuPairingStateMachine::onDiscoveryTimeout()
+ /*!
+ 	\internal
+ 
+-	Called when entering the 'discoverying' state.  At this point we query the
++	Called when entering the 'discovering' state.  At this point we query the
+ 	manager for the current list of devices and their names.  We use this to
+ 	determine if any existing devices match the pairing prefix.
+ 
+@@ -384,7 +428,7 @@ void BleRcuPairingStateMachine::onEnteredDiscoveringState()
+ 	// get the current list of devices
+ 	const QMap<BleAddress, QString> deviceNames = m_manager->deviceNames();
+ 
+-	// process each existing evice
++	// process each existing device
+ 	QMap<BleAddress, QString>::const_iterator it = deviceNames.begin();
+ 	for (; it != deviceNames.end(); ++it)
+ 		processDevice(it.key(), it.value());
+@@ -395,9 +439,7 @@ void BleRcuPairingStateMachine::onExitedDiscoverySuperState()
+ 	// stop the discovery timeout timer
+ 	m_discoveryTimer.stop();
+ 
+-	// and stop the actually discovery (always send this even if we never got
+-	// the signal telling us discovery is started, because sometimes bluez
+-	// gets stuck and we to force it to stop)
++	// and stop the actually discovery
+ 	m_manager->stopDiscovery();
+ }
+ 
+@@ -406,7 +448,7 @@ void BleRcuPairingStateMachine::onExitedDiscoverySuperState()
+ 	\internal
+ 
+ 	Called upon entry to the 'Stopping Discovery' state, the request to stop has
+-	already been sent (on the exit of the 'Discoverying' super state), so we
++	already been sent (on the exit of the 'Discovering' super state), so we
+ 	just need to check that discovery is not already stopped.
+ 
+  */
+@@ -417,7 +459,7 @@ void BleRcuPairingStateMachine::onEnteredStopDiscoveryState()
+ 
+ 	// if we've got to this state it means we have a target device
+ 	Q_ASSERT(!m_targetAddress.isNull());
+-	
++
+ 	// if entered this state and discovery is not running then post a discovery
+ 	// stopped to get out of this event
+ 	if (Q_UNLIKELY(!m_manager->isDiscovering()))
+@@ -433,6 +475,9 @@ void BleRcuPairingStateMachine::onEnteredStopDiscoveryState()
+ 	pairable state then the RCU won't communicate over bluetooth correctly ...
+ 	for some reason.
+ 
++	\note Pairability only applies to the bluez backend, on android the system is
++	always pairable when the bonding request is sent.
++
+  */
+ void BleRcuPairingStateMachine::onPairableChanged(bool pairable)
+ {
+@@ -443,7 +488,7 @@ void BleRcuPairingStateMachine::onPairableChanged(bool pairable)
+ 	// machine to (correctly) abort the process, however the following is
+ 	// here to log it for debugging
+ 	//
+-	// this is caused by NGDEV-83943, fusion is medling where it shouldn't
++	// this is caused by NGDEV-83943, fusion is meddling where it shouldn't
+ 	if (m_stateMachine.inState(PairingSuperState) && (pairable == false))
+ 		qWarning("adaptor 'pairable' disabled before target device became ready");
+ 
+@@ -466,7 +511,7 @@ void BleRcuPairingStateMachine::onEnteredEnablePairableState()
+ 	// if we've got to this state it means we have a target device
+ 	Q_ASSERT(!m_targetAddress.isNull());
+ 
+-	// check if the adpator is pairable
++	// check if the adapter is pairable
+ 	if (m_manager->isPairable()) {
+ 
+ 		// is already pairable so just post the 'enabled' event
+@@ -488,7 +533,7 @@ void BleRcuPairingStateMachine::onEnteredEnablePairableState()
+ 	\internal
+ 
+ 	Called when entering the 'pairing' state.  We hook this point to request
+-	the manager to pair the target device.
++	the adapter to add (pair/bond to) the target device.
+ 
+  */
+ void BleRcuPairingStateMachine::onEnteredPairingState()
+@@ -529,6 +574,7 @@ void BleRcuPairingStateMachine::onEnteredSetupState()
+ {
+ 	// start the setup timeout timer
+ 	m_setupTimer.start();
++	qDebug("starting setup timeout timer for %dms", m_setupTimer.interval());
+ 
+ 	// nothing else needed to do
+ }
+@@ -587,7 +633,8 @@ void BleRcuPairingStateMachine::onEnteredUnpairingState()
+ 	Q_ASSERT(!m_targetAddress.isNull());
+ 
+ 	// remove (unpair) the target device because we've failed :-(
+-	m_manager->removeDevice(m_targetAddress);
++	if (m_manager->removeDevice(m_targetAddress) == false)
++		m_stateMachine.postEvent(DeviceUnpairedEvent);
+ }
+ 
+ void BleRcuPairingStateMachine::onUnpairingTimeout()
+@@ -622,9 +669,8 @@ void BleRcuPairingStateMachine::onEnteredFinishedState()
+ 	Q_ASSERT(!m_setupTimer.isActive());
+ 	Q_ASSERT(!m_unpairingTimer.isActive());
+ 
+-
+ 	// finally just emit a finished signal to the BleRcuManagerImpl object
+-	emit finished();
++	(m_pairingSucceeded ? emit finished() : emit failed());
+ }
+ 
+ // -----------------------------------------------------------------------------
+@@ -644,7 +690,12 @@ void BleRcuPairingStateMachine::processDevice(const BleAddress &address,
+ 	// OUI of the device's MAC address)
+ 	QMap<quint32, QRegExp>::const_iterator it = m_pairingPrefixes.find(address.oui());
+ 	if (it == m_pairingPrefixes.end()) {
+-		qWarning() << "odd, don't have a name prefix for device" << address;
++
++		// log an error if we don't already have a target device (and
++		// therefore have a restricted m_pairingPrefixes set)
++		if (m_targetAddress.isNull())
++			qWarning() << "odd, don't have a name prefix for device" << address;
++
+ 		return;
+ 	}
+ 
+@@ -659,14 +710,16 @@ void BleRcuPairingStateMachine::processDevice(const BleAddress &address,
+ 			// it and then remain in the current state
+ 			if (m_manager->isDevicePaired(address)) {
+ 
+-				qMilestone() << "found target device" << address
+-				             << "but it's currently paired, will unpair and "
+-				                "wait till it shows up in a scan again";
++				qInfo() << "found target device" << address
++				        << "but it's currently paired, will unpair and "
++				           "wait till it shows up in a scan again";
+ 
+ 				m_manager->removeDevice(address);
+ 				return;
+ 			}
+ 
++			qInfo() << "found target device" << address;
++
+ 			// store the target address
+ 			m_targetAddress = address;
+ 
+@@ -675,28 +728,30 @@ void BleRcuPairingStateMachine::processDevice(const BleAddress &address,
+ 			// this may happen if two remotes have the same pairing prefix,
+ 			// in such situations we stick with the first one we found, there
+ 			// is no way to know which is the correct device to pair to
+-			qError().nospace() << "device added with correct pairing prefix, "
+-			                   << "however it's address doesn't match previous "
+-			                   << "found device (prev:" << m_targetAddress
+-			                   << " new:" << address << name << ")";
++			qWarning().nospace() << "device added with correct pairing prefix, "
++			                     << "however it's address doesn't match previous "
++			                     << "found device (prev:" << m_targetAddress
++			                     << " new:" << address << name << ")";
+ 			return;
+ 		}
+ 
+ 		// post the event to move the state machine
+-		m_stateMachine.postEvent(DeviceAddedEvent);
++		m_stateMachine.postEvent(DeviceFoundEvent);
+ 	}
+ }
+ 
+ // -----------------------------------------------------------------------------
+ /*!
++	\internal
++
+ 	Slot expected to be called from outside this object to indicate that
+-	a new device has been detected by bluez.
++	a new device has been detected by the bluetooth adapter.
+ 
+ 	The \a address and \a name of the added device should be supplied, these
+ 	are checked to see if they match the pairing target.
+ 
+  */
+-void BleRcuPairingStateMachine::onDeviceAdded(const BleAddress &address,
++void BleRcuPairingStateMachine::onDeviceFound(const BleAddress &address,
+                                               const QString &name)
+ {
+ 	if (Q_UNLIKELY(!m_stateMachine.isRunning()))
+@@ -708,6 +763,28 @@ void BleRcuPairingStateMachine::onDeviceAdded(const BleAddress &address,
+ 	processDevice(address, name);
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	\internal
++
++	Called by the bluez code when a remote device has been removed.  This means
++	the device has been unpaired and has disconnected.
++
++ */
++void BleRcuPairingStateMachine::onDeviceRemoved(const BleAddress &address)
++{
++	if (Q_UNLIKELY(!m_stateMachine.isRunning()))
++		return;
++
++	qDebug() << "device removed" << address
++	         << "(target" << m_targetAddress << ")";
++
++	// check if the device removed is the one we're targeting
++	if (!m_targetAddress.isNull() && (m_targetAddress == address)) {
++		m_stateMachine.postEvent(DeviceRemovedEvent);
++	}
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Slot expected to be called from outside this object to indicate that
+@@ -739,8 +816,8 @@ void BleRcuPairingStateMachine::onDeviceNameChanged(const BleAddress &address,
+ 	and if it is now paired then we send a \l{DevicePairedEvent} event to the
+ 	state machine.
+ 
+-	\note The is delibratly no event emitted for an unpaired event, we leave it
+-	to the timeouts to handle that case.
++	\note There is deliberately no event emitted for an unpaired event, we leave
++	it to the timeouts to handle that case.
+  */
+ void BleRcuPairingStateMachine::onDevicePairingChanged(const BleAddress &address,
+                                                        bool paired)
+@@ -753,6 +830,8 @@ void BleRcuPairingStateMachine::onDevicePairingChanged(const BleAddress &address
+ 	if (!m_targetAddress.isNull() && (m_targetAddress == address)) {
+ 		if (paired)
+ 			m_stateMachine.postEvent(DevicePairedEvent);
++		else
++			m_stateMachine.postEvent(DeviceUnpairedEvent);
+ 	}
+ }
+ 
+@@ -760,6 +839,10 @@ void BleRcuPairingStateMachine::onDevicePairingChanged(const BleAddress &address
+ /*!
+ 	\internal
+ 
++	Slot called when the given device has become 'ready'.  Ready is the state
++	where the device is bonded and connected and all the GATT services have been
++	resolved and lastly our GATT service objects have run through their
++	initialisation code (successfully).
+ 
+  */
+ void BleRcuPairingStateMachine::onDeviceReadyChanged(const BleAddress &address,
+@@ -768,29 +851,16 @@ void BleRcuPairingStateMachine::onDeviceReadyChanged(const BleAddress &address,
+ 	if (Q_UNLIKELY(!m_stateMachine.isRunning()))
+ 		return;
+ 
+-	// check if the device removed is the one we're trying to pair to
++	// check if the device now ready is the one we're trying to pair to
+ 	if (!m_targetAddress.isNull() && (m_targetAddress == address)) {
+-		if (ready)
++		if (ready) {
++			m_pairingSuccesses++;
++			m_pairingSucceeded = true;
+ 			m_stateMachine.postEvent(DeviceReadyEvent);
++		}
+ 	}
+ }
+ 
+-// -----------------------------------------------------------------------------
+-/*!
+-	\internal
+-
+-
+- */
+-void BleRcuPairingStateMachine::onDeviceRemoved(const BleAddress &address)
+-{
+-	if (Q_UNLIKELY(!m_stateMachine.isRunning()))
+-		return;
+-
+-	// check if the device removed is the one we're trying to pair to
+-	if (!m_targetAddress.isNull() && (m_targetAddress == address))
+-		m_stateMachine.postEvent(DeviceRemovedEvent);
+-}
+-
+ // -----------------------------------------------------------------------------
+ /*!
+ 	\internal
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.h b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.h
+index acdbe4161..03bfdcd32 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.h
+@@ -2,7 +2,7 @@
+ //  blercucpairingstatemachine.h
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #ifndef BLERCUPAIRINGSTATEMACHINE_H
+@@ -40,7 +40,7 @@ public:
+ 			UnpairingState,
+ 		FinishedState
+ 	};
+-	Q_ENUM(State);
++	Q_ENUM(State)
+ 
+ public:
+ 	BleRcuPairingStateMachine(const QSharedPointer<const ConfigSettings> &config,
+@@ -50,25 +50,28 @@ public:
+ 
+ public:
+ 	bool isRunning() const;
+-	quint8 pairingCode() const;
++	int pairingCode() const;
+ 
+ public slots:
+ 	void start(quint8 pairingCode);
++	void start(const BleAddress &target, const QString &name);
+ 	void stop();
+ 
++
+ signals:
+ 	void started();
+ 	void finished();
++	void failed();
+ 
+ private slots:
+ 	void onDiscoveryChanged(bool discovering);
+ 	void onPairableChanged(bool pairable);
+ 
+-	void onDeviceAdded(const BleAddress &address, const QString &name);
++	void onDeviceFound(const BleAddress &address, const QString &name);
++	void onDeviceRemoved(const BleAddress &address);
+ 	void onDeviceNameChanged(const BleAddress &address, const QString &name);
+ 	void onDevicePairingChanged(const BleAddress &address, bool paired);
+ 	void onDeviceReadyChanged(const BleAddress &address, bool ready);
+-	void onDeviceRemoved(const BleAddress &address);
+ 
+ 	void onAdapterPoweredChanged(bool powered);
+ 
+@@ -106,7 +109,7 @@ private:
+ 
+ 	QMap<quint32, QByteArray> m_pairingPrefixFormats;
+ 
+-	quint8 m_pairingCode;
++	int m_pairingCode;
+ 	QMap<quint32, QRegExp> m_pairingPrefixes;
+ 
+ 	BleAddress m_targetAddress;
+@@ -118,24 +121,29 @@ private:
+ 	QTimer m_setupTimer;
+ 	QTimer m_unpairingTimer;
+ 
++	int m_pairingAttempts;
++	int m_pairingSuccesses;
++	bool m_pairingSucceeded;
++
+ private:
+-	static const QEvent::Type DiscoveryStartedEvent    = QEvent::Type(QEvent::User + 1);
+-	static const QEvent::Type DiscoveryStoppedEvent    = QEvent::Type(QEvent::User + 2);
+-	static const QEvent::Type DiscoveryTimeoutEvent    = QEvent::Type(QEvent::User + 3);
++	static const QEvent::Type DiscoveryStartedEvent  = QEvent::Type(QEvent::User + 1);
++	static const QEvent::Type DiscoveryStoppedEvent  = QEvent::Type(QEvent::User + 2);
++	static const QEvent::Type DiscoveryTimeoutEvent  = QEvent::Type(QEvent::User + 3);
+ 
+-	static const QEvent::Type PairableEnabledEvent     = QEvent::Type(QEvent::User + 4);
+-	static const QEvent::Type PairableDisabledEvent    = QEvent::Type(QEvent::User + 5);
++	static const QEvent::Type PairableEnabledEvent   = QEvent::Type(QEvent::User + 4);
++	static const QEvent::Type PairableDisabledEvent  = QEvent::Type(QEvent::User + 5);
+ 
+-	static const QEvent::Type PairingTimeoutEvent      = QEvent::Type(QEvent::User + 6);
+-	static const QEvent::Type SetupTimeoutEvent        = QEvent::Type(QEvent::User + 7);
+-	static const QEvent::Type UnpairingTimeoutEvent    = QEvent::Type(QEvent::User + 8);
++	static const QEvent::Type PairingTimeoutEvent    = QEvent::Type(QEvent::User + 6);
++	static const QEvent::Type SetupTimeoutEvent      = QEvent::Type(QEvent::User + 7);
++	static const QEvent::Type UnpairingTimeoutEvent  = QEvent::Type(QEvent::User + 8);
+ 
+-	static const QEvent::Type DeviceAddedEvent         = QEvent::Type(QEvent::User + 9);
+-	static const QEvent::Type DeviceRemovedEvent       = QEvent::Type(QEvent::User + 10);
+-	static const QEvent::Type DevicePairedEvent        = QEvent::Type(QEvent::User + 11);
+-	static const QEvent::Type DeviceReadyEvent         = QEvent::Type(QEvent::User + 12);
++	static const QEvent::Type DeviceFoundEvent       = QEvent::Type(QEvent::User + 9);
++	static const QEvent::Type DeviceUnpairedEvent    = QEvent::Type(QEvent::User + 10);
++	static const QEvent::Type DeviceRemovedEvent     = QEvent::Type(QEvent::User + 11);
++	static const QEvent::Type DevicePairedEvent      = QEvent::Type(QEvent::User + 12);
++	static const QEvent::Type DeviceReadyEvent       = QEvent::Type(QEvent::User + 13);
+ 
+-	static const QEvent::Type AdapterPoweredOffEvent   = QEvent::Type(QEvent::User + 13);
++	static const QEvent::Type AdapterPoweredOffEvent = QEvent::Type(QEvent::User + 14);
+ };
+ 
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.cpp b/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.cpp
+index c9b54d76e..4c3edac23 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.cpp
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.cpp
+@@ -2,21 +2,25 @@
+ //  configmodelsettings.cpp
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #include "configmodelsettings.h"
+ #include "configmodelsettings_p.h"
+ 
+-#include <QDBusObjectPath>
+ #include <QJsonArray>
+ 
++#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
++#include <QDBusObjectPath>
++#endif // !defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
++
+ 
+ 
+ 
+ ConfigModelSettingsData::ConfigModelSettingsData()
+ 	: m_valid(false)
+ 	, m_disabled(false)
++	, m_filterByte(0xff)
+ 	, m_servicesType(ConfigModelSettings::DBusServiceType)
+ 	, m_servicesSupported(0)
+ {
+@@ -29,6 +33,7 @@ ConfigModelSettingsData::ConfigModelSettingsData(const ConfigModelSettingsData &
+ 	, m_manufacturer(other.m_manufacturer)
+ 	, m_disabled(other.m_disabled)
+ 	, m_pairingNameFormat(other.m_pairingNameFormat)
++	, m_filterByte(other.m_filterByte)
+ 	, m_hasConnParams(other.m_hasConnParams)
+ 	, m_connParams(other.m_connParams)
+ 	, m_servicesType(other.m_servicesType)
+@@ -61,6 +66,8 @@ bool ConfigModelSettingsData::stringToServiceFlag(const QString &name,
+ 		*service = ConfigModelSettings::InfraredService;
+ 	else if (name.compare("touch", Qt::CaseInsensitive) == 0)
+ 		*service = ConfigModelSettings::TouchService;
++	else if (name.compare("upgrade", Qt::CaseInsensitive) == 0)
++		*service = ConfigModelSettings::UpgradeService;
+ 	else
+ 		return false;
+ 
+@@ -76,7 +83,7 @@ bool ConfigModelSettingsData::stringToServiceFlag(const QString &name,
+ 
+ 	The object should be formatted like the following:
+ 
+-	\begincode
++	\code
+ 		[
+ 			{
+ 				"name": "EC05x",
+@@ -175,6 +182,28 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObject &json)
+ 		m_pairingNameFormat = pairingFormat.toString().toLatin1();
+ 	}
+ 
++	// scanNameFormat field
++	{
++		const QJsonValue scanNameFormat = json["scanNameFormat"];
++		if (!scanNameFormat.isString()) {
++			qWarning("invalid 'scanNameFormat' field");
++			return;
++		}
++		m_scanNameMatcher = QRegExp(scanNameFormat.toString(),
++		                            Qt::CaseInsensitive,
++		                            QRegExp::Wildcard);
++	}
++
++	// filterByte field
++	{
++		const QJsonValue filterByte = json["filterByte"];
++		if (!filterByte.isDouble()) {
++			qWarning("invalid 'filterByte' field");
++			return;
++		}
++		m_filterByte = static_cast<quint8>(filterByte.toInt(0xff));
++	}
++
+ 	// services field
+ 	{
+ 		const QJsonValue services = json["services"];
+@@ -198,12 +227,15 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObject &json)
+ 				m_servicesType = ConfigModelSettings::DBusServiceType;
+ 			else if (typeStr.compare("gatt", Qt::CaseInsensitive) == 0)
+ 				m_servicesType = ConfigModelSettings::GattServiceType;
++			else if (typeStr.compare("rci", Qt::CaseInsensitive) == 0)
++				m_servicesType = ConfigModelSettings::RciServiceType;
+ 			else {
+ 				qWarning("invalid 'service.type' field value");
+ 				return;
+ 			}
+ 		}
+ 
++#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+ 		// services.dbus fields
+ 		if (m_servicesType == ConfigModelSettings::DBusServiceType) {
+ 
+@@ -223,6 +255,7 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObject &json)
+ 			m_dbusObjectPath = objectPathCheck.path();
+ 			m_dbusServiceName = serviceName.toString();
+ 		}
++#endif // defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+ 
+ 		// services.supported array
+ 		{
+@@ -388,6 +421,32 @@ QByteArray ConfigModelSettings::pairingNameFormat() const
+ 	return d->m_pairingNameFormat;
+ }
+ 
++// -----------------------------------------------------------------------------
++/*!
++	Returns a regex that can be used to match a SkyQ RCU device in pairing
++	mode during a scan.
++
++	This is different from the \a pairingNameFormat() in that is a printf
++	style format that expects a pairing byte value to be applied to it to create
++	matcher for a single device.  This is a matcher for any device in pairing
++	mode.
++
++ */
++QRegExp ConfigModelSettings::scanNameMatcher() const
++{
++	return d->m_scanNameMatcher;
++}
++
++// -----------------------------------------------------------------------------
++/*!
++	Returns the IR filter byte value that the RCU model will send when pairing.
++
++ */
++quint8 ConfigModelSettings::irFilterByte() const
++{
++	return d->m_filterByte;
++}
++
+ // -----------------------------------------------------------------------------
+ /*!
+ 	Returns \c true if the special connection parameters should be set for
+@@ -470,12 +529,20 @@ QDebug operator<<(QDebug dbg, const ConfigModelSettings &settings)
+ 	              << "oui=" << settings.oui() << ", "
+ 	              << "pairingFmt=" << settings.pairingNameFormat() << ", ";
+ 
+-	if (settings.servicesType() == ConfigModelSettings::GattServiceType) {
+-		dbg.nospace() << "type=gatt, ";
+-	} else {
+-		ConfigModelSettings::DBusServiceDetails details = settings.dbusServiceDetails();
+-		dbg.nospace() << "type=dbus{path:" << details.objectPath << ","
+-		              << "service:" << details.serviceName << "}";
++	switch (settings.servicesType()) {
++		case ConfigModelSettings::GattServiceType:
++			dbg.nospace() << "type=gatt, ";
++			break;
++		case ConfigModelSettings::RciServiceType:
++			dbg.nospace() << "type=rci, ";
++			break;
++		case ConfigModelSettings::DBusServiceType:
++			{
++				ConfigModelSettings::DBusServiceDetails details = settings.dbusServiceDetails();
++				dbg.nospace() << "type=dbus{path:" << details.objectPath << ","
++				              << "service:" << details.serviceName << "}";
++			}
++			break;
+ 	}
+ 
+ 	if (settings.hasBleConnParams())
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.h b/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.h
+index 521dacb84..957fc7d76 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings.h
+@@ -2,7 +2,7 @@
+ //  configmodelsettings.h
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #ifndef CONFIGMODELSETTINGS_H
+@@ -14,6 +14,7 @@
+ #include <QString>
+ #include <QSharedPointer>
+ #include <QJsonObject>
++#include <QRegExp>
+ 
+ 
+ class ConfigModelSettingsData;
+@@ -40,11 +41,15 @@ public:
+ 	bool disabled() const;
+ 
+ 	QByteArray pairingNameFormat() const;
++	QRegExp scanNameMatcher() const;
++
++	quint8 irFilterByte() const;
+ 
+ public:
+ 	enum ServicesType {
+ 		DBusServiceType,
+-		GattServiceType
++		GattServiceType,
++		RciServiceType
+ 	};
+ 
+ 	ServicesType servicesType() const;
+@@ -58,6 +63,7 @@ public:
+ 		FindMeService = 0x08,
+ 		InfraredService = 0x10,
+ 		TouchService = 0x20,
++		UpgradeService = 0x40,
+ 	};
+ 	Q_DECLARE_FLAGS(Services, Service)
+ 
+diff --git a/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings_p.h b/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings_p.h
+index 6da19d129..1b2d5415b 100644
+--- a/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings_p.h
++++ b/AppInfrastructure/BluetoothRcu/daemon/source/configsettings/configmodelsettings_p.h
+@@ -2,7 +2,7 @@
+ //  configmodelsettings_p.h
+ //  BleRcuDaemon
+ //
+-//  Copyright © 2017 Sky UK. All rights reserved.
++//  Copyright © 2018 Sky UK. All rights reserved.
+ //
+ 
+ #ifndef CONFIGMODELSETTINGS_P_H
+@@ -35,6 +35,8 @@ public:
+ 	QString m_manufacturer;
+ 	bool m_disabled;
+ 	QByteArray m_pairingNameFormat;
++	QRegExp m_scanNameMatcher;
++	quint8 m_filterByte;
+ 
+ 	bool m_hasConnParams;
+ 	BleConnectionParameters m_connParams;
+diff --git a/AppInfrastructure/Public/BluetoothRcu/IBluetoothRcu.h b/AppInfrastructure/Public/BluetoothRcu/IBluetoothRcu.h
+index 520b07ffd..81987b49b 100644
+--- a/AppInfrastructure/Public/BluetoothRcu/IBluetoothRcu.h
++++ b/AppInfrastructure/Public/BluetoothRcu/IBluetoothRcu.h
+@@ -21,6 +21,19 @@
+ namespace AI_BLERCU
+ {
+ 
++/**
++ * @brief Supported pairing state types
++ */
++enum class PairingState
++{
++    Initialsing,    // pairing system initialisation is underway
++    Idle,           // pairing system initialisation is done
++    Searching,      // scanning is underway
++    Pairing,        // pairing is underway
++    Complete,       // pairing is done
++    Failed          // pairing is failed
++};
++
+ /**
+  * @brief: RCU device events
+  */
+@@ -35,6 +48,13 @@ public:
+      */
+     virtual void pairingStatusChanged(bool pairingInProgress) = 0;
+ 
++    /**
++     * @brief Pairing status changed notification
++     *
++     * @param PairingState.
++     */
++    virtual void stateChanged(PairingState status) = 0;
++
+     /**
+      * @brief Device list changed notification
+      */
+@@ -302,6 +322,15 @@ public:
+      **/
+     virtual std::future<bool> findMe(const std::string& rcuAddress, FindMeBeepLevel beepLevel, int32_t duration) = 0;
+ 
++    /**
++     * @brief Start scanning
++     *
++     * @param timeout       [in]    scanning timeout in ms
++     *
++     * @return void
++     */
++    virtual void startScanning(const uint32_t timeout) = 0;
++
+ };
+ 
+ } // namespace AI_BLERCU
