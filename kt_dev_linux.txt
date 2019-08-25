@@ -524,12 +524,12 @@
 |kt_linux_core_800| linux-proc
 *kt_linux_core_814* linux-proc-system-info
 
-*kt_linux_core_0000* linux-ipc
+*kt_linux_core_0000* os-ipc
 *kt_linux_core_0000* linux-ipc-sysv tools-ipcs
 *kt_linux_core_0000* linux-ipc-shm-sysv
 *kt_linux_core_0000* linux-ipc-consideration
 *kt_linux_core_0000* linux-ipc-posix
-*kt_linux_core_0000* linux-ipc-socket linux-socket
+*kt_linux_core_0000* os-ipc-socket os-socket
 *kt_linux_core_0000* linux-ipc-socket-unix linux-socket-unix
 *kt_linux_core_0000* linux-ipc-socket-internet linux-socket-internet
 *kt_linux_core_0000* linux-ipc-pipe
@@ -551,6 +551,7 @@
 *kt_linux_core_202* linux-sync-between-processes
 |kt_linux_core_220| sync: read-write lock
 *kt_linux_core_230* linux-sync-file-lock
+*kt_linux_core_0000* os-sync-eventfd
 *kt_linux_core_260* linux-sync-atomic
 |kt_linux_core_263|  conc: ref: lock-free code: a false sense of security
 |kt_linux_core_264|  conc: ref: the free lunch is over 
@@ -572,14 +573,13 @@
 
 |kt_linux_core_600| linux-time
 |kt_linux_core_601| linux-time-conversion
-|kt_linux_core_602| linux-time-resolution jiffies
-*kt_linux_core_602* linux-time-process-time
-*kt_linux_core_603* linux-time-timer
+|kt_linux_core_602| os-time-resolution jiffies
+*kt_linux_core_602* os-time-process-time os-cpu-time
+*kt_linux_core_603* os-time-timer
 *kt_linux_core_603* os-time-realtime os-time-clock-type
 *kt_linux_core_604* linux-time-ns-stamp
 |kt_linux_core_604| linux-time-ms-stamp
 *kt_linux_core_604* linux-time-us-stamp
-|kt_linux_core_606| linux-time-usleep
 
 |kt_linux_core_700| os-dbus
 *kt_linux_core_700* dbus-libdbus
@@ -52563,10 +52563,12 @@ private:
 
 
 ={============================================================================
-*kt_linux_core_0000* linux-ipc
+*kt_linux_core_0000* os-ipc
 
-CH43, Fig 43-1 in {ref-LPI} which says that the 'general' term IPC is often used to describe them all;
-communication, signal, and synchronization.
+LPI-43
+
+Fig 43-1 which says that the 'general' term IPC is often used to describe them
+all; communication, signal, and synchronization.
 
 communication - data transfer - byte stream  - pipe
                                              - fifo
@@ -52595,10 +52597,12 @@ synchronization   - semaphore - sys v
                   - mutex
                   - condition variable
 
-Signals: Although signals are intended primarily for other purposes, they can be used as a
-synchronization technique in certain circumstances. More rarely, signals can be used as a
-communication technique: the signal number itself is a form of information, and realtime signals can
-be accompanied by associated data (an integer or a pointer).
+*os-signal*
+Although signals are intended primarily for other purposes, they can be used
+as a synchronization technique in certain circumstances. More rarely, signals
+can be used as a communication technique: the signal number itself is a form
+of information, and realtime signals can be accompanied by associated data (an
+integer or a pointer).
 
 
 {nonnetworked-ipc}
@@ -53291,7 +53295,7 @@ note: what deficiencies?
 
 
 ={============================================================================
-*kt_linux_core_0000* linux-ipc-socket linux-socket
+*kt_linux_core_0000* os-ipc-socket os-socket
 
 LPI-56
 
@@ -53308,7 +53312,7 @@ For all applications described in this book, protocol is always specified as
 0.
 
 
-{socket-domain}
+{os-socket-domain}
 Sockets exist in a communication domain, which determines:
 
 o the method of identifying a socket (i.e., the format of a socket “address”)
@@ -53517,13 +53521,19 @@ retrieve the peer’s address later using the getpeername() system call, as
 described in Section 61.5.
 
 
-{socket-sockaddr}
+{os-socket-sockaddr} os-port-number
 
 56.4 Generic Socket Address Structures: struct sockaddr
 
+The addr and addrlen arguments to bind() require some further explanation.
 Looking at Table 56-1, we see that each socket domain uses a different address
-format. However, because system calls such as bind() are generic to all socket
-domains, they must be able to accept address structures of any type. 
+format. For example, UNIX domain sockets use pathnames, while Internet domain
+sockets use the combination of an IP address plus a port number.
+
+For each socket domain, a different structure type is defined to store a
+socket address. However, because system calls such as bind() are generic to
+all socket domains, they must be able to accept address structures of any
+type.
 
 In order to permit this, the sockets API defines a generic address structure,
 struct sockaddr. The only purpose for this type is `to cast` the various
@@ -53808,7 +53818,7 @@ would consist of 28 leading ones, followed by 4 zeros, and
 `the subnet with the ID of 1` would be designated as 204.152.189.16/28.
 
 
-58.6.1 Port Numbers
+58.6.1 Port Numbers *socket-port-number*
 
 The task of the transport protocol is to provide an end-to-end communication
 service to applications residing on different hosts (or sometimes on the same
@@ -56681,6 +56691,27 @@ Any number of processes can hold a read lock on the same file (or region of a
     functionality, flock() locking facility is rarely used nowadays. The
     fcntl() system call provides record locking, allowing processes to place
     multiple read and write locks on different regions of the same file.
+
+
+={============================================================================
+*kt_linux_core_0000* os-sync-eventfd
+
+LPI-43.3 Synchronization Facilities
+
+Since kernel 2.6.22, Linux provides an additional, nonstandard synchronization
+mechanism via the eventfd() system call. This system call creates an eventfd
+object that has an associated 8-byte unsigned integer maintained by the
+kernel. The system call returns a file descriptor that refers to the object.
+
+Writing an integer to this file descriptor adds that integer to the object’s
+value. A read() from the file descriptor `blocks if the object’s value is 0.`
+If the object has a nonzero value, a read() returns that value and resets it
+to 0. In addition, poll(), select(), or epoll can be used to test if the
+object has a nonzero value; if it does, the file descriptor indicates as being
+readable. An application that wishes to use an eventfd object for
+synchronization must first create the object using eventfd(), and then call
+fork() to create related processes that inherit file descriptors referring to
+the object. For further details, see the eventfd(2) manual page.
 
 
 ={============================================================================
@@ -87512,7 +87543,7 @@ __TIME_T_TYPE      50 i386-linux-gnu/bits/typesizes.h #define __TIME_T_TYPE	__SL
 __SLONGWORD_TYPE  103 i386-linux-gnu/bits/types.h #define __SLONGWORD_TYPE	long int
 
 
-{gettimeofday-time}
+*syscall-gettimeofday*
 The gettimeofday() system call returns the `calendar time` in the buffer
 pointed to by tv.
 
@@ -87530,7 +87561,7 @@ struct timeval {
 };
 
 The tz argument to gettimeofday() is a historical artifact. This argument is
-now obsolete and should always be specified as NULL.
+`now obsolete and should always be specified as NULL.`
 
 
 <time-call>
@@ -87746,13 +87777,13 @@ time: 00:55:29
 
 
 ={============================================================================
-*kt_linux_core_602* linux-time-resolution jiffies
+*kt_linux_core_602* os-time-resolution jiffies
 
 10-9  1 nanosecond   ns    one billionth of one second
-10-6  1 microsecond  us    one millionth of one second
+10-6  1 microsecond  us    `one millionth` of one second
 10-3  1 millisecond  ms    one thousandth of one second
 
-10.6 The Software Clock (Jiffies)
+LPI-10.6 The Software Clock (Jiffies)
 
 The accuracy of various time-related system calls described in this book is
 limited to the resolution of the system `software clock`, which measures time in
@@ -87780,7 +87811,7 @@ respectively.
 
 
 ={============================================================================
-*kt_linux_core_602* linux-time-process-time
+*kt_linux_core_602* os-time-process-time os-cpu-time
 
 10.7 Process Time
 
@@ -87796,6 +87827,7 @@ System CPU time is amount of time spent executing in kernel mode. This is the
 time that the kernel spends executing system calls or performing other tasks
 on behalf of the program (e.g., servicing page faults).
 
+*syscall-times*
 The times() system call retrieves process time information, returning it in
 the structure pointed to by buf.
 
@@ -87812,6 +87844,7 @@ Returns number of clock ticks (sysconf(_SC_CLK_TCK)) since “arbitrary” time 
     clock_t tms_cstime; /* System CPU time of all (waited for) children */
   };
 
+*time-clock-t*
 The `clock_t` data type used to type the four fields of the tms structure is
   an integer type that measures time `in units called clock ticks.` We can
   call sysconf(_SC_CLK_TCK) to obtain the number of clock ticks per second,
@@ -87834,7 +87867,7 @@ start again at 0 (i.e., a later times() call could return a number that is
   gettimeofday() (described in Section 10.1).
 
 
-*clock-call*
+*syscall-clock*
 The `clock()` function provides a simpler interface for retrieving the process
 time. It returns a single value that measures the total (i.e., user plus
     system) CPU time used by the calling process.
@@ -87860,9 +87893,9 @@ CLOCKS_PER_SEC is 1e+06 on VM which means microseconds on this system
 ~/tizencore$ time -f "%E real,%U user,%S sys" ls -Fs
 -f: command not found
 
-real	0m0.143s
-user	0m0.068s
-sys	0m0.040s
+real  0m0.143s
+user  0m0.068s
+sys   0m0.040s
 
 $ /usr/bin/time -f "%E real,%U user,%S sys" ls -Fs
 total 24
@@ -87870,13 +87903,70 @@ total 24
 0:00.00 real,0.00 user,0.00 sys
 
 Users of the bash shell need to use an explicit path in order to run the
-external time command and not the shell builtin variant. On system where time is
-installed in /usr/bin, the first example would become /usr/bin/time wc
-/etc/hosts
+external time command and not the shell builtin variant. 
 
 
 ={============================================================================
-*kt_linux_core_603* linux-time-timer
+*kt_linux_core_603* os-time-timer os-time-sleep
+
+LPI-23 TIMERS AND SLEEPING
+
+23.1 Interval Timers
+
+the classical UNIX APIs for setting interval timers (setitimer() and alarm())
+to notify a process when a certain amount of time has passed
+
+note:
+SUSv4 marks getitimer() and setitimer() `obsolete`, noting that the POSIX
+timers API (Section 23.6) is preferred.
+
+*time-timeval*
+
+struct timeval {
+    time_t tv_sec;         /* Seconds since 00:00:00, 1 Jan 1970 UTC */
+    suseconds_t tv_usec;   /* Additional `microseconds` (long int) */
+};
+
+*time-itimeval*
+
+struct itimerval {
+  struct timeval it_interval; /* Interval for periodic timer */
+  struct timeval it_value; /* Current value (time until next expiration) */
+};
+
+As a timer progresses, it `counts down` from the initial value (it_value)
+  toward 0. When the timer reaches 0, the corresponding signal is sent to the
+  process, and then, if the interval (it_interval) is nonzero, the timer value
+  (it_value) is reloaded, and counting down toward 0 recommences.
+
+
+<ex>
+Listing 23-1
+
+(shows the output only to show how it works. see the text for more details)
+
+When we run the program in Listing 23-1, we see the following:
+
+// Initial value 1.8 seconds, interval 1 second
+$ ./real_timer 1 800000 1 0 
+
+        Elapsed   Value Interval
+START:  0.00
+Main:   0.50      1.30  1.00  // Timer counts down until expiration
+Main:   1.00      0.80  1.00
+Main:   1.50      0.30  1.00
+ALARM:  1.80      1.00  1.00  // On expiration, timer is reloaded from `interval`
+Main:   2.00      0.80  1.00
+Main:   2.50      0.30  1.00
+ALARM:  2.80      1.00  1.00
+Main:   3.00      0.80  1.00
+Main:   3.50      0.30  1.00
+ALARM:  3.80      1.00  1.00
+That's all folks
+
+As can see, Value counts down from 1.80 and signal fires when 1.80 is elapsed
+for the first setting.
+
 
 LPI 23.2 Scheduling and Accuracy of Timers
 
@@ -87895,18 +87985,19 @@ The availability of high-resolution timers can be determined by examining the
 clock resolution returned by clock_getres(), described in Section 23.5.1.
 
 
-23.4 Suspending Execution for a Fixed Interval (Sleeping)
+LPI-23.4 Suspending Execution for a Fixed Interval (Sleeping)
 
 Sometimes, we want to suspend execution of a process for a fixed amount of
 time. While it is possible to do this using a combination of sigsuspend() and
 the timer functions already described, it is easier to use one of the sleep
 functions instead.
 
+*syscall-sleep*
 #include <unistd.h>
 unsigned int sleep(unsigned int seconds);
 
 Returns 0 on normal completion, or number of unslept seconds if prematurely
-  terminated
+terminated
 
 SUSv3 leaves possible interactions of sleep() with alarm() and setitimer()
 unspecified. On Linux, sleep() is implemented as a call to nanosleep()
@@ -87929,18 +88020,18 @@ int nanosleep(const struct timespec *request, struct timespec *remain);
 
 Returns 0 on successfully completed sleep, or 1 on error or interrupted sleep
 
-*struct-timespec*
+*time-timespec*
 
-  struct timespec {
-    time_t tv_sec;  /* Seconds */
-    long tv_nsec;   /* Nanoseconds */
-  };
+struct timespec {
+  time_t tv_sec;  /* Seconds */
+  long tv_nsec;   /* Nanoseconds */
+};
 
 A further advantage of nanosleep() is that SUSv3 explicitly specifies that it
-  should not be implemented using signals. This means that, unlike the
-  situation with sleep(), we can portably mix calls to nanosleep() with calls
-  to alarm() or setitimer().  Although it is not implemented using signals,
-     nanosleep() may still be interrupted by a signal handler.
+should not be implemented using signals. This means that, unlike the situation
+with sleep(), we can portably mix calls to nanosleep() with calls to alarm()
+  or setitimer().  Although it is not implemented using signals, nanosleep()
+  may still be interrupted by a signal handler.
 
 
 23.5.4 Improved High-Resolution Sleeping: clock_nanosleep()
@@ -87969,6 +88060,73 @@ making an initial call to clock_gettime() to retrieve the time, adding the
 desired amount to that time, and then calling clock_nanosleep() with the
 TIMER_ABSTIME flag (and restarting the system call if it is interrupted by a
     signal handler).
+
+
+*syscall-usleep*
+
+usleep - suspend execution for microsecond intervals
+
+#include <unistd.h>
+
+int usleep(useconds_t usec);
+
+note: copied from other article.
+
+Also consider this code: 
+
+usleep(1000);    // sleep 1 microsecond
+
+On the face of it, this line of code makes a thread sleep for 1 microsecond
+and then continue. In reality, 1 microsecond is just a lower bound to the
+duration of the call.
+
+The man page for usleep() says, "The usleep() function suspends execution of
+the calling process for (at least) usec microseconds. The sleep may be
+lengthened slightly by any system activity or by the time spent processing the
+call or by the granularity of system timers," or if you use the nanosleep()
+function. "Therefore, nanosleep() always pauses for at least the specified
+time; however, it can take up to 10 ms longer than specified until the process
+becomes runnable again."
+
+So if the process is not scheduled under a real-time policy, there's no
+guarantee when your thread will be running again. I've done some tests and (to
+        my surprise) there are situations when code such as: 
+
+cond.timed_wait(lock, x);    // x = e.g. 1 millisecond
+
+will actually wait for more than 1 second.
+
+<ex>
+void msleep(size_t milliseconds)
+{
+    usleep(milliseconds * 1000);
+}
+
+
+LPI-23.7 Timers That Notify via File Descriptors: the timerfd API
+
+Starting with kernel 2.6.25, Linux provides another API for creating timers.
+The Linux-specific timerfd API creates a timer whose expiration notifications
+`can be read from a file descriptor.` This is useful because the file descriptor
+can be monitored along with other descriptors using select(), poll(), and
+epoll
+
+#include <sys/timerfd.h>
+
+int timerfd_create(int clockid, int flags);
+
+Returns file descriptor on success, or –1 on error
+
+
+Reading from the timerfd file descriptor
+
+If one or more expirations have occurred since the timer settings were last
+modified using timerfd_settime() or the last read() was performed, then read()
+  returns immediately, and the returned buffer contains the number of
+  expirations that have occurred. 
+
+If no timer expirations have occurred, then read() blocks until the next
+expiration occurs.
 
 
 ={============================================================================
@@ -88465,52 +88623,6 @@ delete start
 delete scanf int
 delete stringstream int
 delete boost::lexical_cast<int>
-
-
-={============================================================================
-*kt_linux_core_606* linux-time-usleep
-
-{usleep}
-
-usleep - suspend execution for microsecond intervals
-
-#include <unistd.h>
-
-int usleep(useconds_t usec);
-
-note: copied from other article.
-
-Also consider this code: 
-
-usleep(1000);    // sleep 1 microsecond
-
-On the face of it, this line of code makes a thread sleep for 1 microsecond
-and then continue. In reality, 1 microsecond is just a lower bound to the
-duration of the call.
-
-The man page for usleep() says, "The usleep() function suspends execution of
-the calling process for (at least) usec microseconds. The sleep may be
-lengthened slightly by any system activity or by the time spent processing the
-call or by the granularity of system timers," or if you use the nanosleep()
-function. "Therefore, nanosleep() always pauses for at least the specified
-time; however, it can take up to 10 ms longer than specified until the process
-becomes runnable again."
-
-So if the process is not scheduled under a real-time policy, there's no
-guarantee when your thread will be running again. I've done some tests and (to
-        my surprise) there are situations when code such as: 
-
-cond.timed_wait(lock, x);    // x = e.g. 1 millisecond
-
-will actually wait for more than 1 second.
-
-
-{msleep}
-
-void msleep(size_t milliseconds)
-{
-    usleep(milliseconds * 1000);
-}
 
 
 ={============================================================================
