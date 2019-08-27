@@ -25,6 +25,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-as-airplay
 *kt_dev_skymw_0000* skymw-bluez
 *kt_dev_skymw_0000* skymw-bluez-ai
+*kt_dev_skymw_0000* skymw-bluez-audio-stream
 *kt_dev_skymw_0000* skymw-android
 *kt_dev_skymw_0000* skymw-android-doc
 *kt_dev_skymw_0000* skymw-android-studio
@@ -1051,12 +1052,15 @@ std::shared_ptr<AI_BLERCU::IBleRcuContoller> getBleRcuControllerProxyInstance()
 }
 
 
-<bluez-as-observer>
+<bluetooth-as-observer>
 
-// ethan-as-source/Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.h
+// Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.h
 // Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.cpp
 
-class BluetoothRcuDeviceEventObserver : public AICommon::Observer<AI_BLERCU::IBleRcuDeviceEvent>
+// handle signal/notificaiton from AS
+
+class BluetoothRcuDeviceEventObserver : 
+  public AICommon::Observer<AI_BLERCU::IBleRcuDeviceEvent>
 {
   public:
     /**
@@ -1100,7 +1104,7 @@ void BleRcuContollerProxy::signalHandlerPropertiesChanged(const AI_IPC::VariantL
 
 void BleRcuContollerProxy::notifyPairingStatusChanged(bool pairing)
 {
-  notify( std::bind(&IBleRcuDeviceEvent::pairingStatusChanged, std::placeholders::_1, pairing) );
+  `notify`( std::bind(&IBleRcuDeviceEvent::pairingStatusChanged, std::placeholders::_1, pairing) );
 }
 
 // ethan-as-source/Components/AS/Services/Controllers/RcuController/source/AS_RCU_RcuControllerImplementation.cpp
@@ -1135,7 +1139,7 @@ class Notifier : virtual public Polymorphic
 
 // AppInfrastructure/Public/BluetoothRcu/IBluetoothRcu.h
 
-class IBleRcuDeviceEvent : Interface
+class `IBleRcuDeviceEvent` : Interface
 {
 public:
 
@@ -1310,8 +1314,17 @@ public:
      * @return if successful then true else false. We need to check the validity of the future object prior to invoke its get method.
      **/
     virtual std::future<bool> findMe(const std::string& rcuAddress, FindMeBeepLevel beepLevel, int32_t duration) = 0;
-};
 
+    // *start-scanning* added
+    /**
+     * @brief Start scanning
+     *
+     * @param timeout       [in]    scanning timeout in ms
+     *
+     * @return void
+     */
+    virtual void startScanning(const uint32_t timeout) = 0;
+};
 
 
 // client/lib/source/BleRcuFactory.cpp
@@ -1490,6 +1503,8 @@ void `BleRcuContollerProxy::triggerPairing`(uint8_t pairingCode)
 // BluetoothRcu/client/lib/source/BleRcuDevice.cpp
 // each device also registers functions to dbus
 
+  std::function<void(void)> mNotifyPropertyChanged;
+
 BleRcuDevice::BleRcuDevice(const std::shared_ptr<AI_IPC::IIpcService>& ipcService,
                  const std::shared_ptr<IInputHandler>& inputHandler,
                  const std::function<void(void)>& notifyPropertyChanged,
@@ -1528,7 +1543,7 @@ void BleRcuDevice::signalHandlerPropertyChanged(const AI_IPC::VariantList& args)
         if ((!changedProperties.empty()) || (!invalidatedProperties.empty()))
         {
           updateDeviceProperties(changedProperties, invalidatedProperties);
-          mNotifyPropertyChanged();
+          `mNotifyPropertyChanged();`
         }
       }
     }
@@ -1687,8 +1702,10 @@ void Console::initReadLine()
 
 <ai-bluetooth-daemon>
 
-RCU_USR   5022  0.0  0.0   3224   548 ?        Ss   06:31   0:00 /opt/libexec/DobbyInit /opt/sbin/BleRcuDaemon --noconsole --session --netns=3 --audio-fifo-dir=/tmp/blercu/
-RCU_USR   5056  0.0  0.2  48860  7036 ?        Sl   06:31   0:00 BleRcuDaemon --noconsole --session --netns=3 --audio-fifo-dir=/tmp/blercu/
+RCU_USR   5022  0.0  0.0   3224   548 ?        Ss   06:31   0:00 \
+  /opt/libexec/DobbyInit /opt/sbin/BleRcuDaemon --noconsole --session --netns=3 --audio-fifo-dir=/tmp/blercu/
+RCU_USR   5056  0.0  0.2  48860  7036 ?        Sl   06:31   0:00 \
+  BleRcuDaemon --noconsole --session --netns=3 --audio-fifo-dir=/tmp/blercu/
 
 // BleRcuDaemon started. address: , servicename: com.sky.blercu
 
@@ -1762,7 +1779,7 @@ static QSharedPointer<BleRcuController> setupBleRcuController(const QSharedPoint
 }
 
 
-<bluez-controller>
+<ai-bluetooth-daemon-bluez-controller>
 // BluetoothRcu/daemon/source/blercu/blercucontroller.cpp
 
 class BleRcuControllerImpl : public BleRcuController
@@ -1771,7 +1788,7 @@ class BleRcuControllerImpl : public BleRcuController
 
 // BluetoothRcu/daemon/source/blercu/blercucontroller_p.h
 
-	BleRcuPairingStateMachine m_pairingStateMachine;
+BleRcuPairingStateMachine m_pairingStateMachine;
 
 BleRcuControllerImpl::BleRcuControllerImpl(const QSharedPointer<const ConfigSettings> &config,
                                            const QSharedPointer<BleRcuManager> &manager,
@@ -1813,7 +1830,7 @@ bool BleRcuControllerImpl::registerOnBus(const QDBusConnection &dbusConn)
 }
 
 
-<bluez-controller-adaptor>
+<ai-bluetooth-daemon-bluez-controller-adaptor>
 
 dbusxml/com.sky.blercu.Controller1.xml
 
@@ -2234,6 +2251,216 @@ keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$
 22359:NDS: ^0000000158.590546 !MIL   -BLERCU       < p:00000de4 t:89cbadc0 T:no name M:.  L:00000 > bluetooth rcu device info [ Universal Electronics, Inc. / Sky EC102 / hw:102.0.0.1 / fw:BL 195 / sw:7007.02.09 ]
 22360:NDS: ^0000000158.791891 !MIL   -BLERCU       < p:00000de4 t:89cbadc0 T:no name M:statemachine.cpp F:logTransition L:00082 > "[DeviceStateMachine] moving from state StartingServices(8) to ReadyState(9)"
 22361:NDS: ^0000000158.792324 !MIL   -BLERCU       < p:00000de4 t:89cbadc0 T:no name M:blercumanager.cpp F:onDeviceReadyChanged L:01685 > device with address 70:91:F3:22:BC:75 is  ready
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-bluez-audio-stream
+
+./Components/AS/Services/Controllers/BTAudioController/include/AS_BTAUDIO_Controller.h
+./Components/AS/Services/Controllers/BTAudioController/include/AS_BTAUDIO_ControllerImplementation.h
+./Components/AS/Services/Controllers/BTAudioController/include/AS_BTAUDIO_PlatformItf.h
+./Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_ControllerImplementation.cpp
+./Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_ControllerStub.cpp
+./Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_PlatformItf.cpp
+
+
+// Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
+
+    /*********************************************************   BT/Audiostreamer   ***************************************************************/
+    startVisibilityExecutor              = new AS_BTAUDIO::StartVisibilityFactory();
+    cancelVisibilityExecutor             = new AS_BTAUDIO::CancelVisibilityFactory();
+    acceptPairingExecutor                = new AS_BTAUDIO::AcceptPairingFactory();
+    rejectPairingExecutor                = new AS_BTAUDIO::RejectPairingFactory();
+    btaStatusExecutor                    = new AS_BTAUDIO::StatusExecutorFactory();
+
+    audioStreamerStartStreamingExecutor  = new AS_AUDIOSTREAMER::AudioStreamerStartStreamingExecutorFactory();
+    audioStreamerStopStreamingExecutor   = new AS_AUDIOSTREAMER::AudioStreamerStopStreamingExecutorFactory();
+    audioStreamerStatusExecutor          = new AS_AUDIOSTREAMER::AudioStreamerStatusExecutorFactory();
+
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/startvisibility", startVisibilityExecutor );
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/stopvisibility",  cancelVisibilityExecutor );
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/acceptpairing",   acceptPairingExecutor );
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/rejectpairing",   rejectPairingExecutor );
+    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/audiostreamer/bluetooth/status",                 btaStatusExecutor,                  NULL, "AS_WS_BTAD_STAT" );
+
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/action/playstream",                
+        audioStreamerStartStreamingExecutor );
+
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/action/stopstream",                
+        audioStreamerStopStreamingExecutor );
+
+    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/audiostreamer/status",                           
+        audioStreamerStatusExecutor,        NULL, "AS_WS_AUD_STAT" );
+
+    /**********************************************************************************************************************************************/
+
+
+// Components/AS/Services/Executors/AudioStreamer/AudioStreamerStartStreaming
+//  /include/AS_AUDIOSTREAMER_StartStreamingExecutor.h
+
+namespace AS_AUDIOSTREAMER {
+
+  /**
+   * @brief Audio streamer start streaming executor
+   *
+   * This class fulfils the http "post" request to start gateway pairing, i.e.,http://<host>:<port>/<version>/as/audiostreamer/action/startstreaming,
+   * as defined in the AS spec
+   */
+  class AudioStreamerStartStreamingExecutor : public AS_WORKER::Executor
+  {
+      AudioStreamerStartStreamingExecutor( AS_WORKER::Environment *env, AS_WORKER::Params *params )
+        : AS_WORKER::Executor( env, params ),
+        m_audioStreamerController( AS_CONTROLLERS::GetController<AS_AUDIOSTREAMER::AudioStreamerController>() )
+    {
+    }
+
+      /**
+       * @brief The executor method to start audio streaming
+       *
+       * This function is the entry point into the executor. The function could be called synchronously
+       *
+       * @retval   0          on success
+       * @retval   Non-zero   values on failure
+       */
+      int Exec();
+  };
+
+  class AudioStreamerStartStreamingExecutorFactory : public AS_WORKER::Factory
+  {};
+}
+
+
+// Components/AS/Services/Executors/AudioStreamer/AudioStreamerStartStreaming
+//  /source/AS_AUDIOSTREAMER_StartStreamingExecutor.cpp
+
+int AudioStreamerStartStreamingExecutor::Exec()
+{
+    uint32_t httpCode = 200;
+
+    if ( m_audioStreamerController )
+    {
+        int errorCode = m_audioStreamerController->StartStreaming();
+        if ( errorCode != AS_AUDIOSTREAMER_STATUS_OK )
+        {
+            AS_LOG_ERROR( "StartStreaming failed with error code %d", errorCode );
+            httpCode = 500; // Unspecified error as no error codes are currently defined in AS spec for this executor
+        }
+    }
+
+    return AS_STATUS_OK;
+}
+
+
+// Components/AS/Services/Controllers/AudioStreamerController
+//  /include/AS_AUDIOSTREAMER_AudioStreamerController.h
+
+/**
+ * @addtogroup AS_AUDIOSTREAMER
+ *
+ * The AudioStreamerController is responsible for all interaction with Audio Streamer Proxy 
+ * (see #AudioStreamerProxy.h) needed for `/audiostreamer`
+ * http interfaces defined in the AS HTTP Spec.
+ */
+
+namespace AS_AUDIOSTREAMER
+{
+  /**
+   * @brief Audio streamer controller
+   *
+   * It provides the APIs to interact with low level audio streamer such as start and stop AirPlay audio streaming
+   */
+  class AudioStreamerController : public AS_WORKER::Controller
+  {
+    public:
+      /**
+       * @brief Start audio streaming, i.e., it implements the AS API /audiostreamer/action/startstreaming
+       *
+       * @rval If successful then AS_AUDIOSTREAMER_STATUS_OK otherwise an error code indicating the error
+       */
+      virtual int StartStreaming() = 0;
+  };
+}
+
+
+// Components/AS/Services/Controllers/AudioStreamerController
+//  /source/AS_AUDIOSTREAMER_AudioStreamerControllerImplementation.h
+
+class AudioStreamerControllerImplementation : public AudioStreamerController
+{
+  /**
+   * @brief Audio streamer proxy object
+   */
+  AUDIO_STREAMER::Proxy& m_audioStreamerProxy;
+};
+
+AudioStreamerControllerImplementation::AudioStreamerControllerImplementation()
+        : m_audioStreamerProxy( AUDIO_STREAMER::Proxy::Instance() )
+{
+}
+
+
+int AudioStreamerControllerImplementation::StartStreaming()
+{
+  AS_LOG_ENTRY( "%s() entry", __func__ );
+
+  int retval = AS_AUDIOSTREAMER_STATUS_START_STREAMING_ERROR;
+
+  pthread_mutex_lock( &m_mutex );
+  uint32_t playTag = m_nextPlayTag++;
+  pthread_mutex_unlock( &m_mutex );
+
+  AudioStreamerEvent *audioStreamingStartedEvent = new AudioStreamerEvent( AudioStreamerEvent::STREAMING_STARTED, playTag );
+
+  size_t bytesSent = m_msgQueue->Send( audioStreamingStartedEvent->GetEvent(), &audioStreamingStartedEvent, sizeof(AudioStreamerEvent*) );
+  if ( bytesSent >= sizeof(AudioStreamerEvent*) )
+  {
+    `retval = m_audioStreamerProxy.StartStreaming( playTag );`
+    if ( retval == 0 )
+    {
+      AS_LOG_INFO( "StartStreaming() succeeded for play tag %u", playTag );
+
+      retval = AS_AUDIOSTREAMER_STATUS_OK;
+    }
+
+  AS_LOG_EXIT( "%s() exit: retval %d", __func__, retval );
+
+  return retval;
+}
+
+
+// Components/AudioStreamer/include/AudioStreamerProxy.h
+
+class Proxy : AudioStreamer::Base
+{
+  /**
+   * @brief Start streaming the currently pending request
+   *
+   * @param[in] playTag       : Play tag to distinguish listener callbacks (#PLAYER_STATUS_LISTENER and #METADATA_LISTENER) of different play jobs
+   *
+   * @retval: If successful then 0, otherwise an error code indicating the error
+   */
+  int StartStreaming( uint32_t playTag );
+};
+
+int AUDIO_STREAMER::Proxy::StartStreaming( uint32_t playTag )
+{
+    return AudioStreamer::Player::instance().startStreaming(playTag);
+}
+
+
+// Components/AudioStreamer/source/AudioStreamerPlayer.h
+
+// Kind of an implementation of AudioStreamerProxy
+class Player :  public Thread, Base
+{
+};
+
+int AudioStreamer::Player::startStreaming(uint32_t playTag )
+{
+  AUD_LOG_ENTRY("AudioStreamer::Player::startStreaming");
+  AUD_LOG_INFO("AudioStreamer::Player::startStreaming tag=%d", playTag);
+  return AUDIOSTREAMER::AUDIO_STREAMER_STATUS_OK;
+}
 
 
 ={============================================================================

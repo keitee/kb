@@ -12,8 +12,9 @@ if __name__ == "__main__":
     # dirs to include
     dirs = [
         # as
-        'ethan-as-source/Components/AS/Services/Controllers',
+        'ethan-as-source/Components/AS/Services',
         'ethan-as-source/Components/Bluetooth',
+        'ethan-as-source/Components/AudioStreamer',
         'ethan-as-source/Components/Main',
         # ai
         'appinfrastructure/AppInfrastructure/BluetoothRcu',
