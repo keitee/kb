@@ -2191,49 +2191,61 @@ void DBusAbstractAdaptor::registerConnection(const QDBusConnection &connection)
 }
 
 
-<call-from-client-such-as-startpairing>
+<bluez-test-client>
 
-keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$ ag StartPairing
-
-
-console/source/blercu/blercucontroller1_interface.h
-67:     inline QDBusPendingReply<> StartPairing(quint8 pairing_code)
-71:             return asyncCallWithArgumentList(QStringLiteral("StartPairing"), argumentList);
-
-  console/source/console.h
-  44:     void onStartPairingCommand(const QStringList &args);
-  
-  console/source/console.cpp
-  46:                           this, &Console::onStartPairingCommand);
-  164:void Console::onStartPairingCommand(const QStringList &args)
-  
-  console/source/blercu_cmdhandler.cpp
-  304:    QDBusPendingReply<> reply = m_blercuController1->StartPairing(pairingCode);
+// AppInfrastructure/BluetoothRcu/client/test/source/BlueRcuProxyTest.cpp
 
 
-client/test/source/BlueRcuProxyTest.cpp
-410:            Method method6(BLE_RCU_SERVICE, BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, "StartPairing");
-411:            regId = mIpcRcuDaemonService->registerMethodHandler(method6, std::bind(&BleRcuContollerProxyTest::methodHandlerStartPairing, this, std::placeholders::_1));
-659:    void methodHandlerStartPairing(std::shared_ptr<IAsyncReplySender> replySender)
+<bluez-test-daemon>
+BleRcuController(Mock)  | BleRcuController1Adaptor      | DBus | Proxy
+                        | "com.sky.blercu.Controller1"
+                        | OUT(Object Under Test)
 
-client/lib/source/BleRcuController.cpp
-755:    const AI_IPC::Method method(BLE_RCU_SERVICE, BLE_RCU_CONTROLLER_OBJECT, BLE_RCU_CONTROLLER_INTERFACE, "StartPairing");
+// AppInfrastructure/BluetoothRcu/daemon/test/source/mck_blercucontroller.h
+
+class MockBleRcuController : public BleRcuController
+                           , public QDBusContext
+{
+  MOCK_METHOD1(startPairing, bool(quint8));
+};
 
 
-  daemon/test/source/tst_blercucontrolleradaptor.cpp
-  226:TEST_F(BleRcuControllerAdaptorTest, testStartPairing)
-  233:            QDBusMessage request = QDBusMessage::createMethodCall("", m_deviceObjPath, m_interfaceName, "StartPairing");
-  252:            QDBusMessage request = QDBusMessage::createMethodCall("", m_deviceObjPath, m_interfaceName, "StartPairing");
-  271:            QDBusMessage request = QDBusMessage::createMethodCall("", m_deviceObjPath, m_interfaceName, "StartPairing");
+// AppInfrastructure/BluetoothRcu/daemon/test/source/tst_blercucontrolleradaptor.cpp
 
-daemon/source/blercu/adaptors/blercucontroller1_adaptor.cpp
-135:    DBus method call handler for com.sky.BleRcuController1.StartPairing
-138:void BleRcuController1Adaptor::StartPairing(quint8 pairingCode,
+class BleRcuControllerAdaptorTest : public ::testing::Test
+{
+  public:
+    void SetUp()
+    {
+      m_mockController = QSharedPointer<MockBleRcuController>::create();
+    }
+};
 
-daemon/source/blercu/adaptors/blercucontroller1_adaptor.h
-27:                 "    <method name=\"StartPairing\">\n"
-64:     void StartPairing(quint8 pairingCode, const QDBusMessage &message);
-keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$
+
+// Therefore, it is to test dbus interface exposed by daemon
+
+TEST_F(BleRcuControllerAdaptorTest, testStartPairing)
+{
+  // check happy case
+  const QList<quint8> values = { 0, 123, 255 };
+  for (const quint8 &value : values) {
+
+    // construct the request
+    QDBusMessage request = QDBusMessage::createMethodCall("", m_deviceObjPath, m_interfaceName, "StartPairing");
+    request << QVariant::fromValue(value);
+
+    // expect the the controller will be called to start pairing
+    // return success
+    EXPECT_CALL(*m_mockController, isPairing())
+      .WillOnce(::testing::Return(false));
+    EXPECT_CALL(*m_mockController, startPairing(value))
+      .WillOnce(::testing::Return(true));
+
+    // check for a positive reply
+    QDBusMessage reply = m_dbusConn->call(request, QDBus::BlockWithGui);
+    EXPECT_EQ(reply.type(), QDBusMessage::ReplyMessage);
+  }
+}
 
 
 <ai-bluetooth-log>
@@ -2283,7 +2295,8 @@ keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$
     map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/rejectpairing",   rejectPairingExecutor );
     map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/audiostreamer/bluetooth/status",                 btaStatusExecutor,                  NULL, "AS_WS_BTAD_STAT" );
 
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/action/playstream",                
+    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
+        "/as/audiostreamer/action/playstream",                
         audioStreamerStartStreamingExecutor );
 
     map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/action/stopstream",                
@@ -2463,7 +2476,10 @@ int AudioStreamer::Player::startStreaming(uint32_t playTag )
 }
 
 
-<x>
+<player-switch-protocols>
+
+// 1. m_ptrBluetoothProtocol is enabled as long as Player runs
+// 2. set m_nextProtocol and use `startStreamingFromProtocol(m_nextProtocol);`
 
 // Components/AudioStreamer/source/BluetoothProtocol.cpp
 
@@ -2492,9 +2508,199 @@ void AudioStreamer::BluetoothProtocol::enable()
     m_btInstance->setBluetoothTimeout(timeout);
 }
 
+void AudioStreamer::BluetoothProtocol::disable()
+{
+  if( m_btInstance==NULL )
+  {
+    AUD_LOG_WARNING("Bluetooth already stopped, nothing to stop");
+    return;
+  }
+  AUD_LOG_MIL("Stopping bluetooth");
+  m_btInstance->stop();
+  m_wa_stopSent=true;
+  BluetoothApi::Streamer::destroyInstance();
+  m_btInstance=NULL;
+}
+
+void AudioStreamer::BluetoothProtocol::getAudioData(uint32_t sampleTime, uint64_t hostTime, void *buffer, size_t bufferLen)
+{
+}
+
+
+// Components/AudioStreamer/source/AudioStreamerPlayer.cpp
+void AudioStreamer::Player::run()
+{
+  m_ptrBluetoothProtocol = new BluetoothProtocol();
+
+  while()
+  {
+    case TASK_TYPE_SET_OPERATING_MODE:
+      {
+        case PREFS_API_TERMINAL_OPERATING_MODE_ON:
+
+          if( m_nextProtocol!=NULL )
+          {
+            AUD_LOG_INFO("PREFS_API_TERMINAL_OPERATING_MODE_ON: Starting next protocol %p", m_nextProtocol);
+            `startStreamingFromProtocol(m_nextProtocol);`
+            m_nextProtocol=NULL;
+          }
+          break;
+      }
+
+    case TASK_TYPE_STREAMING_STATE_UPDATE:
+      {
+        bool streamingBlocked = s_applicationLaunchPolicy->canLaunchApplication(s_appId);
+        AUD_LOG_MIL("Can Launch app returned %x",streamingBlocked);
+        if (streamingBlocked != m_streamingAllowed)
+        {
+          m_streamingAllowed = streamingBlocked;
+          if( m_streamingAllowed )
+          {
+            `handleEnableStreaming();`
+          }
+        }
+      }
+  }
+
+  if( m_ptrBluetoothProtocol!=NULL )
+  {
+    m_ptrBluetoothProtocol->disable();
+    delete m_ptrBluetoothProtocol;
+    m_ptrBluetoothProtocol=NULL;
+  }
+
+  if( m_ptrAirplayProtocol!=NULL )
+  {
+    m_ptrAirplayProtocol->disable();
+    delete m_ptrAirplayProtocol;
+    m_ptrAirplayProtocol=NULL;
+  }
+}
+
+void AudioStreamer::Player::handleEnableStreaming()
+{
+  /*
+   * Start MDNSD before enabling Airplay
+   */
+  if (m_networkAvailable )
+  {
+
+    if (configureAndStartMdnsd())
+    {
+      m_ptrAirplayProtocol->enable(m_webServer->getPort());
+    }
+    else
+    {
+      AUD_LOG_FATAL("Airplay is not enabled as Audiostreamer failed to start MDNSD in a container");
+    }
+    m_airplayEnabled = true;
+  }
+  else
+  {
+    AUD_LOG_WARNING("Airplay is Not enabled due to Network UnAvailability");
+  }
+
+  m_ptrBluetoothProtocol->enable();
+}
+
+int AudioStreamer::Player::startUp()
+{
+  //start check launch policy
+  Task t;
+  t.type=TASK_TYPE_STREAMING_STATE_UPDATE;
+}
+
+int AUDIO_STREAMER::Proxy::StartUp()
+{
+  return AudioStreamer::Player::instance().startUp();
+}
+
+
+// switch between protocols
+
+void AudioStreamer::Player::handleProtocolMessage(Task &task)
+{
+  switch(msg->type)
+  {
+    case Protocol::MESSAGE_TYPE_SESSION_INITIALIZE:
+      {
+        // stop current protocol first that session has and then save it for next
+
+        AUD_LOG_INFO("Stop protocol %p first",m_session.getProtocol());
+        m_nextProtocol=msg->protocol;
+        handleStopStreaming(); // calls m_protocol->stop();
+      }
+
+    case Protocol::MESSAGE_TYPE_SESSION_FINALIZE_BEGIN:
+
+  }
+}
+
+// Components/AudioStreamer/source/AirPlayProtocol.cpp
+
+bool AudioStreamer::AirPlayProtocol::sessionInitialize()
+{
+  Message msg;
+  postProtocolMessage(MESSAGE_TYPE_SESSION_INITIALIZE, msg);
+  AUD_LOG_EXIT("AudioStreamer::AirPlayProtocol::sessionInitialize");
+  return msg.success;
+}
+
+// Components/AudioStreamer/source/BluetoothProtocol.cpp
+
+void AudioStreamer::BluetoothProtocol::bluetoothEventListener(const BluetoothApi::Streamer::Message& message)
+{
+  case BluetoothApi::Streamer::MESSAGE_TYPE_SESSION_START:
+    {
+      AudioThread::Format atf = s_convertBtFormat(message.audioFormat);            
+      if( !AudioThread::validateFormat(atf) )
+      {
+        AUD_LOG_WARNING("Cannot validate audio format");
+        break;
+      }
+
+      m_audioFormat=atf;
+      AUD_LOG_INFO("AudioFormat: sampleSize %d channels %d sampleRate %d", m_audioFormat.sampleSizeBytes, m_audioFormat.channels, m_audioFormat.sampleRate);
+
+      Message msg;
+      postProtocolMessage(MESSAGE_TYPE_SESSION_INITIALIZE, msg);
+
+      break;
+    }
+}
+
+void AudioStreamer::Player::startStreamingFromProtocol(Protocol *protocol)
+{
+  if( !m_audioThread.threadStart() ) { AUD_LOG_FATAL("Failed to start audio thread"); }
+  m_session.start(protocol);
+}
+
+void AudioStreamer::Player::Session::`start`(Protocol *protocol)
+{
+  m_protocol=protocol;
+  AUD_LOG_MIL("Session::start protocol %p type %d", m_protocol, m_protocol->getProtocolType());
+  m_playerStatus.protocol=protocol->getProtocolType();
+  setState(AUDIO_STREAMER::STREAMING);
+}
+
+
+<bluetooth-streamer>
+
+// register callback to `BluetoothMediaStreamer`
+
+BluetoothApi::Streamer*                 m_btInstance;
+
+void AudioStreamer::BluetoothProtocol::enable()
+{
+  AUD_LOG_MIL("Starting bluetooth");
+  BluetoothApi::Streamer::createInstance();
+  m_btInstance = BluetoothApi::Streamer::instance();
+
+  // BluetoothMediaStreamer
+  `m_btInstance->setMessageHandler(&s_bluetoothEventListener,this);`
+}
 
 // Components/Bluetooth/reader/include/BluetoothStreamer.h
-
 namespace BluetoothApi
 {
   class Streamer
@@ -2502,12 +2708,577 @@ namespace BluetoothApi
   };
 }
 
+
 // Components/Bluetooth/reader/source/bluetooth_media.h
+// Components/Bluetooth/reader/source/bluetooth_media.cpp
 
 class BluetoothMediaStreamer : 
-  public BluetoothApi::Streamer, public BluetoothA2DPTransportListener, public TimerListener
+  public BluetoothApi::Streamer, 
+  public BluetoothA2DPTransportListener, public TimerListener
 {
 };
+
+
+/** @brief Creates the object which manages the bluetooth streamer
+ *
+ * Creates internal state for managing the bluetooth streamer. If already
+ * created, this function does nothing. Thread safe.
+ */
+void BluetoothApi::Streamer::createInstance()
+{
+  pthread_rwlock_wrlock(&singleton_lock);
+  if (!singleton) singleton = `new BluetoothMediaStreamer();`
+  pthread_rwlock_unlock(&singleton_lock);
+}
+
+
+*dbus-transport-added*
+
+// Components/Bluetooth/dbusitf/source/bluez_parser.cpp
+// Handle interface addition, either from signals or from GetManagedObjects responses
+class BluezInterfaceAdditionAdapter : public BluezParserAdapter
+{
+  case BluezParserEvent::PROPERTYBAG_END:
+    if (m_listener && m_object) m_listener->onBluezObjectAdded(m_interface, *m_object);
+}
+
+// Components/Bluetooth/dbusitf/source/bluetooth.cpp
+/**
+ * @brief BluezParser callback.
+ * Not for external use.
+ */
+void Bluetooth::onBluezObjectAdded(const std::string &interface, const BluezObject &obj)
+{
+  Locker lock(&m_bus_lock);
+  BluezProxy *proxy = NULL;
+  if (lookupProxy(interface, &proxy)) `proxy->add(obj);`
+  else AS_LOG_ERROR("no proxy for %s %s", interface.c_str(), obj.getPath().c_str());
+}
+
+void BluetoothMediaTransport::add(const BluezObject &object)
+{
+  BluezObject o = object;
+  o += m_prototype_object;
+  BluezProxy::add(o);
+}
+
+/**
+ * @brief Add a new BluezObject to the proxy
+ * @param object reference to the BluezObject to add
+ */
+void BluezProxy::add(const BluezObject &object)
+{
+  /* Adding a duplicated object is probably a sign that bluetoothd restarted
+   * without cleanly shutting down first.
+   * Since we'd like to keep our cached information up-to-date, we need to replace
+   * our BluezObject with the new one.
+   * And since we'd like any client code to be able to do required magic on object
+   * re-registration, generate a fake "removed" event before re-adding.
+   */
+  if (lookup(object.getPath())) {
+    drop(object.getPath());
+  }
+
+  `if (addObject(object)) notify(onObjectAdded(object.getPath()));`
+}
+
+class MediaTransportListener : public BluezProxyListener
+{
+  public:
+    MediaTransportListener(BluetoothMediaStreamer *streamer) : m_streamer(streamer) {};
+
+  private:
+    void onObjectAdded(const std::string &path) {
+      if (m_streamer) `m_streamer->onTransportAdded(path);`
+    };
+
+    void onPropertyChange(const std::string &path, const DBusProperty &property) {
+      if (property.getName() == BLUEZ_MEDIATRANSPORT_PROP_STATE) {
+        if (m_streamer) m_streamer->onTransportState(path, property.getValue().asString());
+      }
+    };
+
+    BluetoothMediaStreamer *m_streamer;
+};
+
+
+class BluetoothMediaStreamer : 
+  public BluetoothApi::Streamer, 
+  `public BluetoothA2DPTransportListener`, 
+  public TimerListener
+{
+  BluetoothMediaTransport *m_transport;
+};
+
+/** @brief Constructs the BluetoothMediaStreamer object.
+ *
+ * Creates locks used for thread safety. Registers for Bluez MediaPlayer events
+ * and starts a thread to handle Bluez events. Blocks until the media thread is
+ * running.
+ */
+BluetoothMediaStreamer::BluetoothMediaStreamer()
+{
+  // `register to dbus`
+
+  std::vector<std::string> endpoints = media_endpoint->getObjectPaths();
+
+  m_transport = Bluetooth::getInstance()->getMediaTransports();
+  if (m_transport) {
+    `m_transport_listener = new MediaTransportListener(this);`
+    if (m_transport_listener) m_transport->addListener(m_transport_listener);
+    else AS_LOG_ERROR("failed to create MediaTransportListener");
+  } else {
+    AS_LOG_ERROR("failed to obtain BluetoothMediaTransport");
+  }
+}
+
+
+*dbus-transport-added*
+/** @brief Handles Bluez MediaTransport1 addition
+ */
+void BluetoothMediaStreamer::onTransportAdded(const std::string &path)
+{
+  m_evq.push(BTStreamerMessage
+      (BTStreamerMessage::MSG_TYPE_TRANSPORT_ADDED, path));
+}
+
+
+// thread
+
+void BluetoothMediaStreamer::eventHandler(void)
+{
+  case BTStreamerMessage::MSG_TYPE_TRANSPORT_ADDED:
+    // Create a new session for this transport
+    if (`createSession(m.object_path)`) 
+      current_transport = m.object_path;
+    break;
+}
+
+
+// Components/Bluetooth/reader/source/bluetooth_media.h
+
+class PlaybackSession {
+  public:
+    PlaybackSession(
+        const std::string &bluez_xport_path, 
+        BluetoothA2DPTransportListener *listener)
+
+      : xport(NULL)
+        , xport_listener(listener)
+        , halt_timer(TIMER_ID_UNSET) 
+        {
+          xport = `new BluetoothA2DPTransport(bluez_xport_path);`
+          if (xport) xport->addListener(xport_listener);
+        };
+};
+
+bool BluetoothMediaStreamer::createSession(const std::string &xport_path)
+{
+  PlaybackSession *session = findSessionByXport(xport_path);
+  if (!session) {
+    `session = new PlaybackSession(xport_path, this);`
+  }
+  return false;
+}
+
+
+// Components/Bluetooth/reader/source/bluetooth_a2dp_transport.cpp
+
+BluetoothA2DPTransport::BluetoothA2DPTransport(const std::string &transport_path)
+    : m_transport_path(transport_path)
+    , m_fsm(NULL)
+    , m_reader(NULL)
+    , m_got_media_format(false)
+{
+  pthread_mutex_init(&m_listener_lock, NULL);
+  `m_fsm = new BluetoothMediaFsm(transport_path);`
+  if (m_fsm) {
+    `m_fsm->addListener(this);`
+    AS_LOG_MIL("new a2dp transport %s", transport_path.c_str());
+  } else AS_LOG_ERROR("failed to create fsm instance");
+}
+
+
+// Components/Bluetooth/reader/source/bluetooth_media_fsm.h
+*use-thread*
+ret = pthread_create(&m_thread, NULL, threadFn, (void*)this);
+
+class BluetoothMediaFsm
+{
+public:
+    enum FsmEvent {
+        FSM_EVENT_TRANSPORT_IDLE,
+        FSM_EVENT_TRANSPORT_PENDING,
+        FSM_EVENT_TRANSPORT_ACTIVE,
+        FSM_EVENT_TRANSPORT_DEAD,
+        FSM_EVENT_QUIT,
+    };
+
+    BluetoothMediaFsm(std::string transport_path);
+    ~BluetoothMediaFsm();
+
+    bool addListener(BluetoothMediaFsmListener *listener);
+    bool removeListener(BluetoothMediaFsmListener *listener);
+
+    bool getFd(int &fd, uint16_t &wmtu, uint16_t &rmtu) {
+        if (m_fd < 0) return false;
+        fd = m_fd;
+        wmtu = m_wmtu;
+        rmtu = m_rmtu;
+        return true;
+    };
+
+    BluetoothMediaTransport *m_transport;
+};
+
+void BluetoothMediaFsm::run()
+{
+  bool running = true;
+
+  // obtain BT proxy handles
+  if (!m_transport && !m_endpoint) {
+    Bluetooth *bt = Bluetooth::getInstance();
+    DBusProperty property("");
+    if (bt) {
+      m_endpoint = bt->getMediaEndpoints();
+      m_transport = bt->getMediaTransports();
+    }
+  }
+
+  *dbus-transport-aquire-fd*
+  case FSM_EVENT_TRANSPORT_PENDING:
+    if (!acquireTransport()) {
+    }
+
+  *calls-transportUp*
+  case FSM_EVENT_TRANSPORT_ACTIVE:
+    setState(Connected);
+}
+
+bool BluetoothMediaFsm::acquireTransport()
+{
+  m_transport->tryAcquire(m_transport_path, m_fd, m_rmtu, m_wmtu);
+}
+
+
+/**
+ * @brief Attempt to acquire a file descriptor for a media transport.
+ * This relies on the transport being in the pending state, the call will fail
+ * if the transport is idle.
+ *
+ * @param object_path the bluez entity path of the transport
+ *
+ * @param fd reference to an integer to be assigned with the tranport file
+ * descriptor on success 
+ *
+ * @param readMTU reference to an integer to be assigned with the transport
+ * read MTU on success 
+ *
+ * @param writeMTU reference to an integer to be assigned with the transport
+ * write MTU on success 
+ *
+ * @return true on success, false otherwise
+ */
+
+bool BluetoothMediaTransport::tryAcquire(const std::string &object_path, int &fd, uint16_t &readMTU, uint16_t &writeMTU)
+{
+  if (!lookup(object_path)) {
+    AS_LOG_ERROR("no such path %s", object_path.c_str());
+    return false;
+  }
+
+  bool ret = false;
+  DBusMessage *response = NULL;
+  DBusMessage *msg = 
+    dbus_message_new_method_call("org.bluez", object_path.c_str(), 
+        "org.bluez.MediaTransport1", "TryAcquire");
+
+  if (msg) {
+    if (blockingSend(msg, &response)) {
+      int fdesc;
+      uint16_t rmtu, wmtu;
+      DBusError error;
+      dbus_error_init(&error);
+      if (!dbus_message_get_args(response, &error, DBUS_TYPE_UNIX_FD, &fdesc, DBUS_TYPE_UINT16, &rmtu, DBUS_TYPE_UINT16, &wmtu, DBUS_TYPE_INVALID)) {
+        AS_LOG_ERROR("failed to parse TryAcquire response: %s", error.message);
+        dbus_error_free(&error);
+      } else {
+
+        `fd = fdesc;`
+
+        readMTU = rmtu;
+        writeMTU = wmtu;
+        ret = true;
+      }
+    } else {
+      AS_LOG_ERROR("dbus send failed");
+      ret = false;
+    }
+    dbus_message_unref(msg);
+    if (response) dbus_message_unref(response);
+  } else AS_LOG_ERROR("failed to create dbus message");
+  return ret;
+}
+
+
+*dbus-transport-aquire-read-fd*
+void BluetoothA2DPTransport::transportUp()
+{
+  if (!m_reader) {
+    int fd;
+    uint16_t wmtu, rmtu;
+    a2dp_sbc_t config;
+    if (`m_fsm->getFd`(fd, wmtu, rmtu) && m_fsm->getConfig(config)) {
+      `m_reader = new BluetoothMediaReader(fd, config);`
+      if (m_reader) {
+        `m_reader->addListener(this);`
+      } else AS_LOG_ERROR("failed to instantiate media reader");
+    } else AS_LOG_ERROR("failed to obtain transport fd and config");
+  } else {
+    if (m_got_media_format) notify(onMediaTransportUp(this, m_format, m_samplerate, m_channels));
+    else {
+      /* stale reader, create a new one */
+      delete m_reader;
+      m_reader = NULL;
+      transportUp();
+    }
+  }
+}
+
+
+// Components/Bluetooth/reader/source/bluetooth_media_reader.cpp
+
+BluetoothMediaReader::BluetoothMediaReader(int fd, a2dp_sbc_t &config)
+{
+  *use-thread*
+  ret = pthread_create(&m_thread, &attr, readerThreadFn, this);
+}
+
+
+*dbus-transport-aquire-read-ready*
+ssize_t BluetoothMediaReader::decode(const uint8_t *data, int sz)
+{
+  if (decoded_len > 0) {
+    `notify(onBufferReady((char*)m_buf, decoded_len, m_sample));`
+    return offset + sizeof(struct rtp_header) + sizeof(*payload);
+  }
+}
+
+void BluetoothA2DPTransport::onBufferReady(char *buffer, size_t nbytes, size_t sampleno)
+{
+  notify(onBufferReady(this, buffer, nbytes, sampleno));
+}
+
+void BluetoothMediaStreamer::onBufferReady(BluetoothA2DPTransport *xport, void *buffer, size_t nbytes, size_t samplenum)
+{
+  // Copy buffer data; we'll release it later when the player app has finished with it
+
+  `char *copy = new char[nbytes];`
+  if (copy) {
+
+    *use-memcpy*
+    memcpy(copy, buffer, nbytes);
+
+    m_evq.push(
+        BTStreamerMessage(BTStreamerMessage::MSG_TYPE_MEDIA_BUFFER_READY, 
+          xport, 
+          AudioBuffer(copy, nbytes, samplenum))
+        );
+  }
+}
+
+
+*use-thread*
+void BluetoothMediaStreamer::eventHandler(void)
+{
+  case BTStreamerMessage::MSG_TYPE_MEDIA_BUFFER_READY:
+    if (sessionIsCurrent(session) && sessionIsActive(session)) 
+      sendBufferFilled(m.audio_buffer);
+}
+
+void BluetoothMediaStreamer::sendBufferFilled(AudioBuffer &buf)
+{
+  if (buf.isValid()) {
+    Message msg;
+    msg.type = MESSAGE_TYPE_BUFFER_FILLED;
+    msg.buffer = buf.buffer;
+    msg.bufferLevel = buf.nbytes;
+    msg.sampleNumber = buf.samplenum;
+    sendMessage(msg);
+  }
+}
+
+void BluetoothMediaStreamer::sendMessage(Message &m)
+{
+    Locker lock(&m_handler_lock);
+    m_handler(m, m_handler_arg);
+}
+
+// registered to BluetoothMediaStreamer
+// BluetoothMediaStreamer
+// `m_btInstance->setMessageHandler(&s_bluetoothEventListener,this);`
+
+// Components/AudioStreamer/source/AudioBuffer.h
+
+*use-pointers-and-no-copy*
+
+AudioBuffer                             m_audioBuffer;
+
+void AudioStreamer::BluetoothProtocol::bluetoothEventListener
+  (const BluetoothApi::Streamer::Message& message)
+{
+  switch(message.type)
+  {
+    case BluetoothApi::Streamer::MESSAGE_TYPE_BUFFER_FILLED:
+      {
+        Guard lock(m_audBufferSync);
+
+        //accept data
+        size_t bufferLevelBytes = 
+          m_audioBuffer.add(message.buffer, message.bufferLevel, message.sampleNumber);
+      }
+  }
+}
+
+class AudioBuffer
+{
+public:
+    struct Packet
+    {
+        Packet(void *buffer, size_t bufferSize, size_t sampleNumber) 
+          : start(buffer), startSample(sampleNumber), size(bufferSize), used(0) {}
+
+        void *start;
+        size_t startSample;
+        size_t size;
+        size_t used;
+    };
+public:
+    AudioBuffer();
+    ~AudioBuffer();
+    
+    // add and popFront returns the total buffersize in bytes held by the audio buffer after the operation
+    size_t  add(void *buffer, size_t bufferSize, size_t sampleNumber);
+
+private:
+    list<Packet>    m_packets;
+    volatile size_t m_bufferLevel;
+};
+
+size_t AudioStreamer::AudioBuffer::add(void *buffer, size_t bufferSize, size_t sampleNumber)
+{
+  AUD_LOG_ENTRY("AudioStreamer::AudioBuffer::add");
+  Guard lock(m_mutex);
+  AUD_LOG_INFO("Adding buffer %p size %u", buffer, bufferSize);
+  m_bufferLevel += bufferSize;
+  m_packets.push_back(Packet(buffer, bufferSize, sampleNumber));
+  //It's only expected the first packet will have used up any data
+  AUD_LOG_EXIT("AudioStreamer::AudioBuffer::add");
+  return m_bufferLevel-m_packets.front().used;
+}
+
+
+// Components/Bluetooth/dbusitf/include/bluetooth.h
+
+class Bluetooth
+    : public IDBusTransportListener
+    , public BluezParserListener
+{
+  public:
+    static Bluetooth *getInstance();
+
+    // returns a heap-allocated pointer with the same lifetime 
+    // as the Bluetooth object itself
+    BluetoothMediaTransport *getMediaTransports();
+};
+
+Bluetooth::Bluetooth()
+    : m_bus_connection(NULL)
+    , m_bus_transport(NULL)
+{
+  pthread_mutex_init(&m_bus_lock, NULL);
+  pthread_mutex_init(&m_msghdlr_lock, NULL);
+
+  if (connectToBus()) {
+    m_bus_transport = new DBusTransport(m_bus_connection, this);
+    if (m_bus_transport) {
+
+      if (!initProxy("BluetoothHCI", new BluetoothHCI(m_bus_transport)))
+        AS_LOG_ERROR("failed to set up host interface proxy");
+
+      if (!initProxy("BluetoothDevice", new BluetoothDevice(m_bus_transport)))
+        AS_LOG_ERROR("failed to set up device proxy");
+
+      if (!initProxy("MediaEndpoint", new BluetoothMediaEndpoint(m_bus_transport)))
+        AS_LOG_ERROR("failed to set up media endpoint proxy");
+
+      // #define `BLUEZ_MEDIATRANSPORT_INTERFACE`
+      // "org.bluez.MediaTransport1"
+
+      if (!initProxy("BluetoothMediaTransport",
+            `new BluetoothMediaTransport`(m_bus_transport)))
+        AS_LOG_ERROR("failed to set up media transport proxy");
+
+      if (!initProxy("BluetoothMediaPlayer", new BluetoothMediaPlayer(m_bus_transport)))
+        AS_LOG_ERROR("failed to set up media player proxy");
+
+      if (!initProxy("BluetoothPairingAgent", new BluetoothPairingAgent(m_bus_transport)))
+        AS_LOG_ERROR("failed to set up pairing agent");
+
+      if (!addBusMatch(BUS_MATCH_NAME_OWNER_CHANGED)) AS_LOG_ERROR("failed to add NameOwnerChanged bus match");
+      if (!addBusMatch(BUS_MATCH_INTERFACES_ADDED)) AS_LOG_ERROR("failed to add InterfacesAdded bus match");
+      if (!addBusMatch(BUS_MATCH_INTERFACES_REMOVED)) AS_LOG_ERROR("failed to add InterfacesRemoved bus match");
+
+    } else AS_LOG_ERROR("failed to allocate dbus transport");
+  } else AS_LOG_ERROR("failed to initialise dbus connection");
+}
+
+/**
+ * @brief Obtain a pointer to the media transport proxy
+ *
+ * This method will always return a valid pointer with the same lifetime
+   as the Bluetooth singleton.
+ */
+BluetoothMediaTransport *Bluetooth::getMediaTransports()
+{
+  if (lookupProxy(`BLUEZ_MEDIATRANSPORT_INTERFACE`, &proxy)) {
+    return static_cast<BluetoothMediaTransport*>(proxy);
+}
+
+
+/**
+ * @class BluetoothMediaTransport
+ *
+ * The BluetoothMediaTransport class is a proxy for bluez entities exposing
+ * the org.bluez.MediaTransport1 interface.
+ */
+
+class BluetoothMediaTransport : public BluezProxy {
+};
+
+
+// Components/Bluetooth/dbusitf/include/bluez_proxy.h
+
+class BluezProxy
+{
+  public:
+    bool addListener(BluezProxyListener *listener);
+};
+
+
+// Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_PlatformItf.cpp
+
+PlatformItf::PlatformItf(const char *platformDeviceName,
+                         const char *bluezRoot,
+                         bool active) : m_currentHci("")
+{
+  m_bluezPathRoot = bluezRoot;
+  m_active        = active;
+  m_platformDeviceName = platformDeviceName;
+
+  `m_bluetooth = Bluetooth::getInstance();`
+  m_pairingAgent = m_bluetooth->getPairingAgent();
+}
 
 
 ={============================================================================
