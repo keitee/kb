@@ -30,8 +30,14 @@ dbus_bus_add_match(DbusConnection *,const char *rule, DBusError *)
 to add a match for the messages that we want to receive, the rule string has a
 specific format, see DBus match rule for full details.
 
-// gcc `pkg-config --libs --cflags dbus-1 glib-2.0 dbus-glib-1` listen.c -o listen
+gcc `pkg-config --libs --cflags dbus-1 glib-2.0 dbus-glib-1` listen.c -o listen
+    -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -ldbus-glib-1 -ldbus-1 -lgobject-2.0 -lglib-2.0
 gcc -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -ldbus-glib-1 -ldbus-1 -lgobject-2.0 -lglib-2.0 dbus-02-listen.c -o dbus-02-listen
+
+// the above do not work and have to use below for gcc (Ubuntu 7.4.0-1ubuntu1~18.04) 7.4.0
+gcc `pkg-config --cflags dbus-1 glib-2.0 dbus-glib-1` dbus-02-listen.c `pkg-config --libs dbus-1 glib-2.0 dbus-glib-1` -o dbus-02-listen
+$ echo gcc `pkg-config --cflags dbus-1 glib-2.0 dbus-glib-1` dbus-02-listen.c `pkg-config --libs dbus-1 glib-2.0 dbus-glib-1` -o dbus-02-listen
+gcc -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include dbus-02-listen.c -ldbus-glib-1 -ldbus-1 -lgobject-2.0 -lglib-2.0 -o dbus-02-listen
 
 
 // works on gcc (Debian 6.3.0-18+deb9u1) 6.3.0 20170516
@@ -39,7 +45,26 @@ gcc -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/usr/
 gcc -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include dbus-02-send.c -ldbus-1 -o dbus-02-send
 
 
-// when run listen
+// log from send and listen. As you see, filter gets called whenever message is
+// sent.
+
+$ ./dbus-02-send -c
+
+enter: dbus_filter gets called...
+leave: dbus_filter gets called...
+
+$ ./dbus-02-send -u
+
+enter: dbus_filter gets called...
+Message cutomize received
+
+$ ./dbus-02-send -q
+
+enter: dbus_filter gets called...
+Message quit received
+
+
+// monitor log when run listen
 
 method call time=1562107336.225789 sender=:1.93 -> destination=org.freedesktop.DBus serial=1 path=/org/freedesktop/DBus; interface=org.freedesktop.DBus; member=Hello
 method return time=1562107336.225808 sender=org.freedesktop.DBus -> destination=:1.93 serial=1 reply_serial=1
@@ -82,11 +107,21 @@ signal time=1562107489.943757 sender=org.freedesktop.DBus -> destination=(null d
 #include <dbus/dbus-glib.h>
 #include <glib.h>
 
+// to aviod this warning:
+// dbus-02-listen.c: In function ‘main’:
+// dbus-02-listen.c:255:3: warning: implicit declaration of function ‘dbus_connection_setup_with_g_main’; did you mean ‘dbus_connection_send_with_reply’? [-Wimplicit-function-declaration]
+//    dbus_connection_setup_with_g_main(connection,NULL);
+//    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//    dbus_connection_send_with_reply
+//
+// https://dbus.freedesktop.org/doc/dbus-glib/index.html
+#include <dbus/dbus-glib-lowlevel.h>
+
 static DBusHandlerResult
 
 dbus_filter (DBusConnection *connection, DBusMessage *message, void *user_data)
 {
-  printf("dbus_filter gets called...\n");
+  printf("enter: dbus_filter gets called...\n");
 
   /*
 
@@ -110,10 +145,11 @@ dbus_filter (DBusConnection *connection, DBusMessage *message, void *user_data)
   */
   if ( dbus_message_is_signal(message, "org.share.linux", "Customize")) 
   {
-    printf("Message cutomize received\n"); return DBUS_HANDLER_RESULT_HANDLED; 
+    printf("Message cutomize received\n"); 
+    return DBUS_HANDLER_RESULT_HANDLED; 
   }
 
-  if ( dbus_message_is_signal(message,"org.share.linux","Quit" ) )
+  if ( dbus_message_is_signal(message,"org.share.linux", "Quit" ) )
   {
     printf("Message quit received\n");
 
@@ -124,6 +160,7 @@ dbus_filter (DBusConnection *connection, DBusMessage *message, void *user_data)
     return DBUS_HANDLER_RESULT_HANDLED;
   }
 
+  printf("leave: dbus_filter gets called...\n");
   return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
@@ -150,6 +187,8 @@ int main()
   }
 
   /*
+  https://dbus.freedesktop.org/doc/api/html/group__DBusBus.html#ga4eb6401ba014da3dbe3dc4e2a8e5b3ef
+
   DBUS_EXPORT 
   void dbus_bus_add_match(DBusConnection * connection,
     const char * rule,
@@ -157,6 +196,74 @@ int main()
   );
 
   Adds a match rule to match messages going through the message bus.
+
+  The "rule" argument is the string form of a match rule.
+  
+  If you pass NULL for the error, this function will not block; the match thus
+  won't be added until you flush the connection, and if there's an error adding
+  the match you won't find out about it. This is generally acceptable, since the
+  possible errors (including a lack of resources in the bus, the connection
+  having exceeded its quota of active match rules, or the match rule being
+  unparseable) are generally unrecoverable.
+  
+  If you pass non-NULL for the error this function will block until it gets a
+  reply. This may be useful when using match rule keys introduced in recent
+  versions of D-Bus, like 'arg0namespace', to allow the application to fall back
+  to less efficient match rules supported by older versions of the daemon if the
+  running version is not new enough; or when using user-supplied rules rather
+  than rules hard-coded at compile time.
+  
+  Normal API conventions would have the function return a boolean value
+  indicating whether the error was set, but that would require blocking always
+  to determine the return value.
+  
+  The AddMatch method is fully documented in the D-Bus specification. For quick
+  reference, the format of the match rules is discussed here, but the
+  specification is the canonical version of this information.
+  
+  Rules are specified as a string of comma separated key/value pairs. An example
+  is 
+
+  "type='signal',sender='org.freedesktop.DBus', interface='org.freedesktop.DBus',member='Foo', path='/bar/foo',destination=':452345.34'"
+
+  Possible keys you can match on are type, sender, interface, member, path,
+  destination and numbered keys to match message args (keys are 'arg0', 'arg1',
+  etc.). Omitting a key from the rule indicates a wildcard match. For instance
+  omitting the member from a match rule but adding a sender would let all
+  messages from that sender through regardless of the member.
+  
+  Matches are inclusive not exclusive so as long as one rule matches the message
+  will get through. It is important to note this because every time a message is
+  received the application will be paged into memory to process it. This can
+  cause performance problems such as draining batteries on embedded platforms.
+  
+  If you match message args ('arg0', 'arg1', and so forth) only string arguments
+  will match. That is, arg0='5' means match the string "5" not the integer 5.
+  
+  Currently there is no way to match against non-string arguments.
+  
+  A specialised form of wildcard matching on arguments is supported for
+  path-like namespaces. If your argument match has a 'path' suffix (eg:
+  "arg0path='/some/path/'") then it is considered a match if the argument
+  exactly matches the given string or if one of them ends in a '/' and is a
+  prefix of the other.
+  
+  Matching on interface is tricky because method call messages only optionally
+  specify the interface. If a message omits the interface, then it will NOT
+  match if the rule specifies an interface name. This means match rules on
+  method calls should not usually give an interface.
+  
+  However, signal messages are required to include the interface so when
+  matching signals usually you should specify the interface in the match rule.
+  
+  For security reasons, you can match arguments only up to
+  DBUS_MAXIMUM_MATCH_RULE_ARG_NUMBER.
+  
+  Match rules have a maximum length of DBUS_MAXIMUM_MATCH_RULE_LENGTH bytes.
+  
+  Both of these maximums are much higher than you're likely to need, they only
+  exist because the D-Bus bus daemon has fixed limits on all resource usage.
+
   */
   dbus_bus_add_match (connection,
       "type='signal', interface='org.share.linux'",NULL);

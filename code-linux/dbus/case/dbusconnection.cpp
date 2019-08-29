@@ -154,7 +154,125 @@ method calls at the same time.
 If you aren't using threads, you can use a main loop and
 dbus_pending_call_set_notify() to achieve a similar result.
 
+
+DBUS_BUS_ADD_MATCH
+==================
+
+https://dbus.freedesktop.org/doc/api/html/group__DBusBus.html#ga4eb6401ba014da3dbe3dc4e2a8e5b3ef
+
+DBUS_EXPORT 
+void dbus_bus_add_match(DBusConnection * connection,
+  const char * rule,
+  DBusError * error 
+);
+
+Adds a match rule to match messages going through the message bus.
+
+The "rule" argument is the string form of a match rule.
+
+If you pass NULL for the error, this function will not block; the match thus
+won't be added until you flush the connection, and if there's an error adding
+the match you won't find out about it. This is generally acceptable, since the
+possible errors (including a lack of resources in the bus, the connection
+having exceeded its quota of active match rules, or the match rule being
+unparseable) are generally unrecoverable.
+
+If you pass non-NULL for the error this function will block until it gets a
+reply. This may be useful when using match rule keys introduced in recent
+versions of D-Bus, like 'arg0namespace', to allow the application to fall back
+to less efficient match rules supported by older versions of the daemon if the
+running version is not new enough; or when using user-supplied rules rather
+than rules hard-coded at compile time.
+
+Normal API conventions would have the function return a boolean value
+indicating whether the error was set, but that would require blocking always
+to determine the return value.
+
+The AddMatch method is fully documented in the D-Bus specification. For quick
+reference, the format of the match rules is discussed here, but the
+specification is the canonical version of this information.
+
+Rules are specified as a string of comma separated key/value pairs. An example
+is 
+
+"type='signal',sender='org.freedesktop.DBus', interface='org.freedesktop.DBus',member='Foo', path='/bar/foo',destination=':452345.34'"
+
+Possible keys you can match on are type, sender, interface, member, path,
+destination and numbered keys to match message args (keys are 'arg0', 'arg1',
+etc.). Omitting a key from the rule indicates a wildcard match. For instance
+omitting the member from a match rule but adding a sender would let all
+messages from that sender through regardless of the member.
+
+Matches are inclusive not exclusive so as long as one rule matches the message
+will get through. It is important to note this because every time a message is
+received the application will be paged into memory to process it. This can
+cause performance problems such as draining batteries on embedded platforms.
+
+If you match message args ('arg0', 'arg1', and so forth) only string arguments
+will match. That is, arg0='5' means match the string "5" not the integer 5.
+
+Currently there is no way to match against non-string arguments.
+
+A specialised form of wildcard matching on arguments is supported for
+path-like namespaces. If your argument match has a 'path' suffix (eg:
+"arg0path='/some/path/'") then it is considered a match if the argument
+exactly matches the given string or if one of them ends in a '/' and is a
+prefix of the other.
+
+Matching on interface is tricky because method call messages only optionally
+specify the interface. If a message omits the interface, then it will NOT
+match if the rule specifies an interface name. This means match rules on
+method calls should not usually give an interface.
+
+However, signal messages are required to include the interface so when
+matching signals usually you should specify the interface in the match rule.
+
+For security reasons, you can match arguments only up to
+DBUS_MAXIMUM_MATCH_RULE_ARG_NUMBER.
+
+Match rules have a maximum length of DBUS_MAXIMUM_MATCH_RULE_LENGTH bytes.
+
+Both of these maximums are much higher than you're likely to need, they only
+exist because the D-Bus bus daemon has fixed limits on all resource usage.
+
+dbus_bus_add_match (connection,
+  "type='signal', interface='org.share.linux'",NULL);
+
+
+#define BLUEZ_MEDIATRANSPORT_INTERFACE              "org.bluez.MediaTransport1"
+
+s += "',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='";
+s += interface;
+s += "'";
+
+std::string s = 
+"type='signal',sender='org.bluez',interface='org.freedesktop.DBus.Properties',member='PropertiesChanged',arg0='org.bluez.MediaTransport1'";
+
+
+DBUS_CONNECITON_ADD_FILTER
+==================
+
+DBUS_EXPORT dbus_bool_t dbus_connection_add_filter(
+DBusConnection * connection,
+DBusHandleMessageFunction function,
+void * user_data,
+DBusFreeFunction free_data_function 
+);
+
+free_data_function   function to use for freeing user data
+
+Adds a message filter.
+
+Filters are handlers that are run on all incoming messages, prior to the
+objects registered with dbus_connection_register_object_path(). Filters are
+run in the order that they were added. The same handler can be added as a
+filter more than once, in which case it will be run more than once. Filters
+added during a filter callback won't be run on the message being processed.
+
+note: this handler is to parse/process message
+
 */
+
 
 #include "dbusconnection.h"
 
@@ -344,23 +462,6 @@ bool DbusConnection::complete_connect_(DBusConnection *conn, std::string const &
 
   // save the conn before installing the filter and starting the dispatcher
   conn_ = conn;
-
-  // DBUS_EXPORT dbus_bool_t dbus_connection_add_filter(
-  //  DBusConnection * connection,
-  //  DBusHandleMessageFunction function,
-  //  void * user_data,
-  //  DBusFreeFunction free_data_function 
-  // );
-  //
-  // free_data_function   function to use for freeing user data
-  //
-  // Adds a message filter.
-  // 
-  // Filters are handlers that are run on all incoming messages, prior to the
-  // objects registered with dbus_connection_register_object_path(). Filters are
-  // run in the order that they were added. The same handler can be added as a
-  // filter more than once, in which case it will be run more than once. Filters
-  // added during a filter callback won't be run on the message being processed.
 
   if (TRUE != dbus_connection_add_filter(conn_, handle_dbus_message_cb_, this, NULL))
   {

@@ -8,6 +8,7 @@ send.c
 */
 
 #include <stdio.h>
+#include <string.h>
 #include <dbus/dbus.h>
 
 /*
