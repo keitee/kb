@@ -48,6 +48,34 @@
 **
 ****************************************************************************/
 
+/*
+D-Bus Chat Example 
+
+Demonstrates communication among instances of an application.
+
+Chat is a Qt D-Bus example which demonstrates a simple chat system among
+instances of an application. Users connect and send message to each other.
+
+  instance #1   
+    |                    |
+   \|/ register(expose) \|/ message(call)
+
+      instance #2   
+       | register(expose) | message(call)
+
+          instance #3   
+           | register(expose) | message(call)
+
+  <-------------- dbus ------------->
+
+so when only instance #1 exist, this gets input message. when there are many
+instances, all gets the same input message when one of them sends signal.
+
+$ dbus-send --session / org.example.chat.action string:'dbus:' string:'do you see?'
+
+*/
+
+
 #include <QApplication>
 #include <QMessageBox>
 
@@ -70,18 +98,29 @@ ChatMainWindow::ChatMainWindow()
 
     // add our D-Bus interface and connect to D-Bus
     new ChatAdaptor(this);
-    QDBusConnection::sessionBus().registerObject("/", this);
+    if(QDBusConnection::sessionBus().registerObject("/", this))
+      qDebug() << "org.exampe.chat is registered";
+    else
+      qDebug() << "org.exampe.chat is not registered";
 
+    // OrgExampleChatInterface proxy
     org::example::chat *iface;
     iface = new org::example::chat(QString(), QString(), QDBusConnection::sessionBus(), this);
-    //connect(iface, SIGNAL(message(QString,QString)), this, SLOT(messageSlot(QString,QString)));
-    QDBusConnection::sessionBus().connect(QString(), QString(), "org.example.chat", "message", this, SLOT(messageSlot(QString,QString)));
+
+    // maps org.example.chat signal to slots
+    connect(iface, SIGNAL(message(QString,QString)), this, SLOT(messageSlot(QString,QString)));
+    // shorter than this:
+    // QDBusConnection::sessionBus().connect(QString(), QString(), "org.example.chat", "message", this, SLOT(messageSlot(QString,QString)));
+
     connect(iface, SIGNAL(action(QString,QString)), this, SLOT(actionSlot(QString,QString)));
 
+    // shows new nickname dialog
     NicknameDialog dialog;
     dialog.cancelButton->setVisible(false);
     dialog.exec();
     m_nickname = dialog.nickname->text().trimmed();
+    
+    // send dbus signal
     emit action(m_nickname, QLatin1String("joins the chat"));
 }
 
@@ -124,11 +163,18 @@ void ChatMainWindow::textChangedSlot(const QString &newText)
 
 void ChatMainWindow::sendClickedSlot()
 {
-    //emit message(m_nickname, messageLineEdit->text());
-    QDBusMessage msg = QDBusMessage::createSignal("/", "org.example.chat", "message");
-    msg << m_nickname << messageLineEdit->text();
-    QDBusConnection::sessionBus().send(msg);
-    messageLineEdit->setText(QString());
+  // send dbus signal
+  // emit message(m_nickname, messageLineEdit->text());
+  //
+  // do the same as:
+  //
+  // QDBusMessage msg = QDBusMessage::createSignal("/", "org.example.chat", "message");
+  // msg << m_nickname << messageLineEdit->text();
+  // QDBusConnection::sessionBus().send(msg);
+
+  emit message(m_nickname, messageLineEdit->text());
+
+  messageLineEdit->setText(QString());
 }
 
 void ChatMainWindow::changeNickname()
@@ -137,6 +183,8 @@ void ChatMainWindow::changeNickname()
     if (dialog.exec() == QDialog::Accepted) {
         QString old = m_nickname;
         m_nickname = dialog.nickname->text().trimmed();
+
+        // send dbus signal
         emit action(old, QString("is now known as %1").arg(m_nickname));
     }
 }
@@ -148,6 +196,7 @@ void ChatMainWindow::aboutQt()
 
 void ChatMainWindow::exiting()
 {
+    // send dbus signal
     emit action(m_nickname, QLatin1String("leaves the chat"));
 }
 
