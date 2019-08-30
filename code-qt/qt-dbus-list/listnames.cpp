@@ -61,10 +61,12 @@ void method1()
   // QDBusConnectionInterface *QDBusConnection::interface() const
   // Returns a QDBusConnectionInterface object that represents the D-Bus server
   // interface on this connection.
-
+  // 
   // https://doc.qt.io/qt-5/qdbusconnectioninterface.html
   //
   // Detailed Description
+  //
+  // Inherits:	QDBusAbstractInterface
   //
   // The D-Bus bus server daemon provides one special interface
   // org.freedesktop.DBus that allows clients to access certain properties of

@@ -13,6 +13,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_qt_0001| qt-logging
 |kt_dev_qt_0001| qt-slot qt-thread
 |kt_dev_qt_0001| qt-property
+|kt_dev_qt_0001| qt-dbus
 |kt_dev_qt_0001| qt-creator-command
 |kt_dev_qt_0001| qt-creator-project
 |kt_dev_qt_0001| qt-edit-navigate
@@ -1795,6 +1796,443 @@ void DBusAbstractInterface::onPropertiesChanged(const QString& interfaceName,
   }
 
   // TODO: handle invalidatedProperties as well
+}
+
+
+={============================================================================
+|kt_dev_qt_0001| qt-dbus
+
+https://doc.qt.io/qt-5/qdbusservicewatcher.html
+
+Detailed Description
+
+A QDBusServiceWatcher object can be used to notify the application about an
+ownership change of a service name on the bus. It has three watch modes:
+
+Watching for service registration only.
+Watching for service unregistration only.
+Watching for any kind of service ownership change (the default mode).
+
+Besides being created or deleted, services may change owners without a
+unregister/register operation happening. So the serviceRegistered() and
+serviceUnregistered() signals may not be emitted if that happens.
+
+This class is more efficient than using the
+QDBusConnectionInterface::serviceOwnerChanged() signal because it allows one
+to receive only the signals for which the class is interested in.
+
+Ending a service name with the character '*' will match all service names
+within the specified namespace.
+
+For example "com.example.backend1*" will match
+
+com.example.backend1
+com.example.backend1.foo
+com.example.backend1.foo.bar
+
+Substrings in the same domain will not be matched, i.e "com.example.backend12".
+
+<ex>
+
+{
+  // create a dbus service watcher object so we can detect if the bluez daemon
+  // (bluetoothd) falls off the bus or arrives back on the bus
+ 
+  m_bluezServiceWatcher =
+    QSharedPointer<QDBusServiceWatcher>::create("org.bluez", m_bluezDBusConn);
+
+  // connect to the added / remove service signals
+  QObject::connect(m_bluezServiceWatcher.data(), &QDBusServiceWatcher::serviceRegistered,
+      this, &BleRcuManagerImpl::onBluezServiceRegistered,
+      Qt::QueuedConnection);
+  QObject::connect(m_bluezServiceWatcher.data(), &QDBusServiceWatcher::serviceUnregistered,
+      this, &BleRcuManagerImpl::onBluezServiceUnregistered,
+      Qt::QueuedConnection);
+}
+
+
+org.freedesktop.DBus.ObjectManager
+
+GetManagedObjects()
+Returns the subordinate objects paths and their supported interfaces and properties.
+
+arguments
+
+returns
+a{oa{sa{sv}}}
+
+
+InterfacesAdded
+Signal indicating interfaces have been added to an object
+
+parameters: oa{sa{sv}}
+1. Object path gaining the new interfaces
+2. Dictionary of interfaces names and their properties
+
+InterfacesRemoved
+Signal indicating interfaces have been removed from an object
+
+parameters: oas
+1. Object path loosing the interfaces
+2. List of interface names
+
+<ex>
+
+// QDBusConnectionInterface *QDBusConnection::interface() const
+// Returns a QDBusConnectionInterface object that represents the D-Bus server
+// interface on this connection.
+// 
+// https://doc.qt.io/qt-5/qdbusconnectioninterface.html
+//
+// Detailed Description
+//
+// Inherits:	QDBusAbstractInterface
+//
+// The D-Bus bus server daemon provides one special interface
+// org.freedesktop.DBus that allows clients to access certain properties of
+// the bus, such as the current list of clients connected. The
+// QDBusConnectionInterface class provides access to that interface.
+// 
+// The most common uses of this class are to register and unregister service
+// names on the bus using the registerService() and unregisterService()
+// functions, query about existing names using the isServiceRegistered(),
+// registeredServiceNames() and serviceOwner() functions, and to receive
+// notification that a client has registered or de-registered through the
+// serviceRegistered(), serviceUnregistered() and serviceOwnerChanged()
+// signals.
+
+As with QDBusConnectionInterface, can have class for ObjectManager interface
+
+class DBusObjectManagerInterface: public QDBusAbstractInterface
+  {
+    Q_OBJECT
+
+    public:
+      static inline const char *staticInterfaceName()
+      { return "org.freedesktop.DBus.ObjectManager"; }
+
+    public:
+      DBusObjectManagerInterface(const QString &service, const QString &path,
+          const QDBusConnection &connection,
+          QObject *parent = nullptr);
+      ~DBusObjectManagerInterface();
+
+      public slots:
+        inline QDBusPendingReply<DBusManagedObjectList> GetManagedObjects()
+        {
+          QList<QVariant> argumentList;
+          return asyncCallWithArgumentList(QStringLiteral("GetManagedObjects"), argumentList);
+        }
+
+signals:
+      void InterfacesAdded(const QDBusObjectPath &objectPath, DBusInterfaceList interfacesAndProperties);
+      void InterfacesRemoved(const QDBusObjectPath &objectPath, const QStringList &interfaces);
+  };
+
+
+// -----------------------------------------------------------------------------
+/**
+ *	@brief Registers the types used for this dbus interface
+ *
+ *	The function contains an atomic check to ensure that the types are only
+ *	registered once
+ *
+ */
+static void registerObjectManagerTypes()
+{
+  static QAtomicInteger<bool> isDone(false);
+
+  if (isDone.testAndSetAcquire(false, true)) {
+    qDBusRegisterMetaType<DBusInterfaceList>();
+    qDBusRegisterMetaType<DBusManagedObjectList>();
+  }
+}
+
+DBusObjectManagerInterface::DBusObjectManagerInterface(const QString &service,
+                                                       const QString &path,
+                                                       const QDBusConnection &connection,
+                                                       QObject *parent)
+  : QDBusAbstractInterface(service, path, staticInterfaceName(), connection, parent)
+{
+  registerObjectManagerTypes();
+}
+
+DBusObjectManagerInterface::~DBusObjectManagerInterface()
+{}
+
+
+$ dbus-send  --system --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.ListNames
+
+
+<qt-dbus-proxy-ex>
+
+// -----------------------------------------------------------------------------
+/**
+ *	@class BluezAdapterInterface
+ *	@brief Proxy class for dbus interface org.bluez.Adapter1
+ *
+ *	This header was originally generated by the qdbusxml2cpp tool based on
+ *	org.bluez.Adapter1.xml interface specification.
+ *
+ *	It has been modified in the following ways:
+ *	  - Inherited from DBusAbstractInterface rather than QDBusAbstractInterface
+ *	  - Added notify signals to some of the properties
+ *	  - Move the construct and destructor bodies into this header file
+ *
+ */
+class BluezAdapterInterface : public DBusAbstractInterface
+{
+  Q_OBJECT
+
+  public:
+    static inline const char *staticInterfaceName()
+    { return "org.bluez.Adapter1"; }
+
+  public:
+    BluezAdapterInterface(const QString &service, const QString &path, const QDBusConnection &connection, QObject *parent = nullptr)
+      : DBusAbstractInterface(service, path, staticInterfaceName(), connection, parent)
+    { }
+
+    ~BluezAdapterInterface()
+    { }
+
+    Q_PROPERTY(QString Address READ address)
+      inline QString address() const
+      { return qvariant_cast< QString >(property("Address")); }
+
+    Q_PROPERTY(QString Alias READ alias WRITE setAlias NOTIFY aliasChanged)
+      inline QString alias() const
+      { return qvariant_cast< QString >(property("Alias")); }
+    inline void setAlias(const QString &value)
+    { setProperty("Alias", QVariant::fromValue(value)); }
+
+    Q_PROPERTY(quint32 Class READ deviceClass NOTIFY deviceClassChanged)
+      inline quint32 deviceClass() const
+      { return qvariant_cast< quint32 >(property("Class")); }
+
+    Q_PROPERTY(bool Discoverable READ discoverable WRITE setDiscoverable NOTIFY discoverableChanged)
+      inline bool discoverable() const
+      { return qvariant_cast< bool >(property("Discoverable")); }
+    inline void setDiscoverable(bool value)
+    { setProperty("Discoverable", QVariant::fromValue(value)); }
+
+    Q_PROPERTY(uint DiscoverableTimeout READ discoverableTimeout WRITE setDiscoverableTimeout NOTIFY discoverableTimeoutChanged)
+      inline uint discoverableTimeout() const
+      { return qvariant_cast< uint >(property("DiscoverableTimeout")); }
+    inline void setDiscoverableTimeout(uint value)
+    { setProperty("DiscoverableTimeout", QVariant::fromValue(value)); }
+
+    Q_PROPERTY(bool Discovering READ discovering NOTIFY discoveringChanged)
+      inline bool discovering() const
+      { return qvariant_cast< bool >(property("Discovering")); }
+
+    Q_PROPERTY(QString Modalias READ modAlias NOTIFY modAliasChanged)
+      inline QString modAlias() const
+      { return qvariant_cast< QString >(property("Modalias")); }
+
+    Q_PROPERTY(QString Name READ name NOTIFY nameChanged)
+      inline QString name() const
+      { return qvariant_cast< QString >(property("Name")); }
+
+    Q_PROPERTY(bool Pairable READ pairable WRITE setPairable NOTIFY pairableChanged)
+      inline bool pairable() const
+      { return qvariant_cast< bool >(property("Pairable")); }
+    inline void setPairable(bool value)
+    { setProperty("Pairable", QVariant::fromValue(value)); }
+
+    Q_PROPERTY(quint32 PairableTimeout READ pairableTimeout WRITE setPairableTimeout NOTIFY pairableTimeoutChanged)
+      inline quint32 pairableTimeout() const
+      { return qvariant_cast< quint32 >(property("PairableTimeout")); }
+    inline void setPairableTimeout(quint32 value)
+    { setProperty("PairableTimeout", QVariant::fromValue(value)); }
+
+    Q_PROPERTY(bool Powered READ powered WRITE setPowered NOTIFY poweredChanged)
+      inline bool powered() const
+      { return qvariant_cast< bool >(property("Powered")); }
+    inline void setPowered(bool value)
+    { setProperty("Powered", QVariant::fromValue(value)); }
+
+    Q_PROPERTY(QStringList UUIDs READ uuids NOTIFY uuidsChanged)
+      inline QStringList uuids() const
+      { return qvariant_cast< QStringList >(property("UUIDs")); }
+
+    public slots:
+      inline QDBusPendingReply<> RemoveDevice(const QDBusObjectPath &device)
+      {
+        QList<QVariant> argumentList;
+        argumentList << QVariant::fromValue(device);
+        return asyncCallWithArgumentList(QStringLiteral("RemoveDevice"), argumentList);
+      }
+
+    inline QDBusPendingReply<> SetDiscoveryFilter(const QVariantMap &properties)
+    {
+      QList<QVariant> argumentList;
+      argumentList << QVariant::fromValue(properties);
+      return asyncCallWithArgumentList(QStringLiteral("SetDiscoveryFilter"), argumentList);
+    }
+
+    inline QDBusPendingReply<> StartDiscovery()
+    {
+      QList<QVariant> argumentList;
+      return asyncCallWithArgumentList(QStringLiteral("StartDiscovery"), argumentList);
+    }
+
+    inline QDBusPendingReply<> StopDiscovery()
+    {
+      QList<QVariant> argumentList;
+      return asyncCallWithArgumentList(QStringLiteral("StopDiscovery"), argumentList);
+    }
+
+signals:
+    void aliasChanged(const QString& newAlias);
+    void deviceClassChanged(quint32 deviceClass);
+    void discoverableChanged(bool discoverable);
+    void discoverableTimeoutChanged(uint newDiscoverableTimeout);
+    void discoveringChanged(bool discovering);
+    void modAliasChanged(const QString& newModAlias);
+    void nameChanged(const QString& newName);
+    void pairableChanged(bool pairable);
+    void pairableTimeoutChanged(uint newPairableTimeout);
+    void poweredChanged(bool powered);
+    void uuidsChanged(const QStringList &newUuids);
+};
+
+
+<qt-dbus-adapter>
+https://doc.qt.io/qt-5/usingadaptors.html
+
+Using Qt D-Bus Adaptors
+
+Adaptors are special classes that are attached to any QObject-derived class
+and `provide the interface to the external world using D-Bus.` Adaptors are
+intended to be lightweight classes whose main purpose is to relay calls to and
+from the real object, possibly validating or converting the input from the
+external world and, thus, protecting the real object.
+
+Unlike multiple inheritance, adaptors can be added at any time to any object
+(but not removed), which allows for greater flexibility when exporting
+existing classes. Another advantage of adaptors is to provide similar but not
+identical functionality in methods of the same name in different interfaces, a
+case which can be quite common when adding a new version of a standard
+interface to an object.
+
+In order to use an adaptor, one must create a class which inherits
+QDBusAbstractAdaptor. Since that is a standard QObject-derived class, the
+Q_OBJECT macro must appear in the declaration and the source file must be
+processed with the moc tool. The class must also contain one Q_CLASSINFO entry
+with the "D-Bus Interface" name, declaring which interface it is exporting.
+Only one entry per class is supported.
+
+Any public slot in the class will be accessible through the bus over messages
+of the MethodCall type. (See Declaring Slots in D-Bus Adaptors for more
+    information). Signals in the class will be automatically relayed over
+D-Bus. However, not all types are allowed signals or slots' parameter lists:
+see The Qt D-Bus Type System for more information.
+
+Also, any property declared with Q_PROPERTY will be automatically exposed over
+the Properties interface on D-Bus. Since the QObject property system does not
+allow for non-readable properties, it is not possible to declare write-only
+properties using adaptors.
+
+
+<qt-dbus-chat>
+
+$ more org.example.chat.xml
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+  <interface name="org.example.chat">
+    <signal name="message">
+      <arg name="nickname" type="s" direction="out"/>
+      <arg name="text" type="s" direction="out"/>
+    </signal>
+    <signal name="action">
+      <arg name="nickname" type="s" direction="out"/>
+      <arg name="text" type="s" direction="out"/>
+    </signal>
+  </interface>
+</node>
+
+
+note:
+must use one from the qt installation but not from /usr/bin. otherwise, see
+error:
+
+could not find a Qt installation of ''
+
+$ /home/keitee/Qt/5.12.3/gcc_64/bin/qdbusxml2cpp -a chat_adaptor.h org.example.chat.xml
+
+
+/*
+ * This file was generated by qdbusxml2cpp version 0.8
+ * Command line was: qdbusxml2cpp -a chat_adaptor.h org.example.chat.xml
+ *
+ * qdbusxml2cpp is Copyright (C) 2019 The Qt Company Ltd.
+ *
+ * This is an auto-generated file.
+ * This file may have been hand-edited. Look for HAND-EDIT comments
+ * before re-generating it.
+ */
+
+#ifndef CHAT_ADAPTOR_H
+#define CHAT_ADAPTOR_H
+
+#include <QtCore/QObject>
+#include <QtCore/QMetaObject>
+#include <QtCore/QVariant>
+#include <QtDBus/QtDBus>
+#include <QtCore/QByteArray>
+#include <QtCore/QList>
+#include <QtCore/QMap>
+#include <QtCore/QString>
+#include <QtCore/QStringList>
+#include <QtCore/QVariant>
+
+/*
+ * Adaptor class for interface org.example.chat
+ */
+class ChatAdaptor: public QDBusAbstractAdaptor
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.example.chat")
+    Q_CLASSINFO("D-Bus Introspection", ""
+"  <interface name=\"org.example.chat\">\n"
+"    <signal name=\"message\">\n"
+"      <arg direction=\"out\" type=\"s\" name=\"nickname\"/>\n"
+"      <arg direction=\"out\" type=\"s\" name=\"text\"/>\n"
+"    </signal>\n"
+"    <signal name=\"action\">\n"
+"      <arg direction=\"out\" type=\"s\" name=\"nickname\"/>\n"
+"      <arg direction=\"out\" type=\"s\" name=\"text\"/>\n"
+"    </signal>\n"
+"  </interface>\n"
+        "")
+public:
+    ChatAdaptor(QObject *parent);
+    virtual ~ChatAdaptor();
+
+public: // PROPERTIES
+public Q_SLOTS: // METHODS
+Q_SIGNALS: // SIGNALS
+    void action(const QString &nickname, const QString &text);
+    void message(const QString &nickname, const QString &text);
+};
+
+#endif
+/*
+ * Implementation of adaptor class ChatAdaptor
+ */
+
+ChatAdaptor::ChatAdaptor(QObject *parent)
+    : QDBusAbstractAdaptor(parent)
+{
+    // constructor
+    setAutoRelaySignals(true);
+}
+
+ChatAdaptor::~ChatAdaptor()
+{
+    // destructor
 }
 
 
