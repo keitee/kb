@@ -172,6 +172,96 @@ void method2()
   qDebug() << dbus_iface.call("ListNames").arguments().at(0);
 }
 
+void method2_1()
+{
+  qDebug() << "==============================================================";
+  qDebug() << "Method 2_1:";
+
+  // QDBusMessage 
+  //  QDBusMessage::createMethodCall(const QString &service, 
+  //  const QString &path, const QString &interface, const QString &method)
+  //
+  // Constructs a new DBus message representing a method call. A method call
+  // always informs its destination address (service, path, interface and
+  // method).
+  // 
+  // The DBus bus allows calling a method on a given remote object without
+  // specifying the destination interface, if the method name is unique.
+  //
+  // However, if two interfaces on the remote object export the same method
+  // name, the result is undefined (one of the two may be called or an error may
+  // be returned).
+  // 
+  // When using DBus in a peer-to-peer context (i.e., not on a bus), the service
+  // parameter is optional.
+  // 
+  // The QDBusInterface class provides a simpler abstraction to synchronous
+  // method calling.
+  // 
+  // This function returns a QDBusMessage object that can be sent with
+  // QDBusConnection::call().
+
+  // QDBusInterface dbus_iface("org.freedesktop.DBus", "/org/freedesktop/DBus",
+  //    "org.freedesktop.DBus", bus);
+
+  QDBusMessage request = QDBusMessage::createMethodCall("org.freedesktop.DBus", 
+      "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames");
+
+  // QDBusMessage 
+  // QDBusConnection::call(const QDBusMessage &message, QDBus::CallMode mode = QDBus::Block, int timeout = -1) const
+  //
+  // Sends the message over this connection and blocks, waiting for a reply, for
+  // at most timeout milliseconds. This function is suitable for method calls
+  // only. It returns the reply message as its return value, which will be
+  // either of type QDBusMessage::ReplyMessage or QDBusMessage::ErrorMessage.
+  // 
+  // If no reply is received within timeout milliseconds, an automatic error
+  // will be delivered indicating the expiration of the call. The default
+  // timeout is -1, which will be replaced with an implementation-defined value
+  // that is suitable for inter-process communications (generally, 25 seconds).
+  // 
+  // See the QDBusInterface::call() function for a more friendly way of placing
+  // calls.
+  // 
+  // Warning: If mode is QDBus::BlockWithGui, this function will reenter the Qt
+  // event loop in order to wait for the reply. During the wait, it may deliver
+  // signals and other method calls to your application. Therefore, it must be
+  // prepared to handle a reentrancy whenever a call is placed with call().
+
+  QDBusMessage reply = QDBusConnection::sessionBus().call(request);
+
+  // https://doc.qt.io/qt-5/qdbusabstractinterface.html#call-1
+  //
+  // QDBusMessage QDBusAbstractInterface::call(
+  //  const QString &method, 
+  //  const QVariant &arg1 = QVariant(), const QVariant &arg2 = QVariant(), 
+  //  const QVariant &arg3 = QVariant(), const QVariant &arg4 = QVariant(),
+  //  const QVariant &arg5 = QVariant(), const QVariant &arg6 = QVariant(),
+  //  const QVariant &arg7 = QVariant(), const QVariant &arg8 = QVariant())
+  //
+  //
+  // Calls the method method on this interface and passes the parameters to this
+  // function to the method.
+  //
+  // The parameters to call are passed on to the remote function via D-Bus as
+  // input arguments. Output arguments are returned in the `QDBusMessage reply`.
+  // If the reply is an error reply, lastError() will also be set to the
+  // contents of the error message.
+  //
+  // This function can be used with up to 8 parameters, passed in arguments
+  // arg1, arg2, arg3, arg4, arg5, arg6, arg7 and arg8. If you need more than 8
+  // parameters or if you have a variable number of parameters to be passed, use
+  // callWithArgumentList().
+
+  // https://doc.qt.io/qt-5/qdbusmessage.html
+  // QList<QVariant> QDBusMessage::arguments() const
+  // Returns the list of arguments that are going to be sent or were received
+  // from D-Bus.
+
+  // qDebug() << dbus_iface.call("ListNames").arguments().at(0);
+  qDebug() << reply.arguments().at(0);
+}
+
 void method2_2()
 {
   qDebug() << "==============================================================";
@@ -250,6 +340,7 @@ int main(int argc, char **argv)
 
   method1();
   method2();
+  method2_1();
   method3();
   method2_2();
 
