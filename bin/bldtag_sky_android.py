@@ -8,12 +8,13 @@ if __name__ == "__main__":
     # cleanup files
     subprocess.call(["rm", "-f", "G* tags flist.out"])
 
-    # where to run /home/keitee/ip/SkyBluetoothRcu
+    # where to run /home/keitee/ip
     # dirs to include
     dirs = [
-        'app/src/main/cpp/blercu',
-        'app/src/main/java',
-        'app/src/main/cpp/configsettings'
+        'BleRcuExample',
+        'SkyBluetoothRcu/app/src/main/cpp/blercu',
+        'SkyBluetoothRcu/app/src/main/java',
+        'SkyBluetoothRcu/app/src/main/cpp/configsettings'
         ]
 
     listfile = 'flist.out'

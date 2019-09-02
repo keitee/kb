@@ -2236,6 +2236,130 @@ ChatAdaptor::~ChatAdaptor()
 }
 
 
+<qt-dbus-peer-to-peer>
+
+class BleRcuControllerAdaptorTest : public ::testing::Test
+{
+  public:
+    void SetUp()
+    {
+      m_mockController = QSharedPointer<MockBleRcuController>::create();
+
+      m_dbusServer = new QDBusServer();
+
+      /* 
+      https://doc.qt.io/qt-5/qdbusserver.html#details
+      bool QDBusServer::isAnonymousAuthenticationAllowed() const
+      Returns true if anonymous authentication is allowed.
+      */
+
+      m_dbusServer->setAnonymousAuthenticationAllowed(true);
+
+      m_newConnectionReady = false;
+
+      /* 
+      void QDBusServer::newConnection(const QDBusConnection &connection);
+
+      This signal is emitted when a new client connection connection is
+      established to the server.
+      */
+
+      QObject::connect(m_dbusServer, &QDBusServer::newConnection,
+          std::bind(&BleRcuControllerAdaptorTest::onNewConnection, this, std::placeholders::_1));
+
+      processEventsFor(10);
+
+      /*
+      QDBusConnection QDBusConnection::connectToPeer(const QString &address, const QString &name);
+
+      Opens a peer-to-peer connection on address address and associate with it
+      the connection name name. Returns a QDBusConnection object associated
+      with that connection.
+      This function was introduced in Qt 4.8.
+
+      */
+
+      // for some reason the name of the server has to be unique, use a UUID as conventient for now
+      
+      const QUuid name = QUuid::createUuid();
+      m_dbusConn = QSharedPointer<QDBusConnection>::create(QDBusConnection::connectToPeer(m_dbusServer->address(), name.toString()));
+
+      // if all goes to plan then onNewConnection() should be called, wait for
+      // that to happen before proceeding
+      std::function<bool()> lambda = [this]() {
+        return m_newConnectionReady;
+      };
+
+      ASSERT_TRUE(processEventsUtil(lambda, 1000));
+      ASSERT_TRUE(m_dbusConn->isConnected());
+    }
+
+    void TearDown()
+    {
+      m_dbusConn.reset();
+
+      m_dbusServer->deleteLater();
+      m_dbusServer = nullptr;
+
+      m_mockController.reset();
+    }
+
+  protected:
+    QDBusServer *m_dbusServer;
+    QSharedPointer<QDBusConnection> m_dbusConn;
+    bool m_newConnectionReady;
+
+    QSharedPointer<MockBleRcuController> m_mockController;
+
+  protected:
+    const QString m_deviceObjPath = QStringLiteral("/com/sky/blercu/monkeycontroller");
+    const QString m_interfaceName = QStringLiteral("com.sky.blercu.Controller1");
+
+  protected:
+    void onNewConnection(const QDBusConnection &connection)
+    {
+      QDBusConnection newConn(connection);
+
+      // will be owned by m_mockController and therefore automatically
+      // deleted with the mock controller is destructed (no memory leak here)
+      BleRcuController1Adaptor *adaptor = new BleRcuController1Adaptor(m_mockController.data(),
+          QDBusObjectPath(m_deviceObjPath));
+      adaptor->registerConnection(newConn);
+
+      if (!newConn.registerObject(m_deviceObjPath, m_mockController.data()))
+        qCritical("failed to register blercucontroller adaptor object");
+
+      // indicate the next connection is ready
+      m_newConnectionReady = true;
+    }
+
+  protected:
+    QDBusMessage constructGetPropertyMethod(const QString &name)
+    {
+      QDBusMessage request = QDBusMessage::createMethodCall("", m_deviceObjPath, "org.freedesktop.DBus.Properties", "Get");
+      request << m_interfaceName;
+      request << name;
+      return request;
+    }
+
+    QDBusVariant getPropertyFromDBus(const QString &name)
+    {
+      // construct the request
+      QDBusMessage request = constructGetPropertyMethod(name);
+
+      // perform the request
+      QDBusMessage reply = m_dbusConn->call(request, QDBus::BlockWithGui);
+      EXPECT_EQ(reply.type(), QDBusMessage::ReplyMessage);
+
+      // check the reply
+      QList<QVariant> results = reply.arguments();
+      EXPECT_EQ(results.length(), 1);
+      EXPECT_TRUE(results.first().canConvert<QDBusVariant>());
+
+      return results.first().value<QDBusVariant>();
+    }
+};
+
 # ============================================================================
 #{
 ={============================================================================
