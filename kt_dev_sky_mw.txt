@@ -1054,6 +1054,9 @@ method return time=1567148503.833966 sender=:1.4 -> destination=:1.17 serial=43 
 </interface><node name="org"/></node>"
 
 
+// type="a{oa{sa{sv}}}"
+// dict<path, <dict<string, variant>>>
+
 dbus-send --system --type=method_call --print-reply --dest='org.bluez' / org.freedesktop.DBus.ObjectManager.GetManagedObjects
 
 method return time=1567161890.415580 sender=:1.4 -> destination=:1.20 serial=45 reply_serial=2
@@ -2690,8 +2693,73 @@ TEST_F(BleRcuControllerAdaptorTest, testStartPairing)
 ={============================================================================
 *kt_dev_skymw_0000* skymw-bluez-audio-stream
 
+<refs>
+dbusitf usage in AS
+https://www.stb.bskyb.com/confluence/display/~partom1/dbusitf+usage+in+AS
+
+BluetoothAudio
+
+BluetoothAudio provides a pairing mechanism for devices which may stream audio
+to the STB.  It exports http APIs for enabling and disabling STB visibility, and
+managing incoming pairing requests.  It also provides a status websocket with
+information about paired devices as well as information about a pairing request
+when pairing is in progress.
+
+The pairing process for audio devices consists of the following steps:
+
+1. BluetoothAudio's startvisibility API is used to make the STB visible
+(discoverable) and pairable
+
+2. The user initiates a scan on their device, and when the STB is discovered
+makes a pairing request from the device to the STB
+
+3. When the pairing request is received by the STB, BluetoothAudio generates a
+status update with details of the device MAC and name, and pairing code (if any)
+
+4. If the pairing request should be accepted, BluetoothAudio's acceptpairing API
+is used to accept the request
+
+5. Once pairing is completed, BluetoothAudio updates its websocket status to
+reflect the pairing status of the device
+
+Device updates
+BluetoothAudio encapsulates all dbusitf interactions within a "platform
+interface" class PlatformItf.  This provides listener interfaces for device
+updates, as well as listener interfaces for the bluez pairing agent (see below).
+When device updates are received, PlatformItf calls methods on the
+BluetoothAudio Controller object.
+
+Initial bringup
+Similar to RcuController, on initialisation BluetoothAudio populates its own
+internal list of devices based on the dbusitf device object population.  This
+process is handled by PlatformItf::PopulateStatusDb(), called early on by
+Controller::exec().  Again similar to RcuController, PlatformItf registers
+itself as a dbusitf device listener during construction, so by the time
+PopulateStatusDb() is called it is already listening for device updates.
+
+The pairing agent
+While RcuController drives pairing requests from the STB, in the BluetoothAudio
+case pairing requests originate with the user's device.  Handling of this is
+significantly different.
+
+Bluez has the concept of a "pairing agent", which is essentially a DBus endpoint
+that client code can register in order to take responsibility for accepting or
+rejecting incoming pairing requests.  dbusitf provides this functionality as
+BluetoothPairingAgent, which has its own listener interface and methods for
+accepting and rejecting pairing requests.
+
+BluetoothAudio registers a listener with BluetoothPairingAgent, and uses the
+callbacks on this interface to populate its websocket with pairing request
+information.
+
+
+The architecture of the dbusitf code
+https://www.stb.bskyb.com/confluence/display/~partom1/The+architecture+of+the+dbusitf+code
+
+
 <diag-log>
-NDS: ^0000000336.330585 !MIL   -AS           < p:00000df9 t:6e8c4dc0 T:no name M:AS_DMS_Writer.cpp F:BluetoothA2DPTransport L:00258 > @ctx:dbusitf bluetooth_a2dp_transport.cpp(32) new a2dp transport /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0
+NDS: ^0000000336.330585 !MIL   -AS           < p:00000df9 t:6e8c4dc0 T:no name M:AS_DMS_Writer.cpp 
+  F:BluetoothA2DPTransport L:00258 > @ctx:dbusitf bluetooth_a2dp_transport.cpp(32) new a2dp transport /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0
 
 
 <player-switch-protocols>
