@@ -93,6 +93,47 @@ TEST(CConThread, Lambda)
 
 namespace cxx_thread {
 
+  void thread_name_1(ostringstream &os)
+  {
+    // get thread name
+    char name[16];
+    pthread_getname_np(pthread_self(), name, sizeof(name));
+    os << name;
+  }
+
+  void thread_name_2(ostringstream &os)
+  {
+    // set thread name and get it to see if that works
+    char name[16];
+    pthread_setname_np(pthread_self(), "CCON_THREAD");
+    pthread_getname_np(pthread_self(), name, sizeof(name));
+    os << name;
+  }
+} // namespace
+
+TEST(CConThread, Name)
+{
+  using namespace cxx_thread;
+
+  {
+    ostringstream os;
+    std::thread t([&]{thread_name_1(os);});
+    t.join();
+    // this output file name
+    EXPECT_THAT(os.str(), "ccon_out");
+  }
+
+  {
+    ostringstream os;
+    std::thread t([&]{thread_name_2(os);});
+    t.join();
+    EXPECT_THAT(os.str(), "CCON_THREAD");
+  }
+}
+
+
+namespace cxx_thread {
+
   void update_data(std::string &data)
   {
     data = "updated data";

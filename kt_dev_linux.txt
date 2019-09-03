@@ -502,10 +502,10 @@
 *kt_linux_core_157* linux-thread-nptl
 |kt_linux_core_102| linux-thread-q how to run three threads sequencially
 
-*kt_linux_core_200* linux-io-model
+*kt_linux_core_200* os-io-model
 *kt_linux_core_201* linux-io-ioctl
 |kt_linux_core_201| linux-io-extended open-file-table
-|kt_linux_core_202| linux-io-non-blocking
+|kt_linux_core_202| os-io-non-blocking os-io-poll
 *kt_linux_core_203* linux-io-fs driver-api
 *kt_linux_core_203* linux-io-fs-vfs
 *kt_linux_core_202* linux-io-buffering
@@ -49002,7 +49002,7 @@ The mutex has ownership as well and see {mutex-ownership}.
 
 
 ={============================================================================
-*kt_linux_core_200* linux-io-model
+*kt_linux_core_200* os-io-model
 
 LPI 4. FILE I/O
 
@@ -49518,9 +49518,9 @@ by changes made to the file offset by other threads.
 
 
 ={============================================================================
-*kt_linux_core_202* linux-io-non-blocking
+*kt_linux_core_202* os-io-non-blocking
 
-LPI 5.9 Nonblocking I/O
+LPI-5.9 Nonblocking I/O
 
 The O_NONBLOCK flag when opening a file serves two purposes:
 
@@ -49535,7 +49535,7 @@ The O_NONBLOCK flag when opening a file serves two purposes:
   Linux, as on many UNIX implementations, these two error constants are
   synonymous.
 
-<nonblocking-pipe>
+<os-pipe-nonblocking>
 Nonblocking mode can be used with devices (e.g., terminals and
     pseudoterminals), pipes, FIFOs, and sockets. Because file descriptors for
 pipes and sockets are not obtained using open(), we must enable this flag
@@ -49543,13 +49543,132 @@ using the fcntl() F_SETFL operation.
 
 note: This is why use syscall-pipe2.
 
-O_NONBLOCK `is generally ignored for regular files`, because `kernel buffer cache` 
-ensures that `I/O on regular files does not block`, as described in Section
-13.1. However, O_NONBLOCK does have an effect for regular files when mandatory
-file locking is employed (Section 55.4). We say more about nonblocking I/O in
-Section 44.9 and in Chapter 63.
+O_NONBLOCK `is generally ignored for regular files`, because `kernel buffer
+cache` ensures that `I/O on regular files does not block`, as described in
+Section 13.1. However, O_NONBLOCK does have an effect for regular files when
+mandatory file locking is employed (Section 55.4). 
 
 note: non-blocking means using buffering.
+
+LPI-44.9 Nonblocking I/O
+
+As noted earlier, when a process opens one end of a FIFO, it blocks if the
+other end of the FIFO has not yet been opened. Sometimes, it is desirable not
+to block, and for this purpose, the O_NONBLOCK flag can be specified when
+calling open():
+
+
+LPI-63.1 Overview
+
+Most of the programs that we have presented so far in this book employ an I/O
+model under which a process performs I/O on just one file descriptor at a
+time, and each I/O system call blocks until the data is transferred. For
+example, when reading from a pipe, a read() call normally blocks if no data is
+currently present in the pipe, and a write() call blocks if there is
+insufficient space in the pipe to hold the data to be written. Similar
+behavior occurs when performing I/O on various other types of files, including
+FIFOs and sockets.
+
+
+If we place a file descriptor in nonblocking mode by enabling the O_NONBLOCK
+open file sta- tus flag, then an I/O system call that can’t be immediately
+completed `returns an error instead of blocking.` Nonblocking I/O can be
+employed with pipes, FIFOs, sockets, terminals, pseudoterminals, and some
+other types of devices.
+
+
+Because of the limitations of both nonblocking I/O and the use of multiple or
+processes, one of the following alternatives is often preferable:
+
+* I/O multiplexing allows a process to simultaneously monitor multiple file
+  descriptors to find out whether I/O is possible on any of them. The select()
+  and poll() system calls perform I/O multiplexing.  Signal-driven I/O is a
+  technique whereby a process requests that the kernel send
+
+
+Note that none of these techniques performs I/O. They merely tell us that a
+file descriptor is ready. Some other system call must then be used to actually
+perform the I/O.
+
+
+Which technique?
+
+During the course of this chapter, we’ll consider the reasons we may choose
+one of these techniques rather than another. In the meantime, we summarize a
+few points:
+
+* The select() and poll() system calls are long-standing interfaces that have
+  been present on UNIX systems for many years. Compared to the other
+  techniques, their `primary advantage is portability.` Their main disadvantage
+  is that they don’t scale well when monitoring large numbers (hundreds or
+  thousands) of file descriptors.
+
+
+we describe how the choice of notification model affects the way we design a
+program.
+
+select() and poll() employ level-triggered notification. we can check the
+readiness of a file descriptor at any time. This means that when we determine
+that a file descriptor is ready (e.g., it has input available), we can perform
+some I/O on the descriptor, and then repeat the monitoring operation to check
+if the descriptor is still ready (e.g., it still has more input available), in
+  which case we can perform more I/O, and so on. 
+
+In other words, because the level-triggered model allows us to repeat the I/O
+moni- toring operation at any time, it is not necessary to perform as much I/O
+as possible (e.g., read as many bytes as possible) on the file descriptor (or
+    even perform any I/O at all) each time we are notified that a file
+descriptor is ready.
+
+
+LPI-63.2 I/O Multiplexing
+
+I/O multiplexing allows us to simultaneously monitor multiple file descriptors
+to see if I/O is possible on any of them. We can perform I/O multiplexing
+using either of two system calls with essentially the same functionality.
+
+
+LPI-63.2.2
+
+*syscall-poll*
+
+The poll() system call performs a similar task to select(). The major
+difference between the two system calls lies in how we specify the file
+descriptors to be moni- tored. With select(), we provide three sets, each
+marked to indicate the file descriptors of interest. With poll(), we provide a
+list of file descriptors, each marked with the set of events of interest.
+
+#include <poll.h>
+int poll(struct pollfd fds[], nfds_t nfds, int timeout);
+Returns number of ready file descriptors, 0 on timeout, or -1 on error 
+  
+The fds argument and the pollfd array (nfds) specify the file descriptors that
+poll() is to monitor. The timeout argument can be used to set an upper limit
+on the time for which poll() will block. We describe each of these arguments
+in detail below.
+
+struct pollfd {
+  int fd;           /* File descriptor */
+  short events;     /* Requested events bit mask */
+  short revents;    /* Returned events bit mask */
+};
+
+
+The timeout argument
+
+* If timeout equals -1, block until one of the file descriptors listed in the
+  fds array is ready (as defined by the corresponding events field) or a
+  signal is caught.
+
+* If timeout equals 0, do not block-just perform a check to see which file
+  descriptors are ready.
+
+* If timeout is greater than 0, block for up to timeout milliseconds, until
+  one of the file descriptors in fds is ready, or until a signal is caught.
+
+As with select(), the accuracy of timeout is limited by the granularity of the
+software clock (Section 10.6), and SUSv3 specifies that timeout is always
+rounded upward if it is not an exact multiple of the clock granularity.
 
 
 ={============================================================================
