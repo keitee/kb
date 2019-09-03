@@ -2694,214 +2694,6 @@ TEST_F(BleRcuControllerAdaptorTest, testStartPairing)
 NDS: ^0000000336.330585 !MIL   -AS           < p:00000df9 t:6e8c4dc0 T:no name M:AS_DMS_Writer.cpp F:BluetoothA2DPTransport L:00258 > @ctx:dbusitf bluetooth_a2dp_transport.cpp(32) new a2dp transport /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0
 
 
-./Components/AS/Services/Controllers/BTAudioController/include/AS_BTAUDIO_Controller.h
-./Components/AS/Services/Controllers/BTAudioController/include/AS_BTAUDIO_ControllerImplementation.h
-./Components/AS/Services/Controllers/BTAudioController/include/AS_BTAUDIO_PlatformItf.h
-./Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_ControllerImplementation.cpp
-./Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_ControllerStub.cpp
-./Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_PlatformItf.cpp
-
-
-// Components/AS/SwitchBoard/source/AS_SWITCHBOARD_SwitchBoard.cpp
-
-    /*********************************************************   BT/Audiostreamer   ***************************************************************/
-    startVisibilityExecutor              = new AS_BTAUDIO::StartVisibilityFactory();
-    cancelVisibilityExecutor             = new AS_BTAUDIO::CancelVisibilityFactory();
-    acceptPairingExecutor                = new AS_BTAUDIO::AcceptPairingFactory();
-    rejectPairingExecutor                = new AS_BTAUDIO::RejectPairingFactory();
-    btaStatusExecutor                    = new AS_BTAUDIO::StatusExecutorFactory();
-
-    audioStreamerStartStreamingExecutor  = new AS_AUDIOSTREAMER::AudioStreamerStartStreamingExecutorFactory();
-    audioStreamerStopStreamingExecutor   = new AS_AUDIOSTREAMER::AudioStreamerStopStreamingExecutorFactory();
-    audioStreamerStatusExecutor          = new AS_AUDIOSTREAMER::AudioStreamerStatusExecutorFactory();
-
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/startvisibility", startVisibilityExecutor );
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/stopvisibility",  cancelVisibilityExecutor );
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/acceptpairing",   acceptPairingExecutor );
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/bluetooth/action/rejectpairing",   rejectPairingExecutor );
-    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/audiostreamer/bluetooth/status",                 btaStatusExecutor,                  NULL, "AS_WS_BTAD_STAT" );
-
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) 
-        "/as/audiostreamer/action/playstream",                
-        audioStreamerStartStreamingExecutor );
-
-    map->RegisterUrl( REQ_METHOD_HTTP_POST, (char *) "/as/audiostreamer/action/stopstream",                
-        audioStreamerStopStreamingExecutor );
-
-    map->RegisterUrl( REQ_METHOD_WS,        (char *) "/as/audiostreamer/status",                           
-        audioStreamerStatusExecutor,        NULL, "AS_WS_AUD_STAT" );
-
-    /**********************************************************************************************************************************************/
-
-
-// Components/AS/Services/Executors/AudioStreamer/AudioStreamerStartStreaming
-//  /include/AS_AUDIOSTREAMER_StartStreamingExecutor.h
-
-namespace AS_AUDIOSTREAMER {
-
-  /**
-   * @brief Audio streamer start streaming executor
-   *
-   * This class fulfils the http "post" request to start gateway pairing, i.e.,http://<host>:<port>/<version>/as/audiostreamer/action/startstreaming,
-   * as defined in the AS spec
-   */
-  class AudioStreamerStartStreamingExecutor : public AS_WORKER::Executor
-  {
-      AudioStreamerStartStreamingExecutor( AS_WORKER::Environment *env, AS_WORKER::Params *params )
-        : AS_WORKER::Executor( env, params ),
-        m_audioStreamerController( AS_CONTROLLERS::GetController<AS_AUDIOSTREAMER::AudioStreamerController>() )
-    {
-    }
-
-      /**
-       * @brief The executor method to start audio streaming
-       *
-       * This function is the entry point into the executor. The function could be called synchronously
-       *
-       * @retval   0          on success
-       * @retval   Non-zero   values on failure
-       */
-      int Exec();
-  };
-
-  class AudioStreamerStartStreamingExecutorFactory : public AS_WORKER::Factory
-  {};
-}
-
-
-// Components/AS/Services/Executors/AudioStreamer/AudioStreamerStartStreaming
-//  /source/AS_AUDIOSTREAMER_StartStreamingExecutor.cpp
-
-int AudioStreamerStartStreamingExecutor::Exec()
-{
-    uint32_t httpCode = 200;
-
-    if ( m_audioStreamerController )
-    {
-        int errorCode = m_audioStreamerController->StartStreaming();
-        if ( errorCode != AS_AUDIOSTREAMER_STATUS_OK )
-        {
-            AS_LOG_ERROR( "StartStreaming failed with error code %d", errorCode );
-            httpCode = 500; // Unspecified error as no error codes are currently defined in AS spec for this executor
-        }
-    }
-
-    return AS_STATUS_OK;
-}
-
-
-// Components/AS/Services/Controllers/AudioStreamerController
-//  /include/AS_AUDIOSTREAMER_AudioStreamerController.h
-
-/**
- * @addtogroup AS_AUDIOSTREAMER
- *
- * The AudioStreamerController is responsible for all interaction with Audio Streamer Proxy 
- * (see #AudioStreamerProxy.h) needed for `/audiostreamer`
- * http interfaces defined in the AS HTTP Spec.
- */
-
-namespace AS_AUDIOSTREAMER
-{
-  /**
-   * @brief Audio streamer controller
-   *
-   * It provides the APIs to interact with low level audio streamer such as start and stop AirPlay audio streaming
-   */
-  class AudioStreamerController : public AS_WORKER::Controller
-  {
-    public:
-      /**
-       * @brief Start audio streaming, i.e., it implements the AS API /audiostreamer/action/startstreaming
-       *
-       * @rval If successful then AS_AUDIOSTREAMER_STATUS_OK otherwise an error code indicating the error
-       */
-      virtual int StartStreaming() = 0;
-  };
-}
-
-
-// Components/AS/Services/Controllers/AudioStreamerController
-//  /source/AS_AUDIOSTREAMER_AudioStreamerControllerImplementation.h
-
-class AudioStreamerControllerImplementation : public AudioStreamerController
-{
-  /**
-   * @brief Audio streamer proxy object
-   */
-  AUDIO_STREAMER::Proxy& m_audioStreamerProxy;
-};
-
-AudioStreamerControllerImplementation::AudioStreamerControllerImplementation()
-        : m_audioStreamerProxy( AUDIO_STREAMER::Proxy::Instance() )
-{
-}
-
-
-int AudioStreamerControllerImplementation::StartStreaming()
-{
-  AS_LOG_ENTRY( "%s() entry", __func__ );
-
-  int retval = AS_AUDIOSTREAMER_STATUS_START_STREAMING_ERROR;
-
-  pthread_mutex_lock( &m_mutex );
-  uint32_t playTag = m_nextPlayTag++;
-  pthread_mutex_unlock( &m_mutex );
-
-  AudioStreamerEvent *audioStreamingStartedEvent = new AudioStreamerEvent( AudioStreamerEvent::STREAMING_STARTED, playTag );
-
-  size_t bytesSent = m_msgQueue->Send( audioStreamingStartedEvent->GetEvent(), &audioStreamingStartedEvent, sizeof(AudioStreamerEvent*) );
-  if ( bytesSent >= sizeof(AudioStreamerEvent*) )
-  {
-    `retval = m_audioStreamerProxy.StartStreaming( playTag );`
-    if ( retval == 0 )
-    {
-      AS_LOG_INFO( "StartStreaming() succeeded for play tag %u", playTag );
-
-      retval = AS_AUDIOSTREAMER_STATUS_OK;
-    }
-
-  AS_LOG_EXIT( "%s() exit: retval %d", __func__, retval );
-
-  return retval;
-}
-
-
-// Components/AudioStreamer/include/AudioStreamerProxy.h
-
-class Proxy : AudioStreamer::Base
-{
-  /**
-   * @brief Start streaming the currently pending request
-   *
-   * @param[in] playTag       : Play tag to distinguish listener callbacks (#PLAYER_STATUS_LISTENER and #METADATA_LISTENER) of different play jobs
-   *
-   * @retval: If successful then 0, otherwise an error code indicating the error
-   */
-  int StartStreaming( uint32_t playTag );
-};
-
-int AUDIO_STREAMER::Proxy::StartStreaming( uint32_t playTag )
-{
-    return AudioStreamer::Player::instance().startStreaming(playTag);
-}
-
-
-// Components/AudioStreamer/source/AudioStreamerPlayer.h
-
-// Kind of an implementation of AudioStreamerProxy
-class Player :  public Thread, Base
-{
-};
-
-int AudioStreamer::Player::startStreaming(uint32_t playTag )
-{
-  AUD_LOG_ENTRY("AudioStreamer::Player::startStreaming");
-  AUD_LOG_INFO("AudioStreamer::Player::startStreaming tag=%d", playTag);
-  return AUDIOSTREAMER::AUDIO_STREAMER_STATUS_OK;
-}
-
-
 <player-switch-protocols>
 
 // 1. m_ptrBluetoothProtocol is enabled as long as Player runs
@@ -3119,7 +2911,7 @@ BluetoothApi::Streamer*                 m_btInstance;
 void AudioStreamer::BluetoothProtocol::enable()
 {
   AUD_LOG_MIL("Starting bluetooth");
-  BluetoothApi::Streamer::createInstance();
+  `BluetoothApi::Streamer::createInstance();`
   m_btInstance = BluetoothApi::Streamer::instance();
 
   // BluetoothMediaStreamer
@@ -3158,10 +2950,11 @@ void BluetoothApi::Streamer::createInstance()
 }
 
 
-*dbus-transport-added*
+*dbus-transport-added* which fire up listener chain
 
 // Components/Bluetooth/dbusitf/source/bluez_parser.cpp
 // Handle interface addition, either from signals or from GetManagedObjects responses
+
 class BluezInterfaceAdditionAdapter : public BluezParserAdapter
 {
   case BluezParserEvent::PROPERTYBAG_END:
@@ -3169,6 +2962,9 @@ class BluezInterfaceAdditionAdapter : public BluezParserAdapter
 }
 
 // Components/Bluetooth/dbusitf/source/bluetooth.cpp
+
+std::vector<BluezProxy*> m_bluez_proxies;
+
 /**
  * @brief BluezParser callback.
  * Not for external use.
@@ -3179,6 +2975,16 @@ void Bluetooth::onBluezObjectAdded(const std::string &interface, const BluezObje
   BluezProxy *proxy = NULL;
   if (lookupProxy(interface, &proxy)) `proxy->add(obj);`
   else AS_LOG_ERROR("no proxy for %s %s", interface.c_str(), obj.getPath().c_str());
+}
+
+*dbus-property-update*
+void Bluetooth::onBluezProperty(const std::string &object_path, const std::string &interface, const DBusProperty &property)
+{
+  Locker lock(&m_bus_lock);
+  BluezProxy *proxy = NULL;
+  if (lookupProxy(interface, &proxy)) {
+    if (!`proxy->update`(object_path, property))
+  }
 }
 
 void BluetoothMediaTransport::add(const BluezObject &object)
@@ -3192,6 +2998,16 @@ void BluetoothMediaTransport::add(const BluezObject &object)
  * @brief Add a new BluezObject to the proxy
  * @param object reference to the BluezObject to add
  */
+
+#define notify(_what) do { \
+    std::vector<BluezProxyListener*> listeners; \
+    { \
+        Locker lock(&m_listener_lock); \
+        listeners = m_listeners; \
+    } \
+    for (std::vector<BluezProxyListener*>::iterator it = listeners.begin(); it != listeners.end(); ++it) if (*it) (*it)->_what; \
+} while(0)
+
 void BluezProxy::add(const BluezObject &object)
 {
   /* Adding a duplicated object is probably a sign that bluetoothd restarted
@@ -3205,6 +3021,7 @@ void BluezProxy::add(const BluezObject &object)
     drop(object.getPath());
   }
 
+  *notify*
   `if (addObject(object)) notify(onObjectAdded(object.getPath()));`
 }
 
@@ -3220,7 +3037,7 @@ class MediaTransportListener : public BluezProxyListener
 
     void onPropertyChange(const std::string &path, const DBusProperty &property) {
       if (property.getName() == BLUEZ_MEDIATRANSPORT_PROP_STATE) {
-        if (m_streamer) m_streamer->onTransportState(path, property.getValue().asString());
+        if (m_streamer) m_streamer->`onTransportState`(path, property.getValue().asString());
       }
     };
 
@@ -3247,6 +3064,8 @@ BluetoothMediaStreamer::BluetoothMediaStreamer()
   // `register to dbus`
 
   std::vector<std::string> endpoints = media_endpoint->getObjectPaths();
+
+  // BluetoothMediaTransport *m_transport;
 
   m_transport = Bluetooth::getInstance()->getMediaTransports();
   if (m_transport) {
@@ -3308,6 +3127,30 @@ bool BluetoothMediaStreamer::createSession(const std::string &xport_path)
 }
 
 
+*dbus-property-update*
+
+/** @brief Handles Bluez MediaTransport1 state change
+ */
+void BluetoothMediaStreamer::onTransportState(const std::string &path, const std::string &state)
+{
+  m_evq.push(BTStreamerMessage(BTStreamerMessage::MSG_TYPE_TRANSPORT_STATE, path));
+}
+
+void BluetoothMediaStreamer::eventHandler(void)
+{
+  case BTStreamerMessage::MSG_TYPE_TRANSPORT_STATE:
+    {
+      PlaybackSession *session = findSessionByXport(m.object_path);
+      if (session) {
+        std::string state;
+        if (m_transport->getState(session->xport->m_transport_path, state))
+          session->xport->`update`(state);
+      }
+    }
+    break;
+}
+
+
 // Components/Bluetooth/reader/source/bluetooth_a2dp_transport.cpp
 
 BluetoothA2DPTransport::BluetoothA2DPTransport(const std::string &transport_path)
@@ -3317,11 +3160,30 @@ BluetoothA2DPTransport::BluetoothA2DPTransport(const std::string &transport_path
     , m_got_media_format(false)
 {
   pthread_mutex_init(&m_listener_lock, NULL);
+  *create-media-fsm*
   `m_fsm = new BluetoothMediaFsm(transport_path);`
   if (m_fsm) {
     `m_fsm->addListener(this);`
     AS_LOG_MIL("new a2dp transport %s", transport_path.c_str());
   } else AS_LOG_ERROR("failed to create fsm instance");
+}
+
+
+// drive fsm
+
+void BluetoothA2DPTransport::update(const std::string &u)
+{
+  if (m_fsm) {
+    BluetoothMediaFsm::FsmEvent ev;
+    if (u == BLUEZ_MEDIATRANSPORT_STATE_IDLE)          ev = BluetoothMediaFsm::FSM_EVENT_TRANSPORT_IDLE;
+    else if (u == BLUEZ_MEDIATRANSPORT_STATE_PENDING)  ev = BluetoothMediaFsm::FSM_EVENT_TRANSPORT_PENDING;
+    else if (u == BLUEZ_MEDIATRANSPORT_STATE_ACTIVE)   ev = BluetoothMediaFsm::FSM_EVENT_TRANSPORT_ACTIVE;
+    else {
+      AS_LOG_ERROR("unhandled state string %s", u.c_str());
+      return; // early, we don't want to inject the event if we don't map it
+    }
+    m_fsm->injectEvent(ev);
+  }
 }
 
 
@@ -3363,6 +3225,7 @@ void BluetoothMediaFsm::run()
 
   // obtain BT proxy handles
   if (!m_transport && !m_endpoint) {
+    *get-bluetooth-singleton*
     Bluetooth *bt = Bluetooth::getInstance();
     DBusProperty property("");
     if (bt) {
@@ -3605,6 +3468,10 @@ size_t AudioStreamer::AudioBuffer::add(void *buffer, size_t bufferSize, size_t s
 
 
 // Components/Bluetooth/dbusitf/include/bluetooth.h
+// 
+// The Bluetooth singleton class is the toplevel object for accessing the
+// bluetooth stack. It provides a set of proxy classes mirroring objects held by
+// Bluez's bluetoothd.
 
 class Bluetooth
     : public IDBusTransportListener
@@ -3625,31 +3492,35 @@ Bluetooth::Bluetooth()
   pthread_mutex_init(&m_bus_lock, NULL);
   pthread_mutex_init(&m_msghdlr_lock, NULL);
 
+  // use system bus and "com.sky.as2bluez"
+
   if (connectToBus()) {
+
+    // DBusTransport handles dbus bindings
     m_bus_transport = new DBusTransport(m_bus_connection, this);
+
     if (m_bus_transport) {
 
+      // add a proxy to m_bluez_proxies and register interest to dbus
+      
+      // #define BLUEZ_ADAPTER_INTERFACE                     "org.bluez.Adapter1"
       if (!initProxy("BluetoothHCI", new BluetoothHCI(m_bus_transport)))
-        AS_LOG_ERROR("failed to set up host interface proxy");
 
+      // #define BLUEZ_DEVICE_INTERFACE                      "org.bluez.Device1"
       if (!initProxy("BluetoothDevice", new BluetoothDevice(m_bus_transport)))
-        AS_LOG_ERROR("failed to set up device proxy");
 
+      // #define BLUEZ_MEDIA_INTERFACE                       "org.bluez.Media1"
       if (!initProxy("MediaEndpoint", new BluetoothMediaEndpoint(m_bus_transport)))
-        AS_LOG_ERROR("failed to set up media endpoint proxy");
 
-      // #define `BLUEZ_MEDIATRANSPORT_INTERFACE`
-      // "org.bluez.MediaTransport1"
-
+      // #define `BLUEZ_MEDIATRANSPORT_INTERFACE`             "org.bluez.MediaTransport1"
       if (!initProxy("BluetoothMediaTransport",
             `new BluetoothMediaTransport`(m_bus_transport)))
-        AS_LOG_ERROR("failed to set up media transport proxy");
 
+      // #define BLUEZ_MEDIAPLAYER_INTERFACE                 "org.bluez.MediaPlayer1"
       if (!initProxy("BluetoothMediaPlayer", new BluetoothMediaPlayer(m_bus_transport)))
-        AS_LOG_ERROR("failed to set up media player proxy");
 
+      // #define BLUEZ_AGENT_MANAGER_INTERFACE               "org.bluez.AgentManager1"
       if (!initProxy("BluetoothPairingAgent", new BluetoothPairingAgent(m_bus_transport)))
-        AS_LOG_ERROR("failed to set up pairing agent");
 
       if (!addBusMatch(BUS_MATCH_NAME_OWNER_CHANGED)) AS_LOG_ERROR("failed to add NameOwnerChanged bus match");
       if (!addBusMatch(BUS_MATCH_INTERFACES_ADDED)) AS_LOG_ERROR("failed to add InterfacesAdded bus match");
@@ -3692,6 +3563,8 @@ class BluezProxy
 };
 
 
+<as-access>
+
 // Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_PlatformItf.cpp
 
 PlatformItf::PlatformItf(const char *platformDeviceName,
@@ -3704,36 +3577,10 @@ PlatformItf::PlatformItf(const char *platformDeviceName,
 
   `m_bluetooth = Bluetooth::getInstance();`
   m_pairingAgent = m_bluetooth->getPairingAgent();
+  std::vector<std::string> hciNames = m_bluetooth->getHostInterfaces()->getObjectPaths();
 }
 
-
-<bluez-dbus>
-
-Bluetooth::Bluetooth()
-{
-  // #define BLUEZ_ADAPTER_INTERFACE          "org.bluez.Adapter1"
-  if (!initProxy("BluetoothHCI", new BluetoothHCI(m_bus_transport)))
-
-  // #define BLUEZ_DEVICE_INTERFACE           "org.bluez.Device1"
-  if (!initProxy("BluetoothDevice", new BluetoothDevice(m_bus_transport)))
-
-  // #define BLUEZ_MEDIA_INTERFACE            "org.bluez.Media1"
-  if (!initProxy("MediaEndpoint", new BluetoothMediaEndpoint(m_bus_transport)))
-
-  // #define `BLUEZ_MEDIATRANSPORT_INTERFACE`   "org.bluez.MediaTransport1"
-  if (!initProxy("BluetoothMediaTransport",
-        `new BluetoothMediaTransport`(m_bus_transport)))
-
-  // #define BLUEZ_MEDIAPLAYER_INTERFACE       "org.bluez.MediaPlayer1"
-  if (!initProxy("BluetoothMediaPlayer", new BluetoothMediaPlayer(m_bus_transport)))
-
-  // #define BLUEZ_AGENT_MANAGER_INTERFACE     "org.bluez.AgentManager1"
-  if (!initProxy("BluetoothPairingAgent", new BluetoothPairingAgent(m_bus_transport)))
-
-  if (!addBusMatch(BUS_MATCH_NAME_OWNER_CHANGED)) AS_LOG_ERROR("failed to add NameOwnerChanged bus match");
-  if (!addBusMatch(BUS_MATCH_INTERFACES_ADDED)) AS_LOG_ERROR("failed to add InterfacesAdded bus match");
-  if (!addBusMatch(BUS_MATCH_INTERFACES_REMOVED)) AS_LOG_ERROR("failed to add InterfacesRemoved bus match");
-}
+m_bluetooth->getMediaEndpoints()->enableEndpoints();
 
 
 ={============================================================================

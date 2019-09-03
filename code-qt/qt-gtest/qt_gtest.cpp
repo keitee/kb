@@ -615,6 +615,57 @@ TEST(Qt, RegExp)
 
 
 // ={=========================================================================
+// qt-variant
+
+TEST(Qt, Variant)
+{
+  // T QVariant::value() const
+  //
+  // Returns the stored value converted to the template type T. Call
+  // canConvert() to find out whether a type can be converted. If the value
+  // cannot be converted, a default-constructed value will be returned.
+  //
+  // If the type T is supported by QVariant, this function behaves exactly as
+  // toString(), toInt() etc.
+
+  {
+    QVariant v;
+    v = 7;
+    EXPECT_THAT(7, v.toInt());
+    EXPECT_THAT("7", v.toString());
+
+    EXPECT_THAT(v.toInt(), v.value<int>());
+    EXPECT_THAT(v.toString(), v.value<QString>());
+  }
+
+  // QVariant QVariant::fromValue(const T &value)
+  // Returns a QVariant containing a copy of value. Behaves exactly like
+  // setValue() otherwise.
+  //
+  // A QVariant containing a sequential container will also return true for this
+  // function if the targetTypeId is QVariantList. It is possible to iterate
+  // over the contents of the container without extracting it as a (copied)
+  // QVariantList:
+  //
+  // QVariant(int, 7)
+  // QVariant(int, 11)
+  // QVariant(int, 42)
+
+  {
+    QList<int> intList{7, 11, 42};
+    QVariant variant = QVariant::fromValue(intList);
+    if (variant.canConvert<QVariantList>())
+    {
+      QSequentialIterable it = variant.value<QSequentialIterable>();
+
+      foreach(const QVariant &v, it)
+        qDebug() << v;
+    }
+  }
+}
+
+
+// ={=========================================================================
 // qt-slot
 
 TEST(Qt, SlotAndSignal)
