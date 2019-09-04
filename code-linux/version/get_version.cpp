@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <linux/version.h>
+
+// keitee@keitee-mint:~/git/kb/code-linux/version/build$ more /usr/include/linux/version.h
+// #define LINUX_VERSION_CODE 266002
+// #define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
+
+
 int HDR_M=2;
 int HDR_m=6;
 
