@@ -81,6 +81,10 @@ int main(int argc, char *argv[])
   // signal is caught.
 
   ready = poll(poll_fds, num_pipes, -1);
+  if (ready < 0)
+    LOG_ERROR("poll failed");
+
+  std::cout << "poll returned: " << ready << std::endl;
 
   // check which pipes have data available for reading
   for (int i = 0; i < num_pipes; ++i)
