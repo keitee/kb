@@ -12,7 +12,7 @@ if __name__ == "__main__":
     # dirs to include
     dirs = [
         'BleRcuExample',
-        'SkyBluetoothRcu/app/src/main/cpp/blercu',
+        'SkyBluetoothRcu/app/src/main/cpp',
         'SkyBluetoothRcu/app/src/main/java',
         'SkyBluetoothRcu/app/src/main/cpp/configsettings'
         ]
@@ -34,8 +34,8 @@ if __name__ == "__main__":
         "-path", "*/docs",  "-o",
         "-path", "*/unit_test",  "-o",
         "-path", "*/cunitTest",  "-o",
-        "-path", "*/test",  "-o",
-        "-path", "*/android",
+        "-path", "*/test",
+    #   "-path", "*/android",
         ")", "-prune", "-o", "-type", "f", "-print"]
 
     for e in dirs:

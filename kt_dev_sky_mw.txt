@@ -2760,7 +2760,7 @@ Bluetooth media streaming
 https://www.stb.bskyb.com/confluence/display/~partom1/Bluetooth+media+streaming
 
 
-<diag-log>
+<diag-logging>
 NDS: ^0000000336.330585 !MIL   -AS           < p:00000df9 t:6e8c4dc0 T:no name M:AS_DMS_Writer.cpp 
   F:BluetoothA2DPTransport L:00258 > @ctx:dbusitf bluetooth_a2dp_transport.cpp(32) new a2dp transport /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0
 
@@ -3214,6 +3214,11 @@ void BluetoothMediaStreamer::eventHandler(void)
       PlaybackSession *session = findSessionByXport(m.object_path);
       if (session) {
         std::string state;
+
+        // get state from bluez dbuf
+        // #define BLUEZ_MEDIATRANSPORT_STATE_ACTIVE           "active"
+        // bool BluetoothMediaTransport::getState(const std::string &object_path, std::string &state) const
+        
         if (m_transport->getState(session->xport->m_transport_path, state))
           session->xport->`update`(state);
       }
@@ -3248,7 +3253,7 @@ void BluetoothA2DPTransport::update(const std::string &u)
     BluetoothMediaFsm::FsmEvent ev;
     if (u == BLUEZ_MEDIATRANSPORT_STATE_IDLE)          ev = BluetoothMediaFsm::FSM_EVENT_TRANSPORT_IDLE;
     else if (u == BLUEZ_MEDIATRANSPORT_STATE_PENDING)  ev = BluetoothMediaFsm::FSM_EVENT_TRANSPORT_PENDING;
-    else if (u == BLUEZ_MEDIATRANSPORT_STATE_ACTIVE)   ev = BluetoothMediaFsm::FSM_EVENT_TRANSPORT_ACTIVE;
+    `else if (u == BLUEZ_MEDIATRANSPORT_STATE_ACTIVE)   ev = BluetoothMediaFsm::FSM_EVENT_TRANSPORT_ACTIVE;`
     else {
       AS_LOG_ERROR("unhandled state string %s", u.c_str());
       return; // early, we don't want to inject the event if we don't map it
@@ -3310,7 +3315,7 @@ void BluetoothMediaFsm::run()
     if (!acquireTransport()) {
     }
 
-  *calls-transportUp*
+  *calls-transport-up*
   case FSM_EVENT_TRANSPORT_ACTIVE:
     setState(Connected);
 }
@@ -3903,7 +3908,7 @@ List of devices attached
 192.168.0.104:5555      device
 
 
-<comp-adb-logcat> <android-log>
+<comp-adb-logcat> <logging>
 
 https://developer.android.com/studio/debug/am-logcat.html
 
@@ -4145,6 +4150,23 @@ http://192.168.0.105:8280/index.html
 
 <bluez-android-logging>
 
+// the log levels we support
+typedef enum {
+  Fatal = 0x01,
+  Error = 0x02,
+  Warning = 0x04,
+  Milestone = 0x08,
+  Info = 0x10,
+  Debug = 0x20
+} LoggingLevel;
+
+note: use bit flag but not <, >
+
+// check this level should be logged
+const LoggingLevels::Int allowedLevels = g_logLevels.load();
+if (!(allowedLevels & level))
+  return;
+
 static int doMain()
 {
 #if (AI_BUILD_TYPE == AI_DEBUG)
@@ -4163,6 +4185,17 @@ static int doMain()
 #else
 #	error "Unknown AI_BUILD_TYPE, expected AI_DEBUG or AI_RELEASE"
 #endif
+}
+
+
+<java-logging>
+// SkyBluetoothRcu/app/src/main/java/com/sky/blercu/BleRcuService.java
+
+public class BleRcuService extends Service {
+
+  private static boolean DBG = true;
+
+  if (DBG) Log.d(TAG, "created BleRcuService object with qtObject " + mQtObject);
 }
 
 
@@ -4506,6 +4539,7 @@ class BleRcuService : public QObject
 
   QSharedPointer<BleRcuController> m_controller;
 
+  *call-from-c-to-java*
   QSharedPointer<QAndroidJniObject> m_javaBleRcuService;
 
   QSharedPointer<LinuxInputDevice> m_irInputDevice;
@@ -5098,6 +5132,15 @@ jstring BleRcuService::jniGetDeviceInfo(JNIEnv *env, jlong qtObject, jstring add
 void BleRcuService::`getDeviceInfoString`(const BleAddress &address,
                                         DeviceInfoType type, QString *value) const
 {
+}
+
+
+void BleRcuService::onPairingStateChanged(bool pairing)
+{
+  *call-from-c-to-java*
+  m_javaBleRcuService->callMethod<void>("onPairingStateChanged",
+      "(Z)V",
+      static_cast<jboolean>(pairing ? JNI_TRUE : JNI_FALSE));
 }
 
 
@@ -6442,6 +6485,7 @@ void BleRcuService::setController(const QSharedPointer<BleRcuController> &contro
 
 void BleRcuService::onPairingStateChanged(bool pairing)
 {
+  *call-from-c-to-java*
   m_javaBleRcuService->callMethod<void>("onPairingStateChanged",
       "(Z)V",
       static_cast<jboolean>(pairing ? JNI_TRUE : JNI_FALSE));

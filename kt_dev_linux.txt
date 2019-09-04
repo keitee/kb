@@ -88760,6 +88760,14 @@ D-Bus is an Inter-Process Communication (IPC) and Remote Procedure Calling
 (RPC) mechanism specifically designed for efficient and easy-to-use
 communication between processes running `on the same machine.`
 
+The base D-Bus protocol is a one-to-one (peer-to-peer or client-server)
+protocol, specified in the section called “Message Protocol”. That is, it is a
+system for one application to talk to a single other application. However, the
+primary intended application of the protocol is the D-Bus message bus, specified
+in the section called “Message Bus Specification”. The message bus is a special
+application that accepts connections from multiple other applications, and
+forwards messages among them.
+
 
 {tutorial}
 http://dbus.freedesktop.org/doc/dbus-tutorial.html
@@ -88924,6 +88932,12 @@ string:http://dash.bidi.int.bbc.co.uk/e/pseudolive/bbb/client_manifest.mpd int32
 
 
 <dbus-address>
+Server addresses consist of a transport name followed by a colon, and then an
+optional, comma-separated list of keys and values in the form key=value. Each
+value is escaped.
+
+unix:path=/tmp/dbus-test
+
 Applications using D-Bus are `either servers or clients` A server listens for
 incoming connections; a client connects to a server. Once the connection is
 established, it is a symmetric flow of messages; the client-server distinction
@@ -89040,6 +89054,12 @@ Signals are `broadcasts` from the object to any interested observers of the
 
 Both methods and signals are referred to by name, such as "Frobate" or
 "OnClicked".
+
+
+Now, if you want to call a function on some other process via D-Bus, then you
+would do a method call, passing an object path, its interface, and the right
+arguments according to the method's signature, and send that to a specific
+service, on a specific bus.
 
 
 <dbus-proxies>
@@ -89741,7 +89761,15 @@ Returns the subordinate objects paths and their supported interfaces and propert
 arguments
 
 returns
-a{oa{sa{sv}}}
+         a{oa{sa{sv}}}
+// type="a{oa{sa{sv}}}"
+// dict<path, <dict<string, variant>>>
+
+The method that applications can use to get all objects and properties is
+  GetManagedObjects:
+
+org.freedesktop.DBus.ObjectManager.GetManagedObjects 
+  (out DICT<OBJPATH,DICT<STRING,DICT<STRING,VARIANT>>> objpath_interfaces_and_properties);
 
 
 InterfacesAdded
@@ -89750,6 +89778,19 @@ Signal indicating interfaces have been added to an object
 parameters: oa{sa{sv}}
 1. Object path gaining the new interfaces
 2. Dictionary of interfaces names and their properties
+
+The InterfacesAdded signal is emitted when either a new object is added or when
+an existing object gains one or more interfaces. The InterfacesRemoved signal is
+emitted whenever an object is removed or it loses one or more interfaces. The
+second parameter of the InterfacesAdded signal contains a dict with the
+interfaces and properties (if any) that have been added to the given object
+path.
+
+Whenever a new remote object is created (or an existing object gains a new
+    interface), the InterfacesAdded signal is emitted, and since this signal
+contains all properties for the interfaces, no calls to the
+org.freedesktop.Properties interface on the remote object are needed. 
+
 
 InterfacesRemoved
 Signal indicating interfaces have been removed from an object
@@ -89805,6 +89846,18 @@ parameters: sa{sv}as that is (s, a{sv}, as)
 2. Dictionary of string names to variant values of the changed properties
 3. Array of string names indicating properties that have changed but for
 which values are not conveyed.
+
+If one or more properties change on an object, the
+org.freedesktop.DBus.Properties.PropertiesChanged signal may be emitted (this
+    signal was added in 0.14):
+
+org.freedesktop.DBus.Properties.PropertiesChanged (STRING interface_name,
+  DICT<STRING,VARIANT> changed_properties,
+  ARRAY<STRING> invalidated_properties);
+        
+where changed_properties is a dictionary containing the changed properties with
+  the new values and invalidated_properties is an array of properties that
+  changed but the value is not conveyed.
 
 
 <ex>
