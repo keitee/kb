@@ -23,15 +23,10 @@ using namespace testing;
 
 #include <string.h>
 
-/*
 // ={=========================================================================
+// time
 
-time
-
-*/
-
-// to see how template are instanciated
-TEST(Time, RealtimeClock)
+TEST(Time, Localtime)
 {
   auto now = time(0);
   cout << "the local date and time: " << ctime(&now) << endl;
@@ -50,7 +45,34 @@ TEST(Time, RealtimeClock)
       cout << "The UTC date and time: " << asctime(gmtm) << endl;
     }
   }
+}
 
+
+/*
+ To build C and embedded 
+
+#include <stdio.h>
+#include <time.h>
+
+{
+  struct timespec tp;
+
+  clock_gettime(CLOCK_REALTIME, &tp);
+
+  // sec and us (micro sec)
+  printf("time %.010lu.%.06lu\n", 
+      (unsigned long)tp.tv_sec, (unsigned long) (tp.tv_nsec / 1000));
+
+  struct tm* localtm = localtime(&tp.tv_sec);
+  printf("The local date and time: %s\n", asctime(localtm));
+
+  return 0;
+}
+
+*/
+
+TEST(Time, Realtime)
+{
   {
     timespec tp;
 

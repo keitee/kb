@@ -104,6 +104,35 @@ void TimerQueue::timerThread()
     fds[0].events = POLLIN;
     fds[0].revents = 0;
 
+    fds[1].fd = timer_fd_;
+    fds[1].events = POLLIN;
+    fds[1].revents = 0;
+
+    // note that not handling when ret == 0 since 
+    // poll() returns number of ready file descriptors, 0 on timeout, or -1 on
+    // error 
+
+    int ret = TEMP_FAILURE_RETRY(poll(fds, 2, -1));
+    if (ret < 0)
+    {
+      LOG_SYS_ERROR(errno, "poll failed");
+    }
+    else if (ret > 0)
+    {
+      // check if the eventfd has fired
+      if (fds[0].revents != 0)
+      {
+        // check for any error conditions
+        if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))
+        {
+          LOG_ERROR("received error events on eventfd");
+          // LOG_ERROR("received error events on eventfd (0x%04x)",
+          //     fd[0].revents);
+        }
+
+        // 
+      }
+    }
   } // while
 }
 
