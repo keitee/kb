@@ -130,7 +130,14 @@ void TimerQueue::timerThread()
           //     fd[0].revents);
         }
 
-        // 
+        // clear counter on eventfd
+        uint64_t ignore;
+        if (TEMP_FAILURE_RETRY(sizeof(uint64_t) != read(eventfd, &ignore, sizeof(uint64_t))))
+        {
+          LOG_SYS_ERROR(errno, "failed to read from eventfd");
+        }
+
+        // break out of the poll loop. ???
       }
     }
   } // while
