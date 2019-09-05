@@ -1712,6 +1712,39 @@ TEST(SetMulti, Duplicate)
 }
 
 
+TEST(Set, Erase)
+{
+  // if there is match at the beginning, removes them
+  {
+    multiset<int> coll{2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7};
+    EXPECT_THAT(coll, ElementsAre(2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7));
+
+    auto it = coll.begin();
+    while ((it != coll.end()) && (*it == 2))
+    {
+      it = coll.erase(it);
+    }
+
+    EXPECT_THAT(coll, ElementsAre(3, 3, 3, 3, 3, 3, 3, 6, 7));
+  }
+
+  // if there is no match at the beginning, do nothing
+  {
+    multiset<int> coll{2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7};
+    EXPECT_THAT(coll, ElementsAre(2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7));
+
+    auto it = coll.begin();
+    while ((it != coll.end()) && (*it == 3))
+    {
+      it = coll.erase(it);
+    }
+
+    // same as before
+    EXPECT_THAT(coll, ElementsAre(2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7));
+  }
+}
+
+
 // ={=========================================================================
 // cxx-map
 
