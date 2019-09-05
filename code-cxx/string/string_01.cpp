@@ -157,7 +157,7 @@ TEST(String, Const)
 
 // string-back
 
-TEST(String, Back)
+TEST(StringOperation, Back)
 {
     string s1{"zoo"};
     EXPECT_EQ(s1.back(), 'o');
@@ -179,7 +179,7 @@ TEST(String, Back)
 
 // string-maxsize
 
-TEST(String, MaxSize)
+TEST(StringOperation, MaxSize)
 {
   string s{};
 #if __GNUC__ && __x86_64__
@@ -200,7 +200,7 @@ TEST(String, Find)
 
 // string-substr
 
-TEST(String, Substr)
+TEST(StringOperation, Substr)
 {
   std::string coll{"interchangeability"};
 
@@ -224,7 +224,7 @@ TEST(String, Substr)
 
 // string-insert
 
-TEST(String, Insert)
+TEST(StringOperation, Insert)
 {
   // *cxx-string-const-error*
   //
@@ -252,7 +252,7 @@ TEST(String, Insert)
 
 // string-erase, string-replace
 
-TEST(String, EraseReplace)
+TEST(StringOperation, EraseReplace)
 {
   {
     std::string s = "i18n";
@@ -322,7 +322,7 @@ TEST(String, EraseReplace)
 
 // string-assign, string-swap
 
-TEST(String, AssignSwap)
+TEST(StringOperation, AssignSwap)
 {
   {
     const std::string coll{"othello"};
@@ -368,12 +368,25 @@ TEST(String, AssignSwap)
 }
 
 // cxx-string-compare
-TEST(String, Compare)
+TEST(StringOperation, Compare)
 {
   std::string coll1{"string compare"};
   std::string coll2{"string compare"};
 
   EXPECT_THAT(0, coll1.compare(coll2));
+}
+
+
+TEST(StringOperation, Add)
+{
+  std::string coll1{};
+  
+  coll1 = "string";
+  coll1 += " add";
+
+  std::string coll2{"string add"};
+
+  EXPECT_THAT(coll1, coll2);
 }
 
 

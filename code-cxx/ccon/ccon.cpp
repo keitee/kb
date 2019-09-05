@@ -11,6 +11,9 @@
 #include <boost/thread/shared_mutex.hpp>
 // #include <boost/thread/thread.hpp>
 
+#include <sys/eventfd.h>
+#include <unistd.h>
+
 #include "gmock/gmock.h"
 
 using namespace std;
@@ -110,6 +113,7 @@ namespace cxx_thread {
     os << name;
   }
 } // namespace
+
 
 TEST(CConThread, Name)
 {
@@ -643,7 +647,7 @@ TEST(CConAsync, Status)
 
 // CXXSLR 18.5 A First Complete Example for Using a Mutex and a Lock
 
-namespace cxx_mutex
+namespace cxx_sync
 {
   std::mutex print_mutex;
 
@@ -677,24 +681,13 @@ namespace cxx_mutex
     result = "waited for " + to_string(i*20) + "ms and " + s;
     return result;
   }
-
-  // void print_no_lock(std::string const& s)
-  // {
-  //   for (char c : s)
-  //   {
-  //     this_thread::sleep_for(chrono::milliseconds(20));
-  //     std::cout.put(c);
-  //   }
-  //   std::cout << std::endl;
-  // }
-
-} // cxx_mutex
+} // cxx_sync
 
 
 // note that this shows `deadlock` becuase calls lock() twice already before
 // running a thread which calls unlock().
 //
-// TEST(CConLock, MultipleLockAndUnlock)
+// TEST(CCon, Sync_MultipleLockAndUnlock)
 // {
 //   std::mutex print_mutex;
 // 
@@ -719,7 +712,7 @@ namespace cxx_mutex
 // "On Linux, both of these operations succeed for this mutex type and a
 // PTHREAD_MUTEX_DEFAULT mutex behaves like a PTHREAD_MUTEX_NORMAL mutex.
 
-TEST(CConLock, MultipleLockAndUnlock)
+TEST(CConSync, MultipleLockAndUnlock)
 {
   std::mutex m;
   bool result{false};
@@ -740,9 +733,9 @@ TEST(CConLock, MultipleLockAndUnlock)
   EXPECT_THAT(result, true);
 }
 
-TEST(CConLock, LockGuard)
+TEST(CConSync, LockGuard)
 {
-  using namespace cxx_mutex;
+  using namespace cxx_sync;
 
   {
     auto f1 = std::async(std::launch::async,
@@ -758,37 +751,94 @@ TEST(CConLock, LockGuard)
         "waited for 520ms and Hello from a second thread");
   }
 
+  // sometimes pass or sometimes fail
+  // {
+  //   auto f1 = std::async(std::launch::async,
+  //       print_no_lock, "Hello from a first thread");
+
+  //   auto f2 = std::async(std::launch::async,
+  //       print_no_lock, "Hello from a second thread");
+
+  //   EXPECT_THAT(f1.get(), 
+  //       Ne("waited for 500ms and Hello from a first thread"));
+
+  //   EXPECT_THAT(f2.get(), 
+  //       Ne("waited for 520ms and Hello from a second thread"));
+  // }
+}
+
+// output is always that f2 comes first:
+//
+// f2 writes -WRITE
+// f1 writes READ
+
+TEST(CConSync, Eventfd)
+{
+  std::string result{};
+
+  int efd = eventfd(0, EFD_CLOEXEC);
+  if (efd < 0)
   {
-    auto f1 = std::async(std::launch::async,
-        print_no_lock, "Hello from a first thread");
-
-    auto f2 = std::async(std::launch::async,
-        print_no_lock, "Hello from a second thread");
-
-    EXPECT_THAT(f1.get(), 
-        Ne("waited for 500ms and Hello from a first thread"));
-
-    EXPECT_THAT(f2.get(), 
-        Ne("waited for 520ms and Hello from a second thread"));
+    std::cout << "failed to create eventFd" << std::endl;
+    ASSERT_THAT(true, false);
   }
 
-  // mangled output when use stdout
-  //
-  // HHHeeellllllooo   fffrrrooommm   aaa   msfaeiicrnos nttd h trthehrared
-  // eaad
-  // d
+  // eventfd
   // 
-  // {
-  //   using namespace cxx_mutex_no_lock;
+  // read(2)
   //
-  //   auto f1 = std::async(std::launch::async,
-  //       print, "Hello from a first thread");
+  // Each successful read(2) returns an 8-byte integer. A read(2) will fail with
+  // the error EINVAL if the size of the supplied buffer is less than 8 bytes.
   //
-  //   auto f2 = std::async(std::launch::async,
-  //       print, "Hello from a second thread");
+  //  The semantics of read(2) depend on whether the eventfd counter currently
+  //  has a nonzero value and whether the EFD_SEMAPHORE flag was specified when
+  //  creating the eventfd file descriptor:
   //
-  //   print("Hello from a main thread");
-  // }
+  //  * If EFD_SEMAPHORE was not specified and the eventfd counter has a nonzero
+  //  value, then a read(2) returns 8 bytes containing that value, and the
+  //  counter's value is "reset to zero."
+  //
+  //  *  If the eventfd counter is zero at the time of the call to read(2), then
+  //  the call either *blocks until* the counter becomes nonzero (at which time,
+  //  the read(2) proceeds as described  above)  or  fails  with  the  error
+  //  EAGAIN if the file descriptor has been made nonblocking.
+
+
+  auto f1 = std::async(std::launch::async, [&] 
+      {
+        uint64_t read_value{};
+        if (sizeof(uint64_t) != TEMP_FAILURE_RETRY(read(efd, &read_value, sizeof(uint64_t))))
+        {
+          std::cout << "errno: " << errno << ", failed on read(eventfd)" << std:: endl;
+        }
+
+        result = "READ";
+        std::cout << "f1 writes " << result << std::endl;
+
+        return true;
+      });
+
+  auto f2 = std::async(std::launch::async, [&] 
+      {
+        this_thread::sleep_for(chrono::milliseconds(3000));
+
+        uint64_t write_value{100};
+        if (sizeof(uint64_t) != TEMP_FAILURE_RETRY(write(efd, &write_value, sizeof(uint64_t))))
+        {
+          std::cout << "errno: " << errno << ", failed on write(eventfd)" << std:: endl;
+        }
+
+        // note: WHY result is not "READ-WRITE"?
+        result += "-WRITE";
+        std::cout << "f2 writes " << result << std::endl;
+
+        return true;
+      });
+
+  f1.get();
+  f2.get();
+
+  // EXPECT_THAT(result, "READ-WRITE");
 }
 
 
@@ -886,6 +936,7 @@ namespace cxx_condition
 } // namesapce
 
 // similar to linux-sync-cond-lpi-example
+// 3 producers and consumers which produces and consumes 20 items each
 
 TEST(CConCondition, ProducerAndConsumer)
 {
