@@ -975,6 +975,43 @@ bool startPairing(quint8 pairingCode) override;
 meld /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/blercu /home/keitee/mw/appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/source/blercu
 
 
+<bluez-usb>
+do everytime when usb is plugged or reboot machine
+
+keitee@keitee-mint:~/mw/ethan-as-source-repo$ sudo dmesg | tail
+[393789.742167] IPv6: ADDRCONF(NETDEV_UP): eno1: link is not ready
+[393789.931065] IPv6: ADDRCONF(NETDEV_UP): eno1: link is not ready
+[393791.433703] e1000e: eno1 NIC Link is Up 100 Mbps Full Duplex, Flow Control: Rx/Tx
+[393791.433705] e1000e 0000:00:1f.6 eno1: 10/100 speed: disabling TSO
+[393791.433753] IPv6: ADDRCONF(NETDEV_CHANGE): eno1: link becomes ready
+[421360.738270] usb 1-10: new full-speed USB device number 18 using xhci_hcd
+[421361.311131] usb 1-10: New USB device found, idVendor=1d5a, idProduct=c080
+[421361.311137] usb 1-10: New USB device strings: Mfr=0, Product=0, SerialNumber=0
+[421361.337102] input: HID 1d5a:c080 as /devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0/0003:1D5A:C080.000E/input/input53
+[421361.395548] hid-generic 0003:1D5A:C080.000E: input,hiddev2,hidraw4: USB HID v1.11 Keyboard [HID 1d5a:c080] on usb-0000:00:14.0-10/input0
+keitee@keitee-mint:~/mw/ethan-as-source-repo$ /lib/udev/hid2hci --mode=hci --method=csr2 --devpath=
+error: could not find usb_device for ''
+keitee@keitee-mint:~/mw/ethan-as-source-repo$
+keitee@keitee-mint:~/mw/ethan-as-source-repo$
+keitee@keitee-mint:~/mw/ethan-as-source-repo$
+keitee@keitee-mint:~/mw/ethan-as-source-repo$ /lib/udev/hid2hci --mode=hci --method=csr2 --devpath=/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0
+Can't open device: Permission denied (13)
+error: unable to handle '/sys//devices/pci0000:00/0000:00:14.0/usb1/1-10'
+keitee@keitee-mint:~/mw/ethan-as-source-repo$ sudo /lib/udev/hid2hci --mode=hci --method=csr2 --devpath=/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0
+keitee@keitee-mint:~/mw/ethan-as-source-repo$ sudo dmesg | tail
+[421535.138520] Bluetooth: HCI socket layer initialized
+[421535.138521] Bluetooth: L2CAP socket layer initialized
+[421535.138523] Bluetooth: SCO socket layer initialized
+[421535.142951] usbcore: registered new interface driver btusb
+[421535.271614] Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+[421535.271616] Bluetooth: BNEP filters: protocol multicast
+[421535.271622] Bluetooth: BNEP socket layer initialized
+[421535.324115] Bluetooth: RFCOMM TTY layer initialized
+[421535.324124] Bluetooth: RFCOMM socket layer initialized
+[421535.324132] Bluetooth: RFCOMM ver 1.11
+keitee@keitee-mint:~/mw/ethan-as-source-repo$ sudo /lib/udev/hid2hci --mode=hci --method=csr2 --devpath=/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0
+
+
 ={============================================================================
 *kt_dev_skymw_0000* skymw-bluez-as
 
@@ -2776,52 +2813,6 @@ NDS: ^0000000336.330585 !MIL   -AS           < p:00000df9 t:6e8c4dc0 T:no name M
 // 1. m_ptrBluetoothProtocol is enabled as long as Player runs
 // 2. set m_nextProtocol and use `startStreamingFromProtocol(m_nextProtocol);`
 
-// Components/AudioStreamer/source/BluetoothProtocol.cpp
-
-namespace AudioStreamer
-{
-  class BluetoothProtocol : public Protocol, public Base
-  {
-    BluetoothApi::Streamer*                 m_btInstance;
-  };
-}
-
-void AudioStreamer::BluetoothProtocol::enable()
-{
-    if( m_btInstance!=NULL )
-    {
-        AUD_LOG_INFO("Bluetooth already running, nothing to start");
-        return;
-    }
-
-    AUD_LOG_MIL("Starting bluetooth");
-
-    BluetoothApi::Streamer::createInstance();
-    m_btInstance = BluetoothApi::Streamer::instance();
-    m_btInstance->setMessageHandler(&s_bluetoothEventListener,this);    
-    uint32_t timeout = MwServices::instance().getDevDisconnectionTimeout();
-    m_btInstance->setBluetoothTimeout(timeout);
-}
-
-void AudioStreamer::BluetoothProtocol::disable()
-{
-  if( m_btInstance==NULL )
-  {
-    AUD_LOG_WARNING("Bluetooth already stopped, nothing to stop");
-    return;
-  }
-  AUD_LOG_MIL("Stopping bluetooth");
-  m_btInstance->stop();
-  m_wa_stopSent=true;
-  BluetoothApi::Streamer::destroyInstance();
-  m_btInstance=NULL;
-}
-
-void AudioStreamer::BluetoothProtocol::getAudioData(uint32_t sampleTime, uint64_t hostTime, void *buffer, size_t bufferLen)
-{
-}
-
-
 // Components/AudioStreamer/source/AudioStreamerPlayer.cpp
 void AudioStreamer::Player::run()
 {
@@ -2895,8 +2886,50 @@ void AudioStreamer::Player::handleEnableStreaming()
     AUD_LOG_WARNING("Airplay is Not enabled due to Network UnAvailability");
   }
 
+  *bluetooth-audio-enable*
   m_ptrBluetoothProtocol->enable();
 }
+
+// Components/AudioStreamer/source/BluetoothProtocol.cpp
+
+namespace AudioStreamer
+{
+  class BluetoothProtocol : public Protocol, public Base
+  {
+    BluetoothApi::Streamer*                 m_btInstance;
+  };
+}
+
+*bluetooth-audio-enable*
+void AudioStreamer::BluetoothProtocol::enable()
+{
+    AUD_LOG_MIL("Starting bluetooth");
+
+    BluetoothApi::Streamer::createInstance();
+    m_btInstance = BluetoothApi::Streamer::instance();
+    m_btInstance->setMessageHandler(&s_bluetoothEventListener,this);    
+    uint32_t timeout = MwServices::instance().getDevDisconnectionTimeout();
+    m_btInstance->setBluetoothTimeout(timeout);
+}
+
+void AudioStreamer::BluetoothProtocol::disable()
+{
+  if( m_btInstance==NULL )
+  {
+    AUD_LOG_WARNING("Bluetooth already stopped, nothing to stop");
+    return;
+  }
+  AUD_LOG_MIL("Stopping bluetooth");
+  m_btInstance->stop();
+  m_wa_stopSent=true;
+  BluetoothApi::Streamer::destroyInstance();
+  m_btInstance=NULL;
+}
+
+void AudioStreamer::BluetoothProtocol::getAudioData(uint32_t sampleTime, uint64_t hostTime, void *buffer, size_t bufferLen)
+{
+}
+
 
 int AudioStreamer::Player::startUp()
 {
@@ -2979,9 +3012,7 @@ void AudioStreamer::Player::Session::`start`(Protocol *protocol)
 }
 
 
-<bluetooth-streamer>
-
-// register callback to `BluetoothMediaStreamer`
+<bluetooth-streamer> *bluetooth-audio-enable*
 
 BluetoothApi::Streamer*                 m_btInstance;
 
@@ -2991,7 +3022,8 @@ void AudioStreamer::BluetoothProtocol::enable()
   `BluetoothApi::Streamer::createInstance();`
   m_btInstance = BluetoothApi::Streamer::instance();
 
-  // BluetoothMediaStreamer
+  // it is actually BluetoothMediaStreamer
+  // register callback to `BluetoothMediaStreamer`
   `m_btInstance->setMessageHandler(&s_bluetoothEventListener,this);`
 }
 
@@ -3026,6 +3058,12 @@ void BluetoothApi::Streamer::createInstance()
   pthread_rwlock_unlock(&singleton_lock);
 }
 
+
+*dbus-device-added*
+
+F:onPropertyChange L:00258 > @ctx:dbusitf bluetooth_media.cpp(78) BluetoothDeviceListener::onPropertyChange received connection status Connected
+F:onDeviceState L:00258 > @ctx:dbusitf bluetooth_media.cpp(366) KT: BluetoothMediaStreamer::onDeviceState received for 
+  path /org/bluez/hci0/dev_D4_B8_FF_66_D6_25 connection status 1
 
 *dbus-transport-added* which fire up listener chain
 
@@ -3164,6 +3202,9 @@ void BluetoothMediaStreamer::onTransportAdded(const std::string &path)
       (BTStreamerMessage::MSG_TYPE_TRANSPORT_ADDED, path));
 }
 
+
+F:onTransportAdded L:00258 > @ctx:dbusitf bluetooth_media.cpp(293) 
+  KT: BluetoothMediaStreamer::onTransportAdded: path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0
 
 // thread
 
@@ -3497,7 +3538,7 @@ void BluetoothMediaStreamer::sendMessage(Message &m)
 
 `AudioBuffer                             m_audioBuffer;`
 
-void AudioStreamer::BluetoothProtocol::bluetoothEventListener
+void AudioStreamer::BluetoothProtocol::`bluetoothEventListener`
   (const BluetoothApi::Streamer::Message& message)
 {
   switch(message.type)
@@ -3550,6 +3591,49 @@ size_t AudioStreamer::AudioBuffer::add(void *buffer, size_t bufferSize, size_t s
   return m_bufferLevel-m_packets.front().used;
 }
 
+
+*dbus-flows*
+F:onPlayerAdded L:00258 > @ctx:dbusitf bluetooth_media.cpp(318) 
+  KT: BluetoothMediaStreamer::onPlayerAdded: 
+  path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/player0
+
+F:findSessionByPlayer L:00258 > @ctx:dbusitf bluetooth_media.cpp(1195) 
+  KT: BluetoothMediaStreamer::findSessionByPlayer: 
+  player_path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/player0, xport_path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0
+
+F:onPlayerPropertyChange L:00258 > @ctx:dbusitf bluetooth_media.cpp(337) 
+  KT: BluetoothMediaStreamer::onPlayerChanged: 
+  path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/player0, property Status
+
+F:onPlayerPropertyChange L:00258 > @ctx:dbusitf bluetooth_media.cpp(337) 
+  KT: BluetoothMediaStreamer::onPlayerChanged: 
+  path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/player0, property Track
+
+F:onPlayerPropertyChange L:00258 > @ctx:dbusitf bluetooth_media.cpp(337) 
+  KT: BluetoothMediaStreamer::onPlayerChanged: 
+  path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/player0, property Position
+
+F:onTransportState L:00258 > @ctx:dbusitf bluetooth_media.cpp(302) 
+  KT: BluetoothMediaStreamer::onTransportState: path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0, state pending
+
+F:onTransportState L:00258 > @ctx:dbusitf bluetooth_media.cpp(302) 
+  KT: BluetoothMediaStreamer::onTransportState: path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0, state active
+
+
+F:decode L:00258 > @ctx:dbusitf bluetooth_media_reader.cpp(400) KT: onBufferReady(decoded_len 2560, samples 10240
+F:readMediaFd L:00258 > @ctx:dbusitf bluetooth_media_reader.cpp(156) KT: decoded 608 bytes
+F:findSessionByXport L:00258 > @ctx:dbusitf bluetooth_media.cpp(1174) KT: BluetoothMediaStreamer::findSessionByXport: found path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0, size 1
+F:add L:00258 > @ctx:fallback AudioBuffer.cpp(52) Adding buffer 0x7a122788 size 2560
+
+== NDS: ^0000000556.186505 !MIL   -AS           < p:00000dd6 t:724f2dc0 T:no name M:AS_DMS_Writer.cpp F:onTransportState L:00258 > @ctx:dbusitf bluetooth_media.cpp(302) KT: BluetoothMediaStreamer::onTransportState: path /org/bluez/hci0/dev_88_9F_6F_88_6A_7B/fd0, state idle
+
+
+// timeout that comes from config
+F:MwServices L:00258 > @ctx:AS_AUDIOSTREAMER_IMPL MwServices.cpp(203) 
+  AudioStreamer Bluetooth device inactivity timeout is 300 sec
+
+
+*dbus-proxies*
 
 // Components/Bluetooth/dbusitf/include/bluetooth.h
 // 
@@ -3649,6 +3733,10 @@ class BluezProxy
 
 <as-access>
 
+// ethan-as-source/Components/AS/Services/Controllers/BTAudioController/include/AS_BTAUDIO_ControllerImplementation.h
+
+m_platformItf->BindController(this);
+
 // Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_PlatformItf.cpp
 
 PlatformItf::PlatformItf(const char *platformDeviceName,
@@ -3666,12 +3754,18 @@ PlatformItf::PlatformItf(const char *platformDeviceName,
 
 m_bluetooth->getMediaEndpoints()->enableEndpoints();
 
+// adapter
+m_bluetooth->getHostInterfaces()->getAlias( m_currentHci, bluetoothIdStd ) );
+
+m_bluetooth->getDevices()->getPaired(path, isPaired);
 
 m_pairingAgent = m_bluetooth->getPairingAgent();
+m_pairingAgent->setListener(m_listener);
+m_pairingAgent->pairingResponse(addr, accepted);
 
-        m_pairingAgent->setListener(m_listener);
+// add listener to BTDevice
+m_bluetooth->getDevices()->addListener(m_listener);
 
-        if (m_pairingAgent->pairingResponse(addr, accepted))
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-android
