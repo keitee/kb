@@ -71,13 +71,13 @@
 fsm is a this instance 
 
 fsm_instance_t
- - current state (make it a instance)
+ - current state (to remember state)
  - previous state
- - state list(array) ->  each entry defines
-   - use enum          - state hdl(enum)
-   - use invalid       - eaf pointer
-                       - name
-                       - transition table -> each transition table(array) defines
+ - state list(array) ->  each entry:
+                       | hdl(enum)
+                       | eaf pointer
+                       | name
+                       | transition table -> each transition table(array) defines
                                                - event, state pairs to define
                                                what input event this state
                                                can have and which state
@@ -86,9 +86,10 @@ fsm_instance_t
                                                - use invalid marker to mark
                                                end item.
 
- - event list
-   - name
-   - void *data
+ - event list -> each entry:
+                 | hdl(enum)
+                 | name
+                 | void *data
 
 
 o all static and global structures
@@ -198,8 +199,8 @@ o other considerations
  */  
 
 #ifndef TRUE
-#define TRUE 	1
-#define FALSE	0
+#define TRUE  1
+#define FALSE 0
 #endif
 
 /* ----------------------------------------------------------------------------------
@@ -265,8 +266,8 @@ typedef void (*fsm_action_func_t)(struct _fsm_instance_t*, struct _fsm_event_t*)
 /* ----------------------------------------------------------------------------------
  * fsm_event_t
  * ----------------------------------------------------------------------------------
- * hdl			 : handle
- * name		     : name
+ * hdl          : handle
+ * name         : name
  */
 typedef struct _fsm_event_t {
   fsm_event_hdl   hdl;

@@ -209,6 +209,9 @@ void call_state_actions( fsm_instance_t* fsm, fsm_event_hdl event, void* event_d
   /* in case there is enter function */
   if( fsm->current_state->enter_action ) 
   {
+    // note: do not use `event_data` for now. If use, pass data in post_evnet
+    // and eaf will get it to use
+    
     fsm->event_list[event].data = (void*) event_data;
 
     fsm->current_state->enter_action((fsm_instance_t*)fsm, 
@@ -274,7 +277,7 @@ fsm_status_t fsm_create( fsm_instance_t* fsm, fsm_state_hdl init_state, fsm_even
  *    post an event to fsm object
  *   
  ** SYNTAX
- *	  fsm_status_t 
+ *    fsm_status_t 
  *     fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event ) 
  * 
  ** PROTOTYPE IN
@@ -282,7 +285,7 @@ fsm_status_t fsm_create( fsm_instance_t* fsm, fsm_state_hdl init_state, fsm_even
  *                                                                    
  ** PARAMETERS
  *  @ {fsm} is a pointer to given fsm object.
- * 	 
+ *   
  *  @ {post_event} is an event to post to the given fsm object.
  * 
  ** DESCRIPTION 
@@ -302,7 +305,13 @@ fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void
   uint32_t i = 0;
   fsm_state_t* next_state = nullptr;
 
-  // look in transition table of a state
+  // loop through a transition table of a *current* state to see if there is a
+  // match to the input event
+  //
+  // if found a match, then get state handle and get state entry
+  //
+  // note: do not use `event_data` for now.
+  
   while ( fsm->current_state->transition_tbl[i].event_hdl != FSM_INVALID_EVENT_HDL ) 
   {
     // found match event
