@@ -3521,6 +3521,8 @@ void BluetoothMediaStreamer::sendBufferFilled(AudioBuffer &buf)
   }
 }
 
+
+*send-message-back*
 // actually a call
 void BluetoothMediaStreamer::sendMessage(Message &m)
 {
@@ -3531,6 +3533,11 @@ void BluetoothMediaStreamer::sendMessage(Message &m)
 // registered to BluetoothMediaStreamer
 // BluetoothMediaStreamer
 // `m_btInstance->setMessageHandler(&s_bluetoothEventListener,this);`
+
+ethan-as-source/Components/AudioStreamer/source/BluetoothProtocol.cpp
+
+void AudioStreamer::BluetoothProtocol::bluetoothEventListener(const BluetoothApi::Streamer::Message& message)
+
 
 // Components/AudioStreamer/source/AudioBuffer.h
 
@@ -3765,6 +3772,49 @@ m_pairingAgent->pairingResponse(addr, accepted);
 
 // add listener to BTDevice
 m_bluetooth->getDevices()->addListener(m_listener);
+
+
+// device connect / disconnet comes from AS
+
+void PlatformItf::onPropertyChange(const std::string &path, const DBusProperty &property)
+{
+  AS_LOG_ENTRY("%s() entry: path=%s property = %s",
+      __func__,path.c_str(),property.getName().c_str());
+
+  // Note code assumes a direct mapping between device path and device address
+  if (m_controller && property.getName() == BLUEZ_DEVICE_PROP_CONNECTED)
+  {
+    AS::string bdaddr,asPath;
+    bool    connected = property.getValue().asBool();
+
+    asPath.assign(path.c_str());
+    bdaddr = Util::PathToBdaddr(asPath);
+
+    AS_LOG_INFO("Controller bound, passing on connection state %d",(int)connected);
+    m_controller->ProcessConnectionState(bdaddr,connected);
+  }
+
+  AS_LOG_EXIT("%s() exit",__func__);
+}
+
+ethan-as-source/Components/AS/Services/Controllers/BTAudioController/source/AS_BTAUDIO_ControllerImplementation.cpp
+
+void ControllerImplementation::ProcessConnectionState(AS::string bdaddr,
+                                        bool       connected)
+{
+  AS_LOG_ENTRY("%s() bdaddr=%s,connected=%d",
+      __func__,bdaddr.c_str(),(int)connected);
+
+  ControllerMessage *msg = new ControllerMessage(ControllerMessage::ConnectionState);
+
+  msg->m_bdaddr    = bdaddr;
+  msg->m_connected = connected;
+
+  // Send ptr, delete upon reception
+  m_queue->SendPayload(&(msg),sizeof(msg));
+
+  AS_LOG_EXIT("%s() exit",__func__);
+}
 
 
 ={============================================================================
