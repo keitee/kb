@@ -1,5 +1,23 @@
 /*
+
+o Use public structures in header and private structures in source code
+
+o multiple instance shares the same definition.
+
+  fsm instance(FSM_T) inited by init structure
+  - current state
+  - reference to fsm definition
+
+  fsm definition inited by definition info
+  - state x input array of pair<next state, eaf>
+
+  VRM_FSM_ALL_STATES can support `super` state since it allows transition to new
+  state for any event. Then how can use some of events or states to define super
+  state?  Set VRM_FSM_ALL_STATES and carefully post event
+
+
 */
+
 
 /*****************************************************************************\
   \Include files
@@ -74,7 +92,7 @@ typedef struct _fsm
   // name of instance
   char          name[VRM_VSM_MAX_INSTANCE_NAME_LEN];
 
-  // current state of the FSM
+  // *current state of the FSM*
   uint16_t      state_offset;
 
   // previous state of the FSM
@@ -423,6 +441,9 @@ VRM_FSM_CreateDefinition(
     fsm_definition->max_input = 0u;
 
     // calc min, max num of states, events, and count
+    // Each fsm definition(class) has different state and input enum definition
+    // and min always starts from 0 and max varies. This loop finds out min and
+    // max of state and input for a definition from fsm transition table.
 
     for (i = 0u; i < pFSM_definition_info->num_entries; i++) {
 
@@ -451,6 +472,7 @@ VRM_FSM_CreateDefinition(
       }
     }
 
+    // get the number of state and inputs; for example, 0-3 means 4 entries and plus 1.
     fsm_definition->num_states = (fsm_definition->max_state - fsm_definition->min_state) + 1u;
     fsm_definition->num_inputs = (fsm_definition->max_input - fsm_definition->min_input) + 1u;
     count = fsm_definition->num_states * fsm_definition->num_inputs;
@@ -464,23 +486,19 @@ VRM_FSM_CreateDefinition(
 
   if (SYSTEM_STATUS_IS_OK(stat)) { 
 
-    /* Allocate the states table */    
+    /* Allocate the states transiiton table */    
     fsm_definition->table = 
       (FSM_TRANS *)malloc((uint32_t)count * (uint32_t)sizeof(FSM_TRANS));
 
     /* check for allocation error */
     if (fsm_definition->table == 0) {
-
       /* assert */ 
       _fsm_error(mem_err);
-
       (void)free(fsm_definition);
-
       fsm_definition = NULL;
-
       stat = VRM_FSM_FAILURE;
-    } 
-  } 
+    }
+  }
 
 #if 0
   if (SYSTEM_STATUS_IS_OK(stat)) { 
@@ -510,6 +528,39 @@ VRM_FSM_CreateDefinition(
   }
 #endif
 
+  // build dynamic state transition table from definition table
+  //
+  //            inputs
+  //            0   1   2   3   4   5   6   7   8   9
+  // old states
+  // 0          X   0   X   0   X   X   X   X   X   X
+  // 1          X   X   0   0   X   X   X   X   X   X 
+  // 2          X   X   X   0   X   X   0   X   X   X 
+  // 3          X   X   X   0   X   X   X   0   X   X 
+  // 4          X   X   X   0   X   X   X   X   0   X 
+  //
+  // each entry is FSM_TRANS which is pair<new state, eaf> and this table defines
+  // from(old state, input) to(new state, action)
+  //
+  // static state trnsiiton table defines current state and input(event) and
+  // this loop set new state and action pair at index which corresponds to
+  // item in state transition table. 
+  //
+  // Where 0 means set and X is not set. 
+  //
+  // So this trans table defines map between new state, action and current state
+  // and input. 
+  //
+  // For ALL_STATES, set all state for the same input
+  //
+  //
+  //
+  // note: why do this? faster than searching through single array state
+  // transition table?
+  //
+  // note: multiple path from one state? supported and set other column for the
+  // same state low.
+
   if (SYSTEM_STATUS_IS_OK(stat)) { 
     /* initialize the entries in the table */
     for (i = 0u; i < count; i++) {
@@ -525,6 +576,9 @@ VRM_FSM_CreateDefinition(
 
     for (i = 0u; i < pFSM_definition_info->num_entries; i++) 
     {
+      // etnry from definition
+      // `pFSM_definition_info->entries;` is input VRM_FSM_ENTRY list
+
       pEntry = pFSM_definition_info->entries + i;
 
       if (pEntry->state == VRM_FSM_ALL_STATES) {
@@ -536,9 +590,11 @@ VRM_FSM_CreateDefinition(
         last_state = pEntry->state;
       }
 
-      for (state = first_state; state <= last_state; state++) {
+      for (state = first_state; state <= last_state; state++) 
+      {
         offset = (fsm_definition->num_inputs * (state - fsm_definition->min_state)) 
           + (pEntry->input - fsm_definition->min_input);
+
         pTrans = fsm_definition->table + offset;
 
         /* we keep the states offsets, rather than the states themself */
@@ -556,7 +612,7 @@ VRM_FSM_CreateDefinition(
     }    
 #endif
 
-    /* set the returned handle */ 
+    // return definition handle
     *pHandle = (VRM_FSM_DEFINITION_HANDLE)fsm_definition;
   } 
 
@@ -564,7 +620,7 @@ VRM_FSM_CreateDefinition(
     *pHandle = VRM_FSM_ILLEGAL_DEFINITION;
   }
 
-  return stat;		
+  return stat;
 }
 
 
@@ -622,19 +678,19 @@ SYSTEM_STATUS VRM_FSM_DestroyDefinition(VRM_FSM_DEFINITION_HANDLE fsm_def_handle
 SYSTEM_STATUS 
 VRM_FSM_CreateInstance(
     const VRM_FSM_INIT *pInit, 
-    VRM_FSM_INSTANCE_HANDLE *pHandle) 						   
+    VRM_FSM_INSTANCE_HANDLE *pHandle)
 {
   FSM_DEFINITION* def;
-  SYSTEM_STATUS	stat = VRM_FSM_OK;
-  FSM_T			new_fsm = 0;
+  SYSTEM_STATUS stat = VRM_FSM_OK;
+  FSM_T new_fsm = 0;
 
   DIAG_DECLARE_FUNCTION("VRM_FSM_CreateInstance");
 
-  /* sanity checking */ 	
+  // sanity checking
   if ((pInit == NULL) || (pInit->fsm_definition_handle == VRM_FSM_ILLEGAL_DEFINITION)) {
     _fsm_error(par_err);  
     stat = VRM_FSM_FAILURE; 
-  }	 
+  }
 
   // Allocate FSM instance 
   if (SYSTEM_STATUS_IS_OK(stat)) { 
@@ -642,7 +698,7 @@ VRM_FSM_CreateInstance(
     new_fsm = (FSM_T)malloc(sizeof(_fsm));
 
     /* check for allocation error */
-    if (NULL == new_fsm) { 		
+    if (NULL == new_fsm) {
       _fsm_error(mem_err);
       stat = VRM_FSM_FAILURE; 
     } 
@@ -677,7 +733,7 @@ VRM_FSM_CreateInstance(
 
       (void)free((void*)new_fsm);
 
-      *pHandle = NULL;		  
+      *pHandle = NULL;
 
       _fsm_error("Error encountered while trying to set initial state to new FSM instance");
     } 

@@ -20,8 +20,10 @@ project(cmake_qt VERSION 0.1 LANGUAGES CXX)
 # The CMAKE_AUTOMOC setting runs moc automatically when required. For more on
 # this feature see the CMake AUTOMOC documentation
 
-# use this CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake .. since
-# it do not work when use Widgets
+# use this 
+# CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake .. 
+
+# since it do not work when use Widgets
 # set(CMAKE_PREFIX_PATH "$ENV{HOME}/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core")
 #
 # keitee@keitee-mint:~/Qt/5.12.3/gcc_64/lib/cmake$ ls

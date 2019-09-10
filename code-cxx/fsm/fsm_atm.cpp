@@ -750,16 +750,20 @@ TEST(Fsm, AtmDynamic)
 {
   using namespace fsm_dynamic;
 
-  SYSTEM_STATUS	            stat = VRM_FSM_OK;
-  VRM_FSM_DEFINITION_INFO   fsm_info;
+  SYSTEM_STATUS             stat = VRM_FSM_OK;
+
+  // builds definition from definition info
+  VRM_FSM_DEFINITION_INFO   fsm_definition_info;
   VRM_FSM_DEFINITION_HANDLE fsm_definition_handle{};
+
+  fsm_definition_info.entries      = AtmFsm;
+  fsm_definition_info.num_entries  = (uint16_t)NELEMENTS(AtmFsm);
+
+  stat = VRM_FSM_CreateDefinition(&fsm_definition_info, &fsm_definition_handle);
+
+  // build instance from init 
   VRM_FSM_INSTANCE_HANDLE   fsm_instance_handle{};
-  VRM_FSM_INIT	            fsm_init;
-
-  fsm_info.entries      = AtmFsm;
-  fsm_info.num_entries  = (uint16_t)NELEMENTS(AtmFsm);
-
-  stat = VRM_FSM_CreateDefinition(&fsm_info, &fsm_definition_handle);
+  VRM_FSM_INIT              fsm_init;
 
   // initialize fsm init data 
   fsm_init.fsm_definition_handle  = fsm_definition_handle;
@@ -1257,6 +1261,7 @@ namespace
   }
 }
 
+// send and get single message
 TEST(Fsm, MessageUseThread)
 {
   using namespace messaging;
@@ -1272,6 +1277,7 @@ TEST(Fsm, MessageUseThread)
       100);
 }
 
+// send and get various type of messages
 TEST(Fsm, MessageVariousType)
 {
   using namespace messaging;

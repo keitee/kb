@@ -138,7 +138,7 @@ typedef struct _fsm_definition_info {
 
 } VRM_FSM_DEFINITION_INFO; 
 
-// callback function that is called after transition 
+// callback function that is called after every transition 
 typedef void (*VRM_FSM_TRANS_CB)
 (
   void          *data,  // user's pointed data supplied in VRM_FSM_INIT struct
@@ -171,7 +171,7 @@ typedef struct _fsm_init
   VRM_FSM_TRANS_CB            callback;
 
   // called on timeout
-  // FSM_TIMEOUT_CB	  timeout_callback;
+  // FSM_TIMEOUT_CB   timeout_callback;
 
 } VRM_FSM_INIT;
 

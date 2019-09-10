@@ -65221,7 +65221,9 @@ Supports timeout for each fsm instance.
 
 // basic_play.c
 
-/* structure stored per playing program */
+// structure stored per playing program. Like session or context which is passed
+// to fsm and to EAF to access context 
+
 typedef struct BASIC_PLAY_ {
 
   // ...
@@ -65293,7 +65295,8 @@ typedef struct _fsm_entry {
 
 static VRM_FSM_ENTRY PlayEntries[] = {
 
-  VRM_FSM_E(  VRM_FSM_ALL_STATES,           /* (current) state */ 
+  VRM_FSM_E(
+      `VRM_FSM_ALL_STATES`,                   /* (current) state */ 
       E_PLAY_INPUT_STOP,                    /* input */
       E_PLAY_INT_STATE_RELEASED_MEDIACONN,  /* new state */
       /* `action for new state` */
@@ -65317,23 +65320,6 @@ static VRM_FSM_ENTRY PlayEntries[] = {
 
 <to-init-fsm>
 
-// FSM definition info structure
-typedef struct _fsm_definition_info {
-
-  VRM_FSM_ENTRY* entries;   // must be static during definition's life time
-
-  uint16_t num_entries;
-
-  // note: not used so far
-  // This structure is used to define timeouts. FSM uses it to detect when the
-  // state machine gets "stuck" in a state for longer than it should.
-
-  // VRM_FSM_TIMEOUT* timeouts; must be static during definition's life time
-  // uint16_t num_timeouts;
-
-} VRM_FSM_DEFINITION_INFO; 
-
-
 SYSTEM_STATUS PLAY_Init(void)
 {
   VRM_FSM_DEFINITION_INFO fsm_info;
@@ -65348,7 +65334,6 @@ SYSTEM_STATUS PLAY_Init(void)
 
   // set fsm_definition_handle which is static global
   stat = `VRM_FSM_CreateDefinition` (&fsm_info, &`fsm_definition_handle`);
-  VRM_DIAG_ASSERT (SYSTEM_STATUS_IS_OK (stat));
 
   /* initialize fields to null values */
   memset(BasicPlay, 0, (size_t)(sizeof(BASIC_PLAY) * BASIC_PLAY_MAX_HANDLES_NUM));
@@ -65362,209 +65347,10 @@ SYSTEM_STATUS PLAY_Init(void)
 }
 
 
-*internal-structures*
-
-// State transition. Contains the new state and the action to be taken.
-typedef struct fsm_trans {
-  uint16_t new_state;     // new state
-  VRM_FSM_ACTION action;  // action on this transition
-} FSM_TRANS;
-
-typedef struct _fsm_definition { 
-
-  VRM_FSM_DEFINITION_INFO def_info;
-
-  uint16_t     min_state, max_state, num_states;
-  uint16_t     min_input, max_input, num_inputs;
-
-  // transitions table in size of states_num*inputs_num
-  FSM_TRANS   *table;
-
-  // timeouts array in size of states_num
-  // FSM_TIMER   *timeouts;
-
-  // number of live instances of this FSM definition
-  uint16_t instances_count;
-
-} FSM_DEFINITION;
-
-// The states and inputs starts from 0 in state machine definition.
-#define VRM_FSM_ILLEGAL_STATE   ((uint16_t)0xFFFFu) // seems not used
-#define VRM_FSM_ALL_STATES      ((uint16_t)0xFFFE)
-
-
-// build dynamic fsm definition from input definition info
-// CMS_MEDIA_SERVICES/VRM/src/server/manager/fsm.c
-
-SYSTEM_STATUS VRM_FSM_CreateDefinition(
-    const VRM_FSM_DEFINITION_INFO* pFSM_definition_info,
-    VRM_FSM_DEFINITION_HANDLE* pHandle)
-{
-  VRM_FSM_ENTRY   *pEntry;
-  FSM_TRANS       *pTrans;
-  FSM_DEFINITION  *fsm_definition = NULL;
-
-  /* allocate space for definition structure */ 
-  fsm_definition = (FSM_DEFINITION*)
-    MEMMAN_API_AllocElementP();
-
-  /* set definition info */ 
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-
-    /* copy info */
-    fsm_definition->def_info.entries = `pFSM_definition_info->entries;`
-    fsm_definition->def_info.num_entries = pFSM_definition_info->num_entries; 
-    fsm_definition->def_info.timeouts = pFSM_definition_info->timeouts; 
-    fsm_definition->def_info.num_timeouts = pFSM_definition_info->num_timeouts;
-
-    /* no instances at this time */ 
-    fsm_definition->instances_count = 0u;
-
-    /* Scan for the range of states and inputs */
-    fsm_definition->min_state = (uint16_t) -1;
-    fsm_definition->min_input = (uint16_t) -1;
-    fsm_definition->max_state = 0u;
-    fsm_definition->max_input = 0u;
-
-    // Each fsm definition(class) has different state and input enum
-    // definition so min always starts from 0 and max varies. This loop finds
-    // out min and max of state and input for a definition from fsm transition
-    // table.
-
-    for (i = 0u; i < pFSM_definition_info->num_entries; i++) 
-    {
-      if ((pFSM_definition_info->entries[i].state != VRM_FSM_ILLEGAL_STATE) &&
-          (pFSM_definition_info->entries[i].state != VRM_FSM_ALL_STATES )   ) 
-      {
-        if (pFSM_definition_info->entries[i].state < fsm_definition->min_state) {
-          fsm_definition->min_state = pFSM_definition_info->entries[i].state;
-        }
-        if (pFSM_definition_info->entries[i].state > fsm_definition->max_state) { 
-          fsm_definition->max_state = pFSM_definition_info->entries[i].state;
-        }
-        if (pFSM_definition_info->entries[i].new_state < fsm_definition->min_state) {
-          fsm_definition->min_state = pFSM_definition_info->entries[i].new_state;
-        }
-        if (pFSM_definition_info->entries[i].new_state > fsm_definition->max_state) {
-          fsm_definition->max_state = pFSM_definition_info->entries[i].new_state;
-        }
-      }
-
-      if (pFSM_definition_info->entries[i].input < fsm_definition->min_input) { 
-        fsm_definition->min_input = pFSM_definition_info->entries[i].input;
-      }
-      if (pFSM_definition_info->entries[i].input > fsm_definition->max_input) {
-        fsm_definition->max_input = pFSM_definition_info->entries[i].input;
-      }
-    } // for end
-
-    // get the number of state and inputs; for example, 0-3 means 4 entries and plus 1.
-    fsm_definition->num_states = (fsm_definition->max_state - fsm_definition->min_state) + 1u;
-    fsm_definition->num_inputs = (fsm_definition->max_input - fsm_definition->min_input) + 1u;
-
-    count = fsm_definition->num_states * fsm_definition->num_inputs;
-  }
-
-  // This build definition in dynamic memory from static fsm state machine
-  // entries and build transition tables in dynamic memory as well. 
-  // 
-  // This table array has N state x M inputs. Each state has M entries for
-  // all inputs and one of them will be set based on static definition. For
-  // FSM_ALL_STATE which should apply to all states, so set a specified
-  // event for all states. Which is done in FSM_CreateDefintion.
-
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-
-    /* Allocate the states table */    
-    fsm_definition->table = 
-      (FSM_TRANS *)MEMMAN_API_CallocStaticP(VRM_MEMMAN_GetVrmMemoryPoolHandle(),
-          (uint32_t)`count`, (uint32_t)sizeof(`FSM_TRANS`));
-  } 
-
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-
-    /* Allocate a timeouts array, setting all elements to 0 */ 
-    fsm_definition->timeouts =
-      (struct fsm_timer *)VRM_MEMMAN_API_CallocStaticP(
-          VRM_MEMMAN_GetVrmMemoryPoolHandle(),
-          (uint32_t)fsm_definition->num_states, 
-          (uint32_t)sizeof(struct fsm_timer));
-  }
-
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-
-    /* initialize the entries in the table */
-    for (i = 0u; i < count; i++) {
-      fsm_definition->table[i].new_state = VRM_FSM_ILLEGAL_STATE;
-    }
-
-    // note: build dynamic state x input transition table from static
-    // transition table.
-    //
-    //            inputs
-    //            0   1   2   3   4   5   6   7   8   9
-    // states
-    // 0          X   0   X   0   X   X   X   X   X   X
-    // 1          X   X   0   0   X   X   X   X   X   X 
-    // 2          X   X   X   0   X   X   0   X   X   X 
-    // 3          X   X   X   0   X   X   X   0   X   X 
-    // 4          X   X   X   0   X   X   X   X   0   X 
-    //
-    // static state trnsiiton table defines current state and input(event) and
-    // this loop set new state and action pair at index which corresponds to
-    // item in state transition table. Where 0 means set and X is not set. So
-    // this trans table defines map between new state, action and current
-    // state and input. For ALL_STATES, set all state for the same input.
-    //
-    // note: why do this? faster than searching through single array state
-    // transition table?
-    //
-    // note: multiple path from one state? supported and set other column for
-    // the same state low.
-
-    // `pFSM_definition_info->entries;` is input VRM_FSM_ENTRY list
-
-    for (i = 0u; i < pFSM_definition_info->num_entries; i++) {
-
-      pEntry = pFSM_definition_info->entries + i;
-
-      if (pEntry->state == VRM_FSM_ALL_STATES) {
-        first_state = fsm_definition->min_state;
-        last_state = fsm_definition->max_state;
-      }
-      else {
-        first_state = pEntry->state;
-        last_state = pEntry->state;
-      }
-
-      for (state = first_state; state <= last_state; state++) {
-        offset = (fsm_definition->num_inputs * (state - fsm_definition->min_state)) 
-          + (pEntry->input - fsm_definition->min_input);
-        pTrans = fsm_definition->table + offset;
-
-        /* we keep the states offsets, rather than the states themself */
-        pTrans->new_state = pEntry->new_state - fsm_definition->min_state;
-        pTrans->action = pEntry->action;
-      }
-    } // for end to "fill the table"
-
-    /* Fill the timeouts array */
-    for (i = 0u; i < pFSM_definition_info->num_timeouts; i++) {
-      state = pFSM_definition_info->timeouts[i].state - fsm_definition->min_state;
-      fsm_definition->timeouts[state].input = pFSM_definition_info->timeouts[i].input;
-      fsm_definition->timeouts[state].milli = pFSM_definition_info->timeouts[i].milli;
-    }    
-
-    /* set the returned handle */ 
-    *pHandle = (VRM_FSM_DEFINITION_HANDLE)fsm_definition;
-  }
-}
-
-
 <to-create-fsm-instance>
 
-SYSTEM_STATUS PLAY_Start( const PLAY_PARAMS	*p_play_params,
-						  /* out */ PLAY_HANDLE *p_hPlay)
+SYSTEM_STATUS PLAY_Start( const PLAY_PARAMS *p_play_params,
+  /* out */ PLAY_HANDLE *p_hPlay)
 {
   BASIC_PLAY *pPlaySession = NULL; /* the object of the playback */
 
@@ -65617,11 +65403,10 @@ static SYSTEM_STATUS PlayInitializeEntry (BASIC_PLAY *pThis, const PLAY_PARAMS	*
   /* initialize fsm init data */ 
   memset( &init, 0, sizeof(VRM_FSM_INIT));
   init.fsm_definition_handle	= `fsm_definition_handle`;
-  init.callback				= (VRM_FSM_TRANS_CB)PlayActionFsmOnExit;
-  init.init_state				= (uint16_t)`E_PLAY_INT_STATE_NONE`;
-  init.timeout_callback		 = NULL; 
+  init.callback = (VRM_FSM_TRANS_CB)PlayActionFsmOnExit;
+  init.init_state = (uint16_t)`E_PLAY_INT_STATE_NONE`;
 
-  // *set-init-data-for-each-instance*
+  // *pass-play-session-to-each-fsm-instance*
   `init.data = (void *)(pThis);`
 
   // set fsm instance handle
@@ -65633,180 +65418,6 @@ static SYSTEM_STATUS PlayInitializeEntry (BASIC_PLAY *pThis, const PLAY_PARAMS	*
     VRM_DIAG_ASSERT (SYSTEM_STATUS_IS_OK (stat));
   }
 }
-
-
-// note: called on every transition
-// init.callback				= (VRM_FSM_TRANS_CB)PlayActionFsmOnExit;
-// checks fsm transition state, stat value and etc.
-
-// callback function that is called after transition 
-typedef void (*VRM_FSM_TRANS_CB)
-(
-  void          *data,  // user's pointed data supplied in VRM_FSM_INIT struct
-  VRM_FSM_ENTRY *entry
-);
-
-/* specific FSM instance associated data */ 
-typedef struct _fsm_init 
-{
-  // FSM definition to construct instance from 
-  VRM_FSM_DEFINITION_HANDLE   fsm_definition_handle;
-
-  // *set-init-data-for-each-instance*
-  // used by tracing. any user data, that is sent to the user after actions and
-  // timeouts
-  void                        *data;
-
-  // initial state to be set for the machine
-  uint16_t                    init_state;
-
-  // called on transition
-  VRM_FSM_TRANS_CB            callback;
-
-} VRM_FSM_INIT;
-
-
-/* FSM internal control structure - `per instance.` */
-
-typedef struct _fsm
-{
-  VRM_FSM_INIT  init; /* initialization data */
-
-#ifdef VRM_DEBUG
-  int8_t name[VRM_VSM_MAX_INSTANCE_NAME_LEN];  /* name of instance */
-#endif
-
-  /* `current state of the FSM` */
-  uint16_t state_offset;
-
-  uint16_t    input_offset; /* input value that will be processed */
-  bool        input_available; /* true if input is available, false otherwise */
-
-  /* when action is preformed this flag is true */
-  bool         in_action;
-
-} *FSM_T;
-
-
-SYSTEM_STATUS VRM_FSM_CreateInstance(
-    const VRM_FSM_INIT *pInit, 
-    VRM_FSM_INSTANCE_HANDLE *pHandle)
-{
-  FSM_DEFINITION* def;
-  SYSTEM_STATUS	stat = VRM_FSM_OK;
-  SYSTEM_STATUS   stat_memman = MEMMAN_API_STATUS_OK;
-  FSM_T           new_fsm = 0;
-
-  DIAG_DECLARE_FUNCTION("VRM_FSM_CreateInstance");
-
-  /* sanity checking */
-  if ((pInit == NULL) || (pInit->fsm_definition_handle == VRM_FSM_ILLEGAL_DEFINITION)) {
-    _fsm_error(par_err);  
-    stat = VRM_FSM_FAILURE; 
-  }
-
-  /* Allocate FSM instance */
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-    new_fsm = (FSM_T)MEMMAN_API_AllocElementP();
-  }
-
-  /* initialize the allocated structure */
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-
-    /* copy the initialization data */ 
-    memcpy(&(new_fsm->init), pInit, sizeof(VRM_FSM_INIT));
-
-    /* set the name to null string */
-#ifdef VRM_DEBUG
-    *(new_fsm->name) = 0;    
-#endif
-
-    new_fsm->input_available = false;
-
-    /* get the FSM definition */ 
-    `def = (FSM_DEFINITION*)(new_fsm->init.fsm_definition_handle);`
-
-    /* increase instance count for the used definition */
-    new_fsm->in_action = false;
-
-    /* alarm is not valid */ 
-    new_fsm->alarm_expected = false;
-
-    /* `set the initial state` */ 
-    stat = `FSMSetState`((VRM_FSM_INSTANCE_HANDLE)new_fsm, 
-        (uint16_t)(new_fsm->init.init_state - def->min_state));
-
-    /* consider error case */
-    if (!SYSTEM_STATUS_IS_OK(stat)) {   
-    } 
-    else {
-      def->instances_count++; // increase instance counter 
-    }
-  } // if end
-
-   // set the handle, return fsm instance 
-   *pHandle = (VRM_FSM_INSTANCE_HANDLE)new_fsm; 
-}
-
-
-static SYSTEM_STATUS FSMSetState(VRM_FSM_INSTANCE_HANDLE fsm_h, uint16_t state)
-{
-  SYSTEM_STATUS stat = VRM_FSM_OK;
-  FSM_DEFINITION* def = NULL; 
-  FSM_T fsm = (FSM_T)fsm_h;
-  uint16_t state_offset = 0u;
-
-  /* check FSM is not performing an action */ 
-  if (fsm->in_action) {
-    stat = VRM_FSM_FAILURE; 
-  }
-
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-    /* get the FSM definition */
-    def = (FSM_DEFINITION*)(fsm->init.fsm_definition_handle); 
-
-    /* calculate the state offset */
-    `state_offset = state - def->min_state;`
-
-    /* check validity */
-    if (state_offset >= def->num_states) {  
-      _fsm_error(par_err); 
-      stat = VRM_FSM_FAILURE;
-    }
-  }
-
-  if (SYSTEM_STATUS_IS_OK(stat)) { 
-
-    // note: name state_offset is misleading since it's state to set
-
-    /* set the new state */ 
-    `fsm->state_offset = state_offset;`
-
-    /* set the input that is injected when timeout from this state */
-    fsm->timeout_input = def->timeouts[state].input;
-
-    /* cancel previous alarm if needed */
-    if (true == fsm->alarm_expected) { 
-      alarm_stat = SYSTEMALARM_Cancel(fsm->alarm_handle);  
-
-#ifdef VRM_DEBUG 
-      if (!SYSTEM_STATUS_IS_OK(alarm_stat)) {
-        DIAG_LOG_INFO(VRM_diag_segment_id,("Previous alarm could not be canceled. fsm->name: %s",fsm->name));
-      } 
-#endif
-
-      fsm->alarm_expected = false;
-    } 
-
-    /* do we need to set a new alarm? */ 
-    // ...
-  } 	 
-
-  return stat; 
-}
-
-
-<to-use-fsm>
 
 // thread and q
 
