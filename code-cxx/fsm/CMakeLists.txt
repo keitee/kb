@@ -67,12 +67,19 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
-add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
+# do not work
+# add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
+add_compile_options("-g")
 
-add_executable(${PROJECT_NAME} fsm_atm.cpp sfsm.cpp dfsm.cpp)
-target_link_libraries(${PROJECT_NAME} gmock_main)
+# fsm atm
+add_executable(${PROJECT_NAME}_atm fsm_atm.cpp sfsm.cpp dfsm.cpp)
+target_link_libraries(${PROJECT_NAME}_atm gmock_main)
 
-# qt fsm
+# fsm ex
+add_executable(${PROJECT_NAME}_ex fsm_ex.cpp)
+target_link_libraries(${PROJECT_NAME}_ex gmock_main)
+
+# fsm qt
 
 find_package(Qt5Core)
 find_package(Qt5Test)

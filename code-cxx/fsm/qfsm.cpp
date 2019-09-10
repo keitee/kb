@@ -31,7 +31,7 @@ StateMachine::StateMachine(QObject *parent)
 
 StateMachine::~StateMachine()
 {
-	cleanUpEvents();
+  cleanUpEvents();
 }
 
 // -----------------------------------------------------------------------------
@@ -197,17 +197,15 @@ void StateMachine::moveToState(int newState)
     logTransition(oldState, newState);
 
     // get the set of states we're currently in (includes parents)
+    //
     // (make a list of states from the given state up to its top parents)
-    // new: (new's parent, new)
-    // old: (old, old's parent)
+    //
+    // new: (new's parent, new) for enterd order
+    // old: (old, old's parent) for exited order
+
     QList<int> newStates = stateTreeFor(newState, false);
     QList<int> oldStates = stateTreeFor(oldState, true);
 
-    // (for old state set, only emit exited signal for states which are not in
-    // new state set. smae for new state set.
-    // becuase if do blindly, emit exited(call exit eaf) for states we're
-    // entering.)
-    
     // emit the exit signal for any states we left
     for (const int &_oldState : oldStates) {
       if (!newStates.contains(_oldState))
