@@ -118,14 +118,16 @@ o each states defines a trnsition table, one to one match
 1 the post event loop use it to find next matching state corresponding to
   (incoming) posted event.
 
-2 For common evnets for all state, then need to write transition table for each
-  state to have that event. Also for transition to self state. All depends on
-  how defines transition table.
+2 super state. For common evnets for all state, then need to write transition
+  table for each state to have that event. Also for transition to self state.
+  All depends on how defines transition table.
 
 
 o action function
 
-1 this static fsm uses action function *for state but not event* 
+1 state action or event action? this fsm uses state action function *for state*
+  but no real difference between them.
+
 
 2 Questions from the previous note: In this fsm, it runs its eaf when enters a
   state and this is actually state action compared to event action. How to
@@ -164,7 +166,9 @@ o other considerations
 1 no thread-safe support
 
 2 no check if fsm_post_event is called in eaf. This use cause sync call and
-  nested call. To decoule it, use async such as message mechanism.
+  nested call. To decoule it, use async such as message mechanism in post and
+  get fsm event.
+
 
 */
 

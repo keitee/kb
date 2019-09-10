@@ -209,8 +209,7 @@ void call_state_actions( fsm_instance_t* fsm, fsm_event_hdl event, void* event_d
   /* in case there is enter function */
   if( fsm->current_state->enter_action ) 
   {
-    // note: do not use `event_data` for now. If use, pass data in post_evnet
-    // and eaf will get it to use
+    // save `event_data` to event and get it back from event list in the eaf
     
     fsm->event_list[event].data = (void*) event_data;
 
@@ -309,8 +308,6 @@ fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void
   // match to the input event
   //
   // if found a match, then get state handle and get state entry
-  //
-  // note: do not use `event_data` for now.
   
   while ( fsm->current_state->transition_tbl[i].event_hdl != FSM_INVALID_EVENT_HDL ) 
   {
@@ -324,7 +321,7 @@ fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void
       fsm->previous_state = fsm->current_state;
       fsm->current_state = next_state;
 
-      // use current state to call the right eaf
+      // enter current state with input event
       call_state_actions( fsm, post_event, event_data );
       return TRUE; // FSM_OK;
     }
@@ -338,7 +335,7 @@ fsm_status_t fsm_post_event( fsm_instance_t* fsm, fsm_event_hdl post_event, void
     << std::endl;
 
   // WATCH(WATCH_ALL|WATCH_LEVEL_ALWAYS, "FSM: %s: post: unsupported event(%s) in state(%s).",
-  // 	fsm->name, fsm->event_list[post_event].name, fsm->current_state->name );
+  //  fsm->name, fsm->event_list[post_event].name, fsm->current_state->name );
 
   return FALSE; // FSM_ERR_UNSUPPORTED_EVENT;
 }

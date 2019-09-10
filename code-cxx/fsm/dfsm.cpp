@@ -67,7 +67,7 @@ typedef struct _fsm_definition {
 // FSM internal control structure - per instance.
 
 typedef struct _fsm
-{									
+{
   // initialization data
   VRM_FSM_INIT  init;
 
@@ -75,16 +75,16 @@ typedef struct _fsm
   char          name[VRM_VSM_MAX_INSTANCE_NAME_LEN];
 
   // current state of the FSM
-  uint16_t	    state_offset;
+  uint16_t      state_offset;
 
   // previous state of the FSM
-  uint16_t	    pre_state_offset;
+  uint16_t      pre_state_offset;
 
   // input value that will be processed
   uint16_t      input_offset;
 
   // true if input is available, false otherwise 
-  bool		      input_available;
+  bool          input_available;
 
 #if 0
   uint16_t      timeout_input;						/* input to be sent as callback paramter when timeout */

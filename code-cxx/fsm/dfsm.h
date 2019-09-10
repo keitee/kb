@@ -78,8 +78,8 @@ typedef uint32_t SYSTEM_STATUS;
 #define VRM_FSM_FAILURE   ((SYSTEM_STATUS)0)
 
 
-#define VRM_FSM_ILLEGAL_STATE	((uint16_t)0xFFFFu)
-#define VRM_FSM_ALL_STATES		(uint16_t)0xFFFE
+#define VRM_FSM_ILLEGAL_STATE   ((uint16_t)0xFFFFu)
+#define VRM_FSM_ALL_STATES      ((uint16_t)0xFFFE)
 
 
 #define VRM_VSM_MAX_INSTANCE_NAME_LEN 30u
@@ -87,9 +87,6 @@ typedef uint32_t SYSTEM_STATUS;
 #define VRM_FSM_NAME_PREFIX_VRM_MONITOR    "VRM_MONITOR_"
 
 
-
-/* Use this macro for make array of VRM_FSM_ENTRY. */
-#define	VRM_FSM_E(w,x,y,z) {(uint16_t)w,(uint16_t)x,(uint16_t)y,z,#w,#x}
 
 #define VRM_FSM_ILLEGAL_DEFINITION NULL
 
@@ -106,17 +103,16 @@ typedef void* VRM_FSM_INSTANCE_HANDLE;
 typedef void (*VRM_FSM_ACTION) (void* data);
 
 
-typedef struct _fsm_entry {
-  uint16_t state;				/* state to which this transition belongs or VRM_FSM_ALL_STATES */
-  uint16_t input;				/* input on which the transition works */
-  uint16_t new_state;			/* new state */
-  VRM_FSM_ACTION action;      /* action on this transition */
+// Use this macro for make array of VRM_FSM_ENTRY.
+#define VRM_FSM_E(w,x,y,z) {(uint16_t)w,(uint16_t)x,(uint16_t)y,z,#w,#x}
 
-  char *state_str;
-  char *input_str;
-  // char	*state_str;			/* to support trace */
-  // char	*input_str;			/* to support trace */
- 
+typedef struct _fsm_entry {
+  uint16_t state;         // state to which this transition belongs or VRM_FSM_ALL_STATES
+  uint16_t input;         // input on which the transition works
+  uint16_t new_state;     // new state
+  VRM_FSM_ACTION action;  // action on this transition
+  char *state_str;        // to support trace
+  char *input_str;        // to support trace
 } VRM_FSM_ENTRY;
 
 // /*
@@ -131,22 +127,22 @@ typedef struct _fsm_entry {
 // } VRM_FSM_TIMEOUT;
 
 
-/* FSM definition info structure */
+// FSM definition info structure
 typedef struct _fsm_definition_info {
-    VRM_FSM_ENTRY* entries;                    /* must be static during definition's life time */ 											  
+  VRM_FSM_ENTRY* entries;   // must be static during definition's life time
 
-    uint16_t num_entries;				   
+  uint16_t num_entries;
 
-    // VRM_FSM_TIMEOUT* timeouts;				   /* must be static during definition's life time */ 
-    // uint16_t num_timeouts;
- 
+  // VRM_FSM_TIMEOUT* timeouts; must be static during definition's life time
+  // uint16_t num_timeouts;
+
 } VRM_FSM_DEFINITION_INFO; 
 
-
-typedef void (*VRM_FSM_TRANS_CB)			   /* callback function that is called after transition */
+// callback function that is called after transition 
+typedef void (*VRM_FSM_TRANS_CB)
 (
-	void		*data,					   /* user's pointed data supplied in VRM_FSM_INIT struct */
-	VRM_FSM_ENTRY	*entry
+  void          *data,  // user's pointed data supplied in VRM_FSM_INIT struct
+  VRM_FSM_ENTRY *entry
 );
 
 // typedef void (*FSM_TIMEOUT_CB)			   /* callback function that is called when timeout */ 
