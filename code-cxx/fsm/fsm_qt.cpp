@@ -46,7 +46,33 @@ class UseFsm
 
       // add the transitions       From State	              ->    Event                  ->  To State
       m_stateMachine.addTransition(ServiceUnavailableState,       ServiceAvailableEvent,      AdapterUnavailableState);
+
+      // connect to the state entry and exit signals
+      QObject::connect(&m_stateMachine, &StateMachine::entered,
+        this, &BleRcuManagerImpl::onStateEntry);
+      QObject::connect(&m_stateMachine, &StateMachine::exited,
+        this, &BleRcuManagerImpl::onStateExit);
     };
+
+    void BleRcuManagerImpl::onStateEntry(int state)
+    {
+      switch (State(state)) {
+        case ServiceUnavailableState:
+          onEnteredServiceUnavailableState();
+        break;
+        case AdapterUnavailableState:
+          onEnteredAdapterUnavailableState();
+        break;
+        case AdapterPoweredOffState:
+          onEnteredAdapterPoweredOffState();
+        break;
+        case AdapterPoweredOnState:
+          onEnteredAdapterPoweredOnState();
+        break;
+        default:
+        break;
+      }
+    }
 };
 
 
@@ -137,6 +163,15 @@ set. smae for new state set.  becuase if do blindly, emit exited(call exit eaf)
 for states we're entering.
 
 so as test cases, if 3 nested states, call 3 entered signals.
+
+that is shouldMoveState() search for possible new state from transition tables
+of states from current to top parents. this is how event is handled in nested
+state which do not have a transition table and is handled by parent(super)
+state.
+
+The unusual thing is that all exited/enterede are fired along the transition
+path and client can decice what to handle.
+
 
 */
 
@@ -506,6 +541,59 @@ TEST_F(StateMachineTest, exitNestedStateOrder)
   EXPECT_EQ(exitedSpy[0].first().toInt(), int(s1_2_1));
   EXPECT_EQ(exitedSpy[1].first().toInt(), int(s1_2));
   EXPECT_EQ(exitedSpy[2].first().toInt(), int(s1));
+}
+
+
+TEST_F(StateMachineTest, handleSupreState)
+{
+  enum State {
+    ServiceUnavailableState,
+    ServiceAvailableSuperState,
+    AdapterUnavailableState,
+    AdapterAvailableSuperState,
+    AdapterPoweredOffState,
+    AdapterPoweredOnState,
+    ShutdownState
+  };
+
+  // add all the states
+  m_stateMachine.addState(ServiceUnavailableState, QStringLiteral("ServiceUnavailableState"));
+  m_stateMachine.addState(ServiceAvailableSuperState, QStringLiteral("ServiceAvailableSuperState"));
+
+  m_stateMachine.addState(ServiceAvailableSuperState, AdapterUnavailableState, QStringLiteral("AdapterUnavailableState"));
+  m_stateMachine.addState(ServiceAvailableSuperState, AdapterAvailableSuperState, QStringLiteral("AdapterAvailableSuperState"));
+
+  m_stateMachine.addState(AdapterAvailableSuperState, AdapterPoweredOffState, QStringLiteral("AdapterPoweredOffState"));
+  m_stateMachine.addState(AdapterAvailableSuperState, AdapterPoweredOnState, QStringLiteral("AdapterPoweredOnState"));
+
+  m_stateMachine.addState(ShutdownState, QStringLiteral("ShutdownState"));
+
+
+  // add the transitions       From State	              ->    Event                  ->  To State
+  m_stateMachine.addTransition(ServiceUnavailableState,       ServiceAvailableEvent,      AdapterUnavailableState);
+  m_stateMachine.addTransition(ServiceUnavailableState,       ServiceRetryEvent,          ServiceUnavailableState);
+  m_stateMachine.addTransition(ServiceAvailableSuperState,    ServiceUnavailableEvent,    ServiceUnavailableState);
+  m_stateMachine.addTransition(ServiceAvailableSuperState,    ShutdownEvent,              ShutdownState);
+
+  m_stateMachine.addTransition(AdapterUnavailableState,       AdapterAvailableEvent,      AdapterPoweredOffState);
+  m_stateMachine.addTransition(AdapterUnavailableState,       AdapterRetryAttachEvent,    AdapterUnavailableState);
+  m_stateMachine.addTransition(AdapterAvailableSuperState,    AdapterUnavailableEvent,    AdapterUnavailableState);
+
+  m_stateMachine.addTransition(AdapterPoweredOffState,        AdapterPoweredOnEvent,      AdapterPoweredOnState);
+  m_stateMachine.addTransition(AdapterPoweredOffState,        AdapterRetryPowerOnEvent,   AdapterPoweredOffState);
+  m_stateMachine.addTransition(AdapterPoweredOnState,         AdapterPoweredOffEvent,     AdapterPoweredOffState);
+
+
+  // connect to the state entry and exit signals
+  QObject::connect(&m_stateMachine, &StateMachine::entered,
+      this, &BleRcuManagerImpl::onStateEntry);
+  QObject::connect(&m_stateMachine, &StateMachine::exited,
+      this, &BleRcuManagerImpl::onStateExit);
+
+
+  // set the initial state
+  m_stateMachine.setInitialState(ServiceUnavailableState);
+  m_stateMachine.start();
 }
 
 
