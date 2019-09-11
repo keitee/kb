@@ -8,7 +8,7 @@
 
 #include "gmock/gmock.h"
 
-#include "qfsm.h"
+#include "qfsm_qt.h"
 
 #include <QList>
 #include <QString>
@@ -507,9 +507,9 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   EXPECT_EQ(enteredSpy.count(), 3);
 
   // check the order of `entered` signals
-  EXPECT_EQ(enteredSpy[0].first().toInt(), int(s1));
-  EXPECT_EQ(enteredSpy[1].first().toInt(), int(s1_2));
-  EXPECT_EQ(enteredSpy[2].first().toInt(), int(s1_2_2));
+  EXPECT_EQ(enteredSpy[0].first().toInt(), int(s1));      // 1
+  EXPECT_EQ(enteredSpy[1].first().toInt(), int(s1_2));    // 3
+  EXPECT_EQ(enteredSpy[2].first().toInt(), int(s1_2_2));  // 5
 }
 
 
@@ -550,6 +550,7 @@ TEST_F(StateMachineTest, exitNestedStateOrder)
   // exited signals
 
   machine.postEvent(e1);
+
   EXPECT_EQ(exitedSpy.count(), 3);
 
   EXPECT_EQ(exitedSpy[0].first().toInt(), int(s1_2_1));

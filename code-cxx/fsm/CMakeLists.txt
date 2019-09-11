@@ -71,20 +71,29 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
 add_compile_options("-g")
 
+
 # fsm atm
 add_executable(${PROJECT_NAME}_atm fsm_atm.cpp sfsm.cpp dfsm.cpp)
 target_link_libraries(${PROJECT_NAME}_atm gmock_main)
+
 
 # fsm ex
 add_executable(${PROJECT_NAME}_ex fsm_ex.cpp)
 target_link_libraries(${PROJECT_NAME}_ex gmock_main)
 
-# fsm qt
+
+# fsm qt for qt
 
 find_package(Qt5Core)
 find_package(Qt5Test)
-add_executable(${PROJECT_NAME}_qt fsm_qt.cpp qfsm.cpp)
+add_executable(${PROJECT_NAME}_qt fsm_qt.cpp qfsm_qt.cpp)
 target_link_libraries(${PROJECT_NAME}_qt gmock_main Qt5::Core Qt5::Test)
+
+
+# fsm qt but no qt
+
+add_executable(${PROJECT_NAME}_nqt fsm_nqt.cpp qfsm.cpp)
+target_link_libraries(${PROJECT_NAME}_nqt gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

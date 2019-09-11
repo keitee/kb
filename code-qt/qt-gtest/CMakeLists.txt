@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(cmake_qt VERSION 0.1 LANGUAGES CXX)
+project(qt_gtest VERSION 0.1 LANGUAGES CXX)
 
 # To fix find_package issue:
 #

@@ -1,165 +1,104 @@
 //
 //  statemachine.h
-//  BleRcuDaemon
-//
-//  © 2017 Sky UK
 //
 
 #ifndef STATEMACHINE_H
 #define STATEMACHINE_H
 
-#include <QObject>
-#include <QDebug>
-#include <QAtomicInteger>
-#include <QMutex>
-#include <QEvent>
-#include <QQueue>
-#include <QList>
-#include <QMap>
-#include <QSet>
-
+#include <list>
+#include <map>
+#include <queue>
+#include <set>
+#include <sstream>
 #include <functional>
+#include <iostream>
+#include <algorithm>
 
-class StateMachine : public QObject
+class StateMachine
 {
-	Q_OBJECT
+  public:
+    StateMachine();
+    virtual ~StateMachine();
 
-public:
-	StateMachine(QObject *parent = nullptr);
-	virtual ~StateMachine();
+  public:
+    void setObjectName(std::string const &name);
+    bool addState(int state, std::string const &name = std::string());
+    bool addState(int parentState, int state, std::string const &name = std::string());
 
-protected:
-	void customEvent(QEvent *event) override;
-	void timerEvent(QTimerEvent *event) override;
+    bool addTransition(int fromState, int event, int toState);
 
-public:
-	bool addState(int state, const QString &name = QString());
-	bool addState(int parentState, int state, const QString &name = QString());
+    bool setInitialState(int state);
+    bool setFinalState(int state);
 
-	bool addTransition(int fromState, QEvent::Type eventType, int toState);
-//	bool addTransition(int fromState, const QObject *sender, const char *signal,
-//	                   int toState);
-#ifdef Q_QDOC
-	bool addTransition(int fromState, const QObject *sender,
-	                   PointerToMemberFunction signal, int toState);
-#else
-	template <typename Func>
-	inline bool addTransition(int fromState,
-	                          const typename QtPrivate::FunctionPointer<Func>::Object *obj, Func signal,
-	                          int toState)
-	{
-		qint64 id = m_signalIdCounter++;
+    void postEvent(int event);
 
-		std::function<void()> functor =
-			std::bind(&StateMachine::onSignalTransition, this, id);
+    int state() const;
+    bool inState(int state) const;
+    bool inState(std::set<int> const &states) const;
 
-		QMetaObject::Connection c =
-			QObject::connect(obj, signal, this, functor, Qt::AutoConnection);
-		if (c && !setSignalTransition(fromState, toState, id)) {
-			QObject::disconnect(c);
-			return false;
-		}
+    bool isRunning() const;
 
-		return c;
-	}
-#endif // Q_QDOC
+    bool transistionLogLevel() const;
+    void setTransistionLogLevel(bool enable = false);
 
-	bool setInitialState(int state);
-	bool setInitialState(int parentState, int state);
+    bool connect(std::function<void(int)> entered, std::function<void(int)> exited);
 
-	bool setFinalState(int state);
-	bool setFinalState(int parentState, int state);
+  public:
+    bool start();
+    void stop();
 
-	void postEvent(QEvent::Type eventType);
-	qint64 postDelayedEvent(QEvent::Type eventType, int delay);
-	bool cancelDelayedEvent(qint64 id);
-	bool cancelDelayedEvents(QEvent::Type eventType);
+    void finished();
+    void entered(int state);
+    void exited(int state);
+    void transition(int fromState, int toState);
 
-	int state() const;
-	bool inState(int state) const;
-	bool inState(const QSet<int> &states) const;
+  private:
+    std::string objectName() const;
+    int shouldMoveState(int event) const;
+    void triggerStateMove(int newState);
+    void moveToState(int newState);
 
-	bool isRunning() const;
+    std::list<int> stateTreeFor(int state, bool bottomUp) const;
 
-	QtMsgType transistionLogLevel() const;
-	const QLoggingCategory* transistionLogCategory() const;
-	void setTransistionLogLevel(QtMsgType type, const QLoggingCategory *category = nullptr);
+    void cleanUpEvents();
 
-public:
-	static const QEvent::Type FinishedEvent = QEvent::StateMachineWrapped;
+    void logTransition(int oldState, int newState) const;
 
-public slots:
-	bool start();
-	void stop();
+  private:
+    bool m_transitionLogLevel;
 
-signals:
-	void finished();
+  private:
+    struct Transition {
+      int targetState;
+      enum { EventTransition, SignalTransition } type;
+      int event;
+      Transition() : targetState(-1), type(EventTransition), event(-1) {}
+    };
 
-	void entered(int state);
-	void exited(int state);
-	void transition(int fromState, int toState);
+    struct State {
+      int parentState;
+      int initialState;
+      bool hasChildren;
+      bool isFinal;
+      std::string name;
+      std::list<Transition> transitions;
+    };
 
-private:
-	bool setSignalTransition(int fromState, int toState, qint64 signalId);
-	void onSignalTransition(qint64 signalId);
+    std::map<int, State> m_states;
 
-	int shouldMoveState(QEvent::Type eventType) const;
-	void triggerStateMove(int newState);
-	void moveToState(int newState);
+    int m_currentState;
+    int m_initialState;
+    int m_finalState;
 
-	QList<int> stateTreeFor(int state, bool bottomUp) const;
+    bool m_running;
 
-	void cleanUpEvents();
+    bool m_stopPending;
+    bool m_withinStateMover;
+    std::queue<int> m_localEvents;
+    std::string m_name;
 
-	void logTransition(int oldState, int newState) const;
-
-private:
-	QtMsgType m_transitionLogLevel;
-	QLoggingCategory const *m_transitionLogCategory;
-
-private:
-	struct Transition {
-		int targetState;
-		enum { EventTransition, SignalTransition } type;
-		union {
-			QEvent::Type eventType;
-			qint64 signalId;
-		};
-	};
-
-	struct State {
-		int parentState;
-		int initialState;
-		bool hasChildren;
-		bool isFinal;
-		QString name;
-		QList<Transition> transitions;
-	};
-
-	QMap<int, State> m_states;
-
-	int m_currentState;
-	int m_initialState;
-	int m_finalState;
-
-	bool m_running;
-
-	QAtomicInteger<qint64> m_signalIdCounter;
-
-	bool m_stopPending;
-	bool m_withinStateMover;
-	QQueue<QEvent::Type> m_localEvents;
-
-private:
-	struct DelayedEvent {
-		int timerId;
-		QEvent::Type eventType;
-	};
-
-	QMutex m_delayedEventsLock;
-	qint64 m_delayedEventIdCounter;
-	QMap<qint64, DelayedEvent> m_delayedEvents;
+    std::function<void(int)> m_entered;
+    std::function<void(int)> m_exited;
 };
-
 
 #endif // !defined(STATEMACHINE_H)

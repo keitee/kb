@@ -11,6 +11,7 @@
 #include <QDebug>
 #include <QLoggingCategory>
 #include <QApplication>
+#include <QQueue>
 
 #include "qt_class.h"
 
@@ -117,7 +118,7 @@ using namespace std;
 //
 // We recommend that you always use the isEmpty() function and avoid isNull().
 
-TEST(Qt, String)
+TEST(QtString, Ops)
 {
   // You can also pass string literals to functions that take QStrings as
   // arguments, invoking the QString(const char *) constructor. Similarly, you
@@ -193,6 +194,12 @@ TEST(Qt, String)
   }
 }
 
+TEST(QtString, Compare)
+{
+  QString coll{"compare"};
+  EXPECT_THAT(coll, QString("compare"));
+}
+
 
 // To obtain a pointer to the actual character data, call data() or constData().
 // These functions return a pointer to the beginning of the data. The pointer is
@@ -205,7 +212,7 @@ TEST(Qt, String)
 // QByteArray: U%03hhu SkyQ EC201
 // [       OK ] Qt.StringByteArray (0 ms)
 
-TEST(Qt, StringByteArray)
+TEST(QtString, ByteArray)
 {
   QByteArray coll{"U%03hhu SkyQ EC201"};
 
@@ -221,7 +228,7 @@ TEST(Qt, StringByteArray)
 // ={=========================================================================
 // qt-list
 
-TEST(Qt, ListPrepend)
+TEST(QtList, Prepend)
 {
   {
     QList<QString> coll;
@@ -237,6 +244,83 @@ TEST(Qt, ListPrepend)
     for (const auto &e : coll)
       os << qPrintable(e) << ", ";
     EXPECT_THAT(os.str(), "three, two, one, ");
+  }
+}
+
+
+// ={=========================================================================
+// qt-queue
+
+TEST(QtQueue, Pop)
+{
+  {
+    QQueue<int> coll;
+
+    coll.enqueue(1);
+    coll.enqueue(2);
+    coll.enqueue(3);
+
+    EXPECT_THAT(coll.size(), 3);
+
+    // T QQueue::dequeue()
+    // Removes the head item in the queue and returns it. This function assumes
+    // that the queue isn't empty.
+
+    EXPECT_THAT(coll.dequeue(), 1);
+    EXPECT_THAT(coll.size(), 2);
+  }
+}
+
+
+// ={=========================================================================
+// qt-map
+
+namespace qt_map
+{
+  struct State {
+    int parentState;
+    int initialState;
+    QString name;
+  };
+} // namespace
+
+TEST(QtMap, Access)
+{
+  {
+    using namespace qt_map;
+
+    State state1{100, 101, "one"};
+    State state2{200, 201, "two"};
+    State state3{300, 301, "thr"};
+
+    QMap<int, State> coll;
+    
+    coll.insert(1, state1);
+    coll.insert(2, state2);
+    coll.insert(3, state3);
+
+    EXPECT_THAT(coll.size(), 3);
+
+    auto it = coll.find(2);
+
+    if (it == coll.end())
+      EXPECT_THAT(true, false);
+
+    // *cxx-error* However, this compiles okay but fails when runs. So gtest
+    // issue as checking equal works ?
+    // EXPECT_EQ(it, coll.end());
+    
+    // EXPECT_THAT(it.key(), 2);
+    if (it.key() != 2)
+      EXPECT_THAT(true, false);
+
+    if (it.value().initialState != 201)
+      EXPECT_THAT(true, false);
+
+    EXPECT_THAT(it->initialState, 201);
+
+    // this is interesting since it->initialState works
+    EXPECT_THAT(it->initialState, it.value().initialState);
   }
 }
 
@@ -785,18 +869,31 @@ TEST(Qt, Thread)
 
 // ={=========================================================================
 
-int main(int argc, char **argv)
+static void GoogleTestRunner(int argc, char** argv)
 {
-
-  QCoreApplication a(argc, argv);
-
   // Since Google Mock depends on Google Test, InitGoogleMock() is
   // also responsible for initializing Google Test.  Therefore there's
   // no need for calling testing::InitGoogleTest() separately.
   testing::InitGoogleMock(&argc, argv);
-  RUN_ALL_TESTS();
+  int result = RUN_ALL_TESTS();
 
-  // return RUN_ALL_TESTS();
+  QCoreApplication::exit(result);
+}
 
-  return a.exec();
+int main(int argc, char **argv)
+{
+  QCoreApplication app(argc, argv);
+
+  // note: this do not exit when finishes.
+  //
+  // // Since Google Mock depends on Google Test, InitGoogleMock() is
+  // // also responsible for initializing Google Test.  Therefore there's
+  // // no need for calling testing::InitGoogleTest() separately.
+  // testing::InitGoogleMock(&argc, argv);
+  // RUN_ALL_TESTS();
+
+  // This will run the functor from the application event loop.
+  QTimer::singleShot(0, &app, std::bind(&GoogleTestRunner, argc, argv));
+
+  return app.exec();
 }

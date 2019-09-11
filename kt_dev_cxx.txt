@@ -214,7 +214,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-coll-cxx-queue cxx-coll-adaptor
 *kt_dev_cxx_0000* cxx-coll-cxx-stack cxx-coll-cxx-adaptor
 *kt_dev_cxx_0000* cxx-coll-cxx-list
-*kt_dev_cxx_0000* cxx-container-cxx-forward-list
+*kt_dev_cxx_0000* cxx-coll-cxx-list-forward-list
 
 *kt_dev_cxx_0000* cxx-coll-associative
 *kt_dev_cxx_0000* cxx-container-cxx-set cxx-multiset
@@ -1396,8 +1396,10 @@ give the optimizer a clue about the likely result of an integer (or Boolean)
 The __builtin_expect() function takes two arguments: `a value to be tested`, and
 `the expected result.`  Both of these are integral values. The interface is a
 little clumsy for most uses, since the common case is that we want to test for
-"true" (non-zero) or "false" (zero). Thus, the Linux kernel defines two simpler
-interfaces: likely() and unlikely() (in include/linux/compiler.h):
+"true" (non-zero) or "false" (zero). 
+
+Thus, `the Linux kernel defines two simpler interfaces`: likely() and unlikely() 
+(in include/linux/compiler.h):
 
     #define likely(x)      __builtin_expect(!!(x), 1)
     #define unlikely(x)    __builtin_expect(!!(x), 0)
@@ -1584,6 +1586,7 @@ line. So most of case there is no jump.
 
 
 {ex-from-glibc}
+
 #if __GNUC__ >= 3
 # define __glibc_unlikely(cond)	__builtin_expect ((cond), 0)
 # define __glibc_likely(cond)	__builtin_expect ((cond), 1)
@@ -1595,6 +1598,8 @@ line. So most of case there is no jump.
 if (__glibc_unlikely (*s == L_('\0')))
    goto noconv;
 
+
+https://developer.gnome.org/glib/stable/glib-Miscellaneous-Macros.html
 
 G_LIKELY()
 
@@ -22400,11 +22405,10 @@ So:
 
 
 {call-from-const-to-non-const}
+*cxx-error* when calls non-const member on const object.
 
-void print( const TextBlock& cbt )
-{
-  std::cout << cbt[0];                    // operator[] shall be const version
-}
+error: passing ‘const std::map<int, StateMachine::State>’ 
+  as ‘this’ argument discards qualifiers [-fpermissive]
 
 <ex>
 namespace const_member_function
@@ -40027,8 +40031,8 @@ c.resize(num)           Changes the number of elements to num (if size() grows n
 c.resize(num,elem)      Changes the number of elements to num (if size() grows
                         new elements are copies of elem)
 
+*cxx-vector-clear*
 c.clear()               Removes all elements (empties the container)
-
 
 
 {cxx-set-insert-cxx-set-erase} cxx-insert cxx-erase
@@ -40138,7 +40142,7 @@ c.insert(val)       Inserts a copy of val and returns the position of the new
                     element and, for maps, whether it succeeded
 
 `c.insert(pos,val)`   Inserts a copy of val and returns the position of the new
-                    element (pos is used as a hint pointing to where the
+                    element (pos is used as a `hint` pointing to where the
                     insert should start the search)
 
 c.insert(beg,end)   Inserts a copy of all elements of the range [beg,end)
@@ -42851,7 +42855,7 @@ namespace algo_code
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-container-cxx-list-forward-list
+*kt_dev_cxx_0000* cxx-coll-cxx-list-forward-list
 
 7.6.1 Abilities of Forward Lists
 
@@ -43740,7 +43744,7 @@ namespace cxx_code
            *  @brief Attempts to insert a std::pair into the %map.
 
            *  @param __x Pair to be inserted (see std::make_pair for easy
-           *	     creation of pairs).
+           *    creation of pairs).
            *
            *  @return  A pair, of which the first element is an iterator that 
            *           points to the possibly inserted pair, and the second is 
@@ -43801,7 +43805,7 @@ map<string, int>::key_type v4;      // string
 map<string, int>::mapped_type v5;   // int
 
 
-{cxx-map-search-operations} cxx-container-search
+{cxx-map-search-operations} cxx-map-find
 `As for sets and multisets,` maps and multimaps provide special search member
 functions that perform better because of their internal tree structure
 
@@ -43883,6 +43887,66 @@ on map returns `mapped_type` but dereferencing of iterator returns
         __i = insert(__i, value_type(__k, mapped_type()));
       }
 
+<ex>
+*cxx-const-error-const* when calls non-const member on const object.
+
+    std::map<int, State> m_states;
+
+void StateMachine::logTransition(int oldState, int newState) const
+{
+  if (oldState == newState) {
+    message << "[" << objectName() << "] re-entering state "
+      << m_states[newState].name << "(" << newState << ")";
+  }
+}
+
+errors on "m_states[newState].name". ????
+
+namespace cxx_map
+{
+  struct SampleEntry
+  {
+    int id;
+    std::string name;
+  };
+
+  void print_name(std::map<unsigned int, SampleEntry> const &coll)
+  {
+    ASSERT_THAT(coll.size(), 3);
+    // : error: passing ‘const std::map<unsigned int, cxx_map::SampleEntry>’ as ‘this’ argument discards qualifiers [-fpermissive]
+    //      std::cout << "name: " << coll[1].name << std::endl;
+    //                                     ^
+    // std::cout << "name: " << coll[1].name << std::endl;
+
+    // okay as: bits/stl_map.h
+    // const mapped_type&
+    // at(const key_type& __k) const
+    // {}
+    //
+    // so operator[] of map do not support const
+
+    std::cout << "name: " << coll.at(1).name << std::endl;
+  }
+} // namespace
+
+TEST(Map, Access)
+{
+  using namespace cxx_map;
+
+  std::map<unsigned int, SampleEntry> coll{};
+
+  coll.insert({0, {100, "string1"}});
+  coll.insert({1, {200, "string2"}});
+  coll.insert({2, {300, "string3"}});
+
+  ASSERT_THAT(coll.size(), 3);
+
+  std::cout << "name: " << coll[1].name << std::endl;
+  coll[1].name = "changed2";
+  std::cout << "name: " << coll[1].name << std::endl;
+
+  print_name(coll);
+}
 
 <ex> *ex-count-words* *ex-count-keyword*
 

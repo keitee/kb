@@ -3297,6 +3297,17 @@ TEST(FunctionObject, Function)
 
   {
     Foo foo = Foo(100);
+    std::function<void(Foo &)> op;
+
+    // if (op == nullptr)
+    if (!op)
+      EXPECT_THAT(true, true);
+    else
+      EXPECT_THAT(true, false);
+  }
+
+  {
+    Foo foo = Foo(100);
     std::function<void(Foo &)> op = &Foo::update_10;
 
     // specify the target object

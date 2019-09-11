@@ -1498,28 +1498,51 @@ TEST(DISABLED_StlDeque, HowDequeSupportEmpty)
 // ={=========================================================================
 // cxx-queue-priority
 
-TEST(CollQueue, Queue)
+TEST(Queue, Ops)
 {
-  ostringstream os;
-  std::queue<std::string> q;
+  {
+    ostringstream os;
+    std::queue<std::string> q;
 
-  q.push("These "); q.push("are "); q.push("more than ");
-  os << q.front(); q.pop();
-  os << q.front(); q.pop();
+    q.push("These "); q.push("are "); q.push("more than ");
+    os << q.front(); q.pop();
+    os << q.front(); q.pop();
 
-  q.push("four "); q.push("words!");
+    q.push("four "); q.push("words!");
 
-  // discard one element
-  q.pop();
+    // discard one element
+    q.pop();
 
-  os << q.front(); q.pop();
-  os << q.front(); q.pop();
+    os << q.front(); q.pop();
+    os << q.front(); q.pop();
 
-  EXPECT_THAT(os.str(), "These are four words!");
-  EXPECT_THAT(q.size(), 0);
+    EXPECT_THAT(os.str(), "These are four words!");
+    EXPECT_THAT(q.size(), 0);
+  }
+
+  // there is no clear() to remove all
+  {
+    // cxx-error
+    // std::queue<int> coll{1,2,3,4,5};
+
+    std::queue<int> coll{};
+    coll.push(1);
+    coll.push(2);
+    coll.push(3);
+    coll.push(4);
+    coll.push(5);
+
+    EXPECT_THAT(coll.size(), 5);
+
+    while (!coll.empty())
+      coll.pop();
+
+    EXPECT_THAT(coll.size(), 0);
+  }
 }
 
-TEST(CollQueue, PriorityQueue)
+
+TEST(Queue, Priority)
 {
   {
     queue<int> pq;
@@ -1774,36 +1797,91 @@ TEST(Map, Insert)
   ASSERT_THAT(coll[3], Eq("threeeeee"));
 }
 
-// error when use -D_GLIBCXX_DEBUG
-//
-// MATCHER_P(EqPair, expected, "")
-// {
-//     return arg->first == expected.first && arg->second == expected.second;
-// }
-
-TEST(Map, Find)
+namespace cxx_map
 {
-  map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+  struct SampleEntry
+  {
+    int id;
+    std::string name;
+  };
 
-  // *cxx-error*
-  // when tries to use custom matcher, get's link error
-  // ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
+  void print_name(std::map<unsigned int, SampleEntry> const &coll)
+  {
+    ASSERT_THAT(coll.size(), 3);
+    // : error: passing ‘const std::map<unsigned int, cxx_map::SampleEntry>’ as ‘this’ argument discards qualifiers [-fpermissive]
+    //      std::cout << "name: " << coll[1].name << std::endl;
+    //                                     ^
+    // std::cout << "name: " << coll[1].name << std::endl;
 
-  auto posKey = coll.find(3.0);
-  EXPECT_THAT(*posKey, make_pair(3,2));
+    // okay as: bits/stl_map.h
+    // const mapped_type&
+    // at(const key_type& __k) const
+    // {}
+    //
+    // so operator[] of map do not support const
 
-  // *algo-find-if-const* error if there is no const on predicate. 
-  // since it's *cxx-algo-non-modifying* ?
+    std::cout << "name: " << coll.at(1).name << std::endl;
+  }
+} // namespace
 
-  // *cxx-decltype*
-  auto posVal = find_if( coll.cbegin(), coll.cend(),
-      // [] ( const pair<float,float> &elem ) {
-      // [] ( const map<float,float>::value_type &elem ) {
-      [] ( const decltype(coll)::value_type &elem ) {
-      return elem.second == 3.0;
-      } );
-  EXPECT_THAT(posVal->first, Eq(4));
-  EXPECT_THAT(posVal->second, Eq(3));
+TEST(Map, FindAndAccess)
+{
+  {
+    map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+
+    // *cxx-error*
+    // when tries to use custom matcher, get's link error
+    // ASSERT_THAT(posKey, EqPair(make_pair(3,2)));
+
+    auto posKey = coll.find(3.0);
+    EXPECT_THAT(*posKey, make_pair(3,2));
+
+    // *algo-find-if-const* error if there is no const on predicate. 
+    // since it's *cxx-algo-non-modifying* ?
+
+    // *cxx-decltype*
+    auto posVal = find_if( coll.cbegin(), coll.cend(),
+        // [] ( const pair<float,float> &elem ) 
+        // [] ( const map<float,float>::value_type &elem )
+        [] ( const decltype(coll)::value_type &elem ) {
+        return elem.second == 3.0;
+        } );
+    EXPECT_THAT(posVal->first, Eq(4));
+    EXPECT_THAT(posVal->second, Eq(3));
+  }
+
+  {
+    map<float,float> coll{ {1,7}, {2,4}, {3,2}, {4,3}, {5,6}, {6,1}, {7,3} };
+
+    auto value = coll.at(3.0);
+    EXPECT_THAT(value, 2);
+
+    auto it = coll.find(3.0);
+    EXPECT_THAT(it->first, 3);
+    EXPECT_THAT(it->second, 2);
+  }
+
+  {
+    using namespace cxx_map;
+
+    std::map<unsigned int, SampleEntry> coll{};
+
+    coll.insert({0, {100, "string1"}});
+    coll.insert({1, {200, "string2"}});
+    coll.insert({2, {300, "string3"}});
+
+    ASSERT_THAT(coll.size(), 3);
+
+    EXPECT_THAT(coll[1].name, "string2");
+    coll[1].name = "changed2";
+    EXPECT_THAT(coll[1].name, "changed2");
+
+    print_name(coll);
+
+    // *cxx-error* compile error
+    // auto it = coll.find(1);
+    // it->name;
+  }
 }
 
 TEST(Map, EqualRange)
@@ -2113,6 +2191,29 @@ TEST(List, Sort)
 {
   list<int> coll{26, 33, 35, 29, 19, 12, 22};
   coll.sort();
+}
+
+TEST(List, Find)
+{
+  std::list<int> coll1{6,5,4,3,2,1};
+  std::vector<int> ret1{};
+
+  std::list<int> coll2{1,2,3};
+  std::vector<int> ret2{};
+
+  // try to find coll1 elements which are not in coll2
+  for (auto const e : coll1)
+    if (std::find(coll2.cbegin(), coll2.cend(), e) == coll2.end())
+      ret1.push_back(e);
+
+  EXPECT_THAT(ret1, ElementsAre(6,5,4));
+
+  // try to find coll2 elements which are not in coll1
+  for (auto const e : coll2)
+    if (std::find(coll1.cbegin(), coll1.cend(), e) == coll1.end())
+      ret2.push_back(e);
+
+  EXPECT_THAT(ret2.size(),0);
 }
 
 
