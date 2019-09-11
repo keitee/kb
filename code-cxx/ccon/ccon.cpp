@@ -843,7 +843,7 @@ TEST(CConSync, Eventfd)
 
 
 // ={=========================================================================
-// cxx-condition
+// cxx-condition cxx-queue
 
 // class threadsafe_queue 
 // {
