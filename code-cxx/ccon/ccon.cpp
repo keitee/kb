@@ -905,15 +905,25 @@ namespace cxx_condition
 
   void consumer(threadsafe_queue<int>& q)
   {
+    // You can pass defer_lock to initialize the lock without locking the mutex
+    // (yet):
+    //
+    // note: must use lock here and it cause a rase otherwise.
+
+    std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
+
     int value{};
 
     for (int i = 0; i < 20; ++i)
     {
       q.wait_and_pop(value);
+      lock.lock();
       ++consumed_total;
+      lock.unlock();
     }
   }
 
+  // make consumer can consume more than 20 if it can.
   void consumer_error(threadsafe_queue<int>& q)
   {
     std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
@@ -944,6 +954,8 @@ TEST(CConCondition, ProducerAndConsumer)
 
   threadsafe_queue<int> q;
 
+  consumed_total = 0;
+
   std::vector<std::thread> consumers;
   std::vector<std::thread> producers;
   
@@ -959,30 +971,38 @@ TEST(CConCondition, ProducerAndConsumer)
     producers.emplace_back(producer, std::ref(q));
   }
 
+  // waits for them to finish
   for (auto &c : consumers)
     c.join();
 
   for (auto &p : producers)
     p.join();
 
+  // ecah cunsumes 20
   EXPECT_THAT(consumed_total, 60);
 }
 
-// Error which causes consumers waiting and not finished since there are more
+// *cxx-error-race* sometimes works and sometimes not
+// hang is caused since consumers waiting and not finished. there are more
 // consumers and many do not wake up from wait since there will be no more
 // notify once they are used up by other consumer.
+//
+// not easy to see when 5 consumer and see even when 3 consumers
 
-TEST(DISABLED_CConCondition, ProducerAndConsumerError1)
+TEST(DISABLED_CConCondition, ProducerAndConsumerHangError)
+// TEST(CConCondition, ProducerAndConsumerHangError)
 {
   using namespace cxx_condition;
  
   threadsafe_queue<int> q;
+
+  consumed_total = 0;
  
   std::thread c1(consumer_error, std::ref(q));
   std::thread c2(consumer_error, std::ref(q));
   std::thread c3(consumer_error, std::ref(q));
-  std::thread c4(consumer_error, std::ref(q));
-  std::thread c5(consumer_error, std::ref(q));
+  // std::thread c4(consumer_error, std::ref(q));
+  // std::thread c5(consumer_error, std::ref(q));
  
   this_thread::sleep_for(chrono::seconds(2));
  
@@ -990,9 +1010,120 @@ TEST(DISABLED_CConCondition, ProducerAndConsumerError1)
   std::thread p2(&producer, std::ref(q));
   std::thread p3(&producer, std::ref(q));
  
-  c1.join(); c2.join(); c3.join(); c4.join(); c5.join();
+  c1.join(); c2.join(); c3.join(); 
+  // c4.join(); c5.join();
   p1.join(); p2.join(); p3.join();
  
+  EXPECT_THAT(consumed_total, 60);
+}
+
+namespace cxx_condition_notify_all
+{
+  // do notify_all() makes difference?
+
+  template <typename T>
+    class threadsafe_queue
+    {
+      public:
+        explicit threadsafe_queue() noexcept {}
+        threadsafe_queue(threadsafe_queue const&) = delete;
+        threadsafe_queue& operator=(threadsafe_queue const&) = delete;
+
+        void push(T const& item)
+        {
+          std::lock_guard<std::mutex> lock(m_);
+
+          queue_.push(item);
+          // cond_.notify_one();
+          cond_.notify_all();
+        }
+
+        void wait_and_pop(T& value) 
+        {
+          // to use with cxx-condition
+          std::unique_lock<std::mutex> lock(m_);
+
+          cond_.wait(lock, [&]{return !queue_.empty();});
+
+          value = queue_.front();
+          queue_.pop();
+        }
+
+        bool empty() const
+        {
+          std::lock_guard<std::mutex> lock(m_);
+          return queue_.empty();
+        }
+
+      private:
+        std::queue<T> queue_;
+        mutable std::mutex m_;
+        std::condition_variable cond_;
+    };
+
+  std::mutex consumed_mtx;
+  int consumed_total{};
+
+  void producer(threadsafe_queue<int>& q)
+  {
+    for (int i = 0; i < 20; ++i)
+    {
+      q.push(i);
+    }
+  }
+
+  void consumer(threadsafe_queue<int>& q)
+  {
+    // You can pass defer_lock to initialize the lock without locking the mutex
+    // (yet):
+    //
+    // note: must use lock here and it cause a rase otherwise.
+
+    std::unique_lock<std::mutex> lock(consumed_mtx, std::defer_lock);
+
+    int value{};
+
+    for (int i = 0; i < 20; ++i)
+    {
+      q.wait_and_pop(value);
+      lock.lock();
+      ++consumed_total;
+      lock.unlock();
+    }
+  }
+} // namespace
+
+TEST(CConCondition, ProducerAndConsumerUseNotifyAllQueue)
+{
+  using namespace cxx_condition_notify_all;
+
+  threadsafe_queue<int> q;
+
+  consumed_total = 0;
+
+  std::vector<std::thread> consumers;
+  std::vector<std::thread> producers;
+  
+  for (int i = 0; i < 3; ++i)
+  {
+    consumers.emplace_back(consumer, std::ref(q));
+  }
+
+  this_thread::sleep_for(chrono::seconds(2));
+
+  for (int i = 0; i < 3; ++i)
+  {
+    producers.emplace_back(producer, std::ref(q));
+  }
+
+  // waits for them to finish
+  for (auto &c : consumers)
+    c.join();
+
+  for (auto &p : producers)
+    p.join();
+
+  // ecah cunsumes 20
   EXPECT_THAT(consumed_total, 60);
 }
 

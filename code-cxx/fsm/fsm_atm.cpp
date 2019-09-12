@@ -15,9 +15,10 @@ using namespace testing;
 
 // (gdb) b AlgoList_Divide_Test::TestBody()
 
+
 // ={=========================================================================
-// message q 
-// o To make it simple, set T as int.
+// cxx-fsm-queue
+// - make it simple, set T as int.
 
 namespace fsm 
 {
@@ -113,6 +114,9 @@ static void fsm_dynamic_runner(VRM_FSM_INSTANCE_HANDLE fsm)
   std::cout << "fsm_thread: end" << std::endl;
 }
 
+
+// ={=========================================================================
+// cxx-fsm-static
 
 namespace fsm_static
 {
@@ -373,9 +377,6 @@ namespace fsm_static
 } // namesapce
 
 
-// ={=========================================================================
-// tests 
-
 /*
 fsm diagram:
 
@@ -488,7 +489,7 @@ TEST(Fsm, AtmStatic)
 
 
 // ={=========================================================================
-// dynamic fsm
+// cxx-fsm-dynamic
 
 namespace fsm_dynamic
 {
@@ -803,6 +804,8 @@ TEST(Fsm, AtmDynamic)
 
 
 // ={=========================================================================
+// cxx-fsm-cxx
+
 /*
 appendix C A message-passing framework and complete ATM example
 
@@ -938,53 +941,6 @@ In sum, super state is diagram technique and can be implemented in many ways.
 
 namespace messaging
 {
-  struct message_base
-  {
-    virtual ~message_base() {}
-  };
-
-  template<typename T>
-    struct wrapped_message : public message_base
-  {
-    explicit wrapped_message(T const &contents) 
-      : contents_(contents) {}
-
-    T contents_;
-  };
-
-  class queue
-  {
-    public:
-      template<typename T>
-        void push(T const &message)
-        {
-          std::lock_guard<std::mutex> lock(m_);
-
-          mq_.push(std::make_shared<wrapped_message<T>>(message));
-          cv_.notify_all();
-        }
-
-      std::shared_ptr<message_base> wait_and_pop()
-      {
-        std::unique_lock<std::mutex> lock(m_);
-
-        cv_.wait(lock, [this] { return !mq_.empty(); });
-        auto message = mq_.front();
-
-        // *cxx-error* cuase infinite loop on the user when omits this
-        mq_.pop();
-
-        return message;
-      }
-
-    private:
-      std::mutex m_;
-      std::condition_variable cv_;
-
-      // use sp instead
-      std::queue<std::shared_ptr<message_base>> mq_;
-  };
-
   // message to end 
   class close_queue
   {};
@@ -1252,71 +1208,6 @@ namespace messaging
   };
 
 } // namespace
-
-namespace
-{
-  void push_items_to_queue(messaging::queue& q)
-  {
-    q.push(100);
-  }
-}
-
-// send and get single message
-TEST(Fsm, MessageUseThread)
-{
-  using namespace messaging;
-
-  // to avoid conflict with std::queue
-  messaging::queue mq;
-
-  std::async(std::launch::async, push_items_to_queue, std::ref(mq));
-
-  auto message = mq.wait_and_pop();
-
-  EXPECT_THAT(dynamic_cast<messaging::wrapped_message<int>*>(message.get())->contents_,
-      100);
-}
-
-// send and get various type of messages
-TEST(Fsm, MessageVariousType)
-{
-  using namespace messaging;
-
-  queue mq;
-  
-  {
-    mq.push(simple_message());
-    auto message = mq.wait_and_pop();
-
-    EXPECT_THAT(dynamic_cast<wrapped_message<simple_message>*>(message.get())->contents_.name_,
-       "simple_message");
-  }
-
-  {
-    mq.push(100);
-    auto message = mq.wait_and_pop();
-
-    EXPECT_THAT(dynamic_cast<wrapped_message<int>*>(message.get())->contents_, 
-        100);
-  }
-
-  {
-    mq.push((double)100.0);
-    auto message = mq.wait_and_pop();
-
-    EXPECT_THAT(dynamic_cast<wrapped_message<double>*>(message.get())->contents_, 
-        100.0);
-  }
-
-  {
-    std::string text{"string type"};
-    mq.push(text);
-    auto message = mq.wait_and_pop();
-
-    EXPECT_THAT(dynamic_cast<wrapped_message<std::string>*>(message.get())->contents_, 
-        text);
-  }
-}
 
 
 namespace messaging

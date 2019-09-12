@@ -19,148 +19,15 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
-namespace cxx_atomic
+namespace cxx_ex
 {
-  struct Counter {
-
-    Counter() : value(0) {}
-
-    int value;
-
-    void increment(){
-      ++value;
-    }
-
-    void decrement(){
-      --value;
-    }
-
-    int get(){
-      return value;
-    }
-  };
-
-  void increment_counter(Counter& counter)
-  {
-    for (int i = 0; i < 30; ++i)
-    {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      counter.increment();
-    }
-  }
-
-  struct AtomicCounter {
-
-    AtomicCounter() : value(0) {}
-
-    std::atomic<int> value;
-
-    void increment(){
-      ++value;
-    }
-
-    void decrement(){
-      --value;
-    }
-
-    int get(){
-      return value.load();
-    }
-  };
-
-  void increment_atomic_counter(AtomicCounter& counter)
-  {
-    for (int i = 0; i < 30; ++i)
-    {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      counter.increment();
-    }
-  }
-
-  struct LockCounter {
-
-    std::mutex m_;
-
-    LockCounter() : value(0) {}
-
-    std::atomic<int> value;
-
-    void increment(){
-      std::lock_guard<std::mutex> lock(m_);
-      ++value;
-    }
-
-    void decrement(){
-      std::lock_guard<std::mutex> lock(m_);
-      --value;
-    }
-
-    int get(){
-      std::lock_guard<std::mutex> lock(m_);
-      return value.load();
-    }
-  };
-
-  void increment_lock_counter(LockCounter& counter)
-  {
-    for (int i = 0; i < 30; ++i)
-    {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-      counter.increment();
-    }
-  }
-
 } // namespace
 
-TEST(DISABLED_CConAtomic, NoAtomicCounter)
+TEST(CCon, Ex)
 {
-  using namespace cxx_atomic;
+  using namespace cxx_ex;
 
-  Counter counter;
-
-  std::thread a(increment_counter, std::ref(counter));
-  std::thread b(increment_counter, std::ref(counter));
-  std::thread c(increment_counter, std::ref(counter));
-  std::thread d(increment_counter, std::ref(counter));
-
-  a.join(); b.join(); c.join(); d.join();
-  
-  cout << "counter value: " << counter.get() << endl;
-  ASSERT_THAT(counter.get(), 120);
-}
-
-TEST(CConAtomic, AtomicCounter)
-{
-  using namespace cxx_atomic;
-
-  AtomicCounter counter;
-
-  std::thread a(increment_atomic_counter, std::ref(counter));
-  std::thread b(increment_atomic_counter, std::ref(counter));
-  std::thread c(increment_atomic_counter, std::ref(counter));
-  std::thread d(increment_atomic_counter, std::ref(counter));
-
-  a.join(); b.join(); c.join(); d.join();
-  
-  cout << "counter value: " << counter.get() << endl;
-  ASSERT_THAT(counter.get(), 120);
-}
-
-TEST(CConAtomic, LockCounter)
-{
-  using namespace cxx_atomic;
-
-  LockCounter counter;
-
-  std::thread a(increment_lock_counter, std::ref(counter));
-  std::thread b(increment_lock_counter, std::ref(counter));
-  std::thread c(increment_lock_counter, std::ref(counter));
-  std::thread d(increment_lock_counter, std::ref(counter));
-
-  a.join(); b.join(); c.join(); d.join();
-  
-  cout << "counter value: " << counter.get() << endl;
-  ASSERT_THAT(counter.get(), 120);
+  EXPECT_THAT(true, true);
 }
 
 

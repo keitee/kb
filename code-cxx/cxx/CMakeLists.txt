@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(ccon VERSION 0.1 LANGUAGES CXX)
+project(cxx VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -82,8 +82,8 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 include_directories(${Boost_INCLUDE_DIRS}) 
 
 
-# ccon.cpp
-add_executable(${PROJECT_NAME} "ccon.cpp")
+# cxx.cpp
+add_executable(${PROJECT_NAME} "cxx.cpp")
 
 # cause link errors to Boost::thread
 # target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
@@ -91,10 +91,17 @@ add_executable(${PROJECT_NAME} "ccon.cpp")
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
 
 
-# ccon_ex.cpp
-add_executable(${PROJECT_NAME}_ex "ccon_ex.cpp")
+# cxx_ex.cpp
+add_executable(${PROJECT_NAME}_ex "cxx_ex.cpp")
 target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
 
+# cxx_pattern.cpp
+add_executable(${PROJECT_NAME}_pattern "cxx_pattern.cpp")
+target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
+
+# cxx_case.cpp
+add_executable(${PROJECT_NAME}_case "cxx_case.cpp")
+target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
