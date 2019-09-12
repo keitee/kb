@@ -862,65 +862,43 @@ observers, and notifies them of any state changes by calling one of their
 methods. The class diagram shown here describes a possible pattern
 implementation for the proposed problem:
 
+
+<case>
+this is the same.
+- defines observer class from source class
+- use macro for making notifications
+
+// from onbserver
+class MediaStreamer : public public A2DPTransportListener
+{};
+
+
+// from source class
+
+class A2DPTransportListener;
+class A2DPTransport
+{
+  bool addListener(A2DPTransportListener *listener);
+
+#define notify(_what) do { \
+    std::vector<BluetoothA2DPTransportListener*> listeners; \
+    { \
+        Locker lock(&m_listener_lock); \
+        listeners = m_listeners; \
+    } \
+    for (std::vector<BluetoothA2DPTransportListener*>::iterator it = listeners.begin(); it != listeners.end(); ++it) if (*it) (*it)->_what; \
+} while(0)
+
+  {
+    notify(onBufferReady(this, buffer, nbytes, sampleno));
+  }
+};
+
 */
+
 
 namespace cxx_pattern_observer
 {
-  enum class collection_action
-  { add, remove, clear, assign };
-
-  std::string to_string(collection_action const action)
-  {
-    switch(action)
-    {
-      case collection_action::add: return "add";
-      case collection_action::remove: return "remove";
-      case collection_action::clear: return "clear";
-      case collection_action::assign: return "assign";
-      default: return "unsupported action";
-    }
-  }
-
-  struct collection_change_notification
-  {
-    collection_action action_;
-    // std::vector<size_t> item_indexes_;
-    size_t item_indexes_;
-  };
-
-  class collection_observer
-  {
-    public:
-      virtual ~collection_observer() {}
-
-      // why not reference?
-      // virtual void collection_changed(collection_change_notification notificaiton) = 0;
-      virtual void collection_changed(collection_change_notification const& notificaiton) = 0;
-  };
-
-  class observer : public collection_observer
-  {
-    public:
-      virtual void collection_changed(collection_change_notification const& notification) override
-      {
-        std::cout << "action: " << to_string(notification.action_);
-
-        // if (!notification.item_indexes_.empty())
-        {
-          std::cout << ", indexes: ";
-
-          // the index of the element that was changed (such as added or removed)
-          // so no need to have for loop
-          // for (auto i : notification.item_indexes_)
-          //   std::cout << i << ' ';
-
-          std::cout << notification.item_indexes_;
-        }
-
-        std::cout << std::endl;
-      }
-  };
-
 #if 0
   // this is code from the text which works but not sure why this is complicated
   // as this.
@@ -1095,189 +1073,373 @@ namespace cxx_pattern_observer
     std::vector<collection_observer*> observers_;
   };
 #endif
+} // namespace
 
-  template <typename T>
-  class observable_vector
+namespace cxx_pattern_observer
+{
+  enum class changed_action {add, remove, clear, assign};
+
+  std::string action_name(changed_action const action)
   {
-    typedef typename std::vector<T>::size_type size_type;
-
-    public:
-
-    observable_vector() noexcept
-      : data_()
-    {}
-
-    // explicit observable_vector(Allocator const& alloc) noexcept
-    //   : data_(alloc) 
-    //   {}
-
-    // observable_vector(size_type count, const T& value, 
-    //     Allocator const& alloc = Allocator())
-    //   : data_(count, value, alloc)
-    // {}
-
-    // explicit observable_vector(size_type count, 
-    //     Allocator const& alloc = Allocator())
-    //   : data_(count, alloc)
-    // {}
-
-    // // moves
-
-    // observable_vector(observable_vector&& other) noexcept
-    //   : data_(other.data_)
-    //   {}
-
-    // observable_vector(observable_vector&& other, Allocator const& alloc)
-    //   : data_(other.data_, alloc)
-    // {}
-
-    // init list
-    explicit observable_vector(std::initializer_list<T> init)
-      : data_(init)
-    {}
-
-    // template<typename InputIterator>
-    //   observable_vector(InputIterator first, InputIterator last,
-    //       Allocator const& alloc = Allocator())
-    //   : data_(first, last, alloc)
-    //   {}
-
-    observable_vector& operator=(observable_vector const& other)
+    switch(action)
     {
-      if (this != &other)
-      {
-        data_ = other.data_;
+      case changed_action::add: return "added";
+      case changed_action::remove: return "removed";
+      case changed_action::clear: return "cleared";
+      case changed_action::assign: return "assigned";
+      default: return "unsupported";
+    } 
+  }
 
-        // 1. weak_ptr?
-        // 2. std::vector<size_t>{} is empty when assign?
-
-        for (auto o : observers_)
-        {
-          if (o != nullptr)
-          {
-            o->collection_changed(
-                // {collection_action::assign, std::vector<size_t>{}}
-                {collection_action::assign, 0}
-                );
-          }
-        }
-      }
-
-      return *this;
-    }
-
-    observable_vector& operator=(observable_vector&& other)
-    {
-      if (this != &other)
-      {
-        data_ = std::move(other.data_);
-
-        for (auto o : observers_)
-        {
-          if (o != nullptr)
-          {
-            o->collection_changed(
-                // {collection_action::assign, std::vector<size_t>{}}
-                {collection_action::assign, 0}
-                );
-          }
-        }
-      }
-
-      return *this;
-    }
-
-    // the index of the element that was changed (such as added or removed)
-
-    void push_back(T&& value)
-    {
-      cout << "push_back(T&&)" << endl;
-
-      data_.push_back(value);
-
-      for (auto o : observers_)
-      {
-        if (o != nullptr)
-        {
-          o->collection_changed(
-              {collection_action::add, data_.size()-1}
-              );
-        }
-      } // end for
-    }
-
-    void push_back(T& value)
-    {
-      cout << "push_back(T&)" << endl;
-
-      data_.push_back(value);
-
-      for (auto o : observers_)
-      {
-        if (o != nullptr)
-        {
-          o->collection_changed(
-              {collection_action::add, data_.size()-1}
-              );
-        }
-      } // end for
-    }
-
-    void pop_back()
-    {
-      data_.pop_back();
-
-      for (auto o : observers_)
-      {
-        if (o != nullptr)
-        {
-          o->collection_changed(
-              {collection_action::remove, data_.size()}
-              );
-        }
-      } // end for
-    }
-
-    void clear() noexcept
-    {
-      data_.clear();
-
-      for (auto o : observers_)
-      {
-        if (o != nullptr)
-        {
-          o->collection_changed(
-              {collection_action::clear, 0}
-              );
-        }
-      } // end for
-    }
-
-    size_type size() const noexcept
-    { return data_.size(); }
-
-    bool empty() const noexcept
-    { return data_.empty(); }
-
-    void add_observer(collection_observer* const o)
-    { observers_.push_back(o); }
-
-    void remove_observer(collection_observer const* const o)
-    {
-      observers_.erase(
-          std::remove(std::begin(observers_), std::end(observers_), o),
-          std::end(observers_)
-          );
-    }
-
-    private:
-    // what's the difference when use std::vector<T>?
-    // std::vector<T, Allocator> data_;
-    std::vector<T> data_;
-    std::vector<collection_observer*> observers_;
+  struct changed_notification
+  {
+    changed_action action;
+    size_t index;
   };
 
+  // abc
+  class collection_observer
+  {
+    public:
+      virtual ~collection_observer() {}
+      virtual void onChanged(changed_notification const &noti) = 0;
+  };
+
+  // observers(listeners)
+  class observer : public collection_observer
+  {
+    public:
+      virtual void onChanged(changed_notification const &noti)
+      {
+        std::cout << "onChanged(action: " << action_name(noti.action) 
+          << ", index: " << noti.index << ")" << std::endl;
+      }
+  };
+
+  template<typename T>
+    class observable_vector
+    {
+      using size_type = typename std::vector<T>::size_type;
+
+      public: 
+        explicit observable_vector() 
+          : data_(), observers_() 
+        {}
+
+        explicit observable_vector(std::initializer_list<T> init) 
+          : data_(init)
+        {}
+
+        // copy assign
+        // do not update(overwrite) `observers_` from rhs so keep current
+        // observers
+
+        observable_vector& operator=(observable_vector const &rhs)
+        {
+          // for self assign
+          if (this != &rhs)
+          {
+            data_ = rhs.data_;
+
+            for (auto const o : observers_)
+            {
+              if (nullptr != o)
+namespace cxx_pattern_observer
+{
+  enum class changed_action {add, remove, clear, assign};
+
+  std::string action_name(changed_action const action)
+  {
+    switch(action)
+    {
+      case changed_action::add: return "added";
+      case changed_action::remove: return "removed";
+      case changed_action::clear: return "cleared";
+      case changed_action::assign: return "assigned";
+      default: return "unsupported";
+    } 
+  }
+
+  struct changed_notification
+  {
+    changed_action action;
+    size_t index;
+  };
+
+  // abc
+  class collection_observer
+  {
+    public:
+      virtual ~collection_observer() {}
+      virtual void onChanged(changed_notification const &noti) = 0;
+  };
+
+  // observers(listeners)
+  class observer : public collection_observer
+  {
+    public:
+      virtual void onChanged(changed_notification const &noti)
+      {
+        std::cout << "onChanged(action: " << action_name(noti.action) 
+          << ", index: " << noti.index << ")" << std::endl;
+      }
+  };
+
+  template<typename T>
+    class observable_vector
+    {
+      using size_type = typename std::vector<T>::size_type;
+
+      public: 
+        explicit observable_vector() 
+          : data_(), observers_() 
+        {}
+
+        explicit observable_vector(std::initializer_list<T> init) 
+          : data_(init)
+        {}
+
+        // copy assign
+        // do not update(overwrite) `observers_` from rhs so keep current
+        // observers
+
+        observable_vector& operator=(observable_vector const &rhs)
+        {
+          // for self assign
+          if (this != &rhs)
+          {
+            data_ = rhs.data_;
+
+            for (auto const o : observers_)
+            {
+              if (nullptr != o)
+              {
+                o->onChanged({changed_action::assign, data_.size()});
+              }
+            }
+          }
+
+          return *this;
+        }
+
+        // move assign
+        observable_vector& operator=(observable_vector &&rhs)
+        {
+          // for self assign
+          if (this != &rhs)
+          {
+            // done by vector's move
+            data_ = std::move(rhs.data_);
+
+            for (auto const o : observers_)
+            {
+              if (nullptr != o)
+              {
+                o->onChanged({changed_action::assign, data_.size()});
+              }
+            }
+          }
+
+          return *this;
+        }
+
+        void push_back(T &value)
+        {
+          cout << "push_back(T&)" << endl;
+
+          data_.push_back(value);
+
+          // see that this code nearly same except `parameters` to onChange()
+          for (auto const o : observers_)
+          {
+            if (nullptr != o)
+            {
+              o->onChanged({changed_action::add, data_.size()});
+            }
+          }
+        }
+
+        // same as push_back(T&) since std::vector.push_back() will handle
+        void push_back(T &&value)
+        {
+          cout << "push_back(T&&)" << endl;
+
+          data_.push_back(value);
+
+          for (auto const o : observers_)
+          {
+            if (nullptr != o)
+            {
+              o->onChanged({changed_action::add, data_.size()});
+            }
+          }
+        }
+
+        void pop_back()
+        {
+          data_.pop_back();
+
+          for (auto const o : observers_)
+          {
+            if (o != nullptr)
+            {
+              o->onChanged({changed_action::remove, data_.size()});
+            }
+          }
+        }
+
+        void clear() noexcept
+        {
+          data_.clear();
+
+          for (auto const o : observers_)
+          {
+            if (o != nullptr)
+            {
+              o->onChanged({changed_action::clear, data_.size()});
+            }
+          }
+        }
+
+        size_type size() const noexcept
+        { return data_.size(); }
+
+        bool empty() const noexcept
+        { return data_.empty(); }
+
+
+        // observer interfaces
+        void add_observer(collection_observer *o)
+        { observers_.push_back(o); }
+
+        void remove_observer(collection_observer const *o)
+        {
+          // this assumes that there are duplicated observers
+          observers_.erase(
+              std::remove(std::begin(observers_), std::end(observers_), o), // begin
+              observers_.end() // end
+              );
+        }
+
+      private:
+        std::vector<T> data_;
+        std::vector<collection_observer *> observers_;
+    };
 } // namespace
+              {
+                o->onChanged({changed_action::assign, data_.size()});
+              }
+            }
+          }
+
+          return *this;
+        }
+
+        // move assign
+        observable_vector& operator=(observable_vector &&rhs)
+        {
+          // for self assign
+          if (this != &rhs)
+          {
+            // done by vector's move
+            data_ = std::move(rhs.data_);
+
+            for (auto const o : observers_)
+            {
+              if (nullptr != o)
+              {
+                o->onChanged({changed_action::assign, data_.size()});
+              }
+            }
+          }
+
+          return *this;
+        }
+
+        void push_back(T &value)
+        {
+          cout << "push_back(T&)" << endl;
+
+          data_.push_back(value);
+
+          // see that this code nearly same except `parameters` to onChange()
+          for (auto const o : observers_)
+          {
+            if (nullptr != o)
+            {
+              o->onChanged({changed_action::add, data_.size()});
+            }
+          }
+        }
+
+        // same as push_back(T&) since std::vector.push_back() will handle
+        void push_back(T &&value)
+        {
+          cout << "push_back(T&&)" << endl;
+
+          data_.push_back(value);
+
+          for (auto const o : observers_)
+          {
+            if (nullptr != o)
+            {
+              o->onChanged({changed_action::add, data_.size()});
+            }
+          }
+        }
+
+        void pop_back()
+        {
+          data_.pop_back();
+
+          for (auto const o : observers_)
+          {
+            if (o != nullptr)
+            {
+              o->onChanged({changed_action::remove, data_.size()});
+            }
+          }
+        }
+
+        void clear() noexcept
+        {
+          data_.clear();
+
+          for (auto const o : observers_)
+          {
+            if (o != nullptr)
+            {
+              o->onChanged({changed_action::clear, data_.size()});
+            }
+          }
+        }
+
+        size_type size() const noexcept
+        { return data_.size(); }
+
+        bool empty() const noexcept
+        { return data_.empty(); }
+
+
+        // observer interfaces
+        void add_observer(collection_observer *o)
+        { observers_.push_back(o); }
+
+        void remove_observer(collection_observer const *o)
+        {
+          // this assumes that there are duplicated observers
+          observers_.erase(
+              std::remove(std::begin(observers_), std::end(observers_), o), // begin
+              observers_.end() // end
+              );
+        }
+
+      private:
+        std::vector<T> data_;
+        std::vector<collection_observer *> observers_;
+    };
+} // namespace
+
 
 TEST(PatternObserver, ObservableVectorContainer)
 {
@@ -1289,17 +1451,21 @@ TEST(PatternObserver, ObservableVectorContainer)
 
   ov.add_observer(&o);
 
+  // move
   cout << "=========" << endl;
   ov.push_back(1);
 
+  // move
   cout << "=========" << endl;
   ov.push_back(2);
 
+  // copy
   cout << "=========" << endl;
   ov.push_back(value);
 
   cout << "=========" << endl;
   ov.pop_back();
+
   cout << "=========" << endl;
   ov.clear();
 
@@ -1309,11 +1475,14 @@ TEST(PatternObserver, ObservableVectorContainer)
 
   observable_vector<int> ovv{1,2,3};
 
+  // copy assign
   cout << "=========" << endl;
   ov = ovv;
 
+  // move assign
   cout << "=========" << endl;
   ov = observable_vector<int>{7,8,9};
+  ov.push_back(1);
 }
 
 
@@ -2103,6 +2272,8 @@ namespace
   }
 } // namesapce
 
+
+// Hang sometines???
 
 TEST(PatternDispatcher, Sync)
 {
