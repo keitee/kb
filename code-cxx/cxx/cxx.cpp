@@ -4108,8 +4108,9 @@ namespace cxx_sp_use_count
   };
 } // namespace
 
+
 // Again, shows use_count() is not reliable but does match when object is
-// deleted.
+// deleted. No, looks like each smart pointer has use_count which is not shared.
 //
 // Foo ctor(1)
 // p1.use_count: 2
@@ -4139,39 +4140,40 @@ TEST(SmartPointer, UseCount)
   shared_ptr<Foo> p1(new Foo(1));
   shared_ptr<Foo> p2(p1);
 
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
+  EXPECT_THAT(p1.use_count(), 2);
+  EXPECT_THAT(p2.use_count(), 2);
+
 
   p1 = nullptr;
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  // *cxx-sp-bool*
+  EXPECT_THAT(p1, nullptr);
+  EXPECT_FALSE(p1);
+
+  EXPECT_THAT(p1.use_count(), 0);
+  EXPECT_THAT(p2.use_count(), 1);
 
   p1 = nullptr;
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
+  EXPECT_THAT(p1.use_count(), 0);
+  EXPECT_THAT(p2.use_count(), 1);
 
   p1 = nullptr;
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
+  EXPECT_THAT(p1.use_count(), 0);
+  EXPECT_THAT(p2.use_count(), 1);
 
-  cout << "-----------" << endl;
-
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
 
   p2 = nullptr;
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
+
+  EXPECT_THAT(p1.use_count(), 0);
+  EXPECT_THAT(p2.use_count(), 0);
 
   p2 = nullptr;
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
+  EXPECT_THAT(p1.use_count(), 0);
+  EXPECT_THAT(p2.use_count(), 0);
 
   p2 = nullptr;
-  cout << "p1.use_count: " << p1.use_count() << endl;
-  cout << "p2.use_count: " << p2.use_count() << endl;
-
-  cout << "end of main" << endl;
+  EXPECT_THAT(p1.use_count(), 0);
+  EXPECT_THAT(p2.use_count(), 0);
 }
 
 
@@ -4190,6 +4192,7 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     // wp is not involved in reference of sp. since it's weak, creating wp
     // doesn't change the reference count of p
     EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
 
     // sp is created out of wp. lock() checks whether the object to which the
     // weak_ptr points still exist
@@ -4199,13 +4202,18 @@ TEST(SmartPointer, WeakNotInReferenceCount)
       EXPECT_THAT(wp.use_count(), 2);
     }
 
-    // since p is only around in if
+    // since p is only around in if()
     EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
 
-    // cxx-error compile error
+    // cxx-error compile error since cxx-sp-weak do not support bool conversion
+    // but cxx-sp does.
+    //
+    // error: could not convert ‘wp’ from ‘std::weak_ptr<int>’ to ‘bool’
     // if (wp)
-    //   std::cout << "wp is not null" << std::endl;
+    //  std::cout << "wp is not null" << std::endl;
   }
+
 
   // Can explicitly convert a weak_ptr into a shared_ptr by using a
   // corresponding shared_ptr constructor. If there is no valid referenced
@@ -4219,8 +4227,9 @@ TEST(SmartPointer, WeakNotInReferenceCount)
 
     // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
 
-    // sp is created out of wp
+    // sp is created out of wp and cxx-sp supports bool conversion.
     shared_ptr<int> p(wp);
     if (p)
     {
@@ -4229,7 +4238,9 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     }
 
     EXPECT_THAT(sp.use_count(), 2);
+    EXPECT_THAT(sp.use_count(), 2);
   }
+
 
   // Can call expired(), which returns true if use_count() is zero, false
   // otherwise. This option is equivalent to checking whether use_count() is
@@ -4241,8 +4252,12 @@ TEST(SmartPointer, WeakNotInReferenceCount)
 
     // wp is not involved in reference of sp
     EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
 
     sp = nullptr;
+
+    EXPECT_FALSE(sp);
+    EXPECT_THAT(wp.use_count(), 0);
 
     // sp is gone and wp.lock() returns nullptr
     // because the last owner of the object released the object in the meantime
@@ -4250,11 +4265,37 @@ TEST(SmartPointer, WeakNotInReferenceCount)
 
     auto rp = wp.lock();
 
+    // note: cxx-sp-weak use_count() retuns 0 !!!
+    EXPECT_THAT(wp.use_count(), 0);
     EXPECT_THAT(wp.expired(), true);
 
     // rp is shared_ptr
+    EXPECT_FALSE(rp);
     EXPECT_THAT(rp, nullptr);
   }
+
+
+  // so can use use_count() to see if sp's object is still around
+  {
+    auto sp = make_shared<int>(42);
+
+    // wp is created out of sp
+    weak_ptr<int> wp(sp);
+
+    // wp is not involved in reference of sp. since it's weak, creating wp
+    // doesn't change the reference count of p
+    EXPECT_THAT(sp.use_count(), 1);
+    EXPECT_THAT(wp.use_count(), 1);
+
+    // sp is created out of wp. lock() checks whether the object to which the
+    // weak_ptr points still exist
+    if (wp.use_count())
+    {
+      EXPECT_THAT(sp.use_count(), 1);
+      EXPECT_THAT(wp.use_count(), 1);
+    }
+  }
+
 
   // You can explicitly convert a weak_ptr into a shared_ptr by using a
   // corresponding shared_ptr constructor. If there is no valid referenced
@@ -4284,7 +4325,6 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     EXPECT_THAT(wp.expired(), true);
   }
 
-  // assign sp later when use make_shared() directly 
 
   {
     weak_ptr<int> wp;
@@ -4296,6 +4336,7 @@ TEST(SmartPointer, WeakNotInReferenceCount)
     // *cxx-error*
     // EXPECT_THAT(wp, nullptr);
 
+    // assign wp from make_shared() directly and do not work
     wp = make_shared<int>(42);
 
     EXPECT_THAT(wp.expired(), true);

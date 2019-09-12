@@ -24,8 +24,7 @@ set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to t
 # This only works with subdirectories of the current directory. We will see how
 # to add external directories later.
 #
-# As checked:
-# /home/keitee/works/googletest/googlemock/CMakeLists.txt
+# As checked: /home/keitee/works/googletest/googlemock/CMakeLists.txt
 #
 # add_subdirectory(source_dir [binary_dir])
 #
@@ -47,20 +46,18 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 # include_directories([AFTER|BEFORE] [SYSTEM] directory...)
 #
-# AFTER|BEFORE
-# Specify whether or not these include directories should be appended or prepended
-# to the list of include directories. If omitted then the default behavior is
-# used. By default directories are appended to the list. This behavior can be
-# changed by setting CMAKE_INCLUDE_DIRECTORIES_BEFORE to TRUE. 
+# AFTER|BEFORE Specify whether or not these include directories should be
+# appended or prepended to the list of include directories. If omitted then the
+# default behavior is used. By default directories are appended to the list.
+# This behavior can be changed by setting CMAKE_INCLUDE_DIRECTORIES_BEFORE to
+# TRUE. 
 #
-# SYSTEM 
-# Specify that these directories are system include directories. This only has an
-# affect on compilers that support the distinction. This can change the order in
-# which the compiler searches include directories or the handling of warnings from
-# headers found in these directories. 
+# SYSTEM Specify that these directories are system include directories. This
+# only has an affect on compilers that support the distinction. This can change
+# the order in which the compiler searches include directories or the handling
+# of warnings from headers found in these directories. 
 #
-# directory... 
-# The directories to be added to the list of include directories.
+# directory...  The directories to be added to the list of include directories.
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
