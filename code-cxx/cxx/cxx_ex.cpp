@@ -62,7 +62,6 @@ namespace cxx_pattern_dispatcher
         // when observer calls this to remove and notifier is running then
         // cannot remove it now. hold it for now until notifier finishes
         
-
         // that is it waits until notifying is done, `notifying_`  is false and
         // waitee_count_ is num of users.
 
@@ -72,7 +71,6 @@ namespace cxx_pattern_dispatcher
 
           do
           {
-
             // cxx-condition-variable-wait
             // wait()
             // blocks the current thread until the condition variable is woken
@@ -106,13 +104,82 @@ namespace cxx_pattern_dispatcher
           throw std::logic_error("must set a dispatcher before you produce events.");
         }
 
-        // don't want to lock adding new observers while calling observers so
-        // make a copy instead. In the unlikely event that there are expired
-        // observers, remove expired observers by copying 
-        // only if use_count() > 0
+        // In the unlikely event that there are expired observers, remove
+        // expired observers by copying only if use_count() > 0
+        //
+        // since referring shared_ptr which weak_ptr refers to is gone then
+        // use_count() of weak_ptr gets decreased.
 
         decltype(observers_) observers_copy;
+        std::copy_if(observers_.cbegin(), observers_.cend(),
+            std::back_inserter(observers_copy),
+            std::bind(&std::weak_ptr<T>::use_count, std::placeholders::_1));
 
+        if (observers_copy.size() != observers_.size())
+          observers_ = observers_copy;
+
+        // okay, starts notifying
+        notifying_ = true;
+
+        // don't want to lock adding new observers while calling observers so
+        // use a copy instead. 
+        
+        lock.unlock();
+
+        //----------------- NOTE ----------------------------------------------
+        // We maintain vector of strong pointers pointing to observer objects as
+        // otherwise bad things can happen. Lets consider, the observer object
+        // point backs to the notifier object itself.  That means, there is a
+        // circular dependency between the notifier and the observer, but we
+        // break that by using a combination of shared and weak pointers.
+        // However, imagine, within the notify_impl() method, we gets a shared
+        // pointer of observer object out of weak_ptr. After the shared pointer
+        // is constructed (bit still in use), now the owner of the observer
+        // resets its pointer that is pointing to the observer object. This
+        // might result one to one references between the notifier and the
+        // observer, i.e., as soon as the observer will be destroyed the
+        // notifier will also be destroyed. It means, if now the observer object
+        // is destroyed from the notify_imp() method, it will cause the notifier
+        // object itself to be destroyed, where the notify_impl can still
+        // continue to access its member variable (e.g. dispatcher). This might
+        // result an undefined behaviour.
+        //---------------------------------------------------------------------
+
+        // Q: WHY need observers_strong vector?
+        std::vector<std::shared_ptr<T>> observers_strong;
+
+        for(auto const &o : observers_copy)
+        {
+          std::shared_ptr<T> strong = o.lock();
+          if(strong)
+          {
+            // void notify_impl(
+            //  std::function<void(std::shared_ptr<T> const &)> f);
+            dispatcher_->post(std::bind(f, strong));
+          }
+          observers_strong.push_back(strong);
+        }
+
+        // okay, notifying finishes
+        lock.lock();
+
+        // TODO ???
+        // about to unregister an observer so make sure that there is no work
+        // for this observer after that.
+        if (dispatcher_ && (waitee_count_ > 0))
+        {
+          lock.unlock();
+          dispatcher_->sync();
+          lock.lock();
+        }
+
+        notifying_ = false;
+
+        // notify all waited observers on remove_observer()
+        if (waitee_count_ > 0)
+          cv_.notify_all();
+
+        lock.unlock();
       }
   };
 } // namespace

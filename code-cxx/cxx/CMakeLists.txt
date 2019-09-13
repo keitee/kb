@@ -88,9 +88,9 @@ add_executable(${PROJECT_NAME} "cxx.cpp")
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
 
 
-# cxx_ex.cpp
-add_executable(${PROJECT_NAME}_ex "cxx_ex.cpp")
-target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
+# # cxx_ex.cpp
+# add_executable(${PROJECT_NAME}_ex "cxx_ex.cpp")
+# target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
 
 # cxx_pattern.cpp
 add_executable(${PROJECT_NAME}_pattern "cxx_pattern.cpp")

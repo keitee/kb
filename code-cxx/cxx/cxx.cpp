@@ -4109,29 +4109,7 @@ namespace cxx_sp_use_count
 } // namespace
 
 
-// Again, shows use_count() is not reliable but does match when object is
-// deleted. No, looks like each smart pointer has use_count which is not shared.
-//
-// Foo ctor(1)
-// p1.use_count: 2
-// p2.use_count: 2
-// p1.use_count: 0
-// p2.use_count: 1
-// p1.use_count: 0
-// p2.use_count: 1
-// p1.use_count: 0
-// p2.use_count: 1
-// -----------
-// p1.use_count: 0
-// p2.use_count: 1
-// Foo dtor(1)
-// p1.use_count: 0
-// p2.use_count: 0
-// p1.use_count: 0
-// p2.use_count: 0
-// p1.use_count: 0
-// p2.use_count: 0
-// end of main
+// Is use_count() reliable? 
 
 TEST(SmartPointer, UseCount)
 {
