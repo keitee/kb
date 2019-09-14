@@ -70,7 +70,9 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 #
 # see https://stackoverflow.com/questions/42123509/cmake-finds-boost-but-the-imported-targets-not-available-for-boost-version
 
-find_package(Boost 1.65.1 COMPONENTS system thread)
+# 1.65.1 emits some error when linking with cmake and 1.70.0 fixes up.
+# find_package(Boost 1.65.1 COMPONENTS system thread)
+find_package(Boost 1.70.0 COMPONENTS system thread)
 
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
@@ -88,9 +90,9 @@ add_executable(${PROJECT_NAME} "cxx.cpp")
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
 
 
-# # cxx_ex.cpp
-# add_executable(${PROJECT_NAME}_ex "cxx_ex.cpp")
-# target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
+# cxx_ex.cpp
+add_executable(${PROJECT_NAME}_ex "cxx_ex.cpp")
+target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
 
 # cxx_pattern.cpp
 add_executable(${PROJECT_NAME}_pattern "cxx_pattern.cpp")

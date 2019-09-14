@@ -17,11 +17,179 @@ using namespace std::placeholders;
 using namespace testing;
 
 
-TEST(Ex, ex)
+TEST(Cxx, ex)
 {
   EXPECT_THAT(true, true);
 }
 
+namespace cxx_observer_notifier
+{
+  class Polymorphic
+  {
+    public:
+      virtual ~Polymorphic() {};
+  };
+
+  template<typename T>
+    class Notifier : virtual public Polymorphic
+  {
+    public:
+      Notifier() {}
+
+      // register
+      void add_observer(std::shared_ptr<T> const &o)
+      {
+        observer_ = o;
+      }
+
+    protected:
+
+      // for multiple arguments and it calls notify<T>
+      template<typename F, typename... Args>
+        void notify(F f, Args&&... args)
+        {
+          notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+        }
+
+      // for single argument call, notify(x)
+      template<typename F>
+        void notify(F f)
+        {
+          notify_impl_(f);
+        }
+
+    private:
+
+      // saved observer
+      std::shared_ptr<T> observer_;
+
+      // (std::function<void(std::shared_ptr<T> const &)> f) means that the
+      // returned type from bind() will be called shared_ptr<T> which is target
+      // object.
+
+      void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
+      {
+        if(observer_)
+          f(observer_);
+
+        // std::shared_ptr<T> strong = o.lock();
+        // if(strong)
+        // {
+        //   // void notify_impl(
+        //   //  std::function<void(std::shared_ptr<T> const &)> f);
+        //   dispatcher_->post(std::bind(f, strong));
+        // }
+      }
+  };
+
+  // A observer(callback) interface
+  //
+  class StateEvents
+  {
+    public:
+      virtual void stateChanged(int state) = 0;
+      virtual void nameChanged(std::string name) = 0;
+      virtual void keyAndValueChanged(std::string key, std::string value) = 0;
+      virtual void eventOccured() = 0;
+  };
+
+
+  // observer
+  //
+  template <class T>
+    class Observer : public T, virtual public Polymorphic
+  {
+  };
+
+  class TestObserver : public Observer<StateEvents>
+  {
+    public:
+
+      // MOCK_METHOD1(stateChanged, void (int));
+      // MOCK_METHOD1(nameChanged, void (std::string));
+      // MOCK_METHOD2(keyAndValueChanged, void (std::string, std::string));
+      // MOCK_METHOD0(eventOccured, void());
+      
+      void stateChanged(int state)
+      {
+        std::cout << "called stateChanged(" << state << ")" << std::endl;
+      }
+
+      void nameChanged(std::string name)
+      {
+        std::cout << "called nameChanged(" << name << ")" << std::endl;
+      }
+
+      void keyAndValueChanged(std::string key, std::string value)
+      {
+        std::cout << "called keyAndValueChanged(" << key 
+          << ", " << value << ")" << std::endl;
+      }
+
+      void eventOccured()
+      {
+        std::cout << "called eventOccured()" << std::endl;
+      }
+  };
+
+  // source
+  // 
+  class Source : public Notifier<StateEvents>
+  {
+    public:
+      void setState(int state)
+      {
+        // do something
+
+        // calls 
+        // template<typename F> 
+        //  void notify(F f);
+        notify(std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
+      }
+
+      void setName(std::string name)
+      {
+        // do something
+
+        // calls 
+        // template<typename F, typename... Args> 
+        //  void notify(F f, Args&&... args);
+        notify(&StateEvents::nameChanged, name);
+      }
+
+      void setKeyAndValue(std::string key, std::string value)
+      {
+        // do something
+
+        notify(&StateEvents::keyAndValueChanged, key, value);
+      }
+
+      void emitEvent()
+      {
+        // do something
+
+        notify(&StateEvents::eventOccured);
+      }
+  };
+} // namespace
+
+
+TEST(PatternObserver, Notifier)
+{
+  using namespace cxx_observer_notifier;
+
+  Source source;
+
+  auto observer = std::make_shared<TestObserver>();
+  
+  source.add_observer(observer);
+  source.setState(5);
+  source.setName("notifier");
+  source.setKeyAndValue("key", "value");
+}
+
+
+/*
 namespace cxx_pattern_dispatcher
 {
   template<typename T>
@@ -85,6 +253,21 @@ namespace cxx_pattern_dispatcher
 
     protected:
 
+      // for multiple arguments and it calls notify<T>
+      template<typename F, typename... Args>
+        void notify(F f, Args&&... args)
+        {
+          notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+        }
+
+      // for single argument call, notify(x)
+      template<typename F>
+        void notify(F f)
+        {
+          notify_impl_(f);
+        }
+      
+
     private:
       std::mutex m_;
       std::condition_variable cv_;
@@ -95,7 +278,11 @@ namespace cxx_pattern_dispatcher
       uint32_t waitee_count_{0};
       bool notifying_{false};
 
-      void notify_impl(std::function<void(std::shared_ptr<T> const &)> f)
+      // (std::function<void(std::shared_ptr<T> const &)> f) means that the
+      // returned type from bind() will be called shared_ptr<T> which is target
+      // object.
+
+      void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
       {
         std::unique_lock<std::mutex> lock(m_);
 
@@ -182,7 +369,73 @@ namespace cxx_pattern_dispatcher
         lock.unlock();
       }
   };
+
+  //
+  //
+  class Polymorphic
+  {
+    public:
+      virtual ~Polymorphic() {};
+  };
+
+  // A template for observing objects that accept signals defined in T
+  //
+  template <typename T>
+    class Observer : public T, virtual public Polymorphic
+  {
+  };
+
+  // A observer(callback) interface
+  //
+  class StateEvents
+  {
+    public:
+      virtual void stateChanged(int state) = 0;
+      virtual void nameChanged(std::string name) = 0;
+      virtual void keyAndValueChanged(std::string key, std::string value) = 0;
+      virtual void eventOccured() = 0;
+  };
+
+  class Source : public Notifier<StateEvents>
+  {
+    public:
+      void setState(int state)
+      {
+        // do something
+
+        // calls 
+        // template<typename F> 
+        //  void notify(F f);
+        notify(std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
+      }
+
+      void setName(std::string name)
+      {
+        // do something
+
+        // calls 
+        // template<typename F, typename... Args> 
+        //  void notify(F f, Args&&... args);
+        notify(&StateEvents::nameChanged, name);
+      }
+
+      void setKeyAndValue(std::string key, std::string value)
+      {
+        // do something
+
+        notify(&StateEvents::keyAndValueChanged, key, value);
+      }
+
+      void emitEvent()
+      {
+        // do something
+
+        notify(&StateEvents::eventOccured);
+      }
+  };
+
 } // namespace
+*/
 
 
 // ={=========================================================================

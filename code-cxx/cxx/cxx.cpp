@@ -3375,9 +3375,252 @@ TEST(FunctionObject, Function)
   }
 }
 
-TEST(FunctionObject, Memfn)
+
+// *cxx-bind*
+
+TEST(FunctionObject, Bind)
 {
   using namespace cxx_function;
+
+  // use library defined callable
+  {
+    std::plus<int> fo;
+    EXPECT_THAT(fo(10, 20), 30);
+  }
+
+  // cxx-bind-nested
+  {
+    std::plus<int> fo;
+    EXPECT_THAT(fo(7, 10), 17);
+
+    // cxx-bind and _1 holds the first argument
+    auto plus10 = std::bind(std::plus<int>(), std::placeholders::_1, 10);
+    EXPECT_THAT(plus10(7), 17);
+
+    // 17*2 = 34. see that inner fobj itself is used as argument
+    auto plus10times2 = std::bind(
+        std::multiplies<int>(),
+        std::bind(std::plus<int>(), std::placeholders::_1, 10),
+        2);
+    EXPECT_THAT(plus10times2(7), 34);
+
+    // 49*7 = 343. used multiple times
+    auto pow3 = std::bind(std::multiplies<int>(),
+        std::bind(std::multiplies<int>(),
+          std::placeholders::_1,
+          std::placeholders::_1),
+        std::placeholders::_1);
+    EXPECT_THAT(pow3(7), 343);
+
+    auto inversDivide = std::bind(std::divides<double>(),
+      std::placeholders::_2,
+      std::placeholders::_1);
+    EXPECT_NEAR(inversDivide(49, 7), 0.142857, 0.001);
+  }
+
+  {
+    set<int, greater<int>> coll1 = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    deque<int> coll2;
+
+    // initialised
+    EXPECT_THAT(coll2, ElementsAre(9, 8, 7, 6, 5, 4, 3, 2, 1));
+
+    // *algo-transform*
+    transform( coll1.cbegin(), coll1.cend(),    // source
+        back_inserter( coll2 ),                 // destination
+        bind( multiplies<int>(), _1, 10 ));     // unary operation
+
+    // transformed
+    EXPECT_THAT(coll1, ElementsAre(90,80,70,60,50,40,30,20,10));
+
+    // algo-replace-if
+    replace_if( coll2.begin(), coll2.end(),   // range
+        bind( equal_to<int>(), _1, 70 ),      // criterion
+        42 );                                 // new value
+
+    // replaced
+    EXPECT_THAT(coll1, ElementsAre(90,80,42,60,50,40,30,20,10));
+
+    // *algo-remove-if*
+    //
+    // The expressions are evaluated 'from' the 'inside' to the outside. So inner
+    // callable "returns 'bool' type" and outer callable uses that as element type. No
+    // function call involved. That's why logical_and<bool>().
+    // 
+    // template<typename _Tp>
+    // struct logical_and : public binary_function<_Tp, _Tp, bool>
+    // {
+    //   bool
+    //   operator()(const _Tp& __x, const _Tp& __y) const
+    //   { return __x && __y; }
+    // };
+    // 
+    // return bind(greater_equal<int>(), _1, 50) && bind(less_equal<int>(), _1, 80);
+    // 
+    // __x is not "bind(greater_equal<int>(), _1, 50)" and is return value.
+
+    coll2.erase(remove_if( coll2.begin(), coll2.end(),
+          bind(
+            logical_and<bool>(),
+            bind(greater_equal<int>(), _1, 50),
+            bind(less_equal<int>(), _1, 80)
+            ) 
+          ),
+        coll2.end());
+
+    // replaced
+    EXPECT_THAT(coll1, ElementsAre(90,42,40,30,20,10));
+  }
+
+  // std::placeholders:: How it works?
+  {
+    using namespace std::placeholders;
+
+    EXPECT_THAT(std::bind(std::plus<int>(), _1, 10)(30), 40);
+    EXPECT_THAT(std::bind(std::plus<int>(), _1, 10)(30, 40), 40);
+    EXPECT_THAT(std::bind(std::plus<int>(), _1, 10)(30, 40, 50), 40);
+    EXPECT_THAT(std::bind(std::plus<int>(), _2, 10)(30, 40, 50), 50);
+    EXPECT_THAT(std::bind(std::plus<int>(), _3, 10)(30, 40, 50), 60);
+  }
+
+  // cxx-bind-argument-type
+  // Always have to specify the argument type of the predefined function object
+  // used. If the type doesn't match, a type conversion is forced, or the
+  // expression results in a compile-time error.
+  {
+    using namespace std::placeholders;
+
+    EXPECT_THAT(std::bind(std::plus<int>(), _1, 10)(30), 40);
+
+    // cxx-error
+    //
+    // :31:42: error: no match for call to '(std::_Bind_helper<false,
+    //   std::plus<std::basic_string<char> >, const std::_Placeholder<1>&, int>::type
+    //   {aka std::_Bind<std::plus<std::basic_string<char> >(std::_Placeholder<1>,int)>}) (int)'
+    // 
+    // In file included from /usr/include/c++/4.7/bits/stl_algo.h:68:0,
+    //                  from /usr/include/c++/4.7/algorithm:63,
+    //                  from t_bind.cpp:5:
+    // /usr/include/c++/4.7/functional:1140:11: note: candidates are:
+    //
+    // EXPECT_THAT(std::bind(std::plus<std::string>(), _1, 10)(30), 40);
+  }
+}
+
+TEST(FunctionObject, BindMemberFunction)
+{
+  using namespace cxx_function;
+
+  // use std::function<> and that is to use pointer
+  {
+    Foo foo = Foo(100);
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // use cxx-bind
+  {
+    Foo foo = Foo(100);
+    auto op = std::bind(&Foo::update_10, _1);
+
+    // see that pass `foo` object to op
+    op(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // `specify the target object`
+  //
+  // that performing a function call without having a target to call throws
+  // an exception of type std::bad_function_call (see Section 4.3.1, page 43):
+  // 
+  // std::function<void(int,int)> f; 
+  //
+  // f(33,66);
+  //
+  // throws std::bad_function_call
+  //
+  // *cxx-this*
+  //
+  // As with *cxx-this*, same as Foo::update_10(&foo);
+  //
+  // Member function access the object through an extra, implicit parameter named
+  // `this`. The compiler passes the address of `total` to the implicit `this`
+  // parameter `as if` rewrites this call as:
+  // 
+  // total.isbn();
+  // 
+  // (where Sales_data::isbn(Sales_data *const this);)
+  //
+  // Sales_data::isbn(&total);
+
+  // cxx-bind use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    auto op = std::bind(&Foo::update_10, _1);
+
+    {
+      for_each(coll.begin(), coll.end(), op);
+
+      // to get result out and algo-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), 
+          print_value);
+
+      EXPECT_THAT(result, ElementsAre(11,12,13));
+    }
+  }
+
+
+  // cxx-function use reference
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    // note:
+    // void update_10() but why <void(Foo &)>? becuse of *cxx-this* and this
+    // `specify` target object
+
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    {
+      for_each(coll.begin(), coll.end(), op);
+
+      // to get result out and algo-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), 
+          print_value);
+
+      EXPECT_THAT(result, ElementsAre(11,12,13));
+    }
+  }
+
+  // cxx-function use copy
+  {
+    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    // see difference:
+    // std::function<void(`Foo`)> op = &Foo::update_20;
+
+    std::function<void(Foo)> op = &Foo::update_20;
+
+    for_each(coll.begin(), coll.end(), op);
+
+    // to get result out and algo-transform requires unary predicate
+    transform(coll.begin(), coll.end(), back_inserter(result), 
+        print_value);
+
+    EXPECT_THAT(result, ElementsAre(1,2,3));
+  }
+
+
+  // Use `cxx-mem-fn` to let the compiler deduce the member's type and to
+  // generate a callable object.  The callable generated by `mem_fn` can be
+  // called on either an object or a pointer.
 
   {
     Foo foo = Foo(100);
@@ -3403,63 +3646,9 @@ TEST(FunctionObject, Memfn)
 
     EXPECT_THAT(result, ElementsAre(11,12,13));
   }
-}
 
-TEST(FunctionObject, Bind)
-{
-  using namespace cxx_function;
 
-  {
-    Foo foo = Foo(100);
-    auto op = std::bind(&Foo::update_10, _1);
-
-    op(foo);
-
-    EXPECT_THAT(foo.get_value(), 110);
-  }
-
-  // use reference
-  {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
-
-    for_each(coll.begin(), coll.end(), std::bind(&Foo::update_10, _1));
-
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
-
-    EXPECT_THAT(result, ElementsAre(11,12,13));
-  }
-
-  // use reference
-  {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
-
-    for_each(coll.begin(), coll.end(), std::bind(&Foo::update_20, _1));
-
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
-
-    EXPECT_THAT(result, ElementsAre(21,22,23));
-  }
-}
-
-TEST(FunctionObject, Pointer)
-{
-  using namespace cxx_function;
-
-  {
-    Foo foo = Foo(100);
-    std::function<void(Foo &)> op = &Foo::update_10;
-
-    op(foo);
-
-    EXPECT_THAT(foo.get_value(), 110);
-  }
-
+  // use pointer
   {
     Foo foo = Foo(100);
 
@@ -8396,6 +8585,53 @@ TEST(Typedef, Alias)
 
     ASSERT_THAT(coll[3], Eq("threeeeee"));
   }
+}
+
+
+// ={=========================================================================
+// cxx-class
+
+// so semi-colon(;) at end DO NOT matter
+
+namespace cxx_class
+{
+  class ClassA
+  {
+    public:
+      ClassA() : name_("ClassA") 
+      { std::cout << "This is ClassA" << std::endl; }
+
+      void getName() 
+      { std:: cout << "ClassA's name : " << name_ << std::endl; }
+
+    private:
+      std::string name_;
+  };
+
+  class ClassB
+  {
+    public:
+      ClassB() : name_("ClassB") 
+      { std::cout << "This is ClassB" << std::endl; };
+
+      void getName() 
+      { std:: cout << "ClassA's name : " << name_ << std::endl; };
+
+    private:
+      std::string name_;
+  };
+
+} // namespace
+
+TEST(Class, ColonDoesMatter)
+{
+  using namespace cxx_class;
+
+  ClassA cao;
+  cao.getName();
+
+  ClassB cbo;
+  cbo.getName();
 }
 
 

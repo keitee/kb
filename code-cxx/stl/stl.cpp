@@ -2536,12 +2536,6 @@ TEST(Predicate, Stateless)
   EXPECT_THAT(coll, ElementsAre(1,2,4,5,7,8,9,10));
 }
 
-TEST(Predicate, Predefined)
-{
-  std::plus<int> op;
-  EXPECT_THAT(op(10, 20), 30);
-}
-
 // template<typename _InputIterator, typename _Function>
 //   _Function
 // for_each(_InputIterator __first, _InputIterator __last, _Function __f)
