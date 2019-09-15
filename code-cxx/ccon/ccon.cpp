@@ -845,6 +845,93 @@ TEST(CConSync, Eventfd)
 // ={=========================================================================
 // cxx-condition cxx-queue
 
+namespace cxx_condition
+{
+  struct ConditionWait
+  {
+    std::queue<int> q;
+    std::mutex m;
+    std::condition_variable cv;
+    bool thread_running{true};
+  };
+
+  void push_items_and_notify(ConditionWait &cw)
+  {
+    // expect nothing happens since there is no item in the q
+    {
+      // wait to make sure consumer is ready
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      // signal
+      cw.cv.notify_one();
+    }
+
+    // push some and signal
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      // okay, put some items
+      for (int i = 0; i < 5; i++)
+        cw.q.push(i);
+
+      // signal again
+      cw.cv.notify_one();
+    }
+
+    // push some and signal to end
+    {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+      // okay, put some items
+      for (int i = 0; i < 5; i++)
+        cw.q.push(i);
+
+      cw.cv.notify_one();
+
+      cw.thread_running = false;
+    }
+  }
+} // namesapce
+
+// to see how wait() works
+
+TEST(CConCondition, Wait)
+{
+  using namespace cxx_condition;
+
+  struct ConditionWait cw;
+
+  std::vector<int> coll{};
+
+  std::thread t([&]{push_items_and_notify(cw);});
+
+  std::unique_lock<std::mutex> lock(cw.m);
+
+  while (cw.thread_running)
+  {
+    cw.cv.wait(lock, [&]{ return !cw.q.empty() || !cw.thread_running; });
+    if (!cw.q.empty())
+    {
+      auto item = cw.q.front(); cw.q.pop();
+      // std::cout << "poped : " << item << std::endl;
+      coll.push_back(item);
+    }
+    else
+    {
+      // std::cout << "woke up but q is empty" << std::endl;
+      coll.push_back(1000);
+    }
+  }
+
+  t.join();
+
+  EXPECT_THAT(cw.q.size(), 4);
+  EXPECT_THAT(coll, ElementsAre(0,1,2,3,4,0));
+}
+
+
+// interface:
+//
 // class threadsafe_queue 
 // {
 //  void push(T &);
@@ -1225,8 +1312,8 @@ TEST(CConCondition, WaitFor)
   cond.wait_for(lock, std::chrono::seconds(1),
       [&q](){ return !q.empty(); });
 
-  std::string expected{"it's out of wait"};
-  EXPECT_THAT(expected, "it's out of wait");
+  // okay, it's done.
+  EXPECT_THAT(true, true);
 }
 
 

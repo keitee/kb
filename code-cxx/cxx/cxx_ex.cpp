@@ -9,6 +9,10 @@
 #include <forward_list>
 #include <regex>
 #include <boost/lexical_cast.hpp>
+#include <mutex>
+#include <condition_variable>
+
+#include <sys/prctl.h>
 
 #include "gmock/gmock.h"
 
@@ -437,6 +441,419 @@ namespace cxx_pattern_dispatcher
 } // namespace
 */
 
+
+namespace cxx_pattern_dispatcher
+{
+  // Polymorphic.h
+  // original comments:
+  // Inherit from this from all types that have virtual functions. Doing so
+  // ensures that you have virtual destructor and saves you nasty surprises.
+
+  class Polymorphic
+  {
+    public:
+      virtual ~Polymorphic() {};
+  };
+
+  // IDispatcher.h
+  class IDispatcher : public Polymorphic
+  {
+    public:
+      // post an work item to be executed
+      virtual void post(std::function<void ()>) = 0;
+
+      // ensures that any works that was in the queue before the call has been
+      // executed
+      virtual void sync() = 0;
+
+      // check if it's called from this dispatch thread
+      virtual bool invoked_from_this() = 0;
+  }; 
+
+
+  // ThreadedDispatcher.h
+  // (see) that use of `public` for interfaces from parent class and ones from
+  // this class which shows a clear seperation.
+
+  class ThreadedDispatcher : public IDispatcher
+  {
+    public:
+      // post an work item to be executed
+      virtual void post(std::function<void ()>);
+
+      // ensures that any works that was in the queue before the call has been
+      // executed
+      virtual void sync();
+
+      // check if it's called from this dispatch thread
+      virtual bool invoked_from_this();
+
+    public:
+      ThreadedDispatcher(std::string const &name = std::string());
+
+      // create dispatcher with supplied priority and name
+      ThreadedDispatcher(int priority, std::string const &name = std::string());
+
+      ~ThreadedDispatcher();
+
+      // perform any work remaining in the queue the stop accepting new work.
+      void flush();
+
+      // stop accepting new work and dispatcher even if there are works in the
+      // queue.
+      void stop();
+
+    private:
+      bool running_;
+
+      std::thread t_;
+      std::mutex m_;
+      std::condition_variable cv_;
+
+      std::deque<std::function<void()>> q_;
+
+      void do_work_(std::string const &name, int priority);
+      std::function<void()> next_();
+  };
+
+  // (see) that ctor calls ctors
+  ThreadedDispatcher::ThreadedDispatcher(std::string const &name)
+    : ThreadedDispatcher(-1, name)
+  {}
+
+  // *cxx-error* : ISO C++ forbids taking the address of an
+  // unqualified or parenthesized non-static member function to form a pointer
+  // to member function. 
+  // Say ‘&cxx_pattern_dispatcher::ThreadedDispatcher::_do_work’ [-fpermissive] ,
+  //
+  // _t(std::thread(&_do_work, this, name, priority))
+
+  ThreadedDispatcher::ThreadedDispatcher(int priority, std::string const &name)
+    : running_(true)
+      , t_(std::thread(&ThreadedDispatcher::do_work_, this, name, priority))
+  {}
+
+  ThreadedDispatcher::~ThreadedDispatcher()
+  {
+    if (running_)
+      stop();
+  }
+
+  void ThreadedDispatcher::post(std::function<void ()> work)
+  {
+    // (see) this is original code. is it different from the below?
+    //
+    // std::uniqie_lock<std::mutex> lock(m);
+    // if (running)
+    // {
+    //   q.push_back(work);
+    //   lock.unlock();
+    //   cv.notify_one();
+    // }
+    // else
+    // {
+    //   ...
+    // }
+
+    std::lock_guard<std::mutex> lock(m_);
+
+    if(running_)
+    {
+      q_.push_back(work);
+      cv_.notify_one();
+    }
+    else
+    {
+      std::cout << "ignoring work because the dispatcher is not running"
+        << std::endl;
+
+      // original comment:
+      // LOG_WARN("Ignoring work because the dispatcher is not running anymore");
+      //
+      // can't throw an exception here because if this is executed from
+      // destructor, which occurs when work adds more work things go horribly
+      // wrong. Instead, ignore work.
+
+    }
+  }
+
+  bool ThreadedDispatcher::invoked_from_this()
+  {
+    return (std::this_thread::get_id() == t_.get_id());
+  }
+
+  namespace
+  {
+    void syncCallback(std::mutex *m, std::condition_variable *cond, bool *fired)
+    {
+      std::unique_lock<std::mutex> lock(*m);
+      *fired = true;
+      cond->notify_all();
+
+      // unnecessary
+      // lock.unlock();
+    }
+  } // namespace
+
+  void ThreadedDispatcher::sync()
+  {
+    std::mutex sm;
+    std::condition_variable cv;
+    bool fired{false};
+
+    std::unique_lock<std::mutex> qlock(m_);
+    if (!running_)
+    {
+      std::cout << "ignoring sync request because the dispatcher is not running"
+        << std::endl;
+      return;
+    }
+
+    q_.push_back(std::bind(syncCallback, &sm, &cv, &fired));
+    qlock.unlock();
+
+    // pushed sync work and make dispatcher run to do all works in the q
+    cv_.notify_one();
+
+    // wait for `fired` to become true
+    std::unique_lock<std::mutex> slock(sm);
+
+    // same as wait(std::unique_lock<>, predicate);
+    while(!fired)
+    {
+      cv.wait(slock);
+    }
+  }
+
+  // (see) uses unique_lock to unlock it as soon as it changes necessary state.
+  void ThreadedDispatcher::stop()
+  {
+    std::unique_lock<std::mutex> lock(m_);
+    running_ = false;
+    lock.unlock();
+
+    cv_.notify_one();
+    t_.join();
+  }
+
+  // To ensure all the work that is in the queue is done, we lock a mutex. post
+  // a job to the queue that unlocks it and stops running further jobs. Then
+  // block here until that's done.
+
+  namespace
+  {
+    void unlockAndSetFlagToFalse(std::mutex& m, bool& flag)
+    {
+      std::this_thread::sleep_for(std::chrono::seconds(5));
+      // std::cout << "flush thread: waits ends" << std::endl;
+      m.unlock();
+
+      // TODO ??? really work without this?
+      flag = false;
+
+      // (see)
+      // original code. without setting flag, still works
+      // flag = false;
+      //
+      // using namespace std;
+      // m.unlock();
+      // flag = false;
+    }
+  }
+
+  void ThreadedDispatcher::flush()
+  {
+    if (running_)
+    {
+      std::mutex m2;
+      m2.lock();
+      // *cxx-bind*
+      post(std::bind(unlockAndSetFlagToFalse, 
+            std::ref(m2), std::ref(this->running_)));
+      // blocks here until unlockAndSetFlagToFalse() unlock it since post() will
+      // signal and it make signal false as stop() do.
+      m2.lock();
+      m2.unlock();
+      stop();
+    }
+    else
+    {
+      std::cout << "ignoring flush request because the dispatcher is not running"
+        << std::endl;
+    }
+  }
+
+  std::function<void()> ThreadedDispatcher::next_()
+  {
+    // (see) Q: std::move() has an effect here?
+
+    auto work = std::move(q_.front());
+    q_.pop_front();
+    return work;
+  }
+
+  // thread function
+
+  void ThreadedDispatcher::do_work_(std::string const &name, int priority)
+  {
+    if (prctl(PR_SET_NAME, name.empty() ? "THR_DISPATCH" : name.c_str(), 0, 0, 0) < 0)
+    {
+      // AI_LOG_SYS_ERROR(errno, "Failed to set thread name");
+    }
+
+    // if (priority > 0)
+    // {
+    //   struct sched_param param;
+    //   param.sched_priority = priority;
+    //   int err = pthread_setschedparam(pthread_self(), SCHED_RR, &param);
+    //   if (err != 0)
+    //   {
+    //     AI_LOG_SYS_ERROR(err, "Failed to set thread priority to %d", priority);
+    //   }
+    // }
+
+    std::unique_lock<std::mutex> lock(m_);
+
+    // (see) out of wait() when running_ is false? means when stop() is called
+    // runs one work if there is and ends dispatch thread.
+    //
+    // (see) use of bind
+    //
+    // the original code:
+    //
+    // bool ThreadedDispatcher::hasMoreWorkOrWasStopRequested()
+    // {
+    //     return !q.empty() || !running;
+    // }
+    //
+    // cv.wait(lock, bind(&This::hasMoreWorkOrWasStopRequested, this));
+
+    while (running_)
+    {
+      cv_.wait(lock, [&]{ return !q_.empty() || !running_;});
+      if (!q_.empty())
+      {
+        auto work = next_();
+
+        // (see) do not block adding work, post(), while running work.
+        lock.unlock();
+        work();
+        lock.lock();
+      }
+    }
+  }
+
+} // namespace
+
+
+namespace cxx_pattern_dispatcher
+{
+  void assign1(int &what, int value)
+  {
+    // std::cout << "assign1 is called, what: " << what << std::endl;
+    what += value;
+  }
+} // namespace
+
+TEST(PatternDispatcher, checkPostedWorkDone)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  // do one work and uses stop()
+  {
+    int value{};
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    td->post(std::bind(assign1, std::ref(value), 10));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+    EXPECT_THAT(value, 10);
+  }
+
+  // do more work and uses stop()
+  {
+    int value{};
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    td->post(std::bind(assign1, std::ref(value), 10));
+    td->post(std::bind(assign1, std::ref(value), 10));
+    td->post(std::bind(assign1, std::ref(value), 10));
+    td->post(std::bind(assign1, std::ref(value), 10));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+    EXPECT_THAT(value, 40);
+  }
+}
+
+TEST(PatternDispatcher, checkFlush)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  // do one work and uses flush()
+  {
+    int value{};
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    td->post(std::bind(assign1, std::ref(value), 10));
+    td->flush();
+
+    // since flush() used and no need to sleep
+    // std::this_thread::sleep_for(chrono::seconds(2));
+
+    EXPECT_THAT(value, 10);
+  }
+}
+
+namespace cxx_pattern_dispatcher
+{
+  void check_thread_id(std::thread::id id)
+  {
+    EXPECT_NE(std::this_thread::get_id(), id);
+  }
+} // namespace
+
+TEST(PatternDispatcher, checkPostedWorkDoneOnDispatcher)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  // expect that gtest thread is different from dispatcher thread
+  {
+    int value{};
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    td->post(std::bind(check_thread_id, std::this_thread::get_id()));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+  }
+}
+
+namespace cxx_pattern_dispatcher
+{
+  void save_sequence(int &value)
+  {
+    static int sequence{0};
+    value = ++sequence;
+  }
+} // namespace
+
+TEST(PatternDispatcher, checkPostedWorkDoneInOrder)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  // expect that gtest thread is different from dispatcher thread
+  {
+    int first{};
+    int second{};
+    int third{};
+
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    td->post(std::bind(save_sequence, std::ref(first)));
+    td->post(std::bind(save_sequence, std::ref(second)));
+    td->post(std::bind(save_sequence, std::ref(third)));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+
+    EXPECT_THAT(first, 1);
+    EXPECT_THAT(second, 2);
+    EXPECT_THAT(third, 3);
+  }
+}
 
 // ={=========================================================================
 

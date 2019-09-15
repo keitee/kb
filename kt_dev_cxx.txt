@@ -294,7 +294,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-ccon-call-once
 *kt_dev_cxx_0000* cxx-ccon-lock-shared-lock cxx-boost-shared-lock
 *kt_dev_cxx_0000* cxx-ccon-lock-recursive-lock
-*kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-condition-variable cxx-queue
 *kt_dev_cxx_0000* cxx-wait cxx-sleep
 *kt_dev_cxx_0000* cxx-ccon-task-model cxx-future cxx-async
 *kt_dev_cxx_0000* cxx-ccon-promise
@@ -62483,6 +62483,8 @@ o std::unique_lock is typically larger and has a slight performance penalty so
 
 namespace cxx_ccon
 {
+  // bits/std_mutex.h
+
   /// unique_lock
   template<typename _Mutex>
     class unique_lock
@@ -62500,6 +62502,12 @@ namespace cxx_ccon
         {
           lock();
           _M_owns = true;
+        }
+
+        ~unique_lock()
+        {
+          if (_M_owns)
+            unlock();
         }
     }
 }
@@ -62521,7 +62529,7 @@ class X
       std::lock( lhs.m, rhs.m );
 
       // std::adopt_lock to indicate to std::lock_guard objects that the
-      // mutexes are 'already' locked.
+      // mutexes are `already` locked.
 
       std::lock_guard<std::mutex> lock_a(lhs.m, `std::adopt_lock` );
       std::lock_guard<std::mutex> lock_b(rhs.m, `std::adopt_lock` );
@@ -62899,7 +62907,7 @@ corresponding unlock() call is called:
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-queue
+*kt_dev_cxx_0000* cxx-ccon-condition-variable cxx-condition-variable cxx-queue
 
 4.1.1 Waiting for a condition with condition variables
 
@@ -63007,6 +63015,7 @@ still locked if the condition has been satisfied. If the condition hasn't been
 satisfied, the thread unlocks the mutex and resumes waiting. 
 
 <ex>
+where uses condition-variable to use as many as there are
 
   void ThreadedDispatcher::_do_work(std::string const &name, int priority)
   {
@@ -63107,6 +63116,27 @@ so this is unnecessary:
 
   while (queue_.empty())
     cond_.wait(lock, [&]{return !queue_.empty();});
+
+
+https://en.cppreference.com/w/cpp/thread/condition_variable/wait
+
+void wait( std::unique_lock<std::mutex>& lock ); (1) (since C++11)
+
+template< class Predicate > 
+  void wait( std::unique_lock<std::mutex>& lock, Predicate pred ); (2) (since C++11)
+
+2) Equivalent to
+
+while (!pred()) {
+    wait(lock);
+}
+
+This overload may be used to ignore spurious awakenings while waiting for a
+specific condition to become true.
+
+Note that lock must be acquired before entering this method, and it is
+reacquired after wait(lock) exits, which means that lock can be used to guard
+access to pred().
 
 
 <cxx-condition-variable-wait> <cxx-cv-status>
