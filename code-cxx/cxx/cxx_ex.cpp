@@ -836,7 +836,6 @@ TEST(PatternDispatcher, checkPostedWorkDoneInOrder)
 {
   using namespace cxx_pattern_dispatcher;
 
-  // expect that gtest thread is different from dispatcher thread
   {
     int first{};
     int second{};
@@ -854,6 +853,119 @@ TEST(PatternDispatcher, checkPostedWorkDoneInOrder)
     EXPECT_THAT(third, 3);
   }
 }
+
+TEST(PatternDispatcher, checkStopDoNotCauseDeadlock)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    int first{};
+    int second{};
+
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    td->post(std::bind(save_sequence, std::ref(first)));
+    td->post(std::bind(save_sequence, std::ref(second)));
+    td->stop();
+  }
+}
+
+namespace cxx_pattern_dispatcher
+{
+  void increments(int &value)
+  {
+    ++value;
+    std::this_thread::sleep_for(chrono::milliseconds(10));
+  }
+} // namespace
+
+TEST(PatternDispatcher, checkDoLotsOfWorks)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    int value{};
+    const int count{100000};
+
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+
+    for (int i = 0; i < count; ++i)
+    {
+      td->post(std::bind(increments, std::ref(value)));
+    }
+
+    td->flush();
+
+    EXPECT_THAT(value, count);
+  }
+}
+
+namespace cxx_pattern_dispatcher
+{
+  void notify_condition(std::mutex &m, std::condition_variable &cv)
+  {
+    std::unique_lock<std::mutex> lock(m);
+    cv.notify_one();
+  }
+}
+
+TEST(PatternDispatcher, checkDoWithinTimeout)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    int value{};
+    const int count{100000};
+
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+
+    std::mutex m;
+    std::condition_variable cv;
+    std::unique_lock<std::mutex> lock(m);
+
+    td->post(std::bind(notify_condition, std::ref(m), std::ref(cv)));
+
+    // check if codition is set within timeout
+    EXPECT_THAT(
+        cv.wait_for(lock, std::chrono::seconds(5)), 
+        std::cv_status::no_timeout);
+
+    td->flush();
+  }
+}
+
+namespace
+{
+  void sleepy_increments(int &value)
+  {
+    ++value;
+    std::this_thread::sleep_for(chrono::milliseconds(10));
+  }
+} // namesapce
+
+
+// Hang sometines???
+
+TEST(PatternDispatcher, checkSync)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  {
+    int value{0};
+    const int count{100000};
+    auto td = std::make_shared<ThreadedDispatcher>();
+
+    for (int i = 0; i < count; ++i)
+    {
+      td->post(std::bind(sleepy_increments, std::ref(value)));
+    }
+
+    // td->flush();
+    td->sync();
+
+    EXPECT_THAT(value, count);
+  }
+}
+
 
 // ={=========================================================================
 
