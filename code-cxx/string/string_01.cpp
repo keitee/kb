@@ -71,7 +71,7 @@ TEST(String, Ctors)
 }
 
 
-TEST(String, Const)
+TEST(String, CtorsConst)
 {
   {
     // /** *cxx-cstring*
@@ -368,6 +368,16 @@ TEST(StringOperation, AssignSwap)
 }
 
 // cxx-string-compare
+//
+// Return value
+// negative value if *this appears before the character sequence specified by
+// the arguments, in lexicographical order
+//
+// zero if both character sequences compare equivalent
+//
+// positive value if *this appears after the character sequence specified by the
+// arguments, in lexicographical order
+
 TEST(StringOperation, Compare)
 {
   std::string coll1{"string compare"};
