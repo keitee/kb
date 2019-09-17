@@ -783,6 +783,36 @@ TEST(PatternDispatcher, checkPostedWorkDone)
   }
 }
 
+namespace cxx_pattern_dispatcher
+{
+  class Work
+  {
+    public:
+      Work() : name_("work") {}
+
+      void assign()
+      { std::cout << "Work::assign is called" << std::endl; }
+
+    private:
+      std::string name_;
+  };
+} // namespace
+
+TEST(PatternDispatcher, checkPostedMemberFunctionWorkDone)
+{
+  using namespace cxx_pattern_dispatcher;
+
+  // do one work and uses stop() from dtor
+  {
+    Work work;
+
+    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    td->post(std::bind(&Work::assign, &work));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+  }
+}
+
 TEST(PatternDispatcher, checkFlush)
 {
   using namespace cxx_pattern_dispatcher;

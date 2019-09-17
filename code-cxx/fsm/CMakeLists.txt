@@ -86,13 +86,13 @@ target_link_libraries(${PROJECT_NAME}_ex gmock_main)
 
 find_package(Qt5Core)
 find_package(Qt5Test)
-add_executable(${PROJECT_NAME}_qt fsm_qt.cpp qfsm_qt.cpp)
+add_executable(${PROJECT_NAME}_qt qfsm_qt_use.cpp qfsm_qt.cpp)
 target_link_libraries(${PROJECT_NAME}_qt gmock_main Qt5::Core Qt5::Test)
 
 
 # fsm qt but no qt
 
-add_executable(${PROJECT_NAME}_nqt fsm_nqt.cpp qfsm.cpp)
+add_executable(${PROJECT_NAME}_no_qt qfsm_use.cpp qfsm.cpp)
 target_link_libraries(${PROJECT_NAME}_nqt gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
