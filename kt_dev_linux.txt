@@ -41843,11 +41843,11 @@ The setenv() function adds the variable name to the environment with the value
 
 
 ={============================================================================
-*kt_linux_core_004* linux-error-errno linux-errno
+*kt_linux_core_004* os-errno
 
 LPI-3.4 Handling Errors from System Calls and Library Functions
 
-{system-call-on-error}
+{system-call-error}
 A few system calls never fail. For example, getpid() always successfully
 returns the ID of a process, and _exit() always terminates a process. It is
 not necessary to check the return values from such system calls.
@@ -41881,20 +41881,20 @@ if (cnt == -1) {
 First check if the function return value indicates an error, and `only then`
 examine errno to determine the cause of the error.
 
-because `successful` system calls and library functions never reset errno to
+because `successful` system calls and library functions `never reset errno` to
 0, so this variable may have a nonzero value as a consequence of an error from
 a previous call. Furthermore, SUSv3 permits a successful function call to set
 errno to a nonzero value (although few functions do this).
 
 
-<exceptions>
+<errno-exceptions>
 A few system calls (e.g., getpriority()) can legitimately return -1 on
 success. To determine whether an error occurs in such calls, we set errno to 0
 before the call, and then check it afterward. If the call returns -1 and errno
 is nonzero, an error occurred.
 
 
-<linux-errno-call-perror>
+<syscall-perror> syscall-strerror
 The perror() function prints the string pointed to by its msg argument,
 `followed by` a message corresponding to the current value of errno.
 
@@ -41913,25 +41913,25 @@ The various library functions return different data types and different values
 to indicate failure. For our purposes, library functions can be divided into
 the following `categories`:
 
-1. Some library functions return error information in exactly the same way as
-system calls: a -1 return value, with errno indicating the specific error. 
+o Some library functions return error information in exactly the same way as
+  system calls: a -1 return value, with errno indicating the specific error. 
 
   An example of such a function is remove(), which removes a file (using the
       unlink() system call) or a directory (using the rmdir() system call).
   Errors from these functions can be diagnosed in the same way as errors from
   system calls.
 
-2. Some library functions return a value 'other' than -1 on error, but
-nevertheless set errno to indicate the specific error condition. 
+o Some library functions return a value `other than -1 on error`, but
+  nevertheless set errno to indicate the specific error condition. 
 
   For example, fopen() returns a NULL pointer on error, and the setting of
   errno depends on which underlying system call failed. The perror() and
   strerror() functions can be used to diagnose these errors.
 
-3. Other library functions don't use errno at all. The method for determining
-the existence and cause of errors depends on the particular function and is
-documented in the function's manual page. For these functions, it is a mistake
-to use errno, perror(), or strerror() to diagnose errors.
+o Other library functions don't use errno at all. The method for determining
+  the existence and cause of errors depends on the particular function and is
+  documented in the function's manual page. For these functions, it is a
+  mistake to use errno, perror(), or strerror() to diagnose errors.
 
 
 {os-errno-values}
@@ -41951,7 +41951,7 @@ $ cat /usr/include/linux/errno.h
 #define ENAMETOOLONG    36      /* File name too long */
 ...
 
-// <linux>/include/asm-generic/errno-base.h
+// $linux$/include/asm-generic/errno-base.h
 
 #ifndef _ASM_GENERIC_ERRNO_BASE_H
 #define _ASM_GENERIC_ERRNO_BASE_H
@@ -42123,56 +42123,17 @@ $ cat /usr/include/linux/errno.h
 
 
 ={============================================================================
-*kt_linux_core_005* linux-error-handling-code thread-errno
+*kt_linux_core_005* os-errno-thread thread-errno
 
-LPI. 3.5.2 Common Functions and Header Files
+LPI-3.5.2 Common Functions and Header Files
 
-void errMsg(const char *format, ...);
-
-  Prints a message on standard error. Its argument list is the same as for
-    printf(), except that a terminating newline character is automatically
-    appended to the output string. The errMsg() function prints the error text
-    corresponding to the current value of errno-this consists of the error
-    name, such as EPERM, plus the error description as returned by
-    strerror()-followed by the formatted output specified in the argument
-    list.
-
-void errExit(const char *format, ...);
-
-  Operates like errMsg(), but also terminates the program, either by calling
-    exit() or, if the environment variable EF_DUMPCORE is defined with a
-    nonempty string value, `by calling abort() to produce a core dump file`
-
-void err_exit(const char *format, ...);
-
-This is similar to errExit(), but differs in two respects:
-
-  It doesn't flush standard output before printing the error message.
-
-  It terminates the process by calling _exit() instead of exit(). This causes
-  the process to terminate without flushing stdio buffers or invoking exit
-  handlers.
-
-The details of these differences in the operation of err_exit() will become
-clearer where we describe the differences between _exit() and exit(), and
-consider the treatment of stdio buffers and exit handlers in a child created
-by fork(). 
-
-For now, we simply note that err_exit() is especially useful if we write a
-library function that creates a child process that needs to terminate because
-of an error. This termination should occur without flushing the child's copy
-of the parent's (i.e., the calling process's) stdio buffers and without
-invoking exit handlers established by the parent.
-
-
-<thread-errno>
+<os-errno-thread>
 The errno is a global integer variable. However, this doesn't suffice for
 threaded programs. If a thread made a call that returned an error in a
 `global-errno` variable, then this would confuse other threads that might also
 be making calls and checking errno. In other words, race conditions would
 result.
 
-<how>
 Each thread has its own errno value. On Linux, a `thread-specific-errno` is
 achieved in a similar manner to most other UNIX: errno is defined as a macro
 that `expands into a function call` returning a modifiable lvalue that is
@@ -42183,22 +42144,12 @@ programs.
 To summarize, the errno mechanism has been adapted for threads in a manner
 that leaves error reporting unchanged from the traditional UNIX API.
 
-note: 
 After all, errno macro returns a per-thread errno. A program is required to
 declare errno by including <errno.h>, which enables the implementation of a
 per-thread errno.
 
-void errExitEN(int errnum, const char *format, ...);
 
-is the same as errExit(), except that instead of printing the error text
-  corresponding to the current value of errno, it prints the text
-  corresponding to the error number (thus, the EN suffix) given in the
-  argument errnum.
-
-Mainly, we use errExitEN() in programs that employ the POSIX threads API.
-
-Since:
-
+<ex>
 The traditional method of returning status from system calls and some library
 functions is to `return 0 on success and -1 on error`, with errno being set to
 indicate the error. The functions in the `pthreads API do things differently`
@@ -42214,8 +42165,10 @@ if (errno != 0)
    errExit("pthread_create");
 
 This approach is `inefficient` because errno is defined in threaded programs
-  as a macro. Under the POSIX threads API, errno is redefined to be a function
-  that returns a `pointer to a thread-specific storage area` 
+as a macro. Under the POSIX threads API, errno is redefined to be a function
+that returns a `pointer to a thread-specific storage area` 
+
+void errExitEN(int errnum, const char *format, ...);
 
 errExitEN() function allows us to write a more efficient equivalent of the
 above code because each reference to errno in a threaded program carries the
@@ -42227,261 +42180,7 @@ s = pthread_create(&thread, NULL, func, &arg);
 if (s != 0)
    errExitEN(s, "pthread_create");
 
-
-<code>
-<lib/error_functions.h>
-
-/*************************************************************************\
-*                  Copyright (C) Michael Kerrisk, 2014.                   *
-*                                                                         *
-* This program is free software. You may use, modify, and redistribute it *
-* under the terms of the GNU Lesser General Public License as published   *
-* by the Free Software Foundation, either version 3 or (at your option)   *
-* any later version. This program is distributed without any warranty.    *
-* See the files COPYING.lgpl-v3 and COPYING.gpl-v3 for details.           *
-\*************************************************************************/
-
-/* Listing 3-2 */
-
-/* error_functions.h
-
-   Header file for error_functions.c.
-*/
-#ifndef ERROR_FUNCTIONS_H
-#define ERROR_FUNCTIONS_H
-
-/* Error diagnostic routines */
-
-void errMsg(const char *format, ...);
-
-#ifdef __GNUC__
-
-    /* This macro stops 'gcc -Wall' complaining that "control reaches
-       end of non-void function" if we use the following functions to
-       terminate main() or some other non-void function. */
-
-#define NORETURN __attribute__ ((__noreturn__))
-#else
-#define NORETURN
-#endif
-
-void errExit(const char *format, ...) NORETURN ;
-
-void err_exit(const char *format, ...) NORETURN ;
-
-void errExitEN(int errnum, const char *format, ...) NORETURN ;
-
-void fatal(const char *format, ...) NORETURN ;
-
-void usageErr(const char *format, ...) NORETURN ;
-
-void cmdLineErr(const char *format, ...) NORETURN ;
-
-#endif
-
-<lib/error_functions.c>
-
-/*************************************************************************\
-*                  Copyright (C) Michael Kerrisk, 2014.                   *
-*                                                                         *
-* This program is free software. You may use, modify, and redistribute it *
-* under the terms of the GNU Lesser General Public License as published   *
-* by the Free Software Foundation, either version 3 or (at your option)   *
-* any later version. This program is distributed without any warranty.    *
-* See the files COPYING.lgpl-v3 and COPYING.gpl-v3 for details.           *
-\*************************************************************************/
-
-/* Listing 3-3 */
-
-/* error_functions.c
-
-   Some standard error handling routines used by various programs.
-*/
-#include <stdarg.h>
-#include "error_functions.h"
-#include "tlpi_hdr.h"
-#include "ename.c.inc"          /* Defines ename and MAX_ENAME */
-
-#ifdef __GNUC__                 /* Prevent 'gcc -Wall' complaining  */
-__attribute__ ((__noreturn__))  /* if we call this function as last */
-#endif                          /* statement in a non-void function */
-static void
-terminate(Boolean useExit3)
-{
-    char *s;
-
-    /* Dump core if EF_DUMPCORE environment variable is defined and
-       is a nonempty string; otherwise call exit(3) or _exit(2),
-       depending on the value of 'useExit3'. */
-
-    s = getenv("EF_DUMPCORE");
-
-    if (s != NULL && *s != '\0')
-        abort();
-    else if (useExit3)
-        exit(EXIT_FAILURE);
-    else
-        _exit(EXIT_FAILURE);
-}
-
-/* Diagnose 'errno' error by:
-
-      * outputting a string containing the error name (if available
-        in 'ename' array) corresponding to the value in 'err', along
-        with the corresponding error message from strerror(), and
-
-      * outputting the caller-supplied error message specified in
-        'format' and 'ap'. */
-
-static void
-outputError(Boolean useErr, int err, Boolean flushStdout,
-        const char *format, va_list ap)
-{
-#define BUF_SIZE 500
-    char buf[BUF_SIZE], userMsg[BUF_SIZE], errText[BUF_SIZE];
-
-    vsnprintf(userMsg, BUF_SIZE, format, ap);
-
-    if (useErr)
-        snprintf(errText, BUF_SIZE, " [%s %s]",
-                (err > 0 && err <= MAX_ENAME) ?
-                ename[err] : "?UNKNOWN?", strerror(err));
-    else
-        snprintf(errText, BUF_SIZE, ":");
-
-    snprintf(buf, BUF_SIZE, "ERROR%s %s\n", errText, userMsg);
-
-    if (flushStdout)
-        fflush(stdout);       /* Flush any pending stdout */
-    fputs(buf, stderr);
-    fflush(stderr);           /* In case stderr is not line-buffered */
-}
-
-/* Display error message including 'errno' diagnostic, and
-   return to caller */
-
-void
-errMsg(const char *format, ...)
-{
-    va_list argList;
-    int savedErrno;
-
-    savedErrno = errno;       /* In case we change it here */
-
-    va_start(argList, format);
-    outputError(TRUE, errno, TRUE, format, argList);
-    va_end(argList);
-
-    errno = savedErrno;
-}
-
-/* Display error message including 'errno' diagnostic, and
-   terminate the process */
-
-void
-errExit(const char *format, ...)
-{
-    va_list argList;
-
-    va_start(argList, format);
-    outputError(TRUE, errno, TRUE, format, argList);
-    va_end(argList);
-
-    terminate(TRUE);
-}
-
-/* Display error message including 'errno' diagnostic, and
-   terminate the process by calling _exit().
-
-   The relationship between this function and errExit() is analogous
-   to that between _exit(2) and exit(3): unlike errExit(), this
-   function does not flush stdout and calls _exit(2) to terminate the
-   process (rather than exit(3), which would cause exit handlers to be
-   invoked).
-
-   These differences make this function especially useful in a library
-   function that creates a child process that must then terminate
-   because of an error: the child must terminate without flushing
-   stdio buffers that were partially filled by the caller and without
-   invoking exit handlers that were established by the caller. */
-
-void
-err_exit(const char *format, ...)
-{
-    va_list argList;
-
-    va_start(argList, format);
-    outputError(TRUE, errno, FALSE, format, argList);
-    va_end(argList);
-
-    terminate(FALSE);
-}
-
-/* The following function does the same as errExit(), but expects
-   the error number in 'errnum' */
-
-void
-errExitEN(int errnum, const char *format, ...)
-{
-    va_list argList;
-
-    va_start(argList, format);
-    outputError(TRUE, errnum, TRUE, format, argList);
-    va_end(argList);
-
-    terminate(TRUE);
-}
-
-/* Print an error message (without an 'errno' diagnostic) */
-
-void
-fatal(const char *format, ...)
-{
-    va_list argList;
-
-    va_start(argList, format);
-    outputError(FALSE, 0, TRUE, format, argList);
-    va_end(argList);
-
-    terminate(TRUE);
-}
-
-/* Print a command usage error message and terminate the process */
-
-void
-usageErr(const char *format, ...)
-{
-    va_list argList;
-
-    fflush(stdout);           /* Flush any pending stdout */
-
-    fprintf(stderr, "Usage: ");
-    va_start(argList, format);
-    vfprintf(stderr, format, argList);
-    va_end(argList);
-
-    fflush(stderr);           /* In case stderr is not line-buffered */
-    exit(EXIT_FAILURE);
-}
-
-/* Diagnose an error in command-line arguments and
-   terminate the process */
-
-void
-cmdLineErr(const char *format, ...)
-{
-    va_list argList;
-
-    fflush(stdout);           /* Flush any pending stdout */
-
-    fprintf(stderr, "Command-line usage error: ");
-    va_start(argList, format);
-    vfprintf(stderr, format, argList);
-    va_end(argList);
-
-    fflush(stderr);           /* In case stderr is not line-buffered */
-    exit(EXIT_FAILURE);
-}
+Mainly, we use errExitEN() in programs that employ the POSIX threads API.
 
 
 ={============================================================================
