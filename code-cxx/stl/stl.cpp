@@ -3536,7 +3536,7 @@ TEST(AlgoSearch, AlgoUpperLowerBound)
 
 
 // ={=========================================================================
-// cxx-algo-find-if
+// cxx-find-if
 
 namespace algo_find
 {

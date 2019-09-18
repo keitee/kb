@@ -42,19 +42,19 @@ void StateMachine::logTransition(int oldState, int newState) const
   std::ostringstream message{};
 
   if (oldState == newState) {
-    message << "[" << objectName() << "] re-entering state "
+    message << "[" << objectName() << "] re-entering -> "
       << m_states.at(newState).name << "(" << newState << ")";
 
   } else if (oldState == -1) {
 
-    message << "[" << objectName() << "] moving to state "
+    message << "[" << objectName() << "] -> "
       << m_states.at(newState).name << "(" << newState << ")";
 
   } else {
 
-    message << "[" << objectName() << "] moving from state "
+    message << "[" << objectName() << "] "
       << m_states.at(oldState).name << "(" << oldState << ")"
-      << " to "
+      << " -> "
       << m_states.at(newState).name << "(" << newState << ")";
   }
 

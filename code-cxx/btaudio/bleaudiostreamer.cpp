@@ -24,6 +24,9 @@ namespace
       default: return std::string("unknown message"); break;
     }
   }
+
+  // ref: https://www.bluetooth.org/en-us/specification/assigned-numbers/service-discovery
+  const std::string AUDIO_SOURCE_UUID{"0000110a"};
 } // namespace
 
 
@@ -115,7 +118,11 @@ void BleAudioStreamer::doWork_(std::string const &name)
         if (message.property_ == "Connected")
         {
           if (message.value_ == "true")
+          {
+            device_path_ = message.path_;
+
             fsm_.postEvent(DeviceConnectedEvent);
+          }
           else if (message.value_ == "false")
             fsm_.postEvent(DeviceDisconnectedEvent);
           else
@@ -287,13 +294,59 @@ std::string BleAudioStreamer::stringEvent_(FsmEvent event)
   }
 }
 
+
 void BleAudioStreamer::entered_(int state)
 {
   LOG_MSG("fsm entered: %s", stringState_((FsmState)state).c_str());
+
+  switch(state)
+  {
+    case DeviceOnState:
+      eafDeviceOnState_();
+      break;
+
+    case DeviceOffState:
+      eafDeviceOffState_();
+      break;
+  }
 }
+
+
+/* check if device to connect has audio source by checking through UUIDs
+ */
+
+bool BleAudioStreamer::checkHasAudioSource_(std::string const *path)
+{
+  // TODO: device proxy
+  if (device_proxy_)
+  {
+    std::vector<std::string> uuids;
+    if (device_proxy_->getUUIDs(path, uuids))
+    {
+      auto it = std::find_if(uuids.cbegin(), uuids.cend(),
+          [](std::string const &uuid)
+          {
+            return (uuid.substr(0, 8) == AUDIO_SOURCE_UUID) ? true : false;
+          });
+      return (it == uuilds.cend()) ? false : true;
+    }
+  }
+
+  return false;
+}
+
+/* eafs
+*/
 
 void BleAudioStreamer::exited_(int state)
 {
   LOG_MSG("fsm exited: %s", stringState_((FsmState)state).c_str());
 }
 
+void BleAudioStreamer::eafDeviceOnState_()
+{
+  if (checkHasAudioSource_(device_path_))
+  {
+    // start disconnection timer
+  }
+}

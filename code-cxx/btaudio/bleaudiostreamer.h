@@ -110,14 +110,13 @@ class BleAudioStreamer
     void doWork_(std::string const &name);
 
     StateMachine fsm_;
-
     void setupStateMachine_();
-
     std::string stringEvent_(FsmEvent);
     std::string stringState_(FsmState);
-
     void entered_(int state);
     void exited_(int state);
+
+    std::string device_path_;
 };
 
 #endif // BLEAUDIOSTREAMER_H
