@@ -347,6 +347,16 @@ void BleAudioStreamer::eafDeviceOnState_()
 {
   if (checkHasAudioSource_(device_path_))
   {
-    // start disconnection timer
+    // TODO: start disconnection timer
   }
+}
+
+void BleAudioStreamer::eafDeviceOffState_()
+{
+  if (disconnection_timer_)
+  {
+    // TODO: stop disconnection timer
+  }
+
+  device_path_.clear();
 }
