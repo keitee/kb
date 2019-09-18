@@ -4,55 +4,23 @@
 
 #include <iostream>
 #include <functional>
+
+#include "slog.h"
 #include "bleaudiostreamer.h"
 
 namespace
 {
-  class Message
+  std::string stringMessage(int message)
   {
-    public:
-
-      // explicit Message(MessageType type, std::string const &path) 
-      //   : type_(type), path_(path), property_()
-      // {}
-
-      // explicit Message(MessageType type, std::string const &path) 
-      //   : type_(type), path_(path), property_()
-      // {}
-
-      explicit Message(MessageType type, std::string const &path, std::string const &property) 
-        : type_(type), path_(path), property_(property)
-      {}
-
-      enum MessageType 
-      {
-        DeviceConnectedMsg,
-        TransportAddedMsg,
-        TransportRemovedMsg,
-        TransportPropertyChangeMsg,
-        PlayerAddedMsg,
-        PlayerRemovedMsg,
-        PlayerPropertyChangeMsg,
-        DevicePropertyChangeMsg
-      };
-
-    private:
-      MessageType type_;
-      std::string path_{};
-      std::string property_{};
-  };
-
-  std::string stringMessage(MessageType message)
-  {
-    switch(state)
+    switch(message)
     {
-      case DeviceConnectedMsg:          return std::string("DeviceConnectedMsg"); break;
-      case TransportAddedMsg:           return std::string("TransportAddedMsg"); break;
-      case TransportRemovedMsg:         return std::string("TransportRemovedMsg"); break;
-      case TransportPropertyChangeMsg:  return std::string("TransportPropertyChangeMsg"); break;
-      case PlayerAddedMsg:              return std::string("PlayerAddedMsg"); break;
-      case PlayerRemovedMsg:            return std::string("PlayerRemovedMsg"); break;
-      case PlayerPropertyChangeMsg:     return std::string("PlayerPropertyChangeMsg"); break;
+      case Message::DeviceConnectedMsg:          return std::string("DeviceConnectedMsg"); break;
+      case Message::TransportAddedMsg:           return std::string("TransportAddedMsg"); break;
+      case Message::TransportRemovedMsg:         return std::string("TransportRemovedMsg"); break;
+      case Message::TransportPropertyChangeMsg:  return std::string("TransportPropertyChangeMsg"); break;
+      case Message::PlayerAddedMsg:              return std::string("PlayerAddedMsg"); break;
+      case Message::PlayerRemovedMsg:            return std::string("PlayerRemovedMsg"); break;
+      case Message::PlayerPropertyChangeMsg:     return std::string("PlayerPropertyChangeMsg"); break;
       default: return std::string("unknown message"); break;
     }
   }
@@ -66,7 +34,7 @@ BleAudioStreamer::BleAudioStreamer(std::string const &name)
   : running_(true)
   , t_(std::thread(&BleAudioStreamer::doWork_, this, name))
 {
-  std::cout << "BleAudioStreamer ctor" << std::endl;
+  LOG_MSG("BleAudioStreamer ctor");
 
   setupStateMachine_();
 }
@@ -75,54 +43,57 @@ void BleAudioStreamer::postMessage(int message)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(message);
+  q_.push(Message(message));
 }
 
-void onTransportAdded(std::string const &path)
+void BleAudioStreamer::onTransportAdded(std::string const &path)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(Message(TransportAddedMsg, path));
+  q_.push(Message(Message::TransportAddedMsg, path));
 }
 
-void onTransportRemoved(std::string const &path)
+void BleAudioStreamer::onTransportRemoved(std::string const &path)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(Message(TransportRemovedMsg, path));
+  q_.push(Message(Message::TransportRemovedMsg, path));
 }
 
-void BleAudioStreamer::onTransportPropertyChange(std::string const &path, std::string const &property)
+void BleAudioStreamer::onTransportPropertyChange(std::string const &path
+    , std::string const &property, std::string const &value)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(Message(TransportPropertyChangeMsg, path));
+  q_.push(Message(Message::TransportPropertyChangeMsg, path, property, value));
 }
 
 void BleAudioStreamer::onPlayerAdded(std::string const &path)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(Message(PlayerAddedMsg, path));
+  q_.push(Message(Message::PlayerAddedMsg, path));
 }
 void BleAudioStreamer::onPlayerRemoved(std::string const &path)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(Message(PlayerRemovedMsg, path));
+  q_.push(Message(Message::PlayerRemovedMsg, path));
 }
-void BleAudioStreamer::onPlayerPropertyChange(std::string const &path, std::string const &property)
+void BleAudioStreamer::onPlayerPropertyChange(std::string const &path
+    , std::string const &property, std::string const &value)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(Message(PlayerPropertyChangeMsg, path));
+  q_.push(Message(Message::PlayerPropertyChangeMsg, path, property, value));
 }
 
-void BleAudioStreamer::onDevicePropertyChange(std::string const &path, std::string const &property)
+void BleAudioStreamer::onDevicePropertyChange(std::string const &path
+    , std::string const &property, std::string const &value)
 {
   std::lock_guard<std::mutex> lock(m_);
 
-  q_.push(Message(DevicePropertyChangedMsg, path));
+  q_.push(Message(Message::DevicePropertyChangeMsg, path, property, value));
 }
 
 
@@ -135,11 +106,111 @@ void BleAudioStreamer::doWork_(std::string const &name)
 
   while (running_)
   {
-    // std::cout << "wait on q" << std::endl;
     auto message = q_.wait_and_pop();
-    std::cout << "event got is " << stringEvent_((FsmEvent)message) << std::endl;
-    fsm_.postEvent(message);
-  }
+    LOG_MSG("message is %s", stringMessage(message.type_).c_str());
+
+    switch(message.type_)
+    {
+      case Message::DevicePropertyChangeMsg:
+        if (message.property_ == "Connected")
+        {
+          if (message.value_ == "true")
+            fsm_.postEvent(DeviceConnectedEvent);
+          else if (message.value_ == "false")
+            fsm_.postEvent(DeviceDisconnectedEvent);
+          else
+          {
+            LOG_MSG("DevicePropertyChangeMsg got unknown %s property value",
+                message.value_.c_str());
+          }
+        }
+        else
+        {
+          LOG_MSG("DevicePropertyChangeMsg got unknown %s property",
+              message.property_.c_str());
+        }
+
+        break;
+
+      case Message::TransportAddedMsg:
+        fsm_.postEvent(TransportAddedEvent);
+        break;
+
+      case Message::PlayerAddedMsg:
+        fsm_.postEvent(PlayerAddedEvent);
+        break;
+
+      // TODO: use either state = p.getValue().asString() or
+      // proxy->getState() as player Status do?
+      //
+      // have to use PlayerPropertyChangeMsg way since otherwise have to expand
+      // Message to carry metadata/pos update.
+
+      case Message::TransportPropertyChangeMsg:
+        if (message.property_ == "State")
+        {
+          // get property value
+          // std::string state{};
+          // player->getStatue(message.path_, state); 
+          
+          if (message.value_ == "idle")
+            fsm_.postEvent(TransportIdelEvent);
+          else if(message.value_ == "pending")
+            fsm_.postEvent(TransportPendingEvent);
+          else if(message.value_ == "active")
+            fsm_.postEvent(TransportActiveEvent);
+          else
+          {
+            LOG_MSG("TransportPropertyChangeMsg got unknown %s property value", 
+                message.value_.c_str());
+          }
+        }
+        else
+        {
+          LOG_MSG("TransportPropertyChangeMsg got unknown %s property", 
+              message.property_.c_str());
+        }
+
+        break;
+
+      case Message::PlayerPropertyChangeMsg:
+        if (message.property_ == "Track")
+        {
+          // build metadata and notify to AS
+          // have to access proxy
+        }
+        else if(message.property_ == "Position")
+        {
+          // build pos update and notify to AS
+          // have to access proxy
+        }
+        else if(message.property_ == "Status")
+        {
+          // get property value
+          // std::string state{};
+          // player->getStatue(message.path_, state); 
+
+          (message.value_ == "playing" 
+           ? fsm_.postEvent(PlayerPlayingEvent)
+           : fsm_.postEvent(PlayerStoppedEvent));
+        }
+        else
+        {
+          LOG_MSG("PlayerPropertyChangeMsg got unknown %s property", 
+              message.property_.c_str());
+        }
+
+        break;
+
+      case Message::PlayerRemovedMsg:
+        fsm_.postEvent(PlayerRemovedEvent);
+        break;
+
+      case Message::TransportRemovedMsg:
+        fsm_.postEvent(TransportRemovedEvent);
+        break;
+    } // switch
+  } // while
 }
 
 void BleAudioStreamer::setupStateMachine_()
@@ -170,6 +241,9 @@ void BleAudioStreamer::setupStateMachine_()
 
   fsm_.connect(std::bind(&BleAudioStreamer::entered_, this, std::placeholders::_1),
       std::bind(&BleAudioStreamer::exited_, this, std::placeholders::_1));
+
+  fsm_.setTransistionLogLevel(true);
+  fsm_.setObjectName("BleAudioStreamer");
 
   fsm_.setInitialState(DeviceOffState);
   fsm_.start();
@@ -215,12 +289,11 @@ std::string BleAudioStreamer::stringEvent_(FsmEvent event)
 
 void BleAudioStreamer::entered_(int state)
 {
-  std::cout << "fsm entered: " << stringState_((FsmState)state) << std::endl;
+  LOG_MSG("fsm entered: %s", stringState_((FsmState)state).c_str());
 }
 
 void BleAudioStreamer::exited_(int state)
 {
-  std::cout << "fsm exited: " << stringState_((FsmState)state) << std::endl;
+  LOG_MSG("fsm exited: %s", stringState_((FsmState)state).c_str());
 }
-
 

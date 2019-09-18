@@ -2,10 +2,10 @@
 //  statemachine.cpp
 //
 
+#include "slog.h"
 #include "statemachine.h"
 
 
-#define LOG_ERROR printf
 #define G_UNLIKELY(x) __glibc_unlikely(x)
 
 StateMachine::StateMachine() 
@@ -39,7 +39,7 @@ StateMachine::~StateMachine()
 void StateMachine::logTransition(int oldState, int newState) const
 {
   // create the logging message
-  std::ostringstream message;
+  std::ostringstream message{};
 
   if (oldState == newState) {
     message << "[" << objectName() << "] re-entering state "
@@ -59,7 +59,7 @@ void StateMachine::logTransition(int oldState, int newState) const
   }
 
   if (m_transitionLogLevel) {
-    std::cout << message.str() << std::endl;
+    LOG_MSG("%s", message.str().c_str());
   }
 }
 
@@ -145,7 +145,7 @@ void StateMachine::moveToState(int newState)
 
       // sanity check we have an initial state
       if (G_UNLIKELY(it->second.initialState == -1)) {
-        LOG_ERROR("try to move to super state %s(%d) but no initial state set",
+        LOG_ERR("try to move to super state %s(%d) but no initial state set",
             it->second.name.c_str(), newState);
         return;
       }
@@ -249,7 +249,7 @@ int StateMachine::shouldMoveState(int event) const
     // find the current state and sanity check it is in the map
     auto it = m_states.find(state);
     if (G_UNLIKELY(it == m_states.end())) {
-      LOG_ERROR("invalid state %d (this shouldn't happen)", state);
+      LOG_ERR("invalid state %d (this shouldn't happen)", state);
       return -1;
     }
 
@@ -343,19 +343,19 @@ bool StateMachine::addState(int parentState, int state, std::string const &name)
 {
   // can't add states while running (really - we're single threaded, why not?)
   if (G_UNLIKELY(m_running)) {
-    LOG_ERROR("can't add states while running");
+    LOG_ERR("can't add states while running");
     return false;
   }
 
   // check the state is a positive integer
   if (G_UNLIKELY(state < 0)) {
-    LOG_ERROR("state's must be positive integers");
+    LOG_ERR("state's must be positive integers");
     return false;
   }
 
   // check we don't already have this state
   if (G_UNLIKELY(m_states.end() != m_states.find(state))) {
-    LOG_ERROR("already have state %s(%d), not adding again",
+    LOG_ERR("already have state %s(%d), not adding again",
         m_states[state].name.c_str(), state);
     return false;
   }
@@ -366,7 +366,7 @@ bool StateMachine::addState(int parentState, int state, std::string const &name)
 
     // if a parent was supplied make sure we have that parent state
     if (G_UNLIKELY(parent == m_states.end())) {
-      LOG_ERROR("try to add state %s(%d) with missing parent state %d",
+      LOG_ERR("try to add state %s(%d) with missing parent state %d",
           name.c_str(), state, parentState);
       return false;
     }
@@ -393,34 +393,34 @@ bool StateMachine::addTransition(int fromState, int event, int toState)
 {
   // can't add transitions while running (really - we're single threaded, why not?)
   if (G_UNLIKELY(m_running)) {
-    LOG_ERROR("can't add transitions while running");
+    LOG_ERR("can't add transitions while running");
     return false;
   }
 
   // sanity check the event type
   if (G_UNLIKELY(event < 0)) {
-    LOG_ERROR("event is invalid (%d)", int(event));
+    LOG_ERR("event is invalid (%d)", int(event));
     return false;
   }
 
   // sanity check we have a 'from' state
   auto from = m_states.find(fromState);
   if (G_UNLIKELY(from == m_states.end())) {
-    LOG_ERROR("missing 'fromState' %d", fromState);
+    LOG_ERR("missing 'fromState' %d", fromState);
     return false;
   }
 
   // and we have a 'to' state
   auto to = m_states.find(toState);
   if (G_UNLIKELY(to == m_states.end())) {
-    LOG_ERROR("missing 'toState' %d", toState);
+    LOG_ERR("missing 'toState' %d", toState);
     return false;
   }
 
   // also check if the to state is a super state that it has in initial
   // state set
   if (G_UNLIKELY((to->second.hasChildren == true) && (to->second.initialState == -1))) {
-    LOG_ERROR("'toState' %s(%d) is a super state with no initial state set",
+    LOG_ERR("'toState' %s(%d) is a super state with no initial state set",
         to->second.name.c_str(), toState);
     return false;
   }
@@ -447,13 +447,13 @@ bool StateMachine::setInitialState(int state)
 {
   // can't set initial state while running (really - we're single threaded, why not?)
   if (G_UNLIKELY(m_running)) {
-    LOG_ERROR("can't set initial state while running");
+    LOG_ERR("can't set initial state while running");
     return false;
   }
 
   // sanity check we know about the state
   if (G_UNLIKELY(m_states.find(state) == m_states.end())) {
-    LOG_ERROR("can't set initial state to %d as don't have that state", state);
+    LOG_ERR("can't set initial state to %d as don't have that state", state);
     return false;
   }
 
@@ -477,13 +477,13 @@ bool StateMachine::setFinalState(int state)
 {
   // can't set final state while running (really - we're single threaded, why not?)
   if (G_UNLIKELY(m_running)) {
-    LOG_ERROR("can't set final state while running");
+    LOG_ERR("can't set final state while running");
     return false;
   }
 
   // sanity check we know about the state
   if (G_UNLIKELY(m_states.find(state) == m_states.end())) {
-    LOG_ERROR("can't set final state to %d as don't have that state", state);
+    LOG_ERR("can't set final state to %d as don't have that state", state);
     return false;
   }
 
@@ -501,15 +501,15 @@ bool StateMachine::setFinalState(int state)
 void StateMachine::postEvent(int event)
 {
   if (G_UNLIKELY(!m_running)) {
-    LOG_ERROR("cannot post event when the state machine is not running");
+    LOG_ERR("cannot post event when the state machine is not running");
     return;
   }
 
   if (G_UNLIKELY(event < (-1))) {
 
-    LOG_ERROR("event type must be in valid event range (> -1)");
+    LOG_ERR("event type must be in valid event range (> -1)");
 
-    // LOG_ERROR("event type must be in user event range (%d <= %d <= %d)",
+    // LOG_ERR("event type must be in user event range (%d <= %d <= %d)",
     //     QEvent::User, event, QEvent::MaxUser);
     return;
   }
@@ -529,7 +529,7 @@ void StateMachine::postEvent(int event)
 
       // just for debugging
       if (G_UNLIKELY(m_localEvents.size() > 1024))
-        LOG_ERROR("state machine event queue getting large");
+        LOG_ERR("state machine event queue getting large");
 
       // queue it up
       m_localEvents.push(event);
@@ -570,7 +570,7 @@ int StateMachine::state() const
 bool StateMachine::inState(const int state) const
 {
   if (G_UNLIKELY(!m_running)) {
-    LOG_ERROR("the state machine is not running");
+    LOG_ERR("the state machine is not running");
     return false;
   }
 
@@ -586,7 +586,7 @@ bool StateMachine::inState(const int state) const
     // find the current state and sanity check it is in the map
     auto it = m_states.find(state_);
     if (G_UNLIKELY(it == m_states.end())) {
-      LOG_ERROR("invalid state %d (this shouldn't happen)", state_);
+      LOG_ERR("invalid state %d (this shouldn't happen)", state_);
       return false;
     }
 
@@ -606,7 +606,7 @@ bool StateMachine::inState(const int state) const
 bool StateMachine::inState(std::set<int> const &states) const
 {
   if (G_UNLIKELY(!m_running)) {
-    LOG_ERROR("the state machine is not running");
+    LOG_ERR("the state machine is not running");
     return false;
   }
 
@@ -622,7 +622,7 @@ bool StateMachine::inState(std::set<int> const &states) const
     // find the current state and sanity check it is in the map
     auto it = m_states.find(state_);
     if (G_UNLIKELY(it == m_states.end())) {
-      LOG_ERROR("invalid state %d (this shouldn't happen)", state_);
+      LOG_ERR("invalid state %d (this shouldn't happen)", state_);
       return false;
     }
 
@@ -643,7 +643,7 @@ bool StateMachine::connect(std::function<void(int)> entered, std::function<void(
 {
   if ((entered == nullptr) || (exited == nullptr))
   {
-    LOG_ERROR("state machine is already running");
+    LOG_ERR("state machine is already running");
     return false;
   }
 
@@ -655,12 +655,12 @@ bool StateMachine::connect(std::function<void(int)> entered, std::function<void(
 bool StateMachine::start()
 {
   if (G_UNLIKELY(m_running)) {
-    LOG_ERROR("state machine is already running");
+    LOG_ERR("state machine is already running");
     return false;
   }
 
   if (G_UNLIKELY(m_initialState == -1)) {
-    LOG_ERROR("no initial state set, not starting state machine");
+    LOG_ERR("no initial state set, not starting state machine");
     return false;
   }
 
@@ -678,7 +678,7 @@ bool StateMachine::start()
 void StateMachine::stop()
 {
   if (G_UNLIKELY(!m_running)) {
-    LOG_ERROR("state machine not running");
+    LOG_ERR("state machine not running");
     return;
   }
 

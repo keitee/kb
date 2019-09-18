@@ -66,7 +66,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 add_compile_options("-Wall")
 
-add_executable(${PROJECT_NAME} "log.cpp" "lpi_error.cpp")
+add_executable(${PROJECT_NAME} "log.cpp" "lpi_error.cpp" slog.cpp)
 
 target_link_libraries(${PROJECT_NAME} gmock_main)
 

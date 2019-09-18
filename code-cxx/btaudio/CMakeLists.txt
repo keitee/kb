@@ -65,7 +65,7 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 # directory... 
 # The directories to be added to the list of include directories.
 
-include_directories(SYSTEM ${GMOCK_DIR}/include)
+include_directories(SYSTEM ${GMOCK_DIR}/include ../libs)
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
@@ -73,7 +73,8 @@ add_compile_options("-g")
 
 
 # add_executable(main.cpp${PROJECT_NAME}_simple scli.cpp scli_cmd.cpp)
-add_executable(${PROJECT_NAME} scli.cpp statemachine.cpp bleaudiostreamer.cpp main.cpp)
+# add_executable(${PROJECT_NAME} slog.cpp scli.cpp statemachine.cpp bleaudiostreamer.cpp main.cpp)
+add_executable(${PROJECT_NAME} ../libs/slog.cpp scli.cpp statemachine.cpp bleaudiostreamer.cpp main.cpp)
 target_link_libraries(${PROJECT_NAME} gmock_main)
 
 

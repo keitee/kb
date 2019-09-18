@@ -22,13 +22,17 @@ using namespace testing;
 #include <sys/time.h>
 
 #include "lpi_error.h"
+#include "slog.h"
 
 #define LOG_ENABLE
 
 #ifdef LOG_ENABLE
 
-#define LOG_ERROR(fmt...) errMsg(fmt...)
-#define LOG_EXIT_ERROR(fmt...) errExit(fmt...)
+// #define LOG_ERROR(fmt...) errMsg(fmt...)
+// #define LOG_EXIT_ERROR(fmt...) errExit(fmt...)
+
+#define LOG_ERROR errMsg
+#define LOG_EXIT_ERROR errExit
 
 #else
 
@@ -55,7 +59,22 @@ TEST(Log, useErrorMessage)
 TEST(Log, useErrorExit)
 {
   errMsg("this is error message from errExit");
-  LOG_EXIT_ERROR("this is error message from errExit");
+
+  // since it do exit()
+  // LOG_EXIT_ERROR("this is error message from errExit");
+}
+
+TEST(Log, useSimpleLog)
+{
+  int value{10};
+  std::string message{"errMsg"};
+
+  LOG_MSG("this is error message from %s and value %d", 
+      message.c_str(), value);
+
+  // since it do exit()
+  // LOG_ERR("this is error message from %s and value %d", 
+  //     message.c_str(), value);
 }
 
 

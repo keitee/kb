@@ -1826,6 +1826,7 @@ With sh and csh, -D'name(args...)=definition' works.
 All -imacros file and -include file options are processed after all -D and -U
 options. 
 
+*cpp-defined*
 4.2.3 Defined
 
 The special operator defined is used in '#if' and '#elif' expressions to test
@@ -1915,6 +1916,7 @@ of this macro.
 char *strrchr(const char *s, int c);
 The strrchr() function returns a pointer to the last occurrence of the character c in the string s.
 
+#include <stdio.h>
 #include <string.h>
 #define FILE (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
@@ -2147,7 +2149,7 @@ enum Events
 };
 
 
-<ex> *cxx-op-conditional*
+<cpp-ex> *cxx-op-conditional*
 #define PREFS_API_TERMINAL_HDMI_STATE_2_STRING(x) ((((x) == PREFS_API_TERMINAL_HDMI_STATE_HDMI_OFF) ? "PREFS_API_TERMINAL_HDMI_STATE_HDMI_OFF" :\
 		(((x) == PREFS_API_TERMINAL_HDMI_STATE_HDMI_NOT_AVAILABLE) ? "PREFS_API_TERMINAL_HDMI_STATE_HDMI_NOT_AVAILABLE" :\
 				(((x) == PREFS_API_TERMINAL_HDMI_STATE_HDCP_DISABLED) ? "PREFS_API_TERMINAL_HDMI_STATE_HDCP_DISABLED" :\
@@ -7781,41 +7783,44 @@ variable argument. The eprintf macro above could be written
 
      #define eprintf(args...) fprintf (stderr, args)
 
- 
-<problems>
 
-You can have named arguments as well as variable arguments in a variadic
+<use-named-and-variable-args>
+
+You `can have named arguments as well as variable arguments` in a variadic
 macro. We could define eprintf like this, instead:
 
      #define eprintf(format, ...) fprintf (stderr, format, __VA_ARGS__)
 
 This formulation looks more descriptive, but unfortunately it is `less
-flexible`: you must now supply at `least-one-argument` after the format
-string. In standard C, you cannot omit the comma separating the named argument
-from the variable arguments. 
+flexible`: you must now supply at `least-one-argument` after the format string
+because in standard C, you cannot omit the comma separating the named argument
+`from` the variable arguments, because there will be an extra comma after the
+format string.
+
+*cxx-error* on for GCC 4.6 and 6.x when use:
+
+#define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
+eprintf("success!\n");
+
+cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
+  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
+
+HOW to fix?
+
+TEST(Cpp, VaargMacro)
+{
+  eprintf("success!\n");
+}
 
 
-Furthermore, `if you leave the variable argument empty,` you will get a
-syntax-error, because there will be an extra comma after the format string.
 
-     eprintf("success!\n", );
-          ==> fprintf(stderr, "success!\n", );
-
-// GNU CPP has a pair of extensions which deal with this problem. First, you are
-// allowed to leave the variable argument out entirely:
-// 
-//      eprintf ("success!\n");
-//           ==> fprintf(stderr, "success!\n", );
-
-Second, `the '##' token paste operator` has a special meaning when placed
-between a comma and a variable argument. If you write
+`the '##' token paste operator` has a special meaning when placed between a
+comma and a variable argument. If you write
 
      #define eprintf(format, ...) fprintf (stderr, format, ##__VA_ARGS__)
 
 and the variable argument is left out when the eprintf macro is used, then the
-`comma before the '##' will be deleted.` This does not happen if you pass an
-empty argument, nor does it happen if the token preceding '##' is anything
-other than a comma.
+`comma before the '##' will be deleted.` 
 
      eprintf ("success!\n")
           ==> fprintf(stderr, "success!\n");
@@ -7823,14 +7828,6 @@ other than a comma.
 // no napesapce effect but for visual effect
 namespace cxx_cpp
 {
-
-// No for GCC 4.6 and 6.x
-//
-// #define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
-// cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
-//  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
-//                                                                   ^
-
 #define eprintf(fmt, ...)  fprintf(stdout, fmt, ##__VA_ARGS__)
 } // namespace
 
@@ -7839,7 +7836,7 @@ namespace cxx_cpp
 // success!
 // [       OK ] Cpp.VaargMacro (0 ms)
 
-TEST(Cpp, VaargMacro)
+TEST(Cpp, VariableArgsMacro)
 {
   eprintf("success!\n");
 }
@@ -7867,7 +7864,7 @@ To get the same effect with both this and previous versions of GCC, the token
 preceding the special '##' must be a comma, and there must be white space
 between that comma and whatever comes immediately before it:
 
-     #define eprintf(format, args...) fprintf (stderr, format , ##args)
+  #define eprintf(format, args...) fprintf (stderr, format , ##args)
 
 
 {case}
@@ -11042,7 +11039,7 @@ class T {
   double revenue = 0.0;
 };
 
-The `in-class-init` do like `default-arg` because:
+The `cxx-in-class-init` do like `default-arg` because:
 
 T(const string &s) : bookNo(s) {}
 
@@ -11050,24 +11047,13 @@ is equivalent to:
 
 T(const string &s) : bookNo(s), units_sole(0), revenue(0) {}
 
-Before C++11 then:
+note that `cxx-in-class-init` do like `cxx-default-arg` but not the same:
 
-class T {
-  T(): bookNo(), units_sold(0), revenue(0.0) {}
-  T(const string &s) : bookNo(s) {}
-  ...
-  string bookNo;
-  unsigned units_sold;
-  double revenue;
-};
+T(const string &s, unsigned units = 0, double revenue = 0.0) 
+  : bookNo(s), units_sole(units), revenue(revenue) {}
 
-  *cxx-remember*
-  No semicolon when defines member functions in class definition.
-
-  class T {
-    T(): bookNo(), units_sold(0), revenue(0.0) {}
-    T(const string &s);
-  };
+cxx-default-argument covers all T(s), T(s, units), T(s, units, revenue) but
+cxx-in-class-int do not; only convers one.
 
 
 {cxx-ctor-init-list} 
@@ -53917,7 +53903,8 @@ typedef basic_stringstream<char> stringstream;
 sstream strm(string);   
 strm is an sstream that holds a copy of the string s.
 
-strm.str();             
+std::basic_string<CharT,Traits,Allocator> str() const;
+strm.str();
 return a copy of cxx-string that strm holds. Returns the buffer as a string
 
 strm.str(string);       

@@ -575,56 +575,63 @@ TEST(Tuple, Tie)
 // ={=========================================================================
 // cxx-ctor
 
-// o `If defines any other ctor for the class, the compiler do not generates`
-//   default ctor. So if a class requires control to init an object in one case,
-//   then the class is likely to require control in all cases.
-
-class ConstructionNoDefault
+namespace cxx_ctor
 {
-  public:
-    ConstructionNoDefault(const std::string &name) 
-    {
-      (void)name;
-    }
+  // o `If defines any other ctor for the class, the compiler do not generates`
+  //   default ctor. So if a class requires control to init an object in one case,
+  //   then the class is likely to require control in all cases.
 
-  private:
-    int value_;
-};
+  class ConstructionNoDefault
+  {
+    public:
+      ConstructionNoDefault(const std::string &name) 
+      {
+        (void)name;
+      }
 
-// cause compile error
-// cxx.cpp: In constructor ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
-// cxx.cpp:450:37: error: no matching function for call to ‘ConstructionNoDefault::ConstructionNoDefault()’
-//      ConstructionWitNoCtorInitList() {}
+    private:
+      int value_;
+  };
 
-// class ConstructionWitNoCtorInitList
-// {
-//   public:
-//     ConstructionWitNoCtorInitList() {}
+  // cause compile error
+  // cxx.cpp: In constructor ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
+  // cxx.cpp:450:37: error: no matching function for call to ‘ConstructionNoDefault::ConstructionNoDefault()’
+  //      ConstructionWitNoCtorInitList() {}
 
-//   private:
-//     ConstructionNoDefault member;
-// };
+  // class ConstructionWitNoCtorInitList
+  // {
+  //   public:
+  //     ConstructionWitNoCtorInitList() {}
 
-// TEST(Ctor, CtorInitList)
-// {
-//   ConstructionWitNoCtorInitList cwo;
-// }
+  //   private:
+  //     ConstructionNoDefault member;
+  // };
+
+  // TEST(Ctor, CtorInitList)
+  // {
+  //   ConstructionWitNoCtorInitList cwo;
+  // }
 
 
-// okay
+  // okay since uses ConstructionNoDefault(const std::string &name) ctor
+  class ConstructionWitCtorInitList
+  {
+    public:
+      ConstructionWitCtorInitList()
+        : member("construction with init list") {}
 
-class ConstructionWitCtorInitList
-{
-  public:
-    ConstructionWitCtorInitList()
-      : member("construction with init list") {}
- 
-  private:
-    ConstructionNoDefault member;
-};
+    private:
+      ConstructionNoDefault member;
+  };
+} // namespace
+
+
+// to see that default ctor is necessary
 
 TEST(Ctor, CtorInitList)
 {
+  using namespace cxx_ctor;
+
   ConstructionWitCtorInitList cw;
 }
 
@@ -637,60 +644,34 @@ TEST(Ctor, CtorInitList)
 
 namespace cxx_ctor
 {
+  class foo
+  {
+    public:
 
-class foo
-{
-  public:
-
-    explicit foo(int &value) : value_(value) 
+    explicit foo(int &value) : value_(value)
     {
       cout << "foo(int)" << endl;
     }
 
-    foo(int &value, int) : value_(value) 
+    foo(int &value, int) : value_(value)
     {
       cout << "foo(int, int)" << endl;
     }
 
-  private:
-    int value_;
-};
-
+    private:
+      int value_;
+  };
 } // namespace
 
 
-TEST(Ctor, Unused)
+TEST(CxxCtor, UnusedParameters)
 {
   using namespace cxx_ctor;
 
   int value{10};
 
   // *cxx-error*
-  //
-  // cxx_ex.cpp: In member function ‘virtual void Cxx_Ex_Test::TestBody()’:
-  // cxx_ex.cpp:42:12: error: no matching function for call to ‘foo::foo(int)’
-  //    foo f1(10);
-  //             ^
-  // cxx_ex.cpp:42:12: note: candidates are:
-  // (1)
-  // cxx_ex.cpp:27:5: note: foo::foo(int&, int)
-  //      foo(int &value, int) : value_(value)
-  //      ^
-  // cxx_ex.cpp:27:5: note:   candidate expects 2 arguments, 1 provided
-  // (2)
-  // cxx_ex.cpp:23:14: note: foo::foo(int&)
-  //      explicit foo(int &value) : value_(value)
-  //               ^
-  // cxx_ex.cpp:23:14: note:   no known conversion for argument 1 from ‘int’ to ‘int&’
-  // (3)
-  // cxx_ex.cpp:19:7: note: constexpr foo::foo(const foo&)
-  //  class foo
-  //        ^
-  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘const foo&’
-  // (4)
-  // cxx_ex.cpp:19:7: note: constexpr foo::foo(foo&&)
-  // cxx_ex.cpp:19:7: note:   no known conversion for argument 1 from ‘int’ to ‘foo&&’
-  //
+  // : error: cannot bind non-const lvalue reference of type ‘int&’ to an rvalue of type ‘int’
   // foo f1(10);
 
   foo f1(value);
@@ -8353,7 +8334,7 @@ namespace cxx_cpp
   // The function takes a string of format characters and prints out the
   // argument associated with each format character based on the type.
 
-  void xprint(char *fmt, ...)
+  void xprint(char const *fmt, ...)
   {
     va_list ap;
     int d;
@@ -8409,7 +8390,7 @@ namespace cxx_cpp
 // int 10
 // int 97
 
-TEST(Cpp, Vaarg)
+TEST(Cpp, VariableArgs)
 {
   using namespace cxx_cpp;
 
@@ -8438,7 +8419,7 @@ namespace cxx_cpp
 // success!
 // [       OK ] Cpp.VaargMacro (0 ms)
 
-TEST(Cpp, VaargMacro)
+TEST(Cpp, VariableArgsMacro)
 {
   eprintf("success!\n");
 }

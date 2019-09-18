@@ -186,38 +186,52 @@ TEST(BleAudioStreamer, runLoopToTestStreamer)
 TEST(BleAudioStreamer, runDefinedFsm)
 {
   BleAudioStreamer streamer;
+  std::string path{"/org/bluez/hci0/dev_D4_B8_FF_66_D6_25"};
 
-  streamer.postMessage(BleAudioStreamer::DeviceConnectedEvent);
+  // device connected
+  streamer.onDevicePropertyChange(path, "Connected", "true");
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::TransportAddedEvent);
+  // transport added
+  path.append("/fd");
+  streamer.onTransportAdded(path);
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::PlayerAddedEvent);
+  // player added
+  path.append("/player");
+  streamer.onPlayerAdded(path);
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::TransportPendingEvent);
+  // transport pending
+  streamer.onTransportPropertyChange(path, "State", "pending");
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::TransportActiveEvent);
+  // transport active
+  streamer.onTransportPropertyChange(path, "State", "active");
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::PlayerPlayingEvent);
+  // player playing
+  streamer.onPlayerPropertyChange(path, "Status", "playing");
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::PlayerStoppedEvent);
+  // player stopped
+  streamer.onPlayerPropertyChange(path, "Status", "stopped");
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::TransportIdelEvent);
+  // transport idle
+  streamer.onTransportPropertyChange(path, "State", "idle");
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::PlayerRemovedEvent);
+  // player removed
+  streamer.onPlayerRemoved(path);
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::TransportRemovedEvent);
+  // transport removed
+  streamer.onTransportRemoved(path);
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-  streamer.postMessage(BleAudioStreamer::DeviceDisconnectedEvent);
+  // device disconnected
+  streamer.onDevicePropertyChange(path, "Connected", "false");
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
 }
 
