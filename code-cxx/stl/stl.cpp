@@ -1630,6 +1630,24 @@ TEST(Queue, Priority)
 // ={=========================================================================
 // cxx-set
 
+TEST(Set, InsertAndEmplace)
+{
+  set<int> coll1{};
+  
+  for (int i = 0; i < 9; i++)
+    coll1.insert(i);
+
+  EXPECT_THAT(coll1, ElementsAre(0,1,2,3,4,5,6,7,8));
+
+  set<int> coll2{};
+
+  for (int i = 0; i < 9; i++)
+    coll2.emplace(i);
+
+  EXPECT_THAT(coll2, ElementsAre(0,1,2,3,4,5,6,7,8));
+}
+
+
 TEST(Set, SortOrder)
 {
   {
@@ -1740,7 +1758,7 @@ TEST(Set, Erase)
   // if there is match at the beginning, removes them
   {
     multiset<int> coll{2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7};
-    EXPECT_THAT(coll, ElementsAre(2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7));
+    EXPECT_THAT(coll, ElementsAreArray({2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7}));
 
     auto it = coll.begin();
     while ((it != coll.end()) && (*it == 2))
@@ -1754,7 +1772,7 @@ TEST(Set, Erase)
   // if there is no match at the beginning, do nothing
   {
     multiset<int> coll{2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7};
-    EXPECT_THAT(coll, ElementsAre(2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7));
+    EXPECT_THAT(coll, ElementsAreArray({2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7}));
 
     auto it = coll.begin();
     while ((it != coll.end()) && (*it == 3))
@@ -1763,7 +1781,7 @@ TEST(Set, Erase)
     }
 
     // same as before
-    EXPECT_THAT(coll, ElementsAre(2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7));
+    EXPECT_THAT(coll, ElementsAreArray({2, 2, 3, 3, 3, 3, 3, 3, 3, 6, 7}));
   }
 }
 
