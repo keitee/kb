@@ -1136,6 +1136,7 @@ namespace cxx_pattern_observer
       }
   };
 
+  // observee(source)
   template<typename T>
     class observable_vector
     {

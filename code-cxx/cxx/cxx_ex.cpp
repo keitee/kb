@@ -26,7 +26,26 @@ TEST(Cxx, ex)
   EXPECT_THAT(true, true);
 }
 
-namespace cxx_observer_notifier
+
+/*
+
+o Notifier is basically same as the observer pattern. The observer side: Define
+  observer or listener abstract interface and concrete observers subclass it so
+  that implements it.
+
+o The observee(source) side. Notifer<T> has T* but not subclass it and
+  Notifier<T> provides notification functionality such as add observers and
+  notify. concrete observess subclass it and inherites them to *have*.
+  This is *main difference* from observer pattern. 
+
+o For both, have to use mutiple subclassing if want to have multiple abstract
+  observer interfaces.
+ 
+*/
+
+// simple Notifier to see idea
+
+namespace cxx_observer_notifier_simple
 {
   class Polymorphic
   {
@@ -180,7 +199,7 @@ namespace cxx_observer_notifier
 
 TEST(PatternObserver, Notifier)
 {
-  using namespace cxx_observer_notifier;
+  using namespace cxx_observer_notifier_simple;
 
   Source source;
 
@@ -191,6 +210,176 @@ TEST(PatternObserver, Notifier)
   source.setName("notifier");
   source.setKeyAndValue("key", "value");
 }
+
+
+namespace cxx_observer_notifier_full
+{
+  class Polymorphic
+  {
+    public:
+      virtual ~Polymorphic() {};
+  };
+
+  template<typename T>
+    class Notifier : virtual public Polymorphic
+  {
+    public:
+      Notifier() {}
+
+      // register
+      void add_observer(std::shared_ptr<T> const &o)
+      {
+        std::lock_guard<std::mutex> lock(m_);
+        observers_.emplace_back(o);
+      }
+
+      void remove_observer(std::shared_ptr<T> const &o)
+      {
+        std::unique_lock<std::mutex> lock(m_);
+
+#if (_BUILD_TYPE == DEBUG)
+        // less likely check which to see if this function call is made from
+        // dispatch thread.
+        if (dispatcher_ && dispatcher_->invoked_from_this())
+        {
+          throw
+            std::logic_error("potential deadlock since it should not be called from dispatcher");
+        }
+#endif
+      }
+
+    protected:
+
+      // for multiple arguments and it calls notify<T>
+      template<typename F, typename... Args>
+        void notify(F f, Args&&... args)
+        {
+          notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+        }
+
+      // for single argument call, notify(x)
+      template<typename F>
+        void notify(F f)
+        {
+          notify_impl_(f);
+        }
+
+    private:
+      std::mutex m_;
+      std::condition_variable cv_;
+
+      // saved observer
+      std::deque<std::wesk_ptr<T>> observers_;
+
+      // (std::function<void(std::shared_ptr<T> const &)> f) means that the
+      // returned type from bind() will be called shared_ptr<T> which is target
+      // object.
+
+      void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
+      {
+        if(observer_)
+          f(observer_);
+
+        // std::shared_ptr<T> strong = o.lock();
+        // if(strong)
+        // {
+        //   // void notify_impl(
+        //   //  std::function<void(std::shared_ptr<T> const &)> f);
+        //   dispatcher_->post(std::bind(f, strong));
+        // }
+      }
+  };
+
+  // A observer(callback) interface
+  //
+  class StateEvents
+  {
+    public:
+      virtual void stateChanged(int state) = 0;
+      virtual void nameChanged(std::string name) = 0;
+      virtual void keyAndValueChanged(std::string key, std::string value) = 0;
+      virtual void eventOccured() = 0;
+  };
+
+
+  // observer
+  //
+  template <class T>
+    class Observer : public T, virtual public Polymorphic
+  {
+  };
+
+  class TestObserver : public Observer<StateEvents>
+  {
+    public:
+
+      // MOCK_METHOD1(stateChanged, void (int));
+      // MOCK_METHOD1(nameChanged, void (std::string));
+      // MOCK_METHOD2(keyAndValueChanged, void (std::string, std::string));
+      // MOCK_METHOD0(eventOccured, void());
+      
+      void stateChanged(int state)
+      {
+        std::cout << "called stateChanged(" << state << ")" << std::endl;
+      }
+
+      void nameChanged(std::string name)
+      {
+        std::cout << "called nameChanged(" << name << ")" << std::endl;
+      }
+
+      void keyAndValueChanged(std::string key, std::string value)
+      {
+        std::cout << "called keyAndValueChanged(" << key 
+          << ", " << value << ")" << std::endl;
+      }
+
+      void eventOccured()
+      {
+        std::cout << "called eventOccured()" << std::endl;
+      }
+  };
+
+  // source
+  // 
+  class Source : public Notifier<StateEvents>
+  {
+    public:
+      void setState(int state)
+      {
+        // do something
+
+        // calls 
+        // template<typename F> 
+        //  void notify(F f);
+        notify(std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
+      }
+
+      void setName(std::string name)
+      {
+        // do something
+
+        // calls 
+        // template<typename F, typename... Args> 
+        //  void notify(F f, Args&&... args);
+        notify(&StateEvents::nameChanged, name);
+      }
+
+      void setKeyAndValue(std::string key, std::string value)
+      {
+        // do something
+
+        notify(&StateEvents::keyAndValueChanged, key, value);
+      }
+
+      void emitEvent()
+      {
+        // do something
+
+        notify(&StateEvents::eventOccured);
+      }
+  };
+} // namespace
 
 
 /*
