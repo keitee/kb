@@ -367,7 +367,11 @@ TEST(StringOperation, AssignSwap)
   }
 }
 
-// cxx-string-compare
+
+// string-compare
+//
+// int compare( const basic_string& str ) const; (until C++11)
+// int compare( const basic_string& str ) const noexcept; (since C++11)
 //
 // Return value
 // negative value if *this appears before the character sequence specified by
@@ -380,10 +384,37 @@ TEST(StringOperation, AssignSwap)
 
 TEST(StringOperation, Compare)
 {
-  std::string coll1{"string compare"};
-  std::string coll2{"string compare"};
+  {
+    std::string coll1{"string compare"};
+    std::string coll2{"string compare"};
 
-  EXPECT_THAT(0, coll1.compare(coll2));
+    // equal
+    EXPECT_THAT(0, coll1.compare(coll2));
+  }
+
+  {
+    std::string coll1{"string compare"};
+    std::string coll2{"string compare"};
+
+    // equal
+    EXPECT_THAT(true, (coll1 == coll2));
+  }
+
+  {
+    std::string coll1{};
+    std::string coll2{};
+
+    // equal
+    EXPECT_THAT(true, (coll1 == coll2));
+  }
+
+  {
+    std::string coll1{};
+    std::string coll2{"string compare"};
+
+    // equal
+    EXPECT_THAT(false, (coll1 == coll2));
+  }
 }
 
 

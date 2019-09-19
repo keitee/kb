@@ -21,62 +21,15 @@ using testing::FloatEq;
 
 
 // ={=========================================================================
-// string-pos
+// string-ex
 
-namespace U30_Text
+TEST(String, Ex)
 {
-  struct uri_parts
-  {
-    std::string protocol;
-    std::string domain;
-    int port;
-    std::string path;
-    std::string query;
-    std::string fragment;
-  };
+  std::string coll1{};
+  std::string coll2{"not empty"};
 
-  // C++17 features:
-  //
-  // struct uri_parts
-  // {
-  //   std::string                protocol;
-  //   std::string                domain;
-  //   std::optional<int>         port;
-  //   std::optional<std::string> path;
-  //   std::optional<std::string> query;
-  //   std::optional<std::string> fragment;
-  // };
-
-  uri_parts parse_uri(std::string uri)
-  { 
-    uri_parts parts;
-    std::regex rx(R"(^(\w+):\/\/([\w+.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
-
-    auto matches = std::smatch();
-
-    auto found = std::regex_match(uri, matches, rx);
-    EXPECT_TRUE(found);
-
-    // if (found)
-    // {
-    //   uri_parts parts;
-    //   parts.protocol = matches[1].str();
-    // }
-    
-    return parts; 
-  }
-
-} // namespace
-
-TEST(U30, Text)
-{
-  using namespace U30_Text;
-
-  {
-    auto p1 = parse_uri("https://packt.com");
-    // auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
-  }
-
+  // if (coll1)
+  //   cout << "string is empty" << endl;
 }
 
 

@@ -26,7 +26,29 @@ namespace
   }
 
   // ref: https://www.bluetooth.org/en-us/specification/assigned-numbers/service-discovery
-  const std::string AUDIO_SOURCE_UUID{"0000110a"};
+  const std::string BLE_AUDIO_SOURCE_UUID{"0000110a"};
+
+  struct BleAuidoMetadata
+  {
+    bool operator==(BleAuidoMetadata const &rhs) const
+    {
+      if ((title != rhs.title) ||
+          (artist != rhs.artist) ||
+          (album != rhs.album) ||
+          (track_number != rhs.track_number) ||
+          (number_of_tracks != rhs.number_of_tracks))
+      { return false; }
+
+      return true;
+    }
+
+    std::string title{};
+    std::string artist{};
+    std::string album{};
+    uint32_t track_number{};
+    uint32_t number_of_tracks{};
+    std::string genre{};
+  };
 } // namespace
 
 
@@ -140,11 +162,33 @@ void BleAudioStreamer::doWork_(std::string const &name)
         break;
 
       case Message::TransportAddedMsg:
-        fsm_.postEvent(TransportAddedEvent);
+        {
+          if (transport_path_.empty())
+          {
+            transport_path_ = message.path_;
+            fsm_.postEvent(TransportAddedEvent);
+          }
+          else
+          {
+            LOG_MSG("TransportAddedMsg receive but transport path, %s, is not empty",
+                transport_path_.c_str());
+          }
+        }
         break;
 
       case Message::PlayerAddedMsg:
-        fsm_.postEvent(PlayerAddedEvent);
+        {
+          if (player_path_.empty())
+          {
+            player_path_ = message.path_;
+            fsm_.postEvent(PlayerAddedEvent);
+          }
+          else
+          {
+            LOG_MSG("PlayerAddedMsg receive but player path, %s, is not empty",
+                transport_path_.c_str());
+          }
+        }
         break;
 
       // TODO: use either state = p.getValue().asString() or
@@ -154,59 +198,62 @@ void BleAudioStreamer::doWork_(std::string const &name)
       // Message to carry metadata/pos update.
 
       case Message::TransportPropertyChangeMsg:
-        if (message.property_ == "State")
         {
-          // get property value
-          // std::string state{};
-          // player->getStatue(message.path_, state); 
-          
-          if (message.value_ == "idle")
-            fsm_.postEvent(TransportIdelEvent);
-          else if(message.value_ == "pending")
-            fsm_.postEvent(TransportPendingEvent);
-          else if(message.value_ == "active")
-            fsm_.postEvent(TransportActiveEvent);
+          if (message.property_ == "State")
+          {
+            // get property value
+            // std::string state{};
+            // player->getStatue(message.path_, state); 
+
+            if (message.value_ == "idle")
+              fsm_.postEvent(TransportIdelEvent);
+            else if(message.value_ == "pending")
+              fsm_.postEvent(TransportPendingEvent);
+            else if(message.value_ == "active")
+              fsm_.postEvent(TransportActiveEvent);
+            else
+            {
+              LOG_MSG("TransportPropertyChangeMsg got unknown %s property value", 
+                  message.value_.c_str());
+            }
+          }
           else
           {
-            LOG_MSG("TransportPropertyChangeMsg got unknown %s property value", 
-                message.value_.c_str());
+            LOG_MSG("TransportPropertyChangeMsg got unknown %s property", 
+                message.property_.c_str());
           }
         }
-        else
-        {
-          LOG_MSG("TransportPropertyChangeMsg got unknown %s property", 
-              message.property_.c_str());
-        }
-
         break;
 
       case Message::PlayerPropertyChangeMsg:
-        if (message.property_ == "Track")
         {
-          // build metadata and notify to AS
-          // have to access proxy
-        }
-        else if(message.property_ == "Position")
-        {
-          // build pos update and notify to AS
-          // have to access proxy
-        }
-        else if(message.property_ == "Status")
-        {
-          // get property value
-          // std::string state{};
-          // player->getStatue(message.path_, state); 
+          if (message.property_ == "Track")
+          {
+            // build metadata and notify to client
+            updateMetadata_();
+            notify_(MESSAGE_TYPE_METADATA);
+          }
+          else if(message.property_ == "Position")
+          {
+            // build pos update and notify to AS
+            // have to access proxy
+          }
+          else if(message.property_ == "Status")
+          {
+            // get property value
+            // std::string state{};
+            // player->getStatue(message.path_, state); 
 
-          (message.value_ == "playing" 
-           ? fsm_.postEvent(PlayerPlayingEvent)
-           : fsm_.postEvent(PlayerStoppedEvent));
+            (message.value_ == "playing" 
+             ? fsm_.postEvent(PlayerPlayingEvent)
+             : fsm_.postEvent(PlayerStoppedEvent));
+          }
+          else
+          {
+            LOG_MSG("PlayerPropertyChangeMsg got unknown %s property", 
+                message.property_.c_str());
+          }
         }
-        else
-        {
-          LOG_MSG("PlayerPropertyChangeMsg got unknown %s property", 
-              message.property_.c_str());
-        }
-
         break;
 
       case Message::PlayerRemovedMsg:
@@ -295,6 +342,85 @@ std::string BleAudioStreamer::stringEvent_(FsmEvent event)
 }
 
 
+/* check if device to connect has audio source by checking through UUIDs
+ */
+bool BleAudioStreamer::checkHasAudioSource_(std::string const *path)
+{
+  // TODO: device proxy
+  if (device_proxy_)
+  {
+    std::vector<std::string> uuids;
+    if (device_proxy_->getUUIDs(path, uuids))
+    {
+      auto it = std::find_if(uuids.cbegin(), uuids.cend(),
+          [](std::string const &uuid)
+          {
+            return (uuid.substr(0, 8) == BLE_AUDIO_SOURCE_UUID) ? true : false;
+          });
+      return (it == uuilds.cend()) ? false : true;
+    }
+  }
+
+  return false;
+}
+
+
+/* get metadata from player proxy and update streamer with it
+ */
+void BleAudioStreamer::updateMetadata_()
+{
+  if (!player_path_.empty())
+  {
+    player_proxy_->getTrackTitle(player_path_, metadata_.title);
+    player_proxy_->getTrackArtist(player_path_, metadata_.artist);
+    player_proxy_->getTrackAlbum(player_path_, metadata_.album);
+    player_proxy_->getTrackGenre(player_path_, metadata_.genre);
+    player_proxy_->getTrackNumberOfTracks(player_path_, metadata_.number_of_tracks);
+    player_proxy_->getTrackNumber(player_path_, metadata_.track_number);
+  }
+  else
+  {
+    LOG_MSG("player path is not set");
+  }
+}
+
+
+/* update client with messages
+ */
+void BleAudioStreamer::notify_(MessageType type)
+{
+  Message msg{};
+  bool updated{false};
+
+  switch(type)
+  {
+    case MESSAGE_TYPE_METADATA:
+      msg.type          = MESSAGE_TYPE_METADATA;
+      msg.title         = metadata_.title;
+      msg.artist        = metadata_.artist;
+      msg.album         = metadata_.album;
+      msg.number        = metadata_.track_number;
+      msg.totalNumbers  = metadata_.number_of_tracks;
+      msg.genre         = metadata_.genre;
+      updated = true;
+      break;
+
+    default:
+      LOG_MSG("unknown AudioStreamer::MessageType, %d", type);
+      break;
+  }
+
+  if (updated)
+  {
+    // TODO: needs a lock as the previous did?
+    observer_(msg, observer_data_); 
+  }
+}
+
+
+/* eafs
+*/
+
 void BleAudioStreamer::entered_(int state)
 {
   LOG_MSG("fsm entered: %s", stringState_((FsmState)state).c_str());
@@ -308,35 +434,24 @@ void BleAudioStreamer::entered_(int state)
     case DeviceOffState:
       eafDeviceOffState_();
       break;
+
+    case TransportOnState:
+      eafTransportOnState_();
+      break;
+
+    case PlayerOnState:
+      eafTransportOnState_();
+      break;
+
+    case PlayerPendingState:
+      eafPlayerPendingState_();
+      break;
+
+    case PlayerReadyState:
+      eafPlayerReadyState_();
+      break;
   }
 }
-
-
-/* check if device to connect has audio source by checking through UUIDs
- */
-
-bool BleAudioStreamer::checkHasAudioSource_(std::string const *path)
-{
-  // TODO: device proxy
-  if (device_proxy_)
-  {
-    std::vector<std::string> uuids;
-    if (device_proxy_->getUUIDs(path, uuids))
-    {
-      auto it = std::find_if(uuids.cbegin(), uuids.cend(),
-          [](std::string const &uuid)
-          {
-            return (uuid.substr(0, 8) == AUDIO_SOURCE_UUID) ? true : false;
-          });
-      return (it == uuilds.cend()) ? false : true;
-    }
-  }
-
-  return false;
-}
-
-/* eafs
-*/
 
 void BleAudioStreamer::exited_(int state)
 {
@@ -360,3 +475,45 @@ void BleAudioStreamer::eafDeviceOffState_()
 
   device_path_.clear();
 }
+
+void BleAudioStreamer::eafTransportOnState_()
+{
+  // TODO: nothing to do?
+}
+
+
+/* metadata must be updated before and have been set
+ */
+void BleAudioStreamer::eafPlayerOnState_()
+{
+  notify_(MESSAGE_TYPE_METADATA);
+}
+
+void BleAudioStreamer::eafPlayerPendingState_()
+{
+  uint16_t not_used1, not_used2;
+
+  // acquire fd
+#ifdef BLEAUDIO_DEBUG
+  LOG_MSG("debug: have got fd from transport proxy");
+#else
+  // TODO: not clear on what to do if this call fails. the old code has bring up
+  // timer and fake player event. what are they?
+  transport_proxy_->tryAcquire(transport_path_, fd_, not_used1, not_used2); 
+#endif
+}
+
+void BleAudioStreamer::eafPlayerReadyState_()
+{
+  // start a reader with fd 
+#ifdef BLEAUDIO_DEBUG
+  LOG_MSG("debug: have created a reader which reads data from fd");
+#else
+  // TODO: config?
+  // bool BluetoothMediaFsm::getTransportConfig(const std::string &path, a2dp_sbc_t &config)
+  // TODO: relationship with Reader?
+  // TODO: use of unique_ptr<>?
+  reader_ = new BluetoothMediaReader(fd_, config);
+#endif
+}
+

@@ -64,21 +64,53 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # https://stackoverflow.com/questions/6646405/how-do-you-add-boost-libraries-in-cmakelists-txt
 #
 # For this warning:
-
+#
 # CMake Warning at /usr/share/cmake-3.7/Modules/FindBoost.cmake:761 (message):
 #  Imported targets not available for Boost version 106501
 #
 # see https://stackoverflow.com/questions/42123509/cmake-finds-boost-but-the-imported-targets-not-available-for-boost-version
-
+#
 # 1.65.1 emits some error when linking with cmake and 1.70.0 fixes up.
 # find_package(Boost 1.65.1 COMPONENTS system thread)
-find_package(Boost 1.70.0 COMPONENTS system thread)
+#
+# -- Found Boost 1.70.0 at /usr/local/lib/cmake/Boost-1.70.0
+# --   Requested configuration: QUIET COMPONENTS system;thread;regex
+# -- Found boost_headers 1.70.0 at /usr/local/lib/cmake/boost_headers-1.70.0
+# -- Found boost_system 1.70.0 at /usr/local/lib/cmake/boost_system-1.70.0
+# --   libboost_system.a
+# -- Adding boost_system dependencies: headers
+# -- Found boost_thread 1.70.0 at /usr/local/lib/cmake/boost_thread-1.70.0
+# --   libboost_thread.a
+# -- Adding boost_thread dependencies: headers
+# -- Found boost_regex 1.70.0 at /usr/local/lib/cmake/boost_regex-1.70.0
+# --   libboost_regex.a
+# -- Adding boost_regex dependencies: headers
+# -- Boost 1.70.0 found.
+# -- Found Boost components:
+#    system;thread;regex
+#
+# /usr/local/lib/cmake/boost_regex-1.70.0/boost_regex-config.cmake
+# # Create imported target Boost::regex
+# add_library(Boost::regex UNKNOWN IMPORTED)
 
+
+find_package(Boost 1.70.0 COMPONENTS system thread)
 set(Boost_USE_STATIC_LIBS OFF) 
 set(Boost_USE_MULTITHREADED ON)  
 set(Boost_USE_STATIC_RUNTIME OFF) 
-
 include_directories(${Boost_INCLUDE_DIRS}) 
+
+
+# to find library name:
+#
+# ~/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core/Qt5CoreConfig.cmake
+# # For backwards compatibility only. Use Qt5Core_VERSION instead.
+# set(Qt5Core_VERSION_STRING 5.12.3)
+# 
+# set(Qt5Core_LIBRARIES Qt5::Core)
+
+# used in library name:
+# target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Widgets)
 
 
 # cxx.cpp

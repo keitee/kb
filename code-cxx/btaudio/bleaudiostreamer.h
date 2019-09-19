@@ -106,9 +106,11 @@ class BleAudioStreamer
     std::thread t_;
     std::mutex m_;
 
+  private:
     bool running_;
     void doWork_(std::string const &name);
 
+  private:
     StateMachine fsm_;
     void setupStateMachine_();
     std::string stringEvent_(FsmEvent);
@@ -116,7 +118,24 @@ class BleAudioStreamer
     void entered_(int state);
     void exited_(int state);
 
+  private:
     std::string device_path_;
+    std::string transport_path_;
+    std::string player_path_;
+
+    player_proxy_;
+    transport_proxy_;
+    device_proxy_;
+
+    int fd_;
+    BluetoothMediaReader *reader_;
+    
+  private:
+    BleAuidoMetadata metadata_;
+
+    // TODO: from AUdioStreamer
+    MessageHandler observer_;
+    void *observer_data_;
 };
 
 #endif // BLEAUDIOSTREAMER_H

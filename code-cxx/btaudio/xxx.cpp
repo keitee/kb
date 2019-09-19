@@ -20,8 +20,10 @@ namespace BluetoothApi
          */
         typedef struct _Message
         {
+            // enum
             MessageType type;               //!< type of message
             
+            // enum
             // MESSAGE_TYPE_SESSION_START
             Format      audioFormat;        //!< format of the audio streamed in this session
             
@@ -37,9 +39,11 @@ namespace BluetoothApi
             unsigned    position;           //!< in milliseconds (There will be no more than one progress update per second)
             unsigned    duration;           //!< in milliseconds
             
+            // enum
             // MESSAGE_TYPE_TRANSPORT_STATE
             TransportState transportState;  //!< transport state
             
+            // enum
             // MESSAGE_TYPE_PLAYER_STATE
             PlayerState    playerState;     //!< player state
             
@@ -71,26 +75,32 @@ void BluetoothMediaStreamer::onMediaTransportUp
 
                         session->player_format = m.format;
 
-    sendMetadata(session->player_metadata); \
+/*
+ * metadata
+*/
+{
+  msg.type = MESSAGE_TYPE_METADATA;
+  msg.title  = metadata.title;
+  msg.artist = metadata.artist;
+  msg.album  = metadata.album;
+  msg.number = metadata.track_number;
+  msg.totalNumbers = metadata.number_of_tracks;
+  msg.genre = metadata.genre;
 
-        msg.type = MESSAGE_TYPE_METADATA;
-        msg.title  = metadata.title;
-        msg.artist = metadata.artist;
-        msg.album  = metadata.album;
-        msg.number = metadata.track_number;
-        msg.totalNumbers = metadata.number_of_tracks;
-        msg.genre = metadata.genre;
+  std::string title;
+  std::string artist;
+  std::string album;
+  uint32_t track_number;
+  uint32_t number_of_tracks;
+  std::string genre;
 
-        std::string title;
-        std::string artist;
-        std::string album;
-        uint32_t track_number;
-        uint32_t number_of_tracks;
-        std::string genre;
+  // use
+  // comparison. necessary?
+  if (session && session->player_metadata != m.metadata) {
+  }
 
-        // comparison. necessary?
-        //
-                  if (session && session->player_metadata != m.metadata) {
+  sendMetadata(session->player_metadata);
+}
 
     sendPlayerState(session->player_state); \
 
