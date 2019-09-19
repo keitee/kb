@@ -92,8 +92,8 @@ target_link_libraries(${PROJECT_NAME}_qt gmock_main Qt5::Core Qt5::Test)
 
 # fsm qt but no qt
 
-add_executable(${PROJECT_NAME}_no_qt qfsm_use.cpp qfsm.cpp)
-target_link_libraries(${PROJECT_NAME}_nqt gmock_main)
+add_executable(${PROJECT_NAME}_noqt qfsm_use.cpp qfsm.cpp)
+target_link_libraries(${PROJECT_NAME}_noqt gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

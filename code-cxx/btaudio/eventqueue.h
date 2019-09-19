@@ -67,7 +67,8 @@ namespace BleAudio
         {
           std::lock_guard<std::mutex> lock(m_);
 
-          q_.push_back(message);
+          // q_.push_back(message);
+          q_.emplace_back(message);
           cv_.notify_all();
         }
 

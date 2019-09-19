@@ -87,7 +87,7 @@ namespace cxx_fsm
           {
             std::lock_guard<std::mutex> lock(m_);
 
-            q_.push(message);
+            q_.emplace_back(message);
             cv_.notify_all();
           }
 
@@ -98,8 +98,8 @@ namespace cxx_fsm
             // wait until q it not empty
             cv_.wait(lock, [&]{return !q_.empty();});
 
-            auto message = q_.front();
-            q_.pop();
+            auto message = std::move(q_.front());
+            q_.pop_front();
             lock.unlock();
 
             return message;
@@ -108,7 +108,7 @@ namespace cxx_fsm
         private:
           std::condition_variable cv_;
           std::mutex m_;
-          std::queue<T> q_;
+          std::deque<T> q_;
       };
   } // namespace
 
@@ -276,12 +276,6 @@ TEST(Fsm, CxxUseMessageVariousType)
        "message_2");
   }
 }
-
-
-using namespace
-{
-
-} // namespace
 
 
 // ={=========================================================================

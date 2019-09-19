@@ -22,6 +22,7 @@ using namespace testing;
 
 namespace fsm 
 {
+  // simple message q
   template <typename T>
   class queue
   {
@@ -941,12 +942,60 @@ In sum, super state is diagram technique and can be implemented in many ways.
 
 namespace messaging
 {
+  // like polymorphic base
+  struct message_base
+  {
+    virtual ~message_base() {}
+  };
+
+  template<typename T>
+    struct wrapped_message : public message_base
+  {
+    explicit wrapped_message(T const &message)
+      : message_(message) {}
+
+    T message_;
+  };
+
+  class queue
+  {
+    public:
+      template<typename T>
+        void push(T const &message)
+        {
+          std::lock_guard<std::mutex> lock(m_);
+
+          // create new type of wrapped_message<T> whenever push()
+          q_.emplace_back(std::make_shared<wrapped_message<T>>(message));
+          cv_.notify_all();
+        }
+
+      std::shared_ptr<message_base> wait_and_pop()
+      {
+        std::unique_lock<std::mutex> lock(m_);
+
+        cv_.wait(lock, [&]{ return !q_.empty();});
+        auto message = std::move(q_.front());
+
+        // *cxx-error* cuase infinite loop on the user when omits this
+        q_.pop_front();
+        lock.unlock();
+        return message;
+      }
+
+    private:
+      std::condition_variable cv_;
+      std::mutex m_;
+      // std::queue<T> q_;
+      std::deque<std::shared_ptr<message_base>> q_;
+  };
+
   // message to end 
   class close_queue
   {};
 
 
-// #define DISPATCH_DEBUG
+  // #define DISPATCH_DEBUG
 
   // note:
   // type name can be the same as dispatcher
@@ -965,22 +1014,22 @@ namespace messaging
         TemplateDispatcher(TemplateDispatcher &&other):
           pq_(other.pq_), prev_(other.prev_), f_(std::move(other.f_)),
           chained_(other.chained_)
-        { 
+      { 
 #ifdef DISPATCH_DEBUG
-          std::cout << "TD: move: set chained_ true: " << m_.name_ << std::endl;
+        std::cout << "TD: move: set chained_ true: " << m_.name_ << std::endl;
 #endif // DISPATCH_DEBUG
 
-          other.chained_ = true; 
-        }
+        other.chained_ = true; 
+      }
 
         // note: add "explicit" which is different from the text
 
         explicit TemplateDispatcher(queue *pq, Dispatcher *prev, Function &&f):
           pq_(pq), prev_(prev), f_(std::forward<Function>(f)), chained_(false)
-        { 
-          // std::cout << "TD: ctor: set chained_ true: " << m_.name_ << std::endl;
-          prev_->chained_ = true; 
-        }
+      { 
+        // std::cout << "TD: ctor: set chained_ true: " << m_.name_ << std::endl;
+        prev_->chained_ = true; 
+      }
 
         // note:
         // 1. have to use "TemplateDispatcher"
@@ -1010,7 +1059,7 @@ namespace messaging
         // note:
         // "noexcept(false) is necessary. Although close_queue() is only handled
         // in dispatcher::dispatch_(), it runs in this dtor.
-        
+
         ~TemplateDispatcher() noexcept(false)
         {
           if (!chained_)
@@ -1040,7 +1089,7 @@ namespace messaging
             // std::cout << "TD: dispatch_: " << m_.name_ << ": call f: " 
             //   << wrapper->contents_.name_ << std::endl;
 
-            f_(wrapper->contents_);
+            f_(wrapper->message_);
             return true;
           }
           else
@@ -1054,7 +1103,7 @@ namespace messaging
 
         // not really used since "dispatcher" is always chained and do not
         // process message.
-        
+
         void wait_and_dispatch()
         {
           // std::cout << "TD: wait_dispatch_: " << m_.name_ << " { " << std::endl;
@@ -1086,10 +1135,10 @@ namespace messaging
 
       dispatcher(dispatcher &&other):
         pq_(other.pq_), chained_(other.chained_)
-        { 
-          std::cout << "disp: move: " << std::endl;
-          other.chained_ = true; 
-        }
+    { 
+      std::cout << "disp: move: " << std::endl;
+      other.chained_ = true; 
+    }
 
       // *cxx-copy-prevent-copies*
       dispatcher(dispatcher const &) = delete;
@@ -1097,9 +1146,9 @@ namespace messaging
 
       explicit dispatcher(queue *pq):
         pq_(pq), chained_(false)
-        {
-          // std::cout << "disp: ctor: " << std::endl;
-        }
+    {
+      // std::cout << "disp: ctor: " << std::endl;
+    }
 
       ~dispatcher() noexcept(false)
       {
@@ -1115,7 +1164,7 @@ namespace messaging
       // note:
       // 1. must use "dispatcher" which is type
       // 2. "Message" is not used in this but used in TD.
-      
+
       template<typename Message, typename Function>
         TemplateDispatcher<dispatcher, Message, Function>
         handle(Function &&f)
@@ -2280,7 +2329,8 @@ TEST(Fsm, AtmFsmDoWithdraw)
   atm_thread.join();
 }
 
-#endif
+#endif // #if !(defined DISPATCH_DEBUG)
+
 
 // ={=========================================================================
 

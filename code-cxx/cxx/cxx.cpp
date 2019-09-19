@@ -8116,15 +8116,32 @@ TEST(Exception, Noexcept)
 
 
 // ={=========================================================================
+// cxx-type-conversion
+
+TEST(TypeConversion, Double)
+{
+  // double value: 0
+  // double value: 0
+  // double value is not < or > 0
+  {
+    double value{0};
+    printf("double value: %g\n", value);
+    printf("double value: %u\n", value);
+
+    if (value < 0)
+      printf("double value is < 0\n");
+    else if (value > 0)
+      printf("double value is > 0\n");
+    else
+      printf("double value is not < or > 0\n");
+  }
+}
+
+
+// ={=========================================================================
 // cxx-printf
 
-// 0: 01
-// 0: 012
-// 0: 0123
-// 0: 01234
-// 0: 012345
-
-TEST(Printf, Formats)
+TEST(CxxPrintf, Formats)
 {
   // The format argument of printf can be an expression too.
   {
@@ -8148,6 +8165,12 @@ TEST(Printf, Formats)
   //     (OctetStringVariableEntry(pEntry).m_osValue).buf,
   //     osValue.size, osValue.buf,
   //     osNewValue.size, osNewValue.buf);
+  //
+  // 0: 01
+  // 0: 012
+  // 0: 0123
+  // 0: 01234
+  // 0: 012345
   {
     char pmesg[] = "0123456789";
 
@@ -8157,28 +8180,10 @@ TEST(Printf, Formats)
     printf("0: %.*s \n", 5, pmesg );
     printf("0: %.*s \n", 6, pmesg );
   }
-}
 
-
-// ={=========================================================================
-// cxx-type-conversion
-
-TEST(TypeConversion, Double)
-{
-  // double value: 0
-  // double value: 0
-  // double value is not < or > 0
   {
-    double value{0};
-    printf("double value: %g\n", value);
-    printf("double value: %u\n", value);
-
-    if (value < 0)
-      printf("double value is < 0\n");
-    else if (value > 0)
-      printf("double value is > 0\n");
-    else
-      printf("double value is not < or > 0\n");
+    int value{10};
+    printf("this is first fmt" " this is second fmt %d", value);
   }
 }
 

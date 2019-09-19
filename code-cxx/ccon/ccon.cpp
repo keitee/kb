@@ -60,7 +60,7 @@ namespace cxx_thread {
   }
 } // namespace
 
-TEST(CConThread, StdThread)
+TEST(CConThread, Hello)
 {
   using namespace cxx_thread;
 
@@ -72,7 +72,7 @@ TEST(CConThread, StdThread)
 
 // thread id: 139805217429248
 
-TEST(CConThread, StdThreadId)
+TEST(CConThread, Id)
 {
   using namespace cxx_thread;
 
@@ -91,6 +91,31 @@ TEST(CConThread, Lambda)
   std::thread t2([]{doSomething('+');});
   t1.join();
   t2.join();
+}
+
+// true if the thread object identifies an active thread of execution, false
+// otherwise
+
+TEST(CConThread, Joinable)
+{
+  std::thread t([]{doSomething('+');});
+
+  std::cout << "thread is still running? " << std::boolalpha 
+    << t.joinable() << std::endl;
+  
+  // DO NOT WORK as hoped since while() do not ends. Proabaly, it makes a thread
+  // keep alive. 
+  //
+  // while (t.joinable())
+  // {
+  //   std::cout << "thread is still running" << std::endl;
+  //   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  // }
+
+  t.join();
+
+  std::cout << "thread is still running? " << std::boolalpha 
+    << t.joinable() << std::endl;
 }
 
 
