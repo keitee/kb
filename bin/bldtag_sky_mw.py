@@ -30,6 +30,7 @@ if __name__ == "__main__":
 
     # dirs to exclude
     # find {to be replaced} -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
+    # find ethan-as-source/Components/AS/Services -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
     # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
     command = ["find", ".", "-type", "d", 
         "(", 
