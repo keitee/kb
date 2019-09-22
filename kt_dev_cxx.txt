@@ -48706,7 +48706,6 @@ o Call `member functions` for objects, `pointers` to objects, and `smart` pointe
   to objects
 
 <code>
-
 namespace cxx_code
 {
   /**
@@ -48763,7 +48762,6 @@ is that all these function objects are usually declared `inline`. Thus, use a
 function-like notation or abstraction but you get good performance.
 
 
-
 <case-when-bind-useful>
 
 <ex> different number of arguments
@@ -48771,7 +48769,7 @@ function-like notation or abstraction but you get good performance.
 This is an example to show that bind solves different number of argument since
 find_if requires `unary predicate` but want to use more complicated predicate.
 
-*algo-find-if* *algo-find*
+*cxx-find-if* *cxx-find*
 
 namespace cxx_code
 {
@@ -48832,7 +48830,7 @@ namespace cxx_code
    *  @param  __last   An input iterator.
    *  @param  __pred   A predicate.
    *  @return   The first iterator @c i in the range @p [__first,__last)
-   *  such that @p __pred(*i) is true, or 
+   *  such that `@p __pred(*i)` is true, or 
    *  @p `__last if no such iterator *  exists.`
    */
   template<typename _InputIterator, typename _Predicate>
@@ -48863,113 +48861,86 @@ namespace cxx_code
     }
 } // namespace
 
-bool check_size( const string &s, string::size_type sz )
-{
-  return s.size() >= sz;
-}
-
-auto check6 = bind( check_size, _1, 6 );
-
-string s = "hello";
-bool b1 = check6(s);    // bool check_size(s, 6)
-
-auto wc = find_if( words.begin(), words.end(), 
-                     [sz] (const string &a)
-                     { return a.size() >= sz; } );
-
-auto wc = find_if( words.begin(), words.end(), 
-                     bind(check_size, _1, 6) );
 
 <ex>
-#include<iostream>
-#include<vector>
-#include<string>
-#include<algorithm>
-#include<functional>
 
-using namespace std;
-using namespace std::placeholders;
-
-template <typename T>
-inline void PRINT_ELEMENTS( const T& coll, const std::string &optstr = "" )
+TEST(CxxFunctionObject, Bind)
 {
-  std::cout << optstr;
+  using namespace cxx_function;
 
-  for( const auto &elem : coll )
-    std::cout << elem << ' ';
+  // use library defined callable
+  {
+    std::plus<int> fo;
+    EXPECT_THAT(fo(10, 20), 30);
+  }
 
-  std::cout << std::endl;
+  // expect true if size >= 6
+  {
+    auto fo = std::bind(check_size, std::placeholders::_1, 6);
+
+    EXPECT_THAT(fo("hello"), false);
+    EXPECT_THAT(fo("hello!"), true);
+  }
+
+  // show when bind() composites
+  {
+    std::vector<std::string> coll{"bind", "do", "wonders"};
+
+    int size{6};
+
+    auto found1 = std::find_if(coll.cbegin(), coll.cend(),
+        [size](std::string const &e)
+        { return e.size() >= size; }
+        );
+
+    auto found2 = std::find_if(coll.cbegin(), coll.cend(),
+        [](std::string const &e)
+        { return e.size() >= 6; }
+        );
+
+    auto found3 = std::find_if(coll.cbegin(), coll.cend(),
+        std::bind(check_size, std::placeholders::_1, size));
+
+    auto found4 = std::find_if(coll.cbegin(), coll.cend(),
+        std::bind(check_size, std::placeholders::_1, 6));
+
+    EXPECT_THAT(*found1, "wonders");
+    EXPECT_THAT(*found1, *found3);
+    EXPECT_THAT(*found2, *found4);
+
+    // don't have to use arguments to bind() and found the first as function
+    // object always returns true
+    auto found5 = std::find_if(coll.cbegin(), coll.cend(),
+        std::bind(check_size, "wonders", 6));
+
+    EXPECT_THAT(*found5, "bind");
+  }
+
+  // show when bind() changes order of arguments
+  {
+    auto fo1 = std::bind(shorter_than_lhs, std::placeholders::_1, std::placeholders::_2);
+    auto fo2 = std::bind(shorter_than_lhs, std::placeholders::_2, std::placeholders::_1);
+
+    EXPECT_THAT(fo1("bind", "wonders"), false);
+    EXPECT_THAT(fo2("bind", "wonders"), true);
+  }
+
+  // shows that bind() internally uses copy of passed arguments
+  {
+    int value{};
+
+    std::bind(increase, value)();   // same as fo(value) but no effect on value
+    std::bind(increase, value)();   // same as fo(value) but no effect on value
+
+    EXPECT_THAT(value, 0);
+
+    // *cxx-ref*
+    std::bind(increase, std::ref(value))();   // increased
+    std::bind(increase, std::ref(value))();
+
+    EXPECT_THAT(value, 2);
+  }
 }
-
-bool check_size( const string &s, string::size_type sz )
-{
-  return s.size() >= sz;
-}
-
-int main()
-{
-  vector<string> coll{"over", "quick", "red", 
-    "fox", "jumps", "red", "the", "slow", "turtle", "the"};
-
-  sort( coll.begin(), coll.end() );
-
-  PRINT_ELEMENTS( coll, "sorted: " );
-
-  auto wc = find_if( coll.begin(), coll.end(),
-      bind( check_size, _1, 4 ));
-
-  cout << "wc = " << *wc << endl;
-}
-
-sorted: fox jumps over quick red red slow the the turtle 
-wc = jumps
-
-
-<ex> rearrange-arguments
-
-Use bind() to rearrange the parameters in the given collable.
-
-auto g = bind( f, a, b, _2, c, _1 );      
-g(X, Y); // f( a, b, Y, c, X );
-
-As an example, invert the meaning of isShorter.
-
-bool isShorter(const string &s1, const string &s2)
-{
-  return s1.size() < s2.size();
-}
-
-sort( words.begin(), words.end(), isShorter );
-sort( words.begin(), words.end(), bind( isShorter, _2, _1 ));
-
-
-<ex> not-use-arguments
-
-Possible not to use arguments at all. If changes the example above as:
-
-auto wc = find_if( coll.begin(), coll.end(),
-   bind( check_size, "bind", 4 ));
-
-
-sorted: fox jumps over quick red red slow the the turtle 
-wc = fox
-
-
-{bind-copy-arguments} *cpp-ref* *cpp-cref*
-The bind() internally 'copies' passed arguments. To let the function object
-use a reference to a passed argument, use ref() or cref(). 
-
-See Section 5.4.3, page 132. For example:
-
-void incr (int& i)
-{
-  ++i;
-}
-
-int i=0;
-
-bind(incr, i)();            // increments a copy of i, no effect for i
-bind(incr, ref(i))();       // increments i
 
 
 <bind-use-global-function>
@@ -49044,15 +49015,6 @@ bool caseInsFind2(string& s, const string& p)
 ={============================================================================
 *kt_dev_cxx_0000* cxx-fobj-bind-member-function
 
-The *cxx-bind* works with member function, modifying member function, and
-virtual function:
-
-o The first argument is a member function 
-
-o the next argument defines the `target object` for which this member function
-  gets called to.
-
-
 Use pointer to member function?
 
 `a pointer to member is not a callable object`; do not support the function
@@ -49062,7 +49024,8 @@ algorithm.
 auto fp = &string::empty;
 find_if(svec.begin(), svec.end(), fp);
 
-error and won't compile since the code inside find_if executes something like:
+cxx-error and won't compile since the code inside find_if executes something
+  like:
 
 if (fp(*it))
 
@@ -49073,16 +49036,17 @@ The `cxx-function` creates a callable for a member function and knows that it
 must use the appropriate pointer-to-member operator to make the call.
 
 The std::function<>, declared in <functional>, provides polymorphic wrappers
-that generalize the notion of a function pointer.
+that `generalize the notion of a function pointer.`
 
-o the signature's first parameter must represent the (normally implicit) object
-  on which the member will be run. done by `find_if` inside in this case.
-
-  When member functions are used, the object they are called for `must` to be
-  the first argument:
+o the first parameter must represent the (normally implicit) object
+  on which the member will be run `target object` as it calls member function.
 
 o the signature to `function` must speficy whether the object will be passed as
   a pointer or reference.
+
+std::function<void(Foo &)> op;
+
+that is the first agrument is Foo and is reference. 
 
 
 namespace cxx_function
@@ -49112,25 +49076,123 @@ namespace cxx_function
 
 } // namespace
 
-TEST(FunctionObject, BindMemberFunction)
+TEST(CxxFunctionObject, Function)
 {
-  // use std::function<> and that is to use pointer
+  using namespace cxx_function;
+
+  // expect that nullptr if not set
+  {
+    Foo foo = Foo(100);
+    std::function<void(Foo &)> op;
+
+    if (op == nullptr)
+      EXPECT_THAT(true, true);
+    else
+      EXPECT_THAT(true, false);
+  }
+
+  // when use std::function, have to speficy `target`
   {
     Foo foo = Foo(100);
     std::function<void(Foo &)> op = &Foo::update_10;
+
+    // specify the target object
+    //
+    // that performing a function call without having a 'target' to call throws
+    // an exception of type std::bad_function_call (see Section 4.3.1, page 43):
+    // 
+    // std::function<void(int,int)> f; 
+    //
+    // f(33,66);
+    //
+    // throws std::bad_function_call
 
     op(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // use cxx-bind
+  // the signatuer to std::function specify whether the argument is copy or
+  // reference
   {
-    Foo foo = Foo(100);
-    auto op = std::bind(&Foo::update_10, _1);
+    // use reference and copy
+    {
+      Foo foo{100};
+
+      std::function<void(Foo &)> fo1 = &Foo::update_20;
+      fo1(foo);
+      EXPECT_THAT(fo1.get_value(), 120);
+
+      std::function<void(Foo)> fo2 = &Foo::update_20;
+      fo2(foo);
+      EXPECT_THAT(fo1.get_value(), 100);
+    }
+
+    // use reference
+    {
+      vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+      vector<size_t> result{};
+
+      std::function<void(Foo &)> op = &Foo::update_20;
+
+      for_each(coll.begin(), coll.end(), op);
+
+      // to get result out and algo-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), 
+          print_value);
+
+      EXPECT_THAT(result, ElementsAre(21,22,23));
+    }
+
+    // use copy so not updated
+    {
+      vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+      vector<size_t> result{};
+
+      std::function<void(Foo)> op = &Foo::update_20;
+
+      for_each(coll.begin(), coll.end(), op);
+
+      // to get result out and cxx-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), 
+          print_value);
+
+      EXPECT_THAT(result, ElementsAre(1,2,3));
+    }
+  }
+}
+
+
+When use *cxx-bind* to call  member function, modifying member function, and
+virtual function:
+
+o The first argument is a member function 
+
+o the next argument defines the `target object` which this member function
+  gets called to.
+
+
+TEST(CxxFunctionObject, BindAndFunction)
+{
+  using namespace cxx_function;
+
+  // when use std::function<>
+  {
+    Foo foo{100};
+    std::function<void(Foo &)> fo = &Foo::update_10;
+
+    fo(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // when use cxx-bind
+  {
+    Foo foo{100};
+    auto fo = std::bind(&Foo::update_10, _1);
 
     // see that pass `foo` object to op
-    op(foo);
+    fo(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
@@ -49162,16 +49224,41 @@ TEST(FunctionObject, BindMemberFunction)
 
   // cxx-bind use reference
   {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
+    // shows that bind() internally uses copy of passed arguments. NO. it is
+    // becuase when bind() makes function object it binds to copy or reference.
+    {
+      int value{};
 
-    for_each(coll.begin(), coll.end(), std::bind(&Foo::update_10, _1));
+      std::bind(increase, value)();   // same as fo(value) but no effect on value
+      std::bind(increase, value)();   // same as fo(value) but no effect on value
 
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
+      EXPECT_THAT(value, 0);
 
-    EXPECT_THAT(result, ElementsAre(11,12,13));
+      // *cxx-ref*
+      std::bind(increase, std::ref(value))();   // increased
+      std::bind(increase, std::ref(value))();
+
+      EXPECT_THAT(value, 2);
+    }
+
+    // it is when function object is called, that function object gets called
+    // with reference within cxx-for-each
+    {
+      vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+      vector<size_t> result{};
+
+      auto fo = std::bind(&Foo::update_10, _1);
+
+      {
+        for_each(coll.begin(), coll.end(), fo);
+
+        // to get result out and algo-transform requires unary predicate
+        transform(coll.begin(), coll.end(), back_inserter(result), 
+            print_value);
+
+        EXPECT_THAT(result, ElementsAre(11,12,13));
+      }
+    }
   }
 
   // cxx-function use reference
@@ -49185,35 +49272,74 @@ TEST(FunctionObject, BindMemberFunction)
 
     std::function<void(Foo &)> op = &Foo::update_10;
 
-    for_each(coll.begin(), coll.end(), op);
+    {
+      for_each(coll.begin(), coll.end(), op);
 
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
+      // to get result out and algo-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), 
+          print_value);
 
-    EXPECT_THAT(result, ElementsAre(11,12,13));
+      EXPECT_THAT(result, ElementsAre(11,12,13));
+    }
   }
+}
 
-  // cxx-function use copy
+
+<ex>
+
+{
+  // from cxx-bind to cxx-function
   {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
+    Foo foo{100};
+    auto fbind = std::bind(&Foo::update_10, _1);
 
-    // see difference:
-    // std::function<void(`Foo`)> op = &Foo::update_20;
+    std::function<void(Foo &)> ffunc = fbind;
 
-    std::function<void(Foo)> op = &Foo::update_20;
+    ffunc(foo);
 
-    for_each(coll.begin(), coll.end(), op);
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+}
 
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
 
-    EXPECT_THAT(result, ElementsAre(1,2,3));
+client calls:
+
+notify(&IBleRcuDeviceEvent::pairingStatusChanged, pairing));
+
+template<typename F, typename... Args>
+  void notify(F f, Args&&... args)
+  {
+    notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
   }
 
 
+client calls:
+
+notify(std::bind(&IBleRcuDeviceEvent::pairingStatusChanged, std::placeholders::_1, pairing));
+
+calls template:
+
+template<typename F>
+  void notify(F f)
+  {
+    notify_impl(f);
+  }
+
+function object from std::bind binds to function object from std::function. so
+function object from std::function calls function object from bind which calls
+actual member function with the composited argument. cxx-bind is like
+cxx-warpper.
+
+void notify_impl(std::function<void (std::shared_ptr<T> const &)> fun)
+{
+  std::shared_ptr<T> strong = o.lock();
+  dispatcher_->post(std::bind(fun, strong));
+}
+
+
+
+TEST(CxxFunctionObject, MemFn)
+{
   // Use `cxx-mem-fn` to let the compiler deduce the member's type and to
   // generate a callable object.  The callable generated by `mem_fn` can be
   // called on either an object or a pointer.
@@ -49326,39 +49452,6 @@ for_each (cp.begin(), cp.end(), bind(&Person::print, _1));
 
 std::vector<std::shared_ptr<Person>> sp;
 for_each (sp.begin(), sp.end(), bind(&Person::print, _1));
-
-<ex>
-
-notify(&IBleRcuDeviceEvent::pairingStatusChanged, pairing));
-
-template<typename F, typename... Args>
-  void notify(F f, Args&&... args)
-  {
-    notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
-  }
-
-notify(std::bind(&IBleRcuDeviceEvent::pairingStatusChanged, std::placeholders::_1, pairing));
-
-template<typename F>
-  void notify(F f)
-  {
-    notify_impl(f);
-  }
-
-// notify_impl expects void() with target object using shared_ptr
-
-void notify_impl(std::function<void (std::shared_ptr<T> const &)> fun)
-{
-  std::shared_ptr<T> strong = o.lock();
-  dispatcher_->post(std::bind(fun, strong));
-}
-
-
-dispatcher calls f-from-bind()
-  f-from-bind calls fun(strong)
-    fun is f-from-bind so f-from-bind(strong)
-      obj::f(paring)
-
 
 <cxx-bind-ex> CLR 4.4
 

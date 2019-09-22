@@ -3272,21 +3272,22 @@ namespace cxx_function
 
 } // namespace
 
-TEST(FunctionObject, Function)
+TEST(CxxFunctionObject, Function)
 {
   using namespace cxx_function;
 
+  // expect that nullptr if not set
   {
     Foo foo = Foo(100);
     std::function<void(Foo &)> op;
 
-    // if (op == nullptr)
-    if (!op)
+    if (op == nullptr)
       EXPECT_THAT(true, true);
     else
       EXPECT_THAT(true, false);
   }
 
+  // when use std::function, have to speficy `target`
   {
     Foo foo = Foo(100);
     std::function<void(Foo &)> op = &Foo::update_10;
@@ -3307,59 +3308,73 @@ TEST(FunctionObject, Function)
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // cxx-function use reference
+  // the signatuer to std::function specify whether the argument is copy or
+  // reference
   {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
+    // use reference and copy
+    {
+      Foo foo{100};
 
-    std::function<void(Foo &)> op = &Foo::update_10;
+      std::function<void(Foo &)> fo1 = &Foo::update_20;
+      fo1(foo);
+      EXPECT_THAT(foo.get_value(), 120);
 
-    for_each(coll.begin(), coll.end(), op);
+      // if use reference, should be 140
+      std::function<void(Foo)> fo2 = &Foo::update_20;
+      fo2(foo);
+      EXPECT_THAT(foo.get_value(), 120);
+    }
 
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
+    // use reference
+    {
+      vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+      vector<size_t> result{};
 
-    EXPECT_THAT(result, ElementsAre(11,12,13));
-  }
+      std::function<void(Foo &)> op = &Foo::update_20;
 
-  // cxx-function use reference
-  {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
+      for_each(coll.begin(), coll.end(), op);
 
-    std::function<void(Foo &)> op = &Foo::update_20;
+      // to get result out and algo-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), 
+          print_value);
 
-    for_each(coll.begin(), coll.end(), op);
+      EXPECT_THAT(result, ElementsAre(21,22,23));
+    }
 
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
+    // use copy so not updated
+    {
+      vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+      vector<size_t> result{};
 
-    EXPECT_THAT(result, ElementsAre(21,22,23));
-  }
+      std::function<void(Foo)> op = &Foo::update_20;
 
-  // cxx-function use copy
-  {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
+      for_each(coll.begin(), coll.end(), op);
 
-    std::function<void(Foo)> op = &Foo::update_20;
+      // to get result out and cxx-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), 
+          print_value);
 
-    for_each(coll.begin(), coll.end(), op);
-
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
-
-    EXPECT_THAT(result, ElementsAre(1,2,3));
+      EXPECT_THAT(result, ElementsAre(1,2,3));
+    }
   }
 }
 
 
 // *cxx-bind*
 
-TEST(FunctionObject, Bind)
+namespace cxx_function
+{
+  bool check_size(std::string const &s, std::string::size_type size)
+  { return s.size() >= size; }
+
+  bool shorter_than_lhs(std::string const &lhs, std::string const &rhs)
+  { return lhs.size() > rhs.size(); }
+
+  void increase(int &i)
+  { ++i; }
+} // namespace
+
+TEST(CxxFunctionObject, Bind)
 {
   using namespace cxx_function;
 
@@ -3367,6 +3382,57 @@ TEST(FunctionObject, Bind)
   {
     std::plus<int> fo;
     EXPECT_THAT(fo(10, 20), 30);
+  }
+
+  // expect true if size >= 6
+  {
+    auto fo = std::bind(check_size, std::placeholders::_1, 6);
+
+    EXPECT_THAT(fo("hello"), false);
+    EXPECT_THAT(fo("hello!"), true);
+  }
+
+  // show when bind() composites
+  {
+    std::vector<std::string> coll{"bind", "do", "wonders"};
+
+    int size{6};
+
+    auto found1 = std::find_if(coll.cbegin(), coll.cend(),
+        [size](std::string const &e)
+        { return e.size() >= size; }
+        );
+
+    auto found2 = std::find_if(coll.cbegin(), coll.cend(),
+        [](std::string const &e)
+        { return e.size() >= 6; }
+        );
+
+    auto found3 = std::find_if(coll.cbegin(), coll.cend(),
+        std::bind(check_size, std::placeholders::_1, size));
+
+    auto found4 = std::find_if(coll.cbegin(), coll.cend(),
+        std::bind(check_size, std::placeholders::_1, 6));
+
+    EXPECT_THAT(*found1, "wonders");
+    EXPECT_THAT(*found1, *found3);
+    EXPECT_THAT(*found2, *found4);
+
+    // don't have to use arguments to bind() and found the first as function
+    // object always returns true
+    auto found5 = std::find_if(coll.cbegin(), coll.cend(),
+        std::bind(check_size, "wonders", 6));
+
+    EXPECT_THAT(*found5, "bind");
+  }
+
+  // show when bind() changes order of arguments
+  {
+    auto fo1 = std::bind(shorter_than_lhs, std::placeholders::_1, std::placeholders::_2);
+    auto fo2 = std::bind(shorter_than_lhs, std::placeholders::_2, std::placeholders::_1);
+
+    EXPECT_THAT(fo1("bind", "wonders"), false);
+    EXPECT_THAT(fo2("bind", "wonders"), true);
   }
 
   // cxx-bind-nested
@@ -3404,7 +3470,7 @@ TEST(FunctionObject, Bind)
     deque<int> coll2;
 
     // initialised
-    EXPECT_THAT(coll2, ElementsAre(9, 8, 7, 6, 5, 4, 3, 2, 1));
+    EXPECT_THAT(coll1, ElementsAre(9, 8, 7, 6, 5, 4, 3, 2, 1));
 
     // *algo-transform*
     transform( coll1.cbegin(), coll1.cend(),    // source
@@ -3412,7 +3478,7 @@ TEST(FunctionObject, Bind)
         bind( multiplies<int>(), _1, 10 ));     // unary operation
 
     // transformed
-    EXPECT_THAT(coll1, ElementsAre(90,80,70,60,50,40,30,20,10));
+    EXPECT_THAT(coll2, ElementsAre(90,80,70,60,50,40,30,20,10));
 
     // algo-replace-if
     replace_if( coll2.begin(), coll2.end(),   // range
@@ -3420,7 +3486,7 @@ TEST(FunctionObject, Bind)
         42 );                                 // new value
 
     // replaced
-    EXPECT_THAT(coll1, ElementsAre(90,80,42,60,50,40,30,20,10));
+    EXPECT_THAT(coll2, ElementsAre(90,80,42,60,50,40,30,20,10));
 
     // *algo-remove-if*
     //
@@ -3450,7 +3516,7 @@ TEST(FunctionObject, Bind)
         coll2.end());
 
     // replaced
-    EXPECT_THAT(coll1, ElementsAre(90,42,40,30,20,10));
+    EXPECT_THAT(coll2, ElementsAre(90,42,40,30,20,10));
   }
 
   // std::placeholders:: How it works?
@@ -3488,27 +3554,27 @@ TEST(FunctionObject, Bind)
   }
 }
 
-TEST(FunctionObject, BindMemberFunction)
+TEST(CxxFunctionObject, BindAndFunction)
 {
   using namespace cxx_function;
 
-  // use std::function<> and that is to use pointer
+  // when use std::function<>
   {
-    Foo foo = Foo(100);
-    std::function<void(Foo &)> op = &Foo::update_10;
+    Foo foo{100};
+    std::function<void(Foo &)> fo = &Foo::update_10;
 
-    op(foo);
+    fo(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
 
-  // use cxx-bind
+  // when use cxx-bind
   {
-    Foo foo = Foo(100);
-    auto op = std::bind(&Foo::update_10, _1);
+    Foo foo{100};
+    auto fo = std::bind(&Foo::update_10, _1);
 
     // see that pass `foo` object to op
-    op(foo);
+    fo(foo);
 
     EXPECT_THAT(foo.get_value(), 110);
   }
@@ -3540,20 +3606,53 @@ TEST(FunctionObject, BindMemberFunction)
 
   // cxx-bind use reference
   {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
-
-    auto op = std::bind(&Foo::update_10, _1);
-
+    // shows that bind() internally uses copy of passed arguments. NO. it is
+    // becuase when bind() makes function object it binds to copy or reference.
     {
-      for_each(coll.begin(), coll.end(), op);
+      int value{};
 
-      // to get result out and algo-transform requires unary predicate
-      transform(coll.begin(), coll.end(), back_inserter(result), 
-          print_value);
+      std::bind(increase, value)();   // same as fo(value) but no effect on value
+      std::bind(increase, value)();   // same as fo(value) but no effect on value
 
-      EXPECT_THAT(result, ElementsAre(11,12,13));
+      EXPECT_THAT(value, 0);
+
+      // *cxx-ref*
+      std::bind(increase, std::ref(value))();   // increased
+      std::bind(increase, std::ref(value))();
+
+      EXPECT_THAT(value, 2);
     }
+
+    // it is when function object is called, that function object gets called
+    // with reference within cxx-for-each
+    {
+      vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
+      vector<size_t> result{};
+
+      auto fo = std::bind(&Foo::update_10, _1);
+
+      {
+        for_each(coll.begin(), coll.end(), fo);
+
+        // to get result out and algo-transform requires unary predicate
+        transform(coll.begin(), coll.end(), back_inserter(result), 
+            print_value);
+
+        EXPECT_THAT(result, ElementsAre(11,12,13));
+      }
+    }
+  }
+
+  // from cxx-bind to cxx-function
+  {
+    Foo foo{100};
+    auto fbind = std::bind(&Foo::update_10, _1);
+
+    std::function<void(Foo &)> ffunc = fbind;
+
+    ffunc(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
   }
 
 
@@ -3578,26 +3677,11 @@ TEST(FunctionObject, BindMemberFunction)
       EXPECT_THAT(result, ElementsAre(11,12,13));
     }
   }
+}
 
-  // cxx-function use copy
-  {
-    vector<Foo> coll={Foo(1), Foo(2), Foo(3)};
-    vector<size_t> result{};
-
-    // see difference:
-    // std::function<void(`Foo`)> op = &Foo::update_20;
-
-    std::function<void(Foo)> op = &Foo::update_20;
-
-    for_each(coll.begin(), coll.end(), op);
-
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), 
-        print_value);
-
-    EXPECT_THAT(result, ElementsAre(1,2,3));
-  }
-
+TEST(CxxFunctionObject, MemFn)
+{
+  using namespace cxx_function;
 
   // Use `cxx-mem-fn` to let the compiler deduce the member's type and to
   // generate a callable object.  The callable generated by `mem_fn` can be
@@ -3627,7 +3711,11 @@ TEST(FunctionObject, BindMemberFunction)
 
     EXPECT_THAT(result, ElementsAre(11,12,13));
   }
+}
 
+TEST(CxxFunctionObject, Pointer)
+{
+  using namespace cxx_function;
 
   // use pointer
   {
