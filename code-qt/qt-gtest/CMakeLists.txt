@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.0.0)
 
 project(qt_gtest VERSION 0.1 LANGUAGES CXX)
 
+enable_testing()
+
 # To fix find_package issue:
 #
 # https://doc.qt.io/qt-5/cmake-manual.html
@@ -87,7 +89,9 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 # find_package(Qt5Core)
-find_package(Qt5 COMPONENTS Widgets REQUIRED)
+# find_package(Qt5 COMPONENTS Widgets REQUIRED)
+find_package(Qt5Core)
+find_package(Qt5Test)
 
 add_executable(${PROJECT_NAME} "qt_gtest.cpp" "qt_class.cpp")
 
@@ -96,4 +100,4 @@ add_executable(${PROJECT_NAME} "qt_gtest.cpp" "qt_class.cpp")
 # include directories, compile definitions, the position-independent-code flag,
 # and links to the qtmain.lib library on Windows.
 
-target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Widgets)
+target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test)
