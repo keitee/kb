@@ -30,6 +30,36 @@ class Counter : public QObject
     int m_value;
 };
 
+class Foo : public QObject
+{
+  Q_OBJECT
+
+  public:
+    Foo() 
+    { 
+      QTimer *timer = new QTimer(this);
+      connect(timer, SIGNAL(timeout()), this, SLOT(timer_expired()));
+      timer->start(2000);
+      m_value = 0; 
+    }
+
+    int value() const { return m_value; }
+
+    // private slots:
+    public slots:
+      void timer_expired()
+      {
+        qCritical() << "Foo:: timer_expired is called";
+        emit timerExpired(1);
+      }
+
+signals:
+    void timerExpired(int value);
+
+  private:
+    int m_value;
+};
+
 
 // ={=========================================================================
 

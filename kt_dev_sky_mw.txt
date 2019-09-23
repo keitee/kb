@@ -23,6 +23,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-build
 *kt_dev_skymw_0000* skymw-as
 *kt_dev_skymw_0000* skymw-as-airplay
+*kt_dev_skymw_0000* skymw-ai-input-handler
 *kt_dev_skymw_0000* skymw-bluez
 *kt_dev_skymw_0000* skymw-bluez-as
 *kt_dev_skymw_0000* skymw-bluez-dbus
@@ -45,6 +46,28 @@ KT KB. SKYMW
 ={============================================================================
 *kt_dev_skymw_0000* skymw-setup
 
+<skymw-setup-amidala>
+/home/keitee/mw/tftproot/amidala
+
+192.168.0.100:titan/zImage"
+
+setenv serverip 192.168.0.101
+setenv tftp_dir amidala
+setenv autoload no
+setenv tftp_path "$serverip:$user_name/$tftp_dir"
+setenv kernel "$tftp_path/zImage"
+setenv dtb "$tftp_path/sdk2_stih418-amidala.dtb"
+setenv load_addr "0x82008000"
+setenv fdt_addr "0x94000000"
+setenv bootm "dhcp;tftp $load_addr $kernel;tftp $fdt_addr $dtb;dcache off;bootz $load_addr - $fdt_addr"
+setenv bootcmd "run bootm"
+setenv bootargs "remotedir=192.168.0.101:/home/keitee/mw/exports/amidala/flash0"
+setenv bootdelay 2
+saveenv
+reset
+
+bootm=dhcp;tftp 0x82008001 192.168.0.101:/amidala/zImage;tftp 0x94000000 192.168.0.101:/amidala/sdk2_stih418-amidala.dtb;dcache off;bootz 0x82008000 - 0x94000000
+
 <tftp>
 sudo apt-get install tftpd-hpa
 
@@ -61,7 +84,10 @@ TFTP_OPTIONS="--secure"
 sudo apt-get install nfs-kernel-server
 
 
-<boot>
+<skymw-setup-titan-boot>
+
+/home/keitee/mw/tftproot/titan
+
 mount -o rw -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /mnt/x
 
 // should be careful not to include the end of line when pasting it into bolt
@@ -279,6 +305,30 @@ with preprocessed source if appropriate.
 See <http://gcc.gnu.org/bugs.html> for instructions.
 
 
+<skymw-build-amidala>
+
+cd /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-amidala-de
+
+get sdk from zork
+https://zork.ethan.bskyb.com/de/sdk/Q000.022.76.00/
+https://zork.ethan.bskyb.com/de/sdk/Q000.022.76.00/Q__formal__Q000__Q000.022.76.00__SDK__eu-q-amidala-de__release_dbg__S__unsigned.tgz
+
+// copy boot image
+cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-amidala-de/SDK/SKYEU_SKYH418_AMIDALA_LNUX_01/KERN_SKYEU_SKYH418_AMIDALA_LNUX_01/LittleEndian/debug/debug/BootImage/zImage .
+
+./compile_sdkv2.0.sh eu-q-amidala-de /home/keitee/mw/ethan-as-source/ clean
+
+or
+
+cd ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-amidala-de/SDK/FUSION_SYSTEM_INTEGRATION/BSKYB_ETHAN/build
+./make.sh --platform bskyb-falcon-d1-uhd --project bskybgen2 --profile nds_si_devel
+./utils/bskybgen2_flash_H1.sh -b bskyb-falcon-d1-uhd
+
+
+sudo cp -r /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-amidala-de/SDK/flash0 /home/keitee/mw/exports/amidala
+
+
+
 <skymw-build-as> *build-from-as-pov*
 
 export LC_ALL=C
@@ -362,7 +412,10 @@ drwxr-xr-x 10 keitee keitee 4.0K Sep 17 10:37 ../
 lrwxrwxrwx  1 keitee keitee   42 Sep 17 10:40 Components -> /home/keitee/mw/ethan-as-source/Components/
 drwxr-xr-x  2 keitee keitee 4.0K Sep 17 10:40 ./
 
+// to-use-as-from-sdk
+ln -s /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK_Q000.022.04.00_bskybgen2_SKY7278/THIRD_PARTY_LIBRARIES/BSKYB_GEN2_AMS /home/keitee/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/THIRD_PARTY_LIBRARIES/BSKYB_GEN2_AMS/Components
 `
+
 <skymw-build-ai> *build-from-ai-pov*
 // build full under AS but use ai from ai-repo
 
@@ -1017,6 +1070,12 @@ void AirPlay::PlayerImpl::startAirPlay()
 <airplay-progress>
 NDS: ^0000000452.250604 !MIL   -AS           < p:00000de7 t:7a3fedc0 T:no name M:AS_DMS_Writer.cpp F:AirplayinterfaceDiagLog L:00258 > 
   @ctx:AS_AUDIOSTREAMER_IMPL Trace.cpp(41) Progress, duration 39 elapsed 9
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-ai-input-handler
+
+https://www.stb.bskyb.com/confluence/display/~grayb/Input+Handling+In+AI
 
 
 ={============================================================================
@@ -6547,7 +6606,9 @@ keitee@keitee-mint:~/rdk/arrisxi6-morty-RNE-SDK-2.0/samples$ ./build_samples.sh
 
 // Enable SSH Access (every time when boots)
 
-By default the image provides an ssh service (dropbear) that is locked down.  The following can be used to spin up a new instance of dropbear that allow root login.
+By default the image provides an ssh service (dropbear) that is locked down.
+The following can be used to spin up a new instance of dropbear that allow
+root login.
 
 dropbearkey -t rsa -f /tmp/sky-ssh-hostkey
 dropbear -p :10022 -P /var/run/dropbear2.pid -r /tmp/sky-ssh-hostkey -B
@@ -7227,7 +7288,7 @@ git checkout -b NGDEV-146407_AS_INT_peripherals_btremotes_status_is_stuck_in_INI
 
 NGDEV-146407: AS_INT: peripherals/btremotes/status is stuck in INITIALISING state after reboot
 
-From investigation, two races are identified:
+From investigation, the edge case is identified:
 
 * 055 RCU causes an adapter powered earlier than 101 RCU which causes the IDLE
   state change fired before the signal connection is made. So the signal is lost
