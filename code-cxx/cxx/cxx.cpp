@@ -2205,7 +2205,7 @@ namespace cxx_time_duration_case
 } // namespace
 
 
-TEST(Time, DurationCast)
+TEST(CxxTime, DurationCast)
 {
   using namespace cxx_time_duration_case;
 
@@ -2224,20 +2224,27 @@ TEST(Time, DurationCast)
   chrono::milliseconds msec = 
     chrono::duration_cast<chrono::milliseconds>(ms % chrono::seconds(1));
 
+  chrono::nanoseconds nsec1 = 
+    chrono::duration_cast<chrono::nanoseconds>(ms % chrono::seconds(1));
+
+  uint32_t nsec2 = 
+    ((ms % chrono::seconds(1)).count() * 1000000L);
+
   ostringstream os;
 
-  os << hh << "::" << mm << "::" << ss << "::" << msec;
+  os << hh << "::" << mm << "::" << ss << "::" << msec << "::" << nsec1;
 
-  EXPECT_THAT(os.str(), "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]");
+  EXPECT_THAT(os.str(), "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]::[42000000 of 1/1000000000]");
 
   os.str("");
 
   // see that same count() function used as operator<<() above
   
   os << hh.count() << "::" << mm.count() << "::" 
-    << ss.count() << "::" << msec.count();
+    << ss.count() << "::" << msec.count() << "::" << nsec1.count();
 
-  EXPECT_THAT(os.str(), "2::0::55::42");
+  EXPECT_THAT(os.str(), "2::0::55::42::42000000");
+  EXPECT_THAT(nsec1.count(), nsec2);
 }
 
 

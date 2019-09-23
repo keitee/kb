@@ -15,6 +15,8 @@
 
 #include "gmock/gmock.h"
 
+#include <sys/prctl.h>
+
 using namespace std;
 using namespace std::placeholders;
 using namespace testing;

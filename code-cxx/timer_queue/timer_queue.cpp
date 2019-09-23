@@ -118,14 +118,16 @@ int64_t TimerQueue::add(std::chrono::milliseconds const &timeout, bool oneshot
   entry.oneshot = oneshot;
   entry.func = func;
   entry.timeout = timeout;
-  entry.expiry = calcAbsTime(now, timeout);
+  entry.expiry = calcAbsTime_(now, timeout);
 
   // hold the lock and push the timer into the queue
   std::lock_guard<std::mutex> lock(m_);
 
   // if the new timer was added to the head of the queue then update the
   // timerfd.
-  // TODO: why say priority queue?
+  // why say priority queue? since it uses std::multiset and use compare
+  // predicate. that is sorted coll and the closer to the current time comes
+  // first.
   auto it = tqueue_.emplace(entry);
 
   if (it == tqueue_.begin())
@@ -135,8 +137,10 @@ int64_t TimerQueue::add(std::chrono::milliseconds const &timeout, bool oneshot
 }
 
 
-/* stops the poll loop thread and cancels all timers
- */
+/* 
+={=============================================================================
+stops the poll loop thread and cancels all timers
+*/
 void TimerQueue::stop()
 {
   // if the thread is still running, terminate by triggering the eventfd that
@@ -220,4 +224,61 @@ void TimerQueue::timerThread_()
   } // while
 }
 
+/* 
+-{-----------------------------------------------------------------------------
+calculate new timespec time based on now timespec and ms offset
+*/
+
+struct timespec TimerQueue::calcAbsTime_(struct timespec const &base
+    std::chrono::milliseconds const &offset) const
+{
+  #define NSECS_PER_SEC   1000000000L
+  #define NSECS_PER_MSEC  1000000L
+
+  struct timespec ts;
+
+  ts.tv_sec = base.tv_sec
+    + std::chrono::duration_cast<std::chrono::seconds>(offset).count();
+
+  // (offset % std::chrono::seconds(1)).count() makes remaining ms and convert
+  // it to ns.
+  ts.tv_nsec = base.tv_nsec
+    + ((offset % std::chrono::seconds(1)).count() * NSECS_PER_MSEC);
+
+  if (ts.tv_nsec > NSECS_PER_SEC)
+  {
+    ts.tv_nsec -= NSECS_PER_SEC;
+    ts.tv_nsec += 1;
+  }
+
+  return ts;
+}
+
+/* 
+-{-----------------------------------------------------------------------------
+write the item on the head of the `expiry queue` into the timerfd for the next
+wake-up time.
+*/
+
+void TimerQueue::updateTimerfd_() const 
+{ 
+  struct itimerspec its{};
+
+  // struct itimerval {
+  //   struct timeval it_interval; /* Interval for periodic timer */
+  //   struct timeval it_value;    /* Current value (time until next expiration) */
+  // };
+
+  if (tqueue_.empty())
+  {
+    // will disable the timerfd
+    its.it_value.tv_sec = 0;
+    its.it_value.tv_nsec = 0;
+  }
+  else
+  {
+    // set expiry time. begin() returns iterator hence use ->
+    its.it_value = tqueue_.begin()->expiry;
+  }
+}
 

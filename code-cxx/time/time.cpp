@@ -118,7 +118,7 @@ TEST(Time, Realtime)
 
 
 // ={=========================================================================
-// time-timer
+// time-timer-signal
 //
 // LPI-23 Listing 23-1: Using a real-time timer
 // timers/real_timer.c

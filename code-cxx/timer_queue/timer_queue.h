@@ -27,9 +27,9 @@ class TimerQueue
 
     void doRemove_(int64_t tag);
 
-    void updateTimerFd() const;
+    void updateTimerfd_() const;
 
-    struct timespec calcAbsTime(struct timespec const &now,
+    struct timespec calcAbsTime_(struct timespec const &now,
         std::chrono::milliseconds const &timeout) const;
 
   private:
