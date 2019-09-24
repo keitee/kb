@@ -93,8 +93,11 @@ TimerQueue::~TimerQueue()
 }
 
 
-/* add new timer to the timer queue
- */
+/* 
+={=============================================================================
+add new timer to the timer queue
+*/
+
 int64_t TimerQueue::add(std::chrono::milliseconds const &timeout, bool oneshot
     , std::function<bool()> const &func)
 {
@@ -120,22 +123,31 @@ int64_t TimerQueue::add(std::chrono::milliseconds const &timeout, bool oneshot
   entry.timeout = timeout;
   entry.expiry = calcAbsTime_(now, timeout);
 
-  // hold the lock and push the timer into the queue
+  // hold the lock and push the timer into the priority queue
   std::lock_guard<std::mutex> lock(m_);
 
-  // if the new timer was added to the head of the queue then update the
-  // timerfd.
   // why say priority queue? since it uses std::multiset and use compare
   // predicate. that is sorted coll and the closer to the current time comes
   // first.
   auto it = tqueue_.emplace(entry);
 
+  // if the new timer was added to the head of the queue then update the
+  // timerfd.
   if (it == tqueue_.begin())
-    updateTimerfd();
+    updateTimerfd_();
 
   return tag;
 }
 
+
+/* 
+={=============================================================================
+remove the given timer from the queue
+*/
+
+bool TimerQueue::remove(int64_t tag)
+{
+}
 
 /* 
 ={=============================================================================
@@ -279,6 +291,11 @@ void TimerQueue::updateTimerfd_() const
   {
     // set expiry time. begin() returns iterator hence use ->
     its.it_value = tqueue_.begin()->expiry;
+  }
+
+  if (0 != timerfd_settime(timerfd_, TFD_TIMER_ABSTIME, &its, NULL))
+  {
+    LOG_MSG("failed to set timerfd value");
   }
 }
 
