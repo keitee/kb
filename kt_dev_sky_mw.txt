@@ -112,7 +112,7 @@ sudo apt-get install libxslt-dev
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-pages
+*kt_dev_skymw_0000* skymw-mw
 
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=Application+Infrastructure+Architecture
 
@@ -229,7 +229,7 @@ git diff origin/develop..HEAD
 git push --set-upstream origin feature/NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
 
 // since uses diffrent branch name 
-git push -n origin feature/NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
+git push -n origin `feature`/NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared
 
 // Someone else might have changed something
 git pull --rebase
@@ -252,12 +252,13 @@ usage: git flow feature finish [-h] [-F] [-r] [-p] [-k] [-D] [-S] [--no-ff] <nam
     --[no]push            Push to origin after performing finish
     -k, --[no]keep        Keep branch after performing finish
     --keepremote          Keep the remote branch
-    --keeplocal           Keep the local branch
+    `--keeplocal`           Keep the local branch
     -D, --[no]force_delete
                           Force delete feature branch after finish
     -S, --[no]squash      Squash feature during merge
     --no-ff               Never fast-forward during the merge
 
+// see no `feature` in the name
 git flow feature finish -S NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared_compatibility_fix
 git flow feature finish NGDEV-143989_CLONE_-_DTH_-_BLERCU_Support_RCU_pairing_without_infrared_compatibility_fix
 
@@ -358,8 +359,8 @@ drwxr-xr-x 2 keitee keitee 4.0K Sep 17 10:32 ./
 //
 // tar -xzf ${SDK_FILE_NAME}
 
-// update zimage
-cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/SKYOB_SKY7278_BCM7278_LNUX_01/KERN_SKYOB_SKY7278_BCM7278_LNUX_01/LittleEndian/debug/debug/BootImage/zImage .
+// copy boot image
+cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/SKYOB_SKY7278_BCM7278_LNUX_01/KERN_SKYOB_SKY7278_BCM7278_LNUX_01/LittleEndian/debug/debug/BootImage/zImage /home/keitee/mw/tftproot/titan
 
 
 // 2.0??
@@ -1077,6 +1078,86 @@ NDS: ^0000000452.250604 !MIL   -AS           < p:00000de7 t:7a3fedc0 T:no name M
 
 https://www.stb.bskyb.com/confluence/display/~grayb/Input+Handling+In+AI
 
+// appinfrastructure/AppInfrastructure/InputHandler/lib/include/InputHandler.h
+
+class InputSource
+{
+  void sendKey(uint16_t keyCode, bool down);
+  const std::shared_ptr<InputQueue> mQueue;
+};
+
+
+void LinuxInputHandler::addNewInputDevice(dev_t devNumber, const std::string &devPath)
+{
+  // try and create the new device based
+  std::shared_ptr<LinuxInputDevice> device =
+    LinuxInputDevice::create(devNumber, m_modeSetting, devPath, mInputQueue, mDeviceIDManager);
+
+  AI_LOG_MILESTONE("added device node %u:%u (%s) with fd %d and id %hu to input loop ",
+      major(devNumber), minor(devNumber), device->toString().c_str(),
+      device->fd(), device->deviceId());
+}
+
+
+59351:NDS: ^0000000247.989785 !MIL   -APPINFRA     < p:00000e1e t:46910dc0 T:no name 
+M:LinuxInputHandler.cpp F:addNewInputDevice L:00497 > 
+added device node 13:64 (bluetooth vendor:0x057a product:0x0004 'D4:B8:FF:12:E1:A8') with fd 549 and id 4039 to input loop
+
+
+std::shared_ptr<LinuxInputDevice> LinuxInputDevice::create(dev_t devNumber,
+                                                           uint8_t devMode,
+                                                           const std::string &devPath,
+                                                           const std::shared_ptr<InputQueue> &queue,
+                                                           const std::shared_ptr<InputDeviceIDManager> &idManager)
+{
+  // gift the device fd with all the other data to an LinuxInputDevice object
+  std::shared_ptr<LinuxInputDevice> device =
+    std::shared_ptr<LinuxInputDevice>
+    (new LinuxInputDevice(devFd, devNumber, devMode, devType,
+                          busType, id.vendor, id.product,
+                          id.version, physAddress, idToken, queue));
+}
+
+LinuxInputDevice::LinuxInputDevice(int deviceFd, dev_t devNumber)
+{
+  // create either a default event processor or one specific for the BT RCU
+  // depending on the product id
+  if (devType != IInputHandler::DeviceType::GenericLinuxInputDev)
+  {
+    // BLE RCU
+    mEventProcessor = new BleRcuInputEventProcessor(this);
+  }
+}
+
+void LinuxInputDevice::process(int devFd, unsigned events)
+{
+  ssize_t amount = TEMP_FAILURE_RETRY(readv(devFd, iov, maxInputEvents));
+
+  // process the events based on input type
+  mEventProcessor->processEvents(inputEvents, nEvents);
+}
+
+protected:
+    InputSource * const mOutput;
+
+LinuxInputEventProcessor::LinuxInputEventProcessor(InputSource *output)
+    : mOutput(output)
+
+class BleRcuInputEventProcessor : public LinuxInputEventProcessor
+
+BleRcuInputEventProcessor::BleRcuInputEventProcessor(InputSource *output)
+    : LinuxInputEventProcessor(output)
+
+
+// appinfrastructure/AppInfrastructure/InputHandler/lib/source/BleRcuInputEventProcessor.cpp
+void BleRcuInputEventProcessor::processEvents(const struct input_event *events);
+
+void BleRcuInputEventProcessor::processKeyEvents(uint16_t keyCode, int32_t state)
+{
+  // send the up / down state of the key
+  mOutput->sendKey(hidKeyCode, (state == LNX_KEY_UP) ? false : true);
+}
+
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-bluez
@@ -1093,9 +1174,10 @@ meld /home/keitee/ip/repo/SkyBluetoothRcu/app/src/main/cpp/blercu /home/keitee/m
 
 
 <bluez-usb>
-do everytime when usb is plugged or reboot machine
+do everytime when bluetooth usb is plugged or reboot machine
 
 keitee@keitee-mint:~/mw/ethan-as-source-repo$ sudo dmesg | tail
+
 [393789.742167] IPv6: ADDRCONF(NETDEV_UP): eno1: link is not ready
 [393789.931065] IPv6: ADDRCONF(NETDEV_UP): eno1: link is not ready
 [393791.433703] e1000e: eno1 NIC Link is Up 100 Mbps Full Duplex, Flow Control: Rx/Tx
@@ -1126,6 +1208,7 @@ keitee@keitee-mint:~/mw/ethan-as-source-repo$ sudo dmesg | tail
 [421535.324115] Bluetooth: RFCOMM TTY layer initialized
 [421535.324124] Bluetooth: RFCOMM socket layer initialized
 [421535.324132] Bluetooth: RFCOMM ver 1.11
+
 keitee@keitee-mint:~/mw/ethan-as-source-repo$ sudo /lib/udev/hid2hci --mode=hci --method=csr2 --devpath=/devices/pci0000:00/0000:00:14.0/usb1/1-10/1-10:1.0
 
 
@@ -1707,7 +1790,7 @@ void BleRcuContollerProxy::notifyPairingStatusChanged(bool pairing)
 }
 
 
-<bluez-q-controller-proxy> <ai-bluetooth-client-side>
+<bluez-q-client-proxy>
 
 COMPONENT_NAME := BleRcuClientLib
 
@@ -2052,6 +2135,7 @@ void `BleRcuContollerProxy::onIrPairingCode`(
     return;
   }
 
+  *pairing-code*
   const uint8_t pairingCode = (keyCode & 0x00ff);
 
   AI_LOG_MILESTONE("received IR pairing code %03hhu", pairingCode);
@@ -2294,7 +2378,22 @@ void Console::initReadLine()
 }
 
 
-<ai-bluetooth-daemon>
+void BleRcuCmdHandler::startPairing(quint8 pairingCode)
+{
+	if (!m_blercuController1 || !m_blercuController1->isValid()) {
+		qWarning("Missing one or more required dbus interfaces");
+		return;
+	}
+
+	// send the request to the daemon
+	QDBusPendingReply<> reply = m_blercuController1->StartPairing(pairingCode);
+	reply.waitForFinished();
+	if (reply.isError())
+		showDBusError(reply.error());
+}
+
+
+<bluez-q-daemon>
 
 RCU_USR   5022  0.0  0.0   3224   548 ?        Ss   06:31   0:00 \
   /opt/libexec/DobbyInit /opt/sbin/BleRcuDaemon --noconsole --session --netns=3 --audio-fifo-dir=/tmp/blercu/
@@ -2529,6 +2628,13 @@ BleRcuController1Adaptor::BleRcuController1Adaptor(BleRcuController *parent,
       this, &BleRcuController1Adaptor::onPairingStateChanged);
 }
 
+*start-pairing* *pairing-code*
+
+Attempts to start the pairing procedure looking for devices that identify
+with the given \a filterByte and \a pairingCode.  Both these byte values
+are sent in the IR pairing signal and are used `to help identify` the RCU
+model and unique name.
+
 void BleRcuController1Adaptor::`StartPairing`(quint8 pairingCode,
                                             const QDBusMessage &message)
 {
@@ -2539,7 +2645,6 @@ void BleRcuController1Adaptor::`StartPairing`(quint8 pairingCode,
     return;
   }
 
-  *start-pairing*
   // attempt to start pairing using the supplied code
   if (!`m_controller->startPairing`(pairingCode)) {
 
@@ -2547,6 +2652,13 @@ void BleRcuController1Adaptor::`StartPairing`(quint8 pairingCode,
     sendErrorReply(message, error.name(), error.message());
 
   }
+}
+
+bool BleRcuControllerImpl::startPairing(quint8 pairingCode)
+{
+  // start the pairing process
+  m_pairingStateMachine.start(pairingCode);
+  return true;
 }
 
 
@@ -2631,7 +2743,8 @@ void BleRcuCmdHandler::initBleRcuInterfaces()
 }
 
 
-keitee@keitee-mint:~/mw/appinfrastructure/AppInfrastructure/BluetoothRcu$ ag "emit stateChanged\("
+$ ag "emit stateChanged\("
+
 daemon/source/blercu/blercucontroller.cpp
 369:    emit stateChanged(PairingState::Searching);
 550:    emit stateChanged(PairingState::Pairing);
@@ -2688,7 +2801,7 @@ daemon/source/blercu/blercucontroller.cpp
 678:NDS: ^0000000114.941318 !MIL   -BLERCU       < p:00000dfb t:49afcdc0 T:no name M:blercucontroller1_adaptor.cpp F:onStateChanged L:00128 > onStateChanged( 1 )
 -
 
-<ai-bluetooth-manager>
+<bluez-q-manager>
 
 // BluetoothRcu/daemon/source/blercu/blercumanager.cpp
 
@@ -2717,6 +2830,8 @@ BleRcuManagerImpl::BleRcuManagerImpl(const QSharedPointer<const ConfigSettings> 
                                      const QDBusConnection &bluezBusConn,
                                      QObject *parent)
 
+
+<bluez-q-controller>
 // BluetoothRcu/daemon/source/blercu/blercupairingstatemachine.cpp
 
 void BleRcuPairingStateMachine::setupStateMachine()
@@ -2766,7 +2881,7 @@ QSharedPointer<BleRcuDevice> BleRcuDeviceFactory::create(const BleAddress &addre
 }
 
 
-<ai-bluetooth-device>
+<bluez-q-device>
 
 // appinfrastructure/AppInfrastructure/BluetoothRcu/
 // daemon/source/blercu/blercudevice_p.h
@@ -2951,10 +3066,11 @@ static void messageOutput(QtMsgType type, const QMessageLogContext &context,
 ={============================================================================
 *kt_dev_skymw_0000* skymw-bluez-audio-stream
 
+*refs*
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=2016&title=Qt+WebRuntime+Documentation
 Bluetooth Audio: ETHAN Bluetooth AUdio Streaming Theory Of Ops.pdf
 
-<refs>
+*refs*
 dbusitf usage in AS
 https://www.stb.bskyb.com/confluence/display/~partom1/dbusitf+usage+in+AS
 
@@ -3015,9 +3131,11 @@ information.
 
 
 The architecture of the dbusitf code
+*refs*
 https://www.stb.bskyb.com/confluence/display/~partom1/The+architecture+of+the+dbusitf+code
 
 Bluetooth media streaming
+*refs*
 https://www.stb.bskyb.com/confluence/display/~partom1/Bluetooth+media+streaming
 
 
@@ -4069,6 +4187,7 @@ void ControllerImplementation::ProcessConnectionState(AS::string bdaddr,
 *kt_dev_skymw_0000* skymw-android
 
 1. android studio
+*refs*
 https://developer.android.com/studio/install
 
 2. adb, Android Debug Bridge
@@ -4290,6 +4409,7 @@ build.
 *kt_dev_skymw_0000* skymw-android-bluetoothrcu skymw-ip100
 
 <skymw-ip100>
+*refs*
 https://www.stb.bskyb.com/confluence/display/~grayb/Android+Bluez+Stack
 
 <ip100-adb>
@@ -4372,7 +4492,7 @@ Release notes attached, highlights are:
 - Added feature to put the bluetooth code in 'searching' mode for 30 seconds. 
 
 
-<bt-remote-pairing>
+<bt-remote-pairing> *bluez-pairing*
 https://docs.ubuntu.com/core/en/stacks/bluetooth/bluez/docs/reference/pairing/introduction
 
 What is Pairing
@@ -4405,7 +4525,7 @@ persistent storage. An API to the wider system, or some knowledge of the final
 persistent storage system is necessary to co-ordinate this.
 
 
-<bluez-tool-bluetoothctl> *only-for-android*
+<bluez-tool-bluetoothctl> *only-for-android* bluez-tool
 https://www.stb.bskyb.com/confluence/display/2016/RCU%3A+Pairing+steps+by+steps
 
 Pairing from Ubuntu Core
@@ -4429,6 +4549,7 @@ telnet <stb-ip-address> 8123
 [NEW] Controller 38:A6:CE:7E:63:1A "sky-ip100" [default]
 [NEW] Device D4:B8:FF:12:E1:A8 U122 SkyQ EC101
 Agent registered
+
 [bluetooth]# ?
 Invalid command
 [bluetooth]# help
@@ -4522,16 +4643,24 @@ Device D4:B8:FF:12:E1:A8 (public)
 Device has been removed
 [bluetooth]#
 
-//
 
+// *start-pairing*
 [bluetooth]# scan on
+
+// while scan is going
 [bluetooth]# pair D4:B8:FF:12:E1:A8
+Attempting to pair with D4:B8:FF:12:E1:A8
 
 ... press "1+3"
 
-[bluetooth]# scan off
+[CHG] Device D4:B8:FF:12:E1:A8 Connected: yes
+[CHG] Device D4:B8:FF:12:E1:A8 Name: U032 SkyQ EC101
+[CHG] Device D4:B8:FF:12:E1:A8 Alias: U032 SkyQ EC101
+[U187 SkyQ EC101]#
 
-[bluetooth]# info D4:B8:FF:12:E1:A8
+// see the change on [name] and no need to scan off if paired?
+// [bluetooth]# scan off
+// [bluetooth]# info D4:B8:FF:12:E1:A8
 
 *bluez-rcu*
 [U162 SkyQ EC101]# devices
@@ -4589,7 +4718,7 @@ public class BleRcuService extends Service {
 }
 
 
-<bluez-sky>
+<bluez-sky> *start-pairing*
 1+3 key triggers two things:
 
 o do advertisement from rcu
@@ -4952,6 +5081,7 @@ BleRcuService::BleRcuService(QObject *parent)
         this, &BleRcuService::onIrKeyPress);
   }
 
+*pairing-code*
 void BleRcuService::onIrKeyPress(quint16 keyCode, qint32 scanCode)
 {
   // check for the pairing keyCode F13 which is the new format
@@ -5010,7 +5140,7 @@ class BleRcuControllerImpl : public BleRcuController
 //  */
 // void BleRcuPairingStateMachine::onEnteredDiscoveringState()
 // {
-//    *get-devices-from-adapter*
+//    *start-pairing-get-devices-from-adapter*
 // 	// get the current list of devices
 // 	const QMap<BleAddress, QString> deviceNames = m_adapter->deviceNames();
 // 
@@ -5034,16 +5164,16 @@ class BleRcuControllerImpl : public BleRcuController
 // void BleRcuPairingStateMachine::processDevice(const BleAddress &address,
 //                                               const QString &name)
 // {
-//    *match-devices-from-rcu-to-scanned-devices*
-//    QMap<quint32, QRegExp>::const_iterator it = m_pairingPrefixes.find(address.oui());
-//
-//    I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
+//    *pairing-code-match-devices-from-rcu-to-scanned-devices*
+//    QMap<quint32, QRegExp>::const_iterator it = 
+//      m_pairingPrefixes.find(address.oui());
 // }
 // 
-// I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > found target device D4:B8:FF:12:E1:A8
+// I BleRcuQt: < M:blercupairingstatemachine.cpp F:processDevice L:781 > 
+//  found target device D4:B8:FF:12:E1:A8
 
 
-// *pairing-fsm-regex*
+// *pairing-code-regex*
 //
 // m_pairingPrefixFormats is built from *config* when fsm starts and is used to
 // check if current devices does match up with expected pattern in
@@ -5062,7 +5192,7 @@ class BleRcuControllerImpl : public BleRcuController
 // }
 //
 
-// "130" is *paringcode*
+// "130" is *paring-code*
 // 
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 18:46:44:xx:xx:xx is 'U130 SkyQ EC201'
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 70:91:F3:xx:xx:xx is 'U130 SkyQ EC102'
@@ -5089,6 +5219,7 @@ void BleRcuPairingStateMachine::start(quint8 filterByte, quint8 pairingCode)
 
     // construct the wildcard match
     QRegExp regEx(QString::asprintf(it.value().constData(), `pairingCode`));
+
     regEx.setPatternSyntax(QRegExp::WildcardUnix);
 
     qInfo("pairing regex for %02hhX:%02hhX:%02hhX:xx:xx:xx is '%s'",
@@ -5163,8 +5294,11 @@ void BleRcuPairingStateMachine::onStateExit(int state)
 
 void BleRcuPairingStateMachine::onEnteredPairingState()
 {
-	// request the manager to pair with the device
-	m_manager->pairDevice(m_targetAddress);
+  // note:
+  // m_targetAddress comes when device is found in processDevice()
+  //
+  // request the manager to pair with the device
+  m_manager->pairDevice(m_targetAddress);
 }
 
 bool BleRcuManagerImpl::pairDevice(const BleAddress &address)
@@ -5176,14 +5310,14 @@ bool BleRcuManagerImpl::pairDevice(const BleAddress &address)
 
 void BleRcuDeviceImpl::pair(int timeout)
 {
-	QDBusPendingReply<> reply = m_deviceProxy->Pair();
-	QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(reply, this);
+  QDBusPendingReply<> reply = `m_deviceProxy->Pair();`
+  QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(reply, this);
 
-	QObject::connect(watcher, &QDBusPendingCallWatcher::finished,
-	                 this, &BleRcuDeviceImpl::onPairRequestReply);
+  QObject::connect(watcher, &QDBusPendingCallWatcher::finished,
+      this, &BleRcuDeviceImpl::onPairRequestReply);
 
-	// set the flag, it may be cleared if the call fails
-	m_isPairing = true;
+  // set the flag, it may be cleared if the call fails
+  m_isPairing = true;
 }
 
 void BleRcuDeviceImpl::onPairRequestReply(QDBusPendingCallWatcher *call)
@@ -6540,10 +6674,16 @@ public class Renderer implements ModdedGLSurfaceView.Renderer {
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk
 
+https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Building+BleRcuDaemon
 Checkout Code
 
 git clone dwngit@git.stb.bskyb.com:appinfrastructure
 git checkout feature/NOJIRA_rdk_ble_rcu_daemon
+
+The top level CMake file is in the 
+
+appinfrastructure/RDK/BluetoothRcu 
+
 
 // toolchain?
 https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Units
@@ -6551,12 +6691,62 @@ https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Uni
 
 // sdk root where sdk is installed
 
-keitee@keitee-mint:~/rdk/2.0$ ll
+`keitee@keitee-mint:~/rdk/2.0`$ 
 drwxr-xr-x 4 keitee keitee 4.0K Aug 28 00:01 sysroots/
 drwxr-xr-x 5 keitee keitee 4.0K Sep 20 11:07 ../
 -rw-r--r-- 1 keitee keitee 3.4K Sep 20 11:07 environment-setup-cortexa15t2hf-neon-rdk-linux-gnueabi
 -rw-r--r-- 1 keitee keitee  118 Sep 20 11:07 version-cortexa15t2hf-neon-rdk-linux-gnueabi
 -rw-r--r-- 1 keitee keitee  54K Sep 20 11:07 site-config-cortexa15t2hf-neon-rdk-linux-gnueabi
+
+
+<rdk-cmake>
+keitee@keitee-mint:~/rdk/appinfrastructure/RDK/BluetoothRcu/cmake$ more toolchain.cmake
+# this one is important
+SET(CMAKE_SYSTEM_NAME Linux)
+#this one not so much
+SET(CMAKE_SYSTEM_VERSION 1)
+
+set(RDK_SDK /home/keitee/rdk/2.0)
+
+set( RDK_TOOLCHAIN_BASE ${RDK_SDK}/sysroots/x86_64-rdksdk-linux/usr/bin/arm-rdk-linux-gnueabi )
+set( RDK_TOOLCHAIN_PREFIX ${RDK_TOOLCHAIN_BASE}/arm-rdk-linux-gnueabi- )
+
+# compiler flags as set by the RDK SDK
+set( RDK_DEFAULT_CFLAGS "-march=armv7-a -mfloat-abi=hard -mfpu=neon-vfpv4 -mtune=cortex-a7 -fno-omit-frame-pointer -fno-optimize-sibling-calls -ggdb --sysroot=${RDK_SDK}/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi" )
+
+
+# specify the cross compiler
+SET(CMAKE_C_COMPILER   ${RDK_TOOLCHAIN_PREFIX}gcc )
+SET(CMAKE_CXX_COMPILER ${RDK_TOOLCHAIN_PREFIX}g++ )
+
+# the following is needed as the OSX toolchain uses the "/lib/ld-linux.so.3"
+# linker path, whereas in the RDK rootfs they haven't added the symlink so
+# instead we force it to be the original file
+# (nb if you run 'file' on the built binary you can see the difference)
+set( CMAKE_EXE_LINKER_FLAGS "-Wl,--dynamic-linker,/lib/ld-2.24.so" )
+
+set( CMAKE_C_FLAGS "${RDK_DEFAULT_CFLAGS}" CACHE STRING "" FORCE )
+set( CMAKE_CXX_FLAGS "${RDK_DEFAULT_CFLAGS}" CACHE STRING "" FORCE )
+
+# where is the target environment
+#SET( CMAKE_FIND_ROOT_PATH "${RDK_TOOLCHAIN_BASE}" )
+SET( CMAKE_FIND_ROOT_PATH "${RDK_SDK}/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/" )
+SET( CMAKE_SYSROOT "${RDK_SDK}/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/" )
+
+
+# search for programs in the build host directories
+SET( CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER )
+
+# for libraries and headers in the target directories
+set( CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY )
+set( CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY )
+
+# set the path to the Qt SDK
+set( QT5_SDK, ${RDK_SDK}/sysroots/cortexa15t2hf-neon-rdk-linux-gnueabi/usr )
+set( QT5_ABI_SDK "${QT5_SDK}" )
+# set( OE_QMAKE_PATH_EXTERNAL_HOST_BINS "/Volumes/Katalix/RDK/firebolt/Qt-build/rdk_armv7/bin" )
+set( OE_QMAKE_PATH_EXTERNAL_HOST_BINS "/home/keitee/rdk/2.0/sysroots/x86_64-rdksdk-linux/usr/bin" )
+
 
 // set env
 
@@ -6604,6 +6794,7 @@ drwxr-xr-x 8 keitee keitee    4096 Sep 20 11:07 ..
 
 keitee@keitee-mint:~/rdk/arrisxi6-morty-RNE-SDK-2.0/samples$ ./build_samples.sh
 
+<rdk-ssh>
 // Enable SSH Access (every time when boots)
 
 By default the image provides an ssh service (dropbear) that is locked down.
@@ -6620,6 +6811,9 @@ iptables -I OUTPUT 1 -p tcp --sport 10022 -m conntrack --ctstate ESTABLISHED -j 
 
 
 ssh -p 10022 root@<STBIP>
+
+// copy binary to
+/tmp/data
 
 
 ={============================================================================
@@ -7290,13 +7484,13 @@ NGDEV-146407: AS_INT: peripherals/btremotes/status is stuck in INITIALISING stat
 
 From investigation, the edge case is identified:
 
-* 055 RCU causes an adapter powered earlier than 101 RCU which causes the IDLE
-  state change fired before the signal connection is made. So the signal is lost
-  and no state update to AS.
+* 055 RCU and some platforms gets an adapter powered earlier than the usual
+  such as 101 RCU which causes the IDLE state change fired before the signal
+  connection is made. So the signal is lost and no state update to AS.
 
 This commit sends out IDLE state change once all objects are up and running to
-be sure it's get delivered to AS and to cover the case where manager skips out
-to powered on state if adapter is up earlier. 
+be sure it's get delivered to AS when early powered event arrives and manager
+skips out to powered on state. 
 
 
 git flow feature start NGDEV-146407_AS_INT_peripherals_btremotes_status_is_stuck_in_INITIALISING_state_after_reboot

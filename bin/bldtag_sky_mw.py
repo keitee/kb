@@ -23,6 +23,7 @@ if __name__ == "__main__":
         'appinfrastructure/AppInfrastructure/Singletons',
         'appinfrastructure/AppInfrastructure/IpcService',
         'appinfrastructure/AppInfrastructure/Dobby',
+        'appinfrastructure/AppInfrastructure/InputHandler',
         'appinfrastructure/AppInfrastructure/Common'
         ]
 
