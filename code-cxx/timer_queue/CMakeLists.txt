@@ -72,9 +72,12 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 add_compile_options("-g")
 
+# set(LIBS_DIR "../libs")
+# add_subdirectory(${LIBS_DIR} ${CMAKE_BINARY_DIR}/libs)
+# include_directories(SYSTEM ${LIBS_DIR})
 
 # timer_queue
-add_executable(${PROJECT_NAME} timer_queue_main.cpp timer_queue.cpp)
+add_executable(${PROJECT_NAME} timer_queue_test.cpp timer_queue.cpp slog.cpp)
 target_link_libraries(${PROJECT_NAME} gmock_main)
 
 

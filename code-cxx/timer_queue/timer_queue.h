@@ -9,6 +9,26 @@
 #include <thread>
 #include <set>
 
+
+/*
+ *  @brief Utility object that can be used to register a callback function to
+ *  execute in the future
+ *
+ *  Multiple callbacks can be registered via this object, internally it runs a
+ *  thread with a single timerfd that wakes up at the correct time and then
+ *  calls any handlers registered.
+ *
+ *  All callbacks are processed in the same thread, so obviously one timer
+ *  handler can block all the others, clients should bear this in mind.
+ *
+ *  It is safe to called the add() or remote() APIs from within a callback
+ *  handler.  Added timers will be processed once all callbacks have been
+ *  handled in a cycle, whereas removed timers will be added to a queue and
+ *  removed from the loop once the current callback has finished execution. In
+ *  addition it is guaranteed that the callback for a particular timer will
+ *  never be called once the remove() method on the timer in question returns.
+*/
+
 class TimerQueue
 {
   public:
@@ -25,7 +45,7 @@ class TimerQueue
   private:
     void timerThread_();
 
-    void doRemove_(int64_t tag);
+    bool doRemove_(int64_t tag);
 
     void updateTimerfd_() const;
 
@@ -55,16 +75,16 @@ class TimerQueue
     // check if lhs < rhs in time and this is `compare` for multiset which sort
     // timer from near to further in time.
 
-    struct TimeEntryCompare
+    struct TimerEntryCompare
     {
-      bool oparator() (TimeEntry const &lhs, TimeEntry const &rhs)
+      bool operator() (TimerEntry const &lhs, TimerEntry const &rhs)
       {
-        return (lhs.tv_sec < rhs.tv_sec) ||
-          ((lhs.tv_sec == rhs.tv_sec) && (lhs.tv_nsec < rhs.tv_nsec));
+        return (lhs.expiry.tv_sec < rhs.expiry.tv_sec) ||
+          ((lhs.expiry.tv_sec == rhs.expiry.tv_sec) && (lhs.expiry.tv_nsec < rhs.expiry.tv_nsec));
       }
     };
-
-    std::multiset<TimerEntry, TimerEntryCompre> tqueue_;
+    
+    std::multiset<TimerEntry, TimerEntryCompare> tqueue_;
 
   private:
     std::mutex m_;
