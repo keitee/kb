@@ -57,7 +57,7 @@ details, see the eventfd(2) manual page.
 
 
 TimerQueue::TimerQueue()
-  : callback_exec_(false)
+  : callback_running_(false)
     , callback_tag_(-1)
     , tag_counter_(1)
 {
@@ -147,6 +147,52 @@ remove the given timer from the queue
 
 bool TimerQueue::remove(int64_t tag)
 {
+  // sanity check
+  if (tag <= 0)
+  {
+    LOG_MSG("invalid timer tag %lld", tag);
+    return false;
+  }
+
+  std::unique_lock<std::mutex> lock(m_);
+
+  if (!t_.joinable())
+  {
+    LOG_MSG("timer thread not running");
+    return false;
+  }
+
+  if (callback_running_)
+  {
+    removed_.insert(tag);
+
+    // the next special case is if the timer callback currently being called is
+    // the one we are removing. that is "callback_tag_ == tag" and then are from
+    // different thread.
+    //
+    // if this is called from the timer thread then will deadlock waiting on the
+    // condifitonal variable. in such situations it is safe just to add the
+    // timer to the removed set.
+    if ((callback_tag_ == tag) && (std::this_thread::get_id() != t_.get_id()))
+    {
+      // wait till the callback completes since callback_tag_ is set to -1 when
+      // callback finishes.
+      while (callback_tag_ == tag)
+      {
+        callback_complete_.wait(lock);
+      }
+    }
+
+    // ???
+    // unfortunatly we don't actually know if the tag was valid or not at
+    // this point, so for now just assume it was ... FIXME
+    return true;
+  }
+  else
+  {
+    // not currently runs any callbacks so can just remove it
+    return doRemove_(tag);
+  }
 }
 
 /* 
@@ -298,4 +344,36 @@ void TimerQueue::updateTimerfd_() const
     LOG_MSG("failed to set timerfd value");
   }
 }
+
+
+/* 
+-{-----------------------------------------------------------------------------
+removes the time with tag from the queue
+*/
+
+bool TimerQueue::doRemove_(int64_t tag)
+{
+  for (auto it = tqueue_.begin(); it != tqueue_.end(); ++it)
+  {
+    if (it->tag == tag)
+    {
+      bool requires_update = (it == tqueue_.begin()); 
+
+      // see the order of q handling. use begin() and erase() later but not the
+      // other way round.
+      tqueue_.erase(it);
+
+      // if we remove the timer from the head then need to update the expiry of
+      // the timerfd with the new head.
+      if(requires_update)
+        updateTimerfd_();
+
+      return true;
+    }
+  }
+
+  LOG_MSG("failed to find timer %lld to remove", tag);
+  return false;
+}
+
 

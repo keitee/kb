@@ -369,9 +369,11 @@ cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/SKYOB_SKY7278_BCM7
 // 3.0??
 ./compile_sdkv3.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source/
 
-Creating object 
-/home/keitee/mw/`ethan-as-source`/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/FUSION_SYSTEM_INTEGRATION/BSKYB_ETHAN/build/bskybgen2/SKYOB_SKY7278_BCM7278_LNUX_01/LittleEndian/release_dbg/
-/components/bskybgen2/appinfrastructure/XmlDSigVerifier/standalone/lib/source/VerificationRequest.o
+*skymw-build-output* Creating object 
+/home/keitee/mw/`ethan-as-source`/xSubmoduleDarwinSDK/eu-q-titan-uk/
+  SDK/FUSION_SYSTEM_INTEGRATION/BSKYB_ETHAN/build/bskybgen2/SKYOB_SKY7278_BCM7278_LNUX_01/LittleEndian/release_dbg/
+  /components/bskybgen2/appinfrastructure/
+
 
 // all points the same single file
 
@@ -1078,20 +1080,80 @@ NDS: ^0000000452.250604 !MIL   -AS           < p:00000de7 t:7a3fedc0 T:no name M
 
 https://www.stb.bskyb.com/confluence/display/~grayb/Input+Handling+In+AI
 
-// appinfrastructure/AppInfrastructure/InputHandler/lib/include/InputHandler.h
-
-class InputSource
+FactoryContainer::FactoryContainer()
 {
-  void sendKey(uint16_t keyCode, bool down);
-  const std::shared_ptr<InputQueue> mQueue;
+  // input handler creation
+  inputHandler = std::make_shared<InputHandler>();
+}
+
+InputHandler::InputHandler()
+    *create-queue*
+    : mInputQueue(std::make_shared<InputQueue>())
+    , mFusionHandler(std::make_shared<FusionInputHandler>(mInputQueue))
+    *create-linux-input-handler*
+    , mLinuxHandler(std::make_shared<LinuxInputHandler>(mInputQueue))
+    , mCdiHandler(std::make_shared<CdiInputHandler>(mInputQueue))
+{
+  mFusionHandler->start();
+  mLinuxHandler->start();
+  mCdiHandler->start();
+}
+
+int InputHandler::registerKeyListener(unsigned eventSources,
+                                      const IInputHandler::KeyListener& listener,
+                                      const IInputHandler::KeyListenerPredicate& predicate)
+{
+  return mInputQueue->registerKeyListener(eventSources, listener, predicate);
+}
+
+
+// observers
+
+ethan-as-source/Components/AS/Services/Controllers/KeyEventController/source/
+  AS_KEYEVENT_KeyEventControllerImplementation.cpp
+
+void KeyEventControllerImplementation::KeyControllerMainListener
+  (IInputHandler::EventSource eventSource, uint17_t keyCode, bool keyState);
+
+
+// source (observee)
+
+    typedef std::function<void (EventSource, uint16_t, bool)> KeyListener;
+
+    struct Listener
+    {
+        unsigned eventSources;
+        IInputHandler::KeyListener handler;
+        IInputHandler::KeyListenerPredicate predicate;
+        IInputHandler::KeyListenerV2 handlerV2;
+        IInputHandler::KeyListenerPredicateV2 predicateV2;
+    };
+
+class InputQueue
+{
+  std::queue<KeyEvent> mKeyQueue;
+
+  int registerKeyListener(unsigned eventSources,
+      const IInputHandler::KeyListener& listener,
+      const IInputHandler::KeyListenerPredicate& predicate);
 };
 
+
+    const std::shared_ptr<InputQueue> mInputQueue;
 
 void LinuxInputHandler::addNewInputDevice(dev_t devNumber, const std::string &devPath)
 {
   // try and create the new device based
   std::shared_ptr<LinuxInputDevice> device =
-    LinuxInputDevice::create(devNumber, m_modeSetting, devPath, mInputQueue, mDeviceIDManager);
+    LinuxInputDevice::create(devNumber, m_modeSetting, devPath, `mInputQueue`, mDeviceIDManager);
+
+  // add the device to the poll loop
+  EPollLoop::Handler handler = std::bind(`&LinuxInputDevice::process`, device,
+      std::placeholders::_1, std::placeholders::_2);
+
+  int64_t id = mPollLoop->addFileDescriptor(device->fd(), EPollLoop::Readable, handler);
+
+  mInputDevices[devNumber] = std::make_pair(id, device);
 
   AI_LOG_MILESTONE("added device node %u:%u (%s) with fd %d and id %hu to input loop ",
       major(devNumber), minor(devNumber), device->toString().c_str(),
@@ -1102,6 +1164,21 @@ void LinuxInputHandler::addNewInputDevice(dev_t devNumber, const std::string &de
 59351:NDS: ^0000000247.989785 !MIL   -APPINFRA     < p:00000e1e t:46910dc0 T:no name 
 M:LinuxInputHandler.cpp F:addNewInputDevice L:00497 > 
 added device node 13:64 (bluetooth vendor:0x057a product:0x0004 'D4:B8:FF:12:E1:A8') with fd 549 and id 4039 to input loop
+
+
+// appinfrastructure/AppInfrastructure/InputHandler/lib/include/InputHandler.h
+
+class InputSource
+{
+  void sendKey(uint16_t keyCode, bool down);
+  const std::shared_ptr<InputQueue> mQueue;
+};
+
+
+class LinuxInputDevice : public InputSource
+{
+    LinuxInputEventProcessor *mEventProcessor;
+};
 
 
 std::shared_ptr<LinuxInputDevice> LinuxInputDevice::create(dev_t devNumber,
@@ -1118,7 +1195,13 @@ std::shared_ptr<LinuxInputDevice> LinuxInputDevice::create(dev_t devNumber,
                           id.version, physAddress, idToken, queue));
 }
 
-LinuxInputDevice::LinuxInputDevice(int deviceFd, dev_t devNumber)
+
+LinuxInputDevice::LinuxInputDevice(int deviceFd, dev_t devNumber,
+  const std::shared_ptr<InputQueue> &queue)
+    : InputSource(devType, devMode, idToken->value(), queue,
+                  std::chrono::milliseconds(RCU_LONG_STANDBY_MS),
+                  RCU_SHORT_STANDBY_KEYCODE, RCU_LONG_STANDBY_KEYCODE)
+
 {
   // create either a default event processor or one specific for the BT RCU
   // depending on the product id
@@ -1157,6 +1240,29 @@ void BleRcuInputEventProcessor::processKeyEvents(uint16_t keyCode, int32_t state
   // send the up / down state of the key
   mOutput->sendKey(hidKeyCode, (state == LNX_KEY_UP) ? false : true);
 }
+
+// ir keys
+
+-APPINFRA     < M:InputQueue.cpp F:sendKey L:00110 > KT: InputQueue::sendKey(filterByte(20), keyCode(61022), down(0)
+-APPINFRA     < M:InputQueue.cpp F:listenerThread L:00288 > KT: InputQueue::listner.handler(event{source(2), keyCode(61022), down(0)}
+-AS           < M:AS_DMS_Writer.cpp F:KeyControllerMainListener L:00258 > @ctx:AS_KEYEVENT AS_KEYEVENT_KeyEventControllerImplementation.cpp(223) KT: KeyControllerMainListener acquired deviceType: 2, keyCode: 0xee5e, keyState: 0
+-APPINFRA     < M:BleRcuController.cpp F:isIrPairingCode L:00801 > KT: isIrPairingCode filterByte(0x14), keyCode(0xee5e)
+-APPINFRA     < M:InputQueue.cpp F:listenerThread L:00288 > KT: InputQueue::listner.handler(event{source(2), keyCode(61022), down(0)}
+-APPINFRA     < M:BleRcuController.cpp F:onIrPairingCode L:00850 > KT: received IR pairing code 094
+
+-APPINFRA     < M:LinuxInputDevice.cpp F:create L:00169 > KT LinuxInputDevice(devPath(/dev/input/event0) busType(2) devType(3)
+-APPINFRA     < M:LinuxInputDevice.cpp F:LinuxInputDevice L:00210 > KT LinuxInputDevice creates BleRcuInputEventProcessor
+-APPINFRA     < M:LinuxInputHandler.cpp F:addNewInputDevice L:00497 > KT: added device node 13:64 (bluetooth vendor:0x057a product:0x0004 'D4:B8:FF:12:E1:A8') with fd 508 and id 1418 to input loop 
+
+// bluetooth keys
+-APPINFRA     < M:LinuxInputDevice.cpp F:process L:00419 > KT: read 48 bytes (3 events) from device node
+-APPINFRA     < M:BleRcuInputEventProcessor.cpp F:processEvents L:00188 > KT: ble rcu input { type=EV_MSC, code=4, value=458810 }
+-APPINFRA     < M:BleRcuInputEventProcessor.cpp F:processEvents L:00188 > KT: ble rcu input { type=EV_KEY, code=59, value=1 }
+-APPINFRA     < M:BleRcuInputEventProcessor.cpp F:processKeyEvents L:00124 > KT: sendKey(58, 1)
+-APPINFRA     < M:InputQueue.cpp F:sendKey L:00110 > KT: InputQueue::sendKey(filterByte(0), keyCode(57344), down(1)
+-APPINFRA     < M:BleRcuInputEventProcessor.cpp F:processEvents L:00188 > KT: ble rcu input { type=EV_SYN, code=0, value=0 }
+-APPINFRA     < M:InputQueue.cpp F:listenerThread L:00288 > KT: InputQueue::listner.handler(event{source(4), keyCode(57344), down(1)}
+-AS           < M:AS_DMS_Writer.cpp F:KeyControllerMainListener L:00258 > @ctx:AS_KEYEVENT AS_KEYEVENT_KeyEventControllerImplementation.cpp(223) KT: KeyControllerMainListener acquired deviceType: 4, keyCode: 0xe000, keyState: 1
 
 
 ={============================================================================
@@ -5192,6 +5298,18 @@ class BleRcuControllerImpl : public BleRcuController
 // }
 //
 
+!MIL   -APPINFRA     < M:InputQueue.cpp F:sendKey L:00110 > KT: InputQueue::sendKey(filterByte(20), keyCode(61022), down(1)
+!MIL   -APPINFRA     < M:InputQueue.cpp F:listenerThread L:00288 > KT: InputQueue::listner.handler(event{source(2), keyCode(61022), down(1)}
+!MIL   -AS           < M:AS_DMS_Writer.cpp F:KeyControllerMainListener L:00258 > @ctx:AS_KEYEVENT AS_KEYEVENT_KeyEventControllerImplementation.cpp(223) KT: KeyControllerMainListener acquired deviceType: 2, keyCode: 0xee5e, keyState: 1
+!MIL   -APPINFRA     < M:BleRcuController.cpp F:isIrPairingCode L:00801 > KT: isIrPairingCode filterByte(0x14), keyCode(0xee5e)
+!MIL   -APPINFRA     < M:InputQueue.cpp F:listenerThread L:00288 > KT: InputQueue::listner.handler(event{source(2), keyCode(61022), down(1)}
+!MIL   -APPINFRA     < M:BleRcuController.cpp F:onIrPairingCode L:00850 > KT: received IR pairing code 094
+!INFO  -BLERCU       < M:blercupairingstatemachine.cpp F:start L:00209 > pairing regex for 18:46:44:xx:xx:xx is 'U094 SkyQ EC201'
+!INFO  -BLERCU       < M:blercupairingstatemachine.cpp F:start L:00209 > pairing regex for 1C:A2:B1:xx:xx:xx is 'U094ruwido Sky Remote'
+!INFO  -BLERCU       < M:blercupairingstatemachine.cpp F:start L:00209 > pairing regex for 70:91:F3:xx:xx:xx is 'U094 SkyQ EC102'
+!INFO  -BLERCU       < M:blercupairingstatemachine.cpp F:start L:00209 > pairing regex for D4:B8:FF:xx:xx:xx is 'U094 SkyQ EC[12]01'
+!INFO  -BLERCU       < M:blercupairingstatemachine.cpp F:start L:00209 > pairing regex for E8:0F:C8:xx:xx:xx is 'U094 SkyQ EC202'
+
 // "130" is *paring-code*
 // 
 // I BleRcuQt: < M:blercupairingstatemachine.cpp F:start L:236 > pairing regex for 18:46:44:xx:xx:xx is 'U130 SkyQ EC201'
@@ -6674,10 +6792,16 @@ public class Renderer implements ModdedGLSurfaceView.Renderer {
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk
 
+<skymw-rdk-wiki>
+https://wiki.rdkcentral.com/display/RDK/Overview
+
 https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Building+BleRcuDaemon
 Checkout Code
 
-git clone dwngit@git.stb.bskyb.com:appinfrastructure
+git clone dwngit@git.stb.bskyb.com:appinfrastructure appinfrastructure-ai
+git checkout feature/NOJIRA_rdk_appinfra
+
+git clone dwngit@git.stb.bskyb.com:appinfrastructure appinfrastructure-rcu
 git checkout feature/NOJIRA_rdk_ble_rcu_daemon
 
 The top level CMake file is in the 

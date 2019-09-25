@@ -916,6 +916,14 @@ If there is no need to call remove_observer() or removeListener(), then no need
 to hold reference to source(notifier). For example, only add interest and use it
 until application finishes. Or, use of expired weak_ptr.
 
+
+<case> 
+Do not use lister class T which has callback interfaces since it has only one
+callback and do not use inheritance. Instead, use std::function in listener
+registeration and callback as:
+
+typedef std::function<void (EventSource, uint16_t, bool)> KeyListener;
+
 */
 
 

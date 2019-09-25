@@ -73,7 +73,7 @@ class TimerQueue
     int timerfd_;
     int eventfd_;
 
-    bool callback_exec_;
+    bool callback_running_;
     int64_t callback_tag_;
     std::condition_variable callback_complete_;
 
