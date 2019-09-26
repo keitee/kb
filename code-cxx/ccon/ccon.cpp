@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "gmock/gmock.h"
+#include "slog.h"
 
 using namespace std;
 using namespace std::placeholders;
@@ -298,14 +299,35 @@ TEST(CConThread, MemberFunction)
 
 namespace cxx_thread 
 {
+  std::mutex priority_m;
+
+  void f_get_prority(int num)
+  {
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    sched_param sch{};
+    int policy;
+
+    // pthread_t pthread_self(void);
+    //
+    // int pthread_setschedparam(pthread_t thread, int policy,
+    //                                 const struct sched_param *param);
+    // int pthread_getschedparam(pthread_t thread, int *policy,
+    //                                 struct sched_param *param);
+
+    pthread_getschedparam(pthread_self(), &policy, &sch);
+
+    std::lock_guard<std::mutex> lock(priority_m);
+    LOG_MSG("thread %d is running at priority %d", num, sch.sched_priority);
+  }
 } // namespace
 
 TEST(CConThread, Priority)
 {
   using namespace cxx_thread;
 
-  std::thread t1(f, 1);
-  std::thread t2(f, 2);
+  std::thread t1(f_get_prority, 1);
+  std::thread t2(f_get_prority, 2);
 
   sched_param sch{};
   int policy;
@@ -319,11 +341,20 @@ TEST(CConThread, Priority)
   // Returns the implementation defined underlying thread handle.
 
   pthread_getschedparam(t1.native_handle(), &policy, &sch);
+  LOG_MSG("current priority %d", sch.sched_priority);
+
+  // have to run it as `root`. otherwise, gets error:
+  // LOG| F:ccon.cpp C:virtual void CConThread_Priority_Test::TestBody() L:00342 
+  //  [EPERM Operation not permitted] failed to pthread_setschedparam
+
   sch.sched_priority = 20;
-  if (pthread_setschedparam(t1.native_handle(), SCHED_FIFO, &sch)
-  &Foo::update_value, &foo);
-  t.join();
-  EXPECT_THAT(foo.get_value(), 20);
+  if (pthread_setschedparam(t1.native_handle(), SCHED_FIFO, &sch))
+  {
+    LOG_MSG("failed to pthread_setschedparam");
+  }
+
+  t1.join();
+  t2.join();
 }
 
 

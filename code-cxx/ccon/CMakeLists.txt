@@ -82,13 +82,30 @@ set(Boost_USE_STATIC_RUNTIME OFF)
 include_directories(${Boost_INCLUDE_DIRS}) 
 
 
+add_compile_options("-g")
+
+# to use static library
+#
+# Add directories in which the linker will look for libraries.
+#
+# link_directories([AFTER|BEFORE] directory1 [directory2 ...])
+#
+# Adds the paths in which the linker should search for libraries. Relative paths
+# given to this command are interpreted as relative to the current source
+# directory, see CMP0015.
+set(LIBS_DIR "../libs")
+set(LIBS libcxx.a)
+link_directories(${LIBS_DIR}/build)
+include_directories(${LIBS_DIR})
+
+
 # ccon.cpp
 add_executable(${PROJECT_NAME} "ccon.cpp")
 
 # cause link errors to Boost::thread
 # target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
 
-target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
+target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS})
 
 
 # ccon_ex.cpp
