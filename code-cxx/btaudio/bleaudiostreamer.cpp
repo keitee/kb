@@ -8,6 +8,8 @@
 #include "slog.h"
 #include "bleaudiostreamer.h"
 
+using FormatType = BluetoothApi::Streamer::FormatType;
+
 namespace
 {
   std::string stringMessage(int message)
@@ -28,7 +30,7 @@ namespace
   // ref: https://www.bluetooth.org/en-us/specification/assigned-numbers/service-discovery
   const std::string BLE_AUDIO_SOURCE_UUID{"0000110a"};
 
-  struct BleAuidoMetadata
+  struct BleAudioMetadata
   {
     bool operator==(BleAuidoMetadata const &rhs) const
     {
@@ -48,6 +50,13 @@ namespace
     uint32_t track_number{};
     uint32_t number_of_tracks{};
     std::string genre{};
+  };
+
+  struct BleAudioFormat
+  {
+    FormatType  type{};
+    uint32_t  rate{};
+    uint32_t  channels{};
   };
 } // namespace
 
@@ -119,6 +128,14 @@ void BleAudioStreamer::onDevicePropertyChange(std::string const &path
   std::lock_guard<std::mutex> lock(m_);
 
   q_.push(Message(Message::DevicePropertyChangeMsg, path, property, value));
+}
+
+void BleAudioStreamer::onFormatChanged(FormatType format, unsigned int samplerate, unsigned int channels)
+{
+}
+
+void BleAudioStreamer::onBufferReady(char *buffer, size_t nbytes, size_t sampleno)
+{
 }
 
 
@@ -395,6 +412,17 @@ void BleAudioStreamer::notify_(MessageType type)
   switch(type)
   {
     case MESSAGE_TYPE_METADATA:
+      msg.type          = MESSAGE_TYPE_METADATA;
+      msg.title         = metadata_.title;
+      msg.artist        = metadata_.artist;
+      msg.album         = metadata_.album;
+      msg.number        = metadata_.track_number;
+      msg.totalNumbers  = metadata_.number_of_tracks;
+      msg.genre         = metadata_.genre;
+      updated = true;
+      break;
+
+    case MESSAGE_TYPE_SESSION_START:
       msg.type          = MESSAGE_TYPE_METADATA;
       msg.title         = metadata_.title;
       msg.artist        = metadata_.artist;

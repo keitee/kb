@@ -296,6 +296,37 @@ TEST(CConThread, MemberFunction)
 }
 
 
+namespace cxx_thread 
+{
+} // namespace
+
+TEST(CConThread, Priority)
+{
+  using namespace cxx_thread;
+
+  std::thread t1(f, 1);
+  std::thread t2(f, 2);
+
+  sched_param sch{};
+  int policy;
+
+  // int pthread_attr_setschedparam(pthread_attr_t *attr, const struct sched_param *param);
+  //
+  // https://en.cppreference.com/w/cpp/thread/thread/native_handle
+  // std::thread::native_handle
+  // native_handle_type native_handle();
+  // (since C++11)
+  // Returns the implementation defined underlying thread handle.
+
+  pthread_getschedparam(t1.native_handle(), &policy, &sch);
+  sch.sched_priority = 20;
+  if (pthread_setschedparam(t1.native_handle(), SCHED_FIFO, &sch)
+  &Foo::update_value, &foo);
+  t.join();
+  EXPECT_THAT(foo.get_value(), 20);
+}
+
+
 // CCON listing_2.8
 
 namespace cxx_thread {

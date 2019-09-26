@@ -21,6 +21,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-q-hardware
 *kt_dev_skymw_0000* skymw-q-package
 *kt_dev_skymw_0000* skymw-build
+*kt_dev_skymw_0000* skymw-epg
 *kt_dev_skymw_0000* skymw-as
 *kt_dev_skymw_0000* skymw-as-airplay
 *kt_dev_skymw_0000* skymw-ai-input-handler
@@ -30,8 +31,9 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-bluez-q
 *kt_dev_skymw_0000* skymw-bluez-audio-stream
 *kt_dev_skymw_0000* skymw-android
-*kt_dev_skymw_0000* skymw-android-doc
+*kt_dev_skymw_0000* skymw-android-service
 *kt_dev_skymw_0000* skymw-android-studio
+*kt_dev_skymw_0000* skymw-android-skybluez
 *kt_dev_skymw_0000* skymw-android-bluetoothrcu
 *kt_dev_skymw_0000* skymw-android-ip150
 *kt_dev_skymw_0000* skymw-luna
@@ -522,6 +524,14 @@ VERSION = ~*~dev version~*~
 
 ./build_mw_epg.sh --platform eu-q-titan-uk --variant debug --profile sky_trials --nomake
 ./make_image.sh --platform eu-q-titan-uk --variant debug --profile sky_trials --project bskybgen2
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-epg
+
+git clone -b master ssh://dwngit@git.stb.bskyb.com/ethan-qt-epg-app epg
+
+epg/source/prod_epg/epg_ui/src/ui_models/BTRemoteModel.cpp
 
 
 ={============================================================================
@@ -3739,7 +3749,7 @@ BluetoothA2DPTransport::BluetoothA2DPTransport(const std::string &transport_path
 }
 
 
-// drive fsm
+*dbus-property-update* drive fsm
 
 void BluetoothA2DPTransport::update(const std::string &u)
 {
@@ -3809,7 +3819,7 @@ void BluetoothMediaFsm::run()
     if (!acquireTransport()) {
     }
 
-  *calls-transport-up*
+  *dbus-property-update* *calls-transport-up*
   case FSM_EVENT_TRANSPORT_ACTIVE:
     setState(Connected);
 }
@@ -3881,7 +3891,18 @@ bool BluetoothMediaTransport::tryAcquire
 }
 
 
-*dbus-transport-aquire-read-fd*
+*dbus-property-update* *dbus-transport-aquire-read-fd*
+
+void BluetoothMediaFsm::setState(BluetoothMediaFsmState s)
+{
+  AS_LOG_MIL("%s -> %s", fsmStateString(m_state), fsmStateString(s));
+  if (s != m_state) {
+    if (s == Connected) notify(onTransportUp(true));
+    else if (s == Disconnected) notify(onTransportUp(false));
+  }
+  m_state = s;
+}
+
 void BluetoothA2DPTransport::transportUp()
 {
   if (!m_reader) {
@@ -3977,11 +3998,21 @@ void BluetoothMediaStreamer::sendMessage(Message &m)
     m_handler(m, m_handler_arg);
 }
 
+
+// Components/Bluetooth/reader/include/BluetoothStreamer.h
+
+namespace BluetoothApi
+{
+  class Streamer;
+
+  typedef enum _MessageType {} MessageType;
+};
+
 // registered to BluetoothMediaStreamer
 // BluetoothMediaStreamer
 // `m_btInstance->setMessageHandler(&s_bluetoothEventListener,this);`
 
-ethan-as-source/Components/AudioStreamer/source/BluetoothProtocol.cpp
+// Components/AudioStreamer/source/BluetoothProtocol.cpp
 
 void AudioStreamer::BluetoothProtocol::bluetoothEventListener(const BluetoothApi::Streamer::Message& message)
 
@@ -4307,8 +4338,7 @@ fast as possible.
 4. qt.
 
 
-={============================================================================
-*kt_dev_skymw_0000* skymw-android-doc
+<skymw-android-doc>
 
 https://developer.android.com/reference
 https://developer.android.com/reference/android/app/Activity.html
@@ -4512,6 +4542,36 @@ build.
 
 
 ={============================================================================
+*kt_dev_skymw_0000* skymw-android-skybluez
+
+<things-to-check-to-build>
+
+1. set QT setting
+
+app/CMakeLists.txt
+
+# Sets the path to the Qt5 libraries and headers.
+# You'll need to modify the QT5_SDK path below to point to your Qt5 SDK install
+
+set( QT5_SDK "/home/keitee/Qt/5.12.3" )
+
+
+<output>
+keitee@keitee-mint:~/ip/SkyBluez$ find . -name *.apk | xargs ls -al
+-rw-rw-r-- 1 keitee keitee 5844787 Sep 26 11:15 ./app/debug/SkyBluez-armeabi-v7a-debug.apk
+-rw-rw-r-- 1 keitee keitee 4109972 Sep 26 11:20 ./app/release/SkyBluez-armeabi-v7a-release.apk
+
+
+<signing>
+keitee@keitee-mint:~/ip/SkyBluez$ find . -name *.keystore
+./app/platform.keystore
+
+android
+platform
+android
+
+
+={============================================================================
 *kt_dev_skymw_0000* skymw-android-bluetoothrcu skymw-ip100
 
 <skymw-ip100>
@@ -4579,11 +4639,17 @@ app/CMakeLists.txt
 
 set( QT5_SDK "/home/keitee/Qt/5.12.3" )
 
+// copy qt bins
+drwxr-xr-x 11 keitee keitee     4096 Jun 10 16:52 android_bens_armv7
 
-<skymw-bluez-release> *release-process*
+
+<skymw-bluez-release> signing *release-process*
+
+/home/keitee/ip/repo/SkyBluetoothRcu/app/platform.keystore
 pass for key:
 android
 platform
+android
 
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=~grayb&title=Android+-+HowTo+Release+Components
 
@@ -6240,6 +6306,10 @@ https://www.stb.bskyb.com/confluence/display/~grayb/Android+Luna+-+Runtime+Servi
 git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/packages/apps/SkyLunaRuntime
 git clone ssh://kyoupark@mgt-ip100-gerrit.skyqstbbuild.com:29418/sky/platform/packages/apps/SkyLunaRuntime SkyLunaRuntime-100
 
+<signing>
+android
+testkey
+android
 
 <upgrade-apk>
 

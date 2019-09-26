@@ -10,6 +10,7 @@
 #include <deque>
 #include <string>
 
+
 #include "eventqueue.h"
 #include "statemachine.h"
 
@@ -42,7 +43,7 @@ struct Message
 };
 
 
-class BleAudioStreamer
+class BleAudioStreamer : public AICommon::Observer<BleAudio::IBleAudioReaderEvent>
 {
   public:
     BleAudioStreamer(std::string const &name = std::string("BT AUDIO"));
@@ -101,6 +102,10 @@ class BleAudioStreamer
     void onDevicePropertyChange(std::string const &path
         , std::string const &property, std::string const &value);
 
+    // IBleAudioReaderEvent
+    void onFormatChanged(FormatType format, unsigned int samplerate, unsigned int channels);
+    void onBufferReady(char *buffer, size_t nbytes, size_t sampleno);
+
   private:
     BleAudio::queue<::Message> q_;
     std::thread t_;
@@ -131,7 +136,8 @@ class BleAudioStreamer
     BluetoothMediaReader *reader_;
     
   private:
-    BleAuidoMetadata metadata_;
+    BleAudioMetadata metadata_;
+    BleAudioFormat format_;
 
     // TODO: from AUdioStreamer
     MessageHandler observer_;
