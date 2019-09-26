@@ -72,22 +72,24 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 add_compile_options("-g")
 
-# set(LIBS_DIR "../libs")
-# add_subdirectory(${LIBS_DIR} ${CMAKE_BINARY_DIR}/libs)
-# include_directories(SYSTEM ${LIBS_DIR})
+# to use static library
+#
+# Add directories in which the linker will look for libraries.
+#
+# link_directories([AFTER|BEFORE] directory1 [directory2 ...])
+#
+# Adds the paths in which the linker should search for libraries. Relative paths
+# given to this command are interpreted as relative to the current source
+# directory, see CMP0015.
+set(LIBS_DIR "../libs")
+set(LIBS libcxx.a)
+link_directories(${LIBS_DIR}/build)
+include_directories(${LIBS_DIR})
 
 # timer_queue
-add_executable(${PROJECT_NAME} timer_queue_test.cpp timer_queue.cpp slog.cpp)
-target_link_libraries(${PROJECT_NAME} gmock_main)
-
-
-# # fsm qt for qt
-
-# find_package(Qt5Core)
-# find_package(Qt5Test)
-# add_executable(${PROJECT_NAME}_qt qfsm_qt_use.cpp qfsm_qt.cpp)
-# target_link_libraries(${PROJECT_NAME}_qt gmock_main Qt5::Core Qt5::Test)
-
+# add_executable(${PROJECT_NAME} timer_queue_test.cpp timer_queue.cpp slog.cpp)
+add_executable(${PROJECT_NAME} timer_queue_test.cpp timer_queue.cpp)
+target_link_libraries(${PROJECT_NAME} gmock_main ${LIBS})
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

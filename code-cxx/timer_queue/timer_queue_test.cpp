@@ -25,6 +25,15 @@ TEST(TimerQueue, Create)
 
 namespace
 {
+  static int counter{};
+
+  bool callback_simple(std::chrono::milliseconds &delay)
+  {
+    std::this_thread::sleep_for(delay);
+    counter++;
+    return true;
+  }
+
   bool callback_single(std::mutex &m, std::condition_variable &cv)
   {
     std::lock_guard<std::mutex> lock(m);
@@ -32,8 +41,6 @@ namespace
 
     return true;
   }
-
-  static int counter{};
 
   bool callback_repeat(std::mutex &m, std::condition_variable &cv, int repeat)
   {
@@ -69,6 +76,27 @@ TEST(TimerQueue, runSingleTimer)
   cv.wait(lock);
 }
 
+TEST(TimerQueue, runSingleTimerButRemoveBeforeRunning)
+{
+  TimerQueue tq;
+
+  std::chrono::milliseconds delay(200);
+
+  counter = 0;
+
+  // have to use std::chrono and otherwise error.
+  auto tag = tq.add(std::chrono::milliseconds(20000), true,
+      std::bind(callback_simple, std::ref(delay)));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  EXPECT_THAT(tq.remove(tag), true);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  EXPECT_THAT(counter, 0);
+}
+
 TEST(TimerQueue, runRepeatTimer)
 {
   TimerQueue tq;
@@ -90,6 +118,22 @@ TEST(TimerQueue, runRepeatTimer)
   EXPECT_THAT(counter, 10);
 }
 
+// creates many but ends without running them.
+TEST(TimerQueue, makesManyTimersAndExit)
+{
+  TimerQueue tq;
+
+  std::chrono::milliseconds delay(200);
+
+  for (int i = 0; i < 20; ++i)
+  {
+    // have to use std::chrono and otherwise error. oneshot
+    tq.add(std::chrono::milliseconds(20000), true,
+        std::bind(callback_simple, std::ref(delay)));
+  }
+
+  // do not wait for them to end
+}
 
 int main(int argc, char **argv)
 {
