@@ -322,7 +322,7 @@ namespace cxx_thread
   }
 } // namespace
 
-TEST(CConThread, Priority)
+TEST(CConThread, Priority1)
 {
   using namespace cxx_thread;
 
@@ -355,6 +355,62 @@ TEST(CConThread, Priority)
 
   t1.join();
   t2.join();
+}
+
+TEST(CConThread, Priority2)
+{
+  using namespace cxx_thread;
+
+  int policy;
+
+  // int pthread_attr_setschedparam(pthread_attr_t *attr, const struct sched_param *param);
+  //
+  // https://en.cppreference.com/w/cpp/thread/thread/native_handle
+  // std::thread::native_handle
+  // native_handle_type native_handle();
+  // (since C++11)
+  // Returns the implementation defined underlying thread handle.
+
+  // int pthread_attr_setschedpolicy(pthread_attr_t *attr, int policy);
+  // int pthread_attr_getschedpolicy(const pthread_attr_t *attr, int *policy);
+  //
+  // 380:47: error: invalid conversion from 
+  // ‘std::thread::native_handle_type {aka long unsigned int}’ to 
+  // ‘const pthread_attr_t*’ [-fpermissive]
+  //
+  // pthread_attr_getschedpolicy(t1.native_handle(), &policy);
+
+  // pthread_getattr_np() is a non-standard GNU extension that retrieves the
+  // attributes of the thread specified in its first argument
+  //
+  //        #define _GNU_SOURCE             See feature_test_macros(7)
+  //        #include <pthread.h>
+  // 
+  //        int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr);
+  // 
+  //        Compile and link with -pthread.
+  // 
+  // DESCRIPTION
+  //        The  pthread_getattr_np()  function  initializes  the  thread
+  //        attributes  object referred to by attr so that it contains actual
+  //        attribute values describing the running thread thread.
+
+  pthread_attr_t gattr;
+  if (pthread_getattr_np(pthread_self(), &gattr))
+  {
+    LOG_MSG("failed to pthread_getattr_np");
+  }
+
+  pthread_attr_getschedpolicy(&gattr, &policy);
+
+  // #define SCHED_NORMAL 0
+  EXPECT_THAT(policy, SCHED_OTHER);
+
+  pthread_attr_setschedpolicy(&gattr, SCHED_RR);
+  pthread_attr_getschedpolicy(&gattr, &policy);
+
+  // #define SCHED_RR     2
+  EXPECT_THAT(policy, SCHED_RR);
 }
 
 

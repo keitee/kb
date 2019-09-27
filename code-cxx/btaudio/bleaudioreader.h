@@ -7,16 +7,16 @@
 #ifndef BLUAUDIOREADER_H
 #define BLUAUDIOREADER_H
 
-#include "sbc/sbc.h"
 #include <deque>
 #include <stdint.h>
 
+#include "sbc.h"
+#include "bleaudioreaderevent.h"
 #include "BluetoothStreamer.h"
-#include "bluetooth_media_config.h"
 #include "poll_fd.h"
 
 // appinfrastructure/AppInfrastructure/Public/Common/Notifier.h
-#include <Common/Notifier.h>
+#include "Notifier.h"
 
 using FormatType = BluetoothApi::Streamer::FormatType;
 
@@ -30,8 +30,7 @@ public:
   ~BleAudioReader();
 
 private:
-  void readMediaFd(void);
-  void onEvent(int fd, int event, void *dptr);
+  void onPollRead();
   void wakeup();
   void reset(void);
   void sendAudioParams(void);
@@ -66,9 +65,6 @@ private:
   uint8_t m_buf[BUFLEN];
   // Used only by readMediaFd()
   uint8_t m_read_buf[608 * 4];
-
-  std::vector<BleAudioReaderListener *> m_listeners;
-  std::mutex m_listener_lock;
 };
 
 #endif // BLUAUDIOREADER_H

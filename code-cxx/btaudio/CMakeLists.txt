@@ -72,29 +72,33 @@ include_directories(SYSTEM ${GMOCK_DIR}/include ../libs)
 add_compile_options("-g")
 
 
-# add_executable(main.cpp${PROJECT_NAME}_simple scli.cpp scli_cmd.cpp)
-# add_executable(${PROJECT_NAME} slog.cpp scli.cpp statemachine.cpp bleaudiostreamer.cpp main.cpp)
-add_executable(${PROJECT_NAME} ../libs/slog.cpp scli.cpp statemachine.cpp bleaudiostreamer.cpp main.cpp)
-target_link_libraries(${PROJECT_NAME} gmock_main)
+# to use static library
+#
+# Add directories in which the linker will look for libraries.
+#
+# link_directories([AFTER|BEFORE] directory1 [directory2 ...])
+#
+# Adds the paths in which the linker should search for libraries. Relative paths
+# given to this command are interpreted as relative to the current source
+# directory, see CMP0015.
+set(LIBS_DIR "../libs")
+set(LIBS libcxx.a)
+link_directories(${LIBS_DIR}/build)
+include_directories(${LIBS_DIR})
 
+# # add "Common" ??? don't solve the issue; #include <xxx> do not work
+# include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/Common)
+# add_compile_options("-isystem ${CMAKE_CURRENT_SOURCE_DIR}/Common")
 
-# # fsm ex
-# add_executable(${PROJECT_NAME}_ex fsm_ex.cpp)
-# target_link_libraries(${PROJECT_NAME}_ex gmock_main)
+set(SOURCES scli.cpp statemachine.cpp bleaudiostreamer.cpp main.cpp
+  timer_queue.cpp bleaudioreader.cpp poll_fd.cpp)
 
+add_definitions(-DUSE_HOST_BUILD)
 
-# # fsm qt for qt
+message("sources ${SOURCES}")
 
-# find_package(Qt5Core)
-# find_package(Qt5Test)
-# add_executable(${PROJECT_NAME}_qt fsm_qt.cpp qfsm_qt.cpp)
-# target_link_libraries(${PROJECT_NAME}_qt gmock_main Qt5::Core Qt5::Test)
-
-
-# # fsm qt but no qt
-
-# add_executable(${PROJECT_NAME}_nqt fsm_nqt.cpp qfsm.cpp)
-# target_link_libraries(${PROJECT_NAME}_nqt gmock_main)
+add_executable(${PROJECT_NAME} ${SOURCES})
+target_link_libraries(${PROJECT_NAME} gmock_main ${LIBS})
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

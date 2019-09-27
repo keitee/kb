@@ -11,6 +11,7 @@
 #define	OBSERVER_H
 
 #include <Common/Polymorphic.h>
+// #include "Polymorphic.h"
 
 namespace AICommon
 {

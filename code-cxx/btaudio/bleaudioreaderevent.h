@@ -6,7 +6,9 @@
 #define BLEAUDIOREADEREVENT_H
 
 
-#include <Common/Observer.h>
+#include "Observer.h"
+#include "BluetoothStreamer.h"
+
 // appinfrastructure/AppInfrastructure/Public/Common/Observer.h
 // appinfrastructure/AppInfrastructure/Public/Common/Polymorphic.h
 // appinfrastructure/AppInfrastructure/Public/Common/Notifier.h

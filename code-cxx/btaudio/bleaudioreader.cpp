@@ -1,7 +1,7 @@
-#include <algorithm>
-#if !defined(__STDC_FORMAT_MACROS)
-#define __STDC_FORMAT_MACROS
-#endif
+// #if !defined(__STDC_FORMAT_MACROS)
+// #define __STDC_FORMAT_MACROS
+// #endif
+
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -9,86 +9,62 @@
 #include <unistd.h>
 
 #include "bleaudioreader.h"
-#include "sbc/sbc.h"
+
+#ifdef USE_HOST_BUILD
+
+#define AS_LOG_ERROR LOG_MSG
+#define AS_LOG_INFO LOG_MSG
+
+#else
 
 #include "AS_Diag.h"
 extern AS_DIAG::Context *dbusitf_logging_ctx;
 #undef AS_DIAG_CONTEXT_DEFAULT
 #define AS_DIAG_CONTEXT_DEFAULT (dbusitf_logging_ctx)
 
-/* These should be in sbc.h...
- */
-#define SBC_DECODE_ERR_STREAM_TOO_SHORT -1
-#define SBC_DECODE_ERR_BAD_SYNC_BYTE -2
-#define SBC_DECODE_ERR_BAD_CRC -3
-#define SBC_DECODE_ERR_OUT_OF_BOUNDS -4
+#endif // USE_HOST_BUILD
 
+#define USE_SBC_STUB
 
-// TODO: WHICH ORDER do we use?
+#include <Common/sbc.h>
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-struct rtp_header
+static ssize_t sbc_decode(sbc_t *sbc, const void *input, size_t input_len,
+                          void *output, size_t output_len, size_t *written)
 {
-  unsigned cc : 4;
-  unsigned x : 1;
-  unsigned p : 1;
-  unsigned v : 2;
+  return 0;
+}
 
-  unsigned pt : 7;
-  unsigned m : 1;
-
-  uint16_t sequence_number;
-  uint32_t timestamp;
-  uint32_t ssrc;
-  uint32_t csrc[0];
-} __attribute__((packed));
-
-struct rtp_payload
+static int sbc_reinit(sbc_t *sbc, unsigned long flags)
 {
-  unsigned frame_count : 4;
-  unsigned rfa0 : 1;
-  unsigned is_last_fragment : 1;
-  unsigned is_first_fragment : 1;
-  unsigned is_fragmented : 1;
-} __attribute__((packed));
+  return 0;
+}
 
-#elif __BYTE_ORDER == __BIG_ENDIAN
-
-struct rtp_header
+static int sbc_init(sbc_t *sbc, unsigned long flags)
 {
-  unsigned v : 2;
-  unsigned p : 1;
-  unsigned x : 1;
-  unsigned cc : 4;
+  return 0;
+}
 
-  unsigned m : 1;
-  unsigned pt : 7;
-
-  uint16_t sequence_number;
-  uint32_t timestamp;
-  uint32_t ssrc;
-  uint32_t csrc[0];
-} __attribute__((packed));
-
-struct rtp_payload
+static ssize_t sbc_decode(sbc_t *sbc, const void *input, size_t input_len,
+                          void *output, size_t output_len, size_t *written)
 {
-  unsigned is_fragmented : 1;
-  unsigned is_first_fragment : 1;
-  unsigned is_last_fragment : 1;
-  unsigned rfa0 : 1;
-  unsigned frame_count : 4;
-} __attribute__((packed));
+  return 0;
+}
+
+static void sbc_finish(sbc_t *sbc)
+{
+  return;
+}
 
 #else
-#error "Unknown byte order"
-#endif
+#include "sbc/sbc.h"
+#endif // USE_SBC_STUB
 
 void BleAudioReader::wakeup()
 {
   m_poller.interruptPoll();
 }
 
-void BleAudioReader::readMediaFd(void)
+void BleAudioReader::onPollRead(void)
 {
   ssize_t sz;
   ssize_t decoded_sz;
@@ -134,20 +110,16 @@ read_error : {
   return;
 }
 
-void BleAudioReader::onEvent(int fd, int event, void *dptr)
-{
-  readMediaFd();
-}
-
 void BleAudioReader::readerThread()
 {
   AS_LOG_INFO("media reader thread starting");
 
-  // {
-  //   std::lock_guard<std::mutex> lock(&m_thread_lock);
-  //   m_thread_running = true;
-  //   pthread_cond_signal(&m_thread_cond);
-  // }
+  pthread_attr_t attr{};
+  if (pthread_getattr_np(pthread_self(), &attr)) {
+    AS_LOG_ERROR("failed to pthread_getattr_np");
+  }
+
+  pthread_attr_setschedpolicy(&attr, SCHED_RR);
 
   // Reset decoder
   reset();
@@ -419,26 +391,10 @@ BleAudioReader::BleAudioReader(int fd, a2dp_sbc_t &config)
 
   setConfiguration(&config);
 
-  m_fd_tag = m_poller.addFD(m_fd, POLLIN | POLLPRI, true, this, NULL);
-
-  memset(&attr, 0, sizeof(attr));
-  pthread_attr_init(&attr);
-
-  pthread_attr_setschedpolicy(&attr, SCHED_RR);
+  m_fd_tag = m_poller.addFD(m_fd, POLLIN | POLLPRI, true,
+                            std::bind(&BleAudioReader::onPollRead, this));
 
   m_thread = std::thread(&BleAudioReader::readerThread, this);
-
-  // ret = pthread_create(&m_thread, &attr, readerThreadFn, this);
-  // if (!ret) {
-  //   std::unique_lock<std::mutex> lock(&m_thread_lock);
-  //   while (!m_thread_running)
-  //     m_thread_cond.wait(&m_thread_lock);
-  // } else
-  // {
-  //   AS_LOG_ERROR("pthread_create() failed: %s", strerror(ret));
-  // }
-
-  pthread_attr_destroy(&attr);
 }
 
 BleAudioReader::~BleAudioReader()
@@ -451,13 +407,6 @@ BleAudioReader::~BleAudioReader()
   wakeup();
 
   m_thread.join();
-
-  // {
-  //   int ret = pthread_join(m_thread, NULL);
-  //   if (ret != 0)
-  //     AS_LOG_ERROR("unable to wait for thread termination: %s",
-  //     strerror(ret));
-  // }
 
   m_poller.removeFD(m_fd_tag);
   close(m_fd);
