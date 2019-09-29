@@ -1008,7 +1008,8 @@ namespace cxx_condition
 
   void push_items_and_notify(ConditionWait &cw)
   {
-    // expect nothing happens since there is no item in the q
+    // expect nothing happens since there is no item in the q since q is empty
+    // but thread_running is true so wait() do not exit
     {
       // wait to make sure consumer is ready
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -1060,6 +1061,10 @@ TEST(CConCondition, Wait)
 
   while (cw.thread_running)
   {
+    // return from wait when 
+    // 1. notified, and q is not empty or 
+    // 2. notified, q is empty, and thread_running is false
+
     cw.cv.wait(lock, [&]{ return !cw.q.empty() || !cw.thread_running; });
     if (!cw.q.empty())
     {
@@ -1069,7 +1074,7 @@ TEST(CConCondition, Wait)
     }
     else
     {
-      // std::cout << "woke up but q is empty" << std::endl;
+      std::cout << "woke up but q is empty" << std::endl;
       coll.push_back(1000);
     }
   }

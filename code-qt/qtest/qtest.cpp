@@ -15,7 +15,7 @@
 #include <QTimer>
 #include <QSignalSpy>
 
-#include "qt_class.h"
+#include "qclass.h"
 
 using namespace std;
 
@@ -376,7 +376,7 @@ QMessageLogger(0, 0, 0).debug() for release builds.
 
 */
 
-TEST(Qt, Logging)
+TEST(QtLogging, Logging)
 {
   // two ways of logging
   {
@@ -451,7 +451,7 @@ category, so explicit checking is not needed:
 
 Q_LOGGING_CATEGORY(lcEditor1, "qtc.editor.1");
 
-TEST(Qt, LoggingCategory)
+TEST(QtLogging, Category)
 {
   {
     // QLoggingCategory lcEditor("qtc.editor");
@@ -653,7 +653,7 @@ logged at. This information is created by the QMessageLogger class.
 // ={=========================================================================
 // qt-regexp
 
-TEST(Qt, RegExp)
+TEST(QtRegex, Regex)
 {
   quint8 code{130};
   QByteArray pattern{"U%03hhu SkyQ EC201"};
@@ -708,7 +708,7 @@ TEST(Qt, RegExp)
 // ={=========================================================================
 // qt-variant
 
-TEST(Qt, Variant)
+TEST(QtVariant, Variant)
 {
   // T QVariant::value() const
   //
@@ -723,7 +723,9 @@ TEST(Qt, Variant)
     QVariant v;
     v = 7;
     EXPECT_THAT(7, v.toInt());
-    EXPECT_THAT("7", v.toString());
+
+    // compile error. ??
+    // EXPECT_THAT("7", v.toString());
 
     EXPECT_THAT(v.toInt(), v.value<int>());
     EXPECT_THAT(v.toString(), v.value<QString>());
@@ -759,9 +761,9 @@ TEST(Qt, Variant)
 // ={=========================================================================
 // qt-slot
 
-TEST(Qt, SlotAndSignal)
+TEST(QtSlot, SlotAndSignal)
 {
-  // Calling a.setValue(12) makes a emit a valueChanged(12) signal, which b will
+  // Calling a.setValue(12) makes a emit a.valueChanged(12) signal, which b will
   // receive in its setValue() slot, i.e. b.setValue(12) is called. Then b emits
   // the same valueChanged() signal, but since no slot has been connected to b's
   // valueChanged() signal, the signal is ignored.
@@ -772,39 +774,183 @@ TEST(Qt, SlotAndSignal)
 
   {
     Counter a, b;
+
     QObject::connect(&a, &Counter::valueChanged,
         &b, &Counter::setValue);
 
-    a.setValue(12);     // a.value() == 12, b.value() == 12
+    EXPECT_THAT(a.value(), 0);
+    EXPECT_THAT(b.value(), 0);
+
+    a.setValue(12);
+    // effectively, emit valueChanged(value);
+    // a.value() == 12, b.value() == 12
+
     EXPECT_THAT(a.value(), 12);
     EXPECT_THAT(b.value(), 12);
 
-    b.setValue(48);     // a.value() == 12, b.value() == 48
+    b.setValue(48);
+    // effectively, emit valueChanged(value);
+    // a.value() == 12, b.value() == 48
+
     EXPECT_THAT(a.value(), 12);
     EXPECT_THAT(b.value(), 48);
   }
 
+
   // to show signal/slot is blocking call
+  // and shows connect(valueChanged(int), doSomethingLong()); 
+  // this is receiver decide that it do not use it
+ 
   {
     Counter a, b;
+
     QObject::connect(&a, &Counter::valueChanged,
         &b, &Counter::doSomethingLong);
 
     qCritical() << "emit signal via valueChange and runs slot";
     a.valueChanged(12);
     qCritical() << "slot finished";
+
+    EXPECT_THAT(b.value(), 5);
   }
 
-  // to try QueuedConnection but do not run doSomethingLong()
+  // to show `emit signal` is a function call
   {
     Counter a, b;
+
+    QObject::connect(&a, &Counter::valueChanged,
+        &b, &Counter::doSomethingLong);
+
+    qCritical() << "emit signal via valueChange and runs slot";
+    emit a.valueChanged(12);
+    qCritical() << "slot finished";
+
+    EXPECT_THAT(b.value(), 5);
+  }
+}
+
+
+/*
+
+https://doc.qt.io/qt-5/qt.html#ConnectionType-enum
+
+enum Qt::ConnectionType
+
+This enum describes the types of connection that can be used between signals and
+slots. In particular, it determines whether a particular signal is delivered to
+a slot immediately or queued for delivery at a later time.
+
+Constant              Value   Description
+
+Qt::AutoConnection    0       
+
+(Default) If the receiver lives in the thread that emits the signal,
+Qt::DirectConnection is used. Otherwise, Qt::QueuedConnection is used. The
+connection type is determined when the signal is emitted.
+
+Qt::DirectConnection  1       
+
+The slot is invoked immediately when the signal is emitted. The slot is executed
+in the signalling thread.
+
+
+Qt::QueuedConnection  2       
+
+The slot is invoked when control returns to the event loop of the receiver's
+thread. The slot is executed in the receiver's thread.
+
+*/
+
+TEST(DISABLED_QtSlot, QueuedConnection)
+{
+  // to try QueuedConnection but do not run doSomethingLong() even if waits for
+  // its running and finish
+
+  {
+    Counter a, b;
+
     QObject::connect(&a, &Counter::valueChanged,
         &b, &Counter::doSomethingLong, Qt::QueuedConnection);
 
-    qCritical() << "emit signal via valueChange via QueuedConnection and runs slot";
+    qCritical() 
+      << "emit signal via valueChange via QueuedConnection and runs slot";
+
     a.valueChanged(12);
+
+    while (b.value() != 5)
+    {
+      QThread::sleep(1);
+      qCritical() << "checking values";
+    }
+
     qCritical() << "slot finished";
+
+    EXPECT_THAT(b.value(), 5);
   }
+
+  // send signal from main to slot in a thread and it doesn't work either.
+  // since main do not have q main loop? 
+
+  {
+    std::mutex m;
+    std::condition_variable cv;
+    std::unique_lock<std::mutex> lock(m);
+    Counter a;
+
+    QThread* thread = new QThread;
+    ThreadWorkerUseCounter* wo 
+      = new ThreadWorkerUseCounter(a, m, cv);
+    wo->moveToThread(thread);
+
+    // start thread
+    QObject::connect(thread, &QThread::started, 
+        wo, &ThreadWorkerUseCounter::progress);
+    thread->start();
+
+    cv.wait(lock);
+  }
+}
+
+
+// ={=========================================================================
+// qt-event
+// note: WHY receiver do not get events???
+
+TEST(QtEvnet, useCustomEvent)
+{
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  QSharedPointer<CustomEventReceiver> receiver =
+    QSharedPointer<CustomEventReceiver>::create(m, cv);
+
+  CustomEventSender sender(receiver);
+
+  // https://doc.qt.io/qt-5/qsignalspy.html#details
+  QSignalSpy timerExpiredSpy(&sender, &CustomEventSender::timerExpired);
+
+  // use wait to check timer expired event is fired within this tiem.
+  timerExpiredSpy.wait(3000);
+  EXPECT_EQ(timerExpiredSpy.count(), 1);
+
+  /*
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  QSharedPointer<CustomEventReceiver> receiver =
+    QSharedPointer<CustomEventReceiver>::create(m, cv);
+
+  CustomEventSender sender(receiver);
+
+  // sender.connectTimer(std::chrono::milliseconds(2000));
+
+  // wait for 
+  cv.wait(lock);
+
+  qDebug() << "received from %d " << receiver->getReceived();
+  */
 }
 
 
@@ -956,16 +1102,33 @@ towards a timeout in the future instead of tracking elapsed time.
 
 */
 
-TEST(Qt, Timer)
+TEST(QtTimer, useTimerFromQTimer)
 {
-  Foo foo;
+  UseTimer o;
 
   // https://doc.qt.io/qt-5/qsignalspy.html#details
-  QSignalSpy timerExpiredSpy(&foo, &Foo::timerExpired);
+  QSignalSpy timerExpiredSpy(&o, &UseTimer::timerExpired);
 
   // use wait to check timer expired event is fired within this tiem.
   timerExpiredSpy.wait(3000);
   EXPECT_EQ(timerExpiredSpy.count(), 1);
+}
+
+TEST(QtTimer, useTimerFromQObject)
+{
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  UseTimerFromQObject o(cv);
+
+  // o.startTimer(50);
+  // o.startTimer(1000);
+  // o.startTimer(2000);
+
+  cv.wait(lock);
+
+  EXPECT_EQ(o.getValue(), 10);
 }
 
 
@@ -985,45 +1148,51 @@ void	usleep(unsigned long usecs)
 
 */
 
-TEST(Qt, Thread)
+TEST(QtThread, useQThreadDirectly)
 {
   // https://wiki.qt.io/QThreads_general_usage
-  {
-    using namespace qt_thread_1;
 
-    QThread* thread = new QThread;
-    Worker* worker = new Worker();
-    worker->moveToThread(thread);
-    // QObject::connect(worker, SIGNAL (error(QString)), this, SLOT (errorString(QString)));
-    
-    // *qt-runtime-check*
-    // see typo but no compile error. see error only when runs
-    // QObject::connect: No such slot qt_thread_1::Worker::process()
-    // QObject::connect(thread, SIGNAL (started()), worker, SLOT (process()));
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
 
-    QObject::connect(thread, &QThread::started, worker, &Worker::progress);
+  QThread* thread = new QThread;
+  ThreadWorker* wo = new ThreadWorker(m, cv);
+  wo->moveToThread(thread);
 
-    // again, no compile error but when thread finishes and emit signal, nothing
-    // happens and blocks forever. no quit() gets run.
-    //
-    // QObject::connect(worker, SIGNAL (finished()), thread, SLOT (quit()));
-    //
-    // need to make a link to QApplication and also need to run QApplication and
-    // exec in the main.
+  // QObject::connect(worker, SIGNAL (error(QString)), this, SLOT (errorString(QString)));
 
-    // does end main() but do not run a test after this
-    // QObject::connect(worker, SIGNAL (finished()), QApplication::instance(), SLOT (quit()));
+  // *qt-connect-runtime-check*
+  // see typo but no compile error. see error only when runs
+  // QObject::connect: No such slot qt_thread_1::Worker::process()
+  // QObject::connect(thread, SIGNAL (started()), worker, SLOT (process()));
 
-    // both do not end main()
-    // QObject::connect(worker, SIGNAL (finished()), worker, SLOT (deleteLater()));
-    // QObject::connect(thread, SIGNAL (finished()), thread, SLOT (deleteLater()));
+  QObject::connect(thread, &QThread::started, wo, &ThreadWorker::progress);
 
-    thread->start();
-  }
+  // again, no compile error but when thread finishes and emit signal, nothing
+  // happens and blocks forever. no quit() gets run.
+  //
+  // QObject::connect(worker, SIGNAL (finished()), thread, SLOT (quit()));
+  //
+  // need to make a link to QApplication and also need to run QApplication and
+  // exec in the main.
 
+  // does end main() but do not run a test after this
+  // QObject::connect(worker, SIGNAL (finished()), QApplication::instance(), SLOT (quit()));
+
+  // both do not end main()
+  // QObject::connect(worker, SIGNAL (finished()), worker, SLOT (deleteLater()));
+  // QObject::connect(thread, SIGNAL (finished()), thread, SLOT (deleteLater()));
+
+  thread->start();
+
+  cv.wait(lock);
+}
+
+TEST(QtThread, useComposite)
+{
   // so, the belows do not runs as QApplication exited already from the above.
   // https://doc.qt.io/qt-5/qthread.html
-  {
     using namespace qt_thread_2;
 
     Controller co;
@@ -1031,7 +1200,6 @@ TEST(Qt, Thread)
     qCritical() << "before sending operate..";
     emit co.operate(QString("send operate"));
     qCritical() << "after sending operate..";
-  }
 }
 
 
@@ -1040,7 +1208,7 @@ TEST(Qt, Thread)
 static void GoogleTestRunner(int argc, char** argv)
 {
   // Since Google Mock depends on Google Test, InitGoogleMock() is
-  // also responsible for initializing Google Test.  Therefore there's
+  // also responsible for initializing Google Test. Therefore there's
   // no need for calling testing::InitGoogleTest() separately.
   testing::InitGoogleMock(&argc, argv);
   int result = RUN_ALL_TESTS();

@@ -593,25 +593,6 @@ namespace cxx_ctor
       int value_;
   };
 
-  // cause compile error
-  // cxx.cpp: In constructor ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
-  // cxx.cpp:450:37: error: no matching function for call to ‘ConstructionNoDefault::ConstructionNoDefault()’
-  //      ConstructionWitNoCtorInitList() {}
-
-  // class ConstructionWitNoCtorInitList
-  // {
-  //   public:
-  //     ConstructionWitNoCtorInitList() {}
-
-  //   private:
-  //     ConstructionNoDefault member;
-  // };
-
-  // TEST(Ctor, CtorInitList)
-  // {
-  //   ConstructionWitNoCtorInitList cwo;
-  // }
-
 
   // okay since uses ConstructionNoDefault(const std::string &name) ctor
   class ConstructionWitCtorInitList
@@ -628,7 +609,19 @@ namespace cxx_ctor
 
 // to see that default ctor is necessary
 
-TEST(Ctor, CtorInitList)
+// cause compile error
+// cxx.cpp: In constructor ‘ConstructionWitNoCtorInitList::ConstructionWitNoCtorInitList()’:
+// cxx.cpp:450:37: error: no matching function for call to ‘ConstructionNoDefault::ConstructionNoDefault()’
+//      ConstructionWitNoCtorInitList() {}
+//
+// TEST(CxxCtor, showNeedsDefaultConstructor)
+// {
+//   using namespace cxx_ctor;
+//
+//   ConstructionNoDefault o;
+// }
+
+TEST(CxxCtor, CtorInitList)
 {
   using namespace cxx_ctor;
 

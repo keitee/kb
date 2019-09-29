@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(qt_gtest VERSION 0.1 LANGUAGES CXX)
+project(qtest VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -93,7 +93,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 find_package(Qt5Core)
 find_package(Qt5Test)
 
-add_executable(${PROJECT_NAME} "qt_gtest.cpp" "qt_class.cpp")
+add_executable(${PROJECT_NAME} "qtest.cpp" "qclass.cpp")
 
 # The recommended way to use Qt libraries and headers with CMake is to use the
 # target_link_libraries command. This command automatically adds appropriate
