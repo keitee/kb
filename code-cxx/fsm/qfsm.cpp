@@ -3,9 +3,10 @@
 //
 
 #include "qfsm.h"
+#include "slog.h"
 
+#define LOG_ERROR LOG_MSG
 
-#define LOG_ERROR printf
 #define G_UNLIKELY(x) __glibc_unlikely(x)
 
 StateMachine::StateMachine() 
@@ -151,6 +152,8 @@ void StateMachine::moveToState(int newState)
       }
 
       // set the new state to be the initial state of the super state
+      LOG_ERROR("initialState (%d) is really used?",
+          it->second.initialState);
       newState = it->second.initialState;
     }
 
@@ -264,6 +267,7 @@ int StateMachine::shouldMoveState(int event) const
       }
     }
 
+    // note: this is interesting and it is how handle super state
     // event is not found in the transition list.
     // if this state had a parent state, then see if that matches the
     // event and therefore should transition
@@ -272,6 +276,7 @@ int StateMachine::shouldMoveState(int event) const
 
   } while (state != -1);
 
+  LOG_ERROR("not found target state from current state %d", state);
   return -1;
 }
 
@@ -371,7 +376,7 @@ bool StateMachine::addState(int parentState, int state, std::string const &name)
       return false;
     }
 
-    // increment the number of child states
+    // say it as children
     parent->second.hasChildren = true;
   }
 
@@ -403,22 +408,23 @@ bool StateMachine::addTransition(int fromState, int event, int toState)
     return false;
   }
 
-  // sanity check we have a 'from' state
+  // sanity check if we have a valid 'from' state
   auto from = m_states.find(fromState);
   if (G_UNLIKELY(from == m_states.end())) {
     LOG_ERROR("missing 'fromState' %d", fromState);
     return false;
   }
 
-  // and we have a 'to' state
+  // sanity check if we have a valid 'to' state
   auto to = m_states.find(toState);
   if (G_UNLIKELY(to == m_states.end())) {
     LOG_ERROR("missing 'toState' %d", toState);
     return false;
   }
 
-  // also check if the to state is a super state that it has in initial
-  // state set
+  // also check if the to state is a super state that has children and has in
+  // initial state -1
+
   if (G_UNLIKELY((to->second.hasChildren == true) && (to->second.initialState == -1))) {
     LOG_ERROR("'toState' %s(%d) is a super state with no initial state set",
         to->second.name.c_str(), toState);
@@ -494,9 +500,7 @@ bool StateMachine::setFinalState(int state)
 
 // -----------------------------------------------------------------------------
 /*!
-	\threadsafe
-
-
+ * \threadsafe
  */
 void StateMachine::postEvent(int event)
 {
@@ -789,6 +793,7 @@ bool StateMachine::start()
 
   logTransition(-1, m_currentState);
 
+  // run initial state
   m_entered(m_currentState);
 
   return true;

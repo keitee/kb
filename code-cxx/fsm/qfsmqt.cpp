@@ -5,7 +5,7 @@
 //  © 2017 Sky UK
 //
 
-#include "qfsm_qt.h"
+#include "qfsmqt.h"
 
 #include <QCoreApplication>
 #include <QTimerEvent>

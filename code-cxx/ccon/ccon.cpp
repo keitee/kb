@@ -1082,6 +1082,7 @@ TEST(CConCondition, Wait)
   t.join();
 
   EXPECT_THAT(cw.q.size(), 4);
+  // the while gets the second 0 and ends while
   EXPECT_THAT(coll, ElementsAre(0,1,2,3,4,0));
 }
 

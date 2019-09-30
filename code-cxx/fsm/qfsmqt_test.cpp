@@ -8,7 +8,7 @@
 
 #include "gmock/gmock.h"
 
-#include "qfsm_qt.h"
+#include "qfsmqt.h"
 
 #include <QList>
 #include <QString>

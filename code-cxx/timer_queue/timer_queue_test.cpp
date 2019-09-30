@@ -9,6 +9,7 @@
 #include "gmock/gmock.h"
 
 #include "timer_queue.h"
+#include "slog.h"
 
 using namespace testing;
 
@@ -27,10 +28,19 @@ namespace
 {
   static int counter{};
 
+  bool callback_return(bool value)
+  {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    counter++;
+    LOG_MSG("counter value is %d", counter);
+    return value;
+  }
+
   bool callback_simple(std::chrono::milliseconds &delay)
   {
     std::this_thread::sleep_for(delay);
     counter++;
+    LOG_MSG("counter value is %d", counter);
     return true;
   }
 
@@ -60,7 +70,52 @@ namespace
 
     return true;
   }
+
+  class Callback
+  {
+    public:
+      Callback(std::condition_variable &cv)
+        : cv_(cv)
+      {}
+
+      bool CallbackSingle()
+      {
+        std::lock_guard<std::mutex> lock(m_);
+        cv_.notify_one();
+
+        return true;
+      }
+
+    private:
+      std::mutex m_;
+      std::condition_variable &cv_;
+  };
 }
+
+// regardless of return value of handler, oneshot runs only one time.
+
+TEST(TimerQueue, runOneshotTimerWithTrue)
+{
+  TimerQueue tq;
+
+  // have to use std::chrono and otherwise error.
+  tq.add(std::chrono::milliseconds(1000), true,
+      std::bind(callback_return, true));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(4000));
+}
+
+TEST(TimerQueue, runOneshotTimerWithFalse)
+{
+  TimerQueue tq;
+
+  // have to use std::chrono and otherwise error.
+  tq.add(std::chrono::milliseconds(1000), true,
+      std::bind(callback_return, false));
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(4000));
+}
+
 
 TEST(TimerQueue, runSingleTimer)
 {
@@ -72,6 +127,22 @@ TEST(TimerQueue, runSingleTimer)
   // have to use std::chrono and otherwise error.
   tq.add(std::chrono::milliseconds(2000), true,
       std::bind(callback_single, std::ref(m), std::ref(cv)));
+
+  cv.wait(lock);
+}
+
+TEST(TimerQueue, runSingleTimerOnMemberFunction)
+{
+  TimerQueue tq;
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  Callback co(cv);
+
+  // have to use std::chrono and otherwise error.
+  tq.add(std::chrono::milliseconds(2000), true,
+      std::bind(&Callback::CallbackSingle, &co));
 
   cv.wait(lock);
 }

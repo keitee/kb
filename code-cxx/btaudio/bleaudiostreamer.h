@@ -145,6 +145,10 @@ public:
                        unsigned int channels);
   void onBufferReady(char *buffer, size_t nbytes, size_t sampleno);
 
+  // BluetoothApi::Streamer
+public:
+  void setBluetoothTimeout(uint32_t timeout) override;
+
 private:
   BleAudio::queue<BleAudioMessage> q_;
   std::thread t_;
@@ -171,13 +175,18 @@ private:
   std::string transport_path_;
   std::string player_path_;
 
-  TimerQueue disconnection_timer_;
-
   bool checkHasAudioSource_(std::string const &path);
   void updateMetadata_();
   void notify_(MessageType type);
   bool getTransportConfig_(a2dp_sbc_t &config);
   bool getEndpointConfig_(a2dp_sbc_t &config);
+
+  TimerQueue timer_;
+  int64_t disconnection_timer_{0};
+  int64_t refresh_timer_{0};
+  uint32_t disconnection_timeout_{0};
+
+  bool onDisconnectionTimerExpired();
 
 #ifndef USE_HOST_BUILD
   player_proxy_;

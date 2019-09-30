@@ -83,6 +83,7 @@ TEST_F(StateMachineTest, transitionToInitialState)
 
   EXPECT_FALSE(machine.isRunning());
 
+  // only one transition which means one `entered` called
   EXPECT_THAT(enters[initialState], 1);
   EXPECT_THAT(exits.size(), 0);
 }
@@ -118,8 +119,9 @@ TEST_F(StateMachineTest, startWithNoInitialState)
 
   EXPECT_TRUE(machine.connect(entered, exited));
 
+  // start() return false when there's no initial state set. so isRunning() is
+  // false as well.
   EXPECT_FALSE(machine.start());
-
   EXPECT_FALSE(machine.isRunning());
 
   EXPECT_THAT(enters.size(), 0);
@@ -144,14 +146,14 @@ TEST_F(StateMachineTest, addingInvalidStateAndTransitions)
   EXPECT_TRUE(machine.addState(s3));
   EXPECT_TRUE(machine.setInitialState(s1));
 
-  // add an already existing state 
+  // add an already existing state so return false
   EXPECT_FALSE(machine.addState(s1));
 
   // bool addState(int parentState, int state, const QString &name = QString());
   // `state` should be valid and it is not since it's already added before.
   EXPECT_FALSE(machine.addState(s2, s1));
 
-  // add new state with invalid parent. Only add new state when parent is
+  // add new state with `invalid parent`. Only add new state when parent is
   // already added.
   EXPECT_FALSE(machine.addState(invalid1, invalid2));
 
@@ -193,7 +195,8 @@ TEST_F(StateMachineTest, stopWithinSlot)
 
   EXPECT_TRUE(machine.connect(lambda, exited));
 
-  // start the state machine
+  // start the state machine but stops right away since it's stopped in enter
+  // eaf.
   machine.start();
 
   EXPECT_FALSE(machine.isRunning());
@@ -249,26 +252,29 @@ TEST_F(StateMachineTest, receiveEntryExitTransitionSignalsOnLoopback)
 
   EXPECT_FALSE(machine.isRunning());
 
-  EXPECT_EQ(enters[s1], 1U);
-  EXPECT_EQ(exits[s1], 1U);
+  EXPECT_EQ(enters[s1], 1U);  // when enters
+  EXPECT_EQ(exits[s1], 1U);   // when transit to s2, exit s1
 
-  EXPECT_EQ(enters[s2], 2U);
-  EXPECT_EQ(exits[s2], 1U);
+  // even transiiton to self calls enter/exit calls.
+  EXPECT_EQ(enters[s2], 2U);  // when transit to s2, enter s2
+  EXPECT_EQ(exits[s2], 1U);   // when trsnsit to s2(self), enter s2 and exit s2
 }
 
 
+// note: this is interesting feature
+// when transit from (outer) state to (inner) state, entered gets called for all
+// states along that transition path. In this example, transit from 0 to 5 and
+// entered gets called for 0,1,3,5.
+
 TEST_F(StateMachineTest, enterNestedStateOrder)
 {
-  // tests that when entering a nested state that we receive state entry
-  // notifications for the super states before the final state
-
   enum {
-    initialState,
-    s1,
-    s1_1,
-    s1_2,
-    s1_2_1,
-    s1_2_2,
+    initialState,   // 0
+    s1,             // 1
+    s1_1,           // 2
+    s1_2,           // 3
+    s1_2_1,         // 4
+    s1_2_2,         // 5
     s2
   };
 
@@ -295,12 +301,10 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
 
   EXPECT_TRUE(machine.setInitialState(initialState));
 
-
   EXPECT_TRUE(machine.addTransition(initialState, e1, s1_2_2));
   EXPECT_TRUE(machine.addTransition(s1_2_2, e2, s1_2_1));
 
-
-  // {
+  // { common code
   std::vector<int> enters;
   std::vector<int> exits;
 
@@ -317,7 +321,6 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   EXPECT_TRUE(machine.connect(entered, exited));
   // }
 
-
   machine.start();
 
   EXPECT_TRUE(machine.isRunning());
@@ -327,7 +330,7 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   enters.clear();
 
   // since e1 pass through 3 states from init state which is not in (old) state
-  // set.
+  // set. from init (no super) to s1_2_2 (no super) 
 
   machine.postEvent(e1);
   EXPECT_EQ(enters.size(), 3);
@@ -420,12 +423,21 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
   // Removes all items from the list.
   enters.clear();
   
-  // post a event to state which don't have same parent and output is:
+  // trigger from AdapterPoweredOffState to ServiceUnavailableState
   //
-  // exited state 4
-  // exited state 3
-  // exited state 1
+  // there's no no transition defined to handle ServiceUnavailableEvent from
+  // AdapterPoweredOffState but it is handled since there is super state that
+  // defines that transition.
+  //
+  // so `exited` called along the path to exit that supre state and `entered`
+  // called to enter target state.
+  //
+  // exited state 4, AdapterPoweredOffState
+  // exited state 3, AdapterAvailableSuperState
+  // exited state 1, ServiceAvailableSuperState
   // entered state 0
+  //
+  // note that ServiceUnavailableState is not super state
 
   machine.postEvent(ServiceUnavailableEvent);
 
@@ -437,7 +449,10 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
 }
 
 
-TEST_F(StateMachineTest, handleSuperStateSameParent)
+// that is, do not allow transition from super state to super state which do
+// have initial state.
+
+TEST_F(StateMachineTest, NoAddTransitionToSuper_0)
 {
   enum State {
     S1,     // 0
@@ -459,16 +474,155 @@ TEST_F(StateMachineTest, handleSuperStateSameParent)
   machine.addState(S4, S5, ("S5"));
   machine.addState(S5, S6, ("S6"));
 
-
   // add the transitions       From State->Event->To State
+  //
+  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00425 : 'toState' S2(1) is a super state with no initial state set
+  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00425 : 'toState' S3(2) is a super state with no initial state set
+  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00425 : 'toState' S4(3) is a super state with no initial state set
+  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00425 : 'toState' S5(4) is a super state with no initial state set
+  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00425 : 'toState' S2(1) is a super state with no initial state set
+
   EXPECT_FALSE(machine.addTransition(S1,       e1,      S2));
   EXPECT_FALSE(machine.addTransition(S2,       e2,      S3));
   EXPECT_FALSE(machine.addTransition(S3,       e3,      S4));
   EXPECT_FALSE(machine.addTransition(S4,       e4,      S5));
+
+  // true since s6 is not super state
   EXPECT_TRUE(machine.addTransition(S5,       e5,      S6));
+
   EXPECT_FALSE(machine.addTransition(S6,       e6,      S2));
 }
 
+// Do not allow to add transion to super state.
+
+TEST_F(StateMachineTest, NoAddTransitionToSuper_1)
+{
+  enum {
+    initialState,   // 0
+    s1,             // 1
+    s1_1,           // 2
+    s1_2,           // 3
+    s1_2_1,         // 4
+    s1_2_2,         // 5
+    s2
+  };
+
+  StateMachine machine;
+  machine.setObjectName("machine");
+
+  EXPECT_TRUE(machine.addState(initialState));
+  EXPECT_TRUE(machine.addState(s1));
+  EXPECT_TRUE(machine.addState(s1, s1_1));
+  EXPECT_TRUE(machine.addState(s1, s1_2));
+  EXPECT_TRUE(machine.addState(s1_2, s1_2_1));
+  EXPECT_TRUE(machine.addState(s1_2, s1_2_2));
+  EXPECT_TRUE(machine.addState(s2));
+
+  EXPECT_TRUE(machine.setInitialState(initialState));
+
+  // EXPECT_TRUE(machine.addTransition(initialState, e1, s1_2_2));
+
+  // LOG| F:qfsm.cpp C:bool StateMachine::addTransition(int, int, int) L:00428 : 
+  //  'toState' (3) is a super state with no initial state set
+  EXPECT_FALSE(machine.addTransition(initialState, e1, s1_2));
+}
+
+
+// since not able to add transition to super, no transition to super can happen.
+
+TEST_F(StateMachineTest, TransitionToSuper)
+{
+  enum State {
+    ServiceUnavailableState,        // 0
+    ServiceAvailableSuperState,     // 1
+    AdapterUnavailableState,        // 2
+    AdapterAvailableSuperState,     // 3
+    AdapterPoweredOffState,         // 4
+    AdapterPoweredOnState,          // 5
+    ShutdownState                   // 6
+  };
+
+  enum Event {
+    ServiceRetryEvent,
+    ServiceAvailableEvent,
+    ServiceUnavailableEvent,
+    AdapterRetryAttachEvent,
+    AdapterAvailableEvent,
+    AdapterUnavailableEvent,
+    AdapterRetryPowerOnEvent,
+    AdapterPoweredOnEvent,
+    AdapterPoweredOffEvent,
+    ShutdownEvent
+  };
+
+
+  StateMachine machine;
+  machine.setObjectName("machine");
+
+  // add all the states
+  machine.addState(ServiceUnavailableState, "ServiceUnavailableState");
+  machine.addState(ServiceAvailableSuperState, "ServiceAvailableSuperState");
+
+  machine.addState(ServiceAvailableSuperState, AdapterUnavailableState, "AdapterUnavailableState");
+  machine.addState(ServiceAvailableSuperState, AdapterAvailableSuperState, "AdapterAvailableSuperState");
+
+  machine.addState(AdapterAvailableSuperState, AdapterPoweredOffState, "AdapterPoweredOffState");
+  machine.addState(AdapterAvailableSuperState, AdapterPoweredOnState, "AdapterPoweredOnState");
+
+  machine.addState(ShutdownState, "ShutdownState");
+
+
+  // add the transitions       From State	              ->    Event                  ->  To State
+  machine.addTransition(ServiceUnavailableState,       ServiceAvailableEvent,      AdapterUnavailableState);
+  machine.addTransition(ServiceUnavailableState,       ServiceRetryEvent,          ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,    ServiceUnavailableEvent,    ServiceUnavailableState);
+  machine.addTransition(ServiceAvailableSuperState,    ShutdownEvent,              ShutdownState);
+
+  machine.addTransition(AdapterUnavailableState,       AdapterAvailableEvent,      AdapterPoweredOffState);
+  machine.addTransition(AdapterUnavailableState,       AdapterRetryAttachEvent,    AdapterUnavailableState);
+  machine.addTransition(AdapterAvailableSuperState,    AdapterUnavailableEvent,    AdapterUnavailableState);
+
+  machine.addTransition(AdapterPoweredOffState,        AdapterPoweredOnEvent,      AdapterPoweredOnState);
+  machine.addTransition(AdapterPoweredOffState,        AdapterRetryPowerOnEvent,   AdapterPoweredOffState);
+  machine.addTransition(AdapterPoweredOnState,         AdapterPoweredOffEvent,     AdapterPoweredOffState);
+
+
+  // {
+  std::vector<int> enters;
+  std::vector<int> exits;
+
+  auto entered = [&](int state)
+  { 
+    std::cout << "entered state: " << state << std::endl;
+    enters.push_back(state);
+  };
+
+  auto exited = [&](int state)
+  {
+    std::cout << "exited state: " << state << std::endl;
+    exits.push_back(state);
+  };
+
+  EXPECT_TRUE(machine.connect(entered, exited));
+  // }
+
+
+  // set the initial state
+  machine.setInitialState(AdapterPoweredOffState);
+  machine.start();
+
+  // Removes all items from the list.
+  enters.clear();
+  
+  // TODO: postEvent() do not return error. may be necessary to add?
+  // LOG| F:qfsm.cpp C:int StateMachine::shouldMoveState(int) const L:00279 : 
+  //  not found target state from current state -1
+  machine.postEvent(ServiceAvailableSuperState);
+
+  // since no transition is made, nothing there
+  EXPECT_EQ(enters.size(), 0);
+  EXPECT_EQ(exits.size(), 0);
+}
 
 int main(int argc, char **argv)
 {

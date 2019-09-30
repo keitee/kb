@@ -72,6 +72,21 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 add_compile_options("-g")
 
 
+# to use static library
+#
+# Add directories in which the linker will look for libraries.
+#
+# link_directories([AFTER|BEFORE] directory1 [directory2 ...])
+#
+# Adds the paths in which the linker should search for libraries. Relative paths
+# given to this command are interpreted as relative to the current source
+# directory, see CMP0015.
+set(LIBS_DIR "../libs")
+set(LIBS libcxx.a)
+link_directories(${LIBS_DIR}/build)
+include_directories(${LIBS_DIR})
+
+
 # fsm atm
 add_executable(${PROJECT_NAME}_atm fsm_atm.cpp sfsm.cpp dfsm.cpp)
 target_link_libraries(${PROJECT_NAME}_atm gmock_main)
@@ -83,18 +98,15 @@ target_link_libraries(${PROJECT_NAME}_ex gmock_main)
 
 
 # fsm qt for qt
-
 find_package(Qt5Core)
 find_package(Qt5Test)
-add_executable(${PROJECT_NAME}_qt qfsm_qt_use.cpp qfsm_qt.cpp)
-target_link_libraries(${PROJECT_NAME}_qt gmock_main Qt5::Core Qt5::Test)
+add_executable(q${PROJECT_NAME}qt qfsmqt_test.cpp qfsmqt.cpp)
+target_link_libraries(q${PROJECT_NAME}qt gmock_main Qt5::Core Qt5::Test ${LIBS})
 
 
 # fsm qt but no qt
-
-add_executable(${PROJECT_NAME}_noqt qfsm_use.cpp qfsm.cpp)
-target_link_libraries(${PROJECT_NAME}_noqt gmock_main)
+add_executable(q${PROJECT_NAME} qfsm_test.cpp qfsm.cpp)
+target_link_libraries(q${PROJECT_NAME} gmock_main ${LIBS})
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
-
