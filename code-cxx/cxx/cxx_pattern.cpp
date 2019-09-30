@@ -2598,7 +2598,7 @@ namespace cxx_observer_notifier_full
   // @brief A dispatcher that does all the work immediately on the thread that
   // calls post.
 
-  class CallerThreadedDispatcher : public IDispatcher
+  class CallerThreadDispatcher : public IDispatcher
   {
     public:
       virtual void post(std::function<void ()> work) final
@@ -2628,7 +2628,7 @@ TEST(PatternObserver, sendNotificationWithRealDispatcher)
 
 // can use real dispatcher as above but since not control dispatcher such as
 // sync(), flush() or wait it to finish, cannot have deterministic result. Hence
-// CallerThreadedDispatcher which call a work on calling thread.
+// CallerThreadDispatcher which call a work on calling thread.
 
 TEST(PatternObserver, sendNotificationWithCallerDispatcher)
 {
@@ -2636,7 +2636,7 @@ TEST(PatternObserver, sendNotificationWithCallerDispatcher)
 
   Source noti;
   std::shared_ptr<TestObserver> observer = std::make_shared<TestObserver>();
-  noti.set_dispatcher(std::make_shared<CallerThreadedDispatcher>());
+  noti.set_dispatcher(std::make_shared<CallerThreadDispatcher>());
   noti.add_observer(observer);
 
   EXPECT_CALL(*observer, stateChanged(5)).Times(1);
@@ -2650,7 +2650,7 @@ TEST(PatternObserver, sendNotificationManyArgs)
 
   Source noti;
   std::shared_ptr<TestObserver> observer = std::make_shared<TestObserver>();
-  noti.set_dispatcher(std::make_shared<CallerThreadedDispatcher>());
+  noti.set_dispatcher(std::make_shared<CallerThreadDispatcher>());
   noti.add_observer(observer);
 
   EXPECT_CALL(*observer, keyAndValueChanged("key", "value")).Times(1);

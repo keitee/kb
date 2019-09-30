@@ -55459,6 +55459,8 @@ o While dealing with the referenced object, the shared pointer can't get
 
 As a consequence, class weak_ptr provides only a small number of operations:
 
+*cxx-sp-reset*
+
 weak_ptr<T> w(sp);
 w.reset();
 w.use_count();
@@ -56121,39 +56123,8 @@ namespace cxx-code *cxx-sp-code* *cxx-sp-delete*
 } // namespace
 
 
-<ex>
-
-:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
-  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
-  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
- 
-:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
-std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
-= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
-
-TEST(SharedPointerUnique, DoNotAllowCopy)
-{
-  unique_ptr<std::string> p1(new std::string("nico"));
-  unique_ptr<std::string> p2(p1);
-  unique_ptr<std::string> p3;
-  p3 = p2;
-}
-
-TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
-{
-  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
-  // std::basic_string<char>*}’ to non-scalar type
-  // ‘std::unique_ptr<std::basic_string<char> >’ requested
-  //
-  // unique_ptr<std::string> p1 = new string;
-
-  unique_ptr<std::string> p2(new string);
-}
-
-
-o A unique_ptr does not have to own an object, so it can be empty.
+<cxx-sp-empty>
+A unique_ptr does not have to own an object, so it can be empty.
 
 
 <cxx-sp-bool> *cxx-conversion-to-bool*
@@ -56237,7 +56208,8 @@ unique_ptr<Foo> p4(new Foo(4));
 p4 = unique_ptr<Foo>(new Foo(5));     // move assign
 
 
-o Use move semantics *cxx-prefered* since intention is clear
+*when-use-move*
+Use move semantics *cxx-prefered* since intention is clear
 
 // initialize a unique_ptr with a new object
 std::unique_ptr<ClassA> up1(new ClassA);
@@ -56265,6 +56237,47 @@ up2 = std::move(up1);
 
 <ex>
 
+/*
+
+:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+ 
+:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+
+TEST(SharedPointer, UniqueDoNotSupportCopy)
+{
+  unique_ptr<std::string> p1(new std::string("nico"));
+
+  // *cxx-error*
+  unique_ptr<std::string> p2(p1);
+
+  unique_ptr<std::string> p3;
+
+  // *cxx-error*
+  p3 = p2;
+}
+
+TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
+{
+  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+  // std::basic_string<char>*}’ to non-scalar type
+  // ‘std::unique_ptr<std::basic_string<char> >’ requested
+
+  unique_ptr<std::string> p1 = new string;
+}
+
+*/
+
+TEST(SharedPointer, UniqueSupportCopy)
+{
+  unique_ptr<std::string> p2(new string);
+}
+
 namespace cxx_sp_shared
 {
   class Foo 
@@ -56273,25 +56286,49 @@ namespace cxx_sp_shared
       int id;
 
     public:
-      Foo(int val = 1):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
-      ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+      Foo(int val = 1)
+        : id(val) 
+      { 
+        cout << "Foo ctor(" << id << ")" << endl; 
+      }
+
+      ~Foo() 
+      { 
+        cout << "Foo dtor(" << id << ")" << endl; 
+      }
   };
 } // namespace
 
-// [ RUN      ] CxxFeaturesTest.UseUniquePtrMove
+
+// Foo ctor(1)
+// Foo ctor(2)
+// Foo dtor(1)
+// Foo ctor(3)
+// Foo dtor(2)
+// Foo dtor(3)
+
+TEST(SmartPointer, UniqueSetUseMove_0)
+{
+  using namespace cxx_sp_shared;
+
+  std::unique_ptr<Foo> up;
+
+  // not support copy assign for lvalue but support for rvalue
+  up = std::move(std::unique_ptr<Foo>(new Foo(1)));
+  up = std::move(std::unique_ptr<Foo>(new Foo(2)));
+  up = std::move(std::unique_ptr<Foo>(new Foo(3)));
+}
+
 // Foo ctor(1)
 // Foo ctor(2)
 // Foo ctor(3)
 // Foo ctor(4)
-// p3 is not null
 // Foo dtor(2)
 // Foo dtor(1)
-// p3 is null
 // Foo dtor(4)
 // Foo dtor(3)
-// [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SharedPointerUnique, Move)
+TEST(SmartPointer, UniqueSetUseMove_1)
 {
   using namespace cxx_sp_shared;
 
@@ -56300,11 +56337,6 @@ TEST(SharedPointerUnique, Move)
   unique_ptr<Foo> p3(new Foo(3));
   unique_ptr<Foo> p4(new Foo(4));
 
-  // if (p3)
-  //   cout << "p3 is not null" << endl;
-  // else
-  //   cout << "p3 is null" << endl;
-
   EXPECT_TRUE(p3);
 
   p2 = std::move(p3);     // p1->F1   , p2->F3, p3->null
@@ -56312,12 +56344,8 @@ TEST(SharedPointerUnique, Move)
   p3 = std::move(p1);     // p1->null , p2->F3, p3->null
 
   EXPECT_FALSE(p3);
- 
-  // if (p3)
-  //   cout << "p3 is not null" << endl;
-  // else
-  //   cout << "p3 is null" << endl;
 }
+
 
 <ex>
 { 

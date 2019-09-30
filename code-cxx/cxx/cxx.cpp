@@ -3955,39 +3955,6 @@ TEST(SmartPointer, SharedEx)
   EXPECT_THAT(whoMadeCoffee[0].use_count(), 4);
 }
 
-/*
-
-:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
-  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
-  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
- 
-:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
-std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
-= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
-std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
-
-TEST(SharedPointerUnique, DoNotAllowCopy)
-{
-  unique_ptr<std::string> p1(new std::string("nico"));
-  unique_ptr<std::string> p2(p1);
-  unique_ptr<std::string> p3;
-  p3 = p2;
-}
-
-TEST(SharedPointerUnique, DoNotAllowInitCopyForm)
-{
-  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
-  // std::basic_string<char>*}’ to non-scalar type
-  // ‘std::unique_ptr<std::basic_string<char> >’ requested
-  //
-  // unique_ptr<std::string> p1 = new string;
-
-  unique_ptr<std::string> p2(new string);
-}
-
-*/
-
 TEST(SmartPointer, OperatorBool)
 {
   {
@@ -4020,6 +3987,52 @@ TEST(SmartPointer, OperatorBool)
   }
 }
 
+
+// ={=========================================================================
+// cxx-smart-ptr cxx-up
+
+/*
+
+:10:27: error: use of deleted function ‘std::unique_ptr<_Tp,
+  _Dp>::unique_ptr(const std::unique_ptr<_Tp, _Dp>&) [with _Tp =
+  std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+  std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+ 
+:12:8: error: use of deleted function ‘std::unique_ptr<_Tp, _Dp>&
+std::unique_ptr<_Tp, _Dp>::operator=(const std::unique_ptr<_Tp, _Dp>&) [with _Tp
+= std::basic_string<char>; _Dp = std::default_delete<std::basic_string<char> >;
+std::unique_ptr<_Tp, _Dp> = std::unique_ptr<std::basic_string<char> >]’
+
+TEST(SharedPointer, UniqueDoNotSupportCopy)
+{
+  unique_ptr<std::string> p1(new std::string("nico"));
+
+  // *cxx-error*
+  unique_ptr<std::string> p2(p1);
+
+  unique_ptr<std::string> p3;
+
+  // *cxx-error*
+  p3 = p2;
+}
+
+TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
+{
+  // cxx.cpp:1696:36: error: conversion from ‘std::string* {aka
+  // std::basic_string<char>*}’ to non-scalar type
+  // ‘std::unique_ptr<std::basic_string<char> >’ requested
+
+  unique_ptr<std::string> p1 = new string;
+}
+
+*/
+
+TEST(SharedPointer, UniqueSupportCopy)
+{
+  unique_ptr<std::string> p2(new string);
+}
+
+
 namespace cxx_sp_shared
 {
   class Foo 
@@ -4028,25 +4041,49 @@ namespace cxx_sp_shared
       int id;
 
     public:
-      Foo(int val = 1):id(val) { cout << "Foo ctor(" << id << ")" << endl; }
-      ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+      Foo(int val = 1)
+        : id(val) 
+      { 
+        cout << "Foo ctor(" << id << ")" << endl; 
+      }
+
+      ~Foo() 
+      { 
+        cout << "Foo dtor(" << id << ")" << endl; 
+      }
   };
 } // namespace
 
-// [ RUN      ] CxxFeaturesTest.UseUniquePtrMove
+
+// Foo ctor(1)
+// Foo ctor(2)
+// Foo dtor(1)
+// Foo ctor(3)
+// Foo dtor(2)
+// Foo dtor(3)
+
+TEST(SmartPointer, UniqueSetUseMove_0)
+{
+  using namespace cxx_sp_shared;
+
+  std::unique_ptr<Foo> up;
+
+  // not support copy assign for lvalue but support for rvalue
+  up = std::move(std::unique_ptr<Foo>(new Foo(1)));
+  up = std::move(std::unique_ptr<Foo>(new Foo(2)));
+  up = std::move(std::unique_ptr<Foo>(new Foo(3)));
+}
+
 // Foo ctor(1)
 // Foo ctor(2)
 // Foo ctor(3)
 // Foo ctor(4)
-// p3 is not null
 // Foo dtor(2)
 // Foo dtor(1)
-// p3 is null
 // Foo dtor(4)
 // Foo dtor(3)
-// [       OK ] CxxFeaturesTest.UseUniquePtrMove (1 ms)
 
-TEST(SmartPointer, UniqueMove)
+TEST(SmartPointer, UniqueSetUseMove_1)
 {
   using namespace cxx_sp_shared;
 

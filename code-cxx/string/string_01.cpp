@@ -182,7 +182,9 @@ TEST(StringOperation, Back)
 TEST(StringOperation, MaxSize)
 {
   string s{};
-#if __GNUC__ && __x86_64__
+
+// #if __GNUC__ && __x86_64__
+#if __GNUC__ && !__x86_64__
   EXPECT_THAT(s.max_size(), 4611686018427387897);
 #else
   EXPECT_THAT(s.max_size(), 9223372036854775807);
@@ -428,6 +430,20 @@ TEST(StringOperation, Add)
   std::string coll2{"string add"};
 
   EXPECT_THAT(coll1, coll2);
+}
+
+// cxx-string-clear
+TEST(StringOperation, Clear)
+{
+  std::string coll{};
+  
+  coll = "string add";
+
+  EXPECT_THAT(coll.size(), 10); 
+
+  coll.clear();
+
+  EXPECT_THAT(coll.size(), 0); 
 }
 
 

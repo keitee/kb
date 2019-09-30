@@ -12,6 +12,9 @@
 
 #include "BluetoothStreamer.h"
 #include "Observer.h"
+#include "Notifier.h"
+#include "CallerThreadDispatcher.h"
+
 #include "bleaudioreader.h"
 #include "bleaudioreaderevent.h"
 #include "eventqueue.h"
@@ -31,6 +34,13 @@ struct BleAudioMetadata
     return true;
   }
 
+  void clear()
+  {
+    title.clear(); artist.clear(); album.clear();
+    track_number = 0; number_of_tracks = 0;
+    genre.clear();
+  }
+
   std::string title{};
   std::string artist{};
   std::string album{};
@@ -41,6 +51,13 @@ struct BleAudioMetadata
 
 struct BleAudioFormat
 {
+  void clear()
+  {
+    type = FORMAT_TYPE_LAST; 
+    rate = 0;
+    channels = 0;
+  }
+
   FormatType type{};
   uint32_t rate{};
   uint32_t channels{};
@@ -72,6 +89,8 @@ struct BleAudioMessage
 
   // TODO debug purpose
   std::string value_;
+
+
 };
 
 
@@ -140,6 +159,7 @@ public:
                               std::string const &property,
                               std::string const &value);
 
+public:
   // IBleAudioReaderEvent
   void onFormatChanged(FormatType format, unsigned int samplerate,
                        unsigned int channels);
@@ -185,6 +205,7 @@ private:
   int64_t disconnection_timer_{0};
   int64_t refresh_timer_{0};
   uint32_t disconnection_timeout_{0};
+  std::unique_ptr<BleAudioReader> reader_;
 
   bool onDisconnectionTimerExpired();
 

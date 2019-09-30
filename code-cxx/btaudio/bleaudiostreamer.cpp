@@ -170,6 +170,7 @@ void BleAudioStreamer::onDevicePropertyChange(std::string const &path,
                           property, value));
 }
 
+
 /* -{=========================================================================
  * @brief
  */
@@ -177,7 +178,10 @@ void BleAudioStreamer::onDevicePropertyChange(std::string const &path,
 void BleAudioStreamer::onFormatChanged(FormatType format,
                                        unsigned int samplerate,
                                        unsigned int channels)
-{}
+{
+  LOG_MSG("onFormatChange");
+}
+
 
 /* -{=========================================================================
  * @brief
@@ -185,7 +189,13 @@ void BleAudioStreamer::onFormatChanged(FormatType format,
 
 void BleAudioStreamer::onBufferReady(char *buffer, size_t nbytes,
                                      size_t sampleno)
-{}
+{
+  LOG_MSG("onBufferReady");
+
+  q_.push(BleAudioMessage(BleAudioMessage::PlayerPropertyChangeMsg, path,
+                          property, value));
+}
+
 
 /* -{=========================================================================
  * BluetoothApi::Streamer
@@ -205,7 +215,9 @@ void BleAudioStreamer::setBluetoothTimeout(uint32_t timeout)
 
 bool BleAudioStreamer::onDisconnectionTimerExpired()
 {
-#ifndef USE_HOST_BUILD
+#ifdef USE_HOST_BUILD
+  LOG_MSG("host: dvice %s disconnected", device_path_.c_str());
+#else
   if (!device_proxy_ || device_path_.empty())
   {
     // error
@@ -213,8 +225,6 @@ bool BleAudioStreamer::onDisconnectionTimerExpired()
   }
 
   device_proxy_->disconnect(device_path_);
-  LOG_MSG("dvice %s disconnected", device_path_.c_str());
-#else
   LOG_MSG("dvice %s disconnected", device_path_.c_str());
 #endif
 }
@@ -245,8 +255,11 @@ void BleAudioStreamer::doWork_(std::string const &name)
             device_path_ = message.path_;
             fsm_.postEvent(DeviceConnectedEvent);
           }
-        } else if (message.value_ == "false")
+        } 
+        else if (message.value_ == "false")
+        {
           fsm_.postEvent(DeviceDisconnectedEvent);
+        }
         else
         {
           LOG_MSG("DevicePropertyChangeMsg got unknown %s property value",
@@ -265,7 +278,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
       {
         transport_path_ = message.path_;
         fsm_.postEvent(TransportAddedEvent);
-      } else
+      }
+      else
       {
         LOG_MSG(
             "TransportAddedMsg receive but transport path, %s, is not empty",
@@ -279,7 +293,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
       {
         player_path_ = message.path_;
         fsm_.postEvent(PlayerAddedEvent);
-      } else
+      }
+      else
       {
         LOG_MSG("PlayerAddedMsg receive but player path, %s, is not empty",
                 transport_path_.c_str());
@@ -301,11 +316,17 @@ void BleAudioStreamer::doWork_(std::string const &name)
         // player->getStatue(message.path_, state);
 
         if (message.value_ == "idle")
+        {
           fsm_.postEvent(TransportIdelEvent);
+        }
         else if (message.value_ == "pending")
+        {
           fsm_.postEvent(TransportPendingEvent);
+        }
         else if (message.value_ == "active")
+        {
           fsm_.postEvent(TransportActiveEvent);
+        }
         else
         {
           LOG_MSG("TransportPropertyChangeMsg got unknown %s property value",
@@ -325,11 +346,13 @@ void BleAudioStreamer::doWork_(std::string const &name)
         // build metadata and notify to client
         updateMetadata_();
         notify_(MESSAGE_TYPE_METADATA);
-      } else if (message.property_ == "Position")
+      }
+      else if (message.property_ == "Position")
       {
         // build pos update and notify to AS
         // have to access proxy
-      } else if (message.property_ == "Status")
+      }
+      else if (message.property_ == "Status")
       {
         // get property value
         // std::string state{};
@@ -337,7 +360,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
 
         (message.value_ == "playing" ? fsm_.postEvent(PlayerPlayingEvent)
                                      : fsm_.postEvent(PlayerStoppedEvent));
-      } else
+      }
+      else
       {
         LOG_MSG("PlayerPropertyChangeMsg got unknown %s property",
                 message.property_.c_str());
@@ -518,6 +542,16 @@ void BleAudioStreamer::entered_(int state)
   case PlayerReadyState:
     eafPlayerReadyState_();
     break;
+
+  case PlayerRunningState:
+    eafPlayerRunningState_();
+    break;
+
+  case PlayerStopState:
+    eafPlayerStopgState_();
+
+  case TransportIdleState:
+    eafTransportIdleState_();
   }
 }
 
@@ -529,6 +563,8 @@ void BleAudioStreamer::exited_(int state)
 void BleAudioStreamer::eafDeviceOnState_()
 {
   LOG_MSG("on DeviceOnState");
+
+  device_path_.clear();
 
   disconnection_timer_ = timer_.add(
       std::chrono::milliseconds(disconnection_timeout_ * 1000), true,
@@ -550,6 +586,9 @@ void BleAudioStreamer::eafDeviceOffState_()
 void BleAudioStreamer::eafTransportOnState_()
 {
   LOG_MSG("on TransportOnState");
+
+  transport_path_.clear();
+
   // TODO: nothing to do?
 }
 
@@ -557,17 +596,26 @@ void BleAudioStreamer::eafTransportOnState_()
  */
 void BleAudioStreamer::eafPlayerOnState_()
 {
+  LOG_MSG("on PlayerOnState");
+
+  player_path_.clear();
+  metadata_.clear();
+
   notify_(MESSAGE_TYPE_METADATA);
 }
 
 void BleAudioStreamer::eafPlayerPendingState_()
 {
+  LOG_MSG("on PlayerPendingState");
+
   uint16_t not_used1, not_used2;
 
   // acquire fd
 #ifdef USE_HOST_BUILD
-  LOG_MSG("debug: have got fd from transport proxy");
+  LOG_MSG("host: try to acquire fd from transport proxy");
 #else
+  LOG_MSG("try to acquire fd from transport proxy");
+
   // TODO: not clear on what to do if this call fails. the old code has bring up
   // timer and fake player event. what are they?
   transport_proxy_->tryAcquire(transport_path_, fd_, not_used1, not_used2);
@@ -576,18 +624,27 @@ void BleAudioStreamer::eafPlayerPendingState_()
 
 void BleAudioStreamer::eafPlayerReadyState_()
 {
+  LOG_MSG("on PlayerReadyState");
+
   // start a reader with fd
 #ifdef USE_HOST_BUILD
-  LOG_MSG("debug: have created a reader which reads data from fd");
+  LOG_MSG("host: create a reader with fd");
+#else
+  LOG_MSG("create a reader with fd");
 
   a2dp_sbc_t config{};
 
   // creates a reader only when gets configuration
   if (!getTransportConfig_(config) && getEndpointConfig_(config))
   {
-    // TODO: use of unique_ptr<>?
-    reader_ = new BleAudioReader(fd_, config);
-  } else
+    reader_ = std::move(std::unique_ptr<BleAudioReader>(new BleAudioReader(fd_, config)));
+    if (reader_)
+      LOG_MSG("failed to create BluAudioReader");
+
+    reader_.set_dispatcher(std::make_shared<CallerThreadDispatcher>());
+    reader_.add_observer(this);
+  }
+  else
   {
     LOG_MSG("no reader created as no configuration is available");
   }
