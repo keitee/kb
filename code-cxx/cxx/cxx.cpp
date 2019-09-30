@@ -710,6 +710,92 @@ TEST(Ctor, CtorCallsCtor)
   EXPECT_THAT(oo.get_name(), "cxx-oo");
 }
 
+namespace cxx_ctor
+{
+  class CtorUseDefaultArgument
+  {
+    public:
+      CtorUseDefaultArgument(std::string const &bookNo, unsigned sold = 10, unsigned revenue = 20)
+        :bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
+      {}
+
+      // to make it easy to check values
+      std::string bookNo_;
+      unsigned units_sold_;
+      unsigned revenue_;
+  };
+
+  class CtorUseInClassInit
+  {
+    public:
+      // CtorUseInClassInit(std::string const &bookNo, unsigned sold, unsigned revenue)
+      //   :bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
+      // {}
+
+      CtorUseInClassInit(std::string const &bookNo)
+        :bookNo_(bookNo)
+      {}
+
+      std::string bookNo_;
+      unsigned units_sold_{10};
+      unsigned revenue_{20};
+      unsigned value_{};
+  };
+
+} // namespace
+
+TEST(Ctor, CtorDefaultArgAndInClassInit)
+{
+  using namespace cxx_ctor;
+
+  {
+    CtorUseDefaultArgument o("ctor");
+
+    EXPECT_THAT(o.bookNo_, "ctor");
+    EXPECT_THAT(o.units_sold_, 10);
+    EXPECT_THAT(o.revenue_, 20);
+  }
+
+  {
+    CtorUseDefaultArgument o("ctor", 30);
+
+    EXPECT_THAT(o.bookNo_, "ctor");
+    EXPECT_THAT(o.units_sold_, 30);
+    EXPECT_THAT(o.revenue_, 20);
+  }
+
+  {
+    CtorUseDefaultArgument o("ctor", 30, 40);
+
+    EXPECT_THAT(o.bookNo_, "ctor");
+    EXPECT_THAT(o.units_sold_, 30);
+    EXPECT_THAT(o.revenue_, 40);
+  }
+
+  // so have to define all ctors if want to use it like one using default arguments
+  //
+  // {
+  //   // error: no matching function for call to 
+  //   // ‘cxx_ctor::CtorUseInClassInit::CtorUseInClassInit(const char [5])’
+  //
+  //   CtorUseInClassInit o("ctor");
+  //
+  //   EXPECT_THAT(o.bookNo_, "ctor");
+  //   EXPECT_THAT(o.units_sold_, 10);
+  //   EXPECT_THAT(o.revenue_, 20);
+  // }
+
+  // now works when changes ctor
+  {
+    CtorUseInClassInit o("ctor");
+
+    EXPECT_THAT(o.bookNo_, "ctor");
+    EXPECT_THAT(o.units_sold_, 10);
+    EXPECT_THAT(o.revenue_, 20);
+    EXPECT_THAT(o.value_, 0);
+  }
+}
+
 
 // ={=========================================================================
 // cxx-ctor-init-forms

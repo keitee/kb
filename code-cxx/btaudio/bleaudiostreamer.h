@@ -25,56 +25,98 @@ struct BleAudioMetadata
 {
   bool operator==(BleAudioMetadata const &rhs) const
   {
-    if ((title != rhs.title) || (artist != rhs.artist) ||
-        (album != rhs.album) || (track_number != rhs.track_number) ||
-        (number_of_tracks != rhs.number_of_tracks)) {
+    if ((title_ != rhs.title_) || (artist_ != rhs.artist_) ||
+        (album_ != rhs.album_) || (track_number_ != rhs.track_number_) ||
+        (number_of_tracks_ != rhs.number_of_tracks_)) {
       return false;
     }
 
     return true;
   }
 
-  void clear()
+  bool operator!=(BleAudioMetadata const &rhs) const
   {
-    title.clear(); artist.clear(); album.clear();
-    track_number = 0; number_of_tracks = 0;
-    genre.clear();
+    return !(*this == rhs);
   }
 
-  std::string title{};
-  std::string artist{};
-  std::string album{};
-  uint32_t track_number{};
-  uint32_t number_of_tracks{};
-  std::string genre{};
+  void clear()
+  {
+    title_.clear(); artist_.clear(); album_.clear();
+    track_number_ = 0; number_of_tracks_ = 0;
+    genre_.clear();
+  }
+
+  std::string title_{};
+  std::string artist_{};
+  std::string album_{};
+  uint32_t track_number_{};
+  uint32_t number_of_tracks_{};
+  std::string genre_{};
+};
+
+struct BleAudioPosition
+{
+  bool operator==(BleAudioPosition const &rhs) const
+  {
+    return ((duration_ == rhs.duration_) && (position_ == rhs.position_));
+  }
+
+  bool operator!=(BleAudioPosition const &rhs) const
+  {
+    return !(*this == rhs);
+  }
+
+  uint32_t duration_{};
+  uint32_t position_{};
 };
 
 struct BleAudioFormat
 {
+  explicit BleAudioFormat(FormatType type, unit32_t rate, uint32_t channel)
+  {}
+
   void clear()
   {
-    type = FORMAT_TYPE_LAST; 
-    rate = 0;
-    channels = 0;
+    type_ = FORMAT_TYPE_LAST; 
+    rate_ = 0;
+    channels_ = 0;
   }
 
-  FormatType type{};
-  uint32_t rate{};
-  uint32_t channels{};
+  FormatType type_{};
+  uint32_t rate_{};
+  uint32_t channels_{};
+};
+
+struct BleAudioBuffer
+{
+  explicit BleAudioBuffer(void * data, size_t size, size_t sample)
+  {}
+
+  void clear()
+  {
+    data_ = nullptr; 
+    size_ = 0;
+    sample_number_ = 0;
+  }
+
+  void *data_{nullptr};
+  size_t size_{};
+  size_t sample_number_{};
 };
 
 struct BleAudioMessage
 {
   enum
   {
-    DeviceConnectedMsg,
+    // DeviceConnectedMsg,
+    DevicePropertyChangeMsg,
     TransportAddedMsg,
     TransportRemovedMsg,
     TransportPropertyChangeMsg,
     PlayerAddedMsg,
     PlayerRemovedMsg,
     PlayerPropertyChangeMsg,
-    DevicePropertyChangeMsg
+    PlayerBufferReadyMsg
   };
 
   explicit BleAudioMessage(int type, std::string const &path = std::string(),
@@ -83,14 +125,17 @@ struct BleAudioMessage
       : type_(type), path_(path), property_(property), value_(value)
   {}
 
-  int type_;
-  std::string path_;
-  std::string property_;
+  explicit BleAudioMessage(int type)
+      : type_(type)
+  {}
+
+  // TODO size_t?
+  int type_{};
+  std::string path_{};
+  std::string property_{};
 
   // TODO debug purpose
-  std::string value_;
-
-
+  std::string value_{};
 };
 
 
@@ -168,6 +213,7 @@ public:
   // BluetoothApi::Streamer
 public:
   void setBluetoothTimeout(uint32_t timeout) override;
+  void releaseBuffer(void *buffer);
 
 private:
   BleAudio::queue<BleAudioMessage> q_;
@@ -197,15 +243,19 @@ private:
 
   bool checkHasAudioSource_(std::string const &path);
   void updateMetadata_();
+  void updatePosition_();
+  void updateState_();
   void notify_(MessageType type);
   bool getTransportConfig_(a2dp_sbc_t &config);
   bool getEndpointConfig_(a2dp_sbc_t &config);
 
-  TimerQueue timer_;
+  TimerQueue timer_{};
   int64_t disconnection_timer_{0};
   int64_t refresh_timer_{0};
   uint32_t disconnection_timeout_{0};
-  std::unique_ptr<BleAudioReader> reader_;
+
+  int fd_{};
+  std::unique_ptr<BleAudioReader> reader_{};
 
   bool onDisconnectionTimerExpired();
 
@@ -215,15 +265,14 @@ private:
   device_proxy_;
 #endif
 
-  int fd_;
-  BleAudioReader *reader_;
-
 private:
-  BleAudioMetadata metadata_;
-  BleAudioFormat format_;
-
-  MessageHandler observer_;
-  void *observer_data_;
+  BleAudioMetadata metadata_{};
+  BleAudioFormat format_{};
+  BleAudioBuffer buffer_{};
+  BleAudioPosition position_{};
+  std::string play_state_{};
+  MessageHandler observer_{};
+  void *observer_data_{};
 };
 
 #endif // BLEAUDIOSTREAMER_H

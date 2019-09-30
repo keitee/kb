@@ -29,9 +29,9 @@ std::string stringMessage(int message)
 {
   switch (message)
   {
-  case BleAudioMessage::DeviceConnectedMsg:
-    return std::string("DeviceConnectedMsg");
-    break;
+  // case BleAudioMessage::DeviceConnectedMsg:
+  //   return std::string("DeviceConnectedMsg");
+  //   break;
   case BleAudioMessage::TransportAddedMsg:
     return std::string("TransportAddedMsg");
     break;
@@ -49,6 +49,15 @@ std::string stringMessage(int message)
     break;
   case BleAudioMessage::PlayerPropertyChangeMsg:
     return std::string("PlayerPropertyChangeMsg");
+    break;
+  case BleAudioMessage::DevicePropertyChangeMsg:
+    return std::string("DevicePropertyChangeMsg");
+    break;
+  case BleAudioMessage::PlayerBufferReadyMsg:
+    return std::string("PlayerBufferReadyMsg");
+    break;
+  case BleAudioMessage::PlayerFormatChangeMsg:
+    return std::string("PlayerFormatChangeMsg");
     break;
   default:
     return std::string("unknown message");
@@ -164,6 +173,7 @@ void BleAudioStreamer::onDevicePropertyChange(std::string const &path,
                                               std::string const &property,
                                               std::string const &value)
 {
+  // TODO: the original code do not have lock when called from dbus listener
   std::lock_guard<std::mutex> lock(m_);
 
   q_.push(BleAudioMessage(BleAudioMessage::DevicePropertyChangeMsg, path,
@@ -175,11 +185,20 @@ void BleAudioStreamer::onDevicePropertyChange(std::string const &path,
  * @brief
  */
 
-void BleAudioStreamer::onFormatChanged(FormatType format,
-                                       unsigned int samplerate,
-                                       unsigned int channels)
+void BleAudioStreamer::onFormatChanged(FormatType type,
+                                       uint32_t rate,
+                                       uint32_t channels)
 {
+  // TODO: called from reader
+  std::lock_guard<std::mutex> lock(m_);
+
   LOG_MSG("onFormatChange");
+
+  format_.type_ = type;
+  format_.rate_ = rate;
+  format_.channels = channels;
+
+  q_.push(BleAudioMessage(BleAudioMessage::PlayerFormatChangeMsg));
 }
 
 
@@ -187,13 +206,23 @@ void BleAudioStreamer::onFormatChanged(FormatType format,
  * @brief
  */
 
-void BleAudioStreamer::onBufferReady(char *buffer, size_t nbytes,
-                                     size_t sampleno)
+void BleAudioStreamer::onBufferReady(char *buffer, size_t size,
+                                     size_t samples)
 {
+  // TODO: called from reader
+  std::lock_guard<std::mutex> lock(m_);
+
   LOG_MSG("onBufferReady");
 
-  q_.push(BleAudioMessage(BleAudioMessage::PlayerPropertyChangeMsg, path,
-                          property, value));
+  // TODO:
+  // make a copy of the received buffer and which will be notified to the client
+  // The client has to use releaseBuffer(void *) when finishes with it
+
+  buffer_.data_ = buffer;
+  buffer_.size_ = size;
+  buffer_.sample_number_ = samples;
+
+  q_.push(BleAudioMessage(BleAudioMessage::PlayerBufferReadyMsg));
 }
 
 
@@ -206,8 +235,25 @@ void BleAudioStreamer::onBufferReady(char *buffer, size_t nbytes,
 void BleAudioStreamer::setBluetoothTimeout(uint32_t timeout)
 {
   std::lock_guard<std::mutex> lock(m_);
+
+  LOG_MSG("BleAudioStreamer::setBluetoothTimeout:");
+
   disconnection_timeout_ = timeout;
 }
+
+
+/* -{=========================================================================
+ * BluetoothApi::Streamer
+ * @brief
+ */
+
+void BleAudioStreame::releaseBuffer(void *buffer)
+{
+  std::lock_guard<std::mutex> lock(m_);
+
+  LOG_MSG("BleAudioStreamer::releaseBuffer:");
+}
+
 
 /* -{=========================================================================
  * do not do fsm transition
@@ -288,6 +334,10 @@ void BleAudioStreamer::doWork_(std::string const &name)
     }
     break;
 
+    case BleAudioMessage::TransportRemovedMsg:
+      fsm_.postEvent(TransportRemovedEvent);
+      break;
+
     case BleAudioMessage::PlayerAddedMsg: {
       if (player_path_.empty())
       {
@@ -350,16 +400,30 @@ void BleAudioStreamer::doWork_(std::string const &name)
       else if (message.property_ == "Position")
       {
         // build pos update and notify to AS
-        // have to access proxy
+        updatePosition_();
+        notify_(MESSAGE_TYPE_POSITION);
       }
       else if (message.property_ == "Status")
       {
-        // get property value
-        // std::string state{};
-        // player->getStatue(message.path_, state);
+        updateState_();
 
-        (message.value_ == "playing" ? fsm_.postEvent(PlayerPlayingEvent)
-                                     : fsm_.postEvent(PlayerStoppedEvent));
+        // move to play when gets playing state and not in playing state
+        if (play_state_ == "playing" && !fsm_.inState(PlayerRunningState))
+        {
+          fsm_.postEvent(PlayerPlayingEvent);
+        }
+
+        // move to stop when gets non-playing states while in playing state
+        if (play_state_ != "playing" && fsm_.inState(PlayerRunningState))
+        {
+          fsm_.postEvent(PlayerStoppedEvent));
+        }
+        
+        // update client while in playing state
+        if (play_state_ == "playing" && fsm_.inState(PlayerRunningState))
+        {
+          notify_(MESSAGE_TYPE_PLAYER_STATE);
+        }
       }
       else
       {
@@ -373,9 +437,17 @@ void BleAudioStreamer::doWork_(std::string const &name)
       fsm_.postEvent(PlayerRemovedEvent);
       break;
 
-    case BleAudioMessage::TransportRemovedMsg:
-      fsm_.postEvent(TransportRemovedEvent);
+    case BleAudioMessage::PlayerBufferReadyMsg:
+      LOG_MSG("notify client with the filled buffer, size(%d), samples(%d)"
+          buffer_.size_, buffer_.sample_number_);
+      // notify_(MESSAGE_TYPE_BUFFER_FILLED);
       break;
+
+    case BleAudioMessage::PlayerFormatChangeMsg:
+      LOG_MSG("notify client with the filled buffer, size(%d), samples(%d)"
+          buffer_.size_, buffer_.sample_number_);
+      break;
+
     } // switch
   }   // while
 }
@@ -651,6 +723,20 @@ void BleAudioStreamer::eafPlayerReadyState_()
 #endif
 }
 
+
+void BleAudioStreamer::eafPlayerRunningState_()
+{
+  LOG_MSG("on PlayerRunningState");
+
+  // stop disconnection timer
+  timer_.remove(disconnection_timer_);
+
+  notify_(MESSAGE_TYPE_SESSION_START);
+  notify_(MESSAGE_TYPE_METADATA);
+  notify_(MESSAGE_TYPE_PLAYER_STATE);
+  notify_(MESSAGE_TYPE_POSITION);
+}
+
 /* -{--------------------------------------------------------------------------
  * @brief check if device to connect has audio source by checking through UUIDs
  */
@@ -676,15 +762,20 @@ bool BleAudioStreamer::checkHasAudioSource_(std::string const &path)
   return false;
 }
 
+
 /* -{--------------------------------------------------------------------------
  * @brief get metadata from player proxy and update streamer with it
  */
 
 void BleAudioStreamer::updateMetadata_()
 {
+  // TODO: or can use fsm state to check such as if it's in playing state
+
   if (!player_path_.empty())
   {
-#ifndef USE_HOST_BUILD
+#ifdef USE_HOST_BUILD
+    LOG_MSG("host: update play metadata");
+#else
     player_proxy_->getTrackTitle(player_path_, metadata_.title);
     player_proxy_->getTrackArtist(player_path_, metadata_.artist);
     player_proxy_->getTrackAlbum(player_path_, metadata_.album);
@@ -692,6 +783,46 @@ void BleAudioStreamer::updateMetadata_()
     player_proxy_->getTrackNumberOfTracks(player_path_,
                                           metadata_.number_of_tracks);
     player_proxy_->getTrackNumber(player_path_, metadata_.track_number);
+#endif
+  } else
+  {
+    LOG_MSG("player path is not set");
+  }
+}
+
+
+/* -{--------------------------------------------------------------------------
+ * @brief get metadata from player proxy and update streamer with it
+ */
+
+void BleAudioStreamer::updatePosition_()
+{
+  // TODO: or can use fsm state to check such as if it's in playing state
+ 
+  if (!player_path_.empty())
+  {
+#ifdef USE_HOST_BUILD
+    LOG_MSG("host: update play position");
+#else
+    player_proxy_->getPosition(player_path_, position_.position_);
+    player_proxy_->getTrackDuration(player_path_, position_.duration_);
+#endif
+  } else
+  {
+    LOG_MSG("player path is not set");
+  }
+}
+
+void BleAudioStreamer::updateState_()
+{
+  // TODO: or can use fsm state to check such as if it's in playing state
+ 
+  if (!player_path_.empty())
+  {
+#ifdef USE_HOST_BUILD
+    LOG_MSG("host: update play state");
+#else
+    player_proxy_->getStatus(player_path_, play_state_);
 #endif
   } else
   {
@@ -711,26 +842,44 @@ void BleAudioStreamer::notify_(MessageType type)
   switch (type)
   {
   case MESSAGE_TYPE_METADATA:
-    msg.type = MESSAGE_TYPE_METADATA;
-    msg.title = metadata_.title;
-    msg.artist = metadata_.artist;
-    msg.album = metadata_.album;
-    msg.number = metadata_.track_number;
-    msg.totalNumbers = metadata_.number_of_tracks;
-    msg.genre = metadata_.genre;
+    msg.type = type;
+    msg.title = metadata_.title_;
+    msg.artist = metadata_.artist_;
+    msg.album = metadata_.album_;
+    msg.number = metadata_.track_number_;
+    msg.totalNumbers = metadata_.number_of_tracks_;
+    msg.genre = metadata_.genre_;
     updated = true;
     break;
 
   case MESSAGE_TYPE_SESSION_START:
-    msg.type = MESSAGE_TYPE_METADATA;
-    msg.title = metadata_.title;
-    msg.artist = metadata_.artist;
-    msg.album = metadata_.album;
-    msg.number = metadata_.track_number;
-    msg.totalNumbers = metadata_.number_of_tracks;
-    msg.genre = metadata_.genre;
+    msg.type = type;
+    msg.title = metadata_.title_;
+    msg.artist = metadata_.artist_;
+    msg.album = metadata_.album_;
+    msg.number = metadata_.track_number_;
+    msg.totalNumbers = metadata_.number_of_tracks_;
+    msg.genre = metadata_.genre_;
     updated = true;
     break;
+
+  case MESSAGE_TYPE_BUFFER_FILLED;
+    msg.type = type;
+    msg.buffer = buffer_.data_;
+    msg.bufferLevel = buffer_.size_;
+    msg.sampleNumber = buffer_.sample_number_;
+  break;
+
+  case MESSAGE_TYPE_POSITION;
+    msg.type = type;
+    msg.position = position_.position;
+    msg.duration = position_.duration_;
+  break;
+
+  case MESSAGE_TYPE_PLAYER_STATE;
+    msg.type = type;
+    msg.playerState = play_state_;
+  break;
 
   default:
     LOG_MSG("unknown AudioStreamer::MessageType, %d", type);
