@@ -16,6 +16,15 @@
 #include <sys/timerfd.h>
 #include <sys/eventfd.h>
 
+#ifdef USE_HOST_BUILD
+
+#include "slog.h"
+#define AS_LOG_ERROR LOG_MSG
+#define AS_LOG_SYS_ERROR(err, fmt) \
+  LOG_MSG(fmt)
+
+#else
+
 #include "AS_Diag.h"
 extern AS_DIAG::Context *dbusitf_logging_ctx;
 #undef  AS_DIAG_CONTEXT_DEFAULT
@@ -24,7 +33,7 @@ extern AS_DIAG::Context *dbusitf_logging_ctx;
 #define AS_LOG_SYS_ERROR(err, fmt) \
     AS_LOG_ERROR(fmt " (%d)", err)
 
-
+#endif
 
 
 TimerQueue::TimerQueue()

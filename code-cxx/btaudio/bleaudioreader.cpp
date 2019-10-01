@@ -7,13 +7,39 @@
 #include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
+#include <functional>
+#include <mutex>
 
 #include "bleaudioreader.h"
+#include "bleaudioreaderevent.h"
 
 #ifdef USE_HOST_BUILD
 
+#include "slog.h"
 #define AS_LOG_ERROR LOG_MSG
 #define AS_LOG_INFO LOG_MSG
+#define AS_LOG_MIL LOG_MSG
+
+ssize_t sbc_decode(sbc_t *sbc, const void *input, size_t input_len,
+                          void *output, size_t output_len, size_t *written)
+{
+  return 0;
+}
+
+int sbc_reinit(sbc_t *sbc, unsigned long flags)
+{
+  return 0;
+}
+
+int sbc_init(sbc_t *sbc, unsigned long flags)
+{
+  return 0;
+}
+
+void sbc_finish(sbc_t *sbc)
+{
+  return;
+}
 
 #else
 
@@ -22,49 +48,17 @@ extern AS_DIAG::Context *dbusitf_logging_ctx;
 #undef AS_DIAG_CONTEXT_DEFAULT
 #define AS_DIAG_CONTEXT_DEFAULT (dbusitf_logging_ctx)
 
+// #include "sbc.h"
+
 #endif // USE_HOST_BUILD
 
-#define USE_SBC_STUB
-
-#include <Common/sbc.h>
-
-static ssize_t sbc_decode(sbc_t *sbc, const void *input, size_t input_len,
-                          void *output, size_t output_len, size_t *written)
-{
-  return 0;
-}
-
-static int sbc_reinit(sbc_t *sbc, unsigned long flags)
-{
-  return 0;
-}
-
-static int sbc_init(sbc_t *sbc, unsigned long flags)
-{
-  return 0;
-}
-
-static ssize_t sbc_decode(sbc_t *sbc, const void *input, size_t input_len,
-                          void *output, size_t output_len, size_t *written)
-{
-  return 0;
-}
-
-static void sbc_finish(sbc_t *sbc)
-{
-  return;
-}
-
-#else
-#include "sbc/sbc.h"
-#endif // USE_SBC_STUB
 
 void BleAudioReader::wakeup()
 {
   m_poller.interruptPoll();
 }
 
-void BleAudioReader::onPollRead(void)
+void BleAudioReader::onPollRead(int)
 {
   ssize_t sz;
   ssize_t decoded_sz;
@@ -104,7 +98,7 @@ void BleAudioReader::onPollRead(void)
   return;
 
 read_error : {
-  std::lock_guard<std::mutex> lock(&m_thread_lock);
+  std::lock_guard<std::mutex> lock(m_thread_lock);
   m_kill_thread = true;
 }
   return;
@@ -126,7 +120,7 @@ void BleAudioReader::readerThread()
 
   while (true) {
     {
-      std::lock_guard<std::mutex> lock(&m_thread_lock);
+      std::lock_guard<std::mutex> lock(m_thread_lock);
       if (m_kill_thread)
         goto exit;
     }
@@ -167,7 +161,7 @@ void BleAudioReader::sendAudioParams(void)
     AS_LOG_MIL("audio stream format changed: freq=%d channels=%d format=%d",
                frequency, channels, fmt);
     // notify(onFormatChange(fmt, frequency, channels));
-    notify(&IBleAudioReaderEvent::onFormatChange, fmt, frequency, channels);
+    notify(&BleAudio::IBleAudioReaderEvent::onFormatChanged, fmt, frequency, channels);
     m_frequency = frequency;
     m_channels = channels;
     m_format = fmt;
@@ -348,7 +342,7 @@ ssize_t BleAudioReader::decode(const uint8_t *data, int sz)
   }
 
   if (decoded_len > 0) {
-    notify(&IBleAudioReaderEvent::onBufferReady, m_buf, decoded_len, m_sample);
+    notify(&BleAudio::IBleAudioReaderEvent::onBufferReady, (char*)m_buf, decoded_len, m_sample);
     return offset + sizeof(struct rtp_header) + sizeof(*payload);
   }
 
@@ -392,7 +386,7 @@ BleAudioReader::BleAudioReader(int fd, a2dp_sbc_t &config)
   setConfiguration(&config);
 
   m_fd_tag = m_poller.addFD(m_fd, POLLIN | POLLPRI, true,
-                            std::bind(&BleAudioReader::onPollRead, this));
+                            std::bind(&BleAudioReader::onPollRead, this, std::placeholders::_1 ));
 
   m_thread = std::thread(&BleAudioReader::readerThread, this);
 }
@@ -400,7 +394,7 @@ BleAudioReader::BleAudioReader(int fd, a2dp_sbc_t &config)
 BleAudioReader::~BleAudioReader()
 {
   {
-    std::lock_guard<std::mutex> lock(&m_thread_lock);
+    std::lock_guard<std::mutex> lock(m_thread_lock);
     m_kill_thread = true;
   }
 

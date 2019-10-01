@@ -10,13 +10,21 @@
 #include <deque>
 #include <stdint.h>
 
-#include "sbc.h"
 #include "bleaudioreaderevent.h"
+#include "sbc.h"
 #include "BluetoothStreamer.h"
 #include "poll_fd.h"
 
 // appinfrastructure/AppInfrastructure/Public/Common/Notifier.h
 #include "Notifier.h"
+
+#ifdef USE_HOST_BUILD
+
+#define AS_LOG_ERROR LOG_MSG
+#define AS_LOG_INFO LOG_MSG
+
+#endif
+
 
 using FormatType = BluetoothApi::Streamer::FormatType;
 
@@ -30,7 +38,7 @@ public:
   ~BleAudioReader();
 
 private:
-  void onPollRead();
+  void onPollRead(int);
   void wakeup();
   void reset(void);
   void sendAudioParams(void);
@@ -56,8 +64,9 @@ private:
   BluetoothApi::Streamer::FormatType m_format;
 
   static const int BUFLEN = 100 * 4096;
-  ssize_t m_data_offset;
-  uint32_t m_sample;
+  size_t m_data_offset;
+  // uint32_t m_sample;
+  size_t m_sample;
   uint32_t m_next_level_check;
   std::deque<double> m_levels;
   bool m_silent;

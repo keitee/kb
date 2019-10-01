@@ -11,6 +11,7 @@
 #include <mutex>
 #include <map>
 #include <vector>
+#include <functional>
 
 typedef uint64_t PollFDTag;
 
@@ -27,7 +28,7 @@ typedef uint64_t PollFDTag;
 //   virtual void onEvent(int fd, int event, void *dptr) = 0;
 // };
 
-using PollFDEventListener = std::function<void()>;
+using PollFDEventListener = std::function<void(int)>;
 
 /**
  * @class Poller
@@ -48,7 +49,7 @@ public:
   void doPoll(int timeout_ms);
   void interruptPoll();
 
-  void onEvent(int fd, int event, void *dptr);
+  void onEvent(int event);
 
 private:
   class PollFD
@@ -59,8 +60,7 @@ private:
         : m_fd(-1), m_flags(0), m_enabled(false), m_removed(false),
           m_listener() {};
 
-    PollFD(int fd, int flags, bool enabled, PollFDEventListener listener,
-           void *dptr)
+    PollFD(int fd, int flags, bool enabled, PollFDEventListener listener)
         : m_fd(fd), m_flags(flags), m_enabled(enabled), m_removed(false),
           m_listener(listener) {};
 
@@ -77,7 +77,7 @@ private:
     {
       if (m_listener)
         // m_listener->onEvent(m_fd, event, m_dptr);
-        m_listener();
+        m_listener(event);
     };
 
   private:

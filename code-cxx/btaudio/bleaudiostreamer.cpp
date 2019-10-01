@@ -23,6 +23,10 @@ extern AS_DIAG::Context *dbusitf_logging_ctx;
 
 #endif // USE_HOST_BUILD
 
+/* ={=========================================================================
+ * @brief
+ */
+
 namespace {
 
 std::string stringMessage(int message)
@@ -59,6 +63,12 @@ std::string stringMessage(int message)
   case BleAudioMessage::PlayerFormatChangeMsg:
     return std::string("PlayerFormatChangeMsg");
     break;
+  case BleAudioMessage::ClientStopRequestMsg:
+    return std::string("ClientStopRequestMsg");
+    break;
+  case BleAudioMessage::ClientQuitRequestMsg:
+    return std::string("ClientQuitRequestMsg");
+    break;
   default:
     return std::string("unknown message");
     break;
@@ -69,21 +79,61 @@ std::string stringMessage(int message)
 // https://www.bluetooth.org/en-us/specification/assigned-numbers/service-discovery
 const std::string BLE_AUDIO_SOURCE_UUID{"0000110a"};
 
+// in ms
+const size_t PLAY_REFRESH_INTERVAL{1000};
+
+// in ms
+const size_t PLAY_HALT_INTERVAL{3500};
+
+BleAudioStreamer *singleton = nullptr;
+
 } // namespace
 
-/* -{=========================================================================
+/* ={=========================================================================
+ * @brief
+ */
+
+void BluetoothApi::Streamer::createInstance()
+{
+  if (!singleton)
+    singleton = new BleAudioStreamer();
+}
+
+void BluetoothApi::Streamer::destroyInstance()
+{
+  if (!singleton)
+  {
+    delete singleton;
+    singleton = nullptr;
+  }
+}
+
+BluetoothApi::Streamer *BluetoothApi::Streamer::instance()
+{
+  return singleton;
+}
+
+/* ={=========================================================================
  * @brief
  */
 
 BleAudioStreamer::BleAudioStreamer(std::string const &name)
     : running_(true), t_(std::thread(&BleAudioStreamer::doWork_, this, name))
 {
-  LOG_MSG("BleAudioStreamer ctor");
+  LOG_MSG("::BleAudioStreamer");
 
   setupStateMachine_();
 }
 
-/* -{=========================================================================
+BleAudioStreamer::~BleAudioStreamer()
+{
+  LOG_MSG("::~BleAudioStreamer");
+
+  q_.push(BleAudioMessage(BleAudioMessage::ClientQuitRequestMsg));
+  t_.join();
+}
+
+/* ={=========================================================================
  * @brief Debugging purpose
  */
 void BleAudioStreamer::postMessage(int message)
@@ -93,7 +143,7 @@ void BleAudioStreamer::postMessage(int message)
   q_.push(BleAudioMessage(message));
 }
 
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
@@ -104,7 +154,7 @@ void BleAudioStreamer::onTransportAdded(std::string const &path)
   q_.push(BleAudioMessage(BleAudioMessage::TransportAddedMsg, path));
 }
 
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
@@ -115,7 +165,7 @@ void BleAudioStreamer::onTransportRemoved(std::string const &path)
   q_.push(BleAudioMessage(BleAudioMessage::TransportRemovedMsg, path));
 }
 
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
@@ -129,7 +179,7 @@ void BleAudioStreamer::onTransportPropertyChange(std::string const &path,
                           property, value));
 }
 
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
@@ -140,7 +190,7 @@ void BleAudioStreamer::onPlayerAdded(std::string const &path)
   q_.push(BleAudioMessage(BleAudioMessage::PlayerAddedMsg, path));
 }
 
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
@@ -151,7 +201,7 @@ void BleAudioStreamer::onPlayerRemoved(std::string const &path)
   q_.push(BleAudioMessage(BleAudioMessage::PlayerRemovedMsg, path));
 }
 
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
@@ -165,7 +215,7 @@ void BleAudioStreamer::onPlayerPropertyChange(std::string const &path,
                           property, value));
 }
 
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
@@ -180,13 +230,11 @@ void BleAudioStreamer::onDevicePropertyChange(std::string const &path,
                           property, value));
 }
 
-
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
-void BleAudioStreamer::onFormatChanged(FormatType type,
-                                       uint32_t rate,
+void BleAudioStreamer::onFormatChanged(FormatType type, uint32_t rate,
                                        uint32_t channels)
 {
   // TODO: called from reader
@@ -194,20 +242,18 @@ void BleAudioStreamer::onFormatChanged(FormatType type,
 
   LOG_MSG("onFormatChange");
 
-  format_.type_ = type;
-  format_.rate_ = rate;
-  format_.channels = channels;
+  play_format_.type_     = type;
+  play_format_.rate_     = rate;
+  play_format_.channels_ = channels;
 
   q_.push(BleAudioMessage(BleAudioMessage::PlayerFormatChangeMsg));
 }
 
-
-/* -{=========================================================================
+/* ={=========================================================================
  * @brief
  */
 
-void BleAudioStreamer::onBufferReady(char *buffer, size_t size,
-                                     size_t samples)
+void BleAudioStreamer::onBufferReady(char *buffer, size_t size, size_t samples)
 {
   // TODO: called from reader
   std::lock_guard<std::mutex> lock(m_);
@@ -218,15 +264,14 @@ void BleAudioStreamer::onBufferReady(char *buffer, size_t size,
   // make a copy of the received buffer and which will be notified to the client
   // The client has to use releaseBuffer(void *) when finishes with it
 
-  buffer_.data_ = buffer;
-  buffer_.size_ = size;
-  buffer_.sample_number_ = samples;
+  play_buffer_.data_          = buffer;
+  play_buffer_.size_          = size;
+  play_buffer_.sample_number_ = samples;
 
   q_.push(BleAudioMessage(BleAudioMessage::PlayerBufferReadyMsg));
 }
 
-
-/* -{=========================================================================
+/* ={=========================================================================
  * BluetoothApi::Streamer
  * @brief The client application will set disconnection timeout in seconds of
  * device and if not, uses the default which is 0.
@@ -241,25 +286,51 @@ void BleAudioStreamer::setBluetoothTimeout(uint32_t timeout)
   disconnection_timeout_ = timeout;
 }
 
-
-/* -{=========================================================================
+/* ={=========================================================================
  * BluetoothApi::Streamer
- * @brief
+ * @brief Release a data buffer.
  */
 
-void BleAudioStreame::releaseBuffer(void *buffer)
+void BleAudioStreamer::releaseBuffer(void *buffer)
 {
   std::lock_guard<std::mutex> lock(m_);
 
   LOG_MSG("BleAudioStreamer::releaseBuffer:");
 }
 
-
-/* -{=========================================================================
- * do not do fsm transition
+/* ={=========================================================================
+ * BluetoothApi::Streamer
+ * @brief Set the callback for messages.
  */
 
-bool BleAudioStreamer::onDisconnectionTimerExpired()
+void BleAudioStreamer::setMessageHandler(MessageHandler handler, void *user)
+{
+  std::lock_guard<std::mutex> lock(m_);
+
+  LOG_MSG("BleAudioStreamer::releaseBuffer:");
+
+  observer_      = handler;
+  observer_data_ = user;
+}
+
+/* ={=========================================================================
+ * BluetoothApi::Streamer
+ * @brief Informs the streaming device that we want to stop the stream
+ */
+void BleAudioStreamer::stop()
+{
+  std::lock_guard<std::mutex> lock(m_);
+
+  LOG_MSG("BleAudioStreamer::stop:");
+
+  q_.push(BleAudioMessage(BleAudioMessage::ClientStopRequestMsg));
+}
+
+/* ={--------------------------------------------------------------------------
+ * timer callbacks
+ */
+
+bool BleAudioStreamer::onDisconnectionTimerExpired_()
 {
 #ifdef USE_HOST_BUILD
   LOG_MSG("host: dvice %s disconnected", device_path_.c_str());
@@ -268,14 +339,67 @@ bool BleAudioStreamer::onDisconnectionTimerExpired()
   {
     // error
     LOG_MSG("device proxy and device path must be available at this point");
+    return false;
   }
 
+  LOG_MSG("disconnection timer expired and dvice %s disconnected",
+          device_path_.c_str());
   device_proxy_->disconnect(device_path_);
-  LOG_MSG("dvice %s disconnected", device_path_.c_str());
 #endif
+
+  disconnection_timer_ = 0;
+  device_path_.clear();
+
+  return true;
 }
 
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
+ * timer callbacks
+ */
+
+bool BleAudioStreamer::onRefreshTimerExpired_()
+{
+#ifdef USE_HOST_BUILD
+  LOG_MSG("host: refresh timer expired");
+#else
+  if (!player_proxy_ || player_path_.empty())
+  {
+    // error
+    LOG_MSG("player proxy and player path must be available at this point");
+    return false;
+  }
+
+  LOG_MSG("refresh timer expired and refresh player");
+  player_proxy_->refresh(player_path_);
+#endif
+
+  return true;
+}
+
+/* ={--------------------------------------------------------------------------
+ * timer callbacks
+ */
+
+bool BleAudioStreamer::onStopTimerExpired_()
+{
+#ifdef USE_HOST_BUILD
+  LOG_MSG("host: stop timer expired");
+#else
+  if (!device_proxy_ || device_path_.empty())
+  {
+    // error
+    LOG_MSG("device proxy and device path are not available at this point");
+    return false;
+  }
+
+  LOG_MSG("stop timer expired and stop device");
+  device_proxy_->disconnect(device_path_);
+#endif
+
+  return true;
+}
+
+/* ={--------------------------------------------------------------------------
  * @brief
  */
 
@@ -301,7 +425,7 @@ void BleAudioStreamer::doWork_(std::string const &name)
             device_path_ = message.path_;
             fsm_.postEvent(DeviceConnectedEvent);
           }
-        } 
+        }
         else if (message.value_ == "false")
         {
           fsm_.postEvent(DeviceDisconnectedEvent);
@@ -311,7 +435,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
           LOG_MSG("DevicePropertyChangeMsg got unknown %s property value",
                   message.value_.c_str());
         }
-      } else
+      }
+      else
       {
         LOG_MSG("DevicePropertyChangeMsg got unknown %s property",
                 message.property_.c_str());
@@ -319,7 +444,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
 
       break;
 
-    case BleAudioMessage::TransportAddedMsg: {
+    case BleAudioMessage::TransportAddedMsg:
+    {
       if (transport_path_.empty())
       {
         transport_path_ = message.path_;
@@ -338,7 +464,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
       fsm_.postEvent(TransportRemovedEvent);
       break;
 
-    case BleAudioMessage::PlayerAddedMsg: {
+    case BleAudioMessage::PlayerAddedMsg:
+    {
       if (player_path_.empty())
       {
         player_path_ = message.path_;
@@ -358,7 +485,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
       // have to use PlayerPropertyChangeMsg way since otherwise have to expand
       // BleAudioMessage to carry metadata/pos update.
 
-    case BleAudioMessage::TransportPropertyChangeMsg: {
+    case BleAudioMessage::TransportPropertyChangeMsg:
+    {
       if (message.property_ == "State")
       {
         // get property value
@@ -382,7 +510,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
           LOG_MSG("TransportPropertyChangeMsg got unknown %s property value",
                   message.value_.c_str());
         }
-      } else
+      }
+      else
       {
         LOG_MSG("TransportPropertyChangeMsg got unknown %s property",
                 message.property_.c_str());
@@ -390,7 +519,8 @@ void BleAudioStreamer::doWork_(std::string const &name)
     }
     break;
 
-    case BleAudioMessage::PlayerPropertyChangeMsg: {
+    case BleAudioMessage::PlayerPropertyChangeMsg:
+    {
       if (message.property_ == "Track")
       {
         // build metadata and notify to client
@@ -401,7 +531,7 @@ void BleAudioStreamer::doWork_(std::string const &name)
       {
         // build pos update and notify to AS
         updatePosition_();
-        notify_(MESSAGE_TYPE_POSITION);
+        notify_(MESSAGE_TYPE_PROGRESS);
       }
       else if (message.property_ == "Status")
       {
@@ -416,14 +546,14 @@ void BleAudioStreamer::doWork_(std::string const &name)
         // move to stop when gets non-playing states while in playing state
         if (play_state_ != "playing" && fsm_.inState(PlayerRunningState))
         {
-          fsm_.postEvent(PlayerStoppedEvent));
+          fsm_.postEvent(PlayerStoppedEvent);
         }
-        
-        // update client while in playing state
-        if (play_state_ == "playing" && fsm_.inState(PlayerRunningState))
-        {
-          notify_(MESSAGE_TYPE_PLAYER_STATE);
-        }
+
+        // // update client while in playing state
+        // if (play_state_ == "playing" && fsm_.inState(PlayerRunningState))
+        // {
+        //   notify_(MESSAGE_TYPE_PLAYER_STATE);
+        // }
       }
       else
       {
@@ -438,21 +568,40 @@ void BleAudioStreamer::doWork_(std::string const &name)
       break;
 
     case BleAudioMessage::PlayerBufferReadyMsg:
-      LOG_MSG("notify client with the filled buffer, size(%d), samples(%d)"
-          buffer_.size_, buffer_.sample_number_);
+      LOG_MSG("notify client with the filled buffer, size(%d), samples(%d)",
+              play_buffer_.size_, play_buffer_.sample_number_);
       // notify_(MESSAGE_TYPE_BUFFER_FILLED);
       break;
 
     case BleAudioMessage::PlayerFormatChangeMsg:
-      LOG_MSG("notify client with the filled buffer, size(%d), samples(%d)"
-          buffer_.size_, buffer_.sample_number_);
+
+      // TODO: BleAudioFormat.str()?
+      LOG_MSG("notify client with the format change, type(%d), rate(%d), "
+              "channel(%d)",
+              play_format_.type_, play_format_.rate_, play_format_.channels_);
       break;
 
+    case BleAudioMessage::ClientStopRequestMsg:
+
+      LOG_MSG("get stop request from the client on player %s",
+              player_path_.c_str());
+
+      handleStopRequest_();
+
+      break;
+
+    case BleAudioMessage::ClientQuitRequestMsg:
+      running_ = false;
+      break;
+
+    default:
+      LOG_MSG("unknown message is %d", message.type_);
+      break;
     } // switch
   }   // while
 }
 
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
  * @brief FSMs
  */
 
@@ -581,7 +730,7 @@ std::string BleAudioStreamer::stringEvent_(FsmEvent event)
   }
 }
 
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
  * @brief FSM eafs
  */
 
@@ -620,16 +769,31 @@ void BleAudioStreamer::entered_(int state)
     break;
 
   case PlayerStopState:
-    eafPlayerStopgState_();
+    eafPlayerStopState_();
+    break;
 
   case TransportIdleState:
     eafTransportIdleState_();
+    break;
+
+  case PlayerOffState:
+    eafPlayerOffState_();
+    break;
+
+  case TransportOffState:
+    eafTransportOffState_();
+    break;
   }
 }
 
 void BleAudioStreamer::exited_(int state)
 {
   LOG_MSG("fsm exited: %s", stringState_((FsmState)state).c_str());
+}
+
+void BleAudioStreamer::eafDeviceOffState_()
+{
+  device_path_.clear();
 }
 
 void BleAudioStreamer::eafDeviceOnState_()
@@ -640,19 +804,10 @@ void BleAudioStreamer::eafDeviceOnState_()
 
   disconnection_timer_ = timer_.add(
       std::chrono::milliseconds(disconnection_timeout_ * 1000), true,
-      std::bind(&BleAudioStreamer::onDisconnectionTimerExpired, this));
+      std::bind(&BleAudioStreamer::onDisconnectionTimerExpired_, this));
 
   if (disconnection_timer_ <= 0)
     LOG_MSG("failed to add disconnection timer");
-}
-
-void BleAudioStreamer::eafDeviceOffState_()
-{
-  // if (disconnection_timer_) {
-  //   // TODO: stop disconnection timer
-  // }
-
-  device_path_.clear();
 }
 
 void BleAudioStreamer::eafTransportOnState_()
@@ -671,7 +826,7 @@ void BleAudioStreamer::eafPlayerOnState_()
   LOG_MSG("on PlayerOnState");
 
   player_path_.clear();
-  metadata_.clear();
+  play_metadata_.clear();
 
   notify_(MESSAGE_TYPE_METADATA);
 }
@@ -709,7 +864,8 @@ void BleAudioStreamer::eafPlayerReadyState_()
   // creates a reader only when gets configuration
   if (!getTransportConfig_(config) && getEndpointConfig_(config))
   {
-    reader_ = std::move(std::unique_ptr<BleAudioReader>(new BleAudioReader(fd_, config)));
+    reader_ = std::move(
+        std::unique_ptr<BleAudioReader>(new BleAudioReader(fd_, config)));
     if (reader_)
       LOG_MSG("failed to create BluAudioReader");
 
@@ -723,21 +879,79 @@ void BleAudioStreamer::eafPlayerReadyState_()
 #endif
 }
 
-
 void BleAudioStreamer::eafPlayerRunningState_()
 {
-  LOG_MSG("on PlayerRunningState");
+  LOG_MSG("PlayerRunningState");
 
   // stop disconnection timer
   timer_.remove(disconnection_timer_);
+  disconnection_timer_ = 0;
+
+  // start refresh timer
+  refresh_timer_ =
+      timer_.add(std::chrono::milliseconds(PLAY_REFRESH_INTERVAL), false,
+                 std::bind(&BleAudioStreamer::onRefreshTimerExpired_, this));
 
   notify_(MESSAGE_TYPE_SESSION_START);
   notify_(MESSAGE_TYPE_METADATA);
-  notify_(MESSAGE_TYPE_PLAYER_STATE);
-  notify_(MESSAGE_TYPE_POSITION);
+  // notify_(MESSAGE_TYPE_PLAYER_STATE);
+  notify_(MESSAGE_TYPE_PROGRESS);
 }
 
-/* -{--------------------------------------------------------------------------
+void BleAudioStreamer::eafPlayerStopState_()
+{
+  LOG_MSG("PlayerStopState");
+
+  // stop refresh timer
+  timer_.remove(refresh_timer_);
+  refresh_timer_ = 0;
+
+  // start disconnection timer
+  disconnection_timer_ = timer_.add(
+      std::chrono::milliseconds(disconnection_timeout_ * 1000), true,
+      std::bind(&BleAudioStreamer::onDisconnectionTimerExpired_, this));
+
+  if (disconnection_timer_ <= 0)
+    LOG_MSG("failed to add disconnection timer");
+
+  LOG_MSG("PlayerStopState: started disconnection timer");
+
+  notify_(MESSAGE_TYPE_SESSION_STOP);
+}
+
+void BleAudioStreamer::eafTransportIdleState_()
+{
+  LOG_MSG("TransportIdleState");
+
+  // the client do not use this
+  // noify_(MESSAGE_TYPE_TRANSPORT_STATE);
+}
+
+void BleAudioStreamer::eafPlayerOffState_()
+{
+  LOG_MSG("PlayerOffState");
+
+  // clear metadata
+  clearPlayData_();
+
+  player_path_.clear();
+
+  // release a reader
+  reader_.reset();
+}
+
+void BleAudioStreamer::eafTransportOffState_()
+{
+  LOG_MSG("TransportOffState");
+
+  transport_path_.clear();
+
+  // to signal DeviceDisconnectedEvent
+  q_.push(BleAudioMessage(BleAudioMessage::DevicePropertyChangeMsg, "",
+                          "Connected", "false"));
+}
+
+/* ={--------------------------------------------------------------------------
  * @brief check if device to connect has audio source by checking through UUIDs
  */
 
@@ -762,8 +976,7 @@ bool BleAudioStreamer::checkHasAudioSource_(std::string const &path)
   return false;
 }
 
-
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
  * @brief get metadata from player proxy and update streamer with it
  */
 
@@ -784,39 +997,44 @@ void BleAudioStreamer::updateMetadata_()
                                           metadata_.number_of_tracks);
     player_proxy_->getTrackNumber(player_path_, metadata_.track_number);
 #endif
-  } else
+  }
+  else
   {
     LOG_MSG("player path is not set");
   }
 }
 
-
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
  * @brief get metadata from player proxy and update streamer with it
  */
 
 void BleAudioStreamer::updatePosition_()
 {
   // TODO: or can use fsm state to check such as if it's in playing state
- 
+
   if (!player_path_.empty())
   {
 #ifdef USE_HOST_BUILD
     LOG_MSG("host: update play position");
 #else
-    player_proxy_->getPosition(player_path_, position_.position_);
-    player_proxy_->getTrackDuration(player_path_, position_.duration_);
+    player_proxy_->getPosition(player_path_, play_position_.position_);
+    player_proxy_->getTrackDuration(player_path_, play_position_.duration_);
 #endif
-  } else
+  }
+  else
   {
     LOG_MSG("player path is not set");
   }
 }
 
+/* ={--------------------------------------------------------------------------
+ * @brief get metadata from player proxy and update streamer with it
+ */
+
 void BleAudioStreamer::updateState_()
 {
   // TODO: or can use fsm state to check such as if it's in playing state
- 
+
   if (!player_path_.empty())
   {
 #ifdef USE_HOST_BUILD
@@ -824,76 +1042,110 @@ void BleAudioStreamer::updateState_()
 #else
     player_proxy_->getStatus(player_path_, play_state_);
 #endif
-  } else
+  }
+  else
   {
     LOG_MSG("player path is not set");
   }
 }
 
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
+ * @brief get metadata from player proxy and update streamer with it
+ */
+
+void BleAudioStreamer::clearPlayData_()
+{
+  play_metadata_.clear();
+  play_format_.clear();
+  play_position_.clear();
+  play_state_.clear();
+}
+
+/* ={--------------------------------------------------------------------------
+ * @brief get metadata from player proxy and update streamer with it
+ */
+
+void BleAudioStreamer::handleStopRequest_()
+{
+#ifdef USE_HOST_BUILD
+  LOG_MSG("host: have a stop request from the client");
+#else
+  if (!player_proxy_ || player_path_.empty())
+  {
+    LOG_MGS("player proxy or player path are not avaliable");
+    return;
+  }
+
+  // TODO: the original code has lots of check and code to get player path from
+  // underlying dbus if. really necessary? do not use here.
+
+  player_proxy_->stop(player_path_);
+
+  timer_.add(std::chrono::milliseconds(PLAY_HALT_INTERVAL), true,
+             std::bind(&BleAudioStreamer::onStopTimerExpired_, this));
+#endif
+}
+
+/* ={--------------------------------------------------------------------------
  * @brief update client with messages
  */
 
 void BleAudioStreamer::notify_(MessageType type)
 {
   Message msg{};
-  bool updated{false};
 
   switch (type)
   {
   case MESSAGE_TYPE_METADATA:
-    msg.type = type;
-    msg.title = metadata_.title_;
-    msg.artist = metadata_.artist_;
-    msg.album = metadata_.album_;
-    msg.number = metadata_.track_number_;
-    msg.totalNumbers = metadata_.number_of_tracks_;
-    msg.genre = metadata_.genre_;
-    updated = true;
+    msg.type         = type;
+    msg.title        = play_metadata_.title_;
+    msg.artist       = play_metadata_.artist_;
+    msg.album        = play_metadata_.album_;
+    msg.number       = play_metadata_.track_number_;
+    msg.totalNumbers = play_metadata_.number_of_tracks_;
+    msg.genre        = play_metadata_.genre_;
     break;
 
   case MESSAGE_TYPE_SESSION_START:
-    msg.type = type;
-    msg.title = metadata_.title_;
-    msg.artist = metadata_.artist_;
-    msg.album = metadata_.album_;
-    msg.number = metadata_.track_number_;
-    msg.totalNumbers = metadata_.number_of_tracks_;
-    msg.genre = metadata_.genre_;
-    updated = true;
+    msg.type                   = type;
+    msg.audioFormat.type       = play_format_.type_;
+    msg.audioFormat.sampleRate = play_format_.rate_;
+    msg.audioFormat.channels   = play_format_.channels_;
     break;
 
-  case MESSAGE_TYPE_BUFFER_FILLED;
+  case MESSAGE_TYPE_SESSION_STOP:
     msg.type = type;
-    msg.buffer = buffer_.data_;
-    msg.bufferLevel = buffer_.size_;
-    msg.sampleNumber = buffer_.sample_number_;
-  break;
+    break;
 
-  case MESSAGE_TYPE_POSITION;
-    msg.type = type;
-    msg.position = position_.position;
-    msg.duration = position_.duration_;
-  break;
+  case MESSAGE_TYPE_BUFFER_FILLED:
+    msg.type         = type;
+    msg.buffer       = play_buffer_.data_;
+    msg.bufferLevel  = play_buffer_.size_;
+    msg.sampleNumber = play_buffer_.sample_number_;
+    break;
 
-  case MESSAGE_TYPE_PLAYER_STATE;
-    msg.type = type;
-    msg.playerState = play_state_;
-  break;
+  case MESSAGE_TYPE_PROGRESS:
+    msg.type     = type;
+    msg.position = play_position_.position_;
+    msg.duration = play_position_.duration_;
+    break;
+
+    // // TODO: the client do not use this
+    // case MESSAGE_TYPE_PLAYER_STATE:
+    // msg.type        = type;
+    // msg.playerState = play_state_;
+    // break;
 
   default:
     LOG_MSG("unknown AudioStreamer::MessageType, %d", type);
     break;
   }
 
-  if (updated)
-  {
-    // TODO: needs a lock as the previous did?
-    observer_(msg, observer_data_);
-  }
+  // TODO: needs a lock as the previous did?
+  observer_(msg, observer_data_);
 }
 
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
  * @brief get a configuration from transport
  */
 
@@ -924,7 +1176,7 @@ bool BleAudioStreamer::getTransportConfig_(a2dp_sbc_t &config)
   return true;
 }
 
-/* -{--------------------------------------------------------------------------
+/* ={--------------------------------------------------------------------------
  * @brief get a configuration from media endpoint
  */
 
@@ -941,7 +1193,8 @@ bool BleAudioStreamer::getEndpointConfig_(a2dp_sbc_t &config)
                    paths[0].first.c_str(), paths[0].second.c_str(),
                    (unsigned long)paths.size());
     return endpoint_proxy_->getConfiguration(paths[0].second, config);
-  } else
+  }
+  else
   {
     AS_LOG_ERROR("failed to look up endpoint paths");
   }

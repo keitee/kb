@@ -123,8 +123,14 @@ public:
     size_t bufferLevel;  //!< number of bytes that was filled into the buffer
     size_t sampleNumber; //!< Sample number of first sample, buffer must contain
                          //!< contiguous samples
-
-    _Message(); //!< constructor sets all fields to default values
+    //!< constructor sets all fields to default values
+    _Message()
+        : type(MESSAGE_TYPE_LAST), audioFormat(), title(""), artist(""),
+          album(""), number(0), totalNumbers(0), genre(""), position(0),
+          duration(0), transportState(TRANSPORT_STATE_LAST),
+          playerState(PLAYER_STATE_LAST), buffer(NULL), bufferLevel(0),
+          sampleNumber(0)
+    {}
 
   } Message;
 

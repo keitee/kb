@@ -8,8 +8,11 @@
 #include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
+#include <algorithm>
 
 #ifdef USE_HOST_BUILD
+
+#include "slog.h"
 
 #define AS_LOG_ERROR LOG_MSG
 #define AS_LOG_INFO LOG_MSG
@@ -103,7 +106,8 @@ Poller::Poller() : m_tag_seed(128000), m_poll_array_size(1), m_poll_array(NULL)
   if (0 != pipe(m_pipe_fds)) {
     AS_LOG_ERROR("pipe() failed: %s", strerror(errno));
   } else {
-    addFD(m_pipe_fds[0], POLLIN | POLLPRI, true, this, NULL);
+    addFD(m_pipe_fds[0], POLLIN | POLLPRI, true,
+        std::bind(&Poller::onEvent, this, std::placeholders::_1));
   }
 }
 
@@ -245,15 +249,15 @@ void Poller::clearInterrupt()
   }
 }
 
-// /**
-//  * @brief PollFDEventListener callback
-//  * For internal use only
-//  */
-// void Poller::onEvent(int fd, int event, void *dptr)
-// {
-//   if (event & POLLIN)
-//     clearInterrupt();
-// }
+/**
+ * @brief PollFDEventListener callback
+ * For internal use only
+ */
+void Poller::onEvent(int event)
+{
+  if (event & POLLIN)
+    clearInterrupt();
+}
 
 bool Poller::populatePollArray(nfds_t *nfds)
 {
@@ -299,7 +303,7 @@ void Poller::firePollCallbacks()
         for (it = pollfds.begin(); it != pollfds.end(); ++it) {
           bool fire;
           {
-            Locker lock(&m_lock);
+            std::lock_guard<std::mutex> lock(m_lock);
             fire = ((*it)->isEnabled() && !(*it)->isRemoved());
           }
           if (fire)
