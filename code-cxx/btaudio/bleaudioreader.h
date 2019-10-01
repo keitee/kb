@@ -28,17 +28,18 @@
 
 using FormatType = BluetoothApi::Streamer::FormatType;
 
-// class BleAudioReader : public PollFDEventListener public
-// AICommon::Notifier<IBleRcuDeviceEvent>
+// TODO: Poller is used in dbusif and keep this until refactor dbusif as well.
 
-class BleAudioReader : AICommon::Notifier<BleAudio::IBleAudioReaderEvent>
+class BleAudioReader : public PollFDEventListener, public AICommon::Notifier<BleAudio::IBleAudioReaderEvent>
 {
 public:
   BleAudioReader(int fd, a2dp_sbc_t &config);
   ~BleAudioReader();
 
 private:
-  void onPollRead(int);
+  // PollFDEventListener
+  void onEvent(int, int, void*);
+
   void wakeup();
   void reset(void);
   void sendAudioParams(void);

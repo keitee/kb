@@ -1,69 +1,57 @@
-/* 
- * Taken from "Components/Bluetooth" with minimal changes to maintain its
- * functionality.
- */
-
 #ifndef POLL_FD_H
 #define POLL_FD_H
 
 #include <inttypes.h>
-#include <poll.h>
-#include <mutex>
 #include <map>
+#include <poll.h>
+#include <pthread.h>
 #include <vector>
-#include <functional>
 
 typedef uint64_t PollFDTag;
-
 #define PollFDTagInvalid 0
 
-// /**
-//  * @class PollFDEventListener
-//  * Abstract listener class for notification of file descriptor IO events.
-//  */
-// class PollFDEventListener
-// {
-// public:
-//   virtual ~PollFDEventListener(){};
-//   virtual void onEvent(int fd, int event, void *dptr) = 0;
-// };
-
-using PollFDEventListener = std::function<void(int)>;
+/**
+ * @class PollFDEventListener
+ * Abstract listener class for notification of file descriptor IO events.
+ */
+class PollFDEventListener
+{
+public:
+  virtual ~PollFDEventListener(){};
+  virtual void onEvent(int fd, int event, void *dptr) = 0;
+};
 
 /**
  * @class Poller
  * Poller provides file-descriptor polling with per-fd listeners.
  */
-// class Poller : public PollFDEventListener
-class Poller
+class Poller : public PollFDEventListener
 {
 public:
   Poller();
   ~Poller();
 
   PollFDTag addFD(int fd, int flags, bool enabled,
-                  PollFDEventListener const &listener);
+                  PollFDEventListener *listener, void *dptr);
   bool enableFD(PollFDTag tag, bool isEnabled);
   bool removeFD(PollFDTag tag);
 
   void doPoll(int timeout_ms);
   void interruptPoll();
 
-  void onEvent(int event);
+  void onEvent(int fd, int event, void *dptr);
 
 private:
   class PollFD
   {
   public:
-
     PollFD()
         : m_fd(-1), m_flags(0), m_enabled(false), m_removed(false),
-          m_listener() {};
-
-    PollFD(int fd, int flags, bool enabled, PollFDEventListener listener)
+          m_listener(NULL), m_dptr(NULL){};
+    PollFD(int fd, int flags, bool enabled, PollFDEventListener *listener,
+           void *dptr)
         : m_fd(fd), m_flags(flags), m_enabled(enabled), m_removed(false),
-          m_listener(listener) {};
-
+          m_listener(listener), m_dptr(dptr){};
     virtual ~PollFD(){};
 
     int getFD() { return m_fd; };
@@ -76,8 +64,7 @@ private:
     void fire(int event)
     {
       if (m_listener)
-        // m_listener->onEvent(m_fd, event, m_dptr);
-        m_listener(event);
+        m_listener->onEvent(m_fd, event, m_dptr);
     };
 
   private:
@@ -85,7 +72,8 @@ private:
     int m_flags;
     bool m_enabled;
     bool m_removed;
-    PollFDEventListener m_listener;
+    PollFDEventListener *m_listener;
+    void *m_dptr;
   };
 
   void clearInterrupt();
@@ -99,7 +87,6 @@ private:
   struct pollfd *m_poll_array;
   std::map<PollFDTag, PollFD> m_poll_fd_map;
   std::map<int, std::vector<PollFD *>> m_poll_fd_reverse_map;
-  std::mutex m_lock;
+  pthread_mutex_t m_lock;
 };
-
 #endif // POLL_FD_H

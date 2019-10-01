@@ -1,30 +1,19 @@
-// #if !defined(__STDC_FORMAT_MACROS)
-// #define __STDC_FORMAT_MACROS
-// #endif
-
+#if !defined(__STDC_FORMAT_MACROS)
+#define __STDC_FORMAT_MACROS
+#endif
 #include "poll_fd.h"
+#include "locker.h"
+#include <algorithm>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
-#include <algorithm>
-
-#ifdef USE_HOST_BUILD
-
-#include "slog.h"
-
-#define AS_LOG_ERROR LOG_MSG
-#define AS_LOG_INFO LOG_MSG
-
-#else
 
 #include "AS_Diag.h"
 extern AS_DIAG::Context *dbusitf_logging_ctx;
 #undef AS_DIAG_CONTEXT_DEFAULT
 #define AS_DIAG_CONTEXT_DEFAULT (dbusitf_logging_ctx)
-
-#endif // USE_HOST_BUILD
 
 /**
  * @file poll_fd.cpp
@@ -101,13 +90,14 @@ extern AS_DIAG::Context *dbusitf_logging_ctx;
  */
 Poller::Poller() : m_tag_seed(128000), m_poll_array_size(1), m_poll_array(NULL)
 {
-  std::lock_guard<std::mutex> lock(m_lock);
-
-  if (0 != pipe(m_pipe_fds)) {
+  pthread_mutex_init(&m_lock, NULL);
+  if (0 != pipe(m_pipe_fds))
+  {
     AS_LOG_ERROR("pipe() failed: %s", strerror(errno));
-  } else {
-    addFD(m_pipe_fds[0], POLLIN | POLLPRI, true,
-        std::bind(&Poller::onEvent, this, std::placeholders::_1));
+  }
+  else
+  {
+    addFD(m_pipe_fds[0], POLLIN | POLLPRI, true, this, NULL);
   }
 }
 
@@ -115,6 +105,7 @@ Poller::~Poller()
 {
   close(m_pipe_fds[0]);
   close(m_pipe_fds[1]);
+  pthread_mutex_destroy(&m_lock);
   delete[] m_poll_array;
 }
 
@@ -135,11 +126,10 @@ Poller::~Poller()
  * in further Poller calls
  */
 PollFDTag Poller::addFD(int fd, int flags, bool enabled,
-                        PollFDEventListener const &listener)
+                        PollFDEventListener *listener, void *dptr)
 {
-  std::lock_guard<std::mutex> lock(m_lock);
-
-  PollFD pfd(fd, flags, enabled, listener);
+  Locker lock(&m_lock);
+  PollFD pfd(fd, flags, enabled, listener, dptr);
   m_poll_fd_map[m_tag_seed] = pfd;
   m_poll_fd_reverse_map[fd].push_back(&m_poll_fd_map[m_tag_seed]);
   AS_LOG_INFO("fd %d : %s : tag %" PRIu64, fd, enabled ? "enabled" : "disabled",
@@ -155,15 +145,17 @@ PollFDTag Poller::addFD(int fd, int flags, bool enabled,
  */
 bool Poller::enableFD(PollFDTag tag, bool isEnabled)
 {
-  std::lock_guard<std::mutex> lock(m_lock);
-
   AS_LOG_INFO("tag %" PRIu64 " : %s", tag, isEnabled ? "enabled" : "disabled");
-
-  if (m_poll_fd_map.count(tag)) {
-    if (!m_poll_fd_map[tag].isRemoved()) {
+  Locker lock(&m_lock);
+  if (m_poll_fd_map.count(tag))
+  {
+    if (!m_poll_fd_map[tag].isRemoved())
+    {
       m_poll_fd_map[tag].setEnabled(isEnabled);
       return true;
-    } else {
+    }
+    else
+    {
       AS_LOG_ERROR("tag %" PRIu64 " has been removed", tag);
       return false;
     }
@@ -179,11 +171,10 @@ bool Poller::enableFD(PollFDTag tag, bool isEnabled)
  */
 bool Poller::removeFD(PollFDTag tag)
 {
-  std::lock_guard<std::mutex> lock(m_lock);
-
   AS_LOG_INFO("tag %" PRIu64, tag);
-
-  if (m_poll_fd_map.count(tag)) {
+  Locker lock(&m_lock);
+  if (m_poll_fd_map.count(tag))
+  {
     m_poll_fd_map[tag].setRemoved();
     return true;
   }
@@ -200,20 +191,29 @@ void Poller::doPoll(int timeout_ms)
   nfds_t nfds = 0;
   int ret;
 
-  if (populatePollArray(&nfds)) {
-    if (nfds > 0) {
+  if (populatePollArray(&nfds))
+  {
+    if (nfds > 0)
+    {
       ret = poll(m_poll_array, nfds, timeout_ms);
-      if (ret < 0) {
+      if (ret < 0)
+      {
         AS_LOG_ERROR("poll error: %s", strerror(errno));
-      } else if (ret > 0) {
+      }
+      else if (ret > 0)
+      {
         // some fds have events pending
         firePollCallbacks();
       }
       removeStalePollFDs();
-    } else {
+    }
+    else
+    {
       AS_LOG_ERROR("poll called with no fds");
     }
-  } else {
+  }
+  else
+  {
     AS_LOG_ERROR("failed to populate poll array");
   }
 }
@@ -223,13 +223,15 @@ void Poller::doPoll(int timeout_ms)
  */
 void Poller::interruptPoll()
 {
-  char buffer = 'a';
+  char buffer  = 'a';
   bool written = false;
-  while (!written) {
+  while (!written)
+  {
     ssize_t nb = write(m_pipe_fds[1], &buffer, 1);
     if (nb == 1)
       written = true;
-    else if (nb < 0) {
+    else if (nb < 0)
+    {
       AS_LOG_ERROR("write() to pipe failed: %s", strerror(errno));
     }
   }
@@ -239,11 +241,13 @@ void Poller::clearInterrupt()
 {
   char buffer;
   bool reddit = false;
-  while (!reddit) {
+  while (!reddit)
+  {
     ssize_t nb = read(m_pipe_fds[0], &buffer, 1);
     if (nb == 1)
       reddit = true;
-    else if (nb < 0) {
+    else if (nb < 0)
+    {
       AS_LOG_ERROR("read() from pipe failed: %s", strerror(errno));
     }
   }
@@ -253,7 +257,7 @@ void Poller::clearInterrupt()
  * @brief PollFDEventListener callback
  * For internal use only
  */
-void Poller::onEvent(int event)
+void Poller::onEvent(int fd, int event, void *dptr)
 {
   if (event & POLLIN)
     clearInterrupt();
@@ -261,10 +265,11 @@ void Poller::onEvent(int event)
 
 bool Poller::populatePollArray(nfds_t *nfds)
 {
-  std::lock_guard<std::mutex> lock(m_lock);
+  Locker lock(&m_lock);
 
   // resize poll array?
-  if (m_poll_fd_map.size() >= m_poll_array_size) {
+  if (m_poll_fd_map.size() >= m_poll_array_size)
+  {
     delete[] m_poll_array;
     while (m_poll_fd_map.size() >= m_poll_array_size)
       m_poll_array_size *= 2;
@@ -277,9 +282,11 @@ bool Poller::populatePollArray(nfds_t *nfds)
   std::map<PollFDTag, PollFD>::iterator it;
   nfds_t i = 0;
   memset(m_poll_array, 0, m_poll_array_size * sizeof(struct pollfd));
-  for (it = m_poll_fd_map.begin(); it != m_poll_fd_map.end(); ++it) {
-    if (it->second.isEnabled() && !it->second.isRemoved()) {
-      m_poll_array[i].fd = it->second.getFD();
+  for (it = m_poll_fd_map.begin(); it != m_poll_fd_map.end(); ++it)
+  {
+    if (it->second.isEnabled() && !it->second.isRemoved())
+    {
+      m_poll_array[i].fd     = it->second.getFD();
       m_poll_array[i].events = it->second.getFlags();
       i++;
     }
@@ -292,24 +299,30 @@ bool Poller::populatePollArray(nfds_t *nfds)
 
 void Poller::firePollCallbacks()
 {
-  for (size_t i = 0; i < m_poll_array_size; i++) {
-    if (m_poll_array[i].revents) {
+  for (size_t i = 0; i < m_poll_array_size; i++)
+  {
+    if (m_poll_array[i].revents)
+    {
       // no lock around map/vector access since the only thing another
       // thread can alter is enabled or removed state at this point
-      if (m_poll_fd_reverse_map.count(m_poll_array[i].fd)) {
+      if (m_poll_fd_reverse_map.count(m_poll_array[i].fd))
+      {
         std::vector<PollFD *> pollfds =
             m_poll_fd_reverse_map[m_poll_array[i].fd];
         std::vector<PollFD *>::iterator it;
-        for (it = pollfds.begin(); it != pollfds.end(); ++it) {
+        for (it = pollfds.begin(); it != pollfds.end(); ++it)
+        {
           bool fire;
           {
-            std::lock_guard<std::mutex> lock(m_lock);
+            Locker lock(&m_lock);
             fire = ((*it)->isEnabled() && !(*it)->isRemoved());
           }
           if (fire)
             (*it)->fire(m_poll_array[i].revents);
         }
-      } else {
+      }
+      else
+      {
         AS_LOG_ERROR("no reverse lookup for fd %d", m_poll_array[i].fd);
       }
     }
@@ -318,21 +331,26 @@ void Poller::firePollCallbacks()
 
 void Poller::removeStalePollFDs()
 {
-  std::lock_guard<std::mutex> lock(m_lock);
+  Locker lock(&m_lock);
 
   std::map<PollFDTag, PollFD>::iterator it = m_poll_fd_map.begin();
 
-  while (it != m_poll_fd_map.end()) {
-    if (it->second.isRemoved()) {
+  while (it != m_poll_fd_map.end())
+  {
+    if (it->second.isRemoved())
+    {
 
       // remove from reverse map
       int fd = it->second.getFD();
       std::vector<PollFD *>::iterator iit =
           std::find(m_poll_fd_reverse_map[fd].begin(),
                     m_poll_fd_reverse_map[fd].end(), &(it->second));
-      if (iit != m_poll_fd_reverse_map[fd].end()) {
+      if (iit != m_poll_fd_reverse_map[fd].end())
+      {
         m_poll_fd_reverse_map[fd].erase(iit);
-      } else {
+      }
+      else
+      {
         AS_LOG_ERROR("failed to locate reverse map lookup for fd %d", fd);
       }
 
@@ -342,7 +360,8 @@ void Poller::removeStalePollFDs()
         ++it;
         m_poll_fd_map.erase(todel);
       }
-    } else
+    }
+    else
       ++it;
   }
 }

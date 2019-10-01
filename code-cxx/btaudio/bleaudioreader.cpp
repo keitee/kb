@@ -58,7 +58,7 @@ void BleAudioReader::wakeup()
   m_poller.interruptPoll();
 }
 
-void BleAudioReader::onPollRead(int)
+void BleAudioReader::onEvent(int, int, void*)
 {
   ssize_t sz;
   ssize_t decoded_sz;
@@ -385,8 +385,7 @@ BleAudioReader::BleAudioReader(int fd, a2dp_sbc_t &config)
 
   setConfiguration(&config);
 
-  m_fd_tag = m_poller.addFD(m_fd, POLLIN | POLLPRI, true,
-                            std::bind(&BleAudioReader::onPollRead, this, std::placeholders::_1 ));
+  m_fd_tag = m_poller.addFD(m_fd, POLLIN | POLLPRI, true, this, nullptr);
 
   m_thread = std::thread(&BleAudioReader::readerThread, this);
 }
