@@ -61,6 +61,7 @@ class ChatMainWindow: public QMainWindow, Ui::ChatMainWindow
     Q_OBJECT
     QString m_nickname;
     QStringList m_messages;
+
 public:
     ChatMainWindow();
     ~ChatMainWindow();

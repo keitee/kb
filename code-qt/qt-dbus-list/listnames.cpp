@@ -48,6 +48,11 @@
 **
 ****************************************************************************/
 
+
+// @brief
+// shows various ways to call methods on remote dbus server(deamon) in Qt.
+
+
 #include <QtCore/QCoreApplication>
 #include <QtCore/QDebug>
 #include <QtCore/QStringList>
@@ -58,10 +63,16 @@ void method1()
   qDebug() << "==============================================================";
   qDebug() << "Method 1:";
 
+  // https://doc.qt.io/qt-5/qdbusconnection.html
+  //
+  // The QDBusConnection class represents a connection to the D-Bus bus daemon. 
+  //
   // QDBusConnectionInterface *QDBusConnection::interface() const
+  //
   // Returns a QDBusConnectionInterface object that represents the D-Bus server
   // interface on this connection.
   // 
+  //
   // https://doc.qt.io/qt-5/qdbusconnectioninterface.html
   //
   // Detailed Description
@@ -115,7 +126,7 @@ void method2()
   //
   // Detailed Description
   //
-  // QDBusInterface is a generic accessor class that is used to place calls to
+  // QDBusInterface is a *generic accessor class* that is used to place calls to
   // remote objects, connect to signals exported by remote objects and get/set
   // the value of remote properties. This class is useful for dynamic access to
   // remote objects: that is, when you do not have a generated code that
@@ -123,7 +134,9 @@ void method2()
   // 
   // Calls are usually placed by using the call() function, which constructs the
   // message, sends it over the bus, waits for the reply and decodes the reply.
+  //
   // Signals are connected to by using the normal QObject::connect() function.
+  //
   // Finally, properties are accessed using the QObject::property() and
   // QObject::setProperty() functions.
   // 
@@ -165,7 +178,9 @@ void method2()
   // callWithArgumentList().
 
   // https://doc.qt.io/qt-5/qdbusmessage.html
+  //
   // QList<QVariant> QDBusMessage::arguments() const
+  //
   // Returns the list of arguments that are going to be sent or were received
   // from D-Bus.
 
@@ -195,25 +210,32 @@ void method2_1()
   // When using DBus in a peer-to-peer context (i.e., not on a bus), the service
   // parameter is optional.
   // 
-  // The QDBusInterface class provides a simpler abstraction to synchronous
+  // The QDBusInterface class provides a *simpler abstraction to synchronous*
   // method calling.
-  // 
+
+
   // This function returns a QDBusMessage object that can be sent with
   // QDBusConnection::call().
-
+  //
   // QDBusInterface dbus_iface("org.freedesktop.DBus", "/org/freedesktop/DBus",
   //    "org.freedesktop.DBus", bus);
 
   QDBusMessage request = QDBusMessage::createMethodCall("org.freedesktop.DBus", 
       "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames");
 
+  // QDBusConnection sessionBus();
+  //
   // QDBusMessage 
-  // QDBusConnection::call(const QDBusMessage &message, QDBus::CallMode mode = QDBus::Block, int timeout = -1) const
+  // QDBusConnection::call(const QDBusMessage &message, 
+  //  QDBus::CallMode mode = QDBus::Block, int timeout = -1) const
   //
   // Sends the message over this connection and blocks, waiting for a reply, for
-  // at most timeout milliseconds. This function is suitable for method calls
-  // only. It returns the reply message as its return value, which will be
-  // either of type QDBusMessage::ReplyMessage or QDBusMessage::ErrorMessage.
+  // at most timeout milliseconds. 
+  //
+  // *This function is suitable for method calls only.* 
+  //
+  // It returns the reply message as its return value, which will be either of 
+  // type QDBusMessage::ReplyMessage or QDBusMessage::ErrorMessage.
   // 
   // If no reply is received within timeout milliseconds, an automatic error
   // will be delivered indicating the expiration of the call. The default
@@ -227,36 +249,8 @@ void method2_1()
   // event loop in order to wait for the reply. During the wait, it may deliver
   // signals and other method calls to your application. Therefore, it must be
   // prepared to handle a reentrancy whenever a call is placed with call().
-
+  
   QDBusMessage reply = QDBusConnection::sessionBus().call(request);
-
-  // https://doc.qt.io/qt-5/qdbusabstractinterface.html#call-1
-  //
-  // QDBusMessage QDBusAbstractInterface::call(
-  //  const QString &method, 
-  //  const QVariant &arg1 = QVariant(), const QVariant &arg2 = QVariant(), 
-  //  const QVariant &arg3 = QVariant(), const QVariant &arg4 = QVariant(),
-  //  const QVariant &arg5 = QVariant(), const QVariant &arg6 = QVariant(),
-  //  const QVariant &arg7 = QVariant(), const QVariant &arg8 = QVariant())
-  //
-  //
-  // Calls the method method on this interface and passes the parameters to this
-  // function to the method.
-  //
-  // The parameters to call are passed on to the remote function via D-Bus as
-  // input arguments. Output arguments are returned in the `QDBusMessage reply`.
-  // If the reply is an error reply, lastError() will also be set to the
-  // contents of the error message.
-  //
-  // This function can be used with up to 8 parameters, passed in arguments
-  // arg1, arg2, arg3, arg4, arg5, arg6, arg7 and arg8. If you need more than 8
-  // parameters or if you have a variable number of parameters to be passed, use
-  // callWithArgumentList().
-
-  // https://doc.qt.io/qt-5/qdbusmessage.html
-  // QList<QVariant> QDBusMessage::arguments() const
-  // Returns the list of arguments that are going to be sent or were received
-  // from D-Bus.
 
   // qDebug() << dbus_iface.call("ListNames").arguments().at(0);
   qDebug() << reply.arguments().at(0);

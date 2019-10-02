@@ -218,5 +218,6 @@ int main(int argc, char **argv)
 
     ChatMainWindow chat;
     chat.show();
+
     return app.exec();
 }
