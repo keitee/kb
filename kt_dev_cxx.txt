@@ -260,7 +260,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-sp-unique cxx-auto-ptr
 *kt_dev_cxx_0000* cxx-sp-delete sp-deleter
 *kt_dev_cxx_0000* cxx-sp-read: can store unique_ptr in a container?
-*kt_dev_cxx_0000* cxx-sp-misuse cxx-sp-shared-from-this
+*kt_dev_cxx_0000* cxx-sp-issue cxx-sp-shared-from-this
 *kt_dev_stl_105* smart pointer: gotw #102: exception safety
 |kt_dev_stl_102| smart pointer: internal: auto_ptr
 *kt_dev_cxx_0000* cxx-sp-code
@@ -54735,7 +54735,7 @@ copied ownership of the resource is transfered.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-sp-shared
+*kt_dev_cxx_0000* cxx-sp-shared *cxx-sp-shared-from-this*
 
 This implements the concept of `cxx-sp-shared-ownership` so that the object and
 its associated resources get released whenever the last reference to it gets
@@ -57750,7 +57750,7 @@ by uptr: diff(ms): 585
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-sp-misuse cxx-sp-shared-from-this
+*kt_dev_cxx_0000* cxx-sp-issue cxx-sp-shared-from-this
 
 RCLR 5.2.3
 
@@ -57772,8 +57772,7 @@ shared_ptr<int> sp1(new int);
 shared_ptr<int> sp2(sp1);     // OK
 
 
-{cxx-sp-shared-from-this}
-
+{cxx-sp-shared-from-this} *cxx-sp-shared-from-this*
 Suppose that we want to introduce a member function for a Person that creates
 both the reference from a kid to the parent and a corresponding reference back:
 
@@ -57798,7 +57797,7 @@ shared_ptr<Person> initFamily (const string& name)
   return kid;                                 // return kid
 }
 
-naive implementation is:
+`naive implementation` is:
 
 void setParentsAndTheirKids (shared_ptr<Person> m = nullptr, 
     shared_ptr<Person> f = nullptr) 
@@ -57818,10 +57817,13 @@ Apart from cyclic reference issue, the problem is the creation of a shared
 pointer out of `this` pointer. 
 
 Want to pass kid's shared pointer to mother and father but to do that, need a
-shared pointer to the kid, which we don't have at hand since this pointer is
-not shared pointer. So creates temporary shared pointer from this which is
-`new group of shared pointer.` Two shared pointer group to the kid and when
-mom and dad go free, will do `double delete`
+shared pointer from the kid, which we don't have at hand since this pointer is
+not shared pointer. 
+
+*cxx-sp-issue*
+So creates temporary shared pointer from this which is `new group of shared
+pointer.` Two shared pointer group to the kid and when mom and dad go free, will
+do `double delete`
 
 One way to deal with this problem is to pass the shared pointer to the kid as a
 third argument. But the C++ standard library provides another option: class
@@ -57859,7 +57861,9 @@ class GstM: public MediaRouterAsync,
 
 {code}
 
-//bits/shared_ptr.h
+namespace cxx_code *cxx-sp-code*
+{
+  //bits/shared_ptr.h
 
   /** 
    *  @brief Base class allowing use of member function shared_from_this.
@@ -57867,18 +57871,19 @@ class GstM: public MediaRouterAsync,
   template<typename _Tp>
     class enable_shared_from_this
     {
-    protected:
-      enable_shared_from_this() { }
+      protected:
+        enable_shared_from_this() { }
 
-    public:
-      shared_ptr<_Tp>
-      shared_from_this()
-      { return shared_ptr<_Tp>(this->_M_weak_this); }
+      public:
+        shared_ptr<_Tp>
+          shared_from_this()
+          { return shared_ptr<_Tp>(this->_M_weak_this); }
 
-      shared_ptr<const _Tp>
-      shared_from_this() const
-      { return shared_ptr<const _Tp>(this->_M_weak_this); }
+        shared_ptr<const _Tp>
+          shared_from_this() const
+          { return shared_ptr<const _Tp>(this->_M_weak_this); }
     };
+}
 
 
 ={============================================================================
