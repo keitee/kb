@@ -54,7 +54,7 @@ D-Bus Chat Example
 Demonstrates communication among instances of an application.
 
 Chat is a Qt D-Bus example which demonstrates a simple chat system among
-instances of an application. Users connect and send message to each other.
+instances of an application. Users connect and send message to broadcast.
 
   instance #1   
     |                    |
@@ -105,14 +105,18 @@ ChatMainWindow::ChatMainWindow()
 
     // OrgExampleChatInterface proxy
     org::example::chat *iface;
-    iface = new org::example::chat(QString(), QString(), QDBusConnection::sessionBus(), this);
+    iface = new org::example::chat(QString(), QString(), 
+        QDBusConnection::sessionBus(), this);
 
     // maps org.example.chat signal to slots
-    connect(iface, SIGNAL(message(QString,QString)), this, SLOT(messageSlot(QString,QString)));
+    connect(iface, SIGNAL(message(QString,QString)), 
+        this, SLOT(messageSlot(QString,QString)));
+ 
     // shorter than this:
     // QDBusConnection::sessionBus().connect(QString(), QString(), "org.example.chat", "message", this, SLOT(messageSlot(QString,QString)));
 
-    connect(iface, SIGNAL(action(QString,QString)), this, SLOT(actionSlot(QString,QString)));
+    connect(iface, SIGNAL(action(QString,QString)), 
+        this, SLOT(actionSlot(QString,QString)));
 
     // shows new nickname dialog
     NicknameDialog dialog;

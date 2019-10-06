@@ -49,40 +49,114 @@
 ****************************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <QtCore/QCoreApplication>
+#include <QtCore/QTimer>
 #include <QtDBus/QtDBus>
 
 #include "ping-common.h"
+#include "complexpong.h"
 
 
-// PING
+// property functions
 
+QString Pong::value() const
+{
+  return m_value;
+}
+
+void Pong::setValue(QString const &newValue)
+{
+  m_value = newValue;
+}
+
+void Pong::quit()
+{
+  QTimer::singleShot(0, QCoreApplication::instance(),
+      &QCoreApplication::quit);
+}
+
+QDBusVariant Pong::query(const QString &query)
+{
+  QString q = query.toLower();
+  if (q == "hello")
+    return QDBusVariant("World");
+  if (q == "ping")
+    return QDBusVariant("Pong");
+  if (q.indexOf("the answer to life, the universe and everything") != -1)
+    return QDBusVariant(42);
+  if (q.indexOf("unladen swallow") != -1) {
+    if (q.indexOf("european") != -1)
+      return QDBusVariant(11.0);
+    return QDBusVariant(QByteArray("african or european?"));
+  }
+
+  return QDBusVariant("Sorry, I don't know the answer");
+}
 
 int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  if (!QDBusConnection::sessionBus().isConnected()) {
-    fprintf(stderr, "Cannot connect to the D-Bus session bus.\n"
-        "To start it, run:\n"
-        "\teval `dbus-launch --auto-syntax`\n");
-    return 1;
+  // use of adaptor
+  QObject obj;
+  Pong *pong = new Pong(&obj);
+
+  // makes a connection. <signal, slot>
+  // NOTE
+  // why defines aboutToQuit() as signal?
+  QObject::connect(&app, &QCoreApplication::aboutToQuit,
+      pong, &Pong::aboutToQuit);
+
+  // use of property "value"
+  pong->setProperty("value", "initial value");
+
+  /*
+  enum QDBusConnection::RegisterOption
+  flags QDBusConnection::RegisterOptions
+  Specifies the options for registering objects with the connection. The
+  possible values are:
+
+  QDBusConnection::ExportAllSlots
+  ExportScriptableSlots|ExportNonScriptableSlots
+  export all of this object's slots
+
+  */
+
+  QDBusConnection::sessionBus().registerObject("/", &obj);
+
+
+  // NOTE
+  // this uses adaptor but still use registerService() which is not used `chat`
+  // case.
+
+  /*
+  bool QDBusConnection::registerService(const QString &serviceName)
+
+  Attempts to register the serviceName on the D-Bus server and returns true if
+  the registration succeeded. The registration will fail if the name is already
+  registered by another application.
+
+  #define SERVICE_NAME            "org.example.QtDBus.PingExample"
+
+  NOTE that unlike `chat` case, this do not allow running the same `pong`, that
+  is, not allow multiple registered with the same service name.
+
+  */
+
+  if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
+    fprintf(stderr, "%s\n",
+        qPrintable(QDBusConnection::sessionBus().lastError().message()));
+    printf("pong cannot register service and exit\n");
+    exit(1);
   }
 
-  QDBusInterface iface(SERVICE_NAME, "/", "", QDBusConnection::sessionBus());
-  if (iface.isValid()) {
-    QDBusReply<QString> reply = iface.call("ping", argc > 1 ? argv[1] : "");
-    if (reply.isValid()) {
-      printf("Reply was: %s\n", qPrintable(reply.value()));
-      return 0;
-    }
 
-    fprintf(stderr, "Call failed: %s\n", qPrintable(reply.error().message()));
-    return 1;
-  }
+  printf("complexpong is ready to accept a call\n");
+  printf("complexpong is ready to accept a call\n");
+  // fflush();
 
-  fprintf(stderr, "%s\n",
-      qPrintable(QDBusConnection::sessionBus().lastError().message()));
-  return 1;
+  app.exec();
+  return 0;
 }

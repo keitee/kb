@@ -54,10 +54,67 @@
 #include <QtDBus/QtDBus>
 
 #include "ping-common.h"
+#include "complexping.h"
 
+// COMPLEX PING
 
-// PING
+// slot to be called by serviceWatcher.
 
+void Ping::start(const QString &name)
+{
+  if (name != SERVICE_NAME)
+    return;
+
+  // open stdin for reading
+  qstdin.open(stdin, QIODevice::ReadOnly);
+
+  //
+  iface = new QDBusInterface(SERVICE_NAME, "/", "org.example.QtDBus.ComplexPong.Pong",
+      QDBusConnection::sessionBus(), this);
+  if (!iface->isValid())
+  {
+    fprintf(stderr, "%s\n",
+        qPrintable(QDBusConnection::sessionBus().lastError().message()));
+    QCoreApplication::instance()->quit();
+  }
+
+  connect(iface, SIGNAL(aboutToQuit()),
+      QCoreApplication::instance(), SLOT(quit()));
+
+  while (true)
+  {
+    printf("Ask your question: ");
+
+    QString line = QString::fromLocal8Bit(qstdin.readLine()).trimmed();
+    if (line.isEmpty())
+    {
+      iface->call("quit");
+      return;
+    }
+    else if(line == "value")
+    {
+      QVariant reply = iface->property("value");
+      if (!reply.isNull())
+        printf("value property = %s\n", qPrintable(reply.toString()));
+    }
+    else if (line.startsWith("value="))
+    {
+      iface->setProperty("value", line.mid(6));
+    }
+    else
+    {
+      QDBusReply<QDBusVariant> reply = iface->call("query", line);
+      if (reply.isValid())
+        printf("Reply was: %s\n", qPrintable(reply.value().variant().toString()));
+    }
+
+    if (iface->lastError().isValid())
+    {
+      fprintf(stderr, "Call failed: %s\n", 
+          qPrintable(iface->lastError().message()));
+    }
+  } // while
+}
 
 int main(int argc, char **argv)
 {
@@ -70,6 +127,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  /* 
   QDBusInterface iface(SERVICE_NAME, "/", "", QDBusConnection::sessionBus());
   if (iface.isValid()) {
     QDBusReply<QString> reply = iface.call("ping", argc > 1 ? argv[1] : "");
@@ -85,4 +143,21 @@ int main(int argc, char **argv)
   fprintf(stderr, "%s\n",
       qPrintable(QDBusConnection::sessionBus().lastError().message()));
   return 1;
+  */
+
+  // use serviceWatcher to get notified when service is registered.
+
+  QDBusServiceWatcher serviceWatcher(SERVICE_NAME,
+      QDBusConnection::sessionBus(),
+      QDBusServiceWatcher::WatchForRegistration);
+
+  Ping ping;
+  QObject::connect(&serviceWatcher, &QDBusServiceWatcher::serviceRegistered,
+      &ping, &Ping::start);
+
+
+  QProcess pong;
+  pong.start("./complexpong");
+
+  app.exec();
 }

@@ -31,7 +31,10 @@ public:
     { return "org.example.chat"; }
 
 public:
-    OrgExampleChatInterface(const QString &service, const QString &path, const QDBusConnection &connection, QObject *parent = nullptr);
+    OrgExampleChatInterface(const QString &service, 
+        const QString &path, 
+        const QDBusConnection &connection, 
+        QObject *parent = nullptr);
 
     ~OrgExampleChatInterface();
 

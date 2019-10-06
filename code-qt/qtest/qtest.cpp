@@ -36,6 +36,8 @@ using namespace std;
 // ={=========================================================================
 // qt-string
 //
+// https://doc.qt.io/qt-5/qstring.html
+//
 // The QString class provides a Unicode character string.
 //
 // QString stores a string of 16-bit QChars, where each QChar corresponds to one
@@ -224,6 +226,18 @@ TEST(QtString, ByteArray)
   std::ostringstream os;
   os << coll.data();
   EXPECT_THAT(os.str(), "U%03hhu SkyQ EC201");
+}
+
+
+// int QString::indexOf
+// (const QString &str, int from = 0, Qt::CaseSensitivity cs = Qt::CaseSensitive) const
+//
+// Returns the index position of the first occurrence of the string str in this
+// string, searching forward from index position from. Returns -1 if str is not
+// found.
+
+TEST(QtString, indexOf)
+{
 }
 
 

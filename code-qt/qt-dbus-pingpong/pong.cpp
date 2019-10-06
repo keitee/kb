@@ -58,11 +58,83 @@
 #include "ping-common.h"
 #include "pong.h"
 
+
+// https://doc.qt.io/qt-5/qmetaobject.html
+//
+// Detailed Description
+//
+// The Qt Meta-Object System in Qt is responsible for the signals and slots
+// inter-object communication mechanism, runtime type information, and the Qt
+// property system. 
+//
+// A single QMetaObject instance is created for each QObject subclass that is
+// used in an application, and this instance stores all the meta-information for
+// the QObject subclass. This object is available as QObject::metaObject().
+//
+// bool QMetaObject::invokeMethod(QObject *obj, const char *member,
+// Qt::ConnectionType type, QGenericReturnArgument ret, QGenericArgument val0 =
+// QGenericArgument(nullptr), QGenericArgument val1 = QGenericArgument(),
+// QGenericArgument val2 = QGenericArgument(), QGenericArgument val3 =
+// QGenericArgument(), QGenericArgument val4 = QGenericArgument(),
+// QGenericArgument val5 = QGenericArgument(), QGenericArgument val6 =
+// QGenericArgument(), QGenericArgument val7 = QGenericArgument(),
+// QGenericArgument val8 = QGenericArgument(), QGenericArgument val9 =
+// QGenericArgument())
+//
+// Invokes the member (a signal or a slot name) on the object obj. Returns true
+// if the member could be invoked. Returns false if there is no such member or
+// the parameters did not match.
+//
+// The invocation can be either synchronous or asynchronous, depending on type:
+//
+// If type is Qt::DirectConnection, the member will be invoked immediately.
+//
+// If type is Qt::QueuedConnection, a QEvent will be sent and the member is
+// invoked as soon as the application enters the main event loop.
+//
+// If type is Qt::BlockingQueuedConnection, the method will be invoked in the
+// same way as for Qt::QueuedConnection, except that the current thread will
+// block until the event is delivered. Using this connection type to communicate
+// between objects in the same thread will lead to deadlocks.
+
+// If type is Qt::AutoConnection, the member is invoked synchronously if obj
+// lives in the same thread as the caller; otherwise it will invoke the member
+// asynchronously.
+//
+// With asynchronous method invocations, the parameters must be of types that
+// are known to Qt's meta-object system, because Qt needs to copy the arguments
+// to store them in an event behind the scenes. If you try to use a queued
+// connection and get the error message
+
+
 QString Pong::ping(const QString &arg)
 {
   QMetaObject::invokeMethod(QCoreApplication::instance(), "quit");
   return QString("ping(\"%1\") got called").arg(arg);
 }
+
+
+// https://doc.qt.io/qt-5/qtdbus-pingpong-example.html#
+//
+// Demonstrates a simple message system using D-Bus.
+//
+// Ping Pong is a command-line example that demonstrates the basics of Qt D-Bus.
+// A message is sent to another application and there is a confirmation of the
+// message.
+//
+// PONG
+// that is ping send a call and pong quit its running when it gets a call from
+// ping. 
+//
+// ping can specify what to send from command line arg
+//
+// $ QDBUS_DEBUG=1 ./pong
+// (lost of debug messages)
+//
+// $ QDBUS_DEBUG=1 ./ping "hello"
+//
+// Reply was: ping("hello") got called
+
 
 int main(int argc, char **argv)
 {
@@ -83,11 +155,16 @@ int main(int argc, char **argv)
   registered by another application.
 
   #define SERVICE_NAME            "org.example.QtDBus.PingExample"
+
+  NOTE that unlike `chat` case, this do not allow running the same `pong`, that
+  is, not allow multiple registered with the same service name.
+
   */
 
   if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
     fprintf(stderr, "%s\n",
         qPrintable(QDBusConnection::sessionBus().lastError().message()));
+    printf("pong cannot register service and exit\n");
     exit(1);
   }
 
@@ -103,8 +180,14 @@ int main(int argc, char **argv)
 
   */
 
+  // see that can expose object without using adapter interface
+
   Pong pong;
   QDBusConnection::sessionBus().registerObject("/", &pong, QDBusConnection::ExportAllSlots);
+
+  printf("pong is ready to accept a call\n");
+  printf("pong is ready to accept a call\n");
+  // fflush();
 
   app.exec();
   return 0;

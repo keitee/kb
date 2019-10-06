@@ -1,10 +1,10 @@
 # /home/keitee/Qt/Examples/Qt-5.12.3/dbus
 # 
-# drwxrwxr-x  2 keitee keitee 4.0K Jul  2 17:47 chat/
+# drwxrwxr-x  2 keitee keitee 4.0K Jun 10 14:52 pingpong/
 
 cmake_minimum_required(VERSION 3.0.0)
 
-project(qt-dbus-chat VERSION 0.1 LANGUAGES CXX)
+project(qt-pingpong-complex VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -29,14 +29,6 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 # note: how to autogen files from xml?
 # org.example.chat.xml 
 
-add_executable(${PROJECT_NAME} 
-  chatmainwindow.ui
-  chatsetnickname.ui  
-  chat_adaptor.cpp
-  chat_interface.cpp
-  "chat.cpp"
-)
-
 
 # no need to have this:
 # qt5_wrap_cpp("mainwindow.cxx" "mainwindow.h")
@@ -52,4 +44,8 @@ add_executable(${PROJECT_NAME}
 # keitee@keitee-mint:~/Qt/5.12.3/gcc_64/lib/cmake$ more Qt5DBus/Qt5DBusConfig.cmake 
 # set(Qt5DBus_LIBRARIES Qt5::DBus)
 
-target_link_libraries(${PROJECT_NAME} Qt5::DBus Qt5::Core Qt5::Widgets)
+add_executable(complexping complexping.cpp)
+target_link_libraries(complexping Qt5::DBus Qt5::Core Qt5::Widgets)
+
+add_executable(complexpong complexpong.cpp)
+target_link_libraries(complexpong Qt5::DBus Qt5::Core Qt5::Widgets)

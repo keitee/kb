@@ -48,19 +48,4 @@
 **
 ****************************************************************************/
 
-#ifndef PONG_H
-#define PONG_H
-
-#include <QtCore/QObject>
-
-class Pong: public QObject
-{
-    Q_OBJECT
-public slots:
-
-    // see that it works without Q_SCRIPTABLE
-    // Q_SCRIPTABLE QString ping(const QString &arg);
-    QString ping(const QString &arg);
-};
-
-#endif
+#define SERVICE_NAME            "org.example.QtDBus.PingExample"
