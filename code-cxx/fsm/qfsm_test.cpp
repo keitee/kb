@@ -285,7 +285,7 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
   //
   //  s1 (1)
   //
-  // |s1_2 (2)             |  s1_1
+  // |s1_2 (3)             |  s1_1
   // |                     |
   // |[s1_2_1   s1_2_2(5)] |
   //
@@ -293,9 +293,9 @@ TEST_F(StateMachineTest, enterNestedStateOrder)
 
   EXPECT_TRUE(machine.addState(initialState));
   EXPECT_TRUE(machine.addState(s1));
-  EXPECT_TRUE(machine.addState(s1, s1_1));
+  EXPECT_TRUE(machine.addState(s1, s1_1)); // s1 is super
   EXPECT_TRUE(machine.addState(s1, s1_2));
-  EXPECT_TRUE(machine.addState(s1_2, s1_2_1));
+  EXPECT_TRUE(machine.addState(s1_2, s1_2_1)); // s1_2 is super
   EXPECT_TRUE(machine.addState(s1_2, s1_2_2));
   EXPECT_TRUE(machine.addState(s2));
 
@@ -422,19 +422,23 @@ TEST_F(StateMachineTest, handleSuperStateNotSameParent)
 
   // Removes all items from the list.
   enters.clear();
-  
+
   // trigger from AdapterPoweredOffState to ServiceUnavailableState
   //
   // there's no no transition defined to handle ServiceUnavailableEvent from
   // AdapterPoweredOffState but it is handled since there is super state that
   // defines that transition.
   //
+  // machine.addTransition(ServiceAvailableSuperState,
+  //  ServiceUnavailableEvent,
+  //  ServiceUnavailableState);
+  //
   // so `exited` called along the path to exit that supre state and `entered`
   // called to enter target state.
   //
   // exited state 4, AdapterPoweredOffState
   // exited state 3, AdapterAvailableSuperState
-  // exited state 1, ServiceAvailableSuperState
+  // exited state 1, ServiceAvailableSuperState NOTE see that it's called
   // entered state 0
   //
   // note that ServiceUnavailableState is not super state

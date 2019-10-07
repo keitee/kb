@@ -433,17 +433,36 @@ TEST(StringOperation, Add)
 }
 
 // cxx-string-clear
-TEST(StringOperation, Clear)
+//
+// void clear(); (until C++11)
+// void clear() noexcept;
+
+TEST(CxxString, StringClear)
 {
-  std::string coll{};
-  
-  coll = "string add";
+  // it is safe to call clear() on empty coll
+  {
+    std::string coll{};
 
-  EXPECT_THAT(coll.size(), 10); 
+    EXPECT_THAT(coll.empty(), true);
 
-  coll.clear();
+    coll.clear();
+    coll.clear();
+    coll.clear();
 
-  EXPECT_THAT(coll.size(), 0); 
+    EXPECT_THAT(coll.size(), 0);
+  }
+
+  {
+    std::string coll{};
+
+    coll = "string add";
+
+    EXPECT_THAT(coll.size(), 10);
+
+    coll.clear();
+
+    EXPECT_THAT(coll.size(), 0);
+  }
 }
 
 
