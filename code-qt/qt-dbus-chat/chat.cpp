@@ -91,10 +91,14 @@ ChatMainWindow::ChatMainWindow()
 
     connect(messageLineEdit, SIGNAL(textChanged(QString)),
             this, SLOT(textChangedSlot(QString)));
-    connect(sendButton, SIGNAL(clicked(bool)), this, SLOT(sendClickedSlot()));
-    connect(actionChangeNickname, SIGNAL(triggered(bool)), this, SLOT(changeNickname()));
-    connect(actionAboutQt, SIGNAL(triggered(bool)), this, SLOT(aboutQt()));
-    connect(qApp, SIGNAL(lastWindowClosed()), this, SLOT(exiting()));
+    connect(sendButton, SIGNAL(clicked(bool)), this, 
+        SLOT(sendClickedSlot()));
+    connect(actionChangeNickname, SIGNAL(triggered(bool)), 
+        this, SLOT(changeNickname()));
+    connect(actionAboutQt, SIGNAL(triggered(bool)), 
+        this, SLOT(aboutQt()));
+    connect(qApp, SIGNAL(lastWindowClosed()), this, 
+        SLOT(exiting()));
 
     // add our D-Bus interface and connect to D-Bus
     new ChatAdaptor(this);
@@ -102,6 +106,28 @@ ChatMainWindow::ChatMainWindow()
       qDebug() << "org.exampe.chat is registered";
     else
       qDebug() << "org.exampe.chat is not registered";
+
+
+    // Access to remote object is done via proxy, OrgExampleChatInterface.
+    //
+    // Make a connection between signals exposed by proxy and slot functoins in
+    // this adaptor object.
+    //
+    // When runs this
+    //
+    // emit action(m_nickname, QLatin1String("joins the chat"));
+    //
+    // this is send a signal, which is atuclly a dbus call to proxy and this is
+    // relayed to the connected slot function exposed by adaptor.
+    //
+    // that is `emit xxx` made a call to itself since adaptor is from the same
+    // object.
+    //
+    // emit xxx -> proxy -> adaptor
+    // 
+    // Interesting thing is that `emit xxx` makes a call to the proxy although
+    // do not specify it?
+
 
     // OrgExampleChatInterface proxy
     org::example::chat *iface;

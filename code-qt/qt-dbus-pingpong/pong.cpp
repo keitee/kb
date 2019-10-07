@@ -183,7 +183,8 @@ int main(int argc, char **argv)
   // see that can expose object without using adapter interface
 
   Pong pong;
-  QDBusConnection::sessionBus().registerObject("/", &pong, QDBusConnection::ExportAllSlots);
+  QDBusConnection::sessionBus().registerObject("/", &pong, 
+      QDBusConnection::ExportAllSlots);
 
   printf("pong is ready to accept a call\n");
   printf("pong is ready to accept a call\n");

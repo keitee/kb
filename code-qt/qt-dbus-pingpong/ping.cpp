@@ -70,6 +70,10 @@ int main(int argc, char **argv)
     return 1;
   }
 
+
+  // Make a *direct* call(slot) of the remote object, instead of using
+  // signal/slot/connect way.
+
   QDBusInterface iface(SERVICE_NAME, "/", "", QDBusConnection::sessionBus());
   if (iface.isValid()) {
     QDBusReply<QString> reply = iface.call("ping", argc > 1 ? argv[1] : "");

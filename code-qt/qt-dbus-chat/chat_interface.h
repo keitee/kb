@@ -39,7 +39,8 @@ public:
     ~OrgExampleChatInterface();
 
 public Q_SLOTS: // METHODS
-Q_SIGNALS: // SIGNALS
+// Q_SIGNALS: // SIGNALS
+signals:
     void action(const QString &nickname, const QString &text);
     void message(const QString &nickname, const QString &text);
 };

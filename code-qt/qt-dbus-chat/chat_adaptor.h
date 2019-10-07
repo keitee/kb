@@ -48,7 +48,9 @@ public:
 
 public: // PROPERTIES
 public Q_SLOTS: // METHODS
-Q_SIGNALS: // SIGNALS
+
+// Q_SIGNALS: // SIGNALS
+signals: // SIGNALS
     void action(const QString &nickname, const QString &text);
     void message(const QString &nickname, const QString &text);
 };
