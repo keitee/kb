@@ -124,6 +124,7 @@ ChatMainWindow::ChatMainWindow()
     // object.
     //
     // emit xxx -> proxy -> adaptor
+    // emit xxx -> adaptor -> proxy -> proxy's connected slot
     // 
     // Interesting thing is that `emit xxx` makes a call to the proxy although
     // do not specify it?

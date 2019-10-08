@@ -57,8 +57,29 @@
 #include "complexping.h"
 
 // COMPLEX PING
+//
+// D-Bus Complex Ping Pong Example
+// Demonstrates usage of the Qt D-Bus typesystem.
+
+// Complex Ping Pong Example demonstrates the use of Qt D-Bus typesystem with
+// QDBusVariant and QDBusReply. The example consists of the main application
+// complexping which starts the other application, complexpong. Entering
+// keywords such as hello and ping is handled by complexpong and the reply is
+// printed to the standard output.
+//
+// Running the Example
+//
+// To run, execute the complexping application.
+//
+// $ ./complexping
+// Ask your question: When is the next Qt release?
+// Reply was: Sorry, I don't know the answer
+// Ask your question: What is the answer to life, the universe and everything?
+// Reply was: 42
 
 // slot to be called by serviceWatcher.
+
+// #define SERVICE_NAME            "org.example.QtDBus.PingExample"
 
 void Ping::start(const QString &name)
 {
@@ -78,8 +99,12 @@ void Ping::start(const QString &name)
     QCoreApplication::instance()->quit();
   }
 
+  // connect to the remote signal, pong::aboutToQuit.
+
   connect(iface, SIGNAL(aboutToQuit()),
       QCoreApplication::instance(), SLOT(quit()));
+
+  // calls pong's property and slots
 
   while (true)
   {
@@ -145,7 +170,7 @@ int main(int argc, char **argv)
   return 1;
   */
 
-  // use serviceWatcher to get notified when service is registered.
+  // use serviceWatcher to get notified when service(pong) is registered.
 
   QDBusServiceWatcher serviceWatcher(SERVICE_NAME,
       QDBusConnection::sessionBus(),
@@ -155,6 +180,19 @@ int main(int argc, char **argv)
   QObject::connect(&serviceWatcher, &QDBusServiceWatcher::serviceRegistered,
       &ping, &Ping::start);
 
+
+  printf("run ./complepong\n");
+
+  /*
+  https://doc.qt.io/qt-5/qprocess.html
+
+  Running a Process
+
+  To start a process, pass the name and command line arguments of the program
+  you want to run as arguments to start(). Arguments are supplied as individual
+  strings in a QStringList.
+
+  */
 
   QProcess pong;
   pong.start("./complexpong");
