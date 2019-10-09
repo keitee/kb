@@ -320,6 +320,7 @@ https://zork.ethan.bskyb.com/de/sdk/Q000.022.76.00/Q__formal__Q000__Q000.022.76.
 cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-amidala-de/SDK/SKYEU_SKYH418_AMIDALA_LNUX_01/KERN_SKYEU_SKYH418_AMIDALA_LNUX_01/LittleEndian/debug/debug/BootImage/zImage .
 
 ./compile_sdkv2.0.sh eu-q-amidala-de /home/keitee/mw/ethan-as-source/ clean
+./compile_sdkv2.0.sh eu-q-titan-uk /home/keitee/mw/ethan-as-source
 
 or
 
@@ -707,7 +708,7 @@ curl -v -X GET http://192.168.0.102:9005/peripherals/btremotes/edidinfo
 curl -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Host: 192.168.0.102:9005" -H "Origin:" http://192.168.0.102:9005/as/peripherals/btremotes/status
 
 // from curl
-curl -v -X POST http://192.168.0.102:9005/as/peripherals/btremotes/action/startsearching?timeout=30
+curl -v -X POST http://192.168.0.103:9005/as/peripherals/btremotes/action/startsearching?timeout=30
 
 // from asda
 peripherals/btremotes/action/startsearching?timeout=30
@@ -3068,7 +3069,58 @@ daemon/source/blercu/blercucontroller.cpp
 676:NDS: ^0000000114.941246 !MIL   -BLERCU       < p:00000dfb t:49afcdc0 T:no name M:blercumanager.cpp F:onEnteredAdapterPoweredOnState L:00552 > KT: onEnteredAdapterPoweredOnState: emit poweredInitialised
 677:NDS: ^0000000114.941297 !MIL   -BLERCU       < p:00000dfb t:49afcdc0 T:no name M:blercucontroller.cpp F:onInitialised L:00605 > KT: onInitialised: emit stateChanged(idle)
 678:NDS: ^0000000114.941318 !MIL   -BLERCU       < p:00000dfb t:49afcdc0 T:no name M:blercucontroller1_adaptor.cpp F:onStateChanged L:00128 > onStateChanged( 1 )
--
+
+void BleRcuManagerImpl::onEnteredAdapterPoweredOffState()
+{
+  // cancel any pending delayed retry event
+  if (m_retryEventId >= 0) {
+    m_stateMachine.cancelDelayedEvent(m_retryEventId);
+    m_retryEventId = -1;
+  }
+
+  // skip out early if already powered
+  // NGDEV-146407: the powered comes early than the usual for some RCU and
+  // platforms and the timeout value is choosen to make sure all objects and
+  // clients are up and running and is within FUSION sysint INITIALISED level.
+  if (m_adapterProxy->powered()) {
+    qMilestone("skip out early and adapter is powered");
+    m_adapterPowered.setSingleShot(true);
+    m_adapterPowered.setInterval(5000);
+    QObject::connect(&m_adapterPowered, &QTimer::timeout,
+        this, &BleRcuManagerImpl::onAdapterPoweredSkipped);
+    m_adapterPowered.start();
+    m_stateMachine.postEvent(`AdapterPoweredOnEvent`);
+    return;
+  }
+}
+
+void BleRcuManagerImpl::onAdapterPowerChanged(bool powered)
+{
+  if (powered) {
+    qMilestone("BT adapter powered on");
+    m_stateMachine.postDelayedEvent(`AdapterPoweredOnEvent`, 10);
+
+  } else {
+    qMilestone("odd, someone has powered down the BT adapter unexpectedly");
+    m_stateMachine.postDelayedEvent(AdapterPoweredOffEvent, 100);
+  }
+}
+
+void BleRcuManagerImpl::onEnteredAdapterPoweredOnState()
+{
+  // signal that the adapter is powered and we got the list of paired devices
+  emit poweredInitialised(BleRcuManager::privateSignal());
+}
+
+QObject::connect(manager.data(), &BleRcuManager::poweredInitialised,
+    this, &BleRcuControllerImpl::onInitialised,
+    Qt::QueuedConnection);
+
+void BleRcuControllerImpl::onInitialised()
+{
+  // tell clients that the pairing state is changed
+  emit stateChanged(PairingState::Idle);
+}
 
 <bluez-q-manager>
 
@@ -5964,10 +6016,10 @@ app/src/main/java/com/sky/bluetooth/SkyBroadcastReceiver.java
 1
 
 
-/home/keitee/ip/SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
-/home/keitee/ip/SkyBluetoothRcu/app/src/main/java/com/sky/blercu/BleRcuService.java
-/home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/blercuadapter.h
-/home/keitee/ip/SkyBluetoothRcu/app/src/main/cpp/blercu/android/blercuadapter_p.h
+SkyBluetoothRcu/app/src/main/aidl/com/sky/blercu/IBleRcuService.aidl
+SkyBluetoothRcu/app/src/main/java/com/sky/blercu/BleRcuService.java
+SkyBluetoothRcu/app/src/main/cpp/blercu/blercuadapter.h
+SkyBluetoothRcu/app/src/main/cpp/blercu/android/blercuadapter_p.h
 
 
 <bluez-sky-aidl>
@@ -6148,7 +6200,7 @@ void BleRcuService::onPairingStateChanged(bool pairing)
 }
 
 
-<bluez-android-state-change>
+<bluez-android-state-change> *state-change*
 After implemented new way of pairing and status report:
 
 // from AS spec
@@ -6166,15 +6218,50 @@ app/src/main/cpp/blercu/blercucontroller.cpp
 562:    emit stateChanged(PairingState::Failed);
 574:    emit stateChanged(PairingState::Idle);
 
-	// connect to the manager's initialised signal
-	QObject::connect(adapter.data(), &BleRcuAdapter::poweredInitialised,
-	                 this, &BleRcuControllerImpl::onInitialised,
-	                 Qt::QueuedConnection);
+void BleRcuAdapterBluez::onEnteredAdapterPoweredOffState()
+{
+  // skip out early if already powered
+  if (m_adapterProxy->powered()) {
+    m_stateMachine.postEvent(`AdapterPoweredOnEvent`);
+    return;
+  }
+}
+
+void BleRcuAdapterBluez::onAdapterPowerChanged(bool powered)
+{
+  if (powered) {
+    qMilestone("BT adapter powered on");
+    m_stateMachine.postDelayedEvent(`AdapterPoweredOnEvent`, 10);
+
+  } else {
+    qMilestone("odd, someone has powered down the BT adapter unexpectedly");
+    m_stateMachine.postDelayedEvent(AdapterPoweredOffEvent, 100);
+  }
+}
+
+void BleRcuAdapterBluez::onStateEntry(int state)
+{
+  case AdapterPoweredOnState:
+    onEnteredAdapterPoweredOnState();
+    break;
+}
+
+void BleRcuAdapterBluez::onEnteredAdapterPoweredOnState()
+{
+  // signal that the adapter is powered and we got the list of paired devices
+  emit poweredInitialised(BleRcuAdapter::privateSignal());
+}
+
+// connect to the manager's initialised signal
+QObject::connect(adapter.data(), &BleRcuAdapter::poweredInitialised,
+    this, &BleRcuControllerImpl::onInitialised,
+    Qt::QueuedConnection);
+
 
 void BleRcuControllerImpl::onInitialised()
 {
-	// tell clients that the pairing state is changed
-	emit stateChanged(PairingState::Idle);
+  // tell clients that the pairing state is changed
+  emit stateChanged(PairingState::Idle);
 }
 
 662:    emit stateChanged(PairingState::Failed);
@@ -6562,7 +6649,7 @@ User
 https://s3.eu-central-1.amazonaws.com/mgt-ip100-jenkins-output-s3/REL/IP150/QIP100.000.17.00/user/test-keys/IP150-ota.zip
 
 
-<ip100> <ip150>
+<update-ip-box> <ip100> <ip150> <ip051>
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?pageId=54062914
 Programming IP100/IP150 via adb
 
@@ -6579,9 +6666,14 @@ adb push IP150-ota.zip /cache/update.zip
 #(If it already exists you might see the following- mkdir: '/cache/recovery/':
 File exists. Everything is fine and you can proceed to the next step)
 
+adb shell
+su
 adb shell 'mkdir /cache/recovery/'
 adb shell 'echo "--update_package=/cache/update.zip" > /cache/recovery/command'
  
+mkdir /cache/recovery/
+echo "--update_package=/cache/update.zip" > /cache/recovery/command
+
 # Reboot in recovery mode
 adb reboot recovery
 
@@ -7871,6 +7963,70 @@ From log_dump.log
 67590:09-11 16:05:27.576975  1146  1232 I BleRcuQt: < M:blercuservice.cpp F:onStateChanged L:417 > on pairing state changes to  1
 79753:09-11 16:08:42.353928  1141  1268 I BleRcuQt: < M:blercuservice.cpp F:onStateChanged L:417 > on pairing state changes to  1
 95029:09-11 16:16:05.782230  1141  1237 I BleRcuQt: < M:blercuservice.cpp F:onStateChanged L:417 > on pairing state changes to  1
+
+
+
+https://www.stb.bskyb.com/jira/browse/NGDEV-146966
+
+To reproduce, once paired, press 1+3 of remote and see that state changes to
+idle.
+
+{
+  "remotes": [
+    {
+      "bdaddr": "D4:B8:FF:12:E1:A8",
+      "connected": false,
+      "deviceid": -1,
+      "name": "U006 SkyQ EC101"
+    }
+  ],
+  "status": "IDLE"
+}
+
+
+2019-10-09 15:42:57.576 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceConnectedChanged L:373 > D4:B8:FF:12:E1:A8 connected
+2019-10-09 15:42:57.577 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state Paired(1) to ResolvingServices(3)"
+2019-10-09 15:42:57.577 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onEnteredResolvingServicesState L:547 > D4:B8:FF:12:E1:A8 entered RESOLVING_SERVICES state
+2019-10-09 15:42:57.577 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceNameChanged L:352 > D4:B8:FF:12:E1:A8 device name changed from "U184 SkyQ EC101" to "U006 SkyQ EC101"
+2019-10-09 15:42:57.577 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuadapter.cpp F:onDeviceNameChanged L:1695 > renamed device D4:B8:FF:12:E1:A8 to "U006 SkyQ EC101"
+2019-10-09 15:42:58.059 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuservice.cpp F:updateDeviceIdMap L:733 > device D4:B8:FF:12:E1:A8 deviceId has changed to -1
+
+2019-10-09 15:42:58.252 2051-2069/com.sky.skybluetoothrcu E/BleRcuQt: < M:blercuadapter.cpp F:onBluezServiceUnregistered L:605 > detected bluez service has dropped off the dbus, has it crashed?
+2019-10-09 15:42:58.252 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:gatt_services.cpp F:stop L:161 > stopping services
+2019-10-09 15:42:58.269 2051-2069/com.sky.skybluetoothrcu W/BleRcuQt: < M:blercuadapter.cpp F:onEnteredServiceUnavailableState L:297 > "org.bluez" is still not registered on the bus
+2019-10-09 15:42:58.269 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuservice.cpp F:updateDeviceIdMap L:733 > device D4:B8:FF:12:E1:A8 deviceId has changed to -1
+2019-10-09 15:42:58.269 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:? F:? L:0 > ECx01 bluetooth RCU removed
+2019-10-09 15:42:58.383 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuadapter.cpp F:onBluezServiceRegistered L:586 > detected bluez service registration, will retry connecting in 1s
+
+2019-10-09 15:42:59.266 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuadapter.cpp F:findAdapter L:719 > found bluez adapter at "/org/bluez/hci0" with address 38:A6:CE:FE:DA:22
+2019-10-09 15:42:59.273 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuadapter.cpp F:disablePairable L:1158 > disabling pairable mode
+2019-10-09 15:42:59.280 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving to state Idle(0)"
+2019-10-09 15:42:59.281 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[GattAudioService] moving to state Idle(0)"
+2019-10-09 15:42:59.281 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:gatt_infraredservice.cpp F:GattInfraredService L:62 > using standby mode B
+2019-10-09 15:42:59.282 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuadapter.cpp F:onDeviceAdded L:1497 > added device D4:B8:FF:12:E1:A8 named "U006 SkyQ EC101" (connected: false paired: true)
+2019-10-09 15:42:59.282 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuadapter.cpp F:onAdapterPairableChanged L:1323 > adapter pairable state changed to false
+
+2019-10-09 15:42:59.282 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuservice.cpp F:onStateChanged L:417 > on pairing state changes to  1
+
+2019-10-09 15:42:59.291 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDevicePairedChanged L:399 > D4:B8:FF:12:E1:A8 paired
+2019-10-09 15:42:59.291 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state Idle(0) to Paired(1)"
+2019-10-09 15:42:59.291 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercuservice.cpp F:onDeviceAdded L:492 > failed to find input device for D4:B8:FF:12:E1:A8
+2019-10-09 15:42:59.292 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:? F:? L:0 > ECx01 bluetooth RCU added
+2019-10-09 15:42:59.508 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceConnectedChanged L:373 > D4:B8:FF:12:E1:A8 connected
+2019-10-09 15:42:59.508 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state Paired(1) to ResolvingServices(3)"
+2019-10-09 15:42:59.508 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onEnteredResolvingServicesState L:547 > D4:B8:FF:12:E1:A8 entered RESOLVING_SERVICES state
+2019-10-09 15:42:59.875 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceConnectedChanged L:373 > D4:B8:FF:12:E1:A8 disconnected
+2019-10-09 15:42:59.875 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state ResolvingServices(3) to Paired(1)"
+2019-10-09 15:43:00.533 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceConnectedChanged L:373 > D4:B8:FF:12:E1:A8 connected
+2019-10-09 15:43:00.533 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state Paired(1) to ResolvingServices(3)"
+2019-10-09 15:43:00.533 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onEnteredResolvingServicesState L:547 > D4:B8:FF:12:E1:A8 entered RESOLVING_SERVICES state
+2019-10-09 15:43:00.672 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceConnectedChanged L:373 > D4:B8:FF:12:E1:A8 disconnected
+2019-10-09 15:43:00.672 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state ResolvingServices(3) to Paired(1)"
+2019-10-09 15:43:00.991 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceConnectedChanged L:373 > D4:B8:FF:12:E1:A8 connected
+2019-10-09 15:43:00.991 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state Paired(1) to ResolvingServices(3)"
+2019-10-09 15:43:00.991 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onEnteredResolvingServicesState L:547 > D4:B8:FF:12:E1:A8 entered RESOLVING_SERVICES state
+2019-10-09 15:43:01.245 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:blercudevice.cpp F:onDeviceConnectedChanged L:373 > D4:B8:FF:12:E1:A8 disconnected
+2019-10-09 15:43:01.245 2051-2069/com.sky.skybluetoothrcu I/BleRcuQt: < M:statemachine.cpp F:logTransition L:82 > "[DeviceStateMachine] moving from state ResolvingServices(3) to Paired(1)"
 
 
 ={============================================================================
