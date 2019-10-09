@@ -236,8 +236,22 @@ TEST(QtString, ByteArray)
 // string, searching forward from index position from. Returns -1 if str is not
 // found.
 
-TEST(QtString, indexOf)
+TEST(QtString, useIndexOf)
 {
+  QString coll{"QtString supports indexOf method"};
+
+  EXPECT_THAT(coll.indexOf("indexOf"), 18);
+
+  EXPECT_THAT(coll.indexOf("indexof"), -1);
+}
+
+TEST(QtString, useStartsWith)
+{
+  QString coll{"value=10"};
+
+  EXPECT_THAT(coll.startsWith("value="), true);
+
+  EXPECT_THAT(coll.mid(6), "10");
 }
 
 
@@ -990,11 +1004,22 @@ Example for a one second (1000 millisecond) timer (from the Analog Clock example
 
 From then on, the update() slot is called every second.
 
-You can set a timer to time out only once by calling setSingleShot(true). You
-can also use the static QTimer::singleShot() function to call a slot after a
+You can set a timer to time out only once by calling setSingleShot(true). 
+
+void setSingleShot(bool singleShot)
+
+You can also use the static QTimer::singleShot() function to call a slot after a
 specified interval:
 
     QTimer::singleShot(200, this, SLOT(updateCaption()));
+
+void QTimer::singleShot(int msec, const QObject *receiver, const char *member)
+
+This static function calls a slot after a given time interval.
+
+It is very convenient to use this function because you do not need to bother
+with a timerEvent or create a local QTimer object.
+
 
 In multithreaded applications, you can use QTimer in any thread that has an
 event loop. To start an event loop from a non-GUI thread, use QThread::exec().
