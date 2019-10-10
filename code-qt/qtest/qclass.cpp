@@ -12,16 +12,13 @@ void Counter::setValue(int value)
 
 void Counter::doSomethingLong()
 {
-  qCritical() << "doSomethingLong: before sleep..";
-
   // here is the expensive or blocking operations
   // void QThread::sleep(unsigned long secs);
   QThread::sleep(5);
   m_value = 5;
-
-  qCritical() << "doSomethingLong: after sleep..";
 }
 
+#if 0
 
 // ={=========================================================================
 
@@ -58,5 +55,7 @@ namespace qt_thread_2
     qCritical() << "handleResults: " << result;
   }
 } // namespace
+
+#endif
 
 // ={=========================================================================

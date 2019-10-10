@@ -24,10 +24,16 @@ class Counter : public QObject
 
     int value() const { return m_value; }
 
-  // private slots:
   public slots:
-      void setValue(int value);
-      void doSomethingLong();
+    void setValue(int value);
+    void doSomethingLong();
+
+  // Error: Missing access specifier for slots
+  // slots:
+  //
+  // private slots:
+  // error: ‘void Counter::setValue(int)’ is private within this context
+
 
   signals:
     void valueChanged(int newValue);
@@ -35,6 +41,9 @@ class Counter : public QObject
   private:
     int m_value;
 };
+
+
+#if 0
 
 
 // ={=========================================================================
@@ -354,5 +363,7 @@ signals:
       void operate(const QString &);
   };
 } // namespace
+
+#endif 
 
 #endif // QT_CLASS_H

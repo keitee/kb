@@ -14,11 +14,12 @@
 #include <QQueue>
 #include <QTimer>
 #include <QSignalSpy>
+#include <QTime>
 
 #include "qclass.h"
 
 using namespace std;
-
+using ::testing::Ge;
 
 // ={=========================================================================
 // qt-console app
@@ -817,7 +818,8 @@ TEST(QtSlot, SlotAndSignal)
     EXPECT_THAT(b.value(), 12);
 
     b.setValue(48);
-    // effectively, emit valueChanged(value);
+    // effectively, emit valueChanged(value); but b is not connected so no
+    // effect to a.
     // a.value() == 12, b.value() == 48
 
     EXPECT_THAT(a.value(), 12);
@@ -835,11 +837,14 @@ TEST(QtSlot, SlotAndSignal)
     QObject::connect(&a, &Counter::valueChanged,
         &b, &Counter::doSomethingLong);
 
-    qCritical() << "emit signal via valueChange and runs slot";
+    // https://doc.qt.io/qt-5/qtime.html
+    QTime elapsed;
+    elapsed.start();
+    
     a.valueChanged(12);
-    qCritical() << "slot finished";
 
-    EXPECT_THAT(b.value(), 5);
+    // elapsed.elapsed() returns ms.
+    EXPECT_THAT(elapsed.elapsed(), Ge(5000));
   }
 
   // to show `emit signal` is a function call
@@ -849,14 +854,18 @@ TEST(QtSlot, SlotAndSignal)
     QObject::connect(&a, &Counter::valueChanged,
         &b, &Counter::doSomethingLong);
 
-    qCritical() << "emit signal via valueChange and runs slot";
-    emit a.valueChanged(12);
-    qCritical() << "slot finished";
+    QTime elapsed;
+    elapsed.start();
 
-    EXPECT_THAT(b.value(), 5);
+    emit a.valueChanged(12);
+
+    // elapsed.elapsed() returns ms.
+    EXPECT_THAT(elapsed.elapsed(), Ge(5000));
   }
 }
 
+
+#if 0
 
 /*
 
@@ -938,6 +947,7 @@ TEST(DISABLED_QtSlot, QueuedConnection)
     cv.wait(lock);
   }
 }
+
 
 
 // ={=========================================================================
@@ -1240,7 +1250,7 @@ TEST(QtThread, useComposite)
     emit co.operate(QString("send operate"));
     qCritical() << "after sending operate..";
 }
-
+#endif
 
 // ={=========================================================================
 
