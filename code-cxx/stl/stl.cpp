@@ -719,7 +719,8 @@ TEST(Iterator, StreamIterator)
 //  size()    : 4
 //  capacity(): 4
 
-TEST(Vector, Capacity)
+// ={=
+TEST(CxxVector, seeCapacity)
 {
   // create empty vector for strings
   vector<string> sentence;
@@ -781,6 +782,7 @@ private:
   vector<int> icoll;
 };
 
+// ={=
 TEST(CxxVector, useCtor)
 {
   {
@@ -852,6 +854,7 @@ void StlVectorFillVector(vector<int> &coll)
     coll.insert(coll.end(), i);
 }
 
+// ={=
 TEST(Vector, CtorFromExpression)
 {
   vector<int> coll;
@@ -881,6 +884,7 @@ void GetVectorArg(const vector<int> &coll)
   ASSERT_THAT(coll_.size(), 6);
 }
 
+// ={=
 TEST(Vector, CopyAndMoveAssign)
 {
   // assign
@@ -955,6 +959,7 @@ TEST(Vector, CopyAndMoveAssign)
 //     }
 // Aborted
 
+// ={=
 TEST(DISABLED_Vector, EraseRuntimeError)
 {
   vector<int> coll1;
@@ -985,6 +990,7 @@ TEST(DISABLED_Vector, EraseRuntimeError)
   EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
 }
 
+// ={=
 TEST(Vector, EraseNoError)
 {
   vector<int> coll1;
@@ -1014,6 +1020,7 @@ TEST(Vector, EraseNoError)
   EXPECT_THAT(coll2, ElementsAre(1, 3, 5, 7));
 }
 
+// ={=
 TEST(Vector, InsertAndErase)
 {
   vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -1035,24 +1042,6 @@ TEST(Vector, InsertAndErase)
 
   EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
 }
-
-class VectorEraseCallsDtor
-{
-public:
-  VectorEraseCallsDtor(const string name = "vector") : name_(name)
-  {
-    cout << "VectorEraseCallsDtor::ctor: " << name_ << endl;
-  }
-  ~VectorEraseCallsDtor()
-  {
-    cout << "VectorEraseCallsDtor::dtor: " << name_ << endl;
-  }
-
-  string GetName() { return name_; }
-
-private:
-  string name_;
-};
 
 // 1. cxx-vector-reallocation is not something when create a vector with big
 // numbers. This happens from the start.
@@ -1101,19 +1090,46 @@ private:
 // VectorEraseCallsDtor::dtor: name 3
 // VectorEraseCallsDtor::dtor: name 4
 
-TEST(Vector, CreateWithOnDemand)
+namespace cxx_vector {
+
+class VectorRelocation
 {
-  vector<VectorEraseCallsDtor> ovec{};
+public:
+  VectorRelocation(const string name = "vector") : name_(name)
+  {
+    name_ += " called ctor";
+    // cout << "VectorRelocation::ctor: " << name_ << endl;
+  }
+  ~VectorRelocation()
+  {
+    name_ += " called dtor";
+    // cout << "VectorRelocation::dtor: " << name_ << endl;
+  }
+
+  string getName() { return name_; }
+
+private:
+  string name_;
+};
+
+}; // namespace cxx_vector
+
+// ={=
+TEST(CxxVector, seeRelocation)
+{
+  using namespace cxx_vector;
+
+  vector<VectorRelocation> ovec{};
 
   for (int i = 0; i < 5; ++i)
   {
     cout << "-for ---------" << endl;
     string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
+    ovec.push_back(VectorRelocation(name));
   }
 
   for (auto &e : ovec)
-    cout << "for: " << e.GetName() << endl;
+    cout << "for: " << e.getName() << endl;
 
   cout << "-erase---------" << endl;
   auto it = ovec.begin();
@@ -1152,16 +1168,19 @@ TEST(Vector, CreateWithOnDemand)
 // VectorEraseCallsDtor::dtor: name 3
 // VectorEraseCallsDtor::dtor: name 4
 
-TEST(Vector, CreateWithReserve)
+// ={=
+TEST(CxxVector, seeRelocationAndReserve)
 {
-  vector<VectorEraseCallsDtor> ovec{};
+  using namespace cxx_vector;
+
+  vector<VectorRelocation> ovec{};
   ovec.reserve(10);
 
   for (int i = 0; i < 5; ++i)
   {
     cout << "-for ---------" << endl;
     string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
+    ovec.push_back(VectorRelocation(name));
   }
 
   cout << "-erase---------" << endl;
@@ -1199,9 +1218,12 @@ TEST(Vector, CreateWithReserve)
 // VectorEraseCallsDtor::dtor: vector
 // VectorEraseCallsDtor::dtor: vector
 
-TEST(Vector, CreateWithPreAllocation)
+// ={=
+TEST(CxxVector, seeRelocationAndPreAllocation)
 {
-  vector<VectorEraseCallsDtor> ovec(10);
+  using namespace cxx_vector;
+
+  vector<VectorRelocation> ovec(10);
 
   cout << "-erase---------" << endl;
   auto it = ovec.begin();
@@ -1212,6 +1234,33 @@ TEST(Vector, CreateWithPreAllocation)
 
   cout << "-erase---------" << endl;
   it = ovec.erase(it);
+}
+
+namespace cxx_vector {
+const int NUMBER_ALLOCATION{100000};
+};
+
+// ={=
+// to see time difference between reserve() and pre-allocation
+TEST(CxxVector, seeRelocationAndReserveTime)
+{
+  using namespace cxx_vector;
+
+  vector<VectorRelocation> ovec{};
+  ovec.reserve(NUMBER_ALLOCATION);
+
+  for (int i = 0; i < NUMBER_ALLOCATION; ++i)
+  {
+    string name = "name " + to_string(i);
+    ovec.push_back(VectorRelocation(name));
+  }
+}
+
+TEST(CxxVector, seeRelocationAndPreAllocationTime)
+{
+  using namespace cxx_vector;
+
+  vector<VectorRelocation> ovec(NUMBER_ALLOCATION);
 }
 
 // cxx-seg-fault
@@ -1229,15 +1278,17 @@ TEST(Vector, CreateWithPreAllocation)
 
 TEST(DISABLED_Vector, AccessInvalidIndex)
 {
-  vector<VectorEraseCallsDtor> ovec{};
+  using namespace cxx_vector;
+
+  vector<VectorRelocation> ovec{};
 
   for (int i = 0; i < 5; ++i)
   {
     string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
+    ovec.push_back(VectorRelocation(name));
   }
 
-  cout << "name: " << ovec[8].GetName() << endl;
+  cout << "name: " << ovec[8].getName() << endl;
 }
 
 // cxx-undefined
@@ -1255,16 +1306,18 @@ TEST(DISABLED_Vector, AccessInvalidIndex)
 
 TEST(DISABLED_Vector, AccessInvalidIndexWithReserve)
 {
-  vector<VectorEraseCallsDtor> ovec{};
+  using namespace cxx_vector;
+
+  vector<VectorRelocation> ovec{};
   ovec.reserve(10);
 
   for (int i = 0; i < 5; ++i)
   {
     string name = "name " + to_string(i);
-    ovec.push_back(VectorEraseCallsDtor(name));
+    ovec.push_back(VectorRelocation(name));
   }
 
-  cout << "name: " << ovec[8].GetName() << endl;
+  cout << "name: " << ovec[8].getName() << endl;
 }
 
 TEST(CxxVector, asArray)
@@ -1461,20 +1514,31 @@ TEST(CxxVector, useVectorAndArray)
 
 // ={=========================================================================
 // cxx-deque
-// case seg-fault
 
-TEST(DISABLED_StlDeque, HowDequeSupportEmpty)
+// the reference say: Calling back on an empty container is undefined.
+// when runs, see seg fault(core dumped).
+
+TEST(DISABLED_CxxDeque, seeEmpty)
 {
-  deque<int> iq;
+  std::deque<int> coll;
 
   try
   {
-    auto e = iq.back();
+    auto e = coll.back();
     (void)e;
   } catch (...)
   {
-    cout << "exception" << endl;
+    std::cout << "exception" << std::endl;
   }
+}
+
+// As with cxx-vector, deque supports pre-allocation.
+
+TEST(CxxDeque, seePreAllocation)
+{
+  std::deque<int> coll(1000);
+
+  EXPECT_THAT(coll.size(), 1000);
 }
 
 // ={=========================================================================
