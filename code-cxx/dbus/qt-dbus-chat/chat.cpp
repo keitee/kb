@@ -107,7 +107,6 @@ ChatMainWindow::ChatMainWindow()
     else
       qDebug() << "org.exampe.chat is not registered";
 
-
     // Access to remote object is done via proxy, OrgExampleChatInterface.
     //
     // Make a connection between signals exposed by proxy and slot functoins in
@@ -123,12 +122,13 @@ ChatMainWindow::ChatMainWindow()
     // that is `emit xxx` made a call to itself since adaptor is from the same
     // object.
     //
-    // emit xxx -> proxy -> adaptor
-    // emit xxx -> adaptor -> proxy -> proxy's connected slot
-    // 
+    // emit xxx -> proxy signal -> adaptor slot
+    //                              signal:
+    //                               void action(...);
+    //                               void message(...);
+    //
     // Interesting thing is that `emit xxx` makes a call to the proxy although
     // do not specify it?
-
 
     // OrgExampleChatInterface proxy
     org::example::chat *iface;
@@ -138,9 +138,11 @@ ChatMainWindow::ChatMainWindow()
     // maps org.example.chat signal to slots
     connect(iface, SIGNAL(message(QString,QString)), 
         this, SLOT(messageSlot(QString,QString)));
- 
+
     // shorter than this:
-    // QDBusConnection::sessionBus().connect(QString(), QString(), "org.example.chat", "message", this, SLOT(messageSlot(QString,QString)));
+    // QDBusConnection::sessionBus().connect(QString(), QString(),
+    //  "org.example.chat", "message", this,
+    //  SLOT(messageSlot(QString,QString)));
 
     connect(iface, SIGNAL(action(QString,QString)), 
         this, SLOT(actionSlot(QString,QString)));

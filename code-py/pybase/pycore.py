@@ -241,6 +241,7 @@ class TestString(unittest.TestCase):
         self.assertEqual(bin(13), '0b1101')
 
 
+    # $ python3 -m unittest pycore.TestString.test_string_split
     def test_string_split(self):
 
         self.assertEqual(' 1 2  3   '.split(), ['1', '2', '3'])
