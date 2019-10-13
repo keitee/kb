@@ -121,7 +121,7 @@ ChatMainWindow::ChatMainWindow()
     //
     // that is `emit xxx` made a call to itself since adaptor is from the same
     // object.
-    //
+    // ping do not use proxy but still able to connect to remote signal.
     // emit xxx -> proxy signal -> adaptor slot
     //                              signal:
     //                               void action(...);
@@ -153,7 +153,7 @@ ChatMainWindow::ChatMainWindow()
     dialog.exec();
     m_nickname = dialog.nickname->text().trimmed();
     
-    // send dbus signal
+    // send Qt signal but not dbus signal.
     emit action(m_nickname, QLatin1String("joins the chat"));
 }
 

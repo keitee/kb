@@ -19,6 +19,8 @@ class Pong : public QDBusAbstractAdaptor
 
     Pong(QObject *obj) : QDBusAbstractAdaptor(obj) {}
 
+    void really_quit();
+
   signals:
     void aboutToQuit();
 

@@ -100,11 +100,26 @@ void Ping::start(const QString &name)
   }
 
   // connect to the remote signal, pong::aboutToQuit.
+  // NOTE: ping do not use proxy but still able to connect to remote signal.
+  //
+  // Also see that proxy inherits from QDBusAbstractInterface as QDBusInterface
+  // does. So proxy is not much different from QDBusInterface use.
+  //
+  // class OrgExampleChatInterface: public QDBusAbstractInterface
 
   connect(iface, SIGNAL(aboutToQuit()),
       QCoreApplication::instance(), SLOT(quit()));
 
+
   // calls pong's property and slots
+  //
+  // NOTE: see the use of property and method call
+  //
+  // o property get:
+  //    QVariant reply = iface->property("value");
+  //   property set:
+  //    iface->setProperty("value", line.mid(6));
+  // o iface->call("query", line);
 
   while (true)
   {

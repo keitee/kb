@@ -43,94 +43,122 @@ class Counter : public QObject
 };
 
 
-#if 0
-
-
 // ={=========================================================================
 
-class UseTimer : public QObject
+class Timer : public QObject
 {
   Q_OBJECT
 
   public:
-    UseTimer() 
+    Timer() : count_(0) 
     { 
       timer_ = QSharedPointer<QTimer>::create(this);
-      connect(timer_.data(), SIGNAL(timeout()), this, SLOT(onExpired()));
-      timer_->start(2000);
-      value_ = 0; 
     }
 
-    int getValue() const { return value_; }
+    int getCount() const { return count_; }
 
-  // private slots:
   public slots:
+    void setSingleShot()
+    {
+      connect(timer_.data(), SIGNAL(timeout()), 
+          this, SLOT(onExpired()));
+
+      timer_->start(1000);
+    }
+
+    void useSingleShot()
+    {
+      QTimer::singleShot(1000, this, SLOT(onExpired()));
+    }
+
     void onExpired()
     {
       // qDebug() << "UseTimer: timer expired";
-      emit timerExpired(1);
+      emit timerExpired(count_);
+    }
+
+    void setContinuousShot()
+    {
+      connect(timer_.data(), SIGNAL(timeout()), 
+          this, SLOT(onExpiredAndContinue()));
+
+      timer_->start(1000);
+    }
+
+    void onExpiredAndContinue()
+    {
+      // qDebug() << "timer expired: isSingleShot: " << timer_->isSingleShot();
+
+      if (count_ < 3)
+      {
+        count_++;
+
+        // NOTE: From then on, it will emit the timeout() signal 
+        // *at constant intervals.* so don't need this
+        // timer_->start(1000);
+      }
+      else
+        emit timerExpired(count_);
     }
 
   signals:
-    void timerExpired(int value);
+    void timerExpired(int count);
 
   private:
-    int value_;
+    int count_;
     QSharedPointer<QTimer> timer_;
 };
 
 
-class UseTimerFromQObject : public QObject
+class TimerQObject : public QObject
 {
   Q_OBJECT
 
   public:
-    UseTimerFromQObject(std::condition_variable &cv)
-      : cv_(cv)
+    // TimerQObject(std::condition_variable &cv)
+    //   : cv_(cv)
+
+  public:
+    TimerQObject()
     { 
       int timerid{};
 
-      // Starts a timer and returns a timer identifier, or returns zero if it
-      // could not start a timer.
-
-      timerid = startTimer(50);
-      if (timerid <= 0)
-        qDebug() << "failed to create timer(50)";
-      else
-        qDebug() << "timer id: " << timerid;
-
       timerid = startTimer(1000);
-      if (timerid <= 0)
-        qDebug() << "failed to create timer(1000)";
-      else
-        qDebug() << "timer id: " << timerid;
+      // if (timerid <= 0)
+      //   qDebug() << "failed to create timer(1000)";
+      // else
+      //   qDebug() << "created timer id: " << timerid;
 
-      timerid = startTimer(2000);
-      if (timerid <= 0)
-        qDebug() << "failed to create timer(2000)";
-      else
-        qDebug() << "timer id: " << timerid;
-
-      value_ = 0; 
+      count_ = 0; 
     }
 
-    int getValue() const { return value_; }
+    int getCount() const { return count_; }
 
   protected:
+
     // void QObject::timerEvent(QTimerEvent *event)
     void timerEvent(QTimerEvent *event)
     {
-      qDebug() << "timer id: " << event->timerId();
+      count_++;
 
-      if (value_ > 10)
-        cv_.notify_one();
+      // qDebug() << "expired timer id: " << event->timerId();
+
+      // if (count_ >= 3)
+      //   cv_.notify_one();
     }
 
+
+  // to use QSignalSpy
+  signals:
+    void timerExpired(int value);
+
   private:
-    std::condition_variable &cv_;
-    int value_;
+    // std::condition_variable &cv_;
+    int count_;
 };
 
+
+#if 0
 
 // ={=========================================================================
 
