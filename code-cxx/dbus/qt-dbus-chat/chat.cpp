@@ -135,14 +135,38 @@ ChatMainWindow::ChatMainWindow()
     iface = new org::example::chat(QString(), QString(), 
         QDBusConnection::sessionBus(), this);
 
-    // maps org.example.chat signal to slots
-    connect(iface, SIGNAL(message(QString,QString)), 
-        this, SLOT(messageSlot(QString,QString)));
+    // // maps org.example.chat signal to slots
+    // connect(iface, SIGNAL(message(QString,QString)), 
+    //     this, SLOT(messageSlot(QString,QString)));
 
     // shorter than this:
-    // QDBusConnection::sessionBus().connect(QString(), QString(),
-    //  "org.example.chat", "message", this,
-    //  SLOT(messageSlot(QString,QString)));
+    //
+    // bool QDBusConnection::connect(
+    //  const QString &service, 
+    //  const QString &path, 
+    //  const QString &interface, 
+    //  const QString &name, 
+    //  QObject *receiver, 
+    //  const char *slot)
+    //
+    // Connects the signal specified by the service, path, interface and name
+    // parameters to the slot `slot` in object `receiver`. 
+    //
+    // The arguments service and path *can be empty*, denoting a connection to any
+    // signal of the (interface, name) pair, from any remote application.
+    //
+    // Returns true if the connection was successful.
+    // 
+    // Warning: The signal will only be delivered to the slot if the parameters
+    // match. This verification can be done only when the signal is received,
+    // not at connection time.
+
+    if (!QDBusConnection::sessionBus().connect(QString(), QString(),
+     "org.example.chat", "message", this,
+     SLOT(messageSlot(QString,QString))))
+    {
+      qDebug() << "connect message signal failed";
+    }
 
     connect(iface, SIGNAL(action(QString,QString)), 
         this, SLOT(actionSlot(QString,QString)));

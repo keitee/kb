@@ -123,7 +123,7 @@ using ::testing::Ge;
 //
 // We recommend that you always use the isEmpty() function and avoid isNull().
 
-TEST(QtString, Ops)
+TEST(QtString, convertToConstChar)
 {
   // You can also pass string literals to functions that take QStrings as
   // arguments, invoking the QString(const char *) constructor. Similarly, you
@@ -131,6 +131,7 @@ TEST(QtString, Ops)
   // the qPrintable() macro which returns the given QString as a const char *.
   // This is equivalent to calling <QString>.toLocal8Bit().constData().
 
+  // toUtf8()
   {
     std::ostringstream os;
     QString message{"Hello stream logging"};
@@ -138,6 +139,23 @@ TEST(QtString, Ops)
     EXPECT_THAT(os.str(), "Hello stream logging");
   }
 
+  // toLatin1()
+  {
+    std::ostringstream os;
+    QString message{"Hello stream logging"};
+    os << message.toLatin1().constData();
+    EXPECT_THAT(os.str(), "Hello stream logging");
+  }
+
+  // toLocal8Bit()
+  {
+    std::ostringstream os;
+    QString message{"Hello stream logging"};
+    os << message.toLocal8Bit().constData();
+    EXPECT_THAT(os.str(), "Hello stream logging");
+  }
+
+  // qPrintable()
   {
     std::ostringstream os;
     QString message{"Hello stream logging"};
@@ -145,7 +163,10 @@ TEST(QtString, Ops)
     os << qPrintable(message);
     EXPECT_THAT(os.str(), "Hello stream logging");
   }
+}
 
+TEST(QtString, xxx)
+{
   // First, arg(i) replaces %1. Then arg(total) replaces %2. Finally,
   // arg(fileName) replaces %3.
   //
@@ -1128,12 +1149,14 @@ TEST(QtTimer, TimerFromQObject)
 
   TimerQObject o;
 
-  QSignalSpy timerExpiredSpy(&o, &TimerQObject::timerExpired);
-  timerExpiredSpy.wait(5000);
-
-  // cannot use this since it blocks all including timer.
+  // cannot use this since it blocks all including timer. so use QSignalSpy
+  // instead to wait.
+  //
   // QThread::exec();
   // cv.wait(lock);
+
+  QSignalSpy timerExpiredSpy(&o, &TimerQObject::timerExpired);
+  timerExpiredSpy.wait(5000);
 
   // 5 since timer can run 5 for 5000 ms
   EXPECT_EQ(o.getCount(), 5);
