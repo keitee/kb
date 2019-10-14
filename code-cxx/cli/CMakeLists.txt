@@ -73,7 +73,7 @@ add_compile_options("-g")
 
 
 # cli simple
-add_executable(${PROJECT_NAME}_simple scli.cpp scli_cmd.cpp)
+add_executable(${PROJECT_NAME}_simple scli.cpp cli_test.cpp)
 target_link_libraries(${PROJECT_NAME}_simple gmock_main)
 
 
