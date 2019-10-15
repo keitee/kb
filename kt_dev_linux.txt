@@ -49363,7 +49363,7 @@ FIFOs and sockets.
 
 
 If we place a file descriptor in nonblocking mode by enabling the O_NONBLOCK
-open file sta- tus flag, then an I/O system call that can’t be immediately
+open file status flag, then an I/O system call that can’t be immediately
 completed `returns an error instead of blocking.` Nonblocking I/O can be
 employed with pipes, FIFOs, sockets, terminals, pseudoterminals, and some
 other types of devices.
@@ -49372,13 +49372,33 @@ other types of devices.
 Because of the limitations of both nonblocking I/O and the use of multiple or
 processes, one of the following alternatives is often preferable:
 
-* I/O multiplexing allows a process to simultaneously monitor multiple file
+note hat here "nonblocking I/O" means a busy-poll:
+Nonblocking I/O allows us to periodically check (“poll”) whether I/O is
+possible on a file descriptor. For example, we can make an input file
+descriptor nonblocking, and then periodically perform nonblocking reads.
+
+o I/O multiplexing allows a process to simultaneously monitor multiple file
   descriptors to find out whether I/O is possible on any of them. The select()
-  and poll() system calls perform I/O multiplexing.  Signal-driven I/O is a
-  technique whereby a process requests that the kernel send
+  and poll() system calls perform I/O multiplexing.
 
+o Signal-driven I/O is a technique whereby a process requests that the kernel
+  send it a signal when input is available or data can be written on a
+  specified file descriptor.
 
-Note that none of these techniques performs I/O. They merely tell us that a
+*os-epoll*
+o The epoll API is a Linux-specific feature that first appeared in Linux 2.6.
+  Like the I/O multiplexing APIs, the epoll API allows a process to monitor
+  multiple file descriptors to see if I/O is possible on any of them. Like
+  signal-driven I/O, the epoll API provides much better performance when
+  monitoring large numbers of file descriptors.
+
+I/O multiplexing, signal-driven I/O, and epoll are all methods of achiev- ing
+the same result—monitoring one or, commonly, several file descriptors simulta-
+neously to see if they are ready to perform I/O; 
+
+`to be precise, to see whether an I/O call could be performed without blocking.`
+
+`note that none of these techniques performs I/O.` They merely tell us that a
 file descriptor is ready. Some other system call must then be used to actually
 perform the I/O.
 
@@ -49389,28 +49409,46 @@ During the course of this chapter, we’ll consider the reasons we may choose
 one of these techniques rather than another. In the meantime, we summarize a
 few points:
 
-* The select() and poll() system calls are long-standing interfaces that have
+o The select() and poll() system calls are long-standing interfaces that have
   been present on UNIX systems for many years. Compared to the other
   techniques, their `primary advantage is portability.` Their main disadvantage
   is that they don’t scale well when monitoring large numbers (hundreds or
   thousands) of file descriptors.
 
+o The key advantage of the epoll API is that it allows an application to
+  efficiently monitor large numbers of file descriptors. Its primary
+  disadvantage is that it is a Linux-specific API.
 
-we describe how the choice of notification model affects the way we design a
-program.
+o Like epoll, signal-driven I/O allows an application to efficiently monitor
+  large numbers of file descriptors. However, epoll provides a number of
+  advantages over signal-driven I/O.
 
-select() and poll() employ level-triggered notification. we can check the
-readiness of a file descriptor at any time. This means that when we determine
-that a file descriptor is ready (e.g., it has input available), we can perform
-some I/O on the descriptor, and then repeat the monitoring operation to check
-if the descriptor is still ready (e.g., it still has more input available), in
-  which case we can perform more I/O, and so on. 
+
+<notification-model>
+two models of readiness notification for a file descriptor:
+
+o Level-triggered notification: A file descriptor is considered to be ready if
+  it is possible to perform an I/O system call without blocking.
+
+o Edge-triggered notification: Notification is provided if there is I/O
+  activity (e.g., new input) on a file descriptor since it was last monitored.
+
+`When we employ level-triggered notification`, we can check the readiness of a
+file descriptor at any time. This means that when we determine that a file
+descriptor is ready (e.g., it has input available), we can perform some I/O on
+the descriptor, and then repeat the monitoring operation to check if the
+descriptor is still ready (e.g., it still has more input available), in which
+case we can perform more I/O, and so on. 
 
 In other words, because the level-triggered model allows us to repeat the I/O
-moni- toring operation at any time, it is not necessary to perform as much I/O
+monitoring operation at any time, it is not necessary to perform as much I/O
 as possible (e.g., read as many bytes as possible) on the file descriptor (or
-    even perform any I/O at all) each time we are notified that a file
+even perform any I/O at all) each time we are notified that a file
 descriptor is ready.
+
+// TODO: edge-triggered model
+
+select() and poll() employ level-triggered notification. 
 
 
 LPI-63.2 I/O Multiplexing
@@ -49419,14 +49457,13 @@ I/O multiplexing allows us to simultaneously monitor multiple file descriptors
 to see if I/O is possible on any of them. We can perform I/O multiplexing
 using either of two system calls with essentially the same functionality.
 
+LPI-63.2.2
 
-LPI-63.2.2 *os-io-poll*
-
-*syscall-poll*
+*os-poll*
 
 The poll() system call performs a similar task to select(). The major
 difference between the two system calls lies in how we specify the file
-descriptors to be moni- tored. With select(), we provide three sets, each
+descriptors to be monitored. With select(), we provide three sets, each
 marked to indicate the file descriptors of interest. With poll(), we provide a
 list of file descriptors, each marked with the set of events of interest.
 
@@ -49435,8 +49472,8 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout);
 Returns number of ready file descriptors, 0 on timeout, or -1 on error 
   
 The fds argument and the pollfd array (nfds) specify the file descriptors that
-poll() is to monitor. The timeout argument can be used to set an upper limit
-on the time for which poll() will block. We describe each of these arguments
+poll() is to monitor. The `timeout` argument can be used to set `an upper limit`
+on the time `for which poll() will block.` We describe each of these arguments
 in detail below.
 
 struct pollfd {
@@ -49444,7 +49481,6 @@ struct pollfd {
   short events;     /* Requested events bit mask */
   short revents;    /* Returned events bit mask */
 };
-
 
 Upon return from poll(), revents is set to indicate which of those events
 actually occurred for this file descriptor.
@@ -89834,6 +89870,33 @@ DBusObjectManagerInterface::~DBusObjectManagerInterface()
 $ dbus-send  --system --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.ListNames
 
 
+<e>
+from bluetooth usb dongle.
+
+org.bluez
+
+/
+  Interfaces
+    org.freedesktop.DBus.Introspectable
+    org.freedesktop.DBus.ObjectManager
+
+/org/bluez
+  Interfaces
+    org.bluez.AgentManager1
+    org.bluez.ProfileManager1
+    org.freedesktop.DBus.Introspectable
+
+/org/bluez/hci0
+  Interfaces
+    org.bluez.Adapter1
+    org.bluez.GattManager1
+    org.bluez.LEAdvertisingManager1
+    org.bluez.Media1
+    org.bluez.NetworkServer1
+    org.freedesktop.DBus.Introspectable
+    org.freedesktop.DBus.Properties
+
+
 ={============================================================================
 *kt_linux_core_702* os-dbus-lsdbus
 
@@ -90268,12 +90331,29 @@ method return sender=:1.247 -> dest=:1.249 reply_serial=2 object path
 
 
 ={============================================================================
+*kt_linux_core_704* os-dbus-tools
+
+https://www.freedesktop.org/wiki/Software/DbusTools/
+
+Graphical
+
+D-Feet
+
+Shows the object hierarchy exposed by running services, allowing you to call
+the methods you see. More information.
+
+Bustle
+
+Records D-Bus traffic (like dbus-monitor) and shows it as a sequence diagram,
+with built-in filtering and statistics. More information.
+
+
+={============================================================================
 *kt_linux_core_710* dbus: kdbus
 
 {kdbus}
 https://github.com/gregkh/presentation-kdbus
 https://github.com/gregkh/kdbus
-
 
 
 ={============================================================================
