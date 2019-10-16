@@ -175,6 +175,7 @@ int main(int argc, char **argv)
 
   */
 
+  // #define SERVICE_NAME            "org.example.QtDBus.PingExample"
   if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
     fprintf(stderr, "%s\n",
         qPrintable(QDBusConnection::sessionBus().lastError().message()));

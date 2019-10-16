@@ -89,9 +89,12 @@ void Ping::start(const QString &name)
   // open stdin for reading
   qstdin.open(stdin, QIODevice::ReadOnly);
 
-  //
-  iface = new QDBusInterface(SERVICE_NAME, "/", "org.example.QtDBus.ComplexPong.Pong",
-      QDBusConnection::sessionBus(), this);
+  // #define SERVICE_NAME            "org.example.QtDBus.PingExample"
+  iface = new QDBusInterface(SERVICE_NAME,                          // service
+                             "/",                                   // path
+                             "org.example.QtDBus.ComplexPong.Pong", // interface
+                             QDBusConnection::sessionBus(), // connection
+                             this);                         // parent
   if (!iface->isValid())
   {
     fprintf(stderr, "%s\n",
