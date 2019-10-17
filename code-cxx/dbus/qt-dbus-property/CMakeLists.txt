@@ -40,7 +40,7 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 # keitee@keitee-mint:~/Qt/5.12.3/gcc_64/lib/cmake$ more Qt5DBus/Qt5DBusConfig.cmake 
 # set(Qt5DBus_LIBRARIES Qt5::DBus)
 
-add_executable(sender sender.cpp)
+add_executable(sender sender.cpp sender_adaptor.cpp)
 target_link_libraries(sender Qt5::DBus Qt5::Core Qt5::Widgets)
 
 # add_executable(pong pong.cpp)

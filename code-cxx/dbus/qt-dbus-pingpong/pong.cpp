@@ -148,9 +148,18 @@ int main(int argc, char **argv)
   }
 
   /*
+
+  https://doc.qt.io/qt-5/qdbusconnection.html
+
+  As a convenience for the two most common connection types, the sessionBus()
+  and systemBus() functions return open connections to the session server
+  *daemon* and the system server daemon, respectively. Those connections are
+  opened when first used and are closed when the QCoreApplication destructor is
+  run.
+
   bool QDBusConnection::registerService(const QString &serviceName)
 
-  Attempts to register the serviceName on the D-Bus server and returns true if
+  Attempts to register the serviceName on *the D-Bus server* and returns true if
   the registration succeeded. The registration will fail if the name is already
   registered by another application.
 

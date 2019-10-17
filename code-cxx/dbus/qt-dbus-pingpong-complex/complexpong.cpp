@@ -76,8 +76,7 @@ void Pong::quit()
   // QTimer::singleShot(0, QCoreApplication::instance(),
   //     &QCoreApplication::quit);
 
-  QTimer::singleShot(0, this,
-      &Pong::really_quit);
+  QTimer::singleShot(0, this, &Pong::really_quit);
 }
 
 void Pong::really_quit()
@@ -114,30 +113,33 @@ int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  // use of adaptor
+  // see that use of adaptor
   QObject obj;
   Pong *pong = new Pong(&obj);
 
   // NOTE
   // this is signal-to-signal connection. when ping calls remote pong's quit(),
   // it will cause appliction exit which trigger QCoreApplication::aboutToQuit.
-  // this raises Pong::aboutToQuit.
-  //
-  // ping connect to Pong::aboutToQuit and its quit() runs.
-  //
-  // Adaptors are intended to be lightweight classes 
-  // `whose main purpose is to relay calls to and from the real object`, 
-  //
-  // that is Adaptor maps incoming messages for signal/method calls to Qt slot,
-  // signal, and property.
-  // 
-
-  // NOTE
-  // To see "this call effectively "emit aboutToQuit", disable it and use emit
-  // instead above. works well.
   //
   // QObject::connect(&app, &QCoreApplication::aboutToQuit,
   //     pong, &Pong::aboutToQuit);
+  //
+  // this is mapped and it leads to raises Pong::aboutToQuit.
+  //
+  // `ping` connect to this Pong::aboutToQuit and its quit() runs.
+  //
+  // Adaptors are intended to be lightweight classes
+  // `whose main purpose is to relay calls to and from the real object`,
+  //
+  // that is Adaptor maps incoming messages for signal/method calls to Qt slot,
+  // signal, and property.
+  //
+  // NOTE
+  // QObject::connect(&app, &QCoreApplication::aboutToQuit,
+  //     pong, &Pong::aboutToQuit);
+  //
+  // To see this connect() effectively do "emit aboutToQuit", disable it and use
+  // emit instead above. works well.
 
   // use of property "value"
   pong->setProperty("value", "initial value");

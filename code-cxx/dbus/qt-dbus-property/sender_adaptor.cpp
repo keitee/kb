@@ -24,8 +24,8 @@
 SenderAdaptor::SenderAdaptor(QObject *parent)
     : QDBusAbstractAdaptor(parent)
 {
-    // constructor
-    setAutoRelaySignals(true);
+  // // constructor
+  // setAutoRelaySignals(true);
 }
 
 SenderAdaptor::~SenderAdaptor()
@@ -35,19 +35,33 @@ SenderAdaptor::~SenderAdaptor()
 
 bool SenderAdaptor::powered() const
 {
-    // get the value of property Powered
-    return qvariant_cast< bool >(parent()->property("Powered"));
+  // // get the value of property Powered
+  // return qvariant_cast< bool >(parent()->property("Powered"));
+
+  qDebug() << "SenderAdaptor::powered(" << m_powered << ") called";
+  return m_powered;
 }
 
 void SenderAdaptor::setPowered(bool value)
 {
-    // set the value of property Powered
-    parent()->setProperty("Powered", QVariant::fromValue(value));
+  // // set the value of property Powered
+  // parent()->setProperty("Powered", QVariant::fromValue(value));
+
+  m_powered = value;
+  qDebug() << "SenderAdaptor::setPowered(" << m_powered << ") called";
 }
 
+// As with ping example, QString Pong::ping(const QString &arg), use this slot
+// to ends the sender
 void SenderAdaptor::ConnectProfile(const QString &UUID)
 {
-    // handle method call org.example.sender.ConnectProfile
-    QMetaObject::invokeMethod(parent(), "ConnectProfile", Q_ARG(QString, UUID));
+  // // handle method call org.example.sender.ConnectProfile
+  // QMetaObject::invokeMethod(parent(), "ConnectProfile", Q_ARG(QString,
+  // UUID));
+
+  QMetaObject::invokeMethod(QCoreApplication::instance(), "quit");
+  qDebug() << QString(
+                "the sender::ConnectProfile(\"%1\") got called and ask to quit")
+                .arg(UUID);
 }
 

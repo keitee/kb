@@ -55,6 +55,9 @@ public Q_SLOTS: // METHODS
     void ConnectProfile(const QString &UUID);
 Q_SIGNALS: // SIGNALS
     void action(const QString &nickname, const QString &text);
+
+  private:
+    bool m_powered{false};
 };
 
 #endif
