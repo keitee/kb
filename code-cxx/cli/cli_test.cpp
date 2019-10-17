@@ -43,6 +43,18 @@ static bool echoCommand(std::string const &command, void *data)
   return true;
 }
 
+TEST(Cli, unsupportedCommands)
+{
+  CommandHandler handler;
+
+  handler.addCommand("h", "help", helpCommand, &handler);
+
+  // run/process input command
+  auto ret = handler.handle("q");
+
+  EXPECT_THAT(ret, false);
+}
+
 TEST(Cli, showCommands)
 {
   CommandHandler handler;
@@ -51,9 +63,10 @@ TEST(Cli, showCommands)
   handler.addCommand("h", "help", helpCommand, &handler);
   handler.addCommand("q", "quit", quitCommand, &running);
 
-  handler.handle("h");
+  // run/process input command
+  auto ret = handler.handle("h");
 
-  EXPECT_THAT(true, true);
+  EXPECT_THAT(ret, true);
 }
 
 TEST(Cli, doCommand)
@@ -64,8 +77,9 @@ TEST(Cli, doCommand)
   handler.addCommand("h", "help", helpCommand, &handler);
   handler.addCommand("q", "quit", quitCommand, &running);
 
-  handler.handle("q");
+  auto ret = handler.handle("q");
 
+  EXPECT_THAT(ret, true);
   EXPECT_THAT(running, false);
 }
 

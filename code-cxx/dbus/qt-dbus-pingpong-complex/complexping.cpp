@@ -110,6 +110,7 @@ void Ping::start(const QString &name)
   //
   // class OrgExampleChatInterface: public QDBusAbstractInterface
 
+  // QObject::connect()
   connect(iface, SIGNAL(aboutToQuit()),
       QCoreApplication::instance(), SLOT(quit()));
 

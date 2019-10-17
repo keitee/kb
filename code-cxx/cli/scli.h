@@ -35,13 +35,20 @@ class CommandHandler
         {
           auto index = command.find_first_of(" ");
 
-          // has no space in the command
+          // if command is single word which has no space in it, index is npos
+
           if (std::string::npos != index)
           {
             return command.substr(0, index) == name_;
           }
           else
           {
+            // each HandlerContext has its name in `name_` and compare it to
+            // input command in range of [0, size].
+            //
+            // where size is less<>(name_.size(), command.size()) and this
+            // supports that "h" matches to "help".
+
             return (0 == command.compare(0,
                   (name_.size() > command.size() ? name_.size() : command.size()),
                    name_));

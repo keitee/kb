@@ -61,7 +61,21 @@ void SenderAdaptor::ConnectProfile(const QString &UUID)
 
   QMetaObject::invokeMethod(QCoreApplication::instance(), "quit");
   qDebug() << QString(
-                "the sender::ConnectProfile(\"%1\") got called and ask to quit")
+                "sender::ConnectProfile(\"%1\") got called and ask to quit")
                 .arg(UUID);
 }
 
+void SenderAdaptor::SendCommand(const QString &command)
+{
+  qDebug() << QString(
+                "sender::SendCommand(\"%1\") got called")
+                .arg(command);
+
+  QTimer::singleShot(2000, this, SLOT(onTimerExpired()));
+}
+
+void SenderAdaptor::onTimerExpired()
+{
+  qDebug() << "timer expired and emit signal";
+  emit action("from sender", "do you hear me?");
+}

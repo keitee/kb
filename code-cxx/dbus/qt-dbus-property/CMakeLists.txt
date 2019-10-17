@@ -43,5 +43,5 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 add_executable(sender sender.cpp sender_adaptor.cpp)
 target_link_libraries(sender Qt5::DBus Qt5::Core Qt5::Widgets)
 
-# add_executable(pong pong.cpp)
-# target_link_libraries(pong Qt5::DBus Qt5::Core Qt5::Widgets)
+add_executable(client client.cpp client_object.cpp scli.cpp)
+target_link_libraries(client Qt5::DBus Qt5::Core Qt5::Widgets)

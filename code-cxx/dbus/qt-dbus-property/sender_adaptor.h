@@ -53,6 +53,9 @@ public: // PROPERTIES
 
 public Q_SLOTS: // METHODS
     void ConnectProfile(const QString &UUID);
+    void SendCommand(const QString &command);
+    void onTimerExpired();
+
 Q_SIGNALS: // SIGNALS
     void action(const QString &nickname, const QString &text);
 
