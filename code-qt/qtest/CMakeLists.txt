@@ -101,3 +101,7 @@ add_executable(${PROJECT_NAME} "qtest.cpp" "qclass.cpp")
 # and links to the qtmain.lib library on Windows.
 
 target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test)
+
+add_executable(qstandalone "qstandalone.cpp" "qclass.cpp")
+target_link_libraries(qstandalone Qt5::Core Qt5::Test)
+

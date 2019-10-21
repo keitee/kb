@@ -158,86 +158,222 @@ class TimerQObject : public QObject
 };
 
 
-#if 0
 
 // ={=========================================================================
 
-class ThreadWorker : public QObject
+class Thread : public QObject
 {
   Q_OBJECT
 
-  public:
-    ThreadWorker(std::mutex &m, std::condition_variable &cv)
-      : m_(m), cv_(cv)
-    {}
+public:
+  Thread(std::mutex &m, std::condition_variable &cv) : m_(m), cv_(cv) {}
 
-  public slots:
+public slots:
 
-    void progress()
-    {
-      std::unique_lock<std::mutex> lock(m_);
+  void progress()
+  {
+    std::unique_lock<std::mutex> lock(m_);
 
-      qCritical() << "Worker::progress: starts";
+    qCritical() << "Worker::progress: starts";
 
-      // here is the expensive or blocking operations
-      QThread::sleep(5);
+    // here is the expensive or blocking operations
+    QThread::sleep(5);
 
-      qCritical() << "Worker::progress: finishes";
+    qCritical() << "Worker::progress: finishes";
 
-      cv_.notify_one();
-    }
+    cv_.notify_one();
+  }
 
-  private:
-    std::mutex &m_;
-    std::condition_variable &cv_;
+private:
+  std::mutex &m_;
+  std::condition_variable &cv_;
 };
 
-
-class ThreadWorkerUseCounter : public QObject
+class ThreadStandAlone : public QObject
 {
   Q_OBJECT
 
-  public:
-    ThreadWorkerUseCounter(Counter &counter, std::mutex &m, std::condition_variable &cv)
+public:
+  ThreadStandAlone() {}
+
+public slots:
+
+  void progress()
+  {
+    qCritical() << "Worker::progress: starts";
+
+    // here is the expensive or blocking operations
+    QThread::sleep(5);
+
+    qCritical() << "Worker::progress: finishes";
+
+    QMetaObject::invokeMethod(QCoreApplication::instance(), "quit");
+  }
+};
+
+class ThreadDoNotWork : public QObject
+{
+  Q_OBJECT
+
+public:
+  ThreadDoNotWork(Counter &counter, std::mutex &m, std::condition_variable &cv)
       : sender_counter_(counter), m_(m), cv_(cv)
-    {
-      // a's valueChanged -> b's doSomethingLong
-      QObject::connect(&counter, &Counter::valueChanged,
-          &counter_, &Counter::doSomethingLong, Qt::QueuedConnection);
+  {
+    QObject::connect(&counter, &Counter::valueChanged, &counter,
+                     &Counter::doSomethingLong);
+  }
 
-      // qCritical() << "emit valueChanged";
-      // counter.valueChanged(12);
-    }
+public slots:
 
-  public slots:
+  void progress()
+  {
+    std::unique_lock<std::mutex> lock(m_);
 
-    void progress()
-    {
-      std::unique_lock<std::mutex> lock(m_);
+    qCritical() << "emit valueChanged";
+    sender_counter_.valueChanged(12);
 
-      qCritical() << "emit valueChanged";
-      sender_counter_.valueChanged(12);
+    qCritical() << "Worker::progress: starts";
 
-      qCritical() << "Worker::progress: starts";
+    // waits for doSomethingLong() which do "value =5"
+    //
+    // while (counter_.value() != 5)
+    // {
+    //   QThread::sleep(1);
+    //   qCritical() << "checking values";
+    // }
 
-      // waits for signal, doSomethingLong(), runs
-      while (counter_.value() != 5)
-      {
-        QThread::sleep(1);
-        qCritical() << "checking values";
-      }
+    if (sender_counter_.value() == 0)
+      qCritical() << "counter value is 0";
 
-      qCritical() << "Worker::progress: finishes";
+    qCritical() << "counter value is " << sender_counter_.value();
 
-      cv_.notify_one();
-    }
+    qCritical() << "Worker::progress: finishes";
 
-  private:
-    Counter& sender_counter_;
-    Counter counter_;
-    std::mutex &m_;
-    std::condition_variable &cv_;
+    cv_.notify_one();
+  }
+
+private:
+  Counter &sender_counter_;
+  std::mutex &m_;
+  std::condition_variable &cv_;
 };
+
+class ThreadStandAloneX : public QObject
+{
+  Q_OBJECT
+
+public:
+  ThreadStandAloneX(Counter &counter) : sender_counter_(counter)
+  {
+    QObject::connect(&counter, &Counter::valueChanged, &counter,
+                     &Counter::doSomethingLong);
+  }
+
+public slots:
+
+  void progress()
+  {
+    qCritical() << "emit valueChanged";
+    sender_counter_.valueChanged(12);
+
+    qCritical() << "Worker::progress: starts";
+
+    // here is the expensive or blocking operations
+    QThread::sleep(5);
+
+    qCritical() << "counter value is " << sender_counter_.value();
+
+    qCritical() << "Worker::progress: finishes";
+
+    QMetaObject::invokeMethod(QCoreApplication::instance(), "quit");
+  }
+
+private:
+  Counter &sender_counter_;
+};
+
+class ThreadWork : public QObject
+{
+  Q_OBJECT
+
+public:
+  ThreadWork(std::mutex &m, std::condition_variable &cv) : m_(m), cv_(cv)
+  {
+    QObject::connect(&counter_, &Counter::valueChanged, &counter_,
+                     &Counter::doSomethingLong);
+  }
+
+public slots:
+
+  void progress()
+  {
+    std::unique_lock<std::mutex> lock(m_);
+
+    qCritical() << "emit valueChanged";
+    counter_.valueChanged(12);
+
+    qCritical() << "Worker::progress: starts";
+
+    // waits for doSomethingLong() which do "value =5"
+    //
+    while (counter_.value() != 5)
+    {
+      QThread::sleep(1);
+      qCritical() << "counter value is " << counter_.value();
+    }
+
+    if (counter_.value() == 5)
+      qCritical() << "counter value is 5";
+
+    qCritical() << "counter value is " << counter_.value();
+
+    qCritical() << "Worker::progress: finishes";
+
+    cv_.notify_one();
+  }
+
+private:
+  Counter counter_;
+  std::mutex &m_;
+  std::condition_variable &cv_;
+};
+
+class ThreadStandAloneY : public QObject
+{
+  Q_OBJECT
+
+public:
+  ThreadStandAloneY()
+  {
+    QObject::connect(&counter_, &Counter::valueChanged, &counter_,
+                     &Counter::doSomethingLong);
+  }
+
+public slots:
+
+  void progress()
+  {
+    qCritical() << "emit valueChanged";
+    counter_.valueChanged(12);
+
+    qCritical() << "Worker::progress: starts";
+
+    // here is the expensive or blocking operations
+    QThread::sleep(5);
+
+    qCritical() << "counter value is " << counter_.value();
+
+    qCritical() << "Worker::progress: finishes";
+
+    QMetaObject::invokeMethod(QCoreApplication::instance(), "quit");
+  }
+
+private:
+  Counter counter_;
+};
+
+#if 0
+
 
 
 // ={=========================================================================

@@ -1162,6 +1162,160 @@ TEST(QtTimer, TimerFromQObject)
   EXPECT_EQ(o.getCount(), 5);
 }
 
+// ={=========================================================================
+// qt-thread
+/*
+A QThread object manages one thread of control within the program. QThreads
+begin executing in run(). By default, run() starts the `event loop` by calling
+exec() and runs a Qt event loop inside the thread.
+
+Static Public Members
+
+void	msleep(unsigned long msecs)
+void	sleep(unsigned long secs)
+void	usleep(unsigned long usecs)
+
+https://doc.qt.io/qt-5/qobject.html#moveToThread
+
+void QObject::moveToThread(QThread *targetThread)
+
+Changes the `thread affinity` for this object and its children. The object
+cannot be moved if it has a parent. Event processing will continue in the
+targetThread.
+
+`To move an object to the main thread,` use QApplication::instance() to retrieve
+a pointer to the current application, and then use QApplication::thread() to
+retrieve the thread in which the application lives.
+
+For example:
+
+myObject->moveToThread(QApplication::instance()->thread());
+
+If targetThread is nullptr, *all event processing for this object* and its
+children stops, as they are no longer `associated with any thread.`
+
+Note that all active timers for the object will be reset. The timers are first
+stopped in the current thread and restarted (with the same interval) in the
+targetThread. As a result, constantly moving an object between threads can
+postpone timer events indefinitely.
+
+A QEvent::ThreadChange event is sent to this object just before the thread
+affinity is changed. You can handle this event to perform any special
+processing. Note that any new events that are posted to this object will be
+handled in the targetThread, provided it is non-null: when it is nullptr, no
+event processing for this object or its children can happen, as they are no
+longer associated with any thread.
+
+Warning: This function is not thread-safe; the current thread must be same as
+the current thread affinity. In other words, this function can only "push" an
+object from the current thread to another thread, it cannot "pull" an object
+from any arbitrary thread to the current thread. There is one exception to this
+rule however: objects with no thread affinity can be "pulled" to the current
+thread.
+
+See also thread().
+
+There is a problem to test Q slot/signal mechanism in TEST() since
+
+o without cv.wait() TEST ends right away so ends QThread as well.
+o with cv.wait, all tests runs but thread affinity do not work.
+o TEST(QtThread, ThreadAffinity_3) works as expected when run as a standalone.
+  see standalone code.
+
+Therefore, may need to run Qt event loop per test case?
+
+
+TEST(QtThread, ThreadAffinity_1)
+{
+  // https://wiki.qt.io/QThreads_general_usage
+
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  QThread *thread = new QThread;
+  Thread *wo      = new Thread(m, cv);
+  wo->moveToThread(thread);
+
+  QObject::connect(thread, &QThread::started, wo, &Thread::progress);
+
+  thread->start();
+
+  cv.wait(lock);
+}
+
+TEST(QtThread, ThreadAffinity_2)
+{
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+  Counter a;
+
+  QThread *thread = new QThread;
+  ThreadDoNotWork *wo = new ThreadDoNotWork(a, m, cv);
+  wo->moveToThread(thread);
+
+  // start thread
+  QObject::connect(thread, &QThread::started, wo, &ThreadDoNotWork::progress);
+
+  thread->start();
+
+  cv.wait(lock);
+}
+
+TEST(QtThread, ThreadAffinity_3)
+{
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  QThread *thread = new QThread;
+  ThreadWork *wo  = new ThreadWork(m, cv);
+  wo->moveToThread(thread);
+
+  // start thread
+  QObject::connect(thread, &QThread::started, wo, &ThreadWork::progress);
+
+  thread->start();
+
+  cv.wait(lock);
+}
+
+TEST(QtThread, ThreadAffinity_4)
+{
+  // QCoreApplication app(argc, argv);
+
+  // TEST(QtThread, ThreadAffinity_3)
+  {
+    QThread *thread       = new QThread;
+    ThreadStandAloneY *wo = new ThreadStandAloneY();
+    wo->moveToThread(thread);
+
+    // start thread
+    QObject::connect(thread, &QThread::started, wo,
+                     &ThreadStandAloneY::progress);
+
+    thread->start();
+  }
+
+  // return app.exec();
+}
+
+*/
+
+// TEST(QtThread, useComposite)
+// {
+//   // so, the belows do not runs as QApplication exited already from the
+//   above.
+//   // https://doc.qt.io/qt-5/qthread.html
+//     using namespace qt_thread_2;
+
+//     Controller co;
+
+//     qCritical() << "before sending operate..";
+//     emit co.operate(QString("send operate"));
+//     qCritical() << "after sending operate..";
+// }
 
 #if 0
 
@@ -1290,75 +1444,6 @@ TEST(QtEvnet, useCustomEvent)
 }
 
 
-// ={=========================================================================
-// qt-thread
-/*
-
-A QThread object manages one thread of control within the program. QThreads
-begin executing in run(). By default, run() starts the `event loop` by calling
-exec() and runs a Qt event loop inside the thread.
-
-Static Public Members
-
-void	msleep(unsigned long msecs)
-void	sleep(unsigned long secs)
-void	usleep(unsigned long usecs)
-
-*/
-
-TEST(QtThread, useQThreadDirectly)
-{
-  // https://wiki.qt.io/QThreads_general_usage
-
-  std::mutex m;
-  std::condition_variable cv;
-  std::unique_lock<std::mutex> lock(m);
-
-  QThread* thread = new QThread;
-  ThreadWorker* wo = new ThreadWorker(m, cv);
-  wo->moveToThread(thread);
-
-  // QObject::connect(worker, SIGNAL (error(QString)), this, SLOT (errorString(QString)));
-
-  // *qt-connect-runtime-check*
-  // see typo but no compile error. see error only when runs
-  // QObject::connect: No such slot qt_thread_1::Worker::process()
-  // QObject::connect(thread, SIGNAL (started()), worker, SLOT (process()));
-
-  QObject::connect(thread, &QThread::started, wo, &ThreadWorker::progress);
-
-  // again, no compile error but when thread finishes and emit signal, nothing
-  // happens and blocks forever. no quit() gets run.
-  //
-  // QObject::connect(worker, SIGNAL (finished()), thread, SLOT (quit()));
-  //
-  // need to make a link to QApplication and also need to run QApplication and
-  // exec in the main.
-
-  // does end main() but do not run a test after this
-  // QObject::connect(worker, SIGNAL (finished()), QApplication::instance(), SLOT (quit()));
-
-  // both do not end main()
-  // QObject::connect(worker, SIGNAL (finished()), worker, SLOT (deleteLater()));
-  // QObject::connect(thread, SIGNAL (finished()), thread, SLOT (deleteLater()));
-
-  thread->start();
-
-  cv.wait(lock);
-}
-
-TEST(QtThread, useComposite)
-{
-  // so, the belows do not runs as QApplication exited already from the above.
-  // https://doc.qt.io/qt-5/qthread.html
-    using namespace qt_thread_2;
-
-    Controller co;
-
-    qCritical() << "before sending operate..";
-    emit co.operate(QString("send operate"));
-    qCritical() << "after sending operate..";
-}
 #endif
 
 // ={=========================================================================

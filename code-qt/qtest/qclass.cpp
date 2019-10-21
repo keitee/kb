@@ -12,6 +12,7 @@ void Counter::setValue(int value)
 
 void Counter::doSomethingLong()
 {
+  qCritical() << "Counter::doSomethingLong() enters";
   // here is the expensive or blocking operations
   // void QThread::sleep(unsigned long secs);
   QThread::sleep(5);

@@ -8,6 +8,9 @@ class ReadLine : public QObject
   public:
     ReadLine(QObject *parent = nullptr);
     ~ReadLine();
+
+  private:
+    QPointer<ReadLinePrivate> m_private;
 };
 
 #endif /* ifndef READLINE_H
