@@ -72,6 +72,8 @@ int main(int argc, char **argv)
 
   // TEST(QtThread, ThreadAffinity_3)
   {
+    qDebug() << "main: " << app.thread();
+
     QThread *thread       = new QThread;
     ThreadStandAloneY *wo = new ThreadStandAloneY();
     wo->moveToThread(thread);

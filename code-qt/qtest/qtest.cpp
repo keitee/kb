@@ -1303,6 +1303,26 @@ TEST(QtThread, ThreadAffinity_4)
 
 */
 
+
+TEST(QtThread, ThreadAffinity_1)
+{
+  // https://wiki.qt.io/QThreads_general_usage
+
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  QThread *thread = new QThread;
+  Thread *wo      = new Thread(m, cv);
+  wo->moveToThread(thread);
+
+  QObject::connect(thread, &QThread::started, wo, &Thread::progress);
+
+  thread->start();
+
+  cv.wait(lock);
+}
+
 // TEST(QtThread, useComposite)
 // {
 //   // so, the belows do not runs as QApplication exited already from the

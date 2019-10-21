@@ -353,6 +353,8 @@ public slots:
 
   void progress()
   {
+    qDebug() << "thread: " << thread();
+
     qCritical() << "emit valueChanged";
     counter_.valueChanged(12);
 
