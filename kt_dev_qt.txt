@@ -258,6 +258,38 @@ constructor.
 
 Qt/5.12.3/Src/qtbase/src/corelib/kernel/qeventloop.cpp
 
+// Src/qtbase/src/corelib/thread/qthread.cpp
+
+/*!
+    Enters the event loop and waits until exit() is called, returning the value
+    that was passed to exit(). The value returned is 0 if exit() is called via
+    quit().
+
+    This function is meant to be called from within run(). It is necessary to
+    call this function to start event handling.
+
+    \sa quit(), exit()
+*/
+int QThread::exec()
+{
+  Q_D(QThread);
+  QMutexLocker locker(&d->mutex);
+  d->data->quitNow = false;
+  if (d->exited) {
+    d->exited = false;
+    return d->returnCode;
+  }
+  locker.unlock();
+
+  QEventLoop eventLoop;
+  int returnCode = eventLoop.exec();
+
+  locker.relock();
+  d->exited = false;
+  d->returnCode = -1;
+  return returnCode;
+}
+
 
 https://doc.qt.io/archives/qq/qq11-events.html
 
@@ -1285,6 +1317,9 @@ receive queued signals or posted events.
 By default, a QObject lives in the thread in which it is created. An object's
 thread affinity can be queried using thread() and changed using
 moveToThread().
+
+https://wiki.qt.io/Threads_Events_QObjects
+
 
 <ex>
 https://stackoverflow.com/questions/28055749/event-loops-and-signal-slot-processing-when-using-multithreading-in-qt
