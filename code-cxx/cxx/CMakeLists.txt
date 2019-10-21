@@ -67,6 +67,49 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 add_compile_options("-g;-D_GLIBCXX_DEBUG")
 
 
+# cmake help
+#
+# cmake --help-command target_compile_options
+#
+# target_compile_options
+# ----------------------
+# 
+# Add compile options to a target.
+# 
+# ::
+# 
+#  target_compile_options(<target> [BEFORE]
+#    <INTERFACE|PUBLIC|PRIVATE> [items1...]
+#    [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])
+# 
+# Specify compile options to use when compiling a given target.  The
+# named ``<target>`` must have been created by a command such as
+# ``add_executable()`` or ``add_library()`` and must not be an
+# :ref:`IMPORTED Target <Imported Targets>`.  If ``BEFORE`` is specified,
+# the content will be prepended to the property instead of being appended.
+# 
+# This command can be used to add any options, but
+# alternative commands exist to add preprocessor definitions
+# (``target_compile_definitions()`` and ``add_definitions()``) or
+# include directories (``target_include_directories()`` and
+# ``include_directories()``).  See documentation of the
+# ``directory`` and
+# ``target`` ``COMPILE_OPTIONS`` properties.
+# 
+# The ``INTERFACE``, ``PUBLIC`` and ``PRIVATE`` keywords are required to
+# specify the scope of the following arguments.  ``PRIVATE`` and ``PUBLIC``
+# items will populate the ``COMPILE_OPTIONS`` property of
+# ``<target>``.  ``PUBLIC`` and ``INTERFACE`` items will populate the
+# ``INTERFACE_COMPILE_OPTIONS`` property of ``<target>``.  The
+# following arguments specify compile options.  Repeated calls for the same
+# ``<target>`` append items in the order called.
+# 
+# Arguments to ``target_compile_options`` may use "generator expressions"
+# with the syntax ``$<...>``. See the ``cmake-generator-expressions(7)``
+# manual for available expressions.  See the ``cmake-buildsystem(7)``
+# manual for more on defining buildsystem properties.
+
+
 # https://stackoverflow.com/questions/6646405/how-do-you-add-boost-libraries-in-cmakelists-txt
 #
 # For this warning:
@@ -139,6 +182,14 @@ target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
 # cxx_case.cpp
 add_executable(${PROJECT_NAME}_case "cxx_case.cpp")
 target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
+
+# # cxx_xx.cpp
+# add_executable(${PROJECT_NAME}_xx "cxx_xx.cpp")
+# 
+# # this works but neeed to build gmock 32 bit as well. so drop it to use.
+# # target_compile_options(${PROJECT_NAME}_xx PUBLIC -m32)
+# 
+# target_link_libraries(${PROJECT_NAME}_xx gmock_main Boost::thread)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

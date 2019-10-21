@@ -17,43 +17,84 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
+
 // ={=========================================================================
 // cxx-size cxx-sizeof
 
-// x86_64/VM
-// size of (int) is                 : 4
-// size of (unsigned int) is        : 4
-// size of (long) is                : 8
-// size of (unsigned long) is       : 8
-// size of (long int) is            : 8
-// size of (unsigned int) is        : 8
-// size of (long long) is           : 8
-// size of (unsigned long long) is  : 8
-// size of (* int) is               : 8
-// size of (* unsigned int) is      : 8
 
-TEST(Size, SizeOfTypes)
+// LP64
+// __x86_64__
+// size of (int) is                : 4
+// size of (unsigned int) is       : 4
+// size of (long) is               : 8
+// size of (unsigned long) is      : 8
+// size of (long int) is           : 8
+// size of (unsigned long int) is  : 8
+// size of (long long) is          : 8
+// size of (unsigned long long) is : 8
+// size of (* int) is              : 8
+// size of (* unsigned int) is     : 8
+// size of (size_t) is             : 8
+// size of (uint32_t) is           : 4
+// size of (uint64_t) is           : 8
+//
+//
+// LP32
+// __x86_32__
+// size of (int) is                : 4
+// size of (unsigned int) is       : 4
+// size of (long) is               : 4
+// size of (unsigned long) is      : 4
+// size of (long int) is           : 4
+// size of (unsigned long int) is  : 4
+// size of (long long) is          : 8
+// size of (unsigned long long) is : 8
+// size of (* int) is              : 4
+// size of (* unsigned int) is     : 4
+// size of (size_t) is             : 4
+// size of (uint32_t) is           : 4
+// size of (uint64_t) is           : 8
+
+
+TEST(CxxType, showSizeOfTypes)
 {
-  cout << "size of (int) is                 : " << sizeof(int) << endl;
-  cout << "size of (unsigned int) is        : " << sizeof(unsigned int) << endl;
+#if defined(__LP64__) || defined(_LP64)
+  std::cout << "LP64" << std::endl;
+#else
+  std::cout << "LP32" << std::endl;
+#endif
 
-  cout << "size of (long) is                : " << sizeof(long) << endl;
-  cout << "size of (unsigned long) is       : " << sizeof(unsigned long)
+#if __GNUC__ && __x86_64__
+  std::cout << "__x86_64__ " << std::endl;
+#else
+  std::cout << "__x86_32__ " << std::endl;
+#endif
+
+  std::cout << "size of (int) is                : " << sizeof(int) 
+    << std::endl;
+  std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int) 
+    << std::endl;
+
+  std::cout << "size of (long) is               : " << sizeof(long) << std::endl;
+  std::cout << "size of (unsigned long) is      : " << sizeof(unsigned long)
+       << std::endl;
+
+  std::cout << "size of (long int) is           : " << sizeof(long int) << endl;
+  std::cout << "size of (unsigned long int) is  : " << sizeof(unsigned long int)
        << endl;
 
-  cout << "size of (long int) is            : " << sizeof(long int) << endl;
-  cout << "size of (unsigned long int) is   : " << sizeof(unsigned long int)
-       << endl;
-
-  cout << "size of (long long) is           : " << sizeof(long long) << endl;
-  cout << "size of (unsigned long long) is  : " << sizeof(unsigned long long)
+  std::cout << "size of (long long) is          : " << sizeof(long long) << endl; cout << "size of (unsigned long long) is  : " << sizeof(unsigned long long)
        << endl;
 
   int *pint;
   unsigned int *puint;
 
-  cout << "size of (* int) is               : " << sizeof pint << endl;
-  cout << "size of (* unsigned int) is      : " << sizeof puint << endl;
+  std::cout << "size of (* int) is              : " << sizeof pint << endl;
+  std::cout << "size of (* unsigned int) is     : " << sizeof puint << endl;
+
+  std::cout << "size of (size_t) is             : " << sizeof(size_t) << endl;
+  std::cout << "size of (uint32_t) is           : " << sizeof(uint32_t) << endl;
+  std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
 }
 
 namespace use_sizeof {
