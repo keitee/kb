@@ -157,11 +157,54 @@ bool ReadLinePrivate::addCommand(const QString &name, const QStringList &args,
   m_commands.insert(name, std::move(command));
 }
 
+void ReadLinePrivate::commandLineHandler(char *line)
+{
+  // TODO: necessary since this is member function?
+  ReadLinePrivate *self = instance();
+
+  if (line == nullptr)
+    QCoreApplication::quit();
+  else
+    self->commandLineHandler_(QString(line));
+}
+
 void ReadLinePrivate : start(const QString &promt)
 {
+  // https://doc.qt.io/qt-5/qtglobal.html#Q_ASSERT
+  // It does nothing if QT_NO_DEBUG was defined during compilation.
+
   Q_ASSERT(m_libHandle != nullptr);
   if (!m_libHandle)
     return;
+
+  Q_ASSERT(m_stdinListener != nullptr);
+  if (!m_stdinListener)
+    return;
+
+  // typedef void rl_vcpfunc_t (char *);
+  //
+  // Function:
+  // void rl_callback_handler_install (const char *prompt, rl_vcpfunc_t
+  // *lhandler)
+  //
+  // Set up the terminal for readline I/O and display the initial expanded value
+  // of prompt.
+  //
+  // Save the value of lhandler to use as a handler function to call when a
+  // complete line of input has been entered. The handler function receives the
+  // text of the line as an argument.
+  //
+  // As with readline(), the handler function should free the line when it it
+  // finished with it.
+
+  m_rl_callback_handler_install(prompt.toLatin1().constData(),
+                                commandLineHandler);
+
+  m_stdinListener->setEnabled(true);
+
+  qInstallMessageHandler(qtMessageHandler);
+
+  m_running = true;
 }
 
 /* ={==========================================================================
