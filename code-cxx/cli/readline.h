@@ -27,6 +27,10 @@ class ReadLinePrivate : public QObject
 
 public:
   static ReadLinePrivate *instance();
+  ~ReadLinePrivate();
+  bool addCommand(const QString &name, const QStringList &args,
+                  const QString &description, const QObject *receiver,
+                  QtPrivate::QSlotObjectBase *slotObj);
 
 private:
   ReadLinePrivate(QObject *parent = nullptr);
@@ -45,6 +49,19 @@ private:
   rl_callback_read_char_t m_rl_callback_read_char;
   rl_callback_handler_remove_t m_rl_callback_handler_remove;
   add_history_t m_add_history;
+
+  QMutex m_commandsLock;
+
+  struct Command
+  {
+    QStringList arguments;
+    QString description;
+    bool hasValidReceiver;
+    QPointer<const QObject> receiver;
+    QtPrivate::QSlotObjectBase *slotObj;
+  };
+
+  QMap<QString, Command> m_commands;
 };
 
 class ReadLine : public QObject

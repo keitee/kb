@@ -65,7 +65,6 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
   /*
   assume that for `rl_on_new_line` symbol, there is symbol_t typedef and
   m_symbol member variable to set.
-
   */
 
 #define GET_RL_FUNC(f)                                                         \
@@ -80,8 +79,98 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
       return;                                                                  \
     }                                                                          \
   } while (0)
+
+  GET_RL_FUNC(rl_on_new_line);
+  GET_RL_FUNC(rl_forced_update_display);
+  GET_RL_FUNC(rl_completion_matches);
+  GET_RL_FUNC(rl_bind_key);
+  GET_RL_FUNC(rl_callback_handler_install);
+  GET_RL_FUNC(rl_callback_read_char);
+  GET_RL_FUNC(rl_callback_handler_remove);
+  GET_RL_FUNC(add_history);
+
+#undef GET_RL_FUNC
+
+  // Variable: rl_completion_func_t * rl_attempted_completion_function
+  //
+  // A pointer to an alternative function to create matches. The function is
+  // called with text, start, and end. start and end are indices in
+  // rl_line_buffer defining the boundaries of text, which is a character
+  // string. If this function exists and returns NULL, or if this variable is
+  // set to NULL, then rl_complete() will call the value of
+  // rl_completion_entry_function to generate matches, otherwise the array of
+  // strings returned will be used. If this function sets the
+  // rl_attempted_completion_over variable to a non-zero value, Readline will
+  // not perform its default completion even if this function returns no
+  // matches.
+
+  {
+    // replace the completion function with ours
+    void **rl_attempted_completion_function = reinterpret_cast<void **>(
+      dlsym(m_libHandle, "rl_attempted_completion_function"));
+    if (rl_attempted_completion_function)
+      *rl_attempted_completion_function =
+        reinterpret_cast<void *>(completionCallback_);
+
+    // set the tab key to be the completion trigger
+    rl_command_func_t *rl_complete =
+      reinterpret_cast<rl_command_func_t *>(dlsym(m_libHandle, "rl_complete"));
+    if (rl_complete)
+      m_rl_bind_key('\t', rl_complete);
+  }
+
+  // install commands
+  addCommand("quit", {}, "quit program", this,
+             slotToObject(&ReadLinePrivate::onQuitCommand));
+
+  addCommand("exit", {}, "Quit program (same as quit)", this,
+             slotToObject(&ReadLinePrivate::onQuitCommand));
+
+  addCommand("help", {}, "Display this text", this,
+             slotToObject(&ReadLinePrivate::onHelpCommand));
 }
 
+// Internal method intended to only be called from ReadLine, it adds a new
+// command and maps it to the \a slotObj for the given \a receiver.
+
+bool ReadLinePrivate::addCommand(const QString &name, const QStringList &args,
+                                 const QString &desc, const QObject *receiver,
+                                 QtPrivate::QSlotObjectBase *slotObj)
+{
+  QMutexLocker lock(&m_commandsLock);
+
+  if (m_commands.contains(name))
+  {
+    qWarning() << "already have command" << name;
+    return false;
+  }
+
+  int helpWidth = name.length();
+  for (const QString &arg : args)
+    helpWidth += 1 + arg.length();
+
+  // calculate the width of the command plus arg strings for the help text
+  if (helpWidth >= m_maxCommandHelpWidth)
+    m_maxCommandHelpWidth = qMin<int>(helpWidth, 50);
+
+  Command command = {args, desc, (receiver != nullptr), receiver, slotObj};
+  m_commands.insert(name, std::move(command));
+}
+
+void ReadLinePrivate : start(const QString &promt)
+{
+  Q_ASSERT(m_libHandle != nullptr);
+  if (!m_libHandle)
+    return;
+}
+
+/* ={==========================================================================
+ @brief :
+  ...
+
+ @note  :
+
+*/
 ReadLine::ReadLine(QObject *parent)
     : QObject(parent)
     , m_private(ReadLinePrivate::instance())
