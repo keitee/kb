@@ -39,6 +39,8 @@ class SenderAdaptor: public QDBusAbstractAdaptor
 "      <arg direction=\"out\" type=\"s\" name=\"nickname\"/>\n"
 "      <arg direction=\"out\" type=\"s\" name=\"text\"/>\n"
 "    </signal>\n"
+"    <signal name=\"aboutToQuit\">\n"
+"    </signal>\n"
 "    <property access=\"readwrite\" type=\"b\" name=\"Powered\"/>\n"
 "  </interface>\n"
         "")
@@ -58,6 +60,8 @@ public Q_SLOTS: // METHODS
 
 Q_SIGNALS: // SIGNALS
     void action(const QString &nickname, const QString &text);
+    // as with complexping example, it is to signal client to quit
+    void aboutToQuit();
 
   private:
     bool m_powered{false};

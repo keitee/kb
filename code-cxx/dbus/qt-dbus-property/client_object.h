@@ -4,8 +4,8 @@
 class Client : public QObject
 {
   Q_OBJECT
-  // public:
-  //   Client();
+  public:
+    Client();
 
   public slots:
     void onSignalReceived(const QString &name, const QString &text);

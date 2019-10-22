@@ -60,6 +60,10 @@ int main(int argc, char **argv)
   // connect to the remote signal
   Client client;
 
+
+#if 0
+  // this works as well:
+  //
   // QDBusInterface::QDBusInterface(
   //  const QString &service, 
   //  const QString &path,
@@ -83,6 +87,11 @@ int main(int argc, char **argv)
   sender->connect(sender, SIGNAL(action(QString, QString)),
       &client, SLOT(onSignalReceived(QString, QString)));
 
+  // connect sender signal to quit
+  sender->connect(sender, SIGNAL(aboutToQuit()),
+      QCoreApplication::instance(), SLOT(quit()));
+#endif
+
   qDebug() << "org.example.client started";
 
   // this do not work as well since app.exec() didn't run.
@@ -92,6 +101,8 @@ int main(int argc, char **argv)
 
   // never get's run since app.exec() loops.
   // run_cli();
+
+  qDebug() << "org.example.client ended";
 
   return 0;
 }

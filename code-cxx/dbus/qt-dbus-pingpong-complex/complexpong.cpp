@@ -73,6 +73,10 @@ void Pong::setValue(QString const &newValue)
 
 void Pong::quit()
 {
+  // As a special case, a QTimer with a timeout of 0 will time out as soon as
+  // all the events in the window system's event queue have been processed. This
+  // can be used to do heavy work while providing a snappy user interface:
+
   // QTimer::singleShot(0, QCoreApplication::instance(),
   //     &QCoreApplication::quit);
 

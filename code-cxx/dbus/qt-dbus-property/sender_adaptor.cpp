@@ -55,6 +55,8 @@ void SenderAdaptor::setPowered(bool value)
 // to ends the sender
 void SenderAdaptor::ConnectProfile(const QString &UUID)
 {
+  emit aboutToQuit();
+
   // // handle method call org.example.sender.ConnectProfile
   // QMetaObject::invokeMethod(parent(), "ConnectProfile", Q_ARG(QString,
   // UUID));

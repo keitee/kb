@@ -59,5 +59,7 @@ int main(int argc, char **argv)
 
   app.exec();
 
+  qDebug() << "org.example.server ended";
+
   return 0;
 }
