@@ -17,10 +17,8 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
-
 // ={=========================================================================
 // cxx-size cxx-sizeof
-
 
 // LP64
 // __x86_64__
@@ -55,7 +53,6 @@ using namespace testing;
 // size of (uint32_t) is           : 4
 // size of (uint64_t) is           : 8
 
-
 TEST(CxxType, showSizeOfTypes)
 {
 #if defined(__LP64__) || defined(_LP64)
@@ -70,20 +67,22 @@ TEST(CxxType, showSizeOfTypes)
   std::cout << "__x86_32__ " << std::endl;
 #endif
 
-  std::cout << "size of (int) is                : " << sizeof(int) 
-    << std::endl;
-  std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int) 
-    << std::endl;
+  std::cout << "size of (int) is                : " << sizeof(int) << std::endl;
+  std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int)
+            << std::endl;
 
-  std::cout << "size of (long) is               : " << sizeof(long) << std::endl;
+  std::cout << "size of (long) is               : " << sizeof(long)
+            << std::endl;
   std::cout << "size of (unsigned long) is      : " << sizeof(unsigned long)
-       << std::endl;
+            << std::endl;
 
   std::cout << "size of (long int) is           : " << sizeof(long int) << endl;
   std::cout << "size of (unsigned long int) is  : " << sizeof(unsigned long int)
-       << endl;
+            << endl;
 
-  std::cout << "size of (long long) is          : " << sizeof(long long) << endl; cout << "size of (unsigned long long) is  : " << sizeof(unsigned long long)
+  std::cout << "size of (long long) is          : " << sizeof(long long)
+            << endl;
+  cout << "size of (unsigned long long) is  : " << sizeof(unsigned long long)
        << endl;
 
   int *pint;
@@ -3337,6 +3336,117 @@ TEST(CxxFeaturesTest, UseIsspace)
 
 // ={=========================================================================
 // cxx-function-object
+
+// cxx-progress
+//
+// Q: If run it standalone, it runs slower than on in GTEST. WHY?
+//
+// #include <iostream>
+// #include <chrono>
+// #include <thread>
+//
+// using namespace std;
+//
+// typedef bool (*UPDATEFUNC)(int);
+//
+// bool UpdateProgress(int percent)
+// {
+//   cout << flush << "\r" << percent << " % complete...";
+//   // cout << "\r" << percent << "% complete...";
+//   return true;
+// }
+//
+// int main()
+// {
+//   UPDATEFUNC f = UpdateProgress;
+//
+//   for (long l = 0; l < 100000000; ++l)
+//   {
+//     if (l % 1000000 == 0)
+//       f(l / 1000000);
+//
+//     for (long x = 0; x < 100; ++x)
+//       x = x;
+//
+//     // this_thread::sleep_for(std::chrono::milliseconds{1});
+//   }
+//
+//   cout << endl;
+//
+//   return EXIT_SUCCESS;
+// }
+
+namespace cxx_function {
+
+typedef bool (*UPDATEFUNC)(int);
+
+bool updateProgress(int percent)
+{
+  std::cout << std::flush << "\r" << percent << "% complete...";
+  return true;
+}
+
+} // namespace cxx_function
+
+TEST(CxxFunctionObject, FunctionPointer)
+{
+  using namespace cxx_function;
+
+  UPDATEFUNC f = updateProgress;
+
+  for (long l = 0; l < 100000000; ++l)
+  {
+    if (l % 1000000 == 0)
+      f(l / 1000000);
+
+    for (long x = 0; l < 1000000; ++l)
+      x = x;
+
+    // this_thread::sleep_for(std::chrono::milliseconds{10});
+  }
+
+  std::cout << std::endl;
+}
+
+/*
+However, we can’t simply assign the result of dlsym() to such a pointer, as in
+the following example:
+
+funcp = dlsym(handle, symbol);
+
+The reason is that the C99 standard forbids assignment between a function
+pointer and void *. The solution is to use the following (somewhat clumsy) cast:
+
+*(void **) (&funcp) = dlsym(handle, symbol);
+
+Having used dlsym() to obtain a pointer to the function, we can then call the
+function using the usual C syntax for dereferencing function pointers:
+
+res = (*funcp)(somearg);
+
+*/
+
+TEST(CxxFunctionObject, FunctionPointerVoidCast)
+{
+  using namespace cxx_function;
+
+  {
+    void *func;
+
+    // error: invalid conversion from ‘bool (*)(int)’ to ‘void*’ [-fpermissive]
+    // func = updateProgress;
+
+    func = (void *)updateProgress;
+    func = *(void **)updateProgress;
+    func = *((void **)(&updateProgress));
+
+    // cast function pointer's address to void** and then dereference it to make
+    // it "void *"
+
+    // TODO:
+    // since all three compiles well and check on dlsym context.
+  }
+}
 
 namespace cxx_function {
 
@@ -6773,72 +6883,6 @@ TEST(Bit, Overflow)
 
   for (int i = 0; i < 10; ++i)
     cout << (bigrand() % 100) << endl;
-}
-
-// ={=========================================================================
-// cxx-progress
-//
-// Q: If run it standalone, it runs slower than on in GTEST. WHY?
-//
-// #include <iostream>
-// #include <chrono>
-// #include <thread>
-//
-// using namespace std;
-//
-// typedef bool (*UPDATEFUNC)(int);
-//
-// bool UpdateProgress(int percent)
-// {
-//   cout << flush << "\r" << percent << " % complete...";
-//   // cout << "\r" << percent << "% complete...";
-//   return true;
-// }
-//
-// int main()
-// {
-//   UPDATEFUNC f = UpdateProgress;
-//
-//   for (long l = 0; l < 100000000; ++l)
-//   {
-//     if (l % 1000000 == 0)
-//       f(l / 1000000);
-//
-//     for (long x = 0; x < 100; ++x)
-//       x = x;
-//
-//     // this_thread::sleep_for(std::chrono::milliseconds{1});
-//   }
-//
-//   cout << endl;
-//
-//   return EXIT_SUCCESS;
-// }
-
-typedef bool (*UPDATEFUNC)(int);
-
-bool UpdateProgress(int percent)
-{
-  cout << flush << "\r" << percent << "% complete...";
-  return true;
-}
-
-TEST(FunctionPointer, X)
-{
-  UPDATEFUNC f = UpdateProgress;
-
-  for (long l = 0; l < 100000000; ++l)
-  {
-    if (l % 1000000 == 0)
-      f(l / 1000000);
-
-    for (long x = 0; l < 1000000; ++l)
-      x = x;
-
-    // this_thread::sleep_for(std::chrono::milliseconds{10});
-  }
-
-  cout << endl;
 }
 
 // ={=========================================================================

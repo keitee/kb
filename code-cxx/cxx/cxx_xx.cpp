@@ -50,4 +50,7 @@ int main(int argc, char **argv)
   std::cout << "size of (size_t) is             : " << sizeof(size_t) << endl;
   std::cout << "size of (uint32_t) is           : " << sizeof(uint32_t) << endl;
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
+
+  uint64_t value{10};
+  printf("uint64 value is %ld", value);
 }
