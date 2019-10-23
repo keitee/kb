@@ -96,14 +96,15 @@ TEST(CxxType, showSizeOfTypes)
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
 }
 
-namespace use_sizeof {
-
-struct nlist
+namespace use_sizeof
 {
-  struct nlist *next;
-  char *name;
-  char *defn;
-};
+
+  struct nlist
+  {
+    struct nlist *next;
+    char *name;
+    char *defn;
+  };
 
 } // namespace use_sizeof
 
@@ -249,13 +250,14 @@ TEST(Statement, Switch)
 
 // typeid : St16initializer_listIKSt4pairIiPKcEE
 
-namespace cxx_pair {
-template <typename T1, typename T2>
-std::ostream &operator<<(std::ostream &os, std::pair<T1, T2> const &p)
+namespace cxx_pair
 {
-  os << "{" << get<0>(p) << ", " << get<1>(p) << "}";
-  return os;
-}
+  template <typename T1, typename T2>
+  std::ostream &operator<<(std::ostream &os, std::pair<T1, T2> const &p)
+  {
+    os << "{" << get<0>(p) << ", " << get<1>(p) << "}";
+    return os;
+  }
 } // namespace cxx_pair
 
 TEST(Pair, MakePair)
@@ -277,7 +279,8 @@ TEST(Pair, MakePair)
   // };
 
   {
-    const auto pair_map = {make_pair(10, "X"), make_pair(9, "IX"),
+    const auto pair_map = {make_pair(10, "X"),
+                           make_pair(9, "IX"),
                            make_pair(5, "V")};
 
     auto it = pair_map.begin();
@@ -286,9 +289,13 @@ TEST(Pair, MakePair)
   }
 
   {
-    std::vector<std::pair<size_t, bool>> coll{
-      {5, false}, {3, false}, {7, false}, {1, true},
-      {2, false}, {8, false}, {9, false}};
+    std::vector<std::pair<size_t, bool>> coll{{5, false},
+                                              {3, false},
+                                              {7, false},
+                                              {1, true},
+                                              {2, false},
+                                              {8, false},
+                                              {9, false}};
 
     auto found_value = std::numeric_limits<size_t>::max();
     decltype(found_value) found_index{}, index{};
@@ -376,28 +383,34 @@ TEST(Pair, Initialisation)
   //     make_pair(5, "V")
   // };
 
-  const auto pair_init_01 = {make_pair(10, "X"), make_pair(9, "IX"),
+  const auto pair_init_01 = {make_pair(10, "X"),
+                             make_pair(9, "IX"),
                              make_pair(5, "V")};
 
   (void)pair_init_01;
 
-  const auto pair_init_02 = {make_pair(10, "X"), make_pair(9, "IX"),
+  const auto pair_init_02 = {make_pair(10, "X"),
+                             make_pair(9, "IX"),
                              make_pair(5, "V")};
 
   (void)pair_init_02;
 
   // vector that has pairs
 
-  std::vector<std::pair<int, string>> pair_init_03{
-    make_pair(10, "X"), make_pair(9, "IX"), make_pair(5, "V")};
+  std::vector<std::pair<int, string>> pair_init_03{make_pair(10, "X"),
+                                                   make_pair(9, "IX"),
+                                                   make_pair(5, "V")};
 
-  std::vector<std::pair<int, string>> pair_init_04{
-    {10, "X"}, {9, "IX"}, {5, "V"}};
+  std::vector<std::pair<int, string>> pair_init_04{{10, "X"},
+                                                   {9, "IX"},
+                                                   {5, "V"}};
 
   // vector that has tuples
 
   std::vector<std::tuple<int, string, int>> tuple_init_01{
-    make_tuple(10, "X", 1), make_tuple(9, "IX", 2), make_tuple(5, "V", 3)};
+    make_tuple(10, "X", 1),
+    make_tuple(9, "IX", 2),
+    make_tuple(5, "V", 3)};
 
   // cxx.cpp:165:3: error: converting to ‘std::tuple<int,
   // std::basic_string<char, std::char_traits<char>, std::allocator<char> >,
@@ -593,29 +606,32 @@ TEST(Tuple, Tie)
 // ={=========================================================================
 // cxx-ctor
 
-namespace cxx_ctor {
-// o `If defines any other ctor for the class, the compiler do not generates`
-//   default ctor. So if a class requires control to init an object in one case,
-//   then the class is likely to require control in all cases.
-
-class ConstructionNoDefault
+namespace cxx_ctor
 {
-public:
-  ConstructionNoDefault(const std::string &name) { (void)name; }
+  // o `If defines any other ctor for the class, the compiler do not generates`
+  //   default ctor. So if a class requires control to init an object in one
+  //   case, then the class is likely to require control in all cases.
 
-private:
-  int value_;
-};
+  class ConstructionNoDefault
+  {
+  public:
+    ConstructionNoDefault(const std::string &name) { (void)name; }
 
-// okay since uses ConstructionNoDefault(const std::string &name) ctor
-class ConstructionWitCtorInitList
-{
-public:
-  ConstructionWitCtorInitList() : member("construction with init list") {}
+  private:
+    int value_;
+  };
 
-private:
-  ConstructionNoDefault member;
-};
+  // okay since uses ConstructionNoDefault(const std::string &name) ctor
+  class ConstructionWitCtorInitList
+  {
+  public:
+    ConstructionWitCtorInitList()
+        : member("construction with init list")
+    {}
+
+  private:
+    ConstructionNoDefault member;
+  };
 } // namespace cxx_ctor
 
 // to see that default ctor is necessary
@@ -648,17 +664,26 @@ TEST(CxxCtor, CtorInitList)
 // annoying. To avoid such warnings, a common strategy is to omit names for
 // parameters you don't plan to use; that is what is been done above.
 
-namespace cxx_ctor {
-class foo
+namespace cxx_ctor
 {
-public:
-  explicit foo(int &value) : value_(value) { cout << "foo(int)" << endl; }
+  class foo
+  {
+  public:
+    explicit foo(int &value)
+        : value_(value)
+    {
+      cout << "foo(int)" << endl;
+    }
 
-  foo(int &value, int) : value_(value) { cout << "foo(int, int)" << endl; }
+    foo(int &value, int)
+        : value_(value)
+    {
+      cout << "foo(int, int)" << endl;
+    }
 
-private:
-  int value_;
-};
+  private:
+    int value_;
+  };
 } // namespace cxx_ctor
 
 TEST(CxxCtor, UnusedParameters)
@@ -675,28 +700,32 @@ TEST(CxxCtor, UnusedParameters)
   foo f2(value, 30);
 }
 
-namespace cxx_ctor {
-class CtorCallsCtor
+namespace cxx_ctor
 {
-public:
-  CtorCallsCtor(std::string const &name) : CtorCallsCtor(10, name)
+  class CtorCallsCtor
   {
-    std::cout << "CtorCallsCtor(string)" << std::endl;
-  }
+  public:
+    CtorCallsCtor(std::string const &name)
+        : CtorCallsCtor(10, name)
+    {
+      std::cout << "CtorCallsCtor(string)" << std::endl;
+    }
 
-  CtorCallsCtor(int value, std::string const &name) : value_(value), name_(name)
-  {
-    std::cout << "CtorCallsCtor(int, string)" << std::endl;
-  }
+    CtorCallsCtor(int value, std::string const &name)
+        : value_(value)
+        , name_(name)
+    {
+      std::cout << "CtorCallsCtor(int, string)" << std::endl;
+    }
 
-  int get_value() const { return value_; }
+    int get_value() const { return value_; }
 
-  std::string get_name() const { return name_; }
+    std::string get_name() const { return name_; }
 
-private:
-  int value_;
-  std::string name_;
-};
+  private:
+    int value_;
+    std::string name_;
+  };
 } // namespace cxx_ctor
 
 TEST(Ctor, CtorCallsCtor)
@@ -708,36 +737,42 @@ TEST(Ctor, CtorCallsCtor)
   EXPECT_THAT(oo.get_name(), "cxx-oo");
 }
 
-namespace cxx_ctor {
-class CtorUseDefaultArgument
+namespace cxx_ctor
 {
-public:
-  CtorUseDefaultArgument(std::string const &bookNo, unsigned sold = 10,
-                         unsigned revenue = 20)
-      : bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
-  {}
+  class CtorUseDefaultArgument
+  {
+  public:
+    CtorUseDefaultArgument(std::string const &bookNo,
+                           unsigned sold    = 10,
+                           unsigned revenue = 20)
+        : bookNo_(bookNo)
+        , units_sold_(sold)
+        , revenue_(revenue)
+    {}
 
-  // to make it easy to check values
-  std::string bookNo_;
-  unsigned units_sold_;
-  unsigned revenue_;
-};
+    // to make it easy to check values
+    std::string bookNo_;
+    unsigned units_sold_;
+    unsigned revenue_;
+  };
 
-class CtorUseInClassInit
-{
-public:
-  // CtorUseInClassInit(std::string const &bookNo, unsigned sold, unsigned
-  // revenue)
-  //   :bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
-  // {}
+  class CtorUseInClassInit
+  {
+  public:
+    // CtorUseInClassInit(std::string const &bookNo, unsigned sold, unsigned
+    // revenue)
+    //   :bookNo_(bookNo), units_sold_(sold), revenue_(revenue)
+    // {}
 
-  CtorUseInClassInit(std::string const &bookNo) : bookNo_(bookNo) {}
+    CtorUseInClassInit(std::string const &bookNo)
+        : bookNo_(bookNo)
+    {}
 
-  std::string bookNo_;
-  unsigned units_sold_{10};
-  unsigned revenue_{20};
-  unsigned value_{};
-};
+    std::string bookNo_;
+    unsigned units_sold_{10};
+    unsigned revenue_{20};
+    unsigned value_{};
+  };
 
 } // namespace cxx_ctor
 
@@ -801,39 +836,43 @@ TEST(Ctor, CtorDefaultArgAndInClassInit)
 // conversion. So it cannot use with explicit copy ctor and in cases more
 // conversion since only one conversion is allowed at a time.
 
-namespace ctor_init {
-class Foo
+namespace ctor_init
 {
-public:
-  Foo() : mesg_() {}
-
-  // mesg_ is updated only here
-  Foo(const string &mesg) : mesg_(mesg)
+  class Foo
   {
-    os_ << mesg_ << " and converting ctor";
-  }
+  public:
+    Foo()
+        : mesg_()
+    {}
 
-  // copy-ctor
-  Foo(const Foo &foo)
-  {
-    mesg_ = foo.mesg_;
-    os_ << mesg_ << " and copy ctor";
-  }
+    // mesg_ is updated only here
+    Foo(const string &mesg)
+        : mesg_(mesg)
+    {
+      os_ << mesg_ << " and converting ctor";
+    }
 
-  // copy-assign
-  Foo &operator=(Foo const &foo)
-  {
-    mesg_ = foo.mesg_;
-    os_ << mesg_ << " and copy assign";
-    return *this;
-  }
+    // copy-ctor
+    Foo(const Foo &foo)
+    {
+      mesg_ = foo.mesg_;
+      os_ << mesg_ << " and copy ctor";
+    }
 
-  string return_mesg() { return os_.str(); }
+    // copy-assign
+    Foo &operator=(Foo const &foo)
+    {
+      mesg_ = foo.mesg_;
+      os_ << mesg_ << " and copy assign";
+      return *this;
+    }
 
-private:
-  ostringstream os_;
-  string mesg_;
-};
+    string return_mesg() { return os_.str(); }
+
+  private:
+    ostringstream os_;
+    string mesg_;
+  };
 } // namespace ctor_init
 
 TEST(Ctor, CtorInitForms)
@@ -880,35 +919,40 @@ TEST(Ctor, CtorInitForms)
   // }
 }
 
-namespace ctor_init_converting_ctor {
-class Foo
+namespace ctor_init_converting_ctor
 {
-public:
-  Foo() : mesg_() {}
-
-  Foo(const string &mesg) : mesg_(mesg)
+  class Foo
   {
-    os_ << mesg_ << " and string converting ctor";
-  }
+  public:
+    Foo()
+        : mesg_()
+    {}
 
-  Foo(const Foo &foo)
-  {
-    mesg_ = foo.mesg_;
-    os_ << mesg_ << " and copy ctor";
-  }
+    Foo(const string &mesg)
+        : mesg_(mesg)
+    {
+      os_ << mesg_ << " and string converting ctor";
+    }
 
-  // added
-  Foo(const char *mesg) : mesg_(mesg)
-  {
-    os_ << mesg_ << " and char converting ctor";
-  }
+    Foo(const Foo &foo)
+    {
+      mesg_ = foo.mesg_;
+      os_ << mesg_ << " and copy ctor";
+    }
 
-  string return_mesg() { return os_.str(); }
+    // added
+    Foo(const char *mesg)
+        : mesg_(mesg)
+    {
+      os_ << mesg_ << " and char converting ctor";
+    }
 
-private:
-  ostringstream os_;
-  string mesg_;
-};
+    string return_mesg() { return os_.str(); }
+
+  private:
+    ostringstream os_;
+    string mesg_;
+  };
 } // namespace ctor_init_converting_ctor
 
 TEST(Ctor, CtorInitFromMore)
@@ -921,35 +965,40 @@ TEST(Ctor, CtorInitFromMore)
   }
 }
 
-namespace ctor_init_explicit {
-class Foo
+namespace ctor_init_explicit
 {
-public:
-  Foo() : mesg_() {}
-
-  explicit Foo(const string &mesg) : mesg_(mesg)
+  class Foo
   {
-    os_ << mesg_ << " and string converting ctor";
-  }
+  public:
+    Foo()
+        : mesg_()
+    {}
 
-  explicit Foo(const Foo &foo)
-  {
-    mesg_ = foo.mesg_;
-    os_ << mesg_ << " and copy ctor";
-  }
+    explicit Foo(const string &mesg)
+        : mesg_(mesg)
+    {
+      os_ << mesg_ << " and string converting ctor";
+    }
 
-  // added
-  explicit Foo(const char *mesg) : mesg_(mesg)
-  {
-    os_ << mesg_ << " and char converting ctor";
-  }
+    explicit Foo(const Foo &foo)
+    {
+      mesg_ = foo.mesg_;
+      os_ << mesg_ << " and copy ctor";
+    }
 
-  string return_mesg() { return os_.str(); }
+    // added
+    explicit Foo(const char *mesg)
+        : mesg_(mesg)
+    {
+      os_ << mesg_ << " and char converting ctor";
+    }
 
-private:
-  ostringstream os_;
-  string mesg_;
-};
+    string return_mesg() { return os_.str(); }
+
+  private:
+    ostringstream os_;
+    string mesg_;
+  };
 } // namespace ctor_init_explicit
 
 TEST(Ctor, CtorInitFromExplicit)
@@ -991,79 +1040,83 @@ TEST(Ctor, CtorInitFromExplicit)
 // ={=========================================================================
 // cxx-init-list
 
-namespace cxx_init_list {
-class Foo
+namespace cxx_init_list
 {
-public:
-  Foo() : mesg_() {}
-
-  // mesg_ is updated only here
-  Foo(const string &mesg) : mesg_(mesg)
+  class Foo
   {
-    os_ << mesg_ << " and converting ctor";
+  public:
+    Foo()
+        : mesg_()
+    {}
+
+    // mesg_ is updated only here
+    Foo(const string &mesg)
+        : mesg_(mesg)
+    {
+      os_ << mesg_ << " and converting ctor";
+    }
+
+    Foo(const Foo &foo)
+    {
+      mesg_ = foo.mesg_;
+      os_ << mesg_ << " and copy ctor";
+    }
+
+    Foo(std::initializer_list<std::string> values)
+    {
+      for (auto &e : values)
+        os_ << e << ", ";
+    }
+
+    string return_mesg() { return os_.str(); }
+
+  private:
+    ostringstream os_;
+    string mesg_;
+  };
+
+  // to show that it can be used in a function and return vector than print out
+  // to be used in test
+
+  // *cxx-const* *cxx-temporary* *cxx-reference*
+
+  std::vector<string>
+  error_message_1(std::string const &message,
+                  std::initializer_list<std::string> const &ls)
+  {
+    std::vector<string> coll{};
+
+    coll.push_back(message);
+
+    for (auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
   }
 
-  Foo(const Foo &foo)
+  // const is must to use temporary and if not, non-const compile error
+
+  std::vector<int> error_message_2(std::initializer_list<int> const &ls)
   {
-    mesg_ = foo.mesg_;
-    os_ << mesg_ << " and copy ctor";
+    std::vector<int> coll{};
+
+    for (auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
   }
 
-  Foo(std::initializer_list<std::string> values)
+  // no error when use tempoarary since it not use reference
+
+  std::vector<int> error_message_3(std::initializer_list<int> ls)
   {
-    for (auto &e : values)
-      os_ << e << ", ";
+    std::vector<int> coll{};
+
+    for (auto const &e : ls)
+      coll.push_back(e);
+
+    return coll;
   }
-
-  string return_mesg() { return os_.str(); }
-
-private:
-  ostringstream os_;
-  string mesg_;
-};
-
-// to show that it can be used in a function and return vector than print out
-// to be used in test
-
-// *cxx-const* *cxx-temporary* *cxx-reference*
-
-std::vector<string>
-error_message_1(std::string const &message,
-                std::initializer_list<std::string> const &ls)
-{
-  std::vector<string> coll{};
-
-  coll.push_back(message);
-
-  for (auto const &e : ls)
-    coll.push_back(e);
-
-  return coll;
-}
-
-// const is must to use temporary and if not, non-const compile error
-
-std::vector<int> error_message_2(std::initializer_list<int> const &ls)
-{
-  std::vector<int> coll{};
-
-  for (auto const &e : ls)
-    coll.push_back(e);
-
-  return coll;
-}
-
-// no error when use tempoarary since it not use reference
-
-std::vector<int> error_message_3(std::initializer_list<int> ls)
-{
-  std::vector<int> coll{};
-
-  for (auto const &e : ls)
-    coll.push_back(e);
-
-  return coll;
-}
 
 } // namespace cxx_init_list
 
@@ -1102,67 +1155,77 @@ TEST(Initialise, List)
 
 // cxx-ctor-access
 
-namespace cxx_ctor_access {
-class Bar
+namespace cxx_ctor_access
 {
-public:
-  Bar() : mesg_() {}
-
-  Bar(string const &mesg) : mesg_(mesg) {}
-
-  // copy ctor
-  Bar(Bar const &bar)
+  class Bar
   {
-    mesg_ = bar.mesg_;
-    os_ << mesg_ << " and copy ctor";
-  }
+  public:
+    Bar()
+        : mesg_()
+    {}
 
-  string return_mesg() { return os_.str(); }
+    Bar(string const &mesg)
+        : mesg_(mesg)
+    {}
 
-private:
-  ostringstream os_;
-  string mesg_;
-};
+    // copy ctor
+    Bar(Bar const &bar)
+    {
+      mesg_ = bar.mesg_;
+      os_ << mesg_ << " and copy ctor";
+    }
 
-class Foo
-{
-public:
-  Foo() : mesg_() {}
+    string return_mesg() { return os_.str(); }
 
-  Foo(string const &mesg) : mesg_(mesg) {}
+  private:
+    ostringstream os_;
+    string mesg_;
+  };
 
-  // copy ctor without const
-  Foo(Foo &foo)
+  class Foo
   {
-    mesg_ = foo.mesg_;
-    os_ << mesg_ << " and copy ctor";
-    foo.mesg_ = "xxx";
-  }
+  public:
+    Foo()
+        : mesg_()
+    {}
 
-  // raise error only when that's different type:
-  //
-  // cxx.cpp: In constructor ‘cxx_ctor_access::Foo::Foo(cxx_ctor_access::Bar&)’:
-  // cxx.cpp:835:14: error: ‘std::string cxx_ctor_access::Bar::mesg_’ is private
-  //        string mesg_;
-  //               ^
-  // cxx.cpp:855:13: error: within this context
-  //          bar.mesg_ = "xxx";
-  //              ^
+    Foo(string const &mesg)
+        : mesg_(mesg)
+    {}
 
-  Foo(Bar &bar)
-  {
-    (void)bar;
-    // both cause errors
-    // mesg_ = bar.mesg_;
-    // bar.mesg_ = "xxx";
-  }
+    // copy ctor without const
+    Foo(Foo &foo)
+    {
+      mesg_ = foo.mesg_;
+      os_ << mesg_ << " and copy ctor";
+      foo.mesg_ = "xxx";
+    }
 
-  string return_mesg() { return os_.str(); }
+    // raise error only when that's different type:
+    //
+    // cxx.cpp: In constructor
+    // ‘cxx_ctor_access::Foo::Foo(cxx_ctor_access::Bar&)’: cxx.cpp:835:14:
+    // error: ‘std::string cxx_ctor_access::Bar::mesg_’ is private
+    //        string mesg_;
+    //               ^
+    // cxx.cpp:855:13: error: within this context
+    //          bar.mesg_ = "xxx";
+    //              ^
 
-private:
-  ostringstream os_;
-  string mesg_;
-};
+    Foo(Bar &bar)
+    {
+      (void)bar;
+      // both cause errors
+      // mesg_ = bar.mesg_;
+      // bar.mesg_ = "xxx";
+    }
+
+    string return_mesg() { return os_.str(); }
+
+  private:
+    ostringstream os_;
+    string mesg_;
+  };
 
 } // namespace cxx_ctor_access
 
@@ -1179,60 +1242,70 @@ TEST(Ctor, Access)
 // ={=========================================================================
 // cxx-dtor
 
-namespace cxx_dtor {
-
-class NoVirtualDtorBase
+namespace cxx_dtor
 {
-public:
-  NoVirtualDtorBase() { std::cout << "\tno virtual ctor: base" << std::endl; }
 
-  ~NoVirtualDtorBase() { std::cout << "\tno virtual dtor: base" << std::endl; }
-
-private:
-  int base_;
-};
-
-class DerivedFromNoVirtual : public NoVirtualDtorBase
-{
-public:
-  DerivedFromNoVirtual()
+  class NoVirtualDtorBase
   {
-    std::cout << "\tno virtual ctor: derived" << std::endl;
-  }
+  public:
+    NoVirtualDtorBase() { std::cout << "\tno virtual ctor: base" << std::endl; }
 
-  ~DerivedFromNoVirtual()
+    ~NoVirtualDtorBase()
+    {
+      std::cout << "\tno virtual dtor: base" << std::endl;
+    }
+
+  private:
+    int base_;
+  };
+
+  class DerivedFromNoVirtual : public NoVirtualDtorBase
   {
-    std::cout << "\tno virtual dtor: derived" << std::endl;
-  }
+  public:
+    DerivedFromNoVirtual()
+    {
+      std::cout << "\tno virtual ctor: derived" << std::endl;
+    }
 
-private:
-  int derived_;
-};
+    ~DerivedFromNoVirtual()
+    {
+      std::cout << "\tno virtual dtor: derived" << std::endl;
+    }
 
-class VirtualDtorBase
-{
-public:
-  VirtualDtorBase() { std::cout << "\tvirtual ctor: base" << std::endl; }
+  private:
+    int derived_;
+  };
 
-  virtual ~VirtualDtorBase()
+  class VirtualDtorBase
   {
-    std::cout << "\tvirtual dtor: base" << std::endl;
-  }
+  public:
+    VirtualDtorBase() { std::cout << "\tvirtual ctor: base" << std::endl; }
 
-private:
-  int value_;
-};
+    virtual ~VirtualDtorBase()
+    {
+      std::cout << "\tvirtual dtor: base" << std::endl;
+    }
 
-class DerivedFromVirtual : public VirtualDtorBase
-{
-public:
-  DerivedFromVirtual() { std::cout << "\tvirtual ctor: derived" << std::endl; }
+  private:
+    int value_;
+  };
 
-  ~DerivedFromVirtual() { std::cout << "\tvirtual dtor: derived" << std::endl; }
+  class DerivedFromVirtual : public VirtualDtorBase
+  {
+  public:
+    DerivedFromVirtual()
+    {
+      std::cout << "\tvirtual ctor: derived" << std::endl;
+    }
 
-private:
-  int derived_;
-};
+    ~DerivedFromVirtual()
+    {
+      std::cout << "\tvirtual dtor: derived" << std::endl;
+    }
+
+  private:
+    int derived_;
+  };
 
 } // namespace cxx_dtor
 
@@ -1285,78 +1358,83 @@ TEST(Dtor, NoVirtualDtorProblem)
 
 // Why dtor should be virtual in cxx-abc?
 
-namespace cxx_dtor {
-
-class AbstractBase
+namespace cxx_dtor
 {
-public:
-  AbstractBase() : base_(0)
+
+  class AbstractBase
   {
-    std::cout << "\tabstract ctor: base" << std::endl;
-  }
+  public:
+    AbstractBase()
+        : base_(0)
+    {
+      std::cout << "\tabstract ctor: base" << std::endl;
+    }
 
-  ~AbstractBase() { std::cout << "\tabstract dtor: base" << std::endl; }
+    ~AbstractBase() { std::cout << "\tabstract dtor: base" << std::endl; }
 
-  virtual int get_value() = 0;
+    virtual int get_value() = 0;
 
-private:
-  int base_;
-};
+  private:
+    int base_;
+  };
 
-class DerivedFromAbstract : public AbstractBase
-{
-public:
-  DerivedFromAbstract() : derived_(10)
+  class DerivedFromAbstract : public AbstractBase
   {
-    std::cout << "\tabstract ctor: derived" << std::endl;
-  }
+  public:
+    DerivedFromAbstract()
+        : derived_(10)
+    {
+      std::cout << "\tabstract ctor: derived" << std::endl;
+    }
 
-  ~DerivedFromAbstract()
+    ~DerivedFromAbstract()
+    {
+      std::cout << "\tabstract dtor: derived" << std::endl;
+    }
+
+    virtual int get_value() override { return derived_; };
+
+  private:
+    int derived_;
+  };
+
+  class AbstractBaseNoDtor
   {
-    std::cout << "\tabstract dtor: derived" << std::endl;
-  }
+  public:
+    AbstractBaseNoDtor()
+        : base_(0)
+    {
+      std::cout << "\tabstract ctor: base" << std::endl;
+    }
 
-  virtual int get_value() override { return derived_; };
+    // ~AbstractBase()
+    // { std::cout << "\tabstract dtor: base" << std::endl; }
 
-private:
-  int derived_;
-};
+    virtual int get_value() = 0;
 
-class AbstractBaseNoDtor
-{
-public:
-  AbstractBaseNoDtor() : base_(0)
+  private:
+    int base_;
+  };
+
+  class DerivedFromAbstractNoDtor : public AbstractBaseNoDtor
   {
-    std::cout << "\tabstract ctor: base" << std::endl;
-  }
+  public:
+    DerivedFromAbstractNoDtor()
+        : derived_(10)
+    {
+      std::cout << "\tabstract ctor: derived" << std::endl;
+    }
 
-  // ~AbstractBase()
-  // { std::cout << "\tabstract dtor: base" << std::endl; }
+    ~DerivedFromAbstractNoDtor()
+    {
+      std::cout << "\tabstract dtor: derived" << std::endl;
+    }
 
-  virtual int get_value() = 0;
+    virtual int get_value() override { return derived_; };
 
-private:
-  int base_;
-};
-
-class DerivedFromAbstractNoDtor : public AbstractBaseNoDtor
-{
-public:
-  DerivedFromAbstractNoDtor() : derived_(10)
-  {
-    std::cout << "\tabstract ctor: derived" << std::endl;
-  }
-
-  ~DerivedFromAbstractNoDtor()
-  {
-    std::cout << "\tabstract dtor: derived" << std::endl;
-  }
-
-  virtual int get_value() override { return derived_; };
-
-private:
-  int derived_;
-};
+  private:
+    int derived_;
+  };
 
 } // namespace cxx_dtor
 
@@ -1416,55 +1494,56 @@ TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
 // ={=========================================================================
 // cxx-copy-control
 
-namespace copy_control {
-
-class CopyControlBaseUsePrivate
+namespace copy_control
 {
-public:
-  CopyControlBaseUsePrivate()  = default;
-  ~CopyControlBaseUsePrivate() = default;
 
-private:
-  int value_;
-  CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate &base)
+  class CopyControlBaseUsePrivate
   {
-    (void)base;
-    cout << "copy-ctor: base" << endl;
-  } // @11
-  CopyControlBaseUsePrivate &operator=(const CopyControlBaseUsePrivate &base)
+  public:
+    CopyControlBaseUsePrivate()  = default;
+    ~CopyControlBaseUsePrivate() = default;
+
+  private:
+    int value_;
+    CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate &base)
+    {
+      (void)base;
+      cout << "copy-ctor: base" << endl;
+    } // @11
+    CopyControlBaseUsePrivate &operator=(const CopyControlBaseUsePrivate &base)
+    {
+      (void)base;
+      cout << "copy-assign: base" << endl;
+      return *this;
+    }
+  };
+
+  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
   {
-    (void)base;
-    cout << "copy-assign: base" << endl;
-    return *this;
-  }
-};
+  public:
+    void getShout() { cout << "derived get shout" << endl; };
+  };
 
-class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
-{
-public:
-  void getShout() { cout << "derived get shout" << endl; };
-};
+  class CopyControlBaseUseDelete
+  {
+  public:
+    CopyControlBaseUseDelete()  = default;
+    ~CopyControlBaseUseDelete() = default;
 
-class CopyControlBaseUseDelete
-{
-public:
-  CopyControlBaseUseDelete()  = default;
-  ~CopyControlBaseUseDelete() = default;
+  public:
+    CopyControlBaseUseDelete(const CopyControlBaseUseDelete &base) = delete;
+    CopyControlBaseUseDelete &
+    operator=(const CopyControlBaseUseDelete &base) = delete;
 
-public:
-  CopyControlBaseUseDelete(const CopyControlBaseUseDelete &base) = delete;
-  CopyControlBaseUseDelete &
-  operator=(const CopyControlBaseUseDelete &base) = delete;
+  private:
+    int value_;
+  };
 
-private:
-  int value_;
-};
-
-class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
-{
-public:
-  void getShout() { cout << "derived get shout" << endl; };
-};
+  class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
+  {
+  public:
+    void getShout() { cout << "derived get shout" << endl; };
+  };
 
 } // namespace copy_control
 
@@ -1655,21 +1734,22 @@ public:
 // ={=========================================================================
 // cxx-enum
 
-namespace cxx_enum {
-enum color
+namespace cxx_enum
 {
-  red,
-  yellow,
-  green
-}; // unscoped
-// enum { red, yellow, green } color;       // same as above so cause error
+  enum color
+  {
+    red,
+    yellow,
+    green
+  }; // unscoped
+  // enum { red, yellow, green } color;       // same as above so cause error
 
-enum class peppers
-{
-  yellow,
-  red,
-  green
-}; // scoped
+  enum class peppers
+  {
+    yellow,
+    red,
+    green
+  }; // scoped
 } // namespace cxx_enum
 
 TEST(Enum, ScopedAndUnscoped)
@@ -1747,39 +1827,42 @@ TEST(Enum, ScopedAndUnscoped)
   }
 }
 
-namespace cxx_enum_in_class {
-enum class named_and_scoped
+namespace cxx_enum_in_class
 {
-  red,
-  yellow,
-  green
-};
-
-class Foo
-{
-  // private:
-  //   enum {red, yellow, green};
-
-public:
-  enum
+  enum class named_and_scoped
   {
     red,
     yellow,
     green
   };
 
-private:
-  std::string name_;
+  class Foo
+  {
+    // private:
+    //   enum {red, yellow, green};
 
-  // private:
-  //   named_and_scoped color_;
+  public:
+    enum
+    {
+      red,
+      yellow,
+      green
+    };
 
-public:
-  named_and_scoped color_;
+  private:
+    std::string name_;
 
-public:
-  Foo() : name_("") {}
-};
+    // private:
+    //   named_and_scoped color_;
+
+  public:
+    named_and_scoped color_;
+
+  public:
+    Foo()
+        : name_("")
+    {}
+  };
 } // namespace cxx_enum_in_class
 
 TEST(Enum, InClass)
@@ -1917,58 +2000,57 @@ TEST(Enum, ScopeAndType)
 // ={=========================================================================
 // cxx-rvo
 
-namespace cxx_rvo {
-// Note: All methods have side effects
-struct Snitch
+namespace cxx_rvo
 {
-  Snitch(int value) : value_(value) { cout << "c'tor" << endl; }
-  ~Snitch() { cout << "d'tor" << endl; }
-
-  Snitch(const Snitch &) { cout << "copy c'tor" << endl; }
-  Snitch(Snitch &&) { cout << "move c'tor" << endl; }
-
-  Snitch &operator=(const Snitch &)
+  // Note: All methods have side effects
+  struct Snitch
   {
-    cout << "copy assignment" << endl;
-    return *this;
+    Snitch(int value)
+        : value_(value)
+    {
+      cout << "c'tor" << endl;
+    }
+    ~Snitch() { cout << "d'tor" << endl; }
+
+    Snitch(const Snitch &) { cout << "copy c'tor" << endl; }
+    Snitch(Snitch &&) { cout << "move c'tor" << endl; }
+
+    Snitch &operator=(const Snitch &)
+    {
+      cout << "copy assignment" << endl;
+      return *this;
+    }
+
+    Snitch &operator=(Snitch &&)
+    {
+      cout << "move assignment" << endl;
+      return *this;
+    }
+
+    int getValue() const { return value_; }
+
+  private:
+    int value_{0};
+  };
+
+  Snitch ExampleRVO()
+  {
+    std::cout << "in ExampleRVO: " << std::endl;
+    return Snitch(100);
   }
 
-  Snitch &operator=(Snitch &&)
+  vector<Snitch> ReturnVector()
   {
-    cout << "move assignment" << endl;
-    return *this;
+    // vector<Snitch> ivec(1000000000, 1);
+    // vector(n, elem); creates n elements
+    vector<Snitch> ivec(10, Snitch(200));
+    cout << "in ReturnVector: size of vector: " << ivec.size() << endl;
+    return ivec;
   }
 
-  int getValue() const { return value_; }
+  Snitch createSnitch() { return Snitch(200); }
 
-private:
-  int value_{0};
-};
-
-Snitch ExampleRVO()
-{
-  std::cout << "in ExampleRVO: " << std::endl;
-  return Snitch(100);
-}
-
-vector<Snitch> ReturnVector()
-{
-  // vector<Snitch> ivec(1000000000, 1);
-  // vector(n, elem); creates n elements
-  vector<Snitch> ivec(10, Snitch(200));
-  cout << "in ReturnVector: size of vector: " << ivec.size() << endl;
-  return ivec;
-}
-
-Snitch createSnitch()
-{
-  return Snitch(200);
-}
-
-void foo(Snitch s)
-{
-  cout << "snitch value is: " << s.getValue() << endl;
-}
+  void foo(Snitch s) { cout << "snitch value is: " << s.getValue() << endl; }
 
 } // namespace cxx_rvo
 
@@ -2007,7 +2089,11 @@ TEST(RVO, OnAssignment)
 
 struct Snitch_X
 { // Note: All methods have side effects
-  Snitch_X(int value) : value_(value) { cout << "c'tor" << endl; }
+  Snitch_X(int value)
+      : value_(value)
+  {
+    cout << "c'tor" << endl;
+  }
   ~Snitch_X() { cout << "d'tor" << endl; }
 
   Snitch_X(Snitch_X const &) { cout << "copy c'tor" << endl; }
@@ -2051,30 +2137,31 @@ TEST(Reference, UseConstReference)
 // ={=========================================================================
 // cxx-reference
 
-namespace cxx_reference {
-void swap_by_value(int x, int y)
+namespace cxx_reference
 {
-  int temp;
-  temp = x;
-  x    = y;
-  y    = temp;
-}
+  void swap_by_value(int x, int y)
+  {
+    int temp;
+    temp = x;
+    x    = y;
+    y    = temp;
+  }
 
-void swap_by_pointer(int *x, int *y)
-{
-  int temp;
-  temp = *x;
-  *x   = *y;
-  *y   = temp;
-}
+  void swap_by_pointer(int *x, int *y)
+  {
+    int temp;
+    temp = *x;
+    *x   = *y;
+    *y   = temp;
+  }
 
-void swap_by_reference(int &x, int &y)
-{
-  int temp;
-  temp = x;
-  x    = y;
-  y    = temp;
-}
+  void swap_by_reference(int &x, int &y)
+  {
+    int temp;
+    temp = x;
+    x    = y;
+    y    = temp;
+  }
 } // namespace cxx_reference
 
 TEST(Reference, Swap)
@@ -2114,27 +2201,28 @@ TEST(Reference, Swap)
   }
 }
 
-namespace cxx_reference {
-void func_01(char *buffer)
+namespace cxx_reference
 {
-  sprintf(buffer, "is filled by pointer %d\n", 10);
-}
+  void func_01(char *buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
 
-void func_02(char *&buffer)
-{
-  sprintf(buffer, "is filled by pointer %d\n", 10);
-}
+  void func_02(char *&buffer)
+  {
+    sprintf(buffer, "is filled by pointer %d\n", 10);
+  }
 
-// cxx.cpp: In function ‘void
-// use_reference_callby::fill_buffer_by_reference(char&)’: cxx.cpp:826:52:
-// error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
-//      sprintf(buffer, "is filled by pointer %d\n", 10);
-//                                                     ^
+  // cxx.cpp: In function ‘void
+  // use_reference_callby::fill_buffer_by_reference(char&)’: cxx.cpp:826:52:
+  // error: invalid conversion from ‘char’ to ‘char*’ [-fpermissive]
+  //      sprintf(buffer, "is filled by pointer %d\n", 10);
+  //                                                     ^
 
-// void fill_buffer_by_reference(char &buffer)
-// {
-//   sprintf(buffer, "is filled by pointer %d\n", 10);
-// }
+  // void fill_buffer_by_reference(char &buffer)
+  // {
+  //   sprintf(buffer, "is filled by pointer %d\n", 10);
+  // }
 
 } // namespace cxx_reference
 
@@ -2183,7 +2271,9 @@ private:
   int val_;
 
 public:
-  AUsePrivateMemberThroughReference() : val_(10) {}
+  AUsePrivateMemberThroughReference()
+      : val_(10)
+  {}
 
   int &returnReference() { return val_; }
 
@@ -2318,13 +2408,14 @@ TEST(Time, SleepFor)
 // raw: [2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of 1/1000]
 //      02::00::55::42
 
-namespace cxx_time_duration_case {
-template <typename Unit, typename Ratio>
-ostream &operator<<(ostream &os, const chrono::duration<Unit, Ratio> &d)
+namespace cxx_time_duration_case
 {
-  os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
-  return os;
-}
+  template <typename Unit, typename Ratio>
+  ostream &operator<<(ostream &os, const chrono::duration<Unit, Ratio> &d)
+  {
+    os << "[" << d.count() << " of " << Ratio::num << "/" << Ratio::den << "]";
+    return os;
+  }
 } // namespace cxx_time_duration_case
 
 TEST(CxxTime, DurationCast)
@@ -2354,8 +2445,9 @@ TEST(CxxTime, DurationCast)
 
   os << hh << "::" << mm << "::" << ss << "::" << msec << "::" << nsec1;
 
-  EXPECT_THAT(os.str(), "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of "
-                        "1/1000]::[42000000 of 1/1000000000]");
+  EXPECT_THAT(os.str(),
+              "[2 of 3600/1]::[0 of 60/1]::[55 of 1/1]::[42 of "
+              "1/1000]::[42000000 of 1/1000000000]");
 
   os.str("");
 
@@ -2612,41 +2704,44 @@ TEST(Time, Facet)
 
 // the name "Timer" is not representative. TimeLog?
 
-namespace cxx_time_elapsed {
-struct Timer
+namespace cxx_time_elapsed
 {
-  Timer(const std::string &text) : text_(text)
+  struct Timer
   {
-    start_ = chrono::system_clock::now();
-  }
-  ~Timer()
-  {
-    auto elapsed       = chrono::system_clock::now() - start_;
-    auto elapsed_in_ms = chrono::duration_cast<chrono::microseconds>(elapsed);
-    auto elapsed_in_ns = chrono::duration_cast<chrono::milliseconds>(elapsed);
+    Timer(const std::string &text)
+        : text_(text)
+    {
+      start_ = chrono::system_clock::now();
+    }
+    ~Timer()
+    {
+      auto elapsed       = chrono::system_clock::now() - start_;
+      auto elapsed_in_ms = chrono::duration_cast<chrono::microseconds>(elapsed);
+      auto elapsed_in_ns = chrono::duration_cast<chrono::milliseconds>(elapsed);
 
-    // when this is in scope, this uses:
-    //
-    // ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio> &d);
-    //
-    // othrewise, it's error
-    // cout << "time taken (in sec) : " << elapsed << endl;
+      // when this is in scope, this uses:
+      //
+      // ostream &operator<<(ostream &os, const chrono::duration<Unit,Ratio>
+      // &d);
+      //
+      // othrewise, it's error
+      // cout << "time taken (in sec) : " << elapsed << endl;
 
-    cout << "time taken (in ms) : " << elapsed_in_ms.count() << endl;
+      cout << "time taken (in ms) : " << elapsed_in_ms.count() << endl;
 
-    // // *cxx-integer-division*
-    // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000 << endl;
-    // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000.0 << endl;
-    // cout << "time taken (in ns) : " << elapsed_in_ms.count()*0.001 << endl;
-    // cout << "time taken (in ns) : " << elapsed_in_ns.count() << endl;
+      // // *cxx-integer-division*
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000 << endl;
+      // cout << "time taken (in ns) : " << elapsed_in_ms.count()/1000.0 <<
+      // endl; cout << "time taken (in ns) : " << elapsed_in_ms.count()*0.001 <<
+      // endl; cout << "time taken (in ns) : " << elapsed_in_ns.count() << endl;
 
-    cout << "time taken (in ns) : " << elapsed_in_ns.count() << " for " << text_
-         << endl;
-  }
+      cout << "time taken (in ns) : " << elapsed_in_ns.count() << " for "
+           << text_ << endl;
+    }
 
-  std::string text_;
-  chrono::system_clock::time_point start_;
-};
+    std::string text_;
+    chrono::system_clock::time_point start_;
+  };
 
 } // namespace cxx_time_elapsed
 
@@ -2718,148 +2813,153 @@ TEST(Time, ElapsedTime)
 // stringstream int -> boost::lexical_cast<int> took 910us
 // boost::lexical_cast<int> -> end took 0us
 
-namespace cxx_time_lap {
-// design decision:
-// in order to get diff betwen two snaps, required to access two snap. whether
-// snap() or dump() do the work to calc diff? use dump() here
-
-class Snapper
+namespace cxx_time_lap
 {
-public:
-  explicit Snapper() { start_ = chrono::system_clock::now(); }
+  // design decision:
+  // in order to get diff betwen two snaps, required to access two snap. whether
+  // snap() or dump() do the work to calc diff? use dump() here
 
-  void snap(const std::string text)
+  class Snapper
   {
-    SnapTime st{};
-    st.tp          = chrono::system_clock::now();
-    st.description = text;
-    list_.push_back(st);
+  public:
+    explicit Snapper() { start_ = chrono::system_clock::now(); }
+
+    void snap(const std::string text)
+    {
+      SnapTime st{};
+      st.tp          = chrono::system_clock::now();
+      st.description = text;
+      list_.push_back(st);
+    }
+
+    void dump()
+    {
+      std::string previous{"start"};
+      decltype(start_) previous_time = start_;
+
+      for (const auto &e : list_)
+      {
+        auto diff = e.tp - previous_time;
+        cout << previous << " -> " << e.description << " took "
+             << chrono::duration_cast<chrono::microseconds>(diff).count()
+             << " us" << endl;
+
+        previous      = e.description;
+        previous_time = e.tp;
+      }
+    }
+
+  private:
+    struct SnapTime
+    {
+      chrono::system_clock::time_point tp{};
+      std::string description{};
+    };
+
+    std::list<SnapTime> list_;
+    chrono::system_clock::time_point start_;
+  };
+
+  class PerfCounter
+  {
+  public:
+    PerfCounter();
+    ~PerfCounter();
+
+    void snap(const string &name_);
+    void dump();
+
+  private:
+    // *cxx-nested-class*
+    // since the original code uses class but makes it all public, use
+    // struct instead.
+    struct CounterData
+    {
+      CounterData(const string &name_)
+          : name{name_}
+          , pnext{nullptr}
+      {}
+      string name;
+      CounterData *pnext;
+      struct timespec ts;
+    };
+
+    // singly list but has end as well.
+    CounterData *phead;
+    CounterData *pend;
+
+    // utility function
+    CounterData *createSnap(const string &name_);
+  };
+
+  PerfCounter::PerfCounter()
+  {
+    // create a start node
+    phead = pend = createSnap("start");
   }
 
-  void dump()
+  PerfCounter::~PerfCounter()
   {
-    std::string previous{"start"};
-    decltype(start_) previous_time = start_;
-
-    for (const auto &e : list_)
+    // clean up a list
+    for (CounterData *psnap = phead; psnap;)
     {
-      auto diff = e.tp - previous_time;
-      cout << previous << " -> " << e.description << " took "
-           << chrono::duration_cast<chrono::microseconds>(diff).count() << " us"
-           << endl;
-
-      previous      = e.description;
-      previous_time = e.tp;
+      phead = psnap->pnext;
+      std::cout << "delete " << psnap->name << std::endl;
+      delete psnap;
+      psnap = phead;
     }
   }
 
-private:
-  struct SnapTime
+  void PerfCounter::snap(const string &name_)
   {
-    chrono::system_clock::time_point tp{};
-    std::string description{};
-  };
+    CounterData *psnap = createSnap(name_);
 
-  std::list<SnapTime> list_;
-  chrono::system_clock::time_point start_;
-};
-
-class PerfCounter
-{
-public:
-  PerfCounter();
-  ~PerfCounter();
-
-  void snap(const string &name_);
-  void dump();
-
-private:
-  // *cxx-nested-class*
-  // since the original code uses class but makes it all public, use
-  // struct instead.
-  struct CounterData
-  {
-    CounterData(const string &name_) : name{name_}, pnext{nullptr} {}
-    string name;
-    CounterData *pnext;
-    struct timespec ts;
-  };
-
-  // singly list but has end as well.
-  CounterData *phead;
-  CounterData *pend;
-
-  // utility function
-  CounterData *createSnap(const string &name_);
-};
-
-PerfCounter::PerfCounter()
-{
-  // create a start node
-  phead = pend = createSnap("start");
-}
-
-PerfCounter::~PerfCounter()
-{
-  // clean up a list
-  for (CounterData *psnap = phead; psnap;)
-  {
-    phead = psnap->pnext;
-    std::cout << "delete " << psnap->name << std::endl;
-    delete psnap;
-    psnap = phead;
-  }
-}
-
-void PerfCounter::snap(const string &name_)
-{
-  CounterData *psnap = createSnap(name_);
-
-  pend->pnext = psnap;
-  pend        = psnap;
-}
-
-// utility function to have common code in one place
-// note that use of cpp-nested-class type, `PerfCounter::CounterData`
-// Otherwise, see compile errors.
-//
-// CounterData *PerfCounter::createSnap(const string &name_) {}
-//
-// perfcounter.cpp:45:1: error: ‘CounterData’ does not name a type
-//  CounterData *PerfCounter::createSnap(const string &name_)
-//  ^
-
-PerfCounter::CounterData *PerfCounter::createSnap(const string &name_)
-{
-  CounterData *psnap = new CounterData(name_);
-  clock_gettime(CLOCK_MONOTONIC, &(psnap->ts));
-  return psnap;
-}
-
-// cpp-stringstream
-void PerfCounter::dump()
-{
-  std::stringstream ss{};
-  uint32_t countSnap{1};
-
-  // only when there are two nodes to use
-  for (CounterData *pstart = phead; pstart && pstart->pnext;
-       pstart              = pstart->pnext)
-  {
-    ss << "snap: " << countSnap << ": ";
-    ss << pstart->name << " -> " << pstart->pnext->name << " took ";
-
-    // time diff in us from current to next
-    uint64_t timeDiff =
-      (pstart->pnext->ts.tv_sec * 1000000 + pstart->pnext->ts.tv_nsec / 1000) -
-      (pstart->ts.tv_sec * 1000000 + pstart->ts.tv_nsec / 1000);
-
-    ss << timeDiff << "us" << std::endl;
-    ++countSnap;
+    pend->pnext = psnap;
+    pend        = psnap;
   }
 
-  std::cout << ss.str();
-}
+  // utility function to have common code in one place
+  // note that use of cpp-nested-class type, `PerfCounter::CounterData`
+  // Otherwise, see compile errors.
+  //
+  // CounterData *PerfCounter::createSnap(const string &name_) {}
+  //
+  // perfcounter.cpp:45:1: error: ‘CounterData’ does not name a type
+  //  CounterData *PerfCounter::createSnap(const string &name_)
+  //  ^
+
+  PerfCounter::CounterData *PerfCounter::createSnap(const string &name_)
+  {
+    CounterData *psnap = new CounterData(name_);
+    clock_gettime(CLOCK_MONOTONIC, &(psnap->ts));
+    return psnap;
+  }
+
+  // cpp-stringstream
+  void PerfCounter::dump()
+  {
+    std::stringstream ss{};
+    uint32_t countSnap{1};
+
+    // only when there are two nodes to use
+    for (CounterData *pstart = phead; pstart && pstart->pnext;
+         pstart              = pstart->pnext)
+    {
+      ss << "snap: " << countSnap << ": ";
+      ss << pstart->name << " -> " << pstart->pnext->name << " took ";
+
+      // time diff in us from current to next
+      uint64_t timeDiff =
+        (pstart->pnext->ts.tv_sec * 1000000 +
+         pstart->pnext->ts.tv_nsec / 1000) -
+        (pstart->ts.tv_sec * 1000000 + pstart->ts.tv_nsec / 1000);
+
+      ss << timeDiff << "us" << std::endl;
+      ++countSnap;
+    }
+
+    std::cout << ss.str();
+  }
 
 } // namespace cxx_time_lap
 
@@ -2949,21 +3049,22 @@ TEST(Time, Snapper)
 // ={=========================================================================
 // cxx-static
 
-namespace cxx_static {
-// shows static member shall be defined outside of class
-class FooStatic
+namespace cxx_static
 {
-private:
-  static const size_t MAX_CODE_LENGTH{4}; // *TN* no define
-  static const std::string DIGIT_NOT_FOUND;
+  // shows static member shall be defined outside of class
+  class FooStatic
+  {
+  private:
+    static const size_t MAX_CODE_LENGTH{4}; // *TN* no define
+    static const std::string DIGIT_NOT_FOUND;
 
-  // cause an error
-  // static const std::string DIGIT_NOT_FOUND{"*"};
-public:
-  FooStatic() {}
-};
+    // cause an error
+    // static const std::string DIGIT_NOT_FOUND{"*"};
+  public:
+    FooStatic() {}
+  };
 
-const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
+  const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
 } // namespace cxx_static
 
 TEST(Static, DefineStaticOutside)
@@ -2973,49 +3074,51 @@ TEST(Static, DefineStaticOutside)
   FooStatic foo;
 }
 
-namespace cxx_static {
-// c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
-
-class StaticClass
+namespace cxx_static
 {
-protected:
-  int value_{};
-  size_t id_{};
+  // c++ cookbook, 8.4 Automatically Adding New Class Instances to a Container
 
-  string name_{};
-  static list<StaticClass *> instances_;
-  static size_t track_id_;
-
-public:
-  StaticClass(int value, string name = "static class")
-      : value_(value), name_(name)
+  class StaticClass
   {
-    id_ = ++track_id_;
-    instances_.push_back(this);
-  }
+  protected:
+    int value_{};
+    size_t id_{};
 
-  ~StaticClass()
-  {
-    auto it = find(instances_.begin(), instances_.end(), this);
-    if (it != instances_.end())
-      instances_.erase(it);
-  }
+    string name_{};
+    static list<StaticClass *> instances_;
+    static size_t track_id_;
 
-public:
-  static void ShowList()
-  {
-    cout << "ShowList: " << instances_.size() << endl;
-    for (const auto &e : instances_)
+  public:
+    StaticClass(int value, string name = "static class")
+        : value_(value)
+        , name_(name)
     {
-      cout << "ShowList: name : " << e->name_ << endl;
-      cout << "ShowList: value: " << e->value_ << endl;
-      cout << "ShowList: id   : " << e->id_ << endl;
+      id_ = ++track_id_;
+      instances_.push_back(this);
     }
-  }
-};
 
-list<StaticClass *> StaticClass::instances_;
-size_t StaticClass::track_id_ = 0;
+    ~StaticClass()
+    {
+      auto it = find(instances_.begin(), instances_.end(), this);
+      if (it != instances_.end())
+        instances_.erase(it);
+    }
+
+  public:
+    static void ShowList()
+    {
+      cout << "ShowList: " << instances_.size() << endl;
+      for (const auto &e : instances_)
+      {
+        cout << "ShowList: name : " << e->name_ << endl;
+        cout << "ShowList: value: " << e->value_ << endl;
+        cout << "ShowList: id   : " << e->id_ << endl;
+      }
+    }
+  };
+
+  list<StaticClass *> StaticClass::instances_;
+  size_t StaticClass::track_id_ = 0;
 
 } // namespace cxx_static
 
@@ -3049,26 +3152,27 @@ TEST(Static, TrackClassInstancesWhenNothingCreated)
   StaticClass::ShowList();
 }
 
-namespace cxx_static {
-class Foo
+namespace cxx_static
 {
-public:
-  Foo() {}
-  static void createInstance()
+  class Foo
   {
-    std::cout << "Foo::createInstance()" << std::endl;
-  }
-};
+  public:
+    Foo() {}
+    static void createInstance()
+    {
+      std::cout << "Foo::createInstance()" << std::endl;
+    }
+  };
 
-class Bar : public Foo
-{
-public:
-  Bar() {}
-  static void createInstance()
+  class Bar : public Foo
   {
-    std::cout << "Bar::createInstance()" << std::endl;
-  }
-};
+  public:
+    Bar() {}
+    static void createInstance()
+    {
+      std::cout << "Bar::createInstance()" << std::endl;
+    }
+  };
 } // namespace cxx_static
 
 // [ RUN      ] Static.UnderInheritance
@@ -3161,81 +3265,84 @@ TEST(Lambda, CaptureAndReturn)
 // for_each     : fox red the over slow jumps quick turtle
 // jumps quick turtle
 
-namespace cxx_lambda {
-template <typename T>
-inline void PRINT_ELEMENTS(const T &coll, const std::string &opt = "")
+namespace cxx_lambda
 {
-  std::cout << opt;
+  template <typename T>
+  inline void PRINT_ELEMENTS(const T &coll, const std::string &opt = "")
+  {
+    std::cout << opt;
 
-  for (const auto &elem : coll)
-    std::cout << elem << ' ';
+    for (const auto &elem : coll)
+      std::cout << elem << ' ';
 
-  std::cout << std::endl;
-}
+    std::cout << std::endl;
+  }
 
-// *algo-sort* *algo-unique*
-void eliminate_duplicates(vector<string> &words)
-{
-  sort(words.begin(), words.end());
-  auto unique_end = unique(words.begin(), words.end());
-  words.erase(unique_end, words.end());
-}
+  // *algo-sort* *algo-unique*
+  void eliminate_duplicates(vector<string> &words)
+  {
+    sort(words.begin(), words.end());
+    auto unique_end = unique(words.begin(), words.end());
+    words.erase(unique_end, words.end());
+  }
 
-bool check_size(string const &s, string::size_type sz)
-{
-  return s.size() >= sz;
-}
+  bool check_size(string const &s, string::size_type sz)
+  {
+    return s.size() >= sz;
+  }
 
-// keep items in words which is >= sz
-void biggies(vector<string> &words, vector<string>::size_type sz)
-{
-  eliminate_duplicates(words);
+  // keep items in words which is >= sz
+  void biggies(vector<string> &words, vector<string>::size_type sz)
+  {
+    eliminate_duplicates(words);
 
-  // PRINT_ELEMENTS(words, "eliminated: ");
+    // PRINT_ELEMENTS(words, "eliminated: ");
 
-  sort(words.begin(), words.end(),
-       [](string const &a, string const &b) { return a.size() < b.size(); });
+    sort(words.begin(), words.end(), [](string const &a, string const &b) {
+      return a.size() < b.size();
+    });
 
-  // PRINT_ELEMENTS(words, "statle sorted: ");
+    // PRINT_ELEMENTS(words, "statle sorted: ");
 
-  // get an iter of the first element whose size is >= sz
+    // get an iter of the first element whose size is >= sz
 
-  // the problem is that find_if() uses *cxx-predicate* which is unary but we
-  // need two args.
-  //
-  // *cxx-lambda* version
-  //
-  // error when use:
-  //
-  // [](string const& e)
-  //
-  // cxx.cpp:2254:30: error: ‘sz’ is not captured
-  //          { return e.size() >= sz; });
-  //                               ^
-  //
-  // works when use:
-  //
-  // [sz](string const& e)
+    // the problem is that find_if() uses *cxx-predicate* which is unary but we
+    // need two args.
+    //
+    // *cxx-lambda* version
+    //
+    // error when use:
+    //
+    // [](string const& e)
+    //
+    // cxx.cpp:2254:30: error: ‘sz’ is not captured
+    //          { return e.size() >= sz; });
+    //                               ^
+    //
+    // works when use:
+    //
+    // [sz](string const& e)
 
-  // auto wc = find_if(words.begin(), words.end(),
-  //     [=](string const& e)
-  //     { return e.size() >= sz; });
+    // auto wc = find_if(words.begin(), words.end(),
+    //     [=](string const& e)
+    //     { return e.size() >= sz; });
 
-  // *cxx-bind* version
-  auto wc = find_if(words.begin(), words.end(), std::bind(check_size, _1, sz));
+    // *cxx-bind* version
+    auto wc =
+      find_if(words.begin(), words.end(), std::bind(check_size, _1, sz));
 
-  // get the number of elements that are its size >= sz
-  // use *cxx-iter-arithmetic* since it's vector
-  auto num = words.end() - wc;
+    // get the number of elements that are its size >= sz
+    // use *cxx-iter-arithmetic* since it's vector
+    auto num = words.end() - wc;
 
-  EXPECT_THAT(num, 3);
+    EXPECT_THAT(num, 3);
 
-  vector<string> result{};
+    vector<string> result{};
 
-  for_each(wc, words.end(), [&](string const &e) { result.push_back(e); });
+    for_each(wc, words.end(), [&](string const &e) { result.push_back(e); });
 
-  EXPECT_THAT(result, ElementsAre("jumps", "quick", "turtle"));
-}
+    EXPECT_THAT(result, ElementsAre("jumps", "quick", "turtle"));
+  }
 
 } // namespace cxx_lambda
 
@@ -3243,8 +3350,16 @@ TEST(Lambda, Biggies)
 {
   using namespace cxx_lambda;
 
-  vector<string> coll{"over", "quick", "red",  "fox",    "jumps",
-                      "red",  "the",   "slow", "turtle", "the"};
+  vector<string> coll{"over",
+                      "quick",
+                      "red",
+                      "fox",
+                      "jumps",
+                      "red",
+                      "the",
+                      "slow",
+                      "turtle",
+                      "the"};
 
   // PRINT_ELEMENTS( coll, "initialized  : ");
 
@@ -3276,7 +3391,8 @@ TEST(Lambda, Compare)
 
   // use cxx-bind
   {
-    auto pos = find_if(coll.begin(), coll.end(),         // range
+    auto pos = find_if(coll.begin(),
+                       coll.end(),                       // range
                        bind(logical_and<bool>(),         // search criterion
                             bind(greater<int>(), _1, x), // _1 > x
                             bind(less<int>(), _1, y)));  // _1 < y
@@ -3302,7 +3418,10 @@ TEST(Lambda, Compare)
     class Pred
     {
     public:
-      Pred(int x, int y) : x_(x), y_(y) {}
+      Pred(int x, int y)
+          : x_(x)
+          , y_(y)
+      {}
       bool operator()(int value) const { return value > x_ && value < y_; }
 
     private:
@@ -3376,15 +3495,16 @@ TEST(CxxFeaturesTest, UseIsspace)
 //   return EXIT_SUCCESS;
 // }
 
-namespace cxx_function {
-
-typedef bool (*UPDATEFUNC)(int);
-
-bool updateProgress(int percent)
+namespace cxx_function
 {
-  std::cout << std::flush << "\r" << percent << "% complete...";
-  return true;
-}
+
+  typedef bool (*UPDATEFUNC)(int);
+
+  bool updateProgress(int percent)
+  {
+    std::cout << std::flush << "\r" << percent << "% complete...";
+    return true;
+  }
 
 } // namespace cxx_function
 
@@ -3448,29 +3568,29 @@ TEST(CxxFunctionObject, FunctionPointerVoidCast)
   }
 }
 
-namespace cxx_function {
-
-class Foo
+namespace cxx_function
 {
-public:
-  Foo(size_t value = 0) : value_(value) {}
 
-  void update_10() noexcept { value_ += 10; }
+  class Foo
+  {
+  public:
+    Foo(size_t value = 0)
+        : value_(value)
+    {}
 
-  void update_20() noexcept { value_ += 20; }
+    void update_10() noexcept { value_ += 10; }
 
-  void update_30() noexcept { value_ += 30; }
+    void update_20() noexcept { value_ += 20; }
 
-  size_t get_value() const noexcept { return value_; }
+    void update_30() noexcept { value_ += 30; }
 
-private:
-  size_t value_;
-};
+    size_t get_value() const noexcept { return value_; }
 
-size_t print_value(Foo &foo)
-{
-  return foo.get_value();
-}
+  private:
+    size_t value_;
+  };
+
+  size_t print_value(Foo &foo) { return foo.get_value(); }
 
 } // namespace cxx_function
 
@@ -3561,21 +3681,19 @@ TEST(CxxFunctionObject, Function)
 
 // *cxx-bind*
 
-namespace cxx_function {
-bool check_size(std::string const &s, std::string::size_type size)
+namespace cxx_function
 {
-  return s.size() >= size;
-}
+  bool check_size(std::string const &s, std::string::size_type size)
+  {
+    return s.size() >= size;
+  }
 
-bool shorter_than_lhs(std::string const &lhs, std::string const &rhs)
-{
-  return lhs.size() > rhs.size();
-}
+  bool shorter_than_lhs(std::string const &lhs, std::string const &rhs)
+  {
+    return lhs.size() > rhs.size();
+  }
 
-void increase(int &i)
-{
-  ++i;
-}
+  void increase(int &i) { ++i; }
 } // namespace cxx_function
 
 TEST(CxxFunctionObject, Bind)
@@ -3603,18 +3721,22 @@ TEST(CxxFunctionObject, Bind)
     int size{6};
 
     auto found1 =
-      std::find_if(coll.cbegin(), coll.cend(),
-                   [size](std::string const &e) { return e.size() >= size; });
+      std::find_if(coll.cbegin(), coll.cend(), [size](std::string const &e) {
+        return e.size() >= size;
+      });
 
     auto found2 =
-      std::find_if(coll.cbegin(), coll.cend(),
-                   [](std::string const &e) { return e.size() >= 6; });
+      std::find_if(coll.cbegin(), coll.cend(), [](std::string const &e) {
+        return e.size() >= 6;
+      });
 
     auto found3 =
-      std::find_if(coll.cbegin(), coll.cend(),
+      std::find_if(coll.cbegin(),
+                   coll.cend(),
                    std::bind(check_size, std::placeholders::_1, size));
 
-    auto found4 = std::find_if(coll.cbegin(), coll.cend(),
+    auto found4 = std::find_if(coll.cbegin(),
+                               coll.cend(),
                                std::bind(check_size, std::placeholders::_1, 6));
 
     EXPECT_THAT(*found1, "wonders");
@@ -3623,7 +3745,8 @@ TEST(CxxFunctionObject, Bind)
 
     // don't have to use arguments to bind() and found the first as function
     // object always returns true
-    auto found5 = std::find_if(coll.cbegin(), coll.cend(),
+    auto found5 = std::find_if(coll.cbegin(),
+                               coll.cend(),
                                std::bind(check_size, "wonders", 6));
 
     EXPECT_THAT(*found5, "bind");
@@ -3652,18 +3775,20 @@ TEST(CxxFunctionObject, Bind)
     // 17*2 = 34. see that inner fobj itself is used as argument
     auto plus10times2 =
       std::bind(std::multiplies<int>(),
-                std::bind(std::plus<int>(), std::placeholders::_1, 10), 2);
+                std::bind(std::plus<int>(), std::placeholders::_1, 10),
+                2);
     EXPECT_THAT(plus10times2(7), 34);
 
     // 49*7 = 343. used multiple times
-    auto pow3 =
-      std::bind(std::multiplies<int>(),
-                std::bind(std::multiplies<int>(), std::placeholders::_1,
-                          std::placeholders::_1),
-                std::placeholders::_1);
+    auto pow3 = std::bind(std::multiplies<int>(),
+                          std::bind(std::multiplies<int>(),
+                                    std::placeholders::_1,
+                                    std::placeholders::_1),
+                          std::placeholders::_1);
     EXPECT_THAT(pow3(7), 343);
 
-    auto inversDivide = std::bind(std::divides<double>(), std::placeholders::_2,
+    auto inversDivide = std::bind(std::divides<double>(),
+                                  std::placeholders::_2,
                                   std::placeholders::_1);
     EXPECT_NEAR(inversDivide(49, 7), 0.142857, 0.001);
   }
@@ -3676,7 +3801,8 @@ TEST(CxxFunctionObject, Bind)
     EXPECT_THAT(coll1, ElementsAre(9, 8, 7, 6, 5, 4, 3, 2, 1));
 
     // *algo-transform*
-    transform(coll1.cbegin(), coll1.cend(),     // source
+    transform(coll1.cbegin(),
+              coll1.cend(),                     // source
               back_inserter(coll2),             // destination
               bind(multiplies<int>(), _1, 10)); // unary operation
 
@@ -3684,7 +3810,8 @@ TEST(CxxFunctionObject, Bind)
     EXPECT_THAT(coll2, ElementsAre(90, 80, 70, 60, 50, 40, 30, 20, 10));
 
     // algo-replace-if
-    replace_if(coll2.begin(), coll2.end(),    // range
+    replace_if(coll2.begin(),
+               coll2.end(),                   // range
                bind(equal_to<int>(), _1, 70), // criterion
                42);                           // new value
 
@@ -3710,11 +3837,12 @@ TEST(CxxFunctionObject, Bind)
     //
     // __x is not "bind(greater_equal<int>(), _1, 50)" and is return value.
 
-    coll2.erase(
-      remove_if(coll2.begin(), coll2.end(),
-                bind(logical_and<bool>(), bind(greater_equal<int>(), _1, 50),
-                     bind(less_equal<int>(), _1, 80))),
-      coll2.end());
+    coll2.erase(remove_if(coll2.begin(),
+                          coll2.end(),
+                          bind(logical_and<bool>(),
+                               bind(greater_equal<int>(), _1, 50),
+                               bind(less_equal<int>(), _1, 80))),
+                coll2.end());
 
     // replaced
     EXPECT_THAT(coll2, ElementsAre(90, 42, 40, 30, 20, 10));
@@ -4229,26 +4357,28 @@ TEST(SharedPointerUnique, checkSupportCopy)
   EXPECT_THAT(up->empty(), true);
 }
 
-namespace cxx_sp_shared {
-int dtor_count{};
-
-class Foo
+namespace cxx_sp_shared
 {
-private:
-  int id;
+  int dtor_count{};
 
-public:
-  Foo(int val = 1) : id(val)
+  class Foo
   {
-    // cout << "Foo ctor(" << id << ")" << endl;
-  }
+  private:
+    int id;
 
-  ~Foo()
-  {
-    dtor_count++;
-    // cout << "Foo dtor(" << id << ")" << endl;
-  }
-};
+  public:
+    Foo(int val = 1)
+        : id(val)
+    {
+      // cout << "Foo ctor(" << id << ")" << endl;
+    }
+
+    ~Foo()
+    {
+      dtor_count++;
+      // cout << "Foo dtor(" << id << ")" << endl;
+    }
+  };
 } // namespace cxx_sp_shared
 
 // Foo ctor(1)
@@ -4304,23 +4434,24 @@ TEST(SmartPointer, UniqueSetUseMove_1)
   EXPECT_FALSE(p3);
 }
 
-namespace cxx_sp_shared {
-unique_ptr<Foo> source()
+namespace cxx_sp_shared
 {
-  unique_ptr<Foo> ret(new Foo);
-  cout << "source: create up" << endl;
-  cout << "source: owns " << ret.get() << endl;
-  cout << "source: ends" << endl;
+  unique_ptr<Foo> source()
+  {
+    unique_ptr<Foo> ret(new Foo);
+    cout << "source: create up" << endl;
+    cout << "source: owns " << ret.get() << endl;
+    cout << "source: ends" << endl;
 
-  // *cxx-return-cxx-move*
-  return ret;
-}
+    // *cxx-return-cxx-move*
+    return ret;
+  }
 
-void sink(unique_ptr<Foo> p)
-{
-  cout << "sink: owns " << p.get() << endl;
-  cout << "sink: ends" << endl;
-}
+  void sink(unique_ptr<Foo> p)
+  {
+    cout << "sink: owns " << p.get() << endl;
+    cout << "sink: ends" << endl;
+  }
 } // namespace cxx_sp_shared
 
 // [ RUN      ] CxxFeaturesTest.UseUniqueSinkSource
@@ -4350,68 +4481,75 @@ TEST(SmartPointer, UniqueSinkSource)
   cout << "main: ends" << endl;
 }
 
-namespace cxx_sp_delete {
-class ClassA
+namespace cxx_sp_delete
 {
-public:
-  ClassA(string mesg = {}) : mesg_(mesg) {}
-
-  void print_mesg() { cout << "ClassA: " << mesg_ << endl; }
-
-private:
-  string mesg_;
-};
-
-class DebugDeleteClassA
-{
-public:
-  DebugDeleteClassA(ostream &os = cerr) : os_(os) {}
-
-  void operator()(ClassA *p)
+  class ClassA
   {
-    os_ << "DebugDeleteClassA: deleting " << typeid(p).name() << ", p = " << p
-        << endl;
-    delete p;
-  }
+  public:
+    ClassA(string mesg = {})
+        : mesg_(mesg)
+    {}
 
-private:
-  // *cxx-reference-member*
-  ostream &os_;
-};
+    void print_mesg() { cout << "ClassA: " << mesg_ << endl; }
 
-class DebugDelete
-{
-public:
-  DebugDelete(ostream &os = cerr) : os_(os) {}
+  private:
+    string mesg_;
+  };
 
-  // *cxx-template-member*
-  template <typename T> void operator()(T *p)
+  class DebugDeleteClassA
   {
-    os_ << "DebugDelete: deleting " << typeid(p).name() << ", p = " << p
-        << endl;
-    delete p;
-  }
+  public:
+    DebugDeleteClassA(ostream &os = cerr)
+        : os_(os)
+    {}
 
-private:
-  // *cxx-reference-member*
-  ostream &os_;
-};
+    void operator()(ClassA *p)
+    {
+      os_ << "DebugDeleteClassA: deleting " << typeid(p).name() << ", p = " << p
+          << endl;
+      delete p;
+    }
 
-void function_debug_delete(string *str)
-{
-  cout << "deleting " << *str << endl;
-  delete str;
-}
+  private:
+    // *cxx-reference-member*
+    ostream &os_;
+  };
 
-class ClassDebugDelete
-{
-public:
-  void operator()(string *str)
+  class DebugDelete
+  {
+  public:
+    DebugDelete(ostream &os = cerr)
+        : os_(os)
+    {}
+
+    // *cxx-template-member*
+    template <typename T> void operator()(T *p)
+    {
+      os_ << "DebugDelete: deleting " << typeid(p).name() << ", p = " << p
+          << endl;
+      delete p;
+    }
+
+  private:
+    // *cxx-reference-member*
+    ostream &os_;
+  };
+
+  void function_debug_delete(string *str)
   {
     cout << "deleting " << *str << endl;
     delete str;
   }
-};
+
+  class ClassDebugDelete
+  {
+  public:
+    void operator()(string *str)
+    {
+      cout << "deleting " << *str << endl;
+      delete str;
+    }
+  };
 
 } // namespace cxx_sp_delete
 
@@ -4587,16 +4725,21 @@ TEST(SmartPointer, UniqueDeleteReleaseReset)
   cout << "end of main" << endl;
 }
 
-namespace cxx_sp_use_count {
-class Foo
+namespace cxx_sp_use_count
 {
-private:
-  int id;
+  class Foo
+  {
+  private:
+    int id;
 
-public:
-  Foo(int val) : id(val) { cout << "Foo ctor(" << id << ")" << endl; }
-  ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
-};
+  public:
+    Foo(int val)
+        : id(val)
+    {
+      cout << "Foo ctor(" << id << ")" << endl;
+    }
+    ~Foo() { cout << "Foo dtor(" << id << ")" << endl; }
+  };
 } // namespace cxx_sp_use_count
 
 // Is use_count() reliable?
@@ -4850,34 +4993,38 @@ TEST(SmartPointer, WeakNotInReferenceCount)
   }
 }
 
-namespace cxx_sp_weak_problem {
-class Person
+namespace cxx_sp_weak_problem
 {
-public:
-  string name_;
-  shared_ptr<Person> mother_;
-  shared_ptr<Person> father_;
-  vector<shared_ptr<Person>> kids_;
+  class Person
+  {
+  public:
+    string name_;
+    shared_ptr<Person> mother_;
+    shared_ptr<Person> father_;
+    vector<shared_ptr<Person>> kids_;
 
-  Person(string const &name, shared_ptr<Person> mother = nullptr,
-         shared_ptr<Person> father = nullptr)
-      : name_(name), mother_(mother), father_(father)
-  {}
+    Person(string const &name,
+           shared_ptr<Person> mother = nullptr,
+           shared_ptr<Person> father = nullptr)
+        : name_(name)
+        , mother_(mother)
+        , father_(father)
+    {}
 
-  ~Person() { cout << "delete: " << name_ << endl; }
-};
+    ~Person() { cout << "delete: " << name_ << endl; }
+  };
 
-shared_ptr<Person> init_family(string const &name)
-{
-  shared_ptr<Person> mom(new Person(name + "'s mom"));
-  shared_ptr<Person> dad(new Person(name + "'s dad"));
-  shared_ptr<Person> kid(new Person(name, mom, dad));
+  shared_ptr<Person> init_family(string const &name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
 
-  mom->kids_.push_back(kid);
-  dad->kids_.push_back(kid);
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
 
-  return kid;
-}
+    return kid;
+  }
 
 } // namespace cxx_sp_weak_problem
 
@@ -4932,36 +5079,40 @@ TEST(SmartPointer, WeakCyclicReference)
        << endl;
 }
 
-namespace cxx_sp_weak_solution {
-class Person
+namespace cxx_sp_weak_solution
 {
-public:
-  string name_;
-  shared_ptr<Person> mother_;
-  shared_ptr<Person> father_;
+  class Person
+  {
+  public:
+    string name_;
+    shared_ptr<Person> mother_;
+    shared_ptr<Person> father_;
 
-  // vector<shard_ptr<Person>> kids_;
-  vector<weak_ptr<Person>> kids_;
+    // vector<shard_ptr<Person>> kids_;
+    vector<weak_ptr<Person>> kids_;
 
-  Person(string const &name, shared_ptr<Person> mother = nullptr,
-         shared_ptr<Person> father = nullptr)
-      : name_(name), mother_(mother), father_(father)
-  {}
+    Person(string const &name,
+           shared_ptr<Person> mother = nullptr,
+           shared_ptr<Person> father = nullptr)
+        : name_(name)
+        , mother_(mother)
+        , father_(father)
+    {}
 
-  ~Person() { cout << "delete: " << name_ << endl; }
-};
+    ~Person() { cout << "delete: " << name_ << endl; }
+  };
 
-shared_ptr<Person> init_family(string const &name)
-{
-  shared_ptr<Person> mom(new Person(name + "'s mom"));
-  shared_ptr<Person> dad(new Person(name + "'s dad"));
-  shared_ptr<Person> kid(new Person(name, mom, dad));
+  shared_ptr<Person> init_family(string const &name)
+  {
+    shared_ptr<Person> mom(new Person(name + "'s mom"));
+    shared_ptr<Person> dad(new Person(name + "'s dad"));
+    shared_ptr<Person> kid(new Person(name, mom, dad));
 
-  mom->kids_.push_back(kid);
-  dad->kids_.push_back(kid);
+    mom->kids_.push_back(kid);
+    dad->kids_.push_back(kid);
 
-  return kid;
-}
+    return kid;
+  }
 
 } // namespace cxx_sp_weak_solution
 
@@ -5010,63 +5161,67 @@ TEST(SmartPointer, WeakCyclicReferenceSolution)
   cout << p->mother_->kids_[0].lock()->name_ << endl;
 }
 
-namespace cxx_sp_weak_problem {
-class Resource
+namespace cxx_sp_weak_problem
 {
-public:
-  explicit Resource() : name_("resouce"), count_(0)
+  class Resource
   {
-    std::cout << "Resource::Resource" << std::endl;
-  }
-
-  ~Resource() { std::cout << "Resource::~Resource" << std::endl; }
-
-  std::string get_name() const { return name_; }
-
-  int get_count() const { return count_; }
-
-  void increase_count() { ++count_; }
-
-  void decrease_count() { --count_; }
-
-private:
-  std::string name_;
-  int count_;
-};
-
-class ResourceManager
-{
-public:
-  explicit ResourceManager()
-  {
-    std::cout << "ResourceManager::ResourceManager" << std::endl;
-  }
-
-  std::shared_ptr<Resource> get_resource()
-  {
-    auto res = res_.lock();
-
-    // if resource is around
-    if (res)
+  public:
+    explicit Resource()
+        : name_("resouce")
+        , count_(0)
     {
-      std::cout << "ResourceManager::get_resource: res is around and return sp"
-                << std::endl;
-      return res;
+      std::cout << "Resource::Resource" << std::endl;
     }
-    else
-    {
-      std::cout
-        << "ResourceManager::get_resource: res is not around and return new one"
-        << std::endl;
-      auto sp = std::shared_ptr<Resource>{new Resource()};
-      res_    = sp;
-      return sp;
-    }
-  }
 
-private:
-  std::weak_ptr<Resource> res_;
-};
+    ~Resource() { std::cout << "Resource::~Resource" << std::endl; }
+
+    std::string get_name() const { return name_; }
+
+    int get_count() const { return count_; }
+
+    void increase_count() { ++count_; }
+
+    void decrease_count() { --count_; }
+
+  private:
+    std::string name_;
+    int count_;
+  };
+
+  class ResourceManager
+  {
+  public:
+    explicit ResourceManager()
+    {
+      std::cout << "ResourceManager::ResourceManager" << std::endl;
+    }
+
+    std::shared_ptr<Resource> get_resource()
+    {
+      auto res = res_.lock();
+
+      // if resource is around
+      if (res)
+      {
+        std::cout
+          << "ResourceManager::get_resource: res is around and return sp"
+          << std::endl;
+        return res;
+      }
+      else
+      {
+        std::cout << "ResourceManager::get_resource: res is not around and "
+                     "return new one"
+                  << std::endl;
+        auto sp = std::shared_ptr<Resource>{new Resource()};
+        res_    = sp;
+        return sp;
+      }
+    }
+
+  private:
+    std::weak_ptr<Resource> res_;
+  };
 
 } // namespace cxx_sp_weak_problem
 
@@ -5173,123 +5328,127 @@ TEST(SmartPointer, WeakResourceManagerSolution)
 // note that this version uses T which provides pointer and close() in it.
 // changes it to delete().
 
-namespace cxx_sp_unique_own_version {
-struct pointer_int_trait
+namespace cxx_sp_unique_own_version
 {
-  typedef int value_type;
-  using pointer = value_type *;
-
-  // *cxx-static*
-  // without static, cause build error:
-  //
-  // cxx.cpp:2243:24: error: cannot call member function
-  // ‘void
-  // cxx_sp_unique_own_version::pointer_int_trait::deleter(cxx_sp_unique_own_version::pointer_int_trait::pointer)’
-  // without object
-  //
-  //           T::deleter(p_);
-
-  static void deleter(pointer p) { delete p; }
-};
-
-template <typename T> class unique_own
-{
-  using pointer = typename T::pointer;
-
-public:
-  // no copy support
-
-  // not a build error but don't need to do this as *cxx-scope*
-  // unique_own(const unique_own<T> &) = delete;
-  // unique_own<T> &operator=(const unique_own<T> &) = delete;
-
-  unique_own(const unique_own &) = delete;
-  unique_own &operator=(const unique_own &) = delete;
-
-  // ctor & dtor
-  explicit unique_own(typename T::pointer p = nullptr) : p_(p) {}
-
-  // move support
-  // handle moved-from by using release() and moved-to by using reset().
-
-  unique_own(unique_own &&other) noexcept : p_(other.release())
+  struct pointer_int_trait
   {
-    // don't need to do since it's ctor and p_ is not assigned.
-    // if (p_)
-    //   T::deleter(p_);
+    typedef int value_type;
+    using pointer = value_type *;
+
+    // *cxx-static*
+    // without static, cause build error:
     //
-    // p_ = other.p_;
-  }
-
-  unique_own &operator=(unique_own &&other) noexcept
-  {
-    // if (p_)
-    //   T::deleter(p_);
+    // cxx.cpp:2243:24: error: cannot call member function
+    // ‘void
+    // cxx_sp_unique_own_version::pointer_int_trait::deleter(cxx_sp_unique_own_version::pointer_int_trait::pointer)’
+    // without object
     //
-    // p_ = other.p_;
+    //           T::deleter(p_);
 
-    if (this != &other)
-      reset(other.release());
+    static void deleter(pointer p) { delete p; }
+  };
 
-    return *this;
-  }
-
-  ~unique_own() noexcept
+  template <typename T> class unique_own
   {
-    if (p_)
+    using pointer = typename T::pointer;
+
+  public:
+    // no copy support
+
+    // not a build error but don't need to do this as *cxx-scope*
+    // unique_own(const unique_own<T> &) = delete;
+    // unique_own<T> &operator=(const unique_own<T> &) = delete;
+
+    unique_own(const unique_own &) = delete;
+    unique_own &operator=(const unique_own &) = delete;
+
+    // ctor & dtor
+    explicit unique_own(typename T::pointer p = nullptr)
+        : p_(p)
+    {}
+
+    // move support
+    // handle moved-from by using release() and moved-to by using reset().
+
+    unique_own(unique_own &&other) noexcept
+        : p_(other.release())
     {
-      // this is not `typename`
-      T::deleter(p_);
+      // don't need to do since it's ctor and p_ is not assigned.
+      // if (p_)
+      //   T::deleter(p_);
+      //
+      // p_ = other.p_;
     }
-  }
 
-  pointer release() noexcept
-  {
-    auto p = p_;
-    p_     = nullptr;
-    return p;
-  }
-
-  // free resource and set p
-  void reset(pointer p = nullptr) noexcept
-  {
-    // check self-assign
-    if (p_ != p)
+    unique_own &operator=(unique_own &&other) noexcept
     {
-      T::deleter(p_);
-      p_ = p;
+      // if (p_)
+      //   T::deleter(p_);
+      //
+      // p_ = other.p_;
+
+      if (this != &other)
+        reset(other.release());
+
+      return *this;
     }
+
+    ~unique_own() noexcept
+    {
+      if (p_)
+      {
+        // this is not `typename`
+        T::deleter(p_);
+      }
+    }
+
+    pointer release() noexcept
+    {
+      auto p = p_;
+      p_     = nullptr;
+      return p;
+    }
+
+    // free resource and set p
+    void reset(pointer p = nullptr) noexcept
+    {
+      // check self-assign
+      if (p_ != p)
+      {
+        T::deleter(p_);
+        p_ = p;
+      }
+    }
+
+    // swap
+    void swap(unique_own &other) const noexcept { std::swap(p_, other.p_); }
+
+    // *cxx-overload-oparator-bool*
+    // as with unique_ptr, must have const to avoid const error
+    explicit operator bool() const noexcept { return p_ != nullptr; }
+
+    // *cxx-overload-oparator-dereference*
+    typename T::value_type &operator*() const noexcept { return *p_; }
+
+  private:
+    pointer p_;
+  };
+
+  template <typename T>
+
+  // *cxx-error*
+  // void swap(unique_own &lhs, unique_own &rhs)
+  //
+  // okay
+  // void swap(unique_own<T> &lhs, unique_own<T> &rhs)
+  //
+  // okay
+  void swap(const unique_own<T> &lhs, const unique_own<T> &rhs)
+  {
+    lhs.swap(rhs);
   }
 
-  // swap
-  void swap(unique_own &other) const noexcept { std::swap(p_, other.p_); }
-
-  // *cxx-overload-oparator-bool*
-  // as with unique_ptr, must have const to avoid const error
-  explicit operator bool() const noexcept { return p_ != nullptr; }
-
-  // *cxx-overload-oparator-dereference*
-  typename T::value_type &operator*() const noexcept { return *p_; }
-
-private:
-  pointer p_;
-};
-
-template <typename T>
-
-// *cxx-error*
-// void swap(unique_own &lhs, unique_own &rhs)
-//
-// okay
-// void swap(unique_own<T> &lhs, unique_own<T> &rhs)
-//
-// okay
-void swap(const unique_own<T> &lhs, const unique_own<T> &rhs)
-{
-  lhs.swap(rhs);
-}
-
-using unique_own_int = unique_own<pointer_int_trait>;
+  using unique_own_int = unique_own<pointer_int_trait>;
 
 } // namespace cxx_sp_unique_own_version
 
@@ -5388,85 +5547,88 @@ TEST(SmartPointer, OwnUnique)
 // + non-member swap
 // + self-assign
 
-namespace cxx_sp_shared_own_version {
-template <typename T> class shared_own
+namespace cxx_sp_shared_own_version
 {
-public:
-  // ctor and dtor
-  explicit shared_own(T *p = nullptr) noexcept : p_(p), pcount_(new size_t(1))
-  {}
-
-  ~shared_own() noexcept
+  template <typename T> class shared_own
   {
-    if (--*pcount_ == 0)
-    {
-      delete p_;
-      delete pcount_;
-    }
-  }
+  public:
+    // ctor and dtor
+    explicit shared_own(T *p = nullptr) noexcept
+        : p_(p)
+        , pcount_(new size_t(1))
+    {}
 
-  // copy support
-  shared_own(const shared_own &other)
-  {
-    p_      = other.p_;
-    pcount_ = other.pcount_;
-    ++*pcount_;
-  }
-
-  shared_own &operator=(const shared_own &other)
-  {
-    // this requires operator==()
-    // if (*this != other)
-
-    if (this != &other)
+    ~shared_own() noexcept
     {
       if (--*pcount_ == 0)
       {
         delete p_;
         delete pcount_;
       }
+    }
 
+    // copy support
+    shared_own(const shared_own &other)
+    {
       p_      = other.p_;
       pcount_ = other.pcount_;
       ++*pcount_;
     }
 
-    return *this;
-  }
+    shared_own &operator=(const shared_own &other)
+    {
+      // this requires operator==()
+      // if (*this != other)
 
-  // *cxx-overload-operators*
-  T &operator*() const noexcept { return *p_; }
+      if (this != &other)
+      {
+        if (--*pcount_ == 0)
+        {
+          delete p_;
+          delete pcount_;
+        }
 
-  // *cxx-overload-operators*
-  T *operator->() const noexcept { return p_; }
+        p_      = other.p_;
+        pcount_ = other.pcount_;
+        ++*pcount_;
+      }
 
-  explicit operator bool() const noexcept { return p_ != nullptr; }
+      return *this;
+    }
 
-  size_t use_count() { return *pcount_; }
+    // *cxx-overload-operators*
+    T &operator*() const noexcept { return *p_; }
 
-  // swap
-  void swap(shared_own &other) noexcept
+    // *cxx-overload-operators*
+    T *operator->() const noexcept { return p_; }
+
+    explicit operator bool() const noexcept { return p_ != nullptr; }
+
+    size_t use_count() { return *pcount_; }
+
+    // swap
+    void swap(shared_own &other) noexcept
+    {
+      std::swap(p_, other.p_);
+      std::swap(pcount_, other.pcount_);
+    }
+
+    // reset
+    // use *cxx-tempprary* to delete lhs.
+    void reset(T *p = nullptr) noexcept { shared_own<T>(p).swap(*this); }
+
+    //
+    T *get() noexcept { return p_; }
+
+  private:
+    T *p_; // pointee
+    size_t *pcount_;
+  };
+
+  template <typename T> void swap(shared_own<T> &lhs, shared_own<T> &rhs)
   {
-    std::swap(p_, other.p_);
-    std::swap(pcount_, other.pcount_);
+    lhs.swap(rhs);
   }
-
-  // reset
-  // use *cxx-tempprary* to delete lhs.
-  void reset(T *p = nullptr) noexcept { shared_own<T>(p).swap(*this); }
-
-  //
-  T *get() noexcept { return p_; }
-
-private:
-  T *p_; // pointee
-  size_t *pcount_;
-};
-
-template <typename T> void swap(shared_own<T> &lhs, shared_own<T> &rhs)
-{
-  lhs.swap(rhs);
-}
 
 } // namespace cxx_sp_shared_own_version
 
@@ -5598,27 +5760,35 @@ TEST(Bool, CheckBoolDefault)
   EXPECT_EQ(value, false);
 }
 
-namespace __cxx_check {
-
-void CheckFailed(const char *file, int line, const char *cond, unsigned int v1,
-                 unsigned int v2)
+namespace __cxx_check
 {
-  printf("Sanitizer CHECK failed: %s:%d %s (%d, %d)\n", file, line, cond, v1,
-         v2);
-}
 
-/*
-original code from asan. see '\' at while(0 which has no difference.
+  void CheckFailed(const char *file,
+                   int line,
+                   const char *cond,
+                   unsigned int v1,
+                   unsigned int v2)
+  {
+    printf("Sanitizer CHECK failed: %s:%d %s (%d, %d)\n",
+           file,
+           line,
+           cond,
+           v1,
+           v2);
+  }
 
-#define CHECK_IMPL(c1, op, c2) \
-  do { \
-    unsigned int v1 = (unsigned int)(c1); \
-    unsigned int v2 = (unsigned int)(c2); \
-    if (!(v1 op v2)) \
-      CheckFailed(__FILE__, __LINE__, \
-        "(" #c1 ") " #op " (" #c2 ")", v1, v2); \
-  } while (false) \
-*/
+  /*
+  original code from asan. see '\' at while(0 which has no difference.
+
+  #define CHECK_IMPL(c1, op, c2) \
+    do { \
+      unsigned int v1 = (unsigned int)(c1); \
+      unsigned int v2 = (unsigned int)(c2); \
+      if (!(v1 op v2)) \
+        CheckFailed(__FILE__, __LINE__, \
+          "(" #c1 ") " #op " (" #c2 ")", v1, v2); \
+    } while (false) \
+  */
 
 #define CHECK_IMPL(c1, op, c2)                                                 \
   do                                                                           \
@@ -5923,34 +6093,40 @@ TEST(Stdio, ManipulatorsFloat)
 // ={=========================================================================
 // cxx-override
 
-namespace cxx_override {
-namespace no_override {
-class Base
+namespace cxx_override
 {
-public:
-  Base() : base_(10) {}
-
-  virtual int get_value() { return base_; }
-
-private:
-  int base_;
-};
-
-class Derived : public Base
-{
-public:
-  Derived() : derived_(20) {}
-
-  virtual int get_value(int value)
+  namespace no_override
   {
-    (void)value;
-    return derived_;
-  };
+    class Base
+    {
+    public:
+      Base()
+          : base_(10)
+      {}
 
-private:
-  int derived_;
-};
-} // namespace no_override
+      virtual int get_value() { return base_; }
+
+    private:
+      int base_;
+    };
+
+    class Derived : public Base
+    {
+    public:
+      Derived()
+          : derived_(20)
+      {}
+
+      virtual int get_value(int value)
+      {
+        (void)value;
+        return derived_;
+      };
+
+    private:
+      int derived_;
+    };
+  } // namespace no_override
 } // namespace cxx_override
 
 TEST(Override, Condition_1)
@@ -5983,30 +6159,36 @@ TEST(Override, Condition_1)
   // }
 }
 
-namespace cxx_override {
-namespace no_virtual {
-class Base
+namespace cxx_override
 {
-public:
-  Base() : base_(10) {}
+  namespace no_virtual
+  {
+    class Base
+    {
+    public:
+      Base()
+          : base_(10)
+      {}
 
-  int get_value() { return base_; }
+      int get_value() { return base_; }
 
-private:
-  int base_;
-};
+    private:
+      int base_;
+    };
 
-class Derived : public Base
-{
-public:
-  Derived() : derived_(20) {}
+    class Derived : public Base
+    {
+    public:
+      Derived()
+          : derived_(20)
+      {}
 
-  int get_value() { return derived_; };
+      int get_value() { return derived_; };
 
-private:
-  int derived_;
-};
-} // namespace no_virtual
+    private:
+      int derived_;
+    };
+  } // namespace no_virtual
 } // namespace cxx_override
 
 TEST(Override, Condition_2)
@@ -6030,30 +6212,36 @@ TEST(Override, Condition_2)
   }
 }
 
-namespace cxx_override {
-namespace with_virtual {
-class Base
+namespace cxx_override
 {
-public:
-  Base() : base_(10) {}
+  namespace with_virtual
+  {
+    class Base
+    {
+    public:
+      Base()
+          : base_(10)
+      {}
 
-  virtual int get_value() { return base_; }
+      virtual int get_value() { return base_; }
 
-private:
-  int base_;
-};
+    private:
+      int base_;
+    };
 
-class Derived : public Base
-{
-public:
-  Derived() : derived_(20) {}
+    class Derived : public Base
+    {
+    public:
+      Derived()
+          : derived_(20)
+      {}
 
-  int get_value() { return derived_; };
+      int get_value() { return derived_; };
 
-private:
-  int derived_;
-};
-} // namespace with_virtual
+    private:
+      int derived_;
+    };
+  } // namespace with_virtual
 } // namespace cxx_override
 
 TEST(Override, Condition_3)
@@ -6078,30 +6266,36 @@ TEST(Override, Condition_3)
   }
 }
 
-namespace cxx_override {
-namespace with_virtual_and_private {
-class Base
+namespace cxx_override
 {
-public:
-  Base() : base_(10) {}
+  namespace with_virtual_and_private
+  {
+    class Base
+    {
+    public:
+      Base()
+          : base_(10)
+      {}
 
-  virtual int get_value() { return base_; }
+      virtual int get_value() { return base_; }
 
-private:
-  int base_;
-};
+    private:
+      int base_;
+    };
 
-class Derived : private Base
-{
-public:
-  Derived() : derived_(20) {}
+    class Derived : private Base
+    {
+    public:
+      Derived()
+          : derived_(20)
+      {}
 
-  int get_value() { return derived_; };
+      int get_value() { return derived_; };
 
-private:
-  int derived_;
-};
-} // namespace with_virtual_and_private
+    private:
+      int derived_;
+    };
+  } // namespace with_virtual_and_private
 } // namespace cxx_override
 
 // TEST(Override, Condition_4)
@@ -6138,47 +6332,56 @@ private:
 
 // cxx-override when not implemented pure virtual member function
 
-namespace cxx_override {
-namespace no_pure {
-class Base
+namespace cxx_override
 {
-public:
-  Base() : base_(10) {}
+  namespace no_pure
+  {
+    class Base
+    {
+    public:
+      Base()
+          : base_(10)
+      {}
 
-  virtual int get_value() = 0;
+      virtual int get_value() = 0;
 
-private:
-  int base_;
-};
+    private:
+      int base_;
+    };
 
-class Derived : public Base
-{
-public:
-  Derived() : derived_(20) {}
+    class Derived : public Base
+    {
+    public:
+      Derived()
+          : derived_(20)
+      {}
 
-  virtual int get_value() { return derived_; };
+      virtual int get_value() { return derived_; };
 
-private:
-  int derived_;
-};
+    private:
+      int derived_;
+    };
 
-class DerivedNoPure : public Base
-{
-public:
-  DerivedNoPure() : derived_(20) {}
+    class DerivedNoPure : public Base
+    {
+    public:
+      DerivedNoPure()
+          : derived_(20)
+      {}
 
-  // without this, compile fails and with this, will see link error in the
-  // end.
-  // gcc (Debian 4.9.2-10) 4.9.2
-  // : undefined reference to `vtable for cxx_override::no_pure::DerivedNoPure'
-  // collect2: error: ld returned 1 exit status
+      // without this, compile fails and with this, will see link error in the
+      // end.
+      // gcc (Debian 4.9.2-10) 4.9.2
+      // : undefined reference to `vtable for
+      // cxx_override::no_pure::DerivedNoPure' collect2: error: ld returned 1
+      // exit status
 
-  virtual int get_value();
+      virtual int get_value();
 
-private:
-  int derived_;
-};
-} // namespace no_pure
+    private:
+      int derived_;
+    };
+  } // namespace no_pure
 } // namespace cxx_override
 
 TEST(Override, PureVirtual)
@@ -6213,24 +6416,25 @@ TEST(Override, PureVirtual)
 // ={=========================================================================
 // cxx-rtti cxx-cast
 
-namespace cxx_rtti {
-
-class RttiBase
+namespace cxx_rtti
 {
-public:
-  // to make it polymorphic
-  // ~RttiBase() {}
-  virtual ~RttiBase() {}
 
-private:
-  int id_;
-};
+  class RttiBase
+  {
+  public:
+    // to make it polymorphic
+    // ~RttiBase() {}
+    virtual ~RttiBase() {}
 
-class RttiDerived : public RttiBase
-{
-private:
-  int value_;
-};
+  private:
+    int id_;
+  };
+
+  class RttiDerived : public RttiBase
+  {
+  private:
+    int value_;
+  };
 
 } // namespace cxx_rtti
 
@@ -6488,8 +6692,9 @@ TEST(Regex, MatchResult)
     // string expected("<tag-name>the value</tag-name>, 30\ntag-name, 8\nthe
     // value, 9\ntag-name, 8\n"); EXPECT_THAT(os.str(), expected);
 
-    EXPECT_THAT(os.str(), "<tag-name>the value</tag-name>, 30\ntag-name, "
-                          "8\nthe value, 9\ntag-name, 8\n");
+    EXPECT_THAT(os.str(),
+                "<tag-name>the value</tag-name>, 30\ntag-name, "
+                "8\nthe value, 9\ntag-name, 8\n");
   }
 }
 
@@ -6717,49 +6922,47 @@ TEST(Bit, MaxNegagiveIsSpecial)
 // C and old C++ programs usually use type long for arrays of bits and
 // manipulate them with the bit operators, such as &, |, and ~.
 
-namespace bit_set_array {
-const unsigned int BITSPERWORD = 32;
-const unsigned int SHIFT       = 5;
-const unsigned int MASK        = 0x1F;
-const unsigned int SIZE        = 60;
-
-// bit vector to represent a array of bits. Why +1? Since 0-31 bits falls to
-// array[0] and 32-63 falls to array[1], and so on. SIZE is num of bits to
-// represent and BITSPERWORD is num of bits of a word(int). So there should be
-// one array at least for 0-31 bits.
-
-int a[1 + SIZE / BITSPERWORD];
-
-void set_bit(int pos)
+namespace bit_set_array
 {
-  // MASK
-  // MASK is 11111(31) to convert pos into [31-0] bits. By &, make only [31-0]
-  // bits valid and not others and effectively pos - 31 for values
-  // which are > 32. that is:
-  //
-  // 32 -> 0
-  // 33 -> 1
-  // ..
-  //
-  // [pos >> SHIFT]
-  // pos is int and right shift on int may cause problem? Not in [] since it
-  // is unsigned.
-  //
-  // Here, ">> 5" menas to devide 2^5, 32 which is num of bits of a word. so
-  // find array index that pos falls on and this matches up 1 << (pos & MASK)
+  const unsigned int BITSPERWORD = 32;
+  const unsigned int SHIFT       = 5;
+  const unsigned int MASK        = 0x1F;
+  const unsigned int SIZE        = 60;
 
-  a[pos >> SHIFT] |= (1 << (pos & MASK));
-}
+  // bit vector to represent a array of bits. Why +1? Since 0-31 bits falls to
+  // array[0] and 32-63 falls to array[1], and so on. SIZE is num of bits to
+  // represent and BITSPERWORD is num of bits of a word(int). So there should be
+  // one array at least for 0-31 bits.
 
-void clear_bit(int pos)
-{
-  a[pos >> SHIFT] &= ~(1 << (pos & MASK));
-}
+  int a[1 + SIZE / BITSPERWORD];
 
-bool test_bit(int pos)
-{
-  return (a[pos >> SHIFT] & (1 << (pos & MASK))) ? true : false;
-}
+  void set_bit(int pos)
+  {
+    // MASK
+    // MASK is 11111(31) to convert pos into [31-0] bits. By &, make only [31-0]
+    // bits valid and not others and effectively pos - 31 for values
+    // which are > 32. that is:
+    //
+    // 32 -> 0
+    // 33 -> 1
+    // ..
+    //
+    // [pos >> SHIFT]
+    // pos is int and right shift on int may cause problem? Not in [] since it
+    // is unsigned.
+    //
+    // Here, ">> 5" menas to devide 2^5, 32 which is num of bits of a word. so
+    // find array index that pos falls on and this matches up 1 << (pos & MASK)
+
+    a[pos >> SHIFT] |= (1 << (pos & MASK));
+  }
+
+  void clear_bit(int pos) { a[pos >> SHIFT] &= ~(1 << (pos & MASK)); }
+
+  bool test_bit(int pos)
+  {
+    return (a[pos >> SHIFT] & (1 << (pos & MASK))) ? true : false;
+  }
 } // namespace bit_set_array
 
 TEST(Bit, BitVectors)
@@ -6870,11 +7073,9 @@ TEST(Bit, BitSet)
 // dependent for negative operands, as is the action taken on overflow or
 // underflow".
 
-namespace bit_overflow {
-int bigrand()
+namespace bit_overflow
 {
-  return RAND_MAX * rand() + rand();
-}
+  int bigrand() { return RAND_MAX * rand() + rand(); }
 } // namespace bit_overflow
 
 TEST(Bit, Overflow)
@@ -7126,15 +7327,16 @@ TEST(Operator, PrefixPostfix)
 // ={=========================================================================
 // cxx-template
 
-namespace cxx_template {
-template <typename T> int compare(const T &a, const T &b)
+namespace cxx_template
 {
-  if (a < b)
-    return -1;
-  if (b < a)
-    return 1;
-  return 0;
-}
+  template <typename T> int compare(const T &a, const T &b)
+  {
+    if (a < b)
+      return -1;
+    if (b < a)
+      return 1;
+    return 0;
+  }
 } // namespace cxx_template
 
 TEST(Template, Function)
@@ -7150,61 +7352,62 @@ TEST(Template, Function)
   EXPECT_THAT(compare(coll2, coll1), 1);
 }
 
-namespace cxx_template {
-// Q: strcmp returns +5/-5 than 1/-1
-
-int internal_strcmp(const char *p1, const char *p2)
+namespace cxx_template
 {
-  while (true)
+  // Q: strcmp returns +5/-5 than 1/-1
+
+  int internal_strcmp(const char *p1, const char *p2)
   {
-    unsigned int c1 = *p1;
-    unsigned int c2 = *p2;
+    while (true)
+    {
+      unsigned int c1 = *p1;
+      unsigned int c2 = *p2;
 
-    if (c1 == c2)
-      break;
-    if (c1 != c2)
-      return c1 < c2 ? -1 : 1;
-  }
+      if (c1 == c2)
+        break;
+      if (c1 != c2)
+        return c1 < c2 ? -1 : 1;
+    }
 
-  return 0;
-}
-
-// *cxx-array*
-template <unsigned N, unsigned M>
-int compare(const char (&p1)[N], const char (&p2)[M])
-{
-  return internal_strcmp(p1, p2);
-}
-
-template <> int compare(const char *const &p1, const char *const &p2)
-{
-  return internal_strcmp(p1, p2);
-}
-
-template <typename T, int size> class FileBuf
-{
-public:
-  int get_size() { return sizeof(array_) / sizeof(T); }
-
-private:
-  T array_[size];
-};
-
-template <int MIN, int MAX> struct RangedIntPolicy
-{
-  typedef int value_type;
-  value_type value_ = MIN;
-  // value_type value_{MIN};
-
-  int assign(value_type value)
-  {
-    if ((value < MIN) || (value > MAX))
-      return -1;
-
-    value_ = value;
     return 0;
   }
-};
+
+  // *cxx-array*
+  template <unsigned N, unsigned M>
+  int compare(const char (&p1)[N], const char (&p2)[M])
+  {
+    return internal_strcmp(p1, p2);
+  }
+
+  template <> int compare(const char *const &p1, const char *const &p2)
+  {
+    return internal_strcmp(p1, p2);
+  }
+
+  template <typename T, int size> class FileBuf
+  {
+  public:
+    int get_size() { return sizeof(array_) / sizeof(T); }
+
+  private:
+    T array_[size];
+  };
+
+  template <int MIN, int MAX> struct RangedIntPolicy
+  {
+    typedef int value_type;
+    value_type value_ = MIN;
+    // value_type value_{MIN};
+
+    int assign(value_type value)
+    {
+      if ((value < MIN) || (value > MAX))
+        return -1;
+
+      value_ = value;
+      return 0;
+    }
+  };
 
 } // namespace cxx_template
 
@@ -7239,23 +7442,34 @@ TEST(Template, Specialisation)
   }
 }
 
-namespace cxx_template_default {
-// `This shows how function-object is useful` *cxx-functor*
-// default template argument, the 'type' of callable
-// default function argument, F()
-
-template <typename T, typename F = less<T>>
-int compare(const T &a, const T &b, F f = F())
+namespace cxx_template_default
 {
-  if (f(a, b))
-    return -1;
-  if (f(b, a))
-    return 1;
-  return 0;
-}
+  // `This shows how function-object is useful` *cxx-functor*
+  // default template argument, the 'type' of callable
+  // default function argument, F()
+
+  template <typename T, typename F = less<T>>
+  int compare(const T &a, const T &b, F f = F())
+  {
+    if (f(a, b))
+      return -1;
+    if (f(b, a))
+      return 1;
+    return 0;
+  }
+
+  template <typename T = int> struct Numbers
+  {
+    Numbers(T value = 0)
+        : value_(value)
+    {}
+
+    T value_;
+  };
+
 } // namespace cxx_template_default
 
-TEST(Template, FunctionWithDefault)
+TEST(CxxTemplate, DefaultTypeArgument)
 {
   using namespace cxx_template_default;
 
@@ -7277,27 +7491,45 @@ TEST(Template, FunctionWithDefault)
     EXPECT_THAT(compare(2, 2, greater<int>()), 0);
   }
 
-  vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
-  EXPECT_THAT(compare(coll1, coll2), -1);
-  EXPECT_THAT(compare(coll2, coll1), 1);
-}
-
-namespace cxx_template_member {
-class DebugDelete
-{
-public:
-  DebugDelete(ostream &os = cerr) : os_(os) {}
-
-  template <typename T> void operator()(T *p) const
   {
-    os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
-    delete p;
+    vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+    EXPECT_THAT(compare(coll1, coll2), -1);
+    EXPECT_THAT(compare(coll2, coll1), 1);
   }
 
-private:
-  // *cxx-reference-member
-  ostream &os_;
-};
+  {
+    Numbers<> o1(10);
+    Numbers<int> o2(10);
+    EXPECT_THAT(o1.value_, o2.value_);
+  }
+
+  // compile error
+  // {
+  //   Numbers<> o1(10);
+  //   Numbers<std::string> o2("value");
+  //   EXPECT_THAT(o1.value_, o2.value_);
+  // }
+}
+
+namespace cxx_template_member
+{
+  class DebugDelete
+  {
+  public:
+    DebugDelete(ostream &os = cerr)
+        : os_(os)
+    {}
+
+    template <typename T> void operator()(T *p) const
+    {
+      os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
+      delete p;
+    }
+
+  private:
+    // *cxx-reference-member
+    ostream &os_;
+  };
 
 } // namespace cxx_template_member
 
@@ -7327,143 +7559,145 @@ TEST(Template, MemberTemplate)
   }
 }
 
-namespace cxx_template_return_type {
-// use cxx-iter-trait but limited when T is iterator
-template <typename T>
-typename std::iterator_traits<T>::value_type &return_element_01(T first, T last)
+namespace cxx_template_return_type
 {
-  (void)last;
-  return *first;
-}
+  // use cxx-iter-trait but limited when T is iterator
+  template <typename T>
+  typename std::iterator_traits<T>::value_type &return_element_01(T first,
+                                                                  T last)
+  {
+    (void)last;
+    return *first;
+  }
 
-template <typename T>
-auto return_element_02(T first, T last) ->
-  typename std::iterator_traits<T>::reference
-{
-  (void)last;
-  return *first;
-}
+  template <typename T>
+  auto return_element_02(T first, T last) ->
+    typename std::iterator_traits<T>::reference
+  {
+    (void)last;
+    return *first;
+  }
 
-// use cxx-trailing-return before cxx-14
-template <typename T>
-auto return_element_03(T first, T last) -> decltype(*first)
-{
-  (void)last;
-  return *first;
-}
+  // use cxx-trailing-return before cxx-14
+  template <typename T>
+  auto return_element_03(T first, T last) -> decltype(*first)
+  {
+    (void)last;
+    return *first;
+  }
 
-// : error: ‘first’ was not declared in this scope
-// template <typename Iterator>
-// decltype(*first) return_element_04(Iterator first, Iterator last)
-// {
-//   return *first;
-// }
+  // : error: ‘first’ was not declared in this scope
+  // template <typename Iterator>
+  // decltype(*first) return_element_04(Iterator first, Iterator last)
+  // {
+  //   return *first;
+  // }
 
-// 1.3. C++ Templates The Complete Guide Second Edition
-// 1.3.2 Deducing the Return Type
+  // 1.3. C++ Templates The Complete Guide Second Edition
+  // 1.3.2 Deducing the Return Type
 
-template <typename T> T max_01(T const &a, T const &b)
-{
-  return b < a ? a : b;
-}
+  template <typename T> T max_01(T const &a, T const &b)
+  {
+    return b < a ? a : b;
+  }
 
-// declare that the return type is derived from what operator?: yields:
+  // declare that the return type is derived from what operator?: yields:
 
-template <typename T1, typename T2>
-auto max_02(T1 a, T2 b) -> decltype(b < a ? a : b)
-{
-  return b < a ? a : b;
-}
+  template <typename T1, typename T2>
+  auto max_02(T1 a, T2 b) -> decltype(b < a ? a : b)
+  {
+    return b < a ? a : b;
+  }
 
-// *cxx-14*
-// Since C++14, this is possible by simply not declaring any return type (you
-// still have to declare the return type to be auto):
-//
-// template <typename T1, typename T2>
-//   auto max_02(T1 a, T2 b)
-//   {
-//     return b < a ? a : b;
-//   }
-//
-// indicates that the actual return type must be deduced from the return
-// statements in the function body. In fact, using true as the condition for
-// operator?: in the declaration is enough:
-//
-// Note that an initialization of type auto always decays. This also applies
-// to return values when the return type is just auto.
+  // *cxx-14*
+  // Since C++14, this is possible by simply not declaring any return type (you
+  // still have to declare the return type to be auto):
+  //
+  // template <typename T1, typename T2>
+  //   auto max_02(T1 a, T2 b)
+  //   {
+  //     return b < a ? a : b;
+  //   }
+  //
+  // indicates that the actual return type must be deduced from the return
+  // statements in the function body. In fact, using true as the condition for
+  // operator?: in the declaration is enough:
+  //
+  // Note that an initialization of type auto always decays. This also applies
+  // to return values when the return type is just auto.
 
-template <typename T1, typename T2>
-auto max_03(T1 a, T2 b) -> decltype(true ? a : b)
-{
-  return b < a ? a : b;
-}
+  template <typename T1, typename T2>
+  auto max_03(T1 a, T2 b) -> decltype(true ? a : b)
+  {
+    return b < a ? a : b;
+  }
 
-// *cxx-type-trait-decay* *cxx-decay*
-// However, in any case this definition has a significant drawback: It might
-// happen that the return type is a reference type, because under some
-// conditions T might be a reference. For this reason you should return the
-// type decayed from T, which looks as follows:
-//
-// o Yields the decayed type of T.
-// o In detail, for type T the following transformations are performed:
-// – First, remove_reference (see Section D.4 on page 729) is applied.
-//
-// xxx_t is the same as xxx<T>::type and which is *cxx-14*
-//
-// decay_t<int const&> // yields int
-// decay_t<int const[4]> // yields int const*
-// void foo();
-// decay_t<decltype(foo)> // yields void(*)()
+  // *cxx-type-trait-decay* *cxx-decay*
+  // However, in any case this definition has a significant drawback: It might
+  // happen that the return type is a reference type, because under some
+  // conditions T might be a reference. For this reason you should return the
+  // type decayed from T, which looks as follows:
+  //
+  // o Yields the decayed type of T.
+  // o In detail, for type T the following transformations are performed:
+  // – First, remove_reference (see Section D.4 on page 729) is applied.
+  //
+  // xxx_t is the same as xxx<T>::type and which is *cxx-14*
+  //
+  // decay_t<int const&> // yields int
+  // decay_t<int const[4]> // yields int const*
+  // void foo();
+  // decay_t<decltype(foo)> // yields void(*)()
 
-template <typename T1, typename T2>
-auto max_04(T1 a, T2 b) -> typename std::decay<decltype(true ? a : b)>::type
-{
-  return b < a ? a : b;
-}
+  template <typename T1, typename T2>
+  auto max_04(T1 a, T2 b) -> typename std::decay<decltype(true ? a : b)>::type
+  {
+    return b < a ? a : b;
+  }
 
-// cxx-error
-// template <typename T1, typename T2>
-//   typename std::decay<decltype(true ? a : b )>::type
-//   max_05(T1 a, T2 b)
-//   {
-//     return b < a ? a : b;
-//   }
+  // cxx-error
+  // template <typename T1, typename T2>
+  //   typename std::decay<decltype(true ? a : b )>::type
+  //   max_05(T1 a, T2 b)
+  //   {
+  //     return b < a ? a : b;
+  //   }
 
-// *cxx-14*
-// However, since C++14 you can simplify the usage of traits like this by
-// appending _t to the trait name and skipping typename and ::type
+  // *cxx-14*
+  // However, since C++14 you can simplify the usage of traits like this by
+  // appending _t to the trait name and skipping typename and ::type
 
-// template <typename T1, typename T2>
-//   auto max_05(T1 a, T2 b)
-//   -> std::decay_t<decltype(true ? a : b )>
-//   {
-//     return b < a ? a : b;
-//   }
+  // template <typename T1, typename T2>
+  //   auto max_05(T1 a, T2 b)
+  //   -> std::decay_t<decltype(true ? a : b )>
+  //   {
+  //     return b < a ? a : b;
+  //   }
 
-// *cxx-type-trait-commontype*
-// CXXSLR-5.4.1 Purpose of Type Traits
-// For example, the expression std::common_type<T1,T2>::type yields int if
-// both arguments are int, long, if one is int and the other is long, or
-// std::string if one is a string and the other is a string literal (type
-// const char*).
-//
-// Again, note that std::common_type<> decays so that the return value can’t
-// become a reference.
+  // *cxx-type-trait-commontype*
+  // CXXSLR-5.4.1 Purpose of Type Traits
+  // For example, the expression std::common_type<T1,T2>::type yields int if
+  // both arguments are int, long, if one is int and the other is long, or
+  // std::string if one is a string and the other is a string literal (type
+  // const char*).
+  //
+  // Again, note that std::common_type<> decays so that the return value can’t
+  // become a reference.
 
-template <typename T1, typename T2>
-typename std::common_type<T1, T2>::type max_06(T1 a, T2 b)
-{
-  return b < a ? a : b;
-}
+  template <typename T1, typename T2>
+  typename std::common_type<T1, T2>::type max_06(T1 a, T2 b)
+  {
+    return b < a ? a : b;
+  }
 
-// "In fact, using true as the condition for operator?: in the declaration is
-// enough:". Does it mean it ALWAYS picks up type of a?
+  // "In fact, using true as the condition for operator?: in the declaration is
+  // enough:". Does it mean it ALWAYS picks up type of a?
 
-template <typename T1, typename T2>
-auto which_type(T1 a, T2 b) -> decltype(true ? a : b)
-{
-  return a ? a : b;
-}
+  template <typename T1, typename T2>
+  auto which_type(T1 a, T2 b) -> decltype(true ? a : b)
+  {
+    return a ? a : b;
+  }
 } // namespace cxx_template_return_type
 
 TEST(Template, ReturnType)
@@ -7528,11 +7762,9 @@ TEST(Template, ReturnType)
   // }
 }
 
-namespace cxx_template_reference {
-template <typename T> void foo(T value)
+namespace cxx_template_reference
 {
-  ++value;
-}
+  template <typename T> void foo(T value) { ++value; }
 } // namespace cxx_template_reference
 
 TEST(Template, Reference)
@@ -7548,32 +7780,34 @@ TEST(Template, Reference)
   EXPECT_THAT(value, 11);
 }
 
-namespace cxx_template_overload {
-class Mine
+namespace cxx_template_overload
 {
-private:
-  string name;
+  class Mine
+  {
+  private:
+    string name;
 
-public:
-  Mine() : name(string("mine"))
-  { // cout << "mine class" << endl;
+  public:
+    Mine()
+        : name(string("mine"))
+    { // cout << "mine class" << endl;
+    }
+
+    const string &get() { return name; }
+  };
+
+  ostringstream &operator<<(ostringstream &os, Mine mine)
+  {
+    os << mine.get();
+    return os;
   }
 
-  const string &get() { return name; }
-};
-
-ostringstream &operator<<(ostringstream &os, Mine mine)
-{
-  os << mine.get();
-  return os;
-}
-
-template <typename T> string debug_rep(const T &t)
-{
-  ostringstream ret;
-  ret << t;
-  return ret.str();
-}
+  template <typename T> string debug_rep(const T &t)
+  {
+    ostringstream ret;
+    ret << t;
+    return ret.str();
+  }
 } // namespace cxx_template_overload
 
 TEST(Template, Overload)
@@ -7590,51 +7824,52 @@ TEST(Template, Overload)
   EXPECT_THAT(os.str(), "mine\n");
 }
 
-namespace cxx_template_friend {
-// basics/stack1.hpp
-
-template <typename T> class Stack
+namespace cxx_template_friend
 {
-public:
-  void push(T const &elem) { elems_.push_back(elem); }
+  // basics/stack1.hpp
 
-  void pop()
+  template <typename T> class Stack
   {
-    if (elems_.empty())
-      throw std::runtime_error("coll is empty");
+  public:
+    void push(T const &elem) { elems_.push_back(elem); }
 
-    elems_.pop_back();
-  }
+    void pop()
+    {
+      if (elems_.empty())
+        throw std::runtime_error("coll is empty");
 
-  T const &top() const
+      elems_.pop_back();
+    }
+
+    T const &top() const
+    {
+      if (elems_.empty())
+        throw std::runtime_error("coll is empty");
+
+      return elems_.back();
+    }
+
+    bool empty() const { return elems_.empty(); }
+
+  private:
+    std::vector<T> elems_;
+  };
+
+  // To show how to define operator<< for template *cxx-overload-operator*
+  //
+  // C++ Templates The Complete Guide Second Edition
+  // 2.4 Friends
+  //
+  // However, when trying to declare the friend function and define it
+  // afterwards, things become more complicated. In fact, we have two options:
+  // 1. We can implicitly declare a new function template, which must use a
+  // different template parameter, such as U:
+
+  template <typename T> ostream &operator<<(ostream &os, Stack<T> const &s)
   {
-    if (elems_.empty())
-      throw std::runtime_error("coll is empty");
-
-    return elems_.back();
+    cout << "stack's top : " << s.top() << endl;
+    return os;
   }
-
-  bool empty() const { return elems_.empty(); }
-
-private:
-  std::vector<T> elems_;
-};
-
-// To show how to define operator<< for template *cxx-overload-operator*
-//
-// C++ Templates The Complete Guide Second Edition
-// 2.4 Friends
-//
-// However, when trying to declare the friend function and define it
-// afterwards, things become more complicated. In fact, we have two options:
-// 1. We can implicitly declare a new function template, which must use a
-// different template parameter, such as U:
-
-template <typename T> ostream &operator<<(ostream &os, Stack<T> const &s)
-{
-  cout << "stack's top : " << s.top() << endl;
-  return os;
-}
 
 } // namespace cxx_template_friend
 
@@ -7655,60 +7890,61 @@ TEST(Template, Friend)
 // ={=========================================================================
 // cxx-template-forward
 
-namespace cxx_template {
-
-template <typename F, typename T1, typename T2>
-void flip(F f, T1 param1, T2 param2)
+namespace cxx_template
 {
-  f(param2, param1);
-}
 
-// use *cxx-rvalue-reference* to preserve template parameter:
-//
-// A function parameter that is an rvalue reference to a template parameter
-// `preserves` constness and lvalue/rvalue property of its corresponding
-// argument.
+  template <typename F, typename T1, typename T2>
+  void flip(F f, T1 param1, T2 param2)
+  {
+    f(param2, param1);
+  }
 
-template <typename F, typename T1, typename T2>
-void flip_reference(F f, T1 &&param1, T2 &&param2)
-{
-  f(param2, param1);
-}
+  // use *cxx-rvalue-reference* to preserve template parameter:
+  //
+  // A function parameter that is an rvalue reference to a template parameter
+  // `preserves` constness and lvalue/rvalue property of its corresponding
+  // argument.
 
-void f(int value1, int &value2)
-{
-  (void)value1;
-  ++value2;
-}
+  template <typename F, typename T1, typename T2>
+  void flip_reference(F f, T1 &&param1, T2 &&param2)
+  {
+    f(param2, param1);
+  }
 
-void g(int &&value1, int &value2)
-{
-  (void)value1;
-  ++value2;
-}
+  void f(int value1, int &value2)
+  {
+    (void)value1;
+    ++value2;
+  }
 
-// Use `std::forward()` to preserve the types of the original arguments. Unlike
-// std::move(), std::forward() 'must' be called with an explicit template
-// argument, *cxx-template-explicit-argument* and returns rvalue reference to
-// that type, T &&.
-//
-// template <typename F, typename T1, typename T2>
-// void flip(F f, T1 &&t1, T2 &&t2)                    // 1
-// {
-//   f(std::forward<T2>(t2), std::forward<T1>(t1));    // 2
-// }
-//
-// To preserve type information is two-step process, 1 and 2.
-//
-// *cxx-ref*
-// What's the difference between std::ref() and std::forward() solution?
-// By std::forward() solution, user of template don't need to anyting.
+  void g(int &&value1, int &value2)
+  {
+    (void)value1;
+    ++value2;
+  }
 
-template <typename F, typename T1, typename T2>
-void flip_forward(F f, T1 &&param1, T2 &&param2)
-{
-  f(std::forward<T2>(param2), std::forward<T1>(param1));
-}
+  // Use `std::forward()` to preserve the types of the original arguments.
+  // Unlike std::move(), std::forward() 'must' be called with an explicit
+  // template argument, *cxx-template-explicit-argument* and returns rvalue
+  // reference to that type, T &&.
+  //
+  // template <typename F, typename T1, typename T2>
+  // void flip(F f, T1 &&t1, T2 &&t2)                    // 1
+  // {
+  //   f(std::forward<T2>(t2), std::forward<T1>(t1));    // 2
+  // }
+  //
+  // To preserve type information is two-step process, 1 and 2.
+  //
+  // *cxx-ref*
+  // What's the difference between std::ref() and std::forward() solution?
+  // By std::forward() solution, user of template don't need to anyting.
+
+  template <typename F, typename T1, typename T2>
+  void flip_forward(F f, T1 &&param1, T2 &&param2)
+  {
+    f(std::forward<T2>(param2), std::forward<T1>(param1));
+  }
 
 } // namespace cxx_template
 
@@ -7824,25 +8060,29 @@ TEST(Template, Forward)
 // 2. result_of<>::type gets return type
 // 3. decay<>::type gets decayed type
 
-namespace cxx_template {
-struct book
+namespace cxx_template
 {
-  int id;
-  string title;
-  string author;
-};
+  struct book
+  {
+    int id;
+    string title;
+    string author;
+  };
 
-template <
-  typename T, typename F,
-  typename R = typename std::decay<typename std::result_of<typename std::decay<
-    F>::type &(typename std::vector<T>::const_reference)>::type>::type>
-std::vector<R> select(std::vector<T> const &coll, F &&f)
-{
-  std::vector<R> result{};
-  std::transform(coll.cbegin(), coll.cend(), std::back_inserter(result),
-                 std::forward<F>(f));
-  return result;
-}
+  template <typename T,
+            typename F,
+            typename R = typename std::decay<
+              typename std::result_of<typename std::decay<F>::type &(
+                typename std::vector<T>::const_reference)>::type>::type>
+  std::vector<R> select(std::vector<T> const &coll, F &&f)
+  {
+    std::vector<R> result{};
+    std::transform(coll.cbegin(),
+                   coll.cend(),
+                   std::back_inserter(result),
+                   std::forward<F>(f));
+    return result;
+  }
 
 } // namespace cxx_template
 
@@ -7857,14 +8097,16 @@ TEST(Template, ForwardEx)
 
   auto titles = select(books, [](book const &b) { return b.title; });
 
-  EXPECT_THAT(titles, ElementsAre("The C++ Programming Language",
-                                  "Effective Modern C++",
-                                  "The Modern C++ Programming Cookbook"));
+  EXPECT_THAT(titles,
+              ElementsAre("The C++ Programming Language",
+                          "Effective Modern C++",
+                          "The Modern C++ Programming Cookbook"));
 
   auto authors = select(books, [](book const &b) { return b.author; });
 
-  EXPECT_THAT(authors, ElementsAre("Bjarne Stroustrup", "Scott Meyers",
-                                   "Marius Bancila"));
+  EXPECT_THAT(
+    authors,
+    ElementsAre("Bjarne Stroustrup", "Scott Meyers", "Marius Bancila"));
 
   auto ids = select(books, [](book const &b) { return b.id; });
 
@@ -7874,17 +8116,18 @@ TEST(Template, ForwardEx)
 // ={=========================================================================
 // cxx-template-variadic
 
-namespace cxx_template_variadic {
-template <typename T, typename... Args>
-std::pair<int, int> foo(T const &t, Args const &... args)
+namespace cxx_template_variadic
 {
-  (void)t;
-  return make_pair(
-    // number of template parameters
-    sizeof...(Args),
-    // number of function parameters
-    sizeof...(args));
-}
+  template <typename T, typename... Args>
+  std::pair<int, int> foo(T const &t, Args const &... args)
+  {
+    (void)t;
+    return make_pair(
+      // number of template parameters
+      sizeof...(Args),
+      // number of function parameters
+      sizeof...(args));
+  }
 } // namespace cxx_template_variadic
 
 TEST(Template, VariadicSizeofOperator)
@@ -7911,41 +8154,42 @@ TEST(Template, VariadicSizeofOperator)
 // ={=========================================================================
 // cxx-template-type-trait cxx-type-trait
 
-namespace cxx_type_trait {
-template <typename T> bool foo(T const &val)
+namespace cxx_type_trait
 {
-  (void)val;
-
-  // is_pointer<T> yields either a `true_type` ro `false_type`, for which
-  // ::value either yields true or false.
-
-  if (std::is_pointer<T>::value)
+  template <typename T> bool foo(T const &val)
   {
-    // std::cout << "foo() called for a pointer" << std::endl;
-    return true;
+    (void)val;
+
+    // is_pointer<T> yields either a `true_type` ro `false_type`, for which
+    // ::value either yields true or false.
+
+    if (std::is_pointer<T>::value)
+    {
+      // std::cout << "foo() called for a pointer" << std::endl;
+      return true;
+    }
+    else
+    {
+      return false;
+    }
   }
-  else
+
+  template <typename T> void foo_impl(T value, std::true_type)
   {
-    return false;
+    (void)value;
+    std::cout << "foo() called for integral type" << std::endl;
   }
-}
 
-template <typename T> void foo_impl(T value, std::true_type)
-{
-  (void)value;
-  std::cout << "foo() called for integral type" << std::endl;
-}
+  template <typename T> void foo_impl(T value, std::false_type)
+  {
+    (void)value;
+    std::cout << "foo() called for floating type" << std::endl;
+  }
 
-template <typename T> void foo_impl(T value, std::false_type)
-{
-  (void)value;
-  std::cout << "foo() called for floating type" << std::endl;
-}
-
-template <typename T> void foo_overload(T value)
-{
-  foo_impl(value, std::is_integral<T>());
-}
+  template <typename T> void foo_overload(T value)
+  {
+    foo_impl(value, std::is_integral<T>());
+  }
 
 } // namespace cxx_type_trait
 
@@ -8014,100 +8258,105 @@ TEST(Const, NoConstToNonConst)
   }
 }
 
-namespace const_member_function {
-class Screen
+namespace const_member_function
 {
-public:
-  Screen() : mesg_("screen") {}
+  class Screen
+  {
+  public:
+    Screen()
+        : mesg_("screen")
+    {}
 
-  string get_message() const { return mesg_; }
-  string get_message() { return mesg_; }
+    string get_message() const { return mesg_; }
+    string get_message() { return mesg_; }
 
-private:
-  string mesg_;
-};
+  private:
+    string mesg_;
+  };
 
-// *cxx-const-error-const* when there's no const version of get_message()
-//
-// cxx.cpp: In function ‘std::string const_member_function::print_screen(const
-// const_member_function::Screen&)’:
-//
-// cxx.cpp:3359:26: error: passing ‘const const_member_function::Screen’ as
-// ‘this’ argument of ‘std::string
-// const_member_function::Screen::get_message()’ discards qualifiers
-// [-fpermissive]
-//
-//      return s.get_message();
-
-string print_screen(const Screen &s)
-{
-  return s.get_message();
-}
-
-template <class T, size_t R, size_t C> class array2d
-{
-  std::vector<T> arr;
-
-public:
-  array2d() : arr(R * C) {}
-  explicit array2d(std::initializer_list<T> l) : arr(l) {}
-
-  // *cxx-const-error-const* when there's no const version
+  // *cxx-const-error-const* when there's no const version of get_message()
   //
-  // when use constexpr function
+  // cxx.cpp: In function ‘std::string const_member_function::print_screen(const
+  // const_member_function::Screen&)’:
   //
-  //  constexpr T& at(size_t const r, size_t const c)
-  //  {
-  //     return arr.at(r*C + c);
-  //  }
-  //
-  // cxx.cpp: In instantiation of ‘constexpr T&
-  // const_member_function::array2d<T, R, C>::at(size_t, size_t) const [with T =
-  // int; long unsigned int R = 2ul; long unsigned int C = 3ul; size_t = long
-  // unsigned int]’: cxx.cpp:3420:21:   required from ‘void
-  // const_member_function::print_array2d(const
-  // const_member_function::array2d<T, R, C>&) [with T = int; long unsigned int
-  // R = 2ul; long unsigned int C = 3ul]’ cxx.cpp:3439:20:   required from here
-  // cxx.cpp:3403:31: error: invalid initialization of reference of type ‘int&’
-  // from expression of type ‘const value_type {aka const int}’
-  //           return arr.at(r*C + c);
-
-  // non-const version
-  //
-  // *cxx-const-error-const* when there's no const version
-  //
-  // cxx.cpp:3409:21: error: passing ‘const const_member_function::array2d<int,
-  // 2ul, 3ul>’ as ‘this’ argument of ‘T& const_member_function::array2d<T, R,
-  // C>::at(size_t, size_t) [with T = int; long unsigned int R = 2ul; long
-  // unsigned int C = 3ul; size_t = long unsigned int]’ discards qualifiers
+  // cxx.cpp:3359:26: error: passing ‘const const_member_function::Screen’ as
+  // ‘this’ argument of ‘std::string
+  // const_member_function::Screen::get_message()’ discards qualifiers
   // [-fpermissive]
-  //            std::cout << arr.at(i, j) << ' ';
   //
-  // T& at(size_t const r, size_t const c)
-  // {
-  //    return arr.at(r*C + c);
-  // }
+  //      return s.get_message();
 
-  // const version covers both const and non-const use
-  constexpr T const &at(size_t const r, size_t const c) const
-  {
-    return arr.at(r * C + c);
-  }
-};
+  string print_screen(const Screen &s) { return s.get_message(); }
 
-template <class T, size_t R, size_t C>
-void print_array2d(array2d<T, R, C> const &arr)
-{
-  for (size_t i = 0; i < R; ++i)
+  template <class T, size_t R, size_t C> class array2d
   {
-    for (size_t j = 0; j < C; ++j)
+    std::vector<T> arr;
+
+  public:
+    array2d()
+        : arr(R * C)
+    {}
+    explicit array2d(std::initializer_list<T> l)
+        : arr(l)
+    {}
+
+    // *cxx-const-error-const* when there's no const version
+    //
+    // when use constexpr function
+    //
+    //  constexpr T& at(size_t const r, size_t const c)
+    //  {
+    //     return arr.at(r*C + c);
+    //  }
+    //
+    // cxx.cpp: In instantiation of ‘constexpr T&
+    // const_member_function::array2d<T, R, C>::at(size_t, size_t) const [with T
+    // = int; long unsigned int R = 2ul; long unsigned int C = 3ul; size_t =
+    // long unsigned int]’: cxx.cpp:3420:21:   required from ‘void
+    // const_member_function::print_array2d(const
+    // const_member_function::array2d<T, R, C>&) [with T = int; long unsigned
+    // int R = 2ul; long unsigned int C = 3ul]’ cxx.cpp:3439:20:   required from
+    // here cxx.cpp:3403:31: error: invalid initialization of reference of type
+    // ‘int&’ from expression of type ‘const value_type {aka const int}’
+    //           return arr.at(r*C + c);
+
+    // non-const version
+    //
+    // *cxx-const-error-const* when there's no const version
+    //
+    // cxx.cpp:3409:21: error: passing ‘const
+    // const_member_function::array2d<int, 2ul, 3ul>’ as ‘this’ argument of ‘T&
+    // const_member_function::array2d<T, R, C>::at(size_t, size_t) [with T =
+    // int; long unsigned int R = 2ul; long unsigned int C = 3ul; size_t = long
+    // unsigned int]’ discards qualifiers
+    // [-fpermissive]
+    //            std::cout << arr.at(i, j) << ' ';
+    //
+    // T& at(size_t const r, size_t const c)
+    // {
+    //    return arr.at(r*C + c);
+    // }
+
+    // const version covers both const and non-const use
+    constexpr T const &at(size_t const r, size_t const c) const
     {
-      std::cout << arr.at(i, j) << ' ';
+      return arr.at(r * C + c);
     }
+  };
 
-    std::cout << std::endl;
+  template <class T, size_t R, size_t C>
+  void print_array2d(array2d<T, R, C> const &arr)
+  {
+    for (size_t i = 0; i < R; ++i)
+    {
+      for (size_t j = 0; j < C; ++j)
+      {
+        std::cout << arr.at(i, j) << ' ';
+      }
+
+      std::cout << std::endl;
+    }
   }
-}
 
 } // namespace const_member_function
 
@@ -8128,13 +8377,14 @@ TEST(Const, ForMemberFunction)
 // ={=========================================================================
 // cxx-except
 
-namespace cxx_except {
-class my_exception : public exception
+namespace cxx_except
 {
-  virtual const char *what() const throw() { return "my exception happened"; }
-};
+  class my_exception : public exception
+  {
+    virtual const char *what() const throw() { return "my exception happened"; }
+  };
 
-my_exception myex;
+  my_exception myex;
 
 } // namespace cxx_except
 
@@ -8177,27 +8427,28 @@ TEST(Exception, OwnException)
   {}
 }
 
-namespace cxx_except {
-class Foo
+namespace cxx_except
 {
-public:
-  ~Foo() {}
-};
-
-class FooNoAbort
-{
-public:
-  ~FooNoAbort() noexcept(false)
+  class Foo
   {
-    throw std::runtime_error("noexcept(false) so expects no abort");
-  }
-};
+  public:
+    ~Foo() {}
+  };
 
-class FooAbort
-{
-public:
-  ~FooAbort() { throw std::runtime_error("noexcept(true) so expects abort"); }
-};
+  class FooNoAbort
+  {
+  public:
+    ~FooNoAbort() noexcept(false)
+    {
+      throw std::runtime_error("noexcept(false) so expects no abort");
+    }
+  };
+
+  class FooAbort
+  {
+  public:
+    ~FooAbort() { throw std::runtime_error("noexcept(true) so expects abort"); }
+  };
 } // namespace cxx_except
 
 TEST(Exception, Noexcept)
@@ -8455,72 +8706,73 @@ TEST(Cpp, Stringification)
   }
 }
 
-namespace cxx_cpp {
-void argprint(int num_args, ...)
+namespace cxx_cpp
 {
-  va_list ap;
-
-  // The argument `last` is the name of the last argument `before` the
-  // variable argument list, that is, the last argument of `which the calling
-  // function knows the type.`
-
-  va_start(ap, num_args);
-
-  // note that num_arg is valid arg to use
-
-  for (int i = 0; i < num_args; ++i)
+  void argprint(int num_args, ...)
   {
-    std::cout << "arg " << i << " is " << va_arg(ap, int) << std::endl;
-  }
+    va_list ap;
 
-  va_end(ap);
-}
+    // The argument `last` is the name of the last argument `before` the
+    // variable argument list, that is, the last argument of `which the calling
+    // function knows the type.`
 
-// The function takes a string of format characters and prints out the
-// argument associated with each format character based on the type.
+    va_start(ap, num_args);
 
-void xprint(char const *fmt, ...)
-{
-  va_list ap;
-  int d;
-  char c, *s;
+    // note that num_arg is valid arg to use
 
-  va_start(ap, fmt);
-
-  while (*fmt)
-  {
-    switch (*fmt++)
+    for (int i = 0; i < num_args; ++i)
     {
-    case 's':
-      s = va_arg(ap, char *);
-      printf("string %s\n", s);
-      break;
-
-    case 'd':
-      d = va_arg(ap, int);
-      printf("int %d\n", d);
-      break;
-
-    case 'c':
-
-      // c = va_arg(ap, char);
-      // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed
-      // through ‘...’
-      //            c = va_arg(ap, char);
-      //                           ^
-      // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to
-      // ‘va_arg’) cxx.cpp:7950:26: note: if this code is reached, the program
-      // will abort
-      //
-      // need a cast here since va_arg only takes fully promoted types
-
-      c = (char)va_arg(ap, int);
-      printf("char %c\n", c);
-      break;
+      std::cout << "arg " << i << " is " << va_arg(ap, int) << std::endl;
     }
+
+    va_end(ap);
   }
-  va_end(ap);
-}
+
+  // The function takes a string of format characters and prints out the
+  // argument associated with each format character based on the type.
+
+  void xprint(char const *fmt, ...)
+  {
+    va_list ap;
+    int d;
+    char c, *s;
+
+    va_start(ap, fmt);
+
+    while (*fmt)
+    {
+      switch (*fmt++)
+      {
+      case 's':
+        s = va_arg(ap, char *);
+        printf("string %s\n", s);
+        break;
+
+      case 'd':
+        d = va_arg(ap, int);
+        printf("int %d\n", d);
+        break;
+
+      case 'c':
+
+        // c = va_arg(ap, char);
+        // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed
+        // through ‘...’
+        //            c = va_arg(ap, char);
+        //                           ^
+        // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to
+        // ‘va_arg’) cxx.cpp:7950:26: note: if this code is reached, the program
+        // will abort
+        //
+        // need a cast here since va_arg only takes fully promoted types
+
+        c = (char)va_arg(ap, int);
+        printf("char %c\n", c);
+        break;
+      }
+    }
+    va_end(ap);
+  }
 
 } // namespace cxx_cpp
 
@@ -8547,14 +8799,15 @@ TEST(Cpp, VariableArgs)
 }
 
 // no napesapce effect but for visual effect
-namespace cxx_cpp {
+namespace cxx_cpp
+{
 
-// No for GCC 4.6 and 6.x
-//
-// #define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
-// cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
-//  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
-//                                                                   ^
+  // No for GCC 4.6 and 6.x
+  //
+  // #define eprintf(fmt, ...)  fprintf(stdout, fmt, __VA_ARGS__)
+  // cxx.cpp:7996:66: error: expected primary-expression before ‘)’ token
+  //  #define eprintf(format, ...)  fprintf(stdout, format, __VA_ARGS__)
+  //                                                                   ^
 
 #define eprintf(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
 } // namespace cxx_cpp
@@ -8627,12 +8880,13 @@ TEST(Numeric, Abs)
 // ={=========================================================================
 // cxx-typedef
 
-namespace cxx_typedef {
-// defined here since cannot do in the block since:
-//
-// cxx.cpp:7062:3: error: a template declaration cannot appear at block scope
+namespace cxx_typedef
+{
+  // defined here since cannot do in the block since:
+  //
+  // cxx.cpp:7062:3: error: a template declaration cannot appear at block scope
 
-template <typename Value> using mmap = map<unsigned int, Value>;
+  template <typename Value> using mmap = map<unsigned int, Value>;
 
 } // namespace cxx_typedef
 
@@ -8641,8 +8895,10 @@ TEST(Typedef, Alias)
   {
     // cannot be a const map since operator[] is for non-const.
 
-    map<unsigned int, string> coll{
-      {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}};
+    map<unsigned int, string> coll{{1, "one"},
+                                   {2, "two"},
+                                   {3, "three"},
+                                   {4, "four"}};
 
     coll[3] = "threee";
     coll[3] = "threeee";
@@ -8703,28 +8959,37 @@ TEST(Typedef, Alias)
 
 // so semi-colon(;) at end DO NOT matter
 
-namespace cxx_class {
-class ClassA
+namespace cxx_class
 {
-public:
-  ClassA() : name_("ClassA") { std::cout << "This is ClassA" << std::endl; }
+  class ClassA
+  {
+  public:
+    ClassA()
+        : name_("ClassA")
+    {
+      std::cout << "This is ClassA" << std::endl;
+    }
 
-  void getName() { std::cout << "ClassA's name : " << name_ << std::endl; }
+    void getName() { std::cout << "ClassA's name : " << name_ << std::endl; }
 
-private:
-  std::string name_;
-};
+  private:
+    std::string name_;
+  };
 
-class ClassB
-{
-public:
-  ClassB() : name_("ClassB") { std::cout << "This is ClassB" << std::endl; };
+  class ClassB
+  {
+  public:
+    ClassB()
+        : name_("ClassB")
+    {
+      std::cout << "This is ClassB" << std::endl;
+    };
 
-  void getName() { std::cout << "ClassA's name : " << name_ << std::endl; };
+    void getName() { std::cout << "ClassA's name : " << name_ << std::endl; };
 
-private:
-  std::string name_;
-};
+  private:
+    std::string name_;
+  };
 
 } // namespace cxx_class
 
@@ -8742,35 +9007,36 @@ TEST(Class, ColonDoesMatter)
 // ={=========================================================================
 // cxx-class-nested
 
-namespace cxx_nested_1 {
-class Outer
+namespace cxx_nested_1
 {
-private:
-  int outer_x = 100;
-
-public:
-  void test()
+  class Outer
   {
-    Inner *inner = new Inner();
-    inner->display();
-  }
-
-private:
-  class Inner
-  {
+  private:
+    int outer_x = 100;
 
   public:
-    void display()
+    void test()
     {
-      // works for java
-      // have access to enclosing scope? No
-      // cxx.cpp:8397:47: error: invalid use of non-static data member
-      // ‘cxx_nested::Outer::outer_x’ std::cout << "display: outer_x = " <<
-      // outer_x;
-      std::cout << "display: outer_x = " << std::endl;
+      Inner *inner = new Inner();
+      inner->display();
     }
+
+  private:
+    class Inner
+    {
+
+    public:
+      void display()
+      {
+        // works for java
+        // have access to enclosing scope? No
+        // cxx.cpp:8397:47: error: invalid use of non-static data member
+        // ‘cxx_nested::Outer::outer_x’ std::cout << "display: outer_x = " <<
+        // outer_x;
+        std::cout << "display: outer_x = " << std::endl;
+      }
+    };
   };
-};
 } // namespace cxx_nested_1
 
 TEST(Class, Nested_1)
@@ -8781,42 +9047,43 @@ TEST(Class, Nested_1)
   o.test();
 }
 
-namespace cxx_nested_2 {
-class Outer
+namespace cxx_nested_2
 {
-private:
-  int outer_x = 100;
-
-public:
-  void test()
+  class Outer
   {
-    Inner *inner = new Inner();
-    inner->display();
-
-    // fails in java as well
-    // cxx.cpp:8425:39: error: ‘y’ was not declared in this scope
-    //        std::cout << "display: y = " << y << std::endl;
-    std::cout << "display: y = " << std::endl;
-  }
-
-private:
-  class Inner
-  {
+  private:
+    int outer_x = 100;
 
   public:
-    int y = 10;
-
-  public:
-    void display()
+    void test()
     {
-      // have access to enclosing scope? No
-      // cxx.cpp:8397:47: error: invalid use of non-static data member
-      // ‘cxx_nested::Outer::outer_x’ std::cout << "display: outer_x = " <<
-      // outer_x;
-      std::cout << "display: outer_x = " << std::endl;
+      Inner *inner = new Inner();
+      inner->display();
+
+      // fails in java as well
+      // cxx.cpp:8425:39: error: ‘y’ was not declared in this scope
+      //        std::cout << "display: y = " << y << std::endl;
+      std::cout << "display: y = " << std::endl;
     }
+
+  private:
+    class Inner
+    {
+
+    public:
+      int y = 10;
+
+    public:
+      void display()
+      {
+        // have access to enclosing scope? No
+        // cxx.cpp:8397:47: error: invalid use of non-static data member
+        // ‘cxx_nested::Outer::outer_x’ std::cout << "display: outer_x = " <<
+        // outer_x;
+        std::cout << "display: outer_x = " << std::endl;
+      }
+    };
   };
-};
 } // namespace cxx_nested_2
 
 TEST(Class, Nested_2)

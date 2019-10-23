@@ -25,21 +25,23 @@ int main(int argc, char **argv)
   std::cout << "__x86_32__ " << std::endl;
 #endif
 
-  std::cout << "size of (int) is                : " << sizeof(int) 
-    << std::endl;
-  std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int) 
-    << std::endl;
+  std::cout << "size of (int) is                : " << sizeof(int) << std::endl;
+  std::cout << "size of (unsigned int) is       : " << sizeof(unsigned int)
+            << std::endl;
 
-  std::cout << "size of (long) is               : " << sizeof(long) << std::endl;
+  std::cout << "size of (long) is               : " << sizeof(long)
+            << std::endl;
   std::cout << "size of (unsigned long) is      : " << sizeof(unsigned long)
-    << std::endl;
+            << std::endl;
 
   std::cout << "size of (long int) is           : " << sizeof(long int) << endl;
   std::cout << "size of (unsigned long int) is  : " << sizeof(unsigned long int)
-    << endl;
+            << endl;
 
-  std::cout << "size of (long long) is          : " << sizeof(long long) << endl; cout << "size of (unsigned long long) is  : " << sizeof(unsigned long long)
-    << endl;
+  std::cout << "size of (long long) is          : " << sizeof(long long)
+            << endl;
+  cout << "size of (unsigned long long) is  : " << sizeof(unsigned long long)
+       << endl;
 
   int *pint;
   unsigned int *puint;

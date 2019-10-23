@@ -1,17 +1,17 @@
-#include <iostream>
-#include <set>
-#include <vector>
-#include <memory>
-#include <chrono>
-#include <limits>
-#include <thread>
-#include <list>
-#include <forward_list>
-#include <regex>
 #include <boost/lexical_cast.hpp>
-#include <random>
-#include <mutex>
+#include <chrono>
 #include <condition_variable>
+#include <forward_list>
+#include <iostream>
+#include <limits>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <random>
+#include <regex>
+#include <set>
+#include <thread>
+#include <vector>
 
 #include "gmock/gmock.h"
 
@@ -20,7 +20,6 @@
 using namespace std;
 using namespace std::placeholders;
 using namespace testing;
-
 
 /*
 ={=============================================================================
@@ -48,155 +47,161 @@ The following class diagram describes the pattern for validating passwords:
 
         password_validator (abc)
         +                   +
-length_validator         password_validator_decorator 
+length_validator         password_validator_decorator
 
-                         digit_password_validator, case_password_validator, symbol_password_validator
+                         digit_password_validator, case_password_validator,
+symbol_password_validator
 */
 
 namespace cxx_pattern_decorator
 {
   class password_validator
   {
-    public:
-      virtual ~password_validator() {}
-      // virtual bool validate(std::string& password) = 0;
-      // virtual bool validate(std::string password) = 0;
-      virtual bool validate(std::string const& password) = 0;
+  public:
+    virtual ~password_validator() {}
+    // virtual bool validate(std::string& password) = 0;
+    // virtual bool validate(std::string password) = 0;
+    virtual bool validate(std::string const &password) = 0;
   };
 
   // mandatory(default) implementation
 
   class length_validator : public password_validator
   {
-    public:
-      length_validator(unsigned int min_length) noexcept : length_(min_length) 
-      {}
+  public:
+    length_validator(unsigned int min_length) noexcept
+        : length_(min_length)
+    {}
 
-      // bool validate(std::string& password) override
-      // bool validate(std::string password) override
-      bool validate(std::string const& password) override
-      {
-        cout << "length_validator {" << endl;
+    // bool validate(std::string& password) override
+    // bool validate(std::string password) override
+    bool validate(std::string const &password) override
+    {
+      cout << "length_validator {" << endl;
 
-        auto result = password.length() >= length_;
+      auto result = password.length() >= length_;
 
-        cout << "length_validator }" << endl;
+      cout << "length_validator }" << endl;
 
-        return result;
-      }
+      return result;
+    }
 
-    private:
-      unsigned int length_;
+  private:
+    unsigned int length_;
   };
-
 
   class password_validator_decorator : public password_validator
   {
-    public:
-      explicit password_validator_decorator(std::unique_ptr<password_validator> validator)
-        : validator_(std::move(validator)) 
-      {}
+  public:
+    explicit password_validator_decorator(
+      std::unique_ptr<password_validator> validator)
+        : validator_(std::move(validator))
+    {}
 
-      // bool validate(std::string& password) override
-      // bool validate(std::string password) override
-      bool validate(std::string const& password) override
-      {
-        cout << "password_validator_decorator {" << endl;
-        auto result = validator_->validate(password);
-        cout << "password_validator_decorator }" << endl;
+    // bool validate(std::string& password) override
+    // bool validate(std::string password) override
+    bool validate(std::string const &password) override
+    {
+      cout << "password_validator_decorator {" << endl;
+      auto result = validator_->validate(password);
+      cout << "password_validator_decorator }" << endl;
 
-        return result;
-      }
+      return result;
+    }
 
-    private:
-      std::unique_ptr<password_validator> validator_;
+  private:
+    std::unique_ptr<password_validator> validator_;
   };
 
   // must have one digits
 
   class digit_password_validator final : public password_validator_decorator
   {
-    public:
-      explicit digit_password_validator(std::unique_ptr<password_validator> validator)
+  public:
+    explicit digit_password_validator(
+      std::unique_ptr<password_validator> validator)
         : password_validator_decorator(std::move(validator))
-      {}
+    {}
 
-      // bool validate(std::string& password) override
-      // bool validate(std::string password) override
-      bool validate(std::string const& password) override
-      {
-        cout << "digit_password_validator {" << endl;
+    // bool validate(std::string& password) override
+    // bool validate(std::string password) override
+    bool validate(std::string const &password) override
+    {
+      cout << "digit_password_validator {" << endl;
 
-        if (password_validator_decorator::validate(password) == false)
-          return false;
+      if (password_validator_decorator::validate(password) == false)
+        return false;
 
-        cout << "digit_password_validator }" << endl;
+      cout << "digit_password_validator }" << endl;
 
-        return password.find_first_of("0123456789") != std::string::npos;
-      }
+      return password.find_first_of("0123456789") != std::string::npos;
+    }
   };
 
   // must have one lower and one upper case
 
   class case_password_validator final : public password_validator_decorator
   {
-    public:
-      explicit case_password_validator(std::unique_ptr<password_validator> validator)
+  public:
+    explicit case_password_validator(
+      std::unique_ptr<password_validator> validator)
         : password_validator_decorator(std::move(validator))
-      {}
+    {}
 
-      // bool validate(std::string& password) override
-      // bool validate(std::string password) override
-      bool validate(std::string const& password) override
+    // bool validate(std::string& password) override
+    // bool validate(std::string password) override
+    bool validate(std::string const &password) override
+    {
+      cout << "case_password_validator {" << endl;
+
+      if (password_validator_decorator::validate(password) == false)
+        return false;
+
+      bool has_lower{false};
+      bool has_upper{false};
+
+      for (size_t i = 0; i < password.size() && !(has_lower && has_upper); ++i)
       {
-        cout << "case_password_validator {" << endl;
-
-        if (password_validator_decorator::validate(password) == false)
-          return false;
-
-        bool has_lower{false};
-        bool has_upper{false};
-
-        for (size_t i = 0; i < password.size() && !(has_lower && has_upper); ++i)
-        {
-          if (std::islower(password[i])) has_lower = true;
-          else if (std::isupper(password[i])) has_upper = true;
-        }
-
-        cout << "case_password_validator }" << endl;
-
-        return has_lower && has_upper;
+        if (std::islower(password[i]))
+          has_lower = true;
+        else if (std::isupper(password[i]))
+          has_upper = true;
       }
+
+      cout << "case_password_validator }" << endl;
+
+      return has_lower && has_upper;
+    }
   };
 
   // must have one of symbols
 
   class symbol_password_validator final : public password_validator_decorator
   {
-    public:
-      explicit symbol_password_validator(std::unique_ptr<password_validator> validator)
+  public:
+    explicit symbol_password_validator(
+      std::unique_ptr<password_validator> validator)
         : password_validator_decorator(std::move(validator))
-      {}
+    {}
 
-      // error
-      // bool validate(std::string& password) override
-      // okay
-      // bool validate(std::string password) override
-      bool validate(std::string const& password) override
-      {
-        cout << "symbol_password_validator {" << endl;
+    // error
+    // bool validate(std::string& password) override
+    // okay
+    // bool validate(std::string password) override
+    bool validate(std::string const &password) override
+    {
+      cout << "symbol_password_validator {" << endl;
 
-        if (password_validator_decorator::validate(password) == false)
-          return false;
+      if (password_validator_decorator::validate(password) == false)
+        return false;
 
-        cout << "symbol_password_validator }" << endl;
+      cout << "symbol_password_validator }" << endl;
 
-        return password.find_first_of("!@#$%^&*(){}[]?<>") != std::string::npos;
-      }
+      return password.find_first_of("!@#$%^&*(){}[]?<>") != std::string::npos;
+    }
   };
 
-} // namespace
-
+} // namespace cxx_pattern_decorator
 
 // shows how chain of objects works
 //
@@ -210,7 +215,7 @@ namespace cxx_pattern_decorator
 // [       OK ] PatternDecorator.ValidatingPasswords (1 ms)
 
 TEST(PatternDecorator, ValidatingPasswords_1)
-{ 
+{
   using namespace cxx_pattern_decorator;
 
   // okay
@@ -220,8 +225,8 @@ TEST(PatternDecorator, ValidatingPasswords_1)
 
   // use temporary
   std::unique_ptr<digit_password_validator> validator2(
-      new digit_password_validator(std::unique_ptr<length_validator>(new length_validator(8)))
-      );
+    new digit_password_validator(
+      std::unique_ptr<length_validator>(new length_validator(8))));
 
   // *cxx-14*
   // auto validator1 = std::make_unique<digit_password_validator>(
@@ -232,7 +237,6 @@ TEST(PatternDecorator, ValidatingPasswords_1)
   // since do not have a digit
   EXPECT_THAT(validator2->validate("abcde!@#"), false);
 }
-
 
 // now added `case` in the middle of decorator chain and this fails on `case
 // validator` so ends there and see no ends for `digit validator`
@@ -257,28 +261,26 @@ TEST(PatternDecorator, ValidatingPasswords_2)
   using namespace cxx_pattern_decorator;
 
   // use temporary
-  std::unique_ptr<digit_password_validator> validator2(new digit_password_validator(
-        std::unique_ptr<case_password_validator>(new case_password_validator(
-            std::unique_ptr<length_validator>(new length_validator(8))
-            ))));
+  std::unique_ptr<digit_password_validator> validator2(
+    new digit_password_validator(
+      std::unique_ptr<case_password_validator>(new case_password_validator(
+        std::unique_ptr<length_validator>(new length_validator(8))))));
 
   // now expects false
   EXPECT_THAT(validator2->validate("abc123!@#"), false);
-} 
-
+}
 
 // TEST(PatternDecorator, ValidatingPasswords_3)
 // {
-//    auto validator2 = 
+//    auto validator2 =
 //       std::make_unique<symbol_password_validator>(
 //          std::make_unique<case_password_validator>(
 //             std::make_unique<digit_password_validator>(
 //                std::make_unique<length_validator>(8))));
-//  
+//
 //    assert(validator2->validate("Abc123!@#"));
 //    assert(!validator2->validate("Abc123567"));
 // }
-
 
 /*
 ={=============================================================================
@@ -307,109 +309,119 @@ namespace cxx_pattern_composite
 {
   class password_generator
   {
-    public:
-      virtual std::string generate() = 0;
-      virtual std::string allowed_chars() const = 0;
-      virtual size_t length() const = 0;
-      virtual void add(std::unique_ptr<password_generator> generator) = 0;
-      virtual ~password_generator() {}
+  public:
+    virtual std::string generate()                                  = 0;
+    virtual std::string allowed_chars() const                       = 0;
+    virtual size_t length() const                                   = 0;
+    virtual void add(std::unique_ptr<password_generator> generator) = 0;
+    virtual ~password_generator() {}
   };
 
   class basic_password_generator : public password_generator
   {
-    public:
-      explicit basic_password_generator(size_t const length) noexcept
+  public:
+    explicit basic_password_generator(size_t const length) noexcept
         : len_(length)
-        {}
+    {}
 
-      virtual std::string generate() override
-      { throw std::runtime_error("not implemented"); }
+    virtual std::string generate() override
+    {
+      throw std::runtime_error("not implemented");
+    }
 
-      virtual void add(std::unique_ptr<password_generator>) override
-      { throw std::runtime_error("not implemented"); }
+    virtual void add(std::unique_ptr<password_generator>) override
+    {
+      throw std::runtime_error("not implemented");
+    }
 
-      virtual size_t length() const override final
-      { return len_; }
+    virtual size_t length() const override final { return len_; }
 
-    private:
-      size_t len_;
+  private:
+    size_t len_;
   };
 
   class digit_generator : public basic_password_generator
   {
-    public:
-      explicit digit_generator(size_t const length) noexcept
+  public:
+    explicit digit_generator(size_t const length) noexcept
         : basic_password_generator(length)
-        {}
+    {}
 
-      virtual std::string allowed_chars() const override
-      { return "0123456789"; }
+    virtual std::string allowed_chars() const override { return "0123456789"; }
   };
 
   class symbol_generator : public basic_password_generator
   {
-    public:
-      explicit symbol_generator(size_t const length) noexcept
+  public:
+    explicit symbol_generator(size_t const length) noexcept
         : basic_password_generator(length)
-        {}
+    {}
 
-      virtual std::string allowed_chars() const override
-      { return "!@#$%^&*(){}[]?<>"; }
+    virtual std::string allowed_chars() const override
+    {
+      return "!@#$%^&*(){}[]?<>";
+    }
   };
 
   class upper_letter_generator : public basic_password_generator
   {
-    public:
-      explicit upper_letter_generator(size_t const length) noexcept
+  public:
+    explicit upper_letter_generator(size_t const length) noexcept
         : basic_password_generator(length)
-        {}
+    {}
 
-      virtual std::string allowed_chars() const override
-      { return "ABCDEFGHIJKLMNOPQRSTUVXYWZ"; }
+    virtual std::string allowed_chars() const override
+    {
+      return "ABCDEFGHIJKLMNOPQRSTUVXYWZ";
+    }
   };
 
   class composite_password_generator : public password_generator
   {
-    public:
-      composite_password_generator()
-      {}
+  public:
+    composite_password_generator() {}
 
-      virtual std::string generate() override
+    virtual std::string generate() override
+    {
+      std::string password{};
+
+      for (auto &g : generators_)
       {
-        std::string password{};
+        std::string chars = g->allowed_chars();
+        std::uniform_int_distribution<> ud(
+          0,
+          static_cast<int>(chars.length() - 1));
 
-        for (auto& g : generators_)
-        {
-          std::string chars = g->allowed_chars();
-          std::uniform_int_distribution<> ud(0, static_cast<int>(chars.length()-1));
-
-          for (size_t i = 0; i < g->length(); ++i)
-            password += chars[ud(eng)];
-        }
-
-        std::shuffle(std::begin(password), std::end(password), eng);
-
-        return password;
+        for (size_t i = 0; i < g->length(); ++i)
+          password += chars[ud(eng)];
       }
 
-      virtual void add(std::unique_ptr<password_generator> generator) override
-      {
-        generators_.push_back(std::move(generator));
-      }
+      std::shuffle(std::begin(password), std::end(password), eng);
 
-    private:
-      virtual std::string allowed_chars() const override
-      { throw std::runtime_error("not implemented"); }
+      return password;
+    }
 
-      virtual size_t length() const override
-      { throw std::runtime_error("not implemented"); }
+    virtual void add(std::unique_ptr<password_generator> generator) override
+    {
+      generators_.push_back(std::move(generator));
+    }
 
-      std::default_random_engine eng;
-      std::vector<std::unique_ptr<password_generator>> generators_;
+  private:
+    virtual std::string allowed_chars() const override
+    {
+      throw std::runtime_error("not implemented");
+    }
+
+    virtual size_t length() const override
+    {
+      throw std::runtime_error("not implemented");
+    }
+
+    std::default_random_engine eng;
+    std::vector<std::unique_ptr<password_generator>> generators_;
   };
 
-} // namespace
-
+} // namespace cxx_pattern_composite
 
 TEST(PatternComposite, PasswordGenerator_1)
 {
@@ -432,12 +444,12 @@ TEST(PatternComposite, PasswordGenerator_2)
 
   generator.add(std::unique_ptr<symbol_generator>(new symbol_generator(2)));
   generator.add(std::unique_ptr<digit_generator>(new digit_generator(2)));
-  generator.add(std::unique_ptr<upper_letter_generator>(new upper_letter_generator(2)));
+  generator.add(
+    std::unique_ptr<upper_letter_generator>(new upper_letter_generator(2)));
 
   auto password = generator.generate();
   cout << "password: " << password << endl;
 }
-
 
 /*
 ={=============================================================================
@@ -453,31 +465,31 @@ Northeria and Southeria, that have different but similar formats for the
 numbers:
 
 In Northeria, the numbers have the format SYYYYMMDDNNNNNC, where
-  S is a digit representing the sex, 9 for females and 7 for males, 
+  S is a digit representing the sex, 9 for females and 7 for males,
   YYYYMMDD is the birth date, (same)
   NNNNN is a five-digit random number, unique for a day (meaning that the same
-  number can appear twice for two different dates, but not the same date), 
+  number can appear twice for two different dates, but not the same date),
   and C is a digit picked so that the checksum computed as described later is a
-  multiple of 11.  
+  multiple of 11.
 
-In Southeria, the numbers have the format SYYYYMMDDNNNNC, where 
-  S is a digit representing the sex, 1 for females and 2 for males, 
+In Southeria, the numbers have the format SYYYYMMDDNNNNC, where
+  S is a digit representing the sex, 1 for females and 2 for males,
   YYYYMMDD is the birth date, (same)
-  NNNN is a four-digit random number, unique for a day, 
+  NNNN is a four-digit random number, unique for a day,
   and C is a digit picked so that the checksum computed as described below is a
-  multiple of 10.  
-  
-  
+  multiple of 10.
+
+
 The checksum in both cases is a sum of all the digits, each multiplied by its
-weight (the position from the most significant digit to the least). 
+weight (the position from the most significant digit to the least).
 
 For example, the checksum for the Southerian number 12017120134895 is computed
 as follows:
 
-crc = 14*1 + 13*2 + 12*0 + 11*1 + 10*7 + 9*1 + 8*2 + 7*0 + 6*1 + 5*3 
+crc = 14*1 + 13*2 + 12*0 + 11*1 + 10*7 + 9*1 + 8*2 + 7*0 + 6*1 + 5*3
            +  4*4 +  3*8 +  2*9 +  1*5
     = 230 = 23 * 10
- 
+
 The formats for both countries are very similar, although several details are
 different:
 
@@ -493,162 +505,165 @@ steps:
 
 namespace cxx_pattern_template
 {
-  enum class sex_type {female, male};
+  enum class sex_type
+  {
+    female,
+    male
+  };
 
   class social_number_generator
   {
-    public:
-      std::string generate(sex_type sex, unsigned year, unsigned month, unsigned day)
-      {
-        std::stringstream snumber;
+  public:
+    std::string
+    generate(sex_type sex, unsigned year, unsigned month, unsigned day)
+    {
+      std::stringstream snumber;
 
-        snumber << sex_digit(sex);
-        snumber << year << month << day;
-        snumber << next_random(year, month, day);
+      snumber << sex_digit(sex);
+      snumber << year << month << day;
+      snumber << next_random(year, month, day);
 
-        // For example, the checksum for the Southerian number 12017120134895 is
-        // computed as follows:
-        // 
-        // crc = 14*1 + 13*2 + 12*0 + 11*1 + 10*7 + 9*1 + 8*2 + 7*0 + 6*1 + 5*3 
-        //     +  4*4 +  3*8 +  2*9 +  1*5
+      // For example, the checksum for the Southerian number 12017120134895 is
+      // computed as follows:
+      //
+      // crc = 14*1 + 13*2 + 12*0 + 11*1 + 10*7 + 9*1 + 8*2 + 7*0 + 6*1 + 5*3
+      //     +  4*4 +  3*8 +  2*9 +  1*5
 
-        auto number = snumber.str();
-        auto index = number.length();
+      auto number = snumber.str();
+      auto index  = number.length();
 
-        // cxx-algo-accumulate
-        auto sum = std::accumulate(std::begin(number), std::end(number),
-            0, // init value
-            [&](int init, char c)
-            { return init + (index-- * (c - '0')); });
+      // cxx-algo-accumulate
+      auto sum = std::accumulate(
+        std::begin(number),
+        std::end(number),
+        0, // init value
+        [&](int init, char c) { return init + (index-- * (c - '0')); });
 
-        auto rest = sum % modulo_value();
-        snumber << modulo_value() - rest;
+      auto rest = sum % modulo_value();
+      snumber << modulo_value() - rest;
 
-        return snumber.str();
-      }
+      return snumber.str();
+    }
 
-      // dtor-in-cxx-abc
-      virtual ~social_number_generator() {}
+    // dtor-in-cxx-abc
+    virtual ~social_number_generator() {}
 
     // works but public also works
     // protected:
-    
-    public:
-      social_number_generator(int min, int max) 
+
+  public:
+    social_number_generator(int min, int max)
         : ud(min, max)
-      {}
+    {}
 
-    protected:
-      virtual int sex_digit(sex_type const sex) const noexcept = 0;
-      virtual int next_random(unsigned year, unsigned month, unsigned day) = 0;
-      virtual int modulo_value() const noexcept = 0;
+  protected:
+    virtual int sex_digit(sex_type const sex) const noexcept             = 0;
+    virtual int next_random(unsigned year, unsigned month, unsigned day) = 0;
+    virtual int modulo_value() const noexcept                            = 0;
 
-    protected:
-      std::map<unsigned, int> cache;
-      std::uniform_int_distribution<> ud;
-      std::default_random_engine eng;
+  protected:
+    std::map<unsigned, int> cache;
+    std::uniform_int_distribution<> ud;
+    std::default_random_engine eng;
   };
 
   class southeria_social_number_generator final : public social_number_generator
   {
-    public:
-      southeria_social_number_generator():
-        social_number_generator(1000, 9999)
+  public:
+    southeria_social_number_generator()
+        : social_number_generator(1000, 9999)
     {}
 
-    protected:
-      virtual int sex_digit(sex_type sex) const noexcept override
-      {
-        return sex == sex_type::female ? 1 : 2;
-      }
+  protected:
+    virtual int sex_digit(sex_type sex) const noexcept override
+    {
+      return sex == sex_type::female ? 1 : 2;
+    }
 
-      // 4 digit.
-      // cxx-algo-unique use cache to have unique number?
-      virtual int next_random(unsigned year, unsigned month, unsigned day) override
+    // 4 digit.
+    // cxx-algo-unique use cache to have unique number?
+    virtual int
+    next_random(unsigned year, unsigned month, unsigned day) override
+    {
+      auto key = year * 10000 + month * 100 + day;
+      while (true)
       {
-        auto key = year*10000 + month*100 + day;
-        while (true)
+        auto number = ud(eng);
+
+        // when not found
+        auto pos = cache.find(number);
+        if (pos == std::end(cache))
         {
-          auto number = ud(eng);
-
-          // when not found
-          auto pos = cache.find(number);
-          if (pos == std::end(cache))
-          {
-            cache[key] = number;
-            return number;
-          }
+          cache[key] = number;
+          return number;
         }
       }
+    }
 
-      virtual int modulo_value() const noexcept override
-      { return 11; }
+    virtual int modulo_value() const noexcept override { return 11; }
   };
 
   class northeria_social_number_generator final : public social_number_generator
   {
-    public:
-      northeria_social_number_generator():
-        social_number_generator(1000, 9999)
+  public:
+    northeria_social_number_generator()
+        : social_number_generator(1000, 9999)
     {}
 
-    protected:
-      virtual int sex_digit(sex_type sex) const noexcept override
-      {
-        return sex == sex_type::female ? 9 : 7;
-      }
+  protected:
+    virtual int sex_digit(sex_type sex) const noexcept override
+    {
+      return sex == sex_type::female ? 9 : 7;
+    }
 
-      // 5 digit. why are these two functions same as southeria?
-      
-      virtual int next_random(unsigned year, unsigned month, unsigned day) override
+    // 5 digit. why are these two functions same as southeria?
+
+    virtual int
+    next_random(unsigned year, unsigned month, unsigned day) override
+    {
+      auto key = year * 10000 + month * 100 + day;
+      while (true)
       {
-        auto key = year*10000 + month*100 + day;
-        while (true)
+        auto number = ud(eng);
+
+        auto pos = cache.find(number);
+        if (pos == std::end(cache))
         {
-          auto number = ud(eng);
-
-          auto pos = cache.find(number);
-          if (pos == std::end(cache))
-          {
-            cache[key] = number;
-            return number;
-          }
+          cache[key] = number;
+          return number;
         }
       }
+    }
 
-      virtual int modulo_value() const noexcept override
-      { return 11; }
+    virtual int modulo_value() const noexcept override { return 11; }
   };
 
   class social_number_generator_factory
   {
-    public:
-      social_number_generator_factory()
-      {
-        generators_["north"] = 
-          std::unique_ptr<northeria_social_number_generator>(
-              new northeria_social_number_generator());
+  public:
+    social_number_generator_factory()
+    {
+      generators_["north"] = std::unique_ptr<northeria_social_number_generator>(
+        new northeria_social_number_generator());
 
-        generators_["south"] = 
-          std::unique_ptr<southeria_social_number_generator>(
-              new southeria_social_number_generator());
-      }
+      generators_["south"] = std::unique_ptr<southeria_social_number_generator>(
+        new southeria_social_number_generator());
+    }
 
-      social_number_generator* get_generator(std::string country) const
-      {
-        auto it = generators_.find(country);
-        if (it != std::end(generators_))
-          return it->second.get();
+    social_number_generator *get_generator(std::string country) const
+    {
+      auto it = generators_.find(country);
+      if (it != std::end(generators_))
+        return it->second.get();
 
-        throw std::runtime_error("not found country");
-      }
+      throw std::runtime_error("not found country");
+    }
 
-    private:
-      std::map<std::string,
-        std::unique_ptr<social_number_generator>> generators_;
+  private:
+    std::map<std::string, std::unique_ptr<social_number_generator>> generators_;
   };
 
-} // namespace
+} // namespace cxx_pattern_template
 
 TEST(PatternTemplate, GeneratingSecurityNumber)
 {
@@ -661,8 +676,7 @@ TEST(PatternTemplate, GeneratingSecurityNumber)
     std::string result;
     if (snorth1 != nullptr)
     {
-      result = snorth1->generate(
-          sex_type::female, 2017, 12, 25);
+      result = snorth1->generate(sex_type::female, 2017, 12, 25);
 
       cout << "snorth1: " << result << endl;
     }
@@ -673,14 +687,12 @@ TEST(PatternTemplate, GeneratingSecurityNumber)
     std::string result;
     if (ssouth1 != nullptr)
     {
-      result = ssouth1->generate(
-          sex_type::female, 2017, 12, 25);
+      result = ssouth1->generate(sex_type::female, 2017, 12, 25);
 
       cout << "ssouth1: " << result << endl;
     }
   }
 }
-
 
 /*
 ={=============================================================================
@@ -711,47 +723,37 @@ namespace cxx_pattern_chain_of_responsibility
 {
   class role
   {
-    public:
-      virtual double approval_limit() const noexcept = 0;
-      virtual ~role() {}
+  public:
+    virtual double approval_limit() const noexcept = 0;
+    virtual ~role() {}
   };
 
   class employee_role : public role
   {
-    public:
-      virtual double approval_limit() const noexcept override
-      {
-        return 1000;
-      }
+  public:
+    virtual double approval_limit() const noexcept override { return 1000; }
   };
 
   class team_manager_role : public role
-  { 
-    public:
-      virtual double approval_limit() const noexcept override
-      {
-        return 10000;
-      }
+  {
+  public:
+    virtual double approval_limit() const noexcept override { return 10000; }
   };
 
   class dept_manager_role : public role
   {
-    public:
-      virtual double approval_limit() const noexcept override
-      {
-        return 100000;
-      }
-  };
-  
-  class president_role : public role
-  {
-    public:
-      virtual double approval_limit() const noexcept override
-      {
-        return std::numeric_limits<double>::max();
-      }
+  public:
+    virtual double approval_limit() const noexcept override { return 100000; }
   };
 
+  class president_role : public role
+  {
+  public:
+    virtual double approval_limit() const noexcept override
+    {
+      return std::numeric_limits<double>::max();
+    }
+  };
 
   struct expense
   {
@@ -759,38 +761,40 @@ namespace cxx_pattern_chain_of_responsibility
     std::string desc_;
 
     expense(double const amount, std::string desc)
-      : amount_(amount), desc_(desc)
+        : amount_(amount)
+        , desc_(desc)
     {}
   };
 
   class employee
   {
-    public:
-      explicit employee(std::string name, std::unique_ptr<role> role)
-        : name_(name), role_(std::move(role)) 
-      {}
+  public:
+    explicit employee(std::string name, std::unique_ptr<role> role)
+        : name_(name)
+        , role_(std::move(role))
+    {}
 
-      void set_direct_manager(std::shared_ptr<employee> manager)
-      {
-        manager_ = manager;
-      }
+    void set_direct_manager(std::shared_ptr<employee> manager)
+    {
+      manager_ = manager;
+    }
 
-      void approve(expense const& e)
-      {
-        if (e.amount_ <= role_->approval_limit())
-          std::cout << name_ << " approved expense '" << e.desc_ << "', cost= "
-            << e.amount_ << std::endl;
-        else if (manager_ != nullptr)
-          manager_->approve(e);
-      }
+    void approve(expense const &e)
+    {
+      if (e.amount_ <= role_->approval_limit())
+        std::cout << name_ << " approved expense '" << e.desc_
+                  << "', cost= " << e.amount_ << std::endl;
+      else if (manager_ != nullptr)
+        manager_->approve(e);
+    }
 
-    private:
-      std::string name_;
-      std::unique_ptr<role> role_;
-      std::shared_ptr<employee> manager_;
+  private:
+    std::string name_;
+    std::unique_ptr<role> role_;
+    std::shared_ptr<employee> manager_;
   };
 
-} // namespace
+} // namespace cxx_pattern_chain_of_responsibility
 
 // [ RUN      ] PatternChainOfResponsibility.ApprovalSystem
 // john smith approved expense 'magazins', cost= 500
@@ -804,20 +808,24 @@ TEST(PatternChainOfResponsibility, ApprovalSystem)
   using namespace cxx_pattern_chain_of_responsibility;
 
   // employee
-  auto john = std::make_shared<employee>("john smith",
-      std::unique_ptr<employee_role>(new employee_role()));
+  auto john = std::make_shared<employee>(
+    "john smith",
+    std::unique_ptr<employee_role>(new employee_role()));
 
   // team manager
-  auto robert = std::make_shared<employee>("robert booth",
-      std::unique_ptr<team_manager_role>(new team_manager_role()));
+  auto robert = std::make_shared<employee>(
+    "robert booth",
+    std::unique_ptr<team_manager_role>(new team_manager_role()));
 
   // dept manager
-  auto david = std::make_shared<employee>("david jones",
-      std::unique_ptr<dept_manager_role>(new dept_manager_role()));
+  auto david = std::make_shared<employee>(
+    "david jones",
+    std::unique_ptr<dept_manager_role>(new dept_manager_role()));
 
-  // president 
-  auto cecil = std::make_shared<employee>("cecil williamson",
-      std::unique_ptr<president_role>(new president_role()));
+  // president
+  auto cecil = std::make_shared<employee>(
+    "cecil williamson",
+    std::unique_ptr<president_role>(new president_role()));
 
   // build approval chain
   john->set_direct_manager(robert);
@@ -829,7 +837,6 @@ TEST(PatternChainOfResponsibility, ApprovalSystem)
   john->approve(expense{50000, "conference costs"});
   john->approve(expense{200000, "new lorry"});
 }
-
 
 /*
 ={=============================================================================
@@ -897,8 +904,9 @@ class A2DPTransport
         Locker lock(&m_listener_lock); \
         listeners = m_listeners; \
     } \
-    for (std::vector<BluetoothA2DPTransportListener*>::iterator it = listeners.begin(); it != listeners.end(); ++it) if (*it) (*it)->_what; \
-} while(0)
+    for (std::vector<BluetoothA2DPTransportListener*>::iterator it =
+listeners.begin(); it != listeners.end(); ++it) if (*it) (*it)->_what; \ }
+while(0)
 
   {
     notify(onBufferReady(this, buffer, nbytes, sampleno));
@@ -917,7 +925,7 @@ to hold reference to source(notifier). For example, only add interest and use it
 until application finishes. Or, use of expired weak_ptr.
 
 
-<case> 
+<case>
 Do not use lister class T which has callback interfaces since it has only one
 callback and do not use inheritance. Instead, use std::function in listener
 registeration and callback as:
@@ -925,7 +933,6 @@ registeration and callback as:
 typedef std::function<void (EventSource, uint16_t, bool)> KeyListener;
 
 */
-
 
 namespace cxx_pattern_observer
 {
@@ -1103,22 +1110,33 @@ namespace cxx_pattern_observer
     std::vector<collection_observer*> observers_;
   };
 #endif
-} // namespace
+} // namespace cxx_pattern_observer
 
 namespace cxx_pattern_observer
 {
-  enum class changed_action {add, remove, clear, assign};
+  enum class changed_action
+  {
+    add,
+    remove,
+    clear,
+    assign
+  };
 
   std::string action_name(changed_action const action)
   {
-    switch(action)
+    switch (action)
     {
-      case changed_action::add: return "added";
-      case changed_action::remove: return "removed";
-      case changed_action::clear: return "cleared";
-      case changed_action::assign: return "assigned";
-      default: return "unsupported";
-    } 
+    case changed_action::add:
+      return "added";
+    case changed_action::remove:
+      return "removed";
+    case changed_action::clear:
+      return "cleared";
+    case changed_action::assign:
+      return "assigned";
+    default:
+      return "unsupported";
+    }
   }
 
   struct changed_notification
@@ -1130,165 +1148,160 @@ namespace cxx_pattern_observer
   // abc
   class collection_observer
   {
-    public:
-      virtual ~collection_observer() {}
-      virtual void onChanged(changed_notification const &noti) = 0;
+  public:
+    virtual ~collection_observer() {}
+    virtual void onChanged(changed_notification const &noti) = 0;
   };
 
   // observers(listeners)
   class observer : public collection_observer
   {
-    public:
-      virtual void onChanged(changed_notification const &noti)
-      {
-        std::cout << "onChanged(action: " << action_name(noti.action) 
-          << ", index: " << noti.index << ")" << std::endl;
-      }
+  public:
+    virtual void onChanged(changed_notification const &noti)
+    {
+      std::cout << "onChanged(action: " << action_name(noti.action)
+                << ", index: " << noti.index << ")" << std::endl;
+    }
   };
 
   // observee(source)
-  template<typename T>
-    class observable_vector
+  template <typename T> class observable_vector
+  {
+    using size_type = typename std::vector<T>::size_type;
+
+  public:
+    explicit observable_vector()
+        : data_()
+        , observers_()
+    {}
+
+    explicit observable_vector(std::initializer_list<T> init)
+        : data_(init)
+    {}
+
+    // copy assign
+    // do not update(overwrite) `observers_` from rhs so keep current
+    // observers
+
+    observable_vector &operator=(observable_vector const &rhs)
     {
-      using size_type = typename std::vector<T>::size_type;
+      // for self assign
+      if (this != &rhs)
+      {
+        data_ = rhs.data_;
 
-      public: 
-        explicit observable_vector() 
-          : data_(), observers_() 
-        {}
-
-        explicit observable_vector(std::initializer_list<T> init) 
-          : data_(init)
-        {}
-
-        // copy assign
-        // do not update(overwrite) `observers_` from rhs so keep current
-        // observers
-
-        observable_vector& operator=(observable_vector const &rhs)
+        for (auto const o : observers_)
         {
-          // for self assign
-          if (this != &rhs)
+          if (nullptr != o)
           {
-            data_ = rhs.data_;
-
-            for (auto const o : observers_)
-            {
-              if (nullptr != o)
-              {
-                o->onChanged({changed_action::assign, data_.size()});
-              }
-            }
-          }
-
-          return *this;
-        }
-
-        // move assign
-        observable_vector& operator=(observable_vector &&rhs)
-        {
-          // for self assign
-          if (this != &rhs)
-          {
-            // done by vector's move
-            data_ = std::move(rhs.data_);
-
-            for (auto const o : observers_)
-            {
-              if (nullptr != o)
-              {
-                o->onChanged({changed_action::assign, data_.size()});
-              }
-            }
-          }
-
-          return *this;
-        }
-
-        void push_back(T &value)
-        {
-          cout << "push_back(T&)" << endl;
-
-          data_.push_back(value);
-
-          // see that this code nearly same except `parameters` to onChange()
-          for (auto const o : observers_)
-          {
-            if (nullptr != o)
-            {
-              o->onChanged({changed_action::add, data_.size()});
-            }
+            o->onChanged({changed_action::assign, data_.size()});
           }
         }
+      }
 
-        // same as push_back(T&) since std::vector.push_back() will handle
-        void push_back(T &&value)
+      return *this;
+    }
+
+    // move assign
+    observable_vector &operator=(observable_vector &&rhs)
+    {
+      // for self assign
+      if (this != &rhs)
+      {
+        // done by vector's move
+        data_ = std::move(rhs.data_);
+
+        for (auto const o : observers_)
         {
-          cout << "push_back(T&&)" << endl;
-
-          data_.push_back(value);
-
-          for (auto const o : observers_)
+          if (nullptr != o)
           {
-            if (nullptr != o)
-            {
-              o->onChanged({changed_action::add, data_.size()});
-            }
+            o->onChanged({changed_action::assign, data_.size()});
           }
         }
+      }
 
-        void pop_back()
+      return *this;
+    }
+
+    void push_back(T &value)
+    {
+      cout << "push_back(T&)" << endl;
+
+      data_.push_back(value);
+
+      // see that this code nearly same except `parameters` to onChange()
+      for (auto const o : observers_)
+      {
+        if (nullptr != o)
         {
-          data_.pop_back();
-
-          for (auto const o : observers_)
-          {
-            if (o != nullptr)
-            {
-              o->onChanged({changed_action::remove, data_.size()});
-            }
-          }
+          o->onChanged({changed_action::add, data_.size()});
         }
+      }
+    }
 
-        void clear() noexcept
+    // same as push_back(T&) since std::vector.push_back() will handle
+    void push_back(T &&value)
+    {
+      cout << "push_back(T&&)" << endl;
+
+      data_.push_back(value);
+
+      for (auto const o : observers_)
+      {
+        if (nullptr != o)
         {
-          data_.clear();
-
-          for (auto const o : observers_)
-          {
-            if (o != nullptr)
-            {
-              o->onChanged({changed_action::clear, data_.size()});
-            }
-          }
+          o->onChanged({changed_action::add, data_.size()});
         }
+      }
+    }
 
-        size_type size() const noexcept
-        { return data_.size(); }
+    void pop_back()
+    {
+      data_.pop_back();
 
-        bool empty() const noexcept
-        { return data_.empty(); }
-
-
-        // observer interfaces
-        void add_observer(collection_observer *o)
-        { observers_.push_back(o); }
-
-        void remove_observer(collection_observer const *o)
+      for (auto const o : observers_)
+      {
+        if (o != nullptr)
         {
-          // this assumes that there are duplicated observers
-          observers_.erase(
-              std::remove(std::begin(observers_), std::end(observers_), o), // begin
-              observers_.end() // end
-              );
+          o->onChanged({changed_action::remove, data_.size()});
         }
+      }
+    }
 
-      private:
-        std::vector<T> data_;
-        std::vector<collection_observer *> observers_;
-    };
-} // namespace
+    void clear() noexcept
+    {
+      data_.clear();
 
+      for (auto const o : observers_)
+      {
+        if (o != nullptr)
+        {
+          o->onChanged({changed_action::clear, data_.size()});
+        }
+      }
+    }
+
+    size_type size() const noexcept { return data_.size(); }
+
+    bool empty() const noexcept { return data_.empty(); }
+
+    // observer interfaces
+    void add_observer(collection_observer *o) { observers_.push_back(o); }
+
+    void remove_observer(collection_observer const *o)
+    {
+      // this assumes that there are duplicated observers
+      observers_.erase(
+        std::remove(std::begin(observers_), std::end(observers_), o), // begin
+        observers_.end()                                              // end
+      );
+    }
+
+  private:
+    std::vector<T> data_;
+    std::vector<collection_observer *> observers_;
+  };
+} // namespace cxx_pattern_observer
 
 TEST(PatternObserver, ObservableVectorContainer)
 {
@@ -1322,7 +1335,7 @@ TEST(PatternObserver, ObservableVectorContainer)
 
   // no notification since observer is removed.
 
-  observable_vector<int> ovv{1,2,3};
+  observable_vector<int> ovv{1, 2, 3};
 
   // copy assign
   cout << "=========" << endl;
@@ -1330,10 +1343,9 @@ TEST(PatternObserver, ObservableVectorContainer)
 
   // move assign
   cout << "=========" << endl;
-  ov = observable_vector<int>{7,8,9};
+  ov = observable_vector<int>{7, 8, 9};
   ov.push_back(1);
 }
-
 
 /*
 ={=============================================================================
@@ -1391,115 +1403,131 @@ namespace cxx_pattern_strategy
 
     // get discount percentage for each type
 
-    virtual double 
-      discount_percent(double price, double quantity) const noexcept = 0;
+    virtual double discount_percent(double price, double quantity) const
+      noexcept = 0;
   };
 
   struct fixed_discount final : public discount_type
   {
     explicit fixed_discount(double discount) noexcept
-      : discount_(discount) 
-      {}
+        : discount_(discount)
+    {}
 
-    virtual double
-      discount_percent(double, double) const noexcept override
-      { return discount_; }
+    virtual double discount_percent(double, double) const noexcept override
+    {
+      return discount_;
+    }
 
-    private:
-      double discount_;
+  private:
+    double discount_;
   };
 
   struct volume_discount final : public discount_type
   {
     explicit volume_discount(double quantity, double discount) noexcept
-      : discount_(discount), min_quantity_(quantity)
-      {}
+        : discount_(discount)
+        , min_quantity_(quantity)
+    {}
 
-    virtual double
-      discount_percent(double, double quantity) const noexcept override
-      { return quantity >= min_quantity_ ? discount_ : 0; }
+    virtual double discount_percent(double, double quantity) const
+      noexcept override
+    {
+      return quantity >= min_quantity_ ? discount_ : 0;
+    }
 
-    private:
-      double discount_;
-      double min_quantity_;
+  private:
+    double discount_;
+    double min_quantity_;
   };
 
   // discount on total price
   struct price_discount final : public discount_type
   {
     explicit price_discount(double price, double discount) noexcept
-      : discount_(discount), min_total_price_(price)
-      {}
+        : discount_(discount)
+        , min_total_price_(price)
+    {}
 
-    virtual double
-      discount_percent(double price, double quantity) const noexcept override
-      { return (price * quantity) >= min_total_price_ ? discount_ : 0; }
+    virtual double discount_percent(double price, double quantity) const
+      noexcept override
+    {
+      return (price * quantity) >= min_total_price_ ? discount_ : 0;
+    }
 
-    private:
-      double discount_;
-      double min_total_price_;
+  private:
+    double discount_;
+    double min_total_price_;
   };
 
   // discount on item price
   struct amount_discount final : public discount_type
   {
     explicit amount_discount(double price, double discount) noexcept
-      : discount_(discount), min_total_price_(price)
-      {}
+        : discount_(discount)
+        , min_total_price_(price)
+    {}
 
-    virtual double
-      discount_percent(double price, double) const noexcept override
-      { return price >= min_total_price_ ? discount_ : 0; }
+    virtual double discount_percent(double price, double) const
+      noexcept override
+    {
+      return price >= min_total_price_ ? discount_ : 0;
+    }
 
-    private:
-      double discount_;
-      double min_total_price_;
+  private:
+    double discount_;
+    double min_total_price_;
   };
-
 
   // user(client) class
 
   struct customer
   {
     std::string name_;
-    discount_type* discount_;
+    discount_type *discount_;
   };
 
   enum class article_unit
-  { piece, kg, meter, sqmeter, cmeter, liter };
+  {
+    piece,
+    kg,
+    meter,
+    sqmeter,
+    cmeter,
+    liter
+  };
 
   struct article
   {
-    int             id_;
-    std::string     name_;
-    double          price_;
-    article_unit    unit_;
-    discount_type*  discount_;
+    int id_;
+    std::string name_;
+    double price_;
+    article_unit unit_;
+    discount_type *discount_;
   };
 
   struct order_line
   {
-    article         product_;
-    int             quantity_;
-    discount_type*  discount_;
+    article product_;
+    int quantity_;
+    discount_type *discount_;
   };
 
   struct order
   {
-    int                     id_;
-    customer*               buyer_;
+    int id_;
+    customer *buyer_;
     std::vector<order_line> lines_;
-    discount_type*          discount_;
+    discount_type *discount_;
   };
 
   struct price_calculator
   {
-    virtual double calculate_price(order const& o) = 0;
+    virtual double calculate_price(order const &o) = 0;
   };
 
   struct cumulative_price_calculator : public price_calculator
   {
-    virtual double calculate_price(order const& o) override
+    virtual double calculate_price(order const &o) override
     {
       double price = 0;
 
@@ -1511,22 +1539,25 @@ namespace cxx_pattern_strategy
         // product discount
         if (ol.product_.discount_ != nullptr)
         {
-          line_price *= (1.0 - ol.product_.discount_->discount_percent(
-                ol.product_.price_, ol.quantity_));
+          line_price *=
+            (1.0 - ol.product_.discount_->discount_percent(ol.product_.price_,
+                                                           ol.quantity_));
         }
 
         // order_line discount
         if (ol.discount_ != nullptr)
         {
-          line_price *= (1.0 - ol.discount_->discount_percent(
-                ol.product_.price_, ol.quantity_));
+          line_price *=
+            (1.0 -
+             ol.discount_->discount_percent(ol.product_.price_, ol.quantity_));
         }
 
         // buyer discount
         if (o.buyer_ != nullptr && o.buyer_->discount_ != nullptr)
         {
-          line_price *= (1.0 - o.buyer_->discount_->discount_percent(
-                ol.product_.price_, ol.quantity_));
+          line_price *=
+            (1.0 - o.buyer_->discount_->discount_percent(ol.product_.price_,
+                                                         ol.quantity_));
         }
 
         price += line_price;
@@ -1540,13 +1571,13 @@ namespace cxx_pattern_strategy
     };
   };
 
-} // namespace
+} // namespace cxx_pattern_strategy
 
 TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
 {
   using namespace cxx_pattern_strategy;
-  
-  fixed_discount fd(0.1);   // 10%
+
+  fixed_discount fd(0.1); // 10%
   volume_discount vd(10, 0.15);
   price_discount pd(100, 0.05);
   amount_discount ad(100, 0.05);
@@ -1571,7 +1602,6 @@ TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
   EXPECT_THAT(calc.calculate_price(o2), 4.5);
 }
 
-
 /*
 ={=============================================================================
 cxx_pattern_observer-notifier-simple
@@ -1586,11 +1616,11 @@ o Notifier is basically same as the observer pattern. The observer side: Define
 o The observee(source) side. Notifer<T> has T* but not subclass it and
   Notifier<T> provides notification functionality such as add observers and
   notify. concrete observess subclass it and inherites them to *have*.
-  This is *main difference* from observer pattern. 
+  This is *main difference* from observer pattern.
 
 o For both, have to use mutiple subclassing if want to have multiple abstract
   observer interfaces.
- 
+
 */
 
 // simple Notifier to see idea
@@ -1599,154 +1629,136 @@ namespace cxx_observer_notifier_simple
 {
   class Polymorphic
   {
-    public:
-      virtual ~Polymorphic() {};
+  public:
+    virtual ~Polymorphic(){};
   };
 
-  template<typename T>
-    class Notifier : virtual public Polymorphic
+  template <typename T> class Notifier : virtual public Polymorphic
   {
-    public:
-      Notifier() {}
+  public:
+    Notifier() {}
 
-      // register
-      void add_observer(std::shared_ptr<T> const &o)
-      {
-        observer_ = o;
-      }
+    // register
+    void add_observer(std::shared_ptr<T> const &o) { observer_ = o; }
 
-    protected:
+  protected:
+    // for multiple arguments and it calls notify<T>
+    // this is more short and convenient form for user to use
+    template <typename F, typename... Args> void notify(F f, Args &&... args)
+    {
+      notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+    }
 
-      // for multiple arguments and it calls notify<T>
-      // this is more short and convenient form for user to use
-      template<typename F, typename... Args>
-        void notify(F f, Args&&... args)
-        {
-          notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
-        }
+    // for single argument call, notify(x)
+    template <typename F> void notify(F f) { notify_impl_(f); }
 
-      // for single argument call, notify(x)
-      template<typename F>
-        void notify(F f)
-        {
-          notify_impl_(f);
-        }
+  private:
+    // saved observer
+    std::shared_ptr<T> observer_;
 
-    private:
+    // (std::function<void(std::shared_ptr<T> const &)> f) means that the
+    // returned type from bind() will be called shared_ptr<T> which is target
+    // object.
 
-      // saved observer
-      std::shared_ptr<T> observer_;
+    void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
+    {
+      if (observer_)
+        f(observer_);
 
-      // (std::function<void(std::shared_ptr<T> const &)> f) means that the
-      // returned type from bind() will be called shared_ptr<T> which is target
-      // object.
-
-      void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
-      {
-        if(observer_)
-          f(observer_);
-
-        // std::shared_ptr<T> strong = o.lock();
-        // if(strong)
-        // {
-        //   // void notify_impl(
-        //   //  std::function<void(std::shared_ptr<T> const &)> f);
-        //   dispatcher_->post(std::bind(f, strong));
-        // }
-      }
+      // std::shared_ptr<T> strong = o.lock();
+      // if(strong)
+      // {
+      //   // void notify_impl(
+      //   //  std::function<void(std::shared_ptr<T> const &)> f);
+      //   dispatcher_->post(std::bind(f, strong));
+      // }
+    }
   };
 
   // A observer(callback) interface
   //
   class StateEvents
   {
-    public:
-      virtual void stateChanged(int state) = 0;
-      virtual void nameChanged(std::string name) = 0;
-      virtual void keyAndValueChanged(std::string key, std::string value) = 0;
-      virtual void eventOccured() = 0;
+  public:
+    virtual void stateChanged(int state)                                = 0;
+    virtual void nameChanged(std::string name)                          = 0;
+    virtual void keyAndValueChanged(std::string key, std::string value) = 0;
+    virtual void eventOccured()                                         = 0;
   };
-
 
   // observer
   //
-  template <class T>
-    class Observer : public T, virtual public Polymorphic
-  {
-  };
+  template <class T> class Observer : public T, virtual public Polymorphic
+  {};
 
   class TestObserver : public Observer<StateEvents>
   {
-    public:
+  public:
+    // MOCK_METHOD1(stateChanged, void (int));
+    // MOCK_METHOD1(nameChanged, void (std::string));
+    // MOCK_METHOD2(keyAndValueChanged, void (std::string, std::string));
+    // MOCK_METHOD0(eventOccured, void());
 
-      // MOCK_METHOD1(stateChanged, void (int));
-      // MOCK_METHOD1(nameChanged, void (std::string));
-      // MOCK_METHOD2(keyAndValueChanged, void (std::string, std::string));
-      // MOCK_METHOD0(eventOccured, void());
-      
-      void stateChanged(int state)
-      {
-        std::cout << "called stateChanged(" << state << ")" << std::endl;
-      }
+    void stateChanged(int state)
+    {
+      std::cout << "called stateChanged(" << state << ")" << std::endl;
+    }
 
-      void nameChanged(std::string name)
-      {
-        std::cout << "called nameChanged(" << name << ")" << std::endl;
-      }
+    void nameChanged(std::string name)
+    {
+      std::cout << "called nameChanged(" << name << ")" << std::endl;
+    }
 
-      void keyAndValueChanged(std::string key, std::string value)
-      {
-        std::cout << "called keyAndValueChanged(" << key 
-          << ", " << value << ")" << std::endl;
-      }
+    void keyAndValueChanged(std::string key, std::string value)
+    {
+      std::cout << "called keyAndValueChanged(" << key << ", " << value << ")"
+                << std::endl;
+    }
 
-      void eventOccured()
-      {
-        std::cout << "called eventOccured()" << std::endl;
-      }
+    void eventOccured() { std::cout << "called eventOccured()" << std::endl; }
   };
 
   // source
-  // 
+  //
   class Source : public Notifier<StateEvents>
   {
-    public:
-      void setState(int state)
-      {
-        // do something
+  public:
+    void setState(int state)
+    {
+      // do something
 
-        // calls 
-        // template<typename F> 
-        //  void notify(F f);
-        notify(std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
-      }
+      // calls
+      // template<typename F>
+      //  void notify(F f);
+      notify(
+        std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
+    }
 
-      void setName(std::string name)
-      {
-        // do something
+    void setName(std::string name)
+    {
+      // do something
 
-        // calls 
-        // template<typename F, typename... Args> 
-        //  void notify(F f, Args&&... args);
-        notify(&StateEvents::nameChanged, name);
-      }
+      // calls
+      // template<typename F, typename... Args>
+      //  void notify(F f, Args&&... args);
+      notify(&StateEvents::nameChanged, name);
+    }
 
-      void setKeyAndValue(std::string key, std::string value)
-      {
-        // do something
+    void setKeyAndValue(std::string key, std::string value)
+    {
+      // do something
 
-        notify(&StateEvents::keyAndValueChanged, key, value);
-      }
+      notify(&StateEvents::keyAndValueChanged, key, value);
+    }
 
-      void emitEvent()
-      {
-        // do something
+    void emitEvent()
+    {
+      // do something
 
-        notify(&StateEvents::eventOccured);
-      }
+      notify(&StateEvents::eventOccured);
+    }
   };
-} // namespace
-
+} // namespace cxx_observer_notifier_simple
 
 TEST(PatternObserver, NotifierSimple)
 {
@@ -1755,13 +1767,12 @@ TEST(PatternObserver, NotifierSimple)
   Source source;
 
   auto observer = std::make_shared<TestObserver>();
-  
+
   source.add_observer(observer);
   source.setState(5);
   source.setName("notifier");
   source.setKeyAndValue("key", "value");
 }
-
 
 /*
 ={=============================================================================
@@ -1777,25 +1788,24 @@ namespace cxx_observer_notifier_full
 
   class Polymorphic
   {
-    public:
-      virtual ~Polymorphic() {};
+  public:
+    virtual ~Polymorphic(){};
   };
 
   // IDispatcher.h
   class IDispatcher : public Polymorphic
   {
-    public:
-      // post an work item to be executed
-      virtual void post(std::function<void ()>) = 0;
+  public:
+    // post an work item to be executed
+    virtual void post(std::function<void()>) = 0;
 
-      // ensures that any works that was in the queue before the call has been
-      // executed
-      virtual void sync() = 0;
+    // ensures that any works that was in the queue before the call has been
+    // executed
+    virtual void sync() = 0;
 
-      // check if it's called from this dispatch thread
-      virtual bool invoked_from_this() = 0;
-  }; 
-
+    // check if it's called from this dispatch thread
+    virtual bool invoked_from_this() = 0;
+  };
 
   // ThreadedDispatcher.h
   // (see) that use of `public` for interfaces from parent class and ones from
@@ -1803,59 +1813,60 @@ namespace cxx_observer_notifier_full
 
   class ThreadedDispatcher : public IDispatcher
   {
-    public:
-      // post an work item to be executed
-      virtual void post(std::function<void ()>);
+  public:
+    // post an work item to be executed
+    virtual void post(std::function<void()>);
 
-      // ensures that any works that was in the queue before the call has been
-      // executed
-      virtual void sync();
+    // ensures that any works that was in the queue before the call has been
+    // executed
+    virtual void sync();
 
-      // check if it's called from this dispatch thread
-      virtual bool invoked_from_this();
+    // check if it's called from this dispatch thread
+    virtual bool invoked_from_this();
 
-    public:
-      ThreadedDispatcher(std::string const &name = std::string());
+  public:
+    ThreadedDispatcher(std::string const &name = std::string());
 
-      // create dispatcher with supplied priority and name
-      ThreadedDispatcher(int priority, std::string const &name = std::string());
+    // create dispatcher with supplied priority and name
+    ThreadedDispatcher(int priority, std::string const &name = std::string());
 
-      ~ThreadedDispatcher();
+    ~ThreadedDispatcher();
 
-      // perform any work remaining in the queue the stop accepting new work.
-      void flush();
+    // perform any work remaining in the queue the stop accepting new work.
+    void flush();
 
-      // stop accepting new work and dispatcher even if there are works in the
-      // queue.
-      void stop();
+    // stop accepting new work and dispatcher even if there are works in the
+    // queue.
+    void stop();
 
-    private:
-      bool running_;
+  private:
+    bool running_;
 
-      std::thread t_;
-      std::mutex m_;
-      std::condition_variable cv_;
+    std::thread t_;
+    std::mutex m_;
+    std::condition_variable cv_;
 
-      std::deque<std::function<void()>> q_;
+    std::deque<std::function<void()>> q_;
 
-      void do_work_(std::string const &name, int priority);
-      std::function<void()> next_();
+    void do_work_(std::string const &name, int priority);
+    std::function<void()> next_();
   };
 
   // (see) that ctor calls ctors
   ThreadedDispatcher::ThreadedDispatcher(std::string const &name)
-    : ThreadedDispatcher(-1, name)
+      : ThreadedDispatcher(-1, name)
   {}
 
   // *cxx-error* : ISO C++ forbids taking the address of an
   // unqualified or parenthesized non-static member function to form a pointer
-  // to member function. 
-  // Say ‘&cxx_pattern_dispatcher::ThreadedDispatcher::_do_work’ [-fpermissive] ,
+  // to member function.
+  // Say ‘&cxx_pattern_dispatcher::ThreadedDispatcher::_do_work’ [-fpermissive]
+  // ,
   //
   // _t(std::thread(&_do_work, this, name, priority))
 
   ThreadedDispatcher::ThreadedDispatcher(int priority, std::string const &name)
-    : running_(true)
+      : running_(true)
       , t_(std::thread(&ThreadedDispatcher::do_work_, this, name, priority))
   {}
 
@@ -1865,7 +1876,7 @@ namespace cxx_observer_notifier_full
       stop();
   }
 
-  void ThreadedDispatcher::post(std::function<void ()> work)
+  void ThreadedDispatcher::post(std::function<void()> work)
   {
     // (see) this is original code. is it different from the below?
     //
@@ -1883,7 +1894,7 @@ namespace cxx_observer_notifier_full
 
     std::lock_guard<std::mutex> lock(m_);
 
-    if(running_)
+    if (running_)
     {
       q_.push_back(work);
       cv_.notify_one();
@@ -1891,15 +1902,15 @@ namespace cxx_observer_notifier_full
     else
     {
       std::cout << "ignoring work because the dispatcher is not running"
-        << std::endl;
+                << std::endl;
 
       // original comment:
-      // LOG_WARN("Ignoring work because the dispatcher is not running anymore");
+      // LOG_WARN("Ignoring work because the dispatcher is not running
+      // anymore");
       //
       // can't throw an exception here because if this is executed from
       // destructor, which occurs when work adds more work things go horribly
       // wrong. Instead, ignore work.
-
     }
   }
 
@@ -1931,7 +1942,7 @@ namespace cxx_observer_notifier_full
     if (!running_)
     {
       std::cout << "ignoring sync request because the dispatcher is not running"
-        << std::endl;
+                << std::endl;
       return;
     }
 
@@ -1945,7 +1956,7 @@ namespace cxx_observer_notifier_full
     std::unique_lock<std::mutex> slock(sm);
 
     // same as wait(std::unique_lock<>, predicate);
-    while(!fired)
+    while (!fired)
     {
       cv.wait(slock);
     }
@@ -1968,7 +1979,7 @@ namespace cxx_observer_notifier_full
 
   namespace
   {
-    void unlockAndSetFlagToFalse(std::mutex& m, bool& flag)
+    void unlockAndSetFlagToFalse(std::mutex &m, bool &flag)
     {
       std::this_thread::sleep_for(std::chrono::seconds(5));
       // std::cout << "flush thread: waits ends" << std::endl;
@@ -1985,7 +1996,7 @@ namespace cxx_observer_notifier_full
       // m.unlock();
       // flag = false;
     }
-  }
+  } // namespace
 
   void ThreadedDispatcher::flush()
   {
@@ -1994,8 +2005,9 @@ namespace cxx_observer_notifier_full
       std::mutex m2;
       m2.lock();
       // *cxx-bind*
-      post(std::bind(unlockAndSetFlagToFalse, 
-            std::ref(m2), std::ref(this->running_)));
+      post(std::bind(unlockAndSetFlagToFalse,
+                     std::ref(m2),
+                     std::ref(this->running_)));
       // blocks here until unlockAndSetFlagToFalse() unlock it since post() will
       // signal and it make signal false as stop() do.
       m2.lock();
@@ -2004,7 +2016,8 @@ namespace cxx_observer_notifier_full
     }
     else
     {
-      std::cout << "ignoring flush request because the dispatcher is not running"
+      std::cout
+        << "ignoring flush request because the dispatcher is not running"
         << std::endl;
     }
   }
@@ -2022,7 +2035,11 @@ namespace cxx_observer_notifier_full
 
   void ThreadedDispatcher::do_work_(std::string const &name, int priority)
   {
-    if (prctl(PR_SET_NAME, name.empty() ? "THR_DISPATCH" : name.c_str(), 0, 0, 0) < 0)
+    if (prctl(PR_SET_NAME,
+              name.empty() ? "THR_DISPATCH" : name.c_str(),
+              0,
+              0,
+              0) < 0)
     {
       // AI_LOG_SYS_ERROR(errno, "Failed to set thread name");
     }
@@ -2034,7 +2051,8 @@ namespace cxx_observer_notifier_full
     //   int err = pthread_setschedparam(pthread_self(), SCHED_RR, &param);
     //   if (err != 0)
     //   {
-    //     AI_LOG_SYS_ERROR(err, "Failed to set thread priority to %d", priority);
+    //     AI_LOG_SYS_ERROR(err, "Failed to set thread priority to %d",
+    //     priority);
     //   }
     // }
 
@@ -2056,7 +2074,7 @@ namespace cxx_observer_notifier_full
 
     while (running_)
     {
-      cv_.wait(lock, [&]{ return !q_.empty() || !running_;});
+      cv_.wait(lock, [&] { return !q_.empty() || !running_; });
       if (!q_.empty())
       {
         auto work = next_();
@@ -2069,8 +2087,7 @@ namespace cxx_observer_notifier_full
     }
   }
 
-} // namespace
-
+} // namespace cxx_observer_notifier_full
 
 namespace cxx_observer_notifier_full
 {
@@ -2079,7 +2096,7 @@ namespace cxx_observer_notifier_full
     // std::cout << "assign1 is called, what: " << what << std::endl;
     what += value;
   }
-} // namespace
+} // namespace cxx_observer_notifier_full
 
 TEST(PatternDispatcher, checkPostedWorkDone)
 {
@@ -2088,7 +2105,8 @@ TEST(PatternDispatcher, checkPostedWorkDone)
   // do one work and uses stop()
   {
     int value{};
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
     td->post(std::bind(assign1, std::ref(value), 10));
 
     std::this_thread::sleep_for(chrono::seconds(1));
@@ -2098,7 +2116,8 @@ TEST(PatternDispatcher, checkPostedWorkDone)
   // do more work and uses stop()
   {
     int value{};
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
     td->post(std::bind(assign1, std::ref(value), 10));
     td->post(std::bind(assign1, std::ref(value), 10));
     td->post(std::bind(assign1, std::ref(value), 10));
@@ -2113,16 +2132,17 @@ namespace cxx_observer_notifier_full
 {
   class Work
   {
-    public:
-      Work() : name_("work") {}
+  public:
+    Work()
+        : name_("work")
+    {}
 
-      void assign()
-      { std::cout << "Work::assign is called" << std::endl; }
+    void assign() { std::cout << "Work::assign is called" << std::endl; }
 
-    private:
-      std::string name_;
+  private:
+    std::string name_;
   };
-} // namespace
+} // namespace cxx_observer_notifier_full
 
 TEST(PatternDispatcher, checkPostedMemberFunctionWorkDone)
 {
@@ -2132,7 +2152,8 @@ TEST(PatternDispatcher, checkPostedMemberFunctionWorkDone)
   {
     Work work;
 
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
     td->post(std::bind(&Work::assign, &work));
 
     std::this_thread::sleep_for(chrono::seconds(1));
@@ -2146,7 +2167,8 @@ TEST(PatternDispatcher, checkFlush)
   // do one work and uses flush()
   {
     int value{};
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
     td->post(std::bind(assign1, std::ref(value), 10));
     td->flush();
 
@@ -2163,7 +2185,7 @@ namespace cxx_observer_notifier_full
   {
     EXPECT_NE(std::this_thread::get_id(), id);
   }
-} // namespace
+} // namespace cxx_observer_notifier_full
 
 TEST(PatternDispatcher, checkPostedWorkDoneOnDispatcher)
 {
@@ -2172,7 +2194,8 @@ TEST(PatternDispatcher, checkPostedWorkDoneOnDispatcher)
   // expect that gtest thread is different from dispatcher thread
   {
     int value{};
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
     td->post(std::bind(check_thread_id, std::this_thread::get_id()));
 
     std::this_thread::sleep_for(chrono::seconds(1));
@@ -2186,7 +2209,7 @@ namespace cxx_observer_notifier_full
     static int sequence{0};
     value = ++sequence;
   }
-} // namespace
+} // namespace cxx_observer_notifier_full
 
 TEST(PatternDispatcher, checkPostedWorkDoneInOrder)
 {
@@ -2197,7 +2220,8 @@ TEST(PatternDispatcher, checkPostedWorkDoneInOrder)
     int second{};
     int third{};
 
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
     td->post(std::bind(save_sequence, std::ref(first)));
     td->post(std::bind(save_sequence, std::ref(second)));
     td->post(std::bind(save_sequence, std::ref(third)));
@@ -2218,7 +2242,8 @@ TEST(PatternDispatcher, checkStopDoNotCauseDeadlock)
     int first{};
     int second{};
 
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
     td->post(std::bind(save_sequence, std::ref(first)));
     td->post(std::bind(save_sequence, std::ref(second)));
     td->stop();
@@ -2232,7 +2257,7 @@ namespace cxx_observer_notifier_full
     ++value;
     std::this_thread::sleep_for(chrono::milliseconds(10));
   }
-} // namespace
+} // namespace cxx_observer_notifier_full
 
 TEST(PatternDispatcher, checkDoLotsOfWorks)
 {
@@ -2242,7 +2267,8 @@ TEST(PatternDispatcher, checkDoLotsOfWorks)
     int value{};
     const int count{100000};
 
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
 
     for (int i = 0; i < count; ++i)
     {
@@ -2262,7 +2288,7 @@ namespace cxx_observer_notifier_full
     std::unique_lock<std::mutex> lock(m);
     cv.notify_one();
   }
-}
+} // namespace cxx_observer_notifier_full
 
 TEST(PatternDispatcher, checkDoWithinTimeout)
 {
@@ -2272,7 +2298,8 @@ TEST(PatternDispatcher, checkDoWithinTimeout)
     int value{};
     const int count{100000};
 
-    std::shared_ptr<ThreadedDispatcher> td = std::make_shared<ThreadedDispatcher>();
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
 
     std::mutex m;
     std::condition_variable cv;
@@ -2281,9 +2308,8 @@ TEST(PatternDispatcher, checkDoWithinTimeout)
     td->post(std::bind(notify_condition, std::ref(m), std::ref(cv)));
 
     // check if codition is set within timeout
-    EXPECT_THAT(
-        cv.wait_for(lock, std::chrono::seconds(5)), 
-        std::cv_status::no_timeout);
+    EXPECT_THAT(cv.wait_for(lock, std::chrono::seconds(5)),
+                std::cv_status::no_timeout);
 
     td->flush();
   }
@@ -2296,8 +2322,7 @@ namespace
     ++value;
     std::this_thread::sleep_for(chrono::milliseconds(10));
   }
-} // namesapce
-
+} // namespace
 
 TEST(PatternDispatcher, checkSync)
 {
@@ -2320,7 +2345,6 @@ TEST(PatternDispatcher, checkSync)
   }
 }
 
-
 /*
 ={=============================================================================
 cxx_pattern_observer-notifier
@@ -2334,283 +2358,270 @@ namespace cxx_observer_notifier_full
   //     virtual ~Polymorphic() {};
   // };
 
-  template<typename T>
-    class Notifier : virtual public Polymorphic
+  template <typename T> class Notifier : virtual public Polymorphic
   {
-    public:
-      Notifier() {}
+  public:
+    Notifier() {}
 
-      // register
-      void add_observer(std::shared_ptr<T> const &o)
-      {
-        std::lock_guard<std::mutex> lock(m_);
-        observers_.emplace_back(o);
-      }
+    // register
+    void add_observer(std::shared_ptr<T> const &o)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+      observers_.emplace_back(o);
+    }
 
-      void remove_observer(std::shared_ptr<T> const &o)
-      {
-        std::unique_lock<std::mutex> lock(m_);
+    void remove_observer(std::shared_ptr<T> const &o)
+    {
+      std::unique_lock<std::mutex> lock(m_);
 
 #if (_BUILD_TYPE == DEBUG)
-        // less likely check which to see if this function call is made from
-        // dispatch thread.
-        if (dispatcher_ && dispatcher_->invoked_from_this())
-        {
-          throw
-            std::logic_error("potential deadlock since it should not be called from dispatcher");
-        }
+      // less likely check which to see if this function call is made from
+      // dispatch thread.
+      if (dispatcher_ && dispatcher_->invoked_from_this())
+      {
+        throw std::logic_error(
+          "potential deadlock since it should not be called from dispatcher");
+      }
 #endif
 
-        // if shared pointer can be made from a strored weak pointer then it
-        // means a object is still around and it is safe to use.
-        for (size_t i = 0; i < observers_.size(); ++i)
+      // if shared pointer can be made from a strored weak pointer then it
+      // means a object is still around and it is safe to use.
+      for (size_t i = 0; i < observers_.size(); ++i)
+      {
+        if (observers_[i].lock() == o)
         {
-          if (observers_[i].lock() == o)
-          {
-            // erase() needs iterator
-            observers_.erase(observers_.begin() + i);
-            break;
-          }
-        }
-
-        // when observers call this to remove itself but notification is
-        // running, hold them until notification finishes
-        if (notifying_)
-        {
-          waitee_count_++;
-
-          // cxx-condition-variable-wait
-          // wait()
-          // blocks the current thread until the condition variable is woken up 
-          do
-          {
-            cv_.wait(lock);
-          } while (notifying_);
-
-          waitee_count_--;
+          // erase() needs iterator
+          observers_.erase(observers_.begin() + i);
+          break;
         }
       }
 
-      void set_dispatcher(std::shared_ptr<IDispatcher> const &d)
+      // when observers call this to remove itself but notification is
+      // running, hold them until notification finishes
+      if (notifying_)
       {
-        std::lock_guard<std::mutex> lock(m_);
-        dispatcher_ = d;
+        waitee_count_++;
+
+        // cxx-condition-variable-wait
+        // wait()
+        // blocks the current thread until the condition variable is woken up
+        do
+        {
+          cv_.wait(lock);
+        } while (notifying_);
+
+        waitee_count_--;
+      }
+    }
+
+    void set_dispatcher(std::shared_ptr<IDispatcher> const &d)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+      dispatcher_ = d;
+    }
+
+  protected:
+    // for multiple arguments and it calls notify<T>
+    template <typename F, typename... Args> void notify(F f, Args &&... args)
+    {
+      notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+    }
+
+    // for single argument call, notify(x)
+    template <typename F> void notify(F f) { notify_impl_(f); }
+
+  private:
+    std::mutex m_;
+    std::condition_variable cv_;
+    // saved observer
+    std::deque<std::weak_ptr<T>> observers_;
+
+    std::shared_ptr<IDispatcher> dispatcher_;
+    bool notifying_{false};
+    uint32_t waitee_count_{0};
+
+  private:
+    void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
+    {
+      std::unique_lock<std::mutex> lock(m_);
+
+      if (!dispatcher_)
+      {
+        throw std::logic_error(
+          "must set a dispatcher before you produce events.");
       }
 
-    protected:
+      // In the unlikely event that there are expired observers, remove
+      // expired observers by copying only if use_count() > 0
+      //
+      // since referring shared_ptr which weak_ptr refers to is gone then
+      // use_count() of weak_ptr gets decreased.
 
-      // for multiple arguments and it calls notify<T>
-      template<typename F, typename... Args>
-        void notify(F f, Args&&... args)
-        {
-          notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
-        }
+      decltype(observers_) observers_copy;
+      std::copy_if(
+        observers_.cbegin(),
+        observers_.cend(),
+        std::back_inserter(observers_copy),
+        std::bind(&std::weak_ptr<T>::use_count, std::placeholders::_1));
 
-      // for single argument call, notify(x)
-      template<typename F>
-        void notify(F f)
-        {
-          notify_impl_(f);
-        }
+      if (observers_copy.size() != observers_.size())
+        observers_ = observers_copy;
 
-    private:
+      // okay, now have observers to noify and starts notifying
+      notifying_ = true;
 
-      std::mutex m_;
-      std::condition_variable cv_;
-      // saved observer
-      std::deque<std::weak_ptr<T>> observers_;
+      // don't want to lock adding new observers while calling observers so
+      // use a copy instead.
 
-      std::shared_ptr<IDispatcher> dispatcher_;
-      bool notifying_{false};
-      uint32_t waitee_count_{0};
+      lock.unlock();
 
-    private:
+      //----------------- NOTE ----------------------------------------------
+      // We maintain vector of strong pointers pointing to observer objects as
+      // otherwise bad things can happen. Lets consider, the observer object
+      // point backs to the notifier object itself.  That means, there is a
+      // circular dependency between the notifier and the observer, but we
+      // break that by using a combination of shared and weak pointers.
+      // However, imagine, within the notify_impl() method, we gets a shared
+      // pointer of observer object out of weak_ptr. After the shared pointer
+      // is constructed (bit still in use), now the owner of the observer
+      // resets its pointer that is pointing to the observer object. This
+      // might result one to one references between the notifier and the
+      // observer, i.e., as soon as the observer will be destroyed the
+      // notifier will also be destroyed. It means, if now the observer object
+      // is destroyed from the notify_imp() method, it will cause the notifier
+      // object itself to be destroyed, where the notify_impl can still
+      // continue to access its member variable (e.g. dispatcher). This might
+      // result an undefined behaviour.
+      //---------------------------------------------------------------------
 
-      void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
+      // Q: WHY need observers_strong vector? that's NOTE above but not sure?
+      std::vector<std::shared_ptr<T>> observers_strong;
+
+      for (auto const &o : observers_copy)
       {
-        std::unique_lock<std::mutex> lock(m_);
-
-        if (!dispatcher_)
+        std::shared_ptr<T> strong = o.lock();
+        if (strong)
         {
-          throw std::logic_error("must set a dispatcher before you produce events.");
+          // dispatcher expects void()
+          dispatcher_->post(std::bind(f, strong));
         }
+        observers_strong.push_back(strong);
+      }
 
-        // In the unlikely event that there are expired observers, remove
-        // expired observers by copying only if use_count() > 0
-        //
-        // since referring shared_ptr which weak_ptr refers to is gone then
-        // use_count() of weak_ptr gets decreased.
+      // okay, notifying finishes
+      lock.lock();
 
-        decltype(observers_) observers_copy;
-        std::copy_if(observers_.cbegin(), observers_.cend(),
-            std::back_inserter(observers_copy),
-            std::bind(&std::weak_ptr<T>::use_count, std::placeholders::_1));
-
-        if (observers_copy.size() != observers_.size())
-          observers_ = observers_copy;
-
-        // okay, now have observers to noify and starts notifying
-        notifying_ = true;
-
-        // don't want to lock adding new observers while calling observers so
-        // use a copy instead. 
-        
+      // about to unregister an observer so make sure that there is no work
+      // for this observer after that.
+      if (dispatcher_ && (waitee_count_ > 0))
+      {
         lock.unlock();
-
-        //----------------- NOTE ----------------------------------------------
-        // We maintain vector of strong pointers pointing to observer objects as
-        // otherwise bad things can happen. Lets consider, the observer object
-        // point backs to the notifier object itself.  That means, there is a
-        // circular dependency between the notifier and the observer, but we
-        // break that by using a combination of shared and weak pointers.
-        // However, imagine, within the notify_impl() method, we gets a shared
-        // pointer of observer object out of weak_ptr. After the shared pointer
-        // is constructed (bit still in use), now the owner of the observer
-        // resets its pointer that is pointing to the observer object. This
-        // might result one to one references between the notifier and the
-        // observer, i.e., as soon as the observer will be destroyed the
-        // notifier will also be destroyed. It means, if now the observer object
-        // is destroyed from the notify_imp() method, it will cause the notifier
-        // object itself to be destroyed, where the notify_impl can still
-        // continue to access its member variable (e.g. dispatcher). This might
-        // result an undefined behaviour.
-        //---------------------------------------------------------------------
-
-        // Q: WHY need observers_strong vector? that's NOTE above but not sure?
-        std::vector<std::shared_ptr<T>> observers_strong;
-
-        for(auto const &o : observers_copy)
-        {
-          std::shared_ptr<T> strong = o.lock();
-          if(strong)
-          {
-            // dispatcher expects void()
-            dispatcher_->post(std::bind(f, strong));
-          }
-          observers_strong.push_back(strong);
-        }
-
-        // okay, notifying finishes
+        // run all works in dispatcher queue. so not only for this observer
+        // but for all.
+        dispatcher_->sync();
         lock.lock();
-
-        // about to unregister an observer so make sure that there is no work
-        // for this observer after that.
-        if (dispatcher_ && (waitee_count_ > 0))
-        {
-          lock.unlock();
-          // run all works in dispatcher queue. so not only for this observer
-          // but for all.
-          dispatcher_->sync();
-          lock.lock();
-        }
-
-        notifying_ = false;
-
-        // notify all waited observers on remove_observer()
-        if (waitee_count_ > 0)
-          cv_.notify_all();
-
-        lock.unlock();
       }
+
+      notifying_ = false;
+
+      // notify all waited observers on remove_observer()
+      if (waitee_count_ > 0)
+        cv_.notify_all();
+
+      lock.unlock();
+    }
   };
 
   // A observer(callback) interface
   //
   class StateEvents
   {
-    public:
-      virtual void stateChanged(int state) = 0;
-      virtual void nameChanged(std::string name) = 0;
-      virtual void keyAndValueChanged(std::string key, std::string value) = 0;
-      virtual void eventOccured() = 0;
+  public:
+    virtual void stateChanged(int state)                                = 0;
+    virtual void nameChanged(std::string name)                          = 0;
+    virtual void keyAndValueChanged(std::string key, std::string value) = 0;
+    virtual void eventOccured()                                         = 0;
   };
-
 
   // observer
   //
-  // note 
+  // note
   // Arguably you could inherit directly from T, however inheriting from
   // Observer<T> is more intention revealing than inheriting from T. There is
   // no extra overhead because of Empty Base Class Optimisation.
 
-  template <class T>
-    class Observer : public T, virtual public Polymorphic
-  {
-  };
+  template <class T> class Observer : public T, virtual public Polymorphic
+  {};
 
   // mock version
   class TestObserver : public Observer<StateEvents>
   {
-    public:
-
-      MOCK_METHOD1(stateChanged, void (int));
-      MOCK_METHOD1(nameChanged, void (std::string));
-      MOCK_METHOD2(keyAndValueChanged, void (std::string, std::string));
-      MOCK_METHOD0(eventOccured, void());
+  public:
+    MOCK_METHOD1(stateChanged, void(int));
+    MOCK_METHOD1(nameChanged, void(std::string));
+    MOCK_METHOD2(keyAndValueChanged, void(std::string, std::string));
+    MOCK_METHOD0(eventOccured, void());
   };
 
   // source
-  // 
+  //
   class Source : public Notifier<StateEvents>
   {
-    public:
-      void setState(int state)
-      {
-        // do something
+  public:
+    void setState(int state)
+    {
+      // do something
 
-        // calls 
-        // template<typename F> 
-        //  void notify(F f);
-        notify(std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
-      }
+      // calls
+      // template<typename F>
+      //  void notify(F f);
+      notify(
+        std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
+    }
 
-      void setName(std::string name)
-      {
-        // do something
+    void setName(std::string name)
+    {
+      // do something
 
-        // calls 
-        // template<typename F, typename... Args> 
-        //  void notify(F f, Args&&... args);
-        notify(&StateEvents::nameChanged, name);
-      }
+      // calls
+      // template<typename F, typename... Args>
+      //  void notify(F f, Args&&... args);
+      notify(&StateEvents::nameChanged, name);
+    }
 
-      void setKeyAndValue(std::string key, std::string value)
-      {
-        // do something
+    void setKeyAndValue(std::string key, std::string value)
+    {
+      // do something
 
-        notify(&StateEvents::keyAndValueChanged, key, value);
-      }
+      notify(&StateEvents::keyAndValueChanged, key, value);
+    }
 
-      void emitEvent()
-      {
-        // do something
+    void emitEvent()
+    {
+      // do something
 
-        notify(&StateEvents::eventOccured);
-      }
+      notify(&StateEvents::eventOccured);
+    }
   };
-} // namespace
-
+} // namespace cxx_observer_notifier_full
 
 namespace cxx_observer_notifier_full
 {
   // Common/lib/include/CallerThreadDispatcher.h
-  // 
+  //
   // @brief A dispatcher that does all the work immediately on the thread that
   // calls post.
 
   class CallerThreadDispatcher : public IDispatcher
   {
-    public:
-      virtual void post(std::function<void ()> work) final
-      { work(); }
+  public:
+    virtual void post(std::function<void()> work) final { work(); }
 
-      virtual void sync() final 
-      {}
+    virtual void sync() final {}
 
-      virtual bool invoked_from_this() final
-      { return false; }
+    virtual bool invoked_from_this() final { return false; }
   };
-}
+} // namespace cxx_observer_notifier_full
 
 TEST(PatternObserver, sendNotificationWithRealDispatcher)
 {
@@ -2658,11 +2669,9 @@ TEST(PatternObserver, sendNotificationManyArgs)
   noti.setKeyAndValue("key", "value");
 }
 
-
 // ={=========================================================================
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
-

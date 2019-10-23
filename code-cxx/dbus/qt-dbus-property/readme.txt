@@ -118,3 +118,9 @@ method return time=1571332947.866428 sender=:1.72 -> destination=:1.73 serial=3 
 dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.ConnectProfile string:'hello'
 method return time=1571314615.835578 sender=:1.414 -> destination=:1.424 serial=4 reply_serial=2
 
+
+o to make proxy files
+
+/home/keitee/Qt/5.12.3/gcc_64/bin/qdbusxml2cpp -i sender_interface.h -p :sender_interface.cpp org.example.sender.xml
+/home/keitee/Qt/5.12.3/gcc_64/bin/qdbusxml2cpp -p sender_interface.h org.example.sender.xml
+

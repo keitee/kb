@@ -267,7 +267,9 @@ struct StructValue
 {
   int value_;
 
-  StructValue(int value) : value_(value) {}
+  StructValue(int value)
+      : value_(value)
+  {}
 
   int operator++() { return ++value_; }
 };
@@ -774,7 +776,9 @@ TEST(CxxVector, seeCapacity)
 class VectorCtorsTest
 {
 public:
-  VectorCtorsTest(int size, int value = 10) : icoll(size, value) {}
+  VectorCtorsTest(int size, int value = 10)
+      : icoll(size, value)
+  {}
   int size() { return icoll.size(); }
   void print() { PRINT_ELEMENTS(icoll, "clsss : "); }
 
@@ -1090,27 +1094,29 @@ TEST(Vector, InsertAndErase)
 // VectorEraseCallsDtor::dtor: name 3
 // VectorEraseCallsDtor::dtor: name 4
 
-namespace cxx_vector {
-
-class VectorRelocation
+namespace cxx_vector
 {
-public:
-  VectorRelocation(const string name = "vector") : name_(name)
-  {
-    name_ += " called ctor";
-    // cout << "VectorRelocation::ctor: " << name_ << endl;
-  }
-  ~VectorRelocation()
-  {
-    name_ += " called dtor";
-    // cout << "VectorRelocation::dtor: " << name_ << endl;
-  }
 
-  string getName() { return name_; }
+  class VectorRelocation
+  {
+  public:
+    VectorRelocation(const string name = "vector")
+        : name_(name)
+    {
+      name_ += " called ctor";
+      // cout << "VectorRelocation::ctor: " << name_ << endl;
+    }
+    ~VectorRelocation()
+    {
+      name_ += " called dtor";
+      // cout << "VectorRelocation::dtor: " << name_ << endl;
+    }
 
-private:
-  string name_;
-};
+    string getName() { return name_; }
+
+  private:
+    string name_;
+  };
 
 }; // namespace cxx_vector
 
@@ -1236,8 +1242,9 @@ TEST(CxxVector, seeRelocationAndPreAllocation)
   it = ovec.erase(it);
 }
 
-namespace cxx_vector {
-const int NUMBER_ALLOCATION{100000};
+namespace cxx_vector
+{
+  const int NUMBER_ALLOCATION{100000};
 };
 
 // ={=
@@ -1836,7 +1843,7 @@ TEST(Set, Erase)
 // ={=========================================================================
 // cxx-map
 
-TEST(Map, Insert)
+TEST(CxxMap, Insert)
 {
   // cannot be a const map since operator[] is for non-const.
 
@@ -1861,34 +1868,36 @@ TEST(Map, Insert)
   ASSERT_THAT(coll[3], Eq("threeeeee"));
 }
 
-namespace cxx_map {
-struct SampleEntry
+namespace cxx_map
 {
-  int id;
-  std::string name;
-};
+  struct SampleEntry
+  {
+    int id;
+    std::string name;
+  };
 
-void print_name(std::map<unsigned int, SampleEntry> const &coll)
-{
-  ASSERT_THAT(coll.size(), 3);
-  // : error: passing ‘const std::map<unsigned int, cxx_map::SampleEntry>’ as
-  // ‘this’ argument discards qualifiers [-fpermissive]
-  //      std::cout << "name: " << coll[1].name << std::endl;
-  //                                     ^
-  // std::cout << "name: " << coll[1].name << std::endl;
+  void print_name(std::map<unsigned int, SampleEntry> const &coll)
+  {
+    ASSERT_THAT(coll.size(), 3);
 
-  // okay as: bits/stl_map.h
-  // const mapped_type&
-  // at(const key_type& __k) const
-  // {}
-  //
-  // so operator[] of map do not support const
+    // : error: passing ‘const std::map<unsigned int, cxx_map::SampleEntry>’ as
+    // ‘this’ argument discards qualifiers [-fpermissive]
+    //      std::cout << "name: " << coll[1].name << std::endl;
+    //                                     ^
+    // std::cout << "name: " << coll[1].name << std::endl;
 
-  std::cout << "name: " << coll.at(1).name << std::endl;
-}
+    // okay as: bits/stl_map.h
+    // const mapped_type&
+    // at(const key_type& __k) const
+    // {}
+    //
+    // NOTE: so operator[] of map do not support const
+
+    std::cout << "name: " << coll.at(1).name << std::endl;
+  }
 } // namespace cxx_map
 
-TEST(Map, FindAndAccess)
+TEST(CxxMap, FindAndAccess)
 {
   {
     map<float, float> coll{{1, 7}, {2, 4}, {3, 2}, {4, 3},
@@ -1943,14 +1952,91 @@ TEST(Map, FindAndAccess)
     EXPECT_THAT(coll[1].name, "changed2");
 
     print_name(coll);
-
-    // *cxx-error* compile error
-    // auto it = coll.find(1);
-    // it->name;
   }
 }
 
-TEST(Map, EqualRange)
+TEST(CxxMap, Iterate)
+{
+  using namespace cxx_map;
+
+  {
+    std::map<unsigned int, std::string> coll{};
+    std::vector<std::string> ret{};
+
+    coll.insert({4, "string0"});
+    coll.insert({3, "string1"});
+    coll.insert({2, "string2"});
+    coll.insert({1, "string3"});
+    coll.insert({0, "string4"});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    auto it = coll.begin();
+    for (; it != coll.end(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    // as cxx-map is "sorted"
+    EXPECT_THAT(
+      ret,
+      ElementsAre("string4", "string3", "string2", "string1", "string0"));
+  }
+
+  {
+    std::map<unsigned int, std::string> coll{};
+    std::vector<std::string> ret{};
+
+    coll.insert({4, "string0"});
+    coll.insert({3, "string1"});
+    coll.insert({2, "string2"});
+    coll.insert({1, "string3"});
+    coll.insert({0, "string4"});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    // both cause cxx-error when use "++it" as both makes "it" const and "it"
+    // is iterator
+    //
+    // auto const it = coll.begin();
+    // const auto it = coll.begin();
+
+    auto it = coll.cbegin();
+    for (; it != coll.cend(); ++it)
+    {
+      ret.push_back(it->second);
+    }
+
+    EXPECT_THAT(
+      ret,
+      ElementsAre("string4", "string3", "string2", "string1", "string0"));
+  }
+
+  {
+    std::map<unsigned int, std::string> coll{};
+    std::vector<std::string> ret{};
+
+    coll.insert({4, "string0"});
+    coll.insert({3, "string1"});
+    coll.insert({2, "string2"});
+    coll.insert({1, "string3"});
+    coll.insert({0, "string4"});
+
+    ASSERT_THAT(coll.size(), 5);
+
+    // since *cxx-11*, range-for is supported
+    for (const auto &e : coll)
+    {
+      ret.push_back(e.second);
+    }
+
+    EXPECT_THAT(
+      ret,
+      ElementsAre("string4", "string3", "string2", "string1", "string0"));
+  }
+}
+
+TEST(CxxMap, EqualRange)
 {
   std::string str = "total";
 
@@ -2338,28 +2424,31 @@ TEST(ForwardList, Resize)
   EXPECT_THAT(coll, ElementsAre(2, 3, 4, 5, 6, 7, 0, 0, 0, 99));
 }
 
-namespace use_forward_list {
-template <typename T> class ForwardList
+namespace use_forward_list
 {
-public:
-  typedef typename std::forward_list<T>::iterator iterator;
-
-  ForwardList() : count_(0) {}
-
-  size_t size() const { return count_; }
-  void push_front(const T &elem)
+  template <typename T> class ForwardList
   {
-    ++count_;
-    list_.push_front(elem);
-  }
+  public:
+    typedef typename std::forward_list<T>::iterator iterator;
 
-  iterator begin() { return list_.begin(); }
-  iterator end() { return list_.end(); }
+    ForwardList()
+        : count_(0)
+    {}
 
-private:
-  size_t count_;
-  std::forward_list<T> list_;
-};
+    size_t size() const { return count_; }
+    void push_front(const T &elem)
+    {
+      ++count_;
+      list_.push_front(elem);
+    }
+
+    iterator begin() { return list_.begin(); }
+    iterator end() { return list_.end(); }
+
+  private:
+    size_t count_;
+    std::forward_list<T> list_;
+  };
 } // namespace use_forward_list
 
 TEST(ForwardList, ImplementedInTermsOf)
@@ -2458,46 +2547,47 @@ TEST(Stack, BookExample)
               ElementsAreArray({98, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1}));
 }
 
-namespace cxx_stack {
-class ReadEmptyStack : public std::exception
+namespace cxx_stack
 {
-public:
-  virtual const char *what() const noexcept
+  class ReadEmptyStack : public std::exception
   {
-    return "cannot read on empty stack";
-  }
-};
+  public:
+    virtual const char *what() const noexcept
+    {
+      return "cannot read on empty stack";
+    }
+  };
 
-template <typename T> class Stack
-{
-public:
-  typename std::deque<T>::size_type size() const { return coll_.size(); }
-
-  bool empty() const { return coll_.empty(); }
-
-  void push(T const &elem) { coll_.push_back(elem); }
-
-  T pop()
+  template <typename T> class Stack
   {
-    if (coll_.empty())
-      throw ReadEmptyStack();
+  public:
+    typename std::deque<T>::size_type size() const { return coll_.size(); }
 
-    T elem(coll_.back());
-    coll_.pop_back();
-    return elem;
-  }
+    bool empty() const { return coll_.empty(); }
 
-  T &top()
-  {
-    if (coll_.empty())
-      throw ReadEmptyStack();
+    void push(T const &elem) { coll_.push_back(elem); }
 
-    return coll_.back();
-  }
+    T pop()
+    {
+      if (coll_.empty())
+        throw ReadEmptyStack();
 
-private:
-  std::deque<T> coll_;
-};
+      T elem(coll_.back());
+      coll_.pop_back();
+      return elem;
+    }
+
+    T &top()
+    {
+      if (coll_.empty())
+        throw ReadEmptyStack();
+
+      return coll_.back();
+    }
+
+  private:
+    std::deque<T> coll_;
+  };
 
 } // namespace cxx_stack
 
@@ -2534,31 +2624,35 @@ TEST(Stack, ImplementedInTermsOf)
 // ={=========================================================================
 // algo-predicate
 
-namespace algo_predicate {
-class PredicateWithState
+namespace algo_predicate
 {
-public:
-  PredicateWithState(int value) : nth_(value), count_(0) {}
+  class PredicateWithState
+  {
+  public:
+    PredicateWithState(int value)
+        : nth_(value)
+        , count_(0)
+    {}
 
-  // *cxx-unused*
-  bool operator()(int) { return ++count_ == nth_; }
+    // *cxx-unused*
+    bool operator()(int) { return ++count_ == nth_; }
 
-private:
-  int nth_;
-  int count_;
-};
+  private:
+    int nth_;
+    int count_;
+  };
 
-class PredicateWithValue
-{
-public:
-  void operator()(int value) { value += 10; }
-};
+  class PredicateWithValue
+  {
+  public:
+    void operator()(int value) { value += 10; }
+  };
 
-class PredicateWithReference
-{
-public:
-  void operator()(int &value) { value += 10; }
-};
+  class PredicateWithReference
+  {
+  public:
+    void operator()(int &value) { value += 10; }
+  };
 } // namespace algo_predicate
 
 TEST(Predicate, Stateless)
@@ -2702,28 +2796,33 @@ TEST(AlgoCopy, UseOnDifferentCollections)
 //  0,  0,  5,  3,  3,  1,  0,  4,  4,  6,  2,  3,  5,  0,  0,  3,  4,  0,
 //  8,  6,  8, 10, 10, 12, 11,  9,  6, 10,  8, 10, 12, 11,  7,  6, 11,  8,
 
-namespace algo_generate {
-class IntegerSequence
+namespace algo_generate
 {
-public:
-  IntegerSequence(int value) : value_(value) {}
+  class IntegerSequence
+  {
+  public:
+    IntegerSequence(int value)
+        : value_(value)
+    {}
 
-  int operator()() { return ++value_; }
+    int operator()() { return ++value_; }
 
-private:
-  int value_;
-};
+  private:
+    int value_;
+  };
 
-class IntegerSequenceNoReturn
-{
-public:
-  IntegerSequenceNoReturn(int value) : value_(value) {}
+  class IntegerSequenceNoReturn
+  {
+  public:
+    IntegerSequenceNoReturn(int value)
+        : value_(value)
+    {}
 
-  void operator()() { ++value_; }
+    void operator()() { ++value_; }
 
-private:
-  int value_;
-};
+  private:
+    int value_;
+  };
 } // namespace algo_generate
 
 // this means that _Generator shall return value and otherwise get errors:
@@ -2840,7 +2939,9 @@ TEST(AlgoRandom, UseRandomEngineAndDistribution)
 class CardSequenceUseRand
 {
 public:
-  CardSequenceUseRand(int size) : size_(size) {}
+  CardSequenceUseRand(int size)
+      : size_(size)
+  {}
 
   int operator()()
   {
@@ -2868,7 +2969,10 @@ uniform_int_distribution<size_t> CardSequenceUseRandomEngine::udist{0, 24};
 class CardSequenceUseRandWithRange
 {
 public:
-  CardSequenceUseRandWithRange(int min, int max) : min_(min), max_(max) {}
+  CardSequenceUseRandWithRange(int min, int max)
+      : min_(min)
+      , max_(max)
+  {}
 
   int operator()() { return min_ + (rand() % (max_ - min_ + 1)); }
 
@@ -3098,29 +3202,32 @@ TEST(AlgoAccumulate, Map)
 // ={=========================================================================
 // cxx-algo-for-each cxx-algo-transform
 
-namespace algo_code {
-template <typename _InputIterator, typename _Function>
-_Function for_each(_InputIterator __first, _InputIterator __last, _Function __f)
+namespace algo_code
 {
-  // note: call op but not use return
+  template <typename _InputIterator, typename _Function>
+  _Function for_each(_InputIterator __first, _InputIterator __last,
+                     _Function __f)
+  {
+    // note: call op but not use return
 
-  for (; __first != __last; ++__first)
-    __f(*__first);
+    for (; __first != __last; ++__first)
+      __f(*__first);
 
-  return _GLIBCXX_MOVE(__f);
-}
+    return _GLIBCXX_MOVE(__f);
+  }
 
-template <typename _InputIterator, typename _OutputIterator,
-          typename _UnaryOperation>
+  template <typename _InputIterator, typename _OutputIterator,
+            typename _UnaryOperation>
 
-_OutputIterator transform(_InputIterator __first, _InputIterator __last,
-                          _OutputIterator __result, _UnaryOperation __unary_op)
-{
-  for (; __first != __last; ++__first, ++__result)
-    // note: write to output to output iterator and unary
-    *__result = __unary_op(*__first);
-  return __result;
-}
+  _OutputIterator transform(_InputIterator __first, _InputIterator __last,
+                            _OutputIterator __result,
+                            _UnaryOperation __unary_op)
+  {
+    for (; __first != __last; ++__first, ++__result)
+      // note: write to output to output iterator and unary
+      *__result = __unary_op(*__first);
+    return __result;
+  }
 } // namespace algo_code
 
 int square_value_with_return(int value)
@@ -3224,24 +3331,28 @@ TEST(AlgoForEach, UsePredicates)
 //
 // note that this is not predicate since it has its state.
 
-namespace algo_for_each {
-class MeanValue
+namespace algo_for_each
 {
-public:
-  MeanValue() : num_(0), sum_(0) {}
-
-  void operator()(int elem)
+  class MeanValue
   {
-    num_++;
-    sum_ += elem;
-  }
+  public:
+    MeanValue()
+        : num_(0)
+        , sum_(0)
+    {}
 
-  operator double() { return static_cast<double>(sum_) / num_; }
+    void operator()(int elem)
+    {
+      num_++;
+      sum_ += elem;
+    }
 
-private:
-  long num_;
-  long sum_;
-};
+    operator double() { return static_cast<double>(sum_) / num_; }
+
+  private:
+    long num_;
+    long sum_;
+  };
 } // namespace algo_for_each
 
 TEST(AlgoForEach, GetMean)
@@ -3258,12 +3369,10 @@ TEST(AlgoForEach, GetMean)
 // ={=========================================================================
 // cxx-algo-min-max
 
-namespace algo_min_max {
-
-bool AbsLess(int elem1, int elem2)
+namespace algo_min_max
 {
-  return abs(elem1) < abs(elem2);
-}
+
+  bool AbsLess(int elem1, int elem2) { return abs(elem1) < abs(elem2); }
 
 } // namespace algo_min_max
 
@@ -3342,73 +3451,75 @@ TEST(AlgoSearch, SearchFirstSubrange)
   }
 }
 
-namespace algo_search {
-using ITERATOR = std::deque<int>::iterator;
-
-// struct _Iter_equal_to_iter
-// iterator type can be different but value type should be compatible.
-struct EqualToIter
+namespace algo_search
 {
-  template <typename Iterator1, typename Iterator2>
-  bool operator()(Iterator1 it1, Iterator2 it2) const
+  using ITERATOR = std::deque<int>::iterator;
+
+  // struct _Iter_equal_to_iter
+  // iterator type can be different but value type should be compatible.
+  struct EqualToIter
   {
-    return *it1 == *it2;
-  }
-};
-
-ITERATOR my_search(ITERATOR first1, ITERATOR last1, ITERATOR first2,
-                   ITERATOR last2)
-{
-  EqualToIter EQUAL_PREDICATE;
-
-  for (;;)
-  {
-    // find_if() requires unary op and have tried varios attempts but not easy
-    // to make all work.
-    //
-    // first1 = find_if(first1, last1, EQUAL_PREDICATE);
-    // first1 = find_if(first1, last1, bind( EQUAL_PREDICATE, placeholders::_1,
-    // first2)); first1 = find_if(first1, last1,
-    // __iter_comp_iter(EQUAL_PREDICATE, first2));
-
-    // works
-    first1 = find_if(first1, last1, [=](int elem) { return elem == *first2; });
-
-    // not found
-    if (first1 == last1)
-      return last1;
-
-    // cout << "find: " << *first1 << endl;
-
-    ITERATOR p       = first2;
-    ITERATOR current = first1;
-
-    // this make the following loop fails so my_search() returns end().
-    // why since it's copied from stl code???
-    //
-    // if(++current == last1)
-    //   return last1;
-
-    while (EQUAL_PREDICATE(current, p))
+    template <typename Iterator1, typename Iterator2>
+    bool operator()(Iterator1 it1, Iterator2 it2) const
     {
-      // cout << "equal: " << *current << "," << *p << endl;
+      return *it1 == *it2;
+    }
+  };
 
-      // the second range matches up and exit loop
-      if (++p == last2)
-        return first1;
+  ITERATOR my_search(ITERATOR first1, ITERATOR last1, ITERATOR first2,
+                     ITERATOR last2)
+  {
+    EqualToIter EQUAL_PREDICATE;
 
-      if (++current == last1)
+    for (;;)
+    {
+      // find_if() requires unary op and have tried varios attempts but not easy
+      // to make all work.
+      //
+      // first1 = find_if(first1, last1, EQUAL_PREDICATE);
+      // first1 = find_if(first1, last1, bind( EQUAL_PREDICATE,
+      // placeholders::_1, first2)); first1 = find_if(first1, last1,
+      // __iter_comp_iter(EQUAL_PREDICATE, first2));
+
+      // works
+      first1 =
+        find_if(first1, last1, [=](int elem) { return elem == *first2; });
+
+      // not found
+      if (first1 == last1)
         return last1;
-    } // while end
 
-    // cout << "not equal: " << *current << "," << *p << endl;
+      // cout << "find: " << *first1 << endl;
 
-    // wehn found no match, then search again
-    ++first1;
-  } // for end
+      ITERATOR p       = first2;
+      ITERATOR current = first1;
 
-  return first1;
-}
+      // this make the following loop fails so my_search() returns end().
+      // why since it's copied from stl code???
+      //
+      // if(++current == last1)
+      //   return last1;
+
+      while (EQUAL_PREDICATE(current, p))
+      {
+        // cout << "equal: " << *current << "," << *p << endl;
+
+        // the second range matches up and exit loop
+        if (++p == last2)
+          return first1;
+
+        if (++current == last1)
+          return last1;
+      } // while end
+
+      // cout << "not equal: " << *current << "," << *p << endl;
+
+      // wehn found no match, then search again
+      ++first1;
+    } // for end
+
+    return first1;
+  }
 } // namespace algo_search
 
 TEST(AlgoSearch, SearchFirstSubrange_UseOwn)
@@ -3524,25 +3635,26 @@ TEST(AlgoSearch, AlgoUpperLowerBound)
 // ={=========================================================================
 // cxx-find-if
 
-namespace algo_find {
-bool is_prime(int number)
+namespace algo_find
 {
-  number = abs(number);
+  bool is_prime(int number)
+  {
+    number = abs(number);
 
-  // 0 and 1 are not prime numbers
-  if (number == 0 || number == 1)
-    return false;
+    // 0 and 1 are not prime numbers
+    if (number == 0 || number == 1)
+      return false;
 
-  int divisor;
+    int divisor;
 
-  // until find divisor which leaves 0 remainder, that is when divisor is 1 or
-  // when other divisor
-  for (divisor = number / 2; number % divisor != 0; --divisor)
-    ;
+    // until find divisor which leaves 0 remainder, that is when divisor is 1 or
+    // when other divisor
+    for (divisor = number / 2; number % divisor != 0; --divisor)
+      ;
 
-  // if divisor is 1 then no ther is found.
-  return divisor == 1;
-}
+    // if divisor is 1 then no ther is found.
+    return divisor == 1;
+  }
 } // namespace algo_find
 
 // is used to search for the 'first' element of the given range for which the
@@ -3667,29 +3779,30 @@ TEST(AlgoReverse, Use)
   EXPECT_THAT(coll, ElementsAre(7, 2, 3, 4, 5, 6, 1));
 }
 
-namespace algo_reverse {
-using RITERATOR = vector<int>::iterator;
-
-void my_reverse(RITERATOR first, RITERATOR last)
+namespace algo_reverse
 {
-  --last;
+  using RITERATOR = vector<int>::iterator;
 
-  for (; first < last; ++first, --last)
-    swap(*first, *last);
-}
+  void my_reverse(RITERATOR first, RITERATOR last)
+  {
+    --last;
 
-using BITERATOR = list<int>::iterator;
+    for (; first < last; ++first, --last)
+      swap(*first, *last);
+  }
 
-void my_reverse_bi(BITERATOR first, BITERATOR last)
-{
-  --last;
+  using BITERATOR = list<int>::iterator;
 
-  // since `<` is only supported for random
-  // for (;first < last; ++first, --last)
+  void my_reverse_bi(BITERATOR first, BITERATOR last)
+  {
+    --last;
 
-  for (; first != last; ++first, --last)
-    swap(*first, *last);
-}
+    // since `<` is only supported for random
+    // for (;first < last; ++first, --last)
+
+    for (; first != last; ++first, --last)
+      swap(*first, *last);
+  }
 } // namespace algo_reverse
 
 TEST(AlgoReverse, UseOwn)
@@ -4020,96 +4133,94 @@ TEST(AlgoMutating, AlgoReverse)
 // ={=========================================================================
 // algo-sort
 
-namespace algo_code {
-// template< class RandomIt, class Compare>
-// void sort( RandomIt first, RandomIt last, Compare comp );
-
-// /usr/include/c++/4.9/bits/stl_algo.h
-
-/**
- *  @brief Sort the elements of a sequence using a predicate for comparison.
- *  @ingroup sorting_algorithms
- *  @param  __first   An iterator.
- *  @param  __last    Another iterator.
- *  @param  __comp    A comparison functor.
- *  @return  Nothing.
- *
- *  Sorts the elements in the range @p [__first,__last) in ascending order,
- *  such that @p __comp(*(i+1),*i) is false for every iterator @e i in the
- *  range @p [__first,__last-1).
- *
- *  The relative ordering of equivalent elements is not preserved, use
- *  @p stable_sort() if this is needed.
- */
-template <typename _RandomAccessIterator, typename _Compare>
-inline void sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
-                 _Compare __comp)
+namespace algo_code
 {
-  // concept requirements
-  __glibcxx_function_requires(
-    _Mutable_RandomAccessIteratorConcept<_RandomAccessIterator>)
-    __glibcxx_function_requires(
-      _BinaryPredicateConcept<
-        _Compare, typename iterator_traits<_RandomAccessIterator>::value_type,
-        typename iterator_traits<_RandomAccessIterator>::value_type>)
-      __glibcxx_requires_valid_range(__first, __last);
+  // template< class RandomIt, class Compare>
+  // void sort( RandomIt first, RandomIt last, Compare comp );
 
-  std::__sort(__first, __last, __gnu_cxx::__ops::__iter_comp_iter(__comp));
-}
+  // /usr/include/c++/4.9/bits/stl_algo.h
 
-/**
- *  @brief Sort the elements of a sequence.
- *  @ingroup sorting_algorithms
- *  @param  __first   An iterator.
- *  @param  __last    Another iterator.
- *  @return  Nothing.
- *
- *  Sorts the elements in the range @p [__first,__last) in ascending order,
- *  such that for each iterator @e i in the range @p [__first,__last-1),
- *  *(i+1)<*i is false.
- *
- *  The relative ordering of equivalent elements is not preserved, use
- *  @p stable_sort() if this is needed.
- */
-template <typename _RandomAccessIterator>
-inline void sort(_RandomAccessIterator __first, _RandomAccessIterator __last)
-{
-  // concept requirements
-  __glibcxx_function_requires(
-    _Mutable_RandomAccessIteratorConcept<_RandomAccessIterator>)
-    __glibcxx_function_requires(
-      _LessThanComparableConcept<
-        typename iterator_traits<_RandomAccessIterator>::value_type>)
-      __glibcxx_requires_valid_range(__first, __last);
-
-  std::__sort(__first, __last, __gnu_cxx::__ops::__iter_less_iter());
-}
-
-struct _Iter_less_iter
-{
-  template <typename _Iterator1, typename _Iterator2>
-  bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
-  {
-    return *__it1 < *__it2;
-  }
-};
-
-inline _Iter_less_iter __iter_less_iter()
-{
-  return _Iter_less_iter();
-}
-
-template <typename _RandomAccessIterator, typename _Compare>
-inline void __sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
+  /**
+   *  @brief Sort the elements of a sequence using a predicate for comparison.
+   *  @ingroup sorting_algorithms
+   *  @param  __first   An iterator.
+   *  @param  __last    Another iterator.
+   *  @param  __comp    A comparison functor.
+   *  @return  Nothing.
+   *
+   *  Sorts the elements in the range @p [__first,__last) in ascending order,
+   *  such that @p __comp(*(i+1),*i) is false for every iterator @e i in the
+   *  range @p [__first,__last-1).
+   *
+   *  The relative ordering of equivalent elements is not preserved, use
+   *  @p stable_sort() if this is needed.
+   */
+  template <typename _RandomAccessIterator, typename _Compare>
+  inline void sort(_RandomAccessIterator __first, _RandomAccessIterator __last,
                    _Compare __comp)
-{
-  if (__first != __last)
   {
-    std::__introsort_loop(__first, __last, std::__lg(__last - __first) * 2,
-                          __comp);
-    std::__final_insertion_sort(__first, __last, __comp);
+    // concept requirements
+    __glibcxx_function_requires(
+      _Mutable_RandomAccessIteratorConcept<_RandomAccessIterator>)
+      __glibcxx_function_requires(
+        _BinaryPredicateConcept<
+          _Compare, typename iterator_traits<_RandomAccessIterator>::value_type,
+          typename iterator_traits<_RandomAccessIterator>::value_type>)
+        __glibcxx_requires_valid_range(__first, __last);
+
+    std::__sort(__first, __last, __gnu_cxx::__ops::__iter_comp_iter(__comp));
   }
-}
+
+  /**
+   *  @brief Sort the elements of a sequence.
+   *  @ingroup sorting_algorithms
+   *  @param  __first   An iterator.
+   *  @param  __last    Another iterator.
+   *  @return  Nothing.
+   *
+   *  Sorts the elements in the range @p [__first,__last) in ascending order,
+   *  such that for each iterator @e i in the range @p [__first,__last-1),
+   *  *(i+1)<*i is false.
+   *
+   *  The relative ordering of equivalent elements is not preserved, use
+   *  @p stable_sort() if this is needed.
+   */
+  template <typename _RandomAccessIterator>
+  inline void sort(_RandomAccessIterator __first, _RandomAccessIterator __last)
+  {
+    // concept requirements
+    __glibcxx_function_requires(
+      _Mutable_RandomAccessIteratorConcept<_RandomAccessIterator>)
+      __glibcxx_function_requires(
+        _LessThanComparableConcept<
+          typename iterator_traits<_RandomAccessIterator>::value_type>)
+        __glibcxx_requires_valid_range(__first, __last);
+
+    std::__sort(__first, __last, __gnu_cxx::__ops::__iter_less_iter());
+  }
+
+  struct _Iter_less_iter
+  {
+    template <typename _Iterator1, typename _Iterator2>
+    bool operator()(_Iterator1 __it1, _Iterator2 __it2) const
+    {
+      return *__it1 < *__it2;
+    }
+  };
+
+  inline _Iter_less_iter __iter_less_iter() { return _Iter_less_iter(); }
+
+  template <typename _RandomAccessIterator, typename _Compare>
+  inline void __sort(_RandomAccessIterator __first,
+                     _RandomAccessIterator __last, _Compare __comp)
+  {
+    if (__first != __last)
+    {
+      std::__introsort_loop(__first, __last, std::__lg(__last - __first) * 2,
+                            __comp);
+      std::__final_insertion_sort(__first, __last, __comp);
+    }
+  }
 } // namespace algo_code
 
 TEST(AlgoSorting, AlgoSort)

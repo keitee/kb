@@ -1,21 +1,20 @@
-#include <iostream>
-#include <set>
-#include <vector>
-#include <memory>
-#include <chrono>
-#include <limits>
-#include <thread>
-#include <list>
-#include <forward_list>
-#include <regex>
 #include <boost/lexical_cast.hpp>
+#include <chrono>
+#include <forward_list>
+#include <iostream>
+#include <limits>
+#include <list>
+#include <memory>
+#include <regex>
+#include <set>
+#include <thread>
+#include <vector>
 
 #include "gmock/gmock.h"
 
 using namespace std;
 using namespace std::placeholders;
 using namespace testing;
-
 
 /*
 ={=============================================================================
@@ -30,68 +29,66 @@ o show how to implement a new collection type using library container.
 o This shows when shared_ptr is useful than own raii since this case don't
 need `copy-controls` and use syn versions but not a problem as it has only
 one member which is shared_ptr.
- 
+
 */
 
 namespace cxx_case_strblob
 {
   class StrBlob
   {
-    public:
-      typedef std::vector<std::string>::size_type size_type;
-      
-      explicit StrBlob() : 
-        data_(new std::vector<std::string>()) {}
+  public:
+    typedef std::vector<std::string>::size_type size_type;
 
-      explicit StrBlob(std::initializer_list<std::string> il) : 
-        data_(new std::vector<std::string>(il)) {}
+    explicit StrBlob()
+        : data_(new std::vector<std::string>())
+    {}
 
-      size_type size() const noexcept
-      { return data_->size(); }
-      
-      bool empty() const noexcept
-      { return data_->empty(); }
+    explicit StrBlob(std::initializer_list<std::string> il)
+        : data_(new std::vector<std::string>(il))
+    {}
 
-      void push_back(std::string const& elem)
-      { data_->push_back(elem); }
+    size_type size() const noexcept { return data_->size(); }
 
-      void pop_back()
-      {
-        // *cxx-vector* *cxx-undefined* when called on empty vector
-        check(0, "coll is empty");
+    bool empty() const noexcept { return data_->empty(); }
 
-        // *cxx-vector* do not return value
-        data_->pop_back();
-      }
+    void push_back(std::string const &elem) { data_->push_back(elem); }
 
-      std::string& front()
-      {
-        check(0, "coll is empty");
-        return data_->front();
-      }
+    void pop_back()
+    {
+      // *cxx-vector* *cxx-undefined* when called on empty vector
+      check(0, "coll is empty");
 
-      std::string& back()
-      {
-        check(0, "coll is empty");
-        return data_->back();
-      }
+      // *cxx-vector* do not return value
+      data_->pop_back();
+    }
 
-    private:
-      shared_ptr<std::vector<std::string>> data_;
+    std::string &front()
+    {
+      check(0, "coll is empty");
+      return data_->front();
+    }
 
-      // *cxx-except* has nothing to do with return type
-      void check(size_type index, string const& message) const
-      {
-        if (index >= data_->size())
-          throw std::out_of_range(message);
-      }
+    std::string &back()
+    {
+      check(0, "coll is empty");
+      return data_->back();
+    }
+
+  private:
+    shared_ptr<std::vector<std::string>> data_;
+
+    // *cxx-except* has nothing to do with return type
+    void check(size_type index, string const &message) const
+    {
+      if (index >= data_->size())
+        throw std::out_of_range(message);
+    }
   };
 
-} // namespace
-
+} // namespace cxx_case_strblob
 
 TEST(CxxCase, StringBlobNoIteratorSupport)
-{ 
+{
   using namespace cxx_case_strblob;
 
   {
@@ -114,8 +111,7 @@ TEST(CxxCase, StringBlobNoIteratorSupport)
     EXPECT_THAT(sb.size(), 0);
     EXPECT_THROW(sb.front(), std::out_of_range);
   }
-} 
-
+}
 
 // *cxx-iter*
 // see that iterator implementation
@@ -135,193 +131,188 @@ namespace cxx_case_strblob_iterator
   {
     friend class StrBlobIterator;
 
-    public:
-      typedef std::vector<std::string>::size_type size_type;
-      
-      explicit StrBlob() : 
-        data_(new std::vector<std::string>()) {}
+  public:
+    typedef std::vector<std::string>::size_type size_type;
 
-      explicit StrBlob(std::initializer_list<std::string> il) : 
-        data_(new std::vector<std::string>(il)) {}
+    explicit StrBlob()
+        : data_(new std::vector<std::string>())
+    {}
 
-      size_type size() const noexcept
-      { return data_->size(); }
-      
-      bool empty() const noexcept
-      { return data_->empty(); }
+    explicit StrBlob(std::initializer_list<std::string> il)
+        : data_(new std::vector<std::string>(il))
+    {}
 
-      void push_back(std::string const& elem)
-      { data_->push_back(elem); }
+    size_type size() const noexcept { return data_->size(); }
 
-      void pop_back()
-      {
-        // *cxx-vector* *cxx-undefined* when called on empty vector
-        check(0, "coll is empty");
+    bool empty() const noexcept { return data_->empty(); }
 
-        // *cxx-vector* do not return value
-        data_->pop_back();
-      }
+    void push_back(std::string const &elem) { data_->push_back(elem); }
 
-      std::string& front()
-      {
-        check(0, "coll is empty");
-        return data_->front();
-      }
+    void pop_back()
+    {
+      // *cxx-vector* *cxx-undefined* when called on empty vector
+      check(0, "coll is empty");
 
-      std::string& back()
-      {
-        check(0, "coll is empty");
-        return data_->back();
-      }
+      // *cxx-vector* do not return value
+      data_->pop_back();
+    }
 
-      // cause *cxx-incomplete-type* so cannot be defined until StrBlobIterator
-      // is defined.
+    std::string &front()
+    {
+      check(0, "coll is empty");
+      return data_->front();
+    }
 
-      StrBlobIterator begin();
+    std::string &back()
+    {
+      check(0, "coll is empty");
+      return data_->back();
+    }
 
-      StrBlobIterator end();
+    // cause *cxx-incomplete-type* so cannot be defined until StrBlobIterator
+    // is defined.
 
-    private:
-      shared_ptr<std::vector<std::string>> data_;
+    StrBlobIterator begin();
 
-      // *cxx-except* has nothing to do with return type
-      void check(size_type index, string const& message) const
-      {
-        if (index >= data_->size())
-          throw std::out_of_range(message);
-      }
+    StrBlobIterator end();
+
+  private:
+    shared_ptr<std::vector<std::string>> data_;
+
+    // *cxx-except* has nothing to do with return type
+    void check(size_type index, string const &message) const
+    {
+      if (index >= data_->size())
+        throw std::out_of_range(message);
+    }
   };
-
 
   // originally StrBlobPtr
 
   class StrBlobIterator
   {
-    public:
-      typedef std::vector<std::string>::size_type size_type;
+  public:
+    typedef std::vector<std::string>::size_type size_type;
 
-      // *cxx-incomplete-type* so move StrBlobIterator after StrBlob
-      StrBlobIterator(StrBlob& blob, size_type pos = 0)
-        : blob_(blob.data_), curr_(pos)
-      {}
+    // *cxx-incomplete-type* so move StrBlobIterator after StrBlob
+    StrBlobIterator(StrBlob &blob, size_type pos = 0)
+        : blob_(blob.data_)
+        , curr_(pos)
+    {}
 
-      // *cxx-operator-postfix* prefix version
-      StrBlobIterator& operator++()
-      {
-        check(curr_, "increase past the end");
-        ++curr_;
-        return *this;
-      }
+    // *cxx-operator-postfix* prefix version
+    StrBlobIterator &operator++()
+    {
+      check(curr_, "increase past the end");
+      ++curr_;
+      return *this;
+    }
 
-      // *cxx-operator-postfix* postfix version
-      StrBlobIterator const operator++(int)
-      {
-        StrBlobIterator it = *this;
-        ++*this;
-        return it;
-      }
+    // *cxx-operator-postfix* postfix version
+    StrBlobIterator const operator++(int)
+    {
+      StrBlobIterator it = *this;
+      ++*this;
+      return it;
+    }
 
-      StrBlobIterator& operator--()
-      {
-        // decrease first and since it is size_type, -1 becomes big
-        --curr_;
-        check(curr_, "decrease before the begin");
-        return *this;
-      }
+    StrBlobIterator &operator--()
+    {
+      // decrease first and since it is size_type, -1 becomes big
+      --curr_;
+      check(curr_, "decrease before the begin");
+      return *this;
+    }
 
+    StrBlobIterator const operator--(int)
+    {
+      StrBlobIterator it = *this;
+      --*this;
+      return it;
+    }
 
-      StrBlobIterator const operator--(int)
-      {
-        StrBlobIterator it = *this;
-        --*this;
-        return it;
-      }
+    // *cxx-overload-operator*
+    //
+    // 1. this iterator points vector<string>. return vector<string> or
+    // string?
+    //
+    // 2. Although it's const member function since do not change its state,
+    // returns a reference and client can change through it.
 
-      // *cxx-overload-operator*
-      //
-      // 1. this iterator points vector<string>. return vector<string> or
-      // string?
-      //
-      // 2. Although it's const member function since do not change its state,
-      // returns a reference and client can change through it.
+    std::string &operator*() const
+    {
+      auto blob_ptr = check(curr_, "dereference non-existent element");
 
-      std::string& operator*() const 
-      {
-        auto blob_ptr = check(curr_, "dereference non-existent element");
+      // *cxx-precedence* [] is higher
+      return (*blob_ptr)[curr_];
+    }
 
-        // *cxx-precedence* [] is higher
-        return (*blob_ptr)[curr_];
-      }
+    // this is the original code from the book. However, operator->() make
+    // sense when underlying item is pointer. In this case, it's not so
+    // comment it out.
+    //
+    // std::string* operator->() const
+    // {
+    //     // take address of a string reference
+    //     return & this->operator*();
+    // }
 
-      // this is the original code from the book. However, operator->() make
-      // sense when underlying item is pointer. In this case, it's not so
-      // comment it out.
-      //
-      // std::string* operator->() const
-      // {
-      //     // take address of a string reference
-      //     return & this->operator*();
-      // }
+    // *cxx-overload-operator-equal*
 
-      // *cxx-overload-operator-equal*
+    bool operator==(StrBlobIterator const &other) const
+    {
+      auto lhs_blob_ptr = blob_.lock();
 
-      bool operator==(StrBlobIterator const& other) const
-      {
-        auto lhs_blob_ptr = blob_.lock();
+      // *cxx-access* WHY NOT ERROR???
 
-        // *cxx-access* WHY NOT ERROR???
-        
-        auto rhs_blob_ptr = other.blob_.lock();
+      auto rhs_blob_ptr = other.blob_.lock();
 
-        // don't seem to need "curr_ == other.curr_" since it's enough to see
-        // shared pointer is not null
+      // don't seem to need "curr_ == other.curr_" since it's enough to see
+      // shared pointer is not null
 
-        if (lhs_blob_ptr == rhs_blob_ptr)
-          return (!lhs_blob_ptr || curr_ == other.curr_);
-        else 
-          return false;
-      }
+      if (lhs_blob_ptr == rhs_blob_ptr)
+        return (!lhs_blob_ptr || curr_ == other.curr_);
+      else
+        return false;
+    }
 
-      bool operator!=(StrBlobIterator const& other) const
-      {
-        return !(*this == other);
-      }
+    bool operator!=(StrBlobIterator const &other) const
+    {
+      return !(*this == other);
+    }
 
-    private:
-      std::weak_ptr<std::vector<std::string>> blob_;
-      size_type curr_{0};
+  private:
+    std::weak_ptr<std::vector<std::string>> blob_;
+    size_type curr_{0};
 
-      std::shared_ptr<std::vector<std::string>> check(size_type index,
-          string const& message) const
-      {
-        auto blob_ptr = blob_.lock();
-        if (!blob_ptr)
-          throw std::runtime_error("unbounded shared_ptr");
+    std::shared_ptr<std::vector<std::string>> check(size_type index,
+                                                    string const &message) const
+    {
+      auto blob_ptr = blob_.lock();
+      if (!blob_ptr)
+        throw std::runtime_error("unbounded shared_ptr");
 
-        if (index >= blob_ptr->size())
-          throw std::out_of_range(message);
+      if (index >= blob_ptr->size())
+        throw std::out_of_range(message);
 
-        return blob_ptr;
-      }
+      return blob_ptr;
+    }
   };
 
   // cause *cxx-incomplete-type* so cannot be defined until StrBlobIterator
   // is defined. so define them here
 
-  StrBlobIterator StrBlob::begin()
-  {
-    return StrBlobIterator(*this, 0);
-  }
+  StrBlobIterator StrBlob::begin() { return StrBlobIterator(*this, 0); }
 
   StrBlobIterator StrBlob::end()
   {
     return StrBlobIterator(*this, data_->size());
   }
 
-} // namespace
+} // namespace cxx_case_strblob_iterator
 
 TEST(CxxCase, StringBlobIteratorSupport)
-{ 
+{
   using namespace cxx_case_strblob_iterator;
 
   {
@@ -344,7 +335,7 @@ TEST(CxxCase, StringBlobIteratorSupport)
 
     StrBlob sb{"one", "two", "three", "four"};
 
-    for (auto const& e : sb)
+    for (auto const &e : sb)
       coll.push_back(e);
 
     EXPECT_THAT(coll, ElementsAre("one", "two", "three", "four"));
@@ -357,71 +348,67 @@ TEST(CxxCase, StringBlobIteratorSupport)
 
     // since operator*() returns reference
     auto it = sb.begin();
-    *it = "I";
+    *it     = "I";
 
-    for (auto const& e : sb)
+    for (auto const &e : sb)
       coll.push_back(e);
 
     EXPECT_THAT(coll, ElementsAre("I", "two", "three", "four"));
   }
-} 
-
+}
 
 namespace cxx_case_strblob_template
 {
-  template <typename T>
-  class StrBlob
+  template <typename T> class StrBlob
   {
-    public:
+  public:
+    // was:
+    // typedef std::vector<T>::size_type size_type;
+    //
+    // *cxx-template-type-members* it now needs `typename` keyword since it is
+    // a template now.
 
-      // was:
-      // typedef std::vector<T>::size_type size_type;
-      //
-      // *cxx-template-type-members* it now needs `typename` keyword since it is
-      // a template now.
+    typedef typename std::vector<T>::size_type size_type;
 
-      typedef typename std::vector<T>::size_type size_type;
-      
-      explicit StrBlob() : 
-        data_(new std::vector<T>()) {}
+    explicit StrBlob()
+        : data_(new std::vector<T>())
+    {}
 
-      explicit StrBlob(std::initializer_list<T> il) : 
-        data_(new std::vector<T>(il)) {}
+    explicit StrBlob(std::initializer_list<T> il)
+        : data_(new std::vector<T>(il))
+    {}
 
-      size_type size() const noexcept
-      { return data_->size(); }
-      
-      bool empty() const noexcept
-      { return data_->empty(); }
+    size_type size() const noexcept { return data_->size(); }
 
-      void push_back(std::string const& elem)
-      { data_->push_back(elem); }
+    bool empty() const noexcept { return data_->empty(); }
 
-      void pop_back()
-      {
-        // *cxx-vector* *cxx-undefined* when called on empty vector
-        check(0, "coll is empty");
+    void push_back(std::string const &elem) { data_->push_back(elem); }
 
-        // *cxx-vector* do not return value
-        data_->pop_back();
-      }
+    void pop_back()
+    {
+      // *cxx-vector* *cxx-undefined* when called on empty vector
+      check(0, "coll is empty");
 
-      T& front()
-      {
-        check(0, "coll is empty");
-        return data_->front();
-      }
+      // *cxx-vector* do not return value
+      data_->pop_back();
+    }
 
-      T& back()
-      {
-        check(0, "coll is empty");
-        return data_->back();
-      }
+    T &front()
+    {
+      check(0, "coll is empty");
+      return data_->front();
+    }
 
-    private:
-      shared_ptr<std::vector<T>> data_;
+    T &back()
+    {
+      check(0, "coll is empty");
+      return data_->back();
+    }
 
-      void check(size_type index, string const& message) const;
+  private:
+    shared_ptr<std::vector<T>> data_;
+
+    void check(size_type index, string const &message) const;
   };
 
   // *cxx-except* has nothing to do with return type
@@ -437,17 +424,16 @@ namespace cxx_case_strblob_template
   // it is instantiated `only if` it is used and if not, it is not instantiated.
 
   template <typename T>
-    void StrBlob<T>::check(size_type index, string const& message) const
+  void StrBlob<T>::check(size_type index, string const &message) const
   {
     if (index >= data_->size())
       throw std::out_of_range(message);
   }
 
-} // namespace
-
+} // namespace cxx_case_strblob_template
 
 TEST(CxxCase, StringBlobTemplate)
-{ 
+{
   using namespace cxx_case_strblob_template;
 
   {
@@ -470,8 +456,7 @@ TEST(CxxCase, StringBlobTemplate)
     EXPECT_THAT(sb.size(), 0);
     EXPECT_THROW(sb.front(), std::out_of_range);
   }
-} 
-
+}
 
 /*
 ={=============================================================================
@@ -482,203 +467,197 @@ Problem 46, circular buffer, the modern c++ challenge
 2. in push, no full check since it overwrites and in pop, it simply
 calculates first from head substracing size.
 3. no iterator support is needed if not use begin()/end()
- 
+
 */
 
 namespace queue_circular_count_iterator
 {
-  template <typename T>
-    class circular_buffer_iterator;
+  template <typename T> class circular_buffer_iterator;
 
-  template <typename T>
-    class circular_buffer
+  template <typename T> class circular_buffer
+  {
+    typedef circular_buffer_iterator<T> const_iterator;
+    friend class circular_buffer_iterator<T>;
+
+  public:
+    circular_buffer() = delete;
+    // explicit circular_buffer(size_t const size) : data_(size)
+    explicit circular_buffer(T const size)
+        : data_(size)
+    {}
+
+    void clear() noexcept
     {
-      typedef circular_buffer_iterator<T> const_iterator;
-      friend class circular_buffer_iterator<T>;
-
-      public:
-      circular_buffer() = delete;
-      // explicit circular_buffer(size_t const size) : data_(size) 
-      explicit circular_buffer(T const size) : data_(size) 
-      {}
-
-      void clear() noexcept 
-      { head_ = -1; size_ = 0; }
-
-      bool empty() const noexcept
-      { return size_ == 0; }
-
-      bool full() const noexcept
-      { return size_ >= data_.size(); }
-
-      size_t capacity() const noexcept
-      { return data_.size(); }
-
-      size_t size() const noexcept
-      { return size_; }
-
-      const_iterator begin() const
-      {
-        return const_iterator(*this, first_pos(), empty());
-      }
-
-      const_iterator end() const
-      {
-        return const_iterator(*this, next_pos(), true);
-      }
-
-      T pop()
-      {
-        if (empty())
-          throw std::runtime_error("buffer is empty");
-
-        auto pos = first_pos();
-        size_--;
-        return data_[pos];
-      }
-
-      void push(T const item)
-      {
-        // if (full())
-        //   throw std::runtime_error("buffer is full");
-
-        head_ = next_pos();
-        data_[head_] = item;
-
-        if (size_ < data_.size())
-          size_++;
-      }
-
-      private:
-      // size_t size_{};
-      // size_t head_{-1};
-      T size_{};
-      T head_{-1};
-      std::vector<T> data_;
-
-      // return `head` pos to push
-      size_t next_pos() const noexcept
-      {
-        // *cxx-precedence* *cxx-error*
-        // return size_ == 0 ? 0 : (head_ + 1 % data_.size());
-
-        return size_ == 0 ? 0 : ((head_ + 1) % data_.size());
-      }
-
-      // return `tail` pos to pop
-      size_t first_pos() const noexcept
-      {
-        return size_ == 0 ? 0 : (head_ + data_.size() - size_ + 1) % data_.size();
-      }
-    };
-
-  template <typename T>
-    class circular_buffer_iterator
-    {
-      typedef circular_buffer_iterator        self_type;
-      typedef T                               value_type;
-      typedef T&                              reference;
-      typedef T const&                        const_reference;
-      typedef T*                              pointer;
-      typedef std::random_access_iterator_tag iterator_category;
-      typedef ptrdiff_t                       difference_type;
-
-      public:
-
-      explicit circular_buffer_iterator(circular_buffer<T> const& buf, size_t const pos, bool const last) :
-        buffer_(buf), index_(pos), last_(last)
-      {}
-
-      self_type& operator++()
-      {
-        if (last_)
-          throw std::out_of_range("iterator cannot be incremented past the end of range.");
-
-        index_ = (index_ + 1) % buffer_.data_.size();
-
-        // that is when index_ == `head`
-        last_ = (index_ == buffer_.next_pos());
-
-        return *this;
-      }
-
-      // *cxx-operator-postfix*
-      self_type const operator++(int)
-      {
-        self_type temp = *this;
-        ++*this;
-        return temp;
-      }
-
-      bool operator==(self_type const& other) const
-      {
-        // assert(compatible(other));
-
-        return &buffer_ == &other.buffer_
-          && index_ == other.index_ 
-          && last_ == other.last_;
-      }
-
-      bool operator!=(self_type const& other) const
-      { return !(*this == other); }
-
-      const_reference operator*() const
-      {
-        return buffer_.data_[index_];
-      }
-
-      private:
-
-      circular_buffer<T> const& buffer_;
-      size_t index_;
-      bool last_;
-    };
-
-  template <typename T>
-    std::vector<T> print(circular_buffer<T> & buf)
-    {
-      std::vector<T> coll{};
-
-      for (auto & e : buf)
-        coll.push_back(e);
-
-      return coll;
+      head_ = -1;
+      size_ = 0;
     }
 
-} // namespace
+    bool empty() const noexcept { return size_ == 0; }
+
+    bool full() const noexcept { return size_ >= data_.size(); }
+
+    size_t capacity() const noexcept { return data_.size(); }
+
+    size_t size() const noexcept { return size_; }
+
+    const_iterator begin() const
+    {
+      return const_iterator(*this, first_pos(), empty());
+    }
+
+    const_iterator end() const
+    {
+      return const_iterator(*this, next_pos(), true);
+    }
+
+    T pop()
+    {
+      if (empty())
+        throw std::runtime_error("buffer is empty");
+
+      auto pos = first_pos();
+      size_--;
+      return data_[pos];
+    }
+
+    void push(T const item)
+    {
+      // if (full())
+      //   throw std::runtime_error("buffer is full");
+
+      head_        = next_pos();
+      data_[head_] = item;
+
+      if (size_ < data_.size())
+        size_++;
+    }
+
+  private:
+    // size_t size_{};
+    // size_t head_{-1};
+    T size_{};
+    T head_{-1};
+    std::vector<T> data_;
+
+    // return `head` pos to push
+    size_t next_pos() const noexcept
+    {
+      // *cxx-precedence* *cxx-error*
+      // return size_ == 0 ? 0 : (head_ + 1 % data_.size());
+
+      return size_ == 0 ? 0 : ((head_ + 1) % data_.size());
+    }
+
+    // return `tail` pos to pop
+    size_t first_pos() const noexcept
+    {
+      return size_ == 0 ? 0 : (head_ + data_.size() - size_ + 1) % data_.size();
+    }
+  };
+
+  template <typename T> class circular_buffer_iterator
+  {
+    typedef circular_buffer_iterator self_type;
+    typedef T value_type;
+    typedef T &reference;
+    typedef T const &const_reference;
+    typedef T *pointer;
+    typedef std::random_access_iterator_tag iterator_category;
+    typedef ptrdiff_t difference_type;
+
+  public:
+    explicit circular_buffer_iterator(circular_buffer<T> const &buf,
+                                      size_t const pos,
+                                      bool const last)
+        : buffer_(buf)
+        , index_(pos)
+        , last_(last)
+    {}
+
+    self_type &operator++()
+    {
+      if (last_)
+        throw std::out_of_range(
+          "iterator cannot be incremented past the end of range.");
+
+      index_ = (index_ + 1) % buffer_.data_.size();
+
+      // that is when index_ == `head`
+      last_ = (index_ == buffer_.next_pos());
+
+      return *this;
+    }
+
+    // *cxx-operator-postfix*
+    self_type const operator++(int)
+    {
+      self_type temp = *this;
+      ++*this;
+      return temp;
+    }
+
+    bool operator==(self_type const &other) const
+    {
+      // assert(compatible(other));
+
+      return &buffer_ == &other.buffer_ && index_ == other.index_ &&
+             last_ == other.last_;
+    }
+
+    bool operator!=(self_type const &other) const { return !(*this == other); }
+
+    const_reference operator*() const { return buffer_.data_[index_]; }
+
+  private:
+    circular_buffer<T> const &buffer_;
+    size_t index_;
+    bool last_;
+  };
+
+  template <typename T> std::vector<T> print(circular_buffer<T> &buf)
+  {
+    std::vector<T> coll{};
+
+    for (auto &e : buf)
+      coll.push_back(e);
+
+    return coll;
+  }
+
+} // namespace queue_circular_count_iterator
 
 TEST(CxxCase, CircularQueueCountIterator)
 {
   using namespace queue_circular_count_iterator;
 
   {
-    circular_buffer<int> cbuf(5);   // {0, 0, 0, 0, 0} -> {}
+    circular_buffer<int> cbuf(5); // {0, 0, 0, 0, 0} -> {}
 
-    cbuf.push(1);                   // {1, 0, 0, 0, 0} -> {1}
-    cbuf.push(2);                   // {1, 2, 0, 0, 0} -> {1, 2}
-    cbuf.push(3);                   // {1, 2, 3, 0, 0} -> {1, 2, 3}
+    cbuf.push(1); // {1, 0, 0, 0, 0} -> {1}
+    cbuf.push(2); // {1, 2, 0, 0, 0} -> {1, 2}
+    cbuf.push(3); // {1, 2, 3, 0, 0} -> {1, 2, 3}
 
-    auto item = cbuf.pop();         // {1, 2, 3, 0, 0} -> {2, 3}
+    auto item = cbuf.pop(); // {1, 2, 3, 0, 0} -> {2, 3}
     EXPECT_THAT(item, 1);
 
-    cbuf.push(4);                   // {1, 2, 3, 4, 0} -> {2, 3, 4}
-    cbuf.push(5);                   // {1, 2, 3, 4, 5} -> {2, 3, 4, 5}
+    cbuf.push(4); // {1, 2, 3, 4, 0} -> {2, 3, 4}
+    cbuf.push(5); // {1, 2, 3, 4, 5} -> {2, 3, 4, 5}
 
     // see that it overwrites
-    cbuf.push(6);                   // {(6), 2, 3, 4, 5} -> {2, 3, 4, 5, 6}
-    cbuf.push(7);                   // {6, (7), 3, 4, 5} -> {3, 4, 5, 6, 7}
-    cbuf.push(8);                   // {6, 7, (8), 4, 5} -> {4, 5, 6, 7, 8}
+    cbuf.push(6); // {(6), 2, 3, 4, 5} -> {2, 3, 4, 5, 6}
+    cbuf.push(7); // {6, (7), 3, 4, 5} -> {3, 4, 5, 6, 7}
+    cbuf.push(8); // {6, 7, (8), 4, 5} -> {4, 5, 6, 7, 8}
 
-    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {5, 6, 7, 8}
+    item = cbuf.pop(); // {6, 7, 8, 4, 5} -> {5, 6, 7, 8}
     EXPECT_THAT(item, 4);
-    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {6, 7, 8}
+    item = cbuf.pop(); // {6, 7, 8, 4, 5} -> {6, 7, 8}
     EXPECT_THAT(item, 5);
-    item = cbuf.pop();              // {6, 7, 8, 4, 5} -> {7, 8}
+    item = cbuf.pop(); // {6, 7, 8, 4, 5} -> {7, 8}
     EXPECT_THAT(item, 6);
 
-    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {8}
-    cbuf.pop();                     // {6, 7, 8, 4, 5} -> {}
-    cbuf.push(9);                   // {6, 7, 8, 9, 5} -> {9}
+    cbuf.pop();   // {6, 7, 8, 4, 5} -> {8}
+    cbuf.pop();   // {6, 7, 8, 4, 5} -> {}
+    cbuf.push(9); // {6, 7, 8, 9, 5} -> {9}
   }
 
   {
@@ -691,10 +670,9 @@ TEST(CxxCase, CircularQueueCountIterator)
     cbuf.push(5);
     cbuf.push(6);
     cbuf.push(7);
-    EXPECT_THAT(print(cbuf), ElementsAre(3,4,5,6,7));
+    EXPECT_THAT(print(cbuf), ElementsAre(3, 4, 5, 6, 7));
   }
 }
-
 
 /*
 ={=============================================================================
@@ -705,7 +683,7 @@ CXXPP, Quote
 2. in push, no full check since it overwrites and in pop, it simply
 calculates first from head substracing size.
 3. no iterator support is needed if not use begin()/end()
- 
+
 */
 
 // when introduce `discount` concept
@@ -714,85 +692,99 @@ namespace case_quote
 {
   class Quote
   {
-    public:
+  public:
+    Quote()
+        : book_no_()
+        , price_(0.0)
+    {}
 
-      Quote() : book_no_(), price_(0.0) {}
+    Quote(string const &book, double sale_price)
+        : book_no_(book)
+        , price_(sale_price)
+    {}
 
-      Quote(string const& book, double sale_price) :
-        book_no_(book), price_(sale_price) {}
-      
-      virtual ~Quote() {}
+    virtual ~Quote() {}
 
-      std::string isbn() const { return book_no_; }
+    std::string isbn() const { return book_no_; }
 
-      // calculate net price but do not have "discount" concept
-      virtual double net_price(size_t count) const { return count * price_; }
+    // calculate net price but do not have "discount" concept
+    virtual double net_price(size_t count) const { return count * price_; }
 
-    private:
-      std::string book_no_;
-    protected:
-      double price_;
+  private:
+    std::string book_no_;
+
+  protected:
+    double price_;
   };
 
   class Discount_Quote : public Quote
   {
-    public:
+  public:
+    // *cxx-ctor*
+    // Why need to have constructors in abstract class although cannot
+    // define objects of this type directly? Becuase ctors in classes
+    // derived from Disc_quote will use the Disc_quote ctor to construct
+    // the Disc_quote part of their objects. Default ctor default
+    // initialize those members.
 
-      // *cxx-ctor*
-      // Why need to have constructors in abstract class although cannot
-      // define objects of this type directly? Becuase ctors in classes
-      // derived from Disc_quote will use the Disc_quote ctor to construct
-      // the Disc_quote part of their objects. Default ctor default
-      // initialize those members.
+    Discount_Quote()
+        : quantity_(0)
+        , discount_(0.0)
+    {}
+    Discount_Quote(string const &book,
+                   double price,
+                   size_t quantity,
+                   double discount_percent)
+        : Quote(book, price)
+        , quantity_(quantity)
+        , discount_(discount_percent)
+    {}
 
-      Discount_Quote() : quantity_(0), discount_(0.0) {}
-      Discount_Quote(string const& book, double price, 
-          size_t quantity, double discount_percent) :
-        Quote(book, price), quantity_(quantity), discount_(discount_percent) {}
+    // *cxx-dtor*
+    // no need to have virtual dtor here since Quote has it already
 
-      // *cxx-dtor*
-      // no need to have virtual dtor here since Quote has it already
-  
-      // *cxx-abc*
-      // okay to have in the middle of inheritance and "discount" concept
-      virtual double net_price(size_t count) const = 0;
+    // *cxx-abc*
+    // okay to have in the middle of inheritance and "discount" concept
+    virtual double net_price(size_t count) const = 0;
 
-    protected:
-      size_t quantity_;
-      double discount_;
+  protected:
+    size_t quantity_;
+    double discount_;
   };
 
   class Bulk_Quote : public Discount_Quote
   {
-    public:
-      Bulk_Quote(string const& book, double price, 
-          size_t quantity, double discount_percent) :
-        Discount_Quote(book, price, quantity, discount_percent) {}
+  public:
+    Bulk_Quote(string const &book,
+               double price,
+               size_t quantity,
+               double discount_percent)
+        : Discount_Quote(book, price, quantity, discount_percent)
+    {}
 
-      // cxx-override cxx-const
-      // const is one of override condition
+    // cxx-override cxx-const
+    // const is one of override condition
 
-      virtual double net_price(size_t count) const override
-      {
-        if (count >= quantity_)
-          return count * (1 - discount_) * price_;
-        else
-          return count * price_;
-      }
+    virtual double net_price(size_t count) const override
+    {
+      if (count >= quantity_)
+        return count * (1 - discount_) * price_;
+      else
+        return count * price_;
+    }
   };
 
-  double print_total(ostream& os, Quote const& item, size_t sold)
+  double print_total(ostream &os, Quote const &item, size_t sold)
   {
     double net_price = item.net_price(sold);
 
-    os << "isbn: " << item.isbn() << ", sold: " << sold 
-      << ", total due: " << net_price << endl;
+    os << "isbn: " << item.isbn() << ", sold: " << sold
+       << ", total due: " << net_price << endl;
 
     return net_price;
   }
 
-} // namespace
-
+} // namespace case_quote
 
 // To use *gtest-fixture* as a driver than using use user class directly:
 //
@@ -800,36 +792,37 @@ namespace case_quote
 // {
 //     public:
 //         Basket() : items(compare) {}
-// 
+//
 //         void add_item(const shared_ptr<Quote> &item);
-// 
+//
 //         double total_receipt(ostream &os) const;
-// 
+//
 //     private:
-//         static bool compare(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs)
-//         { return lhs->isbn() < rhs->isbn(); }
-// 
-//         // using comp = bool (*)(const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
+//         static bool compare(const shared_ptr<Quote> lhs, const
+//         shared_ptr<Quote> rhs) { return lhs->isbn() < rhs->isbn(); }
+//
+//         // using comp = bool (*)(const shared_ptr<Quote> lhs, const
+//         shared_ptr<Quote> rhs);
 //         // multiset<shared_ptr<Quote>, comp> items;
-// 
-//         using comp = bool (const shared_ptr<Quote> lhs, const shared_ptr<Quote> rhs);
-//         multiset<shared_ptr<Quote>, comp*> items;
+//
+//         using comp = bool (const shared_ptr<Quote> lhs, const
+//         shared_ptr<Quote> rhs); multiset<shared_ptr<Quote>, comp*> items;
 // };
-// 
+//
 // void Basket::add_item(const shared_ptr<Quote> &item)
 // {
 //     cout << "basket::add_item::copy version" << endl;
 //     items.insert(item);
 // }
-// 
+//
 // double Basket::total_receipt(ostream &os) const
 // {
 //     for (auto iter = items.cbegin(); iter != items.cend();
 //             iter = items.upper_bound(*iter))
 //     {
-//         os << "isbn : " << (*iter)->isbn() 
+//         os << "isbn : " << (*iter)->isbn()
 //             << ", sold : " << items.count(*iter)
-//             << ", total sales: " << (*iter)->net_price( items.count(*iter)) 
+//             << ", total sales: " << (*iter)->net_price( items.count(*iter))
 //             << endl;
 //     }
 // }
@@ -837,23 +830,23 @@ namespace case_quote
 // int main()
 // {
 //     Basket sale;
-// 
+//
 //     // Quote sales which has no discount. 45*3 = 135
 //     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
 //     sale.add_item(shared_ptr<Quote>(new Quote("123", 45)));
 //     sale.add_item(make_shared<Quote>("123", 45));
-// 
+//
 //     // minimum 3 and 15% discount. no discount 45*2 = 90
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("345", 45, 3, .15)));
-// 
+//
 //     // Bulk_quote sales which has discount: minimum 3 and 15% discount
 //     // 35*4*(1-.15) = 119
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("678", 35, 3, .15)));
-// 
+//
 //     // Bulk_quote sales which has discount: minimum 5 and 25% discount
 //     // 35*6*(1-.25) = 157.5
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
@@ -862,7 +855,7 @@ namespace case_quote
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
 //     sale.add_item(shared_ptr<Quote>(new Bulk_quote("912", 35, 5, .25)));
-// 
+//
 //     sale.display(cout);
 //     sale.total_receipt(cout);
 // }
@@ -882,50 +875,50 @@ namespace case_quote
 // case.
 // [  FAILED  ] CxxCaseQuote.MockQuote (3 ms)
 
-
 class CxxCaseQuoteX : public ::testing::Test
 {
-  protected:
+protected:
+  // *cxx-using* is under *cxx-access-control*
 
-    // *cxx-using* is under *cxx-access-control*
+  using Quote = case_quote::Quote;
 
-    using Quote = case_quote::Quote;
+  CxxCaseQuoteX()
+      : items_{compare}
+  {}
+  virtual ~CxxCaseQuoteX() {}
 
-    CxxCaseQuoteX() : items_{compare} {}
-    virtual ~CxxCaseQuoteX() {}
+  virtual void SetUp() {}
+  virtual void TearDown() {}
 
-    virtual void SetUp() {}
-    virtual void TearDown() {}
+  double total_receipt() const
+  {
+    double total{};
 
-    double total_receipt() const
+    // when there are duplicates, skip them since net_price() gets called for
+    // them in single call
+
+    for (auto it = items_.cbegin(); it != items_.cend();
+         it      = items_.upper_bound(*it))
     {
-      double total{};
+      total = (*it)->net_price(items_.count(*it));
 
-      // when there are duplicates, skip them since net_price() gets called for
-      // them in single call
-
-      for (auto it = items_.cbegin(); it != items_.cend();
-          it = items_.upper_bound(*it))
-      {
-        total = (*it)->net_price(items_.count(*it));
-
-        cout << "isbn: " << (*it)->isbn()
-          << ", sold: " << items_.count(*it)
-          << ", total sales: " << total << endl;
-      }
-
-      return total;
+      cout << "isbn: " << (*it)->isbn() << ", sold: " << items_.count(*it)
+           << ", total sales: " << total << endl;
     }
 
-    static bool compare(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs)
-    {
-      return lhs->isbn() < rhs->isbn();
-    }
+    return total;
+  }
 
-    using comp = 
-      bool(std::shared_ptr<Quote> const lhs, std::shared_ptr<Quote> const rhs);
+  static bool compare(std::shared_ptr<Quote> const lhs,
+                      std::shared_ptr<Quote> const rhs)
+  {
+    return lhs->isbn() < rhs->isbn();
+  }
 
-    std::multiset<std::shared_ptr<Quote>, comp*> items_;
+  using comp = bool(std::shared_ptr<Quote> const lhs,
+                    std::shared_ptr<Quote> const rhs);
+
+  std::multiset<std::shared_ptr<Quote>, comp *> items_;
 };
 
 TEST_F(CxxCaseQuoteX, CheckTotal_1)
@@ -987,75 +980,77 @@ TEST_F(CxxCaseQuoteX, CheckTotal_4)
   items_.clear();
 }
 
-
 // To test user, driver class, Basket.
 
 namespace case_quote
 {
   class MockQuote : public Quote
   {
-    public:
-      MockQuote(string const& book, double sale_price)
+  public:
+    MockQuote(string const &book, double sale_price)
         : Quote(book, sale_price)
-      {}
+    {}
 
-      MOCK_CONST_METHOD1(net_price, double (size_t count));
+    MOCK_CONST_METHOD1(net_price, double(size_t count));
   };
 
   class MockBulk : public Bulk_Quote
   {
-    public:
-      MockBulk(string const& book, double price, 
-          size_t quantity, double discount_percent)
+  public:
+    MockBulk(string const &book,
+             double price,
+             size_t quantity,
+             double discount_percent)
         : Bulk_Quote(book, price, quantity, discount_percent)
-      {}
+    {}
 
-      MOCK_CONST_METHOD1(net_price, double (size_t count));
+    MOCK_CONST_METHOD1(net_price, double(size_t count));
   };
 
   class Basket
   {
-    public:
-      // *cxx-undefined*
-      // Without it, cause core when add_item is called.
-      Basket() : items_{compare}
-      {}
+  public:
+    // *cxx-undefined*
+    // Without it, cause core when add_item is called.
+    Basket()
+        : items_{compare}
+    {}
 
-      void add_item(std::shared_ptr<Quote> const& item)
+    void add_item(std::shared_ptr<Quote> const &item)
+    {
+      cout << "basket::add_item(shard_ptr)" << endl;
+      items_.insert(item);
+    }
+
+    double total_receipt(ostream &os) const
+    {
+      double total{};
+
+      for (auto iter = items_.cbegin(); iter != items_.cend();
+           iter      = items_.upper_bound(*iter))
       {
-        cout << "basket::add_item(shard_ptr)" << endl;
-        items_.insert(item);
+        total = (*iter)->net_price(items_.count(*iter));
+        os << "isbn: " << (*iter)->isbn() << ", sold: " << items_.count(*iter)
+           << ", total sales: " << total << endl;
       }
 
-      double total_receipt(ostream& os) const
-      {
-        double total{};
+      return total;
+    }
 
-        for (auto iter = items_.cbegin(); iter != items_.cend();
-            iter = items_.upper_bound(*iter))
-        {
-          total = (*iter)->net_price(items_.count(*iter));
-          os << "isbn: " << (*iter)->isbn()
-            << ", sold: " << items_.count(*iter)
-            << ", total sales: " << total << endl;
-        }
+  private:
+    static bool compare(const std::shared_ptr<Quote> lhs,
+                        const std::shared_ptr<Quote> rhs)
+    {
+      return lhs->isbn() < rhs->isbn();
+    }
 
-        return total;
-      }
+    using comp = bool(const std::shared_ptr<Quote>,
+                      const std::shared_ptr<Quote>);
 
-    private:
-      static bool compare(const std::shared_ptr<Quote> lhs,
-          const std::shared_ptr<Quote> rhs)
-      { return lhs->isbn() < rhs->isbn(); }
-
-      using comp = bool(const std::shared_ptr<Quote>,
-          const std::shared_ptr<Quote>);
-
-      std::multiset<shared_ptr<Quote>, comp*> items_;
+    std::multiset<shared_ptr<Quote>, comp *> items_;
   };
 
-} // namespace
-
+} // namespace case_quote
 
 TEST(CxxCaseQuote, MockQuote)
 {
@@ -1066,8 +1061,7 @@ TEST(CxxCaseQuote, MockQuote)
   std::shared_ptr<MockQuote> q2(new MockQuote("123", 45));
   std::shared_ptr<MockQuote> q3(new MockQuote("123", 45));
 
-  EXPECT_CALL(*q1, net_price(_))
-    .WillOnce(Return(135));
+  EXPECT_CALL(*q1, net_price(_)).WillOnce(Return(135));
 
   // when expects that net_price() gets called on q2 and q3 since net_price()
   // will be called once.
@@ -1087,7 +1081,7 @@ TEST(CxxCaseQuote, MockQuote)
   //
   // EXPECT_CALL(*q3, net_price(_))
   //     .WillOnce(Return(135));
- 
+
   // so change "Times" or comment them out
   //
   // EXPECT_CALL(*q2, net_price(_))
@@ -1104,7 +1098,7 @@ TEST(CxxCaseQuote, MockQuote)
   sale.add_item(q2);
   sale.add_item(q3);
 
-  EXPECT_EQ(sale.total_receipt(cout), 135); 
+  EXPECT_EQ(sale.total_receipt(cout), 135);
 }
 
 TEST(CxxCaseQuote, MockBulk)
@@ -1119,8 +1113,7 @@ TEST(CxxCaseQuote, MockBulk)
   shared_ptr<MockBulk> q4(new MockBulk("912", 35, 5, .25));
   shared_ptr<MockBulk> q5(new MockBulk("912", 35, 5, .25));
 
-  EXPECT_CALL(*q1, net_price(_))
-    .WillOnce(Return(157.5));
+  EXPECT_CALL(*q1, net_price(_)).WillOnce(Return(157.5));
 
   Basket sale;
 
@@ -1133,180 +1126,193 @@ TEST(CxxCaseQuote, MockBulk)
   EXPECT_EQ(sale.total_receipt(cout), 157.5);
 }
 
-
 namespace case_quote_clone
 {
   class Quote
   {
-    public:
+  public:
+    Quote()
+        : book_no_()
+        , price_(0.0)
+    {}
 
-      Quote() : book_no_(), price_(0.0) {}
+    Quote(string const &book, double sale_price)
+        : book_no_(book)
+        , price_(sale_price)
+    {}
 
-      Quote(string const& book, double sale_price) :
-        book_no_(book), price_(sale_price) {}
-      
-      virtual ~Quote() {}
+    virtual ~Quote() {}
 
-      std::string isbn() const { return book_no_; }
+    std::string isbn() const { return book_no_; }
 
-      // calculate net price but do not have "discount" concept
-      virtual double net_price(size_t count) const { return count * price_; }
+    // calculate net price but do not have "discount" concept
+    virtual double net_price(size_t count) const { return count * price_; }
 
-      // *cxx-clone* *cxx-move* copy version
-      // *cxx-reference-qualifier*
-      // note: shall have `const or see *cxx-const-to-nonconst-error*
-      // note: if there's no move verison, copy version will be used instead
-      virtual Quote* clone() const &
-      {
-        cout << "quote::clone() &" << endl;
-        return new Quote(*this);
-      }
+    // *cxx-clone* *cxx-move* copy version
+    // *cxx-reference-qualifier*
+    // note: shall have `const or see *cxx-const-to-nonconst-error*
+    // note: if there's no move verison, copy version will be used instead
+    virtual Quote *clone() const &
+    {
+      cout << "quote::clone() &" << endl;
+      return new Quote(*this);
+    }
 
-      // cxx-clone, move version
-      virtual Quote* clone() const &&
-      {
-        cout << "quote::clone() &&" << endl;
-        return new Quote(std::move(*this));
-      }
+    // cxx-clone, move version
+    virtual Quote *clone() const &&
+    {
+      cout << "quote::clone() &&" << endl;
+      return new Quote(std::move(*this));
+    }
 
-    private:
-      std::string book_no_;
-    protected:
-      double price_;
+  private:
+    std::string book_no_;
+
+  protected:
+    double price_;
   };
 
   class Discount_Quote : public Quote
   {
-    public:
+  public:
+    // *cxx-ctor*
+    // Why need to have constructors in abstract class although cannot
+    // define objects of this type directly? Becuase ctors in classes
+    // derived from Disc_quote will use the Disc_quote ctor to construct
+    // the Disc_quote part of their objects. Default ctor default
+    // initialize those members.
 
-      // *cxx-ctor*
-      // Why need to have constructors in abstract class although cannot
-      // define objects of this type directly? Becuase ctors in classes
-      // derived from Disc_quote will use the Disc_quote ctor to construct
-      // the Disc_quote part of their objects. Default ctor default
-      // initialize those members.
+    Discount_Quote()
+        : quantity_(0)
+        , discount_(0.0)
+    {}
+    Discount_Quote(string const &book,
+                   double price,
+                   size_t quantity,
+                   double discount_percent)
+        : Quote(book, price)
+        , quantity_(quantity)
+        , discount_(discount_percent)
+    {}
 
-      Discount_Quote() : quantity_(0), discount_(0.0) {}
-      Discount_Quote(string const& book, double price, 
-          size_t quantity, double discount_percent) :
-        Quote(book, price), quantity_(quantity), discount_(discount_percent) {}
+    // *cxx-dtor*
+    // no need to have virtual dtor here since Quote has it already
 
-      // *cxx-dtor*
-      // no need to have virtual dtor here since Quote has it already
-  
-      // *cxx-abc*
-      // okay to have in the middle of inheritance and "discount" concept
-      virtual double net_price(size_t count) const = 0;
+    // *cxx-abc*
+    // okay to have in the middle of inheritance and "discount" concept
+    virtual double net_price(size_t count) const = 0;
 
-    protected:
-      size_t quantity_;
-      double discount_;
+  protected:
+    size_t quantity_;
+    double discount_;
   };
 
   class Bulk_Quote : public Discount_Quote
   {
-    public:
-      Bulk_Quote(string const& book, double price, 
-          size_t quantity, double discount_percent) :
-        Discount_Quote(book, price, quantity, discount_percent) {}
+  public:
+    Bulk_Quote(string const &book,
+               double price,
+               size_t quantity,
+               double discount_percent)
+        : Discount_Quote(book, price, quantity, discount_percent)
+    {}
 
-      // cxx-override cxx-const
-      // const is one of override condition
+    // cxx-override cxx-const
+    // const is one of override condition
 
-      virtual double net_price(size_t count) const override
-      {
-        if (count >= quantity_)
-          return count * (1 - discount_) * price_;
-        else
-          return count * price_;
-      }
+    virtual double net_price(size_t count) const override
+    {
+      if (count >= quantity_)
+        return count * (1 - discount_) * price_;
+      else
+        return count * price_;
+    }
 
-      // cxx-clone
-      // cxx-error virtual Bulk_Quote* clone() const override &
-      // cxx-const
-      // if don't have const, no error but no override. so use override keyword
-      virtual Bulk_Quote* clone() const& override
-      {
-        cout << "bulk_quote::clone() &" << endl;
-        return new Bulk_Quote(*this);
-      }
+    // cxx-clone
+    // cxx-error virtual Bulk_Quote* clone() const override &
+    // cxx-const
+    // if don't have const, no error but no override. so use override keyword
+    virtual Bulk_Quote *clone() const & override
+    {
+      cout << "bulk_quote::clone() &" << endl;
+      return new Bulk_Quote(*this);
+    }
 
-      virtual Bulk_Quote* clone() const&& override
-      {
-        cout << "bulk_quote::clone() &&" << endl;
-        return new Bulk_Quote(std::move(*this));
-      }
+    virtual Bulk_Quote *clone() const && override
+    {
+      cout << "bulk_quote::clone() &&" << endl;
+      return new Bulk_Quote(std::move(*this));
+    }
   };
 
-  double print_total(ostream& os, Quote const& item, size_t sold)
+  double print_total(ostream &os, Quote const &item, size_t sold)
   {
     double net_price = item.net_price(sold);
 
-    os << "isbn: " << item.isbn() << ", sold: " << sold 
-      << ", total due: " << net_price << endl;
+    os << "isbn: " << item.isbn() << ", sold: " << sold
+       << ", total due: " << net_price << endl;
 
     return net_price;
   }
 
-
   class Basket
   {
-    public:
-      // *cxx-undefined*
-      // Without it, cause core when add_item is called.
-      Basket() : items_{compare}
-      {}
+  public:
+    // *cxx-undefined*
+    // Without it, cause core when add_item is called.
+    Basket()
+        : items_{compare}
+    {}
 
-      void add_item(std::shared_ptr<Quote> const& item)
+    void add_item(std::shared_ptr<Quote> const &item)
+    {
+      cout << "basket::add_item(shard_ptr)" << endl;
+      items_.insert(item);
+    }
+
+    // copy version
+    void add_item(Quote const &item)
+    {
+      cout << "basket::add_item(Quote const&)" << endl;
+      items_.insert(std::shared_ptr<Quote>(item.clone()));
+    }
+
+    // move version *cxx-dynamic-binding*
+    void add_item(Quote &&item)
+    {
+      cout << "basket::add_item(Quote &&)" << endl;
+      items_.insert(std::shared_ptr<Quote>(std::move(item).clone()));
+    }
+
+    double total_receipt(ostream &os) const
+    {
+      double total{};
+
+      for (auto iter = items_.cbegin(); iter != items_.cend();
+           iter      = items_.upper_bound(*iter))
       {
-        cout << "basket::add_item(shard_ptr)" << endl;
-        items_.insert(item);
+        total = (*iter)->net_price(items_.count(*iter));
+        os << "isbn: " << (*iter)->isbn() << ", sold: " << items_.count(*iter)
+           << ", total sales: " << total << endl;
       }
 
-      // copy version
-      void add_item(Quote const& item)
-      {
-        cout << "basket::add_item(Quote const&)" << endl;
-        items_.insert(std::shared_ptr<Quote>(
-              item.clone()));
-      }
+      return total;
+    }
 
-      // move version *cxx-dynamic-binding*
-      void add_item(Quote &&item)
-      {
-        cout << "basket::add_item(Quote &&)" << endl;
-        items_.insert(std::shared_ptr<Quote>(
-              std::move(item).clone()));
-      }
+  private:
+    static bool compare(const std::shared_ptr<Quote> lhs,
+                        const std::shared_ptr<Quote> rhs)
+    {
+      return lhs->isbn() < rhs->isbn();
+    }
 
-      double total_receipt(ostream& os) const
-      {
-        double total{};
+    using comp = bool(const std::shared_ptr<Quote>,
+                      const std::shared_ptr<Quote>);
 
-        for (auto iter = items_.cbegin(); iter != items_.cend();
-            iter = items_.upper_bound(*iter))
-        {
-          total = (*iter)->net_price(items_.count(*iter));
-          os << "isbn: " << (*iter)->isbn()
-            << ", sold: " << items_.count(*iter)
-            << ", total sales: " << total << endl;
-        }
-
-        return total;
-      }
-
-    private:
-      static bool compare(const std::shared_ptr<Quote> lhs,
-          const std::shared_ptr<Quote> rhs)
-      { return lhs->isbn() < rhs->isbn(); }
-
-      using comp = bool(const std::shared_ptr<Quote>,
-          const std::shared_ptr<Quote>);
-
-      std::multiset<shared_ptr<Quote>, comp*> items_;
+    std::multiset<shared_ptr<Quote>, comp *> items_;
   };
 
-} // namespace
+} // namespace case_quote_clone
 
 // [ RUN      ] CxxCaseQuote.Clone
 // basket::add_item(Quote &&)
@@ -1341,11 +1347,9 @@ TEST(CxxCaseQuote, Clone)
   sale.total_receipt(cout);
 }
 
-
 // ={=========================================================================
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }
-

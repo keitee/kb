@@ -35,8 +35,9 @@ int main(int argc, char **argv)
   QObject obj;
   SenderAdaptor *sender = new SenderAdaptor(&obj);
 
-  // set initial property value
-  sender->setProperty("Powered", false);
+  // set initial property value but no slot called since event loop has not
+  // yet started
+  // sender->setProperty("Powered", false);
 
   // see that register `obj` but not
   if (QDBusConnection::sessionBus().registerObject("/", &obj))

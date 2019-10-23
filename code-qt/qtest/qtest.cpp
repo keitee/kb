@@ -1,20 +1,20 @@
-#include <iostream>
-#include <sstream>
-#include <memory>
 #include <exception>
+#include <iostream>
+#include <memory>
+#include <sstream>
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include <QList>
-#include <QString>
 #include <QDebug>
+#include <QList>
 #include <QLoggingCategory>
+#include <QString>
 // #include <QApplication>
 #include <QQueue>
-#include <QTimer>
 #include <QSignalSpy>
 #include <QTime>
+#include <QTimer>
 
 #include "qclass.h"
 
@@ -26,13 +26,12 @@ using ::testing::Ge;
 //
 // main()
 // {
-//   // QCoreApplication a(argc, argv); 
+//   // QCoreApplication a(argc, argv);
 //   // your code is here
 //   // return a.exec();
 // }
 //
 // have to comment out lines for QCoreApplication
-
 
 // ={=========================================================================
 // qt-string
@@ -52,7 +51,6 @@ using ::testing::Ge;
 // if you want to expand your application's market at some point. The two main
 // cases where QByteArray is appropriate are when you need to store raw binary
 // data, and when memory conservation is critical (like in embedded systems).
-
 
 // Converting Between 8-Bit Strings and Unicode Strings
 //
@@ -90,14 +88,13 @@ using ::testing::Ge;
 //
 // One way to define these preprocessor symbols globally for your application is
 // to add the following entry to your qmake project file:
-// 
+//
 // DEFINES += QT_NO_CAST_FROM_ASCII \ 
 //  QT_NO_CAST_TO_ASCII
 //
 // You then need to explicitly call fromUtf8(), fromLatin1(), or fromLocal8Bit()
 // to construct a QString from an 8-bit string, or use the lightweight
 // QLatin1String class, for example:
-
 
 // Distinction Between Null and Empty Strings
 //
@@ -119,7 +116,7 @@ using ::testing::Ge;
 // All functions except isNull() treat null strings the same as empty strings.
 // For example, toUtf8().constData() returns a pointer to a '\0' character for a
 // null string (not a null pointer), and QString() compares equal to
-// QString(""). 
+// QString("").
 //
 // We recommend that you always use the isEmpty() function and avoid isNull().
 
@@ -185,12 +182,12 @@ TEST(QtString, xxx)
   // QTextStream:
 
   {
-    QString i{"3"};              // current file's number
-    QString total{"10"};         // number of files to process
-    QString fileName{"readme"};  // current file's name
+    QString i{"3"};             // current file's number
+    QString total{"10"};        // number of files to process
+    QString fileName{"readme"}; // current file's name
 
-    QString status = QString("Processing file %1 of %2: %3")
-      .arg(i).arg(total).arg(fileName);
+    QString status =
+      QString("Processing file %1 of %2: %3").arg(i).arg(total).arg(fileName);
 
     std::ostringstream os;
     os << qPrintable(status);
@@ -204,15 +201,19 @@ TEST(QtString, xxx)
 
     // error caused since asprintf() comes from stdio::asprintf()
     //
-    // qt_gtest.cpp:169:81: error: cannot convert ‘const char*’ 
+    // qt_gtest.cpp:169:81: error: cannot convert ‘const char*’
     //  to ‘char**’ for argument ‘1’ to ‘int asprintf(char**, const char*, ...)’
-    //     QString status = asprintf("Processing file %d of %d: %s", i, total, fileName);
-    // QString status = asprintf("Processing file %d of %d: %s", i, total, fileName);
- 
-    QByteArray format{"Processing file %d of %d: %s"};
-    QString status = QString::asprintf(format.constData(), i, total, qPrintable(fileName));
+    //     QString status = asprintf("Processing file %d of %d: %s", i, total,
+    //     fileName);
+    // QString status = asprintf("Processing file %d of %d: %s", i, total,
+    // fileName);
 
-    // QString status = QString::asprintf("Processing file %d of %d: %s", i, total, qPrintable(fileName));
+    QByteArray format{"Processing file %d of %d: %s"};
+    QString status =
+      QString::asprintf(format.constData(), i, total, qPrintable(fileName));
+
+    // QString status = QString::asprintf("Processing file %d of %d: %s", i,
+    // total, qPrintable(fileName));
 
     std::ostringstream os;
     os << qPrintable(status);
@@ -225,7 +226,6 @@ TEST(QtString, Compare)
   QString coll{"compare"};
   EXPECT_THAT(coll, QString("compare"));
 }
-
 
 // To obtain a pointer to the actual character data, call data() or constData().
 // These functions return a pointer to the beginning of the data. The pointer is
@@ -250,9 +250,9 @@ TEST(QtString, ByteArray)
   EXPECT_THAT(os.str(), "U%03hhu SkyQ EC201");
 }
 
-
 // int QString::indexOf
-// (const QString &str, int from = 0, Qt::CaseSensitivity cs = Qt::CaseSensitive) const
+// (const QString &str, int from = 0, Qt::CaseSensitivity cs =
+// Qt::CaseSensitive) const
 //
 // Returns the index position of the first occurrence of the string str in this
 // string, searching forward from index position from. Returns -1 if str is not
@@ -276,7 +276,6 @@ TEST(QtString, useStartsWith)
   EXPECT_THAT(coll.mid(6), "10");
 }
 
-
 // ={=========================================================================
 // qt-list
 
@@ -298,7 +297,6 @@ TEST(QtList, Prepend)
     EXPECT_THAT(os.str(), "three, two, one, ");
   }
 }
-
 
 // ={=========================================================================
 // qt-queue
@@ -323,18 +321,139 @@ TEST(QtQueue, Pop)
   }
 }
 
+// ={=========================================================================
+/* qt-variant
+https://doc.qt.io/qt-5/qvariant.html#QVariantMap-typedef
+
+A QVariant object holds a single value of a single type() at a time. (Some
+type()s are multi-valued, for example a string list.) You can find out what
+type, T, the variant holds, convert it to a different type using convert(), get
+its value using one of the toT() functions (e.g., toSize()) and check whether
+the type can be converted to a particular type using canConvert().
+
+*/
+
+TEST(QtVariant, Variant)
+{
+  // T QVariant::value() const
+  //
+  // Returns the stored value "converted to the template type T". Call
+  // canConvert() to find out whether a type can be converted. If the value
+  // cannot be converted, a default-constructed value will be returned.
+  //
+  // If the type T is supported by QVariant, this function behaves exactly as
+  // toString(), toInt() etc.
+
+  {
+    QVariant v;
+    v = 7;
+    EXPECT_THAT(7, v.toInt());
+
+    // compile error since "7" is not QString
+    // EXPECT_THAT("7", v.toString());
+    EXPECT_THAT(QString("7"), v.toString());
+
+    // const char *QVariant::typeName() const
+    // Returns the name of the type stored in the variant. The returned strings
+    // describe the C++ datatype used to store the data: for example, "QFont",
+    // "QString", or "QVariantList". An Invalid variant returns 0.
+    EXPECT_THAT("int", v.typeName());
+
+    EXPECT_THAT(v.toInt(), v.value<int>());        // same as v.toInt()
+    EXPECT_THAT(v.toString(), v.value<QString>()); // same as v.toString()
+  }
+
+  // typedef QVariant::QVariantList
+  // Synonym for QList<QVariant>.
+  //
+  // QVariant QVariant::fromValue(const T &value)
+  // Returns a QVariant containing a copy of value. Behaves exactly like
+  // setValue() otherwise.
+  //
+  // A QVariant containing a sequential container will also return true for this
+  // function if the targetTypeId is QVariantList. It is possible to iterate
+  // over the contents of the container without extracting it as a (copied)
+  // QVariantList:
+  //
+  //
+  // bool QVariant::canConvert() const
+  // Returns true if the variant can be converted to the template type T,
+  // otherwise false.
+  //
+  // output:
+  // QVariant(int, 7)
+  // QVariant(int, 11)
+  // QVariant(int, 42)
+
+  {
+    QList<int> coll{7, 11, 42};
+    QVariant v = QVariant::fromValue(coll);
+    if (v.canConvert<QVariantList>())
+    {
+      QSequentialIterable it = v.value<QSequentialIterable>();
+
+      foreach (const QVariant &v, it)
+        qDebug() << v;
+    }
+  }
+}
 
 // ={=========================================================================
-// qt-map
+/* qt-map
+
+https://doc.qt.io/qt-5/qmap.html
+
+If you want to navigate through all the (key, value) pairs stored in a QMap, you
+can use an iterator. QMap provides both Java-style iterators (QMapIterator and
+QMutableMapIterator) and STL-style iterators (QMap::const_iterator and
+QMap::iterator).
+
+Here's how to iterate over a QMap<QString, int> using a Java-style iterator:
+
+QMapIterator<QString, int> i(map);
+while (i.hasNext()) {
+    i.next();
+    cout << i.key() << ": " << i.value() << endl;
+}
+
+Here's the same code, but using an STL-style iterator this time:
+
+QMap<QString, int>::const_iterator i = map.constBegin();
+while (i != map.constEnd()) {
+    cout << i.key() << ": " << i.value() << endl;
+    ++i;
+}
+
+
+https://doc.qt.io/qt-5/qmap-const-iterator.html
+
+const Key &const_iterator::key() const
+Returns the current item's key.
+
+See also value().
+
+const T &const_iterator::value() const
+Returns the current item's value.
+
+See also key() and operator*().
+
+NOTE: this is different from cxx-map iterator
+
+    auto it = coll.find(3.0);
+    EXPECT_THAT(it->first, 3);
+    EXPECT_THAT(it->second, 2);
+
+*/
 
 namespace qt_map
 {
-  struct State {
+  struct State
+  {
     int parentState;
     int initialState;
     QString name;
   };
-} // namespace
+} // namespace qt_map
 
 TEST(QtMap, Access)
 {
@@ -346,7 +465,7 @@ TEST(QtMap, Access)
     State state3{300, 301, "thr"};
 
     QMap<int, State> coll;
-    
+
     coll.insert(1, state1);
     coll.insert(2, state2);
     coll.insert(3, state3);
@@ -361,7 +480,7 @@ TEST(QtMap, Access)
     // *cxx-error* However, this compiles okay but fails when runs. So gtest
     // issue as checking equal works ?
     // EXPECT_EQ(it, coll.end());
-    
+
     // EXPECT_THAT(it.key(), 2);
     if (it.key() != 2)
       EXPECT_THAT(true, false);
@@ -376,6 +495,21 @@ TEST(QtMap, Access)
   }
 }
 
+/*
+typedef QVariant::QVariantMap
+Synonym for QMap<QString, QVariant>.
+*/
+
+TEST(QtMap, VariantMap)
+{
+  QVariantMap coll;
+
+  // TODO: HOW TO INSERT since {} not supported?
+  // coll.insert({QString("string0"), QVariant(0)});
+  // coll.insert({QString("string1"), "how's the day"});
+  // coll.insert({QString("string2"), 3.2});
+  // coll.insert({QString("string3"), 10});
+}
 
 // ={=========================================================================
 // qt-logging
@@ -390,9 +524,10 @@ them for the following purposes:
 
 qDebug() is used for writing custom debug output.
 qInfo() is used for informational messages.
-qWarning() is used to report warnings and recoverable errors in your application.
-qCritical() is used for writing critical error messages and reporting system errors.
-qFatal() is used for writing fatal error messages shortly before exiting.
+qWarning() is used to report warnings and recoverable errors in your
+application. qCritical() is used for writing critical error messages and
+reporting system errors. qFatal() is used for writing fatal error messages
+shortly before exiting.
 
 
 *controlled by compilation flag*
@@ -444,7 +579,6 @@ TEST(QtLogging, Logging)
     qCritical() << "Hello qCritical";
   }
 
-
   // printf() style logging
   {
     QString message{"Hello stream logging"};
@@ -454,11 +588,10 @@ TEST(QtLogging, Logging)
   // QTextStream manipulators
   // https://doc.qt.io/qt-5/qtextstream.html
   {
-    qDebug().nospace() << "RGB: " << hex << uppercasedigits 
-      << 0xff << 0x33 << 0x33;
+    qDebug().nospace() << "RGB: " << hex << uppercasedigits << 0xff << 0x33
+                       << 0x33;
   }
 }
-
 
 /*
 Categorized logging (Qt 5.2)
@@ -491,12 +624,12 @@ category, so explicit checking is not needed:
 
 #if !defined(QT_NO_DEBUG_OUTPUT)
 #  define qCDebug(category, ...) \
-    for (bool qt_category_enabled = category().isDebugEnabled(); qt_category_enabled; qt_category_enabled = false) \
-        QMessageLogger(QT_MESSAGELOG_FILE, QT_MESSAGELOG_LINE, QT_MESSAGELOG_FUNC, category().categoryName()).debug(__VA_ARGS__)
-#else
-#  define qCDebug(category, ...) QT_NO_QDEBUG_MACRO()
-#endif
- 
+    for (bool qt_category_enabled = category().isDebugEnabled();
+qt_category_enabled; qt_category_enabled = false) \
+        QMessageLogger(QT_MESSAGELOG_FILE, QT_MESSAGELOG_LINE,
+QT_MESSAGELOG_FUNC, category().categoryName()).debug(__VA_ARGS__) #else # define
+qCDebug(category, ...) QT_NO_QDEBUG_MACRO() #endif
+
 */
 
 Q_LOGGING_CATEGORY(lcEditor1, "qtc.editor.1");
@@ -526,14 +659,14 @@ TEST(QtLogging, Category)
   //
   // Both the QLoggingCategory constructor and the Q_LOGGING_CATEGORY() macro
   // accept an optional QtMsgType argument, which disables all message types
-  // with a *lower severity*. 
+  // with a *lower severity*.
   //
   // Q_LOGGING_CATEGORY(driverUsbEvents, "driver.usb.events", QtWarningMsg)
   //
-  // logs messages of type QtWarningMsg, QtCriticalMsg, QtFatalMsg, 
-  // but ignores messages of type QtDebugMsg and QtInfoMsg. 
+  // logs messages of type QtWarningMsg, QtCriticalMsg, QtFatalMsg,
+  // but ignores messages of type QtDebugMsg and QtInfoMsg.
   // (not use enum value?)
-  // 
+  //
   // If no argument is passed, all messages are logged.
   //
   // enum QtMsgType
@@ -541,13 +674,14 @@ TEST(QtLogging, Category)
   // This enum describes the messages that can be sent to a message handler
   // (QtMessageHandler). You can use the enum to identify and associate the
   // various message types with the appropriate actions.
-  // 
-  // Constant	Value	Description 
+  //
+  // Constant	Value	Description
   // QtDebugMsg     0   A message generated by the qDebug() function.
   // QtInfoMsg      4   A message generated by the qInfo() function.
   // QtWarningMsg   1   A message generated by the qWarning() function.
   // QtCriticalMsg  2   A message generated by the qCritical() function.
-  // QtFatalMsg     3   A message generated by the qFatal() function.  QtSystemMsg
+  // QtFatalMsg     3   A message generated by the qFatal() function.
+  // QtSystemMsg
   //
   // qtc.editor.3: 3. Hello warning category logging
   // qtc.editor.3: 3. Hello critical category logging
@@ -569,8 +703,9 @@ TEST(QtLogging, Category)
 
     // from qCX macros, how is this possible?
     //
-    // for (bool qt_category_enabled = cat().isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
-    // 
+    // for (bool qt_category_enabled = cat().isCriticalEnabled();
+    // qt_category_enabled; qt_category_enabled = false)
+    //
     // since:
     //
     // #define QLOGGINGCATEGORY_H
@@ -579,23 +714,27 @@ TEST(QtLogging, Category)
     // QLoggingCategory &operator()() { return *this; }
     // const QLoggingCategory &operator()() const { return *this; }
 
-    for (bool qt_category_enabled = cat.isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled                 = cat.isCriticalEnabled();
+         qt_category_enabled; qt_category_enabled = false)
       std::cout << cat.categoryName() << " isCriticalEnabled" << std::endl;
 
-    for (bool qt_category_enabled = cat().isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled                 = cat().isCriticalEnabled();
+         qt_category_enabled; qt_category_enabled = false)
       std::cout << cat().categoryName() << " isCriticalEnabled" << std::endl;
 
-    for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled;
+         qt_category_enabled      = false)
       std::cout << cat().categoryName() << " isDebugEnabled" << std::endl;
 
-    for (bool qt_category_enabled = cat().isInfoEnabled(); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isInfoEnabled(); qt_category_enabled;
+         qt_category_enabled      = false)
       std::cout << cat().categoryName() << " isInfoEnabled" << std::endl;
 
     // use of isEnabled()
-    for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg);
+         qt_category_enabled; qt_category_enabled = false)
       std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
   }
-
 
   // qtc.editor.4: 4. Hello warning category logging
   // qtc.editor.4: 4. Hello critical category logging
@@ -612,17 +751,21 @@ TEST(QtLogging, Category)
     qCInfo(cat) << "4. Hello info category logging";
     qCDebug(cat, "%s", "4. Hello debug category logging");
 
-    for (bool qt_category_enabled = cat().isCriticalEnabled(); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled                 = cat().isCriticalEnabled();
+         qt_category_enabled; qt_category_enabled = false)
       std::cout << cat().categoryName() << " isCriticalEnabled" << std::endl;
 
-    for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled;
+         qt_category_enabled      = false)
       std::cout << cat().categoryName() << " isDebugEnabled" << std::endl;
 
-    for (bool qt_category_enabled = cat().isInfoEnabled(); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isInfoEnabled(); qt_category_enabled;
+         qt_category_enabled      = false)
       std::cout << cat().categoryName() << " isInfoEnabled" << std::endl;
 
     // use of isEnabled()
-    for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg); qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg);
+         qt_category_enabled; qt_category_enabled = false)
       std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
   }
 }
@@ -658,27 +801,22 @@ Example:
 #include <stdio.h>
 #include <stdlib.h>
 
-void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const
+QString &msg)
 {
     QByteArray localMsg = msg.toLocal8Bit();
     const char *file = context.file ? context.file : "";
     const char *function = context.function ? context.function : "";
     switch (type) {
     case QtDebugMsg:
-        fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtInfoMsg:
-        fprintf(stderr, "Info: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtWarningMsg:
-        fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtCriticalMsg:
-        fprintf(stderr, "Critical: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
-    case QtFatalMsg:
-        fprintf(stderr, "Fatal: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
-        break;
+        fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), file,
+context.line, function); break; case QtInfoMsg: fprintf(stderr, "Info: %s
+(%s:%u, %s)\n", localMsg.constData(), file, context.line, function); break; case
+QtWarningMsg: fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(),
+file, context.line, function); break; case QtCriticalMsg: fprintf(stderr,
+"Critical: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line,
+function); break; case QtFatalMsg: fprintf(stderr, "Fatal: %s (%s:%u, %s)\n",
+localMsg.constData(), file, context.line, function); break;
     }
 }
 
@@ -699,7 +837,6 @@ logged at. This information is created by the QMessageLogger class.
 
 */
 
-
 // ={=========================================================================
 // qt-regexp
 
@@ -714,7 +851,7 @@ TEST(QtRegex, Regex)
   //
   // Sets the syntax mode for the regular expression. The default is
   // QRegExp::RegExp.
-  //  
+  //
   // Setting syntax to QRegExp::Wildcard enables simple shell-like QRegExp
   // wildcard matching. For example, r*.txt matches the string readme.txt in
   // wildcard mode, but does not match readme.
@@ -722,21 +859,22 @@ TEST(QtRegex, Regex)
   // enum QRegExp::PatternSyntax
   //
   // The syntax used to interpret the meaning of the pattern.
-  // 
+  //
   // Constant	Value	Description
   //
-  // QRegExp::RegExp	0	A rich Perl-like pattern matching syntax. This is the
-  // *default*
+  // QRegExp::RegExp	0	A rich Perl-like pattern matching syntax. This is
+  // the *default*
   //
-  // QRegExp::RegExp2	3	Like RegExp, but with greedy quantifiers. (Introduced in
-  // Qt 4.2.)
+  // QRegExp::RegExp2	3	Like RegExp, but with greedy quantifiers.
+  // (Introduced in Qt 4.2.)
   //
-  // QRegExp::Wildcard	1	This provides a simple pattern matching syntax similar
-  // to that used by shells (command interpreters) for "file globbing". See
-  // QRegExp wildcard matching.
+  // QRegExp::Wildcard	1	This provides a simple pattern matching syntax
+  // similar to that used by shells (command interpreters) for "file globbing".
+  // See QRegExp wildcard matching.
   //
-  // QRegExp::WildcardUnix	4	This is similar to Wildcard but with the behavior
-  // of a Unix shell. The wildcard characters can be escaped with the character
+  // QRegExp::WildcardUnix	4	This is similar to Wildcard but with the
+  // behavior of a Unix shell. The wildcard characters can be escaped with the
+  // character
   // "\".
 
   regex.setPatternSyntax(QRegExp::WildcardUnix);
@@ -753,60 +891,6 @@ TEST(QtRegex, Regex)
   EXPECT_THAT(regex.exactMatch("U130 SkyQ EC201"), true);
   EXPECT_THAT(regex.exactMatch("U131 SkyQ EC201"), false);
 }
-
-
-// ={=========================================================================
-// qt-variant
-
-TEST(QtVariant, Variant)
-{
-  // T QVariant::value() const
-  //
-  // Returns the stored value converted to the template type T. Call
-  // canConvert() to find out whether a type can be converted. If the value
-  // cannot be converted, a default-constructed value will be returned.
-  //
-  // If the type T is supported by QVariant, this function behaves exactly as
-  // toString(), toInt() etc.
-
-  {
-    QVariant v;
-    v = 7;
-    EXPECT_THAT(7, v.toInt());
-
-    // compile error. ??
-    // EXPECT_THAT("7", v.toString());
-
-    EXPECT_THAT(v.toInt(), v.value<int>());
-    EXPECT_THAT(v.toString(), v.value<QString>());
-  }
-
-  // QVariant QVariant::fromValue(const T &value)
-  // Returns a QVariant containing a copy of value. Behaves exactly like
-  // setValue() otherwise.
-  //
-  // A QVariant containing a sequential container will also return true for this
-  // function if the targetTypeId is QVariantList. It is possible to iterate
-  // over the contents of the container without extracting it as a (copied)
-  // QVariantList:
-  //
-  // QVariant(int, 7)
-  // QVariant(int, 11)
-  // QVariant(int, 42)
-
-  {
-    QList<int> intList{7, 11, 42};
-    QVariant variant = QVariant::fromValue(intList);
-    if (variant.canConvert<QVariantList>())
-    {
-      QSequentialIterable it = variant.value<QSequentialIterable>();
-
-      foreach(const QVariant &v, it)
-        qDebug() << v;
-    }
-  }
-}
-
 
 // ={=========================================================================
 // qt-slot
@@ -825,8 +909,7 @@ TEST(QtSlot, SlotAndSignal)
   {
     Counter a, b;
 
-    QObject::connect(&a, &Counter::valueChanged,
-        &b, &Counter::setValue);
+    QObject::connect(&a, &Counter::valueChanged, &b, &Counter::setValue);
 
     EXPECT_THAT(a.value(), 0);
     EXPECT_THAT(b.value(), 0);
@@ -847,21 +930,19 @@ TEST(QtSlot, SlotAndSignal)
     EXPECT_THAT(b.value(), 48);
   }
 
-
   // to show signal/slot is blocking call
-  // and shows connect(valueChanged(int), doSomethingLong()); 
+  // and shows connect(valueChanged(int), doSomethingLong());
   // this is receiver decide that it do not use it
- 
+
   {
     Counter a, b;
 
-    QObject::connect(&a, &Counter::valueChanged,
-        &b, &Counter::doSomethingLong);
+    QObject::connect(&a, &Counter::valueChanged, &b, &Counter::doSomethingLong);
 
     // https://doc.qt.io/qt-5/qtime.html
     QTime elapsed;
     elapsed.start();
-    
+
     a.valueChanged(12);
 
     // elapsed.elapsed() returns ms.
@@ -872,8 +953,7 @@ TEST(QtSlot, SlotAndSignal)
   {
     Counter a, b;
 
-    QObject::connect(&a, &Counter::valueChanged,
-        &b, &Counter::doSomethingLong);
+    QObject::connect(&a, &Counter::valueChanged, &b, &Counter::doSomethingLong);
 
     QTime elapsed;
     elapsed.start();
@@ -885,7 +965,6 @@ TEST(QtSlot, SlotAndSignal)
   }
 }
 
-
 // ={=========================================================================
 // qt-timer
 
@@ -896,19 +975,20 @@ Detailed Description
 
 The QTimer class provides a high-level programming interface for timers. To use
 it, create a QTimer, connect its timeout() signal to the appropriate slots, and
-call start(). From then on, it will emit the timeout() signal 
+call start(). From then on, it will emit the timeout() signal
 *at constant intervals.*
 
-Example for a one second (1000 millisecond) timer (from the Analog Clock example):
+Example for a one second (1000 millisecond) timer (from the Analog Clock
+example):
 
     QTimer *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, 
+    connect(timer, &QTimer::timeout, this,
       QOverload<>::of(&AnalogClock::update));
     timer->start(1000);
 
 From then on, the update() slot is called every second.
 
-You can set a timer to time out only once by calling setSingleShot(true). 
+You can set a timer to time out only once by calling setSingleShot(true).
 
 void setSingleShot(bool singleShot)
 
@@ -1064,7 +1144,6 @@ TEST(QtTimer, SingleTimerFromQTimer)
   EXPECT_EQ(timerExpiredSpy.count(), 1);
 }
 
-
 TEST(QtTimer, SingleTimerFromSingleShot)
 {
   Timer o;
@@ -1078,7 +1157,6 @@ TEST(QtTimer, SingleTimerFromSingleShot)
   timerExpiredSpy.wait(2000);
   EXPECT_EQ(timerExpiredSpy.count(), 1);
 }
-
 
 TEST(QtTimer, ContinuousTimerFromQTimer)
 {
@@ -1303,7 +1381,6 @@ TEST(QtThread, ThreadAffinity_4)
 
 */
 
-
 TEST(QtThread, ThreadAffinity_1)
 {
   // https://wiki.qt.io/QThreads_general_usage
@@ -1463,12 +1540,11 @@ TEST(QtEvnet, useCustomEvent)
   */
 }
 
-
 #endif
 
 // ={=========================================================================
 
-static void GoogleTestRunner(int argc, char** argv)
+static void GoogleTestRunner(int argc, char **argv)
 {
   // Since Google Mock depends on Google Test, InitGoogleMock() is
   // also responsible for initializing Google Test. Therefore there's

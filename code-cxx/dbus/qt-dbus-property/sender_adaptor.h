@@ -16,8 +16,8 @@
 #include <QtDBus/QtDBus>
 QT_BEGIN_NAMESPACE
 class QByteArray;
-template<class T> class QList;
-template<class Key, class Value> class QMap;
+template <class T> class QList;
+template <class Key, class Value> class QMap;
 class QString;
 class QStringList;
 class QVariant;
@@ -26,45 +26,52 @@ QT_END_NAMESPACE
 /*
  * Adaptor class for interface org.example.sender
  */
-class SenderAdaptor: public QDBusAbstractAdaptor
+class SenderAdaptor : public QDBusAbstractAdaptor
 {
-    Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", "org.example.sender")
-    Q_CLASSINFO("D-Bus Introspection", ""
-"  <interface name=\"org.example.sender\">\n"
-"    <method name=\"ConnectProfile\">\n"
-"      <arg direction=\"in\" type=\"s\" name=\"UUID\"/>\n"
-"    </method>\n"
-"    <signal name=\"action\">\n"
-"      <arg direction=\"out\" type=\"s\" name=\"nickname\"/>\n"
-"      <arg direction=\"out\" type=\"s\" name=\"text\"/>\n"
-"    </signal>\n"
-"    <signal name=\"aboutToQuit\">\n"
-"    </signal>\n"
-"    <property access=\"readwrite\" type=\"b\" name=\"Powered\"/>\n"
-"  </interface>\n"
-        "")
+  Q_OBJECT
+  Q_CLASSINFO("D-Bus Interface", "org.example.sender")
+  Q_CLASSINFO(
+    "D-Bus Introspection",
+    ""
+    "  <interface name=\"org.example.sender\">\n"
+    "    <method name=\"ConnectProfile\">\n"
+    "      <arg direction=\"in\" type=\"s\" name=\"UUID\"/>\n"
+    "    </method>\n"
+    "    <signal name=\"action\">\n"
+    "      <arg direction=\"out\" type=\"s\" name=\"nickname\"/>\n"
+    "      <arg direction=\"out\" type=\"s\" name=\"text\"/>\n"
+    "    </signal>\n"
+    "    <signal name=\"aboutToQuit\">\n"
+    "    </signal>\n"
+    "    <property access=\"readwrite\" type=\"b\" name=\"Powered\"/>\n"
+    "  </interface>\n"
+    "")
 public:
-    SenderAdaptor(QObject *parent);
-    virtual ~SenderAdaptor();
+  SenderAdaptor(QObject *parent);
+  virtual ~SenderAdaptor();
 
 public: // PROPERTIES
-    Q_PROPERTY(bool Powered READ powered WRITE setPowered)
-    bool powered() const;
-    void setPowered(bool value);
+  // Q_PROPERTY(bool Powered READ powered WRITE setPowered)
+  Q_PROPERTY(bool Powered READ powered WRITE setPowered NOTIFY powerChanged)
+  bool powered() const;
+  void setPowered(bool value);
 
 public Q_SLOTS: // METHODS
-    void ConnectProfile(const QString &UUID);
-    void SendCommand(const QString &command);
-    void onTimerExpired();
+  void ConnectProfile(const QString &UUID);
+  void SendCommand(const QString &command);
+  void onTimerExpired();
+  void onPowerChanged(bool power);
 
 Q_SIGNALS: // SIGNALS
-    void action(const QString &nickname, const QString &text);
-    // as with complexping example, it is to signal client to quit
-    void aboutToQuit();
+  void action(const QString &nickname, const QString &text);
+  // as with complexping example, it is to signal client to quit
+  void aboutToQuit();
 
-  private:
-    bool m_powered{false};
+  // need to define signal as well
+  void powerChanged(bool powered);
+
+private:
+  bool m_powered{false};
 };
 
 #endif

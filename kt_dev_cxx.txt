@@ -21349,7 +21349,7 @@ vector and string's [] operator returns reference but these are exceptions to
 this rule, but not a general rule. Better not use [] operator.
 
 
-{cxx-return-reference-cxx-temporary}
+{cxx-return-temporary-cxx-temporary}
 
 The function returns value
 
@@ -21403,9 +21403,10 @@ the lifetime of the reference itself, and thus avoids what would otherwise be
 a common dangling-reference error. 
 
 In the example above, the temporary returned by f() lives until the closing
-curly brace. (Note this only applies to stack-based references. It doesn't
-    work for references that are members of objects.)
+curly brace. 
 
+Note `this only applies to stack-based references.` It doesn't work for
+references that are members of objects.
 
 Q2: What if we take out the const. is Example 2 still legal C++?
 
@@ -36030,29 +36031,70 @@ type of a callable objects. `default type`
 namespace cxx_template_default
 {
   // `This shows how function-object is useful` *cxx-functor*
-  // default template argument, the type of callable 
+  // default template argument, the 'type' of callable
   // default function argument, F()
 
   template <typename T, typename F = less<T>>
-    int compare(const T& a, const T& b, F f = F())
-    {
-      if (f(a, b)) return -1;
-      if (f(b, a)) return 1;
-      return 0;
-    }
-} // namespace
+  int compare(const T &a, const T &b, F f = F())
+  {
+    if (f(a, b))
+      return -1;
+    if (f(b, a))
+      return 1;
+    return 0;
+  }
 
-TEST(Template, FunctionWithDefaultArg)
+  template <typename T = int> struct Numbers
+  {
+    Numbers(T value = 0)
+        : value_(value)
+    {}
+
+    T value_;
+  };
+
+} // namespace cxx_template_default
+
+TEST(CxxTemplate, DefaultTypeArgument)
 {
   using namespace cxx_template_default;
 
-  EXPECT_THAT(compare(1, 2), -1);
-  EXPECT_THAT(compare(2, 1), 1);
-  EXPECT_THAT(compare(2, 2), 0);
+  {
+    // 1 < 2
+    EXPECT_THAT(compare(1, 2), -1);
+    // 2 > 1
+    EXPECT_THAT(compare(2, 1), 1);
+    // 2 == 2
+    EXPECT_THAT(compare(2, 2), 0);
+  }
 
-  vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
-  EXPECT_THAT(compare(coll1, coll2), -1);
-  EXPECT_THAT(compare(coll2, coll1), 1);
+  {
+    // 1 < 2
+    EXPECT_THAT(compare(1, 2, greater<int>()), 1);
+    // 2 > 1
+    EXPECT_THAT(compare(2, 1, greater<int>()), -1);
+    // 2 == 2
+    EXPECT_THAT(compare(2, 2, greater<int>()), 0);
+  }
+
+  {
+    vector<int> coll1{1, 2, 3}, coll2{1, 2, 4};
+    EXPECT_THAT(compare(coll1, coll2), -1);
+    EXPECT_THAT(compare(coll2, coll1), 1);
+  }
+
+  {
+    Numbers<> o1(10);
+    Numbers<int> o2(10);
+    EXPECT_THAT(o1.value_, o2.value_);
+  }
+
+  // compile error
+  // {
+  //   Numbers<> o1(10);
+  //   Numbers<std::string> o2("value");
+  //   EXPECT_THAT(o1.value_, o2.value_);
+  // }
 }
 
 
@@ -36066,28 +36108,6 @@ bool compareIsbn( const Sales_data &lhs, const Sales_data &rhs )
 }
 
 bool j = compare( item1, item2, compareIsbn );
-
-
-<ex> class template
-
-template <typename T, typename container = vector<T>>
-class MyClass;
-
-template <typename T = int>           // default type
-class Numbers {
-  public:
-    Numbers(T v = 0): val(v) {}       // default value
-  private:
-    T val;
-};
-
-Numbers<long double> lots_of_precision;
-
-<ex>
-The empty braket *cxx-template-specialization* but do not say about type so
-use default type?
-
-Numbers<> average_precision;
 
 
 ={============================================================================
@@ -37962,8 +37982,8 @@ specialization of the hash template and it must define:
 To add members to std namespace
 
 namespace std {
+  // indicate cxx-template-specialisation for T, Sales_data, type
   template <>
-    // indicate it is a specialization for T, Sales_data, type
     struct hash <Sales_data>
     {
       typedef size_t result_type;
@@ -44106,26 +44126,29 @@ on map returns `mapped_type` but dereferencing of iterator returns
   "Thus, to use this feature, you can't use a value type that has no default
   constructor." 
 
-// bits/stl_map.h
+namespace cxx_code
+{
+  // bits/stl_map.h
 
-      // [23.3.1.2] element access
-      /**
-       *  @brief  Subscript ( @c [] ) access to %map data.
-       *  @param  __k  The key for which data should be retrieved.
-       *  @return  A reference to the data of the (key,data) %pair.
-       *
-       *  Allows for easy lookup with the subscript ( @c [] )
-       *  operator.  Returns data associated with the key specified in
-       *  subscript.  If the key does not exist, a pair with that key
-       *  is created using default values, which is then returned.
-       *
-       *  Lookup requires logarithmic time.
-       */
-      mapped_type&
-      operator[](const key_type& __k)
-      {
-        __i = insert(__i, value_type(__k, mapped_type()));
-      }
+  // [23.3.1.2] element access
+  /**
+   *  @brief  Subscript ( @c [] ) access to %map data.
+   *  @param  __k  The key for which data should be retrieved.
+   *  @return  A reference to the data of the (key,data) %pair.
+   *
+   *  Allows for easy lookup with the subscript ( @c [] )
+   *  operator.  Returns data associated with the key specified in
+   *  subscript.  If the key does not exist, a pair with that key
+   *  is created using default values, which is then returned.
+   *
+   *  Lookup requires logarithmic time.
+   */
+  mapped_type&
+    operator[](const key_type& __k)
+    {
+      __i = insert(__i, value_type(__k, mapped_type()));
+    }
+} // namespace
 
 <ex>
 *cxx-const-error-const* when calls non-const member on const object.
@@ -44196,19 +44219,10 @@ map<string, size_t> word_count;
 while( cin >> word )
    ++word_count[word];
 
-// *C++11* *cxx-pair*
+// *cxx-11* *cxx-pair*
 for( const auto &w : word_count )
    cout << w.first << " occurs" << 
           w.second << ((w.second>1) ? "times" : " time") << endl;
-
-// before C++11 since no range-for
-std::map<std::string,float> coll;
-std::map<std::string,float>::iterator pos;
-
-for (pos = coll.begin(); pos != coll.end(); ++pos) {
-  std::cout << "key: " << pos->first << "\t" << "value: " 
-    << pos->second << std::endl;
-}
 
 
 <ex>
