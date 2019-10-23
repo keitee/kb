@@ -3,7 +3,8 @@
 //
 // to build it as 32 bits on 64 bit gcc
 //
-// g++ -m32 ../cxx_xx.cpp
+// g++ -m32 -Wall ../cxx_xx.cpp
+// g++ -Wall ../cxx_xx.cpp
 
 #include <iostream>
 
@@ -54,5 +55,16 @@ int main(int argc, char **argv)
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
 
   uint64_t value{10};
-  printf("uint64 value is %ld", value);
+
+#if !defined(__LP64__) || !defined(_LP64)
+  // 32 bits
+  // warning: format ‘%ld’ expects argument of type ‘long int’, but argument 2 has type ‘uint64_t {aka long long unsigned int}’ [-Wformat=]
+  // printf("uint64 value is %ld\n", value);
+  printf("uint64 value is %lld\n", value);
+#else
+  // 64 bits
+  printf("uint64 value is %ld\n", value);
+  // warning: format ‘%lld’ expects argument of type ‘long long int’, but argument 2 has type ‘uint64_t {aka long unsigned int}’ [-Wformat=]
+  // printf("uint64 value is %lld\n", value);
+#endif
 }

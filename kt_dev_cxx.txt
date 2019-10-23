@@ -55,7 +55,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-type cxx-twos-complement
 *kt_dev_cxx_0000* cxx-bits cxx-builtin-type
 *kt_dev_cxx_0000* cxx-bits cxx-limits
-*kt_dev_cxx_0000* cxx-type cxx-32bit cxx-64bit
+*kt_dev_cxx_0000* cxx-type cxx-32-bit cxx-64-bit
 *kt_dev_cxx_0000* cxx-bits cxx-bitset cxx-align
 *kt_dev_cxx_0000* cxx-cast cpp-pointer-handle
 *kt_dev_cxx_0000* cxx-issue-incremental-build
@@ -3930,7 +3930,7 @@ to use with bit pattern.
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-type cxx-32bit cxx-64bit
+*kt_dev_cxx_0000* cxx-type cxx-32-bit cxx-64-bit
 
 <cxx-type-cxx-size-t>
 type `size_t` is a machine-specific `unsigned type` that is guaranteed to be
@@ -3972,7 +3972,9 @@ namespace cxx_code
   }
 } // namespace
 
-The problem is when use size_t variable, -Werror is on, and use printf like:
+
+<cxx-issue>
+The problem is when use size_t variable, -Wall is on, and use printf like:
 
   AS_LOG_ERROR("failed to find timer with tag %ld to remove", variable);
 
@@ -3983,10 +3985,101 @@ So the solution is:
 changed the type of variable to uint32_t.
 
 
-Likewise, uint64_t type suffers the same issue. For 64 bit build, it says "long
-int" type but for 32 bits type "long long int"
+<cxx-issue>
+https://www.gnu.org/software/libc/manual/html_node/Integers.html
 
-So the solution is:
+20.1 Integers
+
+The C language defines several integer data types: integer, short integer,
+long integer, and character, all in both signed and unsigned varieties.
+The GNU C compiler extends the language to contain long long integers as
+well.
+
+The C integer types were intended to allow code `to be portable` among machines
+with different inherent data sizes (word sizes), so each type may have
+different ranges on different machines. The problem with this is that a
+program often needs to be written for a particular range of integers, and
+sometimes must be written for a particular size of storage, regardless of what
+machine the program runs on.
+
+To address this problem, `the GNU C Library contains C type definitions` you can
+use to declare integers that meet your exact needs. Because the GNU C Library
+header files are customized to a specific machine, your program source code
+doesn’t have to be.
+
+These typedefs are in stdint.h.
+
+If you require that an integer be represented in exactly N bits, use one of
+the following types, with the obvious mapping to bit size and signedness:
+
+int8_t
+int16_t
+int32_t
+int64_t
+uint8_t
+uint16_t
+uint32_t
+uint64_t
+
+Ok, then these types would solve the issue? No since see the issue on using
+printf.
+
+{
+  uint64_t value{10};
+
+#if !defined(__LP64__) || !defined(_LP64)
+  // 32 bits
+  // warning: format ‘%ld’ expects argument of type ‘long int’, but argument 2 has type ‘uint64_t {aka long long unsigned int}’ [-Wformat=]
+  // printf("uint64 value is %ld\n", value);
+
+  printf("uint64 value is %lld\n", value);
+#else
+  // 64 bits
+  printf("uint64 value is %ld\n", value);
+
+  // warning: format ‘%lld’ expects argument of type ‘long long int’, but argument 2 has type ‘uint64_t {aka long unsigned int}’ [-Wformat=]
+  // printf("uint64 value is %lld\n", value);
+#endif
+}
+
+
+// LP64
+// __x86_64__
+// size of (int) is                : 4
+// size of (unsigned int) is       : 4
+// size of (long) is               : 8
+// size of (unsigned long) is      : 8
+// size of (long int) is           : 8
+// size of (unsigned long int) is  : 8
+// size of (long long) is          : 8
+// size of (unsigned long long) is : 8
+// size of (* int) is              : 8
+// size of (* unsigned int) is     : 8
+// size of (size_t) is             : 8
+// size of (uint32_t) is           : 4
+// size of (uint64_t) is           : 8
+//
+//
+// LP32
+// __x86_32__
+// size of (int) is                : 4
+// size of (unsigned int) is       : 4
+// size of (long) is               : 4
+// size of (unsigned long) is      : 4
+// size of (long int) is           : 4
+// size of (unsigned long int) is  : 4
+// size of (long long) is          : 8
+// size of (unsigned long long) is : 8
+// size of (* int) is              : 4
+// size of (* unsigned int) is     : 4
+// size of (size_t) is             : 4
+// size of (uint32_t) is           : 4
+// size of (uint64_t) is           : 8
+
+As said "To address this problem, `the GNU C Library contains C type definitions`"
+shows the same size but shows issue on printf
+
+So the possible solution is:
 
 #if defined(__LP64__) || defined(_LP64)
   AS_LOG_ERROR("failed to find timer with tag %ld to remove", tag);
@@ -4005,6 +4098,18 @@ These macros are defined, with value 1, if (and only if) the compilation is
 for a target where long int and pointer both use 64-bits and int uses 32-bit.
 
 see *cxx-cpp-check-define*
+
+Or the other solution is to use PRId64
+
+https://stackoverflow.com/questions/9225567/how-to-print-a-int64-t-type-in-c
+
+// cause error since it have to use "%"
+AS_LOG_ERROR("failed to find timer with tag % to remove" PRId64, tag);
+
+// ok
+AS_LOG_ERROR("failed to find timer with tag %" PRId64 " to remove", tag);
+
+this is effectively same as pre-processor replace PRIxx with "ld" or "lld".
 
 
 ={============================================================================

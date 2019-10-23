@@ -75,7 +75,7 @@ void SenderAdaptor::SendCommand(const QString &command)
   qDebug() << QString("sender::SendCommand(\"%1\") got called").arg(command);
   QTimer::singleShot(2000, this, SLOT(onTimerExpired()));
 
-  // set initial property value
+  // set property value and `powerChanged` is emitted
   qDebug() << "sender::setProperty(false)";
   setProperty("Powered", false);
 }

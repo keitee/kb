@@ -43,5 +43,8 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 add_executable(sender sender.cpp sender_adaptor.cpp)
 target_link_libraries(sender Qt5::DBus Qt5::Core Qt5::Widgets)
 
-add_executable(client client.cpp client_object.cpp scli.cpp)
+add_executable(client client.cpp client_object.cpp)
 target_link_libraries(client Qt5::DBus Qt5::Core Qt5::Widgets)
+
+add_executable(client_proxy client_use_proxy.cpp sender_interface.cpp)
+target_link_libraries(client_proxy Qt5::DBus Qt5::Core Qt5::Widgets)

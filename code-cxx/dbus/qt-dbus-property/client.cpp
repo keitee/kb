@@ -1,8 +1,8 @@
 #include "client_object.h"
-#include "scli.h"
 
 #define SERVICE_NAME "org.example.SenderExample"
 
+#if 0
 static bool sendCommand(std::string const &command, void *sender)
 {
   qDebug() << "cli::sendCommands called";
@@ -45,6 +45,7 @@ void run_cli(QDBusInterface *sender)
     }
   } // while
 }
+#endif
 
 int main(int argc, char **argv)
 {

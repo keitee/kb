@@ -122,5 +122,5 @@ method return time=1571314615.835578 sender=:1.414 -> destination=:1.424 serial=
 o to make proxy files
 
 /home/keitee/Qt/5.12.3/gcc_64/bin/qdbusxml2cpp -i sender_interface.h -p :sender_interface.cpp org.example.sender.xml
-/home/keitee/Qt/5.12.3/gcc_64/bin/qdbusxml2cpp -p sender_interface.h org.example.sender.xml
+/home/keitee/Qt/5.12.3/gcc_64/bin/qdbusxml2cpp -p sender_interface.h: org.example.sender.xml
 
