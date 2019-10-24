@@ -25,8 +25,8 @@
 SenderAdaptor::SenderAdaptor(QObject *parent)
     : QDBusAbstractAdaptor(parent)
 {
-  // // constructor
-  // setAutoRelaySignals(true);
+  // constructor
+  setAutoRelaySignals(true);
 
   connect(this, SIGNAL(powerChanged(bool)), this, SLOT(onPowerChanged(bool)));
 }
@@ -38,17 +38,41 @@ SenderAdaptor::~SenderAdaptor()
 
 bool SenderAdaptor::powered() const
 {
-  // // get the value of property Powered
-  // return qvariant_cast< bool >(parent()->property("Powered"));
-
+  // get the value of property Powered
   qDebug() << "SenderAdaptor::powered(" << m_powered << ") called";
-  return m_powered;
+  return qvariant_cast<bool>(parent()->property("Powered"));
+  // return m_powered;
 }
+
+/*
+
+bool QObject::setProperty(const char *name, const QVariant &value)
+
+Sets the value of the object's name property to value.
+
+If the property is defined in the class using Q_PROPERTY then true is returned
+on success and false otherwise. If the property is not defined using Q_PROPERTY,
+and therefore not listed in the meta-object, it is added as a dynamic property
+and false is returned.
+
+Information about all available properties is provided through the metaObject()
+and dynamicPropertyNames().
+
+Dynamic properties can be queried again using property() and can be removed by
+setting the property value to an invalid QVariant. Changing the value of a
+dynamic property causes a QDynamicPropertyChangeEvent to be sent to the object.
+
+Note: Dynamic properties starting with "_q_" are reserved for internal purposes.
+
+See also property(), metaObject(), dynamicPropertyNames(), and
+QMetaProperty::write().
+
+*/
 
 void SenderAdaptor::setPowered(bool value)
 {
-  // // set the value of property Powered
-  // parent()->setProperty("Powered", QVariant::fromValue(value));
+  // set the value of property Powered
+  parent()->setProperty("Powered", QVariant::fromValue(value));
 
   m_powered = value;
   qDebug() << "SenderAdaptor::setPowered(" << m_powered << ") called";

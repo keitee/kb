@@ -17,7 +17,10 @@ class Pong : public QDBusAbstractAdaptor
     QString value() const;
     void setValue(const QString &newValue);
 
-    Pong(QObject *obj) : QDBusAbstractAdaptor(obj) {}
+    Pong(QObject *obj)
+        : QDBusAbstractAdaptor(obj)
+        , m_value("pong")
+    {}
 
     void really_quit();
 

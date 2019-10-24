@@ -63,11 +63,13 @@
 
 QString Pong::value() const
 {
+  qDebug() << "pong::value returns" << m_value;
   return m_value;
 }
 
 void Pong::setValue(QString const &newValue)
 {
+  qDebug() << "pong::set value " << newValue;
   m_value = newValue;
 }
 

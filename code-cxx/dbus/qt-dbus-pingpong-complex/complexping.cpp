@@ -137,12 +137,32 @@ void Ping::start(const QString &name)
     }
     else if(line == "value")
     {
+
+      // method call time=1571906439.566168 sender=:1.888 ->
+      // destination=org.example.QtDBus.PingExample serial=9 path=/;
+      // interface=org.freedesktop.DBus.Properties; member=Get
+      //    string "org.example.QtDBus.ComplexPong.Pong"
+      //    string "value"
+      // method return time=1571906439.566688 sender=:1.889 ->
+      // destination=:1.888 serial=4 reply_serial=9
+      //    variant       string "initial value"
+
       QVariant reply = iface->property("value");
       if (!reply.isNull())
         printf("value property = %s\n", qPrintable(reply.toString()));
     }
     else if (line.startsWith("value="))
     {
+
+      // method call time=1571906585.509050 sender=:1.892 ->
+      // destination=org.example.QtDBus.PingExample serial=10 path=/;
+      // interface=org.freedesktop.DBus.Properties; member=Set
+      //    string "org.example.QtDBus.ComplexPong.Pong"
+      //    string "value"
+      //    variant       string "this is message from ping"
+      // method return time=1571906585.509573 sender=:1.893 ->
+      // destination=:1.892 serial=5 reply_serial=10
+
       iface->setProperty("value", line.mid(6));
     }
     else
