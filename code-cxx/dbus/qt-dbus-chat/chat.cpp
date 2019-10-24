@@ -168,6 +168,7 @@ ChatMainWindow::ChatMainWindow()
       qDebug() << "connect message signal failed";
     }
 
+    // this shows error when comment out signals on the proxy code.
     connect(iface, SIGNAL(action(QString,QString)), 
         this, SLOT(actionSlot(QString,QString)));
 

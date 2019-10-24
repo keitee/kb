@@ -22,12 +22,19 @@
      QCoreApplication::instance()->quit();
    }
  
-   connect(sender, SIGNAL(action(QString, QString)),
+   QObject::connect(sender, SIGNAL(action(QString, QString)),
        this, SLOT(onSignalReceived(QString, QString)));
 
    // connect sender signal to quit
-   connect(sender, SIGNAL(aboutToQuit()),
+   QObject::connect(sender, SIGNAL(aboutToQuit()),
        QCoreApplication::instance(), SLOT(quit()));
+
+   // connect(sender, SIGNAL(action(QString, QString)),
+   //     this, SLOT(onSignalReceived(QString, QString)));
+
+   // // connect sender signal to quit
+   // connect(sender, SIGNAL(aboutToQuit()),
+   //     QCoreApplication::instance(), SLOT(quit()));
  }
 
 // signature of the remote signal
