@@ -178,7 +178,11 @@ ChatMainWindow::ChatMainWindow()
     dialog.exec();
     m_nickname = dialog.nickname->text().trimmed();
     
-    // send Qt signal but not dbus signal.
+    // send Qt signal but not dbus signal via ChatMainWindow's signal since
+    // it comment out ChatMainWindow's signals then gets compile error and
+    // comment out ChatAdaptor's signals then no compile error but nothing
+    // happens.
+    qDebug() << "emit action()";
     emit action(m_nickname, QLatin1String("joins the chat"));
 }
 
