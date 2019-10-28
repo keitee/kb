@@ -1,3 +1,21 @@
+# DESCRIPTION and PR are as usual.
+#
+# The mybuild class becomes inherited and so myclass_do_build becomes the
+# default build task.
+#
+# The (pure python) function pyfunc takes some argument and runs the python dir
+# function on this argumentm and prints the result.
+#
+# The (bitbake python) mypatch function is added and registered as a task that
+# needs to be executed before the build function.
+#
+# mypatch calls pyfunc and passes the global bitbake variable d.
+#
+# d (datastore) is defined by bitbake and is always available.
+#
+# The mypatch function is registered as a task that needs to be executed before
+# the build function.
+
 DESCRIPTION = "I am the second recipe"
 PR = "r1"
 inherit mybuild

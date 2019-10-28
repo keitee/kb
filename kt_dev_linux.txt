@@ -22127,6 +22127,72 @@ bbTutorial/
         └── layer.conf
 
 
+6.4. Executing tasks or building the world
+
+We have now several options on running builds or specified tasks for our
+recipes.
+
+Build one recipe
+To run all tasks for our second recipe we simply call bitbake second
+
+Execute one task
+We could also run a specific task for a recipe. Say we want only to run the
+mypatch task for the second recipe. This can be done by applying the command
+bitbake -c mypatch second
+
+  -c CMD, --cmd=CMD     Specify the task to execute. The exact options
+                        available depend on the metadata. Some examples might
+                        be 'compile' or 'populate_sysroot' or 'listtasks' may
+                        give a list of the tasks available.
+
+keitee@keitee-mint:~/git/kb/code-make/bitbake/tut1/build$ bitbake -c mypatch second
+Parsing recipes: 100% |##################################################| Time: 0:00:00
+Parsing of 2 .bb files complete (0 cached, 2 parsed). 2 targets, 0 skipped, 0 masked, 0 errors.
+NOTE: Resolving any missing task queue dependencies
+Initialising tasks: 100% |###############################################| Time: 0:00:00
+NOTE: Executing RunQueue Tasks
+NOTE: Tasks Summary: Attempted 1 tasks of which 0 didn't need to be rerun and all succeeded.
+keitee@keitee-mint:~/git/kb/code-make/bitbake/tut1/build$
+
+
+6.4.1. Checking the build logs
+
+Bitbake creates a `tmp/work directory` in its actual build location where it
+stores all log files.  These log files contain interesting information and are
+worth to study.
+
+An actual output after a first bitbake world run might look like this.
+
+├── build
+│   ├── bitbake-cookerdaemon.log
+│   ├── conf
+│   │   └── bblayers.conf
+│   └── tmp
+│       └── work
+│           ├── first-0.1-r1
+│           │   └── temp
+│           │       ├── log.do_build -> log.do_build.21445
+│           │       ├── log.do_build.20994
+│           │       ├── log.do_build.21445
+│           │       ├── log.task_order
+│           │       ├── run.do_build -> run.do_build.21445
+│           │       ├── run.do_build.20994
+│           │       └── run.do_build.21445
+│           └── second-1.0-r1
+│               └── temp
+│                   ├── log.do_build -> log.do_build.28189
+│                   ├── log.do_build.28150
+│                   ├── log.do_build.28189
+│                   ├── log.do_mypatch -> log.do_mypatch.27873
+│                   ├── log.do_mypatch.27873
+│                   ├── log.task_order
+│                   ├── run.do_build -> run.do_build.28189
+│                   ├── run.do_build.28150
+│                   ├── run.do_build.28189
+│                   ├── run.do_mypatch -> run.do_mypatch.27873
+│                   └── run.do_mypatch.27873
+
+
 ={============================================================================
 *kt_linux_tool_140* make-cmake
 
@@ -29942,7 +30008,7 @@ complilation.
            program when given the -D (--dynamic) option.
 
        -t
-       --syms
+       --syms *toon-nm*
            Print the symbol table entries of the file.  This is similar to the
            information provided by the nm program, although the display format
            is different.  The format of the output depends upon the format of
@@ -60889,10 +60955,20 @@ If a symbol in that archive is needed to resolve an undefined symbol referred
 to by an object in an archive that appears later on the command line, the
 linker would not be able to resolve that reference. 
 
-By grouping the archives, they all be searched repeatedly until all possible
+By grouping the archives, they all be searched `repeatedly` until all possible
 references are resolved. Using this option has a significant performance cost.
 It is best to use it only when there are unavoidable circular references
 between two or more archives.
+
+// ??
+https://ftp.gnu.org/old-gnu/Manuals/ld-2.9.1/html_node/ld_3.html#IDX134
+--whole-archive
+For each archive mentioned on the command line after the --whole-archive
+option, include every object file in the archive in the link, rather than
+searching the archive for the required object files. This is normally used to
+turn an archive file into a shared library, forcing every object to be
+included in the resulting shared library. This option may be used more than
+once.
 
 
 ={============================================================================
@@ -61776,206 +61852,10 @@ script appears in the command line.
 
 
 ={============================================================================
-*kt_linux_gcc_400* gcc-option-link
-
-http://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
-
-3.14 Options for Linking
-
--llibrary
--l library
-Search the library `named library` when `linking`. 
-
-*lib-static-link-order* *gcc-link-order*
-See link errors although all are defined in the library? Becuase:
-
-It makes a difference where in the command you write this option; the linker
-searches and processes libraries and object files in the order they are
-specified. Thus, 'foo.o -lz bar.o' searches library 'z' after file foo.o but
-before bar.o. If bar.o refers to functions in 'z', those functions may not be
-loaded.
-
-<ex>
-$(TESTS) : $(TARGET).o gtest.a gmock.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread -ltinyxml2 ^$ -o $@
-
-g++ -isystem /home/kitp/works/googletest/googletest/include -isystem
-/home/kitp/works/googletest/googlemock/include -isystem
-/home/kitp/works/tinyxml2 -std=c++11 -g -Wall -Wextra -pthread
--L/home/kitp/works/tinyxml2 -lpthread -ltinyxml2 tinyxml_test.o gtest.a
-gmock.a -o tinyxml_test_test
-
-tinyxml_test.o: In function `TinyXml_X_Test::TestBody()':
-/home/kitp/git/kb/code-cxx/t_ex_ccook/tinyxml_test.cpp:36: 
-  undefined reference to `tinyxml2::XMLDocument::XMLDocument(bool, tinyxml2::Whitespace)'
-
-$(TESTS) : $(TARGET).o gtest.a gmock.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -ltinyxml2 -o $@
-
-g++ -isystem /home/kitp/works/googletest/googletest/include -isystem
-  /home/kitp/works/googletest/googlemock/include -isystem
-  /home/kitp/works/tinyxml2 -std=c++11 -g -Wall -Wextra -pthread
-  -L/home/kitp/works/tinyxml2 -lpthread tinyxml_test.o gtest.a gmock.a
-  -ltinyxml2 -o tinyxml_test_test
-
-
-The linker searches a standard list of directories for the library, which is
-actually a file named liblibrary.a. The linker then uses this file as if it
-had been specified precisely by name.
-
-*gcc-link-search*
-The directories searched include several standard system directories plus any
-that you specify with -L.
-
-Normally the files found this way are library files-archive files whose
-members are object files. The linker handles an archive file by scanning
-through it for members which define symbols that have so far been referenced
-but not defined. But if the file that is found is an ordinary object file, it
-is linked in the usual fashion. 
-
-The only difference between using an -l option and specifying a file name is
-that -l surrounds library with 'lib' and '.a' and searches several
-directories.
-
-
--static
-    On systems that support dynamic linking, this prevents linking with the
-    shared libraries. On other systems, this option has no effect.
-
-// ok
-$ g++ -static t_01.cc -L/usr/local/lib -lboost_program_options
-
-// nk. undefined error like when use:
-// $ g++ -static t_01.cc 
-$ g++ -static -L/usr/local/lib -lboost_program_options t_01.cc
-
--shared
-    Produce a shared object which can then be linked with other objects to
-    form an executable. Not all systems support this option. For predictable
-    results, you must also specify the same set of options used for
-    compilation (-fpic, -fPIC, or model suboptions) when you specify this
-    linker option.1 
-
-<gcc-strip>
--s
-  Remove all symbol table and relocation information from the executable.
-
-
-https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html#Code-Gen-Options
-
-3.16 Options for Code Generation Conventions
-
--fpic
-    Generate position-independent code (PIC) suitable for use in a shared
-    library, `if supported for the target machine` Such code accesses all
-    constant addresses through a global offset table (GOT). The dynamic loader
-    resolves the GOT entries when the program starts (the dynamic loader is
-        not part of GCC; it is part of the operating system). If the GOT size
-    for the linked executable exceeds a machine-specific maximum size, you get
-      an error message from the linker indicating that -fpic does not work; in
-        that case, recompile with -fPIC instead. (These maximums are 8k on the
-            SPARC, 28k on AArch64 and 32k on the m68k and RS/6000. The x86 has
-            no such limit.)
-
-    Position-independent code requires special support, and therefore works
-    only on certain machines. For the x86, GCC supports PIC for System V but
-    not for the Sun 386i. Code generated for the IBM RS/6000 is always
-    position-independent.
-
-    When this flag is set, the macros __pic__ and __PIC__ are defined to 1.
-
--fPIC
-    If supported for the target machine, emit position-independent code,
-       suitable for dynamic linking and avoiding any limit on the size of the
-         global offset table. This option makes a difference on AArch64, m68k,
-       PowerPC and SPARC.
-
-    Position-independent code requires special support, and therefore works
-    only on certain machines.
-
-    When this flag is set, the macros __pic__ and __PIC__ are defined to 2.
-
-
--Xlinker option
-Pass option as an option to the linker. You can use this to supply
-system-specific linker options that GCC does not recognize.
-
-If you want to pass an option that takes a separate argument, you must use
--Xlinker twice, once for the option and once for the argument. For example, to
-pass -assert definitions, you must write -Xlinker -assert -Xlinker
-definitions. It does not work to write -Xlinker "-assert definitions", because
-this passes the entire string as a single argument, which is not what the
-linker expects.
-
-When using the GNU linker, it is usually more convenient to pass arguments to
-linker options using the option=value syntax than as separate arguments. For
-example, you can specify -Xlinker -Map=output.map rather than -Xlinker -Map
--Xlinker output.map. Other linkers may not support this syntax for
-command-line options.
-
-<ex>
-// ok
-$ g++ -static -std=c++0x -Xlinker -Map=output.map t_string.cpp
-
-// does really work
-LDFLAGS=" -s -Xlinker -rpath /lib -Xlinker -rpath-link $MIPS/lib/gcc/mips-linux/4.2.0"
-
-
-<ex> *gcc-link-order*
-// single line originally
-
--Xlinker --start-group 
-/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/i686-nptl-linux-gnu/lib/libasan.a
--L/home/kyoupark/STB_SW_vstb_clean/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/LittleEndian/release/lib
--lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib
--lgio -lgobject -ldbus -lz -lasan
--Wl,-rpath-link=/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/i686-nptl-linux-gnu/lib
--rdynamic
--Wl,-rpath-link=/home/kyoupark/STB_SW_vstb_clean/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/LittleEndian/release_dbg/lib/
--L/home/kyoupark/STB_SW_vstb_clean/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/LittleEndian/release_dbg/lib/
--Xlinker -R/NDS/lib
-/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/i686-nptl-linux-gnu/lib/libstdc++.a
--lusb
--L/home/kyoupark/STB_SW_vstb_clean/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/NDS_INTEL_X86_LNUX_MRFUSION_01/LittleEndian/fs/NDS/lib
--Xlinker --end-group -o
-
-
-*gcc-pass-option-to-linker*
--Wl,option
-Pass option as an option to the linker. If option contains commas, it is split
-into multiple options at the commas. You can use this syntax to pass an
-argument to the option. For example, -Wl,-Map,output.map passes -Map
-output.map to the linker. When using the GNU linker, you can also get the same
-effect with -Wl,-Map=output.map.
-
-
--nostdlib
-Do not use the standard system startup files or libraries when linking. No
-startup files and only the libraries you specify are passed to the linker, and
-options specifying linkage of the system libraries, such as -static-libgcc or
--shared-libgcc, are ignored.
-
-The compiler may generate calls to memcmp, memset, memcpy and memmove. These
-entries are usually resolved by entries in libc. These entry points should be
-supplied through some other mechanism when this option is specified.
-
-One of the standard libraries bypassed by -nostdlib and -nodefaultlibs is
-libgcc.a, a library of internal subroutines which GCC uses to overcome
-shortcomings of particular machines, or special needs for some languages. (See
-    Interfacing to GCC Output, for more discussion of libgcc.a.) In most
-cases, you need libgcc.a even when you want to avoid other standard libraries.
-In other words, when you specify -nostdlib or -nodefaultlibs you should
-usually specify -lgcc as well. This ensures that you have no unresolved
-references to internal GCC library subroutines. (An example of such an
-    internal subroutine is '__main', used to ensure C++ constructors are
-    called; see collect2.) 
-
-
-={============================================================================
 *kt_linux_gcc_400* gcc-option-link-order gcc-link-order
 
 {gcc-compliation-process}
-Four phase: preprocessing, compilation, assembly and linking. 
+Four phase: preprocessing, compilation, assembly and linking.
 
 <case> 
 Seen the case that during the porting work, built all files but when starts
@@ -61994,7 +61874,7 @@ compiler recognizes this function during Linker stage and this does not give
 any error.
 
 So gcc assumes implicit calls in compilation phase and starts to emit errors
-when 'actually' use it which lead to link it. See the below for a correct
+`when actually use it` which lead to link it. See the below for a correct
 answer.
 
 
@@ -62012,7 +61892,7 @@ $ md5sum a.out.one
 c33b4d44f06f21e0b378d8d1473b07d8  a.out.one
 
 
-<reference>
+<ex>
 http://eli.thegreenplace.net/2013/07/09/library-order-in-static-linking/
 
 Library order in static linking
@@ -62035,7 +61915,7 @@ int main(int argc, const char* argv[])
 
 It runs just fine and the return value is 5. Now, suppose this is part of a
 larger project that consists of many object files and libraries, and somewhere
-within the project there is a 'library' that contains this code:
+within the project there is a library that contains this code:
 
 void memcpy(char* aa, char* bb, char* cc) {
   int i;
@@ -62051,7 +61931,6 @@ expect it to still return 5? Return something else? Crash?
 segmentation fault. It depends on the order in which the objects and libraries
 in the project were fed to the linker.
 
-// see *case-link*
 
 If you fully understand why this depends on linking order, as well as how to
 avoid the problem (and more serious problems, like circular dependencies) then
@@ -62065,15 +61944,18 @@ Let's start by defining the scope of this article: first, my examples are
 demonstrating the use of the gcc and binutils toolchain on Linux. Compatible
 toolchains (like clang instead of gcc) apply too. 
 
+*gcc-link-static*
 Second, the discussion here resolves around `static linking` that's done at
 compile/link time.
 
-*symbol-visibility*
 `To understand why-linking-order-matters`, it's first instructional to
 understand how the linker works with respect to linking libraries and objects
-together. Just as a quick reminder - an object file both provides (exports)
-  external symbols to other objects and libraries, and expects (imports)
-  symbols from other objects and libraries. For example, in this C code:
+together. 
+
+*gcc-symbol-visibility*
+Just as a quick reminder - an object file both provides (exports) external
+symbols to other objects and libraries, and expects (imports) symbols from
+other objects and libraries. For example, in this C code:
 
 int imported(int);
 
@@ -62093,7 +61975,7 @@ $ gcc -c x.c
 $ nm x.o
 000000000000000e T exported
                  U imported         // undefined
-0000000000000000 t internal         // *cxx-static* 'lowercase' in nm means local.
+0000000000000000 t internal         // *cxx-static* since `lowercase` 
 
 This means: exported is an external symbol - defined in the object file and
 `visible from the outside.` imported is an undefined symbol; in other words, the
@@ -62102,7 +61984,7 @@ term undefined can become confusing - so it helps to remember that this is
 where it comes from originally. internal is defined within the object but
 `invisible from the outside.` 
 
-A library is simply a 'collection' of object files. Just a bunch of object
+`A library is simply a collection of object files.` Just a bunch of object
 files glued together. Creating a library is a very trivial operation that
 doesn't do anything special besides placing many object files into the same
 file. This in itself is important, because a horde of object files is not
@@ -62111,7 +61993,7 @@ convenient to deal with. For example, on my system libc.a (the static version
 just carry libc.a around.  
 
 
-The linking process {gcc-link-algorithm}
+The linking process *gcc-link-algorithm*
 
 This section defines the linking process in a somewhat dry, algorithmic
 manner. This process is the key to understanding why linking order matters.
@@ -62134,50 +62016,51 @@ certain order on the command-line, from left to right. This is the linking
 order. Here's what the linker does:
 
 
-<symbol-table>
+*gcc-link-symbol-table*
 The linker maintains a symbol table. This symbol table does a bunch of things,
     but among them is keeping two lists:
 
-1. A list of symbols 'exported' by all the objects and libraries encountered
-so far.
+o A list of `exported symbols` by all the objects and libraries encountered so
+  far.
 
-2. A list of 'undefined' symbols that the encountered objects and libraries
-requested to import and were not found yet.
+o A list of `undefined symbols` that the encountered objects and libraries
+  requested to import and were not found yet.
 
 
-<for-object-file>
+<when-make-object-file>
 When the linker encounters a new object-file, it looks at:
 
-1.The symbols it exports: these are added to the list of exported symbols
-mentioned above. If any symbol is in the undefined list, it's removed from
-there because it has now been found. If any symbol has already been in the
-exported list, we get a "multiple definition" error: two different objects
-export the same symbol and the linker is confused.
+o The symbols it exports: these are added to the list of exported symbols
+  mentioned above. If any symbol is in the undefined list, it's removed from
+  there because it has now been found. If any symbol has already been in the
+  exported list, we get a "multiple definition" error: two different objects
+  export the same symbol and the linker is confused.
 
-2. The symbols it imports: these are added to the list of undefined symbols,
+o The symbols it imports: these are added to the list of undefined symbols,
   unless they can be found in the list of exported symbols.
 
 
-<for-library>
+<when-make-library> when make a library from linking
 note: the key is that linker tries to find a symbol `only when` it's in the
 undefine list in the symbol table.
 
 When the linker encounters a new library, things are a bit more interesting.
-The linker goes over all the objects in the library. For each one, it 'first'
+The linker goes over all the objects in the library. For each one, it first
 looks at the symbols it exports.
 
-1. If any of the symbols it(library) exports are on the undefined list, the
-object is 'added' to the link and the next step is executed. Otherwise, the
-next step is skipped. This means that if it is not used, this object is not be
-added to the link. 
+*gcc-link-single-pass*
+o If any of the symbols it(library) exports `are on the undefined list`, the
+  object is `added` to the link and the next step is executed. Otherwise, the
+  next step is skipped. This means that if it is not used, this object is not
+  be added to the link. 
 
-2. If the object (from the libray) has been added to the link, it's treated as
-described above - its undefined and exported symbols get added to the symbol
-table. 
+o If the object (from the libray) has been added to the link, it's treated as
+  described above - its undefined and exported symbols get added to the symbol
+  table. 
 
-3. Finally, if any of the objects in the library has been included in the
-link, the library is 'rescanned' again - it's possible that symbols imported
-by the included object can be found in other objects within the same library.
+o Finally, if any of the objects in the library has been included in the link,
+  the library is 'rescanned' again - it's possible that symbols imported by
+  the included object can be found in other objects within the same library.
 
 When the linker finishes, it looks at the symbol table. If any symbols remain
 in the undefined list the linker will throw an `"undefined reference" error`
@@ -62190,6 +62073,77 @@ the main function, you'll get something like:
 collect2: ld returned 1 exit status
 
 
+<ex> *gcc-link-order*
+Link errors although they are defined in the library?
+
+It makes a difference where in the command you write this option; the linker
+searches and processes libraries and object files in the order they are
+specified. 
+
+Thus, 'foo.o -lz bar.o' searches library 'z' after file foo.o but before
+bar.o. If bar.o refers to functions in 'z', those functions may not be loaded
+since *gcc-link-single-pass*
+
+
+<ex>
+// NO
+
+$(TESTS) : $(TARGET).o gtest.a gmock.a
+  $(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread -ltinyxml2 ^$ -o $@
+
+g++ -isystem /home/kitp/works/googletest/googletest/include -isystem
+-L/home/kitp/works/tinyxml2 -lpthread `-ltinyxml2 tinyxml_test.o` gtest.a
+gmock.a -o tinyxml_test_test
+
+tinyxml_test.o: In function `TinyXml_X_Test::TestBody()':
+/home/kitp/git/kb/code-cxx/t_ex_ccook/tinyxml_test.cpp:36: 
+  undefined reference to `tinyxml2::XMLDocument::XMLDocument(bool, tinyxml2::Whitespace)'
+
+// YES
+
+$(TESTS) : $(TARGET).o gtest.a gmock.a
+  $(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -ltinyxml2 -o $@
+
+g++ -isystem /home/kitp/works/googletest/googletest/include -isystem
+  -L/home/kitp/works/tinyxml2 -lpthread `tinyxml_test.o` gtest.a gmock.a
+  `-ltinyxml2` -o tinyxml_test_test
+
+
+<ex>
+
+// YES
+
+arm-rdk-linux-gnueabi-g++ `-lcurl` -o authservice `authservice.o` helpers.o
+logger.o getDeviceInfo.o openssl_helpers.o jsonparser.o platformimpl.o  -lssl
+-lz -lbcrypt -lnxclient -lcjson -L=/usr/local/broadcom/lib -lsrai -lb_secbuf
+-L/media/keitee/ssd2/2/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/include
+-Wl,-whole-archive -lsec_authn -Wl,-no-whole-archive -Wl,-whole-archive
+-Wl,-no-whole-archive -L=/usr/lib -lsec_api -lsec_api_common_hw -lIARMBus
+-ldbus-1 -ldl -lfcgi -lyajl_s -lcrypto -lnexus -lcmndrm -ldrmrootfs
+-lQt5Network -lQt5Core -lpthread
+
+// NO
+
+arm-rdk-linux-gnueabi-g++  -o authservice `authservice.o` helpers.o logger.o
+getDeviceInfo.o openssl_helpers.o jsonparser.o platformimpl.o `-lcurl`
+
+/usr/src/debug/authservice/1.99-r0/git/authservice.cpp:1084: error: undefined reference to 'curl_easy_setopt'
+collect2: error: ld returned 1 exit status
+
+// ERR? WHY it's opposite???
+
+// NO but when removing "-L", it works.
+arm-rdk-linux-gnueabi-g++  -o authservice authservice.o helpers.o logger.o
+getDeviceInfo.o openssl_helpers.o jsonparser.o platformimpl.o   -L -lcurl 
+
+
+-Ldir
+Add directory dir to the list of directories to be searched for -l.
+
+"-L" may empty search path? -print-search-dirs shows no difference so not
+sure the reason.
+
+
 <gcc-link-rescan>
 Note that after the linker has looked at a library, it won't look at it again.
 Even if it exports symbols that may be needed by some later library. The only
@@ -62200,20 +62154,17 @@ rescanned. Flags passed to the linker can tweak this process - again, we'll
 see some examples later.
 
 
-<gcc-link-added-when-really-used>
+<gcc-link-added-when-really-used> *gcc-link-single-pass*
 Also note that when a library is examined, an object file within it can be
 left out of the link if it does not provide symbols that the symbol table
 needs. `This is a very important feature of static linking.` The C library I
 mentioned before makes a heavy use of this feature, by mostly splitting itself
 to an-object-per-function. So, for example if the only C standard library
-function your code 'uses' is strlen, only strlen.o will be taken into the link
-from libc.a - and your executable will be very small.
+function your code uses is strlen, only strlen.o will be taken into the link
+from libc.a - and `your executable will be very small.`
 
-Simple examples 
-// these examples works on ubuntu as they are shown.
 
-The previous section can be hard to digest, so here are some simple examples
-that show the process in action.
+<ex> *gcc-link-order* only matters when linking a libaray
 
 Let's start with the most basic case, of linking two objects together:
 
@@ -62240,8 +62191,6 @@ $ ./a.out ; echo $?
 
 // $? means the exit status which is return value in this case.
 
-note: <key> linking order only matters when use a libaray
-
 :~/work$ nm simplefunc.o
 00000000 T func
 
@@ -62249,7 +62198,6 @@ note: <key> linking order only matters when use a libaray
          U func
 00000000 T main
 
-*gcc-link-order*
 `Since these are object files, the linking order does 'not' matter.` Object
 files are always taken into the link. We can pass them to the linker in
 reversed order and it still works: 
@@ -62565,6 +62513,169 @@ lib archive but picked up wrong one.
 -lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib
 -lgio -lgobject -ldbus -lz -lasan
 -Xlinker --end-group -o
+
+
+gcc-link-option-gcc-option-link
+
+http://gcc.gnu.org/onlinedocs/gcc/Link-Options.html#Link-Options
+
+3.14 Options for Linking
+
+-llibrary
+-l library
+Search the library `named library` when `linking`. 
+
+The linker searches a standard list of directories for the library, which is
+actually a file named liblibrary.a. The linker then uses this file as if it
+had been specified precisely by name.
+
+*gcc-link-search*
+The directories searched include several standard system directories plus any
+that you specify with -L.
+
+Normally the files found this way are library files-archive files whose
+members are object files. The linker handles an archive file by scanning
+through it for members which define symbols that have so far been referenced
+but not defined. But if the file that is found is an ordinary object file, it
+is linked in the usual fashion. 
+
+The only difference between using an -l option and specifying a file name is
+that -l surrounds library with 'lib' and '.a' and searches several
+directories.
+
+
+-static
+    On systems that support dynamic linking, this prevents linking with the
+    shared libraries. On other systems, this option has no effect.
+
+// ok
+$ g++ -static t_01.cc -L/usr/local/lib -lboost_program_options
+
+// nk. undefined error like when use:
+// $ g++ -static t_01.cc 
+$ g++ -static -L/usr/local/lib -lboost_program_options t_01.cc
+
+-shared
+    Produce a shared object which can then be linked with other objects to
+    form an executable. Not all systems support this option. For predictable
+    results, you must also specify the same set of options used for
+    compilation (-fpic, -fPIC, or model suboptions) when you specify this
+    linker option.1 
+
+<gcc-strip>
+-s
+  Remove all symbol table and relocation information from the executable.
+
+
+https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html#Code-Gen-Options
+
+3.16 Options for Code Generation Conventions
+
+-fpic
+    Generate position-independent code (PIC) suitable for use in a shared
+    library, `if supported for the target machine` Such code accesses all
+    constant addresses through a global offset table (GOT). The dynamic loader
+    resolves the GOT entries when the program starts (the dynamic loader is
+        not part of GCC; it is part of the operating system). If the GOT size
+    for the linked executable exceeds a machine-specific maximum size, you get
+      an error message from the linker indicating that -fpic does not work; in
+        that case, recompile with -fPIC instead. (These maximums are 8k on the
+            SPARC, 28k on AArch64 and 32k on the m68k and RS/6000. The x86 has
+            no such limit.)
+
+    Position-independent code requires special support, and therefore works
+    only on certain machines. For the x86, GCC supports PIC for System V but
+    not for the Sun 386i. Code generated for the IBM RS/6000 is always
+    position-independent.
+
+    When this flag is set, the macros __pic__ and __PIC__ are defined to 1.
+
+-fPIC
+    If supported for the target machine, emit position-independent code,
+       suitable for dynamic linking and avoiding any limit on the size of the
+         global offset table. This option makes a difference on AArch64, m68k,
+       PowerPC and SPARC.
+
+    Position-independent code requires special support, and therefore works
+    only on certain machines.
+
+    When this flag is set, the macros __pic__ and __PIC__ are defined to 2.
+
+
+-Xlinker option
+Pass option as an option to the linker. You can use this to supply
+system-specific linker options that GCC does not recognize.
+
+If you want to pass an option that takes a separate argument, you must use
+-Xlinker twice, once for the option and once for the argument. For example, to
+pass -assert definitions, you must write -Xlinker -assert -Xlinker
+definitions. It does not work to write -Xlinker "-assert definitions", because
+this passes the entire string as a single argument, which is not what the
+linker expects.
+
+When using the GNU linker, it is usually more convenient to pass arguments to
+linker options using the option=value syntax than as separate arguments. For
+example, you can specify -Xlinker -Map=output.map rather than -Xlinker -Map
+-Xlinker output.map. Other linkers may not support this syntax for
+command-line options.
+
+<ex>
+// ok
+$ g++ -static -std=c++0x -Xlinker -Map=output.map t_string.cpp
+
+// does really work
+LDFLAGS=" -s -Xlinker -rpath /lib -Xlinker -rpath-link $MIPS/lib/gcc/mips-linux/4.2.0"
+
+
+<ex> *gcc-link-order*
+// single line originally
+
+-Xlinker --start-group 
+/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/i686-nptl-linux-gnu/lib/libasan.a
+-L/home/kyoupark/STB_SW_vstb_clean/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/LittleEndian/release/lib
+-lm -lpthread -lrt -ldl -ltirpc -lsky_airplay_helper -lminizip -ljsoncpp -lglib
+-lgio -lgobject -ldbus -lz -lasan
+-Wl,-rpath-link=/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/i686-nptl-linux-gnu/lib
+-rdynamic
+-Wl,-rpath-link=/home/kyoupark/STB_SW_vstb_clean/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/LittleEndian/release_dbg/lib/
+-L/home/kyoupark/STB_SW_vstb_clean/FUSIONOS_9/BLD_NDS_INTEL_X86_LNUX_MRFUSION_01/platform_cfg/linux/LittleEndian/release_dbg/lib/
+-Xlinker -R/NDS/lib
+/home/kyoupark/asan/i686-nptl-linux-gnu-vstb-630/i686-nptl-linux-gnu/lib/libstdc++.a
+-lusb
+-L/home/kyoupark/STB_SW_vstb_clean/FUSION_SYSTEM_INTEGRATION/BSKYB_INTEGRATION/build/picasso/NDS_INTEL_X86_LNUX_MRFUSION_01/LittleEndian/fs/NDS/lib
+-Xlinker --end-group -o
+
+
+*gcc-pass-option-to-linker*
+-Wl,option
+Pass option as an option to the linker. If option contains commas, it is split
+into multiple options at the commas. You can use this syntax to pass an
+argument to the option. For example, -Wl,-Map,output.map passes -Map
+output.map to the linker. When using the GNU linker, you can also get the same
+effect with -Wl,-Map=output.map.
+
+
+-nostdlib
+Do not use the standard system startup files or libraries when linking. No
+startup files and only the libraries you specify are passed to the linker, and
+options specifying linkage of the system libraries, such as -static-libgcc or
+-shared-libgcc, are ignored.
+
+The compiler may generate calls to memcmp, memset, memcpy and memmove. These
+entries are usually resolved by entries in libc. These entry points should be
+supplied through some other mechanism when this option is specified.
+
+One of the standard libraries bypassed by -nostdlib and -nodefaultlibs is
+libgcc.a, a library of internal subroutines which GCC uses to overcome
+shortcomings of particular machines, or special needs for some languages. (See
+    Interfacing to GCC Output, for more discussion of libgcc.a.) In most
+cases, you need libgcc.a even when you want to avoid other standard libraries.
+In other words, when you specify -nostdlib or -nodefaultlibs you should
+usually specify -lgcc as well. This ensures that you have no unresolved
+references to internal GCC library subroutines. (An example of such an
+    internal subroutine is '__main', used to ensure C++ constructors are
+    called; see collect2.) 
+
 
 
 ={============================================================================
