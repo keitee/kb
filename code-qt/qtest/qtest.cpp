@@ -496,8 +496,14 @@ TEST(QtMap, Access)
 }
 
 /*
+https://doc.qt.io/qt-5/qvariant.html#QVariantList-typedef
+
+typedef QVariant::QVariantList
+Synonym for QList<QVariant>.
+
 typedef QVariant::QVariantMap
 Synonym for QMap<QString, QVariant>.
+
 */
 
 TEST(QtMap, VariantMap)

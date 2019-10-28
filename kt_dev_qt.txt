@@ -2130,6 +2130,105 @@ Q_PROPERTY(type name
            [CONSTANT]
            [FINAL])
 
+A property behaves like a class data member, but it has additional features
+accessible through the Meta-Object System.
+
+A READ accessor function is required `if no MEMBER variable was specified.` It
+is for reading the property value. Ideally, a const function is used for this
+purpose, and it must return either the property's type or a const reference to
+that type. e.g., QWidget::focus is a read-only property with READ function,
+QWidget::hasFocus().
+
+A WRITE accessor function is optional. It is for setting the property value.
+It must return void and must take exactly one argument, either of the
+property's type or a pointer or reference to that type. e.g., QWidget::enabled
+has the WRITE function QWidget::setEnabled(). Read-only properties do not need
+WRITE functions. e.g., QWidget::focus has no WRITE function.
+
+A MEMBER variable association is required if no READ accessor function is
+specified. This makes the given member variable readable and writable without
+the need of creating READ and WRITE accessor functions. It's still possible to
+use READ or WRITE accessor functions in addition to MEMBER variable
+association (but not both), if you need to control the variable access.
+
+A NOTIFY signal is optional. If defined, it should specify one existing signal
+in that class that is emitted whenever the value of the property changes.
+NOTIFY signals for MEMBER variables must take zero or one parameter, which
+must be of the same type as the property. The parameter will take the new
+value of the property. The NOTIFY signal should only be emitted when the
+property has really been changed, to avoid bindings being unnecessarily
+re-evaluated in QML, for example. Qt emits automatically that signal when
+needed for MEMBER properties that do not have an explicit setter.
+
+
+A property can be read and written using the generic functions
+QObject::property() and QObject::setProperty()
+
+https://doc.qt.io/qt-5/qobject.html
+
+QVariant QObject::property(const char *name) const
+
+Returns the value of the object's name property.
+
+If no such property exists, the returned variant is invalid.
+
+Information about all available properties is provided through the
+metaObject() and dynamicPropertyNames().
+
+
+bool QObject::setProperty(const char *name, const QVariant &value)
+
+Sets the value of the object's name property to value.
+
+If the property is defined in the class using Q_PROPERTY then true is returned
+on success and false otherwise. If the property is not defined using
+Q_PROPERTY, and `therefore not listed in the meta-object`, it is added as a
+dynamic property and false is returned.
+
+Information about all available properties is provided through the
+metaObject() and dynamicPropertyNames().
+
+Dynamic properties can be queried again using property() and can be removed by
+setting the property value to an invalid QVariant. Changing the value of a
+dynamic property causes a QDynamicPropertyChangeEvent to be sent to the
+object.
+
+
+but setting the property this way requires that you know about the class at
+compile time. Accessing properties by name lets you access classes you don't
+know about at compile time. You `can discover a class's properties at run time`
+by querying its QObject, QMetaObject, and QMetaProperties.
+
+QObject *object = ...
+const QMetaObject *metaobject = object->metaObject();
+int count = metaobject->propertyCount();
+for (int i=0; i<count; ++i) {
+    QMetaProperty metaproperty = metaobject->property(i);
+    const char *name = metaproperty.name();
+    QVariant value = object->property(name);
+    ...
+}
+
+In the above snippet, QMetaObject::property() is used to get metadata about
+each property defined in some unknown class. The property name is fetched from
+the metadata and passed to QObject::property() to get the value of the
+property in the current object.
+
+
+*qt-meta-object*
+Note that dynamic properties are added on a per instance basis, i.e., they are
+added to QObject, `not QMetaObject.`
+
+Suggest QMetaObject is per class?
+
+The Qt Meta-Object System in Qt is responsible for the signals and slots
+inter-object communication mechanism, runtime type information, and the Qt
+property system. A single QMetaObject instance is created for each QObject
+`subclass` that is used in an application, and this instance stores all the
+meta-information for the QObject subclass. This object is available as
+QObject::metaObject().
+
+
 Here are some typical examples of property declarations taken from class QWidget.
 
 Q_PROPERTY(bool focus READ hasFocus)
@@ -2459,6 +2558,16 @@ registered on.
 Classes derived from QDBusAbstractAdaptor must be created on the heap using
 the new operator and must not be deleted by the user (they will be deleted
     automatically when the object they are connected to is also deleted).
+
+
+QObject::Q_CLASSINFO(Name, Value)
+
+This macro associates extra information to the class, which is available using
+QObject::metaObject(). Qt makes only limited use of this feature, in the
+Active Qt, Qt D-Bus and Qt QML.
+
+The extra information takes the form of a Name string and a Value literal
+string.
 
 
 *qt-proxy-ex* example from complexping
