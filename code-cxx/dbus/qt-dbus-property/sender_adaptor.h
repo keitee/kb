@@ -71,6 +71,7 @@ Q_SIGNALS: // SIGNALS
   void powerChanged(bool powered);
 
 private:
+  void notifyPropertyChanged();
   bool m_powered{false};
 };
 

@@ -114,6 +114,9 @@ method return time=1571310650.913287 sender=:1.414 -> destination=:1.418 serial=
 dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.SendCommand string:'command' 
 method return time=1571332947.866428 sender=:1.72 -> destination=:1.73 serial=3 reply_serial=2
 
+// to use PropertyChanged
+dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.SendCommand string:'changed' 
+
 // to quit
 dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.ConnectProfile string:'hello'
 method return time=1571314615.835578 sender=:1.414 -> destination=:1.424 serial=4 reply_serial=2

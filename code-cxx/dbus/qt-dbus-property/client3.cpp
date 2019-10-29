@@ -41,7 +41,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  ClientUseProxy client((org::example::sender *)sender.data());
+  ClientUseProxy client("client3", (org::example::sender *)sender.data());
 
   // org::example::sender *sender;
   // sender = new org::example::sender(QString(), QString(),

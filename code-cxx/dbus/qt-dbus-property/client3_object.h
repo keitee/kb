@@ -10,14 +10,14 @@ class ClientUseProxy : public QObject
 {
   Q_OBJECT
   public:
-    ClientUseProxy(org::example::sender *);
+    ClientUseProxy(const QString &name, org::example::sender *);
     // ClientUseProxy(QDBusAbstractInterface *);
 
   public slots:
     void onSignalReceived(const QString &name, const QString &text);
 
   private:
-    // QDBusAbstractInterface *proxy_;
+    QString name_;
     org::example::sender *proxy_;
 };
 

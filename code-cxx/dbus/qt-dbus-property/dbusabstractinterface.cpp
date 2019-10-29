@@ -289,7 +289,7 @@ void DBusAbstractInterface::onPropertiesChanged(
 
     // As with isSignalPropertyNotification(), only notify if it's from property
     // notify.
-    qDebug("changed property %s.%s", interface, name);
+    qDebug("changed property %s.%s", qPrintable(interface), qPrintable(name));
     invokeNotifySignal(method, name, value, prop.userType());
   } // for
 }

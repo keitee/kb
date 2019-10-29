@@ -92,11 +92,20 @@ void SenderAdaptor::ConnectProfile(const QString &UUID)
 void SenderAdaptor::SendCommand(const QString &command)
 {
   qDebug() << QString("sender::SendCommand(\"%1\") got called").arg(command);
-  QTimer::singleShot(5000, this, SLOT(onTimerExpired()));
 
-  // set property value and `powerChanged` is emitted
-  qDebug() << "SenderAdaptor::setProperty(true)";
-  setProperty("Powered", true);
+  if (command == "command")
+  {
+    QTimer::singleShot(5000, this, SLOT(onTimerExpired()));
+
+    // set property value and `powerChanged` is emitted
+    qDebug() << "SenderAdaptor::setProperty(true)";
+    setProperty("Powered", true);
+  }
+  else
+  {
+    qDebug() << "notifyPropertyChanged called";
+    notifyPropertyChanged();
+  }
 }
 
 void SenderAdaptor::onTimerExpired()
@@ -111,4 +120,32 @@ void SenderAdaptor::onTimerExpired()
 void SenderAdaptor::onPowerChanged(bool power)
 {
   qDebug() << "got powerChanged signal (" << power << ")";
+}
+
+
+// void SenderAdaptor::notifyPropertyChanged( const QString& interface,
+//                            const QString& propertyName )
+
+void SenderAdaptor::notifyPropertyChanged()
+{
+  // https://doc.qt.io/qt-5/qdbusmessage.html#createSignal
+  // QDBusMessage QDBusMessage::createSignal(
+  //  const QString &path, 
+  //  const QString &interface, 
+  //  const QString &name)
+
+  QDBusMessage signal = QDBusMessage::createSignal(
+      "/",
+      "org.freedesktop.DBus.Properties",
+      "PropertiesChanged");
+  signal << "org.example.sender";
+  QVariantMap changedProps;
+
+  // `QVariant`` QObject::property(const char *name) const
+  // Returns the value of the object's name property.
+  changedProps.insert("Powered", property("Powered"));
+
+  signal << changedProps;
+  signal << QStringList();
+  QDBusConnection::sessionBus().send(signal);
 }
