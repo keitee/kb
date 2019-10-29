@@ -43,8 +43,14 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 add_executable(sender sender.cpp sender_adaptor.cpp)
 target_link_libraries(sender Qt5::DBus Qt5::Core Qt5::Widgets)
 
-add_executable(client client.cpp client_object.cpp)
-target_link_libraries(client Qt5::DBus Qt5::Core Qt5::Widgets)
+# use direct interface
+add_executable(client1 client1.cpp client1_object.cpp)
+target_link_libraries(client1 Qt5::DBus Qt5::Core Qt5::Widgets)
 
-add_executable(client_proxy client_use_proxy.cpp client_use_proxy_object.cpp sender_interface.cpp)
-target_link_libraries(client_proxy Qt5::DBus Qt5::Core Qt5::Widgets)
+# use default proxy
+add_executable(client2 client2.cpp client2_object.cpp sender_interface.cpp)
+target_link_libraries(client2 Qt5::DBus Qt5::Core Qt5::Widgets)
+
+# use extended proxy
+add_executable(client3 client3.cpp client3_object.cpp sender_interface_extended.cpp dbusabstractinterface.cpp)
+target_link_libraries(client3 Qt5::DBus Qt5::Core Qt5::Widgets)

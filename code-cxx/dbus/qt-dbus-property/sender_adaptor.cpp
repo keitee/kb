@@ -25,9 +25,6 @@
 SenderAdaptor::SenderAdaptor(QObject *parent)
     : QDBusAbstractAdaptor(parent)
 {
-  // constructor
-  setAutoRelaySignals(true);
-
   connect(this, SIGNAL(powerChanged(bool)), this, SLOT(onPowerChanged(bool)));
 }
 
@@ -40,8 +37,8 @@ bool SenderAdaptor::powered() const
 {
   // get the value of property Powered
   qDebug() << "SenderAdaptor::powered(" << m_powered << ") called";
-  return qvariant_cast<bool>(parent()->property("Powered"));
-  // return m_powered;
+  // return qvariant_cast<bool>(parent()->property("Powered"));
+  return m_powered;
 }
 
 /*
@@ -71,11 +68,9 @@ QMetaProperty::write().
 
 void SenderAdaptor::setPowered(bool value)
 {
-  // set the value of property Powered
-  parent()->setProperty("Powered", QVariant::fromValue(value));
-
-  m_powered = value;
   qDebug() << "SenderAdaptor::setPowered(" << m_powered << ") called";
+  m_powered = value;
+  emit powerChanged(value);
 }
 
 // As with ping example, QString Pong::ping(const QString &arg), use this slot
@@ -97,17 +92,20 @@ void SenderAdaptor::ConnectProfile(const QString &UUID)
 void SenderAdaptor::SendCommand(const QString &command)
 {
   qDebug() << QString("sender::SendCommand(\"%1\") got called").arg(command);
-  QTimer::singleShot(2000, this, SLOT(onTimerExpired()));
+  QTimer::singleShot(5000, this, SLOT(onTimerExpired()));
 
   // set property value and `powerChanged` is emitted
-  qDebug() << "sender::setProperty(false)";
-  setProperty("Powered", false);
+  qDebug() << "SenderAdaptor::setProperty(true)";
+  setProperty("Powered", true);
 }
 
 void SenderAdaptor::onTimerExpired()
 {
   qDebug() << "timer expired and emit signal";
   emit action("from sender", "do you hear me?");
+
+  qDebug() << "timer expired and change property";
+  setProperty("Powered", false);
 }
 
 void SenderAdaptor::onPowerChanged(bool power)

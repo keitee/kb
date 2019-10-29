@@ -169,6 +169,7 @@ ChatMainWindow::ChatMainWindow()
     }
 
     // this shows error when comment out signals on the proxy code.
+    // Q: who's going to free `iface`?
     connect(iface, SIGNAL(action(QString,QString)), 
         this, SLOT(actionSlot(QString,QString)));
 

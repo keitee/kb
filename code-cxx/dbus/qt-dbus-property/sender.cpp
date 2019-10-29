@@ -9,9 +9,10 @@ int main(int argc, char **argv)
 
   if (!QDBusConnection::sessionBus().isConnected())
   {
-    fprintf(stderr, "Cannot connect to the D-Bus session bus.\n"
-        "To start it, run:\n"
-        "\teval `dbus-launch --auto-syntax`\n");
+    fprintf(stderr,
+            "Cannot connect to the D-Bus session bus.\n"
+            "To start it, run:\n"
+            "\teval `dbus-launch --auto-syntax`\n");
     return 1;
   }
 
@@ -50,7 +51,8 @@ int main(int argc, char **argv)
 
   if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME))
   {
-    fprintf(stderr, "%s\n",
+    fprintf(stderr,
+            "%s\n",
             qPrintable(QDBusConnection::sessionBus().lastError().message()));
     printf("pong cannot register service and exit\n");
     exit(1);

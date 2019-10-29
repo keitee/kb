@@ -1,5 +1,11 @@
 #include "dbusabstractinterface.h"
 
+#include <QDebug>
+#include <QMetaProperty>
+
+#include <QDBusArgument>
+#include <QDBusMetaType>
+
 // -----------------------------------------------------------------------------
 /*
 
@@ -39,7 +45,7 @@ QString const
 DBusAbstractInterface::DBusAbstractInterface(QString const &service,
                                              QString const &path,
                                              char const *interface,
-                                             QDBusConnection &connection,
+                                             const QDBusConnection &connection,
                                              QObject *parent)
     : QDBusAbstractInterface(service, path, interface, connection, parent)
     , m_propertyChangedConnected(false)
@@ -53,7 +59,7 @@ DBusAbstractInterface::DBusAbstractInterface(QString const &service,
   // test) the service name should be empty.
   // NOTE: case when uses DEBUG build
 
-  QString service = QDBusAbstractInterface::service();
+  QString serviceName = QDBusAbstractInterface::service();
 
   // QString QDBusConnection::baseService() const
   // Returns the unique connection name for this connection, if this
@@ -64,9 +70,9 @@ DBusAbstractInterface::DBusAbstractInterface(QString const &service,
   // connection. It uniquely identifies this client in the bus.
   //
   // This function returns an empty QString for "peer-to-peer" connections.
-#if defined(_BUILD_TYPE == DEBUG)
+#if defined(_BUILD_TYPE) && (_BUILD_TYPE == DEBUG)
   if (connection.isConnected() && connection.baseService().isEmpty())
-    service.clear();
+    serviceName.clear();
 #endif
 
   // bool QDBusConnection::connect(
@@ -101,7 +107,7 @@ DBusAbstractInterface::DBusAbstractInterface(QString const &service,
   // This function was introduced in Qt 4.6.
 
   if (!conn.connect(
-        service,
+        serviceName,
         QDBusAbstractInterface::path(),
         m_dbusPropertiesInterface,
         m_dbusPropertiesChangedSignal,
@@ -126,7 +132,7 @@ DBusAbstractInterface::DBusAbstractInterface(QString const &service,
   in the Q_PROPERTY declaration.
 */
 
-bool QDBusAbstractInterface::isSignalPropertyNotification(
+bool DBusAbstractInterface::isSignalPropertyNotification(
   QMetaMethod const &signal) const
 {
   if (Q_UNLIKELY(signal.methodType() != QMetaMethod::Signal))
@@ -409,7 +415,7 @@ void DBusAbstractInterface::invokeNotifySignal(QMetaMethod const &method,
 */
 
 QDBusPendingReply<QDBusVariant>
-DBusAbstractInterface::asnycProperty(char const *name)
+DBusAbstractInterface::asyncProperty(char const *name) const
 {
   QDBusMessage msg =
     QDBusMessage::createMethodCall(QDBusAbstractInterface::service(),
@@ -467,7 +473,8 @@ DBusAbstractInterface::asnycProperty(char const *name)
 */
 
 QDBusPendingReply<>
-DBusAbstractInterface::asyncSetProperty(char const *name, const QVariant &value)
+DBusAbstractInterface::asyncSetProperty(char const *name,
+                                        const QVariant &value) const
 {
   QDBusMessage msg =
     QDBusMessage::createMethodCall(QDBusAbstractInterface::service(),
@@ -503,7 +510,7 @@ DBusAbstractInterface::asyncSetProperty(char const *name, const QVariant &value)
 */
 
 QDBusPendingReply<DBusPropertyMap>
-DBusAbstractInterface::asyncGetAllProperties()
+DBusAbstractInterface::asyncGetAllProperties() const
 {
   QDBusMessage msg =
     QDBusMessage::createMethodCall(QDBusAbstractInterface::service(),

@@ -16,7 +16,7 @@
 
 using DBusPropertyMap = QVariantMap;
 
-class DBusAbstractInterface : public QDbusAbstractInterface
+class DBusAbstractInterface : public QDBusAbstractInterface
 {
   Q_OBJECT
 
@@ -24,7 +24,7 @@ protected:
   explicit DBusAbstractInterface(QString const &service,
                                  QString const &path,
                                  char const *interface,
-                                 QDBusConnection &connection,
+                                 const QDBusConnection &connection,
                                  QObject *parent);
 
   // https://doc.qt.io/qt-5/qtglobal.html#Q_DECL_OVERRIDE
@@ -49,7 +49,7 @@ protected:
   void disconnectNotify(QMetaMethod const &signal) Q_DECL_OVERRIDE;
 
 public:
-  QDBusPendingReply<QDBusVariant> asnycProperty(char const *name) const;
+  QDBusPendingReply<QDBusVariant> asyncProperty(char const *name) const;
   QDBusPendingReply<> asyncSetProperty(char const *name,
                                        const QVariant &value) const;
 

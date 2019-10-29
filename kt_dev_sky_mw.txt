@@ -7646,8 +7646,11 @@ DISTRO_FEATURES_append = " build_rne"
 
 bitbake comcast-mediaclient-vbn-image
 
-# to check id/pass
+
+<check-id-pass>
 wget --user bp-bgray640 --password fugo8PCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/sdk/refsw/17_3/refsw_release_unified_20170922/2.1/refsw_release_unified_20170922-2.1.tgz
+wget --user bp-bgray640 --password fugo8PCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/tigressfwtool/2_2a/tigress-Linux-x86_64-2.2a/2.1/tigress-Linux-x86_64-2.2a-2.1.tar.bz2
+wget --user bp-bgray640 --password fugo8PCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/cpgu/yocto/common/cpgu_brcm_arm/2.18/cpgu_brcm_arm-2.18.tar.bz2
 
 <x>
 /media/keitee/ssd2/2/build-arrisxi6-morty/tmp/work/x86_64-linux/breakpad-native/svn-r0/trunk/src/client/linux/dump_writer_common/ucontext_reader.cc
@@ -7762,6 +7765,147 @@ fatal error: QtWebRTC/private/qwebrtcusermediainterfaces.h: No such file or dire
 ./work/cortexa15t2hf-neon-rdk-linux-gnueabi/qtwebrtc/5.1.1-r0/git/src/webrtc/impl/qwebrtcusermediainterfaces.h
 
 make private directory and copy headers into it
+
+<docker>
+export TIMESTART=`date +%s`
+export DNAME=ubuntu14-morty-$TIMESTART
+
+# rename this to suit you
+export SHARENAME=docker_share
+export SHAREBASE=`pwd`
+
+docker run --name=$DNAME -d -v $SHAREBASE/$SHARENAME:/home/developer -it tony-working0image /bin/bash
+docker attach $DNAME
+
+# Now In Container
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get -y update && apt-get -y upgrade -u && apt-get -y install \
+rsync \
+ssh \
+build-essential \
+curl \
+git \
+gawk \
+wget \
+git-core \
+diffstat \
+unzip \
+texinfo \
+gcc-multilib \
+build-essential \
+chrpath \
+socat \
+libsdl1.2-dev \
+xterm \
+binfmt-support \
+qemu \
+qemu-user-static
+
+echo "dash dash/sh boolean false" | debconf-set-selections
+dpkg-reconfigure dash
+
+useradd   -s /bin/bash developer
+mkdir -p /home/developer
+chown -R developer:developer /home/developer
+
+
+echo '
+developer    ALL=(ALL) NOPASSWD: ALL
+' >> /etc/sudoers
+
+passwd -d developer
+
+
+su developer
+cd ~
+
+
+mkdir -p ~/bin/
+curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+chmod a+x ~/bin/repo
+export PATH="~/bin:$PATH"
+
+mkdir .ssh/
+
+# echo "
+# Host *
+#    ServerAliveInterval 30
+#    ServerAliveCountMax 20
+# Host gerrit.teamccp.com
+# HostName gerrit.teamccp.com
+# User <bp-username>
+# IdentityFile ~/.ssh/id_rsa
+# " >> ~/.ssh/config
+
+echo "
+Host *
+   ServerAliveInterval 30
+   ServerAliveCountMax 20
+Host gerrit.teamccp.com
+    HostName gerrit.teamccp.com
+    ServerAliveInterval 30
+    ServerAliveCountMax 20
+    User bp-bgray640
+" >> ~/.ssh/config
+
+
+## Copy over the ssh keys
+sudo cp -r ~/keys/id* ~/.ssh/
+sudo chown -R developer:developer /home/developer/.ssh
+
+Check connectivity works with something like
+ssh -i ~/.ssh/id_rsa_comcast -p 29418 bp-bgray640@gerrit.teamccp.com
+
+# echo "
+# machine nexus.teamccp.com login bp-mmariy569 password 6lRxqACt5
+# " >>~/.netrc
+
+echo "
+machine nexus.teamccp.com login bp-bgray640 password PasswordGoesHere
+" >>~/.netrc
+
+
+git config --global user.email "kit.park@sky.uk"
+git config --global user.name "Kit Park"
+
+sudo apt-get install locales
+sudo locale-gen en_US.UTF-8
+sudo dpkg-reconfigure locales
+sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+export LANG=en_US.UTF-8
+
+
+mkdir -p Llama/Xi6/
+cd Llama/Xi6/
+ssh -p 29418 gerrit.teamccp.com
+
+# export PATH="~/bin:$PATH"
+repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/arris-bcm-manifest -m arrisxi6-morty.xml -b topic/fr_qtb_upgrade -g all --no-repo-verify --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo
+repo sync --verify --no-tags -c --no-clone-bundle
+
+
+# More threads on WPE
+sed -i s/j4/j16/ ./meta-rdk-ext/recipes-extended/wpe-webkit/wpe-webkit.inc
+
+
+# Choose arrisxi6-morty.conf
+source meta-rdk/setup-environment
+
+
+echo '
+DISTRO_FEATURES_append = " build_rne"
+' >> conf/local.conf
+
+
+echo '
+BB_GENERATE_MIRROR_TARBALLS = "1"
+' >> conf/local.conf
+
+
+bitbake -c fetchall comcast-mediaclient-vbn-image
+bitbake comcast-mediaclient-vbn-image
+bitbake comcast-mediaclient-vbn-image -c populate_sdk
 
 
 ={============================================================================
