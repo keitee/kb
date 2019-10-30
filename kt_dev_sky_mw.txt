@@ -2102,16 +2102,24 @@ FactoryContainer::FactoryContainer()
         AI_IPC::createIpcService(dbusServerPrivate, IPC_SERVICE_APP_PROCESS);
       ipcServices[AI_DBUS::DbusServerId::AI_PRIVATE] = ipcServicePrivate;
 
+      AI_LOG_MILESTONE("runtime manager and package manager set up completed");
+
       // create the BleRcu factory, which just launches the daemon (requires the system IPC service)
       blercuFactory->setLocale(aiDmsFactory->createLocale());
 
       `blercuFactory->setIpcService(ipcServicePrivate);`
 
       blercuFactory->setInputHandler(inputHandler);
-      blercuFactory->startDaemon(dobbyProxy);
+      `blercuFactory->startDaemon(dobbyProxy);`
+
+      // -APPINFRA     < M:DaemonController.cpp F:waitTillReady L:00250 > ai.blercu daemon is ready
 
       // creates BleRcuContollerProxy
       blercuFactory->`createBleRcuControllerProxy`();
+
+      AI_LOG_MILESTONE("ble rcu service system started successfully");
+
+      // -APPINFRA     < M:FactoryContainer.cpp F:FactoryContainer L:00559 > ble rcu service system started successfully
     }
 
 
@@ -2132,11 +2140,61 @@ std::shared_ptr<IBleRcuContoller> BleRcuFactory::createBleRcuControllerProxy()
   }
 }
 
+
+*sync-between-as-and-daemon*
+
 // AppInfrastructure/Singletons/lib/source/Singletons.cpp
 
 std::shared_ptr<AI_BLERCU::IBleRcuContoller> getBleRcuControllerProxyInstance()
 {
     return FactoryContainer::getInstance().`getRcuControllerProxy`();
+}
+
+
+!MIL   -DOBBY        < M:Dobby.cpp F:onContainerStarted L:01129 > container 'ai.blercu'(91) started
+!MIL   -APPINFRA     < M:DaemonController.cpp F:waitTillReady L:00250 > ai.blercu daemon is ready
+!MIL   -BLERCU       < M:main.cpp F:main L:00478 > BleRcuDaemon started
+!MIL   -APPINFRA     < M:FactoryContainer.cpp F:FactoryContainer L:00559 > ble rcu service system started successfully
+!MIL   -APPINFRA     < M:FactoryContainer.cpp F:FactoryContainer L:00573 > softcat factory object set up done
+!MIL   -BLERCU       < M:blercumanager.cpp F:onAdapterPowerChanged L:00871 > BT adapter powered on
+!MIL   -BLERCU       < M:blercucontroller1_adaptor.cpp F:onStateChanged L:00128 > onStateChanged( 1 )
+!MIL   -APPINFRA     < M:BleRcuController.cpp F:signalHandlerPropertiesChanged L:00770 > BleRcu status change: 1
+
+# means got "Ready" signal from blercu deamon
+!MIL   -APPINFRA     < M:DaemonController.cpp F:waitTillReady L:00250 > ai.blercu daemon is ready
+
+bool DaemonController::waitTillReady(const std::chrono::milliseconds& timeout)
+
+
+bool BleRcuControllerImpl::registerOnBus(const QDBusConnection &dbusConn)
+{
+  // we are now ready so emit a 'Ready' signal over dbus letting everyone know
+  BleRcuController1Adaptor *adaptor = findChild<BleRcuController1Adaptor*>();
+  if (!adaptor)
+    qWarning("failed to find BleRcuController1Adaptor child");
+  else
+    emit adaptor->Ready();
+
+  return true;
+}
+
+appinfrastructure/AppInfrastructure/BluetoothRcu/daemon/source/main.cpp
+
+static QSharedPointer<BleRcuController> setupBleRcuController()
+{
+  // create the manager object
+  QSharedPointer<BleRcuManager> manager =
+    QSharedPointer<BleRcuManagerImpl>::create(config,
+        deviceFactory,
+        QDBusConnection::systemBus());
+
+  // create the controller object
+  QSharedPointer<BleRcuController> controller =
+    QSharedPointer<BleRcuControllerImpl>::create(config, manager,
+        options->networkNamespace());
+
+  // register on the controller on dbus
+  controller->registerOnBus(*dbusConn);
 }
 
 
@@ -7608,10 +7666,16 @@ rdk full stack build
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?pageId=65678532
 https://www.stb.bskyb.com/jira/browse/LLDEV-23
 
+https://gerrit.teamccp.com/login/%23%2F
+bp-kpark257
+myLd8pCt5
+
 ssh -i ~/.ssh/id_rsa_comcast -p 29418 bp-bgray640@gerrit.teamccp.com
 ssh -p 29418 bp-bgray640@gerrit.teamccp.com
+ssh -p 29418 gerrit.teamccp.com
 
 https://www.stb.bskyb.com/confluence/pages/viewpage.action?spaceKey=~grayb&title=RDK+-+Building+Xi6+Image
+
 
 Checkout and Configure
 repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/arris-bcm-manifest -m arrisxi6-morty.xml -b topic/fr_qtb_upgrade -g all --no-repo-verify --repo-url=ssh://gerrit.teamccp.com:29418/rdk/tools/git-repo
@@ -7651,6 +7715,10 @@ bitbake comcast-mediaclient-vbn-image
 wget --user bp-bgray640 --password fugo8PCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/sdk/refsw/17_3/refsw_release_unified_20170922/2.1/refsw_release_unified_20170922-2.1.tgz
 wget --user bp-bgray640 --password fugo8PCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/tigressfwtool/2_2a/tigress-Linux-x86_64-2.2a/2.1/tigress-Linux-x86_64-2.2a-2.1.tar.bz2
 wget --user bp-bgray640 --password fugo8PCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/cpgu/yocto/common/cpgu_brcm_arm/2.18/cpgu_brcm_arm-2.18.tar.bz2
+
+wget --user bp-bgray640 --password fugo8PCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/keyobfuscator/yocto/common/keyobfuscator_arm/2.7/keyobfuscator_arm-2.7.tar.bz2
+wget --user bp-kpark257 --password myLd8pCt5 https://nexus.teamccp.com/nexus/content/repositories/broadcom/components/keyobfuscator/yocto/common/keyobfuscator_arm/2.7/keyobfuscator_arm-2.7.tar.bz2
+
 
 <x>
 /media/keitee/ssd2/2/build-arrisxi6-morty/tmp/work/x86_64-linux/breakpad-native/svn-r0/trunk/src/client/linux/dump_writer_common/ucontext_reader.cc

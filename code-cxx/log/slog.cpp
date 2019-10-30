@@ -45,8 +45,9 @@ char const *ename[] = {
 #define MAX_ENAME 132
 
 
-void outputError(bool useErrorString, int err, bool useFlush,
-    const char *format, va_list ap)
+void outputError(const char *file, int line, const char *function
+    , bool useErrorString, int err, bool useFlush
+    , const char *format, va_list ap)
 {
 #define BUF_SIZE (1024)
   char buf[BUF_SIZE];
@@ -59,17 +60,18 @@ void outputError(bool useErrorString, int err, bool useFlush,
   // output error string from errno and only errno is not success
   if (useErrorString && err)
   {
-    snprintf(errText, BUF_SIZE, " [%s %s]",
-        (err > 0 && err <= MAX_ENAME) ? ename[err] : "?UNKNOWN?",
-        strerror(err));
+    snprintf(errText, BUF_SIZE, "F:%s C:%s L:%05d [%s %s]"
+        , file, function, line
+        , (err > 0 && err <= MAX_ENAME) ? ename[err] : "?UNKNOWN?"
+        , strerror(err));
   }
   else
   {
-    snprintf(errText, BUF_SIZE, ":");
+    snprintf(errText, BUF_SIZE, "F:%s C:%s L:%05d :", file, function, line);
   }
 
   // concat user msg and err string. note that added newline.
-  snprintf(buf, BUF_SIZE, "ERROR%s %s\n", errText, userMsg);
+  snprintf(buf, BUF_SIZE, "LOG| %s %s\n", errText, userMsg);
 
   if (useFlush)
     fflush(stdout);
@@ -121,7 +123,7 @@ followed by the formatted output specified in the argument list.
 
 */
 
-void errMsg(const char *format, ...)
+void errMsg(const char *file, int line, const char *function, const char *format, ...)
 {
   va_list arg_list;
   int saved_errno;
@@ -130,7 +132,7 @@ void errMsg(const char *format, ...)
   saved_errno = errno;
 
   va_start(arg_list, format);
-  outputError(true, errno, true, format, arg_list);
+  outputError(file, line, function, true, errno, true, format, arg_list);
   va_end(arg_list);
 
   errno = saved_errno;
@@ -143,12 +145,12 @@ Display error message including 'errno' diagnostic, and terminate the process
 
 */
 
-void errExit(const char *format, ...)
+void errExit(const char *file, int line, const char *function, const char *format, ...)
 {
   va_list arg_list;
 
   va_start(arg_list, format);
-  outputError(true, errno, true, format, arg_list);
+  outputError(file, line, function, true, errno, true, format, arg_list);
   va_end(arg_list);
 
   terminate(true);
@@ -239,17 +241,17 @@ Mainly, we use errExitEN() in programs that employ the POSIX threads API.
 
 */
 
-void errExitEN(int errnum, const char *format, ...)
-{
-  va_list arg_list;
+// void errExitEN(int errnum, const char *format, ...)
+// {
+//   va_list arg_list;
 
-  va_start(arg_list, format);
+//   va_start(arg_list, format);
 
-  // note that errnum but not errno
-  outputError(true, errnum, true, format, arg_list);
-  va_end(arg_list);
+//   // note that errnum but not errno
+//   outputError(true, errnum, true, format, arg_list);
+//   va_end(arg_list);
 
-  terminate(true);
-}
+//   terminate(true);
+// }
 
 } // namespace

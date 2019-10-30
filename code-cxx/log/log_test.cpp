@@ -45,7 +45,7 @@ using namespace testing;
 // ={=========================================================================
 // log-printf
 
-TEST(Log, useErrorMessage)
+TEST(LPILog, useLog)
 {
   int value{10};
   std::string message{"errMsg"};
@@ -56,7 +56,7 @@ TEST(Log, useErrorMessage)
       message.c_str(), value);
 }
 
-TEST(Log, useErrorExit)
+TEST(LPILog, useLogExit)
 {
   errMsg("this is error message from errExit");
 
@@ -64,7 +64,7 @@ TEST(Log, useErrorExit)
   // LOG_EXIT_ERROR("this is error message from errExit");
 }
 
-TEST(Log, useSimpleLog)
+TEST(SimpleLog, useLog)
 {
   int value{10};
   std::string message{"errMsg"};
@@ -77,6 +77,31 @@ TEST(Log, useSimpleLog)
   //     message.c_str(), value);
 }
 
+void func3()
+{
+  LOG_MSG("this is func3()");
+}
+
+void func2()
+{
+  LOG_MSG("this is func2()");
+  func3();
+}
+
+void func1()
+{
+  LOG_MSG("this is func1()");
+  func2();
+}
+
+// LOG| F:log_test.cpp C:void func1() L:00093 : this is func1()
+// LOG| F:log_test.cpp C:void func2() L:00087 : this is func2()
+// LOG| F:log_test.cpp C:void func3() L:00082 : this is func3()
+
+TEST(SimpleLog, showCorrectLineNumbers)
+{
+  func1();
+}
 
 // ={=========================================================================
 int main(int argc, char **argv)

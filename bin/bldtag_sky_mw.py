@@ -15,8 +15,6 @@ if __name__ == "__main__":
         'ethan-as-source/Components/AS/Services',
         'ethan-as-source/Components/AS/Diag',
         'ethan-as-source/Components/Bluetooth',
-        'ethan-as-source/Components/Bluetooth_new',
-        'ethan-as-source/Components/Bluetooth_org',
         'ethan-as-source/Components/AudioStreamer',
         'ethan-as-source/Components/Main',
         # ai
@@ -26,6 +24,7 @@ if __name__ == "__main__":
         'appinfrastructure/AppInfrastructure/IpcService',
         'appinfrastructure/AppInfrastructure/Dobby',
         'appinfrastructure/AppInfrastructure/InputHandler',
+        'appinfrastructure/AppInfrastructure/DaemonController',
         'appinfrastructure/AppInfrastructure/Common'
         ]
 

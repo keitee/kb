@@ -162,7 +162,7 @@ TEST(QtString, convertToConstChar)
   }
 }
 
-TEST(QtString, xxx)
+TEST(QtString, useArg)
 {
   // First, arg(i) replaces %1. Then arg(total) replaces %2. Finally,
   // arg(fileName) replaces %3.
@@ -177,6 +177,7 @@ TEST(QtString, xxx)
   // QString QString::asprintf(const char *cformat, ...)
   //
   // Warning: We do not recommend using QString::asprintf() in new Qt code.
+  //
   // Instead, consider using QTextStream or arg(), both of which support Unicode
   // strings seamlessly and are type-safe. Here's an example that uses
   // QTextStream:
@@ -277,6 +278,72 @@ TEST(QtString, useStartsWith)
 }
 
 // ={=========================================================================
+/* qt-string-list
+
+https://doc.qt.io/qt-5/qstringlist.html
+
+Detailed Description
+
+QStringList inherits from QList<QString>. Like QList, QStringList is implicitly
+shared. It provides fast index-based access as well as fast insertions and
+removals. Passing string lists as value parameters is both fast and safe.
+
+*/
+
+TEST(QtStringList, useInit)
+{
+  QStringList coll1 = {"Arial", "Helvetica", "Times"};
+
+  // Adding Strings
+  // Strings can be added to a list using the insert() append(), operator+=()
+  // and operator<<() functions.
+  //
+  // operator<<() can be used to conveniently add multiple elements to a list:
+
+  QStringList coll2;
+  coll2 << "Arial";
+  coll2 << "Helvetica";
+  coll2 << "Times";
+
+  EXPECT_THAT(coll1, coll2);
+}
+
+TEST(QtStringList, iterate)
+{
+  {
+    QStringList coll1 = {"Arial", "Helvetica", "Times"};
+    std::ostringstream os;
+
+    auto iter = coll1.constBegin();
+    for (iter; iter != coll1.constEnd(); ++iter)
+      os << (*iter).toLocal8Bit().constData() << ", ";
+
+    EXPECT_THAT(os.str(), "Arial, Helvetica, Times, ");
+  }
+
+  {
+    QStringList coll1 = {"Arial", "Helvetica", "Times"};
+    std::ostringstream os;
+
+    auto iter = coll1.constBegin();
+    for (iter; iter != coll1.constEnd(); ++iter)
+      os << qPrintable(*iter) << ", ";
+
+    EXPECT_THAT(os.str(), "Arial, Helvetica, Times, ");
+  }
+
+  {
+    QStringList coll1 = {"Arial", "Helvetica", "Times"};
+    std::ostringstream os;
+
+    for (auto const &e : coll1)
+      os << qPrintable(e) << ", ";
+
+    EXPECT_THAT(os.str(), "Arial, Helvetica, Times, ");
+  }
+}
+
+// ={=========================================================================
 // qt-list
 
 TEST(QtList, Prepend)
@@ -325,7 +392,7 @@ TEST(QtQueue, Pop)
 /* qt-variant
 https://doc.qt.io/qt-5/qvariant.html#QVariantMap-typedef
 
-A QVariant object holds a single value of a single type() at a time. (Some
+A QVariant object holds *a single value of a single type()* at a time. (Some
 type()s are multi-valued, for example a string list.) You can find out what
 type, T, the variant holds, convert it to a different type using convert(), get
 its value using one of the toT() functions (e.g., toSize()) and check whether
@@ -333,7 +400,7 @@ the type can be converted to a particular type using canConvert().
 
 */
 
-TEST(QtVariant, Variant)
+TEST(QtVariant, convert)
 {
   // T QVariant::value() const
   //
@@ -357,42 +424,140 @@ TEST(QtVariant, Variant)
     // Returns the name of the type stored in the variant. The returned strings
     // describe the C++ datatype used to store the data: for example, "QFont",
     // "QString", or "QVariantList". An Invalid variant returns 0.
-    EXPECT_THAT("int", v.typeName());
+
+    // causes falures
+    // /home/keitee/git/kb/code-qt/qtest/qtest.cpp:427: Failure
+    // Value of: "int"
+    // Expected: is equal to 0x7fae3adc4d6a pointing to "int"
+    //   Actual: "int" (of type char [4])
+    // EXPECT_THAT("int", v.typeName());
+
+    // https://doc.qt.io/qt-5/qbytearray.html
+    EXPECT_THAT(QByteArray("int"), QByteArray(v.typeName()));
+
+    // T QVariant::value() const
+    // Returns the stored value converted to the template type T. Call
+    // canConvert() to find out whether a type can be converted. If the value
+    // cannot be converted, a default-constructed value will be returned.
+    //
+    // If the type T is supported by QVariant, this function behaves exactly as
+    // toString(), toInt() etc.
 
     EXPECT_THAT(v.toInt(), v.value<int>());        // same as v.toInt()
     EXPECT_THAT(v.toString(), v.value<QString>()); // same as v.toString()
   }
+}
 
-  // typedef QVariant::QVariantList
-  // Synonym for QList<QVariant>.
+TEST(QtVariant, store)
+{
+  // You can even store QList<QVariant> and QMap<QString, QVariant> values in a
+  // variant, so you can easily construct arbitrarily complex data structures of
+  // arbitrary types. This is very powerful and versatile, but may prove less
+  // memory and speed efficient than storing specific types in standard data
+  // structures.
+
+  {
+    QStringList coll1 = {"Arial", "Helvetica", "Times"};
+    QVariant v(coll1);
+
+    EXPECT_THAT(v.canConvert<QStringList>(), true);
+
+    QStringList coll2 = v.value<QStringList>();
+    EXPECT_THAT(coll1, coll2);
+  }
+}
+
+TEST(QtVariant, null)
+{
+  // QVariant also supports the notion of null values, where you can have a
+  // defined type with no value set. However, note that QVariant types can only
+  // be cast when they have had a value set.
+
+  // bool QVariant::isNull() const
+  // Returns true if this is a null variant, false otherwise. A variant is
+  // considered null if it contains no initialized value, or the contained value
+  // is nullptr or is an instance of a built-in type that has an isNull method,
+  // in which case the result would be the same as calling isNull on the wrapped
+  // object.
   //
+  // Warning: Null variants is not a single state and two null variants may
+  // easily return false on the == operator if they do not contain similar null
+  // values.
+
+  QVariant x;
+  EXPECT_THAT(x.isNull(), true);
+
+  // error: request for member ‘isNull’ in ‘y’, which is of non-class type
+  // ‘QVariant(QString (*)())’ QVariant y(QString());
+
+  // OK
+  // QVariant y((QString()));
+
+  // OK.
+  QVariant y(QString{});
+
+  EXPECT_THAT(y.isNull(), true);
+
+  QVariant z(QString(""));
+  EXPECT_THAT(z.isNull(), false);
+}
+
+TEST(QtVariant, x)
+{
   // QVariant QVariant::fromValue(const T &value)
   // Returns a QVariant containing a copy of value. Behaves exactly like
   // setValue() otherwise.
+  //
+  // template<typename T>
+  // static inline QVariant fromValue(const T &value)
+  // { return qVariantFromValue(value); }
+  //
+  // void QVariant::setValue(const T &value)
+  // Stores a copy of value. If T is a type that QVariant doesn't support,
+  // QMetaType is used to store the value. A compile error will occur if
+  // QMetaType doesn't handle the type.
+
+  {
+    QVariant v;
+    v.setValue(5);
+    EXPECT_THAT(QByteArray("int"), QByteArray(v.typeName()));
+    EXPECT_THAT(v.toInt(), 5);
+  }
+
+  // bool QVariant::canConvert() const
+  // Returns true if the variant can be converted to the template type T,
+  // otherwise false.
   //
   // A QVariant containing a sequential container will also return true for this
   // function if the targetTypeId is QVariantList. It is possible to iterate
   // over the contents of the container without extracting it as a (copied)
   // QVariantList:
   //
-  //
-  // bool QVariant::canConvert() const
-  // Returns true if the variant can be converted to the template type T,
-  // otherwise false.
+  // typedef QVariant::QVariantList
+  // Synonym for QList<QVariant>.
   //
   // output:
   // QVariant(int, 7)
   // QVariant(int, 11)
   // QVariant(int, 42)
 
+  // If the QVariant contains a sequential container and T is QVariantList, the
+  // elements of the container will be converted into QVariants and returned as
+  // a QVariantList.
+
   {
     QList<int> coll{7, 11, 42};
     QVariant v = QVariant::fromValue(coll);
+
+    EXPECT_THAT(QByteArray("QList<int>"), QByteArray(v.typeName()));
+    // qDebug() << v;
+
     if (v.canConvert<QVariantList>())
     {
       QSequentialIterable it = v.value<QSequentialIterable>();
 
-      foreach (const QVariant &v, it)
+      // cxx-range-for
+      for (const QVariant &v : it)
         qDebug() << v;
     }
   }
