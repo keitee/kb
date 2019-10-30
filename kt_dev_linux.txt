@@ -469,7 +469,7 @@
 |kt_linux_core_007| /dev/null
 
 *kt_linux_core_050* linux-signal
-*kt_linux_core_050* linux-signal-handler
+*kt_linux_core_050* os-signal-handler
 *kt_linux_core_051* linux-signal-names
 *kt_linux_core_051* linux-signal-ex: use signal as synchronization
 
@@ -500,7 +500,7 @@
 |kt_linux_core_153| os-thread-compile
 *kt_linux_core_154* os-thread-api pthread-api
 *kt_linux_core_157* linux-thread-attribute
-*kt_linux_core_157* linux-thread-safe linux-thread-specific-data
+*kt_linux_core_157* os-thread-safe os-thread-specific-data
 *kt_linux_core_157* linux-thread-stack
 *kt_linux_core_157* linux-thread-nptl
 |kt_linux_core_102| linux-thread-q how to run three threads sequencially
@@ -42900,7 +42900,7 @@ The same information can also be obtained using various options to the ps(1)
 
 
 ={============================================================================
-*kt_linux_core_050* linux-signal-handler
+*kt_linux_core_050* os-signal-handler
 
 LPI-20, 21
 
@@ -42937,9 +42937,9 @@ After all, can install signal handler only for signals which do exit() or
 abort() by default?
 
 
-{signal-reentrant} *thread-safe-thread-reentrant*
+{signal-reentrant} *os-thread-safe-os-reentrant*
 
-21.1.2 Reentrant and Async-Signal-Safe Functions
+LPI-21.1.2 Reentrant and Async-Signal-Safe Functions
 
 Because a signal handler may asynchronously interrupt the execution of a
 program at any point in time, the main program and the signal handler in
@@ -42970,7 +42970,7 @@ Such possibilities are in fact rife within the standard C library. For
 example, we already noted in Section 7.1.3 that malloc() and free() maintain a
 linked list of freed memory blocks available for reallocation from the heap.
 If a call to malloc() in the main program is interrupted by a signal handler
-that also calls malloc(), then this linked list can be corrupted.  For this
+that also calls malloc(), then this linked list can be corrupted. For this
 reason, the malloc() family of functions, and other library functions that use
 them, are nonreentrant.
 
@@ -46781,54 +46781,6 @@ a terminating newline character. Also, the format string may include the
 to the current value of errno (i.e., the equivalent of strerror(errno)).
 
 
-
-
-={============================================================================
-*kt_linux_core_050* process-function-reentrant
-
-From LPI signal.
-
-Because a signal handler may asynchronously interrupt the execution of a program
-at any point in time, the main program and the signal handler in effect form
-`two-independent` (although not concurrent) threads of execution within the same
-process.
-
-
-A function is said to be `reentrant` if it can safely be simultaneously executed
-by multiple threads of execution in the `same-process`. In this context, "safe"
-means that the function achieves its expected result, regardless of the state of
-execution of any other thread of execution.
-
-A function may be `nonreentrant` if it updates global or static data structures. A
-function that employs only local variables is guaranteed to be reentrant because
-of race-condition. This book shows an example using crypt() in both main and
-signal handler. This corrupts internal buffer which is statically allocated and
-crypt uses when calls it with differnt parameter.
-
-note:
-`nonreentrant` means that function is not safe when gets called by multiple
-threads. Using only local variables means reentrant. Why mentions race
-condition?
-
-Such possibilities are in fact rife within the standard C library. For example,
-     we already noted in Section 7.1.3 that malloc() and free() maintain a
-     linked list of freed memory blocks available for reallocation from the
-     heap. If a call to malloc() in the main program is interrupted by a signal
-     handler that also calls malloc(), then this linked list can be corrupted.
-     For this reason, the malloc() family of functions, and other library
-     functions that use them, are nonreentrant.
-
-Even if we are not using nonreentrant library functions, reentrancy issues can
-still be relevant. If a signal handler updates programmer-defined global data
-structures that are also updated within the main program, then we can say that
-the signal handler is nonreentrant with respect to the main program.
-
-If a function is nonreentrant, then its manual page will normally provide an
-explicit or implicit indication of this fact. In particular, watch out for
-statements that the function uses or returns information in statically allocated
-variables.
-
-
 ={============================================================================
 *kt_linux_core_105* linux-mem-process
 
@@ -48717,18 +48669,18 @@ resPOSIX = pthread_create(&(ptThreadInfo->idThread), &threadAttrs, pfThreadMain,
 
 
 ={============================================================================
-*kt_linux_core_157* linux-thread-safe linux-thread-specific-data
+*kt_linux_core_157* os-thread-safe os-thread-specific-data
 
 LPI-31.1 Thread Safety (and Reentrancy Revisited)
 
-<thread-safety-is> *thread-safe*
+<thread-safety> *os-thread-safe*
 A function is said to be `thread-safe` if it can safely be invoked by multiple
 threads at the same time.
 
 There are various methods of rendering a function thread-safe.
 
 
-<serialisation>
+*os-serialisation*
 One way is to associate a mutex with the function, lock that mutex when the
 function is called, and unlock it when the mutex returns. We say that access
 to the function is `serialized`.
@@ -48749,19 +48701,56 @@ those listed in Table 31-1.
 Table 31-1: Functions that SUSv3 does not require to be thread-safe
 
 
-<reentrant-function> *thread-reentrant*
+<reentrant-function> *os-reentrant*
 Although the use of critical sections to implement thread safety is a
 significant improvement over the use of per-function mutexes, it is still
 somewhat inefficient because there is a cost to locking and unlocking a mutex.
 
 `A reentrant function achieves thread safety without the use of mutexes.` It
-does this by avoiding the use of global and static variables. It does this by
+does this `by avoiding the use of global and static variables.` It does this by
 avoiding the use of global and static variables. Any information that must be
 returned to the caller, or maintained between calls to the function, is stored
 in buffers allocated by the caller.
 
 However, not all functions can be made reentrant. SUSv3 specifies reentrant
 equivalents with names ending with the suffix _r.
+
+
+<os-thread-safe-and-os-reentrant>
+https://deadbeef.me/2017/09/reentrant-threadsafe
+
+Let’s do some definitions.
+
+Thread safe code is one that can be performed from multiple threads safely,
+even if the calls happen simultaneously on multiple threads.
+
+Reentrant code is one that can be entered by another actor before an earlier
+invocation has finished, without affecting the path the first action would
+have taken through the code.
+
+Did you catch the difference? Thread safe code means you can call the function
+on multiple threads. Reentrant code means that you can do all the things
+thread safe code can do but also gurantee safety even if you call the same
+function within the same thread.
+
+So, reentrant code can be thread safe but thread safe code can’t be reentrant
+
+https://doc.qt.io/archives/qt-4.8/threads-reentrancy.html
+Reentrancy and Thread-Safety
+
+Throughout the documentation, the terms reentrant and thread-safe are used to
+mark classes and functions to indicate how they can be used in multithread
+applications:
+
+A thread-safe function can be called simultaneously from multiple threads,
+even when the invocations use shared data, because all references to the
+  shared data are serialized.
+
+A reentrant function can also be called simultaneously from multiple threads,
+but only if each invocation uses its own data.
+
+Hence, a thread-safe function is always reentrant, but a reentrant function is
+not always thread-safe.
 
 
 <thread-specific-data>
@@ -48894,16 +48883,17 @@ thread-safe strerror() implementation presented in the next section.
 31.3.5 Thread-Specific Data Implementation Limits
 
 
-<linux-thread-local-storage>
+<os-thread-local-storage>
 
 31.4 Thread-Local Storage
 
 Like thread-specific data, thread-local storage provides persistent per-thread
 storage. `This feature is non-standard`, but it is provided in the same or a
 similar form on many other UNIX implementations (e.g., Solaris and FreeBSD).
+
 The main advantage of thread-local storage is that it is `much simpler` to use
 than thread-specific data. To create a thread-local variable, we simply
-include the __thread specifier in the declaration of a global or static
+include the `__thread specifier` in the declaration of a global or static
 variable:
 
 static __thread buf[MAX_ERROR_LEN];
@@ -48912,7 +48902,7 @@ Each thread has its own copy of the variables declared with this specifier.
 The variables in a thread’s thread-local storage persist until the thread
 terminates, at which time the storage is automatically deallocated.
 
-Thread-local storage requires support from the kernel (provided in Linux 2.6),
+`Thread-local storage requires support from the kernel` (provided in Linux 2.6),
   the Pthreads implementation (provided in NPTL), and the C compiler (provided
       on x86-32 with gcc 3.3 and later).
 
