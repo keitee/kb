@@ -1,6 +1,10 @@
 
 #include "readline.h"
 
+/* ={==========================================================================
+ @brief :
+*/
+
 // https://doc.qt.io/qt-5/qreadwritelock.html
 // https://doc.qt.io/qt-5/qpointer.html
 
@@ -38,6 +42,10 @@ ReadLinePrivate *ReadLinePrivate::instance()
 
   return instance_.data();
 }
+
+/* ={==========================================================================
+ @brief :
+*/
 
 ReadLinePrivate::ReadLinePrivate(QObject *parent)
     : QObject(parent)
@@ -108,9 +116,12 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
     // replace the completion function with ours
     void **rl_attempted_completion_function = reinterpret_cast<void **>(
       dlsym(m_libHandle, "rl_attempted_completion_function"));
+
     if (rl_attempted_completion_function)
+    {
       *rl_attempted_completion_function =
-        reinterpret_cast<void *>(completionCallback_);
+        reinterpret_cast<void *>(completionCallback);
+    }
 
     // set the tab key to be the completion trigger
     rl_command_func_t *rl_complete =
@@ -128,10 +139,22 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
 
   addCommand("help", {}, "Display this text", this,
              slotToObject(&ReadLinePrivate::onHelpCommand));
+
+  // TODO: install a notifier on stdin to feed readline
+  m_stdinListener =
+    new QSocketNotifier(STDIN_FILENO, QSocketNotifier::Read, this);
+  m_stdinListener->setEnabled(false);
+
+  QObject::connect(m_stdinListener,
+                   &QSocketNotifier::activated,
+                   this,
+                   &ReadLinePrivate::onStdinActivated);
 }
 
-// Internal method intended to only be called from ReadLine, it adds a new
-// command and maps it to the \a slotObj for the given \a receiver.
+/* ={==========================================================================
+ @brief :
+  it adds a new command and maps it to the \a slotObj for the given \a receiver.
+*/
 
 bool ReadLinePrivate::addCommand(const QString &name, const QStringList &args,
                                  const QString &desc, const QObject *receiver,
@@ -157,18 +180,23 @@ bool ReadLinePrivate::addCommand(const QString &name, const QStringList &args,
   m_commands.insert(name, std::move(command));
 }
 
-void ReadLinePrivate::commandLineHandler(char *line)
-{
-  // TODO: necessary since this is member function?
-  ReadLinePrivate *self = instance();
+/* ={==========================================================================
+ @brief :
 
-  if (line == nullptr)
-    QCoreApplication::quit();
-  else
-    self->commandLineHandler_(QString(line));
+*/
+void ReadLinePrivate::runCommand(const QString &command,
+                                 const QStringList &arguments)
+{
+  commandExecute(command, arguments);
 }
 
-void ReadLinePrivate : start(const QString &promt)
+/* ={==========================================================================
+ @brief :
+  ...
+
+*/
+
+void ReadLinePrivate::start(const QString &promt)
 {
   // https://doc.qt.io/qt-5/qtglobal.html#Q_ASSERT
   // It does nothing if QT_NO_DEBUG was defined during compilation.
@@ -190,9 +218,9 @@ void ReadLinePrivate : start(const QString &promt)
   // Set up the terminal for readline I/O and display the initial expanded value
   // of prompt.
   //
-  // Save the value of lhandler to use as a handler function to call when a
-  // complete line of input has been entered. The handler function receives the
-  // text of the line as an argument.
+  // Save the value of lhandler to use as a handler function to call **when a
+  // complete line of input has been entered.** The handler function receives
+  // the text of the line as an argument.
   //
   // As with readline(), the handler function should free the line when it it
   // finished with it.
@@ -202,9 +230,221 @@ void ReadLinePrivate : start(const QString &promt)
 
   m_stdinListener->setEnabled(true);
 
+  // https://doc.qt.io/qt-5/qtglobal.html#qInstallMessageHandler
+  //
+  // Installs a Qt message handler which has been defined previously. Returns a
+  // pointer to the previous message handler.
+  //
+  // The message handler is a function that prints out debug messages, warnings,
+  // critical and fatal error messages. The Qt library (debug mode) contains
+  // hundreds of warning messages that are printed when internal errors (usually
+  // invalid function arguments) occur. Qt built in release mode also contains
+  // such warnings unless QT_NO_WARNING_OUTPUT and/or QT_NO_DEBUG_OUTPUT have
+  // been set during compilation. If you implement your own message handler, you
+  // get total control of these messages.
+  //
+  // The default message handler prints the message to the standard output under
+  // X11 or to the debugger under Windows. If it is a fatal message, the
+  // application aborts immediately.
+  //
+  // Only one message handler can be defined, since this is usually done on an
+  // application-wide basis to control debug output.
+  //
+  // To restore the message handler, call qInstallMessageHandler(0).
+
   qInstallMessageHandler(qtMessageHandler);
 
   m_running = true;
+}
+
+/* ={==========================================================================
+ @brief :
+  ...
+
+*/
+
+void ReadLinePrivate::stop()
+{
+  Q_ASSERT(m_libHandle != nullptr);
+  if (!m_libHandle)
+    return;
+
+  Q_ASSERT(m_stdinListener != nullptr);
+  if (!m_stdinListener)
+    return;
+
+  m_running = false;
+
+  qInstallMessageHandler(0);
+
+  m_rl_callback_handler_remove();
+}
+
+/* ={--------------------------------------------------------------------------
+ @brief :
+  callback from libreadline
+*/
+
+void ReadLinePrivate::commandLineHandler(char *line)
+{
+  // necessary since this is member function? yes because it's called back
+  // without `this` pointer.
+
+  ReadLinePrivate *self = instance();
+
+  if (line == nullptr)
+    QCoreApplication::quit();
+  else
+    self->commandLineHandler_(QString(line));
+}
+
+void ReadLinePrivate::commandLineHandler_(const QString &line)
+{
+  // TODO:
+  // split the string up using regext to group by whitespace (this takes into
+  // account quoted strings)
+  QRegularExpression regex(R"regex([^\"\'\s]\S*|\".*?\"|\'.*?\')regex");
+  QRegularExpressionMatchIterator it = regex.globalMatch(line);
+
+  QStringList args;
+
+  while (it.hasNext())
+  {
+
+    // get the match and strip any leading and trailing quotes
+    QString match = it.next().captured(0);
+
+    int matchLen = match.length();
+    if (matchLen <= 0)
+      continue;
+
+    if ((match[0] == QChar('\"')) && (match[matchLen - 1] == QChar('\"')))
+    {
+      match.remove(matchLen - 1, 1);
+      match.remove(0, 1);
+    }
+    if ((match[0] == QChar('\'')) && (match[matchLen - 1] == QChar('\'')))
+    {
+      match.remove(matchLen - 1, 1);
+      match.remove(0, 1);
+    }
+
+    args += match;
+  }
+
+  if (!args.empty())
+  {
+
+    // the first argument should be the command
+    const QString command = args.takeFirst();
+
+    // try and excute the command
+    commandExecute(command, args);
+
+    // add the command to the history
+    m_add_history(line.toLatin1().constData());
+  }
+}
+
+/* ={--------------------------------------------------------------------------
+ @brief :
+  slot called when input arrives on stdin. use this to trigger libreadline
+*/
+
+void ReadLinePrivate::commandExecute(const QString &command,
+                                     const QStringList &arguments)
+{
+  QStringList possibleCommands;
+}
+
+/* ={--------------------------------------------------------------------------
+ @brief :
+  slot called when input arrives on stdin. use this to trigger libreadline
+*/
+
+void ReadLinePrivate::onStdinActivated(int fd)
+{
+  Q_ASSERT(STDIN_FILENO == fd);
+
+  if (m_rl_callback_read_char)
+    m_rl_callback_read_char();
+}
+
+void ReadLinePrivate::onQuitCommand(const QStringList &args)
+{
+  Q_UNUSED(args);
+
+  QCoreApplication::quit();
+}
+
+void ReadLinePrivate::onHelpCommand(const QStringList &args)
+{
+  Q_UNUSED(args);
+
+  QString text("Available commands:\n");
+
+  // TODO:
+  QMutexLocker lock(&m_commandsLock);
+
+  for (auto it = m_commands.cbegin(); it != m_commands.cend(); ++it)
+  {
+    const QString &name    = it.key();
+    const Command &details = it.value();
+
+    // build up a line with command and its args
+    QString command(name);
+    for (conat QString &arg : details.arguments)
+    {
+      command += ' ';
+      command += arg;
+    }
+
+    QString line = QString("  %1 %2\n")
+                     .arg(command, -m_maxCommandHelpWidth)
+                     .arg(details.description);
+
+    text += line;
+  }
+
+  // TODO
+  qInfo().noquote() << text;
+}
+
+/* ={--------------------------------------------------------------------------
+ @brief :
+ callback
+*/
+
+char **ReadLinePrivate::completionCallback(const char *text, int start, int end)
+{
+  Q_UNUSED(end);
+
+  ReadLinePrivate *self = instance();
+  char **matches{nullptr};
+
+  if (start == 0)
+    matches = self->m_rl_completion_matches(text, commandGenerator);
+
+  return matches;
+}
+
+/* ={--------------------------------------------------------------------------
+ @brief :
+  helper TODO
+
+  Helper utility for returning a QtPrivate::QSlotObjectBase object
+ pointing to the given method.
+
+ \warning This function does no argument validation, DO NOT use this
+ unless you're 100% sure the slot args will match the signal.
+*/
+
+template <typename Func1>
+static QtPrivate::QSlotObjectBase *slotToObject(Func1 slot)
+{
+  typedef QtPrivate::FunctionPointer<Func1> SlotType;
+  return new QtPrivate::QSlotObject<Func1, typename SlotType::Arguments, void>(
+    slot);
 }
 
 /* ={==========================================================================

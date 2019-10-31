@@ -25,15 +25,29 @@ class ReadLinePrivate : public QObject
 {
   Q_OBJECT
 
+private:
+  ReadLinePrivate(QObject *parent = nullptr);
+
 public:
   static ReadLinePrivate *instance();
   ~ReadLinePrivate();
   bool addCommand(const QString &name, const QStringList &args,
                   const QString &description, const QObject *receiver,
                   QtPrivate::QSlotObjectBase *slotObj);
+  void runCommand(const QString &command, const QStringList &arguments);
+
+  void start(const QString &promt);
+  void stop();
+
+private slots:
+  void onStdinActivated(int fd);
+  void onQuitCommand(const QStringList &args);
+  void onHelpCommand(const QStringList &args);
 
 private:
-  ReadLinePrivate(QObject *parent = nullptr);
+  void commandLineHandler(char *line);
+  void commandLineHandler_(const QString &line);
+  void commandExecute(const QString &command, const QStringList &arguments);
 
 private:
   void *m_libHandle;
@@ -62,6 +76,9 @@ private:
   };
 
   QMap<QString, Command> m_commands;
+
+  QSocketNotifier *m_stdinListener;
+  bool m_running;
 };
 
 class ReadLine : public QObject
