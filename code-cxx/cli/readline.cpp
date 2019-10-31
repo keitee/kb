@@ -1,6 +1,11 @@
 
 #include "readline.h"
 
+#ifndef STDIN_FILENO
+#ifndef 0
+#endif
+
+
 /* ={==========================================================================
  @brief :
 */
@@ -427,6 +432,66 @@ char **ReadLinePrivate::completionCallback(const char *text, int start, int end)
 
   return matches;
 }
+
+char *ReadLinePrivate::commandGenerator(const char *text, int state)
+{
+  ReadLinePrivate *self = instance();
+  return self->commandGenerator_(text, state);
+}
+
+char *ReadLinePrivate::commandGenerator_(const char *text, int state)
+{
+  Q_UNUSED(state);
+
+  QMutexLocker lock(&m_commandsLock);
+
+  static QList<QByteArray> matches;
+
+  // if this is a new word to complete, initialise now.
+  if (state == 0)
+  {
+    matches.clear();
+
+    for (auto it = m_commands.cbegin();
+        it != m_commands.cend(); ++it)
+    {
+      const QString &command = it.key();
+
+      if (command.startsWith(text))
+        matches.append(command.toLatin1());
+    }
+  }
+
+  // if no names matched, return null
+  if (matches.empty())
+    return nullptr;
+
+  // otherwise dup the match then remove it from the front of the list
+  char *match = qstrdup(matches.first().constData());
+  matches.removeFirst();
+
+  return match;
+}
+
+void ReadLinePrivate::qtMessageHandler(QtMsgType type,
+                                       const QMessageLogContext &context,
+                                       const QString &message)
+{
+  Q_UNUSED(type);
+  Q_UNUSED(context);
+
+  fputs(message.toLatin1().constData(), stdout);
+  fputc('\n', stdout);
+  fflush(stdout);
+  //printf("%s\n", message.toLatin1().constData());
+  //printf("\n");
+
+  ReadLinePrivate *readline = instance();
+  if (readline && readline->m_rl_on_new_line && readline->isRunning()) {
+    readline->m_rl_on_new_line();
+  }
+}
+
 
 /* ={--------------------------------------------------------------------------
  @brief :

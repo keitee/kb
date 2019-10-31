@@ -49,6 +49,10 @@ private:
   void commandLineHandler_(const QString &line);
   void commandExecute(const QString &command, const QStringList &arguments);
 
+  static char **completionCallback(const char *text, int start, int end);
+  static char *commandGenerator(const char *text, int state);
+  char *commandGenerator_(const char *text, int state);
+
 private:
   void *m_libHandle;
 
