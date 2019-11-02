@@ -1,7 +1,15 @@
 #ifndef READLINE_H
 #define READLINE_H
 
-// readline function types
+#include <QObject>
+#include <QString>
+#include <QDebug>
+#include <QMutex>
+#include <QMap>
+#include <QPointer>
+#include <QSocketNotifier>
+
+// libreadline function types
 
 typedef char *rl_compentry_func_t(const char *, int);
 typedef int rl_command_func_t(int, int);
@@ -21,6 +29,8 @@ typedef void (*rl_callback_handler_remove_t)(void);
 
 typedef void (*add_history_t)(const char *);
 
+// ReadLinePrivate
+
 class ReadLinePrivate : public QObject
 {
   Q_OBJECT
@@ -36,8 +46,11 @@ public:
                   QtPrivate::QSlotObjectBase *slotObj);
   void runCommand(const QString &command, const QStringList &arguments);
 
-  void start(const QString &promt);
+  void start(const QString &prompt = QStringLiteral(">"));
   void stop();
+
+  bool isValid() const;
+  bool isRunning() const;
 
 private slots:
   void onStdinActivated(int fd);
@@ -45,13 +58,20 @@ private slots:
   void onHelpCommand(const QStringList &args);
 
 private:
-  void commandLineHandler(char *line);
+  // cxx-error: cannot convert ‘ReadLinePrivate::commandLineHandler’ 
+  //  from type ‘void (ReadLinePrivate::)(char*)’ to type ‘void (*)(char*)’
+  // void commandLineHandler(char *line);
+
+  static void commandLineHandler(char *line);
+
   void commandLineHandler_(const QString &line);
   void commandExecute(const QString &command, const QStringList &arguments);
 
   static char **completionCallback(const char *text, int start, int end);
   static char *commandGenerator(const char *text, int state);
   char *commandGenerator_(const char *text, int state);
+  static void qtMessageHandler(QtMsgType type, const QMessageLogContext &context,
+      const QString &message);
 
 private:
   void *m_libHandle;
@@ -83,7 +103,10 @@ private:
 
   QSocketNotifier *m_stdinListener;
   bool m_running;
+  int m_maxCommandHelpWidth;
 };
+
+// ReadLine
 
 class ReadLine : public QObject
 {
@@ -93,8 +116,39 @@ class ReadLine : public QObject
     ReadLine(QObject *parent = nullptr);
     ~ReadLine();
 
+  public:
+    bool isValid() const;
+    void setPrompt(const QString &prompt);
+    QString prompt() const;
+    void start();
+    void stop();
+    void runCommand(const QString &command, const QStringList &arguments);
+
+    // addCommand to a QObject slot
+    template <typename Func1>
+      inline bool addCommand(const QString &name, const QStringList &args, const QString &description,
+          const typename QtPrivate::FunctionPointer<Func1>::Object *receiver, Func1 slot)
+      {
+        typedef QtPrivate::FunctionPointer<Func1> SlotType;
+
+        // compilation error if the slot has arguments.
+        Q_STATIC_ASSERT_X(int(SlotType::ArgumentCount) == 1,
+            "The slot must have one argument.");
+
+        Q_STATIC_ASSERT_X((QtPrivate::AreArgumentsCompatible< typename SlotType::Arguments, typename QtPrivate::List<const QStringList&> >::value),
+            "The one and only argument to the slot must be 'const QCommandLineParser&'");
+
+        return addCommandImpl(name, args, description, receiver,
+            new QtPrivate::QSlotObject<Func1, typename SlotType::Arguments, void>(slot));
+      }
+    
   private:
     QPointer<ReadLinePrivate> m_private;
+    QString m_prompt;
+
+    bool addCommandImpl(const QString &name, const QStringList &args,
+        const QString &desc, const QObject *receiver,
+        QtPrivate::QSlotObjectBase *slotObj);
 };
 
-#endif /* ifndef READLINE_H
+#endif // ifndef READLINE_H

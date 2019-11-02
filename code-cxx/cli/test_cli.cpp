@@ -9,6 +9,7 @@
 #include "gmock/gmock.h"
 
 #include "scli.h"
+#include "console.h"
 
 using namespace testing;
 
@@ -131,6 +132,25 @@ TEST(Cli, runLoop)
       break;
     }
   } // while
+}
+
+// ={=========================================================================
+// cxx-cli-readline
+// 
+// DO NOT RUN:
+//
+// [ RUN      ] Cli.useReadLine
+// QSocketNotifier: Can only be used with threads started with QThread
+// console >[       OK ] Cli.useReadLine (92 ms)
+// [----------] 1 test from Cli (92 ms total)
+
+
+TEST(Cli, useReadLine)
+{
+  // create the command handler and start it
+  // Console *console = new Console(&app);
+  Console *console = new Console();
+  console->start();
 }
 
 // ={=========================================================================

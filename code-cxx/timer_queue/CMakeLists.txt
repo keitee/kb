@@ -70,7 +70,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
 
-add_compile_options("-g;-ldl")
+add_compile_options("-g")
 
 # to use static library
 #
