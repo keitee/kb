@@ -98,6 +98,10 @@ target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test ${LIBS} ${C
 add_executable(test_console scli.cpp test_console.cpp console.cpp readline.cpp)
 target_link_libraries(test_console Qt5::Core Qt5::Test ${LIBS} ${CMAKE_DL_LIBS})
 
+# scli
+add_executable(test_scli scli.cpp test_scli.cpp)
+target_link_libraries(test_scli Qt5::Core Qt5::Test ${LIBS})
+
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 
