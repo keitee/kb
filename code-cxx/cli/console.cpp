@@ -17,7 +17,7 @@ void Console::start()
 
 void Console::initReadLine()
 {
-  m_readLine.setPrompt(QStringLiteral("console >"));
+  m_readLine.setPrompt(QStringLiteral("console > "));
 
   m_readLine.addCommand(
       "sample",

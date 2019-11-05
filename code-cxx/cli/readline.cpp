@@ -428,6 +428,70 @@ void ReadLinePrivate::commandExecute(const QString &command,
                                      const QStringList &arguments)
 {
   QStringList possibleCommands;
+
+  QMutexLocker locker(&m_commandsLock);
+
+  QMap<QString, Command>::const_iterator cmdRef = m_commands.end();
+  QMap<QString, Command>::const_iterator it     = m_commands.begin();
+
+  for (; it != m_commands.end(); ++it)
+  {
+
+    const QString &name = it.key();
+    if (name.startsWith(command))
+    {
+
+      // exact matches always work
+      if (command.length() == name.length())
+      {
+        cmdRef = it;
+        break;
+      }
+
+      // check if we don't already have a match, if we do then we have
+      // multiple matches and have to report an error.
+      if (cmdRef == m_commands.end())
+        cmdRef = it;
+      else
+        possibleCommands << name;
+    }
+  }
+
+  if (cmdRef == m_commands.end())
+  {
+    qWarning("%s: No such command.", command.toLatin1().constData());
+  }
+  else if (!possibleCommands.isEmpty())
+  {
+    qWarning() << "Ambiguous command" << command
+               << "possible commands:" << cmdRef.key() << possibleCommands;
+  }
+  else
+  {
+
+    // copy the command info
+    const Command handler = cmdRef.value();
+
+    // unlock before calling the slot
+    locker.unlock();
+
+    if (handler.slotObj)
+    {
+
+      // if the receiver was destroyed, skip this part
+      if (Q_LIKELY(!handler.receiver.isNull() || !handler.hasValidReceiver))
+      {
+
+        // we've already checked the arguments when the command was
+        // added, so can safely do the following void* casts
+        void *args[2] = {
+          0,
+          reinterpret_cast<void *>(const_cast<QStringList *>(&arguments))};
+        handler.slotObj->call(const_cast<QObject *>(handler.receiver.data()),
+                              args);
+      }
+    }
+  }
 }
 
 /* ={--------------------------------------------------------------------------
