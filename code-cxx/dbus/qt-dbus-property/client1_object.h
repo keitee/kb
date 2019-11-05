@@ -9,4 +9,7 @@ class Client : public QObject
 
   public slots:
     void onSignalReceived(const QString &name, const QString &text);
+
+  private:
+    QSharedPointer<QDBusInterface> m_sender;
 };

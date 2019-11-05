@@ -402,15 +402,57 @@ void DBusAbstractInterface::invokeNotifySignal(QMetaMethod const &method,
 /* ={--------------------------------------------------------------------------
  @brief :
 
-  Performs a org.freedesktop.DBus.Properties.Get method call requesting
-  the given property, however it returns the pending reply rather than
-  blocking.
+Performs a org.freedesktop.DBus.Properties.Get method call requesting the given
+property, however it returns the pending reply rather than blocking.
 
   <method name="Get">
     <arg name="interface" type="s" direction="in"/>
     <arg name="name" type="s" direction="in"/>
     <arg name="value" type="v" direction="out"/>
   </method>
+
+https://doc.qt.io/qt-5/qdbusmessage.html
+
+The QDBusMessage class represents one message sent or received over the D-Bus
+bus.
+
+Detailed Description
+
+This object can represent any of the four different types of messages
+(MessageType) that can occur on the bus:
+
+Method calls
+Method return values
+Signal emissions
+Error codes
+
+Objects of this type are created with the static createError(),
+createMethodCall() and createSignal() functions. Use the QDBusConnection::send()
+function to send the messages.
+
+
+QDBusMessage QDBusMessage::createMethodCall(
+  const QString &service,
+  const QString &path,
+  const QString &interface,
+  const QString &method)
+
+Constructs a new DBus message representing a method call. A method call always
+informs its destination address (service, path, interface and method).
+
+The DBus bus allows calling a method on a given remote object without specifying
+the destination interface, if the method name is unique. However, if two
+interfaces on the remote object export the same method name, the result is
+undefined (one of the two may be called or an error may be returned).
+
+When using DBus in a peer-to-peer context (i.e., not on a bus), the service
+parameter is optional.
+
+The QDBusInterface class provides a simpler abstraction to synchronous method
+calling.
+
+This function returns a QDBusMessage object that can be sent with
+QDBusConnection::call().
 
 */
 

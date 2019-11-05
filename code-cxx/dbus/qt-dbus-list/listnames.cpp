@@ -124,14 +124,21 @@ void method2()
 
   // https://doc.qt.io/qt-5/qdbusinterface.html
   //
+  // Inherits: QDBusAbstractInterface
+  //
   // Detailed Description
   //
   // QDBusInterface is a *generic accessor class* that is used to place calls to
   // remote objects, connect to signals exported by remote objects and get/set
-  // the value of remote properties. This class is useful for dynamic access to
-  // remote objects: that is, when you do not have a generated code that
-  // represents the remote interface.
-  // 
+  // the value of remote properties.
+  //
+  // This class is useful for dynamic access to remote objects: that is, when
+  // you do not have a generated code that represents the remote interface.
+  //
+  // NOTE:
+  // Like proxy/adaptor, inherits QDBusAbstractInterface and understand Qt
+  // property system and Qt.
+  //
   // Calls are usually placed by using the call() function, which constructs the
   // message, sends it over the bus, waits for the reply and decodes the reply.
   //
@@ -139,10 +146,6 @@ void method2()
   //
   // Finally, properties are accessed using the QObject::property() and
   // QObject::setProperty() functions.
-  // 
-  // The following code snippet demonstrates how to perform a mathematical
-  // operation of "2 + 2" in a remote application called com.example.Calculator,
-  // accessed via the session bus.
 
   // QDBusInterface::QDBusInterface(
   //  const QString &service, 
@@ -177,8 +180,41 @@ void method2()
   // parameters or if you have a variable number of parameters to be passed, use
   // callWithArgumentList().
 
+  // Sync or Async?
+  //
+  // * Since there is QDBusPendingCall QDBusAbstractInterface::asyncCall(),
+  // call() is sync call
+  //
+  // * QDBusMessage reads:
+  //
   // https://doc.qt.io/qt-5/qdbusmessage.html
   //
+  // QDBusMessage QDBusMessage::createMethodCall(
+  //  const QString &service, const QString &path, const QString &interface,
+  //  const QString &method)
+  //
+  // Constructs a new DBus message representing a method call. A method call
+  // always informs its destination address (service, path, interface and
+  // method).
+  //
+  // The DBus bus allows calling a method on a given remote object without
+  // specifying the destination interface, if the method name is unique.
+  // However, if two interfaces on the remote object export the same method
+  // name, the result is undefined (one of the two may be called or an error may
+  // be returned).
+  //
+  // When using DBus in a peer-to-peer context (i.e., not on a bus), the service
+  // parameter is optional.
+  //
+  // NOTE: The QDBusInterface class provides a simpler abstraction to
+  // synchronous method calling.
+  //
+  // This function returns a QDBusMessage object that can be sent with
+  // QDBusConnection::call().
+  //
+  //
+  // SO, QDBusInterface::call() is sync call.
+
   // QList<QVariant> QDBusMessage::arguments() const
   //
   // Returns the list of arguments that are going to be sent or were received
@@ -249,7 +285,29 @@ void method2_1()
   // event loop in order to wait for the reply. During the wait, it may deliver
   // signals and other method calls to your application. Therefore, it must be
   // prepared to handle a reentrancy whenever a call is placed with call().
-  
+
+  // send out message
+  //
+  // QDBusPendingCall QDBusConnection::asyncCall(
+  //  const QDBusMessage &message,
+  //  int timeout = -1) const
+  //
+  // Sends the message over this connection and returns immediately. This
+  // function is suitable for method calls only. It returns an object of type
+  // QDBusPendingCall which can be used to track the status of the reply.
+  //
+  // If no reply is received within timeout milliseconds, an automatic error
+  // will be delivered indicating the expiration of the call. The default
+  // timeout is -1, which will be replaced with an implementation-defined value
+  // that is suitable for inter-process communications (generally, 25 seconds).
+  // This timeout is also the upper limit for waiting in
+  // QDBusPendingCall::waitForFinished().
+  //
+  // See the QDBusInterface::asyncCall() function for a more friendly way of
+  // placing calls.
+  //
+  // This function was introduced in Qt 4.5.
+
   QDBusMessage reply = QDBusConnection::sessionBus().call(request);
 
   // qDebug() << dbus_iface.call("ListNames").arguments().at(0);
