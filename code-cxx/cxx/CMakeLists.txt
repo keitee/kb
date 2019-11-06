@@ -183,6 +183,10 @@ target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
 add_executable(${PROJECT_NAME}_case "cxx_case.cpp")
 target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
 
+# test_boost.cpp
+add_executable(test_boost "test_boost.cpp")
+target_link_libraries(test_boost gmock_main Boost::thread)
+
 # # cxx_xx.cpp
 # add_executable(${PROJECT_NAME}_xx "cxx_xx.cpp")
 # 

@@ -58,13 +58,15 @@ int main(int argc, char **argv)
 
 #if !defined(__LP64__) || !defined(_LP64)
   // 32 bits
-  // warning: format ‘%ld’ expects argument of type ‘long int’, but argument 2 has type ‘uint64_t {aka long long unsigned int}’ [-Wformat=]
-  // printf("uint64 value is %ld\n", value);
+  // warning: format ‘%ld’ expects argument of type ‘long int’, but argument 2
+  // has type ‘uint64_t {aka long long unsigned int}’ [-Wformat=] printf("uint64
+  // value is %ld\n", value);
   printf("uint64 value is %lld\n", value);
 #else
   // 64 bits
   printf("uint64 value is %ld\n", value);
-  // warning: format ‘%lld’ expects argument of type ‘long long int’, but argument 2 has type ‘uint64_t {aka long unsigned int}’ [-Wformat=]
+  // warning: format ‘%lld’ expects argument of type ‘long long int’, but
+  // argument 2 has type ‘uint64_t {aka long unsigned int}’ [-Wformat=]
   // printf("uint64 value is %lld\n", value);
 #endif
 }
