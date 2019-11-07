@@ -16,6 +16,7 @@ Use #{ for a group and ={ for a item
 |kt_dev_qt_0001| qt-slot qt-thread
 |kt_dev_qt_0001| qt-property
 |kt_dev_qt_0001| qt-dbus
+|kt_dev_qt_0001| qt-dbus-peer-to-peer
 |kt_dev_qt_0001| qt-creator-command
 |kt_dev_qt_0001| qt-creator-project
 |kt_dev_qt_0001| qt-edit-navigate
@@ -230,9 +231,6 @@ window.cpp:
 https://doc.qt.io/qt-5/qcoreapplication.html#processEvents
 
 Qt/5.12.3/Src/qtbase/src/corelib/kernel
-qcoreapplication.cpp
-qcoreapplication.h
-qcoreapplication_p.h
 
 Detailed Description
 
@@ -261,6 +259,131 @@ posted to an event queue with postEvent(). Pending events can be removed with
 removePostedEvents() or dispatched with sendPostedEvents().
 
 The class provides a quit() slot and an aboutToQuit() signal.
+
+    Enters the main event loop and waits until exit() is called.  Returns
+    the value that was passed to exit() (which is 0 if exit() is called via
+    quit()).
+
+    It is necessary to call this function to start event handling. The
+    main event loop receives events from the window system and
+    `dispatches these to the application widgets.`
+
+    To make your application perform idle processing (by executing a
+    special function whenever there are no pending events), use a
+    QTimer with 0 timeout. More advanced idle processing schemes can
+    be achieved using processEvents().
+
+int QCoreApplication::exec()
+{
+  QEventLoop eventLoop;
+  int returnCode = eventLoop.exec();
+}
+
+
+https://doc.qt.io/qt-5/qeventloop.html
+
+The QEventLoop class provides a means of entering and leaving an event loop.
+
+At any time, you can create a QEventLoop object and call exec() on it to start
+a local event loop. From within the event loop, calling exit() will force
+exec() to return.
+
+    Enters the main event loop and waits until exit() is called.
+    Returns the value that was passed to exit().
+
+    If \a flags are specified, only events of the types allowed by
+    the \a flags will be processed.
+
+    It is necessary to call this function to start event handling. The
+    main event loop receives events from the window system and
+    dispatches these to the application widgets.
+
+    Generally speaking, no user interaction can take place before
+    calling exec(). As a special case, modal widgets like QMessageBox
+    can be used before calling exec(), because modal widgets
+    use their own local event loop.
+
+    To make your application perform idle processing (i.e. executing a
+    special function whenever there are no pending events), use a
+    QTimer with 0 timeout. More sophisticated idle processing schemes
+    can be achieved using processEvents().
+
+// qtbase/src/corelib/kernel/qeventloop.cpp
+int QEventLoop::exec(ProcessEventsFlags flags)
+{
+  // remove posted quit events when entering a new event loop
+  QCoreApplication *app = QCoreApplication::instance();
+  if (app && app->thread() == thread())
+    QCoreApplication::removePostedEvents(app, QEvent::Quit);
+
+  while (!d->exit.loadAcquire())
+    processEvents(flags | WaitForMoreEvents | EventLoopExec);
+}
+
+    Processes pending events that match \a flags until there are no
+    more events to process. Returns \c true if pending events were handled;
+    otherwise returns \c false.
+
+    This function is especially useful if you have a long running
+    operation and want to show its progress without allowing user
+    input; i.e. by using the \l ExcludeUserInputEvents flag.
+
+    This function is simply a wrapper for
+    QAbstractEventDispatcher::processEvents(). See the documentation
+    for that function for details.
+
+bool QEventLoop::processEvents(ProcessEventsFlags flags)
+{
+  Q_D(QEventLoop);
+  if (!d->threadData->hasEventDispatcher())
+    return false;
+  return d->threadData->eventDispatcher.load()->processEvents(flags);
+}
+
+
+https://doc.qt.io/qt-5/qabstracteventdispatcher.html
+
+An event dispatcher receives events from the window system and other sources.
+It then sends them to the QCoreApplication or QApplication instance for
+processing and delivery. QAbstractEventDispatcher provides fine-grained
+control over event delivery.
+
+
+// qtbase/src/corelib/kernel/qeventdispatcher_unix.cpp
+bool QEventDispatcherUNIX::processEvents(QEventLoop::ProcessEventsFlags flags)
+{
+  QCoreApplicationPrivate::sendPostedEvents(0, 0, d->threadData);
+}
+
+// qtbase/src/corelib/kernel/qcoreapplication.cpp
+void QCoreApplicationPrivate::sendPostedEvents(QObject *receiver, int event_type,
+                                               QThreadData *data)
+{
+  while (i < data->postEventList.size()) {
+
+    // after all that work, it's time to deliver the event.
+    QCoreApplication::sendEvent(r, e);
+
+  }
+}
+
+
+For simple control of event processing use QCoreApplication::processEvents().
+
+For finer control of the application's event loop, call instance() and call
+functions on the QAbstractEventDispatcher object that is returned. If you want
+to use your own instance of QAbstractEventDispatcher or of a
+QAbstractEventDispatcher subclass, you must install it with
+QCoreApplication::setEventDispatcher() or QThread::setEventDispatcher() before
+a default event dispatcher has been installed.
+
+The main event loop is started by calling QCoreApplication::exec(), and
+stopped by calling QCoreApplication::exit(). Local event loops can be created
+using QEventLoop.
+
+Programs that perform long operations can call processEvents() with a bitwise
+OR combination of various QEventLoop::ProcessEventsFlag values to control
+which events should be delivered.
 
 
 Qt's main event loop (QCoreApplication::exec()) fetches native window system
@@ -416,7 +539,6 @@ which invoked main(), and started with QCoreApplication::exec() (which must be
 the only thread in which GUI-related operations are allowed.  A QThread local
 event loop can be started instead by calling QThread::exec() (inside its run()
     method):
-
 
 
 ={============================================================================
@@ -3177,7 +3299,8 @@ class BleRcuControllerAdaptorTest : public ::testing::Test
       processEventsFor(10);
 
       /*
-      QDBusConnection QDBusConnection::connectToPeer(const QString &address, const QString &name);
+      QDBusConnection 
+        QDBusConnection::connectToPeer(const QString &address, const QString &name);
 
       Opens a peer-to-peer connection on address address and associate with it
       the connection name name. Returns a QDBusConnection object associated
@@ -3188,7 +3311,8 @@ class BleRcuControllerAdaptorTest : public ::testing::Test
       // for some reason the name of the server has to be unique, use a UUID as conventient for now
       
       const QUuid name = QUuid::createUuid();
-      m_dbusConn = QSharedPointer<QDBusConnection>::create(QDBusConnection::connectToPeer(m_dbusServer->address(), name.toString()));
+      m_dbusConn = QSharedPointer<QDBusConnection>::create(
+          QDBusConnection::connectToPeer(m_dbusServer->address(), name.toString()));
 
       // if all goes to plan then onNewConnection() should be called, wait for
       // that to happen before proceeding
