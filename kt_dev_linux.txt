@@ -487,7 +487,8 @@
 *kt_linux_core_103* linux-process-priority-and-schedule 
 *kt_linux_core_110* linux-process-resource
 |kt_linux_core_108| linux-process-group todo
-|kt_linux_core_109| linux-process-deamon todo
+|kt_linux_core_109| os-deamon
+*kt_linux_core_108* os-syslog
 
 *kt_linux_core_105* linux-mem-process
 *kt_linux_core_106* linux-mem-virtual
@@ -11243,6 +11244,11 @@ front-end tool to talk to the kernel and decides the packets to filter. This
 guide may help you to rough idea and basic commands of IPTables where we are
 going to describe practical iptables rules which you may refer and customized
 as per your need.
+
+<ex>
+You then need to open the 10022 port:
+iptables -I INPUT 2 -p tcp --dport 10022 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+iptables -I OUTPUT 1 -p tcp --sport 10022 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
 
 <tool-firewall>
@@ -22198,9 +22204,9 @@ aptitude remove "name"
 
 
 {tool-package-update-and-upgrade}
-The apt-get install command is 'recommended' because it upgrades one or more
+The `apt-get install command is 'recommended' because it upgrades one` or more
 already installed packages without upgrading every package installed, whereas
-the apt-get upgrade command installs the newest version of all currently
+the apt-get upgrade command installs the newest version of `all` currently
 installed packages. In additon, `apt-get update` command must be executed before
 an upgrade to resynchronize the package index files.
 
@@ -22492,16 +22498,20 @@ https://cmake.org/download/
 
 tar xvf cmake-3.13.2.tar.gz
 cd cmake-3.13.2/
-./configure --prefix=/home/kyoupark/
+./configure --prefix=/home/$USER/
 make 
 make install
+
+
+CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 ./bootstrap --prefix=/home/$USER
+../cmake-source/bootstrap && make
 
 CC=gcc CXX=g++ cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=gold -DLLVM_ENABLE_ASSERTIONS=ON [-DLLVM_ENABLE_WERROR=ON] [-DLLVM_TARGETS_TO_BUILD=X86] /home/kyoupark/asan/llvm/llvm
 
 // initially got error saying CMAKE_ROOT is not found and works when did:
 // not sure that's because CMAKE_ROOT or ~/bin/cmake that's installed locally.
 
-export CMAKE_ROOT=/home/kyoupark/share/cmake-3.13
+export CMAKE_ROOT=/home/kyoupark/share/cmake-3.16
 CC=gcc CXX=g++ ~/bin/cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_USE_LINKER=gold -DLLVM_ENABLE_ASSERTIONS=ON [-DLLVM_ENABLE_WERROR=ON] [-DLLVM_TARGETS_TO_BUILD=X86] /home/kyoupark/asan/llvm/llvm
 
 
@@ -22881,6 +22891,40 @@ or cmake-gui if ccmake isn't installed. The reasons for this being useful are
   that is useful, especially on larger projects: make help. This prints a list
   of targets provided by the Makefile. This can be convenient if you only want
   to build specific targets but aren't sure how they were named.
+
+
+={============================================================================
+*kt_linux_tool_140* make-cmake-variable
+
+*cmake-toolchain-file*
+CMAKE_TOOLCHAIN_FILE
+
+Path to toolchain file supplied to cmake(1).
+
+This variable is specified on the command line when cross-compiling with
+CMake. It is the path to a file which is read early in the CMake run and which
+specifies locations for compilers and toolchain utilities, and other target
+platform and compiler related information.
+
+<ex>
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain.cmake -DCMAKE_BUILD_TYPE=DEBUG ..
+
+
+*cmake-prefix-path*
+CMAKE_PREFIX_PATH
+
+Semicolon-separated list of directories specifying installation prefixes to be
+searched by the find_package(), find_program(), find_library(), find_file(),
+and find_path() commands. Each command will add appropriate subdirectories
+  (like bin, lib, or include) as specified in its own documentation.
+
+By default this is empty. It is intended to be set by the project.
+
+See also CMAKE_SYSTEM_PREFIX_PATH, CMAKE_INCLUDE_PATH, CMAKE_LIBRARY_PATH,
+CMAKE_PROGRAM_PATH, and CMAKE_IGNORE_PATH.
+
+<ex> to set Qt directory
+CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake ..
 
 
 ={============================================================================
@@ -46608,7 +46652,7 @@ signal stops a process by default.
 
 
 ={============================================================================
-*kt_linux_core_108* linux-process-daemon
+*kt_linux_core_108* os-daemon
 
 LPI 37.
 
@@ -46724,28 +46768,29 @@ Why is it possible? Since a daemon has no controlling terminal, the kernel never
 signal for a daemon. Therefore, daemons can use SIGHUP for the purpose described here.
 
 
-{syslog}
+={============================================================================
+*kt_linux_core_108* os-syslog
+
 note: no syslogd on a embedded system.
 
-<why>
 When writing a daemon, one problem we encounter is how to display error
 messages. Since a daemon runs in the background, we can't display messages on
-an associated terminal, as we would typically do with other programs. 
+an associated terminal, as we would typically do with other programs.
 
-One possible alternative is to write messages to an application-specific log
+One possible alternative is to write messages to an `application-specific` log
 file, as is done in the program in Listing 37-3. The main problem with this
 approach is that it is difficult for a system administrator to manage multiple
-application log files and monitor them all for error messages. 
+application log files and monitor them all for error messages.
 
 The syslog facility was devised to address this problem which provides a
-single, centralized logging facility that can be used to log messages by 'all'
+single, centralized logging facility that can be used to log messages by `all`
 applications on the system.
 
 
 Figure 37-1: Overview of system logging 
 
-printf uses syslog 2 and /proc/kmsg to log and klogd uses
-syslog 3 to log in to /dev/log.
+note: printf uses syslog 2 and /proc/kmsg to log and klogd uses syslog 3 to
+log in to /dev/log.
 
 Kernel                            User process
   |                                 |
@@ -46765,6 +46810,11 @@ klogd                               |
 
 
 <daemon-and-conf>
+#include <syslog.h>
+
+void openlog(const char *ident, int log_options, int facility);
+void syslog(int priority, const char *format, ...);
+
 The syslog facility has two principal components: the syslogd daemon and the
 syslog(3) library function.
 
@@ -46876,12 +46926,6 @@ DESCRIPTION
        How to set level? Depends on words contained in a line.
 
 
-<syslog3>
-#include <syslog.h>
-
-void openlog(const char *ident, int log_options, int facility);
-void syslog(int priority, const char *format, ...);
-
 <facility-and-level>
 The priority argument is created by ORing together a facility value and a
 level value. The `facility` indicates the general `category` of the application
@@ -46910,6 +46954,15 @@ One difference from printf() is that the format string doesn't need to include
 a terminating newline character. Also, the format string may include the
 2-character sequence %m, which is replaced by the error string correspond- ing
 to the current value of errno (i.e., the equivalent of strerror(errno)).
+
+
+<tool-journalctl>
+
+Displaying Logs from the Current Boot
+
+The most basic of these which you might use daily, is the -b flag. This will
+show you all of the journal entries that have been collected since the most
+recent reboot.
 
 
 ={============================================================================
@@ -87966,6 +88019,17 @@ run in an environment (perhaps a chroot jail, for example) where shared librarie
 
 ={============================================================================
 *kt_linux_core_600* os-time
+
+<ex> *os-timezone*
+$ timedatectl status
+                      Local time: Fri 2019-11-08 11:42:04 GMT
+                  Universal time: Fri 2019-11-08 11:42:04 UTC
+                        RTC time: Fri 2019-11-08 11:42:04
+                       Time zone: Europe/London (GMT, +0000)
+       System clock synchronized: yes
+systemd-timesyncd.service active: yes
+                 RTC in local TZ: no
+
 
 LPI-10 Time
 

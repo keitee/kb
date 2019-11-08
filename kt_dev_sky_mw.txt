@@ -40,7 +40,8 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-android-ip150
 *kt_dev_skymw_0000* skymw-luna
 *kt_dev_skymw_0000* skymw-rdk
-*kt_dev_skymw_0000* skymw-rdk-full
+*kt_dev_skymw_0000* skymw-rdk-build
+*kt_dev_skymw_0000* skymw-rdk-dev
 *kt_dev_skymw_0000* skymw-jira-airplay
 *kt_dev_skymw_0000* skymw-jira-android
 *kt_dev_skymw_0000* skymw-jira-q
@@ -7637,10 +7638,6 @@ git checkout feature/NOJIRA_rdk_appinfra
 git clone dwngit@git.stb.bskyb.com:appinfrastructure appinfrastructure-rcu
 git checkout feature/NOJIRA_rdk_ble_rcu_daemon
 
-The top level CMake file is in the 
-
-appinfrastructure/RDK/BluetoothRcu 
-
 
 // toolchain?
 https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Units
@@ -7657,7 +7654,22 @@ drwxr-xr-x 5 keitee keitee 4.0K Sep 20 11:07 ../
 
 
 <rdk-cmake>
-keitee@keitee-mint:~/rdk/appinfrastructure/RDK/BluetoothRcu/cmake$ more toolchain.cmake
+
+The top level CMake file is in the 
+
+appinfrastructure/RDK/BluetoothRcu 
+
+The first step is to setup a cmake toolchain file to point to you local RDK
+SDK (aka firebolt). You can either modify one of the toolchain files in the
+RDK/BluetoothRcu/cmake directory, or use them as a base to write a new one.
+
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/rdk-xi6-toolchain.cmake ..
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain.cmake -DCMAKE_BUILD_TYPE=DEBUG ..
+
+keitee@keitee-mint:~/rdk/appinfrastructure/RDK/BluetoothRcu/cmake$ 
+
+more toolchain.cmake
+
 # this one is important
 SET(CMAKE_SYSTEM_NAME Linux)
 #this one not so much
@@ -7752,6 +7764,7 @@ drwxr-xr-x 8 keitee keitee    4096 Sep 20 11:07 ..
 keitee@keitee-mint:~/rdk/arrisxi6-morty-RNE-SDK-2.0/samples$ ./build_samples.sh
 
 <rdk-ssh>
+https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Units
 // Enable SSH Access (every time when boots)
 
 By default the image provides an ssh service (dropbear) that is locked down.
@@ -7759,6 +7772,8 @@ The following can be used to spin up a new instance of dropbear that allow
 root login.
 
 dropbearkey -t rsa -f /tmp/sky-ssh-hostkey
+
+// have to run this when reboots
 dropbear -p :10022 -P /var/run/dropbear2.pid -r /tmp/sky-ssh-hostkey -B
 
 You then need to open the 10022 port:
@@ -7774,7 +7789,7 @@ ssh -p 10022 root@<STBIP>
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-full
+*kt_dev_skymw_0000* skymw-rdk-build
 
 rdk full stack build
 
@@ -8122,6 +8137,12 @@ tmp/deploy/images/arrisxi6-morty/
 media/keitee/hdd/docker_share/Llama/Xi6/build-arrisxi6-morty/tmp/deploy/images/arrisxi6-morty$ 
 cp AX061AEI_VBN_fr_qtb_upgrade_20191106094759sdy_MTY_FBT.bin /media/keitee/6085-9899/package.bin
 
+// filename changes to date when build is made
+// `20191108100350`sdy_MTY_FBT.bin
+keitee@keitee-mint:/media/keitee/hdd/docker_share/Llama/Xi6$ cp build-arrisxi6-morty/tmp/deploy/images/arrisxi6-morty/AX061AEI_VBN_fr_qtb_upgrade_20191108100350sdy_MTY_FBT.bin /media/keitee/6085-9899/package.bin
+
+cp build-arrisxi6-morty/tmp/deploy/images/arrisxi6-morty/AX061AEI_VBN_fr_qtb_upgrade_20191108100350sdy_MTY_FBT.bin /media/keitee/6085-9899/package.bin
+
 
 Serial port parameters are 115200, 8N1
 
@@ -8132,6 +8153,99 @@ ctrl-c this to interrupt the boot process (this takes slightly longer to take
 Type usbflash
 
 This will flash the package.bin from the USB stick, and reboot
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-rdk-dev
+
+devicesettings-hal-brcm97428
+
+<jira-rdk>
+NGDEV-151053
+
+in this file /opt/persistent/ds/hostData on the box, set HDMI0.resolution to
+1080p60. Then reboot
+
+cat /opt/persistent/ds/hostData
+
+root@arrisxi6-morty:~# cat /opt/persistent/ds/hostData
+HDMI0.AudioMode STEREO
+HDMI0.AudioMode.AUTO    TRUE
+HDMI0.resolution        720p
+Power.Color     23279
+Power.brightness        10
+audio.LEEnable  TRUE
+
+mount -o rw -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /tmp/x
+
+
+// from journalctl
+Nov 08 09:31:33 arrisxi6-morty dsMgrMain[2977]: [tid=2979]: 191108-09:31:33:863432 
+  The HDMI Audio Mode Setting From Persistent is STEREO
+
+generic/devicesettings/generic/rpc/srv/dsAudio.c
+
+static void _GetAudioModeFromPersistent(void *arg)
+{
+    _DEBUG_ENTER();
+
+    dsAudioSetStereoModeParam_t *param = (dsAudioSetStereoModeParam_t *)arg;
+
+    if (param != NULL)
+    {
+        else if (_APortType == dsAUDIOPORT_TYPE_HDMI) {
+            _AudioModeSettings = device::HostPersistence::getInstance().getProperty("HDMI0.AudioMode",_AudioModeSettings);
+            __TIMESTAMP();printf("The HDMI Audio Mode Setting From Persistent is %s \r\n",_AudioModeSettings.c_str());
+        }
+    }
+}
+
+meta-rdk-video/recipes-extended/devicesettings/devicesettings_git.bb
+19:SRC_URI = "${RDK_GENERIC_ROOT_GIT}/devicesettings/generic;protocol=${RDK_GIT_PROTOCOL};branch=${RDK_GIT_BRANCH}"
+21:# devicesettings is not a 'generic' component, as some of its source
+24:# BSP needs to implement virtual/devicesettings-hal when
+25:# devicesettings become 'generic' we will remove the dependency on the
+29:DEPENDS="directfb iarmbus rdk-logger virtual/devicesettings-hal devicesettings-hal-headers"
+76:    # remove local version of hal since we use devicesettings-hal-headers,
+
+
+<skymw-rdk-as>
+/Llama/Xi6/meta-rdk-sky/recipes-core$ ll
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 skyui/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 sky-fixup/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 packagegroups/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 libasservice/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 images/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 ctemplate/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 assystemserviced/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 asproxy/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 asplayerservice/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 asmockservice/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 asappsserviced/
+drwxrwxr-x 16 keitee keitee 4.0K Nov  4 10:56 ../
+drwxrwxr-x 13 keitee keitee 4.0K Nov  4 10:56 ./
+
+
+/Llama/Xi6/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
+  /usr/src/debug$ ls -ald as*
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asappsserviced
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asmockservice
+drwxr-xr-x 3 keitee keitee 4096 Nov  6 10:53 asplayerservice
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:07 asproxy
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 assystemserviced
+
+
+/Llama/Xi6/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
+  /usr/src/debug/assystemserviced/1.0-0.1/git$ ll
+-rw-r--r-- 1 keitee keitee 1.2K Nov  4 13:46 main.cpp
+drwxr-xr-x 5 keitee keitee 4.0K Nov  4 14:01 System/
+drwxr-xr-x 2 keitee keitee 4.0K Nov  4 14:01 log/
+drwxr-xr-x 2 keitee keitee 4.0K Nov  4 14:01 eventloop/
+drwxr-xr-x 2 keitee keitee 4.0K Nov  4 14:01 dbus/
+drwxr-xr-x 2 keitee keitee 4.0K Nov  4 14:01 asservice/
+drwxr-xr-x 4 keitee keitee 4.0K Nov  4 14:01 3rdParty/
+drwxr-xr-x 3 keitee keitee 4.0K Nov  4 14:01 ../
+drwxr-xr-x 8 keitee keitee 4.0K Nov  4 14:01 ./
 
 
 ={============================================================================

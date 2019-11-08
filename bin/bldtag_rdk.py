@@ -11,8 +11,8 @@ if __name__ == "__main__":
     # runs on /home/keitee/rdk/appinfrastructure/RDK
     # dirs to include
     dirs = [
-        'BluetoothRcu/daemon',
-        'BluetoothRcu/tools'
+        'generic',
+        'meta-rdk-sky'
         ]
 
     listfile = 'flist.out'
