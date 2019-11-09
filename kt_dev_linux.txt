@@ -487,8 +487,8 @@
 *kt_linux_core_103* linux-process-priority-and-schedule 
 *kt_linux_core_110* linux-process-resource
 |kt_linux_core_108| linux-process-group todo
-|kt_linux_core_109| os-deamon
-*kt_linux_core_108* os-syslog
+|kt_linux_core_109| os-daemon
+*kt_linux_core_108* os-syslog os-systemd
 
 *kt_linux_core_105* linux-mem-process
 *kt_linux_core_106* linux-mem-virtual
@@ -534,7 +534,7 @@
 *kt_linux_core_0000* linux-ipc-consideration
 *kt_linux_core_0000* linux-ipc-posix
 *kt_linux_core_0000* os-ipc-socket os-socket
-*kt_linux_core_0000* linux-ipc-socket-unix linux-socket-unix
+*kt_linux_core_0000* os-ipc-socket os-socket-unix
 *kt_linux_core_0000* linux-ipc-socket-internet linux-socket-internet
 *kt_linux_core_0000* linux-ipc-pipe
 *kt_linux_core_0000* linux-ipc-pipe-check-setup
@@ -46769,7 +46769,9 @@ signal for a daemon. Therefore, daemons can use SIGHUP for the purpose described
 
 
 ={============================================================================
-*kt_linux_core_108* os-syslog
+*kt_linux_core_108* os-syslog os-systemd
+
+LPI-37.5 Logging Messages and Errors Using syslog
 
 note: no syslogd on a embedded system.
 
@@ -46789,7 +46791,7 @@ applications on the system.
 
 Figure 37-1: Overview of system logging 
 
-note: printf uses syslog 2 and /proc/kmsg to log and klogd uses syslog 3 to
+note: printk uses syslog 2 and /proc/kmsg to log and klogd uses syslog 3 to
 log in to /dev/log.
 
 Kernel                            User process
@@ -46809,16 +46811,11 @@ klogd                               |
                             syslogd
 
 
-<daemon-and-conf>
-#include <syslog.h>
+The syslog facility has `two principal components`: 
+  the syslogd daemon and the syslog(3) library function.
 
-void openlog(const char *ident, int log_options, int facility);
-void syslog(int priority, const char *format, ...);
 
-The syslog facility has two principal components: the syslogd daemon and the
-syslog(3) library function.
-
-The System Log daemon, `syslogd`, accepts log messages from two different
+The System Log daemon, `os-syslogd`, accepts log messages from two different
 sources: a UNIX domain socket, /dev/log, which holds locally produced
 messages, and (if enabled) an Internet domain socket (UDP port 514), which
 holds messages sent across a TCP/IP network.
@@ -46832,14 +46829,16 @@ dictates of an associated configuration file, /etc/syslog.conf.
 
 Possible destinations include a terminal or virtual console, a disk file, a
 FIFO, one or more (or all) logged-in users, or a process (typically another
-    syslogd daemon) on another system connected via a TCP/IP network. (Sending
-      the message to a process on another system is useful for reducing
-      administrative overhead by consolidating messages from multiple systems
-      to a single location.) A single message may be sent to multiple
-    destinations (or none at all), and messages with different combinations of
-    facility and level can be targeted to different destinations or to
-    different instances of destinations (i.e., different consoles, different
-        disk files, and so on).
+    syslogd daemon) on another system connected via a TCP/IP network. 
+
+Sending the message to a process on another system is useful for reducing
+administrative overhead by consolidating messages from multiple systems to a
+single location. 
+
+A single message may be sent to multiple destinations (or none at all), and
+messages with different combinations of facility and level can be targeted to
+different destinations or to different instances of destinations (i.e.,
+    different consoles, different disk files, and so on).
 
 
 The `syslog(3)` library function can be used by any process to log a message.
@@ -46848,14 +46847,14 @@ arguments to construct a message in a standard format that is then placed on
 the /dev/log socket for reading by syslogd.
 
 
-<klogd>
+<os-klogd>
 An alternative source of the messages placed on /dev/log is the Kernel Log
 daemon, `klogd`, which collects kernel log messages (produced by the kernel
     using its printk() function). 
 
 These messages are collected using either of two equivalent Linux-specific
-interfaces-the `/proc/kmsg` file and the syslog(2) 'system' call-and then
-placed on /dev/log using the syslog(3) 'library' function.
+interfaces-the `/proc/kmsg` file and the `syslog(2) system call`-and then
+placed on /dev/log using the `syslog(3) library` function.
 
 
 Although `syslog(2)` and `syslog(3)` share the same name, they perform quite
@@ -46864,7 +46863,16 @@ klogctl(). Unless explicitly indicated otherwise, when we refer to syslog() in
 this section, `we mean syslog(3)`
 
 
-<syslog2>
+*call-syslog3*
+
+#include <syslog.h>
+
+void openlog(const char *ident, int log_options, int facility);
+void syslog(int priority, const char *format, ...);
+
+
+*call-syslog2*
+
 SYSLOG(2)                  Linux Programmer’s Manual                 SYSLOG(2)
 
 NAME
@@ -46957,6 +46965,8 @@ to the current value of errno (i.e., the equivalent of strerror(errno)).
 
 
 <tool-journalctl>
+
+https://www.digitalocean.com/community/tutorials/how-to-use-journalctl-to-view-and-manipulate-systemd-logs
 
 Displaying Logs from the Current Boot
 
@@ -49439,7 +49449,7 @@ errno set to EEXIST. In other words, this flag allows the caller to 'ensure'
 that it is the process creating the file. 
 
 
-<open-errors>
+<open-errors> *errno-enoent*
 
 ENOENT
 
@@ -53720,21 +53730,28 @@ note: what deficiencies?
 
 LPI-56
 
-Sockets are a method of IPC that allow data to be exchanged between
+Sockets are a method of *os-ipc* that allow data to be exchanged between
 applications, either on the same host (computer) or on different hosts
 connected by a network.
 
-A socket is created using the socket() system call, which returns a file
+
+o Each application creates a socket. A socket is the “apparatus” that allows
+  communication, and both applications require one.
+
+o The server binds its socket to a well-known address (name) so that clients
+  can locate it.
+
+A socket is created using the *call-socket* system call, which returns a file
 descriptor used to refer to the socket in subsequent system calls:
 
-fd = socket(domain, type, protocol);
+fd = socket(`domain`, `type`, protocol);
 
 For all applications described in this book, protocol is always specified as
 0.
 
 
-{os-socket-domain}
-Sockets exist in a communication domain, which determines:
+*os-socket-domain*
+Sockets exist in a `communication domain`, which determines:
 
 o the method of identifying a socket (i.e., the format of a socket “address”)
 
@@ -53751,7 +53768,7 @@ Table 56-1: Socket domains
 Domain   Communication     Communication           Address format          Address structure
          performed         between applications
 
-AF_UNIX  within kernel     on same host            pathname                sockaddr_un
+AF_UNIX  within kernel     `on same host`            `pathname`                sockaddr_un
 
 AF_INET  via IPv4          on hosts connected      32-bit IPv4 address +   sockaddr_in
                            via an IPv4 network     16-bit port number
@@ -53760,9 +53777,10 @@ AF_INET6 via IPv6          on hosts connected      128-bit IPv6 address +  socka
                            via an IPv6 network     16-bit port number
 
 
-{socket-type}
+*os-socket-type*
 Every sockets implementation provides at least two types of sockets: stream
-and datagram.
+and datagram. These socket types `are supported in both` the UNIX(on same
+host) and the Internet domains(on network).
 
 Table 56-2: Socket types and their properties
 
@@ -53773,9 +53791,6 @@ Connection-oriented?             Y                 N
 
 `Stream sockets (SOCK_STREAM)` provide a reliable, bidirectional, byte-stream
 communication channel.
-
-These socket types are supported in both the UNIX(on same host) and the
-Internet domains(on network).
 
 o Reliable means that we are guaranteed that either the transmitted data will
   arrive intact at the receiving application, exactly as it was transmitted by
@@ -53805,7 +53820,7 @@ is not reliable. Messages may arrive out of order, be duplicated, or not
 arrive at all.
 
 Datagram sockets are an example of the more generic concept of a
-connectionless socket since unlike a stream socket, a datagram socket
+`connectionless socket` since unlike a stream socket, a datagram socket
 doesn't need to be connected to another socket in order to be used.
 
   "In the Internet domain, datagram sockets employ the User Datagram Protocol
@@ -53813,7 +53828,7 @@ doesn't need to be connected to another socket in order to be used.
   (TCP). So often just use the terms UDP socket and TCP socket, respectively."
 
 
-{socket-stream-ex}
+*os-socket-stream*
 
 56.5 Stream Sockets
 
@@ -53850,8 +53865,8 @@ Passive socket (server)
   close()                                          close()
 
 
-{syscall-socket}
 
+*call-socket*
 Socket I/O can be performed using the conventional read() and write() system
 calls, or using a range of `socket-specific system calls` (e.g., send(),
     recv(), sendto(), and recvfrom()).
@@ -53874,6 +53889,7 @@ raw sockets (SOCK_RAW). On success, socket() returns a file descriptor used
 to refer to the newly created socket in later system calls.
 
 
+*call-bind*
 int `bind`(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
 Binds a socket to an address. Returns 0 on success, or -1 on error
@@ -53888,12 +53904,17 @@ fixed address that is known in advance to client applications that need to
 communicate with that server.
 
 
+*call-listen*
 int `listen`(int sockfd, int backlog);
 
 The listen() system call marks the stream socket referred to by the file
 descriptor sockfd as passive.
 
+The backlog argument allows us to limit the number of such pending
+connections. Connection requests up to this limit succeed immediately.
 
+
+*call-accept*
 int `accept`(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 
 Returns file descriptor on success, or -1 on error
@@ -53904,6 +53925,20 @@ pending connections when accept() is called, the call blocks until a
 connection request arrives.
 
 
+The key point to understand about accept() is that it creates a new socket,
+and it is this new socket that is connected to the peer socket that
+performed the connect(). A file descriptor for the connected socket is
+returned as the function result of the accept() call.
+
+The remaining arguments to accept() return the address of the peer socket. The
+addr argument points to a structure that is used to return the socket address.
+The type of this argument depends on the socket domain (as for bind()).
+
+If we are not interested in the address of the peer socket, then addr and
+addrlen should be specified as NULL and 0, respectively. 
+
+
+*call-connect*
 int `connect`(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
 The connect() system call connects the active socket referred to by the file
@@ -53942,21 +53977,22 @@ retrieve the peer’s address later using the getpeername() system call, as
 described in Section 61.5.
 
 
-{os-socket-sockaddr} os-port-number
+*os-socket-sockaddr* *os-port-number*
 
 56.4 Generic Socket Address Structures: struct sockaddr
 
 The addr and addrlen arguments to bind() require some further explanation.
+
 Looking at Table 56-1, we see that each socket domain uses a different address
 format. For example, UNIX domain sockets use pathnames, while Internet domain
 sockets use the combination of an IP address plus a port number.
 
 For each socket domain, a different structure type is defined to store a
-socket address. However, because system calls such as bind() are generic to
+socket address. However, because system calls such as bind() are `generic` to
 all socket domains, they must be able to accept address structures of any
 type.
 
-In order to permit this, the sockets API defines a generic address structure,
+In order to permit this, the sockets API defines a `generic address structure`,
 struct sockaddr. The only purpose for this type is `to cast` the various
 domain-specific address structures to a single type for use as arguments in
 the socket system calls. The sockaddr structure is typically defined as
@@ -53998,7 +54034,7 @@ of the address stored in the remainder of the structure.
 
 
 ={============================================================================
-*kt_linux_core_0000* linux-ipc-socket-unix linux-socket-unix
+*kt_linux_core_0000* os-socket-unix
 
 LPI-57 SOCKETS : UNIX DOMAIN
 
@@ -54012,6 +54048,7 @@ struct sockaddr_un {
   char sun_path[108];     /* Null-terminated socket pathname */
 };
 
+// #inlcude <sys/un.h>
 namespace code
 {
   /* Structure describing a generic socket address.  */
@@ -54031,41 +54068,6 @@ namespace code
     char sun_path[108];   /* Path name.  */
   };
 }
-
-
-Listing 57-1: Binding a UNIX domain socket
-
-{
-  const char *SOCKNAME = "/tmp/mysock";
-
-  int sfd;
-  struct sockaddr_un addr;
-
-  sfd = socket(AF_UNIX, SOCK_STREAM, 0); /* Create socket */
-  if (sfd == -1)
-    errExit("socket");
-
-  memset(&addr, 0, sizeof(struct sockaddr_un)); /* Clear structure */
-
-  addr.sun_family = AF_UNIX; /* UNIX domain address */
-
-  strncpy(addr.sun_path, SOCKNAME, sizeof(addr.sun_path) - 1);
-
-  if (bind(sfd, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1)
-    errExit("bind");
-}
-
-
-The use of the memset() call in Listing 57-1 ensures that all of the structure
-fields have the value 0. 
-
-o The subsequent strncpy() call takes advantage of this by specifying its
-  final argument as one less than the size of the sun_path field, to ensure
-  that this field always has a terminating null byte.
-
-o Using memset() to zero out the entire structure, rather than initializing
-  individual fields, ensures that any nonstandard fields that are provided by
-  some implementations are also initialized to 0.
 
 
 namespace code

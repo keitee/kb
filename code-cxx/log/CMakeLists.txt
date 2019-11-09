@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(log VERSION 0.1 LANGUAGES CXX)
+project(test_log VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -66,7 +66,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 add_compile_options("-Wall")
 
-add_executable(${PROJECT_NAME} "log_test.cpp" "lpi_error.cpp" slog.cpp)
+add_executable(${PROJECT_NAME} "test_log.cpp" "lpi_error.cpp" slog.cpp)
 
 target_link_libraries(${PROJECT_NAME} gmock_main)
 
