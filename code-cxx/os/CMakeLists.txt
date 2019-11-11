@@ -64,7 +64,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-g;-D_GLIBCXX_DEBUG")
+add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
 
 
 # cmake help
@@ -189,6 +189,10 @@ target_link_libraries(lpi-socket-unix-server ${LIBS})
 add_executable(lpi-socket-unix-client "lpi_socket_unix_client.cpp")
 target_link_libraries(lpi-socket-unix-client ${LIBS})
 
+# sdevent
+add_executable(sdevent "sdevent.cpp")
+# target_compile_options(sdevent INTERFACE -lsystemd)
+target_link_libraries(sdevent ${LIBS} "-lsystemd")
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

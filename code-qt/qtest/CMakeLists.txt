@@ -88,6 +88,19 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
+
+# when move to cmake 3.15.5
+#
+# CMake Warning (dev) in /home/keitee/works/googletest/googletest/CMakeLists.txt:
+#   AUTOGEN: No valid Qt version found for target gtest_main.  AUTOMOC
+#   disabled.  Consider adding:
+# 
+#     find_package(Qt<QTVERSION> COMPONENTS Core)
+# 
+#   to your CMakeLists.txt file.
+# This warning is for project developers.  Use -Wno-dev to suppress it.
+#
+
 # find_package(Qt5Core)
 # find_package(Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Qt5Core)

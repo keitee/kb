@@ -70,6 +70,12 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 find_package(Qt5Core)
 find_package(Qt5Test)
 
+# find_package(Qt5.12 COMPONENTS Core)
+# find_package(Qt5.12 COMPONENTS Test)
+
+set_property(DIRECTORY PROPERTY QT_VERSION_MAJOR "5")
+set_property(DIRECTORY PROPERTY QT_VERSION_MINOR "12")
+
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
 add_compile_options("-g;-ldl")
