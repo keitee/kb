@@ -153,9 +153,7 @@ TEST(String, CtorsConst)
 
 
 // ={=========================================================================
-// string-operations
-
-// string-back
+// string-operations string-back
 
 TEST(StringOperation, Back)
 {
@@ -191,18 +189,102 @@ TEST(StringOperation, MaxSize)
 #endif
 }
 
-// string-find
 
-TEST(String, Find)
+// ={=========================================================================
+// string-substring string-find string-substr
+
+TEST(CxxStringOperation, SubstringFind)
 {
-  EXPECT_THAT(string("hello").find("ll"), 2);
-  EXPECT_THAT(string("aaaaa").find("bba"), string::npos);
-  EXPECT_THAT(string("aaaaa").find("bba"), -1);
+  // cxx-srring-find
+  // http://www.cplusplus.com/reference/string/string/find/
+  {
+    std::string coll1{"There are two needles in this haystack with needles."};
+    std::string coll2{"needle"};
+
+    std::size_t found = coll1.find(coll2);
+    EXPECT_THAT(found, 14);
+
+    // start from `found+1` and for 6 chars long
+    found = coll1.find("needles are small", found + 1, 6);
+    EXPECT_THAT(found, 44);
+
+    found = coll1.find("haystack");
+    EXPECT_THAT(found, 30);
+
+    found = coll1.find('.');
+    EXPECT_THAT(found, 51);
+
+    found = coll1.find("park");
+    EXPECT_THAT(found, string::npos);
+
+    // since npos is unsigned
+    found = coll1.find("park");
+    EXPECT_THAT(found, -1);
+  }
+
+  // cxx-srring-rfind
+  // https://en.cppreference.com/w/cpp/string/basic_string/rfind
+  //
+  // Finds the last substring equal to the given character sequence. Search
+  // begins at pos, i.e. the found substring must not begin in a position
+  // following pos.
+  //
+  // Return value
+  // Position of the first character of the found substring
+
+  {
+    std::string coll1{"The sixth sick sheik's sixth sheep's sick."};
+    std::string coll2{"sixth"};
+    std::string coll3{"The sixth sick sheik's seventh sheep's sick."};
+
+    auto found = coll1.rfind(coll2);
+    coll1.replace(found, coll2.length(), "seventh");
+    EXPECT_THAT(coll1, coll3);
+
+    found = coll1.rfind(coll2, 0);
+    EXPECT_THAT(found, string::npos);
+
+    // starts from 0 and see match 'T' at 0. returns 0
+    found = coll1.rfind("The", 0);
+    EXPECT_THAT(found, 0);
+
+    // starts from 2 and see match 'The'. returns 0 since 0 is the first char
+    found = coll1.rfind("The", 2);
+    EXPECT_THAT(found, 0);
+
+    found = coll1.rfind("The", 3);
+    EXPECT_THAT(found, 0);
+
+    found = coll1.rfind("The", 4);
+    EXPECT_THAT(found, 0);
+
+    found = coll1.rfind("The", 6);
+    EXPECT_THAT(found, 0);
+
+    // 
+    found = coll1.rfind("sixth", 0);
+    EXPECT_THAT(found, string::npos);
+
+    found = coll1.rfind("sixth", 4);
+    EXPECT_THAT(found, 4);
+    
+    found = coll1.rfind("sixth", 5);
+    EXPECT_THAT(found, 4);
+
+    found = coll1.rfind("sixth", 6);
+    EXPECT_THAT(found, 4);
+  }
+
+  {
+    std::string const s = "This is a string";
+    // search backwards from position 4
+    auto found = s.rfind("is", 4);
+    EXPECT_THAT(found, 2);
+  }
 }
 
-// string-substr
-
-TEST(StringOperation, Substr)
+// is to extract substring
+TEST(CxxStringOperation, SubstringSubStr)
 {
   std::string coll{"interchangeability"};
 

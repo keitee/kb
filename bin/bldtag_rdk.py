@@ -11,8 +11,10 @@ if __name__ == "__main__":
     # runs on /home/keitee/rdk/appinfrastructure/RDK
     # dirs to include
     dirs = [
-        'generic',
-        'meta-rdk-sky'
+        'meta-rdk-sky',
+        'as-system-service',
+        'generic/devicesettings',
+        'build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/devicesettings'
         ]
 
     listfile = 'flist.out'
@@ -22,10 +24,13 @@ if __name__ == "__main__":
     # find {to be replaced} -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
     # find BluetoothRcu/daemon -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
     # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
+    # note that no "-o" before -print
     command = ["find", "-L", ".", "-type", "d", 
         "(", 
         # "-path",  "*/build", "-o", 
-        "-path",  "*/build",
+        "-path",  "*/build", "-o",
+        "-path",  "*/*.cache", "-o",
+        "-path",  "*/.git",
         # note on this end entry which is differnt from the above
         # "-path", "*/test",
         ")", "-prune", "-o", "-type", "f", "-print"]

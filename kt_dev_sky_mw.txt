@@ -7653,7 +7653,7 @@ drwxr-xr-x 5 keitee keitee 4.0K Sep 20 11:07 ../
 -rw-r--r-- 1 keitee keitee  54K Sep 20 11:07 site-config-cortexa15t2hf-neon-rdk-linux-gnueabi
 
 
-<rdk-cmake>
+<rdk-build-cmake>
 
 The top level CMake file is in the 
 
@@ -7663,7 +7663,7 @@ The first step is to setup a cmake toolchain file to point to you local RDK
 SDK (aka firebolt). You can either modify one of the toolchain files in the
 RDK/BluetoothRcu/cmake directory, or use them as a base to write a new one.
 
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/rdk-xi6-toolchain.cmake ..
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/rdk-toolchain.cmake ..
 cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain.cmake -DCMAKE_BUILD_TYPE=DEBUG ..
 
 keitee@keitee-mint:~/rdk/appinfrastructure/RDK/BluetoothRcu/cmake$ 
@@ -8094,8 +8094,8 @@ repo init -u ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/manifests/arris-bcm-man
 repo sync --verify --no-tags -c --no-clone-bundle
 
 
-// add sky layer
-git clone ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/layers/meta-rdk-sky -b topic/fr_qtb_upgrade
+// // add sky layer
+// git clone ssh://gerrit.teamccp.com:29418/rdk/yocto_oe/layers/meta-rdk-sky -b topic/fr_qtb_upgrade
 
 
 // More threads on WPE
@@ -8139,7 +8139,8 @@ cp AX061AEI_VBN_fr_qtb_upgrade_20191106094759sdy_MTY_FBT.bin /media/keitee/6085-
 
 // filename changes to date when build is made
 // `20191108100350`sdy_MTY_FBT.bin
-keitee@keitee-mint:/media/keitee/hdd/docker_share/Llama/Xi6$ cp build-arrisxi6-morty/tmp/deploy/images/arrisxi6-morty/AX061AEI_VBN_fr_qtb_upgrade_20191108100350sdy_MTY_FBT.bin /media/keitee/6085-9899/package.bin
+keitee@keitee-mint:/media/keitee/hdd/docker_share/Llama/Xi6$ 
+cp build-arrisxi6-morty/tmp/deploy/images/arrisxi6-morty/AX061AEI_VBN_fr_qtb_upgrade_20191108100350sdy_MTY_FBT.bin /media/keitee/6085-9899/package.bin
 
 cp build-arrisxi6-morty/tmp/deploy/images/arrisxi6-morty/AX061AEI_VBN_fr_qtb_upgrade_20191108100350sdy_MTY_FBT.bin /media/keitee/6085-9899/package.bin
 
@@ -8246,6 +8247,73 @@ drwxr-xr-x 2 keitee keitee 4.0K Nov  4 14:01 asservice/
 drwxr-xr-x 4 keitee keitee 4.0K Nov  4 14:01 3rdParty/
 drwxr-xr-x 3 keitee keitee 4.0K Nov  4 14:01 ../
 drwxr-xr-x 8 keitee keitee 4.0K Nov  4 14:01 ./
+
+
+root@arrisxi6-morty:~# ps aux | grep journald
+root       918  1.0  0.3  22668  3912 ?        Ss   Nov11  14:48 /lib/systemd/systemd-journald
+root      1703  0.0  0.3 397400  4288 ?        Ssl  Nov11   0:04 /usr/sbin/asproxy --journald
+root      1706  0.0  0.3   4472  3548 ?        Ss   Nov11   0:00 /usr/bin/asmockservice --journald --enable-ping --enable-time
+root      2796 94.5  1.2 483380 13792 ?        Rsl  Nov11 1306:49 /usr/sbin/appsservice --journald
+
+
+# from Ganesan
+
+#!/bin/sh
+#mount-copybind /tmp/data/SKY-MW/libb_secbuf.so /usr/lib/libb_secbuf.so
+## enabling AS port
+iptables -I INPUT 1 -p tcp --match multiport --dport 9001:9007 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+iptables -I OUTPUT 1 -p tcp --match multiport --sport 9001:9007 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+
+## setting up westeros
+export PLAYERSINKBIN_USE_WESTEROSSINK=1
+export QT_WAYLAND_CLIENT_BUFFER_INTEGRATION=wayland-egl
+export QT_WAYLAND_USE_XDG_SHELL=1
+export QT_WAYLAND_SHELL_INTEGRATION=wl-shell
+export QT_QPA_PLATFORM=wayland-egl
+export EGL_PLATFORM=wayland
+export QT_QPA_EGLFS_DEPTH=32
+export QT_QPA_EGLFS_FORCE888=1
+export PLAYERSINKBIN_USE_WESTEROSSINK=1
+export WAYLAND_DISPLAY=main0
+export WESTEROS_VPC_BRIDGE=$WAYLAND_DISPLAY
+export LD_PRELOAD=/usr/lib/libwayland-client.so.0:/usr/lib/libwayland-egl.so.0:$LD_PRELOAD
+export WAYLAND_DISPLAY=main0
+export XDG_RUNTIME_DIR=/tmp
+westeros --renderer libwesteros_render_nexus.so.0.0.0 --width 1920 --height 1080 --display $WAYLAND_DISPLAY&
+##starting applications
+systemctl stop appmanager
+./asproxy &
+./ASSystemService &
+./ASNetworkService &
+
+
+systemctl -a | grep -i mock
+
+
+systemctl stop sky-asmock.service
+killall ASSystemService
+scp -P 10022 ASSystemService root@192.168.0.100:/tmp/data
+/tmp/data/ASSystemService &
+systemctl start sky-asmock.service
+
+
+curl -v -X GET http://192.168.0.100:9005/as/display
+curl -v -X POST http://192.168.0.100:9005/as/display/action/checkresolution?resolution=1080p
+
+http://192.168.0.100:9005/as/display/action/checkresolution?resolution=720p
+
+/as/display/action/checkresolution?resolution=720p
+
+0000098108.145427 NFO: < M:SystemService.cpp F:onRequest L:318 > KT: received POST request for url '/as//display/action/checkresolution'
+0000098108.145477 NFO: < M:SystemService.cpp F:handleRequest L:417 > KT: urlPrefix(/as) request.path(/as//display/action/checkresolution)
+0000098108.145498 NFO: < M:SystemService.cpp F:handleRequest L:442 > KT: execute path (/as//display/action/checkresolution)
+0000098108.145607 ERR: < M:DisplayCheckResolutionExecutor.cpp F:handlePostRequest L:36 > Resolution provided is 1080p
+0000098108.145633 NFO: < M:DisplayController.cpp F:parseResolutionToSTBFormat L:333 > Resolution name is 1080p
+0000098108.145655 NFO: < M:DisplayController.cpp F:parseResolutionToSTBFormat L:343 > Converted resolution 1080p60
+0000098108.145681 NFO: < M:DisplayController.cpp F:setResolution L:364 > port name is HDMI0
+0000098108.145698 NFO: < M:DisplayController.cpp F:setResolution L:368 > resolution being set is 1080p60
+ EDID Num of Resolution .......3
+0000098108.426130 NFO: < M:DisplayCheckResolutionExecutor.cpp F:handlePostRequest L:54 > Setting resolutionParam Status = 0
 
 
 ={============================================================================
@@ -9101,11 +9169,21 @@ NDS: ^0000000208.840607 !MIL   -AS           < p:00000e00 t:31d0bdc0 T:AS_BTAUDI
 <skymw-jira-q>
 // use AI ticket
 git flow feature start NGDEV-149450_FalconV2_UK_checkjob_failures
-
+git branch --set-upstream-to=origin/develop
+git diff origin/develop..HEAD
+git push -n origin feature/NGDEV-149450_FalconV2_UK_checkjob_failures
+git push origin feature/NGDEV-149450_FalconV2_UK_checkjob_failures
 
 NGDEV-149450: Q120: FalconV2 UK checkjob failures since Q120.000.51.00 since integration of AS v16.23.0
 
-This only happens on Falcon V2 and nds_si_devel profile. 
+This only happens on Falcon V2 and nds_si_devel profile and it is an edge case
+where BluRcuDaemon state is out of sync from server's state since AS comes up
+later than the usual and there is no guarantee in terms of the order of
+running.
+
+This commit retrieves state value from a server every time when requested than
+the cached value which can be out of sync.
+
 
 keitee@keitee-mint:~/Downloads$ ag "^==" fail_001
 

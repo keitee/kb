@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(string VERSION 0.1 LANGUAGES CXX)
+project(test_string VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -112,16 +112,16 @@ add_compile_options("-g")
 
 
 # string_01
-add_executable(${PROJECT_NAME}_01 string_01.cpp)
-target_link_libraries(${PROJECT_NAME}_01 gmock_main Boost::regex)
+add_executable(${PROJECT_NAME}_1 test_string_1.cpp)
+target_link_libraries(${PROJECT_NAME}_1 gmock_main Boost::regex)
 
 # string_02
-add_executable(${PROJECT_NAME}_02 string_02.cpp)
-target_link_libraries(${PROJECT_NAME}_02 gmock_main Boost::regex)
+add_executable(${PROJECT_NAME}_2 test_string_2.cpp)
+target_link_libraries(${PROJECT_NAME}_2 gmock_main Boost::regex)
 
-# fsm ex
-add_executable(${PROJECT_NAME}_ex string_ex.cpp)
-target_link_libraries(${PROJECT_NAME}_ex gmock_main)
+# # fsm ex
+# add_executable(${PROJECT_NAME}_ex string_ex.cpp)
+# target_link_libraries(${PROJECT_NAME}_ex gmock_main)
 
 
 # # fsm qt for qt
