@@ -194,5 +194,12 @@ add_executable(sdevent "sdevent.cpp")
 # target_compile_options(sdevent INTERFACE -lsystemd)
 target_link_libraries(sdevent ${LIBS} "-lsystemd")
 
+# sdbus_client
+add_executable(sdbus_client_1 "sdbus_client_1.cpp")
+target_link_libraries(sdbus_client_1 ${LIBS} "-lsystemd")
+
+add_executable(sdbus_client_2 "sdbus_client_2.cpp")
+target_link_libraries(sdbus_client_2 ${LIBS} "-lsystemd")
+
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 
