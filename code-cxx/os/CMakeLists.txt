@@ -198,8 +198,10 @@ target_link_libraries(sdevent ${LIBS} "-lsystemd")
 add_executable(sdbus_client_1 "sdbus_client_1.cpp")
 target_link_libraries(sdbus_client_1 ${LIBS} "-lsystemd")
 
-add_executable(sdbus_client_2 "sdbus_client_2.cpp")
-target_link_libraries(sdbus_client_2 ${LIBS} "-lsystemd")
+# TODO: fails to run cmake for c file
+# # sdbus_server_1
+# add_executable(sdbus_server_1 "sdbus_server_1.c")
+# target_link_libraries(sdbus_server_1 ${LIBS} "-lsystemd")
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

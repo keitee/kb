@@ -872,6 +872,17 @@ methods. The class diagram shown here describes a possible pattern
 implementation for the proposed problem:
 
 
+{
+  observable_vector<int> ov;
+  observer o;
+  ov.add_observer(&o);
+}
+
+If there is no need to call remove_observer() or removeListener(), then no need
+to hold reference to source(notifier). For example, only add interest and use it
+until application finishes. Or, use of expired weak_ptr.
+
+
 <case>
 this is the same.
 - defines observer class from source class
@@ -905,25 +916,13 @@ class A2DPTransport
         listeners = m_listeners; \
     } \
     for (std::vector<BluetoothA2DPTransportListener*>::iterator it =
-listeners.begin(); it != listeners.end(); ++it) if (*it) (*it)->_what; \ }
-while(0)
+      listeners.begin(); it != listeners.end(); ++it) if (*it) (*it)->_what; \
+    } while(0)
 
   {
     notify(onBufferReady(this, buffer, nbytes, sampleno));
   }
 };
-
-
-{
-  observable_vector<int> ov;
-  observer o;
-  ov.add_observer(&o);
-}
-
-If there is no need to call remove_observer() or removeListener(), then no need
-to hold reference to source(notifier). For example, only add interest and use it
-until application finishes. Or, use of expired weak_ptr.
-
 
 <case>
 Do not use lister class T which has callback interfaces since it has only one
