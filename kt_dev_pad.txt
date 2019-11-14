@@ -164,12 +164,31 @@ dropbear -p :10022 -P /var/run/dropbear2.pid -r /tmp/data/sky-ssh-hostkey -B
 iptables -I INPUT 1 -p tcp --dport 10022 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
 iptables -I OUTPUT 1 -p tcp --sport 10022 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
-ssh -p 10022 root@192.168.0.103
+// enabling AS port
+iptables -I INPUT 1 -p tcp --match multiport --dport 9001:9007 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+iptables -I OUTPUT 1 -p tcp --match multiport --sport 9001:9007 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+
+curl -v -X GET http://192.168.0.100:9005/as/display
+curl -v -X POST http://192.168.0.100:9005/as/display/action/checkresolution?resolution=1080p
+
+http://192.168.0.100:9005/as/display/action/checkresolution?resolution=720p
+
+/as/display/action/checkresolution?resolution=720p
+
+ssh -p 10022 root@192.168.0.100
 
 # from host to box
 scp -P 10022 BleRcuDaemon root@192.168.0.103:/tmp/data
 scp -P 10022 /home/keitee/git/kb/bin/lsdbus.sh root@192.168.0.100:/tmp/data
 
+./work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg/usr/bin/.debug/dsMgrMain
+scp -P 10022 dsMgrMain root@192.168.0.100:/tmp/data
+
+// root@arrisxi6-morty:/# find . -name libds.so
+// ./usr/lib/libds.so
+// /media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg/usr/lib/.debug
+scp -P 10022 libds.so root@192.168.0.100:/tmp/data
+mount-copybind /tmp/data/libds.so /usr/lib/libds.so
 
 # from box to host
 scp -P 10022 root@192.168.0.100:/tmp/data/d.cap .
@@ -180,4 +199,8 @@ cd /tmp
 journalctl > out.log
 scp -P 10022 root@192.168.0.103:/tmp/out.log .
 
-./usr/bin/bluetoothctl
+systemctl stop sky-asmock.service
+killall ASSystemService
+scp -P 10022 ASSystemService root@192.168.0.100:/tmp/data
+/tmp/data/ASSystemService &
+systemctl start sky-asmock.service

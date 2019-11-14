@@ -14,6 +14,7 @@ if __name__ == "__main__":
         'meta-rdk-sky',
         'as-system-service',
         'generic/devicesettings',
+        'generic/iarmmgrs',
         'build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/devicesettings'
         ]
 

@@ -248,7 +248,7 @@
 *kt_linux_tool_150* make-automake-standard targets
 *kt_linux_tool_150* make-automake-directory variable
 *kt_linux_tool_150* make-automake-distcheck
-*kt_linux_tool_150* make-automake-ex
+*kt_linux_tool_151* make-automake-ex
 *kt_linux_tool_150* make-automake-ex-explained
 *kt_linux_tool_150* make-automake-variables
 *kt_linux_tool_150* make-automake-ex-packages
@@ -522,7 +522,7 @@
 *kt_linux_core_203* linux-io-permission-check linux-process-credentials
 *kt_linux_core_203* linux-io-fs-mount
 *kt_linux_core_203* linux-io-fs-mount-tool-mount
-*kt_linux_core_203* linux-io-fs-mount-bind tool-chroot
+*kt_linux_core_203* os-fs-mount-bind tool-mount-bind tool-chroot
 *kt_linux_core_203* linux-io-monitor-events 
 *kt_linux_core_204* linux-limit-and-options limit-h
 |kt_linux_core_800| os-proc-device
@@ -13401,6 +13401,7 @@ sudo swapoff /swapfile
 Now let's increase the size of swap file:
 
 sudo dd if=/dev/zero of=/swapfile bs=1M count=1024 oflag=append conv=notrunc
+
 The above command will append 1GiB of zero bytes at the end of your swap file.
 
 Setup the file as a "swap file":
@@ -30375,7 +30376,7 @@ $ nm libhttp_upset.a | grep NDS_HTTP_strdup
 12:00000000 T NDS_HTTP_strdup
 
 
-<mapfile>
+<os-link-map-file>
 Have statically linked application binary, can check if there is a symbol by
 using nm. However, cannot tell from where this symbol. How?
 
@@ -48028,14 +48029,14 @@ these addresses.
 
 
 ={============================================================================
-*kt_linux_core_050* linux-mem-mapping linux-lib-shared
+*kt_linux_core_050* os-mem-mapping os-lib-shared
 
-*proc-maps*
+*os-proc-maps*
 Mappings are lost when a process performs an exec(), but are inherited by the
 child of a fork(). The mapping type (MAP_PRIVATE or MAP_SHARED) is also
 inherited. 
 
-To find out which shared libraries a process is currently using, and
+`To find out which shared libraries a process is currently using`, and
 Information about all of a process’s mappings is visible in the Linux-specific
 /proc/PID/maps file, which we described in Section 48.5.
 
@@ -52299,11 +52300,10 @@ UUID=64bc1edf-1b58-4e86-b1a9-521c09fbf263 none            swap    sw            
 
 
 ={============================================================================
-*kt_linux_core_203* linux-io-fs-mount-bind tool-chroot
+*kt_linux_core_203* os-fs-mount-bind tool-mount-bind tool-chroot
 
 https://unix.stackexchange.com/questions/198590/what-is-a-bind-mount
 
-<bind-mount>
 What is a bind mount?
 
 A bind mount is an alternate view of a directory tree. Classically, mounting
@@ -52356,49 +52356,57 @@ findmnt to indicate bind mount as such.
 If there are mount points under /some/where, their contents are not visible
 under /else/where. 
 
-<rbind>
-// from man page
-// The bind mount call attaches only (part of) a single filesystem, not
-// possible submounts.  The entire file hierarchy including submounts is
-// attached a second place by using:
-//
-// mount --rbind olddir newdir
 
-Instead of bind, you can use rbind, also replicate mount points underneath
-/some/where. For example, if /some/where/mnt is a mount point then
+<ex>
+mount-copybind /tmp/usb/libb_secbuf.so /usr/lib/libb_secbuf.so
 
-mount --rbind /some/where /else/where
-is equivalent to
+root@arrisxi6-morty:/tmp/data# more /sbin/mount-copybind
+#!/bin/sh
+#
+# Perform a bind mount, copying existing files as we do so to ensure the
+# overlaid path has the necessary content.
 
-mount --bind /some/where /else/where
-mount --bind /some/where/mnt /else/where/mnt
+if [ $# -lt 2 ]; then
+    echo >&2 "Usage: $0 spec mountpoint [OPTIONS]"
+    exit 1
+fi
 
-In addition, Linux allows mounts to be declared as shared, slave, private or
-unbindable. This affects whether that mount operation is reflected under a
-bind mount that replicates the mount point. For more details, see the kernel
-documentation.
+spec=$1
+mountpoint=$2
 
-Linux also provides a way to move mounts: where --bind copies, --move moves a
-mount point.
+if [ $# -gt 2 ]; then
+    options=$3
+else
+    options=
+fi
 
-It is possible to have different mount options in two bind-mounted
-directories. There is a quirk, however: making the bind mount and setting the
-mount options cannot be done atomically, they have to be two successive
-operations. (Older kernels did not allow this.) For example, the following
-commands create a read-only view, but there is a small window of time during
-which /else/where is read-write:
+[ -n "$options" ] && options=",$options"
 
-mount --bind /some/where /else/where
-mount -o remount,ro,bind /else/where
+mkdir -p "${spec%/*}"
+if [ -d "$mountpoint" ]; then
+    if [ ! -d "$spec" ]; then
+        mkdir "$spec"
+        cp -pPR "$mountpoint"/. "$spec/"
+    fi
+elif [ -f "$mountpoint" ]; then
+    if [ ! -f "$spec" ]; then
+        cp -pP "$mountpoint" "$spec"
+    fi
+fi
 
-// Note that the filesystem mount options will remain the same as those on the
-// original mount point, and cannot be changed by passing the -o option along
-// with  --bind/--rbind.   
-// The mount options can be changed by a separate remount command, for
-// example:
-//
-// mount --bind olddir newdir
-// mount -o remount,ro newdir
+mount -o "bind$options" "$spec" "$mountpoint"
+
+
+*tool-mount-rbind*
+
+       The bind mount call attaches only (part of) a single filesystem, not
+       possible submounts.  The entire file hierarchy including submounts is
+       attached a second place by using:
+
+              mount --rbind olddir newdir
+
+       Note that the filesystem mount options will remain the same as those on
+       the original mount point.
 
 
 <tool-chroot>
