@@ -534,6 +534,80 @@ TEST(CConThread, ParallelAccumulate)
 
 
 // ={=========================================================================
+// cxx-thread-local, thread local storage
+// example from https://www.modernescpp.com/index.php/thread-local-data
+
+namespace cxx_thread_local
+{
+  std::mutex m;
+
+  // thread_local std::string s("hello from ");
+  std::string s("hello from ");
+
+  void addThreadLocal(std::string const &name)
+  {
+    s += name;
+
+    // protect std::cout
+    std::lock_guard<std::mutex> lock(m);
+    std::cout << s << std::endl;
+    std::cout << "&s: " << &s << std::endl;
+    std::cout << std::endl;
+  }
+} // namespace
+
+// see that each thread has own `s` which has different address and the output
+// of `s` is maintained. also see that no `static` on `s`.
+//
+// [ RUN      ] CConThread.ThreadLocal
+// hello from t1
+// &s: 0x7f19a3a9d6d8
+// 
+// hello from t3
+// &s: 0x7f19a2a9b6d8
+// 
+// hello from t4
+// &s: 0x7f199a29a6d8
+// 
+// hello from t2
+// &s: 0x7f19a329c6d8
+// 
+// [       OK ] CConThread.ThreadLocal (1 ms)
+// 
+//
+// when not use `thread_local`
+//
+// [ RUN      ] CConThread.ThreadLocal
+// hello from t1
+// &s: 0x55e9b21f61a0
+// 
+// hello from t1t4
+// &s: 0x55e9b21f61a0
+// 
+// hello from t1t4t2
+// &s: 0x55e9b21f61a0
+// 
+// hello from t1t4t3
+// &s: 0x55e9b21f61a0
+// 
+// [       OK ] CConThread.ThreadLocal (2 ms)
+
+TEST(CConThread, ThreadLocal)
+{
+  using namespace cxx_thread_local;
+
+  std::thread t1(addThreadLocal, "t1");
+  std::thread t2(addThreadLocal, "t2");
+  std::thread t3(addThreadLocal, "t3");
+  std::thread t4(addThreadLocal, "t4");
+
+  t1.join();
+  t2.join();
+  t3.join();
+  t4.join();
+}
+
+// ={=========================================================================
 // cxx-async
 
 namespace cxx_async {

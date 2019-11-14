@@ -42,9 +42,16 @@ has been allocated yet for the thread. After use, drop the returned reference
 with sd_event_unref(). When the last reference is dropped, the event loop is
 freed. If this function is called while the object returned from a previous call
 from the same thread is still referenced, the same object is returned again, but
-the reference is increased by one. It is recommended to use this call instead of
-sd_event_new() in order to share event loop objects between various components
-that are dispatched in the same thread. All threads have exactly either zero or
+the reference is increased by one. 
+
+
+sd_event_default() and ad_event_new()?
+
+It is recommended to use this call instead of sd_event_new() in order to share
+event loop objects between various components that are dispatched in the same
+thread. 
+
+All threads have exactly either zero or
 one default event loop objects associated, but never more.
 
 
@@ -72,11 +79,12 @@ int sd_event_set_watchdog(sd_event *event, int b);
 
 https://www.freedesktop.org/software/systemd/man/sd_event_add_io.html#
 
+typedef int (*sd_event_io_handler_t)(
+    sd_event_source *s,
+    int fd,
+    uint32_t revents,
+    void *userdata);
 
-sd_event_add_io, sd_event_source_get_io_events, sd_event_source_set_io_events,
-sd_event_source_get_io_revents, sd_event_source_get_io_fd,
-sd_event_source_set_io_fd, sd_event_source_get_io_fd_own,
-sd_event_source_set_io_fd_own, sd_event_source, sd_event_io_handler_t
 
 — Add an I/O event source to an event loop
 
@@ -86,6 +94,25 @@ int sd_event_add_io(sd_event *event,
   uint32_t events,
   sd_event_io_handler_t handler,
   void *userdata);
+
+sd_event_add_io() adds a new I/O event source to an event loop. The event loop
+object is specified in the event parameter, the event source object is returned
+in the source parameter. 
+
+The fd parameter takes the UNIX file descriptor to watch, which may refer to a
+socket, a FIFO, a message queue, a serial connection, a character device, or any
+other file descriptor compatible with Linux epoll(7). 
+
+The events parameter takes a bit mask of events to watch for, a combination of
+the following event flags: EPOLLIN, EPOLLOUT, EPOLLRDHUP, EPOLLPRI, and EPOLLET,
+    see epoll_ctl(2) for details. 
+
+The handler shall reference a function to call when the event source is
+triggered. The userdata pointer will be passed to the handler function, and may
+be chosen freely by the caller. The handler will also be passed the file
+descriptor the event was seen on, as well as the actual event flags. It's
+generally a subset of the events watched, however may additionally include
+EPOLLERR and EPOLLHUP.
 
 
 https://www.freedesktop.org/software/systemd/man/sd_notifyf.html#
@@ -214,6 +241,8 @@ UDP-based remote logging service.
 To compile and link this example, save it as event-example.c, then run:
 
 $ gcc event-example.c -o event-example `pkg-config --cflags --libs libsystemd`
+
+
 For a first test, simply run the resulting binary from the command line, and
 test it against the following netcat command line:
 
@@ -223,6 +252,10 @@ For the sake of brevity error checking is minimal, and in a real-world
 application should, of course, be more comprehensive. However, it hopefully gets
 the idea across how to write a daemon that reacts to external events with
 sd-event.
+
+
+$ nc -u localhost 7777
+opens a udp connection and send what you type to the server. type EXIT to quit.
 
 */
 
@@ -297,12 +330,12 @@ int main(int argc, char *argvp[])
     goto finish;
   }
 
-  r = sd_event_add_io(event,
-                      &event_source,
-                      fd,
-                      EPOLLIN,
-                      io_handler,
-                      nullptr);
+  r = sd_event_add_io(event,  // event
+                      &event_source,  // source
+                      fd,   // fd
+                      EPOLLIN, // events
+                      io_handler,   // handler
+                      nullptr);     // user data
   if (r < 0)
     goto finish;
 

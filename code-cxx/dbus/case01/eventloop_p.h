@@ -12,8 +12,9 @@ class EventLoopPrivate
     int exec();
 
   private:
-    sd_event *m_loop;
-
+    sd_event *m_loop{nullptr};
+    int m_eventfd{-1};
+    thread_local EventLoopPrivate *m_loopRunning{nullptr};
 };
 
 #endif // EVENTLOOP_P_H

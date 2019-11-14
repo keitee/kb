@@ -6,9 +6,8 @@
 */
 
 EventLoopPrivate::EventLoopPrivate()
-    : m_loop(nullptr)
-    , m_eventfd(-1)
 {
+  // create a event loop
   int ret = sd_event_new(&m_loop);
   if (ret < 0)
   {
@@ -33,6 +32,70 @@ EventLoopPrivate::~EventLoopPrivate()
   if (m_loop)
     sd_event_unref(m_loop);
 }
+
+int EventLoopPrivate::eventHandler(sd_event_source *source, int fd,
+    uint32_t revents, void *data)
+{
+  // EventLoopPrivate *self = reinterpret_cast<EventLoopPrivate*>(data);
+  EventLoopPrivate *self = static_cast<EventLoopPrivate*>(data);
+
+  assert(self != nullptr);
+  assert(fd == self->m_eventfd);
+
+  // read the eventfd to clear the event
+  uint64_t ignore;
+  if (TEMP_FAILURE_RETRY(read(self->m_eventfd, &ignore, sizeof(ignore)))
+      != sizeof(ignore))
+  {
+    LOG_MSG("failed to read from eventfd");
+  }
+}
+
+
+int EventLoopPrivate::exec()
+{
+  // sanity check
+  if (!m_loop)
+  {
+    LOG_MSG("no event loop to start");
+    return EXIT_FAILURE;
+  }
+
+  // install a handler for the quit eventfd. so expect eventHandler gets called
+  // when eventfd can be read or is set.
+  sd_event_source *source{nullptr};
+  int ret = sd_event_add_io(
+      m_loop,
+      &source,
+      m_eventfd,
+      EPOLLIN,
+      eventHandler,
+      this);
+  if (ret < 0)
+  {
+    LOG_MSG("failed to add quit eventfd");
+    return EXIT_FAILURE;
+  }
+
+  // TODO set the thread local pointer back to us?
+  m_loopRunning = this;
+
+  // run the event loop
+  int exitCode = sd_event_loop(m_loop);
+
+  // clear as the event loop stopped
+  m_loopRunning = nullptr;
+
+  sd_event_source_unref(source);
+
+  return exitCode;
+}
+
+
+/* ={--------------------------------------------------------------------------
+ @brief :
+  EventLoop
+*/
 
 EventLoop::EventLoop()
   : m_private(std::make_shared<EventLoopPrivate>())
