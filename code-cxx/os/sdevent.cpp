@@ -168,6 +168,27 @@ wait for and their handlers may be registered with sd_event_add_io(3),
      sd_event_add_time(3), sd_event_add_signal(3), sd_event_add_child(3),
      sd_event_add_defer(3), sd_event_add_post(3) and sd_event_add_exit(3).
 
+
+https://www.freedesktop.org/software/systemd/man/sd_event_exit.html
+
+sd_event_exit, sd_event_get_exit_code — Ask the event loop to exit
+
+Synopsis
+
+#include <systemd/sd-event.h>
+
+int sd_event_exit(
+  sd_event *event,
+  int code);
+ 
+Description
+
+sd_event_exit() requests the event loop specified in the event event loop object
+to exit. The code parameter may be any integer value and is returned as-is by
+sd_event_loop(3) after the last event loop iteration. It may also be queried
+using sd_event_get_exit_code(), see below.
+
+
 */
 
 #include <errno.h>

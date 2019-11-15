@@ -542,7 +542,7 @@
 |kt_linux_core_104| ipc: semantics of read() and write() on pipes and fifo
 |kt_linux_core_105| ipc: which one to use {semaphores-versus-pthreads-mutexes}
 
-*kt_linux_core_200* linux-sync-semaphore
+*kt_linux_core_200* os-semaphore
 *kt_linux_core_201* os-mutex
 *kt_linux_core_202* linux-sync-deadlock
 *kt_linux_core_202* linux-sync-cond
@@ -54842,135 +54842,164 @@ On Linux, mutexes are implemented using futexes (an acronym derived from fast us
 # ============================================================================
 #{
 ={============================================================================
-*kt_linux_core_200* linux-sync-semaphore
+*kt_linux_core_200* os-semaphore
 
-{what-is-semaphore}
+LPI-53
+
 note: This can be used for process or thread but it is expensive for thread.
 
-System V semaphores are not used to transfer data between processes. Instead,
-       they allow processes to synchronize their actions. A semaphore is a
-       'kernel'-maintained 'integer' whose value is never permitted to fall
-       below 0. A process can decrease or increase the value of a semaphore.
-       If an attempt is made to decrease the value of the semaphore below 0,
-       then the kernel blocks the operation until the semaphore's value
-       increases to a level that permits the operation to be performed. 
+System V semaphores allow processes to synchronize their actions. A semaphore is
+a `kernel maintained integer` whose value is never permitted to fall below 0. A
+process can `decrease or increase the value of a semaphore.` If an attempt is
+made to decrease the value of the semaphore below 0, then the kernel blocks the
+operation until the semaphore's value increases to a level that permits the
+operation to be performed. 
 
 The meaning of a semaphore is determined by the application. A process
-decrements a semaphore from say, 1 to 0 in order to reserve exclusive access
-to some 'shared' resource, and after completing work on the resource,
-   increments the semaphore so that the shared resource is released for use by
-   some other process. The use of a binary semaphore-a semaphore whose value
-   is limited to 0 or 1-is common.
+decrements a semaphore from say, 1 to 0 in order to reserve exclusive access to
+some shared resource, and after completing work on the resource, increments the
+semaphore so that the shared resource is released for use by some other process.
+The use of a `binary semaphore` - a semaphore whose value is limited to 0 or
+1-is common.
 
-However, an application that deals with multiple instances of a shared
-resource would employ a semaphore whose maximum value equals the 'number' of
-shared resources. Linux provides both System V semaphores and POSIX
-semaphores, which have essentially similar functionality.
+However, an application that deals with multiple instances of a shared resource
+would employ a semaphore whose maximum value equals the number of shared
+resources. Linux provides both System V semaphores and POSIX semaphores, which
+have essentially similar functionality.
 
 1. Setting the semaphore to an absolute value;
 2. Adding a number to the current value of the semaphore;            // give
 3. Subtracting a number from the current value of the semaphore; and // take
 4. Waiting for the semaphore value to be equal to 0.
 
-The last two of these operations may cause the calling process to block. A
-semaphore has no meaning in and of itself. Its meaning is determined only by
-the associations given to it by the processes using the semaphore.
+The last two of these operations may cause the calling process to `block`. A
+semaphore has no meaning in and of itself. Its meaning is determined only by the
+associations given to it by the processes using the semaphore.
 
 However, System V semaphores are rendered unusually complex by the fact that
-they are allocated in groups called semaphore sets. So move to POSIX
-semaphore.
+they are allocated in groups called semaphore sets. So move to POSIX semaphore.
 
 
-{posix-semaphore}
-SUSv3 specifies two types of POSIX semaphores:
+*os-sem-posix*
+SUSv3 specifies two types of `POSIX semaphores`:
 
-1. Named semaphores: This type of semaphore has a name. By calling sem_open()
-with the same name 'unrelated' processes can access the same semaphore.
+POSIX semaphores operate in a manner similar to System V semaphores; 
 
-2. Unnamed semaphores: This type of semaphore doesn't have a name; instead, it
-resides at an agreed-upon location in 'memory'. Unnamed semaphores can be
-shared between processes or between a group of 'threads'. When shared between
-processes, the semaphore must reside in a region of (System V, POSIX, or
-    mmap()) shared memory. When shared between threads, the semaphore may
-reside in an area of memory shared by the threads (e.g., on the heap or in a
-    global variable).
+that is, a POSIX semaphore is an integer whose value is not permitted to fall
+  below 0. If a process attempts to decrease the value of a semaphore below
+  0(take), then, depending on the function used, the call either blocks or fails
+  with an error indicating that the operation was not currently possible.
 
-POSIX semaphores operate in a manner similar to System V semaphores; that is,
-      a POSIX semaphore is an integer whose value is not permitted to fall
-      below 0. If a process attempts to decrease the value of a semaphore
-      below 0(take), then, depending on the function used, the call either
-      blocks or fails with an error indicating that the operation was not
-      currently possible.
 
-Some systems don't provide a full implementation of POSIX semaphores. A
-typical restriction is that only unnamed thread-shared semaphores are
-supported. That was the situation on Linux 2.4; 
+NOTE *os-linux*
+Some systems don't provide a full implementation of POSIX semaphores. A typical
+restriction is that only unnamed thread-shared semaphores are supported. That
+was the situation on Linux 2.4; 
 
-<linux-2-6-support>
 With Linux 2.6 and a glibc that provides NPTL, a full implementation of POSIX
 semaphores is available.
 
-<named-semaphore>
+
+*os-sem-named*
+
+Named semaphores: This type of semaphore has a name. By calling sem_open() with
+the same name `unrelated processes` can access the same semaphore.
+
 To work with a named semaphore, we employ the following functions:
 
-1. The sem_open() function opens or creates a semaphore, initializes the semaphore if it is created
-by the call, and returns a handle for use in later calls.
+o The sem_open() function opens or creates a semaphore, initializes the
+  semaphore if it is created by the call, and returns a handle for use in later
+  calls.
 
 #include <fcntl.h> /* Defines O_* constants */
 #include <sys/stat.h> /* Defines mode constants */
 #include <semaphore.h>
 
-sem_t *sem_open(const char *name, int oflag, ...  /* mode_t mode, unsigned int value */ );
+sem_t *sem_open(
+    const char *name,
+    int oflag, ...  /* mode_t mode, unsigned int value */ );
 
 Returns pointer to semaphore on success, or SEM_FAILED on error
 
-2. The sem_post(sem) and sem_wait(sem) functions respectively increment and decrement a semaphore's
-value. give and take
+o The sem_post(sem) and sem_wait(sem) functions respectively increment and
+  decrement a semaphore's value. give and take
 
-3. The sem_getvalue() function retrieves a semaphore's current value.
+o The sem_getvalue() function retrieves a semaphore's current value.
 
-4. The sem_close() function removes the calling processâs association with a semaphore that it
-previously opened.
+o The sem_close() function removes the calling process's association with a
+  semaphore that it previously opened.
 
-5. The sem_unlink() function removes a semaphore name and marks the semaphore for deletion when all
-processes have closed it.
+o The sem_unlink() function removes a semaphore name and marks the semaphore for
+  deletion when all processes have closed it.
 
-<named-semaphore-on-linux>
-SUSv3 doesn't specify how named semaphores are to be implemented. On Linux, they are created as
-small POSIX shared memory objects with names of the form sem.name, in a dedicated tmpfs file system
-(Section 14.10) mounted under the directory /dev/shm. This file system has 'kernel'-persistence-the
-semaphore objects that it contains will persist, even if no process currently has them open, but
-they will be lost if the system is shut down.
 
-<unnamed-semaphore>
-The semaphore is made available to the processes or threads that use it by placing it in an area of
-memory that they share. Operations on unnamed semaphores use the same functions; sem_wait(),
-sem_post(), sem_getvalue(), and so on that are used to operate on named semaphores.
+*os-sem-wait*
 
-In addition, two further functions are required:
+53.3.1 Waiting on a Semaphore
 
-The sem_init() function initializes a semaphore and informs the system of whether the semaphore will
-be shared between processes or between the threads of a single process.
+The sem_wait() function decrements (decreases by 1) the value of the semaphore
+referred to by sem.
 
-The sem_destroy(sem) function destroys a semaphore. These functions should not be used with named
-semaphores.
+#include <semaphore.h>
 
-<when-useful-to-use-unnamed>
-1. A semaphore that is shared between 'threads' doesn't need a name. Making an
-unnamed semaphore a shared (global or heap) variable automatically makes it
-accessible to all threads.
+int sem_wait(sem_t * sem );
 
-2. A semaphore that is being shared between 'related' processes doesn't need a
-name. If a parent process allocates an unnamed semaphore in a region of shared
-memory (e.g., a shared anonymous mapping), then a child automatically inherits
-the mapping and thus the semaphore as part of the operation of fork().
+Returns 0 on success, or –1 on error
 
-3. If we are building a dynamic data structure (e.g., a binary tree), each of
-whose items requires an associated semaphore, then the simplest approach is to
-allocate an unnamed semaphore within each item. Opening a named semaphore for
-each item would require us to design a convention for generating a (unique)
+If the semaphore currently has a value greater than 0, sem_wait() returns
+immedi- ately. If the value of the semaphore is currently 0, sem_wait() blocks
+until the semaphore value rises above 0; at that time, the semaphore is then
+decremented and sem_wait() returns.
+
+
+*os-sem-unnamed*
+
+This type of semaphore doesn't have a name; instead, it resides at an
+`agreed-upon location in memory` Unnamed semaphores can be shared between
+processes or between a group of threads. When shared between processes, the
+semaphore must reside in a region of (System V, POSIX, or mmap()) shared memory.
+When shared between threads, the semaphore may reside in an area of memory
+shared by the threads (e.g., on the heap or in a global variable).
+
+
+On Linux, they are created as small POSIX shared memory objects with names of
+the form sem.name, in a dedicated tmpfs file system (Section 14.10) mounted
+under the directory /dev/shm. This file system has `kernel persistence`-the
+semaphore objects that it contains will persist, even if no process currently
+has them open, but they will be lost if the system is shut down.
+
+The semaphore is made available to the processes or threads that use it by
+placing it in an area of memory that they share. Operations on unnamed
+semaphores use the same functions; sem_wait(), sem_post(), sem_getvalue(), and
+so on that are used to operate on named semaphores.
+
+`In addition, two further functions are required`:
+
+The `sem_init()` function initializes a semaphore and informs the system of
+whether the semaphore will be shared between processes or between the threads of
+a single process.
+
+The sem_destroy(sem) function destroys a semaphore. These functions should not
+be used with named semaphores.
+
+
+cases when useful to use unnamed:
+
+o A semaphore that is shared `between threads` doesn't need a name. Making an
+  unnamed semaphore a shared (global or heap) variable automatically makes it
+  accessible to all threads.
+
+o A semaphore that is being shared `between related processes` doesn't need a
+  name. If a parent process allocates an unnamed semaphore in a region of shared
+  memory (e.g., a shared anonymous mapping), then a child automatically inherits
+  the mapping and thus the semaphore as part of the operation of fork().
+
+o If we are building a dynamic data structure (e.g., a binary tree), each of
+  whose items requires an associated semaphore, then the simplest approach is to
+  allocate an unnamed semaphore within each item. Opening a named semaphore for
+  each item would require us to design a convention for generating a (unique)
   semaphore name for each item and to manage those names (e.g., unlinking them
-      when they are no longer required). note: real example? useful?
+  when they are no longer required). note: real example? useful?
 
 
 ={============================================================================
