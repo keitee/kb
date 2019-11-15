@@ -153,6 +153,8 @@ void EventLoopPrivate::flush()
       m_methonds.pop();
     }
   }
+
+  // otherwise, post a functor to the event queue and wait till it's executed.
 }
 
 /* ={--------------------------------------------------------------------------
