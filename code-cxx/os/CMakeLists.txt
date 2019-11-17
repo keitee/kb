@@ -189,6 +189,12 @@ target_link_libraries(lpi-socket-unix-server ${LIBS})
 add_executable(lpi-socket-unix-client "lpi_socket_unix_client.cpp")
 target_link_libraries(lpi-socket-unix-client ${LIBS})
 
+# lpi-semaphore
+add_executable(lpi-sem-server "lpi_sem_server.cpp")
+target_link_libraries(lpi-sem-server ${LIBS} "-lpthread")
+add_executable(lpi-sem-client "lpi_sem_client.cpp")
+target_link_libraries(lpi-sem-client ${LIBS} "-lpthread")
+
 # sdevent
 add_executable(sdevent "sdevent.cpp")
 # target_compile_options(sdevent INTERFACE -lsystemd)
