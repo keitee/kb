@@ -2,7 +2,7 @@
 # Our first recipe will just print a log message. We put it into the first
 # group, we will call it first, and it has the version 0.1.
 # 
-# The task do_build overrides the empty global build task from base.bbclass.
+# The task do_build "overrides" the empty global build task from base.bbclass.
 # 
 # PR is the internal revision number which should be updated after each change.
 # 

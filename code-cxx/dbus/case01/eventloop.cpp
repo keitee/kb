@@ -1,4 +1,5 @@
 #include "eventloop.h"
+#include "eventloop_p.h"
 
 /* ={--------------------------------------------------------------------------
  @brief :
@@ -155,6 +156,23 @@ void EventLoopPrivate::flush()
   }
 
   // otherwise, post a functor to the event queue and wait till it's executed.
+  // TODO: uses `unnamed semaphore` and why not condition variable?
+  sem_t sem;
+  sem_int(&sem, 0, 0);
+
+  std::function<void()> signal =
+  [&]()
+  {
+    if (sem_post(&sem) != 0)
+      LOG_MSG("failed to post semaphore in flush()");
+  }
+
+  if (!invokeMethod(std::move(signal)))
+    LOG_MSG("failed to schedule flush functor");
+  else if (sem_wait(&sem) != 0)
+    LOG_MSG("failed to wait semaphore in flush()");
+
+  sem_destory(&sem);
 }
 
 /* ={--------------------------------------------------------------------------
@@ -179,6 +197,7 @@ EventLoop::~EventLoop()
   m_private.reset();
 }
 
+// get a handle
 sd_event *EventLoop::handle() const
 {
   return m_private->m_loop;
@@ -188,3 +207,26 @@ int EventLoop::exec()
 {
   return m_private->exec();
 }
+
+void EventLoop::quit(int exitCode)
+{
+  return m_private->quit(exitCode);
+}
+
+void EventLoop::invokeMethodImpl(std::function<void()> &&func) const
+{
+  return m_private->invokeMethodImpl(std::move(func));
+}
+
+void EventLoop::flush()
+{
+  return m_private->flush();
+}
+
+// return true if the calling thread is the same thread that
+// is executing the event loop
+bool EventLoop::onEventLoopThread() const
+{
+  return (m_private.get() == EventLoopPrivate::m_loopRunning);
+}
+

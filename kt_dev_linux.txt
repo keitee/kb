@@ -22485,13 +22485,27 @@ bitbake -vDDD world
                         are written to ${T}/log.do_taskname, regardless of the
                         debug level.
  
-  -s, --show-versions   Show current and preferred versions of all recipes.
+  -s, --show-versions   Show current and preferred versions of all `recipes.`
 
   -e, --environment     Show the global or per-recipe environment complete
                         with information about where variables were
  
-
+https://www.yoctoproject.org/docs/1.6/bitbake-user-manual/bitbake-user-manual.html
 https://a4z.bitbucket.io/docs/BitBake/guide.html
+
+4.1.1. Layer folder
+
+A layer folder contains configuration, task and target descriptions for what
+BitBake does. It is common practice to name a layer folders `meta-something`.
+
+4.1.2. Build folder
+
+The `build folder` is the directory from which the bitbake command has to be
+`executed`. Here, BitBake expects its initial configuration file and it will place
+all files it creates in this folder.
+
+To be able to run BitBake without getting any errors we need to create a build
+and a layer folder and place some required configuration files in there.
 
 bbTutorial/
 ├── build
@@ -22506,41 +22520,191 @@ bbTutorial/
         └── layer.conf
 
 
+// /meta-tutorial/build/conf/bblayers.conf
+
+# 4.2.2. Some notes to the created files
+#
+# build/conf/bblayers.conf
+#
+# o Add the current directory to BBPATH.
+#   TOPDIR is internally set by BitBake to the current working directory.
+# 
+# o Initialize the variable BBFILES as empty. `recipes` will be added later.
+# 
+# o Add the path of our meta-tutorial to the BBLAYERS variable.
+#   When executed, BitBake will search all given layer directories for
+#   `additional configurations.`
+
+BBPATH := "${TOPDIR}"
+BBFILES ?= ""
+BBLAYERS = "\
+  ${TOPDIR}/../meta-tutorial \
+  ${TOPDIR}/../meta-two \
+"
+
+*bitbake-show-layers*
+$ bitbake-layers show-layers
+NOTE: Starting bitbake server...
+layer                 path                                      priority
+==========================================================================
+meta-tutorial         /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial  5
+meta-two              /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two  5
+
+
+*bitbake-show-recipes*
+$ bitbake-layers show-recipes
+
+
+// /meta-tutorial/conf/layer.conf
+
+# LAYERDIR is a variable BitBake passes to the layer it loads.
+# We append this path to the BBPATH variable.
+# 
+# BBFILES tells BitBake where recipes are.
+# Currently we append nothing, but we will change this later.
+#
+# 5.2. Adding a recipe location to the tutorial layer
+#
+# BitBake needs to know about which recipes a layer provides.
+# We edit our meta-tutorial/conf/layer.conf file and tell BitBake to load all
+# recipe files by using a common pattern.
+
+BBPATH .= ":${LAYERDIR}"
+BBFILES += "${LAYERDIR}/recipes-*/*/*.bb"
+
+# 7.3. Extending the layer configuration
+# append layer name to list of configured layers
+BBFILE_COLLECTIONS += "tutorial"
+# and use name as suffix for other properties
+BBFILE_PATTERN_tutorial = "^${LAYERDIR}/"
+BBFILE_PRIORITY_tutorial = "5"
+
+# 7.4.1. Layer series core name
+# First we define a 'project core name'. This is done by setting the
+# LAYERSERIES_CORENAMES variable.
+LAYERSERIES_CORENAMES = "bitbakeguilde"
+
+# 7.4.2. Layer series compatibility
+# We also need to specify that the tutorial layer is compatible with the
+# bitbakeguilde. This can be done by setting LAYERSERIES_COMPAT_...
+# variable in the in the layer.conf files of *each layer.*
+#
+# The variable ends on the layer name
+
+LAYERVERSION_tutorial = "1"
+LAYERSERIES_COMPAT_tutorial = "bitbakeguilde"
+
+
+4.2.3. BitBake search path
+
+For BitBake there are some file paths which are relative to BBPATH.  This means
+that if we tell BitBake to search for some path then it will search all
+directives in BBPATH for somedir/somefile.  We have added TOPDIR and LAYERDIR to
+BBPATH, so classes/base.bbclass and conf/bitbake.conf could be in any of them.
+
+
+A recipe file has the extension *.bb.
+
+
+├── build
+│   ├── bitbake-cookerdaemon.log
+│   ├── conf
+│   │   └── bblayers.conf
+│   └── tmp
+│       ├── cache
+│       │   ├── bb_codeparser.dat
+│       │   ├── bb_persist_data.sqlite3
+│       │   ├── default
+│       │   │   ├── bb_cache.dat.d99612fecebd7baf5f1eaf5bbc6e924b5fa88034d4fc45157fbe9a32fb8e0819
+│       │   │   └── bb_cache.dat.e6ea43a232f2dcee9ab150256d2f7eda0f868f1e91e51b4dfbb8b4a9018a6b42
+│       │   └── local_file_checksum_cache.dat
+│       ├── stamps
+│       │   └── second-1.0-r1.do_mypatch
+│       └── work
+│           ├── first-0.1-r1
+│           │   └── temp
+│           │       ├── log.do_build -> log.do_build.21445
+│           │       ├── log.do_build.20994
+│           │       ├── log.do_build.21445
+│           │       ├── log.task_order
+│           │       ├── run.do_build -> run.do_build.21445
+│           │       ├── run.do_build.20994
+│           │       └── run.do_build.21445
+│           └── second-1.0-r1
+│               └── temp
+│                   ├── log.do_build -> log.do_build.28189
+│                   ├── log.do_build.28150
+│                   ├── log.do_build.28189
+│                   ├── log.do_mypatch -> log.do_mypatch.27873
+│                   ├── log.do_mypatch.27873
+│                   ├── log.task_order
+│                   ├── run.do_build -> run.do_build.28189
+│                   ├── run.do_build.28150
+│                   ├── run.do_build.28189
+│                   ├── run.do_mypatch -> run.do_mypatch.27873
+│                   └── run.do_mypatch.27873
+├── meta-tutorial
+│   ├── classes
+│   │   ├── base.bbclass
+│   │   └── mybuild.bbclass
+│   ├── conf
+│   │   ├── bitbake.conf
+│   │   └── layer.conf
+│   └── recipes-tutorial
+│       ├── first
+│       │   └── first_0.1.bb
+│       └── second
+│           └── second_1.0.bb
+├── meta-two
+│   └── conf
+│       └── layer.conf
+
+
+*bitbake-task*
+The task `do_build` overrides the empty global build task from base.bbclass.
+
+If we would like to see all tasks a recipe provides 
+
+$ bitbake -c listtasks second
+
+
 6.4. Executing tasks or building the world
 
 We have now several options on running builds or specified tasks for our
 recipes.
 
-Build one recipe
+`Build one recipe`
 To run all tasks for our second recipe we simply call bitbake second
 
-Execute one task
+`Execute one task`
 We could also run a specific task for a recipe. Say we want only to run the
 mypatch task for the second recipe. This can be done by applying the command
 bitbake -c mypatch second
 
   -c CMD, --cmd=CMD     Specify the task to execute. The exact options
                         available depend on the metadata. Some examples might
-                        be 'compile' or 'populate_sysroot' or 'listtasks' may
+                        be 'compile' or 'populate_sysroot' or `listtasks` may
                         give a list of the tasks available.
 
-keitee@keitee-mint:~/git/kb/code-make/bitbake/tut1/build$ bitbake -c mypatch second
+
+bitbake -c mypatch second
+
 Parsing recipes: 100% |##################################################| Time: 0:00:00
 Parsing of 2 .bb files complete (0 cached, 2 parsed). 2 targets, 0 skipped, 0 masked, 0 errors.
 NOTE: Resolving any missing task queue dependencies
 Initialising tasks: 100% |###############################################| Time: 0:00:00
 NOTE: Executing RunQueue Tasks
 NOTE: Tasks Summary: Attempted 1 tasks of which 0 didn't need to be rerun and all succeeded.
-keitee@keitee-mint:~/git/kb/code-make/bitbake/tut1/build$
 
 
 6.4.1. Checking the build logs
 
 Bitbake creates a `tmp/work directory` in its actual build location where it
-stores all log files.  These log files contain interesting information and are
-worth to study.
+stores all log files.
 
-An actual output after a first bitbake world run might look like this.
+These log files contain useful information from BitBake about its actions as
+well as the output of the executed tasks.
+
 
 ├── build
 │   ├── bitbake-cookerdaemon.log
@@ -22570,6 +22734,131 @@ An actual output after a first bitbake world run might look like this.
 │                   ├── run.do_build.28189
 │                   ├── run.do_mypatch -> run.do_mypatch.27873
 │                   └── run.do_mypatch.27873
+
+
+<ex>
+
+keitee@kit-ubuntu:~/git/kb/code-make/bitbake/tut1/build$ bitbake first
+Parsing recipes: 100% |########################################################################################################################################################################################################| Time: 0:00:00
+Parsing of 3 .bb files complete (0 cached, 3 parsed). 3 targets, 0 skipped, 0 masked, 0 errors.
+NOTE: Resolving any missing task queue dependencies
+Initialising tasks: 100% |#####################################################################################################################################################################################################| Time: 0:00:00
+NOTE: Executing RunQueue Tasks
+NOTE: Tasks Summary: Attempted 1 tasks of which 0 didn't need to be rerun and all succeeded.
+
+
+keitee@kit-ubuntu:~/git/kb/code-make/bitbake/tut1/build$ bitbake -v first
+Parsing recipes: 100% |########################################################################################################################################################################################################| Time: 0:00:00
+Parsing of 3 .bb files complete (0 cached, 3 parsed). 3 targets, 0 skipped, 0 masked, 0 errors.
+NOTE: Resolving any missing task queue dependencies
+NOTE: Marking Active Tasks###################################################################################                                                                                                                  | ETA:  0:00:00
+NOTE: Pruned 2 inactive tasks, 1 left#########################################################################                                                                                                                 | ETA:  0:00:00
+NOTE: Assign Weightings
+NOTE: Compute totals (have 1 endpoint(s))#####################################################################                                                                                                                 | ETA:  0:00:00
+Initialising tasks: 100% |#####################################################################################################################################################################################################| Time: 0:00:00
+NOTE: Executing RunQueue Tasks
++ cd /home/keitee/git/kb/code-make/bitbake/tut1/build
++ do_build
++ echo first: some shell script running as build
+first: some shell script running as build
++ ret=0
++ trap  0
++ exit 0
+NOTE: Tasks Summary: Attempted 1 tasks of which 0 didn't need to be rerun and all succeeded.
+
+
+keitee@kit-ubuntu:~/git/kb/code-make/bitbake/tut1/build$ bitbake -vDDD first
+DEBUG: BBCooker starting 1574089613.667756
+DEBUG: BBCooker pyinotify1 1574089613.6706758
+DEBUG: BBCooker pyinotify2 1574089613.670815
+DEBUG: BBCooker pyinotify3 1574089613.673023
+DEBUG: BBCooker pyinotify complete 1574089613.6731472
+DEBUG: Found bblayers.conf (/home/keitee/git/kb/code-make/bitbake/tut1/build/conf/bblayers.conf)
+DEBUG: Adding layer /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial
+DEBUG: Adding layer /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two
+DEBUG: Inheriting /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/classes/base.bbclass (from configuration INHERITs:0)
+DEBUG: Clearing SRCREV cache due to cache policy of: clear
+DEBUG: Using cache in '/home/keitee/git/kb/code-make/bitbake/tut1/build/tmp/cache/local_file_checksum_cache.dat'
+DEBUG: Using cache in '/home/keitee/git/kb/code-make/bitbake/tut1/build/tmp/cache/bb_codeparser.dat'
+DEBUG: BBCooker parsed base configuration 1574089613.6779048
+DEBUG: BBCooker startup complete 1574089613.6779938
+DEBUG: Features set [2] (was [2])
+DEBUG: Updating new environment variable LC_ALL to en_US.UTF-8
+DEBUG: Base environment change, triggering reparse
+DEBUG: Found bblayers.conf (/home/keitee/git/kb/code-make/bitbake/tut1/build/conf/bblayers.conf)
+DEBUG: Adding layer /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial
+DEBUG: Adding layer /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two
+DEBUG: Inheriting /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/classes/base.bbclass (from configuration INHERITs:0)
+DEBUG: Clearing SRCREV cache due to cache policy of: clear
+DEBUG: Using cache in '/home/keitee/git/kb/code-make/bitbake/tut1/build/tmp/cache/local_file_checksum_cache.dat'
+DEBUG: Processing tutorial in collection list
+DEBUG: Processing two in collection list
+DEBUG: collecting .bb files
+DEBUG: Cache dir: /home/keitee/git/kb/code-make/bitbake/tut1/build/tmp/cache/default
+DEBUG: Cache file /home/keitee/git/kb/code-make/bitbake/tut1/build/tmp/cache/default/bb_cache.dat.259dff9e9f59526d2ae1e75fb34d8ad3368f145877aaa4dd8b2995e43285516e not found, building...
+DEBUG: Cache: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb is not cached
+DEBUG: Cache: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/second/second_1.0.bb is not cached
+DEBUG: Cache: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/recipes-base/third/third_01.2.bb is not cached
+DEBUG: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/recipes-base/third/third_01.2.bb: Parsing /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/recipes-base/third/third_01.2.bb                   | ETA:  --:--:--
+DEBUG: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/second/second_1.0.bb: Parsing /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/second/second_1.0.bb
+DEBUG: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/recipes-base/third/third_01.2.bb: Inheriting /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/classes/confbuild.bbclass (from /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/recipes-base/third/third_01.2.bb:6)
+DEBUG: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/recipes-base/third/third_01.2.bb: Inheriting /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/classes/mybuild.bbclass (from /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two/classes/confbuild.bbclass:19)
+DEBUG: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb: Parsing /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb
+DEBUG: /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/second/second_1.0.bb: Inheriting /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/classes/mybuild.bbclass (from /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/second/second_1.0.bb:27)
+Parsing recipes: 100% |########################################################################################################################################################################################################| Time: 0:00:00
+Parsing of 3 .bb files complete (0 cached, 3 parsed). 3 targets, 0 skipped, 0 masked, 0 errors.
+DEBUG: parsing complete
+DEBUG: Target list: ['first']
+DEBUG: providers for first are: ['first']
+DEBUG: sorted providers for first are: ['/home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb']
+DEBUG: adding /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb to satisfy first
+DEBUG: Added dependencies [] for /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb
+NOTE: Resolving any missing task queue dependencies
+DEBUG: Resolved 0 extra dependencies
+DEBUG: Added 0 recursive dependencies in this loop                                                                                                                                                                             | ETA:  0:00:00
+NOTE: Marking Active Tasks###################################################################################                                                                                                                  | ETA:  0:00:00
+NOTE: Pruned 2 inactive tasks, 1 left#########################################################################                                                                                                                 | ETA:  0:00:00
+NOTE: Assign Weightings
+NOTE: Compute totals (have 1 endpoint(s))#####################################################################                                                                                                                 | ETA:  0:00:00
+DEBUG: Starting bitbake-worker##########################################################################################################                                                                                       | ETA:  0:00:00
+Initialising tasks: 100% |#####################################################################################################################################################################################################| Time: 0:00:00
+NOTE: Executing RunQueue Tasks
+DEBUG: Considering /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb:do_build: set()
+DEBUG: Skip list (pre setsceneverify) []
+DEBUG: Full skip list set()
+DEBUG: Using runqueue scheduler 'speed'
+DEBUG: Stampfile /home/keitee/git/kb/code-make/bitbake/tut1/build/tmp/stamps/first-0.1-r1.do_build not available
+DEBUG: Found bblayers.conf (/home/keitee/git/kb/code-make/bitbake/tut1/build/conf/bblayers.conf)
+DEBUG: Adding layer /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial
+DEBUG: Adding layer /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two
+DEBUG: Inheriting /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/classes/base.bbclass (from configuration INHERITs:0)
+DEBUG: Using cache in '/home/keitee/git/kb/code-make/bitbake/tut1/build/tmp/cache/bb_codeparser.dat'
+DEBUG: Parsing /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial/recipes-tutorial/first/first_0.1.bb (full)
+DEBUG: Executing task do_build
+DEBUG: first-0.1-r1 do_build: Executing shell function do_build
++ cd /home/keitee/git/kb/code-make/bitbake/tut1/build
++ do_build
++ echo first: some shell script running as build
+first: some shell script running as build
++ ret=0
++ trap  0
++ exit 0
+
+DEBUG: first-0.1-r1 do_build: Shell function do_build finished
+DEBUG: Teardown for bitbake-worker
+NOTE: Tasks Summary: Attempted 1 tasks of which 0 didn't need to be rerun and all succeeded.
+keitee@kit-ubuntu:~/git/kb/code-make/bitbake/tut1/build$
+
+keitee@kit-ubuntu:~/git/kb/code-make/bitbake/tut1/build$ cat tmp/work/first-0.1-r1/temp/log.do_build
+DEBUG: Executing shell function do_build
+first: some shell script running as build
+DEBUG: Shell function do_build finished
+
+
+8.2. bbappend files
+
+An append file can be use to add functions to an existing class without creating
+a new one. It adds the text of the append file to a class with the same name.
 
 
 ={============================================================================

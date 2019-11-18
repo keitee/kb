@@ -15,6 +15,10 @@ class EventLoopPrivate
     void flush();
 
   private:
+    int
+    eventHandler(sd_event_source *source, int fd, uint32_t revents, void *data);
+
+  private:
     sd_event *m_loop{nullptr};
     int m_eventfd{-1};
     thread_local EventLoopPrivate *m_loopRunning{nullptr};
