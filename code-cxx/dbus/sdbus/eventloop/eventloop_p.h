@@ -21,9 +21,13 @@ class EventLoopPrivate
   private:
     sd_event *m_loop{nullptr};
     int m_eventfd{-1};
+
+    // TODO static?
     thread_local EventLoopPrivate *m_loopRunning{nullptr};
 
+    // TODO mutable?
     mutable std::recursive_mutex m_rm;
+
     std::queue<std::function<void()>> m_methods;
 };
 
