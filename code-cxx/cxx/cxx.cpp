@@ -8579,6 +8579,8 @@ TEST(CxxPrintf, Formats)
 // ={=========================================================================
 // cxx-cpp, macro
 
+namespace cxx_cpp
+{
 #define dprint(expr) printf(#expr " = %g\n", expr)
 #define dprint_string(expr) string coll(#expr " = %g\n")
 #define dprint_string_1(expr) string coll(#expr)
@@ -8586,8 +8588,9 @@ TEST(CxxPrintf, Formats)
 #define xstr(s) str(s)
 #define str(s) #s
 #define foo 4
+} // namespace
 
-TEST(Cpp, Stringification)
+TEST(CxxCpp, Stringification)
 {
   {
     double x = 10.0;
@@ -8788,7 +8791,7 @@ namespace cxx_cpp
 // int 10
 // int 97
 
-TEST(Cpp, VariableArgs)
+TEST(CxxCpp, VariableArgs)
 {
   using namespace cxx_cpp;
 
@@ -8816,9 +8819,62 @@ namespace cxx_cpp
 // success!
 // [       OK ] Cpp.VaargMacro (0 ms)
 
-TEST(Cpp, VariableArgsMacro)
+TEST(CxxCpp, VariableArgsMacro)
 {
   eprintf("success!\n");
+}
+
+namespace cxx_cpp
+{
+#define CHECK_CXX_CPP_DEFINED 1
+// #define CHECK_CXX_CPP_DEFINED 0
+}
+
+TEST(CxxCpp, useDefined)
+{
+#if defined CHECK_CXX_CPP_DEFINED
+  EXPECT_THAT(true, true);
+#else
+  EXPECT_THAT(false, true);
+#endif
+
+#if defined (CHECK_CXX_CPP_DEFINED)
+  EXPECT_THAT(true, true);
+#else
+  EXPECT_THAT(false, true);
+#endif
+
+#ifdef CHECK_CXX_CPP_DEFINED
+  EXPECT_THAT(true, true);
+#else
+  EXPECT_THAT(false, true);
+#endif
+
+  // that is, expect to run EXPECT_THAT(true, true) regardless of if macro is
+  // defined.
+  //
+  // if use 
+  // #define CHECK_CXX_CPP_DEFINED 
+  //
+  // then see error:
+  // :8855:27: error: operator '||' has no left operand
+  // #if CHECK_CXX_CPP_DEFINED || 1
+  //
+  //  control:
+  //  -DCHECK_CXX_CPP_DEFINED=0
+
+#if CHECK_CXX_CPP_DEFINED || 1
+  EXPECT_THAT(true, true);
+#else
+  EXPECT_THAT(false, true);
+#endif
+
+  // fails when #define CHECK_CXX_CPP_DEFINED 0
+#if CHECK_CXX_CPP_DEFINED || 0
+  EXPECT_THAT(true, true);
+#else
+  EXPECT_THAT(false, true);
+#endif
 }
 
 // ={=========================================================================

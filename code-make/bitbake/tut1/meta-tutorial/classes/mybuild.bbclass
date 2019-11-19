@@ -6,7 +6,7 @@
 # 
 # As in base.class, we add a build task. It is again a simple shell function.
 # "mybuild_do_ prefix" is for following the conventions,
-# classname_do_functionname for a task in a class.
+# "classname_do_functionname" for a task in a class.
 # 
 # EXPORT_FUNCTIONS makes the build function available to users of this class.
 # If we did not have this line it could not override the build function from
@@ -14,6 +14,7 @@
 # 
 
 addtask build
+
 mybuild_do_build () {
 
   echo "running mybuild_do_build."

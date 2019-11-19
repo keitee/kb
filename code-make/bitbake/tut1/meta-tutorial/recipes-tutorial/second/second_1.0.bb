@@ -4,8 +4,8 @@
 #
 # >> inherit mybuild
 #
-# The mybuild class becomes inherited and so myclass_do_build becomes the
-# `default build task.`
+# The mybuild class becomes inherited and so myclass_do_build() becomes the
+# "default build task."
 #
 # The (pure python) function pyfunc takes some argument and runs the python dir
 # function on this argumentm and prints the result.
@@ -23,7 +23,9 @@
 # the build function.
 
 DESCRIPTION = "I am the second recipe"
+
 PR = "r1"
+
 inherit mybuild
 
 def pyfunc(o):
