@@ -42,6 +42,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-rdk
 *kt_dev_skymw_0000* skymw-rdk-build
 *kt_dev_skymw_0000* skymw-rdk-dev
+*kt_dev_skymw_0000* skymw-rdk-dev
 *kt_dev_skymw_0000* skymw-jira-airplay
 *kt_dev_skymw_0000* skymw-jira-android
 *kt_dev_skymw_0000* skymw-jira-q
@@ -7874,7 +7875,7 @@ wget https://nexus.teamccp.com/nexus/content/repositories/arris_bcm_xi6/strt/PKG
 
 
 <x>
-/media/keitee/ssd2/2/build-arrisxi6-morty/tmp/work/x86_64-linux/breakpad-native/svn-r0/trunk/src/client/linux/
+/tmp/work/x86_64-linux/breakpad-native/svn-r0/trunk/src/client/linux/
 dump_writer_common/ucontext_reader.cc
 
 --- ./work/x86_64-linux/breakpad-native/svn-r0/trunk/src/client/linux/dump_writer_common/ucontext_reader.cc	2019-10-24 16:26:59.484681153 +0100
@@ -8124,6 +8125,7 @@ LDEBUG: ../Src/Token/TokenDatabase.cpp(961): Uses Remaining: 175 -> 174
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-dev
 
+https://wiki.rdkcentral.com/display/RDK/Device+Settings
 devicesettings-hal-brcm97428
 
 <jira-rdk>
@@ -8450,7 +8452,7 @@ IARM_Result_t _dsSetResolution(void *arg)
 
 *ds-hal*
 
-generic/devicesettings-hal-brcm97428/dsVideoPort.c
+// generic/devicesettings-hal-brcm97428/dsVideoPort.c
 
 dsError_t  dsSetResolution(int handle, dsVideoPortResolution_t *resolution)
 {
@@ -8458,10 +8460,57 @@ dsError_t  dsSetResolution(int handle, dsVideoPortResolution_t *resolution)
 }
 
 
+DEBUG: Marking task /media/keitee/ssd2/direct_build_2/meta-rdk-soc-broadcom/meta-brcm/recipes-extended/iarmmgrs/iarmmgrs-hal-broadcom_git.bb:do_compile as buildable
+DEBUG: Stampfile /media/keitee/ssd2/direct_build_2/build-arrisxi6-morty/tmp/stamps/cortexa15t2hf-neon-rdk-linux-gnueabi/iarmmgrs-hal-broadcom/1.99+git999-r0.do_compile.1fec11c5ed10fed21134f8940a8b7884 not available
+NOTE: Running task 4201 of 6292 (/media/keitee/ssd2/direct_build_2/meta-rdk-soc-broadcom/meta-brcm/recipes-extended/iarmmgrs/iarmmgrs-hal-broadcom_git.bb:do_compile)
+
+// devicesettings-hal-brcm97268-1.99-r0 do_compile: ../git/nscclient.c: In function 'void NscClientInit()':
+
+// generic/devicesettings-hal-brcm97428/nscclient.c
+
+./work/cortexa15t2hf-neon-rdk-linux-gnueabi/devicesettings-hal-brcm97268/1.99-r0/git/nscclient.c
+
+NEXUS_Error NscClientSetDisplayFormat(NEXUS_VideoFormat nexus_format)
+{
+#ifdef RDK_USE_NXCLIENT
+    NxClient_DisplaySettings displaySettings;
+    NEXUS_Error rc = NEXUS_SUCCESS;
+#endif
+
+    if (nsc_client_inited == FALSE)
+    {
+        printf(" NEED TO call NscClientInit() first !!!!\n");
+        return 1;
+    }
+#ifndef RDK_USE_NXCLIENT    
+    brc_client_set_display_format(simple_client_state.rca_client, nexus_format);
+#else
+    {
+        NxClient_GetDisplaySettings(&displaySettings);
+        displaySettings.format = nexus_format;
+        rc = NxClient_SetDisplaySettings(&displaySettings);
+        if (rc)
+        {
+            printf("unable to set display format using NxClient_SetDisplaySettings (%d)...\n", rc);
+            return rc;   
+        }
+    }
+#endif
+
+    return rc;
+}
+
+
+// build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libds-hal.a
+
+$ nm -C tmp/sysroots/arrisxi6-morty/usr/lib/libds-hal.a | ag NscClientSe
+00000258 T NscClientSetDisplayFormat(NEXUS_VideoFormat)
+
+
 *nxclient* libnxclient.so
 00008440 T NxClient_SetDisplaySettings
-??
-trellis/display/weston/wayland-nxclient/nxclient.cpp
+
+/media/keitee/ssd2/refsw_2/trellis/display/weston/wayland-nxclient/nxclient.cpp
 NEXUS_Error NxClient_SetDisplaySettings( const NxClient_DisplaySettings *pSettings )
 {
 }
@@ -8637,6 +8686,99 @@ wayland-egl-bnxs-1.0+gitr999-r0 do_compile: ./arm-rdk-linux-gnueabi-libtool
 -c -o refsw17.3/vc5/common/libwayland_egl_la-display_framework.lo `test -f
 'refsw17.3/vc5/common/display_framework.c' || echo
 '../../../../../../../generic/wayland-egl-bnxs/'`refsw17.3/vc5/common/display_framework.c
+
+
+build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/nexus/nxclient/include/nxclient.h
+
+/**
+composition settings of each surface
+**/
+typedef struct NEXUS_SurfaceComposition
+{
+    NEXUS_SurfaceRegion virtualDisplay; 
+    /* 
+    If width/height non-zero, composition.position will be positioned and
+    scaled relative to the virtualDisplay dimensions.  Otherwise, graphics
+    will be positioned and scaled in clipped framebuffer coordinates; video
+    will be positioned and scaled in parent coordinates.  Because clipping and
+    HW upscaling makes the mapping of framebuffer coordinates to display
+    coordinates complex, we recommend using virtualDisplay.
+    */
+
+    NEXUS_Rect position; 
+    /* 
+    position and size of the surface relative to the size of the parent.
+    scaling is automatic. if rectangle is offscreen, the surface will be
+    clipped appropriately.
+    */
+
+    NEXUS_SurfaceRegion clipBase; /* If width/height non-zero, compositin.clipRect will use this as units.
+                            Otherwise it will use virtualDispay. */
+    NEXUS_Rect clipRect; /* source clipping rectangle in the coordinates of clipBase.
+                            if clipBase is zero, in coordinates of virtualDisplay.
+                            if set to all zeros, no source clipping will be performed.
+                            negative source clipping (zoom out) is not supported.*/
+
+    unsigned zorder; /* relative z-order to other surfaces added to this surface_compositor. 0 is on bottom. */
+    bool visible; /* if true, this surface will be included in the next compositing operation. */
+    bool displayCache; /* deprecated */
+    NEXUS_BlendEquation colorBlend;  /* Specify how to compose the color component */
+    NEXUS_BlendEquation alphaBlend;   /* Specify how to compose the alpha component */
+    struct {
+        NEXUS_Graphics2DColorKey source, dest;
+    } colorKey;
+    NEXUS_Graphics2DFilterCoeffs horizontalFilter;
+    NEXUS_Graphics2DFilterCoeffs verticalFilter;
+    bool alphaPremultiplySourceEnabled;
+    NEXUS_Pixel constantColor; /* For graphics, constant alpha and color for colorBlend and alphaBlend.
+                                  For video, upper 8 bits used for alpha. */
+    int rightViewOffset; /* if display3D, it controls z-offset (in units of virtualDisplay.width) (in addition to any z-offset for the framebuffer) */
+    
+    bool colorMatrixEnabled; /* set true to use colorMatrix */
+    NEXUS_Graphics2DColorMatrix colorMatrix; /* see NEXUS_Graphics2D_SetAlphaColorMatrix for simple matrix-based alpha blend */
+    NEXUS_VideoWindowContentMode contentMode;
+} NEXUS_SurfaceComposition;
+
+/**
+Allow client to set server-level composition settings on its own surfaces
+including position, zorder, alpha blending more more.
+Not used for video window positioning which is done directly with SurfaceClient API.
+
+See NxClient_Config_SetSurfaceClientComposition for an API to change another client's surface composition.
+**/
+void NxClient_GetSurfaceClientComposition(
+    unsigned surfaceClientId, /* top-level surface client id */
+    NEXUS_SurfaceComposition *pSettings
+    );
+
+NEXUS_Error NxClient_SetSurfaceClientComposition(
+    unsigned surfaceClientId, /* top-level surface client id */
+    const NEXUS_SurfaceComposition *pSettings
+    );
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-rdk-westeros
+
+WPE is the reference WebKit port for embedded and low-consumption computer
+devices. It has been designed from the ground-up with performance, small
+footprint, accelerated content rendering, and simplicity of deployment in
+mind, bringing the excellence of the WebKit engine to countless platforms and
+target devices.
+
+
+https://wiki.rdkcentral.com/display/RDK/WPE
+Wayland is not an implementation but a protocol specification between a
+display server and its clients
+
+
+“Wayland is a protocol for a compositor to talk to its client as well as a C
+lib implementation of that protocol”. `Weston` is the reference implementation
+for wayland. `Westeros is a compositor, a replacement of Weston.` This
+  provides clear interface towards graphics and input.
+
+
+https://wiki.rdkcentral.com/display/RDK/Westeros
 
 
 ={============================================================================
