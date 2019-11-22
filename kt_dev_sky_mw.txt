@@ -8558,11 +8558,48 @@ run.do_compile -> run.do_compile.14722*
 /media/keitee/ssd2/direct_build_2/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/nexus/nxclient/server/Makefile
 
 
-/media/keitee/ssd2/direct_build_2/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/nexus/nxclient/server/nxserverlib.c
+build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/nexus/nxclient/server/nxserverlib.c
 
 /* only support rollback from public API calls */
 NEXUS_Error NxClient_P_SetDisplaySettings(nxclient_t client, struct b_session *session, const NxClient_DisplaySettings *pSettings)
 {
+}
+
+NEXUS_Error NxClient_P_SetSurfaceClientComposition(nxclient_t client, unsigned surfaceClientId, const NEXUS_SurfaceComposition *pComposition)
+{
+    NEXUS_SurfaceCompositorClientSettings client_settings;
+#if COMCAST_RDK_SPECIFIC_CHANGE || 1
+    {
+        if (!strcmp(client->joinSettings.name, "xre receiver"))
+        {
+            NEXUS_DisplayHandle display;
+            NEXUS_DisplaySettings displaySettings;
+
+            display = client->session->display[0].display;
+            NEXUS_Display_GetSettings(display, &displaySettings);
+            if (displaySettings.format == NEXUS_VideoFormat_e480p || displaySettings.format == NEXUS_VideoFormat_eNtsc)
+            {
+                client_settings.composition.virtualDisplay.width = 640;
+                client_settings.composition.virtualDisplay.height = 480;
+            }
+            else
+            {
+                client_settings.composition.virtualDisplay.width = 1280;
+                client_settings.composition.virtualDisplay.height = 720;
+            }
+			/*341, make sure the highest zorder is smaller than NXCLIENT_MAX_ZORDER*/
+			/* ensure that Closed Caption is always at the top */
+			if (client_settings.composition.zorder > NXCLIENT_MAX_ZORDER) {
+				client_settings.composition.zorder = NXCLIENT_DEFAULT_ZORDER;
+			}
+        }
+    }
+#endif
+
+    rc = NEXUS_SurfaceCompositor_SetClientSettings(client->session->surfaceCompositor, req->handles.surfaceClient[i].handle, &client_settings);
+    if (rc) return BERR_TRACE(rc);
+
+    return 0;
 }
 
 
@@ -8779,6 +8816,95 @@ for wayland. `Westeros is a compositor, a replacement of Weston.` This
 
 
 https://wiki.rdkcentral.com/display/RDK/Westeros
+
+
+/build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+790df67969-r0/temp
+
+// WindowManager/source/WesterosClient.cpp
+
+{
+    // create the compositor
+    mCompositor = WstCompositorCreate();
+}
+
+{
+  if (!WstCompositorComposeEmbedded(mCompositor, mX, mY, mWidth, mHeight,
+        mMatrix, 1.0f,
+        hints,
+        &needHolePunch, holeRects))
+  {
+    AI_LOG_ERROR("failed to compose embedded");
+  }
+}
+
+
+SkyRenderer::SkyRenderer(WstRenderer *renderer, int argc, char **argv,
+                         const std::shared_ptr<IWesterosClient> &client)
+{
+    // the platform determines the 'real' renderer to use
+#if (RDK_PLATFORM == XI6)
+    // const std::string rendererPath("libwesteros_render_nexus.so.0.0.0");
+    const std::string rendererPath("libwesteros_render_embedded.so.0.0.0");
+#elif (RDK_PLATFORM == AMLOGIC)
+    const std::string rendererPath("/usr/lib/libwesteros_render_embedded.so.0.0.0");
+#else
+#   error "unknown RDK platform type"
+#endif
+
+    // set the args for the 'real' renderer
+    char arg0[] = "--width";
+    char arg1[] = "1920";
+    char arg2[] = "--height";
+    char arg3[] = "1080";
+    char *realArgv[4] = { arg0, arg1, arg2, arg3 };
+
+    // now try and create the 'real' renderer
+    mRealRenderer = WstRendererCreate(rendererPath.c_str(), 4, realArgv);
+}
+
+
+westeros/westeros-compositor.cpp
+
+bool WesterosClient::setupRenderer()
+{
+  const std::string renderModule("/usr/lib/plugins/westeros/libwesteros_render_sky.so");
+}
+
+
+bool WstCompositorComposeEmbedded( WstCompositor *ctx, ...)
+{
+  WstRendererUpdateScene( ctx->renderer );
+}
+
+void WstRendererUpdateScene( WstRenderer *renderer )
+{
+  renderer->updateScene( renderer );
+}
+
+
+westeros/westeros-compositor.cpp
+
+bool WstCompositorStart( WstCompositor *ctx )
+
+static bool wstCompositorCreateRenderer( WstCompositor *ctx )
+{
+  ctx->renderer= WstRendererCreate( ctx->rendererModule, argc, (char **)argv, ctx->display, ctx->nc );
+}
+
+
+westeros/westeros-render.cpp
+
+WstRenderer* WstRendererCreate(const char *moduleName, int argc, char **argv,
+    struct wl_display *display, WstNestedConnection *nc )
+{
+  WstRenderer *renderer= (WstRenderer*)calloc( 1, sizeof(WstRenderer) );
+
+  module= dlopen( moduleName, RTLD_NOW );
+
+  init= dlsym( module, RENDERER_MODULE_INIT );
+
+  rc= ((WSTMethodRenderInit)init)( renderer, argc, argv );
+}
 
 
 ={============================================================================
