@@ -88,7 +88,8 @@ typedef int (*sd_event_io_handler_t)(
 
 — Add an I/O event source to an event loop
 
-int sd_event_add_io(sd_event *event,
+int sd_event_add_io(
+  sd_event *event,
   sd_event_source **source,
   int fd,
   uint32_t events,
@@ -96,8 +97,8 @@ int sd_event_add_io(sd_event *event,
   void *userdata);
 
 sd_event_add_io() adds a new I/O event source to an event loop. The event loop
-object is specified in the event parameter, the event source object is returned
-in the source parameter. 
+object is specified in the `event parameter`, the event source object is returned
+in the `source parameter`. 
 
 The fd parameter takes the UNIX file descriptor to watch, which may refer to a
 socket, a FIFO, a message queue, a serial connection, a character device, or any

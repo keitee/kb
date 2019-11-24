@@ -6,6 +6,9 @@
   EventLoopPrivate
 */
 
+// TODO: since it's static.
+thread_local EventLoopPrivate *EventLoopPrivate::m_loopRunning;
+
 EventLoopPrivate::EventLoopPrivate()
 {
   // create a event loop
@@ -83,12 +86,12 @@ int EventLoopPrivate::exec()
   // when eventfd can be read or is set.
   sd_event_source *source{nullptr};
   int ret = sd_event_add_io(
-      m_loop,
-      &source,
-      m_eventfd,
-      EPOLLIN,
-      eventHandler,
-      this);
+      m_loop,         // event loop
+      &source,        // event source
+      m_eventfd,      // fd to watch
+      EPOLLIN,        // events to watch for
+      eventHandler,   // handler
+      this);          // user data
   if (ret < 0)
   {
     LOG_MSG("failed to add quit eventfd");
@@ -99,6 +102,10 @@ int EventLoopPrivate::exec()
   m_loopRunning = this;
 
   // run the event loop
+  // sd_event_loop() invokes sd_event_run() in a loop, thus implementing the
+  // actual event loop. The call returns as soon as exiting was requested using
+  // sd_event_exit(3).
+
   int exitCode = sd_event_loop(m_loop);
 
   // clear as the event loop stopped
