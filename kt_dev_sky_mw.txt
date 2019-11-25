@@ -8136,7 +8136,6 @@ in this file /opt/persistent/ds/hostData on the box, set HDMI0.resolution to
 
 cat /opt/persistent/ds/hostData
 
-root@arrisxi6-morty:~# cat /opt/persistent/ds/hostData
 HDMI0.AudioMode STEREO
 HDMI0.AudioMode.AUTO    TRUE
 HDMI0.resolution        720p
@@ -8518,6 +8517,8 @@ NEXUS_Error NxClient_SetDisplaySettings( const NxClient_DisplaySettings *pSettin
 
 *nxserver*
 
+  nxserver.service                                                                                       loaded active     running      Nxserver Daemon
+ 
 root      1922  1.5  0.7 374028  8088 ?        Ssl  12:14   0:02 
   /usr/bin/nxserver -audio_output_delay 500 -dropFrame enable -video_cdb 5 -ir none -ms12 -smoothscaling -svp_urr -mode verified -heap video_secure,128M -fbsize 1920,1080
 
@@ -8563,7 +8564,22 @@ build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/un
 /* only support rollback from public API calls */
 NEXUS_Error NxClient_P_SetDisplaySettings(nxclient_t client, struct b_session *session, const NxClient_DisplaySettings *pSettings)
 {
+  rc = NxClient_P_SetDisplaySettingsNoRollback(client, session, pSettings);
 }
+
+NEXUS_Error NxClient_P_SetDisplaySettingsNoRollback(nxclient_t client, struct b_session *session, const NxClient_DisplaySettings *pSettings)
+{
+  rc = b_display_format_change(session, pSettings);
+}
+
+static int b_display_format_change(struct b_session *session, const NxClient_DisplaySettings *pDisplaySettings)
+{
+  composition.virtualDisplay.width = 1280;
+  composition.virtualDisplay.height = 720;
+
+  NxClient_P_SetSurfaceClientComposition(client, resources.surfaceClient.id[j], &composition);
+}
+
 
 NEXUS_Error NxClient_P_SetSurfaceClientComposition(nxclient_t client, unsigned surfaceClientId, const NEXUS_SurfaceComposition *pComposition)
 {
@@ -8601,6 +8617,79 @@ NEXUS_Error NxClient_P_SetSurfaceClientComposition(nxclient_t client, unsigned s
 
     return 0;
 }
+
+
+nxserver_t nxserver_init(int argc, char **argv, bool blocking)
+{
+  // fbsize
+  nxserver_get_default_settings(&settings);
+  {
+    settings->fbsize.width = 1280tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/nexus/nxclient/server/;
+
+    #if NEXUS_HAS_GFD_VERTICAL_UPSCALE
+      settings->fbsize.height = 720;
+    #else
+      settings->fbsize.height = 1080;
+    #endif
+  }
+
+  rc = nxserver_parse_cmdline(argc, argv, &settings, &cmdline_settings);
+  {
+    else if (!strcmp(argv[curarg], "-fbsize") && curarg+1 < argc) {
+      sscanf(argv[++curarg], "%u,%u", &settings->fbsize.width, &settings->fbsize.height);
+    }
+  }
+
+  // NEXUS_Platform_Init will initialize Nexus
+  rc = NEXUS_Platform_MemConfigInit(&platformSettings, &memConfigSettings);
+}
+
+
+keitee@kit-ubuntu:/media/keitee/ssd2/direct_build/build-arrisxi6-morty$ oe-pkgdata-util find-path /usr/bin/nxserver
+NOTE: base_contains is deprecated, please use bb.utils.contains instead.
+broadcom-refsw: /usr/bin/nxserver
+
+scp -P 10022 nxserver root@192.168.0.100:/tmp/data
+mount-copybind /tmp/data/nxserver /usr/bin/nxserver
+mount-copybind -d /tmp/data/nxserver
+
+/tmp/data/nxserver -audio_output_delay 500 -dropFrame enable -video_cdb 5 -ir none -ms12 -smoothscaling -svp_urr -mode verified -heap video_secure,128M -fbsize 1920,1080
+
+*systemctl-status*
+
+root@arrisxi6-morty:~# systemctl status nxserver
+● nxserver.service - Nxserver Daemon
+   Loaded: loaded (/lib/systemd/system/nxserver.service; enabled; vendor preset: enabled)
+   Active: active (running) since Fri 2019-11-22 10:39:54 UTC; 2 days ago
+  Process: 2073 ExecStartPre=/bin/sh -c modprobe wakeup_drv; if [ ! -e /dev/wake0 ]; then mknod -m a=rw /dev/wake0 c 34 0; fi (code=exited, status=0/SUCCESS)
+  Process: 2046 ExecStartPre=/usr/bin/nexus_dfb install (code=exited, status=0/SUCCESS)
+  Process: 1667 ExecStartPre=/bin/sleep 3 (code=exited, status=0/SUCCESS)
+ Main PID: 2080 (nxserver)
+   Status: "Nexus Server is Successfully Initialized"
+   CGroup: /system.slice/nxserver.service
+           ├─2080 /usr/bin/nxserver -audio_output_delay 500 -dropFrame enable -video_cdb 5 -ir none -ms12 -smoothscaling -svp_urr -mode verified -heap video_secure,128M -fbsize 1920,1080
+           └─2111 /usr/bin/splash_client
+
+Warning: Journal has been rotated since unit was started. Log output is incomplete or unavailable.
+
+root@arrisxi6-morty:~# cat /lib/systemd/system/nxserver.service
+[Unit]
+Description=Nxserver Daemon
+After=systemd-modules-load.service
+Requires=systemd-modules-load.service
+
+[Service]
+Type=notify
+Environment="SAGEBIN_PATH=/usr/lib"
+ExecStartPre=/bin/sleep 3
+ExecStartPre=/usr/bin/nexus_dfb install
+ExecStartPre=/bin/sh -c 'modprobe wakeup_drv; if [ ! -e /dev/wake0 ]; then mknod -m a=rw /dev/wake0 c 34 0; fi'
+ExecStart=/usr/bin/nxserver -audio_output_delay 500 -dropFrame enable -video_cdb 5 -ir none -ms12 -smoothscaling -svp_urr -mode verified -heap video_secure,128M -fbsize 1920,1080
+ExecStop=/bin/kill -9 $MAINPID
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
 
 
 /meta-rdk-comcast/recipes-core/images/comcast-mediaclient-vbn-image.bb
