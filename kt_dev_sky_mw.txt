@@ -41,7 +41,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-luna
 *kt_dev_skymw_0000* skymw-rdk
 *kt_dev_skymw_0000* skymw-rdk-build
-*kt_dev_skymw_0000* skymw-rdk-dev
+*kt_dev_skymw_0000* skymw-rdk-video
 *kt_dev_skymw_0000* skymw-rdk-dev
 *kt_dev_skymw_0000* skymw-jira-airplay
 *kt_dev_skymw_0000* skymw-jira-android
@@ -150,7 +150,7 @@ reset
 
 bootm=dhcp;tftp 0x82008001 192.168.0.101:/amidala/zImage;tftp 0x94000000 192.168.0.101:/amidala/sdk2_stih418-amidala.dtb;dcache off;bootz 0x82008000 - 0x94000000
 
-<tftp>
+<skymw-setup-tftp>
 sudo apt-get install tftpd-hpa
 
 cat /etc/default/tftpd-hpa 
@@ -158,35 +158,55 @@ cat /etc/default/tftpd-hpa
 # /etc/default/tftpd-hpa
 
 TFTP_USERNAME="tftp"
-TFTP_DIRECTORY="/opt/tftpboot"
+TFTP_DIRECTORY="/home/keitee/mw/tftproot"
 TFTP_ADDRESS=":69"
 TFTP_OPTIONS="--secure"
 
-<nfs>
-sudo apt-get install nfs-kernel-server
+systemctl status tftpd-hpa.service
+systemctl restart tftpd-hpa.service
 
+
+<skymw-setup-nfs>
+sudo apt-get install nfs-kernel-server
+systemctl status nfs-server.service
+
+$ cat /etc/exports
+/home/keitee/mw/exports   *(rw,sync,no_root_squash,no_all_squash,sync,insecure)
+
+AUTO-MOUNTING 192.168.0.101:/home/keitee/mw/exports/titan/flash0
+
+<mount>
+mount -o nolock -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /tmp/data/x
+mount -o nolock -t nfs 172.18.200.185:/mnt ./
+m
 
 <skymw-setup-titan-boot>
 
 // copy boot image
-cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/SKYOB_SKY7278_BCM7278_LNUX_01/KERN_SKYOB_SKY7278_BCM7278_LNUX_01/LittleEndian/debug/debug/BootImage/zImage /home/keitee/mw/tftproot/titan
+cp ~/mw/ethan-as-source/xSubmoduleDarwinSDK/eu-q-titan-uk/SDK/
+/deps/SKYOB_SKY7278_BCM7278_LNUX_01/KERN_SKYOB_SKY7278_BCM7278_LNUX_01/LittleEndian/debug/debug/BootImage/zImage /home/keitee/mw/tftproot/titan
 
 
 /home/keitee/mw/tftproot/titan
 
 mount -o rw -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /mnt/x
 
+mount -o rw -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /mnt/x
+
+mount -o tcp,nolock,vers=2 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /flash0
+
 // should be careful not to include the end of line when pasting it into bolt
 // command line
-
-setenv -p STARTUP "ifconfig eth0 -auto;boot 192.168.1.5:falcon_d1/zImage 'console=ttyS0,115200 ip=udhcp mesh=off vmalloc=334M brcm_cma_kern_rsv=416M remotedir=192.168.1.5:/export/flash0_falcon_d1'"
 
 // shall have quote ""
 // ok
 setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.100:titan/zImage"
+
 // ok
 setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.101:/titan/zImage ‘remotedir=192.168.0.101:/home/keitee/mw/exports/titan/flash0'"
-// setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.100:titan/zImage console=ttyS0,115200 ip=udhcp vmalloc=300M brcm_cma_kern_rsv=450M remotedir=192.168.0.100:/home/keitee/mw/exports/titan/flash0"
+
+// setenv -p STARTUP "ifconfig eth0 -auto; boot 192.168.0.101:titan/zImage 'console=ttyS0,115200 ip=udhcp vmalloc=300M brcm_cma_kern_rsv=450M remotedir=192.168.0.101:/home/keitee/mw/exports/titan/flash0'"
+//                   "ifconfig eth0 -auto; boot 192.168.0.104:/n-uk/zImage 'console=ttyS0,115200 ip=udhcp vmalloc=300M brcm_cma_kern_rsv=450M remotedir=192.168.0.104:/mnt/nfs/eu-q-titan-uk/flash0'
 
 // error since copied from word document and found that dash(-) causes the
 // issue when used on bolt bootloader
@@ -7642,7 +7662,7 @@ public class Renderer implements ModdedGLSurfaceView.Renderer {
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-sky
+*kt_dev_skymw_0000* skymw-rdk
 
 <skymw-rdk-wiki>
 https://wiki.rdkcentral.com/display/RDK/Overview
@@ -7780,6 +7800,7 @@ drwxr-xr-x 8 keitee keitee    4096 Sep 20 11:07 ..
 // build sample
 
 keitee@keitee-mint:~/rdk/arrisxi6-morty-RNE-SDK-2.0/samples$ ./build_samples.sh
+
 
 <rdk-ssh>
 https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Units
@@ -8122,10 +8143,17 @@ LDEBUG: ../Src/Token/TokenManager.cpp(364): Restoring Token
 LDEBUG: ../Src/Token/TokenDatabase.cpp(961): Uses Remaining: 175 -> 174
 
 
+<skymw-rdk-bitbake>
+meta-rdk-oem-arris-broadcom/meta-arrisxi6/classes/arris-image.bbclass
+
+do_create_arris_image() {
+
+
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-dev
+*kt_dev_skymw_0000* skymw-rdk-video
 
 https://wiki.rdkcentral.com/display/RDK/Device+Settings
+
 devicesettings-hal-brcm97428
 
 <jira-rdk>
@@ -8146,7 +8174,8 @@ audio.LEEnable  TRUE
 mount -o rw -t nfs 192.168.0.101:/home/keitee/mw/exports/titan/flash0 /tmp/x
 
 
-// from journalctl
+*rdk-logging* *tool-journalctl*
+
 Nov 08 09:31:33 arrisxi6-morty dsMgrMain[2977]: [tid=2979]: 191108-09:31:33:863432 
   The HDMI Audio Mode Setting From Persistent is STEREO
 
@@ -8154,20 +8183,21 @@ generic/devicesettings/generic/rpc/srv/dsAudio.c
 
 static void _GetAudioModeFromPersistent(void *arg)
 {
-    _DEBUG_ENTER();
+  _DEBUG_ENTER();
 
-    dsAudioSetStereoModeParam_t *param = (dsAudioSetStereoModeParam_t *)arg;
+  dsAudioSetStereoModeParam_t *param = (dsAudioSetStereoModeParam_t *)arg;
 
-    if (param != NULL)
-    {
-        else if (_APortType == dsAUDIOPORT_TYPE_HDMI) {
-            _AudioModeSettings = device::HostPersistence::getInstance().getProperty("HDMI0.AudioMode",_AudioModeSettings);
-            __TIMESTAMP();printf("The HDMI Audio Mode Setting From Persistent is %s \r\n",_AudioModeSettings.c_str());
-        }
+  if (param != NULL)
+  {
+    else if (_APortType == dsAUDIOPORT_TYPE_HDMI) {
+      _AudioModeSettings = device::HostPersistence::getInstance().getProperty("HDMI0.AudioMode",_AudioModeSettings);
+      __TIMESTAMP(); `printf`("The HDMI Audio Mode Setting From Persistent is %s \r\n",_AudioModeSettings.c_str());
     }
+  }
 }
 
 meta-rdk-video/recipes-extended/devicesettings/devicesettings_git.bb
+
 19:SRC_URI = "${RDK_GENERIC_ROOT_GIT}/devicesettings/generic;protocol=${RDK_GIT_PROTOCOL};branch=${RDK_GIT_BRANCH}"
 21:# devicesettings is not a 'generic' component, as some of its source
 24:# BSP needs to implement virtual/devicesettings-hal when
@@ -8176,8 +8206,16 @@ meta-rdk-video/recipes-extended/devicesettings/devicesettings_git.bb
 76:    # remove local version of hal since we use devicesettings-hal-headers,
 
 
+journalctl –u nxserver --since today
+
+  BDBG_LOG(("KTMSG: BDBG_LOG ******************************************************************************************"));
+  BDBG_LOG(("KTMSG: BDBG_LOG * main"));
+  BDBG_LOG(("KTMSG: BDBG_LOG ******************************************************************************************"));
+
+
 <skymw-rdk-as>
-/Llama/Xi6/meta-rdk-sky/recipes-core$ ll
+meta-rdk-sky/recipes-core$ ll
+
 drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 skyui/
 drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 sky-fixup/
 drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 packagegroups/
@@ -8193,7 +8231,7 @@ drwxrwxr-x 16 keitee keitee 4.0K Nov  4 10:56 ../
 drwxrwxr-x 13 keitee keitee 4.0K Nov  4 10:56 ./
 
 
-/Llama/Xi6/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
+build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
   /usr/src/debug$ ls -ald as*
 drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asappsserviced
 drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asmockservice
@@ -8202,7 +8240,7 @@ drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:07 asproxy
 drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 assystemserviced
 
 
-/Llama/Xi6/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
+build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
   /usr/src/debug/assystemserviced/1.0-0.1/git$ ll
 -rw-r--r-- 1 keitee keitee 1.2K Nov  4 13:46 main.cpp
 drwxr-xr-x 5 keitee keitee 4.0K Nov  4 14:01 System/
@@ -8216,6 +8254,7 @@ drwxr-xr-x 8 keitee keitee 4.0K Nov  4 14:01 ./
 
 
 root@arrisxi6-morty:~# ps aux | grep journald
+
 root       918  1.0  0.3  22668  3912 ?        Ss   Nov11  14:48 /lib/systemd/systemd-journald
 root      1703  0.0  0.3 397400  4288 ?        Ssl  Nov11   0:04 /usr/sbin/asproxy --journald
 root      1706  0.0  0.3   4472  3548 ?        Ss   Nov11   0:00 /usr/bin/asmockservice --journald --enable-ping --enable-time
@@ -8246,6 +8285,8 @@ systemctl -a | grep -i sky
 ● sky-fixup.service                                                                                                 loaded    failed     failed       Sky FixUp
 
 
+*to-run-as-than-mock-as*
+
 systemctl stop sky-asmock.service
 killall ASSystemService
 scp -P 10022 ASSystemService root@192.168.0.100:/tmp/data
@@ -8253,7 +8294,8 @@ scp -P 10022 ASSystemService root@192.168.0.100:/tmp/data
 systemctl start sky-asmock.service
 
 
-<rdk-change-resolution>
+*resolution-change-from-as*
+
 http://192.168.0.100:9005/as/display/action/checkresolution?resolution=720p
 
 /as/display/action/checkresolution?resolution=720p
@@ -8279,7 +8321,12 @@ URL: /display/action/checkresolution?resolution=1080
 0000098108.145655 NFO: < M:DisplayController.cpp F:parseResolutionToSTBFormat L:343 > Converted resolution 1080p60
 0000098108.145681 NFO: < M:DisplayController.cpp F:setResolution L:364 > port name is HDMI0
 
-as-system-service/System/Controllers/Display/DisplayController.cpp
+
+https://git.bskyb.com/llama/as-system-service
+
+// as-system-service/System/Controllers/Display/DisplayController.cpp
+as-system-service/Settings/AVSettings/display/DisplayController.cpp
+
 0000098108.145698 NFO: < M:DisplayController.cpp F:setResolution L:368 > resolution being set is 1080p60
 
                 ports.at(i).setResolution(resolution);
@@ -8525,28 +8572,14 @@ root      1922  1.5  0.7 374028  8088 ?        Ssl  12:14   0:02
 keitee@kit-ubuntu:/media/keitee/ssd2/direct_build_2$ find . -name nxserver
 ./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/obj.97268/bin/nxserver
 ./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/obj.97268/nexus/nxclient/arm-linux/server/nxserver
-./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/packages-split/broadcom-refsw-dbg/usr/bin/.debug/nxserver
-./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/packages-split/broadcom-refsw/usr/bin/nxserver
-./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/package/usr/bin/nxserver
-./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/package/usr/bin/.debug/nxserver
-./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/image/usr/bin/nxserver
-./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs/usr/bin/nxserver
-./build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg/usr/bin/.debug/nxserver
 
-keitee@kit-ubuntu:/media/keitee/ssd2/direct_build_2/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2$ pwd
-/media/keitee/ssd2/direct_build_2/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2
 
-keitee@kit-ubuntu:/media/keitee/ssd2/direct_build_2/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2$ ls
-17.3_xi6_Arris.patch  debugsources.list     magnum                                     opensource      sdkpatches                      sstate-build-populate_sysroot     sysroot-destdir
-3pips                 deploy-ipks           Makefile.app.patch                         package         soc_generic_status.sh           sstate-install-package            temp
-astra                 dhd_rel_1_363_110_37  mpod_17.3_excessive_console_logging.patch  packages-split  sstate-build-package            sstate-install-packagedata        trellis
-bp3_path.patch        egl.pc                nexus                                      patches         sstate-build-packagedata        sstate-install-package_qa         unified_17.3_docsis_memory_leak_fix.patch
-BSEAV                 glesv2.pc             nxserver.service                           pkgdata         sstate-build-package_qa         sstate-install-package_write_ipk
-configure.sstate      image                 nxserver.service.svp                       pseudo          sstate-build-package_write_ipk  sstate-install-populate_lic
-connectivity          license-destdir       obj.97268                                  rockford        sstate-build-populate_lic       sstate-install-populate_sysroot
-
-keitee@kit-ubuntu:/media/keitee/ssd2/direct_build_2/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/temp$ ll run.do_compile
+*nxserver-compile*
+build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/temp
 lrwxrwxrwx 1 keitee keitee 20 Nov 19 11:16 run.do_compile -> run.do_compile.14722*
+
+// output bins
+build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/obj.97268/nexus/nxclient/arm-linux/server
 
 this is shell script
 run.do_compile -> run.do_compile.14722*
@@ -8583,39 +8616,39 @@ static int b_display_format_change(struct b_session *session, const NxClient_Dis
 
 NEXUS_Error NxClient_P_SetSurfaceClientComposition(nxclient_t client, unsigned surfaceClientId, const NEXUS_SurfaceComposition *pComposition)
 {
-    NEXUS_SurfaceCompositorClientSettings client_settings;
+  NEXUS_SurfaceCompositorClientSettings client_settings;
 #if COMCAST_RDK_SPECIFIC_CHANGE || 1
+  {
+    if (!strcmp(client->joinSettings.name, "xre receiver"))
     {
-        if (!strcmp(client->joinSettings.name, "xre receiver"))
-        {
-            NEXUS_DisplayHandle display;
-            NEXUS_DisplaySettings displaySettings;
+      NEXUS_DisplayHandle display;
+      NEXUS_DisplaySettings displaySettings;
 
-            display = client->session->display[0].display;
-            NEXUS_Display_GetSettings(display, &displaySettings);
-            if (displaySettings.format == NEXUS_VideoFormat_e480p || displaySettings.format == NEXUS_VideoFormat_eNtsc)
-            {
-                client_settings.composition.virtualDisplay.width = 640;
-                client_settings.composition.virtualDisplay.height = 480;
-            }
-            else
-            {
-                client_settings.composition.virtualDisplay.width = 1280;
-                client_settings.composition.virtualDisplay.height = 720;
-            }
-			/*341, make sure the highest zorder is smaller than NXCLIENT_MAX_ZORDER*/
-			/* ensure that Closed Caption is always at the top */
-			if (client_settings.composition.zorder > NXCLIENT_MAX_ZORDER) {
-				client_settings.composition.zorder = NXCLIENT_DEFAULT_ZORDER;
-			}
-        }
+      display = client->session->display[0].display;
+      NEXUS_Display_GetSettings(display, &displaySettings);
+      if (displaySettings.format == NEXUS_VideoFormat_e480p || displaySettings.format == NEXUS_VideoFormat_eNtsc)
+      {
+        client_settings.composition.virtualDisplay.width = 640;
+        client_settings.composition.virtualDisplay.height = 480;
+      }
+      else
+      {
+        client_settings.composition.virtualDisplay.width = 1280;
+        client_settings.composition.virtualDisplay.height = 720;
+      }
+      /*341, make sure the highest zorder is smaller than NXCLIENT_MAX_ZORDER*/
+      /* ensure that Closed Caption is always at the top */
+      if (client_settings.composition.zorder > NXCLIENT_MAX_ZORDER) {
+        client_settings.composition.zorder = NXCLIENT_DEFAULT_ZORDER;
+      }
     }
+  }
 #endif
 
-    rc = NEXUS_SurfaceCompositor_SetClientSettings(client->session->surfaceCompositor, req->handles.surfaceClient[i].handle, &client_settings);
-    if (rc) return BERR_TRACE(rc);
+  rc = `NEXUS_SurfaceCompositor_SetClientSettings`(client->session->surfaceCompositor, req->handles.surfaceClient[i].handle, &client_settings);
+  if (rc) return BERR_TRACE(rc);
 
-    return 0;
+  return 0;
 }
 
 
@@ -8644,6 +8677,8 @@ nxserver_t nxserver_init(int argc, char **argv, bool blocking)
   rc = NEXUS_Platform_MemConfigInit(&platformSettings, &memConfigSettings);
 }
 
+
+*bitbake-find-recipe*
 
 keitee@kit-ubuntu:/media/keitee/ssd2/direct_build/build-arrisxi6-morty$ oe-pkgdata-util find-path /usr/bin/nxserver
 NOTE: base_contains is deprecated, please use bb.utils.contains instead.
@@ -8692,8 +8727,105 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 
 
-/meta-rdk-comcast/recipes-core/images/comcast-mediaclient-vbn-image.bb
+*proc-device*
 
+root@arrisxi6-morty:~# cat /proc/brcm/display
+DisplayModule:
+display 0: format=1080p 59.940hz
+  graphics: enabled fb=d94df800 1920x1080 pixelFormat=72
+            vsync count=12951, line=688, errors=0
+  output c93ae280: hdmi
+
+root@arrisxi6-morty:~# cat /proc/brcm/hdmi_output
+HDMI 0:ovE
+ video: s:bf5c82d4 d:c93ae280
+ audio: t:4 o:bf5c82d4 md:ce35a580 p:3470088776
+Attached device: SAMSUNG
+  rxAttached: Y   rxPowered: Y
+  txPower  Clock: Y CH2: Y CH1: Y CH0: Y
+  txPLL Locked: Y  txPLL Status: 0xa5a00
+  Total RxSense Changes:   2
+  Total HP Changes:        2
+  Total Unstable Format Detected Count: 0
+HDMI Settings:
+  ColorSpace: YCbCr 4:4:4
+  ColorDepth: 12
+  Current Video Format:  1080p60
+  Preferred Video Format:  720p
+  Current Audio Format :  Pcm
+  Content Stream Type: 1
+  Matrix Coefficient ID: 1  Override: No
+  Color Range: Limited  Override: No
+SCDC rxStatus: Unavailable
+HDCP Status:
+  Connected device: Receiver
+  Supported Version: 1.x
+  Authenticated: Yes
+  Transmitting Encrypted: Yes
+  Current State: 12   Last Error: 0
+  1.x Stats
+    Attempts:     4  Pass:     3  Fail:     0
+    BCaps Read Failures: 0
+    BKSV Read Failures: 0
+    Invalid BKSV Detected: 0
+  2.2 Stats
+    Attempts:     0  Pass:     0  Fail:     0
+    ReAuth Requests Valid: 0  Invalid: 0
+    AKE_Send_Cert timeouts: 0
+    Watchdog Counter: 0
+    Timeout Counter: 0
+HDR Status:
+   Attached Rx <SAMSUNG> does not support HDR
+
+
+root@arrisxi6-morty:~# cat /proc/brcm/display
+DisplayModule:
+display 0: format=720p 59.940hz
+  graphics: enabled fb=d8cb7c00 1280x720 pixelFormat=72
+            vsync count=29675, line=733, errors=0
+  output c93ae280: hdmi
+
+
+root@arrisxi6-morty:~# cat /proc/brcm/hdmi_output
+HDMI 0:ovE
+ video: s:bf5c82d4 d:c93ae280
+ audio: t:4 o:bf5c82d4 md:ce35a580 p:3470088776
+Attached device: SAMSUNG
+  rxAttached: Y   rxPowered: Y
+  txPower  Clock: Y CH2: Y CH1: Y CH0: Y
+  txPLL Locked: Y  txPLL Status: 0xa5a00
+  Total RxSense Changes:   2
+  Total HP Changes:        2
+  Total Unstable Format Detected Count: 0
+HDMI Settings:
+  ColorSpace: YCbCr 4:4:4
+  ColorDepth: 12
+  Current Video Format:  720p
+  Preferred Video Format:  720p
+  Current Audio Format :  Pcm
+  Content Stream Type: 1
+  Matrix Coefficient ID: 1  Override: No
+  Color Range: Limited  Override: No
+SCDC rxStatus: Unavailable
+HDCP Status:
+  Connected device: Receiver
+  Supported Version: 1.x
+  Authenticated: Yes
+  Transmitting Encrypted: Yes
+  Current State: 12   Last Error: 0
+  1.x Stats
+    Attempts:     5  Pass:     4  Fail:     0
+    BCaps Read Failures: 0
+    BKSV Read Failures: 0
+    Invalid BKSV Detected: 0
+  2.2 Stats
+    Attempts:     0  Pass:     0  Fail:     0
+    ReAuth Requests Valid: 0  Invalid: 0
+    AKE_Send_Cert timeouts: 0
+    Watchdog Counter: 0
+    Timeout Counter: 0
+HDR Status:
+   Attached Rx <SAMSUNG> does not support HDR
 
 *bitbake-recipes*
 // build-arrisxi6-morty/conf/bblayers.conf
@@ -8907,15 +9039,19 @@ for wayland. `Westeros is a compositor, a replacement of Weston.` This
 https://wiki.rdkcentral.com/display/RDK/Westeros
 
 
-/build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+790df67969-r0/temp
-
+// appinfrastructure-ai/RDK/AppManager/WindowManager
 // WindowManager/source/WesterosClient.cpp
+// WESTEROS_COMPOSITOR_LIBRARY from cmake
 
+WesterosClient::WesterosClient()
 {
     // create the compositor
     mCompositor = WstCompositorCreate();
+
+    setupRenderer();
 }
 
+// uses it to send output
 {
   if (!WstCompositorComposeEmbedded(mCompositor, mX, mY, mWidth, mHeight,
         mMatrix, 1.0f,
@@ -8927,13 +9063,33 @@ https://wiki.rdkcentral.com/display/RDK/Westeros
 }
 
 
+bool WesterosClient::setupRenderer()
+{
+  const std::string renderModule("/usr/lib/plugins/westeros/libwesteros_render_sky.so");
+
+  // westeros-compositor.cpp
+  WstCompositorSetRendererModule(mCompositor, renderModule.c_str());
+}
+
+
+// renderers/SkyRenderer/source/SkyRenderer.cpp
+
+int renderer_init(WstRenderer *renderer, int argc, char **argv)
+{
+  // create the sky 'renderer' wrapper
+  SkyRenderer *skyRenderer = new SkyRenderer(renderer, argc, argv, client);
+
+  renderer->renderTerm = skyRendererTerm;
+  ...
+}
+
 SkyRenderer::SkyRenderer(WstRenderer *renderer, int argc, char **argv,
                          const std::shared_ptr<IWesterosClient> &client)
 {
     // the platform determines the 'real' renderer to use
 #if (RDK_PLATFORM == XI6)
     // const std::string rendererPath("libwesteros_render_nexus.so.0.0.0");
-    const std::string rendererPath("libwesteros_render_embedded.so.0.0.0");
+    const std::string rendererPath("`libwesteros_render_embedded.so.0.0.0`");
 #elif (RDK_PLATFORM == AMLOGIC)
     const std::string rendererPath("/usr/lib/libwesteros_render_embedded.so.0.0.0");
 #else
@@ -8948,17 +9104,53 @@ SkyRenderer::SkyRenderer(WstRenderer *renderer, int argc, char **argv,
     char *realArgv[4] = { arg0, arg1, arg2, arg3 };
 
     // now try and create the 'real' renderer
-    mRealRenderer = WstRendererCreate(rendererPath.c_str(), 4, realArgv);
+    //
+    // calls `renderer_init` by init= dlsym( module, RENDERER_MODULE_INIT );
+
+    `mRealRenderer` = WstRendererCreate(rendererPath.c_str(), 4, realArgv);
 }
 
+
+
+// build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+790df67969-r0/git
+// -c ../git/westeros-compositor.cpp -o libwesteros_compositor_la-westeros-compositor.o
+// libwesteros_compositor.so.0.0.0
 
 westeros/westeros-compositor.cpp
 
-bool WesterosClient::setupRenderer()
+WstCompositor* WstCompositorCreate()
 {
-  const std::string renderModule("/usr/lib/plugins/westeros/libwesteros_render_sky.so");
 }
 
+bool WstCompositorSetRendererModule( WstCompositor *ctx, const char *rendererModule )
+{
+  `ctx->rendererModule`= strdup( rendererModule );
+}
+
+// westeros-compositor.h
+
+/**
+ * WstCompositorComposeEmbedded
+ *
+ * Requests that the current scene be composed as part of the configured embedded environment.  This
+ * should be called with the environment setup for offscreen rendering.  For example, if OpenGL is
+ * being used for rendering, WstCompositorComposeEmbedded should be called with an FBO set as the
+ * current render target.
+ *
+ * The x, y, width and height give the desired composition rectangle.  The matrix and alpha
+ * values are what the caller intends to apply when the composited scene is subsequently rendered
+ * from the offscreen target to the callers scene.  Based on the hinting provided, the compositor will
+ * either render to the offscreen target or use an available fast path to render to a separate 
+ * plane.  If no fast path is available it will render to the offscreen target without the transform
+ * and alpha.  If it renders to a separate plane it will apply the provide transformation matrix and alpha
+ * and will set needHolePunch to true.  Upon return, if needHolePunch is true, the caller should 
+ * render a hole punch for each rectangle returned in rects, otherwise it should render the offscreen 
+ * target to its scene while applying the transformation matrix and alpha.
+ *
+ * This should only be called while the compositor is running.
+ */
+
+// westeros-compositor.cpp
 
 bool WstCompositorComposeEmbedded( WstCompositor *ctx, ...)
 {
@@ -8977,7 +9169,7 @@ bool WstCompositorStart( WstCompositor *ctx )
 
 static bool wstCompositorCreateRenderer( WstCompositor *ctx )
 {
-  ctx->renderer= WstRendererCreate( ctx->rendererModule, argc, (char **)argv, ctx->display, ctx->nc );
+  ctx->renderer= WstRendererCreate( `ctx->rendererModule`, argc, (char **)argv, ctx->display, ctx->nc );
 }
 
 
@@ -8988,12 +9180,86 @@ WstRenderer* WstRendererCreate(const char *moduleName, int argc, char **argv,
 {
   WstRenderer *renderer= (WstRenderer*)calloc( 1, sizeof(WstRenderer) );
 
-  module= dlopen( moduleName, RTLD_NOW );
+  module= dlopen(`moduleName`, RTLD_NOW );
 
   init= dlsym( module, RENDERER_MODULE_INIT );
 
   rc= ((WSTMethodRenderInit)init)( renderer, argc, argv );
 }
+
+
+// -c ../git/westeros-render-embedded.cpp -o westeros-render-embedded.o
+// .libs/libwesteros_render_embedded.so.0.0.0
+// -DWESTEROS_PLATFORM_EMBEDDED -DWESTEROS_HAVE_WAYLAND_EGL -DENABLE_SBPROTOCOL
+
+// westeros-render-embedded.cpp
+
+static WstRendererEMB* wstRendererEMBCreate( WstRenderer *renderer )
+{
+  #if defined (WESTEROS_PLATFORM_EMBEDDED)
+  rendererEMB->glCtx= WstGLInit();
+  #endif
+
+  rendererEMB->eglDisplay= eglGetDisplay(EGL_DEFAULT_DISPLAY);
+}
+
+
+// build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/westeros-soc/1.0+gitrAUTOINC+790df67969-r0/git
+// ../git/brcm/westeros-gl/westeros-gl.cpp
+
+WstGLCtx* WstGLInit()
+{
+  NxClient_GetDisplaySettings( &displaySettings );
+#if NEXUS_PLATFORM_VERSION_MAJOR >= 16
+  displaySettings.secure= ctx->secureGraphics;
+#endif
+  rc= NxClient_SetDisplaySettings( &displaySettings );
+}
+
+
+arm-rdk-linux-gnueabi-libtool: link: arm-rdk-linux-gnueabi-g++  -march=armv7ve
+-mthumb -mfpu=neon  -mfloat-abi=hard -mcpu=cortex-a15 -fno-omit-frame-pointer
+-fno-optimize-sibling-calls
+--sysroot=/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty
+-fPIC -DPIC -shared -nostdlib
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/crti.o
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/arm-rdk-linux-gnueabi/6.4.0/crtbeginS.o
+.libs/westeros-render-embedded.o
+-L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib
+-lGLESv2
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/`libwesteros_gl.so`
+-L=/../../work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/obj.97268/bin
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/`libwayland-egl.so`
+-lEGL -lpthread -lnexus -lnxclient
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libwesteros_simplebuffer_server.so
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libwayland-client.so
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libwayland-server.so
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libffi.so
+-lrt
+-L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/x86_64-linux/usr/lib/arm-rdk-linux-gnueabi/gcc/arm-rdk-linux-gnueabi/6.4.0
+-L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/lib
+-L/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/arm-rdk-linux-gnueabi/6.4.0
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/libstdc++.so
+-lm -lc -lgcc_s
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/arm-rdk-linux-gnueabi/6.4.0/crtendS.o
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/lib/crtn.o
+-march=armv7ve -mthumb -mfpu=neon -mfloat-abi=hard -mcpu=cortex-a15
+--sysroot=/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty
+-Os -g -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed   -pthread -Wl,-soname
+-Wl,libwesteros_render_embedded.so.0 -o
+.libs/libwesteros_render_embedded.so.0.0.0
+
+
+/media/keitee/ssd2/direct_build/generic/wayland-egl-bnxs/refsw17.3/vc5/nexus/display_nexus.c
+
+#ifdef NXCLIENT_SUPPORT
+      /* default our SurfaceClient to blend */
+      NEXUS_SurfaceComposition comp;
+      NxClient_GetSurfaceClientComposition(nw->clientID, &comp);
+      comp.colorBlend = info->colorBlend;
+      comp.alphaBlend = info->alphaBlend;
+      NxClient_SetSurfaceClientComposition(nw->clientID, &comp);
+#endif /* NXCLIENT_SUPPORT */
 
 
 ={============================================================================
