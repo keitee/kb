@@ -7,6 +7,12 @@ class DBusConnectionPrivate
     DBusConnectionPrivate(EventLoop const &eventLoop, sd_bus *bus);
     ~DBusConnectionPrivate();
 
+    bool send(DBusMessage &&message) const;
+
+    bool callWithCallback(DBusMessage &&message,
+        std::function<void(DBusMessage &&)> const &callback,
+        int msTimeout);
+
   private:
     EventLoop m_eventLoop;
     sd_bus *m_bus;

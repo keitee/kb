@@ -10,6 +10,14 @@ DBusConnectionPrivate::DBusConnectionPrivate(EventLoop const &eventLoop, sd_bus 
     , m_bus(bus)
 {} 
 
+DBusConnectionPrivate::~DBusConnectionPrivate()
+{
+  m_eventLoop.flush();
+
+  sd_bus_flush_close_unref(m_bus);
+  m_bus = nullptr;
+}
+
 
 /* ={--------------------------------------------------------------------------
  @brief :
