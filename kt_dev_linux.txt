@@ -521,7 +521,7 @@
 *kt_linux_core_203* linux-io-directories
 *kt_linux_core_203* linux-io-permission-check linux-process-credentials
 *kt_linux_core_203* linux-io-fs-mount
-*kt_linux_core_203* linux-io-fs-mount-tool-mount
+*kt_linux_core_203* os-mount tool-mount
 *kt_linux_core_203* os-fs-mount-bind tool-mount-bind tool-chroot
 *kt_linux_core_203* linux-io-monitor-events 
 *kt_linux_core_204* linux-limit-and-options limit-h
@@ -12482,11 +12482,14 @@ look at `man 5 exports`
 // which solves when gets permission denied
 // /home/kyoupark/xxx      *(rw,sync,no_root_squash)
 /home/kyoupark/xxx      *(rw,sync,no_root_squash,no_all_squash,sync,insecure)
+/home/keitee/mw/exports   *(rw,sync,no_root_squash,no_all_squash,no_subtree_check)¬
 
 note: 
 o You can replace * with one of the hostname formats. Make the hostname
   declaration as specific as possible so unwanted systems cannot access the NFS
   mount.
+
+  /home/keitee/mw/exports   192.168.0.0/16(rw,sync,no_subtree_check)
 
 o There shall be no entry in /etc/exports which is not exist in the file system
   and if there is, it causes nfs server stop running.
@@ -12504,7 +12507,6 @@ Export list for 192.168.0.101:
 keitee@kit-ubuntu:~/mw$ showmount -e
 Export list for kit-ubuntu:
 /home/keitee/mw/exports *
-k
 
 
 <check-permission>
@@ -12577,42 +12579,10 @@ mount: mounting 172.20.33.215:/home/kpark/src-dev on /mnt/tmp failed: Connection
 DEVARCH/         GPATH            GRTAGS           GTAGS            
 
 
-<check-on-client> tool-df tool-mount
-df -h
-mount
-
-
 <check-on-server>
 root# showmount -e
 Export list for kit-debian:
 /home/kit/STB_SW *
-
-
-<mount-on-fstab>
-Instead of mounting the NFS shares manually on the client, you could modify
-/etc/fstab so that the NFS shares get mounted automatically when the client
-boots. 
-
-// vi /etc/fstab
-
-192.168.0.100:/home/client1  /mnt/nfs/home/client1   nfs      rw,sync,hard,intr  0     0
-192.168.0.100:/var/www  /var/www   nfs      rw,sync,hard,intr  0     0
-
-Instead of rw,sync,hard,intr you can use different mount options. To learn
-more about available options, take a look at man nfs
-
-
-To test if your modified /etc/fstab is working, unmount the shares and run
-mount -a:
-
-umount /mnt/nfs/home/client1
-umount /var/www
-mount -a
-
-You should now see the two NFS shares in the outputs of
-
-df -h
-mount
 
 
 <nfs-check-version>
@@ -52584,7 +52554,7 @@ in use.
 
 
 ={============================================================================
-*kt_linux_core_203* linux-io-fs-mount-tool-mount
+*kt_linux_core_203* os-mount tool-mount
 
        mount [-fnrsvw] [-t vfstype] [-o options] device dir
 
@@ -52600,7 +52570,84 @@ in use.
 
 mount -o rw -t nfs 10.209.62.106:/home/kyoupark/si-pi/updater /mnt/tmp
 
-{after-change-fstab}
+*os-fstab*
+
+<ex>
+LABEL=ssd2 /media/keitee/ssd2 auto nosuid,nodev,nofail,x-gvfs-show,noauto 0 0
+
+removw `noauto` to be mounted `mount -a`
+
+LABEL=ssd2 /media/keitee/ssd2 auto nosuid,nodev,nofail,x-gvfs-show 0 0
+
+
+keitee@kit-ubuntu:/media/keitee$ cat /etc/fstab
+# /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a
+# device; this may be used with UUID= as a more robust way to name devices
+# that works even if disks are added and removed. See fstab(5).
+#
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+# / was on /dev/sda2 during installation
+UUID=622e2372-9aa3-4df8-a11f-4c3e728aaa31 /               ext4    errors=remount-ro 0       1
+# /boot/efi was on /dev/sda1 during installation
+UUID=6AE8-E13B  /boot/efi       vfat    umask=0077      0       1
+/swapfile                                 none            swap    sw              0       0
+# LABEL=ssd2 /media/keitee/ssd2 auto nosuid,nodev,nofail,x-gvfs-show,noauto 0 0
+/dev/nvme0n1 /media/keitee/ssd2 ext4 nosuid,nodev,nofail,x-gvfs-show 0 0
+LABEL=hdd /media/keitee/hdd ext4 nosuid,nodev,nofail,x-gvfs-show 0 0
+
+
+*os-mount-nfs*
+
+Instead of mounting the NFS shares manually on the client, you could modify
+/etc/fstab so that the NFS shares get mounted automatically when the client
+boots. 
+
+// vi /etc/fstab
+
+192.168.0.100:/home/client1  /mnt/nfs/home/client1   nfs      rw,sync,hard,intr  0     0
+192.168.0.100:/var/www  /var/www   nfs      rw,sync,hard,intr  0     0
+
+Instead of rw,sync,hard,intr you can use different mount options. To learn
+more about available options, take a look at man nfs
+
+
+To test if your modified /etc/fstab is working, unmount the shares and run
+mount -a:
+
+umount /mnt/nfs/home/client1
+umount /var/www
+mount -a
+
+You should now see the two NFS shares in the outputs of
+
+df -h
+mount
+
+
+<ex> *os-nfs*
+kyoupark@kit-debian:~$ cat /etc/fstab 
+# /etc/fstab: static file system information.
+#
+# Use 'blkid' to print the universally unique identifier for a
+# device; this may be used with UUID= as a more robust way to name devices
+# that works even if disks are added and removed. See fstab(5).
+#
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+# / was on /dev/sda1 during installation
+UUID=3f053275-8cc0-4ce8-89c6-412cc9773f1c /               ext4    errors=remount-ro 0       1
+# swap was on /dev/sda5 during installation
+UUID=64bc1edf-1b58-4e86-b1a9-521c09fbf263 none            swap    sw              0       0
+# /dev/sr0        /media/cdrom0   udf,iso9660 user,exec     0       0
+/dev/disk/by-uuid/91479737-b91b-4271-87d1-806f084a4c57 /mnt/ext auto nosuid,nodev,nofail,x-gvfs-show 0 0
+# nfs
+#10.209.62.232:/home/NDS-UK/kyoupark/STB_SW 	/home/kyoupark/bld_STB_SW 	nfs 	rw,sync,hard,intr 	0 0
+#10.209.62.232:/home/NDS-UK/kyoupark/si_logs 	/home/kyoupark/bld_si_logs	nfs 	rw,sync,hard,intr 	0 0
+
+
+*run-this-after-change-fstab*
+
 mount -a
 
        -a, --all
@@ -52609,7 +52656,7 @@ mount -a
               filesystems are mounted following their order in fstab.
 
 
-{find-rfs}
+*os-rfs* 
 [root@HUMAX /]# mount
 rootfs on / type rootfs (rw)
 /dev/root on / type ext3 (rw,relatime,errors=continue,barrier=1,data=ordered)
@@ -52653,7 +52700,8 @@ mount -o remount,exec /var
 that looks to have done the trick
 
 
-<busybox-mount>
+*os-mount-busybox* *os-busybox*
+
 BusyBox v1.13.1 (2016-07-19 14:09:40 BST) multi-call binary
 
 Usage: mount [flags] DEVICE NODE [-o options,more-options]
@@ -52709,25 +52757,6 @@ bits on all files are ignored, and you cannot directly execute any program
 residing on this filesystem. Note that the noexec mount option is implied by
 the user option in /etc/fstab. ... If you use user and want to have executable
 files, use user,exec.
-
-<ex>
-kyoupark@kit-debian:~$ cat /etc/fstab 
-# /etc/fstab: static file system information.
-#
-# Use 'blkid' to print the universally unique identifier for a
-# device; this may be used with UUID= as a more robust way to name devices
-# that works even if disks are added and removed. See fstab(5).
-#
-# <file system> <mount point>   <type>  <options>       <dump>  <pass>
-# / was on /dev/sda1 during installation
-UUID=3f053275-8cc0-4ce8-89c6-412cc9773f1c /               ext4    errors=remount-ro 0       1
-# swap was on /dev/sda5 during installation
-UUID=64bc1edf-1b58-4e86-b1a9-521c09fbf263 none            swap    sw              0       0
-# /dev/sr0        /media/cdrom0   udf,iso9660 user,exec     0       0
-/dev/disk/by-uuid/91479737-b91b-4271-87d1-806f084a4c57 /mnt/ext auto nosuid,nodev,nofail,x-gvfs-show 0 0
-# nfs
-#10.209.62.232:/home/NDS-UK/kyoupark/STB_SW 	/home/kyoupark/bld_STB_SW 	nfs 	rw,sync,hard,intr 	0 0
-#10.209.62.232:/home/NDS-UK/kyoupark/si_logs 	/home/kyoupark/bld_si_logs	nfs 	rw,sync,hard,intr 	0 0
 
 
 ={============================================================================
