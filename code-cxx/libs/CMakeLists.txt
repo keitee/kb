@@ -68,10 +68,17 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
 
-add_compile_options("-g")
+add_compile_options("-g;-Wall")
 
+# to build static lib. 
+# note that rename test_log.cpp to test_log.cxx to exclude it. if not, compile
+# error since it is included in the build but gmock/test is not known here.
 file(GLOB SOURCES "*.cpp")
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
+
+# to build test app
+add_executable(test_log "test_log.cxx" "lpi_error.cpp" slog.cpp)
+target_link_libraries(test_log gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

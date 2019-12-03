@@ -10,8 +10,8 @@ class DBusMessagePrivate
         const std::string &interface,
         const std::string &method);
 
-    DBusMessagePrivate(DBusMessage::ErrorType error,
-        const char *message);
+    DBusMessagePrivate(DBusMessage::ErrorType errorType,
+        const char *errorMessage);
 
     explicit DBusMessagePrivate(sd_bus_message *reply);
     explicit DBusMessagePrivate(sd_bus_error *error);

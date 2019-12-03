@@ -45,15 +45,15 @@ using namespace testing;
 // ={=========================================================================
 /* LPI log
 
-[----------] 2 tests from LPILog
 [ RUN      ] LPILog.useLog
-ERROR [?UNKNOWN? Success], this is error message from errMsg and value 10
-ERROR [?UNKNOWN? Success], this is error message from errMsg and value 10
+ERROR [ Success], this is error message from errMsg and value 10
+ERROR [ Success], this is error message from errMsg and value 10
 [       OK ] LPILog.useLog (0 ms)
+
 [ RUN      ] LPILog.useLogExit
-ERROR [?UNKNOWN? Success], this is error message from errExit
+ERROR [ Success], this is error message from errExit
 [       OK ] LPILog.useLogExit (0 ms)
-[----------] 2 tests from LPILog (0 ms total)
+[
 
 */
 
@@ -78,14 +78,15 @@ TEST(LPILog, useLogExit)
 
 /*
 
-[----------] 2 tests from SimpleLog
 [ RUN      ] SimpleLog.useLog
-LOG| F:test_log.cpp C:virtual void SimpleLog_useLog_Test::TestBody() L:00073 :
-this is error message from errMsg and value 10 [       OK ] SimpleLog.useLog (0
-ms) [ RUN      ] SimpleLog.showCorrectLineNumbers LOG| F:test_log.cpp C:void
-func1() L:00093 : this is func1() LOG| F:test_log.cpp C:void func2() L:00087 :
-this is func2() LOG| F:test_log.cpp C:void func3() L:00082 : this is func3() [
-OK ] SimpleLog.showCorrectLineNumbers (0 ms)
+LOG| F:test_log.cxx C:virtual void SimpleLog_useLog_Test::TestBody() L:00099 : this is error message from errMsg and value 10
+[       OK ] SimpleLog.useLog (0 ms)
+
+[ RUN      ] SimpleLog.showCorrectLineNumbers
+LOG| F:test_log.cxx C:void func1() L:00119 : this is func1()
+LOG| F:test_log.cxx C:void func2() L:00113 : this is func2()
+LOG| F:test_log.cxx C:void func3() L:00108 : this is func3()
+[       OK ] SimpleLog.showCorrectLineNumbers (0 ms)
 
 */
 
