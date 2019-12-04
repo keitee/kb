@@ -9081,6 +9081,12 @@ root      1706  0.0  0.3   4472  3548 ?        Ss   Nov11   0:00 /usr/bin/asmock
 root      2796 94.5  1.2 483380 13792 ?        Rsl  Nov11 1306:49 /usr/sbin/appsservice --journald
 
 
+https://git.bskyb.com/llama/as-system-service
+
+cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 ..
+-D RDK_SDK=<PATH_RDK_SDK> 
+
+
 # from Ganesan
 
 #!/bin/sh
@@ -9141,13 +9147,6 @@ URL: /display/action/checkresolution?resolution=1080
 0000098108.145655 NFO: < M:DisplayController.cpp F:parseResolutionToSTBFormat L:343 > Converted resolution 1080p60
 0000098108.145681 NFO: < M:DisplayController.cpp F:setResolution L:364 > port name is HDMI0
 
-
-https://git.bskyb.com/llama/as-system-service
-
-cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 ..
--D RDK_SDK=<PATH_RDK_SDK> 
-
-
 // as-system-service/System/Controllers/Display/DisplayController.cpp
 as-system-service/Settings/AVSettings/display/DisplayController.cpp
 
@@ -9158,21 +9157,41 @@ as-system-service/Settings/AVSettings/display/DisplayController.cpp
 
 *ds-gen* DS Generic Layer, Device Settings API (`libds.so`)
 
-generic/devicesettings/`generic`/ds/videoOutputPort.cpp
+// $B$/generic/devicesettings/`generic`/ds/videoOutputPort.cpp
+
+// Dec 03 14:29:48 arrisxi6-morty ASSystemService[3037]:  KTMSG: VideoOutputPort::setResolution(720p)
 
 void VideoOutputPort::setResolution(const std::string &resolutionName)
 {
+  cout <<" KTMSG: VideoOutputPort::setResolution(" << resolutionName << ")" 
+    << endl;
+
+  cout <<" KTMSG: VideoOutputPort::setResolution: call dsSetResolution"
+    << endl;
+
   dsError_t ret = `dsSetResolution`(_handle, &resolution);
 }
 
 
-0000098108.426130 NFO: < M:DisplayCheckResolutionExecutor.cpp F:handlePostRequest L:54 > 
-  Setting resolutionParam Status = 0
+// $B$/generic/devicesettings/generic/ds/videoOutputPortConfig.cpp
 
+Dec 03 14:29:48 arrisxi6-morty ASSystemService[3037]:  KTMSG : EDID Num of Resolution .......3
 
-generic/devicesettings/generic/ds/videoOutputPortConfig.cpp
 List<VideoResolution>  VideoOutputPortConfig::getSupportedResolutions()
- EDID Num of Resolution .......3
+{
+  cout <<" KTMSG : EDID Num of Resolution ......."<< edid.numOfSupportedResolution << endl;	
+}
+
+
+Dec 03 14:29:48 arrisxi6-morty ASSystemService[3037]:  KTMSG: VideoOutputPort::setResolution: call dsSetResolution
+
+// $B$/generic/devicesettings/`generic`/ds/videoOutputPort.cpp
+void VideoOutputPort::setResolution(const std::string &resolutionName)
+{
+  cout <<" KTMSG: VideoOutputPort::setResolution: call dsSetResolution"
+    << endl;
+}
+
 
 ./arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg/usr/lib/.debug/libds.so
 00013d15 T device::VideoOutputPort::setResolution(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
@@ -9272,6 +9291,10 @@ each client to communicate with the server process (linked with libnexus.so).
 
 
 *ds-hal*
+libds-hal.so.0.0.0
+oe-pkgdata-util find-path /usr/lib/libds-hal.so.0.0.0
+devicesettings-hal-brcm97268: /usr/lib/libds-hal.so.0.0.0
+
 DS HAL Layer (libds-hal.so)
   A set of ds*.h files that SoC vendors implements
   Access to HAL layer is serialized by dsMgrMain(Daemon)
@@ -9289,13 +9312,16 @@ include/dsRpc.h
 cli/dsVideoPort.c
 424:                                                    (char *)IARM_BUS_DSMGR_API_dsSetResolution,
 
-srv/dsVideoPort.c
-generic/devicesettings/generic/`rpc`/srv/dsVideoPort.c
+
+// libdshalsrv.so
+// $B$/generic/devicesettings/generic/`rpc`/srv/dsVideoPort.c
 
 81:IARM_Result_t _dsSetResolution(void *arg);
 200:            IARM_Bus_RegisterCall(IARM_BUS_DSMGR_API_dsSetResolution,_dsSetResolution);
 697:IARM_Result_t _dsSetResolution(void *arg)
 
+Dec 03 14:29:48 arrisxi6-morty dsMgrMain[2803]: [tid=2805]: 191203-14:29:48:211703 
+  KTMSG: Resolution Requested ..720p Platform Resolution - 1080p60
 
 // sripped
 keitee@kit-ubuntu:/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work$ 
@@ -9315,18 +9341,39 @@ IARM_Bus_RegisterCall(IARM_BUS_DSMGR_API_dsSetResolution,_dsSetResolution);
 
 IARM_Result_t _dsSetResolution(void *arg)
 {
+  dsGetResolution(param->handle,&platresolution);
+
+  __TIMESTAMP();printf("KTMSG: Resolution Requested ..%s Platform Resolution - %s\r\n",resolution.name,platresolution.name);
+
   /*!< Set Platform Resolution  */
-  ret = dsSetResolution(param->handle, &param->resolution);
+  ret = `dsSetResolution`(param->handle, &param->resolution);
 }
 
 
 *ds-hal*
 
-// generic/devicesettings-hal-brcm97428/dsVideoPort.c
+// is really used?
+// $B$/generic/devicesettings-hal-brcm97428/dsVideoPort.c
+
+Dec 03 14:29:48 arrisxi6-morty dsMgrMain[2803]: 
+  Set the resolution for HDMI Video output 36
 
 dsError_t  dsSetResolution(int handle, dsVideoPortResolution_t *resolution)
 {
   nexusApiResult = NscClientSetDisplayFormat(NEXUS_VideoFormat_e720p50hz);
+  printf("Set the resolution for HDMI Video output %d \r\n",format);
+}
+
+
+// libdshalsrv.so
+// $B$/generic/devicesettings/generic/`rpc`/srv/dsVideoPort.c
+
+Dec 03 14:29:48 arrisxi6-morty dsMgrMain[2803]: [tid=2805]: 191203-14:29:48:457625 
+  Set Resolution on HDMI Port!!!!!!..
+
+static void persistResolution(dsVideoPortSetResolutionParam_t *param)
+{
+  __TIMESTAMP();printf("Set Resolution on HDMI Port!!!!!!..\r\n");
 }
 
 
@@ -9336,7 +9383,7 @@ NOTE: Running task 4201 of 6292 (/media/keitee/ssd2/direct_build_2/meta-rdk-soc-
 
 // devicesettings-hal-brcm97268-1.99-r0 do_compile: ../git/nscclient.c: In function 'void NscClientInit()':
 
-// generic/devicesettings-hal-brcm97428/nscclient.c
+// $B$/generic/devicesettings-hal-brcm97428/nscclient.c
 
 ./work/cortexa15t2hf-neon-rdk-linux-gnueabi/devicesettings-hal-brcm97268/1.99-r0/git/nscclient.c
 
@@ -9427,33 +9474,228 @@ NEXUS_BROADCOM_BASE ?= "nexus.teamccp.com/nexus/content/repositories/broadcom/co
 BROADCOM_SDK_GIT ?= "git://${RDK_GIT}/sdk/broadcom"
 
 
+// nexus/nxclient/include/nxclient_global.h
+
+/**
+Summary:
+Global display settings
+
+Description:
+They apply direction to the main display.
+They will be transformed and applied to any secondary (e.g. SD) displays.
+The server adjusts graphics automatically on format change.
+**/
+typedef struct NxClient_DisplaySettings
+{
+  unsigned sequenceNumber;
+  NEXUS_VideoFormat format;
+  NEXUS_DisplayAspectRatio aspectRatio;
+  struct {
+    unsigned x, y;
+  } sampleAspectRatio;         /* Valid if aspectRatio is NEXUS_DisplayAspectRatio_eSar */
+  NEXUS_Pixel backgroundColor; /* surface compositor background color. fills graphics plane where no client surface is visible. */
+  NxClient_GraphicsSettings graphicsSettings;
+  bool secure;
+  NEXUS_TristateEnable dropFrame;
+  NEXUS_DisplayPriority priority; /* see NEXUS_DisplaySettings.priority */
+
+  struct {
+    NxClient_SlaveDisplayMode mode;
+    NEXUS_VideoFormat format;
+    NEXUS_DisplayAspectRatio aspectRatio;
+    NEXUS_Pixel backgroundColor; /* surface compositor background color. fills graphics plane where no client surface is visible. */
+    struct {
+      unsigned x, y;
+    } sampleAspectRatio;         /* Valid if aspectRatio is NEXUS_DisplayAspectRatio_eSar */
+    NxClient_GraphicsSettings graphicsSettings;
+  } slaveDisplay[NXCLIENT_MAX_DISPLAYS-1]; /* where slaveDisplay[0] is SD display, slaveDisplay[1] is encode display. */
+
+  struct {
+    NEXUS_VideoOrientation orientation; /* override orientation of the 3D display. If 2D, then 'format' will determine if 2D or 3D. */
+  } display3DSettings;
+  struct {
+    bool enabled;
+    bool followPreferredFormat; /* For video only, audio does not have a preferred format */
+    bool preventUnsupportedFormat; /* If disabled audio will ignore EDID and attempt compressed and may result in no audio. Enabled by default */
+    NxClient_HdcpLevel hdcp; /* Client sets its desired level. Server aggregates requests from all clients and drives
+                                HDCP authentication. Check NxClient_DisplayStatus.hdmi.hdcp for status and hdmiOutputHdcpChanged for callback. */
+    NxClient_HdcpVersion version;
+    NEXUS_ColorSpace colorSpace;
+    unsigned colorDepth;
+
+    /* Sets the dynamic range mode of the video at the HDMI output. See NEXUS_DisplaySettings.dynamicRangeMode comments. */
+    NEXUS_VideoDynamicRangeMode dynamicRangeMode;
+    /*
+     * DEPRECATED. The dynamicRangeMode member will take precedence over
+     * this setting, unless dynamicRangeMode is set to NEXUS_HdmiDynamicRangeMode_eAuto
+     * and drmInfoFrame.eotf is not set to NEXUS_VideoEotf_eMax.
+     *
+     * New dynamic range modes are only available via the use of the NEXUS_HdmiDynamicRangeMode
+     * enum member dynamicRangeMode below. In addition, the metadata contained in
+     * NEXUS_HdmiDynamicRangeMasteringInfoFrame should only be set for debug
+     * purposes, as setting the metadata using the NxClient_setDisplaySettings
+     * call is not frame-synchronous.
+     *
+     * The following table explains how the deprecated and new APIs work together.
+     *
+     * "Forced" means that the output mode will be forced even if the TV doesn't support it.
+     * NEXUS_VideoEotf is set via the NEXUS_HdmiDynamicRangeMasteringInfoFrame.eotf field below (the DEPRECATED API).
+     * NEXUS_HdmiDynamicRangeMode is set via the dynamicRangeMode field above (the new API).
+     * DRMIF - Yes means the DRMIF is transmitted; No means it is not.
+     * "xxx" means that it doesn't matter what the given column is set to
+     * "Auto" will try to select the best mode based on Broadcom usage rules
+     *
+     * Usage        DRMIF  Deprecated  Forced  NEXUS_VideoEotf            NEXUS_HdmiDynamicRangeMode
+     * ------------ ------ ----------- ------- -------------------------- ---------------------------------------
+     * Legacy SDR   No     Yes         Yes     NEXUS_VideoEotf_eInvalid   NEXUS_HdmiDynamicRangeMode_eAuto
+     * Legacy SDR   No     No          No      xxx                        NEXUS_HdmiDynamicRangeMode_eLegacy
+     * SDR          Yes    Yes         Yes     NEXUS_VideoEotf_eSdr       NEXUS_HdmiDynamicRangeMode_eAuto
+     * SDR          Yes    No          No      xxx                        NEXUS_HdmiDynamicRangeMode_eSdr
+     * HDR10/PQ     Yes    Yes         Yes     NEXUS_VideoEotf_eHdr10/Pq  NEXUS_HdmiDynamicRangeMode_eAuto
+     * HDR10/PQ     Yes    No          No      xxx                        NEXUS_HdmiDynamicRangeMode_eHdr10
+     * HLG          Yes    Yes         Yes     NEXUS_VideoEotf_eHlg       NEXUS_HdmiDynamicRangeMode_eAuto
+     * HLG          Yes    No          No      xxx                        NEXUS_HdmiDynamicRangeMode_eHlg
+     * Dolby Vision No     No          No      xxx                        NEXUS_HdmiDynamicRangeMode_eDolbyVision
+     * HDR10+       Yes    No          No      xxx                        NEXUS_HdmiDynamicRangeMode_eHdr10Plus
+     * Track Input  *      No          No      xxx                        NEXUS_HdmiDynamicRangeMode_eTrackInput
+     * Auto         *      No          No      NEXUS_VideoEotf_eMax       NEXUS_HdmiDynamicRangeMode_eAuto
+     *
+     * Also see NEXUS_HdmiOutputExtraSettings.overrideDynamicRangeMasteringInfoFrame
+     */
+    NEXUS_HdmiDynamicRangeMasteringInfoFrame drmInfoFrame;
+    NEXUS_MatrixCoefficients matrixCoefficients;
+  } hdmiPreferences;
+  struct {
+    bool enabled;
+    bool mpaaDecimationEnabled;
+    bool sdDisplay; /* Connect component to SD display instead of HD display. If HD display is 4K, this allows component to still carry video. */
+  } componentPreferences;
+  struct {
+    bool enabled;
+    unsigned rfmChannel; /* 3 or 4 */
+  } compositePreferences; /* applies to composite and rfm */
+} NxClient_DisplaySettings;
+
 build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2
 `/nexus/nxclient/server/nxserverlib.c`
 
+note: starts from here
 
 /* only support rollback from public API calls */
-NEXUS_Error NxClient_P_SetDisplaySettings(nxclient_t client, struct b_session *session, const NxClient_DisplaySettings *pSettings)
+NEXUS_Error NxClient_P_`SetDisplaySettings`(nxclient_t client, struct b_session *session, const NxClient_DisplaySettings *pSettings)
 {
   rc = NxClient_P_SetDisplaySettingsNoRollback(client, session, pSettings);
 }
 
-NEXUS_Error NxClient_P_SetDisplaySettingsNoRollback(nxclient_t client, struct b_session *session, const NxClient_DisplaySettings *pSettings)
+
+Dec 03 14:29:48 arrisxi6-morty nxserver[2209]:     00:10:52.415 
+  nxserverlib: session 0: changing display format 1080p -> 720p
+
+NEXUS_Error NxClient_P_`SetDisplaySettingsNoRollback`(
+    nxclient_t client, 
+    struct b_session *session, 
+    const NxClient_DisplaySettings *`pSettings`)
 {
-  rc = b_display_format_change(session, pSettings);
+  // note: this do not have NEXUS_SurfaceComposition
+
+  // NEXUS_SurfaceCompositorSettings;
+  //
+  //    bool allowCompositionBypass; 
+  //    /* If top-level client in push mode and NEXUS_SurfaceClientSettings.allowCompositionBypass is true,
+  //       send surface directly to GFD0, bypassing composition and saving a blit.
+  //       Only recommended for single display, 2D mode, no cursor.
+  //       Client must allocate framebuffer-sized surface from same MEMC as GFD0. */
+  //
+  // graphics feeder (GFD)
+
+  NEXUS_SurfaceCompositorSettings surface_compositor_settings;
+
+  if (format_change) {
+    BDBG_LOG(("session %d: changing display format %s -> %s",
+          session->index,
+          lookup_name(g_videoFormatStrs, session->nxclient.displaySettings.format),
+          lookup_name(g_videoFormatStrs, pSettings->format)));
+  }
+
+skip_outputs:
+  rc = b_display_format_change(session, `pSettings`);
 }
 
-static int b_display_format_change(struct b_session *session, const NxClient_DisplaySettings *pDisplaySettings)
+
+// directly gets display settings and use that and use composition to set
+// virtual display
+
+static int b_display_format_change(
+    struct b_session *session, 
+    const NxClient_DisplaySettings *pDisplaySettings)
 {
+  NEXUS_SurfaceComposition composition;
+
+  NEXUS_Display_GetSettings(display, &displaySettings);
+
+  NxClient_P_GetSurfaceClientComposition(client, resources.surfaceClient.id[j], &composition);
+
   composition.virtualDisplay.width = 1280;
   composition.virtualDisplay.height = 720;
 
-  NxClient_P_SetSurfaceClientComposition(client, resources.surfaceClient.id[j], &composition);
+  `NxClient_P_SetSurfaceClientComposition`(client, resources.surfaceClient.id[j], &composition);
 }
 
 
-NEXUS_Error NxClient_P_SetSurfaceClientComposition(nxclient_t client, unsigned surfaceClientId, const NEXUS_SurfaceComposition *pComposition)
+// use composition
+
+// nexus/modules/surface_compositor/include/nexus_surface_compositor_types.h
+
+typedef struct NEXUS_SurfaceComposition
 {
-  NEXUS_SurfaceCompositorClientSettings client_settings;
+  NEXUS_SurfaceRegion virtualDisplay; /* If width/height non-zero, composition.position will be positioned and scaled relative to the virtualDisplay dimensions.
+                                         Otherwise, graphics will be positioned and scaled in clipped framebuffer coordinates; video will be positioned and scaled in parent coordinates.
+                                         Because clipping and HW upscaling makes the mapping of framebuffer coordinates to display coordinates complex, we recommend using virtualDisplay. */
+  NEXUS_Rect position; /* position and size of the surface relative to the size of the parent. scaling is automatic. 
+                          if rectangle is offscreen, the surface will be clipped appropriately. */
+  NEXUS_SurfaceRegion clipBase; /* If width/height non-zero, compositin.clipRect will use this as units.
+                                   Otherwise it will use virtualDispay. */
+  NEXUS_Rect clipRect; /* source clipping rectangle in the coordinates of clipBase.
+                          if clipBase is zero, in coordinates of virtualDisplay.
+                          if set to all zeros, no source clipping will be performed.
+                          negative source clipping (zoom out) is not supported.*/
+
+  unsigned zorder; /* relative z-order to other surfaces added to this surface_compositor. 0 is on bottom. */
+  bool visible; /* if true, this surface will be included in the next compositing operation. */
+  bool displayCache; /* deprecated */
+  NEXUS_BlendEquation colorBlend;  /* Specify how to compose the color component */
+  NEXUS_BlendEquation alphaBlend;   /* Specify how to compose the alpha component */
+  struct {
+    NEXUS_Graphics2DColorKey source, dest;
+  } colorKey;
+  NEXUS_Graphics2DFilterCoeffs horizontalFilter;
+  NEXUS_Graphics2DFilterCoeffs verticalFilter;
+  bool alphaPremultiplySourceEnabled;
+  NEXUS_Pixel constantColor; /* For graphics, constant alpha and color for colorBlend and alphaBlend.
+                                For video, upper 8 bits used for alpha. */
+  int rightViewOffset; /* if display3D, it controls z-offset (in units of virtualDisplay.width) (in addition to any z-offset for the framebuffer) */
+
+  bool colorMatrixEnabled; /* set true to use colorMatrix */
+  NEXUS_Graphics2DColorMatrix colorMatrix; /* see NEXUS_Graphics2D_SetAlphaColorMatrix for simple matrix-based alpha blend */
+  NEXUS_VideoWindowContentMode contentMode;
+} NEXUS_SurfaceComposition;
+
+// nexus/modules/surface_compositor/include/nexus_surface_compositor.h
+
+typedef struct NEXUS_SurfaceCompositorClientSettings
+{
+  `NEXUS_SurfaceComposition composition;`
+  bool tunnelCapable; /* deprecated */
+  NEXUS_SurfaceCompositorClientDisplaySettings display[NEXUS_MAX_DISPLAYS];
+} `NEXUS_SurfaceCompositorClientSettings`;
+
+NEXUS_Error NxClient_P_SetSurfaceClientComposition(
+    nxclient_t client, 
+    unsigned surfaceClientId, 
+    const NEXUS_SurfaceComposition *pComposition)
+{
+  `NEXUS_SurfaceCompositorClientSettings` client_settings;
+
 #if COMCAST_RDK_SPECIFIC_CHANGE || 1
   {
     if (!strcmp(client->joinSettings.name, "xre receiver"))
@@ -9463,6 +9705,7 @@ NEXUS_Error NxClient_P_SetSurfaceClientComposition(nxclient_t client, unsigned s
 
       display = client->session->display[0].display;
       NEXUS_Display_GetSettings(display, &displaySettings);
+
       if (displaySettings.format == NEXUS_VideoFormat_e480p || displaySettings.format == NEXUS_VideoFormat_eNtsc)
       {
         client_settings.composition.virtualDisplay.width = 640;
@@ -9482,17 +9725,47 @@ NEXUS_Error NxClient_P_SetSurfaceClientComposition(nxclient_t client, unsigned s
   }
 #endif
 
-  rc = `NEXUS_SurfaceCompositor_SetClientSettings`(client->session->surfaceCompositor, req->handles.surfaceClient[i].handle, &client_settings);
+  rc = `NEXUS_SurfaceCompositor_SetClientSettings`(
+      client->session->surfaceCompositor, 
+      req->handles.surfaceClient[i].handle, 
+      &client_settings);
   if (rc) return BERR_TRACE(rc);
 
   return 0;
 }
 
 
+// nxserver_main.c
+
+int main(int argc, char **argv)
+{
+  server = nxserver_init(argc, argv, true);
+}
+
+// nxserver.c
+
+// nexus/nxclient/server/nxserverlib.h
+
+struct nxserver_settings
+{
+  unsigned framebuffers;
+
+  struct {
+    unsigned width, height;
+  } fbsize;
+
+  bool allowCompositionBypass;
+
+  NxClient_DisplaySettings display; /* only session 0 */
+  ...
+};
+
 nxserver_t nxserver_init(int argc, char **argv, bool blocking)
 {
+  struct nxserver_settings settings;
+
   // fbsize
-  nxserver_get_default_settings(&settings);
+  `nxserver_get_default_settings`(&settings);
   {
     settings->fbsize.width = 1280tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/nexus/nxclient/server/;
 
@@ -9509,10 +9782,10 @@ nxserver_t nxserver_init(int argc, char **argv, bool blocking)
       sscanf(argv[++curarg], "%u,%u", &settings->fbsize.width, &settings->fbsize.height);
     }
   }
-
-  // NEXUS_Platform_Init will initialize Nexus
-  rc = NEXUS_Platform_MemConfigInit(&platformSettings, &memConfigSettings);
 }
+
+void nxserver_get_default_settings(struct nxserver_settings *settings)
+{}
 
 
 *bitbake-find-recipe*
