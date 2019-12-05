@@ -28,7 +28,6 @@ using namespace testing;
 ={=============================================================================
 cxx-boost-variant
 
-
 */
 
 // boost::variant is defined in boost/variant.hpp. Because boost::variant is a
@@ -37,7 +36,7 @@ cxx-boost-variant
 // One or more template parameters *specify the supported types*. In
 // Example 24.1, v can store values of type double, char, or std::string.
 
-TEST(CxxBoost, setValues)
+TEST(CxxBoostVariant, setValues)
 {
   boost::variant<double, char, std::string> v;
   v = 3.14;
@@ -60,7 +59,7 @@ TEST(CxxBoost, setValues)
 // of types does not take place at compile time.
 //
 
-TEST(CxxBoost, getValues)
+TEST(CxxBoostVariant, getValues)
 {
   boost::variant<double, char, std::string> v;
 
@@ -84,10 +83,64 @@ TEST(CxxBoost, getValues)
   }
 }
 
+// simply failes to get values but no crash as v exist
+//
+// /home/keitee/git/kb/code-cxx/cxx/test_boost.cpp:90: Failure
+// Value of: 3.14
+// Expected: is equal to 0
+//   Actual: 3.14 (of type double)
+
+TEST(CxxBoostVariant, getValuesError1)
+{
+  boost::variant<double, char, std::string> v;
+
+  EXPECT_THAT(3.14, boost::get<double>(v));
+}
+
+// when use add_compile_options("-g;-D_GLIBCXX_DEBUG") regardless of using
+// try/catch
+//
+// /usr/include/c++/7/debug/vector:417:
+// Error: attempt to subscript container with out-of-bounds index 0, but
+// container only holds 0 elements.
+// 
+// Objects involved in the operation:
+//     sequence "this" @ 0x0x7ffe10941130 {
+//       type = std::__debug::vector<boost::variant<double, char, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<boost::variant<double, char, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > >;
+//     }
+// Aborted (core dumped)
+//
+//
+// when NOT use add_compile_options("-g;-D_GLIBCXX_DEBUG")
+//
+// unknown file: Failure
+// C++ exception with description "boost::bad_get: failed value get using boost::get" thrown in the test body.
+//
+// so if calls get<> on non-exist, get exception
+
+
+TEST(CxxBoostVariant, getValuesError2)
+{
+  using Variant = boost::variant<double, char, std::string>;
+  std::vector<Variant> Values;
+
+  // EXPECT_THAT(3.14, boost::get<double>(Values[0]));
+
+  try
+  {
+    EXPECT_THAT(3.14, boost::get<double>(Values[0]));
+  } catch (exception &e)
+  {
+    std::ostringstream os;
+    os << e.what();
+    EXPECT_THAT(os.str(), "boost::bad_get: failed value get using boost::get");
+  }
+}
+
 // Variables of type boost::variant can be written to streams such as the
 // standard output stream, bypassing the hazard of run-time errors
 
-TEST(CxxBoost, printValues)
+TEST(CxxBoostVariant, printValues)
 {
   boost::variant<double, char, std::string> v;
 
@@ -160,7 +213,7 @@ namespace cxx_boost
   };
 } // namespace cxx_boost
 
-TEST(CxxBoost, SafeAccess)
+TEST(CxxBoostVariant, SafeAccess)
 {
   using namespace cxx_boost;
 
