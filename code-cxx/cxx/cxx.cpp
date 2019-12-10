@@ -7416,6 +7416,15 @@ TEST(Template, Specialisation)
   using namespace cxx_template;
 
   {
+    // cxx-strcmp which return 0 in case both are the same
+    EXPECT_THAT(!strcmp("strcmp", "strcmp"), true);
+    EXPECT_THAT(!internal_strcmp("strcmp", "strcmp"), true);
+
+    EXPECT_THAT(strcmp("strcmp", "strcmpx"), Not(true));
+    EXPECT_THAT(internal_strcmp("strcmp", "strcmpx"), Not(true));
+  }
+
+  {
     EXPECT_THAT(compare("mon", "hi"), 1);
     EXPECT_THAT(compare("hi", "mon"), -1);
 
