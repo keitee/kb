@@ -17,22 +17,24 @@ if __name__ == "__main__":
     listfile = 'flist.out'
     logfile = open(listfile, 'w+')
 
-    # dirs to exclude
-    # find {to be replaced} -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
-    # find ethan-as-source/Components/AS/Services -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
-    # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
-    command = ["find", ".", "-type", "d", 
-        "(", 
-        # "-path",  "*/build", "-o", 
-        "-path",  "*/build",
-        # note on this end entry which is differnt from the above
-        # "-path", "*/test",
-        ")", "-prune", "-o", "-type", "f", "-print"]
+    # # dirs to exclude
+    # # find {to be replaced} -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
+    # # find ethan-as-source/Components/AS/Services -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
+    # # subprocess.call(["find", ".", "-type d \( -path '*/build' -o -path '*/mock' \)", "-prune", "-o", "-print"])
+    # command = ["find", ".", "-type", "d", 
+    #     "(", 
+    #     # "-path",  "*/build", "-o", 
+    #     "-path",  "*/build",
+    #     # note on this end entry which is differnt from the above
+    #     # "-path", "*/test",
+    #     ")", "-prune", "-o", "-type", "f", "-print"]
 
-    for e in dirs:
-      command[1] = e
-      subprocess.call(command, stdout=logfile)
+    # for e in dirs:
+    #   command[1] = e
+    #   subprocess.call(command, stdout=logfile)
 
+    command = ["ag", "--depth", "-1", "--cc", "--cpp", "--nocolor", "--nogroup", "-g", "''"]
+    subprocess.call(command, stdout=logfile)
     logfile.close()
 
     sys.stdout.write("building ctags for %s ...\n" % listfile)
