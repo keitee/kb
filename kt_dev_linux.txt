@@ -22687,6 +22687,174 @@ recipes `were referred to as packages` - thus, the existence of several BitBake
 variables that are seemingly mis-named, (e.g. PR, PV, and PE).
 
 
+8.2. bbappend files
+
+An append file can be use `to add functions to an existing class` without creating
+a new one. It adds the text of the append file to a class with the same name.
+
+
+*bitbake-show-recipes*
+
+    show-recipes        list available recipes, showing `the layer` they are
+                        provided by
+
+
+$ bitbake-layers show-recipes
+
+=== Available recipes: ===
+first:
+  meta-tutorial        0.1
+second:
+  meta-tutorial        1.0
+third:
+  meta-two             01.2
+
+keitee@kit-ubuntu:~/git/kb/code-make/bitbake/tut1/meta-tutorial/recipes-tutorial/first$ ls
+firstfirst_0.1.bb
+
+
+-s, --show-versions   Show current and preferred versions of all recipes.
+$ bitbake -s
+Parsing recipes: 100% |########################################################################################################################################################################################################| Time: 0:00:00
+Parsing of 3 .bb files complete (0 cached, 3 parsed). 3 targets, 0 skipped, 0 masked, 0 errors.
+Recipe Name                                    Latest Version         Preferred Version
+===========                                    ==============         =================
+
+firstfirst                                            :0.1-r1
+second                                                :1.0-r1
+third                                                :01.2-r1
+
+
+1.3.5. Append Files
+
+Append files, which are files that have the `.bbappend` file extension, add or
+extend build information to an existing recipe file.
+
+BitBake expects every append file to have a `corresponding recipe file.`
+Furthermore, the append file and corresponding recipe file must use the same
+`root filename.` The filenames can differ only in the file type suffix used (e.g.
+formfactor_0.0.bb and formfactor_0.0.bbappend).
+
+Information in append files overrides the information in the similarly-named
+recipe file.
+
+When you name an append file, you can use the wildcard character (%) to allow
+for matching recipe names. For example, suppose you have an append file named as
+follows:
+
+     busybox_1.21.%.bbappend
+                
+That append file would match any busybox_1.21.x.bb version of the recipe. So,
+the append file would match the following recipe names:
+
+     busybox_1.21.1.bb
+     busybox_1.21.2.bb
+     busybox_1.21.3.bb
+                
+If the busybox recipe was updated to busybox_1.3.0.bb, the append name would not
+match. However, if you named the append file busybox_1.%.bbappend, then you
+would have a match.
+
+BP
+The base recipe name and version but without any special recipe name suffix
+(i.e. -native, lib64-, and so forth). BP is comprised of the following:
+
+     ${BPN}-${PV}
+
+BPN
+
+This variable is a version of the PN variable with common prefixes and suffixes
+removed, such as nativesdk-, -cross, -native, and multilib's lib64- and lib32-.
+The exact lists of prefixes and suffixes removed are specified by the MLPREFIX
+and SPECIAL_PKGSUFFIX variables, respectively.
+
+# $BP [2 operations]
+#   set /media/keitee/ssd2/direct_build/openembedded-core/meta/conf/bitbake.conf:218
+#     "${BPN}-${PV}"
+#   set /media/keitee/ssd2/direct_build/openembedded-core/meta/conf/documentation.conf:97
+#     [doc] "The base recipe name and version but without any special recipe 
+#     name suffix (i.e. -native, lib64-, and so forth). BP is comprised of ${BPN}-${PV}"
+# pre-expansion value:
+#   "${BPN}-${PV}"
+BP="broadcom-refsw-unified-17.3"
+#
+# $BPN [2 operations]
+#   set /media/keitee/ssd2/direct_build/openembedded-core/meta/conf/bitbake.conf:217
+#     "${@base_prune_suffix(d.getVar('PN', True), d.getVar('SPECIAL_PKGSUFFIX', True).split(), d)}"
+#   set /media/keitee/ssd2/direct_build/openembedded-core/meta/conf/documentation.conf:98
+#     [doc] "The bare name of the recipe. This variable is a version of the PN 
+#     variable but removes common suffixes and prefixes."
+# pre-expansion value:
+#   "${@base_prune_suffix(d.getVar('PN', True), d.getVar('SPECIAL_PKGSUFFIX', True).split(), d)}"
+BPN="broadcom-refsw"
+
+
+*bitbake-devshell*
+
+3.8. Using a Development Shell
+
+When debugging certain commands or even when just editing packages, devshell can
+be a useful tool. When you invoke devshell, all tasks up to and including
+do_patch are run for the specified target. Then, a new terminal is opened and
+you are placed in ${S}, the source directory. 
+
+     $ bitbake broadcom-refsw -c devshell
+
+root@kit-ubuntu:/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2# pwd
+/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2
+
+
+In the new terminal, all the OpenEmbedded build-related environment variables
+are still defined so you can use commands such as configure and make. The
+commands execute just as if the OpenEmbedded build system were executing them.
+Consequently, working this way can be helpful when debugging a build or
+preparing software to be used with the OpenEmbedded build system.
+
+Following is an example that uses devshell on a target named matchbox-desktop:
+
+     $ bitbake matchbox-desktop -c devshell
+            
+This command spawns a terminal with a shell prompt within the OpenEmbedded build
+environment. The OE_TERMINAL variable controls what type of shell is opened.
+
+For spawned terminals, the following occurs:
+
+The PATH variable includes the cross-toolchain.
+
+The pkgconfig variables find the correct .pc files.
+
+The configure command finds the Yocto Project site files as well as any other
+necessary files.
+
+Within this environment, you can run configure or compile commands as if they
+were being run by the OpenEmbedded build system itself. As noted earlier, the
+working directory also automatically changes to the Source Directory (S).
+
+To manually run a specific task using devshell, run the corresponding run.*
+script in the ${WORKDIR}/temp directory (e.g., run.do_configure.pid). If a
+task's script does not exist, which would be the case if the task was skipped by
+way of the sstate cache, you can create the task by first running it outside of
+the devshell:
+
+     $ bitbake -c task
+            
+Notes
+Execution of a task's run.* script and BitBake's execution of a task are
+identical. In other words, running the script re-runs the task just as it would
+be run using the bitbake -c command.
+
+
+S
+
+The location in the Build Directory `where unpacked recipe source code resides.`
+By default, this directory is ${WORKDIR}/${BPN}-${PV}, where ${BPN} is the base
+recipe name and ${PV} is the recipe version. If the source tarball extracts the
+code to a directory named anything other than ${BPN}-${PV}, or if the source
+code is fetched from an SCM such as Git or Subversion, then you must set S in
+the recipe so that the OpenEmbedded build system knows where to find the
+unpacked source.
+
+
 *bitbake-variables*
 
 T
@@ -22839,26 +23007,6 @@ layer                 path                                      priority
 ==========================================================================
 meta-tutorial         /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-tutorial  5
 meta-two              /home/keitee/git/kb/code-make/bitbake/tut1/build/../meta-two  5
-
-
-*bitbake-show-recipes*
-
-    show-recipes        list available recipes, showing `the layer` they are
-                        provided by
-
-
-$ bitbake-layers show-recipes
-
-=== Available recipes: ===
-first:
-  meta-tutorial        0.1
-second:
-  meta-tutorial        1.0
-third:
-  meta-two             01.2
-
-
--s, --show-versions   Show current and preferred versions of all recipes.
 
 
 
@@ -23161,11 +23309,6 @@ DEBUG: Executing shell function do_build
 first: some shell script running as build
 DEBUG: Shell function do_build finished
 
-
-8.2. bbappend files
-
-An append file can be use `to add functions to an existing class` without creating
-a new one. It adds the text of the append file to a class with the same name.
 
 
 <bitbake-dependency>
