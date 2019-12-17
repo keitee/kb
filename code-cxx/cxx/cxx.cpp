@@ -5718,7 +5718,7 @@ TEST(CxxFeaturesTest, UseHashOnString)
 
 // cxx-operator-logical-not
 //
-// negation, !a,
+// 1.
 //
 // bool T::operator!() const;
 // bool operator!(const T &a);
@@ -5745,13 +5745,41 @@ TEST(CxxFeaturesTest, UseHashOnString)
 // b = (t != 0);
 //
 // No implicit conversions.
+//
+//
+// 2. 
+//
+// It's a trick to convert to bool.
+//
+// For primitive types, yes, it's essentially equivalent to:
+// 
+// !(notABool != 0)
+//
+// which in turn is equivalent to:
+// 
+// (bool)notABool
+//
+// For non-primitive types, it will be a compiler error, unless you've
+// overloaded operator!, in which case, it might do anything.
 
-TEST(Bool, Negate)
+TEST(CxxBool, LogicalNot)
 {
-  bool value{false};
-  EXPECT_THAT(value, false);
-  EXPECT_THAT(!value, true);
-  EXPECT_THAT(!!value, false);
+  {
+    bool value{false};
+
+    EXPECT_THAT(value, false);
+    EXPECT_THAT(!value, true);
+    EXPECT_THAT(!!value, false);
+  }
+
+  {
+    int value{10};
+    
+    EXPECT_THAT(!value, false);
+    EXPECT_THAT(!!value, true);
+
+    EXPECT_THAT((bool)value, true);
+  }
 }
 
 TEST(Bool, CheckBoolDefault)

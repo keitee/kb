@@ -180,7 +180,7 @@ include_directories(${LIBS_DIR})
 add_executable(${PROJECT_NAME} "test_lpi.cpp")
 ## cause link errors to Boost::thread
 ## target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
-target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
+target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS})
 
 
 # lpi-socket-unix

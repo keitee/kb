@@ -13,9 +13,13 @@
 #include <thread>
 #include <vector>
 
+#include <fcntl.h>
 #include <sys/prctl.h>
 
 #include "gmock/gmock.h"
+
+// use lpi log
+#include "lpi_error.h"
 
 using namespace std;
 using namespace std::placeholders;
@@ -23,6 +27,24 @@ using namespace testing;
 
 // (gdb) b
 // PatternObserver_sendNotificationWithCallerDispatcherButRaiseException_Test::TestBody()
+//
+
+/*
+={=============================================================================
+lpi-file-io
+
+*/
+
+TEST(LpiFileIO, useOpen)
+{
+  int fd;
+
+  fd = open("startup", O_RDONLY);
+  if (fd == -1)
+  {
+    errMsg("failed to open file");
+  }
+}
 
 /*
 ={=============================================================================

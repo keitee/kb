@@ -1,6 +1,7 @@
 #include "gmock/gmock.h"
 
 #include <iostream>
+#include <fcntl.h>
 
 // g++ -g -std=c++0x t_override.cpp
 
@@ -45,27 +46,44 @@ using namespace testing;
 // ={=========================================================================
 /* LPI log
 
+1. LPI log supports `errno`
+
 [ RUN      ] LPILog.useLog
 ERROR [ Success], this is error message from errMsg and value 10
 ERROR [ Success], this is error message from errMsg and value 10
+ERROR [ENOENT No such file or directory], failed to open file
 [       OK ] LPILog.useLog (0 ms)
 
+
+2. this shows `errno` remains
+
 [ RUN      ] LPILog.useLogExit
-ERROR [ Success], this is error message from errExit
+ERROR [ENOENT No such file or directory], this is error message from errExit
 [       OK ] LPILog.useLogExit (0 ms)
-[
 
 */
 
 TEST(LPILog, useLog)
 {
-  int value{10};
-  std::string message{"errMsg"};
+  {
+    int value{10};
+    std::string message{"errMsg"};
 
-  errMsg("this is error message from %s and value %d", 
-      message.c_str(), value);
-  LOG_ERROR("this is error message from %s and value %d", 
-      message.c_str(), value);
+    errMsg("this is error message from %s and value %d", 
+        message.c_str(), value);
+    LOG_ERROR("this is error message from %s and value %d", 
+        message.c_str(), value);
+  }
+
+  {
+    int fd;
+
+    fd = open("startup", O_RDONLY);
+    if (fd == -1)
+    {
+      errMsg("failed to open file");
+    }
+  }
 }
 
 TEST(LPILog, useLogExit)
@@ -77,6 +95,8 @@ TEST(LPILog, useLogExit)
 }
 
 /*
+
+1. simple log do not supports `errno`
 
 [ RUN      ] SimpleLog.useLog
 LOG| F:test_log.cxx C:virtual void SimpleLog_useLog_Test::TestBody() L:00099 : this is error message from errMsg and value 10
