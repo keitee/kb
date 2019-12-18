@@ -77,7 +77,7 @@ file(GLOB SOURCES "*.cpp")
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
 # to build test app
-add_executable(test_log "test_log.cxx" "lpi_error.cpp" slog.cpp)
+add_executable(test_log "test_log.cxx" "lpi_error.cpp" slog.cpp rlog.cpp)
 target_link_libraries(test_log gmock_main)
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})

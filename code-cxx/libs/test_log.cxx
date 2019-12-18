@@ -145,7 +145,12 @@ TEST(SimpleLog, showCorrectLineNumbers)
   func1();
 }
 
+
 // ={=========================================================================
+/* rlog
+// ={=========================================================================
+*/
+
 int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);

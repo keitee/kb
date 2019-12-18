@@ -7,11 +7,6 @@
 namespace Slog
 {
   // <how-to-get-filename-without-full-path>
-  //
-  // #include <string.h>
-  // char *strrchr(const char *s, int c);
-  // The strrchr() function returns a pointer to the last occurrence of the
-  // character c in the string s.
 
   #define FILE (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 

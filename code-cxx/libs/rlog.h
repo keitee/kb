@@ -97,7 +97,35 @@ extern __log_sys_printf(int err,
     }                                                                          \
   } while (0)
 
+// with errno supports
 #define logSysError(err, fmt, ...)                                             \
   __LOG_SYS_PRINTF(err, LOG_LEVEL_ERROR, fmt.##__VA_ARGS__)
+
+#define logSysWarning(err, fmt, ...)                                             \
+  __LOG_SYS_PRINTF(err, LOG_LEVEL_WARNING, fmt.##__VA_ARGS__)
+
+// without errno supports
+#define logWarning(fmt, ...)                                             \
+  __LOG_PRINTF(LOG_LEVEL_WARNING, fmt.##__VA_ARGS__)
+
+#define logDebug(fmt, ...)                                             \
+  __LOG_PRINTF(LOG_LEVEL_DEBUG, fmt.##__VA_ARGS__)
+
+
+// maps to system logging
+#define LOG_MIL(fmt,...) __LOG_PRINTF(LOG_LEVE_MIL, fmt, ##__VA_ARGS__)
+
+namespace rlog
+{
+  using PrinterFunc = std::function<void(unsigned level,
+      const char *file,
+      const char *func,
+      int line,
+      const char *message,
+      int length)>;
+
+  void setFilter(unsigned levels);
+  void setPrinter(const PrinterFunc &printer);
+}
 
 #endif // RLOG_H

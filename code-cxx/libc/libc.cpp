@@ -50,18 +50,59 @@ RETURN VALUE
        The rawmemchr() function returns a pointer to the matching byte, if one
        is found.  If no matching byte is found, the result is unspecified.
 
+
+STRCHR(3)
+
+NAME
+       strchr, strrchr, strchrnul - locate character in string
+
+SYNOPSIS
+       #include <string.h>
+
+       char *strchr(const char *s, int c);
+
+       char *strrchr(const char *s, int c);
+
+       #define _GNU_SOURCE         // See feature_test_macros(7)
+       #include <string.h>
+
+       char *strchrnul(const char *s, int c);
+
+DESCRIPTION
+       The strchr() function returns a pointer to the first occurrence of the
+       character c in the string s.
+
+       The strrchr() function returns a pointer to the last occurrence of the
+       character c in the string s.
+
+       The strchrnul() function is like strchr() except that if c is not found
+       in s, then it returns a pointer to the null byte at the end of s, rather
+       than NULL.
+
+       Here "character" means "byte"; these functions do not work with wide or
+       multibyte characters.
+
+RETURN VALUE
+       The strchr() and strrchr() functions return a pointer to the matched
+       character or NULL if the character is not found.  The terminating null
+       byte is considered part of the string, so that if c is specified as '\0',
+       these functions return a pointer to the terminator.
+
+       The strchrnul() function returns a pointer to the matched character, or a
+       pointer to the null byte at the end of s (i.e., s+strlen(s)) if the
+       character is not found.
+
 */
 
-TEST(Memchar, Base)
+TEST(LibcSearchCharacter, Memchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
 
+  // found `s`
   start = (char*)memchr(text, 's', strlen(text));
   if (start)
   {
-    // cout works as well as printf
-    // cout << start << endl; 
     EXPECT_STREQ(start, "scan memory for a character");
   }
 
@@ -76,20 +117,20 @@ TEST(Memchar, Base)
   start = (char *)memchr(text2, '\n', strlen(text2));
   EXPECT_TRUE(start);
 
+  // just 1 less in length
   auto diff = start-text2;
   EXPECT_EQ(strlen(text2)-1, diff);
 }
 
-TEST(Strchar, Base)
+TEST(LibcSearchCharacter, Strchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
 
+  // found `s`
   start = (char*)strchr(text, 's');
   if (start)
   {
-    // cout works as well as printf
-    // cout << start << endl; 
     EXPECT_STREQ(start, "scan memory for a character");
   }
 
@@ -106,9 +147,24 @@ TEST(Strchar, Base)
   start = (char *)strchr(text2, '\n');
   EXPECT_TRUE(start);
 
+  // just 1 less in length
   auto diff = start-text2;
   EXPECT_EQ(strlen(text2)-1, diff);
 }
+
+TEST(LibcSearchCharacter, Strrchar)
+{
+  char *start{};
+  char fname[] = "/home/keitee/git/kb/code-cxx/libc/libc.cpp";
+
+  // extract filename only from full path
+  start = (char*)strrchr(text, '/');
+  if (start)
+  {
+    EXPECT_STREQ(start+1, "libc.cpp");
+  }
+}
+
 
 namespace use_internal_strchr_01 {
 
