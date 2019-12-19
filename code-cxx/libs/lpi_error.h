@@ -17,15 +17,14 @@
 #ifndef ERROR_FUNCTIONS_H
 #define ERROR_FUNCTIONS_H
 
+/*
 
-/* 
-
-Display error message including `errno` diagnostic, and return to caller 
+Display error message including `errno` diagnostic, and return to caller
 
 Prints a message on standard error. Its argument list is the same as for
-printf(), except that 
+printf(), except that
 
-a terminating newline character is automatically appended to the output string. 
+a terminating newline character is automatically appended to the output string.
 
 The errMsg() function prints the error text corresponding to the current value
 of errno-this consists of the error name, such as EPERM, plus the error
@@ -47,17 +46,15 @@ void errMsg(const char *format, ...);
 // #define NORETURN
 // #endif
 
+/*
 
-/* 
-
-Display error message including `errno` diagnostic, and terminate the process 
+Display error message including `errno` diagnostic, and terminate the process
 
 */
 
 void errExit(const char *format, ...);
 
-
-/* 
+/*
 The following function does the same as errExit(), but expects the error number
 in 'errnum'
 
@@ -92,7 +89,7 @@ functions is to `return 0 on success and -1 on error`, with errno being set to
 indicate the error. The functions in the `pthreads API do things differently`
 All pthreads functions return 0 on success or a positive value on failure. The
 failure value is one of the same values that can be placed in errno by
-traditional UNIX system calls. 
+traditional UNIX system calls.
 
 We could diagnose errors from the POSIX threads functions using code such as
 the following:
@@ -103,7 +100,7 @@ if (errno != 0)
 
 This approach is `inefficient` because errno is defined in threaded programs
 as a macro. Under the POSIX threads API, errno is redefined to be a function
-that returns a `pointer to a thread-specific storage area` 
+that returns a `pointer to a thread-specific storage area`
 
 void errExitEN(int errnum, const char *format, ...);
 

@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <functional>
 
 // from simple log
 //
@@ -24,16 +25,16 @@
 // } // namespace
 //
 //
-// #define LOG_MSG(fmt, ...) \
-//  Slog::errMsg(__FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__) 
+// #define LOG_MSG(fmt, ...)
+//  Slog::errMsg(__FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
 //
-// #define LOG_ERR(fmt, ...) \
+// #define LOG_ERR(fmt, ...)
 // Slog::errExit(__FILE__, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
 //
-// #define LOG_MSG(fmt, ...) \
-//  Slog::errMsg(FILE, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__) 
+// #define LOG_MSG(fmt, ...)
+//  Slog::errMsg(FILE, __LINE__, __PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
 //
-// #define LOG_ERR(fmt, ...) \
+// #define LOG_ERR(fmt, ...)
 //  Slog::errExit(FILE, __LINE__,__PRETTY_FUNCTION__, fmt, ##__VA_ARGS__)
 
 // 1. Unlike simple log, use macro
@@ -41,30 +42,30 @@
 // 3. Unlike LPI log, use errno in the call argument
 
 // log category
-#define LOG_LEVEL_FATAL         0x01
-#define LOG_LEVEL_ERROR         0x02
-#define LOG_LEVEL_WARNING       0x04
-#define LOG_LEVEL_MIL           0x08
-#define LOG_LEVEL_INFO          0x10
-#define LOG_LEVEL_DEBUG         0x20
-#define LOG_LEVEL_VERBOSE       0x40
+#define LOG_LEVEL_FATAL 0x01
+#define LOG_LEVEL_ERROR 0x02
+#define LOG_LEVEL_WARNING 0x04
+#define LOG_LEVEL_MIL 0x08
+#define LOG_LEVEL_INFO 0x10
+#define LOG_LEVEL_DEBUG 0x20
+#define LOG_LEVEL_VERBOSE 0x40
 
 extern const unsigned __log_filter;
 
-extern __log_printf(unsigned level,
-                    const char *file,
-                    const chat *func,
-                    int line,
-                    const char *fmt,
-                    ...) __attribute__((format(printf, 5, 6)));
+extern void __log_printf(unsigned level,
+                         const char *file,
+                         const char *func,
+                         int line,
+                         const char *fmt,
+                         ...) __attribute__((format(printf, 5, 6)));
 
-extern __log_sys_printf(int err,
-                        unsigned level,
-                        const char *file,
-                        const chat *func,
-                        int line,
-                        const char *fmt,
-                        ...) __attribute__((format(printf, 6, 7)));
+extern void __log_sys_printf(int err,
+                             unsigned level,
+                             const char *file,
+                             const char *func,
+                             int line,
+                             const char *fmt,
+                             ...) __attribute__((format(printf, 6, 7)));
 
 // supports errno
 #define __LOG_SYS_PRINTF(err, level, fmt, ...)                                 \
@@ -99,33 +100,30 @@ extern __log_sys_printf(int err,
 
 // with errno supports
 #define logSysError(err, fmt, ...)                                             \
-  __LOG_SYS_PRINTF(err, LOG_LEVEL_ERROR, fmt.##__VA_ARGS__)
+  __LOG_SYS_PRINTF(err, LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
 
-#define logSysWarning(err, fmt, ...)                                             \
-  __LOG_SYS_PRINTF(err, LOG_LEVEL_WARNING, fmt.##__VA_ARGS__)
+#define logSysWarning(err, fmt, ...)                                           \
+  __LOG_SYS_PRINTF(err, LOG_LEVEL_WARNING, fmt, ##__VA_ARGS__)
 
 // without errno supports
-#define logWarning(fmt, ...)                                             \
-  __LOG_PRINTF(LOG_LEVEL_WARNING, fmt.##__VA_ARGS__)
+#define logWarning(fmt, ...) __LOG_PRINTF(LOG_LEVEL_WARNING, fmt, ##__VA_ARGS__)
 
-#define logDebug(fmt, ...)                                             \
-  __LOG_PRINTF(LOG_LEVEL_DEBUG, fmt.##__VA_ARGS__)
-
+#define logDebug(fmt, ...) __LOG_PRINTF(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
 
 // maps to system logging
-#define LOG_MIL(fmt,...) __LOG_PRINTF(LOG_LEVE_MIL, fmt, ##__VA_ARGS__)
+#define LOG_MIL(fmt, ...) __LOG_PRINTF(LOG_LEVE_MIL, fmt, ##__VA_ARGS__)
 
 namespace rlog
 {
   using PrinterFunc = std::function<void(unsigned level,
-      const char *file,
-      const char *func,
-      int line,
-      const char *message,
-      int length)>;
+                                         const char *file,
+                                         const char *func,
+                                         int line,
+                                         const char *message,
+                                         int length)>;
 
   void setFilter(unsigned levels);
   void setPrinter(const PrinterFunc &printer);
-}
+} // namespace rlog
 
 #endif // RLOG_H

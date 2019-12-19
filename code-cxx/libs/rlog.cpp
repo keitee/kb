@@ -1,13 +1,122 @@
 #include "rlog.h"
+#include <cstdarg>
+#include <sys/uio.h> // writev()
 
 const unsigned __log_filter = LOG_LEVEL_VERBOSE | LOG_LEVEL_DEBUG |
                               LOG_LEVEL_INFO | LOG_LEVEL_WARNING |
                               LOG_LEVEL_ERROR | LOG_LEVEL_MIL | LOG_LEVEL_FATAL;
 
+// default printer which output to consolel. it's expected that clients will
+// override this with their own version if want to.
+
+static void __default_log_printer(unsigned level,
+                                  const char *file,
+                                  const char *func,
+                                  int line,
+                                  const char *message,
+                                  int length)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+
+  struct iovec iov[5];
+  char header[32];
+
+  iov[0].iov_base = header;
+  // micro seconds, 10-6
+  iov[0].iov_len = snprintf(header,
+                            sizeof(header),
+                            "%.010lu.%.06lu ",
+                            ts.tv_sec,
+                            ts.tv_nsec / 1000);
+  iov[0].iov_len = std::min(iov[0].iov_len, sizeof(header));
+
+  switch (level)
+  {
+    case LOG_LEVEL_FATAL:
+      iov[1].iov_base = (void *)"FTL: ";
+      iov[1].iov_len  = 5;
+      break;
+
+    case LOG_LEVEL_MIL:
+      iov[1].iov_base = (void *)"MIL: ";
+      iov[1].iov_len  = 5;
+      break;
+
+    case LOG_LEVEL_ERROR:
+      iov[1].iov_base = (void *)"ERR: ";
+      iov[1].iov_len  = 5;
+      break;
+
+    case LOG_LEVEL_WARNING:
+      iov[1].iov_base = (void *)"WRN: ";
+      iov[1].iov_len  = 5;
+      break;
+
+    case LOG_LEVEL_INFO:
+      iov[1].iov_base = (void *)"NFO: ";
+      iov[1].iov_len  = 5;
+      break;
+
+    case LOG_LEVEL_DEBUG:
+      iov[1].iov_base = (void *)"DBG: ";
+      iov[1].iov_len  = 5;
+      break;
+
+    default:
+      iov[1].iov_base = (void *)": ";
+      iov[1].iov_len  = 5;
+      break;
+  }
+
+  // extract filename
+  const char *fname{nullptr};
+  if (file)
+  {
+    if ((fname = strrchr(file, '/')) == nullptr)
+      fname = file;
+    else
+      fname++;
+  }
+
+  char body[160];
+  iov[2].iov_base = (void *)body;
+
+  // if one of them is null.
+  if (!fname || !func || (line <= 0))
+  {
+    iov[2].iov_len = snprintf(body, sizeof(body), "< M:? F:? L:? > ");
+  }
+  else
+  {
+    iov[2].iov_len = snprintf(body, sizeof(body), 
+        "< M:%.*s F:%.*s L:%d > ",
+        64, fname, 64, func, line);
+  }
+
+  iov[2].iov_len = std::min(iov[2].iov_len, sizeof(body));
+
+  iov[3].iov_base = (void *)message;
+  iov[3].iov_len = length;
+
+  iov[4].iov_base = (void *)"\n";
+  iov[4].iov_len = 1;
+
+  // man fileno
+  // FERROR(3)
+  // The function fileno() examines the argument stream and returns its integer
+  // file descriptor.
+
+  writev(fileno(stderr), iov, 5);
+}
+
+// set the default log printer to use the android log
+static rlog::PrinterFunc __log_printer = __default_log_printer;
+
 // so `append` is to append `errno` strings
 static void __log_vprintf(unsigned level,
                           const char *file,
-                          const chat *func,
+                          const char *func,
                           int line,
                           const char *fmt,
                           va_list ap,
@@ -33,16 +142,20 @@ static void __log_vprintf(unsigned level,
 
   // unlikely that mbuf[len-1] is `\n` but if so, decrease len to make space for
   // null char.
-  if (__builtin_expect((mbuf[len -1] == '\n'), 0))
+  if (__builtin_expect((mbuf[len - 1] == '\n'), 0))
     len--;
 
   mbuf[len] = '\0';
 
-  if (append && (len < (sizeof(mbuf)-1)))
+  if (append && (len < (int)(sizeof(mbuf) - 1)))
   {
     // if there is extra space, then apppend it and move len/null back.
     auto extra = std::min<size_t>(strlen(append), sizeof(mbuf) - 1 - len);
-    memcpy(mbuf, append, extra);
+
+    // NOTE: `mbuf + len` since have to add `append` to message. if not, it
+    // overwrites message.
+    memcpy(mbuf + len, append, extra);
+
     len += extra;
     mbuf[len] = '\0';
   }
@@ -64,10 +177,9 @@ static void __log_vprintf(unsigned level,
   }
 }
 
-
 void __log_printf(unsigned level,
                   const char *file,
-                  const chat *func,
+                  const char *func,
                   int line,
                   const char *fmt,
                   ...)
@@ -81,7 +193,7 @@ void __log_printf(unsigned level,
 void __log_sys_printf(int err,
                       unsigned level,
                       const char *file,
-                      const chat *func,
+                      const char *func,
                       int line,
                       const char *fmt,
                       ...)
@@ -101,12 +213,11 @@ void __log_sys_printf(int err,
   if (errmsg)
   {
     snprintf(appendbuf, sizeof(appendbuf), " (%d-%s)", err, errmsg);
-    appendbuf[sizeof(appendbuf)-1] = '\0';
-    append = appendbuf;
+    appendbuf[sizeof(appendbuf) - 1] = '\0';
+    append                           = appendbuf;
   }
 
   va_start(ap, fmt);
   __log_vprintf(level, file, func, line, fmt, ap, append);
   va_end(ap);
 }
-

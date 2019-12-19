@@ -15,112 +15,217 @@
    Some standard error handling routines used by various programs.
 */
 
-#include <cstdio>
-#include <cstdarg>
-#include <cstring>
-#include <cstdlib>
 #include <cerrno>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <unistd.h>
 
 #include "lpi_error.h"
 
-namespace {
+namespace
+{
 
-// lib/ename.c.inc
+  // lib/ename.c.inc
 
-char const *ename[] = {
-/* 0 */ "",
-/* 1 */ "EPERM", "ENOENT", "ESRCH", "EINTR", "EIO", "ENXIO", "E2BIG",
-/* 8 */ "ENOEXEC", "EBADF", "ECHILD", "EAGAIN/EWOULDBLOCK", "ENOMEM",
-/* 13 */ "EACCES", "EFAULT", "ENOTBLK", "EBUSY", "EEXIST", "EXDEV",
-/* 19 */ "ENODEV", "ENOTDIR", "EISDIR", "EINVAL", "ENFILE", "EMFILE",
-/* 25 */ "ENOTTY", "ETXTBSY", "EFBIG", "ENOSPC", "ESPIPE", "EROFS",
-/* 31 */ "EMLINK", "EPIPE", "EDOM", "ERANGE", "EDEADLK/EDEADLOCK",
-/* 36 */ "ENAMETOOLONG", "ENOLCK", "ENOSYS", "ENOTEMPTY", "ELOOP", "",
-/* 42 */ "ENOMSG", "EIDRM", "ECHRNG", "EL2NSYNC", "EL3HLT", "EL3RST",
-/* 48 */ "ELNRNG", "EUNATCH", "ENOCSI", "EL2HLT", "EBADE", "EBADR",
-/* 54 */ "EXFULL", "ENOANO", "EBADRQC", "EBADSLT", "", "EBFONT", "ENOSTR",
-/* 61 */ "ENODATA", "ETIME", "ENOSR", "ENONET", "ENOPKG", "EREMOTE",
-/* 67 */ "ENOLINK", "EADV", "ESRMNT", "ECOMM", "EPROTO", "EMULTIHOP",
-/* 73 */ "EDOTDOT", "EBADMSG", "EOVERFLOW", "ENOTUNIQ", "EBADFD",
-/* 78 */ "EREMCHG", "ELIBACC", "ELIBBAD", "ELIBSCN", "ELIBMAX",
-/* 83 */ "ELIBEXEC", "EILSEQ", "ERESTART", "ESTRPIPE", "EUSERS",
-/* 88 */ "ENOTSOCK", "EDESTADDRREQ", "EMSGSIZE", "EPROTOTYPE",
-/* 92 */ "ENOPROTOOPT", "EPROTONOSUPPORT", "ESOCKTNOSUPPORT",
-/* 95 */ "EOPNOTSUPP/ENOTSUP", "EPFNOSUPPORT", "EAFNOSUPPORT",
-/* 98 */ "EADDRINUSE", "EADDRNOTAVAIL", "ENETDOWN", "ENETUNREACH",
-/* 102 */ "ENETRESET", "ECONNABORTED", "ECONNRESET", "ENOBUFS", "EISCONN",
-/* 107 */ "ENOTCONN", "ESHUTDOWN", "ETOOMANYREFS", "ETIMEDOUT",
-/* 111 */ "ECONNREFUSED", "EHOSTDOWN", "EHOSTUNREACH", "EALREADY",
-/* 115 */ "EINPROGRESS", "ESTALE", "EUCLEAN", "ENOTNAM", "ENAVAIL",
-/* 120 */ "EISNAM", "EREMOTEIO", "EDQUOT", "ENOMEDIUM", "EMEDIUMTYPE",
-/* 125 */ "ECANCELED", "ENOKEY", "EKEYEXPIRED", "EKEYREVOKED",
-/* 129 */ "EKEYREJECTED", "EOWNERDEAD", "ENOTRECOVERABLE", "ERFKILL"
-};
+  char const *ename[] = {
+    /* 0 */ "",
+    /* 1 */ "EPERM",
+    "ENOENT",
+    "ESRCH",
+    "EINTR",
+    "EIO",
+    "ENXIO",
+    "E2BIG",
+    /* 8 */ "ENOEXEC",
+    "EBADF",
+    "ECHILD",
+    "EAGAIN/EWOULDBLOCK",
+    "ENOMEM",
+    /* 13 */ "EACCES",
+    "EFAULT",
+    "ENOTBLK",
+    "EBUSY",
+    "EEXIST",
+    "EXDEV",
+    /* 19 */ "ENODEV",
+    "ENOTDIR",
+    "EISDIR",
+    "EINVAL",
+    "ENFILE",
+    "EMFILE",
+    /* 25 */ "ENOTTY",
+    "ETXTBSY",
+    "EFBIG",
+    "ENOSPC",
+    "ESPIPE",
+    "EROFS",
+    /* 31 */ "EMLINK",
+    "EPIPE",
+    "EDOM",
+    "ERANGE",
+    "EDEADLK/EDEADLOCK",
+    /* 36 */ "ENAMETOOLONG",
+    "ENOLCK",
+    "ENOSYS",
+    "ENOTEMPTY",
+    "ELOOP",
+    "",
+    /* 42 */ "ENOMSG",
+    "EIDRM",
+    "ECHRNG",
+    "EL2NSYNC",
+    "EL3HLT",
+    "EL3RST",
+    /* 48 */ "ELNRNG",
+    "EUNATCH",
+    "ENOCSI",
+    "EL2HLT",
+    "EBADE",
+    "EBADR",
+    /* 54 */ "EXFULL",
+    "ENOANO",
+    "EBADRQC",
+    "EBADSLT",
+    "",
+    "EBFONT",
+    "ENOSTR",
+    /* 61 */ "ENODATA",
+    "ETIME",
+    "ENOSR",
+    "ENONET",
+    "ENOPKG",
+    "EREMOTE",
+    /* 67 */ "ENOLINK",
+    "EADV",
+    "ESRMNT",
+    "ECOMM",
+    "EPROTO",
+    "EMULTIHOP",
+    /* 73 */ "EDOTDOT",
+    "EBADMSG",
+    "EOVERFLOW",
+    "ENOTUNIQ",
+    "EBADFD",
+    /* 78 */ "EREMCHG",
+    "ELIBACC",
+    "ELIBBAD",
+    "ELIBSCN",
+    "ELIBMAX",
+    /* 83 */ "ELIBEXEC",
+    "EILSEQ",
+    "ERESTART",
+    "ESTRPIPE",
+    "EUSERS",
+    /* 88 */ "ENOTSOCK",
+    "EDESTADDRREQ",
+    "EMSGSIZE",
+    "EPROTOTYPE",
+    /* 92 */ "ENOPROTOOPT",
+    "EPROTONOSUPPORT",
+    "ESOCKTNOSUPPORT",
+    /* 95 */ "EOPNOTSUPP/ENOTSUP",
+    "EPFNOSUPPORT",
+    "EAFNOSUPPORT",
+    /* 98 */ "EADDRINUSE",
+    "EADDRNOTAVAIL",
+    "ENETDOWN",
+    "ENETUNREACH",
+    /* 102 */ "ENETRESET",
+    "ECONNABORTED",
+    "ECONNRESET",
+    "ENOBUFS",
+    "EISCONN",
+    /* 107 */ "ENOTCONN",
+    "ESHUTDOWN",
+    "ETOOMANYREFS",
+    "ETIMEDOUT",
+    /* 111 */ "ECONNREFUSED",
+    "EHOSTDOWN",
+    "EHOSTUNREACH",
+    "EALREADY",
+    /* 115 */ "EINPROGRESS",
+    "ESTALE",
+    "EUCLEAN",
+    "ENOTNAM",
+    "ENAVAIL",
+    /* 120 */ "EISNAM",
+    "EREMOTEIO",
+    "EDQUOT",
+    "ENOMEDIUM",
+    "EMEDIUMTYPE",
+    /* 125 */ "ECANCELED",
+    "ENOKEY",
+    "EKEYEXPIRED",
+    "EKEYREVOKED",
+    /* 129 */ "EKEYREJECTED",
+    "EOWNERDEAD",
+    "ENOTRECOVERABLE",
+    "ERFKILL"};
 
 #define MAX_ENAME 132
 
-
-void outputError(bool useErrorString, int err, bool useFlush,
-    const char *format, va_list ap)
-{
+  void outputError(
+    bool useErrorString, int err, bool useFlush, const char *format, va_list ap)
+  {
 #define BUF_SIZE (1024)
-  char buf[BUF_SIZE];
-  char userMsg[BUF_SIZE];
-  char errText[BUF_SIZE];
+    char buf[BUF_SIZE];
+    char userMsg[BUF_SIZE];
+    char errText[BUF_SIZE];
 
-  // output formatted message from user
-  vsnprintf(userMsg, BUF_SIZE, format, ap);
+    // output formatted message from user
+    vsnprintf(userMsg, BUF_SIZE, format, ap);
 
-  // output error string from errno
-  if (useErrorString)
-  {
-    // error nemonic and error string
-    snprintf(errText, BUF_SIZE, " [%s %s]",
-        (err > 0 && err <= MAX_ENAME) ? ename[err] : "",
-        strerror(err));
+    // output error string from errno
+    if (useErrorString)
+    {
+      // error nemonic and error string
+      snprintf(errText,
+               BUF_SIZE,
+               " [%s %s]",
+               (err > 0 && err <= MAX_ENAME) ? ename[err] : "",
+               strerror(err));
+    }
+    else
+    {
+      snprintf(errText, BUF_SIZE, ":");
+    }
+
+    // concat user msg and err string. note that added newline.
+    snprintf(buf, BUF_SIZE, "ERROR%s, %s\n", errText, userMsg);
+
+    if (useFlush)
+      fflush(stdout);
+
+    fputs(buf, stderr);
+    fflush(stderr);
   }
-  else
+
+  /*
+  Dump core if EF_DUMPCORE environment variable is defined and is a nonempty
+  string; otherwise call exit(3) or _exit(2), depending on the value of
+  'useExit3'.
+  */
+
+  void terminate(bool useExit3)
   {
-    snprintf(errText, BUF_SIZE, ":");
+    char *s;
+
+    s = getenv("EF_DUMPCORE");
+
+    // have to set below to get core file
+    // $ ulimit -c unlimited
+
+    if (s != nullptr && *s != '\0')
+      abort();
+    else if (useExit3)
+      exit(EXIT_FAILURE);
+    else
+      _exit(EXIT_FAILURE);
   }
-
-  // concat user msg and err string. note that added newline.
-  snprintf(buf, BUF_SIZE, "ERROR%s, %s\n", errText, userMsg);
-
-  if (useFlush)
-    fflush(stdout);
-
-  fputs(buf, stderr);
-  fflush(stderr);
-}
-
-
-/* 
-Dump core if EF_DUMPCORE environment variable is defined and is a nonempty
-string; otherwise call exit(3) or _exit(2), depending on the value of
-'useExit3'. 
-*/
-
-void terminate(bool useExit3)
-{
-  char *s;
-
-  s = getenv("EF_DUMPCORE");
-
-  // have to set below to get core file
-  // $ ulimit -c unlimited
-
-  if (s != nullptr && *s != '\0')
-    abort();
-  else if(useExit3)
-    exit(EXIT_FAILURE);
-  else
-    _exit(EXIT_FAILURE);
-}
 
 } // namespace
-
 
 void errMsg(const char *format, ...)
 {
@@ -137,7 +242,6 @@ void errMsg(const char *format, ...)
   errno = saved_errno;
 }
 
-
 void errExit(const char *format, ...)
 {
   va_list arg_list;
@@ -149,8 +253,7 @@ void errExit(const char *format, ...)
   terminate(true);
 }
 
-
-/* 
+/*
 
 Display error message including 'errno' diagnostic, and terminate the process by
 calling _exit().
@@ -169,7 +272,6 @@ caller.
 void err_exit(const char *format, ...)
 
 */
-
 
 void errExitEN(int errnum, const char *format, ...)
 {

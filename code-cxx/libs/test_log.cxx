@@ -1,28 +1,30 @@
 #include "gmock/gmock.h"
 
-#include <iostream>
 #include <fcntl.h>
-
-// g++ -g -std=c++0x t_override.cpp
+#include <iostream>
 
 using namespace std;
 using namespace testing;
 
-// #define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist' declarations from <stdio.h> */
+// #define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist' declarations from
+// <stdio.h> */
 //
-// ibc.cpp: In member function ‘virtual void Syscall_GetPidThroughSyscall_Test::TestBody()’:
-// libc.cpp:605:13: error: ‘SYS_getpid’ was not declared in this scope
+// ibc.cpp: In member function ‘virtual void
+// Syscall_GetPidThroughSyscall_Test::TestBody()’: libc.cpp:605:13: error:
+// ‘SYS_getpid’ was not declared in this scope
 //      syscall(SYS_getpid);
 //              ^
-// libc.cpp: In function ‘sanitizer_syscall::uptr sanitizer_syscall::internal_stat(const char*, void*)’:
-// libc.cpp:699:23: error: ‘__NR_stat’ was not declared in this scope
+// libc.cpp: In function ‘sanitizer_syscall::uptr
+// sanitizer_syscall::internal_stat(const char*, void*)’: libc.cpp:699:23:
+// error: ‘__NR_stat’ was not declared in this scope
 //  #define SYSCALL(name) __NR_##name
 //                        ^
 #include <sys/syscall.h>
-#include <sys/types.h>
 #include <sys/time.h>
+#include <sys/types.h>
 
 #include "lpi_error.h"
+#include "rlog.h"
 #include "slog.h"
 
 #define LOG_ENABLE
@@ -41,7 +43,6 @@ using namespace testing;
 #define LOG_EXIT_ERROR(fmt...)
 
 #endif
-
 
 // ={=========================================================================
 /* LPI log
@@ -69,10 +70,12 @@ TEST(LPILog, useLog)
     int value{10};
     std::string message{"errMsg"};
 
-    errMsg("this is error message from %s and value %d", 
-        message.c_str(), value);
-    LOG_ERROR("this is error message from %s and value %d", 
-        message.c_str(), value);
+    errMsg("this is error message from %s and value %d",
+           message.c_str(),
+           value);
+    LOG_ERROR("this is error message from %s and value %d",
+              message.c_str(),
+              value);
   }
 
   {
@@ -99,8 +102,9 @@ TEST(LPILog, useLogExit)
 1. simple log do not supports `errno`
 
 [ RUN      ] SimpleLog.useLog
-LOG| F:test_log.cxx C:virtual void SimpleLog_useLog_Test::TestBody() L:00099 : this is error message from errMsg and value 10
-[       OK ] SimpleLog.useLog (0 ms)
+LOG| F:test_log.cxx C:virtual void SimpleLog_useLog_Test::TestBody() L:00099 :
+this is error message from errMsg and value 10 [       OK ] SimpleLog.useLog (0
+ms)
 
 [ RUN      ] SimpleLog.showCorrectLineNumbers
 LOG| F:test_log.cxx C:void func1() L:00119 : this is func1()
@@ -115,11 +119,10 @@ TEST(SimpleLog, useLog)
   int value{10};
   std::string message{"errMsg"};
 
-  LOG_MSG("this is error message from %s and value %d", 
-      message.c_str(), value);
+  LOG_MSG("this is error message from %s and value %d", message.c_str(), value);
 
   // since it do exit()
-  // LOG_ERR("this is error message from %s and value %d", 
+  // LOG_ERR("this is error message from %s and value %d",
   //     message.c_str(), value);
 }
 
@@ -145,11 +148,44 @@ TEST(SimpleLog, showCorrectLineNumbers)
   func1();
 }
 
-
 // ={=========================================================================
 /* rlog
-// ={=========================================================================
+
+  Return Value
+  On success, sd_bus_new() returns 0 or a positive integer. On failure, it
+  returns a negative errno-style error code.
+
+  rc = sd_bus_attach_event(bus, eventLoop.handle(), SD_EVENT_PRIORITY_NORMAL);
+  if (rc < 0)
+  {
+    logSysError(-rc, "failed to attach bus to event loop");
+    sd_bus_unref(bus);
+  }
+
 */
+
+// (gdb) b
+// Rlog_useCategory_Test::TestBody()
+
+// [----------] 1 test from Rlog
+// [ RUN      ] Rlog.useCategory
+// 0001200307.527447 ERR: < M:test_log.cxx F:TestBody L:181 > failed to open file (2-No such file or directory)
+// [       OK ] Rlog.useCategory (0 ms)
+
+TEST(Rlog, useCategory)
+{
+  {
+    int fd;
+
+    errno = 0;
+
+    fd = open("startup", O_RDONLY);
+    if (fd == -1)
+    {
+      logSysError(errno, "failed to open file");
+    }
+  }
+}
 
 int main(int argc, char **argv)
 {
