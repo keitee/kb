@@ -7,26 +7,23 @@
 // create a new message object
 
 DBusMessagePrivate::DBusMessagePrivate(DBusMessage::MessageType type,
-        std::string const &service,
-        std::string const &path,
-        std::string const &interface,
-        std::string const &method)
-  : m_type(type)
+                                       std::string const &service,
+                                       std::string const &path,
+                                       std::string const &interface,
+                                       std::string const &method)
+    : m_type(type)
     , m_service(service)
     , m_path(path)
     , m_interface(interface)
     , m_method(method)
-{
-}
+{}
 
 DBusMessagePrivate::DBusMessagePrivate(DBusMessage::ErrorType errorType,
-        const char *errorMessage)
-  : m_type(DBusMessage::ErrorMessage)
+                                       const char *errorMessage)
+    : m_type(DBusMessage::ErrorMessage)
     , m_errorName(m_errorNames.at(errorType))
     , m_errorMessage(errorMessage ? errorMessage : "")
-{
-}
-
+{}
 
 /*
 https://www.freedesktop.org/software/systemd/man/sd_bus_error.html#
@@ -47,17 +44,15 @@ typedef struct {
 */
 
 DBusMessagePrivate::DBusMessagePrivate(sd_bus_error *error)
-  : m_type(DBusMessage::ErrorMessage)
+    : m_type(DBusMessage::ErrorMessage)
     , m_errorName((error && error->name) ? error->name : "")
     , m_errorMessage((error && error->message) ? error->message : "")
-{
-}
+{}
 
 DBusMessagePrivate::DBusMessagePrivate(sd_bus_message *reply)
-  : m_type(getMessageType_(reply))
+    : m_type(getMessageType_(reply))
     , m_service(sd_bus_message_get_sender(reply))
-{
-}
+{}
 
 static DBusMessage::MessageType getMessageType_(sd_bus_message *reply)
 {
@@ -70,7 +65,6 @@ static DBusMessage::MessageType getMessageType_(sd_bus_message *reply)
     return DBusMessage::InvalidMessage;
   }
 }
-
 
 /* ={--------------------------------------------------------------------------
  @brief :

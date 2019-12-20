@@ -17,6 +17,12 @@ if __name__ == "__main__":
     listfile = 'flist.out'
     logfile = open(listfile, 'w+')
 
+    # # dirs to include
+    # dirs = [
+    #     '.',
+    #     '/usr/include'
+    #     ]
+    #
     # # dirs to exclude
     # # find {to be replaced} -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
     # # find ethan-as-source/Components/AS/Services -type d \( -path '*/build' -o -path '*/mock' \) -prune -o -print
@@ -29,12 +35,19 @@ if __name__ == "__main__":
     #     # "-path", "*/test",
     #     ")", "-prune", "-o", "-type", "f", "-print"]
 
-    # for e in dirs:
-    #   command[1] = e
-    #   subprocess.call(command, stdout=logfile)
+    # dirs to exclude
+    command = ["ag", ".", "--depth", "-1", 
+        "--cc", 
+        "--cpp",  "--nocolor", "--nogroup", "-g", "''"]
 
-    command = ["ag", "--depth", "-1", "--cc", "--cpp", "--nocolor", "--nogroup", "-g", "''"]
-    subprocess.call(command, stdout=logfile)
+    for e in dirs:
+      command[1] = e
+      subprocess.call(command, stdout=logfile)
+
+    # # ag --depth -1 --cc --cpp --nocolor --nogroup -g ''
+    # command = ["ag", "--depth", "-1", "--cc", "--cpp", "--nocolor", "--nogroup", "-g", "''"]
+    # subprocess.call(command, stdout=logfile)
+
     logfile.close()
 
     sys.stdout.write("building ctags for %s ...\n" % listfile)
