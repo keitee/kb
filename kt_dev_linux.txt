@@ -675,86 +675,243 @@ env ${LD_PRELOAD} nickelmediad \
 
 
 ={============================================================================
-*kt_linux_bash_005* sh-quote
+*kt_linux_bash_005* sh-shell
+
+2 Definitions
+
+'metacharacter'
+     A character that, when unquoted, separates words.  A metacharacter
+     is a 'space', 'tab', 'newline', or one of the following characters:
+     '|', '&', ';', '(', ')', '<', or '>'.
+
+'word'
+     A sequence of characters treated as a unit by the shell.  Words may
+     not include unquoted 'metacharacters'.
+
+
+3.1.1 Shell Operation
+
+The following is a brief description of the shell's operation when it
+reads and executes a command.  Basically, the shell does the following:
+
 
 3.1.2 Quoting
 
-Quoting is used to remove the special meaning of certain characters or words to
-the shell. Quoting can be used to disable special treatment for special
+Quoting is used `to remove the special meaning` of certain characters or words
+to the shell. Quoting can be used to disable special treatment for special
 characters, to prevent reserved words from being recognized as such, and to
 prevent parameter expansion.
-
-// metacharacter
-//    A character that, when unquoted, separates words. A metacharacter is a
-//    blank or one of the following characters: ‘|’, ‘&’, ‘;’, ‘(’, ‘)’, ‘<’, or
-//    ‘>’.
 
 There are three quoting mechanisms: the escape character, single quotes, and
 double quotes. 
 
-* Escape Character: to remove the special meaning from a single character.
+*sh-escape* *sh-quote*
+o Escape Character
+  to remove the special meaning from a single character.
  
-A non-quoted backslash ‘\’ is the Bash `escape-character`. It preserves the
-literal value of the next `character` that follows
+  A non-quoted backslash ‘\’ is the Bash `escape-character`. It preserves the
+  literal value of the next `character` that follows
+
+  ex: to escape `$` char
+  echo You owe \$1250
+  You owe $1250
+
+
+*sh-quote-single* *sh-double-quote*
+o Single Quotes
+  to inhibit `all` interpretation of a sequence of characters.
+
+  Enclosing `characters` in single quotes (‘'’) preserves the literal value of
+  each character within the quotes. A single quote `may not occur between
+  single quotes`, even when preceded by a backslash. 
+
+  <ex>
+  Quote all inside the single quote.
+  
+  $ echo '<-$1250.**>; (update?) [y|n]'
+  <-$1250.**>; (update?) [y|n]
+
+
+o Double Quotes
+  to suppress `most` of the interpretation of a sequence of characters.
+
+  Enclosing characters in double quotes (‘"’) preserves the literal value of
+  all characters within the quotes, with the exception of ‘$’, ‘`’, ‘\’, and,
+  when history expansion is enabled, ‘!’. 
+
+  The characters ‘$’ and ‘`’ retain their special meaning within double quotes
+  (see Shell Expansions). 
+  
+  The backslash retains its special meaning only when followed by one of the
+  following characters: ‘$’, ‘`’, ‘"’, ‘\’, or newline. 
+
+  Within double quotes, backslashes that are followed by one of these
+  characters are removed.  Backslashes preceding characters without a special
+  meaning are left unmodified. A double quote may be quoted within double
+  quotes by preceding it with a backslash. If enabled, history expansion will
+  be performed unless an ‘!’ appearing in double quotes is escaped using a
+  backslash. The backslash preceding the ‘!’ is not removed.
+
+  The special parameters ‘*’ and ‘@’ have special meaning when in double
+  quotes (see Shell Parameter Expansion). 
+
+  <ex> difference between single and double quote
+
+  Do not quote all (see below) so that `can use variables` inside the quoted.
+  
+  $ echo '$USER owes <-$1250.**>; [ as of (``date +%m/%d``) ]'
+  $USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]
+  
+  $ echo "$USER owes <-$1250.**>; [ as of (``date +%m/%d``) ]"
+  parkkt owes <-250.**>; [ as of (01/26) ]
+
+  <ex>
+  To prevent globbing by shell before passing params to grep command.
+  
+  $ grep '[0-9][0-9]*$' report2 report7
+
+  <ex>
+  ssh theyard "mysql -e "select upload_time from upload where parser_result != 'Not Yet Parsed' $1""      # not work
+  ssh theyard "mysql -e \"select upload_time from upload where parser_result != 'Not Yet Parsed' $1\""    # work
+
+
+*sh-command*
+
+3.2.3 Lists of Commands
+
+A list is a sequence of one or more `pipelines` separated by one of the
+operators ;, &, &&, or ||, and optionally terminated by one of ;, &, or a
+`newline`. 
+
+*sh-newline* *sh-semicolon*
+A sequence of one or more newlines may appear in a 'list' to delimit commands,
+equivalent to a semicolon.
+
+Commands separated by a ';' are executed `sequentially`; the shell waits for
+each command to terminate in turn.  The return status is the exit status of
+the last command executed.
+
+If a command is terminated by the control operator ‘&’, the shell executes the
+command `asynchronously` in a subshell. This is known as executing the command
+in the `background`. The shell does not wait for the command to finish, and
+the return status is 0 (true). 
+
+
+AND and OR lists are sequences of one or more pipelines separated by the
+control operators '&&' and '||', respectively.  AND and OR lists are executed
+with left associativity.
+
+   An AND list has the form
+     COMMAND1 && COMMAND2
+
+COMMAND2 is executed if, and only if, COMMAND1 returns an exit status of zero.
+
+   An OR list has the form
+     COMMAND1 || COMMAND2
+
+COMMAND2 is executed if, and only if, COMMAND1 returns a non-zero exit status.
+
+The return status of AND and OR lists is the exit status of the last command
+executed in the list.
+
 
 <ex>
-$ echo You owe \$1250
-You owe $1250
+if [ "$(whoami)" != 'root' ]; then
+   echo "You have no permission to run $0 as non-root user."
+   exit 1;
+fi
 
+With Bash, you can shorten this type of construct. The compact equivalent of
+the above test is as follows:
 
-*sh-single-double-quote*
-* Single Quotes: to inhibit `all` interpretation of a sequence of characters.
+[ "$(whoami)" != 'root' ] && (echo you are using a non-privileged account; exit 1)
 
-Enclosing `characters` in single quotes (‘'’) preserves the literal value of each
-character within the quotes. A single quote `may not occur between single quotes`,
-even when preceded by a backslash. 
+Similar to the "&&" expression which indicates what to do if the test proves
+true, "||" specifies what to do if the test is false.
+
 
 <ex>
-Quote all inside the single quote.
+* Check if loginscript is not set. If it's set(defined) then run -f. 
+  * if file exist then test return true so no fail() call.
+  * if file not exist then test return false so run fail() call.
+* If loginscript is not set, no run -f and test return true(0) so no fail() call.
 
-$ echo '<-$1250.**>; (update?) [y|n]'
-<-$1250.**>; (update?) [y|n]
+[[ -z "$loginscript" || -f "$loginscript" ]] ||
+    fail "Loginscript '$loginscript' doesn't exist."
 
-
-* Double Quotes: to suppress `most` of the interpretation of a sequence of
-  characters.
-
-Enclosing characters in double quotes (‘"’) preserves the literal value of all
-characters within the quotes, with the exception of ‘$’, ‘`’, ‘\’, and, when
-history expansion is enabled, ‘!’. 
-
-The characters ‘$’ and ‘`’ retain their special meaning within double quotes
-(see Shell Expansions). 
-
-The backslash retains its special meaning only when followed by one of the
-following characters: ‘$’, ‘`’, ‘"’, ‘\’, or newline. Within double quotes,
-backslashes that are followed by one of these characters are removed.
-  Backslashes preceding characters without a special meaning are left
-  unmodified. A double quote may be quoted within double quotes by preceding it
-  with a backslash. If enabled, history expansion will be performed unless an
-  ‘!’ appearing in double quotes is escaped using a backslash. The backslash
-  preceding the ‘!’ is not removed.
-
-The special parameters ‘*’ and ‘@’ have special meaning when in double quotes
-(see Shell Parameter Expansion). 
+Progress to next cond when only cond1 is true. [[ cond1 || cond2 ]] || exec
 
 <ex>
-Do not quote all (see below) so that `can use variables` inside the quoted.
+To see if meet at least one of options.
 
-$ echo '$USER owes <-$1250.**>; [ as of (``date +%m/%d``) ]'
-$USER owes <-$1250.**>; [ as of (`date +%m/%d`) ]
-
-$ echo "$USER owes <-$1250.**>; [ as of (``date +%m/%d``) ]"
-parkkt owes <-250.**>; [ as of (01/26) ]
+[[ -n "$release" || -n "$zincdir" || -n "$jenkinshost" || -n "$jenkinsurl" ||
+   -n "$galliumurl" || -n "$localgallium" || -n "$platformconfigurl" ||
+   "$virtualinputdriver" -ne 0 || -n "$irdriver" || "$enabledbustcp" -ne 0 ||
+   "$directfbsrc" -ne 0 || "$killzincdaemons" -ne 0 || -n "$toolnames" ||
+   -n "$networkmanager" || -n "$loginscript" || -n "$startupscript" ||
+   "$forcefirsttime" -ne 0 || "$needsreboot" -ne 0 || "$vidmemcapture" -ne 0 ]] ||
+{
+    fail "You must specify at least one of -[ZzjugcdeEtsknlbTfrv]."
+}
 
 <ex>
-To prevent globbing by shell before passing params to grep command.
+function x {
+  ...
 
-$ grep '[0-9][0-9]*$' report2 report7
+  [[ 
+    "$cacheOptionCorrectAtExpectedPosition" = 1 &&
+    "$cacheValueCorrectAtExpectedPosition" = 1 &&
+    "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
+    "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
+    "$jarOptionCorrectAtExpectedPosition" = "1" && 
+    "$jarValueCorrectAtExpectedPosition" = "1" && 
+    "$urlOptionCorrectAtExpectedPosition" = "1" && 
+    "$urlValueCorrectAtExpectedPosition" = "1" 
+  ]] 
+}
+
+From the debug output, shows only 4 since stops as soon as see flase. This may
+be confusing when debugging.
+
++ [[ 1 = 1 ]]
++ [[ 1 = 1 ]]
++ [[ 1 = 1 ]]
++ [[ 0 = 1 ]]
 
 <ex>
-ssh theyard "mysql -e "select upload_time from upload where parser_result != 'Not Yet Parsed' $1""      # not work
-ssh theyard "mysql -e \"select upload_time from upload where parser_result != 'Not Yet Parsed' $1\""    # work
+The lsr-config returns "0/1" or "true/false" when use --bool and the problem is
+when a key is boolean and is not set in a database meaning 0, it still returns
+"0" which is not NULL string. So "if [ -z ]" check always becomes false.
+
+The solution is that use variable's value depending on key value to set actual
+variable.
+
+#!/bin/sh
+
+# when key is not set or returns "false" then run "echo false" and ends here.
+# enable_yv_media="".
+#
+# when key set and returns "true" then enable_yv_media="true" since lsr-config
+# returns zero exit status.
+
+enable_yv_media=""
+[ "false" = "$(lsr-config --bool platform.settings.enable-yv-media || echo false)" ] || {
+    enable_yv_media="true"
+}
+
+USE_YV_MEDIA_ROUTER="$enable_yv_media"
+
+if [ -z "$USE_YV_MEDIA_ROUTER" ]; then
+	echo "NOT SET. $USE_YV_MEDIA_ROUTER. WILL USE OEM MR"
+else
+	echo "SET. $USE_YV_MEDIA_ROUTER. WILL USE YV MR"
+fi
+
+However, if use this then goes wrong.
+
+if [ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ]; then
+    // things to do when true case
+
 
 
 ={============================================================================
@@ -1310,153 +1467,6 @@ ping -c 2 $ip &&
 (
 echo "commands.."
 ) | telnet $ip
-
-
-={============================================================================
-*kt_linux_bash_019* sh-list-construct
-
-3.2.3 Lists of Commands
-
-A list is a sequence of one or more `pipelines` separated by one of the
-operators ;, &, &&, or ||, and optionally terminated by one of ;, &, or a
-`newline`. 
-
-note: means do on multiple pipelines
-
-<semicolon>
-
-   A sequence of one or more newlines may appear in a 'list' to delimit
-   commands, equivalent to a semicolon.
-
-Commands separated by a ; are executed 'sequentially'; the shell waits for each
-command to terminate in turn. The return status is the exit status of the last
-command executed. 
-
-If a command is terminated by the control operator ‘&’, the shell executes the
-command `asynchronously` in a subshell. This is known as executing the command
-in the `background`. The shell does not wait for the command to finish, and the
-return status is 0 (true). 
-
-// When job control is not active (see Job Control), the standard input for
-// asynchronous commands, in the absence of any explicit redirections, is
-// redirected from /dev/null. 
-
-
-<and-and-or>
-AND and OR lists are sequences of one or more pipelines separated by the control
-operators ‘&&’ and ‘||’, respectively. AND and OR lists are executed with left
-associativity.
-
-An AND list has the form
-
-command1 && command2
-
-command2 is executed if, and only if, command1 returns an exit status of `zero`.
-
-An OR list has the form
-
-command1 || command2
-
-command2 is executed if, and only if, command1 returns a non-zero exit status.
-
-The return status of AND and OR lists is the exit status of the last command
-executed in the list. 
-
-<ex>
-if [ "$(whoami)" != 'root' ]; then
-   echo "You have no permission to run $0 as non-root user."
-   exit 1;
-fi
-
-With Bash, you can shorten this type of construct. The compact equivalent of the
-above test is as follows:
-
-[ "$(whoami)" != 'root' ] && ( echo you are using a non-privileged account; exit 1 )
-
-Similar to the "&&" expression which indicates what to do if the test proves
-true, "||" specifies what to do if the test is false.
-
-<ex>
-* Check if loginscript is not set. If it's set(defined) then run -f. 
-  * if file exist then test return true so no fail() call.
-  * if file not exist then test return false so run fail() call.
-* If loginscript is not set, no run -f and test return true(0) so no fail() call.
-
-[[ -z "$loginscript" || -f "$loginscript" ]] ||
-    fail "Loginscript '$loginscript' doesn't exist."
-
-Progress to next cond when only cond1 is true. [[ cond1 || cond2 ]] || exec
-
-<ex>
-To see if meet at least one of options.
-
-[[ -n "$release" || -n "$zincdir" || -n "$jenkinshost" || -n "$jenkinsurl" ||
-   -n "$galliumurl" || -n "$localgallium" || -n "$platformconfigurl" ||
-   "$virtualinputdriver" -ne 0 || -n "$irdriver" || "$enabledbustcp" -ne 0 ||
-   "$directfbsrc" -ne 0 || "$killzincdaemons" -ne 0 || -n "$toolnames" ||
-   -n "$networkmanager" || -n "$loginscript" || -n "$startupscript" ||
-   "$forcefirsttime" -ne 0 || "$needsreboot" -ne 0 || "$vidmemcapture" -ne 0 ]] ||
-{
-    fail "You must specify at least one of -[ZzjugcdeEtsknlbTfrv]."
-}
-
-<ex>
-function x {
-  ...
-
-  [[ 
-    "$cacheOptionCorrectAtExpectedPosition" = 1 &&
-    "$cacheValueCorrectAtExpectedPosition" = 1 &&
-    "$cacheSizeOptionCorrectAtExpectedPosition" = 1 &&
-    "$cacheSizeValueCorrectAtExpectedPosition" = 1 &&
-    "$jarOptionCorrectAtExpectedPosition" = "1" && 
-    "$jarValueCorrectAtExpectedPosition" = "1" && 
-    "$urlOptionCorrectAtExpectedPosition" = "1" && 
-    "$urlValueCorrectAtExpectedPosition" = "1" 
-  ]] 
-}
-
-From the debug output, shows only 4 since stops as soon as see flase. This may
-be confusing when debugging.
-
-+ [[ 1 = 1 ]]
-+ [[ 1 = 1 ]]
-+ [[ 1 = 1 ]]
-+ [[ 0 = 1 ]]
-
-<ex>
-The lsr-config returns "0/1" or "true/false" when use --bool and the problem is
-when a key is boolean and is not set in a database meaning 0, it still returns
-"0" which is not NULL string. So "if [ -z ]" check always becomes false.
-
-The solution is that use variable's value depending on key value to set actual
-variable.
-
-#!/bin/sh
-
-# when key is not set or returns "false" then run "echo false" and ends here.
-# enable_yv_media="".
-#
-# when key set and returns "true" then enable_yv_media="true" since lsr-config
-# returns zero exit status.
-
-enable_yv_media=""
-[ "false" = "$(lsr-config --bool platform.settings.enable-yv-media || echo false)" ] || {
-    enable_yv_media="true"
-}
-
-USE_YV_MEDIA_ROUTER="$enable_yv_media"
-
-if [ -z "$USE_YV_MEDIA_ROUTER" ]; then
-	echo "NOT SET. $USE_YV_MEDIA_ROUTER. WILL USE OEM MR"
-else
-	echo "SET. $USE_YV_MEDIA_ROUTER. WILL USE YV MR"
-fi
-
-However, if use this then goes wrong.
-
-if [ "false" = "$(lsr-config --bool platform.settings.webkit-use-media-router || echo false)" ]; then
-    // things to do when true case
 
 
 ={============================================================================
@@ -3011,16 +3021,16 @@ A variable has a value and zero or more attributes. Attributes are assigned
 using the `declare` builtin command.
 
 A parameter is set if it has been assigned a value. Once a variable is set, it
-may be unset only by using the `unset command`
+may be unset only by using the 'unset' builtin command.
 
 A variable may be assigned to by a statement of the form
 
 name=[value]
 
-note:
+*sh-assign*
 `no space` between "name", "=", "[value]". Otherwise, treat it as command.
 
-
+*sh-null*
 If value is not given, the variable is assigned the `null-string` and the null
 string is a `valid value.` 
 
@@ -3364,7 +3374,7 @@ bash: CONST: readonly variable
 
 
 ={============================================================================
-*kt_linux_bash_001* sh-array
+*kt_linux_bash_001* sh-array sh-list
 
 6.7 Arrays
 
@@ -3426,41 +3436,22 @@ that number is interpreted as relative to one greater than the maximum index of
 
 
 <to-reference> *sh-brace*
-Any element of an array may be referenced using ${name[subscript]}. The `braces`
-are required to avoid conflicts with the shell’s `filename-expansion` operators.
+Any element of an array may be referenced using '${NAME[SUBSCRIPT]}'. The
+`braces` are required to avoid conflicts with the shell’s `filename-expansion`
+operators.
 
 If the subscript is ‘@’ or ‘*’, the word expands to `all-members` of the array
 name. 
 
 These subscripts differ only when the word appears within double quotes. If the
-word is double-quoted, ${name[*]} expands to a `single-word` with the value of
+word is double-quoted, ${NAME[*]} expands to a `single-word` with the value of
 each array member separated by the first character of the IFS variable, and
-${name[@]} expands each element of name to a separate word. When there are no
-array members, ${name[@]} expands to nothing. If the double-quoted expansion
+${NAME[@]} expands each element of name to a separate word. When there are no
+array members, ${NAME[@]} expands to nothing. If the double-quoted expansion
 occurs within a word, the expansion of the first parameter is joined with the
 beginning part of the original word, and the expansion of the last parameter is
 joined with the last part of the original word. This is `analogous` to the
 expansion of the special parameters ‘@’ and ‘*’. 
-
-<ex>
-The both are the same.
-
-declare -ar list=(
-    'darwin_0019fbd18c9a_487032cd821312aea3b11274c2ff7384'
-    'darwin_0019fbb71c47_c4130c208206b80b3963ee05c861b5c3'
-    'darwin_0019fbb71bb1_d23afbe329e75a1d9bcabc233373d398'
-)
-
-declare -ar list2=(
-    darwin_0019fbd18c9a_487032cd821312aea3b11274c2ff7384
-    darwin_0019fbb71c47_c4130c208206b80b3963ee05c861b5c3
-    darwin_0019fbb71bb1_d23afbe329e75a1d9bcabc233373d398
-)
-
-
-<ex>
-echo "all = ${FRUIT[*]}"      # single-word which has all
-echo "all = ${FRUIT[@]}"      # same as above
 
 
 <ex>
@@ -4711,61 +4702,6 @@ hello
 supershell$ 
 
 
-{sh-shift}
-shift
-
-    shift [n]
-
-    Shift the positional parameters `to-the-left` by n. The positional
-    parameters from n+1 ... $# are renamed to $1 ... $#-n. Parameters
-    represented by the numbers $# to $#-n+1 are unset. n must be a non-negative
-    number less than or equal to $#. If n is zero or greater than $#, the
-    positional parameters are not changed. If n is not supplied, it is assumed
-    to be 1. The return status is zero unless n is greater than $# or less than
-    zero, non-zero otherwise.
-
-<ex>
-See that use S1 all the way and $# decreases
-
-#!/bin/bash
-echo "this is 1 $1, num $#"
-shift;
-echo "this is 1 $1, num $#"
-shift;
-echo "this is 1 $1, num $#"
-shift;
-echo "this is 1 $1, num $#"
-shift;
-echo "this is 1 $1, num $#"
-
-$ ./sbash.sh 1 2 3 4 5 6 
-this is 1 1, num 6
-this is 1 2, num 5
-this is 1 3, num 4
-this is 1 4, num 3
-this is 1 5, num 2
-
-So can use 'loop' until there is no more args to process:
-
-while [ "$1" != "" ]; do
-   case $1 in
-      -h | -help | --help)
-         echo "help.."
-         exit
-         ;;
-      release)
-         echo "release..."
-         exit
-         ;;
-      *)
-         echo "else..."
-         exit
-         ;;
-   esac
-   shift
-done
-
-
 {sh-trap}
 trap
 
@@ -4978,7 +4914,7 @@ sl is aliased to `echo $SHLVL'
 ={============================================================================
 *kt_linux_bash_024* sh-builtin-bash-eval bash-expr
 
-<sh-eval>
+*sh-eval*
 'eval'
           eval [ARGUMENTS]
 
@@ -5912,6 +5848,7 @@ The following paragraphs describe the notation used to represent keystrokes.
 The text C-k is read as ‘Control-K’ and describes the character produced when
 the k key is pressed while the Control key is depressed.
 
+*os-readline-meta-key*
 The text M-k is read as ‘Meta-K’ and describes the character produced when the
 Meta key (if you have one) is depressed, and the k key is pressed. The Meta key
 is labeled `ALT` on many keyboards. 
@@ -5935,32 +5872,28 @@ of the line to press RET; the entire line is accepted regardless of the location
 of the cursor within the line. 
 
 
-*os-readline*
+*os-readline-commands*
 
 C-b
     Move back one character. 
 C-f
     Move forward one character. 
+C-d
+    Delete the character underneath the cursor. 
 
 *C-a*
     Move to the start of the line. 
 *C-e*
     Move to the end of the line. 
-
-*M-f* note: M is ALT
+*M-f*
     Move forward a `word`, where a word is composed of letters and digits. 
+    note that may not work if terminal app get is
 *M-b*
     Move backward a word. 
 
-DEL or Backspace
-    Delete the character to the left of the cursor. 
-
-C-d
-    Delete the character underneath the cursor. 
 
 C-l
     Clear the screen, reprinting the current line at the top. 
-
 *C-k*
     Kill the text from the current cursor position to the `end-of-the-line`.
 
@@ -5995,9 +5928,9 @@ using this sequence of keystrokes:
 
 Press the up arrow to bring back the previous command.
 
-Press Ctrl-w to cut the path part: "/path/to/repo.git".
+Press `Ctrl-w` to cut the path part: "/path/to/repo.git".
 
-Press Ctrl-c to cancel the current command.
+Press `Ctrl-c` to cancel the current command.
 
 Type git remote add origin, and press `Ctrl-y to paste` the path. 
 
@@ -6009,13 +5942,15 @@ does contain enough to allow simple editing of the line. The Readline vi mode
 behaves as specified in the POSIX standard.
 
 In order to switch interactively between emacs and vi editing modes, use the
-‘set -o emacs’ and ‘set -o vi’ commands (see The Set Builtin). The Readline
-default is emacs mode.
 
-When you enter a line in vi mode, you are already placed in 'insertion' mode, as
-if you had typed an "i". Pressing ESC switches you into 'command' mode, where
-  you can edit the text of the line with the standard vi movement keys, move to
-    previous history lines with "k" and subsequent lines with "j", and so forth. 
+‘set -o emacs’ and ‘set -o vi’ commands
+
+The Readline default is emacs mode.
+
+When you enter a line in vi mode, you are already placed in `insertion mode`, as
+if you had typed an "i". Pressing ESC switches you into `command mode`, where
+you can edit the text of the line with the standard vi movement keys, move to
+previous history lines with "k" and subsequent lines with "j", and so forth. 
 
 
 ={============================================================================
@@ -6125,35 +6060,6 @@ Bash uses The GNU Readline Library for the shell prompt and history.
 ={============================================================================
 *kt_linux_bash_032* sh-complete
 
-// exclude everything which is not .foo. that is when `myfoo<tab>`, it list
-// files which don't have .foo 
-
-complete -f -X '!*.foo' myfoo
-
-*sh-complete*
-
-complete
-          complete [-abcdefgjksuv] [-o COMP-OPTION] [-DE] [-A ACTION] [-G GLOBPAT] [-W WORDLIST]
-          [-F FUNCTION] [-C COMMAND] [-X FILTERPAT]
-          [-P PREFIX] [-S SUFFIX] NAME [NAME ...]
-          complete -pr [-DE] [NAME ...]
-
-     Specify `how arguments to each NAME should be completed.`
-
-     '-A ACTION'
-          The ACTION may be one of the following to generate a list of
-          possible completions:
-
-          'file'
-               File names.  May also be specified as '-f'.
-
-     '-X FILTERPAT'
-          FILTERPAT is a pattern as used for filename expansion.  It is
-          applied to the list of possible completions generated by the
-          preceding options and arguments, and each completion matching
-          FILTERPAT is `removed from the list.` A leading '!' in
-          FILTERPAT negates the pattern; in this case, any completion
-          not matching FILTERPAT is removed.
 
 
 ={============================================================================
@@ -22430,7 +22336,7 @@ $ echo "Message Body Here" | mail -s "Subject Here" -a backup.zip user@example.c
 ={============================================================================
 *kt_linux_tool_100* tool-package-apt
 
-<list>
+*tool-package-search*
 
 sudo apt-cache search <program name>
 sudo apt-cache pkgnames | grep libdbus
@@ -22450,7 +22356,13 @@ rmp -qa
 There's an easy way to see the locations of all the files installed as part of
 the package, using the dpkg utility.
 
+
+*tool-dpkg-list*
 dpkg -L `packagename`
+
+              -L, --listfiles package-name...
+                  List files installed to your system from package-name.
+ 
 rpm -ql `packagename`
 
 
