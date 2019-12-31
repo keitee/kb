@@ -421,7 +421,7 @@ TEST(Iterator, Distance)
   }
 }
 
-TEST(Iterator, Array)
+TEST(CxxIterator, Array)
 {
   int vals[] = {33, 67, -4, 13, 5, 2};
 
@@ -434,17 +434,20 @@ TEST(Iterator, Array)
   // std::begin(v)  // yields v.begin()
   // std::end(v)    // yields v.end()
 
+  // cxx-algo-copy
   std::copy(std::begin(coll), std::end(coll), back_inserter(out));
   EXPECT_THAT(out, ElementsAre(33, 67, -4, 13, 5, 2));
 }
 
-TEST(Iterator, Adapters)
+TEST(CxxIterator, Adapters)
 {
   list<int> coll{1, 2, 3, 4, 5, 6, 7, 8, 9};
 
   // cxx-iter-back-inserter
   {
     vector<int> ocoll;
+
+    // cxx-algo-copy
     std::copy(coll.cbegin(), coll.cend(), back_inserter(ocoll));
     EXPECT_THAT(ocoll, ElementsAreArray({1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
@@ -454,6 +457,8 @@ TEST(Iterator, Adapters)
   // have to use cxx-deque since it uses push_front
   {
     deque<int> ocoll;
+
+    // cxx-algo-copy
     std::copy(coll.cbegin(), coll.cend(), front_inserter(ocoll));
     EXPECT_THAT(ocoll, ElementsAreArray({9, 8, 7, 6, 5, 4, 3, 2, 1}));
   }
@@ -461,6 +466,8 @@ TEST(Iterator, Adapters)
   // *cxx-iter-inserter*
   {
     vector<int> ocoll;
+
+    // cxx-algo-copy
     std::copy(coll.cbegin(), coll.cend(), inserter(ocoll, ocoll.begin()));
     EXPECT_THAT(ocoll, ElementsAreArray({1, 2, 3, 4, 5, 6, 7, 8, 9}));
   }
@@ -787,7 +794,7 @@ private:
 };
 
 // ={=
-TEST(CxxVector, useCtor)
+TEST(CxxVector, Ctor)
 {
   {
     vector<int> coll(5);
@@ -850,33 +857,25 @@ TEST(CxxVector, useCtor)
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4, 5, 6));
   }
-}
 
-void StlVectorFillVector(vector<int> &coll)
-{
-  for (int i = 0; i < 20; ++i)
-    coll.insert(coll.end(), i);
-}
+  // see that vector gets created with the value, size() and this is dynamic.
+  {
+    vector<int> coll(20, 1);
 
-// ={=
-TEST(Vector, CtorFromExpression)
-{
-  vector<int> coll;
-  StlVectorFillVector(coll);
+    // okay as well
+    // int value;
+    // cin >> value;
+    // vector<bool> table1(value);
 
-  // okay as well
-  // int value;
-  // cin >> value;
-  // vector<bool> table1(value);
+    vector<bool> table1(coll.size());
+    vector<bool> table2(10);
 
-  vector<bool> table1(coll.size());
-  vector<bool> table2(10);
+    int iarray[coll.size()];
 
-  int iarray[coll.size()];
-
-  EXPECT_THAT(table1.size(), 20);
-  EXPECT_THAT(table2.size(), 10);
-  EXPECT_THAT(sizeof(iarray) / sizeof(iarray[0]), 20);
+    EXPECT_THAT(table1.size(), 20);
+    EXPECT_THAT(table2.size(), 10);
+    EXPECT_THAT(sizeof(iarray) / sizeof(iarray[0]), 20);
+  }
 }
 
 void GetVectorArg(const vector<int> &coll)
@@ -965,6 +964,7 @@ TEST(Vector, CopyAndMoveAssign)
 
 // ={=
 TEST(DISABLED_Vector, EraseRuntimeError)
+// TEST(CxxVector, EraseRuntimeError)
 {
   vector<int> coll1;
   INSERT_ELEMENTS(coll1, 0, 8);
@@ -972,12 +972,20 @@ TEST(DISABLED_Vector, EraseRuntimeError)
 
   auto it = coll1.begin() + 1;
 
-  // note: it is not valid after this
+  // note: `it` is not valid after this
   coll1.erase(it);
   EXPECT_THAT(coll1, ElementsAre(0, 2, 3, 4, 5, 6, 7, 8));
 
-  coll1.erase(it);
-  EXPECT_THAT(coll1, ElementsAre(0, 3, 4, 5, 6, 7, 8));
+  // not cause exception
+  try
+  {
+    coll1.erase(it);
+    EXPECT_THAT(coll1, ElementsAre(0, 3, 4, 5, 6, 7, 8));
+  }
+  catch(const exception &e)
+  {
+    std::cout << "what is " << e.what() << std::endl;
+  }
 
   vector<int> coll2{0, 1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -995,7 +1003,7 @@ TEST(DISABLED_Vector, EraseRuntimeError)
 }
 
 // ={=
-TEST(Vector, EraseNoError)
+TEST(CxxVector, EraseNoError)
 {
   vector<int> coll1;
   INSERT_ELEMENTS(coll1, 0, 8);
@@ -1025,7 +1033,7 @@ TEST(Vector, EraseNoError)
 }
 
 // ={=
-TEST(Vector, InsertAndErase)
+TEST(CxxVector, InsertAndErase)
 {
   vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -1045,6 +1053,48 @@ TEST(Vector, InsertAndErase)
   }
 
   EXPECT_THAT(coll, ElementsAre(1, 1, 3, 3, 5, 5, 7, 7, 9, 9));
+}
+
+TEST(CxxVector, FindAndErase)
+{
+  // find/erase when there are no duplicates. use index
+  {
+    vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    for (size_t i = 0; i < coll.size(); ++i)
+    {
+      if (3 == coll[i])
+      {
+        coll.erase(coll.begin() + i);
+        // since no need to continue looping.
+        break;
+      }
+    }
+
+    EXPECT_THAT(coll, ElementsAre(0, 1, 2, 4, 5, 6, 7, 8, 9));
+  }
+
+  // find/erase when there are no duplicates
+  {
+    vector<int> coll{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    auto it = std::find(coll.begin(), coll.end(), 3);
+    if (coll.end() != it)
+    {
+      coll.erase(it);
+    }
+
+    EXPECT_THAT(coll, ElementsAre(0, 1, 2, 4, 5, 6, 7, 8, 9));
+  }
+
+  // find/erase when there are duplicates
+  {
+    vector<int> coll{0, 1, 2, 3, 3, 3, 6, 7, 8, 9};
+
+    coll.erase(std::remove(coll.begin(), coll.end(), 3), coll.end());
+
+    EXPECT_THAT(coll, ElementsAre(0, 1, 2, 6, 7, 8, 9));
+  }
 }
 
 // 1. cxx-vector-reallocation is not something when create a vector with big
@@ -2758,8 +2808,24 @@ TEST(AlgoSwap, IterSwap)
 // ={=========================================================================
 // cxx-algo-copy
 //
+// [ RUN      ] AlgoCopy.Error
+// /usr/include/c++/6/bits/stl_algobase.h:452:
+// Error: function requires a valid iterator range [__first, __last).
+// 
+// Objects involved in the operation:
+//     iterator "__first" @ 0x0x7ffe7bb56d60 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+//       state = past-the-end;
+//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffe7bb56c10
+//     }
+//     iterator "__last" @ 0x0x7ffe7bb56d30 {
+//       type = __gnu_debug::_Safe_iterator<__gnu_cxx::__normal_iterator<int*, std::__cxx1998::vector<int, std::allocator<int> > >, std::__debug::vector<int, std::allocator<int> > > (mutable iterator);
+//       state = dereferenceable;
+//       references sequence with type 'std::__debug::vector<int, std::allocator<int> >' @ 0x0x7ffe7bb56c10
+//     }
+// Aborted
 
-TEST(AlgoCopy, Error)
+TEST(DISABLED_AlgoCopy, Error)
 {
   {
     std::vector<int> coll;
@@ -2770,8 +2836,41 @@ TEST(AlgoCopy, Error)
     auto first = std::find(coll.begin(), coll.end(), 300);
     auto last  = std::find(coll.begin(), coll.end(), 3);
 
-    std::copy(first, last, std::ostream_iterator<int>(cout, ", "));
+    try 
+    {
+      std::copy(first, last, std::ostream_iterator<int>(cout, ", "));
+    }
+    catch (const exception &e)
+    {
+      std::cout << "exection " << e.what() << std::endl;
+    }
   }
+}
+
+// *cxx-algo-copy-if*
+// OutputIterator
+// copy_if (InputIterator sourceBeg, InputIterator sourceEnd,
+// OutputIterator destBeg,
+// UnaryPredicate op)
+
+TEST(AlgoCopy, CopyIf)
+{
+  std::vector<int> coll1;
+  std::vector<int> coll2;
+
+  for (int i = 0; i <= 6; ++i)
+    coll1.push_back(i);
+
+  std::copy_if(coll1.begin(), coll1.end(),
+      back_inserter(coll2),
+      // [](int e)
+      [](const decltype(coll2)::value_type &e)
+      {
+        return (e % 2) == 0;
+      });
+
+  // check if there are all even
+  EXPECT_THAT(coll2, ElementsAre(0, 2, 4, 6));
 }
 
 TEST(AlgoCopy, UseOnDifferentCollections)
@@ -2782,7 +2881,7 @@ TEST(AlgoCopy, UseOnDifferentCollections)
 
     list<int> coll1;
 
-    copy(coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
+    std::copy(coll.begin(), coll.end(), inserter(coll1, coll1.begin()));
     EXPECT_THAT(coll1, ElementsAre(1, 2, 3, 4, 5, 6));
   }
 }

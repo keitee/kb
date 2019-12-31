@@ -165,13 +165,13 @@ https://www.freedesktop.org/software/systemd/man/sd_event_loop.html#
 sd_event_run, sd_event_loop
 — Run an event loop
 
-sd_event_run() may be used to run a single iteration of the event loop specified
-in the event parameter. The function waits until an event to process is
-available, and dispatches the registered handler for it. The usec parameter
+sd_event_run() may be used to run a `single iteration` of the event loop
+specified in the event parameter. The function waits until an event to process
+is available, and dispatches the registered handler for it. The usec parameter
 specifies the maximum time (in microseconds) to wait for an event. Use
 (uint64_t) -1 to specify an infinite timeout.
 
-sd_event_loop() invokes sd_event_run() in a loop, thus implementing the actual
+sd_event_loop() invokes sd_event_run() `in a loop`, thus implementing the actual
 event loop. The call returns as soon as exiting was requested using
 sd_event_exit(3).
 
@@ -215,6 +215,8 @@ using sd_event_get_exit_code(), see below.
 
 #include <systemd/sd-daemon.h>
 #include <systemd/sd-event.h>
+
+#include "rlog.h"
 
 static int
 io_handler(sd_event_source *source, int fd, uint32_t revents, void *user_data)
@@ -306,6 +308,7 @@ int main(int argc, char *argvp[])
   int r{};
   sigset_t ss;
 
+  // create a event loop
   r = sd_event_default(&event);
   if (r < 0)
     goto finish;
@@ -363,12 +366,13 @@ int main(int argc, char *argvp[])
     goto finish;
   }
 
-  r = sd_event_add_io(event,  // event
-                      &event_source,  // source
-                      fd,   // fd
-                      EPOLLIN, // events
-                      io_handler,   // handler
-                      nullptr);     // user data
+  // add IO event to event loop
+  r = sd_event_add_io(event,          // event
+                      &event_source,  // returned source
+                      fd,             // fd
+                      EPOLLIN,        // events
+                      io_handler,     // handler
+                      nullptr);       // user data
   if (r < 0)
     goto finish;
 
@@ -376,8 +380,12 @@ int main(int argc, char *argvp[])
                   "READY=1\n"
                   "STATUS=Daemon startup completed, processing events.");
 
+  logWarning("sdevent daemon started");
+  logSysError(errno, "sdevent daemon started");
+
   printf("sdevent daemon started\n");
 
+  // run a event loop
   r = sd_event_loop(event);
 
   printf("sdevent daemon finished\n");

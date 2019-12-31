@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_cxx VERSION 0.1 LANGUAGES CXX)
+project(test_sdbus_case VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -59,12 +59,13 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 #
 # directory...  The directories to be added to the list of include directories.
 
-include_directories(SYSTEM ${GMOCK_DIR}/include)
+include_directories(SYSTEM ${GMOCK_DIR}/include eventloop)
 
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-# add_compile_options("-g;-D_GLIBCXX_DEBUG")
+
+add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
 
 
 # cmake help
@@ -162,43 +163,29 @@ include_directories(${Boost_INCLUDE_DIRS})
 # target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Widgets)
 
 
+# to use libs static library
+#
+# Add directories in which the linker will look for libraries.
+#
+# link_directories([AFTER|BEFORE] directory1 [directory2 ...])
+#
+# Adds the paths in which the linker should search for libraries. Relative paths
+# given to this command are interpreted as relative to the current source
+# directory, see CMP0015.
+set(LIBS_DIR "../../libs")
+set(LIBS libcxx.a)
+link_directories(${LIBS_DIR}/build)
+include_directories(${LIBS_DIR})
+
+
+# file(GLOB SOURCES "src/*.cxx")
 # cxx.cpp
-add_executable(${PROJECT_NAME} "test_cxx.cpp")
+add_executable(${PROJECT_NAME} "test_sdbus_case.cpp" eventloop/eventloop.cpp)
 
 # cause link errors to Boost::thread
 # target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
 
-target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
-
-
-# # cxx_ex.cpp
-# add_executable(${PROJECT_NAME}_ex "cxx_ex.cpp")
-# target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
-
-# test_cxx_ex.cpp
-add_executable(${PROJECT_NAME}_ex "test_cxx_ex.cpp")
-target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
-
-# cxx_pattern.cpp
-# add_executable(${PROJECT_NAME}_pattern "cxx_pattern.cpp")
-add_executable(${PROJECT_NAME}_pattern "test_cxx_pattern.cpp")
-target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
-
-# cxx_case.cpp
-add_executable(${PROJECT_NAME}_case "cxx_case.cpp")
-target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
-
-# test_boost.cpp
-add_executable(test_boost "test_boost.cpp")
-target_link_libraries(test_boost gmock_main Boost::thread)
-
-# # cxx_xx.cpp
-# add_executable(${PROJECT_NAME}_xx "cxx_xx.cpp")
-# 
-# # this works but neeed to build gmock 32 bit as well. so drop it to use.
-# # target_compile_options(${PROJECT_NAME}_xx PUBLIC -m32)
-# 
-# target_link_libraries(${PROJECT_NAME}_xx gmock_main Boost::thread)
+target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS} "-lsystemd")
 
 # add_test(Gtest.MatcherForPair ${PROJECT_NAME})
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

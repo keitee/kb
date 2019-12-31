@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(ggtest VERSION 0.1 LANGUAGES CXX)
+project(test_gtest VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 

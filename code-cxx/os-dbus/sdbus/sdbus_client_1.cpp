@@ -21,23 +21,54 @@ https://www.freedesktop.org/software/systemd/man/sd_bus_open_system.html#
 #include <systemd/sd-bus.h>
 
 /*
-//
-// $ busctl introspect org.freedesktop.systemd1 /org/freedesktop/systemd1
-//
-// NAME                                TYPE      SIGNATURE        RESULT/VALUE
-FLAGS
-// org.freedesktop.DBus.Introspectable interface -                - -
-// .Introspect                         method    -                s -
-// org.freedesktop.DBus.Peer           interface -                - -
-// .GetMachineId                       method    -                s -
-// .Ping                               method    -                - -
-// org.freedesktop.DBus.Properties     interface -                - -
-// .Get                                method    ss               v -
-// .GetAll                             method    s                a{sv} -
-// .Set                                method    ssv              - -
-// .PropertiesChanged                  signal    sa{sv}as         - -
-// org.freedesktop.systemd1.Manager    interface -                - -
-// .StartUnit                          method    ss               o -
+
+busctl tree org.freedesktop.login1 
+└─/org
+  └─/org/freedesktop
+    └─/org/freedesktop/login1
+      ├─/org/freedesktop/login1/seat
+      │ ├─/org/freedesktop/login1/seat/seat0
+      │ └─/org/freedesktop/login1/seat/self
+      ├─/org/freedesktop/login1/session
+      │ ├─/org/freedesktop/login1/session/_32
+      │ ├─/org/freedesktop/login1/session/c1
+      │ └─/org/freedesktop/login1/session/self
+      └─/org/freedesktop/login1/user
+        ├─/org/freedesktop/login1/user/_1001
+        ├─/org/freedesktop/login1/user/_119
+        └─/org/freedesktop/login1/user/self
+
+
+busctl introspect org.freedesktop.login1 /org/freedesktop/login1/session
+NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
+org.freedesktop.DBus.Introspectable interface -         -            -
+.Introspect                         method    -         s            -
+org.freedesktop.DBus.Peer           interface -         -            -
+.GetMachineId                       method    -         s            -
+.Ping                               method    -         -            -
+org.freedesktop.DBus.Properties     interface -         -            -
+.Get                                method    ss        v            -
+.GetAll                             method    s         a{sv}        -
+.Set                                method    ssv       -            -
+.PropertiesChanged                  signal    sa{sv}as  -            -
+
+
+https://www.freedesktop.org/software/systemd/man/busctl.html
+
+Of course, some method call parameters can get a ton more complex, but with
+busctl it's relatively easy to encode them all. See the man page for details.
+
+busctl knows a number of other operations. For example, you can use it to
+monitor D-Bus traffic as it happens (including generating a .cap file for use
+with Wireshark!) or you can set or get specific properties. However, this blog
+story was supposed to be about sd-bus, not busctl, hence let's cut this short
+here, and let me direct you to the man page in case you want to know more about
+the tool.
+
+busctl (like the rest of system) is implemented using the sd-bus API. Thus it
+exposes many of the features of sd-bus itself. For example, you can use to
+connect to remote or container buses. It understands both kdbus and classic
+D-Bus, and more!
 
 
 keitee@kit-hdebi:~/git/kb/code-cxx/os/build$ ./sdbus_client
@@ -46,6 +77,9 @@ queued service job as /org/freedesktop/systemd1/job/2208
 
 
 */
+
+// Invoking a Method, from C, with sd-bus
+// client side
 
 int main(int argc, char *argvp[])
 {
@@ -56,7 +90,7 @@ int main(int argc, char *argvp[])
   const char *path{nullptr};
   int r;
 
-  // connect to the system bus
+  // connect to the system bus and note that on `strerror(-r)`
   r = sd_bus_open_system(&bus);
   if (r < 0)
   {
@@ -85,6 +119,17 @@ int main(int argc, char *argvp[])
   printf("succuess on methond call\n");
 
   // parse the response message
+  //
+  // https://www.freedesktop.org/software/systemd/man/sd_bus_message_read.html#
+  //
+  // sd_bus_message_read() reads a sequence of fields from the D-Bus message
+  // object m and advances the read position in the message. The type string
+  // types describes the types of items expected in the message and the field
+  // arguments that follow. The type string may be NULL or empty, in which case
+  // nothing is read.
+  //
+  //"o", SD_BUS_TYPE_OBJECT_PATH, object path, const char **
+
   r = sd_bus_message_read(m, "o", &path);
   if (r < 0)
   {

@@ -182,15 +182,15 @@ TEST(Statement, Switch)
 
     switch (value)
     {
-    case 1:
-      os << "value is 1";
-      EXPECT_THAT(value, 1);
-      break;
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
 
-    case 2:
-      os << "value is 2";
-      EXPECT_THAT(value, 2);
-      break;
+      case 2:
+        os << "value is 2";
+        EXPECT_THAT(value, 2);
+        break;
     }
 
     EXPECT_THAT(os.str(), "value is 2");
@@ -205,20 +205,20 @@ TEST(Statement, Switch)
 
     switch (value)
     {
-    case 1:
-      os << "value is 1";
-      EXPECT_THAT(value, 1);
-      break;
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
 
-    case 8 | 16:
-      os << "value is 24";
-      EXPECT_THAT(value, 24);
-      break;
+      case 8 | 16:
+        os << "value is 24";
+        EXPECT_THAT(value, 24);
+        break;
 
-    default:
-      os << "value is default";
-      EXPECT_THAT(value, 8);
-      break;
+      default:
+        os << "value is default";
+        EXPECT_THAT(value, 8);
+        break;
     }
 
     EXPECT_THAT(os.str(), "value is default");
@@ -230,19 +230,58 @@ TEST(Statement, Switch)
 
     switch (value)
     {
-    case 1:
-      os << "value is 1";
-      EXPECT_THAT(value, 1);
-      break;
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
 
-    case 8 | 16:
-      os << "value is 24";
-      EXPECT_THAT(value, 24);
-      break;
+      case 8 | 16:
+        os << "value is 24";
+        EXPECT_THAT(value, 24);
+        break;
     }
 
     EXPECT_THAT(os.str(), "value is 24");
   }
+}
+
+// ={=========================================================================
+// cxx-if
+
+namespace cxx_if
+{
+  bool f1(std::string &s)
+  {
+    s += "f1 return true,";
+    return true;
+  }
+  bool f2(std::string &s)
+  {
+    s += "f2 return true,";
+    return true;
+  }
+  bool f3(std::string &s)
+  {
+    s += "f3 return true";
+    return true;
+  }
+} // namespace cxx_if
+
+// see that a sequence of calls are called if all returns true
+TEST(Cxx, If)
+{
+  using namespace cxx_if;
+
+  std::string ret{};
+
+  if (!f1(ret))
+    std::cout << "f1 return false" << std::endl;
+  else if (!f2(ret))
+    std::cout << "f2 return false" << std::endl;
+  else if (!f3(ret))
+    std::cout << "f3 return false" << std::endl;
+
+  EXPECT_THAT(ret, "f1 return true,f2 return true,f3 return true");
 }
 
 // ={=========================================================================
@@ -1941,34 +1980,34 @@ public:
 
     switch (flag)
     {
-    // used constexpr on oeprator| and & since someone might want to
-    // use them in constant expression.
-    case EnumFlags::SPORT:
-      cout << "has sport flag" << endl;
-      result = 0;
-      break;
+      // used constexpr on oeprator| and & since someone might want to
+      // use them in constant expression.
+      case EnumFlags::SPORT:
+        cout << "has sport flag" << endl;
+        result = 0;
+        break;
 
-    case EnumFlags::KIDS:
-      cout << "has kids flas" << endl;
-      result = 1;
-      break;
+      case EnumFlags::KIDS:
+        cout << "has kids flas" << endl;
+        result = 1;
+        break;
 
-    case EnumFlags::MUSIC:
-      cout << "has music flag" << endl;
-      result = 2;
-      break;
+      case EnumFlags::MUSIC:
+        cout << "has music flag" << endl;
+        result = 2;
+        break;
 
-      // *cxx-switch*
-      // to avoid warning
-      // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
-      // case EnumFlags::SPORT|EnumFlags::MUSIC:
-      //     cout << "has sport and music flag" << endl;
-      //     result = 3;
-      //     break;
+        // *cxx-switch*
+        // to avoid warning
+        // warning: case value ‘5’ not in enumerated type ‘EnumFlags’ [-Wswitch]
+        // case EnumFlags::SPORT|EnumFlags::MUSIC:
+        //     cout << "has sport and music flag" << endl;
+        //     result = 3;
+        //     break;
 
-    default:
-      cout << "has unknown flag" << endl;
-      result = 100;
+      default:
+        cout << "has unknown flag" << endl;
+        result = 100;
     }
 
     return result;
@@ -2464,7 +2503,8 @@ TEST(CxxTime, DurationCast)
 
 // the following function prints the properties of a clock
 // C represents clock
-template <typename C> void print_clock_data(ostringstream &os)
+template <typename C>
+void print_clock_data(ostringstream &os)
 {
   using namespace std;
 
@@ -3570,7 +3610,6 @@ TEST(CxxFunctionObject, FunctionPointerVoidCast)
 
 namespace cxx_function
 {
-
   class Foo
   {
   public:
@@ -3909,6 +3948,17 @@ TEST(CxxFunctionObject, BindAndFunction)
     EXPECT_THAT(foo.get_value(), 110);
   }
 
+  // when use cxx-bind and object
+  {
+    Foo foo{100};
+    auto fo = std::bind(&Foo::update_10, &foo);
+
+    // see that no target object
+    fo();
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
   // `specify the target object`
   //
   // that performing a function call without having a target to call throws
@@ -3935,73 +3985,73 @@ TEST(CxxFunctionObject, BindAndFunction)
   // Sales_data::isbn(&total);
 
   // cxx-bind use reference
-  {// shows that bind() internally uses copy of passed arguments. NO. it is
-   // becuase when bind() makes function object it binds to copy or reference.
-   {int value{};
-
-  std::bind(increase, value)(); // same as fo(value) but no effect on value
-  std::bind(increase, value)(); // same as fo(value) but no effect on value
-
-  EXPECT_THAT(value, 0);
-
-  // *cxx-ref*
-  std::bind(increase, std::ref(value))(); // increased
-  std::bind(increase, std::ref(value))();
-
-  EXPECT_THAT(value, 2);
-}
-
-// it is when function object is called, that function object gets called
-// with reference within cxx-for-each
-{
-  vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-  vector<size_t> result{};
-
-  auto fo = std::bind(&Foo::update_10, _1);
-
+  // shows that bind() internally uses copy of passed arguments. NO. it is
+  // becuase when bind() makes function object it binds to copy or reference.
   {
-    for_each(coll.begin(), coll.end(), fo);
+    int value{};
 
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+    std::bind(increase, value)(); // same as fo(value) but no effect on value
+    std::bind(increase, value)(); // same as fo(value) but no effect on value
 
-    EXPECT_THAT(result, ElementsAre(11, 12, 13));
+    EXPECT_THAT(value, 0);
+
+    // *cxx-ref*
+    std::bind(increase, std::ref(value))(); // increased
+    std::bind(increase, std::ref(value))();
+
+    EXPECT_THAT(value, 2);
   }
-}
-}
 
-// from cxx-bind to cxx-function
-{
-  Foo foo{100};
-  auto fbind = std::bind(&Foo::update_10, _1);
-
-  std::function<void(Foo &)> ffunc = fbind;
-
-  ffunc(foo);
-
-  EXPECT_THAT(foo.get_value(), 110);
-}
-
-// cxx-function use reference
-{
-  vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
-  vector<size_t> result{};
-
-  // note:
-  // void update_10() but why <void(Foo &)>? becuse of *cxx-this* and this
-  // `specify` target object
-
-  std::function<void(Foo &)> op = &Foo::update_10;
-
+  // it is when function object is called, that function object gets called
+  // with reference within cxx-for-each
   {
-    for_each(coll.begin(), coll.end(), op);
+    vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
 
-    // to get result out and algo-transform requires unary predicate
-    transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+    auto fo = std::bind(&Foo::update_10, _1);
 
-    EXPECT_THAT(result, ElementsAre(11, 12, 13));
+    {
+      for_each(coll.begin(), coll.end(), fo);
+
+      // to get result out and algo-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+
+      EXPECT_THAT(result, ElementsAre(11, 12, 13));
+    }
   }
-}
+
+  // from cxx-bind to cxx-function
+  {
+    Foo foo{100};
+    auto fbind = std::bind(&Foo::update_10, _1);
+
+    std::function<void(Foo &)> ffunc = fbind;
+
+    ffunc(foo);
+
+    EXPECT_THAT(foo.get_value(), 110);
+  }
+
+  // cxx-function use reference
+  {
+    vector<Foo> coll = {Foo(1), Foo(2), Foo(3)};
+    vector<size_t> result{};
+
+    // note:
+    // void update_10() but why <void(Foo &)>? becuse of *cxx-this* and this
+    // `specify` target object
+
+    std::function<void(Foo &)> op = &Foo::update_10;
+
+    {
+      for_each(coll.begin(), coll.end(), op);
+
+      // to get result out and algo-transform requires unary predicate
+      transform(coll.begin(), coll.end(), back_inserter(result), print_value);
+
+      EXPECT_THAT(result, ElementsAre(11, 12, 13));
+    }
+  }
 }
 
 TEST(CxxFunctionObject, MemFn)
@@ -4009,7 +4059,7 @@ TEST(CxxFunctionObject, MemFn)
   using namespace cxx_function;
 
   // Use `cxx-mem-fn` to let the compiler deduce the member's type and to
-  // generate a callable object.  The callable generated by `mem_fn` can be
+  // generate a callable object. The callable generated by `mem_fn` can be
   // called on either an object or a pointer.
 
   {
@@ -4020,6 +4070,14 @@ TEST(CxxFunctionObject, MemFn)
 
     EXPECT_THAT(foo.get_value(), 110);
   }
+
+  // cxx-error compile error
+  // {
+  //   Foo foo = Foo(100);
+  //   auto op = std::mem_fn(&Foo::update_10, &foo);
+  //   op();
+  //   EXPECT_THAT(foo.get_value(), 110);
+  // }
 
   // use reference
   {
@@ -4035,6 +4093,122 @@ TEST(CxxFunctionObject, MemFn)
 
     EXPECT_THAT(result, ElementsAre(11, 12, 13));
   }
+}
+
+namespace cxx_function
+{
+  class EventLoop
+  {
+  public:
+    bool invokeImpl(std::function<void()> &&f) const
+    {
+      if (f)
+        f();
+    }
+
+    template <typename F>
+    inline bool invokeMethod(F &&f) const
+    {
+      // do not make difference
+      // return invokeImpl(std::move(f));
+      return invokeImpl(f);
+    }
+
+    // do not make difference:
+    // template <typename F, typename... Args>
+    //   inline bool invokeMethod(F &&f, Args&&... args) const
+    //   {
+    //     return invokeImpl(
+    //         std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+    //   }
+
+    template <typename F, typename... Args>
+    inline bool invokeMethod(F &&f, Args &&... args) const
+    {
+      return invokeImpl(std::bind(f, std::forward<Args>(args)...));
+    }
+  };
+
+  class Target
+  {
+  private:
+    std::string m_name;
+    int m_value;
+
+  public:
+    Target(std::string name = "target", int value = 0)
+        : m_name(name)
+        , m_value(value)
+    {}
+
+    std::string getName()
+    {
+      std::cout << "getName : " << m_name << std::endl;
+      return m_name;
+    }
+
+    int getValue()
+    {
+      std::cout << "getValue : " << m_value << std::endl;
+      return m_value;
+    }
+
+    void setNameAndValue(std::string name, int value)
+    {
+      m_name  = name;
+      m_value = value;
+      std::cout << "setNameAndValue : " << m_name << ", " << m_value
+                << std::endl;
+    }
+  };
+
+  // class Target2
+  // {
+  //   private:
+  //     std::string m_name;
+  //     int m_value;
+  //     EventLoop m_loop;
+
+  //   public:
+  //     Target2(std::string name = "target2", int value = 0)
+  //       : m_name(name), m_value(value)
+  //     {}
+
+  //     // void run()
+  //     // {
+  //     //   m_loop.invokeMethod(&Target2::setNameAndValue, "case", 200);
+  //     //   std::cout << "run : " << m_name << std::endl;
+  //     // }
+
+  //     void setNameAndValue(std::string name, int value)
+  //     {
+  //       m_name = name; m_value = value;
+  //       std::cout << "setNameAndValue : " << m_name << ", " << m_value
+  //                 << std::endl;
+  //     }
+  // };
+
+} // namespace cxx_function
+
+TEST(CxxFunctionObject, Case)
+{
+  using namespace cxx_function;
+
+  EventLoop loop;
+  Target t1("t1", 100);
+
+  // target is embedded so void()
+  loop.invokeMethod(std::bind(&Target::getValue, &t1));
+  loop.invokeMethod(std::bind(&Target::getName, &t1));
+
+  auto lambda = []() { std::cout << "lambda gets called" << std::endl; };
+
+  // no target and void()
+  loop.invokeMethod(lambda);
+
+  loop.invokeMethod(&Target::setNameAndValue, &t1, "case", 200);
+
+  // loop.invokeMethod(&Target::setNameAndValue, "case", 200);
 }
 
 TEST(CxxFunctionObject, Pointer)
@@ -4523,7 +4697,8 @@ namespace cxx_sp_delete
     {}
 
     // *cxx-template-member*
-    template <typename T> void operator()(T *p)
+    template <typename T>
+    void operator()(T *p)
     {
       os_ << "DebugDelete: deleting " << typeid(p).name() << ", p = " << p
           << endl;
@@ -5348,7 +5523,8 @@ namespace cxx_sp_unique_own_version
     static void deleter(pointer p) { delete p; }
   };
 
-  template <typename T> class unique_own
+  template <typename T>
+  class unique_own
   {
     using pointer = typename T::pointer;
 
@@ -5549,7 +5725,8 @@ TEST(SmartPointer, OwnUnique)
 
 namespace cxx_sp_shared_own_version
 {
-  template <typename T> class shared_own
+  template <typename T>
+  class shared_own
   {
   public:
     // ctor and dtor
@@ -5625,7 +5802,8 @@ namespace cxx_sp_shared_own_version
     size_t *pcount_;
   };
 
-  template <typename T> void swap(shared_own<T> &lhs, shared_own<T> &rhs)
+  template <typename T>
+  void swap(shared_own<T> &lhs, shared_own<T> &rhs)
   {
     lhs.swap(rhs);
   }
@@ -5747,16 +5925,16 @@ TEST(CxxFeaturesTest, UseHashOnString)
 // No implicit conversions.
 //
 //
-// 2. 
+// 2.
 //
 // It's a trick to convert to bool.
 //
 // For primitive types, yes, it's essentially equivalent to:
-// 
+//
 // !(notABool != 0)
 //
 // which in turn is equivalent to:
-// 
+//
 // (bool)notABool
 //
 // For non-primitive types, it will be a compiler error, unless you've
@@ -5774,7 +5952,7 @@ TEST(CxxBool, LogicalNot)
 
   {
     int value{10};
-    
+
     EXPECT_THAT(!value, false);
     EXPECT_THAT(!!value, true);
 
@@ -7357,7 +7535,8 @@ TEST(Operator, PrefixPostfix)
 
 namespace cxx_template
 {
-  template <typename T> int compare(const T &a, const T &b)
+  template <typename T>
+  int compare(const T &a, const T &b)
   {
     if (a < b)
       return -1;
@@ -7407,12 +7586,14 @@ namespace cxx_template
     return internal_strcmp(p1, p2);
   }
 
-  template <> int compare(const char *const &p1, const char *const &p2)
+  template <>
+  int compare(const char *const &p1, const char *const &p2)
   {
     return internal_strcmp(p1, p2);
   }
 
-  template <typename T, int size> class FileBuf
+  template <typename T, int size>
+  class FileBuf
   {
   public:
     int get_size() { return sizeof(array_) / sizeof(T); }
@@ -7421,7 +7602,8 @@ namespace cxx_template
     T array_[size];
   };
 
-  template <int MIN, int MAX> struct RangedIntPolicy
+  template <int MIN, int MAX>
+  struct RangedIntPolicy
   {
     typedef int value_type;
     value_type value_ = MIN;
@@ -7495,7 +7677,8 @@ namespace cxx_template_default
     return 0;
   }
 
-  template <typename T = int> struct Numbers
+  template <typename T = int>
+  struct Numbers
   {
     Numbers(T value = 0)
         : value_(value)
@@ -7557,7 +7740,8 @@ namespace cxx_template_member
         : os_(os)
     {}
 
-    template <typename T> void operator()(T *p) const
+    template <typename T>
+    void operator()(T *p) const
     {
       os_ << "deleting " << typeid(p).name() << ", p = " << p << endl;
       delete p;
@@ -7633,7 +7817,8 @@ namespace cxx_template_return_type
   // 1.3. C++ Templates The Complete Guide Second Edition
   // 1.3.2 Deducing the Return Type
 
-  template <typename T> T max_01(T const &a, T const &b)
+  template <typename T>
+  T max_01(T const &a, T const &b)
   {
     return b < a ? a : b;
   }
@@ -7801,7 +7986,11 @@ TEST(Template, ReturnType)
 
 namespace cxx_template_reference
 {
-  template <typename T> void foo(T value) { ++value; }
+  template <typename T>
+  void foo(T value)
+  {
+    ++value;
+  }
 } // namespace cxx_template_reference
 
 TEST(Template, Reference)
@@ -7839,7 +8028,8 @@ namespace cxx_template_overload
     return os;
   }
 
-  template <typename T> string debug_rep(const T &t)
+  template <typename T>
+  string debug_rep(const T &t)
   {
     ostringstream ret;
     ret << t;
@@ -7865,7 +8055,8 @@ namespace cxx_template_friend
 {
   // basics/stack1.hpp
 
-  template <typename T> class Stack
+  template <typename T>
+  class Stack
   {
   public:
     void push(T const &elem) { elems_.push_back(elem); }
@@ -7902,7 +8093,8 @@ namespace cxx_template_friend
   // 1. We can implicitly declare a new function template, which must use a
   // different template parameter, such as U:
 
-  template <typename T> ostream &operator<<(ostream &os, Stack<T> const &s)
+  template <typename T>
+  ostream &operator<<(ostream &os, Stack<T> const &s)
   {
     cout << "stack's top : " << s.top() << endl;
     return os;
@@ -8193,7 +8385,8 @@ TEST(Template, VariadicSizeofOperator)
 
 namespace cxx_type_trait
 {
-  template <typename T> bool foo(T const &val)
+  template <typename T>
+  bool foo(T const &val)
   {
     (void)val;
 
@@ -8211,19 +8404,22 @@ namespace cxx_type_trait
     }
   }
 
-  template <typename T> void foo_impl(T value, std::true_type)
+  template <typename T>
+  void foo_impl(T value, std::true_type)
   {
     (void)value;
     std::cout << "foo() called for integral type" << std::endl;
   }
 
-  template <typename T> void foo_impl(T value, std::false_type)
+  template <typename T>
+  void foo_impl(T value, std::false_type)
   {
     (void)value;
     std::cout << "foo() called for floating type" << std::endl;
   }
 
-  template <typename T> void foo_overload(T value)
+  template <typename T>
+  void foo_overload(T value)
   {
     foo_impl(value, std::is_integral<T>());
   }
@@ -8325,7 +8521,8 @@ namespace const_member_function
 
   string print_screen(const Screen &s) { return s.get_message(); }
 
-  template <class T, size_t R, size_t C> class array2d
+  template <class T, size_t R, size_t C>
+  class array2d
   {
     std::vector<T> arr;
 
@@ -8625,7 +8822,7 @@ namespace cxx_cpp
 #define xstr(s) str(s)
 #define str(s) #s
 #define foo 4
-} // namespace
+} // namespace cxx_cpp
 
 TEST(CxxCpp, Stringification)
 {
@@ -8783,32 +8980,32 @@ namespace cxx_cpp
     {
       switch (*fmt++)
       {
-      case 's':
-        s = va_arg(ap, char *);
-        printf("string %s\n", s);
-        break;
+        case 's':
+          s = va_arg(ap, char *);
+          printf("string %s\n", s);
+          break;
 
-      case 'd':
-        d = va_arg(ap, int);
-        printf("int %d\n", d);
-        break;
+        case 'd':
+          d = va_arg(ap, int);
+          printf("int %d\n", d);
+          break;
 
-      case 'c':
+        case 'c':
 
-        // c = va_arg(ap, char);
-        // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed
-        // through ‘...’
-        //            c = va_arg(ap, char);
-        //                           ^
-        // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to
-        // ‘va_arg’) cxx.cpp:7950:26: note: if this code is reached, the program
-        // will abort
-        //
-        // need a cast here since va_arg only takes fully promoted types
+          // c = va_arg(ap, char);
+          // cxx.cpp:7950:26: warning: ‘char’ is promoted to ‘int’ when passed
+          // through ‘...’
+          //            c = va_arg(ap, char);
+          //                           ^
+          // cxx.cpp:7950:26: note: (so you should pass ‘int’ not ‘char’ to
+          // ‘va_arg’) cxx.cpp:7950:26: note: if this code is reached, the
+          // program will abort
+          //
+          // need a cast here since va_arg only takes fully promoted types
 
-        c = (char)va_arg(ap, int);
-        printf("char %c\n", c);
-        break;
+          c = (char)va_arg(ap, int);
+          printf("char %c\n", c);
+          break;
       }
     }
     va_end(ap);
@@ -8864,8 +9061,8 @@ TEST(CxxCpp, VariableArgsMacro)
 namespace cxx_cpp
 {
 #define CHECK_CXX_CPP_DEFINED 1
-// #define CHECK_CXX_CPP_DEFINED 0
-}
+  // #define CHECK_CXX_CPP_DEFINED 0
+} // namespace cxx_cpp
 
 TEST(CxxCpp, useDefined)
 {
@@ -8875,7 +9072,7 @@ TEST(CxxCpp, useDefined)
   EXPECT_THAT(false, true);
 #endif
 
-#if defined (CHECK_CXX_CPP_DEFINED)
+#if defined(CHECK_CXX_CPP_DEFINED)
   EXPECT_THAT(true, true);
 #else
   EXPECT_THAT(false, true);
@@ -8890,8 +9087,8 @@ TEST(CxxCpp, useDefined)
   // that is, expect to run EXPECT_THAT(true, true) regardless of if macro is
   // defined.
   //
-  // if use 
-  // #define CHECK_CXX_CPP_DEFINED 
+  // if use
+  // #define CHECK_CXX_CPP_DEFINED
   //
   // then see error:
   // :8855:27: error: operator '||' has no left operand
@@ -8929,7 +9126,8 @@ TEST(CxxCpp, useDefined)
 #include <iostream>
 using namespace std;
 
-template <class T, int Size> class Vector
+template <class T, int Size>
+class Vector
 {
   // Compile time assertion to check if
   // the size of the vector is greater than
@@ -8979,7 +9177,8 @@ namespace cxx_typedef
   //
   // cxx.cpp:7062:3: error: a template declaration cannot appear at block scope
 
-  template <typename Value> using mmap = map<unsigned int, Value>;
+  template <typename Value>
+  using mmap = map<unsigned int, Value>;
 
 } // namespace cxx_typedef
 

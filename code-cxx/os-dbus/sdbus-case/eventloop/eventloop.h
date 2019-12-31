@@ -1,49 +1,54 @@
 #ifndef EVENTLOOP_H
 #define EVENTLOOP_H
 
-class EventLoopPrivate;
+#include <systemd/sd-event.h>
+#include "eventloop_p.h"
+#include <memory>
+
+// class EventLoopPrivate;
 
 class EventLoop
 {
-  public:
-    EventLoop();
-    EventLoop(const EventLoop &other);
-    EventLoop(EventLoop &&other);
-    ~EventLoop();
+private:
+  std::shared_ptr<EventLoopPrivate> m_private;
 
-    sd_event *handle() const;
-    int exec();
-    void quit(int exitCode);
-    void flush();
+  bool invokeMethodImpl(std::function<void()> &&f) const;
 
-    // TODO
-    // return boolean if the calling thread is the same thread that runs the
-    // event loop. WHY is onXXX()?
-    bool onEventLoopThread() const;
+public:
+  explicit EventLoop();
+  explicit EventLoop(const EventLoop &);
+  explicit EventLoop(EventLoop &&);
+  ~EventLoop();
 
-    template <typename F>
-      bool invokeMethod(F &&func) const
-      {
-        return this->invokeMethodImpl(
-            std::forward<F>(func)
-            );
-      }
+  int run();
+  void quit(int exitCode);
+  void flush();
 
-    template <typename F, typename... Args>
-      bool invokeMethod(F &&func, Args &&... args) const
-      {
-        return this->invokeMethodImpl(
-            std::bind(std::forward<F>(func),
-              std::forward<Args>(args)...)
-            );
-      }
+  // access private member of EventLoopPrivate
+  // get sd_event*
+  sd_event *handle() const;
 
-  private:
-    void invokeMethodImpl(std::function<void()> &&func) const;
+  // access private member of EventLoopPrivate
+  // check if EventLoopPrivate of calling thread is the same as one of running.
+  // that is if the calling thead is the same of running event loop
+  bool onEventLoopThread() const;
 
-  private:
-    std::shared_ptr<EventLoopPrivate> m_private;
+public:
+  template <typename F>
+    inline bool invokeMethod(F &&f) const
+    {
+      // NOTE: unnecessary?
+      // return invokeMethodImpl(std::forward<F>(f));
+      return invokeMethodImpl(f);
+    }
+
+  template <typename F, typename... Args>
+    inline bool invokeMethod(F &&f, Args&&... args) const
+    {
+      // NOTE: unnecessary?
+      // return invokeMethodImpl(std::forward<F>(f));
+      return invokeMethodImpl(f, std::forward<Args>(args)...);
+    }
 };
 
 #endif // EVENTLOOP_H
-

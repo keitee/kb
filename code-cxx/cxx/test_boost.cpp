@@ -69,8 +69,9 @@ TEST(CxxBoostVariant, getValues)
   v = 'A';
   EXPECT_THAT('A', boost::get<char>(v));
 
-  // /googletest/googlemock/include/gmock/gmock-matchers.h:541:39: 
-  // error: no matching function for call to ‘ImplicitCast_(const std::__cxx11::basic_string<char>&)’
+  // /googletest/googlemock/include/gmock/gmock-matchers.h:541:39:
+  // error: no matching function for call to ‘ImplicitCast_(const
+  // std::__cxx11::basic_string<char>&)’
   //      return Matcher<T>(ImplicitCast_<T>(value));
   //                        ~~~~~~~~~~~~~~~~^~~~~~~
 
@@ -108,10 +109,14 @@ TEST(CxxBoostVariant, getValuesError1)
 // /usr/include/c++/7/debug/vector:417:
 // Error: attempt to subscript container with out-of-bounds index 0, but
 // container only holds 0 elements.
-// 
+//
 // Objects involved in the operation:
 //     sequence "this" @ 0x0x7ffe10941130 {
-//       type = std::__debug::vector<boost::variant<double, char, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >, std::allocator<boost::variant<double, char, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > >;
+//       type = std::__debug::vector<boost::variant<double, char,
+//       std::__cxx11::basic_string<char, std::char_traits<char>,
+//       std::allocator<char> > >, std::allocator<boost::variant<double, char,
+//       std::__cxx11::basic_string<char, std::char_traits<char>,
+//       std::allocator<char> > > > >;
 //     }
 // Aborted (core dumped)
 //
@@ -119,10 +124,10 @@ TEST(CxxBoostVariant, getValuesError1)
 // when NOT use add_compile_options("-g;-D_GLIBCXX_DEBUG")
 //
 // unknown file: Failure
-// C++ exception with description "boost::bad_get: failed value get using boost::get" thrown in the test body.
+// C++ exception with description "boost::bad_get: failed value get using
+// boost::get" thrown in the test body.
 //
 // so if calls get<> on non-exist, get exception
-
 
 TEST(CxxBoostVariant, getValuesError2)
 {
@@ -170,7 +175,6 @@ TEST(CxxBoostVariant, printValues)
   EXPECT_THAT(os.str(), "Boost");
 }
 
-
 /*
 
 For type-safe access, Boost.Variant provides a function called
@@ -183,7 +187,7 @@ operator is overloaded three times in Example 24.4 because v supports the types
 double, char, and std::string.
 
 boost::static_visitor is a template. The type of the return value of operator()
-must be specified as a template parameter. 
+must be specified as a template parameter.
 
 *If the operator does not have a return value*, a template parameter is not
 required, as seen in the example.

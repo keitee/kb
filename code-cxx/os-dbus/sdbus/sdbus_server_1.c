@@ -168,12 +168,12 @@ int main(int argc, char *argvp[])
 
   // https://www.freedesktop.org/software/systemd/man/sd_bus_add_object_vtable.html#
   // install the object
-  r = sd_bus_add_object_vtable(bus,
-                               &slot,
-                               "/net/poettering/Calculator", // object path
-                               "net.poettering.Calculator",  // interface
-                               calculator_vtable,            // vtable
-                               NULL);                     // user data
+  r = sd_bus_add_object_vtable(bus,                           // bus
+                               &slot,                         // slot
+                               "/net/poettering/Calculator",  // object path
+                               "net.poettering.Calculator",   // interface
+                               calculator_vtable,             // vtable
+                               NULL);                         // user data
 
   if (r < 0)
   {

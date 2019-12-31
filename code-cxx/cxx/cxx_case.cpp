@@ -359,7 +359,8 @@ TEST(CxxCase, StringBlobIteratorSupport)
 
 namespace cxx_case_strblob_template
 {
-  template <typename T> class StrBlob
+  template <typename T>
+  class StrBlob
   {
   public:
     // was:
@@ -472,9 +473,11 @@ calculates first from head substracing size.
 
 namespace queue_circular_count_iterator
 {
-  template <typename T> class circular_buffer_iterator;
+  template <typename T>
+  class circular_buffer_iterator;
 
-  template <typename T> class circular_buffer
+  template <typename T>
+  class circular_buffer
   {
     typedef circular_buffer_iterator<T> const_iterator;
     friend class circular_buffer_iterator<T>;
@@ -555,7 +558,8 @@ namespace queue_circular_count_iterator
     }
   };
 
-  template <typename T> class circular_buffer_iterator
+  template <typename T>
+  class circular_buffer_iterator
   {
     typedef circular_buffer_iterator self_type;
     typedef T value_type;
@@ -614,7 +618,8 @@ namespace queue_circular_count_iterator
     bool last_;
   };
 
-  template <typename T> std::vector<T> print(circular_buffer<T> &buf)
+  template <typename T>
+  std::vector<T> print(circular_buffer<T> &buf)
   {
     std::vector<T> coll{};
 
