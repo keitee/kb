@@ -31,6 +31,7 @@ public:
   // access private member of EventLoopPrivate
   // check if EventLoopPrivate of calling thread is the same as one of running.
   // that is if the calling thead is the same of running event loop
+  // return true if they are the same
   bool onEventLoopThread() const;
 
 public:

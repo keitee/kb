@@ -17,7 +17,7 @@ enable_testing()
 # $ENV{FOO}
 
 # to gnerate signal/slot codes
-set(CMAKE_AUTOMOC ON)
+# set(CMAKE_AUTOMOC ON)
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 

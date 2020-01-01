@@ -44,20 +44,17 @@ TEST(EventLoop, checkWorkDone)
 
   EventLoop loop;
 
-  auto f1 = std::async(std::launch::async, 
-      [&]()
-      {
-        std::this_thread::sleep_for(chrono::milliseconds(300));
+  auto f1 = std::async(std::launch::async, [&]() {
+    std::this_thread::sleep_for(chrono::milliseconds(300));
 
-        std::cout << "post works to event loop" << std::endl;
+    std::cout << "post works to event loop" << std::endl;
 
-        for (int i = 0; i < 10; ++i)
-          loop.invokeMethod(std::bind(w1, value));
+    for (int i = 0; i < 10; ++i)
+      loop.invokeMethod(std::bind(w1, value));
 
-        loop.flush();
-        loop.quit(0);
-      }
-      );
+    loop.flush();
+    loop.quit(0);
+  });
 
   loop.run();
 
@@ -66,7 +63,7 @@ TEST(EventLoop, checkWorkDone)
   /*
   // run event loop
   loop.run();
-  
+
   {
     int value{};
     std::shared_ptr<ThreadedDispatcher> td =

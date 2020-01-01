@@ -74,11 +74,13 @@ int EventLoopPrivate::run()
   }
 
   // TODO: set the thread local pointer back to us. ???
+  logWarning("loop runs and set the thread local to this");
   m_loopRunning = this;
 
   // not use rc to say explicit that it is exit code from event loop
   int exitCode = sd_event_loop(m_eventloop);
 
+  logWarning("loop ends and set the thread local to null");
   m_loopRunning = nullptr;
 
   sd_event_source_unref(quitEventSource);
@@ -104,6 +106,8 @@ int EventLoopPrivate::eventHandler_(sd_event_source *source,
   {
     logSysError(errno, "failed to read from eventfd");
   }
+
+  logWarning("signaled and process all in the queue");
 
   // take the lock and process *ALL* in the queue
   {
@@ -139,7 +143,8 @@ bool EventLoopPrivate::invokeMethod(std::function<void()> &&f)
   // NOTE: use block to release lock
   {
     std::lock_guard<std::recursive_mutex> lock(m_rm);
-    m_q.emplace(std::move(f));
+    // m_q.emplace(std::move(f));
+    m_q.emplace(f);
   }
 
   uint64_t wakeup{1};
@@ -187,7 +192,10 @@ void EventLoopPrivate::flush()
       logSysError(errno, "failed to post sem in flush");
   };
 
-  if (invokeMethod(std::move(flushLambda)))
+  // unnecessary.
+  // if (invokeMethod(std::move(flushLambda)))
+
+  if (invokeMethod(flushLambda))
     logError("failed to post flush");
   else if (sem_wait(&sem) != 0)
     logSysError(errno, "failed to wait sem in flush");
@@ -201,7 +209,7 @@ void EventLoopPrivate::flush()
 */
 
 EventLoop::EventLoop()
-  : m_private(std::make_shared<EventLoopPrivate>())
+    : m_private(std::make_shared<EventLoopPrivate>())
 {}
 
 EventLoop::~EventLoop()
@@ -210,11 +218,11 @@ EventLoop::~EventLoop()
 }
 
 EventLoop::EventLoop(const EventLoop &rhs)
-  : m_private(rhs.m_private)
+    : m_private(rhs.m_private)
 {}
 
 EventLoop::EventLoop(EventLoop &&rhs)
-  : m_private(rhs.m_private)
+    : m_private(rhs.m_private)
 {}
 
 int EventLoop::run()
@@ -234,6 +242,8 @@ void EventLoop::flush()
 
 bool EventLoop::invokeMethodImpl(std::function<void()> &&f) const
 {
+  // : error: cannot bind ‘std::function<void()>’ lvalue 
+  // to ‘std::function<void()>&&’
   // return m_private->invokeMethod(f);
   return m_private->invokeMethod(std::move(f));
 }

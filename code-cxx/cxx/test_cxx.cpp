@@ -96,6 +96,16 @@ TEST(CxxType, showSizeOfTypes)
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
 }
 
+// ={=========================================================================
+
+TEST(CxxType, Null)
+{
+  const char *p1 = "";
+  const char *p2 = nullptr;
+
+  EXPECT_NE(p1, p2);
+}
+
 namespace use_sizeof
 {
 
@@ -107,6 +117,8 @@ namespace use_sizeof
   };
 
 } // namespace use_sizeof
+
+// ={=========================================================================
 
 TEST(Size, Arrays)
 {
@@ -3242,240 +3254,6 @@ TEST(Static, UnderInheritance)
 }
 
 // ={=========================================================================
-// cxx-lambda
-
-TEST(Lambda, CaptureAndReturn)
-{
-  {
-    auto func = []() {
-      std::string value{"this is a callback"};
-      return value;
-    };
-
-    EXPECT_THAT(func(), "this is a callback");
-  }
-
-  // deduced return is integer
-  {
-    auto func = [] { return 42; };
-
-    EXPECT_THAT(func(), 42);
-  }
-
-  // deduced return is double
-  {
-    auto func = [] { return 42.0; };
-
-    EXPECT_THAT(func(), 42.0);
-  }
-
-  // no deduction
-  {
-    auto func = []() -> double { return 42; };
-
-    EXPECT_THAT(func(), 42.0);
-  }
-
-  {
-    int x = 0;
-    int y = 42;
-
-    auto func = [x, &y] {
-      std::cout << "x: " << x << std::endl;
-      std::cout << "y: " << y << std::endl;
-      ++y;
-
-      // *cxx-error*
-      // cxx.cpp:2646:9: error: increment of read-only variable ‘x’
-      //        ++x;
-      // ++x;
-    };
-
-    x = y = 77;
-    func();
-    func();
-  }
-}
-
-// initialized  : over quick red fox jumps red the slow turtle the
-// sorted       : fox jumps over quick red red slow the the turtle
-// eliminated   : fox jumps over quick red slow the turtle
-// stable sorted: fox red the over slow jumps quick turtle
-// 3 words of length 5 or longer
-// for_each     : fox red the over slow jumps quick turtle
-// jumps quick turtle
-
-namespace cxx_lambda
-{
-  template <typename T>
-  inline void PRINT_ELEMENTS(const T &coll, const std::string &opt = "")
-  {
-    std::cout << opt;
-
-    for (const auto &elem : coll)
-      std::cout << elem << ' ';
-
-    std::cout << std::endl;
-  }
-
-  // *algo-sort* *algo-unique*
-  void eliminate_duplicates(vector<string> &words)
-  {
-    sort(words.begin(), words.end());
-    auto unique_end = unique(words.begin(), words.end());
-    words.erase(unique_end, words.end());
-  }
-
-  bool check_size(string const &s, string::size_type sz)
-  {
-    return s.size() >= sz;
-  }
-
-  // keep items in words which is >= sz
-  void biggies(vector<string> &words, vector<string>::size_type sz)
-  {
-    eliminate_duplicates(words);
-
-    // PRINT_ELEMENTS(words, "eliminated: ");
-
-    sort(words.begin(), words.end(), [](string const &a, string const &b) {
-      return a.size() < b.size();
-    });
-
-    // PRINT_ELEMENTS(words, "statle sorted: ");
-
-    // get an iter of the first element whose size is >= sz
-
-    // the problem is that find_if() uses *cxx-predicate* which is unary but we
-    // need two args.
-    //
-    // *cxx-lambda* version
-    //
-    // error when use:
-    //
-    // [](string const& e)
-    //
-    // cxx.cpp:2254:30: error: ‘sz’ is not captured
-    //          { return e.size() >= sz; });
-    //                               ^
-    //
-    // works when use:
-    //
-    // [sz](string const& e)
-
-    // auto wc = find_if(words.begin(), words.end(),
-    //     [=](string const& e)
-    //     { return e.size() >= sz; });
-
-    // *cxx-bind* version
-    auto wc =
-      find_if(words.begin(), words.end(), std::bind(check_size, _1, sz));
-
-    // get the number of elements that are its size >= sz
-    // use *cxx-iter-arithmetic* since it's vector
-    auto num = words.end() - wc;
-
-    EXPECT_THAT(num, 3);
-
-    vector<string> result{};
-
-    for_each(wc, words.end(), [&](string const &e) { result.push_back(e); });
-
-    EXPECT_THAT(result, ElementsAre("jumps", "quick", "turtle"));
-  }
-
-} // namespace cxx_lambda
-
-TEST(Lambda, Biggies)
-{
-  using namespace cxx_lambda;
-
-  vector<string> coll{"over",
-                      "quick",
-                      "red",
-                      "fox",
-                      "jumps",
-                      "red",
-                      "the",
-                      "slow",
-                      "turtle",
-                      "the"};
-
-  // PRINT_ELEMENTS( coll, "initialized  : ");
-
-  biggies(coll, 5);
-}
-
-// Suppose that you search in a collection for the first element with a value
-// that is between x and y.
-
-// If need to use in more than one or two places, use function than a lambda.
-// However, it is not easy to write function to replace a lambda that captures
-// local variables. For example, find_if takes unary predicate and see how to
-// pass more than one as this example.
-
-TEST(Lambda, Compare)
-{
-  deque<int> coll = {1, 3, 19, 5, 13, 7, 11, 2, 17};
-
-  int x{5};
-  int y{12};
-
-  // use lambda
-  {
-    auto pos =
-      find_if(coll.begin(), coll.end(), [=](int e) { return e > x && e < y; });
-
-    EXPECT_THAT(*pos, 7);
-  }
-
-  // use cxx-bind
-  {
-    auto pos = find_if(coll.begin(),
-                       coll.end(),                       // range
-                       bind(logical_and<bool>(),         // search criterion
-                            bind(greater<int>(), _1, x), // _1 > x
-                            bind(less<int>(), _1, y)));  // _1 < y
-
-    EXPECT_THAT(*pos, 7);
-  }
-
-  // before cxx-11, other ways to do
-
-  // handwritten loop
-  {
-    deque<int>::iterator pos;
-
-    for (pos = coll.begin(); pos != coll.end(); ++pos)
-      if (*pos > x && *pos < y)
-        break;
-
-    EXPECT_THAT(*pos, 7);
-  }
-
-  // use cxx-fobj cxx-predicate
-  {
-    class Pred
-    {
-    public:
-      Pred(int x, int y)
-          : x_(x)
-          , y_(y)
-      {}
-      bool operator()(int value) const { return value > x_ && value < y_; }
-
-    private:
-      int x_;
-      int y_;
-    };
-
-    auto pos = find_if(coll.begin(), coll.end(), Pred(x, y));
-
-    EXPECT_THAT(*pos, 7);
-  }
-}
-
-// ={=========================================================================
 // cxx-isspace
 
 // isspace(' '): 8192
@@ -4097,13 +3875,45 @@ TEST(CxxFunctionObject, MemFn)
 
 namespace cxx_function
 {
-  class EventLoop
+  class EventLoopPrivate
   {
   public:
-    bool invokeImpl(std::function<void()> &&f) const
+    bool invoke(std::function<void()> &&f) const
     {
       if (f)
         f();
+    }
+  };
+
+  class EventLoop
+  {
+  private:
+    // std::shared_ptr<EventLoopPrivate> m_private;
+    EventLoopPrivate m_private;
+
+  public:
+    explicit EventLoop()
+    // : m_private(std::make_shared<EventLoopPrivate>())
+    {}
+
+    // NOTE:
+    // std::move() is required when forward calls to another class
+    bool invokeImpl(std::function<void()> &&f) const
+    {
+      // ok:
+      // if (f)
+      //   f();
+
+      // error: cannot bind ‘std::function<void()>’ lvalue
+      // to ‘std::function<void()>&&’
+      // m_private->invoke(f);
+
+      // error: cannot bind ‘std::function<void()>’ lvalue
+      // to ‘std::function<void()>&&’
+      // m_private.invoke(f);
+
+      // ok:
+      m_private.invoke(std::move(f));
     }
 
     template <typename F>
@@ -4161,33 +3971,6 @@ namespace cxx_function
                 << std::endl;
     }
   };
-
-  // class Target2
-  // {
-  //   private:
-  //     std::string m_name;
-  //     int m_value;
-  //     EventLoop m_loop;
-
-  //   public:
-  //     Target2(std::string name = "target2", int value = 0)
-  //       : m_name(name), m_value(value)
-  //     {}
-
-  //     // void run()
-  //     // {
-  //     //   m_loop.invokeMethod(&Target2::setNameAndValue, "case", 200);
-  //     //   std::cout << "run : " << m_name << std::endl;
-  //     // }
-
-  //     void setNameAndValue(std::string name, int value)
-  //     {
-  //       m_name = name; m_value = value;
-  //       std::cout << "setNameAndValue : " << m_name << ", " << m_value
-  //                 << std::endl;
-  //     }
-  // };
-
 } // namespace cxx_function
 
 TEST(CxxFunctionObject, Case)
@@ -4201,6 +3984,9 @@ TEST(CxxFunctionObject, Case)
   loop.invokeMethod(std::bind(&Target::getValue, &t1));
   loop.invokeMethod(std::bind(&Target::getName, &t1));
 
+  auto f1 = std::bind(&Target::getValue, &t1);
+  loop.invokeMethod(f1);
+
   auto lambda = []() { std::cout << "lambda gets called" << std::endl; };
 
   // no target and void()
@@ -4208,6 +3994,7 @@ TEST(CxxFunctionObject, Case)
 
   loop.invokeMethod(&Target::setNameAndValue, &t1, "case", 200);
 
+  // no since have to have target
   // loop.invokeMethod(&Target::setNameAndValue, "case", 200);
 }
 
@@ -4269,6 +4056,276 @@ TEST(CxxFunctionObject, Pointer)
     // cxx.cpp:2676:42: error: invalid use of non-static member function ‘void
     // cxx_function::Foo::update_10()’ cout << "f2 member address " <<
     // Foo::update_10 <<
+  }
+}
+
+TEST(CxxFunctionObject, LambdaCaptureAndReturn)
+{
+  {
+    auto func = []() {
+      std::string value{"this is a callback"};
+      return value;
+    };
+
+    EXPECT_THAT(func(), "this is a callback");
+  }
+
+  // deduced return is integer
+  {
+    auto func = [] { return 42; };
+
+    EXPECT_THAT(func(), 42);
+  }
+
+  // deduced return is double
+  {
+    auto func = [] { return 42.0; };
+
+    EXPECT_THAT(func(), 42.0);
+  }
+
+  // no deduction
+  {
+    auto func = []() -> double { return 42; };
+
+    EXPECT_THAT(func(), 42.0);
+  }
+
+  // CXXSLR-3.1.10 Lambdas
+  // [=] means that the outer scope is passed to the lambda by value. Thus, you
+  // can `read` but not modify all data that was readable where the lambda was
+  // defined.
+
+  {
+    int x = 42;
+    int y = 42;
+
+    auto func = [x, &y] {
+      // std::cout << "x: " << x << std::endl;
+      // std::cout << "y: " << y << std::endl;
+
+      ++y;
+
+      // *cxx-error*
+      // cxx.cpp:2646:9: error: increment of read-only variable ‘x’
+      //        ++x;
+      // ++x;
+    };
+
+    x = 77;
+    func();
+    func();
+
+    // when do capture value? the question is wrong since
+    // EXPECT_THAT(x, 42); is true inside of lambda
+
+    EXPECT_THAT(x, 77);
+    EXPECT_THAT(y, 44);
+  }
+
+  // To have a mixture of passing by value and passing by reference, you can
+  // declare the lambda as mutable. In that case, objects are passed by value,
+  // but inside the function object defined by the lambda, you have write access
+  // to the passed value.
+  // Ok but `x` do not change so what's the point???
+
+  {
+    int x = 42;
+    int y = 42;
+
+    auto func = [x, &y]() mutable {
+      // std::cout << "x: " << x << std::endl;
+      // std::cout << "y: " << y << std::endl;
+
+      ++y;
+
+      // no *cxx-error*
+      ++x;
+    };
+
+    func();
+    func();
+
+    // not 44
+    EXPECT_THAT(x, 42);
+    EXPECT_THAT(y, 44);
+  }
+}
+
+// initialized  : over quick red fox jumps red the slow turtle the
+// sorted       : fox jumps over quick red red slow the the turtle
+// eliminated   : fox jumps over quick red slow the turtle
+// stable sorted: fox red the over slow jumps quick turtle
+// 3 words of length 5 or longer
+// for_each     : fox red the over slow jumps quick turtle
+// jumps quick turtle
+
+namespace cxx_function_lambda
+{
+  template <typename T>
+  inline void PRINT_ELEMENTS(const T &coll, const std::string &opt = "")
+  {
+    std::cout << opt;
+
+    for (const auto &elem : coll)
+      std::cout << elem << ' ';
+
+    std::cout << std::endl;
+  }
+
+  // *algo-sort* *algo-unique*
+  void eliminate_duplicates(vector<string> &words)
+  {
+    sort(words.begin(), words.end());
+    auto unique_end = unique(words.begin(), words.end());
+    words.erase(unique_end, words.end());
+  }
+
+  bool check_size(string const &s, string::size_type sz)
+  {
+    return s.size() >= sz;
+  }
+
+  // keep items in words which is >= sz
+  void biggies(vector<string> &words, vector<string>::size_type sz)
+  {
+    eliminate_duplicates(words);
+
+    // PRINT_ELEMENTS(words, "eliminated: ");
+
+    sort(words.begin(), words.end(), [](string const &a, string const &b) {
+      return a.size() < b.size();
+    });
+
+    // PRINT_ELEMENTS(words, "statle sorted: ");
+
+    // get an iter of the first element whose size is >= sz
+
+    // the problem is that find_if() uses *cxx-predicate* which is unary but we
+    // need two args.
+    //
+    // *cxx-lambda* version
+    //
+    // error when use:
+    //
+    // [](string const& e)
+    //
+    // cxx.cpp:2254:30: error: ‘sz’ is not captured
+    //          { return e.size() >= sz; });
+    //                               ^
+    //
+    // works when use:
+    //
+    // [sz](string const& e)
+
+    // auto wc = find_if(words.begin(), words.end(),
+    //     [=](string const& e)
+    //     { return e.size() >= sz; });
+
+    // *cxx-bind* version
+    auto wc =
+      find_if(words.begin(), words.end(), std::bind(check_size, _1, sz));
+
+    // get the number of elements that are its size >= sz
+    // use *cxx-iter-arithmetic* since it's vector
+    auto num = words.end() - wc;
+
+    EXPECT_THAT(num, 3);
+
+    vector<string> result{};
+
+    for_each(wc, words.end(), [&](string const &e) { result.push_back(e); });
+
+    EXPECT_THAT(result, ElementsAre("jumps", "quick", "turtle"));
+  }
+} // namespace cxx_function_lambda
+
+TEST(CxxFunctionObject, LambdaBiggies)
+{
+  using namespace cxx_function_lambda;
+
+  vector<string> coll{"over",
+                      "quick",
+                      "red",
+                      "fox",
+                      "jumps",
+                      "red",
+                      "the",
+                      "slow",
+                      "turtle",
+                      "the"};
+
+  // PRINT_ELEMENTS( coll, "initialized  : ");
+
+  biggies(coll, 5);
+}
+
+// Suppose that you search in a collection for the first element with a value
+// that is between x and y.
+
+// If need to use in more than one or two places, use function than a lambda.
+// However, it is not easy to write function to replace a lambda that captures
+// local variables. For example, find_if takes unary predicate and see how to
+// pass more than one as this example.
+
+TEST(CxxFunctionObject, LambdaCompare)
+{
+  deque<int> coll = {1, 3, 19, 5, 13, 7, 11, 2, 17};
+
+  int x{5};
+  int y{12};
+
+  // use lambda
+  {
+    auto pos =
+      find_if(coll.begin(), coll.end(), [=](int e) { return e > x && e < y; });
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // use cxx-bind
+  {
+    auto pos = find_if(coll.begin(),
+                       coll.end(),                       // range
+                       bind(logical_and<bool>(),         // search criterion
+                            bind(greater<int>(), _1, x), // _1 > x
+                            bind(less<int>(), _1, y)));  // _1 < y
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // before cxx-11, other ways to do
+
+  // handwritten loop
+  {
+    deque<int>::iterator pos;
+
+    for (pos = coll.begin(); pos != coll.end(); ++pos)
+      if (*pos > x && *pos < y)
+        break;
+
+    EXPECT_THAT(*pos, 7);
+  }
+
+  // use cxx-fobj cxx-predicate
+  {
+    class Pred
+    {
+    public:
+      Pred(int x, int y)
+          : x_(x)
+          , y_(y)
+      {}
+      bool operator()(int value) const { return value > x_ && value < y_; }
+
+    private:
+      int x_;
+      int y_;
+    };
+
+    auto pos = find_if(coll.begin(), coll.end(), Pred(x, y));
+
+    EXPECT_THAT(*pos, 7);
   }
 }
 
@@ -6294,6 +6351,51 @@ TEST(Stdio, ManipulatorsFloat)
   ostringstream os;
   os << std::fixed << std::setprecision(2) << value;
   EXPECT_THAT(os.str(), "8.81");
+}
+
+// ={=========================================================================
+// cxx-move
+
+namespace cxx_move
+{
+  class Move
+  {
+  private:
+    std::string m_name;
+    int m_value;
+
+  public:
+    explicit Move(std::string name = "", int value = 0)
+        : m_name(name)
+        , m_value(value)
+    {}
+
+    void setMembers(std::string &&name, int &&value)
+    {
+      m_name  = name;
+      m_value = value;
+      std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
+    }
+  };
+} // namespace cxx_move
+
+TEST(CxxMove, useStdMove)
+{
+  using namespace cxx_move;
+
+  Move o;
+
+  std::string name("move");
+  int value{10};
+
+  // error: cannot bind
+  // ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ lvalue
+  // to ‘std::__cxx11::string&& {aka std::__cxx11::basic_string<char>&&}’
+  //
+  // o.setMembers(name, value);
+
+  o.setMembers("move", 10);
+  o.setMembers(std::move(name), std::move(value));
 }
 
 // ={=========================================================================
