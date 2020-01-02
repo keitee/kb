@@ -1,12 +1,12 @@
-#include <iostream>
-#include <thread>
+#include <condition_variable>
+#include <exception>
 #include <future>
+#include <iostream>
 #include <list>
 #include <mutex>
 #include <queue>
 #include <stack>
-#include <exception>
-#include <condition_variable>
+#include <thread>
 
 // #include <string.h>
 // #include <pthread.h>
@@ -21,7 +21,7 @@ using namespace testing;
 
 namespace cxx_ex
 {
-} // namespace
+} // namespace cxx_ex
 
 TEST(CCon, Ex)
 {
@@ -30,11 +30,10 @@ TEST(CCon, Ex)
   EXPECT_THAT(true, true);
 }
 
-
 // ={=========================================================================
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

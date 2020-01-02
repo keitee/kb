@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(stl VERSION 0.1 LANGUAGES CXX)
+project(test_stl VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -64,7 +64,9 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
-add_executable(${PROJECT_NAME} "stl.cpp")
+add_compile_options("-g;-D_GLIBCXX_DEBUG")
+
+add_executable(${PROJECT_NAME} "test_stl.cpp")
 
 target_link_libraries(${PROJECT_NAME} gmock_main)
 

@@ -196,6 +196,8 @@ TEST( WeatherStationUserInterface, test_sample)
     EXPECT_EQ( "this is sample!!", ui.test_sample() );
 }
 
+#if 0
+TODO: link error
 // ={=========================================================================
 // test MATCHER_P
 
@@ -253,6 +255,7 @@ TEST(Gtest, MatcherForPair)
     // EXPECT_THAT(p1, EqPair(make_pair(1,std::vector<std::string>{"PAIR"})));
     // EXPECT_THAT(p1, EqPair(p3));
 }
+#endif
 
 
 // ={=========================================================================
@@ -283,11 +286,33 @@ switch(expression) {
 NOTE: you can only use FAIL() in functions that return void. See the Assertion
 Placement section for more information.
 
+[ RUN      ] Gtest.FailAssertion
+/home/keitee/git/kb/code-cxx/gtest/test_gtest.cpp:293: Failure
+Failed
+should generate a fatal failure
+[  FAILED  ] Gtest.FailAssertion (0 ms)
+[ RUN      ] Gtest.Message
+/home/keitee/git/kb/code-cxx/gtest/test_gtest.cpp:299: Failure
+Value of: false
+  Actual: false
+Expected: true
+expected true but false
+[  FAILED  ] Gtest.Message (0 ms)
+
 */
 
 TEST(Gtest, FailAssertion)
 {
   FAIL() << "should generate a fatal failure";
+}
+
+TEST(Gtest, Message)
+{
+  // do print message but make a test failed 
+  EXPECT_TRUE(false) << "expected true but false";
+
+  // do not print message
+  EXPECT_TRUE(true) << "expected true but true";
 }
 
 

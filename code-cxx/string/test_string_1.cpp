@@ -151,6 +151,14 @@ TEST(String, CtorsConst)
   }
 }
 
+TEST(CxxString, Assign)
+{
+  std::string coll;
+
+  coll = "assign string";
+
+  EXPECT_THAT(coll, "assign string");
+}
 
 // ={=========================================================================
 // string-operations string-back

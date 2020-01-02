@@ -919,10 +919,12 @@ class A2DPTransport
       listeners.begin(); it != listeners.end(); ++it) if (*it) (*it)->_what; \
     } while(0)
 
+// use notify() macro
   {
     notify(onBufferReady(this, buffer, nbytes, sampleno));
   }
 };
+
 
 <case>
 Do not use lister class T which has callback interfaces since it has only one
@@ -933,12 +935,12 @@ typedef std::function<void (EventSource, uint16_t, bool)> KeyListener;
 
 */
 
+#if 0
+// this is code from the text which works but not sure why this is complicated
+// as this.
+
 namespace cxx_pattern_observer
 {
-#if 0
-  // this is code from the text which works but not sure why this is complicated
-  // as this.
-
   // final?
   template <typename T, typename Allocator = std::allocator<T>>
   class observable_vector final
@@ -1108,9 +1110,10 @@ namespace cxx_pattern_observer
     std::vector<T, Allocator> data_;
     std::vector<collection_observer*> observers_;
   };
-#endif
 } // namespace cxx_pattern_observer
+#endif
 
+#if 0
 namespace cxx_pattern_observer
 {
   enum class changed_action
@@ -1344,6 +1347,306 @@ TEST(PatternObserver, ObservableVectorContainer)
   cout << "=========" << endl;
   ov = observable_vector<int>{7, 8, 9};
   ov.push_back(1);
+}
+#endif
+
+namespace observer_ex_2019_12_25
+{
+  // use observable vector
+
+  enum class ChangedAction
+  {
+    add,
+    remove,
+    clear,
+    assign
+  };
+
+  struct ChangedNotification
+  {
+    ChangedAction action;
+    size_t index;
+  };
+
+  std::string GET_ACTION_NAME(ChangedAction const action)
+  {
+    switch (action)
+    {
+      case ChangedAction::add:
+        return "add notification";
+      case ChangedAction::remove:
+        return "remove notification";
+      case ChangedAction::clear:
+        return "clear notification";
+      case ChangedAction::assign:
+        return "assign notification";
+      default:
+        return "unknown notification";
+    }
+  };
+
+  // observer uses `interface` and let's use ABC and inheritance in observer
+  // tree
+
+  class CollectionObserver
+  {
+  public:
+    virtual ~CollectionObserver() {}
+    virtual void onChanged(ChangedNotification const &changedNotification) = 0;
+  };
+
+  class Observer1 : public CollectionObserver
+  {
+  public:
+    virtual void onChanged(ChangedNotification const &changedNotification)
+    {
+      std::cout << "Observer1::onChanged("
+                << GET_ACTION_NAME(changedNotification.action) << " on index "
+                << changedNotification.index << std::endl;
+    }
+  };
+
+  class Observer2 : public CollectionObserver
+  {
+  public:
+    virtual void onChanged(ChangedNotification const &changedNotification)
+    {
+      std::cout << "Observer2::onChanged("
+                << GET_ACTION_NAME(changedNotification.action) << " on index "
+                << changedNotification.index << std::endl;
+    }
+  };
+
+  // observee, subject
+
+  template <typename T>
+  class ObservableVector
+  {
+    using size_type = typename std::vector<T>::size_type;
+
+  private:
+    std::vector<T> data_;
+    std::vector<CollectionObserver *> observers_;
+
+  public:
+    explicit ObservableVector()
+        : data_()
+        , observers_()
+    {}
+
+    explicit ObservableVector(std::initializer_list<T> list)
+        : data_(list)
+        , observers_()
+    {}
+
+    // copy supports
+    // copies data vector but not observers. notify current observers
+
+    // no need to use this
+    // ObservableVector<T> &operator=(const ObservableVector<T> &rhs)
+
+    ObservableVector &operator=(const ObservableVector &rhs)
+    {
+      std::cout << "operator=(&)" << std::endl;
+
+      // self assign
+      if (this != &rhs)
+      {
+        data_ = rhs.data_;
+
+        for (const auto &e : observers_)
+        {
+          // although it is less likely that e is nullptr
+          // if (nullptr != e)
+          // so can use
+
+          if (__builtin_expect(nullptr != e, 1))
+          {
+            // NOTE: see cxx-temporary
+            e->onChanged({ChangedAction::assign, data_.size()});
+          }
+        }
+      }
+
+      return *this;
+    }
+
+    // no copy ctor
+    ObservableVector(const ObservableVector &rhs) = delete;
+
+    // move supports
+    ObservableVector &operator=(const ObservableVector &&rhs)
+    {
+      std::cout << "operator=(&&)" << std::endl;
+
+      if (this != &rhs)
+      {
+        data_ = std::move(rhs.data_);
+
+        for (const auto &e : observers_)
+        {
+          if (__builtin_expect(nullptr != e, 1))
+          {
+            e->onChanged({ChangedAction::assign, data_.size()});
+          }
+        }
+      }
+
+      return *this;
+    }
+
+    ObservableVector(const ObservableVector &&rhs) = delete;
+
+    void push_back(const T &value)
+    {
+      data_.push_back(value);
+
+      for (const auto &e : observers_)
+      {
+        if (__builtin_expect(nullptr != e, 1))
+        {
+          // e.onChanged({ChangedAction::add, 1});
+          e->onChanged({ChangedAction::add, data_.size()});
+        }
+      }
+    }
+
+    void push_back(const T &&value)
+    {
+      // data_.push_back(std::move(value));
+      // no need since it's already rvalue adn std::vector() will handle
+      // move context
+      //
+      // this makes the move version same as the copy version.
+
+      data_.push_back(value);
+
+      for (const auto &e : observers_)
+      {
+        if (__builtin_expect(nullptr != e, 1))
+        {
+          e->onChanged({ChangedAction::add, data_.size()});
+        }
+      }
+    }
+
+    void pop_back()
+    {
+      data_.pop_back();
+
+      for (const auto &e : observers_)
+      {
+        if (__builtin_expect(nullptr != e, 1))
+        {
+          e->onChanged({ChangedAction::remove, data_.size()});
+        }
+      }
+    }
+
+    void clear() noexcept
+    {
+      data_.clear();
+
+      for (const auto &e : observers_)
+      {
+        if (__builtin_expect(nullptr != e, 1))
+        {
+          e->onChanged({ChangedAction::clear, data_.size()});
+        }
+      }
+    }
+
+    size_type size() const noexcept { return data_.size(); }
+
+    bool empty() const noexcept { return data_.empty(); }
+
+    // void add_observer(const CollectionObserver *observer)
+    void add_observer(CollectionObserver *observer)
+    {
+      observers_.push_back(observer);
+    }
+
+    // assumes that there are duplicates in observers
+    void remove_observer(const CollectionObserver *observer)
+    {
+      observers_.erase(
+        std::remove(observers_.begin(), observers_.end(), observer),
+        observers_.end());
+    }
+  }; // ObservableVector
+
+} // namespace observer_ex_2019_12_25
+
+// [ RUN      ] Observer.Ex_ObservableVectorContainer
+// =========
+// Observer1::onChanged(add notification on index 1
+// Observer2::onChanged(add notification on index 1
+// =========
+// Observer1::onChanged(add notification on index 2
+// Observer2::onChanged(add notification on index 2
+// =========
+// Observer1::onChanged(add notification on index 3
+// Observer2::onChanged(add notification on index 3
+// =========
+// Observer1::onChanged(remove notification on index 2
+// Observer2::onChanged(remove notification on index 2
+// =========
+// Observer1::onChanged(clear notification on index 0
+// Observer2::onChanged(clear notification on index 0
+// =========
+// operator=(&)
+// =========
+// operator=(&&)
+// [       OK ] Observer.Ex_ObservableVectorContainer (0 ms)
+
+// TEST(Observer, Ex_ObservableVectorContainer)
+TEST(PatternObserver, ObservableVectorContainer)
+{
+  using namespace observer_ex_2019_12_25;
+
+  ObservableVector<int> ov1;
+
+  Observer1 o1;
+  Observer2 o2;
+
+  int value{5};
+
+  ov1.add_observer(&o1);
+  ov1.add_observer(&o2);
+
+  // move
+  cout << "=========" << endl;
+  ov1.push_back(1);
+
+  // move
+  cout << "=========" << endl;
+  ov1.push_back(2);
+
+  // copy
+  cout << "=========" << endl;
+  ov1.push_back(value);
+
+  cout << "=========" << endl;
+  ov1.pop_back();
+
+  cout << "=========" << endl;
+  ov1.clear();
+
+  ov1.remove_observer(&o1);
+  ov1.remove_observer(&o2);
+
+  // no notification since observer is removed.
+
+  ObservableVector<int> ov2{1, 2, 3};
+
+  // copy assign
+  cout << "=========" << endl;
+  ov1 = ov2;
+
+  // move assign
+  cout << "=========" << endl;
+  ov1 = ObservableVector<int>{7, 8, 9};
+  ov1.push_back(1);
 }
 
 /*
@@ -1603,270 +1906,248 @@ TEST(PatternStrategy, ComputingOrderPriceWithDiscounts)
 
 /*
 ={=============================================================================
-cxx_pattern_observer-notifier-simple
-*/
+cxx_pattern_observer_notifier_simple
 
-/*
+o this pattern is the same as the observer. The observer side uses
+  observer/callback/listener interface ABC and concrete observers have to
+  implement them.
 
-o Notifier is basically same as the observer pattern. The observer side: Define
-  observer or listener abstract interface and concrete observers subclass it so
-  that implements it.
+o The source/subject side inherites Notifier<T> has T* and T is interface ABC
+  and T points to observer. Notifier<T> provides notification functinality and a
+  subclass, source, inherits to have them. This is main difference to observer
+  pattern.
 
-o The observee(source) side. Notifer<T> has T* but not subclass it and
-  Notifier<T> provides notification functionality such as add observers and
-  notify. concrete observess subclass it and inherites them to *have*.
-  This is *main difference* from observer pattern.
-
-o For both, have to use mutiple subclassing if want to have multiple abstract
-  observer interfaces.
+o The both have to use multiple inheritance if want to supports multiple
+  callback interfaces.
 
 */
 
-// simple Notifier to see idea
-
-namespace cxx_observer_notifier_simple
+namespace cxx_notifier_simple_ex_2019_12
 {
-  class Polymorphic
-  {
-  public:
-    virtual ~Polymorphic(){};
-  };
-
-  template <typename T> class Notifier : virtual public Polymorphic
-  {
-  public:
-    Notifier() {}
-
-    // register
-    void add_observer(std::shared_ptr<T> const &o) { observer_ = o; }
-
-  protected:
-    // for multiple arguments and it calls notify<T>
-    // this is more short and convenient form for user to use
-    template <typename F, typename... Args> void notify(F f, Args &&... args)
-    {
-      notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
-    }
-
-    // for single argument call, notify(x)
-    template <typename F> void notify(F f) { notify_impl_(f); }
-
-  private:
-    // saved observer
-    std::shared_ptr<T> observer_;
-
-    // (std::function<void(std::shared_ptr<T> const &)> f) means that the
-    // returned type from bind() will be called shared_ptr<T> which is target
-    // object.
-
-    void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
-    {
-      if (observer_)
-        f(observer_);
-
-      // std::shared_ptr<T> strong = o.lock();
-      // if(strong)
-      // {
-      //   // void notify_impl(
-      //   //  std::function<void(std::shared_ptr<T> const &)> f);
-      //   dispatcher_->post(std::bind(f, strong));
-      // }
-    }
-  };
-
-  // A observer(callback) interface
-  //
+  // A observer(callback) interface ABC
   class StateEvents
   {
   public:
     virtual void stateChanged(int state)                                = 0;
     virtual void nameChanged(std::string name)                          = 0;
     virtual void keyAndValueChanged(std::string key, std::string value) = 0;
-    virtual void eventOccured()                                         = 0;
+    virtual void eventOccurred()                                        = 0;
   };
 
-  // observer
-  //
-  template <class T> class Observer : public T, virtual public Polymorphic
-  {};
-
-  class TestObserver : public Observer<StateEvents>
+  class Polymorphic
   {
   public:
-    // MOCK_METHOD1(stateChanged, void (int));
-    // MOCK_METHOD1(nameChanged, void (std::string));
-    // MOCK_METHOD2(keyAndValueChanged, void (std::string, std::string));
-    // MOCK_METHOD0(eventOccured, void());
-
-    void stateChanged(int state)
-    {
-      std::cout << "called stateChanged(" << state << ")" << std::endl;
-    }
-
-    void nameChanged(std::string name)
-    {
-      std::cout << "called nameChanged(" << name << ")" << std::endl;
-    }
-
-    void keyAndValueChanged(std::string key, std::string value)
-    {
-      std::cout << "called keyAndValueChanged(" << key << ", " << value << ")"
-                << std::endl;
-    }
-
-    void eventOccured() { std::cout << "called eventOccured()" << std::endl; }
+    virtual ~Polymorphic() {}
   };
 
-  // source
-  //
+  // source. supports single observer
+
+  // necessary?
+  // template <typename T> class Notifier : virtual public Polymorphic
+
+  template <typename T>
+  class Notifier : public Polymorphic
+  {
+  private:
+    std::shared_ptr<T> observer_;
+
+    // implies that `observer_` is shared pointer which is target object and
+    // calls its member function.
+    void notify_impl_(std::function<void(const std::shared_ptr<T> &)> f)
+    {
+      if (observer_)
+        f(observer_);
+    }
+
+  protected:
+    template <typename F>
+    void notify(F f)
+    {
+      notify_impl_(f);
+    }
+
+    // as `Source::setState()` below shows, user have to use bind() to call.
+    // To provide more convenient form to user:
+    template <typename F, typename... Args>
+    void notify(F f, Args &&... args)
+    {
+      notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+    }
+
+  public:
+    Notifier() {}
+
+    void addObserver(const std::shared_ptr<T> &observer)
+    {
+      observer_ = observer;
+    }
+  };
+
   class Source : public Notifier<StateEvents>
   {
   public:
     void setState(int state)
     {
-      // do something
-
-      // calls
-      // template<typename F>
-      //  void notify(F f);
+      // calls 'template <typename F> void notify(F f)'
       notify(
         std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
     }
 
     void setName(std::string name)
     {
-      // do something
-
-      // calls
-      // template<typename F, typename... Args>
-      //  void notify(F f, Args&&... args);
+      // use `convenient form`
       notify(&StateEvents::nameChanged, name);
     }
 
     void setKeyAndValue(std::string key, std::string value)
     {
-      // do something
-
       notify(&StateEvents::keyAndValueChanged, key, value);
     }
 
-    void emitEvent()
-    {
-      // do something
+    void emitEvent() { notify(&StateEvents::eventOccurred); }
+  };
 
-      notify(&StateEvents::eventOccured);
+  // observer
+
+  // necessry?
+  // template <class T> class Observer : public T, virtual public Polymorphic
+
+  template <typename T>
+  class Observer : public T, public Polymorphic
+  {};
+
+  class Observer1 : public Observer<StateEvents>
+  {
+  public:
+    // if use gmock
+    // MOCK_METHOD1(stateChanged, void (int));
+    // MOCK_METHOD1(nameChanged, void (std::string));
+    // MOCK_METHOD2(keyAndValueChanged, void (std::string, std::string));
+    // MOCK_METHOD0(eventOccured, void());
+
+  public:
+    virtual void stateChanged(int state)
+    {
+      std::cout << "Observer1::stateChanged(" << state << ") called"
+                << std::endl;
+    }
+
+    virtual void nameChanged(std::string name)
+    {
+      std::cout << "Observer1::nameChanged(" << name << ") called" << std::endl;
+    }
+
+    virtual void keyAndValueChanged(std::string key, std::string value)
+    {
+      std::cout << "Observer1::keyAndValueChanged(" << key << "," << value
+                << ") called" << std::endl;
+    }
+
+    virtual void eventOccurred()
+    {
+      std::cout << "Observer1::eventOccurred() called" << std::endl;
     }
   };
-} // namespace cxx_observer_notifier_simple
+
+} // namespace cxx_notifier_simple_ex_2019_12
+
+// [ RUN      ] PatternObserver.NotifierSimple
+// Observer1::stateChanged(5) called
+// Observer1::nameChanged(notifier) called
+// Observer1::keyAndValueChanged(name,Observer1) called
+// [       OK ] PatternObserver.NotifierSimple (0 ms)
 
 TEST(PatternObserver, NotifierSimple)
 {
-  using namespace cxx_observer_notifier_simple;
+  using namespace cxx_notifier_simple_ex_2019_12;
 
   Source source;
 
-  auto observer = std::make_shared<TestObserver>();
+  auto observer = std::make_shared<Observer1>();
 
-  source.add_observer(observer);
+  source.addObserver(observer);
   source.setState(5);
   source.setName("notifier");
-  source.setKeyAndValue("key", "value");
+  source.setKeyAndValue("name", "Observer1");
 }
 
 /*
-={=============================================================================
+={=========================================================================
 cxx_pattern_dispatcher
+
 */
 
-namespace cxx_observer_notifier_full
+namespace cxx_dispatcher_ex_2019_12
 {
-  // Polymorphic.h
-  // original comments:
-  // Inherit from this from all types that have virtual functions. Doing so
+  // Inherit from this for all types that have virtual functions. Doing so
   // ensures that you have virtual destructor and saves you nasty surprises.
-
   class Polymorphic
   {
   public:
-    virtual ~Polymorphic(){};
+    virtual ~Polymorphic() {}
   };
 
   // IDispatcher.h
-  class IDispatcher : public Polymorphic
+  class Dispatcher : public Polymorphic
   {
   public:
-    // post an work item to be executed
+    // post an `work` to be run
     virtual void post(std::function<void()>) = 0;
 
-    // ensures that any works that was in the queue before the call has been
-    // executed
+    // ensure that any works in the queue before tha call has been run
     virtual void sync() = 0;
 
-    // check if it's called from this dispatch thread
+    // check if it's called from this dispatcher thread
     virtual bool invoked_from_this() = 0;
   };
 
   // ThreadedDispatcher.h
-  // (see) that use of `public` for interfaces from parent class and ones from
-  // this class which shows a clear seperation.
-
-  class ThreadedDispatcher : public IDispatcher
+  class ThreadedDispatcher : public Dispatcher
   {
-  public:
-    // post an work item to be executed
-    virtual void post(std::function<void()>);
-
-    // ensures that any works that was in the queue before the call has been
-    // executed
-    virtual void sync();
-
-    // check if it's called from this dispatch thread
-    virtual bool invoked_from_this();
-
-  public:
-    ThreadedDispatcher(std::string const &name = std::string());
-
-    // create dispatcher with supplied priority and name
-    ThreadedDispatcher(int priority, std::string const &name = std::string());
-
-    ~ThreadedDispatcher();
-
-    // perform any work remaining in the queue the stop accepting new work.
-    void flush();
-
-    // stop accepting new work and dispatcher even if there are works in the
-    // queue.
-    void stop();
-
   private:
-    bool running_;
-
     std::thread t_;
     std::mutex m_;
     std::condition_variable cv_;
 
     std::deque<std::function<void()>> q_;
 
-    void do_work_(std::string const &name, int priority);
-    std::function<void()> next_();
-  };
+    bool running_;
 
-  // (see) that ctor calls ctors
-  ThreadedDispatcher::ThreadedDispatcher(std::string const &name)
-      : ThreadedDispatcher(-1, name)
-  {}
+    void do_work_(const std::string &name, int priority);
+    std::function<void()> next_();
+
+  public:
+    ThreadedDispatcher(const std::string &name = std::string());
+    ThreadedDispatcher(int priority, const std::string &name = std::string());
+    ~ThreadedDispatcher();
+
+    // perform any remaining work in the queue and stop taking new work
+    void flush();
+
+    // stop a dispatcher even if there are works in the queue
+    void stop();
+
+  public:
+    virtual void post(std::function<void()>);
+    virtual void sync();
+    virtual bool invoked_from_this();
+  };
 
   // *cxx-error* : ISO C++ forbids taking the address of an
   // unqualified or parenthesized non-static member function to form a pointer
   // to member function.
   // Say ‘&cxx_pattern_dispatcher::ThreadedDispatcher::_do_work’ [-fpermissive]
-  // ,
   //
   // _t(std::thread(&_do_work, this, name, priority))
 
-  ThreadedDispatcher::ThreadedDispatcher(int priority, std::string const &name)
+  ThreadedDispatcher::ThreadedDispatcher(int priority, const std::string &name)
       : running_(true)
       , t_(std::thread(&ThreadedDispatcher::do_work_, this, name, priority))
+  {}
+
+  // see that ctor calls ctor
+  ThreadedDispatcher::ThreadedDispatcher(const std::string &name)
+      : ThreadedDispatcher(-1, name)
   {}
 
   ThreadedDispatcher::~ThreadedDispatcher()
@@ -1875,172 +2156,15 @@ namespace cxx_observer_notifier_full
       stop();
   }
 
-  void ThreadedDispatcher::post(std::function<void()> work)
-  {
-    // (see) this is original code. is it different from the below?
-    //
-    // std::uniqie_lock<std::mutex> lock(m);
-    // if (running)
-    // {
-    //   q.push_back(work);
-    //   lock.unlock();
-    //   cv.notify_one();
-    // }
-    // else
-    // {
-    //   ...
-    // }
-
-    std::lock_guard<std::mutex> lock(m_);
-
-    if (running_)
-    {
-      q_.push_back(work);
-      cv_.notify_one();
-    }
-    else
-    {
-      std::cout << "ignoring work because the dispatcher is not running"
-                << std::endl;
-
-      // original comment:
-      // LOG_WARN("Ignoring work because the dispatcher is not running
-      // anymore");
-      //
-      // can't throw an exception here because if this is executed from
-      // destructor, which occurs when work adds more work things go horribly
-      // wrong. Instead, ignore work.
-    }
-  }
-
-  bool ThreadedDispatcher::invoked_from_this()
-  {
-    return (std::this_thread::get_id() == t_.get_id());
-  }
-
-  namespace
-  {
-    void syncCallback(std::mutex *m, std::condition_variable *cond, bool *fired)
-    {
-      std::unique_lock<std::mutex> lock(*m);
-      *fired = true;
-      cond->notify_all();
-
-      // unnecessary
-      // lock.unlock();
-    }
-  } // namespace
-
-  void ThreadedDispatcher::sync()
-  {
-    std::mutex sm;
-    std::condition_variable cv;
-    bool fired{false};
-
-    std::unique_lock<std::mutex> qlock(m_);
-    if (!running_)
-    {
-      std::cout << "ignoring sync request because the dispatcher is not running"
-                << std::endl;
-      return;
-    }
-
-    q_.push_back(std::bind(syncCallback, &sm, &cv, &fired));
-    qlock.unlock();
-
-    // pushed sync work and make dispatcher run to do all works in the q
-    cv_.notify_one();
-
-    // wait for `fired` to become true
-    std::unique_lock<std::mutex> slock(sm);
-
-    // same as wait(std::unique_lock<>, predicate);
-    while (!fired)
-    {
-      cv.wait(slock);
-    }
-  }
-
-  // (see) uses unique_lock to unlock it as soon as it changes necessary state.
-  void ThreadedDispatcher::stop()
-  {
-    std::unique_lock<std::mutex> lock(m_);
-    running_ = false;
-    lock.unlock();
-
-    cv_.notify_one();
-    t_.join();
-  }
-
-  // To ensure all the work that is in the queue is done, we lock a mutex. post
-  // a job to the queue that unlocks it and stops running further jobs. Then
-  // block here until that's done.
-
-  namespace
-  {
-    void unlockAndSetFlagToFalse(std::mutex &m, bool &flag)
-    {
-      std::this_thread::sleep_for(std::chrono::seconds(5));
-      // std::cout << "flush thread: waits ends" << std::endl;
-      m.unlock();
-
-      // TODO ??? really work without this?
-      flag = false;
-
-      // (see)
-      // original code. without setting flag, still works
-      // flag = false;
-      //
-      // using namespace std;
-      // m.unlock();
-      // flag = false;
-    }
-  } // namespace
-
-  void ThreadedDispatcher::flush()
-  {
-    if (running_)
-    {
-      std::mutex m2;
-      m2.lock();
-      // *cxx-bind*
-      post(std::bind(unlockAndSetFlagToFalse,
-                     std::ref(m2),
-                     std::ref(this->running_)));
-      // blocks here until unlockAndSetFlagToFalse() unlock it since post() will
-      // signal and it make signal false as stop() do.
-      m2.lock();
-      m2.unlock();
-      stop();
-    }
-    else
-    {
-      std::cout
-        << "ignoring flush request because the dispatcher is not running"
-        << std::endl;
-    }
-  }
-
-  std::function<void()> ThreadedDispatcher::next_()
-  {
-    // (see) Q: std::move() has an effect here?
-
-    auto work = std::move(q_.front());
-    q_.pop_front();
-    return work;
-  }
-
-  // thread function
-
-  void ThreadedDispatcher::do_work_(std::string const &name, int priority)
+  void ThreadedDispatcher::do_work_(const std::string &name, int priority)
   {
     if (prctl(PR_SET_NAME,
-              name.empty() ? "THR_DISPATCH" : name.c_str(),
+              name.empty() ? "DISPATCHER" : name.c_str(),
               0,
               0,
               0) < 0)
     {
-      // AI_LOG_SYS_ERROR(errno, "Failed to set thread name");
+      // LOG_ERR("failed to set thread name");
     }
 
     // if (priority > 0)
@@ -2057,440 +2181,626 @@ namespace cxx_observer_notifier_full
 
     std::unique_lock<std::mutex> lock(m_);
 
-    // (see) out of wait() when running_ is false? means when stop() is called
-    // runs one work if there is and ends dispatch thread.
+    // 1. exit from wait() when running_ is false which means when stop() is
+    // called and there are works in the queue, runs one work and ends dispatch
+    // thread.
     //
-    // (see) use of bind
-    //
-    // the original code:
+    // 2. the original code:
     //
     // bool ThreadedDispatcher::hasMoreWorkOrWasStopRequested()
-    // {
-    //     return !q.empty() || !running;
-    // }
+    // { return !q.empty() || !running; }
     //
     // cv.wait(lock, bind(&This::hasMoreWorkOrWasStopRequested, this));
 
     while (running_)
     {
+      // wait until q is not empty or running is true
       cv_.wait(lock, [&] { return !q_.empty() || !running_; });
+
+      // check again for sure
       if (!q_.empty())
       {
         auto work = next_();
 
-        // (see) do not block adding work, post(), while running work.
+        // while calling `work()`, allow uses to post more works
         lock.unlock();
+        // this makes `void f()`
         work();
         lock.lock();
       }
     }
   }
 
-} // namespace cxx_observer_notifier_full
-
-namespace cxx_observer_notifier_full
-{
-  void assign1(int &what, int value)
+  std::function<void()> ThreadedDispatcher::next_()
   {
-    // std::cout << "assign1 is called, what: " << what << std::endl;
-    what += value;
+    // necessary? seems not
+    // auto work = std::move(q_.front());
+
+    auto work = q_.front();
+    q_.pop_front();
+    return work;
   }
-} // namespace cxx_observer_notifier_full
+
+  // this is original code. so the difference is to use unique_lock for fine
+  // control. does it run faster??
+  //
+  // std::uniqie_lock<std::mutex> lock(m);
+  // if (running)
+  // {
+  //   q.push_back(work);
+  //   lock.unlock();
+  //   cv.notify_one();
+  // }
+  // else
+  // {
+  //   ...
+  // }
+
+  void ThreadedDispatcher::post(std::function<void()> work)
+  {
+    std::lock_guard<std::mutex> lock(m_);
+
+    if (running_)
+    {
+      q_.push_back(work);
+      cv_.notify_one();
+    }
+    else
+    {
+      std::cout << "ignore work as the dispatcher is not running" << std::endl;
+
+      // NOTE: when occurrs?
+      // original comment:
+      // can't throw an exception here because if this is executed from
+      // destructor, which occurs when work adds more work things go horribly
+      // wrong. Instead, ignore work.
+    }
+  }
+
+  bool ThreadedDispatcher::invoked_from_this()
+  {
+    // see if calling thread is the same as dispatcher t_ thread
+    return (std::this_thread::get_id() == t_.get_id());
+  }
+
+  namespace
+  {
+    // 1. the original uses unique_lock and it seems unnecessary
+    // 2. when dispatcher calls this, how does it gets all arguments? all
+    //    arguments are vaild to use? through std::bind()
+    // 3. use of pointer but not reference which is used in flush()
+
+    void syncCallback_(std::mutex *m, std::condition_variable *cv, bool *done)
+    {
+      // NOTE: using lock_guard is a problem? nope.
+      // std::unique_lock<std::mutex> lock(*m);
+      std::lock_guard<std::mutex> lock(*m);
+      *done = true;
+      cv->notify_all();
+      // unnecessary
+      // lock.unlock();
+    }
+  } // namespace
+
+  // ensure that any works in the queue before tha call has been run
+  void ThreadedDispatcher::sync()
+  {
+    std::mutex sm;
+    std::condition_variable scv;
+    bool done{false};
+
+    std::unique_lock<std::mutex> lock(m_);
+
+    if (!running_)
+    {
+      std::cout << "ignoring sync request because the dispatcher is not running"
+                << std::endl;
+      return;
+    }
+
+    q_.push_back(std::bind(syncCallback_, &sm, &scv, &done));
+    lock.unlock();
+
+    // signal dispatcher to run
+    cv_.notify_one();
+
+    // wait for `sync work` to be done
+    std::unique_lock<std::mutex> sync_lock(sm);
+
+    // same as wait(sync_lock, predicate) *cxx-condition-variable-wait*
+    while (!done)
+    {
+      scv.wait(sync_lock);
+    }
+  }
+
+  namespace
+  {
+    // original code
+    // void unlockAndSetFlagToFalse(std::mutex& m, bool& flag)
+    // {
+    //   using namespace std;
+    //   m.unlock();
+    //   flag = false;
+    // }
+
+    void unlockAndSetFlagToFalse_(std::mutex &m, bool &flag)
+    {
+      // NOTE: okay without this since flush() calls stop() which do set flag
+      // false?
+      // flag = false;
+      m.unlock();
+    }
+  } // namespace
+
+  // void ThreadedDispatcher::flush()
+  // {
+  //   if (running_)
+  //   {
+  //     std::mutex m2;
+  //     m2.lock();
+  //     // *cxx-bind*
+  //     post(std::bind(unlockAndSetFlagToFalse,
+  //                    std::ref(m2),
+  //                    std::ref(this->running_)));
+  //     // blocks here until unlockAndSetFlagToFalse() unlock it since post()
+  //     will
+  //     // signal and it make signal false as stop() do.
+  //     m2.lock();
+  //     m2.unlock();
+  //     stop();
+  //   }
+  //   else
+  //   {
+  //     std::cout
+  //       << "ignoring flush request because the dispatcher is not running"
+  //       << std::endl;
+  //   }
+  // }
+
+  void ThreadedDispatcher::flush()
+  {
+    std::mutex fm;
+
+    if (!running_)
+    {
+      std::cout << "ignoring sync request because the dispatcher is not running"
+                << std::endl;
+      return;
+    }
+
+    fm.lock();
+
+    post(std::bind(unlockAndSetFlagToFalse_,
+                   std::ref(fm),
+                   std::ref(this->running_)));
+
+    // unlike sync() which use condition variable, use `double lock` on mutex
+    // waits for callback is called
+    // NOTE: that is flush() is the same as sync except doing stop().
+    fm.lock();
+    fm.unlock();
+    stop();
+  }
+
+  void ThreadedDispatcher::stop()
+  {
+    std::unique_lock<std::mutex> lock(m_);
+    running_ = false;
+    lock.unlock();
+
+    cv_.notify_one();
+    t_.join();
+  }
+
+} // namespace cxx_dispatcher_ex_2019_12
+
+namespace
+{
+  void work1(int &what, int value) { what += value; }
+
+  class Work
+  {
+  private:
+    int &what_; // see reference
+    int value_;
+
+  public:
+    Work(int &what, int value)
+        : what_(what)
+        , value_(value)
+    {}
+
+    void assign() { what_ += value_; }
+  };
+} // namespace
 
 TEST(PatternDispatcher, checkPostedWorkDone)
 {
-  using namespace cxx_observer_notifier_full;
+  using namespace cxx_dispatcher_ex_2019_12;
 
-  // do one work and uses stop()
+  // single work
   {
     int value{};
     std::shared_ptr<ThreadedDispatcher> td =
       std::make_shared<ThreadedDispatcher>();
-    td->post(std::bind(assign1, std::ref(value), 10));
+
+    td->post(std::bind(work1, std::ref(value), 10));
 
     std::this_thread::sleep_for(chrono::seconds(1));
     EXPECT_THAT(value, 10);
   }
 
-  // do more work and uses stop()
+  // more work
   {
     int value{};
     std::shared_ptr<ThreadedDispatcher> td =
       std::make_shared<ThreadedDispatcher>();
-    td->post(std::bind(assign1, std::ref(value), 10));
-    td->post(std::bind(assign1, std::ref(value), 10));
-    td->post(std::bind(assign1, std::ref(value), 10));
-    td->post(std::bind(assign1, std::ref(value), 10));
+
+    td->post(std::bind(work1, std::ref(value), 10));
+    td->post(std::bind(work1, std::ref(value), 10));
+    td->post(std::bind(work1, std::ref(value), 10));
+    td->post(std::bind(work1, std::ref(value), 10));
 
     std::this_thread::sleep_for(chrono::seconds(1));
     EXPECT_THAT(value, 40);
   }
 }
 
-namespace cxx_observer_notifier_full
+TEST(PatternDispatcher, checkPostedMemberFunctionDone)
 {
-  class Work
+  using namespace cxx_dispatcher_ex_2019_12;
+
+  // single work
   {
-  public:
-    Work()
-        : name_("work")
-    {}
-
-    void assign() { std::cout << "Work::assign is called" << std::endl; }
-
-  private:
-    std::string name_;
-  };
-} // namespace cxx_observer_notifier_full
-
-TEST(PatternDispatcher, checkPostedMemberFunctionWorkDone)
-{
-  using namespace cxx_observer_notifier_full;
-
-  // do one work and uses stop() from dtor
-  {
-    Work work;
+    int value{};
+    Work w1(std::ref(value), 10);
 
     std::shared_ptr<ThreadedDispatcher> td =
       std::make_shared<ThreadedDispatcher>();
-    td->post(std::bind(&Work::assign, &work));
+
+    td->post(std::bind(&Work::assign, &w1));
 
     std::this_thread::sleep_for(chrono::seconds(1));
+    EXPECT_THAT(value, 10);
   }
 }
 
 TEST(PatternDispatcher, checkFlush)
 {
-  using namespace cxx_observer_notifier_full;
+  using namespace cxx_dispatcher_ex_2019_12;
 
   // do one work and uses flush()
   {
     int value{};
     std::shared_ptr<ThreadedDispatcher> td =
       std::make_shared<ThreadedDispatcher>();
-    td->post(std::bind(assign1, std::ref(value), 10));
+
+    td->post(std::bind(work1, std::ref(value), 10));
     td->flush();
 
-    // since flush() used and no need to sleep
+    // since flush() used so no need to sleep
     // std::this_thread::sleep_for(chrono::seconds(2));
 
     EXPECT_THAT(value, 10);
   }
 }
 
-namespace cxx_observer_notifier_full
+namespace
 {
-  void check_thread_id(std::thread::id id)
+  void checkThreadId_(std::thread::id id)
   {
     EXPECT_NE(std::this_thread::get_id(), id);
   }
-} // namespace cxx_observer_notifier_full
+} // namespace
 
-TEST(PatternDispatcher, checkPostedWorkDoneOnDispatcher)
+TEST(PatternDispatcher, checkDoneOnDispatcher)
 {
-  using namespace cxx_observer_notifier_full;
+  using namespace cxx_dispatcher_ex_2019_12;
 
-  // expect that gtest thread is different from dispatcher thread
   {
     int value{};
     std::shared_ptr<ThreadedDispatcher> td =
       std::make_shared<ThreadedDispatcher>();
-    td->post(std::bind(check_thread_id, std::this_thread::get_id()));
+
+    // expect false since calling thread is not dispatcher
+    EXPECT_THAT(td->invoked_from_this(), false);
+
+    td->post(std::bind(checkThreadId_,
+                       std::this_thread::get_id() // calling thread id
+                       ));
 
     std::this_thread::sleep_for(chrono::seconds(1));
-  }
-}
-
-namespace cxx_observer_notifier_full
-{
-  void save_sequence(int &value)
-  {
-    static int sequence{0};
-    value = ++sequence;
-  }
-} // namespace cxx_observer_notifier_full
-
-TEST(PatternDispatcher, checkPostedWorkDoneInOrder)
-{
-  using namespace cxx_observer_notifier_full;
-
-  {
-    int first{};
-    int second{};
-    int third{};
-
-    std::shared_ptr<ThreadedDispatcher> td =
-      std::make_shared<ThreadedDispatcher>();
-    td->post(std::bind(save_sequence, std::ref(first)));
-    td->post(std::bind(save_sequence, std::ref(second)));
-    td->post(std::bind(save_sequence, std::ref(third)));
-
-    std::this_thread::sleep_for(chrono::seconds(1));
-
-    EXPECT_THAT(first, 1);
-    EXPECT_THAT(second, 2);
-    EXPECT_THAT(third, 3);
-  }
-}
-
-TEST(PatternDispatcher, checkStopDoNotCauseDeadlock)
-{
-  using namespace cxx_observer_notifier_full;
-
-  {
-    int first{};
-    int second{};
-
-    std::shared_ptr<ThreadedDispatcher> td =
-      std::make_shared<ThreadedDispatcher>();
-    td->post(std::bind(save_sequence, std::ref(first)));
-    td->post(std::bind(save_sequence, std::ref(second)));
-    td->stop();
-  }
-}
-
-namespace cxx_observer_notifier_full
-{
-  void increments(int &value)
-  {
-    ++value;
-    std::this_thread::sleep_for(chrono::milliseconds(10));
-  }
-} // namespace cxx_observer_notifier_full
-
-TEST(PatternDispatcher, checkDoLotsOfWorks)
-{
-  using namespace cxx_observer_notifier_full;
-
-  {
-    int value{};
-    const int count{100000};
-
-    std::shared_ptr<ThreadedDispatcher> td =
-      std::make_shared<ThreadedDispatcher>();
-
-    for (int i = 0; i < count; ++i)
-    {
-      td->post(std::bind(increments, std::ref(value)));
-    }
-
-    td->flush();
-
-    EXPECT_THAT(value, count);
-  }
-}
-
-namespace cxx_observer_notifier_full
-{
-  void notify_condition(std::mutex &m, std::condition_variable &cv)
-  {
-    std::unique_lock<std::mutex> lock(m);
-    cv.notify_one();
-  }
-} // namespace cxx_observer_notifier_full
-
-TEST(PatternDispatcher, checkDoWithinTimeout)
-{
-  using namespace cxx_observer_notifier_full;
-
-  {
-    int value{};
-    const int count{100000};
-
-    std::shared_ptr<ThreadedDispatcher> td =
-      std::make_shared<ThreadedDispatcher>();
-
-    std::mutex m;
-    std::condition_variable cv;
-    std::unique_lock<std::mutex> lock(m);
-
-    td->post(std::bind(notify_condition, std::ref(m), std::ref(cv)));
-
-    // check if codition is set within timeout
-    EXPECT_THAT(cv.wait_for(lock, std::chrono::seconds(5)),
-                std::cv_status::no_timeout);
-
-    td->flush();
   }
 }
 
 namespace
 {
-  void sleepy_increments(int &value)
+  void saveSequence_(int &value)
+  {
+    static int sequence{33};
+    value = ++sequence;
+  }
+} // namespace
+
+TEST(PatternDispatcher, checkDoneInOrder)
+{
+  using namespace cxx_dispatcher_ex_2019_12;
+
+  {
+    int v1{};
+    int v2{};
+    int v3{};
+
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
+
+    td->post(std::bind(saveSequence_, std::ref(v1)));
+    td->post(std::bind(saveSequence_, std::ref(v2)));
+    td->post(std::bind(saveSequence_, std::ref(v3)));
+
+    std::this_thread::sleep_for(chrono::seconds(1));
+
+    EXPECT_THAT(v1, 34);
+    EXPECT_THAT(v2, 35);
+    EXPECT_THAT(v3, 36);
+  }
+}
+
+// do not see possibilities of deadlock in using stop()
+TEST(PatternDispatcher, checkStopDoNotCauseDeadlock)
+{
+  using namespace cxx_dispatcher_ex_2019_12;
+
+  {
+    int v1{};
+    int v2{};
+    int v3{};
+
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
+
+    td->post(std::bind(saveSequence_, std::ref(v1)));
+    td->post(std::bind(saveSequence_, std::ref(v2)));
+    td->post(std::bind(saveSequence_, std::ref(v3)));
+
+    td->stop();
+  }
+}
+
+namespace
+{
+  void doIncrements_(int &value)
   {
     ++value;
     std::this_thread::sleep_for(chrono::milliseconds(10));
   }
+
+  void doDecrements_(int &value)
+  {
+    {
+      --value;
+      std::this_thread::sleep_for(chrono::milliseconds(20));
+    }
+  }
 } // namespace
 
-TEST(PatternDispatcher, checkSync)
+TEST(PatternDispatcher, doLostOfWorks)
 {
-  using namespace cxx_observer_notifier_full;
+  using namespace cxx_dispatcher_ex_2019_12;
 
+  // single work
   {
-    int value{0};
+    int value{};
     const int count{100000};
-    auto td = std::make_shared<ThreadedDispatcher>();
+
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
 
     for (int i = 0; i < count; ++i)
     {
-      td->post(std::bind(sleepy_increments, std::ref(value)));
+      td->post(std::bind(doIncrements_, std::ref(value)));
     }
 
-    // td->flush();
+    td->flush();
+
+    // expect that the number of work done must be count value.
+    EXPECT_THAT(value, count);
+  }
+
+  // multiple works
+  {
+    int value{};
+    const int count{100000};
+
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
+
+    for (int i = 0; i < count; ++i)
+    {
+      if ((i % 2) == 0)
+        td->post(std::bind(doIncrements_, std::ref(value)));
+      else
+        td->post(std::bind(doDecrements_, std::ref(value)));
+    }
+
+    td->flush();
+
+    // expect that the number of work done must be count value.
+    EXPECT_THAT(value, 0);
+  }
+}
+
+namespace
+{
+  void notify_(std::mutex &m, std::condition_variable &cv)
+  {
+    std::lock_guard<std::mutex> lock(m);
+    cv.notify_one();
+  }
+} // namespace
+
+TEST(PatternDispatcher, checkDonwInTimeout)
+{
+  using namespace cxx_dispatcher_ex_2019_12;
+
+  // since there is no determistic way to check how many works can be done in
+  // certain time, do one test in timeout.
+  {
+    // std::shared_ptr<ThreadedDispatcher> td =
+    //   std::make_shared<ThreadedDispatcher>();
+
+    auto td = std::make_shared<ThreadedDispatcher>();
+
+    std::mutex m;
+    std::condition_variable cv;
+    std::unique_lock<std::mutex> lock(m);
+
+    td->post(std::bind(notify_, std::ref(m), std::ref(cv)));
+
+    // *cxx-condition-variable-wait*
+    // check if condition is signaled within timeout value
+    EXPECT_THAT(cv.wait_for(lock, std::chrono::seconds(5)),
+                std::cv_status::no_timeout);
+  }
+}
+
+TEST(PatternDispatcher, checkSync)
+{
+  using namespace cxx_dispatcher_ex_2019_12;
+
+  // single work
+  {
+    int value{};
+    const int count{100000};
+
+    std::shared_ptr<ThreadedDispatcher> td =
+      std::make_shared<ThreadedDispatcher>();
+
+    for (int i = 0; i < count; ++i)
+    {
+      td->post(std::bind(doIncrements_, std::ref(value)));
+    }
+
     td->sync();
 
+    // expect that the number of work done must be count value.
     EXPECT_THAT(value, count);
   }
 }
 
 /*
-={=============================================================================
-cxx_pattern_observer-notifier
+// ={=========================================================================
+cxx_pattern_observer_notifier_full
+
 */
 
-namespace cxx_observer_notifier_full
+namespace cxx_notifier_full_ex_2019_12
 {
-  // class Polymorphic
-  // {
-  //   public:
-  //     virtual ~Polymorphic() {};
-  // };
-
-  template <typename T> class Notifier : virtual public Polymorphic
+  // A observer(callback) interface ABC
+  class StateEvents
   {
   public:
-    Notifier() {}
+    virtual void stateChanged(int state)                                = 0;
+    virtual void nameChanged(std::string name)                          = 0;
+    virtual void keyAndValueChanged(std::string key, std::string value) = 0;
+    virtual void eventOccurred()                                        = 0;
+  };
 
-    // register
-    void add_observer(std::shared_ptr<T> const &o)
-    {
-      std::lock_guard<std::mutex> lock(m_);
-      observers_.emplace_back(o);
-    }
+  // Inherit from this for all types that have virtual functions. Doing so
+  // ensures that you have virtual destructor and saves you nasty surprises.
+  class Polymorphic
+  {
+  public:
+    virtual ~Polymorphic() {}
+  };
 
-    void remove_observer(std::shared_ptr<T> const &o)
-    {
-      std::unique_lock<std::mutex> lock(m_);
+  // IDispatcher.h
+  class Dispatcher : public Polymorphic
+  {
+  public:
+    // post an `work` to be run
+    virtual void post(std::function<void()>) = 0;
 
-#if (_BUILD_TYPE == DEBUG)
-      // less likely check which to see if this function call is made from
-      // dispatch thread.
-      if (dispatcher_ && dispatcher_->invoked_from_this())
-      {
-        throw std::logic_error(
-          "potential deadlock since it should not be called from dispatcher");
-      }
-#endif
+    // ensure that any works in the queue before tha call has been run
+    virtual void sync() = 0;
 
-      // if shared pointer can be made from a strored weak pointer then it
-      // means a object is still around and it is safe to use.
-      for (size_t i = 0; i < observers_.size(); ++i)
-      {
-        if (observers_[i].lock() == o)
-        {
-          // erase() needs iterator
-          observers_.erase(observers_.begin() + i);
-          break;
-        }
-      }
+    // check if it's called from this dispatcher thread
+    virtual bool invoked_from_this() = 0;
+  };
 
-      // when observers call this to remove itself but notification is
-      // running, hold them until notification finishes
-      if (notifying_)
-      {
-        waitee_count_++;
+  // source. supports `multiple` observer
 
-        // cxx-condition-variable-wait
-        // wait()
-        // blocks the current thread until the condition variable is woken up
-        do
-        {
-          cv_.wait(lock);
-        } while (notifying_);
+  // necessary?
+  // template <typename T> class Notifier : virtual public Polymorphic
 
-        waitee_count_--;
-      }
-    }
-
-    void set_dispatcher(std::shared_ptr<IDispatcher> const &d)
-    {
-      std::lock_guard<std::mutex> lock(m_);
-      dispatcher_ = d;
-    }
-
-  protected:
-    // for multiple arguments and it calls notify<T>
-    template <typename F, typename... Args> void notify(F f, Args &&... args)
-    {
-      notify(std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
-    }
-
-    // for single argument call, notify(x)
-    template <typename F> void notify(F f) { notify_impl_(f); }
-
+  template <typename T>
+  class Notifier : public Polymorphic
+  {
   private:
     std::mutex m_;
     std::condition_variable cv_;
-    // saved observer
     std::deque<std::weak_ptr<T>> observers_;
 
-    std::shared_ptr<IDispatcher> dispatcher_;
+    std::shared_ptr<Dispatcher> dispatcher_;
     bool notifying_{false};
     uint32_t waitee_count_{0};
 
-  private:
-    void notify_impl_(std::function<void(std::shared_ptr<T> const &)> f)
+    void notify_impl_(std::function<void(const std::shared_ptr<T> &)> f)
     {
       std::unique_lock<std::mutex> lock(m_);
 
       if (!dispatcher_)
       {
         throw std::logic_error(
-          "must set a dispatcher before you produce events.");
+          "must set a dispatcher before you produces events");
       }
 
-      // In the unlikely event that there are expired observers, remove
-      // expired observers by copying only if use_count() > 0
-      //
-      // since referring shared_ptr which weak_ptr refers to is gone then
-      // use_count() of weak_ptr gets decreased.
+      // In the unlikely event where there are expired observers, remove expired
+      // observers by copying only if weak_ptr.use_count() > 0 since if
+      // corresponding shared pointer is gone, then use_count() of weak pointer
+      // gets decreased.
 
       decltype(observers_) observers_copy;
+
       std::copy_if(
         observers_.cbegin(),
         observers_.cend(),
         std::back_inserter(observers_copy),
         std::bind(&std::weak_ptr<T>::use_count, std::placeholders::_1));
 
+      // update observers_
       if (observers_copy.size() != observers_.size())
         observers_ = observers_copy;
 
-      // okay, now have observers to noify and starts notifying
+      // okay, now we have all living observers so starts notifying
       notifying_ = true;
 
-      // don't want to lock adding new observers while calling observers so
-      // use a copy instead.
+      // do not want to block adding observers while notifying them so use a
+      // copy instead.
 
       lock.unlock();
 
       //----------------- NOTE ----------------------------------------------
       // We maintain vector of strong pointers pointing to observer objects as
       // otherwise bad things can happen. Lets consider, the observer object
-      // point backs to the notifier object itself.  That means, there is a
-      // circular dependency between the notifier and the observer, but we
-      // break that by using a combination of shared and weak pointers.
-      // However, imagine, within the notify_impl() method, we gets a shared
-      // pointer of observer object out of weak_ptr. After the shared pointer
-      // is constructed (bit still in use), now the owner of the observer
-      // resets its pointer that is pointing to the observer object. This
-      // might result one to one references between the notifier and the
-      // observer, i.e., as soon as the observer will be destroyed the
-      // notifier will also be destroyed. It means, if now the observer object
-      // is destroyed from the notify_imp() method, it will cause the notifier
-      // object itself to be destroyed, where the notify_impl can still
-      // continue to access its member variable (e.g. dispatcher). This might
-      // result an undefined behaviour.
+      // point backs to the notifier object itself.
+      //
+      // NOTE: cannot see where the observer points back to the notifier?
+      //
+      // That means, there is a circular dependency between the notifier and the
+      // observer, but we break that by using a combination of shared and weak
+      // pointers.  However, imagine, within the notify_impl() method, we gets a
+      // shared pointer of observer object out of weak_ptr. After the shared
+      // pointer is constructed (bit still in use), now the owner of the
+      // observer resets its pointer that is pointing to the observer object.
+      // This might result one to one references between the notifier and the
+      // observer, i.e., as soon as the observer will be destroyed the notifier
+      // will also be destroyed. It means, if now the observer object is
+      // destroyed from the notify_imp() method, it will cause the notifier
+      // object itself to be destroyed, where the notify_impl can still continue
+      // to access its member variable (e.g. dispatcher). This might result an
+      // undefined behaviour.
       //---------------------------------------------------------------------
 
       // Q: WHY need observers_strong vector? that's NOTE above but not sure?
@@ -2529,105 +2839,185 @@ namespace cxx_observer_notifier_full
 
       lock.unlock();
     }
-  };
 
-  // A observer(callback) interface
-  //
-  class StateEvents
-  {
+  protected:
+    template <typename F>
+    void notify(F f)
+    {
+      notify_impl_(f);
+    }
+
+    template <typename F, typename... Args>
+    void notify(F f, Args &&... args)
+    {
+      notify_impl_(
+        std::bind(f, std::placeholders::_1, std::forward<Args>(args)...));
+    }
+
   public:
-    virtual void stateChanged(int state)                                = 0;
-    virtual void nameChanged(std::string name)                          = 0;
-    virtual void keyAndValueChanged(std::string key, std::string value) = 0;
-    virtual void eventOccured()                                         = 0;
+    explicit Notifier() {}
+
+    void addObserver(const std::shared_ptr<T> &observer)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+      observers_.emplace_back(observer);
+    }
+
+    void removeObserver(const std::shared_ptr<T> &observer)
+    {
+      std::unique_lock<std::mutex> lock(m_);
+
+      // if (_BUILD_TYPE == DEBUG)
+      if (dispatcher_ && dispatcher_->invoked_from_this())
+      {
+        throw std::logic_error(
+          "potential deadlock since it should not be called from dispatcher");
+      }
+      // #endif
+
+      // 1. have to use this form using index for searching since have to use
+      // weak_ptr.lock().
+      // 2. if shared pointer can be made from a weak pointer, it means a
+      // object is still around and it is safe to use.
+
+      for (size_t i = 0; i < observers_.size(); ++i)
+      {
+        if (observers_[i].lock() == observer)
+        {
+          observers_.erase(observers_.begin() + i);
+        }
+      }
+
+      // observers can call this while notification from source is pending so
+      // to make observers is still around, hold them until notification
+      // finishes.
+      // TODO: to do that, should it be moved before `deleting it`? that is to
+      // move before `for loop` to search?
+
+      if (notifying_)
+      {
+        waitee_count_++;
+
+        // cxx-condition-variable-wait
+        // same as `wait(lock, condition)` and blocks the current thread until
+        // the condition variable is woken up.
+        while (notifying_)
+        {
+          cv_.wait(lock);
+        }
+
+        waitee_count_--;
+      }
+    }
+
+    void setDispatcher(const std::shared_ptr<Dispatcher> &dispatcher)
+    {
+      std::lock_guard<std::mutex> lock(m_);
+      dispatcher_ = dispatcher;
+    }
   };
 
-  // observer
-  //
-  // note
-  // Arguably you could inherit directly from T, however inheriting from
-  // Observer<T> is more intention revealing than inheriting from T. There is
-  // no extra overhead because of Empty Base Class Optimisation.
-
-  template <class T> class Observer : public T, virtual public Polymorphic
-  {};
-
-  // mock version
-  class TestObserver : public Observer<StateEvents>
-  {
-  public:
-    MOCK_METHOD1(stateChanged, void(int));
-    MOCK_METHOD1(nameChanged, void(std::string));
-    MOCK_METHOD2(keyAndValueChanged, void(std::string, std::string));
-    MOCK_METHOD0(eventOccured, void());
-  };
-
-  // source
-  //
   class Source : public Notifier<StateEvents>
   {
   public:
     void setState(int state)
     {
-      // do something
-
-      // calls
-      // template<typename F>
-      //  void notify(F f);
+      // calls 'template <typename F> void notify(F f)'
       notify(
         std::bind(&StateEvents::stateChanged, std::placeholders::_1, state));
     }
 
     void setName(std::string name)
     {
-      // do something
-
-      // calls
-      // template<typename F, typename... Args>
-      //  void notify(F f, Args&&... args);
+      // use `convenient form`
       notify(&StateEvents::nameChanged, name);
     }
 
     void setKeyAndValue(std::string key, std::string value)
     {
-      // do something
-
       notify(&StateEvents::keyAndValueChanged, key, value);
     }
 
-    void emitEvent()
-    {
-      // do something
+    void emitEvent() { notify(&StateEvents::eventOccurred); }
+  };
 
-      notify(&StateEvents::eventOccured);
+  // observer
+  // NOTE:
+  // Arguably you could inherit directly from T, however inheriting from
+  // Observer<T> is more intention revealing than inheriting from T. There is
+  // no extra overhead because of Empty Base Class Optimisation.
+
+  // necessary?
+  // template <class T> class Observer : public T, virtual public Polymorphic
+
+  template <typename T>
+  class Observer : public T, public Polymorphic
+  {};
+
+  class Observer1 : public Observer<StateEvents>
+  {
+  public:
+    // if use gmock
+    MOCK_METHOD1(stateChanged, void(int));
+    MOCK_METHOD1(nameChanged, void(std::string));
+    MOCK_METHOD2(keyAndValueChanged, void(std::string, std::string));
+    MOCK_METHOD0(eventOccurred, void());
+  };
+
+  class ObserverWrong : public Polymorphic
+  {
+  public:
+    virtual void stateOccurred()
+    {
+      std::cout << "stateOccurred()" << std::endl;
     }
   };
-} // namespace cxx_observer_notifier_full
 
-namespace cxx_observer_notifier_full
-{
   // Common/lib/include/CallerThreadDispatcher.h
-  //
-  // @brief A dispatcher that does all the work immediately on the thread that
-  // calls post.
+  // do not use seperate thread for dispatcher and simply use caller thread as
+  // if it's a `real` dispatcher
 
-  class CallerThreadDispatcher : public IDispatcher
+  class CallerThreadedDispatcher : public Dispatcher
   {
   public:
     virtual void post(std::function<void()> work) final { work(); }
-
     virtual void sync() final {}
-
     virtual bool invoked_from_this() final { return false; }
   };
-} // namespace cxx_observer_notifier_full
 
-TEST(PatternObserver, sendNotificationWithRealDispatcher)
+} // namespace cxx_notifier_full_ex_2019_12
+
+// what if use unrelated observer? type error at compile.
+//
+// test_cxx_ex.cpp:794:23: error: no matching function for call to
+// ‘cxx_notifier_full_ex_2019_12::Source::addObserver(
+//    std::shared_ptr<cxx_notifier_full_ex_2019_12::ObserverWrong>&)’
+//   source.addObserver(o);
+#if 0
+TEST(PatternObserver, tryUnrelatedObserver)
 {
-  using namespace cxx_observer_notifier_full;
+  using namespace cxx_notifier_full_ex_2019_12;
+
+  Source source;
+  source.setDispatcher(std::make_shared<CallerThreadedDispatcher>());
+
+  std::shared_ptr<ObserverWrong> o = std::make_shared<ObserverWrong>();
+  source.addObserver(o);
+}
+#endif
+
+#if 0
+
+// can use real dispatcher but since not able to control dispatcher directly
+// such as sync(), flush() or wait it to finish, cannot have deterministic
+// result. Hence use CallerThreadDispatcher which call a work on calling thread.
+
+TEST(PatternNotifierFull, sendNotificationWithRealDispatcher)
+{
+  using namespace cxx_notifier_full_ex_2019_12;
 
   Source noti;
-  std::shared_ptr<TestObserver> observer = std::make_shared<TestObserver>();
+  std::shared_ptr<Observer1> observer = std::make_shared<Observer1>();
   noti.set_dispatcher(std::make_shared<ThreadedDispatcher>());
   noti.add_observer(observer);
 
@@ -2635,33 +3025,33 @@ TEST(PatternObserver, sendNotificationWithRealDispatcher)
 
   noti.setState(5);
 }
+#endif
 
-// can use real dispatcher as above but since not control dispatcher such as
-// sync(), flush() or wait it to finish, cannot have deterministic result. Hence
-// CallerThreadDispatcher which call a work on calling thread.
-
-TEST(PatternObserver, sendNotificationWithCallerDispatcher)
+TEST(PatternNotifierFull, sendNotificationWithCallerDispatcher)
 {
-  using namespace cxx_observer_notifier_full;
+  using namespace cxx_notifier_full_ex_2019_12;
 
-  Source noti;
-  std::shared_ptr<TestObserver> observer = std::make_shared<TestObserver>();
-  noti.set_dispatcher(std::make_shared<CallerThreadDispatcher>());
-  noti.add_observer(observer);
+  Source source;
+  source.setDispatcher(std::make_shared<CallerThreadedDispatcher>());
 
-  EXPECT_CALL(*observer, stateChanged(5)).Times(1);
+  std::shared_ptr<Observer1> o1 = std::make_shared<Observer1>();
+  std::shared_ptr<Observer1> o2 = std::make_shared<Observer1>();
+  source.addObserver(o1);
+  source.addObserver(o2);
 
-  noti.setState(5);
+  EXPECT_CALL(*o1, stateChanged(5)).Times(1);
+  EXPECT_CALL(*o2, stateChanged(5)).Times(1);
+  source.setState(5);
 }
 
-TEST(PatternObserver, sendNotificationManyArgs)
+TEST(PatternNotifierFull, sendNotificationManyArgs)
 {
-  using namespace cxx_observer_notifier_full;
+  using namespace cxx_notifier_full_ex_2019_12;
 
   Source noti;
-  std::shared_ptr<TestObserver> observer = std::make_shared<TestObserver>();
-  noti.set_dispatcher(std::make_shared<CallerThreadDispatcher>());
-  noti.add_observer(observer);
+  std::shared_ptr<Observer1> observer = std::make_shared<Observer1>();
+  noti.setDispatcher(std::make_shared<CallerThreadedDispatcher>());
+  noti.addObserver(observer);
 
   EXPECT_CALL(*observer, keyAndValueChanged("key", "value")).Times(1);
 

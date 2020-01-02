@@ -64,7 +64,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 # do not work
 # add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
+# add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
 
 
 # cmake help
@@ -182,11 +182,6 @@ include_directories(${LIBS_DIR})
 add_executable(sdevent "sdevent.cpp")
 # target_compile_options(sdevent INTERFACE -lsystemd)
 target_link_libraries(sdevent ${LIBS} "-lsystemd")
-
-# TODO: fails to run cmake for c file
-# # sdbus_server_1
-# add_executable(sdbus_server_1 "sdbus_server_1.c")
-# target_link_libraries(sdbus_server_1 ${LIBS} "-lsystemd")
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

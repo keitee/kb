@@ -106,6 +106,8 @@ extern void __log_sys_printf(int err,
   __LOG_SYS_PRINTF(err, LOG_LEVEL_WARNING, fmt, ##__VA_ARGS__)
 
 // without errno supports
+#define logError(fmt, ...) __LOG_PRINTF(LOG_LEVEL_ERROR, fmt, ##__VA_ARGS__)
+
 #define logWarning(fmt, ...) __LOG_PRINTF(LOG_LEVEL_WARNING, fmt, ##__VA_ARGS__)
 
 #define logDebug(fmt, ...) __LOG_PRINTF(LOG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)

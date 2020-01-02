@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(sdbus VERSION 0.1 LANGUAGES CXX)
+# project(sdbus VERSION 0.1 LANGUAGES CXX)
+project(sdbus VERSION 0.1)
 
 enable_testing()
 
@@ -182,10 +183,39 @@ include_directories(${LIBS_DIR})
 add_executable(sdbus_client_1 "sdbus_client_1.cpp")
 target_link_libraries(sdbus_client_1 ${LIBS} "-lsystemd")
 
-# TODO: fails to run cmake for c file
+
+# NOTE: fails to run cmake for c file
+#
+# CMake Error: Error required internal CMake variable not set, cmake may not be built correctly.
+# Missing variable is:
+# CMAKE_C_COMPILE_OBJECT
+# CMake Error: Error required internal CMake variable not set, cmake may not be built correctly.
+# Missing variable is:
+# CMAKE_C_LINK_EXECUTABLE
+#
+# the solution is:
+# https://stackoverflow.com/questions/5042932/cmake-missing-environment-variables-errors
+# The 2nd and later optional args to the PROJECT command should be known CMake language values.
+# 
+# It's typical values are:
+# 
+# leave it off, don't provide a 2nd arg (default to C and CXX)
+#
+# https://cmake.org/cmake/help/latest/command/project.html
+# 
+# LANGUAGES <language-name>...
+# 
+# Optional. Can also be specified without LANGUAGES keyword per the first, short
+# signature.
+#
+# By default C and CXX are enabled if no language options are given. Specify
+# language NONE, or use the LANGUAGES keyword and list no languages, to skip
+# enabling any languages.
+
+
 # # sdbus_server_1
-# add_executable(sdbus_server_1 "sdbus_server_1.c")
-# target_link_libraries(sdbus_server_1 ${LIBS} "-lsystemd")
+add_executable(sdbus_server_1 "sdbus_server_1.c")
+target_link_libraries(sdbus_server_1 ${LIBS} "-lsystemd")
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 
