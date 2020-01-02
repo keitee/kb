@@ -1,8 +1,8 @@
 #include "gmock/gmock.h"
 
+#include <deque>
 #include <iostream>
 #include <list>
-#include <deque>
 #include <regex>
 
 // g++ -g -std=c++0x t_override.cpp
@@ -42,31 +42,31 @@ Input: { 1,2,3,4,5,6 }, output: "010203040506"
 
 */
 
-namespace U23_2018_11_27 {
+namespace U23_2018_11_27
+{
 
-  // as itoa, can use modulus and reverse the result. How does the text? 
+  // as itoa, can use modulus and reverse the result. How does the text?
   // use *cxx-stringstream*
 
-  template<typename T>
-    string bytes_to_hexstr(T coll)
-    {
-      ostringstream os;
+  template <typename T>
+  string bytes_to_hexstr(T coll)
+  {
+    ostringstream os;
 
-      for(const auto e : coll)
-        os << hex << (int)e;
+    for (const auto e : coll)
+      os << hex << (int)e;
 
-      return os.str();
-    }
+    return os.str();
+  }
 
-} // namespace
-
+} // namespace U23_2018_11_27
 
 TEST(U23, 20181127)
 {
   using namespace U23_2018_11_27;
 
   {
-    std::vector<unsigned char> v{ 0xBA, 0xAD, 0xF0, 0x0D };
+    std::vector<unsigned char> v{0xBA, 0xAD, 0xF0, 0x0D};
 
     // EXPECT_THAT(bytes_to_hexstr(v), "BAADF00D");
     EXPECT_THAT(bytes_to_hexstr(v), "baadf0d");
@@ -77,7 +77,7 @@ TEST(U23, 20181127)
 
 In order to write a general-purpose function that can handle various sorts of
 ranges, such as an std::array, std::vector, a C-like array, or others, we should
-write a function template. 
+write a function template.
 
 In the following, there are two overloads; one that takes a container as an
 argument and a flag indicating the casing style, and one that takes a pair of
@@ -88,41 +88,41 @@ filling character, or case flag:
 
 */
 
-namespace U23_Text {
+namespace U23_Text
+{
 
-  template<typename Iter>
-    string bytes_to_hexstr(Iter begin, Iter end, const bool uppercase = false)
-    {
-      ostringstream os;
+  template <typename Iter>
+  string bytes_to_hexstr(Iter begin, Iter end, const bool uppercase = false)
+  {
+    ostringstream os;
 
-      if (uppercase)
-        os.setf(std::ios_base::uppercase);
+    if (uppercase)
+      os.setf(std::ios_base::uppercase);
 
-      // *cxx-error*  *cxx-stringstream*
-      // if there is no cast to int to stringstream then output is wrong. why?
+    // *cxx-error*  *cxx-stringstream*
+    // if there is no cast to int to stringstream then output is wrong. why?
 
-      for(; begin != end; ++begin)
-        os << hex << setw(2) << setfill('0')
-          << static_cast<int>(*begin);
+    for (; begin != end; ++begin)
+      os << hex << setw(2) << setfill('0') << static_cast<int>(*begin);
 
-      return os.str();
-    }
+    return os.str();
+  }
 
-  template<typename Coll>
-    string bytes_to_hexstr(const Coll &coll, const bool uppercase = false)
-    {
-      // *cxx-begin* to support stl coll and others
-      return bytes_to_hexstr(begin(coll), end(coll), uppercase);
-    }
+  template <typename Coll>
+  string bytes_to_hexstr(const Coll &coll, const bool uppercase = false)
+  {
+    // *cxx-begin* to support stl coll and others
+    return bytes_to_hexstr(begin(coll), end(coll), uppercase);
+  }
 
-} // namespace
+} // namespace U23_Text
 
 TEST(U23, Text)
 {
   using namespace U23_Text;
 
-  std::vector<unsigned char> v{ 0xBA, 0xAD, 0xF0, 0x0D };
-  std::array<unsigned char, 6> a{ {1,2,3,4,5,6} };
+  std::vector<unsigned char> v{0xBA, 0xAD, 0xF0, 0x0D};
+  std::array<unsigned char, 6> a{{1, 2, 3, 4, 5, 6}};
   unsigned char buf[5] = {0x11, 0x22, 0x33, 0x44, 0x55};
 
   EXPECT_TRUE(bytes_to_hexstr(v, true) == "BAADF00D");
@@ -133,7 +133,6 @@ TEST(U23, Text)
   EXPECT_TRUE(bytes_to_hexstr(a) == "010203040506");
   EXPECT_TRUE(bytes_to_hexstr(buf) == "1122334455");
 }
-
 
 // ={=========================================================================
 
@@ -157,20 +156,25 @@ Input "010203040506", output: {1, 2, 3, 4, 5, 6}
 
 */
 
-namespace U24_2018_11_28 {
+namespace U24_2018_11_28
+{
 
   // as itoa(), if use stringstream again, can speficy to read 2 chars such as
-  // setw(2) as done for output? No. How does text? 
+  // setw(2) as done for output? No. How does text?
 
-} // namespace
+} // namespace U24_2018_11_28
 
-namespace U24_Text {
+namespace U24_Text
+{
 
   unsigned char char_to_int(const char ch)
   {
-    if ((ch >= '0') && (ch <= '9')) return ch - '0';
-    if ((ch >= 'a') && (ch <= 'f')) return ch - 'a' + 10;
-    if ((ch >= 'A') && (ch <= 'F')) return ch - 'A' + 10;
+    if ((ch >= '0') && (ch <= '9'))
+      return ch - '0';
+    if ((ch >= 'a') && (ch <= 'f'))
+      return ch - 'a' + 10;
+    if ((ch >= 'A') && (ch <= 'F'))
+      return ch - 'A' + 10;
 
     // if reaches here
     throw std::invalid_argument("invalid hex char input");
@@ -182,29 +186,30 @@ namespace U24_Text {
 
     // +=2 is a trick
 
-    for(size_t i = 0; i < str.size(); i += 2)
+    for (size_t i = 0; i < str.size(); i += 2)
     {
       // "<< 4" since it's hex and it's 2^4(16).
 
-      auto result = char_to_int(str[i]) << 4 | char_to_int(str[i+1]);
+      auto result = char_to_int(str[i]) << 4 | char_to_int(str[i + 1]);
       coll.push_back(result);
     }
 
     return coll;
   }
 
-} // namespace
+} // namespace U24_Text
 
 TEST(U24, Text)
 {
   using namespace U24_Text;
 
-  std::vector<unsigned char> expected{ 0xBA, 0xAD, 0xF0, 0x0D, 0x42 };
+  std::vector<unsigned char> expected{0xBA, 0xAD, 0xF0, 0x0D, 0x42};
 
-  EXPECT_THAT(str_to_bytes("BAADF00D42"), ElementsAre(0xBA, 0xAD, 0xF0, 0x0D, 0x42));
-  EXPECT_THAT(str_to_bytes("BaaDf00d42"), ElementsAre(0xBA, 0xAD, 0xF0, 0x0D, 0x42));
+  EXPECT_THAT(str_to_bytes("BAADF00D42"),
+              ElementsAre(0xBA, 0xAD, 0xF0, 0x0D, 0x42));
+  EXPECT_THAT(str_to_bytes("BaaDf00d42"),
+              ElementsAre(0xBA, 0xAD, 0xF0, 0x0D, 0x42));
 }
-
 
 // ={=========================================================================
 
@@ -222,13 +227,14 @@ lowercase. For instance, the text "the c++ challenger" should be transformed to
 
    assert("The C++ Challenger"s ==
           capitalize("the c++ challenger"s));
-   assert("This Is An Example, Should Work!"s == 
+   assert("This Is An Example, Should Work!"s ==
           capitalize("THIS IS an ExamplE, should wORk!"s));
 }
 
 */
 
-namespace U25_2018_11_28 {
+namespace U25_2018_11_28
+{
 
   string capitalize(const string &input)
   {
@@ -242,9 +248,9 @@ namespace U25_2018_11_28 {
     }
 
     // remove the last " "
-    return result.erase(result.size()-1);
+    return result.erase(result.size() - 1);
   }
-} // namespace
+} // namespace U25_2018_11_28
 
 TEST(U25, 2018_11_28)
 {
@@ -253,7 +259,8 @@ TEST(U25, 2018_11_28)
   EXPECT_THAT(capitalize("the c++ challenger"), "The C++ Challenger");
 }
 
-namespace U25_Text {
+namespace U25_Text
+{
 
   string capitalize(const string &input)
   {
@@ -271,7 +278,8 @@ namespace U25_Text {
         if (new_word)
         {
           // *cxx-error*  *cxx-stringstream*
-          // if there is no cast to int to stringstream then output is wrong. why?
+          // if there is no cast to int to stringstream then output is wrong.
+          // why?
           result << static_cast<char>(std::toupper(ch));
           new_word = false;
         }
@@ -285,8 +293,7 @@ namespace U25_Text {
     return result.str();
   }
 
-} // namespace
-
+} // namespace U25_Text
 
 TEST(U25, Text)
 {
@@ -294,7 +301,6 @@ TEST(U25, Text)
 
   EXPECT_THAT(capitalize("the c++ challenger"), "The C++ Challenger");
 }
-
 
 // ={=========================================================================
 
@@ -307,8 +313,8 @@ string by concatenating all the input strings separated with the specified
 delimiter. The delimiter must not appear after the last string, and when no
 input string is provided, the function must return an empty string.
 
-Example: 
-input { "this","is","an","example" } and delimiter ' ' (space), 
+Example:
+input { "this","is","an","example" } and delimiter ' ' (space),
 output: "this is an example".
 
 {
@@ -317,12 +323,12 @@ output: "this is an example".
    std::vector<std::string> v1{ "this","is","an","example" };
    std::vector<std::string> v2{ "example" };
    std::vector<std::string> v3{ };
- 
+
    assert(join_strings(v1, " ") == "this is an example"s);
    assert(join_strings(v2, " ") == "example"s);
    assert(join_strings(v3, " ") == ""s);
 }
- 
+
 */
 
 // to see why the text uses "-1"
@@ -330,49 +336,47 @@ output: "this is an example".
 TEST(U26, 2018_11_28)
 {
   ostringstream os;
-  std::vector<std::string> coll{ "this","is","an","example" };
+  std::vector<std::string> coll{"this", "is", "an", "example"};
 
   copy(coll.begin(), coll.end(), ostream_iterator<string>(os, ","));
   EXPECT_THAT(os.str(), "this,is,an,example,");
 }
 
-
 namespace U26_Text
 {
-  template<typename Iter>
-    string join_string(Iter begin, Iter end, const char *delimeter)
-    {
-      ostringstream os;
+  template <typename Iter>
+  string join_string(Iter begin, Iter end, const char *delimeter)
+  {
+    ostringstream os;
 
-      // copy(begin, end-1, ostream_iterator<string>(os, delimeter));
-      // os << *(end-1);
+    // copy(begin, end-1, ostream_iterator<string>(os, delimeter));
+    // os << *(end-1);
 
-      // *cxx-prev*
-      copy(begin, prev(end), ostream_iterator<string>(os, delimeter));
-      os << *prev(end);
+    // *cxx-prev*
+    copy(begin, prev(end), ostream_iterator<string>(os, delimeter));
+    os << *prev(end);
 
-      return os.str();
-    }
+    return os.str();
+  }
 
-  template<typename Coll>
-    string join_string(Coll coll, const char *delimeter)
-    {
-      if (coll.size() == 0)
-        return string();
+  template <typename Coll>
+  string join_string(Coll coll, const char *delimeter)
+  {
+    if (coll.size() == 0)
+      return string();
 
-      return join_string(coll.begin(), coll.end(), delimeter);
-    }
-}
+    return join_string(coll.begin(), coll.end(), delimeter);
+  }
+} // namespace U26_Text
 
 TEST(U26, Text)
 {
   using namespace U26_Text;
 
-  std::vector<std::string> coll{ "this","is","an","example" };
+  std::vector<std::string> coll{"this", "is", "an", "example"};
 
   EXPECT_THAT(join_string(coll, " "), "this is an example");
 }
-
 
 // ={=========================================================================
 
@@ -384,52 +388,54 @@ Write a function that, given a string and a list of possible delimiter
 characters, splits the string into tokens separated by any of the delimiters and
 returns them in an std::vector.
 
-Example: 
-input: "this,is.a sample!!" with delimiters ",.! ", 
+Example:
+input: "this,is.a sample!!" with delimiters ",.! ",
 output: {"this", "is", "a", "sample"}.
 
 */
 
 namespace U27_2018_11_29
 {
-  template<typename Coll>
-    class is_any_of
+  template <typename Coll>
+  class is_any_of
+  {
+  public:
+    explicit is_any_of(const Coll &range)
+        : range_(range)
+    {}
+    bool operator()(const typename Coll::value_type value)
     {
-      public:
-        explicit is_any_of(const Coll &range) : range_(range) {}
-        bool operator ()(const typename Coll::value_type value)
-        {
-          for (auto const e : range_)
-            if (e == value)
-              return true;
-          return false;
-        }
-
-      private:
-          Coll range_;
-    };
-
-  template<typename Coll, typename Predicate>
-    void split(Coll &coll, const char *text, Predicate pred) 
-    {
-      typename Coll::value_type token{};
-
-      while (*text)
-      {
-        if (pred(*text))
-        {
-          coll.push_back(token);
-          token.clear();
-        } 
-        else
-          token.append(1, *text);
-
-        ++text;
-      }
-
-      coll.push_back(token);
+      for (auto const e : range_)
+        if (e == value)
+          return true;
+      return false;
     }
-} // namespace
+
+  private:
+    Coll range_;
+  };
+
+  template <typename Coll, typename Predicate>
+  void split(Coll &coll, const char *text, Predicate pred)
+  {
+    typename Coll::value_type token{};
+
+    while (*text)
+    {
+      if (pred(*text))
+      {
+        coll.push_back(token);
+        token.clear();
+      }
+      else
+        token.append(1, *text);
+
+      ++text;
+    }
+
+    coll.push_back(token);
+  }
+} // namespace U27_2018_11_29
 
 TEST(U27, 2018_11_29)
 {
@@ -449,7 +455,7 @@ TEST(U27, 2018_11_29)
   // find and substr approach uses idx and length so to support multiple
   // delimeters, have to scan. so this approach but later, it turns out that
   // find_first_of() supports multiple delimeters.
-  
+
   {
     string input{"Name|Address|Phone"};
     string delim{"|,."};
@@ -461,7 +467,7 @@ TEST(U27, 2018_11_29)
 
     for (const auto ch : input)
     {
-      if(f(ch))
+      if (f(ch))
       {
         result.push_back(token);
         token.clear();
@@ -486,18 +492,17 @@ TEST(U27, 2018_11_29)
   }
 }
 
-
-namespace U27_Text 
+namespace U27_Text
 {
   // namespace std {
   //   template <typename charT,
   //            typename traits = char_traits<charT>,
   //            typename Allocator = allocator<charT> >
   //              class basic_string;
-  //  
+  //
   //   typedef basic_string<char> string;
   // }
-  // 
+  //
   // Q: WHY define tstring when it looks the same as std::string??
   //
   // template <typename T>
@@ -525,18 +530,21 @@ namespace U27_Text
 
   // As boost version, no return and reference arg
 
-  inline void split(std::vector<string> &coll, const std::string &text, const char delim)
+  inline void
+  split(std::vector<string> &coll, const std::string &text, const char delim)
   {
     std::stringstream ss{text};
     std::string token{};
 
     while (std::getline(ss, token, delim))
     {
-      if (!token.empty()) coll.push_back(token);
+      if (!token.empty())
+        coll.push_back(token);
     }
   }
 
-  inline void split(std::vector<string> &coll, const std::string &text, const string delims)
+  inline void
+  split(std::vector<string> &coll, const std::string &text, const string delims)
   {
     size_t pos{}, prev_pos{};
 
@@ -551,7 +559,8 @@ namespace U27_Text
 
   // text version
   //
-  // inline void split(std::vector<string> &coll, const std::string &text, const string delims)
+  // inline void split(std::vector<string> &coll, const std::string &text, const
+  // string delims)
   // {
   //   size_t pos{}, prev_pos{};
   //
@@ -566,7 +575,7 @@ namespace U27_Text
   //   if (prev_pos < text.length())
   //     coll.push_back(text.substr(prev_pos, pos));
   // }
-}
+} // namespace U27_Text
 
 TEST(U27, Text)
 {
@@ -581,7 +590,6 @@ TEST(U27, Text)
   EXPECT_THAT(coll2, ElementsAre("this", "is", "a", "sample"));
 }
 
-
 // ={=========================================================================
 
 /*
@@ -595,7 +603,6 @@ length exist, the first one should be returned.
 moved to algo
 
 */
-
 
 // ={=========================================================================
 
@@ -628,12 +635,12 @@ namespace U29_2018_11_29
 {
   // so it's pattern matching but no idea.
 
-} // namespace
+} // namespace U29_2018_11_29
 
 namespace U29_Text
 {
   // The simplest way to solve this problem is by using regular expressions. The
-  // regular expression that meets the described format is 
+  // regular expression that meets the described format is
   //
   // "[A-Z]{3}-[A-Z]{2} \d{3,4}".
 
@@ -647,7 +654,7 @@ namespace U29_Text
     return std::regex_match(str.data(), rx);
   }
 
-} // namespace
+} // namespace U29_Text
 
 TEST(U29, Text)
 {
@@ -658,7 +665,6 @@ TEST(U29, Text)
   EXPECT_TRUE(!validate_license_plate_format("ABC-DE 12345"));
   EXPECT_TRUE(!validate_license_plate_format("abc-de 1234"));
 }
-
 
 // ={=========================================================================
 
@@ -697,7 +703,8 @@ following structure is used to return results from parsing an URL
 (alternatively, you could return a tuple and use structured binding to bind
 variables to the various sub parts of the tuple):
 
-std::regex rx(R"(^(\w+):\/\/([\w.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
+std::regex
+rx(R"(^(\w+):\/\/([\w.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
 
 */
 
@@ -726,11 +733,12 @@ namespace U30_Text
   // };
 
   uri_parts parse_uri(std::string uri)
-  { 
+  {
     uri_parts parts;
 
     //                1          2        3 4       5          6   7        8  9
-    std::regex rx(R"(^(\w+):\/\/([\w+.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
+    std::regex rx(
+      R"(^(\w+):\/\/([\w+.-]+)(:(\d+))?([\w\/\.]+)?(\?([\w=&]*)(#?(\w+))?)?$)");
 
     auto matches = std::smatch();
 
@@ -742,7 +750,7 @@ namespace U30_Text
       if (matches[1].matched && matches[2].matched)
       {
         parts.protocol = matches[1].str();
-        parts.domain = matches[2].str();
+        parts.domain   = matches[2].str();
 
         if (matches[4].matched)
           parts.port = std::stoi(matches[4]);
@@ -757,32 +765,31 @@ namespace U30_Text
           parts.fragment = matches[9];
       }
     }
-    
-    return parts; 
+
+    return parts;
   }
 
-} // namespace
+} // namespace U30_Text
 
 TEST(U30, Text)
 {
   using namespace U30_Text;
 
   {
-   auto p1 = parse_uri("https://packt.com");
-   EXPECT_TRUE(p1.protocol == "https");
-   EXPECT_TRUE(p1.domain == "packt.com");
+    auto p1 = parse_uri("https://packt.com");
+    EXPECT_TRUE(p1.protocol == "https");
+    EXPECT_TRUE(p1.domain == "packt.com");
 
-   auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
-   // assert(p2.has_value());
-   EXPECT_TRUE(p2.protocol == "https");
-   EXPECT_TRUE(p2.domain == "bbc.com");
-   EXPECT_TRUE(p2.port == 80);
-   EXPECT_TRUE(p2.path == "/en/index.html");
-   EXPECT_TRUE(p2.query == "lite=true");
-   EXPECT_TRUE(p2.fragment == "ui");
+    auto p2 = parse_uri("https://bbc.com:80/en/index.html?lite=true#ui");
+    // assert(p2.has_value());
+    EXPECT_TRUE(p2.protocol == "https");
+    EXPECT_TRUE(p2.domain == "bbc.com");
+    EXPECT_TRUE(p2.port == 80);
+    EXPECT_TRUE(p2.path == "/en/index.html");
+    EXPECT_TRUE(p2.query == "lite=true");
+    EXPECT_TRUE(p2.fragment == "ui");
   }
 }
-
 
 // ={=========================================================================
 
@@ -797,7 +804,7 @@ yyyy-mm-dd.
 {
    using namespace std::string_literals;
 
-   assert(transform_date("today is 01.12.2017!"s) == 
+   assert(transform_date("today is 01.12.2017!"s) ==
           "today is 2017-12-01!"s);
 }
 
@@ -838,7 +845,7 @@ namespace U31_2018_12_03
     return result;
   }
 
-} // namespace
+} // namespace U31_2018_12_03
 
 TEST(U31, 2018_12_03)
 {
@@ -846,7 +853,8 @@ TEST(U31, 2018_12_03)
 
   // *cxx-gtest* prefer EXPECT_THAT for better message when something goes
   // wrong.
-  // EXPECT_TRUE(transform_date("today is 01.12.2017!") == "today is 2017-12-01!");
+  // EXPECT_TRUE(transform_date("today is 01.12.2017!") == "today is
+  // 2017-12-01!");
 
   EXPECT_THAT(transform_date("today is 01.12.2017!"), "today is 2017-12-01!");
 }
@@ -870,11 +878,11 @@ namespace U31_Text
     regex rx(R"((\d{1,2})(\.|-|/)(\d{2})(\.|-|/)(\d{4}))");
 
     // ok
-    //regex rx(R"((\d{1,2})(\.)(\d{2})(\.)(\d{4}))");
+    // regex rx(R"((\d{1,2})(\.)(\d{2})(\.)(\d{4}))");
 
     return std::regex_replace(message, rx, R"($5-$3-$1)");
   }
-} // namespace
+} // namespace U31_Text
 
 TEST(U31, Text)
 {
@@ -882,7 +890,6 @@ TEST(U31, Text)
 
   EXPECT_THAT(transform_date("today is 01.12.2017!"), "today is 2017-12-01!");
 }
-
 
 // ={=========================================================================
 int main(int argc, char **argv)

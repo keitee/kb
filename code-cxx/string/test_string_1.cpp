@@ -1,13 +1,13 @@
-#include <iostream>
-#include <cstring>
-#include <vector>
-#include <fstream>
 #include <bitset>
 #include <boost/algorithm/string.hpp>
-#include <boost/regex.hpp>
 #include <boost/cast.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/regex.hpp>
+#include <cstring>
+#include <fstream>
+#include <iostream>
 #include <regex>
+#include <vector>
 
 #include "gmock/gmock.h"
 
@@ -16,9 +16,8 @@
 using namespace std;
 using testing::ElementsAre;
 using testing::Eq;
-using testing::StrEq;
 using testing::FloatEq;
-
+using testing::StrEq;
 
 // ={=========================================================================
 // string-pos
@@ -32,10 +31,9 @@ TEST(StringIterator, PosEnd)
 
   // this is error since iterator is not int
   // EXPECT_EQ(coll.end(), 5);
-  
+
   EXPECT_EQ(*coll.end(), '\0');
 }
-
 
 // ={=========================================================================
 // string-ctors
@@ -70,7 +68,6 @@ TEST(String, Ctors)
   }
 }
 
-
 TEST(String, CtorsConst)
 {
   {
@@ -87,7 +84,8 @@ TEST(String, CtorsConst)
 
     // both cause error
     //
-    // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+    // t_string.cpp:29:49: error: invalid conversion from ‘char’ to ‘const
+    // char*’ [-fpermissive]
     //
     // const char const_letter = 'A';
     // string string_from_const_letter(const_letter);
@@ -103,16 +101,18 @@ TEST(String, CtorsConst)
   // {
   //   char letter = 'A';
   //
-  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
+  //   char*’ [-fpermissive]
   //   //      string s(letter);
-  // 
+  //
   //   string s(letter);
   // }
   //
   // {
   //   char letter = 'A';
   //
-  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const char*’ [-fpermissive]
+  //   // string.cpp:99:20: error: invalid conversion from ‘char’ to ‘const
+  //   char*’ [-fpermissive]
   //   //         s.append(letter);
   //
   //   string s;
@@ -120,7 +120,7 @@ TEST(String, CtorsConst)
   // }
 
   // HOW TO GET AROUND?
-  
+
   // /**
   //  *  @brief  Append a character.
   //  *  @param __c  The character to append.
@@ -151,37 +151,27 @@ TEST(String, CtorsConst)
   }
 }
 
-TEST(CxxString, Assign)
-{
-  std::string coll;
-
-  coll = "assign string";
-
-  EXPECT_THAT(coll, "assign string");
-}
-
 // ={=========================================================================
 // string-operations string-back
 
 TEST(StringOperation, Back)
 {
-    string s1{"zoo"};
-    EXPECT_EQ(s1.back(), 'o');
+  string s1{"zoo"};
+  EXPECT_EQ(s1.back(), 'o');
 
-    // this fails as the same reason as string ctors shown above.
-    // EXPECT_EQ(string(s1.back()), "o");
-    
-    // /**
-    //  *  @brief  Construct string as multiple characters.
-    //  *  @param  __n  Number of characters.
-    //  *  @param  __c  Character to use.
-    //  *  @param  __a  Allocator to use (default is default allocator).
-    //  */
-    // basic_string(size_type __n, _CharT __c, const _Alloc& __a = _Alloc());
+  // this fails as the same reason as string ctors shown above.
+  // EXPECT_EQ(string(s1.back()), "o");
 
-    EXPECT_EQ(string(1, s1.back()), "o");
+  // /**
+  //  *  @brief  Construct string as multiple characters.
+  //  *  @param  __n  Number of characters.
+  //  *  @param  __c  Character to use.
+  //  *  @param  __a  Allocator to use (default is default allocator).
+  //  */
+  // basic_string(size_type __n, _CharT __c, const _Alloc& __a = _Alloc());
+
+  EXPECT_EQ(string(1, s1.back()), "o");
 }
-
 
 // string-maxsize
 
@@ -196,7 +186,6 @@ TEST(StringOperation, MaxSize)
   EXPECT_THAT(s.max_size(), 9223372036854775807);
 #endif
 }
-
 
 // ={=========================================================================
 // string-substring string-find string-substr
@@ -269,13 +258,13 @@ TEST(CxxStringOperation, SubstringFind)
     found = coll1.rfind("The", 6);
     EXPECT_THAT(found, 0);
 
-    // 
+    //
     found = coll1.rfind("sixth", 0);
     EXPECT_THAT(found, string::npos);
 
     found = coll1.rfind("sixth", 4);
     EXPECT_THAT(found, 4);
-    
+
     found = coll1.rfind("sixth", 5);
     EXPECT_THAT(found, 4);
 
@@ -297,7 +286,7 @@ TEST(CxxStringOperation, SubstringSubStr)
   std::string coll{"interchangeability"};
 
   // see `cxx-string-length` returns length which is [0, length)
-  EXPECT_THAT(coll.length(), 18); 
+  EXPECT_THAT(coll.length(), 18);
 
   // return whole string
   EXPECT_THAT(coll.substr(), "interchangeability");
@@ -310,9 +299,8 @@ TEST(CxxStringOperation, SubstringSubStr)
   EXPECT_THAT(coll.substr(11), "ability");
 
   // note that the second is `length`
-  EXPECT_THAT(coll.substr(5,6), "change");
+  EXPECT_THAT(coll.substr(5, 6), "change");
 }
-
 
 // string-insert
 
@@ -325,7 +313,7 @@ TEST(StringOperation, Insert)
   // use
   //
   // string& string::insert (size_type idx, size_type num, char c);
-  
+
   {
     string s{};
     s.insert(0, 1, 'X');
@@ -349,30 +337,30 @@ TEST(StringOperation, EraseReplace)
   {
     std::string s = "i18n";
 
-    s.replace(1,2,"nternationalizatio");   // change of size
+    s.replace(1, 2, "nternationalizatio"); // change of size
     EXPECT_EQ(s, "internationalization");
 
-    s.erase(13);                           // s: international. note: from 13
+    s.erase(13); // s: international. note: from 13
     EXPECT_EQ(s, "international");
 
-    s.erase(7, 5);                         // internaxxxxxl
+    s.erase(7, 5); // internaxxxxxl
     EXPECT_EQ(s, "internal");
 
     // *cxx-string-pop-back*
     // void string::pop_back ()
     // Calling this for an empty string results in undefined behavior.
 
-    s.pop_back();                          // s: interna (since C++11)
+    s.pop_back(); // s: interna (since C++11)
     EXPECT_EQ(s, "interna");
 
-    s.replace(0, 2,"ex");                   // s: externa
+    s.replace(0, 2, "ex"); // s: externa
     EXPECT_EQ(s, "externa");
   }
 
   {
     std::string s = "i18n";
 
-    s.replace(1,2,"nternationalizatio");   // change of size
+    s.replace(1, 2, "nternationalizatio"); // change of size
     EXPECT_EQ(s, "internationalization");
 
     // use iterator? No, all string find function returns index.
@@ -380,7 +368,7 @@ TEST(StringOperation, EraseReplace)
     EXPECT_EQ(s, "internationa");
   }
 
-  // when use erase(iterator), it erases only one element. 
+  // when use erase(iterator), it erases only one element.
   {
     std::string s{"abcde"};
 
@@ -406,16 +394,21 @@ TEST(StringOperation, EraseReplace)
     // it is replacing. cxx-string-replace
 
     string s = "Niels Stroustrup";
-    s.replace(0, 5,"nicholas");
+    s.replace(0, 5, "nicholas");
     EXPECT_EQ(s, "nicholas Stroustrup");
   }
 }
 
+// cxx-string-assign
 
-// string-assign, string-swap
-
-TEST(StringOperation, AssignSwap)
+TEST(CxxString, Assign)
 {
+  {
+    std::string coll;
+    coll = "assign string";
+    EXPECT_THAT(coll, "assign string");
+  }
+
   {
     const std::string coll{"othello"};
     std::string s{};
@@ -432,23 +425,6 @@ TEST(StringOperation, AssignSwap)
   }
 
   {
-    std::string coll{"othello"};
-    std::string s{};
-
-    // assign "othello" (equivalent to operator =)
-    s.swap(coll);
-    EXPECT_EQ(s, "othello");
-
-    // compile error
-    // s.swap("the");
-    // s.swap(string("the"));
-    
-    string str{"the"};
-    s.swap(str);
-    EXPECT_EQ(s, "the");
-  }
-
-  {
     std::string s{};
 
     s.assign("othello");
@@ -459,6 +435,27 @@ TEST(StringOperation, AssignSwap)
   }
 }
 
+// cxx-string-swap
+
+TEST(CxxString, Swap)
+{
+  {
+    std::string coll{"othello"};
+    std::string s{};
+
+    // assign "othello" (equivalent to operator =)
+    s.swap(coll);
+    EXPECT_EQ(s, "othello");
+
+    // compile error
+    // s.swap("the");
+    // s.swap(string("the"));
+
+    string str{"the"};
+    s.swap(str);
+    EXPECT_EQ(s, "the");
+  }
+}
 
 // string-compare
 //
@@ -509,11 +506,10 @@ TEST(StringOperation, Compare)
   }
 }
 
-
 TEST(StringOperation, Add)
 {
   std::string coll1{};
-  
+
   coll1 = "string";
   coll1 += " add";
 
@@ -555,7 +551,6 @@ TEST(CxxString, StringClear)
   }
 }
 
-
 // ={=========================================================================
 // string-cstring
 
@@ -565,28 +560,27 @@ TEST(String, CompareStringAndCstring)
   EXPECT_EQ(sz.size(), 3);
 
   char cs[] = "zoo";
-  EXPECT_EQ(strlen(cs),3);
-  EXPECT_EQ(sizeof(cs)/sizeof(char),4);
+  EXPECT_EQ(strlen(cs), 3);
+  EXPECT_EQ(sizeof(cs) / sizeof(char), 4);
 
   const char *s1  = "this is first message";
   const char s2[] = "this is first message";
 
-  EXPECT_THAT(sizeof(s1), 8);                 // pointer
-  EXPECT_THAT(sizeof s1, 8);                  // pointer
-  EXPECT_THAT(sizeof *s1, 1);                 // byte
-  EXPECT_THAT(sizeof(s2), 22);                // array
-  EXPECT_THAT(sizeof(s2)/sizeof(s2[0]), 22);  // array
+  EXPECT_THAT(sizeof(s1), 8);                  // pointer
+  EXPECT_THAT(sizeof s1, 8);                   // pointer
+  EXPECT_THAT(sizeof *s1, 1);                  // byte
+  EXPECT_THAT(sizeof(s2), 22);                 // array
+  EXPECT_THAT(sizeof(s2) / sizeof(s2[0]), 22); // array
   EXPECT_THAT(strlen(s2), 21);
 
   string ss{s1};
-  EXPECT_THAT(ss.size(), 21);                  // string
+  EXPECT_THAT(ss.size(), 21); // string
 }
-
 
 // return bool if source and target are the same from the end.
 // bool strend(char *s, char *t);
 
-namespace string_cstring 
+namespace string_cstring
 {
   bool strend_01(char *s, char *t)
   {
@@ -619,7 +613,7 @@ namespace string_cstring
 
     return false;
   }
-} // namespace
+} // namespace string_cstring
 
 // strend(this is first message, ssage) returns 1
 // strend(this is first message, xsage) returns 0
@@ -628,7 +622,7 @@ namespace string_cstring
 
 TEST(String, CompareStringFromEnd)
 {
-  using namespace string_cstring; 
+  using namespace string_cstring;
 
   char s1[] = "this is first message";
   char t1[] = "ssage";
@@ -652,7 +646,6 @@ TEST(String, OutputCstring)
   os << s1 << endl;
   EXPECT_EQ(os.str(), "this is first message\n");
 }
-
 
 // ={=========================================================================
 // string-conversion
@@ -693,7 +686,7 @@ TEST(StringConverison, Functions)
     // man strtol()
     //
     // The string may begin with an arbitrary amount of white space (as deter‐
-    // mined by isspace(3)) followed by a single optional '+' or '-' sign.  
+    // mined by isspace(3)) followed by a single optional '+' or '-' sign.
 
     // If base is zero or 16, the string may then include a "0x" prefix, and
     // the number  will  be read in base 16; otherwise, a zero base is taken
@@ -726,11 +719,15 @@ TEST(StringConverison, StringStream)
 
     bitset<15> bit_set(5789);
     os << "float : " << 4.67 << ", bitset : " << bit_set << endl;
-    EXPECT_EQ(os.str(), "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+    EXPECT_EQ(
+      os.str(),
+      "decimal : 15, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
 
     os.seekp(0);
     os << "octal : " << oct << 15;
-    EXPECT_EQ(os.str(), "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
+    EXPECT_EQ(
+      os.str(),
+      "octal : 1715, hex : f\nfloat : 4.67, bitset : 001011010011101\n");
   }
 
   // to string
@@ -738,14 +735,15 @@ TEST(StringConverison, StringStream)
     stringstream ss;
     vector<string> string_vector{};
 
-    for(int i = 0; i < 4; ++i)
+    for (int i = 0; i < 4; ++i)
     {
       ss << "player " << i;
       string_vector.push_back(string(ss.str()));
       ss.str("");
     }
 
-    EXPECT_THAT(string_vector, ElementsAre("player 0", "player 1", "player 2", "player 3"));
+    EXPECT_THAT(string_vector,
+                ElementsAre("player 0", "player 1", "player 2", "player 3"));
   }
 
   // to number
@@ -782,7 +780,7 @@ TEST(StringConverison, StringStream)
     while (is >> value)
       coll.push_back(value);
 
-    EXPECT_THAT(coll, ElementsAre(1,2,3,4));
+    EXPECT_THAT(coll, ElementsAre(1, 2, 3, 4));
   }
 
   // to number
@@ -832,15 +830,15 @@ TEST(StringConverison, BooxtLexicalCast)
   EXPECT_THAT(boost::lexical_cast<int>("3301"), 3301);
 }
 
-
 TEST(StringConverison, NarrowNumericConversion)
 {
   // warning/error
-  // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’ inside { } [-Wnarrowing]
+  // :464:12: warning: narrowing conversion of ‘5.0e+0’ from ‘double’ to ‘int’
+  // inside { } [-Wnarrowing]
   //    int x{5.0};
   //            ^
   // int x{5.0};
- 
+
   int x = 5.0;
   EXPECT_EQ(x, 5);
 
@@ -856,13 +854,12 @@ TEST(StringConverison, NarrowNumericConversion)
   EXPECT_THROW(boost::numeric_cast<short>(i), boost::bad_numeric_cast);
 }
 
-
 // ={=========================================================================
 // string-pad string-insert
 //
 // pad(string, lenth, char);
 //
-// s.insert(pos,num,c) 
+// s.insert(pos,num,c)
 //
 // Inserts num occurrences of the character c at iterator position pos and
 // returns the iterator position of the first new character
@@ -870,8 +867,8 @@ TEST(StringConverison, NarrowNumericConversion)
 template <typename T>
 void pad(T &s, typename T::size_type n, typename T::value_type c)
 {
-    if (n > s.size())
-        s.append(n - s.size(), c);
+  if (n > s.size())
+    s.append(n - s.size(), c);
 }
 
 TEST(StringPad, InsertAppendPad)
@@ -900,7 +897,6 @@ TEST(StringPad, InsertAppendPad)
   EXPECT_EQ(ws1, L"fooXXXXXXXXXXXXXXXXX");
 }
 
-
 TEST(StringPad, AppendNull)
 {
   string s1{};
@@ -911,12 +907,11 @@ TEST(StringPad, AppendNull)
   EXPECT_EQ(s1.length(), 0);
 }
 
-
 // ={=========================================================================
 // string-trim
 //
 // 4.2 Trimming a String
-// 
+//
 // void trim(std::string &s, char c);
 //
 // remove chars from the end which matches with the given char
@@ -925,17 +920,16 @@ TEST(StringPad, AppendNull)
 // rtrim(s1, 'o');
 // EXPECT_EQ(s1, "z");
 //
-// variations: trim whitespace, trim from the left. 
-
+// variations: trim whitespace, trim from the left.
 
 // use single call to erase than removing one at a time.
 
-namespace string_trim 
+namespace string_trim
 {
 
   void trim_1(string &s, const char c)
   {
-    int start = s.size()-1;
+    int start = s.size() - 1;
 
     // failes on "ooo" since don not chacek when start == 0
     //
@@ -955,15 +949,16 @@ namespace string_trim
 
     // same as
     // s.erase(start+1, s.size());
-   
+
     // +1 since start is the pos that is not c
-    s.erase(start+1);
+    s.erase(start + 1);
   }
 
   // if use iterators
   void trim_2(string &s, const char c)
   {
-    if (s.empty()) return;
+    if (s.empty())
+      return;
 
     auto end = s.end();
 
@@ -984,10 +979,10 @@ namespace string_trim
     //
     // case core
     // s.erase(end);
-    // 
-    // okay 
+    //
+    // okay
     // if (end != s.end()) s.erase(end);
-    // 
+    //
     // okay
     // s.erase(end, s.end());
     //
@@ -1026,7 +1021,7 @@ namespace string_trim
     //   }
     //
     // Oh, it does have ASSERT How to enable? Use -D_GLIBCXX_DEBUG_PEDANTIC then
-    // gets assert rather than having a core only which need to debug further. 
+    // gets assert rather than having a core only which need to debug further.
     //
     // /usr/include/c++/4.9/bits/basic_string.h:1399: std::basic_string<_CharT,
     // _Traits, _Alloc>::iterator std::basic_string<_CharT, _Traits,
@@ -1036,12 +1031,11 @@ namespace string_trim
     // _Alloc>::iterator = __gnu_cxx::__normal_iterator<char*,
     // std::basic_string<char> >; typename
     // _Alloc::rebind<_CharT>::other::pointer = char*]: Assertion '__position >=
-    // _M_ibegin() && __position < _M_iend()' failed.  
+    // _M_ibegin() && __position < _M_iend()' failed.
     // Aborted (core dumped)
   }
 
-} // namespace
-
+} // namespace string_trim
 
 TEST(StringTrim, 2018_11)
 {
@@ -1061,19 +1055,19 @@ TEST(StringTrim, 2018_11)
 
   {
     string s1{"zoo                              "};
-    trim_1(s1,' ');
+    trim_1(s1, ' ');
     EXPECT_THAT(s1, "zoo");
   }
 
   {
     string s1{"zoo"};
-    trim_1(s1,' ');
+    trim_1(s1, ' ');
     EXPECT_THAT(s1, "zoo");
   }
 
   {
     string s1{"ooo"};
-    trim_1(s1,'o');
+    trim_1(s1, 'o');
     EXPECT_THAT(s1, "");
   }
 
@@ -1092,32 +1086,30 @@ TEST(StringTrim, 2018_11)
 
   {
     string s1{"zoo                              "};
-    trim_2(s1,' ');
+    trim_2(s1, ' ');
     EXPECT_THAT(s1, "zoo");
   }
 
   {
     string s1{"zoo"};
-    trim_2(s1,' ');
+    trim_2(s1, ' ');
     EXPECT_THAT(s1, "zoo");
   }
 
   {
     string s1{"ooo"};
-    trim_2(s1,'o');
+    trim_2(s1, 'o');
     EXPECT_THAT(s1, "");
   }
 }
 
-
 // ={=========================================================================
-// string-split 
+// string-split
 //
 // 4.6 Splitting a String
 // You want to split a delimited string into multiple strings. For example, you
 // may want to split the string "Name|Address|Phone" into three separate
 // strings, "Name", "Address", and "Phone", with the delimiter removed.
-
 
 // *cxx-string-find* *cxx-string-substr* *cxx-string-replace*
 //
@@ -1137,30 +1129,30 @@ TEST(StringSplit, GetExtension)
 
     // if not have .
     if (idx == string::npos)
-    { 
+    {
       filename = inputname + '.' + suffix;
     }
     else
     {
       basename = inputname.substr(0, idx);
-      extname = inputname.substr(idx+1);
+      extname  = inputname.substr(idx + 1);
       filename = basename + '.' + suffix;
 
       // to use cxx-string-replace
       if (extname == suffix)
       {
         filename = inputname;
-        filename.replace(idx+1, string::npos, "xxx");
+        filename.replace(idx + 1, string::npos, "xxx");
       }
     }
 
     coll2.push_back(filename);
   }
 
-  EXPECT_THAT(coll2, 
-      ElementsAre("prog.tmp", "mydir.tmp", "hello.tmp", "opps.xxx", "end.tmp"));
+  EXPECT_THAT(
+    coll2,
+    ElementsAre("prog.tmp", "mydir.tmp", "hello.tmp", "opps.xxx", "end.tmp"));
 }
-
 
 // split input string by delimeter and put them into vector
 // void split(const string &s, char delim, vector<string> &coll);
@@ -1171,14 +1163,15 @@ namespace stringsplit_2018_10
 {
   // note:
   // this has *undefined* behaviour; sometimes works and sometimes infinite loop
-  // since `found` is npos when not found and do ++found and use it loop condition.
+  // since `found` is npos when not found and do ++found and use it loop
+  // condition.
   //
   // void split(const string &s, char delim, vector<string> &coll)
   // {
   //   size_t i{};
   //   size_t found{};
   //   std::string token;
-  // 
+  //
   //   for (i = 0; found != std::string::npos; )
   //   {
   //     found = s.find(delim, i);
@@ -1191,15 +1184,15 @@ namespace stringsplit_2018_10
 
   void split_text(const string &s, char delim, vector<string> &coll)
   {
-    string::size_type i = 0;
+    string::size_type i     = 0;
     string::size_type found = s.find(delim);
 
     while (found != string::npos)
     {
       // save the first token
-      coll.push_back(s.substr(i, found-i));
+      coll.push_back(s.substr(i, found - i));
       // std::cout << "token: " << s.substr(i, found-i) << std::endl;
-      i = ++found;
+      i     = ++found;
       found = s.find(delim, i);
 
       // if see no more token, save the current
@@ -1211,7 +1204,6 @@ namespace stringsplit_2018_10
     }
   }
 
-
   void split_revised(const string &input, char delim, vector<string> &coll)
   {
     string::size_type i{};
@@ -1219,16 +1211,15 @@ namespace stringsplit_2018_10
 
     while (found != string::npos)
     {
-      coll.push_back(input.substr(i, found-i));
-      i = ++found;
+      coll.push_back(input.substr(i, found - i));
+      i     = ++found;
       found = input.find(delim, i);
     }
 
     if (found == string::npos)
-      coll.push_back(input.substr(i, found-i));
+      coll.push_back(input.substr(i, found - i));
   }
-} // namespace
-
+} // namespace stringsplit_2018_10
 
 TEST(StringSplit, ByDelimeter_201810)
 {
@@ -1236,29 +1227,28 @@ TEST(StringSplit, ByDelimeter_201810)
 
   {
     std::vector<std::string> coll;
-    split_text("Smith, Bill, 5/1/2002, Active", ',', coll); 
+    split_text("Smith, Bill, 5/1/2002, Active", ',', coll);
     EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
   }
 
   {
     // fails:
     std::vector<std::string> coll;
-    split_text("Smith", ',', coll); 
+    split_text("Smith", ',', coll);
     EXPECT_THAT(coll, ElementsAre());
   }
 
   {
     std::vector<std::string> coll;
 
-    split_revised("Smith, Bill, 5/1/2002, Active", ',', coll); 
+    split_revised("Smith, Bill, 5/1/2002, Active", ',', coll);
     EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
 
     coll.clear();
-    split_revised("Smith", ',', coll); 
+    split_revised("Smith", ',', coll);
     EXPECT_THAT(coll, ElementsAre("Smith"));
   }
 }
-
 
 // *boost-split* *boost-is-any-of*
 // The one function that is in the example that isn’t in the table is
@@ -1270,8 +1260,7 @@ TEST(StringSplit, ByBoost)
   {
     vector<string> coll;
 
-    boost::split(coll, "Smith, Bill, 5/1/2002, Active", 
-        boost::is_any_of("|"));
+    boost::split(coll, "Smith, Bill, 5/1/2002, Active", boost::is_any_of("|"));
 
     // not found and returns the input
     EXPECT_THAT(coll, ElementsAre("Smith, Bill, 5/1/2002, Active"));
@@ -1280,8 +1269,7 @@ TEST(StringSplit, ByBoost)
   {
     vector<string> coll;
 
-    boost::split(coll, "Smith, Bill, 5/1/2002, Active", 
-        boost::is_any_of(","));
+    boost::split(coll, "Smith, Bill, 5/1/2002, Active", boost::is_any_of(","));
 
     EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
   }
@@ -1289,8 +1277,7 @@ TEST(StringSplit, ByBoost)
   {
     vector<string> coll;
 
-    boost::split(coll, "Name|Address|Phone", 
-        boost::is_any_of("|"));
+    boost::split(coll, "Name|Address|Phone", boost::is_any_of("|"));
 
     EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
   }
@@ -1299,8 +1286,7 @@ TEST(StringSplit, ByBoost)
   {
     vector<string> coll;
 
-    boost::split(coll, "Name|Address,Phone", 
-        boost::is_any_of("|,"));
+    boost::split(coll, "Name|Address,Phone", boost::is_any_of("|,"));
 
     EXPECT_THAT(coll, ElementsAre("Name", "Address", "Phone"));
   }
@@ -1327,29 +1313,28 @@ TEST(StringSplit, ByBoost)
   }
 }
 
-
-namespace stringsplit_2018_11 {
+namespace stringsplit_2018_11
+{
 
   // 2018.11.14
 
   void split(const string &s, const char delim, vector<string> &coll)
   {
     string token{};
-    size_t start{}, end{}; 
+    size_t start{}, end{};
 
     end = s.find(delim, start);
     for (; end < string::npos;)
     {
       coll.push_back(s.substr(start, end - start));
-      start = end+1;
-      end = s.find(delim, start);
+      start = end + 1;
+      end   = s.find(delim, start);
     }
 
     coll.push_back(s.substr(start, end - start));
   }
 
-} // namespace
-
+} // namespace stringsplit_2018_11
 
 TEST(StringSplit, ByDelimeter_2018_11)
 {
@@ -1359,13 +1344,13 @@ TEST(StringSplit, ByDelimeter_2018_11)
     std::vector<std::string> coll;
 
     //         5      11
-    split("Smith, Bill, 5/1/2002, Active", ',', coll); 
+    split("Smith, Bill, 5/1/2002, Active", ',', coll);
     EXPECT_THAT(coll, ElementsAre("Smith", " Bill", " 5/1/2002", " Active"));
 
     coll.clear();
 
     // when not found
-    split("Smith", ',', coll); 
+    split("Smith", ',', coll);
     EXPECT_THAT(coll, ElementsAre("Smith"));
   }
 
@@ -1398,15 +1383,16 @@ TEST(StringSplit, ByDelimeter_2018_11)
   }
 }
 
-
-namespace stringsplit_2018_11_strchr {
+namespace stringsplit_2018_11_strchr
+{
 
   // 2018.11.14
   // should try memchar/strchr way? nope.
-  
-} // namespace
 
-namespace string_split_2018_11 {
+} // namespace stringsplit_2018_11_strchr
+
+namespace string_split_2018_11
+{
 
   // copied from TEST(Stdio, GetLine)
 
@@ -1420,9 +1406,8 @@ namespace string_split_2018_11 {
 
   //   EXPECT_THAT(coll, ElementsAre("one", "two", "three"));
   // }
-  
-} // namespace
 
+} // namespace string_split_2018_11
 
 // ={=========================================================================
 // string-token
@@ -1445,85 +1430,83 @@ namespace string_split_2018_11 {
 namespace tokenizer_book
 {
 
-class StringTokenizer
-{
+  class StringTokenizer
+  {
   public:
     StringTokenizer(const string &s, const char *delim = nullptr)
         : str_(s)
     {
-        if (!delim)
-            delim_ = " \f\n\r\r\v|";
-        else
-            delim_ = delim;
+      if (!delim)
+        delim_ = " \f\n\r\r\v|";
+      else
+        delim_ = delim;
 
-        // NOTE: *TDD*
-        // this causes to fail on the "||Name" and loop on nextToken has
-        // {"Name", "Name"}
-        //
-        // begin_ = str_.find_first_not_of(delim_);
-        // end_ = str_.find_first_of(delim_);
+      // NOTE: *TDD*
+      // this causes to fail on the "||Name" and loop on nextToken has
+      // {"Name", "Name"}
+      //
+      // begin_ = str_.find_first_not_of(delim_);
+      // end_ = str_.find_first_of(delim_);
 
-        begin_ = str_.find_first_not_of(delim_);
-        end_ = str_.find_first_of(delim_, begin_);
+      begin_ = str_.find_first_not_of(delim_);
+      end_   = str_.find_first_of(delim_, begin_);
     }
 
     void nextToken(string &s)
     {
-        // if (begin_ == string::npos && end_ == string::npos)
-        // is when input is null.
-        //
-        // NOTE:
-        // This is not supposed be called since hasMoreTokens() return false.
-        // However, when user call it wihtout checking with hasMoreTokens() then
-        // do nothing and more defensive. 
-        //
-        // see MakeToken::nextToken()
+      // if (begin_ == string::npos && end_ == string::npos)
+      // is when input is null.
+      //
+      // NOTE:
+      // This is not supposed be called since hasMoreTokens() return false.
+      // However, when user call it wihtout checking with hasMoreTokens() then
+      // do nothing and more defensive.
+      //
+      // see MakeToken::nextToken()
 
-        if (begin_ != string::npos && end_ != string::npos)
-        {
-            s = str_.substr(begin_, end_ - begin_);
-            begin_ = str_.find_first_not_of(delim_, end_);
-            end_ = str_.find_first_of(delim_, begin_);
-        }
-        else if (begin_ != string::npos && end_ == string::npos)
-        {
-            s = str_.substr(begin_, str_.length() - begin_);
-            begin_ = str_.find_first_not_of(delim_, end_);
-        }
+      if (begin_ != string::npos && end_ != string::npos)
+      {
+        s      = str_.substr(begin_, end_ - begin_);
+        begin_ = str_.find_first_not_of(delim_, end_);
+        end_   = str_.find_first_of(delim_, begin_);
+      }
+      else if (begin_ != string::npos && end_ == string::npos)
+      {
+        s      = str_.substr(begin_, str_.length() - begin_);
+        begin_ = str_.find_first_not_of(delim_, end_);
+      }
     }
 
     size_t countTokens()
     {
-        // return if we already counted. possible to call this more than once?
-        // this is becuase to have member variable.
-        if (count_ != 0)
-            return count_;
+      // return if we already counted. possible to call this more than once?
+      // this is becuase to have member variable.
+      if (count_ != 0)
+        return count_;
 
-        size_t count_delim = 0;
-        size_t pos_delim = 0;
+      size_t count_delim = 0;
+      size_t pos_delim   = 0;
 
-        for (;;)
-        {
-            // break if there are only delimiters.
-            if ((pos_delim = str_.find_first_not_of(delim_, pos_delim)) == string::npos)
-                break;
+      for (;;)
+      {
+        // break if there are only delimiters.
+        if ((pos_delim = str_.find_first_not_of(delim_, pos_delim)) ==
+            string::npos)
+          break;
 
-            // this is different from the book
-            // pos_delim = str_.find_first_of(delim_, pos_delim+1);
-            pos_delim = str_.find_first_of(delim_, pos_delim);
-            ++count_delim;
+        // this is different from the book
+        // pos_delim = str_.find_first_of(delim_, pos_delim+1);
+        pos_delim = str_.find_first_of(delim_, pos_delim);
+        ++count_delim;
 
-            if (pos_delim == string::npos)
-                break;
-        }
+        if (pos_delim == string::npos)
+          break;
+      }
 
-        return count_ = count_delim;
+      return count_ = count_delim;
     }
 
-    bool hasMoreTokens()
-    {
-        return begin_ != end_;
-    }
+    bool hasMoreTokens() { return begin_ != end_; }
 
   private:
     StringTokenizer() {}
@@ -1532,10 +1515,9 @@ class StringTokenizer
     size_t count_{};
     size_t begin_{};
     size_t end_{};
-};
+  };
 
-} // namespace
-
+} // namespace tokenizer_book
 
 namespace tokenizer_2018_05_29
 {
@@ -1577,49 +1559,45 @@ namespace tokenizer_2018_05_29
 
   class MakeToken_0529
   {
-    public:
-      MakeToken_0529(const string &input, const string &delim = "|"):
-        input_(input), delim_(delim)
-        {
-          size_t i{};
-          size_t found = input_.find_first_of(delim_, i);
+  public:
+    MakeToken_0529(const string &input, const string &delim = "|")
+        : input_(input)
+        , delim_(delim)
+    {
+      size_t i{};
+      size_t found = input_.find_first_of(delim_, i);
 
-          while (found != string::npos)
-          {
-            tokens_.push_back(input_.substr(i, found-i));
-            i = ++found;
-            found = input_.find_first_of(delim_, i);
-
-          }
-
-          if (found == string::npos)
-            tokens_.push_back(input_.substr(i, found));
-        }
-
-      size_t countTokens()
+      while (found != string::npos)
       {
-        return tokens_.size();
+        tokens_.push_back(input_.substr(i, found - i));
+        i     = ++found;
+        found = input_.find_first_of(delim_, i);
       }
 
-      void nextToken(string &token)
-      {
-        auto it = tokens_.begin();
-        if (it != tokens_.end())
-        {
-          token = *it;
-          tokens_.erase(it);
-        }
-      }
+      if (found == string::npos)
+        tokens_.push_back(input_.substr(i, found));
+    }
 
-    private:
-      const string input_;
-      const string delim_;
-      size_t number_of_tokens_{};
-      vector<string> tokens_{};
+    size_t countTokens() { return tokens_.size(); }
+
+    void nextToken(string &token)
+    {
+      auto it = tokens_.begin();
+      if (it != tokens_.end())
+      {
+        token = *it;
+        tokens_.erase(it);
+      }
+    }
+
+  private:
+    const string input_;
+    const string delim_;
+    size_t number_of_tokens_{};
+    vector<string> tokens_{};
   };
 
-} // namespace
-
+} // namespace tokenizer_2018_05_29
 
 TEST(MakeToken_0529, UseVariousInputs)
 {
@@ -1715,33 +1693,31 @@ TEST(MakeToken_0529, UseVariousInputs)
 namespace tokenizer_2018_06_06
 {
 
-// int main( ) {
-//    string s = " razzle dazzle giddyup ";
-//    string tmp;
-//    StringTokenizer st(s);
-//    cout << "there are " << st.countTokens( ) << " tokens.\n";
-//    while (st.hasMoreTokens( )) {
-//        st.nextToken(tmp);
-//        cout << "token = " << tmp << '\n';
-//    }
-// }
-//
-// * not boost-split style which means do not support null token.
+  // int main( ) {
+  //    string s = " razzle dazzle giddyup ";
+  //    string tmp;
+  //    StringTokenizer st(s);
+  //    cout << "there are " << st.countTokens( ) << " tokens.\n";
+  //    while (st.hasMoreTokens( )) {
+  //        st.nextToken(tmp);
+  //        cout << "token = " << tmp << '\n';
+  //    }
+  // }
+  //
+  // * not boost-split style which means do not support null token.
 
-class StringTokenizer_0606
-{
+  class StringTokenizer_0606
+  {
   public:
     StringTokenizer_0606(const string &input, const string &delim = "|")
-      : input_(input), delim_(delim)
+        : input_(input)
+        , delim_(delim)
     {
       pos_token_ = input_.find_first_not_of(delim_, 0);
       pos_delim_ = input_.find_first_of(delim_, pos_token_);
     }
 
-    bool hasMoreTokens()
-    {
-      return pos_token_ != pos_delim_;
-    }
+    bool hasMoreTokens() { return pos_token_ != pos_delim_; }
 
     void nextToken(string &token)
     {
@@ -1758,8 +1734,9 @@ class StringTokenizer_0606
 
       size_t pos_start = input_.find_first_not_of(delim_, 0);
       size_t pos_delim{};
-      
-      while( (pos_delim = input_.find_first_of(delim_, pos_start)) != string::npos)
+
+      while ((pos_delim = input_.find_first_of(delim_, pos_start)) !=
+             string::npos)
       {
         pos_start = input_.find_first_not_of(delim_, pos_delim);
         ++count_;
@@ -1778,10 +1755,9 @@ class StringTokenizer_0606
     size_t count_{};
     size_t pos_token_{};
     size_t pos_delim_{};
-};
+  };
 
-} // namespace
-
+} // namespace tokenizer_2018_06_06
 
 TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
 {
@@ -1873,8 +1849,8 @@ TEST(StringTokenizer_0606, ParseTokensFromVariosInputs)
   EXPECT_THAT(coll, ElementsAre("Name"));
 }
 
-
-namespace tokenizer_2018_11_split {
+namespace tokenizer_2018_11_split
+{
 
   // use split()
 
@@ -1893,9 +1869,9 @@ namespace tokenizer_2018_11_split {
 
   class StringTokenizer
   {
-    public:
+  public:
     explicit StringTokenizer(const string &s, const char delim = '|')
-      : delim_(delim)
+        : delim_(delim)
     {
       split(s, delim);
     }
@@ -1906,19 +1882,18 @@ namespace tokenizer_2018_11_split {
     bool hasMoreTokens() { return !token_.empty(); }
 
     // have to remove one
-    void nextToken(string &next) 
-    { 
+    void nextToken(string &next)
+    {
       // since vector don't have interface to pop from the front
       next = token_.front();
       token_.erase(token_.begin());
     }
 
-    private:
-
+  private:
     void split(const string &s, const char delim)
     {
       auto length = s.length();
-      auto end = s.find(delim);
+      auto end    = s.find(delim);
       decltype(end) start{};
       string token;
 
@@ -1935,7 +1910,7 @@ namespace tokenizer_2018_11_split {
         // token_.push_back(s.substr(start, end - start));
 
         start = end + 1;
-        end = s.find(delim, start);
+        end   = s.find(delim, start);
       }
 
       // // this covers either last or single split
@@ -1951,8 +1926,7 @@ namespace tokenizer_2018_11_split {
     char delim_;
   };
 
-} // namespace
-
+} // namespace tokenizer_2018_11_split
 
 // cases:
 //
@@ -2108,7 +2082,8 @@ TEST(StringTokenizer, 2018_11_split)
   // }
 }
 
-namespace tokenizer_2018_11_find {
+namespace tokenizer_2018_11_find
+{
 
   // use find() family
   // do not use internal coll such as vector which means that do everything on
@@ -2130,108 +2105,103 @@ namespace tokenizer_2018_11_find {
 
   class StringTokenizer
   {
-    public:
-      StringTokenizer(const string &s, const char delim = '|')
-      : input_(s), delim_(delim)
+  public:
+    StringTokenizer(const string &s, const char delim = '|')
+        : input_(s)
+        , delim_(delim)
+    {
+      count_ = 0;
+      start_ = input_.find_first_not_of(delim_);
+      end_   = input_.find_first_of(delim_, start_);
+    }
+
+    void nextToken(string &s)
+    {
+      // works for all except when call nextToken() without checking on
+      // hasMore(). crashes.
+      //
+      // s = input_.substr(start_, end_ - start_);
+      // start_ = input_.find_first_not_of(delim_, end_);
+      // end_ = input_.find_first_of(delim_, start_);
+
+      if (start_ != string::npos && end_ != string::npos)
       {
-        count_ = 0;
-        start_ = input_.find_first_not_of(delim_);
-        end_ = input_.find_first_of(delim_, start_);
+        s      = input_.substr(start_, end_ - start_);
+        start_ = input_.find_first_not_of(delim_, end_);
+        end_   = input_.find_first_of(delim_, start_);
       }
-
-      void nextToken(string &s)
+      else if (start_ != string::npos && end_ == string::npos)
       {
-        // works for all except when call nextToken() without checking on
-        // hasMore(). crashes.
-        //
-        // s = input_.substr(start_, end_ - start_);
-        // start_ = input_.find_first_not_of(delim_, end_);
-        // end_ = input_.find_first_of(delim_, start_);
-
-        if (start_ != string::npos && end_ != string::npos)
-        {
-          s = input_.substr(start_, end_ - start_);
-          start_ = input_.find_first_not_of(delim_, end_);
-          end_ = input_.find_first_of(delim_, start_);
-        }
-        else if (start_ != string::npos && end_ == string::npos)
-        {
-          s = input_.substr(start_, end_ - start_);
-          start_ = input_.find_first_not_of(delim_, end_);
-        }
+        s      = input_.substr(start_, end_ - start_);
+        start_ = input_.find_first_not_of(delim_, end_);
       }
+    }
 
-      bool hasMoreTokens()
-      {
-        return start_ != end_;
-      }
+    bool hasMoreTokens() { return start_ != end_; }
 
-      size_t countTokens()
-      {
-        if (count_)
-          return count_;
-
-        // use two variables:
-        //
-        // decltype(start_) start{}, end{};
-        // 
-        // start = input_.find_first_not_of(delim_);
-        // end = input_.find_first_of(delim_);
-        //
-        // while (end < string::npos)
-        // {
-        //   ++count_;
-        //   start = input_.find_first_not_of(delim_, end);
-        //   end = input_.find_first_of(delim_, start);
-        // }
-
-
-        // do not support cases which has only delims:
-        //
-        // decltype(start_) run{};
-        //
-        // run = input_.find_first_of(delim_);
-        //
-        // while (run < string::npos)
-        // {
-        //   ++count_;
-        //   run = input_.find_first_not_of(delim_, run);
-        //   run = input_.find_first_of(delim_, run);
-        // }
-        //
-        // return ++count_;
-
-
-        // same approach as the book. the difference is that
-        // o do find_first_not_of() and this makes no need to increase count out
-        // of while loop which enables to return 0.
-        //
-        // o there is at least one token whenever see a char which is not delim,
-        // so find_first_not_of()
-
-        decltype(start_) run{};
-
-        while (run < string::npos)
-        {
-          if ((run = input_.find_first_not_of(delim_, run)) == string::npos)
-            break;
-
-          ++count_;
-          run = input_.find_first_of(delim_, run);
-        }
-
+    size_t countTokens()
+    {
+      if (count_)
         return count_;
+
+      // use two variables:
+      //
+      // decltype(start_) start{}, end{};
+      //
+      // start = input_.find_first_not_of(delim_);
+      // end = input_.find_first_of(delim_);
+      //
+      // while (end < string::npos)
+      // {
+      //   ++count_;
+      //   start = input_.find_first_not_of(delim_, end);
+      //   end = input_.find_first_of(delim_, start);
+      // }
+
+      // do not support cases which has only delims:
+      //
+      // decltype(start_) run{};
+      //
+      // run = input_.find_first_of(delim_);
+      //
+      // while (run < string::npos)
+      // {
+      //   ++count_;
+      //   run = input_.find_first_not_of(delim_, run);
+      //   run = input_.find_first_of(delim_, run);
+      // }
+      //
+      // return ++count_;
+
+      // same approach as the book. the difference is that
+      // o do find_first_not_of() and this makes no need to increase count out
+      // of while loop which enables to return 0.
+      //
+      // o there is at least one token whenever see a char which is not delim,
+      // so find_first_not_of()
+
+      decltype(start_) run{};
+
+      while (run < string::npos)
+      {
+        if ((run = input_.find_first_not_of(delim_, run)) == string::npos)
+          break;
+
+        ++count_;
+        run = input_.find_first_of(delim_, run);
       }
 
-    private:
-      string input_;
-      char delim_;
-      size_t start_, end_;
-      decltype(start_) count_;
+      return count_;
+    }
+
+  private:
+    string input_;
+    char delim_;
+    size_t start_, end_;
+    decltype(start_) count_;
   };
 
-} // namespace
-
+} // namespace tokenizer_2018_11_find
 
 TEST(StringTokenizer, 2018_11_find)
 {
@@ -2376,17 +2346,18 @@ TEST(StringTokenizer, 2018_11_find)
   }
 }
 
-
 // ={=========================================================================
 // string-parse
 
-namespace string_parse {
+namespace string_parse
+{
 
   // from asan tool
-  
+
   // usage:
   //
-  // const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar\n";
+  // const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593
+  // /foo/bar\n";
   //
   // char *next_line = (char *)memchr(current, '\n', strlen(current));
   // EXPECT_TRUE(next_line);
@@ -2394,7 +2365,6 @@ namespace string_parse {
   // *start = ParseHex(&current);
   // EXPECT_EQ(*start, 0x08048000);
   // EXPECT_EQ(*current++, '-');
-
 
   // covers hex
   int TranslateDigit(const char c)
@@ -2411,14 +2381,13 @@ namespace string_parse {
     return -1;
   }
 
-
   // function modifies input pointer variable
   //
   // const char *current = "08048000-...";
   // ParseHex(&current);
   // ParseNumber(&current)
   // {
-  //  (*p)++; means that changes current vaiable. 
+  //  (*p)++; means that changes current vaiable.
   // }
   //
   // That's okay from compiler pov since this is pointer to const char and const
@@ -2441,7 +2410,7 @@ namespace string_parse {
 
     while ((digit = TranslateDigit(**p)) >= 0 && (digit < base))
     {
-      value = base*value + digit;
+      value = base * value + digit;
       // increase pointer to process next char
       (*p)++;
     }
@@ -2449,40 +2418,31 @@ namespace string_parse {
     return value;
   }
 
-  int ParseHex(const char **p)
-  {
-    return ParseNumber(p, 16);
-  }
+  int ParseHex(const char **p) { return ParseNumber(p, 16); }
 
-  int ParseDecimal(const char **p)
-  {
-    return ParseNumber(p, 10);
-  }
+  int ParseDecimal(const char **p) { return ParseNumber(p, 10); }
 
-  bool IsOneOf(char c, char c1, char c2)
-  {
-    return (c == c1) || (c == c2);
-  }
+  bool IsOneOf(char c, char c1, char c2) { return (c == c1) || (c == c2); }
 
-} // namespace
-
+} // namespace string_parse
 
 TEST(StringParse, Hex)
 {
   using namespace string_parse;
- 
+
   // example from /proc/map
   // address           perms offset  dev   inode       pathname
   // 00400000-00452000 r-xp 00000000 08:02 173521      /usr/bin/dbus-daemon
 
   int value{}, protection{};
-  char filename[100]={};
+  char filename[100] = {};
 
-  const char *current = "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar\n";
+  const char *current =
+    "08048000-08056000 r-xp 00000000 03:0c 64593   /foo/bar\n";
 
   // char *next_line = (char *)memchr(current, '\n', strlen(current));
   char *next_line = (char *)strchr(current, '\n');
-  
+
   value = ParseHex(&current);
   EXPECT_EQ(value, 0x08048000);
   EXPECT_EQ(*current, '-');
@@ -2544,44 +2504,45 @@ TEST(StringParse, Hex)
   int i = 0;
   while (current < next_line)
   {
-    if ( /* filename && */ i < 100 /* filename_size-1 */)
+    if (/* filename && */ i < 100 /* filename_size-1 */)
       filename[i++] = *current;
 
     ++current;
   }
 
-  if ( /* filename && */ i < 100 /* filename_size-1 */)
+  if (/* filename && */ i < 100 /* filename_size-1 */)
     filename[i] = 0;
 
   EXPECT_STREQ(filename, "/foo/bar");
 }
 
-
 // ={=========================================================================
 // string-join
 
-void join(const std::vector<std::string> &vector, const char delim, std::string &joined)
+void join(const std::vector<std::string> &vector,
+          const char delim,
+          std::string &joined)
 {
-    joined.clear();
+  joined.clear();
 
-    for (auto it = vector.cbegin(); it != vector.cend(); ++it)
-    {
-        joined.append(*it);
+  for (auto it = vector.cbegin(); it != vector.cend(); ++it)
+  {
+    joined.append(*it);
 
-        // cxx-iter-arithmetic
-        if (it < vector.cend() - 1)
-            joined.append(1, delim);
-    }
+    // cxx-iter-arithmetic
+    if (it < vector.cend() - 1)
+      joined.append(1, delim);
+  }
 }
 
 TEST(String, JoinSequnenceString_01)
 {
-    std::vector<string> svec{"fee", "fi", "foe", "fum"};
-    std::string s;
+  std::vector<string> svec{"fee", "fi", "foe", "fum"};
+  std::string s;
 
-    join(svec, '/', s);
+  join(svec, '/', s);
 
-    EXPECT_THAT(s, Eq("fee/fi/foe/fum"));
+  EXPECT_THAT(s, Eq("fee/fi/foe/fum"));
 }
 
 /*
@@ -2593,8 +2554,8 @@ string by concatenating all the input strings separated with the specified
 delimiter. The delimiter must not appear after the last string, and when no
 input string is provided, the function must return an empty string.
 
-Example: 
-input { "this","is","an","example" } and delimiter ' ' (space), 
+Example:
+input { "this","is","an","example" } and delimiter ' ' (space),
 output: "this is an example".
 
 {
@@ -2603,12 +2564,12 @@ output: "this is an example".
    std::vector<std::string> v1{ "this","is","an","example" };
    std::vector<std::string> v2{ "example" };
    std::vector<std::string> v3{ };
- 
+
    assert(join_strings(v1, " ") == "this is an example"s);
    assert(join_strings(v2, " ") == "example"s);
    assert(join_strings(v3, " ") == ""s);
 }
- 
+
 */
 
 // to see why the text uses "-1"
@@ -2617,69 +2578,67 @@ output: "this is an example".
 TEST(String, JoinSequnenceString_02)
 {
   ostringstream os;
-  std::vector<std::string> coll{ "this","is","an","example" };
+  std::vector<std::string> coll{"this", "is", "an", "example"};
 
   copy(coll.begin(), coll.end(), ostream_iterator<string>(os, ","));
   EXPECT_THAT(os.str(), "this,is,an,example,");
 }
 
-
 namespace U26_Text
 {
-  template<typename Iter>
-    string join_string(Iter begin, Iter end, const char *delimeter)
-    {
-      ostringstream os;
+  template <typename Iter>
+  string join_string(Iter begin, Iter end, const char *delimeter)
+  {
+    ostringstream os;
 
-      // copy(begin, end-1, ostream_iterator<string>(os, delimeter));
-      // os << *(end-1);
+    // copy(begin, end-1, ostream_iterator<string>(os, delimeter));
+    // os << *(end-1);
 
-      // *cxx-prev*
-      copy(begin, prev(end), ostream_iterator<string>(os, delimeter));
-      os << *prev(end);
+    // *cxx-prev*
+    copy(begin, prev(end), ostream_iterator<string>(os, delimeter));
+    os << *prev(end);
 
-      return os.str();
-    }
+    return os.str();
+  }
 
-  template<typename Coll>
-    string join_string(Coll coll, const char *delimeter)
-    {
-      if (coll.size() == 0)
-        return string();
+  template <typename Coll>
+  string join_string(Coll coll, const char *delimeter)
+  {
+    if (coll.size() == 0)
+      return string();
 
-      return join_string(coll.begin(), coll.end(), delimeter);
-    }
-}
+    return join_string(coll.begin(), coll.end(), delimeter);
+  }
+} // namespace U26_Text
 
 // TEST(U26, Text)
 TEST(String, JoinSequnenceString_03)
 {
   using namespace U26_Text;
 
-  std::vector<std::string> coll{ "this","is","an","example" };
+  std::vector<std::string> coll{"this", "is", "an", "example"};
 
   EXPECT_THAT(join_string(coll, " "), "this is an example");
 }
-
 
 // ={=========================================================================
 // 4.10 Finding the nth Instance of a Substring
 bool nth_substring(int n, const std::string &s, const std::string &p)
 {
-    size_t start{0};
-    size_t found;
+  size_t start{0};
+  size_t found;
 
-    for (int i = 0; i < n; ++i)
-    {
-        found = s.find(p, start);
+  for (int i = 0; i < n; ++i)
+  {
+    found = s.find(p, start);
 
-        if (found != std::string::npos)
-            start = found + 1;
-        else
-            return false;
-    }
+    if (found != std::string::npos)
+      start = found + 1;
+    else
+      return false;
+  }
 
-    return true;
+  return true;
 }
 
 // int nthSubstr(int n, const string &s, const string &p)
@@ -2696,15 +2655,14 @@ bool nth_substring(int n, const std::string &s, const std::string &p)
 
 TEST(String, FindNthSubstring)
 {
-    const std::string s{"the wind, the sea, the sky, the trees"};
-    const std::string p{"the"};
+  const std::string s{"the wind, the sea, the sky, the trees"};
+  const std::string p{"the"};
 
-    EXPECT_THAT(nth_substring(1, s, p), true);
-    EXPECT_THAT(nth_substring(2, s, p), true);
-    EXPECT_THAT(nth_substring(4, s, p), true);
-    EXPECT_THAT(nth_substring(5, s, p), false);
+  EXPECT_THAT(nth_substring(1, s, p), true);
+  EXPECT_THAT(nth_substring(2, s, p), true);
+  EXPECT_THAT(nth_substring(4, s, p), true);
+  EXPECT_THAT(nth_substring(5, s, p), false);
 }
-
 
 // ={=========================================================================
 // string-raw
@@ -2717,121 +2675,117 @@ TEST(String, FindNthSubstring)
 
 TEST(String, RawString)
 {
-    const std::string s = R"({ "address": {
+  const std::string s = R"({ "address": {
          "road":"Drury Ln",
          "city":"Fountain",
          "state":"CO",
          "country":"US" }})";
 
-    std::cout << s << std::endl;
+  std::cout << s << std::endl;
 }
-
 
 // ={=========================================================================
 // 4.11 Removing a Substring from a String
 
 void removeSubstrs1(std::string &s, const std::string &p)
 {
-    auto start = s.find(p);
+  auto start = s.find(p);
 
-    if (start != std::string::npos)
-    {
-        auto first = s.substr(0, start);
-        auto second = s.substr(start + p.size());
+  if (start != std::string::npos)
+  {
+    auto first  = s.substr(0, start);
+    auto second = s.substr(start + p.size());
 
-        s = first + second;
-    }
+    s = first + second;
+  }
 }
 
 void removeSubstrs2(std::string &s, const std::string &p)
 {
-    auto start = s.find(p);
+  auto start = s.find(p);
 
-    if (start != std::string::npos)
-        s.erase(start, p.size());
+  if (start != std::string::npos)
+    s.erase(start, p.size());
 }
 
 void removeSubstrs3(std::string &s, const std::string &p)
 {
-    auto size = p.size();
+  auto size = p.size();
 
-    for (auto start = s.find(p);
-         start != std::string::npos;
-         start = s.find(p))
-        s.erase(start, size);
+  for (auto start = s.find(p); start != std::string::npos; start = s.find(p))
+    s.erase(start, size);
 }
 
 TEST(String, RemoveSubString)
 {
-    string s1{"One fish, two fish, red fish, blue fish"};
-    string r1{"One , two fish, red fish, blue fish"};
-    string p{"fish"};
+  string s1{"One fish, two fish, red fish, blue fish"};
+  string r1{"One , two fish, red fish, blue fish"};
+  string p{"fish"};
 
-    removeSubstrs1(s1, p);
+  removeSubstrs1(s1, p);
 
-    string s2{"One fish, two fish, red fish, blue fish"};
+  string s2{"One fish, two fish, red fish, blue fish"};
 
-    removeSubstrs2(s2, p);
+  removeSubstrs2(s2, p);
 
-    EXPECT_TRUE(s1 == r1);
-    EXPECT_TRUE(s2 == r1);
+  EXPECT_TRUE(s1 == r1);
+  EXPECT_TRUE(s2 == r1);
 
-    string s3{"One fish, two fish, red fish, blue fish"};
-    string r3{"One , two , red , blue "};
+  string s3{"One fish, two fish, red fish, blue fish"};
+  string r3{"One , two , red , blue "};
 
-    removeSubstrs3(s3, p);
-    EXPECT_THAT(s3, Eq(r3));
+  removeSubstrs3(s3, p);
+  EXPECT_THAT(s3, Eq(r3));
 }
-
 
 // ={=========================================================================
 // 4.12 Converting a String to Lower- or Uppercase
 
 void toUpper(std::string &s)
 {
-    for (auto i = s.begin(); i != s.end(); ++i)
-        *i = toupper(*i);
+  for (auto i = s.begin(); i != s.end(); ++i)
+    *i = toupper(*i);
 }
 
 void toLower(std::string &s)
 {
-    for (auto i = s.begin(); i != s.end(); ++i)
-        *i = tolower(*i);
+  for (auto i = s.begin(); i != s.end(); ++i)
+    *i = tolower(*i);
 }
 
 TEST(String, ConvertStringToLowerUpperCase)
 {
-    string s{"shazam"};
+  string s{"shazam"};
 
-    toUpper(s);
-    EXPECT_THAT(s, Eq("SHAZAM"));
+  toUpper(s);
+  EXPECT_THAT(s, Eq("SHAZAM"));
 
-    toLower(s);
-    EXPECT_THAT(s, Eq("shazam"));
+  toLower(s);
+  EXPECT_THAT(s, Eq("shazam"));
 }
-
 
 // ={=========================================================================
 // 4.13 Doing a Case-Insensitive String Comparison
 
 bool caseInsCompare1(const string &s1, const string &s2)
 {
-    if (s1.size() != s2.size())
-        return false;
+  if (s1.size() != s2.size())
+    return false;
 
-    for (auto lhs = s1.cbegin(), rhs = s2.cbegin(); lhs != s1.cend(); ++lhs, ++rhs)
-        if (toupper(*lhs) != toupper(*rhs))
-            return false;
+  for (auto lhs = s1.cbegin(), rhs = s2.cbegin(); lhs != s1.cend();
+       ++lhs, ++rhs)
+    if (toupper(*lhs) != toupper(*rhs))
+      return false;
 
-    return true;
+  return true;
 }
 
 TEST(String, CompareCaseInsensitive)
 {
-    const string s1 = "In the BEGINNING...";
-    const string s2 = "In the beginning...";
+  const string s1 = "In the BEGINNING...";
+  const string s2 = "In the beginning...";
 
-    EXPECT_TRUE(caseInsCompare1(s1, s2));
+  EXPECT_TRUE(caseInsCompare1(s1, s2));
 }
 
 // ={=========================================================================
@@ -2840,55 +2794,54 @@ TEST(String, CompareCaseInsensitive)
 // modifies s and assumes p is upper-case
 bool caseInsFind1(string &s, const string &p)
 {
-    toUpper(s);
+  toUpper(s);
 
-    return s.find(p) != std::string::npos;
+  return s.find(p) != std::string::npos;
 }
 
 // do not modify s
 bool caseInsFind2(string &s, const string &p)
 {
-    auto it = search(s.begin(), s.end(), p.begin(), p.end(),
-                     [](char lhs, char rhs) {
-                         return toupper(lhs) == rhs;
-                     });
+  auto it =
+    search(s.begin(), s.end(), p.begin(), p.end(), [](char lhs, char rhs) {
+      return toupper(lhs) == rhs;
+    });
 
-    return it != s.end();
+  return it != s.end();
 }
 
 TEST(String, SearchCaseInsensitive)
 {
-    string s1 = "row, row, row, your boat";
-    const string p = "YOUR";
+  string s1      = "row, row, row, your boat";
+  const string p = "YOUR";
 
-    // // returns 15
-    // cout << caseInsFind(s, p) << endl;
+  // // returns 15
+  // cout << caseInsFind(s, p) << endl;
 
-    EXPECT_TRUE(caseInsFind1(s1, p));
-    cout << s1 << endl;
+  EXPECT_TRUE(caseInsFind1(s1, p));
+  cout << s1 << endl;
 
-    string s2 = "row, row, row, your boat";
-    EXPECT_TRUE(caseInsFind2(s2, p));
-    cout << s2 << endl;
+  string s2 = "row, row, row, your boat";
+  EXPECT_TRUE(caseInsFind2(s2, p));
+  cout << s2 << endl;
 }
-
 
 // ={=========================================================================
 // 4.15 Converting Between Tabs and Spaces in a Text File
 
 TEST(String, ConvertTabToSpace)
 {
-    ifstream input_file{"input.txt"};
-    ofstream output_file{"output_space.txt"};
-    char read_char{};
+  ifstream input_file{"input.txt"};
+  ofstream output_file{"output_space.txt"};
+  char read_char{};
 
-    while (input_file.get(read_char))
-    {
-        if (read_char == '\t')
-            output_file << "   "; // 3 spaces
-        else
-            output_file << read_char;
-    }
+  while (input_file.get(read_char))
+  {
+    if (read_char == '\t')
+      output_file << "   "; // 3 spaces
+    else
+      output_file << read_char;
+  }
 }
 
 // the tricky bit is that:
@@ -2907,44 +2860,44 @@ TEST(String, ConvertTabToSpace)
 
 TEST(String, ConvertSpaceToTab)
 {
-    ifstream input_file{"output_space.txt"};
-    ofstream output_file{"output_tab.txt"};
-    char read_char{};
-    size_t space_count{};
+  ifstream input_file{"output_space.txt"};
+  ofstream output_file{"output_tab.txt"};
+  char read_char{};
+  size_t space_count{};
 
-    while (input_file.get(read_char))
+  while (input_file.get(read_char))
+  {
+    // if (read_char == '\s')
+    if (read_char == ' ')
     {
-        // if (read_char == '\s')
-        if (read_char == ' ')
-        {
-            ++space_count;
+      ++space_count;
 
-            if (3 == space_count)
-            {
-                // output_file << '\t';
-                output_file.put('\t');
-                space_count = 0;
-            }
-        }
-        else
-        {
-            if (space_count)
-            {
-                for (size_t i = 0; i < space_count; ++i)
-                    output_file.put(' ');
-
-                space_count = 0;
-            }
-
-            output_file << read_char;
-        }
+      if (3 == space_count)
+      {
+        // output_file << '\t';
+        output_file.put('\t');
+        space_count = 0;
+      }
     }
+    else
+    {
+      if (space_count)
+      {
+        for (size_t i = 0; i < space_count; ++i)
+          output_file.put(' ');
+
+        space_count = 0;
+      }
+
+      output_file << read_char;
+    }
+  }
 }
 
-
-// // ={=========================================================================
+// //
+// ={=========================================================================
 // // 4.16 Wrapping Lines in a Text File
-// 
+//
 // // Two requirements:
 // //
 // // For example, if you want to wrap text at 72 characters, you would insert a
@@ -2964,14 +2917,14 @@ TEST(String, ConvertSpaceToTab)
 // //
 // // at the wrap point, write a '\n' and last word. update i since last word is
 // // already written on the new line.
-// 
+//
 // void testWrap(istream &in, ostream &out, size_t width)
 // {
 //     string tmp{};
 //     char current_char = '\0';
 //     char last_char = '\0';
 //     size_t i = 0;
-// 
+//
 //     while (in.get(current_char))
 //     {
 //         // increase i on every iteration
@@ -2988,27 +2941,28 @@ TEST(String, ConvertSpaceToTab)
 //             out << tmp;
 //             tmp.clear();
 //         }
-// 
-//         // Since the original approach do not work well in dealing with new line in
-//         // the input, this is an attempt to fix. not sure if it works. no further
+//
+//         // Since the original approach do not work well in dealing with new
+//         line in
+//         // the input, this is an attempt to fix. not sure if it works. no
+//         further
 //         // effort and stops here.
 //         //
 //         // if (current_char == '\n')
 //         //   current_char = ' ';
-// 
+//
 //         tmp += current_char;
 //         last_char = current_char;
 //     }
 // }
-// 
+//
 // TEST(String, WrapLinesInTextFile)
 // {
 //     ifstream input_file{"input.txt"};
 //     ofstream output_file{"output_wrap.txt"};
-// 
+//
 //     testWrap(input_file, output_file, 72);
 // }
-
 
 // ={=========================================================================
 // 4.17 Counting the Number of Characters, Words,
@@ -3031,79 +2985,77 @@ TEST(String, ConvertSpaceToTab)
 
 TEST(String, CountStuffInTextFile)
 {
-    ifstream input_file{"input.txt"};
-    size_t word_count{};
-    size_t char_count{};
-    size_t line_count{};
-    char current_char{};
-    char last_char{' '};
-    string tmp{};
+  ifstream input_file{"input.txt"};
+  size_t word_count{};
+  size_t char_count{};
+  size_t line_count{};
+  char current_char{};
+  char last_char{' '};
+  string tmp{};
 
-    while (input_file.get(current_char))
+  while (input_file.get(current_char))
+  {
+    // to count word when current is space and last previous is not space.
+    //
+    // this has +1 word than wc command since when the input line is:
+    // [space]xxx xxx
+
+    // this first space is counted as a word as isspace(curr) is true and
+    // isspace(last) is false. To fix this, set last_char's init value.
+
+    if ((isspace(current_char) || current_char == '\n') && !isspace(last_char))
     {
-        // to count word when current is space and last previous is not space.
-        //
-        // this has +1 word than wc command since when the input line is:
-        // [space]xxx xxx
-        
-        // this first space is counted as a word as isspace(curr) is true and
-        // isspace(last) is false. To fix this, set last_char's init value.
-
-        if ((isspace(current_char) || current_char == '\n') && !isspace(last_char))
-        {
-            // cout << "w: " << tmp << endl;
-            // tmp.clear();
-            ++word_count;
-        }
-
-        // to count line
-        if (current_char == '\n')
-            ++line_count;
-
-        tmp += current_char;
-        last_char = current_char;
-        ++char_count;
+      // cout << "w: " << tmp << endl;
+      // tmp.clear();
+      ++word_count;
     }
 
-    cout << "cc: " << char_count << endl;
-    cout << "wc: " << word_count << endl;
-    cout << "lc: " << line_count << endl;
+    // to count line
+    if (current_char == '\n')
+      ++line_count;
+
+    tmp += current_char;
+    last_char = current_char;
+    ++char_count;
+  }
+
+  cout << "cc: " << char_count << endl;
+  cout << "wc: " << word_count << endl;
+  cout << "lc: " << line_count << endl;
 }
 
 TEST(String, CountStuffInTextFile2)
 {
-    ifstream input_file{"input.txt"};
+  ifstream input_file{"input.txt"};
 
-    char cur = '\0';
-    char last = '\0';
-    int chars = 0;
-    int words = 0;
-    int lines = 0;
+  char cur  = '\0';
+  char last = '\0';
+  int chars = 0;
+  int words = 0;
+  int lines = 0;
 
-    while (input_file.get(cur))
-    {
-        if (cur == '\n' ||
-            (cur == '\f' && last == '\r'))
-            lines++;
-        else
-            chars++;
-        if (!std::isalnum(cur) && // This is the end of a
-            std::isalnum(last))   // word
-            words++;
-        last = cur;
-    }
-    if (chars > 0)
-    {                           // Adjust word and line
-        if (std::isalnum(last)) // counts for special
-            words++;            // case
-        lines++;
-    }
+  while (input_file.get(cur))
+  {
+    if (cur == '\n' || (cur == '\f' && last == '\r'))
+      lines++;
+    else
+      chars++;
+    if (!std::isalnum(cur) && // This is the end of a
+        std::isalnum(last))   // word
+      words++;
+    last = cur;
+  }
+  if (chars > 0)
+  {                         // Adjust word and line
+    if (std::isalnum(last)) // counts for special
+      words++;              // case
+    lines++;
+  }
 
-    cout << "cc: " << chars << endl;
-    cout << "wc: " << words << endl;
-    cout << "lc: " << lines << endl;
+  cout << "cc: " << chars << endl;
+  cout << "wc: " << words << endl;
+  cout << "lc: " << lines << endl;
 }
-
 
 // ={=========================================================================
 // 4.18 Counting Instances of Each Word in a Text File
@@ -3120,19 +3072,17 @@ TEST(String, CountWordsInTextFile)
     ++wm[word];
   }
 
-  for(const auto &e : wm)
+  for (const auto &e : wm)
   {
-    (void)e; 
+    (void)e;
     ++word_count;
   }
 
   cout << "word count: " << word_count << endl;
 }
 
-
 // ={=========================================================================
 // 4.19 Add Margins to a Text File
-
 
 // ={=========================================================================
 // 4.20 Justify a Text File
@@ -3159,7 +3109,6 @@ TEST(String, JustifyTextFile)
     output_file << line << '\n';
   }
 }
-
 
 // ={=========================================================================
 // 4.21 Squeeze Whitespace to Single Spaces in a Text File
@@ -3197,7 +3146,6 @@ TEST(String, SqueezeWhitespaceInTextFile)
   }
 }
 
-
 // operator>>() ignores whitespace, so all I have to do is add a space and each
 // chunk of nonwhitespace.
 
@@ -3219,7 +3167,6 @@ TEST(String, SqueezeWhitespaceInTextFileTwo)
   }
 }
 
-
 // ={=========================================================================
 // 4.22 Autocorrect Text as a Buffer Changes
 // You have a class that represents some kind of text field or document, and as
@@ -3228,17 +3175,20 @@ TEST(String, SqueezeWhitespaceInTextFileTwo)
 
 typedef map<std::string, std::string> StrStrMap;
 
-class TextAutoCorrectField {
-  public:
-    TextAutoCorrectField() = delete;
-    TextAutoCorrectField(const StrStrMap *p) : pdict_(p) {}
+class TextAutoCorrectField
+{
+public:
+  TextAutoCorrectField() = delete;
+  TextAutoCorrectField(const StrStrMap *p)
+      : pdict_(p)
+  {}
 
-    void append(char c);
-    void getText(string &s) {s = buf_;}
+  void append(char c);
+  void getText(string &s) { s = buf_; }
 
-  private:
-    string buf_;
-    const StrStrMap *pdict_;
+private:
+  string buf_;
+  const StrStrMap *pdict_;
 };
 
 void TextAutoCorrectField::append(char c)
@@ -3246,28 +3196,27 @@ void TextAutoCorrectField::append(char c)
   // only do when see a word boundary that is a sequence of a char and space or
   // punctions.
 
-  if ((isspace(c) || ispunct(c)) &&
-      buf_.length() > 0 &&
-      !isspace(buf_[buf_.length()-1]))
+  if ((isspace(c) || ispunct(c)) && buf_.length() > 0 &&
+      !isspace(buf_[buf_.length() - 1]))
   {
     // Is there ever case where buf_ contails multiple words seperated by ws?
     // in other words, is there any case when i is not 0?
     // yes, there is since buf_ of TextAutoCorrectField becomes corrected line
     // but not a word, so we have to work on the last chunk which just becomes a
-    // word. i is the start index of this word. 
-    
+    // word. i is the start index of this word.
+
     auto x = buf_.find_last_of(" \f\n\r\t\v");
     auto i = (x == string::npos) ? 0 : ++x;
 
     // std::cout << "TextAutoCorrectField::append: i : " << i << std::endl;
 
     // take out the last word and look it up in the map
-    string word = buf_.substr(i, buf_.length()-i);
+    string word                     = buf_.substr(i, buf_.length() - i);
     StrStrMap::const_iterator found = pdict_->find(word);
 
     if (found != pdict_->end())
     {
-      buf_.erase(i, buf_.length()-i);
+      buf_.erase(i, buf_.length() - i);
       buf_ += found->second;
     }
   }
@@ -3281,10 +3230,10 @@ TEST(String, AutoCorrectField)
   TextAutoCorrectField auto_text(&dict);
 
   // see that update a map after passed in to TextAutoCorrectField
-  
-  dict["taht"] = "that";
+
+  dict["taht"]  = "that";
   dict["right"] = "wrong";
-  dict["bug"] = "feature";
+  dict["bug"]   = "feature";
 
   string given_text = "He's right, taht's a bug.";
 
@@ -3299,20 +3248,19 @@ TEST(String, AutoCorrectField)
   std::cout << "corrected: " << result_text << std::endl;
 }
 
-
 // ={=========================================================================
 // 4.23 Reading a Comma-Separated Text File
 // You want to read in a text file that is delimited by commas and new lines (or
 // any other pair of delimiters for that matter). Records are delimited by one
 // character, and fields within a record are delimited by another. For example,
 // a comma-separated text file of employee information may look like the
-// following: 
-// Smith, Bill, 5/1/2002, Active 
+// following:
+// Smith, Bill, 5/1/2002, Active
 // Stanford, John, 4/5/1999, Inactive
 // Such files are usually interim storage for data sets exported from
 // spreadsheets, databases, or other file formats.
 
-void loadCSV(ifstream &ifs, vector<vector<string>*> &data)
+void loadCSV(ifstream &ifs, vector<vector<string> *> &data)
 {
   using namespace stringsplit_2018_10;
 
@@ -3336,7 +3284,7 @@ TEST(String, ReadCsvFile)
 {
   ifstream ifs{"input.csv"};
 
-  vector<vector<string>*> data;
+  vector<vector<string> *> data;
 
   loadCSV(ifs, data);
 
@@ -3353,7 +3301,6 @@ TEST(String, ReadCsvFile)
     delete e;
   }
 }
-
 
 // ={=========================================================================
 // 4.24 Using Regular Expressions to Split a String
@@ -3378,10 +3325,9 @@ TEST(DISABLED_String, BoostRegex)
     cout << *p++ << endl;
 }
 
-
 // ={=========================================================================
 int main(int argc, char **argv)
 {
-    testing::InitGoogleMock(&argc, argv);
-    return RUN_ALL_TESTS();
+  testing::InitGoogleMock(&argc, argv);
+  return RUN_ALL_TESTS();
 }

@@ -1,5 +1,97 @@
 /* ={--------------------------------------------------------------------------
  @brief :
+ DBusMessagePrivate::Argument
+*/
+
+DBusMessagePrivate::Argument::operator bool() const
+{
+  if (type_ != Boolean)
+  {
+    logWarning("argument type is not boolean");
+    return false;
+  }
+
+  return basic_.bool_;
+}
+
+DBusMessagePrivate::Argument::operator int() const
+{
+  if (type_ != Integer)
+  {
+    logWarning("argument type is not boolean");
+    // TODO
+    return INT32_MAX;
+  }
+
+  return basic_.i_;
+}
+
+DBusMessagePrivate::Argument::operator unsigned() const
+{
+  if (type_ != UnsignedInteger)
+  {
+    logWarning("argument type is not boolean");
+    // TODO
+    return UINT32_MAX;
+  }
+
+  return basic_.ui_;
+}
+
+DBusMessagePrivate::Argument::operator double() const
+{
+  if (type_ != Double)
+  {
+    logWarning("argument type is not boolean");
+    // TODO
+    // https://en.cppreference.com/w/cpp/numeric/math/nan
+    return std::nan("");
+  }
+
+  return basic_.real_;
+}
+
+DBusMessagePrivate::Argument::operator std::string() const
+{
+  if (type_ != String)
+  {
+    logWarning("argument type is not boolean");
+    return std::string();
+  }
+
+  return basic_.str_;
+}
+
+DBusMessagePrivate::Argument::operator DBusFileDescriptor() const
+{
+  if (type_ != FileDescriptor)
+  {
+    logWarning("argument type is not boolean");
+    return DBusFileDescriptor();
+  }
+
+  return fd_;
+}
+
+// return the dbus type character that matches the stored type
+// TODO: no defaults
+char DBusMessagePrivate::Argument::dbusType() const
+{
+  switch (type_)
+  {
+    // explicit way
+    // case Argument::Boolean: return 'b';
+    case Boolean: return 'b';
+    case Integer: return 'i';
+    case UnsignedInteger: return 'u';
+    case Double: return 'd';
+    case String: return 's';
+    case FileDescriptor: return 'h';
+  }
+}
+
+/* ={--------------------------------------------------------------------------
+ @brief :
   DBusMessagePrivate
 */
 
@@ -90,6 +182,28 @@ DBusMessagePrivate::DBusMessagePrivate(sd_bus_message *reply)
   if (DBusMessage::ReplyMessage == m_type)
   {
     const char *path = sd_bus_message_get_path(reply);
+    if (path)
+      m_path.assign(path);
+
+    const char *interface = sd_bus_message_get_interface(reply);
+    if (interface)
+      m_interface.assign(interface);
+
+    // https://www.freedesktop.org/software/systemd/man/sd_bus_message_get_signature.html#
+    //
+    // const char* sd_bus_message_get_signature(
+    //  sd_bus_message *message,
+    //  int complete);
+    //
+    // sd_bus_message_get_signature() returns the signature of message message.
+    // If complete is true, the signature of the whole message is returned, and
+    // just the signature of the currently open container otherwise.
+
+    const char *signature = sd_bus_message_get_signature(reply, 1);
+    if (signature)
+      m_signature.assign(signature);
+
+    demarshallArgs(reply);
   }
 }
 
@@ -104,7 +218,7 @@ DBusMessagePrivate::DBusMessagePrivate(sd_bus_message *reply)
 // SD_BUS_MESSAGE_METHOD_ERROR,
 // SD_BUS_MESSAGE_SIGNAL. 
 
-DBusMessage::MessageType getMessageType_(sd_bus_message *reply)
+DBusMessage::MessageType DBusMessagePrivate::getMessageType_(sd_bus_message *reply)
 {
   uint8_t type{};
 
@@ -124,5 +238,161 @@ DBusMessage::MessageType getMessageType_(sd_bus_message *reply)
     default:
       logError("unexpected message type %hu", type);
       return DBusMessage::InvalidMessage;
+  }
+}
+
+// attempts to read the arguments from the message
+//
+// /usr/include/systemd/sd-bus-protocol.h
+// Primitive types
+// 
+// enum {
+//         _SD_BUS_TYPE_INVALID         = 0,
+//         SD_BUS_TYPE_BYTE             = 'y',
+//         SD_BUS_TYPE_BOOLEAN          = 'b',
+//         SD_BUS_TYPE_INT16            = 'n',
+//         SD_BUS_TYPE_UINT16           = 'q',
+//         SD_BUS_TYPE_INT32            = 'i',
+//         SD_BUS_TYPE_UINT32           = 'u',
+//         SD_BUS_TYPE_INT64            = 'x',
+//         SD_BUS_TYPE_UINT64           = 't',
+//         SD_BUS_TYPE_DOUBLE           = 'd',
+//         SD_BUS_TYPE_STRING           = 's',
+//         SD_BUS_TYPE_OBJECT_PATH      = 'o',
+//         SD_BUS_TYPE_SIGNATURE        = 'g',
+//         SD_BUS_TYPE_UNIX_FD          = 'h',
+//         SD_BUS_TYPE_ARRAY            = 'a',
+//         SD_BUS_TYPE_VARIANT          = 'v',
+//         SD_BUS_TYPE_STRUCT           = 'r', /* not actually used in signatures */
+//         SD_BUS_TYPE_STRUCT_BEGIN     = '(',
+//         SD_BUS_TYPE_STRUCT_END       = ')',
+//         SD_BUS_TYPE_DICT_ENTRY       = 'e', /* not actually used in signatures */
+//         SD_BUS_TYPE_DICT_ENTRY_BEGIN = '{',
+//         SD_BUS_TYPE_DICT_ENTRY_END   = '}'
+// };
+
+bool DBusMessagePrivate::demarshallArgs_(sd_bus_message *message)
+{
+  // NOTE:
+  // No document on sd_bus_message_at_end() and need to look into the code?
+  while (!sd_bus_message_at_end(message, false))
+  {
+    char type = '\0';
+    const char *content{nullptr};
+    int rc = sd_bus_message_peek_type(message, &type, &content);
+    if (rc < 0)
+    {
+      logSysWarning(-rc, "failed to get message arg");
+      return false;
+    }
+    
+    // process the argument type
+    switch (type)
+    {
+      case SD_BUS_TYPE_BOOLEAN:
+        {
+          int32_t value;
+          rc = sd_bus_message_read_basic(message, type, &value);
+          if (rc > 0)
+            m_args.emplace_back(Argument(static_cast<bool>(value)));
+          break;
+        }
+
+      case SD_BUS_TYPE_INT32:
+        {
+          int32_t value;
+          rc = sd_bus_message_read_basic(message, type, &value);
+          if (rc > 0)
+            m_args.emplace_back(Argument(static_cast<int>(value)));
+          break;
+        }
+
+      case SD_BUS_TYPE_UINT32:
+        {
+          int32_t value;
+          rc = sd_bus_message_read_basic(message, type, &value);
+          if (rc > 0)
+            m_args.emplace_back(Argument(static_cast<unsigned>(value)));
+          break;
+        }
+
+      case SD_BUS_TYPE_DOUBLE:
+        {
+          double value;
+          rc = sd_bus_message_read_basic(message, type, &value);
+          if (rc > 0)
+            m_args.emplace_back(Argument(value));
+          break;
+        }
+
+      case SD_BUS_TYPE_STRING:
+        {
+          const char *value{nullptr};
+          rc = sd_bus_message_read_basic(message, type, &value);
+          if (rc > 0)
+            m_args.emplace_back(Argument(value));
+          break;
+        }
+
+      case SD_BUS_TYPE_UNIX_FD:
+        {
+          int value{-1};
+          rc = sd_bus_message_read_basic(message, type, &value);
+          if (rc > 0)
+            m_args.emplace_back(Argument(DBusFileDescriptor(value)));
+          break;
+        }
+
+      case SD_BUS_TYPE_ARRAY:
+      case SD_BUS_TYPE_STRUCT:
+        {
+          std::string types;
+
+          // is used to skip below
+          types += type;
+          if (content)
+            types += content;
+
+          logWarning("received message with unsupported array or struct so skip");
+          rc = sd_bus_message_skip(message, types.c_str());
+          break;
+        }
+
+      default:
+        {
+          std::string types;
+
+          // is used to skip below
+          types += type;
+
+          logWarning("received message with unsupported array or struct so skip");
+          rc = sd_bus_message_skip(message, types.c_str());
+          break;
+        }
+    } // switch
+
+    // NOTE: single place to handle failure for all cases
+    if (rc < 0)
+    {
+      logSysWarning(-rc, "failed to read or skip message arguments");
+      return false;
+    }
+  } // while
+}
+
+// construct a sd_bus_message
+toMessage(sd_bus *bus) const
+{
+  int rc{};
+
+  sd_bus_message *message{nullptr};
+  if (DBusMessage::MethodCallMessage == m_type)
+  {
+    rc = sd_bus_message_new_method_call(
+        bus, &msg,
+        m_service.c_str(),
+        m_path.c_str(),
+        m_interface.c_str(),
+        m_name.c_str());
   }
 }

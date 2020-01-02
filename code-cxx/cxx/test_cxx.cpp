@@ -186,7 +186,7 @@ TEST(Arith, Comparison)
 // ={=========================================================================
 // cxx-switch
 
-TEST(Statement, Switch)
+TEST(CxxStatement, Switch)
 {
   {
     ostringstream os;
@@ -4753,7 +4753,7 @@ namespace cxx_sp_delete
         : os_(os)
     {}
 
-    // *cxx-template-member*
+    // T will be deduced since it is *cxx-template-member*
     template <typename T>
     void operator()(T *p)
     {

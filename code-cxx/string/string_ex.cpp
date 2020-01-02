@@ -1,8 +1,8 @@
-#include <iostream>
-#include <cstring>
-#include <vector>
-#include <fstream>
 #include <bitset>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <vector>
 // #include <boost/algorithm/string.hpp>
 // #include <boost/regex.hpp>
 // #include <boost/cast.hpp>
@@ -16,9 +16,8 @@
 using namespace std;
 using testing::ElementsAre;
 using testing::Eq;
-using testing::StrEq;
 using testing::FloatEq;
-
+using testing::StrEq;
 
 // ={=========================================================================
 // string-ex
@@ -32,10 +31,9 @@ TEST(String, Ex)
   //   cout << "string is empty" << endl;
 }
 
-
 // ={=========================================================================
 int main(int argc, char **argv)
 {
-    testing::InitGoogleMock(&argc, argv);
-    return RUN_ALL_TESTS();
+  testing::InitGoogleMock(&argc, argv);
+  return RUN_ALL_TESTS();
 }
