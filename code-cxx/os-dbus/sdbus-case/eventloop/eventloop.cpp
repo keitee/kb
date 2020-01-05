@@ -1,4 +1,4 @@
-// #include "eventloop_p.h"
+#include "eventloop_p.h"
 #include "eventloop.h"
 // #include <systemd/sd-event.h>
 // use lpi log
@@ -143,6 +143,7 @@ bool EventLoopPrivate::invokeMethod(std::function<void()> &&f)
   // NOTE: use block to release lock
   {
     std::lock_guard<std::recursive_mutex> lock(m_rm);
+    // necessary?
     // m_q.emplace(std::move(f));
     m_q.emplace(f);
   }
@@ -159,6 +160,12 @@ bool EventLoopPrivate::invokeMethod(std::function<void()> &&f)
   return true;
 }
 
+// NOTE:
+// although this function state that it can be called from a different thread
+// than the event loop thread, if do so, it cause deadlock because flush() and
+// eventHandler_() uses the same recursive_mutex which should be used by the
+// same thread.
+
 void EventLoopPrivate::flush()
 {
   std::lock_guard<std::recursive_mutex> lock(m_rm);
@@ -166,6 +173,9 @@ void EventLoopPrivate::flush()
   // if called on the event loop thread
   if (this == m_loopRunning)
   {
+    // this fix the issue above
+    // std::lock_guard<std::recursive_mutex> lock(m_rm);
+
     while (!m_q.empty())
     {
       const auto f = m_q.front();
@@ -188,19 +198,28 @@ void EventLoopPrivate::flush()
   sem_init(&sem, 0, 0);
 
   auto flushLambda = [&]() {
+
+    logWarning("sem_post");
+
     if (sem_post(&sem) != 0)
       logSysError(errno, "failed to post sem in flush");
   };
 
   // unnecessary.
-  // if (invokeMethod(std::move(flushLambda)))
+  // if (!invokeMethod(std::move(flushLambda)))
 
-  if (invokeMethod(flushLambda))
+  if (!invokeMethod(flushLambda))
     logError("failed to post flush");
   else if (sem_wait(&sem) != 0)
     logSysError(errno, "failed to wait sem in flush");
 
   sem_destroy(&sem);
+}
+
+// debug
+size_t EventLoopPrivate::size() const
+{
+  return m_q.size();
 }
 
 /* ={--------------------------------------------------------------------------
@@ -225,6 +244,7 @@ EventLoop::EventLoop(EventLoop &&rhs)
     : m_private(rhs.m_private)
 {}
 
+// NOTE: no check on m_private before calling
 int EventLoop::run()
 {
   return m_private->run();
@@ -238,6 +258,12 @@ void EventLoop::quit(int exitCode)
 void EventLoop::flush()
 {
   m_private->flush();
+}
+
+// debug
+size_t EventLoop::size() const
+{
+  return m_private->size();
 }
 
 bool EventLoop::invokeMethodImpl(std::function<void()> &&f) const

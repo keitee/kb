@@ -1,13 +1,12 @@
 #include <QCoreApplication>
 #include <QDebug>
 
-#include "scli.h"
 #include "console.h"
-
+#include "scli.h"
 
 // ={=========================================================================
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
   QCoreApplication::setApplicationName("TestConsole");

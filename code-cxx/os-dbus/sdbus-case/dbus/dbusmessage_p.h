@@ -1,9 +1,21 @@
 #ifndef DBUSMESSAGE_P_H
 #define DBUSMESSAGE_P_H
 
+#include "dbusmessage.h"
+#include "dbusconnection_p.h"
+#include "dbusfiledescriptor.h"
+
+#include <string>
+#include <list>
+#include <map>
+#include <memory>
+
 class DBusMessagePrivate
 {
 private:
+  friend DBusMessage;
+  friend DBusConnectionPrivate;
+
   std::string m_path;
   std::string m_interface;
   std::string m_name;
@@ -11,16 +23,25 @@ private:
   std::string m_errorName;
   std::string m_errorMessage;
 
+  // NOTE: theare are public. make it private and use friend instead
+  const DBusMessage::MessageType m_type;
+  const std::string m_service;
+
+  // TODO: is map necessary?
   static const std::map<DBusMessage::ErrorType, std::string> m_errorNames;
 
-private:
+public:
   DBusMessage::MessageType getMessageType_(sd_bus_message *message);
   bool demarshallArgs_(sd_bus_message *message);
-  std::unique_ptr;
+
+  // to use unique_ptr with deleter
+  // sd_bus_message *sd_bus_message_ref(sd_bus_message *m);
 
   using sd_bus_message_ptr =
-      std::unique_ptr<sd_bus_message, sd_bus_message *(*)(sd_bus_message *)>;
-  sd_bus_message_ptr toMessage(sd_bus *bus) const;
+    std::unique_ptr<sd_bus_message, sd_bus_message *(*)(sd_bus_message *)>;
+
+  sd_bus_message_ptr toMessage_(sd_bus *bus) const;
+
 private:
   struct Argument
   {
@@ -36,16 +57,30 @@ private:
 
     union BasicType
     {
-      bool bool_{};
-      int i_{};
-      unsigned ui_{};
-      double real_{0.0f};
+      // *cxx-error*
+      // bool bool_{};
+      // int i_{};
+      // unsigned ui_{};
+      // double real_{0.0f};
 
-      // BasicType() : real_(0.0f) {}
-      explicit BasicType(bool b) : bool_(b) {}
-      explicit BasicType(int i) : i_(i) {}
-      explicit BasicType(unsigned u) : ui_(u) {}
-      explicit BasicType(double d) : real_(d) {}
+      bool bool_;
+      int i_;
+      unsigned ui_;
+      double real_;
+
+      BasicType() : real_(0.0f) {}
+      explicit BasicType(bool b)
+          : bool_(b)
+      {}
+      explicit BasicType(int i)
+          : i_(i)
+      {}
+      explicit BasicType(unsigned u)
+          : ui_(u)
+      {}
+      explicit BasicType(double d)
+          : real_(d)
+      {}
     } basic_;
 
     std::string str_;
@@ -53,14 +88,38 @@ private:
     // from `dusfiledescriptor.h`
     DBusFileDescriptor fd_;
 
-    explicit Argument(bool b) : type_(Boolean), basic_(b) {}
-    explicit Argument(int i) : type_(Integer), basic_(i) {}
-    explicit Argument(unsigned u) : type_(UnsignedInteger), basic_(u) {}
-    explicit Argument(double d) : type_(Double), basic_(d) {}
-    explicit Argument(const char *str) : type_(String), str_(str) {}
-    explicit Argument(const std::string &str) : type_(String), str_(str) {}
-    explicit Argument(std::string &&str) : type_(String), str_(str) {}
-    explicit Argument(DBusFileDescriptor fd) : type_(FileDescriptor), fd_(fd) {}
+    explicit Argument(bool b)
+        : type_(Boolean)
+        , basic_(b)
+    {}
+    explicit Argument(int i)
+        : type_(Integer)
+        , basic_(i)
+    {}
+    explicit Argument(unsigned u)
+        : type_(UnsignedInteger)
+        , basic_(u)
+    {}
+    explicit Argument(double d)
+        : type_(Double)
+        , basic_(d)
+    {}
+    explicit Argument(const char *str)
+        : type_(String)
+        , str_(str)
+    {}
+    explicit Argument(const std::string &str)
+        : type_(String)
+        , str_(str)
+    {}
+    explicit Argument(std::string &&str)
+        : type_(String)
+        , str_(str)
+    {}
+    explicit Argument(DBusFileDescriptor fd)
+        : type_(FileDescriptor)
+        , fd_(fd)
+    {}
 
     explicit operator bool() const;
     explicit operator int() const;
@@ -75,8 +134,6 @@ private:
   std::list<Argument> m_args;
 
 public:
-  const DBusMessage::MessageType m_type;
-
   explicit DBusMessagePrivate(DBusMessage::MessageType type,
                               const std::string &service,
                               const std::string &path,

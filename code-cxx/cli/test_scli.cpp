@@ -1,8 +1,4 @@
-#include <QCoreApplication>
-#include <QDebug>
-
 #include "scli.h"
-#include "console.h"
 
 // ={=========================================================================
 //
@@ -18,6 +14,7 @@ static bool quitCommand(std::string const &command, void *data)
 {
   bool *running = static_cast<bool *>(data);
   *running      = false;
+  std::cout << "quit command : " << command << std::endl;
   return true;
 }
 
@@ -66,16 +63,12 @@ void start()
     }
   } // while
 
-  QCoreApplication::quit();
+  // QCoreApplication::quit();
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-  QCoreApplication app(argc, argv);
-  QCoreApplication::setApplicationName("TestConsole");
-  QCoreApplication::setApplicationVersion("1.0");
-
   start();
 
-  return app.exec();
+  return EXIT_SUCCESS;
 }

@@ -2,23 +2,22 @@
 #include "readline.h"
 #include "slog.h"
 
-#include <QCoreApplication>
 #include <QAbstractEventDispatcher>
-#include <QRegularExpression>
+#include <QCoreApplication>
 #include <QReadWriteLock>
+#include <QRegularExpression>
 // #include <QTextStream>
 #include <QDebug>
 
 #include <stdio.h>
 #include <stdlib.h>
 // #include <stdarg.h>
-#include <string.h>
 #include <dlfcn.h>
+#include <string.h>
 
 #ifndef STDIN_FILENO
 #define STDIN_FILENO 0
 #endif
-
 
 /* ={--------------------------------------------------------------------------
  @brief :
@@ -38,7 +37,6 @@ static QtPrivate::QSlotObjectBase *slotToObject(Func1 slot)
   return new QtPrivate::QSlotObject<Func1, typename SlotType::Arguments, void>(
     slot);
 }
-
 
 /* ={==========================================================================
  @brief :
@@ -117,12 +115,12 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
 #define GET_RL_FUNC(f)                                                         \
   do                                                                           \
   {                                                                            \
-    m_##f = reinterpret_cast<f##_t>(dlsym(m_libHandle, "" #f ""));                  \
+    m_##f = reinterpret_cast<f##_t>(dlsym(m_libHandle, "" #f ""));             \
     if (!m_##f)                                                                \
     {                                                                          \
       LOG_MSG("failed to get symbol '" #f "' (%s)", dlerror());                \
-      dlclose(m_libHandle);                                                         \
-      m_libHandle = nullptr;                                                        \
+      dlclose(m_libHandle);                                                    \
+      m_libHandle = nullptr;                                                   \
       return;                                                                  \
     }                                                                          \
   } while (0)
@@ -170,13 +168,22 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
   }
 
   // install commands
-  addCommand("quit", {}, "quit program", this,
+  addCommand("quit",
+             {},
+             "quit program",
+             this,
              slotToObject(&ReadLinePrivate::onQuitCommand));
 
-  addCommand("exit", {}, "Quit program (same as quit)", this,
+  addCommand("exit",
+             {},
+             "Quit program (same as quit)",
+             this,
              slotToObject(&ReadLinePrivate::onQuitCommand));
 
-  addCommand("help", {}, "Display this text", this,
+  addCommand("help",
+             {},
+             "Display this text",
+             this,
              slotToObject(&ReadLinePrivate::onHelpCommand));
 
   // TODO: install a notifier on stdin to feed readline
@@ -193,7 +200,8 @@ ReadLinePrivate::ReadLinePrivate(QObject *parent)
 ReadLinePrivate::~ReadLinePrivate()
 {
   // remove the listener on stdin
-  if (m_stdinListener) {
+  if (m_stdinListener)
+  {
     m_stdinListener->setEnabled(false);
     delete m_stdinListener;
   }
@@ -203,14 +211,16 @@ ReadLinePrivate::~ReadLinePrivate()
     m_rl_callback_handler_remove();
 
   // close the handle to the readline library
-  if (m_libHandle) {
+  if (m_libHandle)
+  {
     dlclose(m_libHandle);
     m_libHandle = nullptr;
   }
 
   // clean up all the command handlers
   QMap<QString, Command>::iterator it = m_commands.begin();
-  while (it != m_commands.end()) {
+  while (it != m_commands.end())
+  {
 
     const Command &command = it.value();
     if (command.slotObj)
@@ -225,8 +235,10 @@ ReadLinePrivate::~ReadLinePrivate()
   it adds a new command and maps it to the \a slotObj for the given \a receiver.
 */
 
-bool ReadLinePrivate::addCommand(const QString &name, const QStringList &args,
-                                 const QString &desc, const QObject *receiver,
+bool ReadLinePrivate::addCommand(const QString &name,
+                                 const QStringList &args,
+                                 const QString &desc,
+                                 const QObject *receiver,
                                  QtPrivate::QSlotObjectBase *slotObj)
 {
   QMutexLocker lock(&m_commandsLock);
@@ -349,9 +361,15 @@ void ReadLinePrivate::stop()
   m_rl_callback_handler_remove();
 }
 
-bool ReadLinePrivate::isValid() const { return m_libHandle != nullptr; }
+bool ReadLinePrivate::isValid() const
+{
+  return m_libHandle != nullptr;
+}
 
-bool ReadLinePrivate::isRunning() const { return m_running; }
+bool ReadLinePrivate::isRunning() const
+{
+  return m_running;
+}
 
 /* ={--------------------------------------------------------------------------
  @brief :
@@ -584,8 +602,7 @@ char *ReadLinePrivate::commandGenerator_(const char *text, int state)
   {
     matches.clear();
 
-    for (auto it = m_commands.cbegin();
-        it != m_commands.cend(); ++it)
+    for (auto it = m_commands.cbegin(); it != m_commands.cend(); ++it)
     {
       const QString &command = it.key();
 
@@ -615,15 +632,15 @@ void ReadLinePrivate::qtMessageHandler(QtMsgType type,
   fputs(message.toLatin1().constData(), stdout);
   fputc('\n', stdout);
   fflush(stdout);
-  //printf("%s\n", message.toLatin1().constData());
-  //printf("\n");
+  // printf("%s\n", message.toLatin1().constData());
+  // printf("\n");
 
   ReadLinePrivate *readline = instance();
-  if (readline && readline->m_rl_on_new_line && readline->isRunning()) {
+  if (readline && readline->m_rl_on_new_line && readline->isRunning())
+  {
     readline->m_rl_on_new_line();
   }
 }
-
 
 /* ={==========================================================================
  @brief :
@@ -634,9 +651,12 @@ void ReadLinePrivate::qtMessageHandler(QtMsgType type,
 */
 
 ReadLine::ReadLine(QObject *parent)
-    : QObject(parent), m_private(ReadLinePrivate::instance()), m_prompt("> ") 
+    : QObject(parent)
+    , m_private(ReadLinePrivate::instance())
+    , m_prompt("> ")
 {
-  if (m_private.isNull() || !m_private->isValid()) {
+  if (m_private.isNull() || !m_private->isValid())
+  {
     qCritical("failed to get readline instance");
   }
 }
@@ -646,7 +666,6 @@ ReadLine::~ReadLine()
   if (!m_private.isNull())
     m_private->stop();
 }
-
 
 bool ReadLine::isValid() const
 {
@@ -681,9 +700,11 @@ void ReadLine::runCommand(const QString &command, const QStringList &arguments)
   m_private->runCommand(command, arguments);
 }
 
-bool ReadLine::addCommandImpl(const QString &name, const QStringList &args,
-    const QString &desc, const QObject *receiver,
-    QtPrivate::QSlotObjectBase *slotObj)
+bool ReadLine::addCommandImpl(const QString &name,
+                              const QStringList &args,
+                              const QString &desc,
+                              const QObject *receiver,
+                              QtPrivate::QSlotObjectBase *slotObj)
 {
   Q_ASSERT(!m_private.isNull());
   return m_private->addCommand(name, args, desc, receiver, slotObj);

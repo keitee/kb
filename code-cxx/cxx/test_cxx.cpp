@@ -4332,16 +4332,18 @@ TEST(CxxFunctionObject, LambdaCompare)
 // ={=========================================================================
 // cxx-smart-ptr cxx-sp
 
-TEST(SmartPointer, Ctor)
+TEST(CxxSmartPointerShared, construct)
 {
   {
     shared_ptr<string> pNico(new string("nico")); // OK
   }
+
   {
     shared_ptr<string> pNico{new string("nico")}; // OK
   }
+
   {
-    shared_ptr<string> pNico = make_shared<string>("nico"); // OK
+    shared_ptr<string> pNico = std::make_shared<string>("nico"); // OK
   }
 
   // // NO since requires cxx-copy-init but shared ptr's ctor are explicit
@@ -4349,22 +4351,27 @@ TEST(SmartPointer, Ctor)
   //   shared_ptr<string> pNico = new string("nico");
   // }
 
-  // // NO
-  // {
-  //   shared_ptr<int> p (new int(42));
-  //
-  //   // cxx.cpp:1739:5: error: no match for ‘operator=’ (operand types are
-  //   ‘std::shared_ptr<int>’ and ‘int*’) p = new int(1024);
-  // }
-
   // points to '9999999999'
-  shared_ptr<string> p4 = make_shared<string>(10, '9');
+  shared_ptr<string> p4 = std::make_shared<string>(10, '9');
 
   // points to empty vector<string>
   auto p6 = make_shared<vector<string>>();
+
+  // construct sp from up
+  {
+    std::unique_ptr<std::string> up = std::make_unique<std::string>("unique");
+
+    // up is null once sp is constructed. have to be rvalue
+    std::shared_ptr<std::string> sp(std::move(up));
+
+    // up do not have use_count()
+    // EXPECT_THAT(up.use_count(), 0);
+    EXPECT_THAT(!!up, false);
+    EXPECT_THAT(sp.use_count(), 1);
+  }
 }
 
-TEST(SmartPointer, SharedCopy)
+TEST(CxxSmartPointerShared, copy)
 {
   auto p = make_shared<int>(42);
 
@@ -4391,9 +4398,10 @@ TEST(SmartPointer, SharedCopy)
   EXPECT_THAT(*r, 42);
 }
 
-TEST(SmartPointer, Reset)
+// common for shared and unique
+TEST(CxxSmartPointer, reset)
 {
-  // 1. sp, shared structure, and referenced object are separate entity.
+  // 1. sp, shared structure, and referenced object are *separate* entity.
   //
   // 2. although shared count is 2, q.use_count() return 0 since cxx-sp-code
   // returns 0 when sp is empty(null)
@@ -4413,9 +4421,13 @@ TEST(SmartPointer, Reset)
     q.reset();
 
     EXPECT_THAT(p.use_count(), 2);
+
+    // shows q.reset() do independantly
     EXPECT_THAT(q.use_count(), 0);
+
     EXPECT_THAT(r.use_count(), 2);
   }
+
   {
     auto p = make_shared<int>(42);
 
@@ -4433,6 +4445,7 @@ TEST(SmartPointer, Reset)
     EXPECT_THAT(q.use_count(), 0);
     EXPECT_THAT(r.use_count(), 2);
   }
+
   {
     auto p = make_shared<int>(42);
 
@@ -4453,6 +4466,7 @@ TEST(SmartPointer, Reset)
     EXPECT_THAT(q.use_count(), 0);
     EXPECT_THAT(r.use_count(), 2);
   }
+
   {
     unique_ptr<int> up{new int(100)};
 
@@ -4468,7 +4482,7 @@ TEST(SmartPointer, Reset)
 
 // CXXSLR 5.2 Smart Pointers
 
-TEST(SmartPointer, SharedEx)
+TEST(CxxSmartPointerShared, example1)
 {
   std::shared_ptr<std::string> pNico{new std::string("nico")};
   std::shared_ptr<std::string> pJutta{new std::string("jutta")};
@@ -4510,7 +4524,8 @@ TEST(SmartPointer, SharedEx)
   EXPECT_THAT(whoMadeCoffee[0].use_count(), 4);
 }
 
-TEST(SmartPointer, OperatorBool)
+// common
+TEST(CxxSmartPointer, bool)
 {
   {
     auto p = make_shared<int>(42);
@@ -4538,6 +4553,12 @@ TEST(SmartPointer, OperatorBool)
     unique_ptr<int> up{new int(100)};
 
     EXPECT_TRUE(up);
+
+    // cxx-error on gmock matcher
+    // EXPECT_THAT(up, nullptr);
+    EXPECT_THAT(!!up, true);
+    EXPECT_THAT(up != nullptr, true);
+
     EXPECT_THAT(*up, 100);
   }
 }
@@ -4581,11 +4602,32 @@ TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
 
 */
 
-TEST(SharedPointerUnique, checkSupportCopy)
+TEST(CxxSmartPointerUnique, construct)
 {
-  unique_ptr<std::string> up(new string);
+  {
+    std::unique_ptr<std::string> up(new std::string);
+    // std::string()->empty()
+    EXPECT_THAT(up->empty(), true);
+  }
 
-  EXPECT_THAT(up->empty(), true);
+  // since *cxx-14* and 
+  // template< class T, class... Args >
+  //  unique_ptr<T> make_unique( Args&&... args );
+  //
+  // https://gcc.gnu.org/projects/cxx-status.html
+  //
+  // C++14 Support in GCC
+  // GCC has full support for the previous revision of the C++ standard, which
+  // was published in 2014.
+  //
+  // This mode is the default in GCC 6.1 and above; it can be explicitly
+  // selected with the -std=c++14 command-line flag, or -std=gnu++14 to enable
+  // GNU extensions as well.
+
+  {
+    auto up = make_unique<std::string>("unique pointer");
+    EXPECT_THAT(*up, "unique pointer");
+  }
 }
 
 namespace cxx_sp_shared
@@ -4612,57 +4654,60 @@ namespace cxx_sp_shared
   };
 } // namespace cxx_sp_shared
 
-// Foo ctor(1)
-// Foo ctor(2)
-// Foo dtor(1)
-// Foo ctor(3)
-// Foo dtor(2)
-// Foo dtor(3)
-
-TEST(SmartPointerUnique, seeUseMoveToSet)
+TEST(CxxSmartPointerUnique, moveAssign)
 {
-  using namespace cxx_sp_shared;
+  // Foo ctor(1)
+  // Foo ctor(2)
+  // Foo dtor(1)
+  // Foo ctor(3)
+  // Foo dtor(2)
+  // Foo dtor(3)
 
-  std::unique_ptr<Foo> up;
+  {
+    using namespace cxx_sp_shared;
 
-  // not support copy assign for lvalue but support for rvalue
-  up = std::move(std::unique_ptr<Foo>(new Foo(1)));
-  up = std::move(std::unique_ptr<Foo>(new Foo(2)));
-  // Foo(1) is gone
-  EXPECT_THAT(dtor_count, 1);
-  up = std::move(std::unique_ptr<Foo>(new Foo(3)));
-  // Foo(2) is gone
-  EXPECT_THAT(dtor_count, 2);
-  up = nullptr;
-  // Foo(3) is gone
-  EXPECT_THAT(dtor_count, 3);
-}
+    std::unique_ptr<Foo> up;
 
-// Foo ctor(1)
-// Foo ctor(2)
-// Foo ctor(3)
-// Foo ctor(4)
-// Foo dtor(2)
-// Foo dtor(1)
-// Foo dtor(4)
-// Foo dtor(3)
+    // not support copy assign for lvalue but support for rvalue
+    up = std::move(std::unique_ptr<Foo>(new Foo(1)));
+    up = std::move(std::unique_ptr<Foo>(new Foo(2)));
+    // Foo(1) is gone
+    EXPECT_THAT(dtor_count, 1);
 
-TEST(SmartPointer, UniqueSetUseMove_1)
-{
-  using namespace cxx_sp_shared;
+    up = std::move(std::unique_ptr<Foo>(new Foo(3)));
+    // Foo(2) is gone
+    EXPECT_THAT(dtor_count, 2);
 
-  unique_ptr<Foo> p1(new Foo(1));
-  unique_ptr<Foo> p2(new Foo(2));
-  unique_ptr<Foo> p3(new Foo(3));
-  unique_ptr<Foo> p4(new Foo(4));
+    up = nullptr;
+    // Foo(3) is gone
+    EXPECT_THAT(dtor_count, 3);
+  }
 
-  EXPECT_TRUE(p3);
+  // Foo ctor(1)
+  // Foo ctor(2)
+  // Foo ctor(3)
+  // Foo ctor(4)
+  // Foo dtor(2)
+  // Foo dtor(1)
+  // Foo dtor(4)
+  // Foo dtor(3)
 
-  p2 = std::move(p3); // p1->F1   , p2->F3, p3->null
-  p3 = std::move(p1); // p1->null , p2->F3, p3->F1
-  p3 = std::move(p1); // p1->null , p2->F3, p3->null
+  {
+    using namespace cxx_sp_shared;
 
-  EXPECT_FALSE(p3);
+    std::unique_ptr<Foo> p1(new Foo(1));
+    std::unique_ptr<Foo> p2(new Foo(2));
+    std::unique_ptr<Foo> p3(new Foo(3));
+    std::unique_ptr<Foo> p4(new Foo(4));
+
+    EXPECT_TRUE(p3);
+
+    p2 = std::move(p3); // p1->F1   , p2->F3, p3->null
+    p3 = std::move(p1); // p1->null , p2->F3, p3->F1
+    p3 = std::move(p1); // p1->null , p2->F3, p3->null
+
+    EXPECT_FALSE(p3);
+  }
 }
 
 namespace cxx_sp_shared
@@ -4717,131 +4762,157 @@ namespace cxx_sp_delete
   class ClassA
   {
   public:
-    ClassA(string mesg = {})
-        : mesg_(mesg)
+    ClassA(std::string mesg = {})
+        : m_mesg(mesg)
     {}
 
-    void print_mesg() { cout << "ClassA: " << mesg_ << endl; }
+    std::string getMessage() const { return m_mesg; }
 
   private:
-    string mesg_;
+    std::string m_mesg;
   };
 
+  // Since there is no way to get return from operator() becuase it called
+  // unique_ptr code inside, have to use outputting message.
   class DebugDeleteClassA
   {
   public:
     DebugDeleteClassA(ostream &os = cerr)
-        : os_(os)
+        : m_os(os)
     {}
 
     void operator()(ClassA *p)
     {
-      os_ << "DebugDeleteClassA: deleting " << typeid(p).name() << ", p = " << p
-          << endl;
+      m_os << p->getMessage() << " is deleted" << std::endl;
       delete p;
     }
 
   private:
     // *cxx-reference-member*
-    ostream &os_;
+    ostream &m_os;
   };
 
+  // generic version since T will be deduced in *cxx-template-member*
   class DebugDelete
   {
   public:
     DebugDelete(ostream &os = cerr)
-        : os_(os)
+        : m_os(os)
     {}
 
-    // T will be deduced since it is *cxx-template-member*
     template <typename T>
     void operator()(T *p)
     {
-      os_ << "DebugDelete: deleting " << typeid(p).name() << ", p = " << p
-          << endl;
+      m_os << p->getMessage() << " is deleted" << std::endl;
       delete p;
     }
 
   private:
-    // *cxx-reference-member*
-    ostream &os_;
+    ostream &m_os;
   };
 
-  void function_debug_delete(string *str)
+  void function_delete(std::string *str)
   {
-    cout << "deleting " << *str << endl;
+    if (str == nullptr)
+      std::cout << "str is null" << std::endl;
+
+    std::cout << *str << " is deleted" << std::endl;
     delete str;
   }
 
-  class ClassDebugDelete
+  class DebugDelete2
   {
   public:
     void operator()(string *str)
     {
-      cout << "deleting " << *str << endl;
+      std::cout << *str << " is deleted" << std::endl;
       delete str;
     }
   };
 
 } // namespace cxx_sp_delete
 
-// [ RUN      ] SharedPointer.Deleter
-// ClassA:
-// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
-// ClassA:
-// DebugDeleteClassA: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
-// ClassA:
-// DebugDelete: deleting PN13cxx_sp_delete6ClassAE, p = 0x10ffe00
-// deleting jutta on function
-// deleting nico on function
-// deleting jutta on functor
-// deleting nico on functor
-// deleting nico
-// [       OK ] SharedPointer.Deleter (5 ms)
-
-TEST(SmartPointer, Deleter)
+TEST(CxxSmartPointer, Deleter)
 {
   using namespace cxx_sp_delete;
 
+  // unique pointers
+
   {
-    unique_ptr<ClassA, DebugDeleteClassA> up(new ClassA());
-    up->print_mesg();
+    std::unique_ptr<ClassA, DebugDeleteClassA> up(
+      new ClassA("unique with deleter"));
+
+    EXPECT_THAT(up->getMessage(), "unique with deleter");
   }
 
   // same as the above since unique_ptr ctor() uses deleter type to create
   // delter to use
   {
-    unique_ptr<ClassA, DebugDeleteClassA> up(new ClassA(), DebugDeleteClassA());
-    up->print_mesg();
+    std::unique_ptr<ClassA, DebugDeleteClassA> up(
+      new ClassA("unique with deleter"),
+      DebugDeleteClassA());
+
+    EXPECT_THAT(up->getMessage(), "unique with deleter");
   }
 
   {
-    unique_ptr<ClassA, DebugDelete> up(new ClassA(), DebugDelete());
-    up->print_mesg();
+    std::unique_ptr<ClassA, DebugDelete> up(new ClassA("unique with deleter"),
+                                            DebugDelete());
+
+    EXPECT_THAT(up->getMessage(), "unique with deleter");
   }
 
   // *cxx-error*
   // {
-  //   unique_ptr<string, decltype(function_debug_delete)> up(new
-  //   string("unique"), function_debug_delete);
+  //   std::unique_ptr<std::string, decltype(function_delete)> up(new
+  //   string("unique"), function_delete);
   // }
 
+  // see that the way of using function pointer
   {
-    shared_ptr<string> sp1(new string("nico on function"),
-                           function_debug_delete);
-    shared_ptr<string> sp2(new string("jutta on function"),
-                           function_debug_delete);
+    std::unique_ptr<std::string, void (*)(std::string *)> up(
+      new std::string("unique with function deleter1"),
+      function_delete);
   }
 
   {
-    shared_ptr<string> sp1(new string("nico on functor"), ClassDebugDelete());
-    shared_ptr<string> sp2(new string("jutta on functor"), ClassDebugDelete());
+    using unique_ptr_with_function =
+      std::unique_ptr<std::string, void (*)(std::string *)>;
+
+    unique_ptr_with_function up(new std::string("unique with function deleter2"),
+                                function_delete);
+  }
+
+  // okay when nullptr is used? Yes since unique_ptr do have checks before
+  // calling deleter
+  {
+    using unique_ptr_with_function =
+      std::unique_ptr<std::string, void (*)(std::string *)>;
+
+    unique_ptr_with_function up(nullptr, function_delete);
+  }
+
+  // shared pointers
+
+  {
+    std::shared_ptr<string> sp1(new std::string("nico on function"),
+                                function_delete);
+    std::shared_ptr<string> sp2(new std::string("jutta on function"),
+                                function_delete);
+  }
+
+  {
+    std::shared_ptr<std::string> sp1(new std::string("nico on functor"),
+                                     DebugDelete2());
+
+    std::shared_ptr<std::string> sp2(new std::string("jutta on functor"),
+                                     DebugDelete2());
   }
 
   {
     // *cxx-lambda*
-    shared_ptr<string> sp1(new string("nico"), [](string *str) {
-      cout << "deleting " << *str << endl;
+    std::shared_ptr<string> sp1(new string("nico"), [](string *str) {
+      std::cout << *str << " is deleted" << std::endl;
       delete str;
     });
   }
@@ -4856,8 +4927,8 @@ TEST(SmartPointer, DeleteTime)
 {
   using namespace cxx_sp_delete;
 
-  shared_ptr<string> pnico(new string("nico"), function_debug_delete);
-  shared_ptr<string> pjutta(new string("jutta"), function_debug_delete);
+  shared_ptr<string> pnico(new string("nico"), function_delete);
+  shared_ptr<string> pjutta(new string("jutta"), function_delete);
 
   // uppercase the first char
   (*pnico)[0] = 'N';
@@ -6007,6 +6078,7 @@ TEST(CxxBool, LogicalNot)
     EXPECT_THAT(!!value, false);
   }
 
+  // for non-bool type, `!!` returns bool value of the given variable.
   {
     int value{10};
 

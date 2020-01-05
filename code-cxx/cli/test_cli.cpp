@@ -1,35 +1,34 @@
-#include <memory>
-#include <thread>
-#include <mutex>
 #include <chrono>
 #include <condition_variable>
-#include <queue>
 #include <future>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
 
 #include "gmock/gmock.h"
 
-#include "scli.h"
 #include "console.h"
+#include "scli.h"
 
 using namespace testing;
 
 // (gdb) b AlgoList_Divide_Test::TestBody()
-
 
 // ={=========================================================================
 // cxx-cli-simple
 
 static bool helpCommand(std::string const &command, void *data)
 {
-  CommandHandler *handler = static_cast<CommandHandler*>(data);
+  CommandHandler *handler = static_cast<CommandHandler *>(data);
   handler->showCommands();
   return true;
 }
 
 static bool quitCommand(std::string const &command, void *data)
 {
-  bool *running = static_cast<bool*>(data);
-  *running = false;
+  bool *running = static_cast<bool *>(data);
+  *running      = false;
   return true;
 }
 
@@ -136,14 +135,13 @@ TEST(Cli, runLoop)
 
 // ={=========================================================================
 // cxx-cli-readline
-// 
+//
 // DO NOT RUN:
 //
 // [ RUN      ] Cli.useReadLine
 // QSocketNotifier: Can only be used with threads started with QThread
 // console >[       OK ] Cli.useReadLine (92 ms)
 // [----------] 1 test from Cli (92 ms total)
-
 
 TEST(Cli, useReadLine)
 {
@@ -155,7 +153,7 @@ TEST(Cli, useReadLine)
 
 // ={=========================================================================
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

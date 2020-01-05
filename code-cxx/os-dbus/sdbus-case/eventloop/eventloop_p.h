@@ -1,6 +1,7 @@
 #ifndef EVENTLOOP_P_H
 #define EVENTLOOP_P_H
 
+#include <systemd/sd-event.h>
 #include <functional>
 #include <mutex>
 #include <queue>
@@ -33,6 +34,9 @@ class EventLoopPrivate
     void quit(int exitCode);
     bool invokeMethod(std::function<void()> &&f);
     void flush();
+
+    // debug 
+    size_t size() const;
 };
 
 #endif // EVENTLOOP_P_H

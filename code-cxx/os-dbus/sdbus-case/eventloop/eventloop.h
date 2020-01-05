@@ -1,11 +1,14 @@
 #ifndef EVENTLOOP_H
 #define EVENTLOOP_H
 
-#include <systemd/sd-event.h>
-#include "eventloop_p.h"
+// #include <systemd/sd-event.h>
+// #include "eventloop_p.h"
+
 #include <memory>
 
-// class EventLoopPrivate;
+typedef struct sd_event sd_event;
+
+class EventLoopPrivate;
 
 class EventLoop
 {
@@ -15,9 +18,13 @@ private:
   bool invokeMethodImpl(std::function<void()> &&f) const;
 
 public:
-  explicit EventLoop();
-  explicit EventLoop(const EventLoop &);
-  explicit EventLoop(EventLoop &&);
+  // explicit EventLoop();
+  // explicit EventLoop(const EventLoop &);
+  // explicit EventLoop(EventLoop &&);
+
+  EventLoop();
+  EventLoop(const EventLoop &);
+  EventLoop(EventLoop &&);
   ~EventLoop();
 
   int run();
@@ -34,7 +41,12 @@ public:
   // return true if they are the same
   bool onEventLoopThread() const;
 
+  // debug 
+  size_t size() const;
+
 public:
+
+  // post F and it trigger event loop thread to process
   template <typename F>
     inline bool invokeMethod(F &&f) const
     {
@@ -48,7 +60,8 @@ public:
     {
       // NOTE: unnecessary?
       // return invokeMethodImpl(std::forward<F>(f));
-      return invokeMethodImpl(f, std::forward<Args>(args)...);
+      // return invokeMethodImpl(f, std::forward<Args>(args)...);
+      return invokeMethodImpl(std::bind(f, std::forward<Args>(args)...));
     }
 };
 
