@@ -128,23 +128,7 @@ DBusConnection DBusConnection::systemBus(const EventLoop &eventloop)
   {
     logSysError(-rc, "failed to open system bus");
 
-    // /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/dbus/dbusconnection.cpp:131:68:
-    // error: no matching function for call to
-    // ‘DBusConnection::DBusConnection(DBusConnection)’
-    //      return DBusConnection(std::make_shared<DBusConnectionPrivate>());
-    //                                                                     ^
-    // /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/dbus/dbusconnection.cpp:109:1:
-    // note: candidate:
-    // DBusConnection::DBusConnection(std::shared_ptr<DBusConnectionPrivate>&&)
-    //  DBusConnection::DBusConnection(std::shared_ptr<DBusConnectionPrivate>
-    //  &&priv)
-    //  ^~~~~~~~~~~~~~
-    // /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/dbus/dbusconnection.cpp:109:1:
-    // note:   no known conversion for argument 1 from ‘DBusConnection’ to
-    // ‘std::shared_ptr<DBusConnectionPrivate>&&’
-    //
-    // return DBusConnection(nullptr);
-    return DBusConnection();
+    return DBusConnection(nullptr);
   }
 
   // bind bus with event loop

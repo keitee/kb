@@ -17,9 +17,6 @@ class DBusConnection
     DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
 
   public:
-    // explicit DBusConnection(const DBusConnection &);
-    // explicit DBusConnection(DBusConnection &&);
-
     DBusConnection(const DBusConnection &);
     DBusConnection(DBusConnection &&);
 
