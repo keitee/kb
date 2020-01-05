@@ -149,6 +149,103 @@ TEST(EventLoop, ThreadWorkDone2)
 
 namespace
 {
+  class Work1
+  {
+    public:
+      void printArgs(int v1, int v2, int v3)
+      {
+        std::cout << "v1: " << v1 
+          << ", v2: " << v2 << ", v3: " << v3 << std::endl;
+      }
+  };
+
+#if 0
+  // TODO: HOW possible without using target??
+  //
+  // bool ASRequestPrivate::doSendReply(unsigned int code)
+  // {
+  // 
+  //     // otherwise running on a different thread so need to invoke from the
+  //     // event loop thread
+  //     return m_eventLoop.invokeMethod(&ASRequestPrivate::marshallAndSendReply,
+  //                                     reply, code, headers, body);
+  // }
+
+  class Work2
+  {
+    private:
+      const EventLoop m_eventloop;
+
+    public:
+      Work2(const EventLoop &eventloop)
+        : m_eventloop(eventloop)
+      {}
+
+      void pushWorks();
+
+      void printArgs(int v1, int v2, int v3)
+      {
+        std::cout << "v1: " << v1 
+          << ", v2: " << v2 << ", v3: " << v3 << std::endl;
+      }
+  };
+
+  // cause compile error
+  void Work2::pushWorks()
+  {
+    for (int i = 0; i < 10; ++i)
+      m_eventloop.invokeMethod(&Work2::printArgs, 10, 20, 30);
+  }
+#endif
+}
+
+// may use target with invokeMethod()
+
+TEST(EventLoop, InvokeWithThis)
+{
+  int value{};
+
+  EventLoop loop;
+  Work1 w;
+
+  auto f1 = std::async(std::launch::async, [&]() {
+
+    for (int i = 0; i < 10; ++i)
+      loop.invokeMethod(&Work1::printArgs, &w, 10, 20, 30);
+
+    EXPECT_THAT(loop.size(), 10);
+
+    loop.quit(0);
+  });
+
+  // blocks here
+  loop.run();
+}
+
+#if 0
+TEST(EventLoop, InvokeWithoutThis)
+{
+  int value{};
+
+  EventLoop loop;
+
+  auto f1 = std::async(std::launch::async, [&]() {
+
+      Work2 w(loop);
+      w.pushWorks();
+
+      EXPECT_THAT(loop.size(), 10);
+
+      loop.quit(0);
+      });
+
+  // blocks here
+  loop.run();
+}
+#endif
+
+namespace
+{
   static bool helpCommand(std::string const &command, void *data)
   {
     CommandHandler *handler = static_cast<CommandHandler *>(data);

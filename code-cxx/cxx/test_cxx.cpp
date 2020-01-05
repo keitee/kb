@@ -186,7 +186,7 @@ TEST(Arith, Comparison)
 // ={=========================================================================
 // cxx-switch
 
-TEST(CxxStatement, Switch)
+TEST(CxxStatement, switch)
 {
   {
     ostringstream os;
@@ -208,8 +208,8 @@ TEST(CxxStatement, Switch)
     EXPECT_THAT(os.str(), "value is 2");
   }
 
-  // the point is that to show case 8 | 16: is a case for single value which is
-  // 24. And that can mean "logical or" if value is enum which is 24.
+  // the point is that `case 8 | 16:` is a case for single value which is
+  // 24. The value of "or" of 8 and 16
 
   {
     ostringstream os;
@@ -254,6 +254,27 @@ TEST(CxxStatement, Switch)
     }
 
     EXPECT_THAT(os.str(), "value is 24");
+  }
+
+  // what if there is no default handled? runs no statements.
+  {
+    ostringstream os;
+    int value{30};
+
+    switch (value)
+    {
+      case 1:
+        os << "value is 1";
+        EXPECT_THAT(value, 1);
+        break;
+
+      case 8 | 16:
+        os << "value is 24";
+        EXPECT_THAT(value, 24);
+        break;
+    }
+
+    EXPECT_THAT(os.str(), "");
   }
 }
 

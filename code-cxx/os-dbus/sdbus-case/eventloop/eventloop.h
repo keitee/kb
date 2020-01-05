@@ -18,10 +18,6 @@ private:
   bool invokeMethodImpl(std::function<void()> &&f) const;
 
 public:
-  // explicit EventLoop();
-  // explicit EventLoop(const EventLoop &);
-  // explicit EventLoop(EventLoop &&);
-
   EventLoop();
   EventLoop(const EventLoop &);
   EventLoop(EventLoop &&);
@@ -59,9 +55,8 @@ public:
     inline bool invokeMethod(F &&f, Args&&... args) const
     {
       // NOTE: unnecessary?
-      // return invokeMethodImpl(std::forward<F>(f));
-      // return invokeMethodImpl(f, std::forward<Args>(args)...);
-      return invokeMethodImpl(std::bind(f, std::forward<Args>(args)...));
+      // return invokeMethodImpl(std::bind(f, std::forward<Args>(args)...));
+      return invokeMethodImpl(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
     }
 };
 
