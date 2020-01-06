@@ -5,6 +5,7 @@
 // #include "eventloop_p.h"
 
 #include <memory>
+#include <functional>
 
 typedef struct sd_event sd_event;
 

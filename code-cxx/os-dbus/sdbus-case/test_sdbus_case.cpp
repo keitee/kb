@@ -159,8 +159,8 @@ namespace
       }
   };
 
-#if 0
-  // TODO: HOW possible without using target??
+  // TODO: HOW possible without using target?? the trick is that that's staic
+  // function.
   //
   // bool ASRequestPrivate::doSendReply(unsigned int code)
   // {
@@ -183,7 +183,7 @@ namespace
 
       void pushWorks();
 
-      void printArgs(int v1, int v2, int v3)
+      static void printArgs(int v1, int v2, int v3)
       {
         std::cout << "v1: " << v1 
           << ", v2: " << v2 << ", v3: " << v3 << std::endl;
@@ -196,7 +196,6 @@ namespace
     for (int i = 0; i < 10; ++i)
       m_eventloop.invokeMethod(&Work2::printArgs, 10, 20, 30);
   }
-#endif
 }
 
 // may use target with invokeMethod()

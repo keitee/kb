@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-# project(sdbus VERSION 0.1 LANGUAGES CXX)
-project(sdbus VERSION 0.1)
+project(sdbus VERSION 0.1 LANGUAGES CXX)
+# project(sdbus VERSION 0.1)
 
 enable_testing()
 
@@ -213,8 +213,11 @@ target_link_libraries(sdbus_client_1 ${LIBS} "-lsystemd")
 # enabling any languages.
 
 
-# # sdbus_server_1
-add_executable(sdbus_server_1 "sdbus_server_1.c")
+# sdbus_server_1
+# add_executable(sdbus_server_1 "sdbus_server_1.c")
+
+# Ok on gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0
+add_executable(sdbus_server_1 "sdbus_server_1.cpp")
 target_link_libraries(sdbus_server_1 ${LIBS} "-lsystemd")
 
 add_test(${PROJECT_NAME} ${PROJECT_NAME})

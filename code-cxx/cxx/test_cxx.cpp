@@ -680,29 +680,55 @@ TEST(Tuple, Tie)
 
 namespace cxx_ctor
 {
-  // o `If defines any other ctor for the class, the compiler do not generates`
-  //   default ctor. So if a class requires control to init an object in one
-  //   case, then the class is likely to require control in all cases.
+#if 0
 
-  class ConstructionNoDefault
+shows that cannot create object since ctor() is private.
+
+{
+  class Base3
+  {
+  private:
+    int value_;
+
+  public:
+    ~Base3() = default;
+
+  private:
+    Base3()  = default;
+  };
+} // namespace cxx_copy_control
+
+TEST(CxxCtor, Private)
+{
+  using namespace cxx_ctor;
+
+  Base3 b1;
+}
+#endif
+
+  // `If defines any other ctor for the class, the compiler do not generates`
+  // default ctor. So if a class requires control to init an object in one case,
+  // then the class is likely to require control in all cases.
+
+  class Base1
   {
   public:
-    ConstructionNoDefault(const std::string &name) { (void)name; }
+    Base1(const std::string &name) { (void)name; }
 
   private:
     int value_;
   };
 
-  // okay since uses ConstructionNoDefault(const std::string &name) ctor
-  class ConstructionWitCtorInitList
+  // okay since uses Ctor1(const std::string &name) ctor
+  class User
   {
   public:
-    ConstructionWitCtorInitList()
+    User()
         : member("construction with init list")
     {}
 
   private:
-    ConstructionNoDefault member;
+    Base1 member;
   };
 } // namespace cxx_ctor
 
@@ -714,20 +740,20 @@ namespace cxx_ctor
 // cxx.cpp:450:37: error: no matching function for call to
 // ‘ConstructionNoDefault::ConstructionNoDefault()’
 //      ConstructionWitNoCtorInitList() {}
-//
-// TEST(CxxCtor, showNeedsDefaultConstructor)
-// {
-//   using namespace cxx_ctor;
-//
-//   ConstructionNoDefault o;
-// }
 
-TEST(CxxCtor, CtorInitList)
+TEST(CxxCtor, NoDefault)
 {
-  using namespace cxx_ctor;
+  // {
+  // using namespace cxx_ctor;
+  // Base1 o;
+  // }
 
-  ConstructionWitCtorInitList cw;
+  {
+  using namespace cxx_ctor;
+  Base1 o("another ctor");
+  }
 }
+
 
 // *cxx-unused*
 // The only purpose of the parameter is to 'distinguish' prefix from postfix
@@ -758,7 +784,7 @@ namespace cxx_ctor
   };
 } // namespace cxx_ctor
 
-TEST(CxxCtor, UnusedParameters)
+TEST(CxxCtor, Parameters)
 {
   using namespace cxx_ctor;
 
@@ -800,7 +826,7 @@ namespace cxx_ctor
   };
 } // namespace cxx_ctor
 
-TEST(Ctor, CtorCallsCtor)
+TEST(CxxCtor, CtorCallsCtor)
 {
   using namespace cxx_ctor;
 
@@ -848,7 +874,7 @@ namespace cxx_ctor
 
 } // namespace cxx_ctor
 
-TEST(Ctor, CtorDefaultArgAndInClassInit)
+TEST(CxxCtor, CtorDefaultArgAndInClassInit)
 {
   using namespace cxx_ctor;
 
@@ -1565,24 +1591,28 @@ TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
 
 // ={=========================================================================
 // cxx-copy-control
+// use ifdef since this test causes compile error
 
-namespace copy_control
+#if 0
+namespace cxx_copy_control
 {
-
-  class CopyControlBaseUsePrivate
+  class CopyControlBase1
   {
-  public:
-    CopyControlBaseUsePrivate()  = default;
-    ~CopyControlBaseUsePrivate() = default;
-
   private:
     int value_;
-    CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate &base)
+
+  public:
+    CopyControlBase1()  = default;
+    ~CopyControlBase1() = default;
+
+  private:
+    CopyControlBase1(const CopyControlBase1 &base)
     {
       (void)base;
       cout << "copy-ctor: base" << endl;
     } // @11
-    CopyControlBaseUsePrivate &operator=(const CopyControlBaseUsePrivate &base)
+
+    CopyControlBase1 &operator=(const CopyControlBase1 &base)
     {
       (void)base;
       cout << "copy-assign: base" << endl;
@@ -1590,218 +1620,90 @@ namespace copy_control
     }
   };
 
-  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
+  class Derived1 : public CopyControlBase1
   {
   public:
-    void getShout() { cout << "derived get shout" << endl; };
+    void print() { cout << "derived get shout" << endl; };
   };
 
-  class CopyControlBaseUseDelete
+  class CopyControlBase2
   {
-  public:
-    CopyControlBaseUseDelete()  = default;
-    ~CopyControlBaseUseDelete() = default;
-
-  public:
-    CopyControlBaseUseDelete(const CopyControlBaseUseDelete &base) = delete;
-    CopyControlBaseUseDelete &
-    operator=(const CopyControlBaseUseDelete &base) = delete;
-
   private:
     int value_;
+
+  public:
+    CopyControlBase2()  = default;
+    ~CopyControlBase2() = default;
+
+  public:
+    CopyControlBase2(const CopyControlBase2 &base) = delete;
+    CopyControlBase2 &operator=(const CopyControlBase2 &base) = delete;
   };
 
-  class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
+  class Derived2 : public CopyControlBase2
   {
   public:
-    void getShout() { cout << "derived get shout" << endl; };
+    void print() { cout << "derived get shout" << endl; };
   };
+} // namespace cxx_copy_control
 
-} // namespace copy_control
+TEST(CxxCopyControl, PrivateAndDelete)
+{
+  using namespace cxx_copy_control;
 
-// TEST(CxxCopyControl, UsePrivateAndDelete)
-// {
-//   CopyControlBaseUsePrivate b1, b2;
-//
-//   // cxx.cpp:141:5: error:
-//   ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const
-//   CopyControlBaseUsePrivate&)’ is private
-//   //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) {
-//   cout << "copy-ctor: base" << endl; }   // @11
-//   //      ^
-//   // cxx.cpp:174:34: error: within this context
-//   //    CopyControlBaseUsePrivate b3(b1);
-//
-//   CopyControlBaseUsePrivate b3(b1);
-//
-//   CopyControlDerivedUsePrivate d1, d2;
-//
-//   // note:
-//   // since base copy ctor is private and derived copy ctor is deleted.
-//   //
-//   // cxx.cpp:177:37: error: use of deleted function
-//   ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const
-//   CopyControlDerivedUsePrivate&)’
-//   //    CopyControlDerivedUsePrivate d3(d1);
-//   //                                      ^
-//   // cxx.cpp:145:7: note:
-//   ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const
-//   CopyControlDerivedUsePrivate&)’ is implicitly deleted because the default
-//   definition would be ill-formed:
-//   //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
-//   //        ^
-//   // cxx.cpp:141:5: error:
-//   ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const
-//   CopyControlBaseUsePrivate&)’ is private
-//   //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) {
-//   cout << "copy-ctor: base" << endl; }   // @11
-//   //      ^
-//   // cxx.cpp:145:7: error: within this context
-//   //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
-//   //        ^
-//
-//   CopyControlDerivedUsePrivate d3(d1);
-//
-//   // cxx.cpp:141:5: error:
-//   ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const
-//   CopyControlBaseUsePrivate&)’ is private
-//   //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) {
-//   cout << "copy-ctor: base" << endl; }   // @11
-//   //      ^
-//   // cxx.cpp:167:34: error: within this context
-//   //    CopyControlBaseUsePrivate b3(b1);
-//   //                                   ^
-//
-//   CopyControlBaseUseDelete b4, b5;
-//
-//   // note:
-//   // whether they are public or private do not make difference.
-//   //
-//   // when are private and deleted
-//   //
-//   // cxx.cpp:170:33: error: within this context
-//   //    CopyControlBaseUseDelete b6(b4);
-//   //                                  ^
-//   // cxx.cpp:170:33: error: use of deleted function
-//   ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const
-//   CopyControlBaseUseDelete&)’
-//   // cxx.cpp:151:5: note: declared here
-//   //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) =
-//   delete;
-//   //      ^
-//
-//   // when are public and deleted
-//   //
-//   // cxx.cpp:181:33: error: use of deleted function
-//   ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const
-//   CopyControlBaseUseDelete&)’
-//   //    CopyControlBaseUseDelete b6(b4);
-//   //                                  ^
-//   // cxx.cpp:151:5: note: declared here
-//   //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) =
-//   delete;
-//   //      ^
-//
-//   CopyControlBaseUseDelete b6(b4);
-//
-//   CopyControlDerivedUseDelete d4, d5;
-//
-//   // cxx.cpp:210:36: error: use of deleted function
-//   ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const
-//   CopyControlDerivedUseDelete&)’
-//   //    CopyControlDerivedUseDelete d6(d4);
-//   //                                     ^
-//   // cxx.cpp:165:7: note:
-//   ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const
-//   CopyControlDerivedUseDelete&)’ is implicitly deleted because the default
-//   definition would be ill-formed:
-//   //  class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
-//   //        ^
-//   // cxx.cpp:165:7: error: use of deleted function
-//   ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const
-//   CopyControlBaseUseDelete&)’
-//   // cxx.cpp:158:5: note: declared here
-//   //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) =
-//   delete;
-//   //      ^
-//
-//   CopyControlDerivedUseDelete d6(d4);
-// }
+  {
+    CopyControlBase1 b1, b2;
 
-// ={=========================================================================
-// cxx-copy-control-assign
+    // error: ‘cxx_copy_control::CopyControlBase1::CopyControlBase1
+    // (const cxx_copy_control::CopyControlBase1&)’
+    // is private within this context
+    CopyControlBase1 b3(b1);
+  }
 
-// cxx.cpp: In member function ‘virtual void
-// CopyControl_AssignWithVoidReturn_Test::TestBody()’: cxx.cpp:527:6: error: use
-// of deleted function ‘void
-// copy_control_assign::CopyControlBaseUseDelete::operator=(const
-// copy_control_assign::CopyControlBaseUseDelete&)’
-//    d2 = d1;
-//       ^
-// namespace copy_control_assign {
-//
-// class CopyControlBaseUseDelete {
-//   public:
-//     CopyControlBaseUseDelete(int value = 0) : value_(value) {}
-//     ~CopyControlBaseUseDelete() = default;
-//
-//   public:
-//     CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
-//
-//     void operator=(const CopyControlBaseUseDelete& base) = delete;
-//
-//   public:
-//     int value_;
-// };
-//
-// } // namespace
-//
-// TEST(CopyControl, AssignWithVoidReturn)
-// {
-//   using namespace copy_control_assign;
-//
-//   CopyControlBaseUseDelete d1(100);
-//   CopyControlBaseUseDelete d2;
-//
-//   d2 = d1;
-// }
+  {
+    CopyControlBase2 b1, b2;
 
-// cxx.cpp: In member function ‘virtual void
-// CopyControl_AssignWithVoidReturn_Test::TestBody()’: cxx.cpp:542:10: error:
-// ‘void
-// copy_control_assign_use_private::CopyControlBaseUseDelete::operator=(const
-// copy_control_assign_use_private::CopyControlBaseUseDelete&)’ is private
-//      void operator=(const CopyControlBaseUseDelete& base);
-//           ^
-// cxx.cpp:557:6: error: within this context
-//    d2 = d1;
-//       ^
-// namespace copy_control_assign_use_private {
-//
-// class CopyControlBaseUseDelete {
-//   public:
-//     CopyControlBaseUseDelete(int value = 0) : value_(value) {}
-//     ~CopyControlBaseUseDelete() = default;
-//
-//   private:
-//     CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base);
-//     void operator=(const CopyControlBaseUseDelete& base);
-//
-//   public:
-//     int value_;
-// };
-//
-// } // namespace
-//
-// TEST(CopyControl, AssignWithVoidReturn)
-// {
-//   using namespace copy_control_assign_use_private;
-//
-//   CopyControlBaseUseDelete d1(100);
-//   CopyControlBaseUseDelete d2;
-//
-//   d2 = d1;
-// }
+    // error: use of deleted function
+    // ‘cxx_copy_control::CopyControlBase2::CopyControlBase2
+    // (const cxx_copy_control::CopyControlBase2&)’
+    CopyControlBase2 b3(b1);
+  }
+
+  {
+    CopyControlBase2 b1(100);
+    CopyControlBase2 b2;
+
+    // error: use of deleted function ‘void
+    // copy_control_assign::CopyControlBaseUseDelete::operator=(const
+    // copy_control_assign::CopyControlBaseUseDelete&)’
+    //    d2 = d1;
+    //       ^
+
+    b2 = b1;
+  }
+
+  {
+    Derived2 b1, b2;
+
+    // error: use of deleted function
+    // ‘cxx_copy_control::Derived2::Derived2(const cxx_copy_control::Derived2&)’
+    //      Derived2 b3(b1);
+    //                    ^
+    // note: ‘cxx_copy_control::Derived2::Derived2(const
+    // cxx_copy_control::Derived2&)’ is implicitly deleted because the default
+    // definition would be ill-formed:
+    //    class Derived2 : public CopyControlBase2
+    //          ^~~~~~~~
+    // error: use of deleted function
+    // ‘cxx_copy_control::CopyControlBase2::CopyControlBase2(const
+    // cxx_copy_control::CopyControlBase2&)’ note: declared here
+    //      CopyControlBase2(const CopyControlBase2 &base) = delete;
+    //      ^~~~~~~~~~~~~~~~
+
+    Derived2 b3(b1);
+  }
+}
+#endif
 
 // ={=========================================================================
 // cxx-enum
@@ -4631,7 +4533,7 @@ TEST(CxxSmartPointerUnique, construct)
     EXPECT_THAT(up->empty(), true);
   }
 
-  // since *cxx-14* and 
+  // since *cxx-14* and
   // template< class T, class... Args >
   //  unique_ptr<T> make_unique( Args&&... args );
   //
@@ -4900,8 +4802,9 @@ TEST(CxxSmartPointer, Deleter)
     using unique_ptr_with_function =
       std::unique_ptr<std::string, void (*)(std::string *)>;
 
-    unique_ptr_with_function up(new std::string("unique with function deleter2"),
-                                function_delete);
+    unique_ptr_with_function up(
+      new std::string("unique with function deleter2"),
+      function_delete);
   }
 
   // okay when nullptr is used? Yes since unique_ptr do have checks before

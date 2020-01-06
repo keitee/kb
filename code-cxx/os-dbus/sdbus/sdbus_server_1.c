@@ -168,6 +168,23 @@ int main(int argc, char *argvp[])
 
   // https://www.freedesktop.org/software/systemd/man/sd_bus_add_object_vtable.html#
   // install the object
+  //
+  // sd_bus_add_object_vtable() is used to declare attributes for the path
+  // object path path connected to the bus connection bus under the interface
+  // interface. The table vtable may contain property declarations using
+  // SD_BUS_PROPERTY() or SD_BUS_WRITABLE_PROPERTY(), method declarations using
+  // SD_BUS_METHOD(), SD_BUS_METHOD_WITH_NAMES(), SD_BUS_METHOD_WITH_OFFSET(),
+  // or SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
+  // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below. The userdata
+  // parameter contains a pointer that will be passed to various callback
+  // functions. It may be specified as NULL if no value is necessary.
+  //
+  // For both functions, a match slot is created internally. If the output
+  // parameter slot is NULL, a "floating" slot object is created, see
+  // sd_bus_slot_set_floating(3). Otherwise, a pointer to the slot object is
+  // returned. In that case, the reference to the slot object should be dropped
+  // when the vtable is not needed anymore, see sd_bus_slot_unref(3).
+
   r = sd_bus_add_object_vtable(bus,                           // bus
                                &slot,                         // slot
                                "/net/poettering/Calculator",  // object path

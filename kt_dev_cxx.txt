@@ -11407,8 +11407,8 @@ Tried copy-ctor and compile error:
 To tell the compiler to create syn version for functions `but-not-limited` to
 default ctor. 
 
-For `default-ctor`, if there are other ctor, then compiler will 'not' make a
-default ctor and can ask the compiler to create one.
+For `default-ctor`, if there are other ctor, then compiler will `not synthesize`
+a default ctor and can ask the compiler to create one.
 
 class Sales_data {
   public:
@@ -18310,7 +18310,7 @@ struct NoCopy {
 };
 
 
-<not-on-dtor>
+*cxx-dtor*
 If the dtor is deleted, then there is no way to destory objects of that type.
 The compiler will not let us define variables or create temporaries of that
 type.
@@ -18321,7 +18321,7 @@ To prevent copies before C++11:
 
 class PrivateCopy {
   private:
-  // `declare but not define` 
+    // `declare but not define` 
     PrivateCopy(const PrivateCopy&);
     PrivateCopy &operator=(const PrivateCopy&);
 
@@ -18333,149 +18333,131 @@ class PrivateCopy {
 Since the dtor is public, users will be able to define object but not be able
 to copy such objects.
 
-
 The either way will see errors:
 
-fsm_atm.cpp:1066:7: error: ‘messaging::dispatcher::dispatcher(const messaging::dispatcher&)’ is private
+: error: ‘messaging::dispatcher::dispatcher(const messaging::dispatcher&)’ is private
        dispatcher(dispatcher const &) = delete;
        ^
 
-fsm_atm.cpp:1142:30: error: use of deleted function ‘messaging::dispatcher::dispatcher(const messaging::dispatcher&)’
+: error: use of deleted function ‘messaging::dispatcher::dispatcher(const messaging::dispatcher&)’
        { return dispatcher(&q_); }
 
 
 <ex>
-This is an example and see 'compile' errors when use `private-access-control`
-to prevent copies and note that won't compile regardless of whether there is
-copy control definition(implementation) in base class.
-
-class CopyControlBaseUsePrivate {
-  public:
-    CopyControlBaseUsePrivate() = default;
-    ~CopyControlBaseUsePrivate() = default;
-
+namespace cxx_copy_control
+{
+  class CopyControlBase1
+  {
   private:
     int value_;
-    CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) 
-    { cout << "copy-ctor: base" << endl; }   // @11
-    CopyControlBaseUsePrivate& operator=(const CopyControlBaseUsePrivate& base) 
-    { cout << "copy-assign: base" << endl; }
-};
-
-class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
-{
-  public:
-    void getShout() { cout << "derived get shout" << endl; };
-};
-
-
-class CopyControlBaseUseDelete {
-  public:
-    CopyControlBaseUseDelete() = default;
-    ~CopyControlBaseUseDelete() = default;
 
   public:
-    CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
-    CopyControlBaseUseDelete& operator=(const CopyControlBaseUseDelete& base) = delete;
+    CopyControlBase1()  = default;
+    ~CopyControlBase1() = default;
 
   private:
-    int value_;
-};
+    CopyControlBase1(const CopyControlBase1 &base)
+    {
+      (void)base;
+      cout << "copy-ctor: base" << endl;
+    } // @11
 
-class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
-{
+    CopyControlBase1 &operator=(const CopyControlBase1 &base)
+    {
+      (void)base;
+      cout << "copy-assign: base" << endl;
+      return *this;
+    }
+  };
+
+  class Derived1 : public CopyControlBase1
+  {
   public:
-    void getShout() { cout << "derived get shout" << endl; };
-};
+    void print() { cout << "derived get shout" << endl; };
+  };
+
+  class CopyControlBase2
+  {
+  private:
+    int value_;
+
+  public:
+    CopyControlBase2()  = default;
+    ~CopyControlBase2() = default;
+
+  public:
+    CopyControlBase2(const CopyControlBase2 &base) = delete;
+    CopyControlBase2 &operator=(const CopyControlBase2 &base) = delete;
+  };
+
+  class Derived2 : public CopyControlBase2
+  {
+  public:
+    void print() { cout << "derived get shout" << endl; };
+  };
+} // namespace cxx_copy_control
 
 TEST(CxxCopyControl, UsePrivateAndDelete)
 {
-  CopyControlBaseUsePrivate b1, b2;
+  using namespace cxx_copy_control;
 
-  // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
-  //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
-  //      ^
-  // cxx.cpp:174:34: error: within this context
-  //    CopyControlBaseUsePrivate b3(b1);
+  {
+    CopyControlBase1 b1, b2;
 
-  CopyControlBaseUsePrivate b3(b1);
+    // error: ‘cxx_copy_control::CopyControlBase1::CopyControlBase1
+    // (const cxx_copy_control::CopyControlBase1&)’
+    // is private within this context
+    CopyControlBase1 b3(b1);
+  }
 
-  CopyControlDerivedUsePrivate d1, d2;
+  {
+    CopyControlBase2 b1, b2;
 
-  // note: 
-  // since base copy ctor is private and derived copy ctor is deleted.
-  //
-  // cxx.cpp:177:37: error: use of deleted function 
-  // ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const CopyControlDerivedUsePrivate&)’
-  //    CopyControlDerivedUsePrivate d3(d1);
-  //                                      ^
-  // cxx.cpp:145:7: note: ‘CopyControlDerivedUsePrivate::CopyControlDerivedUsePrivate(const CopyControlDerivedUsePrivate&)’ 
-  // is implicitly deleted because the default definition would be ill-formed:
-  //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
-  //        ^
-  // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
-  //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
-  //      ^
-  // cxx.cpp:145:7: error: within this context
-  //  class CopyControlDerivedUsePrivate : public CopyControlBaseUsePrivate
-  //        ^
-  
-  CopyControlDerivedUsePrivate d3(d1);
+    // error: use of deleted function
+    // ‘cxx_copy_control::CopyControlBase2::CopyControlBase2
+    // (const cxx_copy_control::CopyControlBase2&)’
+    CopyControlBase2 b3(b1);
+  }
 
-  // cxx.cpp:141:5: error: ‘CopyControlBaseUsePrivate::CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate&)’ is private
-  //      CopyControlBaseUsePrivate(const CopyControlBaseUsePrivate& base) { cout << "copy-ctor: base" << endl; }   // @11
-  //      ^
-  // cxx.cpp:167:34: error: within this context
-  //    CopyControlBaseUsePrivate b3(b1);
-  //                                   ^
+  {
+    CopyControlBase2 b1(100);
+    CopyControlBase2 b2;
 
-  CopyControlBaseUseDelete b4, b5;
+    // error: use of deleted function ‘void
+    // copy_control_assign::CopyControlBaseUseDelete::operator=(const
+    // copy_control_assign::CopyControlBaseUseDelete&)’
+    //    d2 = d1;
+    //       ^
 
-  // note:
-  // whether they are public or private do not make difference.
-  //
-  // when are private and deleted
-  //
-  // cxx.cpp:170:33: error: within this context
-  //    CopyControlBaseUseDelete b6(b4);
-  //                                  ^
-  // cxx.cpp:170:33: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
-  // cxx.cpp:151:5: note: declared here
-  //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
-  //      ^
-  
-  // when are public and deleted
-  //
-  // cxx.cpp:181:33: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
-  //    CopyControlBaseUseDelete b6(b4);
-  //                                  ^
-  // cxx.cpp:151:5: note: declared here
-  //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
-  //      ^
+    b2 = b1;
+  }
 
-  CopyControlBaseUseDelete b6(b4);
+  {
+    Derived2 b1, b2;
 
-  CopyControlDerivedUseDelete d4, d5;
+    // error: use of deleted function
+    // ‘cxx_copy_control::Derived2::Derived2(const cxx_copy_control::Derived2&)’
+    //      Derived2 b3(b1);
+    //                    ^
+    // note: ‘cxx_copy_control::Derived2::Derived2(const
+    // cxx_copy_control::Derived2&)’ is implicitly deleted because the default
+    // definition would be ill-formed:
+    //    class Derived2 : public CopyControlBase2
+    //          ^~~~~~~~
+    // error: use of deleted function
+    // ‘cxx_copy_control::CopyControlBase2::CopyControlBase2(const
+    // cxx_copy_control::CopyControlBase2&)’ note: declared here
+    //      CopyControlBase2(const CopyControlBase2 &base) = delete;
+    //      ^~~~~~~~~~~~~~~~
 
-  // cxx.cpp:210:36: error: use of deleted function ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const CopyControlDerivedUseDelete&)’
-  //    CopyControlDerivedUseDelete d6(d4);
-  //                                     ^
-  // cxx.cpp:165:7: note: ‘CopyControlDerivedUseDelete::CopyControlDerivedUseDelete(const CopyControlDerivedUseDelete&)’ 
-  // is implicitly deleted because the default definition would be ill-formed:
-  //  class CopyControlDerivedUseDelete : public CopyControlBaseUseDelete
-  //        ^
-  // cxx.cpp:165:7: error: use of deleted function ‘CopyControlBaseUseDelete::CopyControlBaseUseDelete(const CopyControlBaseUseDelete&)’
-  // cxx.cpp:158:5: note: declared here
-  //      CopyControlBaseUseDelete(const CopyControlBaseUseDelete& base) = delete;
-  //      ^
-
-  CopyControlDerivedUseDelete d6(d4);
+    Derived2 b3(b1);
+  }
 }
 
 
-<friend-can-access> 
+<cxx-friend-can-access> 
 However, friend and members still can access private. How to prevent this? Use
-'link' error by not defining in addition to using private access.
+`link error` by not defining in addition to using private access.
 
 using std::cout; using std::endl;
 
@@ -24675,21 +24657,25 @@ objects is analogous to defining objects of any type.
 
 "struct { ... } x, y, z;" is analogus to "int x, y, z;"
 
-Why 'tag'? The tag can be used 'later' in definition of instances of the
-structure since cannot use the above later. Given the declaration above:
+`Why tag?` The tag can be used later in definition of instances of the structure
+since cannot use the above later. Given the declaration above:
 
 struct point pt = { 320, 200 };
 
-The only 'legal' operation on structure are copy and assign as a unit but not
+The only legal operation on structure are copy and assign as a unit but not
 compare.
 
-<why-typedef> From ansic, p146.
-The typedef creates a new data `type name` and does not create a `new type` in
-any sense; merely adds a new name for some 'existing' type. In effect, typedef
+*cxx-typedef* From ansic, p146.
+The typedef creates a `new data type name` and does not create a `new type` in
+any sense; merely adds a `new name for some existing type.` In effect, typedef
 is like #define, except that it is interpreted by the compiler.
 
-struct point top;
-point top;            // using typedef is convenient
+struct point top;               // without using typedef
+struct point bot;
+
+typedef struct point point;
+point top;                      // now use `point` instead
+point bot;
 
 
 {cxx-struct-initialization}
@@ -24724,9 +24710,10 @@ typedef struct {
 NODE node = {0,0,{0},0};
 
 
-<cxx-struct-designated-initializers> 
-note: about the initialzation order but not layout.
+<cxx-struct-designated-initializers>
 https://gcc.gnu.org/onlinedocs/gcc/Designated-Inits.html
+
+note that it is about the initialzation order but not layout.
 
 Standard C90 requires the elements of an initializer to appear in a fixed
 order, the same as the order of the elements in the array or structure being
