@@ -32,6 +32,8 @@ static int method_multiply(sd_bus_message *m, void *data, sd_bus_error *error)
     return r;
   }
 
+  logWarning("method multiply is called");
+
   // reply with the result
   return sd_bus_reply_method_return(m, "x", x * y);
 }
@@ -74,6 +76,8 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
         "sorry, cannot do that");
     return -EINVAL;
   }
+
+  logWarning("method divide is called");
 
   // reply with the result
   return sd_bus_reply_method_return(m, "x", x / rhs);
@@ -180,13 +184,17 @@ int main(int argc, char **argv)
 
   // connect to the system bus
   // copy ctor
-  DBusConnection conn = DBusConnection::systemBus(eventLoop);
+
+  // 0000095658.544841 ERR: < M:dbusconnection.cpp F:registerName L:228 > failed to acquire the service name (13-Permission denied)
+  // DBusConnection conn = DBusConnection::systemBus(eventLoop);
+  DBusConnection conn = DBusConnection::sessionBus(eventLoop);
   if (!conn.isConnected())
   {
     logError("failed to connect to system bus");
     return EXIT_FAILURE;
   }
 
+  // done in ASServicePrivate::ASServicePrivate for example
 
   // https://www.freedesktop.org/software/systemd/man/sd_bus_add_object_vtable.html#
   // install the object
@@ -219,6 +227,9 @@ int main(int argc, char **argv)
     return EXIT_FAILURE;
   }
 
+#if 0
+  // when use this, keep getting tracker_handler() called.
+
   // TODO what's tracker?
   // create a tracker object to keep track of registered clients, if they
   // disappear then we automatically remove their listeners
@@ -230,11 +241,76 @@ int main(int argc, char **argv)
   {
     logSysError(-rc, "failed to create bus tracker");
   }
+#endif
+
+  // register name and it will end up calling like:
+  // r = sd_bus_request_name(bus, "net.poettering.Calculator", 0);
+
+  if (!conn.registerName("net.poettering.Calculator"))
+  {
+    logFatal("failed to acquire service name");
+    return EXIT_FAILURE;
+  }
 
   logWarning("sdbus server is running");
 
   // Notify that the service is now ready.
   sd_notify(0, "READY=1");
+
+
+#if 0
+  // parse the response message
+  // https://www.freedesktop.org/software/systemd/man/sd_bus_process.html#
+  //
+  // sd_bus_process() drives the connection between the client and the message
+  // bus. That is, it handles connecting, authentication, and message
+  // processing. When invoked pending I/O work is executed, and queued incoming
+  // messages are dispatched to registered callbacks. Each time it is invoked a
+  // single operation is executed.
+  //
+  // return positive if a message was processed. It returns zero when no
+  // operations were pending.
+  //
+  // When zero is returned the caller should synchronously poll for I/O events
+  // before calling into sd_bus_process() again. For that either user the
+  // simple, synchronous sd_bus_wait(3) call, or hook up the bus connection
+  // object to an external or manual event loop using sd_bus_get_fd(3).
+  //
+  // https://www.freedesktop.org/software/systemd/man/sd_bus_wait.html#
+  //
+  // sd_bus_wait() synchronously waits for I/O on the specified bus connection
+  // object. This function is supposed to be called whenever sd_bus_process(3)
+  // returns zero, indicating that no work is pending on the connection.
+  // Internally, this call invokes ppoll(3), to wait for I/O on the bus
+  // connection. If the timeout_sec parameter is specified, the call will block
+  // at most for the specified amount of time in µs. Pass UINT64_MAX to permit
+  // it to sleep indefinitely.
+
+  for (;;)
+  {
+    // process requests
+    r = sd_bus_process(bus, NULL);
+    if (r < 0)
+    {
+      fprintf(stderr, "failed to process bus: %s\n", strerror(-r));
+      goto finish;
+    }
+
+    // processed a request and try to process another one right away
+    if (r > 0)
+    {
+      printf("processed a request and try another\n");
+      continue;
+    }
+
+    r = sd_bus_wait(bus, (uint64_t)-1);
+    if (r < 0)
+    {
+      fprintf(stderr, "failed to wait on bus: %s\n", strerror(-r));
+      goto finish;
+    }
+  }
+#endif
 
   return eventLoop.run();
 }

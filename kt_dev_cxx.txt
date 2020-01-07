@@ -11389,6 +11389,48 @@ That's why `default-ctor` is almost nearly required.
 To see when syn versions are useful. see {make-base-class-for-reference-counting}
 
 
+{cxx-default}
+
+Again:
+
+o `If defines any other ctor for the class, the compiler do not generates`
+  default ctor. So if a class requires control to init an object in one case,
+  then the class is likely to require control in all cases.
+
+17.6 Generating Default Operations
+
+By default, the compiler generates each of these operations if a program uses
+it. However, if the programmer takes control by defining one or more of those
+operations, the generation of related operations is suppressed:
+
+o If the programmer declares any constructor for a class, the default
+  constructor is not generated for that class.
+
+o If the programmer declares a copy operation, a move operation, or a destructor
+  for a class, no copy operation, move operation, or destructor is generated for
+  that class.
+
+Unfortunately, `the second rule is only incompletely enforced`: for backward
+compatibility, copy constructors and copy assignments are generated even if a
+destructor is defined. However, that generation is deprecated in the ISO
+standard (§iso.D), and you should expect a modern compiler to warn against it.
+
+If necessary, we can be explicit about which functions are generated (§17.6.1)
+and which are not (§17.6.4).
+
+To tell the compiler to create syn version for functions `but-not-limited` to
+default ctor.
+
+class Sales_data {
+  public:
+    Sales_data() = default;
+    Sales_data(const Sales_data&) = default;
+    Sales_data& operator=(const Sales_data &);
+    ~Sales_data() = default;
+    ...
+};
+
+
 {cxx-ctor-const}
 The ctor `cannot-be-const`. When create a const object of a class type, the
 object does not assume its constness until after the ctor completes the
@@ -11401,25 +11443,6 @@ Tried copy-ctor and compile error:
     { cout << "FooFoo's copy ctor: " << endl; }
 
 :38:31: error: constructors may not be cv-qualified
-
-
-{cxx-default-keyword}
-To tell the compiler to create syn version for functions `but-not-limited` to
-default ctor. 
-
-For `default-ctor`, if there are other ctor, then compiler will `not synthesize`
-a default ctor and can ask the compiler to create one.
-
-class Sales_data {
-  public:
-    Sales_data() = default;
-    Sales_data(const Sales_data&) = default;
-    Sales_data& operator=(const Sales_data &);
-    ~Sales_data() = default;
-    ...
-};
-
-Q: use case other than default ctor?
 
 
 {cxx-init-in-class-init} *cxx-11* CPR 73
@@ -24710,20 +24733,105 @@ typedef struct {
 NODE node = {0,0,{0},0};
 
 
-<cxx-struct-designated-initializers>
+<ex> *cxx-struct-designated-initializers*
+
+struct sd_bus_vtable {
+        /* Please do not initialize this structure directly, use the
+         * macros below instead */
+
+        uint8_t type:8;
+        uint64_t flags:56;
+        union {
+                struct {
+                        size_t element_size;
+                } start;
+                struct {
+                        const char *member;
+                        const char *signature;
+                        const char *result;
+                        sd_bus_message_handler_t handler;
+                        size_t offset;
+                } method;
+                struct {
+                        const char *member;
+                        const char *signature;
+                } signal;
+                struct {
+                        const char *member;
+                        const char *signature;
+                        sd_bus_property_get_t get;
+                        sd_bus_property_set_t set;
+                        size_t offset;
+                } property;
+        } x;
+};
+
+#define SD_BUS_VTABLE_START(_flags)                                     \
+        {                                                               \
+                .type = _SD_BUS_VTABLE_START,                           \
+                .flags = _flags,                                        \
+                .x.start.element_size = sizeof(sd_bus_vtable),          \
+        }
+
+causes errors when compile it using GCC:
+
+error: expected primary-expression before ‘.’ token
+   SD_BUS_VTABLE_START(0),
+   ^
+error: expected primary-expression before ‘.’ token
+   SD_BUS_METHOD("Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
+   ^
+
 https://gcc.gnu.org/onlinedocs/gcc/Designated-Inits.html
 
-note that it is about the initialzation order but not layout.
+6.29 Designated Initializers
 
 Standard C90 requires the elements of an initializer to appear in a fixed
 order, the same as the order of the elements in the array or structure being
 initialized.
 
 In ISO C99 you can give the elements `in any order`, specifying the array
-indices or structure field names they apply to, and GNU C allows this as an
+indices or `structure field names they apply to`, and GNU C allows this as an
 extension in C90 mode as well. `This extension is not implemented in GNU C++`
 
-it means that have to use `.c` but not `.cpp` to build.
+note that means C++ do not supports struct initialisation using field names
+
+In a structure initializer, specify the name of a field to initialize with
+‘.fieldname =’ before the element value. For example, given the following
+structure,
+
+struct point { int x, y; };
+
+the following initialization
+
+struct point p = { .y = yvalue, .x = xvalue };
+
+is equivalent to
+
+struct point p = { xvalue, yvalue };
+
+To fix:
+
+o Use `.c` but not `.cpp` to build.
+
+o Use the macro which works for C and C++ as well.
+
+#define SD_BUS_VTABLE_START(_flags)                                     \
+        {                                                               \
+                .type = _SD_BUS_VTABLE_START,                           \
+                .flags = _flags,                                        \
+                .x = {                                                  \
+                    .start = {                                          \
+                        .element_size = sizeof(sd_bus_vtable)           \
+                    },                                                  \
+                },                                                      \
+        }
+
+See Nested initialization
+https://en.cppreference.com/w/c/language/struct_initialization
+
+
+<ex>
 
 struct view_class {
   const char *title;

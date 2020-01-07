@@ -19,8 +19,7 @@ class DBusConnection
   public:
     DBusConnection(const DBusConnection &);
     DBusConnection(DBusConnection &&);
-
-    // ~DBusConnection();
+    ~DBusConnection()=default;
 
     static DBusConnection systemBus(const EventLoop &);
     static DBusConnection sessionBus(const EventLoop &);
