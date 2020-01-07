@@ -1782,10 +1782,10 @@ TEST(Set, SortOrder)
   }
 }
 
-TEST(Set, Search)
+TEST(CxxSet, search)
 {
   {
-    set<int> coll;
+    std::set<int> coll;
 
     coll.insert(1);
     coll.insert(2);
@@ -1795,25 +1795,24 @@ TEST(Set, Search)
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 4, 5, 6));
 
+    // Returns an iterator to the first element `with key not less than val.`
     EXPECT_THAT(*coll.lower_bound(3), 4);
 
     // Returns an iterator to the first element with key greater than val.
     EXPECT_THAT(*coll.upper_bound(3), 4);
 
+    // Returns a `range, pair of iterators`, denoting the elements with val
     EXPECT_THAT(*coll.equal_range(3).first, 4);
     EXPECT_THAT(*coll.equal_range(3).second, 4);
 
     EXPECT_THAT(*coll.lower_bound(5), 5);
-
-    // Returns an iterator to the first element with key greater than val.
     EXPECT_THAT(*coll.upper_bound(5), 6);
-
     EXPECT_THAT(*coll.equal_range(5).first, 5);
     EXPECT_THAT(*coll.equal_range(5).second, 6);
   }
 
   {
-    multiset<int> coll;
+    std::multiset<int> coll;
 
     coll.insert(1);
     coll.insert(2);
@@ -1826,9 +1825,9 @@ TEST(Set, Search)
 
     EXPECT_THAT(coll, ElementsAre(1, 2, 3, 3, 3, 4, 5, 6));
 
+    // since multiset is not contiguous, cannot use iterator arithmetic. use
+    // distance().
     EXPECT_THAT(distance(coll.begin(), coll.lower_bound(3)), 2);
-
-    // Returns an iterator to the first element with key greater than val.
     EXPECT_THAT(distance(coll.begin(), coll.upper_bound(3)), 5);
 
     EXPECT_THAT(distance(coll.begin(), coll.equal_range(3).first), 2);
