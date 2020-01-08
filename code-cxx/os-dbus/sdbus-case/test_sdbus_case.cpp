@@ -151,12 +151,12 @@ namespace
 {
   class Work1
   {
-    public:
-      void printArgs(int v1, int v2, int v3)
-      {
-        std::cout << "v1: " << v1 
-          << ", v2: " << v2 << ", v3: " << v3 << std::endl;
-      }
+  public:
+    void printArgs(int v1, int v2, int v3)
+    {
+      std::cout << "v1: " << v1 << ", v2: " << v2 << ", v3: " << v3
+                << std::endl;
+    }
   };
 
   // TODO: HOW possible without using target?? the trick is that that's staic
@@ -164,30 +164,31 @@ namespace
   //
   // bool ASRequestPrivate::doSendReply(unsigned int code)
   // {
-  // 
+  //
   //     // otherwise running on a different thread so need to invoke from the
   //     // event loop thread
-  //     return m_eventLoop.invokeMethod(&ASRequestPrivate::marshallAndSendReply,
+  //     return
+  //     m_eventLoop.invokeMethod(&ASRequestPrivate::marshallAndSendReply,
   //                                     reply, code, headers, body);
   // }
 
   class Work2
   {
-    private:
-      const EventLoop m_eventloop;
+  private:
+    const EventLoop m_eventloop;
 
-    public:
-      Work2(const EventLoop &eventloop)
+  public:
+    Work2(const EventLoop &eventloop)
         : m_eventloop(eventloop)
-      {}
+    {}
 
-      void pushWorks();
+    void pushWorks();
 
-      static void printArgs(int v1, int v2, int v3)
-      {
-        std::cout << "v1: " << v1 
-          << ", v2: " << v2 << ", v3: " << v3 << std::endl;
-      }
+    static void printArgs(int v1, int v2, int v3)
+    {
+      std::cout << "v1: " << v1 << ", v2: " << v2 << ", v3: " << v3
+                << std::endl;
+    }
   };
 
   // cause compile error
@@ -196,7 +197,7 @@ namespace
     for (int i = 0; i < 10; ++i)
       m_eventloop.invokeMethod(&Work2::printArgs, 10, 20, 30);
   }
-}
+} // namespace
 
 // may use target with invokeMethod()
 
@@ -208,7 +209,6 @@ TEST(EventLoop, InvokeWithThis)
   Work1 w;
 
   auto f1 = std::async(std::launch::async, [&]() {
-
     for (int i = 0; i < 10; ++i)
       loop.invokeMethod(&Work1::printArgs, &w, 10, 20, 30);
 

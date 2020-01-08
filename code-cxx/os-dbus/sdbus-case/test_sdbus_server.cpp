@@ -1,10 +1,159 @@
 #include <sys/signal.h>
-#include <systemd/sd-daemon.h>
 #include <systemd/sd-bus-vtable.h>
+#include <systemd/sd-daemon.h>
 
-#include "eventloop.h"
 #include "dbusconnection.h"
+#include "eventloop.h"
 #include "rlog.h"
+
+/*
+https://www.freedesktop.org/software/systemd/man/sd_bus_default.html
+
+Normally, slot objects (as created by sd_bus_add_match(3) and similar calls)
+keep a reference to their bus connection object, too. Thus, as long as a bus
+slot object remains referenced its bus object will remain allocated too.
+Optionally, bus slot objects may be placed in "floating" mode. When in floating
+mode the life cycle of the bus slot object is bound to the bus object, i.e. when
+the bus object is freed the bus slot object is automatically unreferenced too.
+The floating state of a slot object may be controlled explicitly with
+sd_bus_slot_set_floating(3), though usually floating bus slot objects are
+created by passing NULL as the slot parameter of sd_bus_add_match() and related
+calls, thus indicating that the caller is not directly interested in referencing
+and managing the bus slot object.
+
+
+https://www.freedesktop.org/software/systemd/man/sd_bus_add_match.html#
+
+sd_bus_add_match, sd_bus_add_match_async, sd_bus_match_signal,
+sd_bus_match_signal_async — Add a match rule for incoming message dispatching
+
+typedef int (*sd_bus_message_handler_t)(sd_bus_message *m, void *userdata,
+sd_bus_error *ret_error);
+
+int sd_bus_add_match(	sd_bus *bus,
+  sd_bus_slot **slot,
+  const char *match,
+  sd_bus_message_handler_t callback,
+  void *userdata);
+
+Description
+
+sd_bus_add_match() installs a match rule for messages received on the specified
+bus connection object bus. The syntax of the match rule expression passed in
+match is described in the D-Bus Specification.
+
+The specified handler function callback is called for eaching incoming message
+matching the specified expression, the userdata parameter is passed as-is to the
+callback function.
+
+The match is installed synchronously when connected to a bus broker, i.e. the
+call sends a control message requested the match to be added to the broker and
+waits until the broker confirms the match has been installed successfully.
+
+sd_bus_add_match_async() operates very similar to sd_bus_match_signal(), however
+it installs the match asynchronously, in a non-blocking fashion: a request is
+sent to the broker, but the call does not wait for a response. The
+install_callback function is called when the response is later received, with
+the response message from the broker as parameter. If this function is specified
+as NULL a default implementation is used that terminates the bus connection
+should installing the match fail.
+
+sd_bus_match_signal() is very similar to sd_bus_add_match(), but only matches
+signals, and instead of a match expression accepts four parameters: sender (the
+service name of the sender), path (the object path of the emitting object),
+interface (the interface the signal belongs to), member (the signal name), from
+which the match string is internally generated. Optionally, these parameters may
+be specified as NULL in which case the relevant field of incoming signals is not
+tested.
+
+sd_bus_match_signal_async() combines the signal matching logic of
+sd_bus_match_signal() with the asynchronous behaviour of
+sd_bus_add_match_async().
+
+On success, and if non-NULL, `the slot return parameter` will be set to a slot
+object that may be used as a reference to the installed match, and may be
+utilized to remove it again at a later time with sd_bus_slot_unref(3). If
+specified as NULL the lifetime of the match is bound to the lifetime of the bus
+object itself, and the match is generally not removed independently. See
+sd_bus_slot_set_floating(3) for details.
+
+
+https://dbus.freedesktop.org/doc/dbus-specification.html
+
+Messages that list a client as their DESTINATION do not need to match the
+client's match rules, and are sent to that client regardless. As a result, match
+rules are mainly used to receive a subset of broadcast signals.
+
+Match rules are added using the AddMatch bus method (see the section called
+    “org.freedesktop.DBus.AddMatch”). Rules are specified as a string of comma
+separated key/value pairs.
+
+Excluding a key from the rule indicates a wildcard match. For instance excluding
+the the member from a match rule but adding a sender would let all messages from
+that sender through. An example of a complete rule would be
+
+"type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='Foo',path='/bar/foo',destination=':452345.34',arg2='bar'"
+
+*/
+
+// typedef int (*sd_bus_message_handler_t)(sd_bus_message *m, void *userdata,
+// sd_bus_error *ret_error);
+
+int rule_matched(sd_bus_message *msg, void *userData, void *retError)
+{
+  std::string message;
+
+  // simply print out message details
+  // https://www.freedesktop.org/software/systemd/man/sd_bus_message_get_sender.html#
+  // const char* sd_bus_message_get_sender(	sd_bus_message *message);
+  // const char* sd_bus_message_get_destination(	sd_bus_message
+  // *message); const char* sd_bus_message_get_path(	sd_bus_message
+  // *message); const char* sd_bus_message_get_interface(	sd_bus_message
+  // *message); const char* sd_bus_message_get_member(	sd_bus_message
+  // *message);
+
+  message += "sender=" + std::string(sd_bus_message_get_sender(msg));
+  message += ", destination=" + std::string(sd_bus_message_get_destination(msg));
+  message += ", path=" + std::string(sd_bus_message_get_path(msg));
+  message += ", interface=" + std::string(sd_bus_message_get_interface(msg));
+  message += ", member=" + std::string(sd_bus_message_get_member(msg));
+
+  logWarning("rules matched: %s", message.c_str());
+}
+
+void install_match(DBusConnection &conn, sd_bus_slot &slot)
+{
+  std::string matchRule = "type='signal'";
+
+  // comment them out to accept all
+  //
+  // if (!service.empty())
+  // {
+  //   matchRule += ",sender='" + service + "'";
+  // }
+  // if (!path.empty())
+  // {
+  //   matchRule += ",path='" + path + "'";
+  // }
+  // if (!interface.empty())
+  // {
+  //   matchRule += ",interface='" + interface + "'";
+  // }
+  // if (!signalName.empty())
+  // {
+  //   matchRule += ",member='" + signalName + "'";
+  // }
+
+  int rc = sd_bus_add_match(conn.handle(),
+                            &slot,
+                            matchRule.c_str(),
+                            sd_bus_message_handler_t(rule_matched),
+                            nullptr);
+  if (rc < 0)
+  {
+    logSysError(-rc, "failed to add match");
+  }
+}
 
 // ={=========================================================================
 
@@ -15,8 +164,8 @@ namespace
 
   std::string objectPath("/net/poettering/Calculator"); // object path
   std::string interface("net.poettering.Calculator");   // interface
-  std::string service;  // service
-}
+  std::string service;                                  // service
+} // namespace
 
 static int method_multiply(sd_bus_message *m, void *data, sd_bus_error *error)
 {
@@ -53,7 +202,7 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
   }
 
   // return an error on division by zero
-  // 
+  //
   // sd_bus_error_set() sets an error structure to the specified name and
   // message strings.
   //
@@ -72,8 +221,8 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
   if (rhs == 0)
   {
     sd_bus_error_set_const(error,
-        "net.poettering.DivisionByZero",
-        "sorry, cannot do that");
+                           "net.poettering.DivisionByZero",
+                           "sorry, cannot do that");
     return -EINVAL;
   }
 
@@ -85,10 +234,10 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
 
 static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_VTABLE_START(0),
-  SD_BUS_METHOD("Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
+  SD_BUS_METHOD(
+    "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD("Divide", "xx", "x", method_divide, SD_BUS_VTABLE_UNPRIVILEGED),
-  SD_BUS_VTABLE_END
-};
+  SD_BUS_VTABLE_END};
 
 // tracker callback
 //
@@ -126,10 +275,10 @@ static void send_signal(DBusConnection &conn)
   // path, interface, and member parameters.
 
   int rc = sd_bus_message_new_signal(conn.handle(),
-      &msg,
-      objectPath.c_str(),
-      interface.c_str(),
-      "WebSocketUpdate");
+                                     &msg,
+                                     objectPath.c_str(),
+                                     interface.c_str(),
+                                     "WebSocketUpdate");
   if (rc < 0)
   {
     logSysError(-rc, "failed to create new signal message");
@@ -185,8 +334,9 @@ int main(int argc, char **argv)
   // connect to the system bus
   // copy ctor
 
-  // 0000095658.544841 ERR: < M:dbusconnection.cpp F:registerName L:228 > failed to acquire the service name (13-Permission denied)
-  // DBusConnection conn = DBusConnection::systemBus(eventLoop);
+  // 0000095658.544841 ERR: < M:dbusconnection.cpp F:registerName L:228 > failed
+  // to acquire the service name (13-Permission denied) DBusConnection conn =
+  // DBusConnection::systemBus(eventLoop);
   DBusConnection conn = DBusConnection::sessionBus(eventLoop);
   if (!conn.isConnected())
   {
@@ -215,12 +365,12 @@ int main(int argc, char **argv)
   // returned. In that case, the reference to the slot object should be dropped
   // when the vtable is not needed anymore, see sd_bus_slot_unref(3).
 
-  rc = sd_bus_add_object_vtable(conn.handle(),            // bus
-                               &slot,                         // slot
-                               objectPath.c_str(),            // object path
-                               interface.c_str(),             // interface
-                               calculator_vtable,             // vtable
-                               NULL);                         // user data
+  rc = sd_bus_add_object_vtable(conn.handle(),      // bus
+                                &slot,              // slot
+                                objectPath.c_str(), // object path
+                                interface.c_str(),  // interface
+                                calculator_vtable,  // vtable
+                                NULL);              // user data
   if (rc < 0)
   {
     logSysError(-rc, "failed to add object");
@@ -256,7 +406,6 @@ int main(int argc, char **argv)
 
   // Notify that the service is now ready.
   sd_notify(0, "READY=1");
-
 
 #if 0
   // parse the response message

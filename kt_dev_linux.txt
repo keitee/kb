@@ -7485,8 +7485,9 @@ $ find . -type d -name \*stb-4 | xargs -I{} find {} -name \*nickel\* | xargs ls 
 
 To switch hosts using key base instead of using password.
 
-<ssh-server-install>
+<tool-ssh-install> *tool-systemctl*
 apt-get install openssh-server
+
 systemctl start ssh.service
 systemctl enable ssh.service
 systemctl status ssh.service
@@ -7512,6 +7513,15 @@ drwxr-xr-x 15 parkkt ccusers 4096 Dec  9 12:47 ..
      format has increased resistance to brute-force pass‐ word cracking but is
      not supported by versions of OpenSSH prior to 6.5.  Ed25519 keys always
      use the new private key format.
+
+
+<tool-ssh-dropbear>
+The following can be used to spin up a new instance of dropbear that allow
+root login - you only need to run the first line once, afterwards can just
+re-use the key in /tmp/data (which is a persistent store)
+
+dropbearkey -t rsa -f /tmp/data/sky-ssh-hostkey
+dropbear -p :10022 -P /var/run/dropbear2.pid -r /tmp/data/sky-ssh-hostkey -B
 
 
 <ssh-copy-id>
@@ -11247,6 +11257,90 @@ as per your need.
 You then need to open the 10022 port:
 iptables -I INPUT 2 -p tcp --dport 10022 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
 iptables -I OUTPUT 1 -p tcp --sport 10022 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+
+
+https://www.digitalocean.com/community/tutorials/how-to-list-and-delete-iptables-firewall-rules
+
+List Rules as Tables
+
+Listing the iptables rules in the table view can be useful for comparing
+different rules against each other,
+
+To output all of the active iptables rules in a table, run the iptables
+command with the -L option:
+
+    sudo iptables -L
+
+This will output all of current rules sorted by chain.
+
+If you want to limit the output to a specific chain (INPUT, OUTPUT, TCP,
+etc.), you can specify the chain name directly after the -L option.
+
+Let’s take a look at an example INPUT chain:
+
+    sudo iptables -L INPUT
+
+Example: Input Chain Rule Table Listing
+Chain INPUT (policy DROP)
+target     prot opt source               destination
+ACCEPT     all  --  anywhere             anywhere             ctstate RELATED,ESTABLISHED
+ACCEPT     all  --  anywhere             anywhere
+DROP       all  --  anywhere             anywhere             ctstate INVALID
+UDP        udp  --  anywhere             anywhere             ctstate NEW
+TCP        tcp  --  anywhere             anywhere             tcp flags:FIN,SYN,RST,ACK/SYN ctstate NEW
+ICMP       icmp --  anywhere             anywhere             ctstate NEW
+REJECT     udp  --  anywhere             anywhere             reject-with icmp-port-unreachable
+REJECT     tcp  --  anywhere             anywhere             reject-with tcp-reset
+REJECT     all  --  anywhere             anywhere             reject-with icmp-proto-unreachable
+
+The first line of output indicates the chain name (INPUT, in this case),
+    followed by its default policy (DROP). 
+
+The next line consists of the headers of each column in the table, and is
+followed by the chain’s rules.  Let’s go over what each header indicates:
+
+o target: If a packet matches the rule, the target specifies what should be
+  done with it. For example, a packet can be accepted, dropped, logged, or
+  sent to another chain to be compared against more rules
+
+o prot: The protocol, such as tcp, udp, icmp, or all
+o opt: Rarely used, this column indicates IP options
+o source: The source IP address or subnet of the traffic, or anywhere
+o destination: The destination IP address or subnet of the traffic, or anywhere
+
+The last column, which is not labeled, indicates the options of a rule. That
+is, any part of the rule that isn’t indicated by the previous columns. This
+could be anything from source and destination ports, to the connection state
+of the packet.
+
+
+Flush All Rules, Delete All Chains, and Accept All
+
+This section will show you how to flush all of your firewall rules, tables,
+     and chains, and allow all network traffic.
+
+Note: This will effectively disable your firewall. You should only follow this
+section if you want to start over the configuration of your firewall.
+
+First, set the default policies for each of the built-in chains to ACCEPT. The
+main reason to do this is to ensure that you won’t be locked out from your
+server via SSH:
+
+    sudo iptables -P INPUT ACCEPT
+    sudo iptables -P FORWARD ACCEPT
+    sudo iptables -P OUTPUT ACCEPT
+
+Then flush the nat and mangle tables, flush all chains (-F), and delete all
+non-default chains (-X):
+
+    sudo iptables -t nat -F
+    sudo iptables -t mangle -F
+    sudo iptables -F
+    sudo iptables -X
+
+Your firewall will now allow all network traffic. If you list your rules now,
+     you will will see there are none, and only the three default chains
+     (INPUT, FORWARD, and OUTPUT) remain.
 
 
 <tool-firewall>
@@ -47725,6 +47819,22 @@ service is running today, you can type:
 
 journalctl -u nginx.service --since today
 
+
+Following Logs
+
+To actively follow the logs as they are being written, you can use the -f
+flag. Again, this works as you might expect if you have experience using tail
+-f:
+
+journalctl -f
+
+
+-n, --lines=
+Show the most recent journal events and limit the number of events shown. If
+--follow is used, this option is implied. The argument is a positive integer
+or "all" to disable line limiting. The default value is 10 if no argument is
+given.
+ 
 
 ={============================================================================
 *kt_linux_core_105* linux-mem-process
