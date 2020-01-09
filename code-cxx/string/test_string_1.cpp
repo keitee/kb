@@ -36,11 +36,9 @@ TEST(StringIterator, PosEnd)
 }
 
 // ={=========================================================================
-// string-ctors
-//
 // *cxx-string-ctor*
 
-TEST(String, Ctors)
+TEST(CxxString, create)
 {
   {
     string s("nico");
@@ -65,6 +63,15 @@ TEST(String, Ctors)
   {
     string s("zoo");
     EXPECT_EQ(s, "zoo");
+  }
+
+  {
+    std::string coll{};
+    const char *message = "this is message";
+
+    // error: invalid operands of types ‘const char [17]’ and ‘const char*’ to binary ‘operator+’
+    // coll += "std::string and " + message;
+    coll += "std::string and " + std::string(message);
   }
 }
 

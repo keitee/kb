@@ -12,6 +12,7 @@ https://www.freedesktop.org/software/systemd/man/sd_bus_default.html
 Normally, slot objects (as created by sd_bus_add_match(3) and similar calls)
 keep a reference to their bus connection object, too. Thus, as long as a bus
 slot object remains referenced its bus object will remain allocated too.
+
 Optionally, bus slot objects may be placed in "floating" mode. When in floating
 mode the life cycle of the bus slot object is bound to the bus object, i.e. when
 the bus object is freed the bus slot object is automatically unreferenced too.
@@ -121,7 +122,8 @@ int rule_matched(sd_bus_message *msg, void *userData, void *retError)
   logWarning("rules matched: %s", message.c_str());
 }
 
-void install_match(DBusConnection &conn, sd_bus_slot &slot)
+// 
+void install_match(const DBusConnection &conn, sd_bus_slot *&slot)
 {
   std::string matchRule = "type='signal'";
 
@@ -401,6 +403,8 @@ int main(int argc, char **argv)
     logFatal("failed to acquire service name");
     return EXIT_FAILURE;
   }
+
+  install_match(conn, slot);
 
   logWarning("sdbus server is running");
 

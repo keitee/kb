@@ -434,7 +434,7 @@
 *kt_linux_core_412* os-lib-search
 *kt_linux_core_402* os-lib-resolve-order os-lib-preload
 *kt_linux_core_400* linux-lib-ld-debug
-*kt_linux_core_405* linux-lib-ld-api
+*kt_linux_core_405* os-dl-api os-ld-api
 *kt_linux_core_400* linux-lib-shared-visibility
 *kt_linux_core_406* lib-shared-elf-edit 
 *kt_linux_core_410* lib-shared: check libraries that process uses
@@ -87767,9 +87767,9 @@ process_envvars (enum mode *modep)
 
 
 ={============================================================================
-*kt_linux_core_405* linux-lib-ld-api
+*kt_linux_core_405* os-dl-api os-ld-api
 
-LPI42.1
+LPI-42.1
 
 DLOPEN(3)
 
@@ -87791,7 +87791,8 @@ SYNOPSIS
        `Link with -ldl.`
 
 
-<dl-dlopen>
+*call-dlopen*
+42.1.1 Opening a Shared Library: dlopen()
 
 void *dlopen(const char *libfilename, int flags);
 
@@ -87811,7 +87812,7 @@ RTLD_LAZY
 
 Undefined function symbols in the library should be resolved only as the code is
 executed. If a piece of code requiring a particular symbol is not executed, that
-symbol is 'never' resolved. Lazy resolution is performed `only for function`
+symbol is `never resolved.` Lazy resolution is performed `only for function`
 references; references to variables are always resolved immediately. Specifying
 the RTLD_LAZY flag provides behavior that corresponds to the normal operation of
 the dynamic linker when loading the shared libraries identified in an
@@ -87827,7 +87828,7 @@ references in other libraries loaded by this process and also for lookups via
 dlsym().
 
 
-<dl-dlerror>
+*call-dlerror*
 If we receive an error return from dlopen() or one of the other functions in the
 dlopen API, we can use dlerror() to obtain a pointer to a string that indicates
 the cause of the error.
@@ -87835,7 +87836,7 @@ the cause of the error.
 #include <dlfcn.h>
 const char *dlerror(void);
 
-Returns pointer to error-diagnostic string, or NULL if 'no' error has occurred
+Returns pointer to error-diagnostic string, or `NULL if no error has occurred`
 since previous call to dlerror()
 
 The dlerror() function returns NULL if no error has occurred since the last call
@@ -87845,47 +87846,40 @@ to dlerror(). We'll see how this is useful in the next section.
 (void) dlerror(); /* Clear dlerror() */
 
 
-<dl-dlsym>
-#include <dlfcn.h>
+*call-dlsym*
+42.1.3 Obtaining the Address of a Symbol: dlsym()
 
+The dlsym() function searches for the named symbol (a function or variable) in
+`the library referred to by handle` and 
+in `the libraries in that library’s dependency tree.`
+
+#include <dlfcn.h>
 void *dlsym(void *handle, char *symbol);
 
 Returns address of symbol, or NULL if symbol is not found
 
-searches a library for a symbol (a string containing the name of a function or
-    variable) and returns its address.
+*os-lib-symbol* symbol (a string containing the name of a function or variable)
 
-The value of a symbol returned by dlsym() 'may' be NULL, which is
-'indistinguishable' from the "symbol not found" return. 
+If symbol is found, dlsym() returns its address; otherwise, dlsym() returns
+NULL. The handle argument is normally a library handle returned by a previous
+call to dlopen().
+
+The value of a symbol returned by dlsym() `may be NULL`, which is
+`indistinguishable from NULL for the "symbol not found" return.` 
 
 In order to differentiate the two possibilities, we must call dlerror()
 beforehand (to make sure that any previously held error string is cleared) and
 then if, after the call to dlsym(), dlerror() returns a non-NULL value, we
 know that an error occurred.
 
-There  are  two special pseudo-handles: 
-
-RTLD_DEFAULT
-
-The former will find the first occurrence of the desired symbol using the
-default library search order.  
-
-RTLD_NEXT *linux-dl-next*
-
-The latter will find the next occurrence of a function in the search order
-after the current library. This allows one to provide a wrapper around a
-function in another shared library.
-
 <ex>
-
 From dlsym(3):
 
-    Since the value of the symbol could actually be NULL (so that a NULL return
-            from dlsym() need not indicate an error), the correct way to test
-    for an error is to call dlerror(3) to clear any old error conditions, then
-    call dlsym(), and then call dlerror(3) again, saving its return value into a
-    variable, and check whether this saved value is not NULL.
-
+`Since the value of the symbol could actually be NULL` (so that a NULL return
+from dlsym() need not indicate an error), the correct way to test for an error
+is to call dlerror(3) to clear any old error conditions, then call dlsym(),
+and then call dlerror(3) again, saving its return value into a variable, and
+check whether this saved value is not NULL.
 
 typedef bool (*BcmInit)(void);
 BcmInit bcmInit = (BcmInit)dlsym(nexusSharedLibHandle, "BcmNexus_Platform_Init");
@@ -87894,13 +87888,12 @@ const char* err = dlerror();
 // This assumes that when `dlsym` is NULL, `dlerror` should return some value so
 // err should not be NULL. However, dlerror can return NULL when dlsym return
 // NULL and this code runs to else-if and can crash since bcmInit() is a call.
-//
+
 if (!bcmInit && err) {
     NICKEL_ERROR("dlsym failed: " << err);
 } else if (!bcmInit()) { 
     ...
 }
-
 
 Should be:
 
@@ -87910,7 +87903,32 @@ if (!bcmInit) {
 } else if (!bcmInit()) {
 
 
-<dl-dlclose>
+Using library pseudohandles with dlsym()
+
+Instead of specifying a library handle returned by a call to dlopen(), either
+of the following `pseudohandles` may be specified as the handle argument for
+dlsym():
+
+There are two special `pseudo-handles`: 
+
+RTLD_DEFAULT
+
+The former will find the first occurrence of the desired symbol using the
+default library search order.  
+
+RTLD_NEXT
+
+Search for symbol in shared libraries loaded after the one invoking dlsym().
+This is useful when creating a wrapper function with the same name as a
+function defined elsewhere. 
+
+For example, in our main program, we may define our own version of malloc()
+(which perhaps does some bookkeeping of memory allocation), and this function
+can invoke the real malloc() by first obtaining its address via the call 
+func = dlsym(RTLD_NEXT, “malloc”).
+
+
+*call-dlclose*
 The dlclose() function closes a library previously opened by dlopen().
 
 
