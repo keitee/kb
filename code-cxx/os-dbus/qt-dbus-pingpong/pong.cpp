@@ -58,6 +58,75 @@
 #include "ping-common.h"
 #include "pong.h"
 
+/*
+from /home/keitee/Qt/Examples/Qt-5.12.3/dbus/pingpong
+
+#define SERVICE_NAME            "org.example.QtDBus.PingExample"
+
+
+dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DBus' / org.freedesktop.DBus.ListNames | ag "Ping"
+      string "org.example.QtDBus.PingExample"
+
+
+o see that Pong do not set `inerface name` and it's automatically(?) assigned:
+
+  <interface name="local.pong.Pong">
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1571302308.302756 sender=:1.378 -> destination=:1.381 serial=3 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+  <interface name="local.pong.Pong">
+    <method name="ping">
+      <arg type="s" direction="out"/>
+      <arg name="arg" type="s" direction="in"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.DBus.Properties">
+    <method name="Get">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="property_name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="out"/>
+    </method>
+    <method name="Set">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="property_name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="in"/>
+    </method>
+    <method name="GetAll">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="values" type="a{sv}" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
+    </method>
+    <signal name="PropertiesChanged">
+      <arg name="interface_name" type="s" direction="out"/>
+      <arg name="changed_properties" type="a{sv}" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantMap"/>
+      <arg name="invalidated_properties" type="as" direction="out"/>
+    </signal>
+  </interface>
+  <interface name="org.freedesktop.DBus.Introspectable">
+    <method name="Introspect">
+      <arg name="xml_data" type="s" direction="out"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.DBus.Peer">
+    <method name="Ping"/>
+    <method name="GetMachineId">
+      <arg name="machine_uuid" type="s" direction="out"/>
+    </method>
+  </interface>
+</node>
+"
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / local.pong.Pong.ping string:'hello'
+method return time=1571302741.367224 sender=:1.383 -> destination=:1.385 serial=4 reply_serial=2
+   string "ping("hello") got called"
+
+*/
+
 
 // https://doc.qt.io/qt-5/qmetaobject.html
 //

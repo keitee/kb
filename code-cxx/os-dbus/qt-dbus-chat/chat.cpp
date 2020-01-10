@@ -72,6 +72,7 @@ so when only instance #1 exist, this gets input message. when there are many
 instances, all gets the same input message when one of them sends signal.
 
 $ dbus-send --session / org.example.chat.action string:'dbus:' string:'do you see?'
+dbus-send --session / org.example.chat.action string:'dbus:' string:'do you see?'
 
 */
 
@@ -93,13 +94,19 @@ ChatMainWindow::ChatMainWindow()
             this, SLOT(textChangedSlot(QString)));
     connect(sendButton, SIGNAL(clicked(bool)), this, 
         SLOT(sendClickedSlot()));
+
+    // for menu->file->change nick name
     connect(actionChangeNickname, SIGNAL(triggered(bool)), 
         this, SLOT(changeNickname()));
+
+    // for memu->help->about  qt
     connect(actionAboutQt, SIGNAL(triggered(bool)), 
         this, SLOT(aboutQt()));
+
     connect(qApp, SIGNAL(lastWindowClosed()), this, 
         SLOT(exiting()));
 
+    // ADAPTOR
     // add our D-Bus interface and connect to D-Bus
     new ChatAdaptor(this);
     if(QDBusConnection::sessionBus().registerObject("/", this))
@@ -109,7 +116,7 @@ ChatMainWindow::ChatMainWindow()
 
     // Access to remote object is done via proxy, OrgExampleChatInterface.
     //
-    // Make a connection between signals exposed by proxy and slot functoins in
+    // Make a connection between signals exposed by proxy and slot functions in
     // this adaptor object.
     //
     // When runs this
@@ -127,18 +134,32 @@ ChatMainWindow::ChatMainWindow()
     //                               void action(...);
     //                               void message(...);
     //
+    // TODO
     // Interesting thing is that `emit xxx` makes a call to the proxy although
-    // do not specify it?
+    // do not specify it? is that *RELAY* feature?
+    //
+    // ChatMainWindow defines signals
+    //    if omit this, comple error
+    //
+    // Proxy          defines signals
+    //    connect() on this 
+    //    if omit this, compile error
+    //
+    // Adaptor        defines signals
+    //    expose signals to dbus
+    //    if omit this, no compile error but nothing happens
 
+    // PROXY
     // OrgExampleChatInterface proxy
     org::example::chat *iface;
     iface = new org::example::chat(QString(), QString(), 
         QDBusConnection::sessionBus(), this);
 
-    // // maps org.example.chat signal to slots
+    // connect (local) slot to (remote) org.example.chat signal
+    //
     // connect(iface, SIGNAL(message(QString,QString)), 
     //     this, SLOT(messageSlot(QString,QString)));
-
+    //
     // shorter than this:
     //
     // bool QDBusConnection::connect(
@@ -152,7 +173,7 @@ ChatMainWindow::ChatMainWindow()
     // Connects the signal specified by the service, path, interface and name
     // parameters to the slot `slot` in object `receiver`. 
     //
-    // The arguments service and path *can be empty*, denoting a connection to any
+    // The arguments `service` and `path` *can be empty*, denoting a connection to any
     // signal of the (interface, name) pair, from any remote application.
     //
     // Returns true if the connection was successful.
@@ -168,8 +189,7 @@ ChatMainWindow::ChatMainWindow()
       qDebug() << "connect message signal failed";
     }
 
-    // this shows error when comment out signals on the proxy code.
-    // Q: who's going to free `iface`?
+    // Q: who's going to free `iface`? no one since done when app ends.
     connect(iface, SIGNAL(action(QString,QString)), 
         this, SLOT(actionSlot(QString,QString)));
 
@@ -179,10 +199,6 @@ ChatMainWindow::ChatMainWindow()
     dialog.exec();
     m_nickname = dialog.nickname->text().trimmed();
     
-    // send Qt signal but not dbus signal via ChatMainWindow's signal since
-    // it comment out ChatMainWindow's signals then gets compile error and
-    // comment out ChatAdaptor's signals then no compile error but nothing
-    // happens.
     qDebug() << "emit action()";
     emit action(m_nickname, QLatin1String("joins the chat"));
 }
@@ -197,8 +213,10 @@ void ChatMainWindow::rebuildHistory()
     chatHistory->setPlainText(history);
 }
 
+// for `message` signal
 void ChatMainWindow::messageSlot(const QString &nickname, const QString &text)
 {
+    qDebug() << "called messageSlot()";
     QString msg( QLatin1String("<%1> %2") );
     msg = msg.arg(nickname, text);
     m_messages.append(msg);
@@ -208,8 +226,10 @@ void ChatMainWindow::messageSlot(const QString &nickname, const QString &text)
     rebuildHistory();
 }
 
+// for `action` signal
 void ChatMainWindow::actionSlot(const QString &nickname, const QString &text)
 {
+    qDebug() << "called actionSlot()";
     QString msg( QLatin1String("* %1 %2") );
     msg = msg.arg(nickname, text);
     m_messages.append(msg);
