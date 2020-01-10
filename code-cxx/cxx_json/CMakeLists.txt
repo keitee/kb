@@ -59,7 +59,7 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 #
 # directory...  The directories to be added to the list of include directories.
 
-include_directories(SYSTEM ${GMOCK_DIR}/include)
+include_directories(SYSTEM ${GMOCK_DIR}/include jsoncpp/incbin)
 
 
 # do not work
