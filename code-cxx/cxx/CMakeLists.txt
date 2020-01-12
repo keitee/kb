@@ -170,25 +170,19 @@ add_executable(${PROJECT_NAME} "test_cxx.cpp")
 
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread)
 
-
-# # cxx_ex.cpp
-# add_executable(${PROJECT_NAME}_ex "cxx_ex.cpp")
-# target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
-
-# test_cxx_ex.cpp
+# _ex.cpp
 add_executable(${PROJECT_NAME}_ex "test_cxx_ex.cpp")
 target_link_libraries(${PROJECT_NAME}_ex gmock_main Boost::thread)
 
-# cxx_pattern.cpp
-# add_executable(${PROJECT_NAME}_pattern "cxx_pattern.cpp")
+# _pattern.cpp
 add_executable(${PROJECT_NAME}_pattern "test_cxx_pattern.cpp")
 target_link_libraries(${PROJECT_NAME}_pattern gmock_main Boost::thread)
 
-# cxx_case.cpp
-add_executable(${PROJECT_NAME}_case "cxx_case.cpp")
+# _case.cpp
+add_executable(${PROJECT_NAME}_case "test_cxx_case.cpp")
 target_link_libraries(${PROJECT_NAME}_case gmock_main Boost::thread)
 
-# test_boost.cpp
+# _boost.cpp
 add_executable(test_boost "test_boost.cpp")
 target_link_libraries(test_boost gmock_main Boost::thread)
 

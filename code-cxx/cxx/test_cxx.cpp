@@ -17,6 +17,255 @@ using namespace std;
 using namespace std::placeholders;
 using namespace testing;
 
+/*
+
+56:TEST(CxxType, showSizeOfTypes)
+101:TEST(CxxType, Null)
+123:TEST(Size, Arrays)
+175:TEST(Arith, Comparison)
+189:TEST(CxxStatement, switch)
+304:TEST(Cxx, If)
+335:TEST(Pair, MakePair)
+404:TEST(Pair, PackReference)
+438:TEST(Pair, Initialisation)
+526:TEST(Pair, Comparison)
+562:TEST(Tuple, MakeTuple)
+600:TEST(Tuple, Tie)
+701:TEST(CxxCtor, Private)
+744:TEST(CxxCtor, NoDefault)
+786:TEST(CxxCtor, Parameters)
+828:TEST(CxxCtor, CtorCallsCtor)
+876:TEST(CxxCtor, CtorDefaultArgAndInClassInit)
+975:TEST(Ctor, CtorInitForms)
+1055:TEST(Ctor, CtorInitFromMore)
+1101:TEST(Ctor, CtorInitFromExplicit)
+1220:TEST(Initialise, List)
+1329:TEST(Ctor, Access)
+1427:TEST(Dtor, NoVirtualDtorProblem)
+1538:TEST(Dtor, AbstractBaseClassNoCompileError)
+1575:TEST(Dtor, AbstractBaseClassNeedVirtualDtor)
+1649:TEST(CxxCopyControl, PrivateAndDelete)
+1728:TEST(Enum, ScopedAndUnscoped)
+1841:TEST(Enum, InClass)
+1958:TEST(Enum, ScopeAndType)
+2030:TEST(RVO, OnSingle)
+2037:TEST(RVO, OnVector)
+2044:TEST(RVO, OnArg)
+2051:TEST(RVO, OnAssignment)
+2103:TEST(Reference, UseConstReference)
+2140:TEST(Reference, Swap)
+2202:TEST(Reference, CString)
+2275:TEST(Reference, AccessOnReference)
+2298:TEST(Ratio, Ratio)
+2318:TEST(Time, SystemCall)
+2358:TEST(Time, SleepFor)
+2394:TEST(CxxTime, DurationCast)
+2480:TEST(Time, CronoClockDetails)
+2508:TEST(Time, SteadyClock)
+2579:TEST(Time, Timepoint)
+2599:TEST(Time, TimePointArithmetic)
+2645:TEST(Time, Facet)
+2722:TEST(Time, ElapsedTime)
+2957:TEST(Time, Snapper)
+3044:TEST(Static, DefineStaticOutside)
+3110:TEST(Static, TrackClassInstances)
+3122:TEST(Static, TrackClassInstancesWhenNothingCreated)
+3160:TEST(Static, UnderInheritance)
+3190:TEST(CxxFeaturesTest, UseIsspace)
+3201:// Q: If run it standalone, it runs slower than on in GTEST. WHY?
+3251:TEST(CxxFunctionObject, FunctionPointer)
+3289:TEST(CxxFunctionObject, FunctionPointerVoidCast)
+3336:TEST(CxxFunctionObject, Function)
+3438:TEST(CxxFunctionObject, Bind)
+3626:TEST(CxxFunctionObject, BindAndFunction)
+3757:TEST(CxxFunctionObject, MemFn)
+3898:TEST(CxxFunctionObject, Case)
+3923:TEST(CxxFunctionObject, Pointer)
+3984:TEST(CxxFunctionObject, LambdaCaptureAndReturn)
+4165:TEST(CxxFunctionObject, LambdaBiggies)
+4193:TEST(CxxFunctionObject, LambdaCompare)
+4257:TEST(CxxSmartPointerShared, construct)
+4296:TEST(CxxSmartPointerShared, copy)
+4324:TEST(CxxSmartPointer, reset)
+4407:TEST(CxxSmartPointerShared, example1)
+4450:TEST(CxxSmartPointer, bool)
+4503:TEST(SharedPointer, UniqueDoNotSupportCopy)
+4516:TEST(SharedPointer, UniqueDoNotSupportCopyInitCopyForm)
+4527:TEST(CxxSmartPointerUnique, construct)
+4579:TEST(CxxSmartPointerUnique, moveAssign)
+4668:TEST(SmartPointer, UniqueSinkSource)
+4757:TEST(CxxSmartPointer, Deleter)
+4849:TEST(SmartPointer, DeleteTime)
+4915:TEST(SmartPointer, UniqueDeleteReleaseReset)
+4973:TEST(SmartPointer, UseCount)
+5018:TEST(SmartPointer, WeakNotInReferenceCount)
+5282:TEST(SmartPointer, WeakCyclicReference)
+5366:TEST(SmartPointer, WeakCyclicReferenceSolution)
+5476:TEST(SmartPointer, WeakResourceManagerSolution)
+5682:TEST(SmartPointer, OwnUnique)
+5864:TEST(SmartPointer, OwnShared)
+5918:// TEST(CxxFeaturesTest, DISABLED_UseRangeForOnInteger)
+5934:TEST(CxxFeaturesTest, UseHashOnString)
+5994:TEST(CxxBool, LogicalNot)
+6015:TEST(Bool, CheckBoolDefault)
+6070:TEST(Bool, CheckUsage)
+6101:TEST(Stdio, Input)
+6171:TEST(Stdio, GetLine)
+6245:TEST(Stdio, SpecialTypes)
+6309:TEST(Stdio, Manipulators)
+6343:TEST(Stdio, ManipulatorsFloat)
+6377:TEST(CxxMove, useStdMove)
+6435:TEST(Override, Condition_1)
+6497:TEST(Override, Condition_2)
+6550:TEST(Override, Condition_3)
+6604:// TEST(Override, Condition_4)
+6690:TEST(Override, PureVirtual)
+6744:TEST(Rtti, UseTypeid)
+6762:TEST(Rtti, DynamicCast)
+6829:TEST(Regex, Match)
+6876:TEST(Regex, MatchFound)
+6904:TEST(Regex, MatchResult)
+7017:TEST(Bit, BitSetCtor)
+7058:TEST(Bit, SizeConsideration)
+7088:TEST(Bit, RightShift)
+7208:TEST(Bit, MaxNegagiveIsSpecial)
+7271:TEST(Bit, BitVectors)
+7306:TEST(Bit, BitSet)
+7384:TEST(Bit, Overflow)
+7395:TEST(MinMax, Order)
+7424:TEST(IntegerDivision, FahrenheitCelsius)
+7457:TEST(IntegerDivision, FahrenheitCelsius_Float)
+7506:TEST(IntegerDivision, Percentage)
+7535:TEST(IntegerDivision, Shift)
+7603:// TEST(Operator, MinMax)
+7616:TEST(Operator, PrefixPostfix)
+7646:TEST(Template, Function)
+7721:TEST(Template, Specialisation)
+7789:TEST(CxxTemplate, DefaultTypeArgument)
+7854:TEST(Template, MemberTemplate)
+8022:TEST(Template, ReturnType)
+8093:TEST(Template, Reference)
+8137:TEST(Template, Overload)
+8202:TEST(Template, Friend)
+8277:TEST(Template, Forward)
+8415:TEST(Template, ForwardEx)
+8459:TEST(Template, VariadicSizeofOperator)
+8531:TEST(Template, TypeTrait)
+8553:TEST(Const, NoViaConstReference)
+8566:TEST(Const, NoConstToNonConst)
+8694:TEST(Const, ForMemberFunction)
+8722:TEST(Exception, OwnException)
+8785:TEST(Exception, Noexcept)
+8839:TEST(TypeConversion, Double)
+8861:TEST(CxxPrintf, Formats)
+8924:TEST(CxxCpp, Stringification)
+9125:TEST(CxxCpp, VariableArgs)
+9153:TEST(CxxCpp, VariableArgsMacro)
+9164:TEST(CxxCpp, useDefined)
+9238:TEST(Assert, StaticAssert)
+9249:TEST(Numeric, Abs)
+9282:TEST(Typedef, Alias)
+9385:TEST(Class, ColonDoesMatter)
+9431:TEST(Class, Nested_1)
+9478:TEST(Class, Nested_2)
+
+*/
+
+/*
+// ={=========================================================================
+//
+[ RUN      ] CxxMemoryModel.allocator
+sizeof p : 8
+sizeof *p: 32
+coll{string1,string2,string3,}
+coll{string1,string2,string3,}
+[       OK ] CxxMemoryModel.allocator (0 ms)
+
+*/
+
+TEST(CxxMemoryModel, allocator)
+{
+  // do allocation only
+  {
+    std::allocator<std::string> alloc;
+    auto const p = alloc.allocate(10);
+    std::cout << "sizeof p : " << sizeof(p) << std::endl;
+    std::cout << "sizeof *p: " << sizeof(*p) << std::endl;
+    alloc.deallocate(p, 10);
+  }
+
+  // do allocation and construction
+  {
+    std::allocator<std::string> alloc;
+
+    // auto const data = alloc.allocate(10);
+    // NOTE: compile error when use `const`
+    auto data = alloc.allocate(10);
+
+    // back it up.
+    // NOTE: shall use `coll` to deallocate and access. crashes otherwise.
+    auto const coll = data;
+
+    // calls ctor. From *cxx-11*, supports many ctors of the 'type'.
+    //
+    // The first argument to construct() must be a pointer to unconstructed
+    // space allocated by allocate(). The second and subsequent argument
+    // determine ctor to use.
+
+    alloc.construct(data++, "string1");
+    alloc.construct(data++, "string2");
+    alloc.construct(data++, "string3");
+
+    std::cout << "coll{";
+
+    for (int i = 0; i < 3; i++)
+      std::cout << coll[i] << ",";
+
+    std::cout << "}" << std::endl;
+
+    // alloc.destroy(p) calls dtor
+
+    alloc.destroy(--data);
+    alloc.destroy(--data);
+    alloc.destroy(data);
+
+    alloc.deallocate(coll, 10);
+  }
+
+  // do allocation and construction
+  {
+    std::allocator<std::string> alloc;
+
+    // NOTE: no compile error in this case where use uninitialized_copy
+    auto const data = alloc.allocate(10);
+
+    const std::vector<std::string> coll{"string1", "string2", "string3"};
+
+    // o The library defines two that calls `construct()` on each element in
+    //   unconstructed memory.
+    //
+    // o Returns the position after the last initialized element.
+    //   Like cxx-copy, return its incremented destination iterator.
+    //
+    // to sum, do "construct and copy" to destination
+    //
+    // uninitialized_copy_n(b, n, b2);
+    // uninitialized_fill(b, e, t);
+    // uninitialized_fill_n(b, n, t);
+
+    auto result = std::uninitialized_copy(coll.cbegin(), coll.cend(), data);
+
+    std::cout << "coll{";
+
+    for (int i = 0; i < 3; i++)
+      std::cout << data[i] << ",";
+
+    std::cout << "}" << std::endl;
+
+    alloc.deallocate(data, 10);
+  }
+}
+
 // ={=========================================================================
 // cxx-size cxx-sizeof
 
@@ -749,11 +998,10 @@ TEST(CxxCtor, NoDefault)
   // }
 
   {
-  using namespace cxx_ctor;
-  Base1 o("another ctor");
+    using namespace cxx_ctor;
+    Base1 o("another ctor");
   }
 }
-
 
 // *cxx-unused*
 // The only purpose of the parameter is to 'distinguish' prefix from postfix
@@ -6352,6 +6600,18 @@ TEST(Stdio, ManipulatorsFloat)
 // ={=========================================================================
 // cxx-move
 
+TEST(CxxMove, lvalue)
+{
+  int x = 10;
+  int *pint;
+
+  pint = &(++x);
+
+  // *cxx-error* since & requires lvalue
+  // : error: lvalue required as unary ‘&’ operand
+  // pint = &(x++);
+}
+
 namespace cxx_move
 {
   class Move
@@ -6366,6 +6626,58 @@ namespace cxx_move
         , m_value(value)
     {}
 
+    // copy controls
+    Move(const Move &rhs)
+        : m_name(rhs.m_name)
+        , m_value(rhs.m_value)
+    {
+      std::cout << "Move(const Move &rhs)" << std::endl;
+      // m_name = rns.m_name;
+      // m_value = rhs.m_value;
+    }
+
+    Move &operator=(const Move &rhs)
+    {
+      std::cout << "Move &operator=(const Move &rhs)" << std::endl;
+      m_name  = rhs.m_name;
+      m_value = rhs.m_value;
+    }
+
+#ifdef MOVE_BUT_USE_COPY
+    // move controls
+    Move(Move &&rhs)
+        : m_name(rhs.m_name)
+        , m_value(rhs.m_value)
+    {
+      std::cout << "Move(Move &rhs)" << std::endl;
+    }
+
+    Move &operator=(Move &&rhs)
+    {
+      std::cout << "Move &operator=(Move &&rhs)" << std::endl;
+      m_name  = rhs.m_name;
+      m_value = rhs.m_value;
+    }
+#else
+    // move controls
+    Move(Move &&rhs)
+        : m_name(std::move(rhs.m_name))
+        , m_value(rhs.m_value)
+    {
+      std::cout << "Move(Move &rhs)" << std::endl;
+    }
+
+    Move &operator=(Move &&rhs)
+    {
+      std::cout << "Move &operator=(Move &&rhs)" << std::endl;
+      m_name  = std::move(rhs.m_name);
+      m_value = rhs.m_value;
+    }
+
+#endif
+
+    bool isNameEmpty() const { return m_name.empty(); }
+
     void setMembers(std::string &&name, int &&value)
     {
       m_name  = name;
@@ -6375,23 +6687,85 @@ namespace cxx_move
   };
 } // namespace cxx_move
 
-TEST(CxxMove, useStdMove)
+TEST(CxxMove, binding)
 {
   using namespace cxx_move;
 
-  Move o;
+  {
+    int i = 42;
 
-  std::string name("move");
-  int value{10};
+    int &r = i; // okay
 
-  // error: cannot bind
-  // ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ lvalue
-  // to ‘std::__cxx11::string&& {aka std::__cxx11::basic_string<char>&&}’
-  //
-  // o.setMembers(name, value);
+    // cxx-error, cannot bind `rvalue-reference` to `lvalue`
+    // : error: cannot bind ‘int’ lvalue to ‘int&&’
+    // int &&rr = i;
 
-  o.setMembers("move", 10);
-  o.setMembers(std::move(name), std::move(value));
+    // cxx-error, i*42 is rvalue
+    // error: invalid initialization of non-const reference of type ‘int&’ from
+    // an rvalue of type ‘int’ int &r2 = i*42;
+
+    const int &r3 = i * 42; // okay  bind `rvalue` to `const-lvalue-reference`
+
+    int &&r4 = i * 42; // okay
+  }
+
+  {
+    Move m;
+
+    std::string name("move");
+    int value{10};
+
+    // lvalue to rvalue error
+    // error: cannot bind
+    // ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ lvalue to 
+    // ‘std::__cxx11::string&& {aka std::__cxx11::basic_string<char>&&}’
+    //
+    // m.setMembers(name, value);
+
+    m.setMembers("move", 10);
+    m.setMembers(std::move(name), std::move(value));
+  }
+}
+
+TEST(CxxMove, signal)
+{
+  using namespace cxx_move;
+
+  // use copy controls
+  {
+    std::vector<Move> coll;
+
+    Move m1{"m1", 10};
+    Move m2{"m2", 20};
+
+    coll.push_back(m1);
+    coll.push_back(m2);
+
+    // string member is not empty since it's copied
+    EXPECT_THAT(m1.isNameEmpty(), false);
+    EXPECT_THAT(m2.isNameEmpty(), false);
+  }
+
+  // use move controls
+  {
+    std::vector<Move> coll;
+
+    Move m1{"m1", 10};
+    Move m2{"m2", 20};
+
+    coll.push_back(std::move(m1));
+    coll.push_back(std::move(m2));
+
+#ifdef MOVE_BUT_USE_COPY
+    // string member is NOT empty since it's NOT moved
+    EXPECT_THAT(m1.isNameEmpty(), false);
+    EXPECT_THAT(m2.isNameEmpty(), false);
+#else
+    // string member is empty since it's moved
+    EXPECT_THAT(m1.isNameEmpty(), true);
+    EXPECT_THAT(m2.isNameEmpty(), true);
+#endif
+  }
 }
 
 // ={=========================================================================

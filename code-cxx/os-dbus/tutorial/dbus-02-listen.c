@@ -224,7 +224,8 @@ int main()
   Rules are specified as a string of comma separated key/value pairs. An example
   is 
 
-  "type='signal',sender='org.freedesktop.DBus', interface='org.freedesktop.DBus',member='Foo', path='/bar/foo',destination=':452345.34'"
+  "type='signal',sender='org.freedesktop.DBus', interface='org.freedesktop.DBus',member='Foo', \
+    path='/bar/foo',destination=':452345.34'"
 
   Possible keys you can match on are type, sender, interface, member, path,
   destination and numbered keys to match message args (keys are 'arg0', 'arg1',
@@ -270,7 +271,8 @@ int main()
 
   /* 
   DBUS_EXPORT 
-  dbus_bool_t dbus_connection_add_filter(DBusConnection * connection,
+  dbus_bool_t dbus_connection_add_filter(
+    DBusConnection * connection,
     DBusHandleMessageFunction function,
     void * user_data,
     DBusFreeFunction free_data_function 

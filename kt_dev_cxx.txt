@@ -1,4 +1,4 @@
-*kt_dev_cxx*                                                     tw=100, utf-8
+*kt_dev_cxx*                                                     tw=80, utf-8
 
 /^[#=]{
 Use #{ for a group and ={ for a item
@@ -98,9 +98,8 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-copy-dyn-resource cxx-ex-hasptr-exmaple
 *kt_dev_cpp_0000* cxx-copy-swap cxx-swap copy-and-swap-idiom
 *kt_dev_cxx_0000* cxx-copy-control cxx-ex-message-example
-*kt_dev_cxx_0000* cxx-copy-control-move cxx-move cxx-ex-strvec-example
-*kt_dev_cxx_0000* cxx-copy-control-move cxx-rvalue-reference
-*kt_dev_cxx_0000* cxx-copy-control-move cxx-std-move cxx-move-synthesized
+*kt_dev_cxx_0000* cxx-move cxx-ex-strvec-example
+*kt_dev_cxx_0000* cxx-move
 *kt_dev_cxx_0000* cxx-ex-query-example cpp-interface
 *kt_dev_cxx_0000* cxx-abc cxx-ex-quote-example cxx-refactoring
 *kt_dev_cxx_0000* cxx-abc-call-in-dtor
@@ -168,6 +167,7 @@ KT KB. CPP
 *kt_dev_cxx_0000* cxx-design-core-guide
 
 *kt_dev_cxx_0000* cxx-new-delete
+*kt_dev_cxx_0000* cxx-allocator
 *kt_dev_cxx_0000* cxx-random
 *kt_dev_cxx_0000* cxx-enum
 *kt_dev_cxx_0000* cxx-nested-class
@@ -267,7 +267,6 @@ KT KB. CPP
 *kt_dev_cpp_0000* cxx-sp-thread-safety
 *kt_dev_cxx_0000* cxx-sp-case-examples
 
-|kt_dev_stl_110| cpp-allocator
 *kt_dev_cxx_0000* cxx-chrono cxx-time
 
 #{ MORE EFFECTIVE C++ 1ST, 1996, 25TH PRINTING
@@ -15709,7 +15708,7 @@ int main()
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-copy-control-move cxx-move cxx-ex-strvec-example
+*kt_dev_cxx_0000* cxx-move cxx-ex-strvec-example
 
 In some circumstances, an object is `immediately destroyed` after it is
 copied. In those cases, moving rather than copying the object can provide a
@@ -15722,359 +15721,395 @@ In previous library, class stored in a container had to be `copyable`. Under
 new standard, can use container on types that cannot be copied so long as they
 can be moved.
 
+<ex>
+
 CPR 524
 
 StrVec example which is a simplification of the library vector class. Like
 vector, supports reallocation. If there is not enough space left, then obtains
-new space, moves the existing elements into that space, free the old space,
-and adds the new elements.
+new space, moves the existing elements into that space, free the old space, and
+adds the new elements.
 
 | 0 | 1 | 2 | 3 | 4 | unconstructed std::string elements |
-
 ^                     ^                                  ^
 elements              first_free                         cap
 
-
-<ex>
-#include <iostream>
-#include <string>
-#include <memory>
-#include <fstream>
-// #include <chrono>
-// #include <thread>
-
-// * valuelike copy context
-//
-class StrVec
+namespace cxx_case_strvec
 {
-    public:
-        StrVec() {}
-        StrVec(std::initializer_list<std::string> il)
-        {
-            auto vec = alloc_and_copy(il.begin(), il.end());
-            element_ = vec.first;
-            free_ = cap_ = vec.second;
-        }
+  class StrVec
+  {
+  private:
+    using size_type = std::string::size_type;
 
-        // copy controls
-        StrVec(const StrVec &rhs)
-        {
-            auto vec = alloc_and_copy(rhs.begin(), rhs.end());
-            element_ = vec.first;
-            free_ = cap_ = vec.second;
-        }
+    // TODO: why static in the text?
+    std::allocator<std::string> m_alloc;
 
-        StrVec &operator=(const StrVec &rhs)
-        {
-            // *cxx-except-self-assign*
-            auto vec = alloc_and_copy(rhs.begin(), rhs.end());
-            free();
-            element_ = vec.first;
-            free_ = cap_ = vec.second;
-            return *this;
-        }
+    std::string *m_element{nullptr};
+    std::string *m_free{nullptr};
+    std::string *m_capacity{nullptr};
 
-        // move controls *cxx-move*
-        StrVec(StrVec &&rhs) noexcept
-            : element_(rhs.element_), free_(rhs.free_), cap_(rhs.cap_)
-        {
-            rhs.element_ = rhs.free_ = rhs.cap_ = nullptr;
-        }
+    // allocate and construct memory copying from [begin, end) and return
+    // [begin, end) of the constructed.
 
-        StrVec &operator=(StrVec &&rhs) noexcept
-        {
-            // *cxx-except-self-assign* direct test
-            if (this != &rhs)
-            {
-                // free existing elements
-                free();
-                element_ = rhs.element_;
-                free_ = rhs.free_;
-                cap_ = rhs.cap_;
-                rhs.element_ = rhs.free_ = rhs.cap_ = nullptr;
-            }
+    std::pair<std::string *, std::string *>
+      alloc_and_copy_(const std::string *begin, const std::string *end)
+      {
+        // use iterator arithmetic
+        auto data = m_alloc.allocate(end - begin);
+        return {data, std::uninitialized_copy(begin, end, data)};
+      }
 
-            return *this;
-        }
+    // free [element, cap) only when elemenet is not null
+    // move backwards from 'free' to call dtor on [element, free)
+    //
+    // NOTE: needs destroy()? Yes since std::string is `valuelike` and has own
+    // memory for holding characters
 
-        ~StrVec() { free(); }
+    void free_()
+    {
+      if (m_element)
+      {
+        for (auto p = m_free; p != m_element; /* empty */)
+          m_alloc.destroy(--p);
 
-        void push_back(const std::string &s)
-        {
-            // need reallocate? Ensure that there is room for another element.
-            check_and_alloc();
+        m_alloc.deallocate(m_element, m_capacity - m_element);
+      }
+    }
 
-            // construct a copy of s
-            //
-            // The first argument to construct must be a pointer to
-            // 'unconstructed' space allocated by `allocate()`. 
-            //
-            // The second argument determine 'which' constructor to use to
-            // construct the object in that space. This is string's copy ctor.
+    // o cxx-move
+    // move the data from the old memory to the new std::move() returns rvalue,
+    // which cause construct() to use string move ctor.
+    
+    // o cxx-gdb
+    // seg-fault when use `element` in the loop:
+    //
+    // for (size_t i = 0; i != size(); ++i)
+    //     alloc.construct(dest++, std::move(*element_++));
+    //
+    // *gdb-debug* bt when use -g
+    // Program terminated with signal SIGSEGV, Segmentation fault.
+    // #0  0x00007f94aa120113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+    // (gdb) bt
+    // #0  0x00007f94aa120113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+    // #1  0x0000000000401bf7 in __gnu_cxx::new_allocator<std::string>::construct<std::string<std::string> > (this=0x602cd1 <StrVec::alloc>, __p=0xa53000) at /usr/include/c++/4.9/ext/new_allocator.h:120
+    // #2  0x0000000000401932 in StrVec::reallocate (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:117
+    // #3  0x0000000000401aa5 in StrVec::check_and_alloc (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:147
+    // #4  0x000000000040165e in StrVec::push_back (this=0x7ffdc9026bc0, s="two") at t_ex_strvec.cpp:44
+    // #5  0x000000000040133e in main () at t_ex_strvec.cpp:198
+    //
+    // when not use -g
+    // (gdb) bt
+    // #0  0x00007f3348f5c113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+    // #1  0x0000000000401bf7 in void __gnu_cxx::new_allocator<std::string>::construct<std::string, std::string>(std::string*, std::string&&) ()
+    // #2  0x0000000000401932 in StrVec::reallocate() ()
+    // #3  0x0000000000401aa5 in StrVec::check_and_alloc() ()
+    // #4  0x000000000040165e in StrVec::push_back(std::string const&) ()
+    // #5  0x000000000040133e in main ()
+    //
+    // How to debug? See that uses 'construct' and gdb is useful to see
+    // what's going on when stepping through. Found out that the loop
+    // continues and saw that when add to print i and size().
+    //
+    // ...
+    // i: 16856, size: 18446744073709534761
+    // Segmentation fault (core dumped)
+    //
+    // (gdb) f 2
+    // #2  0x0000000000401932 in StrVec::reallocate (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:117
+    // 117                     alloc.construct(dest++, std::move(*element_++));
+    // (gdb) p i
+    // $1 = 16856
+    // (gdb) p/u free_-element_
+    // $6 = 18446744073709534760
+    //
+    // Why? Since element_ is member data and keep increasing it, then size()
+    // member function would produce negative which turns into big number sicne
+    // size() returns size_t, unsigned int.
 
-            // *cxx-side-effect*
-            alloc.construct(free_++, s);
-        }
+    void reallocate_()
+    {
+      auto new_capacity = size() ? size() * 2 : 1;
+      auto new_data = m_alloc.allocate(new_capacity);
 
-	    // emplace member covered in chapter 16
-	    template <class... Args> void emplace_back(Args&&... args)
-        {
-            check_and_alloc(); // reallocates the StrVec if necessary
-            alloc.construct(free_++, std::forward<Args>(args)...);
-        }
+      auto dest = new_data;
+      auto source = m_element;
 
-        size_t size() const { return free_ - element_; }
-        size_t capacity() const { return cap_ - element_; }
+      for (size_type i = 0; i != size(); ++i)
+      {
+        m_alloc.construct(dest++, std::move(*source++)); 
+      }
 
-        std::string *begin() const { return element_; }
-        // *cxx-off-the-end*
-        std::string *end() const { return free_; }
+      m_element = new_data;
+      m_free = dest;
+      m_capacity = m_element + new_capacity; 
+    }
 
-        // since element_ is pointer
-        std::string &operator[](std::size_t n) { return element_[n]; }
-        const std::string &operator[](std::size_t n) const { return element_[n]; }
+    // check if it needs reallocation
 
-    private:
+    void check_and_alloc_()
+    {
+      if (size() == capacity())
+      {
+        reallocate_();
+      }
+    }
 
-        // *cxx-static-class-variable*
-        static std::allocator<std::string> alloc;
+  public:
+    StrVec() = default;
+    ~StrVec() { free_(); }
 
-        std::pair<std::string *, std::string *>
-            alloc_and_copy(const std::string *begin, const std::string *end)
-            {
-                // allocate `unconstructed` space to hold elements
-                // *cxx-iter-arithmetic*
-                auto data = alloc.allocate(end - begin);
+    StrVec(std::initializer_list<std::string> il)
+    {
+      auto coll = alloc_and_copy_(il.begin(), il.end());
+      m_element = coll.first;
+      m_free = m_capacity = coll.second;
+    }
 
-                // uninitialized_copy() 
-                // * construct copies of given elements in uninitialized space
-                // * returns the position after the last initialized element.
-                return {data, uninitialized_copy(begin, end, data)};
-            }
+    // copy controls. makes a copy
+    StrVec(const StrVec &rhs)
+    {
+      std::cout << "StrVec(const StrVec &rhs)" << std::endl;
+      auto coll = alloc_and_copy_(rhs.begin(), rhs.end());
+      m_element = coll.first;
+      m_free = m_capacity = coll.second;
+    }
 
-        // `string is valuelike` and has own memory for those characters. After
-        // copying a string, there are two strings.  However, when reallocates
-        // copies, there will be only `one user` after the copy and as soon as
-        // copy is done, no need to keep the old.
+    // copy controls. makes a copy and also support cxx-self-assian.
+    StrVec &operator=(const StrVec &rhs)
+    {
+      if (this != &rhs)
+      {
+        std::cout << "StrVec &operator=(const StrVec &rhs)" << std::endl;
+        auto coll = alloc_and_copy_(rhs.begin(), rhs.end());
+        free_();
+        m_element = coll.first;
+        m_free = m_capacity = coll.second;
+        return *this;
+      }
+    }
 
-        // So copying the data in these std::strings in the old is unnecessary
-        // in this case so StrVec's performance will be much better if can avoid
-        // the overhead of allocating and deallocating the char memories for
-        // strings themselves each time we reallocate.
+#ifdef MOVE_SUPPORTED
+    // *cxx-move* controls. no need to alloc
+    StrVec(StrVec &&rhs) noexcept
+      : m_element(rhs.m_element), m_free(rhs.m_free), m_capacity(rhs.m_capacity)
+    {
+      std::cout << "StrVec(StrVec &&rhs)" << std::endl;
+      rhs.m_element = rhs.m_free = rhs.m_capacity = nullptr;
+    }
 
-        void reallocate()
-        {
-            auto newcap = size() ? size()*2 : 1;
+    // move controls. no need to alloc
+    StrVec &operator=(StrVec &&rhs) noexcept
+    {
+      if (this != &rhs)
+      {
+        std::cout << "StrVec &operator=(StrVec &&rhs)" << std::endl;
+        free_();
+        m_element = rhs.m_element;
+        m_free = rhs.m_free;
+        m_capacity = rhs.m_capacity;
 
-            auto newspace = alloc.allocate(newcap);
+        rhs.m_element = rhs.m_free = rhs.m_capacity = nullptr;
+      }
 
-            std::cout << "reallocate: size() " << size() << std::endl;
+      return *this;
+    }
+#endif 
 
-            auto dest = newspace;
-            auto source = element_;
+  public:
+    std::string &operator[](size_type n) { return m_element[n]; }
 
-            // move the data from the old memory to the new
-            // std::move() returns rvalue, which cause construct() to use string
-            // move ctor.
-            //
-            // seg-fault when have a typo and use element in the loop:
-            //
-            // for (size_t i = 0; i != size(); ++i)
-            //     alloc.construct(dest++, std::move(*element_++));
-            //
-            // *gdb-debug* bt when use -g
-            // Program terminated with signal SIGSEGV, Segmentation fault.
-            // #0  0x00007f94aa120113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-            // (gdb) bt
-            // #0  0x00007f94aa120113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-            // #1  0x0000000000401bf7 in __gnu_cxx::new_allocator<std::string>::construct<std::string<std::string> > (this=0x602cd1 <StrVec::alloc>, __p=0xa53000) at /usr/include/c++/4.9/ext/new_allocator.h:120
-            // #2  0x0000000000401932 in StrVec::reallocate (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:117
-            // #3  0x0000000000401aa5 in StrVec::check_and_alloc (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:147
-            // #4  0x000000000040165e in StrVec::push_back (this=0x7ffdc9026bc0, s="two") at t_ex_strvec.cpp:44
-            // #5  0x000000000040133e in main () at t_ex_strvec.cpp:198
-            //
-            // when not use -g
-            // (gdb) bt
-            // #0  0x00007f3348f5c113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
-            // #1  0x0000000000401bf7 in void __gnu_cxx::new_allocator<std::string>::construct<std::string, std::string>(std::string*, std::string&&) ()
-            // #2  0x0000000000401932 in StrVec::reallocate() ()
-            // #3  0x0000000000401aa5 in StrVec::check_and_alloc() ()
-            // #4  0x000000000040165e in StrVec::push_back(std::string const&) ()
-            // #5  0x000000000040133e in main ()
-            //
-            // How to debug? See that uses 'construct' and gdb is useful to see
-            // what's going on when stepping through. Found out that the loop
-            // continues and saw that when add to print i and size().
-            //
-            // ...
-            // i: 16856, size: 18446744073709534761
-            // Segmentation fault (core dumped)
-            //
-            // (gdb) f 2
-            // #2  0x0000000000401932 in StrVec::reallocate (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:117
-            // 117                     alloc.construct(dest++, std::move(*element_++));
-            // (gdb) p i
-            // $1 = 16856
-            // (gdb) p/u free_-element_
-            // $6 = 18446744073709534760
-            //
-            // Why? Since element_ is member data and keep increasing it, then
-            // size() member function would produce negative which turns into
-            // big number sicne size() returns size_t, unsigned int.
+    size_type size() const { return m_free - m_element; }
+    size_type capacity() const { return m_capacity - m_element; }
 
-            for (size_t i = 0; i != size(); ++i)
-            {
-                // std::cout << "i: " << i << ", size: " << size() << std::endl;
-                alloc.construct(dest++, std::move(*source++));
-            }
+    std::string *begin() const { return m_element; }
+    std::string *end() const { return m_free; }
 
-            // std::cout.flush();
-            // std::this_thread::sleep_for(std::chrono::seconds{5});
+    const std::string *cbegin() const { return m_element; }
+    const std::string *cend() const { return m_free; }
 
-            // to point the new space
-            element_ = newspace;
-            free_ = dest;
-            cap_ = element_ + newcap;
-        }
+    // *cxx-copy*
+    void push_back(const std::string &s)
+    {
+      check_and_alloc_();
 
-        void free()
-        {
-            // may not pass deallocate() a nullptr.
-            if (element_)
-            {
-                // move backward and use "--p" to delete [element_, free)
-                // call type dtor, which is string dtor.
-                for (auto p = free_; p != element_; /* empty */ )
-                    alloc.destroy(--p);
+      // TODO: construct a copy of s
+      //
+      // The first argument to construct must be a pointer to
+      // unconstructed space allocated by `allocate()`. 
+      //
+      // The second argument `determine which constructor` to use to
+      // construct the object in that space. This is string's copy ctor.
 
-                alloc.deallocate(element_, cap_ - element_);
-            }
-        }
+      m_alloc.construct(m_free++, s);
+    }
 
-        void check_and_alloc()
-		{ 
-            std::cout << "size: " << size() << ", cap: " << capacity() << std::endl;
-            if (size() == capacity()) reallocate(); 
-        }
+    // *cxx-move-overload*
+    //
+    // The *cxx-std-move* is to signal to compiler to pick up move operations
+    // via resolution. The std::move() doesn't itself do any moving, but merely
+    // converts its argument into a so-called rvalue reference.
 
-        std::string *element_{nullptr};
-        std::string *free_{nullptr};
-        std::string *cap_{nullptr};
-};
+    void push_back(std::string &&s)
+    {
+      check_and_alloc_();
+      m_alloc.construct(m_free++, std::move(s));
+    }
 
+    // *cxx-emplace-back* is covered in chapter 16
+    template <typename... Args>
+      void emplace_back(Args&&... args)
+      {
+        check_and_alloc_();
+        m_alloc.construct(m_free++, std::forward<Args>(args)...);
+      }
+  };
 
-// *cxx-static-class-variable*
-std::allocator<std::string> StrVec::alloc;
+  StrVec returnVector()
+  {
+    StrVec coll;
 
-
-void print(const StrVec &svec)
-{
-    // since element type, string, supports stream output
-    for (auto e : svec)
-        std::cout << e << " ";
-    std::cout << std::endl;
-}
-
-StrVec getVec(std::istream &is)
-{
-    StrVec svec;
-    std::string s;
-
-    while (is >> s)
-        svec.push_back(s);
+    coll.push_back("func1");
+    coll.push_back("func2");
+    coll.push_back("func3");
 
     // this is where move is necessary
-    return svec;
-}
+    return coll;
+  }
+} // namespace cxx_case_strvec
 
-
-// None two three
-// size: 0, cap: 0
-// reallocate: size() 0
-// size: 1, cap: 1
-// reallocate: size() 1
-// one two
-// sv size: 3
-// svec size: 2
-// sv size: 2
-// svec size: 0
-
-int main()
+TEST(CxxCase, StringVector)
 {
-	StrVec sv = {"one", "two", "three"};
+  using namespace cxx_case_strvec;
 
-	// run `the string empty funciton` on the first element in sv
-	if (!sv[0].empty()) 
-		sv[0] = "None"; // assign a new value to the first string 
+  {
+    StrVec coll{"string1", "string2", "string3"};
 
-    print(sv);
+    {
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
 
-    StrVec svec;
-    svec.push_back({"one"});
-    svec.push_back({"two"});
-    print(svec);
+      EXPECT_THAT(os.str(), "string1,string2,string3,");
+    }
 
-    std::cout << "sv size: " << sv.size() << std::endl;
-    std::cout << "svec size: " << svec.size() << std::endl;
+    // operator[]
+    {
+      EXPECT_THAT(coll[0], "string1");
 
-    sv = std::move(svec);
+      coll[0] = "element1";
+      coll[1] = "element2";
+      coll[2] = "element3";
 
-    std::cout << "sv size: " << sv.size() << std::endl;
-    std::cout << "svec size: " << svec.size() << std::endl;
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
 
-// GCC_4_7_0/13$ more data/storyDataFile
-// Alice Emma has long flowing red hair.
-// Her Daddy says when the wind blows
-// through her hair, it looks almost alive,
-// like a fiery bird in flight.
-// A beautiful fiery bird, he tells her,
-// magical but untamed.
-// "Daddy, shush, there is no such thing,"
-// she tells him, at the same time wanting
-// him to tell her more.
-// Shyly, she asks, "I mean, Daddy, is there?"
-//
-//	// we'll call getVec a couple of times
-//	// and will read the same file each time
-//	ifstream in("data/storyDataFile");
-//	StrVec svec = getVec(in);
-//	print(svec);
-//	in.close();
-//
-//	cout << "copy " << svec.size() << endl;
-//	auto svec2 = svec;
-//	print(svec2);
-//
-//	cout << "assign" << endl;
-//	StrVec svec3;
-//	svec3 = svec2;
-//	print(svec3);
-//
-//	StrVec v1, v2;
-//	v1 = v2;                   // v2 is an lvalue; copy assignment
-//
-//	in.open("data/storyDataFile");
-//	v2 = getVec(in);          // getVec(in) is an rvalue; move assignment
-//	in.close();
-//
-//	StrVec vec;  // empty StrVec
-//	string s = "some string or another";
-//	vec.push_back(s);      // calls push_back(const string&)
-//	vec.push_back("done"); // calls push_back(string&&)
-//
-//	// emplace member covered in chpater 16
-//	s = "the end";
-//	vec.emplace_back(10, 'c'); // adds cccccccccc as a new last element
-//	vec.emplace_back(s);  // uses the string copy constructor
-//	string s1 = "the beginning", s2 = s;
-//	vec.emplace_back(s1 + s2); // uses the move constructor
+      EXPECT_THAT(os.str(), "element1,element2,element3,");
+    }
 
-	return 0;
+    // push_back
+    {
+      coll.push_back("push1");
+      coll.push_back("push2");
+
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+    }
+
+    // copy
+    {
+      StrVec coll2;
+      coll2 = coll;
+
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+      EXPECT_THAT(coll.size(), 5);
+
+      // stringstream-clear
+      os = ostringstream("");
+      for (const auto & e : coll2)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+      EXPECT_THAT(coll2.size(), 5);
+    }
+
+    // move
+    {
+      StrVec coll2;
+      coll2 = std::move(coll);
+
+      EXPECT_THAT(coll2.size(), 5);
+
+#ifdef MOVE_SUPPORTED
+      EXPECT_THAT(coll.size(), 0);
+#else
+      // copy will be used instead
+      EXPECT_THAT(coll.size(), 5);
+#endif
+
+      ostringstream os;
+      for (const auto & e : coll2)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+      EXPECT_THAT(coll2.size(), 5);
+    }
+
+    // cxx-emplace-back
+    {
+      // coll is still around
+
+      coll.emplace_back("string1");
+      coll.emplace_back(5, 'c');    // add "ccccc"
+
+      std::string s1("string2");
+      std::string s2("string3");
+      coll.emplace_back(s1 + s2);   // use string move
+
+#ifdef MOVE_SUPPORTED
+      EXPECT_THAT(coll.size(), 3);
+#else
+      EXPECT_THAT(coll.size(), 8);
+#endif
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+#ifdef MOVE_SUPPORTED
+      EXPECT_THAT(os.str(), "string1,ccccc,string2string3,");
+#else
+      EXPECT_THAT(os.str(), 
+          "element1,element2,element3,push1,push2,string1,ccccc,string2string3,");
+#endif
+    }
+
+    // cxx-return
+    {
+      StrVec coll2;
+      EXPECT_THAT(coll2.size(), 0);
+
+      // will use cxx-copy-assign or cxx-move-assign? Use cxx-move
+      coll2 = returnVector();
+
+      EXPECT_THAT(coll2.size(), 3);
+    }
+  }
 }
 
 
 ={============================================================================
-*kt_dev_cxx_0000* cxx-copy-control-move cxx-rvalue-reference
+*kt_dev_cxx_0000* cxx-move
 
 {cxx-rvalue} {cxx-lvalue}
 In C, `lvalue` could stand on the left-hand side of an assignment whereas
@@ -16100,17 +16135,21 @@ The address-of-operator(&) requires an lvalue operand and returns a pointer to
 its operand as an rvalue.
 
 <ex> show that x++ returns rvalue which is the previous, temporary.
-int main(int argc, char* argv[])
+
 {
   int x = 10;
   int *pint;
 
   pint = &(++x);
-  pint = &(x++);        // error since & requires lvalue
+
+  // *cxx-error* since & requires lvalue
+  // : error: lvalue required as unary ‘&’ operand
+  // pint = &(x++);
 }
 
 
-{cxx-reference-lvalue-reference}
+<ex> function that return cxx-lvalue-reference
+
 CPR 226. "Calls to functions that return reference are lvalue" which means
 that can be used in the same ways as any other lvalue.
 
@@ -16125,32 +16164,42 @@ char &get_value(string &str, string::size_type ix)
 }
 
 
-<cxx-reference-binding-property> CPR 532 
+<cxx-reference-binding> CPR 532 
 The `cxx-rvalue-reference` is a reference that `must be bound to an rvalue`
-and is just another name for an object. `use '&&' rather than '&'` 
+and as with reference, it is just another name for an object. 
+
+o `use '&&' rather than '&'` 
 
 o Cannot bind `lvalue-reference` to expression that requires a conversion, to
   literals, or to expression that return an rvalue. 
 
-o Can bind an `rvalue-reference` to lvalue reference but cannot 'directly'
-  bind an rvalue reference to an lvalue.
+o Can bind an `rvalue-reference` to lvalue reference 
+  but `cannot directly` bind lvalue to rvalue reference
 
 note: 
 What does "directly" mean? Can do indirectly and see *reference-collapsing*
 
-int i = 42;
+{
+  int i = 42;
 
-int &r = i;             // okay
-int &&rr = i;           // error, cannot bind `rvalue-reference` to `lvalue`
+  int &r = i;             // okay
 
-int &r2 = i*42;         // error, i*42 is rvalue
-const int &r3 = i*42;   // okay  bind `rvalue` to `const-lvalue-reference`
-int &&r2 = i*42;        // okay
+  // cxx-error, cannot bind `lvalue` to `rvalue-reference` 
+  // : error: cannot bind ‘int’ lvalue to ‘int&&’
+  // int &&rr = i;
+
+  // cxx-error, i*42 is rvalue
+  // error: invalid initialization of non-const reference of type ‘int&’ from an rvalue of type ‘int’
+  // int &r2 = i*42;
+
+  const int &r3 = i*42;   // okay bind `rvalue` to `const-lvalue-reference`
+
+  int &&r4 = i*42;        // okay
+}
 
 *cxx-return*
 Functions that return a non-reference type, along with the arithmetic,
 relational, bitwise, and `postfix` operations, all yield rvalues.
-
 
 string f();
 string &r2{f()};          // error when 
@@ -16160,7 +16209,7 @@ reference.
 
 
 <cxx-rvalue-is-temporary> *cxx-move* *cxx-temporary* implicit move sementics
-Looking at the list of rvalue and lvalue expressions, lvalue has 'persitent'
+Looking at the list of rvalue and lvalue expressions, lvalue has `persitent`
 state, whereas rvalue are either literals or `temporary objects` created in
 the course of evaluating expressions.
 
@@ -16170,52 +16219,70 @@ object is about to be destroyed and there can be `no other users` of that
 uses an rvalue reference is `free to take over resources` from the object to
 which the reference refers.
 
+{
+  StrVec returnVector()
+  {
+    StrVec coll;
 
-={============================================================================
-*kt_dev_cxx_0000* cxx-copy-control-move cxx-std-move
+    coll.push_back("func1");
+    coll.push_back("func2");
+    coll.push_back("func3");
+
+    // this is where move is necessary
+    return coll;
+  }
+
+  // cxx-return
+  {
+    StrVec coll2;
+    EXPECT_THAT(coll2.size(), 0);
+
+    // will use cxx-copy-assign or cxx-move-assign? Use cxx-move
+    coll2 = returnVector();
+
+    EXPECT_THAT(coll2.size(), 3);
+  }
+}
+
+When class has both a move and copy ctor, how does the library know what to
+use? Use *cxx-function-matching* since copy ctor takes const StrVec& and move
+only takes StrVec&&.
+
+
+<cxx-std-move>
 
 return rvalue reference to its given object.
 
-#include <utility>k
+#include <utility>
 
 int &&rr = std::move(rr1);
 moved-to             moved-from
 
-Essentially to tell or signal compiler that we do not intend to use rr1 again
+Essentially `to tell or signal compiler` that we do not intend to use rr1 again
 except to assign to it or destroy it. So after move, cannot make any
 assumptions about the value of the moved-from object. 
 
-note: Think a string case that can destory string object itself and can assign
-new memory for characters. 
+
+use std::move():
+
+Since there is *cxx-arg-dependent-lookup*  `if user defines move()` then
+overloading rule picks up the right version. However, std::move is template and
+*cxx-rvalue* matches to `any type` so name collision are more likely to use
+move() but less likely to be intentional. Therefore, suggest fully qualified
+one, std::move().
 
 
-<why-std-move>
-Since there is argument dependant lookup, if user defines move() then
-overloading rule picks up the right version. However, std::move is template
-and rvalue matches to 'any' type so name collision are more likely but less
-likely to be intentional. Therefore, suggest fully qualified one, std::move().
-
-
-{cxx-move-controls}
-See `no const` on parameter and `noexcept` since do 'not' allocate any new
-memory and take over the memory from its argument. 
-
-StrVec(const StrVec&);                // copy ctor
-StrVec &operator=(const StrVec&);     // copy assign
-
-StrVec(StrVec&&) noexcept;            // move ctor
-StrVec &operator=(StrVec&&) noexcept; // move assign
-
+{cxx-move-can-be-dangerous} <destructible-state>
 The move-ctor must ensure that the moved-from object is left in a state that
 destroying that object will be harmless. The moved-from object continues to
 exist, eventually will be destroyed and the dtor will be run on that. 
 
-What's sensible state of the moved-from object depends on context. For example:
+What's sensible state of the moved-from object depends on context. 
+For example:
 
-*cxx-ex-strvec-example*
 Setting pointer members to nullptr makes StrVec::free() in dtor do nothing.
-Otherwise, would delete the memory(resource) we have moved. Also this is 'why'
-do not have const on s since changes its state.
+Otherwise, would delete the memory(resource) we have moved. Also this is why do
+not have const on s since changes its state.
 
 StrVec::StrVec( StrVec&& s ) noexcept
 : elements(s.elements), first_free(s.first_free), cap(s.cap)
@@ -16227,92 +16294,67 @@ StrVec::StrVec( StrVec&& s ) noexcept
 StrVec &StrVec::operator=( StrVec &&rhs ) noexcept;
 
 
-{move-can-be-dangerous} <destructible-state>
-Since moved-from object has 'indeterminate' state, std::move is a dangerous
-operation. When we call std::move must be certain that there can be 'no' user
+Since moved-from object has indeterminate state, std::move is a dangerous
+operation. When we call std::move must be certain that there can be no user
 of the moved-from object. 
 
 Be careful about meaning of move: The actual move happens on elements which is
 string in this case and move is done by copying and setting pointer members in
-StrVec POV and is not to free the memory moved. This is a meaning of taking
-over the resources in s, StrVec.
+StrVec POV and is not to free the memory moved. This is a meaning of taking over
+the resources in s, StrVec.
 
-Moving from an object does not destroy that object. Therefore, must ensure
-that the moved-from object is `in a state in which the dtor can be run.` In
-this example, if not set these pointer members null, there shall be a problem
-when dtor runs and calls free().
+Moving from an object does not destroy that object. Therefore, must ensure that
+the moved-from object is `in a state in which the dtor can be run.` In this
+example, if not set these pointer members null, there shall be a problem when
+dtor runs and calls free().
 
-In addition to that, move operations guarantee that the object remains 'valid'
-meaning that can runs operations but no guarantees/assumptions about its
-'value'. Can safely be given a new value or used in other ways that do not
-depend on its current value. StrVec move leave the moved-from object in the
-same state `as a default initialized object` and other classes may behave
-differently.
+In addition to that, move operations guarantee that the object remains valid
+meaning that can runs operations but no guarantees/assumptions about its value.
+Can safely be given a new value or used in other ways that do not depend on its
+current value. StrVec move leave the moved-from object in the same state `as a
+default initialized object` and other classes may behave differently.
 
 See *cxx-ex-hasptr-exmaple* for the problem when moved-from state is wrong.
+
+
+{cxx-move-controls}
+See `no const` on parameter and `noexcept` since `do not allocate` any new
+memory and take over the memory from its argument. 
+
+StrVec(const StrVec&);                // copy ctor
+StrVec &operator=(const StrVec&);     // copy assign
+
+StrVec(StrVec&&) noexcept;            // move ctor
+StrVec &operator=(StrVec&&) noexcept; // move assign
 
 
 {cxx-move-synthesized} *cxx-copy-control*
 If class do not define copy ctor and assign then compiler `always make` these
 operations; either memberwise or deleted.
 
-Move operations are different. The compiler make move operations `only if` a
+cxx-move operations are different. The compiler make move operations `only if` a
 class does `not` define any copy ctor and assign and `only if` all non-static
 members can be move constructed and assigned because if a class doesn't have a
-move operation, `the corresponding copy operation is used` in place of move
-via function matching. 
+move operation, `the corresponding copy operation is used` in place of move via
+function matching. 
 
-  *cxx-remember*
-  "if class has own copy ctor and assign then move will 'not' be synthesized."
+*cxx-remember*
+if class has own copy ctor and assign then move `will not be synthesized`
 
-// the compiler will synthesize the move operations for X and hasX
-struct X {
-  int i;
-  std::string s;
-};
+note:
+This means that having cxx-copy-controls ONLY can effectively turn off *cxx-rvo*
+since move controls will not be made. RCGL P9
 
-struct hasX {
-  X mem;
-};
-
-X x, x2 = std::move(x);          // use the synthesized move ctor
-hasX hx, hx2 = std::move(hx);
+*cxx-remember*
+"class that define move operations `must` also define own copy operations." 
 
 If class defines either move ctor and/or move assign but not defined copy
 controls, the copy controls will de defined `deleted`. 
 
-  *cxx-remember*
-  "class that define move operations 'must' also define own copy operations." 
-
-
-note:
-This means that having copy controls can effectively turn off *cxx-rvo* since
-move controls will not be made. RCGL P9
-
-
-<cxx-move-or-copy>
-When class has both a move and copy ctor, how does the library know what to
-use? Use *cxx-function-matching* since copy ctor takes const StrVec& and move
-only takes StrVec&&.
-
-StrVec v1, v2;
-v1 = v2;                    // use copy assign
-
-StrVec getVec(istream &);   // assume getVec returns an rvalue
-v2 = getVec(cin);           // use move assign
-   
-// Q: return rvalue and cannot bind rvalue to lvalue. so only move assign is
-// viable?
-//
-// Like const, can bind lvalue to rvale but cannot bind rvalue to lvalue. So
-// in the second assign, both copy assign and move assign are viable but copy
-// assign requires conversion to const. Hence move is used since it is exact
-// match.
-
 
 {cxx-move-conditions}
 
-* noexcept on move
+o *cxx-noexcept* on move
 
 The library containers provide guarantees as to what they do if an exception
 happens; vector guarantees that if an exception happens when call push_back, the
@@ -16326,33 +16368,182 @@ original copy still remains. Like, exception safe condition in using dynamic
 resources.
 
 To avoid this potential problem, vector must use a copy ctor instead move during
-reallocation 'unless' it knows that 'element's type move ctor cannot throw an
+reallocation unless it knows that element's type move ctor cannot throw an
 exception. How to tell the library that move ctor is safe to use? Do so by using
 explicitly `noexcept` keyword on move ctor and assign.
 
-note: the question is how vector code knows if it has noexcept or not?
 
-
-* copy is bigger than move 
+o cxx-copy is bigger than cxx-move 
 
 Using the copy controls in place of move controls is safe and will meet the
 requirement of move controls since objects is moved by copying operations. In
 other words, copy controls are more of necessary to work properly, move controls
-are more of performance choice so if there are no move operations, copy controls
-will be used instead.
+are more of `performance choice` so if there are no move operations, copy
+controls will be used instead.
 
 note: 
 If a class has no move operations, copy operations will be used even if
 attempt to use move by calling std::move().
 
 // Foo define copy but no move operations
-Foo x;
-Foo y(x);                  // copy ctor
 Foo z(std::move(x));       // copy ctor
 
 Here copy initialization happens but std::move returns rvalue, Foo&&, but no
 move ctor. So can convert a Foo&& to const Foo&, copy ctor is viable and it is
-called. "can bind rvalue to const lvalue reference".
+called since *cxx-reference-binding* "can bind rvalue to const lvalue reference"
+
+
+{cxx-move-overload} *cxx-overload*
+Member functions other than constructors and assignment can benefit from
+providing both copy and move versions.
+
+{
+  // *cxx-copy*
+  void push_back(const std::string &s)
+  {
+    check_and_alloc_();
+
+    // TODO: construct a copy of s
+    //
+    // The first argument to construct must be a pointer to
+    // unconstructed space allocated by `allocate()`. 
+    //
+    // The second argument determine which constructor to use to
+    // construct the object in that space. This is string's copy ctor.
+
+    m_alloc.construct(m_free++, s);
+  }
+
+  // *cxx-move-overload*
+  //
+  // The *cxx-std-move* is to signal to compiler to pick up move operations
+  // via resolution. The std::move() doesn't itself do any moving, but merely
+  // converts its argument into a so-called rvalue reference.
+
+  void push_back(std::string &&s)
+  {
+    check_and_alloc_();
+    m_alloc.construct(m_free++, std::move(s));
+  }
+}
+
+
+<ex>
+namespace cxx_move
+{
+  class Move
+  {
+  private:
+    std::string m_name;
+    int m_value;
+
+  public:
+    explicit Move(std::string name = "", int value = 0)
+        : m_name(name)
+        , m_value(value)
+    {}
+
+    // copy controls
+    Move(const Move &rhs)
+        : m_name(rhs.m_name)
+        , m_value(rhs.m_value)
+    {
+      std::cout << "Move(const Move &rhs)" << std::endl;
+      // m_name = rns.m_name;
+      // m_value = rhs.m_value;
+    }
+
+    Move &operator=(const Move &rhs)
+    {
+      std::cout << "Move &operator=(const Move &rhs)" << std::endl;
+      m_name  = rhs.m_name;
+      m_value = rhs.m_value;
+    }
+
+#ifdef MOVE_BUT_USE_COPY
+    // move controls
+    Move(Move &&rhs)
+        : m_name(rhs.m_name)
+        , m_value(rhs.m_value)
+    {
+      std::cout << "Move(Move &rhs)" << std::endl;
+    }
+
+    Move &operator=(Move &&rhs)
+    {
+      std::cout << "Move &operator=(Move &&rhs)" << std::endl;
+      m_name  = rhs.m_name;
+      m_value = rhs.m_value;
+    }
+#else
+    // move controls
+    Move(Move &&rhs)
+        : m_name(std::move(rhs.m_name))
+        , m_value(rhs.m_value)
+    {
+      std::cout << "Move(Move &rhs)" << std::endl;
+    }
+
+    Move &operator=(Move &&rhs)
+    {
+      std::cout << "Move &operator=(Move &&rhs)" << std::endl;
+      m_name  = std::move(rhs.m_name);
+      m_value = rhs.m_value;
+    }
+
+#endif
+
+    bool isNameEmpty() const { return m_name.empty(); }
+
+    void setMembers(std::string &&name, int &&value)
+    {
+      m_name  = name;
+      m_value = value;
+      std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
+    }
+  };
+} // namespace cxx_move
+
+TEST(CxxMove, signal)
+{
+  using namespace cxx_move;
+
+  // use copy controls
+  {
+    std::vector<Move> coll;
+
+    Move m1{"m1", 10};
+    Move m2{"m2", 20};
+
+    coll.push_back(m1);
+    coll.push_back(m2);
+
+    // string member is not empty since it's copied
+    EXPECT_THAT(m1.isNameEmpty(), false);
+    EXPECT_THAT(m2.isNameEmpty(), false);
+  }
+
+  // use move controls
+  {
+    std::vector<Move> coll;
+
+    Move m1{"m1", 10};
+    Move m2{"m2", 20};
+
+    coll.push_back(std::move(m1));
+    coll.push_back(std::move(m2));
+
+#ifdef MOVE_BUT_USE_COPY
+    // string member is NOT empty since it's NOT moved
+    EXPECT_THAT(m1.isNameEmpty(), false);
+    EXPECT_THAT(m2.isNameEmpty(), false);
+#else
+    // string member is empty since it's moved
+    EXPECT_THAT(m1.isNameEmpty(), true);
+    EXPECT_THAT(m2.isNameEmpty(), true);
+#endif
+  }
+}
 
 
 {cxx-move-iterator-adaptor}
@@ -16408,63 +16599,16 @@ algorithms only when confident that algorithms does not access an element after
 it has assigned to that element.
 
 
-{cxx-move-overload} *cpp-overload-move*
-Member functions other than constructors and assignment can benefit from
-providing both copy and move versions.
-
-//  *cpp-overload-const*
-//  class Screen {
-//    public:
-//      Screen& display()
-//      { cout << "dis: this is non-const member" << endl; return *this; }
-//  
-//      `const` Screen& display() `const`
-//      { cout << "dis: this is const member" << endl; return *this; }
-//  };
-
-class StrVec {
-  public:
-
-    // copy version, lvalue reference to const
-    void push_back( const std::string& );
-    {
-      chk_n_alloc();
-      alloc.construct( first_free++, s );
-    }
-
-    // move version, rvalue reference to nonconst
-    void push_back( std::string&& );
-    {
-      chk_n_alloc();
-      alloc.construct(first_free++, std::move(s));  // use string move ctor
-    }
-
-};
-
-StrVec vec;
-string s = "some string or another";
-
-vec.push_back(s);         // push_back(const string&)
-vec.push_back("done");    // push_back(string&&). temporary string.
-
-
-note:
-Move operations is about moving pointers and nothing special about that. The
-std::move is to signal to compiler to pick up move operations via resolution.
-The std::move() doesn't itself do any moving, but merely converts its argument
-into a so-called rvalue reference.
-
-
 {cxx-reference-quailifier} *cxx-move* RCPR 546
-Ordinarily, can call a member function on object, regardless of whether that
-is an lvalue or rvalue. Sometimes such usage can be surprising. Here assign to
-the "rvalue result" of concatentating these strings:
+Ordinarily, can call a member function on object, regardless of whether that is
+an lvalue or rvalue. Sometimes such usage can be surprising. Here assign to the
+rvalue *cxx-return* of concatentating these strings:
 
 s1 + s2 = "wow!";
 
-Still allow assignment to rvalues for backward compatability. The new standard
-have a way to `prevent such usage` by forcing the left-hand operand, the
-object to which `this` points, to be an lvalue.
+Still allow assignment to rvalues for backward compatability. *cxx-11* have a
+way to `prevent such usage` by forcing the left-hand operand, the object to
+which `this` points, to be an lvalue.
 
 To indicate `the lvalue/rvalue property of this`, use reference qualify:
 
@@ -16480,11 +16624,6 @@ class Foo {
     // move version, rvalue reference qualifier
     Foo someMem() const &&;   
 };
-
-
-<cxx-overload> *cxx-overload-move*
-Why ues it? We can overload a function based on its reference quialifier. See
-see *case_quote_clone*
 
 
 ={============================================================================
@@ -33969,7 +34108,7 @@ of calls to be done with fewer arguments.
 ={============================================================================
 *kt_dev_cxx_0000* cxx-new-delete
 
-{default-value-initialize}
+default-value-initialize:
 
 string* ps = new string;      // default-init
 string* ps = new string();    // value-init. T()
@@ -33977,22 +34116,22 @@ string* ps = new string();    // value-init. T()
 int* pi = new int;            // default-init
 int* pi = new int();          // value-init. T()
 
-Only for built-in types, value-init makes difference and this means that
-default-init for built-in types has 'uninitialized' values. For class types,
-  both will use default ctors and so no difference. 
+For built-in types, value-init set initialized values and default-init has
+`uninitialized values.` For class types, both will use default ctors and so no
+difference. 
   
-The `new operator` combines allocation and construction; creates 'unnamed' and
-then 'default-init' objects e.g. calls ctor for class object.
+The `cxx-new-operator` combines `allocation and construction`; creates `unnamed`
+and then *cxx-default-init* objects e.g. calls ctor for class object.
 
 
-{new-operator-and-operator-new}
-MEC++08: This operator is built into the language and, like sizeof, you can't
-change its meaning: it always does the same thing. What it does is twofold:
-allocation and construction.
+{cxx-new-operator-and-cxx-operator-new}
+MEC++08: This operator is built into the language and, like *cxx-sizeof* you
+can't change its meaning: it always does the same thing:
+`allocation and construction.`
 
-The new operator, use `operator new` (or operator new[]) to allocate raw
-memory, runs ctor to construct, and returns pointer to constructed memory.
-Raise 'bad_alloc' exception when there is  no memory.
+The `cxx-new-operator`, use `cxx-operator-new` (or operator new[]) to allocate
+raw memory, runs ctor to construct, and returns pointer to constructed memory.
+Raise 'bad_alloc' exception when there is no memory.
 
 For deletion, do opposite; runs dtor and operator delete( or delete[]) to free
 memory.
@@ -34474,6 +34613,132 @@ class Widget : public StandardNewDeleteForms {
     static void* operator new( std::size_t size, std::ostream& os ) throw( std::bad_alloc );
     static void operator delete( void* rawMemory, std::ostream& os ) throw();
 };
+
+
+={============================================================================
+*kt_dev_cxx_0000* cxx-allocator
+
+The C++ standard library uses special objects to handle the allocation and
+deallocation of memory. Such objects are called allocators. They represent a
+special "memory model" and are used `as an abstraction to translate` the need
+to use memory into a raw call for memory. The use of different allocator
+objects at the same time allows you to use different memory models in a
+program.
+
+Originally, allocators were introduced as part of the STL to handle the nasty
+problem of different pointer types on PCs (such as near, far, and huge
+    pointers). 
+
+Now, allocators serve as a base for technical solutions that use certain
+`memory models`, such as shared memory, garbage collection, and
+object-oriented databases, without changing the interfaces.
+
+
+#include <memory>
+
+template<class T>
+struct allocator;
+
+template<>
+struct allocator<void>;
+
+
+The allocator provides `type-aware allocation` since it is template and returns
+unconstructed memory while *cxx-operator-new* uses only size. Be careful since
+using unconstructed memory is cxx-undefined.
+
+o The default allocator is used as the default value everywhere an allocator can
+  be used as an argument.
+
+o Provides a way to decouple alloc/dealloc and construction/destruction and
+  allows finer control. For example, allocate big memory and pay the overhead of
+  construction only when needed.
+
+<ex>
+
+[ RUN      ] CxxMemoryModel.allocator
+sizeof p : 8
+sizeof *p: 32
+coll{string1,string2,string3,}
+coll{string1,string2,string3,}
+[       OK ] CxxMemoryModel.allocator (0 ms)
+
+TEST(CxxMemoryModel, allocator)
+{
+  // do allocation only
+  {
+    std::allocator<std::string> alloc;
+    auto const p = alloc.allocate(10);
+    std::cout << "sizeof p : " << sizeof(p) << std::endl;
+    std::cout << "sizeof *p: " << sizeof(*p) << std::endl;
+    alloc.deallocate(p, 10);
+  }
+
+  // do allocation and construction
+  {
+    std::allocator<std::string> alloc;
+
+    // auto const data = alloc.allocate(10);
+    auto data = alloc.allocate(10);
+
+    // back it up.
+    // NOTE: shall use `coll` to deallocate and access. crashes otherwise.
+    auto const coll = data;
+
+    // calls ctor. From *cxx-11*, supports many ctors of the 'type'. 
+    //
+    // The first argument to construct() must be a pointer to unconstructed
+    // space allocated by allocate(). The second and subsequent argument
+    // determine ctor to use.
+    //
+    // alloc.destroy(p) calls dtor
+
+    alloc.construct(data++, "string1");
+    alloc.construct(data++, "string2");
+    alloc.construct(data++, "string3");
+
+    std::cout << "coll{";
+
+    for (int i = 0; i < 3; i++)
+      std::cout << coll[i] << ",";
+
+    std::cout << "}" << std::endl;
+
+    alloc.deallocate(coll, 10);
+  }
+
+  // do allocation and construction
+  {
+    std::allocator<std::string> alloc;
+    auto const data = alloc.allocate(10);
+
+    const std::vector<std::string> coll{"string1", "string2", "string3"};
+
+    // o The library defines two that calls `construct()` on each element in
+    //   unconstructed memory.
+    //
+    // o Returns the position after the last initialized element.
+    //   Like cxx-copy, return its incremented destination iterator.
+    //
+    // to sum, do "construct and copy" to destination
+    //
+    // uninitialized_copy_n(b, n, b2);
+    // uninitialized_fill(b, e, t);
+    // uninitialized_fill_n(b, n, t);
+
+    auto result = std::uninitialized_copy(
+        coll.cbegin(), coll.cend(), data);
+
+    std::cout << "coll{";
+
+    for (int i = 0; i < 3; i++)
+      std::cout << data[i] << ",";
+
+    std::cout << "}" << std::endl;
+
+    alloc.deallocate(data, 10);
+  }
+}
 
 
 ={============================================================================
@@ -59665,87 +59930,6 @@ all         :  Kong Yize: 44.77
  The Maltese Falcon: 19.76
  Water: 0.44
  Pizza: 2.22
-
-
-={============================================================================
-*kt_dev_stl_110* cpp-allocator
-
-(From Primus?)
-This is analogous to allocator.construct() but one important difference:
-allocator.construct() must use memory allocated by the 'same' allocator but need
-not point to memory by operator new and refer to dynamic memory.
-
-
-{allocator}
-The C++ standard library uses special objects to handle the allocation and
-deallocation of memory. Such 'objects' are called allocators. They represent a
-special "memory model" and are used as an abstraction to translate the need to
-use memory into a raw call for memory. The use of different allocator objects at
-the same time allows you to use different memory models in a program.
-
-Originally, allocators were introduced as part of the STL to handle the nasty
-problem of different pointer types on PCs (such as near, far, and huge
-    pointers). Now, allocators serve as a base for technical solutions that use
-certain memory models, such as shared memory, garbage collection, and
-object-oriented databases, without changing the interfaces.
-
-The 'default' allocator is used as the default value everywhere an allocator can
-be used as an argument.
-
-#include <memory>
-
-template<class T>
-struct allocator;
-
-template<>
-struct allocator<void>;
-
-Provides a way to decouple alloc/dealloc and construction/destruction and allows
-finer control. For example, allocate big memory and pay the overhead of
-construction 'only' when needed.
-
-note: The allocator provides 'type-aware' allocation and returns 'unconstructed'
-memory while operator-new uses only 'size'. Be careful since using unconstructed
-memory is 'undefined'.
-
-allocator<string> alloc;
-auto const p = alloc.allocator(n);
-
-// calls ctor. From C++11, supports many ctors of the 'type'. The first argument
-// to construct() must be a pointer to unconstructed space allocated by
-// allocate(). The second and subsequent argument determine ctor to use.
-
-alloc.construct(p++);
-alloc.construct(p++, 10, 'c');
-alloc.construct(p++, "hi");
-
-// calls dtor
-alloc.destory(p);
-
-// size must match
-alloc.deallocate(p, n);
-
-
-<companion-algorithms>
-The library defines two that calls `construct()` on each element in
-unconstructed memory.
-
-uninitialized_copy(b, e, b2);
-
-copies elements from the input range by iterator b and e into 'unconstructed'
-memory by iterator b2. Like copy, return its incremented destination iterator.
-
-uninitialized_copy_n(b, n, b2);
-copies n elements from b to b2.
-
-uninitialized_fill(b, e, t);
-construct objects in raw memory denoted by b and e as a copy of t.
-
-uninitialized_fill_n(b, n, t);
-
-auto p = alloc.allocate( vi.size()*2 );
-auto q = uninitialized_copy( vi.begin(), vi.end(), p );
-uninitialized_fill_n( q, vi.size(), 42 );
 
 
 ={============================================================================

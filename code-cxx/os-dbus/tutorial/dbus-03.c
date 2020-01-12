@@ -1,4 +1,4 @@
-/* 
+/*
 https://linoxide.com/how-tos/d-bus-ipc-mechanism-linux/
 
 Example 3: DBus services
@@ -35,8 +35,8 @@ $ gcc `pkg-config --libs --cflags dbus-1` dbus-03-start.c -o dbus-03-start
 
 */
 
-#include <stdio.h>
 #include <dbus/dbus.h>
+#include <stdio.h>
 
 int main()
 {
@@ -47,19 +47,19 @@ int main()
   dbus_error_init(&error);
 
   /* DBUS_BUS_STARTER is the bus that started us */
-  connection = dbus_bus_get(DBUS_BUS_STARTER, &error); 
+  connection = dbus_bus_get(DBUS_BUS_STARTER, &error);
 
   // Do something here to make sure that the application was successfully
   // started by DBus
   // Example could be something like
-  
+
   printf("share-linux-serivce-example.c is launched...\n");
   FILE *tmp;
   tmp = fopen("/tmp/share-linux-service.result", "w");
-  fprintf(tmp,"share-linux service was started successfully");
+  fprintf(tmp, "share-linux service was started successfully");
   fclose(tmp);
 
-  // After that you have the service up, so you can do whetever you like 
+  // After that you have the service up, so you can do whetever you like
 
   dbus_connection_unref(connection);
 

@@ -462,6 +462,397 @@ TEST(CxxCase, StringBlobTemplate)
 /*
 ={=============================================================================
 
+StrVec
+
+CPR 524
+
+StrVec example which is a simplification of the library vector class. Like
+vector, supports reallocation. If there is not enough space left, then obtains
+new space, moves the existing elements into that space, free the old space, and
+adds the new elements.
+
+| 0 | 1 | 2 | 3 | 4 | unconstructed std::string elements |
+^                     ^                                  ^
+elements              first_free                         cap
+
+*/
+
+namespace cxx_case_strvec
+{
+  class StrVec
+  {
+  private:
+    using size_type = std::string::size_type;
+
+    // TODO: why static in the text?
+    std::allocator<std::string> m_alloc;
+
+    std::string *m_element{nullptr};
+    std::string *m_free{nullptr};
+    std::string *m_capacity{nullptr};
+
+    // allocate and construct memory copying from [begin, end) and return
+    // [begin, end) of the constructed.
+
+    std::pair<std::string *, std::string *>
+      alloc_and_copy_(const std::string *begin, const std::string *end)
+      {
+        // use iterator arithmetic
+        auto data = m_alloc.allocate(end - begin);
+        return {data, std::uninitialized_copy(begin, end, data)};
+      }
+
+    // free [element, cap) only when elemenet is not null
+    // move backwards from 'free' to call dtor on [element, free)
+    //
+    // NOTE: needs destroy()? Yes since std::string is `valuelike` and has own
+    // memory for holding characters
+
+    void free_()
+    {
+      if (m_element)
+      {
+        for (auto p = m_free; p != m_element; /* empty */)
+          m_alloc.destroy(--p);
+
+        m_alloc.deallocate(m_element, m_capacity - m_element);
+      }
+    }
+
+    // o cxx-move
+    // move the data from the old memory to the new std::move() returns rvalue,
+    // which cause construct() to use string move ctor.
+    
+    // o cxx-gdb
+    // seg-fault when use `element` in the loop:
+    //
+    // for (size_t i = 0; i != size(); ++i)
+    //     alloc.construct(dest++, std::move(*element_++));
+    //
+    // *gdb-debug* bt when use -g
+    // Program terminated with signal SIGSEGV, Segmentation fault.
+    // #0  0x00007f94aa120113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+    // (gdb) bt
+    // #0  0x00007f94aa120113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+    // #1  0x0000000000401bf7 in __gnu_cxx::new_allocator<std::string>::construct<std::string<std::string> > (this=0x602cd1 <StrVec::alloc>, __p=0xa53000) at /usr/include/c++/4.9/ext/new_allocator.h:120
+    // #2  0x0000000000401932 in StrVec::reallocate (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:117
+    // #3  0x0000000000401aa5 in StrVec::check_and_alloc (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:147
+    // #4  0x000000000040165e in StrVec::push_back (this=0x7ffdc9026bc0, s="two") at t_ex_strvec.cpp:44
+    // #5  0x000000000040133e in main () at t_ex_strvec.cpp:198
+    //
+    // when not use -g
+    // (gdb) bt
+    // #0  0x00007f3348f5c113 in std::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::string&&) () from /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+    // #1  0x0000000000401bf7 in void __gnu_cxx::new_allocator<std::string>::construct<std::string, std::string>(std::string*, std::string&&) ()
+    // #2  0x0000000000401932 in StrVec::reallocate() ()
+    // #3  0x0000000000401aa5 in StrVec::check_and_alloc() ()
+    // #4  0x000000000040165e in StrVec::push_back(std::string const&) ()
+    // #5  0x000000000040133e in main ()
+    //
+    // How to debug? See that uses 'construct' and gdb is useful to see
+    // what's going on when stepping through. Found out that the loop
+    // continues and saw that when add to print i and size().
+    //
+    // ...
+    // i: 16856, size: 18446744073709534761
+    // Segmentation fault (core dumped)
+    //
+    // (gdb) f 2
+    // #2  0x0000000000401932 in StrVec::reallocate (this=0x7ffdc9026bc0) at t_ex_strvec.cpp:117
+    // 117                     alloc.construct(dest++, std::move(*element_++));
+    // (gdb) p i
+    // $1 = 16856
+    // (gdb) p/u free_-element_
+    // $6 = 18446744073709534760
+    //
+    // Why? Since element_ is member data and keep increasing it, then size()
+    // member function would produce negative which turns into big number sicne
+    // size() returns size_t, unsigned int.
+
+    void reallocate_()
+    {
+      auto new_capacity = size() ? size() * 2 : 1;
+      auto new_data = m_alloc.allocate(new_capacity);
+
+      auto dest = new_data;
+      auto source = m_element;
+
+      for (size_type i = 0; i != size(); ++i)
+      {
+        m_alloc.construct(dest++, std::move(*source++)); 
+      }
+
+      m_element = new_data;
+      m_free = dest;
+      m_capacity = m_element + new_capacity; 
+    }
+
+    // check if it needs reallocation
+
+    void check_and_alloc_()
+    {
+      if (size() == capacity())
+      {
+        reallocate_();
+      }
+    }
+
+  public:
+    StrVec() = default;
+    ~StrVec() { free_(); }
+
+    StrVec(std::initializer_list<std::string> il)
+    {
+      auto coll = alloc_and_copy_(il.begin(), il.end());
+      m_element = coll.first;
+      m_free = m_capacity = coll.second;
+    }
+
+    // copy controls. makes a copy
+    StrVec(const StrVec &rhs)
+    {
+      std::cout << "StrVec(const StrVec &rhs)" << std::endl;
+      auto coll = alloc_and_copy_(rhs.begin(), rhs.end());
+      m_element = coll.first;
+      m_free = m_capacity = coll.second;
+    }
+
+    // copy controls. makes a copy and also support cxx-self-assian.
+    StrVec &operator=(const StrVec &rhs)
+    {
+      if (this != &rhs)
+      {
+        std::cout << "StrVec &operator=(const StrVec &rhs)" << std::endl;
+        auto coll = alloc_and_copy_(rhs.begin(), rhs.end());
+        free_();
+        m_element = coll.first;
+        m_free = m_capacity = coll.second;
+        return *this;
+      }
+    }
+
+#ifdef MOVE_SUPPORTED
+    // *cxx-move* controls. no need to alloc
+    StrVec(StrVec &&rhs) noexcept
+      : m_element(rhs.m_element), m_free(rhs.m_free), m_capacity(rhs.m_capacity)
+    {
+      std::cout << "StrVec(StrVec &&rhs)" << std::endl;
+      rhs.m_element = rhs.m_free = rhs.m_capacity = nullptr;
+    }
+
+    // move controls. no need to alloc
+    StrVec &operator=(StrVec &&rhs) noexcept
+    {
+      if (this != &rhs)
+      {
+        std::cout << "StrVec &operator=(StrVec &&rhs)" << std::endl;
+        free_();
+        m_element = rhs.m_element;
+        m_free = rhs.m_free;
+        m_capacity = rhs.m_capacity;
+
+        rhs.m_element = rhs.m_free = rhs.m_capacity = nullptr;
+      }
+
+      return *this;
+    }
+#endif 
+
+  public:
+    std::string &operator[](size_type n) { return m_element[n]; }
+
+    size_type size() const { return m_free - m_element; }
+    size_type capacity() const { return m_capacity - m_element; }
+
+    std::string *begin() const { return m_element; }
+    std::string *end() const { return m_free; }
+
+    const std::string *cbegin() const { return m_element; }
+    const std::string *cend() const { return m_free; }
+
+    // *cxx-copy*
+    void push_back(const std::string &s)
+    {
+      check_and_alloc_();
+
+      // TODO: construct a copy of s
+      //
+      // The first argument to construct must be a pointer to
+      // unconstructed space allocated by `allocate()`. 
+      //
+      // The second argument `determine which constructor` to use to
+      // construct the object in that space. This is string's copy ctor.
+
+      m_alloc.construct(m_free++, s);
+    }
+
+    // *cxx-move-overload*
+    //
+    // The *cxx-std-move* is to signal to compiler to pick up move operations
+    // via resolution. The std::move() doesn't itself do any moving, but merely
+    // converts its argument into a so-called rvalue reference.
+
+    void push_back(std::string &&s)
+    {
+      check_and_alloc_();
+      m_alloc.construct(m_free++, std::move(s));
+    }
+
+    // *cxx-emplace-back* is covered in chapter 16
+    template <typename... Args>
+      void emplace_back(Args&&... args)
+      {
+        check_and_alloc_();
+        m_alloc.construct(m_free++, std::forward<Args>(args)...);
+      }
+  };
+
+  StrVec returnVector()
+  {
+    StrVec coll;
+
+    coll.push_back("func1");
+    coll.push_back("func2");
+    coll.push_back("func3");
+
+    // this is where move is necessary
+    return coll;
+  }
+} // namespace cxx_case_strvec
+
+TEST(CxxCase, StringVector)
+{
+  using namespace cxx_case_strvec;
+
+  {
+    StrVec coll{"string1", "string2", "string3"};
+
+    {
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "string1,string2,string3,");
+    }
+
+    // operator[]
+    {
+      EXPECT_THAT(coll[0], "string1");
+
+      coll[0] = "element1";
+      coll[1] = "element2";
+      coll[2] = "element3";
+
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,");
+    }
+
+    // push_back
+    {
+      coll.push_back("push1");
+      coll.push_back("push2");
+
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+    }
+
+    // copy
+    {
+      StrVec coll2;
+      coll2 = coll;
+
+      // since T, std::string, supports streams
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+      EXPECT_THAT(coll.size(), 5);
+
+      // stringstream-clear
+      os = ostringstream("");
+      for (const auto & e : coll2)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+      EXPECT_THAT(coll2.size(), 5);
+    }
+
+    // move
+    {
+      StrVec coll2;
+      coll2 = std::move(coll);
+
+      EXPECT_THAT(coll2.size(), 5);
+
+#ifdef MOVE_SUPPORTED
+      EXPECT_THAT(coll.size(), 0);
+#else
+      // copy will be used instead
+      EXPECT_THAT(coll.size(), 5);
+#endif
+
+      ostringstream os;
+      for (const auto & e : coll2)
+        os << e << ",";
+
+      EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
+      EXPECT_THAT(coll2.size(), 5);
+    }
+
+    // cxx-emplace-back
+    {
+      // coll is still around
+
+      coll.emplace_back("string1");
+      coll.emplace_back(5, 'c');    // add "ccccc"
+
+      std::string s1("string2");
+      std::string s2("string3");
+      coll.emplace_back(s1 + s2);   // use string move
+
+#ifdef MOVE_SUPPORTED
+      EXPECT_THAT(coll.size(), 3);
+#else
+      EXPECT_THAT(coll.size(), 8);
+#endif
+      ostringstream os;
+      for (const auto & e : coll)
+        os << e << ",";
+
+#ifdef MOVE_SUPPORTED
+      EXPECT_THAT(os.str(), "string1,ccccc,string2string3,");
+#else
+      EXPECT_THAT(os.str(), 
+          "element1,element2,element3,push1,push2,string1,ccccc,string2string3,");
+#endif
+    }
+
+    // cxx-return
+    {
+      StrVec coll2;
+      EXPECT_THAT(coll2.size(), 0);
+
+      // will use cxx-copy-assign or cxx-move-assign? Use cxx-move
+      coll2 = returnVector();
+
+      EXPECT_THAT(coll2.size(), 3);
+    }
+  }
+}
+
+/*
+={=============================================================================
+
 Problem 46, circular buffer, the modern c++ challenge
 
 1. use size(count) and head only
