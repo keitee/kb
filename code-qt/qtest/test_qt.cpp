@@ -707,6 +707,21 @@ NOTE: this is different from cxx-map iterator
     EXPECT_THAT(it->first, 3);
     EXPECT_THAT(it->second, 2);
 
+
+https://doc.qt.io/qt-5/qmap.html#value
+
+const T QMap::value(const Key &key, const T &defaultValue = T()) const
+
+Returns the value associated with the key key.
+
+If the map contains no item with key key, the function returns defaultValue. If
+no defaultValue is specified, the function returns a default-constructed value.
+
+If there are multiple items for key in the map, the value of the most recently
+inserted one is returned.
+
+See also key(), values(), contains(), and operator[]().
+
 */
 
 namespace qt_map
@@ -721,9 +736,9 @@ namespace qt_map
 
 TEST(QtMap, Access)
 {
-  {
-    using namespace qt_map;
+  using namespace qt_map;
 
+  {
     State state1{100, 101, "one"};
     State state2{200, 201, "two"};
     State state3{300, 301, "thr"};
@@ -756,6 +771,31 @@ TEST(QtMap, Access)
 
     // this is interesting since it->initialState works
     EXPECT_THAT(it->initialState, it.value().initialState);
+  }
+
+  {
+    State state1{100, 101, "one"};
+    State state2{200, 201, "two"};
+    State state3{300, 301, "thr"};
+
+    QMap<int, State> coll;
+
+    coll.insert(1, state1);
+    coll.insert(2, state2);
+    coll.insert(3, state3);
+
+    EXPECT_THAT(coll.size(), 3);
+
+    auto it = coll.value(2);
+
+    if (it.initialState != 201)
+      EXPECT_THAT(true, false);
+
+    EXPECT_THAT(it.initialState, 201);
+
+    // if not found, return default constructed value
+    it = coll.value(4);
+    EXPECT_THAT(it.initialState, 0);
   }
 }
 
