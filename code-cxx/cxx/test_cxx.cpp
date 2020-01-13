@@ -6684,7 +6684,18 @@ namespace cxx_move
       m_value = value;
       std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
     }
+
+    void printMembers() const
+    {
+      std::cout << "name: " << m_name << ", value: " << m_value << std::endl;
+    }
   };
+
+  void set_move(const Move &m)
+  {
+    // m.setMembers("set_move", 30);
+    m.printMembers();
+  }
 } // namespace cxx_move
 
 TEST(CxxMove, binding)
@@ -6765,6 +6776,18 @@ TEST(CxxMove, signal)
     EXPECT_THAT(m1.isNameEmpty(), true);
     EXPECT_THAT(m2.isNameEmpty(), true);
 #endif
+  }
+
+  // which will be called? no copy or move controls are called
+  // *cxx-reference-binding* Can bind `rvalue` to `const-lvalue-reference`
+  // assume that the moved is const and that meanss nothing will be changed so
+  // why bother to copy of it? so no copy or move.
+  {
+    Move m1{"m1", 10};
+    Move m2{"m2", 20};
+
+    // void set_move(const Move &m); rvalue to lvalue reference
+    set_move(std::move(m2)); 
   }
 }
 

@@ -195,19 +195,5 @@ target_link_libraries(lpi-sem-server ${LIBS} "-lpthread")
 add_executable(lpi-sem-client "lpi_sem_client.cpp")
 target_link_libraries(lpi-sem-client ${LIBS} "-lpthread")
 
-# sdevent
-add_executable(sdevent "sdevent.cpp")
-# target_compile_options(sdevent INTERFACE -lsystemd)
-target_link_libraries(sdevent ${LIBS} "-lsystemd")
-
-# sdbus_client
-add_executable(sdbus_client_1 "sdbus_client_1.cpp")
-target_link_libraries(sdbus_client_1 ${LIBS} "-lsystemd")
-
-# TODO: fails to run cmake for c file
-# # sdbus_server_1
-# add_executable(sdbus_server_1 "sdbus_server_1.c")
-# target_link_libraries(sdbus_server_1 ${LIBS} "-lsystemd")
-
 add_test(${PROJECT_NAME} ${PROJECT_NAME})
 

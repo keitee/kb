@@ -1,9 +1,9 @@
 #include "slog.h"
 #include <cerrno>
 #include <cstdlib> // exit
-#include <fcntl.h> // Defines O_* constants 
-#include <sys/stat.h> // Defines mode constants
+#include <fcntl.h> // Defines O_* constants
 #include <semaphore.h>
+#include <sys/stat.h> // Defines mode constants
 #include <unistd.h>
 
 #define LOG_EXIT LOG_MSG
@@ -44,9 +44,9 @@ SYNOPSIS
        extern int optind, opterr, optopt;
 
 
-#include <fcntl.h> // Defines O_* constants 
-#include <sys/stat.h> // Defines mode constants
+#include <fcntl.h> // Defines O_* constants
 #include <semaphore.h>
+#include <sys/stat.h> // Defines mode constants
 
 sem_t *sem_open(const char *name, int oflag, ...
 // mode_t mode,
