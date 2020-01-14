@@ -31,13 +31,10 @@ void Ping::start(const QString &name)
     QCoreApplication::instance()->quit();
   }
 
-  // connect to the remote signal, pong::aboutToQuit.
   // NOTE: ping do not use proxy but still able to connect to remote signal.
   //
   // Also see that proxy inherits from QDBusAbstractInterface as QDBusInterface
   // does. So proxy is not much different from QDBusInterface use.
-  //
-  // class OrgExampleChatInterface: public QDBusAbstractInterface
 
   // QObject::connect()
   connect(iface, SIGNAL(aboutToQuit()),
@@ -59,6 +56,7 @@ void Ping::start(const QString &name)
     printf("Ask your question: ");
 
     QString line = QString::fromLocal8Bit(qstdin.readLine()).trimmed();
+
     if (line.isEmpty())
     {
       iface->call("quit");
@@ -66,12 +64,12 @@ void Ping::start(const QString &name)
     }
     else if(line == "value")
     {
-
       // method call time=1571906439.566168 sender=:1.888 ->
       // destination=org.example.QtDBus.PingExample serial=9 path=/;
       // interface=org.freedesktop.DBus.Properties; member=Get
       //    string "org.example.QtDBus.ComplexPong.Pong"
       //    string "value"
+      //
       // method return time=1571906439.566688 sender=:1.889 ->
       // destination=:1.888 serial=4 reply_serial=9
       //    variant       string "initial value"
@@ -89,6 +87,7 @@ void Ping::start(const QString &name)
       //    string "org.example.QtDBus.ComplexPong.Pong"
       //    string "value"
       //    variant       string "this is message from ping"
+      //
       // method return time=1571906585.509573 sender=:1.893 ->
       // destination=:1.892 serial=5 reply_serial=10
 
@@ -120,31 +119,14 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  /* 
-  QDBusInterface iface(SERVICE_NAME, "/", "", QDBusConnection::sessionBus());
-  if (iface.isValid()) {
-    QDBusReply<QString> reply = iface.call("ping", argc > 1 ? argv[1] : "");
-    if (reply.isValid()) {
-      printf("Reply was: %s\n", qPrintable(reply.value()));
-      return 0;
-    }
-
-    fprintf(stderr, "Call failed: %s\n", qPrintable(reply.error().message()));
-    return 1;
-  }
-
-  fprintf(stderr, "%s\n",
-      qPrintable(QDBusConnection::sessionBus().lastError().message()));
-  return 1;
-  */
-
-  // use serviceWatcher to get notified when service(pong) is registered. And
-  // runs Ping::start()
+  // use serviceWatcher to get notified when service(complexpong) is registered.
+  // And runs Ping::start()
 
   QDBusServiceWatcher serviceWatcher(SERVICE_NAME,
       QDBusConnection::sessionBus(),
       QDBusServiceWatcher::WatchForRegistration);
 
+  // not proxy and QObject
   Ping ping;
   QObject::connect(&serviceWatcher, &QDBusServiceWatcher::serviceRegistered,
       &ping, &Ping::start);

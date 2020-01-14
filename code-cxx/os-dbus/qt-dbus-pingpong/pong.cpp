@@ -18,7 +18,7 @@ dbus-send  --session --type=method_call --print-reply --dest='org.freedesktop.DB
       string "org.example.QtDBus.PingExample"
 
 
-o see that Pong do not set `inerface name` and it's automatically(?) assigned:
+NOTE: that Pong do not set `inerface name` and it's automatically(?) assigned:
 
   <interface name="local.pong.Pong">
 
@@ -77,14 +77,13 @@ method return time=1571302741.367224 sender=:1.383 -> destination=:1.385 serial=
 
 */
 
-
 // https://doc.qt.io/qt-5/qmetaobject.html
 //
 // Detailed Description
 //
 // The Qt Meta-Object System in Qt is responsible for the signals and slots
 // inter-object communication mechanism, runtime type information, and the Qt
-// property system. 
+// property system.
 //
 // A single QMetaObject instance is created for each QObject subclass that is
 // used in an application, and this instance stores all the meta-information for
@@ -125,13 +124,11 @@ method return time=1571302741.367224 sender=:1.383 -> destination=:1.385 serial=
 // to store them in an event behind the scenes. If you try to use a queued
 // connection and get the error message
 
-
 QString Pong::ping(const QString &arg)
 {
   QMetaObject::invokeMethod(QCoreApplication::instance(), "quit");
   return QString("ping(\"%1\") got called").arg(arg);
 }
-
 
 // https://doc.qt.io/qt-5/qtdbus-pingpong-example.html#
 //
@@ -142,7 +139,7 @@ QString Pong::ping(const QString &arg)
 // o do not use adaptor
 //
 // o ping make a remote call and print reply and pong quit its running when it
-// gets a call from ping. 
+// gets a call from ping.
 //
 // $ QDBUS_DEBUG=1 ./pong (lost of debug messages)
 //
@@ -155,10 +152,12 @@ int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  if (!QDBusConnection::sessionBus().isConnected()) {
-    fprintf(stderr, "Cannot connect to the D-Bus session bus.\n"
-        "To start it, run:\n"
-        "\teval `dbus-launch --auto-syntax`\n");
+  if (!QDBusConnection::sessionBus().isConnected())
+  {
+    fprintf(stderr,
+            "Cannot connect to the D-Bus session bus.\n"
+            "To start it, run:\n"
+            "\teval `dbus-launch --auto-syntax`\n");
     return 1;
   }
 
@@ -185,9 +184,11 @@ int main(int argc, char **argv)
 
   */
 
-  if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
-    fprintf(stderr, "%s\n",
-        qPrintable(QDBusConnection::sessionBus().lastError().message()));
+  if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME))
+  {
+    fprintf(stderr,
+            "%s\n",
+            qPrintable(QDBusConnection::sessionBus().lastError().message()));
     printf("pong cannot register service and exit\n");
     exit(1);
   }
@@ -207,8 +208,9 @@ int main(int argc, char **argv)
   // see that can expose object without using adapter interface
 
   Pong pong;
-  QDBusConnection::sessionBus().registerObject("/", &pong, 
-      QDBusConnection::ExportAllSlots);
+  QDBusConnection::sessionBus().registerObject("/",
+                                               &pong,
+                                               QDBusConnection::ExportAllSlots);
 
   printf("pong is ready to accept a call\n");
   printf("pong is ready to accept a call\n");

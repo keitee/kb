@@ -53,14 +53,14 @@
 
 #include <QtCore/QObject>
 
-class Pong: public QObject
+class Pong : public QObject
 {
-    Q_OBJECT
+  Q_OBJECT
 public slots:
 
-    // see that it works without Q_SCRIPTABLE
-    // Q_SCRIPTABLE QString ping(const QString &arg);
-    QString ping(const QString &arg);
+  // see that it works without Q_SCRIPTABLE
+  // Q_SCRIPTABLE QString ping(const QString &arg);
+  QString ping(const QString &arg);
 };
 
 #endif

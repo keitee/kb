@@ -6,9 +6,31 @@
 #include "ping-common.h"
 
 /*
+https://doc.qt.io/qt-5/qdbusabstractinterface.html#call
+
+QDBusAbstractInterface
+
+QDBusMessage QDBusAbstractInterface::call(
+  const QString &method, const QVariant &arg1 = QVariant(), const QVariant &arg2
+  = QVariant(), const QVariant &arg3 = QVariant(), const QVariant &arg4 =
+  QVariant(), const QVariant &arg5 = QVariant(), const QVariant &arg6 =
+  QVariant(), const QVariant &arg7 = QVariant(), const QVariant &arg8 =
+  QVariant());
+
+Calls the method method on this interface and passes the parameters to this
+function to the method.
+
+The parameters to call are passed on to the remote function via D-Bus as input
+arguments. Output arguments are returned in the `QDBusMessage reply`. If the
+reply is an error reply, lastError() will also be set to the contents of the
+error message.
+
+
 https://doc.qt.io/qt-5/qdbusinterface.html
 
-Detailed Description
+QDBusInterface
+
+Inherits:	QDBusAbstractInterface
 
 QDBusInterface is a generic accessor class that is used *to place calls* to
 remote objects, connect to signals exported by remote objects and get/set the
@@ -25,24 +47,6 @@ Finally, properties are accessed using the QObject::property() and
 QObject::setProperty() functions.
 
 
-https://doc.qt.io/qt-5/qdbusabstractinterface.html#call
-
-QDBusMessage QDBusAbstractInterface::call(
-  const QString &method, const QVariant &arg1 = QVariant(), const QVariant &arg2
-  = QVariant(), const QVariant &arg3 = QVariant(), const QVariant &arg4 =
-  QVariant(), const QVariant &arg5 = QVariant(), const QVariant &arg6 =
-  QVariant(), const QVariant &arg7 = QVariant(), const QVariant &arg8 =
-  QVariant());
-
-Calls the method method on this interface and passes the parameters to this
-function to the method.
-
-The parameters to call are passed on to the remote function via D-Bus as input
-arguments. Output arguments are returned in the QDBusMessage reply. If the reply
-is an error reply, lastError() will also be set to the contents of the error
-message.
-
-
 https://doc.qt.io/qt-5/qdbusreply.html
 
 Detailed Description
@@ -51,19 +55,19 @@ A QDBusReply object is a *subset* of the QDBusMessage object that represents a
 method call's reply. It contains only the first output argument or the error
 code and is used by QDBusInterface-derived classes to allow returning the error
 code as the function's return argument.
- 
+
 However, if it does fail under those conditions, the value returned by
 QDBusReply<T>::value() is a default-constructed value. It may be
 indistinguishable from a valid return value.
 
 
-NOTE: 
+NOTE:
 input argument = in parameter
 output argument = out parameter = return value
 
 
 QDBusReply objects are used for remote calls that have no output arguments or
-return values (i.e., they have a "void" return type). 
+return values (i.e., they have a "void" return type).
 
 Use the isValid() function to test if the reply succeeded.
 
@@ -84,21 +88,39 @@ int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  if (!QDBusConnection::sessionBus().isConnected()) {
-    fprintf(stderr, "Cannot connect to the D-Bus session bus.\n"
-        "To start it, run:\n"
-        "\teval `dbus-launch --auto-syntax`\n");
+  if (!QDBusConnection::sessionBus().isConnected())
+  {
+    fprintf(stderr,
+            "Cannot connect to the D-Bus session bus.\n"
+            "To start it, run:\n"
+            "\teval `dbus-launch --auto-syntax`\n");
     return 1;
   }
 
+  // #define WHEN_USE_MESSAGE
 
+#ifdef WHEN_USE_MESSAGE
+
+  // NOTE: cannot use this since error:
+  // No such method 'ping' in any interface at object path '/' (signature '')
+  
+  // QDBusMessage QDBusMessage::createMethodCall(const QString &service, const
+  // QString &path, const QString &interface, const QString &method)
+
+  QDBusMessage msg =
+    QDBusMessage::createMethodCall(SERVICE_NAME, "/", QString(), "ping");
+  QDBusConnection::sessionBus().call(msg);
+#else
   // Make a *direct* call(slot) of the remote object, instead of using
   // signal/slot/connect way.
 
   QDBusInterface iface(SERVICE_NAME, "/", "", QDBusConnection::sessionBus());
-  if (iface.isValid()) {
+  if (iface.isValid())
+  {
     QDBusReply<QString> reply = iface.call("ping", argc > 1 ? argv[1] : "");
-    if (reply.isValid()) {
+
+    if (reply.isValid())
+    {
       printf("Reply was: %s\n", qPrintable(reply.value()));
       return 0;
     }
@@ -106,8 +128,11 @@ int main(int argc, char **argv)
     fprintf(stderr, "Call failed: %s\n", qPrintable(reply.error().message()));
     return 1;
   }
+#endif
 
-  fprintf(stderr, "%s\n",
-      qPrintable(QDBusConnection::sessionBus().lastError().message()));
+  fprintf(stderr,
+          "%s\n",
+          qPrintable(QDBusConnection::sessionBus().lastError().message()));
+
   return 1;
 }

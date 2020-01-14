@@ -1,24 +1,82 @@
-// COMPLEX PING
-//
-// D-Bus Complex Ping Pong Example
-// Demonstrates usage of the Qt D-Bus typesystem.
+/*
 
-// Complex Ping Pong Example demonstrates the use of Qt D-Bus typesystem with
-// QDBusVariant and QDBusReply. The example consists of the main application
-// complexping which starts the other application, complexpong. Entering
-// keywords such as hello and ping is handled by complexpong and the reply is
-// printed to the standard output.
-//
-// Running the Example
-//
-// To run, execute the complexping application.
-//
-// $ ./complexping
-// Ask your question: When is the next Qt release?
-// Reply was: Sorry, I don't know the answer
-// Ask your question: What is the answer to life, the universe and everything?
-// Reply was: 42
+D-Bus Complex Ping Pong Example
 
+Demonstrates usage of the Qt D-Bus typesystem.
+
+Complex Ping Pong Example demonstrates the use of Qt D-Bus typesystem with
+QDBusVariant and QDBusReply. The example consists of the main application
+complexping which starts the other application, complexpong. Entering
+keywords such as hello and ping is handled by complexpong and the reply is
+printed to the standard output.
+
+Running the Example
+
+To run, execute the complexping application.
+
+$ ./complexping
+Ask your question: When is the next Qt release?
+Reply was: Sorry, I don't know the answer
+Ask your question: What is the answer to life, the universe and everything?
+Reply was: 42
+
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.QtDBus.PingExample' / org.freedesktop.DBus.Introspectable.Introspect
+
+method return time=1579041212.526071 sender=:1.447 -> destination=:1.449 serial=4 reply_serial=2
+   string "<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+  <interface name="org.example.QtDBus.ComplexPong.Pong">
+    <property name="value" type="s" access="readwrite"/>
+    <signal name="aboutToQuit">
+    </signal>
+    <method name="query">
+      <arg type="v" direction="out"/>
+      <arg name="query" type="s" direction="in"/>
+    </method>
+    <method name="quit">
+      <annotation name="org.freedesktop.DBus.Method.NoReply" value="true"/>
+    </method>
+  </interface>
+
+  <interface name="org.freedesktop.DBus.Properties">
+    <method name="Get">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="property_name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="out"/>
+    </method>
+    <method name="Set">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="property_name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="in"/>
+    </method>
+    <method name="GetAll">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="values" type="a{sv}" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out0" value="QVariantMap"/>
+    </method>
+    <signal name="PropertiesChanged">
+      <arg name="interface_name" type="s" direction="out"/>
+      <arg name="changed_properties" type="a{sv}" direction="out"/>
+      <annotation name="org.qtproject.QtDBus.QtTypeName.Out1" value="QVariantMap"/>
+      <arg name="invalidated_properties" type="as" direction="out"/>
+    </signal>
+  </interface>
+  <interface name="org.freedesktop.DBus.Introspectable">
+    <method name="Introspect">
+      <arg name="xml_data" type="s" direction="out"/>
+    </method>
+  </interface>
+  <interface name="org.freedesktop.DBus.Peer">
+    <method name="Ping"/>
+    <method name="GetMachineId">
+      <arg name="machine_uuid" type="s" direction="out"/>
+    </method>
+  </interface>
+</node>
+"
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,6 +102,29 @@ void Pong::setValue(QString const &newValue)
   qDebug() << "pong::set value " << newValue;
   m_value = newValue;
 }
+
+/*
+NOTE
+
+QObject::connect(&app, &QCoreApplication::aboutToQuit,
+    pong, &Pong::aboutToQuit);
+
+this is signal-to-signal connection. when ping calls remote pong's quit(),
+it will cause appliction exit which trigger QCoreApplication::aboutToQuit.
+this is mapped and it leads to raises Pong::aboutToQuit signal.
+
+`ping` connect to this Pong::aboutToQuit and runs its quit().
+
+Adaptors are intended to be lightweight classes
+`whose main purpose is to relay calls to and from the real object`,
+
+To see this connect() effectively do "emit aboutToQuit", disable it and use
+emit instead above. works well.
+
+that is, "send a signal", "emit a signal" means a "send a signal message on
+dbus" after all.
+ 
+*/
 
 void Pong::quit()
 {
@@ -91,33 +172,11 @@ int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  // see that use of adaptor
+  // adaptor
   QObject obj;
   Pong *pong = new Pong(&obj);
 
-  // NOTE
-  // QObject::connect(&app, &QCoreApplication::aboutToQuit,
-  //     pong, &Pong::aboutToQuit);
-  //
-  // this is signal-to-signal connection. when ping calls remote pong's quit(),
-  // it will cause appliction exit which trigger QCoreApplication::aboutToQuit.
-  // this is mapped and it leads to raises Pong::aboutToQuit.
-  //
-  // `ping` connect to this Pong::aboutToQuit and its quit() runs.
-  //
-  // Adaptors are intended to be lightweight classes
-  // `whose main purpose is to relay calls to and from the real object`,
-  //
-  // that is Adaptor maps incoming messages for signal/method calls to Qt slot,
-  // signal, and property.
-  //
-  // To see this connect() effectively do "emit aboutToQuit", disable it and use
-  // emit instead above. works well.
-  //
-  // that is, "send a signal", "emit a signal" means a "send a signal message on
-  // dbus" after all.
-
-  // use of property "value"
+  // set property "value"
   pong->setProperty("value", "initial value");
 
   /*
@@ -135,25 +194,12 @@ int main(int argc, char **argv)
   QDBusConnection::sessionBus().registerObject("/", &obj);
 
 
-  // NOTE
-  // this uses adaptor but use registerService() which is not used `chat`
-  // example
-
-  /*
-  bool QDBusConnection::registerService(const QString &serviceName)
-
-  Attempts to register the serviceName on the D-Bus server and returns true if
-  the registration succeeded. The registration will fail if the name is already
-  registered by another application.
-
-  #define SERVICE_NAME            "org.example.QtDBus.PingExample"
-
-  NOTE that unlike `chat` case, this do not allow running the same `pong`, that
-  is, not allow multiple registered with the same service name.
-
-  */
+  // NOTE that unlike `chat` case, use registerService() and do not allow running
+  // the same `pong`, that is, not allow multiple registered with the same service
+  // name.
 
   // #define SERVICE_NAME            "org.example.QtDBus.PingExample"
+
   if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
     fprintf(stderr, "%s\n",
         qPrintable(QDBusConnection::sessionBus().lastError().message()));
@@ -161,10 +207,7 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-
   printf("complexpong is ready to accept a call\n");
-  printf("complexpong is ready to accept a call\n");
-  // fflush();
 
   app.exec();
   return 0;

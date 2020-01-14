@@ -48,4 +48,4 @@
 **
 ****************************************************************************/
 
-#define SERVICE_NAME            "org.example.QtDBus.PingExample"
+#define SERVICE_NAME "org.example.QtDBus.PingExample"
