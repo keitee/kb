@@ -50,9 +50,10 @@ Client::Client()
     QCoreApplication::instance()->quit();
   }
 
+  // connects to `sender`'s signals
+  //
   // NOTE: have to use m_sender->connect() but not QObject::connect() and if do,
   // nothing happens meaning SLOT get not called.
-
   m_sender->connect(m_sender.data(),
                     SIGNAL(action(QString, QString)),
                     this,

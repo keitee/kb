@@ -57,8 +57,11 @@ public: // PROPERTIES
   void setPowered(bool value);
 
 public Q_SLOTS: // METHODS
-  void ConnectProfile(const QString &UUID);
-  void SendCommand(const QString &command);
+  // void ConnectProfile(const QString &UUID);
+  // void SendCommand(const QString &command);
+
+  void ConnectProfile(const QString &UUID, const QDBusMessage &message);
+  void SendCommand(const QString &command, const QDBusMessage &message);
   void onTimerExpired();
   void onPowerChanged(bool power);
 

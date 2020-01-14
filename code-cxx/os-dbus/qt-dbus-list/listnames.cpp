@@ -210,26 +210,28 @@ void method2_1()
 
   // QDBusConnection sessionBus();
   //
-  // QDBusMessage 
-  // QDBusConnection::call(const QDBusMessage &message, 
-  //  QDBus::CallMode mode = QDBus::Block, int timeout = -1) const
+  // QDBusMessage
+  // QDBusConnection::call(
+  //  const QDBusMessage &message,
+  //  QDBus::CallMode mode = QDBus::Block,
+  //  int timeout = -1) const
   //
   // Sends the message over this connection and blocks, waiting for a reply, for
-  // at most timeout milliseconds. 
+  // at most timeout milliseconds.
   //
-  // *This function is suitable for method calls only.* 
+  // *This function is suitable for method calls only.*
   //
-  // It returns the reply message as its return value, which will be either of 
+  // It returns the reply message as its return value, which will be either of
   // type QDBusMessage::ReplyMessage or QDBusMessage::ErrorMessage.
-  // 
+  //
   // If no reply is received within timeout milliseconds, an automatic error
   // will be delivered indicating the expiration of the call. The default
   // timeout is -1, which will be replaced with an implementation-defined value
   // that is suitable for inter-process communications (generally, 25 seconds).
-  // 
+  //
   // See the QDBusInterface::call() function for a more friendly way of placing
   // calls.
-  // 
+  //
   // Warning: If mode is QDBus::BlockWithGui, this function will reenter the Qt
   // event loop in order to wait for the reply. During the wait, it may deliver
   // signals and other method calls to your application. Therefore, it must be
@@ -260,6 +262,37 @@ void method2_1()
   QDBusMessage reply = QDBusConnection::sessionBus().call(request);
 
   // qDebug() << dbus_iface.call("ListNames").arguments().at(0);
+  qDebug() << reply.arguments().at(0);
+}
+
+// ==============================================================
+// Method 2_1_1:
+// dbus[6366]: arguments to dbus_message_iter_init_append() were incorrect, assertion "message != NULL" failed in file ../../../dbus/dbus-message.c line 2499.
+// This is normally a bug in some application using the D-Bus library.
+// 
+//   D-Bus not built with -rdynamic so unable to print a backtrace
+// Aborted (core dumped)
+
+void method2_1_1()
+{
+  qDebug() << "==============================================================";
+  qDebug() << "Method 2_1_1:";
+
+  // This function returns a QDBusMessage object that can be sent with
+  // QDBusConnection::call().
+  //
+  // QDBusInterface dbus_iface("org.freedesktop.DBus", "/org/freedesktop/DBus",
+  //    "org.freedesktop.DBus", bus);
+
+  QDBusMessage request;
+
+  request << "org.freedesktop.DBus";
+  request << "/org/freedesktop/DBus";
+  request << "org.freedesktop.DBus";
+  request << "ListNames";
+
+  QDBusMessage reply = QDBusConnection::sessionBus().call(request);
+
   qDebug() << reply.arguments().at(0);
 }
 
@@ -342,6 +375,7 @@ int main(int argc, char **argv)
   method1();
   method2();
   method2_1();
+  method2_1_1();
   method3();
   method2_2();
 
