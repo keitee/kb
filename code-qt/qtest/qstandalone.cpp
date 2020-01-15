@@ -1,17 +1,17 @@
-#include <iostream>
-#include <sstream>
-#include <memory>
 #include <exception>
+#include <iostream>
+#include <memory>
+#include <sstream>
 
-#include <QList>
-#include <QString>
 #include <QDebug>
+#include <QList>
 #include <QLoggingCategory>
+#include <QString>
 // #include <QApplication>
 #include <QQueue>
-#include <QTimer>
 #include <QSignalSpy>
 #include <QTime>
+#include <QTimer>
 
 #include "qclass.h"
 
@@ -79,7 +79,9 @@ int main(int argc, char **argv)
     wo->moveToThread(thread);
 
     // start thread
-    QObject::connect(thread, &QThread::started, wo,
+    QObject::connect(thread,
+                     &QThread::started,
+                     wo,
                      &ThreadStandAloneY::progress);
 
     thread->start();

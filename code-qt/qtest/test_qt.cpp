@@ -496,20 +496,85 @@ type()s are multi-valued, for example a string list.) You can find out what
 type, T, the variant holds, convert it to a different type using convert(), get
 its value using one of the toT() functions (e.g., toSize()) and check whether
 the type can be converted to a particular type using canConvert().
+*/
 
+// /Qt/5.12.3/Src/qtbase/src/corelib/kernel/qvariant.cpp
+//
+// see how it's documented in the code
+
+/*! \fn template<typename T> T QVariant::value() const
+
+    Returns the stored value converted to the template type \c{T}.
+    Call canConvert() to find out whether a type can be converted.
+    If the value cannot be converted, a \l{default-constructed value}
+    will be returned.
+
+    If the type \c{T} is supported by QVariant, this function behaves
+    exactly as toString(), toInt() etc.
+
+    Example:
+
+    \snippet code/src_corelib_kernel_qvariant.cpp 5
+
+    If the QVariant contains a pointer to a type derived from QObject then
+    \c{T} may be any QObject type. If the pointer stored in the QVariant can be
+    qobject_cast to T, then that result is returned. Otherwise a null pointer is
+    returned. Note that this only works for QObject subclasses which use the
+    Q_OBJECT macro.
+
+    If the QVariant contains a sequential container and \c{T} is QVariantList, the
+    elements of the container will be converted into \l {QVariant}s and returned as a QVariantList.
+
+    \snippet code/src_corelib_kernel_qvariant.cpp 9
+
+    \sa setValue(), fromValue(), canConvert(), Q_DECLARE_SEQUENTIAL_CONTAINER_METATYPE()
+*/
+
+/*
+/Qt/5.12.3/Src/qtbase/src/corelib/kernel/qvariant.h
+
+    template<typename T>
+    inline T value() const
+    { return qvariant_cast<T>(*this); }
+
+// from https://doc.qt.io/qt-5/qvariant.html#value
+
+T QVariant::value() const
+
+Returns the stored value "converted to the template type T". Call
+canConvert() to find out whether a type can be converted. If the value
+cannot be converted, a default-constructed value will be returned.
+
+If the type T is supported by QVariant, this function behaves exactly as
+toString(), toInt() etc.
+
+
+bool QVariant::canConvert() const
+Returns true if the variant can be converted to `the template type T`,
+otherwise false.
+
+
+  //
+  // A QVariant containing a sequential container will also return true for this
+  // function if the targetTypeId is QVariantList. It is possible to iterate
+  // over the contents of the container without extracting it as a (copied)
+  // QVariantList:
+  //
+  // typedef QVariant::QVariantList
+  // Synonym for QList<QVariant>.
+  //
+  // output:
+  // QVariant(int, 7)
+  // QVariant(int, 11)
+  // QVariant(int, 42)
+
+  // If the QVariant contains a sequential container and T is QVariantList, the
+  // elements of the container will be converted into QVariants and returned as
+  // a QVariantList.
 */
 
 TEST(QtVariant, convert)
 {
-  // T QVariant::value() const
-  //
-  // Returns the stored value "converted to the template type T". Call
-  // canConvert() to find out whether a type can be converted. If the value
-  // cannot be converted, a default-constructed value will be returned.
-  //
-  // If the type T is supported by QVariant, this function behaves exactly as
-  // toString(), toInt() etc.
-
   {
     QVariant v;
     v = 7;
@@ -518,7 +583,9 @@ TEST(QtVariant, convert)
     // compile error since "7" is not QString
     // EXPECT_THAT("7", v.toString());
     EXPECT_THAT(QString("7"), v.toString());
+  }
 
+  {
     // const char *QVariant::typeName() const
     // Returns the name of the type stored in the variant. The returned strings
     // describe the C++ datatype used to store the data: for example, "QFont",
@@ -533,22 +600,102 @@ TEST(QtVariant, convert)
 
     // https://doc.qt.io/qt-5/qbytearray.html
     EXPECT_THAT(QByteArray("int"), QByteArray(v.typeName()));
+  }
 
-    // T QVariant::value() const
-    // Returns the stored value converted to the template type T. Call
-    // canConvert() to find out whether a type can be converted. If the value
-    // cannot be converted, a default-constructed value will be returned.
-    //
-    // If the type T is supported by QVariant, this function behaves exactly as
-    // toString(), toInt() etc.
-
+  {
     EXPECT_THAT(v.toInt(), v.value<int>());        // same as v.toInt()
     EXPECT_THAT(v.toString(), v.value<QString>()); // same as v.toString()
   }
+
+  // MyCustomStruct s;
+  // v.setValue(s);
+
+  // v.canConvert<int>();              // returns false
+  // v.canConvert<MyCustomStruct>();   // returns true
+  {
+    QVariant v{42};
+
+    EXPECT_THAT(v.canConvert<int>(), true);
+    EXPECT_THAT(v.canConvert<QString>(), true);
+  }
 }
+
+/*
+
+QVariant QVariant::fromValue(const T &value)
+
+Returns a QVariant containing a copy of value. Behaves exactly like setValue()
+otherwise.
+
+code:
+
+template<typename T>
+static inline QVariant fromValue(const T &value)
+{ return qVariantFromValue(value); }
+
+
+void QVariant::setValue(const T &value)
+
+Stores a copy of value. If T is a type that QVariant doesn't support, QMetaType
+is used to store the value. A compile error will occur if QMetaType doesn't
+handle the type.
+
+code:
+
+template<typename T>
+inline void QVariant::setValue(const T &avalue)
+{ qVariantSetValue(*this, avalue); }
+
+*/
 
 TEST(QtVariant, store)
 {
+  {
+    QVariant v;
+    v.setValue(5);
+    EXPECT_THAT(QByteArray("int"), QByteArray(v.typeName()));
+    EXPECT_THAT(v.toInt(), 5);
+  }
+
+  // bool QVariant::canConvert() const
+  // Returns true if the variant can be converted to the template type T,
+  // otherwise false.
+  //
+  // A QVariant containing a sequential container will also return true for this
+  // function if the targetTypeId is QVariantList. It is possible to iterate
+  // over the contents of the container without extracting it as a (copied)
+  // QVariantList:
+  //
+  // typedef QVariant::QVariantList
+  // Synonym for QList<QVariant>.
+  //
+  // output:
+  // QVariant(int, 7)
+  // QVariant(int, 11)
+  // QVariant(int, 42)
+
+  // If the QVariant contains a sequential container and T is QVariantList, the
+  // elements of the container will be converted into QVariants and returned as
+  // a QVariantList.
+
+  {
+    QList<int> coll{7, 11, 42};
+    QVariant v = QVariant::fromValue(coll);
+
+    EXPECT_THAT(QByteArray("QList<int>"), QByteArray(v.typeName()));
+    // qDebug() << v;
+
+    if (v.canConvert<QVariantList>())
+    {
+      QSequentialIterable it = v.value<QSequentialIterable>();
+
+      // cxx-range-for
+      for (const QVariant &v : it)
+        qDebug() << v;
+    }
+  }
+}
+
   // You can even store QList<QVariant> and QMap<QString, QVariant> values in a
   // variant, so you can easily construct arbitrarily complex data structures of
   // arbitrary types. This is very powerful and versatile, but may prove less
@@ -601,66 +748,6 @@ TEST(QtVariant, null)
   EXPECT_THAT(z.isNull(), false);
 }
 
-TEST(QtVariant, x)
-{
-  // QVariant QVariant::fromValue(const T &value)
-  // Returns a QVariant containing a copy of value. Behaves exactly like
-  // setValue() otherwise.
-  //
-  // template<typename T>
-  // static inline QVariant fromValue(const T &value)
-  // { return qVariantFromValue(value); }
-  //
-  // void QVariant::setValue(const T &value)
-  // Stores a copy of value. If T is a type that QVariant doesn't support,
-  // QMetaType is used to store the value. A compile error will occur if
-  // QMetaType doesn't handle the type.
-
-  {
-    QVariant v;
-    v.setValue(5);
-    EXPECT_THAT(QByteArray("int"), QByteArray(v.typeName()));
-    EXPECT_THAT(v.toInt(), 5);
-  }
-
-  // bool QVariant::canConvert() const
-  // Returns true if the variant can be converted to the template type T,
-  // otherwise false.
-  //
-  // A QVariant containing a sequential container will also return true for this
-  // function if the targetTypeId is QVariantList. It is possible to iterate
-  // over the contents of the container without extracting it as a (copied)
-  // QVariantList:
-  //
-  // typedef QVariant::QVariantList
-  // Synonym for QList<QVariant>.
-  //
-  // output:
-  // QVariant(int, 7)
-  // QVariant(int, 11)
-  // QVariant(int, 42)
-
-  // If the QVariant contains a sequential container and T is QVariantList, the
-  // elements of the container will be converted into QVariants and returned as
-  // a QVariantList.
-
-  {
-    QList<int> coll{7, 11, 42};
-    QVariant v = QVariant::fromValue(coll);
-
-    EXPECT_THAT(QByteArray("QList<int>"), QByteArray(v.typeName()));
-    // qDebug() << v;
-
-    if (v.canConvert<QVariantList>())
-    {
-      QSequentialIterable it = v.value<QSequentialIterable>();
-
-      // cxx-range-for
-      for (const QVariant &v : it)
-        qDebug() << v;
-    }
-  }
-}
 
 // ={=========================================================================
 /* qt-map
@@ -1024,12 +1111,14 @@ TEST(QtLogging, Category)
     // QLoggingCategory &operator()() { return *this; }
     // const QLoggingCategory &operator()() const { return *this; }
 
-    for (bool qt_category_enabled                 = cat.isCriticalEnabled();
-         qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat.isCriticalEnabled();
+         qt_category_enabled;
+         qt_category_enabled = false)
       std::cout << cat.categoryName() << " isCriticalEnabled" << std::endl;
 
-    for (bool qt_category_enabled                 = cat().isCriticalEnabled();
-         qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isCriticalEnabled();
+         qt_category_enabled;
+         qt_category_enabled = false)
       std::cout << cat().categoryName() << " isCriticalEnabled" << std::endl;
 
     for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled;
@@ -1042,7 +1131,8 @@ TEST(QtLogging, Category)
 
     // use of isEnabled()
     for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg);
-         qt_category_enabled; qt_category_enabled = false)
+         qt_category_enabled;
+         qt_category_enabled = false)
       std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
   }
 
@@ -1061,8 +1151,9 @@ TEST(QtLogging, Category)
     qCInfo(cat) << "4. Hello info category logging";
     qCDebug(cat, "%s", "4. Hello debug category logging");
 
-    for (bool qt_category_enabled                 = cat().isCriticalEnabled();
-         qt_category_enabled; qt_category_enabled = false)
+    for (bool qt_category_enabled = cat().isCriticalEnabled();
+         qt_category_enabled;
+         qt_category_enabled = false)
       std::cout << cat().categoryName() << " isCriticalEnabled" << std::endl;
 
     for (bool qt_category_enabled = cat().isDebugEnabled(); qt_category_enabled;
@@ -1075,7 +1166,8 @@ TEST(QtLogging, Category)
 
     // use of isEnabled()
     for (bool qt_category_enabled = cat().isEnabled(QtWarningMsg);
-         qt_category_enabled; qt_category_enabled = false)
+         qt_category_enabled;
+         qt_category_enabled = false)
       std::cout << cat().categoryName() << " isWarningEnabled" << std::endl;
   }
 }

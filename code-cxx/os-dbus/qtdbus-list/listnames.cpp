@@ -310,6 +310,14 @@ calling.
 This function returns a QDBusMessage object that can be sent with
 QDBusConnection::call().
 
+==============================================================
+Method 2_1:
+--------------------------------------------------------------
+QDBusMessage(type=MethodCall, service="org.freedesktop.DBus", path="/org/freedesktop/DBus", interface="org.freedesktop.DBus", member="ListNames", signature="", contents=() )
+--------------------------------------------------------------
+QVariant(QStringList, ("org.freedesktop.DBus", "org.freedesktop.Notifications", ":1.7", "org.freedesktop.network-manager-applet", ":1.8", ":1.9", "org.Nemo", "org.freedesktop.systemd1", "org.freedesktop.Tracker1.Miner.Extract", "org.gtk.vfs.Daemon", "org.pulseaudio.Server", "org.mpris.MediaPlayer2.chromium.instance2102", "org.gnome.SessionManager", ":1.60", ":1.61", "org.gnome.evolution.dataserver.Sources5", ":1.40", ":1.85", ":1.41", "org.a11y.Bus", "org.gtk.vfs.UDisks2VolumeMonitor", "org.gnome.evolution.dataserver.Subprocess.Backend.AddressBookx2010x2", ":1.42", ":1.20", ":1.87", ":1.21", "org.gnome.Identity", ":1.88", ":1.66", "org.gnome.EvolutionAlarmNotify", "org.gnome.keyring", ":1.22", ":1.67", "org.freedesktop.PackageKit", ":1.23", ":1.68", ":1.46", ":1.24", ":1.69", ":1.47", "org.gnome.Caribou.Keyboard", ":1.25", "org.Cinnamon", ":1.26", ":1.27", ":1.28", "org.bluez.obex", "ca.desrt.dconf", "org.gtk.vfs.GPhoto2VolumeMonitor", ":1.29", "org.freedesktop.Telepathy.ChannelDispatcher", "org.freedesktop.Tracker1.Miner.Applications", "org.gnome.SettingsDaemon", "org.freedesktop.Tracker1", "org.freedesktop.ScreenSaver", "org.gnome.evolution.dataserver.Calendar7", "org.gnome.Magnifier", "org.gtk.vfs.AfcVolumeMonitor", "org.freedesktop.FileManager1", "org.PulseAudio1", "org.Cinnamon.LookingGlass", "org.gnome.Panel", "org.gtk.vfs.GoaVolumeMonitor", "org.freedesktop.Telepathy.AccountManager", ":1.70", ":1.71", "org.gnome.evolution.dataserver.Subprocess.Backend.Calendarx1991x2", "org.gtk.vfs.mountpoint_1939", "org.gnome.OnlineAccounts", "org.gnome.evolution.dataserver.AddressBook9", "org.gnome.evolution.dataserver.Subprocess.Backend.Calendarx1991x3", ":1.50", ":1.74", "org.gtk.vfs.Metadata", ":1.52", ":1.30", ":1.53", ":1.31", "org.cinnamon.ScreenSaver", ":1.54", ":1.32", ":1.10", ":1.55", ":1.33", ":1.11", ":1.56", ":1.34", ":1.12", "org.freedesktop.Telepathy.MissionControl5", ":1.57", ":1.35", ":1.0", ":1.13", ":1.58", ":1.36", "org.cinnamon.SettingsDaemon", ":1.1", ":1.14", "org.freedesktop.Tracker1.Miner.Files", ":1.59", ":1.37", ":1.15", "org.freedesktop.secrets", ":1.38", ":1.16", "org.gtk.vfs.MTPVolumeMonitor", ":1.39", ":1.17", "org.freedesktop.Tracker1.Miner.Userguides", ":1.18", "org.freedesktop.Tracker1.Miner.Files.Index", "org.gnome.Software", "org.freedesktop.IBus", ":1.6", ":1.19"))
+==============================================================
+
 */
 
 void method2_1()
@@ -325,6 +333,37 @@ void method2_1()
 
   QDBusMessage request = QDBusMessage::createMethodCall("org.freedesktop.DBus", 
       "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames");
+
+  // /Qt/5.12.3/Src/qtbase/src/dbus/qdbusmessage.h
+  //
+  // #ifndef QT_NO_DEBUG_STREAM
+  // Q_DBUS_EXPORT QDebug operator<<(QDebug, const QDBusMessage &);
+  // #endif
+  //
+  // /Qt/5.12.3/Src/qtbase/src/dbus/qdbusmessage.cpp
+  //
+  // QDebug operator<<(QDebug dbg, const QDBusMessage &msg)
+  // {
+  //     QDebugStateSaver saver(dbg);
+  //     dbg.nospace() << "QDBusMessage(type=" << msg.type()
+  //                   << ", service=" << msg.service();
+  //     if (msg.type() == QDBusMessage::MethodCallMessage ||
+  //         msg.type() == QDBusMessage::SignalMessage)
+  //         dbg.nospace() << ", path=" << msg.path()
+  //                       << ", interface=" << msg.interface()
+  //                       << ", member=" << msg.member();
+  //     if (msg.type() == QDBusMessage::ErrorMessage)
+  //         dbg.nospace() << ", error name=" << msg.errorName()
+  //                       << ", error message=" << msg.errorMessage();
+  //     dbg.nospace() << ", signature=" << msg.signature()
+  //                   << ", contents=(";
+  //     debugVariantList(dbg, msg.arguments());
+  //     dbg.nospace() << ") )";
+  //     return dbg;
+  // }
+
+  qDebug() << "--------------------------------------------------------------";
+  qDebug() << request;
 
   // QDBusConnection sessionBus();
   //
@@ -379,6 +418,7 @@ void method2_1()
 
   QDBusMessage reply = QDBusConnection::sessionBus().call(request);
 
+  qDebug() << "--------------------------------------------------------------";
   // qDebug() << dbus_iface.call("ListNames").arguments().at(0);
   qDebug() << reply.arguments().at(0);
 }
@@ -462,7 +502,6 @@ int main(int argc, char **argv)
   method1();
   method2();
   method2_1();
-  method2_1_1();
   method3();
   method2_2();
 
