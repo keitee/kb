@@ -4,12 +4,12 @@
 class Client : public QObject
 {
   Q_OBJECT
-  public:
-    Client();
+public:
+  Client();
 
-  public slots:
-    void onSignalReceived(const QString &name, const QString &text);
+public slots:
+  void onSignalReceived(const QString &name, const QString &text);
 
-  private:
-    QSharedPointer<QDBusInterface> m_sender;
+private:
+  QSharedPointer<QDBusInterface> m_sender;
 };

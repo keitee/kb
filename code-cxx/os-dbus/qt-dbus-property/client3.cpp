@@ -1,3 +1,8 @@
+
+// Compared client 1 ex:
+// 1. use proxy
+// 2. extented proxy
+
 #include <QtCore/QCoreApplication>
 #include <QtDBus/QtDBus>
 
@@ -21,7 +26,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  // proxy
+  // PROXY
   //
   // bool QDBusAbstractInterface::isValid() const
   // Returns true if this is a valid reference to a remote object. It returns
@@ -31,32 +36,32 @@ int main(int argc, char **argv)
   // Note: when dealing with remote objects, it is not always possible to
   // determine if it exists when creating a QDBusInterface.
 
-  QSharedPointer<org::example::sender> sender =
+  QSharedPointer<org::example::sender> proxy =
     QSharedPointer<org::example::sender>::create(SERVICE_NAME,
                                                  "/",
                                                  QDBusConnection::sessionBus());
-  if (!sender || !sender->isValid())
+  if (!proxy || !proxy->isValid())
   {
     qWarning() << "failed to create proxy";
     return 1;
   }
 
-  ClientUseProxy client("client3", (org::example::sender *)sender.data());
+  ClientUseProxy client("client3", (org::example::sender *)proxy.data());
 
   // org::example::sender *sender;
   // sender = new org::example::sender(QString(), QString(),
   //     QDBusConnection::sessionBus());
 
   // connect the proxy and the receving end
-  sender->connect(sender.data(),
-                  SIGNAL(action(QString, QString)),
-                  &client,
-                  SLOT(onSignalReceived(QString, QString)));
+  proxy->connect(proxy.data(),
+                 SIGNAL(action(QString, QString)),
+                 &client,
+                 SLOT(onSignalReceived(QString, QString)));
 
-  sender->connect(sender.data(),
-                  SIGNAL(aboutToQuit()),
-                  QCoreApplication::instance(),
-                  SLOT(quit()));
+  proxy->connect(proxy.data(),
+                 SIGNAL(aboutToQuit()),
+                 QCoreApplication::instance(),
+                 SLOT(quit()));
 
   qDebug() << "org.example.client.use.proxy started";
 

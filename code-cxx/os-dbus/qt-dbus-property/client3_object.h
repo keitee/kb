@@ -9,16 +9,16 @@
 class ClientUseProxy : public QObject
 {
   Q_OBJECT
-  public:
-    ClientUseProxy(const QString &name, org::example::sender *);
-    // ClientUseProxy(QDBusAbstractInterface *);
+public:
+  ClientUseProxy(const QString &name, org::example::sender *);
+  // ClientUseProxy(QDBusAbstractInterface *);
 
-  public slots:
-    void onSignalReceived(const QString &name, const QString &text);
+public slots:
+  void onSignalReceived(const QString &name, const QString &text);
 
-  private:
-    QString name_;
-    org::example::sender *proxy_;
+private:
+  QString name_;
+  org::example::sender *proxy_;
 };
 
 #endif // CLIENT_USE_PROXY_H

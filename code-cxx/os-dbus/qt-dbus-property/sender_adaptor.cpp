@@ -19,38 +19,6 @@
 #include <QtCore/QVariant>
 
 /*
-exercise sender without using clients
-
-$ ./sender
-org.example.sender is registered
-org.example.sender registered and started
-
-
-dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.SendCommand string:'command'
-method return time=1578995647.935382 sender=:1.792 -> destination=:1.794 serial=5 reply_serial=2
-
-"sender::SendCommand(\"command\") got called"
-SenderAdaptor::setProperty(true)
-SenderAdaptor::setPowered( false ) called
-got powerChanged signal ( true )
-timer expired and emit signal
-timer expired and change property
-SenderAdaptor::setPowered( true ) called
-got powerChanged signal ( false )
-
-
-dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.SendCommand string:'changed' 
-
-"sender::SendCommand(\"changed\") got called"
-notifyPropertyChanged called
-SenderAdaptor::powered( false ) called
-
-
-dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.ConnectProfile string:'hello'
-
-*/
-
-/*
  * Implementation of adaptor class SenderAdaptor
  */
 SenderAdaptor::SenderAdaptor(QObject *parent)
@@ -64,15 +32,10 @@ SenderAdaptor::~SenderAdaptor()
   // destructor
 }
 
-bool SenderAdaptor::powered() const
-{
-  // get the value of property Powered
-  qDebug() << "SenderAdaptor::powered(" << m_powered << ") called";
-  // return qvariant_cast<bool>(parent()->property("Powered"));
-  return m_powered;
-}
-
 /*
+
+Q_PROPERTY(bool Powered READ powered WRITE setPowered NOTIFY powerChanged)
+
 bool QObject::setProperty(const char *name, const QVariant &value)
 
 Sets the value of the object's name property to value.
@@ -91,16 +54,30 @@ dynamic property causes a QDynamicPropertyChangeEvent to be sent to the object.
 
 Note: Dynamic properties starting with "_q_" are reserved for internal purposes.
 
-See also property(), metaObject(), dynamicPropertyNames(), and
-QMetaProperty::write().
-
 */
+
+bool SenderAdaptor::powered() const
+{
+  // get the value of property Powered
+  qDebug() << "SenderAdaptor::powered(" << m_powered << ") called";
+  // return qvariant_cast<bool>(parent()->property("Powered"));
+  return m_powered;
+}
 
 void SenderAdaptor::setPowered(bool value)
 {
   qDebug() << "SenderAdaptor::setPowered(" << m_powered << ") called";
   m_powered = value;
   emit powerChanged(value);
+}
+
+// A NOTIFY signal is optional. If defined, it should specify one existing
+// signal in that class that is emitted whenever the value of the property
+// changes.
+
+void SenderAdaptor::onPowerChanged(bool power)
+{
+  qDebug() << "got powerChanged signal (" << power << ")";
 }
 
 /*
@@ -281,8 +258,9 @@ D-Bus Type System, QDBusConnection, and QDBusMessage.
 // As with ping example, QString Pong::ping(const QString &arg), use this slot
 // to ends the sender
 
-// void SenderAdaptor::ConnectProfile(const QString &UUID)
-void SenderAdaptor::ConnectProfile(const QString &UUID, const QDBusMessage &message)
+// to quit
+void SenderAdaptor::ConnectProfile(const QString &UUID,
+                                   const QDBusMessage &message)
 {
   emit aboutToQuit();
 
@@ -301,39 +279,60 @@ void SenderAdaptor::SendCommand(const QString &command,
                                 const QDBusMessage &message)
 {
   qDebug() << QString("sender::SendCommand(%1) got called").arg(command);
-  qDebug() << "message: " << message.service() << "," << message.path() << ","
-           << message.member();
+  qDebug() << "message.service: " << message.service();
+  qDebug() << "message.path   : " << message.path();
+  qDebug() << "message.member : " << message.member();
 
   if (command == "command")
   {
     QTimer::singleShot(5000, this, SLOT(onTimerExpired()));
 
     // set property value and `powerChanged` is emitted
-    qDebug() << "SenderAdaptor::setProperty(true)";
     setProperty("Powered", true);
   }
-  else if (commane == "error")
+  else if (command == "error")
   {
+    message.setDelayedReply(true);
+
+    // QDBusMessage QDBusMessage::createErrorReply(const QString name, const
+    // QString &msg) const
+    //
+    // Constructs a new DBus message representing an error reply message, with
+    // the given name and msg.
+    QDBusMessage error = message.createErrorReply(
+      QString("SenderError"),
+      QString("this is the error message from sender"));
+
+    qDebug() << "error.service: " << error.service();
+    qDebug() << "error.path   : " << error.path();
+    qDebug() << "error.member : " << error.member();
+
+    // bool QDBusConnection::send(const QDBusMessage &message) const
+    //
+    // Sends the message over this connection, without waiting for a reply. This
+    // is suitable for errors, signals, and return values as well as calls whose
+    // return values are not necessary.
+    // Returns true if the message was queued successfully, false otherwise.
+
+    if (!QDBusConnection::sessionBus().send(error))
+      qDebug() << "failed to send error reply";
+    else
+      qDebug() << "succeeded to send error reply";
   }
   else
   {
-    qDebug() << "notifyPropertyChanged called";
+    qDebug() << "calls setProperty and notifyPropertyChanged()";
     notifyPropertyChanged();
   }
 }
 
 void SenderAdaptor::onTimerExpired()
 {
-  qDebug() << "timer expired and emit signal";
+  qDebug() << "timer expired and emit action signal";
   emit action("from sender", "do you hear me?");
 
   qDebug() << "timer expired and change property";
   setProperty("Powered", false);
-}
-
-void SenderAdaptor::onPowerChanged(bool power)
-{
-  qDebug() << "got powerChanged signal (" << power << ")";
 }
 
 /*
@@ -353,10 +352,10 @@ method call or signal emission.
 
 void SenderAdaptor::notifyPropertyChanged()
 {
-  QDBusMessage signal = QDBusMessage::createSignal(
-      "/",
-      "org.freedesktop.DBus.Properties",
-      "PropertiesChanged");
+  QDBusMessage signal =
+    QDBusMessage::createSignal("/",
+                               "org.freedesktop.DBus.Properties",
+                               "PropertiesChanged");
 
   signal << "org.example.sender";
   QVariantMap changedProps;

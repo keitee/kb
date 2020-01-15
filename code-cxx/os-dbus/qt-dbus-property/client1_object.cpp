@@ -4,39 +4,6 @@
 
 Client::Client()
 {
-  // QDBusInterface::QDBusInterface(
-  //  const QString &service,
-  //  const QString &path,
-  //  const QString &interface = QString(),
-  //  const QDBusConnection &connection = QDBusConnection::sessionBus(),
-  //  QObject *parent = nullptr)
-
-#if 0
-
-  auto sender = new QDBusInterface(SERVICE_NAME,
-                                   "/",
-                                   "org.example.sender",
-                                   QDBusConnection::sessionBus());
-  if (!sender->isValid())
-  {
-    fprintf(stderr,
-            "%s\n",
-            qPrintable(QDBusConnection::sessionBus().lastError().message()));
-    QCoreApplication::instance()->quit();
-  }
-
-  QObject::connect(sender,
-                   SIGNAL(action(QString, QString)),
-                   this,
-                   SLOT(onSignalReceived(QString, QString)));
-
-  // connect sender signal to quit
-  QObject::connect(sender,
-                   SIGNAL(aboutToQuit()),
-                   QCoreApplication::instance(),
-                   SLOT(quit()));
-#else
-
   m_sender =
     QSharedPointer<QDBusInterface>::create(SERVICE_NAME,
                                            "/",
@@ -51,34 +18,41 @@ Client::Client()
   }
 
   // connects to `sender`'s signals
-  //
-  // NOTE: have to use m_sender->connect() but not QObject::connect() and if do,
-  // nothing happens meaning SLOT get not called.
+
+#ifdef THIS_WORKS_AS_WELL
   m_sender->connect(m_sender.data(),
                     SIGNAL(action(QString, QString)),
                     this,
                     SLOT(onSignalReceived(QString, QString)));
+  connect sender signal to quit m_sender->connect(m_sender.data(),
+                                                  SIGNAL(aboutToQuit()),
+                                                  QCoreApplication::instance(),
+                                                  SLOT(quit()));
+#else
+  connect(m_sender.data(),
+          SIGNAL(action(QString, QString)),
+          this,
+          SLOT(onSignalReceived(QString, QString)));
 
-  // connect sender signal to quit
-  m_sender->connect(m_sender.data(),
-                    SIGNAL(aboutToQuit()),
-                    QCoreApplication::instance(),
-                    SLOT(quit()));
+  connect(m_sender.data(),
+          SIGNAL(aboutToQuit()),
+          QCoreApplication::instance(),
+          SLOT(quit()));
 #endif
 }
 
-// signature of the remote signal
-// void action(const QString &nickname, const QString &text);
 void Client::onSignalReceived(const QString &name, const QString &text)
 {
-  qDebug() << "Client::onSignalReceived: name: " << name << ", text: " << text
-           << " called";
+  qDebug()
+    << QString("Client::onSignalReceived: name(%1), text(%2)").arg(name, text);
 
   // Asscess the remote property.
 
-  // do not work
+  // NOT able to call property read methond as it's not work
   // qDebug() << m_sender->call("powered").arguments().at(0);
+  // use instead:
+  // QVariant reply = iface->property("powered");
 
-  // work
-  qDebug() << m_sender->property("Powered").value<bool>();
+  qDebug() << QString("Client::onSignalReceived: powerd propertry(%1)")
+                .arg(m_sender->property("Powered").value<bool>());
 }

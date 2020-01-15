@@ -6,31 +6,37 @@
 #include <QDBusArgument>
 #include <QDBusMetaType>
 
-// -----------------------------------------------------------------------------
-/*
+/* ={--------------------------------------------------------------------------
+  from BluetoothRcu/daemon/source/dbus/dbusabstractinterface.cpp
 
-  \class DBusAbstractInterface
-  \brief Wrapper around the QDBusAbstractInterface class to provide notify
-  signals for property changes.
+  DBusAbstractInterface
+
+  Wrapper around the QDBusAbstractInterface class to provide notify signals for
+  property changes.
 
   The dbus specficiation defines the org.freedesktop.DBus.Properties interface
-  for getting / setting properties, Qt already implements this, however it
-  doesn't implement a handler for the
+  for getting / setting properties, Qt already implements this, 
+
+  however it doesn't implement a `handler` for the
   org.freedesktop.DBus.Properties.PropertiesChanged signal.
 
   This is a problem for us as bluetoothd uses this to notify us of all sorts
   of things; i.e. scan on/off, powered on/off, etc
 
-  \see
+  see:
   https://randomguy3.wordpress.com/2010/09/07/the-magic-of-qtdbus-and-the-propertychanged-signal/
-
-  \see https://github.com/nemomobile/qtdbusextended
+  https://github.com/nemomobile/qtdbusextended
 
 
   So how do you use this class ?
   1. Generate an interface class using the Qt qdbusxml2cpp tool
+
   2. Change the generated class so that it inherits from the
   \a DBusAbstractInterface class rather than \a QDBusAbstractInterface
+
+  since `proxy` uses QDBusAbstractInterface:
+  class OrgExampleChatInterface: public QDBusAbstractInterface
+
   3. Add the \c NOTIFY option to the properties of the generated class and
   matching signals (just like you would for an ordinary notify property)
 
@@ -56,13 +62,12 @@ DBusAbstractInterface::DBusAbstractInterface(QString const &service,
   argumentMatch << QDBusAbstractInterface::interface();
 
   // get the service name of the proxy. For peer-to-peer connection (i.e. unit
-  // test) the service name should be empty.
-  // NOTE: case when uses DEBUG build
+  // test) the service name should be empty such as debug build
 
   QString serviceName = QDBusAbstractInterface::service();
 
   // QString QDBusConnection::baseService() const
-  // Returns the unique connection name for this connection, if this
+  // Returns `the unique connection name` for this connection, if this
   // QDBusConnection object is connected, or an empty QString otherwise.
   //
   // A Unique Connection Name is a string in the form ":x.xxx" (where x are
@@ -70,7 +75,7 @@ DBusAbstractInterface::DBusAbstractInterface(QString const &service,
   // connection. It uniquely identifies this client in the bus.
   //
   // This function returns an empty QString for "peer-to-peer" connections.
-#if defined(_BUILD_TYPE) && (_BUILD_TYPE == DEBUG)
+#if (_BUILD_TYPE == DEBUG)
   if (connection.isConnected() && connection.baseService().isEmpty())
     serviceName.clear();
 #endif
@@ -89,7 +94,7 @@ DBusAbstractInterface::DBusAbstractInterface(QString const &service,
   //
   // Connects the signal to the slot `slot` in object `receiver`. Unlike the
   // previous connect() overload, this function allows one to specify the
-  // parameter signature to be connected using the signature variable. The
+  // `parameter signature` to be connected using the signature variable. The
   // function will then verify that this signature can be delivered to the slot
   // specified by slot and return false otherwise.
   //
@@ -424,8 +429,8 @@ DBusAbstractInterface::asyncProperty(char const *name) const
 
   // KT
   qDebug("are they different? '%s.%s'",
-         m_dbusPropertiesInterface,
-         QDBusAbstractInterface::interface());
+         qPrintable(m_dbusPropertiesInterface),
+         qPrintable(QDBusAbstractInterface::interface()));
 
   // args
   msg << QDBusAbstractInterface::interface();
@@ -483,8 +488,8 @@ DBusAbstractInterface::asyncSetProperty(char const *name,
 
   // KT
   qDebug("are they different? '%s.%s'",
-         m_dbusPropertiesInterface,
-         QDBusAbstractInterface::interface());
+         qPrintable(m_dbusPropertiesInterface),
+         qPrintable(QDBusAbstractInterface::interface()));
 
   // args
   msg << QDBusAbstractInterface::interface();
@@ -519,8 +524,8 @@ DBusAbstractInterface::asyncGetAllProperties() const
 
   // KT
   qDebug("are they different? '%s.%s'",
-         m_dbusPropertiesInterface,
-         QDBusAbstractInterface::interface());
+         qPrintable(m_dbusPropertiesInterface),
+         qPrintable(QDBusAbstractInterface::interface()));
 
   // args
   msg << QDBusAbstractInterface::interface();
