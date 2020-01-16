@@ -62,9 +62,9 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 
-# do not work
-# add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
-add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
+# not ok, add_compile_options("$<$<CONFIG:DEBUG>:-W;-Wall;-O0;-g;-pedantic>")
+# ok, add_compile_options("-g;-D_GLIBCXX_DEBUG;-lsystemd")
+add_compile_options(-g -D_GLIBCXX_DEBUG -lsystemd)
 
 
 # cmake help

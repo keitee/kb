@@ -2,13 +2,17 @@ cmake_minimum_required(VERSION 3.0.0)
 
 project(qtest VERSION 0.1 LANGUAGES CXX)
 
-enable_testing()
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_AUTOMOC ON)
 
+# set(CMAKE_AUTORCC ON)
+# set(CMAKE_AUTOUIC ON)
+
+# TODO:
 # To fix find_package issue:
 #
 # https://doc.qt.io/qt-5/cmake-manual.html
 #
-
 # The first requirement when using CMake is to use find_package to locate the
 # libraries and header files shipped with Qt. These libraries and header files
 # can then be used to build libraries and applications based on Qt.
@@ -35,10 +39,31 @@ enable_testing()
 # Qt53DExtras     Qt53DQuickInput      Qt5Concurrent         Qt5Gui            Qt5Network            Qt5PositioningQuick  Qt5QuickControls2   Qt5Script         Qt5Sql         Qt5VirtualKeyboard    Qt5WebEngineWidgets  Qt5XmlPatterns
 # Qt53DInput      Qt53DQuickRender     Qt5Core               Qt5Help           Qt5NetworkAuth        Qt5PrintSupport      Qt5QuickTemplates2  Qt5ScriptTools    Qt5Svg         Qt5WaylandClient      Qt5WebSockets
 # Qt53DLogic      Qt53DQuickScene2D    Qt5DataVisualization  Qt5LinguistTools  Qt5Nfc                Qt5Purchasing        Qt5QuickTest        Qt5Scxml          Qt5Test        Qt5WaylandCompositor  Qt5WebView
+#
+# so followings worked:
+#
+find_package(Qt5Core)
+find_package(Qt5Test)
+#
+# However, when move to cmake 3.15.5:
+#
+# CMake Warning (dev) in /home/keitee/works/googletest/googletest/CMakeLists.txt:
+#   AUTOGEN: No valid Qt version found for target gtest_main.  AUTOMOC
+#   disabled.  Consider adding:
+# 
+#     find_package(Qt<QTVERSION> COMPONENTS Core)
+# 
+#   to your CMakeLists.txt file.
+# This warning is for project developers.  Use -Wno-dev to suppress it.
 
+# find_package(Qt5 "5.12.6" COMPONENTS Core)
+# find_package(Qt5 COMPONENTS Core)
 
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_AUTOMOC ON)
+# set_property(DIRECTORY PROPERTY QT_VERSION_MAJOR ${QT_VERSION_MAJOR})
+# set_property(DIRECTORY PROPERTY QT_VERSION_MINOR ${QT_VERSION_MINOR})
+
+# set(CMAKE_INCLUDE_CURRENT_DIR ON)
+# set(CMAKE_AUTOMOC ON)
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 
@@ -89,24 +114,8 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 
-# when move to cmake 3.15.5
-#
-# CMake Warning (dev) in /home/keitee/works/googletest/googletest/CMakeLists.txt:
-#   AUTOGEN: No valid Qt version found for target gtest_main.  AUTOMOC
-#   disabled.  Consider adding:
-# 
-#     find_package(Qt<QTVERSION> COMPONENTS Core)
-# 
-#   to your CMakeLists.txt file.
-# This warning is for project developers.  Use -Wno-dev to suppress it.
-#
-
-# find_package(Qt5Core)
-# find_package(Qt5 COMPONENTS Widgets REQUIRED)
-find_package(Qt5Core)
-find_package(Qt5Test)
-
-add_executable(test_qt "test_qt.cpp" "qclass.cpp")
+# add_executable(test_qt "test_qt.cpp" "qclass.cpp")
+add_executable(test_qt "test_qt.cpp")
 
 # The recommended way to use Qt libraries and headers with CMake is to use the
 # target_link_libraries command. This command automatically adds appropriate
@@ -114,8 +123,8 @@ add_executable(test_qt "test_qt.cpp" "qclass.cpp")
 # and links to the qtmain.lib library on Windows.
 
 # target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test)
-target_link_libraries(test_qt gmock_main Qt5::Core Qt5::Test)
+target_link_libraries(test_qt gmock_main Qt5::Core)
 
 add_executable(qstandalone "qstandalone.cpp" "qclass.cpp")
-target_link_libraries(qstandalone Qt5::Core Qt5::Test)
+target_link_libraries(qstandalone Qt5::Core)
 
