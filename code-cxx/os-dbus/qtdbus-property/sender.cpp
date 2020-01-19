@@ -172,6 +172,11 @@ got powerChanged signal ( true ) from the remote sender
 // access property do not trigger PropertyChagned
 dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.SendCommand string:'command'
 
+
+RETURN
+
+dbus-send --session --type=method_call --print-reply --dest='org.example.SenderExample' / org.example.sender.SendCommand string:'error'
+
 */
 
 #include "sender_adaptor.h"

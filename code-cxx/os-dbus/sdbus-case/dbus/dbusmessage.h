@@ -64,7 +64,7 @@ public:
   DBusMessage();
   ~DBusMessage();
 
-  // TODO: no copy but yes move?
+  // NOTE: no copy but yes move? Yes, like std::unique_ptr
   DBusMessage(const DBusMessage &) = delete;
   DBusMessage(DBusMessage &&) noexcept;
 

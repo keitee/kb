@@ -16,7 +16,7 @@
 #include <QTime>
 #include <QTimer>
 
-// #include "qclass.h"
+#include "qclass.h"
 
 using namespace std;
 using ::testing::Ge;

@@ -303,9 +303,7 @@ void SenderAdaptor::SendCommand(const QString &command,
       QString("SenderError"),
       QString("this is the error message from sender"));
 
-    qDebug() << "error.service: " << error.service();
-    qDebug() << "error.path   : " << error.path();
-    qDebug() << "error.member : " << error.member();
+    qDebug() << error;
 
     // bool QDBusConnection::send(const QDBusMessage &message) const
     //

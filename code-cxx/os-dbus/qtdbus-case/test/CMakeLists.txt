@@ -1,35 +1,26 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(qtest VERSION 0.1 LANGUAGES CXX)
-
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
-set(CMAKE_AUTOMOC ON)
-
-# set(CMAKE_AUTORCC ON)
-# set(CMAKE_AUTOUIC ON)
+project(test VERSION 0.1 LANGUAGES CXX)
 
 # TODO:
 # To fix find_package issue:
-#
-# https://doc.qt.io/qt-5/cmake-manual.html
-#
-# The first requirement when using CMake is to use find_package to locate the
-# libraries and header files shipped with Qt. These libraries and header files
-# can then be used to build libraries and applications based on Qt.
 
-# In order for find_package to be successful, Qt 5 must be found below the
-# CMAKE_PREFIX_PATH, or the Qt5<Module>_DIR must be set in the CMake cache to
-# the location of the Qt5WidgetsConfig.cmake file. The easiest way to use CMake
-# is to set the CMAKE_PREFIX_PATH environment variable to the install prefix of
-# Qt 5.
-#
+# CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake ..
+# cmake version 3.15.5
+
+
+# https://doc.qt.io/qt-5/cmake-manual.html
+
+# For find_package to be successful, CMake must find the Qt installation in one
+# of the following ways: Set your CMAKE_PREFIX_PATH environment variable to the
+# Qt 5 installation prefix. "This is the recommended way."
+
 # The CMAKE_AUTOMOC setting runs moc automatically when required. For more on
 # this feature see the CMake AUTOMOC documentation
 
 # use this 
 # CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake .. 
 
-# since it do not work when use Widgets
 # set(CMAKE_PREFIX_PATH "$ENV{HOME}/Qt/5.12.3/gcc_64/lib/cmake/Qt5Core")
 #
 # keitee@keitee-mint:~/Qt/5.12.3/gcc_64/lib/cmake$ ls
@@ -40,11 +31,24 @@ set(CMAKE_AUTOMOC ON)
 # Qt53DInput      Qt53DQuickRender     Qt5Core               Qt5Help           Qt5NetworkAuth        Qt5PrintSupport      Qt5QuickTemplates2  Qt5ScriptTools    Qt5Svg         Qt5WaylandClient      Qt5WebSockets
 # Qt53DLogic      Qt53DQuickScene2D    Qt5DataVisualization  Qt5LinguistTools  Qt5Nfc                Qt5Purchasing        Qt5QuickTest        Qt5Scxml          Qt5Test        Qt5WaylandCompositor  Qt5WebView
 #
-# so followings worked:
-#
+# ~/Qt/5.12.3/gcc_64/lib/cmake$ more Qt5DBus/Qt5DBusConfig.cmake 
+# set(Qt5DBus_LIBRARIES Qt5::DBus)
+
+
 find_package(Qt5Core)
+if(Qt5Core_FOUND)
+  message(STATUS "Qt5Core found")
+else()
+  message(STATUS "Qt5Core not found, not building moc")
+endif()
+
 find_package(Qt5Test)
-#
+
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
 # However, when move to cmake 3.15.5:
 #
 # CMake Warning (dev) in /home/keitee/works/googletest/googletest/CMakeLists.txt:
@@ -61,9 +65,6 @@ find_package(Qt5Test)
 
 # set_property(DIRECTORY PROPERTY QT_VERSION_MAJOR ${QT_VERSION_MAJOR})
 # set_property(DIRECTORY PROPERTY QT_VERSION_MINOR ${QT_VERSION_MINOR})
-
-# set(CMAKE_INCLUDE_CURRENT_DIR ON)
-# set(CMAKE_AUTOMOC ON)
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 
@@ -93,6 +94,10 @@ set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to t
 
 add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
+# TODO how to access other modules??
+# add_subdirectory(configsettings)
+# add_subdirectory(/home/keitee/git/kb/code-cxx/os-dbus/qtdbus-case/configsettings)
+
 
 # include_directories([AFTER|BEFORE] [SYSTEM] directory...)
 #
@@ -112,19 +117,23 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 # The directories to be added to the list of include directories.
 
 include_directories(SYSTEM ${GMOCK_DIR}/include)
+include_directories(SYSTEM ../configsettings)
 
 
 # add_executable(test_qt "test_qt.cpp" "qclass.cpp")
-add_executable(test_qt "test_qt.cpp")
 
-# The recommended way to use Qt libraries and headers with CMake is to use the
-# target_link_libraries command. This command automatically adds appropriate
-# include directories, compile definitions, the position-independent-code flag,
-# and links to the qtmain.lib library on Windows.
+# # The recommended way to use Qt libraries and headers with CMake is to use the
+# # target_link_libraries command. This command automatically adds appropriate
+# # include directories, compile definitions, the position-independent-code flag,
+# # and links to the qtmain.lib library on Windows.
 
-# target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test)
-target_link_libraries(test_qt gmock_main Qt5::Core)
+# # target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test)
+# target_link_libraries(test_qt gmock_main Qt5::Core)
 
-add_executable(qstandalone "qstandalone.cpp" "qclass.cpp")
-target_link_libraries(qstandalone Qt5::Core)
+
+# NOTE:
+# Qt5::Test is needed for QSignalSpy.h
+
+add_executable(test "tst_main.cpp" "tst_configsettings.cpp")
+target_link_libraries(test gmock_main configsettings Qt5::Core Qt5::Test)
 

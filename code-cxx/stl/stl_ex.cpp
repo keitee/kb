@@ -1,16 +1,16 @@
-#include <iostream>
-#include <set>
-#include <map>
-#include <vector>
-#include <memory>
 #include <deque>
-#include <list>
 #include <forward_list>
-#include <unordered_set>
+#include <iostream>
+#include <list>
+#include <map>
+#include <memory>
 #include <queue>
+#include <set>
+#include <unordered_set>
+#include <vector>
 // #include <algorithm>
-#include <numeric>        // std::accumulate for gcc 6
-#include <limits>         // std::numeric_limits
+#include <limits>  // std::numeric_limits
+#include <numeric> // std::accumulate for gcc 6
 #include <random>
 
 #include "gmock/gmock.h"
@@ -19,40 +19,40 @@ using namespace std;
 using namespace testing;
 
 template <typename T>
-void INSERT_ELEMENTS( T& coll, int first, int last )
+void INSERT_ELEMENTS(T &coll, int first, int last)
 {
-    for (auto i = first; i <= last; i++)
-        coll.insert( coll.end(), i );
+  for (auto i = first; i <= last; i++)
+    coll.insert(coll.end(), i);
 }
 
 template <typename T>
-void PRINT_ELEMENTS( T& coll, const string optstr="" )
+void PRINT_ELEMENTS(T &coll, const string optstr = "")
 {
-    size_t count{};
-    cout << optstr;
+  size_t count{};
+  cout << optstr;
 
-    for( const auto &elem : coll )
-    {
-        cout << elem << " ";
-        ++count;
-    }
+  for (const auto &elem : coll)
+  {
+    cout << elem << " ";
+    ++count;
+  }
 
-    cout << "(" << count << ")" << endl;
+  cout << "(" << count << ")" << endl;
 }
 
 template <typename T>
-void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
+void PRINT_M_ELEMENTS(T &coll, const string optstr = "")
 {
-    size_t count{};
-    cout << optstr;
+  size_t count{};
+  cout << optstr;
 
-    for( const auto &elem : coll )
-    {
-        cout << " {" << elem.first << ", " << elem.second << "}";
-        ++count;
-    }
+  for (const auto &elem : coll)
+  {
+    cout << " {" << elem.first << ", " << elem.second << "}";
+    ++count;
+  }
 
-    cout << " (" << count << ")" << endl;
+  cout << " (" << count << ")" << endl;
 }
 
 // template <typename T>
@@ -60,13 +60,12 @@ void PRINT_M_ELEMENTS( T& coll, const string optstr="" )
 // {
 //   size_t count = coll.size();
 //   cout << optstr;
-// 
+//
 //   for(size_t i = 0; i < count; ++i)
 //     cout << coll.top() << " ";
-// 
+//
 //   cout << "(" << count << ")" << endl;
 // }
-
 
 // ={=========================================================================
 
@@ -79,7 +78,7 @@ void print_permutations_recursive_01(std::string in, std::string out)
     for (size_t i = 0; i < in.size(); ++i)
     {
       print_permutations_recursive_01(in.substr(1), out + in[0]);
-      std::rotate(in.begin(), in.begin()+1, in.end());
+      std::rotate(in.begin(), in.begin() + 1, in.end());
     }
   }
 }
@@ -99,11 +98,11 @@ void print_permutations_recursive_02(std::string in, std::string out)
   {
     for (size_t i = 0; i < in.size(); ++i)
     {
-      out.push_back(in[in.size()-1]);
+      out.push_back(in[in.size() - 1]);
       in.pop_back();
       print_permutations_recursive_02(in, out);
-      if(!in.empty())
-        std::rotate(in.begin(), in.begin()+1, in.end());
+      if (!in.empty())
+        std::rotate(in.begin(), in.begin() + 1, in.end());
     }
   }
 }
@@ -118,9 +117,8 @@ TEST(StlEx, Ex)
 }
 
 // ={=========================================================================
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
-

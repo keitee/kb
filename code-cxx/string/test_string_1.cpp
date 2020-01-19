@@ -2672,23 +2672,154 @@ TEST(String, FindNthSubstring)
 }
 
 // ={=========================================================================
-// string-raw
+// string-raw string-literal
 
+// outupt string:
+//
 // { "address": {
 //          "road":"Drury Ln",
 //          "city":"Fountain",
 //          "state":"CO",
 //          "country":"US" }}
 
-TEST(String, RawString)
+TEST(String, raw)
 {
-  const std::string s = R"({ "address": {
+  {
+    std::ostringstream os1;
+    std::ostringstream os2;
+
+    const char message[] = "this is \
+                           a multi-line message \
+                           and works";
+    os1 << message;
+
+    os2 << "this is                            a multi-line message                            and works";
+
+    EXPECT_THAT(os1.str(), os2.str());
+  }
+
+  // they are not the same since string-raw includes `space` as well.
+  {
+    std::string coll1{R"(1
+
+    22
+
+    333)"};
+
+    std::string coll2{"1\n22\n333"};
+
+    // std::cout << coll1 << std::endl;
+    // std::cout << coll2 << std::endl;
+  }
+
+  // string-raw works like extended-regex
+  {
+    std::string coll1("~Query(\"hair\")");
+    std::string coll2(R"(~Query("hair"))");
+
+    EXPECT_THAT(coll1, coll2);
+  }
+
+  // multi-lines
+  {
+    std::ostringstream os1;
+    std::ostringstream os2;
+
+    // different as do not include `spaces`
+    // { "address": {"road":"Drury Ln","city":"Fountain","state":"CO","country":"US" }}
+    // const char outx[] = "{ \"address\": {"
+    //         "\"road\":\"Drury Ln\","
+    //         "\"city\":\"Fountain\","
+    //         "\"state\":\"CO\","
+    //         "\"country\":\"US\" }}";
+    // std::cout << outx << std::endl;
+
+    // have to use `escape` like extended-regex and `newline` but note that it
+    // includes `spaces`
+
+    const char out[] = "{ \"address\": {\n\
+                        \"road\":\"Drury Ln\",\n\
+                        \"city\":\"Fountain\",\n\
+                        \"state\":\"CO\",\n\
+                        \"country\":\"US\" }}";
+
+    os1 << out;
+
+    // raw-string is better
+    const std::string s = R"({ "address": {
          "road":"Drury Ln",
          "city":"Fountain",
          "state":"CO",
          "country":"US" }})";
+    os2 << out;
 
-  std::cout << s << std::endl;
+    EXPECT_THAT(os1.str(), os2.str());
+  }
+
+  {
+    // compile error:
+    // std::string json_content1 = R"(
+    // {
+    //     "Title":"(C/C++)",
+    //     "Subtitle":"(Powered by C/C++)",
+    //     "Description":"(The world of C/++ developers)",
+    //     "MainPage":"cpp",
+    //     "Items":null,
+    //     "Id":"6"
+    // })";
+
+    // okay since do not have "(", ")" in it
+    std::string json_content1 = R"(
+    {
+        "Title":"C/C++",
+        "Subtitle":"Powered by C/C++",
+        "Description":"The world of C/++ developers",
+        "MainPage":"cpp",
+        "Items":null,
+        "Id":"6"
+    })";
+
+    // https://www.drdobbs.com/cpp/new-c-language-features-in-visual-studio/240165945
+    // prefix(optional) R "delimiter( raw_characters )delimiter"	(6)	(since C++11)
+    // https://www.youtube.com/watch?v=DiZ-az_nJMM
+
+    std::string json_content2 = R"ZZZ(
+    {
+        "Title":"(C/C++)",
+        "Subtitle":"(Powered by C/C++)",
+        "Description":"(The world of C/++ developers)",
+        "MainPage":"cpp",
+        "Items":null,
+        "Id":"6"
+    })ZZZ";
+
+    std::string json_content3 = R"JSON(
+    {
+        "Title":"(C/C++)",
+        "Subtitle":"(Powered by C/C++)",
+        "Description":"(The world of C/++ developers)",
+        "MainPage":"cpp",
+        "Items":null,
+        "Id":"6"
+    })JSON";
+
+    // well, don't need to use `delimeter` for json since do not have
+    // parenthesis.
+
+    std::string json_content4 = R"(
+    {
+      "uris": [
+        {
+          "path": "/as/drm/status",
+          "method": "ws",
+          "thread": "AS_WS_DRM",
+          "content": {
+            "status": "UNAVAILABLE"
+          }
+        }
+      ]
+    })";
+  }
 }
 
 // ={=========================================================================
