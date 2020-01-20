@@ -181,6 +181,10 @@ void CmdLineOptions::closeConsole(const QString)
 void CmdLineOptions::setDBusSession(const QString) 
 {
   qDebug() << "handler: setDBusSession called";
+
+  // NOTE: when not use "enum class"
+  // m_busType = SessionBus;
+
   m_busType = DBusType::SessionBus;
 }
 

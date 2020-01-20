@@ -302,7 +302,7 @@ TEST(CxxMemoryModel, allocator)
 // size of (uint32_t) is           : 4
 // size of (uint64_t) is           : 8
 
-TEST(CxxType, showSizeOfTypes)
+TEST(CxxType, size)
 {
 #if defined(__LP64__) || defined(_LP64)
   std::cout << "LP64" << std::endl;
@@ -341,6 +341,8 @@ TEST(CxxType, showSizeOfTypes)
   std::cout << "size of (* unsigned int) is     : " << sizeof puint << endl;
 
   std::cout << "size of (size_t) is             : " << sizeof(size_t) << endl;
+  std::cout << "size of (uint8_t) is            : " << sizeof(uint8_t) << endl;
+  std::cout << "size of (uint16_t) is           : " << sizeof(uint16_t) << endl;
   std::cout << "size of (uint32_t) is           : " << sizeof(uint32_t) << endl;
   std::cout << "size of (uint64_t) is           : " << sizeof(uint64_t) << endl;
 }
@@ -2357,9 +2359,9 @@ TEST(Reference, UseConstReference)
 }
 
 // ={=========================================================================
-// cxx-reference
+// cxx-swap
 
-namespace cxx_reference
+namespace cxx_swap
 {
   void swap_by_value(int x, int y)
   {
@@ -2384,11 +2386,11 @@ namespace cxx_reference
     x    = y;
     y    = temp;
   }
-} // namespace cxx_reference
+} // namespace cxx_swap
 
-TEST(Reference, Swap)
+TEST(CxxSwap, swap)
 {
-  using namespace cxx_reference;
+  using namespace cxx_swap;
 
   // no swap happens since uses a copy
   {
@@ -9325,7 +9327,7 @@ TEST(TypeConversion, Double)
 // ={=========================================================================
 // cxx-printf
 
-TEST(CxxPrintf, Formats)
+TEST(CxxPrintf, format)
 {
   // The format argument of printf can be an expression too.
   {
@@ -9369,8 +9371,32 @@ TEST(CxxPrintf, Formats)
   {
     int value{10};
     printf("this is first fmt"
-           " this is second fmt %d",
+           " this is second fmt %d\n",
            value);
+  }
+
+  // cxx-scanf
+  // RETURN VALUE
+  // On success, these functions return the number of input items successfully
+  // matched and assigned; this can be fewer than provided for, or even zero, in
+  // the event of an early matching failure.
+ 
+  // The length modifier "hh"
+  {
+    uint8_t bytes[3];
+    if (!sscanf("1C:A2:B1",
+                "%02hhx:%02hhx:%02hhx",
+                &bytes[0],
+                &bytes[1],
+                &bytes[2]))
+    {
+      EXPECT_THAT(true, false);
+    }
+
+    // see that it gets values in reverse order
+    EXPECT_THAT(bytes[0], 0x1C);
+    EXPECT_THAT(bytes[1], 0xA2);
+    EXPECT_THAT(bytes[2], 0xB1);
   }
 }
 

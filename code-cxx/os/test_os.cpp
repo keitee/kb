@@ -1,11 +1,21 @@
-#include "gmock/gmock.h"
-
+#include <boost/lexical_cast.hpp>
+#include <boost/variant.hpp>
+#include <chrono>
+#include <condition_variable>
+#include <forward_list>
 #include <iostream>
+#include <limits>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <regex>
+#include <set>
+#include <thread>
+#include <vector>
 
-// g++ -g -std=c++0x t_override.cpp
-
-using namespace std;
-using namespace testing;
+#include <fcntl.h>
+#include <sys/prctl.h>
+#include <sys/uio.h> // readv()
 
 // #define _GNU_SOURCE /* Get '_sys_nerr' and '_sys_errlist' declarations from <stdio.h> */
 //
@@ -21,7 +31,129 @@ using namespace testing;
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <string.h>
+#include "gmock/gmock.h"
+
+// use lpi log
+#include "lpi_error.h"
+
+using namespace std;
+using namespace std::placeholders;
+using namespace testing;
+
+// (gdb) b
+// PatternObserver_sendNotificationWithCallerDispatcherButRaiseException_Test::TestBody()
+//
+
+/*
+={=============================================================================
+lpi-file-io
+
+*/
+
+TEST(LpiIO, open)
+{
+  int fd;
+
+  fd = open("startup", O_RDONLY);
+  if (fd == -1)
+  {
+    errMsg("failed to open file");
+  }
+}
+
+/*
+={=============================================================================
+lpi-io
+
+5.7 Scatter-Gather I/O: readv() and writev()
+
+Instead of accepting a single buffer of data to be read or written, these
+functions transfer multiple buffers of data in a single system call. The set of
+buffers to be transferred is defined by the array iov.
+
+Each element of iov is a structure of the following form:
+
+struct iovec {
+  void *iov_base; // Start address of buffer
+  size_t iov_len; // Number of bytes to transfer to/from buffer
+};
+
+–––––––––––––––––––––––––––––––––––––––––––––––––––––––––– fileio/t_readv.c
+
+TODO:
+How can test it??
+
+Gather output
+
+The writev() system call performs gather output. It concatenates (“gathers”)
+data from all of the buffers specified by iov and writes them as a sequence of
+contiguous bytes to the file referred to by the file descriptor fd.
+
+The primary advantages of readv() and writev() are convenience and speed. For
+example, we could replace a call to writev() by either:
+
+o code that allocates a single large buffer, copies the data to be written from
+  other locations in the process’s address space into that buffer, and then
+  calls write() to output the buffer; or
+
+o a series of write() calls that output the buffers individually.
+
+The first of these options, while semantically equivalent to using writev(),
+leaves us with the inconvenience (and inefficiency) of allocating buffers and
+copying data in user space.
+
+The second option is not semantically equivalent to a single call to writev(),
+since the write() calls are not performed atomically. Furthermore, performing a
+single writev() system call is cheaper than performing multiple write() calls
+(refer to the dis- cussion of system calls in Section 3.1).
+
+*/
+
+TEST(LpiIO, readv)
+{
+  int fd;
+
+  struct iovec iov[3];
+
+  // 3 buffers
+  struct stat mystat;
+  int x;
+  // #define STR_SIZE 100
+  char str[100];
+
+  ssize_t numRead, totalRequired;
+
+  // fd = open(argv[1], O_RDONLY);
+  fd = open("some input", O_RDONLY);
+  if (fd == -1)
+    errExit("open failed");
+
+  totalRequired = 0;
+
+  iov[0].iov_base = &mystat;
+  iov[0].iov_len  = sizeof(struct stat);
+  totalRequired += iov[0].iov_len;
+
+  iov[1].iov_base = &x;
+  iov[1].iov_len  = sizeof(x);
+  totalRequired += iov[1].iov_len;
+
+  iov[2].iov_base = str;
+  iov[2].iov_len  = 100;
+  totalRequired += iov[2].iov_len;
+
+  numRead = readv(fd, iov, 3);
+  if (numRead == -1)
+    errExit("readv failed");
+
+  if (numRead < totalRequired)
+    errMsg("read fewer bytes than requested");
+
+  // The gtest macros return a stream for outputting diagnostic messages when a
+  // test fails.
+  EXPECT_TRUE(false) << "total bytes requested: " << totalRequired
+                     << ", bytes read: " << numRead;
+}
 
 // ={=========================================================================
 // *sys-memchr*
@@ -94,20 +226,20 @@ RETURN VALUE
 
 */
 
-TEST(LibcSearchCharacter, Memchar)
+TEST(Glibc, memchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
 
   // found `s`
-  start = (char*)memchr(text, 's', strlen(text));
+  start = (char *)memchr(text, 's', strlen(text));
   if (start)
   {
     EXPECT_STREQ(start, "scan memory for a character");
   }
 
   // if not found
-  start = (char*)memchr(text, 'p', sizeof(text));
+  start = (char *)memchr(text, 'p', sizeof(text));
   EXPECT_EQ(start, nullptr);
 
   // note that `null` termination char is different from '\n'
@@ -118,24 +250,24 @@ TEST(LibcSearchCharacter, Memchar)
   EXPECT_TRUE(start);
 
   // just 1 less in length
-  auto diff = start-text2;
-  EXPECT_EQ(strlen(text2)-1, diff);
+  auto diff = start - text2;
+  EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
-TEST(LibcSearchCharacter, Strchar)
+TEST(Glibc, strchar)
 {
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
 
   // found `s`
-  start = (char*)strchr(text, 's');
+  start = (char *)strchr(text, 's');
   if (start)
   {
     EXPECT_STREQ(start, "scan memory for a character");
   }
 
   // if not found
-  start = (char*)strchr(text, 'p');
+  start = (char *)strchr(text, 'p');
   EXPECT_EQ(start, nullptr);
 
   // note that `null` termination char is different from '\n'
@@ -148,54 +280,54 @@ TEST(LibcSearchCharacter, Strchar)
   EXPECT_TRUE(start);
 
   // just 1 less in length
-  auto diff = start-text2;
-  EXPECT_EQ(strlen(text2)-1, diff);
+  auto diff = start - text2;
+  EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
-TEST(LibcSearchCharacter, Strrchar)
+TEST(Glibc, strrchar)
 {
   char *start{};
   char fname[] = "/home/keitee/git/kb/code-cxx/libc/libc.cpp";
 
   // extract filename only from full path
-  start = (char*)strrchr(text, '/');
+  start = (char *)strrchr(fname, '/');
   if (start)
   {
-    EXPECT_STREQ(start+1, "libc.cpp");
+    EXPECT_STREQ(start + 1, "libc.cpp");
   }
 }
 
-
-namespace use_internal_strchr_01 {
-
-char *internal_strchr(const char *s, int c)
+namespace use_internal_strchr_01
 {
-  unsigned int i = 0;
-  while (s[i] && s[i] != c)
-    ++i;
 
-  return strlen(s) == i ? nullptr : (char *)(s + i);
-}
+  char *internal_strchr(const char *s, int c)
+  {
+    unsigned int i = 0;
+    while (s[i] && s[i] != c)
+      ++i;
 
-} // namespace
+    return strlen(s) == i ? nullptr : (char *)(s + i);
+  }
 
-TEST(Strchar, OwnVersion)
+} // namespace use_internal_strchr_01
+
+TEST(Glibc, strrcharOwn)
 {
   using namespace use_internal_strchr_01;
 
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
 
-  start = (char*)internal_strchr(text, 's');
+  start = (char *)internal_strchr(text, 's');
   if (start)
   {
     // cout works as well as printf
-    // cout << start << endl; 
+    // cout << start << endl;
     EXPECT_STREQ(start, "scan memory for a character");
   }
 
   // if not found
-  start = (char*)internal_strchr(text, 'p');
+  start = (char *)internal_strchr(text, 'p');
   EXPECT_EQ(start, nullptr);
 
   // note that `null` termination char is different from '\n'
@@ -205,44 +337,45 @@ TEST(Strchar, OwnVersion)
   start = (char *)internal_strchr(text2, '\n');
   EXPECT_TRUE(start);
 
-  auto diff = start-text2;
-  EXPECT_EQ(strlen(text2)-1, diff);
+  auto diff = start - text2;
+  EXPECT_EQ(strlen(text2) - 1, diff);
 }
 
-namespace use_internal_strchr_02 {
-
-// sanitizer_common/sanitizer_libc.cc
-char *internal_strchr(const char *s, int c)
+namespace use_internal_strchr_02
 {
-  while (true)
+
+  // sanitizer_common/sanitizer_libc.cc
+  char *internal_strchr(const char *s, int c)
   {
-    if (*s == (char)c)
-      return const_cast<char *>(s);
-    if (*s == 0)
-      return nullptr;
-    s++;
+    while (true)
+    {
+      if (*s == (char)c)
+        return const_cast<char *>(s);
+      if (*s == 0)
+        return nullptr;
+      s++;
+    }
   }
-}
 
-} // namespace
+} // namespace use_internal_strchr_02
 
-TEST(Strchar, AsanVersion)
+TEST(Glibc, strrcharAsanVersion)
 {
   using namespace use_internal_strchr_02;
 
   char *start{};
   char text[] = "memchr, memrchr, rawmemchr - scan memory for a character";
 
-  start = (char*)internal_strchr(text, 's');
+  start = (char *)internal_strchr(text, 's');
   if (start)
   {
     // cout works as well as printf
-    // cout << start << endl; 
+    // cout << start << endl;
     EXPECT_STREQ(start, "scan memory for a character");
   }
 
   // if not found
-  start = (char*)internal_strchr(text, 'p');
+  start = (char *)internal_strchr(text, 'p');
   EXPECT_EQ(start, nullptr);
 
   // note that `null` termination char is different from '\n'
@@ -252,10 +385,9 @@ TEST(Strchar, AsanVersion)
   start = (char *)internal_strchr(text2, '\n');
   EXPECT_TRUE(start);
 
-  auto diff = start-text2;
-  EXPECT_EQ(strlen(text2)-1, diff);
+  auto diff = start - text2;
+  EXPECT_EQ(strlen(text2) - 1, diff);
 }
-
 
 // ={=========================================================================
 // *sys-readlink*
@@ -280,7 +412,8 @@ SYNOPSIS
    Feature Test Macro Requirements for glibc (see feature_test_macros(7)):
 
        readlink():
-           _BSD_SOURCE || _XOPEN_SOURCE >= 500 || _XOPEN_SOURCE && _XOPEN_SOURCE_EXTENDED || _POSIX_C_SOURCE >= 200112L
+           _BSD_SOURCE || _XOPEN_SOURCE >= 500 || _XOPEN_SOURCE &&
+_XOPEN_SOURCE_EXTENDED || _POSIX_C_SOURCE >= 200112L
 
        readlinkat():
            Since glibc 2.10:
@@ -300,7 +433,7 @@ RETURN VALUE
 
 */
 
-TEST(Readlink, Base)
+TEST(Glibc, readlink)
 {
   char buffer[100];
 
@@ -310,7 +443,7 @@ TEST(Readlink, Base)
     buffer[len] = '\0';
 
     // cout works as well as printf
-    // cout << "exe: " << buffer << endl; 
+    // cout << "exe: " << buffer << endl;
 
     EXPECT_STREQ(buffer, "/home/kyoupark/git/kb/code-linux/ex_libc/libc_out");
   }
@@ -321,7 +454,7 @@ TEST(Readlink, Base)
     buffer[len] = '\0';
 
     // cout works as well as printf
-    cout << "cmdline: " << buffer << endl; 
+    cout << "cmdline: " << buffer << endl;
 
     EXPECT_STREQ(buffer, "/home/kyoupark/git/kb/code-linux/ex_libc/libc_out");
   }
@@ -572,8 +705,7 @@ bool mem_is_zero(const char *beg, uptr size) {
   return all == 0;
 }
 
-*/ 
-
+*/
 
 // ={=========================================================================
 // *sys-syscall*
@@ -589,8 +721,8 @@ NAME
 
 SYNOPSIS
        #define _GNU_SOURCE          // See feature_test_macros(7)
-       #include <unistd.h>
        #include <sys/syscall.h>     // For SYS_xxx definitions
+       #include <unistd.h>
 
        long syscall(long number, ...);
 
@@ -617,8 +749,8 @@ NOTES
 
    Architecture-specific requirements
        Each architecture ABI has its own requirements on how system call
-       arguments are passed to the kernel.  For system calls that have a glibc
-       wrapper (e.g., most system calls), glibc handles the details of  copying
+       arguments are passed to the kernel.  For system calls that have a Glibc
+       wrapper (e.g., most system calls), Glibc handles the details of  copying
        arguments  to the  right  registers  in a manner suitable for the
        architecture.  However, when using syscall() to make a system call, the
        caller might need to handle architecture-dependent details; this
@@ -649,182 +781,193 @@ NOTES
 
 */
 
-TEST(Syscall, GetTid)
+TEST(Glibc, gettid)
 {
   // cout << "tid : " << syscall(SYS_gettid) << endl;
   syscall(SYS_gettid);
 }
 
-TEST(Syscall, GetPidThroughGlibc)
+TEST(Glibc, getpid)
 {
-  // int pid{};
-
-  for (int i = 0; i < (1 << 24); ++i)
   {
-    getpid();
+    // int pid{};
+
+    for (int i = 0; i < (1 << 24); ++i)
+    {
+      getpid();
+    }
+    // cout << "pid : " << pid << endl;
   }
-  // cout << "pid : " << pid << endl;
+  {
+    // int pid{};
+
+    for (int i = 0; i < (1 << 24); ++i)
+    {
+      syscall(SYS_getpid);
+    }
+    // cout << "pid : " << pid << endl;
+  }
 }
 
-TEST(Syscall, GetPidThroughSyscall)
+namespace sanitizer_syscall
 {
-  // int pid{};
 
-  for (int i = 0; i < (1 << 24); ++i)
-  {
-    syscall(SYS_getpid);
-  }
-  // cout << "pid : " << pid << endl;
-}
+  // NAME
+  //        stat, fstat, lstat, fstatat - get file status
+  //
+  // SYNOPSIS
+  //        #include <sys/types.h>
+  //        #include <sys/stat.h>
+  //        #include <unistd.h>
+  //
+  //        int stat(const char *pathname, struct stat *buf);
+  //        int fstat(int fd, struct stat *buf);
+  //        int lstat(const char *pathname, struct stat *buf);
+  //
+  //
+  // DESCRIPTION
+  //        These  functions  return  information  about  a file, in the buffer
+  //        pointed to by stat.  No permissions are required on the file itself,
+  //        butin the case of stat(), fstatat(), and lstat()execute (search)
+  //        permission is required on all of the directories in pathname that
+  //        lead to the file.
+  //
+  //        stat() and fstatat() retrieve information about the file pointed to
+  //        by pathname; the differences for fstatat() are described below.
+  //
+  //        lstat() is identical to stat(), except that if pathname is a
+  //        symbolic link, then it returns information about the link itself,
+  //        not the file that it refers to.
+  //
+  //        fstat() is identical to stat(), except that the file about which
+  //        information is to be retrieved is specified by the file descriptor
+  //        fd.
+  //
+  //        All of these system calls return a stat structure, which contains
+  //        the following fields:
+  //
+  //            struct stat {
+  //                dev_t     st_dev;         /* ID of device containing file */
+  //                ino_t     st_ino;         /* inode number */
+  //                mode_t    st_mode;        /* protection */
+  //                nlink_t   st_nlink;       /* number of hard links */
+  //                uid_t     st_uid;         /* user ID of owner */
+  //                gid_t     st_gid;         /* group ID of owner */
+  //                dev_t     st_rdev;        /* device ID (if special file) */
+  //                off_t     st_size;        /* total size, in bytes */
+  //                blksize_t st_blksize;     /* blocksize for filesystem I/O */
+  //                blkcnt_t  st_blocks;      /* number of 512B blocks allocated
+  //                */
+  //
+  //               /* Since Linux 2.6, the kernel supports nanosecond
+  //                  precision for the following timestamp fields.
+  //                  For the details before Linux 2.6, see NOTES. */
+  //
+  //               struct timespec st_atim;  /* time of last access */
+  //               struct timespec st_mtim;  /* time of last modification */
+  //               struct timespec st_ctim;  /* time of last status change */
+  //
+  //           #define st_atime st_atim.tv_sec      /* Backward compatibility */
+  //           #define st_mtime st_mtim.tv_sec
+  //           #define st_ctime st_ctim.tv_sec
+  //           };
+  //
+  //       Because tests of the above form are common, additional macros are
+  //       defined by POSIX to allow the test of the file type in st_mode to be
+  //       written more concisely:
+  //
+  //           S_ISREG(m)  is it a regular file?
+  //
+  // <skipped>
+  //
+  // RETURN VALUE
+  //       On success, zero is returned.  On error, -1 is returned, and errno is
+  //       set appropriately.
+  //
 
-namespace sanitizer_syscall {
+  // this means that uses either "sanitizer_syscall_linux_x86_64.inc" or
+  // "sanitizer_syscall_generic.inc"
+  //
+  // #if SANITIZER_LINUX && defined(__x86_64__)
+  // #include "sanitizer_syscall_linux_x86_64.inc"
+  // #elif SANITIZER_LINUX && defined(__aarch64__)
+  // #include "sanitizer_syscall_linux_aarch64.inc"
+  // #else
+  // #include "sanitizer_syscall_generic.inc"
+  // #endif
 
-// NAME
-//        stat, fstat, lstat, fstatat - get file status
-// 
-// SYNOPSIS
-//        #include <sys/types.h>
-//        #include <sys/stat.h>
-//        #include <unistd.h>
-// 
-//        int stat(const char *pathname, struct stat *buf);
-//        int fstat(int fd, struct stat *buf);
-//        int lstat(const char *pathname, struct stat *buf);
-// 
-// 
-// DESCRIPTION
-//        These  functions  return  information  about  a file, in the buffer
-//        pointed to by stat.  No permissions are required on the file itself,
-//        butin the case of stat(), fstatat(), and lstat()execute (search) 
-//        permission is required on all of the directories in pathname that lead to
-//        the file.
-// 
-//        stat() and fstatat() retrieve information about the file pointed to by
-//        pathname; the differences for fstatat() are described below.
-// 
-//        lstat() is identical to stat(), except that if pathname is a symbolic
-//        link, then it returns information about the link itself, not the file
-//        that it refers to.
-// 
-//        fstat() is identical to stat(), except that the file about which
-//        information is to be retrieved is specified by the file descriptor fd.
-// 
-//        All of these system calls return a stat structure, which contains the
-//        following fields:
-// 
-//            struct stat {
-//                dev_t     st_dev;         /* ID of device containing file */
-//                ino_t     st_ino;         /* inode number */
-//                mode_t    st_mode;        /* protection */
-//                nlink_t   st_nlink;       /* number of hard links */
-//                uid_t     st_uid;         /* user ID of owner */
-//                gid_t     st_gid;         /* group ID of owner */
-//                dev_t     st_rdev;        /* device ID (if special file) */
-//                off_t     st_size;        /* total size, in bytes */
-//                blksize_t st_blksize;     /* blocksize for filesystem I/O */
-//                blkcnt_t  st_blocks;      /* number of 512B blocks allocated */
-//
-//               /* Since Linux 2.6, the kernel supports nanosecond
-//                  precision for the following timestamp fields.
-//                  For the details before Linux 2.6, see NOTES. */
-//
-//               struct timespec st_atim;  /* time of last access */
-//               struct timespec st_mtim;  /* time of last modification */
-//               struct timespec st_ctim;  /* time of last status change */
-//
-//           #define st_atime st_atim.tv_sec      /* Backward compatibility */
-//           #define st_mtime st_mtim.tv_sec
-//           #define st_ctime st_ctim.tv_sec
-//           };
-//
-//       Because tests of the above form are common, additional macros are
-//       defined by POSIX to allow the test of the file type in st_mode to be
-//       written more concisely:
-//
-//           S_ISREG(m)  is it a regular file?
-//
-// <skipped>
-//
-// RETURN VALUE
-//       On success, zero is returned.  On error, -1 is returned, and errno is set
-//       appropriately.
-//
-
-// this means that uses either "sanitizer_syscall_linux_x86_64.inc" or
-// "sanitizer_syscall_generic.inc"
-//
-// #if SANITIZER_LINUX && defined(__x86_64__)
-// #include "sanitizer_syscall_linux_x86_64.inc"
-// #elif SANITIZER_LINUX && defined(__aarch64__)
-// #include "sanitizer_syscall_linux_aarch64.inc"
-// #else
-// #include "sanitizer_syscall_generic.inc"
-// #endif
-
-
-typedef unsigned long uptr;
-typedef unsigned long long u64;
+  typedef unsigned long uptr;
+  typedef unsigned long long u64;
 
 // #if !((SANITIZER_FREEBSD || SANITIZER_MAC) && defined(__x86_64__))
 #define SYSCALL(name) __NR_##name
 
-// when not use template version
-// #define internal_syscall syscall
+  // when not use template version
+  // #define internal_syscall syscall
 
+  // kyoupark@kit-debian64:~/git/kb/code-linux/ex_syscall$ nm -C syscall.o |
+  // grep internal_syscall 000000000000045e t unsigned long
+  // sanitizer_syscall::internal_syscall<unsigned long>(unsigned long long,
+  // unsigned long) 0000000000000433 t unsigned long
+  // sanitizer_syscall::internal_syscall<unsigned long, unsigned long>(unsigned
+  // long long, unsigned long, unsigned long)
 
-// kyoupark@kit-debian64:~/git/kb/code-linux/ex_syscall$ nm -C syscall.o | grep internal_syscall
-// 000000000000045e t unsigned long sanitizer_syscall::internal_syscall<unsigned long>(unsigned long long, unsigned long)
-// 0000000000000433 t unsigned long sanitizer_syscall::internal_syscall<unsigned long, unsigned long>(unsigned long long, unsigned long, unsigned long)
-
-template <typename T1>
+  template <typename T1>
   static uptr internal_syscall(u64 nr, T1 arg1)
   {
     u64 retval;
-    asm volatile("syscall" : "=a"(retval) : "a"(nr), "D"((u64)arg1) :
-        "rcx", "r11", "memory", "cc");
+    asm volatile("syscall"
+                 : "=a"(retval)
+                 : "a"(nr), "D"((u64)arg1)
+                 : "rcx", "r11", "memory", "cc");
     return retval;
   }
 
-template <typename T1, typename T2>
+  template <typename T1, typename T2>
   static uptr internal_syscall(u64 nr, T1 arg1, T2 arg2)
   {
     u64 retval;
-    asm volatile("syscall" : "=a"(retval) : "a"(nr), "D"((u64)arg1),
-        "S"((u64)arg2) : "rcx", "r11", "memory", "cc");
+    asm volatile("syscall"
+                 : "=a"(retval)
+                 : "a"(nr), "D"((u64)arg1), "S"((u64)arg2)
+                 : "rcx", "r11", "memory", "cc");
     return retval;
   }
 
-uptr internal_stat(const char *path, void *buf) {
+  uptr internal_stat(const char *path, void *buf)
+  {
 
-  // #if SANITIZER_LINUX && (defined(__x86_64__) || SANITIZER_WORDSIZE == 64)
-  // # define SANITIZER_LINUX_USES_64BIT_SYSCALLS 1
+    // #if SANITIZER_LINUX && (defined(__x86_64__) || SANITIZER_WORDSIZE == 64)
+    // # define SANITIZER_LINUX_USES_64BIT_SYSCALLS 1
 
-  return internal_syscall(SYSCALL(stat), (uptr)path, (uptr)buf);
-}
+    return internal_syscall(SYSCALL(stat), (uptr)path, (uptr)buf);
+  }
 
-bool FileExistsInternal(const char *filename) {
-  struct stat st;
+  bool FileExistsInternal(const char *filename)
+  {
+    struct stat st;
 
-  if (internal_stat(filename, &st))
-    return false;
+    if (internal_stat(filename, &st))
+      return false;
 
-  // Sanity check: filename is a regular file.
-  return S_ISREG(st.st_mode);
-}
+    // Sanity check: filename is a regular file.
+    return S_ISREG(st.st_mode);
+  }
 
-bool FileExistsExternal(const char *filename) {
-  struct stat st;
+  bool FileExistsExternal(const char *filename)
+  {
+    struct stat st;
 
-  if (stat(filename, &st))
-    return false;
+    if (stat(filename, &st))
+      return false;
 
-  // Sanity check: filename is a regular file.
-  return S_ISREG(st.st_mode);
-}
+    // Sanity check: filename is a regular file.
+    return S_ISREG(st.st_mode);
+  }
 
-} // namespace
+} // namespace sanitizer_syscall
 
-TEST(Syscall, SanitizerSyscallInternal)
+TEST(Glibc, SanitizerSyscallInternal)
 {
   using namespace sanitizer_syscall;
 
@@ -834,7 +977,7 @@ TEST(Syscall, SanitizerSyscallInternal)
   }
 }
 
-TEST(Syscall, SanitizerSyscallExternal)
+TEST(Glibc, SanitizerSyscallExternal)
 {
   using namespace sanitizer_syscall;
 
@@ -845,17 +988,49 @@ TEST(Syscall, SanitizerSyscallExternal)
 }
 
 // to see how template are instanciated
-TEST(Syscall, SingleArgSanitizerSyscall)
+TEST(Glibc, SingleArgSanitizerSyscall)
 {
   using namespace sanitizer_syscall;
 
-  internal_syscall(SYSCALL(unlink), (uptr)"syscall.o");
+  internal_syscall(SYSCALL(unlink), (uptr) "syscall.o");
 }
 
+TEST(Glibc, env)
+{
+  {
+    auto ret = getenv("TEST_LPI");
+    EXPECT_THAT(ret, nullptr);
+  }
+
+  // int setenv(const char *name, const char *value, int overwrite);
+  {
+    auto rc = setenv("TEST_LPI", "1", 1);
+    if (rc < 0)
+      EXPECT_THAT(false, true);
+
+    auto ret = getenv("TEST_LPI");
+    EXPECT_THAT(std::string(ret), std::string("1"));
+  }
+}
+
+/*
+// ={=========================================================================
+// *scanf*
+
+The scanf() function reads input from the standard input stream stdin, fscanf()
+reads input from the stream pointer stream, and sscanf() reads its input from
+the character string pointed to by str.
+
+*/
+
+TEST(Glibc, scanf)
+{
+  {}
+}
 
 // ={=========================================================================
 int main(int argc, char **argv)
 {
-  testing::InitGoogleMock(&argc, argv);
+  testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

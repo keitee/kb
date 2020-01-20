@@ -35,14 +35,14 @@ project(qtest VERSION 0.1 LANGUAGES CXX)
 # set(Qt5DBus_LIBRARIES Qt5::DBus)
 
 
-find_package(Qt5Core)
-if(Qt5Core_FOUND)
-  message(STATUS "Qt5Core found")
-else()
-  message(STATUS "Qt5Core not found, not building moc")
-endif()
+# find_package(Qt5Core)
+# if(Qt5Core_FOUND)
+#   message(STATUS "Qt5Core found")
+# else()
+#   message(STATUS "Qt5Core not found, not building moc")
+# endif()
 
-find_package(Qt5Test)
+# find_package(Qt5Test)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -92,8 +92,20 @@ set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to t
 # This variable holds the path to the top level binary output directory, i.e.
 # the directory in which you ran the cmake command
 
+# no warnings but failes on automoc
+find_package(Qt5 "5.12.6" COMPONENTS Core)
 add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 
+# warnngs on automoc
+# find_package(Qt5Core)
+
+if(Qt5Core_FOUND)
+  message(STATUS "Qt5Core found")
+else()
+  message(STATUS "Qt5Core not found, not building moc")
+endif()
+
+find_package(Qt5Test)
 
 # include_directories([AFTER|BEFORE] [SYSTEM] directory...)
 #
@@ -115,7 +127,7 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 
-# add_executable(test_qt "test_qt.cpp" "qclass.cpp")
+add_executable(test_qt "test_qt.cpp" "qclass.cpp")
 
 # # The recommended way to use Qt libraries and headers with CMake is to use the
 # # target_link_libraries command. This command automatically adds appropriate
@@ -124,6 +136,7 @@ include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 # # target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test)
 # target_link_libraries(test_qt gmock_main Qt5::Core)
+target_link_libraries(test_qt gmock Qt5::Core)
 
 
 # NOTE:

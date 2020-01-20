@@ -6,17 +6,17 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <QByteArray>
-#include <QDebug>
-#include <QList>
-#include <QLoggingCategory>
-#include <QQueue>
-#include <QSignalSpy>
+// #include <QByteArray>
+// #include <QDebug>
+// #include <QList>
+// #include <QLoggingCategory>
+// #include <QQueue>
+// #include <QSignalSpy>
 #include <QString>
-#include <QTime>
-#include <QTimer>
+// #include <QTime>
+// #include <QTimer>
 
-#include "qclass.h"
+// #include "qclass.h"
 
 using namespace std;
 using ::testing::Ge;
@@ -228,6 +228,7 @@ TEST(QtString, Compare)
   EXPECT_THAT(coll, QString("compare"));
 }
 
+#if 0
 /*
 
 https://doc.qt.io/qt-5/qbytearray.html
@@ -1861,8 +1862,6 @@ TEST(QtThread, ThreadAffinity_1)
 //     emit co.operate(QString("send operate"));
 //     qCritical() << "after sending operate..";
 // }
-
-#if 0
 
 /*
 
