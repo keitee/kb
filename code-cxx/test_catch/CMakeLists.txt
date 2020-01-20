@@ -14,6 +14,6 @@ else()
 endif()
 
 # test_catch.cpp
-add_executable(${PROJECT_NAME} "test_catch.cpp")
+add_executable(${PROJECT_NAME} "test_catch.cpp" "test_qt.cpp")
 
 target_link_libraries(${PROJECT_NAME} Qt5::Core)

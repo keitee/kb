@@ -2,7 +2,6 @@
 
 #define CATCH_CONFIG_MAIN // This tells Catch to provide a main() - only do this in one cpp file
 #include "catch.hpp"
-#include <QString>
 
 unsigned int Factorial(unsigned int number)
 {
@@ -169,15 +168,5 @@ SCENARIO("vectors can be sized and resized", "[vector]")
         REQUIRE(v.capacity() >= 5);
       }
     }
-  }
-}
-
-TEST_CASE("Some.Tests", "[xx]")
-{
-  SECTION("Something", "")
-  {
-    CHECK(QString() == QString());
-    const QString someString(QLatin1String("foo"));
-    CHECK(someString == QLatin1String("foo"));
   }
 }
