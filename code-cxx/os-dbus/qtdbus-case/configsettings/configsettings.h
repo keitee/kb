@@ -5,6 +5,8 @@
 #include <QList>
 #include <QSharedPointer>
 
+#include <configmodelsettings.h>
+
 class ConfigSettings
 {
 private:
@@ -22,10 +24,17 @@ private:
   static TimeOuts parseTimeouts_(const QJsonObject &json);
 
 private:
-  // ConfigSettings(const Timeouts &timeouts,
-  //                QList<ConfigModelSettings> &&models);
+  const TimeOuts m_timeout;
+  const QList<ConfigModelSettings> m_modelDetails;
 
-  ConfigSettings();
+private:
+  // NOTE: private constructor which is used to return in staic functions so
+  // used in cxx-move context.
+
+  friend class QSharedPointer<ConfigSettings>;
+  ConfigSettings(const TimeOuts &timeout, QList<ConfigModelSettings> &&models);
+
+  // ConfigSettings();
 
 public:
   ~ConfigSettings() = default;

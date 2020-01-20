@@ -1,4 +1,5 @@
 #include <QDebug>
+#include <QJsonObject>
 #include <QList>
 #include <QSharedPointer>
 
@@ -12,7 +13,7 @@ ConfigModelSettingsData::ConfigModelSettingsData()
     : m_valid(false)
     , m_disabled(false)
     , m_filterByte(0xff)
-    , m_servicesType(ConfigModelSettings::DBusServiceType)
+    , m_servicesType(ConfigModelSettings::ServicesType::DBusServiceType)
     , m_servicesSupported(0)
 {}
 
@@ -25,8 +26,8 @@ ConfigModelSettingsData::ConfigModelSettingsData(
     , m_disabled(other.m_disabled)
     , m_pairingNameFormat(other.m_pairingNameFormat)
     , m_filterByte(other.m_filterByte)
-    //	, m_hasConnParams(other.m_hasConnParams)
-    , m_connParams(other.m_connParams)
+    , m_hasConnParams(other.m_hasConnParams)
+    // , m_connParams(other.m_connParams)
     , m_servicesType(other.m_servicesType)
     , m_servicesSupported(other.m_servicesSupported)
 {}
@@ -67,11 +68,11 @@ ConfigModelSettingsData::ConfigModelSettingsData(
     ]
 */
 
-ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
+ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObject &json)
     : m_valid(false)
-    , m_diabled(false)
+    , m_disabled(false)
     , m_hasConnParams(false)
-    , m_serviceSupported(0);
+    , m_servicesSupported(0)
 {
   // name field
   {
@@ -82,6 +83,8 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
       m_name = name.toString();
   }
 
+  qDebug() << "config.name:         " << m_name;
+
   // manufacturer field
   {
     const QJsonValue manufacturer = json["manufacturer"];
@@ -91,10 +94,12 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
       m_manufacturer = manufacturer.toString();
   }
 
+  qDebug() << "config.manufacturer: " << m_manufacturer;
+
   // oui field
   {
     const QJsonValue oui = json["oui"];
-    if (!ou.isString())
+    if (!oui.isString())
     {
       qWarning("invalid or missing 'oui' field");
       return;
@@ -115,6 +120,8 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
             (quint32(bytes[2]));
   }
 
+  qDebug() << "config.oui:        " << m_oui;
+
   // pairingFormat field
   // NOTE: this will contiue processing even if see error and which means
   // `optional` field
@@ -129,6 +136,8 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
     m_pairingNameFormat = pairingFormat.toString().toLatin1();
   }
 
+  qDebug() << "config.pairingNameFormat: " << m_pairingNameFormat;
+
   // service field which is nested one
   {
     const QJsonValue service = json["service"];
@@ -137,6 +146,8 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
       qWarning("invalid or missing 'service' field");
       return;
     }
+
+    qDebug() << "config.service:    " << service.toString();
 
     const QJsonObject serviceObject = service.toObject();
 
@@ -149,16 +160,18 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
         return;
       }
 
+      qDebug() << "config.service.type: " << type.toString();
+
       const QString typeString = type.toString();
 
       if (0 == typeString.compare("dbus", Qt::CaseInsensitive))
       {
         // NOTE: if not use enum class
         // m_serviceType = ConfigModelSettings::DBusServiceType;
-        m_serviceType = ConfigModelSettings::ServicesType::DBusServiceType;
+        m_servicesType = ConfigModelSettings::ServicesType::DBusServiceType;
       }
       else if (0 == typeString.compare("gatt", Qt::CaseInsensitive))
-        m_serviceType = ConfigModelSettings::ServicesType::GattServiceType;
+        m_servicesType = ConfigModelSettings::ServicesType::GattServiceType;
       else
       {
         qWarning("invalid or missing 'service.type' field");
@@ -166,12 +179,19 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObjet &json)
       }
     }
   }
+
+  m_valid = true;
 }
 
 /*
 -{-----------------------------------------------------------------------------
 */
 
-ConfigModelSettings::ConfigModelSettings(const QJsonObjet &json)
+ConfigModelSettings::ConfigModelSettings(const QJsonObject &json)
     : m_data(QSharedPointer<ConfigModelSettingsData>::create(json))
 {}
+
+bool ConfigModelSettings::isValid() const
+{
+  return m_data && m_data->m_valid;
+}

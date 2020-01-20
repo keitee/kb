@@ -1,8 +1,9 @@
-#include "configsettings.h"
+#include <configmodelsettings.h>
+#include <configsettings.h>
 
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
-#include <QJsonObject>
 
 // originally, this flle comes from Qt resource definition:
 //
@@ -78,7 +79,7 @@ ConfigSettings::TimeOuts ConfigSettings::parseTimeouts_(const QJsonObject &json)
   {
     const QJsonValue value = json[fields[i].name];
 
-    qDebug() << fields[i].name << " = " << value;
+    qDebug() << "timeout: " << fields[i].name << " = " << value;
 
     if (!value.isUndefined())
     {
@@ -138,7 +139,7 @@ QSharedPointer<ConfigSettings> ConfigSettings::fromJsonFile_(QIODevice *file)
   // Converts the value to an object and returns it.
 
   // since we're in the static, parseTimeouts_() should also be static.
-  Timeouts timeout = parseTimeouts_(timeoutValue.toObject());
+  TimeOuts timeout = parseTimeouts_(timeoutValue.toObject());
 
   // find the vendor detail
   QJsonValue vendorValue = obj["models"];
@@ -166,16 +167,18 @@ QSharedPointer<ConfigSettings> ConfigSettings::fromJsonFile_(QIODevice *file)
     models.append(modelSettings);
   }
 
-  return QSharedPointer<ConfigSettings>();
+  return QSharedPointer<ConfigSettings>::create(timeout, std::move(models));
 }
 
-// ConfigSettings::ConfigSettings(const Timeouts &timeouts,
-//                    QList<ConfigModelSettings> &&models)
-// {
-//   qDebug() << "configsettings is constructed";
-// }
-
-ConfigSettings::ConfigSettings()
+ConfigSettings::ConfigSettings(const TimeOuts &timeout,
+                               QList<ConfigModelSettings> &&models)
+    : m_timeout(timeout)
+    , m_modelDetails(models)
 {
   qDebug() << "configsettings is constructed";
 }
+
+// ConfigSettings::ConfigSettings()
+// {
+//   qDebug() << "configsettings is constructed";
+// }

@@ -5,7 +5,10 @@
 
 # Make an automatic library - will be static or dynamic based on user setting
 # TODO: where??
-add_library(configsettings configsettings.cpp ${HEADER_LIST})
+add_library(configsettings 
+  configsettings.cpp 
+  configmodelsettings.cpp
+  ${HEADER_LIST})
 
 # we need this directory, and users of our library will need it too.
 # target_include_directories(student PUBLIC ../include)
