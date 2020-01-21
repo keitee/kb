@@ -6,6 +6,10 @@
 #include <QList>
 #include <QSharedPointer>
 
+// NOTE:
+// 1. the order of class declaration do matter ans uses `forward declaration`
+// 2. Can merget 'ConfigModelSettingData' into ConfigModelSettings.
+
 struct ConfigModelSettingsData;
 
 class ConfigModelSettings
@@ -18,9 +22,11 @@ private:
   ConfigModelSettings(const QJsonObject &json);
 
 public:
-  // Unlike ConfigSettings, it has public ctor
-  ConfigModelSettings();
+  // NOTE:
+  // Unlike ConfigSettings, it has public ctor so can do:
+  // const QList<ConfigModelSettings> m_modelDetails;
 
+  ConfigModelSettings();
   ~ConfigModelSettings() = default;
 
 public:

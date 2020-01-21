@@ -3,6 +3,12 @@
 #include <QList>
 #include <QSharedPointer>
 
+#if defined(Q_XXXX)
+// NOTE: what is it for?
+// #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+#include <QDBusObjectPath>
+#endif
+
 #include <configmodelsettings.h>
 
 /*
@@ -83,6 +89,7 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObject &json)
       m_name = name.toString();
   }
 
+  qDebug() << "---------------------";
   qDebug() << "config.name:         " << m_name;
 
   // manufacturer field
@@ -140,14 +147,12 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObject &json)
 
   // service field which is nested one
   {
-    const QJsonValue service = json["service"];
+    const QJsonValue service = json["services"];
     if (!service.isObject())
     {
       qWarning("invalid or missing 'service' field");
       return;
     }
-
-    qDebug() << "config.service:    " << service.toString();
 
     const QJsonObject serviceObject = service.toObject();
 
@@ -177,6 +182,38 @@ ConfigModelSettingsData::ConfigModelSettingsData(const QJsonObject &json)
         qWarning("invalid or missing 'service.type' field");
         return;
       }
+
+#if defined(Q_XXXX)
+      // #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+      // service.dbus* field. have to use serviceObject.
+      {
+        if (ConfigModelSettings::ServicesType::DBusServiceType ==
+            m_servicesType)
+        {
+          const QJsonValue serviceName = serviceObject["dbusServiceName"];
+          const QJsonValue objectPath = serviceObject["dbusObjectPath"];
+
+          if (!serviceName.isString() || !objectPath.isString())
+          {
+            qWarning("invalid 'dbusServiceName' or 'dbusObjectPath' field");
+            return;
+          }
+
+          QDBusObjectPath objectPathCheck(objectPath.toString());
+          if (objectPathCheck.path().isEmpty())
+          {
+            qWarning("invalid 'dbusObjectPath' field");
+            return;
+          }
+
+          m_dbusObjectPath = objectPathCheck.path();
+          m_dbusServiceName = serviceName.toString();
+
+          qDebug() << "config.service.dbusServiceName: " << m_dbusServiceName;
+          qDebug() << "config.service.dbusObjectPath : " << m_dbusObjectPath;
+        }
+      }
+#endif
     }
   }
 

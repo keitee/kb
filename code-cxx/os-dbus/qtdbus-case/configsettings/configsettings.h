@@ -28,8 +28,10 @@ private:
   const QList<ConfigModelSettings> m_modelDetails;
 
 private:
-  // NOTE: private constructor which is used to return in staic functions so
+  // NOTE: 
+  // 1. private constructor which is used to return in staic functions so
   // used in cxx-move context.
+  // 2. Have to make QSharedPointer<T> friend
 
   friend class QSharedPointer<ConfigSettings>;
   ConfigSettings(const TimeOuts &timeout, QList<ConfigModelSettings> &&models);

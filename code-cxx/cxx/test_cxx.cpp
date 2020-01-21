@@ -4537,6 +4537,7 @@ namespace cxx_smart_pointer
     private:
       explicit SmartFoo()
       {
+        std::cout << "SmartFoo()" << std::endl;
         m_name = "smart foo";
       }
 
@@ -4555,12 +4556,14 @@ namespace cxx_smart_pointer
 
 TEST(CxxSmartPointer, construct)
 {
+  using namespace cxx_smart_pointer;
+
   {
-    shared_ptr<string> pNico(new string("nico")); // OK
+    std::shared_ptr<std::string> pNico(new std::string("nico")); // OK
   }
 
   {
-    shared_ptr<string> pNico{new string("nico")}; // OK
+    std::shared_ptr<std::string> pNico{new std::string("nico")}; // OK
   }
 
   {
@@ -4572,6 +4575,11 @@ TEST(CxxSmartPointer, construct)
   //   shared_ptr<string> pNico = new string("nico");
   // }
 
+  {
+    std::shared_ptr<SmartFoo> foo = std::shared_ptr<SmartFoo>(); // OK
+  }
+
+  // to see how use std::string's constructors
   {
     // points to '9999999999'
     shared_ptr<string> p4 = std::make_shared<string>(10, '9');
@@ -4594,9 +4602,7 @@ TEST(CxxSmartPointer, construct)
   }
 
   {
-    using namespace cxx_smart_pointer;
-
-    // cxx-error: 
+    // cxx-error:
     // ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
     // SmartFoo foo;
 

@@ -10785,12 +10785,56 @@ bitbake comcast-mediaclient-vbn-image
 
 do patches as you do for buidling rdk in local ubuntu. 
 
+<sky-app>
+keitee@kit-ubuntu:/media/keitee/ssd2/llama/workspace2/build-sky_llama_adapter$ cat ../meta-rdk-oem-sky-amlogic/meta-llama/conf/machine/include/sky_llama_common.inc
 
-<flash>
+# Comment below to get sky apps
+# BBMASK += "meta-rdk-sky/recipes-extended/appmanager/|.meta-rdk-sky/recipes-core/packagegroups/packagegroup-rdk-media-common.bbappend|.meta-rdk-sky/recipes-core/images/comcast-mediaclient-vbn-image.bbappend"
+
+
+<sky-app-epg>
+eitee@kit-ubuntu:/media/keitee/ssd2/llama/workspace2/build-sky_llama_adapter/tmp/work/sky_llama_adapter-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs/opt/sky/packages$ ls -al
+-rw-r--r-- 1 keitee keitee 18243445 Jan 21 11:49 epg-ui-11.164.00.07.wgt
+-rw-r--r-- 1 keitee keitee  6712962 Jan 21 11:49 luna-runtime-2.17.3.wgt
+-rw-r--r-- 1 keitee keitee    26556 Jan 21 11:49 rdkbrowser-1.0.0.wgt
+
+LD_PRELOAD=/usr/lib/libwesteros_gl.so.0 /usr/sbin/appsservice -v --launchdelay=30000
+
+systemctl stop sky-appsservice
+
+cat /sys/module/amvdec_ports/parameters/multiplanar
+echo 1 > /sys/module/amvdec_ports/parameters/multiplanar
+
+systemctl start sky-appsservice
+
+systemctl status sky-asplayer.service
+systemctl stop sky-asplayer.service
+systemctl start sky-asplayer.service
+
+ExecStartPre="echo 1 > /sys/module/amvdec_ports/parameters/multiplanar"
+
+echo 1 > /sys/module/amvdec_ports/parameters/multiplanar
+export XDG_RUNTIME_DIR=/tmp
+export WAYLAND_DISPLAY=westeros-asplayer
+export PLAYERSINKBIN_USE_WESTEROSSINK=1
+export WESTEROS_GL_USE_BEST_MODE=1
+export WESTEROS_SINK_USE_GFX=1
+export LD_PRELOAD=/usr/lib/libwesteros_gl.so.0.0.0
+asrdkplayer -v
+
+<repo-from-brentwood>
+https://skyswteam.com
+https://skyswteam.com/rdk-llama-bwd-osterley-integration/meta-rdk-sky
+
+bitbake iarmbus
+
+
+<to-flash>
 usb_burn aml_sdc_burn.ini
 
 <rdk-rootfs>
-llama/workspace2/build-sky_llama_adapter/tmp/work/sky_llama_adapter-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs
+llama/workspace2/build-sky_llama_adapter/tmp/work/sky_llama_adapter-rdk-linux-gnueabi/
+  comcast-mediaclient-vbn-image/1.0-r0/rootfs
 
 cat lib/systemd/system/appmanager.service
 
@@ -10859,6 +10903,102 @@ libaampjsbindings.so
 
 // source
 /media/keitee/ssd2/llama/workspace2/generic/aamp-video-engine/aamp
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-rdk-as-windowmanager
+
+int main(int argc, char *argv[])
+{
+    // create and start the window manager
+    std::shared_ptr<IWindowManager> windowMgr =
+        WindowManagerFactory::create(eventLoop);
+    windowMgr->start();
+}
+
+// asappsserviced/RDK/AppManager/WindowManager/source/WindowManagerFactory.cpp
+
+std::shared_ptr<IWindowManager> WindowManagerFactory::create(const sky::EventLoop &eventLoop)
+{
+    (void) eventLoop;
+    return std::make_shared<WesterosWindowManager>(eventLoop);
+}
+
+// asappsserviced/RDK/AppManager/WindowManager/source/WesterosWindowManager.h
+
+class WesterosWindowManager : public std::enable_shared_from_this<WesterosWindowManager>
+                            , public IWindowManager
+{}
+
+void WesterosWindowManager::start()
+{
+    if (!mPlayerClient)
+    {
+        mPlayerClient = std::make_shared<WesterosPlayerClient>(mEventLoop, shared_from_this());
+        if (!mPlayerClient || !mPlayerClient->start())
+        {
+            AI_LOG_ERROR("failed to start AS player client compositor");
+        }
+    }
+
+    if (!mRenderLoop->start())
+    {
+        AI_LOG_ERROR("failed to start render loop");
+    }
+}
+
+// asappsserviced/RDK/AppManager/WindowManager/source/WesterosPlayerClient.h
+class WesterosPlayerClient : public std::enable_shared_from_this<WesterosPlayerClient>
+
+WesterosPlayerClient::WesterosPlayerClient()
+{
+  // create the compositor
+  mCompositor = WstCompositorCreate();
+}
+
+bool WesterosPlayerClient::start()
+{
+  if (!mCompositor)
+  {
+    AI_LOG_ERROR("no compositor created");
+    return false;
+  }
+
+  if (mIsRunning)
+  {
+    AI_LOG_WARN("compositor already started");
+    return true;
+  }
+
+  if (!WstCompositorStart(mCompositor))
+  {
+    AI_LOG_ERROR("failed to start compositor");
+    return false;
+  }
+
+  mIsRunning = true;
+
+  AI_LOG_INFO("started AS player compositor @ '%s/%s'",
+      mDisplayName.first.c_str(), mDisplayName.second.c_str());
+
+  return true;
+}
+
+
+*westeros-compositor-llama*
+// NOTE: cannot find sources here
+/llama/workspace2/build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+88abed1807-r0
+
+https://code.rdkcentral.com/r/plugins/gitiles/components/opensource/westeros/+/0a74bbdc44fe57b7fec916ec599ca1fdba324709/westeros-compositor.h
+
+/**
+ * WestCompositorCreate
+ *
+ * Create a new compositor instance.  The caller should configure
+ * the instance with WstCompositorSet* calls and then start the
+ * compositor operation by calling WstCompositorStart.
+ */
+WstCompositor* WstCompositorCreate();
 
 
 ={============================================================================
