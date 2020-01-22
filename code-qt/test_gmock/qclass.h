@@ -1,163 +1,183 @@
 #ifndef QT_CLASS_H
 #define QT_CLASS_H
 
-#include <mutex>
 #include <condition_variable>
+#include <mutex>
 
-#include <QTimer>
-#include <QDebug>
-#include <QThread>
-#include <QEvent>
 #include <QCoreApplication>
+#include <QDebug>
+#include <QEvent>
+#include <QThread>
+#include <QTimer>
 
+#include <gmock/gmock.h>
 
-// ={=========================================================================
-// ex from https://doc.qt.io/qt-5/signalsandslots.html
-// shows it's object based
+/*
+={=============================================================================
+CounterFoo
+https://doc.qt.io/qt-5/signalsandslots.html
+shows it's object based
+*/
 
-class Counter : public QObject
+// have to use source for linking with qt moc generated files
+#define USE_HEADER_FOR
+
+class CounterFoo : public QObject
 {
   Q_OBJECT
 
-  public:
-    Counter() { m_value = 0; }
+public:
+  CounterFoo() { m_value = 0; }
 
-    int value() const { return m_value; }
+  int value() const { return m_value; }
 
-  public slots:
-    void setValue(int value);
-    void doSomethingLong();
+#ifdef USE_HEADER_FOR
+public slots:
+  void setValue(int value);
+  void doSomethingLong();
 
   // Error: Missing access specifier for slots
   // slots:
   //
   // private slots:
   // error: ‘void Counter::setValue(int)’ is private within this context
+#else
+  void setValue(int value)
+  {
+    if (value != m_value)
+    {
+      m_value = value;
+      emit valueChanged(value);
+    }
+  }
 
+  void doSomethingLong()
+  {
+    qCritical() << "Counter::doSomethingLong() enters";
+    // here is the expensive or blocking operations
+    // void QThread::sleep(unsigned long secs);
+    QThread::sleep(5);
+    m_value = 5;
+  }
+#endif
 
-  signals:
-    void valueChanged(int newValue);
+signals:
+  void valueChanged(int newValue);
 
-  private:
-    int m_value;
+private:
+  int m_value;
 };
 
+/*
+={=============================================================================
+TimerFoo
+*/
 
-// ={=========================================================================
-
-class Timer : public QObject
+class QTimerFoo : public QObject
 {
   Q_OBJECT
 
-  public:
-    Timer() : count_(0) 
-    { 
-      timer_ = QSharedPointer<QTimer>::create(this);
-    }
+private:
+  int m_count;
+  QSharedPointer<QTimer> m_timer;
 
-    int getCount() const { return count_; }
+public:
+  QTimerFoo()
+      : m_count(0)
+  {
+    m_timer = QSharedPointer<QTimer>::create(this);
+  }
 
-  public slots:
-    void setSingleShot()
+  int count() const { return m_count; }
+
+public slots:
+
+  void singleShot1(int msec)
+  {
+    connect(m_timer.data(), SIGNAL(timeout()), this, SLOT(onExpired()));
+
+    m_timer->start(msec);
+  }
+
+  void singleShot2(int msec)
+  {
+    QTimer::singleShot(msec, this, SLOT(onExpired()));
+  }
+
+  void onExpired()
+  {
+    // qDebug() << "UseTimer: timer expired";
+    emit timerExpired(m_count);
+  }
+
+  void continuousShot(int msec)
+  {
+    connect(m_timer.data(),
+            SIGNAL(timeout()),
+            this,
+            SLOT(onExpiredAndContinue()));
+
+    m_timer->start(msec);
+  }
+
+  void onExpiredAndContinue()
+  {
+    qDebug() << "onExpiredAndContinue: timer expired";
+
+    if (m_count < 3)
     {
-      connect(timer_.data(), SIGNAL(timeout()), 
-          this, SLOT(onExpired()));
+      m_count++;
 
-      timer_->start(1000);
+      // NOTE: From then on, it will emit the timeout() signal
+      // *at constant intervals.* so don't need this
+      // timer_->start(1000);
     }
+    else
+      emit timerExpired(m_count);
+  }
 
-    void useSingleShot()
-    {
-      QTimer::singleShot(1000, this, SLOT(onExpired()));
-    }
-
-    void onExpired()
-    {
-      // qDebug() << "UseTimer: timer expired";
-      emit timerExpired(count_);
-    }
-
-    void setContinuousShot()
-    {
-      connect(timer_.data(), SIGNAL(timeout()), 
-          this, SLOT(onExpiredAndContinue()));
-
-      timer_->start(1000);
-    }
-
-    void onExpiredAndContinue()
-    {
-      // qDebug() << "timer expired: isSingleShot: " << timer_->isSingleShot();
-
-      if (count_ < 3)
-      {
-        count_++;
-
-        // NOTE: From then on, it will emit the timeout() signal 
-        // *at constant intervals.* so don't need this
-        // timer_->start(1000);
-      }
-      else
-        emit timerExpired(count_);
-    }
-
-  signals:
-    void timerExpired(int count);
-
-  private:
-    int count_;
-    QSharedPointer<QTimer> timer_;
+signals:
+  void timerExpired(int count);
 };
 
-
-class TimerQObject : public QObject
+class OTimerFoo : public QObject
 {
   Q_OBJECT
 
-  public:
-    // TimerQObject(std::condition_variable &cv)
-    //   : cv_(cv)
+private:
+  int m_count{};
+  int m_timerId{};
 
-  public:
-    TimerQObject()
-    { 
-      int timerid{};
+public:
+  OTimerFoo()
+  {
 
-      timerid = startTimer(1000);
-      // if (timerid <= 0)
-      //   qDebug() << "failed to create timer(1000)";
-      // else
-      //   qDebug() << "created timer id: " << timerid;
+    m_timerId = startTimer(1000);
+    // if (timerid <= 0)
+    //   qDebug() << "failed to create timer(1000)";
+    // else
+    //   qDebug() << "created timer id: " << timerid;
 
-      count_ = 0; 
-    }
+    m_count = 0;
+  }
 
-    int getCount() const { return count_; }
+  int count() const { return m_count; }
 
-  protected:
+protected:
+  // void QObject::timerEvent(QTimerEvent *event)
+  virtual void timerEvent(QTimerEvent *event)
+  {
+    m_count++;
 
-    // void QObject::timerEvent(QTimerEvent *event)
-    void timerEvent(QTimerEvent *event)
-    {
-      count_++;
+    EXPECT_THAT(m_timerId, event->timerId());
+  }
 
-      // qDebug() << "expired timer id: " << event->timerId();
-
-      // if (count_ >= 3)
-      //   cv_.notify_one();
-    }
-
-
-  // to use QSignalSpy
-  signals:
-    void timerExpired(int value);
-
-  private:
-    // std::condition_variable &cv_;
-    int count_;
+  // if want to use a signal with QSignalSpy
+  // signals:
+  //   void timerExpired(int value);
 };
 
-
+#if 0
 
 // ={=========================================================================
 
@@ -166,7 +186,10 @@ class Thread : public QObject
   Q_OBJECT
 
 public:
-  Thread(std::mutex &m, std::condition_variable &cv) : m_(m), cv_(cv) {}
+  Thread(std::mutex &m, std::condition_variable &cv)
+      : m_(m)
+      , cv_(cv)
+  {}
 
 public slots:
 
@@ -217,9 +240,13 @@ class ThreadDoNotWork : public QObject
 
 public:
   ThreadDoNotWork(Counter &counter, std::mutex &m, std::condition_variable &cv)
-      : sender_counter_(counter), m_(m), cv_(cv)
+      : sender_counter_(counter)
+      , m_(m)
+      , cv_(cv)
   {
-    QObject::connect(&counter, &Counter::valueChanged, &counter,
+    QObject::connect(&counter,
+                     &Counter::valueChanged,
+                     &counter,
                      &Counter::doSomethingLong);
   }
 
@@ -263,9 +290,12 @@ class ThreadStandAloneX : public QObject
   Q_OBJECT
 
 public:
-  ThreadStandAloneX(Counter &counter) : sender_counter_(counter)
+  ThreadStandAloneX(Counter &counter)
+      : sender_counter_(counter)
   {
-    QObject::connect(&counter, &Counter::valueChanged, &counter,
+    QObject::connect(&counter,
+                     &Counter::valueChanged,
+                     &counter,
                      &Counter::doSomethingLong);
   }
 
@@ -297,9 +327,13 @@ class ThreadWork : public QObject
   Q_OBJECT
 
 public:
-  ThreadWork(std::mutex &m, std::condition_variable &cv) : m_(m), cv_(cv)
+  ThreadWork(std::mutex &m, std::condition_variable &cv)
+      : m_(m)
+      , cv_(cv)
   {
-    QObject::connect(&counter_, &Counter::valueChanged, &counter_,
+    QObject::connect(&counter_,
+                     &Counter::valueChanged,
+                     &counter_,
                      &Counter::doSomethingLong);
   }
 
@@ -345,7 +379,9 @@ class ThreadStandAloneY : public QObject
 public:
   ThreadStandAloneY()
   {
-    QObject::connect(&counter_, &Counter::valueChanged, &counter_,
+    QObject::connect(&counter_,
+                     &Counter::valueChanged,
+                     &counter_,
                      &Counter::doSomethingLong);
   }
 
@@ -373,6 +409,8 @@ public slots:
 private:
   Counter counter_;
 };
+
+#endif
 
 #if 0
 
@@ -530,6 +568,6 @@ signals:
   };
 } // namespace
 
-#endif 
+#endif
 
 #endif // QT_CLASS_H

@@ -4,123 +4,116 @@
 #include <sstream>
 
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
+// #include <gtest/gtest.h>
 
-// #include <QByteArray>
-// #include <QDebug>
-// #include <QList>
-// #include <QLoggingCategory>
-// #include <QQueue>
-// #include <QSignalSpy>
+#include <QByteArray>
+#include <QCoreApplication>
+#include <QDebug>
+#include <QList>
+#include <QLoggingCategory>
+#include <QQueue>
+#include <QSignalSpy>
 #include <QString>
-// #include <QTime>
-// #include <QTimer>
+#include <QTime>
+#include <QTimer>
 
-// #include "qclass.h"
+#include "qclass.h"
+
+#include "test_qt.moc"
 
 using namespace std;
 using ::testing::Ge;
 
-// ={=========================================================================
-// qt-console app
-//
-// main()
-// {
-//   // QCoreApplication a(argc, argv);
-//   // your code is here
-//   // return a.exec();
-// }
-//
-// have to comment out lines for QCoreApplication
+/*
+={=============================================================================
+qstring
 
-// ={=========================================================================
-// qt-string
-//
-// https://doc.qt.io/qt-5/qstring.html
-//
-// The QString class provides a Unicode character string.
-//
-// QString stores a string of 16-bit QChars, where each QChar corresponds to one
-// UTF-16 code unit. (Unicode characters with code values above 65535 are stored
-// using surrogate pairs, i.e., two consecutive QChars.)
-//
-// In addition to QString, Qt also provides the "QByteArray" class to store raw
-// bytes and traditional 8-bit '\0'-terminated strings. For most purposes,
-// QString is the class you want to use. It is used throughout the Qt API, and
-// the Unicode support ensures that your applications will be easy to translate
-// if you want to expand your application's market at some point. The two main
-// cases where QByteArray is appropriate are when you need to store raw binary
-// data, and when memory conservation is critical (like in embedded systems).
+https://doc.qt.io/qt-5/qstring.html
 
-// Converting Between 8-Bit Strings and Unicode Strings
-//
-// QString provides the following three functions that return a const char *
-// version of the string as QByteArray: toUtf8(), toLatin1(), and toLocal8Bit().
-//
-// toLatin1() returns a Latin-1 (ISO 8859-1) encoded 8-bit string.
-//
-// toUtf8() returns a UTF-8 encoded 8-bit string. UTF-8 is a superset of
-// US-ASCII (ANSI X3.4-1986) that supports the entire Unicode character set
-// through multibyte sequences.
-//
-// toLocal8Bit() returns an 8-bit string using the system's local encoding.
-//
-// To convert from one of these encodings, QString provides fromLatin1(),
-// fromUtf8(), and fromLocal8Bit(). Other encodings are supported through the
-// QTextCodec class.
-//
-// As mentioned above, QString provides a lot of functions and operators that
-// make it easy to interoperate with const char * strings. But this
-// functionality is a double-edged sword: It makes QString more convenient to
-// use if all strings are US-ASCII or Latin-1, but there is always the risk that
-// an implicit conversion from or to const char * is done using the wrong 8-bit
-// encoding. To minimize these risks, you can turn off these implicit
-// conversions by defining the following two preprocessor symbols:
-//
-// QT_NO_CAST_FROM_ASCII disables automatic conversions from C string literals
-// and pointers to Unicode.
-//
-// QT_RESTRICTED_CAST_FROM_ASCII allows automatic conversions from C characters
-// and character arrays, but disables automatic conversions from character
-// pointers to Unicode.
-//
-// QT_NO_CAST_TO_ASCII disables automatic conversion from QString to C strings.
-//
-// One way to define these preprocessor symbols globally for your application is
-// to add the following entry to your qmake project file:
-//
-// DEFINES += QT_NO_CAST_FROM_ASCII \ 
-//  QT_NO_CAST_TO_ASCII
-//
-// You then need to explicitly call fromUtf8(), fromLatin1(), or fromLocal8Bit()
-// to construct a QString from an 8-bit string, or use the lightweight
-// QLatin1String class, for example:
+The QString class provides a Unicode character string.
 
-// Distinction Between Null and Empty Strings
-//
-// For historical reasons, QString distinguishes between a null string and an
-// empty string. A null string is a string that is initialized using QString's
-// default constructor or by passing (const char *)0 to the constructor. An
-// empty string is any string with size 0. A null string is always empty, but an
-// empty string isn't necessarily null:
-//
-// QString().isNull();               // returns true
-// QString().isEmpty();              // returns true
-//
-// QString("").isNull();             // returns false
-// QString("").isEmpty();            // returns true
-//
-// QString("abc").isNull();          // returns false
-// QString("abc").isEmpty();         // returns false
-//
-// All functions except isNull() treat null strings the same as empty strings.
-// For example, toUtf8().constData() returns a pointer to a '\0' character for a
-// null string (not a null pointer), and QString() compares equal to
-// QString("").
-//
-// We recommend that you always use the isEmpty() function and avoid isNull().
+QString stores a string of 16-bit QChars, where each QChar corresponds to one
+UTF-16 code unit. (Unicode characters with code values above 65535 are stored
+using surrogate pairs, i.e., two consecutive QChars.)
 
-TEST(QtString, convertToConstChar)
+In addition to QString, Qt also provides the "QByteArray" class to store raw
+bytes and traditional 8-bit '\0'-terminated strings. For most purposes, QString
+is the class you want to use. It is used throughout the Qt API, and the Unicode
+support ensures that your applications will be easy to translate if you want to
+expand your application's market at some point. The two main cases where
+QByteArray is appropriate are when you need to store raw binary data, and when
+memory conservation is critical (like in embedded systems).
+
+Converting Between 8-Bit Strings and Unicode Strings
+
+QString provides the following three functions that return a const char *
+version of the string as QByteArray: toUtf8(), toLatin1(), and toLocal8Bit().
+
+toLatin1() returns a Latin-1 (ISO 8859-1) encoded 8-bit string.
+
+toUtf8() returns a UTF-8 encoded 8-bit string. UTF-8 is a superset of US-ASCII
+(ANSI X3.4-1986) that supports the entire Unicode character set through
+multibyte sequences.
+
+toLocal8Bit() returns an 8-bit string using the system's local encoding.
+
+To convert from one of these encodings, QString provides fromLatin1(),
+fromUtf8(), and fromLocal8Bit(). Other encodings are supported through the
+QTextCodec class.
+
+As mentioned above, QString provides a lot of functions and operators that make
+it easy to interoperate with const char * strings. But this functionality is a
+double-edged sword: It makes QString more convenient to use if all strings are
+US-ASCII or Latin-1, but there is always the risk that an implicit conversion
+from or to const char * is done using the wrong 8-bit encoding. To minimize
+these risks, you can turn off these implicit conversions by defining the
+following two preprocessor symbols:
+
+QT_NO_CAST_FROM_ASCII disables automatic conversions from C string literals and
+pointers to Unicode.
+
+QT_RESTRICTED_CAST_FROM_ASCII allows automatic conversions from C characters and
+character arrays, but disables automatic conversions from character pointers to
+Unicode.
+
+QT_NO_CAST_TO_ASCII disables automatic conversion from QString to C strings.
+
+One way to define these preprocessor symbols globally for your application is to
+add the following entry to your qmake project file:
+
+DEFINES += QT_NO_CAST_FROM_ASCII \ 
+ QT_NO_CAST_TO_ASCII
+
+You then need to explicitly call fromUtf8(), fromLatin1(), or fromLocal8Bit() to
+construct a QString from an 8-bit string, or use the lightweight QLatin1String
+class, for example:
+
+Distinction Between Null and Empty Strings
+
+For historical reasons, QString distinguishes between a null string and an empty
+string. A null string is a string that is initialized using QString's default
+constructor or by passing (const char *)0 to the constructor. An empty string is
+any string with size 0. A null string is always empty, but an empty string isn't
+necessarily null:
+
+QString().isNull();               // returns true
+QString().isEmpty();              // returns true
+
+QString("").isNull();             // returns false
+QString("").isEmpty();            // returns true
+
+QString("abc").isNull();          // returns false
+QString("abc").isEmpty();         // returns false
+
+All functions except isNull() treat null strings the same as empty strings.  For
+example, toUtf8().constData() returns a pointer to a '\0' character for a null
+string (not a null pointer), and QString() compares equal to QString("").
+
+We recommend that you always use the isEmpty() function and avoid isNull().
+
+*/
+
+TEST(QString, convert)
 {
   // You can also pass string literals to functions that take QStrings as
   // arguments, invoking the QString(const char *) constructor. Similarly, you
@@ -162,7 +155,7 @@ TEST(QtString, convertToConstChar)
   }
 }
 
-TEST(QtString, useArg)
+TEST(QString, format)
 {
   // First, arg(i) replaces %1. Then arg(total) replaces %2. Finally,
   // arg(fileName) replaces %3.
@@ -222,14 +215,55 @@ TEST(QtString, useArg)
   }
 }
 
-TEST(QtString, Compare)
+TEST(QString, operations)
 {
-  QString coll{"compare"};
-  EXPECT_THAT(coll, QString("compare"));
+  // int QString::indexOf
+  // (const QString &str, int from = 0, Qt::CaseSensitivity cs =
+  // Qt::CaseSensitive) const
+  //
+  // Returns the index position of the first occurrence of the string str in this
+  // string, searching forward from index position from. Returns -1 if str is not
+  // found.
+
+  // SECTION( "QString::indexOf" )
+  {
+    QString coll{"QtString supports indexOf method"};
+
+    EXPECT_TRUE(coll.indexOf("indexOf") == 18);
+
+    EXPECT_TRUE(coll.indexOf("indexof") == -1);
+  }
+
+  // SECTION( "QString::startsWith" )
+  {
+    QString coll{"value=10"};
+
+    EXPECT_TRUE(coll.startsWith("value=") == true);
+
+    EXPECT_TRUE(coll.mid(6) == "10");
+  }
+
+  // int QString::compare
+  //  (const QString &other, Qt::CaseSensitivity cs = Qt::CaseSensitive) const
+  //
+  // This function overloads compare().
+  //
+  // Lexically compares this string with the other string and returns an integer
+  // less than, equal to, or greater than zero if this string is less than, equal
+  // to, or greater than the other string.
+
+  // SECTION( "QString::compare" )
+  {
+    QString coll{"compare"};
+
+    // equal
+    EXPECT_TRUE(coll.compare("compare") == 0);
+  }
 }
 
-#if 0
 /*
+={=============================================================================
+qbytearray
 
 https://doc.qt.io/qt-5/qbytearray.html
 
@@ -312,13 +346,13 @@ https://doc.qt.io/qt-5/qstring.html#QStringLiteral
 
 QStringLiteral(str)
 
-The macro generates the data for a QString out of the string literal str at
+The `macro` generates the data for a QString out of the string literal str at
 compile time. Creating a QString from it is free in this case, and the generated
 string data is stored in the read-only segment of the compiled object file.
 
 */
 
-TEST(QtString, ByteArray)
+TEST(QString, qbytearray)
 {
   {
     QByteArray coll{"U%03hhu SkyQ EC201"};
@@ -328,7 +362,7 @@ TEST(QtString, ByteArray)
 
     std::ostringstream os;
     os << coll.data();
-    EXPECT_THAT(os.str(), "U%03hhu SkyQ EC201");
+    EXPECT_TRUE(os.str() == "U%03hhu SkyQ EC201");
   }
 
   {
@@ -339,7 +373,7 @@ TEST(QtString, ByteArray)
 
     std::ostringstream os;
     os << coll.data();
-    EXPECT_THAT(os.str(), "U%03hhu SkyQ EC201");
+    EXPECT_TRUE(os.str() == "U%03hhu SkyQ EC201");
   }
 
   {
@@ -347,38 +381,13 @@ TEST(QtString, ByteArray)
 
     std::ostringstream os;
     os << qPrintable(coll);
-    EXPECT_THAT(os.str(), "U%03hhu SkyQ EC201");
+    EXPECT_TRUE(os.str() == "U%03hhu SkyQ EC201");
   }
 }
 
-// int QString::indexOf
-// (const QString &str, int from = 0, Qt::CaseSensitivity cs =
-// Qt::CaseSensitive) const
-//
-// Returns the index position of the first occurrence of the string str in this
-// string, searching forward from index position from. Returns -1 if str is not
-// found.
-
-TEST(QtString, useIndexOf)
-{
-  QString coll{"QtString supports indexOf method"};
-
-  EXPECT_THAT(coll.indexOf("indexOf"), 18);
-
-  EXPECT_THAT(coll.indexOf("indexof"), -1);
-}
-
-TEST(QtString, useStartsWith)
-{
-  QString coll{"value=10"};
-
-  EXPECT_THAT(coll.startsWith("value="), true);
-
-  EXPECT_THAT(coll.mid(6), "10");
-}
-
-// ={=========================================================================
-/* qt-string-list
+/*
+={=============================================================================
+qstringlist
 
 https://doc.qt.io/qt-5/qstringlist.html
 
@@ -390,7 +399,7 @@ removals. Passing string lists as value parameters is both fast and safe.
 
 */
 
-TEST(QtStringList, useInit)
+TEST(QStringList, create)
 {
   QStringList coll1 = {"Arial", "Helvetica", "Times"};
 
@@ -408,7 +417,7 @@ TEST(QtStringList, useInit)
   EXPECT_THAT(coll1, coll2);
 }
 
-TEST(QtStringList, iterate)
+TEST(QStringList, iterate)
 {
   {
     QStringList coll1 = {"Arial", "Helvetica", "Times"};
@@ -443,10 +452,12 @@ TEST(QtStringList, iterate)
   }
 }
 
-// ={=========================================================================
-// qt-list
+/*
+={=============================================================================
+qlist
+*/
 
-TEST(QtList, Prepend)
+TEST(QList, operations)
 {
   {
     QList<QString> coll;
@@ -465,10 +476,12 @@ TEST(QtList, Prepend)
   }
 }
 
-// ={=========================================================================
-// qt-queue
+/*
+={=============================================================================
+qqueue
+*/
 
-TEST(QtQueue, Pop)
+TEST(QQueue, operations)
 {
   {
     QQueue<int> coll;
@@ -488,8 +501,10 @@ TEST(QtQueue, Pop)
   }
 }
 
-// ={=========================================================================
-/* qt-variant
+/*
+={=============================================================================
+qvariant
+
 https://doc.qt.io/qt-5/qvariant.html#QVariantMap-typedef
 
 A QVariant object holds *a single value of a single type()* at a time. (Some
@@ -497,13 +512,12 @@ type()s are multi-valued, for example a string list.) You can find out what
 type, T, the variant holds, convert it to a different type using convert(), get
 its value using one of the toT() functions (e.g., toSize()) and check whether
 the type can be converted to a particular type using canConvert().
-*/
 
-// /Qt/5.12.3/Src/qtbase/src/corelib/kernel/qvariant.cpp
-//
-// see how it's documented in the code
+/Qt/5.12.3/Src/qtbase/src/corelib/kernel/qvariant.cpp
 
-/*! \fn template<typename T> T QVariant::value() const
+see how it's documented in the code
+
+/! \fn template<typename T> T QVariant::value() const
 
     Returns the stored value converted to the template type \c{T}.
     Call canConvert() to find out whether a type can be converted.
@@ -529,9 +543,8 @@ the type can be converted to a particular type using canConvert().
     \snippet code/src_corelib_kernel_qvariant.cpp 9
 
     \sa setValue(), fromValue(), canConvert(), Q_DECLARE_SEQUENTIAL_CONTAINER_METATYPE()
-*/
 
-/*
+
 /Qt/5.12.3/Src/qtbase/src/corelib/kernel/qvariant.h
 
     template<typename T>
@@ -542,39 +555,35 @@ the type can be converted to a particular type using canConvert().
 
 T QVariant::value() const
 
-Returns the stored value "converted to the template type T". Call
-canConvert() to find out whether a type can be converted. If the value
-cannot be converted, a default-constructed value will be returned.
+Returns the stored value "converted to the template type T". Call canConvert()
+to find out whether a type can be converted. If the value cannot be converted, a
+default-constructed value will be returned.
 
 If the type T is supported by QVariant, this function behaves exactly as
 toString(), toInt() etc.
 
 
 bool QVariant::canConvert() const
-Returns true if the variant can be converted to `the template type T`,
-otherwise false.
+Returns true if the variant can be converted to `the template type T`, otherwise
+false.
 
 
-  //
-  // A QVariant containing a sequential container will also return true for this
-  // function if the targetTypeId is QVariantList. It is possible to iterate
-  // over the contents of the container without extracting it as a (copied)
-  // QVariantList:
-  //
-  // typedef QVariant::QVariantList
-  // Synonym for QList<QVariant>.
-  //
-  // output:
-  // QVariant(int, 7)
-  // QVariant(int, 11)
-  // QVariant(int, 42)
+QVariantList
+  
+A QVariant containing a sequential container will also return true for this
+function if the targetTypeId is QVariantList. It is possible to iterate over the
+contents of the container without extracting it as a (copied) QVariantList:
 
-  // If the QVariant contains a sequential container and T is QVariantList, the
-  // elements of the container will be converted into QVariants and returned as
-  // a QVariantList.
+typedef QVariant::QVariantList
+Synonym for QList<QVariant>.
+
+If the QVariant contains a sequential container and T is QVariantList, the
+elements of the container will be converted into QVariants and returned as a
+QVariantList.
+
 */
 
-TEST(QtVariant, convert)
+TEST(QVariant, convert)
 {
   {
     QVariant v;
@@ -584,9 +593,7 @@ TEST(QtVariant, convert)
     // compile error since "7" is not QString
     // EXPECT_THAT("7", v.toString());
     EXPECT_THAT(QString("7"), v.toString());
-  }
 
-  {
     // const char *QVariant::typeName() const
     // Returns the name of the type stored in the variant. The returned strings
     // describe the C++ datatype used to store the data: for example, "QFont",
@@ -601,18 +608,11 @@ TEST(QtVariant, convert)
 
     // https://doc.qt.io/qt-5/qbytearray.html
     EXPECT_THAT(QByteArray("int"), QByteArray(v.typeName()));
-  }
 
-  {
     EXPECT_THAT(v.toInt(), v.value<int>());        // same as v.toInt()
     EXPECT_THAT(v.toString(), v.value<QString>()); // same as v.toString()
   }
 
-  // MyCustomStruct s;
-  // v.setValue(s);
-
-  // v.canConvert<int>();              // returns false
-  // v.canConvert<MyCustomStruct>();   // returns true
   {
     QVariant v{42};
 
@@ -649,72 +649,77 @@ inline void QVariant::setValue(const T &avalue)
 
 */
 
-TEST(QtVariant, store)
+TEST(QVariant, store)
 {
+  // SECTION("QVariant::setValue")
+  {{QVariant v1;
+  v1.setValue(5);
+
+  QVariant v2{5};
+
+  EXPECT_TRUE(v1 == v2);
+}
+
+{
+  QVariant v1;
+  v1.setValue(5);
+
+  QVariant v2;
+
+  // TODO: fromValue() is static function. no compile error??
+  // v2.fromValue(5);
+  //
+  // qDebug() << "v2 : " << v2;
+  // v2 :  QVariant(Invalid)
+
+  v2 = QVariant::fromValue(5);
+
+  EXPECT_TRUE(v1 == v2);
+}
+}
+
+// output:
+// QVariant(int, 7)
+// QVariant(int, 11)
+// QVariant(int, 42)
+
+// SECTION("QVariant::fromValue")
+{
+  QList<int> coll{7, 11, 42};
+  QVariant v = QVariant::fromValue(coll);
+
+  EXPECT_TRUE(QByteArray("QList<int>") == QByteArray(v.typeName()));
+
+  // qDebug() << v;
+
+  if (v.canConvert<QVariantList>())
   {
-    QVariant v;
-    v.setValue(5);
-    EXPECT_THAT(QByteArray("int"), QByteArray(v.typeName()));
-    EXPECT_THAT(v.toInt(), 5);
-  }
+    QSequentialIterable it = v.value<QSequentialIterable>();
 
-  // bool QVariant::canConvert() const
-  // Returns true if the variant can be converted to the template type T,
-  // otherwise false.
-  //
-  // A QVariant containing a sequential container will also return true for this
-  // function if the targetTypeId is QVariantList. It is possible to iterate
-  // over the contents of the container without extracting it as a (copied)
-  // QVariantList:
-  //
-  // typedef QVariant::QVariantList
-  // Synonym for QList<QVariant>.
-  //
-  // output:
-  // QVariant(int, 7)
-  // QVariant(int, 11)
-  // QVariant(int, 42)
-
-  // If the QVariant contains a sequential container and T is QVariantList, the
-  // elements of the container will be converted into QVariants and returned as
-  // a QVariantList.
-
-  {
-    QList<int> coll{7, 11, 42};
-    QVariant v = QVariant::fromValue(coll);
-
-    EXPECT_THAT(QByteArray("QList<int>"), QByteArray(v.typeName()));
-    // qDebug() << v;
-
-    if (v.canConvert<QVariantList>())
-    {
-      QSequentialIterable it = v.value<QSequentialIterable>();
-
-      // cxx-range-for
-      for (const QVariant &v : it)
-        qDebug() << v;
-    }
+    // cxx-range-for
+    for (const QVariant &v : it)
+      qDebug() << v;
   }
 }
 
-  // You can even store QList<QVariant> and QMap<QString, QVariant> values in a
-  // variant, so you can easily construct arbitrarily complex data structures of
-  // arbitrary types. This is very powerful and versatile, but may prove less
-  // memory and speed efficient than storing specific types in standard data
-  // structures.
+// You can even store QList<QVariant> and QMap<QString, QVariant> values in a
+// variant, so you can easily construct arbitrarily complex data structures of
+// arbitrary types. This is very powerful and versatile, but may prove less
+// memory and speed efficient than storing specific types in standard data
+// structures.
 
-  {
-    QStringList coll1 = {"Arial", "Helvetica", "Times"};
-    QVariant v(coll1);
+{
+  QStringList coll1 = {"Arial", "Helvetica", "Times"};
+  QVariant v(coll1);
 
-    EXPECT_THAT(v.canConvert<QStringList>(), true);
+  EXPECT_THAT(v.canConvert<QStringList>(), true);
 
-    QStringList coll2 = v.value<QStringList>();
-    EXPECT_THAT(coll1, coll2);
-  }
+  QStringList coll2 = v.value<QStringList>();
+  EXPECT_THAT(coll1, coll2);
+}
 }
 
-TEST(QtVariant, null)
+TEST(QVariant, null)
 {
   // QVariant also supports the notion of null values, where you can have a
   // defined type with no value set. However, note that QVariant types can only
@@ -734,24 +739,66 @@ TEST(QtVariant, null)
   QVariant x;
   EXPECT_THAT(x.isNull(), true);
 
-  // error: request for member ‘isNull’ in ‘y’, which is of non-class type
-  // ‘QVariant(QString (*)())’ QVariant y(QString());
-
   // OK
   // QVariant y((QString()));
 
   // OK.
   QVariant y(QString{});
-
   EXPECT_THAT(y.isNull(), true);
 
   QVariant z(QString(""));
   EXPECT_THAT(z.isNull(), false);
 }
 
+/*
+={=============================================================================
+qsharedpointer
+*/
 
-// ={=========================================================================
-/* qt-map
+TEST(QSharedPointer, create)
+{
+  // QString::QString(int size, QChar ch)
+  // Constructs a string of the given size with every character set to ch.
+
+  {
+    std::ostringstream os;
+
+    QSharedPointer<QString> sp1 = QSharedPointer<QString>(new QString(5, 'Q'));
+
+    os << qPrintable(*sp1);
+
+    EXPECT_TRUE(os.str() == "QQQQQ");
+  }
+
+  // NOTE: Like make_shared()
+  //
+  // QSharedPointer<T> QSharedPointer::create(Args &&... args)
+  // This is an overloaded function.
+  //
+  // Creates a QSharedPointer object and allocates a new item of type T. The
+  // QSharedPointer internals and the object are allocated in one single memory
+  // allocation, which could help reduce memory fragmentation in a long-running
+  // application.
+  //
+  // This function will attempt to call a constructor for type T that can accept
+  // all the arguments passed (args). Arguments will be perfectly-forwarded.
+  //
+  // This function was introduced in Qt 5.1.
+
+  {
+    std::ostringstream os;
+
+    QSharedPointer<QString> sp1 = QSharedPointer<QString>::create(5, 'Q');
+
+    os << qPrintable(*sp1);
+
+    EXPECT_TRUE(os.str() == "QQQQQ");
+  }
+}
+
+/*
+={=============================================================================
+qmap
 
 https://doc.qt.io/qt-5/qmap.html
 
@@ -812,7 +859,7 @@ See also key(), values(), contains(), and operator[]().
 
 */
 
-namespace qt_map
+namespace q_map
 {
   struct State
   {
@@ -820,11 +867,11 @@ namespace qt_map
     int initialState;
     QString name;
   };
-} // namespace qt_map
+} // namespace q_map
 
-TEST(QtMap, Access)
+TEST(QMap, access)
 {
-  using namespace qt_map;
+  using namespace q_map;
 
   {
     State state1{100, 101, "one"};
@@ -898,7 +945,7 @@ Synonym for QMap<QString, QVariant>.
 
 */
 
-TEST(QtMap, VariantMap)
+TEST(QMap, variant_map)
 {
   QVariantMap coll;
 
@@ -908,6 +955,8 @@ TEST(QtMap, VariantMap)
   // coll.insert({QString("string2"), 3.2});
   // coll.insert({QString("string3"), 10});
 }
+
+#if 0
 
 // ={=========================================================================
 // qt-logging
@@ -1295,10 +1344,14 @@ TEST(QtRegex, Regex)
   EXPECT_THAT(regex.exactMatch("U131 SkyQ EC201"), false);
 }
 
-// ={=========================================================================
-// qt-slot
+#endif
 
-TEST(QtSlot, SlotAndSignal)
+/*
+={=============================================================================
+qmetaobject
+*/
+
+TEST(Qmetaobject, slot_and_signal)
 {
   // Calling a.setValue(12) makes a emit a.valueChanged(12) signal, which b will
   // receive in its setValue() slot, i.e. b.setValue(12) is called. Then b emits
@@ -1310,9 +1363,9 @@ TEST(QtSlot, SlotAndSignal)
   // connections (e.g., if b.valueChanged() were connected to a.setValue()).
 
   {
-    Counter a, b;
+    CounterFoo a, b;
 
-    QObject::connect(&a, &Counter::valueChanged, &b, &Counter::setValue);
+    QObject::connect(&a, &CounterFoo::valueChanged, &b, &CounterFoo::setValue);
 
     EXPECT_THAT(a.value(), 0);
     EXPECT_THAT(b.value(), 0);
@@ -1338,40 +1391,47 @@ TEST(QtSlot, SlotAndSignal)
   // this is receiver decide that it do not use it
 
   {
-    Counter a, b;
+    CounterFoo a, b;
 
-    QObject::connect(&a, &Counter::valueChanged, &b, &Counter::doSomethingLong);
+    QObject::connect(&a,
+                     &CounterFoo::valueChanged,
+                     &b,
+                     &CounterFoo::doSomethingLong);
 
     // https://doc.qt.io/qt-5/qtime.html
-    QTime elapsed;
-    elapsed.start();
+    QTime timeSnap;
+    timeSnap.start();
 
+    // NOTE: can call signal which is effectivly a function
     a.valueChanged(12);
 
     // elapsed.elapsed() returns ms.
-    EXPECT_THAT(elapsed.elapsed(), Ge(5000));
+    EXPECT_THAT(timeSnap.elapsed(), Ge(5000));
   }
 
   // to show `emit signal` is a function call
   {
-    Counter a, b;
+    CounterFoo a, b;
 
-    QObject::connect(&a, &Counter::valueChanged, &b, &Counter::doSomethingLong);
+    QObject::connect(&a,
+                     &CounterFoo::valueChanged,
+                     &b,
+                     &CounterFoo::doSomethingLong);
 
-    QTime elapsed;
-    elapsed.start();
+    QTime timeSnap;
+    timeSnap.start();
 
     emit a.valueChanged(12);
 
     // elapsed.elapsed() returns ms.
-    EXPECT_THAT(elapsed.elapsed(), Ge(5000));
+    EXPECT_THAT(timeSnap.elapsed(), Ge(5000));
   }
 }
 
-// ={=========================================================================
-// qt-timer
-
 /*
+={=============================================================================
+qtimer
+
 https://doc.qt.io/qt-5/qtimer.html
 
 Detailed Description
@@ -1404,13 +1464,15 @@ specified interval:
     void QTimer::singleShot(
       int msec, const QObject *receiver, const char *member)
 
+    // NOTE: see "const char *memeber"
+
 This static function calls a slot after a given time interval.
 
 It is very convenient to use this function because you do not need to bother
 with a timerEvent or create a local QTimer object.
 
 
-*qt-event-loop*
+*qt-eventloop*
 In multithreaded applications, you can use QTimer in any thread that has an
 event loop. To start an event loop from a non-GUI thread, use QThread::exec().
 
@@ -1428,7 +1490,7 @@ This can be used to do *heavy work* while providing a snappy user interface:
 
     QTimer *timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(processOneThing()));
-    timer->start();
+    timer->start();   // NOTE: no msec
 
 void QTimer::start()
 This function overloads start().
@@ -1443,7 +1505,7 @@ been processed.
 
 From then on, processOneThing() will be called repeatedly. It should be written
 in such a way that it always returns quickly (typically after processing one
-data item) so that Qt can deliver events to the user interface and stop the
+    data item) so that Qt can deliver events to the user interface and stop the
 timer as soon as it has done all its work. This is the traditional way of
 implementing heavy work in GUI applications, but as multithreading is nowadays
 becoming available on more and more platforms, we expect that zero-millisecond
@@ -1547,67 +1609,67 @@ towards a timeout in the future instead of tracking elapsed time.
 
 */
 
-TEST(QtTimer, SingleTimerFromQTimer)
+TEST(QTimer, single_and_continuous)
 {
-  Timer o;
+  {
+    QTimerFoo o;
 
-  o.setSingleShot();
+    o.singleShot1(1000);
 
-  // https://doc.qt.io/qt-5/qsignalspy.html#details
-  QSignalSpy timerExpiredSpy(&o, &Timer::timerExpired);
+    // https://doc.qt.io/qt-5/qsignalspy.html#details
+    QSignalSpy spy(&o, &QTimerFoo::timerExpired);
 
-  // use wait to check timer expired event is fired within this tiem.
-  timerExpiredSpy.wait(2000);
-  EXPECT_EQ(timerExpiredSpy.count(), 1);
-}
+    // use wait to check timer expired event is fired within this tiem.
+    spy.wait(2000);
+    EXPECT_EQ(spy.count(), 1);
+  }
 
-TEST(QtTimer, SingleTimerFromSingleShot)
-{
-  Timer o;
+  {
+    QTimerFoo o;
 
-  o.useSingleShot();
+    o.singleShot2(1000);
 
-  // https://doc.qt.io/qt-5/qsignalspy.html#details
-  QSignalSpy timerExpiredSpy(&o, &Timer::timerExpired);
+    // https://doc.qt.io/qt-5/qsignalspy.html#details
+    QSignalSpy spy(&o, &QTimerFoo::timerExpired);
 
-  // use wait to check timer expired event is fired within this tiem.
-  timerExpiredSpy.wait(2000);
-  EXPECT_EQ(timerExpiredSpy.count(), 1);
-}
+    // use wait to check timer expired event is fired within this tiem.
+    spy.wait(2000);
+    EXPECT_EQ(spy.count(), 1);
+  }
 
-TEST(QtTimer, ContinuousTimerFromQTimer)
-{
-  Timer o;
+  {
+    QTimerFoo o;
 
-  o.setContinuousShot();
+    o.continuousShot(1000);
 
-  // https://doc.qt.io/qt-5/qsignalspy.html#details
-  QSignalSpy timerExpiredSpy(&o, &Timer::timerExpired);
+    QSignalSpy spy(&o, &QTimerFoo::timerExpired);
 
-  // use wait to check timer expired event is fired within this tiem.
-  //
-  // bool QSignalSpy::wait(int timeout = 5000)
-  //
-  // Starts an event loop that runs until the given signal is received.
-  // Optionally the event loop can return earlier on a timeout (in
-  // milliseconds).
-  //
-  // Returns true if the signal was emitted *at least* once in timeout
-  // milliseconds, otherwise returns false.
-  //
-  // So wait() returns as soon as the first timeout signal arrives
+    // use wait to check timer expired event is fired within this tiem.
+    //
+    // bool QSignalSpy::wait(int timeout = 5000)
+    //
+    // *qt-eventloop*
+    // Starts an event loop that runs until the given signal is received.
+    // Optionally the event loop can return earlier on a timeout (in
+    // milliseconds).
+    //
+    // Returns true if the signal was emitted *at least* once in timeout
+    // milliseconds, otherwise returns false.
+    //
+    // So wait() returns as soon as the first timeout signal arrives
 
-  timerExpiredSpy.wait(5000);
+    spy.wait(5000);
 
-  // Can use sleep like this? NO since these blocks this test run including
-  // timer
-  //
-  // QThread::msleep(5000);
-  // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    // Can use sleep like this? NO since these blocks this test run including
+    // timer
+    //
+    // QThread::msleep(5000);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(5000));
 
-  // one Timer::timerExpired signal and three QTimer::timeout signals
-  EXPECT_EQ(timerExpiredSpy.count(), 1);
-  EXPECT_EQ(o.getCount(), 3);
+    // one Timer::timerExpired signal and three QTimer::timeout signals
+    EXPECT_EQ(spy.count(), 1);
+    EXPECT_EQ(o.count(), 3);
+  }
 }
 
 /*
@@ -1622,21 +1684,45 @@ with a timerEvent or create a local QTimer object.
 The time interval is msec milliseconds.
 */
 
-TEST(QtTimer, SingleShotUseFunctor)
+TEST(QTimer, use_functor)
 {
   bool done{false};
 
   auto func = [&] { done = true; };
 
-  QTimer::singleShot(100, func);
+  QTimer::singleShot(1000, func);
 
   while (!done)
   {
     // NOTE:
-    // this do not work and hangs since timer is not dispatched. So not
-    // processed.
-    //
     // std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    //
+    // this do not work and hangs since no eventloop runs and timer is not
+    // dispatched. So not processed.
+
+    // NOTE: will see many printouts until timer expires
+    // qDebug() << "call processEvents";
+
+    // void QCoreApplication::processEvents
+    //  (QEventLoop::ProcessEventsFlags flags = QEventLoop::AllEvents)
+    //
+    // Processes all pending events for the calling thread according to the
+    // specified flags until there are no more events to process.
+    //
+    // You can call this function occasionally when your program is busy
+    // performing a long operation (e.g. copying a file).
+    //
+    // In the event that you are running a local loop which calls this function
+    // continuously, without an event loop, the DeferredDelete events will not
+    // be processed. This can affect the behaviour of widgets, e.g. QToolTip,
+    // that rely on DeferredDelete events to function properly. An alternative
+    // would be to call sendPostedEvents() from within that local loop.
+    //
+    // Calling this function processes events only for the calling thread, and
+    // returns after all available events have been processed. Available events
+    // are events queued before the function call. This means that events that
+    // are posted while the function runs will be queued until a later round of
+    // event processing.
 
     QCoreApplication::processEvents();
   }
@@ -1645,8 +1731,8 @@ TEST(QtTimer, SingleShotUseFunctor)
 /*
 https://doc.qt.io/qt-5/qobject.html#startTimer
 
-
-int QObject::startTimer(int interval, Qt::TimerType timerType = Qt::CoarseTimer)
+int QObject::startTimer
+  (int interval, Qt::TimerType timerType = Qt::CoarseTimer)
 
 Starts a timer and returns a timer identifier, or returns zero if it could not
 start a timer.
@@ -1661,20 +1747,11 @@ class when a timer event occurs. Reimplement this function to get timer events.
 If multiple timers are running, the QTimerEvent::timerId() can be used to find
 out which timer was activated.
 
-
 */
 
-TEST(QtTimer, TimerFromQObject)
+TEST(QTimer, qobjet_timer)
 {
-  // std::mutex m;
-  // std::condition_variable cv;
-  // std::unique_lock<std::mutex> lock(m);
-  // TimerQObject o(cv);
-
-  // *cxx-error* why?
-  // TimerQObject o();
-
-  TimerQObject o;
+  OTimerFoo o;
 
   // cannot use this since it blocks all including timer. so use QSignalSpy
   // instead to wait.
@@ -1682,16 +1759,20 @@ TEST(QtTimer, TimerFromQObject)
   // QThread::exec();
   // cv.wait(lock);
 
-  QSignalSpy timerExpiredSpy(&o, &TimerQObject::timerExpired);
-  timerExpiredSpy.wait(5000);
+  QSignalSpy spy(&o, &OTimerFoo::timerExpired);
+  spy.wait(5000);
 
   // 5 since timer can run 5 for 5000 ms
-  EXPECT_EQ(o.getCount(), 5);
+  EXPECT_THAT(o.count(), 5);
+
+  // signal is not emitted but spy.wait() is expired
+  EXPECT_EQ(spy.count(), 0);
 }
 
-// ={=========================================================================
-// qt-thread
 /*
+={=============================================================================
+qthread
+
 A QThread object manages one thread of control within the program. QThreads
 begin executing in run(). By default, run() starts the `event loop` by calling
 exec() and runs a Qt event loop inside the thread.
@@ -1750,7 +1831,10 @@ o TEST(QtThread, ThreadAffinity_3) works as expected when run as a standalone.
   see standalone code.
 
 Therefore, may need to run Qt event loop per test case?
+ 
+*/
 
+#if 0
 
 TEST(QtThread, ThreadAffinity_1)
 {
@@ -1902,10 +1986,13 @@ TEST(DISABLED_QtSlot, QueuedConnection)
   {
     Counter a, b;
 
-    QObject::connect(&a, &Counter::valueChanged,
-        &b, &Counter::doSomethingLong, Qt::QueuedConnection);
+    QObject::connect(&a,
+                     &Counter::valueChanged,
+                     &b,
+                     &Counter::doSomethingLong,
+                     Qt::QueuedConnection);
 
-    qCritical() 
+    qCritical()
       << "emit signal via valueChange via QueuedConnection and runs slot";
 
     a.valueChanged(12);
@@ -1922,7 +2009,7 @@ TEST(DISABLED_QtSlot, QueuedConnection)
   }
 
   // send signal from main to slot in a thread and it doesn't work either.
-  // since main do not have q main loop? 
+  // since main do not have q main loop?
 
   {
     std::mutex m;
@@ -1930,21 +2017,20 @@ TEST(DISABLED_QtSlot, QueuedConnection)
     std::unique_lock<std::mutex> lock(m);
     Counter a;
 
-    QThread* thread = new QThread;
-    ThreadWorkerUseCounter* wo 
-      = new ThreadWorkerUseCounter(a, m, cv);
+    QThread *thread            = new QThread;
+    ThreadWorkerUseCounter *wo = new ThreadWorkerUseCounter(a, m, cv);
     wo->moveToThread(thread);
 
     // start thread
-    QObject::connect(thread, &QThread::started, 
-        wo, &ThreadWorkerUseCounter::progress);
+    QObject::connect(thread,
+                     &QThread::started,
+                     wo,
+                     &ThreadWorkerUseCounter::progress);
     thread->start();
 
     cv.wait(lock);
   }
 }
-
-
 
 // ={=========================================================================
 // qt-event

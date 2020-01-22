@@ -23,7 +23,10 @@ private:
   QCommandLineParser m_parser;
   QList<QPair<QCommandLineOption, OptionHandler>> m_options;
 
-  DBusType m_busType{DBusType::NoDBus};
+  // use class init for defaults
+  DBusType m_busType{DBusType::SystemBus};
+  QString m_serviceName{"com.sky.blercu"};
+  QString m_busAddress{};
 
 public:
   explicit CmdLineOptions();
@@ -33,11 +36,13 @@ public:
 
   bool isSet(const QString &name) const;
   QString value(const QString &name) const;
-
-  DBusType dbusType() const;
+  void closeConsole(const QString);
 
 public:
-  void closeConsole(const QString);
+  DBusType dbusType() const;
+  QString dbusAddress() const;
+  QString dbusService() const;
+
   void setDBusSession(const QString);
   void setNetworkNamespace(const QString);
   void setAudioFifoDirectory(const QString);

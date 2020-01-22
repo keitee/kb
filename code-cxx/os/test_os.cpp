@@ -995,27 +995,64 @@ TEST(Glibc, SingleArgSanitizerSyscall)
   internal_syscall(SYSCALL(unlink), (uptr) "syscall.o");
 }
 
+/*
+={=============================================================================
+glibc-env
+
+GETENV(3)  
+
+RETURN VALUE
+       The getenv() function returns a pointer to the value in the environment,
+       or NULL if there is no match.
+
+SETENV(3) 
+
+  int setenv(const char *name, const char *value, int overwrite);
+
+DESCRIPTION
+       The  setenv()  function  adds  the  variable name to the environment with
+       the value `value`, if name does not already exist.  If name does exist in
+       the environment, then its value is changed to value if overwrite is
+       nonzero; if overwrite is zero, then the value of name is not changed (and
+       setenv() returns a success status).  This function makes copies of the
+       strings pointed to by name and value (by contrast with putenv(3)).
+
+       The unsetenv() function deletes the variable name from the environment.
+       If name does not exist in the environment, then the function succeeds,
+       and the environment is unchanged.
+
+*/
+
 TEST(Glibc, env)
 {
+  // when there is no such env var
   {
     auto ret = getenv("TEST_LPI");
     EXPECT_THAT(ret, nullptr);
   }
 
-  // int setenv(const char *name, const char *value, int overwrite);
   {
+    // that is 'overwrite' on, 1, set value regardless
     auto rc = setenv("TEST_LPI", "1", 1);
     if (rc < 0)
       EXPECT_THAT(false, true);
 
     auto ret = getenv("TEST_LPI");
     EXPECT_THAT(std::string(ret), std::string("1"));
+
+    // env var is already exist and overwrite is 0, so will not change it
+    rc = setenv("TEST_LPI", "0", 0);
+    if (rc < 0)
+      EXPECT_THAT(false, true);
+
+    ret = getenv("TEST_LPI");
+    EXPECT_THAT(std::string(ret), std::string("1"));
   }
 }
 
 /*
-// ={=========================================================================
-// *scanf*
+={=============================================================================
+glibc-scanf
 
 The scanf() function reads input from the standard input stream stdin, fscanf()
 reads input from the stream pointer stream, and sscanf() reads its input from

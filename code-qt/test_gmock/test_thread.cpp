@@ -28,7 +28,7 @@ int main(int argc, char **argv)
   {
     qDebug() << "main: " << app.thread();
 
-    QThread *thread       = new QThread;
+    QThread *thread = new QThread;
 
     // comes from qclass.h
     ThreadStandAloneY *wo = new ThreadStandAloneY();

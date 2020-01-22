@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.0)
 
 project(qtest VERSION 0.1 LANGUAGES CXX)
 
-# TODO:
+# NOTE:
 # To fix find_package issue:
 
 # CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.3/gcc_64 cmake ..
@@ -33,16 +33,6 @@ project(qtest VERSION 0.1 LANGUAGES CXX)
 #
 # ~/Qt/5.12.3/gcc_64/lib/cmake$ more Qt5DBus/Qt5DBusConfig.cmake 
 # set(Qt5DBus_LIBRARIES Qt5::DBus)
-
-
-# find_package(Qt5Core)
-# if(Qt5Core_FOUND)
-#   message(STATUS "Qt5Core found")
-# else()
-#   message(STATUS "Qt5Core not found, not building moc")
-# endif()
-
-# find_package(Qt5Test)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
@@ -92,20 +82,23 @@ set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to t
 # This variable holds the path to the top level binary output directory, i.e.
 # the directory in which you ran the cmake command
 
-# no warnings but failes on automoc
-find_package(Qt5 "5.12.6" COMPONENTS Core)
-add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
+# NOTE: use version which cause errors when moving to differenct Qt installation
+# find_package(Qt5 "5.12.6" COMPONENTS Core)
 
-# warnngs on automoc
-# find_package(Qt5Core)
-
+find_package(Qt5Test)
+find_package(Qt5Core)
 if(Qt5Core_FOUND)
   message(STATUS "Qt5Core found")
 else()
   message(STATUS "Qt5Core not found, not building moc")
 endif()
 
-find_package(Qt5Test)
+
+add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
+
+# warnngs on automoc
+# find_package(Qt5Core)
+
 
 # include_directories([AFTER|BEFORE] [SYSTEM] directory...)
 #
@@ -127,21 +120,21 @@ find_package(Qt5Test)
 include_directories(SYSTEM ${GMOCK_DIR}/include)
 
 
+#define USE_HEADER_FOR
 add_executable(test_qt "test_qt.cpp" "qclass.cpp")
+# add_executable(test_qt "test_qt.cpp")
 
 # # The recommended way to use Qt libraries and headers with CMake is to use the
 # # target_link_libraries command. This command automatically adds appropriate
 # # include directories, compile definitions, the position-independent-code flag,
 # # and links to the qtmain.lib library on Windows.
 
-# # target_link_libraries(${PROJECT_NAME} gmock_main Qt5::Core Qt5::Test)
-# target_link_libraries(test_qt gmock_main Qt5::Core)
-target_link_libraries(test_qt gmock Qt5::Core)
+target_link_libraries(test_qt gmock Qt5::Core Qt5::Test)
 
 
-# NOTE:
-# Qt5::Test is needed for QSignalSpy.h
+# # NOTE:
+# # Qt5::Test is needed for QSignalSpy.h
 
-add_executable(test_thread "test_thread.cpp" "qclass.cpp")
-target_link_libraries(test_thread gmock_main Qt5::Core Qt5::Test)
+# add_executable(test_thread "test_thread.cpp" "qclass.cpp")
+# target_link_libraries(test_thread gmock_main Qt5::Core Qt5::Test)
 

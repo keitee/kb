@@ -7,7 +7,24 @@
 #include <QQueue>
 #include <QString>
 #include <QStringList>
+#include <QThread>
 #include <QVariant>
+
+/*
+AutoMoc error
+-------------
+  "/home/keitee/git/kb/code-qt/test_catch/test_qt.cpp"
+The file contains a "Q_OBJECT" macro, but does not include "test_qt.moc"!
+Consider to
+  - add #include "test_qt.moc"
+  - enable SKIP_AUTOMOC for this file
+
+CMakeFiles/test_catch_autogen.dir/build.make:57: recipe for target 'CMakeFiles/test_catch_autogen' failed
+*/
+// OK
+#include "test_qt.moc"
+
+#include <class.h>
 
 /*
 ={=============================================================================
@@ -336,7 +353,7 @@ https://doc.qt.io/qt-5/qstring.html#QStringLiteral
 
 QStringLiteral(str)
 
-The macro generates the data for a QString out of the string literal str at
+The `macro` generates the data for a QString out of the string literal str at
 compile time. Creating a QString from it is free in this case, and the generated
 string data is stored in the read-only segment of the compiled object file.
 
@@ -663,7 +680,14 @@ TEST_CASE("store QVariant", "[qvariant]")
       v1.setValue(5);
 
       QVariant v2;
-      v2.fromValue(5);
+      
+      // TODO: fromValue() is static function. no compile error??
+      // v2.fromValue(5);
+      //
+      // qDebug() << "v2 : " << v2;
+      // v2 :  QVariant(Invalid)
+      
+      v2 = QVariant::fromValue(5);
 
       REQUIRE(v1 == v2);
     }
@@ -745,3 +769,161 @@ TEST_CASE("null QVariant", "[qvariant]")
 
   REQUIRE(z.isNull() == false);
 }
+
+/*
+={=============================================================================
+qsharedpointer
+*/
+
+TEST_CASE("constructor and create()", "[qsharedpointer]") 
+{
+  // QString::QString(int size, QChar ch)
+  // Constructs a string of the given size with every character set to ch.
+
+  {
+    std::ostringstream os;
+
+    QSharedPointer<QString> sp1 = QSharedPointer<QString>(new QString(5, 'Q'));
+
+    os << qPrintable(*sp1);
+
+    REQUIRE(os.str() == "QQQQQ");
+  }
+
+  // NOTE: Like make_shared()
+  //
+  // QSharedPointer<T> QSharedPointer::create(Args &&... args)
+  // This is an overloaded function.
+  //
+  // Creates a QSharedPointer object and allocates a new item of type T. The
+  // QSharedPointer internals and the object are allocated in one single memory
+  // allocation, which could help reduce memory fragmentation in a long-running
+  // application.
+  //
+  // This function will attempt to call a constructor for type T that can accept
+  // all the arguments passed (args). Arguments will be perfectly-forwarded.
+  //
+  // This function was introduced in Qt 5.1.
+
+  {
+    std::ostringstream os;
+
+    QSharedPointer<QString> sp1 = QSharedPointer<QString>::create(5, 'Q');
+
+    os << qPrintable(*sp1);
+
+    REQUIRE(os.str() == "QQQQQ");
+  }
+}
+
+/*
+={=============================================================================
+qthread
+
+A QThread object manages one thread of control within the program. QThreads
+begin executing in run(). By default, run() starts the `event loop` by calling
+exec() and runs a Qt event loop inside the thread.
+
+Static Public Members
+
+void	msleep(unsigned long msecs)
+void	sleep(unsigned long secs)
+void	usleep(unsigned long usecs)
+
+https://doc.qt.io/qt-5/qobject.html#moveToThread
+
+void QObject::moveToThread(QThread *targetThread)
+
+Changes the `thread affinity` for this object and its children. The object
+cannot be moved if it has a parent. Event processing will continue in the
+`targetThread.`
+
+`To move an object to the main thread,` use QApplication::instance() to retrieve
+a pointer to the current application, and then use QApplication::thread() to
+retrieve the thread in which the application lives.
+
+For example:
+
+myObject->moveToThread(QApplication::instance()->thread());
+
+If targetThread is nullptr, *all event processing for this object* and its
+children stops, as they are no longer `associated with any thread.`
+
+Note that all active timers for the object will be reset. The timers are first
+stopped in the current thread and restarted (with the same interval) in the
+targetThread. As a result, constantly moving an object between threads can
+postpone timer events indefinitely.
+
+A QEvent::ThreadChange event is sent to this object just before the thread
+affinity is changed. You can handle this event to perform any special
+processing. Note that any new events that are posted to this object will be
+handled in the targetThread, provided it is non-null: when it is nullptr, no
+event processing for this object or its children can happen, as they are no
+longer associated with any thread.
+
+Warning: This function is not thread-safe; the current thread must be same as
+the current thread affinity. In other words, this function can only "push" an
+object from the current thread to another thread, it cannot "pull" an object
+from any arbitrary thread to the current thread. There is one exception to this
+rule however: objects with no thread affinity can be "pulled" to the current
+thread.
+
+See also thread().
+
+There is a problem to test Q slot/signal mechanism in TEST() since
+
+o without cv.wait() TEST ends right away so ends QThread as well.
+o with cv.wait, all tests runs but thread affinity do not work.
+o TEST(QtThread, ThreadAffinity_3) works as expected when run as a standalone.
+  see standalone code.
+
+Therefore, may need to run Qt event loop per test case?
+
+*/
+
+#if 0
+class Foo 
+{
+  private:
+    std::string m_name{};
+
+  public:
+    Foo() 
+    {
+      std::cout << "Foo::Foo()" << std::endl;
+      m_name = "Foo";
+    }
+    ~Foo() = default;
+
+    void printFoo()
+    {
+      std::cout << "Foo's name: " << m_name << std::endl;
+    }
+};
+
+TEST_CASE("can have class definition in c file", "[cxx]")
+{
+  Foo foo;
+  foo.printFoo();
+}
+#endif
+
+TEST_CASE("ThreadAffinity_1", "[qthread]")
+{
+  // https://wiki.qt.io/QThreads_general_usage
+
+  std::mutex m;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(m);
+
+  QThread *thread = new QThread;
+  ThreadFoo *wo      = new ThreadFoo(m, cv);
+  wo->moveToThread(thread);
+
+  QObject::connect(thread, &QThread::started, wo, &ThreadFoo::progress);
+
+  thread->start();
+
+  cv.wait(lock);
+}
+

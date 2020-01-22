@@ -1,8 +1,11 @@
 #include "qclass.h"
 
-// ={=========================================================================
+/*
+={=============================================================================
+CounterFoo
+*/
 
-void Counter::setValue(int value)
+void CounterFoo::setValue(int value)
 {
   if (value != m_value)
   {
@@ -11,7 +14,7 @@ void Counter::setValue(int value)
   }
 }
 
-void Counter::doSomethingLong()
+void CounterFoo::doSomethingLong()
 {
   qCritical() << "Counter::doSomethingLong() enters";
   // here is the expensive or blocking operations

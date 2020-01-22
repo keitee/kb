@@ -177,7 +177,9 @@ void CmdLineOptions::closeConsole(const QString)
   qDebug() << "handler: closeConsole called";
 }
 
+// setter.
 // explicit say it do not use arg
+
 void CmdLineOptions::setDBusSession(const QString) 
 {
   qDebug() << "handler: setDBusSession called";
@@ -211,7 +213,18 @@ QString CmdLineOptions::value(const QString &name) const
 }
 
 // getter. get dbus type
+
 CmdLineOptions::DBusType CmdLineOptions::dbusType() const
 {
   return m_busType;
+}
+
+QString CmdLineOptions::dbusAddress() const
+{
+  return m_busAddress;
+}
+
+QString CmdLineOptions::dbusService() const
+{
+  return m_serviceName;
 }

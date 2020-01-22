@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0.0)
 
-project(test_lpi VERSION 0.1 LANGUAGES CXX)
+project(test_os VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
@@ -177,7 +177,7 @@ link_directories(${LIBS_DIR}/build)
 include_directories(${LIBS_DIR})
 
 # ex
-add_executable(${PROJECT_NAME} "test_lpi.cpp")
+add_executable(${PROJECT_NAME} "test_os.cpp")
 ## cause link errors to Boost::thread
 ## target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS})
