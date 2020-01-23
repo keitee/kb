@@ -1,19 +1,5 @@
 cmake_minimum_required(VERSION 2.6)
-project(cmake_gtest)
-
-enable_testing()
-
-# https://stackoverflow.com/questions/690223/how-to-retrieve-a-user-environment-variable-in-cmake-windows
-# Getting variables into your CMake script
-# You can pass a variable on the line with the cmake invocation:
-#
-# FOO=1 cmake
-# or by exporting a variable in BASH:
-#
-# export FOO=1
-# Then you can pick it up in a cmake script using:
-#
-# $ENV{FOO}
+project(boost)
 
 set(GMOCK_DIR "$ENV{HOME}/works/googletest/googlemock" CACHE PATH "The path to the GoogleMock")
 
@@ -61,12 +47,13 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 # directory... 
 # The directories to be added to the list of include directories.
 
-include_directories(SYSTEM ${GMOCK_DIR}/include)
+# see to find `package name` such as `regex`
+# /usr/share/cmake-3.7/Modules/FindBoost.cmake
 
-add_executable(${PROJECT_NAME} "gtest.cpp")
+find_package(Boost 1.55 REQUIRED COMPONENTS regex)
+include_directories(SYSTEM ${GMOCK_DIR}/include ${Boost_INCLUDE_DIRS})
 
-target_link_libraries(${PROJECT_NAME} gmock_main)
+add_executable(${PROJECT_NAME} "boost.cpp")
 
-# add_test(Gtest.MatcherForPair ${PROJECT_NAME})
-add_test(${PROJECT_NAME} ${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME} gmock_main ${Boost_LIBRARIES})
 
