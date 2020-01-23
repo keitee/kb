@@ -40,7 +40,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-android-ip150
 *kt_dev_skymw_0000* skymw-luna
 *kt_dev_skymw_0000* skymw-rdk
-*kt_dev_skymw_0000* skymw-rdk-build
+*kt_dev_skymw_0000* skymw-rdk-bitbake-build
 *kt_dev_skymw_0000* skymw-rdk-refsw
 *kt_dev_skymw_0000* skymw-rdk-bitbake
 *kt_dev_skymw_0000* skymw-rdk-video
@@ -48,6 +48,7 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-rdk-nexus-virtual-display
 *kt_dev_skymw_0000* skymw-rdk-westeros
 *kt_dev_skymw_0000* skymw-rdk-git
+*kt_dev_skymw_0000* skymw-rdk-xione
 *kt_dev_skymw_0000* skymw-rdk-llama
 *kt_dev_skymw_0000* skymw-rdk-as
 *kt_dev_skymw_0000* skymw-jira-airplay
@@ -1009,7 +1010,9 @@ curl 192.168.0.102:9005/as/test/preferences -X POST --data '{"enableirinput":"fa
    "status" : "PAIRING"
 }
 
-<as-log>
+={============================================================================
+*kt_dev_skymw_0000* skymw-as-log
+
 NDS: ^0000000208.838051 !MIL   -AS           < p:00000e00 t:75390dc0 T:AS_MAIN_TH_9001 M:AS_DMS_Writer.cpp F:LogReceivedRequest L:00258 > 
   @ctx:AS_WEBSERVER AS_WEB_SERVER_RequestResponseLogger.cpp(205) HTTP Request received. 
   httpRequestHandle: 235, httpMethod: 1, Port: 9001, URI: /as/audiostreamer/bluetooth/action/startvisibility?timeout=105
@@ -1020,6 +1023,64 @@ NDS: ^0000000208.840607 !MIL   -AS           < p:00000e00 t:31d0bdc0 T:AS_BTAUDI
   Web Socket URL Scheme:  ws ws://127.0.0.1:9001/as/audiostreamer/bluetooth/status
 !INFO  -com.bskyb.epgui < M:RestfulRequestHandler.cpp F:void RestfulRequestHandler::onWebSocketConnected() L:00092 > Websocket connected QUrl("ws://127.0.0.1:9001/as/audiostreamer/bluetooth/status")
 !INFO  -com.bskyb.epgui < M:RestfulRequestHandler.cpp F:void RestfulRequestHandler::onWebSocketConnected() L:00096 > Connected Socket URI: QUrl("ws://127.0.0.1:9001/as/audiostreamer/bluetooth/status")
+
+
+<as-log-on-fusion>
+so `level` is managed by fusion diag
+
+#include "AS_Diag.h"
+extern AS_DIAG::Context *dbusitf_logging_ctx;
+#undef AS_DIAG_CONTEXT_DEFAULT
+#define AS_DIAG_CONTEXT_DEFAULT (dbusitf_logging_ctx)
+
+// #undef AS_LOG_INFO
+// #define AS_LOG_INFO AS_LOG_MIL
+
+NDS: ^0000000431.114917 
+       !MIL   -AS           < p:00000e02 t:321fedc0 T:no name 
+       M:AS_DMS_Writer.cpp F:entered_ L:00258 
+       > @ctx:dbusitf bleaudiostreamer.cpp(1035) fsm entered: (PlayerStopState)
+       >
+// fusion diag
+// home/keitee/mw/ethan-as-source/Components/AS/Diag/include/AS_DIAG_Macros.h
+
+#define AS_LOG_FATAL(msg...)    do {do {AS_DECLARE_FUNCTION;DIAG_LOG_FATAL(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,
+    AS_DIAG::Fatal,writeFatal,handleFatal,msg);} while (0)
+
+#define AS_LOG_MIL(msg...)      do {do {AS_DECLARE_FUNCTION;DIAG_LOG_MIL(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Mil,writeMil,handleMil,msg);} while (0)
+#define AS_LOG_ERROR(msg...)    do {do {AS_DECLARE_FUNCTION;DIAG_LOG_ERROR(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Error,writeError,handleError,msg);} while (0)
+#define AS_LOG_WARNING(msg...)  do {do {AS_DECLARE_FUNCTION;DIAG_LOG_WARN(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Warning,writeWarning,handleWarning,msg);} while (0)
+#define AS_LOG_INFO(msg...)     do {do {AS_DECLARE_FUNCTION;DIAG_LOG_INFO(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Info,writeInfo,handleInfo,msg);} while (0)
+#define AS_LOG_ENTRY(msg...)    AS_LOG_INFO(msg)
+#define AS_LOG_EXIT(msg...)     AS_LOG_INFO(msg)
+
+
+<as-log-on-rdk>
+
+// set `level` in main
+        __ai_debug_log_level = AI_DEBUG_LEVEL_INFO;
+
+
+// asappsserviced/RDK/Logging/include/Logging.h
+
+#define __AI_LOG_PRINTF(level, fmt, ...) \
+    do {  \
+        if (__builtin_expect(((level) <= __ai_debug_log_level),0)) \
+            __ai_debug_log_printf((level), __FILE__, __FUNCTION__, __LINE__, fmt, ##__VA_ARGS__); \
+    } while(0)
+
+#else /* (AI_BUILD_TYPE == AI_RELEASE) */
+
+#   define AI_LOG_FN_ENTRY() \
+        __AI_LOG_PRINTF(AI_DEBUG_LEVEL_DEBUG, "entry")
+#   define AI_LOG_FN_EXIT() \
+        __AI_LOG_PRINTF(AI_DEBUG_LEVEL_DEBUG, "exit")
+#   define AI_LOG_DEBUG(fmt,...) \
+        __AI_LOG_PRINTF(AI_DEBUG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#   define AI_LOG_INFO(fmt,...) \
+        __AI_LOG_PRINTF(AI_DEBUG_LEVEL_INFO, fmt, ##__VA_ARGS__)
+#   define AI_LOG_MILESTONE(fmt,...) \
+        __AI_LOG_PRINTF(AI_DEBUG_LEVEL_MILESTONE, fmt, ##__VA_ARGS__)
 
 
 ={============================================================================
@@ -1104,16 +1165,7 @@ void AirplayinterfaceDiagLog(int level ,const char* msg)
 }
 
 
-// fusion diag
-// home/keitee/mw/ethan-as-source/Components/AS/Diag/include/AS_DIAG_Macros.h
-
-#define AS_LOG_FATAL(msg...)    do {do {AS_DECLARE_FUNCTION;DIAG_LOG_FATAL(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Fatal,writeFatal,handleFatal,msg);} while (0)
-#define AS_LOG_MIL(msg...)      do {do {AS_DECLARE_FUNCTION;DIAG_LOG_MIL(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Mil,writeMil,handleMil,msg);} while (0)
-#define AS_LOG_ERROR(msg...)    do {do {AS_DECLARE_FUNCTION;DIAG_LOG_ERROR(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Error,writeError,handleError,msg);} while (0)
-#define AS_LOG_WARNING(msg...)  do {do {AS_DECLARE_FUNCTION;DIAG_LOG_WARN(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Warning,writeWarning,handleWarning,msg);} while (0)
-#define AS_LOG_INFO(msg...)     do {do {AS_DECLARE_FUNCTION;DIAG_LOG_INFO(AS_DIAG_SEG_ID,(msg));} while (0); AS_DIAG_CONTEXT_TEST(AS_DIAG_CONTEXT_DEFAULT,AS_DIAG::Info,writeInfo,handleInfo,msg);} while (0)
-#define AS_LOG_ENTRY(msg...)    AS_LOG_INFO(msg)
-#define AS_LOG_EXIT(msg...)     AS_LOG_INFO(msg)
+as-log-issue ?
 
 However, there seems to be an issue:
 m_total shows 0. WHY?
@@ -7744,7 +7796,6 @@ https://www.stb.bskyb.com/confluence/display/~grayb/RDK+-+Setting+up+new+Xi6+Uni
 download arrisxi6-morty-RNE-SDK-2.0-bundle.tgz from google drive and install
 it to like /media/keitee/ssd2/rdk/2.0
 
-
 // sdk root where sdk is installed
 
 `keitee@keitee-mint:~/rdk/2.0`$ 
@@ -7757,6 +7808,8 @@ drwxr-xr-x 5 keitee keitee 4.0K Sep 20 11:07 ../
 
 <skymw-rdk-build-cmake>
 
+TO BUILD BLE RCU USING RDK toolchain.
+
 The top level CMake file is in the 
 
 CMAKE_PREFIX_PATH=/home/keitee/Qt/5.12.6/gcc_64 cmake ..
@@ -7767,11 +7820,12 @@ The first step is to setup a cmake toolchain file to point to you local RDK
 SDK (aka firebolt). You can either modify one of the toolchain files in the
 RDK/BluetoothRcu/cmake directory, or use them as a base to write a new one.
 
+*specify-toolchain-cmake*
 cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/rdk-toolchain.cmake ..
 cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchain.cmake -DCMAKE_BUILD_TYPE=DEBUG ..
 
+// 
 keitee@keitee-mint:~/rdk/appinfrastructure/RDK/BluetoothRcu/cmake$ 
-
 more toolchain.cmake
 
 # this one is important
@@ -7864,9 +7918,7 @@ drwxr-xr-x 8 keitee keitee    4096 Sep 20 11:07 ..
 
 
 // build sample
-
 keitee@keitee-mint:~/rdk/arrisxi6-morty-RNE-SDK-2.0/samples$ ./build_samples.sh
-
 
 wayland-egl-bnxs-1.0+gitr999-r0 do_compile: ./arm-rdk-linux-gnueabi-libtool
 --tag=CC   --mode=compile arm-rdk-linux-gnueabi-gcc  -march=armv7ve -mthumb
@@ -7919,25 +7971,8 @@ wayland-egl-bnxs-1.0+gitr999-r0 do_compile: ./arm-rdk-linux-gnueabi-libtool
 -DB_REFSW_DEBUG_ASSERT_NO_FAIL=1 -DB_REFSW_STRICT_PRINTF_FORMAT=1
 -DBCHP_PWR_SUPPORT -DBCHP_PWR_HAS_RESOURCES -DBCHP_RESET_COMMON
 -DBCHP_UNIFIED_IMPL -DRDK_USE_NXCLIENT
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/../../work/arrisxi6_morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/obj.97268/bin/include
--I"/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/arrisxi6-morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/rockford"/middleware/platform/nexus
--I"/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/arrisxi6-morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/rockford"/middleware/v3d/interface/khronos/include
--I"/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/arrisxi6-morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/rockford"/middleware/v3d/interface/khronos/include/EGL
 -std=c99 -DNXPL_PLATFORM_NSC -DNXCLIENT_SUPPORT -DNO_OPENVG
--DEMBEDDED_SETTOP_BOX
--I../../../../../../../generic/wayland-egl-bnxs/refsw17.3/vc5/common
--I../../../../../../../generic/wayland-egl-bnxs/refsw17.3/vc5/nexus
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/include
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/include/vc5
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/include/vc5/generic
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/include/vc5/helpers/v3d
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/include/interface/khronos/include
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty/usr/include/interface/khronos/include/bcg_abstract
--I/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/arrisxi6-morty-rdk-linux-gnueabi/broadcom-refsw/unified-17.3-r4.2/magnum/basemodules/chp/include/7268/rdb/b0
 -Os -pipe -g -feliminate-unused-debug-types
--fdebug-prefix-map=/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/wayland-egl-bnxs/1.0+gitr999-r0=/usr/src/debug/wayland-egl-bnxs/1.0+gitr999-r0
--fdebug-prefix-map=/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/x86_64-linux=
--fdebug-prefix-map=/media/keitee/ssd2/direct_build/build-arrisxi6-morty/tmp/sysroots/arrisxi6-morty=
 -c -o refsw17.3/vc5/common/libwayland_egl_la-display_framework.lo `test -f
 'refsw17.3/vc5/common/display_framework.c' || echo
 '../../../../../../../generic/wayland-egl-bnxs/'`refsw17.3/vc5/common/display_framework.c
@@ -7969,8 +8004,9 @@ wayland-egl-bnxs-1.0+gitr999-r0 do_compile: ./arm-rdk-linux-gnueabi-libtool
 
 
 ={============================================================================
-*kt_dev_skymw_0000* skymw-rdk-build
+*kt_dev_skymw_0000* skymw-rdk-bitbake-build
 
+RDK build using bitbake
 
 *skymw-rdk-token*
 
@@ -9304,57 +9340,6 @@ root      2796 94.5  1.2 483380 13792 ?        Rsl  Nov11 1306:49 /usr/sbin/apps
 *devicesettings-recipe*
 meta-rdk-video/recipes-extended/devicesettings/devicesettings_git.bb
 SRC_URI = "${RDK_GENERIC_ROOT_GIT}/devicesettings/generic;protocol=${RDK_GIT_PROTOCOL};branch=${RDK_GIT_BRANCH}"
-
-
-*skymw-rdk-as*
-meta-rdk-sky/recipes-core$ ll
-
-drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 skyui/
-drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 sky-fixup/
-drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 packagegroups/
-drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 libasservice/
-drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 images/
-drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 ctemplate/
-drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 assystemserviced/
-drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 asproxy/
-drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 asplayerservice/
-drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 asmockservice/
-drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 asappsserviced/
-
-
-tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/assystemserviced/1.0-0.1/git
-
-tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
-  /usr/src/debug$ ls -ald as*
-drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asappsserviced
-drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asmockservice
-drwxr-xr-x 3 keitee keitee 4096 Nov  6 10:53 asplayerservice
-drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:07 asproxy
-drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 assystemserviced
-
-
-https://git.bskyb.com/llama/as-system-service
-
-cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 ..
--D RDK_SDK=<PATH_RDK_SDK> 
-
-## enabling AS port
-iptables -I INPUT 1 -p tcp --match multiport --dport 9001:9007 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
-iptables -I OUTPUT 1 -p tcp --match multiport --sport 9001:9007 -m conntrack --ctstate ESTABLISHED -j ACCEPT
-
-systemctl stop appmanager
-./asproxy &
-./ASSystemService &
-./ASNetworkService &
-
-systemctl -a | grep -i sky
-  sky-appsservice.service                                                                                           loaded    active     running      Sky AS Apps Service
-  sky-asmock.service                                                                                                loaded    active     running      Sky AS Mock Service daemon
-  sky-asplayer.service                                                                                              loaded    active     running      Sky AS Player Service
-  sky-asproxy.service                                                                                               loaded    active     running      Sky AS Proxy daemon
-  sky-bluetoothrcu.service                                                                                          loaded    active     running      Sky Bluetooth RCU Daemon
-  sky-dobby.service                                                                                                 loaded    active     running      Sky Dobby (Container) daemon
-● sky-fixup.service                                                                                                 loaded    failed     failed       Sky FixUp
 
 
 *rdk-resolution-change-from-file*
@@ -10870,6 +10855,71 @@ lrwxrwxrwx 1 keitee keitee 19 Jan  2 09:46 libwayland-egl.so -> libwayland-egl.s
 ={============================================================================
 *kt_dev_skymw_0000* skymw-rdk-as
 
+// under bitbake
+meta-rdk-sky/recipes-core$ ll
+
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 skyui/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 sky-fixup/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 packagegroups/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 libasservice/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 images/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 ctemplate/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 assystemserviced/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 asproxy/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 asplayerservice/
+drwxrwxr-x  3 keitee keitee 4.0K Nov  4 10:56 asmockservice/
+drwxrwxr-x  2 keitee keitee 4.0K Nov  4 10:56 asappsserviced/
+
+
+tmp/work/cortexa15t2hf-neon-rdk-linux-gnueabi/assystemserviced/1.0-0.1/git
+
+tmp/work/arrisxi6_morty-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg
+  /usr/src/debug$ ls -ald as*
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asappsserviced
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 asmockservice
+drwxr-xr-x 3 keitee keitee 4096 Nov  6 10:53 asplayerservice
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:07 asproxy
+drwxr-xr-x 3 keitee keitee 4096 Nov  4 14:01 assystemserviced
+
+
+// as rdk repo
+https://git.bskyb.com/llama/as-system-service
+
+
+cmake -D RDK_SDK=/media/keitee/ssd2/rdk/2.0 ..
+-D RDK_SDK=<PATH_RDK_SDK> 
+
+## enabling AS port
+iptables -I INPUT 1 -p tcp --match multiport --dport 9001:9007 -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT
+iptables -I OUTPUT 1 -p tcp --match multiport --sport 9001:9007 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+
+
+systemctl stop appmanager
+./asproxy &
+./ASSystemService &
+./ASNetworkService &
+
+systemctl -a | grep -i sky
+  sky-appsservice.service                                                                                           loaded    active     running      Sky AS Apps Service
+  sky-asmock.service                                                                                                loaded    active     running      Sky AS Mock Service daemon
+  sky-asplayer.service                                                                                              loaded    active     running      Sky AS Player Service
+  sky-asproxy.service                                                                                               loaded    active     running      Sky AS Proxy daemon
+  sky-bluetoothrcu.service                                                                                          loaded    active     running      Sky Bluetooth RCU Daemon
+  sky-dobby.service                                                                                                 loaded    active     running      Sky Dobby (Container) daemon
+● sky-fixup.service                                                                                                 loaded    failed     failed       Sky FixUp
+
+// repo for brentwood
+https://skyswteam.com/rdk-llama-bwd-osterley-integration/meta-rdk-sky/tree/bens_changes_for_llama
+
+
+*rdk-as-build* out of bitbake
+
+/media/keitee/ssd2/as/asappsserviced/RDK/AppManager/build
+
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/rdk-toolchain.cmake ..
+cmake -DCMAKE_TOOLCHAIN_FILE=/media/keitee/ssd2/as/cmake/kit.toolchain.new.cmake ..
+
+
 *as-asmockservice*
 
 [Service]
@@ -10889,6 +10939,7 @@ Only in configs: network.json
 this means that these three files are not handled by mock; real services do
 instead.
 
+
 *as-asplayer*
 armv7at2hf-neon-rdk-linux-gnueabi/gst-plugins-rdk-aamp/1.99+git999-r0$ diff ./package/usr/lib/gstreamer-1.0/libgstaamp.so ~/mw/exports/rdk/libgstaamp.so
 ./gst-plugins-rdk-aamp/1.99+git999-r0/gst-plugins-rdk-aamp-1.99+git999/libgstaamp.so
@@ -10903,6 +10954,112 @@ libaampjsbindings.so
 
 // source
 /media/keitee/ssd2/llama/workspace2/generic/aamp-video-engine/aamp
+
+
+*as-appsserviced*
+/llama/workspace2/build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/
+  asappsserviced/git-r0/git/RDK/AppManager
+
+// source
+/media/keitee/ssd2/llama/workspace2/build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/asappsserviced/git-r0/git/RDK/AppManager/WindowManager/source
+
+// output
+/media/keitee/ssd2/llama/workspace2/build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/asappsserviced/git-r0/build$
+
+*as-appsserviced-recipe*
+/meta-rdk-sky/recipes-core/asappsserviced/asappsserviced_git.bb
+
+LD_PRELOAD=/usr/lib/libwesteros_gl.so.0 /usr/sbin/appsservice -v --launchdelay=30000
+
+asappsserviced-git-r0 do_listtasks: do_build                       Default task for a recipe - depends on all other normal tasks required to 'build' a recipe
+asappsserviced-git-r0 do_listtasks: do_checkuri                    Validates the SRC_URI value
+asappsserviced-git-r0 do_listtasks: do_checkuriall                 Validates the SRC_URI value for all recipes required to build a target
+asappsserviced-git-r0 do_listtasks: do_clean                       Removes all output files for a target
+asappsserviced-git-r0 do_listtasks: do_cleanall                    Removes all output files, shared state cache, and downloaded source files for a target
+asappsserviced-git-r0 do_listtasks: do_cleansstate                 Removes all output files and shared state cache for a target
+asappsserviced-git-r0 do_listtasks: do_compile                     Compiles the source in the compilation directory
+asappsserviced-git-r0 do_listtasks: do_configure                   Configures the source by enabling and disabling any build-time and configuration options for the software being built
+asappsserviced-git-r0 do_listtasks: do_devpyshell                  Starts an interactive Python shell for development/debugging
+asappsserviced-git-r0 do_listtasks: do_devshell                    Starts a shell with the environment set up for development/debugging
+asappsserviced-git-r0 do_listtasks: do_fetch                       Fetches the source code
+asappsserviced-git-r0 do_listtasks: do_fetchall                    Fetches all remote sources required to build a target
+asappsserviced-git-r0 do_listtasks: do_generate_toolchain_file
+asappsserviced-git-r0 do_listtasks: do_install                     Copies files from the compilation directory to a holding area
+asappsserviced-git-r0 do_listtasks: do_listtasks                   Lists all defined tasks for a target
+asappsserviced-git-r0 do_listtasks: do_package                     Analyzes the content of the holding area and splits it into subsets based on available packages and files
+asappsserviced-git-r0 do_listtasks: do_package_qa                  Runs QA checks on packaged files
+asappsserviced-git-r0 do_listtasks: do_package_qa_setscene         Runs QA checks on packaged files (setscene version)
+asappsserviced-git-r0 do_listtasks: do_package_setscene            Analyzes the content of the holding area and splits it into subsets based on available packages and files (setscene version)
+asappsserviced-git-r0 do_listtasks: do_package_write_ipk           Creates the actual IPK packages and places them in the Package Feed area
+asappsserviced-git-r0 do_listtasks: do_package_write_ipk_setscene  Creates the actual IPK packages and places them in the Package Feed area (setscene version)
+asappsserviced-git-r0 do_listtasks: do_packagedata                 Creates package metadata used by the build system to generate the final packages
+asappsserviced-git-r0 do_listtasks: do_packagedata_setscene        Creates package metadata used by the build system to generate the final packages (setscene version)
+asappsserviced-git-r0 do_listtasks: do_patch                       Locates patch files and applies them to the source code
+asappsserviced-git-r0 do_listtasks: do_populate_lic                Writes license information for the recipe that is collected later when the image is constructed
+asappsserviced-git-r0 do_listtasks: do_populate_lic_setscene       Writes license information for the recipe that is collected later when the image is constructed (setscene version)
+asappsserviced-git-r0 do_listtasks: do_populate_sysroot            Copies a subset of files installed by do_install into the sysroot in order to make them available to other recipes
+asappsserviced-git-r0 do_listtasks: do_populate_sysroot_setscene   Copies a subset of files installed by do_install into the sysroot in order to make them available to other recipes (setscene version)
+asappsserviced-git-r0 do_listtasks: do_unpack                      Unpacks the source code into a working directory
+
+bitbake asappsserviced -c clean -f
+
+// not build
+// bitbake asappsserviced -c compile
+// not build
+// bitbake asappsserviced -c compile -f
+
+// build
+bitbake asappsserviced
+
+// outputs
+./armv7at2hf-neon-rdk-linux-gnueabi/asappsserviced/git-r0/build/appsservice
+./sky_llama_adapter-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg/usr/sbin/.debug/appsservice
+./sky_llama_adapter-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs/usr/sbin/appsservice
+
+bitbake comcast-mediaclient-vbn-image
+
+
+*as-appsserviced-service*
+asappsserviced/git-r0/git/RDK/AppManager/Systemd/sky-appsservice.xi6.service
+
+# This file is systemd script for launching the AS apps service
+# at boot time.
+#
+# Enable appsservice to start on boot:
+#         systemctl enable sky-appsservice.service
+#
+# Start appsservice immediately:
+#         systemctl start sky-appsservice.service
+#
+# Stop appsservice:
+#         systemctl stop sky-appsservice.service
+#
+# Status:
+#         systemctl status sky-appsservice.service
+
+[Unit]
+Description=Sky AS Apps Service
+Wants=sky-asproxy.service
+
+Requires=sky-dobby.service
+After=sky-dobby.service
+
+Requires=nxserver.service
+After=nxserver.service
+
+Requires=storagemgrmain.service
+After=storagemgrmain.service
+
+After=sky-asmock.service
+
+[Service]
+Type=dbus
+BusName=com.sky.as.apps
+Environment="LD_PRELOAD=/usr/lib/libwayland-egl.so.0"
+ExecStartPre=/bin/sleep 60
+ExecStart=/usr/sbin/appsservice --journald
+WatchdogSec=10
+Restart=on-failure
 
 
 ={============================================================================
@@ -10930,6 +11087,7 @@ class WesterosWindowManager : public std::enable_shared_from_this<WesterosWindow
                             , public IWindowManager
 {}
 
+*player-client*
 void WesterosWindowManager::start()
 {
     if (!mPlayerClient)
@@ -10946,6 +11104,26 @@ void WesterosWindowManager::start()
         AI_LOG_ERROR("failed to start render loop");
     }
 }
+
+*client*
+std::shared_ptr<IWindowManagerClient> WesterosWindowManager::createClient(const std::string &name,
+                                                                          uid_t userId,
+                                                                          ClientState initialState)
+{
+    (void) initialState;
+
+    std::shared_ptr<WesterosClient> client =
+        std::make_shared<WesterosClient>(mEventLoop, shared_from_this(), name, userId);
+
+    client->inheritVideoSurface(mPlayerClient->getSurface());
+    client->start();
+
+    std::lock_guard<std::mutex> locker(mClientLock);
+    mClients.emplace_back(RenderClient{ client, nullptr });
+
+    return client;
+}
+
 
 // asappsserviced/RDK/AppManager/WindowManager/source/WesterosPlayerClient.h
 class WesterosPlayerClient : public std::enable_shared_from_this<WesterosPlayerClient>
@@ -11000,6 +11178,28 @@ https://code.rdkcentral.com/r/plugins/gitiles/components/opensource/westeros/+/0
  */
 WstCompositor* WstCompositorCreate();
 
+/**
+ * WstCompositorSetNestedSize
+ *
+ * Specify the size of the surface which should be created on the display
+ * specified with WstCompositorSetNestedDisplayName in which to display the
+ * composited output.  This must be called prior to WstCompositorStart.
+ */
+bool WstCompositorSetNestedSize( WstCompositor *ctx, unsigned int width, unsigned int height );
+
+
+void WesterosPlayerClient::render()
+{
+  /**
+   * WstCompositorComposeEmbedded
+   *
+   * Requests that the current scene be composed as part of the
+   * configured embedded environment.  This should only be called
+   * while the compositor is running.
+   */
+  bool WstCompositorComposeEmbedded(
+      WstCompositor *ctx, int width, int height, int resW, int resH, float *matrix, float alpha );
+}
 
 ={============================================================================
 *kt_dev_skymw_0000* skymw-jira-airplay
