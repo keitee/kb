@@ -908,6 +908,9 @@ TEST_CASE("can have class definition in c file", "[cxx]")
 }
 #endif
 
+// see it if want to use QCoreApplication with catch
+// https://www.froglogic.com/blog/tip-of-the-week/unit-tests-for-qt-based-applications-with-catch/
+
 TEST_CASE("ThreadAffinity_1", "[qthread]")
 {
   // https://wiki.qt.io/QThreads_general_usage

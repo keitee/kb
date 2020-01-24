@@ -41,7 +41,16 @@ project(external VERSION 0.1 LANGUAGES CXX)
 #
 # Otherwise, one of the download methods below must be specified (multiple
 # download methods should not be given) or a custom DOWNLOAD_COMMAND provided.
-# 
+#
+# DOWNLOAD_COMMAND <cmd>...
+#
+# Overrides the command used for the download step (generator expressions are
+# supported). If this option is specified, all other download options will be
+# ignored. 
+#
+# NOTE: Providing an empty string for <cmd> effectively disables the download
+# step.
+#
 # URL Download
 #
 # URL <url1> [<url2>...]
