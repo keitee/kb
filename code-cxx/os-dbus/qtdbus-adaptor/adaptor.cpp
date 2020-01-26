@@ -222,9 +222,9 @@ dbus-send --session --type=method_call --print-reply --dest='org.example.SenderE
 
 */
 
-#include "sender_adaptor.h"
+#include "controller.h"
 
-#define SERVICE_NAME "org.example.SenderExample"
+#define SERVICE_NAME "org.example.adaptor"
 
 int main(int argc, char **argv)
 {
@@ -257,18 +257,14 @@ int main(int argc, char **argv)
   // will happen if remove this parent connection, keep this.
 
   QObject obj;
-  SenderAdaptor *sender = new SenderAdaptor(&obj);
-
-  // set initial property value
-  // NOTE call `setPowered` since is `WRITE` function
-  sender->setProperty("Powered", true);
+  Controller1Adaptor *adaptor = new Controller1Adaptor(&obj);
 
   // see that register `obj` but not
   if (QDBusConnection::sessionBus().registerObject("/", &obj))
-    qDebug() << "org.example.sender is registered";
+    qDebug() << "org.example.adaptor is registered";
   else
   {
-    qDebug() << "org.example.sender is not registered";
+    qDebug() << "org.example.adaptor is not registered";
     return 1;
   }
 
@@ -281,11 +277,11 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  qDebug() << "org.example.sender registered and started";
+  qDebug() << "org.example.adaptor registered and started";
 
   app.exec();
 
-  qDebug() << "org.example.server ended";
+  qDebug() << "org.example.adaptor ended";
 
   return 0;
 }

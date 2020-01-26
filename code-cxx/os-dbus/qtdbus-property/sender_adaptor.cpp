@@ -360,10 +360,13 @@ void SenderAdaptor::notifyPropertyChanged()
 
   // `QVariant`` QObject::property(const char *name) const
   // Returns the value of the object's name property.
+  
+  // NOTE: run READ function
   changedProps.insert("Powered", property("Powered"));
 
   signal << changedProps;
   signal << QStringList();
 
+  qDebug() << "sender: send PropertiesChanged";
   QDBusConnection::sessionBus().send(signal);
 }

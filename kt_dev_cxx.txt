@@ -192,7 +192,6 @@ KT KB. CPP
 |kt_dev_cpp_300| case: framework {tizen-case}
 |kt_dev_cpp_301| case: wrapper
 |kt_dev_cpp_302| case: porting layer
-|kt_dev_cpp_303| case: inheritance {how-gcc-build-vtable}
 |kt_dev_cpp_304| case: overload
 
 *kt_dev_cxx_0000* cxx-stl
@@ -12866,7 +12865,7 @@ TEST(Dtor, NoVirtualDtorProblem)
 }
 
 
-{dtor-in-cxx-abc} {dtor-pure} *cxx-abc* *cxx-pure*
+{dtor-in-cxx-abc} {pure-virtual-dtor} *cxx-abc* *cxx-pure*
 EC++07. Why use this? Sometimes you have a class that you'd like to be abstract
 but you don't have any pure virtual functions.
 
@@ -12881,7 +12880,7 @@ The pure-virtual-dtor `must` have a definition(implementation) and must be
 implemeted outside class definitions.
 
 MEC++33. `pure virtual do not mean it has no implementation` and means that
-the class is abstract and the derived func must be non-virtual. True, most
+the class is abstract and the derived func must implement it. True, most
 pure virtual functions are never implemented, but `dtor are a special-case.`
 They must be implemented, because they are called whenever a derived class
 destructor is invoked.  
@@ -17808,7 +17807,7 @@ members.
 /interface/port/IIframe.h:94:18: note: 	virtual bool IIframe::isMHEG2(void*, uint32_t)
 /interface/port/IIframe.h:102:18: note: 	virtual bool IIframe::isMHEG4(void*, uint32_t)
 
-Why? When deriving a ABC class, if don't override a pure virtual func then the
+Why? When deriving a cxx-abc class, if don't override a pure virtual func then the
 derived also becomes ABC. Hence errors.
 
 This may be a way to check whether overrides happens or not? Yes, when use ABC
@@ -27211,13 +27210,66 @@ But MEC++ says it is more about uncovering the design need to have abstract
 class out of derived classes.
 
 
-{virtual-and-definition}
+{cxx-virtual-and-definition} *cxx-vtable*
 Ordinarily if we do not use a function, do not need to supply a definition for
 that function. However `must define every virtual function` regardless of
 whether it is used because do not know which version of a function is called
 until run time. 
 
 note: To make a vtable in compile time.
+
+<ex>
+In the porting layer design and implementation, have drawn the class hierarchy.
+
+ ISession (ABC) and more...      IEvent 
+
+ IDriver : public ISession, public IEvent
+
+ CDsm : public IDriver and more...
+
+When add more interface classes which are ABC and add more concrete derived
+classes, shall add the same member functions in a header and source of a
+derived class. Otherwise, will have compile/link error since ABC forces
+derived class to define functions. See *error-when-create-abc* for what
+happens when not overrides pure virtual functions. Tedious. Any other better
+way?
+
+1> How about having a *pure-virtual-dtor* to make a ABC and having normal
+virtual members?  If have a class definition and the defintion of a
+pure-virtual-dtor in the header, get a multiple defintion error since this is
+included in every file which use it. Can have source file which has a dtor
+definition but still needs definitions for other members. If not, get errors
+as 3>.
+
+2> How about having a virtual members for interface classes? Since it has
+implementation, that is okay for a derived class not to override or implement
+it. So no tedious work. However, cannot force derived to override and can
+forget to implement it. Here talking about 'interface' class.
+
+3> What will happen when changes pure virtual functions to normal virtual
+functions but do not have implementation? Simply changes a header since it has
+a header only as a interface class.
+
+Linking CXX executable mhegproto
+port/libmhport.a(CDsm.cpp.o): In function `~ISession':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+port/libmhport.a(CDsm.cpp.o): In function `~IDriver':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x94): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x98): undefined reference to `IEvent::unsubscribeEvent(void*)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x9c): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
+port/libmhport.a(CDsm.cpp.o):(.rodata._ZTI7IDriver[typeinfo for IDriver]+0x28): undefined reference to `typeinfo for IEvent'
+port/libmhport.a(CDsm.cpp.o): In function `.LANCHOR0':
+CDsm.cpp:(.rodata+0x5ac): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
+CDsm.cpp:(.rodata+0x5b0): undefined reference to `IEvent::unsubscribeEvent(void*)'
+CDsm.cpp:(.rodata+0x5b4): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
+port/libmhport.a(CCi.cpp.o): In function `~ISession':
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
+
+This shows how GCC implements vtables for a class.
 
 
 {virtual-and-resolution}
@@ -39565,56 +39617,6 @@ those.
 │       ├── WINDOWS
 │       ├── VXWORS
 │       ├── ...
-
-
-={============================================================================
-*kt_dev_cpp_303* case: inheritance
-
-In the porting layer design and implementation, have drawn the class hierarchy.
-
- ISession (ABC) and more...      IEvent 
-
- IDriver : public ISession, public IEvent
-
- CDsm : public IDriver and more...
-
-When add more interface classes which are ABC and add more concrete derived classes, shall add the
-same member functions in a header and source of a derived class. Otherwise, will have compile/link
-error since ABC forces derived class to define functions. See {error-when-create-abc} for what
-happens when not overrides pure virtual functions. Tedious. Any other better way?
-
-1> How about having a pure-virtual-dtor to make a ABC and having normal virtual members?  If have a
-class definition and the defintion of a pure-virtual-dtor in the header, get a multiple defintion
-error since this is included in every file which use it. Can have source file which has a dtor
-definition but still needs definitions for other members. If not, get errors as 3>.
-
-2> How about having a virtual members for interface classes? Since it has implementation, that is
-okay for a derived class not to override or implement it. So no tedious work. However, cannot force
-derived to override and can forget to implement it. Here talking about 'interface' class.
-
-3> What will happen when changes pure virtual functions to normal virtual functions but do not have
-implementation? Simply changes a header since it has a header only as a interface class.
-
-Linking CXX executable mhegproto
-port/libmhport.a(CDsm.cpp.o): In function `~ISession':
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-port/libmhport.a(CDsm.cpp.o): In function `~IDriver':
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/PortLayer.h:36: undefined reference to `vtable for IEvent'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x94): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x98): undefined reference to `IEvent::unsubscribeEvent(void*)'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTV7IDriver[vtable for IDriver]+0x9c): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
-port/libmhport.a(CDsm.cpp.o):(.rodata._ZTI7IDriver[typeinfo for IDriver]+0x28): undefined reference to `typeinfo for IEvent'
-port/libmhport.a(CDsm.cpp.o): In function `.LANCHOR0':
-CDsm.cpp:(.rodata+0x5ac): undefined reference to `IEvent::subscribeEvent(void*, char const*, void (*)(void*, unsigned int), void*, void**, int, int)'
-CDsm.cpp:(.rodata+0x5b0): undefined reference to `IEvent::unsubscribeEvent(void*)'
-CDsm.cpp:(.rodata+0x5b4): undefined reference to `IEvent::getVersionEvent(void*, int*, int*)'
-port/libmhport.a(CCi.cpp.o): In function `~ISession':
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-/home/abuild/rpmbuild/BUILD/org.tizen.mhegproto-0.1/interface/port/ISession.h:30: undefined reference to `vtable for IEvent'
-
-This shows how GCC implements vtables for a class.
 
 
 ={============================================================================

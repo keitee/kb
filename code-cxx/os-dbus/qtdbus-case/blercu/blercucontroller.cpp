@@ -1,11 +1,11 @@
-#include "blercucontroller_impl.h"
+#include <adaptors/blercucontroller1_adaptor.h>
+#include <blercucontroller_p.h>
 
 BleRcuControllerImpl::BleRcuControllerImpl(
   const QSharedPointer<ConfigSettings> &config, QObject *parent)
-    : BleRcuController(parant)
+    : BleRcuController(parent)
     , m_config(config) // pass shared pointer
     , m_objectPath(QStringLiteral("/com/sky/bleruc/controller"))
-    , m_lastError(BleRcuError::NoError)
 {
   // there were connect() calls to connect state machine signals and bluez
   // manager signals to its slots like:
@@ -18,6 +18,8 @@ BleRcuControllerImpl::BleRcuControllerImpl(
   m_adaptors.append(new BleRcuController1Adaptor(this, m_objectPath));
 }
 
+BleRcuControllerImpl::~BleRcuControllerImpl() {}
+
 // returns true if this object has been registered on dbus
 
 bool BleRcuControllerImpl::isRegisteredToDBus(const QDBusConnection &dbus) const
@@ -28,7 +30,7 @@ bool BleRcuControllerImpl::isRegisteredToDBus(const QDBusConnection &dbus) const
   return (dbus.objectRegisteredAt(m_objectPath.path()) == this);
 }
 
-bool BleRcuControllerImpl::registerToDBus(const QDBusConnection &dbus) const
+bool BleRcuControllerImpl::registerToDBus(const QDBusConnection &dbus)
 {
   if (isRegisteredToDBus(dbus))
   {
@@ -46,15 +48,52 @@ bool BleRcuControllerImpl::registerToDBus(const QDBusConnection &dbus) const
 
   if (!connection.registerObject(m_objectPath.path(), this))
   {
-    qError("failed to register blercu controller object");
+    qWarning("failed to register blercu controller object");
     return false;
   }
+
+  qDebug() << "BleRcuControllerImpl::registerToDBus: registered path "
+           << m_objectPath.path();
 
   // tell all adaptors that they're now registered on the dbus. this is used for
   // property change notification
 
   for (const auto &adaptor : m_adaptors)
   {
-    adaptor.registerConnection(connection);
+    // DBusAbstractAdaptor::registerConnection()
+    adaptor->registerConnection(connection);
   }
+
+  return true;
+}
+
+bool BleRcuControllerImpl::unregisterFromDBus(const QDBusConnection &) {}
+
+QString BleRcuControllerImpl::managedDevices() const
+{
+  qWarning("BleRcuControllerImpl::managedDevices() called");
+  return "blercudevice1";
+}
+
+bool BleRcuControllerImpl::isPairing() const
+{
+  qWarning("BleRcuControllerImpl::isPairing() called");
+  return true;
+}
+
+quint8 BleRcuControllerImpl::pairingCode() const
+{
+  qWarning("BleRcuControllerImpl::pairingCode() called");
+  return 33;
+}
+
+bool BleRcuControllerImpl::startPairing(quint8 pairingCode)
+{
+  qWarning("BleRcuControllerImpl::startPairing() called");
+  return true;
+}
+
+void BleRcuControllerImpl::cancelPairing()
+{
+  qWarning("BleRcuControllerImpl::cancelPairing() called");
 }

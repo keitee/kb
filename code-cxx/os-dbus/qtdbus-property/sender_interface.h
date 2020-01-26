@@ -42,10 +42,12 @@ public:
 
   Q_PROPERTY(
     bool Powered READ powered WRITE setPowered NOTIFY senderPowerChanged)
+
   inline bool powered() const
   {
     return qvariant_cast<bool>(property("Powered"));
   }
+
   inline void setPowered(bool value)
   {
     setProperty("Powered", QVariant::fromValue(value));

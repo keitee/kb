@@ -15,8 +15,8 @@ class DBusAbstractAdaptor : public QDBusAbstractAdaptor
   Q_OBJECT
 
 private:
-  QList<QDBusConnection> m_dbusConnections;
-  QDBusContext *m_parentContext;
+	QList<QDBusConnection> m_dbusConnections;
+	QDBusContext *m_parentContext;
 
 protected:
   explicit DBusAbstractAdaptor(QObject *parent);
@@ -29,8 +29,8 @@ public:
 
 protected:
   void sendErrorReply(const QDBusMessage &request,
-                      const QString &name,
-                      const QString &message) const;
+      const QString &name,
+      const QString &message) const;
 
   void sendReply(const QDBusMessage &request, const QVariant &result) const;
 
