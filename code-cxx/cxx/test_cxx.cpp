@@ -393,8 +393,9 @@ TEST(CxxType, cast)
 }
 
 // ={=========================================================================
+// cxx-array
 
-TEST(Size, Arrays)
+TEST(CxxSize, sizeof)
 {
   using namespace use_sizeof;
 
@@ -408,26 +409,32 @@ TEST(Size, Arrays)
 
   {
     // cxx.cpp:77:14: warning: deprecated conversion from string constant to
-    // ‘char*’ [-Wwrite-strings] char *s1 = "this is first message"; is a
-    // pointer EXPECT_EQ(sizeof(s2), 8); EXPECT_EQ(sizeof s2, 8);
+    // ‘char*’ [-Wwrite-strings] 
+    // char *s1 = "this is first message"; is a pointer
   }
 
   char s2[] = "this is first message";
+  int arr[20] = {33};
 
   EXPECT_EQ(sizeof(s2), 22);
   EXPECT_EQ(sizeof s2, 22);
 
-  // is object
+  // "*s2" is object
   EXPECT_EQ(sizeof(*s2), 1);
 
-  // is array
-  EXPECT_EQ(sizeof(s2), 22);
-  EXPECT_EQ(sizeof(s2) / sizeof(s2[0]), 22);
+  // array size
+  {
+    EXPECT_EQ(sizeof(s2), 22);
+    EXPECT_EQ(sizeof(s2) / sizeof(s2[0]), 22);
 
-  // strlen
+    EXPECT_EQ(sizeof(arr), 20*4);
+    EXPECT_EQ(sizeof(arr) / sizeof(arr[0]), 20);
+  }
+
+  // strlen do not count '\n'
   EXPECT_EQ(strlen(s2), 21);
 
-  string s{s2};
+  std::string s{s2};
   EXPECT_EQ(s.size(), 21);
 
   char coll1[100];
@@ -436,11 +443,41 @@ TEST(Size, Arrays)
   char coll2[] = {1, 2, 3, 4, 5, 6, 7};
   EXPECT_EQ(sizeof(coll2), 7);
 
-  struct nlist *plist;
-  EXPECT_EQ(sizeof(plist), 8);
-  // 8 or else?
-  // Here a pointer points to a 'type' and this is a struct in this case.
-  EXPECT_EQ(sizeof(*plist), 24);
+  // pointer size
+  {
+    int *pint{nullptr};
+    EXPECT_EQ(sizeof(pint), 8);
+
+    struct nlist *plist;
+    EXPECT_EQ(sizeof(plist), 8);
+
+    // 8 or else?
+    // Here a pointer points to a 'type' and this is a struct in this case.
+    EXPECT_EQ(sizeof(*plist), 24);
+  }
+}
+
+// ={=========================================================================
+// cxx-pointer
+
+TEST(CxxPointer, array)
+{
+  int coll[] = {10, 11, 12, 13, 14, 15, 16};
+
+  // array name is a pointer to the first element
+  int *arr = coll;
+
+  // access elements via []
+  EXPECT_THAT(arr[0], 10);
+  EXPECT_THAT(arr[2], 12);
+  EXPECT_THAT(arr[4], 14);
+  EXPECT_THAT(arr[6], 16);
+
+  // access elements via pointer arithmetic
+  EXPECT_THAT(*(arr+0), 10);
+  EXPECT_THAT(*(arr+2), 12);
+  EXPECT_THAT(*(arr+4), 14);
+  EXPECT_THAT(*(arr+6), 16);
 }
 
 // ={=========================================================================
