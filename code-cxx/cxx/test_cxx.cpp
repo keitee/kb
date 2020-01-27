@@ -349,7 +349,7 @@ TEST(CxxType, size)
 
 // ={=========================================================================
 
-TEST(CxxType, Null)
+TEST(CxxType, null)
 {
   const char *p1 = "";
   const char *p2 = nullptr;
@@ -368,6 +368,29 @@ namespace use_sizeof
   };
 
 } // namespace use_sizeof
+
+TEST(CxxType, cast)
+{
+  int x{55};
+  int y{140};
+
+  unsigned width{436};
+  unsigned height{246};
+
+  float value[4];
+
+  value[0] = static_cast<float>(x);
+  value[1] = static_cast<float>(y);
+  value[2] = static_cast<float>(width);
+  value[3] = static_cast<float>(height);
+
+  printf("values {%f, %f, %f, %f}\n", value[0], value[1], value[2], value[3]);
+
+  value[2] = static_cast<float>(width) / 1920.0f;
+  value[3] = static_cast<float>(height) / 1080.0f;
+
+  printf("values {%f, %f, %f, %f}\n", value[0], value[1], value[2], value[3]);
+}
 
 // ={=========================================================================
 
@@ -9335,21 +9358,42 @@ TEST(TypeConversion, Double)
 
 TEST(CxxPrintf, format)
 {
-  // The format argument of printf can be an expression too.
+  // The flag characters
+  // The character % is followed by zero or more of the following flags:
+  // `#`
+  //
+  // The value should be converted to an "alternate form".  
+  //
+  // For x and X conversions, a non-zero result has the string "0x" (or "0X" for
+  // X conversions) prepended to it.  
+
+  // value: 64
+  // value: 0x64
+  // value: 0x64
   {
-    // printf((argc>1) ? "%s " : "%s", *++argv );
-    int argc = 1;
-    printf((argc > 1) ? "|%s|\n" : "%s\n", "argc");
+    int value{100};
+    printf("value: %x\n", value);
+    printf("value: %#x\n", value);
+    printf("value: 0x%x\n", value);
   }
 
-  // print unsigned long value
+  // The field width
+  // An  optional  decimal  digit  string  (with nonzero first digit) specifying
+  // a minimum field width.  If the converted value has fewer characters than
+  // the field width, it will be padded with spaces on the left (or right, if
+  // the left-adjustment flag has been given).
   //
-  // ulong max from limits: 18446744073709551615L
-  // ulong max from limits: 18446744073709551615
+  // Instead of a decimal digit string one may write "*" or "*m$" (for some
+  // decimal integer m) to specify that the field width is given in the next
+  // argument, or in the m-th argument, respec‐ tively, which must be of type
+  // int.
+
+  // value: {100}
+  // value: {       100}
   {
-    // here "L" is normal char
-    printf("ulong max from limits: %luL\n", ULONG_MAX);
-    printf("ulong max from limits: %lu\n", ULONG_MAX);
+    int value{100};
+    printf("value: {%d}\n", value);
+    printf("value: {%10d}\n", value);
   }
 
   // MHEGDebugDebug(eMHEGengRuntime,"OS-OctetStringVariable Append %.*s, %.*s ->
@@ -9373,6 +9417,46 @@ TEST(CxxPrintf, format)
     printf("0: %.*s \n", 5, pmesg);
     printf("0: %.*s \n", 6, pmesg);
   }
+
+  // The precision
+  // An  optional precision, in the form of a period ('.') followed by an
+  // optional decimal digit string. 
+  //
+  // value: {100.000000}
+  // value: {100.0}
+  // value: {100.0}
+  // value: {100.0}
+  // value: {100.0}
+  // value: {100.00}
+  // value: {100.00}
+  {
+    float value{100.0};
+    printf("value: {%f}\n", value);
+    printf("value: {%0.01f}\n", value);
+    printf("value: {%.01f}\n", value);
+    printf("value: {%0.1f}\n", value);
+    printf("value: {%.1f}\n", value);
+    printf("value: {%0.2f}\n", value);
+    printf("value: {%.2f}\n", value);
+  }
+
+  // The format argument of printf can be an expression too.
+  {
+    // printf((argc>1) ? "%s " : "%s", *++argv );
+    int argc = 1;
+    printf((argc > 1) ? "|%s|\n" : "%s\n", "argc");
+  }
+
+  // print unsigned long value
+  //
+  // ulong max from limits: 18446744073709551615L
+  // ulong max from limits: 18446744073709551615
+  {
+    // here "L" is normal char
+    printf("ulong max from limits: %luL\n", ULONG_MAX);
+    printf("ulong max from limits: %lu\n", ULONG_MAX);
+  }
+
 
   {
     int value{10};
