@@ -369,27 +369,42 @@ namespace use_sizeof
 
 } // namespace use_sizeof
 
+// ={=========================================================================
+// cxx-cast cxx-conversion
+
 TEST(CxxType, cast)
 {
-  int x{55};
-  int y{140};
+  {
+    int x{55};
+    int y{140};
 
-  unsigned width{436};
-  unsigned height{246};
+    unsigned width{436};
+    unsigned height{246};
 
-  float value[4];
+    float value[4];
 
-  value[0] = static_cast<float>(x);
-  value[1] = static_cast<float>(y);
-  value[2] = static_cast<float>(width);
-  value[3] = static_cast<float>(height);
+    value[0] = static_cast<float>(x);
+    value[1] = static_cast<float>(y);
+    value[2] = static_cast<float>(width);
+    value[3] = static_cast<float>(height);
 
-  printf("values {%f, %f, %f, %f}\n", value[0], value[1], value[2], value[3]);
+    printf("values {%f, %f, %f, %f}\n", value[0], value[1], value[2], value[3]);
 
-  value[2] = static_cast<float>(width) / 1920.0f;
-  value[3] = static_cast<float>(height) / 1080.0f;
+    value[2] = static_cast<float>(width) / 1920.0f;
+    value[3] = static_cast<float>(height) / 1080.0f;
 
-  printf("values {%f, %f, %f, %f}\n", value[0], value[1], value[2], value[3]);
+    printf("values {%f, %f, %f, %f}\n", value[0], value[1], value[2], value[3]);
+  }
+
+  {
+    int value0{1920};
+    float value1{1920.0f};
+
+    float value2 = float(value0);
+
+    EXPECT_TRUE((value2 / value1) == 1.0);
+    EXPECT_TRUE((value2 / value1) == 1);
+  }
 }
 
 // ={=========================================================================
