@@ -29,11 +29,30 @@ BleRcuController1Adaptor::BleRcuController1Adaptor(
     , m_controller(parent)
     , m_dbusObjectPath(objPath)
 {
+  // NOTE:
+  // https://doc.qt.io/qt-5/qdbusabstractadaptor.html
+  // QDBusAbstractAdaptor uses the standard QObject mechanism of signals, slots
+  // and properties to determine what signals, methods and properties to export
+  // to the bus. Any signal emitted by QDBusAbstractAdaptor-derived classes will
+  // be automatically be relayed through any D-Bus connections the object is
+  // registered on.
+
+  // void QDBusAbstractAdaptor::setAutoRelaySignals(bool enable)
+  //
+  // Toggles automatic signal relaying from the real object (see object()).
+  //
+  // Automatic signal relaying consists of signal-to-signal connection of the
+  // signals on the parent that have the exact same method signatue in both
+  // classes.
+  //
+  // If enable is set to true, connect the signals; if set to false, disconnect
+  // all signals.
+
   // TODO: don't use "auto replay signals, do this manually
   // setAutoRelaySignals(true);
   setAutoRelaySignals(false);
 
-  // connect to the device added and removed signals
+  // connect to the device added and removed signals from parent
   QObject::connect(m_controller,
                    &BleRcuController::managedDeviceAdded,
                    this,

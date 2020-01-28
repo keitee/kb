@@ -12,7 +12,8 @@ printed to the standard output.
 
 Running the Example
 
-To run, execute the complexping application.
+To run, execute the complexping application which will lauch complexpong server.
+Entering empty line will call `quit` on remote server.
 
 $ ./complexping
 Ask your question: When is the next Qt release?
@@ -105,20 +106,30 @@ void Pong::setValue(QString const &newValue)
 
 /*
 NOTE
+the original code was:
 
-QObject::connect(&app, &QCoreApplication::aboutToQuit,
+int main(int argc, char **argv)
+{
+  QObject::connect(&app, &QCoreApplication::aboutToQuit,
     pong, &Pong::aboutToQuit);
+}
+
+void Pong::quit()
+{
+  QTimer::singleShot(0, QCoreApplication::instance(),
+    &QCoreApplication::quit);
+}
 
 this is signal-to-signal connection. when ping calls remote pong's quit(),
 it will cause appliction exit which trigger QCoreApplication::aboutToQuit.
 this is mapped and it leads to raises Pong::aboutToQuit signal.
 
-`ping` connect to this Pong::aboutToQuit and runs its quit().
+`ping` connect to this Pong::aboutToQuit and runs its quit() so ping also exit.
 
 Adaptors are intended to be lightweight classes
 `whose main purpose is to relay calls to and from the real object`,
 
-To see this connect() effectively do "emit aboutToQuit", disable it and use
+So To see this connect() effectively do "emit aboutToQuit", disable it and use
 emit instead above. works well.
 
 that is, "send a signal", "emit a signal" means a "send a signal message on

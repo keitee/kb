@@ -14,6 +14,12 @@ BleRcuControllerImpl::BleRcuControllerImpl(
   //                  this, &BleRcuControllerImpl::onFinishedPairing,
   //                  Qt::QueuedConnection);
 
+  // NOTE:
+  // https://doc.qt.io/qt-5/qdbusabstractadaptor.html
+  // Classes derived from QDBusAbstractAdaptor must be created on the heap using
+  // the new operator and must not be deleted by the user (they will be deleted
+  // automatically when the object they are connected to is also deleted).
+
   // create and attach the dbus adaptor for the controller interface
   m_adaptors.append(new BleRcuController1Adaptor(this, m_objectPath));
 }
@@ -45,6 +51,11 @@ bool BleRcuControllerImpl::registerToDBus(const QDBusConnection &dbus)
   // Further attempts to connect using the same name will return the same connection.
 
   QDBusConnection connection(dbus);
+
+  // NOTE:
+  // register `BleRcuControllerImpl` to dbus but somehow
+  // `BleRcuController1Adaptor` which defines xml dbus interfaces gets dbus call.
+  // HOW?
 
   if (!connection.registerObject(m_objectPath.path(), this))
   {
