@@ -11176,23 +11176,19 @@ westeros-compositor.h
  */
 WstCompositor* WstCompositorCreate();
 
-/**
- * WstCompositorSetNestedSize
- *
- * Specify the size of the surface which should be created on the display
- * specified with WstCompositorSetNestedDisplayName in which to display the
- * composited output.  This must be called prior to WstCompositorStart.
- */
-bool WstCompositorSetNestedSize( WstCompositor *ctx, unsigned int width, unsigned int height );
 
-
-void WesterosPlayerClient::render()
+void WesterosPlayerClient::setSurface(const WesterosPlayerSurfaceConfig &config)
 {
   mMatrix[0] = static_cast<float>(mConfig.outputRect.width) / 1920.0f;
   mMatrix[5] = static_cast<float>(mConfig.outputRect.height) / 1080.0f;
 
-  mMatrix[12] = static_cast<float>(mConfig.outputRect.x) / ratioHacks[0];
-  mMatrix[13] = static_cast<float>(mConfig.outputRect.y) / ratioHacks[1];
+  mMatrix[12] = static_cast<float>(mConfig.outputRect.x);
+  mMatrix[13] = static_cast<float>(mConfig.outputRect.y);
+}
+
+void WesterosPlayerClient::render()
+{
+  WstCompositorComposeEmbedded(mCompositor, 0, 0, 1920, 1080);
 
   /**
    * WstCompositorComposeEmbedded
@@ -11202,13 +11198,15 @@ void WesterosPlayerClient::render()
    * while the compositor is running.
    */
   bool WstCompositorComposeEmbedded(
-      WstCompositor *ctx, int width, int height, int resW, int resH, float *matrix, float alpha )
+      WstCompositor *ctx, int x, int y, int width, int height, float *matrix, float alpha )
   {
-    ctx->renderer->outputWidth= width;
-    ctx->renderer->outputHeight= height;
-    ctx->renderer->outputX= x;
-    ctx->renderer->outputY= y;
+    `ctx->renderer->outputWidth= width;`
+    `ctx->renderer->outputHeight= height;`
+    `ctx->renderer->outputX= x;`
+    `ctx->renderer->outputY= y;`
+
     `ctx->renderer->matrix= matrix;`
+
     ctx->renderer->alpha= alpha;
     ctx->renderer->fastHint= (hints & WstHints_noRotation);
     ctx->renderer->hints= hints;
@@ -11255,6 +11253,29 @@ void WesterosPlayerClient::render()
     }
   }
 }
+
+// stripped
+
+typedef struct _WstCompositor
+{
+   const char *displayName;
+   const char *rendererModule;
+   bool isEmbedded;
+   int outputWidth;
+   int outputHeight;
+
+   WstOutput *output;
+   WstRenderer *renderer;
+
+   struct wl_display *display;
+   struct wl_simple_shell *simpleShell;
+   struct wl_event_source *displayTimer;
+
+   int nextSurfaceId;
+   std::vector<WstSurface*> surfaces;
+   std::map<int32_t, WstSurface*> surfaceMap;
+   
+} WstCompositor;
 
 // log from console
 
@@ -11397,6 +11418,14 @@ PARK: setting player surface to { visible:true zOrder:-2
   outRect:55x140, 436x246 
   inRect:0.0x0.0, 1.0x1.0 alpha:1.0 }
 
+// scaled video
+PARK: westeros-render-embedded: matrix{(0.2, 0.2), (55.0, 140.0)}
+PARK: westeros-render-embedded: fast is false
+PARK: westeros-render-embedded: EMBRenderSurface
+
+// full video
+PARK: westeros-render-embedded: matrix{(1.0, 1.0), (0.0, 0.0)}
+PARK: westeros-render-embedded: EMBRenderSurface
 
 /tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+88abed1807-r0/temp
 
