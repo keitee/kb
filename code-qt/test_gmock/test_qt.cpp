@@ -6,6 +6,8 @@
 #include <gmock/gmock.h>
 // #include <gtest/gtest.h>
 
+#include <sys/uio.h> // writev()
+
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDebug>
@@ -956,12 +958,10 @@ TEST(QMap, variant_map)
   // coll.insert({QString("string3"), 10});
 }
 
-#if 0
-
-// ={=========================================================================
-// qt-logging
-
 /*
+={=============================================================================
+qlogging
+
 https://doc.qt.io/qt-5/debug.html
 
 Warning and Debugging Messages
@@ -969,12 +969,20 @@ Warning and Debugging Messages
 Qt includes global macros for writing out warning and debug text. You can use
 them for the following purposes:
 
-qDebug() is used for writing custom debug output.
-qInfo() is used for informational messages.
-qWarning() is used to report warnings and recoverable errors in your
-application. qCritical() is used for writing critical error messages and
-reporting system errors. qFatal() is used for writing fatal error messages
-shortly before exiting.
+qDebug() 
+is used for writing custom debug output.
+
+qInfo() 
+is used for informational messages.
+
+qWarning() 
+is used to report warnings and recoverable errors in your application. 
+
+qCritical() 
+is used for writing critical error messages and reporting system errors. 
+
+qFatal() 
+is used for writing fatal error messages shortly before exiting.
 
 
 *controlled by compilation flag*
@@ -1001,14 +1009,26 @@ qFatal aborts
 The QMessageLogger class generates log messages.
 
 QMessageLogger is used to generate messages for the Qt logging framework.
+
 Usually one uses it through qDebug(), qInfo(), qWarning(), qCritical, or
 qFatal() functions, which are actually macros: For example qDebug() expands to
 QMessageLogger(__FILE__, __LINE__, Q_FUNC_INFO).debug() for debug builds, and
 QMessageLogger(0, 0, 0).debug() for release builds.
 
+[ RUN      ] QLogging.various_way
+Hello qDebug
+Hello qWarning
+Hello qCritical
+Hello qDebug
+Hello qWarning
+Hello qCritical
+QString: Hello stream logging
+RGB: FF3333
+[       OK ] QLogging.various_way (0 ms)
+
 */
 
-TEST(QtLogging, Logging)
+TEST(QLogging, various_way)
 {
   // two ways of logging
   {
@@ -1077,29 +1097,51 @@ qt_category_enabled; qt_category_enabled = false) \
 QT_MESSAGELOG_FUNC, category().categoryName()).debug(__VA_ARGS__) #else # define
 qCDebug(category, ...) QT_NO_QDEBUG_MACRO() #endif
 
+[ RUN      ] QLogging.categoryLogging
+qtc.editor.1: 1. Hello debug category logging
+qtc.editor.1: 1. Hello warning category logging
+qtc.editor.1: 1. Hello critical category logging
+qtc.editor.1: 1. Hello debug category logging
+qtc.editor.2: 2. Hello debug category logging
+qtc.editor.2: 2. Hello warning category logging
+qtc.editor.2: 2. Hello critical category logging
+qtc.editor.2: 2. Hello debug category logging
+qtc.editor.3: 3. Hello warning category logging
+qtc.editor.3: 3. Hello critical category logging
+qtc.editor.3: 3. Hello info category logging
+qtc.editor.3 isCriticalEnabled
+qtc.editor.3 isCriticalEnabled
+qtc.editor.3 isInfoEnabled
+qtc.editor.3 isWarningEnabled
+qtc.editor.4: 4. Hello warning category logging
+qtc.editor.4: 4. Hello critical category logging
+qtc.editor.4 isCriticalEnabled
+qtc.editor.4 isWarningEnabled
+[       OK ] QLogging.categoryLogging (0 ms)
+
 */
 
-Q_LOGGING_CATEGORY(lcEditor1, "qtc.editor.1");
+Q_LOGGING_CATEGORY(cat1, "qtc.editor.1");
 
-TEST(QtLogging, Category)
+TEST(QLogging, categoryLogging)
 {
   {
     // QLoggingCategory lcEditor("qtc.editor");
     // can use macro as above
 
-    qCDebug(lcEditor1) << "1. Hello debug category logging";
-    qCWarning(lcEditor1) << "1. Hello warning category logging";
-    qCCritical(lcEditor1) << "1. Hello critical category logging";
-    qCDebug(lcEditor1, "%s", "1. Hello debug category logging");
+    qCDebug(cat1) << "1. Hello debug category logging";
+    qCWarning(cat1) << "1. Hello warning category logging";
+    qCCritical(cat1) << "1. Hello critical category logging";
+    qCDebug(cat1, "%s", "1. Hello debug category logging");
   }
 
   {
-    QLoggingCategory lcEditor2("qtc.editor.2");
+    QLoggingCategory cat2("qtc.editor.2");
 
-    qCDebug(lcEditor2) << "2. Hello debug category logging";
-    qCWarning(lcEditor2) << "2. Hello warning category logging";
-    qCCritical(lcEditor2) << "2. Hello critical category logging";
-    qCDebug(lcEditor2, "%s", "2. Hello debug category logging");
+    qCDebug(cat2) << "2. Hello debug category logging";
+    qCWarning(cat2) << "2. Hello warning category logging";
+    qCCritical(cat2) << "2. Hello critical category logging";
+    qCDebug(cat2, "%s", "2. Hello debug category logging");
   }
 
   // QLoggingCategory(const char *, QtMsgType severityLevel) (Qt 5.4)
@@ -1253,22 +1295,28 @@ Example:
 #include <stdio.h>
 #include <stdlib.h>
 
-void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const
-QString &msg)
+void 
+myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
     QByteArray localMsg = msg.toLocal8Bit();
     const char *file = context.file ? context.file : "";
     const char *function = context.function ? context.function : "";
     switch (type) {
     case QtDebugMsg:
-        fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), file,
-context.line, function); break; case QtInfoMsg: fprintf(stderr, "Info: %s
-(%s:%u, %s)\n", localMsg.constData(), file, context.line, function); break; case
-QtWarningMsg: fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(),
-file, context.line, function); break; case QtCriticalMsg: fprintf(stderr,
-"Critical: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line,
-function); break; case QtFatalMsg: fprintf(stderr, "Fatal: %s (%s:%u, %s)\n",
-localMsg.constData(), file, context.line, function); break;
+        fprintf(stderr, "Debug: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtInfoMsg:
+        fprintf(stderr, "Info: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtWarningMsg:
+        fprintf(stderr, "Warning: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtCriticalMsg:
+        fprintf(stderr, "Critical: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
+    case QtFatalMsg:
+        fprintf(stderr, "Fatal: %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        break;
     }
 }
 
@@ -1282,12 +1330,222 @@ int main(int argc, char **argv)
 
 Finally, the QtMsgType definition identifies the various messages that can be
 generated and sent to a Qt message handler; QtMessageHandler is a type
-definition for a pointer to a function with the signature void
-myMessageHandler(QtMsgType, const QMessageLogContext &, const char *).
+definition for a pointer to a function with the signature 
+
+void myMessageHandler(QtMsgType, const QMessageLogContext &, const char *).
+
 QMessageLogContext class contains the line, file, and function the message was
 logged at. This information is created by the QMessageLogger class.
 
 */
+
+namespace
+{
+  // [ RUN      ] QLogging.installMessageHandler1
+  // type             : 4
+  // context.category : default
+  // context.line     : 0
+  // msg              : this is info  message
+  // type             : 0
+  // context.category : default
+  // context.line     : 0
+  // msg              : this is debug message
+  // [       OK ] QLogging.installMessageHandler1 (0 ms)
+
+  static void CustomMessageHandler1(QtMsgType type,
+                                    const QMessageLogContext &context,
+                                    const QString &mesg)
+  {
+    std::cout << "type             : " << type << std::endl;
+    std::cout << "context.category : " << context.category << std::endl;
+
+    // file can be `null`
+    if (context.file)
+      std::cout << "context.file     : " << context.file << std::endl;
+
+    std::cout << "context.line     : " << context.line << std::endl;
+
+    if (context.function)
+      std::cout << "context.function : " << context.function << std::endl;
+
+    std::cout << "msg              : " << qPrintable(mesg) << std::endl;
+  }
+
+  // NOTE:
+  // so it is to make Qt logging `compatible` to gtest output
+  //
+  // [ RUN      ] QLogging.loggingMessageHandler2
+  // [          ] INF: < M:? F:? L:0 > this is info  message
+  // [          ] DBG: < M:? F:? L:0 > this is debug message
+  // [       OK ] QLogging.loggingMessageHandler2 (0 ms)
+  // [
+
+  static void CustomMessageHandler2(QtMsgType type,
+                                    const QMessageLogContext &context,
+                                    const QString &mesg)
+  {
+
+#define LOG_LEVEL_FATAL (1)
+#define LOG_LEVEL_ERROR (2)
+#define LOG_LEVEL_WARNING (3)
+#define LOG_LEVEL_MILESTONE (4)
+#define LOG_LEVEL_INFO (5)
+#define LOG_LEVEL_DEBUG (6)
+
+    int level{};
+
+    // this is when `milestone` category is defined and for using category
+    // logging.
+    //
+    // WHY?
+    // this is deliberately not a string compare, we are intentionally comparing
+    // the pointers
+    //
+    // TODO:
+    // QMessageLogContext Class document do not have this:
+    //
+    // if (context.category == milestone().categoryName())
+    // {
+    //   level = LOG_LEVEL_MILESTONE;
+    // }
+    // else
+    {
+      switch (type)
+      {
+        case QtFatalMsg:
+          level = LOG_LEVEL_FATAL;
+          break;
+        case QtCriticalMsg:
+          level = LOG_LEVEL_ERROR;
+          break;
+        case QtWarningMsg:
+          level = LOG_LEVEL_WARNING;
+          break;
+        case QtInfoMsg:
+          level = LOG_LEVEL_INFO;
+          break;
+        case QtDebugMsg:
+          level = LOG_LEVEL_DEBUG;
+          break;
+        default:
+          level = LOG_LEVEL_DEBUG;
+          break;
+      }
+    }
+
+    // construct the level
+    struct iovec iov[5];
+
+	  iov[0].iov_base = (void*)"[          ] ";
+    iov[0].iov_len = 13;
+
+    switch (level)
+    {
+      case LOG_LEVEL_FATAL:
+        iov[1].iov_base = (void *)"FAT: ";
+        iov[1].iov_len = 5;
+        break;
+
+      case LOG_LEVEL_ERROR:
+        iov[1].iov_base = (void *)"ERR: ";
+        iov[1].iov_len = 5;
+        break;
+
+      case LOG_LEVEL_WARNING:
+        iov[1].iov_base = (void *)"WRN: ";
+        iov[1].iov_len = 5;
+        break;
+
+      case LOG_LEVEL_MILESTONE:
+        iov[1].iov_base = (void *)"MIL: ";
+        iov[1].iov_len = 5;
+        break;
+
+      case LOG_LEVEL_INFO:
+        iov[1].iov_base = (void *)"INF: ";
+        iov[1].iov_len = 5;
+        break;
+
+      case LOG_LEVEL_DEBUG:
+        iov[1].iov_base = (void *)"DBG: ";
+        iov[1].iov_len = 5;
+        break;
+
+      default:
+        iov[1].iov_base = (void *)": ";
+        iov[1].iov_len = 2;
+        break;
+    }
+
+    // construct filename
+    const char *file_name{nullptr};
+
+    if (context.file)
+    {
+      file_name = strrchr(context.file, '/');
+
+      // if `file_name` not exist, use `context.file`. otherwise, use it from
+      // after '/'.
+      (!file_name) ? (file_name = context.file) : file_name++;
+    }
+
+    // construct message
+    char output[156];
+
+    // NOTE: (file_name ? : "?")
+    iov[2].iov_base = (void *)output;
+    iov[2].iov_len  = snprintf(output,
+                              sizeof(output),
+                              "< M:%.*s F:%.*s L:%d > ",
+                              64,
+                              (file_name ?: "?"),
+                              64,
+                              (context.function ?: "?"),
+                              context.line);
+
+    // iov[2].iov_len  = qMin<size_t>(iov[2].iov_len, sizeof(output));
+    iov[2].iov_len = std::min(iov[2].iov_len, sizeof(output));
+
+    // get the message buffer
+    QByteArray message = qPrintable(mesg);
+    char *msg_buf = message.data();
+    int msg_length = message.length();
+
+    iov[3].iov_base = msg_buf;
+    iov[3].iov_len = msg_length;
+
+    // eom
+    iov[4].iov_base = (void *)"\n";
+    iov[4].iov_len = 1;
+
+    // cxx-error: invalid conversion from ‘_IO_FILE*’ to ‘int’ [-fpermissive]
+    // writev(stderr, iov, 5);
+
+    writev(fileno(stderr), iov, 5);
+  }
+} // namespace
+
+TEST(QLogging, loggingMessageHandler1)
+{
+  auto oldHandler = qInstallMessageHandler(CustomMessageHandler1);
+
+  qInfo() << "this is info  message";
+  qDebug() << "this is debug message";
+
+  qInstallMessageHandler(oldHandler);
+}
+
+TEST(QLogging, loggingMessageHandler2)
+{
+  auto oldHandler = qInstallMessageHandler(CustomMessageHandler2);
+
+  qInfo() << "this is info  message";
+  qDebug() << "this is debug message";
+
+  qInstallMessageHandler(oldHandler);
+}
+
+#if 0
 
 // ={=========================================================================
 // qt-regexp

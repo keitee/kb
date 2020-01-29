@@ -151,7 +151,6 @@ private:
 public:
   OTimerFoo()
   {
-
     m_timerId = startTimer(1000);
     // if (timerid <= 0)
     //   qDebug() << "failed to create timer(1000)";
@@ -170,11 +169,13 @@ protected:
     m_count++;
 
     EXPECT_THAT(m_timerId, event->timerId());
+
+    emit timerExpired(m_count);
   }
 
   // if want to use a signal with QSignalSpy
-  // signals:
-  //   void timerExpired(int value);
+signals:
+  void timerExpired(int value);
 };
 
 #if 0
