@@ -1052,7 +1052,7 @@ TEST(Glibc, env)
 
 /*
 ={=============================================================================
-glibc-scanf
+os-ansi-color
 
 The scanf() function reads input from the standard input stream stdin, fscanf()
 reads input from the stream pointer stream, and sscanf() reads its input from
@@ -1060,9 +1060,29 @@ the character string pointed to by str.
 
 */
 
-TEST(Glibc, scanf)
+#define ESC '\033'
+#define EOE 'm'
+#define DEFAULT_COLOR "01;31"
+
+TEST(OsAnsi, color)
 {
-  {}
+  // green text
+  // all attributes off, greeen + message + back to the default.
+  std::cout << "\033[0;32m" "this is ansi color coded text" << "\033[m" << std::endl;
+
+  std::cout << ESC << "[0;32" << EOE << "this is ansi color coded text" << ESC << EOE << std::endl;
+
+  // underscored red on white
+  std::cout << "\033[4;31;47m" "this is ansi color coded text" << "\033[m" << std::endl;
+
+  // bold red
+  std::cout << "\033[" DEFAULT_COLOR "mthis is ansi color coded text" << "\033[m" << std::endl;
+
+  // underscored red on white
+  std::cout << "\033[1;32m" "this is ansi color coded text" << "\033[m" << std::endl;
+
+  // underscored red on white
+  printf("\033[1;32m" "this is ansi color coded text\n" "\033[m");
 }
 
 // ={=========================================================================

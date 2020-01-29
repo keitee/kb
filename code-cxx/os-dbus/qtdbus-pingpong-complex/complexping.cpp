@@ -3,10 +3,18 @@
 #include <QtCore/QCoreApplication>
 #include <QtDBus/QtDBus>
 
-#include "ping-common.h"
 #include "complexping.h"
+#include "ping-common.h"
 
 // #define SERVICE_NAME            "org.example.QtDBus.PingExample"
+
+void Ping::quit()
+{
+  // To print message when gets `aboutToQuit` signal from `pong`, use this slot
+
+  printf("Ping::quit(): call quit() directly\n");
+  QCoreApplication::instance()->quit();
+}
 
 // slot to be called by serviceWatcher.
 
@@ -26,8 +34,9 @@ void Ping::start(const QString &name)
                              this);                         // parent
   if (!iface->isValid())
   {
-    fprintf(stderr, "%s\n",
-        qPrintable(QDBusConnection::sessionBus().lastError().message()));
+    fprintf(stderr,
+            "%s\n",
+            qPrintable(QDBusConnection::sessionBus().lastError().message()));
     QCoreApplication::instance()->quit();
   }
 
@@ -36,10 +45,13 @@ void Ping::start(const QString &name)
   // Also see that proxy inherits from QDBusAbstractInterface as QDBusInterface
   // does. So proxy is not much different from QDBusInterface use.
 
-  // QObject::connect()
-  connect(iface, SIGNAL(aboutToQuit()),
-      QCoreApplication::instance(), SLOT(quit()));
+  // original code:
+  // // QObject::connect()
+  // connect(iface, SIGNAL(aboutToQuit()),
+  //     QCoreApplication::instance(), SLOT(quit()));
 
+  // QObject::connect()
+  connect(iface, SIGNAL(aboutToQuit()), this, SLOT(quit()));
 
   // calls pong's property and slots
   //
@@ -62,7 +74,7 @@ void Ping::start(const QString &name)
       iface->call("quit");
       return;
     }
-    else if(line == "value")
+    else if (line == "value")
     {
       // method call time=1571906439.566168 sender=:1.888 ->
       // destination=org.example.QtDBus.PingExample serial=9 path=/;
@@ -97,13 +109,15 @@ void Ping::start(const QString &name)
     {
       QDBusReply<QDBusVariant> reply = iface->call("query", line);
       if (reply.isValid())
-        printf("Reply was: %s\n", qPrintable(reply.value().variant().toString()));
+        printf("Reply was: %s\n",
+               qPrintable(reply.value().variant().toString()));
     }
 
     if (iface->lastError().isValid())
     {
-      fprintf(stderr, "Call failed: %s\n", 
-          qPrintable(iface->lastError().message()));
+      fprintf(stderr,
+              "Call failed: %s\n",
+              qPrintable(iface->lastError().message()));
     }
   } // while
 }
@@ -112,10 +126,12 @@ int main(int argc, char **argv)
 {
   QCoreApplication app(argc, argv);
 
-  if (!QDBusConnection::sessionBus().isConnected()) {
-    fprintf(stderr, "Cannot connect to the D-Bus session bus.\n"
-        "To start it, run:\n"
-        "\teval `dbus-launch --auto-syntax`\n");
+  if (!QDBusConnection::sessionBus().isConnected())
+  {
+    fprintf(stderr,
+            "Cannot connect to the D-Bus session bus.\n"
+            "To start it, run:\n"
+            "\teval `dbus-launch --auto-syntax`\n");
     return 1;
   }
 
@@ -123,13 +139,15 @@ int main(int argc, char **argv)
   // And runs Ping::start()
 
   QDBusServiceWatcher serviceWatcher(SERVICE_NAME,
-      QDBusConnection::sessionBus(),
-      QDBusServiceWatcher::WatchForRegistration);
+                                     QDBusConnection::sessionBus(),
+                                     QDBusServiceWatcher::WatchForRegistration);
 
   // not proxy and QObject
   Ping ping;
-  QObject::connect(&serviceWatcher, &QDBusServiceWatcher::serviceRegistered,
-      &ping, &Ping::start);
+  QObject::connect(&serviceWatcher,
+                   &QDBusServiceWatcher::serviceRegistered,
+                   &ping,
+                   &Ping::start);
 
   printf("run ./compleping\n");
 

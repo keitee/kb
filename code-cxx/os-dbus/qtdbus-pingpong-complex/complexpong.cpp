@@ -86,9 +86,8 @@ method return time=1579041212.526071 sender=:1.447 -> destination=:1.449 serial=
 #include <QtCore/QTimer>
 #include <QtDBus/QtDBus>
 
-#include "ping-common.h"
 #include "complexpong.h"
-
+#include "ping-common.h"
 
 // property functions
 
@@ -129,8 +128,7 @@ this is mapped and it leads to raises Pong::aboutToQuit signal.
 Adaptors are intended to be lightweight classes
 `whose main purpose is to relay calls to and from the real object`,
 
-So To see this connect() effectively do "emit aboutToQuit", disable it and use
-emit instead above. works well.
+So this connect() make a signal and do the same as "emit aboutToQuit"
 
 that is, "send a signal", "emit a signal" means a "send a signal message on
 dbus" after all.
@@ -155,8 +153,7 @@ void Pong::really_quit()
 
   emit aboutToQuit();
 
-  QTimer::singleShot(0, QCoreApplication::instance(),
-      &QCoreApplication::quit);
+  QTimer::singleShot(0, QCoreApplication::instance(), &QCoreApplication::quit);
 }
 
 QDBusVariant Pong::query(const QString &query)
@@ -170,7 +167,8 @@ QDBusVariant Pong::query(const QString &query)
     return QDBusVariant("Pong");
   if (q.indexOf("the answer to life, the universe and everything") != -1)
     return QDBusVariant(42);
-  if (q.indexOf("unladen swallow") != -1) {
+  if (q.indexOf("unladen swallow") != -1)
+  {
     if (q.indexOf("european") != -1)
       return QDBusVariant(11.0);
     return QDBusVariant(QByteArray("african or european?"));
@@ -204,16 +202,17 @@ int main(int argc, char **argv)
 
   QDBusConnection::sessionBus().registerObject("/", &obj);
 
-
   // NOTE that unlike `chat` case, use registerService() and do not allow running
   // the same `pong`, that is, not allow multiple registered with the same service
   // name.
 
   // #define SERVICE_NAME            "org.example.QtDBus.PingExample"
 
-  if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME)) {
-    fprintf(stderr, "%s\n",
-        qPrintable(QDBusConnection::sessionBus().lastError().message()));
+  if (!QDBusConnection::sessionBus().registerService(SERVICE_NAME))
+  {
+    fprintf(stderr,
+            "%s\n",
+            qPrintable(QDBusConnection::sessionBus().lastError().message()));
     printf("pong cannot register service and exit\n");
     exit(1);
   }
