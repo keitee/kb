@@ -11239,6 +11239,19 @@ void WesterosPlayerClient::render()
 
     static void wstRendererUpdateScene( WstRenderer *renderer )
     {
+
+      rendererEMB->rendererFast->surfaceGetGeometry( rendererEMB->rendererFast, surface->surfaceFast, 
+          &sx, &sy, &sw, &sh );
+      
+      void wstRendererSurfaceGetGeometry( WstRenderer *renderer, WstRenderSurface *surface, 
+          int *x, int *y, int *width, int *height )
+      {
+        *x= surface->x;
+        *y= surface->y;
+        *width= surface->width;
+        *height= surface->height;
+      }
+
       if ( sw && sw )
       {
         WstRect r;
@@ -11253,6 +11266,79 @@ void WesterosPlayerClient::render()
     }
   }
 }
+
+// westeros-render.h (stripped)
+
+typedef struct _WstRenderer
+{
+   int outputWidth;
+   int outputHeight;
+   void *nativeWindow;
+   struct wl_display *display;
+
+   `void *renderer;`
+   
+   // For embedded composition
+   int outputX;
+   int outputY;
+   float *matrix;
+   float alpha;
+   bool fastHint;
+   int hints;
+   bool needHolePunch;
+   std::vector<WstRect> rects;
+} WstRenderer;
+
+// stripped
+typedef struct _WstRendererEMB
+{
+   `WstRenderer *renderer;`
+   int outputWidth;
+   int outputHeight;
+
+} WstRendererEMB;
+
+// log
+
+PARK: setting player surface to { visible:true zOrder:-2 
+        outRect:0x0, 1920x1080    // x, y, w, h
+        inRect:0.0x0.0, 1.0x1.0 alpha:1.0 }
+
+// after calculation
+
+PARK: setSurface matrix {
+        1.000000x1.000000,    // for w, h
+        0.000000x0.000000     // for x, y
+      }
+
+// full video [0, 5, 12, 13]
+PARK: westeros-render-embedded: matrix{(1.0, 1.0), (0.0, 0.0)}
+PARK: westeros-render-embedded: EMBRenderSurface
+
+
+0000000927.874407 NFO: < T:17175 M:WesterosClient.cpp F:configurePlayerSurface L:1090 > 
+client 'com.bskyb.epgui' requested player surface change 
+{ visible:true zOrder:-2 outRect:55x140,436x246 inRect:0.0x0.0,1.0x1.0 alpha:1.0 }
+
+0000000927.879367 NFO: < T:15526 M:WesterosPlayerClient.cpp F:setSurface L:456 > 
+
+PARK: setting player surface to { visible:true zOrder:-2 
+        outRect:55x140, 436x246               // x, y, w, h
+        inRect:0.0x0.0, 1.0x1.0 alpha:1.0 }
+
+// after calculation
+
+PARK: setSurface matrix {
+        0.227083x0.227778,          // w, h [0, 5]
+        55.000000x140.000000        // x, y [12, 13]
+      }
+
+
+// scaled video when use %.1f
+PARK: westeros-render-embedded: matrix{(0.2, 0.2), (55.0, 140.0)}
+PARK: westeros-render-embedded: fast is false
+PARK: westeros-render-embedded: EMBRenderSurface
+
 
 // stripped
 
@@ -11308,12 +11394,20 @@ scp -P 10022 appsservice root@192.168.0.103:
 dropbearkey -t rsa -f /home/root/sky-ssh-hostkey
 dropbear -p :10022 -P /var/run/dropbear2.pid -r /home/root/sky-ssh-hostkey -B
 
-// stop player
+// check status
 systemctl status sky-asplayer
+systemctl status sky-appsservice
+
+
+// stop player
 systemctl stop sky-asplayer
+// will crash appsservice
+systemctl stop sky-appsservice
 
-// set envs and run player
 
+// move to ssh and set envs and run player
+
+cat /sys/module/amvdec_ports/parameters/multiplanar
 echo 1 > /sys/module/amvdec_ports/parameters/multiplanar
 cat /sys/module/amvdec_ports/parameters/multiplanar
 
@@ -11335,11 +11429,10 @@ asrdkplayer -v
 
 
 systemctl status sky-appsservice
-// will crash appsservice
-systemctl stop sky-appsservice
 
 systemctl start sky-appsservice
 LD_PRELOAD=/usr/lib/libwesteros_gl.so.0 /usr/sbin/appsservice -v --launchdelay=30000
+
 LD_PRELOAD=/usr/lib/libwesteros_gl.so.0 ./appsservice -v --launchdelay=30000
 
 LD_PRELOAD=/usr/lib/libwesteros_gl.so.0 gdb --args ./appsservice -v --launchdelay=30000
@@ -11407,26 +11500,6 @@ westeros-sink: caps: (video/x-h264, pixel-aspect-ratio=(fraction)1/1, width=(int
 gst_westeros_sink_set_property set window rect (0,0,1920,1080)
 
 
-// log
-
-0000000927.874407 NFO: < T:17175 M:WesterosClient.cpp F:configurePlayerSurface L:1090 > 
-client 'com.bskyb.epgui' requested player surface change 
-{ visible:true zOrder:-2 outRect:55x140,436x246 inRect:0.0x0.0,1.0x1.0 alpha:1.0 }
-
-0000000927.879367 NFO: < T:15526 M:WesterosPlayerClient.cpp F:setSurface L:456 > 
-PARK: setting player surface to { visible:true zOrder:-2 
-  outRect:55x140, 436x246 
-  inRect:0.0x0.0, 1.0x1.0 alpha:1.0 }
-
-// scaled video
-PARK: westeros-render-embedded: matrix{(0.2, 0.2), (55.0, 140.0)}
-PARK: westeros-render-embedded: fast is false
-PARK: westeros-render-embedded: EMBRenderSurface
-
-// full video
-PARK: westeros-render-embedded: matrix{(1.0, 1.0), (0.0, 0.0)}
-PARK: westeros-render-embedded: EMBRenderSurface
-
 /tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/westeros/1.0+gitrAUTOINC+88abed1807-r0/temp
 
 bitbake westeros -c compile
@@ -11483,6 +11556,15 @@ end
 b gst_westeros_sink_set_property:PARK1
 b gst_westeros_sink_set_property:PARK2
 
+
+break westeros-render-embedded.cpp:1430
+// b wstRendererEMBRenderSurface:PARK1
+b wstRendererEMBRenderSurface:PARK2
+
+// same
+b westeros-compositor.cpp:2077
+// b WstCompositorComposeEmbedded:PARK2
+b WstCompositorComposeEmbedded:PARK1
 
 // aamp-cli commands
 
