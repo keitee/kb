@@ -63,7 +63,7 @@ TEST(LpiIO, open)
 
 /*
 ={=============================================================================
-lpi-io
+lpi-io call-writev
 
 5.7 Scatter-Gather I/O: readv() and writev()
 
@@ -105,7 +105,7 @@ copying data in user space.
 The second option is not semantically equivalent to a single call to writev(),
 since the write() calls are not performed atomically. Furthermore, performing a
 single writev() system call is cheaper than performing multiple write() calls
-(refer to the dis- cussion of system calls in Section 3.1).
+(refer to the discussion of system calls in Section 3.1).
 
 */
 

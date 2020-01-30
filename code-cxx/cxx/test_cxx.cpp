@@ -3763,7 +3763,7 @@ namespace cxx_function
   void increase(int &i) { ++i; }
 } // namespace cxx_function
 
-TEST(CxxFunctionObject, Bind)
+TEST(CxxCallable, callable_bind)
 {
   using namespace cxx_function;
 
@@ -3771,6 +3771,16 @@ TEST(CxxFunctionObject, Bind)
   {
     std::plus<int> fo;
     EXPECT_THAT(fo(10, 20), 30);
+  }
+
+  // cxx-error: no matching function for call to ‘std::plus<int>::plus(int, int)’
+  // {
+  //   EXPECT_THAT(std::plus<int>(10, 20), 30);
+  // }
+
+  // cxx-min, template function
+  {
+    EXPECT_THAT(std::min(10, 20), 10);
   }
 
   // expect true if size >= 6
@@ -9408,7 +9418,7 @@ TEST(TypeConversion, Double)
 // ={=========================================================================
 // cxx-printf
 
-TEST(CxxPrintf, format)
+TEST(CxxPrintf, printf_format)
 {
   // The flag characters
   // The character % is followed by zero or more of the following flags:
