@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdarg>
 #include <forward_list>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <list>
@@ -67,10 +68,6 @@ using namespace testing;
 2645:TEST(Time, Facet)
 2722:TEST(Time, ElapsedTime)
 2957:TEST(Time, Snapper)
-3044:TEST(Static, DefineStaticOutside)
-3110:TEST(Static, TrackClassInstances)
-3122:TEST(Static, TrackClassInstancesWhenNothingCreated)
-3160:TEST(Static, UnderInheritance)
 3190:TEST(CxxFeaturesTest, UseIsspace)
 3201:// Q: If run it standalone, it runs slower than on in GTEST. WHY?
 3251:TEST(CxxFunctionObject, FunctionPointer)
@@ -3367,7 +3364,7 @@ namespace cxx_static
   const std::string FooStatic::DIGIT_NOT_FOUND{"*"};
 } // namespace cxx_static
 
-TEST(Static, DefineStaticOutside)
+TEST(CxxStatic, static_class_member)
 {
   using namespace cxx_static;
 
@@ -3433,23 +3430,22 @@ namespace cxx_static
 // ShowList: value: 100
 // ShowList: id   : 3
 
-TEST(Static, TrackClassInstances)
+TEST(CxxStatic, static_count_instances)
 {
   using namespace cxx_static;
 
-  StaticClass sc1(1, "instance 1");
-  StaticClass sc2(10, "instance 2");
-  StaticClass sc3(100, "instance 3");
-  StaticClass::ShowList();
-}
+  {
+    StaticClass sc1(1, "instance 1");
+    StaticClass sc2(10, "instance 2");
+    StaticClass sc3(100, "instance 3");
+    StaticClass::ShowList();
+  }
 
-// ShowList: 0
-
-TEST(Static, TrackClassInstancesWhenNothingCreated)
-{
-  using namespace cxx_static;
-
-  StaticClass::ShowList();
+  // when no instance is created
+  // ShowList: 0
+  {
+    StaticClass::ShowList();
+  }
 }
 
 namespace cxx_static
@@ -3483,7 +3479,7 @@ namespace cxx_static
 // Foo::createInstance()
 // [       OK ] Static.UnderInheritance (0 ms)
 
-TEST(Static, UnderInheritance)
+TEST(CxxStatic, static_in_inheritance)
 {
   using namespace cxx_static;
 
@@ -3496,9 +3492,104 @@ TEST(Static, UnderInheritance)
   Bar bar;
   bar.createInstance();
 
+  // see foo's version since it is not virtual
   Foo *p = new Bar;
   p->createInstance();
   delete p;
+}
+
+namespace cxx_static
+{
+  class FooThread
+  {
+    private:
+
+      // error: ISO C++ forbids in-class initialization of non-const static
+      // member ‘cxx_static::FooThread::m_value1’
+      // static int m_value1{10};
+
+      static int m_value1;
+      static int m_value2;
+      static std::vector<int> m_coll;
+      std::string m_name;
+
+      static FooThread *m_self;
+
+    public:
+      FooThread() : m_name("foo") { m_self = this; }
+      ~FooThread() {}
+      void print() 
+      {
+        std::cout << "name   : " << m_name << ", value1 : " << m_value1
+                  << ", value2 : " << m_value2 << std::endl;
+
+        std::cout << "coll   : " << m_coll[0] << ", " << m_coll[1] << ", "
+                  << m_coll[2] << ", " << m_coll[3] << std::endl;
+
+        std::cout << "self   : " << m_self << std::endl;
+      }
+  };
+
+  int FooThread::m_value1{10};
+  int FooThread::m_value2{20};
+  std::vector<int> FooThread::m_coll{10, 20, 30, 40};
+  FooThread *FooThread::m_self{nullptr};
+}
+
+// TEST(CxxStatic, static_in_thread)
+// {
+//   using namespace cxx_static;
+
+//   FooThread foo;
+
+//   // print from thread1
+//   foo.print();
+
+//   // print from thread2
+//   auto f1 = std::async(std::launch::async, [&]() {
+//     std::this_thread::sleep_for(chrono::milliseconds(1300));
+//     foo.print();
+//   });
+
+//   // print from thread3
+//   auto f2 = std::async(std::launch::async, [&]() {
+//     std::this_thread::sleep_for(chrono::milliseconds(1300));
+//     foo.print();
+//   });
+
+//   // print from thread1
+//   foo.print();
+
+//   f1.get();
+//   f2.get();
+// }
+
+TEST(CxxStatic, static_in_thread)
+{
+  using namespace cxx_static;
+
+  auto foo = make_shared<FooThread>();
+
+  // print from thread1
+  foo->print();
+
+  // print from thread2
+  auto f1 = std::async(std::launch::async, [&]() {
+    std::this_thread::sleep_for(chrono::milliseconds(1300));
+    foo->print();
+  });
+
+  // print from thread3
+  auto f2 = std::async(std::launch::async, [&]() {
+    std::this_thread::sleep_for(chrono::milliseconds(1300));
+    foo->print();
+  });
+
+  // print from thread1
+  foo->print();
+
+  f1.get();
+  f2.get();
 }
 
 // ={=========================================================================

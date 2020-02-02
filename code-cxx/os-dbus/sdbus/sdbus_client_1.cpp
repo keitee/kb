@@ -22,6 +22,8 @@ https://www.freedesktop.org/software/systemd/man/sd_bus_open_system.html#
 
 /*
 
+Let's see which `objects` the org.freedesktop.login1 service actually offers:
+
 busctl tree org.freedesktop.login1 
 └─/org
   └─/org/freedesktop
@@ -38,6 +40,8 @@ busctl tree org.freedesktop.login1
         ├─/org/freedesktop/login1/user/_119
         └─/org/freedesktop/login1/user/self
 
+Let's see what interfaces, methods, signals and properties one of these objects
+actually exposes:
 
 busctl introspect org.freedesktop.login1 /org/freedesktop/login1/session
 NAME                                TYPE      SIGNATURE RESULT/VALUE FLAGS
@@ -71,10 +75,19 @@ connect to remote or container buses. It understands both kdbus and classic
 D-Bus, and more!
 
 
-keitee@kit-hdebi:~/git/kb/code-cxx/os/build$ ./sdbus_client
+$ busctl call org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager StartUnit ss "cups.service" "replace"
+o "/org/freedesktop/systemd1/job/2593"
+
+The specified signature string hence indicates what comes next. systemd's
+StartUnit method call takes the unit name to start as first parameter, and the
+mode in which to start it as second. The call returned a single object path
+value. It is encoded the same way as the input parameter: a signature (just o
+for the object path) followed by the actual value.
+
+
+$ ./sdbus_client
 succuess on methond call
 queued service job as /org/freedesktop/systemd1/job/2208
-
 
 */
 

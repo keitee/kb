@@ -59,7 +59,7 @@ add_subdirectory(${GMOCK_DIR} ${CMAKE_BINARY_DIR}/gmock)
 #
 # directory...  The directories to be added to the list of include directories.
 
-include_directories(SYSTEM ${GMOCK_DIR}/include eventloop dbus)
+include_directories(SYSTEM ${GMOCK_DIR}/include eventloop2 dbus)
 
 
 # do not work
@@ -179,7 +179,7 @@ include_directories(${LIBS_DIR})
 
 
 # file(GLOB SOURCES "src/*.cxx")
-add_executable(${PROJECT_NAME} "test_sdbus_case.cpp" eventloop/eventloop.cpp
+add_executable(${PROJECT_NAME} "test_sdbus_case.cpp" eventloop2/eventloop.cpp
   scli.cpp)
 
 # cause link errors to Boost::thread
@@ -188,7 +188,7 @@ add_executable(${PROJECT_NAME} "test_sdbus_case.cpp" eventloop/eventloop.cpp
 target_link_libraries(${PROJECT_NAME} gmock_main Boost::thread ${LIBS} "-lsystemd")
 
 
-add_executable(test_sdbus_server "test_sdbus_server.cpp" eventloop/eventloop.cpp
+add_executable(test_sdbus_server "test_sdbus_server.cpp" eventloop2/eventloop.cpp
   dbus/dbusmessage.cpp dbus/dbusconnection.cpp dbus/dbusfiledescriptor.cpp)
 target_link_libraries(test_sdbus_server Boost::thread ${LIBS} "-lsystemd")
 

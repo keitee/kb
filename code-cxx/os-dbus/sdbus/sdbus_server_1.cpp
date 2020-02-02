@@ -70,6 +70,18 @@ sorry, can't do that
 #include <systemd/sd-bus-vtable.h>
 
 
+// #include <systemd/sd-bus.h>
+//
+// typedef int (*sd_bus_message_handler_t)(	sd_bus_message *m,
+//  	void *userdata,
+//  	sd_bus_error *ret_error);
+//  
+// int sd_bus_add_match(	sd_bus *bus,
+//  	sd_bus_slot **slot,
+//  	const char *match,
+//  	sd_bus_message_handler_t callback,
+//  	void *userdata);
+
 // https://www.freedesktop.org/software/systemd/man/sd_bus_message_read.html#
 //
 // int sd_bus_message_read(
@@ -218,6 +230,10 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
                 },                                                      \
         }
 
+// *os-dbus-type*
+// x           64-bit signed integer
+// SD_BUS_METHOD( member, signature, result, handler, flags)
+
 static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_VTABLE_START(0),
   SD_BUS_METHOD("Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
@@ -253,16 +269,19 @@ int main(int argc, char *argvp[])
   // install the object
   //
   // sd_bus_add_object_vtable() is used to declare attributes for the path
-  // object path path connected to the bus connection bus under the interface
-  // interface. The table vtable may contain property declarations using
-  // SD_BUS_PROPERTY() or SD_BUS_WRITABLE_PROPERTY(), method declarations using
-  // SD_BUS_METHOD(), SD_BUS_METHOD_WITH_NAMES(), SD_BUS_METHOD_WITH_OFFSET(),
-  // or SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
-  // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below. The userdata
-  // parameter contains a pointer that will be passed to various callback
-  // functions. It may be specified as NULL if no value is necessary.
+  // object path `path` connected to the bus connection bus under the interface
+  // interface. 
   //
-  // For both functions, a match slot is created internally. If the output
+  // The table vtable may contain property declarations using SD_BUS_PROPERTY()
+  // or SD_BUS_WRITABLE_PROPERTY(), method declarations using SD_BUS_METHOD(),
+  // SD_BUS_METHOD_WITH_NAMES(), SD_BUS_METHOD_WITH_OFFSET(), or
+  // SD_BUS_METHOD_WITH_NAMES_OFFSET(), and signal declarations using
+  // SD_BUS_SIGNAL_WITH_NAMES() or SD_BUS_SIGNAL(), see below. 
+  //
+  // The `userdata` parameter contains a pointer that will be passed to various
+  // callback functions. It may be specified as NULL if no value is necessary.
+  //
+  // For both functions, a `match slot` is created internally. If the output
   // parameter slot is NULL, a "floating" slot object is created, see
   // sd_bus_slot_set_floating(3). Otherwise, a pointer to the slot object is
   // returned. In that case, the reference to the slot object should be dropped
@@ -313,6 +332,7 @@ int main(int argc, char *argvp[])
   // sd_bus_wait() synchronously waits for I/O on the specified bus connection
   // object. This function is supposed to be called whenever sd_bus_process(3)
   // returns zero, indicating that no work is pending on the connection.
+  //
   // Internally, this call invokes ppoll(3), to wait for I/O on the bus
   // connection. If the timeout_sec parameter is specified, the call will block
   // at most for the specified amount of time in µs. Pass UINT64_MAX to permit

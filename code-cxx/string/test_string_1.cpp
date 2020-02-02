@@ -205,6 +205,7 @@ TEST(CxxStringOperation, SubstringFind)
     std::string coll1{"There are two needles in this haystack with needles."};
     std::string coll2{"needle"};
 
+    // first match
     std::size_t found = coll1.find(coll2);
     EXPECT_THAT(found, 14);
 
@@ -226,15 +227,16 @@ TEST(CxxStringOperation, SubstringFind)
     EXPECT_THAT(found, -1);
   }
 
-  // cxx-srring-rfind
+  // cxx-srring-rfind reverse find
   // https://en.cppreference.com/w/cpp/string/basic_string/rfind
   //
-  // Finds the last substring equal to the given character sequence. Search
+  // Finds the `last substring` equal to the given character sequence. Search
   // begins at pos, i.e. the found substring must not begin in a position
   // following pos.
   //
   // Return value
-  // Position of the first character of the found substring
+  // Position of the first character of the found substring or `npos` if no such
+  // substring is found.
 
   {
     std::string coll1{"The sixth sick sheik's sixth sheep's sick."};

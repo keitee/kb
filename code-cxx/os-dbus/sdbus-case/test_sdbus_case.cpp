@@ -27,7 +27,7 @@ void w1(int &v)
 //
 // size is 10 but value is still 0.
 
-TEST(EventLoop, NoWorkDone)
+TEST(EventLoop, event_no_work)
 {
   int value{};
 
@@ -45,10 +45,11 @@ TEST(EventLoop, NoWorkDone)
   EXPECT_THAT(value, 0);
 }
 
-// will flush() make difference? No since flush() simply post a wait task and
-// wait to finish it but do not call run() so blocks there.
+// will flush() make difference? blocked since didn't call run() so
+// EventLoopPrivate::m_loopRuunig is null and runs path when "this !=
+// m_loopRunning". that use sem and wait for that and blocked there.
 
-TEST(DISABLED_EventLoop, FlushNoWorkDone)
+TEST(DISABLED_EventLoop, event_flush_no_work)
 {
   int value{};
 
@@ -64,11 +65,10 @@ TEST(DISABLED_EventLoop, FlushNoWorkDone)
   EXPECT_THAT(value, 0);
 }
 
-// running on a different thread should make difference? nope see the comment on
-// flush()
+// running on a different thread should make difference?
+// two threas and one event loop.
 
-TEST(DISABLED_EventLoop, ThreadButDeadlock)
-// TEST(EventLoop, ThreadButDeadlock)
+TEST(EventLoop, event_deadlock)
 {
   int value{};
 
@@ -95,56 +95,57 @@ TEST(DISABLED_EventLoop, ThreadButDeadlock)
   EXPECT_THAT(value, 10);
 }
 
-// so do not use flush()
+// two threas and one event loop. so do not use flush().
+// NOTE: can share event loop between threads
 
-TEST(EventLoop, ThreadWorkDone1)
+TEST(EventLoop, event_share)
 {
-  int value{};
+  {
+    int value{};
 
-  EventLoop loop;
+    EventLoop loop;
 
-  auto f1 = std::async(std::launch::async, [&]() {
-    // std::this_thread::sleep_for(chrono::milliseconds(300));
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
 
-    // shall use std::ref
-    for (int i = 0; i < 10; ++i)
-      loop.invokeMethod(std::bind(w1, std::ref(value)));
+      // shall use std::ref
+      for (int i = 0; i < 10; ++i)
+        loop.invokeMethod(std::bind(w1, std::ref(value)));
 
-    EXPECT_THAT(loop.size(), 10);
+      EXPECT_THAT(loop.size(), 10);
 
-    loop.quit(0);
-  });
+      loop.quit(0);
+    });
 
-  // blocks here
-  loop.run();
+    // blocks here
+    loop.run();
 
-  EXPECT_THAT(value, 10);
-}
+    EXPECT_THAT(value, 10);
+  }
 
-// same as above but use the convenient form of invokeMethod()
+  // same as above but use the convenient form of invokeMethod()
+  {
+    int value{};
 
-TEST(EventLoop, ThreadWorkDone2)
-{
-  int value{};
+    EventLoop loop;
 
-  EventLoop loop;
+    auto f1 = std::async(std::launch::async, [&]() {
+      // std::this_thread::sleep_for(chrono::milliseconds(300));
 
-  auto f1 = std::async(std::launch::async, [&]() {
-    // std::this_thread::sleep_for(chrono::milliseconds(300));
+      // shall use std::ref
+      for (int i = 0; i < 10; ++i)
+        loop.invokeMethod(w1, std::ref(value));
 
-    // shall use std::ref
-    for (int i = 0; i < 10; ++i)
-      loop.invokeMethod(w1, std::ref(value));
+      EXPECT_THAT(loop.size(), 10);
 
-    EXPECT_THAT(loop.size(), 10);
+      loop.quit(0);
+    });
 
-    loop.quit(0);
-  });
+    // blocks here
+    loop.run();
 
-  // blocks here
-  loop.run();
-
-  EXPECT_THAT(value, 10);
+    EXPECT_THAT(value, 10);
+  }
 }
 
 namespace
@@ -191,7 +192,6 @@ namespace
     }
   };
 
-  // cause compile error
   void Work2::pushWorks()
   {
     for (int i = 0; i < 10; ++i)
@@ -199,49 +199,48 @@ namespace
   }
 } // namespace
 
-// may use target with invokeMethod()
+// may memeber function
 
-TEST(EventLoop, InvokeWithThis)
+TEST(EventLoop, event_invoke_member)
 {
-  int value{};
+  {
+    int value{};
 
-  EventLoop loop;
-  Work1 w;
+    EventLoop loop;
+    Work1 w;
 
-  auto f1 = std::async(std::launch::async, [&]() {
-    for (int i = 0; i < 10; ++i)
-      loop.invokeMethod(&Work1::printArgs, &w, 10, 20, 30);
+    auto f1 = std::async(std::launch::async, [&]() {
+      for (int i = 0; i < 10; ++i)
+        loop.invokeMethod(&Work1::printArgs, &w, 10, 20, 30);
 
-    EXPECT_THAT(loop.size(), 10);
+      EXPECT_THAT(loop.size(), 10);
 
-    loop.quit(0);
-  });
+      loop.quit(0);
+    });
 
-  // blocks here
-  loop.run();
-}
+    // blocks here
+    loop.run();
+  }
 
-#if 0
-TEST(EventLoop, InvokeWithoutThis)
-{
-  int value{};
+  // without `target` to call member function since it's static
+  {
+    int value{};
 
-  EventLoop loop;
+    EventLoop loop;
 
-  auto f1 = std::async(std::launch::async, [&]() {
-
+    auto f1 = std::async(std::launch::async, [&]() {
       Work2 w(loop);
       w.pushWorks();
 
       EXPECT_THAT(loop.size(), 10);
 
       loop.quit(0);
-      });
+    });
 
-  // blocks here
-  loop.run();
+    // blocks here
+    loop.run();
+  }
 }
-#endif
 
 namespace
 {
@@ -279,7 +278,7 @@ namespace
   }
 } // namespace
 
-TEST(EventLoop, CliWorkDone)
+TEST(EventLoop, event_cli)
 {
   CommandHandler handler;
   bool running{true};

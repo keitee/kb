@@ -35,6 +35,55 @@ On failure, they return a negative errno-style error code.
 
 API
 -------------------------------------------------------------------------------
+https://www.freedesktop.org/software/systemd/man/sd-event.html#
+
+Name
+
+sd-event — A generic event loop implementation
+
+The event loop design is targeted on running a separate instance of the event
+loop in each thread; it has no concept of distributing events from a single
+event loop instance onto multiple worker threads. Dispatching events is strictly
+ordered and subject to configurable priorities. In each event loop iteration a
+single event source is dispatched. Each time an event source is dispatched the
+kernel is polled for new events, before the next event source is dispatched. The
+event loop is designed to honor priorities and provide fairness within each
+priority. It is not designed to provide optimal throughput, as this contradicts
+these goals due the limitations of the underlying epoll(7) primitives.
+
+The event loop implementation provides the following features:
+
+I/O event sources, based on epoll(7)'s file descriptor watching, including edge
+triggered events (EPOLLET). See sd_event_add_io(3).
+
+Timer event sources, based on timerfd_create(2), supporting the CLOCK_MONOTONIC,
+CLOCK_REALTIME, CLOCK_BOOTIME clocks, as well as the CLOCK_REALTIME_ALARM and
+CLOCK_BOOTTIME_ALARM clocks that can resume the system from suspend. When
+creating timer events a required accuracy parameter may be specified which
+allows coalescing of timer events to minimize power consumption. See
+sd_event_add_time(3).
+
+UNIX process signal events, based on signalfd(2), including full support for
+real-time signals, and queued parameters. See sd_event_add_signal(3).
+
+Child process state change events, based on waitid(2). See
+sd_event_add_child(3).
+
+Static event sources, of three types: defer, post and exit, for invoking calls
+in each event loop, after other event sources or at event loop termination. See
+sd_event_add_defer(3).
+
+Event sources may be assigned a 64bit priority value, that controls the order in
+which event sources are dispatched if multiple are pending simultaneously. See
+sd_event_source_set_priority(3).
+
+The event loop may automatically send watchdog notification messages to the
+service manager. See sd_event_set_watchdog(3).
+
+The event loop may be integrated into foreign event loops, such as the GLib one.
+See sd_event_get_fd(3) for an example.
+
+
 https://www.freedesktop.org/software/systemd/man/sd_event_new.html#
 
 sd_event_new, sd_event_default, sd_event_ref, sd_event_unref, sd_event_unrefp,
@@ -42,9 +91,18 @@ sd_event_get_tid, sd_event
 
 — Acquire and release an event loop object
 
+#include <systemd/sd-event.h>
+
+typedef struct sd_event sd_event;
+
+int sd_event_new(	sd_event **event);
+
 sd_event_new() allocates a new event loop object. The event loop object is
 returned in the event parameter. After use, drop the returned reference with
 sd_event_unref(). When the last reference is dropped, the object is freed
+
+
+int sd_event_default(	sd_event **event);
 
 sd_event_default() acquires a reference to the default event loop object of the
 calling thread, possibly allocating a new object if no default event loop object
@@ -72,7 +130,8 @@ sd_event_add_signal, sd_event_source_get_signal, sd_event_signal_handler_t
 
 — Add a UNIX process signal event source to an event loop
 
-int sd_event_add_signal(sd_event *event,
+int sd_event_add_signal(
+  sd_event *event,
   sd_event_source **source,
   int signal,
   sd_event_signal_handler_t handler,
@@ -200,7 +259,6 @@ to exit. The code parameter may be any integer value and is returned as-is by
 sd_event_loop(3) after the last event loop iteration. It may also be queried
 using sd_event_get_exit_code(), see below.
 
-
 */
 
 #include <errno.h>
@@ -289,7 +347,6 @@ For the sake of brevity error checking is minimal, and in a real-world
 application should, of course, be more comprehensive. However, it hopefully gets
 the idea across how to write a daemon that reacts to external events with
 sd-event.
-
 
 */
 

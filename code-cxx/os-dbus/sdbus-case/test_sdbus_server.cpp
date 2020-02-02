@@ -97,6 +97,49 @@ that sender through. An example of a complete rule would be
 
 */
 
+#undef SD_BUS_VTABLE_START
+#define SD_BUS_VTABLE_START(_flags)                                            \
+  {                                                                            \
+    .type = _SD_BUS_VTABLE_START, .flags = _flags,                             \
+    .x = {                                                                     \
+      .start = {.element_size = sizeof(sd_bus_vtable)},                        \
+    },                                                                         \
+  }
+
+#undef SD_BUS_METHOD_WITH_OFFSET
+#define SD_BUS_METHOD_WITH_OFFSET(_member,                                     \
+                                  _signature,                                  \
+                                  _result,                                     \
+                                  _handler,                                    \
+                                  _offset,                                     \
+                                  _flags)                                      \
+  {                                                                            \
+    .type = _SD_BUS_VTABLE_METHOD, .flags = _flags,                            \
+    .x = {                                                                     \
+      .method =                                                                \
+        {                                                                      \
+          .member    = _member,                                                \
+          .signature = _signature,                                             \
+          .result    = _result,                                                \
+          .handler   = _handler,                                               \
+          .offset    = _offset,                                                \
+        },                                                                     \
+    },                                                                         \
+  }
+
+#undef SD_BUS_SIGNAL
+#define SD_BUS_SIGNAL(_member, _signature, _flags)                             \
+  {                                                                            \
+    .type = _SD_BUS_VTABLE_SIGNAL, .flags = _flags,                            \
+    .x = {                                                                     \
+      .signal =                                                                \
+        {                                                                      \
+          .member    = _member,                                                \
+          .signature = _signature,                                             \
+        },                                                                     \
+    },                                                                         \
+  }
+
 // typedef int (*sd_bus_message_handler_t)(sd_bus_message *m, void *userdata,
 // sd_bus_error *ret_error);
 
@@ -114,7 +157,8 @@ int rule_matched(sd_bus_message *msg, void *userData, void *retError)
   // *message);
 
   message += "sender=" + std::string(sd_bus_message_get_sender(msg));
-  message += ", destination=" + std::string(sd_bus_message_get_destination(msg));
+  message +=
+    ", destination=" + std::string(sd_bus_message_get_destination(msg));
   message += ", path=" + std::string(sd_bus_message_get_path(msg));
   message += ", interface=" + std::string(sd_bus_message_get_interface(msg));
   message += ", member=" + std::string(sd_bus_message_get_member(msg));
@@ -122,7 +166,7 @@ int rule_matched(sd_bus_message *msg, void *userData, void *retError)
   logWarning("rules matched: %s", message.c_str());
 }
 
-// 
+//
 void install_match(const DBusConnection &conn, sd_bus_slot *&slot)
 {
   std::string matchRule = "type='signal'";

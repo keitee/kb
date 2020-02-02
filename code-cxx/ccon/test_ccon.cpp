@@ -98,44 +98,47 @@ TEST(CConThread, Hello)
 
 // thread id: 139805217429248
 
-TEST(CConThread, Id)
+TEST(CConThread, thread_id)
 {
   using namespace cxx_thread;
 
-  ostringstream os;
-  std::thread t([&] { hello_and_thread_id(os); });
-  t.join();
-  EXPECT_THAT(os.str(), "Hello Concurrent World");
-}
-
-TEST(CConThread, GetIDFromPthread)
-{
-  using namespace cxx_thread;
-
-  char coll[] = "Hello world";
-  pthread_t t;
-  void *res;
-  int s;
-
-  EXPECT_THAT(strlen(coll), 11);
-
-  s = pthread_create(&t, NULL, threadFunc, (void *)coll);
-  if (s != 0)
+  // get id using std::thread
   {
-    printf("pthread_create failed");
-    exit(EXIT_FAILURE);
+    ostringstream os;
+    std::thread t([&] { hello_and_thread_id(os); });
+    t.join();
+    EXPECT_THAT(os.str(), "Hello Concurrent World");
   }
 
-  printf("main pid = %ld\n", getpid());
-
-  s = pthread_join(t, &res);
-  if (s != 0)
+  // get id from pthred
   {
-    printf("pthread_join failed");
-    exit(EXIT_FAILURE);
-  }
+    using namespace cxx_thread;
 
-  EXPECT_THAT((long)res, 11);
+    char coll[] = "Hello world";
+    pthread_t t;
+    void *res;
+    int s;
+
+    EXPECT_THAT(strlen(coll), 11);
+
+    s = pthread_create(&t, NULL, threadFunc, (void *)coll);
+    if (s != 0)
+    {
+      printf("pthread_create failed");
+      exit(EXIT_FAILURE);
+    }
+
+    printf("main pid = %ld\n", getpid());
+
+    s = pthread_join(t, &res);
+    if (s != 0)
+    {
+      printf("pthread_join failed");
+      exit(EXIT_FAILURE);
+    }
+
+    EXPECT_THAT((long)res, 11);
+  }
 }
 
 // +..+..+...+..+.+++++
