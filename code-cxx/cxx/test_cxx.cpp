@@ -180,7 +180,7 @@ coll{string1,string2,string3,}
 
 */
 
-TEST(CxxMemoryModel, allocator)
+TEST(CxxMemoryModel, memory_model_allocator)
 {
   // do allocation only
   {
@@ -299,7 +299,7 @@ TEST(CxxMemoryModel, allocator)
 // size of (uint32_t) is           : 4
 // size of (uint64_t) is           : 8
 
-TEST(CxxType, size)
+TEST(CxxType, type_size)
 {
 #if defined(__LP64__) || defined(_LP64)
   std::cout << "LP64" << std::endl;
@@ -346,7 +346,7 @@ TEST(CxxType, size)
 
 // ={=========================================================================
 
-TEST(CxxType, null)
+TEST(CxxType, type_null)
 {
   const char *p1 = "";
   const char *p2 = nullptr;
@@ -356,20 +356,18 @@ TEST(CxxType, null)
 
 namespace use_sizeof
 {
-
   struct nlist
   {
     struct nlist *next;
     char *name;
     char *defn;
   };
-
 } // namespace use_sizeof
 
 // ={=========================================================================
 // cxx-cast cxx-conversion
 
-TEST(CxxType, cast)
+TEST(CxxType, type_cast)
 {
   {
     int x{55};
@@ -405,6 +403,183 @@ TEST(CxxType, cast)
 }
 
 // ={=========================================================================
+// cxx-variant
+
+namespace cxx_variant
+{
+  // custom variant type
+
+  struct Argument
+  {
+    enum class Type
+    {
+      Bool,
+      Int,
+      UInt,
+      Double,
+      String
+    } m_type;
+
+    // NOTE: cannot use in-class init for union
+
+    union Base
+    {
+      bool bool_;
+      int i_;
+      unsigned ui_;
+      double real_;
+
+      // cxx-error: initializations for multiple members of
+      // since it's cxx-union
+      // explicit Base(bool b)
+      //     : bool_(b)
+      //     , i_(0)
+      //     , ui_(0)
+      //     , real_(0.0f)
+      // {}
+
+      // default ctor is necessary since `string` type needs it and otherwise
+      // it's error
+      Base()
+          : real_(0.0f)
+      {}
+
+      explicit Base(bool b)
+          : bool_(b)
+      {}
+
+      explicit Base(int i)
+          : i_(i)
+      {}
+
+      explicit Base(unsigned ui)
+          : ui_(ui)
+      {}
+
+      explicit Base(double real)
+          : real_(real)
+      {}
+    } m_base;
+
+    std::string m_string;
+
+    explicit Argument(bool value)
+        : m_type(Type::Bool)
+        , m_base(value)
+    {}
+
+    explicit Argument(int value)
+        : m_type(Type::Int)
+        , m_base(value)
+    {}
+
+    explicit Argument(unsigned value)
+        : m_type(Type::UInt)
+        , m_base(value)
+    {}
+
+    explicit Argument(double value)
+        : m_type(Type::Double)
+        , m_base(value)
+    {}
+
+    explicit Argument(std::string value)
+        : m_type(Type::String)
+        , m_string(value)
+    {}
+
+    // getters
+    explicit operator bool() const
+    {
+      if (m_type != Type::Bool)
+      {
+        std::cout << "type is not bool" << std::endl;
+        return false;
+      }
+
+      return m_base.bool_;
+    }
+
+    explicit operator int() const
+    {
+      if (m_type != Type::Int)
+      {
+        std::cout << "type is not int" << std::endl;
+        return INT32_MAX;
+      }
+
+      return m_base.i_;
+    }
+
+    explicit operator unsigned() const
+    {
+      if (m_type != Type::UInt)
+      {
+        std::cout << "type is not unsigned int" << std::endl;
+        return UINT32_MAX;
+      }
+
+      return m_base.ui_;
+    }
+
+    explicit operator double() const
+    {
+      if (m_type != Type::Double)
+      {
+        std::cout << "type is not double" << std::endl;
+        return std::nan("");
+      }
+
+      return m_base.real_;
+    }
+
+    explicit operator std::string() const
+    {
+      if (m_type != Type::String)
+      {
+        std::cout << "type is not string" << std::endl;
+        return std::string("");
+      }
+
+      return m_string;
+    }
+  };
+} // namespace cxx_variant
+
+TEST(CxxType, type_variant)
+{
+  using namespace cxx_variant;
+
+  // error since it do not have default ctor
+  // Argument arg1;
+
+  {
+    Argument arg1(true);
+    EXPECT_THAT((bool)arg1, true);
+  }
+
+  {
+    Argument arg1(false);
+    EXPECT_THAT((bool)arg1, false);
+  }
+
+  {
+    Argument arg1(3301);
+    EXPECT_THAT((int)arg1, 3301);
+  }
+
+  {
+    Argument arg1(3301.0);
+    EXPECT_THAT((int)arg1, 3301.0);
+  }
+
+  {
+    Argument arg1("string variant");
+    EXPECT_THAT((std::string)arg1, std::string("string variant"));
+  }
+}
+
+// ={=========================================================================
 // cxx-array
 
 TEST(CxxSize, sizeof)
@@ -421,11 +596,11 @@ TEST(CxxSize, sizeof)
 
   {
     // cxx.cpp:77:14: warning: deprecated conversion from string constant to
-    // ‘char*’ [-Wwrite-strings] 
+    // ‘char*’ [-Wwrite-strings]
     // char *s1 = "this is first message"; is a pointer
   }
 
-  char s2[] = "this is first message";
+  char s2[]   = "this is first message";
   int arr[20] = {33};
 
   EXPECT_EQ(sizeof(s2), 22);
@@ -439,7 +614,7 @@ TEST(CxxSize, sizeof)
     EXPECT_EQ(sizeof(s2), 22);
     EXPECT_EQ(sizeof(s2) / sizeof(s2[0]), 22);
 
-    EXPECT_EQ(sizeof(arr), 20*4);
+    EXPECT_EQ(sizeof(arr), 20 * 4);
     EXPECT_EQ(sizeof(arr) / sizeof(arr[0]), 20);
   }
 
@@ -486,10 +661,10 @@ TEST(CxxPointer, array)
   EXPECT_THAT(arr[6], 16);
 
   // access elements via pointer arithmetic
-  EXPECT_THAT(*(arr+0), 10);
-  EXPECT_THAT(*(arr+2), 12);
-  EXPECT_THAT(*(arr+4), 14);
-  EXPECT_THAT(*(arr+6), 16);
+  EXPECT_THAT(*(arr + 0), 10);
+  EXPECT_THAT(*(arr + 2), 12);
+  EXPECT_THAT(*(arr + 4), 14);
+  EXPECT_THAT(*(arr + 6), 16);
 }
 
 // ={=========================================================================
@@ -3502,39 +3677,42 @@ namespace cxx_static
 {
   class FooThread
   {
-    private:
+  private:
+    // error: ISO C++ forbids in-class initialization of non-const static
+    // member ‘cxx_static::FooThread::m_value1’
+    // static int m_value1{10};
 
-      // error: ISO C++ forbids in-class initialization of non-const static
-      // member ‘cxx_static::FooThread::m_value1’
-      // static int m_value1{10};
+    static int m_value1;
+    static int m_value2;
+    static std::vector<int> m_coll;
+    std::string m_name;
 
-      static int m_value1;
-      static int m_value2;
-      static std::vector<int> m_coll;
-      std::string m_name;
+    static FooThread *m_self;
 
-      static FooThread *m_self;
+  public:
+    FooThread()
+        : m_name("foo")
+    {
+      m_self = this;
+    }
+    ~FooThread() {}
+    void print()
+    {
+      std::cout << "name   : " << m_name << ", value1 : " << m_value1
+                << ", value2 : " << m_value2 << std::endl;
 
-    public:
-      FooThread() : m_name("foo") { m_self = this; }
-      ~FooThread() {}
-      void print() 
-      {
-        std::cout << "name   : " << m_name << ", value1 : " << m_value1
-                  << ", value2 : " << m_value2 << std::endl;
+      std::cout << "coll   : " << m_coll[0] << ", " << m_coll[1] << ", "
+                << m_coll[2] << ", " << m_coll[3] << std::endl;
 
-        std::cout << "coll   : " << m_coll[0] << ", " << m_coll[1] << ", "
-                  << m_coll[2] << ", " << m_coll[3] << std::endl;
-
-        std::cout << "self   : " << m_self << std::endl;
-      }
+      std::cout << "self   : " << m_self << std::endl;
+    }
   };
 
   int FooThread::m_value1{10};
   int FooThread::m_value2{20};
   std::vector<int> FooThread::m_coll{10, 20, 30, 40};
   FooThread *FooThread::m_self{nullptr};
-}
+} // namespace cxx_static
 
 // TEST(CxxStatic, static_in_thread)
 // {
@@ -4707,20 +4885,20 @@ namespace cxx_smart_pointer
 {
   class SmartFoo
   {
-    private:
-      std::string m_name;
+  private:
+    std::string m_name;
 
-    private:
-      explicit SmartFoo()
-      {
-        std::cout << "SmartFoo()" << std::endl;
-        m_name = "smart foo";
-      }
+  private:
+    explicit SmartFoo()
+    {
+      std::cout << "SmartFoo()" << std::endl;
+      m_name = "smart foo";
+    }
 
-    public:
-      ~SmartFoo() = default;
+  public:
+    ~SmartFoo() = default;
 
-      static std::shared_ptr<SmartFoo> getFoo();
+    static std::shared_ptr<SmartFoo> getFoo();
   };
 
   std::shared_ptr<SmartFoo> SmartFoo::getFoo()
@@ -4728,7 +4906,7 @@ namespace cxx_smart_pointer
     std::cout << "return smart pointer" << std::endl;
     return std::shared_ptr<SmartFoo>();
   }
-}
+} // namespace cxx_smart_pointer
 
 TEST(CxxSmartPointer, construct)
 {
@@ -4782,7 +4960,7 @@ TEST(CxxSmartPointer, construct)
     // ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
     // SmartFoo foo;
 
-    // new_allocator.h:120:4: 
+    // new_allocator.h:120:4:
     // error: ‘cxx_smart_pointer::SmartFoo::SmartFoo()’ is private within this context
     // std::shared_ptr<SmartFoo> sp = std::make_shared<SmartFoo>();
 
@@ -6981,7 +7159,7 @@ TEST(CxxMove, binding)
 
     // lvalue to rvalue error
     // error: cannot bind
-    // ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ lvalue to 
+    // ‘std::__cxx11::string {aka std::__cxx11::basic_string<char>}’ lvalue to
     // ‘std::__cxx11::string&& {aka std::__cxx11::basic_string<char>&&}’
     //
     // m.setMembers(name, value);
@@ -7040,7 +7218,7 @@ TEST(CxxMove, signal)
     Move m2{"m2", 20};
 
     // void set_move(const Move &m); rvalue to lvalue reference
-    set_move(std::move(m2)); 
+    set_move(std::move(m2));
   }
 }
 
@@ -9515,10 +9693,10 @@ TEST(CxxPrintf, printf_format)
   // The character % is followed by zero or more of the following flags:
   // `#`
   //
-  // The value should be converted to an "alternate form".  
+  // The value should be converted to an "alternate form".
   //
   // For x and X conversions, a non-zero result has the string "0x" (or "0X" for
-  // X conversions) prepended to it.  
+  // X conversions) prepended to it.
 
   // value: 64
   // value: 0x64
@@ -9573,7 +9751,7 @@ TEST(CxxPrintf, printf_format)
 
   // The precision
   // An  optional precision, in the form of a period ('.') followed by an
-  // optional decimal digit string. 
+  // optional decimal digit string.
   //
   // value: {100.000000}
   // value: {100.0}
@@ -9610,7 +9788,6 @@ TEST(CxxPrintf, printf_format)
     printf("ulong max from limits: %lu\n", ULONG_MAX);
   }
 
-
   {
     int value{10};
     printf("this is first fmt"
@@ -9623,7 +9800,7 @@ TEST(CxxPrintf, printf_format)
   // On success, these functions return the number of input items successfully
   // matched and assigned; this can be fewer than provided for, or even zero, in
   // the event of an early matching failure.
- 
+
   // The length modifier "hh"
   {
     uint8_t bytes[3];

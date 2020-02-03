@@ -11,30 +11,33 @@ class DBusConnectionPrivate;
 
 class DBusConnection
 {
-  private:
-    std::shared_ptr<DBusConnectionPrivate> m_private;
-    DBusConnection();
-    DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
+private:
+  std::shared_ptr<DBusConnectionPrivate> m_private;
+  DBusConnection();
+  DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
 
-  public:
-    DBusConnection(const DBusConnection &);
-    DBusConnection(DBusConnection &&);
-    ~DBusConnection()=default;
+public:
+  DBusConnection(const DBusConnection &);
+  DBusConnection(DBusConnection &&);
+  ~DBusConnection() = default;
 
-    static DBusConnection systemBus(const EventLoop &);
-    static DBusConnection sessionBus(const EventLoop &);
+  static DBusConnection systemBus(const EventLoop &);
+  static DBusConnection sessionBus(const EventLoop &);
 
-    // getters
-    sd_bus *handle() const;
-    EventLoop eventLoop() const;
+  // getters
+  // get sd_bus handle
+  sd_bus *handle() const;
 
-    // true if sd_bus* is set
-    bool isConnected() const;
+  // get eventloop
+  EventLoop eventLoop() const;
 
-    // register the given name
-    bool registerName(const std::string &name);
+  // true if sd_bus* is set
+  bool isConnected() const;
 
-    DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
+  // register the given name
+  bool registerName(const std::string &name);
+
+  // DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
 };
 
 #endif // DBUSCONNECTION_H

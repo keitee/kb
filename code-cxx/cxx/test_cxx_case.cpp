@@ -495,12 +495,12 @@ namespace cxx_case_strvec
     // [begin, end) of the constructed.
 
     std::pair<std::string *, std::string *>
-      alloc_and_copy_(const std::string *begin, const std::string *end)
-      {
-        // use iterator arithmetic
-        auto data = m_alloc.allocate(end - begin);
-        return {data, std::uninitialized_copy(begin, end, data)};
-      }
+    alloc_and_copy_(const std::string *begin, const std::string *end)
+    {
+      // use iterator arithmetic
+      auto data = m_alloc.allocate(end - begin);
+      return {data, std::uninitialized_copy(begin, end, data)};
+    }
 
     // free [element, cap) only when elemenet is not null
     // move backwards from 'free' to call dtor on [element, free)
@@ -522,7 +522,7 @@ namespace cxx_case_strvec
     // o cxx-move
     // move the data from the old memory to the new std::move() returns rvalue,
     // which cause construct() to use string move ctor.
-    
+
     // o cxx-gdb
     // seg-fault when use `element` in the loop:
     //
@@ -572,19 +572,19 @@ namespace cxx_case_strvec
     void reallocate_()
     {
       auto new_capacity = size() ? size() * 2 : 1;
-      auto new_data = m_alloc.allocate(new_capacity);
+      auto new_data     = m_alloc.allocate(new_capacity);
 
-      auto dest = new_data;
+      auto dest   = new_data;
       auto source = m_element;
 
       for (size_type i = 0; i != size(); ++i)
       {
-        m_alloc.construct(dest++, std::move(*source++)); 
+        m_alloc.construct(dest++, std::move(*source++));
       }
 
-      m_element = new_data;
-      m_free = dest;
-      m_capacity = m_element + new_capacity; 
+      m_element  = new_data;
+      m_free     = dest;
+      m_capacity = m_element + new_capacity;
     }
 
     // check if it needs reallocation
@@ -634,7 +634,9 @@ namespace cxx_case_strvec
 #ifdef MOVE_SUPPORTED
     // *cxx-move* controls. no need to alloc
     StrVec(StrVec &&rhs) noexcept
-      : m_element(rhs.m_element), m_free(rhs.m_free), m_capacity(rhs.m_capacity)
+        : m_element(rhs.m_element)
+        , m_free(rhs.m_free)
+        , m_capacity(rhs.m_capacity)
     {
       std::cout << "StrVec(StrVec &&rhs)" << std::endl;
       rhs.m_element = rhs.m_free = rhs.m_capacity = nullptr;
@@ -647,8 +649,8 @@ namespace cxx_case_strvec
       {
         std::cout << "StrVec &operator=(StrVec &&rhs)" << std::endl;
         free_();
-        m_element = rhs.m_element;
-        m_free = rhs.m_free;
+        m_element  = rhs.m_element;
+        m_free     = rhs.m_free;
         m_capacity = rhs.m_capacity;
 
         rhs.m_element = rhs.m_free = rhs.m_capacity = nullptr;
@@ -656,7 +658,7 @@ namespace cxx_case_strvec
 
       return *this;
     }
-#endif 
+#endif
 
   public:
     std::string &operator[](size_type n) { return m_element[n]; }
@@ -678,7 +680,7 @@ namespace cxx_case_strvec
       // TODO: construct a copy of s
       //
       // The first argument to construct must be a pointer to
-      // unconstructed space allocated by `allocate()`. 
+      // unconstructed space allocated by `allocate()`.
       //
       // The second argument `determine which constructor` to use to
       // construct the object in that space. This is string's copy ctor.
@@ -700,11 +702,11 @@ namespace cxx_case_strvec
 
     // *cxx-emplace-back* is covered in chapter 16
     template <typename... Args>
-      void emplace_back(Args&&... args)
-      {
-        check_and_alloc_();
-        m_alloc.construct(m_free++, std::forward<Args>(args)...);
-      }
+    void emplace_back(Args &&... args)
+    {
+      check_and_alloc_();
+      m_alloc.construct(m_free++, std::forward<Args>(args)...);
+    }
   };
 
   StrVec returnVector()
@@ -730,7 +732,7 @@ TEST(CxxCase, StringVector)
     {
       // since T, std::string, supports streams
       ostringstream os;
-      for (const auto & e : coll)
+      for (const auto &e : coll)
         os << e << ",";
 
       EXPECT_THAT(os.str(), "string1,string2,string3,");
@@ -746,7 +748,7 @@ TEST(CxxCase, StringVector)
 
       // since T, std::string, supports streams
       ostringstream os;
-      for (const auto & e : coll)
+      for (const auto &e : coll)
         os << e << ",";
 
       EXPECT_THAT(os.str(), "element1,element2,element3,");
@@ -759,7 +761,7 @@ TEST(CxxCase, StringVector)
 
       // since T, std::string, supports streams
       ostringstream os;
-      for (const auto & e : coll)
+      for (const auto &e : coll)
         os << e << ",";
 
       EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
@@ -772,7 +774,7 @@ TEST(CxxCase, StringVector)
 
       // since T, std::string, supports streams
       ostringstream os;
-      for (const auto & e : coll)
+      for (const auto &e : coll)
         os << e << ",";
 
       EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
@@ -780,7 +782,7 @@ TEST(CxxCase, StringVector)
 
       // stringstream-clear
       os = ostringstream("");
-      for (const auto & e : coll2)
+      for (const auto &e : coll2)
         os << e << ",";
 
       EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
@@ -802,7 +804,7 @@ TEST(CxxCase, StringVector)
 #endif
 
       ostringstream os;
-      for (const auto & e : coll2)
+      for (const auto &e : coll2)
         os << e << ",";
 
       EXPECT_THAT(os.str(), "element1,element2,element3,push1,push2,");
@@ -814,11 +816,11 @@ TEST(CxxCase, StringVector)
       // coll is still around
 
       coll.emplace_back("string1");
-      coll.emplace_back(5, 'c');    // add "ccccc"
+      coll.emplace_back(5, 'c'); // add "ccccc"
 
       std::string s1("string2");
       std::string s2("string3");
-      coll.emplace_back(s1 + s2);   // use string move
+      coll.emplace_back(s1 + s2); // use string move
 
 #ifdef MOVE_SUPPORTED
       EXPECT_THAT(coll.size(), 3);
@@ -826,14 +828,15 @@ TEST(CxxCase, StringVector)
       EXPECT_THAT(coll.size(), 8);
 #endif
       ostringstream os;
-      for (const auto & e : coll)
+      for (const auto &e : coll)
         os << e << ",";
 
 #ifdef MOVE_SUPPORTED
       EXPECT_THAT(os.str(), "string1,ccccc,string2string3,");
 #else
-      EXPECT_THAT(os.str(), 
-          "element1,element2,element3,push1,push2,string1,ccccc,string2string3,");
+      EXPECT_THAT(
+        os.str(),
+        "element1,element2,element3,push1,push2,string1,ccccc,string2string3,");
 #endif
     }
 

@@ -1,14 +1,14 @@
 #ifndef DBUSMESSAGE_P_H
 #define DBUSMESSAGE_P_H
 
-#include "dbusmessage.h"
 #include "dbusconnection_p.h"
 #include "dbusfiledescriptor.h"
+#include "dbusmessage.h"
 
-#include <string>
 #include <list>
 #include <map>
 #include <memory>
+#include <string>
 
 class DBusMessagePrivate
 {
@@ -27,16 +27,17 @@ private:
   const DBusMessage::MessageType m_type;
   const std::string m_service;
 
-  // TODO: is map necessary?
+  // TODO: is map necessary than vector?
   static const std::map<DBusMessage::ErrorType, std::string> m_errorNames;
 
-public:
+private:
   DBusMessage::MessageType getMessageType_(sd_bus_message *message);
-  bool demarshallArgs_(sd_bus_message *message);
+  bool fromMessage_(sd_bus_message *message);
 
   // to use unique_ptr with deleter
   // sd_bus_message *sd_bus_message_ref(sd_bus_message *m);
 
+public:
   using sd_bus_message_ptr =
     std::unique_ptr<sd_bus_message, sd_bus_message *(*)(sd_bus_message *)>;
 
@@ -68,7 +69,9 @@ private:
       unsigned ui_;
       double real_;
 
-      BasicType() : real_(0.0f) {}
+      BasicType()
+          : real_(0.0f)
+      {}
       explicit BasicType(bool b)
           : bool_(b)
       {}

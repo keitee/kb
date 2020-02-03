@@ -32,7 +32,9 @@
 //   Failed,
 //   Searching
 // };
-
+//
+// NOTE: cannot use extern on enum and have to have same definition across all
+// files.
 
 // void print_enum_values()
 // {

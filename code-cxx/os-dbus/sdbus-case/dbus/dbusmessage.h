@@ -69,7 +69,7 @@ public:
   DBusMessage(DBusMessage &&) noexcept;
 
   DBusMessage &operator=(const DBusMessage &) = delete;
-  DBusMessage &operator=(DBusMessage &&) noexcept;
+  DBusMessage &operator                       =(DBusMessage &&) noexcept;
 
   bool isValid() const;
   bool isError() const;
@@ -86,21 +86,19 @@ public:
 
   // write(push) arg from message
   template <typename T>
-    DBusMessage &operator<<(const T &arg);
+  DBusMessage &operator<<(const T &arg);
 
   // read(extract) arg from message
   template <typename T>
-    DBusMessage &operator>>(T &arg);
+  DBusMessage &operator>>(T &arg);
 
 public:
-  static DBusMessage createMethodCall(
-      const std::string &service,
-      const std::string &path,
-      const std::string &interface,
-      const std::string &methond);
+  static DBusMessage createMethodCall(const std::string &service,
+                                      const std::string &path,
+                                      const std::string &interface,
+                                      const std::string &method);
 
   static DBusMessage createIncomingSignal(sd_bus_message *reply);
-
 };
 
 #endif // DBUSMESSAGE_H

@@ -1,8 +1,8 @@
 #ifndef DBUSCONNECTION_P_H
 #define DBUSCONNECTION_P_H
 
-#include "eventloop.h"
 #include "dbusmessage.h"
+#include "eventloop.h"
 
 #include <systemd/sd-bus.h>
 #include <systemd/sd-event.h>

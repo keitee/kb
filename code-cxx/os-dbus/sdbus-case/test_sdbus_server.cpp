@@ -383,6 +383,7 @@ int main(int argc, char **argv)
   // 0000095658.544841 ERR: < M:dbusconnection.cpp F:registerName L:228 > failed
   // to acquire the service name (13-Permission denied) DBusConnection conn =
   // DBusConnection::systemBus(eventLoop);
+
   DBusConnection conn = DBusConnection::sessionBus(eventLoop);
   if (!conn.isConnected())
   {

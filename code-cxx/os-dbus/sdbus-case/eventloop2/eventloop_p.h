@@ -26,8 +26,9 @@ private:
   std::queue<std::function<void()>> m_q;
 
   // see flush()
-  // static EventLoopPrivate *m_loopRunning;
-  // EventLoopPrivate *m_loopRunning;
+  // 1. EventLoopPrivate *m_loopRunning;
+  // 2. static EventLoopPrivate *m_loopRunning;
+  // 3.
   static thread_local EventLoopPrivate *m_loopRunning;
 
   // NOTE: static do not honor access control

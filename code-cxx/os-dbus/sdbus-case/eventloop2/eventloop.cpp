@@ -23,13 +23,16 @@ Shows client thread actually runs loop and sd_event do dispatch work
 
 */
 
+// #define EVENTLOOP_DEBUG
+
 /* ={--------------------------------------------------------------------------
  @brief :
   EventLoopPrivate
 */
 
-// since it is static
 thread_local EventLoopPrivate *EventLoopPrivate::m_loopRunning{nullptr};
+
+// since it is static
 // EventLoopPrivate *EventLoopPrivate::m_loopRunning{nullptr};
 
 // get eventloop and eventfd
@@ -52,9 +55,10 @@ EventLoopPrivate::EventLoopPrivate()
     logSysError(errno, "failed to create new eventfd");
   }
 
-  // debug
-  // logWarning("EventLoopPrivate::EventLoopPrivate() thread(%ld)",
-  //            std::this_thread::get_id());
+#ifdef EVENTLOOP_DEBUG
+  logWarning("EventLoopPrivate::EventLoopPrivate() thread(%ld)",
+             std::this_thread::get_id());
+#endif
 }
 
 // release eventfd and eventloop
@@ -83,12 +87,6 @@ EventLoopPrivate::~EventLoopPrivate()
 // TODO:
 // 1. read(m_eventfd) really fails and if so, does it matter since it's already
 // signaled?
-//
-// 2. recursive? means that it is possible to be called (dispatched) while
-// handleing the one?
-//
-// this is used in client interfaces as well and recursive lock only works for
-// the same thread. So, seems that recursive lock has no use here.
 //
 // 3. return value from event handler? no mention in the document.
 
@@ -161,11 +159,13 @@ int EventLoopPrivate::run()
   }
 
   m_loopRunning = this;
-  // debug
-  // logWarning("eventloop runs and set the thread local to this. thread id(%ld), "
-  //            "m_loopRunning(0x%p)",
-  //            std::this_thread::get_id(),
-  //            m_loopRunning);
+
+#ifdef EVENTLOOP_DEBUG
+  logWarning("eventloop runs and set the thread local to this. thread id(%ld), "
+             "m_loopRunning(0x%p)",
+             std::this_thread::get_id(),
+             m_loopRunning);
+#endif
 
   // run eventloop which `dispatch` sources
   //
@@ -219,21 +219,22 @@ thread than a thread running event loop.
 
 
 1. EventLoopPrivate *m_loopRunning;
-member variable and single entity. when two threads use the same EventLoop, it
-has the same single value.
+member variable and single entity. when two threads use the same EventLoop,
+m_loopRunning has the same single value.
 
 2. static EventLoopPrivate *m_loopRunning;
-one thread which calls run() has the value and the other which calls flush() has
-null value
+same as 1 since `static` only make it availbble without making instance.
 
 3. static thread_local EventLoopPrivate *m_loopRunning;
-same as 2.
+So how can differentiate threads? By using `thread_local`, a thread which
+created EventLoop will have a copy of m_loopRunning but other thread which uses
+public interface don't. So it'll be null.
 
-TODO: do not understand 2 and 3 though.
 
-So case 2 and 3 cause deadlock since when flush() gets called, m_loopRunning is
-null and take path when calling thread is different from running thread. call
-event_handler_() which locks on the same recursive mutex so blocks.
+So deadlock will happen since when flush() gets called from different thread,
+m_loopRunning is null and take path when calling thread is different from
+running thread. call event_handler_() which locks on the same recursive mutex so
+blocks.
 
 On gdb, confirms that and this can be the other way around; t2 can be blocked.
 
@@ -258,6 +259,14 @@ Thread 2 (Thread 0x7ffff5d7c700 (LWP 6144)):
 #3  0x000055555557bb0c in EventLoopPrivate::flush (this=0x55555580a4a0) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/eventloop1/eventloop.cpp:213
 #4  0x000055555557bce2 in EventLoop::flush (this=0x7fffffffd7d0) at /home/keitee/git/kb/code-cxx/os-dbus/sdbus-case/eventloop1/eventloop.cpp:260
 
+
+NOTE: 
+recursive lock? means that it is possible to be called (dispatched) while
+handleing the one? Is there really a case where running thread flush itself?
+
+this is used in client interfaces as well and recursive lock only works for
+the same thread. Uses recursive lock for this case which seems to be rare.
+
 */
 
 #define DEADLOCK_FIX
@@ -277,9 +286,12 @@ void EventLoopPrivate::flush()
     std::lock_guard<std::recursive_mutex> lock(m_rm);
 #endif
 
-    // debug
-    // logWarning("flush called from smae thread(%ld)",
-    //            std::this_thread::get_id());
+#ifdef EVENTLOOP_DEBUG
+    logWarning("flush called from smae thread(%ld)"
+               "m_loopRunning(0x%p)",
+               std::this_thread::get_id(),
+               m_loopRunning);
+#endif
 
     while (!m_q.empty())
     {
@@ -296,11 +308,12 @@ void EventLoopPrivate::flush()
   // otherwise post a f to the event loop on different thread/process and wait
   // until it runs
 
-  // debug
-  // logWarning("flush called from different thread(%ld), "
-  //            "m_loopRunning(0x%p)",
-  //            std::this_thread::get_id(),
-  //            m_loopRunning);
+#ifdef EVENTLOOP_DEBUG
+  logWarning("flush called from different thread(%ld), "
+             "m_loopRunning(0x%p)",
+             std::this_thread::get_id(),
+             m_loopRunning);
+#endif
 
   sem_t sem;
   sem_init(&sem, 0, 0);
@@ -380,8 +393,7 @@ sd_event *EventLoop::handle() const
 
 bool EventLoop::onEventLoopThread() const
 {
-  return false;
-  // return (EventLoopPrivate::m_loopRunning == m_private.get());
+  return (EventLoopPrivate::m_loopRunning == m_private.get());
 }
 
 bool EventLoop::invokeMethodImpl(std::function<void()> &&f) const

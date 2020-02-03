@@ -25,7 +25,6 @@ DBusMessagePrivate::Argument::operator int() const
   if (type_ != Integer)
   {
     logWarning("argument type is not boolean");
-    // TODO
     return INT32_MAX;
   }
 
@@ -37,7 +36,6 @@ DBusMessagePrivate::Argument::operator unsigned() const
   if (type_ != UnsignedInteger)
   {
     logWarning("argument type is not boolean");
-    // TODO
     return UINT32_MAX;
   }
 
@@ -79,8 +77,8 @@ DBusMessagePrivate::Argument::operator DBusFileDescriptor() const
   return fd_;
 }
 
-// return the dbus type character that matches the stored type
-// TODO: no defaults
+// return the corresponding dbus type character that matches the stored type
+// int the variant os-dbus-type
 char DBusMessagePrivate::Argument::dbusType() const
 {
   switch (type_)
@@ -262,7 +260,8 @@ DBusMessagePrivate::getMessageType_(sd_bus_message *reply)
   }
 }
 
-// attempts to read the arguments from the message
+// attempts to read the arguments from the message and convert sd_bus_message to
+// Arguments
 //
 // https://www.freedesktop.org/software/systemd/man/sd_bus_message_read.html
 //
@@ -403,7 +402,7 @@ bool DBusMessagePrivate::demarshallArgs_(sd_bus_message *message)
   } // while
 }
 
-// construct a sd_bus_message
+// construct a sd_bus_message for either a method call or signal
 DBusMessagePrivate::sd_bus_message_ptr
 DBusMessagePrivate::toMessage_(sd_bus *bus) const
 {
@@ -522,10 +521,18 @@ DBusMessage &DBusMessage::operator=(DBusMessage &&rhs) noexcept
   return *this;
 }
 
-// NOTE: have to use std::move() since uses rvalue from unique to shared
+// TODO: have to use std::move() since uses rvalue from unique to shared
 // pointer.
+//
+//      template<typename _Tp1, typename _Del>
+//        shared_ptr(std::unique_ptr<_Tp1, _Del>&& __r)
+//        : __shared_ptr<_Tp>(std::move(__r)) { }
+//
+// 2. use private ctor since it's friend to DBusMessagePrivate
+
 DBusMessage::DBusMessage(std::unique_ptr<DBusMessagePrivate> &&rhs)
-    : m_private(std::move(rhs))
+//    : m_private(std::move(rhs))
+    : m_private(rhs)
 {}
 
 // true if the message is valid

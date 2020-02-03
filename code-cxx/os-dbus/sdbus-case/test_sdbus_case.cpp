@@ -326,6 +326,69 @@ TEST(EventLoop, event_cli)
   f1.get();
 }
 
+/*
+{
+    Json::Value root;
+
+    uint32_t returnCode = 500;
+    std::string ipAddress;
+    DBusMessage message = DBusMessage::createMethodCall("com.sky.as.proxy",
+                                                        "/com/sky/as/service",
+                                                        "com.sky.as.Service1",
+                                                        "DBusProxyMethodCall"
+                                                        );
+
+    message << getIpMethodArgs;
+
+    DBusMessage reply = GetDbusConnection().call( std::move(message) );
+    if ( reply.isError() )
+    {
+        AS_LOG_ERROR("Get IP failed: %s, %s", reply.errorName().c_str(), reply.errorMessage().c_str() );
+
+        returnCode = 500;
+        root["errorCode"] = 103;
+        root["userMessage"] = "Generic failure";
+    }
+    else
+    {
+        reply >> returnCode;
+
+        if ( returnCode == 200 )
+        {
+            reply >> ipAddress;
+            AS_LOG_MIL("GetIp succeeded, ipAddress: %s, return code: %u", ipAddress.c_str(), returnCode);
+
+            Json::Value network;
+            network["ipaddr"] = ipAddress;
+
+            root["version"] = 1;
+            root["network"] = network;
+        }
+        else
+        {
+            AS_LOG_ERROR("GetIp failed, return code: %u", returnCode);
+
+            returnCode = 500;
+            root["errorCode"] = 103;
+            root["userMessage"] = "Generic failure";
+        }
+    }
+
+    jsonResponse = Json::StyledWriter().write(root);
+
+    return returnCode;
+}
+*/
+
+TEST(DBusMessage, message_create)
+{
+  DBusMessage message =
+    DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
+                                  "/org/freedesktop/DBus", // path
+                                  "org.freedesktop.DBus",  // interface
+                                  "ListNames");
+}
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {

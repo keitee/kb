@@ -3,22 +3,22 @@
 
 class DBusFileDescriptor
 {
-  private:
-    int m_fd;
+private:
+  int m_fd;
 
-  public:
-    DBusFileDescriptor();
-    explicit DBusFileDescriptor(int fd);
-    ~DBusFileDescriptor();
+public:
+  DBusFileDescriptor();
+  explicit DBusFileDescriptor(int fd);
+  ~DBusFileDescriptor();
 
-    bool isValid() const;
-    int fd() const;
+  bool isValid() const;
+  int fd() const;
 
-    // since clear() is the same as reset() but is added to follow c++ naming
-    // convention, then use clear() only as reset() is for smart pointers.
-    // void reset();
+  // since clear() is the same as reset() but is added to follow c++ naming
+  // convention, then use clear() only as reset() is for smart pointers.
+  // void reset();
 
-    void clear();
+  void clear();
 };
 
 #endif // DBUSFILEDESCRIPTOR_H
