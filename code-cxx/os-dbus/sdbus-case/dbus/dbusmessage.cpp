@@ -616,7 +616,7 @@ DBusMessage &DBusMessage::operator>>(T &arg)
   return *this;
 }
 
-// TODO what if don't have these?
+// TODO what if don't have these?  `cxx-template-explicit-argument`
 template DBusMessage &DBusMessage::operator>><bool>(bool &);
 
 template <typename T>
@@ -626,7 +626,7 @@ DBusMessage &DBusMessage::operator<<(const T &arg)
       (MessageType::SignalMessage == m_private->m_type))
   {
     DBusMessagePrivate::Argument variant(arg);
-    // dbusType() return `a char`
+
     m_private->m_signature.push_back(variant.dbusType());
     // since Argument do not have 'move support', it will not have an effect.
     m_private->m_args.emplace_back(std::move(variant));
@@ -640,13 +640,16 @@ DBusMessage &DBusMessage::operator<<(const T &arg)
   return *this;
 }
 
-template DBusMessage &DBusMessage::operator<<<bool>(const bool &);
+// TODO what if don't have these?  `cxx-template-explicit-argument`
+template DBusMessage &DBusMessage::operator<< <bool>(const bool &);
+
 
 DBusMessage DBusMessage::createMethodCall(const std::string &service,
                                           const std::string &path,
                                           const std::string &interface,
                                           const std::string &method)
 {
+  // uses private ctor
   return DBusMessage(
     std::make_unique<DBusMessagePrivate>(DBusMessage::MethodCallMessage,
                                          service,
