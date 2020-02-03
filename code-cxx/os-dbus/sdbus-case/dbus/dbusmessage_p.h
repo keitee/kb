@@ -23,7 +23,7 @@ private:
   std::string m_errorName;
   std::string m_errorMessage;
 
-  // NOTE: theare are public. make it private and use friend instead
+  // NOTE: was public. make it private and use friend instead
   const DBusMessage::MessageType m_type;
   const std::string m_service;
 
@@ -34,10 +34,10 @@ private:
   DBusMessage::MessageType getMessageType_(sd_bus_message *message);
   bool fromMessage_(sd_bus_message *message);
 
+public:
   // to use unique_ptr with deleter
   // sd_bus_message *sd_bus_message_ref(sd_bus_message *m);
 
-public:
   using sd_bus_message_ptr =
     std::unique_ptr<sd_bus_message, sd_bus_message *(*)(sd_bus_message *)>;
 

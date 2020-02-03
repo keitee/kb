@@ -219,7 +219,7 @@ DBusMessagePrivate::DBusMessagePrivate(sd_bus_message *reply)
     if (signature)
       m_signature.assign(signature);
 
-    demarshallArgs_(reply);
+    fromMessage_(reply);
   }
 }
 
@@ -293,7 +293,7 @@ DBusMessagePrivate::getMessageType_(sd_bus_message *reply)
 //         SD_BUS_TYPE_DICT_ENTRY_END   = '}'
 // };
 
-bool DBusMessagePrivate::demarshallArgs_(sd_bus_message *message)
+bool DBusMessagePrivate::fromMessage_(sd_bus_message *message)
 {
   // NOTE:
   // No document on sd_bus_message_at_end() and need to look into the code?
