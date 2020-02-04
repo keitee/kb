@@ -6778,7 +6778,7 @@ TEST(Bool, CheckUsage)
 // ={=========================================================================
 // cxx-stdio
 
-TEST(Stdio, Input)
+TEST(CxxIO, stdio_input)
 {
   {
     int i{};
@@ -6848,7 +6848,7 @@ TEST(Stdio, Input)
   }
 }
 
-TEST(Stdio, GetLine)
+TEST(CxxIO, stdio_getline)
 {
   {
     int i{};
@@ -6922,7 +6922,7 @@ TEST(Stdio, GetLine)
   }
 }
 
-TEST(Stdio, SpecialTypes)
+TEST(CxxIO, stdio_special_types)
 {
   int i1{}, i2{}, i3{}, i4{};
 
@@ -6986,7 +6986,7 @@ TEST(Stdio, SpecialTypes)
   EXPECT_THAT(iss8.good(), true);
 }
 
-TEST(Stdio, Manipulators)
+TEST(CxxIO, stdio_manipulators)
 {
   // showpos Forces writing a positive sign on positive numbers
   // noshowpos Forces not writing a positive sign on positive numbers
@@ -7020,13 +7020,26 @@ TEST(Stdio, Manipulators)
        << endl;
 }
 
-TEST(Stdio, ManipulatorsFloat)
+TEST(CxxIO, stdio_manipulators_float)
 {
   double value = 8.809030;
   ostringstream os;
   os << std::fixed << std::setprecision(2) << value;
   EXPECT_THAT(os.str(), "8.81");
 }
+
+#if 0
+TEST(CxxIO, fstream_wildcard)
+{
+  const std::string files{"../*.cpp"};
+
+  // parse any addition config files
+  for (const std::string &file : files)
+  {
+    std::cout << "file: " << file << std::endl;
+  }
+}
+#endif
 
 // ={=========================================================================
 // cxx-move

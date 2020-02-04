@@ -103,7 +103,8 @@ Create file alice.json with the following contents:
 // characters: chapter: 7
 // [       OK ] CxxJSON.ex1 (1 ms)
 
-TEST(CxxJSON, ex1)
+// read json file
+TEST(CxxJSON, jsoncpp_ex1)
 {
   {
     std::ifstream ifs("../alice.json");
@@ -111,16 +112,35 @@ TEST(CxxJSON, ex1)
     Json::Reader reader;
     Json::Value root;
 
+    // use reader and get `root`
     reader.parse(ifs, root);
 
+    // access map
     std::cout << "book: " << root["book"].asString() << std::endl;
     std::cout << "year: " << root["year"].asUInt() << std::endl;
 
-    // array of characters
+    // Json::Value is `variant`
+    const Json::Value &book = root["book"];
+    std::cout << "book: " << book.asString() << std::endl;
+
+    const Json::Value &year = root["year"];
+    std::cout << "year: " << year.asUInt() << std::endl;
+
+    // `characters` maps to array
     const Json::Value &chars = root["characters"];
 
+    // each array element is a map.
     for (int i = 0; i < chars.size(); i++)
     {
+      const Json::Value &object = chars[i];
+
+      // bool Json::Value::isObject	(		)	const
+
+      if (object.isObject() && !object.empty())
+      {
+        std::cout << "i : " << i << " is object and not empty" << std::endl;
+      }
+
       std::cout << "characters:    name: " << chars[i]["name"].asString()
         << std::endl;
       std::cout << "characters: chapter: " << chars[i]["chapter"].asString()
@@ -132,6 +152,7 @@ TEST(CxxJSON, ex1)
     // (to make life easier) we want to support json with single quotes
     // rather than mandated double quotes, so we use the non-standard
     // json reader object
+
     Json::CharReaderBuilder builder;
     builder["allowComments"] = true;
     builder["allowSingleQuotes"] = true;
@@ -145,11 +166,67 @@ TEST(CxxJSON, ex1)
     std::cout << "book: " << root["book"].asString() << std::endl;
     std::cout << "year: " << root["year"].asUInt() << std::endl;
 
+    // NOTE: compiles but raise exception. what's the above comment?
+    //
+    // std::cout << "book: " << root['book'].asString() << std::endl;
+    // std::cout << "year: " << root['year'].asUInt() << std::endl;
+
     // array of characters
     const Json::Value &chars = root["characters"];
 
     for (int i = 0; i < chars.size(); i++)
     {
+      std::cout << "characters:    name: " << chars[i]["name"].asString()
+        << std::endl;
+      std::cout << "characters: chapter: " << chars[i]["chapter"].asString()
+        << std::endl;
+    }
+  }
+}
+
+// what does `empty` mesna?
+
+TEST(CxxJSON, jsoncpp_ex1_1)
+{
+  {
+    std::ifstream ifs("../alice_empty.json");
+
+    Json::Reader reader;
+    Json::Value root;
+
+    // use reader and get `root`
+    reader.parse(ifs, root);
+
+    // access map
+    std::cout << "book: " << root["book"].asString() << std::endl;
+    std::cout << "year: " << root["year"].asUInt() << std::endl;
+
+    // Json::Value is `variant`
+    const Json::Value &book = root["book"];
+    std::cout << "book: " << book.asString() << std::endl;
+
+    const Json::Value &year = root["year"];
+    std::cout << "year: " << year.asUInt() << std::endl;
+
+    // `characters` maps to array
+    const Json::Value &chars = root["characters"];
+
+    // each array element is a map.
+    for (int i = 0; i < chars.size(); i++)
+    {
+      const Json::Value &object = chars[i];
+
+      // bool Json::Value::isObject	(		)	const
+
+      if (object.isObject() && !object.empty())
+      {
+        std::cout << "i : " << i << " is object and not empty" << std::endl;
+      }
+      else
+      {
+        std::cout << "i : " << i << " is object but empty" << std::endl;
+      }
+
       std::cout << "characters:    name: " << chars[i]["name"].asString()
         << std::endl;
       std::cout << "characters: chapter: " << chars[i]["chapter"].asString()
@@ -180,7 +257,8 @@ TEST(CxxJSON, ex1)
 // }
 // [       OK ] CxxJSON.ex2 (0 ms)
 
-TEST(CxxJSON, ex2)
+// construct json from code
+TEST(CxxJSON, jsoncpp_ex2)
 {
   // create the characters array
   Json::Value ch;
@@ -203,8 +281,9 @@ TEST(CxxJSON, ex2)
 namespace
 {
   // https://github.com/graphitemaster/incbin
-  // NOTE: "alice.json" should be in the same directory where compilation
-  // happens.
+  // TODO: "alice.json" should be in the same directory where compilation
+  // happens. HOW can specify a directory??
+
   INCBIN(AConfig, "../alice.json");
 } // namespace
 
@@ -217,11 +296,12 @@ namespace
 // "DrmConfig" "Size" ":\n" ".int " "" "g" "DrmConfig" "End" " - " "" "g"
 // "DrmConfig" "Data" "\n" ".balign " "16" "\n" ".text\n" );
 // extern "C" const __attribute__((aligned(16))) unsigned char gDrmConfigData[];
-// extern "C" const __attribute__((aligned(16))) unsigned char *const
-// gDrmConfigEnd; extern "C" const unsigned int gDrmConfigSize;
+// extern "C" const __attribute__((aligned(16))) unsigned char *const gDrmConfigEnd;
+// extern "C" const unsigned int gDrmConfigSize;
 
 /*
-[ RUN      ] CxxJSON.ex3
+[ RUN      ] CxxJSON.jsoncpp_ex3
+======================
 {
     "book":"Alice in Wonderland",
     "year":1865,
@@ -233,7 +313,7 @@ namespace
     ]
 }
 
-//
+======================
 {
         "book" : "Alice in Wonderland",
         "characters" :
@@ -253,8 +333,7 @@ namespace
         ],
         "year" : 1865
 }
-
-// from styled write
+======================
 {
    "book" : "Alice in Wonderland",
    "characters" : [
@@ -274,20 +353,17 @@ namespace
    "year" : 1865
 }
 
-[       OK ] CxxJSON.ex3 (0 ms)
+[       OK ] CxxJSON.jsoncpp_ex3 (0 ms)
 
 
 http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_reader.html#a0b3c4e24c8393354bab57a6ba3ffc27f
 
-parse() [2/3]
-
-bool Json::Reader::parse
-(
-const char * 	beginDoc,
-const char * 	endDoc,
-Value & 	root,
-bool 	collectComments = true
-)
+bool Json::Reader::parse(
+  const char * 	beginDoc,
+  const char * 	endDoc,
+  Value & 	root,
+  bool 	collectComments = true
+);
 
 Read a Value from a JSON document.
 
@@ -306,9 +382,10 @@ true if the document was successfully parsed, false if an error occurred.
 
 */
 
-TEST(CxxJSON, ex3)
+TEST(CxxJSON, jsoncpp_ex3)
 {
-  // manually print out
+  std::cout << "======================" << std::endl;
+  // char array as reads 
   {
     for (int i = 0; i < gAConfigSize; i++)
     {
@@ -317,6 +394,7 @@ TEST(CxxJSON, ex3)
     std::cout << std::endl;
   }
 
+  std::cout << "======================" << std::endl;
   // use `reader`
   {
     Json::Reader reader;
@@ -335,9 +413,16 @@ TEST(CxxJSON, ex3)
 
     std::cout << root << std::endl;
 
+    // use writer
+    std::cout << "======================" << std::endl;
+
     Json::StyledWriter writer;
+
+    // write() to std::string
+    // http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_styled_writer.html
     // virtual std::string write(const Value &root); // write JSON object to a
     // string
+
     std::cout << writer.write(root) << std::endl;
   }
 }
@@ -381,7 +466,7 @@ namespace
   INCBIN(NetflixConfig, "../netflix.json");
 } // namespace
 
-TEST(CxxJSON, ex4)
+TEST(CxxJSON, jsoncpp_ex4)
 {
   // (to make life easier) we want to support json with single quotes
   // rather than mandated double quotes, so we use the non-standard
@@ -394,8 +479,8 @@ TEST(CxxJSON, ex4)
 
   const std::map<std::string, std::pair<const char *, size_t>> config_files = {
     {"drm", {reinterpret_cast<const char *>(gDrmConfigData), gDrmConfigSize}},
-    {"net",
-     {reinterpret_cast<const char *>(gNetflixConfigData), gNetflixConfigSize}}};
+    {"net", {reinterpret_cast<const char *>(gNetflixConfigData), gNetflixConfigSize}}
+  };
 
   // pair{filename, root value}
   std::map<std::string, const Json::Value> parsed;
@@ -417,6 +502,7 @@ TEST(CxxJSON, ex4)
       continue;
     }
 
+    // push `root` of the parsed
     parsed.emplace(std::move(fname), std::move(root));
   }
 
@@ -435,8 +521,13 @@ TEST(CxxJSON, ex4)
 
   const std::vector<std::string> allowed_fields{"path", "method", "thread"};
 
+  // http://open-source-parsers.github.io/jsoncpp-docs/doxygen/class_json_1_1_value.html#ada6ba1369448fb0240bccc36efaa46f7
+  // Create a default Value of the given type.
+
   Json::Value urls(Json::arrayValue);
 
+  // filters out the parsed json and construct one:
+  //
   // urls
   //   [{
   //       "method" : "ws",
@@ -466,9 +557,14 @@ TEST(CxxJSON, ex4)
       {
         // std::cout << "u: " << u << std::endl;
 
+        // objectValue 	
+        // object value (collection of name/value pairs).
+
         Json::Value item(Json::objectValue);
 
         // get fields to look for from a map
+        // NOTE: filters out them based on `allowed_fields`
+
         for (const auto &field : allowed_fields)
         {
           // overwrite or append??
