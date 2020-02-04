@@ -51,6 +51,8 @@ KT KB. SKYMW
 *kt_dev_skymw_0000* skymw-rdk-xione
 *kt_dev_skymw_0000* skymw-rdk-llama
 *kt_dev_skymw_0000* skymw-rdk-as
+*kt_dev_skymw_0000* skymw-rdk-dtt
+*kt_dev_skymw_0000* skymw-rdk-as-windowmanager
 *kt_dev_skymw_0000* skymw-jira-airplay
 *kt_dev_skymw_0000* skymw-jira-android
 *kt_dev_skymw_0000* skymw-jira-q
@@ -10915,6 +10917,10 @@ cmake -DCMAKE_TOOLCHAIN_FILE=/media/keitee/ssd2/as/cmake/kit.toolchain.new.cmake
 
 *as-asmockservice*
 
+[Unit]
+Description=Sky AS Mock Service daemon
+After=sky-bluetoothrcu.service
+
 [Service]
 Type=dbus
 BusName=com.sky.as.mockservice
@@ -11055,6 +11061,56 @@ ExecStartPre=/bin/sleep 60
 ExecStart=/usr/sbin/appsservice --journald
 WatchdogSec=10
 Restart=on-failure
+
+
+={============================================================================
+*kt_dev_skymw_0000* skymw-rdk-dtt
+
+// server
+
+/media/keitee/ssd2/dtt/mediarite-sky_llama_adapter-20200131/futarque
+
+scp -P 10022 ./MediaRite.exe root@192.168.0.100:
+
+systemctl stop appmanager
+
+export XDG_RUNTIME_DIR='/run';export WAYLAND_DISPLAY=wayland-0; export WESTEROS_SINK_USE_GFX=1;
+
+./MediaRite.exe
+
+root@sky_llama_adapter:~# ./MediaRite.exe
+./MediaRite.exe: error while loading shared libraries: libicuio.so.58: cannot open shared object file: No such file or directory
+
+keitee@kit-ubuntu:/media/keitee/ssd2/llama/workspace2$ find . -name *libicuio.so* | xargs ls -al
+lrwxrwxrwx 2 keitee keitee     16 Jan  2 09:42 ./build-sky_llama_adapter/tmp/sysroots/sky_llama_adapter/usr/lib/libicuio.so -> libicuio.so.58.2
+lrwxrwxrwx 2 keitee keitee     16 Jan  2 09:42 ./build-sky_llama_adapter/tmp/sysroots/sky_llama_adapter/usr/lib/libicuio.so.58 -> libicuio.so.58.2
+-rwxr-xr-x 2 keitee keitee  30668 Jan  2 09:42 ./build-sky_llama_adapter/tmp/sysroots/sky_llama_adapter/usr/lib/libicuio.so.58.2
+lrwxrwxrwx 2 keitee keitee     16 Jan  2 09:42 ./build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/icu/58.2-r0/sysroot-destdir/usr/lib/libicuio.so -> libicuio.so.58.2
+lrwxrwxrwx 2 keitee keitee     16 Jan  2 09:42 ./build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/icu/58.2-r0/sysroot-destdir/usr/lib/libicuio.so.58 -> libicuio.so.58.2
+
+// copy manually
+-rwxr-xr-x 2 keitee keitee  30668 Jan  2 09:42 ./build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/icu/58.2-r0/sysroot-destdir/usr/lib/libicuio.so.58.2
+./build-sky_llama_adapter/tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/icu/58.2-r0/sysroot-destdir/usr/lib/
+
+scp -P 10022 ./libicuio.so.58.2 root@192.168.0.100:
+
+// copy whole directory and must be on "/" on target
+
+scp -r -P 10022 ./futarque root@192.168.0.100:
+
+-rwxr-xr-x 1 keitee keitee 183072 Jan  2 09:42 ./build-sky_llama_adapter/tmp/work/sky_llama_adapter-rdk-linux-gnueabi/comcast-mediaclient-vbn-image/1.0-r0/rootfs-dbg/usr/lib/.debug/libicuio.so.58.2
+
+
+export XDG_RUNTIME_DIR='/run';export WAYLAND_DISPLAY=wayland-0; export WESTEROS_SINK_USE_GFX=1;
+LD_LIBRARY_PATH=./usr/lib ./MediaRite.exe
+
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -F
+
+./ptestcli -s<your device's IP>:40660 
+./ptestcli -s192.168.0.100:40660 
 
 
 ={============================================================================
@@ -11442,6 +11498,13 @@ LD_PRELOAD=/usr/lib/libwesteros_gl.so.0 ./appsservice -v --launchdelay=30000
 LD_PRELOAD=/usr/lib/libwesteros_gl.so.0 gdb --args ./appsservice -v --launchdelay=30000
 
 
+// copy to a box
+
+scp -P 10022 ./.libs/libwesteros_render_embedded.so.0 root@192.168.0.100:/usr/lib/libwesteros_render_embedded.so.0.0.0
+scp -P 10022 ./.libs/libwesteros_compositor.so.0.0.0 root@192.168.0.100:/usr/lib/libwesteros_compositor.so.0.0.0
+scp -P 10022 ./build/./.libs/libgstwesterossink.so root@192.168.0.100:/usr/lib/gstreamer-1.0/libgstwesterossink.so
+scp -P 10022 ./.libs/libwesteros_simpleshell_server.so.0.0.0 root@192.168.0.100:/usr/lib/libwesteros_simpleshell_server.so.0.0.0
+
 // solib dependency
 
 root@sky_llama_adapter:/proc/7007# /lib/ld-2.24.so --list /usr/sbin/appsservice
@@ -11545,14 +11608,6 @@ bitbake westeros -c compile
 libwesteros_gl.so.0.0.0
 bitbake westeros-soc-drm -c compile
 tmp/work/armv7at2hf-neon-rdk-linux-gnueabi/westeros-soc-drm/1.0-r0/git/drm/westeros-gl/westeros-gl.c
-
-
-// copy to a box
-
-scp -P 10022 ./.libs/libwesteros_render_embedded.so.0 root@192.168.0.100:/usr/lib/libwesteros_render_embedded.so.0.0.0
-scp -P 10022 ./.libs/libwesteros_compositor.so.0.0.0 root@192.168.0.100:/usr/lib/libwesteros_compositor.so.0.0.0
-scp -P 10022 ./build/./.libs/libgstwesterossink.so root@192.168.0.100:/usr/lib/gstreamer-1.0/libgstwesterossink.so
-scp -P 10022 ./.libs/libwesteros_simpleshell_server.so.0.0.0 root@192.168.0.100:/usr/lib/libwesteros_simpleshell_server.so.0.0.0
 
 
 b wstRendererUpdateScene
