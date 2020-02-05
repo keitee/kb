@@ -7,6 +7,7 @@
 
 #include "gmock/gmock.h"
 
+#include "dbusmessage.h"
 #include "eventloop.h"
 
 #include "scli.h" // scli
@@ -386,7 +387,7 @@ TEST(DBusMessage, message_create)
     DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
                                   "/org/freedesktop/DBus", // path
                                   "org.freedesktop.DBus",  // interface
-                                  "ListNames");
+                                  "ListNames");            // method
 }
 
 // ={=========================================================================

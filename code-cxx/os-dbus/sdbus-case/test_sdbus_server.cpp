@@ -3,6 +3,7 @@
 #include <systemd/sd-daemon.h>
 
 #include "dbusconnection.h"
+#include "dbusmessage.h"
 #include "eventloop.h"
 #include "rlog.h"
 
@@ -213,6 +214,9 @@ namespace
   std::string service;                                  // service
 } // namespace
 
+// NOTE: handler has the fixed signature regardless of input/output args
+// static int handler(sd_bus_message *m, void *data, sd_bus_error *error);
+
 static int method_multiply(sd_bus_message *m, void *data, sd_bus_error *error)
 {
   int64_t x{};
@@ -278,11 +282,21 @@ static int method_divide(sd_bus_message *m, void *data, sd_bus_error *error)
   return sd_bus_reply_method_return(m, "x", x / rhs);
 }
 
+static int method_function1(sd_bus_message *m, void *data, sd_bus_error *error)
+{
+  DBusMessage message =
+    DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
+        "/org/freedesktop/DBus", // path
+        "org.freedesktop.DBus",  // interface
+        "ListNames");            // method
+}
+
 static const sd_bus_vtable calculator_vtable[] = {
   SD_BUS_VTABLE_START(0),
   SD_BUS_METHOD(
     "Multiply", "xx", "x", method_multiply, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_METHOD("Divide", "xx", "x", method_divide, SD_BUS_VTABLE_UNPRIVILEGED),
+  SD_BUS_METHOD("Function1", nullptr, nullptr, method_function1, SD_BUS_VTABLE_UNPRIVILEGED),
   SD_BUS_VTABLE_END};
 
 // tracker callback
@@ -364,6 +378,7 @@ static void send_signal(DBusConnection &conn)
   sd_bus_message_unref(msg);
 }
 
+
 // ={=========================================================================
 int main(int argc, char **argv)
 {
@@ -384,7 +399,11 @@ int main(int argc, char **argv)
   // to acquire the service name (13-Permission denied) DBusConnection conn =
   // DBusConnection::systemBus(eventLoop);
 
+  // NOTE: cannot make `conn` global object since DBusConnection() is private
+  // and which is invalid connection.
+
   DBusConnection conn = DBusConnection::sessionBus(eventLoop);
+
   if (!conn.isConnected())
   {
     logError("failed to connect to system bus");
@@ -455,6 +474,16 @@ int main(int argc, char **argv)
 
   // Notify that the service is now ready.
   sd_notify(0, "READY=1");
+
+  {
+    DBusMessage message =
+      DBusMessage::createMethodCall("org.freedesktop.DBus",  // service
+          "/org/freedesktop/DBus", // path
+          "org.freedesktop.DBus",  // interface
+          "ListNames");            // method
+
+    DBusMessage reply = conn.call(std::move(message));
+  }
 
 #if 0
   // parse the response message

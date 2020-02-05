@@ -19,7 +19,6 @@ private:
   std::string m_path;
   std::string m_interface;
   std::string m_name;
-  std::string m_signature;
   std::string m_errorName;
   std::string m_errorMessage;
 
@@ -134,6 +133,8 @@ private:
     char dbusType() const;
   };
 
+private:
+  std::string m_signature;
   std::list<Argument> m_args;
 
 public:

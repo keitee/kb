@@ -13,6 +13,8 @@ class DBusConnection
 {
 private:
   std::shared_ptr<DBusConnectionPrivate> m_private;
+
+private:
   DBusConnection();
   DBusConnection(std::shared_ptr<DBusConnectionPrivate> &&);
 
@@ -37,7 +39,7 @@ public:
   // register the given name
   bool registerName(const std::string &name);
 
-  // DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
+  DBusMessage call(DBusMessage &&message, int msTimeout = -1) const;
 };
 
 #endif // DBUSCONNECTION_H

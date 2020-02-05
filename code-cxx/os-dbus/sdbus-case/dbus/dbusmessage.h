@@ -15,8 +15,6 @@ private:
 
   std::shared_ptr<DBusMessagePrivate> m_private;
 
-  DBusMessage(std::unique_ptr<DBusMessagePrivate> &&);
-
 public:
   enum MessageType
   {
@@ -59,6 +57,9 @@ public:
     InvalidMember,
     InvalidInterface,
   };
+
+private:
+  DBusMessage(std::unique_ptr<DBusMessagePrivate> &&);
 
 public:
   DBusMessage();

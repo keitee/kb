@@ -153,6 +153,8 @@ DBusMessagePrivate::DBusMessagePrivate(DBusMessage::MessageType type,
     , m_interface(interface)
     , m_name(method)
 {
+  // the signature is dynamically updated as args are marshalled into the
+  // message object ... anyway reserve some space for the arg signature
   m_signature.reserve(8);
 }
 
@@ -531,8 +533,8 @@ DBusMessage &DBusMessage::operator=(DBusMessage &&rhs) noexcept
 // 2. use private ctor since it's friend to DBusMessagePrivate
 
 DBusMessage::DBusMessage(std::unique_ptr<DBusMessagePrivate> &&rhs)
-//    : m_private(std::move(rhs))
-    : m_private(rhs)
+    : m_private(std::move(rhs))
+//    : m_private(rhs)
 {}
 
 // true if the message is valid

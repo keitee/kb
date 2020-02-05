@@ -30,7 +30,9 @@ DBusConnectionPrivate::~DBusConnectionPrivate()
 
 bool DBusConnectionPrivate::send(DBusMessage &&message) const
 {
-  // take the message data
+  // take the message data. 
+  // NOTE: access private member since both are in friendship
+
   std::shared_ptr<DBusMessagePrivate> messageData = message.m_private;
   message.m_private.reset();
 

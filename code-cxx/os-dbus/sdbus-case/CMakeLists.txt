@@ -180,7 +180,11 @@ include_directories(${LIBS_DIR})
 
 
 # file(GLOB SOURCES "src/*.cxx")
-add_executable(${PROJECT_NAME} "test_sdbus_case.cpp" eventloop2/eventloop.cpp
+add_executable(${PROJECT_NAME} "test_sdbus_case.cpp" 
+  eventloop2/eventloop.cpp
+  dbus/dbusmessage.cpp 
+  dbus/dbusconnection.cpp 
+  dbus/dbusfiledescriptor.cpp
   scli.cpp)
 
 # cause link errors to Boost::thread
