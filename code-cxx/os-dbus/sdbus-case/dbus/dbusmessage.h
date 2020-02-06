@@ -26,7 +26,10 @@ public:
     InvalidMessage
   };
 
-  enum ErrorType
+  // make it `enum class`
+  // enum ErrorType
+
+  enum class ErrorType
   {
     NoError,
     Other,
@@ -59,7 +62,8 @@ public:
   };
 
 private:
-  DBusMessage(std::unique_ptr<DBusMessagePrivate> &&);
+  explicit DBusMessage(std::unique_ptr<DBusMessagePrivate> &&);
+  explicit DBusMessage(ErrorType error, const char *message = nullptr);
 
 public:
   DBusMessage();

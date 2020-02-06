@@ -33,13 +33,13 @@ private:
   DBusMessage::MessageType getMessageType_(sd_bus_message *message);
   bool fromMessage_(sd_bus_message *message);
 
-public:
   // to use unique_ptr with deleter
   // sd_bus_message *sd_bus_message_ref(sd_bus_message *m);
 
   using sd_bus_message_ptr =
     std::unique_ptr<sd_bus_message, sd_bus_message *(*)(sd_bus_message *)>;
 
+  // NOTE: was public but make it private
   sd_bus_message_ptr toMessage_(sd_bus *bus) const;
 
 private:

@@ -8,6 +8,9 @@
 #include "rlog.h"
 #include <cassert>
 
+// 25 secs
+#define DBUS_DEFAULT_TIMEOUT_USEC    (25 * 1000 * 1000)
+
 /* ={--------------------------------------------------------------------------
  @brief :
   DBusConnectionPrivate
@@ -234,6 +237,107 @@ bool DBusConnection::registerName(const std::string &name)
   return true;
 }
 
-// DBusMessage call(DBusMessage &&message, int msTimeout) const
-// {
-// }
+// sends the message over this connection and blocks, waiting for a reply, for
+// at most msTimeout ms or default value.
+//
+// this function is suitable for method calls only. it returns the reply message
+// as its return value, which will be either of type DBusMessage::ReplyMessage
+// or DBusMessage::ErrorMessage.
+//
+// if no reply is received within timeout, an automatic error will be delivered
+// indicating the expiration of the call. The default timeout is -1, which will
+// be replaced with an implementation-defined value that is suitable for
+// inter-process communications. that is 25 seconds now.
+//
+// it is safe to call this from any thread. If called from the event loop thread
+// it will block the event loop until complete
+//
+// TODO: ??? otherwise it will post a message to the event loop and send the dbus
+// message within that.
+
+DBusMessage DBusConnection::call(DBusMessage &&message, int msTimeout) const
+{
+  // sanity check
+  if (message.type() !- DBusMessage::MethodCallMessage)
+  {
+    logWarning("trying to call with non-method call message");
+
+    // NOTE: see use of `enum class`
+    // DBusMessage(DBusMessage::Failed);
+    return DBusMessage(ErrorType::Failed);
+  }
+
+  // can access private member, m_bus, since they are in friendship.
+  auto *priv = m_private.get();
+  if (!priv || !priv->m_bus)
+  {
+    logWarning("sd_bus not connected");
+    return DBusMessage(ErrorType::NoNetwork);
+  }
+
+  // called from the eventloop thread
+  if (priv->m_eventloop.onEventLoopThread())
+  {
+    // construct sd_bus_message from the given message and returns unique_ptr
+    auto msg = message.m_private->toMessage_(priv->m_bus);
+    if (!msg)
+    {
+      logWarning("failed to make sd_bus message from DBusMessage");
+      return DBusMessage(ErrorType::Failed);
+    }
+
+    // NOTE: there is no document for these calls but can see them in header. So
+    // they are sync call:
+    //
+    // This means that any synchronous remote operation (such as sd_bus_call(3),
+    // sd_bus_add_match(3) or sd_bus_request_name(3)),
+    //
+    // int sd_bus_call(
+    //  sd_bus *bus, 
+    //  sd_bus_message *m, 
+    //  uint64_t usec,
+    //  sd_bus_error *ret_error, 
+    //  sd_bus_message **reply); 
+    //
+    // int sd_bus_call_async(
+    //  sd_bus *bus, 
+    //  sd_bus_slot **slot, 
+    //  sd_bus_message *m,
+    //  sd_bus_message_handler_t callback, 
+    //  void *userdata, 
+    //  uint64_t usec);
+
+    sd_bus_error error;
+    memset(&error, 0, sizeof(error));
+
+    // convert ms timeout to sd-bus timeout in micro sec(us)
+    uint64_t timeout{};
+    if (msTimeout >= 0)
+      timeout = msTimeout * 1000;
+    else
+      timeout = DBUS_DEFAULT_TIMEOUT_USEC;
+
+    // make the call
+    sd_bus_message *reply{nullptr};
+    int rc = sd_bus_call(priv->m_bus, msg.get(), timeout, &error, &reply);
+
+    // if there is an error reply
+    if ((rc < 0) || (!reply))
+    {
+      // TODO: construct DBusMessage from the sd_bus_error of call
+      // DBusMessagePrivate is exposed and can we fix it??
+      DBusMessage errorMessage(std::make_unique<DBusMessagePrivate>(&error));
+      sd_bus_error_free(&error);
+      return errorMessage;
+    }
+
+    // if there is no error but reply
+    DBusMessage replyMessage(std::make_unique<DBusMessagePrivate>(reply));
+
+    // release
+    sd_bus_message_unref(reply);
+    sd_bus_error_free(&error);
+
+    return replyMessage;
+  }
+}

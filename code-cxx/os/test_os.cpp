@@ -155,6 +155,53 @@ TEST(LpiIO, readv)
                      << ", bytes read: " << numRead;
 }
 
+/*
+={=============================================================================
+os-memset os-bzero
+
+man bzero
+
+CONFORMING TO
+       The bzero() function is deprecated (marked as LEGACY in POSIX.1-2001);
+       use memset(3) in new programs.  POSIX.1-2008 removes the specification of
+       bzero().  The bzero() function first appeared in 4.3BSD.
+
+       The explicit_bzero() function is a nonstandard extension that is also
+       present on some of the BSDs.  Some other implementations have a similar
+       function, such as memset_explicit() or memset_s().
+
+
+SYNOPSIS
+       #include <string.h>
+       void *memset(void *s, int c, size_t n);
+
+DESCRIPTION
+       The memset() function fills the first n bytes of the memory area pointed
+       to by s with the constant byte c.
+
+*/
+
+TEST(OsGlibc, glibc_memset)
+{
+  // 20 bytes of array
+  char coll1[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  char coll2[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  char coll3[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  char coll4[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+  EXPECT_THAT(coll1, ElementsAreArray({1, 1, 1, 1, 1, 1, 1, 1, 1, 1}));
+
+  EXPECT_THAT(0, memcmp(coll1, coll2, 10));
+
+  bzero(coll2, 10);
+  EXPECT_THAT(coll2, ElementsAreArray({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}));
+  EXPECT_THAT(0, memcmp(coll2, coll4, 10));
+
+  memset(coll3, 0, 10);
+  EXPECT_THAT(coll3, ElementsAreArray({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}));
+  EXPECT_THAT(0, memcmp(coll3, coll4, 10));
+}
+
 // ={=========================================================================
 // *sys-memchr*
 /*
@@ -1084,6 +1131,7 @@ TEST(OsAnsi, color)
   // underscored red on white
   printf("\033[1;32m" "this is ansi color coded text\n" "\033[m");
 }
+
 
 // ={=========================================================================
 int main(int argc, char **argv)
